@@ -755,12 +755,36 @@ describe('LAYOUT_TEX', () => {
     expect(POINTS_TEX).toContain('\\def\\axt@vtake{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@vtg\\or\\expandafter\\axt@vtk\\or\\expandafter\\axt@vtp\\fi}')
     // a float's points around its finished box (\@endfloatbox closes it): at its start a point would give its first
     // paragraph a \parskip (2608.01890's figures)
-    expect(POINTS_TEX).toContain('\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}')
+    expect(POINTS_TEX).toContain('\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\axt@fnpt\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}')
+    // (and beside its opening point, inside its box, `fn<n>` where its type has no counter: no \caption can number it, so it is
+    // no figure, table or algorithm — NeurIPS's noticebox; \@captype is the float's own there)
+    expect(POINTS_TEX).toContain('\\def\\axt@fnpt{\\ifdefined\\@captype\\ifcsname c@\\@captype\\endcsname\\else\\axt@point{fn\\axt@bn}\\fi\\fi}')
     expect(POINTS_TEX).not.toContain('@floatboxreset')
     // after the destination's own definition, inside LAYOUT_TEX; its count a macro, no register; one line
     expect(LAYOUT_TEX.indexOf(POINTS_TEX)).toBeGreaterThan(LAYOUT_TEX.indexOf('\\def\\axt@dest#1'))
     expect(LAYOUT_TEX.endsWith(`${POINTS_TEX}\\makeatother`)).toBe(true)
     for (const word of ['\\newcount', '\\newbox', '\\newdimen', '\\typeout', '\n', '%']) expect(POINTS_TEX).not.toContain(word)
+  })
+
+  it('LAYOUT_TEX sets a point before a caption\'s label where TeX sets it: each caption maker hands its original the label with it', () => {
+    // (the label is \fnum@<type>, an argument of every caption maker: LaTeX's and every class's \@makecaption #1, longtable's
+    // \LT@makecaption #2, float.sty's styles #1, algorithm2e's \algocf@captiontext #1. Each, once the document begins, passes the
+    // original its label with `\axt@kf` before it: nothing assigned or expanded before the original runs, the label's own tokens
+    // and parameters as they were)
+    const at = POINTS_TEX.indexOf('\\AddToHook{begindocument/end}{\\ifdefined\\@makecaption')
+    expect(at).toBeGreaterThan(0)
+    const hook = POINTS_TEX.slice(at)
+    expect(hook).toContain('\\let\\axt@kmc\\@makecaption\\long\\def\\@makecaption#1#2{\\axt@kmc{\\axt@kf#1}{#2}}')
+    expect(hook).toContain('\\let\\axt@klt\\LT@makecaption\\long\\def\\LT@makecaption#1#2#3{\\axt@klt#1{\\axt@kf#2}{#3}}')
+    expect(hook).toContain('\\let\\axt@kfp\\floatc@plain\\long\\def\\floatc@plain#1#2{\\axt@kfp{\\axt@kf#1}{#2}}')
+    expect(hook).toContain('\\let\\axt@kfr\\floatc@ruled\\long\\def\\floatc@ruled#1#2{\\axt@kfr{\\axt@kf#1}{#2}}')
+    expect(hook).toContain('\\let\\axt@kac\\algocf@captiontext\\long\\def\\algocf@captiontext#1#2{\\axt@kac{\\axt@kf#1}{#2}}')
+    expect(hook).toContain('\\let\\axt@kcc\\caption@@make\\long\\def\\caption@@make#1#2{\\axt@kcc{\\axt@kf#1}{#2}}')
+    // (typeset only: nothing in a moving argument or a file; never while the gate is off; in vertical mode, at the paragraph
+    // the label begins, once)
+    expect(POINTS_TEX).toContain('\\def\\axt@kf{\\ifx\\protect\\@typeset@protect\\axt@ka\\fi}')
+    expect(POINTS_TEX).toContain('\\protected\\def\\axt@ka{\\ifaxt@off\\else\\ifhmode\\axt@kpt\\else\\ifvmode\\ifdefined\\AddToHookNext\\ifaxt@kwait\\else\\global\\axt@kwaittrue\\AddToHookNext{para/begin}{\\axt@klate}\\fi\\fi\\fi\\fi\\fi}')
+    expect(POINTS_TEX).toContain('\\def\\axt@kpt{\\xdef\\axt@kn{\\the\\numexpr\\axt@kn+1\\relax}\\axt@point{ka\\axt@kn}}')
   })
 })
 

@@ -92,6 +92,24 @@ describe('placeholders, labels and names (MR 4–6)', () => {
     const r = ownOf(pages, { units: units('Intro') })
     expect(groupsOf(r, pages)).toEqual({ u0: 'Intro', 'u0.l': '2.1', 'u9.p': '*' })
   })
+  it('takes a caption\'s label by TeX\'s call, from its point `ka<k>` to the start, on a line of its own (IEEEtran\'s "TABLE I")', () => {
+    // (IEEEtran sets a table's \\fnum@table centred on a line of its own above the caption's text; the marked compile puts `ka<k>`
+    // before the label's expansion (layout/marks.mjs). The label is what TeX set from that point to the caption's start mark,
+    // whatever line it stands on: on the start's baseline alone, "TABLE I" was no one's)
+    const caption = [{ kind: 'caption', src: 'Accuracy by probe' }]
+    const pages = [page([{ pt: 'fs1' }, { pt: 'ka1' }, 'TABLE I\n', { pt: '0s' }, 'Accuracy by probe', { pt: '0e' }, { pt: 'fe1' }])]
+    const r = ownOf(pages, { units: caption })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'Accuracy by probe', 'u0.l': 'TABLE I' })
+    expect(r.units.get(0)?.labelKept).toBe(false)
+    // (on the caption's first line, as most classes set it: the same label, from the point)
+    const inline = [page([{ pt: 'fs1' }, { pt: 'ka1' }, 'Figure 2: ', { pt: '0s' }, 'Accuracy by probe', { pt: '0e' }, { pt: 'fe1' }])]
+    expect(groupsOf(ownOf(inline, { units: caption }), inline)['u0.l']).toBe('Figure 2: ')
+  })
+  it('takes no label for a caption TeX set no label point for, whatever stands on its line (the call is the evidence, not the baseline)', () => {
+    const caption = [{ kind: 'caption', src: 'Accuracy by probe' }]
+    const pages = [page([{ pt: 'fs1' }, 'Figure 2: ', { pt: '0s' }, 'Accuracy by probe', { pt: '0e' }, { pt: 'fe1' }])]
+    expect(groupsOf(ownOf(pages, { units: caption }), pages)['u0.l']).toBeUndefined()
+  })
   it('takes as an author\'s lead only what TeX set after its call, the marks before it no lead of its (2611.03953v2)', () => {
     // (ICML: \icmlauthor sets each name, then its marks; the next author's call (latex-front.mjs \axtcall, the point `<i>c` before
     // the call's command or the \and that opens its block) comes after them. Walked back to the end mark before, the marks "12"

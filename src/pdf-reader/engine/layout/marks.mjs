@@ -964,7 +964,28 @@ export const POINTS_TEX = [
   '\\newif\\ifaxt@bodied',
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\axt@body{\\if@twocolumn\\if@firstcolumn1\\else2\\fi\\else0\\fi}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\global\\axt@bodiedtrue\\fi}\\fi',
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}\\fi',
-  '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
+  // (a float of a type that has no counter, `fn<n>` beside its `fs<n>`, in its own box: \\c@\\@captype undefined where its box
+  // ends, so that no \\caption can number it and TeX says it is no figure, table or algorithm: NeurIPS's \\@float{noticebox},
+  // ICML's \\@float{copyrightbox}, which define \\ftype@<type> alone. The ledger reads its text as the page's own outside the
+  // bodies, a note (PDF-READER §18.28))
+  '\\def\\axt@fnpt{\\ifdefined\\@captype\\ifcsname c@\\@captype\\endcsname\\else\\axt@point{fn\\axt@bn}\\fi\\fi}',
+  '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\axt@fnpt\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
+  // (a caption's label where TeX sets it, `ka<k>` before it: every caption maker is handed its label, \\fnum@<type>, as an
+  // argument of its own — LaTeX's \\@caption, caption.sty's and every class's to \\@makecaption (#1), longtable's to
+  // \\LT@makecaption (#2), float.sty's to its styles' \\floatc@plain and \\floatc@ruled (#1), algorithm2e's to
+  // \\algocf@captiontext (#1), caption.sty's every path, a sub-caption's (subcaption sets \\@makecaption to its own inside a
+  // subfigure) and a rotated one's too, to \\caption@@make (#1) —, so each of them, once the document begins, hands its original
+  // the label with the point
+  // before it: no assignment and nothing expanded before the original runs (longtable's sets its \\multispan first), the
+  // label's own tokens and parameters as they were (algorithm2e's \\fnum@algocf reads one). Two makers of one caption
+  // (caption.sty's \\@makecaption hands its label on to \\caption@@make) set two points side by side, nothing between them. Typeset only (\\protect
+  // \\@typeset@protect: nothing in a moving argument or a file); in vertical mode it waits for the paragraph the label begins
+  // (LaTeX's para/begin, once), so that no node is put on a vertical list; never while the gate is off (a list of figures, the
+  // output routine). A measured copy's point goes with its box: the label TeX ships carries one. The label is what TeX set from
+  // the point to the caption's start mark, whatever line it stands on (own.mjs MR 5, PDF-READER §18.28))
+  '\\gdef\\axt@kn{0}\\newif\\ifaxt@kwait\\def\\axt@kpt{\\xdef\\axt@kn{\\the\\numexpr\\axt@kn+1\\relax}\\axt@point{ka\\axt@kn}}\\def\\axt@klate{\\ifaxt@kwait\\global\\axt@kwaitfalse\\ifaxt@off\\else\\ifhmode\\axt@kpt\\fi\\fi\\fi}',
+  '\\protected\\def\\axt@ka{\\ifaxt@off\\else\\ifhmode\\axt@kpt\\else\\ifvmode\\ifdefined\\AddToHookNext\\ifaxt@kwait\\else\\global\\axt@kwaittrue\\AddToHookNext{para/begin}{\\axt@klate}\\fi\\fi\\fi\\fi\\fi}\\def\\axt@kf{\\ifx\\protect\\@typeset@protect\\axt@ka\\fi}',
+  '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\ifdefined\\@makecaption\\let\\axt@kmc\\@makecaption\\long\\def\\@makecaption#1#2{\\axt@kmc{\\axt@kf#1}{#2}}\\fi\\ifdefined\\LT@makecaption\\let\\axt@klt\\LT@makecaption\\long\\def\\LT@makecaption#1#2#3{\\axt@klt#1{\\axt@kf#2}{#3}}\\fi\\ifdefined\\floatc@plain\\let\\axt@kfp\\floatc@plain\\long\\def\\floatc@plain#1#2{\\axt@kfp{\\axt@kf#1}{#2}}\\fi\\ifdefined\\floatc@ruled\\let\\axt@kfr\\floatc@ruled\\long\\def\\floatc@ruled#1#2{\\axt@kfr{\\axt@kf#1}{#2}}\\fi\\ifdefined\\algocf@captiontext\\let\\axt@kac\\algocf@captiontext\\long\\def\\algocf@captiontext#1#2{\\axt@kac{\\axt@kf#1}{#2}}\\fi\\ifdefined\\caption@@make\\let\\axt@kcc\\caption@@make\\long\\def\\caption@@make#1#2{\\axt@kcc{\\axt@kf#1}{#2}}\\fi}\\fi',
   '\\AtBeginDocument{\\ifdefined\\pgfsys@beginpicture\\let\\axt@pgfbp\\pgfsys@beginpicture\\def\\pgfsys@beginpicture{\\axt@pgfbp\\axt@point{zs}}\\let\\axt@pgfep\\pgfsys@endpicture\\def\\pgfsys@endpicture{\\axt@point{ze}\\axt@pgfep}\\fi}',
   // (where TeX begins a front matter environment after the author block, `fm<n>`: the abstract, the keywords, IEEEtran's index
   // terms, the role table's environments of the front matter that are no author's (rules/arg-roles.mjs FRONT_ROLES

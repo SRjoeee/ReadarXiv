@@ -1,7 +1,8 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ledger.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, nothing else but one change, marked CHANGED (a formula's interior: an orphan line between two of a formula's lines
-// the formula's): run by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts,
-// the change apart. Today's file stays the production prepare's until the cut-over.
+// marked COPY, nothing else but two changes, marked CHANGED (a formula's interior: an orphan line between two of a formula's lines
+// the formula's; a float of a type with no counter no float: its text the page's own outside the bodies): run by locate over
+// arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file
+// stays the production prepare's until the cut-over.
 // The ledger of our final pass (docs/route/orphan-text.md, stage 1): every text glyph of every page given exactly one content
 // class (rules/content-classes.mjs), so that what no class explains — an orphan — is counted, listed and gated (the sweep's
 // invariant (o): orphan letters, none). Read from what the maker child already has: the pages pageInk read (`indices`, with
@@ -40,6 +41,9 @@ const RELATION = /[=<>≤≥≈≠∈∉⊂⊆→←↦∼≃≡∝]/u
 export const MONO_SHARE = 0.6
 /** an included graphic's line: glyphs inside a form XObject this share of it, at least */
 export const FORM_SHARE = 0.5
+/** a float's bracket (layout/marks.mjs POINTS_TEX `fs<n>`, `fe<n>`) and the point that says its type has no counter (`fn<n>`) */
+const FLOAT_BRACKET = /^f([se])(\d+)$/
+const FLOAT_UNCOUNTED = /^fn\d+$/
 /** the orphan lines a ledger lists, at most (all are counted) */
 export const ORPHAN_LINES_MAX = 200
 /** an orphan line's text as listed, at most */
@@ -171,6 +175,27 @@ export function ledgerOf(pages, own, { units = null } = {}) {
     const out = new Uint8Array(n).fill(CLASS_CODE.symbols)
     classes.push(out)
     const R = regionsOf({ glyphs: { n }, boxes: pg.boxes ?? [], points: P }), code = regionMask(pg.regions, n, 'code'), display = regionMask(pg.regions, n, 'display'), dtext = displayTextMask(pg.regions, n)
+    // (CHANGED: each glyph's floats of a type with no counter, `fn<n>` beside the float's `fs<n>` (layout/marks.mjs): no \\caption
+    // can number such a float, so TeX says it is no figure, table or algorithm but the page's own text the float mechanism
+    // placed: NeurIPS's notice, \\@float{noticebox}[b]. Its lines are read at the depth of the counted floats around them, so
+    // that the rules read one at no float's depth as text outside the bodies, a note (PDF-READER §18.28), not `figures` by
+    // depth, which no figure reading takes)
+    const uncounted = new Int32Array(n)
+    {
+      const fn = new Set(P.filter(pt => FLOAT_UNCOUNTED.test(pt.name)).map(pt => pt.name.slice(2)))
+      if (fn.size) {
+        const open = []
+        for (let q = 0, g = 0; g < n; g++) {
+          for (; q < P.length && P[q].glyph <= g; q++) {
+            const m = FLOAT_BRACKET.exec(P[q].name)
+            if (!m) continue
+            if (m[1] === 's') open.push(m[2])
+            else { const i = open.lastIndexOf(m[2]); if (i >= 0) open.splice(i, 1) }
+          }
+          uncounted[g] = open.filter(k => fn.has(k)).length
+        }
+      }
+    }
     // (the page's first and last mark of its own text, the column's mark aside: the head is shipped before the first, the foot
     // after the last)
     let first = n, last = 0
@@ -240,7 +265,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       if (line && entryAt[g] && line.entry !== entries[g] && line.region === region && Math.abs(x.y - line.y) <= LINE_DY * Math.max(size, line.size) && x.x0 - line.x1 <= LINE_GAP * size) { line.entry = entries[g]; line.zone = zones[g] }
       if (line && !(line.region === region && line.zone === zones[g] && line.entry === entries[g] && Math.abs(x.y - line.y) <= LINE_DY * Math.max(size, line.size) && x.x0 >= line.x0 - size && x.x0 - line.x1 <= LINE_GAP * size)) close()
       if (!line) {
-        const depth = region >> 1, body = (region & 1) === 1
+        const depth = Math.max(0, (region >> 1) - uncounted[g]), body = (region & 1) === 1
         line = { gs: [], region, zone: zones[g], para: paraAt[g], opens: false, entry: entries[g], entryFrom: null, y: x.y, size, x0: x.x0, x1: x.x1, n: 0, letters: 0, words: 0, pairs: 0, math: 0, mono: 0, code: 0, display: 0, form: 0, relation: false, depth, outside: bracketed && !body && depth === 0, head: g < first, foot: g >= footFrom }
       }
       line.gs.push(g); line.x1 = Math.max(line.x1, x.x1); line.size = Math.max(line.size, size)
