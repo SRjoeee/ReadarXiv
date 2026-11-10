@@ -31,5 +31,8 @@ export const lineExtent: (
 export type EdgeMark = { t: Pick<Token, 'punct'>; cut?: boolean } | null | undefined
 /** an opening mark's leading blank half at a line's start, none of its ink, em: lost wherever the state compresses (break.mjs) */
 export const leadOf: (it: EdgeMark, compress: number) => number = m.leadOf
+/** the marks no line the breaker opens starts with, the target's rules' and UAX 14's: whether a character is one (break.mjs
+ *  `barred`'s) */
+export const noLineStart: (P: Pick<FitParams, 'noStart' | 'noEnd'>) => (ch: string) => boolean = m.noLineStart
 /** a closing mark's trailing blank half at a line's end, none of its ink, em: hung past the line's edge (break.mjs) */
 export const hangOf: (it: EdgeMark, compress: number) => number = m.hangOf

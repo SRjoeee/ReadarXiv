@@ -112,6 +112,12 @@ const squeezable = (items, hangs, compress, P) => (compress < P.compressMax ? it
  * room by its ink: every line the breaker sets, justified, centred or flush (groupOf, stretchOf, placeItems), and a figure
  * text on its anchor (S.figures)
  */
+/** whether a character is a mark no line opens with: UAX 14's (no-start.mjs, the one table the layer gate's lineStartPunct reads
+ *  too) or the target's rules' (P.noStart: CJK's small kana and prolonged sound mark, its closing quotes, the per cent sign) */
+const noLineStart = P => {
+  const kinsoku = kinsokuOf(P.noStart ?? '', P.noEnd ?? '')
+  return ch => noStart(ch) || kinsoku.starts(ch)
+}
 const leadOf = (it, compress) => (it?.t.punct === 'open' && compress >= 1 ? 0.5 : 0)
 const hangOf = (it, compress) => (it?.t.punct === 'close' && !it.cut && compress < 2 ? 0.5 : 0)
 /**
@@ -137,8 +143,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
   // (the marks no line opens with: a character UAX 14 keeps from a line's start, no-start.mjs, the one table the layer
   // gate's lineStartPunct reads too, or one the target's rules do, P.noStart: CJK's small kana and prolonged sound mark,
   // its closing quotes, the per cent sign; `barred`, a token that opens with one)
-  const kinsoku = kinsokuOf(P.noStart ?? '', P.noEnd ?? '')
-  const barredChar = ch => noStart(ch) || kinsoku.starts(ch)
+  const barredChar = noLineStart(P)
   const barred = t => !t.space && typeof t.s === 'string' && t.s !== '' && barredChar(t.s)
   // (a word wider than its line cut by its characters, each a grapheme, what a reader sees as one character: a letter and the
   // marks over it, a flag's two regional indicators; never before a mark no line opens with, nor inside a pair UAX 14 keeps)
@@ -664,4 +669,4 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
   return { lines: lines.filter(l => l.items.length), rest: over ?? i, total: tokens.length, tokens, spilled }
 }
 
-export { breakLines, hangOf, latinishOf, leadOf, squeezable }
+export { breakLines, hangOf, latinishOf, leadOf, noLineStart, squeezable }

@@ -555,6 +555,7 @@ export function adapt(i: AdaptInput): Adapted {
               ? [0, m.label.ink[0], m.label.ink[1], m.label.ink[5], m.label.ink[3], m.label.ink[4], m.label.ink[2]]
               : null,
           keptBetween: () => !!m.join![1],
+          x: lines[0]![2],
           // (its label's crop, where the tokens are its own: RUN:2215-2224, the crop as a carried label's, set by the row's
           // baseline)
           ...(i.reading.own && label
