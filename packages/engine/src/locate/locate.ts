@@ -77,6 +77,9 @@ export interface Member {
   /** its ink stays (a kept block): in no group */
   fixed: boolean
   figure: boolean
+  /** its elements made of a group set wholly in a face of one pitch on lines of their own (Rule 1 by group, PDF-READER §18.22):
+   *  TeX's vertical box, its rows kept where TeX set them as a display's are, by piece id */
+  ownRows?: Set<string>
   /** A's glyphs (global) by role; elements by piece id */
   text: number[]
   label: number[]
@@ -93,9 +96,6 @@ export interface Member {
   /** the elements (by piece id) of a symbol's class whose ink is not that symbol as its reading draws it (a letter or digit among
    *  its glyphs, or a raise or a drop the reading does not draw): drawn as their ink, a formula's (bundle.ts classed) */
   asInk?: Set<string>
-  /** its elements made of a group set wholly in a face of one pitch on lines of their own (Rule 1 by group, PDF-READER §18.22):
-   *  TeX's vertical box, its rows kept where TeX set them as a display's are, by piece id */
-  ownRows?: Set<string>
   labelAt?: Label
   style: Style
   align: 'j' | 'l' | 'c' | 'r'
