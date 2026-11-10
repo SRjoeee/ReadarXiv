@@ -119,14 +119,34 @@ export const FRESH_SAYS = 'the two sides drew different translations: today its 
  * pass has added to
  */
 export function tagFresh(p, v2, todayOf) {
-  const keys = new Set((v2.fresh ?? []).flatMap((o) => [todayOf.has(o) ? `t${todayOf.get(o)}` : `p${o}`, `p${o}`]))
-  if (!keys.size) return
+  const causeOf = new Map()
+  for (const o of v2.fresh ?? []) {
+    const c = v2.freshCause?.[o] ?? 'no-row'
+    for (const k of [todayOf.has(o) ? `t${todayOf.get(o)}` : `p${o}`, `p${o}`]) causeOf.set(k, causeOf.has(k) && causeOf.get(k) !== c ? 'mixed' : c)
+  }
+  if (!causeOf.size) return
+  let ruled = false
   for (const d of p.diffs ?? []) {
-    if (d.fresh || ![...(String(d.unit ?? '').match(/\b[tp]\d+\b/g) ?? []), ...(d.cells ?? [])].some((k) => keys.has(k))) continue
+    const touched = [...(String(d.unit ?? '').match(/\b[tp]\d+\b/g) ?? []), ...(d.cells ?? [])].filter((k) => causeOf.has(k))
+    if (d.fresh || !touched.length) continue
     d.fresh = true
     d.what = `${d.what} (${FRESH_SAYS})`
+    // (a text today kept by its name/code test, isName/isCode, and v2 sends: a difference of its words, not of its format, is
+    // the owner's ruling of 2026-11-11, never worse; its geometry is judged as any fresh unit's)
+    if (d.worse && WORDS.has(d.flag) && touched.every((k) => causeOf.get(k) === 'today-kept')) {
+      d.worse = false
+      d.nearer = 'ruling'
+      d.ruling = NAME_CODE_RULING
+      ruled = true
+    }
   }
+  if (ruled) recount(p)
 }
+/** the measures of a text's words, not its format (tagFresh: the name/code ruling reads only these) */
+const WORDS = new Set(['shown', 'figures', 'groups', 'labels', 'toggles', 'style', 'weight'])
+/** what a difference of a figure text today kept by its name/code test (isName/isCode) and v2 sends rests on */
+export const NAME_CODE_RULING =
+  "the owner's ruling of 2026-11-11: a figure label's words are the translator's; v2 keeps text by how the paper set it, never by a word's shape"
 /** what each measure is, as a distance from the original */
 export const SAYS = {
   shown: "a unit today shows translated that v2 leaves the original's (one today draws in its source's own words misses none), or its label today relabels that v2 keeps the original's: a translation missing (no nearness judged)",

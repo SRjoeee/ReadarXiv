@@ -306,6 +306,14 @@ scripts, toggles, shown, labels, figures, groups, the highlight's coverage, and 
 original's own) is judged as anywhere, and each difference that touches a fresh unit is tagged (`fresh`, its words saying the
 two sides drew different translations: `tagFresh`). A page worse through a judged measure of a fresh unit is v2's finding.
 
+The owner's ruling of 2026-11-11 on the figure texts today keeps by its name/code test (today's figureUnits: mt.mjs isName or
+isCode, a label of names or a markup token: "<pad>", "MedQA", "ResNet-32"), which v2 sends: "never garble" is about format,
+not words; how a word is translated belongs to the translator, and no hard rule guesses from a word's shape. Such a text's
+fresh row is named so (`today-kept`) and listed apart on its page ("kept by today's name/code rule, sent by v2"), as
+information; a difference of its words alone (`shown`, `figures`, `groups`, `labels`, `toggles`, `style`, `weight`) is the
+ruling's (`nearer` "ruling", never worse: `verdict.mjs` NAME_CODE_RULING); its geometry is judged as any fresh unit's (a longer
+reply that overflows its room or collides counts).
+
 Beside the verdict each side's faults against absolute bounds are measured (and for the measures above each side's own
 count: text over ink, lines past the frame or the block, elements drawn otherwise, glyphs shown in part, groups mixed, a
 paper's labels mixed, a page number off, ink not black) (a first line off both ways by 0.25 of the

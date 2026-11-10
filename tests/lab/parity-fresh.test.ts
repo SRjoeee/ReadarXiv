@@ -13,7 +13,7 @@ import { scriptedFetch } from '@readarxiv/translate/testing'
 // @ts-expect-error — a plain node module of the lab
 import { cachedTranslator, freshNeeds, freshRowsOf, withFresh } from '../../lab/typeset/parity/fresh.mjs'
 // @ts-expect-error — a plain node module of the lab
-import { FRESH_SAYS, freshOf, measurePage, tagFresh } from '../../lab/typeset/parity/verdict.mjs'
+import { FRESH_SAYS, freshOf, measurePage, NAME_CODE_RULING, tagFresh } from '../../lab/typeset/parity/verdict.mjs'
 
 type Row = { id: string; ok: boolean; by?: string; content?: unknown[] }
 const unit = (id: string, s: string, kind = 'para') => ({ id, kind, content: [{ t: 'text', s }] })
@@ -177,6 +177,17 @@ describe("a unit laid with a fresh row on the sheet: what follows from its text'
     const p = { diffs: [g(['t7', 't9']), g(['t3', 't4'])] }
     tagFresh(p, { fresh: [11] }, new Map([[11, 7]]))
     expect(p.diffs.map((d: { fresh?: boolean }) => !!d.fresh)).toEqual([true, false])
+  })
+  it("a text today kept by its name/code test and v2 sends: a difference of its words is the owner's ruling, its geometry judged", () => {
+    const d = (flag: string, unit: string) => ({ flag, unit, what: 'w', worse: true, nearer: 'today' })
+    const p = { diffs: [d('style', 'p40 figure'), d('cross', 'p40 figure'), d('style', 'p41 figure')], worse: 3 }
+    tagFresh(p, { fresh: [40, 41], freshCause: { 40: 'today-kept', 41: 'no-row' } }, new Map())
+    const said = (flag: string, unit: string) =>
+      p.diffs.filter((x: { flag: string; unit: string }) => x.flag === flag && x.unit === unit).map((x: { worse: boolean; nearer: string; ruling?: string }) => [x.worse, x.nearer, x.ruling ?? null])
+    expect(said('style', 'p40 figure')).toEqual([[false, 'ruling', NAME_CODE_RULING]])
+    expect(said('cross', 'p40 figure')).toEqual([[true, 'today', null]])
+    expect(said('style', 'p41 figure')).toEqual([[true, 'today', null]])
+    expect(p.worse).toBe(2)
   })
   it('the run lists every page with its fresh units by cause, and the units v2 sends that today never had, drawn or not', () => {
     const v2 = { fresh: [11, 12, 30], freshCause: { 11: 'no-row', 12: 'unit', 30: 'no-row' }, freshNew: [30, 31], today: { 11: { today: 7 }, 12: { today: 8 } }, pages: { 3: { members: [{ ord: 11 }, { ord: 12 }] }, 4: { members: [{ ord: 30 }, { ord: 31 }] } }, facts: { 3: { members: [{ ord: 11, kind: 'para' }, { ord: 12, kind: 'figure' }] }, 4: { members: [{ ord: 30, kind: 'figure' }] } } }
