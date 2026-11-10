@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { Laid, Metrics, Rows } from '../../src/types.ts'
+import { coverDone, coverOf, newCover } from '../replay/cover.ts'
 
 type Box = [number, number, number, number]
 const metrics: Metrics = {
@@ -180,6 +181,151 @@ describe('Laid.lit by sentence', () => {
       bs.some((b) => b[0] <= crop.x + 1 && crop.x + 1 <= b[2] && b[1] <= y && y <= b[3])
     expect(covers(laid.lit.right[1]!)).toBe(true)
     expect(covers(laid.lit.right[0]!)).toBe(false)
+  })
+  it('lights an element at a sentence cut with one sentence on both panes, where its translator set the cut past it', () => {
+    // (2611.03953v2 p2, the owner's report of 2026-11-10: "… leaves behind. P²-MOPD moves …", the source's second sentence
+    // beginning at the element, came back with the element first in its translated sentence too and the translation's cut past
+    // it (the translator counts a mark at a cut with the sentence before): the left lit it from "P²-MOPD" on, the right in the
+    // sentence before. One piece, one sentence: the one it stands in on A, where its ink begins, on both panes)
+    const content: OutPiece[] = [
+      { t: 'text', s: 'Eins zwei drei. ' },
+      { t: 'el', id: '5' },
+      { t: 'text', s: ' fünf sechs. Sieben acht neun.' },
+    ]
+    const after = 'Eins zwei drei. '.length + 1 + ' '.length
+    const r: Row = {
+      id,
+      ok: true,
+      by: 'test',
+      content,
+      sentences: { src: [15, 30], tr: [after, after + 'fünf sechs. '.length] },
+    }
+    const m = member({ align: 'l', els: [['5', { kind: 'ref', ink: [[1, 200, 698, 214, 707, 700]] }]] })
+    const p = layPage(part(m), rowsOf([r]), rules, metrics)
+    const laid = p.members[0]!
+    expect(laid.state).toBe('laid')
+    const line = laid.lines.find(([, , , its]) => its.some((x) => 'piece' in x))!
+    const crop = line[3].find((x) => 'piece' in x) as { x: number }
+    const y = line[0]
+    const holds = (bs: readonly Box[], x: number, yy: number) =>
+      bs.some((b) => b[0] <= x && x <= b[2] && b[1] <= yy && yy <= b[3])
+    // (on A its ink, x 200–214 on the first line, in the second sentence; as drawn its crop in the same one, and in no other)
+    expect(laid.lit.left.map((bs) => holds(bs, 207, 702))).toEqual([false, true, false])
+    expect(laid.lit.right.map((bs) => holds(bs, crop.x + 1, y))).toEqual([false, true, false])
+    const c = newCover()
+    coverOf(c, p, part(m), metrics, 'cut')
+    coverDone(c, 'cut')
+    expect([...c.faults]).toEqual([])
+  })
+  it('the sentence cover (I10) counts a piece in no sentence, one in two, and an element in another sentence on each pane', () => {
+    // (the gate's own check, cover.ts, over a page laid right and the same page with its boxes broken three ways)
+    const content: OutPiece[] = [
+      { t: 'text', s: 'Eins zwei drei. ' },
+      { t: 'el', id: '5' },
+      { t: 'text', s: ' fünf sechs. Sieben acht neun.' },
+    ]
+    const at = 'Eins zwei drei. '.length
+    const r: Row = {
+      id,
+      ok: true,
+      by: 'test',
+      content,
+      sentences: { src: [15, 30], tr: [at, at + 1 + ' fünf sechs. '.length] },
+    }
+    const m = member({ align: 'l', els: [['5', { kind: 'ref', ink: [[1, 200, 698, 214, 707, 700]] }]] })
+    const page = layPage(part(m), rowsOf([r]), rules, metrics)
+    const faultsOf = (lit: Laid['lit']) => {
+      const c = newCover()
+      coverOf(c, { ...page, members: [{ ...page.members[0]!, lit }] }, part(m), metrics)
+      coverDone(c)
+      return [...c.faults.keys()].sort()
+    }
+    const lit = page.members[0]!.lit
+    expect(faultsOf(lit)).toEqual([])
+    // (the right's first sentence lost: its characters in none, the sentence drawn on the left alone)
+    expect(faultsOf({ ...lit, right: [[], lit.right[1]!, lit.right[2]!] })).toEqual([
+      'right missing sentence',
+      'right none text',
+    ])
+    // (the left's second sentence also the first's: its words and the element's ink in two, so in neither alone)
+    expect(faultsOf({ ...lit, left: [[...lit.left[0]!, ...lit.left[1]!], lit.left[1]!, lit.left[2]!] })).toEqual([
+      'left missing sentence',
+      'left two element',
+      'left two word',
+    ])
+    // (the element's crop lit with the first sentence as drawn, its ink with the second on A)
+    const line = page.members[0]!.lines.find(([, , , its]) => its.some((x) => 'piece' in x))!
+    const crop = line[3].find((x) => 'piece' in x) as { x: number }
+    const cut = (bs: Box[]) =>
+      bs.flatMap((b): Box[] =>
+        b[0] <= crop.x + 1 && crop.x + 1 <= b[2] && b[1] <= line[0] && line[0] <= b[3]
+          ? [
+              [b[0], b[1], crop.x, b[3]],
+              [crop.x + 30, b[1], b[2], b[3]],
+            ]
+          : [b],
+      )
+    expect(
+      faultsOf({
+        ...lit,
+        right: [[...lit.right[0]!, [crop.x, line[0] - 5, crop.x + 30, line[0] + 8]], cut(lit.right[1]!), lit.right[2]!],
+      }),
+    ).toEqual(['both differ element'])
+  })
+  it('lights an element its translation sets inside another sentence with its own on both panes, an island in that one', () => {
+    // (an element the translation moved: on A it begins the second sentence, as drawn it stands among the first's words; it
+    // lights with the second on both panes, and the first sentence's words either side of it with the first)
+    const content: OutPiece[] = [
+      { t: 'text', s: 'Eins ' },
+      { t: 'el', id: '5' },
+      { t: 'text', s: ' zwei drei. fünf sechs. Sieben acht neun.' },
+    ]
+    const proj = 'Eins ' + '\ufffc' + ' zwei drei. fünf sechs. Sieben acht neun.'
+    const r: Row = {
+      id,
+      ok: true,
+      by: 'test',
+      content,
+      sentences: { src: [15, 30], tr: [proj.indexOf('fünf'), proj.indexOf('Sieben')] },
+    }
+    const m = member({ align: 'l', els: [['5', { kind: 'ref', ink: [[1, 200, 698, 214, 707, 700]] }]] })
+    const p = layPage(part(m), rowsOf([r]), rules, metrics)
+    const laid = p.members[0]!
+    expect(laid.state).toBe('laid')
+    const line = laid.lines.find(([, , , its]) => its.some((x) => 'piece' in x))!
+    const crop = line[3].find((x) => 'piece' in x) as { x: number }
+    const zwei = line[3].find((x) => 's' in x && typeof x.s === 'string' && x.s.includes('zwei')) as {
+      s: string
+      x: number
+      size: number
+    }
+    const zx = zwei.x + (zwei.size * [...zwei.s.slice(0, zwei.s.indexOf('zwei'))].length) / 2 + 1
+    const y = line[0]
+    const holds = (bs: readonly Box[], x: number) => bs.some((b) => b[0] <= x && x <= b[2] && b[1] <= y && y <= b[3])
+    expect(laid.lit.right.map((bs) => holds(bs, crop.x + 1))).toEqual([false, true, false])
+    expect(laid.lit.right.map((bs) => holds(bs, zx))).toEqual([true, false, false])
+    const c = newCover()
+    coverOf(c, p, part(m), metrics, 'island')
+    coverDone(c, 'island')
+    expect([...c.faults]).toEqual([])
+  })
+  it('lights an element’s ink on A with its sentence where it stands past its line’s text (an equation’s number at the margin)', () => {
+    // (2610.21176v1 p13: a unit's last element set at the column's right edge, past its line's text: its ink in no box on A)
+    const m = member({ els: [['9', { kind: 'other', ink: [[1, 280, 674, 296, 683, 676]] }]] })
+    // (the translation sets it, drawn as a crop of its ink at the translation's end; on A its ink stays where TeX set it)
+    const r: Row = {
+      id,
+      ok: true,
+      by: 'test',
+      content: [
+        { t: 'text', s: `${TR} ` },
+        { t: 'el', id: '9' },
+      ],
+      sentences: SENTENCES,
+    }
+    const laid = laidOf(m, r)
+    const holds = (bs: readonly Box[]) => bs.some((b) => b[0] <= 288 && 288 <= b[2] && b[1] <= 678 && 678 <= b[3])
+    expect(laid.lit.left.map(holds)).toEqual([false, false, true])
   })
   it('lights its kept ink with its sentence, on the row it stands on: a label with the first, an element the translation omits where it stands on A', () => {
     // (`own` holds the displays alone; an element no sentence of the translation places, kept where it stands, lights with the

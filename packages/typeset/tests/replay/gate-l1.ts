@@ -32,6 +32,7 @@ import { type FitMeasure, fitMeasure } from '../../src/breaker/measure.ts'
 import type { Face } from '../../src/breaker/tokens.ts'
 import type { Metrics, RuleParams, Rows } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
+import { type Cover, coverDone, coverOf, newCover } from './cover.ts'
 import { walkCase } from './fit-input.ts'
 import type { GateUnit } from './gate.ts'
 import { keptJoin, keptRow, type L1Placed, l1Paper, type TodayPrepared, todayPrepared, todayUnitOf } from './l1.ts'
@@ -93,6 +94,9 @@ export type GateL1 = {
     figures: Map<string, number>
     /** Laid.lit over the laid members: those lit, a laid line with no box on the right, the panes' entries apart */
     lit: { laid: number; lines: number; boxes: number; apart: number; empty: number }
+    /** I10, the sentence cover over every member lit (cover.ts): each piece drawn in exactly one sentence on each pane, the
+     *  panes' sentences the same */
+    cover: Cover
   }
 }
 
@@ -481,6 +485,7 @@ export function gateL1Pair(
             linkEx: new Map(),
             figures: new Map(),
             lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 },
+            cover: newCover(),
           },
         }
       : {}),
@@ -896,6 +901,7 @@ export function gateL1Pair(
         { linkFates },
       )
       out.entry.ms.push(performance.now() - t1)
+      coverOf(out.entry.cover, page, part as Part, metrics, pair)
       // (the links' fates, the dropped with an example each; the laid members' boxes on both panes)
       ;((part as Part).links ?? []).forEach((l, i) => {
         // (an annotation of a member's other page, which the part holds with its page: counted apart)
@@ -1006,6 +1012,7 @@ export function gateL1Pair(
       prev.elements.push(...elements)
     }
   }
+  if (out.entry) coverDone(out.entry.cover, pair)
   for (const u of L.units) {
     const x = dumped.get(u.ord)
     if (x)

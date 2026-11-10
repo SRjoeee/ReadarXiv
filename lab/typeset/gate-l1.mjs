@@ -34,7 +34,20 @@ const READING = args.find(a => a.startsWith('--reading='))?.slice(10) ?? 'today'
 const SUBST = args.find(a => a.startsWith('--subst='))?.slice(8).split(',').filter(Boolean) ?? []
 // (--entry: each page laid again by design-a's layPage over its part and the rows, compared with the runner's lay, and timed)
 const ENTRY = args.includes('--entry')
-const entry = { alike: 0, differ: 0, ex: [], ms: [], names: new Map(), links: new Map(), linkEx: new Map(), figures: new Map(), lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 } }
+const entry = { alike: 0, differ: 0, ex: [], ms: [], names: new Map(), links: new Map(), linkEx: new Map(), figures: new Map(), lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 }, cover: { members: 0, pieces: 0, faults: new Map(), ex: new Map(), byPair: new Map() } }
+/** I10's counts (cover.ts) over the pairs: each fault's count by key, its examples, each pair's faults */
+const addCover = (pair, c) => {
+  const C = entry.cover
+  C.members += c.members
+  C.pieces += c.pieces
+  let n = 0
+  for (const [k, v] of c.faults) {
+    C.faults.set(k, (C.faults.get(k) ?? 0) + v)
+    C.ex.set(k, [...(C.ex.get(k) ?? []), ...(c.ex.get(k) ?? [])].slice(0, 8))
+    n += v
+  }
+  if (n) C.byPair.set(pair, [...c.faults].map(([k, v]) => `${k} ${v}`).join(', '))
+}
 const metricsOf = pair => (METRICS === 'served' ? served : layered(tableMetrics(readGz(join(TAP, 'metrics', `${pair}.metrics.json.gz`))), served))
 const count = { pairs: 0, laid: 0, adapted: 0, pages: 0, twoPages: 0, twoPagesDiffer: 0, threw: 0 }
 const stops = new Map(), setting = new Map(), threw = [], selfDiffer = []
@@ -72,7 +85,7 @@ for (const pair of pairs) {
   count.adapted += g.setting.size
   count.pages += g.pages
   pageMs.push(...g.ms)
-  if (g.entry) { entry.alike += g.entry.alike; entry.differ += g.entry.differ; entry.ms.push(...g.entry.ms); for (const x of g.entry.ex) if (entry.ex.length < 8) entry.ex.push(`${pair} ${x}`); for (const [k, n] of g.entry.names) entry.names.set(k, (entry.names.get(k) ?? 0) + n); for (const [k, n] of g.entry.links) entry.links.set(k, (entry.links.get(k) ?? 0) + n); for (const [k, n] of g.entry.figures) entry.figures.set(k, (entry.figures.get(k) ?? 0) + n); for (const [k, xs] of g.entry.linkEx) entry.linkEx.set(k, [...(entry.linkEx.get(k) ?? []), ...xs].slice(0, 4)); for (const k of Object.keys(entry.lit)) entry.lit[k] += g.entry.lit[k] }
+  if (g.entry) { entry.alike += g.entry.alike; entry.differ += g.entry.differ; entry.ms.push(...g.entry.ms); for (const x of g.entry.ex) if (entry.ex.length < 8) entry.ex.push(`${pair} ${x}`); for (const [k, n] of g.entry.names) entry.names.set(k, (entry.names.get(k) ?? 0) + n); for (const [k, n] of g.entry.links) entry.links.set(k, (entry.links.get(k) ?? 0) + n); for (const [k, n] of g.entry.figures) entry.figures.set(k, (entry.figures.get(k) ?? 0) + n); for (const [k, xs] of g.entry.linkEx) entry.linkEx.set(k, [...(entry.linkEx.get(k) ?? []), ...xs].slice(0, 4)); for (const k of Object.keys(entry.lit)) entry.lit[k] += g.entry.lit[k]; addCover(pair, g.entry.cover) }
   adaptMs += g.adaptMs
   readMs += g.readMs ?? 0
   inv.laid += g.inv.laid
@@ -195,6 +208,10 @@ if (ENTRY) {
   console.log(`the entry's links (Page.links, lay/links.ts), by fate: ${[...entry.links].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}${entry.linkEx.has(k) ? ` (${entry.linkEx.get(k).join('; ')})` : ''}`).join(', ')}`)
   console.log(`the entry's figure texts (S.figures over the part), by turn and state: ${[...entry.figures].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(', ')}`)
   console.log(`the entry's boxes (Laid.lit): ${entry.lit.laid} members laid with lines, ${entry.lit.lines} lines, ${entry.lit.boxes} boxes on the right; panes' entries apart ${entry.lit.apart}; nothing on the right ${entry.lit.empty}`)
+  const C = entry.cover, faults = [...C.faults.values()].reduce((a, b) => a + b, 0)
+  console.log(`I10, the sentence cover (cover.ts): ${C.members} member-pages lit, ${C.pieces} pieces; ${faults} faults${faults ? ':' : ''}`)
+  for (const [k, n] of [...C.faults].sort((a, b) => b[1] - a[1])) console.log(`  ${n} ${k}: ${(C.ex.get(k) ?? []).join(' | ')}`)
+  for (const [pair, line] of C.byPair) console.log(`  ${pair}: ${line}`)
 }
 if (selfDiffer.length) console.log(`laid otherwise from another page's part: ${selfDiffer.slice(0, 10).join('; ')}`)
 if (threw.length) console.log(`threw (${threw.length}): ${threw.slice(0, 8).join(' | ')}`)

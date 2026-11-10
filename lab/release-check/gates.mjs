@@ -1,5 +1,5 @@
 // lab/release-check/gates.mjs: what `pnpm release-check` runs and how it reads each gate (design §4.9): the invariants I1 to
-// I9 and the migration's differential, the targets of §7, and every gate that exists, each as it exists: its command, the
+// I10 and the migration's differential, the targets of §7, and every gate that exists, each as it exists: its command, the
 // inputs it reads from outside the repository, the tier it first runs in, the invariants it holds and how its output is
 // read. Nothing here is a new gate: a gate's pass is its own (its exit code, or the counts its own output states against the
 // bound its own header names), and an invariant no gate holds is said so (`gap`). Not shipped.
@@ -53,6 +53,11 @@ export const INVARIANTS = [
     id: 'I9',
     says: 'the box refuses each escape of the security suite, passes its canary and has no network',
     gap: 'the security suite has run under emulation only; three of its cases hold as written on native amd64 alone',
+  },
+  {
+    id: 'I10',
+    says: 'on both panes every piece drawn of a lit unit (its text, its elements, its label) is in exactly one of its sentences, and the panes have the same sentences',
+    gap: "counted over the corpus's laid pages with today's rows (the typesetter's runner, --entry) and the parity's pairs as the reader lays them; not over the website's own rows, which only staging holds",
   },
   {
     id: 'D',
@@ -128,6 +133,9 @@ export function typesetOf(text) {
   const out = {}
   const inv = /invariants over the laid members(?: \(page by page\))?: (\{[^}]*\})/.exec(text)
   if (inv) Object.assign(out, JSON.parse(inv[1]))
+  // (I10, the sentence cover: the typesetter's runner with --entry, the parity's v2 lay)
+  const cover = /^I10, the sentence cover \(cover\.ts\): .*?(\d+) faults/m.exec(text)
+  if (cover) out.I10 = num(cover[1])
   const lay = /a page's lay \(layPagePrepared[^)]*\), ms: p50 ([\d.]+), p90 ([\d.]+), p99 ([\d.]+), max ([\d.]+) over (\d+) pages/.exec(text)
   if (lay) Object.assign(out, { layP50: num(lay[1]), layP90: num(lay[2]), layP99: num(lay[3]), layMax: num(lay[4]), layPages: num(lay[5]) })
   const first = /^\{"pairs":.*\}$/m.exec(text)
@@ -349,10 +357,10 @@ export const GATES = [
   },
   {
     id: 'typeset-parts',
-    title: "the typesetter over this run's prepared parts (lab/typeset/gate-l1.mjs) and the reader's differential",
+    title: "the typesetter over this run's prepared parts (lab/typeset/gate-l1.mjs), each page laid again by the entry (the sentence cover), and the reader's differential",
     tier: 'full',
     stage: 'reader',
-    holds: ['D', 'I3', 'I4', 'I5'],
+    holds: ['D', 'I3', 'I4', 'I5', 'I10'],
     after: ['prepare'],
     needs: ctx => [
       exists('the tap', lab(ctx, 'baseline/tap/ledgers')),
@@ -361,7 +369,7 @@ export const GATES = [
       exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
     ],
     steps: ctx => [
-      { cmd: ['node', 'lab/typeset/gate-l1.mjs', `--out=${join(ctx.work, 'typeset-parts')}`], slot: 'test', env: { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }, fresh: join(ctx.work, 'typeset-parts') },
+      { cmd: ['node', 'lab/typeset/gate-l1.mjs', '--entry', `--out=${join(ctx.work, 'typeset-parts')}`], slot: 'test', env: { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }, fresh: join(ctx.work, 'typeset-parts') },
       { cmd: ['node', lab(ctx, 'baseline/tools/diff.mjs'), lab(ctx, 'baseline'), join(ctx.work, 'typeset-parts'), '--scope=reader', `--json=${join(ctx.work, 'typeset-parts-diff.json')}`] },
     ],
     judge: (ctx, steps) => typesetJudge(steps),
@@ -371,7 +379,7 @@ export const GATES = [
     title: "display ≥ today: no page worse than today's, a difference only where nearer the original (lab/typeset/parity/: today's output and v2's drawn beside arXiv's page on 22 papers with the same rows, every difference judged against the original)",
     tier: 'full',
     stage: 'reader',
-    holds: ['I3'],
+    holds: ['I3', 'I10'],
     // (the maintainer's base threshold for the refactor: v2's display equal to or better than the production site's)
     cutover: true,
     after: ['prepare'],
@@ -402,7 +410,10 @@ export const GATES = [
       const inc = /^incomplete: (\d+)/m.exec(text)
       if (inc) numbers.incomplete = num(inc[1])
       for (const f of text.matchAll(/^ {2}([a-z-]+) +(\d+) pages worse \((\d+) differences\), (\d+) nearer/gm)) numbers[f[1]] = `${f[2]} pages worse, ${f[4]} nearer`
-      return { pass: steps.length === 3 && steps.every(s => s.exit === 0), numbers, note: `the sheet: ${join(ctx.work, 'display', 'sheet', 'index.html')}` }
+      // (I10 over the pairs' Pages as the reader lays them: v2.mjs's count)
+      const I10 = typesetOf(steps[0]?.text ?? '').I10
+      if (I10 != null) numbers.I10 = I10
+      return { pass: steps.length === 3 && steps.every(s => s.exit === 0), numbers, ...(I10 != null ? { findings: { I10: { held: I10 === 0, count: I10 } } } : {}), note: `the sheet: ${join(ctx.work, 'display', 'sheet', 'index.html')}` }
     },
   },
   {
@@ -545,7 +556,7 @@ function typesetJudge(steps) {
   const d = steps[1] ? diffOf(steps[1].text) : {}
   return {
     pass: steps.every(s => s.exit === 0),
-    numbers: { ...d, I3: t.I3, I4: t.I4, I5: t.I5, msPerPage: t.msPerPage, layP50: t.layP50, layP90: t.layP90, layP99: t.layP99, layPages: t.layPages },
-    findings: Object.fromEntries(['I3', 'I4', 'I5'].filter(k => t[k] != null).map(k => [k, { held: t[k] === 0, count: t[k] }])),
+    numbers: { ...d, I3: t.I3, I4: t.I4, I5: t.I5, ...(t.I10 != null ? { I10: t.I10 } : {}), msPerPage: t.msPerPage, layP50: t.layP50, layP90: t.layP90, layP99: t.layP99, layPages: t.layPages },
+    findings: Object.fromEntries(['I3', 'I4', 'I5', 'I10'].filter(k => t[k] != null).map(k => [k, { held: t[k] === 0, count: t[k] }])),
   }
 }

@@ -2246,9 +2246,24 @@ within noise.
 - **What pairs the sentences** is the row's starts (Row.sentences: the translator's own, offsets in the unit's projection and
   its translation's) found on each pane, as on the layer path: on arXiv's page at the sentence's first word or element, its
   second or third where the first is not found, else the unit lights whole on both (`packages/typeset` lay/lit.ts
-  `startsOnA`); as drawn, the laid token of that word or element (each token's sentence its place in the translation, an
-  element's its piece's, else its neighbour's; the token that carries the first word begins it, an opening bracket set against
-  the word with it). A sentence that begins with an element (a reference, a citation that is its subject, a paper's name
+  `startsOnA`); as drawn, the laid token of that word or element. **Which sentence a piece is in is decided once, for both
+  panes** (lit.ts `sentenceMap`, the owner's rules of 2026-10-30: both panes always light the same thing; a sentence lights
+  all its pieces, text, elements, labels): the unit cut at the row's starts into half-open ranges, each piece in the one its
+  start falls in. A token of the translation's text by its first character's place (a sentence's start at its first word, from
+  the opening brackets and quotes set against it: "(Vier" begins its sentence at the bracket); an element, one piece in both
+  texts, by where its ink begins on A, wherever the translation sets it: its crop or its text as drawn, its ink on A and the
+  row it stands on there, widened over its ink (one TeX set past its line's text, an equation's number at the margin, stands in
+  no line's box), all in that sentence; a label in the first. A translator counts a mark at a cut with either sentence:
+  Microsoft set "…的方向。[P²-MOPD]沿该方向…" with its cut past the element, the source's at it, and the left lit
+  "P²-MOPD" with its sentence, the right with the sentence before (2611.03953v2 p2, the owner's report of 2026-11-10); the
+  translation's places alone had put 425 elements of the corpus's laid pages in another sentence than A's (today's rows over
+  stage 1a's parts at 95529b6f9). Where a translation sets an element inside another sentence than its own on A, the element
+  is an island of its own sentence there, a run of its own on its row. **I10, the sentence cover** holds it
+  (`packages/typeset/tests/replay/cover.ts`, counted by `lab/typeset/gate-l1.mjs --entry` over a run's parts and by the
+  parity's lay of its pairs, `lab/release-check` I10): on both panes every piece drawn of a lit member (each word of its text on A
+  at its first glyph, each character as drawn, each crop, each element's ink, its label, its held lines) is in exactly one of
+  its sentences, an element and the label in the same one on both, and every sentence drawn on one pane is drawn on the other.
+  A sentence that begins with an element (a reference, a citation that is its subject, a paper's name
   macro: "\method{} trains this model …") begins at it on both panes: moved on to the first letter past it, as both panes did
   until 2026-11-10, the element lit with the sentence before (2611.03953v2 p5, the owner's report: "Three details of Equation
   (6) matter." came back with the reference first, and "(6)" lit with the sentence before; on staging's rows of five papers,
@@ -2282,8 +2297,8 @@ within noise.
   is on one (on A a KEPT line on a display is the display's, a member lit from A too); the reader lights a display alone where
   the pointer is over it (`{id, s: -2 - piece}`, the same on every page: today's `displayBlockId`, one hover id a display),
   never with its member, whole or by sentence. The rest of a member's kept ink (a piece or a label kept where it stands, a
-  character) lights with it, the row it stands on widened over it, by sentence with its sentence (an element no sentence of the
-  translation places, the sentence it stands in on A). The painter's outline (today's `shapePath`) joins two rows where they
+  character) lights with it, the row it stands on widened over it, by sentence with its sentence (an element, the sentence its
+  ink begins in on A, as every element's). The painter's outline (today's `shapePath`) joins two rows where they
   meet across and paints the room between them, from the upper row's left to the lower one's right; v2 hands it every row of a
   sentence on a page, so it bridged whatever stood between them, a room no box holds and the hit test never found. A shape's
   rows are one outline now only where no other block stands between two of them (a box lit on the pane, another member's or a
