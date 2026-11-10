@@ -3750,6 +3750,48 @@ On staging (round 8 B2b) 2608.25210v2's prompt name `llm_equal_human` came back 
   `\textcolor{blue}{[sentence\_1]}` held a `\_` element, which the restore rule does not read; as an identifier, brackets and
   all, it is one element now, its ink the original's blue.
 
+### 18.27 arXiv's ink is no text of the paper's: its margin stamp (the coordinator's ruling, 2026-11-11)
+
+arXiv's stamp ("arXiv:2608.25210v2 [cs.DB] 28 Aug 2026", turned up page 1's left margin, grey) was a figure text in the
+prepare's bundles of 78 of the 88 corpus papers (round 8 B5's stage 1a), 76 of them with no `why`: the reader would send it
+and draw its translation over it (its colon full-width, its date in Chinese), figures being on by default. Today's prepare
+reads our compile, which has no stamp, so production has no such unit, and the parity sheet, which lays v2 with
+production's stored rows, never showed it (no row, the original's).
+
+- **Why it was read.** The figure reading takes a glyph no unit owns shown inside a form XObject or set in a picture
+  (`figure-text.mjs`). `ink.ts` reads a glyph's form from its partner on B, TeX's fact; a glyph with no partner kept A's own
+  flag, and arXiv's newer pages show the stamp inside a form of arXiv's (NimbusRoman-Regular, fill 0x808080). The ten older
+  papers' stamps (1007.0072v1 to 2602.23285v2) are drawn in the page's own stream (Times-Roman), in no form and no picture:
+  never taken, then or now.
+- **The rule** (`align.ts` `setPagesOf`, `ink.ts` `ARXIV_INK`, `born.ts`). On a page of A our compile sets, one of whose
+  glyphs, level or turned, has a partner on B, a glyph our compile never printed is arXiv's ink, no text the paper's TeX set:
+  never a figure glyph (the figure reading's input gives it the owner `a`), never a unit (none is born of it), so never sent,
+  erased or lit; both panes show it where arXiv drew it. "A page our compile sets" is that binary fact of the mapping, never a
+  share of its glyphs. A page our compile sets none of tells nothing of who set its ink and is read as before: 2610.20030v1's
+  pages 9 to 12, a second top-level file of its source (`supplemental_prl.tex`, its `00README.json`) that arXiv compiles and
+  joins to the first, our compile the first's alone. Read on A glyph by glyph against B, the stamp's rule would have taken
+  that supplement's 62 figure texts with it, real axis titles ("target area", "cell motility", "mean shape index"): the
+  evidence of absence is a page our compile sets. The ledger is untouched: it reads no turned glyph, so the stamp is in none
+  of its lines before or after and invariant (o) counts none of it; a level glyph of arXiv's ink inside a unit our compile set
+  makes that unit a content difference, as before (§18.14), and a line of it alone in a form is the ledger's `figures`. Where
+  TeX states a page's text frame no line's measure took the stamp in (`locate.ts` `frameOf`); where it states none, the hull
+  of the page's members no longer does (below).
+- **Over the 88.** Of the A pages any level glyph of which has no partner on B (10 in all), the 4 supplement pages have none
+  paired and the other 6 at least 99.7 % of their glyphs (a compile difference of 1 to 11 glyphs, none in a figure text);
+  turned glyphs with no partner on a page our compile sets are page 1's stamp alone, in all 88. Stage 1a against round 8
+  B5's (r13): 78 units gone in 78 papers, each the stamp's figure text, and no other unit made, gone or changed (the made
+  units after it one place earlier); its member gone from page 1's part, every part's faces without the stamp's face, its
+  link annotation, which its member owned in 5 papers, owned by none, as in the other 73. Two title pages with no text frame
+  of TeX's stated, measured by the hull of the page's members' lines, which had taken the stamp's in (`locate.ts` `columnOf`):
+  2608.08481v1 p1 (21 to 54 pt) and 2610.37668v1 p1 (24.26 to 51.08 pt), where TeX's block begins: 45 members' lines measured
+  from there, two read centred now (a names line and a notice whose middles stand on the block's), the room beside 15 of them
+  from the block and under 10 grown where the stamp's line was the ink under them. The differential reads the 76 stamps sent
+  as gains of the candidate's, absent from the baseline (gained 1,036 to 960; shown 37,900 to 37,824): none was ever
+  today's; lost (11), accepted (918) and changed (6,608) as before.
+- **What went with it.** The comments that read a figure's text A alone draws as a figure "where B is a draft" were the
+  drafts-only compile's (DESIGN §16, deleted 2026-11-09): our final pass includes each figure as arXiv's compile does, so a
+  figure's text has its partners on B. The engine's tests that set a figure's text on A alone set it on B too.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
