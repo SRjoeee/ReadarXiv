@@ -10,7 +10,7 @@ import { MissingMeasure } from '../../src/metrics/table.ts'
 import { fillPass, type PassUnit } from '../../src/shared/fill-pass.ts'
 import { layoutOf, linesOf, walkCase } from './fit-input.ts'
 import { chain } from './round.ts'
-import { derived, firstDifference, flooredIn, ledger, onPagesOf, roomUnderIn } from './tap.ts'
+import { derived, firstDifference, flooredIn, inWordOf, ledger, onPagesOf, roomUnderIn, wordGlued } from './tap.ts'
 
 type Raw = Record<string, unknown>
 type Pass = {
@@ -176,17 +176,18 @@ export function passesOf(
       if (untracked.has(id)) continue
       const p = lays.get(id)!
       const want = L.units.find((u) => u.ord === id)?.slots.find((s) => s.by === 'S.fill.page')?.value
-      d = firstDifference(
-        {
-          page: pass.page,
-          target: fin(told?.target ?? null),
-          layout: layoutOf(p.layout as unknown as Raw),
-          lines: linesOf(p.layout as unknown as Raw),
-          leadBase: fin(p.P?.leadBase),
-        },
-        want ?? null,
-        `L10 ord ${id}`,
-      )
+      const mine = {
+        page: pass.page,
+        target: fin(told?.target ?? null),
+        layout: layoutOf(p.layout as unknown as Raw),
+        lines: linesOf(p.layout as unknown as Raw),
+        leadBase: fin(p.P?.leadBase),
+      }
+      d = firstDifference(mine, want ?? null, `L10 ord ${id}`)
+      // (a unit whose tokens hold an item that continues its word: its lines' ends read to a millionth of a point, lane
+      // literal-fixes' rule moving a line's slack between its gaps and never its end, tap.ts wordGlued)
+      if (d && inWordOf([...p.tokens, ...(p.runs ?? []).flatMap((q) => q.tokens)]))
+        d = firstDifference(wordGlued(mine), wordGlued(want ?? null), `L10 ord ${id}`)
     }
     const ruled =
       !!d &&
