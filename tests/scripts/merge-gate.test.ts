@@ -241,6 +241,12 @@ describe('mergesIn', () => {
     ]) {
       expect(merges(text).at(-1)?.unreadable, text).toBe(true)
     }
+    // the same behind a wrapper that hands a shell its string: the string runs where the wrapper put it (#635, Codex)
+    for (const text of [`env -C ../release bash -c 'gh pr merge --merge'`, `env GH_REPO=o/r bash -c 'gh pr merge 5'`, "env -C ../release bash <<'EOF'\ngh pr merge 5\nEOF", `nice sh -c 'cd wt && gh pr merge'`]) {
+      expect(merges(text).at(-1)?.unreadable, text).toBe(true)
+    }
+    expect(merge(`nice bash -c 'gh pr merge 603 -R o/r'`)).toMatchObject({ ref: '603', repo: 'o/r', unreadable: false })
+    expect(merge(`bash -c 'gh pr merge 603'`).unreadable).toBe(false)
     expect(merge('command gh pr merge 603 -R o/r')).toMatchObject({ ref: '603', repo: 'o/r', unreadable: false, plain: false })
     expect(merge('env FOO=1 gh pr merge https://github.com/o/r/pull/5').unreadable).toBe(false)
     expect(merge('nice gh api -X PUT repos/o/r/pulls/5/merge').unreadable).toBe(false)

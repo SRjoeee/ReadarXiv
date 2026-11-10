@@ -440,17 +440,18 @@ const SEQUENCE = /^(?:&&\n*|[;\n]+)$/
 const CHAINED = /^&&\n*$/
 
 /** The command lines a command hands to a shell: the string after `bash -c`, the arguments of `eval`, and the
- *  here-documents of a shell that is given no string (`bash <<'EOF'`: quoted or not, that body runs) */
+ *  here-documents of a shell that is given no string (`bash <<'EOF'`: quoted or not, that body runs); with `at`, the
+ *  index of the word that is the shell */
 function shellStrings({ words, bodies }, start) {
   for (let j = start; j < words.length; j++) {
     const name = words[j].slice(words[j].lastIndexOf('/') + 1)
-    if (name === 'eval') return [words.slice(j + 1).join(' ')]
+    if (name === 'eval') return { at: j, scripts: [words.slice(j + 1).join(' ')] }
     if (!SHELLS.has(name)) continue
     const flag = words.findIndex((w, k) => k > j && /^-[A-Za-z]*c$/.test(w))
-    if (flag < 0) return bodies
-    return words[flag + 1] === undefined ? [] : [words[flag + 1]]
+    if (flag < 0) return { at: j, scripts: bodies }
+    return { at: j, scripts: words[flag + 1] === undefined ? [] : [words[flag + 1]] }
   }
-  return []
+  return { at: start, scripts: [] }
 }
 
 /** Commands that set variables their words do not name */
@@ -641,12 +642,16 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
       break
     }
     if (depth < 4) {
-      for (const script of [...scripts, ...shellStrings(command, start)]) {
-        // (a script runs where its command runs: inside whatever chain led here, so the directory it inherits is not
-        // in doubt; the line's variables it does not take, their one setting being the line's to count, not its own)
-        const within = { ...context, conditionalDir: false, conditionalVars: false, dirKnown: context.dirKnown && !line.loopMoves, loops: context.loops + loops.length, vars: {} }
-        for (const merge of mergesIn(script, within, depth + 1)) merges.push({ ...merge, plain: false })
-      }
+      // a script runs where its command runs: inside whatever chain led here, so the directory it inherits is not in
+      // doubt; the line's variables it does not take, their one setting being the line's to count, not its own
+      const within = { ...context, conditionalDir: false, conditionalVars: false, dirKnown: context.dirKnown && !line.loopMoves, loops: context.loops + loops.length, vars: {} }
+      // the string a shell is handed runs where that shell runs, and behind a wrapper that is the wrapper's to know,
+      // as it is for a `gh` behind one
+      const handed = shellStrings(command, start)
+      const behind = handed.at > start || words.slice(0, handed.at).some(word => REPOINTS.test(word))
+      const there = behind ? { ...within, dirKnown: false, branchKnown: false } : within
+      for (const script of scripts) for (const merge of mergesIn(script, within, depth + 1)) merges.push({ ...merge, plain: false })
+      for (const script of handed.scripts) for (const merge of mergesIn(script, there, depth + 1)) merges.push({ ...merge, plain: false })
     }
     learn(context, command)
     move(context, command, start)
