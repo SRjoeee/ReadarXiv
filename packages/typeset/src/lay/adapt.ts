@@ -199,7 +199,8 @@ export function sharedPaper(flows: readonly (readonly Placed[])[], page: number)
  * TeX's for the line and takes the line's. A line TeX set justified or flush left needs nothing: its members run on from its
  * first one's start already (S.rowStart). Its rows are TeX's lines, each from its first glyph's start (a member's label's,
  * where it stands first on it) to its last one's end: IJCAI's names, one centred paragraph over three lines, each \and's comma
- * the next name's label, a name over two lines (2611.00342v1 p1)
+ * the next name's label, a name over two lines (2611.00342v1 p1). A paragraph of several lines is the run's whole, nothing of
+ * the page before its first member nor after its last on their lines
  */
 export function rowLinesOf(flows: readonly (readonly Placed[])[]): Map<number, Omit<RowLine, 'left' | 'right'>> {
   const out = new Map<number, Omit<RowLine, 'left' | 'right'>>()
@@ -265,6 +266,22 @@ export function rowLinesOf(flows: readonly (readonly Placed[])[]): Map<number, O
           if (lb) rows.at(-1)!.x0 = Math.min(rows.at(-1)!.x0, lb[1]!)
         })
       if (!lines) continue
+      // (a paragraph of several lines is the run's whole: nothing of the page before its first member on its first line nor after
+      // its last one on its last line, as their Room.side states it, to their column's edge. Its lines are laid anew, its members'
+      // text moving from one to another: beside ink that stays there it would take or lose text under it. 2608.16117v1 p1's
+      // places, another flow's after them on their last line. One line keeps its members on it, its middle TeX's: as before)
+      const a = row[0]!,
+        z = row.at(-1)!
+      if (
+        rows.length > 1 &&
+        !(
+          a.room.side &&
+          a.room.side[0] <= a.lines[0]![7] + 0.01 &&
+          z.room.side &&
+          z.room.side[1] >= z.lines.at(-1)![8] - 0.01
+        )
+      )
+        continue
       const line = { ords: row.map((m) => m.ord), align, rows } as const
       for (const m of row) out.set(m.ord, line)
     }

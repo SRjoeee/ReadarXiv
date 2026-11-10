@@ -4,6 +4,7 @@
 // drawn on a laid line off with it.
 import type { El, OutPiece, Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
+import { rowLinesOf } from '../../src/lay/adapt.ts'
 import { layPage } from '../../src/lay/entry.ts'
 import { rowPieces, srcOfEl } from '../../src/lay/read.ts'
 import { rulesFor } from '../../src/rules-for.ts'
@@ -1245,6 +1246,11 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(wide[3]!.lines.find((l) => l[0] === y1)?.[3].some((it) => 'src' in it)).toBe(true)
     const line2 = wide[3]!.lines.find((l) => l[0] === y2)!
     expect((line2[1] + line2[2]) / 2).toBeCloseTo(300, 0)
+    // (a paragraph its run does not hold whole — ink of the page after its last member on its last line, which Room.side
+    // states: 2608.16117v1 p1's places, another flow's places after them on that line — is no run: its lines would take
+    // and lose its members' text beside what stays there; laid member by member, as before)
+    expect(rowLinesOf([[a, b, c, d]]).size).toBe(4)
+    expect(rowLinesOf([[a, b, c, { ...d, room: { below: 20, side: [290, 400] } }]]).size).toBe(0)
   })
   it('sets a babel name drawn on its own in the target’s word (S.names over the part); one that leads a unit is that unit’s', () => {
     // ("Abstract" centred over its column: the target's word at its size, its centre kept, its text group off)

@@ -3185,7 +3185,10 @@ member breaks only at its own spaces, after the label it carries (the separator 
 before), so a name the line no longer holds goes on whole to the next, as TeX breaks the paragraph between words, and a CJK name,
 which holds no space, is never cut between its characters where a line holds it. Each line's extent is read off that lay, and the
 run laid again with each line moved to stand centred on TeX's line, or ending at its end; each line keeps its width, so the second
-lay is the first one moved, line by line. A run of one line is laid as before. Not done: a line TeX's stream holds as more than
+lay is the first one moved, line by line. A paragraph of several lines must be the run's whole: nothing of the page before its
+first member on its first line nor after its last one on its last line (their `Room.side` reaching their column's edge), since
+its lines are laid anew and its members' text moves between them (2608.16117v1 p1's places, another flow's places after them on
+their last line: laid member by member, as before). A run of one line is laid as before. Not done: a line TeX's stream holds as more than
 one flow (a paragraph's end between two of its members: 2608.16117v1's first line of places, three flows, each centred on its
 own); a line with ink kept between two members other than the member's label, or a member whose label stays where TeX set it
 (laid member by member, as before); a run whose members' lay does not keep the lines the first lay set (laid member by member,
