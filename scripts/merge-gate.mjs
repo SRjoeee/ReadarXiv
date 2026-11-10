@@ -415,7 +415,9 @@ function apiArguments(words, dynamic, first) {
   const at = words.findIndex((word, k) => k >= first && MERGE_ENDPOINT.test(pathOf(word)))
   if (at >= 0) {
     const [, owner, name, number] = MERGE_ENDPOINT.exec(pathOf(words[at]))
-    return { kind: 'api', ref: number, repo: PLACEHOLDER.test(owner) || PLACEHOLDER.test(name) ? null : `${owner}/${name}`, refAt: at, repoAt: at }
+    const blanks = [PLACEHOLDER.test(owner), PLACEHOLDER.test(name)]
+    // (`{owner}/{repo}` is the directory's repository; a repository named by half is nobody's to put together)
+    return { kind: 'api', ref: number, repo: blanks[0] || blanks[1] ? null : `${owner}/${name}`, refAt: at, repoAt: at, ...(blanks[0] !== blanks[1] ? { composed: true } : {}) }
   }
   // no endpoint in sight, but one the shell composes (`"$ENDPOINT"`, `$R/merge`): a PUT to it is a merge nobody can
   // read, unless the words after its last expansion end the path some other way. An option's value is no endpoint.
@@ -475,6 +477,11 @@ const REPOINTS = /^(?:GH|GIT)_\w*=/
  *  before succeeded (`&&`) */
 const SEQUENCE = /^(?:&&\n*|[;\n]+)$/
 const CHAINED = /^&&\n*$/
+/** The words that open a block whose commands run or not as it decides, and the words that close one */
+const OPENS = new Set(['if', 'case', 'while', 'until', 'for'])
+const CLOSES = new Set(['fi', 'esac', 'done'])
+/** What joins two commands, without the parentheses that open or close a subshell between them */
+const joining = joint => joint.replace(/[()]/g, '')
 
 /** How a shell whose name is the word at `at` is told what to run, read the way the shell reads its own options:
  *  `c` anywhere in a cluster of short options means the first word that is no option is the command string
@@ -616,29 +623,30 @@ function learn(context, { words, dynamic, before, after }) {
   }
   const first = words[0] === 'export' ? 1 : 0
   if (words.length > first && words.slice(first).every(w => ASSIGNMENT.test(w))) {
-    const inSequence = (before === '' || SEQUENCE.test(before)) && (after === '' || SEQUENCE.test(after))
+    const inSequence = (joining(before) === '' || SEQUENCE.test(joining(before))) && (joining(after) === '' || SEQUENCE.test(joining(after)))
     for (let k = first; k < words.length; k++) {
       const eq = words[k].indexOf('=')
-      hold(words[k].slice(0, eq), inSequence && !dynamic[k] ? [words[k].slice(eq + 1)] : null)
+      hold(words[k].slice(0, eq), context.blocks === 0 && inSequence && !dynamic[k] ? [words[k].slice(eq + 1)] : null)
     }
-    if (inSequence && CHAINED.test(before)) context.conditionalVars = true
+    if (inSequence && CHAINED.test(joining(before))) context.conditionalVars = true
   }
 }
 
 /** Where the commands after `command` run, as far as its words say: a plain `cd` to a literal directory, joined to
  *  its neighbours in sequence, is followed; any other change of directory, and an assignment that repoints `gh`,
- *  loses the directory, and so does a command that changes which repository the directory is (`git remote`,
- *  `git config`, `gh repo set-default`); any other command may have changed the branch. A `cd` reached through `&&` ran only if what
+ *  loses the directory, and so does a `cd` inside a block (`if`, `case`, a loop) and a command that changes which
+ *  repository the directory is (`git remote`, `git config`, `gh repo set-default`); any other command may have
+ *  changed the branch. A `cd` reached through `&&` ran only if what
  *  stands before it succeeded, so it is conditional: it holds for the rest of that chain and no further. */
 function move(context, { words, dynamic, before, after }, start) {
   if (words.some(word => REPOINTS.test(word))) context.dirKnown = false
   const head = words[start]
   if (head === undefined) return
   if (head === 'cd') {
-    const inSequence = (before === '' || SEQUENCE.test(before)) && (after === '' || SEQUENCE.test(after))
-    if (start === 0 && inSequence && words.length <= 2 && !dynamic.some(Boolean) && words[1] !== '-') {
+    const inSequence = (joining(before) === '' || SEQUENCE.test(joining(before))) && (joining(after) === '' || SEQUENCE.test(joining(after)))
+    if (context.blocks === 0 && start === 0 && inSequence && words.length <= 2 && !dynamic.some(Boolean) && words[1] !== '-') {
       context.dirs = [...context.dirs, words[1] ?? '~']
-      if (CHAINED.test(before)) context.conditionalDir = true
+      if (CHAINED.test(joining(before))) context.conditionalDir = true
     } else context.dirKnown = false
   } else {
     // (`git remote`, `git config`, `gh repo set-default`: the directory stays, the repository `gh` finds in it may not)
@@ -657,15 +665,38 @@ function move(context, { words, dynamic, before, after }, start) {
  *  `plain`: the merge is the whole command line, written
  *  `gh … pr merge …` with nothing for the shell to expand; `files`, on a GraphQL request alone: the files its body is
  *  read from, which say whether it merges. */
-export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKnown: true, conditionalDir: false, conditionalVars: false, loops: 0, vars: {} }, depth = 0) {
+export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKnown: true, conditionalDir: false, conditionalVars: false, loops: 0, blocks: 0, vars: {} }, depth = 0) {
   const { commands, compound, redirected } = simpleCommands(text)
   const line = lineOf(commands, text)
   const context = { ...inherited }
   const merges = []
+  // what a subshell does to the directory and the variables ends at its closing parenthesis; what it did to the
+  // branch, or to a file, stays done. A `case` ends each of its patterns with a `)` that closes nothing: `cases`
+  // holds, for every `case` still open, how many subshells were open when it began, and a `)` met at that depth is a
+  // pattern's. A `)` with nothing to close leaves the directory and the variables unknown.
+  const scopes = []
+  const cases = []
+  context.blocks = 0
   for (const [index, command] of commands.entries()) {
     const { words, dynamic, scripts } = command
     const loops = line.loopsOf[index]
-    if (!CHAINED.test(command.before)) {
+    for (const c of command.before) {
+      if (c === '(') scopes.push({ ...context })
+      else if (c === ')' && !(cases.length > 0 && scopes.length <= cases.at(-1))) {
+        const outer = scopes.pop()
+        if (outer === undefined) Object.assign(context, { dirKnown: false, vars: {} })
+        else Object.assign(context, outer, { branchKnown: outer.branchKnown && context.branchKnown, blocks: context.blocks })
+      }
+    }
+    // the blocks the command stands in (`if … fi`, `case … esac`, a loop to its `done`): inside one, a command runs
+    // or not as the block decides, so what it does to the directory or to a variable is not the line's to count on
+    for (let k = 0; k < words.length && RESERVED.has(words[k]); k++) {
+      if (words[k] === 'case') cases.push(scopes.length)
+      else if (words[k] === 'esac') cases.pop()
+      if (OPENS.has(words[k])) context.blocks++
+      else if (CLOSES.has(words[k])) context.blocks = Math.max(0, context.blocks - 1)
+    }
+    if (!CHAINED.test(joining(command.before))) {
       // the `&&` chain a `cd` or an assignment was reached through has ended: whether it ran is not on the line
       if (context.conditionalDir) context.dirKnown = false
       if (context.conditionalVars) context.vars = {}
@@ -723,6 +754,7 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
               repos === null ||
               dynamic[i] ||
               repointed ||
+              call.composed === true ||
               (viaApi && !/^\d+$/.test(ref ?? '')) ||
               (needsDirectory && lostDirectory) ||
               (needsBranch && (wrapped || !context.branchKnown || context.loops + loops.length > 0)),
@@ -757,7 +789,7 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
   return merges
 }
 
-const named = merge => (merge.graphql ? 'a GraphQL mutation' : merge.composed ? 'a PUT to an endpoint the shell composes' : merge.ref === null ? "the current branch's pull request" : `pull request ${merge.ref}`)
+const named = merge => (merge.graphql ? 'a GraphQL mutation' : merge.composed ? 'a PUT to an endpoint the line does not spell out' : merge.ref === null ? "the current branch's pull request" : `pull request ${merge.ref}`)
 
 /** The gate's answer for a command line: `{ decision: 'ask' | 'allow', reason }`, or null for no answer.
  *  `lookup(merge)` returns `{ repo: 'owner/name', base, number }` for the pull request a merge names, or null when it

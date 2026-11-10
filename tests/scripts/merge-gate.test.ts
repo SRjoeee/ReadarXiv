@@ -163,6 +163,31 @@ describe('mergesIn', () => {
     expect(merge('cd x && gh pr merge https://github.com/SRjoeee/ReadarXiv/pull/603').unreadable).toBe(false)
     expect(merge('git fetch && cd wt && gh pr merge 603')).toMatchObject({ dirs: ['wt'], unreadable: false })
     expect(merge('git fetch && cd wt && bash -c "gh pr merge 603"')).toMatchObject({ dirs: ['wt'], unreadable: false })
+    // what a subshell does to the directory and the variables ends with it (#635, Codex); the branch it leaves is left
+    expect(merge('(true; cd ../other; true); gh pr merge 411 --merge')).toMatchObject({ ref: '411', dirs: [], unreadable: false })
+    expect(merge('(cd x && gh pr merge 603)')).toMatchObject({ dirs: ['x'], unreadable: false })
+    expect(merges('(cd x && gh pr merge 603); (cd y; gh pr merge 411) && gh pr merge 5 -R o/r').map(m => [m.ref, m.dirs])).toEqual([['603', ['x']], ['411', ['y']], ['5', []]])
+    expect(merge('cd a && (cd b); gh pr merge 603')).toMatchObject({ dirs: ['a'], unreadable: false })
+    for (const text of ['(n=411); gh pr merge $n', '(git checkout other); gh pr merge', 'cd y); gh pr merge 5']) {
+      expect(merges(text).at(-1)?.unreadable, text).toBe(true)
+    }
+    // a `case` closes each pattern with a `)` that ends no subshell: the polling loops of these sessions keep their
+    // directory through it, and a subshell around or inside a `case` still ends where it ends
+    expect(merge('cd /w && for i in 1 2 3; do s=$(gh pr view 5 --json mergeable -q .mergeable); case "$s" in MERGEABLE*) break;; UNKNOWN|"") sleep 3;; esac; done; gh pr merge 5 --merge')).toMatchObject({ dirs: ['/w'], unreadable: false })
+    expect(merge('( case $x in a) true;; esac; cd y ); gh pr merge 5')).toMatchObject({ dirs: [], unreadable: false })
+    expect(merge('case $x in (a) (cd y; true);; esac; gh pr merge 5')).toMatchObject({ dirs: [], unreadable: false })
+    // inside a block a command runs or not as the block decides: its `cd`, its assignment, are not counted on
+    for (const text of [
+      'case $x in a) cd y;; esac; gh pr merge 5',
+      'if true; then\n  cd y\nfi\ngh pr merge 5',
+      'if cd y; then true; fi; gh pr merge 5',
+      'while true; do\n  cd y\n  break\ndone; gh pr merge 5',
+      'case $x in a) n=411;; esac; gh pr merge $n',
+      'if true; then\n  n=411\nfi\ngh pr merge $n',
+    ]) {
+      expect(merges(text).at(-1)?.unreadable, text).toBe(true)
+    }
+    expect(merge('if [ "$c" = SUCCESS ]; then gh pr merge 332 --merge 2>&1 | tail -1; fi')).toMatchObject({ ref: '332', unreadable: false })
     // an assignment reached through `&&` ends with its chain; the plain `cd` before it does not
     expect(merge('cd /w && R=repos/o/r && gh api $R/comments | cat; gh pr merge 603')).toMatchObject({ dirs: ['/w'], unreadable: false })
     for (const text of [
@@ -172,7 +197,6 @@ describe('mergesIn', () => {
       'cd "$DIR" && gh pr merge 603',
       'cd x || true; gh pr merge 603',
       'test -d wt && cd wt; gh pr merge 603',
-      '(cd x && gh pr merge 603)',
       'cd - && gh pr merge 603',
       'if true; then cd x; fi; gh pr merge 603',
       'export GH_REPO=o/r; gh pr merge 603',
@@ -322,7 +346,10 @@ describe('mergesIn', () => {
 
   it('reads the REST and the GraphQL way to merge, and no other request', () => {
     expect(merges('gh api -X PUT repos/SRjoeee/ReadarXiv/pulls/411/merge -f merge_method=merge')).toEqual([{ ref: '411', repo: 'SRjoeee/ReadarXiv', dirs: [], unreadable: false, plain: false }])
-    expect(merge('gh api --method=put /repos/{owner}/{repo}/pulls/411/merge')).toMatchObject({ ref: '411', repo: null })
+    expect(merge('gh api --method=put /repos/{owner}/{repo}/pulls/411/merge')).toMatchObject({ ref: '411', repo: null, unreadable: false })
+    // a repository named by half: the other half is the directory's to fill, and the gate does not put the two together (#635, Codex)
+    expect(merge('gh api -X PUT repos/{owner}/ReadarXiv/pulls/411/merge').unreadable).toBe(true)
+    expect(merge('gh api -X PUT repos/SRjoeee/:repo/pulls/411/merge').unreadable).toBe(true)
     expect(merge('gh api -XPUT repos/o/r/pulls/$N/merge').unreadable).toBe(true)
     expect(merge(`gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: "x"}) { clientMutationId } }'`).unreadable).toBe(true)
     expect(merges('gh api repos/SRjoeee/ReadarXiv/pulls/411/merge')).toEqual([])
@@ -544,6 +571,12 @@ describe('against the shell itself', () => {
     'bash -ce "gh pr merge 5 -R o/r"; bash -euo pipefail -c "cd a && gh pr merge 6 -R o/r"',
     'bash <<< "gh pr merge 5 -R o/r"; echo "gh pr merge 6 -R o/r" | bash',
     'cat <(echo x) > /dev/null; gh pr merge 7 -R o/r',
+    '(true; cd a; true); gh pr merge 5',
+    '(cd a && gh pr merge 6); gh pr merge 7',
+    'cd a && (cd b; gh pr merge 8) && gh pr merge 9',
+    'x=a; case $x in a) cd a;; b) cd b;; esac; gh pr merge 5',
+    'if true; then\n  cd a\nfi\ngh pr merge 6',
+    'for i in 1 2; do case $i in 1) continue;; esac; break; done; (cd a; true); gh pr merge 7',
   ]
   /** The pull request a recorded `gh` call merged, or undefined when it was no merge */
   const merged = (args: string) => {
