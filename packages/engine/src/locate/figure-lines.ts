@@ -258,7 +258,7 @@ export function figureLinesOf(
       const items = itemsOf(ks)
       if (items.length) judge(ft, items, glyphs)
       // (a formula of a line of it torn from ink no line took: the paragraph the original's, F1's)
-      if (!ft.why && para.lines.some((x) => torn(ft, x.l, glyphs, loose))) ft.why = 'crowded'
+      if (!ft.why && para.lines.some((x) => torn(ft, x.l, glyphs, loose, lines))) ft.why = 'crowded'
       out.push(ft)
       for (const i of para.of) taken.add(i)
     }
@@ -274,7 +274,7 @@ export function figureLinesOf(
         ft.page = p
         ft.under = underOf(l.ks)
         if (items.length) judge(ft, items, glyphs)
-        if (!ft.why && torn(ft, l, glyphs, loose)) ft.why = 'crowded'
+        if (!ft.why && torn(ft, l, glyphs, loose, lines)) ft.why = 'crowded'
         out.push(ft)
         return
       }
@@ -892,9 +892,18 @@ export function textOf(gs: readonly number[], glyphs: readonly G[]): string {
  * F1: whether a text's formula element has ink of its own the text does not hold: a glyph no line took standing over or under
  * the element (its extent across, within its line's band of either side of the baseline: a sum's limits set past half the
  * size, a fraction's other line). The element moves with the translation and that ink would stay where it is, a torn formula:
- * the text stays the original's, the fallback of the relation reading (no fact tells the ink is the element's)
+ * the text stays the original's, the fallback of the relation reading (no fact tells the ink is the element's). A glyph that
+ * stands on another line's baseline (RUN_DY) is that line's, taken or not: a torn piece stands on no line's (a table's number
+ * cells under a group header's formula, no unit, stand on their row's; a caption's last mark past its line's run gap on the
+ * caption's: 2609.19644v1 p11)
  */
-function torn(ft: FigureText, l: Line, glyphs: readonly G[], loose: readonly number[]): boolean {
+function torn(
+  ft: FigureText,
+  l: Line,
+  glyphs: readonly G[],
+  loose: readonly number[],
+  lines: readonly Line[],
+): boolean {
   if (!loose.length) return false
   const reach = BAND_EM * l.size
   return ft.els.some((e) => {
@@ -904,7 +913,8 @@ function torn(ft: FigureText, l: Line, glyphs: readonly G[], loose: readonly num
     return loose.some((g) => {
       const x = glyphs[g]!
       if (!real(x) || (x.ix1 ?? x.x1) <= x0 || (x.ix0 ?? x.x0) >= x1) return false
-      return x.bottom < l.y + reach && x.top > l.y - reach
+      if (!(x.bottom < l.y + reach && x.top > l.y - reach)) return false
+      return !lines.some((m) => m !== l && Math.abs(m.y - x.y) <= RUN_DY * Math.max(m.size, x.size))
     })
   })
 }
