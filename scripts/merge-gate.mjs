@@ -368,8 +368,9 @@ function apiOptions(words, first) {
 }
 
 /** What a `gh api graphql` whose arguments start at `first` sends as its query: `literal`, an argument that holds a
- *  merge mutation; `unseen`, a query the arguments do not hold (an expansion, the standard input); `files`, the
- *  files a query or the whole body is read from. Null when every query is in sight and none merges. */
+ *  merge mutation; `unseen`, a query the arguments do not hold (an expansion, the standard input, a file named by an
+ *  expansion); `files`, the files a query or the whole body is read from. Null when every query is in sight and none
+ *  merges. */
 function graphqlArguments(words, dynamic, first) {
   let literal = false
   let unseen = false
@@ -669,9 +670,12 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
       const repointed = words.slice(0, i).some(word => REPOINTS.test(word))
       const lostDirectory = wrapped || !context.dirKnown || line.loopMoves
       if (call.kind === 'graphql') {
-        // a body file named by a relative path is a file of some directory: where that is in doubt, so is the body
-        const adrift = lostDirectory && call.files.some(file => !file.startsWith('/'))
-        if (call.literal || adrift || (call.unseen && GRAPHQL_MERGE.test(text))) merges.push({ ref: null, repo: null, dirs: context.dirs, unreadable: true, plain: false, graphql: true })
+        // a body file is opened now, before the line runs: it says what the request will send only if nothing on the
+        // line could rewrite it first (no command but a literal `cd` before it, no loop around it), and, named by a
+        // relative path, only if the directory is not in doubt. A query the line does not show is nobody's to read.
+        const settled = context.branchKnown && context.loops + loops.length === 0
+        const adrift = call.files.length > 0 && (!settled || (lostDirectory && call.files.some(file => !file.startsWith('/'))))
+        if (call.literal || call.unseen || adrift) merges.push({ ref: null, repo: null, dirs: context.dirs, unreadable: true, plain: false, graphql: true })
         else if (call.files.length > 0) merges.push({ ref: null, repo: null, dirs: context.dirs, unreadable: false, plain: false, graphql: true, files: call.files })
         break
       }
@@ -726,6 +730,8 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
       for (const script of scripts) for (const merge of mergesIn(script, within, depth + 1)) merges.push({ ...merge, plain: false })
       for (const script of handed.scripts) for (const merge of mergesIn(script, there, depth + 1)) merges.push({ ...merge, plain: false })
     }
+    // (what a substitution runs is a command that ran: the branch, and any file, may be another after it)
+    if (scripts.length > 0) context.branchKnown = false
     learn(context, command)
     move(context, command, start)
   }

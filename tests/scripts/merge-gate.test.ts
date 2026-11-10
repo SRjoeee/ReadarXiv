@@ -355,8 +355,23 @@ describe('mergesIn', () => {
     expect(merge(`Q='mutation { mergePullRequest(input: {}) { clientMutationId } }'; gh api graphql -f query="$Q"`).unreadable).toBe(true)
     expect(merge(`gh api graphql --input - <<'EOF'\n{"query":"mutation { mergePullRequest(input: {}) { clientMutationId } }"}\nEOF`).unreadable).toBe(true)
     expect(merges(`gh api graphql -f query='query($id: ID!) { node(id: $id) { id } }' -F id="$ID"`)).toEqual([])
-    expect(merges('gh api graphql -f query="$Q"')).toEqual([])
     expect(merges('gh api graphql -f query=@literal')).toEqual([])
+    // a query the line does not show, and a body file the line does not name, are a request nobody can read
+    for (const text of ['gh api graphql -f query="$Q"', 'Q=$(cat merge.graphql); gh api graphql -f query="$Q"', 'gh api graphql --input "$FILE"', 'gh api graphql -F query=@$f', "gh api graphql --input - <<'EOF'\n{}\nEOF"]) {
+      expect(merges(text).at(-1), text).toMatchObject({ unreadable: true })
+    }
+    // a body file is read before the line runs, so it is trusted only while nothing on the line could have rewritten
+    // it first (#635, Codex: `cp mutation.json request.json && gh api graphql --input request.json`)
+    for (const text of [
+      'cp mutation.json request.json && gh api graphql --input request.json',
+      "cat > q.json <<'EOF'\n{}\nEOF\ngh api graphql --input q.json",
+      'x=$(cp mutation.json request.json); gh api graphql --input request.json',
+      'for i in 1 2; do gh api graphql --input request.json; done',
+      'echo start; gh api graphql -F query=@q.graphql',
+    ]) {
+      expect(merges(text).at(-1), text).toMatchObject({ unreadable: true })
+      expect(merges(text).at(-1)?.files, text).toBeUndefined()
+    }
   })
 
   it('finds no merge where none runs', () => {
