@@ -4,7 +4,7 @@
 // markers wire sends a group that is not `must` on no wire (Microsoft moves such markers to the reply's end, empty: today's
 // stored replies), and 2608.25210v2's `\textcolor{blue}{…}` placeholders, whose words the translator translates.
 import { describe, expect, it } from 'vitest'
-import { accept } from '../src/accept.ts'
+import { accept, textOf } from '../src/accept.ts'
 import { chainOf } from '../src/chain.ts'
 import type { OutPiece, Result } from '../src/contract.ts'
 import { microsoft } from '../src/adapters/microsoft.ts'
@@ -56,6 +56,18 @@ describe('placeGroups: a group the reply did not bring back, around its own text
       ['5', [tx('（B2）')]],
       ['9', [tx('（B4）')]],
     ])
+  })
+  it("unwraps a copy the reply brought back holding white space, its content kept where it stands: the reply's text the same", () => {
+    // (Codex on #634, 4520557057: a span holding white space alone passes as not brought back; taking the copy out took the
+    // space with it, "Use valuenow.", after acceptance, and the projection the sentences are counted in moved)
+    const u = unit('s', [t('Use '), span('1', 'italic', [t('value')]), t(' now.')])
+    const reply = [tx('Use value'), sp('1', [tx(' ')]), tx('now.')]
+    const got = placeGroups(u, reply)
+    expect(got).toEqual([tx('Use '), sp('1', [tx('value')]), tx(' '), tx('now.')])
+    expect(textOf(got)).toBe(textOf(reply))
+    expect(accept(u, got)).toEqual({ ok: true })
+    // (an empty copy, a moved marker pair, goes: nothing of the reply's text is in it)
+    expect(placeGroups(u, [tx('Use value now.'), sp('1', [])])).toEqual([tx('Use '), sp('1', [tx('value')]), tx(' now.')])
   })
   it('leaves a group whose words the translator translated: no counterpart stated (2608.25210v2 p11)', () => {
     const u = unit('v', [

@@ -15,8 +15,8 @@
 // Not placed: a group whose words were translated (no counterpart is stated; a translator that keeps markup brings it back),
 // one whose text the translation or the source holds twice, one holding an element or another group (its pieces travel on
 // their own), one the translation holds only inside another group. Nothing else of a reply moves: a placed group splits one
-// text piece of its place, and its empty copy (a moved marker pair) goes. The projection, and so a row's sentences, is the
-// reply's own: a span's edges are none of it.
+// text piece of its place, and its copy holding no text (a moved marker pair, empty or around white space) is unwrapped, its
+// white space kept where it stands. The projection, and so a row's sentences, is the reply's own: a span's edges are none of it.
 import { textOf } from './accept.ts'
 import type { OutPiece, Piece, UnitIn } from './contract.ts'
 
@@ -118,8 +118,9 @@ export function placeGroups(unit: UnitIn, out: readonly OutPiece[]): OutPiece[] 
     count(scopeOut, true)
     const hit = at as { piece: Extract<OutPiece, { t: 'text' }>; m: [number, number] } | null
     if (total !== 1 || !hit) continue
-    // (its empty copy, a moved marker pair, out of the reply)
-    if (back) back.in.splice(back.in.indexOf(back.span), 1)
+    // (its copy the reply brought back holding no text, a moved marker pair, unwrapped: its content, none or white space, kept
+    // where it stands, so the reply's text, and the projection its sentences are counted in, are the reply's)
+    if (back) back.in.splice(back.in.indexOf(back.span), 1, ...back.span.content)
     const { piece, m } = hit
     const s = piece.s
     scopeOut.splice(
