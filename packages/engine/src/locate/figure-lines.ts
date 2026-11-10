@@ -109,7 +109,14 @@ export function figureLinesOf(
 ): FigureText[] {
   const out: FigureText[] = []
   const pitch = (g: G) => !!fixed && fixed.has(bare(g.font))
-  const built: { p: number; glyphs: G[]; boxes: number[]; runOf: Map<number, number[]>; lines: Line[]; loose: number[] }[] = []
+  const built: {
+    p: number
+    glyphs: G[]
+    boxes: number[]
+    runOf: Map<number, number[]>
+    lines: Line[]
+    loose: number[]
+  }[] = []
   pages.forEach((pg, pi) => {
     const p = pi + 1
     const glyphs = (pg.glyphs ?? []) as G[]
