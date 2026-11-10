@@ -174,9 +174,9 @@ describe("a unit laid with a fresh row on the sheet: what follows from its text'
   })
   it("a table's group holding a cell laid with a fresh row is tagged by its cells; one holding none is not", () => {
     const g = (cells: string[]) => ({ flag: 'groups', unit: 'group g1', what: 'w', cells, worse: true, nearer: 'today' })
-    const p = { diffs: [g(['t7', 't9']), g(['t3', 't4'])] }
+    const p: { diffs: (ReturnType<typeof g> & { fresh?: boolean })[] } = { diffs: [g(['t7', 't9']), g(['t3', 't4'])] }
     tagFresh(p, { fresh: [11] }, new Map([[11, 7]]))
-    expect(p.diffs.map((d: { fresh?: boolean }) => !!d.fresh)).toEqual([true, false])
+    expect(p.diffs.map((d) => !!d.fresh)).toEqual([true, false])
   })
   it("a text today kept by its name/code test and v2 sends: a difference of its words is the owner's ruling, its geometry judged", () => {
     const d = (flag: string, unit: string) => ({ flag, unit, what: 'w', worse: true, nearer: 'today' })
