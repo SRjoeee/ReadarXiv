@@ -189,6 +189,16 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     ])
     expect(t!.order.map((o) => o.t)).toEqual(['text', 'el'])
   })
+  it('makes no element of a letter a plot’s marker sits on: a decoration holds whole words, their ink inside it (2610.21085v1 p21)', () => {
+    // (a marker over the "j" of "jury": its box holds the letter's ink centre, not its ink, and the stretch is no word; read as one
+    // it split the word's show in a Type 3 face and the page's wrap went without its figures, every figure text the original's)
+    const { page, fig } = pageOf([[{ text: 'jury', font: 'DejaVuSans' }]])
+    const g = page.glyphs as Glyph[]
+    const cx = (g[0]!.x0 + g[0]!.x1) / 2
+    crowd(fig, 0, [boxMet(0, rect(cx - 1.5, 700, cx + 1.5, 703, { fill: true, stroke: false }))])
+    const [t] = figureLinesOf([page], fig, () => false, null)
+    expect(t).toBeUndefined()
+  })
   it('frees a text a closed shape holds whole: its room the shape’s inside, its edges over and under its baseline', () => {
     const { page, fig } = pageOf([[{ text: 'CTJA module', font: 'DejaVuSans' }]])
     const box = rect(66, 694, 140, 712)

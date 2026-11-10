@@ -370,7 +370,16 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
     }
     const idx = held.map((g) => at.get(g)!).sort((a, b) => a - b)
     const contiguous = idx.length > 0 && idx.at(-1)! - idx[0]! + 1 === idx.length
-    if (held.length && !others && contiguous && held.length < own.size) {
+    // (a decoration holds whole words: its stretch's ink inside it, and the stretch from a word's start to a word's end, a word
+    // space or a mark that is no letter or digit beside it, its line's end; never a letter of a word, a plot's marker over it)
+    if (
+      held.length &&
+      !others &&
+      contiguous &&
+      held.length < own.size &&
+      held.every((j) => inside(glyphs[j]!, x0, y0, x1, y1)) &&
+      wordBounded(textGs, idx, glyphs)
+    ) {
       decorate(
         ft,
         idx.map((i) => textGs[i]!),
@@ -394,7 +403,13 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
       const span = over.map((g) => at.get(g)!).sort((a, b) => a - b)
       const starts = over.some((j) => glyphs[j]!.x0 <= x0 + hw),
         ends = over.some((j) => glyphs[j]!.x1 >= x1 - hw)
-      if (span.length && starts && ends && span.at(-1)! - span[0]! + 1 === span.length) {
+      if (
+        span.length >= 2 &&
+        starts &&
+        ends &&
+        span.at(-1)! - span[0]! + 1 === span.length &&
+        wordBounded(textGs, span, glyphs)
+      ) {
         if (span.length === own.size) ft.textBoxes.push(it.b)
         else
           decorate(
@@ -409,6 +424,21 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
     unrelated = true
   }
   ft.why = unrelated ? 'crowded' : ft.why === 'crowded' ? null : ft.why
+}
+
+/** whether a stretch of a text's glyphs (`idx`, contiguous places in `gs`, its line order) begins at a word's start and ends at
+ *  a word's end: the glyph before it and the glyph after it stand a word space apart from it (SPACE_GAP of their size) or are no
+ *  letter or digit, or are none */
+function wordBounded(gs: readonly number[], idx: readonly number[], glyphs: readonly G[]): boolean {
+  const word = /[\p{L}\p{N}]/u
+  const side = (a: number | undefined, b: number | undefined, after: boolean) => {
+    if (a === undefined || b === undefined) return true
+    const x = glyphs[a]!,
+      y = glyphs[b]!
+    const [l, r] = after ? [y, x] : [x, y]
+    return r.x0 - l.x1 >= SPACE_GAP * Math.min(l.size, r.size) || !word.test(x.u) || !word.test(y.u)
+  }
+  return side(gs[idx[0]! - 1], gs[idx[0]!], false) && side(gs[idx.at(-1)! + 1], gs[idx.at(-1)!], true)
 }
 
 /** a stretch of a figure text's glyphs its decoration holds: its element, the decoration its box (an element it is inside or
