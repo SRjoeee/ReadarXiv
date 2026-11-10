@@ -3624,7 +3624,14 @@ On staging (round 8 B2b) 2608.25210v2's prompt name `llm_equal_human` came back 
   trajectories 17, 2608.25210v2 6, 2610.21312v1, 2610.31506v1, 2610.42112v1 2 each); the marked source of 14 papers moved. No
   formula is caught: a formula is a placeholder, a bare `_` TeX's subscript, and an ink script a glyph off its baseline (no
   underscore). Stage 1a states today's unit held whole by its successor through the replay's reading of an identifier (`l1.ts`
-  readingOf: `\_` an underscore, an identifier placeholder its characters).
+  readingOf: `\_` an underscore, an identifier placeholder its characters), and (f) reads the two dumps' placeholders alike: a
+  text symbol its character whatever ink a dump states of it, any other an unread mark only where its own ink is stated
+  (today's dumps list `\%`, `\_` and a `\code{…}` head with none). What the prepare keeps whole as identifiers is the
+  original's text, by the coordinator's ruling of 2026-11-10: the lab's dump marks a figure text so kept `keptBy: 'identifier'`,
+  and states today's unit of identifiers alone the candidate sends nothing of (a cell, a line of ink) with the same mark and
+  cause ("kept as the original: an identifier is never sent"), which the differential accepts and the parity reads as the
+  ruling's (`lab/typeset/parity/README.md`; a unit no row of a pair's serves, its text changed by the rule, is unmeasured there,
+  listed, never worse). Over the 88 the differential's lost fell from 221 to 18, r11's own.
 - **No glue inside a word** (`breaker/break.mjs` `inWord`, `gapsOf`; `place.mjs`). A line not set as Latin text spreads its
   slack, and its squeeze, over the gaps between its items, but none before an item that continues its word (`brk`: a piece after
   a break point inside a word, a URL's after its `/`, `.`, `-`, a compound's after its hyphen; `cont`: a run of one case of a
