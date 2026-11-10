@@ -664,7 +664,7 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
       }
       if (i !== theirs.length) return false
       const same = writtenAs(ps, drop, marked)
-      return same !== null && same(texOf(n))
+      return same?.(texOf(n)) ?? false
     })
     return all.find((n) => L && n.lines?.[0] && meets(L, n.lines[0])) ?? all.sort((a, b) => a.ord - b.ord)[0] ?? null
   }
