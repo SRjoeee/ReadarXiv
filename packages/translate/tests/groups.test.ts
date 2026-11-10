@@ -67,7 +67,11 @@ describe('placeGroups: a group the reply did not bring back, around its own text
     expect(textOf(got)).toBe(textOf(reply))
     expect(accept(u, got)).toEqual({ ok: true })
     // (an empty copy, a moved marker pair, goes: nothing of the reply's text is in it)
-    expect(placeGroups(u, [tx('Use value now.'), sp('1', [])])).toEqual([tx('Use '), sp('1', [tx('value')]), tx(' now.')])
+    expect(placeGroups(u, [tx('Use value now.'), sp('1', [])])).toEqual([
+      tx('Use '),
+      sp('1', [tx('value')]),
+      tx(' now.'),
+    ])
   })
   it('leaves a group whose words the translator translated: no counterpart stated (2608.25210v2 p11)', () => {
     const u = unit('v', [
