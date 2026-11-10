@@ -6,7 +6,8 @@
 //   <out>/prepare/<id>.prepare.json the prepare dump in the baseline's format (readarxiv-lab-data/refactor-2026-11/baseline/
 //   FORMAT.md §3), for its tools/diff.mjs;
 //   <out>/located/<id>.json what the gate reads beside the dump: each unit's place, cause, member ords; the wrap's pages; parts;
-//   stdout one summary line. Exit 3: a compile no cache holds (the paper missing).
+//   stdout one summary line. Exit 3: a compile no cache holds (the paper missing). Exit 4: a paragraph TeX opened where a group
+//   the instrument wrote as its content stood (Located.stats.opensLost: the gate of pipeline/instrument.mjs passThroughOf), outputs written.
 //   node --max-old-space-size=6144 --import tsx lab/pdf/prepare-back/run.mjs --dir=<paper dir> --id=<id> --out=<dir> --caches=<dir>:<dir>…
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -271,7 +272,9 @@ for (let p = 1; p <= N; p++) {
   const why = refusal ?? (addOn && 'refused' in addOn ? `wrap: ${addOn.refused}` : !part ? 'no part' : w && !w.ok ? `not wrapped: ${w.why}` : null)
   pages.push({ page: p, drawn: why === null, ...(why ? { why } : {}) })
 }
-const counts = { units: units.length, ...states, byKind: {}, pages: N, pagesDrawn: pages.filter(p => p.drawn).length }
+// (paragraphs TeX opened where a group the instrument wrote as its content stood: none stated, and none may be: the gate below)
+const opensLost = tally?.located?.opensLost ?? 0
+const counts = { units: units.length, ...states, byKind: {}, pages: N, pagesDrawn: pages.filter(p => p.drawn).length, ...(opensLost ? { opensLost } : {}) }
 for (const u of units) { const k = (counts.byKind[u.kind] ??= { drawn: 0, laid: 0, unlaid: 0 }); k[u.state]++ }
 mkdirSync(join(OUT, 'prepare'), { recursive: true })
 // (the lines the candidate reads as a display's formula, locate's `displays`, which restate.mjs states a unit by as run.mjs does)
@@ -291,4 +294,7 @@ writeFileSync(join(OUT, 'located', `${id}.json`), `${JSON.stringify({
 })}\n`)
 console.log(JSON.stringify({ id, refused: refusal, units: units.length, ...states, located: tally?.located.located ?? 0, unlocated: tally?.located.unlocated ?? {}, born: tally?.located.born ?? 0, made: tally?.located.made ?? null, wrap: tally?.wrap ?? null, ...(proofs ? { proofs: { a: proofs.glyphs.a.failed, c: proofs.glyphs.c.failed, ...(proofs.pixels ? { on: proofs.pixels.onFailed?.length, offOutside: proofs.pixels.offOutside ? Object.fromEntries(Object.entries(proofs.pixels.offOutside).map(([k, v]) => [k, v.length])) : proofs.pixels.refused } : {}) } } : {}), ms: Math.round(performance.now() - t0) }))
 for (const t of tasks) await t.destroy().catch(() => {})
+// (the gate of a group written as its content (pipeline/instrument.mjs passThroughOf, decided before TeX's paragraph ends are read):
+// a paragraph TeX opened at one has nothing to state it on, so the paper fails, exit 4, its outputs written)
+if (opensLost) { console.error(`${id}: ${opensLost} paragraph(s) TeX opened where a group the instrument wrote as its content stood`); process.exit(4) }
 process.exit(0)

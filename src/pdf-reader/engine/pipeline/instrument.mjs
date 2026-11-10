@@ -107,6 +107,19 @@ export function passThroughOf(pieces) {
   })
   return out
 }
+/** where each group passThroughOf writes as its content opened, as offsets in the unit's projection (each text piece's characters,
+ *  each element or nested unit one): the engine's facts pass counts a paragraph TeX opened at one, which must be none
+ *  (InstrumentUnit.passed, Located.stats.opensLost) */
+export function passedOf(pieces) {
+  const through = passThroughOf(pieces), out = []
+  let at = 0
+  pieces.forEach((p, k) => {
+    if (p.t === 'text') at += unicodeOf(p.s).length
+    else if (p.t === 'ph' || p.t === 'nested') at += 1
+    else if (p.t === 'open' && through.has(k)) out.push(at)
+  })
+  return out
+}
 /** today's flat pieces ([open … close] pairs) as nested ones: an open starts a span, a close ends the innermost; a close with no
  *  open wraps what came before it at its level (the group began before the unit), an open left at the end has no close; an
  *  element's wire facts (wireFacts), and a reference's item's full name where the marked compile stated one, with the language
@@ -1027,9 +1040,9 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     const id = unitId(u.kind, content)
     ids[i] = id
     const unhidden = own.units.get(i)?.unhidden
-    const classes = classesOf(u.pieces, colours.get(i) ?? null, shown), spans = spansOf(u.pieces, colours.get(i) ?? null)
+    const classes = classesOf(u.pieces, colours.get(i) ?? null, shown), spans = spansOf(u.pieces, colours.get(i) ?? null), passed = passedOf(u.pieces)
     classesBy[i] = new Map(classes)
-    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(facts.kept.has(i) ? { kept: true } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : boxed.has(i) ? { align: boxed.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
+    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(passed.length ? { passed } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(facts.kept.has(i) ? { kept: true } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : boxed.has(i) ? { align: boxed.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
   })
   for (let i = units.length; i < inkBase; i++) {
     const content = contentOf(bundle[i][5].map(p => ({ t: 'text', s: p[1] })))

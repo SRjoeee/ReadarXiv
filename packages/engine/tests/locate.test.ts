@@ -2372,6 +2372,18 @@ describe('a paragraph TeX opened inside a unit (C13, C15: SpanAt.opens, El.opens
     ]
     expect(partOf(owned(B, units, [], [22]), B).spans?.some(([, x]) => x.opens !== undefined) ?? false).toBe(false)
   })
+  it('counts a paragraph TeX opened where a group the instrument wrote as its content stood: a gate, which no such group may meet', () => {
+    // (pipeline/instrument.mjs passThroughOf: a group that carries nothing is its content, decided before TeX's paragraph ends are
+    // read; one TeX opened a paragraph at would have nothing to state it on. Stage 1a fails a paper that has one)
+    const B = docOf([{ lines: ['An item ends with sentences.', 'llm equal two: Determine', 'whether the two agree'] }])
+    const content = [text('An item ends with sentences. \n llm equal two: Determine whether the two agree')]
+    const units: InstrumentUnit[] = [{ id: unitId('para', content), kind: 'para', content, passed: [29] }]
+    expect(locate(owned(B, units, [], [28]), B, align(B, B)).stats.opensLost).toBe(1)
+    // (an end that no such group's open meets, and one where none stood)
+    expect(locate(owned(B, units, [], [43]), B, align(B, B)).stats.opensLost).toBeUndefined()
+    const plain = [{ ...units[0]!, passed: [] }]
+    expect(locate(owned(B, plain, [], [28]), B, align(B, B)).stats.opensLost).toBeUndefined()
+  })
   it('states the element whose first glyph opens TeX’s paragraph, and none whose own glyphs the end falls inside', () => {
     const B = docOf([{ lines: ['A first paragraph ends.', 'X and the second one', 'runs on'] }])
     const content = [

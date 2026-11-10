@@ -4,7 +4,7 @@
 // no span, which the tags wire would send as a tag pair for nothing. Over the 88 papers' bundles, 20,172 of the first kind and
 // 2,943 of the second, none with a face, a fill, a link or a paragraph TeX opened at it of its own
 import { describe, expect, it } from 'vitest'
-import { piecesOf, spansOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import { passedOf, piecesOf, spansOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
 
 type P = { t: string; s?: string; src?: string; id?: number }
 const open = (src: string, id: number, sets?: 0): P => {
@@ -43,5 +43,10 @@ describe('a group that carries nothing is its content', () => {
     expect(shape(piecesOf(styled))).toEqual([['span', '0', '\\emph{', ['Nature']]])
     const cut = [open('\\bibinfo{title}{', 1, 0), text('A study')]
     expect(shape(piecesOf(cut))).toEqual([['span', '0', '\\bibinfo{title}{', ['A study']]])
+  })
+  it('states where each such group opened, in the projection, for the engine to count a paragraph TeX opened there (a gate)', () => {
+    const pieces = [text('On '), open('{', 1), text('GPU'), close(1), text(' and '), ph('$x$'), text(' '), open('\\bibinfo{title}{', 2, 0), text('T'), close(2)]
+    expect(passedOf(pieces)).toEqual([3, 13])
+    expect(passedOf([open('{', 1), ph('\\em'), text('all'), close(1)])).toEqual([])
   })
 })
