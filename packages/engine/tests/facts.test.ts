@@ -20,6 +20,7 @@ import {
   styleOf,
   fillRunsOf,
   fixedFacesOf,
+  oneFamily,
   tailOf,
   textOf,
   urlCopyOf,
@@ -1246,5 +1247,22 @@ describe('a face of one pitch (Rule 1)', () => {
       at('l', 88, 525, 'CCCCCC+Courier'),
     ]
     expect([...fixedFacesOf([...node, ...body, ...tt])]).toEqual(['Courier'])
+  })
+})
+
+describe('one family, as two fonts’ names tell it (PDF.js states no family where the engine reads)', () => {
+  it('is the name before its first hyphen, or the name without PDF.js’s own style words and hyphens', () => {
+    // (one family in two weights or two slants: 2608.06701v1 p2's bubbles, a bold word inside a row of ArialMT)
+    expect(oneFamily('MUFUZY+ArialMT', 'MUFUZY+Arial-BoldMT')).toBe(true)
+    expect(oneFamily('TimesNewRomanPSMT', 'AAAAAI+TimesNewRomanPS-ItalicMT')).toBe(true)
+    expect(oneFamily('ArialMT', 'Arial-BoldItalicMT')).toBe(true)
+    // (today's reading: the part before the first hyphen)
+    expect(oneFamily('KZNDUM+NimbusRomNo9L-Regu', 'PPHKCD+NimbusRomNo9L-Medi')).toBe(true)
+    expect(oneFamily('DejaVuSans', 'DejaVuSans-Oblique')).toBe(true)
+    // (two faces whose names differ by more than a style word: two families)
+    expect(oneFamily('ArialMT', 'ArialNarrow-Bold')).toBe(false)
+    expect(oneFamily('NimbusRomNo9L-Regu', 'NimbusSanL-Regu')).toBe(false)
+    expect(oneFamily('CMR10', 'CMMI10')).toBe(false)
+    expect(oneFamily('ArialMT', 'Arial-Black')).toBe(false)
   })
 })

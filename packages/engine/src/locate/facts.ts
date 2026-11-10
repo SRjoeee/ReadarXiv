@@ -93,6 +93,31 @@ export function classifyFont(name: string): FontClass {
   return { fam, bold, italic, caps }
 }
 
+/**
+ * A font's family keys as its PostScript name tells them, subset tag off: the name before its first hyphen (DejaVuSans and
+ * DejaVuSans-Oblique, NimbusRomNo9L-Regu and -Medi), and the name without PDF.js's own style words and its hyphens. Nothing else
+ * states a family where the engine reads: PDF.js gives the main thread a font's name and its generic class (`fallbackName`), and
+ * reads `bold`, `italic` and `black` off the name only for a font it could not load (pdf.worker's Font, its fallback to a system
+ * font: /bold/i, /oblique|italic/i, /Black/); its alias table is the worker's own, and a descriptor's /FontFamily is optional
+ */
+export function familyKeysOf(name: string): readonly [string, string] {
+  const n = bare(name)
+  const styled = n
+    .replace(/bold|oblique|italic/giu, '')
+    .replace(/Black/gu, '')
+    .replace(/-/gu, '')
+  return [n.replace(/-.*$/u, ''), styled]
+}
+/** whether two fonts are one family (familyKeysOf): their names equal before the first hyphen, or equal without PDF.js's style
+ *  words and the hyphens: ArialMT and Arial-BoldMT, TimesNewRomanPSMT and TimesNewRomanPS-ItalicMT (2608.06701v1 p2's bubbles, a
+ *  bold word inside a row), never ArialMT and ArialNarrow-Bold */
+export function oneFamily(a: string, b: string): boolean {
+  return sameFamily(familyKeysOf(a), familyKeysOf(b))
+}
+/** oneFamily over keys already read */
+export const sameFamily = (a: readonly [string, string], b: readonly [string, string]) =>
+  (!!a[0] && a[0] === b[0]) || (!!a[1] && a[1] === b[1])
+
 const mostOf = <T>(xs: Iterable<T>): T | undefined => {
   const n = new Map<T, number>()
   let best: T | undefined

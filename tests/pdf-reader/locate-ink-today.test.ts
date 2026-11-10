@@ -104,9 +104,12 @@ describe('today’s ink makers in the engine package', () => {
       const { runs: _, ...glyphs } = (u as { glyphs: Glyphs }).glyphs
       return { ...(u as object), glyphs }
     }
-    // (and the crowded texts' met ink, `met`, which locate's relation reading judges: figure-lines.ts)
-    const { met: _met, ...figCopy } = copy.fig as typeof copy.fig & { met?: unknown }
-    expect({ ...copy, fig: figCopy, ink: copy.ink.map(bare) }).toEqual(today)
+    // (and the crowded texts' met ink, `met`, which locate's relation reading judges, and the closed paths that hold units alone,
+    // `holds`, the container step's (F3), with its counters `stats.boxed` and `stats.interior`: figure-lines.ts)
+    type Fig = typeof copy.fig & { met?: unknown; holds?: unknown; stats?: Record<string, number> }
+    const { met: _met, holds: _holds, ...figCopy } = copy.fig as Fig
+    const { boxed: _boxed, interior: _interior, ...stats } = (figCopy as Fig).stats ?? {}
+    expect({ ...copy, fig: { ...figCopy, stats }, ink: copy.ink.map(bare) }).toEqual(today)
     for (const u of copy.ink) {
       const runs = runsOf(u) ?? []
       expect(runs.flatMap(([, gs]) => gs)).toEqual((u as unknown as { glyphs: Glyphs }).glyphs.ph)

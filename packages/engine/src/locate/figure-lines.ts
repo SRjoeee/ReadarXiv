@@ -293,41 +293,55 @@ function linesOf(
       )
         continue
       idx.sort((a, b) => lines[b]!.y - lines[a]!.y || lines[a]!.x0 - lines[b]!.x0)
-      const L = idx.map((i) => lines[i]!)
-      const F = idx.map((i) => proseFacts({ l: lines[i]!, read: reads[i]! }, glyphs, boxes))
+      // (the runs it holds on one baseline are one line, however far apart their words stand: the path is the fact that holds
+      // them together, no wider run gap (the coordinator's (c), 2026-11-11))
+      const rows: { l: Line; read: Read }[] = []
+      for (const i of idx) {
+        const l = lines[i]!
+        const r = rows.find((q) => Math.abs(q.l.y - l.y) <= RUN_DY * Math.max(q.l.size, l.size))
+        if (!r) rows.push({ l, read: reads[i]! })
+        else {
+          r.l = lineOf([...r.l.ks, ...l.ks], [...r.l.gs, ...l.gs], new Set([...r.l.free, ...l.free]), glyphs, r.l.fig)
+          r.read = lineRead(r.l, glyphs, pitch, math)
+        }
+      }
+      if (rows.length < 2 || rows.some((r) => !(r.read.kind === 'plain' || r.read.kind === 'mixed'))) continue
+      const L = rows.map((r) => r.l)
+      const F = rows.map((r) => proseFacts(r, glyphs, boxes))
       const tol = PARA_ALIGN_TOL * Math.max(...L.map((l) => l.size))
       const spread = (f: (l: Line) => number) => Math.max(...L.map(f)) - Math.min(...L.map(f))
-      // (a node's label as its path sets it: its lines one under the other with no blank line between (two lines on one baseline
-      // are two labels, 2608.06701v1 p8's), in one face, size, weight and fill (a title over a subtitle in another is two texts),
-      // no line an item's (a list in a node, 2608.06007v1 p1's "KV Lifecycle - identify - place"), and centred, as a node sets
-      // its label: lines set flush in a path are its rows (a value over a value, 2610.37668v1's PSNR / LPIPS / FPS over each
-      // image; a legend's entries))
+      // (a node's label as its path sets it: its lines one under the other with no blank line between, in one face, size, weight
+      // and fill (a title over a subtitle in another is two texts), no line an item's (a list in a node, 2608.06007v1 p1's "KV
+      // Lifecycle - identify - place"), and centred, as a node sets its label: lines set flush in a path are its rows (a value over
+      // a value, 2610.37668v1's PSNR / LPIPS / FPS over each image; a legend's entries))
       const stacked = F.every(
         (f, n) => !n || (F[n - 1]!.y - f.y > 0.5 * f.size && F[n - 1]!.y - f.y - F[n - 1]!.band < F[n - 1]!.band),
       )
       if (!stacked || !F.every((f) => sameFace(F[0]!, f)) || spread((l) => (l.x0 + l.x1) / 2) > tol) continue
       const align = 'c' as const
       const ft: FigureText = {
-        ks: idx.flatMap((i) => lines[i]!.ks),
+        ks: L.flatMap((l) => l.ks),
         page: p,
         order: [],
         els: [],
         label: [],
         para: { justified: false, by: 'container', align },
-        claimed: idx.flatMap((i) => reads[i]!.gs.filter((g) => lines[i]!.free.has(g))),
+        claimed: rows.flatMap((r) => r.read.gs.filter((g) => r.l.free.has(g))),
         copies: [],
         textBoxes: [],
         why: null,
         container: null,
         under: null,
       }
-      idx.forEach((i, n) => {
-        if (n) ft.order.push({ t: 'br', end: endOf(glyphs, reads[idx[n - 1]!]!.gs, reads[i]!.gs, sourceOf, true) })
-        piecesInto(ft, reads[i]!, false)
+      rows.forEach((r, n) => {
+        if (n) ft.order.push({ t: 'br', end: endOf(glyphs, rows[n - 1]!.read.gs, r.read.gs, sourceOf, true) })
+        piecesInto(ft, r.read, false)
       })
       const items = itemsOf(ft.ks)
       if (items.length) judge(ft, items, glyphs)
-      if (!ft.why && idx.some((i) => torn(ft, lines[i]!, glyphs, loose, lines))) ft.why = 'crowded'
+      // (torn reads the lines as the text reads them: its rows in place of the runs they merged)
+      const others = [...lines.filter((_, i) => !idx.includes(i)), ...L]
+      if (!ft.why && L.some((l) => torn(ft, l, glyphs, loose, others))) ft.why = 'crowded'
       if (!ft.container)
         ft.container = roomIn(
           h.shape,
@@ -1026,7 +1040,8 @@ function proseFacts(x: ProseLine, glyphs: readonly G[], boxes: readonly number[]
     if (bx1 > l.x0 || bx1 < l.x0 - ANCHOR_REACH * size || by1 <= bottom || by0 >= top) continue
     leaders.add(b / 4)
   }
-  const face = most((g) => bare(g.font).replace(/-.*$/u, ''))
+  // (its face the font most of its letters are set in, compared by family: facts.ts oneFamily)
+  const face = most((g) => bare(g.font))
   return {
     fig: l.fig,
     y: l.y,

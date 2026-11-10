@@ -39,6 +39,26 @@ const page = (text: string, at: number) => {
   }
 }
 
+describe('figureUnitsOf reads one line over the faces of one family', () => {
+  /** a page of one line whose glyphs are set in the fonts `font` gives each */
+  const set = (text: string, font: (i: number) => string) => {
+    const p = page(text, 290)
+    for (const [i, g] of p.glyphs.entries()) g.font = font(i)
+    return p
+  }
+  it('reads a bold word and its row one line where the names are one family without PDF.js’s style words (2608.06701v1 p2)', () => {
+    const bold = set('Open the relevant', (i) => (i < 4 ? 'MUFUZY+Arial-BoldMT' : 'MUFUZY+ArialMT'))
+    expect(figureUnitsOf([bold], null).units.map((u: { text: string }) => u.text)).toEqual(['Open the relevant'])
+    const italic = set('an inner word', (i) =>
+      i > 2 && i < 8 ? 'AAAAAI+TimesNewRomanPS-ItalicMT' : 'AAAAAC+TimesNewRomanPSMT',
+    )
+    expect(figureUnitsOf([italic], null).units.map((u: { text: string }) => u.text)).toEqual(['an inner word'])
+    // (two families, a narrow face beside the regular one: apart)
+    const narrow = set('Open the relevant', (i) => (i < 4 ? 'ArialNarrow-Bold' : 'ArialMT'))
+    expect(figureUnitsOf([narrow], null).units.map((u: { text: string }) => u.text)).toEqual(['Open', 'the relevant'])
+  })
+})
+
 describe("figureUnitsOf reads a page's shapes with its own figure texts alone", () => {
   it("tells each page done in order, and reads the same with each page's shapes let go once it is", () => {
     const made = () => [page('label', 140), page('words', 131)]
@@ -124,7 +144,7 @@ describe('figure-text: the closed paths that hold units alone (F3’s container 
     ])
     expect(stats.boxed).toBe(1)
   })
-  it('holds no lines another glyph shares the path with; of two paths round the same lines, the inner one', () => {
+  it('holds no lines another glyph shares the path with; of two paths round the same lines, the inner one: the outer holds a node', () => {
     // ("yes" a unit of its own inside the diamond: not alone)
     const inside = [...units, { k: 3, gs: [] as number[] }]
     const g2 = [...glyphs, glyph('x', 98, 690)]
@@ -137,8 +157,24 @@ describe('figure-text: the closed paths that hold units alone (F3’s container 
     }
     const held = containersOf(pg([frame]), units, 1).map((h: { b: number }) => h.b)
     expect(held).toEqual([0])
-    // (a stroke inside the diamond, a legend's sample: no node's label alone, 2608.06701v1 p6)
+    // (a stroke inside the diamond, a legend's sample or a rule under words: no reason, the lines held alone still (the node's
+    // label rule reads a legend's rows apart, figure-lines.ts))
     const sample = { b: 1, segs: [70, 690, 78, 690], box: [70, 689.5, 78, 690.5] }
-    expect(containersOf(pg([sample]), units, 1).length).toBe(0)
+    expect(containersOf(pg([sample]), units, 1).map((h: { b: number }) => h.b)).toEqual([0])
+  })
+  it('holds lines a fill under words of one line stands among (a decoration), not lines a node of their own holds', () => {
+    const rect = (b: number, x0: number, y0: number, x1: number, y1: number) => ({
+      b,
+      segs: [x0, y0, x1, y0, x1, y0, x1, y1, x1, y1, x0, y1, x0, y1, x0, y0],
+      box: [x0, y0, x1, y1],
+    })
+    // (a chip under "signal", inside its line's band, one band's height over and under its baseline (2608.06701v1 p9's code
+    // in a bubble, 0.96 of the size): the diamond holds its lines still)
+    expect(containersOf(pg([rect(1, 83, 683, 117, 695)]), units, 1).map((h: { b: number }) => h.b)).toEqual([0])
+    // (a node's box round "signal" with room over and under it, past the band (2608.06007v1 p8's nodes, 1.5 of the size and
+    // more): its text its own, the diamond holds no lines alone)
+    expect(containersOf(pg([rect(1, 83, 676, 117, 698)]), units, 1).map((h: { b: number }) => h.b)).toEqual([])
+    // (a box round two of its lines: a node of its own however tight, which holds them; the diamond none)
+    expect(containersOf(pg([rect(1, 78, 670, 122, 695)]), units, 1).map((h: { b: number }) => h.b)).toEqual([1])
   })
 })

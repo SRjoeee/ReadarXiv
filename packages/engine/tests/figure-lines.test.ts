@@ -368,6 +368,41 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     fig.holds = [{ p: 1, b: 0, ks: [0, 1], shape: rect(60, 690, 280, 712) }]
     expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
   })
+  // (a row's width as glyphsOf sets it at size 10: x where a row of these parts stands centred on cx, its parts `gap` apart)
+  const widthOf = (t: string) => [...t].reduce((w, u) => w + (u === ' ' ? 3 : 5 + (u.codePointAt(0)! % 3)), 0)
+  const centred = (cx: number, font: string, texts: string[], gap = 0) => {
+    let x = cx - (texts.reduce((w, t) => w + widthOf(t), 0) + gap * (texts.length - 1)) / 2
+    return texts.map((text) => {
+      const part = { text, font, x }
+      x += widthOf(text) + gap
+      return part
+    })
+  }
+  it('reads the runs a path holds on one baseline one line: a row its words stand wide apart in, a node’s label still', () => {
+    const T = 'TimesNewRomanPSMT'
+    const { page, fig } = pageOf([
+      centred(130, T, ['Locate the actual']),
+      centred(130, T, ['validate', 'record'], 12),
+      centred(130, T, ['checks']),
+    ])
+    fig.holds = [{ p: 1, b: 0, ks: [0, 1, 2, 3], shape: rect(60, 660, 200, 712) }]
+    const [t] = figureLinesOf([page], fig, () => false, null).filter((x) => x.ks.length > 1)
+    expect(t!.ks).toEqual([0, 1, 2, 3])
+    expect(t!.para).toEqual({ justified: false, by: 'container', align: 'c' })
+    expect(t!.order.filter((o) => o.t === 'br')).toHaveLength(2)
+  })
+  it('reads a row whose bold words outnumber its others in the face of its family (2608.06701v1 p2’s "… to inspect the")', () => {
+    const R = 'MUFUZY+ArialMT',
+      B = 'MUFUZY+Arial-BoldMT'
+    const { page, fig } = pageOf([
+      centred(130, R, ['Open the relevant']),
+      [...centred(130, R, ['to', 'inspect', 'it'], 3)].map((q, i) => (i === 1 ? { ...q, font: B } : q)),
+      centred(130, R, ['validation checks']),
+    ])
+    fig.holds = [{ p: 1, b: 0, ks: [0, 1, 2, 3, 4], shape: rect(60, 660, 200, 712) }]
+    const [t] = figureLinesOf([page], fig, () => false, null).filter((x) => x.ks.length > 1)
+    expect(t?.ks).toEqual([0, 1, 2, 3, 4])
+  })
   it('reads a closed path’s inside by its interior: a glyph inside its box and outside it crowds nothing (2608.06701v1 p2)', () => {
     // (one line in the diamond, "yes" beside it: in the diamond's box, outside the diamond)
     const { page, fig } = pageOf([

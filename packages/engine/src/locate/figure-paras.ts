@@ -9,6 +9,8 @@
 // joined by no guess from their shape: stacked legend entries read so (lanes/fig-text/img/ragged); the lines a closed shape
 // holds alone are F3's next step (the coordinator's decisions of 2026-11-10 and 2026-11-11).
 
+import { oneFamily } from './facts.ts'
+
 /** how near two edges or two pitches are one, of the text's size (figure-text.mjs ALIGN_TOL) */
 export const PARA_ALIGN_TOL = 0.08
 /** how near two sizes are one (a glyph joins a run within a hundredth of its size: figure-text.mjs) */
@@ -30,7 +32,8 @@ export interface ParaLine {
   /** its ink's top and bottom, every glyph of it (its formulas' and their scripts' too), PDF units */
   top: number
   bottom: number
-  /** its text letters' face family (the PostScript name before its style), whether every one is bold, and their fill */
+  /** the font most of its text letters are set in (its family read by facts.ts oneFamily), whether every one is bold, and their
+   *  fill */
   face: string | null
   bold: boolean
   fill: number | null
@@ -54,7 +57,8 @@ export interface Para {
 /** two lines in one face family, weight, size and fill (a paragraph's; a node's label) */
 export const sameFace = (a: ParaLine, b: ParaLine) =>
   !!a.face &&
-  a.face === b.face &&
+  !!b.face &&
+  oneFamily(a.face, b.face) &&
   a.bold === b.bold &&
   Math.abs(a.size - b.size) <= SIZE_TOL * Math.max(a.size, b.size) &&
   a.fill === b.fill
