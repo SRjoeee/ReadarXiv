@@ -3863,6 +3863,23 @@ the next point (own.mjs MR 4), the next unit's start, across TeX's paragraph end
   no other form with words in any paper's text; `\IfFileExists` (13 calls, 5 papers) was the role table's already. Two papers'
   marked sources move.
 
+### 18.29 An opening point reads past an earlier unit's marks set again inside its ink (2026-11-11)
+
+The owner's batch 6 (2608.25210v2 p1): VLDB's "PVLDB Reference Format: …" paragraph was no unit. Its `\vldbauthors` and
+`\vldbtitle` hold the title's and the authors' arguments, which acmart keeps with their marks (`\shorttitle`, `\authors`), so TeX
+sets those units' marks a second time inside the paragraph (MR 3's later occurrence). `\vldbtitle`'s opening point read to its
+next point, the title's start mark set again, and owned nothing; the title's glyphs fell to the paragraph's text, more letters
+than its source writes.
+
+- **The rule** (layout/stream.mjs `alone`, `earlierUnit`). An opening point alone whose next points in its region are marks of
+  units numbered before its own (the source sets its units in order, so after a piece of unit `n` such a mark is that unit's
+  text set again, never the next unit's) reads past them, its ink running to where the text after it begins; where that text
+  is not found before the next point of another kind, as before. A piece with no text after it, or blocked by an unmarked piece, is read
+  as before.
+- **Not alone**: `\vldbauthors` writes no point today (after `\\` the marks pass it over, marks.mjs `passedOver`), so the
+  paragraph stays no unit until its marks are written (the marks lane); its whole proof (located, translated as ACM's block,
+  its names under the author names' toggle, one name per person) comes with them.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
