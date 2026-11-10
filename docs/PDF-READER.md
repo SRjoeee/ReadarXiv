@@ -3345,8 +3345,11 @@ rests on his line quoted there: a translation may be made or not, never garbled.
   kept as the paper has it, as a code environment's lines are (§19.7): its unit `kept`, its member `fixed`, a figure text's why
   `figure: code`. That is code, a command, a prompt, JSON, an OCR card, an identifier. A figure's word in another face is kept
   with its line where the ink right before and after it, in its page's order, stands on its baseline in a face of one pitch
-  (2411.13093v4 p19's "attractions" and "coin", set in Georgia inside Consolas JSON). A paper whose body face is of one pitch
-  keeps nothing for it. A unit holding a word of another face stays translated, its typewriter run an element or a group: a
+  (2411.13093v4 p19's "attractions" and "coin", set in Georgia inside Consolas JSON). A figure's run, TeX's line in a picture
+  too (which goes on over faces and colours, §19.12), goes into or out of no face of one pitch (`figure-text.mjs`, `fixed`):
+  2610.19159v1's transcript box titles set a path in typewriter between their words, and the path is a figure text of its own,
+  kept, the words before and after it translated. A paper whose body face is of one pitch keeps nothing for it, and its
+  figures' runs go on as before. A unit holding a word of another face stays translated, its typewriter run an element or a group: a
   paragraph naming a function in `\texttt`, a figure's title line with a path in it. Titles, captions, questions and answers
   set in a proportional face are translated.
 - **The facts it rests on** (`facts.ts` fixedFacesOf). A face is of one pitch where each font program of it (an embedded subset)
@@ -3357,14 +3360,14 @@ rests on his line quoted there: a translation may be made or not, never garbled.
   face is the face most of the paper's source units' text glyphs are set in.
 - **Over the 88 and 2411.13093v4** (stage 1a, lane mono-rule). 40 source units are kept on 5 papers: 2608.06007v1's 23 cells
   of API signatures, and prompts set with `\ttfamily` (2608.25210v2 6, 2610.11256v1 4, 2610.21098v1 1, 2610.22195v1 6), which
-  were translated while `\texttt` prompts were kept. 154 figure texts are kept on 6 papers (code, paths, identifiers such as
-  `lin2` and `Kitchen_In`, e-mail addresses), and 129 on 2411.13093v4. Every face kept is a typewriter's (Consolas, DejaVu Sans
-  Mono, Nimbus Mono, Bera Sans Mono, Liberation Mono, Inconsolata, Computer Modern Typewriter), but for the 3 words inside
-  2411.13093v4's code lines; no paper's body face is one of one pitch. 2610.19159v1's 17 transcript box titles hold a path in
-  typewriter between words in a proportional face, one figure text a line as TeX set it (§19.12): titles, translated, each
-  path a group.
-- **The parity** reads a unit so kept as the original's text, no translation missing (`lab/typeset/parity/README.md`): the
-  prepare marks each (`pitch`; the lab's dump `keptBy: 'pitch'`), and no other unit left the original's is read so.
+  were translated while `\texttt` prompts were kept. 173 figure texts are kept on 8 papers (code, paths, identifiers such as
+  `lin2` and `Kitchen_In`, e-mail addresses, 2610.19159v1's 17 paths), and 129 on 2411.13093v4. Every face kept is a
+  typewriter's (Consolas, DejaVu Sans Mono, Nimbus Mono, Bera Sans Mono, Liberation Mono, Inconsolata, Computer Modern
+  Typewriter), but for the 3 words inside 2411.13093v4's code lines; no paper's body face is one of one pitch.
+- **The parity and stage 1a's differential** read a unit so kept as the original's text, no translation missing: the prepare
+  marks each (`pitch`; the lab's dump `keptBy: 'pitch'`), the parity's ruling reads the mark (`lab/typeset/parity/README.md`),
+  and the dump states it the differential's cause (k), accepted (`stated.mjs` keptWhyOf); no other unit left the original's is
+  read so.
 - **Not this rule's.** A box whose source unit is one block of a proportional line and a typewriter prompt (2608.25210v2 p3)
   stays translated, its keys garbled; a cut at the box in the front end would keep it. A figure's name label in a proportional
   face (2411.13093v4 p19's "DET", Georgia-Bold) is translated alone: today's rule that keeps a figure label that is a name or
