@@ -707,6 +707,80 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(figuresOf('ABCDEF+CMTT10')).toEqual([[line, false, false]])
   })
 
+  it('reads a figure’s word by its spacing, not its sizes: a heading in faked small capitals one figure text, no script and no other label joined', () => {
+    // (2609.19644v1 pp. 56-71, an ICLR draft included as figures: iclr2025's faked small capitals, each word's capital at the
+    // line's size and the rest of it smaller, abutting it on its baseline. The run cut at every size change: "S" | "YSTEM", the
+    // rests translated alone, 'ORECASTING' -> ore casting. The owner's rule of 2026-11-10: glyphs on one baseline with no word
+    // space between them are one word whatever their sizes, and a run goes on across such a change)
+    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+    /** A with a figure's line of words, each glyph [character, size, raise], set left to right on one baseline: a glyph's advance
+     *  0.6 of its size, a word space of 3.3 between words and no space glyph, as TeX sets them */
+    const figuresOf = (words: [string, number, number?][][]) => {
+      const line = words.flat()
+      const A = docOf([
+        {
+          lines: [
+            'a paragraph whose word',
+            { text: line.map(([c]) => c).join(''), y: 640, form: true, font: 'ABCDEF+NimbusRomNo9L-Regu' },
+            { text: 'continues on its last line', y: 600 },
+          ],
+        },
+      ])
+      let j = 'a paragraph whose word'.length
+      let x = 100
+      words.forEach((word, w) => {
+        if (w) x += 3.3
+        for (const [, size, raise = 0] of word) {
+          const y = 640 + raise
+          const x1 = x + 0.6 * size
+          Object.assign(A.pages[0]!.glyphs[j++]!, {
+            size,
+            x0: x,
+            x1,
+            ix0: x,
+            ix1: x1,
+            y,
+            top: y + 0.7 * size,
+            bottom: y - 0.2 * size,
+          })
+          x = x1
+        }
+      })
+      const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+      return L.members.filter((m) => m.figure && m.unit >= 0).map((m) => [m.plain, m.style.size, m.style.caps])
+    }
+    /** a word in faked small capitals: its capitals at the line's size, every other character in capitals at the smaller one */
+    const sc = (s: string, big = 7.66, small = 6.13): [string, number][] =>
+      [...s].map((c) => [c.toUpperCase(), /\p{Lu}|&/u.test(c) ? big : small])
+    expect(figuresOf(['System', 'Overview', '&', 'Problem', 'Formulation'].map((w) => sc(w)))).toEqual([
+      ['SYSTEM OVERVIEW & PROBLEM FORMULATION', 7.66, 1],
+    ])
+    // (a word the source writes lowercase, all its letters small, goes on with the run once a word of it held both sizes)
+    expect(figuresOf(['Fusion', 'with', 'Multi-Scale', 'Gating', 'for'].map((w) => sc(w, 13.24, 10.59)))).toEqual([
+      ['FUSION WITH MULTI-SCALE GATING FOR', 13.24, 1],
+    ])
+    // (a glyph raised or lowered off the baseline, smaller and abutting, is a script: none of the word, its run its own as
+    // before (one that spells a word a figure text alone, the figure-formula lane's))
+    const at = (s: string, size: number, raise = 0) => [...s].map((c): [string, number, number] => [c, size, raise])
+    expect(
+      figuresOf([
+        [...at('Error', 10), ...at('ab', 7, 3.5)],
+        [...at('Loss', 10), ...at('ik', 7, -2)],
+      ]),
+    ).toEqual([
+      ['Error', 10, undefined],
+      ['ab', 7, undefined],
+      ['Loss', 10, undefined],
+      ['ik', 7, undefined],
+    ])
+    // (two labels of two sizes a word space apart on one baseline, no word of them holding both: two figure texts, as before)
+    expect(figuresOf([at('Accuracy', 10), at('loss', 7)])).toEqual([
+      ['Accuracy', 10, undefined],
+      ['loss', 7, undefined],
+    ])
+  })
+
   it('makes no group of a figure text set in one face, and a group of each run its glyphs set apart from its own style', () => {
     const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
     const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])

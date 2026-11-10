@@ -1,8 +1,8 @@
 // COPIED as it is from src/pdf-reader/engine/layout/figure-text.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
 // marked COPY, a turned glyph's owner read where the page states one (streamOf: today's pages own none), and, marked CHANGED, a line of a
-// justified paragraph set from its start (setsOf) and a run ended where it goes into or out of a face of one pitch (`fixed`, Rule 1's
-// fact): run by locate over arXiv's page (../ink.ts), held equal to today's by
-// tests/pdf-reader/locate-ink-today.test.ts. Today's file stays the production prepare's until the cut-over.
+// justified paragraph set from its start (setsOf), a run ended where it goes into or out of a face of one pitch (`fixed`, Rule 1's
+// fact) and a run gone on across a size change inside a word (figureUnitsOf `sized`): run by locate over arXiv's page (../ink.ts),
+// held equal to today's by tests/pdf-reader/locate-ink-today.test.ts. Today's file stays the production prepare's until the cut-over.
 // The text inside a vector figure of our final pass (docs/route/orphan-text.md stage 5, the content class `figures`,
 // rules/content-classes.mjs): the labels, axis titles, legends and annotations a figure draws as glyphs, cut into ink units, one
 // a label or a line, each an ink unit of kind `inkfigures` the bundle's units hold after the paper's own and the other ink units
@@ -24,8 +24,10 @@
 // in the family's italic; no math face), size, colour, direction and figure (one form painted, one picture: pageInk's `fid` and
 // `pid`, so that two figures side by side never make one label), on one baseline (within RUN_DY of their size across it), at
 // most RUN_GAP of its size past the run's end along it and not back over it by more than RUN_BACK; any other glyph between ends
-// the run. TeX's own text in a picture (a glyph of no form, between the picture's points: a TikZ node's, a tcolorbox's that pgf
-// draws) is TeX's line: once its run spells a word, a glyph of another face (no math face) or another colour goes on with it, so
+// the run. (CHANGED) A word is told by its spacing, not its sizes: a glyph on the run's baseline no word space past the glyph
+// before it (SPACE_GAP of their size) is that glyph's word's whatever its size, and every size a word of the run holds is the
+// run's then (a faked small capital's word: its capital at the line's size, its rest smaller). TeX's own text in a picture (a
+// glyph of no form, between the picture's points: a TikZ node's, a tcolorbox's that pgf draws) is TeX's line: once its run spells a word, a glyph of another face (no math face) or another colour goes on with it, so
 // that a label and the address TeX set after it in the link's colour are one unit, and a list of addresses with the commas between
 // them (2611.03178v1's abstract box: "Project Page:" and its address were two units, the address left the original's where TeX set
 // it, a hole after the label's translation); a symbol TeX set before the first word (an icon) is none of it, and the run after
@@ -199,6 +201,15 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
   const pitchOf = name => !!fixed && fixed.has(faceOf(name))
   // (TeX's own glyph in a picture after a run of TeX's that spells a word: its line goes on over faces and colours, math aside)
   const texLine = (x, run) => run.word && !x.form && !run.form && x.picture > 0 && famOf(x.font) !== 'math' && famOf(run.font) !== 'math'
+  // (CHANGED: a word is told by its spacing, not its sizes, the owner's rule of 2026-11-10. A glyph is of the run's sizes where it
+  // is set at one of them, within 1 %, as a run's glyphs were of its one size; or where it stands no word space past the glyph
+  // before it (SPACE_GAP of their size, as `word` reads one below; a space glyph is a word space), its word's whatever its
+  // size, whose size is the run's then too, so that the words after it at either size go on with it. iclr2025's faked small
+  // capitals (2609.19644v1 pp. 56-71, an ICLR draft included as figures): each word's capital at the line's size, the rest of
+  // it smaller and abutting it; the run cut at each change, "S" | "YSTEM", the rests were translated alone ('ORECASTING' -> ore
+  // casting), and a word the source writes lowercase ("with") is all small. A script stands off the baseline (RUN_DY): none of it)
+  const known = (x, run) => run.sizes.some(z => Math.abs(x.size - z) <= 0.01 * z)
+  const sized = (x, run, s) => known(x, run) || (!x.blank && !!run.last && s - run.last.s1 < SPACE_GAP * Math.max(x.size, run.last.size))
   const units = [], glyphMaps = [], turnedMaps = []
   // (the runs that spell a word the caps have counted, units or not)
   let taken = 0
@@ -219,12 +230,13 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       if (run) {
         const f = run.frame, s = along(f, x.ox, x.oy), t = across(f, x.ox, x.oy)
         const tex = texLine(x, run)
-        const joins = (oneLine(x.font, run.font) || tex) && pitchOf(x.font) === pitchOf(run.font) && Math.abs(x.size - run.size) <= 0.01 * run.size && (x.fill === run.fill || tex) && x.form === run.form && x.fid === run.fid && x.pid === run.pid
+        const joins = (oneLine(x.font, run.font) || tex) && pitchOf(x.font) === pitchOf(run.font) && sized(x, run, s) && (x.fill === run.fill || tex) && x.form === run.form && x.fid === run.fid && x.pid === run.pid
           && Math.abs(x.ux - f.ux) < 1e-3 && Math.abs(x.uy - f.uy) < 1e-3 && Math.abs(t) <= RUN_DY * run.size
           && s >= run.s1 - RUN_BACK * run.size && s - run.s1 <= RUN_GAP * run.size
           // (a code region's edge ends a run: the prose beside the code, in its face on its baseline, is read, and the code alone kept)
           && x.code === run.inCode
         if (!joins) close()
+        else if (!known(x, run)) run.sizes.push(x.size)
       }
       if (!run) {
         if (x.blank) continue
@@ -233,7 +245,7 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
         const p = prev, pf = p?.frame
         const led = !!p && !x.form && !p.form && x.picture > 0 && x.pid === p.pid && Math.abs(x.ux - pf.ux) < 1e-3 && Math.abs(x.uy - pf.uy) < 1e-3
           && Math.abs(across(pf, x.ox, x.oy)) <= RUN_DY * p.size && along(pf, x.ox, x.oy) >= p.s1 - RUN_BACK * p.size && along(pf, x.ox, x.oy) - p.s1 <= RUN_GAP * p.size
-        run = { gs: [], font: x.font, size: x.size, fill: x.fill, form: x.form, fid: x.fid, pid: x.pid, inCode: x.code, s1: 0, frame: { ox: x.ox, oy: x.oy, ux: x.ux, uy: x.uy }, word: false, last: null, led }
+        run = { gs: [], font: x.font, size: x.size, sizes: [x.size], fill: x.fill, form: x.form, fid: x.fid, pid: x.pid, inCode: x.code, s1: 0, frame: { ox: x.ox, oy: x.oy, ux: x.ux, uy: x.uy }, word: false, last: null, led }
         prev = null
       }
       // (whether it spells a word yet: two letters together, no space between, as WORD reads its text)
