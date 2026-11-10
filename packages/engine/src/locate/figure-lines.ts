@@ -839,7 +839,8 @@ function proseFacts(x: ProseLine, glyphs: readonly G[], boxes: readonly number[]
   // shows justification only where two of them or more are one (TeX stretches a line's spaces alike), never a tab's gap)
   const gaps: number[] = []
   for (let i = 1; i < cl.length; i++)
-    if (cl[i]!.text && cl[i - 1]!.text && !/[.!?:;,]["')\]”’]*$/u.test(cl[i - 1]!.s)) gaps.push(cl[i]!.x0 - cl[i - 1]!.x1)
+    if (cl[i]!.text && cl[i - 1]!.text && !/[.!?:;,]["')\]”’]*$/u.test(cl[i - 1]!.s))
+      gaps.push(cl[i]!.x0 - cl[i - 1]!.x1)
   const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
   const bottom = Math.min(...main.map((g) => g.bottom)),
     top = Math.max(...main.map((g) => g.top))

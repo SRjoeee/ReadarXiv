@@ -98,7 +98,9 @@ describe('figure-paras: what is never joined', () => {
     expect(joined(three({ bold: true }), drop)).toEqual([[[1, 2], ['hyphen-drop']]])
     expect(joined(three({ fill: 0xa73a3a }), drop)).toEqual([[[1, 2], ['hyphen-drop']]])
     // (the third line off the block's edge: the first two alone)
-    expect(joined([line(100, 290, 700), line(100, 296, 688), line(130, 200, 676)], drop)).toEqual([[[0, 1], ['hyphen-drop']]])
+    expect(joined([line(100, 290, 700), line(100, 296, 688), line(130, 200, 676)], drop)).toEqual([
+      [[0, 1], ['hyphen-drop']],
+    ])
   })
   it('never joins two lines each led by ink of its own (a legend’s samples); a frame’s side leading both is no such ink', () => {
     const ls = (a: number[], b: number[]) => [
