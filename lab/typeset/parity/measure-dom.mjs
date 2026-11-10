@@ -105,8 +105,13 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
     const lines = byLine.map(({ y, rot, chars: cs }) => {
       cs.sort((a, b) => a.x0 - b.x0)
       const ink = cs.filter((c) => !c.hidden && !SPACE.test(c.ch) && c.ch)
+      // (its size as the original's is read, fidelity.mjs originalOf: the size it was set at, its largest cased letter's (faked
+      // small capitals set the capitals at it and the rest smaller; a script is a line of its own), else its median
+      // character's. Read at the median, a line of a translation holding a paper's macro in small capitals read their size:
+      // 2608.06701v1 p4 t59 at 7.97, set at 9.96)
       const sizes = ink.map((c) => c.size).sort((a, b) => a - b)
-      const size = sizes.length ? sizes[sizes.length >> 1] : (cs[0]?.size ?? 0)
+      const cased = ink.filter((c) => c.ch.toLowerCase() !== c.ch.toUpperCase()).map((c) => c.size)
+      const size = cased.length ? Math.max(...cased) : sizes.length ? sizes[sizes.length >> 1] : (cs[0]?.size ?? 0)
       // (the widest gaps: between consecutive drawn characters, a space between them a word space, and so a run placed at its
       // own x (the typesetter's glue before it: a lead's word, its label, the text after them, set apart with no space
       // character), none a letter gap; a crop standing between them, or a hidden stand-in, no gap at all)

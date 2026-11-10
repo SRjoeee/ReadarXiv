@@ -1269,11 +1269,15 @@ function inkedLine(l) {
 }
 
 /** a run set smaller and raised or lowered off its line's baseline (a footnote mark, a superscript: the typesetter's rise)
- *  is part of the nearest line it stands within 0.6 of that line's size of, not a line of its own */
+ *  is part of the nearest line it stands within 0.6 of that line's size of, not a line of its own, where it stands against
+ *  that line: no word space (a third of its size, TeX's) from its ink across. A line of the other column on about the same
+ *  baseline stands a gutter apart and is a line of its own, whatever its size (2608.06701v1 p3 t60: a right-column line read
+ *  smaller made one line across the gutter with the left's, which no sentence box covers) */
 function raised(lines) {
   const keep = []
+  const against = (l, h) => l.x0 <= h.x1 + h.size / 3 && l.x1 >= h.x0 - h.size / 3
   for (const l of [...lines].sort((a, b) => b.size - a.size || b.n - a.n)) {
-    const host = keep.find((h) => !h.rot && !l.rot && l.size < 0.85 * h.size && Math.abs(l.y - h.y) < 0.6 * h.size)
+    const host = keep.find((h) => !h.rot && !l.rot && l.size < 0.85 * h.size && Math.abs(l.y - h.y) < 0.6 * h.size && against(l, h))
     if (!host) {
       keep.push({ ...l })
       continue

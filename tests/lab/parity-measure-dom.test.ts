@@ -62,3 +62,43 @@ describe('a drawn line read back: word spaces and letter gaps', () => {
     expect(l.word).toBe(0)
   })
 })
+
+describe("a drawn line's size read as the original's is: the size it was set at, its faked small capitals aside", () => {
+  // (2608.06701v1 p4 t59, the merged el-facts tree: a line of the caption's translation holding two of the paper's macros in
+  // faked small capitals, "GRAPHECTORY" and "LANGUTORY", 18 small capitals at 7.97 pt of 35 characters, read at their median
+  // 7.97 where the original is read at its largest cased letter's 9.96 (fidelity.mjs originalOf): a size judged off by a fifth
+  // that each side set at 9.96. One definition for every side: its largest cased letter's, else its median character's)
+  type Sized = Run & { size: number }
+  const sizedLine = (runs: Sized[]) => {
+    const svg = svgOf(runs)
+    // (each run's computed font size its own: a <tspan> at its share of the size, as the layer draws small capitals)
+    ;(globalThis as { getComputedStyle?: unknown }).getComputedStyle = (span: { textContent?: string }) => ({
+      ...style,
+      fontSize: `${runs.find((x) => x.s === span.textContent)?.size ?? SIZE}px`,
+    })
+    try {
+      return linesOfSvg(svg, 'data-axt-ord', [0, 0, 595, 842], 1)[0].lines[0]
+    } finally {
+      ;(globalThis as { getComputedStyle?: unknown }).getComputedStyle = () => style
+    }
+  }
+  it('a line of CJK text and capitals at 9.96 with more small capitals at 7.97 is read at 9.96', () => {
+    const l = sizedLine([
+      { s: '\u56fe4:', x: 72, size: 9.96 },
+      { s: 'G', x: 90, size: 9.96 },
+      { s: 'RAPHECTORY', x: 96, size: 7.97 },
+      { s: '\u548c', x: 150, size: 9.96 },
+      { s: 'L', x: 160, size: 9.96 },
+      { s: 'ANGUTORY', x: 166, size: 7.97 },
+      { s: '\u6355\u6349', x: 210, size: 9.96 },
+    ])
+    expect(l.size).toBe(9.96)
+  })
+  it('a line of no cased letter is read at its median character', () => {
+    const l = sizedLine([
+      { s: '\u56fe\u56fe\u56fe', x: 72, size: 9.96 },
+      { s: '\u548c', x: 120, size: 7.97 },
+    ])
+    expect(l.size).toBe(9.96)
+  })
+})
