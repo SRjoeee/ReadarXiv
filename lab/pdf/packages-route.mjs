@@ -9,6 +9,7 @@ import { join, relative, resolve } from 'node:path'
 export const PACKAGES_IMPORTS = Object.freeze({
   '@readarxiv/engine': '/packages/engine/src/index.ts',
   '@readarxiv/format': '/packages/format/src/index.ts',
+  '@readarxiv/text': '/packages/text/src/index.ts',
   zod: '/zod/index.js',
 })
 /** zod's files a page may ask for: its entry and the modules under it */

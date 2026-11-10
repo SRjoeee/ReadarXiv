@@ -59,6 +59,12 @@ export interface ReadOptions<X> {
   annotations?: boolean
   /** read each font's own map and mark the glyphs it gives no Unicode of (`nu`; opens the document with fontExtraProperties) */
   mapped?: boolean
+  /** false: no figure path's lines (pageInk's `shapes`), which a reader of B's figures never reads (the front half's adapter) */
+  shapes?: boolean
+  /** false: each page's raw glyphs (pageInk's) let go once its Doc page is made, its raw page kept without them (`glyphs` empty):
+   *  a reader that reads the Doc's glyphs alone holds one copy of a document's glyphs, never two (the front half's adapter
+   *  reading B, lane mem-front) */
+  rawGlyphs?: boolean
 }
 
 /** a character no Unicode stands for: private use, a replacement character, a control (today's draw.mjs NO_UNICODE) */
@@ -125,13 +131,16 @@ export async function readPdf<X = never>(
         indices: true,
         turned: o.turned ?? false,
         shapesAll: o.shapesAll ?? false,
+        shapes: o.shapes ?? true,
         glyphsMax: GLYPHS_PAGE,
         boxesMax: BOXES_PAGE,
         names,
       })
       const annotations = o.annotations ? ((await page.getAnnotations?.().catch(() => [])) ?? []) : null
       const view = [...page.view] as [number, number, number, number]
-      pages.push({ ...docPageOf(ink, view, page.rotate ?? 0, bases), extra, annotations })
+      const read = docPageOf(ink, view, page.rotate ?? 0, bases)
+      if (o.rawGlyphs === false && read.raw) read.raw.glyphs = []
+      pages.push({ ...read, extra, annotations })
       page.cleanup()
     }
   } finally {

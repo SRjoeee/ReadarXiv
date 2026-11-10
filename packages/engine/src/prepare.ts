@@ -46,14 +46,17 @@ export type Tally = {
 }
 
 /** arXiv's PDF read as the back half reads it: its pages as locate and the wrap take them (a lab's proofs read them again so, where
- *  prepareBack did not keep them) */
+ *  prepareBack did not keep them); `rawGlyphs` false, each page's raw glyphs let go once its Doc page is made (prepareBack's,
+ *  where it keeps nothing: locate and the wrap read the Doc's glyphs) */
 export function readArxiv(
   pdfjs: PdfJs,
   original: Uint8Array,
   options: Record<string, unknown> = {},
+  rawGlyphs = true,
 ): Promise<{ doc: Doc; pages: ReadPage<AlignFacts>[]; info: Record<string, unknown> | null }> {
   return readPdf(pdfjs, original, {
     options,
+    rawGlyphs,
     turned: true,
     // (every path's lines: the figure texts locate makes on A read a figure's lines where B's pictures and forms say it is one)
     shapesAll: true,
@@ -126,7 +129,8 @@ async function placedOf(
   times: { t1: number; t2: number; t3: number }
 }> {
   const keep = deps.keep === true
-  const read = await readArxiv(deps.pdfjs, original, deps.pdfOptions)
+  // (A's raw glyphs let go page by page unless kept: locate and the wrap read the Doc's; the lab's proofs and reviews read raw ones)
+  const read = await readArxiv(deps.pdfjs, original, deps.pdfOptions, keep)
   const t1 = now()
   const owners = new Int32Array(ins.ink.pages.reduce((n, p) => n + p.glyphs.length, 0)).fill(-1)
   let o = 0

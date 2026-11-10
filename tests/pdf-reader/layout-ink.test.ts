@@ -618,6 +618,19 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
     expect(r.cut!.has(2) || r.unseen!.has(2)).toBe(false)
     expect(only(r.glyphs, 'A')).toMatchObject({ clipped: true, unseen: true })
   })
+  it('makes no figure path\'s lines where its reader asks none (`shapes: false`, the front half\'s read of B), every other reading as it was', () => {
+    // (B's shapes are read by no step of the front half nor of the back half, which reads A's: the lines of every path of B's figures
+    // were made and held for nothing, 215 MiB made on 2610.40394v1's 35 pages; lane mem-front)
+    const rect = (x0: number, y0: number, x1: number, y1: number): Op => [OPS.constructPath, [OPS.fill, [Float32Array.from([0, x0, y0, 1, x1, y0, 1, x1, y1, 1, x0, y1, 4])], Float32Array.from([x0, y0, x1, y1])]]
+    const ops = list(form(rect(10, 10, 20, 20), ...text('f1', 10, [1, 0, 0, 1, 30, 20], show(g('A', 600))), rect(30, 10, 40, 20)))
+    const on = pageInk(OPS, ops, commonObjs, { rotate: 0, turned: true, indices: true })
+    const off = pageInk(OPS, ops, commonObjs, { rotate: 0, turned: true, indices: true, shapes: false })
+    expect(on.shapes!.size).toBe(2)
+    expect(off.shapes!.size).toBe(0)
+    const { shapes: _a, ...restOn } = on
+    const { shapes: _b, ...restOff } = off
+    expect(restOff).toEqual(restOn)
+  })
   it('a fill of a tiling pattern is marked as one, a shading pattern\'s and a colour\'s are not (#560)', () => {
     // (a rectangle's path as PDF.js gives it: moveTo, lineTo three times, closePath)
     const rect = (x0: number, y0: number, x1: number, y1: number): Op => [OPS.constructPath, [OPS.fill, [Float32Array.from([0, x0, y0, 1, x1, y0, 1, x1, y1, 1, x0, y1, 4])], Float32Array.from([x0, y0, x1, y1])]]

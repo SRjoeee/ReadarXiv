@@ -3,6 +3,7 @@
 import { read, unitId } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
+import { pageGlyphsOf } from '../src/glyph.ts'
 import { bundle } from '../src/bundle/bundle.ts'
 import type { Doc } from '../src/doc.ts'
 import type { PageInk } from '../src/ink.types.ts'
@@ -947,5 +948,29 @@ describe("locate takes A's raw pages (lane mem-back)", () => {
     expect(taken.units).toEqual(held.units)
     expect(taken.members).toEqual(held.members)
     expect(taken.groups).toEqual(held.groups)
+  })
+})
+
+describe("locate reads A's glyphs off its Doc (lane mem-front)", () => {
+  // (the ink step reads each A page's glyphs off the Doc, never pageInk's raw ones: so that the back half reads A with its raw glyphs
+  // let go page by page (readPdf's `rawGlyphs: false`), one copy of A's glyphs as of B's. A Doc read by readPdf holds page glyphs, which
+  // a glyph made with a field changed keeps (glyphWith): the same units, members and groups as from plain glyphs, and from raw pages
+  // that hold none)
+  it('makes the same units from page glyphs with raw pages that hold none', () => {
+    const { B, A } = pair({
+      lines: ['Running Title', 'Body text here'],
+      points: [
+        ['bs1', 13],
+        ['be1', 27],
+      ],
+    })
+    const ins = instrumentOf(B, [unitOf('para', 'Body text here')], [[-1, 0]])
+    const held = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const paged: Doc = { pages: A.pages.map((pg) => ({ ...pg, glyphs: pageGlyphsOf(pg.glyphs) })) }
+    const bare = rawOf(A).map((r) => ({ ...r, glyphs: [] }) as unknown as PageInk)
+    const read = locate(ins, paged, align(B, paged), { pages: bare, take: true })
+    expect(read.units).toEqual(held.units)
+    expect(read.members).toEqual(held.members)
+    expect(read.groups).toEqual(held.groups)
   })
 })
