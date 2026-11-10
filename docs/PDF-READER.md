@@ -3299,6 +3299,43 @@ after it), and sets the mark's blank as glue that may shrink by half an em.
   would take more onto a line (2611.03953v2's first entry through the next name again); it would also replace the squeeze's two
   thresholds. A later step.
 
+### 18.19 A reference's abbreviated name is sent as the item's full name (2026-11-10)
+
+On staging, 2610.22065v1 p5's "… sweep σinfer in Fig. 7." came back from Microsoft with the figure's word dropped and the number
+alone after a full stop of its own, and "Fig." elsewhere as the fruit: the endpoint cuts a sentence at an abbreviation's full
+stop before a reference's marker (its own sentence lengths hold a sentence of the marker alone). A no-break space and the text
+paired did not help. The owner's ruling (2026-11-10): where the word tied to a cross-reference abbreviates the referenced
+item's own name, the translator is sent the full name; the name is the paper's own TeX's; unknown, the text goes as it is; no
+word list and no language's table; the original drawn when translation is off never changes.
+
+- **The rule** (`packages/translate` `names.ts` `namedOf`): where the word a unit's text ends in right before a reference — a
+  tie, a space or a break alone between — is a case-insensitive proper prefix of the element's `name`, followed by a full stop
+  ("Fig." of "Figure", "Eq." of "Equation", "Sec." of "Section", "Tab." of "Table"), every translator is sent that name instead,
+  in the word's case (a lower-case word the name in lower case, one in capitals the name in capitals). The chain applies it to
+  each unit before any translator (`chain.ts` `settle`) and gives a row's sentences back in the unit's own projection (a start
+  inside the name at the word's start). `CHAIN_RULES` gains `names`: every row is read again, the stored replies of unchanged
+  wires hit (the store key is the wire's bytes).
+- **The name is the paper's** (`layout/marks.mjs` `refsTex`, the engine's `readRefNames`, `pipeline/instrument.mjs` `piecesOf`):
+  the marked compile asks TeX, once the last page is out, about each label the paper's reference elements name (`\ref`,
+  `\ref*`, `\eqref`, `\autoref`, `\cref` of one label, `\nameref`; not `\pageref`): its type, the label's anchor's (hyperref's,
+  and LaTeX's own since 2023, `{num}{page}{title}{anchor}{}`: `figure.caption.12`'s `figure`, `appendix.A`'s `appendix`, as
+  hyperref's `\autoref` reads it), else cleveref's `[type]`; then the `\meaning` of cleveref's capitalised and own names,
+  hyperref's `\<type>autorefname` and LaTeX's `\<type>name`. The first that is plain words with no full stop is the element's
+  `name` (format's element piece; not in the unit's id): cleveref's default "Fig." and IEEEtran's `\figurename` "Fig." are
+  passed over for hyperref's "Figure". Nothing is set and nothing written to a file; a paper with no reference compiles the
+  bytes it did.
+- **Measured** (lane `ref-names`, 2026-11-10). Staging's stored Chinese rows of five papers (Microsoft's): "Fig." tied to
+  a reference kept the figure's word right before its number 45 times of 101 (52 a full stop before the number, 10 the fruit),
+  "App." 1 of 11, "Eq." 139 of 141, "Sec." 86 of 90. Live, keyless, 52 such abbreviations of 27 units of the corpus sent as they
+  are and as the name (27 requests): the endpoint cut its source sentence at the abbreviation 10 times, never at the name; the
+  item's word right before the number "Fig." 7 -> 15 of 15, "Tab." 0 -> 3 of 3 (read as a label), "App." 2 -> 5 of 5, "Eq." and
+  "Sec." alike both ways. 2610.22065v1 p5 as the chain sends it now: one sentence, the figure's word before its number.
+- **Not this rule's**: a plural ("Figs.", "Eqs.", "Secs.": no prefix of the singular name; garbled alike on staging: "Eqs." 0 of 13);
+  "Sec." to a subsection where hyperref alone names it ("subsection"); RevTeX's sections, whose anchors are `section*` (no
+  name: 2610.10492v1's 64); amsmath's `\tag`ged equations (`AMS`, whose name is `\equationautorefname`, a command); a name pdfTeX
+  writes with an accent command (`Ecuaci\'on`); a label with no anchor and no cleveref (an older TeX tree without hyperref).
+  Today's wire (`translate/mt.mjs`) keeps the word: `TRANSLATE_VERSION` stays.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
