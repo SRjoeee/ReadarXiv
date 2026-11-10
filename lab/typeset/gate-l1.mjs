@@ -36,14 +36,21 @@ const READING = args.find(a => a.startsWith('--reading='))?.slice(10) ?? 'today'
 const SUBST = args.find(a => a.startsWith('--subst='))?.slice(8).split(',').filter(Boolean) ?? []
 // (--entry: each page laid again by design-a's layPage over its part and the rows, compared with the runner's lay, and timed)
 const ENTRY = args.includes('--entry')
+// (the entry is laid over the door's rows, which the runner reads for the reading from the part alone: asked with today's
+// reading it laid nothing, and I10 counted no piece, "0 faults")
+if (ENTRY && READING !== 'part') {
+  console.error("gate-l1.mjs: --entry needs --reading=part (the entry is laid over the door's rows, read for that reading alone)")
+  process.exit(2)
+}
 const entry = { alike: 0, differ: 0, ex: [], ms: [], names: new Map(), links: new Map(), linkEx: new Map(), figures: new Map(), lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 }, cover: { members: 0, pieces: 0, faults: new Map(), ex: new Map(), byPair: new Map() } }
 /** Whether the entry is given a door row. The rows are today's stored replies in today's reading; one that says nothing (the
  *  chain's rule, accept.ts: no letter or digit where the unit has a letter, 'empty') is no translation of its unit under any
  *  reading, and the chain makes no row of it whatever its translator: the entry is given none and leaves the unit the
  *  original's (given it, the entry hid the unit's text and drew nothing: three table cells of two pack pairs, I10's "right
- *  missing sentence"). The rule's other clauses hold a reply to v2's wire (its ids, its spans) and to v2's unit (its length),
- *  which a door row, today's reading of today's unit, is not made for (238 of the 123 pairs' rows empty a span v2 marks `must`,
- *  8 name a span by today's id): counted by why, given as they are, the parity placing their groups (parity/rows.mjs) */
+ *  missing sentence"). A row the rule's other clauses refuse (a span lost, emptied or set otherwise than the unit nests it; an
+ *  id, a span named by today's numbering; its length) the chain would ask again of the next translator; the door holds no
+ *  other reply of its unit and the row still says its translation: given as it is, as the parity lays it on both sides,
+ *  and counted by why (over the 123 pairs with round 8 B5's parts: 229 by a span, 6 by an id, 1 by its length) */
 const judged = new Map(), unsaid = []
 let judging = ''
 const accept = (unit, content) => {
@@ -233,6 +240,11 @@ if (ENTRY) {
   console.log(`I10, the sentence cover (cover.ts): ${C.members} member-pages lit, ${C.pieces} pieces; ${faults} faults${faults ? ':' : ''}`)
   for (const [k, n] of [...C.faults].sort((a, b) => b[1] - a[1])) console.log(`  ${n} ${k}: ${(C.ex.get(k) ?? []).join(' | ')}`)
   for (const [pair, line] of C.byPair) console.log(`  ${pair}: ${line}`)
+}
+// (an entry that laid nothing counted I10 over no piece: no count, the run fails)
+if (ENTRY && !entry.cover.pieces) {
+  console.log('the entry laid nothing: I10 not counted')
+  process.exitCode = 1
 }
 if (selfDiffer.length) console.log(`laid otherwise from another page's part: ${selfDiffer.slice(0, 10).join('; ')}`)
 if (threw.length) console.log(`threw (${threw.length}): ${threw.slice(0, 8).join(' | ')}`)

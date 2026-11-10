@@ -2261,8 +2261,9 @@ within noise.
   translation's places alone had put 425 elements of the corpus's laid pages in another sentence than A's (today's rows over
   stage 1a's parts at 95529b6f9). Where a translation sets an element inside another sentence than its own on A, the element
   is an island of its own sentence there, a run of its own on its row. **I10, the sentence cover** holds it
-  (`packages/typeset/tests/replay/cover.ts`, counted by `lab/typeset/gate-l1.mjs --entry` over a run's parts and by the
-  parity's lay of its pairs, `lab/release-check` I10): on both panes every piece drawn of a lit member (each word of its text on A
+  (`packages/typeset/tests/replay/cover.ts`, counted by `lab/typeset/gate-l1.mjs --entry --reading=part` over a run's parts,
+  the release check's `sentence-cover`, and by the parity's lay of its pairs, its `display`; with today's reading the runner
+  lays no entry): on both panes every piece drawn of a lit member (each word of its text on A
   at its first glyph, each character as drawn, each crop, each element's ink, its label, its held lines) is in exactly one of
   its sentences, an element and the label in the same one on both, and every sentence drawn on one pane is drawn on the other
   (a full-width mark's ink read in its own em: one at a line's head, its blank half cut, is drawn half an em left of the line's
