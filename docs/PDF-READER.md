@@ -3836,28 +3836,37 @@ wherever any ink met its band, a frame round a citation in a sentence as much as
   face. Two of today's runs of one sentence in two faces stay two (F3). The differential pairs the units of one id in their
   order: where F0 takes some of many alike (2610.22197v1's 18 "lin2"), the pairing shifts onto others (stated, not a loss).
 
-### 18.28 A label TeX hung beside its text is laid in its hang (2026-11-11)
+### 18.28 A label TeX hung beside its text hangs its text at the drawn label's width (2026-11-11)
 
 The owner on the fresh-rows sheet, 2609.36054v2-zh p3: Figure 1's label and the text after it, separate blocks, by rule or a
 bug? The original sets "Figure 1." at 47 in the margin and every line of its text at 95.61 beside it (the caption package's
-`hang`, `\hangindent` the label's width); v2, and today's reader, set the second line under the label.
+`hang`); v2, and today's reader, set the second line under the label.
 
-- **The rule** (`lay/adapt.ts` `hang`, `breaker/slots.mjs` `tab`, `breaker/break.mjs` `tabbed` and tabOf). A label drawn anew is
-  its first line's (RUN:2039-2041): its rectangle was widened to the label, so the block's edge was the label's and every line
-  after the first started there. Where every text line of a member starts at one x past the label's end and the label stands at
-  its first line's measure start (Line x0 and m0, Label.ink; two text lines at least), the label is laid in its hang and the
-  text keeps the measure TeX gave it: the block's first slot starts at the label and states the text's start, and the first text
-  after the label starts there, or right after the label where the label drawn needs more room than the hang; the label and the
-  room up to the text neither stretch nor shrink, a box as TeX's hang is (the breaker counts no space of the label's as one that
-  shrinks: the reader gate's I5 found 9 lines past their slot where it had). Drawing the label anew changes its words, not where
-  TeX set them. A label kept as ink (a reference's "[12]", a heading's "A.4") kept its hang already: its block's edge is the
-  text's.
+- **The rule** (`lay/adapt.ts` `hang` and `hangGap`, `breaker/slots.mjs` `hangGap` and `hung`, `breaker/break.mjs` `tabbed`,
+  `edge` and tabOf; the coordinator's ruling of 2026-11-11). A label drawn anew is its first line's (RUN:2039-2041): its
+  rectangle was widened to the label, so the block's edge was the label's and every line after the first started there. In TeX a
+  hung caption's indent is its label box's width, the label and its separator (`\hangindent`): the original's text edge is a
+  consequence of "Figure 1." being that wide, not a position of its own. Where every text line of a member starts at one x past
+  the label's end and the label stands at its first line's measure start (Line x0 and m0, Label.ink; two text lines at least),
+  the label drawn anew keeps its place, its separator and the space TeX set after it (the original's gap from the label's ink to
+  its text, `hangGap`, at the state's scale), and its text hangs at that width: the first text after the label starts at the
+  drawn label's end and that space, and every later line of the block starts at that edge, its measure from there to the
+  original's right edge. A narrower label (Chinese "Figure 1.") hangs its text nearer, a wider one ("Abbildung 1.") farther. The
+  label and its space neither stretch nor shrink, a box as TeX's hang is (the breaker counts no space of the label's as one that
+  shrinks: the reader gate's I5 found 9 lines past their slot where it had). A label kept as the original's ink (a reference's
+  "[12]", a heading's "A.4", a caption's label not drawn anew) keeps the original's hang: its block's edge is the text's.
 - **Over the 88** (r14's parts, every page laid with identity rows by the typesetter before and after, lane b5-fixes): 55
   captions hang their label, in 4 papers; the 35 of them whose label is drawn anew are laid otherwise (29 figures', 6 tables':
-  2307.16209v1 24, 2610.21201v1 5, 2610.21377v1 5, 2609.36054v2 1), and no other of the 63,230 members laid moves.
-- **Not this rule's.** Where the label drawn is wider than the hang, the first line's text starts after it and the lines after it
-  keep TeX's edge; TeX would have widened the hang to the new label for every line. How a caption's label is found (its float's
-  `\fnum@<type>`, a label on a line of its own) is the label's reading's (lane marks-2), not this rule's: it lays a label found.
+  2307.16209v1 24, 2610.21201v1 5, 2610.21377v1 5, 2609.36054v2 1), and no other of the 63,230 members laid moves. The strip the
+  drawn label's hang gives the text, from the label's start to the original's text edge over the caption's lines, holds no ink
+  of arXiv's page but the label's and no other member's line or element, on all 55: the region is the caption's own. Laid with
+  identity rows the line count of 6 of the 35 moves against B6 (2307.16209v1 p86 t286 4 -> 5; 2610.21201v1 t13 10 -> 11, t19 9
+  -> 10, t14 10 -> 11, t87 15 -> 16; 2610.21377v1 t268 4 -> 5), and of 3 against the hang at the original's edge (2610.21201v1
+  t13 12 -> 11, t87 17 -> 16, t48 3 -> 2): a line ends sooner where the measure is wider, as an element drawn at its own width
+  does.
+- **Not this rule's.** How a caption's label is found (its float's `\fnum@<type>`, a label on a line of its own) is the label's
+  reading's (lane marks-2), not this rule's: it lays a label found, which needs Label.ink's start at the first line's measure
+  start and its end before the text lines' shared start; a label on a line of its own is no hang.
 
 ## 19. The engine's contract
 

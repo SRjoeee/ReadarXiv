@@ -347,7 +347,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
   // shrinking as they do)
   const groupOf = (from, end) => {
     const items = []
-    let w = 0, sp = 0, rig = 0
+    let w = 0, sp = 0, rig = 0, edge
     let prev = line.items.at(-1)?.t ?? null
     for (let q = from; q < end; q++) {
       const t = tokens[q]
@@ -381,28 +381,41 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       // (`kern`: the explicit glue after it, an advance of its own beside its width, which trim drops at a line's end: no part of
       // what it draws, a crop's image, a word's box)
       const kern = kernOf(t, f)
-      // (the line's first text after a label TeX hung beside its text block (the slot's `tab`, B.slots): it starts where the hang
-      // ends, the room up to it the label's, or right after the label where the label drawn needs more; `tabbed`)
-      const hung = line.tab !== undefined && !t.label ? line.items.concat(items) : null
-      const tab = hung?.some(it => it.t.label) && hung.every(it => it.t.label || it.t.space) ? Math.max(0, line.tab - line.x0 - (line.x + w + asp)) : 0
+      // (the line's first text after a label TeX hung beside its text block (the slot's `hangGap`, B.slots): it starts at the hang,
+      // the drawn label's end and the space TeX set after the label, the label's own spaces after it aside (TeX's hang: the
+      // label box's width); `tabbed`, the hang's edge the group's `edge`)
+      const hung = line.hangGap !== undefined && !t.label ? line.items.concat(items) : null
+      let tab = 0, atTab = false
+      if (edge === undefined && hung?.some(it => it.t.label) && hung.every(it => it.t.label || it.t.space)) {
+        atTab = true
+        let x = 0, end = 0
+        for (const it of hung) {
+          x += (it.asp ?? 0) + it.w + (it.kern ?? 0)
+          if (it.t.label) end = x
+        }
+        tab = end + line.hangGap - (line.x + w + asp)
+        edge = line.x0 + end + line.hangGap
+      }
       // (the label's spaces then a box's, TeX's hang: none shrinks, `rig` the line's own already counted, the group's taken out)
-      if (tab) {
+      if (atTab) {
         rig = line.items.reduce((a, it) => a + (it.t.space && !it.rigid ? it.w : 0), 0)
         for (const it of items) if (it.t.space && !it.rigid) { it.rigid = true; sp -= it.w }
       }
       // (`cut`: the mark has lost its blank half, which a squeezed line does not take from it again, placeItems)
-      items.push({ t, w: tw, shift, asp: asp + tab, ...(tab ? { tabbed: true } : {}), ...(kern ? { kern } : {}), ...(shift ? { cut: true } : {}) })
+      items.push({ t, w: tw, shift, asp: asp + tab, ...(atTab ? { tabbed: true } : {}), ...(kern ? { kern } : {}), ...(shift ? { cut: true } : {}) })
       w += tw + asp + tab + kern
       prev = t
     }
     // a closing mark at the line's end hangs its blank half (hangOf)
     const hang = hangOf(items.at(-1), st.compress) * f
-    return { items, w, sp, hang, rig }
+    return { items, w, sp, hang, rig, edge }
   }
   /** whether a group fits the line in hand: its spaces and the line's shrunk to spaceMin, a closing mark at its end hung */
   const fits = (g, cap) => line.x - (line.spaces - g.rig) * (1 - P.spaceMin) - g.sp * (1 - P.spaceMin) + g.w - g.hang <= cap + 0.01
   // (a group set at a hung label's end makes the label's spaces on the line a box's, TeX's hang: they shrink no more, `rig`)
+  // (and its hang's edge every later line of the hung block starts at, `hung` (B.slots): TeX's \hangindent, the label box's width)
   const take = g => {
+    if (g.edge !== undefined) for (let q = li + 1; q < slots.length; q++) if (slots[q].hung && slots[q].block === line.block) slots[q] = { ...slots[q], x0: g.edge }
     if (g.rig) { for (const it of line.items) if (it.t.space) it.rigid = true; line.spaces -= g.rig }
     for (const it of g.items) { line.items.push(it); if (it.t.space && !it.rigid) line.spaces += it.w }
     line.x += g.w

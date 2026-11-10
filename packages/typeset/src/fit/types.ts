@@ -16,9 +16,11 @@ export type FitBlock = DecorBlock & {
   flowX?: { y: number; lead: FitBlock | null }
   opens?: true
   widened?: boolean
-  /** where a label TeX hung beside the block's text is laid (lay/adapt.ts): its first line starts there, its text at the block's
-   *  start (B.slots' `tab`) */
+  /** where a label TeX hung beside the block's text is laid (lay/adapt.ts): its first line starts there; its text hangs at the
+   *  drawn label's end and `hangGap`, the space TeX set after the label (PDF units at the original's size), every line of the
+   *  block from that edge (B.slots, breakLines) */
   hang?: number
+  hangGap?: number
   /** the ink that stays beside its lines (lay/adapt.ts, from Room.stays: a QED box after a proof's last words), each piece's box
    *  and the side of the original's line it stood on: every slot whose line reaches it keeps off it (B.slots) */
   stays?: Stay[]

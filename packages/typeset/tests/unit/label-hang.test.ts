@@ -58,35 +58,56 @@ const laidOf = (m: Placed) => {
 }
 
 describe('a label TeX hung beside its text, drawn anew', () => {
-  it('is laid in its hang, the text’s first line starting where the hang ends and every line after it on that edge', () => {
-    const lines = laidOf(caption(95.61))
-    expect(lines.length).toBeGreaterThan(1)
-    const [first, ...rest] = lines
-    // (the label at its own place, in the margin)
-    expect(first!.items[0]![0]).toMatch(/^\u56fe/)
-    expect(first!.items[0]![1]).toBeCloseTo(47, 1)
-    // (the text's first character at the hang's end, the room between the label's)
-    const text = first!.items.find(([s]) => (s as string).includes('\u653f'))!
-    expect(text[1]).toBeCloseTo(95.61, 1)
-    // (every later line on the text's edge, never under the label)
-    for (const l of rest) expect(l.items[0]![1]).toBeCloseTo(95.61, 1)
-  })
-  it('starts the first line’s text right after a label drawn wider than the hang, the lines after it on the text’s edge', () => {
-    // (German "Abbildung 1." needs more room than TeX's hang for "Figure 1.": the text follows it, as a label in the flow is
-    // followed; TeX would widen the hang to the new label for every line, and the original's lines keep theirs)
-    const de: Row = { id, ok: true, by: 'test', content: [{ t: 'text', s: 'Die Ergebnisse der Modelle '.repeat(3) }] }
+  /** where a laid line's label ends: its last label item's end (its text, its trailing space aside), and its scale against the
+   *  part's 10 pt */
+  const labelEnd = (items: (string | number)[][], sizes: number[]) => {
+    const k = items.findIndex(([s]) => /[\u653fD]/u.test(s as string)) - 1
+    return {
+      end: (items[k]![1] as number) + (sizes[k]! * [...(items[k]![0] as string).trimEnd()].length) / 2,
+      scale: sizes[k]! / 10,
+    }
+  }
+  const sizedOf = (m: Placed, to: string, row0: Row) => {
     const [laid] = layPage(
-      part(caption(95.61)),
-      { get: (k) => (k === id ? de : undefined), done: true },
-      rulesFor('de'),
+      part(m),
+      { get: (k) => (k === id ? row0 : undefined), done: true },
+      rulesFor(to),
       metrics(),
     ).members
-    const lines = laid!.lines.map(([, , , items]) => items.map((it) => ('face' in it ? [it.s, it.x] : ['', 0])))
-    expect(lines[0]![0]![0]).toMatch(/^Abbildung/)
-    expect(lines[0]![0]![1]).toBeCloseTo(47, 1)
-    const text = lines[0]!.find(([s]) => (s as string).startsWith('Die'))!
-    expect(text[1] as number).toBeGreaterThan(95.61)
-    for (const l of lines.slice(1)) expect(l[0]![1]).toBeCloseTo(95.61, 1)
+    expect(laid!.state).toBe('laid')
+    return laid!.lines.map(([, , , items]) => ({
+      items: items.map((it) => ('face' in it ? [it.s, it.x] : ['', 0])),
+      sizes: items.map((it) => ('face' in it ? it.size : 0)),
+    }))
+  }
+  it('hangs its text at the drawn label’s own width: the label at its place, the space TeX set after it, every line on that edge', () => {
+    // (the coordinator's ruling of 2026-11-11, TeX's own rule: a hung caption's indent is its label box's width, the label and its
+    // separator; "Figure 1." 44.67 pt wide set the original's text at 95.61, 3.94 pt after it. The Chinese label is narrower: its
+    // text starts 3.94 pt after it, and every later line hangs there, the measure from that edge to the original's right edge)
+    const lines = sizedOf(caption(95.61), 'zh', row)
+    expect(lines.length).toBeGreaterThan(1)
+    const [first, ...rest] = lines
+    expect(first!.items[0]![0]).toMatch(/^\u56fe/)
+    expect(first!.items[0]![1]).toBeCloseTo(47, 1)
+    const { end, scale } = labelEnd(first!.items, first!.sizes)
+    const edge = end + (95.61 - 91.67) * scale
+    const text = first!.items.find(([s]) => (s as string).includes('\u653f'))!
+    expect(text[1]).toBeCloseTo(edge, 1)
+    expect(edge).toBeLessThan(95.61 - 1)
+    for (const l of rest) expect(l.items[0]![1]).toBeCloseTo(edge, 1)
+  })
+  it('hangs its text after a label drawn wider than the original’s, every line on that edge, past the original’s', () => {
+    // (German "Abbildung 1." is wider than "Figure 1.": by the same rule its hang is wider)
+    const de: Row = { id, ok: true, by: 'test', content: [{ t: 'text', s: 'Die Ergebnisse der Modelle '.repeat(3) }] }
+    const lines = sizedOf(caption(95.61), 'de', de)
+    expect(lines[0]!.items[0]![0]).toMatch(/^Abbildung/)
+    expect(lines[0]!.items[0]![1]).toBeCloseTo(47, 1)
+    const { end, scale } = labelEnd(lines[0]!.items, lines[0]!.sizes)
+    const edge = end + (95.61 - 91.67) * scale
+    const text = lines[0]!.items.find(([s]) => (s as string).startsWith('Die'))!
+    expect(text[1]).toBeCloseTo(edge, 1)
+    expect(edge).toBeGreaterThan(95.61)
+    for (const l of lines.slice(1)) expect(l.items[0]![1]).toBeCloseTo(edge, 1)
   })
   it('sets no line past its slot: the label’s spaces, a box’s as TeX’s hang, are no space a line shrinks', () => {
     // (the reader gate's I5 on the zh packs: the breaker took a character on the hung first line counting the label's spaces as
