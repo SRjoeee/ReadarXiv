@@ -24,7 +24,7 @@ import {
   type UnitIn,
   type Why,
 } from './contract.ts'
-import { placeGroups } from './groups.ts'
+import { placeGroups, placeReferences, referencesOf, referenceText } from './groups.ts'
 import { namedOf } from './names.ts'
 import { runsOf } from './runs.ts'
 import { sha256Hex } from './sha256.ts'
@@ -61,8 +61,10 @@ export const KEY_VERSION = 't1'
  *  original's, never its English between translated stretches), a span that is no edge keeping its head in a copy of itself:
  *  runs.ts; an element set after the unit's text given to no translator, put back after the translation: tailOf; a group a
  *  reply did not bring back placed around its own text where the translation states it: groups.ts; a word tied to a reference
- *  that abbreviates the item's name sent to every translator as that name: names.ts): a change to them is a change of every row */
-export const CHAIN_RULES = 'chain/1|fall-through|reask|runs>=2-whole|runs-heads|after|groups|names'
+ *  that abbreviates the item's name sent to every translator as that name: names.ts; a phrase group a markers-wire translator's
+ *  reply did not bring back placed where it states the group's reference translation, asked of it in the unit's batch:
+ *  groups.ts placeReferences): a change to them is a change of every row */
+export const CHAIN_RULES = 'chain/1|fall-through|reask|runs>=2-whole|runs-heads|after|groups|names|references'
 
 // ---------------------------------------------------------------- the platform's timers and controllers, by structure
 
@@ -703,7 +705,8 @@ export function chainOf(ports: Ports = {}): Chain {
       c.note({ kind: 'passed', by: s.by, id: u.id, why: { kind: 'unconfigured', code: s.code } })
     if (!c.served.length)
       return { id: u.id, ok: false, why: { kind: 'unconfigured', code: c.offCodes[0] ?? 'no-language' } }
-    // every translator's wire and key, read from the store at once
+    // every translator's wire and key, and a markers-wire translator's references' (groups.ts referencesOf), read from the
+    // store at once
     const wires = c.served.map((t) => {
       try {
         const wire = t.write(u, c.target)
@@ -712,14 +715,26 @@ export function chainOf(ports: Ports = {}): Chain {
         return null
       }
     })
-    const stored = await c.reader(wires.flatMap((w) => (w ? [w.key] : [])))
+    const groups = c.served.some((t) => t.wire === 'markers') ? referencesOf(u) : []
+    const refWires = c.served.map((t) =>
+      t.wire !== 'markers'
+        ? []
+        : groups.flatMap((g) => {
+            try {
+              const wire = t.write(g.unit, c.target)
+              return [{ g, wire, key: keyOf(t, c.target, wire, c.context) }]
+            } catch {
+              return []
+            }
+          }),
+    )
+    const keys = [...wires.flatMap((w) => (w ? [w.key] : [])), ...refWires.flat().map((r) => r.key)]
+    const stored = await c.reader(keys)
     const hit = new Map<string, string>()
-    wires
-      .flatMap((w) => (w ? [w.key] : []))
-      .forEach((k, j) => {
-        const v = stored[j]
-        if (typeof v === 'string') hit.set(k, v)
-      })
+    keys.forEach((k, j) => {
+      const v = stored[j]
+      if (typeof v === 'string') hit.set(k, v)
+    })
     let refused = false
     let unavailable: number | null = null
     let off: UnconfiguredCode | null = null
@@ -740,6 +755,54 @@ export function chainOf(ports: Ports = {}): Chain {
         passed({ kind: 'unconfigured', code: offNow })
         continue
       }
+      const w = { seq: c.seq, index: i, last, note: c.note }
+      // the references of its phrase groups (a markers-wire translator's alone): each stored, else asked in the unit's batch
+      // (started right before the unit is asked, in the same turn), read as any reply is; one that fails places nothing. The
+      // unit's reply is stored as it came, whatever they give
+      const refs = refWires[k] ?? []
+      let asked: Map<string, Promise<string | null>> | null = null
+      const refText = (r: (typeof refs)[number], raw: string): string | null => {
+        try {
+          return referenceText(r.g.unit, t.read(r.g.unit, raw))
+        } catch {
+          return null
+        }
+      }
+      const startRefs = () => {
+        if (asked) return asked
+        asked = new Map()
+        for (const r of refs) {
+          const got = hit.get(r.key)
+          asked.set(
+            r.g.id,
+            got !== undefined
+              ? Promise.resolve(refText(r, got))
+              : ask(t, c.target, c.context, r.key, r.wire, false, w, c.signal).then((a) => {
+                  const s = 'raw' in a ? refText(r, a.raw) : null
+                  if (s !== null && 'raw' in a) c.write(r.key, a.raw)
+                  return s
+                }),
+          )
+        }
+        return asked
+      }
+      /** the reply's content with each phrase group it did not bring back placed by its reference (groups.ts) */
+      const placed = async (content: OutPiece[]): Promise<OutPiece[]> => {
+        const ids = new Set(spanIdsOf(content))
+        const missing = refs.filter((r) => !ids.has(r.g.id))
+        if (!missing.length) return content
+        try {
+          const all = startRefs()
+          const texts = new Map<string, string>()
+          for (const r of missing) {
+            const s = await all.get(r.g.id)
+            if (s) texts.set(r.g.id, s)
+          }
+          return placeReferences(u, content, texts, c.target)
+        } catch {
+          return content
+        }
+      }
       // a stored reply, judged again as a fresh one is
       const raw = hit.get(wk.key)
       if (raw !== undefined) {
@@ -748,7 +811,7 @@ export function chainOf(ports: Ports = {}): Chain {
           return {
             id: u.id,
             ok: true,
-            content: r.content,
+            content: await placed(r.content),
             by: t.identity,
             ...(r.sentences ? { sentences: r.sentences } : {}),
           }
@@ -765,7 +828,6 @@ export function chainOf(ports: Ports = {}): Chain {
         passed({ kind: 'unavailable', retryAfterMs: ms })
         continue
       }
-      const w = { seq: c.seq, index: i, last, note: c.note }
       let a: Answer = { unavailable: true }
       // (the chain's last translator waits a cooldown out, LAST_WAITS times at most; any other has been passed over above)
       for (let waits = 0; ; ) {
@@ -779,7 +841,10 @@ export function chainOf(ports: Ports = {}): Chain {
           await clock.sleep(ms, c.signal)
           if (c.signal.aborted) return aborted(u)
         }
-        a = await ask(t, c.target, c.context, wk.key, wk.wire, false, w, c.signal)
+        const pending = ask(t, c.target, c.context, wk.key, wk.wire, false, w, c.signal)
+        // (the references go out in the unit's request: asked in this turn, after it)
+        if (refs.length) startRefs()
+        a = await pending
         if (!(last && 'cooling' in a && a.cooling) || waits >= LAST_WAITS) break
       }
       if ('aborted' in a) return aborted(u)
@@ -790,7 +855,7 @@ export function chainOf(ports: Ports = {}): Chain {
           return {
             id: u.id,
             ok: true,
-            content: r.content,
+            content: await placed(r.content),
             by: t.identity,
             ...(r.sentences ? { sentences: r.sentences } : {}),
           }
@@ -806,7 +871,7 @@ export function chainOf(ports: Ports = {}): Chain {
               return {
                 id: u.id,
                 ok: true,
-                content: r2.content,
+                content: await placed(r2.content),
                 by: t.identity,
                 ...(r2.sentences ? { sentences: r2.sentences } : {}),
               }
@@ -898,6 +963,17 @@ export function chainOf(ports: Ports = {}): Chain {
       ? { content, sentences: r.sentences }
       : { content }
   }
+}
+
+/** the ids of a content's spans, at any depth, that hold text */
+function spanIdsOf(ps: readonly OutPiece[], out: string[] = []): string[] {
+  for (const p of ps)
+    if (p.t === 'span') {
+      if (p.content.some((q) => q.t === 'text' && /\S/.test(q.s)) || p.content.some((q) => q.t === 'span'))
+        out.push(p.id)
+      spanIdsOf(p.content, out)
+    }
+  return out
 }
 
 /** a unit's elements TeX sets after its text (`after`: the PDF's backref list after a bibliography entry), wherever its

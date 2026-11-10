@@ -151,6 +151,7 @@ packages/translate/tests/host-statements.test.ts 6  # 2026-11-07: Chinese replie
 packages/translate/tests/sha256.test.ts 1  # 2026-11-07: a multilingual text, the input of a digest checked against Node's
 packages/translate/src/groups.ts 1  # 2026-11-10: a full-width parenthesis quoted as the example of Unicode's compatibility folding a group's text is read under (lane style-spans)
 packages/translate/tests/groups.test.ts 32  # 2026-11-10: Chinese replies as Microsoft stored them, a group's text among their words, the inputs and expectations of placing a group a reply did not bring back (lane style-spans)
+packages/translate/tests/references.test.ts 21  # 2026-11-11: Chinese replies and reference translations (synthetic stand-ins of Microsoft's, the owner's two leads among them) and the pieces placed in them, the inputs and expectations of placing a phrase group by its reference (lane style-wire)
 packages/translate/src/adapters/chrome.ts 2  # 2026-11-07: CJK punctuation the built-in translator sets a space after, the table it is taken off by, and its quoted example
 packages/translate/src/testing/suite.ts 1  # 2026-11-07: full-width brackets, one way the conformance suite mangles a reply
 packages/translate/src/wire/align.ts 2  # 2026-11-07: the scripts' sentence ends and closers a boundary is snapped onto (Biome's formatter writes them as characters)

@@ -148,6 +148,7 @@ export function microsoft(o: MicrosoftOptions): Translator {
     identity: `microsoft:${sha256Hex(JSON.stringify(['microsoft', MICROSOFT_ENDPOINT, 'markers/1', RAW])).slice(0, 16)}`,
     digest: MICROSOFT_DIGEST,
     context: false,
+    wire: 'markers',
     limits,
     supports: async (target) => microsoftServesTarget(target),
     write: (unit) => planMarkers(unit).wire,

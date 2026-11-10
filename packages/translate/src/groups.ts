@@ -17,8 +17,24 @@
 // their own), one the translation holds only inside another group. Nothing else of a reply moves: a placed group splits one
 // text piece of its place, and its copy holding no text (a moved marker pair, empty or around white space) is unwrapped, its
 // white space kept where it stands. The projection, and so a row's sentences, is the reply's own: a span's edges are none of it.
-import { textOf } from './accept.ts'
-import type { OutPiece, Piece, UnitIn } from './contract.ts'
+//
+// A phrase group whose words were translated is placed too where the reply states its reference translation, the group's own
+// text translated alone by the same translator (`referencesOf`, `placeReferences`; the chain asks it of a markers-wire
+// translator alone, in the unit's batch, and never changes the unit's reply): once in the group's place, as a defined
+// normalisation of both reads (NFKC, no white space beside a CJK character, a run of white space one space; the reference's
+// ends trimmed of punctuation and white space), both ends on a word boundary of the reply in the target language (UAX #29 and
+// ICU's dictionaries: `Intl.Segmenter`, granularity `word`). Over the 88 papers' Chinese (lane style-wire, 2026-11-11): of 559
+// phrase groups sent today as no markers, the reply states 236 references once, ICU's boundaries hold both ends of 233, and a
+// read of 60 found 59 placed right; "Power Law+Gaussian", whose reference holds a word of its own, is the one wrong. Not asked
+// for a group that is `must` (it comes back on the wire), that holds the whole unit (it comes back around the translation),
+// that holds an element or another group (its pieces travel on their own), or whose text is one word (a label, a name: its own
+// text is placed as above, or it is translated as a word).
+//
+// `Intl.Segmenter` is in every place the chain runs: the website's Worker (workerd's V8 with ICU), the extension's background
+// (Chrome since 87; the floor is 131) and node in the lab (full ICU since 13); this module asked it for word boundaries
+// before references (`segmentsOf`), as packages/text asks it for sentences.
+import { accept, textOf } from './accept.ts'
+import type { Lang, OutPiece, Piece, UnitIn } from './contract.ts'
 
 const SOLID = /\S/
 /** a text as matched: compatibility-equal (NFKC), white space aside */
@@ -84,9 +100,16 @@ function spansIn(ps: OutPiece[], out = new Map<string, { span: Extract<OutPiece,
   return out
 }
 
-/** The reply's content with each group it did not bring back placed around its own text where the translation states it
- *  (above). Pure; the content given is not changed */
-export function placeGroups(unit: UnitIn, out: readonly OutPiece[]): OutPiece[] {
+/** a group's place in a reply: the text piece of its scope that holds its one match, the match there */
+type Hit = { piece: Extract<OutPiece, { t: 'text' }>; m: [number, number] }
+/** The reply's content with each group of `wanted` the reply did not bring back placed around the one match `find` gives in
+ *  its place (the group the reply holds around it, nearest, else the whole unit), where `fits` takes it. Pure */
+function placeBy(
+  unit: UnitIn,
+  out: readonly OutPiece[],
+  wanted: (g: Group, scope: readonly Piece[]) => ((s: string) => [number, number][]) | null,
+  fits: (s: string, m: [number, number]) => boolean = () => true,
+): OutPiece[] {
   const { groups, scopes } = groupsOf(unit.content)
   if (!groups.length) return out as OutPiece[]
   const copy = (ps: readonly OutPiece[]): OutPiece[] =>
@@ -97,27 +120,25 @@ export function placeGroups(unit: UnitIn, out: readonly OutPiece[]): OutPiece[] 
     const spans = spansIn(top)
     const back = spans.get(g.id)
     if (back && SOLID.test(textOf(back.span.content))) continue
-    const f = fold(g.text)
-    if (!f) continue
-    // (its place: the group the reply holds around it, nearest, else the whole unit; the source's text there holds it once,
-    // in the group alone)
+    // (its place: the group the reply holds around it, nearest, else the whole unit)
     const scopeId = [...g.ancestors].reverse().find((a) => SOLID.test(textOf(spans.get(a)?.span.content ?? []))) ?? ''
-    if (sourceTexts(scopes.get(scopeId)!, g.id).some((s) => matchesIn(s, f).length)) continue
+    const find = wanted(g, scopes.get(scopeId)!)
+    if (!find) continue
     const scopeOut = scopeId ? spans.get(scopeId)!.span.content : top
     // (every place the reply holds it there, at any depth: one, in a text of the place itself)
     let total = 0
-    let at: { piece: Extract<OutPiece, { t: 'text' }>; m: [number, number] } | null = null
+    let at: Hit | null = null
     const count = (ps: readonly OutPiece[], direct: boolean) => {
       for (const p of ps)
         if (p.t === 'text') {
-          const ms = matchesIn(p.s, f)
+          const ms = find(p.s)
           total += ms.length
           if (direct && ms.length === 1) at = { piece: p, m: ms[0]! }
         } else if (p.t === 'span') count(p.content, false)
     }
     count(scopeOut, true)
-    const hit = at as { piece: Extract<OutPiece, { t: 'text' }>; m: [number, number] } | null
-    if (total !== 1 || !hit) continue
+    const hit = at as Hit | null
+    if (total !== 1 || !hit || !fits(hit.piece.s, hit.m)) continue
     // (its copy the reply brought back holding no text, a moved marker pair, unwrapped: its content, none or white space, kept
     // where it stands, so the reply's text, and the projection its sentences are counted in, are the reply's)
     if (back) back.in.splice(back.in.indexOf(back.span), 1, ...back.span.content)
@@ -133,4 +154,131 @@ export function placeGroups(unit: UnitIn, out: readonly OutPiece[]): OutPiece[] 
     placed = true
   }
   return placed ? top : (out as OutPiece[])
+}
+
+/** The reply's content with each group it did not bring back placed around its own text where the translation states it
+ *  (above). Pure; the content given is not changed */
+export function placeGroups(unit: UnitIn, out: readonly OutPiece[]): OutPiece[] {
+  return placeBy(unit, out, (g, scope) => {
+    const f = fold(g.text)
+    // (the source's text there holds it once, in the group alone)
+    if (!f || sourceTexts(scope, g.id).some((s) => matchesIn(s, f).length)) return null
+    return (s) => matchesIn(s, f)
+  })
+}
+
+// ---------------------------------------------------------------- a phrase group placed by its reference translation
+
+/** a CJK character, as the normalisation reads one (after NFKC): kana, the unified and compatibility ideographs, CJK symbols
+ *  and punctuation, the full-width forms NFKC keeps */
+const CJK = /[\u3000-\u303f\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uff00-\uffef]/
+let graphemes: Intl.Segmenter | null = null
+/** a text as a reference is matched in it: each grapheme NFKC, no white space beside a CJK character, a run of white space one
+ *  space; with each character's grapheme in the text ([from, to) code units) */
+function normalOf(s: string): { n: string; from: number[]; to: number[] } {
+  graphemes ??= new Intl.Segmenter('und', { granularity: 'grapheme' })
+  const parts: { c: string; a: number; b: number }[] = []
+  for (const g of graphemes.segment(s))
+    for (const c of g.segment.normalize('NFKC'))
+      parts.push({ c: /\s/u.test(c) ? ' ' : c, a: g.index, b: g.index + g.segment.length })
+  let n = ''
+  const from: number[] = []
+  const to: number[] = []
+  for (let k = 0; k < parts.length; k++) {
+    const p = parts[k]!
+    if (p.c === ' ') {
+      if (n.endsWith(' ')) continue
+      let j = k + 1
+      while (parts[j]?.c === ' ') j++
+      const before = n.at(-1)
+      const after = parts[j]?.c
+      if (!before || !after || CJK.test(before) || CJK.test(after)) continue
+    }
+    n += p.c
+    from.push(p.a)
+    to.push(p.b)
+  }
+  return { n, from, to }
+}
+/** a reference as it is matched: normalised, its ends trimmed of punctuation and white space */
+const wantOf = (ref: string): string => normalOf(ref).n.replace(/^[\p{P}\s]+|[\p{P}\s]+$/gu, '')
+/** each place a text holds `want` as normalised, apart: [start, end) in the text's code units */
+function referencesIn(s: string, want: string): [number, number][] {
+  const { n, from, to } = normalOf(s)
+  const out: [number, number][] = []
+  for (let k = n.indexOf(want); k >= 0; k = n.indexOf(want, k + want.length))
+    out.push([from[k]!, to[k + want.length - 1]!])
+  return out
+}
+const wordSegmenters = new Map<Lang, Intl.Segmenter>()
+/** whether [start, end) of a text begins and ends on its word boundaries in `target` (a tag the platform cannot read: its root's) */
+function onWords(s: string, m: [number, number], target: Lang): boolean {
+  let seg = wordSegmenters.get(target)
+  if (!seg) {
+    try {
+      seg = new Intl.Segmenter(target, { granularity: 'word' })
+    } catch {
+      seg = new Intl.Segmenter('und', { granularity: 'word' })
+    }
+    wordSegmenters.set(target, seg)
+  }
+  const ends = new Set<number>([s.length])
+  for (const x of seg.segment(s)) ends.add(x.index)
+  return ends.has(m[0]) && ends.has(m[1])
+}
+
+/** the spans that hold every word and element of the unit but the white space and the elements that set nothing (the markers
+ *  wire sends them on no wire and puts them back around the translation, markers.ts `around`) */
+function wholeOf(content: readonly Piece[]): Set<string> {
+  const out = new Set<string>()
+  let inner = content
+  for (;;) {
+    const solid = inner.filter((p) => !(p.t === 'text' && !SOLID.test(p.s)) && !(p.t === 'el' && p.silent))
+    const only = solid[0]
+    if (solid.length !== 1 || only?.t !== 'span') return out
+    out.add(only.id)
+    inner = only.content
+  }
+}
+
+/** A group a reference is asked for, and the unit it is asked as: the group's text alone */
+export interface ReferenceGroup {
+  id: string
+  unit: UnitIn
+}
+/** The unit's groups a reference translation is asked for (above): of text alone, not `must`, not around the whole unit, whose
+ *  text holds two words and a letter. Each asked as a unit of its own, `<unit id>~g<group id>` */
+export function referencesOf(unit: UnitIn): ReferenceGroup[] {
+  const { groups } = groupsOf(unit.content)
+  const whole = wholeOf(unit.content)
+  return groups
+    .filter((g) => !whole.has(g.id) && /\S\s+\S/u.test(g.text.trim()) && /\p{L}/u.test(g.text))
+    .map((g) => ({ id: g.id, unit: { id: `${unit.id}~g${g.id}`, content: [{ t: 'text', s: g.text }] } }))
+}
+/** a reference's text from a translator's reading of its reply (`read`), accepted as any reply is; null where none */
+export function referenceText(unit: UnitIn, r: { content: OutPiece[] } | null): string | null {
+  if (!r || !Array.isArray(r.content) || !accept(unit, r.content).ok) return null
+  const s = textOf(r.content.flatMap((p) => (p.t === 'text' ? [p] : [])))
+  return SOLID.test(s) ? s : null
+}
+
+/** The reply's content with each group of `refs` (by id: its reference translation) it did not bring back placed where the
+ *  reply states that reference once, both ends on the reply's word boundaries in `target` (above). Pure */
+export function placeReferences(
+  unit: UnitIn,
+  out: readonly OutPiece[],
+  refs: ReadonlyMap<string, string>,
+  target: Lang,
+): OutPiece[] {
+  if (!refs.size) return out as OutPiece[]
+  return placeBy(
+    unit,
+    out,
+    (g) => {
+      const ref = refs.get(g.id)
+      const want = ref === undefined ? '' : wantOf(ref)
+      return want ? (s) => referencesIn(s, want) : null
+    },
+    (s, m) => onWords(s, m, target),
+  )
 }
