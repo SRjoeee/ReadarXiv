@@ -453,6 +453,9 @@ export function gateL1Pair(
      *  joined to): ord -> today's ord, its row then laid in the member's unit (the parity's: stage 1a's statement of the unit
      *  the member's holds whole, the two of one content, lab/typeset/parity/join.mjs heldJoin) */
     held?: (members: readonly L1Placed[], today: readonly number[]) => ReadonlyMap<number, number>
+    /** the chain's acceptance of a reading (the translate package's `accept`, which this package may not import: its runners
+     *  pass it): an entry row it refuses is no row, as the chain makes none of a reply it refuses, stored or fresh */
+    accept?: (unit: Unit, content: readonly OutPiece[]) => boolean
   } = {},
 ): GateL1 {
   const measure = o.metricsOf ? fitMeasure(o.metricsOf(pair)) : null
@@ -594,7 +597,7 @@ export function gateL1Pair(
     if (t) return keptRow(row, t, src)
     const source = sourcePieces(todayUnitOf(src).content)
     const content = outOfDoor(row[1], source)
-    if (!content) return null
+    if (!content || (o.accept && !o.accept(src, content))) return null
     // (the sentences today laid, where the prepare marks the unit lit by sentence: as a translator is asked for them)
     const sentences = src.sentences ? doorSentences(row, source) : undefined
     return { content, ...(sentences ? { sentences } : {}) }

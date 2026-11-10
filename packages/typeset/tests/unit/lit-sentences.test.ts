@@ -272,6 +272,33 @@ describe('Laid.lit by sentence', () => {
       }),
     ).toEqual(['both differ element'])
   })
+  it('the sentence cover reads a full-width mark’s ink in its own em: an opening one set at a line’s head, its blank half cut', () => {
+    // (1512.03385v1-zh p10: "（“07++12”）" at a line's head, the mark's leading blank half cut, the glyph drawn half an em left of
+    // the line's start and its ink in the em's second half, at the line's start; the cover read its ink from its advance, the
+    // blank half, left of its row: "right none text")
+    const zh = '（“零七”）。第二句话在这里。第三句话。'
+    const r: Row = {
+      id,
+      ok: true,
+      by: 'test',
+      content: [{ t: 'text', s: zh }],
+      sentences: { src: [15, 30], tr: [zh.indexOf('第二'), zh.indexOf('第三')] },
+    }
+    // (a full-width character an em wide, as the CJK faces set it)
+    const wide: Metrics = {
+      ...metrics,
+      advance: (_f, size, t) =>
+        [...t].reduce((a, ch) => a + (/[\u3000-\u303f\u4e00-\u9fff\uff00-\uffef“”]/u.test(ch) ? size : size / 2), 0),
+    }
+    const page = layPage(part(member()), rowsOf([r]), rulesFor('zh'), wide)
+    const first = page.members[0]!.lines[0]![3][0] as { s: string; x: number }
+    expect(first.s.startsWith('（')).toBe(true)
+    expect(first.x).toBeLessThan(72)
+    const c = newCover()
+    coverOf(c, page, part(member()), wide, 'mark')
+    coverDone(c, 'mark')
+    expect([...c.faults]).toEqual([])
+  })
   it('lights an element its translation sets inside another sentence with its own on both panes, an island in that one', () => {
     // (an element the translation moved: on A it begins the second sentence, as drawn it stands among the first's words; it
     // lights with the second on both panes, and the first sentence's words either side of it with the first)
@@ -308,6 +335,36 @@ describe('Laid.lit by sentence', () => {
     coverOf(c, p, part(m), metrics, 'island')
     coverDone(c, 'island')
     expect([...c.faults]).toEqual([])
+  })
+  it('gives a sentence’s box on a line the line’s band, where it holds only an element there', () => {
+    // (2602.23285v2-ja p13, every toggle on, t219: an element crop at the end of a line, its ink from A's next line, lit with its
+    // sentence as on A; its box the crop's ink height, 554.7-562.1 in the line's band 552.8-563.8, left the line short of a lit
+    // band: the parity's highlight coverage counted the line uncovered. A sentence's box on a line takes the line's band)
+    const content: OutPiece[] = [
+      { t: 'text', s: 'Eins ' },
+      { t: 'el', id: '5' },
+      { t: 'text', s: ' zwei drei. fünf sechs. Sieben acht neun.' },
+    ]
+    const proj = 'Eins ' + '\ufffc' + ' zwei drei. fünf sechs. Sieben acht neun.'
+    const r: Row = {
+      id,
+      ok: true,
+      by: 'test',
+      content,
+      sentences: { src: [15, 30], tr: [proj.indexOf('fünf'), proj.indexOf('Sieben')] },
+    }
+    // (its ink 5 pt tall, the line's text 9.7)
+    const m = member({ align: 'l', els: [['5', { kind: 'ref', ink: [[1, 200, 700, 214, 705, 700]] }]] })
+    const laid = laidOf(m, r)
+    const line = laid.lines.find(([, , , its]) => its.some((x) => 'piece' in x))!
+    const at = (line[3].find((x) => 'piece' in x) as { x: number }).x + 1
+    const y = line[0]
+    const onLine = (bs: readonly Box[]) => bs.filter((b) => b[1] <= y && y <= b[3])
+    const crop = onLine(laid.lit.right[1]!).filter((b) => b[0] <= at && at <= b[2])
+    expect(crop).toHaveLength(1)
+    const text = onLine(laid.lit.right[0]!)
+    expect(text.length).toBeGreaterThan(0)
+    for (const b of text) expect([crop[0]![1], crop[0]![3]]).toEqual([b[1], b[3]])
   })
   it('lights an element’s ink on A with its sentence where it stands past its line’s text (an equation’s number at the margin)', () => {
     // (2610.21176v1 p13: a unit's last element set at the column's right edge, past its line's text: its ink in no box on A)

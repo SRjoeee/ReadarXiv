@@ -122,8 +122,11 @@ function piecesDrawn(x: Laid, m: Placed, page: number, metrics: Metrics, display
         if (/\s/u.test(ch)) return
         const from = it.dx?.[i] ?? metrics.advance(it.face, it.size, chars.slice(0, i).join(''))
         const to = it.dx?.[i + 1] ?? from + metrics.advance(it.face, it.size, ch)
-        // (its ink's middle: a closing mark's first half, an opening one's second)
-        const at = CLOSING.test(ch) ? from + (to - from) / 4 : OPENING.test(ch) ? to - (to - from) / 4 : (from + to) / 2
+        // (its ink's middle: a full-width closing mark's in its em's first half, an opening one's in its second, the em its own
+        // advance whatever the line set it by: one at a line's head drawn half an em left, its blank half cut, its ink at the
+        // line's start)
+        const em = CLOSING.test(ch) || OPENING.test(ch) ? metrics.advance(it.face, it.size, ch) : 0
+        const at = CLOSING.test(ch) ? from + em / 4 : OPENING.test(ch) ? from + (3 * em) / 4 : (from + to) / 2
         out.push({ kind: 'text', at: [it.x + at, y + rise + 0.3 * it.size] })
       })
     }

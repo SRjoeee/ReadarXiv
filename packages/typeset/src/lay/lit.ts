@@ -52,7 +52,7 @@ export const inkOfLine = (l: Line): Ink => [l[0], l[2], l[6], l[3], l[5], l[4]]
 
 /** `rows` with ink of the member's that has no row of its own: the row whose band holds its baseline widened over it, else a
  *  row of its own */
-function widened(rows: Box[], ink: readonly Ink[], page: number): Box[] {
+export function widened(rows: Box[], ink: readonly Ink[], page: number): Box[] {
   const out = rows.map((b) => [...b] as Box)
   for (const k of ink) if (k[0] === page) widen(out, k)
   return out
@@ -420,10 +420,12 @@ function startsInPlain(places: NonNullable<ReturnType<typeof placesOf>>, tr: rea
 }
 
 /**
- * The boxes of the laid tokens, one a run of a sentence's tokens on a line: across them, up and down, each running on to the
- * next run's start on the line (the space after a full stop is the sentence's before it, as today's shapes tile a row: a
- * pointer over it lights that sentence), the line's last one to its last token's end. A sentence's tokens on a line are one run
- * but where an element of another stands among them (one its translation set inside it): a run each side of it
+ * The boxes of the laid tokens, one a run of a sentence's tokens on a line: across them, the line's band up and down (its
+ * tokens' boxes together), each running on to the next run's start on the line (the space after a full stop is the sentence's
+ * before it, as today's shapes tile a row: a pointer over it lights that sentence), the line's last one to its last token's
+ * end. A sentence's tokens on a line are one run but where an element of another stands among them (one its translation set
+ * inside it): a run each side of it. The band whatever the run holds: a run of an element's crop alone took the crop's ink
+ * height, short of the line's (2602.23285v2-ja p13 t219, every toggle on: 554.7-562.1 in a band of 552.8-563.8)
  */
 function rowsBySentence(tokens: readonly (Placed_ & { s: number })[], n: number): Box[][] {
   const out: Box[][] = Array.from({ length: n }, () => [])
@@ -442,8 +444,16 @@ function rowsBySentence(tokens: readonly (Placed_ & { s: number })[], n: number)
     out[t.s]!.push(run.box)
     byLine.set(t.line, [...(byLine.get(t.line) ?? []), run.box])
   }
-  // (a line's runs in the text's order, left to right: each ends where the next begins)
-  for (const boxes of byLine.values()) for (let k = 0; k + 1 < boxes.length; k++) boxes[k]![2] = boxes[k + 1]![0]
+  // (a line's runs in the text's order, left to right: each ends where the next begins, each the line's band up and down)
+  for (const boxes of byLine.values()) {
+    const bottom = Math.min(...boxes.map((b) => b[1])),
+      top = Math.max(...boxes.map((b) => b[3]))
+    for (const [k, b] of boxes.entries()) {
+      if (k + 1 < boxes.length) b[2] = boxes[k + 1]![0]
+      b[1] = bottom
+      b[3] = top
+    }
+  }
   return out
 }
 
