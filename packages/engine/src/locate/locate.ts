@@ -1679,14 +1679,22 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // the one whose last glyph is the last an instrument unit owns before its first (what stands between is no unit's, or made on
   // A: a connector), on that one's last line after its end, in one column or in none TeX set apart (no body's or float's
   // bracket between: a row of names over the page's middle). It moves where that member is not the one before it among the
-  // units, or moved itself: the rest of a run TeX set one after the other goes with it. Never an insert's, nor to one)
+  // units, or moved itself: the rest of a run TeX set one after the other goes with it. Never an insert's, nor to one; nor a
+  // babel name's or to one, whose place in a flow is its binding's (below: `leads`), its unit's place among the units none)
   for (const x of members) {
-    if (madeOnA(x) || x.bFirst < 0 || insert(x) || standing.has(x.ord)) continue
+    if (madeOnA(x) || x.bFirst < 0 || insert(x) || x.name !== undefined || standing.has(x.ord)) continue
     let b = x.bFirst - 1
     while (b >= 0 && pageB[b] === pageB[x.bFirst] && (unitB[b] as number) < 0) b--
     const o = b >= 0 && pageB[b] === pageB[x.bFirst] ? lastAt.get(b) : undefined
     const lead = o === undefined ? undefined : members[o]
-    if (!lead || lead === x || insert(lead) || (members[x.ord - 1] === lead && !standing.has(lead.ord))) continue
+    if (
+      !lead ||
+      lead === x ||
+      insert(lead) ||
+      lead.name !== undefined ||
+      (members[x.ord - 1] === lead && !standing.has(lead.ord))
+    )
+      continue
     const a = lead.lines.at(-1),
       l = x.lines[0]
     if (!a || !l || a[0] !== l[0] || l[2] < a[3] - 0.5) continue

@@ -157,6 +157,33 @@ describe('locate', () => {
     expect(L.members[2]!.join).toEqual([4])
     expect(L.members[3]!.join).toEqual([4])
   })
+  it('leaves a babel name’s place in a flow to its binding, whatever TeX set after it (2610.21085v1 p7’s "Proof.")', () => {
+    // (a name binds the unit TeX set right after it where that unit's first glyph stands on its baseline (`leads`); a proof that
+    // opens with a formula raised off it is bound to none, and the stream's order, which no name's unit has among the units, is
+    // not read for it: the name and its proof stay as the binding left them)
+    const B2 = docOf([
+      {
+        lines: [
+          { text: 'Proof', x: 72, y: 700 },
+          { text: '.', x: 102, y: 700 },
+          { text: 'X', x: 110, y: 703 },
+          { text: ' holds here', x: 116, y: 700 },
+          { text: 'Body text', x: 72, y: 600 },
+        ],
+      },
+    ])
+    const units2 = [
+      unitOf('para', 'Body text'),
+      unitOf('theorem', 'X holds here'),
+      { ...unitOf('name', 'Proof'), name: 'proof' },
+    ]
+    const ins2 = instrumentOf(B2, units2, [[2, -1, 1, 1, 0]], [[ROLE.name, ROLE.text, ROLE.text, ROLE.text, ROLE.text]])
+    const L = locate(ins2, B2, align(B2, B2))
+    const name = L.members.find((m) => m.kind === 'name')!
+    const proof = L.members.find((m) => m.kind === 'theorem')!
+    expect(name.leads).toBeUndefined()
+    expect(L.flows.find((f) => f.includes(proof.ord))).toEqual([proof.ord])
+  })
   it('leaves an author’s unit no member where TeX sets it in a paragraph that sets another unit again, its text the page’s', () => {
     // (2610.22065v1 p1: acmart's reference format, one paragraph of the paper's front matter set again — the authors, the year,
     // the title a second time —, and the author units set there alone, the block under the title written out by the paper. Each
