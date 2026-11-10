@@ -72,6 +72,11 @@ export const CAUSE = Object.freeze({
   // engine's `pitch`, the dump's `keptBy: 'pitch'`), the original's text, no translation missing; the candidate's own unit's
   // cause, keptWhyOf: accepted)
   pitch: 'kept as the original: set wholly in a face of one pitch',
+  // ((k) by group, lane b5-fixes, the owner's ruling of 2026-11-11 (PDF-READER §18.22, Rule 1 read by group): a source unit of
+  // today's the candidate writes as one TeX source, a group of it one element its prepare keeps for its pitch (the dump's element
+  // `keptBy: 'pitch'`): the same unit, its id moved with its content, that group the original's ink, never sent, the rest of it
+  // translated)
+  pitchGroup: 'a group of it kept as the original: set wholly in a face of one pitch',
   // ((l), the coordinator's ruling of 2026-11-10, round 8 B5, and (l'), its extension the same day: today's ink unit whose every
   // line one source unit of v2's holds (no other meets them), both read as the reader sees them (seenOf): each formula's span one
   // placeholder (today's formula runs: its placeholders and the digits its ledger read as text inside or right beside them; v2's
@@ -554,6 +559,17 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     seen.set(u.id, k + 1)
     return units.filter((n) => !n.replaced && n.id === u.id).sort((a, b) => a.ord - b.ord)[k] ?? null
   }
+  // ((k) by group: the candidate's unit of today's kind writing today's TeX source, white space as one space, an element of it kept
+  // for its pitch; the one at today's place first)
+  const texOf = (x) => (x.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : (p.src ?? ''))).join('').replace(/\s+/g, ' ').trim()
+  const pitchGroupOf = (u) => {
+    const src = texOf(u)
+    const L = u.lines?.[0]
+    const all = units.filter(
+      (n) => !n.replaced && n.kind === u.kind && !baseIds.has(n.id) && (n.elements ?? []).some((e) => e.keptBy === 'pitch') && texOf(n) === src,
+    )
+    return all.find((n) => L && n.lines?.[0] && meets(L, n.lines[0])) ?? all.sort((a, b) => a.ord - b.ord)[0] ?? null
+  }
   for (const u of base) {
     if ((have.get(u.id) ?? 0) > 0) {
       have.set(u.id, have.get(u.id) - 1)
@@ -564,6 +580,11 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
       const whole = !!n && !!t && (own.why === UNMARKED ? glyphTextOf(n) === t : glyphTextOf(n).includes(t))
       if (n && n !== own && n.state === 'drawn' && whole)
         out.push({ u, own, why: `made on arXiv's page as ${n.id.slice(0, 12)}: ${CAUSE.held}`, cause: keyOf(CAUSE.held), holder: n.id })
+      continue
+    }
+    const grouped = /^ink/.test(u.kind) ? null : pitchGroupOf(u)
+    if (grouped) {
+      out.push({ u, why: `written as ${grouped.id.slice(0, 12)}: ${CAUSE.pitchGroup}`, cause: 'pitchGroup', holder: grouped.id })
       continue
     }
     // ((F) first, the coordinator's ruling of 2026-11-10 on rebuild/mail-group: a line of e-mail addresses and their separators
