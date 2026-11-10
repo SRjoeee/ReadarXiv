@@ -169,12 +169,12 @@ function writtenAs(ps, drop, marked = new Set()) {
   const plain = parts.filter((x) => x !== null).join('').replace(/\s+/g, ' ').trim()
   if (parts.length === 1) return (x) => x === plain
   // (pairs side by side one place)
-  const t = parts.map((x) => x ?? '\u0001').join('').replace(/\s+/g, ' ').replace(/\u0001+/g, '\u0001').trim()
+  const t = parts.map((x) => x ?? '\ue000').join('').replace(/\s+/g, ' ').replace(/\ue000+/g, '\ue000').trim()
   // (or marks, characters no letter, digit or space, at one place or more: a place between two spaces holds its marks before one of
   // them, or none and one space)
   const escape = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const M = '[^\\p{L}\\p{N}\\s]'
-  const bits = t.split('\u0001')
+  const bits = t.split('\ue000')
   let src = ''
   for (let i = 0; i < bits.length; i++) {
     let left = bits[i]
