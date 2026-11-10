@@ -527,6 +527,16 @@ describe('figure-lines: F1, a formula in a figure is an element, never sent (the
       expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
     }
   })
+  it('reads a mark set between two words, no space either side and no math face, as the words’: "Near−monopoly" (2610.11256v1 p17)', () => {
+    // (a plot's labels set with the minus sign for their hyphen: each one text, translated; between two letters of a formula
+    // it is the formula's: "x−y" kept)
+    for (const text of ['Near−monopoly', 'Over−priced', 'input→output']) {
+      const { page, fig } = pageOf([[{ text, font: 'Helvetica' }]])
+      expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
+    }
+    const { page, fig } = pageOf([[{ text: 'x−y', font: 'Helvetica' }]])
+    expect(figureLinesOf([page], fig, () => false, null).map((t) => t.why)).toEqual(['formula'])
+  })
   it('reads an upright face the document sets a word of apart from any formula as text: its words translated', () => {
     // (KaTeX_Main also sets a label of its own, no formula on its line: a text face; "arg min" a word before the formula)
     const { page, fig } = pageOf([
