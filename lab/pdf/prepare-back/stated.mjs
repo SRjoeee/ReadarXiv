@@ -367,11 +367,12 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
       hi = at.at(-1).ord
     return units.some((n) => !n.replaced && n.ord > lo && n.ord < hi && !at.includes(n)) ? null : at
   }
-  // ((g) over the parts: arXiv's glyphs of ink on today's lines, line by line, each by its advance across the line and its
-  // baseline within it, in x order; their characters, white space no glyph)
-  const arxivOn = (u) => {
+  // ((g) over the parts: arXiv's glyphs of ink on the parts' own lines (made on arXiv's page, where arXiv set them), part by
+  // part and line by line, each by its advance across the line and its baseline within it, in x order; their characters, white
+  // space no glyph)
+  const arxivOn = (lines) => {
     let s = ''
-    for (const l of u.lines) {
+    for (const l of lines) {
       const page = glyphs(l.page)
       if (!page) return null
       s += page
@@ -386,7 +387,7 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     if (!at.every((n) => /^ink/.test(n.kind) && ['drawn', 'laid'].includes(n.state) && !n.why)) return false
     const h = at.map(glyphTextOf).join(''),
       t = glyphTextOf(u)
-    return !!t && t !== h && arxivOn(u) === h && subsequence(t, h)
+    return !!t && t !== h && arxivOn(at.flatMap((n) => n.lines ?? [])) === h && subsequence(t, h)
   }
   // (a unit's text as written, an address its element reads as itself: what (F) reads)
   const writtenOf = (x) => (x.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : p.kind === 'ph' ? (readingOf(p.src ?? '') ?? '\ufffc') : '')).join('')

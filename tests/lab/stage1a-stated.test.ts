@@ -547,6 +547,12 @@ describe("a stand-in that reads otherwise and the units after it: (j) from the s
       [587, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`],
     ])
     expect(said(statedOf(t, notes))).toEqual([[587, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`]])
+    // (arXiv's glyphs read on the parts' own lines, where arXiv set them: today's line, short of the initials arXiv's has, ends
+    // before them; 2610.21084v1's)
+    const short = [on(unit(id('a'), 587, 'inknames', [text('(. Chung); (.M. Solomon)')]), box(72, 300, 600, 608, 598), box(72, 125, 588, 596, 586))]
+    expect(said(statedOf(short, notes, { glyphs: arxiv('(M.Chung);', '(J.M.Solomon)') }))).toEqual([
+      [587, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.arxivParts}`],
+    ])
   })
 })
 
