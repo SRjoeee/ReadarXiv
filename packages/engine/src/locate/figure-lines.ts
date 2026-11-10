@@ -105,6 +105,32 @@ export function figureLinesOf(
   owned: (p: number, g: number) => boolean,
   fixed: ReadonlySet<string> | null,
   textFaces: ReadonlySet<string> | null = null,
+  work: LinesWork | null = null,
+): FigureText[] {
+  W = work
+  try {
+    return linesOf(pages, fig, owned, fixed, textFaces)
+  } finally {
+    W = null
+  }
+}
+
+/**
+ * The figure reading's work, counted (deterministic: what the input asks, no clock): `rounds` the line reading's passes (a pass
+ * ends at a join and starts again), `pairs` the pairs of lines it tests, `scripts` the pairs the script join tests (F1's, inside
+ * each pass that joins nothing), `votes` the glyphs a line's size and baseline are voted over, `faces` the glyphs read for a
+ * formula's (mathGlyph: a face's name and a character). The speed of the prepare's locate where figures are many: 2609.19644v1's
+ * included pages
+ */
+export type LinesWork = { rounds: number; pairs: number; scripts: number; votes: number; faces: number }
+let W: LinesWork | null = null
+
+function linesOf(
+  pages: readonly TodayPage[],
+  fig: TodayFigures,
+  owned: (p: number, g: number) => boolean,
+  fixed: ReadonlySet<string> | null,
+  textFaces: ReadonlySet<string> | null,
 ): FigureText[] {
   const out: FigureText[] = []
   const pitch = (g: G) => !!fixed && fixed.has(bare(g.font))
@@ -162,9 +188,11 @@ export function figureLinesOf(
     }
     for (let again = true; again; ) {
       again = false
+      if (W) W.rounds++
       lines.sort((a, b) => b.y - a.y || a.x0 - b.x0)
       for (let i = 0; i < lines.length && !again; i++)
         for (let j = i + 1; j < lines.length && !again; j++) {
+          if (W) W.pairs++
           const a = lines[i]!,
             b = lines[j]!
           const size = Math.max(a.size, b.size)
@@ -318,6 +346,7 @@ const isMathChar = (u: string) =>
 /** a glyph of a formula by facts (1) and (2): its character a mathematical one, or its face a math face by its name
  *  (classifyFont's `math`: CMMI, CMSY, KaTeX_Math …; a math italic letter's Unicode is the plain letter, so the name is read) */
 function mathGlyph(g: G): boolean {
+  if (W) W.faces++
   return classifyFont(g.font).fam === 'math' || isMathChar(g.u)
 }
 
@@ -331,6 +360,7 @@ function scriptsJoined(lines: Line[], glyphs: readonly G[]): boolean {
     again = false
     for (let i = 0; i < lines.length && !again; i++)
       for (let j = 0; j < lines.length && !again; j++) {
+        if (W) W.scripts++
         const a = lines[i]!,
           b = lines[j]!
         if (i === j || a.fig !== b.fig || b.size > 0.9 * a.size) continue
@@ -518,6 +548,7 @@ function formulaOf(gs: readonly number[], glyphs: readonly G[], f: Formulas): bo
 
 function lineOf(ks: number[], gs0: number[], free: Set<number>, glyphs: readonly G[], fig: string): Line {
   const gs = [...new Set(gs0)].sort((a, b) => glyphs[a]!.x0 - glyphs[b]!.x0 || a - b)
+  if (W) W.votes += gs.length
   // (its size the size most of its glyphs stand at, those no run holds too; its baseline theirs: a display's math glyphs are no
   // run's, and its runs may be its scripts alone, "final", "base", "low" (2609.19644v1 p59), whose size and baseline are not
   // the line's)
