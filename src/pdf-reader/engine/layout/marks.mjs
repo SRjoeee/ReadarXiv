@@ -1854,7 +1854,7 @@ const r2 = v => Math.round(v * 100) / 100
 
 /** the names a log reports set twice: pdfTeX's and LuaTeX's warnings, dvipdfmx's, in every pass a log holds (a line TeX
  *  cut at 79 characters joined to the next) */
-const duplicatesIn = log => {
+export const duplicatesIn = log => {
   const text = (log ?? '').replace(/^(.{79})\n/gm, '$1'), out = new Set()
   for (const m of text.matchAll(/destination with the same identifier \(name\{axt-([^}\s]+)\}\)|duplicate destination with the name 'axt-([^'\s]+)'|Object @axt-(\S+?) already defined/g)) out.add(m[1] ?? m[2] ?? m[3])
   return [...out].filter(n => MARK_NAME.test(n))

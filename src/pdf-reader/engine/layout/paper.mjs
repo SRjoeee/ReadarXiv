@@ -26,7 +26,7 @@ import { DRAFT_OPTION, listsMissing, markedPreamble, NO_DRIVER_GROUP, notFound, 
 import { completeLog } from '../pipeline/typeset/tex.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { isMemoryError } from '@readarxiv/engine'
-import { auxUnits, contextUnits, copiesOutOfPlace, engineUnknown, preambleUnits, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
+import { auxUnits, contextUnits, copiesOutOfPlace, cutCopyUnits, engineUnknown, preambleUnits, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
 import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, markTextOf } from './base.mjs'
 import { completeCalled, LAYOUT_CLASSES, probeSamples, readInkAnswers, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
 
@@ -133,7 +133,8 @@ export async function madeBibliography(paper, { compile, compilerOf = null, engi
  * page count is arXiv's (`pages`, where the host gives it: a number, or a function asked once for it; with several toplevel
  * sources, `meta.toplevels`, at most arXiv's: the first file's pages are arXiv's first); no auxiliary file it wrote holds a
  * mark of ours where no text is set (auxUnits), unless TeX shows what it did with each (copiesOutOfPlace: the compile otherwise
- * the paper's, its log naming every destination set twice); its TeX errors are no more than the unmarked original's (an unmarked compile
+ * the paper's, its log naming every destination set twice), and no file it wrote holds a class's verbatim copy of our source
+ * cut inside a mark of ours (cutCopyUnits: cas-common's abstract, whose copy lost our line probe's name); its TeX errors are no more than the unmarked original's (an unmarked compile
  * only where it has any). A paper whose marked original passes costs no compile more. On a check that fails, the units the
  * evidence blames are left unmarked and the marked original compiled again, at most GUARD_EXTRA compiles in all, the
  * unmarked original's among them, none where `compileBudgetMs` (the host's budget across every compile of the paper, as
@@ -377,8 +378,9 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
       const short = ran && N !== null && M !== null && M < N && !several, long = ran && N !== null && M !== null && M > N
       const text = shown ? shown.pages.length > 0 : false, errors = c ? errorCount(c.log) : 0
       // (a mark a file it wrote holds, judged by what TeX did with it where the compile shows it: guard.mjs copiesOutOfPlace; its
-      // pages' text read, so that no mark printed is known, not assumed: no `textOf`, or one that failed, shows nothing)
-      const aux = ran ? copiesOutOfPlace(auxUnits(c, count, job), { clean: shown !== null && !short && !long && !text && errors === 0, log: c.log }) : new Set()
+      // pages' text read, so that no mark printed is known, not assumed: no `textOf`, or one that failed, shows nothing; and a mark of
+      // ours a class's verbatim copy of our source cut, whatever else the compile shows: guard.mjs cutCopyUnits)
+      const aux = ran ? new Set([...copiesOutOfPlace(auxUnits(c, count, job), { clean: shown !== null && !short && !long && !text && errors === 0, log: c.log }), ...cutCopyUnits(c, f, count)]) : new Set()
       return { c, files: f, spans: sp, ran, pages: M, short, long, aux, text, textUnits: new Set(shown ? [...shown.units].filter(u => u < count) : []), errors }
     }
     /** whether it stands: ran through, arXiv's pages, nothing out of place, and no errors (or no more than the paper's own) */

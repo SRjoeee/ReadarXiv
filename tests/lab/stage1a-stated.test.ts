@@ -90,6 +90,31 @@ describe("the baseline's units the candidate does not make, stated with how it r
     expect(said(statedOf(base, units))).toEqual([[161, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.names}`]])
   })
 
+  it("states a names unit the author block's rule moved out of the block as its ledger class's unit standing for it (2610.21084v1 t587)", () => {
+    // (rule 8 made today's page-foot note of the authors' e-mails inknames; outside the author block under the title the block
+    // rule gives it back its ledger class, inknotes: the unit of today's kind no more, it stands for today's all the same, at its
+    // place or, neither with a line, at its ord; here refused, as it was when it was inknames)
+    const refused = { why: 'content difference: aonly' }
+    const today = { ...unit(id('a'), 587, 'inknames', [text('(. Chung)')]), lines: [] }
+    const v2 = { ...unit(id('b'), 587, 'inknotes', [text('(M. Chung)')]), lines: [], ...refused }
+    expect(said(statedOf([today], [v2]))).toEqual([[587, `made on arXiv's page as ${'b'.repeat(12)}: content difference: aonly`]])
+    const placed = { ...unit(id('c'), 12, 'inkorphan', [text('(M. Chung)')]), ...refused }
+    expect(said(statedOf([unit(id('a'), 587, 'inknames', [text('(. Chung)')])], [placed]))).toEqual([
+      [587, `made on arXiv's page as ${'c'.repeat(12)}: content difference: aonly`],
+    ])
+    // (a unit of its own kind there first; no other kind's: a note of today's now an orphan line is no move of the block's)
+    const both = [placed, { ...unit(id('d'), 13, 'inknames', [text('(M. Chung)')]), ...refused }]
+    expect(said(statedOf([unit(id('a'), 587, 'inknames', [text('(. Chung)')])], both))).toEqual([
+      [587, `made on arXiv's page as ${'d'.repeat(12)}: content difference: aonly`],
+    ])
+    expect(statedOf([{ ...unit(id('a'), 5, 'inknotes', [text('x')]), lines: [] }], [{ ...unit(id('b'), 5, 'inkorphan', [text('y')]), lines: [] }])).toEqual([])
+    // (a kept block there is no unit the block's rule moved, which never makes one: (f)'s holding by a kept block states it, as before)
+    const kept = { ...unit(id('e'), 40, 'inkorphan', []), kept: true as const }
+    expect(said(statedOf([unit(id('a'), 587, 'inknames', [text('(. Chung)')])], [kept]))).toEqual([
+      [587, `made on arXiv's page as ${'e'.repeat(12)}: ${CAUSE.heldKept}`],
+    ])
+  })
+
   it('states no names line for a line now of another kind that is not the names toggle (held whole (f)), nor one at another place', () => {
     expect(said(statedOf([unit(id('a'), 1, 'inkorphan', [text('x')])], [unit(id('b'), 1, 'inknotes', [text('x')])]))).toEqual([
       [1, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`],
@@ -204,6 +229,72 @@ describe("(e) a unit whose lines v2 keeps whole as the original's, inside a disp
     expect(said(statedOf(base, [kept]))).toEqual([[118, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.kept}`]])
     const moved = { ...unit(id('b'), 141, 'inknotes', [], [107.91, 240, 195.57]), kept: true as const }
     expect(said(statedOf(base, [moved]))).toEqual([[118, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`]])
+  })
+})
+
+describe("(g) and (h): one that stands for today's unit and reads otherwise (the coordinator's rulings of 2026-11-10, round 8 B2)", () => {
+  /** v2's unit made on A at today's place, drawn, its text and elements given, on today's lines (x1 as v2's) and more */
+  const made = (kind: string, pieces: DumpPiece[], lines: [number, number, number][], els: { k: number; line: number }[] = []) => {
+    const n = unit(id('b'), 9, kind, pieces, lines[0])
+    n.lines = lines.map(([x0, x1, b]) => ({ page: 1, x0, x1, baseline: b, top: b + 8, bottom: b - 2 }))
+    n.elements = els.map(({ k, line }) => ({ k, kind: 'url', segs: [{ ...n.lines[line]! }] }))
+    return { ...n, state: 'drawn' }
+  }
+  it("(g) states one whose text is arXiv's over today's lines, today's a subsequence of it, as another reading, now arXiv's text (2610.21084v1 t587)", () => {
+    // (cas-common's footnote: our old compile set "(. Chung)", arXiv "(M. Chung)"; v2's unit read off arXiv's page, laid)
+    const today = unit(id('a'), 587, 'inknames', [ph('\\url{a@b.org}'), text(' (. Chung); '), ph('\\url{c@d.org}'), text(' (.M. Solomon)')], [99.9, 420, 129])
+    const v2 = made('inknotes', [ph('\\url{a@b.org}'), text(' (M. Chung); '), ph('\\url{c@d.org}'), text(' (J.M. Solomon)')], [[99.9, 426.7, 129]], [{ k: 0, line: 0 }, { k: 2, line: 0 }])
+    expect(said(statedOf([today], [v2]))).toEqual([[587, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.arxivText}`]])
+    // (today's text no subsequence of v2's, or v2's unit not on today's lines, or refused: another reading)
+    const other = made('inknotes', [ph('\\url{a@b.org}'), text(' (M. Chang); '), ph('\\url{c@d.org}'), text(' (J.M. Solomon)')], [[99.9, 426.7, 129]], [{ k: 0, line: 0 }, { k: 2, line: 0 }])
+    expect(said(statedOf([today], [other]))).toEqual([[587, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`]])
+    const more = made('inknotes', v2.pieces, [[99.9, 426.7, 129], [72, 186, 119.5]], [{ k: 0, line: 0 }, { k: 2, line: 0 }])
+    expect(said(statedOf([today], [more]))).toEqual([[587, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`]])
+  })
+  it("(h) states one whose text is today's and whole lines more that carry no text word as held whole, with its wrapped no-word lines (2610.22214v1 t310)", () => {
+    // (ACM's permission note: today's two lines; v2's the same and the DOI TeX broke onto a third, which the join rule adds)
+    const today = unit(id('a'), 310, 'inknotes', [text('ACM ISBN 979-8-4007')], [53.3, 186.8, 100.6])
+    today.lines.push({ page: 1, x0: 53.5, x1: 162, baseline: 92.6, top: 100.6, bottom: 90.6 })
+    const lines: [number, number, number][] = [[53.3, 186.8, 100.6], [53.5, 162, 92.6], [53.8, 166.9, 84.7]]
+    const v2 = made('inknotes', [text('ACM ISBN 979-8-4007 '), ph('\\url{https://doi.org/10.1145/1}')], lines, [{ k: 1, line: 2 }])
+    expect(said(statedOf([today], [v2]))).toEqual([[310, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.wrapped}`]])
+    // (the line more holding text: no wrapping (h); the stand-in holds today's text whole, in order: held whole, (f) by a stand-in
+    // of its kind, the coordinator's ruling of 2026-11-10 on round 8 B2a; one that does not hold it, another reading)
+    const worded = made('inknotes', [text('ACM ISBN 979-8-4007 doi 10.1145')], lines)
+    expect(said(statedOf([today], [worded]))).toEqual([[310, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+    const other = made('inknotes', [text('ACM ISBN 979-8-4008 doi 10.1145')], lines)
+    expect(said(statedOf([today], [other]))).toEqual([[310, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`]])
+  })
+})
+
+describe("(i) a unit the guard left unmarked, held whole by one drawn unit with its text (the coordinator's ruling of 2026-11-10, round 8 B2)", () => {
+  /** today's abstract paragraph on two lines, drawn (or not); v2's own unit of it, unlaid with the reason the dump gives it */
+  const today = (state = 'drawn') => {
+    const u = unit(id('a'), 4, 'abstract', [text('Scientific prediction under '), text('uncertainty needs more.')], [212, 472, 523.6])
+    u.lines.push({ page: 1, x0: 212, x1: 390, baseline: 514.1, top: 522.1, bottom: 512.1 })
+    return { ...u, state }
+  }
+  const own = (why: string) => ({ id: id('a'), ord: 4, kind: 'abstract', text: '', pieces: today().pieces, state: 'unlaid', why })
+  const ink = (s: string, state = 'drawn') => {
+    const n = unit(id('b'), 587, 'inkorphan', [text(s)], [212, 472, 523.6])
+    n.lines.push({ page: 1, x0: 212, x1: 390, baseline: 514.1, top: 522.1, bottom: 512.1 })
+    return { ...n, state }
+  }
+  it("states it held whole by another unit, on its own unit, the guard's reason kept (2610.21084v1 t4: cas-common's abstract)", () => {
+    const stated = statedOf([today()], [own('unlocated: marks'), ink('Scientific prediction under uncertainty needs more.')])
+    expect(said(stated)).toEqual([[4, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+    expect(stated[0]).toMatchObject({ cause: 'held', holder: id('b'), own: { ord: 4, why: 'unlocated: marks' } })
+  })
+  it("states none where today did not draw it (no loss to state), the reason is another, the holder is not drawn or holds other text, or two units hold its lines", () => {
+    expect(said(statedOf([today('unlaid')], [own('unlocated: marks'), ink('Scientific prediction under uncertainty needs more.')]))).toEqual([])
+    expect(said(statedOf([today()], [own('unlocated: no ink'), ink('Scientific prediction under uncertainty needs more.')]))).toEqual([])
+    expect(said(statedOf([today()], [own('content difference: bonly'), ink('Scientific prediction under uncertainty needs more.')]))).toEqual([])
+    expect(said(statedOf([today()], [own('unlocated: marks'), ink('Scientific prediction under uncertainty needs more.', 'laid')]))).toEqual([])
+    expect(said(statedOf([today()], [own('unlocated: marks'), ink('4Scientific prediction under uncertainty needs more.')]))).toEqual([])
+    const half = ink('Scientific prediction under uncertainty needs more.')
+    half.lines = half.lines.slice(0, 1)
+    const other = { ...unit(id('c'), 588, 'inkorphan', [text('x')], [212, 390, 514.1]), state: 'drawn' }
+    expect(said(statedOf([today()], [own('unlocated: marks'), half, other]))).toEqual([])
   })
 })
 
@@ -432,7 +523,7 @@ describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (la
       new RegExp(e.match).test(cause),
     )
   it('accepts the ruled causes, and neither another reading nor lines kept whole outside a display the engine states', () => {
-    for (const c of [CAUSE.scripts, CAUSE.names, CAUSE.trail, CAUSE.orderAsElement, CAUSE.display, CAUSE.held, CAUSE.heldBlock, CAUSE.addresses, CAUSE.split])
+    for (const c of [CAUSE.scripts, CAUSE.names, CAUSE.trail, CAUSE.orderAsElement, CAUSE.display, CAUSE.held, CAUSE.heldBlock, CAUSE.addresses, CAUSE.split, CAUSE.arxivText, CAUSE.wrapped])
       expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${c}`)).toBe(true)
     expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`)).toBe(false)
     expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.kept}`)).toBe(false)
