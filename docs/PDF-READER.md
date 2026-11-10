@@ -3861,15 +3861,51 @@ tag pair, a `must` bare group was a marker pair on Microsoft's, and placement an
   front end read as setting its argument alone (latex-front.mjs identityPair, the open piece's `sets` 0) and a bare group holding no
   declaration of its own (no placeholder that sets nothing directly inside it, `mt.mjs` isInkless: a switch it would scope), both of
   its ends in the unit, are their content, their text joined with the text on either side. A group the front end says nothing of
-  stays one: `\enquote` (TeX prints its quotes), a paper's macro that sets more (`\multicolumn`, `\rotatebox`, `\fbox`), a group
-  around a declaration (`{\em …}`).
-- **Measured** over 86 of the 88 papers (2610.30034v1 and 2610.30875v1, whose folders now resolve into the archive image, not
-  read), stage 1a against §18.27's: 23,425 groups written as their content in 2,334 units of 75 papers (`\bibinfo` 10,428,
-  `\bibnamefont` 4,084, `\bibfnamefont` 3,704, bare 3,253, `\bibfield` 1,729, `\showarticletitle` 170, `\techreport` 44,
-  `\natexlab` 12), each unit exactly the one before with those groups' ends out, every other unit, part member and part fact
-  the same with the unit ids carried; drawn units and pages per paper the same. Every fill stated on such a group was also its
-  link's around it. The tags wire: 20,330 tag pairs fewer (34,275 to 13,945), 311,288 characters (4.0 %), in 2,237 units' wires;
-  the markers wire: 264 units' wires change, a `must` bare group's markers gone (1,991 characters).
+  stays one: a paper's macro that sets more (`\multicolumn`, `\rotatebox`, `\fbox`), a group around a declaration (`{\em …}`);
+  a command that prints its argument between marks is those marks as text and its argument (§18.29).
+- **Its gate.** The instrument decides this before TeX's paragraph ends are read; a paragraph TeX opened inside a unit is stated
+  on the group whose open the text meets there (SpanAt.opens), so one opened where a group written as its content stood would
+  have nothing to state it on. The instrument states where each such group opened (`InstrumentUnit.passed`, offsets in the
+  unit's projection; the bundle does not carry them), the facts pass counts a paragraph end the unit's text meets there as it
+  meets a group's open (`Located.stats.opensLost`), and stage 1a writes the count in the dump and fails the paper (`run.mjs`,
+  exit 4), so that such a case is a gate's and not a reader's. None over the 88.
+- **Measured** over the 88 papers, stage 1a against §18.27's: 23,454 groups written as their content in 2,354 units of 77 papers
+  (`\bibinfo` 10,428, `\bibnamefont` 4,084, `\bibfnamefont` 3,704, bare 3,282, `\bibfield` 1,729, `\showarticletitle` 170,
+  `\techreport` 44, `\natexlab` 12, `\anonymous` 1), each unit exactly the one before with those groups' ends out, every other
+  unit and part member (63,230) the same with the unit ids carried; drawn units (38,366) and pages (2,339) per paper the same.
+  Every fill stated on such a group was also its link's around it. The tags wire: 20,359 tag pairs fewer (34,579 to 14,220),
+  311,716 characters (3.9 %), in 2,257 units' wires; the markers wire: 264 units' wires change, a `must` bare group's markers
+  gone (1,991 characters).
+
+### 18.29 What a command prints as characters is characters: `\enquote`'s quotation marks (2026-11-11)
+
+`\enquote{X}` prints X between quotation marks. The front end read it as a pair around X (in a bibliography entry a span of
+style `other`), and csquotes' in the body as one placeholder: the marks were in no text piece and no element, so the translation
+was laid without them (below, as laid). The rule is §18.27's: what a command prints as
+characters is characters, and what a translator then does with quotation marks is the translator's. Not the original's ink (it
+would freeze English quotes around translated words, and ink cannot flow), not quotes of ours chosen per target (the
+translator's to choose).
+
+- **A command whose definition prints its argument between marks and nothing else** (`latex-front.mjs` wrapOf: its replacement
+  text `<marks>#n<marks>`, no letter, digit, command or group in the marks, both sides set): those marks are text of the unit,
+  TeX's ligatures read (``` `` ``` “, `''` ”, `` ` `` ‘, `'` ’, `--` –, `---` —), the call's source with them, written back byte for
+  byte; its argument walked as before, the pair's id spent. A paper's `\newcommand` and a `.bbl`'s `\providecommand` alike
+  (2610.10069v1's `\newcommand{\enquote}[1]{``#1''}`, REVTeX's `\providecommand \enquote [1]{``#1''}` in 2307.16209v1). A
+  definition that sets anything else stays the pair it was.
+- **csquotes' `\enquote`** (the paper defining none): the outer level's double marks, an `\enquote` inside one the inner level's
+  single, as csquotes alternates, `\enquote*` from the inner level (quoteMarks), where the marks can be read off the paper's
+  files: csquotes loaded with no style, `style=american`, `english` or `USenglish`, no `autostyle`, no `\setquotestyle`, no babel
+  or polyglossia language but English (`csquotesOf`). Another style, or a language's, is one placeholder as before: its marks are
+  the style's, which the compile's glyphs would tell (the element's own text, as an element's text is read); not read here. No
+  paper of the 88 loads csquotes.
+- **Measured** over the 88 papers' stage 1a against §18.28's: 51 units of 2 papers change (2610.10069v1 43, 2307.16209v1 8, all
+  references), each exactly with its `\enquote` pair out and “…” around its content; every other unit and part member the same;
+  drawn units (38,366) and pages per paper the same. The 51 wires all change: tags 10,730 to 10,114 characters, markers 7,010 to
+  7,104 (2610.10069v1-zh is a parity pair: 43 references, laid under the references toggle). Stage 1a's statement (o) reads a
+  pair v2 does not write as its content between the marks it may print (39 of today's units more stated by it); the
+  differential loses round 14's 11. Laid by the reader's own lay, Chinese by Microsoft, the references toggle on, before and after:
+  2307.16209v1 p143 "E. Berti，黑洞扰动理论，（2016）." and "E. Berti，“黑洞扰动理论”，（2016）."; 2610.10069v1 p24 "希克斯互补性与扰动效用模型" and "《Hicksian互补性与扰动效用模型》",
+  in title marks, the translator's choice for a title in Chinese (its "Hicksian" left English this time, also the translator's).
 
 ## 19. The engine's contract
 
