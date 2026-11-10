@@ -7,6 +7,7 @@
 // a doubled copy), a container round all of it, or unrelated ink, never covered. Pure arithmetic over a page's glyphs and boxes;
 // every measure the figure reading's, in its size: RUN_DY, RUN_GAP, SPACE_GAP, DRAW_BAND.
 import {
+  ANCHOR_REACH,
   DRAW_BAND,
   RUN_DY,
   RUN_GAP,
@@ -16,7 +17,9 @@ import {
   type TodayPage,
   type TodayShape,
 } from './today/today.types.ts'
-import { classifyFont } from './facts.ts'
+import type { DocGlyph } from '../doc.ts'
+import { classifyFont, lineEnd } from './facts.ts'
+import { PARA_ALIGN_TOL, type ParaLine, parasOf } from './figure-paras.ts'
 
 /** a glyph as the figure reading reads one (pageInk's, a page of today's makers) */
 interface G {
@@ -35,6 +38,7 @@ interface G {
   pid?: number
   blank?: boolean
   unseen?: boolean
+  fill?: number
 }
 
 /** a figure text this reading makes or judges anew */
@@ -42,11 +46,17 @@ export interface FigureText {
   /** its runs (figureUnitsOf's units by k), in their line's order: the first its figure group's */
   ks: number[]
   page: number
-  /** its pieces in its line's order: text (its glyphs on its page, by index) or an element (`els`' index) */
-  order: ({ t: 'text'; glyphs: number[] } | { t: 'el'; i: number })[]
+  /** its pieces in its lines' order: text (its glyphs on its page, by index), an element (`els`' index), or a line's end inside
+   *  a paragraph (F3): a space, a word's own hyphen kept and nothing more (`join`), or TeX's hyphen dropped (`drop`) */
+  order: ({ t: 'text'; glyphs: number[] } | { t: 'el'; i: number } | { t: 'br'; end: 'space' | 'join' | 'drop' })[]
   /** its elements: `code` (a run of one pitch), `math` (a formula, F1), `cite` (a stretch a decoration holds, a letter in it),
    *  `ref` (one with none); each its glyphs and its boxes (a decoration's, a ground's) on its page */
   els: { kind: 'code' | 'math' | 'cite' | 'ref'; glyphs: number[]; boxes: number[] }[]
+  /** an item's marker at its start (a dash, a bullet, "(b)", "1.", "A."): its label, the original's ink where it stands, no
+   *  text of it (F3) */
+  label: number[]
+  /** a paragraph of two lines or more (F3), and whether its block is justified; null a line alone */
+  para: { justified: boolean } | null
   /** glyphs no run held that it takes (a comma between two addresses, a digit): its text's */
   claimed: number[]
   /** a doubled copy of its glyphs (a glyph of one of its characters over one of them): hidden with its text */
@@ -97,7 +107,7 @@ export function figureLinesOf(
 ): FigureText[] {
   const out: FigureText[] = []
   const pitch = (g: G) => !!fixed && fixed.has(bare(g.font))
-  const built: { p: number; glyphs: G[]; runOf: Map<number, number[]>; lines: Line[] }[] = []
+  const built: { p: number; glyphs: G[]; boxes: number[]; runOf: Map<number, number[]>; lines: Line[] }[] = []
   pages.forEach((pg, pi) => {
     const p = pi + 1
     const glyphs = (pg.glyphs ?? []) as G[]
@@ -184,34 +194,65 @@ export function figureLinesOf(
         again = true
       }
     }
-    built.push({ p, glyphs, runOf, lines })
+    built.push({ p, glyphs, boxes, runOf, lines })
   })
   // ---- F1: a script set beside a formula's glyph is its formula's line; then the faces that are a formula's own (fact 3)
   for (const b of built) scriptsJoined(b.lines, b.glyphs)
   const math: Formulas = { faces: formulaFacesOf(built, textFaces, pitch), pitch }
-  for (const { p, glyphs, runOf, lines } of built) {
-    // ---- each line read: its glyphs' roles, M (a formula's), F (a face of one pitch) or T, in its order; its text F0's, code's
-    // or a formula's
-    for (const l of lines) {
-      const ft = readLine(l, glyphs, pitch, math)
-      // (a tone under a text kept whole, a line of code or a run wholly of one pitch (Rule 1), is nothing to it: the text is the
-      // original's, its tones with it)
-      const tones = (keep: boolean) => (it: TodayMet) => !(keep && 'ground' in it && it.ground)
-      const items = l.ks.flatMap((k) => fig.met.get(k)?.items ?? []).filter(tones(ft?.why === 'code'))
-      const crowded = l.ks.some((k) => fig.units[k]!.why === 'crowded')
-      const under = l.ks.reduce<number | null>((u, k) => {
+  for (const { p, glyphs, boxes, runOf, lines } of built) {
+    // ---- each line read: its glyphs' roles, M (a formula's), F (a face of one pitch) or T, in its order
+    const reads = lines.map((l) => lineRead(l, glyphs, pitch, math))
+    const itemsOf = (ks: readonly number[]) => ks.flatMap((k) => fig.met.get(k)?.items ?? [])
+    const underOf = (ks: readonly number[]) =>
+      ks.reduce<number | null>((u, k) => {
         const x = fig.met.get(k)?.under ?? fig.units[k]!.under ?? null
         return x === null ? u : u === null ? x : Math.min(u, x)
       }, null)
+    // ---- F3: the lines of prose that are a paragraph's, one text; a line across a justified line's stretched space read whole
+    // where the paragraph takes it
+    const taken = new Set<number>()
+    for (const para of figureParas(lines, reads, glyphs, boxes, pitch, math)) {
+      const ks = para.lines.flatMap((x) => x.l.ks)
+      const ft: FigureText = {
+        ks,
+        page: p,
+        order: [],
+        els: [],
+        label: para.lines[0]!.read.marker,
+        para: { justified: para.justified },
+        claimed: para.lines.flatMap((x) => x.read.gs.filter((g) => x.l.free.has(g))),
+        copies: [],
+        textBoxes: [],
+        why: null,
+        container: null,
+        under: null,
+      }
+      para.lines.forEach((x, k) => {
+        if (k) ft.order.push({ t: 'br', end: para.ends[k - 1]! })
+        piecesInto(ft, x.read, k === 0)
+      })
+      const items = itemsOf(ks)
+      if (items.length) judge(ft, items, glyphs)
+      out.push(ft)
+      for (const i of para.of) taken.add(i)
+    }
+    // ---- each other line: F0's, F1's or an item's text; a line of code or of formulas kept whole; else its runs as they were
+    lines.forEach((l, i) => {
+      if (taken.has(i)) return
+      const ft = textOfRead(l, reads[i]!)
+      // (a tone under a text kept whole, a line of code or a run wholly of one pitch (Rule 1), is nothing to it: the text is the
+      // original's, its tones with it)
+      const tones = (keep: boolean) => (it: TodayMet) => !(keep && 'ground' in it && it.ground)
+      const items = itemsOf(l.ks).filter(tones(ft?.why === 'code'))
       if (ft) {
         ft.page = p
-        ft.under = under
+        ft.under = underOf(l.ks)
         if (items.length) judge(ft, items, glyphs)
         out.push(ft)
-        continue
+        return
       }
       // (a run alone, as today's reading made it, judged anew where it was crowded or stands in part on a tone)
-      if (!items.length) continue
+      if (!items.length) return
       for (const k of l.ks) {
         const m = fig.met.get(k)
         if (!m) continue
@@ -223,6 +264,8 @@ export function figureLinesOf(
           page: p,
           order: [{ t: 'text', glyphs: [...gs].sort((a, b) => glyphs[a]!.x0 - glyphs[b]!.x0) }],
           els: [],
+          label: [],
+          para: null,
           claimed: [],
           copies: [],
           textBoxes: [],
@@ -233,7 +276,7 @@ export function figureLinesOf(
         judge(one, its, glyphs)
         if (one.els.length || (fig.units[k]!.why === 'crowded' && one.why !== 'crowded')) out.push(one)
       }
-    }
+    })
   }
   return out
 }
@@ -442,14 +485,30 @@ function lineOf(ks: number[], gs0: number[], free: Set<number>, glyphs: readonly
   }
 }
 
+/** a line as read: its glyphs in its order (an icon before its first word none of it), its pieces by role (T text, F a run of one
+ *  pitch, M a formula), and what it is: a line of `code` (every word between glyphs of one pitch, Rule 1's inside-a-line), a
+ *  `formula` (no word outside its formulas), `mixed` (words and a run of one pitch or a formula: F0's and F1's text), `plain`
+ *  (words alone) or `none` (no word, no formula); `marker`, the glyphs of the marker it opens with where it is an item's */
+interface Read {
+  gs: number[]
+  pieces: { r: 'T' | 'F' | 'M'; gs: number[] }[]
+  kind: 'code' | 'formula' | 'mixed' | 'plain' | 'none'
+  marker: number[]
+}
+
+/** an item's marker, a cluster that spells no word: a dash or a bullet; or one letter or a number of three digits at most, a
+ *  bracket before it or not, then a full stop or a closing bracket ("A.", "c)", "(b)", "1.") */
+const MARKER = /^(?:[\p{Pd}•◦‣⁃∙▪▫●○*]|\(?(?:\p{L}|\p{N}{1,3})[.)])$/u
+/** a sentence's end, closing marks after it */
+const SENTENCE_END = /[.!?\u3002\uff01\uff1f]["')\]\u201d\u2019]*$/u
+
 /**
- * A line's figure text where it is one of F0's or a line of code, else null. Its glyphs' roles in its order: F (a face of one
- * pitch) or T; a stretch of T that spells a word is the line's text; one standing between F glyphs right before and right after
- * it, every one of them, makes the line code, kept whole (Rule 1's inside-a-line: 2411.13093v4 p19's Georgia word inside a
- * Consolas line); else each stretch of F an element `code`. The glyphs no run holds before its first run's (an icon TeX set
- * before the first word) are none of it, as today's reading leaves them
+ * A line read (F0, F1): its glyphs' roles in its order. A stretch of T that spells a word is the line's text; one standing between
+ * F glyphs right before and right after it, every one of them, makes the line code, kept whole (Rule 1's inside-a-line:
+ * 2411.13093v4 p19's Georgia word inside a Consolas line). The glyphs no run holds before its first run's (an icon TeX set before
+ * the first word) are none of it, as today's reading leaves them
  */
-function readLine(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean, math: Formulas): FigureText | null {
+function lineRead(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean, math: Formulas): Read {
   // (the glyphs no run holds before its first run's: the text's where each abuts the glyph after it, no word space between (an
   // opening bracket, a code line's opening quote), or is a formula's; from one standing a word space apart back, an icon TeX
   // set before the first word, none of it)
@@ -462,13 +521,8 @@ function readLine(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean, math:
   }
   const gs = l.gs.slice(first)
   const formula = formulaOf(gs, glyphs, math)
-  if (l.ks.length < 2 && !l.free.size && !formula.some(Boolean)) {
-    // (one run alone and no formula in it: F0 has nothing to join)
-    return null
-  }
   const role = gs.map((g, i) => (formula[i] ? 'M' : pitch(glyphs[g]!) ? 'F' : 'T'))
-  if (!role.includes('F') && !role.includes('M')) return null
-  const stretches: { r: string; gs: number[] }[] = []
+  const stretches: Read['pieces'] = []
   gs.forEach((g, i) => {
     const s = stretches.at(-1)
     if (s && s.r === role[i]) s.gs.push(g)
@@ -476,58 +530,239 @@ function readLine(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean, math:
   })
   const words = stretches.filter((s) => s.r === 'T' && WORD.test(textOf(s.gs, glyphs).normalize('NFKC')))
   // (F1: a line no word of which stands outside its formulas is kept whole, as today's runs of a math face are)
-  if (!words.length && role.includes('M'))
-    return {
-      ks: [...l.ks],
-      page: 0,
-      order: [{ t: 'text', glyphs: gs }],
-      els: [],
-      claimed: gs.filter((g) => l.free.has(g)),
-      copies: [],
-      textBoxes: [],
-      why: 'formula',
-      container: null,
-      under: null,
-    }
-  if (!words.length) return null
-  const code = words.every((s) => {
-    const i = stretches.indexOf(s)
-    return stretches[i - 1]?.r === 'F' && stretches[i + 1]?.r === 'F'
-  })
+  if (!words.length) return { gs, pieces: stretches, kind: role.includes('M') ? 'formula' : 'none', marker: [] }
+  const code =
+    role.includes('F') &&
+    words.every((s) => {
+      const i = stretches.indexOf(s)
+      return stretches[i - 1]?.r === 'F' && stretches[i + 1]?.r === 'F'
+    })
+  if (code) return { gs, pieces: stretches, kind: 'code', marker: [] }
   // (outside a line of code, a stretch of one pitch with no letter or digit, a mark alone ("behavior." its period set in the
   // face of one pitch), is the text's, no element, the stretches beside it one)
-  const pieces: typeof stretches = []
+  const pieces: Read['pieces'] = []
   for (const st of stretches) {
-    const r = !code && st.r === 'F' && !st.gs.some((g) => /[\p{L}\p{N}]/u.test(glyphs[g]!.u)) ? 'T' : st.r
+    const r = st.r === 'F' && !st.gs.some((g) => /[\p{L}\p{N}]/u.test(glyphs[g]!.u)) ? 'T' : st.r
     const last = pieces.at(-1)
     if (last && last.r === r) last.gs.push(...st.gs)
     else pieces.push({ r, gs: [...st.gs] })
   }
-  if (!code && !pieces.some((st) => st.r === 'F' || st.r === 'M')) return null
-  const ft: FigureText = {
-    ks: [...l.ks],
-    page: 0,
-    order: [],
-    els: [],
-    claimed: gs.filter((g) => l.free.has(g)),
-    copies: [],
-    textBoxes: [],
-    why: code ? 'code' : null,
-    container: null,
-    under: null,
+  // (an item's marker: its first cluster, text, spelling no word, a word space before the rest of the line, which holds a word)
+  let marker: number[] = []
+  const end = gs.findIndex((g, i) => i > 0 && glyphs[g]!.x0 - glyphs[gs[i - 1]!]!.x1 >= SPACE_GAP * glyphs[g]!.size)
+  if (end > 0 && pieces[0]?.r === 'T' && end <= pieces[0].gs.length) {
+    const head = gs.slice(0, end)
+    const rest = pieces[0].gs.slice(end)
+    const m = head.map((g) => glyphs[g]!.u).join('')
+    const worded =
+      WORD.test(textOf(rest, glyphs).normalize('NFKC')) ||
+      pieces.slice(1).some((x) => x.r === 'T' && WORD.test(textOf(x.gs, glyphs).normalize('NFKC')))
+    if (MARKER.test(m) && worded) marker = head
   }
-  if (code) {
-    ft.order.push({ t: 'text', glyphs: gs })
-    return ft
-  }
-  for (const s of pieces) {
-    if (s.r === 'T') ft.order.push({ t: 'text', glyphs: s.gs })
+  return { gs, pieces, kind: pieces.some((st) => st.r !== 'T') ? 'mixed' : 'plain', marker }
+}
+
+/** a read line's pieces into a text's order and elements: its text stretches, each run of one pitch an element `code`, each
+ *  formula an element `math`; its marker (`label`) left out where the text takes it as its label */
+function piecesInto(ft: FigureText, read: Read, label: boolean): void {
+  const skip = new Set(label ? read.marker : [])
+  for (const s of read.pieces) {
+    const gs = s.gs.filter((g) => !skip.has(g))
+    if (!gs.length) continue
+    if (s.r === 'T') ft.order.push({ t: 'text', glyphs: gs })
     else {
-      ft.els.push({ kind: s.r === 'M' ? 'math' : 'code', glyphs: s.gs, boxes: [] })
+      ft.els.push({ kind: s.r === 'M' ? 'math' : 'code', glyphs: gs, boxes: [] })
       ft.order.push({ t: 'el', i: ft.els.length - 1 })
     }
   }
+}
+
+/**
+ * A line's figure text where it is one this reading makes: a line of code or of formulas, kept whole; a line of words with a run
+ * of one pitch or a formula in it (F0, F1: each an element); an item, its marker its label (F3). Else null: one run alone with
+ * nothing to join, or runs of words alone, as today's reading made them
+ */
+function textOfRead(l: Line, read: Read): FigureText | null {
+  const base = {
+    ks: [...l.ks],
+    page: 0,
+    els: [],
+    label: [],
+    para: null,
+    claimed: read.gs.filter((g) => l.free.has(g)),
+    copies: [],
+    textBoxes: [],
+    container: null,
+    under: null,
+  }
+  if (read.kind === 'none') return null
+  if (read.kind === 'formula' || read.kind === 'code')
+    return { ...base, order: [{ t: 'text', glyphs: read.gs }], why: read.kind }
+  if (read.kind === 'plain' && !read.marker.length) return null
+  const ft: FigureText = { ...base, order: [], label: read.marker, why: null }
+  piecesInto(ft, read, true)
   return ft
+}
+
+/** a printed line of prose with its reading, as the paragraph reading takes it */
+interface ProseLine {
+  l: Line
+  read: Read
+}
+/**
+ * F3: the page's paragraphs (figure-paras.ts) over its lines of prose (`mixed` and `plain`), each with its lines top to bottom,
+ * their ends, and the lines of the page it is made of (`of`). Two fragments of one baseline farther apart than the run gap (a
+ * justified line's stretched space after a sentence) are read as one line where a line of prose right over or under them has ink
+ * across the gap, and stand so only where a paragraph takes that line; else they stay the fragments they were
+ */
+function figureParas(
+  lines: readonly Line[],
+  reads: readonly Read[],
+  glyphs: readonly G[],
+  boxes: readonly number[],
+  pitch: (g: G) => boolean,
+  math: Formulas,
+): { lines: ProseLine[]; ends: ('space' | 'join' | 'drop')[]; justified: boolean; of: number[] }[] {
+  const prose = (r: Read) => r.kind === 'mixed' || r.kind === 'plain'
+  // (the fragments bridged: two lines of prose on one baseline, the second right of the first; a row of prose within two bands
+  // over or under them has ink across the gap between them, and none has a gap of its own there, ink on both sides and none
+  // across: a gutter between two columns under a title is no stretched space)
+  const entries: { x: ProseLine; of: number[] }[] = []
+  const used = new Set<number>()
+  // (the page's lines of prose by figure, top to bottom: a line's rows near it are found from its place there)
+  const byFig = new Map<string, number[]>()
+  lines.forEach((l, i) => {
+    if (!prose(reads[i]!)) return
+    const at = byFig.get(l.fig)
+    if (at) at.push(i)
+    else byFig.set(l.fig, [i])
+  })
+  for (const idx of byFig.values()) {
+    idx.sort((p, q) => lines[q]!.y - lines[p]!.y || lines[p]!.x0 - lines[q]!.x0)
+    /** the lines of the figure within `d` of baseline y, but those of `skip` */
+    const near = (at: number, y: number, d: number, skip: readonly number[]) => {
+      const out: number[] = []
+      for (let k = at - 1; k >= 0 && Math.abs(lines[idx[k]!]!.y - y) < d; k--)
+        if (!skip.includes(idx[k]!)) out.push(idx[k]!)
+      for (let k = at + 1; k < idx.length && Math.abs(lines[idx[k]!]!.y - y) < d; k++)
+        if (!skip.includes(idx[k]!)) out.push(idx[k]!)
+      return out
+    }
+    idx.forEach((i, at) => {
+      if (used.has(i)) return
+      let cur = lines[i]!
+      const of = [i]
+      for (let again = true; again; ) {
+        again = false
+        const rows = near(at, cur.y, 2 * BAND_EM * cur.size, of).map((k) => lines[k]!)
+        for (const j of near(at, cur.y, RUN_DY * cur.size + 1e-9, of)) {
+          const b = lines[j]!
+          if (used.has(j) || b.x0 <= cur.x1 || Math.abs(b.y - cur.y) > RUN_DY * Math.max(cur.size, b.size)) continue
+          const others = rows.filter((c) => c !== b && Math.abs(c.y - cur.y) > 0.5 * cur.size)
+          const across = others.some((c) => c.x0 <= cur.x1 && c.x1 >= b.x0)
+          const gapped = others.some(
+            (c1) =>
+              c1.x1 < b.x0 &&
+              others.some(
+                (c2) => c2 !== c1 && Math.abs(c2.y - c1.y) <= RUN_DY * cur.size && c2.x0 > cur.x1 && c2.x0 > c1.x1,
+              ),
+          )
+          if (!across || gapped) continue
+          cur = lineOf([...cur.ks, ...b.ks], [...cur.gs, ...b.gs], new Set([...cur.free, ...b.free]), glyphs, cur.fig)
+          of.push(j)
+          again = true
+          break
+        }
+      }
+      for (const j of of) used.add(j)
+      entries.push({ x: { l: cur, read: of.length > 1 ? lineRead(cur, glyphs, pitch, math) : reads[i]! }, of })
+    })
+  }
+  const live = entries.filter((e) => prose(e.x.read))
+  const facts = live.map((e) => proseFacts(e.x, glyphs, boxes))
+  const docGlyph = (g: number) => ({ ...glyphs[g]!, base: bare(glyphs[g]!.font) }) as unknown as DocGlyph
+  const end = (a: number, b: number) => {
+    const A = live[a]!.x.read.gs,
+      B = live[b]!.x.read.gs
+    return lineEnd([...A, ...B].map(docGlyph), A.length, {})
+  }
+  return parasOf(facts, end).map((para) => ({
+    lines: para.lines.map((k) => live[k]!.x),
+    ends: para.ev.map((e) => (e === 'hyphen-drop' ? 'drop' : e === 'hyphen-join' ? 'join' : 'space')),
+    justified: para.justified,
+    of: para.lines.flatMap((k) => live[k]!.of),
+  }))
+}
+
+/** a line of prose's facts as the paragraph reading reads them (figure-paras.ts ParaLine), off its text glyphs */
+function proseFacts(x: ProseLine, glyphs: readonly G[], boxes: readonly number[]): ParaLine {
+  const { l, read } = x
+  const text = read.pieces.filter((s) => s.r === 'T').flatMap((s) => s.gs)
+  const letters = text.filter((g) => LETTER.test(glyphs[g]!.u))
+  const most = <T>(f: (g: G) => T): T | null => {
+    const n = new Map<T, number>()
+    for (const g of letters) n.set(f(glyphs[g]!), (n.get(f(glyphs[g]!)) ?? 0) + 1)
+    return [...n].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+  }
+  const sizes = letters.map((g) => glyphs[g]!.size).sort((a, b) => a - b)
+  const size = sizes[sizes.length >> 1] ?? l.size
+  const main = read.gs.map((g) => glyphs[g]!).filter((g) => Math.abs(g.size - size) <= 0.01 * size)
+  const heights = main.map((g) => g.top - g.bottom).sort((a, b) => a - b)
+  // (its clusters, each text or not by its first glyph's piece)
+  const roleOf = new Map<number, string>()
+  for (const s of read.pieces) for (const g of s.gs) roleOf.set(g, s.r)
+  const cl: { gs: number[]; x0: number; x1: number; text: boolean; s: string }[] = []
+  for (const g of read.gs) {
+    const y = glyphs[g]!
+    const c = cl.at(-1)
+    if (c && y.x0 - c.x1 < SPACE_GAP * y.size) {
+      c.gs.push(g)
+      c.x1 = Math.max(c.x1, y.x1)
+      c.s += y.u
+    } else cl.push({ gs: [g], x0: y.x0, x1: y.x1, text: roleOf.get(g) === 'T', s: y.u })
+  }
+  // (its word spaces: between two clusters of text, the first ending in no punctuation (TeX widens a space after one); a line
+  // shows justification only where two of them or more are one (TeX stretches a line's spaces alike), never a tab's gap)
+  const gaps: number[] = []
+  const all: number[] = []
+  for (let i = 1; i < cl.length; i++) {
+    const d = cl[i]!.x0 - cl[i - 1]!.x1
+    all.push(d)
+    if (cl[i]!.text && cl[i - 1]!.text && !/[.!?:;,]["')\]”’]*$/u.test(cl[i - 1]!.s)) gaps.push(d)
+  }
+  const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
+  const bottom = Math.min(...main.map((g) => g.bottom)),
+    top = Math.max(...main.map((g) => g.top))
+  // (the ink that ends right before its start, within the anchor's reach, across its band: a legend's sample, a frame's side)
+  const leaders = new Set<number>()
+  for (let b = 0; b + 3 < boxes.length; b += 4) {
+    const bx1 = Math.max(boxes[b]!, boxes[b + 2]!)
+    const by0 = Math.min(boxes[b + 1]!, boxes[b + 3]!),
+      by1 = Math.max(boxes[b + 1]!, boxes[b + 3]!)
+    if (bx1 > l.x0 || bx1 < l.x0 - ANCHOR_REACH * size || by1 <= bottom || by0 >= top) continue
+    leaders.add(b / 4)
+  }
+  const face = most((g) => bare(g.font).replace(/-.*$/u, ''))
+  return {
+    fig: l.fig,
+    y: l.y,
+    x0: l.x0,
+    x1: l.x1,
+    size,
+    band: Math.max(heights[heights.length >> 1] ?? 0, BAND_EM * size),
+    face,
+    bold: letters.length > 0 && letters.every((g) => classifyFont(glyphs[g]!.font).bold),
+    fill: most((g) => g.fill ?? 0),
+    uniform: gaps.length >= 2 && Math.max(...gaps) - Math.min(...gaps) <= PARA_ALIGN_TOL * size,
+    wordSpace: mean(gaps),
+    space: mean(all),
+    words: cl.filter((c) => c.text && WORD.test(c.s.normalize('NFKC'))).length,
+    marker: read.marker.length > 0,
+    ended: SENTENCE_END.test(cl.at(-1)?.s ?? ''),
+    firstWidth: cl[0] ? cl[0].x1 - cl[0].x0 : 0,
+    lead: read.gs.map((g) => glyphs[g]!.u).join(''),
+    leaders,
+  }
 }
 
 /** a stretch's text: its glyphs' Unicode (NFKC), a space where two stand SPACE_GAP of their size apart */
@@ -553,8 +788,10 @@ export function textOf(gs: readonly number[], glyphs: readonly G[]): string {
  * framed citation an element, never translated); of all of it, hidden with its text; a copy hidden with its text
  */
 function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[]): void {
-  const textGs = ft.order.flatMap((o) => (o.t === 'text' ? o.glyphs : ft.els[o.i]!.glyphs))
-  const own = new Set(textGs)
+  const textGs = ft.order.flatMap((o) => (o.t === 'text' ? o.glyphs : o.t === 'el' ? ft.els[o.i]!.glyphs : []))
+  // (its own: its text's and its elements' glyphs, and its label's, an item's marker, which no decoration is told by)
+  const label = new Set(ft.label)
+  const own = new Set([...textGs, ...ft.label])
   const at = new Map(textGs.map((g, i) => [g, i]))
   let unrelated = false
   for (const it of fillsJoined(items, textGs, glyphs)) {
@@ -594,13 +831,15 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
     // (the glyphs whose ink centre it holds: its own and any other)
     const held: number[] = []
     let others = false
+    let labelled = 0
     for (let j = 0; j < glyphs.length; j++) {
       const g = glyphs[j]!
       if (!real(g)) continue
       const cx = ((g.ix0 ?? g.x0) + (g.ix1 ?? g.x1)) / 2,
         cy = (g.top + g.bottom) / 2
       if (cx > x0 && cx < x1 && cy > y0 && cy < y1) {
-        if (own.has(j)) held.push(j)
+        if (label.has(j)) labelled++
+        else if (own.has(j)) held.push(j)
         else others = true
       }
     }
@@ -614,7 +853,7 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
       held.length &&
       !others &&
       contiguous &&
-      held.length < own.size &&
+      held.length < textGs.length &&
       (!it.ground || y1 - y0 <= 2 * BAND_EM * glyphs[held[0]!]!.size) &&
       held.every((j) => inside(glyphs[j]!, x0, y0, x1, y1)) &&
       wordBounded(textGs, idx, glyphs)
@@ -630,10 +869,11 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
     // (a tone under part of the text that holds no stretch of its words whole: its ground, crowding nothing, as before)
     if (it.ground) continue
     if (
-      held.length === own.size &&
+      held.length === textGs.length &&
+      labelled === label.size &&
       !others &&
       closed(it.shape) &&
-      textGs.every((j) => inside(glyphs[j]!, x0, y0, x1, y1))
+      [...own].every((j) => inside(glyphs[j]!, x0, y0, x1, y1))
     ) {
       ft.container = roomIn(it.shape!, textGs, glyphs)
       continue
@@ -651,7 +891,7 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
         span.at(-1)! - span[0]! + 1 === span.length &&
         wordBounded(textGs, span, glyphs)
       ) {
-        if (span.length === own.size) ft.textBoxes.push(...it.bs)
+        if (span.length === textGs.length) ft.textBoxes.push(...it.bs)
         else
           decorate(
             ft,
@@ -773,7 +1013,7 @@ function decorate(ft: FigureText, stretch: number[], bs: number[], glyphs: reado
   ft.els.push({ kind, glyphs: [...stretch], boxes: [...bs] })
   let placed = false
   for (const o of ft.order) {
-    if (o.t === 'el') {
+    if (o.t !== 'text') {
       order.push(o)
       continue
     }

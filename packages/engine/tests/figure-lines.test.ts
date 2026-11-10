@@ -367,7 +367,12 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
       })),
       under: null,
     })
-    expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
+    // (an item, F3: its marker "D." its label; the tone under the label and under every word of its text is its ground, no
+    // word an element)
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+    expect(rest).toEqual([])
+    expect(t!.label.map((j) => g[j]!.u).join('')).toBe('D.')
+    expect([t!.els, t!.why]).toEqual([[], null])
   })
   it('makes no element of a stretch a plot’s shading holds, a tone taller than the line (2610.21547v1 p14 "bound m = 1")', () => {
     const { page, fig } = pageOf([[{ text: 'bound m = 1', font: 'Times' }]])
@@ -540,5 +545,109 @@ describe('figure-lines: F1, a formula in a figure is an element, never sent (the
     expect(rest).toEqual([])
     expect(t!.why).toBeNull()
     expect(t!.order.map((o) => o.t)).toEqual(['text', 'el'])
+  })
+})
+
+describe('figure-lines: F3, a figure’s paragraph is one text; an item’s marker its label (the owner’s ruling of 2026-11-10)', () => {
+  const body = (text: string) => [{ text, font: 'NimbusRomNo9L-Regu' }]
+  it('joins three ragged lines of prose, the text going on, into one text of three lines', () => {
+    const { page, fig } = pageOf([
+      body('the quick brown fox jumps over'),
+      body('lazy dogs while the others run'),
+      body('away from it'),
+    ])
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+    expect(rest).toEqual([])
+    expect(t!.ks).toEqual([0, 1, 2])
+    expect(t!.order.map((o) => (o.t === 'br' ? o.end : o.t))).toEqual(['text', 'space', 'text', 'space', 'text'])
+    expect(t!.why).toBeNull()
+    expect(t!.para).toEqual({ justified: false })
+  })
+  it('joins two lines at TeX’s hyphen, and leaves two ragged lines alone as they were', () => {
+    const hyphen = pageOf([body('all of the foun-'), body('dation models')])
+    const [t] = figureLinesOf([hyphen.page], hyphen.fig, () => false, null)
+    expect(t!.ks).toEqual([0, 1])
+    expect(t!.order.map((o) => (o.t === 'br' ? o.end : o.t))).toEqual(['text', 'drop', 'text'])
+    const two = pageOf([body('the quick brown fox jumps over'), body('lazy dogs')])
+    expect(figureLinesOf([two.page], two.fig, () => false, null)).toEqual([])
+  })
+  it('makes an item’s marker its label, never its text: "A. 12:30 PM in the car", a line alone (2411.13093v4 p19)', () => {
+    for (const marker of ['A.', 'c)', '(b)', '1.', '-']) {
+      const { page, fig } = pageOf([body(`${marker} 12:30 PM in the car`)])
+      const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+      expect(rest).toEqual([])
+      const G = page.glyphs as Glyph[]
+      expect(t!.label.map((g) => G[g]!.u).join('')).toBe(marker)
+      expect(t!.order).toHaveLength(1)
+      const text = t!.order[0] as { t: 'text'; glyphs: number[] }
+      expect(text.glyphs.map((g) => G[g]!.u).join('')).toBe('12:30PMinthecar')
+    }
+    // (no marker: a word, an abbreviation, a number with its unit, a marker alone)
+    for (const text of ['An option in the car', 'e.g. in the car', '12.5 km from here', 'A.']) {
+      const { page, fig } = pageOf([body(text)])
+      expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
+    }
+  })
+  it('begins an item at each marker: an item of two lines one text with its label, the next item its own', () => {
+    const { page, fig } = pageOf([
+      body('A. all of the foun-'),
+      [{ text: 'dation models', font: 'NimbusRomNo9L-Regu', x: 84 }],
+      body('B. the second option'),
+    ])
+    const texts = figureLinesOf([page], fig, () => false, null)
+    const G = page.glyphs as Glyph[]
+    expect(texts.map((t) => [t.ks, t.label.map((g) => G[g]!.u).join('')])).toEqual([
+      [[0, 1], 'A.'],
+      [[2], 'B.'],
+    ])
+  })
+  it('reads two fragments of a justified line across its stretched space as one line of its paragraph; a gutter under a title never', () => {
+    // (a justified block: its second line set in two runs 8 pt apart, past the run gap, the lines over and under it with ink
+    // across that gap: one line, the paragraph whole)
+    const just = pageOf([
+      body('the quick brown fox jumps over'),
+      [
+        { text: 'lazy dogs while.', font: 'NimbusRomNo9L-Regu' },
+        { text: 'The others run', font: 'NimbusRomNo9L-Regu', x: 170 },
+      ],
+      body('away from it all and then rest'),
+      body('for a while'),
+    ])
+    const [t, ...rest] = figureLinesOf([just.page], just.fig, () => false, null)
+    expect(rest).toEqual([])
+    expect(t!.ks).toEqual([0, 1, 2, 3, 4])
+    // (a title over two columns: the row under the first has the gutter too: two columns, each its own paragraph)
+    const cols = pageOf([
+      body('a title set over both of the columns here'),
+      [
+        { text: 'the left col-', font: 'NimbusRomNo9L-Regu' },
+        { text: 'the right col-', font: 'NimbusRomNo9L-Regu', x: 190 },
+      ],
+      [
+        { text: 'umn goes on', font: 'NimbusRomNo9L-Regu' },
+        { text: 'umn goes on', font: 'NimbusRomNo9L-Regu', x: 190 },
+      ],
+    ])
+    expect(figureLinesOf([cols.page], cols.fig, () => false, null).map((x) => x.ks)).toEqual([
+      [1, 3],
+      [2, 4],
+    ])
+  })
+  it('frees a paragraph’s line its own lines crowd, and makes a framed stretch of one an element (2609.19644v1 p58)', () => {
+    const { page, fig } = pageOf([
+      body('the quick brown fox jumps over'),
+      body('lazy dogs while Garza et al. run'),
+      body('away from it'),
+    ])
+    const G = page.glyphs as Glyph[]
+    // (the second line's band meets a glyph of the first: its own paragraph's; and a frame round "Garza et al.")
+    const at = G.findIndex((g) => g.u === 'G')
+    const frame = rect(G[at]!.x0 - 1, 683, G[at + 11]!.x1 + 1, 695)
+    fig.units[1]!.why = 'crowded'
+    fig.met.set(1, { items: [{ g: 2 }, boxMet(0, frame)], under: null })
+    const [t] = figureLinesOf([page], fig, () => false, null)
+    expect(t!.ks).toEqual([0, 1, 2])
+    expect(t!.why).toBeNull()
+    expect(t!.els.map((e) => [e.kind, e.boxes])).toEqual([['cite', [0]]])
   })
 })

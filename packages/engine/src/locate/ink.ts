@@ -404,7 +404,7 @@ export function inkOf(o: InkInput): {
   for (const k of figOrder) {
     const f = fig.units[k]!
     const t = textAt.get(k)
-    if (t && (t.ks.length > 1 || t.els.length)) {
+    if (t && (t.ks.length > 1 || t.els.length || t.label.length)) {
       made.push(figureTextOf(t, fig, pages, inkA, m, o.pageA, global))
       continue
     }
@@ -533,6 +533,15 @@ function figureTextOf(
   }
   let prev: (typeof G)[number] | null = null
   for (const o of t.order) {
+    // (a line's end inside a paragraph, F3: a space; a word's own hyphen kept, nothing more; TeX's hyphen dropped, the word whole)
+    if (o.t === 'br') {
+      const last = raw.at(-1)
+      if (o.end === 'space') space()
+      else if (o.end === 'drop' && last?.piece.t === 'text')
+        last.piece = { t: 'text', s: last.piece.s.replace(/[-‐\u00ad]$/u, '') }
+      prev = null
+      continue
+    }
     const gs = o.t === 'text' ? o.glyphs : t.els[o.i]!.glyphs
     const first = G[gs[0]!]!
     const spaced = !!prev && first.x0 - prev.x1 >= SPACE_GAP * first.size
@@ -585,19 +594,23 @@ function figureTextOf(
   }
   const f0 = fig.units[t.ks[0]!]!
   const fz = fig.units[t.ks.at(-1)!]!
-  const all = t.order.flatMap((o) => (o.t === 'text' ? o.glyphs : t.els[o.i]!.glyphs))
+  const all = t.order.flatMap((o) => (o.t === 'text' ? o.glyphs : o.t === 'el' ? t.els[o.i]!.glyphs : []))
   const x1 = Math.max(...all.map((g) => G[g]!.x1))
   const x0 = G[all[0]!]!.x0
-  const room = {
-    x: x0,
-    ...(Number.isFinite(f0.y) ? { y: f0.y } : {}),
-    length: x1 - x0,
-    ...(f0.anchor ? { anchor: f0.anchor } : {}),
-    ...(Number.isFinite(f0.before) ? { before: f0.before } : {}),
-    ...(Number.isFinite(fz.after) ? { after: fz.after } : {}),
-    ...(typeof f0.under === 'number' && Number.isFinite(f0.under) ? { under: f0.under } : {}),
-    ...roomOfText(t),
-  }
+  // (a paragraph, F3: laid in its lines as a body paragraph is, its room the facts pass's (its lines' sides, below it): none of
+  // a line's free line along its run; a line alone, as before)
+  const room = t.para
+    ? { ...roomOfText(t) }
+    : {
+        x: x0,
+        ...(Number.isFinite(f0.y) ? { y: f0.y } : {}),
+        length: x1 - x0,
+        ...(f0.anchor ? { anchor: f0.anchor } : {}),
+        ...(Number.isFinite(f0.before) ? { before: f0.before } : {}),
+        ...(Number.isFinite(fz.after) ? { after: fz.after } : {}),
+        ...(typeof f0.under === 'number' && Number.isFinite(f0.under) ? { under: f0.under } : {}),
+        ...roomOfText(t),
+      }
   return {
     unit: {
       id: unitId('inkfigures', content),
@@ -616,8 +629,12 @@ function figureTextOf(
             ]),
           }
         : {}),
-      figure: { set: -1 - t.ks[0]!, ...room },
-      ...(f0.anchor ? { align: ALIGN_OF[f0.anchor as keyof typeof ALIGN_OF] } : {}),
+      figure: { set: -1 - t.ks[0]!, ...(t.para ? { para: true as const } : {}), ...room },
+      ...(t.para
+        ? { align: t.para.justified ? ('j' as const) : ('l' as const) }
+        : f0.anchor
+          ? { align: ALIGN_OF[f0.anchor as keyof typeof ALIGN_OF] }
+          : {}),
       ...(t.why
         ? {
             why: `figure: ${t.why}`,
@@ -628,6 +645,7 @@ function figureTextOf(
         : {}),
     },
     text: [...textGs, ...t.copies].map(glob).sort((a, b) => a - b),
+    ...(t.label.length ? { label: t.label.map(glob).sort((a, b) => a - b) } : {}),
     ph: [],
     phId: null,
     turned: [],

@@ -132,3 +132,62 @@ describe('a figure text laid inside the closed shape that holds it (the owner’
     expect(sizeOf(boxed(1))).toBe('unfit')
   })
 })
+
+describe('a figure’s paragraph and an item with its label, laid by the paragraph path (F3)', () => {
+  // (three lines of prose at 10 on a pitch of 12, the block 100 to 300, justified, its last line short; its room 30 under it)
+  const para: Placed = {
+    ord: 0,
+    kind: 'figure',
+    text: idOf(3),
+    lead: 12,
+    read: ['style', 'lead'],
+    style: { role: 'serif', size: 10 },
+    align: 'j',
+    lines: [
+      [1, 0, 100, 300, 424, 431, 422, 100, 300, 0, 10],
+      [1, 0, 100, 300, 412, 419, 410, 100, 300, 0, 10],
+      [1, 0, 100, 180, 400, 407, 398, 100, 300, 0, 10],
+    ],
+    room: { below: 30, side: [100, 300] },
+  }
+  it('lays a paragraph’s translation in lines inside its block, its text group off', () => {
+    const row: Row = {
+      id: idOf(3),
+      ok: true,
+      by: 'test',
+      content: [{ t: 'text', s: '这是一段图中的文字，它的翻译按段落排在原来的行里，不超出原来的块。' }],
+    }
+    const page = layPage(part([para]), rows([row]), rulesFor('zh'), metrics)
+    const m = page.members.find((x) => x.ord === 0)!
+    expect(m.state).toBe('laid')
+    expect(m.off & 1).toBe(1)
+    expect(m.lines.length).toBeGreaterThan(1)
+    for (const l of m.lines)
+      for (const it of l[3] as Item[]) {
+        expect(it.x).toBeGreaterThanOrEqual(100 - 1e-6)
+        if ('face' in it) expect(it.x + widthOf(it.size, it.s)).toBeLessThanOrEqual(300 + 1e-6)
+      }
+  })
+  it('lays an item after its label, the label the original’s ink: its group never turned off', () => {
+    // ("A." 100 to 109, its text from 113)
+    const item: Placed = {
+      ord: 0,
+      kind: 'figure',
+      text: idOf(4),
+      lead: 12,
+      style: { role: 'serif', size: 10 },
+      align: 'l',
+      lines: [[1, 0, 113, 230, 400, 407, 398, 100, 300, 0, 10]],
+      label: { kind: 'number', ink: [1, 100, 398, 109, 407, 400], style: { role: 'serif', size: 10 }, line: 0 },
+      room: { below: 10, side: [100, 300] },
+    }
+    const row: Row = { id: idOf(4), ok: true, by: 'test', content: [{ t: 'text', s: '中午12:30在车上' }] }
+    const page = layPage(part([item]), rows([row]), rulesFor('zh'), metrics)
+    const m = page.members.find((x) => x.ord === 0)!
+    expect(m.state).toBe('laid')
+    expect(m.off & 4).toBe(0)
+    const text = m.lines.flatMap((l) => l[3] as Item[]).filter((it) => 'face' in it)
+    expect(text.map((it) => it.s).join('')).toContain('中午')
+    expect(Math.min(...text.map((it) => it.x))).toBeGreaterThanOrEqual(113 - 1e-6)
+  })
+})

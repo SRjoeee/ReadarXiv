@@ -73,6 +73,8 @@ export interface InstrumentUnit {
     under?: number
     /** a container's edge over its baseline (figure-lines.ts: a closed shape round all of it), PDF units up from it */
     over?: number
+    /** a paragraph of two lines or more (F3, figure-lines.ts): laid as a body paragraph is, no line's free line its room */
+    para?: true
   }
   /** why the instrument gives it no ink of its own, where it gives none (the marks could not delimit it on B) */
   why?: string

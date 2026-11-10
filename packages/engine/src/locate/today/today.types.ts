@@ -103,6 +103,7 @@ export const figureUnitsOf = fig.figureUnitsOf as (
 export const figureGroup = fig.figureGroup as (k: number) => string
 /** the figure reading's measures, in its sizes (figure-text.mjs) */
 export const RUN_DY = fig.RUN_DY as number
+export const ANCHOR_REACH = fig.ANCHOR_REACH as number
 export const RUN_GAP = fig.RUN_GAP as number
 export const SPACE_GAP = fig.SPACE_GAP as number
 export const DRAW_BAND = fig.DRAW_BAND as readonly [number, number]

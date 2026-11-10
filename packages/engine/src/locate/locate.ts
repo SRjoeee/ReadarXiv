@@ -1032,8 +1032,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       mem.align = x.unit.align ?? 'j'
       // (a figure text's own text on A, which S.figures tells a translation that says nothing else by: Placed.plain; its groups'
       // text with the rest. Its runs in another face, each group's style its glyphs': the part's SpanAt.style)
-      // (a figure text with an element, F0's line: none, and the paragraph path lays it, its elements carried as their ink)
-      if (x.unit.figure && !x.unit.content.some((q) => q.t === 'el')) mem.plain = sourceText(x.unit.content)
+      // (a figure text with an element, F0's line: none, and the paragraph path lays it, its elements carried as their ink; a
+      // paragraph and an item with its label, F3's: none either)
+      if (x.unit.figure && !x.unit.content.some((q) => q.t === 'el') && !x.unit.figure.para && !x.label?.length)
+        mem.plain = sourceText(x.unit.content)
       if (x.spanStyles) mem.spanStyles = x.spanStyles
       members.push(mem)
       if (!x.text.length && !x.ph.length && !x.turned.length) {
@@ -2153,7 +2155,11 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       set(a, name(a, 't'))
       if (mem.figure) figureGroups.add(name(a, 't'))
     }
-    for (const a of mem.label) set(a, name(a, 'l'))
+    // (a figure item's label, F3's: a figure group too, written inside the form its text is shown in)
+    for (const a of mem.label) {
+      set(a, name(a, 'l'))
+      if (mem.figure) figureGroups.add(name(a, 'l'))
+    }
     for (const [ap, aj] of mem.turned) {
       groups[ap - 1]!.turned[aj] = `${mem.ord}.${ap}.t`
       if (mem.figure) figureGroups.add(`${mem.ord}.${ap}.t`)
