@@ -655,6 +655,46 @@ describe('a character TeX writes escaped is a character of the text, its source 
   })
 })
 
+describe('what a command prints as characters is characters: \\enquote\'s quotation marks (the coordinator\'s ruling of 2026-11-11)', () => {
+  const doc = (body: string, pre = '') => project(`\\documentclass{article}${pre}\\begin{document}\n${body}\n\\end{document}`)
+  const source = (p: ReturnType<typeof project>) => new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))
+  const unitsOf = (p: ReturnType<typeof project>) => p.units as Unit[]
+  const bib = (entry: string) => `Text.\n\\begin{thebibliography}{1}\n\\bibitem{a} ${entry}\n\\end{thebibliography}`
+  /** a unit's text as UTF-8 (the front end holds a source's text as its UTF-8 bytes in a Latin-1 view) */
+  const said = (u: Unit) => new TextDecoder().decode(Uint8Array.from([...textOf(u)].map(c => c.charCodeAt(0))))
+
+  it("a paper's own \\enquote{…} that sets its argument between TeX's quotation marks: the marks text, written back byte for byte (2610.10069v1)", () => {
+    const entry = 'A. Allen (2019): \\enquote{Hicksian complementarity,} Econometrica.'
+    const p = doc(bib(entry), '\\newcommand{\\enquote}[1]{``#1\'\'}')
+    const u = unitsOf(p).find(x => x.kind === 'reference') as Unit
+    expect(u.pieces.some(x => x.t === 'open')).toBe(false)
+    expect(said(u)).toContain('\u201cHicksian complementarity,\u201d Econometrica.')
+    expect(source(p)).toContain(entry)
+  })
+  it("a .bbl's \\providecommand of it, REVTeX's (2307.16209v1), alike; a definition that sets anything else stays as it was", () => {
+    const p = project('\\documentclass{article}\\begin{document}\nText.\n\\begin{thebibliography}{1}\n\\providecommand \\enquote  [1]{``#1\'\'}\n\\bibitem{a} B. Berti, \\enquote {Black holes,} 2020.\n\\end{thebibliography}\n\\end{document}')
+    const u = unitsOf(p).find(x => x.kind === 'reference') as Unit
+    expect(said(u)).toContain('\u201cBlack holes,\u201d')
+    expect(u.pieces.some(x => x.t === 'open')).toBe(false)
+    const boxed = doc(bib('C. Chu, \\enquote{A title,} 1989.'), '\\newcommand{\\enquote}[1]{\\textit{#1}}')
+    expect((unitsOf(boxed).find(x => x.kind === 'reference') as Unit).pieces.some(x => x.t === 'open')).toBe(true)
+  })
+  it("csquotes' \\enquote: the outer level's double marks, an \\enquote inside one the inner level's single, \\enquote* from the inner level", () => {
+    const p = doc('He said \\enquote{yes \\enquote{no} maybe} and \\enquote*{so} here.', '\\usepackage{csquotes}')
+    const u = unitsOf(p)[0] as Unit
+    expect(u.pieces.some(x => x.t === 'open')).toBe(false)
+    expect(said(u).trim()).toBe('He said \u201cyes \u2018no\u2019 maybe\u201d and \u2018so\u2019 here.')
+    expect(source(p)).toContain('He said \\enquote{yes \\enquote{no} maybe} and \\enquote*{so} here.')
+  })
+  it('csquotes with a style the source alone cannot tell (another style, autostyle): \\enquote stays one placeholder, as before', () => {
+    // (its marks are the style's, which the compile's glyphs would tell: not read here)
+    for (const pre of ['\\usepackage[style=german]{csquotes}', '\\usepackage[autostyle]{csquotes}']) {
+      const u = unitsOf(doc('He said \\enquote{yes} here.', pre))[0] as Unit
+      expect(u.pieces.map(x => [x.t, (x as { src?: string }).src]), pre).toContainEqual(['ph', '\\enquote{yes}'])
+    }
+  })
+})
+
 describe('a display outside a unit\'s marks (the reader\'s anchors take it from beyond them: 211 of 747 displays were lit with no unit)', () => {
   const body = (b: string) => project(`\\documentclass{article}\\begin{document}\n${b}\n\\end{document}`).units as (Unit & { lead?: string; trail?: string })[]
   const flags = (b: string) => body(b).map(u => [textOf(u).trim().split(' ')[0], typeof u.lead === 'string', typeof u.trail === 'string'])

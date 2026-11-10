@@ -2428,6 +2428,11 @@ function walk(s, from, to, b, ctx) {
         i = e; continue
       }
     }
+    // csquotes' \\enquote{…} (the paper defining none): its quotation marks text around its argument, by its level (quoteMarks)
+    if (name === 'enquote' && !ctx.macros.has('enquote') && !ctx.bibDefs?.has('enquote') && !BIB_KINDS.has(b.kind)) {
+      const marks = quoteMarks(s, end, ctx), k = skipSpaces(s, end), e = s[k] === '{' ? matchGroup(s, k) : -1
+      if (marks && e > 0 && e <= to) { endText(); i = withMarks(s, i, k + 1, e - 1, e, marks, b, ctx); continue }
+    }
     // in a bibliography entry, a command that sets its text argument as it stands (BIB_TEXT): a pair around it, its other
     // arguments kept with the opening; a \\bibinfo of a field that is no prose (BIB_KEPT_FIELD) one placeholder
     if (BIB_KINDS.has(b.kind) && BIB_TEXT.has(name)) {
@@ -2436,7 +2441,11 @@ function walk(s, from, to, b, ctx) {
         const text = reqs[before], field = before ? s.slice(reqs[0].start + 1, reqs[0].end - 1).trim() : ''
         endText()
         if (name === 'bibinfo' && BIB_KEPT_FIELD.test(field)) { b.ph(s.slice(i, e), i, e); i = e; continue }
-        const id = b.open(s.slice(i, text.start + 1), i, identityPair(ctx.macros.get(name) ?? ctx.bibDefs?.get(name), before + 1)); walk(s, text.start + 1, text.end - 1, b, ctx); b.close(id, '}', e); i = e; continue
+        // (a command that prints its argument between marks: the marks text, wrapOf; csquotes' \\enquote by its level)
+        const def = ctx.macros.get(name) ?? ctx.bibDefs?.get(name)
+        const marks = wrapOf(def, before + 1) ?? (name === 'enquote' && !def ? quoteMarks(s, end, ctx) : null)
+        if (marks) { i = withMarks(s, i, text.start + 1, text.end - 1, e, marks, b, ctx); continue }
+        const id = b.open(s.slice(i, text.start + 1), i, identityPair(def, before + 1)); walk(s, text.start + 1, text.end - 1, b, ctx); b.close(id, '}', e); i = e; continue
       }
     }
     if (name === 'item') { endText(); b.flush(); const { args, end: e } = argsAfter(s, end, 1); i = args.length && args[0].kind === 'opt' ? e : end; continue }
@@ -2591,7 +2600,11 @@ function walk(s, from, to, b, ctx) {
         // an argument that holds paragraphs, a figure or a proof (\\techreport{…}, \\revised{…} around whole passages)
         // is walked as an environment's body is; one within a paragraph is part of it, the call around it a pair
         if (holdsBlock(s.slice(arg.start + 1, arg.end - 1))) { endText(); b.flush(); walk(s, arg.start + 1, arg.end - 1, b, ctx); b.flush(); i = call.end; goOn(macro, call, i); continue }
-        endText(); const id = b.open(s.slice(i, arg.start + 1), i, identityPair(macro, macro.prose)); walk(s, arg.start + 1, arg.end - 1, b, ctx); b.close(id, s.slice(arg.end - 1, call.end), call.end); i = call.end; goOn(macro, call, i); continue
+        endText()
+        // (a macro that prints its argument between marks: the marks text, wrapOf)
+        const marks = wrapOf(macro, macro.prose)
+        if (marks) { i = withMarks(s, i, arg.start + 1, arg.end - 1, call.end, marks, b, ctx); goOn(macro, call, i); continue }
+        const id = b.open(s.slice(i, arg.start + 1), i, identityPair(macro, macro.prose)); walk(s, arg.start + 1, arg.end - 1, b, ctx); b.close(id, s.slice(arg.end - 1, call.end), call.end); i = call.end; goOn(macro, call, i); continue
       }
     }
     if (call) {
@@ -3054,6 +3067,59 @@ function bibDefinitions(head) {
   }
   return out
 }
+/** TeX's text ligatures of quotation marks and dashes as the characters they set (`` “, '' ”, ` ‘, ' ’, --- —, -- –) */
+const texMarks = t => t.replace(/``/g, '\u201c').replace(/''/g, '\u201d').replace(/`/g, '\u2018').replace(/'/g, '\u2019').replace(/---/g, '\u2014').replace(/--/g, '\u2013')
+/**
+ * The characters a pair's command prints around its argument `arg`, by its definition (`macro`: paperMacros' or bibDefinitions'),
+ * where its replacement text is that argument between marks and nothing else — no letter, no digit, no command, no group:
+ * `{``#1''}`, 2610.10069v1's \\enquote and REVTeX's .bbl's — as { before, after }, TeX's ligatures read; null else. What a command
+ * prints as characters is characters (the coordinator's ruling of 2026-11-11): the marks are text of the unit, its source with
+ * them, and what a translator does with quotation marks is the translator's
+ */
+function wrapOf(macro, arg) {
+  const body = macro && typeof macro.def === 'string' ? texUncommented(macro.def) : null
+  const m = body && /^([^#\\{}%$&~^_\p{L}\p{N}]*)#([1-9])([^#\\{}%$&~^_\p{L}\p{N}]*)$/u.exec(body)
+  if (!m || Number(m[2]) !== arg || Number(m[2]) > (macro.params ?? 0) || !/\S/.test(m[1]) || !/\S/.test(m[3])) return null
+  return { before: texMarks(m[1]), after: texMarks(m[3]) }
+}
+/**
+ * csquotes' quotation marks where the paper loads it and they can be read off its own files: the outer level's double marks
+ * and the inner level's single (`levels`), as its English style sets them, where it is loaded with no style, `style=american`,
+ * `english` or `USenglish`, and no `autostyle`, no \\setquotestyle, no babel or polyglossia language but English; `{ known:
+ * false }` where the style is another the source alone cannot tell (the compile's glyphs would be the fact: not read here); null
+ * where csquotes is not loaded
+ */
+function csquotesOf(texts) {
+  const t = texts.map(uncommented).join('\n')
+  const m = /\\usepackage\s*(?:\[([^\]]*)\])?\s*\{[^}]*\bcsquotes\b[^}]*\}/.exec(t)
+  if (!m) return null
+  const opts = (m[1] ?? '').split(',').map(x => x.trim()).filter(Boolean)
+  const style = opts.find(o => /^style\s*=/.test(o))?.replace(/^style\s*=\s*/, '')
+  const english = l => /^(?:american|english|USenglish|UKenglish|british|canadian|australian|newzealand)$/.test(l)
+  const babel = [...t.matchAll(/\\usepackage\s*\[([^\]]*)\]\s*\{babel\}/g)].flatMap(b => b[1].split(',').map(x => x.trim()).filter(x => x && !x.includes('=')))
+  const main = /\\setmainlanguage\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/.exec(t)?.[1]?.trim()
+  const known = !opts.some(o => /^autostyle\b/.test(o) && !/=\s*false$/.test(o)) && !/\\setquotestyle\b/.test(t) &&
+    (!style || /^(?:american|english|USenglish)$/.test(style)) && (!babel.length || english(babel.at(-1))) && (!main || english(main))
+  return known ? { known, levels: [['\u201c', '\u201d'], ['\u2018', '\u2019']] } : { known }
+}
+/** csquotes' marks for an \\enquote at the walk's quotation level (`ctx.quoteLevel`, 0 outside one; `\\enquote*` one level in,
+ *  `end` past its name and star), alternating by level; null where the paper does not load csquotes or its marks are unknown */
+function quoteMarks(s, end, ctx) {
+  if (!ctx.quotes?.known) return null
+  const level = (ctx.quoteLevel ?? 0) + (s[end - 1] === '*' ? 1 : 0)
+  const [before, after] = ctx.quotes.levels[level % 2]
+  return { before, after, level: level + 1 }
+}
+/** a call that prints its argument (s[from, to)) between marks: the opening mark text with the call's source up to its argument's
+ *  open, the argument walked (at the next quotation level, for csquotes), the closing mark text with the rest of the call's source
+ *  to `e`; the pair's id spent as the pair's was, so that every pair after it keeps its id. Returns `e` */
+function withMarks(s, i, from, to, e, marks, b, ctx) {
+  b.pairId++
+  b.letter(marks.before, s.slice(i, from), i, from, true)
+  walk(s, from, to, b, marks.level === undefined ? ctx : { ...ctx, quoteLevel: marks.level })
+  b.letter(marks.after, s.slice(to, e), to, e, true)
+  return e
+}
 /** whether a pair's command, by its definition (`def`: paperMacros' or bibDefinitions'), sets its argument `arg` (the one the
  *  walk makes the pair's content, from 1, the last it takes) and nothing else: such a pair sets nothing over what it holds, and
  *  goes on no wire (translate/mt.mjs classOf). No name is listed: a style that sets the field in small capitals, a paper's
@@ -3424,7 +3490,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   // which is biblatex's data — \\entry, \\field — and no text, which \\bibliography, biblatex's alias of \\addbibresource, never reads)
   const bblName = `${jobName(mainFile.rel)}.bbl`, bblBytes = fsys.read(bblName)
   const bbl = bblBytes && /\\begin\s*\{thebibliography\}/.test(texText(bblBytes)) ? bblName : null
-  const ctx = { frontRowEnds: frontRowEndsOf(ownTexts), rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), activeSpaces: activeSpacesIn([...sources.map(sourceText), ...ownTexts]), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
+  const ctx = { frontRowEnds: frontRowEndsOf(ownTexts), rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), activeSpaces: activeSpacesIn([...sources.map(sourceText), ...ownTexts]), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), quotes: csquotesOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
   // (the author block's commands of a class the paper ships that the role table does not know: ownAuthorsOf)
   ctx.ownAuthors = ownAuthorsOf(own, ctx.macros)
   const scan = { lineEnvs, ifs, ifValues }, percents = { lineEnvs, ifs, defined: paper.own, skipEnvs }
