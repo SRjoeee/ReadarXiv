@@ -3543,7 +3543,7 @@ translating or keeping are both fine; a garbled translation never is.
   fails is refused, the next translator asked, and a unit no translator gives stays the original's. The runs floor, the last
   step, sends a refused unit's text stretches one by one; where a stretch came back from none, its English stood between
   translated ones in a row stated ok (`runs:<id>`), drawn as a translation. The floor now gives every stretch or nothing
-  (`chain.ts` runsFloor). In 4,033 rows of 26 staging captures no row came from the floor and no marker or tag is left in
+  (`chain.ts` runsFloor; `CHAIN_RULES` names it, `runs>=2-whole`, so the chain's identity moves and every row is made again). In 4,033 rows of 26 staging captures no row came from the floor and no marker or tag is left in
   any text; the parity's 15,079 laid lines of 22 pairs hold none either.
 - **An artefact is kept**: text set wholly in a face of one pitch, the owner's ruling, §18.22.
 - **No rule draws the original where a lay is not clean.** The lay keeps a translation inside its own region by construction

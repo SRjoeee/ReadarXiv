@@ -56,10 +56,12 @@ export const GATE_MS = 1_000
 /** the store key's grammar; it rises only if the grammar changes */
 export const KEY_VERSION = 't1'
 /** the chain's own outcome rules (fall-through per unit, one re-ask where a translator asks it, the runs floor of stretches
- *  of two letters or more, a span that is no edge keeping its head in a copy of itself: runs.ts; an element set after the
- *  unit's text given to no translator, put back after the translation: tailOf; a group a reply did not bring back placed
- *  around its own text where the translation states it: groups.ts): a change to them is a change of every row */
-export const CHAIN_RULES = 'chain/1|fall-through|reask|runs>=2|runs-heads|after|groups'
+ *  of two letters or more, every stretch given or none, `-whole` (d76d6b200: a stretch no translator gives leaves the unit the
+ *  original's, never its English between translated stretches), a span that is no edge keeping its head in a copy of itself:
+ *  runs.ts; an element set after the unit's text given to no translator, put back after the translation: tailOf; a group a
+ *  reply did not bring back placed around its own text where the translation states it: groups.ts): a change to them is a
+ *  change of every row */
+export const CHAIN_RULES = 'chain/1|fall-through|reask|runs>=2-whole|runs-heads|after|groups'
 
 // ---------------------------------------------------------------- the platform's timers and controllers, by structure
 
