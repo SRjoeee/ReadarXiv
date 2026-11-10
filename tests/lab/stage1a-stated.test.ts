@@ -899,6 +899,14 @@ describe("today's unit the candidate writes with a group that carries nothing as
     const v2 = { ...unit(id('b'), 30, 'reference', [text('A. Author, A study of GPU kernels, '), open('\\emph{'), text('Nature'), close(), text(' 5%.')]), state: 'drawn' }
     expect(said(statedOf([today], [v2]))).toEqual([[30, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
   })
+  it('is that unit where v2 writes a command\'s pair as the quotation marks it prints (\\enquote, 2026-11-11)', () => {
+    const today = unit(id('a'), 32, 'reference', [text('A. Allen (2019): '), open('\\enquote{'), text('Hicksian complementarity,'), close(), text(' Econometrica.')])
+    const v2 = { ...unit(id('b'), 32, 'reference', [text('A. Allen (2019): \u201cHicksian complementarity,\u201d Econometrica.')]), state: 'drawn' }
+    expect(said(statedOf([today], [v2]))).toEqual([[32, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+    // (marks where the pair stood, nothing else: a word more is another unit)
+    const more = { ...unit(id('c'), 32, 'reference', [text('A. Allen (2019): \u201cHicksian complementarity,\u201d in Econometrica.')]), state: 'drawn' }
+    expect(String(said(statedOf([today], [more]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
+  })
   it('is no such unit where the candidate keeps a group today has not, or loses a word', () => {
     const today = unit(id('a'), 31, 'reference', [open('{'), text('GPU'), close(), text(' kernels.')])
     const added = { ...unit(id('b'), 31, 'reference', [open('\\emph{'), text('GPU'), close(), text(' kernels.')]), state: 'drawn' }

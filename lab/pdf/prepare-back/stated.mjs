@@ -46,9 +46,10 @@ export const CAUSE = Object.freeze({
   // ((o), the coordinator's rulings of 2026-11-11 on lane style-wire: a source unit of today's the candidate writes as today's
   // TeX with each kernel or textcomp text symbol that is a character of its text now (latex-front.mjs textCharacter: `\%`, `\&`,
   // `\#`, `\$`, `\{`, `\}`, \textasciitilde, \textbar, \textless, \textgreater, \textbackslash) its character, and each group
-  // that carries nothing its content (instrument.mjs passThroughOf): the same unit, its id moved with its pieces, wherever either
-  // lays it (its holder the candidate's unit))
-  characters: 'the same unit as v2 writes it: its escaped characters text, a group that carries nothing its content',
+  // that carries nothing its content (instrument.mjs passThroughOf), and the marks a command prints around its argument text
+  // (latex-front.mjs wrapOf: \\enquote's quotation marks): the same unit, its id moved with its pieces, wherever either lays it
+  // (its holder the candidate's unit))
+  characters: 'the same unit as v2 writes it: its escaped characters text, a group that carries nothing its content, the marks a command prints text',
   // ((f)'s holding by a kept block, no text of it sent (2608.06007v1's biblatex bibliography kept whole): no text to read, stated
   // apart, not accepted)
   heldKept: 'held whole by a kept block, no text of it sent',
@@ -138,26 +139,36 @@ const depthAt = (ps, from, at) => {
 /** today's TeX of a unit as v2 writes it: each text symbol that is a character of v2's text its character (a control word's
  *  skipped spaces and a group around it alone with it, as TeX reads them), the pieces of `drop` (the ends of the groups v2
  *  writes as their content) out, white space as one space; null where no piece is either */
-function writtenAs(ps, drop) {
-  let src = ''
+function writtenAs(ps, drop, marked = new Set()) {
+  // (literal stretches, and where a command's pair stood that v2 writes as the marks it prints: those marks or nothing)
+  const parts = ['']
   let changed = drop.size > 0
   for (let k = 0; k < ps.length; k++) {
     const p = ps[k]
-    if (drop.has(k)) continue
+    if (drop.has(k)) {
+      if (marked.has(k)) parts.push(null, '')
+      continue
+    }
     const sym = p.kind === 'ph' ? characterOf(p.src) : null
     const group = p.kind === 'open' && p.src === '{' && ps[k + 1]?.kind === 'ph' && characterOf(ps[k + 1].src) !== null && ps[k + 2]?.kind === 'close'
+    let add = ''
     if (group) {
-      src += characterOf(ps[k + 1].src)
+      add = characterOf(ps[k + 1].src)
       changed = true
       k += 2
     } else if (sym !== null) {
-      src += sym
+      add = sym
       changed = true
       // (TeX skips the spaces after a control word, not after the empty group that ends one)
-      if (/^\\[A-Za-z]/.test(p.src) && !/\{\}$/.test(p.src) && ps[k + 1]?.kind === 'text') src += ps[++k].s.replace(/^[ \t]+/, '')
-    } else src += p.kind === 'text' ? p.s : (p.src ?? '')
+      if (/^\\[A-Za-z]/.test(p.src) && !/\{\}$/.test(p.src) && ps[k + 1]?.kind === 'text') add += ps[++k].s.replace(/^[ \t]+/, '')
+    } else add = p.kind === 'text' ? p.s : (p.src ?? '')
+    parts[parts.length - 1] += add
   }
-  return changed ? src.replace(/\s+/g, ' ').trim() : null
+  if (!changed) return null
+  if (parts.length === 1) { const t = parts[0].replace(/\s+/g, ' ').trim(); return (x) => x === t }
+  const escape = (t) => t.replace(/\s+/g, ' ').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`^${parts.map((x) => (x === null ? `[\\p{Ps}\\p{Pe}\\p{Pi}\\p{Pf}"'\`]*` : escape(x))).join('').replace(/^ /, '').replace(/ $/, '')}$`, 'u')
+  return (x) => re.test(x)
 }
 /** a dump unit's TeX: its text and each other piece's source, white space as one space */
 const texOf = (x) => (x.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : (p.src ?? ''))).join('').replace(/\s+/g, ' ').trim()
@@ -624,17 +635,19 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     const all = units.filter((n) => {
       if (n.replaced || n.kind !== u.kind || baseIds.has(n.id)) return false
       const theirs = groupsIn(n.pieces ?? []).map((g) => g.src)
-      const drop = new Set()
+      const drop = new Set(), marked = new Set()
       let i = 0
       for (const g of groups) {
         if (bare(g)) { drop.add(g.open).add(g.close); continue }
         if (theirs[i] === g.src) { i++; continue }
         if (g.close < 0) return false
+        // (a command's pair v2 does not write: its content, between the marks it prints where it prints some, \\enquote's)
         drop.add(g.open).add(g.close)
+        marked.add(g.open).add(g.close)
       }
       if (i !== theirs.length) return false
-      const src = writtenAs(ps, drop)
-      return src !== null && texOf(n) === src
+      const same = writtenAs(ps, drop, marked)
+      return same !== null && same(texOf(n))
     })
     return all.find((n) => L && n.lines?.[0] && meets(L, n.lines[0])) ?? all.sort((a, b) => a.ord - b.ord)[0] ?? null
   }
