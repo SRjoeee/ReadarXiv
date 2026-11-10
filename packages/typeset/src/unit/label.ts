@@ -1,13 +1,15 @@
 // U.label (design-b §1.5): a float's label in the target's name (T26) and a theorem-like head's (T27), each with the
 // original's number and punctuation, and the label the unit is then laid with. Ported from engine 065c1d973: labelInTarget
 // L2:1184-1195, spacedText L2:1230-1235, headLabelInTarget L2:1245-1259 (BABEL_HEADS L2:1274), the run's choice RUN:2029-2036,
-// headOf RUN:744-752, rules/tex-names.mjs headInTarget :145-161 and headName :60-63, colourOfStyle L2:2909, hexOf L2:4569.
+// rules/tex-names.mjs headName :60-63, colourOfStyle L2:2909, hexOf L2:4569. A head is named from the parts its part states
+// (Label.name, num, punct, as TeX set them), not by today's pattern over its text (headInTarget :145-161, which took one
+// capital before a number's first dot and no more: "Corollary VI.2" stayed the original's, 2610.21312v1).
 //
 // Its inputs, and the field each comes from once lane L1 states it (until then the tap's recorded values):
 // - `label`: the label the class set before the unit's first line, its glyphs (prepareUnit's) ← Placed.label (Label: kind,
 //   ink, name, num, punct, their styles); today's glyphs are the page's characters in its box
-// - `head`: a theorem-like head's glyphs in the layout file's label box (headOf, the page's characters) ← Placed.label's
-//   name, num and punct with their styles; its text is spacedText's reading of them
+// - `head`: a theorem-like head's parts ← Placed.label's name, num and punct, each one glyph of its ink with its text and
+//   style
 // - `relabels`: the unit's label group exists and the wrap does not keep the label as the original's ← Placed.fixed (bit 4)
 // - `words`: babel's names in the target (Rules.words); `heads`: translator's dictionary's head names in the target
 //   (rules/tex-names.json, a data file of Rules); `names`: the paper's own name units' translations (A6, other rows)
@@ -37,10 +39,13 @@ export type UnitLabel = {
   float?: FloatLabel
 }
 export type HeadLabel = { text: string; parts: LabelPart[]; open: boolean; chars: readonly Glyph[] }
+/** a theorem-like head's parts as its part states them (Label.name, num, punct: amsthm's \thmname, \thmnumber and the
+ *  punctuation after them), each one glyph of its ink */
+export type HeadParts = { name?: Glyph; num?: Glyph; punct?: Glyph }
 
 export type LabelInput = {
   label: UnitLabel | undefined
-  head: readonly Glyph[] | null
+  head: HeadParts | null
   kind: string
   /** the reader draws labels anew (today's door: always) */
   labels: boolean
@@ -127,18 +132,31 @@ function headName(english: string, heads: LabelInput['heads'], names: LabelInput
   const w = names?.get?.(english)
   return typeof w === 'string' && w.trim() ? w.trim() : null
 }
-/** a theorem-like head in the target: its name, its number and punctuation as TeX set them (tex-names.mjs:145 headInTarget) */
-export function headInTarget(text: string, heads: LabelInput['heads'], names: LabelInput['names']): string | null {
-  const m =
-    typeof text === 'string' &&
-    /^\s*(\p{L}[\p{L}\p{M} .'’-]*?)\s*((?:[A-Z]{0,2}\d+|[A-Z](?=[.\-–]\d))(?:[.\-–]\d+)*[a-z]?|[IVXLCDM]{1,7}|[A-Z])?(\s*[.:]?\s*[([]?)\s*$/u.exec(
-      text,
-    )
-  if (!m) return null
-  const english = m[1]!.replace(/\s+/g, ' ')
+const hexOf = (rgb: number) => `#${rgb.toString(16).padStart(6, '0')}`
+/** a glyph's fill as a style's colour (L2:2909 colourOfStyle) */
+const colourOfStyle = (st: Glyph['st']) =>
+  Number.isInteger(st?.fill) && st!.fill! >= 0 ? { color: st!.fill! > 0 ? hexOf(st!.fill!) : undefined } : {}
+
+/** a theorem-like head's label as the target names it, in its parts' styles (L2:1245 headLabelInTarget): its name in the
+ *  target's word (the rules' head names, else the paper's own name unit's), its number and its punctuation as TeX printed them,
+ *  a space before the punctuation where it stands apart (spacedText's reading); null for a babel name's head (the names path's),
+ *  a head of no name, and a name nothing names in the target. An unnumbered head whose name ends in its own stop, a style that
+ *  sets no punctuation after it ("Thm."), is named with its stop where its name alone is not */
+export function headLabelInTarget(
+  head: HeadParts,
+  heads: LabelInput['heads'],
+  names: LabelInput['names'],
+): Omit<HeadLabel, 'chars'> | null {
+  const chars = [head.name, head.num, head.punct].filter((c): c is Glyph => !!c)
+  if (!head.name || BABEL_HEADS.test(spacedText(chars))) return null
+  const english = head.name.ch.replace(/\s+/g, ' ').trim()
+  if (!/^\p{L}/u.test(english)) return null
+  // (its punctuation as TeX set it, a space before it where it stands a fifth of its size apart: "Definition 5.1 (")
+  const before = head.num ?? head.name,
+    p = head.punct
   let name = headName(english, heads, names),
-    tail = m[3]!
-  if (!name && !m[2] && /^\s*\./.test(tail)) {
+    tail = p ? `${p.x0 - before.x1 >= 0.2 * Math.max(p.size ?? 0, before.size ?? 0) ? ' ' : ''}${p.ch}` : ''
+  if (!name && !head.num && /^\s*\./.test(tail)) {
     const dotted = headName(`${english}.`, heads, names)
     if (dotted) {
       name = dotted
@@ -146,32 +164,12 @@ export function headInTarget(text: string, heads: LabelInput['heads'], names: La
     }
   }
   if (!name) return null
-  return `${name}${m[2] ? ` ${m[2]}` : ''}${tail.replace(/\s+/g, ' ')}`
-}
-
-const hexOf = (rgb: number) => `#${rgb.toString(16).padStart(6, '0')}`
-/** a glyph's fill as a style's colour (L2:2909 colourOfStyle) */
-const colourOfStyle = (st: Glyph['st']) =>
-  Number.isInteger(st?.fill) && st!.fill! >= 0 ? { color: st!.fill! > 0 ? hexOf(st!.fill!) : undefined } : {}
-
-/** a theorem-like head's label as the target names it, in its parts' styles (L2:1245 headLabelInTarget) */
-export function headLabelInTarget(
-  chars: readonly Glyph[],
-  heads: LabelInput['heads'],
-  names: LabelInput['names'],
-): Omit<HeadLabel, 'chars'> | null {
-  const text = spacedText(chars)
-  if (BABEL_HEADS.test(text)) return null
-  const drawn = headInTarget(text, heads, names)
-  if (!drawn) return null
-  const cs = [...chars].filter((c) => /\S/.test(c.ch ?? '')).sort((a, b) => a.x0 - b.x0)
-  const tail = /[\s.:([]*$/.exec(text)![0],
-    drawnTail = /[\s.:([]*$/.exec(drawn)![0]
+  const drawn = `${name}${head.num ? ` ${head.num.ch}` : ''}${tail.replace(/\s+/g, ' ')}`
+  const drawnTail = /[\s.:([]*$/.exec(drawn)![0]
   const own = (st: Glyph['st']) =>
     st && st.fam !== 'math' ? { bold: !!st.bold, italic: !!st.italic, ...colourOfStyle(st) } : {}
-  const nTail = tail.replace(/\s/g, '').length
-  const parts: LabelPart[] = [{ text: drawn.slice(0, drawn.length - drawnTail.length), st: own(cs[0]?.st) }]
-  if (drawnTail) parts.push({ text: drawnTail, st: own((nTail ? cs[cs.length - nTail] : cs.at(-1))?.st) })
+  const parts: LabelPart[] = [{ text: drawn.slice(0, drawn.length - drawnTail.length), st: own(head.name.st) }]
+  if (drawnTail) parts.push({ text: drawnTail, st: own((head.punct ?? chars.at(-1))?.st) })
   return { text: drawn, parts, open: /[([]\s*$/.test(drawn) }
 }
 
@@ -179,10 +177,12 @@ export function headLabelInTarget(
 export function label(i: LabelInput): Labelled {
   const relabel = i.labels && i.relabels ? labelInTarget(i.label, i.words, i.captions, i.to) : null
   const read =
-    !relabel && i.labels && i.relabels && (i.kind === 'theorem' || i.kind === 'heading') && i.head?.length
+    !relabel && i.labels && i.relabels && (i.kind === 'theorem' || i.kind === 'heading') && i.head?.name
       ? headLabelInTarget(i.head, i.heads, i.names)
       : null
-  const head = read ? { ...read, chars: i.head! } : null
+  const head = read
+    ? { ...read, chars: [i.head!.name, i.head!.num, i.head!.punct].filter((c): c is Glyph => !!c) }
+    : null
   let out = i.label
   if (head)
     out = {

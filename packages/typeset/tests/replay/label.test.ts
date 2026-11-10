@@ -1,9 +1,10 @@
 // U.label replayed on the tap's sample: the run's labels option, the label group's verdict, the unit's kind, the head's
-// glyphs and the paper's name units as today's run handed them (U.label:in), the label prepareUnit read (U.elements:out),
+// glyphs (read into the parts the prepare states for them) and the paper's name units as today's run handed them
+// (U.label:in), the label prepareUnit read (U.elements:out),
 // translator's head names from today's tex-names.json; against the relabel, the head and the label today laid the unit with.
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { type Glyph, label, type UnitLabel } from '../../src/unit/label.ts'
+import { type Glyph, type HeadParts, label, type UnitLabel } from '../../src/unit/label.ts'
 import { firstDifference, hasTap, hasToday, roundsOf, sample, todayFile } from './tap.ts'
 
 type In = {
@@ -20,6 +21,28 @@ type Out = {
   relabel: string | null
   head: { text: string; parts: unknown; open: boolean; chars: Glyph[] } | null
   label?: UnitLabel
+}
+
+/** today's head characters (U.label:in) in the parts the prepare states for them (packages/engine locate/facts.ts labelParts):
+ *  its marks at its end the punctuation, its last word the number where a counter's (a digit in it, a roman numeral, a letter
+ *  alone), the words before it the name; each part one glyph of its characters, in its first character's style */
+function partsOf(cs: readonly Glyph[] | null): HeadParts | null {
+  const t = (cs ?? []).filter((c) => /\S/.test(c.ch))
+  let e = t.length
+  while (e > 0 && /^\p{P}$/u.test(t[e - 1]!.ch)) e--
+  let s = e
+  while (s > 1 && t[s - 1]!.x0 - t[s - 2]!.x1 < 0.1 * Math.max(t[s - 1]!.size ?? 0, t[s - 2]!.size ?? 0)) s--
+  const word = t
+    .slice(s - 1, e)
+    .map((c) => c.ch)
+    .join('')
+  const n = s > 1 && /\p{N}|^(?:[IVXLCDM]+|[ivxlcdm]+|\p{L})$/u.test(word) ? s - 1 : e
+  const one = (xs: readonly Glyph[]): Glyph | undefined =>
+    xs.length ? { ...xs[0]!, ch: xs.map((c) => c.ch).join(''), x1: xs.at(-1)!.x1 } : undefined
+  const name = one(t.slice(0, n)),
+    num = one(t.slice(n, e)),
+    punct = one(t.slice(e))
+  return name ? { name, ...(num ? { num } : {}), ...(punct ? { punct } : {}) } : null
 }
 
 /** a label as compared: its glyphs by their characters */
@@ -41,7 +64,7 @@ describe.skipIf(!hasTap || !hasToday)('U.label: replayed on the tap', () => {
         count.rounds++
         const got = label({
           label: prep.label,
-          head: a.headChars,
+          head: partsOf(a.headChars),
           kind: a.kind,
           labels: !!a.labels,
           relabels: !!a.relabels,
@@ -57,8 +80,8 @@ describe.skipIf(!hasTap || !hasToday)('U.label: replayed on the tap', () => {
         const d =
           firstDifference(got.relabel, want.relabel, 'relabel') ??
           firstDifference(
-            got.head && { ...got.head, chars: got.head.chars.length },
-            want.head && { ...want.head, chars: want.head.chars.length },
+            got.head && { ...got.head, chars: got.head.chars.map((c) => c.ch).join('') },
+            want.head && { ...want.head, chars: want.head.chars.map((c) => c.ch).join('') },
             'head',
           ) ??
           firstDifference(shown(got.label), shown(want.label), 'label')

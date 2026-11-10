@@ -185,28 +185,57 @@ describe('a float label’s parts: TeX’s \\fnum@<type>, its name, a tie, its n
     // 0.19 em on a justified line, under the 0.2 em that keeps a capital before a digit the name's: name "TableS". The tie on
     // the 87 papers' float labels measured 0.19 to 0.48 em, a kern inside their words -0.09 to 0)
     const any = expect.anything()
-    expect(labelParts(run('TABLE I.'), 1, true)).toMatchObject({
+    expect(labelParts(run('TABLE I.'), 1)).toMatchObject({
       name: ['TABLE', any],
       num: ['I', any],
       punct: ['.', any],
     })
     const tight = run('TableS2:').map((x, k) => (k >= 5 ? { ...x, x0: x.x0 + 1.9, x1: x.x1 + 1.9 } : x))
-    expect(labelParts(tight, 1, true)).toMatchObject({ name: ['Table', any], num: ['S2', any], punct: [':', any] })
-    expect(labelParts(run('Table IV:'), 1, true)).toMatchObject({ name: ['Table', any], num: ['IV', any] })
+    expect(labelParts(tight, 1)).toMatchObject({ name: ['Table', any], num: ['S2', any], punct: [':', any] })
+    expect(labelParts(run('Table IV:'), 1)).toMatchObject({ name: ['Table', any], num: ['IV', any] })
     // (as before where the number is no last word of its own: one word, a number with a digit read already)
-    expect(labelParts(run('Fig. 4.'), 1, true)).toMatchObject({
+    expect(labelParts(run('Fig. 4.'), 1)).toMatchObject({
       name: ['Fig.', any],
       num: ['4', any],
       punct: ['.', any],
     })
-    expect(labelParts(run('Figure 1.1 –'), 1, true)).toMatchObject({ name: ['Figure', any], num: ['1.1', any] })
-    expect(labelParts(run('Fig.S1'), 1, true)).toMatchObject({ name: ['Fig.', any], num: ['S1', any] })
-    expect(labelParts(run('(a)'), 1, true).name?.[0]).toBe('a')
-    expect(labelParts(run('(a)'), 1, true).num).toBeUndefined()
+    expect(labelParts(run('Figure 1.1 –'), 1)).toMatchObject({ name: ['Figure', any], num: ['1.1', any] })
+    expect(labelParts(run('Fig.S1'), 1)).toMatchObject({ name: ['Fig.', any], num: ['S1', any] })
+    expect(labelParts(run('(a)'), 1).name?.[0]).toBe('a')
+    expect(labelParts(run('(a)'), 1).num).toBeUndefined()
     // (an unnumbered label's last word is its name's: no number)
-    expect(labelParts(run('Figure:'), 1, true).num).toBeUndefined()
+    expect(labelParts(run('Figure:'), 1).num).toBeUndefined()
     // (a head's label as before)
     expect(labelParts(run('Theorem 2.1.'), 1)).toMatchObject({ name: ['Theorem', any], num: ['2.1', any] })
+  })
+})
+
+describe('a head’s label parts: amsthm’s \\thmname, a space, \\thmnumber, as a float’s', () => {
+  it('reads its number as its last word, whatever its counter prints: a roman section’s number before its own', () => {
+    // (2610.21312v1, IEEEtran with \newtheorem{theorem}{Theorem}[section]: "Corollary VI.2 (" was read "CorollaryVI." and "2",
+    // the I abutting the V; "Proposition V.2 (" was read right, its one capital standing a space after the name)
+    const any = expect.anything()
+    expect(labelParts(run('Corollary VI.2 ('), 1)).toMatchObject({
+      name: ['Corollary', any],
+      num: ['VI.2', any],
+      punct: ['(', any],
+    })
+    expect(labelParts(run('Proposition VII.1 ('), 1)).toMatchObject({ name: ['Proposition', any], num: ['VII.1', any] })
+    expect(labelParts(run('Proposition V.2 ('), 1)).toMatchObject({ name: ['Proposition', any], num: ['V.2', any] })
+    expect(labelParts(run('Theorem II'), 1)).toMatchObject({ name: ['Theorem', any], num: ['II', any] })
+    expect(labelParts(run('Appendix A'), 1)).toMatchObject({ name: ['Appendix', any], num: ['A', any] })
+    // (the number from its first digit or letter: a bracket before it is neither part's, as before)
+    expect(labelParts(run('Eq. (3)'), 1)).toMatchObject({ name: ['Eq.', any], num: ['3', any] })
+    // (a word that is no counter's ends no number: the name is the whole)
+    expect(labelParts(run('Main Theorem.'), 1).num).toBeUndefined()
+  })
+  it('reads its name as letters, a ligature’s glyph its letters, its words spaced as TeX set them', () => {
+    // (2610.21765v1's "Deﬁnition 1.": PDF.js gave the ligature as one character, U+FB01, which no head name holds)
+    const lig = run('Definition 1.')
+    lig.splice(2, 2, { ...lig[2]!, u: 'ﬁ', x1: lig[3]!.x1 })
+    expect(labelParts(lig, 1)).toMatchObject({ name: ['Definition', expect.anything()], num: ['1', expect.anything()] })
+    expect(labelParts(run('Key Lemma 2.'), 1)).toMatchObject({ name: ['Key Lemma', expect.anything()] })
+    expect(labelParts(run('Main Theorem.'), 1)).toMatchObject({ name: ['Main Theorem', expect.anything()] })
   })
 })
 

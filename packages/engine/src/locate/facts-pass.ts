@@ -527,7 +527,7 @@ export function factsOf({
     // -- its label's parts and style
     if (mem.labelAt && mem.label.length) {
       const lg = mem.label.map(gA)
-      Object.assign(mem.labelAt, labelParts(lg, mem.labelAt.ink[0], mem.labelAt.kind === 'float'), {
+      Object.assign(mem.labelAt, labelParts(lg, mem.labelAt.ink[0]), {
         style: styleOf(lg, mem.labelAt.style.size),
       })
     }
