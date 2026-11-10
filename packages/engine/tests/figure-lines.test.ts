@@ -292,6 +292,77 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     crowd(fig, 0, [boxMet(0, rect(g[1]!.x0 - 0.3, 697, g[1]!.x1 + 0.3, 708))])
     expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
   })
+  // (2608.06701v1 p2's node "Any / signal / detected?" in a diamond, its branch label "yes" beside it: inside the diamond's box,
+  // outside the diamond)
+  const diamond = (cx: number, cy: number, w: number, h: number): TodayShape => ({
+    segs: [cx, cy + h, cx + w, cy, cx + w, cy, cx, cy - h, cx, cy - h, cx - w, cy, cx - w, cy, cx, cy + h],
+    stroke: true,
+    fill: false,
+    hw: 0.5,
+  })
+  const node = () =>
+    pageOf([
+      [{ text: 'Any', font: 'TimesNewRomanPSMT', x: 90 }],
+      [{ text: 'signal', font: 'TimesNewRomanPSMT', x: 82.5 }],
+      [
+        { text: 'detected?', font: 'TimesNewRomanPSMT', x: 71.5 },
+        { text: 'yes', font: 'TimesNewRomanPSMT', x: 140, dy: -7 },
+      ],
+    ])
+  it('makes the lines a closed path holds alone one text: a node’s label, its lines centred, its room the path’s (F3)', () => {
+    const { page, fig } = node()
+    fig.holds = [{ p: 1, b: 0, ks: [0, 1, 2], shape: diamond(100, 688, 60, 30) }]
+    const texts = figureLinesOf([page], fig, () => false, null)
+    const t = texts.find((x) => x.ks.includes(0))
+    expect(t!.ks).toEqual([0, 1, 2])
+    expect(t!.order.map((o) => (o.t === 'br' ? o.end : o.t))).toEqual(['text', 'space', 'text', 'space', 'text'])
+    expect(t!.para).toEqual({ justified: false, by: 'container', align: 'c' })
+    expect(t!.why).toBeNull()
+    expect(t!.container).not.toBeNull()
+    expect(texts.some((x) => x.ks.includes(3))).toBe(false)
+  })
+  it('joins a node’s word broken with no hyphen where the paper writes it whole elsewhere: "test_password|_lookup.py" (2608.06701v1 p9)', () => {
+    const gapped = (text: string, x: number) => [{ text, font: 'TimesNewRomanPSMT', gaps: true, x }]
+    const end = (elsewhere: boolean) => {
+      const { page, fig } = pageOf([
+        gapped('test_password', 80),
+        gapped('_lookup.py', 85),
+        [],
+        [],
+        elsewhere ? gapped('run test_password_lookup.py now', 300) : [],
+      ])
+      const p = { ...page, glyphs: pageGlyphsOf(page.glyphs as unknown as DocGlyph[]) } as unknown as TodayPage
+      fig.holds = [{ p: 1, b: 0, ks: [0, 1], shape: rect(70, 680, 170, 712) }]
+      const t = figureLinesOf([p], fig, () => false, null).find((x) => x.ks.includes(0))
+      return t?.order.find((o) => o.t === 'br')
+    }
+    expect(end(true)).toEqual({ t: 'br', end: 'join' })
+    expect(end(false)).toEqual({ t: 'br', end: 'space' })
+  })
+  it('joins no two lines a path holds on one baseline: two labels side by side (2608.06701v1 p8’s "Prefix Phase", "Full Phase")', () => {
+    const { page, fig } = pageOf([
+      [
+        { text: 'Prefix Phase', font: 'TimesNewRomanPSMT', x: 72 },
+        { text: 'Full Phase', font: 'TimesNewRomanPSMT', x: 200 },
+      ],
+    ])
+    fig.holds = [{ p: 1, b: 0, ks: [0, 1], shape: rect(60, 690, 280, 712) }]
+    expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
+  })
+  it('reads a closed path’s inside by its interior: a glyph inside its box and outside it crowds nothing (2608.06701v1 p2)', () => {
+    // (one line in the diamond, "yes" beside it: in the diamond's box, outside the diamond)
+    const { page, fig } = pageOf([
+      [
+        { text: 'detected?', font: 'TimesNewRomanPSMT', x: 71.5 },
+        { text: 'yes', font: 'TimesNewRomanPSMT', x: 140, dy: -22 },
+      ],
+    ])
+    fig.units[0]!.why = 'crowded'
+    fig.met.set(0, { items: [boxMet(0, diamond(100, 700, 60, 30))], under: null })
+    const [t] = figureLinesOf([page], fig, () => false, null).filter((x) => x.ks.includes(0))
+    expect(t!.why).toBeNull()
+    expect(t!.container).not.toBeNull()
+  })
   it('frees a text a closed shape holds whole: its room the shape’s inside, its edges over and under its baseline', () => {
     const { page, fig } = pageOf([[{ text: 'CTJA module', font: 'DejaVuSans' }]])
     const box = rect(66, 694, 140, 712)

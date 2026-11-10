@@ -16,6 +16,7 @@ import {
   type TodayMet,
   type TodayPage,
   type TodayShape,
+  interiorOf,
 } from './today/today.types.ts'
 import type { DocGlyph } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
@@ -58,7 +59,7 @@ export interface FigureText {
   label: number[]
   /** a paragraph of two lines or more (F3): whether its block is justified, and the evidence its lines are joined by, `strong`
    *  (a join at TeX's hyphen or a justified line's); null a line alone */
-  para: { justified: boolean; by: 'strong' } | null
+  para: { justified: boolean; by: 'strong' | 'container'; align?: 'l' | 'c' | 'r' } | null
   /** glyphs no run held that it takes (a comma between two addresses, a digit): its text's */
   claimed: number[]
   /** a doubled copy of its glyphs (a glyph of one of its characters over one of them): hidden with its text */
@@ -121,10 +122,20 @@ export function figureLinesOf(
  * ends at a join and starts again), `pairs` the pairs of lines it tests, `scripts` the pairs the script join tests (F1's, inside
  * each pass that joins nothing), `votes` the glyphs a line's size and baseline are voted over, `faces` the glyphs read for a
  * formula's (mathGlyph: a face's name and a character), `ends` a paragraph's line ends in a hyphen read against the document's
- * text (F3). The speed of the prepare's locate where figures are many: 2609.19644v1's
+ * text (F3), `boxed` the closed paths whose box holds two units or more (figure-text.mjs containersOf, F3's container step) and
+ * `interior` the points read against a closed path's inside, there and in the relation reading. The speed of the prepare's locate where figures are many: 2609.19644v1's
  * included pages
  */
-export type LinesWork = { rounds: number; pairs: number; scripts: number; votes: number; faces: number; ends: number }
+export type LinesWork = {
+  rounds: number
+  pairs: number
+  scripts: number
+  votes: number
+  faces: number
+  ends: number
+  boxed: number
+  interior: number
+}
 let W: LinesWork | null = null
 
 function linesOf(
@@ -267,10 +278,63 @@ function linesOf(
         const x = fig.met.get(k)?.under ?? fig.units[k]!.under ?? null
         return x === null ? u : u === null ? x : Math.min(u, x)
       }, null)
+    const taken = new Set<number>()
+    // ---- F3's container step: the lines a closed path holds alone (figure-text.mjs containersOf), two or more, one under the
+    // other, every one a line of words: one text, its lines top to bottom, its room the path's inside (roomIn), set as its lines
+    // are (their centres one: a node's label centred; else their left or right edges)
+    for (const h of fig.holds ?? []) {
+      if (h.p !== p) continue
+      const ks = new Set(h.ks)
+      const idx = lines.flatMap((l, i) => (l.ks.length && l.ks.every((k) => ks.has(k)) ? [i] : []))
+      if (idx.length < 2 || new Set(idx.flatMap((i) => lines[i]!.ks)).size !== ks.size) continue
+      if (idx.some((i) => taken.has(i) || !(reads[i]!.kind === 'plain' || reads[i]!.kind === 'mixed'))) continue
+      idx.sort((a, b) => lines[b]!.y - lines[a]!.y || lines[a]!.x0 - lines[b]!.x0)
+      // (one under the other: two lines on one baseline in one path are two labels, side by side (2608.06701v1 p8))
+      if (idx.some((i, n) => n && Math.abs(lines[i]!.y - lines[idx[n - 1]!]!.y) <= RUN_DY * lines[i]!.size)) continue
+      const L = idx.map((i) => lines[i]!)
+      const tol = PARA_ALIGN_TOL * Math.max(...L.map((l) => l.size))
+      const spread = (f: (l: Line) => number) => Math.max(...L.map(f)) - Math.min(...L.map(f))
+      const align =
+        spread((l) => (l.x0 + l.x1) / 2) <= tol
+          ? 'c'
+          : spread((l) => l.x0) <= tol
+            ? 'l'
+            : spread((l) => l.x1) <= tol
+              ? 'r'
+              : 'c'
+      const ft: FigureText = {
+        ks: idx.flatMap((i) => lines[i]!.ks),
+        page: p,
+        order: [],
+        els: [],
+        label: [],
+        para: { justified: false, by: 'container', align },
+        claimed: idx.flatMap((i) => reads[i]!.gs.filter((g) => lines[i]!.free.has(g))),
+        copies: [],
+        textBoxes: [],
+        why: null,
+        container: null,
+        under: null,
+      }
+      idx.forEach((i, n) => {
+        if (n) ft.order.push({ t: 'br', end: endOf(glyphs, reads[idx[n - 1]!]!.gs, reads[i]!.gs, sourceOf, true) })
+        piecesInto(ft, reads[i]!, false)
+      })
+      const items = itemsOf(ft.ks)
+      if (items.length) judge(ft, items, glyphs)
+      if (!ft.why && idx.some((i) => torn(ft, lines[i]!, glyphs, loose, lines))) ft.why = 'crowded'
+      if (!ft.container)
+        ft.container = roomIn(
+          h.shape,
+          ft.order.flatMap((o) => (o.t === 'text' ? o.glyphs : [])),
+          glyphs,
+        )
+      out.push(ft)
+      for (const i of idx) taken.add(i)
+    }
     // ---- F3: the lines of prose that are a paragraph's, one text; a line across a justified line's stretched space read whole
     // where the paragraph takes it
-    const taken = new Set<number>()
-    for (const para of figureParas(lines, reads, glyphs, boxes, pitch, math, sourceOf)) {
+    for (const para of figureParas(lines, reads, glyphs, boxes, pitch, math, sourceOf, taken)) {
       const ks = para.lines.flatMap((x) => x.l.ks)
       const ft: FigureText = {
         ks,
@@ -755,14 +819,49 @@ interface ProseLine {
   l: Line
   read: Read
 }
-/**
- * F3: the page's paragraphs (figure-paras.ts) over its lines of prose (`mixed` and `plain`), each with its lines top to bottom,
- * their ends, and the lines of the page it is made of (`of`). Two fragments of one baseline farther apart than the run gap (a
- * justified line's stretched space after a sentence) are read as one line where a line of prose right over or under them has ink
- * across the gap, and stand so only where a paragraph takes that line; else they stay the fragments they were
- */
 /** the hyphens a line may end in (facts.ts HYPHENS) */
 const HYPHENS_AT_END = /^[-\u2010\u00ad]$/u
+/** what a line's end before the next line is (facts.ts lineEnd): a space, a word's hyphen joined, TeX's break dropped; a hyphen
+ *  read against the document's text. A page's glyph is made by glyphWith: its coordinates are getters over its page's array,
+ *  which a spread does not copy, and lineEnd read every gap as none, no word's start, every TeX break a word's hyphen
+ *  ("con-text", 2609.19644v1 p60) */
+function endOf(
+  glyphs: readonly G[],
+  A: readonly number[],
+  B: readonly number[],
+  source: () => string,
+  token = false,
+): 'space' | 'join' | 'drop' {
+  const docGlyph = (g: number) => glyphWith(glyphs[g]! as unknown as DocGlyph, { base: bare(glyphs[g]!.font) })
+  const hyphen = HYPHENS_AT_END.test(glyphs[A.at(-1)!]?.u ?? '')
+  if (W && hyphen) W.ends++
+  const r = lineEnd([...A, ...B].map(docGlyph), A.length, hyphen ? { source: source() } : {})
+  if (r !== 'space' || !token) return r
+  // (a node's label broken inside a word with no hyphen, set at its path's width ("test_password|_lookup.py", 2608.06701v1 p9):
+  // joined where the document writes the word whole elsewhere, as a source tells a word)
+  const run = (gs: readonly number[], end: boolean) => {
+    const xs = end ? [...gs].reverse() : [...gs]
+    let out = ''
+    for (let i = 0; i < xs.length; i++) {
+      const g = glyphs[xs[i]!]!
+      if (i) {
+        const p = glyphs[xs[i - 1]!]!
+        const gap = end ? p.x0 - g.x1 : g.x0 - p.x1
+        if (gap > TRACKING_SPACE_FACTOR * g.size) break
+      }
+      out = end ? g.u + out : out + g.u
+    }
+    return out
+  }
+  const a = run(A, true),
+    b = run(B, false)
+  if (!a || !b || /\s/u.test(a + b)) return r
+  if (W) W.ends++
+  const count = (w: string) => (source().match(new RegExp(`(?<!\\S)${escapeRe(w)}(?!\\S)`, 'giu')) ?? []).length
+  return count(a + b) > 0 ? 'join' : r
+}
+const escapeRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 /** a document's text off its pages' glyphs, in their order: a space where two stand apart (TRACKING_SPACE_FACTOR of the size,
  *  PDF.js's reading of a space), where a line changes or goes back, and between pages */
 function documentText(pages: readonly TodayPage[]): string {
@@ -786,6 +885,12 @@ function documentText(pages: readonly TodayPage[]): string {
   return out
 }
 
+/**
+ * F3: the page's paragraphs (figure-paras.ts) over its lines of prose (`mixed` and `plain`), each with its lines top to bottom,
+ * their ends, and the lines of the page it is made of (`of`). Two fragments of one baseline farther apart than the run gap (a
+ * justified line's stretched space after a sentence) are read as one line where a line of prose right over or under them has ink
+ * across the gap, and stand so only where a paragraph takes that line; else they stay the fragments they were
+ */
 function figureParas(
   lines: readonly Line[],
   reads: readonly Read[],
@@ -794,6 +899,7 @@ function figureParas(
   pitch: (g: G) => boolean,
   math: Formulas,
   source: () => string,
+  skip: ReadonlySet<number> = new Set(),
 ): {
   lines: ProseLine[]
   ends: ('space' | 'join' | 'drop')[]
@@ -810,7 +916,7 @@ function figureParas(
   // (the page's lines of prose by figure, top to bottom: a line's rows near it are found from its place there)
   const byFig = new Map<string, number[]>()
   lines.forEach((l, i) => {
-    if (!prose(reads[i]!)) return
+    if (skip.has(i) || !prose(reads[i]!)) return
     const at = byFig.get(l.fig)
     if (at) at.push(i)
     else byFig.set(l.fig, [i])
@@ -858,20 +964,7 @@ function figureParas(
   }
   const live = entries.filter((e) => prose(e.x.read))
   const facts = live.map((e) => proseFacts(e.x, glyphs, boxes))
-  // (a page's glyph with its base name, made by glyphWith: a page glyph's coordinates are getters over its page's array, which a
-  // spread does not copy, and lineEnd read every gap as none, no word's start, every TeX break a word's hyphen: "con-text",
-  // 2609.19644v1 p60)
-  const docGlyph = (g: number) => glyphWith(glyphs[g]! as unknown as DocGlyph, { base: bare(glyphs[g]!.font) })
-  const end = (a: number, b: number) => {
-    const A = live[a]!.x.read.gs,
-      B = live[b]!.x.read.gs
-    if (W && HYPHENS_AT_END.test(glyphs[A.at(-1)!]?.u ?? '')) W.ends++
-    return lineEnd(
-      [...A, ...B].map(docGlyph),
-      A.length,
-      HYPHENS_AT_END.test(glyphs[A.at(-1)!]?.u ?? '') ? { source: source() } : {},
-    )
-  }
+  const end = (a: number, b: number) => endOf(glyphs, live[a]!.x.read.gs, live[b]!.x.read.gs, source)
   return parasOf(facts, end).map((para) => ({
     lines: para.lines.map((k) => live[k]!.x),
     ends: para.ev.map((e) => (e === 'hyphen-drop' ? 'drop' : e === 'hyphen-join' ? 'join' : 'space')),
@@ -1046,16 +1139,24 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
       el.boxes.push(...it.bs)
       continue
     }
-    // (the glyphs whose ink centre it holds: its own and any other)
+    // (the glyphs whose ink centre it holds: its own and any other; a closed path's by its interior, its box the cheap test
+    // first (F3's container step: a diamond's corners are no inside of it, 2608.06701v1 p2's "yes" beside its node))
     const held: number[] = []
     let others = false
     let labelled = 0
+    const shut = !!it.shape && closed(it.shape)
     for (let j = 0; j < glyphs.length; j++) {
       const g = glyphs[j]!
       if (!real(g)) continue
       const cx = ((g.ix0 ?? g.x0) + (g.ix1 ?? g.x1)) / 2,
         cy = (g.top + g.bottom) / 2
-      if (cx > x0 && cx < x1 && cy > y0 && cy < y1) {
+      if (
+        cx > x0 &&
+        cx < x1 &&
+        cy > y0 &&
+        cy < y1 &&
+        (!shut || (W ? W.interior++ : 0, interiorOf(it.shape!.segs, cx, cy)))
+      ) {
         if (label.has(j)) labelled++
         else if (own.has(j)) held.push(j)
         else others = true

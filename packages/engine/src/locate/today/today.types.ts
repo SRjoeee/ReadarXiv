@@ -83,6 +83,12 @@ export interface TodayFigures {
   /** (the copy's) each crowded figure text's met ink, by its k, and the depth under its baseline of the stroke under its text;
    *  an uncrowded one's tones under part of it alone */
   met: Map<number, { items: TodayMet[]; under: number | null }>
+  /** (CHANGED, F3) each closed path that holds two units or more alone, the innermost of nested ones: its page, its box index, the
+   *  units it holds, its shape (figure-text.mjs containersOf) */
+  holds?: { p: number; b: number; ks: number[]; shape: TodayShape }[]
+  /** the reading's counts (figure-text.mjs `stats`): of them, F3's container step's, the closed paths whose box holds two units
+   *  or more and the points read against a path's inside */
+  stats?: { boxed?: number; interior?: number }
 }
 export interface TodayLedger {
   lines: unknown[]
@@ -101,6 +107,13 @@ export const figureUnitsOf = fig.figureUnitsOf as (
   },
 ) => TodayFigures
 export const figureGroup = fig.figureGroup as (k: number) => string
+export const interiorOf = fig.interiorOf as (segs: ArrayLike<number>, x: number, y: number) => boolean
+export const containersOf = fig.containersOf as (
+  pg: TodayPage,
+  units: { k: number; gs: number[] }[],
+  p: number,
+  stats?: { boxed: number; interior: number },
+) => { p: number; b: number; ks: number[]; shape: TodayShape }[]
 /** the figure reading's measures, in its sizes (figure-text.mjs) */
 export const RUN_DY = fig.RUN_DY as number
 export const ANCHOR_REACH = fig.ANCHOR_REACH as number

@@ -218,7 +218,9 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
   const met = new Map()
   // (the runs that spell a word the caps have counted, units or not)
   let taken = 0
-  const stats = { units: 0, crowded: 0, letters: 0, runs: 0, past: 0, clipped: 0, outsized: 0, sets: 0, grouped: 0, aligned: 0 }
+  const stats = { units: 0, crowded: 0, letters: 0, runs: 0, past: 0, clipped: 0, outsized: 0, sets: 0, grouped: 0, aligned: 0, boxed: 0, interior: 0 }
+  // (CHANGED: F3's containers, each closed path that holds two of a page's units or more and no other glyph: containersOf)
+  const holds = []
   pages.forEach((pg, pi) => {
     // (the page's text lines a unit's column is read from, made once a page and call, of this call's owners)
     let lines = null
@@ -326,10 +328,88 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
     // (the page's units in their columns and sets, then each one's room on its line)
     setsOf(mine, evidence, stats)
     roomsOf(pg, S, mine)
+    // (CHANGED: the closed paths that hold units alone, read while the page's shapes are kept: the lines of a node, F3)
+    holds.push(...containersOf(pg, mine.filter(m => Math.abs(m.u.ux - 1) < 1e-6 && Math.abs(m.u.uy) < 1e-6).map(m => ({ k: m.u.k, gs: m.r.gs.filter(x => !x.turned && !x.blank).map(x => x.i) })), pi + 1, stats))
     // (the page read: nothing here reads its shapes again, which a reader may let go, `done`: locate's ink step, lane mem-back)
     done?.(pi)
   })
-  return { units, glyphs: glyphMaps, turned: turnedMaps, stats, met }
+  return { units, glyphs: glyphMaps, turned: turnedMaps, stats, met, holds }
+}
+
+/**
+ * CHANGED (F3, the container step): the closed paths of a page that hold units alone. A path is closed where every segment's end
+ * is met by another's (to the hundredth of a unit); it holds a unit where every glyph of the unit has its ink's centre inside the
+ * path, the box tested first (a cheap rejection: the glyph's ink inside the path's box) and the interior deciding (the even-odd
+ * rule over its segments: a diamond's corners are no inside of it, 2608.06701v1 p2's "yes" beside "Any signal detected?"); it
+ * holds them alone where no other glyph of the page is inside it and no other ink but its own drawing again (a legend's samples,
+ * a chart's nodes inside a box round it). Two units or more held so: one hold, the innermost of nested paths holding the same
+ * units. `stats.boxed` the paths the box test passed, `stats.interior` the points the interior read
+ */
+export function containersOf(pg, units, p, stats = { boxed: 0, interior: 0 }) {
+  const SH = pg.shapes ?? null, B = pg.boxes ?? [], G = pg.glyphs ?? [], U = pg.unseen ?? null
+  if (!SH || units.length < 2) return []
+  const out = []
+  const centre = g => [((g.ix0 ?? g.x0) + (g.ix1 ?? g.x1)) / 2, (g.top + g.bottom) / 2]
+  for (const [b, shape] of SH) {
+    if (!shape || U?.has(b) || !closedPath(shape.segs)) continue
+    const x0 = Math.min(B[4 * b], B[4 * b + 2]), x1 = Math.max(B[4 * b], B[4 * b + 2])
+    const y0 = Math.min(B[4 * b + 1], B[4 * b + 3]), y1 = Math.max(B[4 * b + 1], B[4 * b + 3])
+    const inBox = g => (g.ix0 ?? g.x0) >= x0 && (g.ix1 ?? g.x1) <= x1 && g.bottom >= y0 && g.top <= y1
+    const held = units.filter(u => u.gs.length && u.gs.every(i => G[i] && inBox(G[i])))
+    if (held.length < 2) continue
+    stats.boxed++
+    const inside = g => { stats.interior++; const [cx, cy] = centre(g); return interiorOf(shape.segs, cx, cy) }
+    if (!held.every(u => u.gs.every(i => inside(G[i])))) continue
+    const theirs = new Set(held.flatMap(u => u.gs))
+    let alone = true
+    for (let i = 0; i < G.length && alone; i++) {
+      const g = G[i]
+      if (theirs.has(i) || !g || g.blank || g.unseen || !/\S/u.test(g.u ?? '') || !inBox(g)) continue
+      if (inside(g)) alone = false
+    }
+    // (and no other ink: a path, an image inside it, but its own drawing again (a node's fill and its stroke, one box): a legend's
+    // samples, the nodes of a box round a whole chart, 2608.06701v1 p2 and p6)
+    for (let c = 0; c + 3 < B.length && alone; c += 4) {
+      if (c / 4 === b || U?.has(c / 4)) continue
+      const cx0 = Math.min(B[c], B[c + 2]), cx1 = Math.max(B[c], B[c + 2]), cy0 = Math.min(B[c + 1], B[c + 3]), cy1 = Math.max(B[c + 1], B[c + 3])
+      if (Math.abs(cx0 - x0) <= 0.5 && Math.abs(cx1 - x1) <= 0.5 && Math.abs(cy0 - y0) <= 0.5 && Math.abs(cy1 - y1) <= 0.5) continue
+      // (ink inside its box: a path round it, a ground under it, is no ink inside it)
+      if (cx0 < x0 || cx1 > x1 || cy0 < y0 || cy1 > y1) continue
+      const mx = (cx0 + cx1) / 2, my = (cy0 + cy1) / 2
+      stats.interior++
+      if (interiorOf(shape.segs, mx, my)) alone = false
+    }
+    if (!alone) continue
+    const ks = held.map(u => u.k).sort((a, c) => a - c)
+    const area = (x1 - x0) * (y1 - y0)
+    const same = out.findIndex(h => h.ks.length === ks.length && h.ks.every((k, j) => k === ks[j]))
+    if (same < 0) out.push({ p, b, ks, shape, area })
+    else if (area < out[same].area) out[same] = { p, b, ks, shape, area }
+  }
+  return out.map(({ area, ...h }) => h)
+}
+
+/** whether a path's segments (x0, y0, x1, y1 each) close: every end met by another's, to the hundredth of a unit */
+function closedPath(segs) {
+  if (!segs || segs.length < 12) return false
+  const deg = new Map()
+  for (let i = 0; i + 3 < segs.length; i += 4)
+    for (const [x, y] of [[segs[i], segs[i + 1]], [segs[i + 2], segs[i + 3]]]) {
+      const k = `${Math.round(x * 100)}|${Math.round(y * 100)}`
+      deg.set(k, (deg.get(k) ?? 0) + 1)
+    }
+  for (const d of deg.values()) if (d % 2) return false
+  return true
+}
+
+/** whether a point is inside a closed path by the even-odd rule over its segments (a ray to the right crossing them) */
+export function interiorOf(segs, x, y) {
+  let c = false
+  for (let i = 0; i + 3 < segs.length; i += 4) {
+    const ax = segs[i], ay = segs[i + 1], bx = segs[i + 2], by = segs[i + 3]
+    if ((ay > y) !== (by > y) && x < ax + ((y - ay) * (bx - ax)) / (by - ay)) c = !c
+  }
+  return c
 }
 
 /** the page's text lines a unit's column is read from: the level glyphs a unit owns (own.mjs's groups), by baseline, a line
