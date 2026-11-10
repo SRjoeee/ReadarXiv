@@ -227,6 +227,23 @@ describe('readRefNames: each reference’s item type and the full name the paper
       [2, { type: 'thm' }],
     ])
   })
+  it('states the language TeX declared where it read the names (babel’s BCP 47 tag, AXT-REFLANG) on every name', () => {
+    const log = [
+      'AXT-REFLANG macro:->pt-BR',
+      'AXT-REF 0 figure',
+      'AXT-REFNAME 0 a macro:->Figura',
+      'AXT-REF 1 section*',
+    ].join('\n')
+    expect([...readRefNames(log)]).toEqual([
+      [0, { type: 'figure', name: 'Figura', lang: 'pt-BR' }],
+      [1, { type: 'section*' }],
+    ])
+    // (no language declared: no babel, or a tag babel does not know)
+    expect(readRefNames('AXT-REF 0 figure\nAXT-REFNAME 0 a macro:->Figure').get(0)).toEqual({
+      type: 'figure',
+      name: 'Figure',
+    })
+  })
   it('states nothing where TeX wrote nothing (a log of before, a paper with no reference)', () => {
     expect(readRefNames('AXT-ALIGN 3 p 1 0.0pt 1 0.0pt 0 0.0pt').size).toBe(0)
   })

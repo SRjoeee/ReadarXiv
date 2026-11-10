@@ -10,10 +10,11 @@
 // reference (white space, a tie or a break alone between them) is a case-insensitive proper prefix of the full name the paper
 // gives the referenced item's type (the element's `name`, read in its marked compile from its own TeX: the label's type and
 // cleveref's, hyperref's or LaTeX's name for it), followed by a full stop, the translator is sent that name instead, in the
-// word's case. A name not stated (a type or a name TeX did not tell), or a word that is no such abbreviation ("Figs.",
-// "Thm."), leaves the text as it is. Only what a translator is sent changes: the unit, the original's text and every reading of
+// word's case, where the language TeX declared for the name (babel's tag) is the one the translator translates from (SOURCE), or
+// none is declared: 2307.16209v1's English text under babel's Brazilian Portuguese names ("Figura") keeps "Fig.". A name not
+// stated (a type or a name TeX did not tell), or a word that is no such abbreviation ("Figs.", "Thm."), leaves the text as it is. Only what a translator is sent changes: the unit, the original's text and every reading of
 // it stay; a row's sentences come back in the unit's own projection.
-import type { Piece, Result, UnitIn } from './contract.ts'
+import { type Piece, type Result, SOURCE, type UnitIn } from './contract.ts'
 import { standInOf } from './wire/text.ts'
 
 /** the word a text ends in, its full stop, then white space alone: [1] the word (a letter, then letters and marks), a word
@@ -36,8 +37,15 @@ function cased(word: string, name: string): string {
 const abbreviates = (word: string, name: string): boolean =>
   word.length < name.length && name.toLowerCase().startsWith(word.toLowerCase())
 
+/** whether a name declared in the language `tag` (BCP 47) is one of the language translated from: its language subtag
+ *  SOURCE's, case aside (RFC 4647's basic filtering: `en` matches `en`, `en-US`); a name declared in no language is taken */
+const ofSource = (tag: string | undefined): boolean =>
+  tag === undefined ||
+  tag.toLowerCase() === SOURCE.toLowerCase() ||
+  tag.toLowerCase().startsWith(`${SOURCE.toLowerCase()}-`)
+
 /** the reference a text piece at `k` is tied to: the next piece past white space alone (an element read as a space or a
- *  break, a text of white space), where it states a name */
+ *  break, a text of white space), where it states a name of the language translated from (or of none declared) */
 function tiedTo(ps: readonly Piece[], k: number): string | null {
   for (let j = k + 1; j < ps.length; j++) {
     const q = ps[j] as Piece
@@ -46,7 +54,7 @@ function tiedTo(ps: readonly Piece[], k: number): string | null {
       return null
     }
     if (q.t !== 'el') return null
-    if (q.name) return q.name
+    if (q.name) return ofSource(q.nameLang) ? q.name : null
     if (standInOf(q.kind) === ' ') continue
     return null
   }

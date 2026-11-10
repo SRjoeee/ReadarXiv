@@ -175,8 +175,11 @@ export function framesOf(
   })
 }
 
-/** a reference's item type and the full name the paper gives it (readRefNames) */
-export type RefName = { type: string; name?: string }
+/** a reference's item type and the full name the paper gives it, with the BCP 47 tag of the language TeX declared where it
+ *  read the name (readRefNames) */
+export type RefName = { type: string; name?: string; lang?: string }
+/** a BCP 47 tag as babel writes one: subtags of letters and digits joined by hyphens */
+const BCP47 = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/
 /** a name as a reference's full name: plain words (a letter first, then letters, marks, an apostrophe or a hyphen, words apart
  *  by one space), at most 40 characters, no full stop: a name that holds one is an abbreviation ("Fig.", cleveref's default),
  *  and one that holds a command or a brace is no plain name (`\scshape Table`) */
@@ -201,7 +204,8 @@ function textOf(written: string): string {
  * and own names, hyperref's \<type>autorefname and LaTeX's \<type>name that is defined, in that order, written once the last
  * page is out). The type is the label's anchor's (hyperref's, and LaTeX's own since 2023: `figure.caption.12`'s `figure`, as
  * hyperref's own \autoref reads it), else cleveref's where it wrote one; the name the first of those that is a full name
- * (FULL_NAME), a babel name macro read through the layout compile's own wrapper (NAME_WRAP). A label TeX knew no type for
+ * (FULL_NAME), a babel name macro read through the layout compile's own wrapper (NAME_WRAP); and on each name the language
+ * TeX declared where it read them (`AXT-REFLANG`, babel's BCP 47 tag of \languagename), none where none is. A label TeX knew no type for
  * states nothing; a type none of whose names is a full one (RevTeX's `section*` anchors), no name
  */
 export function readRefNames(log: string): Map<number, RefName> {
@@ -220,5 +224,8 @@ export function readRefNames(log: string): Map<number, RefName> {
     const name = body === undefined ? '' : textOf(body).trim()
     if (name.length <= 40 && FULL_NAME.test(name)) ref.name = name
   }
+  // (the language the names were read in, once: babel's tag of \languagename there, AXT-REFLANG; on every name)
+  const tag = MEANING.exec(/^AXT-REFLANG (.*)$/m.exec(text)?.[1]?.trimEnd() ?? '')?.[1]?.trim()
+  if (tag && BCP47.test(tag)) for (const r of out.values()) if (r.name !== undefined) r.lang = tag
   return new Map([...out].sort((a, b) => a[0] - b[0]))
 }

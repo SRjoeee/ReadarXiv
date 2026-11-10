@@ -12,6 +12,7 @@ import {
   type Limits,
   type OutPiece,
   type Sentences,
+  SOURCE,
   type Translator,
   type UnitIn,
 } from '../contract.ts'
@@ -152,7 +153,7 @@ export function microsoft(o: MicrosoftOptions): Translator {
     write: (unit) => planMarkers(unit).wire,
     read: readMicrosoft,
     async *send(wires, call, signal) {
-      const query = `from=en&to=${encodeURIComponent(microsoftTarget(call.target))}&isEnterpriseClient=false`
+      const query = `from=${SOURCE}&to=${encodeURIComponent(microsoftTarget(call.target))}&isEnterpriseClient=false`
       let body: string
       try {
         const reply = await o.fetch(`${MICROSOFT_ENDPOINT}?${query}`, {

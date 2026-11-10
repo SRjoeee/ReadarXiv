@@ -4,9 +4,9 @@ import type { Instrument, Owners, PieceClass, SpanClass } from '@readarxiv/engin
 /** a string as today's engine holds it (UTF-8 bytes read latin1) as Unicode */
 export declare function unicodeOf(s: unknown): string
 /** today's flat pieces as nested ones, its run-in labels `must` */
-export declare function contentOf(pieces: unknown[], o?: { kindOf?: (p: unknown) => string; idOfNested?: (u: unknown) => string | null; nameOf?: (p: unknown) => string | undefined }): unknown[]
+export declare function contentOf(pieces: unknown[], o?: { kindOf?: (p: unknown) => string; idOfNested?: (u: unknown) => string | null; nameOf?: (p: unknown) => { name?: string; lang?: string } | undefined }): unknown[]
 /** today's flat pieces as nested ones, its elements' wire facts; no run-in label read yet (marksOf) */
-export declare function piecesOf(pieces: unknown[], o?: { kindOf?: (p: unknown) => string; idOfNested?: (u: unknown) => string | null; nameOf?: (p: unknown) => string | undefined }): unknown[]
+export declare function piecesOf(pieces: unknown[], o?: { kindOf?: (p: unknown) => string; idOfNested?: (u: unknown) => string | null; nameOf?: (p: unknown) => { name?: string; lang?: string } | undefined }): unknown[]
 /** each source unit's text glyphs on B (the owners' ROLE.text of it), in B's stream order, by unit index */
 export declare function textGlyphsOf<G>(doc: { pages: readonly { glyphs: readonly G[] }[] }, owners: readonly (Owners | undefined)[]): Map<number, G[]>
 /** what TeX set for a source unit's groups that their source does not say (marks/faces.ts over its text glyphs on B): a face

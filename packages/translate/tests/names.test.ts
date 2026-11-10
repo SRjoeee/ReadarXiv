@@ -66,6 +66,29 @@ describe('namedOf: the word tied to a reference, an abbreviation of the item’s
     expect(sent(u)).toBe('Figure\uFFFC\uFFFC and Table\uFFFC\uFFFC agree.')
   })
 
+  it('sends the name only where the language TeX declares for it is the one the translator is asked to translate from', () => {
+    const named = (lang?: string): Piece =>
+      lang === undefined
+        ? { t: 'el', id: '2', kind: 'ref', name: 'Figura' }
+        : { t: 'el', id: '2', kind: 'ref', name: 'Figura', nameLang: lang }
+    // (an English text whose babel language is Brazilian Portuguese: its name "Figura" is no word of the English text)
+    expect(namedOf(unit('b', [t('as shown in Fig.'), tie('1'), named('pt-BR')]))).toBeNull()
+    // (a name in English, a region of it or none at all: English is the source; no language declared, the rule as before)
+    expect(
+      sent(unit('e', [t('see Fig.'), tie('1'), { t: 'el', id: '2', kind: 'ref', name: 'Figure', nameLang: 'en-US' }])),
+    ).toBe('see Figure\uFFFC\uFFFC')
+    expect(sent(unit('n', [t('see Fig.'), tie('1'), named()]))).toBe('see Figura\uFFFC\uFFFC')
+    // (a tag compared by its language subtag, case aside: "EN-gb" is English, "eng" is no English tag of BCP 47's)
+    expect(
+      namedOf(
+        unit('g', [t('see Fig.'), tie('1'), { t: 'el', id: '2', kind: 'ref', name: 'Figure', nameLang: 'EN-gb' }]),
+      ),
+    ).not.toBeNull()
+    expect(
+      namedOf(unit('x', [t('see Fig.'), tie('1'), { t: 'el', id: '2', kind: 'ref', name: 'Figure', nameLang: 'eng' }])),
+    ).toBeNull()
+  })
+
   it('never changes the unit it is given (the original)', () => {
     const u = unit('o', [t('in Fig.'), tie('1'), ref('2', 'Figure')])
     const before = JSON.stringify(u)

@@ -82,8 +82,8 @@ const BACKREF_GAP = '\u2002'
 export const contentOf = (pieces, o = {}) => runIns(piecesOf(pieces, o))
 /** today's flat pieces ([open … close] pairs) as nested ones: an open starts a span, a close ends the innermost; a close with no
  *  open wraps what came before it at its level (the group began before the unit), an open left at the end has no close; an
- *  element's wire facts (wireFacts), and a reference's item's full name where the marked compile stated one (`nameOf`: the
- *  engine's readRefNames over marks.mjs refsTex's statements) */
+ *  element's wire facts (wireFacts), and a reference's item's full name where the marked compile stated one, with the language
+ *  TeX declared for it (`nameOf` { name, lang }: the engine's readRefNames over marks.mjs refsTex's statements) */
 export function piecesOf(pieces, { kindOf = () => 'other', idOfNested = () => null, nameOf = () => undefined } = {}) {
   let level = []
   const stack = []
@@ -91,7 +91,7 @@ export function piecesOf(pieces, { kindOf = () => 'other', idOfNested = () => nu
     const id = String(k)
     switch (p.t) {
       case 'text': level.push({ t: 'text', s: unicodeOf(p.s) }); break
-      case 'ph': { const name = nameOf(p); level.push({ t: 'el', id, kind: kindOf(p) ?? 'other', src: unicodeOf(p.src), ...wireFacts(p), ...(name ? { name } : {}) }); break }
+      case 'ph': { const n = nameOf(p); level.push({ t: 'el', id, kind: kindOf(p) ?? 'other', src: unicodeOf(p.src), ...wireFacts(p), ...(n?.name ? { name: n.name, ...(n.lang ? { nameLang: n.lang } : {}) } : {}) }); break }
       case 'nested': level.push({ t: 'unit', id, unit: idOfNested(p.unit) ?? '0'.repeat(64), pre: unicodeOf(p.pre), post: unicodeOf(p.post) }); break
       case 'open': {
         const style = styleOf(unicodeOf(p.src))
@@ -965,7 +965,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   // marks.mjs refsTex, the engine's readRefNames; what a translator is sent for a word tied to it that abbreviates it)
   const refKeys = new Map(refKeysOf(units).map((k, i) => [k, i]))
   const refNames = readRefNames(lastTexLog(log))
-  const nameOf = p => { const k = refKeyOf(p); return k === null ? undefined : refNames.get(refKeys.get(k) ?? -1)?.name }
+  const nameOf = p => { const k = refKeyOf(p); return k === null ? undefined : refNames.get(refKeys.get(k) ?? -1) }
   const ids = []
   const out = []
   const kindOf = elementKindOf

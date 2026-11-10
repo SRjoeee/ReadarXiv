@@ -26,6 +26,7 @@ describe('the references the marked compile asks TeX about', () => {
     expect(tex).toContain('\\axt@rf{0}{fig:a}\\axt@rf{1}{x_1 y}')
     expect(tex).toContain('AXT-REFNAME')
     expect(tex).toContain('enddocument/afterlastpage')
+    expect(tex).toContain('AXT-REFLANG')
     expect(tex.startsWith('\\makeatletter')).toBe(true)
     expect(tex.endsWith('\\makeatother')).toBe(true)
     expect(refsTex([])).toBe('')
@@ -34,7 +35,7 @@ describe('the references the marked compile asks TeX about', () => {
 
 describe('the adapter states a reference’s full name on its element', () => {
   it('names the element TeX stated a name for, and no other', () => {
-    const names = new Map([['fig:a', 'Figure']])
+    const names = new Map([['fig:a', { name: 'Figure', lang: 'en' }]])
     type Ph = { t: string; src: string }
     const nameOf = (p: unknown) => names.get(refKeyOf(p as Ph) ?? '')
     const kindOf = (p: unknown) => {
@@ -45,7 +46,7 @@ describe('the adapter states a reference’s full name on its element', () => {
       kindOf,
       nameOf,
     })
-    expect(content[2]).toEqual({ t: 'el', id: '2', kind: 'ref', src: '\\ref{fig:a}', name: 'Figure' })
+    expect(content[2]).toEqual({ t: 'el', id: '2', kind: 'ref', src: '\\ref{fig:a}', name: 'Figure', nameLang: 'en' })
     expect(content[5]).toEqual({ t: 'el', id: '5', kind: 'eqref', src: '\\eqref{eq:b}' })
     expect(content[1]).not.toHaveProperty('name')
   })

@@ -3312,7 +3312,11 @@ word list and no language's table; the original drawn when translation is off ne
   tie, a space or a break alone between; a word of its own, white space or an opening bracket before it (never the "e." of
   "i.e.") — is a case-insensitive proper prefix of the element's `name`, followed by a full stop
   ("Fig." of "Figure", "Eq." of "Equation", "Sec." of "Section", "Tab." of "Table"), every translator is sent that name instead,
-  in the word's case (a lower-case word the name in lower case, one in capitals the name in capitals). The chain applies it to
+  in the word's case (a lower-case word the name in lower case, one in capitals the name in capitals) — where the language TeX
+  declared for the name is the one every translator translates from (`contract.ts` `SOURCE`, `en`, which each adapter's request
+  names), its language subtag compared (RFC 4647's basic filtering: `en-US` is English), or where none is declared (no babel):
+  2307.16209v1's English text under babel's Brazilian Portuguese names ("Figura", `pt-BR`) keeps its "Fig." (the coordinator's
+  ruling of 2026-11-10). The chain applies it to
   each unit before any translator (`chain.ts` `settle`) and gives a row's sentences back in the unit's own projection (a start
   inside the name at the word's start). `CHAIN_RULES` gains `names`: every row is read again, the stored replies of unchanged
   wires hit (the store key is the wire's bytes).
@@ -3322,7 +3326,9 @@ word list and no language's table; the original drawn when translation is off ne
   and LaTeX's own since 2023, `{num}{page}{title}{anchor}{}`: `figure.caption.12`'s `figure`, `appendix.A`'s `appendix`, as
   hyperref's `\autoref` reads it), else cleveref's `[type]`; then the `\meaning` of cleveref's capitalised and own names,
   hyperref's `\<type>autorefname` and LaTeX's `\<type>name` (a babel name macro read through the layout compile's own
-  wrapper, NAMES_TEX). The first that is plain words with no full stop is the element's
+  wrapper, NAMES_TEX); and, once, the language they are read in: babel's BCP 47 tag of `\languagename` there (its
+  `\bbl@tbcp@<language>`, the locale's `identification.tag.bcp47`, what `\BCPdata{tag.bcp47}` reads), the element's
+  `nameLang`. The first that is plain words with no full stop is the element's
   `name` (format's element piece; not in the unit's id): cleveref's default "Fig." and IEEEtran's `\figurename` "Fig." are
   passed over for hyperref's "Figure". Nothing is set and nothing written to a file; a paper with no reference compiles the
   bytes it did.
@@ -3340,8 +3346,8 @@ word list and no language's table; the original drawn when translation is off ne
   "Sec." to a subsection where hyperref alone names it ("subsection"); RevTeX's sections, whose anchors are `section*` (no
   name: 2610.10492v1's 64); amsmath's `\tag`ged equations (`AMS`, whose name is `\equationautorefname`, a command); a name pdfTeX
   writes with an accent command (`Ecuaci\'on`); a label with no anchor and no cleveref (an older TeX tree without hyperref);
-  IEEEtran without hyperref ("Fig." its only name). A paper whose names are another language's than its text (2307.16209v1's
-  babel Portuguese "Figura") is sent its own name, which Microsoft leaves as it is or transliterates.
+  IEEEtran without hyperref ("Fig." its only name); a paper under polyglossia (no babel tag read: the rule as for no language
+  declared).
   Today's wire (`translate/mt.mjs`) keeps the word: `TRANSLATE_VERSION` stays.
 
 ## 19. The engine's contract

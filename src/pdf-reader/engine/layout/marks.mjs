@@ -1252,7 +1252,10 @@ export function refKeysOf(units) {
  * its first full stop (`figure.caption.12`'s `figure`, `appendix.A`'s `appendix`: what hyperref's own \autoref reads), else
  * cleveref's (its `<key>@cref` label, `[type][…]…`) where it wrote one, as `AXT-REF <i> <type>`; then the
  * meaning of each of cleveref's capitalised and own names for that type, hyperref's \<type>autorefname and LaTeX's \<type>name
- * that is defined, as `AXT-REFNAME <i> <C|c|a|n> <\meaning>` (the engine's readRefNames takes the first full name). Nothing is
+ * that is defined, as `AXT-REFNAME <i> <C|c|a|n> <\meaning>` (the engine's readRefNames takes the first full name); first, once,
+ * the language the names are read in, `AXT-REFLANG <\meaning>` of babel's BCP 47 tag of \languagename there (its
+ * \bbl@tbcp@<language>, the locale's identification.tag.bcp47 that \BCPdata{tag.bcp47} reads: `en`, `en-US`, `pt-BR`; none
+ * without babel). Nothing is
  * expanded but the label's own definitions, nothing set, nothing written to a file: \meaning reads a name whatever it holds. A
  * label TeX has no definition of, or one with neither form (no hyperref, no cleveref), is passed over. One line, its own
  * \makeatletter; '' for a paper with no reference, whose bytes stay as they were
@@ -1268,7 +1271,8 @@ export function refsTex(keys) {
     '\\def\\axt@rfc#1#2\\@nil{\\axt@rfct#1[]\\@nil}\\def\\axt@rfct#1[#2]#3\\@nil{\\def\\axt@rt{#2}}',
     '\\def\\axt@rfh#1#2#3#4#5\\@nil{\\axt@rfa#4.\\@nil}\\def\\axt@rfa#1.#2\\@nil{\\def\\axt@rt{#1}}',
     '\\def\\axt@rfn#1#2#3{\\ifcsname #3\\endcsname\\message{^^JAXT-REFNAME #1 #2 \\expandafter\\meaning\\csname #3\\endcsname^^J}\\fi}',
-    `\\def\\axt@rfall{${keys.map((k, i) => `\\axt@rf{${i}}{${k}}`).join('')}}`,
+    '\\def\\axt@rflang{\\ifdefined\\languagename\\ifcsname bbl@tbcp@\\languagename\\endcsname\\message{^^JAXT-REFLANG \\expandafter\\meaning\\csname bbl@tbcp@\\languagename\\endcsname^^J}\\fi\\fi}',
+    `\\def\\axt@rfall{\\axt@rflang${keys.map((k, i) => `\\axt@rf{${i}}{${k}}`).join('')}}`,
     '\\ifdefined\\AddToHook\\AddToHook{enddocument/afterlastpage}{\\axt@rfall}\\else\\AtEndDocument{\\axt@rfall}\\fi',
     '\\makeatother',
   ].join('')
