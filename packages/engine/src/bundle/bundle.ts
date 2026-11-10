@@ -46,6 +46,8 @@ export interface BundleInput {
   original: Uint8Array
   paper: { id: string; version: number; pages: number }
   made: string
+  /** what PDF.js recovered from while B and A were read (read.ts readPdf), stated in the head where any */
+  recovered?: Head['recovered']
 }
 
 /** each member's state in the bundle: why it stays the original's (PrepWhy), and the groups the add-on could not part */
@@ -359,6 +361,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     parts: partDigests,
     ...(refused.length ? { refused: refused.sort((x, y) => x[0] - y[0]) } : {}),
     ...(outline.length ? { outline } : {}),
+    ...(input.recovered?.length ? { recovered: input.recovered } : {}),
   }
   const { bytes, digest } = write('head', head)
   yield { kind: 'head', bytes, digest, head }

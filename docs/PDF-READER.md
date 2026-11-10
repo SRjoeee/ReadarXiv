@@ -3679,6 +3679,15 @@ extension's compile client (`parked/extension-compile/`).
   every Node: from Node 24 on, `Buffer.allocUnsafe` and what is made of it (`Buffer.concat`, zlib's output) throw a RangeError of
   Node's own words, `Failed to allocate memory`, with the code ERR_MEMORY_ALLOCATION_FAILED, where Node 22 threw V8's `Array buffer
   allocation failed`; `pipeline/memory.mjs` `isMemoryError` reads the code first.
+  PDF.js's worker recovers from a failure inside it in some twenty places and answers the read as whole (a page's list ended
+  where its parse failed, a font read as none): no call of its API fails for it, `stopAtErrors` included (its API settles a
+  page's list with what it read). Its warnings are where it says so, each with its reason as text: the engine's `readPdf`
+  (the back half's reading of A, the instrument's of B) hears them for the document it reads (`warnings.ts`: PDF.js's level
+  raised to its warnings for that document and set back after it, console.warn PDF.js's channel to the watch while it is open
+  and put back). A reason that is a failed allocation (`isMemoryText`, V8's words, the same definition as `isMemoryError`'s)
+  throws one, so the prepare refuses the paper for its memory (2609.19644v1's page 70, read empty at 880 MiB, committed 77
+  objects without it). Any other recovery is stated in the head, optional, as `recovered`: [A or B, its site, its count, its
+  first reason]; none fires on the corpus (the census of 2026-11-10: 88 papers and 2609.19644v1, arXiv's PDF and B).
 
 ### 19.4 The layer API, as the web defines it
 

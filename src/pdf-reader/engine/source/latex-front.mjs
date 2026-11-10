@@ -7,6 +7,7 @@
 // are Uint8Arrays.
 
 // ---------------------------------------------------------------- files and bytes
+import { isMemoryError } from '@readarxiv/engine'
 import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from '../rules/arg-roles.mjs'
 import { symbolText, TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
 import { selectsArgument } from '../rules/tex-kernel.mjs'
@@ -37,8 +38,9 @@ export const latin1Bytes = s => { const b = new Uint8Array(s.length); for (let i
 const utf8Bytes = s => new TextEncoder().encode(s)
 const bytesOf = (s, enc) => (enc === 'utf8' ? utf8Bytes(s) : latin1Bytes(s))
 const UTF8 = new TextDecoder('utf-8', { fatal: true }), UTF8_LAX = new TextDecoder()
-/** whether a source's text (its bytes read latin1) is UTF-8: a file that is never decodes as UTF-8 */
-const isUtf8Text = t => { try { UTF8.decode(latin1Bytes(t)); return true } catch { return false } }
+/** whether a source's text (its bytes read latin1) is UTF-8: a file that is never decodes as UTF-8 (a failed allocation of its
+ *  bytes is the paper's, never a file in another encoding) */
+const isUtf8Text = t => { try { UTF8.decode(latin1Bytes(t)); return true } catch (e) { if (isMemoryError(e)) throw e; return false } }
 /**
  * A file's input encoding as its characters (S2 of 2026-10-24): a unit's text is UTF-8 bytes read latin1 (mt.mjs utf8
  * decodes it), so a file that is not UTF-8 has each of its text pieces turned into UTF-8 by the encoding the main file's
@@ -2449,11 +2451,12 @@ function walk(s, from, to, b, ctx) {
       // 6)" (2610.21547's eleven units, S1 of 2026-10-24)
       if (arg && !macro.then && setsWords(macro)) {
         // (a macro inside its own expansion, or expansions nested past a few levels — a recursive call in a branch TeX never
-        // takes, \\a calling \\b calling \\a —, and any failure of the expansion leave the call one placeholder)
+        // takes, \\a calling \\b calling \\a —, and any failure of the expansion leave the call one placeholder; a failed
+        // allocation is the paper's)
         const expanding = ctx.expanding ?? new Set()
         let text = null
         if (!macro.opt && !expanding.has(name) && expanding.size < EXPANSION_DEPTH) {
-          try { text = expandedText(macro, call.reqs.map(r => s.slice(r.group ? r.start + 1 : r.start, r.group ? r.end - 1 : r.end)), b.file, { ...ctx, expanding: new Set([...expanding, name]) }) } catch { text = null }
+          try { text = expandedText(macro, call.reqs.map(r => s.slice(r.group ? r.start + 1 : r.start, r.group ? r.end - 1 : r.end)), b.file, { ...ctx, expanding: new Set([...expanding, name]) }) } catch (e) { if (isMemoryError(e)) throw e; text = null }
         }
         // (the pair's id spent as the pair's was: the pairs after it keep theirs, and their units their hashes)
         endText(); b.pairId++
@@ -3353,7 +3356,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   const texOrder = entriesLast(units)
   // a source declared in a Latin-1 family encoding: its bytes read as latin1 are already the right characters
   const enc = inputencFrom(mainCmds ?? texCommands(all, scan), all)?.options.split(',').map(x => x.trim()).find(x => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
-  const isUtf8 = t => { try { new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t)); return true } catch { return false } }
+  const isUtf8 = t => { try { new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t)); return true } catch (e) { if (isMemoryError(e)) throw e; return false } }
   const transcode = enc ? new Set([...files].filter(([, t]) => !isUtf8(t)).map(([f]) => f)) : new Set()
   // the units written inside a float, by their index in `units`, rising: a number survives a copy of the units, a clone and JSON
   const inFloat = units.flatMap((u, i) => (ctx.floats.has(u) ? [i] : []))

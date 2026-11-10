@@ -3,10 +3,14 @@
 // refused page, a dropped part) lets one of these through unchanged, so that the service sees a memory failure as one and not
 // as a defect of the paper. The predicate is the web's own (container/src/run/memory.ts isMemoryError), reproduced word for
 // word, so that the child and the service agree on what a memory failure is. Imports nothing: the readers and the writers of
-// the layer's format take it.
+// the layer's format take it. isMemoryText is the same definition for a reason that reaches text only (PDF.js's warnings: a
+// failure its worker recovers from, read by readPdf's watch, warnings.ts), V8's words in one place for both.
 
 /** V8's words for a backing store it could not allocate */
 export const ALLOCATION_FAILED = 'Array buffer allocation failed'
+/** V8's failed allocation as text: its RangeError's toString(), the form in which a failure's reason reaches text (PDF.js's
+ *  wrapping of a worker's error keeps it as `details`; its warnings print `${reason}`) */
+const ALLOCATION_FAILED_TEXT = `RangeError: ${ALLOCATION_FAILED}`
 /** Node's words for one it could not allocate itself, with its code ERR_MEMORY_ALLOCATION_FAILED: from Node 24 on,
  *  Buffer.allocUnsafe and what is made of it (Buffer.allocUnsafeSlow, Buffer.concat, zlib's output) throw a RangeError of these
  *  words where Node 22 threw V8's ALLOCATION_FAILED (measured under RLIMIT_DATA on 22.23, 24.22 and 26.13) */
@@ -26,6 +30,16 @@ export function isMemoryError(e) {
   if (e.name !== 'UnknownErrorException') return false
   // (the wrapping keeps an error's words and its toString(), not its code: V8's is a RangeError, Node's own an Error on Node 22
   // and a RangeError from Node 24 on)
-  if (e.message === ALLOCATION_FAILED) return e.details === `RangeError: ${ALLOCATION_FAILED}`
+  if (e.message === ALLOCATION_FAILED) return isMemoryText(e.details)
   return e.message === NODE_ALLOCATION_FAILED && (e.details === `RangeError: ${NODE_ALLOCATION_FAILED}` || e.details === `Error: ${NODE_ALLOCATION_FAILED}`)
+}
+
+/**
+ * Whether `reason`, a failure's reason as text, is a failed allocation: exactly V8's (its RangeError's toString(), the words
+ * isMemoryError takes in PDF.js's wrapping of one). Node's own failure is told by its code, which no text carries, so none of
+ * its words is one here; nor V8's words in any other error's text (`FormatError: Array buffer allocation failed`), nor any text
+ * around them
+ */
+export function isMemoryText(reason) {
+  return reason === ALLOCATION_FAILED_TEXT
 }
