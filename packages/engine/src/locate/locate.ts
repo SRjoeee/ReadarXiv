@@ -187,7 +187,7 @@ export interface Located {
     /** the units made on A by today's rule (ink.ts), where A's pages were given */
     made?: InkStats
     /** the source units kept as artefacts (Rule 1, PDF-READER §18.22), and whether the paper's body face is one of one pitch */
-    artefacts?: { units: number; bodyFixed: boolean; groups?: number }
+    artefacts?: { units: number; bodyFixed: boolean; groups?: number; read?: number }
   }
 }
 
@@ -1102,6 +1102,15 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       if (placements.get(mem.unit) !== 1) continue
       const unit = units[mem.unit]!
       if (unit.kept || unit.fixed || !unit.content.some((p) => p.t === 'span')) continue
+      // (a unit no glyph of whose text is set in a face of one pitch holds no such group: its letters are not aligned)
+      if (
+        !mem.text.some((a) => {
+          const g = gA(a)
+          return isInk(g) && /\S/u.test(g.u) && fixedFace(g.font)
+        })
+      )
+        continue
+      stats.artefacts.read = (stats.artefacts.read ?? 0) + 1
       const made = pitchGroupsOf(unit, mem)
       if (!made.length) continue
       const at = new Map(made.map((x) => [x.span.id, x]))
