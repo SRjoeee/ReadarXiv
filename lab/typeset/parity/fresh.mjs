@@ -184,12 +184,14 @@ export function freshTranslator(dir = FRESH_ROWS, { fill = false, fetch: f } = {
  */
 export async function freshRowsOf(units, target, { dir = FRESH_ROWS, translator } = {}) {
   const t = translator ?? freshTranslator(dir)
+  // (the wires this call asks: a translator shared over a run counts its whole run's)
+  const before = (t.asked ?? []).reduce((a, b) => a + b, 0)
   const rows = new Map()
   const ins = [...new Map(units.map((u) => [u.id, u])).values()].map(unitInOf)
   for await (const r of chainOf({ store: folderStore(dir) }).translate(ins, target, { translators: [t] })) rows.set(r.id, r)
   // (unavailable: the cache holds no reply of its wire, a run not told to fill, or the endpoint did not answer the fill)
   const missing = [...rows.values()].filter((r) => !r.ok && r.why.kind === 'unavailable').map((r) => r.id)
-  return { rows, missing, asked: (t.asked ?? []).reduce((a, b) => a + b, 0) }
+  return { rows, missing, asked: (t.asked ?? []).reduce((a, b) => a + b, 0) - before }
 }
 
 /**
