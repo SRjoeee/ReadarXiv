@@ -3835,10 +3835,12 @@ takes one capital before ".n" ("V.2") and a roman numeral with nothing after it:
   glyph, the name first (`whole`, as a float's label): a swapped head (`\swapnumbers`, "3.2 Theorem"), or one with glyphs no
   part holds, keeps the original's rather than lose its number.
 - **Over the 88** (r14's parts, every member of kind theorem or heading whose label begins with a name the paper declares or
-  the zh table holds; rootcause/batch6.md): 566 heads in 34 papers; relabelled before 521, after 529: the 5 of 2610.21312v1 and
+  the zh table holds; rootcause/batch6.md): 566 heads in 34 papers; relabelled before 522, after 530 (stage 1a f12 against r14: exactly these 8 heads change their relabel, every other drawn alike): the 5 of 2610.21312v1 and
   the 3 of 2610.21765v1 (which today's production draws: its characters spell "Definition"). Not by this rule: 2610.21026v1's
   seven "Assumption" (`\newtheorem{assumption}{\protect\assumptionname}`: a name printed through a macro is no name unit of the
-  paper's, and the table has none), and babel's "Proof." (the names path's, by design).
+  paper's, and the table has none), and babel's "Proof." (the names path's, by design). The same reading moves 24 other labels'
+  parts, no relabel: ten run-in paragraph labels now read with their space ("Index Terms", SIAM's "Key words"), and fourteen
+  appendix headings' "Appendix A" now name and letter (2610.21201v1, 2610.30875v1), which no table names either way.
 
 ### 18.28 etoolbox's conditionals are read as TeX's own (2026-11-11)
 
