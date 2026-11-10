@@ -11,8 +11,9 @@ import { hangOf } from '../breaker/break.types.ts'
 import type { FitBlock } from '../fit/types.ts'
 import type { FillLaid } from '../shared/fill-page.ts'
 import { relay } from '../shared/relay.ts'
+import { inkEndOf } from '../shared/share.ts'
 import { lineRoom, lineShift, type Row, type RowLine, rowStart } from '../shared/row-start.ts'
-import { shareOf } from '../shared/share.ts'
+import { type Rect, rectKey } from '../util.ts'
 import type { Json, LedgerSlot, RuleParams } from '../types.ts'
 import { layMember, type MemberLay, type Prepared } from './member.ts'
 import { fin, Trace } from './trace.ts'
@@ -112,75 +113,173 @@ function lineAt(members: readonly FlowMember[], i: number): number {
 }
 
 /**
- * A line of TeX's its members share whole, set centred or flush right, laid as one run (the owner's: a translated author
+ * A paragraph of TeX's its members fill whole, set centred or flush right, laid as one run (the owner's: a translated author
  * line reflows as one line, its names, marks and separators run together, set as TeX set that line). Each member laid by
  * itself, a name stood centred on its own original's middle: the translations, shorter, left a hole before each (2610.21106v1
- * p1, amsart's "NI XIANG AND YUNI XIONG", 36 pt where TeX set 3.3). TeX centred the line as a whole: an hbox of its content
- * at its natural width, then placed. So here: the members laid as a run from the room's start (the first at it, each after
- * the one before from its ink's end at TeX's separation, S.rowStart, every one ragged to the room's end), its extent read off
- * the lay (the first one's start to the last one's end, a closing mark's blank half that hangs aside, as a centred line's
- * placing has it), then laid again from where that run stands centred on the line's middle, or ends at its end. The room
- * holds the run's width either way, so the second lay is the first one moved. Null, the members laid as before, where the run
- * is not one line: a member not laid, laid on more lines than its one, or not laid from the one before (a label carried with
- * its line, U.decor's)
+ * p1, amsart's "NI XIANG AND YUNI XIONG", 36 pt where TeX set 3.3; 2611.00342v1 p1, IJCAI's eleven names over three lines, a
+ * hole before each comma, a name broken over two lines, a name's marks alone on a third). TeX set the paragraph as a whole:
+ * its lines broken, each an hbox of its content at its natural width, then placed. So here: the members laid one after the
+ * other over the paragraph's lines (TeX's rows, each its room: as wide as the run's members' lines may take, centred on the
+ * row's middle or ending at its end), the first from its room's start, each after the one before from its ink's end at TeX's
+ * separation, every one ragged to its room's end and on to the rows under it (a name that no longer fits on a row goes on
+ * on the next, as TeX breaks a paragraph); each row's extent read off the lay (its first item's start to its last ink's end, a
+ * closing mark's blank half that hangs aside, as a centred line's placing has it), then laid again with each row moved by
+ * what stands it centred on TeX's row's middle, or ending at its end. Each row keeps its width either way, so the second lay
+ * is the first one moved, row by row. Null, the members laid as before, where the run is not laid so: a member not laid, or
+ * ending on no row of the paragraph
  */
 function layLine(
   row: readonly FlowMember[],
   layOne: (m: FlowMember, before: FlowLay | undefined, noOver: boolean) => FlowLay,
 ): FlowLay[] | null {
   const line = row[0]!.line!
-  const [lo, hi] = lineRoom(line, line.left, row.at(-1)!.line!.right)
-  // (each member's line ragged to the room's end; the first from `start`, each after it from where the one before ends)
-  const asRun = (start: number): FlowMember[] =>
-    row.map((m, k) => {
-      const b0 = m.blocks[0]!
-      const b: FitBlock = {
-        ...b0,
-        centred: false,
-        flush: 'left',
-        measures: null,
-        indent: 0,
-        x1: hi,
-        ...(k === 0 ? { x0: lo, start } : { x0: b0.rects[0]![1]! }),
-      }
-      return { ...m, blocks: [b, ...m.blocks.slice(1)] }
-    })
-  const lay = (ms: FlowMember[]): FlowLay[] => {
-    const o: FlowLay[] = []
-    ms.forEach((m, k) => {
-      o.push(layOne(m, o[k - 1], false))
-      settleBack(o, ms, k, layOne)
-    })
-    return o
+  const R = line.rows
+  const left = Math.min(...row.map((m) => m.line!.left)),
+    right = Math.max(...row.map((m) => m.line!.right))
+  const rooms = R.map((r) => lineRoom(line.align, r, left, right))
+  // (TeX's separation before a member: from the ink's end of the one before to its first glyph, its label's where that stands
+  // on the row, S.rowStart's)
+  const gapOf = (m: FlowMember) => {
+    const rs = m.rowStart!
+    return Math.max(0, (rs.ownLabel ? rs.ownLabel[2]! : m.blocks[0]!.rects[0]![1]!) - rs.row.x1)
   }
-  // (the run's extent: its first member's start to its last one's end, each laid on its one line, each after the first from
-  // the one before)
-  const extent = (o: FlowLay[]): [number, number] | null => {
-    const ls = o.map((x) => (x.lay.state === 'laid' ? x.lay.lay.layout : null))
-    if (o.some((x, k) => k > 0 && x.ledBy === undefined) || ls.some((L) => L?.lines.length !== 1)) return null
-    const a = ls[0]!.lines[0]!,
-      L = ls.at(-1)!,
-      z = L.lines[0]!
-    return [a.x0, z.x0 + z.used! - hangOf(z.items.at(-1), L.state.compress) * L.f]
-  }
-  const first = extent(lay(asRun(lo)))
-  if (!first) return null
-  const run = lay(asRun(lo + lineShift(line, first[0], first[1])))
-  if (!extent(run)) return null
-  // (the run's end held as the run laid it: the page's fill sets none of the run's members further right, the last one as no
-  // member laid before another on a row (S.share, keepsShare); grown by its tracking, the last name moved the run's end and the
-  // line off where TeX set it, 2610.10069v1 p1's third name 5.7 pt, its line 3.2 pt right of TeX's middle)
-  const z = run.at(-1)!.lay
-  if (z.state === 'laid' && !z.lay.share) {
-    const b = z.lay.blocks[0]!
-    z.lay.share = shareOf(
-      z.lay.layout,
-      z.lay.blocks,
-      { page: b.page, baseline: b.B[0]!, size: b.sizes?.[0] ?? z.lay.s },
-      z.lay.P.measure,
+  // (the room under the paragraph's last line a translation may borrow: its last member's, TeX's facts)
+  const free = row.at(-1)!.blocks.at(-1)!.free
+  // (a member's block: the paragraph's lines from TeX's `r`th on, each its room moved by `shift`, its first from `start`, on the
+  // baseline the line before it there was laid at where that is not TeX's, `startY`: a CJK line TeX's \lineskip rule set lower)
+  const blockOf = (
+    m: FlowMember,
+    r: number,
+    start: number,
+    shift: readonly number[],
+    startY: number | undefined,
+  ): FitBlock => {
+    const b0 = m.blocks[0]!,
+      rs = R.slice(r)
+    const below = b0.B[0]! - b0.rects[0]![2]!,
+      above = b0.rects[0]![4]! - b0.B[0]!
+    const rects = rs.map(
+      (w, k) =>
+        [
+          w.page,
+          rooms[r + k]![0] + shift[r + k]!,
+          w.baseline - below,
+          rooms[r + k]![1] + shift[r + k]!,
+          w.baseline + above,
+        ] as Rect,
     )
+    const B = rs.map((w) => w.baseline)
+    const pitch = R.length > 1 ? (R[0]!.baseline - R.at(-1)!.baseline) / (R.length - 1) : b0.pitch
+    return {
+      page: rs[0]!.page,
+      rects,
+      x0: Math.min(...rects.map((q) => q[1])),
+      x1: Math.max(...rects.map((q) => q[3])),
+      top: rects[0]![4],
+      bottom: rects.at(-1)![2],
+      h: rects[0]![4] - rects.at(-1)![2],
+      pitch,
+      pitch0: R.length > 1 ? pitch : b0.pitch0,
+      indent: 0,
+      centred: false,
+      flush: 'left',
+      // (each line its own measure: its room, moved)
+      measures: new Map(rects.map((q) => [rectKey(q), [q[1], q[3]] as [number, number]])),
+      after: b0.after,
+      B,
+      G: B,
+      exact: B.map(() => true),
+      sizes: B.map(() => b0.sizes[0] ?? m.s),
+      free,
+      flow: b0.flow,
+      start,
+      ...(startY !== undefined ? { startY } : {}),
+    }
   }
-  return run
+  const last = R.at(-1)!
+  // (a paragraph of several lines laid on TeX's lines, at its pitch: each member's own fit set its own leading, a CJK target's
+  // looser than TeX's, and the next member, laid from where it ended, stood on no line of the paragraph's; one line, any)
+  const fixed = R.length > 1 ? { leadBase: 1, leadFloor: 1 } : null
+  // (the run laid: each member, the paragraph's lines as laid (their baselines, top down: the i-th stands for TeX's i-th), each
+  // member's lines among them, and each line's extent, its first item's start to its last ink's end, a closing mark's blank half
+  // that hangs aside, as a centred line's placing has it)
+  // (each member broken only at its own spaces where a line holds it, as TeX broke the paragraph between words: its tokens glued
+  // one to the next but at a space, and after the label it carries, the separator TeX set before it (IJCAI's \and's comma),
+  // which closes the line before where the member goes on to the next. A CJK name holds no space: it goes on whole, where cut
+  // between its characters by the fit, a name of three characters stood over two lines, two and one (2611.00342v1's "Woohyeon Kwon" on staging); one longer than a line is cut by the breaker as before)
+  const tokensOf = (m: FlowMember, k: number) => {
+    const t = m.tokens
+    const lead = k > 0 && m.rowStart?.carried && t[0]?.crop ? 1 : 0
+    return Object.assign(
+      t.map((x, q) => (q <= lead || x.space || x.glue ? x : { ...x, glue: true })),
+      { base: (t as { base?: unknown }).base },
+    ) as typeof t
+  }
+  const lay = (shift: readonly number[]) => {
+    const o: FlowLay[] = [],
+      ys: number[] = [],
+      rowsOf: number[][] = [],
+      ext: [number, number][] = []
+    let x = rooms[0]![0] + shift[0]!
+    for (const [k, m] of row.entries()) {
+      const r = k === 0 ? 0 : ys.length - 1
+      const y = ys[r]
+      const b = blockOf(
+        m,
+        r,
+        k === 0 ? x : x + gapOf(m),
+        shift,
+        y !== undefined && Math.abs(y - R[r]!.baseline) >= 0.05 ? y : undefined,
+      )
+      const got = layOne(
+        {
+          ...m,
+          ...(fixed ? { P: { ...m.P, ...fixed } } : {}),
+          tokens: tokensOf(m, k),
+          blocks: [b],
+          rowStart: undefined,
+          kept: null,
+          follower: null,
+          shareRow: { page: last.page, baseline: last.baseline, size: b.sizes[0]! },
+        },
+        o[k - 1],
+        true,
+      )
+      if (got.lay.state !== 'laid') return null
+      const L = got.lay.lay.layout
+      if (!L.lines.length) return null
+      const rs: number[] = []
+      for (const l of L.lines) {
+        let i = ys.findIndex((v) => Math.abs(v - l.baseline) < 0.05)
+        if (i < 0) {
+          if (l.page !== last.page || (ys.length && l.baseline > ys.at(-1)! - 0.05) || ys.length >= R.length)
+            return null
+          ys.push(l.baseline)
+          i = ys.length - 1
+        }
+        if (i < r) return null
+        rs.push(i)
+        const end = l.x0 + l.used! - hangOf(l.items.at(-1), L.state.compress) * L.f,
+          e = ext[i]
+        ext[i] = e ? [Math.min(e[0], l.x0), Math.max(e[1], end)] : [l.x0, end]
+      }
+      x = inkEndOf(L.lines.at(-1)!, L, m.P.measure)
+      rowsOf.push(rs)
+      o.push(k ? { ...got, ledBy: row[k - 1]!.ord } : got)
+    }
+    return { o, ys, rowsOf, ext }
+  }
+  const first = lay(R.map(() => 0))
+  if (!first) return null
+  // (each line moved to stand as TeX set the paragraph's line it stands for: centred on its middle, or ending at its end)
+  const shift = R.map((w, i) => {
+    const e = first.ext[i]
+    return e ? lineShift(line.align, w, e[0], e[1]) : 0
+  })
+  const run = lay(shift)
+  if (!run || run.ys.join() !== first.ys.join() || run.rowsOf.some((rs, k) => rs.join() !== first.rowsOf[k]!.join()))
+    return null
+  return run.o
 }
 
 /** F9 S.relay (settleLeadOf RUN:2550-2558, relay RUN:2565): where the member before member j was laid over j's row and j is
