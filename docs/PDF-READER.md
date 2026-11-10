@@ -5979,6 +5979,19 @@ lines) follows it, the original's with it off, translated with it on (the author
   the source's, the entries, the paper's names; nothing is announced twice, and no contract between the host's children changes
   but the `.bbl` handed to the one that opens the paper again (the web's prepare: the hand-off's `bbl`). The host decides the
   paper's TeX Live tree before the pass, so that the entries are the `.bbl` of the tree that compiles it. Measured: below.
+- **A `\bibliography` inside a group is read where TeX reads it** (`source/latex-front.mjs` `bibliographiesIn`). The walk reads
+  every group next to a command the role table does not know as that command's arguments, kept whole as one placeholder (some
+  prose stays untranslated, nothing breaks), and never met a `\bibliography` inside one: 2608.06007v1's
+  `\balance{ \bibliographystyle{unsrt} \bibliography{ref} }` (balance.sty's `\balance` takes no argument, the group is TeX's)
+  named no bibliography, so BibTeX made no `.bbl`, and 2610.37818v1's `{ \small … \bibliography{main} }`, read as a fourth
+  argument of the `\iftoggle{…}{…}{}` before it, never visited its shipped one. Their printed entries, text no unit owns in the
+  references' zone with no entry number, were kept blocks (§17.1, the owner's ruling of 2026-10-30: a bibliography the front end
+  did not cut into entries), never translated: the References toggle reached nothing there (round 8: 7 blocks over 06007's pp. 15-18, 4 in
+  37818). Such a call's `\bibliography`, outside comments, is now read as a bare one is: its names recorded, the job's `.bbl`
+  visited there, the paragraph before ended; the call is then no unit's, as `\bibliography`'s own source is none, and nothing
+  of ours is written in its groups (the entries are the `.bbl`'s units). Not the whole group walked: our marks would go into an
+  argument whose use the walk cannot know. Over the 88 papers the front end changes these two alone: 06007's 88 entries and
+  37818's 40, units of kind `reference` under the toggle; the 4 biblatex papers' 223 entries were units already.
 - **A biblatex bibliography: one unit an entry, of kind `inkreferences`** (`marks.mjs` POINTS_TEX, `ledger.mjs`, `ink-units.mjs`,
   2610.35877v1 on staging: its entries translated with the references off, its heading drawn into the first entry). biblatex
   prints its entries from biber's fields (`\printbibliography`), no TeX of the source the front end could mark, and they were
