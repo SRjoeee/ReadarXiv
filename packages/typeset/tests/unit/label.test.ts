@@ -32,7 +32,7 @@ describe('U.label', () => {
     const one = (ch: string, x0: number): Glyph => ({ ...glyphs(ch, x0)[0]!, ch, x1: x0 + 5 * ch.length - 0.1 })
     expect(
       headLabelInTarget(
-        { name: one('Theorem', 72), num: one('2', 112), punct: one('.', 117) },
+        { name: one('Theorem', 72), num: one('2', 112), punct: one('.', 117), whole: true },
         { Theorem: 'Satz' },
         null,
       ),
@@ -44,10 +44,12 @@ describe('U.label', () => {
       ],
       open: false,
     })
-    expect(headLabelInTarget({ name: one('Claim', 72) }, {}, new Map([['Claim', 'Behauptung']]))?.text).toBe(
-      'Behauptung',
-    )
-    expect(headLabelInTarget({ name: one('Proof', 72), punct: one('.', 97) }, { Proof: 'Beweis' }, null)).toBeNull()
+    expect(
+      headLabelInTarget({ name: one('Claim', 72), whole: true }, {}, new Map([['Claim', 'Behauptung']]))?.text,
+    ).toBe('Behauptung')
+    expect(
+      headLabelInTarget({ name: one('Proof', 72), punct: one('.', 97), whole: true }, { Proof: 'Beweis' }, null),
+    ).toBeNull()
   })
   it('relabels a theorem-like head from its parts as the part states them, whatever its number’s form', () => {
     // (a part's Label.name, num and punct, each one glyph of its ink: 2610.21312v1's IEEEtran heads numbered within \Roman
@@ -69,10 +71,11 @@ describe('U.label', () => {
       words: null,
       captions: null,
     }
-    const head = (name: string, num: string | null, punct: string | null) => ({
+    const head = (name: string, num: string | null, punct: string | null, whole = true) => ({
       name: part(name, 49, 100),
       ...(num ? { num: part(num, 104, 117) } : {}),
       ...(punct ? { punct: part(punct, punct === '(' ? 121 : 117, 124) } : {}),
+      whole,
     })
     const drawn = (h: ReturnType<typeof head>) => label({ ...base, head: h, heads: de, names: null }).label?.drawn
     expect(drawn(head('Corollary', 'VI.2', '('))).toBe('Korollar VI.2 (')
@@ -82,6 +85,8 @@ describe('U.label', () => {
     expect(drawn(head('Key Lemma', '2', '.'))).toBe('Hauptlemma 2.')
     // (a name no table holds, nor the paper's name units: the original's; a babel name's head is the names path's)
     expect(drawn(head('Assumption', '1', '.'))).toBeUndefined()
+    // (parts that do not hold the label's every glyph, the name first: a swapped head, "3.2 Theorem", keeps the original's)
+    expect(drawn(head('Corollary', null, '.', false))).toBeUndefined()
     expect(label({ ...base, head: head('Proof', null, '.'), heads: { Proof: 'Beweis' }, names: null }).head).toBeNull()
     // (the paper's own name unit names it where no table does)
     expect(

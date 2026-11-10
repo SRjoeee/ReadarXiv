@@ -40,8 +40,10 @@ export type UnitLabel = {
 }
 export type HeadLabel = { text: string; parts: LabelPart[]; open: boolean; chars: readonly Glyph[] }
 /** a theorem-like head's parts as its part states them (Label.name, num, punct: amsthm's \thmname, \thmnumber and the
- *  punctuation after them), each one glyph of its ink */
-export type HeadParts = { name?: Glyph; num?: Glyph; punct?: Glyph }
+ *  punctuation after them), each one glyph of its ink; `whole`, whether they hold the label's every glyph, from its ink's
+ *  start (the name first) to its end, its own 1/100 grid: a swapped head (amsthm's \swapnumbers, "3.2 Theorem") or one
+ *  with glyphs no part holds is no head the rule can name, and keeps the original's (FloatLabel.whole's test) */
+export type HeadParts = { name?: Glyph; num?: Glyph; punct?: Glyph; whole: boolean }
 
 export type LabelInput = {
   label: UnitLabel | undefined
@@ -148,7 +150,7 @@ export function headLabelInTarget(
   names: LabelInput['names'],
 ): Omit<HeadLabel, 'chars'> | null {
   const chars = [head.name, head.num, head.punct].filter((c): c is Glyph => !!c)
-  if (!head.name || BABEL_HEADS.test(spacedText(chars))) return null
+  if (!head.name || !head.whole || BABEL_HEADS.test(spacedText(chars))) return null
   const english = head.name.ch.replace(/\s+/g, ' ').trim()
   if (!/^\p{L}/u.test(english)) return null
   // (its punctuation as TeX set it, a space before it where it stands a fifth of its size apart: "Definition 5.1 (")

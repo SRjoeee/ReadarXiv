@@ -23,7 +23,8 @@ type Out = {
   label?: UnitLabel
 }
 
-/** today's head characters (U.label:in) in the parts the prepare states for them (packages/engine locate/facts.ts labelParts):
+/** today's head characters (U.label:in) in the parts the prepare states for them (packages/engine locate/facts.ts labelParts),
+ *  which hold its every glyph, its name first (`whole`):
  *  its marks at its end the punctuation, its last word the number where a counter's (a digit in it, a roman numeral, a letter
  *  alone), the words before it the name; each part one glyph of its characters, in its first character's style */
 function partsOf(cs: readonly Glyph[] | null): HeadParts | null {
@@ -42,7 +43,7 @@ function partsOf(cs: readonly Glyph[] | null): HeadParts | null {
   const name = one(t.slice(0, n)),
     num = one(t.slice(n, e)),
     punct = one(t.slice(e))
-  return name ? { name, ...(num ? { num } : {}), ...(punct ? { punct } : {}) } : null
+  return name ? { name, ...(num ? { num } : {}), ...(punct ? { punct } : {}), whole: true } : null
 }
 
 /** a label as compared: its glyphs by their characters */

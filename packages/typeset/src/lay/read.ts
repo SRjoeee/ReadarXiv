@@ -413,16 +413,20 @@ function labelOf(m: Placed, designs: PaperReading['designs']): UnitLabel | undef
 }
 
 /** a theorem-like head's parts as U.label names it from them: Label.name, num and punct, each one glyph of its ink in the
- *  label's style; null where the part states no name (a part made before its parts were stated, a label of no word) */
+ *  label's style, and whether they hold its every glyph; null where the part states no name (a part made before its parts
+ *  were stated, a label of no word) */
 function headOf(m: Placed, designs: PaperReading['designs']): HeadParts | null {
   const lb = m.label
   if (!lb?.name) return null
   const st = { ...tstyleOf(lb.style, designs), ...(lb.style.fill ? { fill: lb.style.fill } : {}) }
   const glyph = ([ch, ink]: [string, number[]]): Glyph => ({ ch, x0: ink[1]!, x1: ink[3]!, size: lb.style.size, st })
+  // (whether its parts hold its every glyph, the name first: from its ink's start to its end, its own 1/100 grid)
+  const whole = lb.name[1][1] <= lb.ink[1] + 0.01 && (lb.punct ?? lb.num ?? lb.name)[1][3] >= lb.ink[3] - 0.01
   return {
     name: glyph(lb.name),
     ...(lb.num ? { num: glyph(lb.num) } : {}),
     ...(lb.punct ? { punct: glyph(lb.punct) } : {}),
+    whole,
   }
 }
 
