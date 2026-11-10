@@ -55,8 +55,10 @@ export interface FigureText {
   /** an item's marker at its start (a dash, a bullet, "(b)", "1.", "A."): its label, the original's ink where it stands, no
    *  text of it (F3) */
   label: number[]
-  /** a paragraph of two lines or more (F3), and whether its block is justified; null a line alone */
-  para: { justified: boolean } | null
+  /** a paragraph of two lines or more (F3): whether its block is justified, and the evidence its lines are joined by, `strong`
+   *  (a join at TeX's hyphen or a justified line's) or `ragged` (three ragged lines or more and no stronger join); null a line
+   *  alone */
+  para: { justified: boolean; by: 'strong' | 'ragged' } | null
   /** glyphs no run held that it takes (a comma between two addresses, a digit): its text's */
   claimed: number[]
   /** a doubled copy of its glyphs (a glyph of one of its characters over one of them): hidden with its text */
@@ -202,7 +204,18 @@ export function figureLinesOf(
   for (const { p, glyphs, boxes, runOf, lines } of built) {
     // ---- each line read: its glyphs' roles, M (a formula's), F (a face of one pitch) or T, in its order
     const reads = lines.map((l) => lineRead(l, glyphs, pitch, math))
-    const itemsOf = (ks: readonly number[]) => ks.flatMap((k) => fig.met.get(k)?.items ?? [])
+    // (the ink its runs met, each item once: a frame or a tone two runs of one text met is one, judged once)
+    const itemsOf = (ks: readonly number[]) => {
+      const seen = new Set<string>()
+      return ks
+        .flatMap((k) => fig.met.get(k)?.items ?? [])
+        .filter((it) => {
+          const key = 'g' in it ? `g${it.g}` : `b${it.b}${it.ground ? 't' : ''}`
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+    }
     const underOf = (ks: readonly number[]) =>
       ks.reduce<number | null>((u, k) => {
         const x = fig.met.get(k)?.under ?? fig.units[k]!.under ?? null
@@ -219,7 +232,7 @@ export function figureLinesOf(
         order: [],
         els: [],
         label: para.lines[0]!.read.marker,
-        para: { justified: para.justified },
+        para: { justified: para.justified, by: para.by },
         claimed: para.lines.flatMap((x) => x.read.gs.filter((g) => x.l.free.has(g))),
         copies: [],
         textBoxes: [],
@@ -622,7 +635,13 @@ function figureParas(
   boxes: readonly number[],
   pitch: (g: G) => boolean,
   math: Formulas,
-): { lines: ProseLine[]; ends: ('space' | 'join' | 'drop')[]; justified: boolean; of: number[] }[] {
+): {
+  lines: ProseLine[]
+  ends: ('space' | 'join' | 'drop')[]
+  justified: boolean
+  by: 'strong' | 'ragged'
+  of: number[]
+}[] {
   const prose = (r: Read) => r.kind === 'mixed' || r.kind === 'plain'
   // (the fragments bridged: two lines of prose on one baseline, the second right of the first; a row of prose within two bands
   // over or under them has ink across the gap between them, and none has a gap of its own there, ink on both sides and none
@@ -690,6 +709,7 @@ function figureParas(
     lines: para.lines.map((k) => live[k]!.x),
     ends: para.ev.map((e) => (e === 'hyphen-drop' ? 'drop' : e === 'hyphen-join' ? 'join' : 'space')),
     justified: para.justified,
+    by: para.ev.some((e) => e !== 'ragged') ? ('strong' as const) : ('ragged' as const),
     of: para.lines.flatMap((k) => live[k]!.of),
   }))
 }
@@ -978,9 +998,10 @@ function fillsJoined(items: readonly TodayMet[], textGs: readonly number[], glyp
   return [...out, ...joined.map(({ lo: _lo, hi: _hi, ...m }) => m)]
 }
 
-/** whether a stretch of a text's glyphs (`idx`, contiguous places in `gs`, its line order) is words whole: it holds a letter or
- *  a digit, and the glyph before it and the glyph after it stand a word space apart from it (SPACE_GAP of their size) or are no
- *  letter or digit, or are none */
+/** whether a stretch of a text's glyphs (`idx`, contiguous places in `gs`, its lines' order) is words whole: it holds a letter
+ *  or a digit, and the glyph before it and the glyph after it stand a word space apart from it (SPACE_GAP of their size), or on
+ *  another line (a paragraph's line break, F3: a baseline half a size away or more, past any script's), or are no letter or
+ *  digit, or are none */
 function wordBounded(gs: readonly number[], idx: readonly number[], glyphs: readonly G[]): boolean {
   const word = /[\p{L}\p{N}]/u
   const side = (a: number | undefined, b: number | undefined, after: boolean) => {
@@ -988,7 +1009,11 @@ function wordBounded(gs: readonly number[], idx: readonly number[], glyphs: read
     const x = glyphs[a]!,
       y = glyphs[b]!
     const [l, r] = after ? [y, x] : [x, y]
-    return r.x0 - l.x1 >= SPACE_GAP * Math.min(l.size, r.size) || !word.test(x.u)
+    return (
+      Math.abs(x.y - y.y) >= 0.5 * Math.max(x.size, y.size) ||
+      r.x0 - l.x1 >= SPACE_GAP * Math.min(l.size, r.size) ||
+      !word.test(x.u)
+    )
   }
   return (
     idx.some((i) => word.test(glyphs[gs[i]!]!.u)) &&

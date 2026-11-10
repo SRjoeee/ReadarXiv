@@ -561,7 +561,7 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     expect(t!.ks).toEqual([0, 1, 2])
     expect(t!.order.map((o) => (o.t === 'br' ? o.end : o.t))).toEqual(['text', 'space', 'text', 'space', 'text'])
     expect(t!.why).toBeNull()
-    expect(t!.para).toEqual({ justified: false })
+    expect(t!.para).toEqual({ justified: false, by: 'ragged' })
   })
   it('joins two lines at TeX’s hyphen, and leaves two ragged lines alone as they were', () => {
     const hyphen = pageOf([body('all of the foun-'), body('dation models')])
@@ -649,5 +649,46 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     expect(t!.ks).toEqual([0, 1, 2])
     expect(t!.why).toBeNull()
     expect(t!.els.map((e) => [e.kind, e.boxes])).toEqual([['cite', [0]]])
+  })
+  it('reads a frame its paragraph’s runs each met once: its box on its element once', () => {
+    const { page, fig } = pageOf([
+      body('the quick brown fox jumps over'),
+      body('lazy dogs while Garza et al. run'),
+      body('away from it'),
+    ])
+    const G = page.glyphs as Glyph[]
+    const at = G.findIndex((g) => g.u === 'G')
+    const frame = rect(G[at]!.x0 - 1, 683, G[at + 11]!.x1 + 1, 695)
+    for (const k of [0, 1, 2]) {
+      fig.units[k]!.why = 'crowded'
+      fig.met.set(k, { items: [boxMet(0, frame)], under: null })
+    }
+    const [t] = figureLinesOf([page], fig, () => false, null)
+    expect(t!.why).toBeNull()
+    expect(t!.els.map((e) => [e.kind, e.boxes])).toEqual([['cite', [0]]])
+  })
+  it('reads a paragraph’s line break as a word’s end: a framed stretch ending one line or starting the next is an element', () => {
+    const { page, fig } = pageOf([
+      body('the quick brown fox jumps over'),
+      body('lazy dogs while the others run'),
+      body('away from it'),
+    ])
+    const G = page.glyphs as Glyph[]
+    // (a frame round "over", the first line's last word, and one round "lazy", the second line's first)
+    const o = G.findIndex((g, i) => g.u === 'o' && G[i + 1]?.u === 'v')
+    const z = G.findIndex((g) => g.u === 'z')
+    const end = rect(G[o]!.x0 - 1, 697, G[o + 3]!.x1 + 1, 709)
+    const start = rect(G[z - 2]!.x0 - 1, 683, G[z + 1]!.x1 + 1, 695)
+    fig.units[0]!.why = 'crowded'
+    fig.units[1]!.why = 'crowded'
+    fig.met.set(0, { items: [boxMet(0, end)], under: null })
+    fig.met.set(1, { items: [boxMet(1, start)], under: null })
+    const [t] = figureLinesOf([page], fig, () => false, null)
+    expect(t!.ks).toEqual([0, 1, 2])
+    expect(t!.why).toBeNull()
+    expect(t!.els.map((e) => [e.kind, e.boxes, e.glyphs.map((g) => G[g]!.u).join('')])).toEqual([
+      ['cite', [0], 'over'],
+      ['cite', [1], 'lazy'],
+    ])
   })
 })

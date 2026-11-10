@@ -73,8 +73,10 @@ export interface InstrumentUnit {
     under?: number
     /** a container's edge over its baseline (figure-lines.ts: a closed shape round all of it), PDF units up from it */
     over?: number
-    /** a paragraph of two lines or more (F3, figure-lines.ts): laid as a body paragraph is, no line's free line its room */
-    para?: true
+    /** a paragraph of two lines or more (F3, figure-lines.ts): laid as a body paragraph is, no line's free line its room; the
+     *  evidence its lines are joined by, `strong` (TeX's hyphen, a justified line) or `ragged` (three ragged lines or more): the
+     *  lab's dump tells them apart by it (`para`); the bundle does not carry it */
+    para?: 'strong' | 'ragged'
   }
   /** why the instrument gives it no ink of its own, where it gives none (the marks could not delimit it on B) */
   why?: string

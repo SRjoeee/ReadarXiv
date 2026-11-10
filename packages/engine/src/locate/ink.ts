@@ -629,7 +629,7 @@ function figureTextOf(
             ]),
           }
         : {}),
-      figure: { set: -1 - t.ks[0]!, ...(t.para ? { para: true as const } : {}), ...room },
+      figure: { set: -1 - t.ks[0]!, ...(t.para ? { para: t.para.by } : {}), ...room },
       ...(t.para
         ? { align: t.para.justified ? ('j' as const) : ('l' as const) }
         : f0.anchor

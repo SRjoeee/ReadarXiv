@@ -381,7 +381,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     ])
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
     const figs = L.members.filter((m) => m.figure)
-    // (F3, PDF-READER §18.26: the block is justified, its lines one paragraph, one figure text laid as a body paragraph is: no
+    // (F3, PDF-READER §18.27: the block is justified, its lines one paragraph, one figure text laid as a body paragraph is: no
     // own text for S.figures, justified, its four lines)
     expect(figs.map((m) => [m.plain, m.align, m.lines.length])).toEqual([[undefined, 'j', 4]])
     expect(L.units[figs[0]!.unit]!.content).toEqual([
@@ -389,7 +389,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
         'The entry of the box indented here and its lines go on to the measure end set in one block of its prose its last one',
       ),
     ])
-    expect(L.units[figs[0]!.unit]!.figure).toMatchObject({ para: true })
+    expect(L.units[figs[0]!.unit]!.figure).toMatchObject({ para: 'strong' })
   })
 
   it('sets a paragraph’s lines from their start where the figure’s maker set two of them a hundredth of a point larger', () => {
