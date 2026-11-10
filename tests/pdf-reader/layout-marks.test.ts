@@ -774,12 +774,21 @@ describe('LAYOUT_TEX', () => {
     const at = POINTS_TEX.indexOf('\\AddToHook{begindocument/end}{\\ifdefined\\@makecaption')
     expect(at).toBeGreaterThan(0)
     const hook = POINTS_TEX.slice(at)
-    expect(hook).toContain('\\let\\axt@kmc\\@makecaption\\long\\def\\@makecaption#1#2{\\axt@kmc{\\axt@kf#1}{#2}}')
+    expect(POINTS_TEX).toContain('\\long\\def\\axt@kmcw#1#2{\\axt@kmc{\\axt@kf#1}{#2}}')
+    expect(hook).toContain('\\ifdefined\\@makecaption\\let\\axt@kmc\\@makecaption\\let\\@makecaption\\axt@kmcw\\fi')
     expect(hook).toContain('\\let\\axt@klt\\LT@makecaption\\long\\def\\LT@makecaption#1#2#3{\\axt@klt#1{\\axt@kf#2}{#3}}')
     expect(hook).toContain('\\let\\axt@kfp\\floatc@plain\\long\\def\\floatc@plain#1#2{\\axt@kfp{\\axt@kf#1}{#2}}')
     expect(hook).toContain('\\let\\axt@kfr\\floatc@ruled\\long\\def\\floatc@ruled#1#2{\\axt@kfr{\\axt@kf#1}{#2}}')
     expect(hook).toContain('\\let\\axt@kac\\algocf@captiontext\\long\\def\\algocf@captiontext#1#2{\\axt@kac{\\axt@kf#1}{#2}}')
     expect(hook).toContain('\\let\\axt@kcc\\caption@@make\\long\\def\\caption@@make#1#2{\\axt@kcc{\\axt@kf#1}{#2}}')
+    // (a class that sets its caption maker inside its float's environment, after the document began: Elsevier's cas-common sets
+    // \@makecaption to its figure's or its table's own at the environment's start, 2610.21084v1's 21 captions. Each float, as
+    // it begins (\@xfloat, every float's and every class's way in, its arguments passed on untouched), hands that maker its label
+    // the same way, in the float's own group: an assignment, no node, nothing where the maker is already a wrapper)
+    expect(POINTS_TEX).toContain('\\long\\def\\axt@kmfw#1#2{\\axt@kmf{\\axt@kf#1}{#2}}')
+    expect(POINTS_TEX).toContain('\\def\\axt@kmfr{\\ifdefined\\@makecaption\\ifx\\@makecaption\\axt@kmcw\\else\\ifx\\@makecaption\\axt@kmfw\\else\\let\\axt@kmf\\@makecaption\\let\\@makecaption\\axt@kmfw\\fi\\fi\\fi}')
+    expect(hook).toContain('\\ifdefined\\@xfloat\\let\\axt@kxf\\@xfloat\\def\\@xfloat{\\axt@kmfr\\axt@kxf}\\fi')
+    expect(POINTS_TEX.slice(POINTS_TEX.indexOf('\\def\\axt@kmfr'))).not.toMatch(/^[^}]*axt@point/)
     // (typeset only: nothing in a moving argument or a file; never while the gate is off; in vertical mode, at the paragraph
     // the label begins, once)
     expect(POINTS_TEX).toContain('\\def\\axt@kf{\\ifx\\protect\\@typeset@protect\\axt@ka\\fi}')
