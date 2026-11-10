@@ -13,9 +13,14 @@
 // only opened with fontExtraProperties) and a glyph whose Unicode no character of that map gives, or one no Unicode stands for
 // (private use, a replacement character, a control), is `nu`: its text is no reading of its glyph (2307.16209v1's newtx sum
 // sign, which PDF.js reads by its code as "Í"). The glyph's state rides through pageInk on the same tag.
+//
+// Each page's operator list is read in the pieces PDF.js's worker sends it (opstream.ts readOps), each piece by every reader in
+// turn (`extra`'s, the glyphs' tags, pageInk's: each reads the list front to back once, its state running on from piece to piece)
+// and let go: no page's whole list is held (2610.40394v1 page 23, 510,506 operations, was 93 MiB held as one list, lane op-stream).
 import type { Doc, DocGlyph, DocMarks, DocPage, DocTurned } from './doc.ts'
 import { PageGlyph } from './glyph.ts'
-import { BOXES_PAGE, GLYPHS_PAGE, type PageInk, pageInk } from './ink.types.ts'
+import { BOXES_PAGE, GLYPHS_PAGE, inkReader, type PageInk } from './ink.types.ts'
+import { type OpsPage, type OpsReader, readOps } from './opstream.ts'
 
 /** what the back half needs of PDF.js: its getDocument and its operator codes */
 export interface PdfJs {
@@ -27,11 +32,9 @@ export interface PdfDocument {
   getPage(n: number): Promise<PdfPage>
   getMetadata?(): Promise<{ info?: Record<string, unknown> } | null>
 }
-export interface PdfPage {
+export interface PdfPage extends OpsPage {
   rotate?: number
   view: number[]
-  commonObjs: { get(id: string): unknown }
-  getOperatorList(): Promise<{ fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }>
   getAnnotations?(): Promise<unknown[]>
   cleanup(): void
 }
@@ -53,8 +56,8 @@ export interface ReadOptions<X> {
   turned?: boolean
   /** with `turned`: every painted path's lines kept (pageInk's `shapesAll`): arXiv's page, whose figures its own points do not tell */
   shapesAll?: boolean
-  /** made of each page's operator list before pageInk reads it (the wrap's alignment facts) */
-  extra?: (OPS: Record<string, number>, ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }) => X
+  /** a reader of each page's operator list, each piece read by it before pageInk reads it (the wrap's alignment facts) */
+  extra?: (OPS: Record<string, number>) => OpsReader<X>
   /** read each page's annotations too (A's links) */
   annotations?: boolean
   /** read each font's own map and mark the glyphs it gives no Unicode of (`nu`; opens the document with fontExtraProperties) */
@@ -108,11 +111,9 @@ export async function readPdf<X = never>(
     info = ((await pdf.getMetadata?.().catch(() => null)) ?? null)?.info ?? null
     for (let p = 1; p <= pdf.numPages; p++) {
       const page = await pdf.getPage(p)
-      const ops = await page.getOperatorList()
-      const extra = o.extra ? o.extra(pdfjs.OPS, ops) : null
-      tagGlyphs(
+      const extra = o.extra ? o.extra(pdfjs.OPS) : null
+      const tag = glyphTagger(
         pdfjs.OPS,
-        ops,
         o.mapped
           ? (id) => {
               if (!maps.has(id)) {
@@ -126,7 +127,7 @@ export async function readPdf<X = never>(
             }
           : null,
       )
-      const ink = pageInk(pdfjs.OPS, ops, page.commonObjs, {
+      const reader = inkReader(pdfjs.OPS, page.commonObjs, {
         rotate: page.rotate ?? 0,
         indices: true,
         turned: o.turned ?? false,
@@ -136,11 +137,18 @@ export async function readPdf<X = never>(
         boxesMax: BOXES_PAGE,
         names,
       })
+      // (each piece read by `extra` before its glyphs are tagged, and by pageInk after: the order the whole list was read in)
+      await readOps(page, pdfjs.OPS, (fnArray, argsArray) => {
+        extra?.read(fnArray, argsArray)
+        tag(fnArray, argsArray)
+        reader.read(fnArray, argsArray)
+      })
+      const ink = reader.end()
       const annotations = o.annotations ? ((await page.getAnnotations?.().catch(() => [])) ?? []) : null
       const view = [...page.view] as [number, number, number, number]
       const read = docPageOf(ink, view, page.rotate ?? 0, bases)
       if (o.rawGlyphs === false && read.raw) read.raw.glyphs = []
-      pages.push({ ...read, extra, annotations })
+      pages.push({ ...read, extra: extra ? extra.end() : null, annotations })
       page.cleanup()
     }
   } finally {
@@ -149,35 +157,39 @@ export async function readPdf<X = never>(
   return { doc: { pages: pages.map((p) => p.page) }, pages, info }
 }
 
-/** each glyph of the operator list's shows given its code and font character, through its Unicode; with `mapOf` (a font's
- *  map by its id), whether its Unicode is no reading of it, the font the shows are in followed through the graphics state
- *  (setFont; save and restore; a form's begin and end) */
-function tagGlyphs(
+/** a tagger of the operator list's pieces, each after the one before: each glyph of its shows given its code and font character,
+ *  through its Unicode; with `mapOf` (a font's map by its id), whether its Unicode is no reading of it, the font the shows are in
+ *  followed through the graphics state (setFont; save and restore; a form's begin and end), from piece to piece */
+function glyphTagger(
   OPS: Record<string, number>,
-  ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> },
   mapOf: ((id: string) => Set<string> | null) | null,
-): void {
+): (fnArray: ArrayLike<number>, argsArray: ArrayLike<unknown>) => void {
   const stack: (Set<string> | null)[] = []
   let mapped: Set<string> | null = null
-  for (let i = 0; i < ops.fnArray.length; i++) {
-    const fn = ops.fnArray[i]
-    if (mapOf) {
-      if (fn === OPS.save || fn === OPS.paintFormXObjectBegin) stack.push(mapped)
-      else if (fn === OPS.restore || fn === OPS.paintFormXObjectEnd)
-        mapped = stack.length ? (stack.pop() ?? null) : mapped
-      else if (fn === OPS.setFont) {
-        const id = (ops.argsArray[i] as unknown[] | undefined)?.[0]
-        mapped = typeof id === 'string' ? mapOf(id) : null
+  return (fnArray, argsArray) => {
+    for (let i = 0; i < fnArray.length; i++) {
+      const fn = fnArray[i]
+      if (mapOf) {
+        if (fn === OPS.save || fn === OPS.paintFormXObjectBegin) stack.push(mapped)
+        else if (fn === OPS.restore || fn === OPS.paintFormXObjectEnd)
+          mapped = stack.length ? (stack.pop() ?? null) : mapped
+        else if (fn === OPS.setFont) {
+          const id = (argsArray[i] as unknown[] | undefined)?.[0]
+          mapped = typeof id === 'string' ? mapOf(id) : null
+        }
       }
-    }
-    if (fn !== OPS.showText && fn !== OPS.showSpacedText) continue
-    const arr = (ops.argsArray[i] as unknown[] | undefined)?.[0]
-    if (!Array.isArray(arr)) continue
-    for (let j = 0; j < arr.length; j++) {
-      const g = arr[j] as { unicode?: unknown; originalCharCode?: unknown; fontChar?: unknown } | null
-      if (g && typeof g === 'object' && typeof g.unicode === 'string') {
-        const nu = mapOf && unmapped(g.unicode, mapped) ? '1' : ''
-        arr[j] = { ...g, unicode: `${g.unicode}${SEP}${g.originalCharCode ?? ''}${SEP}${g.fontChar ?? ''}${SEP}${nu}` }
+      if (fn !== OPS.showText && fn !== OPS.showSpacedText) continue
+      const arr = (argsArray[i] as unknown[] | undefined)?.[0]
+      if (!Array.isArray(arr)) continue
+      for (let j = 0; j < arr.length; j++) {
+        const g = arr[j] as { unicode?: unknown; originalCharCode?: unknown; fontChar?: unknown } | null
+        if (g && typeof g === 'object' && typeof g.unicode === 'string') {
+          const nu = mapOf && unmapped(g.unicode, mapped) ? '1' : ''
+          arr[j] = {
+            ...g,
+            unicode: `${g.unicode}${SEP}${g.originalCharCode ?? ''}${SEP}${g.fontChar ?? ''}${SEP}${nu}`,
+          }
+        }
       }
     }
   }

@@ -3,6 +3,7 @@
 // JavaScript re-exported with its type.
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
 import * as remove_js from './remove.mjs'
+import type { OpsReader } from './opstream.ts'
 
 /** a content stream's operators (those of `keep`, null: every one), holding at most `limit` bytes by COST (past it LexLimit), with what they hold */
 export const lex = remove_js.lex as (
@@ -52,6 +53,8 @@ export interface AlignFacts {
 }
 /** a page's alignment facts from PDF.js's operator list (pure): the page aligns by them exactly as by the list */
 export const alignOf = remove_js.alignOf as (OPS: Record<string, number>, opList: OpList) => AlignFacts
+/** alignOf as a reader of the list in pieces, each after the one before, then alignOf's facts (`end`) */
+export const alignReader = remove_js.alignReader as (OPS: Record<string, number>) => OpsReader<AlignFacts>
 export interface Remover {
   numPages: number
   encrypted: boolean

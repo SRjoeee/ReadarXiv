@@ -8,7 +8,7 @@ import type { Doc } from './doc.ts'
 import type { Instrument } from './instrument.ts'
 import { type Located, type LocateOptions, locate } from './locate/locate.ts'
 import { type PdfJs, type ReadPage, readPdf } from './read.ts'
-import { type AlignFacts, alignOf, type PdfLib } from './remove.types.ts'
+import { type AlignFacts, alignReader, type PdfLib } from './remove.types.ts'
 import { type AddOn, type WrapPageA, wrap, wrapPageOf } from './wrap/wrap.ts'
 
 export interface PrepareDeps {
@@ -60,7 +60,7 @@ export function readArxiv(
     turned: true,
     // (every path's lines: the figure texts locate makes on A read a figure's lines where B's pictures and forms say it is one)
     shapesAll: true,
-    extra: (OPS, ops) => alignOf(OPS, ops),
+    extra: (OPS) => alignReader(OPS),
     annotations: true,
     // (each font's own map: a glyph it gives no Unicode of is no reading of its text, A17)
     mapped: true,
