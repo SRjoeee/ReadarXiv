@@ -30,6 +30,7 @@ import {
   claimInk,
   figureGroup,
   figureUnitsOf,
+  identifiersIn,
   inkUnitsOf,
   keptUnitsOf,
   ledgerOf,
@@ -379,6 +380,10 @@ export function inkOf(o: InkInput): {
       Math.abs(ux - 1) > 1e-6 || Math.abs(uy) > 1e-6
         ? [Math.round(ux * 1e4) / 1e4, Math.round(uy * 1e4) / 1e4]
         : undefined
+    // (one that holds an identifier, a token holding two letters or digits joined by underscores (the front end's identifiersIn:
+    // `str_replace`, `w/o sol_pool_freq`), is the original's, whatever its face: a figure text is drawn whole, its text and no element, so the
+    // identifier cannot be kept apart from the words around it, and sent, its words came back translated inside it, as
+    // 2608.25210v2's `llm_equal_human` in a unit came back with its last part in Chinese; an ink unit keeps one as an element instead)
     // (where a translation of it may stand, as today's figure reading tells it: S.figures reads these from the part)
     const room = {
       ...(Number.isFinite(f.x) ? { x: f.x } : {}),
@@ -400,7 +405,9 @@ export function inkOf(o: InkInput): {
           ? { why: `figure: ${f.why}`, fixed: true as const }
           : o.artefact?.(text, turned)
             ? { why: 'figure: code', fixed: true as const, pitch: true as const }
-            : {}),
+            : identifiersIn((f.text ?? '').normalize('NFKC')).length
+              ? { why: 'figure: identifier', fixed: true as const }
+              : {}),
       },
       text,
       ph: [],

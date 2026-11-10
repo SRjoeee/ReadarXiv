@@ -269,6 +269,57 @@ describe('a translated line of names that may not fit its box (2608.06701: Japan
   })
 })
 
+describe('an identifier is not prose: a token of word characters joined by underscores is one placeholder, as the paper writes it', () => {
+  const doc = (body: string, defs = '') => project(`\\documentclass{article}${defs}\\begin{document}\n${body}\n\\end{document}`)
+  const kept = (units: Unit[]) => units.flatMap(u => u.pieces.filter(p => p.t === 'ph').map(p => (p as { src?: string }).src))
+
+  it('its parts joined by \\_ (or \\textunderscore) are one element, never sent (2608.25210v2: llm_equal_human came back with its last part in Chinese)', () => {
+    const units = doc('The prompt llm\\_equal\\_human asks whether [sentence\\_1] and the run\\textunderscore id agree.') as unknown as { units: Unit[] }
+    const text = units.units.map(textOf).join(' | ')
+    expect(text).not.toMatch(/llm|equal|human|sentence|run|\bid\b/)
+    expect(text).toContain('The prompt ')
+    expect(text).toContain(' asks whether  and the  agree.')
+    expect(kept(units.units)).toEqual(['llm\\_equal\\_human', '[sentence\\_1]', 'run\\textunderscore id'])
+  })
+
+  it('a table cell or a paragraph of identifiers alone is no unit: nothing of it is prose', () => {
+    const units = doc('Words here.\n\n{\\em response\\_equal\\_human}\n\n{\\em response\\_equal\\_llm\\_example}\n') as unknown as { units: Unit[] }
+    expect(units.units.map(u => textOf(u).trim())).toEqual(['Words here.'])
+  })
+
+  it('the whole token is the identifier, its leading and trailing sentence punctuation aside (the coordinator’s, 2026-11-10)', () => {
+    // (2608.06701v1's `CallbackBase.host_label(result)` one identifier; 2608.25210v2 Table 2's response_equal_human_example drawn
+    // today with its last part translated; a stop, a comma, a quote or a parenthesis the sentence opened is no part of it, a
+    // bracket the token answers is)
+    const units = doc('Call CallbackBase.host\\_label(result), then llm\\_equal\\_human. See it (as conv5\\_x) for ``x86\\_64\'\' and [sentence\\_1], e.g.\\ here.') as unknown as { units: Unit[] }
+    expect(kept(units.units)).toEqual(['CallbackBase.host\\_label(result)', 'llm\\_equal\\_human', 'conv5\\_x', 'x86\\_64', '[sentence\\_1]', '\\ '])
+    expect(units.units.map(textOf).join('|').trim()).toBe('Call , then . See it (as ) for ``\'\' and , e.g.here.')
+  })
+
+  it('nothing broader: a camelCase word, an underscore with no word character on one side, a formula’s subscript, a hyphen or a dot stay as they were', () => {
+    // (a bare _ is TeX's subscript: 2610.21377v1's formulas the walker read as text, `H_0`, are no identifier)
+    const units = doc('Keep camelCase and x \\_ y and \\_\\_init\\_\\_ and $x_1$ and a-b and a.b in the text.') as unknown as { units: Unit[] }
+    const text = units.units.map(textOf).join(' | ')
+    expect(text).toContain('Keep camelCase and x ')
+    expect(text).toContain(' y and ')
+    expect(text).toContain('init')
+    expect(text).toContain(' and a-b and a.b in the text.')
+    expect(kept(units.units)).toEqual(expect.arrayContaining(['\\_', '$x_1$']))
+    expect(kept(units.units).some(s => /init|camel/.test(s ?? ''))).toBe(false)
+  })
+
+  it('an e-mail address with an underscore stays one address, not an identifier and a rest', () => {
+    const units = doc('Write to first\\_last@example.org or to my\\_box at example.net today.') as unknown as { units: Unit[] }
+    expect(kept(units.units)).toEqual(['first\\_last@example.org', 'my\\_box'])
+  })
+
+  it('a bare _ the walker leaves in a unit’s text is TeX’s subscript, no identifier (2610.21377v1)', () => {
+    // (2610.21377v1's formulas the walker read as text: `H_0`, `e_k` were caught as identifiers when a bare _ read as one)
+    const units = doc('Then the space H_0 of functions e_k holds here.') as unknown as { units: Unit[] }
+    expect(kept(units.units)).toEqual(['_', '_'])
+  })
+})
+
 describe('what goes around the translation: tables fitted, notes the class compares, a heading written out', () => {
   const withTables = (tex: string) => loadProject(inMemory(new Map([['main.tex', new TextEncoder().encode(tex)]])), 'main.tex', { tables: true })
   const typeset = (p: ReturnType<typeof withTables>, pick: (u: Unit) => boolean) => {
