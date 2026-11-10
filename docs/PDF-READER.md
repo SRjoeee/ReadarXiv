@@ -4258,6 +4258,24 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     never the marking's (`inkless`, `apart`); each glyph is read against the text by one step (`leadStep`), and a formula's
     glyph only where nothing of ink stands between the lead and the mark (a footnote's call's). `?` is no character spelled: the
     probe has no aux, and a `\ref` sets "??" there.
+  - *XeTeX lists a word as one node* (2611.03178v1 p19 in Chinese, the owner's report on staging of round 8's part A: the gap
+    after the translation of "Models." wider than after every other run-in head). XeLaTeX sets a word of a font of its own (fontspec's, TU) as one
+    node, and `\showbox` lists it so, `\TU/XCharter(0)/m/sc/10.5 CoworkOS`, where pdfTeX and LuaTeX list a character a node: the
+    probe's reading took a node of one character alone, so that no macro of a XeLaTeX paper had a text. The paper opens five
+    paragraphs with `\system{}` (`\textsc{CoworkOS}`) right after their run-in heads. In vertical mode `\axthpk` sets no point
+    for it (its expansion begins with `\textsc`), so its ink, set before the start mark, is the unit's placeholders' (the wrap's
+    MR 5) and goes to its piece by the text the probe showed it sets (`glyphPiecesOf`'s lead); with none, the element had no ink
+    (stated `outside`, kept where TeX set it), the paragraph's first glyph on A was "organizes", 61.1 pt past "Models.", past
+    `SHARED_SEP`, and locate made no flow of the head and its paragraph: the paragraph was laid from TeX's start of
+    "organizes", "CoworkOS" English where TeX set it between the head's shorter translation and the paragraph's. The probe now
+    reads XeTeX's word (`marks.mjs` `WORD_NODE`), outside a formula, each of its characters as a character node's would be: the
+    element owns its glyphs, the paragraph's first line begins at it, 7.48 pt after the head's ink as TeX set them (the stop's ink end
+    to "C"), the two one flow, and S.rowStart lays the paragraph from the head's translation at that separation, "CoworkOS" its
+    first element.
+    On 2611.03178v1 five paragraphs open with the element's ink now (pp. 15, 16, 18, 19, 22): the two after a run-in head (p15,
+    p19) one flow with it, the three a paragraph's own start laid from TeX's start of the line, the element in it. Over the 88
+    papers (stage 1a against round 8 part A's) nothing moves: their three XeLaTeX papers open no unit with a macro whose ink
+    TeX set before the start mark.
   - *A footnote's call after the last word is found by its raised mark* (2610.35877v1's abstract, the owner's report on staging:
     the whole abstract English). The abstract ends `step.\footnotemark`; TeX answered that a mark around `\footnotemark` moves the
     word after it (`switches` `00000020`: the space factor the call reads), so the call has none, and the patch's end mark stands
@@ -5511,7 +5529,7 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   any run (`FIGURE_UNITS_DOC`), so that where the cap falls does not move: past it, as before, the transcripts' heads are the ink
   units' lines.
 - **Cut** into runs, one a label or a line: in stream order, one family (its font's name past a subset's tag, PIPELINE 69, and
-  past its style, neither a math face, PIPELINE 71, below),
+  past its style, neither a math face, PIPELINE 71, below; TeX's own line in a picture over its faces and colours, below),
   size, colour, direction and figure (one form painted, one picture: pageInk's `fid` and `pid`, so that two figures side by side never make one label), in a code region or out of every
   one (a run kept whole for a code glyph would leave the prose beside it English: none of the 14 code papers has such a run, a
   rule of the cut, not a case), one baseline (`RUN_DY`
@@ -5603,7 +5621,7 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   (`SpanAt.style`); S.figures draws the group's translation in it, the rest in the label's own. A reply that drops the group
   draws the whole in the label's own face. What stays apart: TeX's
   math faces (CMMI, CMSY, MSBM: families of their own, and math), so "rate p" in TeX keeps "rate"; a subscript or superscript
-  (another size); a coloured word (another fill); two columns of a legend (past `RUN_GAP`); two panels. No list of style
+  (another size); a coloured word in a plotting program's figure (another fill; TeX's line in a picture goes on, below); two columns of a legend (past `RUN_GAP`); two panels. No list of style
   words: the diagnosis's what-if, which had one, missed TeX's Times (NimbusRomNo9L-Regu and -Medi). Measured over the sweep's
   87 papers (our base pages, every page; next's cut and this one's, each engine's own): 468 labels joined from 799 units on 26
   papers (by their first glyph's family NimbusRomNo9L 240, 2610.19159v1's TikZ prose boxes most of them, DejaVuSans 102,
@@ -5617,6 +5635,30 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   crowded as their pieces were, 2 rooms moving. In 2610.21085v1's Figure 4, "jury, α = 8" and "jury, α = 1" are one unit each,
   at full size by the zh model; the gridline under the first (its top 0.81 pt under the baseline) is cleared by a CJK
   translation's em box at that size (0.77 pt).
+- **TeX's line in a picture is one run** (2611.03178v1 p1 in Chinese, the owner's report on staging of round 8's part A:
+  the translation of "Project Page:", a hole, then "coworkos-ai.github.io", and that of "Demo Gallery:" set in from the
+  others). The class's abstract is a tcolorbox,
+  which pgf draws, and `\printprojectmetadata` sets in it four lines no source unit holds (each `\metadata`'s text, kept in a
+  macro by `\gappto`): an icon, a label in `\sffamily\bfseries`, then the address in `\texttt` in the link's colour, a word's
+  space after the label. Its glyphs are a picture's, so figure texts, and the cut ended a run at a change of family and of
+  colour: the label and the address two units, each laid by S.figures in its own box, the address's translation its own text,
+  so left the original's where TeX set it, 19.4 pt after the label's shorter translation where TeX set 3.4. TeX's own text in a
+  picture (no form's) is TeX's line: once its run spells a word, a glyph of another face (no math face) or of another colour
+  goes on with it (`figure-text.mjs` `texLine`), so that each line is one unit, its address a group of its own (a list of
+  addresses with the commas between them too); a symbol TeX set before the first word (the icon) is none of it, and the run
+  TeX's line goes on with after such a run is set from its start where no ink of a figure's tells its anchor (`led`):
+  "Demo Gallery:", whose icon is 1.4 pt wider than its neighbours', stood off their column's start, was read centred and drawn
+  9.4 pt in. A plotting program's text (an included PDF's) is cut as before. A figure text's groups are its runs of one face
+  and one fill (`packages/engine` `locate/ink.ts` figureRuns), a group's style stating its fill where it is not the unit's,
+  black included, and S.figures draws each run in its group's fill: the unit's own style is the address's, most of its glyphs,
+  in the link's colour, the label's group black.
+  Over the 88 papers (stage 1a against round 8 part A's; figure texts alone move, no source or ink unit, no flow): 38 lines of
+  TeX's in pictures are one figure text each where they were 61 (2610.19159v1's transcript titles, 34 from 55: "Agent Action:
+  Write", the path in typewriter type and "(Self-directed scope reduction)" one line; 2610.37818v1's "Full 200" and "(a) Rays
+  past 90", 3 from 3, their numbers in another face; 2610.40576v1 p18's "All good. </think> ```python", 1 from 3, its markup token
+  a group of the line's translation where it was a figure text of its own), and 15 figure texts in 5 papers are set from their
+  start, each after a run of its line it did not join, a formula's or a capital's set larger (2610.21880v1 p4's "th pct.",
+  2610.35877v1 p3's "; two laws of use"). On 2611.03178v1, its four lines from ten units, each set from its start.
 - **What an opaque fill covers is no ink to a label on it** (PIPELINE 76, the release sweep of staging e4be8723 on 2026-11-06:
   2609.26457v1 p6's annotation "6: demands a root-cause / diagnosis before any fix" English in Chinese, its second line
   translated in production). A fill of a colour painted at an alpha of 1, under no blend mode but Normal and no soft mask, its

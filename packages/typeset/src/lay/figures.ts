@@ -39,7 +39,12 @@ function unitOf(row: Row | undefined, m: Placed): FigureUnit | undefined {
       else if (p.t === 'el') pieces.push({ t: 'text', s: ' ', ...(cls ? { cls } : {}) })
       else {
         const st = styles.get(p.id)
-        walk(p.content, st ? { fam: st.role, bold: !!st.bold, italic: !!st.slant } : cls)
+        walk(
+          p.content,
+          st
+            ? { fam: st.role, bold: !!st.bold, italic: !!st.slant, ...(st.fill !== undefined ? { fill: st.fill } : {}) }
+            : cls,
+        )
       }
   }
   walk(row.content, undefined)
@@ -155,12 +160,14 @@ export function figuresOf(
     const items: TextItem[] = []
     let x = f.x!
     for (const r of f.runs!) {
+      // (a run in its group's fill where the part states one, black none: TeX's label before its address in the link's colour)
+      const fill = r.fill ?? f.fill
       items.push({
         s: r.s,
         x,
         face: fontString(r.face, 100),
         size: f.size!,
-        ...(f.fill ? { fill: f.fill } : {}),
+        ...(fill ? { fill } : {}),
         ...turn,
       })
       x += (w100(r.s, r.face) / 100) * f.size!

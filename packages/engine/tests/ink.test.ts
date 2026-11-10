@@ -374,6 +374,53 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(placed.plain).toBe('Task: list all the names')
   })
 
+  it('states a figure text’s runs by face and by fill: TeX’s line in a picture, a label and its address in the link’s colour, the label a group whose fill it states (2611.03178v1)', () => {
+    // (the class's tcolorbox, which pgf draws: "Page:" in \sffamily\bfseries, black, then \texttt's address in the link's colour,
+    // TeX's one line: one figure text, its own style the address's (most of its glyphs), the label a group in its face and its
+    // black, which its own style (the address's colour) would draw otherwise)
+    const at = 'a paragraph whose word'.length
+    const docWith = (marks: boolean): Doc => {
+      const d = docOf([
+        {
+          lines: [
+            'a paragraph whose word',
+            { text: 'Page: site.io', y: 640 },
+            { text: 'continues on its last line', y: 600 },
+          ],
+        },
+      ])
+      const pg = d.pages[0]!
+      pg.glyphs.slice(at, at + 13).forEach((g, j) => {
+        const f = j < 6 ? 'LMSans10-Bold' : 'LMMono10-Regular'
+        Object.assign(g, { font: `ABCDEF+${f}`, base: f, fill: j < 6 ? 0 : 0x315f9c })
+      })
+      if (marks)
+        pg.marks = {
+          paras: [],
+          paraEnds: [],
+          regions: [],
+          pictures: [
+            { name: 'zs', glyph: at, box: 0 },
+            { name: 'ze', glyph: at + 13, box: 0 },
+          ],
+        }
+      return d
+    }
+    const B = docWith(true)
+    const A = docWith(false)
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, -1, 0]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    expect(L.units[1]!.kind).toBe('inkfigures')
+    expect(L.units[1]!.content).toEqual([
+      expect.objectContaining({ t: 'span', id: '0', style: 'sans-bold', content: [text('Page:')] }),
+      text(' site.io'),
+    ])
+    const fig = L.members[1]!
+    expect(fig.style).toMatchObject({ role: 'mono', fill: 0x315f9c })
+    expect(fig.spanStyles).toEqual([['0', expect.objectContaining({ role: 'sans', bold: 1, fill: 0 })]])
+    expect(fig.plain).toBe('Page: site.io')
+  })
+
   it('makes no group of a figure text set in one face, and a group of each run its glyphs set apart from its own style', () => {
     const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
     const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
