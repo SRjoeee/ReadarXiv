@@ -273,7 +273,7 @@ describe('Laid.lit by sentence', () => {
     ).toEqual(['both differ element'])
   })
   it('the sentence cover reads a full-width mark’s ink in its own em: an opening one set at a line’s head, its blank half cut', () => {
-    // (1512.03385v1-zh p10: "（“07++12”）" at a line's head, the mark's leading blank half cut, the glyph drawn half an em left of
+    // (1512.03385v1-zh p10: a full-width bracket and quote at a line's head, the mark's leading blank half cut, the glyph drawn half an em left of
     // the line's start and its ink in the em's second half, at the line's start; the cover read its ink from its advance, the
     // blank half, left of its row: "right none text")
     const zh = '（“零七”）。第二句话在这里。第三句话。'
@@ -292,7 +292,7 @@ describe('Laid.lit by sentence', () => {
     }
     const page = layPage(part(member()), rowsOf([r]), rulesFor('zh'), wide)
     const first = page.members[0]!.lines[0]![3][0] as { s: string; x: number }
-    expect(first.s.startsWith('（')).toBe(true)
+    expect(first.s.startsWith('\uff08')).toBe(true)
     expect(first.x).toBeLessThan(72)
     const c = newCover()
     coverOf(c, page, part(member()), wide, 'mark')
