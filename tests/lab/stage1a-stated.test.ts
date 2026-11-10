@@ -818,3 +818,50 @@ describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (la
     expect(accepted(CAUSE.displayPart)).toBe(true)
   })
 })
+
+describe("(k) on elements and (n): today's unit now wholly an element a figure text keeps as the original's ink", () => {
+  // (2608.06701v1 p1's shape: today's "Observation" and its run of one pitch "The path", two units; F0's one figure text, the run
+  // an element marked kept for its pitch, its box today's line)
+  const word = on(unit(id('a'), 344, 'inkfigures', [text('Observation')]), box(417.26, 449.1, 584.91, 588.75, 583.85))
+  const path = on(unit(id('c'), 346, 'inkfigures', [text('The path')]), box(452.39, 475.56, 584.91, 588.55, 583.85))
+  const joined = (keptBy: string | undefined, src = 'The path') => [
+    {
+      ...on(unit(id('b'), 344, 'inkfigures', [text('Observation'), text(':'), text(' '), ph(src)]), box(417.26, 475.56, 584.91, 588.75, 583.85)),
+      elements: [{ k: 3, kind: 'code', ...(keptBy ? { keptBy } : {}), segs: [box(452.39, 475.56, 584.91, 588.55, 583.85)] }],
+    },
+  ]
+  it('states the run kept as the original for its pitch, held by the text; the words before it held whole', () => {
+    const stated = statedOf([word, path], joined('pitch'))
+    expect(said(stated)).toEqual([
+      [344, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`],
+      [346, CAUSE.pitch],
+    ])
+    expect(stated[1].holder).toBe(id('b'))
+  })
+  it('states a stretch a decoration holds kept with it (n), and no element of another source, nor one not kept, so', () => {
+    expect(said(statedOf([path], joined('decoration')))).toEqual([[346, CAUSE.decoration]])
+    expect(said(statedOf([path], joined('pitch', 'The paths')))).not.toEqual([[346, CAUSE.pitch]])
+    expect(said(statedOf([path], joined(undefined)))).not.toEqual([[346, CAUSE.pitch]])
+  })
+})
+
+describe("(f) over (g): a stand-in that holds today's text whole, in order, a run of one pitch after it (F0's line)", () => {
+  // (2608.06701v1 p1: today's "Action:" and its command, two units; F0's one figure text on today's line, its command an element
+  // kept for its pitch. Today's text a contiguous part of the stand-in's: held whole by it, its holder named for the parity's
+  // joined join, never "another reading, now arXiv's text", which is characters our old compile did not set)
+  it('states today’s words held whole by the line, and its command kept for its pitch, both naming the line', () => {
+    const action = on(unit(id('a'), 343, 'inkfigures', [text('Action:')]), box(417.26, 435.6, 591.04, 595.03, 590.14))
+    const command = on(unit(id('c'), 344, 'inkfigures', [text('view x.py')]), box(438.05, 545.39, 591.04, 594.06, 590.14))
+    const line = {
+      ...on(unit(id('b'), 343, 'inkfigures', [text('Action: '), ph('view x.py')]), box(417.26, 545.39, 591.04, 595.03, 590.14)),
+      state: 'drawn',
+      elements: [{ k: 1, kind: 'code', keptBy: 'pitch', segs: [box(438.05, 545.39, 591.04, 594.06, 590.14)] }],
+    }
+    const stated = statedOf([action, command], [line])
+    expect(said(stated)).toEqual([
+      [343, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`],
+      [344, CAUSE.pitch],
+    ])
+    expect(stated.map((s: { holder?: string }) => s.holder)).toEqual([id('b'), id('b')])
+  })
+})

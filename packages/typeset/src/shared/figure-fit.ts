@@ -18,6 +18,9 @@ export type FitFigure = {
   before: number
   after: number
   under: number | null
+  /** a container's edge over its baseline (Room.over: a closed shape round all of its glyphs), where it has one: its translation's
+   *  ink stays under it, its set shrunk to it (the owner's reformulation of 2026-11-10: the translation laid inside it) */
+  over?: number | null
 }
 /** where a translation is drawn: its size, how far along its run's direction from its origin it begins, its width */
 export type FigureFit = { size: number; offset: number; width: number }
@@ -40,15 +43,27 @@ export const CJK_FOOT = 0.12
  * where not given): its ink, its advance less them, is what it needs of its line and what its anchor places
  */
 export function fitFigureSet(
-  items: readonly { f: FitFigure; width1: number; depth1: number; blank1?: readonly [number, number] }[],
+  items: readonly {
+    f: FitFigure
+    width1: number
+    depth1: number
+    height1?: number
+    blank1?: readonly [number, number]
+  }[],
   floor: number,
 ): (FigureFit | null | false)[] {
   const ink1 = items.map(({ width1, blank1 }) => width1 - (blank1 ? blank1[0] + blank1[1] : 0))
-  const need = items.map(({ f }, i) => {
+  const need = items.map(({ f, height1 }, i) => {
     if (!(ink1[i]! > 0) || !(f.length > 0) || !(f.size > 0)) return 0
     const full = ink1[i]! * f.size,
       line = lineOf(f)
-    return full > line ? line / full : 1
+    const along = full > line ? line / full : 1
+    // (inside its container: its ink over its baseline no higher than the container's edge)
+    const over =
+      typeof f.over === 'number' && Number.isFinite(f.over) && (height1 ?? 0) > 0
+        ? f.over / ((height1 as number) * f.size)
+        : 1
+    return Math.min(along, over)
   })
   const met = items.map(() => false)
   let k = 1

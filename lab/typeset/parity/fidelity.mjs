@@ -53,10 +53,13 @@ export function runsIn(runs, boxes) {
  * A text's original style and size, read off arXiv's glyphs in its lines' boxes (`runs` render.mjs's, `fonts` their PDF font
  * names): the share of its characters (white space and math fonts' aside) set in a bold and in a slanted face, and its size,
  * the size TeX was asked for: its largest cased letter's (faked small capitals set the capitals at it and the rest smaller;
- * a script is smaller, never larger), else the median character's. null where no glyph stands there
+ * a script is smaller, never larger), else the median character's. `except`: boxes whose glyphs are no characters of the
+ * text's (an element it keeps as the original's ink, which the drawn text's share leaves uncounted alike). null where no glyph
+ * stands there
  */
-export function originalOf(runs, fonts, boxes) {
-  const rs = runsIn(runs, boxes)
+export function originalOf(runs, fonts, boxes, except = []) {
+  const out = new Set(runsIn(runs, except))
+  const rs = runsIn(runs, boxes).filter((r) => !out.has(r))
   let chars = 0,
     bold = 0,
     italic = 0,
@@ -570,6 +573,9 @@ export function judgeJoined(c, pairs, todays, what) {
   const { rec, facts, V, keyOfPart, judge, NEAR } = c
   const runs = rec.original?.runs ?? null,
     fonts = rec.original?.fonts ?? []
+  // (the ink of the elements a member keeps as the original's, v2.mjs's `keptEls`: no characters of the text's share, as the
+  // drawn text leaves them uncounted (the coordinator's ruling 1 on F0, 2026-11-10; verdict.mjs's units alike))
+  const keptInk = new Map(c.v2?.keptEls ?? [])
   for (const [ord, gid] of pairs) {
     const m = facts.get(ord)
     const tl = (todays.get(gid)?.lines ?? []).filter((l) => l.n > 0),
@@ -579,6 +585,7 @@ export function judgeJoined(c, pairs, todays, what) {
       runs,
       fonts,
       m.lines.filter((l) => l[0] === c.n).map((l) => [l[2], Math.min(l[5], l[6]), l[3], Math.max(l[5], l[6])]),
+      (keptInk.get(ord) ?? []).filter((b) => b[0] === c.n).map((b) => b.slice(1)),
     )
     const os = a?.size ?? m.style?.size
     const nm = `p${ord} ${m.kind}`

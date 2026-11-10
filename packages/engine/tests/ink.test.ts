@@ -365,9 +365,9 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
 
   it('keeps a figure’s word set in another face inside a line of a face of one pitch, with its line, always (Rule 1)', () => {
     // (2411.13093v4 p19's code boxes: `"ASR": "The number of the attractions.",` in Consolas but "attractions" in Georgia, and
-    // `["coin", "table", ...]` but "coin": the lines kept, each read a Chinese word between its English ones. A word whose
-    // glyphs right before and after it, in the page's order on its baseline, are of a face of one pitch stands inside a line of
-    // code. A word of its own line stays translated)
+    // `["coin", "table", ...]` but "coin": the lines kept, each read a Chinese word between its English ones. A line every word
+    // of which stands between glyphs of a face of one pitch is code, one figure text kept whole (figure-lines.ts, PDF-READER
+    // §18.26: Rule 1's inside-a-line read on the line). A word of its own line stays translated)
     const body = (t: string) => ({ text: t, font: 'ABCDEF+CMR10' })
     const A = docOf([
       {
@@ -388,17 +388,10 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
           g.x1 = g.x0 + (0.3 + ((g.u.codePointAt(0)! * 7) % 11) / 25) * g.size
     const units = [unitOf('para', 'Body text of the paper set here and more body text in that face')]
     const L = locate(instrumentOf(B, units, [[0, 0]]), A, align(B, A), { pages: rawOf(A) })
-    const fixed = new Map(L.members.filter((m) => m.figure).map((m) => [m.plain, m.fixed]))
-    expect(fixed.get('"key": "count all the')).toBe(true)
-    expect(fixed.get('harbours')).toBe(true)
-    expect(fixed.get('Loss curve')).toBe(false)
-    const pitch = new Map(
-      L.members.filter((m) => m.figure && m.unit >= 0).map((m) => [m.plain, !!L.units[m.unit]!.pitch]),
-    )
-    expect([pitch.get('"key": "count all the'), pitch.get('harbours'), pitch.get('Loss curve')]).toEqual([
-      true,
-      true,
-      false,
+    const figs = L.members.filter((m) => m.figure && m.unit >= 0)
+    expect(figs.map((m) => [m.plain, m.fixed, !!L.units[m.unit]!.pitch])).toEqual([
+      ['"key": "count all the harbours.",', true, true],
+      ['Loss curve', false, false],
     ])
   })
 
@@ -756,11 +749,12 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(fig.plain).toBe('Page: site.io')
   })
 
-  it('ends TeX’s line in a picture where it goes into or out of a face of one pitch: a title’s path its own figure text, kept (Rule 1)', () => {
+  it('makes a title and its path, TeX’s line in a picture, one figure text whose path is a code element, kept as its ink (F0)', () => {
     // (2610.19159v1's transcript box titles, pgf's: "Agent Action: Write" in a proportional face, the path written in typewriter,
     // then "(Self-directed scope reduction)": TeX's line went on over the faces and made one figure text of them, a title,
-    // translated with its path inside. The owner's ruling of 2026-11-10 keeps text set in a face of one pitch: the line goes on
-    // over faces and colours, but not into or out of a face of one pitch, read off the glyphs as Rule 1 reads it)
+    // translated with its path inside. Rule 1's run ends at the face of one pitch (the owner's ruling of 2026-11-10), and the
+    // line's runs are one figure text again whose run of one pitch is an element, never sent, its ink moving with the
+    // translation (F0, the owner's ruling of 2026-11-10: figure-lines.ts, PDF-READER §18.26)
     const line = 'Action: Write /tmp/f_a.py (scope cut)'
     const at = 'a paragraph whose word'.length
     const path = [line.indexOf('/'), line.indexOf('py') + 2]
@@ -795,21 +789,37 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
         }
       return d
     }
-    const figuresOf = (body: string) => {
+    const locateWith = (body: string) => {
       const B = docWith(true, body)
       const A = docWith(false, body)
       const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, -1, 0]])
-      const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
-      return L.members.filter((m) => m.figure && m.unit >= 0).map((m) => [m.plain, m.fixed, !!L.units[m.unit]!.pitch])
+      return locate(ins, A, align(B, A), { pages: rawOf(A) })
     }
-    expect(figuresOf('ABCDEF+CMR10')).toEqual([
-      ['Action: Write', false, false],
-      ['/tmp/f_a.py', true, true],
-      ['(scope cut)', false, false],
+    const L = locateWith('ABCDEF+CMR10')
+    const figs = L.members.filter((m) => m.figure && m.unit >= 0)
+    expect(figs).toHaveLength(1)
+    const [fig] = figs
+    const unit = L.units[fig!.unit]!
+    expect(unit.content).toEqual([
+      text('Action: Write '),
+      { t: 'el', id: '1', kind: 'code', src: '/tmp/f_a.py' },
+      text(' (scope cut)'),
     ])
-    // (a paper whose body face is of one pitch: Rule 1 keeps nothing, and TeX's line goes on as before; the line holds an
-    // identifier, `f_a`, which keeps a figure text whole as the original's whatever its face, and not by Rule 1)
-    expect(figuresOf('ABCDEF+CMTT10')).toEqual([[line, true, false]])
+    expect([fig!.fixed, !!unit.pitch, fig!.plain]).toEqual([false, false, undefined])
+    // (its element drawn from its ink, as the paper sets it: class `other`, set as written; its ink the path's glyphs)
+    expect(unit.classes).toEqual([['1', { cls: 'other', literal: true, copy: '/tmp/f_a.py' }]])
+    // (and marked kept for its pitch, by its piece: what the lab's dump and the parity read)
+    expect(unit.keptEls).toEqual([['1', 'pitch']])
+    expect(fig!.els.get('1')).toHaveLength('/tmp/f_a.py'.length)
+    expect(fig!.elements.find(([id]) => id === '1')?.[1]).toMatchObject({ kind: 'code', ink: [expect.any(Array)] })
+    // (a paper whose body face is of one pitch: Rule 1 keeps nothing and F0 makes no element of the path, and TeX's line goes on
+    // as before, one text; that text holds an identifier, `f_a`, which keeps a figure text whole as the original's whatever its
+    // face (§18.25), not by Rule 1. Where F0 makes the path an element, above, the identifier is the element's ink and the line
+    // is translated round it)
+    const T = locateWith('ABCDEF+CMTT10')
+    expect(
+      T.members.filter((m) => m.figure && m.unit >= 0).map((m) => [m.plain, m.fixed, !!T.units[m.unit]!.pitch]),
+    ).toEqual([[line, true, false]])
   })
 
   it('reads a figure’s word by its spacing, not its sizes: a heading in faked small capitals one figure text, no script and no other label joined', () => {

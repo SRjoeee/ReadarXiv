@@ -19,7 +19,7 @@
 // theorem-like head is drawn in the target's word (U.label's headLabelInTarget): the rules' (Rules.heads), else the paper's own
 // name unit's row (ownNamesOf over Part.paper.names), as today's headOf; a reference cleveref or \autoref generates, and a
 // citation's note, with its names in the target's (U.rename: Rules.refs, babel's names, the paper's own), as today's renameRefs.
-import { LINE_FLAG, type OutPiece, type Part, type Placed } from '@readarxiv/format'
+import { type Ink, LINE_FLAG, type OutPiece, type Part, type Placed } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
 import { fitMeasure, fontString } from '../breaker/measure.ts'
@@ -34,10 +34,10 @@ import type { FlowMember } from './flow.ts'
 import { figuresOf } from './figures.ts'
 import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
 import { type LinkFate, type LinkOwner, linksOf } from './links.ts'
-import { inFrame, inkOfLine, litLaid, litOfA, pageBoxOf, runBoxOfA } from './lit.ts'
+import { inFrame, inkOfLine, litLaid, litOfA, pageBoxOf, runBoxOfA, widened } from './lit.ts'
 import { layPagePrepared } from './page.ts'
 import { type CellAnswer, namesGroup, type TableGroup, tableGroups, unchanged } from '../shared/table-groups.ts'
-import { tokenBand } from '../emit/sentences.ts'
+import { carriedOf, tokenBand, tokenBox } from '../emit/sentences.ts'
 import { CJK, cjkClassRe } from '../breaker/script.ts'
 import { measured, paperOf, readMember, rowPieces, tstyleOf } from './read.ts'
 import { namedRows } from './named.ts'
@@ -68,14 +68,15 @@ function groupsOn(m: Placed, page: number): number {
   )
 }
 
-/** each crop a member's layout draws, on any of its pages: the page its ink is cut from, and whether it is an element's (its
- *  piece) or its label's (D.display's crop: `k` its element, none its label) */
-function cutsOf(L: Layout | undefined): { page: number; el: boolean }[] {
-  const out: { page: number; el: boolean }[] = []
+/** each crop a member's layout draws, on any of its pages: the page its ink is cut from, whether it is an element's (its
+ *  piece) or its label's (D.display's crop: `k` its element, none its label), and the member whose label it is where another
+ *  member's (`of`: a label no line opens with, drawn at the end of the member before, flow.ts) */
+function cutsOf(L: Layout | undefined): { page: number; el: boolean; of?: number }[] {
+  const out: { page: number; el: boolean; of?: number }[] = []
   for (const line of L?.lines ?? [])
     for (const it of line.items) {
-      const c = (it.t as { crop?: { page: number; k?: number } }).crop
-      if (c) out.push({ page: c.page, el: c.k !== undefined })
+      const c = (it.t as { crop?: { page: number; k?: number; of?: number } }).crop
+      if (c) out.push({ page: c.page, el: c.k !== undefined, ...(typeof c.of === 'number' ? { of: c.of } : {}) })
     }
   return out
 }
@@ -562,6 +563,25 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   ]
   const laid = layPagePrepared(page, flows, ties, R)
   const byOrd = new Map(laid.members.map((x) => [x.ord, x]))
+  // (each label drawn in another member's layout, by its owner: the pages its crop is cut from)
+  const carriedLabels = new Map<number, Set<number>>()
+  for (const x of laid.members)
+    for (const c of cutsOf(x.lay?.layout))
+      if (c.of !== undefined) carriedLabels.set(c.of, (carriedLabels.get(c.of) ?? new Set()).add(c.page))
+  // (each label carried to the end of the name before (a label no line opens with, flow.ts), by its owner: its drawn box on this
+  // page, on the holder's line, as ink (its line's baseline), lit with its owner on the right (litLaid's `carried`))
+  const carriedTo = new Map<number, Ink[]>()
+  for (const x of laid.members) {
+    const L = x.lay?.layout
+    for (const line of L?.lines ?? []) {
+      if (line.page !== page) continue
+      for (const it of line.items) {
+        const of = carriedOf(it)
+        const b = of !== undefined && of !== x.ord ? tokenBox(it, line, L!) : null
+        if (b) carriedTo.set(of!, [...(carriedTo.get(of!) ?? []), [page, b.l, b.bottom, b.r, b.top, line.baseline]])
+      }
+    }
+  }
   // (each name drawn as a lead, by the member it leads: its ink on A lit with that member's)
   const leadOf = new Map<number, Placed>()
   for (const m of members) {
@@ -597,7 +617,15 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
         state: 'laid',
         off,
         lines: here ? inked(nl) : [],
-        lit: here ? { left: [[boxOfA(m.lines[0]!)]], right: [nl.map(nameBox)], own: [] } : litOfA(m, page),
+        // (its label with it, the first sentence's: on A where TeX set it, as drawn where it stays the original's (its crop drawn
+        // with the word is on the word's line); 2610.20967v1 p5's "9." before its name, in no box on A)
+        lit: here
+          ? {
+              left: [widened([boxOfA(m.lines[0]!)], m.label ? [m.label.ink] : [], page)],
+              right: [widened(nl.map(nameBox), m.label && !(off & LABEL_KEPT) ? [m.label.ink] : [], page)],
+              own: [],
+            }
+          : litOfA(m, page),
       }
     }
     // (a name drawn as its member's lead: its text off where that member is laid, both the original's where it is not; lit with
@@ -626,7 +654,8 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
     // translation: today's hide.mjs), its label where it is drawn anew or carried as a crop; this page's its `off`, another's what
     // its links of that page read)
     const layout = x?.lay?.layout
-    const allCuts = cutsOf(layout)
+    // (its own crops: another's label drawn at its end is that member's)
+    const allCuts = cutsOf(layout).filter((c) => c.of === undefined || c.of === m.ord)
     const offOn = (q: number) => {
       const cuts = allCuts.filter((c) => c.page === q)
       return (
@@ -634,7 +663,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
           ? 0
           : 1 |
             (movedOn.get(m.ord)?.has(q) || cuts.some((c) => c.el) ? 2 : 0) |
-            (relabelled.has(m.ord) || cuts.some((c) => !c.el) ? LABEL_KEPT : 0)) &
+            (relabelled.has(m.ord) || cuts.some((c) => !c.el) || carriedLabels.get(m.ord)?.has(q) ? LABEL_KEPT : 0)) &
         groupsOn(m, q) &
         ~(m.fixed ?? 0)
       )
@@ -671,6 +700,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
               kept,
               lead: leadOf.get(m.ord) ?? null,
               by: pieces ? { sentences, pieces } : undefined,
+              carried: carriedTo.get(m.ord) ?? [],
             })
           : litOfA(m, page, sentences?.src),
     }

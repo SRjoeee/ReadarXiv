@@ -17,6 +17,7 @@ import { displayTextMask, type PageInk, regionMask } from '../ink.types.ts'
 import type { Instrument, InstrumentUnit, PieceClass, SpanClass } from '../instrument.ts'
 import { runIns } from '../marks/run-ins.ts'
 import { type AuthorBlock, authorBlockOf } from './author-block.ts'
+import { type FigureText, figureLinesOf, textOf as lineTextOf } from './figure-lines.ts'
 import {
   changeOf,
   faceKeyOf,
@@ -38,6 +39,7 @@ import {
   type TodayInkUnit,
   type TodayPage,
   type TodayPiece,
+  SPACE_GAP,
   type TodayUnit,
   UNIT_FLAG,
 } from './today/today.types.ts'
@@ -224,26 +226,46 @@ export function inkOf(o: InkInput): {
   // (the block's ink is no figure's text, though TeX drew it in the picture its title is in: a framed title box. Nor is arXiv's
   // ink, a level glyph with no partner on B on a page our compile sets; the ledger reads it as before, free: inside a unit our
   // compile set it makes that unit a content difference (locate.ts), and a line of it alone in a form is the class `figures`)
-  const fig = figureUnitsOf(
-    pages,
-    {
-      glyphs: own.glyphs.map((row, i) => {
-        const block = framed?.page === i
-        if (!block && !o.setA[i]) return row
-        const at = m.offA[i] as number
-        return row.map(
-          (x, g) =>
-            x ?? (block && framed.has(g) ? 'b' : o.setA[i] && (m.aToB[at + g] as number) < 0 ? ARXIV_INK : null),
-        )
-      }),
-    },
-    { done: shapesRead, fixed: o.fixed ?? null },
-  )
+  const figOwn = own.glyphs.map((row, i) => {
+    const block = framed?.page === i
+    if (!block && !o.setA[i]) return row
+    const at = m.offA[i] as number
+    return row.map(
+      (x, g) => x ?? (block && framed.has(g) ? 'b' : o.setA[i] && (m.aToB[at + g] as number) < 0 ? ARXIV_INK : null),
+    )
+  })
+  const fig = figureUnitsOf(pages, { glyphs: figOwn }, { done: shapesRead, fixed: o.fixed ?? null })
+  // (the figure texts its printed lines make anew, F0's, and those the relation reading judges anew: figure-lines.ts, PDF-READER
+  // §18.26. A run of none stays as today's reading made it)
+  const texts = figureLinesOf(pages, fig, (p, g) => figOwn[p - 1]?.[g] != null, o.fixed ?? null)
+  // (each text by its first run; the runs it takes after its first, and those wholly a doubled copy of a text's glyphs: no
+  // figure text of their own. Of two runs each the other's copy, the first's text stands, the second's is its copy)
+  const textAt = new Map<number, FigureText>()
+  const taken = new Set<number>()
+  for (const t of [...texts].sort((a, b) => a.ks[0]! - b.ks[0]!)) {
+    if (taken.has(t.ks[0]!)) continue
+    textAt.set(t.ks[0]!, t)
+    for (const k of t.ks.slice(1)) taken.add(k)
+    const copyRuns = new Set<number>()
+    for (const g of t.copies) {
+      const k = fig.glyphs[t.page - 1]?.get(g)
+      if (k !== undefined && !t.ks.includes(k)) copyRuns.add(k)
+    }
+    for (const k of copyRuns) {
+      const all = [...(fig.glyphs[t.page - 1] ?? [])].filter(([, x]) => x === k).map(([g]) => g)
+      if (all.every((g) => t.copies.includes(g))) {
+        taken.add(k)
+        textAt.delete(k)
+      }
+    }
+  }
   const ledgerOwn = own.glyphs.map((row, i) => {
     const f = fig.glyphs[i]
     if (!f?.size) return row
     const out = [...row]
     for (const [g, k] of f) out[g] = figureGroup(k)
+    // (the glyphs a text takes that no run held: its own, no line of the ledger's)
+    for (const t of textAt.values()) if (t.page === i + 1) for (const g of t.claimed) out[g] = figureGroup(t.ks[0]!)
     return out
   })
   const ledger = ledgerOf(pages, { glyphs: ledgerOwn }, { units })
@@ -377,9 +399,11 @@ export function inkOf(o: InkInput): {
     made.push(x)
   }
   // (the figure texts in today's bundle's order: those it draws first, in their order, then those whose ink stays)
-  const figOrder = [...fig.units.keys()].sort(
-    (a, b) => (fig.units[a]!.why ? 1 : 0) - (fig.units[b]!.why ? 1 : 0) || a - b,
-  )
+  const whyOf = (k: number) => {
+    const t = textAt.get(k)
+    return t ? (t.why === 'crowded' ? 1 : 0) : fig.units[k]!.why ? 1 : 0
+  }
+  const figOrder = [...fig.units.keys()].filter((k) => !taken.has(k)).sort((a, b) => whyOf(a) - whyOf(b) || a - b)
   // (each figure text's glyphs: its level ones (global, stream order) and its turned ones ([page, index]), in today's reading's
   // order of them)
   const figText = new Map<number, number[]>()
@@ -392,7 +416,14 @@ export function inkOf(o: InkInput): {
   })
   for (const k of figOrder) {
     const f = fig.units[k]!
+    const t = textAt.get(k)
+    if (t && (t.ks.length > 1 || t.els.length)) {
+      made.push(figureTextOf(t, fig, pages, inkA, m, o.pageA, global))
+      continue
+    }
     const text = (figText.get(k) ?? []).sort((a, b) => a - b)
+    // (a run alone the relation reading judged: its doubled copy's glyphs hidden with its text, its decoration's boxes)
+    if (t) for (const g of t.copies) text.push(global(t.page, g))
     const turned = figTurned.get(k) ?? []
     // (its text in the runs its glyphs set in another face than its own: each a group of its own, its style its glyphs')
     const { content, styles } = figureRuns(f.text ?? '', streamOfFigure(text, turned, pages, inkA, m, o.pageA))
@@ -415,6 +446,7 @@ export function inkOf(o: InkInput): {
       ...(Number.isFinite(f.before) ? { before: f.before } : {}),
       ...(Number.isFinite(f.after) ? { after: f.after } : {}),
       ...(typeof f.under === 'number' && Number.isFinite(f.under) ? { under: f.under } : {}),
+      ...(t ? roomOfText(t) : {}),
     }
     made.push({
       unit: {
@@ -423,8 +455,8 @@ export function inkOf(o: InkInput): {
         content,
         figure: { set: f.set ?? f.k, ...(dir ? { dir } : {}), ...room },
         ...(f.anchor ? { align: ALIGN_OF[f.anchor as keyof typeof ALIGN_OF] } : {}),
-        ...(f.why
-          ? { why: `figure: ${f.why}`, fixed: true as const }
+        ...((t ? t.why : f.why)
+          ? { why: `figure: ${t ? t.why : f.why}`, fixed: true as const }
           : o.artefact?.(text, turned)
             ? { why: 'figure: code', fixed: true as const, pitch: true as const }
             : identifiersIn((f.text ?? '').normalize('NFKC')).length
@@ -435,7 +467,7 @@ export function inkOf(o: InkInput): {
       ph: [],
       phId: null,
       turned,
-      textBoxes: [],
+      textBoxes: t ? t.textBoxes.map((b): [number, number] => [t.page, b]) : [],
       elBoxes: [],
       ...(styles.length ? { spanStyles: styles } : {}),
     })
@@ -472,6 +504,145 @@ export function inkOf(o: InkInput): {
       code: made.filter((x) => x.unit.why === 'figure: code').length,
     },
     block,
+  }
+}
+
+/** a judged text's room beside today's: the stroke under its text where the relation reading freed it, a container's edges */
+function roomOfText(t: FigureText): { under?: number; over?: number } {
+  const under = Math.min(t.under ?? Infinity, t.container?.under ?? Infinity)
+  return {
+    ...(Number.isFinite(under) ? { under } : {}),
+    ...(t.container ? { over: t.container.over } : {}),
+  }
+}
+
+/**
+ * A figure text its printed line makes (figure-lines.ts): its content in its line's order, its text pieces as figureRuns states a
+ * figure text's (each run of another face a group), each element a piece of its own (`code`: a run of one pitch; `cite`, `ref`:
+ * a stretch a decoration holds), a space between two where their glyphs stand SPACE_GAP of their size apart; each element drawn
+ * from its ink (its class `other`, a code one `literal`, its glyphs' text its copy), its glyphs and its boxes (a ground's, a
+ * decoration's) its own. Laid by the paragraph path (it states no own text, locate): its room the line's, from its first run's
+ * room before to its last run's after, alone in its set (no size tie with the labels S.figures sets)
+ */
+function figureTextOf(
+  t: FigureText,
+  fig: ReturnType<typeof figureUnitsOf>,
+  pages: readonly TodayPage[],
+  inkA: Doc,
+  m: Mapping,
+  pageA: Int32Array,
+  global: (p: number, g: number) => number,
+): Made {
+  const p = t.page
+  const G = inkA.pages[p - 1]!.glyphs
+  const glob = (g: number) => global(p, g)
+  const textGs = t.order.flatMap((o) => (o.t === 'text' ? o.glyphs : []))
+  const own = textGs.map((g) => G[g]!)
+  // (its pieces with ids of their own, renumbered by place once the white space between them is merged)
+  type Raw = { piece: Piece; style?: Style; cls?: PieceClass; el?: { glyphs: number[]; boxes: [number, number][] } }
+  const raw: Raw[] = []
+  const space = () => {
+    const last = raw.at(-1)
+    if (last?.piece.t === 'text') last.piece = { t: 'text', s: `${last.piece.s} ` }
+    else raw.push({ piece: { t: 'text', s: ' ' } })
+  }
+  let prev: (typeof G)[number] | null = null
+  for (const o of t.order) {
+    const gs = o.t === 'text' ? o.glyphs : t.els[o.i]!.glyphs
+    const first = G[gs[0]!]!
+    const spaced = !!prev && first.x0 - prev.x1 >= SPACE_GAP * first.size
+    if (o.t === 'text') {
+      const s = (spaced ? ' ' : '') + lineTextOf(gs, G)
+      const r = figureRuns(s, {
+        stream: streamOfFigure(
+          gs.map(glob).sort((a, b) => a - b),
+          [],
+          pages,
+          inkA,
+          m,
+          pageA,
+        ).stream,
+        own,
+      })
+      const st = new Map(r.styles)
+      for (const x of r.content) {
+        const last = raw.at(-1)
+        if (x.t === 'text' && last?.piece.t === 'text') last.piece = { t: 'text', s: last.piece.s + x.s }
+        else raw.push({ piece: x, ...(x.t === 'span' && st.has(x.id) ? { style: st.get(x.id)! } : {}) })
+      }
+    } else {
+      if (spaced) space()
+      const e = t.els[o.i]!
+      const src = lineTextOf(e.glyphs, G)
+      raw.push({
+        piece: { t: 'el', id: '', kind: e.kind, src },
+        cls: { cls: 'other', ...(e.kind === 'code' ? { literal: true as const } : {}), copy: src },
+        el: { glyphs: e.glyphs.map(glob).sort((a, b) => a - b), boxes: e.boxes.map((b): [number, number] => [p, b]) },
+      })
+    }
+    prev = G[gs.at(-1)!]!
+  }
+  const content: Piece[] = []
+  const styles: [string, Style][] = []
+  const classes: [string, PieceClass][] = []
+  const els = new Map<string, { glyphs: number[]; boxes: [number, number][] }>()
+  for (const x of raw) {
+    const id = String(content.length)
+    if (x.piece.t === 'text') content.push(x.piece)
+    else if (x.piece.t === 'span') {
+      content.push({ ...x.piece, id })
+      if (x.style) styles.push([id, x.style])
+    } else if (x.piece.t === 'el') {
+      content.push({ ...x.piece, id })
+      classes.push([id, x.cls!])
+      els.set(id, x.el!)
+    }
+  }
+  const f0 = fig.units[t.ks[0]!]!
+  const fz = fig.units[t.ks.at(-1)!]!
+  const all = t.order.flatMap((o) => (o.t === 'text' ? o.glyphs : t.els[o.i]!.glyphs))
+  const x1 = Math.max(...all.map((g) => G[g]!.x1))
+  const x0 = G[all[0]!]!.x0
+  const room = {
+    x: x0,
+    ...(Number.isFinite(f0.y) ? { y: f0.y } : {}),
+    length: x1 - x0,
+    ...(f0.anchor ? { anchor: f0.anchor } : {}),
+    ...(Number.isFinite(f0.before) ? { before: f0.before } : {}),
+    ...(Number.isFinite(fz.after) ? { after: fz.after } : {}),
+    ...(typeof f0.under === 'number' && Number.isFinite(f0.under) ? { under: f0.under } : {}),
+    ...roomOfText(t),
+  }
+  return {
+    unit: {
+      id: unitId('inkfigures', content),
+      kind: 'inkfigures',
+      content,
+      ...(classes.length ? { classes } : {}),
+      ...(classes.length
+        ? {
+            keptEls: classes.map(([id]): [string, 'pitch' | 'decoration'] => [
+              id,
+              (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind === 'code'
+                ? 'pitch'
+                : 'decoration',
+            ]),
+          }
+        : {}),
+      figure: { set: -1 - t.ks[0]!, ...room },
+      ...(f0.anchor ? { align: ALIGN_OF[f0.anchor as keyof typeof ALIGN_OF] } : {}),
+      ...(t.why
+        ? { why: `figure: ${t.why}`, fixed: true as const, ...(t.why === 'code' ? { pitch: true as const } : {}) }
+        : {}),
+    },
+    text: [...textGs, ...t.copies].map(glob).sort((a, b) => a - b),
+    ph: [],
+    phId: null,
+    turned: [],
+    textBoxes: t.textBoxes.map((b): [number, number] => [p, b]),
+    elBoxes: [],
+    ...(styles.length ? { spanStyles: styles } : {}),
+    ...(els.size ? { els } : {}),
   }
 }
 

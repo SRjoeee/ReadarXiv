@@ -30,6 +30,13 @@ describe('an inline formula closes at TeX\'s math shift: `$` or \\), whichever o
     expect(us.map(textOf)).toEqual(['Take and here.', 'Then follows.'])
     expect(formulasOf(us[0]!)).toEqual(['\\(x>0$', '$y<0$'])
   })
+  it('a math shift inside a group of the formula, a text box\'s own formula, closes nothing of it (Codex on #634, round 8 B5)', () => {
+    // (TeX ends inline math at a math shift of the formula's own level: one inside a group, `\\text{for $y>0$}`, is the box's own
+    // formula; a closing shift inside a group of math proper is an error TeX reports)
+    const us = unitsOf('So \\(x+\\text{for $y>0$}=z\\) and $a+\\mbox{if $b$, \\(c\\)}$ hold.')
+    expect(us.map(textOf)).toEqual(['So and hold.'])
+    expect(formulasOf(us[0]!)).toEqual(['\\(x+\\text{for $y>0$}=z\\)', '$a+\\mbox{if $b$, \\(c\\)}$'])
+  })
   it('a formula opened and closed alike reads as before, an escaped dollar no shift', () => {
     const us = unitsOf('Costs $\\$5$ and \\(a\\) and $b$ here.')
     expect(us.map(textOf)).toEqual(['Costs and and here.'])

@@ -313,9 +313,14 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const runs = rec.original?.runs ?? null,
     fonts = rec.original?.fonts ?? []
   const aOrig = new Map()
+  // (the ink of the elements a member keeps as the original's, v2.mjs's `keptEls`: F0's run of one pitch, a stretch a decoration
+  // holds. Their glyphs are no characters of the text's share, as the drawn text leaves them uncounted: the coordinator's ruling
+  // 1 on F0, 2026-11-10)
+  const keptInk = new Map(v2.keptEls ?? [])
   if (runs)
     for (const [key, o] of orig) {
-      const a = originalOf(runs, fonts, o.lines.map((l) => [l.x0, l.bottom ?? l.y - 0.2 * l.size, l.x1, l.top ?? l.y + 0.8 * l.size]))
+      const except = (keptInk.get(o.part) ?? []).filter((b) => b[0] === n).map((b) => b.slice(1))
+      const a = originalOf(runs, fonts, o.lines.map((l) => [l.x0, l.bottom ?? l.y - 0.2 * l.size, l.x1, l.top ?? l.y + 0.8 * l.size]), except)
       if (a) aOrig.set(key, a)
     }
   /** a drawn line by its ink (inkedLine, its crops and raised marks with it: withCrops) */
@@ -695,9 +700,33 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // (and those it keeps for an identifier they hold, `identifier`, the coordinator's ruling of 2026-11-10: IDENTIFIER_RULING)
   const figKept = [...figuresMatched(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n).keys()].filter((o) => pitch.has(o) || identifier.has(o))
   const figPitch = figKept.filter((o) => pitch.has(o)).length
-  if (figV < figT) {
-    const ruled = figV >= figT - figKept.length
-    diff('figures', null, 'figure texts drawn translated', null, { value: figT, off: null }, { value: figV, off: null }, !ruled, ruled ? 'ruling' : 'today')
+  // (a figure member v2 draws that holds two or more of today's units whole, its text theirs in order (v2.mjs `joined`,
+  // join.mjs joinedJoin's exact text: F0's line, a figure paragraph, a word joined across a size change, 2608.06701v1 p1's
+  // "…th" | "e…"): one translation for what today drew in pieces, each of them drawn)
+  const joinedV2 = v2.joined ?? {}
+  const figJoined = rec.v2.units
+    .filter((u) => figOrds.has(u.id) && u.lines.some((l) => l.n > 0) && (joinedV2[u.id]?.length ?? 0) > 1)
+    .reduce((a, u) => a + joinedV2[u.id].length - 1, 0)
+  const figVJ = figV + figJoined
+  // (and today's figure texts inside one no row of the pair's serves, left the original's (`unmeasured`): literal-fixes' rule,
+  // extended to F0's figure texts whose stretch is now an element, today's row having translated it (the coordinator's ruling
+  // 1 on F0, 2026-11-10). Each of today's drawn groups whose middle stands in such a member's lines on the page, however today
+  // cut it: the box join pairs one piece of a text today drew in two at most (2608.06701v1 p1's names on tones)
+  const unmeasuredSpans = [...figOrds]
+    .filter((o) => !pitch.has(o) && !identifier.has(o) && unmeasured(o))
+    .map((o) => spanOf((facts.get(o)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))))
+    .filter(Boolean)
+  const figUnmeasured = (rec.today.figures ?? []).filter((g) => {
+    const b = spanOf(g.lines.filter((l) => l.n > 0).map(band))
+    if (!b) return false
+    const x = (b.x0 + b.x1) / 2,
+      y = (b.y0 + b.y1) / 2
+    return unmeasuredSpans.some((s) => x >= s.x0 - 0.5 && x <= s.x1 + 0.5 && y >= s.y0 - 0.5 && y <= s.y1 + 0.5)
+  }).length
+  if (figVJ < figT) {
+    const ruled = figVJ >= figT - figKept.length
+    const unm = !ruled && figVJ >= figT - figKept.length - figUnmeasured
+    diff('figures', null, 'figure texts drawn translated', null, { value: figT, off: null }, { value: figVJ, off: null }, !ruled && !unm, ruled ? 'ruling' : unm ? 'unmeasured' : 'today')
     if (ruled) out.diffs.at(-1).ruling = [...new Set(figKept.map((o) => (pitch.has(o) ? PITCH_RULING : IDENTIFIER_RULING)))].join(' / ')
   }
 
@@ -932,7 +961,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     laid: { today: T.size, v2: V.size, gained },
     echoed,
     within,
-    figures: { today: figT, v2: figV, v2Laid: figLaid, ...(figPitch ? { pitch: figPitch } : {}), ...(figKept.length > figPitch ? { identifier: figKept.length - figPitch } : {}) },
+    figures: { today: figT, v2: figV, v2Laid: figLaid, ...(figPitch ? { pitch: figPitch } : {}), ...(figKept.length > figPitch ? { identifier: figKept.length - figPitch } : {}), ...(figJoined ? { joined: figJoined } : {}), ...(figUnmeasured ? { unmeasured: figUnmeasured } : {}) },
   }
   for (const f of FLAGS) {
     const a = faults.today[f] ?? [],

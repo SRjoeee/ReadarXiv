@@ -165,6 +165,9 @@ function textOfPieces(pieces: NonNullable<FigureUnit['pieces']>): { text: string
 /** figureRuns' width at size 1, each run's in its face (L2:4836 figureRunsWidth, widthOf L2:1322) */
 export const figureRunsWidth = (runs: readonly FigureRun[], m: FitMeasure): number =>
   runs.reduce((a, r) => a + m.w100(r.s, r.face) / 100, 0)
+/** how far over its baseline figureRuns reach at size 1, their ink (a container's edge keeps it under it, figure-fit.ts) */
+export const figureRunsHeight = (runs: readonly FigureRun[], m: FitMeasure): number =>
+  runs.reduce((h, r) => Math.max(h, m.ink100(r.s, r.face).a / 100), 0)
 /** how far under its baseline figureRuns reach at size 1, a CJK run's held to its face's em box (L2:4839 figureRunsDepth) */
 export const figureRunsDepth = (runs: readonly FigureRun[], m: FitMeasure): number =>
   runs.reduce(
@@ -208,6 +211,7 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
     runs: FigureRun[]
     width1: number
     depth1: number
+    height1: number
     blank1: [number, number]
   }[] = []
   for (const f of i.figures) {
@@ -275,6 +279,7 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
       runs,
       width1: figureRunsWidth(runs, m),
       depth1: figureRunsDepth(runs, m),
+      height1: figureRunsHeight(runs, m),
       blank1: blanksOf(runs, i.rules),
     })
   }

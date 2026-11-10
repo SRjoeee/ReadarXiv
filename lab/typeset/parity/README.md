@@ -270,6 +270,15 @@ difference, a run-in's `gap` beside it and its cell's place in a grid group are 
 worse; the sheet lists every page with its unmeasured units and their count, and its summary states the whole count
 (`verdict.mjs` unmeasuredOf, the result's `unmeasured`).
 
+The coordinator's ruling 1 on F0 (rebuild/fig-text, 2026-11-10) extends both rules to F0's elements, no page ruled one by one.
+An element of a figure text the dump marks `keptBy` 'pitch' (its run of one pitch) or 'decoration' (a stretch a frame, an
+underline or a tone holds) is the original's ink: `join.mjs` candidateKeptElements gives its segments by member, `v2.mjs`
+writes them, `keptEls`, and the original's bold and slanted shares (`style`) are read without their glyphs, as the drawn
+text's share leaves the element's ink uncounted (`fidelity.mjs` originalOf's `except`). And a figure text no row of the
+pair's serves, left the original's (its stretch now an element, today's row having translated it: `noRow`), is unmeasured in
+`figures` as in `shown`: a count fewer by no more than the texts the rulings keep and those is "unmeasured", never worse (the
+measure's `unmeasured` count).
+
 Beside the verdict each side's faults against absolute bounds are measured (and for the measures above each side's own
 count: text over ink, lines past the frame or the block, elements drawn otherwise, glyphs shown in part, groups mixed, a
 paper's labels mixed, a page number off, ink not black) (a first line off both ways by 0.25 of the
