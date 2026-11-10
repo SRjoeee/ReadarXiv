@@ -890,12 +890,12 @@ export function textOf(gs: readonly number[], glyphs: readonly G[]): string {
 
 /**
  * F1: whether a text's formula element has ink of its own the text does not hold: a glyph no line took standing over or under
- * the element (its extent across, within its line's band of either side of the baseline: a sum's limits set past half the
- * size, a fraction's other line). The element moves with the translation and that ink would stay where it is, a torn formula:
- * the text stays the original's, the fallback of the relation reading (no fact tells the ink is the element's). A glyph that
- * stands on another line's baseline (RUN_DY) is that line's, taken or not: a torn piece stands on no line's (a table's number
- * cells under a group header's formula, no unit, stand on their row's; a caption's last mark past its line's run gap on the
- * caption's: 2609.19644v1 p11)
+ * the element (its extent across) and nearer its line, by baseline, than any other line across it (a sum's limits set past half
+ * the size, a fraction's other line: 2610.35877v1 p3's denominator a full size under). The element moves with the translation
+ * and that ink would stay where it is, a torn formula: the text stays the original's, the fallback of the relation reading (no
+ * fact tells the ink is the element's). A glyph that stands on another line's baseline (RUN_DY) is that line's, taken or not
+ * (a table's number cells under a group header's formula, no unit, stand on their row's; a caption's last mark past its line's
+ * run gap on the caption's: 2609.19644v1 p11); one nearer another line across it, that line's (a script of the line under)
  */
 function torn(
   ft: FigureText,
@@ -905,16 +905,22 @@ function torn(
   lines: readonly Line[],
 ): boolean {
   if (!loose.length) return false
-  const reach = BAND_EM * l.size
   return ft.els.some((e) => {
     if (e.kind !== 'math') return false
     const x0 = Math.min(...e.glyphs.map((g) => glyphs[g]!.ix0 ?? glyphs[g]!.x0)),
       x1 = Math.max(...e.glyphs.map((g) => glyphs[g]!.ix1 ?? glyphs[g]!.x1))
     return loose.some((g) => {
       const x = glyphs[g]!
-      if (!real(x) || (x.ix1 ?? x.x1) <= x0 || (x.ix0 ?? x.x0) >= x1) return false
-      if (!(x.bottom < l.y + reach && x.top > l.y - reach)) return false
-      return !lines.some((m) => m !== l && Math.abs(m.y - x.y) <= RUN_DY * Math.max(m.size, x.size))
+      const gx0 = x.ix0 ?? x.x0,
+        gx1 = x.ix1 ?? x.x1
+      if (!real(x) || gx1 <= x0 || gx0 >= x1) return false
+      const d = Math.abs(x.y - l.y)
+      return !lines.some(
+        (m) =>
+          m !== l &&
+          (Math.abs(m.y - x.y) <= RUN_DY * Math.max(m.size, x.size) ||
+            (m.x0 < gx1 && m.x1 > gx0 && Math.abs(m.y - x.y) < d)),
+      )
     })
   })
 }
