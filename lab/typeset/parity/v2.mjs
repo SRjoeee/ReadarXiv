@@ -24,7 +24,7 @@ const { layered, servedMetrics } = await import('../served-metrics.mjs')
 const { typesetLay } = await import('../../../packages/reader/src/compose/typeset.ts')
 const { hyphenationOf } = await import('../../../packages/typeset/src/index.ts')
 const { hyphFileOf } = await import('./inputs.mjs')
-const { candidateAddress, candidatePitch, candidateStated, heldJoin, todayJoin } = await import('./join.mjs')
+const { candidateAddress, candidatePitch, candidateStated, heldJoin, joinedJoin, todayJoin } = await import('./join.mjs')
 const { readAsChain } = await import('./rows.mjs')
 const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
 const { partsIn, UNJOINED, unjoinedOf, withUnjoined } = await import('./unjoin.mjs')
@@ -96,6 +96,14 @@ for (const pair of pairs) {
     heldRows.laid = out.size
     return out
   }
+  // (the members holding several of today's units whole, their text today's in order (join.mjs joinedJoin, lane fig-text): each
+  // given a row said by today's rows in that order, its elements its own; the verdict counts today's units each holds)
+  const joinedAll = new Map()
+  const joined = (members, today) => {
+    const j = joinedJoin(members, l1Paper(paperOf(pair))?.units ?? new Map(), stated, today, prepared0)
+    for (const [o, x] of j) joinedAll.set(o, x.todays)
+    return j
+  }
   // (the rows as the chain reads a reply, rows.mjs: the door's stored replies, each group they did not bring back placed where
   // the translation states it)
   const units = l1Paper(paperOf(pair))?.units ?? new Map()
@@ -119,7 +127,7 @@ for (const pair of pairs) {
   globalThis.__parityFill = targets(offTargets)
   globalThis.__parityNoOptionI = true
   try {
-    gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held })
+    gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held, joined })
   } finally {
     globalThis.__parityNoOptionI = undefined
   }
@@ -132,14 +140,14 @@ for (const pair of pairs) {
   }
   globalThis.__parityMarkSpaces = true
   try {
-    gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held })
+    gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held, joined })
   } finally {
     globalThis.__parityMarkSpaces = undefined
   }
   globalThis.__ckPage = keep
   globalThis.__parityFill = targets(fills)
   heldRows.joined = 0
-  const got = gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held })
+  const got = gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held, joined })
   for (const [pg, f] of Object.entries(offTargets)) (before[pg] ??= { lines: {} }).target = f.target
   // (lane url-join: the pair laid once more with the line ends of each word TeX set as written read as spaces again, as a run
   // without the rule read them (unjoin.mjs, AXT_PARITY_UNJOINED), its pages not kept nor its passes' targets: each line count on
@@ -156,7 +164,7 @@ for (const pair of pairs) {
     }
     globalThis.__parityFill = undefined
     try {
-      withUnjoined(words, () => gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held }))
+      withUnjoined(words, () => gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held, joined }))
     } finally {
       globalThis.__ckPage = kept.page
       globalThis.__parityFill = kept.fill
@@ -221,7 +229,7 @@ for (const pair of pairs) {
   // (the members the candidate's prepare keeps as a line of e-mail addresses, by ord: the verdict's `shown` reads them as the
   // original's, the coordinator's ruling of 2026-11-10)
   const address = candidateAddress(paperOf(pair))
-  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, fills, before, spaced, unjoined, ...(missing ? { notes: [missing] } : {}), ...(pitch.length ? { pitch } : {}), ...(address.length ? { address } : {}), held: heldRows, threw: got.threw, laidPages: Object.keys(pages).length }
+  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, fills, before, spaced, unjoined, ...(missing ? { notes: [missing] } : {}), ...(pitch.length ? { pitch } : {}), ...(address.length ? { address } : {}), ...(joinedAll.size ? { joined: Object.fromEntries(joinedAll) } : {}), held: heldRows, threw: got.threw, laidPages: Object.keys(pages).length }
   writeFileSync(join(OUT, `${pair}.json`), `${JSON.stringify(out)}\n`)
   const laid = Object.values(pages).reduce((n, p) => n + p.members.filter((m) => m.state === 'laid').length, 0)
   console.log(`${pair}: ${Object.keys(pages).length} pages, ${laid} members laid, ${(performance.now() - t0).toFixed(0)} ms${heldRows.joined ? `; held: ${heldRows.joined} joined, ${heldRows.laid} given today's row` : ''}`)

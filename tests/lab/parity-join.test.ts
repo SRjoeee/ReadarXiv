@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { candidateAddress, candidatePitch, heldJoin, todayJoin } from '../../lab/typeset/parity/join.mjs'
+import { candidateAddress, candidatePitch, heldJoin, joinedPlan, todayJoin } from '../../lab/typeset/parity/join.mjs'
 import { unitId } from '../../packages/format/src/ids.ts'
 
 type Content = { t: 'text'; s: string }[]
@@ -285,5 +285,32 @@ describe("the members the candidate's prepare keeps for their text set wholly in
     } finally {
       rmSync(run, { recursive: true, force: true })
     }
+  })
+})
+
+describe('joinedPlan: several of today’s units saying one of v2’s, by the exact text (lane fig-text)', () => {
+  it('pairs a word joined across a size change: today’s two pieces, v2’s one text (2608.06701v1 p1)', () => {
+    expect(joinedPlan(['and retry viewing th', 'e file.'], [{ t: 'text', s: 'and retry viewing the file.' }])).toEqual([
+      { t: 'today', i: 0 },
+      { t: 'today', i: 1 },
+    ])
+  })
+  it('pairs a label and its address, the address v2’s element (F0, 2611.03178v1 p1)', () => {
+    const content = [{ t: 'text', s: 'Project Page: ' }, { t: 'el', id: '1', kind: 'code', src: 'site.io' }]
+    expect(joinedPlan(['Project Page:', 'site.io'], content)).toEqual([
+      { t: 'today', i: 0 },
+      { t: 'el', id: '1' },
+    ])
+  })
+  it('joins a word TeX broke at a line’s end, today’s hyphen left out', () => {
+    expect(joinedPlan(['the foun-', 'dation models'], [{ t: 'text', s: 'the foundation models' }])).toEqual([
+      { t: 'today', i: 0 },
+      { t: 'today', i: 1 },
+    ])
+  })
+  it('none where the texts are not one, or a piece of today’s straddles an element’s edge', () => {
+    expect(joinedPlan(['and retry', 'the file.'], [{ t: 'text', s: 'and retry viewing the file.' }])).toBeNull()
+    const content = [{ t: 'text', s: 'Page: ' }, { t: 'el', id: '1', kind: 'code', src: 'site.io' }]
+    expect(joinedPlan(['Page: site', '.io'], content)).toBeNull()
   })
 })

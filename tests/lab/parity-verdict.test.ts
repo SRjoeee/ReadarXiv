@@ -21,11 +21,21 @@ const rec = (o: { today?: object; v2?: object; original?: number } = {}) => ({
   px: {},
 })
 /** v2.mjs's file of a pair: the page's members (Page) and the part's facts, the join to today's ords */
-const v2Of = (o: { members?: object[]; facts?: object[]; ties?: number[][]; today?: Record<number, { today: number }>; pitch?: number[] } = {}) => ({
+const v2Of = (
+  o: {
+    members?: object[]
+    facts?: object[]
+    ties?: number[][]
+    today?: Record<number, { today: number }>
+    pitch?: number[]
+    joined?: Record<number, number[]>
+  } = {},
+) => ({
   pages: { [N]: { members: o.members ?? [], links: [] } },
   facts: { [N]: { members: o.facts ?? [], links: 0, ...(o.ties ? { ties: o.ties } : {}) } },
   today: o.today ?? {},
   ...(o.pitch ? { pitch: o.pitch } : {}),
+  ...(o.joined ? { joined: o.joined } : {}),
 })
 /** `prep`: today's prepare dump's units (the original's lines of today's units, its figure texts among them) */
 /** `led`: the part's run-ins, follower ord -> its leader's (a member the part joins to the one before it in its flow, or the
@@ -899,5 +909,32 @@ describe("shown, figures: a unit the prepare keeps for its text set wholly in a 
     expect(of('figures')(figs({ pitch: [50], v2Draws51: false }))).toEqual([[true, 'today']])
     expect(of('figures')(figs({ v2Draws51: true }))).toEqual([[true, 'today']])
     expect(of('figures')(figs({ pitch: [52], v2Draws51: true }))).toEqual([[true, 'today']])
+  })
+})
+
+describe('figures: a figure text of v2’s that holds several of today’s, its text theirs in order, draws each of them (lane fig-text)', () => {
+  // (2608.06701v1 p1: today's two groups "… retry viewing th" | "e file." a size change cut, v2's one figure text "… retry
+  // viewing the file." (fig-smallcaps: a word joined across a size change; F0's lines and F3's paragraphs alike): join.mjs
+  // joinedJoin pairs the two of today's with v2's one by the exact text, v2.mjs writes it `joined`; one translation drawn for
+  // them is no figure text missing)
+  type D = { flag: string; worse: boolean; nearer: string }
+  const of = (p: { diffs: D[] }) => p.diffs.filter((d) => d.flag === 'figures').map((d) => [d.worse, d.nearer])
+  const figFact = (ord: number, x0: number, x1: number) => ({ ord, kind: 'figure', align: 'l', style: { size: 8 }, lines: [factLine(x0, x1, 300, 8)] })
+  const prepFig = (ord: number, x0: number, x1: number) => ({ ord, kind: 'figure', lines: [{ page: N, x0, x1, baseline: 300, top: 306.4, bottom: 298.4, size: 8 }] })
+  const run = (joined?: Record<number, number[]>) =>
+    measure(
+      v2Of({ members: [{ ord: 60, state: 'laid', lines: [] }], facts: [figFact(60, 100, 185)], ...(joined ? { joined } : {}) }),
+      rec({
+        today: { figures: [{ id: 'f0', lines: [drawnLine(100, 140, 300, 'wxyz', 8)] }, { id: 'f1', lines: [drawnLine(145, 185, 300, 'wxyz', 8)] }] },
+        v2: { units: [{ id: 60, lines: [drawnLine(100, 185, 300, 'abcdefgh', 8)] }] },
+      }),
+      [prepFig(90, 100, 140), prepFig(91, 145, 185)],
+    )
+  it('counts the one drawn as the two of today’s it holds: not worse', () => {
+    expect(of(run({ 60: [90, 91] }))).toEqual([])
+    expect(run({ 60: [90, 91] }).measures.figures).toMatchObject({ today: 2, v2: 1, joined: 1 })
+  })
+  it('without the join, one fewer: worse', () => {
+    expect(of(run())).toEqual([[true, 'today']])
   })
 })
