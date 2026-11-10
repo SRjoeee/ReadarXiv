@@ -347,7 +347,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
   // shrinking as they do)
   const groupOf = (from, end) => {
     const items = []
-    let w = 0, sp = 0
+    let w = 0, sp = 0, rig = 0
     let prev = line.items.at(-1)?.t ?? null
     for (let q = from; q < end; q++) {
       const t = tokens[q]
@@ -385,6 +385,11 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       // ends, the room up to it the label's, or right after the label where the label drawn needs more; `tabbed`)
       const hung = line.tab !== undefined && !t.label ? line.items.concat(items) : null
       const tab = hung?.some(it => it.t.label) && hung.every(it => it.t.label || it.t.space) ? Math.max(0, line.tab - line.x0 - (line.x + w + asp)) : 0
+      // (the label's spaces then a box's, TeX's hang: none shrinks, `rig` the line's own already counted, the group's taken out)
+      if (tab) {
+        rig = line.items.reduce((a, it) => a + (it.t.space && !it.rigid ? it.w : 0), 0)
+        for (const it of items) if (it.t.space && !it.rigid) { it.rigid = true; sp -= it.w }
+      }
       // (`cut`: the mark has lost its blank half, which a squeezed line does not take from it again, placeItems)
       items.push({ t, w: tw, shift, asp: asp + tab, ...(tab ? { tabbed: true } : {}), ...(kern ? { kern } : {}), ...(shift ? { cut: true } : {}) })
       w += tw + asp + tab + kern
@@ -392,10 +397,16 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     }
     // a closing mark at the line's end hangs its blank half (hangOf)
     const hang = hangOf(items.at(-1), st.compress) * f
-    return { items, w, sp, hang }
+    return { items, w, sp, hang, rig }
   }
   /** whether a group fits the line in hand: its spaces and the line's shrunk to spaceMin, a closing mark at its end hung */
-  const fits = (g, cap) => line.x - line.spaces * (1 - P.spaceMin) - g.sp * (1 - P.spaceMin) + g.w - g.hang <= cap + 0.01
+  const fits = (g, cap) => line.x - (line.spaces - g.rig) * (1 - P.spaceMin) - g.sp * (1 - P.spaceMin) + g.w - g.hang <= cap + 0.01
+  // (a group set at a hung label's end makes the label's spaces on the line a box's, TeX's hang: they shrink no more, `rig`)
+  const take = g => {
+    if (g.rig) { for (const it of line.items) if (it.t.space) it.rigid = true; line.spaces -= g.rig }
+    for (const it of g.items) { line.items.push(it); if (it.t.space && !it.rigid) line.spaces += it.w }
+    line.x += g.w
+  }
   // (a line's trailing spaces dropped, and the kern of its last token: glue TeX drops at a break, a kern the line no longer
   // needs)
   const trim = l => {
@@ -431,7 +442,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     if (!squeezes || line.centred || !line.items.length) return false
     const all = line.items.concat(g.items)
     if (latinishOf(all, P)) return false
-    const need = line.x - (line.spaces + g.sp) * (1 - P.spaceMin) + g.w - g.hang - cap
+    const need = line.x - (line.spaces - g.rig + g.sp) * (1 - P.spaceMin) + g.w - g.hang - cap
     const gaps = gapsOf(all)
     const stretch = stretchOf(cap)
     return gaps > 0 && stretch > STRETCH_MIN * f && need <= squeezable(all, g.hang > 0, st.compress, P).length * half + gapSqueeze * gaps + 1e-9 && need / gaps < stretch
@@ -556,10 +567,9 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     const shrink = line.spaces * (1 - P.spaceMin)
     let g = groupOf(i, j)
     if (j > own && !line.items.length && !fits(g, cap)) { j = own; g = groupOf(i, j) }
-    const { items, w } = g
+    const { items } = g
     if (fits(g, cap)) {
-      for (const it of items) { line.items.push(it); if (it.t.space) line.spaces += it.w }
-      line.x += w
+      take(g)
       i = j
       continue
     }
@@ -629,8 +639,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     }
     // a CJK line squeezed to take the group (squeezeTakes)
     if (squeezeTakes(g, cap)) {
-      for (const it of items) { line.items.push(it); if (it.t.space) line.spaces += it.w }
-      line.x += w
+      take(g)
       line.squeezed = true
       i = j
       continue

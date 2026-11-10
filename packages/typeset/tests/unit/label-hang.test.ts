@@ -88,6 +88,25 @@ describe('a label TeX hung beside its text, drawn anew', () => {
     expect(text[1] as number).toBeGreaterThan(95.61)
     for (const l of lines.slice(1)) expect(l[0]![1]).toBeCloseTo(95.61, 1)
   })
+  it('sets no line past its slot: the label’s spaces, a box’s as TeX’s hang, are no space a line shrinks', () => {
+    // (the reader gate's I5 on the zh packs: the breaker took a character on the hung first line counting the label's spaces as
+    // ones that shrink, which the placement, the hang a box, never shrank: 9 lines up to 1.5 pt past their slot)
+    const cjk = String.fromCodePoint(...Array.from({ length: 60 }, (_, k) => 0x4e00 + ((k * 37) % 400)))
+    const r: Row = { id, ok: true, by: 'test', content: [{ t: 'text', s: cjk }] }
+    const [laid] = layPage(
+      part(caption(100.75)),
+      { get: (k) => (k === id ? r : undefined), done: true },
+      rulesFor('zh'),
+      metrics(),
+    ).members
+    expect(laid!.state).toBe('laid')
+    expect(laid!.lines[0]![3][0]!).toMatchObject({ x: 47 })
+    for (const [, , , items] of laid!.lines) {
+      const last = items.at(-1)!
+      const end = 'face' in last ? last.x + (last.size * [...last.s.trimEnd()].length) / 2 : 0
+      expect(end).toBeLessThanOrEqual(300 + 0.01)
+    }
+  })
   it('keeps a label TeX set at the start of its first line, the lines after it at the measure, the first line’s', () => {
     // (a caption's label in its first line's text, its second line back at the measure's start: no hang, the label begins the
     // first line, as before)
