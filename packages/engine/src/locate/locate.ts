@@ -51,7 +51,7 @@ import {
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
 import { groupStyleOf, hasScopes, namesFace } from './group-style.ts'
-import { groupStyleOf as commandStyleOf, type InkInput, type InkStats, inkOf } from './ink.ts'
+import { groupStyleOf as commandStyleOf, type DisplayLine, type InkInput, type InkStats, inkOf } from './ink.ts'
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from './today/today.types.ts'
@@ -169,6 +169,9 @@ export interface Located {
   groups: { glyphs: (string | null)[]; boxes: (string | null)[]; turned: (string | null)[] }[]
   /** groups that are figure texts' (the wrap writes their runs inside a form in the form) */
   figureGroups: Set<string>
+  /** the lines on A the units made there read as a display's formula (ink.ts DisplayLine), where A's pages were given: what the
+   *  lab's stage states a unit absent from the candidate by (lab/pdf/prepare-back/stated.mjs) */
+  displays: DisplayLine[]
   stats: {
     units: number
     located: number
@@ -392,6 +395,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   const members: Member[] = []
   // (each unit's \baselineskip where its paragraph ends, LINES_TEX's AXT-LINES: its members' lead)
   const texSkip = new Map((ins.tex.skips ?? []).map((k) => [k.unit, k.baselineskip]))
+  const displays: DisplayLine[] = []
   const stats: Located['stats'] = {
     units: ins.units.length,
     located: 0,
@@ -821,7 +825,9 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       made,
       stats: st,
       block,
+      displays: dl,
     } = inkOf({ ins, inkA, raws: o.pages, take: o.take === true, m, pageA, owned, classesOf: o.classesOf, ownerOf })
+    displays.push(...dl)
     // (a unit of the author block TeX sets away from the block under the title — acmart's reference format, amsart's addresses
     // at the paper's end — is the text it is there, of no toggle: `textnames` (the owner's ruling of 2026-11-09). One set in the
     // block keeps its kind; where no title is located, none is told apart)
@@ -1937,7 +1943,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       if (mem.place) stats.places[mem.place]++
     } else noteUnlocated(mem.cause ?? 'no ink')
   }
-  return { units, members, born, flows, ties, links, groups, figureGroups, stats }
+  return { units, members, born, flows, ties, links, groups, figureGroups, stats, displays }
 }
 
 /** a single line's alignment its block read centred (Member.byBlock), read again over the TeX line its flow says it shares: the

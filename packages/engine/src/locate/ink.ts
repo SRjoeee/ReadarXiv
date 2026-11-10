@@ -11,7 +11,7 @@
 import { type Piece, type Style, unitId } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
 import type { Doc, DocPoint } from '../doc.ts'
-import type { PageInk } from '../ink.types.ts'
+import { displayTextMask, type PageInk, regionMask } from '../ink.types.ts'
 import type { Instrument, InstrumentUnit, PieceClass, SpanClass } from '../instrument.ts'
 import { runIns } from '../marks/run-ins.ts'
 import { type AuthorBlock, authorBlockOf } from './author-block.ts'
@@ -89,7 +89,11 @@ export interface InkStats {
 
 /** the units made on A, in today's bundle's order (ink units, kept blocks, figure texts: those drawn first), their indices from
  *  `ins.units.length` on (an echo's index, of a source unit or of an ink unit before it, in that one list) */
-export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: AuthorBlock | null } {
+/** a line on A the engine reads as a display's formula (a ledger line of the class math at least half of whose glyphs TeX set in a
+ *  display, not in its text mode): [page, x0, bottom, x1, top, baseline] — what the lab's stage reads a display's ink by */
+export type DisplayLine = [number, number, number, number, number, number]
+
+export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: AuthorBlock | null; displays: DisplayLine[] } {
   const { ins, inkA, m } = o
   const base = ins.units.length
   const carried = carry(ins.ink, inkA, m, o.pageA)
@@ -382,7 +386,28 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: Auth
     })
   }
   for (const x of made) x.text.sort((a, b) => a - b)
+  // (the lines the ledger read as a display's formula: its glyphs in a display, not in the display's text mode, at least half)
+  const displays: DisplayLine[] = []
+  const masks = carried.map((c, i) => {
+    const n = inkA.pages[i]!.glyphs.length
+    return [regionMask(c.regions, n, 'display'), displayTextMask(c.regions, n)] as const
+  })
+  for (const L of ledger.lines as { page: number; cls: string; gs: number[]; x0: number; x1: number; y: number }[]) {
+    if (L.cls !== 'math' || !L.gs.length) continue
+    const [d, t] = masks[L.page - 1]!
+    const G = inkA.pages[L.page - 1]!.glyphs
+    let k = 0,
+      bottom = Infinity,
+      top = -Infinity
+    for (const g of L.gs) {
+      if (d[g] && !t[g]) k++
+      bottom = Math.min(bottom, G[g]!.bottom)
+      top = Math.max(top, G[g]!.top)
+    }
+    if (k > 0 && k >= 0.5 * L.gs.length) displays.push([L.page, L.x0, bottom, L.x1, top, L.y])
+  }
   return {
+    displays,
     made,
     stats: {
       ink: ink.length,

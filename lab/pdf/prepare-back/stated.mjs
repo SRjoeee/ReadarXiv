@@ -50,6 +50,10 @@ export const CAUSE = Object.freeze({
   // each on today's box (2610.19159v1 t1906: today's orphan line, v2's two figure texts on it): accepted)
   split: 'split across consecutive units, its text theirs in order',
   another: 'another reading',
+  // ((f): a unit the candidate does not make, every line of it inside a line the engine reads as a display's formula (a display
+  // TeX's marked compile states, its text-mode glyphs read as text: locate's `displays`): the display's ink, kept with it — the
+  // coordinator's ruling of 2026-11-09; 2608.08481v1 t118-t121, (7)'s and (8)'s parts)
+  displayPart: "kept on arXiv's page as part of a display",
 })
 
 /** how near two boxes' edges are one edge (PDF units: lines and boxes are stated to a hundredth) */
@@ -77,13 +81,15 @@ export const trailsOf = (els) =>
  * `base` the baseline dump's units, `units` the candidate's own (none stated yet), `trails` the trails the candidate's members
  * carry (rebuild/front-matter's El.trail: its ink's box `page`, `x0`, `x1`, `top`, `bottom`, `baseline` and its characters
  * `text`), `labels` the number each candidate unit's label states (Label.num, by the unit's ord in the dump), `glyphs` arXiv's
- * glyphs on a page as the engine reads A (DocGlyph: `u`, `x0`, `x1` its advance, `y` its baseline, `blank`), null where not read:
+ * glyphs on a page as the engine reads A (DocGlyph: `u`, `x0`, `x1` its advance, `y` its baseline, `blank`), null where not read,
+ * `displays` the lines on arXiv's page the candidate reads as a display's formula (locate's `displays`: `[page, x0, bottom, x1,
+ * top, baseline]`):
  * each baseline unit the candidate does not make, in the baseline's order, `{ u, why, cause, holder }` (`cause` CAUSE's key, or
  * `content` for a content difference, `keptAt` for a kept block at its place; `holder` the id of the candidate's unit holding
  * it whole, held (f), by the block (b') or by the block's units (f'), the one whose glyph text is today's); one it has no
  * statement for (absent from the candidate) is left out
  */
-export function statedOf(base, units, { trails = [], labels = new Map(), glyphs = () => null } = {}) {
+export function statedOf(base, units, { trails = [], labels = new Map(), glyphs = () => null, displays: shown = [] } = {}) {
   const out = []
   const have = new Map()
   for (const u of units) have.set(u.id, (have.get(u.id) ?? 0) + 1)
@@ -284,6 +290,12 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
   // (a unit's text as written, an address its element reads as itself: what (F) reads)
   const writtenOf = (x) => (x.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : p.kind === 'ph' ? (readingOf(p.src ?? '') ?? '\ufffc') : '')).join('')
   const keyOf = (why) => Object.keys(CAUSE).find((k) => CAUSE[k] === why) ?? 'content'
+  // ((f): a line inside the display lines on its page whose box holds its baseline, from the first one's start to the last one's
+  // end — a formula row the ledger cut at its gaps is one row)
+  const inDisplay = (l) => {
+    const on = shown.filter(([p, , bottom, , top]) => p === l.page && Math.min(bottom, top) <= l.baseline && l.baseline <= Math.max(bottom, top))
+    return on.length > 0 && Math.min(...on.map((d) => d[1])) <= l.x0 + ON && Math.max(...on.map((d) => d[3])) >= l.x1 - ON
+  }
   for (const u of base) {
     if ((have.get(u.id) ?? 0) > 0) {
       have.set(u.id, have.get(u.id) - 1)
@@ -300,10 +312,13 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
         : null
     // (none of either: a unit of the author block's now holding its glyphs, whatever today's kind)
     const names = !c && !kept ? heldByBlock(u) : undefined
+    // (none of these: every line of it inside the display lines the candidate reads on its baseline, between their ends
+    // (rebuild/display-marks: a display's ink, kept with it))
+    const part = !c && !kept && !names && !!u.lines?.length && u.lines.every((l) => inDisplay(l))
     // (none of these: a unit of the author block's standing for it after the name before's trail (c'))
-    const trailed = !c && !kept && !names && /^ink/.test(u.kind) ? trailBlock(u) : null
+    const trailed = !c && !kept && !names && !part && /^ink/.test(u.kind) ? trailBlock(u) : null
     // (none of these: one unit of the candidate's, of any class, holding it whole (f); a kept block holding a line of addresses (F))
-    const holder = !c && !kept && !names && !trailed ? heldBy(u) : null
+    const holder = !c && !kept && !names && !part && !trailed ? heldBy(u) : null
     const held = !holder
       ? null
       : !holder.pieces?.length
@@ -314,8 +329,8 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
           ? CAUSE.held
           : null
     // (none of these: the author block's units holding its line between them (f'); consecutive units holding its text (j))
-    const block = !c && !kept && !names && !trailed && !held ? heldByBlockUnits(u) : null
-    const split = !c && !kept && !names && !trailed && !held && !block ? splitOf(u) : null
+    const block = !c && !kept && !names && !part && !trailed && !held ? heldByBlockUnits(u) : null
+    const split = !c && !kept && !names && !part && !trailed && !held && !block ? splitOf(u) : null
     // (a stand-in of its kind that reads otherwise, holding today's whole text: held whole (f))
     const how = c ? howOf(u, c) : null
     const standIn = how === CAUSE.another && standInHolds(u, c)
@@ -337,6 +352,7 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
                   ? { by: split[0], cause: CAUSE.split }
                   : null
     if (kept) out.push({ u, why: "kept on arXiv's page as the original's, no text of it sent", cause: 'keptAt' })
+    else if (!said && part) out.push({ u, why: CAUSE.displayPart, cause: 'displayPart' })
     else if (said)
       out.push({
         u,
