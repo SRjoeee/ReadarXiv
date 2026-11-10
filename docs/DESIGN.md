@@ -1047,10 +1047,10 @@ only how it meets the rest of the extension.
   1,280), the lowest data limit each paper prepared under three times of three: 2609.19644v1 (71 pages, a 26 MB
   source and PDF), which died under 1,280 as on staging, 1,080; 2610.40394v1 960 (1,160 with its lists whole), dying
   under it reading A or B; 2610.19159v1 (163 pages), which died at the 768 MiB heap cap, 1,200 (1,120 where the box
-  lets go of the source, its files and B's bytes once the front half is done; with the lists in pieces 1,160 passed
-  three times of three, two of three before); 2610.42112v1 960 and 2610.37668v1 800 or less (once each, before the
-  lists were read in pieces). 2610.19159v1 dies in align, where A's Doc (190 MiB of its 469,663 glyphs) and B's are
-  held whole: what a back half that reads page by page would no longer hold. Every object of the 88 corpus papers
+  lets go of the source, its files and B's bytes once the front half is done), 1,080 with its lists in pieces;
+  2610.42112v1 960 and 2610.37668v1 800 or less (once each, before the lists were read in pieces). Under 1,080
+  2610.19159v1 dies in locate (two runs of three at 1,040), A's Doc (190 MiB of its 469,663 glyphs) and B's held
+  whole through align and locate: what a back half that reads page by page would no longer hold. Every object of the 88 corpus papers
   and of 2609.19644v1 is the same (stage 1a and I6; for the lists in pieces, 87 of the 88, the 88th's compile held
   only in an archive the check did not read). What the box itself holds through the back half (the source, its
   files, B's bytes) is the box's to let go.
