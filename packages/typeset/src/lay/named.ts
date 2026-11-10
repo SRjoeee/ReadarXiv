@@ -207,7 +207,7 @@ export function namedRows(part: Pick<Part, 'paper'>, rows: Rows, leave: Readonly
       if (!n) return rows.get(id)
       if (made.has(id)) return made.get(id)
       const own = rows.get(id)
-      const got = !own || !own.ok ? own : n[1] ? inVariant(c, own, n) : inOwnRow(c, own, n)
+      const got = !own?.ok ? own : n[1] ? inVariant(c, own, n) : inOwnRow(c, own, n)
       made.set(id, got)
       return got
     },
