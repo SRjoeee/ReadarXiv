@@ -93,6 +93,13 @@ describe('placeholders, labels and names (MR 4–6)', () => {
     const l = ownOf(led, { units: authors })
     expect(groupsOf(l, led)).toEqual({ u0: 'Ada', u1: 'Bob', 'u1.l': '†' })
     expect([l.units.get(1)?.unhidden, l.units.get(1)?.labelKept]).toEqual([null, false])
+    // (a word a class sets after the call — llncs' and IJCAI's \\and set " and " before the last author:
+    // 2610.19860v1, 2610.21491v1 —: no label's form, its ink the original's where it stands, left to the ink units as before, so
+    // that the connector is translated; never the author's label, which kept it English)
+    const word = [page([{ pt: '0s' }, 'Ada', { pt: '0e' }, '1', { pt: '1c' }, { dx: 3 }, 'and', { dx: 3 }, { pt: '1s' }, 'Bob', { pt: '1e' }])]
+    const w = ownOf(word, { units: authors })
+    expect(groupsOf(w, word)).toEqual({ u0: 'Ada', u1: 'Bob' })
+    expect([w.units.get(1)?.unhidden, w.units.get(1)?.labelKept]).toEqual([null, true])
     // (no call stated: walked back to the end mark before, as before)
     const none = [page([{ pt: '0s' }, 'Ada', { pt: '0e' }, { dx: 2 }, '12', { dx: 6 }, { pt: '1s' }, 'Bob', { pt: '1e' }])]
     expect(groupsOf(ownOf(none, { units: authors }), none)).toEqual({ u0: 'Ada', u1: 'Bob', 'u1.l': '12' })
