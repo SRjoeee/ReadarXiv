@@ -210,6 +210,23 @@ describe('readRefNames: each reference’s item type and the full name the paper
     expect(got.get(1)?.name).toBe('Ilustración')
     expect(got.get(2)?.name).toBe('Tablaón')
   })
+  it('reads a name the marked compile’s own babel-name wrapper holds as the text it wraps (NAMES_TEX)', () => {
+    // (the layout compile wraps each babel name macro, \figurename, as \relax\axtnma{key}<its text>\axtnmb{key}: an article
+    // with no hyperref has no other name for a figure; IEEEtran's wrapped text is an abbreviation still)
+    const log = [
+      'AXT-REF 0 figure',
+      'AXT-REFNAME 0 n \\long macro:->\\relax \\axtnma {figure}Figure\\axtnmb {figure}',
+      'AXT-REF 1 figure',
+      'AXT-REFNAME 1 n \\long macro:->\\relax \\axtnma {figure}Fig.\\axtnmb {figure}',
+      'AXT-REF 2 thm',
+      'AXT-REFNAME 2 n \\long macro:#1->#1',
+    ].join('\n')
+    expect([...readRefNames(log)]).toEqual([
+      [0, { type: 'figure', name: 'Figure' }],
+      [1, { type: 'figure' }],
+      [2, { type: 'thm' }],
+    ])
+  })
   it('states nothing where TeX wrote nothing (a log of before, a paper with no reference)', () => {
     expect(readRefNames('AXT-ALIGN 3 p 1 0.0pt 1 0.0pt 0 0.0pt').size).toBe(0)
   })

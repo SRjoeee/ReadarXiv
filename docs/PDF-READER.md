@@ -3309,7 +3309,8 @@ item's own name, the translator is sent the full name; the name is the paper's o
 word list and no language's table; the original drawn when translation is off never changes.
 
 - **The rule** (`packages/translate` `names.ts` `namedOf`): where the word a unit's text ends in right before a reference — a
-  tie, a space or a break alone between — is a case-insensitive proper prefix of the element's `name`, followed by a full stop
+  tie, a space or a break alone between; a word of its own, white space or an opening bracket before it (never the "e." of
+  "i.e.") — is a case-insensitive proper prefix of the element's `name`, followed by a full stop
   ("Fig." of "Figure", "Eq." of "Equation", "Sec." of "Section", "Tab." of "Table"), every translator is sent that name instead,
   in the word's case (a lower-case word the name in lower case, one in capitals the name in capitals). The chain applies it to
   each unit before any translator (`chain.ts` `settle`) and gives a row's sentences back in the unit's own projection (a start
@@ -3320,7 +3321,8 @@ word list and no language's table; the original drawn when translation is off ne
   `\ref*`, `\eqref`, `\autoref`, `\cref` of one label, `\nameref`; not `\pageref`): its type, the label's anchor's (hyperref's,
   and LaTeX's own since 2023, `{num}{page}{title}{anchor}{}`: `figure.caption.12`'s `figure`, `appendix.A`'s `appendix`, as
   hyperref's `\autoref` reads it), else cleveref's `[type]`; then the `\meaning` of cleveref's capitalised and own names,
-  hyperref's `\<type>autorefname` and LaTeX's `\<type>name`. The first that is plain words with no full stop is the element's
+  hyperref's `\<type>autorefname` and LaTeX's `\<type>name` (a babel name macro read through the layout compile's own
+  wrapper, NAMES_TEX). The first that is plain words with no full stop is the element's
   `name` (format's element piece; not in the unit's id): cleveref's default "Fig." and IEEEtran's `\figurename` "Fig." are
   passed over for hyperref's "Figure". Nothing is set and nothing written to a file; a paper with no reference compiles the
   bytes it did.

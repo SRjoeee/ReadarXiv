@@ -183,6 +183,9 @@ export type RefName = { type: string; name?: string }
 const FULL_NAME = /^\p{L}[\p{L}\p{M}'’-]*(?: [\p{L}\p{M}'’-]+)*$/u
 /** a macro's meaning as TeX writes it (`\meaning`): its body after `macro:->`, a definition of no parameter alone */
 const MEANING = /^(?:\\(?:long|protected|outer) )*macro:->(.*)$/
+/** a babel name macro as the layout compile's own wrapper leaves it (marks.mjs NAMES_TEX: `\relax\axtnma{<key>}<its text>
+ *  \axtnmb{<key>}`, \meaning's spacing): the text it wraps */
+const NAME_WRAP = /^\\relax \\axtnma \{[a-z]{1,16}\}(.*)\\axtnmb \{[a-z]{1,16}\}$/
 const UTF8 = new TextDecoder('utf-8')
 /** a name TeX wrote, as text: its ^^ notation (a byte TeX would not print) read, and its bytes (the log is read byte for byte,
  *  one character a byte) read as UTF-8 where they are bytes */
@@ -198,8 +201,8 @@ function textOf(written: string): string {
  * and own names, hyperref's \<type>autorefname and LaTeX's \<type>name that is defined, in that order, written once the last
  * page is out). The type is the label's anchor's (hyperref's, and LaTeX's own since 2023: `figure.caption.12`'s `figure`, as
  * hyperref's own \autoref reads it), else cleveref's where it wrote one; the name the first of those that is a full name
- * (FULL_NAME). A label TeX knew no type for states nothing; a type none of whose names is a full one (RevTeX's `section*`
- * anchors), no name
+ * (FULL_NAME), a babel name macro read through the layout compile's own wrapper (NAME_WRAP). A label TeX knew no type for
+ * states nothing; a type none of whose names is a full one (RevTeX's `section*` anchors), no name
  */
 export function readRefNames(log: string): Map<number, RefName> {
   const out = new Map<number, RefName>()
@@ -212,7 +215,8 @@ export function readRefNames(log: string): Map<number, RefName> {
   for (const m of text.matchAll(/^AXT-REFNAME (\d{1,6}) [Ccan] (.*)$/gm)) {
     const ref = out.get(Number(m[1]))
     if (!ref || ref.name !== undefined) continue
-    const body = MEANING.exec((m[2] as string).trimEnd())?.[1]
+    const meaning = MEANING.exec((m[2] as string).trimEnd())?.[1]
+    const body = meaning === undefined ? undefined : (NAME_WRAP.exec(meaning)?.[1] ?? meaning)
     const name = body === undefined ? '' : textOf(body).trim()
     if (name.length <= 40 && FULL_NAME.test(name)) ref.name = name
   }

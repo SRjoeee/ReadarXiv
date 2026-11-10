@@ -25,6 +25,10 @@ describe('namedOf: the word tied to a reference, an abbreviation of the item’s
     // name's own case otherwise, its first letter the word's: hyperref's `section` for "Sec.")
     expect(sent(unit('c', [t('see fig.'), tie('1'), ref('2', 'Figure')]))).toBe('see figure\uFFFC\uFFFC')
     expect(sent(unit('d', [t('see FIG.'), tie('1'), ref('2', 'Figure')]))).toBe('see FIGURE\uFFFC\uFFFC')
+    // (a word after an opening bracket is a word of its own)
+    expect(sent(unit('p', [t('as shown (Fig.'), tie('1'), ref('2', 'Figure'), t(').')]))).toBe(
+      'as shown (Figure\uFFFC\uFFFC).',
+    )
     expect(sent(unit('e', [t('Sec.'), tie('1'), ref('2', 'section'), t(' concludes.')]))).toBe(
       'Section\uFFFC\uFFFC concludes.',
     )
@@ -45,6 +49,10 @@ describe('namedOf: the word tied to a reference, an abbreviation of the item’s
     none([t('Fig. a and'), tie('1'), ref('2', 'Figure')])
     // (a word that only ends in the letters: "configs." is no abbreviation of "Figure")
     none([t('the configs.'), tie('1'), ref('2', 'Figure')])
+    // (the last letters of an abbreviation of several words: "i.e." is no word "e." of its own, 2608.16117v1's
+    // "i.e. \cref{…}" to an equation)
+    none([t('any value, i.e. '), ref('2', 'Equation')])
+    none([t('the work-eq.'), tie('1'), ref('2', 'Equation')])
   })
 
   it('reads the word inside a group as it reads it at the unit’s level, and every reference of the unit', () => {

@@ -16,9 +16,10 @@
 import type { Piece, Result, UnitIn } from './contract.ts'
 import { standInOf } from './wire/text.ts'
 
-/** the word a text ends in, its full stop, then white space alone: [1] the word (a letter, then letters and marks: no
- *  letter, mark or digit right before it), [2] the white space */
-const TIED = /(?<![\p{L}\p{M}\p{N}])(\p{L}[\p{L}\p{M}]*)\.(\s*)$/u
+/** the word a text ends in, its full stop, then white space alone: [1] the word (a letter, then letters and marks), a word
+ *  of its own (the text's start, white space or an opening bracket or quote right before it: never the last letters of
+ *  "i.e." or of "work-eq."), [2] the white space */
+const TIED = /(?<=^|[\s\p{Ps}\p{Pi}])(\p{L}[\p{L}\p{M}]*)\.(\s*)$/u
 
 /** the name in the abbreviation's case: in capitals where its letters are (two or more), else its first letter the word's */
 function cased(word: string, name: string): string {
