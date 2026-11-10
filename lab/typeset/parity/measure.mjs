@@ -201,16 +201,24 @@ for (const [pair, raw] of drawn) {
       const r2 = (x) => (Number.isFinite(x) ? Math.round(x * 100) / 100 : null)
       // (each size tie of the page holding a fresh unit: its other members' size as v2 drew them, against the original's, the
       // median share, stated though not judged (the coordinator's ruling of 2026-11-11 on the tie rule))
-      const kindOf = new Map((v2.facts?.[p.page]?.members ?? []).map((m) => [m.ord, m.kind]))
+      const factOf = new Map((v2.facts?.[p.page]?.members ?? []).map((m) => [m.ord, m]))
+      const kindOf = new Map([...factOf].map(([o, m]) => [o, m.kind]))
       const keyOf = (o) => (todayOf.has(o) ? `t${todayOf.get(o)}` : `p${o}`)
+      // (a member's drawn size, its lines' median as v2 drew them, turned ones too, against the original's: the unit measure's
+      // where it read one, else TeX's size the part states)
+      const med = (xs) => xs.sort((a, b) => a - b)[xs.length >> 1]
+      const shareOf = (o) => {
+        const ls = (rec?.v2?.units ?? []).find((u) => u.id === o)?.lines.filter((l) => l.n > 0) ?? []
+        const os = p.units?.find((x) => x.key === keyOf(o))?.sides?.v2?.osize ?? factOf.get(o)?.style?.size
+        return ls.length && os ? med(ls.map((l) => l.size)) / os : null
+      }
       const ties = (v2.facts?.[p.page]?.ties ?? [])
         .filter((t) => t.some((o) => ords.has(o)))
         .map((t) => {
           const shares = t
             .filter((o) => !ords.has(o))
-            .map((o) => p.units?.find((x) => x.key === keyOf(o))?.sides?.v2)
-            .filter((v) => v?.size && v?.osize)
-            .map((v) => v.size / v.osize)
+            .map(shareOf)
+            .filter((x) => x !== null)
             .sort((a, b) => a - b)
           return { kind: kindOf.get(t[0]) ?? null, members: t.length, fresh: t.filter((o) => ords.has(o)).length, drawn: shares.length, share: shares.length ? r2(shares[shares.length >> 1]) : null }
         })
