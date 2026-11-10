@@ -398,9 +398,9 @@ function apiArguments(words, dynamic, first) {
   const options = apiOptions(words, first)
   const method = options.findLast(option => option.name === '--method')
   if (method === undefined || !(dynamic[method.at] || (method.value ?? '').toUpperCase() === 'PUT')) return null
-  const at = words.findIndex((word, k) => k >= first && MERGE_ENDPOINT.test(word))
+  const at = words.findIndex((word, k) => k >= first && MERGE_ENDPOINT.test(pathOf(word)))
   if (at >= 0) {
-    const [, owner, name, number] = MERGE_ENDPOINT.exec(words[at])
+    const [, owner, name, number] = MERGE_ENDPOINT.exec(pathOf(words[at]))
     return { kind: 'api', ref: number, repo: PLACEHOLDER.test(owner) || PLACEHOLDER.test(name) ? null : `${owner}/${name}`, refAt: at, repoAt: at }
   }
   // no endpoint in sight, but one the shell composes (`"$ENDPOINT"`, `$R/merge`): a PUT to it is a merge nobody can
@@ -410,9 +410,13 @@ function apiArguments(words, dynamic, first) {
   return composed < 0 ? null : { kind: 'api', ref: null, repo: null, refAt: composed, repoAt: composed, composed: true }
 }
 
-/** Whether a word the shell expands may come out ending in `/merge`: what stands after its last expansion is all the
- *  line says of its end */
-function mayEndInMerge(word) {
+/** An endpoint without the query or the fragment that may follow its path */
+const pathOf = word => word.split(/[?#]/, 1)[0]
+
+/** Whether a word the shell expands may come out with a path ending in `/merge`: what stands after its last
+ *  expansion is all the line says of its end */
+function mayEndInMerge(whole) {
+  const word = pathOf(whole)
   const expansions = [...word.matchAll(/\$\{[^}]*\}|\$\([^)]*\)|\$[A-Za-z_]\w*|`[^`]*`/g)]
   const last = expansions.at(-1)
   const tail = last === undefined ? '' : word.slice(last.index + last[0].length)
@@ -761,8 +765,28 @@ export function repositoryOf(url) {
   return m ? `${m[1]}/${m[2]}`.toLowerCase() : null
 }
 
-function run(file, args, cwd) {
-  return execFileSync(file, args, { cwd, encoding: 'utf8', timeout: 15_000, stdio: ['ignore', 'pipe', 'ignore'] })
+/** A lookup that answers within the time the hook has. Claude Code drops the answer of a hook that runs past its
+ *  timeout and lets the command go, so the lookups of one command line share `budget` milliseconds: each pull
+ *  request is looked up once, `find(merge, left)` is given what is left, and once it is spent a pull request gets no
+ *  answer at all — which the gate takes as one it could not look up, and asks. */
+export function withinBudget(find, budget, now = Date.now) {
+  const until = now() + budget
+  const found = new Map()
+  return merge => {
+    const key = JSON.stringify([merge.ref, merge.repo, merge.dirs])
+    if (!found.has(key)) {
+      const left = until - now()
+      found.set(key, left < 1000 ? null : find(merge, left))
+    }
+    return found.get(key)
+  }
+}
+
+/** The time all lookups of one command line may take together: under the hook's own timeout (`.claude/settings.json`) */
+const BUDGET = 20_000
+
+function run(file, args, cwd, timeout = 15_000) {
+  return execFileSync(file, args, { cwd, encoding: 'utf8', timeout, stdio: ['ignore', 'pipe', 'ignore'] })
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
@@ -775,16 +799,16 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(realpathS
   try {
     here = repositoryOf(run('git', ['-C', dirname(fileURLToPath(import.meta.url)), 'remote', 'get-url', 'origin']))
   } catch {}
-  const lookup = merge => {
+  const lookup = withinBudget((merge, left) => {
     try {
       const args = ['pr', 'view', ...(merge.ref === null ? [] : [merge.ref]), '--json', 'baseRefName,number,url', ...(merge.repo === null ? [] : ['--repo', merge.repo])]
-      const found = JSON.parse(run('gh', args, directoryOf(merge)))
+      const found = JSON.parse(run('gh', args, directoryOf(merge), Math.min(15_000, left)))
       const repo = repositoryOf(found.url)
       return repo === null ? null : { repo, base: found.baseRefName, number: found.number }
     } catch {
       return null
     }
-  }
+  }, BUDGET)
   const read = (file, merge) => {
     try {
       return readFileSync(resolve(directoryOf(merge), file), 'utf8')

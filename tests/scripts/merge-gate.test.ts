@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node script, deliberately dependency-free and untyped
-import { decide, mergesIn, repositoryOf, simpleCommands } from '../../scripts/merge-gate.mjs'
+import { decide, mergesIn, repositoryOf, simpleCommands, withinBudget } from '../../scripts/merge-gate.mjs'
 
 type Merge = { ref: string | null; repo: string | null; dirs: string[]; unreadable: boolean; plain: boolean; files?: string[] }
 type Command = { words: string[]; dynamic: boolean[]; scripts: string[]; before: string; after: string }
@@ -318,6 +318,10 @@ describe('mergesIn', () => {
     expect(merge('gh api --method PUT -H "Accept: x" repos/o/r/pulls/5/merge').ref).toBe('5')
     expect(merge('gh api -X "$METHOD" repos/o/r/pulls/5/merge').ref).toBe('5')
     expect(merges('gh api -X POST repos/o/r/pulls/5/merge')).toEqual([])
+    // the path is the endpoint, whatever query follows it (#635, Codex)
+    expect(merge(`gh api -X PUT 'repos/SRjoeee/ReadarXiv/pulls/411/merge?sha=abc'`)).toMatchObject({ ref: '411', repo: 'SRjoeee/ReadarXiv', unreadable: false })
+    expect(merge('gh api -X PUT "$R/merge?merge_method=merge"').unreadable).toBe(true)
+    expect(merges(`gh api -X PUT 'repos/o/r/pulls/5/update-branch?x=/merge'`)).toEqual([])
     // an endpoint the shell composes (#635, Codex): a PUT to one that may end in `/merge` is a merge nobody can read
     for (const text of [
       'ENDPOINT=repos/SRjoeee/ReadarXiv/pulls/411/merge; gh api -X PUT "$ENDPOINT"',
@@ -564,6 +568,35 @@ describe('against the shell itself', () => {
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
+  })
+})
+
+describe('withinBudget', () => {
+  // The hook has thirty seconds; Claude Code drops the answer of one that runs past them and lets the command go
+  // (#635, Codex). So the lookups share one allowance, and a pull request there is no time left to look up is one
+  // the gate could not look up: it asks.
+  it('looks each pull request up once, gives each lookup what is left, and stops answering when the time is spent', () => {
+    let clock = 0
+    const calls: [string | null, number][] = []
+    const slow = (m: Merge, left: number) => {
+      calls.push([m.ref, left])
+      const took = 11_000
+      clock += Math.min(took, left)
+      return left < took ? null : lookup(m)
+    }
+    const budgeted = withinBudget(slow, 20_000, () => clock)
+    const text = 'for n in 603 603 411; do gh pr merge "$n" --merge; done'
+    expect(decide(text, { lookup: budgeted, read, here: HERE })).toMatchObject({ decision: 'ask', reason: expect.stringContaining('could not be looked up') })
+    expect(calls).toEqual([
+      ['603', 20_000],
+      ['411', 9_000],
+    ])
+    // and with the time gone, no further lookup starts at all
+    expect(budgeted({ ref: '77', repo: null, dirs: [], unreadable: false, plain: false })).toBeNull()
+    expect(calls).toHaveLength(2)
+    // within the allowance the answer is the lookup's own
+    clock = 0
+    expect(decide(text, { lookup: withinBudget((m: Merge) => lookup(m), 20_000, () => clock), read, here: HERE })?.reason).toContain('#411 merges into main')
   })
 })
 
