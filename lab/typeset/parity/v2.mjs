@@ -124,7 +124,7 @@ for (const pair of pairs) {
   // unmeasured, never worse, the coordinator's ruling of 2026-11-10. A member the prepare states a reason for has none to read)
   // (lane parity-fresh: the members laid with a fresh row, found over the entry's rows of a first pass cut at its first page's
   // lay (the rows are whole by then), then read from the cache through the chain, fresh.mjs. Each member of the paper's parts;
-  // today's own group decision (a cell whose door row today's group kept) is no row missing)
+  // a cell today's group decision kept (its door row `kept`, the reply not stored) among them, so that v2's own decision runs)
   let fresh = null
   const freshAt = { cause: {}, refused: [], missing: [], newer: [] }
   if (FRESH !== 'off') {
@@ -167,7 +167,7 @@ for (const pair of pairs) {
       if (!joinedAll0[ord]) freshAt.newer.push(ord)
     }
     const n = (c) => Object.values(freshAt.cause).filter((x) => x === c).length
-    console.log(`${pair}: fresh ${Object.keys(freshAt.cause).length} members (no row ${n('no-row')}, another unit's row ${n('unit')}) of ${needs.size} asked in ${ids.length} units; refused ${freshAt.refused.length}; not in the cache ${freshAt.missing.length}; ${freshAt.newer.length} today never had${got.asked ? `; ${got.asked} wires asked of the endpoint` : ''}`)
+    console.log(`${pair}: fresh ${Object.keys(freshAt.cause).length} members (no row ${n('no-row')}, a cell today's group kept ${n('group')}, another unit's row ${n('unit')}) of ${needs.size} asked in ${ids.length} units; refused ${freshAt.refused.length}; not in the cache ${freshAt.missing.length}; ${freshAt.newer.length} today never had${got.asked ? `; ${got.asked} wires asked of the endpoint` : ''}`)
     if (FRESH === 'fill') continue
   }
   const noRow = new Set()

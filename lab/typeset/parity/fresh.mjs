@@ -142,18 +142,19 @@ export async function freshRowsOf(units, target, { dir = FRESH_ROWS, translator 
  * The members laid with a fresh row, over `members` (every member of the paper's parts, once): ord -> `{ id, cause }`.
  * `rows` the entry's rows (gate-l1.ts: get by unit id; kept; `said`, the ids whose row is today's row of another unit said in
  * v2's: today's flat text of a figure text v2 holds a group in, a unit whose kept runs v2 holds as elements); `units` the
- * bundle's units by id; `decided(m)` whether today's own group decision kept the member's unit (its door row `kept`: a cell
- * today left the original's by its group, whose translation v2 is never handed: `groups`' "not exercised", no row missing).
- * Causes: 'no-row', a text no stored row serves (v2.mjs's `noRow` before this lane); 'unit', a text whose stored row answered
- * another unit than v2's. A member the prepare states a reason for (`why`), or the paper keeps, is sent nothing.
+ * bundle's units by id; `decided(m)` whether today's own group decision kept the member's unit (its door row `kept`, the reply
+ * not stored: a table's cell today left the original's by its group). Causes: 'no-row', a text no stored row serves (v2.mjs's
+ * `noRow` before this lane); 'group', a cell today's group decision kept, so that v2's own decision runs on what the site
+ * would get (the coordinator's ruling of 2026-11-11: the stored rows hold no reply of it, so like-for-like is not to be had);
+ * 'unit', a text whose stored row answered another unit than v2's. A member the prepare states a reason for (`why`), or the
+ * paper keeps, is sent nothing.
  */
 export function freshNeeds(members, rows, units, { decided = () => false } = {}) {
   const out = new Map()
   for (const m of members) {
     if (typeof m.text !== 'string' || m.why || rows.kept?.(m.text) || !units.has(m.text)) continue
-    if (!rows.get(m.text)) {
-      if (!decided(m)) out.set(m.ord, { id: m.text, cause: 'no-row' })
-    } else if (rows.said?.(m.text)) out.set(m.ord, { id: m.text, cause: 'unit' })
+    if (!rows.get(m.text)) out.set(m.ord, { id: m.text, cause: decided(m) ? 'group' : 'no-row' })
+    else if (rows.said?.(m.text)) out.set(m.ord, { id: m.text, cause: 'unit' })
   }
   return out
 }

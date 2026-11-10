@@ -115,6 +115,8 @@ for (const [pair, raw] of drawn) {
   const frame = frameOf(v2.facts)
   const groups = (ledger(pair)?.tables ?? []).map((t) => ({ group: t.group, ids: t.ids }))
   const keptByGroup = new Set([...(doorRows(pair)?.values() ?? [])].filter((r) => r[2] === 'kept' && (r[5] === 'whole' || r[5] === 'partial')).map((r) => r[0]))
+  // (lane parity-fresh: a cell handed a fresh row, v2's own decision run on it, is no longer undecided)
+  for (const o of v2.fresh ?? []) if (todayOf.has(o)) keptByGroup.delete(todayOf.get(o))
   // (arXiv's metadata authors and hyperref's cite.* anchors, off arXiv's PDF; placed in today's units (its prepare dump's lines)
   // and the part's members (their lines on A), the drawing's glyphs in its text content's order)
   const pdf = pdfOf.get(raw.paper)

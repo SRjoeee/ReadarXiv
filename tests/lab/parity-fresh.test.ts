@@ -46,8 +46,11 @@ describe('which members are laid with a fresh row', () => {
   it("a member whose stored row answered another unit than v2's gets one", () => {
     expect(needs.get(3)).toEqual({ id: 'c', cause: 'unit' })
   })
-  it("a served member, one the prepare gives a reason for, one the paper keeps, one today's group decision kept, a name: none", () => {
-    expect([...needs.keys()].sort()).toEqual([2, 3])
+  it("a cell today's group decision kept, whose reply the stored rows do not hold, gets one: v2's own decision runs on it", () => {
+    expect(needs.get(6)).toEqual({ id: 'f', cause: 'group' })
+  })
+  it('a served member, one the prepare gives a reason for, one the paper keeps, a name: none', () => {
+    expect([...needs.keys()].sort()).toEqual([2, 3, 6])
   })
 })
 
