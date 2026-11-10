@@ -1565,6 +1565,8 @@ export function identifiersIn(s) {
  *  (startOf, marks.mjs headEnd), a code mark with both its marks (marks.mjs classOf) */
 export const identifierSource = src => {
   if (typeof src !== 'string' || /^\\[A-Za-z@]/.test(src) || /@|:\/\//.test(src)) return false
+  // (TeX's math shift, a `$` no backslash escapes: a formula's subscript, `$s_i$`, is no identifier)
+  if (src.replace(/\\(?:[A-Za-z@]+|[^A-Za-z@])/g, '').includes('$')) return false
   const t = src.replace(/\\(?:[A-Za-z@]+(?:\{\})?[ \t]*|[^A-Za-z@])/g, cs => symbolText(cs.trim()) ?? '\u0000')
   const at = identifiersIn(t)
   return at.length === 1 && at[0][0] === 0 && at[0][1] === t.length

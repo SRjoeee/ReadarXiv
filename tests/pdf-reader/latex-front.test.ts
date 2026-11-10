@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { inMemory, lineBreaks, loadProject, localizeNames, markUnits, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { identifierSource, inMemory, lineBreaks, loadProject, localizeNames, markUnits, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { serialize } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The PDF reader's LaTeX front end: what of a paper's source is prose to translate
@@ -306,6 +306,12 @@ describe('an identifier is not prose: a token of word characters joined by under
     expect(text).toContain(' and a-b and a.b in the text.')
     expect(kept(units.units)).toEqual(expect.arrayContaining(['\\_', '$x_1$']))
     expect(kept(units.units).some(s => /init|camel/.test(s ?? ''))).toBe(false)
+  })
+
+  it('a placeholder is an identifier only as text TeX sets as written: a formula never, its math shift TeX’s', () => {
+    // (the layout marks read a placeholder's class by it: `$s_i$`, a formula's subscript, is no identifier, nor `\(s_i\)`)
+    for (const src of ['$s_i$', '$E_h$', '\\(s_i\\)', 'a $x_1$']) expect(identifierSource(src)).toBe(false)
+    for (const src of ['llm\\_equal\\_human', '[sentence\\_1]', '\\$HOME\\_DIR']) expect(identifierSource(src)).toBe(true)
   })
 
   it('an e-mail address with an underscore stays one address, not an identifier and a rest', () => {
