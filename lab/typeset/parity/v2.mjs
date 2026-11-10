@@ -56,6 +56,7 @@ const patterns = (lang) => {
   return hyph.get(lang)
 }
 
+const I10 = { pieces: 0, faults: new Map() }
 for (const pair of pairs) {
   const t0 = performance.now()
   const pages = {}
@@ -215,8 +216,19 @@ for (const pair of pairs) {
     const ties = (part.ties ?? []).filter((t) => t.rule === 'size').map((t) => t.ords)
     facts[pg] = { members: list, links: part.links?.length ?? 0, ties }
   }
-  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, fills, before, spaced, unjoined, ...(missing ? { notes: [missing] } : {}), held: heldRows, threw: got.threw, laidPages: Object.keys(pages).length }
+  // (I10, the sentence cover over the pair's Pages as the reader lays them, the entry's: each piece drawn of a member lit in
+  // exactly one of its sentences on each pane, the panes' sentences the same; packages/typeset/tests/replay/cover.ts)
+  const c = got.entry?.cover
+  const cover = c ? { members: c.members, pieces: c.pieces, faults: Object.fromEntries(c.faults), ex: Object.fromEntries(c.ex) } : null
+  if (cover) {
+    I10.pieces += cover.pieces
+    for (const [k, n] of c.faults) I10.faults.set(k, (I10.faults.get(k) ?? 0) + n)
+  }
+  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, fills, before, spaced, unjoined, ...(missing ? { notes: [missing] } : {}), held: heldRows, threw: got.threw, laidPages: Object.keys(pages).length, cover }
   writeFileSync(join(OUT, `${pair}.json`), `${JSON.stringify(out)}\n`)
   const laid = Object.values(pages).reduce((n, p) => n + p.members.filter((m) => m.state === 'laid').length, 0)
-  console.log(`${pair}: ${Object.keys(pages).length} pages, ${laid} members laid, ${(performance.now() - t0).toFixed(0)} ms${heldRows.joined ? `; held: ${heldRows.joined} joined, ${heldRows.laid} given today's row` : ''}`)
+  const faults = cover ? Object.values(cover.faults).reduce((a, b) => a + b, 0) : 0
+  console.log(`${pair}: ${Object.keys(pages).length} pages, ${laid} members laid, ${(performance.now() - t0).toFixed(0)} ms${heldRows.joined ? `; held: ${heldRows.joined} joined, ${heldRows.laid} given today's row` : ''}; I10 ${faults} faults${faults ? ` (${Object.entries(cover.faults).map(([k, n]) => `${k} ${n}`).join(', ')})` : ''}`)
 }
+const I10faults = [...I10.faults.values()].reduce((a, b) => a + b, 0)
+console.log(`I10, the sentence cover (cover.ts): ${I10.pieces} pieces; ${I10faults} faults${I10faults ? `: ${[...I10.faults].map(([k, n]) => `${k} ${n}`).join(', ')}` : ''}`)

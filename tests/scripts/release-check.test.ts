@@ -55,7 +55,7 @@ describe('the gate table', () => {
   })
 
   it('holds every invariant of design §4.9 and the differential, and every target of §7 says where its number comes from', () => {
-    expect(INVARIANTS.map(i => i.id)).toEqual(['I1', 'I2', 'I3', 'I4', 'I5', 'I6', 'I7', 'I8', 'I9', 'D'])
+    expect(INVARIANTS.map(i => i.id)).toEqual(['I1', 'I2', 'I3', 'I4', 'I5', 'I6', 'I7', 'I8', 'I9', 'I10', 'D'])
     for (const t of TARGETS) expect([t.id, Boolean(t.from || t.why)]).toEqual([t.id, true])
     for (const t of TARGETS) if (t.from) expect(GATES.map(g => g.id)).toContain(t.from)
   })
@@ -114,8 +114,11 @@ describe("a gate's output, read as the gate states it", () => {
       '{"pairs":123,"prepared":32589,"laid":32035,"pages":3014,"twoPages":1336,"twoPagesDiffer":0,"ms":27100,"msPerPage":8.99}',
       "a page's lay (layPagePrepared, L8-E1), ms: p50 7.77, p90 20.6, p99 32.8, max 90 over 3213 pages; the adapter (L6) 10 ms in all",
       'invariants over the laid members (page by page): {"laid":33371,"lines":9,"I3":78,"I4":0,"I5":0}; I3: x',
+      'I10, the sentence cover (cover.ts): 64062 member-pages lit, 4783401 pieces; 491 faults:',
     ].join('\n')
-    expect(typesetOf(text)).toMatchObject({ pairs: 123, msPerPage: 8.99, layP50: 7.77, layP90: 20.6, layP99: 32.8, layPages: 3213, I3: 78, I4: 0, I5: 0 })
+    expect(typesetOf(text)).toMatchObject({ pairs: 123, msPerPage: 8.99, layP50: 7.77, layP90: 20.6, layP99: 32.8, layPages: 3213, I3: 78, I4: 0, I5: 0, I10: 491 })
+    // (the parity's v2 lay states it so too)
+    expect(typesetOf('I10, the sentence cover (cover.ts): 100 pieces; 0 faults').I10).toBe(0)
   })
 
   it("reads the corpus runner's log: a refused paper, a missing compile, a failure and the proofs' counts apart", () => {
