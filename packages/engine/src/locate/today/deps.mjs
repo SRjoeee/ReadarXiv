@@ -125,10 +125,13 @@ export const utf8 = s => (ASCII.test(s) ? s : DECODER.decode(latin1Bytes(s)))
 // run's characters, ink-units.mjs phSource: `$…$` or `\url{…}`) today's classOf's answer for those two forms: a formula of no
 // character `$$`, DISPLAY (translate/mt.mjs:89), which the copy's phSource never writes (a run has a character, and a `$` of it
 // is written `\$`); any other `$…$`, MATH; `\url{…}`, URL. Nothing else reads it
+/** the kinds the adapter states where today's classOf names none: `other`, and a tie's `space` and a forced break's `break` (both
+ *  INVISIBLE to today's classOf; stated since lane fig-cut, 2026-11-10) */
+const NONE = new Set(['other', 'space', 'break'])
 export function classOf(piece) {
   if (piece?.t === 'nested') return 'footnote'
   if (piece?.t !== 'ph') return null
-  if (typeof piece.kind === 'string') return piece.kind === 'other' ? null : piece.kind
+  if (typeof piece.kind === 'string') return NONE.has(piece.kind) ? null : piece.kind
   const src = piece.src ?? ''
   return src.startsWith('$$') ? 'display' : src.startsWith('$') ? 'math' : /^\\url(?![A-Za-z@])/.test(src) ? 'url' : 'macro'
 }

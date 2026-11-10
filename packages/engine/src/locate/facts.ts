@@ -554,8 +554,9 @@ function textEndMarks(s: string): { marks: string[]; stopped: boolean } {
   }
   return { marks, stopped: false }
 }
-/** the element kinds that set no ink (today's phClass `zero`, `space`): passed over at a unit's end */
-const INKLESS_KINDS = new Set(['zero', 'space', 'other'])
+/** the element kinds that set no ink (today's phClass `zero`, `space`; the adapter's `space` a tie, `break` a forced line break):
+ *  passed over at a unit's end */
+const INKLESS_KINDS = new Set(['zero', 'space', 'break', 'other'])
 /** the marks a unit's source writes at its end, after its last letter, digit or element (today's sourceEndMarks L2:1608):
  *  null where a symbol element stands among them (its ink is among the page's marks there, as many as its source does not
  *  tell) */

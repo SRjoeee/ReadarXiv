@@ -35,7 +35,8 @@ export type Piece =
        *  `display` is, whatever this says */
       alone?: boolean | undefined
       /** what the element reads as to a sentence cutter, where the host knows it (the HTML page: its visible text); else
-       *  its kind decides (a formula a word, a reference a number, a citation's or a note's mark an annotation) */
+       *  its kind decides (a formula a word, a reference a number, a note's mark an annotation, a citation one too but
+       *  where it opens a sentence after a stop: `… expensive. \citet{x} proposes`) */
       reads?: string | undefined
       /** it sets nothing where it stands, no character and no space (the PDF's source reader, from TeX's tables: a
        *  declaration, a key written to a file, a penalty, `\noindent`, `\-`, a table's row rule; never a space, a break, a

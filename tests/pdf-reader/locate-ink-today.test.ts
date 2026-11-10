@@ -430,6 +430,9 @@ describe('today’s ink makers in the engine package', () => {
     for (const src of ['$$', '$x$', '$a+b$', '\\url{https://a.b/c}', '\\url{}']) expect(T.classOf({ t: 'ph', src })).toBe(classOf({ t: 'ph', src }))
     expect(T.classOf({ t: 'ph', src: '$x$', kind: 'other' })).toBe(null)
     expect(T.classOf({ t: 'nested' })).toBe(classOf({ t: 'nested' }))
+    // (a tie and a forced break, which the adapter states `space` and `break` since lane fig-cut, are none of today's classes)
+    expect(T.classOf({ t: 'ph', src: '~', kind: 'space' })).toBe(classOf({ t: 'ph', src: '~' }))
+    expect(T.classOf({ t: 'ph', src: '\\\\', kind: 'break' })).toBe(classOf({ t: 'ph', src: '\\\\' }))
   })
   it('turn an ink unit’s pieces into the format’s content and spans as the instrument adapter did', () => {
     const today = run(TODAY)

@@ -242,6 +242,16 @@ export function glueOf(src) {
 }
 /** a forced break's source (tex.mjs:84 FORCED_BREAK) */
 export const FORCED_BREAK = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
+/**
+ * The kind a bundle's element states (the translator contract's ElKind, what a sentence cutter reads it as): a tie `~` a
+ * `space` (TeX's interword space, which it sets whatever the space factor: the author's word that a stop before it ends no
+ * sentence), a forced line break a `break` (FORCED_BREAK: a line's end, which in a paragraph separates its words as a space
+ * does), each read so by today's cutter (mt.mjs splitContextOf); any other today's classOf's, `other` where it names none.
+ * Before, both were `other`, which the package's cutter reads as a word: `R.~S.~Sutton` was cut after its initials, and a line
+ * after `\\` ran on into the next only by the source's own line end (lane fig-cut, 2026-11-10). Neither enters a unit's id
+ * (format's unitId reads an element's source)
+ */
+export const elementKindOf = p => (p?.src === '~' ? 'space' : FORCED_BREAK.test(p?.src ?? '') ? 'break' : (classOf(p) ?? 'other'))
 /** a citation's note: its last optional argument, its ties and control spaces a space, where it holds a letter (layer2.mjs
  *  renameRefs' CITE_NOTE L2:1279-1305) */
 const CITE_NOTE = /^\\(?:cite[a-z]*|parencite|textcite|autocite)\*?((?:\s*\[[^\]]*\])+)\s*\{/
@@ -952,7 +962,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   for (const [i, k, rgb] of readColours(log)) (colours.get(i) ?? colours.set(i, new Map()).get(i)).set(k, rgb)
   const ids = []
   const out = []
-  const kindOf = p => classOf(p) ?? 'other'
+  const kindOf = elementKindOf
   const classesBy = []
   const facts = unitFactsOf(paper)
   units.forEach((u, i) => {

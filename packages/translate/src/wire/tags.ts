@@ -166,7 +166,7 @@ export function planTags(unit: UnitIn): TagsPlan {
       // (what the host says it reads as, but an annotation is one whatever its text: it belongs to the sentence before)
       const byKind = standInOf(k?.kind ?? 'other')
       const s = byKind !== 'annotation' && k?.reads !== undefined ? k.reads : byKind
-      return k?.stop ? `${s === undefined || s === 'annotation' ? 'Xx' : s}${k.stop}` : s
+      return k?.stop ? `${s === undefined || s === 'annotation' || s === 'citation' ? 'Xx' : s}${k.stop}` : s
     }
     for (const q of sentenceCuts(projection, standIn)) {
       const c = orig[q] as number

@@ -1155,6 +1155,56 @@ only how it meets the rest of the extension.
   word: a sentence ran on past it, or the mark opened the next sentence. Before, the extension's reader cast format's units,
   and both adapters threw on every unit that holds a nested unit, so translating here gave those units no translation
   (152 units of 36 of the 88 papers).
+- **The sentences a unit is asked in** (lane fig-cut, 2026-11-10). The tags wire asks Google and Chrome for the sentences the
+  shared cutter (`packages/text` `sentenceCuts`) finds, a boundary tag before each. The HTML page's splitter, which it
+  restates, cut a wire whose white space was already collapsed; the PDF's units carry their TeX source's own lines, and
+  Intl.Segmenter breaks at every line end (UAX #29 SB4), so every source line cut a sentence: 34,791 of the 88 corpus papers'
+  71,288 cuts, in 8,405 of 18,101 lit units, stood at a line end with no stop before it (`the upper bound⏎‖of Hardy's`), and
+  1512.03385v1's leading `\vspace` was a sentence of its own. The cutter now reads the text's white space as TeX reads a
+  paragraph's (and HTML its text): a run is one space, and only an empty line, TeX's `\par`, ends a sentence there. A
+  citation was read as an annotation of the sentence before it wherever it stood, and Intl.Segmenter never breaks before a
+  lower-case word, so `… expensive. \citet{x} proposes …` was one sentence. Microsoft's own boundaries over the stored rows,
+  at a citation after a stop and white space with a lower-case word after it: a sentence begins there 54 of 54 times after
+  a sentence's last word, 0 of 11 after an abbreviation's (`Pham et al. \cite{x} classify`). So a citation after a
+  sentence's stop and the space TeX sets after it, with a word in lower case after it, opens the next sentence (the kind's
+  stand-in `citation`); elsewhere it annotates the sentence it is set against, as before (`… holds.\cite{x} We …`, `…
+  Harness? \cite{x}, LRB = …`). Over the 88 papers' 18,101 lit units: 35,198 cuts at a line end gone, in 8,717 units of all
+  88 papers; 39 added, each a citation opening a sentence before its verb; one lost that the line end alone had made
+  (`… no history. 220⏎firm-runs per model.`, a number then lower case, which Intl.Segmenter continues). Against today's
+  cutter over the same units restated in today's pieces (`mt.mjs` `serializeTags`, `cutsOf`), the units asked in the same
+  sentences rise from 9,918 to 16,517 of 17,957 (paragraphs 8,609 of 8,733); most of the rest were references, where a tie
+  read as a word (the source reader stated it `other`, as it stated a forced break) and as a space in today's cutter, so
+  `R.~S.~Sutton` was cut after its initials. The source reader now states a tie `~` a `space` and a forced line break (`\\`,
+  `\\*`, `\\[…]`, `\newline`) a `break` (`pipeline/instrument.mjs` `elementKindOf`): TeX sets a tie as an interword space
+  whatever the space factor (the author's word that a stop before it ends no sentence) and a forced break as a line's end; the
+  contract's cutter reads each as a space. An element's kind enters no unit id (`unitId` reads its source); today's `classOf`
+  names neither, and the engine's port of it reads both as none (`locate/today/deps.mjs`), its end marks pass over both
+  (`facts.ts` `INKLESS_KINDS`). Over the 88 papers: 6,102 units of 87 papers state 16,088 ties and 310 breaks so; 1,160 lit
+  units' tags wires change; the units asked in today's sentences rise to 17,587 of 17,957 (references 3,538 of 3,780); one
+  markers wire changes (2307.16209v1: a display followed by `\\` and a capital now takes its stop, `displayEnds`' rule for an
+  element that reads as white space); no adapter changes, and a moved unit's row moves with it (its key holds the unit's
+  sha256). For the cutter's own two rules, Google's and Chrome's behaviour digest moves (a fixture unit of our own words with both shapes, `SOURCE_LINES`; no earlier one held
+  either), and with it the chain's identity, so a page's rows are made again from the answers store, whose key is the wire's
+  bytes: only a unit whose tags wire changed is asked again. Microsoft reports its own sentences, which this cutter does not
+  touch, and its digest stays.
+  **What Microsoft does after an abbreviation's stop** (1512.03385v1 p7: "Fig.~\ref{fig:std} shows" came back
+  「无花果。7 显示…」, the fruit). The request is `Analysis of Layer Responses. @c# Fig. @d# shows …`, today's wire and the markers wire
+  byte for byte, the tie and the reference one marker, the space after the stop the wire's own (a marker right after a full
+  stop is set apart); Microsoft's own sentence lengths cut `@c# Fig.` off, and it translated the word alone. Over every
+  stored Microsoft row, at a stop followed by a tie, an element and a lower-case word, Microsoft cuts after `Fig.` 86 of 121
+  times (the 35 kept inside brackets, `(see Fig. @h# a)`), `Figs.` 10 of 10, `Eqs.` 12 of 12, `no.` 45 of 45, and never after
+  `Eq.` (175), `Sec.` (37), `vol.` (61), `e.g.`, `i.e.`, `et al.`; with the number written as text, `Fig. 7 shows`, 0 of 8. So
+  it reads `Fig.` and `No.` as abbreviations only before a number, and a marker is none. The tie is TeX's own statement that
+  the stop ends no sentence (LaTeX's `~` and `\ ` after a non-final period, an interword space whatever the space factor),
+  and LaTeXML writes it as a no-break space, which the HTML page sends as it is (`Fig.&nbsp;@d#`, no space of the wire's).
+  Live (Microsoft, zh-Hans, 2026-11-10, `lab/translate/live-html.ts` today mode, 12 windows of today's wire where it had cut,
+  each in three forms, 4 requests): as sent, a sentence began after the stop in 12 of 12; with a no-break space (U+00A0) for
+  the wire's space the reply was byte for byte the same, text and sentence lengths, in 12 of 12 (it reads U+00A0 as a space and
+  gives none back); with no space none was cut, but the label came back in English in 12 of 12 (`Fig.@b#显示…`), §6.2's
+  `word.@a#`. Neither form is a fix: a rule of the wire stands only where it is the source's own fact, sent alike on every
+  wire and harming no engine (the owner's standing rule), and the no-break space helps none here. Both wires collapse a
+  source's own U+00A0 with the rest of its white space (JavaScript's `\s` holds it), and the cutter reads a stop before it as
+  before a space. The wire is unchanged; "Fig." before a reference stays Microsoft's to cut.
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
   both sides together; captions as body units, by sentence; headings and table cells whole; a table cell by cell, its

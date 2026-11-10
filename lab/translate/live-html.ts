@@ -8,8 +8,8 @@
 // Counted: the placeholders that come back (each source element whose marker stands once in the reply), the blocks
 // accepted, and the blocks refused (today: resent alone, then cut into runs, by the page; on the chain: to the next
 // translator). A refusal or a rate limit of the endpoint stops the run (no retry loop).
-// Each row keeps the wire sent and the reply, and on the package's side the raw item its adapter reads (since 2026-11-07's
-// checks: the first run kept counts only). A block dumped with `unitM` (html-blocks.lab.ts) goes out as that unit, the page's
+// Each row keeps the wire sent, the reply and the raw item (its sentence lengths; today's side since 2026-11-10's probe of a
+// stop before a marker, the package's since 2026-11-07's checks: the first run kept counts only). A block dumped with `unitM` (html-blocks.lab.ts) goes out as that unit, the page's
 // mapping as it is now; one without, as the first run built it (the element kinds alone).
 // Run: npx tsx lab/translate/live-html.ts <blocks.jsonl> <out.json> today|package
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -79,7 +79,8 @@ if (which === 'today') {
         const got = tokenize(reply, 'markers').flatMap(t => (t.kind === 'void' ? [t.id] : []))
         const back = ids.filter(id => got.filter(g => g === id).length === 1).length
         const ok = validate(reply, expectationsFromText(b.markers, 'markers')).ok
-        out.push({ id: b.id, paper: b.paper, elements: ids.length, back, accepted: ok, refused: !ok, wire: b.markers, reply })
+        // (the raw item too: its sentence lengths, `sentLen`, are where the endpoint cut its sentences)
+        out.push({ id: b.id, paper: b.paper, elements: ids.length, back, accepted: ok, refused: !ok, wire: b.markers, reply, raw: JSON.stringify(items?.[i]) })
       })
     } catch (e) {
       for (const b of batch) out.push({ id: b.id, paper: b.paper, elements: count(/@[a-z]+#/g, b.markers), back: 0, accepted: false, refused: false, error: String(e) })
