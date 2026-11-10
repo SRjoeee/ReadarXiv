@@ -52,7 +52,7 @@ import { utf8 } from '../translate/mt.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { UNHIDDEN } from '@readarxiv/engine'
 import { classOf, headsOf, INK_ANY, leadStep } from './marks.mjs'
-import { columnsAt, OWNED, OWNED_HOW, ownedOf, regionsOf, spellOf } from './stream.mjs'
+import { columnsAt, OWNED, OWNED_HOW, ownedOf, READ_ALONE, regionsOf, spellOf } from './stream.mjs'
 import { isLabelForm, labelFormOf, labelText } from './label-form.mjs'
 import { counterAfter, counterBefore } from './names.mjs'
 
@@ -489,11 +489,12 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       const A = list[0], r = at(A)
       if (close.length === 1 && !before(close[0], A) && at(close[0]) === r && (close[0][0] === A[0] || r % 2 === 1)) e = { ...take(A, close[0], r), how: OWNED_HOW.indexOf('closed') }
       else if (close.length === 0) {
-        // an opening alone: to the next point in its region (a bracket's and a name's passed over)
+        // an opening alone: to the next point in its region (a bracket's, a name's and a point another reader reads alone passed
+        // over: stream.mjs READ_ALONE)
         let B = null
         for (let p = A[0]; p <= P && !B; p++) {
           const pts = pages[p - 1].points
-          for (let q = p === A[0] ? A[1] + 1 : 0; q < pts.length; q++) if (!BRACKET.test(pts[q].name) && regions[p - 1].at[q] === r) { B = [p, q]; break }
+          for (let q = p === A[0] ? A[1] + 1 : 0; q < pts.length; q++) if (!BRACKET.test(pts[q].name) && !READ_ALONE.test(pts[q].name) && regions[p - 1].at[q] === r) { B = [p, q]; break }
           if (r % 2 === 0) break
         }
         if (B) e = take(A, B, r)

@@ -271,6 +271,25 @@ describe('a paper\'s macro at a unit\'s head, its point \\axthpk\'s (marks.mjs l
   })
 })
 
+describe('the points a reader of its own reads alone: a caption\'s label point, a float of no counter\'s (marks.mjs POINTS_TEX)', () => {
+  // (2406.06525v1 p6: a cell's superscript, its opening point alone after the cell's end mark, read to the next point; the
+  // caption's label point `ka<k>` now stood there first, and the reading lost its ink. `ka<k>` is read by the label's walk
+  // (MR 5) alone and `fn<n>` by the ledger alone: every other reading passes over them as over a bracket)
+  const us = [{ kind: 'para', pieces: [{ t: 'text', s: 'OAI' }, { t: 'ph', src: '\\textsuperscript{ukn.}' }] }, { kind: 'caption', src: 'Comparison' }]
+  const at = (extra: { pt: string }[]) => page([{ pt: '0s' }, 'OAI', { pt: '0e' }, { pt: 'p0.1a' }, 'ukn.', { dx: 3 }, '4-0', ...extra, '\n', 'Table 4: ', { pt: '1s' }, 'Comparison', { pt: '1e' }])
+  it('gives an opening alone the same reading with the points as without them, the label aside', () => {
+    const without = [at([])]
+    const r0 = ownOf(without, { units: us, follows: followsOf(us as never, new Set(without[0]!.points.map(x => x.name))) })
+    for (const extra of [[{ pt: 'ka1' }, { pt: 'ka2' }], [{ pt: 'fn3' }]]) {
+      const pages = [at(extra)]
+      const r = ownOf(pages, { units: us, follows: followsOf(us as never, new Set(pages[0]!.points.map(x => x.name))) })
+      const g = groupsOf(r, pages), g0 = groupsOf(r0, without)
+      expect({ ...g, 'u1.l': undefined }).toEqual({ ...g0, 'u1.l': undefined })
+      expect(g['u0.p']).toBe(g0['u0.p'])
+    }
+  })
+})
+
 describe('a display its unit opens with, which the marking passes over (stream.mjs headInk)', () => {
   // (2501.14787v1 p24u193: \\[ vec f'(A)[dA] = … \\] after a blank line, then "In order to understand …"; no point of its own, its
   // ink between 192e and 193s in no group, made three kept blocks by the ink units, and lit with its unit's first sentence on the left)
