@@ -96,6 +96,15 @@ const STRETCH_MIN = 0.05
  *  the exclamation and question marks, which a Japanese face sets in the em's middle (Harano Aji's question mark reaches
  *  0.72 em: cut by half, it ran into the next character) */
 const SQUEEZE_MARKS = /^[\u3001\u3002\uFF0C\uFF0E\uFF08\uFF09\u300C\u300D\u300E\u300F\u3010\u3011\u3014\u3015\u3008\u3009\u300A\u300B\u3018\u3019\u3016\u3017\u201C\u201D\u2018\u2019]$/
+/** whether an item continues the word of the item before it (tokensOf2's pushText: a piece after a break point inside a word,
+ *  `brk` — a URL's after its `/`, `.`, `-`, a compound's after its hyphen —, or a run of one case of a word, `cont`): the gap
+ *  before it is a break point with no glue, as TeX's url package sets one (\Urlmuskip 0mu: a penalty) and as TeX sets every
+ *  word, so no CJK line's slack or squeeze goes into it (placeItems, squeezeTakes). 2608.25210v2 p17: a URL whose line ends
+ *  are joins (lane url-join), cut at its break points, was letter-spaced to the measure, 1.9-2.7 pt after each "/" */
+const inWord = it => !!(it.t.brk || it.t.cont)
+/** a line's gaps that take a CJK line's slack or squeeze: those between two of its items `items` (from the n-th on, n > 0),
+ *  but the ones inside a word (inWord) */
+const gapsOf = items => { let n = 0; for (let k = 1; k < items.length; k++) if (!inWord(items[k])) n++; return n }
 /** whether a line is set as Latin text, its slack in its word spaces (placeItems): it has spaces, and its script breaks only
  *  at spaces or fewer than half its items are CJK */
 const latinishOf = (items, P) => items.some(it => it.t.space) && (P.keepAll || items.filter(it => it.t.cls === 'cjk').length < items.length / 2)
@@ -402,7 +411,8 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     if (n < 2) return Infinity
     const end = line.items[n - 1]
     const hang = hangOf(end, st.compress) * f
-    return (cap - (x - (end.kern ?? 0)) + hang) / (n - 1)
+    const gaps = gapsOf(line.items.slice(0, n))
+    return gaps > 0 ? (cap - (x - (end.kern ?? 0)) + hang) / gaps : Infinity
   }
   /** whether the line in hand squeezes to take group g, which does not fit it */
   const squeezeTakes = (g, cap) => {
@@ -410,7 +420,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     const all = line.items.concat(g.items)
     if (latinishOf(all, P)) return false
     const need = line.x - (line.spaces + g.sp) * (1 - P.spaceMin) + g.w - g.hang - cap
-    const gaps = all.length - 1
+    const gaps = gapsOf(all)
     const stretch = stretchOf(cap)
     return gaps > 0 && stretch > STRETCH_MIN * f && need <= squeezable(all, g.hang > 0, st.compress, P).length * half + gapSqueeze * gaps + 1e-9 && need / gaps < stretch
   }
@@ -664,4 +674,4 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
   return { lines: lines.filter(l => l.items.length), rest: over ?? i, total: tokens.length, tokens, spilled }
 }
 
-export { breakLines, hangOf, latinishOf, leadOf, squeezable }
+export { breakLines, gapsOf, hangOf, inWord, latinishOf, leadOf, squeezable }
