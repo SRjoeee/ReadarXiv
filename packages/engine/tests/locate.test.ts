@@ -3290,6 +3290,20 @@ describe('a block name a unit holds elsewhere (docs/PDF-READER.md §19.15)', () 
     expect(paper.persons).toEqual([[units[1]!.id, 'author', 0]])
     expect(paper.splits).toEqual([[units[1]!.id, [], [], [0]]])
   })
+  it('makes no variant of a unit no part holds (its member unlocated, no line of it on any page)', () => {
+    const B = docOf([{ lines: ['A Title', 'Shisheng Xiong', 'A paragraph.'] }])
+    const units = [
+      { ...unitOf('heading', 'A Title'), title: true as const, front: true as const },
+      { ...unitOf('author', 'Shisheng Xiong'), front: true as const },
+      unitOf('para', 'A paragraph.'),
+      unitOf('footnote', 'Corresponding author: Shisheng Xiong.'),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2]])
+    const o = objects(ins, locate(ins, B, align(B, B)))
+    expect(
+      o.flatMap((x) => (x.kind === 'units' ? read('units', x.bytes, x.digest).units : [])).map((u) => u.kind),
+    ).toEqual(['heading', 'author', 'para', 'footnote'])
+  })
   it('states nothing where no unit holds a block name elsewhere', () => {
     const B = docOf([{ lines: ['A Title', 'Shisheng Xiong', 'A paragraph.'] }])
     const units = [

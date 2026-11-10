@@ -6409,7 +6409,7 @@ The toggle still governs the block under the title alone (§19.13, the ruling of
     stated as its element and its length and offset, for the sentences, or as its stretch.
   - `persons`: each person's anchor, the anchor's member kind and its stretch.
   - `splits`: how the anchors' rows, and the rows resolved in place, are cut.
-- **The lay** (packages/typeset `lay/named.ts`, one view of the rows at layPage's top; every caller lays the page alike). With
+- **The lay** (`packages/typeset/src/lay/named.ts`, one view of the rows at layPage's top; every caller lays the page alike). With
   the names shown (the anchor's kind not left):
   - **The variant's row:** each `person` element becomes the block's translation. Its `src` sentences map back onto the unit's
     projection and its `tr` sentences onto the text as drawn, so that both panes light by sentence (§17).
@@ -6443,4 +6443,4 @@ The toggle still governs the block under the title alone (§19.13, the ruling of
     initials or in capitals (18 units in 7 papers), and a name across a tie outside the block (4 in references).
   - A shorter name inside another person's longer one ("Jun Yang" in "Jun Yang Li") where the longer is no block name.
   - The anchors' cuts are measured on Microsoft's replies alone. The tags wire's readings (Google, Chrome's built-in
-    translator) are tested on shaped replies (packages/translate `tests/names-wire.test.ts`).
+    translator) are tested on shaped replies (`packages/translate/tests/names-wire.test.ts`).

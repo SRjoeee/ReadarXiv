@@ -248,7 +248,10 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   const names = namesOf(
     units,
     (u, p) => classes.get(u)?.get(p),
-    placed.flatMap((x) => (typeof x.text === 'string' ? [{ ord: x.ord, unit: x.text, kind: x.kind }] : [])),
+    // (the members a part holds: one with no line on any page is drawn nowhere)
+    placed.flatMap((x) =>
+      typeof x.text === 'string' && x.lines.length ? [{ ord: x.ord, unit: x.text, kind: x.kind }] : [],
+    ),
   )
   const written = units.flatMap((u) => {
     const v = names.variants.get(u.id)
