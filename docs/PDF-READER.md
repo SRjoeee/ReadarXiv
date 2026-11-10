@@ -6423,18 +6423,16 @@ The toggle still governs the block under the title alone (§19.13, the ruling of
     - a whole-stretch unit keeps its own translation of that name.
   - **Waiting:** a page waits for the variant's row and the anchors' rows besides the unit's own, while rows may come. Nothing
     committed is laid again; a toggle lays every page again.
-- **Measured** (r9 bundles of the 88, plus 2604.14228v3):
-  - 332 names, 319 of them with an anchor (81 papers).
-  - 117 placed units in 29 papers hold one elsewhere:
-    - 95 references (self-citations);
-    - 9 reference format units;
-    - 6 correspondence lines;
-    - 2 acknowledgements;
-    - 4 biographies or end matter;
-    - 1 IEEE affiliation footnote.
-  - 11 of the 22 that are no references are resolved in their own rows. 103 units have a variant: 23.1K characters, 0.38 % of
-    the corpus's, at most 2.8 % of one paper.
-  - On page 1, 5 variants (483 characters) over 9 papers.
+- **Measured** (stage 1a over the 88 at this change, against the base's run):
+  - 29 papers state 117 units naming 192 persons elsewhere, every other object the same:
+    - 96 references (self-citations);
+    - 8 reference format units (2610.22065v1's), resolved in their own rows;
+    - 5 paragraphs (acknowledgements, biographies);
+    - 4 footnotes and 4 ink units (correspondence lines, a reference format paragraph).
+  - 13 units are resolved in their own rows and 104 have a variant: 23.6K characters, 0.40 % of the corpus's.
+  - On page 1: 15 units in 8 papers, 5 of them variants (487 characters).
+  - 2604.14228v3's correspondence line, at this engine one ink unit of its block (the tcolorbox's rest), has a variant: it is
+    drawn 申志强 with the names on and the original's with them off, as the block is.
 - **The block's translation wins.** The block's translation is the person's, whatever it is. 2610.22195v1's block translates
   each ICML name alone (延辰邓) where its acknowledgement, in a sentence, had 邓彦晨: the acknowledgement now reads the block's.
   The block's own quality (names translated one by one rather than in a list) is a separate matter.
