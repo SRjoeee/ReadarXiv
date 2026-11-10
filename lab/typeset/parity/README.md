@@ -111,7 +111,11 @@ and size it was drawn in (computed style), drawn or a crop's transparent stand-i
 read as the original's is: its largest letter's (any script's: faked small capitals set the capitals at it and the rest
 smaller, a CJK character is a letter at its line's size), else its median character's; a line's extent takes in the crops
 standing on it, and a smaller run raised or lowered off a line (a footnote mark) is part of it, in that line's column of the
-paper's frame (a line of the other column on about the same baseline is a line of its own, whatever its size).
+paper's frame (a line of the other column on about the same baseline is a line of its own, whatever its size). These
+readings are taken in the browser as the page is drawn (`measure-dom.mjs`), and a raw file keeps each line's aggregates
+alone: no change to them can be re-applied to old raw files by `measure.mjs`; a change to a drawn line's reading means the
+pages are drawn again (lane el-facts, 2026-11-11: B6's sheet under the new readings is that lane's redraw, 46 worse by
+default and 56 every toggle on, not a re-measure).
 A unit is joined across the sides by today's ord (`join.mjs`, written by v2.mjs): every member of the entry's Pages, laid or
 not, joined to today's unit by its unit's id and its rank among the part's members of that id (the baseline's rule), never by
 what gate-l1's runner adapted (its stops record no join, so a member the entry lays and the runner stops, an element that
