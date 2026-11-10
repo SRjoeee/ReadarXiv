@@ -3260,7 +3260,10 @@ of 41 papers held a space their copy did not.
   deep in one run, past `DRIFT_BOUND`, and was dropped (three DOIs with every switch on: 2610.40645v1-ja p38, p39, 2608.06701v1-zh
   p12). The annotations of one target over such a word are placed over the whole of what is drawn of it.
 - The parity against B1's final: 49 -> 50 by default, 58 -> 59 with every switch on, the one page each 1810.04805v2-zh p14 t237,
-  a paragraph of two broken URLs now drawn whole and set a line shorter than today's (5 for 6, the original's 7).
+  a paragraph of two broken URLs now drawn whole and set a line shorter than today's (5 for 6, the original's 7). The parity
+  counts a line count the joins move as the rule's only where the pair laid with those line ends read as spaces again sets
+  today's count (the coordinator's ruling of 2026-11-10, `lab/typeset/parity/README.md`): back to 49 and 58, that page alone
+  moved; of the 37 units over the 22 pairs that hold such a word, it is the one whose line count was worse.
 
 ## 19. The engine's contract
 
