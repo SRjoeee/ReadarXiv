@@ -3855,7 +3855,10 @@ figure text of its own, translated as a word.
   its line. A glyph standing on another line's baseline is that line's, taken or not (2609.19644v1 p11: a table's number cells
   under a group header's formula, a caption's last mark past its line's run gap). Reading the line nearest by baseline instead,
   with no reach, was tried and withdrawn (2026-11-11): a display forms no line, so a display, its equation number or a folio 3
-  to 27 sizes below stood nearest a paragraph's last line (2609.19644v1: 33 of F1's 47 lines drawn against 39).
+  to 27 sizes below stood nearest a paragraph's last line (2609.19644v1: 33 of F1's 47 lines drawn against 39). Over the 91
+  (2026-11-11, every loose glyph over or under a formula element read each way): the band keeps 11 texts, the nearest line
+  132, the nearest line with the glyph's row inside the element's extent 11, and the band with that row 1, which loses
+  2610.35877v1 p3's denominator, a true one.
 - **The wrap's proof reads a show as it draws.** An element cuts a show of the figure's form where its text and its element meet,
   and the split writes each chunk's codes and adjustments. The proof read the show otherwise in two ways, neither of which draws
   anything: a show opening with an empty string, whose codes (none) the split does not write (2610.20967v1 p2), and an adjustment
