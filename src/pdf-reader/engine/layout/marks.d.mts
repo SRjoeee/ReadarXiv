@@ -273,3 +273,10 @@ export declare function parseLayoutMarks(bytes: Uint8Array): LayoutMarks
 export declare const RULE: RegExp
 /** the regions' points' TeX for the code environments a paper uses (latex-front.mjs project `codeEnvs`), '' for none */
 export declare function regionsTex(codeEnvs: readonly string[] | null | undefined, bodies?: readonly string[] | null): string
+/** the label a reference element names (classOf's `ref` and `eqref`, one label, no page's), as the marked compile writes it; null
+ *  for any other piece */
+export declare function refKeyOf(piece: { t: string; src?: string } | null | undefined): string | null
+/** each label the paper's reference elements name, once, in the order its units name them */
+export declare function refKeysOf(units: readonly { pieces?: readonly { t: string; src?: string }[] }[]): string[]
+/** what the marked compile asks TeX about each reference (AXT-REF, AXT-REFNAME at the document's end); '' for none */
+export declare function refsTex(keys: readonly string[]): string

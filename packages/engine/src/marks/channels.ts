@@ -174,3 +174,47 @@ export function framesOf(
     }
   })
 }
+
+/** a reference's item type and the full name the paper gives it (readRefNames) */
+export type RefName = { type: string; name?: string }
+/** a name as a reference's full name: plain words (a letter first, then letters, marks, an apostrophe or a hyphen, words apart
+ *  by one space), at most 40 characters, no full stop: a name that holds one is an abbreviation ("Fig.", cleveref's default),
+ *  and one that holds a command or a brace is no plain name (`\scshape Table`) */
+const FULL_NAME = /^\p{L}[\p{L}\p{M}'’-]*(?: [\p{L}\p{M}'’-]+)*$/u
+/** a macro's meaning as TeX writes it (`\meaning`): its body after `macro:->`, a definition of no parameter alone */
+const MEANING = /^(?:\\(?:long|protected|outer) )*macro:->(.*)$/
+const UTF8 = new TextDecoder('utf-8')
+/** a name TeX wrote, as text: its ^^ notation (a byte TeX would not print) read, and its bytes (the log is read byte for byte,
+ *  one character a byte) read as UTF-8 where they are bytes */
+function textOf(written: string): string {
+  const s = written.replace(/\^\^([0-9a-f]{2})/g, (_, h: string) => String.fromCharCode(Number.parseInt(h, 16)))
+  const codes = Array.from(s, (c) => c.charCodeAt(0))
+  if (!codes.some((c) => c > 0x7f) || codes.some((c) => c > 0xff)) return s
+  return UTF8.decode(Uint8Array.from(codes))
+}
+/**
+ * Each reference's item type and the full name the paper gives it, by the reference's place in the list the marked compile was
+ * given (marks.mjs refsTex: `AXT-REF <i> <type>`, then `AXT-REFNAME <i> <slot> <\meaning>` for each of cleveref's capitalised
+ * and own names, hyperref's \<type>autorefname and LaTeX's \<type>name that is defined, in that order, written once the last
+ * page is out). The type is the label's anchor's (hyperref's, and LaTeX's own since 2023: `figure.caption.12`'s `figure`, as
+ * hyperref's own \autoref reads it), else cleveref's where it wrote one; the name the first of those that is a full name
+ * (FULL_NAME). A label TeX knew no type for states nothing; a type none of whose names is a full one (RevTeX's `section*`
+ * anchors), no name
+ */
+export function readRefNames(log: string): Map<number, RefName> {
+  const out = new Map<number, RefName>()
+  // (a statement longer than the log's 79 columns wrapped: joined)
+  const text = log.replace(/^(AXT-REFNAME .{67})\n/gm, '$1')
+  for (const m of text.matchAll(/^AXT-REF (\d{1,6}) (\S{1,64}) *$/gm)) {
+    const i = Number(m[1])
+    if (!out.has(i)) out.set(i, { type: m[2] as string })
+  }
+  for (const m of text.matchAll(/^AXT-REFNAME (\d{1,6}) [Ccan] (.*)$/gm)) {
+    const ref = out.get(Number(m[1]))
+    if (!ref || ref.name !== undefined) continue
+    const body = MEANING.exec((m[2] as string).trimEnd())?.[1]
+    const name = body === undefined ? '' : textOf(body).trim()
+    if (name.length <= 40 && FULL_NAME.test(name)) ref.name = name
+  }
+  return new Map([...out].sort((a, b) => a[0] - b[0]))
+}

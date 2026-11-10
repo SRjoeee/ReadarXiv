@@ -1221,6 +1221,59 @@ export const LAYOUT_TEX = [
   '\\makeatother',
 ].join('')
 
+// ---------------------------------------------------------------- a reference's item and its name
+/** a reference to a page, not to an item (\pageref): no item's name for it */
+const PAGE_REF = /^\\pageref(?![A-Za-z@])/
+/** a reference's one label, its command's one argument: [1] the key */
+const ONE_KEY = /^\\[A-Za-z]+\*?\s*\{([^{},]*)\}\s*$/
+/** a key the marked compile may write into its TeX as the paper writes it: printable ASCII but TeX's characters that would not
+ *  stay characters in a definition's body (`\`, the braces, `%`, `#`), and no `^^` (TeX's notation for a character code) */
+const TEX_KEY = /^(?!.*\^\^)[^\\{}%#]{1,200}$/
+/** the label a reference element names (classOf's `ref` and `eqref`, one label, no page's), as the marked compile writes it
+ *  (white space as TeX reads it, one space); null for any other piece */
+export function refKeyOf(piece) {
+  if (piece?.t !== 'ph') return null
+  const cls = classOf(piece)
+  if ((cls !== 'ref' && cls !== 'eqref') || PAGE_REF.test(piece.src)) return null
+  const key = ONE_KEY.exec(piece.src)?.[1]?.replace(/\s+/g, ' ')
+  return key !== undefined && /^[\x20-\x7e]+$/.test(key) && TEX_KEY.test(key) ? key : null
+}
+/** each label the paper's reference elements name (refKeyOf), once, in the order its units name them: the list the marked
+ *  compile asks TeX about (refsTex), each key by its place in it */
+export function refKeysOf(units) {
+  const out = new Set()
+  for (const u of units) for (const p of u.pieces ?? []) { const k = refKeyOf(p); if (k !== null) out.add(k) }
+  return [...out]
+}
+/**
+ * What the marked compile asks TeX about each of the paper's references (`keys`, refKeysOf's), written once the last page is out
+ * (enddocument/afterlastpage, before END_TEX's AXT-END), when every label of the aux TeX read is defined and so is every name:
+ * the label's type, its anchor's (hyperref's, and the kernel's since LaTeX 2023, `{num}{page}{title}{anchor}{}`), the part before
+ * its first full stop (`figure.caption.12`'s `figure`, `appendix.A`'s `appendix`: what hyperref's own \autoref reads), else
+ * cleveref's (its `<key>@cref` label, `[type][…]…`) where it wrote one, as `AXT-REF <i> <type>`; then the
+ * meaning of each of cleveref's capitalised and own names for that type, hyperref's \<type>autorefname and LaTeX's \<type>name
+ * that is defined, as `AXT-REFNAME <i> <C|c|a|n> <\meaning>` (the engine's readRefNames takes the first full name). Nothing is
+ * expanded but the label's own definitions, nothing set, nothing written to a file: \meaning reads a name whatever it holds. A
+ * label TeX has no definition of, or one with neither form (no hyperref, no cleveref), is passed over. One line, its own
+ * \makeatletter; '' for a paper with no reference, whose bytes stay as they were
+ */
+export function refsTex(keys) {
+  if (!keys.length) return ''
+  return [
+    '\\makeatletter',
+    '\\def\\axt@rf#1#2{\\begingroup\\edef\\axt@rk{\\detokenize{#2}}\\let\\axt@rt\\@empty',
+    '\\ifcsname r@\\axt@rk\\endcsname\\expandafter\\expandafter\\expandafter\\axt@rfh\\csname r@\\axt@rk\\endcsname{}{}{}{}{}\\@nil\\fi',
+    '\\ifx\\axt@rt\\@empty\\ifcsname r@\\axt@rk @cref\\endcsname\\expandafter\\expandafter\\expandafter\\axt@rfc\\csname r@\\axt@rk @cref\\endcsname{}\\@nil\\fi\\fi',
+    '\\ifx\\axt@rt\\@empty\\else\\message{^^JAXT-REF #1 \\axt@rt^^J}\\axt@rfn{#1}{C}{Cref@\\axt@rt @name}\\axt@rfn{#1}{c}{cref@\\axt@rt @name}\\axt@rfn{#1}{a}{\\axt@rt autorefname}\\axt@rfn{#1}{n}{\\axt@rt name}\\fi\\endgroup}',
+    '\\def\\axt@rfc#1#2\\@nil{\\axt@rfct#1[]\\@nil}\\def\\axt@rfct#1[#2]#3\\@nil{\\def\\axt@rt{#2}}',
+    '\\def\\axt@rfh#1#2#3#4#5\\@nil{\\axt@rfa#4.\\@nil}\\def\\axt@rfa#1.#2\\@nil{\\def\\axt@rt{#1}}',
+    '\\def\\axt@rfn#1#2#3{\\ifcsname #3\\endcsname\\message{^^JAXT-REFNAME #1 #2 \\expandafter\\meaning\\csname #3\\endcsname^^J}\\fi}',
+    `\\def\\axt@rfall{${keys.map((k, i) => `\\axt@rf{${i}}{${k}}`).join('')}}`,
+    '\\ifdefined\\AddToHook\\AddToHook{enddocument/afterlastpage}{\\axt@rfall}\\else\\AtEndDocument{\\axt@rfall}\\fi',
+    '\\makeatother',
+  ].join('')
+}
+
 /** POINTS_TEX's point under `latex` (latex-front.mjs dviEngine), where pdfTeX writes no PDF itself and its \\pdfliteral sets
  *  nothing: xdvipdfmx's, as POINTS_TEX sets it under XeTeX, a `pdf:code` special, the same rendering intent in the content
  *  stream; pdfTeX's where it writes the PDF. DVI_LAYOUT_TEX's last part */
