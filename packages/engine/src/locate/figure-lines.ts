@@ -343,8 +343,10 @@ function phrasesOf(cl: readonly Cluster[]): { idx: number[]; touches: boolean }[
     const text = !c.math && !c.fixed
     const prev = cl[i - 1]
     if (text && cur && prev && c.x0 - prev.x1 <= RUN_GAP * Math.max(c.size, prev.size)) cur.idx.push(i)
-    else if (text) out.push((cur = { idx: [i], touches: false }))
-    else cur = null
+    else if (text) {
+      cur = { idx: [i], touches: false }
+      out.push(cur)
+    } else cur = null
   })
   for (const ph of out) {
     const first = cl[ph.idx[0]!]!,
