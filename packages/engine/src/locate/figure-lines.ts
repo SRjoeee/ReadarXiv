@@ -188,8 +188,7 @@ export function figureLinesOf(
   })
   // ---- F1: a script set beside a formula's glyph is its formula's line; then the faces that are a formula's own (fact 3)
   for (const b of built) scriptsJoined(b.lines, b.glyphs)
-  const formulaFaces = formulaFacesOf(built, textFaces, pitch)
-  const math = (g: G) => mathGlyph(g) || formulaFaces.has(bare(g.font))
+  const math: Formulas = { faces: formulaFacesOf(built, textFaces, pitch), pitch }
   for (const { p, glyphs, runOf, lines } of built) {
     // ---- each line read: its glyphs' roles, M (a formula's), F (a face of one pitch) or T, in its order; its text F0's, code's
     // or a formula's
@@ -276,40 +275,149 @@ function scriptsJoined(lines: Line[], glyphs: readonly G[]): void {
   }
 }
 
-/** (3) the faces that are a formula's own upright face: a face no math one by its name nor of one pitch, which the document's source
- *  units set no text in (`textFaces`) and no figure's line sets a word in (two letters on end) without a glyph of a formula by facts
- *  (1) and (2) on it: KaTeX_Main's "arg min", "log det", "Mah" beside KaTeX's math italic */
+/** what the formula reading reads beside a glyph's own facts: the faces that are a formula's own (3), and a face of one pitch */
+interface Formulas {
+  faces: ReadonlySet<string>
+  pitch: (g: G) => boolean
+}
+
+/** a sign − ± ∓ right before a digit, no word space between: a number's, no formula's ("−1.04") */
+function signed(gs: readonly number[], i: number, glyphs: readonly G[]): boolean {
+  const g = glyphs[gs[i]!]!,
+    h = glyphs[gs[i + 1]!]
+  return /^[−±∓]$/u.test(g.u) && !!h && /\p{N}/u.test(h.u) && h.x0 - g.x1 < SPACE_GAP * g.size
+}
+
+/** a line's clusters: its glyphs (places in `gs`, its order) no word space apart (SPACE_GAP); each whether it holds a formula's
+ *  glyph by facts (1) and (2), a number's sign none; whether every glyph of it is of one pitch; and the faces of its letters */
+interface Cluster {
+  is: number[]
+  x0: number
+  x1: number
+  size: number
+  math: boolean
+  fixed: boolean
+  letters: boolean
+  faces: Set<string>
+}
+function clustersOf(gs: readonly number[], glyphs: readonly G[], pitch: (g: G) => boolean): Cluster[] {
+  const out: Cluster[] = []
+  gs.forEach((g, i) => {
+    const x = glyphs[g]!
+    const c = out.at(-1)
+    if (c && x.x0 - c.x1 < SPACE_GAP * x.size) {
+      c.is.push(i)
+      c.x1 = Math.max(c.x1, x.x1)
+      c.size = Math.max(c.size, x.size)
+    } else
+      out.push({
+        is: [i],
+        x0: x.x0,
+        x1: x.x1,
+        size: x.size,
+        math: false,
+        fixed: false,
+        letters: false,
+        faces: new Set(),
+      })
+  })
+  for (const c of out) {
+    c.math = c.is.some((i) => mathGlyph(glyphs[gs[i]!]!) && !signed(gs, i, glyphs))
+    c.fixed = c.is.every((i) => pitch(glyphs[gs[i]!]!))
+    for (const i of c.is) {
+      const g = glyphs[gs[i]!]!
+      if (!LETTER.test(g.u)) continue
+      c.letters = true
+      c.faces.add(bare(g.font))
+    }
+  }
+  return out
+}
+/** a line's phrases: its consecutive clusters that hold no formula's glyph and are not of one pitch whole, white space alone
+ *  between them within the run gap; each whether it touches a formula, a cluster holding a formula's glyph right before it or
+ *  right after it within the run gap */
+function phrasesOf(cl: readonly Cluster[]): { idx: number[]; touches: boolean }[] {
+  const out: { idx: number[]; touches: boolean }[] = []
+  let cur: { idx: number[]; touches: boolean } | null = null
+  cl.forEach((c, i) => {
+    const text = !c.math && !c.fixed
+    const prev = cl[i - 1]
+    if (text && cur && prev && c.x0 - prev.x1 <= RUN_GAP * Math.max(c.size, prev.size)) cur.idx.push(i)
+    else if (text) out.push((cur = { idx: [i], touches: false }))
+    else cur = null
+  })
+  for (const ph of out) {
+    const first = cl[ph.idx[0]!]!,
+      last = cl[ph.idx.at(-1)!]!
+    const a = cl[ph.idx[0]! - 1],
+      b = cl[ph.idx.at(-1)! + 1]
+    ph.touches =
+      (!!a && a.math && first.x0 - a.x1 <= RUN_GAP * Math.max(a.size, first.size)) ||
+      (!!b && b.math && b.x0 - last.x1 <= RUN_GAP * Math.max(b.size, last.size))
+  }
+  return out
+}
+
+/** (3) the faces that are a formula's own upright face: a face a letter of which stands in a formula's cluster, no word space
+ *  from a formula's glyph by facts (1) and (2) ("Tr(" before KaTeX's Σ, "Mah" under its P), that is no math face by its name
+ *  nor of one pitch, that the document's source units set no text in (`textFaces`), and that no figure line sets a phrase in
+ *  apart from a formula (one touching none): a fact over the document. A label's face beside a formula ("jury, α = 8") sets no
+ *  letter inside one and is the label's */
 function formulaFacesOf(
   built: readonly { glyphs: G[]; lines: Line[] }[],
   textFaces: ReadonlySet<string> | null,
   pitch: (g: G) => boolean,
 ): Set<string> {
-  const seen = new Set<string>()
+  const inside = new Set<string>()
   const apart = new Set<string>()
   for (const { glyphs, lines } of built)
     for (const l of lines) {
       const gs = l.gs.filter((g) => real(glyphs[g]))
-      const withMath = gs.some((g, i) => mathGlyph(glyphs[g]!) && !signed(gs, i, glyphs))
-      for (let i = 0; i < gs.length; i++) {
-        const g = glyphs[gs[i]!]!
-        const f = bare(g.font)
-        if (classifyFont(g.font).fam === 'math' || pitch(g)) continue
-        // (seen beside a formula: a face only a figure's numbers or words apart from formulas set is none)
-        if (withMath) seen.add(f)
-        // (a word of its face: this letter and the next, one face, no word space between)
-        const h = glyphs[gs[i + 1]!]
-        if (
-          !withMath &&
-          h &&
-          bare(h.font) === f &&
-          LETTER.test(g.u) &&
-          LETTER.test(h.u) &&
-          h.x0 - g.x1 < SPACE_GAP * Math.min(g.size, h.size)
-        )
-          apart.add(f)
-      }
+      const cl = clustersOf(gs, glyphs, pitch)
+      for (const c of cl)
+        if (c.math)
+          for (const i of c.is) {
+            const g = glyphs[gs[i]!]!
+            if (LETTER.test(g.u) && !mathGlyph(g) && !pitch(g)) inside.add(bare(g.font))
+          }
+      for (const ph of phrasesOf(cl))
+        if (!ph.touches) for (const i of ph.idx) for (const f of cl[i]!.faces) apart.add(f)
     }
-  return new Set([...seen].filter((f) => !apart.has(f) && !textFaces?.has(f)))
+  return new Set([...inside].filter((f) => !apart.has(f) && !textFaces?.has(f)))
+}
+
+/** F1: which of a line's glyphs (in its order) are a formula's. A cluster holding a formula's glyph (facts (1), (2)) is a formula
+ *  whole; it takes the clusters beside it within the run gap that hold no letter and no glyph of one pitch (an operator, a number,
+ *  a bracket: "x = 3"), and so on from them; and a phrase that touches a formula, every letter of which is in a formula's own face
+ *  (3), is the formula's ("log det" between KaTeX's formulas). A word in any other face is never one ("x and y" two formulas) */
+function formulaOf(gs: readonly number[], glyphs: readonly G[], f: Formulas): boolean[] {
+  const cl = clustersOf(gs, glyphs, f.pitch)
+  const inF = cl.map((c) => c.math)
+  for (let again = true; again; ) {
+    again = false
+    cl.forEach((c, i) => {
+      if (inF[i] || c.letters || c.is.some((k) => f.pitch(glyphs[gs[k]!]!))) return
+      const a = cl[i - 1],
+        b = cl[i + 1]
+      if (
+        (a && inF[i - 1] && c.x0 - a.x1 <= RUN_GAP * Math.max(a.size, c.size)) ||
+        (b && inF[i + 1] && b.x0 - c.x1 <= RUN_GAP * Math.max(b.size, c.size))
+      ) {
+        inF[i] = true
+        again = true
+      }
+    })
+  }
+  for (const ph of phrasesOf(cl)) {
+    if (!ph.touches) continue
+    const faces = new Set(ph.idx.flatMap((i) => [...cl[i]!.faces]))
+    if (faces.size && [...faces].every((x) => f.faces.has(x))) for (const i of ph.idx) inF[i] = true
+  }
+  const out = new Array<boolean>(gs.length).fill(false)
+  cl.forEach((c, k) => {
+    if (inF[k]) for (const i of c.is) out[i] = true
+  })
+  return out
 }
 
 function lineOf(ks: number[], gs0: number[], free: Set<number>, glyphs: readonly G[], fig: string): Line {
@@ -332,56 +440,6 @@ function lineOf(ks: number[], gs0: number[], free: Set<number>, glyphs: readonly
   }
 }
 
-/** a sign − ± ∓ right before a digit, no word space between: a number's, no formula's ("−1.04") */
-function signed(gs: readonly number[], i: number, glyphs: readonly G[]): boolean {
-  const g = glyphs[gs[i]!]!,
-    h = glyphs[gs[i + 1]!]
-  return /^[−±∓]$/u.test(g.u) && !!h && /\p{N}/u.test(h.u) && h.x0 - g.x1 < SPACE_GAP * g.size
-}
-
-/** F1: which of a line's glyphs (in its order) are a formula's. A cluster is glyphs no word space apart (SPACE_GAP); one holding
- *  a formula's glyph (`math`: facts (1), (2), (3)) is a formula, a sign − ± ∓ right before a digit a number's, no formula's; a
- *  formula takes the clusters beside it within the run gap that hold a formula's glyph or no letter (an operator, a number, a
- *  bracket: "x = 3"), never a word ("x and y" two formulas) */
-function formulaOf(gs: readonly number[], glyphs: readonly G[], math: (g: G) => boolean): boolean[] {
-  const clusters: number[][] = []
-  let end = -Infinity
-  gs.forEach((g, i) => {
-    const x = glyphs[g]!
-    if (!clusters.length || x.x0 - end >= SPACE_GAP * x.size) clusters.push([i])
-    else clusters.at(-1)!.push(i)
-    end = Math.max(clusters.at(-1)!.length > 1 ? end : -Infinity, x.x1)
-  })
-  const isMath = clusters.map((c) => c.some((i) => math(glyphs[gs[i]!]!) && !signed(gs, i, glyphs)))
-  const noLetter = clusters.map((c) => !c.some((i) => LETTER.test(glyphs[gs[i]!]!.u)))
-  const inF = [...isMath]
-  const gap = (a: number[], b: number[]) => {
-    const x = glyphs[gs[a.at(-1)!]!]!,
-      y = glyphs[gs[b[0]!]!]!
-    return { d: y.x0 - Math.max(...a.map((i) => glyphs[gs[i]!]!.x1)), size: Math.max(x.size, y.size) }
-  }
-  for (let again = true; again; ) {
-    again = false
-    for (let c = 0; c < clusters.length; c++) {
-      if (!inF[c]) continue
-      for (const n of [c - 1, c + 1]) {
-        if (n < 0 || n >= clusters.length || inF[n] || !(isMath[n] || noLetter[n])) continue
-        const [a, b] = n < c ? [clusters[n]!, clusters[c]!] : [clusters[c]!, clusters[n]!]
-        const { d, size } = gap(a, b)
-        if (d < RUN_GAP * size) {
-          inF[n] = true
-          again = true
-        }
-      }
-    }
-  }
-  const out = new Array<boolean>(gs.length).fill(false)
-  clusters.forEach((c, k) => {
-    if (inF[k]) for (const i of c) out[i] = true
-  })
-  return out
-}
-
 /**
  * A line's figure text where it is one of F0's or a line of code, else null. Its glyphs' roles in its order: F (a face of one
  * pitch) or T; a stretch of T that spells a word is the line's text; one standing between F glyphs right before and right after
@@ -389,7 +447,7 @@ function formulaOf(gs: readonly number[], glyphs: readonly G[], math: (g: G) => 
  * Consolas line); else each stretch of F an element `code`. The glyphs no run holds before its first run's (an icon TeX set
  * before the first word) are none of it, as today's reading leaves them
  */
-function readLine(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean, math: (g: G) => boolean): FigureText | null {
+function readLine(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean, math: Formulas): FigureText | null {
   // (the glyphs no run holds before its first run's: the text's where each abuts the glyph after it, no word space between (an
   // opening bracket, a code line's opening quote), or is a formula's; from one standing a word space apart back, an icon TeX
   // set before the first word, none of it)
@@ -397,7 +455,7 @@ function readLine(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean, math:
   while (first > 0) {
     const a = glyphs[l.gs[first - 1]!]!,
       b = glyphs[l.gs[first]!]!
-    if (b.x0 - a.x1 >= SPACE_GAP * Math.min(a.size, b.size) && !math(a)) break
+    if (b.x0 - a.x1 >= SPACE_GAP * Math.min(a.size, b.size) && !mathGlyph(a)) break
     first--
   }
   const gs = l.gs.slice(first)

@@ -490,6 +490,37 @@ describe('figure-lines: F1, a formula in a figure is an element, never sent (the
     const G = page.glyphs as Glyph[]
     expect(t!.els[0]!.glyphs.map((g) => G[g]!.u).join('')).toBe('xbase=3')
   })
+  it('keeps a label’s words text where its face sets no letter inside a formula: "jury, α = 8", the face’s only line (2610.21085v1)', () => {
+    // (a face is a formula's own only where a letter of it stands in a formula's cluster, no word space from a formula's glyph:
+    // a label's face beside a formula is the label's, though the document sets no other word in it)
+    const { page, fig } = pageOf([
+      [
+        { text: 'jury, ', font: 'Helvetica' },
+        { text: 'α', font: 'CMMI10', run: false },
+        { text: ' = 8', font: 'Helvetica' },
+      ],
+    ])
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+    expect(rest).toEqual([])
+    expect(t!.why).toBeNull()
+    expect(t!.order.map((o) => o.t)).toEqual(['text', 'el'])
+    const G = page.glyphs as Glyph[]
+    expect(t!.els[0]!.glyphs.map((g) => G[g]!.u).join('')).toBe('α=8')
+  })
+  it('takes a phrase in a formula’s own face that touches a formula into it: "log det" between two formulas (2609.19644v1 p37)', () => {
+    // ("Tr(" abuts the math italic x: KaTeX_Main sets letters inside a formula's cluster; "log det" a word space from the formulas
+    // either side, every letter of it in that face: the formula's, the line a formula whole)
+    const { page, fig } = pageOf([
+      [
+        { text: 'Tr(', font: 'KaTeX_Main-Regular' },
+        { text: 'x', font: 'KaTeX_Math-Italic', run: false },
+        { text: ') log det ', font: 'KaTeX_Main-Regular' },
+        { text: 'y', font: 'KaTeX_Math-Italic', run: false },
+      ],
+    ])
+    const [t] = figureLinesOf([page], fig, () => false, null)
+    expect(t!.why).toBe('formula')
+  })
   it('reads a number’s sign and ASCII marks in a text face as no formula: "−1.04", "<task-root>/"', () => {
     for (const text of ['gain −1.04 on it', 'open <task-root>/ now']) {
       const { page, fig } = pageOf([[{ text, font: 'Helvetica' }]])
