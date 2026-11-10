@@ -190,6 +190,17 @@ describe('mergesIn', () => {
       // biome-ignore lint/suspicious/noTemplateCurlyInString: a shell expansion, not a template
       'n=603; : ${n:=411}; gh pr merge $n',
       'n=603; printf -v n 411; gh pr merge $n',
+      // the review's second form of the same, and the reason the rule is no longer a list of commands that assign:
+      // a variable is trusted only on a line whose every command is known not to assign one
+      "n=603; printf -vn '%s' 411; gh pr merge $n",
+      'n=603; print -v n 411; gh pr merge $n',
+      'n=603; read -an <<< 411; gh pr merge $n',
+      'n=603; some-tool --set n; gh pr merge $n',
+      'n=603; $TOOL; gh pr merge $n',
+      'n=603; command printf -vn 411; gh pr merge $n',
+      'n=603; exec {n}>/dev/null; gh pr merge $n',
+      'n=603; local n; gh pr merge $n',
+      'n=603; export n; gh pr merge $n',
       'for n in 603; do n=411; gh pr merge $n; done',
       'for n in 603; do gh pr merge $n; n=411; done',
       'for n in 603; do read n; gh pr merge $n; done',
@@ -208,6 +219,11 @@ describe('mergesIn', () => {
     expect(refs('n=603; for n in 411; do gh pr merge $n; done')).toEqual([['411', false]])
     expect(refs('for n in 603 411; do :; done; gh pr merge $n')).toEqual([['603', false], ['411', false]])
     expect(refs('n=603; while sleep 9; do gh pr merge $n && break; done')).toEqual([['603', false]])
+    expect(refs(`n=603; printf '%s\\n' merging; git fetch -q && gh pr merge $n --merge 2>&1 | tail -1; echo done`)).toEqual([['603', false]])
+    expect(refs('export n=603; gh pr merge $n')).toEqual([['603', false]])
+    expect(refs('set -e; set -o pipefail; for n in 603 411; do gh pr merge $n --merge || { echo stop; exit 1; }; done')).toEqual([['603', false], ['411', false]])
+    expect(refs('n=603; set -A n 411; gh pr merge $n')).toEqual([['$n', true]])
+    expect(refs('n=603; set -- 411; gh pr merge $n')).toEqual([['$n', true]])
   })
 
   it('calls unreadable a merge in a loop whose branch or directory the loop itself may change', () => {
@@ -246,6 +262,13 @@ describe('mergesIn', () => {
       expect(merges(text).at(-1)?.unreadable, text).toBe(true)
     }
     expect(merge(`nice bash -c 'gh pr merge 603 -R o/r'`)).toMatchObject({ ref: '603', repo: 'o/r', unreadable: false })
+    // and for the file a GraphQL request takes its body from: a relative path is read in a directory (#635, Codex)
+    for (const text of ['env -C ../release gh api graphql --input request.json', 'pushd x; gh api graphql -F query=@q.graphql', 'cd "$DIR" && gh api graphql --input request.json']) {
+      expect(merge(text), text).toMatchObject({ unreadable: true })
+      expect(merge(text).files, text).toBeUndefined()
+    }
+    expect(merge('env -C ../release gh api graphql --input /abs/request.json')).toMatchObject({ files: ['/abs/request.json'], unreadable: false })
+    expect(merge('cd ../release && gh api graphql --input request.json')).toMatchObject({ files: ['request.json'], dirs: ['../release'], unreadable: false })
     expect(merge(`bash -c 'gh pr merge 603'`).unreadable).toBe(false)
     expect(merge('command gh pr merge 603 -R o/r')).toMatchObject({ ref: '603', repo: 'o/r', unreadable: false, plain: false })
     expect(merge('env FOO=1 gh pr merge https://github.com/o/r/pull/5').unreadable).toBe(false)

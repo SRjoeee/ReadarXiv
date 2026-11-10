@@ -19,15 +19,18 @@
 // substitution, in the string or the here-document a shell is handed — and the request body a GraphQL call names as
 // a file. A pull request or a repository named by a variable is read at the variable's value only where the line
 // leaves no doubt about it: inside the body of its own `for n in 5 6`, when that body sets `n` nowhere, or when the
-// whole line sets the name once, to a literal (`R=owner/name`); a name set twice, in a branch or a loop's later
-// pass, or on a line that holds `eval` or arithmetic, is nobody's to read. It does not follow the line into a
-// program it runs (a script that merges is that script's to answer for), and it sees shell commands only, not a
-// merge another tool makes.
+// whole line sets the name once, to a literal (`R=owner/name`); and only on a line whose every command is known not
+// to assign (a closed list of names: the shells have more ways to assign than a list of those could hold). A name
+// set twice, in a branch or a loop's later pass, or on a line that runs anything else, is nobody's to read. The
+// same doubt covers what leans on a directory or a branch: after a `cd` the shell may have skipped, behind a
+// wrapper, in a loop that moves. It does not follow the line into a program it runs (a script that merges is that
+// script's to answer for), and it sees shell commands only, not a merge another tool makes.
 //
 // The first version read less: it took `gh pr merge` only as three words in a row, resolved every merge in the
 // directory the command started in, and kept a substitution inside quotes as text. The review of #635 walked past
 // it four ways; the second version followed the line in the order it is written, and the review found a variable
-// read at a value the shell had since replaced. `tests/scripts/merge-gate.test.ts` pins each, and hands a set of
+// read at a value the shell had since replaced; the third listed the commands that assign, and the review found
+// one more the same day. `tests/scripts/merge-gate.test.ts` pins each, and hands a set of
 // lines to bash and zsh themselves, with a stand-in `gh`: where the gate says it can read a line, every merge the
 // shell made is one the gate read. Measured on 2026-11-11 over some 15,800 distinct shell commands of this
 // repository's recent sessions, which merge in chains and loops, almost never plainly: it found their 424 merging
@@ -454,28 +457,49 @@ function shellStrings({ words, bodies }, start) {
   return { at: start, scripts: [] }
 }
 
-/** Commands that set variables their words do not name */
-const OPAQUE = new Set(['eval', 'source', '.', 'let', 'mapfile', 'readarray', 'getopts', 'select', 'coproc', 'vared', 'trap'])
-const DECLARES = new Set(['export', 'local', 'declare', 'typeset', 'readonly', 'integer', 'float'])
+/** Commands that cannot set a shell variable: programs of their own, and the builtins that only test, print, move
+ *  or leave. The list is closed on purpose. The shells have more ways to assign than a list of them can hold
+ *  (`printf -vN`, zsh's `print -v`, `read -aN`, a function the line defines), and the review of #635 found one the
+ *  day such a list was written; so a line that runs anything not named here is a line whose variables the gate does
+ *  not claim to know. */
+const INERT = new Set([
+  ...['gh', 'git', 'echo', 'sleep', 'true', 'false', ':', 'test', '[', '[[', 'break', 'continue', 'cd', 'exit', 'pwd'],
+  ...['tail', 'head', 'cat', 'grep', 'rg', 'sed', 'awk', 'jq', 'tr', 'cut', 'sort', 'uniq', 'wc', 'tee', 'date', 'ls', 'mkdir', 'rm', 'cp', 'mv', 'touch', 'basename', 'dirname'],
+  ...['pnpm', 'npm', 'npx', 'node', 'curl', 'perl', 'python3', 'ps', 'df', 'du', 'base64', 'open', 'sysctl', 'find', 'xargs'],
+])
 /** A word that sets a variable, wherever it stands: `n=5`, `n+=5`, `n[1]=5` */
 const SETS = /^([A-Za-z_]\w*)(?:\[[^\]]*\])?\+?=/
 
-/** How a command line sets its variables and moves, read over the whole line before any of it is followed, because
- *  the order the shell runs it in is not the order it is written in (a loop's second pass, a branch not taken, a
- *  function called later). `settings`: how many times each name is set anywhere on the line — an assignment in any
- *  position, a loop's variable, a `read`, an `unset`, a declaration; `loopsOf`: command by command, the loops it
- *  stands in, outermost first, each with the variable its `for` runs (null for a `while`), the literal values it
- *  runs it over (null when the shell decides them) and the names its body sets; `opaque`: the line holds something that sets variables without naming them in a word (`eval`, a sourced
- *  file, arithmetic, an expansion that assigns); `loopMoves`: a loop's body changes the directory.
- *
- *  A variable is taken at its value only where no order of execution can make the value another: inside the body
- *  of its own `for`, when that body sets it nowhere; anywhere else, when the whole line sets it once; and never on
- *  an opaque line. */
+/** Whether the command whose name is the word at `at` leaves every variable as it was: one of INERT; `printf`
+ *  without its `-v`; `export` of nothing but assignments, whose values are then in sight; `set` of options alone
+ *  (`set -e`, `set -o pipefail`), not of the positional parameters or, with `-A`, of an array */
+function inert(words, dynamic, at) {
+  if (dynamic[at]) return false
+  const name = words[at].slice(words[at].lastIndexOf('/') + 1)
+  const rest = words.slice(at + 1)
+  if (name === 'printf') return !rest.some(word => word.startsWith('-v'))
+  if (name === 'export') return rest.length > 0 && rest.every(word => ASSIGNMENT.test(word))
+  if (name === 'set') return rest.every((word, k) => (/^[-+][a-zA-Z]+$/.test(word) && !word.includes('A')) || (/^\w+$/.test(word) && /^[-+]o$/.test(rest[k - 1] ?? '')))
+  return INERT.has(name)
+}
+
 /** The words a `for` at word `at` runs its variable over (`for n in 5 6`), or null when the shell decides any of them */
 function literalsOf(words, dynamic, at) {
   return words[at + 2] === 'in' && words.length > at + 3 && !dynamic.slice(at + 3).some(Boolean) ? words.slice(at + 3) : null
 }
 
+/** How a command line sets its variables and moves, read over the whole line before any of it is followed, because
+ *  the order the shell runs it in is not the order it is written in (a loop's second pass, a branch not taken, a
+ *  function called later). `settings`: how many times each name is set by a word of the line — an assignment in any
+ *  position, a loop's variable; `loopsOf`: command by command, the loops it stands in, outermost first, each with
+ *  the variable its `for` runs (null for a `while`), the literal values it runs it over (null when the shell
+ *  decides them) and the names its body sets; `opaque`: something on the line may set a variable without a word
+ *  that says so — a command not known to be inert, arithmetic, an expansion or a redirection that assigns;
+ *  `loopMoves`: a loop's body changes the directory.
+ *
+ *  A variable is taken at its value only where no order of execution can make the value another: inside the body
+ *  of its own `for`, when that body sets it nowhere; anywhere else, when the whole line sets it once; and never on
+ *  an opaque line. */
 function lineOf(commands, text) {
   const settings = new Map()
   const stack = []
@@ -485,11 +509,12 @@ function lineOf(commands, text) {
     settings.set(name, (settings.get(name) ?? 0) + 1)
     for (const loop of stack) loop.sets.add(name)
   }
-  // (arithmetic, `$[…]`, and any `${…=…}`: bash's `${n:=5}`, zsh's `${n::=5}`)
-  let opaque = /\(\(|\$\[|\$\{[^}]*=/.test(text)
+  // (arithmetic, `$[…]`; any `${…=…}`: bash's `${n:=5}`, zsh's `${n::=5}`; `{n}>file`, which sets `n` to a descriptor)
+  let opaque = /\(\(|\$\[|\$\{[^}]*=|\{[A-Za-z_]\w*\}[<>]/.test(text)
   let loopMoves = false
   for (const { words, dynamic } of commands) {
     let start = 0
+    let heads = false
     for (; start < words.length && RESERVED.has(words[start]); start++) {
       if (words[start] === 'do') {
         stack.push({ ...(header ?? { name: null, values: null }), sets: new Set() })
@@ -498,26 +523,29 @@ function lineOf(commands, text) {
       else if (words[start] === 'for' && words[start + 1] !== undefined) {
         set(words[start + 1])
         header = { name: words[start + 1], values: literalsOf(words, dynamic, start) }
-      }
+        heads = true
+      } else if (words[start] === 'case') heads = true
+      else if (words[start] === 'function') opaque = true
     }
     loopsOf.push([...stack])
     for (const word of words) {
       const sets = SETS.exec(word)
       if (sets) set(sets[1])
     }
-    const head = words[start]
-    if (head === undefined) continue
-    if (head === 'read' || head === 'unset' || DECLARES.has(head)) words.slice(start + 1).filter(word => /^[A-Za-z_]\w*$/.test(word)).forEach(set)
-    // (a declaration with a flag may bind one name to another, `declare -n`: then a setting names the wrong variable)
-    if (OPAQUE.has(head) || (head === 'printf' && words.includes('-v')) || (DECLARES.has(head) && words.slice(start + 1).some(word => word.startsWith('-')))) opaque = true
-    if (stack.length > 0 && (head === 'cd' || MOVES.has(head))) loopMoves = true
+    // what follows `for` or `case` on their own line is the loop's list or the subject, not a command
+    let at = start
+    while (at < words.length && ASSIGNMENT.test(words[at])) at++
+    if (heads || at >= words.length) continue
+    if (!inert(words, dynamic, at)) opaque = true
+    const name = words[at].slice(words[at].lastIndexOf('/') + 1)
+    if (stack.length > 0 && (name === 'cd' || MOVES.has(name))) loopMoves = true
   }
   return { settings, loopsOf, opaque, loopMoves }
 }
 
 /** What the variables hold after `command`, as far as its words say: the literals of `for n in 5 6` and of a plain
- *  `R=owner/name`, so that the merge of `$n` in such a loop is each of those merges; a variable set any other way
- *  (an expansion, `read`, an assignment the shell may skip) holds nothing the gate knows. */
+ *  `R=owner/name`; a variable set any other way (an expansion, an assignment the shell may skip) holds nothing the
+ *  gate knows. Whether a held value may be used at all is the line's to say (`lineOf`). */
 function learn(context, { words, dynamic, before, after }) {
   const hold = (name, values) => {
     context.vars = { ...context.vars, [name]: values }
@@ -527,7 +555,7 @@ function learn(context, { words, dynamic, before, after }) {
     hold(words[at + 1], literalsOf(words, dynamic, at))
     return
   }
-  const first = words[0] === 'export' || words[0] === 'local' || words[0] === 'declare' ? 1 : 0
+  const first = words[0] === 'export' ? 1 : 0
   if (words.length > first && words.slice(first).every(w => ASSIGNMENT.test(w))) {
     const inSequence = (before === '' || SEQUENCE.test(before)) && (after === '' || SEQUENCE.test(after))
     for (let k = first; k < words.length; k++) {
@@ -535,8 +563,6 @@ function learn(context, { words, dynamic, before, after }) {
       hold(words[k].slice(0, eq), inSequence && !dynamic[k] ? [words[k].slice(eq + 1)] : null)
     }
     if (inSequence && CHAINED.test(before)) context.conditionalVars = true
-  } else if (words[0] === 'read' || words[0] === 'unset') {
-    for (const name of words.slice(1)) hold(name, null)
   }
 }
 
@@ -594,8 +620,15 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
       if (words[i] !== 'gh' && !words[i].endsWith('/gh') && !dynamic[i]) continue
       const call = ghCall(words, dynamic, i)
       if (call === null) continue
+      // behind a wrapper (`env`, `xargs`, `command`), what the directory, the branch and the environment are when `gh`
+      // runs is the wrapper's to know; and an assignment that repoints `gh` counts wherever it stands before it
+      const wrapped = i > start
+      const repointed = words.slice(0, i).some(word => REPOINTS.test(word))
+      const lostDirectory = wrapped || !context.dirKnown || line.loopMoves
       if (call.kind === 'graphql') {
-        if (call.literal || (call.unseen && GRAPHQL_MERGE.test(text))) merges.push({ ref: null, repo: null, dirs: context.dirs, unreadable: true, plain: false, graphql: true })
+        // a body file named by a relative path is a file of some directory: where that is in doubt, so is the body
+        const adrift = lostDirectory && call.files.some(file => !file.startsWith('/'))
+        if (call.literal || adrift || (call.unseen && GRAPHQL_MERGE.test(text))) merges.push({ ref: null, repo: null, dirs: context.dirs, unreadable: true, plain: false, graphql: true })
         else if (call.files.length > 0) merges.push({ ref: null, repo: null, dirs: context.dirs, unreadable: false, plain: false, graphql: true, files: call.files })
         break
       }
@@ -615,10 +648,6 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
       }
       const refs = said(call.ref, call.refAt)
       const repos = said(call.repo, call.repoAt)
-      // behind a wrapper (`env`, `xargs`, `command`), what the directory, the branch and the environment are when `gh`
-      // runs is the wrapper's to know; and an assignment that repoints `gh` counts wherever it stands before it
-      const wrapped = i > start
-      const repointed = words.slice(0, i).some(word => REPOINTS.test(word))
       for (const ref of refs ?? [call.ref]) {
         for (const repo of repos ?? [call.repo]) {
           const needsDirectory = repo === null && !/^https?:\/\//.test(ref ?? '')
@@ -633,7 +662,7 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
               dynamic[i] ||
               repointed ||
               (viaApi && !/^\d+$/.test(ref ?? '')) ||
-              (needsDirectory && (wrapped || !context.dirKnown || line.loopMoves)) ||
+              (needsDirectory && lostDirectory) ||
               (needsBranch && (wrapped || !context.branchKnown || context.loops + loops.length > 0)),
             plain: !viaApi && depth === 0 && i === 0 && !compound && !redirected && commands.length === 1 && !dynamic.some(Boolean),
           })
