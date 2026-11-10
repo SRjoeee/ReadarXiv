@@ -5515,7 +5515,11 @@ word than its words are to each other, 2610.21884v1), a number in the text's own
 left the original's and drawn apart from its line), its math and typewriter runs (and a web address in any face) kept placeholders (the
 rebuilt reader's copy of the maker, `packages/engine` `locate/today/ink-units.mjs`, keeps an e-mail address in a word one too, the
 address alone and the word's other characters text, by the front end's own pattern, `latex-front.mjs` `EMAIL_ADDRESS`: in colour
-groups no translation kept, 2609.36054v2 p1's grey addresses were drawn black, #28; and it gives each kept run its own ink, which
+groups no translation kept, 2609.36054v2 p1's grey addresses were drawn black, #28; and a group of local parts before their one
+domain, `ADDRESS_GROUP`, one kept run over its words and over the break of lines TeX set one right after the other, every glyph
+of it whatever its face: 2611.00342v1 p1's two rows, braces in the symbol font's math face, the first broken after a comma, had
+their local parts sent under the names toggle and drawn back capitalised with full-width commas; now lines of addresses alone
+are no ink unit's but a kept block, and a group inside a note one element of it; and it gives each kept run its own ink, which
 today's file draws by its own segments and the copy had given the unit's first placeholder: 149 of the 88 corpus papers' 185 ink
 members of two elements or more drew every run at the first one's place; and it writes a kept formula's TeX specials by the tokens
 that set them in a formula, `\{`, `\}`, `\$` and `\backslash`, where today's file strips them: a run of a brace alone, the closing
@@ -6483,7 +6487,13 @@ lines) follows it, the original's with it off, translated with it on (the author
   translated and set in the names' bold; outside an author block `\centerline` is one placeholder as before). A later row with
   none of these is a place, as the classes set it: a name alone there cannot be told from a place by its
   TeX. An e-mail, a web address and an ORCID written out stay placeholders, the original's ink; so does an e-mail whose
-  local part TeX escapes (`goh\_siong\_thye@…`, one placeholder with its `\_`, 2608.11884, 2608.29778). Every author block's
+  local part TeX escapes (`goh\_siong\_thye@…`, one placeholder with its `\_`, 2608.11884, 2608.29778); and so does a group of
+  local parts written once before their one domain, in braces, parentheses or brackets, separated by commas and/or white space,
+  whatever space TeX writes between them (`\{kahe,~v-xiangz\}@…`, `\{mph,\,lmb\}@…`, `[first name]@…`: `ADDRESS_GROUP`,
+  `keepGroups`, one placeholder as the paper writes it; read from one text between `\{` and `\}` alone, a tie parted the list
+  into words sent one by one, 1512.03385v1, and a bracket's was text, 2610.21085v1). A row of addresses alone is then no unit,
+  and the ink side keeps it whole too (below, the ink units' rule 4): its lines a kept block, the original's whatever the names
+  toggle (2611.00342v1, the owner's 2026-11-10: 「翻译或者不翻译都可以，关键是不能乱翻」). Every author block's
   unit keeps its number: what PIPELINE 29 cut the text between two notes into (one unit of kind author, a unit the walk flushed
   inside it one more: `olderUnits`, a walk of the old cut in a shadow of the walk's context) keeps it in the first unit cut inside
   its range, of either kind, and every other unit cut there is numbered after every other unit of the source, before the entries

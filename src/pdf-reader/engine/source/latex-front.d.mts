@@ -29,6 +29,8 @@ export declare function urlPercents(text: string, file: string, scan?: { ifs?: R
 export declare const BACKREF_LIST: string
 /** an e-mail address as a text writes it: the source's (keepAddresses) and an ink unit's word (the engine package's copy of ink-units.mjs, rule 4) */
 export declare const EMAIL_ADDRESS: RegExp
+/** several addresses at one domain written once, a group of their local parts in braces, parentheses or brackets before it, separated by commas and/or white space (`{jyeoj251, bmw5779}@gmail.com`): the source's (keepGroups) and an ink unit's lines' (the engine package's copy of ink-units.mjs) */
+export declare const ADDRESS_GROUP: RegExp
 /** the patched files (path → bytes): each unit's range replaced by its translated pieces, the rest untouched */
 /** what goes around a unit when it is written out (markUnits): `whole` puts it around all of the unit, inside the groups that open and close it */
 export type UnitMark = { start: string; end: string; before?: string; whole?: boolean; call?: string; callAt?: number } | null

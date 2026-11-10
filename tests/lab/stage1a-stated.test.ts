@@ -12,7 +12,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { CAUSE, keptWhyOf, statedOf } from '../../lab/pdf/prepare-back/stated.mjs'
-import { scriptsKeptAsElements, scriptsKeptInAnotherOrder } from '../../packages/typeset/tests/replay/l1.ts'
+import { RAW_ADDRESSES, readingOf, scriptsKeptAsElements, scriptsKeptInAnotherOrder } from '../../packages/typeset/tests/replay/l1.ts'
+import { ADDRESS_GROUP, EMAIL_ADDRESS } from '../../src/pdf-reader/engine/source/latex-front.mjs'
 
 type DumpPiece = { kind: string; s?: string; src?: string }
 type Line = { page: number; x0: number; x1: number; baseline: number; top: number; bottom: number }
@@ -437,6 +438,41 @@ describe('(F) a line of e-mail addresses held whole by a kept block', () => {
   })
 })
 
+describe("(F) and (f) for an address's placeholders: the replay reads a brace's text symbol, a tie and an address as the source writes it", () => {
+  // (the coordinator's ruling of 2026-11-10 on rebuild/mail-group: 1512.03385v1 t321, an affiliation of `\{kahe,~v-xiangz\}@…`
+  // today held as text pieces between ties, now a kept block; 2610.21085v1 t2, a footnote's `[first name]@…` now one element;
+  // 2610.17024v1 t504, a note of a group now a kept block of its kind, which stood for it and read it otherwise)
+  it('reads `\\{`, `\\}` and a tie as their characters, and a placeholder that is an address as the source writes it', () => {
+    expect([readingOf('\\{'), readingOf('\\}'), readingOf('~')]).toEqual(['{', '}', ' '])
+    expect(readingOf('[first name]@example.com')).toBe('[first name]@example.com')
+    expect(readingOf('ada@example.org')).toBe('ada@example.org')
+    expect(readingOf('\\{ada,~alan\\}@example.org')).toBe('{ada, alan}@example.org')
+    for (const src of ['\\textbf', '\\{ada', 'see ada@example.org', '\\,', '[see 2]@']) expect(readingOf(src)).toBe(null)
+    // (one pattern for the replay and the front end)
+    expect(RAW_ADDRESSES.map((r: RegExp) => r.source)).toEqual([`^(?:${EMAIL_ADDRESS.source})$`, `^(?:${ADDRESS_GROUP.source})$`])
+  })
+  const at = box(195.49, 399.73, 599.46, 606.93, 596.97)
+  const keptOf = (kind: string, b = at) => ({ ...on(unit(id('b'), 371, kind, []), b), kept: true as const })
+  it("states a source unit of a group between ties, now a kept block's line, a line of addresses kept whole (F)", () => {
+    const today = on(unit(id('a'), 321, 'affiliation', [ph('\\normalsize'), text('\n'), ph('\\{'), text('ada,'), ph('~'), text('alan'), ph('\\}'), text('@example.org\n')]), at)
+    expect(said(statedOf([today], [keptOf('inknotes')]))).toEqual([[321, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.addresses}`]])
+  })
+  it('states a footnote whose bracket group is now one element of it held whole (f)', () => {
+    const line = box(80.3, 282.73, 87.44, 94, 85)
+    const today = on(unit(id('a'), 2, 'footnote', [text('Correspondence: [first name]@example.com.')]), line)
+    const mine = { ...on(unit(id('b'), 2, 'footnote', [text('Correspondence: '), ph('[first name]@example.com'), text('.')]), line), elements: [{ k: 1, kind: 'other', segs: [box(150, 280, 87.44, 94, 85)] }] }
+    expect(said(statedOf([today], [mine]))).toEqual([[2, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+  })
+  it("states a note of addresses alone a kept block of its kind holds as (F), before that block stands for it, its lines today's or not", () => {
+    const today = on(unit(id('a'), 504, 'inknotes', [text('{ada, alan}@example.org')]), box(211.38, 383.89, 675.49, 681.6, 673.9))
+    for (const b of [box(211.38, 383.83, 675.49, 681.6, 673.9), box(211.38, 383.89, 675.49, 681.6, 673.9)])
+      expect(said(statedOf([today], [keptOf('inknotes', b)]))).toEqual([[504, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.addresses}`]])
+    // (a note with a word besides: as before, the stand-in's)
+    const other = on(unit(id('a'), 504, 'inknotes', [text('Contact: {ada, alan}@example.org')]), box(211.38, 383.89, 675.49, 681.6, 673.9))
+    expect(said(statedOf([other], [keptOf('inknotes', box(211.38, 383.89, 675.49, 681.6, 673.9))]))).toEqual([[504, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.kept}`]])
+  })
+})
+
 describe("(f), a stand-in of today's kind: one v2 unit of its kind at its place holding today's whole text in order", () => {
   // (2610.19159v1 t3804's shape: a transcript box's title, today's two figure texts in two faces, rebuild/run-on-kept's one; the
   // joined line stands for today's second piece, its text today's and more)
@@ -444,6 +480,16 @@ describe("(f), a stand-in of today's kind: one v2 unit of its kind at its place 
   it('states it held whole by that unit', () => {
     const base = [on(unit(id('a'), 3804, 'inkfigures', [text('(Self-directed scope reduction)')]), box(124.42, 284.69, 544.94, 551.16, 543.09))]
     expect(said(statedOf(base, [title]))).toEqual([[3804, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+  })
+
+  it('reads a group of local parts now one element of the stand-in by its characters, braces too (2610.37668v1 t415)', () => {
+    // (today's "Contact information: {ada, alan}@example.org" as text; v2's the words and the group one kept run, its source the
+    // characters the page sets: held whole. Read without its braces, the element is another address, and the unit another reading)
+    const at = box(61.77, 258.02, 98.95, 104.96, 96.7)
+    const base = [on(unit(id('a'), 415, 'inkorphan', [text('Contact information: {ada, alan}@example.org')]), at)]
+    const standIn = (src: string) => [{ ...on(unit(id('b'), 415, 'inkorphan', [text('Contact information: '), ph(src)]), at), elements: [{ k: 1, kind: 'url', segs: [box(136.23, 258.02, 98.95, 104.96, 96.7)] }] }]
+    expect(said(statedOf(base, standIn('\\url{{ada,alan}@example.org}')))).toEqual([[415, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+    expect(said(statedOf(base, standIn('\\url{ada,alan@example.org}')))).toEqual([[415, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`]])
   })
 
   it('states another reading where today holds a character the stand-in has not, or holds them in another order', () => {

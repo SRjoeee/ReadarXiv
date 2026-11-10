@@ -30,6 +30,8 @@ export interface TodayInkUnit {
   cls: string
   echo: number | null
   kept?: true
+  /** a kept block of e-mail addresses and their separators alone (keptUnitsOf's, addressesAlone) */
+  address?: true
   pieces: TodayPiece[]
   /** its text's glyphs, its placeholders' (`ph`), each kept run's by its placeholder's index among the pieces (`runs`,
    *  inkUnitsOf's; none for a kept block), and, of its text's, its label's where it has one (`label`: inkUnitsOf's,
@@ -109,6 +111,9 @@ export const UNIT_FLAG = deps.UNIT_FLAG as Readonly<
 export const classOf = deps.classOf as (piece: TodayPiece) => string | null
 /** an e-mail address as a text writes it (the front end's, latex-front.mjs EMAIL_ADDRESS) */
 export const EMAIL_ADDRESS = deps.EMAIL_ADDRESS as RegExp
+/** several addresses at one domain written once, a group of their local parts before it (the front end's, latex-front.mjs
+ *  ADDRESS_GROUP) */
+export const ADDRESS_GROUP = deps.ADDRESS_GROUP as RegExp
 /** the letters a text is told by, without accents, lower case (stream.mjs spellOf) */
 export const spellOf = deps.spellOf as (s: string) => string
 /** each glyph's and box's region by the page's brackets (stream.mjs regionsOf): depth * 2 + 1 in a column's body */

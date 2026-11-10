@@ -31,6 +31,9 @@ export interface InstrumentUnit {
   /** kept for its text set wholly in a face of one pitch, or a figure's word inside such a line (Rule 1, PDF-READER §18.22):
    *  the lab's dump and parity tell the units this rule keeps by it; the bundle does not carry it */
   pitch?: true
+  /** a kept block of e-mail addresses and their separators alone (today/ink-units.mjs addressesAlone): the lab's dump and parity
+   *  tell such a block by it (the coordinator's ruling of 2026-11-10); the bundle does not carry it */
+  address?: true
   /** an ink unit drawn with another unit's row: that unit's index */
   echo?: number
   /** a table's cell: its table, row and column, and the columns and rows it spans, whether it is a header's */

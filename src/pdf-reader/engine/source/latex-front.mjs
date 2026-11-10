@@ -8,7 +8,7 @@
 
 // ---------------------------------------------------------------- files and bytes
 import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from '../rules/arg-roles.mjs'
-import { TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
+import { symbolText, TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
 import { selectsArgument } from '../rules/tex-kernel.mjs'
 /** unpacked files (a Map of relative path → bytes) as a project's file system */
 export function inMemory(map) { return { list: () => [...map.keys()], read: p => map.get(p) ?? null } }
@@ -1422,12 +1422,18 @@ const joinLetters = pieces => {
   return out
 }
 // an e-mail address or a web address — the latter's last stop, comma or parenthesis the sentence's —, an ORCID written out
-// (0000-0002-1825-0097), and the domain after a list of names in braces
+// (0000-0002-1825-0097), and a group of local parts before their one domain
 /** an e-mail address as a text writes it: the source's (keepAddresses) and an ink unit's word (packages/engine's copy of
  *  ink-units.mjs, rule 4: held equal to this by tests/pdf-reader/locate-ink-today.test.ts) */
 export const EMAIL_ADDRESS = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/
-const EMAIL = new RegExp(String.raw`${EMAIL_ADDRESS.source}|\b(?:https?|ftp):\/\/[^\s{}\\]*[^\s{}\\.,;:!?)\]]|\bwww\.[\w-]+(?:\.[\w-]+)+(?:\/[^\s{}\\]*[^\s{}\\.,;:!?)\]])?|\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b`, 'g'), HAS_EMAIL = new RegExp(EMAIL.source)
-const AT_DOMAIN = /^@[\w-]+(?:\.[\w-]+)+/
+/** several addresses at one domain written once, a group of their local parts before it (`{jyeoj251, bmw5779}@gmail.com`,
+ *  2611.00342v1; `[first name]@distributed.inc`, 2610.21085v1): an opening brace, parenthesis or bracket with no local part's
+ *  character right before it, EMAIL_ADDRESS's local parts separated by commas and/or white space, the matching closing one,
+ *  and directly after it `@` and EMAIL_ADDRESS's domain. Its syntax alone, every character of it, as the paper sets it: the
+ *  source's (keepGroups, its spaces and braces read as TeX sets them) and an ink unit's lines' (packages/engine's copy of
+ *  ink-units.mjs, groupedAddresses: held equal to this by tests/pdf-reader/locate-ink-today.test.ts) */
+export const ADDRESS_GROUP = /(?<![\w.+-])(?:\{[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\}|\([\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\)|\[[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\])@[\w-]+(?:\.[\w-]+)+/
+const EMAIL = new RegExp(String.raw`${ADDRESS_GROUP.source}|${EMAIL_ADDRESS.source}|\b(?:https?|ftp):\/\/[^\s{}\\]*[^\s{}\\.,;:!?)\]]|\bwww\.[\w-]+(?:\.[\w-]+)+(?:\/[^\s{}\\]*[^\s{}\\.,;:!?)\]])?|\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b`, 'g'), HAS_EMAIL = new RegExp(EMAIL.source)
 /** an e-mail whose local part TeX escapes (`goh\_siong\_thye@a-star.edu.sg`, 2608.11884; `tang\_chao@xtu.edu.cn`, 2608.29778):
  *  each `\_` a placeholder of its own, which parted the address, its first words left text ("goh siong", "tang", sent to the
  *  translator). The words before the address that its `\_` join, the `\_` and the address are one placeholder, as the paper
@@ -1455,24 +1461,50 @@ function escapedLocals(pieces) {
   }
   return out
 }
+/** TeX's spaces as a source writes them between two words: a tie, a control space, the kernel's `\,`, `\:`, `\;`, and
+ *  `\thinspace`, `\enspace`, `\quad`, `\qquad`, `\space` */
+const TEX_SPACE = /^(?:~|\\[ ,:;]|\\(?:thinspace|enspace|quad|qquad|space)(?![A-Za-z@]))$/
+const GROUPS = new RegExp(ADDRESS_GROUP.source, 'g')
+/** each group of local parts before their one domain (ADDRESS_GROUP) one placeholder, written as the paper writes it, read
+ *  over a unit's pieces as TeX sets them: a text piece its characters, a space of TeX's (TEX_SPACE) white space, a text symbol
+ *  its one character (`\{`, `\}`, `\_`: symbolText), anything else (a command, a group, an accent's letter) no character of an
+ *  address. Read from one text between `\{` and `\}` alone, a tie or a thin space between the local parts
+ *  (`\{kahe,~v-xiangz\}@…`, 1512.03385v1; `\{mph,\,lmb\}@…`, 2610.17024v1) parted the group into words sent one by one, and a
+ *  group in brackets (`[first name]@…`, 2610.21085v1) was text */
+function keepGroups(pieces) {
+  if (!pieces.some(p => p.t === 'text' && p.src === undefined && p.s.includes('@'))) return pieces
+  let flat = ''
+  const from = []
+  for (const p of pieces) {
+    from.push(flat.length)
+    flat += p.t === 'text' ? (p.src === undefined ? p.s : '\u0000') : p.t === 'ph' ? (TEX_SPACE.test(p.src ?? '') ? ' ' : symbolText(p.src) ?? '\u0000') : '\u0000'
+  }
+  from.push(flat.length)
+  const pieceAt = o => { let k = 0; while (from[k + 1] <= o) k++; return k }
+  const out = []
+  // (a text piece's part from s to e, as sliceSkips cuts one; the whole piece where that is all of it)
+  const part = (k, s, e) => { const p = pieces[k]; if (p.t !== 'text' || (s === 0 && e === p.s.length)) out.push(p); else if (e > s) out.push(sliceSkips(p, { ...p, s: p.s.slice(s, e) }, s, e)) }
+  // (k the first piece not yet written, `off` how much of it a group took)
+  let k = 0, off = 0
+  for (const m of flat.matchAll(GROUPS)) {
+    const a = m.index, b = a + m[0].length, ka = pieceAt(a), kb = pieceAt(b - 1)
+    for (; k < ka; k++, off = 0) part(k, off, pieces[k].s?.length ?? 0)
+    if (pieces[ka].t === 'text') part(ka, off, a - from[ka])
+    let src = ''
+    for (let j = ka; j <= kb; j++) src += pieces[j].t === 'text' ? pieces[j].s.slice(j === ka ? a - from[j] : 0, j === kb ? b - from[j] : undefined) : pieces[j].src
+    out.push({ t: 'ph', src })
+    if (pieces[kb].t === 'text' && b - from[kb] < pieces[kb].s.length) { k = kb; off = b - from[kb] } else { k = kb + 1; off = 0 }
+  }
+  for (; k < pieces.length; k++, off = 0) part(k, off, pieces[k].s?.length ?? 0)
+  return out
+}
 /** An address is not prose: an e-mail in a unit's text (jatin@us.ibm.com), an ORCID, a web address a link shows as its text
- *  (\\href{https://osf.io/gjvbs}{https://osf.io/gjvbs}, now that a link's text is text: 2608.14893), and a list of names
- *  in escaped braces with its domain ({sl225, samand2, reyhaneh}@illinois.edu), each become a placeholder, kept as the
+ *  (\\href{https://osf.io/gjvbs}{https://osf.io/gjvbs}, now that a link's text is text: 2608.14893), and a group of local
+ *  parts before their domain ({sl225, samand2, reyhaneh}@illinois.edu, keepGroups), each become a placeholder, kept as the
  *  paper has it. Sent as text, a machine translation spelled one of 2608.06701's names in katakana and joined the list
  *  with the ideographic comma */
 function keepAddresses(pieces) {
-  pieces = escapedLocals(pieces)
-  const lists = []
-  for (let k = 0; k < pieces.length; k++) {
-    const p = pieces[k], names = pieces[k + 1], shut = pieces[k + 2], after = pieces[k + 3]
-    const domain = after?.t === 'text' && AT_DOMAIN.exec(after.s)?.[0]
-    if (p.t === 'ph' && p.src === '\\{' && names?.t === 'text' && shut?.t === 'ph' && shut.src === '\\}' && domain) {
-      lists.push({ t: 'ph', src: p.src + names.s + shut.src + domain })
-      if (after.s.length > domain.length) lists.push(sliceSkips(after, { ...after, s: after.s.slice(domain.length) }, domain.length))
-      k += 3
-    } else lists.push(p)
-  }
-  return lists.flatMap(p => {
+  return keepGroups(escapedLocals(pieces)).flatMap(p => {
     if (p.t !== 'text' || !HAS_EMAIL.test(p.s)) return [p]
     const out = []
     let at = 0

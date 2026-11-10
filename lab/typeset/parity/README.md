@@ -229,6 +229,13 @@ spaces put back sets today's count on the page: `v2.mjs` lays each pair first wi
 a lab global, its pages not kept) and records each member's line count on each page of that lay (`spaced`); `verdict.mjs`
 markSpaceRuling. A count those spaces do not explain is judged as any.
 
+The coordinator's ruling of 2026-11-10 (rebuild/mail-group), on the owner's principle that translating or keeping are both
+fine and a garbled translation never: an e-mail address is a literal, never sent, and a line of addresses alone that the
+candidate's prepare keeps whole (a kept block of addresses and their separators alone: the engine's `address`, the dump's
+`keptBy: 'address'`, `join.mjs` candidateAddress, `v2.mjs`'s `address` by member ord) is the original's text: a `shown`
+difference whose today's unit is joined to such a member, or, joined to none (the block is a unit of its own), lies with every
+line on one of its lines, is the ruling's (`nearer` "ruling", never worse). No other kind is ruled so.
+
 The coordinator's ruling of 2026-11-10 (lane url-join): a line's end inside one word TeX set as written is a join (a URL, or a
 literal mark whose copy holds no white space; PDF-READER §18.20); where that sets a unit in fewer lines than today's
 (1810.04805v2-zh p14 t237, two broken URLs drawn whole: 5 lines for today's 6, the original's 7), the line count is an

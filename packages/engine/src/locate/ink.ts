@@ -335,7 +335,14 @@ export function inkOf(o: InkInput): {
   for (const u of kept) {
     const content: Piece[] = []
     const x: Made = {
-      unit: { id: unitId(u.kind, content), kind: u.kind, content, kept: true, fixed: true },
+      unit: {
+        id: unitId(u.kind, content),
+        kind: u.kind,
+        content,
+        kept: true,
+        fixed: true,
+        ...(u.address ? { address: true as const } : {}),
+      },
       text: [],
       ph: [],
       phId: null,

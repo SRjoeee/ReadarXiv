@@ -378,6 +378,14 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
         out.push({ u, own, why: `made on arXiv's page as ${n.id.slice(0, 12)}: ${CAUSE.held}`, cause: keyOf(CAUSE.held), holder: n.id })
       continue
     }
+    // ((F) first, the coordinator's ruling of 2026-11-10 on rebuild/mail-group: a line of e-mail addresses and their separators
+    // alone that one kept block of the candidate's holds whole is (F)'s whatever its kinds, before that block, a stand-in of
+    // today's kind, reads it otherwise (2610.17024v1 t504: the block's line ends 0.06 pt before today's))
+    const mail = addressesOnly(writtenOf(u)) ? heldBy(u) : null
+    if (mail && !mail.pieces?.length) {
+      out.push({ u, why: `made on arXiv's page as ${mail.id.slice(0, 12)}: ${CAUSE.addresses}`, cause: 'addresses' })
+      continue
+    }
     // (a unit made on A stands only for one of today's ink units, kept blocks and figure texts)
     const c = /^ink/.test(u.kind) ? standsFor(u) : null
     // (none: a kept block of its kind at its place, no text of it sent: its lines the ledger reads as no unit's text, a formula's
