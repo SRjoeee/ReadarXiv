@@ -93,8 +93,9 @@ export async function readOps(
     const { fnArray, argsArray } = piece
     queue = queue.then(async () => {
       if (failed) return
-      for (const id of fontsOf(OPS, fnArray, argsArray)) if (!ended && !page.commonObjs.has(id)) await resolved(id)
+      // (the queue never fails: what fails is told once the list has ended, and no piece is handed on after it)
       try {
+        for (const id of fontsOf(OPS, fnArray, argsArray)) if (!ended && !page.commonObjs.has(id)) await resolved(id)
         take(fnArray, argsArray)
       } catch (e) {
         failed = true
