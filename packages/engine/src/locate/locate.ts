@@ -1586,7 +1586,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         // set it. A formula's text is no drawing (it is cropped, its text read for its brackets): a capital set smaller there is
         // a script, `\rho_{BDM}`'s BDM, no small capital)
         const cased = textClass ? elementCase(gl.map(gA)) : { glyphs: gl.map(gA) }
-        if (cased.ratio !== undefined) (mem.smallCaps ??= new Map()).set(id, cased.ratio)
+        if (cased.ratio !== undefined) {
+          mem.smallCaps ??= new Map()
+          mem.smallCaps.set(id, cased.ratio)
+        }
         const own = cased.glyphs
         el.text = textOf(own, lineEnds)
         // (its runs of one fill, where its glyphs hold more than one: a link's text coloured, its brackets black)
