@@ -4,16 +4,16 @@
 // Microsoft's keyless adapter, through a cache keyed by the chain's own key; a served member keeps its stored row; with no
 // fresh rows the rows are the entry's own. The cache answers offline: a wire it lacks is named, never fetched, outside the
 // fill. Synthetic units and replies; a temporary folder for the cache.
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { type FetchInit, microsoft } from '@readarxiv/translate'
 import { scriptedFetch } from '@readarxiv/translate/testing'
 // @ts-expect-error — a plain node module of the lab
-import { cachedTranslator, freshNeeds, freshRowsOf, withFresh } from '../../lab/typeset/parity/fresh.mjs'
+import { cachedTranslator, freshNeeds, freshRowsOf, keylessLock, pacedFetch, withFresh } from '../../lab/typeset/parity/fresh.mjs'
 // @ts-expect-error — a plain node module of the lab
-import { FRESH_SAYS, freshOf, measurePage, NAME_CODE_RULING, tagFresh } from '../../lab/typeset/parity/verdict.mjs'
+import { FRESH_SAYS, freshOf, judgedChanged, measurePage, NAME_CODE_RULING, offOriginalOf, tagFresh } from '../../lab/typeset/parity/verdict.mjs'
 
 type Row = { id: string; ok: boolean; by?: string; content?: unknown[] }
 const unit = (id: string, s: string, kind = 'para') => ({ id, kind, content: [{ t: 'text', s }] })
@@ -225,5 +225,88 @@ describe("a unit laid with a fresh row on the sheet: what follows from its text'
         { pair: 'p-zh', page: 4, unit: 'p31', drawn: false },
       ],
     })
+  })
+})
+
+describe('the review mode (--fresh=all): every unit v2 sends laid with its own fresh row', () => {
+  it('a member a stored row serves gets one too, named so; the others keep their cause', () => {
+    const units = new Map(['a', 'b', 'c'].map((id) => [id, unit(id, `text ${id}`)]))
+    const rows = entry([stored('a'), stored('c')], { said: ['c'] })
+    const n = freshNeeds([member(1, 'a'), member(2, 'b'), member(3, 'c'), member(4, 'a', { why: 'pitch' })], rows, units, { all: true })
+    expect([...n]).toEqual([
+      [1, { id: 'a', cause: 'served' }],
+      [2, { id: 'b', cause: 'no-row' }],
+      [3, { id: 'c', cause: 'unit' }],
+    ])
+    expect(freshNeeds([member(1, 'a')], rows, units).size).toBe(0)
+  })
+  it('no words beside every difference: the whole side is fresh; the name/code ruling still reads', () => {
+    const d = (flag: string, unit: string) => ({ flag, unit, what: 'w', worse: true, nearer: 'today' })
+    const p = { diffs: [d('style', 'p40 figure'), d('cross', 'p41 para')], worse: 2 }
+    tagFresh(p, { fresh: [40, 41], freshMode: 'all', freshCause: { 40: 'today-kept', 41: 'served' } }, new Map())
+    expect(p.diffs.map((x: { what: string }) => x.what)).toEqual(['w', 'w'])
+    expect(p.diffs.find((x: { flag: string }) => x.flag === 'style')).toMatchObject({ worse: false, nearer: 'ruling' })
+  })
+  it("the units whose fresh text changed a judged measure: each unit's judged differences on the gate sheet against the review's", () => {
+    const d = (flag: string, unit: string | null, worse: boolean, nearer: string) => ({ flag, unit, worse, nearer })
+    const gate = { diffs: [d('align', 't7 para', true, 'today'), d('cross', 't8 para', false, 'v2'), d('line-count', 't9 para', true, 'today'), d('links', null, true, 'today')] }
+    const review = { diffs: [d('align', 't7 para', true, 'today'), d('cross', 't8 para', true, 'today'), d('frame', 't10 para', true, 'today'), d('line-count', 't9 para', false, 'fresh'), d('links', null, true, 'today')] }
+    // (a measure the review mode does not judge, its line count here, is no change of a judged one)
+    expect(judgedChanged(gate, review)).toEqual([
+      { unit: 't10 para', flag: 'frame', gate: null, review: 'worse' },
+      { unit: 't8 para', flag: 'cross', gate: 'nearer', review: 'worse' },
+    ])
+  })
+  it("the units off the original's size or line count by more than the measure's floor, against the original alone", () => {
+    const u = (key: string, lines: number, olines: number, size: number, osize: number) => ({ key, kind: 'para', sides: { v2: { lines, olines, size, osize } } })
+    const p = { units: [u('t1', 4, 4, 10, 10), u('t2', 6, 4, 10, 10), u('t3', 4, 4, 9, 10), u('t4', 4, 4, 9.9, 10)] }
+    expect(offOriginalOf(p).map((x: { unit: string }) => x.unit)).toEqual(['t2', 't3'])
+  })
+})
+
+describe('the keyless endpoint, one sender at a time across lanes', () => {
+  const dirs: string[] = []
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+  })
+  it('takes a free lock, names its owner, gives it back', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'parity-lock-'))
+    dirs.push(root)
+    const lock = join(root, 'ms-keyless.lock')
+    const got = await keylessLock(lock, { lane: 'parity-fresh', retryMs: 1, tries: 1 })
+    expect(got.ok).toBe(true)
+    expect(readFileSync(join(lock, 'owner'), 'utf8')).toContain(`parity-fresh ${process.pid}`)
+    got.release()
+    expect(existsSync(lock)).toBe(false)
+  })
+  it("waits on a live owner's lock, takes a dead owner's and says so", async () => {
+    const root = mkdtempSync(join(tmpdir(), 'parity-lock-'))
+    dirs.push(root)
+    const lock = join(root, 'ms-keyless.lock')
+    mkdirSync(lock)
+    writeFileSync(join(lock, 'owner'), `style-wire ${process.ppid} 2026-11-11T00:00:00Z\n`)
+    expect((await keylessLock(lock, { lane: 'parity-fresh', retryMs: 1, tries: 2 })).ok).toBe(false)
+    writeFileSync(join(lock, 'owner'), 'style-wire 999999 2026-11-11T00:00:00Z\n')
+    const got = await keylessLock(lock, { lane: 'parity-fresh', retryMs: 1, tries: 1 })
+    expect(got).toMatchObject({ ok: true, tookFrom: 'style-wire 999999 2026-11-11T00:00:00Z' })
+    got.release()
+  })
+  it('stops on the first 429: no request after it', async () => {
+    let n = 0
+    const real = globalThis.fetch
+    globalThis.fetch = (async () => {
+      n++
+      return new Response('slow down', { status: 429 })
+    }) as typeof fetch
+    try {
+      const f = pacedFetch(0)
+      const init = { method: 'POST', headers: {}, body: '[]', signal: new AbortController().signal }
+      expect((await f('https://x', init)).status).toBe(429)
+      expect(f.throttled()).toBe(true)
+      await expect(f('https://x', init)).rejects.toThrow(/429/)
+      expect(n).toBe(1)
+    } finally {
+      globalThis.fetch = real
+    }
   })
 })

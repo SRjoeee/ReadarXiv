@@ -326,6 +326,18 @@ information; a difference of its words alone (`shown`, `figures`, `groups`, `lab
 ruling's (`nearer` "ruling", never worse: `verdict.mjs` NAME_CODE_RULING); its geometry is judged as any fresh unit's (a longer
 reply that overflows its room or collides counts).
 
+The review mode (`--fresh=all`, the coordinator's of 2026-11-11), never mixed with the gate in one sheet: every unit v2 sends is
+laid with its own fresh row, not only those no stored row serves, since a stored row is production's reply to production's
+wire, and shows production's faults on v2's pane (a marker spaced inside "R&D", a style group a reply never carried). The
+owner judges v2 against the original on this sheet; the gate stays the stored-row sheet, on which "pages worse" is counted.
+Its fill (`--fresh=fill-all`, about 690 requests over the 22 pairs) sends only under the keyless lock every lane honours
+(`refactor-2026-11/locks/ms-keyless.lock`, fresh.mjs keylessLock: an atomic mkdir, its owner the lane, the PID and the start; a
+dead owner's taken and said), one request at a time, and stops at the endpoint's first 429 (a rerun resumes from the cache).
+Its sheet tints nothing; FRESH_UNJUDGED are unjudged for every unit; its worse count is information. Each page lists the units
+off the original's size or line count by more than the measures' floors (verdict.mjs offOriginalOf), and, given the gate sheet
+at the same head (`measure.mjs --gate=<its parity.json>`), the units whose fresh text changed a judged measure (judgedChanged:
+a unit's judged differences on the two sheets, the measures it does not judge aside), with the text each side drew.
+
 Beside the verdict each side's faults against absolute bounds are measured (and for the measures above each side's own
 count: text over ink, lines past the frame or the block, elements drawn otherwise, glyphs shown in part, groups mixed, a
 paper's labels mixed, a page number off, ink not black) (a first line off both ways by 0.25 of the

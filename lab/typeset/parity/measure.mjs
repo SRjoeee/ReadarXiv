@@ -20,7 +20,7 @@ import { keptFacts, originalFacts, scriptsPass } from './blind.mjs'
 import { frameOf, labelsPass } from './fidelity.mjs'
 import { pdfOf, whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
-import { coverageOf, FLAGS, freshOf, measurePage, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
+import { coverageOf, FLAGS, freshOf, judgedChanged, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
 
 /** why a unit is laid with a fresh row (fresh.mjs freshNeeds' causes), as the sheet says it (lane parity-fresh) */
 const FRESH_CAUSE = {
@@ -43,6 +43,11 @@ const FRESH_CSS = `
 </style>`
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
 const WORK = arg('work')
+/** the review mode's gate sheet (--gate=<its parity.json>, the gate mode's sheet at the same head): each unit whose fresh text
+ *  changed a judged measure listed on its page (verdict.mjs judgedChanged) */
+const GATE = arg('gate')
+const gateOf = new Map()
+if (GATE) for (const p of JSON.parse(readFileSync(GATE, 'utf8')).pages) gateOf.set(`${p.pair}|${p.page}`, p)
 const OUT = arg('out')
 if (!WORK || !OUT) throw new Error('measure.mjs: --work=<dir> and --out=<dir> are required')
 const asked = process.argv.slice(2).filter((a) => !a.startsWith('--'))
@@ -198,6 +203,19 @@ for (const [pair, raw] of drawn) {
       tagFresh(p, v2, todayOf)
       const at = fr.pages.find((x) => x.page === p.page)
       const rec = raw.pages.find((r) => r.page === p.page)
+      // (the review mode, every unit fresh: no tint, no fresh list; the units off the original's size or line count, and, against
+      // the gate sheet, those whose fresh text changed a judged measure, each with the text each side drew)
+      if (v2.freshMode === 'all') {
+        const off = offOriginalOf(p)
+        const texts = (key) => {
+          const ord = key.startsWith('p') ? Number(key.slice(1)) : [...todayOf].find(([, t]) => `t${t}` === key)?.[0]
+          const said = (us, id) => (us ?? []).filter((u) => u.id === id).flatMap((u) => u.lines.map((l) => l.text)).join(' ').slice(0, 300)
+          return { today: key.startsWith('t') ? said(rec?.today?.units, Number(key.slice(1))) : '', v2: said(rec?.v2?.units, ord) }
+        }
+        const changed = GATE ? judgedChanged(gateOf.get(`${p.pair}|${p.page}`), p).map((c) => ({ ...c, ...texts(String(c.unit).split(' ')[0]) })) : null
+        if (off.length || changed?.length) p.review = { off, ...(changed ? { changed } : {}) }
+        continue
+      }
       const r2 = (x) => (Number.isFinite(x) ? Math.round(x * 100) / 100 : null)
       // (each size tie of the page holding a fresh unit: its other members' size as v2 drew them, against the original's, the
       // median share, stated though not judged (the coordinator's ruling of 2026-11-11 on the tie rule))
@@ -279,6 +297,15 @@ const result = {
           pages: freshes.flatMap((f) => f.pages),
           never: freshes.flatMap((f) => f.never),
           unjudged: pages.reduce((n, p) => n + p.diffs.filter((d) => d.nearer === 'fresh').length, 0),
+          // (the review mode: every unit v2 sends laid fresh; against the gate sheet, the units whose fresh text changed a judged
+          // measure; the units off the original's size or line count)
+          ...(pages.some((p) => p.review) || GATE
+            ? {
+                mode: 'all',
+                ...(GATE ? { gate: GATE, changed: pages.reduce((n, p) => n + (p.review?.changed?.length ?? 0), 0), changedPages: pages.filter((p) => p.review?.changed?.length).length } : {}),
+                off: pages.reduce((n, p) => n + (p.review?.off?.length ?? 0), 0),
+              }
+            : {}),
         },
       }
     : {}),
@@ -327,7 +354,9 @@ function sheet(r) {
     ? `<article class="card"><h2>Unmeasured: ${um.units} units on ${um.pages.length} pages</h2><p>${r.fresh ? "Units neither a stored row nor a fresh one serves (the translator refused them, or the cache holds no reply: run v2.mjs --fresh=fill), which v2 leaves the original's here: never worse, not measured." : "Units no row of the pair's fixed rows serves (a rule changed their text: today's stored replies cannot say them), which v2 leaves the original's here: never worse, not measured."}</p><ul>${um.pages.map((u) => `<li><a href="#${esc(`${u.pair}-p${u.page}`)}">${esc(u.pair)} p${u.page}</a>: ${u.units.length} (${esc(u.units.join(', '))})${u.judgements > u.units.length ? `; ${u.judgements - u.units.length} judgements beside them` : ''}</li>`).join('')}</ul></article>`
     : ''
   const fr = r.fresh
-  const freshCard = fr
+  const freshCard = fr?.mode === 'all'
+    ? `<article class="card flagged"><h2>Review mode: v2's side drawn entirely with fresh translations (${fr.units} units)</h2><p>Every unit v2 sends is laid with its own reply from the translate package's chain (Microsoft's keyless adapter, from lab-data's cache): v2 as a reader gets it, against the original. Today's side keeps its stored rows, so its measures against today compare two translations: line count, size, spacing and sentence pairing are not judged (listed "fresh"); the rest are. The worse count of this sheet is information, not the gate's (the gate sheet lays stored rows where they serve). Units off the original's size or line count are listed on their page (${fr.off})${fr.gate ? `; units whose fresh text changed a judged measure against the gate sheet (${esc(fr.gate)}): ${fr.changed} on ${fr.changedPages} pages, listed on each` : ''}.</p></article>`
+    : fr
     ? `<article class="card"><h2>Drawn with a fresh translation: ${fr.units} units on ${fr.pages.length} pages</h2><p>Units no stored row of the pair's serves, or whose stored row answered another unit than v2's, laid with the row a reader gets (the translate package's chain, Microsoft's keyless adapter, from lab-data's cache), tinted on v2's pane. Their line count, size, bold and slanted share, spacing and sentence pairing follow from the text drawn: listed as "fresh", never worse nor nearer (${fr.unjudged} differences); every other measure judges them. By kind: ${esc(Object.entries(fr.kinds).map(([k, n]) => `${k} ${n}`).join(', '))}. By cause: ${esc(Object.entries(fr.causes).map(([k, n]) => `${FRESH_CAUSE[k] ?? k} ${n}`).join(', '))}.</p><ul>${fr.pages.map((u) => `<li><a href="#${esc(`${u.pair}-p${u.page}`)}">${esc(u.pair)} p${u.page}</a>: ${u.units.length} (${esc(u.units.join(', '))})${u.causes.unit ? `; ${u.causes.unit} whose stored row answered another unit` : ''}</li>`).join('')}</ul></article><article class="card${fr.never.length ? ' flagged' : ''}"><h2>Sent by v2, never by today: ${fr.never.length} units</h2><p>Units v2 sends a translator that today had no unit of (nothing of today's to compare): each is v2's own decision to translate.</p><ul>${fr.never.map((x) => `<li><a href="#${esc(`${x.pair}-p${x.page}`)}">${esc(x.pair)} p${x.page}</a>: ${esc(x.unit)}${x.drawn ? '' : ' (not drawn: refused or not in the cache)'}</li>`).join('')}</ul></article>`
     : ''
   const said = r.notes?.length ? `<article class="card flagged"><h2>Not applied</h2><ul>${r.notes.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></article>` : ''
@@ -361,7 +390,14 @@ function sheet(r) {
       const freshLi = (x) => `<li>${esc(x.unit)} ${esc(x.kind ?? '')}: ${x.lines ?? '–'} lines (original ${x.olines ?? '–'}), size ${x.size ?? '–'} (original ${x.osize ?? '–'}${x.size && x.osize ? `, ${Math.round((x.size / x.osize) * 100)} %` : ''})${x.today ? `; today ${x.today.lines} lines, size ${x.today.size}` : '; today: not drawn'}</li>`
       const ruleKept = p.fresh?.said.filter((x) => x.cause === 'today-kept') ?? []
       const tieLi = (x) => `<li>${esc(x.kind ?? 'text')}s laid at one size with fresh ones: ${x.share} of the original's (the median of ${x.drawn} drawn), tied to ${x.fresh} fresh of ${x.members}</li>`
-      const freshList = p.fresh
+      const offLi = (x) => `<li>${esc(x.unit)} ${esc(x.kind ?? '')}: ${x.lines ?? '–'} lines (original ${x.olines ?? '–'}), size ${x.size ?? '–'} (original ${x.osize ?? '–'}${x.size && x.osize ? `, ${Math.round((x.size / x.osize) * 100)} %` : ''})</li>`
+      const chLi = (x) => `<li>${esc(x.unit)} <b>${esc(x.flag)}</b>: gate ${esc(x.gate ?? 'none')} → review ${esc(x.review ?? 'none')}</li>`
+      const reviewList = p.review
+        ? `${p.review.off.length ? `<p class="h">Off the original's size or line count (not judged against today's here):</p><ul class="freshlist">${p.review.off.map(offLi).join('')}</ul>` : ''}${p.review.changed?.length ? `<p class="h">The fresh text changed a judged measure (gate sheet → this sheet):</p><ul class="freshlist">${p.review.changed.map(chLi).join('')}</ul>` : ''}`
+        : ''
+      const freshList = p.review
+        ? reviewList
+        : p.fresh
         ? `<p class="h">Drawn with a fresh translation (tinted; size and lines against the original's, not judged against today's):</p><ul class="freshlist">${p.fresh.said.filter((x) => x.cause !== 'today-kept').map(freshLi).join('')}${(p.fresh.ties ?? []).map(tieLi).join('')}</ul>${ruleKept.length ? `<p class="h">Kept by today's name/code rule, sent by v2: ${ruleKept.length}</p><ul class="freshlist">${ruleKept.map(freshLi).join('')}</ul>` : ''}`
         : ''
       const verdict = p.error ? '' : p.worse ? `<span class="v bad">worse than today: ${p.worse}</span>` : '<span class="v good">not worse than today</span>'

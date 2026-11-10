@@ -130,7 +130,8 @@ export function tagFresh(p, v2, todayOf) {
     const touched = [...(String(d.unit ?? '').match(/\b[tp]\d+\b/g) ?? []), ...(d.cells ?? [])].filter((k) => causeOf.has(k))
     if (d.fresh || !touched.length) continue
     d.fresh = true
-    d.what = `${d.what} (${FRESH_SAYS})`
+    // (the review mode lays every unit fresh: words beside every difference would say nothing)
+    if (v2.freshMode !== 'all') d.what = `${d.what} (${FRESH_SAYS})`
     // (a text today kept by its name/code test, isName/isCode, and v2 sends: a difference of its words, not of its format, is
     // the owner's ruling of 2026-11-11, never worse; its geometry is judged as any fresh unit's)
     if (d.worse && WORDS.has(d.flag) && touched.every((k) => causeOf.get(k) === 'today-kept')) {
@@ -141,6 +142,47 @@ export function tagFresh(p, v2, todayOf) {
     }
   }
   if (ruled) recount(p)
+}
+/**
+ * The review mode's mark (lane parity-fresh, --fresh=all): the units whose fresh text changed a judged measure, each unit's
+ * judged differences (`nearer` v2 or today: worse or nearer) on the gate sheet's page `gate` against the review sheet's page
+ * `review`, one entry a unit and measure whose state differs (`worse`, `nearer`, or null: none), the measures FRESH_UNJUDGED
+ * aside. A reply that differs from the stored one in wording alone changes no judged measure and is not listed
+ */
+export function judgedChanged(gate, review) {
+  const stateOf = (p) => {
+    const m = new Map()
+    for (const d of p?.diffs ?? []) {
+      if (!d.unit || (d.nearer !== 'v2' && d.nearer !== 'today')) continue
+      // (only the measures the review mode judges: never one it reads as `fresh`, the highlight's sentence pairing among them)
+      if (FRESH_UNJUDGED.includes(d.flag) || String(d.what).startsWith('its sentences paired')) continue
+      const k = `${d.unit}\u0000${d.flag}`
+      m.set(k, m.get(k) === 'worse' || d.worse ? 'worse' : 'nearer')
+    }
+    return m
+  }
+  const g = stateOf(gate),
+    r = stateOf(review)
+  const out = []
+  for (const k of new Set([...g.keys(), ...r.keys()])) {
+    if (g.get(k) === r.get(k)) continue
+    const [unit, flag] = k.split('\u0000')
+    out.push({ unit, flag, gate: g.get(k) ?? null, review: r.get(k) ?? null })
+  }
+  return out.sort((a, b) => (a.unit < b.unit ? -1 : a.unit > b.unit ? 1 : a.flag < b.flag ? -1 : a.flag > b.flag ? 1 : 0))
+}
+/** the units of page `p` v2 draws off the original's size or line count by more than the measures' own floors (NEAR.size, half a
+ *  line): v2 against the original alone, stated in the review mode where neither is judged against today */
+export function offOriginalOf(p) {
+  const out = []
+  for (const u of p?.units ?? []) {
+    const v = u.sides?.v2
+    if (!v) continue
+    const lines = v.olines !== undefined && Math.abs(v.lines - v.olines) > 0.5
+    const size = v.osize && v.size && Math.abs(1 - v.size / v.osize) > NEAR.size
+    if (lines || size) out.push({ unit: u.key, kind: u.kind ?? null, lines: v.lines, olines: v.olines ?? null, size: r2(v.size), osize: r2(v.osize ?? null) })
+  }
+  return out
 }
 /** the measures of a text's words, not its format (tagFresh: the name/code ruling reads only these) */
 const WORDS = new Set(['shown', 'figures', 'groups', 'labels', 'toggles', 'style', 'weight'])

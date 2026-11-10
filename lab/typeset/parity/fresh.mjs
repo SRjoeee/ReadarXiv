@@ -9,7 +9,7 @@
 // (v2.mjs --fresh=fill): a run that is not told to fill never asks the network, and names the rows its cache lacks.
 // Lab-data only: the cache holds the papers' text.
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { chainOf, Fault, keyOf, microsoft, unitInOf } from '../../../packages/translate/src/index.ts'
 import { LAB } from '../../../packages/typeset/tests/replay/tap.ts'
@@ -93,16 +93,21 @@ export function cachedTranslator(base, { dir, fill = false }) {
   }
 }
 
-/** the platform's fetch with the project's User-Agent, one request at a time `pace` ms apart (the fill's alone) */
+/** the platform's fetch with the project's User-Agent, one request at a time `pace` ms apart (the fill's alone); after the
+ *  endpoint's first 429 it asks nothing more (`throttled()`), every later call refused at once: the fill stops there and says
+ *  so, and a later fill resumes from the cache */
 export function pacedFetch(pace = FILL_PACE_MS) {
   let last = 0
   let queue = Promise.resolve()
-  return (url, init) => {
+  let throttled = false
+  const f = (url, init) => {
     const go = queue.then(async () => {
+      if (throttled) throw new Error('parity fresh rows: the endpoint answered 429; no request after it')
       const wait = last + pace - Date.now()
       if (wait > 0) await new Promise((r) => setTimeout(r, wait))
       try {
         const r = await fetch(url, { method: init.method, headers: { ...init.headers, 'User-Agent': UA }, body: init.body, signal: init.signal })
+        if (r.status === 429) throttled = true
         const text = await r.text()
         return { ok: r.ok, status: r.status, headers: { get: (k) => r.headers.get(k) }, text: async () => text }
       } finally {
@@ -112,6 +117,53 @@ export function pacedFetch(pace = FILL_PACE_MS) {
     queue = go.catch(() => {})
     return go
   }
+  f.throttled = () => throttled
+  return f
+}
+
+/** the lock every lane honours before it sends to the keyless endpoint from this machine (the coordinator's of 2026-11-11):
+ *  a directory made atomically, its `owner` the lane, the sending process's PID and the start time */
+export const KEYLESS_LOCK = join(LAB, 'refactor-2026-11', 'locks', 'ms-keyless.lock')
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    return e?.code === 'EPERM'
+  }
+}
+/**
+ * The keyless lock taken for `lane` (mkdir, atomic): `{ ok: true, release, tookFrom? }`; where another's lock stands and its
+ * PID is alive, tried again every `retryMs` (a minute) `tries` times, then `{ ok: false, owner }`; where its PID is dead,
+ * removed and taken, `tookFrom` its owner line (the caller says so)
+ */
+export async function keylessLock(dir = KEYLESS_LOCK, { lane, retryMs = 60_000, tries = Number.POSITIVE_INFINITY } = {}) {
+  mkdirSync(join(dir, '..'), { recursive: true })
+  let tookFrom
+  for (let k = 0; k < tries; k++) {
+    try {
+      mkdirSync(dir)
+      writeFileSync(join(dir, 'owner'), `${lane} ${process.pid} ${new Date().toISOString()}\n`)
+      const release = () => {
+        const o = existsSync(join(dir, 'owner')) ? readFileSync(join(dir, 'owner'), 'utf8') : ''
+        if (o.startsWith(`${lane} ${process.pid} `)) rmSync(dir, { recursive: true, force: true })
+      }
+      return { ok: true, release, ...(tookFrom ? { tookFrom } : {}) }
+    } catch (e) {
+      if (e?.code !== 'EEXIST') throw e
+      const owner = existsSync(join(dir, 'owner')) ? readFileSync(join(dir, 'owner'), 'utf8').trim() : ''
+      const pid = Number(owner.split(' ')[1])
+      if (Number.isInteger(pid) && pid > 0 && !alive(pid)) {
+        tookFrom = owner
+        rmSync(dir, { recursive: true, force: true })
+        k--
+        continue
+      }
+      if (k + 1 < tries) await new Promise((r) => setTimeout(r, retryMs))
+      else return { ok: false, owner }
+    }
+  }
+  return { ok: false, owner: '' }
 }
 
 /** the translator the fresh rows come from: Microsoft's keyless adapter (production's default lane), one request in flight,
@@ -120,7 +172,9 @@ export function freshTranslator(dir = FRESH_ROWS, { fill = false, fetch: f } = {
   const none = async () => {
     throw new Error('parity fresh rows: no network outside the fill')
   }
-  return cachedTranslator(microsoft({ fetch: fill ? (f ?? pacedFetch()) : none, limits: { inFlight: 1 } }), { dir, fill })
+  const fetch = fill ? (f ?? pacedFetch()) : none
+  const t = cachedTranslator(microsoft({ fetch, limits: { inFlight: 1 } }), { dir, fill })
+  return { ...t, throttled: () => !!fetch.throttled?.() }
 }
 
 /**
@@ -149,14 +203,17 @@ export async function freshRowsOf(units, target, { dir = FRESH_ROWS, translator 
  * serves (v2.mjs's `noRow` before this lane); 'today-kept', one today never sent by its name/code rule, which v2 sends;
  * 'group', a cell today's group decision kept, so that v2's own decision runs on what the site would get (the coordinator's
  * ruling of 2026-11-11: the stored rows hold no reply of it, so like-for-like is not to be had); 'unit', a text whose stored row
- * answered another unit than v2's. A member the prepare states a reason for (`why`), or the paper keeps, is sent nothing.
+ * answered another unit than v2's; with `all` (the review mode, --fresh=all), 'served', a text a stored row serves, so that
+ * every unit v2 sends is laid as a reader gets it. A member the prepare states a reason for (`why`), or the paper keeps, is
+ * sent nothing.
  */
-export function freshNeeds(members, rows, units, { decided = () => false, todayKept = () => false } = {}) {
+export function freshNeeds(members, rows, units, { decided = () => false, todayKept = () => false, all = false } = {}) {
   const out = new Map()
   for (const m of members) {
     if (typeof m.text !== 'string' || m.why || rows.kept?.(m.text) || !units.has(m.text)) continue
     if (!rows.get(m.text)) out.set(m.ord, { id: m.text, cause: decided(m) ? 'group' : todayKept(m) ? 'today-kept' : 'no-row' })
     else if (rows.said?.(m.text)) out.set(m.ord, { id: m.text, cause: 'unit' })
+    else if (all) out.set(m.ord, { id: m.text, cause: 'served' })
   }
   return out
 }

@@ -33,7 +33,7 @@ const { candidateKept, candidateKeptElements, candidateKeptToday, candidateState
 const { readAsChain } = await import('./rows.mjs')
 const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
 const { partsIn, UNJOINED, unjoinedOf, withUnjoined } = await import('./unjoin.mjs')
-const { FRESH_ROWS, freshNeeds, freshRowsOf, freshTranslator, withFresh } = await import('./fresh.mjs')
+const { FRESH_ROWS, freshNeeds, freshRowsOf, freshTranslator, KEYLESS_LOCK, keylessLock, withFresh } = await import('./fresh.mjs')
 const { doorRows } = await import('../../../packages/typeset/tests/replay/rows.ts')
 
 const args = process.argv.slice(2)
@@ -41,8 +41,22 @@ const OUT = args.find((a) => a.startsWith('--out='))?.slice(6)
 if (!OUT) throw new Error('v2.mjs: --out=<dir> is required')
 const pairs = args.filter((a) => !a.startsWith('--'))
 /** the fresh rows: 'cache' (offline, the default), 'off' (none), 'fill' (the cache filled from the endpoint, no page laid) */
+/** and 'all' (the review mode: every unit v2 sends laid with its own fresh row, offline) or 'fill-all' (its fill) */
 const FRESH = args.find((a) => a.startsWith('--fresh='))?.slice(8) ?? 'cache'
-if (!['cache', 'off', 'fill'].includes(FRESH)) throw new Error(`v2.mjs: --fresh=${FRESH}: cache, off or fill`)
+if (!['cache', 'off', 'fill', 'all', 'fill-all'].includes(FRESH)) throw new Error(`v2.mjs: --fresh=${FRESH}: cache, off, fill, all or fill-all`)
+const ALL = FRESH === 'all' || FRESH === 'fill-all'
+const FILL = FRESH === 'fill' || FRESH === 'fill-all'
+// (a fill sends to the keyless endpoint: one sender at a time on this machine, every lane honouring the lock; one translator, so
+// one pace and one stop on the first 429, for the whole run)
+let translator = null
+if (FILL) {
+  const lock = await keylessLock(KEYLESS_LOCK, { lane: 'parity-fresh' })
+  if (!lock.ok) throw new Error(`v2.mjs: the keyless lock stays another's: ${lock.owner}`)
+  if (lock.tookFrom) console.log(`the keyless lock's owner was dead, the lock taken: ${lock.tookFrom}`)
+  process.on('exit', lock.release)
+  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(sig === 'SIGINT' ? 130 : 143))
+  translator = freshTranslator(FRESH_ROWS, { fill: true })
+}
 /** the reader's toggles the pages are laid under: the defaults, or (--toggles=on) every switch of "What to translate" on (figure
  *  and table text, headers and footers, references, the author block: docs/PDF-READER.md §15), so that what a reader turns on
  *  is judged too */
@@ -153,7 +167,7 @@ for (const pair of pairs) {
     let needs = new Map()
     const CUT = Symbol('cut')
     globalThis.__parityLay = (_part, rows) => {
-      if (rows) needs = freshNeeds([...all.values()], rows, units, { decided, todayKept })
+      if (rows) needs = freshNeeds([...all.values()], rows, units, { decided, todayKept, all: ALL })
       throw CUT
     }
     const page0 = globalThis.__ckPage
@@ -169,7 +183,7 @@ for (const pair of pairs) {
     const got = await freshRowsOf(
       ids.map((id) => units.get(id)),
       target,
-      { translator: freshTranslator(FRESH_ROWS, { fill: FRESH === 'fill' }) },
+      { translator: translator ?? freshTranslator(FRESH_ROWS) },
     )
     fresh = got.rows
     for (const [ord, { id, cause }] of needs) {
@@ -181,8 +195,12 @@ for (const pair of pairs) {
       if (!joinedAll0[ord] && !joinedAll.has(ord)) freshAt.newer.push(ord)
     }
     const n = (c) => Object.values(freshAt.cause).filter((x) => x === c).length
-    console.log(`${pair}: fresh ${Object.keys(freshAt.cause).length} members (no row ${n('no-row')}, kept by today's name/code rule ${n('today-kept')}, a cell today's group kept ${n('group')}, another unit's row ${n('unit')}) of ${needs.size} asked in ${ids.length} units; refused ${freshAt.refused.length}; not in the cache ${freshAt.missing.length}; ${freshAt.newer.length} today never had${got.asked ? `; ${got.asked} wires asked of the endpoint` : ''}`)
-    if (FRESH === 'fill') continue
+    console.log(`${pair}: fresh ${Object.keys(freshAt.cause).length} members (no row ${n('no-row')}, kept by today's name/code rule ${n('today-kept')}, a cell today's group kept ${n('group')}, another unit's row ${n('unit')}${ALL ? `, served by a stored row ${n('served')}` : ''}) of ${needs.size} asked in ${ids.length} units; refused ${freshAt.refused.length}; not in the cache ${freshAt.missing.length}; ${freshAt.newer.length} today never had${got.asked ? `; ${got.asked} wires asked of the endpoint` : ''}`)
+    if (translator?.throttled()) {
+      console.log(`${pair}: the endpoint answered 429: the fill stops here (the cache keeps every reply so far; a later fill resumes)`)
+      process.exit(3)
+    }
+    if (FILL) continue
   }
   const noRow = new Set()
   globalThis.__parityLay = (part, rows0) => {
@@ -343,6 +361,7 @@ for (const pair of pairs) {
     ...(freshAt.refused.length ? { freshRefused: freshAt.refused.sort((a, b) => a - b) } : {}),
     ...(freshAt.missing.length ? { freshMissing: freshAt.missing.sort((a, b) => a - b) } : {}),
     ...(freshAt.newer.length ? { freshNew: freshAt.newer.sort((a, b) => a - b) } : {}),
+    ...(ALL ? { freshMode: 'all' } : {}),
     held: heldRows,
     threw: got.threw,
     laidPages: Object.keys(pages).length,
