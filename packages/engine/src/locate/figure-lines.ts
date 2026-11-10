@@ -250,9 +250,16 @@ function readLine(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean): Figu
     // (one run alone: F0 has nothing to join)
     return null
   }
-  // (the glyphs no run holds before its first run's, but those of one pitch (a code line's opening quote): an icon, none of it)
+  // (the glyphs no run holds before its first run's: the text's where each abuts the glyph after it, no word space between (an
+  // opening bracket, a code line's opening quote); from one standing a word space apart back, an icon TeX set before the first
+  // word, none of it)
   let first = l.gs.findIndex((g) => !l.free.has(g))
-  while (first > 0 && pitch(glyphs[l.gs[first - 1]!]!)) first--
+  while (first > 0) {
+    const a = glyphs[l.gs[first - 1]!]!,
+      b = glyphs[l.gs[first]!]!
+    if (b.x0 - a.x1 >= SPACE_GAP * Math.min(a.size, b.size)) break
+    first--
+  }
   const gs = l.gs.slice(first)
   const role = gs.map((g) => (pitch(glyphs[g]!) ? 'F' : 'T'))
   if (!role.includes('F')) return null
@@ -268,6 +275,16 @@ function readLine(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean): Figu
     const i = stretches.indexOf(s)
     return stretches[i - 1]?.r === 'F' && stretches[i + 1]?.r === 'F'
   })
+  // (outside a line of code, a stretch of one pitch with no letter or digit, a mark alone ("behavior." its period set in the
+  // face of one pitch), is the text's, no element, the stretches beside it one)
+  const pieces: typeof stretches = []
+  for (const st of stretches) {
+    const r = !code && st.r === 'F' && !st.gs.some((g) => /[\p{L}\p{N}]/u.test(glyphs[g]!.u)) ? 'T' : st.r
+    const last = pieces.at(-1)
+    if (last && last.r === r) last.gs.push(...st.gs)
+    else pieces.push({ r, gs: [...st.gs] })
+  }
+  if (!code && !pieces.some((st) => st.r === 'F')) return null
   const ft: FigureText = {
     ks: [...l.ks],
     page: 0,
@@ -284,7 +301,7 @@ function readLine(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean): Figu
     ft.order.push({ t: 'text', glyphs: gs })
     return ft
   }
-  for (const s of stretches) {
+  for (const s of pieces) {
     if (s.r === 'T') ft.order.push({ t: 'text', glyphs: s.gs })
     else {
       ft.els.push({ kind: 'code', glyphs: s.gs, boxes: [] })
@@ -426,8 +443,8 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
   ft.why = unrelated ? 'crowded' : ft.why === 'crowded' ? null : ft.why
 }
 
-/** whether a stretch of a text's glyphs (`idx`, contiguous places in `gs`, its line order) begins at a word's start and ends at
- *  a word's end: the glyph before it and the glyph after it stand a word space apart from it (SPACE_GAP of their size) or are no
+/** whether a stretch of a text's glyphs (`idx`, contiguous places in `gs`, its line order) is words whole: it holds a letter or
+ *  a digit, and the glyph before it and the glyph after it stand a word space apart from it (SPACE_GAP of their size) or are no
  *  letter or digit, or are none */
 function wordBounded(gs: readonly number[], idx: readonly number[], glyphs: readonly G[]): boolean {
   const word = /[\p{L}\p{N}]/u
@@ -436,9 +453,13 @@ function wordBounded(gs: readonly number[], idx: readonly number[], glyphs: read
     const x = glyphs[a]!,
       y = glyphs[b]!
     const [l, r] = after ? [y, x] : [x, y]
-    return r.x0 - l.x1 >= SPACE_GAP * Math.min(l.size, r.size) || !word.test(x.u) || !word.test(y.u)
+    return r.x0 - l.x1 >= SPACE_GAP * Math.min(l.size, r.size) || !word.test(x.u)
   }
-  return side(gs[idx[0]! - 1], gs[idx[0]!], false) && side(gs[idx.at(-1)! + 1], gs[idx.at(-1)!], true)
+  return (
+    idx.some((i) => word.test(glyphs[gs[i]!]!.u)) &&
+    side(gs[idx[0]! - 1], gs[idx[0]!], false) &&
+    side(gs[idx.at(-1)! + 1], gs[idx.at(-1)!], true)
+  )
 }
 
 /** a stretch of a figure text's glyphs its decoration holds: its element, the decoration its box (an element it is inside or

@@ -127,6 +127,26 @@ describe('figure-lines: F0, a figure’s line of words and a run of one pitch', 
     expect(t!.els).toEqual([])
     expect(t!.ks).toEqual([0, 1, 2])
   })
+  it('keeps a bracket abutting the line’s first run its text, and makes no element of a mark of one pitch alone (2610.22197v1, 2608.06701v1)', () => {
+    // ("(lin2; feed only)": the bracket no run holds, set against "lin2": the text's, never an icon's; "behavior." its period in
+    // the face of one pitch: no element of it)
+    const { page, fig } = pageOf([
+      [
+        { text: '(', font: 'DejaVuSans', run: false },
+        { text: 'lin2', font: 'LMMono10-Regular' },
+        { text: '; feed only)', font: 'DejaVuSans' },
+      ],
+      [
+        { text: 'consistent with behavior', font: 'DejaVuSans' },
+        { text: '.', font: 'LMMono10-Regular', run: false },
+      ],
+    ])
+    const texts = figureLinesOf([page], fig, () => false, MONO)
+    expect(texts).toHaveLength(1)
+    const [t] = texts
+    expect(t!.order.map((o) => o.t)).toEqual(['text', 'el', 'text'])
+    expect(t!.claimed).toEqual([0])
+  })
   it('reads no line where Rule 1 keeps nothing (no faces of one pitch given): today’s runs stand', () => {
     const { page, fig } = pageOf([
       [
@@ -198,6 +218,12 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     crowd(fig, 0, [boxMet(0, rect(cx - 1.5, 700, cx + 1.5, 703, { fill: true, stroke: false }))])
     const [t] = figureLinesOf([page], fig, () => false, null)
     expect(t).toBeUndefined()
+  })
+  it('makes no element of a mark a box holds inside a number: a decoration holds a word, a letter or a digit in it (2610.42112v1)', () => {
+    const { page, fig } = pageOf([[{ text: '3.61 pp', font: 'DejaVuSans' }]])
+    const g = page.glyphs as Glyph[]
+    crowd(fig, 0, [boxMet(0, rect(g[1]!.x0 - 0.3, 697, g[1]!.x1 + 0.3, 708))])
+    expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
   })
   it('frees a text a closed shape holds whole: its room the shape’s inside, its edges over and under its baseline', () => {
     const { page, fig } = pageOf([[{ text: 'CTJA module', font: 'DejaVuSans' }]])
