@@ -17,6 +17,7 @@ import type { Doc, DocGlyph, DocMarks, DocPage, DocTurned } from './doc.ts'
 import { PageGlyph } from './glyph.ts'
 import { BOXES_PAGE, GLYPHS_PAGE, type PageInk, pageInk } from './ink.types.ts'
 import { isMemoryError } from './memory.types.ts'
+import { memoryFailure, WARNINGS, watchWarnings } from './warnings.ts'
 
 /** what the back half needs of PDF.js: its getDocument and its operator codes */
 export interface PdfJs {
@@ -79,15 +80,28 @@ export function mappedOf(font: unknown): Set<string> | null {
 export const unmapped = (u: string, mapped: Set<string> | null): boolean =>
   [...u].some((ch) => /\S/.test(ch) && (NO_UNICODE.test(ch) || (mapped !== null && !mapped.has(ch))))
 
-/** the document's pages, read; `info` its metadata */
+/** what PDF.js recovered from while a document was read (warnings.ts): each site heard, how often, and its first reason */
+export type Recovered = [site: string, count: number, first: string][]
+
+/** the document's pages, read; `info` its metadata; `recovered`, what PDF.js recovered from inside its worker while it read
+ *  them (warnings.ts): a failed allocation among them is thrown, as one PDF.js's API had answered with */
 export async function readPdf<X = never>(
   pdfjs: PdfJs,
   bytes: Uint8Array,
   o: ReadOptions<X> = {},
-): Promise<{ doc: Doc; pages: ReadPage<X>[]; info: Record<string, unknown> | null }> {
+): Promise<{ doc: Doc; pages: ReadPage<X>[]; info: Record<string, unknown> | null; recovered: Recovered }> {
+  // (PDF.js's warnings heard while the document is read: its level raised to WARNINGS for it where the reader asked for less,
+  // and set back to the reader's once it is let go; a warning passed on only where the reader asked for them)
+  const asked = (o.options as { verbosity?: unknown } | undefined)?.verbosity
+  const level = typeof asked === 'number' ? asked : null
+  const watch = watchWarnings({ forward: level === null || level >= WARNINGS })
+  const heard = (): void => {
+    if (watch.memory !== null) throw memoryFailure(watch.memory)
+  }
   const task = pdfjs.getDocument({
     ...(o.options ?? {}),
     ...(o.mapped ? { fontExtraProperties: true } : {}),
+    verbosity: Math.max(level ?? WARNINGS, WARNINGS),
     data: bytes.slice(),
   })
   // (each font's map, read once a document: by its id in the page's common objects)
@@ -102,9 +116,12 @@ export async function readPdf<X = never>(
     const pdf = await task.promise
     // (the document's metadata where PDF.js reads it, else none; a failed allocation is the paper's: memory.mjs)
     info = ((await pdf.getMetadata?.().catch(orNone(null))) ?? null)?.info ?? null
+    heard()
     for (let p = 1; p <= pdf.numPages; p++) {
       const page = await pdf.getPage(p)
       const ops = await page.getOperatorList()
+      // (a failed allocation PDF.js's worker recovered from while it read the page: its list or a font of it cut short)
+      heard()
       const extra = o.extra ? o.extra(pdfjs.OPS, ops) : null
       tagGlyphs(
         pdfjs.OPS,
@@ -134,6 +151,7 @@ export async function readPdf<X = never>(
       // (annotations PDF.js cannot read are none of the page's links; a failed allocation is the paper's, never a page without
       // its links)
       const annotations = o.annotations ? ((await page.getAnnotations?.().catch(orNone([]))) ?? []) : null
+      heard()
       const view = [...page.view] as [number, number, number, number]
       pages.push({ ...docPageOf(ink, view, page.rotate ?? 0, bases), extra, annotations })
       page.cleanup()
@@ -141,8 +159,23 @@ export async function readPdf<X = never>(
   } finally {
     // (the document let go: a failure of its teardown loses nothing read, and a failure of the reading stands)
     await task.destroy().catch(() => {})
+    watch.close()
+    if (level !== null && level < WARNINGS) await levelBack(pdfjs, level)
   }
-  return { doc: { pages: pages.map((p) => p.page) }, pages, info }
+  heard()
+  const recovered: Recovered = [...watch.recovered].map(([site, x]) => [site, x.count, x.first])
+  return { doc: { pages: pages.map((p) => p.page) }, pages, info, recovered }
+}
+
+/** PDF.js's level set back to the reader's (one for the process: each document's opening sets it, its API's and its worker's),
+ *  by an opening of no bytes at that level, which fails and is let go */
+async function levelBack(pdfjs: PdfJs, level: number): Promise<void> {
+  const task = pdfjs.getDocument({ data: new Uint8Array(0), verbosity: level })
+  await task.promise.then(
+    () => {},
+    () => {},
+  )
+  await task.destroy().catch(() => {})
 }
 
 /** a rejection's stand-in, `none`, for what a reading may lack (a page's links, the document's metadata); a failed allocation

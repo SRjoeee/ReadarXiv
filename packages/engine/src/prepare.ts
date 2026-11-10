@@ -2,12 +2,13 @@
 // arXiv's PDF read once (read.ts), B's ownership carried onto it (align, locate), arXiv's runs wrapped (wrap), and the bundle's
 // objects made (bundle), yielded as each is made: the units first, then each page's part, the add-on, the head last; then a
 // tally of what was done and how long each step took.
+import type { Head } from '@readarxiv/format'
 import { align, type Mapping } from './align/align.ts'
 import { type BundleObject, bundle } from './bundle/bundle.ts'
 import type { Doc } from './doc.ts'
 import type { Instrument } from './instrument.ts'
 import { type Located, type LocateOptions, locate } from './locate/locate.ts'
-import { type PdfJs, type ReadPage, readPdf } from './read.ts'
+import { type PdfJs, type ReadPage, type Recovered, readPdf } from './read.ts'
 import { type AlignFacts, alignOf, type PdfLib } from './remove.types.ts'
 import { type AddOn, type WrapPageA, wrap, wrapPageOf } from './wrap/wrap.ts'
 
@@ -40,6 +41,8 @@ export type Tally = {
   pages: number
   located: Located['stats']
   wrap: { refused?: string; pagesRefused: number; groups: number }
+  /** what PDF.js recovered from while B and A were read (the head's `recovered`); none where nothing was */
+  recovered?: NonNullable<Head['recovered']>
   /** the intermediate results, for the lab's dumps and proofs (the box drops them); A's pages only where they were kept */
   mapping: Mapping
   locatedAll: Located
@@ -53,7 +56,7 @@ export function readArxiv(
   pdfjs: PdfJs,
   original: Uint8Array,
   options: Record<string, unknown> = {},
-): Promise<{ doc: Doc; pages: ReadPage<AlignFacts>[]; info: Record<string, unknown> | null }> {
+): Promise<{ doc: Doc; pages: ReadPage<AlignFacts>[]; info: Record<string, unknown> | null; recovered: Recovered }> {
   return readPdf(pdfjs, original, {
     options,
     turned: true,
@@ -79,6 +82,13 @@ export async function* prepareBack(
   const { located, mapping, times } = p
   const addOn = await wrap(original, located, p.wrapPages, deps)
   const t4 = now()
+  // (what PDF.js recovered from while it read B (the instrument's) and A: the head states it)
+  const recovered: NonNullable<Head['recovered']> = []
+  for (const [doc, r] of [
+    ['B', ins.recovered],
+    ['A', p.recovered],
+  ] as const)
+    for (const [site, n, first] of r ?? []) recovered.push([doc, site, n, first])
   for (const x of bundle({
     ins,
     located,
@@ -86,6 +96,7 @@ export async function* prepareBack(
     original,
     paper: { ...deps.paper, pages: p.pages },
     made: deps.made,
+    ...(recovered.length ? { recovered } : {}),
   }))
     yield x
   const t5 = now()
@@ -104,6 +115,7 @@ export async function* prepareBack(
       'refused' in addOn
         ? { refused: addOn.refused, pagesRefused: 0, groups: 0 }
         : { pagesRefused: [...addOn.pages.values()].filter((x) => !x.ok).length, groups: addOn.groups.size },
+    ...(recovered.length ? { recovered } : {}),
     mapping,
     locatedAll: located,
     addOn,
@@ -125,6 +137,7 @@ async function placedOf(
   wrapPages: (WrapPageA | null)[]
   pages: number
   pagesA: ReadPage<AlignFacts>[] | null
+  recovered: Recovered
   times: { t1: number; t2: number; t3: number }
 }> {
   const keep = deps.keep === true
@@ -165,6 +178,7 @@ async function placedOf(
     wrapPages,
     pages: read.doc.pages.length,
     pagesA: keep ? read.pages : null,
+    recovered: read.recovered,
     times: { t1, t2, t3 },
   }
 }

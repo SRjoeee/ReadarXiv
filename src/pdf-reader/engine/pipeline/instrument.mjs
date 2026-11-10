@@ -1059,7 +1059,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   // (the pieces TeX set before their unit's start point (outsidePieces): whatever they set is no text of the unit's)
   const outside = outsidePieces(pages, units, { glyphs })
   return {
-    instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, ...(empty.length ? { empty } : {}), ...(outside.length ? { outside } : {}), tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds, ...(frames.some(Boolean) ? { frames } : {}), ...(skips.length ? { skips } : {}) }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
+    instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, ...(empty.length ? { empty } : {}), ...(outside.length ? { outside } : {}), ...(read.recovered.length ? { recovered: read.recovered } : {}), tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds, ...(frames.some(Boolean) ? { frames } : {}), ...(skips.length ? { skips } : {}) }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
     today: { own, inkBase },
   }
 }
