@@ -3326,9 +3326,9 @@ word list and no language's table; the original drawn when translation is off ne
   and LaTeX's own since 2023, `{num}{page}{title}{anchor}{}`: `figure.caption.12`'s `figure`, `appendix.A`'s `appendix`, as
   hyperref's `\autoref` reads it), else cleveref's `[type]`; then the `\meaning` of cleveref's capitalised and own names,
   hyperref's `\<type>autorefname` and LaTeX's `\<type>name` (a babel name macro read through the layout compile's own
-  wrapper, NAMES_TEX); and, once, the language they are read in: babel's BCP 47 tag of `\languagename` there (its
-  `\bbl@tbcp@<language>`, the locale's `identification.tag.bcp47`, what `\BCPdata{tag.bcp47}` reads), the element's
-  `nameLang`. The first that is plain words with no full stop is the element's
+  wrapper, NAMES_TEX); and, once, the language the paper's names are set up for: babel's BCP 47 tag of its main language
+  (`\bbl@tbcp@<\bbl@main@language>`, the locale's `identification.tag.bcp47`, what `\BCPdata{tag.bcp47}` reads; hyperref
+  sets its names for it at `\begin{document}`, whatever the text switches to after), the element's `nameLang`. The first that is plain words with no full stop is the element's
   `name` (format's element piece; not in the unit's id): cleveref's default "Fig." and IEEEtran's `\figurename` "Fig." are
   passed over for hyperref's "Figure". Nothing is set and nothing written to a file; a paper with no reference compiles the
   bytes it did.

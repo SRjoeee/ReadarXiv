@@ -58,7 +58,8 @@ export type Piece =
        *  marked compile: "Figure", "Equation", "section"), where TeX states one. A word tied to the reference that
        *  abbreviates it ("Fig.") is sent to every translator as this name (names.ts namedOf); the unit itself keeps the word */
       name?: string | undefined
-      /** the BCP 47 tag of the language TeX declared where it read `name` (babel's); absent where none is declared. The name
+      /** the BCP 47 tag of the language the paper's names are set up for (babel's main language); absent where none is
+       *  declared. The name
        *  is sent only where this is SOURCE's language, or none is declared */
       nameLang?: string | undefined
     }

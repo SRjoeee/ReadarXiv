@@ -205,7 +205,7 @@ function textOf(written: string): string {
  * page is out). The type is the label's anchor's (hyperref's, and LaTeX's own since 2023: `figure.caption.12`'s `figure`, as
  * hyperref's own \autoref reads it), else cleveref's where it wrote one; the name the first of those that is a full name
  * (FULL_NAME), a babel name macro read through the layout compile's own wrapper (NAME_WRAP); and on each name the language
- * TeX declared where it read them (`AXT-REFLANG`, babel's BCP 47 tag of \languagename), none where none is. A label TeX knew no type for
+ * the paper's names are set up for (`AXT-REFLANG`, babel's BCP 47 tag of its main language), none where none is declared. A label TeX knew no type for
  * states nothing; a type none of whose names is a full one (RevTeX's `section*` anchors), no name
  */
 export function readRefNames(log: string): Map<number, RefName> {
@@ -224,7 +224,7 @@ export function readRefNames(log: string): Map<number, RefName> {
     const name = body === undefined ? '' : textOf(body).trim()
     if (name.length <= 40 && FULL_NAME.test(name)) ref.name = name
   }
-  // (the language the names were read in, once: babel's tag of \languagename there, AXT-REFLANG; on every name)
+  // (the language the paper's names are set up for, once: babel's tag of its main language, AXT-REFLANG; on every name)
   const tag = MEANING.exec(/^AXT-REFLANG (.*)$/m.exec(text)?.[1]?.trimEnd() ?? '')?.[1]?.trim()
   if (tag && BCP47.test(tag)) for (const r of out.values()) if (r.name !== undefined) r.lang = tag
   return new Map([...out].sort((a, b) => a[0] - b[0]))

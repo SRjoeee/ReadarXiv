@@ -27,6 +27,9 @@ describe('the references the marked compile asks TeX about', () => {
     expect(tex).toContain('AXT-REFNAME')
     expect(tex).toContain('enddocument/afterlastpage')
     expect(tex).toContain('AXT-REFLANG')
+    // (the language the paper's names are set up for: babel's main language, whatever \selectlanguage the text switches to
+    // before the end, 2307.16209v1's English text under a Brazilian Portuguese main language whose hyperref names are "Figura")
+    expect(tex).toContain('bbl@tbcp@\\bbl@main@language')
     expect(tex.startsWith('\\makeatletter')).toBe(true)
     expect(tex.endsWith('\\makeatother')).toBe(true)
     expect(refsTex([])).toBe('')
