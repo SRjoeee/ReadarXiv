@@ -214,9 +214,17 @@ export function tokenBox(
   return { l, r: l + it.w - (t.kern ? (t.kernEm ?? 0) * LL.f : 0), y, h, top, bottom }
 }
 
+/** the member whose label a laid token draws where another member's line holds it (a label no line opens with, carried to the
+ *  end of the name before: its crop's `of`, lay/flow.ts); undefined for every other token */
+export function carriedOf(it: LaidLine['items'][number]): number | undefined {
+  const of = (it.t as { crop?: { of?: unknown } }).crop?.of
+  return typeof of === 'number' ? of : undefined
+}
+
 /** each of a laid member's lines on `page` as one box over its tokens' boxes ([x0, bottom, x1, top], tokenBox): what the right
- *  pane lights of it whole (design-a's Laid.lit); a line of no token none */
-export function lineBoxes(L: Layout, page: number): [number, number, number, number][] {
+ *  pane lights of it whole (design-a's Laid.lit); a line of no token none. `self`: the member's ord, whose lines then leave out
+ *  another member's label carried to them (carriedOf), lit with its owner */
+export function lineBoxes(L: Layout, page: number, self?: number): [number, number, number, number][] {
   const out: [number, number, number, number][] = []
   for (const line of L.lines) {
     if (line.page !== page) continue
@@ -225,6 +233,8 @@ export function lineBoxes(L: Layout, page: number): [number, number, number, num
       x1 = Number.NEGATIVE_INFINITY,
       y1 = Number.NEGATIVE_INFINITY
     for (const it of line.items) {
+      const of = carriedOf(it)
+      if (self !== undefined && of !== undefined && of !== self) continue
       const b = tokenBox(it, line, L)
       if (!b) continue
       x0 = Math.min(x0, b.l)

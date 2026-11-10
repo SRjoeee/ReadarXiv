@@ -140,8 +140,9 @@ export async function freshRowsOf(units, target, { dir = FRESH_ROWS, translator 
 
 /**
  * The members laid with a fresh row, over `members` (every member of the paper's parts, once): ord -> `{ id, cause }`.
- * `rows` the entry's rows (gate-l1.ts: get by unit id; kept; `said`, the ids whose row is today's row of another unit said in
- * v2's: today's flat text of a figure text v2 holds a group in, a unit whose kept runs v2 holds as elements); `units` the
+ * `rows` the entry's rows (gate-l1.ts: get by unit id; kept; `said`, the ids whose row is today's row of other units said in
+ * v2's: today's flat text of a figure text v2 holds a group in, a unit whose kept runs v2 holds as elements, a member holding
+ * several of today's units joined); `units` the
  * bundle's units by id; `decided(m)` whether today's own group decision kept the member's unit (its door row `kept`, the reply
  * not stored: a table's cell today left the original's by its group); `todayKept(m)` whether today's prepare kept its unit,
  * never sending it (a figure text of names or code: today's figureUnits, isName/isCode). Causes: 'no-row', a text no stored row

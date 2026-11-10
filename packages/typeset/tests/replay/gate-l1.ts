@@ -453,6 +453,20 @@ export function gateL1Pair(
      *  joined to): ord -> today's ord, its row then laid in the member's unit (the parity's: stage 1a's statement of the unit
      *  the member's holds whole, the two of one content, lab/typeset/parity/join.mjs heldJoin) */
     held?: (members: readonly L1Placed[], today: readonly number[]) => ReadonlyMap<number, number>
+    /** the members each of which holds two or more of today's units whole, its text theirs in order (lab/typeset/parity/join.mjs
+     *  joinedJoin: F0's lines, a figure paragraph, a word joined across a size change): ord -> today's ords and the plan its row is
+     *  said by, each piece today's unit's row (its text) or one of the member's elements */
+    joined?: (
+      members: readonly L1Placed[],
+      today: readonly number[],
+    ) => ReadonlyMap<
+      number,
+      { todays: readonly number[]; plan: readonly ({ t: 'today'; i: number } | { t: 'el'; id: string })[] }
+    >
+    /** whether the entry is given a member's door row (its runner's judgement by the translate package's rule, which this
+     *  package may not import): one refused is no row, the unit left the original's, as the chain makes no row of a reading
+     *  that says nothing */
+    accept?: (unit: Unit, content: readonly OutPiece[]) => boolean
   } = {},
 ): GateL1 {
   const measure = o.metricsOf ? fitMeasure(o.metricsOf(pair)) : null
@@ -583,6 +597,45 @@ export function gateL1Pair(
       if (u) unitOf.set(ord, u)
     }
   }
+  // (and the members holding several of today's units, each its row said by theirs in its order, joinedRow)
+  const joinedOf = new Map<
+    number,
+    { todays: readonly number[]; plan: readonly ({ t: 'today'; i: number } | { t: 'el'; id: string })[] }
+  >()
+  if (o.joined) {
+    const joined = new Set([...unitOf.values()].map((u) => u.ord))
+    const free = [...byOrd].filter(([ord]) => !unitOf.has(ord)).map(([, x]) => x.m)
+    const left = L.units.filter((u) => !joined.has(u.ord)).map((u) => u.ord)
+    for (const [ord, j] of o.joined(free, left)) {
+      const u = L.units.find((x) => x.ord === j.todays[0])
+      if (!u) continue
+      unitOf.set(ord, u)
+      joinedOf.set(ord, j)
+    }
+  }
+  /** a joined member's row: each of today's units in its plan its door row's text, each element the member's own, today's texts
+   *  apart by a space where the target writes one between words; null where one of them has no row whole or in part */
+  const joinedRow = (ord: number): { content: OutPiece[]; by: string } | null => {
+    const j = joinedOf.get(ord)
+    if (!j || !doors) return null
+    const gap = /^(zh|ja|ko)/.test(L.target) ? '' : ' '
+    const content: OutPiece[] = []
+    let by = ''
+    for (const p of j.plan) {
+      if (p.t === 'el') {
+        content.push({ t: 'el', id: p.id })
+        continue
+      }
+      const r = doors.get(j.todays[p.i]!)
+      if (!r || !(r[2] === 'whole' || r[2] === 'partial')) return null
+      by ||= String(r[3])
+      const s = r[1].filter((q): q is string => typeof q === 'string').join('')
+      const last = content.at(-1)
+      if (last?.t === 'text') last.s += gap + s
+      else content.push({ t: 'text', s })
+    }
+    return { content, by }
+  }
   /** a member's door row as the translation package's Result holds it, in the unit's own pieces: the door's, or today's row
    *  said in v2's unit where the two hold its kept runs otherwise; null where a piece is no source piece */
   const rowOf = (
@@ -594,7 +647,7 @@ export function gateL1Pair(
     if (t) return keptRow(row, t, src)
     const source = sourcePieces(todayUnitOf(src).content)
     const content = outOfDoor(row[1], source)
-    if (!content) return null
+    if (!content || (o.accept && !o.accept(src, content))) return null
     // (the sentences today laid, where the prepare marks the unit lit by sentence: as a translator is asked for them)
     const sentences = src.sentences ? doorSentences(row, source) : undefined
     return { content, ...(sentences ? { sentences } : {}) }
@@ -667,7 +720,12 @@ export function gateL1Pair(
       // every page) has one row, which today's door holds under its first ord)
       const row = doors?.get(u.ord) ?? (u.id ? doorById.get(u.id) : undefined)
       const src = bundle.units.get(x.m.text)
-      if (!row || !src || !(row[2] === 'whole' || row[2] === 'partial') || !metrics || !paperR) {
+      const jr = joinedOf.has(ord) ? joinedRow(ord) : undefined
+      if (jr === null) {
+        stop('the reading: a joined unit with a piece of today’s with no row')
+        continue
+      }
+      if (!src || !metrics || !paperR || (!jr && (!row || !(row[2] === 'whole' || row[2] === 'partial')))) {
         stop(`the reading: ${!row ? 'no door row' : !src ? 'no unit of the part' : `a row ${row[2]}`}`)
         if (!row && process.env.AXT_GATE_NOROW)
           console.log(`NOROW ${pair} ord ${u.ord} ${u.kind} ${x.m.kind} ${String(x.m.text).slice(0, 12)}`)
@@ -681,22 +739,32 @@ export function gateL1Pair(
       // (the door's row as the translation package's Result would hold it (its text, the source's elements and groups by id):
       // the reading takes the pieces from it and the member's facts alone, rowPieces; AXT_GATE_SOURCE=1 the unit's own pieces
       // as before, to hold the two equal); a unit whose kept runs v2 holds as elements, today's row said in v2's unit
-      const content = keptOf.has(ord) ? (rowOf(ord, row, src)?.content ?? null) : outOfDoor(row[1], source)
+      const content = jr
+        ? jr.content
+        : keptOf.has(ord)
+          ? (rowOf(ord, row!, src)?.content ?? null)
+          : outOfDoor(row![1], source)
       if (!content) {
         stop('the reading: a row piece no source piece is')
         continue
       }
-      const pieces = process.env.AXT_GATE_SOURCE
-        ? (row[1].map((q) =>
-            typeof q === 'string' ? ({ t: 'text', tr: true, s: q } as V0Piece) : source[q],
-          ) as V0Piece[])
-        : rowPieces(mm, content)
+      const pieces =
+        process.env.AXT_GATE_SOURCE && row && !jr
+          ? (row[1].map((q) =>
+              typeof q === 'string' ? ({ t: 'text', tr: true, s: q } as V0Piece) : source[q],
+            ) as V0Piece[])
+          : rowPieces(mm, content)
       const tr = performance.now()
       let rd: ReturnType<typeof readMember>
       try {
         rd = readMember({
           m: mm,
-          unit: { kind: u.kind, ...(x.m.title ? { title: true } : {}), state: row[2], pieces } as RowUnit,
+          unit: {
+            kind: u.kind,
+            ...(x.m.title ? { title: true } : {}),
+            state: jr ? 'whole' : row![2],
+            pieces,
+          } as RowUnit,
           rects: mm.lines.map((l) => rectOf(l, mm)),
           to: L.target,
           P: R as never,
@@ -828,12 +896,22 @@ export function gateL1Pair(
     }
   for (const o of tieHeld) if (adapted.has(o)) out.tieHeld.add(adapted.get(o)!.ord)
   // (the entry's rows: each member's door row as the translation package's Result, by its unit's id; `said`, the ids whose row
-  // is today's row of another unit said in v2's, which no translator gave v2's unit: lab/typeset/parity/fresh.mjs freshNeeds)
+  // is today's row of other units said in v2's (several of today's joined, kept runs held as elements, a figure text flattened),
+  // which no translator gave v2's unit: lab/typeset/parity/fresh.mjs freshNeeds)
   let entryRows: (Rows & { said(id: string): boolean }) | null = null
   if (out.entry && doors) {
     const byId = new Map<string, Row>(nameRows)
     const said = new Set<string>()
     for (const [ord, x] of byOrd) {
+      // (a member holding several of today's: theirs in its order, joinedRow)
+      if (joinedOf.has(ord) && typeof x.m.text === 'string' && !byId.has(x.m.text)) {
+        const jr = joinedRow(ord)
+        if (jr) {
+          byId.set(x.m.text, { id: x.m.text, ok: true, by: jr.by, content: jr.content })
+          said.add(x.m.text)
+        }
+        continue
+      }
       const u = unitOf.get(ord)
       const row = u ? (doors.get(u.ord) ?? (u.id ? doorById.get(u.id) : undefined)) : undefined
       const src = typeof x.m.text === 'string' ? bundle.units.get(x.m.text) : undefined

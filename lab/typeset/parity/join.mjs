@@ -35,6 +35,10 @@ function ownIdOf(m, units) {
  *  the statement names its holder: a names unit's stand-in of its ledger class, today's characters in another order (its kind
  *  moved; the coordinator's ruling of 2026-11-10, round 8 B2b) */
 const HOLDS = new Set(['held', 'names', 'heldBlock', 'order'])
+/** the causes the joined join reads besides: today's unit now wholly an element of the holder that keeps it as the original's ink,
+ *  (k) on elements and (n) (stated.mjs's `pitch` and `decoration` with a holder, lane fig-text): one of the units the holder
+ *  holds in order, its text the element's */
+const JOINS = new Set([...HOLDS, 'pitch', 'decoration'])
 /** the folder of the candidate's prepare dumps, stage 1a's statements in them: AXT_L1_DUMPS, else the one beside the bundles
  *  (a stage 1a run's `<run>/prepare`, its bundles `<run>/bundles`) */
 export const L1_DUMPS = process.env.AXT_L1_DUMPS ?? join(L1_BUNDLES, '..', 'prepare')
@@ -59,6 +63,27 @@ export function candidateKept(paper, by, dumps = L1_DUMPS) {
   if (!existsSync(f) || !existsSync(g)) return []
   const ords = new Set(JSON.parse(readFileSync(f, 'utf8')).units.filter((u) => !u.replaced && u.keptBy === by).map((u) => u.ord))
   return (JSON.parse(readFileSync(g, 'utf8')).dumpOrds ?? []).filter(([d]) => ords.has(d)).map(([, m]) => m)
+}
+/**
+ * The ink of the elements the candidate's prepare keeps as the original's, by member (the coordinator's ruling 1 on F0,
+ * 2026-11-10): a figure text's element its dump marks `keptBy` 'pitch' (its run of one pitch, F0) or 'decoration' (a stretch a
+ * frame, an underline or a tone holds, (n)). `[member ord, [page, x0, y0, x1, y1][]]`, each element's segments, by the member
+ * its unit is joined to (`dumpOrds`); none where lab-data holds no dump or located file of it
+ */
+export function candidateKeptElements(paper, dumps = L1_DUMPS) {
+  const f = join(dumps, `${paper}.prepare.json`),
+    g = join(dumps, '..', 'located', `${paper}.json`)
+  if (!existsSync(f) || !existsSync(g)) return []
+  const KEPT = new Set(['pitch', 'decoration'])
+  const ink = new Map()
+  for (const u of JSON.parse(readFileSync(f, 'utf8')).units) {
+    if (u.replaced) continue
+    const boxes = (u.elements ?? [])
+      .filter((e) => KEPT.has(e.keptBy))
+      .flatMap((e) => (e.segs ?? []).map((k) => [k.page, k.x0, Math.min(k.top, k.bottom), k.x1, Math.max(k.top, k.bottom)]))
+    if (boxes.length) ink.set(u.ord, boxes)
+  }
+  return (JSON.parse(readFileSync(g, 'utf8')).dumpOrds ?? []).filter(([d]) => ink.has(d)).map(([d, m]) => [m, ink.get(d)])
 }
 /** the members the candidate's prepare keeps for their text set wholly in a face of one pitch (candidateKept's 'pitch') */
 export const candidatePitch = (paper, dumps = L1_DUMPS) => candidateKept(paper, 'pitch', dumps)
@@ -112,6 +137,97 @@ export function heldJoin(members, units, stated, free, prepared = null) {
         t.pieces.every((p, j) => p.kind === flat[j].t && (p.kind === 'text' ? p.s === flat[j].s : (p.src ?? null) === (flat[j].src ?? null)))
       out.set(m.ord, { today: ts[k], same })
     })
+  }
+  return out
+}
+
+/**
+ * How several of today's units say one unit of v2's (lane fig-text: F0's line, a figure paragraph; fig-smallcaps' word joined
+ * across a size change, 2608.06701v1 p1's "…th" | "e…"), by the exact text: today's texts in their order (`texts`, each a
+ * unit's text as the prepare dump states it), white space aside, are v2's unit's text (`content`, its pieces: its text, and each
+ * element its source's text), each of today's a run of v2's text pieces or one element whole, a line-end hyphen of today's
+ * standing where v2's text has none (a word TeX broke) left out. Returns the plan v2's row is said by, each piece of v2's in its
+ * order: { t: 'today', i } (today's i-th unit's row: its text), { t: 'el', id } (v2's element, a kept one where today's said
+ * it, else carried as v2 carries it); null where the texts are not one
+ */
+export function joinedPlan(texts, content) {
+  // (v2's unit as a stream of characters, white space aside, each with what it is: a text piece's, or an element's)
+  const stream = []
+  const walk = (ps) => {
+    for (const p of ps) {
+      if (p.t === 'text') for (const c of p.s.replace(/\s+/gu, '')) stream.push({ c, el: null })
+      else if (p.t === 'span') walk(p.content)
+      else if (p.t === 'el') for (const c of (p.src ?? '').replace(/\s+/gu, '')) stream.push({ c, el: p.id })
+    }
+  }
+  walk(content)
+  // (each of today's in its order where it stands in the stream: its start, and what it is there)
+  const pieces = []
+  const used = new Set()
+  let at = 0
+  for (let i = 0; i < texts.length; i++) {
+    const t = texts[i].replace(/\s+/gu, '')
+    if (!t) return null
+    const from = at
+    for (let j = 0; j < t.length; j++) {
+      if (stream[at]?.c === t[j]) at++
+      // (a line-end hyphen of today's, v2's text going on without it: TeX's break of a word)
+      else if (j === t.length - 1 && /^[-‐­]$/u.test(t[j]) && i + 1 < texts.length) continue
+      else return null
+    }
+    const els = new Set(stream.slice(from, at).map((x) => x.el))
+    if (els.size !== 1) return null
+    const [el] = els
+    if (el !== null) {
+      // (one element whole: today's unit its text alone)
+      if (stream.filter((x) => x.el === el).length !== at - from || used.has(el)) return null
+      used.add(el)
+      pieces.push({ from, piece: { t: 'el', id: el } })
+    } else pieces.push({ from, piece: { t: 'today', i } })
+  }
+  if (at !== stream.length) return null
+  // (v2's elements today held in no unit of its own, each where it stands)
+  stream.forEach((x, k) => {
+    if (x.el !== null && !used.has(x.el)) {
+      used.add(x.el)
+      pieces.push({ from: k, piece: { t: 'el', id: x.el } })
+    }
+  })
+  return pieces.sort((a, b) => a.from - b.from).map((x) => x.piece)
+}
+
+/**
+ * The members `members` (no id or glyphs joined them) each of which stage 1a states holds two or more of today's units whole
+ * (`stated`: candidateStated's, the statement naming its unit as the holder), the member alone of its id, and whose text is
+ * theirs in order (joinedPlan): member ord -> { todays: today's ords in order, plan }. `units` the bundle's units by id,
+ * `prepared` today's prepare dump's units by ord (their texts)
+ */
+export function joinedJoin(members, units, stated, free, prepared = null) {
+  if (!prepared) return new Map()
+  const open = new Set(free)
+  const by = new Map()
+  for (const s of stated)
+    if (JOINS.has(s.stated.cause) && s.stated.holder && open.has(s.stated.ord)) {
+      if (!by.has(s.stated.holder)) by.set(s.stated.holder, [])
+      by.get(s.stated.holder).push(s.stated.ord)
+    }
+  // (the holder a statement names is the candidate's unit, its own id: a member's unit's id, or the id today's unit of it would
+  // have (todayUnitOf: its kept runs read as text), each held by one member alone)
+  const count = new Map()
+  for (const m of members)
+    for (const id of new Set([ownIdOf(m, units), typeof m.text === 'string' ? m.text : null]))
+      if (id) count.set(id, (count.get(id) ?? 0) + 1)
+  const out = new Map()
+  for (const m of members) {
+    const own = ownIdOf(m, units)
+    const id = typeof m.text === 'string' && by.has(m.text) ? m.text : own
+    const ts = id && count.get(id) === 1 ? (by.get(id) ?? []).sort((a, b) => a - b) : []
+    if (ts.length < 2) continue
+    const src = typeof m.text === 'string' ? units.get(m.text) : undefined
+    const texts = ts.map((t) => prepared.get(t)?.text)
+    if (!src || texts.some((t) => typeof t !== 'string')) continue
+    const plan = joinedPlan(texts, src.content)
+    if (plan) out.set(m.ord, { todays: ts, plan })
   }
   return out
 }

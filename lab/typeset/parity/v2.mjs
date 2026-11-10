@@ -29,7 +29,7 @@ const { layered, servedMetrics } = await import('../served-metrics.mjs')
 const { typesetLay } = await import('../../../packages/reader/src/compose/typeset.ts')
 const { hyphenationOf } = await import('../../../packages/typeset/src/index.ts')
 const { hyphFileOf } = await import('./inputs.mjs')
-const { candidateKept, candidateKeptToday, candidateStated, heldJoin, todayJoin } = await import('./join.mjs')
+const { candidateKept, candidateKeptElements, candidateKeptToday, candidateStated, heldJoin, joinedJoin, todayJoin } = await import('./join.mjs')
 const { readAsChain } = await import('./rows.mjs')
 const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
 const { partsIn, UNJOINED, unjoinedOf, withUnjoined } = await import('./unjoin.mjs')
@@ -107,6 +107,14 @@ for (const pair of pairs) {
     heldRows.laid = out.size
     return out
   }
+  // (the members holding several of today's units whole, their text today's in order (join.mjs joinedJoin, lane fig-text): each
+  // given a row said by today's rows in that order, its elements its own; the verdict counts today's units each holds)
+  const joinedAll = new Map()
+  const joined = (members, today) => {
+    const j = joinedJoin(members, l1Paper(paperOf(pair))?.units ?? new Map(), stated, today, prepared0)
+    for (const [o, x] of j) joinedAll.set(o, x.todays)
+    return j
+  }
   // (the rows as the chain reads a reply, rows.mjs: the door's stored replies, each group they did not bring back placed where
   // the translation states it)
   const units = l1Paper(paperOf(pair))?.units ?? new Map()
@@ -151,7 +159,7 @@ for (const pair of pairs) {
     const page0 = globalThis.__ckPage
     globalThis.__ckPage = undefined
     try {
-      gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held })
+      gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held, joined })
     } catch (e) {
       if (e !== CUT) throw e
     } finally {
@@ -194,7 +202,7 @@ for (const pair of pairs) {
   globalThis.__parityFill = targets(offTargets)
   globalThis.__parityNoOptionI = true
   try {
-    gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held })
+    gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held, joined })
   } finally {
     globalThis.__parityNoOptionI = undefined
   }
@@ -207,14 +215,14 @@ for (const pair of pairs) {
   }
   globalThis.__parityMarkSpaces = true
   try {
-    gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held })
+    gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held, joined })
   } finally {
     globalThis.__parityMarkSpaces = undefined
   }
   globalThis.__ckPage = keep
   globalThis.__parityFill = targets(fills)
   heldRows.joined = 0
-  const got = gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held })
+  const got = gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held, joined })
   for (const [pg, f] of Object.entries(offTargets)) (before[pg] ??= { lines: {} }).target = f.target
   // (lane url-join: the pair laid once more with the line ends of each word TeX set as written read as spaces again, as a run
   // without the rule read them (unjoin.mjs, AXT_PARITY_UNJOINED), its pages not kept nor its passes' targets: each line count on
@@ -231,7 +239,7 @@ for (const pair of pairs) {
     }
     globalThis.__parityFill = undefined
     try {
-      withUnjoined(words, () => gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held }))
+      withUnjoined(words, () => gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held, joined }))
     } finally {
       globalThis.__ckPage = kept.page
       globalThis.__parityFill = kept.fill
@@ -298,6 +306,9 @@ for (const pair of pairs) {
   const address = candidateKept(paperOf(pair), 'address')
   const identifier = candidateKept(paperOf(pair), 'identifier')
   const keptToday = candidateKeptToday(paperOf(pair))
+  // (the ink of the elements its prepare keeps as the original's, by member: F0's run of one pitch, a stretch a decoration holds;
+  // the verdict reads the original's style without it, the coordinator's ruling 1 on F0)
+  const keptEls = candidateKeptElements(paperOf(pair))
   // (I10, the sentence cover over the pair's Pages as the reader lays them, the entry's: each piece drawn of a member lit in
   // exactly one of its sentences on each pane, the panes' sentences the same; packages/typeset/tests/replay/cover.ts)
   const c = got.entry?.cover
@@ -322,7 +333,9 @@ for (const pair of pairs) {
     ...(address.length ? { address } : {}),
     ...(identifier.length ? { identifier } : {}),
     ...(keptToday.length ? { keptToday } : {}),
+    ...(keptEls.length ? { keptEls } : {}),
     ...(noRow.size ? { noRow: [...noRow].sort((a, b) => a - b) } : {}),
+    ...(joinedAll.size ? { joined: Object.fromEntries(joinedAll) } : {}),
     // (lane parity-fresh: the members laid with a fresh row and why, those the translator refused or the cache lacks (left as
     // before: no row, or their stored row), and those sent that today never had a unit of)
     ...(Object.keys(freshAt.cause).length ? { fresh: Object.keys(freshAt.cause).map(Number).sort((a, b) => a - b), freshCause: freshAt.cause } : {}),

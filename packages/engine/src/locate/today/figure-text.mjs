@@ -213,6 +213,9 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
   const known = (x, run) => run.sizes.some(z => Math.abs(x.size - z) <= 0.01 * z)
   const sized = (x, run, s) => known(x, run) || (!x.blank && !!run.last && s - run.last.s1 < SPACE_GAP * Math.max(x.size, run.last.size))
   const units = [], glyphMaps = [], turnedMaps = []
+  // (CHANGED: the ink each crowded unit's band meets, by its k, and its stroke under its text: locate's relation reading judges
+  // it, figure-lines.ts, the owner's reformulation of 2026-11-10)
+  const met = new Map()
   // (the runs that spell a word the caps have counted, units or not)
   let taken = 0
   const stats = { units: 0, crowded: 0, letters: 0, runs: 0, past: 0, clipped: 0, outsized: 0, sets: 0, grouped: 0, aligned: 0 }
@@ -309,7 +312,9 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       // there, as TeX set it (a heading a class sets in a boxed panel); else its middle; the unit's set below may take its
       // column's edge over either)
       u.anchor = room.told ? room.anchor : r.led ? 'start' : (columnAnchorOf((lines ??= columnLinesOf(pg, own?.glyphs?.[pi])), u) ?? room.anchor)
-      if (room.crowded) { u.why = 'crowded'; stats.crowded++ }
+      // (CHANGED: a crowded unit's met ink and its tones, an uncrowded one's tones under part of it, for the relation reading)
+      if (room.crowded) { u.why = 'crowded'; stats.crowded++; met.set(k, { items: [...room.met, ...room.grounds], under: room.under }) }
+      else if (room.grounds.length) met.set(k, { items: room.grounds, under: room.under })
       u.under = room.crowded ? null : room.under
       units.push(u)
       mine.push({ u, r, free: room })
@@ -324,7 +329,7 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
     // (the page read: nothing here reads its shapes again, which a reader may let go, `done`: locate's ink step, lane mem-back)
     done?.(pi)
   })
-  return { units, glyphs: glyphMaps, turned: turnedMaps, stats }
+  return { units, glyphs: glyphMaps, turned: turnedMaps, stats, met }
 }
 
 /** the page's text lines a unit's column is read from: the level glyphs a unit owns (own.mjs's groups), by baseline, a line
@@ -668,6 +673,14 @@ function roomOf(pg, f, u, own) {
   // (the nearest ink right before its box along its baseline and right after it, within the reach: their gaps to the box; and
   // within `far` the free line either side, its room (roomsOf): the ink a translation there would meet, as far as it shows)
   let crowded = false, before = Infinity, after = Infinity, freeBefore = Infinity, freeAfter = Infinity
+  // (CHANGED: each item of ink the band meets, a glyph's index `g` or a box's `b` with its box and its lines where pageInk kept
+  // them; the scan goes on past the first, so that a unit the relation reading frees has its room and anchor read whole)
+  const met = [], metBox = new Set(), grounds = []
+  let atBox = null
+  const meet = () => {
+    crowded = true
+    if (atBox !== null && !metBox.has(atBox.b)) { metBox.add(atBox.b); met.push(atBox) }
+  }
   // (the top, across its frame, of the strokes under its text: the depth a translation drawn there must stay above, told by the
   // layer, which knows the translation's faces and size)
   let underTop = -Infinity
@@ -722,13 +735,13 @@ function roomOf(pg, f, u, own) {
   /** an extent along the baseline, of ink across the band: inside the box, or right before or after it (the crowding and the
    *  anchor are read within the reach alone, as they were before the room: the same units are drawn) */
   const along1 = (a0, a1) => {
-    if (a1 > band[0] && a0 < band[2]) crowded = true
+    if (a1 > band[0] && a0 < band[2]) meet()
     else if (a1 <= band[0] && a1 >= -reach) before = Math.min(before, -a1)
     else if (a0 >= band[2] && a0 <= u.length + reach) after = Math.min(after, a0 - u.length)
   }
   /** a stroke's part under the text: its top across the frame */
   const under1 = top => { underTop = Math.max(underTop, top) }
-  for (let g = 0; g < G.length && !crowded; g++) {
+  for (let g = 0; g < G.length; g++) {
     if (mineG.has(g)) continue
     const x = G[g], box = [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top]
     if (x.blank || x.unseen || !/\S/u.test(x.u ?? '') || apartFar(...box)) continue
@@ -737,10 +750,10 @@ function roomOf(pg, f, u, own) {
     // (painted before a cover that hides it, only the parts of it that show)
     const next = A?.[g] ?? Infinity
     for (const [a0, a1] of next <= lastCover ? seen(next, e[0], e[2]) : [[e[0], e[2]]]) {
-      if (a1 > band[0] && a0 < band[2]) { if (!apart(...box)) crowded = true } else free1(a0, a1)
+      if (a1 > band[0] && a0 < band[2]) { if (!apart(...box)) { crowded = true; if (!met.some(m => m.g === g)) met.push({ g }) } } else free1(a0, a1)
     }
   }
-  for (let b = 0; b + 3 < B.length && !crowded; b += 4) {
+  for (let b = 0; b + 3 < B.length; b += 4) {
     // (a box as far as it shows: the bounds of its transparency groups cut it, pageInk's `cut`)
     const box = C?.get(b / 4) ?? [B[b], B[b + 1], B[b + 2], B[b + 3]]
     if (apartFar(...box) || mineB.has(b / 4) || U?.has(b / 4)) continue
@@ -750,6 +763,12 @@ function roomOf(pg, f, u, own) {
     // its box shows them: a line its clip cuts off is no ink there)
     const near = !apart(...box) && !(e[2] <= -reach || e[0] >= u.length + reach)
     const shape = S?.get(b / 4), after = b / 4 >= over
+    atBox = { b: b / 4, box: [B[b], B[b + 1], B[b + 2], B[b + 3]], shape: shape ?? null, kind: pg.paths?.[b / 4] }
+    // (CHANGED: a tone painted before the text, a fill of no stroke and no pattern an edge of whose box stands inside the text's
+    // extent, across its band: a tone under part of it, a highlight under a stretch of its words, which crowds nothing (shapeRoom);
+    // recorded for the relation reading (figure-lines.ts), which carries one holding a stretch of its words whole with them)
+    if (shape?.fill && !shape.stroke && !shape.pattern && !after && e[1] < band[3] && e[3] > band[1] && e[2] > 0 && e[0] < u.length && (e[0] > 0 || e[2] < u.length))
+      grounds.push({ ...atBox, ground: true })
     // (what of it shows: a cover painted after it hides it where it holds the band)
     const next = b / 4 + 1, al = shownBy(next, near ? along1 : null), fr = shownBy(next, free1)
     const un = next <= lastCover ? (top, a0, a1) => { if (seen(next, Math.max(a0, band[0]), Math.min(a1, band[2])).length) under1(top) } : under1
@@ -769,7 +788,7 @@ function roomOf(pg, f, u, own) {
   const anchor = Math.max(before, 0) * ANCHOR_RATIO < Math.max(after, 0) ? 'start' : Math.max(after, 0) * ANCHOR_RATIO < Math.max(before, 0) ? 'end' : 'centre'
   // (`told`: whether the ink within the reach told the anchor, on either side; none on both is its middle by default; `under`, the
   // depth under its baseline of the nearest stroke under its text, PDF units, or null where none is)
-  return { crowded, anchor, told: Number.isFinite(before) || Number.isFinite(after), before: freeBefore, after: freeAfter, under: underTop > -Infinity ? -underTop : null }
+  return { crowded, met, grounds: grounds.filter(x => !metBox.has(x.b)), anchor, told: Number.isFinite(before) || Number.isFinite(after), before: freeBefore, after: freeAfter, under: underTop > -Infinity ? -underTop : null }
 }
 
 /** a path's lines against a unit's band (in its frame): each segment's part across the band (a stroke's widened by its half

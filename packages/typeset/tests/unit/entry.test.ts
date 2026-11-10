@@ -10,6 +10,7 @@ import { rowPieces, srcOfEl } from '../../src/lay/read.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { Item, Metrics, Rows } from '../../src/types.ts'
 import { statedBreaks } from '../../src/unit/breaks.ts'
+import { coverDone, coverOf, newCover } from '../replay/cover.ts'
 
 const metrics = (ready: Metrics['ready'] = () => true): Metrics => ({
   ready,
@@ -1377,6 +1378,36 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
       expect('src' in comma && comma.s).toBe(',')
       expect(laid[k]!.lines[0]![3][0]!.x).toBeCloseTo(comma.x + 8, 5)
     }
+    // (each comma drawn once: a name whose comma goes at the end of the name before has its label's group off on its page, as
+    // where it drew the crop itself, so the original's comma is not drawn where it stands as well (Codex on #634, round 8 B5);
+    // the first name has no label)
+    expect(laid.map((m) => m.off & 4)).toEqual([0, 4, 4, 4])
+    // (the whole of each name's `off`, as the review's reproduction states it: its text off, and its label's group off where
+    // its comma went to the name before; the last name's was 1 before)
+    expect(laid.map((m) => m.off)).toEqual([1, 5, 5, 5])
+    // (one owner on both panes, the label's: each comma, drawn at the end of the name before, is lit with its owner's first
+    // sentence on the right as on A, in no box of the name before's; the cover reads it as its owner's piece and finds it in one
+    // sentence on each pane; and its crop is cut by its owner's label ink, not the name before's (lay/clips.ts). The
+    // coordinator's ruling of 2026-11-11 on round 8 B6's merge of sent-cover's follow-up)
+    const page4 = layPage({ ...part(a), flows: [[a, b, c, d]] }, rows4, rules, inked)
+    const cv = newCover()
+    coverOf(cv, page4, { ...part(a), flows: [[a, b, c, d]] }, inked)
+    coverDone(cv)
+    expect([...cv.faults]).toEqual([])
+    const owners = [b, c, d]
+    for (let k = 1; k < 4; k++) {
+      const at = page4.members[k - 1]!.lines[0]!
+      const crop = at[3].at(-1)! as Extract<Item, { src: unknown }>
+      const mid = [crop.x + ((crop.src[3] - crop.src[1]) * (crop.k || 1)) / 2, at[0]] as const
+      const holds = (boxes: number[][][]) =>
+        boxes.flat().some((q) => q[0]! <= mid[0] && mid[0] <= q[2]! && q[1]! <= mid[1] && mid[1] <= q[3]!)
+      expect([holds(page4.members[k]!.lit.right), holds(page4.members[k - 1]!.lit.right)]).toEqual([true, false])
+      const own = owners[k - 1]!.label!.ink
+      expect(crop.ink).toEqual([
+        [own[1], own[2], own[3], own[4]],
+        [own[1], own[2], own[3], own[4]],
+      ])
+    }
     // (the run centred on the paragraph's middle, 300)
     expect((spans[0]![0] + spans[3]![1]) / 2).toBeCloseTo(300, 5)
     // (translations a line does not hold: the last name goes on to the paragraph's next line whole, its comma closing the line
@@ -1425,6 +1456,7 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(tight.map((m) => m.state)).toEqual(['laid', 'laid', 'laid', 'laid'])
     const commas = tight.flatMap((m) => m.lines.flatMap((l) => l[3].filter((it) => 'src' in it && it.s === ',')))
     expect(commas.length).toBe(3)
+    expect(tight.map((m) => m.off & 4)).toEqual([0, 4, 4, 4])
     for (const m of tight)
       for (const l of m.lines) {
         const first = l[3].reduce((p, q) => (q.x < p.x ? q : p))
@@ -1575,6 +1607,40 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const [merged] = layPage(part({ ...name, fixed: 4 }), rowsOf([], true), rules, metrics()).members
     expect(merged).toMatchObject({ state: 'laid', off: 1 })
     expect(merged!.lines[0]![3][0]).toMatchObject({ s: '9.', piece: 'label' })
+  })
+  it('lights a name’s label with the name on both panes, the label TeX set before it its first sentence’s', () => {
+    // (2610.20967v1 p5, "9. REFERENCES": the number the name's label since refs-head; its lit on A the name's line alone, the
+    // label in no sentence: I10's "left none label". A label is its unit's first sentence's, on both panes)
+    const name = member({
+      ord: 0,
+      kind: 'name',
+      text: { name: 'ref' },
+      plain: 'REFERENCES',
+      align: 'c',
+      style: { role: 'serif', size: 10, bold: 1, upper: 1, design: 'NimbusRomNo9L-Medi' },
+      label: {
+        kind: 'head',
+        ink: [1, 138, 698, 150, 707, 700],
+        style: { role: 'serif', size: 10, bold: 1 },
+        num: ['9', [1, 138, 698, 144, 707, 700]],
+        punct: ['.', [1, 144, 698, 150, 707, 700]],
+        line: 0,
+      },
+      lines: [[1, 0, 156, 216, 700, 707, 698, 54, 300, 0, 10]],
+      room: { below: 12, next: 20, side: [54, 300] },
+    })
+    const holds = (bs: readonly number[][], [x0, y0, x1, y1]: number[]) =>
+      bs.some((b) => b[0]! <= x0! && b[1]! <= y0! && b[2]! >= x1! && b[3]! >= y1!)
+    for (const m of [name, { ...name, fixed: 4 }]) {
+      const page = layPage(part(m), rowsOf([], true), rules, metrics())
+      const [laid] = page.members
+      expect(laid!.lit.left).toHaveLength(1)
+      expect(holds(laid!.lit.left[0]!, [138, 698, 150, 707])).toBe(true)
+      const c = newCover()
+      coverOf(c, page, part(m), metrics())
+      coverDone(c)
+      expect([...c.faults]).toEqual([])
+    }
   })
   it('sets a name in capitals where its style is the text’s capitals (Style.upper), none where they are faked small capitals', () => {
     // (cloud Codex on #623: the bundle states a name's case in Style.upper, the entry read Word.caps alone: "ABSTRACT" laid as
