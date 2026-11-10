@@ -186,7 +186,6 @@ export function figureLinesOf(
       // original's, its tones with it)
       const tones = (keep: boolean) => (it: TodayMet) => !(keep && 'ground' in it && it.ground)
       const items = l.ks.flatMap((k) => fig.met.get(k)?.items ?? []).filter(tones(ft?.why === 'code'))
-      const crowded = l.ks.some((k) => fig.units[k]!.why === 'crowded')
       const under = l.ks.reduce<number | null>((u, k) => {
         const x = fig.met.get(k)?.under ?? fig.units[k]!.under ?? null
         return x === null ? u : u === null ? x : Math.min(u, x)
