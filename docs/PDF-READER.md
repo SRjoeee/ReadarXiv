@@ -2281,11 +2281,18 @@ within noise.
   meet across and paints the room between them, from the upper row's left to the lower one's right; v2 hands it every row of a
   sentence on a page, so it bridged whatever stood between them, a room no box holds and the hit test never found. A shape's
   rows are one outline now only where no other block stands between two of them (a box lit on the pane, another member's or a
-  display, whose middle is between them and that meets them across, the two a row's height apart at least: today's runs, cut
-  there, `highlight.mjs interrupted`); a gap with nothing in it stays the unit's, as today's. Judged by the parity's highlight
-  measure as the reader paints it (`lab/typeset/parity/paint.mjs`, the reader's own cut): over round 6's drawing, the shapes'
-  fills of another block (a display; on arXiv's page another unit's line) were worse than today's on 181 units of 103 pages
-  (2602.23285v2-ja p15 t127: 2 against 0), and are on none.
+  display, whose middle is between them and that stands in their column, the two a row's height apart at least: today's runs,
+  cut there, `highlight.mjs interrupted`); a gap with nothing in it stays the unit's, as today's. The column is the one the
+  member spans on the page (`columnOf`: the extent across of its every box there, its sentences' and its displays'), never the
+  two rows' own width: a sentence whose translation ends a line short before its display and goes on short after it had the
+  two short rows, both left of the display's ink, joined by a strip down the column's edge over the display's row, while the
+  rows on arXiv's page, longer, met the display and were cut (the owner's report of 2026-11-10 on staging, 2610.17024v1 p9,
+  display (43)). Judged by the parity's highlight measure as the reader paints it (`lab/typeset/parity/paint.mjs`, the
+  reader's own cut): over round 6's drawing, the shapes' fills of another block (a display; on arXiv's page another unit's
+  line) were worse than today's on 181 units of 103 pages (2602.23285v2-ja p15 t127: 2 against 0), and are on none. The
+  measure counts a bridge too (a room the outline paints between two rows room for a line apart, across a block's row in the
+  column, which holds none of its ink): over round 8 part A's drawing (5c83a7faf), with the rows' own width the cut was worse
+  than today's on 34 units of 31 pages, default and every toggle on alike (2610.17024v1 p9 t129 among them), and is on none.
 - **What it does not settle**: a display the part states no ink of (LOST) leaves a gap with nothing in it, filled as today's;
   a display set on a text line beside a word (TeX's display after a word on its baseline) is on that line's row, lit with it;
   a sentence whose only text is a display lights nothing but the display; and a sentence that runs on past a display with no

@@ -7,7 +7,7 @@
 import { bare, judgeJoined, joinedOf, measureFidelity, mutualBest as bestPairs, originalOf, SIZE_STEP } from './fidelity.mjs'
 import { measureBlind } from './blind.mjs'
 import { unitClass } from '../../../packages/engine/src/locate/today/content-classes.mjs'
-import { paintedEntries } from './paint.mjs'
+import { litColumn, paintedEntries } from './paint.mjs'
 import { sentencesPaired } from './sentences.mjs'
 
 const r2 = (v) => (v === null || v === undefined ? v : Math.round(v * 100) / 100)
@@ -777,11 +777,14 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // the pointer lights it (a sentence, or a unit lit whole), over another block: a display (the part's El of kind 'display' on
   // the page, its own unit's too: the original's ink, kept, the same on both panes and in both drawings), and on arXiv's page
   // another unit's line too (the same for both sides; as drawn, the neighbours each drawing sets differ, and a pad over a
-  // small one, a figure's tick label, is no fill): counted where the shape holds the block's middle, v2 worse where it fills
-  // more blocks than today. The owner's reports of 2026-11-09: one shape over display (11) and the lines either side of it on both panes
-  // (2602.23285v2 p15), a paragraph over both of its displays (2609.33403v1), where today lights a bar a row and no display;
-  // coverage judged it nearer. Today's shapes are its rectangles (its runs, cut at a display, tile their rows: lighting.mjs
-  // paints one outline a run); v2's paint.mjs paintedEntries, the reader's own rule)
+  // small one, a figure's tick label, is no fill): counted where the shape holds the block's middle, or bridges its row (a room
+  // the outline paints between two of its rows stands across the block's middle, the block in the column the member spans:
+  // the owner's report of 2026-11-10, 2610.17024v1 p9, a strip down the column's edge from a short row over display (43)'s row
+  // to the short row after it, which holds none of the display's ink), v2 worse where it fills more blocks than today. The
+  // owner's reports of 2026-11-09: one shape over display (11) and the lines either side of it on both panes (2602.23285v2
+  // p15), a paragraph over both of its displays (2609.33403v1), where today lights a bar a row and no display; coverage judged
+  // it nearer. Today's shapes are its rectangles (its runs, cut at a display, tile their rows: lighting.mjs paints one outline
+  // a run); v2's paint.mjs paintedEntries, the reader's own rule)
   const displaysHere = [...facts.values()].flatMap((m) =>
     (m.els ?? []).filter((e) => e[1] === 'display').flatMap((e) => e[2].map((b) => ({ ord: m.ord, box: [b[0], b[1], b[2], b[3]] }))),
   )
@@ -794,8 +797,16 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       y = (y0 + y1) / 2
     return rects.some((r) => r[0] <= x && x <= r[2] && r[1] <= y && y <= r[3])
   }
-  /** how many of `blocks` one of a side's shapes holds the middle of */
-  const filled = (shapes, blocks) => blocks.filter((b) => shapes.some((rects) => holdsMiddle(rects, b.box))).length
+  /** whether a room a shape paints between two of its rows that stand room for a line apart (paint.mjs: [x0, y0, x1, y1, 1])
+   *  stands across a block's row, the block in the member's column */
+  const bridges = (rects, [x0, y0, x1, y1], [c0, c1]) => {
+    const y = (y0 + y1) / 2
+    return Math.min(x1, c1) > Math.max(x0, c0) && rects.some((r) => r[4] === 1 && r[1] < y && y < r[3])
+  }
+  /** how many of `blocks` one of a side's shapes holds the middle of or bridges (a member's `column` on the pane; today's
+   *  shapes paint no room) */
+  const filled = (shapes, blocks, column = null) =>
+    blocks.filter((b) => shapes.some((rects) => holdsMiddle(rects, b.box) || (column && bridges(rects, b.box, column)))).length
   hl.fillsToday = 0
   hl.fillsV2 = 0
   for (const key of new Set([...todays, ...V.keys()])) {
@@ -808,14 +819,14 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const tShapes = (side) => (!tb ? [] : tb.by ? (tb[`${side}By`] ?? []) : [tb[side] ?? []])
     const dt = filled(tShapes('left'), onA) + filled(tShapes('right'), displaysHere)
     const dv =
-      filled(paintedEntries(lit, 'left', others.left, PAINT_PAD, halfLead.left), onA) +
-      filled(paintedEntries(lit, 'right', others.right, PAINT_PAD, halfLead.right), displaysHere)
+      filled(paintedEntries(lit, 'left', others.left, PAINT_PAD, halfLead.left), onA, litColumn(lit, 'left')) +
+      filled(paintedEntries(lit, 'right', others.right, PAINT_PAD, halfLead.right), displaysHere, litColumn(lit, 'right'))
     hl.fillsToday += dt
     hl.fillsV2 += dv
-    if (dt) fault('today', 'highlight', `${name}: its highlight fills ${dt} other blocks (a display, another unit's line)`)
-    if (dv) fault('v2', 'highlight', `${name}: its highlight fills ${dv} other blocks (a display, another unit's line)`)
+    if (dt) fault('today', 'highlight', `${name}: its highlight fills or bridges ${dt} other blocks (a display, another unit's line)`)
+    if (dv) fault('v2', 'highlight', `${name}: its highlight fills or bridges ${dv} other blocks (a display, another unit's line)`)
     if (dv !== dt)
-      diff('highlight', name, "other blocks its highlight's shapes fill (a display, another unit's line: its middle held), both panes", 0, { value: dt, off: dt }, { value: dv, off: dv }, dv > dt, dv < dt ? 'v2' : 'today')
+      diff('highlight', name, "other blocks its highlight's shapes fill or bridge (a display, another unit's line: its middle held, or its row crossed in the column), both panes", 0, { value: dt, off: dt }, { value: dv, off: dv }, dv > dt, dv < dt ? 'v2' : 'today')
   }
   // (the highlight's granularity, apart from its coverage: a unit today pairs sentence by sentence paired so by v2, judged on
   // its boxes per sentence, sentences.mjs)
