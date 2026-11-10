@@ -56,6 +56,11 @@ export const CAUSE = Object.freeze({
   // arXiv's glyph text there and today's a subsequence of it: characters our old compile did not set, 2610.21084v1's initials,
   // which cas-common lost where our marks stood in the names it took apart: accepted)
   arxivText: "another reading, now arXiv's text",
+  // ((g) over (j)'s parts, the coordinator's ruling of 2026-11-10, round 8 B3: v2's stand-in of today's unit and the units after
+  // it, consecutive, on today's lines, made on arXiv's page and laid, their texts joined arXiv's glyph text on those lines
+  // exactly, today's an in-order subsequence of it (2610.21084v1 t587, rebuild/author-lines-3 parting its note at TeX's
+  // paragraph ends): accepted)
+  arxivParts: "another reading, now arXiv's text, over consecutive units",
   // ((h), the same ruling: v2's unit today's text on today's lines and whole lines more that carry no text word, each held by its
   // elements, which the join rule adds (ink-units.mjs: an address or a URL TeX broke onto a line of its own, 2610.22214v1's ACM
   // DOI): accepted)
@@ -77,6 +82,9 @@ const LEDGER_OF_NAMES = new Set(['inknotes', 'inkorphan'])
 /** the reason a dump gives a unit the layout guard left unmarked (its marks taken out: locate finds none, run.mjs `unlocated:
  *  <cause>`), which (i) reads */
 const UNMARKED = 'unlocated: marks'
+/** the reason a dump gives a unit of the candidate's set in a paragraph that sets a unit again (rebuild/author-lines-3's re-set
+ *  paragraph: acmart's reference format one ink unit), which (i) reads too (the coordinator's ruling of 2026-11-10, round 8 B3) */
+const RESET = 'unlocated: set in a paragraph that sets a unit again'
 /** (k): the cause a candidate's own unit states where the prepare keeps it for its text set wholly in a face of one pitch, by
  *  the mark it writes (the dump's `keptBy: 'pitch'`, which the parity's ruling reads too), else null: a unit kept otherwise
  *  (a code environment's kept block, a crowded figure text) states none */
@@ -349,6 +357,37 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     const t = glyphTextOf(u)
     return t && at.map(glyphTextOf).join('').includes(t) ? at : null
   }
+  // ((j) from a stand-in that reads otherwise, the coordinator's ruling of 2026-11-10, round 8 B3: the units meeting today's
+  // lines, the stand-in the first of them, two or more, consecutive in the dump's order, null otherwise)
+  const partsFrom = (u, c) => {
+    if (!u.lines?.length) return null
+    const at = units.filter((n) => !n.replaced && u.lines.some((l) => boxesOf(n).some((k) => across(k, l)))).sort((a, b) => a.ord - b.ord)
+    if (at.length < 2 || at[0] !== c) return null
+    const lo = at[0].ord,
+      hi = at.at(-1).ord
+    return units.some((n) => !n.replaced && n.ord > lo && n.ord < hi && !at.includes(n)) ? null : at
+  }
+  // ((g) over the parts: arXiv's glyphs of ink on today's lines, line by line, each by its advance across the line and its
+  // baseline within it, in x order; their characters, white space no glyph)
+  const arxivOn = (u) => {
+    let s = ''
+    for (const l of u.lines) {
+      const page = glyphs(l.page)
+      if (!page) return null
+      s += page
+        .filter((g) => !g.blank && g.x0 >= l.x0 - ON && g.x1 <= l.x1 + ON && g.y >= Math.min(l.top, l.bottom) - ON && g.y <= Math.max(l.top, l.bottom) + ON)
+        .sort((a, b) => a.x0 - b.x0)
+        .map((g) => g.u)
+        .join('')
+    }
+    return s.replace(/\s+/g, '')
+  }
+  const arxivParts = (u, at) => {
+    if (!at.every((n) => /^ink/.test(n.kind) && ['drawn', 'laid'].includes(n.state) && !n.why)) return false
+    const h = at.map(glyphTextOf).join(''),
+      t = glyphTextOf(u)
+    return !!t && t !== h && arxivOn(u) === h && subsequence(t, h)
+  }
   // (a unit's text as written, an address its element reads as itself: what (F) reads)
   const writtenOf = (x) => (x.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : p.kind === 'ph' ? (readingOf(p.src ?? '') ?? '\ufffc') : '')).join('')
   const keyOf = (why) => Object.keys(CAUSE).find((k) => CAUSE[k] === why) ?? 'content'
@@ -372,9 +411,11 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     if ((have.get(u.id) ?? 0) > 0) {
       have.set(u.id, have.get(u.id) - 1)
       const own = ownOf(u)
-      const n = u.state === 'drawn' && own?.state === 'unlaid' && own.why === UNMARKED ? heldBy(u) : null
+      // (unmarked: the holder's glyph text today's; set again in a re-set paragraph: the paragraph's holding today's whole)
+      const n = u.state === 'drawn' && own?.state === 'unlaid' && (own.why === UNMARKED || own.why === RESET) ? heldBy(u) : null
       const t = n ? glyphTextOf(u) : ''
-      if (n && n !== own && n.state === 'drawn' && t && glyphTextOf(n) === t)
+      const whole = !!n && !!t && (own.why === UNMARKED ? glyphTextOf(n) === t : glyphTextOf(n).includes(t))
+      if (n && n !== own && n.state === 'drawn' && whole)
         out.push({ u, own, why: `made on arXiv's page as ${n.id.slice(0, 12)}: ${CAUSE.held}`, cause: keyOf(CAUSE.held), holder: n.id })
       continue
     }
@@ -419,6 +460,9 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     // (a stand-in of its kind that reads otherwise, holding today's whole text: held whole (f))
     const how = c ? howOf(u, c) : null
     const standIn = how === CAUSE.another && standInHolds(u, c)
+    // (one that holds no whole: (j) from it onward, its text the parts' in order; else (g) over the parts)
+    const parts = how === CAUSE.another && !standIn ? partsFrom(u, c) : null
+    const fromIt = parts ? (parts.map(glyphTextOf).join('').includes(glyphTextOf(u)) && !!glyphTextOf(u) ? CAUSE.split : arxivParts(u, parts) ? CAUSE.arxivParts : null) : null
     // (a names unit's stand-in of its ledger class, its characters today's in another order: its kind moved, the candidate's
     // unit holding today's whole, named as the holder so that the parity joins the two (heldJoin), as while (f) stated them: the
     // coordinator's ruling of 2026-11-10, round 8 B2b, 2610.30034v1 t309-t311)
@@ -426,7 +470,9 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     const said = c
       ? standIn
         ? { by: c, cause: CAUSE.held, holder: c }
-        : { by: c, cause: how, ...(moved ? { holder: c } : {}) }
+        : fromIt
+          ? { by: c, cause: fromIt }
+          : { by: c, cause: how, ...(moved ? { holder: c } : {}) }
       : kept
         ? null
         : names

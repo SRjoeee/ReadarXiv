@@ -516,6 +516,59 @@ describe("(j) a unit split: its text one contiguous part of consecutive v2 units
   })
 })
 
+describe("a stand-in that reads otherwise and the units after it: (j) from the stand-in, (g) over its parts (the coordinator's rulings of 2026-11-10, round 8 B3)", () => {
+  // (rebuild/author-lines-3 parts an ink unit where TeX ended a paragraph: today's one unit over two of TeX's paragraphs, v2's
+  // two, the first of today's kind at its place, so a stand-in)
+  const A = box(72, 300, 600, 608, 598),
+    B = box(72, 260, 588, 596, 586)
+  const today = (s: string, kind = 'inkorphan', ord = 172) => [on(unit(id('a'), ord, kind, [text(s)]), A, B)]
+  const part = (c: string, ord: number, kind: string, s: string, l: Line) => ({ ...on(unit(id(c), ord, kind, [text(s)]), l), state: 'drawn' })
+  it("(A) states one whose text is the stand-in's and the next units' in order, on its lines, split (2608.27728v1 t172, 2610.30875v1 t303)", () => {
+    const parts = [part('b', 172, 'inkorphan', 'CCS Concepts', A), part('c', 173, 'inkorphan', 'Computing methodologies', B)]
+    expect(said(statedOf(today('CCS Concepts Computing methodologies'), parts))).toEqual([[172, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.split}`]])
+    // (a character of today's no part's, or a unit between them: another reading, as before)
+    expect(said(statedOf(today('CCS Concepts: Computing methodologies'), parts))).toEqual([[172, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`]])
+    const apart = [parts[0]!, { ...parts[1]!, ord: 175 }, part('d', 174, 'para', 'x', box(72, 300, 300, 308, 298))]
+    expect(said(statedOf(today('CCS Concepts Computing methodologies'), apart))).toEqual([[172, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`]])
+  })
+  // (cas-common's page-foot note of the e-mails, today's names unit, v2's parted into notes at TeX's paragraph ends: our old
+  // compile set "(. Chung)", arXiv "(M. Chung)")
+  const word = (s: string, x: number, y: number) => [...s].map((ch, i) => glyph(ch, x + 5 * i, x + 5 * i + 5, y, 10))
+  const arxiv = (a: string, b: string) => (page: number) => (page === 1 ? [...word(a, 72, 600), ...word(b, 72, 588)] : null)
+  const notes = [part('b', 588, 'inknotes', '(M. Chung);', A), part('c', 589, 'inknotes', '(J.M. Solomon)', B)]
+  it("(B) states one whose parts' text is arXiv's glyph text on its lines, today's a subsequence of it, another reading over its parts, now arXiv's (2610.21084v1 t587)", () => {
+    const t = today('(. Chung); (.M. Solomon)', 'inknames', 587)
+    expect(said(statedOf(t, notes, { glyphs: arxiv('(M.Chung);', '(J.M.Solomon)') }))).toEqual([
+      [587, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.arxivParts}`],
+    ])
+    // (arXiv's glyphs on its lines not the parts' text, exactly; today's no subsequence; no glyphs read: another reading)
+    expect(said(statedOf(t, notes, { glyphs: arxiv('(M.Chung);x', '(J.M.Solomon)') }))).toEqual([[587, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`]])
+    expect(said(statedOf(today('(. Cheung); (.M. Solomon)', 'inknames', 587), notes, { glyphs: arxiv('(M.Chung);', '(J.M.Solomon)') }))).toEqual([
+      [587, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`],
+    ])
+    expect(said(statedOf(t, notes))).toEqual([[587, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`]])
+  })
+})
+
+describe("(i) for a unit set in a paragraph that sets a unit again (the coordinator's ruling of 2026-11-10, round 8 B3)", () => {
+  // (2610.22065v1: acmart's reference format, one paragraph v2 re-sets as one ink unit; v2's own author units there unlocated
+  // with that reason, today's author units its names, each held whole by the paragraph)
+  const L = box(53, 300, 190, 198, 188)
+  const today = [{ ...on(unit(id('a'), 1, 'author', [text('Ada Lee')]), L), state: 'drawn' }]
+  const own = (why: string) => ({ id: id('a'), ord: 1, kind: 'author', text: '', pieces: today[0]!.pieces, state: 'unlaid', why })
+  const paragraph = (s: string) => ({ ...on(unit(id('b'), 154, 'inkorphan', [text(s)]), L), state: 'drawn' })
+  const RESET = 'unlocated: set in a paragraph that sets a unit again'
+  it('states it held whole by the one drawn unit whose text holds its name, on its own unit', () => {
+    const stated = statedOf(today, [own(RESET), paragraph('Ada Lee, Bo Chen. 2027. On tests.')])
+    expect(said(stated)).toEqual([[1, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+    expect(stated[0]).toMatchObject({ cause: 'held', holder: id('b'), own: { ord: 1, why: RESET } })
+  })
+  it('states none for another reason, or where the unit does not hold the name whole', () => {
+    expect(said(statedOf(today, [own('unlocated: no ink'), paragraph('Ada Lee, Bo Chen. 2027. On tests.')]))).toEqual([])
+    expect(said(statedOf(today, [own(RESET), paragraph('Ada Li, Bo Chen. 2027. On tests.')]))).toEqual([])
+  })
+})
+
 describe("its head's number in its phrase: a running head's alone", () => {
   it("states a running head whose number v2 reads in its phrase so, and no figure text joined with a number", () => {
     const head = (kind: string) => [{ ...unit(id('a'), 3, kind, [text('of 21')]), text: 'of 21' }]
