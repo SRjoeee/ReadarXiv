@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node script, deliberately dependency-free and untyped
 import { decide, mergesIn, repositoryOf, simpleCommands, withinBudget } from '../../scripts/merge-gate.mjs'
 
-type Merge = { ref: string | null; repo: string | null; dirs: string[]; unreadable: boolean; plain: boolean; files?: string[] }
+type Merge = { ref: string | null; repo: string | null; dirs: string[]; unreadable: boolean; plain: boolean; files?: string[]; hidden?: boolean }
 type Command = { words: string[]; dynamic: boolean[]; scripts: string[]; bodies: string[]; before: string; after: string }
 type Answer = { decision: 'ask' | 'allow'; reason: string } | null
 
@@ -152,6 +152,47 @@ describe('mergesIn', () => {
     // (a string with a word the shell decides in it is still a string the line shows)
     expect(merges('bash -c "cd $DIR && pnpm test"')).toEqual([])
     expect(merges(`bash -lc 'echo hi'`)).toEqual([])
+    // the same inside a longer string (#635, Codex): a command in it named by a variable is read at the value the
+    // line leaves no doubt about, and one whose name is still only an expansion is a command the line does not show
+    expect(merges(`CMD='gh pr merge 411 --merge'; bash -c "$CMD; echo done"`).map(m => [m.ref, m.unreadable])).toEqual([['411', false]])
+    expect(merges(`CMD='gh pr merge 411'; bash -c "git fetch -q && $CMD --merge"`).map(m => [m.ref, m.unreadable])).toEqual([['411', false]])
+    for (const text of ['bash -c "$CMD; echo done"', 'bash -c "echo start; $(cat cmd) --flag"', `sh -c 'echo start; "$(cat cmd)"'`, `CMD='echo hi'; printf -v CMD '%s' "$1"; bash -c "$CMD; echo done"`]) {
+      expect(merges(text), text).toMatchObject([{ unreadable: true, plain: false }])
+      expect(answer(text)?.reason, text).toContain('a command the line does not show')
+    }
+    // (a pull request named by a variable inside the string is not read at the line's value: whether the line's shell
+    // or the one it starts expands it is the quotes' to say, and the second knows no variable the first did not export)
+    expect(merge(`N=603; sh -c 'gh pr merge $N --merge'`).unreadable).toBe(true)
+    // (arithmetic, a `case` and a test are no commands; a word the shell decides beside a name in sight is an argument)
+    for (const text of ['bash -c "echo $(( $(nproc) / 2 )) && echo $HOME"', `bash -c 'if (( $n > 5 )); then echo big; fi'`, `bash -c 'case $X in a) echo a;; esac'`, `sh -c 'for f in $FILES; do cat $f; done'`]) {
+      expect(merges(text), text).toEqual([])
+    }
+    // and on the line itself: a command the line keeps in a variable and runs is read at every text an assignment on
+    // the line gives that variable, whichever the shell takes
+    expect(merges(`CMD='gh pr merge 411 --merge'; $CMD`).map(m => [m.ref, m.unreadable])).toEqual([['411', false]])
+    expect(merges(`CMD='gh pr merge'; \${CMD} 411 --merge`).map(m => [m.ref, m.unreadable])).toEqual([['411', false]])
+    expect(merges(`if [ -n "$1" ]; then CMD='gh pr merge 411'; else CMD='gh pr merge 603'; fi; $CMD`).map(m => m.ref)).toEqual(['411', '603'])
+    expect(merges(`for c in 'gh pr merge 411' 'gh pr merge 603'; do $c --merge; done`).map(m => m.ref)).toEqual(['411', '603'])
+    expect(merges(`export CMD='gh pr merge 411'; out=$($CMD 2>&1)`).map(m => m.ref)).toEqual(['411'])
+    expect(merges(`CMD='gh pr merge 411 --merge'; GH_REPO=o/r $CMD`)).toMatchObject([{ ref: '411', unreadable: true }])
+    // (behind a wrapper, as a merge written out behind one is)
+    expect(merges(`CMD='gh pr merge 411 --merge'; env $CMD`)).toMatchObject([{ ref: '411', unreadable: true }])
+    expect(merges(`CMD='gh pr merge 411 -R SRjoeee/ReadarXiv'; command $CMD`).map(m => [m.ref, m.repo, m.unreadable])).toEqual([['411', 'SRjoeee/ReadarXiv', false]])
+    expect(answer(`CMD='gh pr merge 411 --merge'; $CMD`)?.reason).toContain('#411 merges into main')
+    expect(answer(`CMD='gh pr merge 603 --merge'; $CMD`)).toBeNull()
+    for (const text of [
+      `CMD='pnpm test'; $CMD --run`,
+      `B='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'; $B --version`,
+      `P=$(command -v python3); $P - <<'PY'\nprint('gh pr merge 411')\nPY`,
+      // (text in a variable that is no command's name is text: a message, a body)
+      `NOTE='then gh pr merge 411 --merge'; gh pr comment 411 --body "$NOTE"`,
+      `MSG='gh pr merge 411 is next'; git commit -m "note: $MSG"`,
+      // (a command the line gets from elsewhere and runs by name is a program it runs, as a script is)
+      '$EDITOR notes.md',
+      '"$(command -v node)" script.mjs',
+    ]) {
+      expect(merges(text), text).toEqual([])
+    }
     // the other ways a line hands a shell its commands on the standard input: a here-string (#635, Codex), a pipe
     for (const text of [
       `bash <<< 'gh pr merge 411 --merge'`,
@@ -666,7 +707,12 @@ describe('against the shell itself', () => {
     '(cd a && gh pr merge 6); gh pr merge 7',
     'cd a && (cd b; gh pr merge 8) && gh pr merge 9',
     'CMD="gh pr merge 5 -R o/r"; bash -c "$CMD"',
+    'CMD="gh pr merge 4 -R o/r"; bash -c "$CMD; echo done"',
     'CMD="gh pr merge 6 -R o/r"; eval "$CMD"',
+    'CMD="gh pr merge 7 -R o/r"; $CMD',
+    'CMD="gh pr merge 8 -R o/r"; if true; then CMD="gh pr merge 9 -R o/r"; fi; $CMD',
+    'CMD="gh pr merge 3 -R o/r"; env $CMD',
+    'for c in "gh pr merge 5 -R o/r" "gh pr merge 6 -R o/r"; do $c; done',
     'x=a; case $x in a) cd a;; b) cd b;; esac; gh pr merge 5',
     'if true; then\n  cd a\nfi\ngh pr merge 6',
     'for i in 1 2; do case $i in 1) continue;; esac; break; done; (cd a; true); gh pr merge 7',

@@ -17,16 +17,25 @@
 //
 // What it reads is the command line: a merge wherever it stands in it — after a `cd`, behind a wrapper, inside a
 // substitution, in what a shell is handed to run (a `-c` string, a here-document, a here-string, a pipe) — and the
-// request body a GraphQL call names as a file. A pull request or a repository named by a variable is read at the variable's value only where the line
-// leaves no doubt about it: inside the body of its own `for n in 5 6`, when that body sets `n` nowhere, or when the
-// whole line sets the name once, to a literal (`R=owner/name`); and only on a line whose every command is known not
-// to assign (a closed list of names: the shells have more ways to assign than a list of those could hold). A name
-// set twice, in a branch or a loop's later pass, or on a line that runs anything else, is nobody's to read. The
-// same doubt covers what leans on a directory or a branch: after a `cd` the shell may have skipped, behind a
-// wrapper, in a loop that moves. It does not follow the line into a program it runs (a script that merges is that
-// script's to answer for), it sees shell commands only, not a merge another tool makes, and it does not undo a line
-// written to hide a merge (a command name built by brace or glob expansion, an encoded payload): it guards against
-// forgetting the rule, not against meaning to break it.
+// request body a GraphQL call names as a file. A pull request or a repository named by a variable is read at the
+// variable's value only where the line leaves no doubt about it: inside the body of its own `for n in 5 6`, when
+// that body sets `n` nowhere, or when the whole line sets the name once, to a literal (`R=owner/name`); and only on
+// a line whose every command is known not to assign (a closed list of names: the shells have more ways to assign
+// than a list of those could hold). A name set twice, in a branch or a loop's later pass, or on a line that runs
+// anything else, is nobody's to read. The same doubt covers what leans on a directory or a branch: after a `cd` the
+// shell may have skipped, behind a wrapper, in a loop that moves.
+//
+// A command the line keeps in a variable and runs (`CMD='gh pr merge 5'; $CMD`) is read at every text an assignment
+// on the line gives that variable; in a string a shell is handed (`bash -c "$CMD; …"`), at the value the line leaves
+// no doubt about, and a command there whose name is still nothing but an expansion is one the line does not show:
+// it may be a merge, and the gate asks.
+//
+// Where the reading ends: it does not follow the line into a program it runs (a script that merges is that script's
+// to answer for), nor to a command the line fetches from somewhere else and runs by name (a variable of the
+// environment, one filled by `read` or `printf -v`); it sees shell commands only, not a merge another tool makes;
+// and it does not undo a line written to hide a merge (a command name built by brace or glob expansion, a command
+// put together piece by piece, an encoded payload). It guards against forgetting the rule, not against meaning to
+// break it.
 //
 // The first version read less: it took `gh pr merge` only as three words in a row, resolved every merge in the
 // directory the command started in, and kept a substitution inside quotes as text. The review of #635 walked past
@@ -509,8 +518,12 @@ const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh'])
 const ASSIGNMENT = /^[A-Za-z_]\w*=/
 /** A word that is one variable, whole: `$n`, `${n}` */
 const VARIABLE = /^\$(?:(\w+)|\{(\w+)\})$/
-/** A command string that is nothing but what the shell expands: variables, substitutions */
-const HIDDEN = /^\s*(?:(?:\$\w+|\$\{[^}]*\}|\$\((?:[^()]|\([^()]*\))*\)|`[^`]*`)\s*)+$/
+/** A word that is nothing but what the shell expands: variables, substitutions, the positional parameters */
+const EXPANDED = /^(?:\$\w+|\$\{[^}]*\}|\$\((?:[^()]|\([^()]*\))*\)|`[^`]*`|\$[@*])+$/
+/** A text that begins as a call of `gh` */
+const STARTS_GH = /^\s*(?:\S*\/)?gh(?:\s|$)/
+/** A word as shell text again: one the shell expands inside double quotes, any other inside single ones */
+const quoted = (word, expands) => (expands ? JSON.stringify(word) : `'${word.replaceAll("'", "'\\''")}'`)
 /** An assignment that changes which repository `gh` works on: its own variables (`GH_REPO`, `GH_HOST`), and git's
  *  (`GIT_DIR`), whose remotes it reads */
 const REPOINTS = /^(?:GH|GIT)_\w*=/
@@ -578,6 +591,8 @@ const INERT = new Set([
 ])
 /** A word that sets a variable, wherever it stands: `n=5`, `n+=5`, `n[1]=5` */
 const SETS = /^([A-Za-z_]\w*)(?:\[[^\]]*\])?\+?=/
+/** A word that gives a variable a text whole: `n=5` */
+const GIVES = /^([A-Za-z_]\w*)=([\s\S]*)$/
 
 /** Whether the command whose name is the word at `at` leaves every variable as it was: one of INERT; `printf`
  *  without its `-v`; `export` of nothing but assignments, whose values are then in sight; `set` of options alone
@@ -604,13 +619,15 @@ function literalsOf(words, dynamic, at) {
  *  the variable its `for` runs (null for a `while`), the literal values it runs it over (null when the shell
  *  decides them) and the names its body sets; `opaque`: something on the line may set a variable without a word
  *  that says so — a command not known to be inert, arithmetic, an expansion or a redirection that assigns;
- *  `loopMoves`: a loop's body changes the directory.
+ *  `loopMoves`: a loop's body changes the directory; `given`: name by name, every text an assignment word or a
+ *  loop's literal list gives it, in any order and on any path — what a variable may hold when it is run as a command.
  *
  *  A variable is taken at its value only where no order of execution can make the value another: inside the body
  *  of its own `for`, when that body sets it nowhere; anywhere else, when the whole line sets it once; and never on
  *  an opaque line. */
 function lineOf(commands, text) {
   const settings = new Map()
+  const given = new Map()
   const stack = []
   const loopsOf = []
   let header = null
@@ -618,6 +635,7 @@ function lineOf(commands, text) {
     settings.set(name, (settings.get(name) ?? 0) + 1)
     for (const loop of stack) loop.sets.add(name)
   }
+  const give = (name, texts) => given.set(name, [...(given.get(name) ?? []), ...texts])
   // (arithmetic, `$[…]`; any `${…=…}`: bash's `${n:=5}`, zsh's `${n::=5}`; `{n}>file`, which sets `n` to a descriptor)
   let opaque = /\(\(|\$\[|\$\{[^}]*=|\{[A-Za-z_]\w*\}[<>]/.test(text)
   let loopMoves = false
@@ -632,6 +650,7 @@ function lineOf(commands, text) {
       else if (words[start] === 'for' && words[start + 1] !== undefined) {
         set(words[start + 1])
         header = { name: words[start + 1], values: literalsOf(words, dynamic, start) }
+        give(header.name, header.values ?? [])
         heads = true
       } else if (words[start] === 'case') heads = true
       else if (words[start] === 'function') opaque = true
@@ -640,6 +659,8 @@ function lineOf(commands, text) {
     for (const word of words) {
       const sets = SETS.exec(word)
       if (sets) set(sets[1])
+      const gives = GIVES.exec(word)
+      if (gives) give(gives[1], [gives[2]])
     }
     // what follows `for` or `case` on their own line is the loop's list or the subject, not a command
     let at = start
@@ -649,7 +670,7 @@ function lineOf(commands, text) {
     const name = words[at].slice(words[at].lastIndexOf('/') + 1)
     if (stack.length > 0 && (name === 'cd' || MOVES.has(name) || RUNS_BUILTINS.has(name))) loopMoves = true
   }
-  return { settings, loopsOf, opaque, loopMoves }
+  return { settings, given, loopsOf, opaque, loopMoves }
 }
 
 /** What the variables hold after `command`, as far as its words say: the literals of `for n in 5 6` and of a plain
@@ -710,7 +731,7 @@ function move(context, { words, dynamic, before, after }, start) {
  *  `plain`: the merge is the whole command line, written
  *  `gh … pr merge …` with nothing for the shell to expand; `files`, on a GraphQL request alone: the files its body is
  *  read from, which say whether it merges. */
-export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKnown: true, conditionalDir: false, conditionalVars: false, loops: 0, blocks: 0, vars: {} }, depth = 0) {
+export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKnown: true, conditionalDir: false, conditionalVars: false, loops: 0, blocks: 0, handed: false, outer: null, vars: {} }, depth = 0) {
   const { commands, compound, redirected } = simpleCommands(text)
   const line = lineOf(commands, text)
   const context = { ...inherited }
@@ -762,11 +783,13 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
     }
     let start = 0
     while (start < words.length && (RESERVED.has(words[start]) || ASSIGNMENT.test(words[start]))) start++
+    let called = false
     for (let i = start; i < words.length; i++) {
       // (a word the shell decides may be `gh` too: `$GH pr merge 5` is a merge nobody can read)
       if (words[i] !== 'gh' && !words[i].endsWith('/gh') && !dynamic[i]) continue
       const call = ghCall(words, dynamic, i)
       if (call === null) continue
+      called = true
       // behind a wrapper (`env`, `xargs`, `command`), what the directory, the branch and the environment are when `gh`
       // runs is the wrapper's to know; and an assignment that repoints `gh` counts wherever it stands before it
       const wrapped = i > start
@@ -821,7 +844,9 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
     if (depth < 4) {
       // a script runs where its command runs: inside whatever chain led here, so the directory it inherits is not in
       // doubt; the line's variables it does not take, their one setting being the line's to count, not its own
-      const within = { ...context, conditionalDir: false, conditionalVars: false, dirKnown: context.dirKnown && !line.loopMoves, loops: context.loops + loops.length, vars: {} }
+      // (`outer`: a variable the script does not set itself is the line's, where the line leaves no doubt about it)
+      const outer = name => valuesOf(name) ?? context.outer?.(name) ?? null
+      const within = { ...context, conditionalDir: false, conditionalVars: false, dirKnown: context.dirKnown && !line.loopMoves, loops: context.loops + loops.length, vars: {}, handed: false, outer }
       // the string a shell is handed runs where that shell runs, and behind a wrapper that is the wrapper's to know,
       // as it is for a `gh` behind one
       const handed = shellStrings(command, start)
@@ -831,19 +856,35 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
       // that feed it are what the line shows of that (`echo '…' | bash`, `cat <<EOF | sh`)
       const piped = []
       for (let k = index; handed.reads && k > 0 && /^\|&?$/.test(commands[k].before); k--) piped.push(...commands[k - 1].words.slice(1), ...commands[k - 1].bodies)
-      // a string a shell is handed that is one expansion whole (`bash -c "$CMD"`, `eval "$(…)"`) is read at the
-      // variable's values where the line leaves no doubt about them, and is otherwise a command the line does not
-      // show: it may be a merge
-      const shown = []
-      for (const script of handed.scripts) {
-        const variable = VARIABLE.exec(script.trim())
-        const values = variable ? valuesOf(variable[1] ?? variable[2]) : null
-        if (values !== null) shown.push(...values)
-        else if (HIDDEN.test(script)) merges.push({ ref: null, repo: null, dirs: context.dirs, unreadable: true, plain: false, hidden: true })
-        else shown.push(script)
-      }
       for (const script of scripts) for (const merge of mergesIn(script, within, depth + 1)) merges.push({ ...merge, plain: false })
-      for (const script of [...shown, ...piped]) for (const merge of mergesIn(script, there, depth + 1)) merges.push({ ...merge, plain: false })
+      for (const script of piped) for (const merge of mergesIn(script, there, depth + 1)) merges.push({ ...merge, plain: false })
+      for (const script of handed.scripts) for (const merge of mergesIn(script, { ...there, handed: true }, depth + 1)) merges.push({ ...merge, plain: false })
+      // a command the line keeps in a variable (`CMD='gh pr merge 5'; $CMD`, `bash -c "$CMD; …"`): a word that is one
+      // variable whole stands for every text an assignment on this line gives the variable, or, in a script, for the
+      // value the line around it leaves no doubt about, and the command is read again with that text in the word's
+      // place — where the word is the command's name, and behind a wrapper (`env $CMD`) where the text begins as a
+      // call of `gh`. What the texts are is not in doubt here as it is for a pull request's number: every one of them
+      // is read, and a merge in any of them is a merge.
+      const first = words.findIndex(word => !RESERVED.has(word))
+      const heads = words.slice(0, start).some(word => word === 'for' || word === 'case')
+      let shown = false
+      for (let k = start; !called && !heads && k < words.length; k++) {
+        const variable = dynamic[k] ? VARIABLE.exec(words[k]) : null
+        if (variable === null) continue
+        const name = variable[1] ?? variable[2]
+        for (const text of line.given.get(name) ?? context.outer?.(name) ?? []) {
+          // (the string a shell is handed is read as that shell's script, above)
+          if (k > start && (handed.scripts.length > 0 || !STARTS_GH.test(text))) continue
+          if (k === start) shown = true
+          const again = [...words.slice(first, k).map((word, j) => quoted(word, dynamic[first + j])), text, ...words.slice(k + 1).map((word, j) => quoted(word, dynamic[k + 1 + j]))].join(' ')
+          for (const merge of mergesIn(again, { ...within, handed: context.handed }, depth + 1)) merges.push({ ...merge, plain: false })
+        }
+      }
+      // in a string a shell is handed, a command whose name is still nothing but an expansion (`bash -c "$CMD"`,
+      // `eval "$(…)"`, `sh -c "…; $CMD --flag"`) is a command the line does not show: it may be a merge. On the line
+      // itself such a name is a program the line runs, as a path would be. (`(( $n > 5 ))` is no command.)
+      const unnamed = start < words.length && dynamic[start] && EXPANDED.test(words[start]) && !/\(\($/.test(command.before)
+      if (context.handed && unnamed && !called && !heads && !shown) merges.push({ ref: null, repo: null, dirs: context.dirs, unreadable: true, plain: false, hidden: true })
     }
     learn(context, command)
     move(context, command, start)
