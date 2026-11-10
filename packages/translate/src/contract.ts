@@ -51,6 +51,10 @@ export type Piece =
        *  number and wrote the character for "page" before it) and puts it back after the translation, its white space before
        *  it, on every wire and the runs floor */
       after?: string | undefined
+      /** the full name the paper gives the type of the item a reference refers to (the PDF's source reader, read in its
+       *  marked compile: "Figure", "Equation", "section"), where TeX states one. A word tied to the reference that
+       *  abbreviates it ("Fig.") is sent to every translator as this name (names.ts namedOf); the unit itself keeps the word */
+      name?: string | undefined
     }
   | {
       t: 'span'

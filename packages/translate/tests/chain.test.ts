@@ -1,9 +1,17 @@
 // The chain's rules, each a test through the interface with fakes (design-a §5, design-b §5.3). Each describe names the
 // row of interfaces/translate/DECISION.md's table, or the contract's rule, it holds.
 import { describe, expect, it } from 'vitest'
-import { ACCEPT_DIGEST } from '../src/accept.ts'
+import { ACCEPT_DIGEST, projectionOf } from '../src/accept.ts'
 import { ATTEMPTS, BREAKER, chainOf, identityOf, keyOf } from '../src/chain.ts'
-import { Fault, type Note, type Piece, type Result, type Translator, type UnitIn } from '../src/contract.ts'
+import {
+  Fault,
+  type Note,
+  type OutPiece,
+  type Piece,
+  type Result,
+  type Translator,
+  type UnitIn,
+} from '../src/contract.ts'
 import { sha256Hex } from '../src/sha256.ts'
 import { microsoft } from '../src/adapters/microsoft.ts'
 import { echo, fakeTranslator, mangler, scriptedFetch } from '../src/testing/fakes.ts'
@@ -1093,5 +1101,25 @@ describe('the contract: a host withdrawing its calls one after another starts no
     expect((await pb)[0]).toMatchObject({ id: 'm', ok: true, by: 'hang:x' })
     expect((await pa)[0]).toMatchObject({ ok: false, why: { kind: 'aborted' } })
     expect(t1.calls.length).toBe(2)
+  })
+})
+
+describe('the chain: a word tied to a reference that abbreviates its item’s name goes to every translator as the name', () => {
+  const tie: Piece = { t: 'el', id: '1', kind: 'space' }
+  const fig: Piece = { t: 'el', id: '2', kind: 'ref', name: 'Figure' }
+  const u = unit('f', [t('As shown in Fig.'), tie, fig, t(', it holds. Then it ends.')], true)
+  it('sends the full name on each translator’s wire, the store key its wire’s, and gives the sentences back in the unit’s projection', async () => {
+    const sentences = (out: OutPiece[]) => {
+      const s = projectionOf(out)
+      return { src: [s.indexOf('Then')], tr: [s.indexOf('Then')] }
+    }
+    const a = echo('a:0', { sentences })
+    const rs = await all(chainOf({ clock: fakeClock() }).translate([u], 'ja', { translators: [a] }))
+    expect(a.calls.flat().join('')).toContain('As shown in Figure')
+    expect(a.calls.flat().join('')).not.toContain('Fig.')
+    const own = 'As shown in Fig.\uFFFC\uFFFC, it holds. Then it ends.'
+    expect(rs[0]).toMatchObject({ id: 'f', ok: true, sentences: { src: [own.indexOf('Then')] } })
+    // (the unit given is the unit kept: its text is the original's)
+    expect(JSON.stringify(u.content)).toContain('As shown in Fig.')
   })
 })

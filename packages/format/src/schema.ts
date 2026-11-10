@@ -44,6 +44,7 @@ export type Piece =
       stop?: string | undefined
       silent?: 1 | undefined
       after?: string | undefined
+      name?: string | undefined
     }
   | {
       t: 'span'
@@ -89,6 +90,12 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
       // \newblock's glue before it), and the white space that stands for that gap: no translator is given it, and it comes back
       // after the translation, this white space before it
       after: z.string().optional(),
+      // a reference's: the full name the paper gives the type of the item it refers to, as its marked compile states it (the
+      // label's type, its anchor's, else cleveref's; the first of cleveref's, hyperref's and LaTeX's names for that type that
+      // is plain words and no abbreviation: "Figure", "Equation", hyperref's "section"). Not
+      // in the unit's id: it is read from `src` and the paper's TeX. A translator is sent it for a word tied to the reference
+      // that abbreviates it ("Fig."), packages/translate names.ts; the unit and its original keep the word
+      name: z.string().optional(),
     }),
     z.object({
       t: z.literal('span'),
