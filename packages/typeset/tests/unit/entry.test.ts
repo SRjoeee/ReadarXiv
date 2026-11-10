@@ -1381,6 +1381,9 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     // where it drew the crop itself, so the original's comma is not drawn where it stands as well (Codex on #634, round 8 B5);
     // the first name has no label)
     expect(laid.map((m) => m.off & 4)).toEqual([0, 4, 4, 4])
+    // (the whole of each name's `off`, as the review's reproduction states it: its text off, and its label's group off where
+    // its comma went to the name before; the last name's was 1 before)
+    expect(laid.map((m) => m.off)).toEqual([1, 5, 5, 5])
     // (the run centred on the paragraph's middle, 300)
     expect((spans[0]![0] + spans[3]![1]) / 2).toBeCloseTo(300, 5)
     // (translations a line does not hold: the last name goes on to the paragraph's next line whole, its comma closing the line
