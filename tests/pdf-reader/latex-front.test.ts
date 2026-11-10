@@ -618,6 +618,43 @@ describe('a letter command is the letter itself in its word: TeX\'s skipped spac
   })
 })
 
+describe('a character TeX writes escaped is a character of the text, its source beside it (\\%, \\&, \\#, \\$, \\{, \\}, \\textasciitilde, \\textbar, \\textless, \\textgreater, \\textbackslash)', () => {
+  // (a placeholder, it went out as a marker and came back where Microsoft split the term, "R&D" as "D … R&"; as text the
+  // translator reads the term, and a reply sets "96%" glued as the paper does: Microsoft's Chinese and Japanese, 2026-11-11)
+  const doc = (body: string, defs = '') => project(`\\documentclass{article}${defs}\\begin{document}\n${body}\n\\end{document}`)
+  const source = (p: ReturnType<typeof project>) => new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))
+  const kept = (p: ReturnType<typeof project>) => (p.units as Unit[]).flatMap(u => u.pieces.filter(x => x.t === 'ph').map(x => (x as { src?: string }).src))
+
+  it('each is its character in its word, no placeholder, and written back byte for byte: TeX skips the spaces after a control word, not after a control symbol', () => {
+    const forms: [string, string][] = [
+      ['5\\% of', '5% of'], ['R\\&D', 'R&D'], ['Task \\#1', 'Task #1'], ['\\$100', '$100'], ['the set \\{a, b\\}', 'the set {a, b}'],
+      ['\\textasciitilde 5', '~5'], ['a\\textbar b', 'a|b'], ['\\textless 5', '<5'], ['\\textgreater{} 5', '> 5'], ['C:\\textbackslash{}x', 'C:\\x'],
+      ['5\\%{} of', '5% of'], ['{\\%}', '%'],
+    ]
+    for (const [tex, word] of forms) {
+      const p = doc(`We see ${tex} here.`)
+      const u = (p.units as Unit[])[0] as Unit
+      expect(u.pieces.map(x => x.t), tex).toEqual(['text'])
+      expect(textOf(u).trim(), tex).toBe(`We see ${word} here.`)
+      expect(source(p), tex).toContain(`We see ${tex} here.`)
+    }
+  })
+
+  it('a placeholder still where the paper defines the command itself', () => {
+    expect(kept(doc('We see a\\textbar b here.', '\\renewcommand{\\textbar}{\\ensuremath{\\vert}}'))).toEqual(['\\textbar'])
+    expect(kept(doc('We see 5\\% here.', '\\renewcommand{\\%}{ percent}'))).toEqual(['\\%'])
+  })
+
+  it('\\_ stays with the identifier rule, and an identifier that holds one of them is one placeholder as the paper writes it, as before', () => {
+    expect(kept(doc('Set \\$HOME\\_DIR and \\{root\\_question\\} and run\\_id here, at 5\\% of it.'))).toEqual(['\\$HOME\\_DIR', '\\{root\\_question\\}', 'run\\_id'])
+  })
+
+  it('a group around one alone spends its pair\'s id, as a group around a letter does: the pairs after it keep theirs', () => {
+    const ids = (body: string) => ((doc(body).units as Unit[])[0]?.pieces ?? []).filter(x => x.t === 'open').map(x => (x as unknown as { id: number }).id)
+    expect(ids('We see {\\%} and \\emph{others} here.')).toEqual(ids('We see {x} and \\emph{others} here.').slice(1))
+  })
+})
+
 describe('a display outside a unit\'s marks (the reader\'s anchors take it from beyond them: 211 of 747 displays were lit with no unit)', () => {
   const body = (b: string) => project(`\\documentclass{article}\\begin{document}\n${b}\n\\end{document}`).units as (Unit & { lead?: string; trail?: string })[]
   const flags = (b: string) => body(b).map(u => [textOf(u).trim().split(' ')[0], typeof u.lead === 'string', typeof u.trail === 'string'])

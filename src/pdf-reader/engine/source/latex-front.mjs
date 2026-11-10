@@ -309,8 +309,7 @@ const LETTER_COMMANDS = new Map(['o', 'O', 'ss', 'ae', 'AE', 'oe', 'OE', 'aa', '
  * A placeholder, it went out as a marker, and the marker a word touches gets a space of ours (mt.mjs serialize): 2010.11929v2's
  * `{\\L}ukasz Kaiser` came back as "Ł ukasz Kaiser"
  */
-function letterCommand(s, i, end, name, to, own) {
-  const letter = LETTER_COMMANDS.get(name)
+function letterCommand(s, i, end, name, to, own, letter = LETTER_COMMANDS.get(name)) {
   if (!letter || own?.has(name) || !s.startsWith(name, i + 1)) return null
   // (from the control word's own end: commandAt's takes a star after it, which none of these has, `Gro\\ss*` a star of the text)
   const word = i + 1 + name.length
@@ -320,11 +319,33 @@ function letterCommand(s, i, end, name, to, own) {
   if (s.startsWith('{}', e)) e += 2
   return e <= to ? { letter, end: e } : null
 }
-/** the letter commands a paper's own files define anew (\\renewcommand{\\o}{\\omega}, \\def\\L{\\mathcal{L}}, a \\let): there the
- *  command is the paper's, and no letter is made of it */
+/** the text symbols TeX sets as one character of the text (TEXT_SYMBOLS): the kernel's control symbols `\\%`, `\\&`, `\\#`, `\\$`, `\\{`,
+ *  `\\}` and textcomp's \\textasciitilde, \\textbar, \\textless, \\textgreater, \\textbackslash. Not `\\_`, which the identifier rule
+ *  reads (keepIdentifiers) */
+const TEXT_CHARACTERS = new Map(['%', '&', '#', '$', '{', '}', 'textasciitilde', 'textbar', 'textless', 'textgreater', 'textbackslash'].map(n => [n, TEXT_SYMBOLS[`\\${n}`]]))
+/**
+ * The character a text symbol at s[i] sets (`end` past its name), as TeX sets it: a control word's skipped spaces and an empty
+ * group ending it with it (`\\textless 5` is "<5"), a control symbol alone (`5\\% of` is "5% of": TeX skips no space after one),
+ * an empty group right after it with it; where the paper does not define the command itself (ownLetters); with where its source
+ * ends, or null. A placeholder, it went out as a marker, and Microsoft split the term there ("R&D" came back as "D", a verb, then "R&"); as
+ * text the translator reads the term, and a percent comes back glued as the paper sets it (2026-11-11, Microsoft's Chinese and
+ * Japanese on 110 units of the 88 papers, each sent both ways: none refused, 131 of 134 percents glued, every "R&D" one word;
+ * over the 88, 1,520 such placeholders in 776 units of 65 papers, and 96 of the textcomp symbols)
+ */
+function textCharacter(s, i, end, name, to, own) {
+  const char = TEXT_CHARACTERS.get(name)
+  if (!char || own?.has(name) || !s.startsWith(name, i + 1)) return null
+  if (!/^[A-Za-z]/.test(name)) {
+    const e = s.startsWith('{}', i + 2) ? i + 4 : i + 2
+    return e <= to ? { letter: char, end: e } : null
+  }
+  return letterCommand(s, i, end, name, to, own, char)
+}
+/** the letter commands and the text characters (textCharacter) a paper's own files define anew (\\renewcommand{\\o}{\\omega},
+ *  \\def\\L{\\mathcal{L}}, \\renewcommand{\\textbar}{…}, a \\let): there the command is the paper's, and no letter is made of it */
 const ownLetters = texts => {
   const out = new Set()
-  for (const m of texts.map(uncommented).join('\n').matchAll(/\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)DocumentCommand|[gex]?def|let)\s*\{?\s*\\([A-Za-z]+)(?![A-Za-z@])/g)) if (LETTER_COMMANDS.has(m[1])) out.add(m[1])
+  for (const m of texts.map(uncommented).join('\n').matchAll(/\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)DocumentCommand|[gex]?def|let)\s*\{?\s*\\([A-Za-z]+(?![A-Za-z@])|[%&#${}])/g)) if (LETTER_COMMANDS.has(m[1]) || TEXT_CHARACTERS.has(m[1])) out.add(m[1])
   return out
 }
 /** the accents a paper's own files define anew (\\def\\v{\\varphi}, \\renewcommand{\\H}{\\mathcal{H}}, a package's
@@ -1351,6 +1372,9 @@ function displayOutside(pieces, displays, macros) {
  * a letter's (joinLetters), cut around an address or a number (keepAddresses, escapedLocals, keepNumbers), transcoded
  */
 const SKIPPED = new WeakMap()
+/** the text pieces a text symbol made (textCharacter): one character, its source beside it, which the identifier and address
+ *  readings read as that character, as they read its placeholder before (keepRead) */
+const CHARACTERS = new WeakSet()
 /** whether a paper makes the space character active anywhere (\\obeyspaces, a \\catcode of the space set to 13): there TeX reads
  *  a line's indent after a comment as active spaces, not as nothing, and the walk keeps every indent (SKIPPED stays empty).
  *  `\\catcode32=13` or `=\\active`, in any of the paper's own files */
@@ -1390,7 +1414,7 @@ class Builder {
   close(id, src, end) { if (this.cur) { this.cur.pieces.push({ t: 'close', id, src }); this.cur.end = end } }
   /** a letter an accent made (accentLetter): text, its UTF-8 bytes read as the source's are, and `src` the accent as
    *  the source writes it — what is set wherever the unit is set untranslated (patch). Joined with its word at flush */
-  letter(letter, src, start, end) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }; this.cur.pieces.push({ t: 'text', s: latin1(utf8Bytes(letter)), src }); this.cur.end = end }
+  letter(letter, src, start, end, character = false) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }; const p = { t: 'text', s: latin1(utf8Bytes(letter)), src }; if (character) CHARACTERS.add(p); this.cur.pieces.push(p); this.cur.end = end }
   flush() {
     const u = this.cur; this.cur = null
     if (!u) return
@@ -1485,7 +1509,8 @@ const GROUPS = new RegExp(ADDRESS_GROUP.source, 'g')
 const CONTROL_WORD = /\\[A-Za-z@]+$/
 /** each range `find` gives of the reading ([start, end), in order, apart) one placeholder, written as the paper writes it, read over a unit's pieces as TeX sets
  *  them: a text piece its characters (the spaces that open it after a control word none: TeX skips them), a space of TeX's
- *  (TEX_SPACE) white space, a text symbol its one character (`\{`, `\}`, `\_`, `\textunderscore`: symbolText), anything else
+ *  (TEX_SPACE) white space, a text symbol its one character (a placeholder's, `\_`, `\textunderscore`: symbolText; a text piece's,
+ *  `\{`, `\}`, `\$`: textCharacter's, its source written in a match), anything else
  *  (a command, a group, an accent's letter, a bare `_`: TeX's subscript, a formula's the walker left in text) no character of a
  *  match. A match starts and ends on a character of its own; what TeX skipped inside it is written with it */
 function keepRead(pieces, find) {
@@ -1497,6 +1522,9 @@ function keepRead(pieces, find) {
     if (p.t === 'text' && p.src === undefined) {
       const skip = k > 0 && pieces[k - 1].t === 'ph' && CONTROL_WORD.test(pieces[k - 1].src ?? '') ? /^[ \t]*(?:\r?\n)?[ \t]*/.exec(p.s)[0].length : 0
       for (let o = skip; o < p.s.length; o++) { flat += p.s[o]; at.push([k, o]) }
+    } else if (CHARACTERS.has(p)) {
+      flat += p.s
+      at.push([k, 0])
     } else {
       flat += p.t === 'ph' ? (TEX_SPACE.test(p.src ?? '') ? ' ' : symbolText(p.src) ?? '\u0000') : '\u0000'
       at.push([k, 0])
@@ -1512,7 +1540,7 @@ function keepRead(pieces, find) {
     for (; k < ka; k++, off = 0) part(k, off, pieces[k].s?.length ?? 0)
     if (pieces[ka].t === 'text') part(ka, off, oa)
     let src = ''
-    for (let j = ka; j <= kb; j++) src += pieces[j].t === 'text' ? pieces[j].s.slice(j === ka ? oa : 0, j === kb ? b : undefined) : pieces[j].src
+    for (let j = ka; j <= kb; j++) src += pieces[j].t === 'text' && !CHARACTERS.has(pieces[j]) ? pieces[j].s.slice(j === ka ? oa : 0, j === kb ? b : undefined) : pieces[j].src
     out.push({ t: 'ph', src })
     if (pieces[kb].t === 'text' && b < pieces[kb].s.length) { k = kb; off = b } else { k = kb + 1; off = 0 }
   }
@@ -2229,6 +2257,9 @@ function walk(s, from, to, b, ctx) {
       // (the group the letter alone, no space inside it: `{ \\L}` and `{\\ss{} }` set a space too, left to the walk)
       const kernelLetter = !letter && accent && k === i + 1 && ctx.letters !== false && (letterCommand(s, k, accent.end, accent.name, e - 1, ctx.ownLetters) || (accent.name === 'ifmmode' ? ifmmodeLetter(s, accent.end, e - 1, ctx) : null))
       if (kernelLetter && kernelLetter.end === e - 1) { endText(); b.pairId += pairsOf(s, i, e, b, ctx); b.letter(kernelLetter.letter, s.slice(i, e), i, e); i = e; continue }
+      // (and around a text symbol alone, {\\%}: its character, textCharacter)
+      const character = !letter && !kernelLetter && accent && k === i + 1 && ctx.letters !== false && textCharacter(s, k, accent.end, accent.name, e - 1, ctx.ownLetters)
+      if (character && character.end === e - 1) { endText(); b.pairId += pairsOf(s, i, e, b, ctx); b.letter(character.letter, s.slice(i, e), i, e, true); i = e; continue }
       endText(); const id = b.open('{', i); walk(s, i + 1, e - 1, b, ctx); b.close(id, '}', e); i = e; continue
     }
     if (c === '&' && b.cellMode) { endText(); b.flush(); i++; continue }
@@ -2591,6 +2622,8 @@ function walk(s, from, to, b, ctx) {
     // a letter command, \\L ukasz, \\L{}ukasz, Bj\\o rn: the letter in its word (letterCommand), TeX's skipped spaces with it
     const kernelLetter = ctx.letters !== false && letterCommand(s, i, end, name, to, ctx.ownLetters)
     if (kernelLetter) { endText(); b.pairId += pairsOf(s, i, kernelLetter.end, b, ctx); b.letter(kernelLetter.letter, s.slice(i, kernelLetter.end), i, kernelLetter.end); i = kernelLetter.end; continue }
+    const character = ctx.letters !== false && textCharacter(s, i, end, name, to, ctx.ownLetters)
+    if (character) { endText(); b.pairId += pairsOf(s, i, character.end, b, ctx); b.letter(character.letter, s.slice(i, character.end), i, character.end, true); i = character.end; continue }
     if (ACCENTS.has(name)) {
       let k = /^[A-Za-z]$/.test(name) ? skipSpaces(s, end) : end
       if (s[k] === '{') k = matchGroup(s, k)

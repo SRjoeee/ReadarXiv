@@ -201,3 +201,22 @@ describe('google: a display that states no stop of its own', () => {
     ])
   })
 })
+
+// (a character TeX writes escaped, `\&`, `\textless`, `\textgreater`, is a character of the text since the source reader sends
+// it as one: on the tags wire it travels as an entity, a bare one fusing with the tags around it (text.ts), and is read back as
+// the character, beside a tag on either side)
+describe('google: a character TeX writes escaped, sent as text', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  it('"&", "<" and ">" travel as entities and come back as the characters, beside a tag on either side', () => {
+    const u = unit('u', [t('R&D <'), el('1'), t('> 5% of A&B'), el('2'), t('&.')])
+    const wire = g.write(u, 'zh-Hans')
+    expect(wire).toBe('R&amp;D &lt;<x id="1"/>&gt; 5% of A&amp;B<x id="2"/>&amp;.')
+    expect(readTagged(u, wire)?.content).toEqual([
+      { t: 'text', s: 'R&D <' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: '> 5% of A&B' },
+      { t: 'el', id: '2' },
+      { t: 'text', s: '&.' },
+    ])
+  })
+})
