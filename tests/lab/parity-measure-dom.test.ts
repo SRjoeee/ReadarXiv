@@ -7,8 +7,9 @@ import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { linesOfSvg } from '../../lab/typeset/parity/measure-dom.mjs'
 
-/** a run: its text, its x, whether it is placed at its own x (a <tspan x>), and a gap between its letters */
-type Run = { s: string; x: number; placed?: boolean; gap?: number }
+/** a run: its text, its x, whether it is placed at its own x (a <tspan x>), a gap between its letters, its face's weight and
+ *  style (the computed style's) */
+type Run = { s: string; x: number; placed?: boolean; gap?: number; weight?: string; italic?: boolean }
 const SIZE = 11.96
 const W = 0.5 * SIZE
 const identity = () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, inverse: identity, multiply: () => identity() })
@@ -20,6 +21,7 @@ function textOf(runs: Run[], y: number) {
     getNumberOfChars: () => r.s.length,
     getAttribute: (a: string) => (a === 'x' && r.placed !== false ? String(r.x) : null),
     hasAttribute: (a: string) => a === 'x' && r.placed !== false,
+    computed: { ...style, ...(r.weight ? { fontWeight: r.weight } : {}), ...(r.italic ? { fontStyle: 'italic' } : {}) },
   }))
   return {
     getAttribute: () => null,
@@ -34,7 +36,7 @@ const svgOf = (runs: Run[]) => {
   return { getScreenCTM: identity, querySelectorAll: () => [g] }
 }
 const style = { fontWeight: '700', fontStyle: 'normal', fontSize: `${SIZE}px`, fillOpacity: '1', visibility: 'visible', fill: '#000' }
-;(globalThis as { getComputedStyle?: unknown }).getComputedStyle = () => style
+;(globalThis as { getComputedStyle?: unknown }).getComputedStyle = (el: { computed?: typeof style }) => el.computed ?? style
 
 describe('a drawn line read back: word spaces and letter gaps', () => {
   const line = (runs: Run[]) => linesOfSvg(svgOf(runs), 'data-axt-ord', [0, 0, 595, 842], 1)[0].lines[0]
@@ -60,5 +62,23 @@ describe('a drawn line read back: word spaces and letter gaps', () => {
     ])
     expect(l.letter).toBeCloseTo(3 / SIZE, 2)
     expect(l.word).toBe(0)
+  })
+})
+
+describe("a drawn line read back: each character's face, for a share that leaves some of them out", () => {
+  const line = (runs: Run[]) => linesOfSvg(svgOf(runs), 'data-axt-ord', [0, 0, 595, 842], 1)[0].lines[0]
+  it("states each character's weight and slant beside its text (`st`: 1 bold, 2 slanted, 3 both, 0 neither, a space 0)", () => {
+    // (a head drawn anew: its label "Satz 1 (" in a bold face, its note in a slanted one, the rest upright and regular)
+    const l = line([
+      { s: 'Satz 1 (', x: 72 },
+      { s: 'Wohl', x: 72 + 8 * W, weight: '400', italic: true },
+      { s: '). Es', x: 72 + 12 * W, weight: '400' },
+    ])
+    expect(l.text).toBe('Satz 1 (Wohl). Es')
+    expect(l.st).toBe('11110101222200000')
+    expect([l.bold, l.italic]).toEqual([6, 4])
+  })
+  it('a line with no bold and no slanted character states none', () => {
+    expect(line([{ s: 'Es gilt', x: 72, weight: '400' }]).st).toBeUndefined()
   })
 })

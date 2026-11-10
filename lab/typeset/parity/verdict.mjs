@@ -342,6 +342,17 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       // (a turned line, a figure's rotated text, is measured by its box alone: no baseline, start or gap to read)
       const ls = all.filter((l) => !l.rot)
       const s = { lines: all.length, size: median(all.map((l) => l.size)), chars: sum(all, 'n'), bold: sum(all, 'bold'), italic: sum(all, 'italic') }
+      // (a label the side draws anew is no character of the text's share: the original's share is read over the unit's lines,
+      // which begin after the label's ink (originalOf), so a relabelled head's bold label is no bold text; a label kept as the
+      // original's ink is a crop's stand-in, never counted)
+      if (o?.first && o.label?.name?.[1]?.[0] === n) {
+        const d = drawnLabelOf(all, o.label)
+        if (d) {
+          s.chars -= d.n
+          s.bold -= d.bold
+          s.italic -= d.italic
+        }
+      }
       if (o?.lines.length && ls.length) {
         const ol = [...o.lines].sort((a, b) => b.y - a.y)
         const dl = [...ls].sort((a, b) => b.y - a.y)
@@ -1314,6 +1325,39 @@ function labelOf(lines, label) {
     if (!new RegExp(`^[^\\s\\p{N}\\p{P}]+[\\s\\p{P}]*${esc}(?![\\p{L}\\p{N}])`, 'u').test(text)) return 'kept'
   } else if (l.x0 >= name[1][3] - NEAR.positionMin) return 'kept'
   return text.startsWith(name[0]) ? 'original' : 'translated'
+}
+
+/**
+ * A label a side drew anew (labelOf: 'original' or 'translated') as the characters it holds at its first line's opening: a word
+ * and the label's number, or the original's name word where it states none, with the white space and punctuation after them
+ * (TeX's "Proposition 1 (", "Fig. 4:"; its ink is the label's, the punctuation with it). How many drawn characters it holds,
+ * and how many of them are bold and slanted (the line's `st`, measure-dom.mjs; none stated: no bold or slanted character).
+ * null where the label is kept or where no text tells where it ends: a label of a word alone drawn in the target
+ */
+function drawnLabelOf(lines, label) {
+  const how = labelOf(lines, label)
+  if (how !== 'original' && how !== 'translated') return null
+  const l = lines.filter((x) => !x.rot && x.n > 0).sort((a, b) => b.y - a.y)[0]
+  const text = l.text.trimStart()
+  const num = (label.num?.[0] ?? '').replace(/^[\p{P}\s]+|[\p{P}\s]+$/gu, '')
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const head = num ? `[^\\s\\p{N}\\p{P}]+[\\s\\p{P}]*${esc(num)}(?![\\p{L}\\p{N}])` : how === 'original' ? esc(label.name[0]) : null
+  const m = head ? new RegExp(`^${head}[\\s\\p{P}]*`, 'u').exec(text) : null
+  if (!m) return null
+  const from = l.text.length - text.length,
+    to = from + m[0].length
+  let n = 0,
+    bold = 0,
+    italic = 0
+  for (let i = from; i < to; i++) {
+    const ch = l.text[i]
+    if (/\s/u.test(ch) || ch === OBJ) continue
+    n++
+    const f = Number(l.st?.[i] ?? 0)
+    if (f & 1) bold++
+    if (f & 2) italic++
+  }
+  return { n, bold, italic }
 }
 
 /** the box a list of boxes {x0, y0, x1, y1} spans, or null */

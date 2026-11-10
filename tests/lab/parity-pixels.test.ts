@@ -3,6 +3,8 @@
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { darkOf, overOf, partsOf, pixelsOf, shownOf } from '../../lab/typeset/parity/pixels.mjs'
+// @ts-expect-error — a plain node module of the lab
+import { boxesOf } from '../../lab/typeset/parity/analyse.mjs'
 
 const W = 12,
   H = 8
@@ -69,5 +71,23 @@ describe('pixels: the drawing read against arXiv\'s page', () => {
     const ink = rect(2, 2, 4, 4)
     expect(shownOf(shot(ink), shot(ink), all, W, H)).toEqual({ ink: 4, shown: 4 })
     expect(shownOf(shot(ink), shot(), all, W, H)).toEqual({ ink: 4, shown: 0 })
+  })
+})
+
+describe("the units' boxes the pixels off arXiv's page are counted outside (analyse.mjs boxesOf)", () => {
+  // (a head's label "Proposition 1 (" at 48.96–113.52 on page 3, its line on A after it; a side that draws the label anew draws
+  // over the label's place, the unit's own: 2610.21312v1 p5, two theorem heads relabelled by v2, 522 device pixels "off arXiv's
+  // page" where the original's label stood)
+  const label = { ink: [3, 48.96, 256.26, 113.52, 265.18, 258.3], kind: 'head', name: ['Proposition', [3, 48.96, 256.26, 98.04, 265.18, 258.3]] }
+  const facts = { 3: { members: [{ ord: 21, kind: 'theorem', label, lines: [[3, 0, 113.52, 300, 258.3, 266.3, 256.3, 48, 300, 0, 10]] }] } }
+  it("holds each unit's label's ink beside its lines on A", () => {
+    expect(boxesOf({ page: 3 }, { facts }, 3)).toEqual([
+      [112.52, 255.3, 301, 267.3],
+      [47.96, 255.26, 114.52, 266.18],
+    ])
+  })
+  it("a label on another page is not this page's", () => {
+    const line4 = [4, 0, 72, 300, 700, 708, 698, 48, 300, 0, 10]
+    expect(boxesOf({ page: 4 }, { facts: { 4: { members: [{ ...facts[3].members[0], lines: [facts[3].members[0].lines[0], line4] }] } } }, 4)).toEqual([[71, 697, 301, 709]])
   })
 })
