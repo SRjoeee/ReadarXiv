@@ -3897,6 +3897,65 @@ figure text of its own, translated as a word.
   space from its base (2610.20507v1 p3's "GA" after τ): it is text of its line, translated with it, and stage 1a states it
   absent.
 
+### 18.28 A figure's paragraph, its list and its node, each one text (2026-11-11)
+
+A figure that sets running text (an included page, a caption inside a figure, a node's label) was cut line by line: each
+line a figure text of its own, sent alone and laid on its own baseline. A sentence came back in fragments, its parts
+translated apart, and a line its own paragraph's other lines crowded stayed English among translated ones (2609.19644v1's
+included pages: blocks alternating English and Chinese). F3 reads what the figure prints: its paragraphs, its lists and the
+lines a node holds, each one text, by facts of the text and of the figure's structure, never by a guess from a line's shape.
+
+- **A paragraph, by TeX's own facts** (`figure-paras.ts`). Lines of one figure, one under the other with no blank line between,
+  in one face family, size, weight and fill, on one left edge (an indent or a hanging indent allowed on its first line), joined
+  where the text goes on by a fact: TeX's hyphen at a line's end, or a justified block (two full lines or more whose word spaces
+  are stretched: unlike between them, or unlike its short last line's, which TeX sets at its natural spaces, \parfillskip). The
+  lines stand by TeX's interline rule: the block's one pitch, \baselineskip, or, where a tall line would touch at that pitch,
+  further, \lineskip clear, one clearance on every such push (a \parskip keeps its clearance at the pitch and is no push; an
+  unpushed gap may be less clear than \lineskip, down to \lineskiplimit: 2609.19644v1 p59's 0.37 beside a push's 0.76). Ragged
+  lines are joined by nothing: stacked legend entries read the same. Tried and withdrawn: an inline formula's space to a word as
+  a word space (a math cluster beside a digit made a line read uneven; over the 91 it joined nothing and lost 3 joins).
+- **A paragraph's line ends.** TeX's break and a word's own hyphen are one glyph. As a body unit's are by its source, they are
+  told by the document's own text (every page's glyphs in their order), in any case: the word written with its hyphen keeps it
+  ("per-timestep", "high-frequency"; 2610.21098v1's plot labels "Success-|superior", which its body writes "success-superior"),
+  written whole drops it ("Suffix"); TeX's rules where the document writes neither. A hyphen with a digit on either side is the
+  author's, TeX hyphenating letters alone ("128-|bit", "DeepSeek-|3.2"), for body units too. A page's glyph is read with its
+  coordinates (glyphWith): a spread of one carried none, and every line end of a figure paragraph had read as a word's own hyphen
+  ("con-text", 126 of 2609.19644v1's 129).
+- **A list's marker is its item's label**, never sent: a line opens with an enumerator LaTeX's list counters print (\arabic,
+  \alph, \Alph, \roman, \Roman, a bullet or a dash; an opening bracket, a closing point or bracket), and another line of its
+  figure opens with the next one or the one before, of its form, at its left edge (a column) or on its baseline (a row): options
+  set as a grid (2411.13093v4 p19's A. B. over C. D., where "A." had come back "Answer"). One enumerated line alone is text.
+- **A node's label** (the container step). A closed path holds the lines whose glyphs' centres all stand inside it (read by its
+  interior after its box) alone where no other glyph is inside it and no closed path inside it holds text of its own (the nodes
+  of a box round a chart); a fill or a frame under words of one line, within one band's height of its baseline, is a decoration
+  that goes with its words (2608.06701v1 p9's code chips, 0.96 of the size, where 2608.06007v1 p8's nodes stand at 1.5 and
+  more), and other ink inside, a stroke or a legend's samples, is no reason. The runs it holds on one baseline are one line,
+  however far apart their words stand: the path holds them together. Its lines are one text where they read as a node sets its
+  label: one under the other with no blank line between, in one face, size, weight and fill, no line an item's, and centred; its
+  room the path's inside. Lines set flush in a path are its rows (a value over a value, 2610.37668v1's PSNR / LPIPS / FPS over
+  each image; a legend's entries): no fact of the geometry tells a box hugging its rows from one text was wrapped into (the
+  bubbles of 2608.06701v1 p2 are set ragged at their natural spaces, every break forced by the path's width, as are 99 of 37668's
+  103 overlays), and whether such rows join is the owner's, on real pages. A word broken in a node with no hyphen is joined where
+  the document writes it whole ("test_password|_lookup.py"). The relation reading reads a closed path's inside by its interior
+  too: a diamond's branch label, inside its box and outside it, crowds nothing (2608.06701v1 p2's "Any signal detected?").
+- **One family.** Two fonts are one family where their names, subset tag off, are equal before the first hyphen (DejaVuSans and
+  DejaVuSans-Oblique, NimbusRomNo9L-Regu and -Medi), or equal once PDF.js's own style words (its /bold/i, /italic|oblique/i,
+  /Black/) and the hyphens are taken out: ArialMT and Arial-BoldMT, TimesNewRomanPSMT and TimesNewRomanPS-ItalicMT; never ArialMT
+  and ArialNarrow-Bold. PDF.js states no family where the engine reads: the main thread gets a font's name and generic class, and
+  its weight and slant only for a font it could not load; its alias table is the worker's own; a descriptor's /FontFamily is
+  optional. A bold word in a row of ArialMT had cut the figure's run ("Open" | "the relevant") and made a row whose bold letters
+  outnumber the others read another face (2608.06701v1 p2's bubbles).
+- **An element's own box.** A rule or a frame inside an element's extent is the element's where its middle stands on the
+  element's line, inside the band its glyphs span about their baseline: a paragraph's frame round a citation on another line is
+  that citation's, however close the lines stand (2609.19644v1 p58, the same author cited on four lines, every frame taken by the
+  first citation and its crops drawn empty; p3's lines 1.6 pt apart). The test read the extent across alone since F0; no page
+  showed it before F3 put several lines in one text.
+- **Its ground.** Over the 91 papers the strong joins act on one: 2609.19644v1, whose included pages are another paper's running
+  text (18 pages of 12 lines of prose or more). The 88 hold five figure paragraphs, the same with or without the interline rule and
+  the natural spaces; on 19644 those two add 67 joins (34 need the interline rule, 44 the natural spaces), 40 of 40 read right.
+  No other paper of the corpus has included pages of running text: image grids' captions and flowcharts are the container step's
+  ground, and the fresh-paper sweep is where F3 meets new papers.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
