@@ -179,6 +179,110 @@ describe('a URL TeX set whole on one line, its crop the original’s ink', () =>
   })
 })
 
+describe('an address that fits a line whole goes to the next whole, unless the line it leaves would be justified and stretched', () => {
+  // (the coordinator's ruling of 2026-11-12, PDF-READER §18.50: an address is one thing to a reader. A CJK line closed before it
+  // is set ragged by placement where its stretch would pass cjkJust (0.25 em a gap), and reads as not stretched up to
+  // STRETCH_MIN (0.05 em a gap): in both the address goes whole to the next line; only between the two, a justified line
+  // letter-spaced to its measure, is it cut at its own break points, as is one longer than a line. The test's metrics set a
+  // character at half an em, and the fit sets these paragraphs at its tracking floor, -0.03 em: 4.7 pt a character at 10 pt)
+  const zh = rulesFor('zh')
+  const body =
+    '本文提出的方法在多个公开数据集上均取得了稳定提升并且训练开销更低所有代码模型权重以及评测脚本和使用说明均已整理完毕并公开发布于以下地址'
+  const addressOf = (width: number, breaks: number[]): Placed['els'] => [
+    [
+      '1',
+      {
+        kind: 'other',
+        cmd: 'url',
+        literal: 1,
+        copy: 'https://example.org/lab/models/release',
+        text: 'https://example.org/lab/models/release',
+        style: { role: 'mono', size: 10, design: 'SFTT1000' },
+        ink: [[1, 72, 686, 72 + width, 695, 688]],
+        // (each break's x past the address's start, and the copy text's code units before it: "https://", ".org/", "/lab/",
+        // "/models/")
+        breaks: breaks.map((b, k): [number, number] => [72 + b, [8, 20, 24, 31][k]!]),
+      },
+    ],
+  ]
+  /** a paragraph of `n` characters of the body, the address and a full stop, justified on two lines of the measure 72 to `x1` */
+  const caseOf = (n: number, x1: number, width: number, breaks: number[]) => {
+    const para: Placed = {
+      ord: 6,
+      kind: 'para',
+      text: idOf(7),
+      lead: 12,
+      style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+      align: 'j',
+      lines: [
+        [1, 0, 72, x1, 700, 707, 698, 72, x1, 0, 10],
+        [1, 0, 72, x1, 688, 695, 686, 72, x1, 0, 10],
+      ],
+      els: addressOf(width, breaks),
+      room: { below: 20, next: 24, side: [72, x1] },
+    }
+    const rows: Rows = {
+      get: (k) =>
+        k === idOf(7)
+          ? {
+              id: idOf(7),
+              ok: true,
+              by: 'test',
+              content: [
+                { t: 'text', s: body.slice(0, n) },
+                { t: 'el', id: '1' },
+                { t: 'text', s: '。' },
+              ],
+            }
+          : undefined,
+      done: true,
+    }
+    const laid = laidOf(layPage(partOf([[para]]), rows, zh, metrics), 6)
+    expect(laid.state).toBe('laid')
+    expect(laid.fit?.track).toBeCloseTo(-0.03, 6)
+    const crops = laid.lines.map(
+      (l) => l[3].filter((it) => 'src' in it) as { s: string; src: number[]; cut?: number }[],
+    )
+    return { laid, crops }
+  }
+  it('keeps it whole where the line before would be set ragged (30 characters on a measure of 325: 0.63 em a gap)', () => {
+    // (the line closed before it: 141 pt of text, 184 of slack over 29 gaps, past cjkJust: placement sets it ragged, unstretched;
+    // the address's first three pieces would fit beside it)
+    const { crops } = caseOf(30, 397, 250, [20, 50, 150, 220])
+    expect(crops[0]!.length).toBe(0)
+    expect(crops[1]!.map((c) => [c.s, c.cut ?? 0])).toEqual([['https://example.org/lab/models/release', 0]])
+  })
+  it('keeps it whole where the line before is nearly full (60 characters on 307: 0.042 em a gap)', () => {
+    // (282 pt of text, 25 of slack over 59 gaps, under STRETCH_MIN: justified, it reads as unstretched; "https://" would fit)
+    const { crops } = caseOf(60, 379, 250, [20, 50, 150, 220])
+    expect(crops[0]!.length).toBe(0)
+    expect(crops[1]!.map((c) => [c.s, c.cut ?? 0])).toEqual([['https://example.org/lab/models/release', 0]])
+  })
+  it('cuts it at its last break point that fits where the line before would be justified and stretched (50 on 325: 0.18 em)', () => {
+    // (235 pt of text, 90 of slack over 49 gaps: between STRETCH_MIN and cjkJust, a line letter-spaced to its measure)
+    const { crops } = caseOf(50, 397, 250, [20, 50, 150, 220])
+    expect(crops[0]!.map((c) => [c.s, c.cut])).toEqual([['https://example.org/', 2]])
+    expect(crops[1]!.map((c) => [c.s, c.cut])).toEqual([['lab/models/release', 1]])
+  })
+  it('cuts one longer than a line at its last break point that fits, whatever the line before (400 pt on 325)', () => {
+    const { crops } = caseOf(30, 397, 400, [20, 50, 150, 330])
+    expect(crops[0]!.map((c) => [c.s, c.cut])).toEqual([['https://example.org/lab/', 2]])
+    expect(crops[1]!.map((c) => c.cut)).toEqual([1])
+  })
+  it('still cuts 2303.11366v4 p1’s: its line before at 0.205 em a gap, after the cut 0.035 (a8c36be1f)', () => {
+    // (the maintainer's case of 2026-11-08: the abstract's last line before "https://github.com/noahshinn024/reflexion" was
+    // justified at 0.205 em a gap, under cjkJust, the URL whole on the next; with "https://" cut onto it, 0.035 em a gap. Here
+    // 26 characters, 122.2 pt, on a measure of 173.45: 51.25 pt of slack over 25 gaps, 0.205 em, between the two bounds; with
+    // "https://" (41.75 pt) on the line, 9.1 pt over 26 gaps)
+    const { laid, crops } = caseOf(26, 245.45, 160, [41.75, 70, 110, 140])
+    const advance = 5 + laid.fit!.track * 10
+    expect((245.45 - 72 - 26 * advance) / 25 / 10).toBeCloseTo(0.205, 6)
+    expect(crops[0]!.map((c) => [c.s, c.cut])).toEqual([['https://', 2]])
+    const first = laid.lines[0]![3][0] as { dx?: number[] }
+    expect((first.dx![1]! - first.dx![0]! - advance) / 10).toBeCloseTo(0.035, 4)
+  })
+})
+
 describe('a URL TeX broke over lines, drawn as its text in a CJK line: no stretch at its break points', () => {
   // (2608.25210v2 p17 with the references on: the line ending "https://www.databricks.com/blog/2023/04/18/introducing-ai-" set to the
   // column's full measure, 1.9-2.7 pt after each "/": a CJK line spreads its slack over the gaps between its items, and a URL
