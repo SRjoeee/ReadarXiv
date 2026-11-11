@@ -4191,7 +4191,7 @@ states, for each, what TeX knows (layout/marks.mjs POINTS_TEX); one move of the 
   as before: its reading not taken further here). Every compile of the 88 (307) sets the same glyphs and boxes and writes the
   same .aux, .lof, .lot, .toc, .out and .bbl but for its new points and one line of the glue class above.
 
-### 18.37 A theorem head is named from its parts as TeX set them (2026-11-11)
+### 18.39 A theorem head is named from its parts as TeX set them (2026-11-11)
 
 The owner's batch 6 (2610.21312v1 p5 and p6): "Corollary VI.2", "Proposition VI.3", "Proposition VII.1" stayed the original's,
 where "Proposition V.2" two pages before was drawn in the target's word. The paper is IEEEtran with amsthm's
@@ -4241,7 +4241,7 @@ takes one capital before ".n" ("V.2") and a roman numeral with nothing after it:
   paper's are read from the caches (stage 1a f15: 88 made, 0 missing); 2610.21504v1 alone moves, its "Proof" a name of its own
   before the paragraph, the paragraph's label the joint ":", as 2610.30034v1's; v2 draws the target's word and colon.
 
-### 18.38 etoolbox's conditionals are read as TeX's own (2026-11-11)
+### 18.40 etoolbox's conditionals are read as TeX's own (2026-11-11)
 
 The owner's batch 6 (2608.25210v2 p1): VLDB's "PVLDB Artifact Availability: …" paragraph stayed English. It is the false
 branch of `\ifdefempty{\vldbavailabilityurl}{}{…}`, and the role table did not know etoolbox's conditionals: the call was one
@@ -4270,7 +4270,7 @@ the next point (own.mjs MR 4), the next unit's start, across TeX's paragraph end
   URL element, as on arXiv's page. Over the 88: 8 such elements in 5 papers move from `umacro` to `zero`, parts alone; one other
   unit was unproven the same way, 2610.20266v1's theorem 102 (`\begingroup`).
 
-### 18.39 An opening point reads past an earlier unit's marks set again inside its ink (2026-11-11)
+### 18.41 An opening point reads past an earlier unit's marks set again inside its ink (2026-11-11)
 
 The owner's batch 6 (2608.25210v2 p1): VLDB's "PVLDB Reference Format: …" paragraph was no unit. Its `\vldbauthors` and
 `\vldbtitle` hold the title's and the authors' arguments, which acmart keeps with their marks (`\shorttitle`, `\authors`), so TeX
