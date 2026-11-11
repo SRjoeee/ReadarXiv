@@ -212,7 +212,7 @@ describe("reduce: the layer's states (Task 12)", () => {
   })
 
   it('no source, no PDF, a prepare that cannot succeed: the translated displays greyed, the HTML version offered', () => {
-    for (const why of ['no-source', 'no-pdf', 'cannot-prepare', 'unknown-versions'] as const) {
+    for (const why of ['no-source', 'too-large', 'cannot-prepare', 'unknown-versions'] as const) {
       expect(
         fold([opened, { type: 'preparing', position: 1, progress: 0 }, { type: 'unavailable', why, retryAt: null }]),
         why,

@@ -467,7 +467,7 @@ describe("the capsule beside the lost original's own card (StateWords openOrigin
       kind: 'progress',
       text: 'translating 3 / 10',
     })
-    expect(said(lost({ available: false, unavailable: { why: 'no-pdf', retryAt: null } }))).toEqual({
+    expect(said(lost({ available: false, unavailable: { why: 'no-source', retryAt: null } }))).toEqual({
       kind: 'unavailable',
       text: 'no pdf',
     })

@@ -2,7 +2,17 @@
 // hosts' pages go through, the website's (our server's rows, an address's target) and the extension's (rows made here, a key),
 // each as the chrome shows it.
 import { describe, expect, it } from 'vitest'
-import { DEFAULTS, eventsOf, INITIAL, kindOf, LAYER_WHY, type ReaderState, reduce } from '../../src/index.ts'
+import {
+  LASTING as CHROME_LASTING,
+  DEFAULTS,
+  eventsOf,
+  INITIAL,
+  kindOf,
+  LAYER_WHY,
+  type ReaderState,
+  reduce,
+} from '../../src/index.ts'
+import { LASTING as SESSION_LASTING } from '../../src/session/machine.ts'
 
 const base: ReaderState = {
   paper: { id: '2601.00002', version: 1, title: '', html: null, pdf: 'https://arxiv.org/pdf/2601.00002v1' },
@@ -130,6 +140,14 @@ describe("the reader's state as the chrome's", () => {
       available: true,
       unavailable: { why: 'busy', retryAt: 5 },
     })
+  })
+  it('one table says which refusals last (session/machine.ts LASTING): the chrome holds the paper\'s exactly where the session does', () => {
+    for (const [why, unavailable] of Object.entries(LAYER_WHY)) {
+      expect(CHROME_LASTING.has(unavailable), why).toBe(SESSION_LASTING.has(why as never))
+      const s = { ...open, layer: { s: 'refused' as const, why: why as never, retryAt: null } }
+      // (a passing refusal leaves the translated displays to be had: a retry asks again, machine.ts cmd.retry)
+      expect(fold([base, open, s]).available, why).toBe(!SESSION_LASTING.has(why as never))
+    }
   })
   it("rows failing: a key missing is the settings' card; out of reach the network; a refusal a bad request; a target the reader does not set its own notice", () => {
     expect(kindOf({ kind: 'server' })).toBe('network')

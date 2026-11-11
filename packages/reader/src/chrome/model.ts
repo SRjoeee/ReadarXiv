@@ -4,14 +4,15 @@
 // paper on its layer (its own events) or the reader's (openReader's state, told as these events); the chrome is the same.
 import type { ProviderErrorKind } from '@readarxiv/ui'
 import type { Prefs, PrefsPatch } from '../prefs.ts'
+import { LASTING as PAPERS } from '../session/machine.ts'
+import { LAYER_WHY } from './events.ts'
 
 export type EngineDisplay = 'original' | 'translation' | 'bilingual'
 /** why there is no bilingual version: for now (`refused`, a limit, its time given; `unreachable`, our server out of reach), or
- *  for this paper (`no-source`, `no-pdf`, `cannot-prepare`, `unknown-versions`: our server cannot make one for this version of
- *  the reader), or for this language (`target`) */
+ *  for this paper (`no-source`, `cannot-prepare`, `unknown-versions`: our server cannot make one for this version of the
+ *  reader), or for this language (`target`) */
 export type Unavailable =
   | 'no-source'
-  | 'no-pdf'
   | 'cannot-prepare'
   /** the paper too large for our server to prepare (a host may say it in words of its own; else as `cannot-prepare`) */
   | 'too-large'
@@ -22,15 +23,9 @@ export type Unavailable =
   | 'busy'
   | 'unreachable'
   | 'target'
-/** the unavailable states that are the paper's or the language's, not a moment's */
-export const LASTING: ReadonlySet<Unavailable> = new Set<Unavailable>([
-  'no-source',
-  'no-pdf',
-  'cannot-prepare',
-  'too-large',
-  'unknown-versions',
-  'target',
-])
+/** the unavailable states that are the paper's or the language's, not a moment's: the session's lasting refusals as the chrome
+ *  says them (one table, session/machine.ts LASTING), and a language the typesetter does not set */
+export const LASTING: ReadonlySet<Unavailable> = new Set<Unavailable>([...PAPERS].map((why) => LAYER_WHY[why]).concat('target'))
 /** the sync as the chrome names it to a session: together, or off */
 export type SyncMode = 'same' | 'off'
 /** a heading of the contents: its id (its unit's), its title (translated where its row is in), the original's, its level, its page */

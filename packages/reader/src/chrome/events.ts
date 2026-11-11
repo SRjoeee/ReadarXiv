@@ -8,15 +8,17 @@ import type { LayerWhy } from '../session/machine.ts'
 import type { SessionEvent, Unavailable } from './model.ts'
 
 /** the reader's reason a layer was refused, as the chrome says it: a lasting refusal keeps the original and greys the translated
- *  displays, a passing one offers a retry */
+ *  displays, a passing one offers a retry. Which last is the session's one table (session/machine.ts LASTING), which the
+ *  chrome's own is made from (model.ts LASTING): a layer the side refused or an object not its bytes is passing there, a retry
+ *  asks again, so here it is our server's for now */
 export const LAYER_WHY: Readonly<Record<LayerWhy, Unavailable>> = {
   'no-source': 'no-source',
   'not-found': 'no-source',
   'cannot-prepare': 'cannot-prepare',
   'too-large': 'too-large',
   outdated: 'unknown-versions',
-  mismatch: 'cannot-prepare',
-  broken: 'cannot-prepare',
+  mismatch: 'unreachable',
+  broken: 'unreachable',
   busy: 'busy',
   limit: 'refused',
   unreachable: 'unreachable',
