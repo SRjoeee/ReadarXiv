@@ -130,22 +130,32 @@ function halfLeading(page: Page, side: Side, committed: boolean): number {
   const key = `${side}:${committed}`
   const known = leads.get(page)?.get(key)
   if (known !== undefined) return known
-  const v = leadOf(page, side, committed)
+  const v = halfLeadingOf(
+    page.members.map((m) => (m.lit.dir ? [] : side === 'right' && committed ? m.lit.right : m.lit.left)),
+  )
   const m = leads.get(page) ?? new Map<string, number>()
   m.set(key, v)
   leads.set(page, m)
   return v
 }
-function leadOf(page: Page, side: Side, committed: boolean): number {
+/**
+ * Half the lower quartile of the gaps between each member's consecutive rows on a pane, PDF units (`members`: each member's
+ * boxes there, one entry a sentence): its rows whatever sentence each is of, as today's lighting read a unit's consecutive
+ * lines (view/highlight.mjs: the space between a unit's lines). Read inside each sentence alone, a pane whose sentences each
+ * hold one row (a translation's sentences are shorter than the original's), or whose rows a display parts, held no gap and
+ * padded nothing: on 2610.10069v1-zh p21 the right pane's shapes stood on their glyphs' em boxes, a heading's flush with its
+ * ink, where the left's were padded by 2.98 pt (the parity's highlight, lane parity-small). Two sentences' boxes on one row
+ * overlap and make no gap. The parity's measure reads the paint with this function (lab/typeset/parity/verdict.mjs)
+ */
+export function halfLeadingOf(members: readonly (readonly (readonly Box[])[])[]): number {
   const gaps: number[] = []
-  for (const m of page.members)
-    for (const rows of m.lit.dir ? [] : side === 'right' && committed ? m.lit.right : m.lit.left) {
-      const ys = [...rows].sort((a, b) => b[3] - a[3])
-      for (let i = 1; i < ys.length; i++) {
-        const g = (ys[i - 1] as Box)[1] - (ys[i] as Box)[3]
-        if (g >= 0 && g < 2 * ((ys[i] as Box)[3] - (ys[i] as Box)[1])) gaps.push(g)
-      }
+  for (const entries of members) {
+    const ys = entries.flat().sort((a, b) => b[3] - a[3])
+    for (let i = 1; i < ys.length; i++) {
+      const g = (ys[i - 1] as Box)[1] - (ys[i] as Box)[3]
+      if (g >= 0 && g < 2 * ((ys[i] as Box)[3] - (ys[i] as Box)[1])) gaps.push(g)
     }
+  }
   if (!gaps.length) return 0
   gaps.sort((a, b) => a - b)
   return (gaps[Math.floor((gaps.length - 1) / 4)] as number) / 2

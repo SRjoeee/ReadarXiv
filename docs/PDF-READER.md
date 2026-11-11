@@ -2565,6 +2565,20 @@ within noise.
   makes no group for such a member, so no drawing can turn it off either. Over the 88 papers, 12 members are wholly painted
   over in this way, every one a figure text that the wrap leaves unwrapped and the entry never lays
   (`lab/pdf/prepare-back/hidden.mjs`).
+- **The half leading is read between a member's rows, whatever sentence each row is of** (2026-11-12, lane parity-small;
+  `compose/highlight.ts` `halfLeadingOf`, which the parity's highlight measure reads too, as `paint.mjs` reads the cut): the
+  gaps between each member's consecutive rows on the pane, two sentences' boxes on one row overlapping and making none, as
+  today's lighting read a unit's consecutive lines. It was read inside each sentence alone, so a pane whose sentences each
+  hold one row (a translation's are shorter than the original's) or whose rows a display parts held no gap and padded nothing:
+  on 2610.10069v1-zh p21 the right pane's shapes stood on their glyphs' boxes while the left's were padded by 2.98 pt, the
+  heading t171 (three CJK characters at 14.35 pt) lit from 0.12 em under its baseline to 0.88 em over it, its ink from 0.11 under to 0.83
+  over (arXiv's page set its paragraphs' rows 9.67 pt apart: now 4.84 pt a side). Over B10's drawing of the parity's 22 pairs
+  the half leading moves on 50 of the 344 right panes and 64 left ones (−1.45 to +4.84 pt), and the highlight measure changes
+  on two units, that heading and 2610.40645v1-ja p27 t228 (no longer worse), no other difference of any measure moving, by
+  default or with every toggle on. A CJK heading is lit on its em box (the tokens' band, `emit/sentences.ts`, as today's), and
+  the measure reads a drawn line as the band 0.2 em under its baseline to 0.8 over it, a Latin line's: over 12.5 pt the 0.08 em
+  between the two bottoms passes the measure's point, so on a page whose half leading is under that, a heading whose every
+  pixel of ink is lit is read uncovered (t228 now stands 0.007 pt inside the point with its page's 0.155 pt).
 - **What it does not settle**: a display the part states no ink of (LOST) leaves a gap with nothing in it, filled as today's;
   a display set on a text line beside a word (TeX's display after a word on its baseline) is on that line's row, lit with it;
   a sentence whose only text is a display lights nothing but the display; and a sentence that runs on past a display with no

@@ -507,3 +507,45 @@ describe('the highlight of a figure text is its own line band', () => {
     for (const el of Object.values(els)) el.remove()
   })
 })
+
+describe('the half leading is read between a member’s rows, whatever sentence each row is of', () => {
+  // (a paragraph lit by sentence whose every sentence holds one row on each pane, rows 18 pt apart with 6 pt between them, and
+  // a heading of one row under it: the page's leading is the 6 pt between the paragraph's rows, so every shape on the page is
+  // padded 3 over and under. Read inside each sentence alone, the page held no gap and padded nothing: a heading's shape stood
+  // on its glyphs' em box, flush with their ink, on a pane whose sentences are each one row, while the left padded them)
+  const para: Box[][] = [[[72, 700, 300, 712]], [[72, 682, 300, 694]], [[72, 664, 200, 676]]]
+  const head: Box = [72, 630, 150, 644]
+  const page: Page = {
+    page: 1,
+    wait: { rows: [], faces: [] },
+    links: [],
+    members: [
+      { ord: 4, page: 1, state: 'laid', off: 1, lines: [], lit: { left: para, right: para, own: [] } },
+      { ord: 5, page: 1, state: 'laid', off: 1, lines: [], lit: { left: [[head]], right: [[head]], own: [] } },
+    ],
+  }
+  it('pads a heading of one row by half the space between the paragraph’s rows, on both panes', () => {
+    const { els, hl } = setUp(page)
+    hl.light({ id: 5, s: -1 })
+    for (const side of ['left', 'right'] as const) {
+      const shape = els[side].querySelector<HTMLElement>('.axt-hl')!
+      expect([shape.style.top, shape.style.height]).toEqual([`${H - 644 - 3}px`, `${14 + 2 * 3}px`])
+    }
+    hl.dispose()
+    for (const el of Object.values(els)) el.remove()
+  })
+  it('reads no gap between two sentences that share a row (their boxes on one band)', () => {
+    // (the paragraph's second and third sentences on one row: the gaps are still the 6 pt between its rows)
+    const shared: Box[][] = [[[72, 700, 300, 712]], [[72, 682, 150, 694]], [[150, 682, 300, 694]]]
+    const one: Page = {
+      ...page,
+      members: [{ ...page.members[0]!, lit: { left: shared, right: shared, own: [] } }, page.members[1]!],
+    }
+    const { els, hl } = setUp(one)
+    hl.light({ id: 5, s: -1 })
+    const shape = els.right.querySelector<HTMLElement>('.axt-hl')!
+    expect(shape.style.top).toBe(`${H - 644 - 3}px`)
+    hl.dispose()
+    for (const el of Object.values(els)) el.remove()
+  })
+})
