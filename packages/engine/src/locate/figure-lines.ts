@@ -115,7 +115,26 @@ export function figureLinesOf(
   try {
     const out = linesOf(pages, fig, owned, fixed, textFaces)
     // (a text drawn twice keeps the original's: one of its units has its double, doubledOf; the only ink that keeps a figure text)
-    const doubled = doubledOf(fig, pages)
+    const { doubled, twins } = doubledOf(fig, pages)
+    // (an overprint is drawn once only where the reading made one of its units the other's copy (judge's `copies`; ink.ts then
+    // gives the copy no text of its own); where it did not, both are kept: two translations would be drawn over each other)
+    const textAt = new Map<number, FigureText>()
+    for (const t of out) for (const k of t.ks) textAt.set(k, t)
+    const unitGlyphs = (p: number, k: number) => {
+      const G = (pages[p - 1]?.glyphs ?? []) as G[]
+      return [...(fig.glyphs[p - 1] ?? [])].filter(([g, x]) => x === k && G[g] && real(G[g]!)).map(([g]) => g)
+    }
+    for (const [u, v] of twins) {
+      const p = (fig.units[u] as { page?: number }).page ?? 1
+      const copied = (a: number, b: number) => {
+        const t = textAt.get(a)
+        return !!t && !t.ks.includes(b) && unitGlyphs(p, b).every((g) => t.copies.includes(g))
+      }
+      if (!copied(u, v) && !copied(v, u)) {
+        doubled.add(u)
+        doubled.add(v)
+      }
+    }
     for (const t of out)
       if (t.why === null && t.ks.some((k) => doubled.has(k))) {
         t.why = 'crowded'
@@ -179,8 +198,12 @@ const count = (k: keyof NonNullable<LinesWork['kept']>) => {
  * or down) in one face, size and fill is an overprint (2610.22214v1's legend drawn on itself, 2610.21924v1's "CONDITIONAL RESCUE"
  * 0.16 pt across, a bold): the copy is hidden with its text, one translation drawn (judge's `copies`), none kept
  */
-function doubledOf(fig: TodayFigures, pages: readonly TodayPage[]): Set<number> {
+function doubledOf(
+  fig: TodayFigures,
+  pages: readonly TodayPage[],
+): { doubled: Set<number>; twins: [number, number][] } {
   const out = new Set<number>()
+  const pairs: [number, number][] = []
   const by = new Map<string, TodayFigures['units']>()
   // (a level unit's glyphs along x, real ones: its page's, by today's map)
   const gsOf = new Map<number, number[]>()
@@ -193,6 +216,20 @@ function doubledOf(fig: TodayFigures, pages: readonly TodayPage[]): Set<number> 
         k,
         gs.sort((a, b) => G[a]!.x0 - G[b]!.x0),
       )
+    // (a run whose glyphs are each set twice, a hair apart, its text each letter twice ("SSEEAARRCCHH", 2610.21924v1 p5): its
+    // own double, no text to send)
+    for (const [k, gs] of mine)
+      if (
+        gs.length >= 4 &&
+        gs.length % 2 === 0 &&
+        gs.every((g, i) => {
+          if (i % 2) return true
+          const x = G[g]!,
+            y = G[gs[i + 1]!]!
+          return x.u === y.u && (x.ix1 ?? x.x1) > (y.ix0 ?? y.x0) && Math.abs(x.y - y.y) <= 0.5 * x.size
+        })
+      )
+        out.add(k)
   })
   const twins = (u: TodayFigures['units'][number], v: TodayFigures['units'][number]) => {
     const p = (u as { page?: number }).page ?? 1
@@ -236,14 +273,17 @@ function doubledOf(fig: TodayFigures, pages: readonly TodayPage[]): Set<number> 
       const b = boxOf(v)!
       // (the two inks overlapping across and up: a token on two lines a pitch under its size apart stands apart, 2609.19644v1
       // p38's code)
-      if (a[0]! < b[2]! && b[0]! < a[2]! && a[1]! < b[3]! && b[1]! < a[3]! && !twins(u, v)) {
-        out.add(u.k)
-        out.add(v.k)
+      if (a[0]! < b[2]! && b[0]! < a[2]! && a[1]! < b[3]! && b[1]! < a[3]!) {
+        if (twins(u, v)) pairs.push([u.k, v.k])
+        else {
+          out.add(u.k)
+          out.add(v.k)
+        }
       }
     }
     list.push(u)
   }
-  return out
+  return { doubled: out, twins: pairs }
 }
 const countKept = (t: FigureText) => {
   if (t.why === 'code' || t.why === 'formula') count(t.why)

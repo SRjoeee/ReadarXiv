@@ -795,6 +795,26 @@ describe('figure-lines: step 2, ink that is no text never keeps a figure text (t
     ])
     expect(texts[0]!.copies.sort((a, b) => a - b)).toEqual(second)
   })
+  it('keeps an overprint the reading did not make one text, and a run whose every glyph is set twice (2610.21924v1 p5)', () => {
+    // (two units of "CONDITIONAL RESCUE" on one another, neither's room meeting the other's glyphs: no copy recorded, two
+    // translations would be drawn over each other; both kept)
+    const { page, fig } = pageOf([
+      [{ text: 'RESCUE', font: T, x: 100 }],
+      [{ text: 'RESCUE', font: T, x: 100.16, dy: 14 }],
+    ])
+    fig.units[1]!.y = fig.units[0]!.y
+    figureLinesOf([page], fig, () => false, null)
+    expect(fig.units.map((u) => u.why)).toEqual(['crowded', 'crowded'])
+    // (one run whose glyphs are each set twice, a hair apart: its text "SSEEAARRCCHH", no text to send)
+    const twice = pageOf([[{ text: 'SEARCH', font: T, x: 100 }]])
+    const g = twice.page.glyphs as Glyph[]
+    const n = g.length
+    for (let i = 0; i < n; i++)
+      g.push({ ...g[i]!, x0: g[i]!.x0 + 0.2, x1: g[i]!.x1 + 0.2, ix0: g[i]!.ix0 + 0.2, ix1: g[i]!.ix1 + 0.2 })
+    for (let i = n; i < 2 * n; i++) twice.fig.glyphs[0]!.set(i, 0)
+    figureLinesOf([twice.page], twice.fig, () => false, null)
+    expect(twice.fig.units.map((u) => u.why)).toEqual(['crowded'])
+  })
   it('reads each page’s units by that page’s glyphs: a long label on one page, a short one on the next (2610.21924v1)', () => {
     // (the overprint test sorted every unit's glyphs by the last page's glyph array, and a unit of an earlier page whose glyphs
     // that page has not crashed the paper)
