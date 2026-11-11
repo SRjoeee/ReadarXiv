@@ -722,6 +722,26 @@ describe("a link with no address is its argument: REVTeX's \\href@noop {} {…} 
   })
 })
 
+describe("a quoted argument holding a declaration keeps the group that scopes it (Codex's review of B8, 2026-11-11)", () => {
+  const doc = (body: string, pre = '') => project(`\\documentclass{article}${pre}\\begin{document}\n${body}\n\\end{document}`)
+  const shape = (p: ReturnType<typeof project>) => ((p.units as Unit[])[0]!.pieces as { t: string; s?: string; src?: string }[]).map(x => [x.t, x.t === 'text' ? new TextDecoder().decode(Uint8Array.from([...(x.s ?? '')].map(c => c.charCodeAt(0)))).trim() : x.src])
+  const source = (p: ReturnType<typeof project>) => new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))
+  it("csquotes' `\\enquote{\\bfseries bold words}` (Codex's own input): the marks text, the switch inside its group", () => {
+    const p = doc('Say \\enquote{\\bfseries bold words} normally.', '\\usepackage{csquotes}')
+    expect(shape(p)).toEqual([['text', 'Say \u201c'], ['open', '{'], ['ph', '\\bfseries'], ['text', 'bold words'], ['close', '}'], ['text', '\u201d normally.']])
+    expect(source(p)).toContain('Say \\enquote{\\bfseries bold words} normally.')
+    // (today's markers wire puts the switch after the unit's text only inside its group: it scopes nothing past it)
+    const back = (serialize((p.units as Unit[])[0] as never) as { back?: { t: string; src?: string }[] }).back ?? []
+    expect(back.map(x => x.t)).toEqual(['open', 'ph', 'close'])
+  })
+  it("a paper's \\enquote (wrapOf) alike; an argument with no declaration of its own stays text alone", () => {
+    const p = doc('Say \\enquote{\\em these words} now.', '\\newcommand{\\enquote}[1]{``#1\'\'}')
+    expect(shape(p).map(x => x[0])).toEqual(['text', 'open', 'ph', 'text', 'close', 'text'])
+    expect(source(p)).toContain('Say \\enquote{\\em these words} now.')
+    expect(shape(doc('Say \\enquote{\\textbf{these} words} now.', '\\usepackage{csquotes}')).map(x => x[0])).toEqual(['text', 'open', 'text', 'close', 'text'])
+  })
+})
+
 describe("an identifier or a grouped address read after a piece the front end writes as characters (Codex's review of B8, 2026-11-11)", () => {
   // (keepRead's offsets: one per character it reads; a generated piece's characters are its UTF-8 bytes in a Latin-1 view, three
   // for a quotation mark, and one offset for all of them put every match after it on the wrong pieces, or past the end)
