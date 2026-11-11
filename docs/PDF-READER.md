@@ -732,7 +732,11 @@ spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while
     reader asks again by itself at once when the browser says it is online again (the `online` event), and, while it says it
     is online, at a growing pace (a second, doubled to thirty);
   - our server at fault (`server`: a 5xx twice, a prepare that failed by its fault): 翻译暂时不可用, with its time where its
-    record names one; a retry asks again.
+    record names one; a retry asks again. A prepare's failure is our server's when its record says `internal`, `deadline`,
+    `translation-down` or `unavailable`: each named in the session's table (`session/machine.ts PREPARE_WHY`, the layer
+    refused `unreachable` with the record's `retryAt`, the time of our server's next attempt), never the paper's own. They
+    had fallen to the same by being in no table; today's page told `internal` as a failure (the feature list's R08). The
+    website's tests hold its server's words and the table equal, so a word its server adds fails them until it is named.
   The extension's capsules keep the catalogue's sentences (PDF 对照暂时无法加载 for our server and the network, its limit's
   sentence for a limit and the rate).
 - **An action is offered only where the system will not take it by itself; a failure is told only where the system is not
