@@ -3951,7 +3951,8 @@ states, for each, what TeX knows (layout/marks.mjs POINTS_TEX); one move of the 
 - **Today's reader keeps an own-line label as before.** Today's layer sets a float's relabel as its first line's start; a
   label on a line of its own would be carried into the text's line and its own line left blank, so it relabels a label only
   on its unit's first line (`layer2.mjs` labelOnFirstLine) and keeps any other as the original's ink, as before the label was
-  found. v2 lays it as a row of its own (below).
+  found. v2 lays it as a row of its own (below). The flag is today's layer's alone, no rule of reading: it goes with that layer
+  at the cut-over and is never carried into v2.
 - **Each point read by its own reader alone** (stream.mjs `READ_ALONE`): `ka<k>` by own.mjs MR 5, `fn<n>` by the ledger; every
   other reading passes over them as over a bracket (the mark sequence an opening alone reads to, headInk's point before, the
   sequence points, instrument.mjs's stop): 2406.06525v1 p6's cell superscript, an opening alone after its cell's end mark,

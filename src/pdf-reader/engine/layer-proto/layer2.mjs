@@ -1176,7 +1176,8 @@ export function labelOf(out, unit, rects, charsByPage, gapsIn) {
  * Whether a unit's label stands on its first line (`rect`, the first line's rectangle: [page, x0, bottom, x1, top], tex.mjs
  * texRects): every character on that page within the line's height. A float's label found by TeX's call may stand on a line of
  * its own above the text (IEEEtran's "TABLE I", PDF-READER §18.29); this layer sets a relabel as its first line's start, so it
- * relabels only a label on that line and keeps any other as the original's ink, as before such a label was found
+ * relabels only a label on that line and keeps any other as the original's ink, as before such a label was found. Today's
+ * layer's alone, no rule of reading: it goes with this layer at the cut-over and is never carried into v2
  */
 export function labelOnFirstLine(label, rect) {
   const cs = label?.chars ?? []

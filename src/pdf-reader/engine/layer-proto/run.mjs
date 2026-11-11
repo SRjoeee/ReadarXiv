@@ -2028,7 +2028,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // the unit's text, and set as the line's start, in its own style, before the translation
     // (a float's label TeX set on a line of its own, found by its call (IEEEtran's "TABLE I" above the caption's text): this layer
     // sets a relabel as the first line's start, which would carry it into the text's line, so it stays the original's ink there,
-    // as before it was found: relabelled only on the unit's first line, L2.labelOnFirstLine; v2 lays it as a row of its own)
+    // as before it was found: relabelled only on the unit's first line, L2.labelOnFirstLine; v2 lays it as a row of its own.
+    // A flag of today's layer alone, no rule of reading: it goes with this layer at the cut-over, never carried into v2)
     const relabelsP = relabels(p.id) && (!prep.label?.chars?.length || L2.labelOnFirstLine(prep.label, p.rects[0]))
     const relabel = labels && relabelsP ? L2.labelInTarget(prep.label, R.labels, labels.captions, to) : null
     // or a theorem-like head's (its unit's body or its note), in translator's name for the target, its number and punctuation
