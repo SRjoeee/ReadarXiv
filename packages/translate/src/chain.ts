@@ -68,14 +68,15 @@ export const KEY_VERSION = 't1'
  *  of two letters or more, every stretch given or none, `-whole` (d76d6b200: a stretch no translator gives leaves the unit the
  *  original's, never its English between translated stretches), a span that is no edge keeping its head in a copy of itself:
  *  runs.ts; an element set after the unit's text given to no translator, put back after the translation: tailOf; a group a
- *  reply did not bring back placed around its own text where the translation states it: groups.ts; a word tied to a reference
+ *  reply did not bring back placed around its own text where the translation states it, as often as the source holds that
+ *  text in groups of its style alone, its end mark matched by its class, `groups/2`: groups.ts; a word tied to a reference
  *  that abbreviates the item's name sent to every translator as that name: names.ts; a phrase group a markers-wire translator's
  *  reply did not bring back placed where it states the group's reference translation, asked of it in the unit's batch:
  *  groups.ts placeReferences; a request a translator refuses handed on whole, halved only where its endpoint said it is too
  *  large, `pass-whole`, #636: a 400 read as every unit's refusal kept the next translator's answers as rows): a change to them
  *  is a change of every row */
 export const CHAIN_RULES =
-  'chain/1|fall-through|reask|runs>=2-whole|runs-heads|after|groups|names|references|pass-whole'
+  'chain/1|fall-through|reask|runs>=2-whole|runs-heads|after|groups/2|names|references|pass-whole'
 
 // ---------------------------------------------------------------- the platform's timers and controllers, by structure
 

@@ -135,6 +135,86 @@ describe('placeGroups: a group the reply did not bring back, around its own text
   })
 })
 
+// (2602.23285v2's research questions, the shapes of its units 84b879f7 and e5a44685 (zh, staging's rows): a label set bold
+// twice in one paragraph, none `must`, Microsoft writing it twice as it is; a label whose own stop the reply writes in its own
+// script. Synthetic text in those shapes)
+const questions = unit('q', [
+  span('0', 'bold', [t('RQ2')]),
+  t(' concerns the initial state. We are now ready to answer '),
+  span('4', 'bold', [t('RQ2')]),
+  t(', given the trained model.'),
+])
+
+describe('placeGroups at n: a text the source holds only as groups of one style, as often as the reply holds it', () => {
+  it('places each of the n groups around its occurrence, in order (RQ2 twice in one paragraph)', () => {
+    const got = placeGroups(questions, [
+      tx('RQ2涉及初始状态。我们现在可以回答RQ2，给定训练好的模型。'),
+      sp('0', []),
+      sp('4', []),
+    ])
+    expect(got).toEqual([
+      sp('0', [tx('RQ2')]),
+      tx('涉及初始状态。我们现在可以回答'),
+      sp('4', [tx('RQ2')]),
+      tx('，给定训练好的模型。'),
+    ])
+    expect(accept(questions, got)).toEqual({ ok: true })
+  })
+  it('places nothing where the reply holds the text another number of times (a sentence the translator dropped)', () => {
+    const reply = [tx('RQ2は初期状態に関するものです。')]
+    expect(placeGroups(questions, reply)).toEqual(reply)
+    expect(placeGroups(questions, [tx('RQ2，RQ2，以及RQ2。')])).toEqual([tx('RQ2，RQ2，以及RQ2。')])
+  })
+  it('places nothing where the source holds the text outside the groups too, or in a group of another style', () => {
+    const plain = unit('p', [
+      span('0', 'bold', [t('RQ2')]),
+      t(' holds; RQ2 is open; '),
+      span('5', 'bold', [t('RQ2')]),
+      t(' ends.'),
+    ])
+    expect(placeGroups(plain, [tx('RQ2成立；RQ2开放；RQ2结束。')])).toEqual([tx('RQ2成立；RQ2开放；RQ2结束。')])
+    const mixed = unit('m', [
+      span('0', 'bold', [t('RQ2')]),
+      t(' holds and '),
+      span('3', 'italic', [t('RQ2')]),
+      t(' ends.'),
+    ])
+    expect(placeGroups(mixed, [tx('RQ2成立且RQ2结束。')])).toEqual([tx('RQ2成立且RQ2结束。')])
+  })
+  it("places the lost ones where the reply brought one back around its text: each occurrence one group's", () => {
+    const got = placeGroups(questions, [
+      tx('RQ2涉及初始状态。我们现在可以回答'),
+      sp('4', [tx('RQ2')]),
+      tx('，给定训练好的模型。'),
+    ])
+    expect(got).toEqual([
+      sp('0', [tx('RQ2')]),
+      tx('涉及初始状态。我们现在可以回答'),
+      sp('4', [tx('RQ2')]),
+      tx('，给定训练好的模型。'),
+    ])
+  })
+  it("matches a group's end mark by its class, the reply's stop inside the group as the source has it (RQ1. -> RQ1。)", () => {
+    const inside = unit('i', [t('In summary, '), span('2', 'bold', [t('RQ1.')]), t(' The model keeps its accuracy.')])
+    expect(placeGroups(inside, [tx('总之，RQ1。该模型保持其准确性。')])).toEqual([
+      tx('总之，'),
+      sp('2', [tx('RQ1。')]),
+      tx('该模型保持其准确性。'),
+    ])
+    // (the stop outside the group in the source: outside it in the place)
+    const outside = unit('o', [t('In summary, '), span('2', 'bold', [t('RQ1')]), t('. The model keeps its accuracy.')])
+    expect(placeGroups(outside, [tx('总之，RQ1。该模型保持其准确性。')])).toEqual([
+      tx('总之，'),
+      sp('2', [tx('RQ1')]),
+      tx('。该模型保持其准确性。'),
+    ])
+    // (the words alone, no stop after them in the reply: not the group's text)
+    expect(placeGroups(inside, [tx('总之，RQ1表明该模型保持其准确性。')])).toEqual([
+      tx('总之，RQ1表明该模型保持其准确性。'),
+    ])
+  })
+})
+
 describe('the chain reads every reply so: a Microsoft reply to a unit with label groups on no wire', () => {
   it('sends the groups on no wire, and brings each back around its label in the translation', async () => {
     const f = scriptedFetch(() => ({ status: 200, body: JSON.stringify([{ translations: [{ text: REPLY }] }]) }))
