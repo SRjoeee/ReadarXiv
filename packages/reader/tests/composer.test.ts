@@ -706,6 +706,35 @@ describe('a row stated again otherwise (a run our server replaced mid-way)', () 
     expect(w.stack.contentOf(1)?.key).toBe(was)
     expect(entries(w, 1)).toEqual([2, 1])
   })
+  it('a row the lay read where it was missing, waited for by no page, changes nothing on screen when it comes', async () => {
+    // (as layPage reads the paper's own names: typeset lay/entry.ts ownNamesOf reads their rows, wait.ts waits for none, and
+    // the page commits before one is in)
+    const pages = new Map([[1, partOf(1, [member(10, 1, 0), member(11, 1, 1)])]])
+    const inner = sentenceLay()
+    const lay = ((part: Part, rows: Rows) => {
+      rows.get('name')
+      return inner(part, rows)
+    }) as unknown as Lay & { calls: number }
+    const w = world({ pages, lay })
+    w.stack.setNear([1])
+    const rows = statedRows('zh')
+    open(w, rows)
+    rows.state([row('u10'), row('u11')])
+    await settle()
+    w.stack.put(1)
+    await settle()
+    expect(w.composer.laid(1)).not.toBeNull()
+    const calls = inner.calls
+    const was = w.stack.contentOf(1)?.key
+    const before = w.composer.probe()
+    rows.state([row('name')])
+    await settle()
+    const after = w.composer.probe()
+    expect(inner.calls).toBe(calls)
+    expect([after.gen, after.lays, after.commits]).toEqual([before.gen, before.lays, before.commits])
+    expect(w.stack.contentOf(1)?.key).toBe(was)
+    expect(w.composer.muted(1)).toBe(false)
+  })
 })
 
 describe('the translating marks', () => {

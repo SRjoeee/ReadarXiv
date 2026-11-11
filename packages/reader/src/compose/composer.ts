@@ -13,8 +13,9 @@
 //   at an equal distance); from a page's commit until it is in place no other page is laid, HOLD_MS at most, so that the page
 //   the reader waits on is shown first (layer-side.mjs `hold`). A page commits when nothing it waits for is missing: its rows,
 //   or its faces (asked in one wave for the near pages, the middle page first, each page laid again once its own are in; a page
-//   still waiting for rows asks meanwhile those of the rows it has). Committed is final: a late row changes nothing on screen
-//   until the language, the toggles or the paper change, or a row it was laid with is stated again otherwise (below).
+//   still waiting for rows asks meanwhile those of the rows it has). Committed is final: a late row (one missing when the page
+//   was laid, as the paper's own names a lay reads and no page waits for) changes nothing on screen until the language, the
+//   toggles or the paper change, or a row it was laid with (one in when it was laid) is stated again otherwise (below).
 // - **What stays the original's.** A page with no part (no layout), a page laid with nothing hidden, a page whose part or lay
 //   or drawing failed (asked again on a zoom, coming near or the next scroll), a page whose drawing is not in place PAGE_MS after
 //   its commit (one warning; asked again on the next scroll), and a member whose groups the composed document does not hold.
@@ -147,8 +148,10 @@ interface Commit {
   gen: number
   /** shown in its slot (its drawing put in place) */
   shown: boolean
-  /** each row its lay read, by unit id (undefined: none then) */
-  read: Map<string, Row | undefined>
+  /** the rows the page was laid with: each row its lay read that was in, by unit id. A row its lay read where it was missing is
+   *  none of them (the paper's own names, which a lay reads and no page waits for, typeset lay/entry.ts ownNamesOf, wait.ts):
+   *  coming later, it changes nothing on screen */
+  read: Map<string, Row>
 }
 interface PageRec {
   failed: boolean
@@ -244,13 +247,13 @@ export function createComposer(o: ComposerOptions): Composer {
   }
   /** the rows as if they had ended: what a page waiting for rows reads to ask the faces of the rows in (never committed) */
   const endedView: Rows = { get: (id) => rowsView.get(id), done: true, kept: rowsView.kept }
-  /** a page laid over the rows now, with each row its lay read (Commit.read) */
-  const layRead = (part: Part): { page: Page; read: Map<string, Row | undefined> } => {
-    const read = new Map<string, Row | undefined>()
+  /** a page laid over the rows now, with the rows it was laid with (Commit.read: those its lay read that were in) */
+  const layRead = (part: Part): { page: Page; read: Map<string, Row> } => {
+    const read = new Map<string, Row>()
     const view: Rows = {
       get(id) {
         const r = rowsView.get(id)
-        read.set(id, r)
+        if (r) read.set(id, r)
         return r
       },
       get done() {
@@ -261,12 +264,14 @@ export function createComposer(o: ComposerOptions): Composer {
     return { page: held(o.lay(part, view), part), read }
   }
   /** whether a row a commit was laid with is stated otherwise now (the same row read anew, as its run's whole states it again,
-   *  is none: kept as the one read, so that it is compared once) */
+   *  is none: kept as the one read, so that it is compared once). A row is never taken away within a generation: the reader's
+   *  rows only grow (session/rows.ts keep()), and another target's come with a generation of their own (setLayer); `!now` is
+   *  there for the types, its answer the comparison's */
   const restated = (c: Commit): boolean => {
     for (const [id, was] of c.read) {
       const now = rowsView.get(id)
       if (now === was) continue
-      if (JSON.stringify(now) !== JSON.stringify(was)) return true
+      if (!now || JSON.stringify(now) !== JSON.stringify(was)) return true
       c.read.set(id, now)
     }
     return false
@@ -471,7 +476,7 @@ export function createComposer(o: ComposerOptions): Composer {
     }
     counts.lays++
     let page: Page
-    let read: Map<string, Row | undefined>
+    let read: Map<string, Row>
     try {
       ;({ page, read } = layRead(part))
     } catch (e) {
@@ -560,7 +565,7 @@ export function createComposer(o: ComposerOptions): Composer {
     if (commits.has(n)) uncommit(n)
     settledNow(n)
   }
-  function commit(n: number, page: Page, read: Map<string, Row | undefined>) {
+  function commit(n: number, page: Page, read: Map<string, Row>) {
     if (!groups) return
     groups.set(page)
     const c: Commit = { page, tick: ++tick, gen, shown: false, read }
