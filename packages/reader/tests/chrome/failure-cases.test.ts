@@ -10,14 +10,16 @@ import { textOf } from '../../src/chrome/capsule-words.ts'
 import { eventsOf } from '../../src/chrome/events.ts'
 import { INITIAL, reduce, type ReaderState as ChromeState } from '../../src/chrome/model.ts'
 import type { StateWords } from '../../src/chrome/parts.tsx'
-import { type Capsule, type Card, capsuleOf, cardOf } from '../../src/chrome/status.ts'
+import { type Capsule, type Card, capsuleOf, cardOf, retryOffered } from '../../src/chrome/status.ts'
 import { DEFAULTS, type Prefs } from '../../src/prefs.ts'
 import type { ReaderState } from '../../src/reader.ts'
 import {
+  againOf,
   type Doc,
   displayOf,
   type Input,
   init,
+  REFUSED_ASKS,
   type Ref,
   resources,
   type State,
@@ -32,6 +34,9 @@ const PREFS: Prefs = { ...DEFAULTS, display: 'bilingual', target: ZH }
 const WORDS: StateWords = {
   translating: (got, total) => (total > 0 ? `translating ${got}/${total}` : 'translating'),
   notNow: (at) => (at === null ? 'unavailable' : `unavailable until ${at}`),
+  limited: (at) => (at === null ? 'limit' : `limit until ${at}`),
+  rate: 'too many asks',
+  network: 'network down',
   failed: (kind) => `failed: ${kind}`,
 }
 
@@ -85,16 +90,24 @@ const doc = (rev: number, layer: Doc['layer'], t: Target): Doc => ({
   targets: { [ZH]: t },
 })
 
+type Refusal = { why: 'quota' | 'busy' | 'rate'; afterMs: number | null; at?: number | null }
 type Beat =
   | { at: number; doc: Doc }
   | { at: number; opened: true }
   | { at: number; laid: number }
   | { at: number; retry: true }
   | { at: number; set: Partial<Prefs> }
+  /** the follow's end as the client tells it (a paper not opened, a 429, the network) */
+  | { at: number; lost: string; afterMs?: number }
+  /** the session's timers due by `at` fired, in their order */
+  | { at: number; timers: true }
+  /** the browser's word on the network */
+  | { at: number; online: boolean }
 
 /** a visit: every resource the machine asks answered at once, our server's rows read as reader.ts reads them (every ref the
- *  document names for the target, each once a ticket; at the run's end read whole, its end told), drawn at the end */
-function visit(store: Store, beats: Beat[]) {
+ *  document names for the target, each once a ticket; at the run's end read whole, its end told), drawn at the end; the opens
+ *  answered by `refusals` in turn (none left: the document held), each drawn capsule kept with its time (`seen`) */
+function visit(store: Store, beats: Beat[], refusals: Refusal[] = []) {
   let s: State = init({
     paper: { id: '2610.00002', version: 1 },
     here: false,
@@ -111,6 +124,8 @@ function visit(store: Store, beats: Beat[]) {
   let chrome: ChromeState = INITIAL
   let told: ReaderState | null = null
   const live = (slot: string) => [...resources(s)].find(([, spec]) => spec.slot === slot)?.[0] ?? null
+  const answers = [...refusals]
+  const seen: { at: number; capsule: Capsule | null; card: Card | null }[] = []
   const toldOf = (): ReaderState => {
     const r = s.rows
     const view = viewOf({
@@ -126,6 +141,8 @@ function visit(store: Store, beats: Beat[]) {
     })
     const count = { got: view.got, total: view.total, lost: view.lost }
     const base = { target: r.target, from: 'server' as const }
+    const again = againOf(s)
+    const l = s.link
     return {
       paper: { id: '2610.00002', version: 1, title: '', html: null, pdf: '' },
       prefs: s.prefs.value,
@@ -135,8 +152,10 @@ function visit(store: Store, beats: Beat[]) {
         s.layer.s === 'ready'
           ? { s: 'ready', laid: s.panes.laid, total: 4, asOriginal: 0 }
           : s.layer.s === 'refused'
-            ? { s: 'refused', why: s.layer.why, retryAt: s.layer.retryAt }
-            : { s: 'none' },
+            ? { s: 'refused', why: s.layer.why, retryAt: s.layer.retryAt, ...(again.layer ? { self: true } : {}) }
+            : l.s === 'stopped'
+              ? { s: 'refused', why: l.why, retryAt: l.retryAt, ...(again.layer ? { self: true } : {}) }
+              : { s: 'none' },
       rows:
         r.s === 'none'
           ? { ...base, s: 'none' }
@@ -144,7 +163,14 @@ function visit(store: Store, beats: Beat[]) {
             ? { ...base, s: 'arriving', ...count, waits: view.waits }
             : r.s === 'complete'
               ? { ...base, s: 'complete', ...count, stopped: r.stopped }
-              : { ...base, s: 'failed', why: r.why, ...count, retryAt: r.retryAt },
+              : {
+                  ...base,
+                  s: 'failed',
+                  why: r.why,
+                  ...count,
+                  retryAt: r.retryAt,
+                  ...(again.rows !== null ? { self: true } : {}),
+                },
       view: {
         display: displayOf(s),
         sync: { on: true, available: true },
@@ -160,10 +186,17 @@ function visit(store: Store, beats: Beat[]) {
       crashed: false,
     } as ReaderState
   }
+  /** the capsule as the website's rules draw it at `at` (the last beat's time by default) */
+  const capsuleAt = (at = now, closed = 0): Capsule | null =>
+    capsuleOf(chrome, { noticeClosed: closed, narrowShown: false, refusalsSeen: 0 }, LANGUAGES, WORDS, {
+      retry: 'when-due',
+      now: at,
+    })
   const draw = () => {
     const next = toldOf()
     for (const e of eventsOf(told, next)) chrome = reduce(chrome, e)
     told = next
+    seen.push({ at: now, capsule: capsuleAt(), card: cardOf(chrome, () => 'reason', WORDS) })
   }
   const react = () => {
     if (s.layer.s === 'ready' && s.layer.code && !s.layer.loaded) queue.push({ i: 'code.loaded', t: s.layer.code })
@@ -174,7 +207,8 @@ function visit(store: Store, beats: Beat[]) {
     const composed = live('composed')
     if (composed && s.layer.s === 'ready' && !s.layer.open) queue.push({ i: 'composed.opened', t: composed })
     const open = live('open')
-    if (open && s.doc) queue.push({ i: 'open.answered', t: open, doc: s.doc })
+    if (open && answers.length) queue.push({ i: 'open.answered', t: open, doc: s.doc, refused: answers.shift() })
+    else if (open && s.doc) queue.push({ i: 'open.answered', t: open, doc: s.doc })
     const t = live('rows')
     if (s.rows.s === 'arriving' && t) {
       if (reading?.t !== t) reading = { t, read: new Set() }
@@ -205,7 +239,8 @@ function visit(store: Store, beats: Beat[]) {
       draw()
     }
   }
-  draw()
+  // (the preferences land at once: a settings page's own word is no part of these cases)
+  feed({ i: 'prefs.read', value: PREFS })
   for (const b of beats) {
     now = b.at
     if ('opened' in b) {
@@ -217,16 +252,25 @@ function visit(store: Store, beats: Beat[]) {
       if (link) feed({ i: 'paper', t: link, doc: b.doc })
     } else if ('laid' in b) feed({ i: 'panes.laid', laid: b.laid, total: 4 })
     else if ('set' in b) feed({ i: 'cmd.set', prefs: b.set })
+    else if ('lost' in b) {
+      const link = live('link')
+      if (link) feed({ i: 'follow.lost', t: link, why: b.lost, ...(b.afterMs !== undefined ? { afterMs: b.afterMs } : {}) })
+    } else if ('timers' in b) {
+      for (;;) {
+        const due = [...resources(s)]
+          .filter(([, spec]) => spec.slot === 'timer' && spec.at <= b.at)
+          .sort((x, y) => (x[1] as { at: number }).at - (y[1] as { at: number }).at)[0]
+        if (!due) break
+        now = (due[1] as { at: number }).at
+        feed({ i: 'time', t: due[0], now })
+      }
+      now = b.at
+    } else if ('online' in b) feed({ i: 'env.online', on: b.online })
     else feed({ i: 'cmd.retry' })
+    seen.push({ at: now, capsule: capsuleAt(), card: cardOf(chrome, () => 'reason', WORDS) })
   }
-  /** the capsule as the website's rules draw it at `at` (the last beat's time by default) */
-  const capsuleAt = (at = now, closed = 0): Capsule | null =>
-    capsuleOf(chrome, { noticeClosed: closed, narrowShown: false, refusalsSeen: 0 }, LANGUAGES, WORDS, {
-      retry: 'when-due',
-      now: at,
-    })
   const card: Card | null = cardOf(chrome, () => 'reason', WORDS)
-  return { capsule: capsuleAt(), capsuleAt, card, chrome, s, opens: () => live('open') }
+  return { capsule: capsuleAt(), capsuleAt, card, chrome, s, opens: () => live('open'), seen }
 }
 
 const words = (c: Capsule | null) => (c && 'words' in c ? textOf(c.words) : null)
@@ -280,10 +324,10 @@ describe('a run of our server that ends failed (PDF-READER §8)', () => {
     expect(v.chrome.phase).toBe('ready')
     expect(v.card).toBeNull()
     expect(v.chrome.failureAt).toBe(39_000)
-    // (the retry withheld until our server's time, when a press asks: the website's rule)
+    // (no retry offered, at our server's time either: the session asks again by itself then, PDF-READER §8.1)
     expect(v.capsule).toMatchObject({ kind: 'notice', action: null })
     expect(words(v.capsule)).toBe('5 passages failed')
-    expect(v.capsuleAt(39_000)).toMatchObject({ kind: 'notice', action: 'retry' })
+    expect(v.capsuleAt(39_000)).toMatchObject({ kind: 'notice', action: null })
     // (the session's own next ask is its open's, at that time; the rows wait for nothing of their own)
     expect([...resources(v.s).values()]).toContainEqual({ slot: 'timer', at: 39_000 })
     expect([...resources(v.s).values()].filter((x) => x.slot === 'timer' && x.at === 39_000)).toHaveLength(1)
@@ -294,7 +338,7 @@ describe('a run of our server that ends failed (PDF-READER §8)', () => {
     expect(v.card).toBeNull()
     expect(words(v.capsule)).toBe('5 passages failed')
   })
-  it("(c) the same before any page is laid: the card, its retry and its line at our server's time", () => {
+  it("(c) the same before any page is laid: the card and its line at our server's time (no retry: the session asks again by itself then)", () => {
     const v = run({ end: windowsDone })
     expect(v.chrome.phase).toBe('failed')
     expect(v.card?.reason).toBe('failed: network')
@@ -347,5 +391,70 @@ describe('a run of our server that ends failed (PDF-READER §8)', () => {
       translated: { got: 10, total: 10 },
     })
     expect(v.capsule).toBeNull()
+  })
+})
+
+/** whether a retry is offered anywhere at a time drawn: the capsule's chip or the card's button */
+const offered = (x: { capsule: Capsule | null; card: Card | null }) =>
+  (!!x.capsule && retryOffered(x.capsule)) || x.card?.action === 'retry'
+
+describe('an action is offered only where the session will not take it by itself (PDF-READER §8.1; the flow-demo of 2026-11-11, F2)', () => {
+  // (the recording: a quota refused at 20:17:10 until 21:00:00, the page's clock moved to 20:59:50; at 21:00:00 the chip came and,
+  // the same instant, the session asked again by itself: the chip stood about 0.25 s)
+  const T = 1_000_000
+  const END = T + 2_570_000
+  const quota: Refusal = { why: 'quota', afterMs: 2_570_000, at: END }
+  const ask = (at: number): Beat => ({ at, lost: 'not-opened' })
+  it("the limit of new papers, asked again by the session at our server's time: no retry offered before it, at it, or after", () => {
+    const store: Store = { units: new Map(), rows: new Map() }
+    const v = visit(store, [{ at: 100, opened: true }, ask(T), { at: END - 10_000, timers: true }, { at: END, timers: true }], [quota])
+    const said = v.seen.filter((x) => x.capsule?.kind === 'notNow')
+    expect(said.length).toBeGreaterThan(0)
+    expect(words(said[0]?.capsule ?? null)).toBe(`limit until ${END}`)
+    for (const x of v.seen) expect(offered(x), `at ${x.at}`).toBe(false)
+    // (drawn at our server's time, before the session's own timer is applied: the moment the chip stood)
+    const before = visit(store, [{ at: 100, opened: true }, ask(T)], [quota])
+    expect(before.capsuleAt(END)).toMatchObject({ kind: 'notNow' })
+    expect(retryOffered(before.capsuleAt(END) as Capsule)).toBe(false)
+    expect(before.capsuleAt(END + 60_000) && retryOffered(before.capsuleAt(END + 60_000) as Capsule)).toBe(false)
+    // (asked again by itself at that time: our server followed again, and the open asked once it says the paper is not opened)
+    expect(v.s.link.s).toBe('on')
+  })
+  it('past the refusals the session waits out by itself, the limit is the reader\'s to retry: offered at its time', () => {
+    const store: Store = { units: new Map(), rows: new Map() }
+    const beats: Beat[] = [{ at: 100, opened: true }]
+    let t = T
+    for (let n = 1; n <= REFUSED_ASKS + 1; n++) {
+      beats.push(ask(t))
+      if (n <= REFUSED_ASKS) beats.push({ at: t + 1000, timers: true })
+      t += 1000
+    }
+    const v = visit(store, beats, Array.from({ length: REFUSED_ASKS + 1 }, () => ({ why: 'quota', afterMs: 1000, at: null })))
+    expect(v.s.link).toMatchObject({ s: 'stopped', why: 'limit', wake: null })
+    const due = (v.s.link as { retryAt: number }).retryAt
+    expect(retryOffered(v.capsuleAt(due - 1) as Capsule)).toBe(false)
+    expect(retryOffered(v.capsuleAt(due) as Capsule)).toBe(true)
+  })
+  it("the visitor's rate of asks and the network itself, which the session waits out by itself: never a retry", () => {
+    const store: Store = { units: new Map(), rows: new Map() }
+    const rate = visit(store, [{ at: 100, opened: true }, ask(T), { at: T + 4000, timers: true }], [{ why: 'rate', afterMs: 4000, at: null }])
+    expect(rate.seen.some((x) => words(x.capsule) === 'too many asks')).toBe(true)
+    for (const x of rate.seen) expect(offered(x), `rate at ${x.at}`).toBe(false)
+    expect(retryOffered(visit(store, [{ at: 100, opened: true }, ask(T)], [{ why: 'rate', afterMs: 4000, at: null }]).capsuleAt(T + 4000) as Capsule)).toBe(false)
+    const net = visit(store, [{ at: 100, opened: true }, { at: T, lost: 'network' }, { at: T + 500, online: false }])
+    expect(words(net.capsule)).toBe('network down')
+    for (const x of net.seen) expect(offered(x), `network at ${x.at}`).toBe(false)
+  })
+  it('our server out of reach, which the session stops asking: its retry offered at once', () => {
+    const store: Store = { units: new Map(), rows: new Map() }
+    const v = visit(store, [{ at: 100, opened: true }, { at: T, lost: 'server' }])
+    expect(v.capsule).toMatchObject({ kind: 'notNow' })
+    expect(retryOffered(v.capsule as Capsule)).toBe(true)
+  })
+  it("passages that failed, asked again by the session at our server's time: no retry, before or at it; nothing laid, the card's neither", () => {
+    const laid = run({ laidAt: 4000, end: (store) => [rowsObject(store, ids(0, 5))] })
+    for (const at of [9000, 38_999, 39_000]) expect(retryOffered(laid.capsuleAt(at) as Capsule), `at ${at}`).toBe(false)
+    const bare = run({ end: (store) => [rowsObject(store, ids(0, 5))] })
+    expect(bare.card).toMatchObject({ reason: 'failed: network', action: null })
   })
 })

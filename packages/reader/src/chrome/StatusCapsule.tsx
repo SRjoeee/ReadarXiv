@@ -23,7 +23,17 @@ import { linkable } from './links.ts'
 import { useParts } from './parts.tsx'
 import { TippedButton } from './TippedButton.tsx'
 import { textOf } from './capsule-words.ts'
-import { type Capsule, capsuleLook, capsuleOf, cardOf, dueAt, originalCardOf, type Sign, spokenOf } from './status.ts'
+import {
+  type Capsule,
+  capsuleLook,
+  capsuleOf,
+  cardOf,
+  dueAt,
+  originalCardOf,
+  retryOffered,
+  type Sign,
+  spokenOf,
+} from './status.ts'
 import { useReader } from './use-reader.ts'
 
 /** a capsule's signs by name (status.ts Look); the spinner is the capsule's own */
@@ -96,8 +106,9 @@ export function StatusCapsule({
   if (now?.kind === 'progress' && stageSaid.current?.stage !== now.stage)
     stageSaid.current = { stage: now.stage, words: textOf(now.words) }
   if (now?.kind !== 'progress') stageSaid.current = null
-  // a refusal's retry, offered unless the host's rule withholds it until its time (status.ts `wait`)
-  const retryNow = capsule?.kind === 'notNow' && !capsule.wait
+  // a refusal's retry, offered unless the session asks again by itself or the host's rule withholds it until its time
+  // (status.ts retryOffered)
+  const retryNow = capsule?.kind === 'notNow' && retryOffered(capsule)
   // words alone, no chip at the end: padded there as at the start (reader.css)
   const alone =
     capsule?.kind === 'narrow' ||

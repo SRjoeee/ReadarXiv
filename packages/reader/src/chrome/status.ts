@@ -15,8 +15,9 @@ export type Capsule =
   | { kind: 'unavailable'; words: CapsuleWords; href?: string; label?: string }
   /** the bilingual version cannot be had right now (our server out of reach, S-R-24; or at its limit, a 429, S-R-26: its own
    *  words): said, with its retry and the HTML version offered where there is one; passing, not remembered; not closable.
-   *  `wait`: its retry withheld until its time (a host's rule, parts.tsx `retry`: the website's) */
-  | { kind: 'notNow'; words: CapsuleWords; href?: string; label?: string; wait?: true }
+   *  `wait`: its retry withheld until its time (a host's rule, parts.tsx `retry`: the website's). `self`: the session asks again
+   *  by itself (at its time, or once the network is back): no retry offered at all (PDF-READER §8.1) */
+  | { kind: 'notNow'; words: CapsuleWords; href?: string; label?: string; wait?: true; self?: true }
   /** passages that failed (S-P-60): with its retry (S-P-61) only where the run stopped for a reason a retry mends
    *  (`failure`); the passages the typesetting left in the original fail the same way again, until a new version (I-5
    *  of 2026-10-04) */
@@ -60,10 +61,11 @@ export function causeOf(state: ReaderState): Cause | null {
       return null
   }
 }
-/** `arxiv`: a link to arXiv, for an address that names no paper (S-R-20) */
+/** `arxiv`: a link to arXiv, for an address that names no paper (S-R-20); null: none, the session asking again by itself for
+ *  what failed (PDF-READER §8.1) */
 export interface Card {
   reason: string
-  action: 'retry' | 'settings' | 'arxiv'
+  action: 'retry' | 'settings' | 'arxiv' | null
 }
 
 /** the reasons a key settles: the settings are where it is fixed (the popup's rule) */
@@ -209,8 +211,9 @@ export function capsuleOf(
             ? (words.rate ?? R.status.limited)
             : (words.limited?.(at) ?? R.status.limited)
     const notNow = plain(text)
-    // (its retry offered at once, or at its time where the host's rule says so: a retry before it asks nothing)
-    const wait = withheld(state, rules) ? { wait: true as const } : {}
+    // (no retry where the session asks again by itself; else offered at once, or at its time where the host's rule says so: a
+    // retry before it asks nothing)
+    const wait = state.unavailable?.self ? { self: true as const } : withheld(state, rules) ? { wait: true as const } : {}
     const html = linkOf(state.htmlVersion, words, rules.origins)
     return html ? { kind: 'notNow', words: notNow, ...html, ...wait } : { kind: 'notNow', words: notNow, ...wait }
   }
@@ -219,12 +222,17 @@ export function capsuleOf(
     return {
       kind: 'notice',
       words: withCount((words.failedPassages ?? S.failed.text)(state.failedUnits), state.failedUnits),
-      action: state.failure && !withheld(state, rules) ? 'retry' : null,
+      action: state.failure && !state.selfAsks.service && !withheld(state, rules) ? 'retry' : null,
     }
   if (state.narrow && state.display === 'bilingual' && !seen.narrowShown)
     return { kind: 'narrow', words: plain(words.narrow ?? R.status.narrow) }
   return null
 }
+
+/** whether a capsule offers a retry now: a refusal for now neither withheld until its time nor asked again by the session itself,
+ *  failed passages whose retry is offered (StatusCapsule draws the chip by this alone) */
+export const retryOffered = (c: Capsule): boolean =>
+  (c.kind === 'notNow' && !c.wait && !c.self) || (c.kind === 'notice' && c.action === 'retry')
 
 /** what is under way, said to screen readers in the status region: the progress line is decorative, and no capsule shows it
  *  (where a host's words show it, the capsule says them itself) */
@@ -394,12 +402,13 @@ export function cardOf(
   const kind = (words.openOriginal ? state.failures.service : state.failure) ?? 'unknown'
   // (the original not read: its own words where the host gives them, else the network's, as the failure it is told as)
   if (state.failures.pdf !== null && words.originalLost && !words.openOriginal)
-    return { reason: words.originalLost, action: 'retry' }
+    return { reason: words.originalLost, action: state.selfAsks.pdf ? null : 'retry' }
   // the chain's own words for a rate limit promise a retry by itself; a stopped run here waits for the reader's (the extension's
   // today session says `rate-limit`, its chain's kind as it is). A key's reason is the key's only where the service chosen
-  // carries one (the host's reason)
+  // carries one (the host's reason). No retry where the session asks again by itself for the failure the card shows
+  const self = words.openOriginal || state.failures.pdf === null ? state.selfAsks.service : state.selfAsks.pdf
   return {
     reason: words.failed?.(kind) ?? (kind === 'rate-limit' ? R.status.rateLimited : reason(kind)),
-    action: KEYS.has(kind) ? 'settings' : 'retry',
+    action: KEYS.has(kind) ? 'settings' : self ? null : 'retry',
   }
 }

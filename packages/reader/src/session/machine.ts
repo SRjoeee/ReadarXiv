@@ -576,6 +576,35 @@ const outOfReach = (s: State) => {
   s.link = { s: 'stopped', why: 'unreachable', retryAt: null, wake: null, timer: null }
 }
 
+/** what the session asks again by itself, none of the reader's doing, for each thing that stopped (PDF-READER §8.1: an action
+ *  is offered only where the system will not take it by itself, and a failure is told only where it is not already trying
+ *  again):
+ *  - `original`: arXiv's PDF that the network failed to bring, opened again a second on, and at once when the browser is online;
+ *  - `layer`: the look at our server stopped by a 429 the session waits out (`wake`: the rate, capacity, the limit's first
+ *    REFUSED_ASKS), or by the network (asked again once the browser is online, or at a growing pace while it says it is); or our
+ *    server's record of a prepare failed for now, whose open the session asks at the time the record names (needsOf), where
+ *    this visit has not asked it already;
+ *  - `rows`: our server's run of the target failed, whose open the session asks (needsOf): `now`, under way or due at once, `later`
+ *    at the time the record names; or a translator's wait the rows wait out by themselves (`later`). Null: nothing asks it again but
+ *    the reader's retry (our server out of reach, the limit past its asks, a key, a language, an open asked already this visit) */
+export function againOf(s: State): { original: boolean; layer: boolean; rows: 'now' | 'later' | null } {
+  const original = s.original.s === 'failed' && s.original.why === 'network'
+  const l = s.link
+  let layer = false
+  if (l.s === 'stopped') layer = l.wake !== null || l.why === 'network'
+  else if (s.layer.s === 'refused' && !LASTING.has(s.layer.why) && s.layer.retryAt !== null)
+    layer = !s.open.asked.includes(`prepare#${s.doc?.prepare.attempt ?? 0}`)
+  let rows: 'now' | 'later' | null = null
+  const r = s.rows
+  if (r.s === 'failed' && r.why.kind === 'server') {
+    const id = `${r.target}#${s.doc?.targets[r.target]?.attempt ?? 0}`
+    const need = needsOf(s).find((n) => n.id === id)
+    if (s.open.t && s.open.for.includes(id)) rows = 'now'
+    else if (need && !s.open.asked.includes(id)) rows = need.at === null ? 'now' : 'later'
+  } else if (r.s === 'failed' && r.why.kind === 'unavailable' && r.retryAt !== null) rows = 'later'
+  return { original, layer, rows }
+}
+
 /** the input folded into its region */
 function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
   const s: State = { ...s0 }

@@ -25,6 +25,7 @@ import { type Kit, loadKit, type PdfBuild } from './pdfjs/kit.ts'
 import { dirOf, follow, objectStore, open, Refused, segOf } from './session/client.ts'
 import { type Contents, createContents, type OutlineEntry, type Rect } from './session/contents.ts'
 import {
+  againOf,
   type Doc,
   displayOf,
   type Effect,
@@ -112,16 +113,18 @@ export interface ReaderState {
   paper: { id: string; version: number | null; title: string; html: string | null; pdf: string }
   prefs: Prefs
   settings: { s: 'reading' | 'landed' | 'unreadable'; refused: number }
+  /** `self` (here and on a refusal and a failed run): the session asks again by itself, at its time or once the network is back,
+   *  none of the reader's doing, so no retry is offered for it (machine.ts againOf, PDF-READER §8.1) */
   original:
     | { s: 'opening'; loaded: number; total: number }
     | { s: 'open'; pages: number; ours: boolean }
-    | { s: 'failed'; why: OriginalWhy }
+    | { s: 'failed'; why: OriginalWhy; self?: true }
   layer:
     | { s: 'none' }
     /** `stage`: the prepare's as our server's record names it, null before the first (the progress line's place: status.ts) */
     | { s: 'preparing'; stage: string | null }
     | { s: 'ready'; laid: number; total: number; asOriginal: number }
-    | { s: 'refused'; why: LayerWhy; retryAt: number | null }
+    | { s: 'refused'; why: LayerWhy; retryAt: number | null; self?: true }
   /** the rows of the target. Their counts are the view's, one statement (session/rows.ts viewOf): the units of the layer shown
    *  that the toggles show translated (`total`), those with a translation held (`got`), those with a row that is none (`lost`);
    *  0 of 0 while that layer's units are not read. `waits`: one of them still to come from a run under way (none for rows read
@@ -132,7 +135,7 @@ export interface ReaderState {
     /** `stopped`: why the units lost got no translation (the service's word: the run stopped short), null where none was */
     | { s: 'complete'; got: number; total: number; lost: number; stopped: RowsStop | null }
     /** `retryAt`: when a retry is due, where the translator named a wait (a retry before it asks nothing) */
-    | { s: 'failed'; why: RowsWhy; got: number; total: number; lost: number; retryAt?: number | null }
+    | { s: 'failed'; why: RowsWhy; got: number; total: number; lost: number; retryAt?: number | null; self?: true }
   )
   view: {
     display: Display
@@ -1058,6 +1061,8 @@ export function openReader(
     const count = { got: view.got, total: view.total, lost: view.lost }
     const p = panes as Panes | null
     const l = s.link
+    const again = againOf(s)
+    const self = (on: boolean) => (on ? { self: true as const } : {})
     told = {
       paper: {
         id: paper.id,
@@ -1072,7 +1077,7 @@ export function openReader(
         s.original.s === 'open'
           ? { s: 'open', pages: s.original.pages, ours: s.original.pin }
           : s.original.s === 'failed'
-            ? { s: 'failed', why: s.original.why }
+            ? { s: 'failed', why: s.original.why, ...self(again.original) }
             : { s: 'opening', loaded: s.original.loaded, total: s.original.total },
       // (the look stopped with no layer to show: a 429's wait or our server out of reach, as a passing refusal; a prepare under
       // way keeps its units, and rows made from them go on)
@@ -1080,9 +1085,9 @@ export function openReader(
         s.layer.s === 'ready'
           ? { s: 'ready', laid: s.panes.laid, total: head?.paper.pages ?? 0, asOriginal: asOriginalNow() }
           : s.layer.s === 'refused'
-            ? { s: 'refused', why: s.layer.why, retryAt: s.layer.retryAt }
+            ? { s: 'refused', why: s.layer.why, retryAt: s.layer.retryAt, ...self(again.layer) }
             : l.s === 'stopped'
-              ? { s: 'refused', why: l.why, retryAt: l.retryAt }
+              ? { s: 'refused', why: l.why, retryAt: l.retryAt, ...self(again.layer) }
               : s.layer.s === 'preparing'
                 ? { s: 'preparing', stage: s.layer.stage }
                 : { s: 'none' },
@@ -1090,7 +1095,7 @@ export function openReader(
         r.s === 'none'
           ? { ...rowsView, s: 'none' }
           : r.s === 'failed'
-            ? { ...rowsView, s: 'failed', why: r.why, ...count, retryAt: r.retryAt }
+            ? { ...rowsView, s: 'failed', why: r.why, ...count, retryAt: r.retryAt, ...self(again.rows !== null) }
             : r.s === 'complete'
               ? { ...rowsView, s: 'complete', ...count, stopped: r.stopped }
               : { ...rowsView, s: 'arriving', ...count, waits: view.waits },

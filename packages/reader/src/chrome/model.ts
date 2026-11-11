@@ -87,7 +87,14 @@ export type SessionEvent =
   | { type: 'html'; url: string | null }
   /** the reader cannot go on: the original could not be fetched, the service cannot translate, or a crash; the chain's error
    *  kind where it is the service's */
-  | { type: 'fail'; event: 'fetch failed' | 'service' | 'crashed'; text: string; kind?: ProviderErrorKind }
+  | {
+      type: 'fail'
+      event: 'fetch failed' | 'service' | 'crashed'
+      text: string
+      kind?: ProviderErrorKind
+      /** the session asks again by itself (the original, opened again a second on): no retry offered (PDF-READER §8.1) */
+      self?: true
+    }
   /** the paper's layer being prepared: told at each of our server's answers while it lasts */
   | { type: 'preparing'; progress: number | null }
   /** the layer is coming: a catalog, or a prepare's first objects */
@@ -99,7 +106,8 @@ export type SessionEvent =
   | { type: 'layer'; state: 'opening' | 'open' | 'refused'; laid: number; total: number; original?: number }
   /** the translation under way, and its end for the attempt (`stopped`: why it stopped short) */
   | { type: 'translating'; got: number; total: number; lost: number }
-  /** `retryAt`: when a retry of a run stopped short is due, where the service named a time (none: at once) */
+  /** `retryAt`: when a retry of a run stopped short is due, where the service named a time (none: at once); `self`: the session
+   *  asks the run again by itself (at that time): no retry offered (PDF-READER §8.1) */
   | {
       type: 'translated'
       got: number
@@ -107,9 +115,12 @@ export type SessionEvent =
       lost: number
       stopped: ProviderErrorKind | null
       retryAt?: number | null
+      self?: true
     }
-  /** no bilingual version for now, or for this paper or language */
-  | { type: 'unavailable'; why: Unavailable; retryAt: number | null }
+  /** no bilingual version for now, or for this paper or language; `self`: the session asks again by itself (at its time, or
+   *  once the network is back): no retry offered (PDF-READER §8.1). None where a session does not say (the extension's today
+   *  session): a retry offered */
+  | { type: 'unavailable'; why: Unavailable; retryAt: number | null; self?: true }
   /** our server's document followed: its stream lost and asked again, nothing heard since (or heard again) */
   | { type: 'link'; reconnecting: boolean }
 /** what a session is given: the panes it draws into, and where it tells its events */
@@ -146,7 +157,7 @@ export interface ReaderState {
    *  (none laid there: a page no part lays a line on), none where absent */
   layer: { laid: number; total: number; original?: number }
   /** no bilingual version for now (refused, unreachable: passing), or for this paper or language; null while there may be */
-  unavailable: { why: Unavailable; retryAt: number | null } | null
+  unavailable: { why: Unavailable; retryAt: number | null; self?: true } | null
   /** 0–1, the share of the paper's paragraphs translated */
   progress: number
   /** a run's rows coming in: from its first batch to its end (or a refusal), whatever the phase, which the original's failure
@@ -167,6 +178,9 @@ export interface ReaderState {
    *  may fail during the start, so one slot cannot hold them. `failure` is the one shown: the PDF's first (nothing reads
    *  without the original), then the service's */
   failures: { pdf: ProviderErrorKind | null; service: ProviderErrorKind | null }
+  /** for each failure, whether the session asks again by itself (the original opened again, the run asked again at its time):
+   *  no retry is offered for it (PDF-READER §8.1: an action is offered only where the system will not take it by itself) */
+  selfAsks: { pdf: boolean; service: boolean }
   /** when a retry of the run's failure is due, where the service named a time (a rows' wait); null: none named */
   failureAt: number | null
   languageSupported: boolean
@@ -229,6 +243,7 @@ export const INITIAL: ReaderState = {
   failedUnits: 0,
   failure: null,
   failures: { pdf: null, service: null },
+  selfAsks: { pdf: false, service: false },
   failureAt: null,
   languageSupported: true,
   download: 'none',
@@ -377,7 +392,7 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     // (a failure the open mends is the original's own fetch failure alone: a service's, a key missing, stays with its card)
     case 'opened': {
       const mends = state.failures.pdf !== null
-      const next = withFailures(state, { ...state.failures, pdf: null })
+      const next = { ...withFailures(state, { ...state.failures, pdf: null }), selfAsks: { ...state.selfAsks, pdf: false } }
       // a service's failure left with nothing laid keeps its card
       const failed = next.failures.service !== null && !drawn(next) && state.phase === 'failed'
       // (a prepare told while the original loaded, the translation not begun: its phase now, the original on screen; the
@@ -391,9 +406,10 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     }
     case 'fail': {
       const kind = kindOf(event.kind)
-      const failures =
-        event.event === 'fetch failed' ? { ...state.failures, pdf: kind } : { ...state.failures, service: kind }
-      return { ...withFailures(state, failures), phase: drawn(state) ? 'ready' : 'failed' }
+      const pdf = event.event === 'fetch failed'
+      const failures = pdf ? { ...state.failures, pdf: kind } : { ...state.failures, service: kind }
+      const selfAsks = pdf ? { ...state.selfAsks, pdf: !!event.self } : { ...state.selfAsks, service: !!event.self }
+      return { ...withFailures(state, failures), selfAsks, phase: drawn(state) ? 'ready' : 'failed' }
     }
     case 'preparing': {
       const preparing = { progress: event.progress }
@@ -467,6 +483,7 @@ function reduceRunFree(
       const progress = event.total ? Math.min(1, event.got / event.total) : 0
       return {
         ...withFailures(state, { ...state.failures, service: null }),
+        selfAsks: { ...state.selfAsks, service: false },
         phase: 'translating',
         begun: true,
         laying: false,
@@ -484,6 +501,7 @@ function reduceRunFree(
         rowsComing: false,
         translated: countOf(state, event),
         failureAt: event.stopped ? (event.retryAt ?? null) : null,
+        selfAsks: { ...state.selfAsks, service: !!event.stopped && !!event.self },
       }
       // stopped short with nothing laid: the card, with the service's reason; with pages laid, the notice and its retry
       if (event.stopped && !drawn(state))
@@ -520,7 +538,7 @@ function reduceRunFree(
         ...state,
         preparing: null,
         rowsComing: false,
-        unavailable: { why: event.why, retryAt: event.retryAt },
+        unavailable: { why: event.why, retryAt: event.retryAt, ...(event.self ? { self: true as const } : {}) },
         // the paper's own: its translated displays greyed; a language the layer does not set: the language's notice
         available: lasting && event.why !== 'target' ? false : state.available,
         languageSupported: event.why === 'target' ? false : state.languageSupported,
