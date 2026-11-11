@@ -58,7 +58,7 @@ import {
 import { createRuntime, type Handlers, type Runtime } from './session/runtime.ts'
 import { ownedClock } from './stack/clock.ts'
 import { createScheduler } from './stack/scheduler.ts'
-import { DEFAULTS } from './prefs.ts'
+import { bandPaint, DEFAULTS } from './prefs.ts'
 import { TYPESET_TARGETS } from './compose/targets.ts'
 import { addSheets } from './styles.ts'
 
@@ -195,6 +195,8 @@ export interface Engine {
 }
 
 const PAPER = /^((?:[a-z-]+(?:\.[A-Z]{2})?\/\d{7})|(?:\d{4}\.\d{4,5}))(?:v(\d+))?$/
+/** the wash's two variables, which the reader writes on its root for the band chosen (prefs.ts bandPaint) */
+const BAND_VARS = ['--axt-hl-color', '--axt-hl-mix'] as const
 /** how long a new reading place stands before its units are asked first (a scroll's pages passed over ask nothing) */
 const NEAR_MS = 150
 
@@ -1022,7 +1024,22 @@ export function openReader(
       highlight?.setOn(s.prefs.value.highlight.on)
       panes?.noLayer(s.layer.s === 'refused')
     })
+    paintBand(s.prefs.value)
     tellSoon()
+  }
+  /** the band chosen painted (prefs.ts bandPaint): its colour and strength on the root, where the sheet's bands read them on
+   *  every pane and page; written where they changed, taken away at the close */
+  let painted = ''
+  function paintBand(p: Prefs) {
+    const paint = bandPaint(p)
+    const said = paint ? JSON.stringify(paint) : ''
+    if (said === painted || closed) return
+    painted = said
+    for (const k of BAND_VARS) {
+      const v = paint?.[k]
+      if (v) root.style.setProperty(k, v)
+      else root.style.removeProperty(k)
+    }
   }
   const unstate = rt.subscribe(onState)
   onState(rt.state)
@@ -1224,6 +1241,7 @@ export function openReader(
         for (const [el, kept] of had) for (const c of [...el.children]) if (!kept.has(c)) c.remove()
         root.classList.remove('axt-reader')
         for (const a of ['data-axt-pdf-mode', 'data-axt-narrow', 'data-axt-swapped']) root.removeAttribute(a)
+        for (const k of BAND_VARS) root.style.removeProperty(k)
       })
       listeners.clear()
     },

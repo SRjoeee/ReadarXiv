@@ -413,7 +413,16 @@ const sameRefs = (a: readonly Ref[], b: readonly Ref[]) =>
   a.length === b.length && a.every((x, i) => x.sha256 === b[i]?.sha256)
 
 const backoff = (tries: number) => Math.min(BACKOFF_MAX_MS, BACKOFF_MS * 2 ** Math.max(0, tries - 1))
-const WHY: Record<string, LayerWhy> = {
+/**
+ * A failed prepare's `why`, as our server's document names it, to the layer's refusal, each named: the paper's own (lasting:
+ * no bilingual version, the HTML one offered where there is one), our server's admission (the queue, the visitor's limit), and
+ * our server's own trouble, which is no fault of the paper's and passes: its internal failure, a step past its deadline, its
+ * translator or its boxes out of reach, all `unreachable`, said as our server's for now with the time our server's document
+ * names for its next attempt (status.ts `server`: "translation unavailable for now, retry at {time}", PDF-READER §8.1). A
+ * word this table does not name is our server's for now too; the website's tests hold the server's words and this table
+ * equal, so a word added there fails them until it is named here. `cannot` and `limit` are older spellings
+ */
+export const PREPARE_WHY: Readonly<Record<string, LayerWhy>> = {
   'not-found': 'not-found',
   'no-source': 'no-source',
   cannot: 'cannot-prepare',
@@ -424,6 +433,10 @@ const WHY: Record<string, LayerWhy> = {
   busy: 'busy',
   quota: 'limit',
   limit: 'limit',
+  internal: 'unreachable',
+  deadline: 'unreachable',
+  'translation-down': 'unreachable',
+  unavailable: 'unreachable',
 }
 
 /** the layer as a document states it */
@@ -449,7 +462,7 @@ function layerOfDoc(s: State, d: Doc): LayerRegion {
   if (p.state === 'failed')
     return {
       s: 'refused',
-      why: WHY[p.why ?? ''] ?? 'unreachable',
+      why: (p.why && Object.hasOwn(PREPARE_WHY, p.why) && PREPARE_WHY[p.why]) || 'unreachable',
       retryAt: p.retryAt,
       timer: l.s === 'refused' ? l.timer : null,
     }
@@ -524,7 +537,7 @@ export function needsOf(s: State): Need[] {
     if (!t) out.push({ id: `${target}#0`, at: null })
     else if (
       p.state !== 'running' &&
-      !!d.layer &&
+      d.layer &&
       (t.state === 'none' ||
         t.state === 'failed' ||
         (t.state === 'done' && !!t.units && !sameRefs(t.units, d.layer.units)))

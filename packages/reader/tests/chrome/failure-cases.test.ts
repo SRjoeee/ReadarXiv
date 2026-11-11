@@ -793,3 +793,23 @@ function preparingDoc(): Doc {
     targets: { [ZH]: target('none', { attempt: 0 }) },
   }
 }
+
+describe("a prepare our server failed by its own trouble, not the paper's (the feature list's R08: these words were in no table)", () => {
+  /** the paper's prepare failed for `why`, our server's next attempt at `retryAt` */
+  const failedPrepare = (why: string, retryAt: number): Doc => ({
+    ...preparingDoc(),
+    rev: 2,
+    prepare: { state: 'failed', why, retryAt, stage: null, units: [], attempt: 1 },
+  })
+  for (const why of ['internal', 'deadline', 'translation-down', 'unavailable'])
+    it(`${why}: our server's for now, with the time of its next attempt, never the paper's own (the wait flow's "server" cause)`, () => {
+      const store: Store = { units: new Map(), rows: new Map() }
+      const v = visit(store, [
+        { at: 100, opened: true },
+        { at: 200, doc: failedPrepare(why, 90_000) },
+      ])
+      expect(v.s.layer).toMatchObject({ s: 'refused', why: 'unreachable', retryAt: 90_000 })
+      expect(words(v.capsule)).toBe('unavailable until 90000')
+      expect(v.capsule).toMatchObject({ kind: 'notNow' })
+    })
+})

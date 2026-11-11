@@ -6,7 +6,7 @@
 //   theme        theme                       swapped   pdfReader.swapped        dim   pdfReader.dimPages
 //   highlight    reading.sentenceHighlight, appearance.activeHighlight
 //   ui           uiLanguage ('auto': the browser's languages, as the pages pick their pack)
-//   bands        appearance.highlights (a built-in band under its shipped name: null, the reader names it)
+//   bands        appearance.highlights, each its colour and opacity (a built-in band under its shipped name: null, the reader names it)
 //   links        reading.openIn              translator   the chain's revision (config/revision.ts), opaque
 import type { Prefs, PrefsPatch, UiLanguage } from '@readarxiv/reader'
 import { pickLocale } from '@readarxiv/ui'
@@ -34,7 +34,7 @@ export function prefsOf(config: Config, o: { revision?: string | null; languages
     dim: config.pdfReader.dimPages,
     highlight: { on: config.reading.sentenceHighlight, band: config.appearance.activeHighlight },
     ui: pickLocale(config.uiLanguage, o.languages ?? globalThis.navigator?.languages ?? []) as UiLanguage,
-    bands: config.appearance.highlights.map(h => ({ id: h.id, colour: h.color, name: shipped.get(h.id) === h.name ? null : h.name })),
+    bands: config.appearance.highlights.map(h => ({ id: h.id, colour: h.color, opacity: h.opacity, name: shipped.get(h.id) === h.name ? null : h.name })),
     links: config.reading.openIn,
     translator: o.revision ?? null,
   }

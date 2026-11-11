@@ -126,7 +126,15 @@ const c = {
     const ui = o.ui ?? 'en'
     setLocale(ui)
     document.documentElement.lang = ui
-    const prefs: Prefs = { ...DEFAULTS, target, ui, bands: [{ id: 'soft-green', colour: '#cdeccd', name: null }] }
+    const prefs: Prefs = {
+      ...DEFAULTS,
+      target,
+      ui,
+      bands: [
+        { id: 'soft-green', colour: '#cdeccd', opacity: 0.22, name: null },
+        { id: 'sand', colour: 'oklch(0.85 0.12 85)', opacity: 0.3, name: null },
+      ],
+    }
     const host = {
       fetch: (u: string, i?: RequestInit) => fetch(u, i),
       original: (ref: string) =>
