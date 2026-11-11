@@ -876,13 +876,30 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     (o) => pitch.has(o) || identifier.has(o) || formula.has(o) || double.has(o) || script.has(o),
   )
   const figPitch = figKept.filter((o) => pitch.has(o)).length
-  // (a figure member v2 draws that holds two or more of today's units whole, its text theirs in order (v2.mjs `joined`,
-  // join.mjs joinedJoin's exact text: F0's line, a figure paragraph, a word joined across a size change, 2608.06701v1 p1's
-  // "…th" | "e…"): one translation for what today drew in pieces, each of them drawn)
+  // (a figure member v2 draws that holds two or more of today's figure texts: one translation for what today drew in pieces, each
+  // of them drawn. Held by their text, its text theirs in order (v2.mjs `joined`, join.mjs joinedJoin's exact text: F0's line, a
+  // figure paragraph, a word joined across a size change, 2608.06701v1 p1's "…th" | "e…"), or by their place: a text of today's
+  // drawn (its group joined to its unit by the drawn box against the original's, as figuresMatched joins them) every line of
+  // which on A stands on one of the member's lines (its baseline within half the size, the two overlapping across: a line is one
+  // text's), on one drawn member's alone. 2608.06701v1 p1: v2 lays a figure's wrapped rows as one text where today drew a group
+  // a row, counted one by one, 35 against 45, though every row is translated)
   const joinedV2 = v2.joined ?? {}
-  const figJoined = rec.v2.units
-    .filter((u) => figOrds.has(u.id) && u.lines.some((l) => l.n > 0) && (joinedV2[u.id]?.length ?? 0) > 1)
-    .reduce((a, u) => a + joinedV2[u.id].length - 1, 0)
+  const figDrawn = rec.v2.units.filter((u) => figOrds.has(u.id) && u.lines.some((l) => l.n > 0))
+  const heldBy = new Map(figDrawn.map((u) => [u.id, new Set(joinedV2[u.id] ?? [])]))
+  const figBox = (u) => spanOf((u.lines ?? []).filter((l) => l.page === n).map((l) => ({ x0: l.x0, y0: Math.min(l.top, l.bottom), x1: l.x1, y1: Math.max(l.top, l.bottom) })))
+  const todayGroups = (rec.today.figures ?? []).map((g) => ({ id: g.id, box: spanOf(g.lines.filter((l) => l.n > 0).map(band)) })).filter((x) => x.box)
+  const todayFigs = [...prepByOrd.values()].filter((u) => /figure/.test(u.kind ?? '')).map((u) => ({ id: u.ord, box: figBox(u) })).filter((x) => x.box)
+  const linesOfMember = (ord) => (facts.get(ord)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], x1: l[3], y: l[4], size: l[10] ?? facts.get(ord).style?.size ?? 0 }))
+  for (const t of mutualBest(todayGroups, todayFigs).values()) {
+    const ls = (prepByOrd.get(t)?.lines ?? []).filter((l) => l.page === n && !l.rot)
+    if (!ls.length) continue
+    const on = figDrawn.filter((u) => {
+      const ml = linesOfMember(u.id)
+      return ls.every((l) => ml.some((L) => Math.abs(L.y - l.baseline) <= 0.5 * Math.max(L.size, l.size ?? 0, 1) && l.x0 < L.x1 && l.x1 > L.x0))
+    })
+    if (on.length === 1) heldBy.get(on[0].id).add(t)
+  }
+  const figJoined = [...heldBy.values()].reduce((a, s) => a + Math.max(0, s.size - 1), 0)
   const figVJ = figV + figJoined
   // (and today's figure texts inside one no row of the pair's serves, left the original's (`unmeasured`): literal-fixes' rule,
   // extended to F0's figure texts whose stretch is now an element, today's row having translated it (the coordinator's ruling

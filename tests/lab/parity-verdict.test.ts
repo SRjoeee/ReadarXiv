@@ -1191,8 +1191,31 @@ describe('figures: a figure text of v2’s that holds several of today’s, its 
     expect(of(run({ 60: [90, 91] }))).toEqual([])
     expect(run({ 60: [90, 91] }).measures.figures).toMatchObject({ today: 2, v2: 1, joined: 1 })
   })
-  it('without the join, one fewer: worse', () => {
-    expect(of(run())).toEqual([[true, 'today']])
+  // (by their place as well as by their text: a text of today's every line of which on A stands on one of the lines of a figure
+  // text v2 draws is held by it, whatever the two texts say. 2608.06701v1 p1: v2 lays a figure's wrapped rows as one text, today
+  // drew a group a row, 35 against 45 counted one by one though every row is translated)
+  it('without the text join, the two of today’s on the line v2 draws one text on are held by it: not worse', () => {
+    expect(of(run())).toEqual([])
+    expect(run().measures.figures).toMatchObject({ today: 2, v2: 1, joined: 1 })
+  })
+  const rows = (o: { drawn?: boolean; lines?: number[] } = {}) =>
+    measure(
+      v2Of({ members: [{ ord: 60, state: o.drawn === false ? 'unwrapped' : 'laid', lines: [] }], facts: [{ ord: 60, kind: 'figure', align: 'l', style: { size: 8 }, lines: (o.lines ?? [300, 290]).map((y) => factLine(100, 185, y, 8)) }] }),
+      rec({
+        today: { figures: [{ id: 'f0', lines: [drawnLine(100, 160, 300, 'wxyz', 8)] }, { id: 'f1', lines: [drawnLine(100, 150, 290, 'wxyz', 8)] }] },
+        v2: { units: o.drawn === false ? [] : [{ id: 60, lines: [drawnLine(100, 185, 300, 'abcdefgh', 8), drawnLine(100, 140, 290, 'abcd', 8)] }] },
+      }),
+      [
+        { ord: 90, kind: 'figure', lines: [{ page: N, x0: 100, x1: 185, baseline: 300, top: 306.4, bottom: 298.4, size: 8 }] },
+        { ord: 91, kind: 'figure', lines: [{ page: N, x0: 100, x1: 150, baseline: 290, top: 296.4, bottom: 288.4, size: 8 }] },
+      ],
+    )
+  it('two wrapped rows today drew apart, v2 one text over both: not worse', () => {
+    expect(of(rows())).toEqual([])
+  })
+  it('a text of today’s on a line no text of v2’s stands on, or on a text v2 does not draw: one fewer, worse', () => {
+    expect(of(rows({ lines: [300] }))).toEqual([[true, 'today']])
+    expect(of(rows({ drawn: false }))).toEqual([[true, 'today']])
   })
 })
 
