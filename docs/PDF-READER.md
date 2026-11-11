@@ -4174,19 +4174,22 @@ states, for each, what TeX knows (layout/marks.mjs POINTS_TEX); one move of the 
   threshold (align.ts), and A is what a reader sees; both papers' bundles are byte-identical with and without the point, the one
   diagnostic that moves the line's unit's `place`, `same` to `respaced`. B cannot leave expansion off: its lines would no longer
   break where A's do. The compile-pair check reports such a line under its own heading (`glueLines`), never as moved glyphs.
-- **Proofs over the 88** (stage 1a at the head on its own compiles against the base, 664a114fa, on its own): 18 papers move,
-  and only as ruled. 8 units gained, `inknotes`, one on page 1 of each paper with a NeurIPS notice (1706.03762v7, 2608.27728v1,
-  2610.17108v1, 2610.20947v1, 2610.21026v1, 2610.21176v1, 2610.21376v1, 2610.30769v1); none removed or changed. 37 captions
-  gain their label, every one of the census's (36 on a line of their own: IEEEtran's "TABLE I" .. "TABLE X" centred, cas-sc's
-  "Table 1" .. "Table 7" flush left, SIAM's "Table 1", "Table 2" centred; one on its first line, 2610.20848v1's "Figure 1:"),
-  none lost, none changed, in all 24 classes of the 88 (the lab's label check, run by class: the first version of the TeX lost
-  cas-sc's 14 figure labels, its maker set inside its environment, which is how the float's own wrap was found). Beside them
-  only what follows from the notes: their glyphs counted in the faces table of their papers' pages, and the ords after a note
-  one more (2610.20947v1's references' links name their owners by ord). Seven captions stay without a label, none for want of
-  a call: three `\caption*` (no label is TeX's), revtex4's three "TABLE. I:" (called; refused by the label's form, MR 6, as
-  before), weco_paper's "Figure 8 |" before a macro's ink (called, its two points there; no label stated, as before: its
-  reading not taken further here).
-
+- **Proofs over the 88** (stage 1a at the head on its own compiles against B8, 8ca1dcd1b, on its own): 19 papers move, and
+  only as ruled. 8 units gained, `inknotes`, one on page 1 of each paper with a NeurIPS notice (1706.03762v7, 2608.27728v1,
+  2610.17108v1, 2610.20947v1, 2610.21026v1, 2610.21176v1, 2610.21376v1, 2610.30769v1). 37 captions gain their label, every one of
+  the census's (36 on a line of their own: IEEEtran's "TABLE I" .. "TABLE X" centred, cas-sc's "Table 1" .. "Table 7" flush
+  left, SIAM's "Table 1", "Table 2" centred; one on its first line, 2610.20848v1's "Figure 1:"), none lost, none changed, in all
+  24 classes of the 88 (the lab's label check, run by class: the first version of the TeX lost cas-sc's 14 figure labels, its
+  maker set inside its environment, which is how the float's own wrap was found). The point before a forced break is set for 9
+  placeholders in 4 papers (2608.06701v1, 2608.25210v2, 2610.21313v1, 2610.21477v1): 2608.06701v1's affiliation, refused before
+  ("text past its source"), is located, its marks and addresses its elements; 2610.21313v1's email line under its affiliation,
+  an ink unit of names before (today's reader and v2 with the names on drew its "bo" as a Chinese name), is its affiliation's
+  element, the address kept. Beside them only what follows from the notes: their glyphs counted in the faces table of their papers' pages,
+  and the ords after a note one more (2610.20947v1's references' links name their owners by ord). Seven captions stay without a
+  label, none for want of a call: three `\caption*` (no label is TeX's), revtex4's three "TABLE. I:" (called; refused by the
+  label's form, MR 6, as before), weco_paper's "Figure 8 |" before a macro's ink (called, its two points there; no label stated,
+  as before: its reading not taken further here). Every compile of the 88 (307) sets the same glyphs and boxes and writes the
+  same .aux, .lof, .lot, .toc, .out and .bbl but for its new points and one line of the glue class above.
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
