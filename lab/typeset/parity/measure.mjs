@@ -13,12 +13,13 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { rowLinesOf } from '../../../packages/typeset/src/index.ts'
-import { l1Paper } from '../../../packages/typeset/tests/replay/l1.ts'
+import { L1_BUNDLES_DIR, l1Paper } from '../../../packages/typeset/tests/replay/l1.ts'
+import { bundlesLine, headsFor } from '../../../packages/typeset/tests/replay/bundles.ts'
 import { doorRows } from '../../../packages/typeset/tests/replay/rows.ts'
 import { LAB, ledger } from '../../../packages/typeset/tests/replay/tap.ts'
 import { keptFacts, originalFacts, scriptsPass } from './blind.mjs'
 import { frameOf, labelsPass } from './fidelity.mjs'
-import { pdfOf, whyNot } from './inputs.mjs'
+import { bundleCheck, bundleOf, pdfOf, whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
 import { carriedOf, coverageOf, FLAGS, freshOf, judgedChanged, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
 
@@ -51,6 +52,9 @@ if (GATE) for (const p of JSON.parse(readFileSync(GATE, 'utf8')).pages) gateOf.s
 const OUT = arg('out')
 if (!WORK || !OUT) throw new Error('measure.mjs: --work=<dir> and --out=<dir> are required')
 const asked = process.argv.slice(2).filter((a) => !a.startsWith('--'))
+// (the bundles read, named in the log; a pair asked that a named folder lacks is an error, bundles.ts)
+console.log(bundlesLine(L1_BUNDLES_DIR))
+headsFor(asked, L1_BUNDLES_DIR)
 const PREPARE = join(LAB, 'refactor-2026-11', 'baseline', 'prepare')
 const json = (f) => JSON.parse(readFileSync(f, 'utf8'))
 const sha = (f) => createHash('sha256').update(readFileSync(f)).digest('hex')
@@ -68,6 +72,21 @@ for (const pair of run?.pairs ?? []) {
   if (why) notMeasured.set(pair, why)
   else drawn.set(pair, raw)
 }
+// (each v2 file against the bundles this verdict reads, before anything is measured: one laid over others refused, naming both,
+// and the run stopped; one of before the guard measured with a warning, in the log and in parity.json: inputs.mjs bundleCheck)
+const warnings = [...(run?.warnings ?? [])]
+const refusedBundles = []
+for (const [pair, raw] of drawn) {
+  const chk = bundleCheck({ pair, ...json(join(WORK, 'v2', `${pair}.json`)) }, bundleOf(raw.paper))
+  if (!chk.ok) refusedBundles.push(chk.why)
+  else if (chk.warning && !warnings.includes(chk.warning)) warnings.push(chk.warning)
+}
+if (refusedBundles.length) {
+  for (const w of refusedBundles) console.error(`measure.mjs: refused, ${w}`)
+  console.error('measure.mjs: a v2 file is measured only against the bundles it was laid over (AXT_L1_BUNDLES): nothing written')
+  process.exit(2)
+}
+for (const w of warnings) console.warn(`WARNING ${w}`)
 const pairs = [...drawn.keys()]
 // (the pairs the sheet names not drawn: the run's asked ones that were not, and the maintainer's first ones not asked)
 const missing = [...notMeasured].map(([pair, why]) => ({ pair, why, asked: true }))
@@ -320,6 +339,8 @@ const result = {
   facts,
   errors: pages.filter((p) => p.error).map((p) => `${p.pair} p${p.page}: ${p.error}`),
   notes,
+  // (the v2 files read unchecked: laid before the bundles guard, inputs.mjs bundleCheck)
+  ...(warnings.length ? { warnings } : {}),
   carried,
   summary,
   worst,

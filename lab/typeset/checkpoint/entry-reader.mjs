@@ -18,6 +18,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { build } from 'vite'
 import { startServer } from '../../../packages/reader/e2e/server.mjs'
+import { bundlesDir, bundlesLine, headsFor } from '../../../packages/typeset/tests/replay/bundles.ts'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
 const ROOT = join(import.meta.dirname, '..', '..', '..')
@@ -37,7 +38,11 @@ if (!LAID?.links) throw new Error(`${PAIR}: no entry pages with links in ${arg('
 const OUT = arg('out', join(ROOT, 'packages/reader/e2e/.entry-out'))
 const id = PAIR.split('-')[0]
 const target = PAIR.split('-')[1].split('.')[0]
-const bundle = join(process.env.AXT_L1_BUNDLES ?? join(LAB, 'lanes/L7/prepare/bundles'), id)
+// (the bundles: AXT_L1_BUNDLES, which must be a bundles folder holding the pair where set, else lanes/L7's; named in the log)
+const BUNDLES = bundlesDir(process.env, join(LAB, 'lanes/L7/prepare/bundles'))
+console.log(bundlesLine(BUNDLES))
+headsFor([PAIR], BUNDLES)
+const bundle = join(BUNDLES.dir, id)
 const catalogue = process.env.AXT_PAPERS ?? join(LAB, 'baseline/corpora/papers.json')
 const paper = JSON.parse(readFileSync(catalogue, 'utf8')).papers.find((p) => p.id === id)
 if (!paper) throw new Error(`${id}: not in the paper catalogue ${catalogue} (AXT_PAPERS)`)

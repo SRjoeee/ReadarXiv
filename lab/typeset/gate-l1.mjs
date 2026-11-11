@@ -12,6 +12,8 @@ import { join } from 'node:path'
 import { readerDump } from '../../packages/typeset/tests/replay/display.ts'
 import { gateL1Pair } from '../../packages/typeset/tests/replay/gate-l1.ts'
 import { LAB, readGz, TAP } from '../../packages/typeset/tests/replay/tap.ts'
+import { bundlesLine, headsFor } from '../../packages/typeset/tests/replay/bundles.ts'
+import { L1_BUNDLES_DIR } from '../../packages/typeset/tests/replay/l1.ts'
 import { tableMetrics } from '../../packages/typeset/src/metrics/table.ts'
 import { layered, servedMetrics } from './served-metrics.mjs'
 import { accept as acceptReading } from '../../packages/translate/src/accept.ts'
@@ -23,6 +25,13 @@ const named = args.filter(a => !a.startsWith('--'))
 // (AXT_GATE_LIST=<class prefix>: each member whose setting's first difference starts so, printed with its pair and ord; `*` every member)
 const LIST = process.env.AXT_GATE_LIST
 const pairs = named.length ? named : readdirSync(join(TAP, 'ledgers')).map(f => f.replace(/\.ledger\.json\.gz$/, '')).sort()
+// (the bundles served, named in the log; a pair named here that a named folder lacks is an error, bundles.ts; of the tap's every
+// ledger, those the folder lacks are said and stopped as before, "no L1 bundle of the paper")
+console.log(bundlesLine(L1_BUNDLES_DIR))
+{
+  const { missing } = headsFor(pairs, L1_BUNDLES_DIR, { listed: !named.length })
+  if (missing.length) console.log(`the bundles hold no head of ${missing.length} of the ${pairs.length} pairs (each stopped, no L1 bundle): ${missing.join(', ')}`)
+}
 mkdirSync(join(OUT, 'reader'), { recursive: true })
 // (--metrics=table: the tap's table alone, a measure it lacks throws MissingMeasure; default: the table, then the served
 // measurer (served-metrics.mjs: the reader's faces, Skia's canvas) for a measure today never made; --metrics=served: the

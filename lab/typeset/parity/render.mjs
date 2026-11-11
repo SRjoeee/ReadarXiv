@@ -24,12 +24,13 @@ import { answerBytes, startServer } from '../../../packages/reader/e2e/server.mj
 import { readerAssets } from '../../../packages/reader/src/vite.ts'
 import { doorRows } from '../../../packages/typeset/tests/replay/rows.ts'
 import { CACHE, paperOf } from '../../../packages/typeset/tests/replay/today.ts'
-import { L1_BUNDLES } from '../../../packages/typeset/tests/replay/l1.ts'
+import { L1_BUNDLES, L1_BUNDLES_DIR } from '../../../packages/typeset/tests/replay/l1.ts'
+import { bundlesLine, headsFor } from '../../../packages/typeset/tests/replay/bundles.ts'
 import { LAB, TODAY } from '../../../packages/typeset/tests/replay/tap.ts'
 import { SLICES, TABLES } from '../served-metrics.mjs'
 import { analyse } from './analyse.mjs'
 import { DEVICE_PT, inPlace } from './fidelity.mjs'
-import { hyphFileOf, pdfOf, whyNot } from './inputs.mjs'
+import { bundleCheck, bundleOf, hyphFileOf, pdfOf, whyNot } from './inputs.mjs'
 import { PAIRS } from './pairs.mjs'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
@@ -45,6 +46,9 @@ const TOGGLES = arg('toggles') === 'on' ? 'on' : 'defaults'
 const CLASSES_ON = { figures: true, tables: true, heads: true, references: true, names: true }
 const asked = process.argv.slice(2).filter((a) => !a.startsWith('--'))
 const pairs = asked.length ? asked : PAIRS
+// (the bundles served, named in the log; a pair asked that a named folder lacks is an error, bundles.ts)
+console.log(bundlesLine(L1_BUNDLES_DIR))
+headsFor(pairs, L1_BUNDLES_DIR)
 /** the web's tree of this release (its faces' module and static index): AXT_WEB, else the worktree beside the face tables */
 const WEB = process.env.AXT_WEB ?? join(TABLES, '..', '..', '..', '..')
 const MODS = join(ROOT, 'node_modules')
@@ -152,6 +156,9 @@ let current = null
 const sliceDir = (name) => SLICES.map((d) => join(d, name)).find((f) => existsSync(f))
 const todayDesc = new Map()
 const missing = []
+// (the v2 files laid over other bundles than the ones served here, and those of before the guard: inputs.mjs bundleCheck)
+const refusedBundles = []
+RUN.warnings = []
 for (const pair of pairs) {
   const paper = paperOf(pair)
   const target = /-([a-z]{2,3})$/.exec(pair)?.[1]
@@ -187,6 +194,14 @@ for (const pair of pairs) {
     missing.push({ pair, why: `v2.mjs laid it under the toggles ${v2.toggles ?? 'defaults'}, the drawing is asked ${TOGGLES}` })
     todayDesc.delete(pair)
     continue
+  }
+  // (its pages against the bundles' composed document it was laid over, never another's: the reader unwraps whatever the
+  // served document's groups do not hold, half a page drawn as the original's)
+  const chk = bundleCheck({ pair, ...v2 }, bundleOf(paper))
+  if (!chk.ok) refusedBundles.push(chk.why)
+  else if (chk.warning) {
+    RUN.warnings.push(chk.warning)
+    console.warn(`WARNING ${chk.warning}`)
   }
   const byId = new Map()
   for (const [pg, f] of Object.entries(v2.facts))
@@ -319,6 +334,15 @@ const routes = [
 ]
 // (the pairs that cannot be drawn, told before any is: a run that stops still names them)
 RUN.missing = missing
+// (a v2 file laid over other bundles than these: the run stops before any page is drawn, naming both)
+if (refusedBundles.length) {
+  RUN.stopped = `bundles: ${refusedBundles.join('; ')}`
+  manifest()
+  for (const w of refusedBundles) console.error(`render.mjs: refused, ${w}`)
+  console.error('render.mjs: a v2 file is drawn only against the bundles it was laid over (AXT_L1_BUNDLES): nothing drawn')
+  process.exit(2)
+}
+if (!RUN.warnings.length) delete RUN.warnings
 manifest()
 const server = await startServer({ out: BUILD, objects, routes })
 

@@ -8,11 +8,16 @@ import { join } from 'node:path'
 import { type OutPiece, type Part, type Piece, type Placed, type Unit, unitId } from '@readarxiv/format'
 import { sourcePieces } from '../../src/lay/read.ts'
 import type { V0Piece } from '../../src/unit/breaks.ts'
+import { bundlesDir } from './bundles.ts'
 import { type DoorRow, doorSentences } from './rows.ts'
 import { LAB } from './tap.ts'
 
-export const L1_BUNDLES =
-  process.env.AXT_L1_BUNDLES ?? join(LAB, 'refactor-2026-11', 'lanes', 'L7', 'prepare', 'bundles')
+/** the bundles folder: AXT_L1_BUNDLES, which must be one where set (bundles.ts: never the default in its place), else lanes/L7's */
+export const L1_BUNDLES_DIR = bundlesDir(
+  process.env,
+  join(LAB, 'refactor-2026-11', 'lanes', 'L7', 'prepare', 'bundles'),
+)
+export const L1_BUNDLES = L1_BUNDLES_DIR.dir
 export const hasL1 = existsSync(L1_BUNDLES)
 
 /** a member as L1's part holds it: Placed and the fields L1's later schema adds */

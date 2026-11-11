@@ -22,24 +22,28 @@ register('../checkpoint/items-hook.mjs', import.meta.url)
 register('./hook.mjs', import.meta.url)
 const { gateL1Pair } = await import('../../../packages/typeset/tests/replay/gate-l1.ts')
 const { ledger, readGz, TAP } = await import('../../../packages/typeset/tests/replay/tap.ts')
-const { l1Paper, todayPrepared } = await import('../../../packages/typeset/tests/replay/l1.ts')
+const { L1_BUNDLES, L1_BUNDLES_DIR, l1Paper, todayPrepared } = await import('../../../packages/typeset/tests/replay/l1.ts')
+const { bundlesLine, headsFor } = await import('../../../packages/typeset/tests/replay/bundles.ts')
 const { paperOf } = await import('../../../packages/typeset/tests/replay/today.ts')
 const { tableMetrics } = await import('../../../packages/typeset/src/metrics/table.ts')
 const { layered, servedMetrics } = await import('../served-metrics.mjs')
 const { typesetLay } = await import('../../../packages/reader/src/compose/typeset.ts')
 const { hyphenationOf } = await import('../../../packages/typeset/src/index.ts')
-const { hyphFileOf } = await import('./inputs.mjs')
+const { bundleOf, hyphFileOf } = await import('./inputs.mjs')
 const { candidateKept, candidateKeptElements, candidateKeptToday, candidateStated, heldJoin, joinedJoin, todayJoin } = await import('./join.mjs')
 const { readAsChain } = await import('./rows.mjs')
 const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
 const { partsIn, UNJOINED, unjoinedOf, withUnjoined } = await import('./unjoin.mjs')
-const { FRESH_ROWS, freshNeeds, freshRowsOf, freshTranslator, KEYLESS_LOCK, keylessLock, withFresh } = await import('./fresh.mjs')
+const { FRESH_ROWS, freshNeeds, freshRowsOf, freshTranslator, KEYLESS_LOCK, keylessLock, logFill, withFresh } = await import('./fresh.mjs')
 const { doorRows } = await import('../../../packages/typeset/tests/replay/rows.ts')
 
 const args = process.argv.slice(2)
 const OUT = args.find((a) => a.startsWith('--out='))?.slice(6)
 if (!OUT) throw new Error('v2.mjs: --out=<dir> is required')
 const pairs = args.filter((a) => !a.startsWith('--'))
+// (the bundles laid over, named in the log; a pair asked that a named folder lacks is an error, bundles.ts)
+console.log(bundlesLine(L1_BUNDLES_DIR))
+headsFor(pairs, L1_BUNDLES_DIR)
 /** the fresh rows: 'cache' (offline, the default), 'off' (none), 'fill' (the cache filled from the endpoint, no page laid) */
 /** and 'all' (the review mode: every unit v2 sends laid with its own fresh row, offline) or 'fill-all' (its fill) */
 const FRESH = args.find((a) => a.startsWith('--fresh='))?.slice(8) ?? 'cache'
@@ -56,7 +60,32 @@ if (FILL) {
   process.on('exit', lock.release)
   for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(sig === 'SIGINT' ? 130 : 143))
   translator = freshTranslator(FRESH_ROWS, { fill: true })
+  // (what the fill did, one entry a run in the cache's fills.jsonl and printed at its end: wires asked, requests made, refused,
+  // 429s, the pairs touched, start and end; written on any exit, a 429's or a failure's too)
+  const start = new Date().toISOString()
+  process.on('exit', (code) => {
+    const entry = {
+      start,
+      end: new Date().toISOString(),
+      exit: code,
+      mode: FRESH,
+      lane: 'parity-fresh',
+      bundles: L1_BUNDLES,
+      wires: fillLog.reduce((n, p) => n + p.wires, 0),
+      requests: translator.requests(),
+      refused: fillLog.reduce((n, p) => n + p.refused, 0),
+      missing: fillLog.reduce((n, p) => n + p.missing, 0),
+      rate429: translator.rated(),
+      pairs: fillLog.filter((p) => p.wires || p.refused || p.missing),
+    }
+    logFill(entry)
+    console.log(`fill: ${entry.wires} wires in ${entry.requests} requests, refused ${entry.refused}, still missing ${entry.missing}, 429s ${entry.rate429}; ${entry.pairs.length} pairs touched; ${entry.start} - ${entry.end} (${FRESH_ROWS}/fills.jsonl)`)
+  })
 }
+/** each pair's part of the fill (its wires asked, refused, still missing), for the fill's log */
+const fillLog = []
+/** what the fills would ask over the run, counted offline (cache mode): fresh.mjs needOf's, summed */
+const needAll = { units: 0, wires: 0, requests: 0, wiresUpTo: 0, requestsUpTo: 0 }
 /** the reader's toggles the pages are laid under: the defaults, or (--toggles=on) every switch of "What to translate" on (figure
  *  and table text, headers and footers, references, the author block: docs/PDF-READER.md §15), so that what a reader turns on
  *  is judged too */
@@ -195,7 +224,10 @@ for (const pair of pairs) {
       if (!joinedAll0[ord] && !joinedAll.has(ord)) freshAt.newer.push(ord)
     }
     const n = (c) => Object.values(freshAt.cause).filter((x) => x === c).length
-    console.log(`${pair}: fresh ${Object.keys(freshAt.cause).length} members (no row ${n('no-row')}, kept by today's name/code rule ${n('today-kept')}, a cell today's group kept ${n('group')}, another unit's row ${n('unit')}${ALL ? `, served by a stored row ${n('served')}` : ''}) of ${needs.size} asked in ${ids.length} units; refused ${freshAt.refused.length}; not in the cache ${freshAt.missing.length}; ${freshAt.newer.length} today never had${got.asked ? `; ${got.asked} wires asked of the endpoint` : ''}`)
+    if (FILL) fillLog.push({ pair, wires: got.asked, refused: freshAt.refused.length, missing: freshAt.missing.length })
+    if (got.need) for (const k of Object.keys(needAll)) needAll[k] += got.need[k]
+    const need = got.need ? ` (${got.need.units} units: a fill asks ${got.need.wires} wires in about ${got.need.requests} requests, up to ${got.need.wiresUpTo} in ${got.need.requestsUpTo} where replies are refused and their runs floor asked)` : ''
+    console.log(`${pair}: fresh ${Object.keys(freshAt.cause).length} members (no row ${n('no-row')}, kept by today's name/code rule ${n('today-kept')}, a cell today's group kept ${n('group')}, another unit's row ${n('unit')}${ALL ? `, served by a stored row ${n('served')}` : ''}) of ${needs.size} asked in ${ids.length} units; refused ${freshAt.refused.length}; not in the cache ${freshAt.missing.length}${need}; ${freshAt.newer.length} today never had${got.asked ? `; ${got.asked} wires asked of the endpoint` : ''}`)
     if (translator?.throttled()) {
       console.log(`${pair}: the endpoint answered 429: the fill stops here (the cache keeps every reply so far; a later fill resumes)`)
       process.exit(3)
@@ -359,6 +391,9 @@ for (const pair of pairs) {
   const out = {
     pair,
     paper: paperOf(pair),
+    // (the bundles it was laid over, the head's digest: render.mjs and measure.mjs refuse to read it against others, inputs.mjs
+    // bundleCheck)
+    bundle: bundleOf(paperOf(pair)),
     toggles: TOGGLES,
     pages,
     today,
@@ -392,5 +427,6 @@ for (const pair of pairs) {
   const faults = cover ? Object.values(cover.faults).reduce((a, b) => a + b, 0) : 0
   console.log(`${pair}: ${Object.keys(pages).length} pages, ${laid} members laid, ${(performance.now() - t0).toFixed(0)} ms${heldRows.joined ? `; held: ${heldRows.joined} joined, ${heldRows.laid} given today's row` : ''}; I10 ${faults} faults${faults ? ` (${Object.entries(cover.faults).map(([k, n]) => `${k} ${n}`).join(', ')})` : ''}`)
 }
+if (needAll.units) console.log(`the cache lacks ${needAll.units} units' replies: a fill asks ${needAll.wires} wires in about ${needAll.requests} requests, up to ${needAll.wiresUpTo} in ${needAll.requestsUpTo} where replies are refused (v2.mjs --fresh=fill${ALL ? '-all' : ''})`)
 const I10faults = [...I10.faults.values()].reduce((a, b) => a + b, 0)
 console.log(`I10, the sentence cover (cover.ts): ${I10.pieces} pieces; ${I10faults} faults${I10faults ? `: ${[...I10.faults].map(([k, n]) => `${k} ${n}`).join(', ')}` : ''}`)

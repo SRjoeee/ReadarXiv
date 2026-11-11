@@ -1,5 +1,6 @@
 // lab/typeset/parity/inputs.mjs: what the parity check needs of a pair, and why a pair cannot be drawn (render.mjs draws only
 // the pairs whose inputs are all in lab-data; measure.mjs names the others on the sheet). Nothing is fetched or made here.
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { L1_BUNDLES } from '../../../packages/typeset/tests/replay/l1.ts'
@@ -22,6 +23,33 @@ export const pdfOf = new Map(
 export const HYPH = [join(CACHE, 'static/hyph'), join(LAB, 'refactor-2026-11', 'baseline', 'static', 'hyph')]
 /** a language's served patterns file, or null where none is served */
 export const hyphFileOf = (lang) => HYPH.map((d) => join(d, `${lang}.json`)).find((f) => existsSync(f)) ?? null
+
+/**
+ * The bundles a paper is laid over, as v2.mjs records them and render.mjs and measure.mjs check them: `head`, the SHA-256 of the
+ * paper's head.json in the bundles folder `dir` (the head names the paper and every part and unit chunk by its own content
+ * digest, so two folders' heads are one digest only where they hold the same bundle), and `dir`, the folder, to say which;
+ * null where the folder holds no head of the paper
+ */
+export function bundleOf(paper, dir = L1_BUNDLES) {
+  const f = join(dir, paper, 'head.json')
+  return existsSync(f) ? { head: createHash('sha256').update(readFileSync(f)).digest('hex'), dir } : null
+}
+/**
+ * Whether a v2 file (`v2`, v2.mjs's: its `bundle`) may be drawn or measured against the bundles `served` (bundleOf's): `{ ok: true }`
+ * where it was laid over them; `{ ok: false, why }`, naming both, where over others (a page laid over one bundle and drawn
+ * against another's composed document is unwrapped wherever the two differ: 2026-11-11, the toggles-on review drawing; a
+ * re-measure over the default bundles read 63 pages worse); `{ ok: true, warning }` for a file of before this guard, which
+ * names none
+ */
+export function bundleCheck(v2, served) {
+  const pair = v2.pair ?? '?'
+  if (!v2.bundle) return { ok: true, warning: `${pair}: its v2 file names no bundles (laid before the bundles guard): drawn against ${served?.dir ?? 'none'} unchecked` }
+  if (served && v2.bundle.head === served.head) return { ok: true }
+  return {
+    ok: false,
+    why: `${pair}: laid over the bundles of ${v2.bundle.dir} (head ${v2.bundle.head.slice(0, 12)}), served ${served ? `${served.dir} (head ${served.head.slice(0, 12)})` : 'none'}`,
+  }
+}
 
 /** why a pair cannot be drawn from lab-data, or null: arXiv's PDF, today's server-made bundle, the door rows, the L1 bundle,
  *  and v2.mjs's pages (`work`, where v2.mjs wrote them) */
