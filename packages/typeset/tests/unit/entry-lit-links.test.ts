@@ -1091,6 +1091,34 @@ describe('S.figures over the part: a figure text drawn in its translation where 
     expect(m!.lit.left).toEqual([[[140, 398, 160, 406]]])
     expect(m!.lit.right[0]).toHaveLength(1)
   })
+  it('lights a figure text on its own lines\u2019 band alone, laid or not (Laid.lit band: no pad, no half leading of the page\u2019s body)', () => {
+    // (2610.21313v1-zh p3 t179 on the fresh rows' sheet: a 4.67 pt label padded by the page's half leading reached the label of
+    // the card behind it; a figure text's shape is its band, docs/PDF-READER.md §17.9)
+    const laid = layPage(part(label()), rowsOf([rowF('Verlust')]), rules, metrics()).members[0]!
+    expect(laid.state).toBe('laid')
+    expect(laid.lit.band).toBe(true)
+    const kept = layPage(part(label()), rowsOf([rowF('Loss')]), rules, metrics()).members[0]!
+    expect(kept.state).not.toBe('laid')
+    expect(kept.lit.band).toBe(true)
+    // (a paragraph's never)
+    const para = layPage(part(member({ ord: 1, text: idG })), rowsOf([rowF('ein Satz', idG)]), rules, metrics())
+      .members[0]!
+    expect(para.lit.band).toBeUndefined()
+    // (and inside its container where the part states one: a closed shape 4 over its baseline (400), a stroke 1 under it; its
+    // line's band 398-406 on A, its drawn band about the same baseline, each cut to 399-404 on both panes)
+    const boxed = label({ room: { below: 1, next: 9, side: [120, 180], over: 4, under: 1 } })
+    for (const [rows, state] of [
+      [rowsOf([rowF('Verlust')]), 'laid'],
+      [rowsOf([rowF('Loss')]), 'none'],
+    ] as const) {
+      const b = layPage(part(boxed), rows, rules, metrics()).members[0]!
+      expect(b.state).toBe(state)
+      for (const box of [...b.lit.left.flat(), ...b.lit.right.flat()]) {
+        expect(box[1]).toBeCloseTo(399, 6)
+        expect(box[3]).toBeCloseTo(404, 6)
+      }
+    }
+  })
   it('lays a link round a figure text drawn in its translation over its drawing, never at A’s box over its hidden ink (Codex on #634)', () => {
     // ("Loss" 140-160 drawn "Verlust" 136-164 about its centre, its text group off. Its link round it on A stayed at A's box,
     // 139-161: the drawing's ends dead. A figure text drawn has no link group: one target's annotations round all of it go over

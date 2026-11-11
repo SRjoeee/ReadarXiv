@@ -548,6 +548,8 @@ describe('page session', () => {
     await h.session.ready
     h.deps.config.get = async () => { throw new TypeError('the endpoint said: sk-not-for-the-log') }
     await expect(h.session.start()).rejects.toThrow(TypeError)
+    // Read after the status: the scope the status bound is released, as a refusal releases it (Codex on #184)
+    expect(h.cancelled).toEqual([h.statusCalls[0]])
     expect(h.trace()).toContain('start failed (TypeError; message withheld)')
     expect(h.trace().join('\n')).not.toContain('sk-not-for-the-log')
     // The failed start is over: the next one is judged on its own
@@ -746,6 +748,24 @@ describe('page session', () => {
       await vi.waitFor(() => expect(asked(h)).toContain('label'))
       expect(asked(h).slice(before).filter(id => id !== 'label')).toEqual([])
       expect(document.getElementById('label')!.nextElementSibling?.classList.contains('axt-t')).toBe(true)
+    })
+
+    it('figures switched on while the start waits for the chain\'s state: the session starts with them on (the switch is not lost to the start\'s earlier read)', async () => {
+      const h = harness({ page: PAGE + PICTURE, config: { image: { enabled: false } }, holdStatusAt: 1 })
+      live = h.session
+      const started = h.session.start()
+      await settle()
+      expect(h.statusCalls).toHaveLength(1)
+      // The popup's switch, while the status is out: the store written, then the watcher's event
+      const on = { ...h.config(), image: { enabled: true } }
+      await h.deps.config.set(on)
+      h.session.onConfig(on)
+      h.releaseStatus()
+      expect(await started).toEqual({ started: true })
+      await settle()
+      expect(document.documentElement.getAttribute(IMG_MODES_ATTR)).toBe('stack side only')
+      await h.session.translate(h.blocks)
+      expect(asked(h)).toContain('label')
     })
 
     it('figures on show in every display (the redesign\'s design, §4): a label reached in stacked is asked for there', async () => {

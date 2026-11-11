@@ -118,6 +118,31 @@ export const FRESH_SAYS = 'the two sides drew different translations: today its 
  * today's ord), or a tie, a run-in, a line of several, a table's group (its `cells`) that holds one. Run once over a page every
  * pass has added to
  */
+/**
+ * The differences carried from an earlier round (lab-data parity/carried.json, measure.mjs): a page judged worse on stored rows
+ * that left the worse list only because its unit is laid with a fresh row since, unjudged on line count, size, stretch and
+ * sentence pairing (the coordinator's ruling, round 8 B8) - carried on every later sheet with its state now, so that it never
+ * vanishes from the count. Each entry `{ pair, page, unit, flag, since, modes, was }` of `mode` with `state` ('unjudged: a
+ * fresh row', 'judged: worse', 'judged: not worse', 'page not drawn') and `now`, the unit's line counts on this sheet
+ */
+export function carriedOf(entries, pages, mode) {
+  const out = []
+  for (const e of entries ?? []) {
+    if (!(e.modes ?? ['default']).includes(mode)) continue
+    const p = pages.find((x) => x.pair === e.pair && x.page === e.page)
+    if (!p) {
+      out.push({ ...e, state: 'page not drawn' })
+      continue
+    }
+    const u = (p.units ?? []).find((x) => x.key === e.unit)
+    const now = u ? { today: u.sides?.today?.lines ?? null, v2: u.sides?.v2?.lines ?? null, original: u.sides?.v2?.olines ?? u.sides?.today?.olines ?? null } : null
+    const fresh = (p.fresh?.units ?? []).includes(e.unit)
+    const worse = (p.diffs ?? []).some((d) => d.worse && d.flag === e.flag && (d.unit ?? '').split(' ')[0] === e.unit)
+    out.push({ ...e, state: worse ? 'judged: worse' : fresh ? 'unjudged: a fresh row' : 'judged: not worse', now })
+  }
+  return out
+}
+
 export function tagFresh(p, v2, todayOf) {
   const causeOf = new Map()
   for (const o of v2.fresh ?? []) {
@@ -345,7 +370,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     if (lines.length && m.lines[0]?.[0] === n && lb?.[0] === n && Math.abs(lb[5] - lines[0].y) <= 0.5) lines[0] = { ...lines[0], label: lb[1] }
     orig.set(keyOfPart(m.ord), { kind: m.kind, align: m.align, style: m.style, lines, first: m.lines[0]?.[0] === n, last: m.lines.at(-1)?.[0] === n, top: !!top?.has(m.ord), part: m.ord, size: m.style.size, label: m.label ?? null, pitch: m.pitch ?? null })
   }
-  // (a caption's label on a line of its own (Label with no `line`, PDF-READER §18.29): v2 draws its relabel as a row of its own on
+  // (a caption's label on a line of its own (Label with no `line`, PDF-READER §18.34): v2 draws its relabel as a row of its own on
   // the label's baseline, today keeps the original's ink there. The row is no line of the unit's text: the anchor, the line
   // count and every measure of lines read the text's lines on both sides; the labels measure reads the row (Vall))
   for (const [key, o] of orig) {
@@ -923,7 +948,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // (the highlight as the reader sees it: a drawn line by its ink (a CJK opening mark's blank first half, a closing mark's blank
   // second half, no ink), each side's boxes as its reader paints them: today's as its shapes paint them (today/entry.mjs
   // litBoxes), v2's Laid.lit and its kept ink's boxes padded as the reader's highlight.ts paints them, PAINT_PAD beside and
-  // half the page's leading above and below (halfLeading: half the lower quartile of the gaps between a member's rows))
+  // half the page's leading above and below (halfLeading: half the lower quartile of the gaps between a member's rows); a figure
+  // text's on its band alone (Laid.lit `band`))
   const leadOf = (side) => {
     const gaps = []
     for (const m of v2.pages[n]?.members ?? [])

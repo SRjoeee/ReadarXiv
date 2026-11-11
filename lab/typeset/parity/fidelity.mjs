@@ -14,6 +14,20 @@ export const SIZE_STEP = 0.025
 /** device pixels of a side's text over other ink that a reader sees: three crossings of two strokes at reading size (a stroke
  *  of 10 pt type is 1.6 to 2.7 device px wide at the parity's 2.67 px a point) */
 export const OVER_MIN = 20
+/** a device pixel of the parity's drawing, in points: PDF.js's scale 1 (96/72 CSS px a point) at device scale 2 (render.mjs SCALE,
+ *  DPR); the bound the pixel comparison reads a glyph shown by (analyse.mjs partsOf: its ink there or within a device pixel) */
+export const DEVICE_PT = 72 / 96 / 2
+/**
+ * Whether a crop of a side's drawing stands where its source stands, so that `erased` reads its pixels as the original's in
+ * place: its source on this page and each edge of its drawn box within a device pixel of its source's (DEVICE_PT, the bound the
+ * pixel comparison reads by); else it is moved, and its drawn place is set aside (render.mjs `moved`). A crop is a whole copy of
+ * its source's ink wherever it stands. Within half a point, a crop the translation set 0.43 pt right of its source (2608.25210v2
+ * p3 t56's `[sentence_2]`, 1.15 device px) was in place, and its whole "[" read as the original's shown in part. `c`: [group,
+ * x0, y0, x1, y1 drawn, piece, sx0, sy0, sx1, sy1 its source, source page]
+ */
+export function inPlace(c, n) {
+  return c[10] === n && [1, 2, 3, 4].every((i) => c[i + 5] !== null && Math.abs(c[i] - c[i + 5]) <= DEVICE_PT)
+}
 /** an original glyph shown in part (an erasure's sliver): at least this many device px of it shown, and at least SLIVER_SHARE
  *  of it, at most PART_SHARE (more is the glyph kept, its edge a sub-pixel phase off) */
 export const SLIVER_PX = 6
@@ -307,6 +321,19 @@ export function measureFidelity(c) {
     }
   }
 
+  // (today's element of v2's element `k` of source `src`, the `rank`-th of that source in v2's unit: today's of the same piece
+  // id where today's placeholder there is that source (a unit joined by its id, the same pieces), or where the part states no
+  // source; else today's placeholder of that source, the same occurrence (a unit whose content moved, stage 1a's (o) or (k) by
+  // group: today's `\%` a placeholder v2 writes as text, each piece after it numbered otherwise; round 8 B8, 1810.04805 p4 t47,
+  // v2's \citet read as today's \ref two pieces on); none where today's unit holds no such placeholder)
+  const todayElementOf = (tu, k, src, rank) => {
+    if (!tu) return undefined
+    const flat = (x) => (x ?? '').replace(/\s+/g, ' ').trim()
+    const at = tu.pieces?.find((p) => String(p.k) === k)
+    if (src == null || flat(at?.src) === flat(src)) return tu.elements?.find((e) => String(e.k) === k)
+    const p = (tu.pieces ?? []).filter((q) => q.kind === 'ph' && flat(q.src) === flat(src))[rank]
+    return p ? tu.elements?.find((e) => e.k === p.k) : undefined
+  }
   // ---------------- elements: an element drawn otherwise than the original sets it: its pieces apart that TeX set on one line,
   // its scripts or sizes set flat as text, or drawn as nothing where TeX set ink for it
   const wrong = { today: new Map(), v2: new Map() }
@@ -378,7 +405,10 @@ export function measureFidelity(c) {
     const today = c.todayOf.get(ord)
     const tu = today !== undefined ? prepByOrd.get(today) : undefined
     const firstLaid = Math.min(...Object.entries(v2.pages).filter(([, p]) => p.members.some((x) => x.ord === ord && x.state === 'laid')).map(([pg]) => Number(pg)))
-    for (const [k, kind, boxes, inkAll, text, raised, keep, literal] of m.els) {
+    const seen = new Map()
+    for (const [k, kind, boxes, inkAll, text, raised, keep, literal, src] of m.els) {
+      const rank = src == null ? 0 : (seen.get(src) ?? 0)
+      if (src != null) seen.set(src, rank + 1)
       if (!VISIBLE(kind) || keep) continue
       const id = `${ord}:${k}`
       if (cropped('v2', ord, boxes) || keptHere('v2', id)) continue
@@ -394,7 +424,7 @@ export function measureFidelity(c) {
       // TeX set nothing: no element missing. Missing where TeX's points hold ink: today's reading finds it on this page, or its
       // points hold ink its reading lost)
       if (text === 2 || kind === 'symbol' || ((kind === 'macro' || kind === 'umacro') && text === 1)) continue
-      const te = tu?.elements?.find((e) => String(e.k) === k)
+      const te = todayElementOf(tu, k, src, rank)
       const found = te?.segs?.some((g) => g.page === n)
       // (a piece whose ink stands outside its unit's lines, OUTSIDE, stays the original's in place on both sides: an IEEE drop
       // cap, 2610.20484 p1)
@@ -540,18 +570,30 @@ export function measureFidelity(c) {
     gaps.sort((a, b) => a - b)
     return gaps.length ? { pitch: gaps[gaps.length >> 1], size } : null
   }
+  // (the original's lines the unit lays: not those of an element v2 keeps as the original's ink at its own size, a prompt box
+  // set in a face of one pitch (lane b5-fixes; round 8 B8, 2608.25210 p3 t55: its description at 8.97 pt over a box at 7.97,
+  // the box's size read as the unit's and its lines as the unit's room). A line is the element's where its baseline is one of
+  // the element's ink boxes' on this page and the two overlap across)
+  const laidLinesOf = (o) => {
+    const kept = (facts.get(o.part)?.els ?? []).filter((e) => e[6]).flatMap((e) => e[2])
+    if (!kept.length) return o.lines
+    return o.lines.filter((l) => !kept.some((b) => Math.abs(l.y - b[4]) <= 1 && Math.min(l.x1, b[2]) - Math.max(l.x0, b[0]) > 0.5 * (b[2] - b[0])))
+  }
   const tight = { today: new Map(), v2: new Map() }
   const leadOf = new Map()
   for (const [side, M] of [['today', T], ['v2', V]])
     for (const [key, ls] of M) {
       const o = orig.get(key)
       if (!o || o.lines.length < 2 || /figure/.test(o.kind ?? '') || o.kind === 'cell') continue
+      const own = laidLinesOf(o)
+      if (!own.length) continue
       const fl = flat(ls)
+      // (with a kept element's lines set apart, TeX's \baselineskip and the size of the lines left where one line is left)
       const d = pitchOf(fl),
-        read = pitchOf(o.lines)
+        read = pitchOf(own) ?? (o.pitch && own.length < o.lines.length ? { pitch: o.pitch, size: own.map((l) => l.size).sort((x, y) => x - y)[own.length >> 1] || 10 } : null)
       if (!d || !read) continue
       const a = o.pitch ? { pitch: o.pitch, size: read.size } : read
-      const room = Math.min(...fl.map((l) => l.y)) - Math.min(...o.lines.map((l) => l.y)) >= a.pitch - 0.5
+      const room = Math.min(...fl.map((l) => l.y)) - Math.min(...own.map((l) => l.y)) >= a.pitch - 0.5
       const t = room ? Math.max(0, 1 - d.pitch / d.size / (a.pitch / a.size)) : 0
       tight[side].set(key, t)
       leadOf.set(`${side}|${key}`, d.pitch / d.size)

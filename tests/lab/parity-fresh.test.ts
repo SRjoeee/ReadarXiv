@@ -13,7 +13,7 @@ import { scriptedFetch } from '@readarxiv/translate/testing'
 // @ts-expect-error — a plain node module of the lab
 import { cachedTranslator, freshNeeds, freshRowsOf, keylessLock, logFill, pacedFetch, withFresh } from '../../lab/typeset/parity/fresh.mjs'
 // @ts-expect-error — a plain node module of the lab
-import { FRESH_SAYS, freshOf, judgedChanged, measurePage, NAME_CODE_RULING, offOriginalOf, tagFresh } from '../../lab/typeset/parity/verdict.mjs'
+import { carriedOf, FRESH_SAYS, freshOf, judgedChanged, measurePage, NAME_CODE_RULING, offOriginalOf, tagFresh } from '../../lab/typeset/parity/verdict.mjs'
 
 type Row = { id: string; ok: boolean; by?: string; content?: unknown[] }
 const unit = (id: string, s: string, kind = 'para') => ({ id, kind, content: [{ t: 'text', s }] })
@@ -335,5 +335,30 @@ describe('the keyless endpoint, one sender at a time across lanes', () => {
     } finally {
       globalThis.fetch = real
     }
+  })
+})
+
+describe('a difference carried from a round whose unit is now on a fresh row (the coordinator, round 8 B8)', () => {
+  // (a page worse on stored rows in B7 that left the worse list only because its unit is laid with a fresh row now, unjudged on
+  // line count: carried on every later sheet with its state, so that it never vanishes. 2608.25210 p11 t214: today 5 lines, v2 4,
+  // the original 6)
+  const entry = { pair: '2608.25210v2-zh', page: 11, unit: 't214', flag: 'line-count', since: 'B7', modes: ['default'], was: { today: 5, v2: 4, original: 6 } }
+  const page = (o: { fresh?: string[]; v2?: number; worse?: boolean } = {}) => ({
+    pair: '2608.25210v2-zh',
+    page: 11,
+    units: [{ key: 't214', kind: 'para', sides: { today: { lines: 5, olines: 6 }, v2: { lines: o.v2 ?? 4, olines: 6 } } }],
+    diffs: o.worse ? [{ flag: 'line-count', unit: 't214 para', worse: true }] : [],
+    ...(o.fresh ? { fresh: { units: o.fresh } } : {}),
+  })
+  it('states it unjudged on a fresh row, with v2’s value now beside the one it was carried with', () => {
+    expect(carriedOf([entry], [page({ fresh: ['t214'] })], 'default')).toEqual([
+      { ...entry, state: 'unjudged: a fresh row', now: { today: 5, v2: 4, original: 6 } },
+    ])
+  })
+  it('states it judged worse again, judged and not worse, or its page not drawn; and none in a mode it does not name', () => {
+    expect(carriedOf([entry], [page({ worse: true })], 'default')[0].state).toBe('judged: worse')
+    expect(carriedOf([entry], [page({ v2: 6 })], 'default')[0]).toMatchObject({ state: 'judged: not worse', now: { v2: 6 } })
+    expect(carriedOf([entry], [], 'default')[0].state).toBe('page not drawn')
+    expect(carriedOf([entry], [page()], 'toggles-on')).toEqual([])
   })
 })

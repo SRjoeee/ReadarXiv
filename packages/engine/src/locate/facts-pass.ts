@@ -473,6 +473,18 @@ export function factsOf({
         }
         return spellOf(s).slice(0, WANT)
       }
+      // (the text before a projection offset, up to the piece before it that sets ink, and from it, spelled: as textBefore and
+      // textInside read a group's open)
+      const textAt = (o: number, step: 1 | -1) => {
+        const at: { s: string; inked: boolean }[] = []
+        for (const x of seq)
+          if (x.t === 'text') for (let c = 0; c < x.s.length; c++) at.push({ s: x.s[c]!, inked: false })
+          else if (x.t === 'el' || x.t === 'unit') at.push({ s: '', inked: inked(x) })
+        let s = ''
+        for (let k = step > 0 ? o : o - 1; k >= 0 && k < at.length && !at[k]!.inked; k += step)
+          s = step > 0 ? s + at[k]!.s : at[k]!.s + s
+        return step > 0 ? spellOf(s).slice(0, WANT) : spellOf(s).slice(-WANT)
+      }
       // (B's glyphs of the unit's text before b, and from it, spelled, up to an element's)
       const pB = (b: number) => {
         let p = 0
@@ -521,6 +533,17 @@ export function factsOf({
             return tb && ta && before.endsWith(tb) && after.startsWith(ta) ? [groupBefore(q + 1)!] : []
           })
           if (new Set(met).size === 1) at = { group: met[0]! }
+          // (where no group's open meets the end, a group the instrument wrote as its content that stood there, read as a group's
+          // open is: a paragraph TeX opened at it, which nothing states now, counted (a gate))
+          else if (
+            !met.length &&
+            unit.passed?.some((o) => {
+              const tb = textAt(o, -1),
+                ta = textAt(o, 1)
+              return tb && ta && before.endsWith(tb) && after.startsWith(ta)
+            })
+          )
+            mem.opensLost = (mem.opensLost ?? 0) + 1
         }
         if (!at) continue
         if ('el' in at) {

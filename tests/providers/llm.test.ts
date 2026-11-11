@@ -3,7 +3,8 @@
 // as its remedy; the key goes to the service alone (#88 E3, E4)
 import { APICallError } from 'ai'
 import { MockLanguageModelV4 } from 'ai/test'
-import { chainOf, Fault, type FetchInit, type FetchReply, type Result, type Translator, type UnitIn } from '@readarxiv/translate'
+import { chainOf, Fault, type FetchInit, type FetchReply, type Result, type Store, type Translator, type UnitIn } from '@readarxiv/translate'
+import { fakeClock } from '@readarxiv/translate/testing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG, type Config } from '@/config/schema'
 import { endpointIdentity, LLM_LIMITS, llmTranslator, withoutKey } from '@/providers/llm'
@@ -78,6 +79,39 @@ describe('the LLM translator', () => {
     expect(sent).toContain('Input and Output Protocol')
     expect(sent).toContain('<x id')
   })
+  it("a stored answer is keyed by the glossary entries its own wire uses: an entry it does not use leaves it in reach, its own term's change asks again (#637)", async () => {
+    let calls = 0
+    const model = modelReturning(() => { calls++; return { segments: [{ id: '0', text: 'Ein Satz.' }] } })
+    const entries = new Map<string, string>()
+    const store: Store = { read: async ks => ks.map(k => entries.get(k) ?? null), write: async es => { for (const [k, v] of es) entries.set(k, v) } }
+    const chain = chainOf({ store })
+    const llm = llmTranslator(SVC, { codeOf, model })
+    const drain = async (it: AsyncIterable<Result>) => { for await (const _ of it); }
+    const ask = (u: UnitIn, glossary: { term: string; translation: string }[]) => drain(chain.translate([u], 'de', { translators: [llm], context: { title: 'T', glossary } }))
+    const none: UnitIn = { id: 'u', content: [{ t: 'text', s: 'A sentence without any term.' }] }
+    const kernel = { term: 'kernel', translation: 'Kern' }
+    await ask(none, [kernel])
+    await ask(none, [kernel, { term: 'lattice', translation: 'Gitter' }])
+    expect(calls).toBe(1)
+    // the key of a unit that uses no entry is the key with no glossary at all
+    await drain(chain.translate([none], 'de', { translators: [llm], context: { title: 'T' } }))
+    expect(calls).toBe(1)
+    const uses: UnitIn = { id: 'k', content: [{ t: 'text', s: 'The kernel of a map.' }] }
+    await ask(uses, [kernel])
+    await ask(uses, [kernel, { term: 'lattice', translation: 'Gitter' }])
+    expect(calls).toBe(2)
+    await ask(uses, [{ term: 'kernel', translation: 'Kernel' }])
+    expect(calls).toBe(3)
+  })
+  it("a request's prompt holds the union of the entries each of its wires uses, in the table's order: no entry made of two wires' ends", async () => {
+    let sent = ''
+    const model = modelReturning(() => ({ segments: [{ id: '0', text: 'a' }, { id: '1', text: 'b' }] }), o => { sent = JSON.stringify(o) })
+    const t = llmTranslator(SVC, { codeOf, model })
+    const glossary = [{ term: 'tree', translation: 'Baum' }, { term: 'neural network', translation: 'NN' }, { term: 'graph', translation: 'Graph-de' }]
+    await all(t.send(['A graph and a neural', 'network of a tree.'], { target: 'de', context: { glossary } }, new AbortController().signal))
+    expect(sent).toContain('tree -> Baum\\ngraph -> Graph-de')
+    expect(sent).not.toContain('neural network -> NN')
+  })
   it('through the chain: a reply that loses an element is asked alone once more, then the next translator answers', async () => {
     let calls = 0
     const model = modelReturning(() => {
@@ -97,18 +131,47 @@ describe('the LLM translator', () => {
     expect(await faultOf(t)).toMatchObject({ remedy: 'off', code: 'no-key' })
     expect(doGenerate).not.toHaveBeenCalled()
   })
-  it("each failure as its remedy: a refused key off, a model the endpoint lacks off, a 429 cools with its Retry-After, a 400 halves, a 5xx again, a reply with no object again once", async () => {
+  it("each failure as its remedy: a refused key off, a model the endpoint lacks off, a 429 cools with its Retry-After, a 413 too large, a 400 passed whole, a 5xx again, a reply with no object again once", async () => {
     const statuses: number[] = []
     const run = (e: unknown) => faultOf(llmTranslator(SVC, { codeOf, model: modelThrowing(e), onStatus: s => statuses.push(s) }))
     expect(await run(apiError(401))).toMatchObject({ remedy: 'off', code: 'key-refused' })
     expect(await run(apiError(403))).toMatchObject({ remedy: 'off', code: 'key-refused' })
     expect(await run(apiError(404))).toMatchObject({ remedy: 'off', code: 'model' })
     expect(await run(apiError(429, 'slow', { 'retry-after': '7' }))).toMatchObject({ remedy: 'cool', code: 'rate' })
-    expect(await run(apiError(400))).toMatchObject({ remedy: 'halve' })
+    expect(await run(apiError(413))).toMatchObject({ remedy: 'pass', code: 'too-large' })
+    expect(await run(apiError(400))).toMatchObject({ remedy: 'pass', code: 'malformed' })
     expect(await run(apiError(502))).toMatchObject({ remedy: 'again', code: 'network' })
     expect(await run(Object.assign(new Error('no object'), { name: 'AI_NoObjectGeneratedError' }))).toMatchObject({ remedy: 'again', code: 'malformed' })
     expect(await run(Object.assign(new Error('aborted'), { name: 'AbortError' }))).toMatchObject({ remedy: 'abort' })
-    expect(statuses).toEqual([401, 403, 404, 429, 400, 502])
+    expect(statuses).toEqual([401, 403, 404, 429, 413, 400, 502])
+  })
+  it("a 429's Retry-After of an hour does not hold a call: one request, no sleep, the unit told the hour (#638: 7,200,000 ms)", async () => {
+    const clock = fakeClock()
+    let calls = 0
+    const model = new MockLanguageModelV4({ doGenerate: async () => { calls++; throw apiError(429, 'slow', { 'retry-after': '3600' }) } })
+    const rs: Result[] = []
+    for await (const r of chainOf({ clock }).translate([{ id: 'u', content: [{ t: 'text', s: 'One sentence.' }] }], 'zh-Hans', { translators: [llmTranslator(SVC, { codeOf, model })] })) rs.push(r)
+    expect(rs).toEqual([{ id: 'u', ok: false, why: { kind: 'unavailable', retryAfterMs: 3_600_000 } }])
+    expect(calls).toBe(1)
+    expect(clock.now()).toBe(0)
+  })
+  it('an endpoint that answers 400 to every request is asked once and the request handed on whole (#636: 7 requests, 11 alone)', async () => {
+    const units = [0, 1, 2, 3].map(i => ({ id: `u${i}`, content: [{ t: 'text' as const, s: `Sentence number ${i} of a paragraph.` }] }))
+    const drain = async (it: AsyncIterable<Result>) => { const out: Result[] = []; for await (const r of it) out.push(r); return out }
+    let calls = 0
+    const model = new MockLanguageModelV4({ doGenerate: async () => { calls++; throw apiError(400) } })
+    const fallback: Translator = {
+      identity: 'fallback:0', digest: 'd', context: false, limits: LLM_LIMITS, supports: async () => true,
+      write: u => JSON.stringify(u.content), read: (_u, raw) => ({ content: JSON.parse(raw) }),
+      async *send(wires) { for (const [i, w] of wires.entries()) yield [i, w] as const },
+    }
+    const rs = await drain(chainOf().translate(units, 'zh-Hans', { translators: [llmTranslator(SVC, { codeOf, model }), fallback] }))
+    expect(calls).toBe(1)
+    expect(rs.every(r => r.ok && r.by === 'fallback:0')).toBe(true)
+    calls = 0
+    const alone = await drain(chainOf().translate(units, 'zh-Hans', { translators: [llmTranslator(SVC, { codeOf, model })] }))
+    expect(calls).toBe(1)
+    expect(alone.map(r => (r.ok ? 'ok' : r.why.kind))).toEqual(['unavailable', 'unavailable', 'unavailable', 'unavailable'])
   })
 })
 

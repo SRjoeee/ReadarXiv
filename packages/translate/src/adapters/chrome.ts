@@ -89,6 +89,7 @@ export function chrome(o: ChromeOptions): Translator {
     identity: `chrome:${sha256Hex(JSON.stringify(['chrome', 'Translator', 'tags/1', 'raw/1'])).slice(0, 16)}`,
     digest: CHROME_DIGEST,
     context: false,
+    wire: 'tags',
     limits: { ...CHROME_LIMITS, ...o.limits },
     async supports(target) {
       const api = o.api

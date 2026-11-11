@@ -1,7 +1,8 @@
 #!/bin/bash
 # lab/pdf/prepare-back/corpus.sh <papers.tsv> <out> <caches> [parallel] [run.mjs flags…]: every paper of the list (id <tab> dir) through run.mjs,
 # at most `parallel` (default 2) at once, none started under 12 GiB free. One line a paper in <out>/log.tsv: id, exit, the
-# summary line (exit 3: a compile no cache holds). Run it inside the lab's heavy slot (its machine is short of memory).
+# summary line (exit 3: a compile no cache holds; exit 4: run.mjs's gate of a paragraph opened at a group written as its content,
+# counted failed). Run it inside the lab's heavy slot (its machine is short of memory).
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 LIST=${1:?papers.tsv}; OUT=${2:?out}; CACHES=${3:?caches}; PAR=${4:-2}; shift 4 2>/dev/null || shift $#; FLAGS=("$@")

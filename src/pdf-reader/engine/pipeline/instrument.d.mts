@@ -30,6 +30,9 @@ export declare function spansOf(
   pieces: readonly { t: string; src?: string; [more: string]: unknown }[],
   colours?: ReadonlyMap<number, number> | null,
 ): [string, SpanClass][]
+/** where each group written as its content (passThroughOf) opened, as offsets in the unit's projection: the engine's facts pass
+ *  counts a paragraph TeX opened at one (InstrumentUnit.passed, Located.stats.opensLost) */
+export declare function passedOf(pieces: readonly { t: string; src?: string; s?: string; [more: string]: unknown }[]): number[]
 /** explicit glue as TeX sets it (layer2.mjs glueOf) */
 export declare function glueOf(src: string): { em?: number; bp?: number; brk: boolean } | null
 /** a forced break's source (tex.mjs FORCED_BREAK) */

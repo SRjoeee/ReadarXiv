@@ -17,6 +17,7 @@
 // AND, today's inkorphan, v2's inknames), the coordinator's ruling of 2026-11-10, heldJoin.
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { HOLDER_JOIN } from '../../pdf/prepare-back/stated.mjs'
 import { INK_KIND } from '../../../packages/engine/src/locate/today/ink-units.mjs'
 import { unitId } from '../../../packages/format/src/ids.ts'
 import { sourcePieces } from '../../../packages/typeset/src/lay/read.ts'
@@ -31,14 +32,15 @@ function ownIdOf(m, units) {
   return named ? todayUnitOf(named).id : m.text
 }
 
-/** the causes stage 1a states a unit of today's held whole by one unit of the candidate's by (stated.mjs's keys); `order` where
- *  the statement names its holder: a names unit's stand-in of its ledger class, today's characters in another order (its kind
- *  moved; the coordinator's ruling of 2026-11-10, round 8 B2b) */
-const HOLDS = new Set(['held', 'names', 'heldBlock', 'order'])
-/** the causes the joined join reads besides: today's unit now wholly an element of the holder that keeps it as the original's ink,
- *  (k) on elements and (n) (stated.mjs's `pitch` and `decoration` with a holder, lane fig-text): one of the units the holder
- *  holds in order, its text the element's */
-const JOINS = new Set([...HOLDS, 'pitch', 'decoration'])
+/** the causes stage 1a states a unit of today's held whole by one unit of the candidate's by, the statement naming the holder
+ *  (stated.mjs's HOLDER_JOIN 'whole': (f), (b'), (f'), a names unit's stand-in of its ledger class (`order`), (l') `seen`, (k) by
+ *  group `pitchGroup`, (o) `characters`): read from stage 1a's own table, so that a cause it states with a holder is joined as it
+ *  declares (round 8 B8: this list, kept here by hand, had gained `pitchGroup` and not `characters`) */
+const HOLDS = new Set(Object.keys(HOLDER_JOIN).filter((cause) => HOLDER_JOIN[cause] === 'whole'))
+/** the causes the joined join reads: those and today's unit now wholly an element of the holder that keeps it as the original's
+ *  ink, (k) on elements and (n) (HOLDER_JOIN 'element': `pitch`, `decoration`, lane fig-text): one of the units the holder holds
+ *  in order, its text the element's */
+const JOINS = new Set(Object.keys(HOLDER_JOIN))
 /** the folder of the candidate's prepare dumps, stage 1a's statements in them: AXT_L1_DUMPS, else the one beside the bundles
  *  (a stage 1a run's `<run>/prepare`, its bundles `<run>/bundles`) */
 export const L1_DUMPS = process.env.AXT_L1_DUMPS ?? join(L1_BUNDLES, '..', 'prepare')

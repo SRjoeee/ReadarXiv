@@ -44,11 +44,12 @@ export function paintedShape(boxes, others, pad, lead, column) {
  * Each shape v2's reader paints of a member's highlight on a pane (Laid.lit): one an entry, as the pointer over that sentence
  * lights it (a member lit whole: its one entry), its displays never with it (`own`: blocks of their own, lit alone); each as
  * paintedShape paints it, in the column the member spans there (columnOf, the reader's). `others`: every box lit on the pane
- * of the page
+ * of the page; a figure text's (Laid.lit `band`) on its band alone, as the reader paints it
  */
 export const paintedEntries = (lit, side, others, pad, lead) => {
   const column = columnOf(lit?.[side] ?? [], lit?.own ?? [])
-  return (lit?.[side] ?? []).map((boxes) => paintedShape(boxes, others, pad, lead, column))
+  // (a figure text on its own lines' band alone, Laid.lit's `band`: neither pad)
+  return (lit?.[side] ?? []).map((boxes) => paintedShape(boxes, others, lit?.band ? 0 : pad, lit?.band ? 0 : lead, column))
 }
 /** the column a member spans on a pane (the reader's columnOf over Laid.lit) */
 export const litColumn = (lit, side) => columnOf(lit?.[side] ?? [], lit?.own ?? [])
