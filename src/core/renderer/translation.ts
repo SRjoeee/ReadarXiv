@@ -18,6 +18,11 @@ export function setState(block: Block, state: BlockState): void {
   block.el.removeAttribute(PARTIAL_ATTR)
 }
 
+/** The state the block carries on the page, or null while no round has marked it */
+export function stateOf(block: Block): BlockState | null {
+  return block.el.getAttribute(STATE_ATTR) as BlockState | null
+}
+
 export function markPartial(block: Block): void {
   block.el.setAttribute(PARTIAL_ATTR, '')
 }
