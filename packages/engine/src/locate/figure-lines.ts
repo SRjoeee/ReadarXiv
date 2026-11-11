@@ -278,6 +278,11 @@ function linesOf(
         const x = fig.met.get(k)?.under ?? fig.units[k]!.under ?? null
         return x === null ? u : u === null ? x : Math.min(u, x)
       }, null)
+    // (the closed path that holds a text's units alone, the innermost: the interior it is laid in (judge))
+    const holderOf = (ks: readonly number[]) =>
+      (fig.holds ?? [])
+        .filter((h) => h.p === p && ks.every((k) => h.ks.includes(k)))
+        .sort((a, b) => a.ks.length - b.ks.length)[0]?.shape ?? null
     const taken = new Set<number>()
     // ---- F3's container step: the lines a closed path holds alone (figure-text.mjs containersOf), two or more, a node's label
     // (below), every one a line of words: one text, its lines top to bottom, centred, its room the path's inside (roomIn)
@@ -343,7 +348,7 @@ function linesOf(
         piecesInto(ft, r.read, false)
       })
       const items = itemsOf(ft.ks)
-      if (items.length) judge(ft, items, glyphs)
+      if (items.length) judge(ft, items, glyphs, h.shape)
       // (torn reads the lines as the text reads them: its rows in place of the runs they merged)
       const others = [...lines.filter((_, i) => !idx.includes(i)), ...L]
       if (!ft.why && L.some((l) => torn(ft, l, glyphs, loose, others))) ft.why = 'crowded'
@@ -379,7 +384,7 @@ function linesOf(
         piecesInto(ft, x.read, k === 0)
       })
       const items = itemsOf(ks)
-      if (items.length) judge(ft, items, glyphs)
+      if (items.length) judge(ft, items, glyphs, holderOf(ks))
       // (a formula of a line of it torn from ink no line took: the paragraph the original's, F1's)
       if (!ft.why && para.lines.some((x) => torn(ft, x.l, glyphs, loose, lines))) ft.why = 'crowded'
       out.push(ft)
@@ -396,7 +401,7 @@ function linesOf(
       if (ft) {
         ft.page = p
         ft.under = underOf(l.ks)
-        if (items.length) judge(ft, items, glyphs)
+        if (items.length) judge(ft, items, glyphs, holderOf(l.ks))
         if (!ft.why && torn(ft, l, glyphs, loose, lines)) ft.why = 'crowded'
         out.push(ft)
         return
@@ -423,7 +428,7 @@ function linesOf(
           container: null,
           under: m.under,
         }
-        judge(one, its, glyphs)
+        judge(one, its, glyphs, holderOf([k]))
         if (one.els.length || (fig.units[k]!.why === 'crowded' && one.why !== 'crowded')) out.push(one)
       }
     })
@@ -1160,13 +1165,19 @@ function torn(
  * inside), or unrelated ink, never covered: `crowded`. A decoration of a stretch is that stretch's element, carrying it (a
  * framed citation an element, never translated); of all of it, hidden with its text; a copy hidden with its text
  */
-function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[]): void {
+function judge(
+  ft: FigureText,
+  items: readonly TodayMet[],
+  glyphs: readonly G[],
+  holder: TodayShape | null = null,
+): void {
   const textGs = ft.order.flatMap((o) => (o.t === 'text' ? o.glyphs : o.t === 'el' ? ft.els[o.i]!.glyphs : []))
   // (its own: its text's and its elements' glyphs, and its label's, an item's marker, which no decoration is told by)
   const label = new Set(ft.label)
   const own = new Set([...textGs, ...ft.label])
   const at = new Map(textGs.map((g, i) => [g, i]))
-  let unrelated = false
+  let unrelated = false,
+    outside = false
   for (const it of fillsJoined(items, textGs, glyphs)) {
     if ('g' in it) {
       if (own.has(it.g)) continue
@@ -1292,9 +1303,45 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
         continue
       }
     }
+    // (ink on or outside the border of the closed path that holds the text alone (figure-text.mjs containersOf): the text is laid
+    // inside that path's interior, so the ink cannot be under its translation (the owner's ruling on placement; 2608.06701v1 p2's
+    // scroll, its outline one open stroke over its fill's border, a curl outside its corner the first row's room met))
+    if (holder && it.shape && !inInterior(it.shape, holder)) {
+      outside = true
+      continue
+    }
     unrelated = true
   }
   ft.why = unrelated ? 'crowded' : ft.why === 'crowded' ? null : ft.why
+  if (outside && !unrelated && holder && !ft.container) ft.container = roomIn(holder, textGs, glyphs)
+}
+
+/** whether a shape's ink stands inside a closed path's interior: a point of it (each segment's ends and its quarters) inside,
+ *  farther from the path's border than both strokes' half widths and a quarter point; on the border or outside it, none */
+function inInterior(shape: TodayShape, holder: TodayShape): boolean {
+  const s = shape.segs as ArrayLike<number>,
+    h = holder.segs as ArrayLike<number>
+  const tol = (shape.hw ?? 0) + (holder.hw ?? 0) + 0.25
+  const near = (x: number, y: number) => {
+    for (let i = 0; i + 3 < h.length; i += 4) {
+      const ax = h[i]!,
+        ay = h[i + 1]!,
+        bx = h[i + 2]!,
+        by = h[i + 3]!
+      const dx = bx - ax,
+        dy = by - ay
+      const t = dx || dy ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy))) : 0
+      if (Math.hypot(x - (ax + t * dx), y - (ay + t * dy)) <= tol) return true
+    }
+    return false
+  }
+  for (let i = 0; i + 3 < s.length; i += 4)
+    for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+      const x = s[i]! + t * (s[i + 2]! - s[i]!),
+        y = s[i + 1]! + t * (s[i + 3]! - s[i + 1]!)
+      if (interiorOf(h, x, y) && !near(x, y)) return true
+    }
+  return false
 }
 
 type Met =

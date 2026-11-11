@@ -465,6 +465,36 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     // "20-layer", two curves' labels))
     expect(node([[{ text: '56-layer', font: T, x: 100 }], [{ text: '65-layer', font: T, x: 100 }]], [], 75)).toEqual([])
   })
+  it('lays a text its container holds over ink on or outside the container’s border: a scroll’s open outline (2608.06701v1 p2)', () => {
+    // (a scroll: its closed fill holds two rows alone, set flush (no node's label, each row its own text); its outline one open
+    // stroke over the fill's border, a curl outside its top left corner, which the first row's room meets: today unrelated ink,
+    // the row kept; it lies on or outside the interior the text is laid in)
+    const T = 'ArialMT'
+    const { page, fig } = pageOf([
+      [{ text: 'Locate the actual', font: T, x: 80 }],
+      [{ text: 'validation checks', font: T, x: 80 }],
+    ])
+    const fill = rect(72, 680, 175, 712, { stroke: false, fill: true })
+    const outline: TodayShape = {
+      segs: [
+        74, 712, 175, 712, 175, 712, 175, 680, 175, 680, 72, 680, 72, 680, 72, 710, 72, 710, 68, 714, 68, 714, 74, 716,
+      ],
+      stroke: true,
+      fill: false,
+      hw: 0.3,
+    }
+    fig.holds = [{ p: 1, b: 0, ks: [0, 1], shape: fill }]
+    fig.units[0]!.why = 'crowded'
+    fig.met.set(0, { items: [boxMet(1, outline)], under: null })
+    const t = figureLinesOf([page], fig, () => false, null).find((x) => x.ks.includes(0))
+    expect(t?.why).toBeNull()
+    expect(t?.container).not.toBeNull()
+    // (ink inside the interior, a stroke across the row: crowded still)
+    const across: TodayShape = { segs: [100, 696, 100, 706], stroke: true, fill: false, hw: 0.3 }
+    fig.met.set(0, { items: [boxMet(1, across)], under: null })
+    const u = figureLinesOf([page], fig, () => false, null).find((x) => x.ks.includes(0))
+    expect(u === undefined || u.why === 'crowded').toBe(true)
+  })
   it('reads a closed path’s inside by its interior: a glyph inside its box and outside it crowds nothing (2608.06701v1 p2)', () => {
     // (one line in the diamond, "yes" beside it: in the diamond's box, outside the diamond)
     const { page, fig } = pageOf([
