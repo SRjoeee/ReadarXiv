@@ -3988,6 +3988,124 @@ bug? The original sets "Figure 1." at 47 in the margin and every line of its tex
   reading's (lane marks-2), not this rule's: it lays a label found, which needs Label.ink's start at the first line's measure
   start and its end before the text lines' shared start; a label on a line of its own is no hang.
 
+### 18.30 A character TeX writes escaped is a character of the text (2026-11-11)
+
+`\%`, `\&`, `\#`, `\$` were placeholders: each went out as a marker, the original's ink drawn for it. Microsoft read a marker as
+a boundary inside the term it stood in: "R&D" came back as its "D", a verb, then "R&" (2610.21098v1), and a percent stood apart from
+its number. Sent both ways over 110 units of the 88 papers (90 in Chinese, 20 in Japanese, lane style-wire): as text none was
+refused and no sentence map lost, 131 of 134 percents came back glued as the paper sets them (3 written as words), every "R&D" one
+term, 140 markers fewer.
+
+- **The kernel's control symbols `\%`, `\&`, `\#`, `\$`, `\{`, `\}` and textcomp's `\textasciitilde`, `\textbar`,
+  `\textless`, `\textgreater`, `\textbackslash` are the character they set, in its word** (`latex-front.mjs` textCharacter, the
+  letter commands' path): its source beside it, written back byte for byte; a control word's skipped spaces and an empty group
+  with it (`\textless 5` is "<5"), none after a control symbol (`5\% of` is "5% of"); a group around one alone spends its pair's
+  id; a paper's own definition of the command keeps it a placeholder. `\_` stays the identifier rule's (§18.25): an identifier or
+  an address read with such a character as TeX sets it is one placeholder as the paper writes it, as before (`keepRead`).
+- **A text `#` on the markers wire.** Microsoft gives back the entity `&#35;` as `#` (114 of 114 in Chinese, Japanese and German),
+  so the character goes bare, and a wire holding one is read as the HTML page reads a block that holds one (DESIGN §6.3): each
+  marker with its one `#`, no marker read without it, every other `#` the text's; a `#` right after a marker is refused (a doubled
+  closer or a moved `#`) unless the wire itself follows that marker with its text's `#` (`@b## of runs`, `@a# ## Root Goal`).
+  Today's wire (`mt.mjs`) read every reply as holding no `#` of its own and dropped each as a stray one; it now reads so too
+  (`TRANSLATE_VERSION`), as packages/translate's markers.ts does (`hashAfter`).
+- **The name rule reads "&" as mid-sentence** (`mt.mjs` isName): a capitalised word after "& " in the prose is a proper noun
+  there, a conjunction no sentence beginning after it. As a placeholder the `\&` stood in no text of the prose, and
+  2610.37818v1's "Tanks & Temples" cells were kept as the dataset's name; as its character they would have been sent.
+- **Measured** over the 88 papers' stage 1a against round 14's: 1,649 placeholders are characters now, in 851 units of 65
+  papers (`\%` 1,209, `\&` 270, `\#` 48, `\$` 26, `\{` and `\}` 20 each, `\textbar` 24, `\textasciitilde` 23, `\textless` 5,
+  `\textgreater` 3, `\textbackslash` 1), and the 65 papers are the ones whose objects moved. Otherwise: nested units' piece ids
+  and hashes, as their own units change; and three cells the name rule reads anew: 2610.21547v1's "ASR FedAvg (%)" (twice)
+  kept now, three name words, and 2610.21491v1's "MSE …%" no longer, four. Shown units 37,915 either way; against the baseline the
+  differential loses round 14's 11, 882 of today's units stated as the candidate's written as today's TeX with these characters
+  text (stage 1a's statement (o), `lab/pdf/prepare-back/stated.mjs`: the same unit, its id moved with its pieces, wherever either
+  lays it). The layout marks: such a character is text, so no mark stands
+  around it, and a paper's macro glued to it is read as before a word (its ink ends where the text begins: 2610.21098v1's
+  `\HarnessLimitShare{}\%`).
+
+### 18.31 A group that carries nothing is its content (2026-11-11)
+
+Every bare group `{…}` and every command the front end reads as setting its argument alone was a span of style `other`: in the
+bibliography RevTeX's `\bibinfo{field}{…}`, `\bibfield`, `\bibnamefont`, `\bibfnamefont`, a `.bbl`'s `\showarticletitle` and
+`\natexlab`, BibTeX's case braces; in the body a paper's `\newcommand{\techreport}[1]{#1}`. TeX sets their content as it would
+with no group: no face, no fill, no link, no paragraph of their own. Yet the tags wire (Google's, Chrome's, an LLM's) sent each as a
+tag pair, a `must` bare group was a marker pair on Microsoft's, and placement and the references counted them as groups.
+
+- **The rule** (`pipeline/instrument.mjs` passThroughOf, in piecesOf and spansOf): a group is a pair only if it changes how its
+  content is set or the reader needs its extent; decided from the front end's own facts, carried through the instrument. A pair the
+  front end read as setting its argument alone (latex-front.mjs identityPair, the open piece's `sets` 0) and a bare group holding no
+  declaration of its own (no placeholder that sets nothing directly inside it, `mt.mjs` isInkless: a switch it would scope), both of
+  its ends in the unit, are their content, their text joined with the text on either side. A group the front end says nothing of
+  stays one: a paper's macro that sets more (`\multicolumn`, `\rotatebox`, `\fbox`), a group around a declaration (`{\em …}`);
+  a command that prints its argument between marks is those marks as text and its argument (§18.32).
+- **Its gate.** The instrument decides this before TeX's paragraph ends are read; a paragraph TeX opened inside a unit is stated
+  on the group whose open the text meets there (SpanAt.opens), so one opened where a group written as its content stood would
+  have nothing to state it on. The instrument states where each such group opened (`InstrumentUnit.passed`, offsets in the
+  unit's projection; the bundle does not carry them), the facts pass counts a paragraph end the unit's text meets there as it
+  meets a group's open (`Located.stats.opensLost`), and stage 1a writes the count in the dump and fails the paper (`run.mjs`,
+  exit 4), so that such a case is a gate's and not a reader's. None over the 88.
+- **Measured** over the 88 papers, stage 1a against §18.30's: 23,454 groups written as their content in 2,354 units of 77 papers
+  (`\bibinfo` 10,428, `\bibnamefont` 4,084, `\bibfnamefont` 3,704, bare 3,282, `\bibfield` 1,729, `\showarticletitle` 170,
+  `\techreport` 44, `\natexlab` 12, `\anonymous` 1), each unit exactly the one before with those groups' ends out, every other
+  unit and part member (63,230) the same with the unit ids carried; drawn units (38,366) and pages (2,339) per paper the same.
+  Every fill stated on such a group was also its link's around it. The tags wire: 20,359 tag pairs fewer (34,579 to 14,220),
+  311,716 characters (3.9 %), in 2,257 units' wires; the markers wire: 264 units' wires change, a `must` bare group's markers
+  gone (1,991 characters).
+
+### 18.32 What a command prints as characters is characters: `\enquote`'s quotation marks (2026-11-11)
+
+`\enquote{X}` prints X between quotation marks. The front end read it as a pair around X (in a bibliography entry a span of
+style `other`), and csquotes' in the body as one placeholder: the marks were in no text piece and no element, so the translation
+was laid without them (below, as laid). The rule is §18.30's: what a command prints as
+characters is characters, and what a translator then does with quotation marks is the translator's. Not the original's ink (it
+would freeze English quotes around translated words, and ink cannot flow), not quotes of ours chosen per target (the
+translator's to choose).
+
+- **A command whose definition prints its argument between marks and nothing else** (`latex-front.mjs` wrapOf: its replacement
+  text `<marks>#n<marks>`, no letter, digit, command or group in the marks, both sides set): those marks are text of the unit,
+  TeX's ligatures read (``` `` ``` “, `''` ”, `` ` `` ‘, `'` ’, `--` –, `---` —), the call's source with them, written back byte for
+  byte; its argument walked as before, the pair's id spent. A paper's `\newcommand` and a `.bbl`'s `\providecommand` alike
+  (2610.10069v1's `\newcommand{\enquote}[1]{``#1''}`, REVTeX's `\providecommand \enquote [1]{``#1''}` in 2307.16209v1). A
+  definition that sets anything else stays the pair it was.
+- **csquotes' `\enquote`** (the paper defining none): the outer level's double marks, an `\enquote` inside one the inner level's
+  single, as csquotes alternates, `\enquote*` from the inner level (quoteMarks), where the marks can be read off the paper's
+  files: csquotes loaded with no style, `style=american`, `english` or `USenglish`, no `autostyle`, no `\setquotestyle`, no babel
+  or polyglossia language but English (`csquotesOf`). Another style, or a language's, is one placeholder as before: its marks are
+  the style's, which the compile's glyphs would tell (the element's own text, as an element's text is read); not read here. No
+  paper of the 88 loads csquotes.
+- **Measured** over the 88 papers' stage 1a against §18.31's: 51 units of 2 papers change (2610.10069v1 43, 2307.16209v1 8, all
+  references), each exactly with its `\enquote` pair out and “…” around its content; every other unit and part member the same;
+  drawn units (38,366) and pages per paper the same. The 51 wires all change: tags 10,730 to 10,114 characters, markers 7,010 to
+  7,104 (2610.10069v1-zh is a parity pair: 43 references, laid under the references toggle). Stage 1a's statement (o) reads a
+  pair v2 does not write as its content between the marks it may print (39 of today's units more stated by it); the
+  differential loses round 14's 11. Laid by the reader's own lay, Chinese by Microsoft, the references toggle on, before and after:
+  2307.16209v1 p143 "E. Berti，黑洞扰动理论，（2016）." and "E. Berti，“黑洞扰动理论”，（2016）."; 2610.10069v1 p24 "希克斯互补性与扰动效用模型" and "《Hicksian互补性与扰动效用模型》",
+  in title marks, the translator's choice for a title in Chinese (its "Hicksian" left English this time, also the translator's).
+
+### 18.33 A link with no address is its argument: REVTeX's `\href@noop {} {…}` (2026-11-11)
+
+REVTeX's `.bbl` writes an entry's journal part that has no DOI, and a note, as `\href@noop {} {…}`, its head defining the command
+as `\@secondoftwo`: it sets its second argument as it stands and links nothing. The front end read the call whole as one
+placeholder, so its content stayed the original's ink (every journal part of 2610.20030v1: its copy text read "@noop journal
+journal Soft Matter volume 18, pages 2168 ( year 2022)"), and an entry made of it alone was no unit at all (2610.20030v1's
+supplemental note, left the original's English).
+
+- **The rule** (`latex-front.mjs` BIB_TEXT): `\href@noop` is one of the bibliography's text commands, its text the second
+  argument: a pair the head's definition reads as setting its argument alone (§18.31: written as its content), the groups it
+  holds as before (`\textbf` around a volume a group of its own, `\enquote`'s marks text, §18.32), its numbers the original's ink
+  as every entry's.
+- **The census before it**, over the 88 papers: 93 such placeholders in 6 papers (2610.20030v1 37, 2307.16209v1 26, 2610.20451v1
+  14, 2610.20595v1 14, 2610.20716v1 1, 2610.21765v1 1), every one in a reference, its address empty, no command inside it that
+  links by another route; no link of arXiv's page is owned by one or stands on its ink (one, a neighbouring paragraph's
+  `\ref`, touches a line's edge); one call more, the note, was in no unit. Every paper defines it in its head as above.
+- **Measured** over the 88 papers' stage 1a against §18.32's: 93 units of the 6 papers change, each exactly its placeholder read
+  as its argument (2307.16209v1's `Painlev\'e` a letter of its word, as everywhere); the note is a unit, drawn; an ink unit of
+  2610.20030v1 goes, the line it held now its entry's own (an entry over a page break, its second line the journal part); the
+  other 82 papers' bundles the same byte for byte; drawn units 38,366 to 38,367, pages the same. Wires of the 93: tags 14,534 to
+  21,204 characters, markers 7,990 to 11,724 (the journal names sent); no parity pair's. Stage 1a's statement (o) reads today's
+  placeholder as the front end now reads it in an entry; the differential loses round 14's 11. Laid by the reader's own lay,
+  Chinese by Microsoft, the references toggle on: 2610.20030v1 p5's journal part, a crop of the original's English, is now
+  "软物质 18，2168（2022）." with its numbers the original's ink; its note "“请参见[出版社将插入网址]的补充资料，获取图表S1-S3和电影字幕。”".
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

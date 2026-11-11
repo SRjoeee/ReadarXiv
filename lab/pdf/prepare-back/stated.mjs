@@ -16,7 +16,8 @@ import { readingOf, scriptsKeptAsElements, scriptsKeptInAnotherOrder } from '../
 import { classifyFont } from '../../../packages/engine/src/locate/facts.ts'
 import { unitClass } from '../../../packages/engine/src/locate/today/content-classes.mjs'
 import { symbolText } from '../../../src/pdf-reader/engine/rules/text-symbols.mjs'
-import { identifiersIn } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { identifiersIn, inMemory, loadProject } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { isInkless } from '../../../src/pdf-reader/engine/translate/mt.mjs'
 
 /** how a unit made on arXiv's page reads where it stands for one of the baseline's */
 export const CAUSE = Object.freeze({
@@ -42,6 +43,13 @@ export const CAUSE = Object.freeze({
   // ((f): a unit of today's whose every line one unit of the candidate's holds and no other meets (its lines, its elements' boxes,
   // its label's), of any class, today's glyph text an in-order part of that unit's: accepted)
   held: 'held whole by another unit',
+  // ((o), the coordinator's rulings of 2026-11-11 on lane style-wire: a source unit of today's the candidate writes as today's
+  // TeX with each kernel or textcomp text symbol that is a character of its text now (latex-front.mjs textCharacter: `\%`, `\&`,
+  // `\#`, `\$`, `\{`, `\}`, \textasciitilde, \textbar, \textless, \textgreater, \textbackslash) its character, and each group
+  // that carries nothing its content (instrument.mjs passThroughOf), and the marks a command prints around its argument text
+  // (latex-front.mjs wrapOf: \\enquote's quotation marks): the same unit, its id moved with its pieces, wherever either lays it
+  // (its holder the candidate's unit))
+  characters: 'the same unit as v2 writes it: its escaped characters text, a group that carries nothing its content, the marks a command prints text, a link with no address its argument',
   // ((f)'s holding by a kept block, no text of it sent (2608.06007v1's biblatex bibliography kept whole): no text to read, stated
   // apart, not accepted)
   heldKept: 'held whole by a kept block, no text of it sent',
@@ -127,6 +135,90 @@ const FORMULA_MARK = '\ufffc'
 const UNREAD = '\u2400'
 /** how near two boxes' edges are one edge (PDF units: lines and boxes are stated to a hundredth) */
 const ON = 0.05
+/** how many groups opened after `from` are open at `at` (a piece directly in a group whose content begins at `from`: 0) */
+const depthAt = (ps, from, at) => {
+  let d = 0
+  for (let k = from; k < at; k++) d += ps[k].kind === 'open' ? 1 : ps[k].kind === 'close' ? -1 : 0
+  return d
+}
+/** today's TeX of a unit as v2 writes it: each text symbol that is a character of v2's text its character (a control word's
+ *  skipped spaces and a group around it alone with it, as TeX reads them), the pieces of `drop` (the ends of the groups v2
+ *  writes as their content) out, white space as one space; null where no piece is either */
+function writtenAs(ps, drop, marked = new Set()) {
+  // (literal stretches, and where a command's pair stood that v2 writes as the marks it prints: those marks or nothing)
+  const parts = ['']
+  let changed = drop.size > 0
+  for (let k = 0; k < ps.length; k++) {
+    const p = ps[k]
+    if (drop.has(k)) {
+      if (marked.has(k)) parts.push(null, '')
+      continue
+    }
+    const sym = p.kind === 'ph' ? characterOf(p.src) : null
+    const group = p.kind === 'open' && p.src === '{' && ps[k + 1]?.kind === 'ph' && characterOf(ps[k + 1].src) !== null && ps[k + 2]?.kind === 'close'
+    let add = ''
+    if (group) {
+      add = characterOf(ps[k + 1].src)
+      changed = true
+      k += 2
+    } else if (sym !== null) {
+      add = sym
+      changed = true
+      // (TeX skips the spaces after a control word, not after the empty group that ends one)
+      if (/^\\[A-Za-z]/.test(p.src) && !/\{\}$/.test(p.src) && ps[k + 1]?.kind === 'text') add += ps[++k].s.replace(/^[ \t]+/, '')
+    } else add = p.kind === 'text' ? p.s : (p.src ?? '')
+    parts[parts.length - 1] += add
+  }
+  if (!changed) return null
+  // (no marks: today's TeX with those pairs out, white space as one space over the whole, as texOf reads a unit)
+  const plain = parts.filter((x) => x !== null).join('').replace(/\s+/g, ' ').trim()
+  if (parts.length === 1) return (x) => x === plain
+  // (pairs side by side one place)
+  const t = parts.map((x) => x ?? '\ue000').join('').replace(/\s+/g, ' ').replace(/\ue000+/g, '\ue000').trim()
+  // (or marks, characters no letter, digit or space, at one place or more: a place between two spaces holds its marks before one of
+  // them, or none and one space)
+  const escape = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const M = '[^\\p{L}\\p{N}\\s]'
+  const bits = t.split('\ue000')
+  let src = ''
+  for (let i = 0; i < bits.length; i++) {
+    let left = bits[i]
+    if (i === bits.length - 1) { src += escape(left); break }
+    const right = bits[i + 1]
+    if ((left.endsWith(' ') || i === 0 && left === '') && right.startsWith(' ')) { src += `${escape(left)}(?:${M}+ )?`; bits[i + 1] = right.slice(1); continue }
+    if (left.endsWith(' ') && i + 1 === bits.length - 1 && right === '') { left = left.slice(0, -1); src += `${escape(left)}(?: ${M}+)?`; continue }
+    src += `${escape(left)}${M}*`
+  }
+  const re = new RegExp(`^${src}$`, 'u')
+  return (x) => x === plain || re.test(x)
+}
+/** REVTeX's link with no address, a placeholder of today's */
+const NOOP = /^\\href@noop(?![A-Za-z@])/
+/** a placeholder's source as the front end reads it in a bibliography entry now (latex-front.mjs: REVTeX's \\href@noop one of
+ *  its text commands, step D), as dump pieces: the entry's pieces after a word of ours (an entry of no words is no unit), its
+ *  text as characters; null where it makes no entry */
+function entryPiecesOf(src) {
+  const tex = `\\documentclass{article}\\begin{document}\nSome text.\n\\begin{thebibliography}{1}\n\\bibitem{a}Qzxv ${src}\n\\end{thebibliography}\n\\end{document}\n`
+  const p = loadProject(inMemory(new Map([['main.tex', new TextEncoder().encode(tex)]])), 'main.tex')
+  const first = p.units.find((x) => x.kind === 'reference')?.pieces
+  if (first?.[0]?.t !== 'text' || !/^\s*Qzxv /.test(first[0].s)) return null
+  const u = { pieces: first }
+  const chars = (x) => new TextDecoder().decode(Uint8Array.from([...x].map((c) => c.charCodeAt(0))))
+  const out = u.pieces.map((q) => (q.t === 'text' ? { kind: 'text', s: chars(q.s) } : { kind: q.t, src: chars(q.src ?? '') }))
+  out[0].s = out[0].s.replace(/^\s*Qzxv /, '')
+  if (!out[0].s) out.shift()
+  if (out.at(-1)?.kind === 'text') out.at(-1).s = out.at(-1).s.replace(/\s+$/, '')
+  return out
+}
+/** a dump unit's TeX: its text and each other piece's source, white space as one space */
+const texOf = (x) => (x.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : (p.src ?? ''))).join('').replace(/\s+/g, ' ').trim()
+/** the text symbols that are characters of v2's text (latex-front.mjs TEXT_CHARACTERS) */
+const TEXT_CHARACTERS = new Set(['\\%', '\\&', '\\#', '\\$', '\\{', '\\}', '\\textasciitilde', '\\textbar', '\\textless', '\\textgreater', '\\textbackslash'])
+/** a placeholder's source as that character (alone or before `{}`, its control word's trailing spaces aside), else null */
+const characterOf = (src) => {
+  const m = /^(\\(?:[A-Za-z]+|[%&#$_{}]))(?:\{\})?[ \t]*$/.exec(src ?? '')
+  return m && TEXT_CHARACTERS.has(m[1]) ? symbolText(m[1]) : null
+}
 /** an e-mail address as a line of addresses writes it: one local part, or several in braces before one domain, at a domain of
  *  two labels or more (RFC 5322's dot-atom, its letters any script's) */
 const ADDRESS = /(?:\{[^{}@]+\}|[\p{L}\p{N}!#$%&'*+/=?^_`|~.-]+)@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/gu
@@ -561,7 +653,6 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
   }
   // ((k) by group: the candidate's unit of today's kind writing today's TeX source, white space as one space, an element of it kept
   // for its pitch; the one at today's place first)
-  const texOf = (x) => (x.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : (p.src ?? ''))).join('').replace(/\s+/g, ' ').trim()
   const pitchGroupOf = (u) => {
     const src = texOf(u)
     const L = u.lines?.[0]
@@ -570,7 +661,68 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     )
     return all.find((n) => L && n.lines?.[0] && meets(L, n.lines[0])) ?? all.sort((a, b) => a.ord - b.ord)[0] ?? null
   }
+  // ((o): today's TeX of a unit, each text symbol that is a character of v2's text its character (a control word's skipped
+  // spaces and a group around it alone with it, as TeX reads them), and the opens and closes of the groups the candidate writes
+  // as their content out (a pair that sets its argument alone, a bare group with no declaration of its own: instrument.mjs
+  // passThroughOf), white space as one space; the candidate's unit of today's kind, not one of today's ids, writing it, its
+  // groups' ends today's in their order, one fewer at least where no character moved: the one at today's place first)
+  /** each group of a unit's pieces, in order: its open's index, its close's (-1 where the unit holds none), its open's source */
+  const groupsIn = (ps) => {
+    const out = [], stack = []
+    ps.forEach((p, k) => {
+      if (p.kind === 'open') { const g = { open: k, close: -1, src: p.src ?? '' }; out.push(g); stack.push(g) }
+      else if (p.kind === 'close' && stack.length) stack.pop().close = k
+    })
+    return out
+  }
+  const charactersOf = (u) => {
+    // (today's pieces; else, where they hold a placeholder of a link with no address, REVTeX's \\href@noop {} {…}, with each
+    // read as the front end now reads it in an entry: its groups, its letters, its placeholders; latex-front.mjs BIB_TEXT, step D)
+    const own = writtenWith(u, u.pieces ?? [])
+    if (own || !(u.pieces ?? []).some((p) => p.kind === 'ph' && NOOP.test(p.src ?? ''))) return own
+    return writtenWith(u, (u.pieces ?? []).flatMap((p) => (p.kind === 'ph' && NOOP.test(p.src ?? '') ? (entryPiecesOf(p.src) ?? [p]) : [p])))
+  }
+  /** the candidate's unit writing today's unit `u` with pieces `ps` (o), or null */
+  const writtenWith = (u, ps) => {
+    // (a bare group holding no declaration of its own, the instrument's rule read off today's pieces; then a command's pair the
+    // candidate does not write, read off its groups, each command's pairs all kept or all dropped by the front end's reading)
+    const groups = groupsIn(ps)
+    const bare = (g) => g.src === '{' && g.close >= 0 && !ps.slice(g.open + 1, g.close).some((q, j) => q.kind === 'ph' && isInkless({ t: 'ph', src: q.src }) && depthAt(ps, g.open + 1, g.open + 1 + j) === 0)
+    const L = u.lines?.[0]
+    const all = units.filter((n) => {
+      if (n.replaced || n.kind !== u.kind || baseIds.has(n.id)) return false
+      const theirs = groupsIn(n.pieces ?? []).map((g) => g.src)
+      const drop = new Set(), marked = new Set()
+      let i = 0
+      for (const g of groups) {
+        if (bare(g)) { drop.add(g.open).add(g.close); continue }
+        if (theirs[i] === g.src) { i++; continue }
+        if (g.close < 0) return false
+        // (a command's pair v2 does not write: its content, between the marks it prints where it prints some, \\enquote's)
+        drop.add(g.open).add(g.close)
+        marked.add(g.open).add(g.close)
+      }
+      if (i !== theirs.length) return false
+      const same = writtenAs(ps, drop, marked)
+      return same?.(texOf(n)) ?? false
+    })
+    return all.find((n) => L && n.lines?.[0] && meets(L, n.lines[0])) ?? all.sort((a, b) => a.ord - b.ord)[0] ?? null
+  }
   for (const u of base) {
+    if ((have.get(u.id) ?? 0) === 0 && !/^ink/.test(u.kind)) {
+      // ((k) by group before (o): a unit the candidate writes with a group of it kept as an element for its pitch is that
+      // statement, the more particular; (o) states the rest of the units it writes as today's TeX)
+      const grouped = pitchGroupOf(u)
+      if (grouped) {
+        out.push({ u, why: `written as ${grouped.id.slice(0, 12)}: ${CAUSE.pitchGroup}`, cause: 'pitchGroup', holder: grouped.id })
+        continue
+      }
+      const n = charactersOf(u)
+      if (n) {
+        out.push({ u, why: `written as ${n.id.slice(0, 12)}: ${CAUSE.characters}`, cause: 'characters', holder: n.id })
+        continue
+      }
+    }
     if ((have.get(u.id) ?? 0) > 0) {
       have.set(u.id, have.get(u.id) - 1)
       const own = ownOf(u)
@@ -580,11 +732,6 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
       const whole = !!n && !!t && (own.why === UNMARKED ? glyphTextOf(n) === t : glyphTextOf(n).includes(t))
       if (n && n !== own && n.state === 'drawn' && whole)
         out.push({ u, own, why: `made on arXiv's page as ${n.id.slice(0, 12)}: ${CAUSE.held}`, cause: keyOf(CAUSE.held), holder: n.id })
-      continue
-    }
-    const grouped = /^ink/.test(u.kind) ? null : pitchGroupOf(u)
-    if (grouped) {
-      out.push({ u, why: `written as ${grouped.id.slice(0, 12)}: ${CAUSE.pitchGroup}`, cause: 'pitchGroup', holder: grouped.id })
       continue
     }
     // ((F) first, the coordinator's ruling of 2026-11-10 on rebuild/mail-group: a line of e-mail addresses and their separators

@@ -496,3 +496,65 @@ describe('microsoft: a display that states no stop of its own', () => {
     expect(on([quiet('q'), t(' Then we go on.')])).toBe('We set: @a#. Then we go on.')
   })
 })
+
+// (a character TeX writes escaped, `\#`, `\%`, `\&`, is a character of the text since the source reader sends it as one: on the
+// markers wire a text "@" or "#" beside a marker is the text's, never part of the marker)
+describe('microsoft: a character TeX writes escaped, sent as text, beside a marker', () => {
+  const m = microsoft({ fetch: scriptedFetch(microsoftEcho).fetch })
+  const echo = (u: ReturnType<typeof unit>) =>
+    readMicrosoft(u, JSON.stringify({ text: m.write(u, 'zh-Hans') }))?.content
+  it('a text "@" before a marker and after one', () => {
+    const u = unit('u', [t('write to x@'), el('1'), t('@y today.')])
+    expect(echo(u)).toEqual([
+      { t: 'text', s: 'write to x@' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: '@y today.' },
+    ])
+  })
+  it('a text "#" before a marker and after one', () => {
+    const u = unit('u', [t('Task #'), el('1'), t(' sets '), el('2'), t('# of runs.')])
+    expect(echo(u)).toEqual([
+      { t: 'text', s: 'Task #' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: ' sets ' },
+      { t: 'el', id: '2' },
+      { t: 'text', s: '# of runs.' },
+    ])
+    // (white space between: a prompt's headings after a list's mark, "## Root Goal", as 2610.21098v1 sets them)
+    const heads = unit('h', [t('## Root Goal '), el('1'), t(' ## Prior Context')])
+    expect(m.write(heads, 'zh-Hans')).toBe('## Root Goal @a# ## Prior Context')
+    expect(echo(heads)).toEqual([
+      { t: 'text', s: '## Root Goal ' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: ' ## Prior Context' },
+    ])
+    // (a `#` after a marker the text does not follow with one is Microsoft's doubled closer or a `#` moved: refused, as before)
+    expect(readMicrosoft(u, JSON.stringify({ text: 'Task #@a## sets @b## of runs.' }))).toBeNull()
+  })
+  it('a marker written back with its "#" taken by the character after it, "@b#%" as "@b%", is still read (2610.21098v1 bac80fc7f6)', () => {
+    // (Microsoft's Chinese, 2026-11-11, for a unit whose `\%` went as text: "@b#% of the shortlists" came back "@b%" and the
+    // words; a stand-in of the same shape, with "%" after two markers, one of them written so)
+    const u = unit('u', [
+      t('At '),
+      el('1'),
+      t(', the tools are in only '),
+      el('2'),
+      t('% of the lists and in '),
+      el('3'),
+      t('% of others.'),
+    ])
+    expect(m.write(u, 'zh-Hans')).toBe('At @a#, the tools are in only @b#% of the lists and in @c#% of others.')
+    expect(
+      readMicrosoft(u, JSON.stringify({ text: '在 @a# 时，工具仅出现在 @b% 的列表中，在其他列表中占 @c#%。' }))
+        ?.content,
+    ).toEqual([
+      { t: 'text', s: '在 ' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: ' 时，工具仅出现在 ' },
+      { t: 'el', id: '2' },
+      { t: 'text', s: '% 的列表中，在其他列表中占 ' },
+      { t: 'el', id: '3' },
+      { t: 'text', s: '%。' },
+    ])
+  })
+})

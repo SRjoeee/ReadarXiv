@@ -781,20 +781,30 @@ const NUMBER_SPACE = /(?<=\p{N})[ \t\n\f\r]+$/u, NUMBER_LEAD = /^[ \t\n\f\r]+(?=
  *  control space, `\,`, \quad, \hspace{…}; `\!` takes room away), a group's end. layer/pieces.mjs reads the same table the same
  *  way (the reader's layer may not import this module); a test holds the two equal */
 export const SPACING = new RegExp(`^(?:${spaceLead({ negative: false })}|\\}$)`)
-/** a run of `#` the reply holds outside its markers, not an entity's (`&#39;`): the source's text holds none — TeX's
- *  `\#` and a bare `#` are placeholders (latex-front.mjs walk) —, so on the wire a `#` is a marker's, and is dropped
- *  wherever the reply set it; with it a pair of brackets that held nothing else (Microsoft's Japanese wrote 1706.03762's
- *  `auto-regressive @f#, consuming` back as `... @f#(#)...`, its marker read and `(#)` set as text) */
+/** a run of `#` the reply holds outside its markers, not an entity's (`&#39;`), where the wire holds no `#` of its own
+ *  (`hashFree`): there a `#` is a marker's, and is dropped wherever the reply set it; with it a pair of brackets that held
+ *  nothing else (Microsoft's Japanese wrote 1706.03762's `auto-regressive @f#, consuming` back as `... @f#(#)...`, its marker
+ *  read and `(#)` set as text). A wire that holds one — TeX's `\#`, a character of the text since 2026-11-11 (latex-front.mjs
+ *  textCharacter), written bare: Microsoft gives back the entity `&#35;` as `#` (114 of 114, Chinese, Japanese, German) —
+ *  is read as the HTML page reads a block that holds one (src/core/protector/tokens.ts markerReader): each marker with its one
+ *  `#`, no marker without it, every other `#` the text's; and a `#` right after a marker that the wire does not follow with
+ *  its own `#` is Microsoft's doubled closer or the text's moved there, which nobody can tell: refused (packages/translate's
+ *  markers.ts reads so too) */
 const STRAY = /(?<!&)#+/g
 const STRAY_PAIR = /[ \t]*[([\uff08\u3010]\s*(?<!&)#+\s*[)\]\uff09\u3011]/g
 export function rehydrate(text, { wire, slots, lead, trail, stops, numbers, numbersAfter, front, back, refill, own }, tolerant = false) {
   const pieces = [], seen = new Map()
   let last = 0, afterNumber = false, afterOwn = false
+  const hashFree = typeof wire !== 'string' || !wire.replace(/@@|@[a-z]+#/g, '').includes('#')
+  if (!hashFree) {
+    const after = new Set([...wire.matchAll(/@@|@([a-z]+)#(?=[ \t]*#)/g)].flatMap(m => (m[1] ? [m[1]] : [])))
+    for (const m of text.replace(/@@/g, '').matchAll(/@([a-z]+)#[ \t]*#/g)) if (!after.has(m[1])) return { error: 'doubled closer' }
+  }
   // a text between two markers, the wire's spaces off it: after the one before it, before the one after it (`before`);
   // after a display's that carried its own stop, what the reply set for it (ownAfter) — once the wire's space after a
   // stop is off, which a marker right after the display's own (`@r#. @s#`) has from it
   const pushText = (s, before = null) => {
-    s = s.replace(STRAY_PAIR, '').replace(STRAY, '')
+    if (hashFree) s = s.replace(STRAY_PAIR, '').replace(STRAY, '')
     if (before) s = s.replace(before, '')
     // (the flag is the last marker's: each marker sets it)
     if (afterOwn) s = ownAfter(s)
@@ -804,13 +814,13 @@ export function rehydrate(text, { wire, slots, lead, trail, stops, numbers, numb
   }
   // read with the markers wire's one reader, the HTML page's (src/core/protector/tokens.ts markerReader): a marker's `#`
   // doubled is its own, a space between them or none — Microsoft wrote 2610.02069's `@e#` back as `@e##` and set the
-  // second `#` as text ("El Ni ñ#", and "Figure 10#" in its Chinese), and `@d#` as `@d# #` in its Japanese — the
-  // source's text holding no `#` of its own. Tolerant: the engine sometimes drops the closing # before a CJK character
+  // second `#` as text ("El Ni ñ#", and "Figure 10#" in its Chinese), and `@d#` as `@d# #` in its Japanese — where the
+  // wire holds no `#` of its own (`hashFree`, STRAY above). Tolerant: the engine sometimes drops the closing # before a CJK character
   // or punctuation (@b形, @g。); a lone @ can only be a marker's remains, because a literal @ went out as @@, accepted
   // only when no letter follows, never inside a word. One read without its `#` leaves it where the reply set it (that
   // paper's unit 47 in Chinese: `@a` in the middle of the reply, a lone `#` at its end), dropped there as any stray `#`
-  // is (STRAY)
-  const re = markerReader(tolerant ? { hashFree: true, bare: { width: toAlpha(Math.max(1, slots.length)).length } } : { hashFree: true })
+  // is (STRAY); never where the wire holds a `#` of its own, which may be the one it lost
+  const re = markerReader(tolerant && hashFree ? { hashFree, bare: { width: toAlpha(Math.max(1, slots.length)).length } } : { hashFree })
   let m, buf = ''
   while ((m = re.exec(text))) {
     buf += text.slice(last, m.index); last = re.lastIndex
@@ -1059,7 +1069,9 @@ export function isName(text, prose) {
   const words = text.replace(/\s+/g, ' ').trim().split(' ')
   if (words.length > 3) return false
   const quote = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const proper = w => new RegExp(`[a-z,;:)\\]] ${quote(w)}(?![a-z])`).test(prose) || new RegExp(`(^|[^A-Za-z])${quote(w)}[A-Z]`).test(prose)
+  // (after a lower-case letter, a clause's punctuation or `&`, a conjunction no sentence begins after: 2610.37818v1's "Tanks &
+  // Temples", whose `\\&` is a character of the text since 2026-11-11, and which as a placeholder stood in no text of the prose)
+  const proper = w => new RegExp(`[a-z,;:)\\]&] ${quote(w)}(?![a-z])`).test(prose) || new RegExp(`(^|[^A-Za-z])${quote(w)}[A-Z]`).test(prose)
   const common = w => new RegExp(`(^|[^A-Za-z])${quote(w.toLowerCase())}($|[^A-Za-z])`).test(prose)
   const nameWord = w => { const bare = w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, ''); return !bare || /[0-9]/.test(bare) || /^[A-Z][^a-z]*$/.test(bare) || /^[A-Za-z][a-z]*[A-Z]/.test(bare) || (/^[A-Z][a-z]+$/.test(bare) && proper(bare) && !common(bare)) }
   return words.every(nameWord)

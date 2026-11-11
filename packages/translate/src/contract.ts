@@ -187,6 +187,9 @@ export interface Translator {
   readonly digest: string
   /** whether its replies depend on the paper's context: then the context's digest enters the store key */
   readonly context: boolean
+  /** the wire it writes, as it declares it: `markers` (a group that is not `must` goes on no wire, chain.ts asks the reference
+   *  translation of a phrase group alone of such a translator, groups.ts) or `tags`; none declared, none asked */
+  readonly wire?: 'markers' | 'tags'
   readonly limits: Limits
   /** whether it serves the target; bounded by the adapter, and by the chain besides */
   supports(target: Lang): Promise<boolean>

@@ -883,9 +883,88 @@ describe('(k) by group: a source unit the candidate writes as one source, a grou
     expect(got[0].holder).toBe(id('b'))
   })
   it('states none where the source differs or no element of the candidate’s is kept for its pitch', () => {
-    expect(statedOf([today()], [mine()])).toEqual([])
+    // (no element kept for its pitch: no group of it kept; the unit the candidate writes as today's TeX is (o)'s, lane
+    // style-wire's, merged after this lane in round 8 B8)
+    expect(said(statedOf([today()], [mine()])).map(([, w]) => w)).toEqual([`written as ${'b'.repeat(12)}: ${CAUSE.characters}`])
     const other = mine('pitch')
     other.pieces = [text('a token ('), ph('{\\tt [SEP]}'), text(') first')].map((p, k) => ({ k, ...p }))
     expect(statedOf([today()], [other])).toEqual([])
+  })
+})
+
+// (B of lane style-wire, the coordinator's ruling of 2026-11-11: `\%`, `\&`, `\#`, `\$`, `\{`, `\}` and textcomp's \textasciitilde,
+// \textbar, \textless, \textgreater, \textbackslash are characters of the candidate's text, so a unit holding one has a new id; it
+// is today's unit, written as today's TeX with each of those placeholders its character, wherever the two lay it)
+describe("today's unit the candidate writes with its escaped characters as text", () => {
+  it('is that unit, by its source, whatever line either lays it on', () => {
+    const today = unit(id('a'), 263, 'para', [text('Gain of 5'), ph('\\%'), text(' on R'), ph('\\&'), text('D, see '), ph('$x$'), text('.')], [72, 300, 646])
+    const v2 = { ...unit(id('b'), 140, 'para', [text('Gain of 5% on R&D, see '), ph('$x$'), text('.')], [72, 300, 634]), state: 'drawn' }
+    expect(said(statedOf([today], [v2]))).toEqual([[263, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+  })
+  it("reads a control word's skipped space and a group around one alone as TeX does", () => {
+    const today = unit(id('a'), 5, 'reference', [text('See www.x.org/'), ph('\\textasciitilde'), text(' aeb and '), { kind: 'open', src: '{' }, ph('\\%'), { kind: 'close', src: '}' }, text(' more, 2.08 '), ph('\\textgreater{}'), text(' q.')])
+    const v2 = { ...unit(id('b'), 5, 'reference', [text('See www.x.org/~aeb and % more, 2.08 > q.')]), state: 'drawn' }
+    expect(said(statedOf([today], [v2]))).toEqual([[5, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+  })
+  it('is no such unit where anything else differs, or where today held none of those placeholders', () => {
+    const today = unit(id('a'), 7, 'para', [text('Gain of 5'), ph('\\%'), text(' here.')])
+    expect(String(said(statedOf([today], [{ ...unit(id('b'), 7, 'para', [text('Gain of 6% here.')]), state: 'drawn' }]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
+    const plain = unit(id('c'), 8, 'para', [text('Plain words here.')])
+    expect(String(said(statedOf([plain], [{ ...unit(id('d'), 8, 'para', [text('Plain words here.')]), state: 'drawn' }]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
+  })
+})
+
+// (C of lane style-wire, 2026-11-11: a group that carries nothing, a pair that sets its argument alone or a bare group with no
+// declaration of its own, is its content in v2's unit, so the unit has a new id: today's unit, written with such groups'
+// opens and closes out, is it)
+describe("today's unit the candidate writes with a group that carries nothing as its content", () => {
+  const open = (src: string): DumpPiece => ({ kind: 'open', src })
+  const close = (src = '}'): DumpPiece => ({ kind: 'close', src })
+  it('is that unit, its other groups and every element and word as today\'s, alone or with an escaped character as text', () => {
+    const today = unit(id('a'), 30, 'reference', [text('A. Author, '), open('\\bibinfo{title}{'), text('A study of '), open('{'), text('GPU'), close(), text(' kernels'), close(), text(', '), open('\\emph{'), text('Nature'), close(), text(' 5'), ph('\\%'), text('.')])
+    const v2 = { ...unit(id('b'), 30, 'reference', [text('A. Author, A study of GPU kernels, '), open('\\emph{'), text('Nature'), close(), text(' 5%.')]), state: 'drawn' }
+    expect(said(statedOf([today], [v2]))).toEqual([[30, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+  })
+  it('is that unit where a pair v2 writes as nothing stood between two spaces, white space read as one space (2608.25210v2)', () => {
+    const today = unit(id('a'), 31, 'para', [text('The cost of '), open('\\techreport{'), text(' the plan '), close(), text(' is computed.')])
+    const v2 = { ...unit(id('b'), 31, 'para', [text('The cost of the plan is computed.')]), state: 'drawn' }
+    expect(said(statedOf([today], [v2]))).toEqual([[31, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+  })
+  it('is that unit where two such pairs stand a space apart (2610.22065v1\'s entries: `}. \\bibinfo{year}{`)', () => {
+    const today = unit(id('a'), 33, 'reference', [open('\\bibfield{author}{'), open('\\bibinfo{person}{'), text('Samira Abnar'), close(), text('.'), close(), text(' '), open('\\bibinfo{year}{'), text('2020'), close(), text('.')])
+    const v2 = { ...unit(id('b'), 33, 'reference', [text('Samira Abnar. 2020.')]), state: 'drawn' }
+    expect(said(statedOf([today], [v2]))).toEqual([[33, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+  })
+  it('is that unit where today\'s placeholder is a link with no address v2 reads as its argument (\\href@noop, step D)', () => {
+    const today = unit(id('a'), 34, 'reference', [text('D. M. Sussman, '), ph('\\href@noop {} {\\bibfield  {journal} {\\bibinfo  {journal} {SoftwareX}\\ }\\textbf {\\bibinfo {volume} {6}},\\ \\bibinfo {pages} {16} (\\bibinfo {year} {2017})}')])
+    const v2 = { ...unit(id('b'), 34, 'reference', [text('D. M. Sussman, SoftwareX'), ph('\\ '), open('\\textbf {'), ph('6'), close(), text(','), ph('\\ '), ph('16'), text(' ('), ph('2017'), text(')')]), state: 'drawn' }
+    expect(said(statedOf([today], [v2]))).toEqual([[34, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+    // (as the front end reads it in an entry: \\bibinfo's two arguments, then a group of the entry's own holding \\natexlab{b},
+    // a placeholder; an accent its letter: 2307.16209v1's)
+    const lab = unit(id('d'), 35, 'reference', [text('A. B, '), ph('\\href@noop {} {\\emph {\\bibinfo {booktitle} {Studies on the Painlev\\\'e Equations}}\\ (\\bibinfo\n  {year} {1981}{\\natexlab{b}})}')])
+    const v2lab = { ...unit(id('e'), 35, 'reference', [text('A. B, '), open('\\emph {'), text('Studies on the Painlev\u00e9 Equations'), close(), ph('\\ '), text('('), ph('1981'), ph('\\natexlab{b}'), text(')')]), state: 'drawn' }
+    expect(said(statedOf([lab], [v2lab]))).toEqual([[35, `written as ${'e'.repeat(12)}: ${CAUSE.characters}`]])
+    // (a link with no address that holds no word of its own: 2610.20451v1's `\\href@noop {} {\\  (\\bibinfo {year} {2024})}`)
+    const year = unit(id('f'), 36, 'reference', [text('A. B, Order,'), ph('\\ '), ph('\\href@noop {} {\\  (\\bibinfo {year} {2024})}'), text(',')])
+    const v2year = { ...unit(id('g'), 36, 'reference', [text('A. B, Order,'), ph('\\ '), ph('\\ '), text(' ('), ph('2024'), text('),')]), state: 'drawn' }
+    expect(said(statedOf([year], [v2year]))).toEqual([[36, `written as ${'g'.repeat(12)}: ${CAUSE.characters}`]])
+    // (its words as today's: another word is another unit)
+    const other = { ...unit(id('c'), 34, 'reference', [text('D. M. Sussman, SoftwareY'), ph('\\ '), open('\\textbf {'), ph('6'), close(), text(','), ph('\\ '), ph('16'), text(' ('), ph('2017'), text(')')]), state: 'drawn' }
+    expect(String(said(statedOf([today], [other]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
+  })
+  it('is that unit where v2 writes a command\'s pair as the quotation marks it prints (\\enquote, 2026-11-11)', () => {
+    const today = unit(id('a'), 32, 'reference', [text('A. Allen (2019): '), open('\\enquote{'), text('Hicksian complementarity,'), close(), text(' Econometrica.')])
+    const v2 = { ...unit(id('b'), 32, 'reference', [text('A. Allen (2019): \u201cHicksian complementarity,\u201d Econometrica.')]), state: 'drawn' }
+    expect(said(statedOf([today], [v2]))).toEqual([[32, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+    // (marks where the pair stood, nothing else: a word more is another unit)
+    const more = { ...unit(id('c'), 32, 'reference', [text('A. Allen (2019): \u201cHicksian complementarity,\u201d in Econometrica.')]), state: 'drawn' }
+    expect(String(said(statedOf([today], [more]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
+  })
+  it('is no such unit where the candidate keeps a group today has not, or loses a word', () => {
+    const today = unit(id('a'), 31, 'reference', [open('{'), text('GPU'), close(), text(' kernels.')])
+    const added = { ...unit(id('b'), 31, 'reference', [open('\\emph{'), text('GPU'), close(), text(' kernels.')]), state: 'drawn' }
+    expect(String(said(statedOf([today], [added]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
+    const lost = { ...unit(id('c'), 31, 'reference', [text('kernels.')]), state: 'drawn' }
+    expect(String(said(statedOf([today], [lost]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
   })
 })

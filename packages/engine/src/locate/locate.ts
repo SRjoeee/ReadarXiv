@@ -131,6 +131,9 @@ export interface Member {
   /** the groups TeX opened a paragraph at inside it (C13, C15: SpanAt.opens), by their open piece's id: that paragraph's first
    *  line */
   spanOpens?: Map<string, number>
+  /** paragraphs TeX opened inside it where a group the instrument wrote as its content stood (InstrumentUnit.passed): none is
+   *  stated, and stage 1a fails the paper (Located.stats.opensLost) */
+  opensLost?: number
   /** a figure text's runs in another face than its own, by their group's piece id: each one's style, read off its glyphs on A
    *  (ink.ts figureRuns; SpanAt.style) */
   spanStyles?: [string, Style][]
@@ -192,6 +195,9 @@ export interface Located {
     made?: InkStats
     /** the source units kept as artefacts (Rule 1, PDF-READER §18.22), and whether the paper's body face is one of one pitch */
     artefacts?: { units: number; bodyFixed: boolean; groups?: number; read?: number }
+    /** paragraphs TeX opened inside a unit where a group the instrument wrote as its content stood (InstrumentUnit.passed), no
+     *  group left to state it on (SpanAt.opens): a gate, which must count none (stage 1a fails a paper with one) */
+    opensLost?: number
   }
 }
 
@@ -2401,6 +2407,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     if (mem.located) {
       stats.located++
       if (mem.place) stats.places[mem.place]++
+      if (mem.opensLost) stats.opensLost = (stats.opensLost ?? 0) + mem.opensLost
     } else noteUnlocated(mem.cause ?? 'no ink')
   }
   return { units, members, born, flows, ties, links, groups, figureGroups, stats, displays }
