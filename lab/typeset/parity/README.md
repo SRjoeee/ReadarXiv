@@ -320,7 +320,10 @@ would make it like-for-like). A member the prepare gives a reason (`why`) or the
 sends it nothing.
 
 `--fresh=cache` (the default) reads the cache alone: a wire it lacks is never fetched, the unit left as before (no row, or its
-stored row), and the log names how many (`freshMissing`); `--fresh=fill` fills it, slowly, and lays nothing; `--fresh=off`
+stored row), and the log names how many (`freshMissing`) and what a fill would ask, counted to the end of each unit (fresh.mjs
+needOf: its first wire, which a fill asks whatever comes back, and up to its runs floor's stretches, which it asks only where the
+reply is refused; the requests as the chain cuts them), so that the fill asks between the two counts; `--fresh=fill` fills it, slowly, and lays nothing, writing what it did beside the cache (`fills.jsonl`, one entry a run: wires
+asked, requests made, refused, still missing, 429s, the pairs touched, start and end; printed at its end); `--fresh=off`
 withholds every fresh row, which gives the sheet byte for byte as before this lane. v2.mjs's file records `fresh` (the
 members laid with a fresh translation) with `freshCause`, `freshRefused` (the translator refused it: left as before),
 `freshMissing`, and `freshNew` (sent, but today had no unit of it: nothing of today's to compare, each v2's own decision to
