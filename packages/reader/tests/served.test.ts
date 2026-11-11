@@ -453,6 +453,10 @@ describe('the served faces and the Metrics over them', () => {
     expect(s.faces.familyOf(FONT)).toBe('"axt-nimbus-roman", "axt-shs-sc"')
     expect(rule).toMatch(/font-weight: 700/)
     expect(rule).toMatch(/font-style: italic/)
+    // (no trim of CJK punctuation and no glyph of another language's: a mark is its face's default glyph wherever it stands,
+    // the one the typesetter measured, docs/PDF-READER.md §18.47)
+    expect(rule).toMatch(/text-spacing-trim: space-all/)
+    expect(rule).toMatch(/font-feature-settings: "locl" 0/)
     expect(s.faces.classOf(`italic small-caps 700 100px "axt-nimbus-roman", "axt-shs-sc"`)).toBe(c)
   })
 })

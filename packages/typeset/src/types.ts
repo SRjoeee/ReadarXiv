@@ -150,6 +150,9 @@ export type Item =
        *  line's baseline runs from (x0, y) along it, and `x` (and `dx`) is its place along it from x0 (x − x0 its distance from
        *  the line's start); drawn turned, its characters along it, a raise across it */
       dir?: [ux: number, uy: number]
+      /** the tracking after each of its characters, PDF units (a run of one x laid with tracking, the fit's state's: its
+       *  characters' advances the face's and this; display.ts lineRuns), drawn by the page's painter */
+      track?: number
     }
   /** a crop; `cut` its edges cut from its element's ink between two glyphs (1 its left, 2 its right: a URL broken where TeX's
    *  url package breaks it), which the reader draws with no antialiased margin; `ink` its own ink, its piece's boxes on its

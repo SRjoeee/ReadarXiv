@@ -9,9 +9,11 @@ export type Ink = [page: number, x0: number, y0: number, x1: number, y1: number,
 export type FaceId = string
 
 export type Item =
-  /** a run of one face: from x, its characters at `dx` (per character) where given, `rise` over the baseline where raised; one
-   *  set along `dir` (a figure text the original sets turned: a unit vector, the page's y up) stands on its line's baseline from
-   *  (x0, y) along it, `x` (and `dx`) its place along it from x0, a raise across it */
+  /** a run of one face, drawn at `size` in `face` (the face at 100 px with its size correction, as Metrics measures it: a face
+   *  of correction 0.959 at size 10 is drawn at 9.59): from x, its characters at `dx` (per character) where given, else each
+   *  advance the face's and `track`, `rise` over the baseline where raised; one set along `dir` (a figure text the original sets
+   *  turned: a unit vector, the page's y up) stands on its line's baseline from (x0, y) along it, `x` (and `dx`) its place along
+   *  it from x0, a raise across it */
   | {
       s: string
       x: number
@@ -22,6 +24,9 @@ export type Item =
       dx?: number[]
       rise?: number
       dir?: [ux: number, uy: number]
+      /** the tracking after each of its characters, PDF units (a run of one x laid with tracking: its characters' advances
+       *  the face's and this) */
+      track?: number
     }
   /** a crop: src's ink, its base on the line's, scaled k; `s` its copy text, `piece` its element (or 'label', 'counter'); `cut`
    *  its edges cut from its element's ink between two glyphs (1 its left, 2 its right: a URL broken), drawn with no margin;
