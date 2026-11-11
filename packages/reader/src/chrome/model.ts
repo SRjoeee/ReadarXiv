@@ -25,7 +25,9 @@ export type Unavailable =
   | 'target'
 /** the unavailable states that are the paper's or the language's, not a moment's: the session's lasting refusals as the chrome
  *  says them (one table, session/machine.ts LASTING), and a language the typesetter does not set */
-export const LASTING: ReadonlySet<Unavailable> = new Set<Unavailable>([...PAPERS].map((why) => LAYER_WHY[why]).concat('target'))
+export const LASTING: ReadonlySet<Unavailable> = new Set<Unavailable>(
+  [...PAPERS].map((why) => LAYER_WHY[why]).concat('target'),
+)
 /** the sync as the chrome names it to a session: together, or off */
 export type SyncMode = 'same' | 'off'
 /** a heading of the contents: its id (its unit's), its title (translated where its row is in), the original's, its level, its page */

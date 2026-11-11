@@ -141,7 +141,7 @@ describe("the reader's state as the chrome's", () => {
       unavailable: { why: 'busy', retryAt: 5 },
     })
   })
-  it('one table says which refusals last (session/machine.ts LASTING): the chrome holds the paper\'s exactly where the session does', () => {
+  it("one table says which refusals last (session/machine.ts LASTING): the chrome holds the paper's exactly where the session does", () => {
     for (const [why, unavailable] of Object.entries(LAYER_WHY)) {
       expect(CHROME_LASTING.has(unavailable), why).toBe(SESSION_LASTING.has(why as never))
       const s = { ...open, layer: { s: 'refused' as const, why: why as never, retryAt: null } }
