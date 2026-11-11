@@ -439,7 +439,10 @@ function linesOf(
         return /^\p{Ll}/u.test(textOf(r.read.gs, glyphs).replace(/^[\p{P}\p{Z}]+/u, ''))
       })
       const groups: number[][] = [[0]]
-      joins.forEach((j, k) => (j ? groups.at(-1)!.push(k + 1) : groups.push([k + 1])))
+      joins.forEach((j, k) => {
+        if (j) groups.at(-1)!.push(k + 1)
+        else groups.push([k + 1])
+      })
       for (const g of groups) if (g.length > 1) textOfRows(g, side)
     }
     // ---- F3: the lines of prose that are a paragraph's, one text; a line across a justified line's stretched space read whole
