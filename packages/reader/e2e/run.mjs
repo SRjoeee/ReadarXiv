@@ -2305,6 +2305,73 @@ for (const shape of ['root', 'html', 'body', 'chrome']) {
   )
 }
 await check(
+  "highlight: the band chosen in the reading options paints the highlight, its colour at its strength, on both panes, on a page light, dark and dimmed (the feature list's E2: the choice was stored and the band stayed green)",
+  async () => {
+    const { page, context, errors } = await chromeLaid('s1-columns')
+    const P1 = '.pane[data-side="right"] .axt-slot[data-page-number="1"]'
+    await waitFor(page, (P1) => !!document.querySelector(`${P1} .axt-over > svg tspan`), P1)
+    /** a unit lit under the pointer (away first, so that it lights anew), each lit band's paint on both panes, and what the band
+     *  `want` paints as the sheet mixes it (a probe of the same colour-mix, read the same way) */
+    const lit = async (want) => {
+      await page.mouse.move(3, 3)
+      await page.waitForTimeout(250)
+      const at = await page.evaluate((P1) => {
+        const t = [...document.querySelectorAll(`${P1} .axt-over > svg tspan`)].find(
+          (x) => (x.textContent ?? '').trim().length > 3,
+        )
+        t.scrollIntoView({ block: 'center' })
+        const r = t.getBoundingClientRect()
+        return [r.left + r.width / 2, r.top + r.height / 2]
+      }, P1)
+      await page.waitForTimeout(300)
+      await page.mouse.move(at[0], at[1])
+      await waitFor(
+        page,
+        () => document.querySelectorAll('.pane[data-side="left"] .axt-hl, .pane[data-side="right"] .axt-hl').length > 1,
+        null,
+        5000,
+      )
+      return page.evaluate((want) => {
+        const paintOf = (el) =>
+          el.classList.contains('axt-hl-shape')
+            ? getComputedStyle(el.querySelector('path')).fill
+            : getComputedStyle(el).backgroundColor
+        const probe = document.createElement('div')
+        probe.style.background = `color-mix(in oklab, ${want.colour} ${want.mix}, transparent)`
+        document.body.append(probe)
+        const wanted = getComputedStyle(probe).backgroundColor
+        probe.remove()
+        const sides = Object.fromEntries(
+          ['left', 'right'].map((s) => [
+            s,
+            [...document.querySelectorAll(`.pane[data-side="${s}"] .axt-hl`)].map(paintOf),
+          ]),
+        )
+        return { wanted, sides, dim: document.documentElement.hasAttribute('data-axt-dim') }
+      }, want)
+    }
+    const GREEN = { colour: '#cdeccd', mix: '22%' },
+      SAND = { colour: 'oklch(0.85 0.12 85)', mix: '30%' }
+    const steps = { light: await lit(GREEN) }
+    await page.evaluate(() => window.__c.controller.setPrefs({ highlight: { band: 'sand' } }))
+    steps.chosen = await lit(SAND)
+    await page.evaluate(() => window.__c.controller.setPrefs({ theme: 'dark', dim: false }))
+    steps.dark = await lit(SAND)
+    await page.evaluate(() => window.__c.controller.setPrefs({ theme: 'dark', dim: true }))
+    steps.dimmed = await lit(SAND)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    for (const [k, s] of Object.entries(steps))
+      for (const side of ['left', 'right'])
+        assert(
+          s.sides[side].length > 0 && s.sides[side].every((p) => p === s.wanted),
+          `${k}, the ${side} pane's bands: ${JSON.stringify(s)}`,
+        )
+    assert(steps.light.wanted !== steps.chosen.wanted && !steps.dark.dim && steps.dimmed.dim, JSON.stringify(steps))
+    return Object.fromEntries(Object.entries(steps).map(([k, s]) => [k, s.wanted]))
+  },
+)
+await check(
   "chrome: a host's own controls in their places, each working: its way home first in the lead, its short link right after the title, its interface language the reading options' last row (L11 gap 2)",
   async () => {
     const { page, context, errors } = await chromeLaid('s1-columns', { slots: true })

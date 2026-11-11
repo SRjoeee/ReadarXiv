@@ -21,6 +21,8 @@ export type { Side, Zoom } from './panes/panes.ts'
 export { buildFor, legacyRuns, modernRuns } from './pdfjs/builds.ts'
 export type { PdfBuild, PdfModules } from './pdfjs/kit.ts'
 export {
+  type Band,
+  bandPaint,
   CLASSES,
   type ClassName,
   type Display,

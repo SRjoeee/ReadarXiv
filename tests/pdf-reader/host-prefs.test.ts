@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULTS, type WritablePrefs } from '@readarxiv/reader'
+import { bandPaint, DEFAULTS, type WritablePrefs } from '@readarxiv/reader'
 import { LANG_CODES, toBcp47 } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { codeOf, prefsOf, withPrefs } from '@/pdf-reader/host/prefs'
@@ -20,6 +20,13 @@ describe('the reader preferences over the extension configuration', () => {
     const p = prefsOf(config({ appearance: { ...DEFAULT_CONFIG.appearance, highlights } }))
     expect(p.bands[0]?.name).toBeNull()
     expect(p.bands[1]?.name).toBe('mine')
+  })
+  it('gives each band its colour and its strength, so that the reader paints the one chosen as today\'s look sheet did', () => {
+    const highlights = [...DEFAULT_CONFIG.appearance.highlights, { id: 'hl-mine', name: 'mine', color: '#f4d9e4', opacity: 0.4 }]
+    const c = config({ appearance: { ...DEFAULT_CONFIG.appearance, highlights, activeHighlight: 'hl-mine' } })
+    const p = prefsOf(c)
+    expect(p.bands.map(b => [b.id, b.colour, b.opacity])).toEqual(highlights.map(h => [h.id, h.color, h.opacity]))
+    expect(bandPaint(p)).toEqual({ '--axt-hl-color': '#f4d9e4', '--axt-hl-mix': '40%' })
   })
   it('takes the interface language from the browser where the setting is auto', () => {
     expect(prefsOf(config({ uiLanguage: 'auto' }), { languages: ['zh-TW'] }).ui).toBe('zh-TW')

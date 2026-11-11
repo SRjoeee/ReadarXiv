@@ -2584,6 +2584,14 @@ within noise.
   makes no group for such a member, so no drawing can turn it off either. Over the 88 papers, 12 members are wholly painted
   over in this way, every one a figure text that the wrap leaves unwrapped and the entry never lays
   (`lab/pdf/prepare-back/hidden.mjs`).
+- **The band chosen paints it** (the reading options' highlight colour, §6.1 item 4): the host gives the bands its store keeps (`Prefs.bands`, each its
+  colour and its strength: the extension's highlight profiles, the website's three), and the reader writes the one chosen on
+  its root as the wash's two variables, `--axt-hl-color` and `--axt-hl-mix` (`prefs.ts bandPaint`: the first band where the
+  choice names none, as today's `activeHighlight`; the strength a whole percentage clamped to 5–60 %; a band of no colour is
+  the sheet's green at its strength), which every band reads, a sentence's and a whole unit's, on both panes, on a page light,
+  dark or dimmed. The choice was stored and never painted: every band was the sheet's green at 22 % (the feature list's E2,
+  2026-11-12; today's look sheet wrote both, `src/core/renderer/style-preset.ts appearanceRule`). Held by the package's e2e
+  `highlight: the band chosen …`.
 - **What it does not settle**: a display the part states no ink of (LOST) leaves a gap with nothing in it, filled as today's;
   a display set on a text line beside a word (TeX's display after a word on its baseline) is on that line's row, lit with it;
   a sentence whose only text is a display lights nothing but the display; and a sentence that runs on past a display with no

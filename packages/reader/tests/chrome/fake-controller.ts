@@ -11,9 +11,9 @@ type Spied<T> = { [K in keyof T]: T[K] extends (...args: infer A) => infer R ? M
 export const PREFS: Prefs = {
   ...DEFAULTS,
   bands: [
-    { id: 'soft-green', colour: '#cdeccd', name: null },
-    { id: 'sky', colour: '#cfe3f7', name: null },
-    { id: 'mine', colour: '#f4d9e4', name: 'Mine' },
+    { id: 'soft-green', colour: '#cdeccd', opacity: 0.22, name: null },
+    { id: 'sky', colour: '#cfe3f7', opacity: 0.25, name: null },
+    { id: 'mine', colour: '#f4d9e4', opacity: 0.3, name: 'Mine' },
   ],
 }
 
