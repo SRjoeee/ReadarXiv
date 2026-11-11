@@ -319,6 +319,7 @@ function linesOf(
         (f, n) => !n || (F[n - 1]!.y - f.y > 0.5 * f.size && F[n - 1]!.y - f.y - F[n - 1]!.band < F[n - 1]!.band),
       )
       if (!stacked || !F.every((f) => sameFace(F[0]!, f)) || F.some((f, n) => n > 0 && ledApart(F[n - 1]!, f))) continue
+      if (legendOf(h.shape, F, boxes)) continue
       if (spread((l) => (l.x0 + l.x1) / 2) > tol) continue
       const align = 'c' as const
       const ft: FigureText = {
@@ -840,6 +841,43 @@ interface ProseLine {
   l: Line
   read: Read
 }
+/**
+ * F3: whether a path's rows are a legend's entries: two rows or more each with ink of its own beside its words inside the path,
+ * within its band (one band's height over and under its baseline) and on no other row's, before or after them at any distance (a
+ * sample, a marker). Entries of one length stand centred as a node's label does ("plain-18" over "plain-34", their samples after
+ * them, 1512.03385v1 p5; markers 1.5 em before, past a leader's reach, 2610.21085v1 p31; circles beside a frame's side both rows
+ * meet, 2010.11929v2 p7). Ink under its words is a decoration, and one row beside an icon is a node's still
+ */
+function legendOf(shape: TodayShape, F: readonly ParaLine[], boxes: readonly number[]): boolean {
+  const segs = shape.segs as ArrayLike<number>
+  let hx0 = Infinity,
+    hy0 = Infinity,
+    hx1 = -Infinity,
+    hy1 = -Infinity
+  for (let i = 0; i + 1 < segs.length; i += 2) {
+    hx0 = Math.min(hx0, segs[i]!)
+    hx1 = Math.max(hx1, segs[i]!)
+    hy0 = Math.min(hy0, segs[i + 1]!)
+    hy1 = Math.max(hy1, segs[i + 1]!)
+  }
+  let sampled = 0
+  F.forEach((f, n) => {
+    const reach = BAND_EM * f.size
+    for (let b = 0; b + 3 < boxes.length; b += 4) {
+      const bx0 = Math.min(boxes[b]!, boxes[b + 2]!),
+        bx1 = Math.max(boxes[b]!, boxes[b + 2]!),
+        by0 = Math.min(boxes[b + 1]!, boxes[b + 3]!),
+        by1 = Math.max(boxes[b + 1]!, boxes[b + 3]!)
+      if (bx0 < hx0 || bx1 > hx1 || by0 < hy0 || by1 > hy1) continue
+      if (by0 < f.y - reach || by1 > f.y + reach || (bx1 > f.x0 && bx0 < f.x1)) continue
+      if (F.some((g, k) => k !== n && by1 > g.bottom && by0 < g.top)) continue
+      sampled++
+      return
+    }
+  })
+  return sampled >= 2
+}
+
 /** the hyphens a line may end in (facts.ts HYPHENS) */
 const HYPHENS_AT_END = /^[-\u2010\u00ad]$/u
 /** what a line's end before the next line is (facts.ts lineEnd): a space, a word's hyphen joined, TeX's break dropped; a hyphen

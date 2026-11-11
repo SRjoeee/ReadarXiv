@@ -416,6 +416,32 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     )
     fig.holds = [{ p: 1, b: 9, ks: [0, 1], shape: rect(75, 680, 160, 712) }]
     expect(figureLinesOf([page], fig, () => false, null).filter((t) => t.ks.length > 1)).toEqual([])
+    // (its samples after its entries, or a marker before each past a leader's reach, a frame's side beside both: each row's own ink
+    // beside its words is a legend's still, 1512.03385v1 p1 and p5, 2610.21085v1 p31, 2010.11929v2 p7)
+    const beside = (boxes: number[][]) => {
+      const { page: pg, fig: f } = pageOf(
+        [[{ text: 'plain-18', font: T, x: 100 }], [{ text: 'plain-81', font: T, x: 100 }]],
+        boxes,
+      )
+      f.holds = [{ p: 1, b: 9, ks: [0, 1], shape: rect(75, 680, 180, 712) }]
+      return figureLinesOf([pg], f, () => false, null).filter((t) => t.ks.length > 1)
+    }
+    expect(
+      beside([
+        [150, 702, 170, 703],
+        [150, 688, 170, 689],
+      ]),
+    ).toEqual([])
+    expect(
+      beside([
+        [78, 700, 82, 704],
+        [78, 686, 82, 690],
+        [90, 680, 90.5, 712],
+      ]),
+    ).toEqual([])
+    // (a node's label: no ink beside its rows, or ink beside one of them alone, an icon: one text)
+    expect(beside([])).toHaveLength(1)
+    expect(beside([[78, 700, 82, 704]])).toHaveLength(1)
   })
   it('reads a closed path’s inside by its interior: a glyph inside its box and outside it crowds nothing (2608.06701v1 p2)', () => {
     // (one line in the diamond, "yes" beside it: in the diamond's box, outside the diamond)
