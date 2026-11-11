@@ -562,8 +562,14 @@ send it units (`axt:translate`: `{ units, target, context?, scope? }` → one re
 the sections below describe of the ported request layer (Read Frog's queues, retry policy and token bucket), of the
 per-call fallback service and its 60 s demotions, of the page's own resend, runs fallback and halving, and of the service
 inserting sentence markers, is the package's now, per unit: write, store read, requests cut by each translator's limits
-with equal wires sent once, three attempts with backoff, a 429 cooling its translator for every call, a breaker per
-translator (50 % of 20, never the chain's last), halving where a request is wrong for its content, one acceptance rule,
+with equal wires sent once, three attempts with backoff, a 429 cooling its translator for every call (the chain's last
+translator waits a cooldown or a gate's refusal out only within what the chain gives one request of it, its three tries of
+`callMs`; a longer pause is never slept, the unit answers unavailable with the time the endpoint named, which the host
+offers its retry by: a Retry-After of an hour, slept twice, had held a call two hours, #638), a breaker per
+translator (50 % of 20, never the chain's last), halving only where an endpoint says a request is too large (a 413, or the
+words of its stated cap: Microsoft's plain-text 400) while any other refused request goes whole to the next translator and
+counts against its own as a failure of its endpoint does (a 400 to every request had been halved into 7 requests for an
+LLM's 4 units and 199 for Google's 100, #636), one acceptance rule,
 fall-through to the next translator per unit, one re-ask where a translator asks it (an LLM), the runs floor past the last,
 whole or not at all: where a stretch comes back from no translator the unit is refused and its original stays, never its
 English between translated stretches (PDF-READER §18.21).
@@ -722,8 +728,10 @@ decision: clearing it costs a re-translation and nothing else.
 
 - **The answers** (`answers`): the chain's Store. The key is the package's `keyOf`, `t1 | translator identity | target |
   sha256 of the wire the translator is sent for the unit | the context's digest, or -` (`packages/translate` chain.ts), the
-  context entering only for a translator whose replies depend on it (an LLM's: title, abstract, section, glossary; never a
-  free engine's, so a free engine's answer serves every paper and every heading). The value is the translator's raw reply
+  context entering only for a translator whose replies depend on it (an LLM's: title, abstract, section, and of the glossary
+  only the entries the wire uses, which the translator states, `glossaryOf`: an entry added, changed or removed that a passage
+  does not use leaves its answer in reach, and a passage that uses none keys as with no glossary, #637; never a free
+  engine's, so a free engine's answer serves every paper and every heading). The value is the translator's raw reply
   for that unit, **kept only once accepted, and read again and judged again on every use**: a better reading of an old reply
   needs no new request, and a reply the acceptance rule now refuses is asked again. No number is raised by hand: what a
   translator is sent changes its key by itself (the wire's bytes are in it); how a reply is read changes nothing stored. A
@@ -732,7 +740,8 @@ decision: clearing it costs a re-translation and nothing else.
   model, `PROMPT_VERSION` with the prompt's key, and the thinking switch where the endpoint is sent one
   (`src/providers/llm.ts`), so a prompt whose meaning changes raises `PROMPT_VERSION` and its answers and rows are new.
 - **The rows** (`rows`): a unit's accepted result, `r1 | identityOf(the chain's translators) | target | sha256 of the
-  unit (its kind, content, whether it lights by sentence) | the context's digest where a translator reads it`
+  unit (its kind, content, whether it lights by sentence) | the context's digest where a translator reads it`, its glossary
+  the entries the unit's wires use (`rowContextOf`, the package's: the unit as the chain sends it)
   (`src/providers/transport.ts`). A page opened again reads its units' rows before anything is asked, and sends nothing for
   them. Kept only where the result is what the chain would give again: the first translator's answer, or a later one's
   where every translator before it **refused** the unit — not one that could not be reached, was cooling, had no key or no

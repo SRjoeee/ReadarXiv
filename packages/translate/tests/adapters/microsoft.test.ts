@@ -61,10 +61,18 @@ translatorSuite('microsoft', {
     {
       name: 'its stated cap (a plain-text 400)',
       answer: { status: 400, body: 'Request exceeds the maximum allowed translation size.' },
-      remedy: 'halve',
-      code: 'overload',
+      remedy: 'pass',
+      code: 'too-large',
     },
-    { name: 'another 400', answer: { status: 400, body: 'Bad request' }, remedy: 'halve', code: 'malformed' },
+    { name: '413', answer: { status: 413, body: '' }, remedy: 'pass', code: 'too-large' },
+    // a 400 that does not name its cap: the request handed on whole (#636); "maximum" alone names no size of ours
+    { name: 'another 400', answer: { status: 400, body: 'Bad request' }, remedy: 'pass', code: 'malformed' },
+    {
+      name: 'a 400 of another maximum',
+      answer: { status: 400, body: 'The maximum number of languages is exceeded' },
+      remedy: 'pass',
+      code: 'malformed',
+    },
     { name: '403 of a keyless endpoint', answer: { status: 403, body: 'forbidden' }, remedy: 'again', code: 'network' },
     { name: '404', answer: { status: 404, body: '' }, remedy: 'pass' },
     { name: 'not JSON', answer: { status: 200, body: '<html>gateway</html>' }, remedy: 'again', code: 'malformed' },

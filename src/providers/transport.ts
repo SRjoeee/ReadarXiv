@@ -5,7 +5,7 @@
 // so page translation and the settings page's connection test share one path (issue #42):
 // - createLocalTransport (this file), in the background;
 // - createMessageTransport (src/shared/transport.ts): every method a message, in content scripts and extension pages.
-import { type Chain, Fault, identityOf, type Note, type PaperContext, type Result, sha256Hex, type Translator, type UnitIn, type Why } from '@readarxiv/translate'
+import { type Chain, Fault, identityOf, type Note, type PaperContext, type Result, rowContextOf, sha256Hex, type Translator, type UnitIn, type Why } from '@readarxiv/translate'
 import { chainRevision } from '@/config/revision'
 import type { Config } from '@/config/schema'
 import { chosenService, serviceOf, serviceRuns, type Service } from '@/config/services'
@@ -109,6 +109,9 @@ export interface LocalTransportDeps extends TranslatorDeps {
   /** a refused key of one of the reader's services (a 401), for the health record */
   onFailure?: (info: { id: string; kind: ProviderErrorKind; message: string; status?: number }) => void
 }
+
+/** a hand-over a call met: the service, why, and for how many of the call's units */
+interface Told { id: string; kind: ProviderErrorKind; message: string; count: number }
 
 /** How long a hand-over of an engine that could not answer stands in the popup's words (fallback.ts's cooldown before) */
 const HANDOVER_MS = 60_000
@@ -231,8 +234,10 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     lastDemoted = { id: a.id, kind: 'auth', message: 'the endpoint refused this key before' }
   }
 
+  // (the context as the unit's answers depend on it: its glossary the entries the unit's wires use, #637; without a glossary
+  // the context itself, the key as before)
   const rowKey = (u: UnitIn, lang: string, context: PaperContext | undefined) =>
-    `${ROWS}|${chainId}|${lang}|${sha256Hex(JSON.stringify([u.kind ?? null, u.content, u.sentences === true, u.strict === true]))}|${usesContext && context ? sha256Hex(JSON.stringify(context)) : '-'}`
+    `${ROWS}|${chainId}|${lang}|${sha256Hex(JSON.stringify([u.kind ?? null, u.content, u.sentences === true, u.strict === true]))}|${usesContext && context ? sha256Hex(JSON.stringify(rowContextOf(translators, u, lang, context))) : '-'}`
 
   /** one call of `chain` with `order`: results by unit, the rows read first and written after. `own`: only a translator's
    *  own answer is one (the connection test's) */
@@ -245,10 +250,13 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     live.set(scope, mine)
     mine.add(ac)
     inFlight++
+    /** the hand-overs this call met, by service and kind: each logged once, when the call ends, with its count of units */
+    const told = new Map<string, Told>()
     try {
       const out = new Map<string, UnitResult>()
       // the rows first: a unit with one is answered by it, nothing asked
       const keys = rows ? call.units.map(u => rowKey(u, lang, context)) : []
+      const keyById = new Map(keys.map((k, i) => [(call.units[i] as UnitIn).id, k]))
       const held = rows ? await within(rows.read(keys), 2_000, keys.map(() => null)) : []
       const todo: UnitIn[] = []
       call.units.forEach((u, i) => {
@@ -256,7 +264,6 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
         if (row) out.set(u.id, { ...row, id: u.id, ...engineOf(row.by, answerers) })
         else todo.push(u)
       })
-      const byId = new Map(todo.map(u => [u.id, u]))
       const cached = call.units.length - todo.length
       const passed = new Map<string, Map<string, Why['kind'][]>>()
       let sent = 0
@@ -268,11 +275,12 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
         const byT = passed.get(n.id) ?? new Map<string, Why['kind'][]>()
         passed.set(n.id, byT)
         byT.set(n.by, [...(byT.get(n.by) ?? []), n.why.kind])
-        handover(answerers.get(n.by), n.why)
+        handover(answerers.get(n.by), n.why, told)
       }
       const writes: [string, string][] = []
       if (todo.length) {
-        for await (const r of chain.translate(todo, lang, { translators: order, signal: ac.signal, note, ...(context ? { context } : {}) })) {
+        const stream = chain.translate(todo, lang, { translators: order, signal: ac.signal, note, ...(context ? { context } : {}) })[Symbol.asyncIterator]()
+        const take = (r: Result) => {
           // the connection test asks whether the endpoint keeps the sample's placeholders (options/connect.ts): what the
           // runs floor rebuilt from its stretches is the chain's, and fails the test as the endpoint's reply alone would
           if (r.ok && own && !order.some(t => t.identity === r.by)) out.set(r.id, { id: r.id, ok: false, why: { kind: 'refused' }, error: errorOf({ kind: 'refused' }) })
@@ -282,18 +290,40 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
             out.set(r.id, { ...r, ...e })
             if (rows && isRow(r, order, passed)) {
               const { id: _, ...row } = r
-              writes.push([rowKey(byId.get(r.id) as UnitIn, lang, context), JSON.stringify(row)])
+              writes.push([keyById.get(r.id) as string, JSON.stringify(row)])
             }
           } else out.set(r.id, { ...r, error: errorOf(r.why, r.why.kind === 'unconfigured' && r.why.code === 'key-refused' ? lastStatus : undefined) })
         }
+        try {
+          // every unit's result first (the chain gives exactly one each); then the chain's end, which waits for its own store
+          // write, and the rows' write beside it: the call waits for the two together, not one after the other. Both have
+          // ended (or run out of their time) before it returns, as each did before: an answer returned is an answer stored,
+          // as far as a store that answers can say, and production's call waited for its cache writes too
+          for (let n = 0; n < todo.length; n++) {
+            const step = await stream.next()
+            if (step.done) break
+            take(step.value)
+          }
+          await Promise.all([stream.next(), rows && writes.length ? within(rows.write(writes), 5_000, undefined) : undefined])
+        } finally {
+          // (a throw of ours midway lets the chain's work go as a host that stops reading does; after its end, nothing)
+          void stream.return?.(undefined)
+        }
       }
-      if (rows && writes.length) await within(rows.write(writes), 5_000, undefined)
       const results = call.units.map(u => out.get(u.id) ?? { id: u.id, ok: false as const, why: { kind: 'aborted' as const }, error: errorOf({ kind: 'aborted' }) })
       const failed = results.find(r => !r.ok)
       // what the call cost, for the diagnostics log (issue #237): a call the rows answered whole costs nothing and says nothing
       if (sent > 0 || failed) deps.note?.(batchLine({ ...(call.scope !== undefined ? { scope: call.scope } : {}), segments: call.units.length, cached, calls: sent, done: results.filter(r => r.ok).length, ...(failed && !failed.ok ? { failed: failed.error.kind } : {}) }))
       return { ok: true, results, cached }
     } finally {
+      for (const x of told.values()) {
+        // the worker's console says it once a call, as the queues it replaced did (`[axt] batch failed`): pnpm e2e takes this
+        // line as the boundary no request of a session stopped by it may cross (#96, #223); the call's answer, which stops a
+        // session, comes after it
+        const units = `for ${x.count} unit${x.count === 1 ? '' : 's'}`
+        console.warn(`[axt] ${x.id} passed over (${x.kind}) ${units}: ${redact(x.message)}`)
+        deps.warn?.(`[axt] ${x.id} passed over ${units}: ${redact(x.message)}`)
+      }
       inFlight--
       mine.delete(ac)
       if (!mine.size) live.delete(scope)
@@ -305,11 +335,17 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     const a = answerers.get(identity) ?? (by === 'runs:mixed' ? built.primary : undefined)
     return a ? { engine: a.id, kind: a.kind } : {}
   }
-  /** a translator passed over for a unit: a hand-over the popup may word, for what makes it more than the unit's */
-  const handover = (a: Answerer | undefined, why: Why) => {
+  /** a translator passed over for a unit: a hand-over the popup may word, for what makes it more than the unit's; told once a
+   *  call (`told`), the units after the first counted (two calls of 60 units passing a cooling translator logged 120 lines) */
+  const handover = (a: Answerer | undefined, why: Why, told: Map<string, Told>) => {
     if (!a || why.kind === 'refused' || why.kind === 'aborted') return
     if (why.kind === 'unconfigured' && why.code === 'no-language') return
     const info = errorOf(why, why.kind === 'unconfigured' && why.code === 'key-refused' ? lastStatus : undefined)
+    const seen = told.get(`${a.id}|${info.kind}`)
+    if (seen) {
+      seen.count++
+      return
+    }
     const lasting = info.kind === 'no-key' || info.kind === 'auth'
     // a lasting hand-over already known (the health record's refused key, with its 401) keeps what it says
     if (lasting && demoted.get(a.id)?.until === Number.POSITIVE_INFINITY) return
@@ -317,10 +353,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     lastDemoted = { id: a.id, kind: info.kind, message: info.message }
     // a refused key of a stored service of the reader's (a 401): the health record's (background/health-guard.ts)
     if (info.kind === 'auth' && info.status === 401 && serviceOf(config, a.id)) deps.onFailure?.({ id: a.id, kind: 'auth', message: info.message, status: 401 })
-    // the worker's console says it too, the moment the chain learnt it, as the queues it replaced did (`[axt] batch
-    // failed`): pnpm e2e takes this line as the boundary no request of a session stopped by it may cross (#96, #223)
-    console.warn(`[axt] ${a.id} passed over (${info.kind}): ${redact(info.message)}`)
-    deps.warn?.(`[axt] ${a.id} passed over: ${redact(info.message)}`)
+    told.set(`${a.id}|${info.kind}`, { id: a.id, kind: info.kind, message: info.message, count: 1 })
   }
   const answered = (id: string) => {
     lastAnswer = id

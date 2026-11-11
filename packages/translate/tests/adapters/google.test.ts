@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { google, readTagged } from '../../src/adapters/google.ts'
-import type { FetchInit, Piece } from '../../src/contract.ts'
-import { NEVER, scriptedFetch } from '../../src/testing/fakes.ts'
+import { chainOf } from '../../src/chain.ts'
+import type { FetchInit, Piece, Result } from '../../src/contract.ts'
+import { echo, NEVER, scriptedFetch } from '../../src/testing/fakes.ts'
+import { fakeClock } from '../../src/testing/ports.ts'
 import { translatorSuite } from '../../src/testing/suite.ts'
 import { el, span, t, unit } from '../pieces.ts'
 import { DISPLAY_ENDS, GOOGLE_REPLIES, HEAD_STOP, LABEL_AFTER_BREAK, SOURCE_LINES, UNITS } from './fixtures.ts'
@@ -28,7 +30,15 @@ translatorSuite('google', {
     },
     { name: '500', answer: { status: 500, body: '' }, remedy: 'again', code: 'network' },
     { name: 'the network', answer: { network: true }, remedy: 'again', code: 'network' },
-    { name: '400', answer: { status: 400, body: 'bad' }, remedy: 'halve' },
+    // a 400 that names no size, whatever it says ("API key not valid" included): the request handed on whole (#636)
+    { name: '400', answer: { status: 400, body: 'bad' }, remedy: 'pass', code: 'malformed' },
+    {
+      name: 'its key refused, a 400',
+      answer: { status: 400, body: 'API key not valid. Please pass a valid API key.' },
+      remedy: 'pass',
+      code: 'malformed',
+    },
+    { name: '413', answer: { status: 413, body: 'Request Entity Too Large' }, remedy: 'pass', code: 'too-large' },
     { name: '403 of a keyless endpoint', answer: { status: 403, body: '' }, remedy: 'again', code: 'network' },
     { name: 'not JSON', answer: { status: 200, body: 'nope' }, remedy: 'again', code: 'malformed' },
     { name: 'the wrong count', answer: { status: 200, body: '[["one"]]' }, remedy: 'again', code: 'malformed' },
@@ -218,5 +228,19 @@ describe('google: a character TeX writes escaped, sent as text', () => {
       { t: 'el', id: '2' },
       { t: 'text', s: '&.' },
     ])
+  })
+})
+
+describe('google: a 400 to every request through the chain (#636)', () => {
+  it('100 units are one request, handed on whole to the next translator (199 requests when every 400 was halved)', async () => {
+    const f = scriptedFetch(() => ({ status: 400, body: 'API key not valid. Please pass a valid API key.' }))
+    const units = Array.from({ length: 100 }, (_, i) => unit(`u${i}`, [t(`Word ${i}.`)]))
+    const rs: Result[] = []
+    for await (const r of chainOf({ clock: fakeClock() }).translate(units, 'zh-Hans', {
+      translators: [google({ fetch: f.fetch }), echo('fallback:0')],
+    }))
+      rs.push(r)
+    expect(f.requests.length).toBe(1)
+    expect(rs.every((r) => r.ok && r.by === 'fallback:0')).toBe(true)
   })
 })

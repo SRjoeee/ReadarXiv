@@ -8,7 +8,7 @@ export const TRANSLATE_PURPOSE =
 
 export { ACCEPT_DIGEST, accept, asOut, projectionOf, type Refusal, validSentences } from './accept.ts'
 export { NESTED_KIND, unitInOf } from './bundle.ts'
-export { chainOf, identityOf, keyOf, realClock } from './chain.ts'
+export { chainOf, identityOf, keyOf, realClock, rowContextOf } from './chain.ts'
 export { sha256Hex } from './sha256.ts'
 export {
   type Chain,
@@ -16,6 +16,7 @@ export {
   type ElKind,
   Fault,
   type FaultCode,
+  type Glossary,
   type Fetch,
   type FetchInit,
   type FetchReply,
