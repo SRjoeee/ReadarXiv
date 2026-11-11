@@ -224,7 +224,7 @@ const NOTE_DIGITS = /^[0-9,]+$/u
  * today's one definition (ink-units.mjs scriptsOf, rule 4: smaller than the row's text and off its baseline, read on the
  * engine's hundredth of a point, no threshold; the row's text size its largest, where a line of prose's is its most frequent), a
  * note mark aside; or a spacing accent or a combining mark set over another of its
- * glyphs (its middle in that glyph's advance, its ink over that glyph's ink) that TeX's \accent did not set over its letter
+ * glyphs (its ink's middle across inside that glyph's ink, its ink above it) that TeX's \accent did not set over its letter
  * (accents.mjs accentOver, which joins a text accent to its letter: Física stays a word), its elements' glyphs too (a formula's
  * hat over its μ, laid as two crops one after the other: 2610.20947v1 p3). Its own glyphs alone: a neighbour's smaller text in
  * its band is no script of its (2602.23285v2 p9). 2610.22214v1 p4's "a_mn x_n = b_m", drawn "amn xn = bm"
@@ -262,9 +262,14 @@ export function setApart(t: Pick<FigureText, 'order' | 'els'>, G: readonly G[]):
     const A = G[a]!
     if (!COMBINING.has(A.u) && !/^\p{M}+$/u.test(A.u)) continue
     if ([all[k - 1], all[k + 1]].some((l) => l !== undefined && accentOver(A, G[l]!) !== null)) continue
-    const m = (A.x0 + A.x1) / 2
-    if (all.some((b) => b !== a && !COMBINING.has(G[b]!.u) && G[b]!.x0 <= m && m <= G[b]!.x1 && A.bottom >= G[b]!.top))
-      return true
+    // (over another glyph's ink: its ink's middle across inside that glyph's ink, its ink above it; a code quote beside a letter,
+    // its own advance's, is none: 2608.06701v1 p1's "`rg`")
+    const m = ((A.ix0 ?? A.x0) + (A.ix1 ?? A.x1)) / 2
+    const over = (b: number) => {
+      const B = G[b]!
+      return b !== a && !COMBINING.has(B.u) && (B.ix0 ?? B.x0) <= m && m <= (B.ix1 ?? B.x1) && A.bottom >= B.top
+    }
+    if (all.some(over)) return true
   }
   return false
 }

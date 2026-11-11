@@ -1471,6 +1471,19 @@ describe("F3's `script`: a figure text the engine cannot draw as it was set is t
     }
     expect(setApart(t, G as never)).toBe(true)
   })
+  it('keeps no code quote beside a letter: its ink beside the letter\'s, not over it (2608.06701v1 p1\'s "`rg`")', () => {
+    // (a backtick after a g, the g's advance past the quote's middle: the quote's ink stands beside the g's, past its ink's end)
+    const G = gl([
+      ['r', 'Arial', 6, 100, 102.6, 650],
+      ['g', 'Arial', 6, 102.6, 107.5, 650],
+      ['`', 'Arial', 6, 105.8, 108, 650],
+    ])
+    G[1]!.ix1 = 105.7
+    G[2]!.ix0 = 106.3
+    G[2]!.bottom = 654.5
+    G[1]!.top = 653.2
+    expect(setApart(text(3), G as never)).toBe(false)
+  })
   it('keeps no text accent TeX set over its letter (Física: the accent joins its letter, accents.mjs accentOver)', () => {
     // (OT1's acute set over a dotless i in one font, its advance centred on the letter's: the reading's one character)
     const G = gl([
