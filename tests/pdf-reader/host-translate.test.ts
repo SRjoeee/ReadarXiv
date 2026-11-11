@@ -1,12 +1,17 @@
 // The reader host's one function that talks to the background (src/pdf-reader/host/translate.ts): units in, one result a unit
-// out (the chain's, in the background), in calls the size of the chain's batches, under one scope withdrawn when done
+// out (the chain's, in the background), in calls of production's batches of plain source, one at a time, under one scope
+// withdrawn when done; through the background's own transport and chain, the requests and round trips of a 3-page open
 import { describe, expect, it } from 'vitest'
 import type { Unit } from '@readarxiv/format'
-import { chainOf, type FetchInit, google, microsoft, type Translator, type UnitIn } from '@readarxiv/translate'
-import { scriptedFetch } from '@readarxiv/translate/testing'
+import { chainOf, type FetchInit, type FetchReply, google, microsoft, type Translator, type UnitIn } from '@readarxiv/translate'
+import { fakeClock, scriptedFetch } from '@readarxiv/translate/testing'
+import { MockLanguageModelV4 } from 'ai/test'
+import { DEFAULT_CONFIG, type Config } from '@/config/schema'
 import { FIRST_BATCH as ENGINE_FIRST_BATCH, NEXT_BATCH as ENGINE_NEXT_BATCH } from '@/pdf-reader/engine/translate.mjs'
 import { FIRST_BATCH, hostTranslate, NEXT_BATCH } from '@/pdf-reader/host/translate'
-import type { TranslationTransport } from '@/providers/transport'
+import { llmTranslator } from '@/providers/llm'
+import { CancelledScopeRegistry } from '@/providers/request/cancellation'
+import { createLocalTransport, type TranslationTransport } from '@/providers/transport'
 
 const unit = (id: string, content: Unit['content']): Unit => ({ id, kind: 'para', content }) as Unit
 const status = (o: Record<string, unknown> = {}) => ({ providerId: 'microsoft', chosen: 'microsoft', available: true, maxBatchChars: 1000, maxBatchItems: 2, targetLanguage: 'deu', promptId: '', revision: 'r', engine: {}, chain: ['microsoft'], demotions: [], identity: 'id-ms', ...o })
@@ -130,5 +135,102 @@ describe('the reader host translate through the background', () => {
     for await (const _ of it) ac.abort()
     expect(asked).toHaveLength(1)
     expect(cancelled.length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * The 3-page open through the background's own transport and chain, an endpoint that answers in rounds: every request out is
+ * held until nothing more moves (each step a turn of the event loop, never a time), then all of them are answered together,
+ * one round trip. The chain's clock is a fake that never advances (no request time, no backoff), so the counts are the
+ * same however loaded the machine
+ */
+describe('the reader host through the background\'s transport and chain: requests and round trips of a 3-page open', () => {
+  const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
+  const usage = { inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 1, text: 1, reasoning: undefined } }
+  const turn = () => new Promise<void>(r => setTimeout(r, 0))
+
+  async function open(llm: boolean) {
+    const held: (() => void)[] = []
+    let requests = 0
+    const answer = <T>(make: () => T): Promise<T> => {
+      requests++
+      return new Promise<T>(resolve => held.push(() => resolve(make())))
+    }
+    const fetch = async (_url: string, init: FetchInit): Promise<FetchReply> => {
+      const texts = JSON.parse(init.body) as string[]
+      return answer(() => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(texts.map(text => ({ translations: [{ text }] }))) }))
+    }
+    const model = new MockLanguageModelV4({
+      doGenerate: async o => {
+        const ids = [...JSON.stringify(o.prompt).matchAll(/\\"id\\":\\"(\d+)\\"/g)].map(m => m[1] as string)
+        return answer(() => ({ content: [{ type: 'text' as const, text: JSON.stringify({ segments: ids.map(id => ({ id, text: 'Ein Satz aus Wörtern. '.repeat(8) })) }) }], finishReason: { unified: 'stop' as const, raw: undefined }, usage, warnings: [] }))
+      },
+    })
+    const config = { ...DEFAULT_CONFIG, ...(llm ? { provider: SVC.id, services: [SVC] } : {}) } as Config
+    const chain = chainOf({ clock: fakeClock({ auto: false }) })
+    const local = await createLocalTransport(config, { chain, probe: chain, fetch, chromeApi: null, cancelled: new CancelledScopeRegistry(), ...(llm ? { llm: (s: typeof SVC) => llmTranslator(s, { codeOf: () => 'deu', model }) } : {}) } as never)
+    // the host's calls as they are asked and answered, by their units' ids
+    const events: string[] = []
+    const transport: TranslationTransport = {
+      ...local,
+      translate: async call => {
+        events.push(`asked ${call.units.map(u => u.id).join(' ')}`)
+        const r = await local.translate(call)
+        events.push(`answered ${call.units.map(u => u.id).join(' ')}`)
+        return r
+      },
+    }
+    let done = false
+    let ok = 0
+    const run = (async () => {
+      for await (const r of hostTranslate({ transport, paper: 'p' })(threePages(), 'de', { signal: new AbortController().signal })) if (r.ok) ok++
+      done = true
+    })()
+    const rounds: number[] = []
+    while (!done) {
+      // (until nothing moves: no request asked and no call answered for 50 turns in a row)
+      for (let still = 0, seen = -1; still < 50; still++) {
+        const now = requests + events.length
+        if (now !== seen) {
+          seen = now
+          still = 0
+        }
+        await turn()
+        if (done) break
+      }
+      if (done) break
+      if (!held.length) throw new Error('the open stalled with no request out')
+      rounds.push(held.length)
+      for (const go of held.splice(0)) go()
+    }
+    await run
+    return { ok, requests, rounds, events }
+  }
+
+  const ordered = (events: string[]) => {
+    const first = events.find(e => e.startsWith('answered '))?.split(' ').slice(1) ?? []
+    expect(first[0]).toBe('p1-0')
+    expect(first.every(id => id.startsWith('p1-'))).toBe(true)
+    const asked = new Set<string>()
+    for (const e of events) {
+      const [what, ...ids] = e.split(' ')
+      if (what === 'asked') for (const id of ids) asked.add(id)
+      else for (const id of ids) for (let p = 1; p < Number(id.slice(1, id.indexOf('-'))); p++) for (let k = 0; k < 16; k++) expect(asked.has(`p${p}-${k}`)).toBe(true)
+    }
+  }
+
+  it('Microsoft: 11 requests in 3 round trips (10 in 10 when the host sent chain-sized calls one after another), several in flight within a call, the nearest served first', async () => {
+    const r = await open(false)
+    expect(r.ok).toBe(48)
+    expect(r.requests).toBe(11)
+    expect(r.rounds).toEqual([2, 7, 2])
+    ordered(r.events)
+  })
+  it('an LLM: 25 requests in 5 round trips (24 in 24 before), at most 8 in flight, the nearest served first', async () => {
+    const r = await open(true)
+    expect(r.ok).toBe(48)
+    expect(r.requests).toBe(25)
+    expect(r.rounds).toEqual([4, 8, 8, 1, 4])
+    ordered(r.events)
   })
 })
