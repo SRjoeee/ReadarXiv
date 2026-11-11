@@ -4739,6 +4739,9 @@ has no put-back: it lost them too (lane bold-spans).
   word came back untranslated or in the wrong sense, lane bold-spans' probe), and a phrase whose reference the reply does not
   state.
 
+§18.43 is not used: it was held for lane span-putback's item 2 (the word tied to a reference read past a silent element,
+`names.ts`), which the owner's ruling of 2026-11-11 cancelled before anything of it was built.
+
 ### 18.44 A run-in label after a forced break begins its line past the elements between (2026-11-11)
 
 2602.23285v2's contributions list (staging, zh and production alike): "(i) *Effective spatiotemporal modeling for ODE

@@ -748,12 +748,13 @@ function wordsOf(t: readonly DocGlyph[]): string {
 /** a label's parts as TeX set them: its name, TeX's glue, its number, its punctuation (a float's \fnum@<type>, \<type>name~
  *  \the<type>; a theorem-like head's amsthm \thmname{#1}\thmnumber{ #2}, or LaTeX's \@begintheorem's #1 and #2). The number
  *  is the word after the label's last word space where that word is a number as LaTeX prints a counter (a digit in it, a
- *  roman one, a letter alone: "3", "2.1", "A.4", "S2", "TABLE I", "Corollary VI.2"), from its first digit or letter (a
- *  bracket before it is neither part's: "Eq. (3)"); where none is, the digits with the dots, letters and dashes between them
- *  at its end ("Fig.S1"; a stop or dash before its first digit or letter stands between none of them, and is the name's where
- *  a name stands before it: "Fig. 4."). The name is its word or words before the number, from its first letter, with the
- *  marks a word holds ("Figure", "Theorem", "Key Lemma", an abbreviation's "Fig.", "Thm."), read as letters: Unicode's
- *  compatibility form (NFKC), a ligature's glyph its letters ("Deﬁnition"'s U+FB01), a space where TeX set its glue (FLOAT_TIE).
+ *  roman one, a letter alone: "3", "2.1", "A.4", "S2", "TABLE I", "Corollary VI.2"), as TeX printed it (an opening bracket
+ *  before its first digit or letter is the number's: "Eq. (3)" is "(3"); where none is, the digits with the dots, letters
+ *  and dashes between them at its end ("Fig.S1"; a stop or dash before its first digit or letter stands between none of
+ *  them, and is the name's where a name stands before it: "Fig. 4."). The name is its word or words before the number,
+ *  from its first letter, with the marks a word holds ("Figure", "Theorem", "Key Lemma", an abbreviation's "Fig.", "Thm."),
+ *  read as letters: Unicode's compatibility form (NFKC), a ligature's glyph its letters ("Deﬁnition"'s U+FB01), a space where
+ *  TeX set its glue (FLOAT_TIE).
  *  The punctuation is the marks after the number (":", ".", "("). Each with its ink on `page`. Today's head and float label
  *  readings (L2:1184-1195, L2:1245-1259) read the three off the label's text with a pattern of their shapes, which took one
  *  capital before a number's first dot and no more: "Corollary VI.2" was "CorollaryVI." and "2" (2610.21312v1) */

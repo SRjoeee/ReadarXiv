@@ -386,7 +386,6 @@ function readingsOf(
   return { readings, cls2 }
 }
 
-/** the label as U.label reads it: its parts (Label.name, num, punct) each one glyph of its ink, in its style */
 /** whether a named label's parts hold its every glyph, the name first: from its ink's start to its end (its own 1/100 grid),
  *  and none of its glyphs between them in no part (Label.unheld, the engine's count: a bracket before its name, a note it holds
  *  whole, Codex on round 8's pull request). Only such a label is drawn anew from its parts */
@@ -394,6 +393,7 @@ function partsHold(lb: NonNullable<Placed['label']>): boolean {
   if (!lb.name || lb.unheld) return false
   return lb.name[1][1] <= lb.ink[1] + 0.01 && (lb.punct ?? lb.num ?? lb.name)[1][3] >= lb.ink[3] - 0.01
 }
+/** the label as U.label reads it: its parts (Label.name, num, punct) each one glyph of its ink, in its style */
 function labelOf(m: Placed, designs: PaperReading['designs']): UnitLabel | undefined {
   const lb = m.label
   if (!lb) return undefined
