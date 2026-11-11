@@ -344,6 +344,9 @@ for (const pair of pairs) {
   const pitch = candidateKept(paperOf(pair), 'pitch')
   const address = candidateKept(paperOf(pair), 'address')
   const identifier = candidateKept(paperOf(pair), 'identifier')
+  // (F1's figure line of formulas alone and F3's double, the rulings of 2026-11-11: verdict.mjs FORMULA_RULING, DOUBLE_RULING)
+  const formula = candidateKept(paperOf(pair), 'formula')
+  const double = candidateKept(paperOf(pair), 'double')
   const keptToday = candidateKeptToday(paperOf(pair))
   // (the ink of the elements its prepare keeps as the original's, by member: F0's run of one pitch, a stretch a decoration holds;
   // the verdict reads the original's style without it, the coordinator's ruling 1 on F0)
@@ -371,6 +374,8 @@ for (const pair of pairs) {
     ...(pitch.length ? { pitch } : {}),
     ...(address.length ? { address } : {}),
     ...(identifier.length ? { identifier } : {}),
+    ...(formula.length ? { formula } : {}),
+    ...(double.length ? { double } : {}),
     ...(keptToday.length ? { keptToday } : {}),
     ...(keptEls.length ? { keptEls } : {}),
     ...(noRow.size ? { noRow: [...noRow].sort((a, b) => a - b) } : {}),

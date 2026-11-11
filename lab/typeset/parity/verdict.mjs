@@ -774,6 +774,10 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // cell of identifiers alone, no unit of v2's): the original's text, no translation missing, the coordinator's ruling of
   // 2026-11-10, IDENTIFIER_RULING (or the mark's own ruling))
   const identifier = new Set(v2.identifier ?? [])
+  // (and those it keeps for a formula, F1's figure line of formulas alone (`formula`, PDF-READER §18.35), or for being drawn twice
+  // over itself, F3's double (`double`, §18.36): the original's, the rulings of 2026-11-11, FORMULA_RULING and DOUBLE_RULING)
+  const formula = new Set(v2.formula ?? [])
+  const double = new Set(v2.double ?? [])
   const keptToday = new Map(v2.keptToday ?? [])
   for (const key of T.keys()) {
     if (V.has(key)) continue
@@ -794,7 +798,18 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const named = v2.toggles !== 'on' && o?.part !== null && o?.part !== undefined && unitClass(facts.get(o.part)?.kind) === 'names'
     const kept = o?.part !== null && o?.part !== undefined && pitch.has(o.part)
     const mail = o?.part !== null && o?.part !== undefined ? address.has(o.part) : !!o?.lines?.length && o.lines.every(onAddress)
-    const mark = kept ? 'pitch' : mail ? 'address' : o?.part !== null && o?.part !== undefined && identifier.has(o.part) ? 'identifier' : (keptToday.get(Number(key.slice(1))) ?? null)
+    const part = o?.part !== null && o?.part !== undefined ? o.part : null
+    const mark = kept
+      ? 'pitch'
+      : mail
+        ? 'address'
+        : part !== null && identifier.has(part)
+          ? 'identifier'
+          : part !== null && formula.has(part)
+            ? 'formula'
+            : part !== null && double.has(part)
+              ? 'double'
+              : (keptToday.get(Number(key.slice(1))) ?? null)
     const ruled = named || !!mark
     if (!ruled && unmeasured(o?.part)) {
       diff('shown', `${key} ${o?.kind ?? ''}`.trim(), "translated by today, left the original's by v2: no row of the pair's serves its text", null, { value: 'translated', off: null }, { value: 'no row', off: null }, false, 'unmeasured')
@@ -831,7 +846,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // unit is joined to one of v2's figure members `pitch` names, figuresMatched's join by the original's box. Fewer than today's
   // by no more than those is the ruling's, PITCH_RULING; a group the join does not pair stays counted)
   // (and those it keeps for an identifier they hold, `identifier`, the coordinator's ruling of 2026-11-10: IDENTIFIER_RULING)
-  const figKept = [...figuresMatched(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n).keys()].filter((o) => pitch.has(o) || identifier.has(o))
+  const figKept = [...figuresMatched(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n).keys()].filter(
+    (o) => pitch.has(o) || identifier.has(o) || formula.has(o) || double.has(o),
+  )
   const figPitch = figKept.filter((o) => pitch.has(o)).length
   // (a figure member v2 draws that holds two or more of today's units whole, its text theirs in order (v2.mjs `joined`,
   // join.mjs joinedJoin's exact text: F0's line, a figure paragraph, a word joined across a size change, 2608.06701v1 p1's
@@ -846,7 +863,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // 1 on F0, 2026-11-10). Each of today's drawn groups whose middle stands in such a member's lines on the page, however today
   // cut it: the box join pairs one piece of a text today drew in two at most (2608.06701v1 p1's names on tones)
   const unmeasuredSpans = [...figOrds]
-    .filter((o) => !pitch.has(o) && !identifier.has(o) && unmeasured(o))
+    .filter((o) => !pitch.has(o) && !identifier.has(o) && !formula.has(o) && !double.has(o) && unmeasured(o))
     .map((o) => spanOf((facts.get(o)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))))
     .filter(Boolean)
   const figUnmeasured = (rec.today.figures ?? []).filter((g) => {
@@ -860,7 +877,14 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const ruled = figVJ >= figT - figKept.length
     const unm = !ruled && figVJ >= figT - figKept.length - figUnmeasured
     diff('figures', null, 'figure texts drawn translated', null, { value: figT, off: null }, { value: figVJ, off: null }, !ruled && !unm, ruled ? 'ruling' : unm ? 'unmeasured' : 'today')
-    if (ruled) out.diffs.at(-1).ruling = [...new Set(figKept.map((o) => (pitch.has(o) ? PITCH_RULING : IDENTIFIER_RULING)))].join(' / ')
+    if (ruled)
+      out.diffs.at(-1).ruling = [
+        ...new Set(
+          figKept.map((o) =>
+            pitch.has(o) ? PITCH_RULING : identifier.has(o) ? IDENTIFIER_RULING : formula.has(o) ? FORMULA_RULING : DOUBLE_RULING,
+          ),
+        ),
+      ].join(' / ')
   }
 
   // ------------------------------------------------ against arXiv's page and the original's facts (fidelity.mjs), and the
@@ -882,7 +906,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     groups: groups ?? [],
     keptByGroup: keptByGroup ?? new Set(),
     // (today's ords of the cells a rule's mark keeps or no row serves: no group's state, the coordinator's rulings of 2026-11-10)
-    apart: new Set([...keptToday.keys(), ...[...todayOf].filter(([o]) => pitch.has(o) || address.has(o) || identifier.has(o) || unmeasured(o)).map(([, t]) => t)]),
+    apart: new Set([...keptToday.keys(), ...[...todayOf].filter(([o]) => pitch.has(o) || address.has(o) || identifier.has(o) || formula.has(o) || double.has(o) || unmeasured(o)).map(([, t]) => t)]),
     folios: new Set([...(folios ?? [])].filter((o) => facts.has(o))),
     figurePairs: figureGroupsOf(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n),
     judge,
@@ -1203,8 +1227,14 @@ const ADDRESS_RULING =
 /** what a unit v2's prepare keeps for an identifier rests on (`shown`, `figures`) */
 const IDENTIFIER_RULING =
   "the coordinator's ruling of 2026-11-10 on the owner's principle (translating or keeping are both fine, a garbled translation never; PDF-READER §18.25): an identifier, a token holding an underscore between two word characters, is no prose, never sent, and what the prepare keeps whole for one (a figure text, a cell of identifiers alone) is the original's text: no translation missing"
+/** what a figure text v2's prepare keeps for a formula rests on (`shown`, `figures`) */
+const FORMULA_RULING =
+  "the coordinator's ruling of 2026-11-11 (F1, PDF-READER §18.35, accepted by the owner): a text in a figure that is a formula is the original's, drawn as it was set, where today held it as words: no translation missing"
+/** what a figure text v2's prepare keeps for being drawn twice rests on (`shown`, `figures`) */
+const DOUBLE_RULING =
+  "the owner's ruling (F3, PDF-READER §18.36): a figure text drawn twice over itself is kept the original's, two translations would be drawn over each other: no translation missing"
 /** the ruling of each mark the candidate's prepare writes (`keptBy`) */
-const RULING_OF = { pitch: PITCH_RULING, address: ADDRESS_RULING, identifier: IDENTIFIER_RULING }
+const RULING_OF = { pitch: PITCH_RULING, address: ADDRESS_RULING, identifier: IDENTIFIER_RULING, formula: FORMULA_RULING, double: DOUBLE_RULING }
 const NAMES_RULING =
   "the owner's rulings of 2026-10-25 and 2026-11-09 (PDF-READER §19.13): the names toggle, off by default, keeps the author block under the title the original's, whole, whatever today translated of it"
 /** what a line count leadRuling and sharePass read as the ruling's rests on: the owner's words of 2026-11-10 ("on the
