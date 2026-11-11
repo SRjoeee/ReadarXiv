@@ -100,6 +100,12 @@ const FRONT_PROSE = new Set(['IEEEauthorblockN', 'IEEEauthorblockA', 'institutio
  *  translated and set in the names' bold). Walked as FRONT_PROSE is, inside an author block alone; elsewhere one placeholder, as
  *  before. Its row is read through it (rowText), so that a row it opens with a mark is a place */
 const FRONT_BOXES = new Set(['centerline'])
+/** plain TeX's line boxes (ltplain.dtx: \\line is \\hb@xt@\\hsize, \\centerline#1 \\line{\\hss#1\\hss}, \\leftline and \\rightline
+ *  alike): their argument the box's content, walked as CONTENT_BOX's (PDF-READER §18.46). \\line is no \\leavevmode: met where no
+ *  unit is open, TeX in vertical mode, the box is a line of its own and the text after it begins a paragraph. PIPELINE 29's
+ *  walk (olderUnits' shadow, `boxesUnread`) read each as one placeholder, and reads them so still: else the units an author
+ *  block's rows are cut into are no longer `later`, and every unit after the block is numbered again (2010.11929v2) */
+const LINE_BOXES = new Set(['centerline', 'leftline', 'rightline'])
 /** IEEEtran's blocks, each a group of lines the class sets on its own in a cell of a table: a unit each, so that a
  *  line of names is fitted to its box alone (AUTHOR_WIDE), apart from the places' block and its line breaks; the block of
  *  names (\\IEEEauthorblockN) every line of it names, the block of places (\\IEEEauthorblockA) every line places */
@@ -110,7 +116,7 @@ const INLINE_TEXT = new Set(['textbf', 'textit', 'emph', 'textsl', 'textsc', 'un
 // commands whose last required argument is typeset as it stands — a scaled table, a boxed or coloured phrase, a TikZ
 // picture fitted to the column — by how many required arguments they take, that one included. The others (a width,
 // an angle, a colour) stay as they are
-const CONTENT_BOX = new Map([['resizebox', 3], ['scalebox', 2], ['adjustbox', 2], ['rotatebox', 2], ['raisebox', 2], ['fbox', 1], ['mbox', 1], ['framebox', 1], ['makebox', 1], ['parbox', 2], ['colorbox', 2], ['fcolorbox', 3], ['textcolor', 2]])
+const CONTENT_BOX = new Map([['resizebox', 3], ['scalebox', 2], ['adjustbox', 2], ['rotatebox', 2], ['raisebox', 2], ['fbox', 1], ['mbox', 1], ['framebox', 1], ['makebox', 1], ['parbox', 2], ['colorbox', 2], ['fcolorbox', 3], ['textcolor', 2], ['centerline', 1], ['leftline', 1], ['rightline', 1]])
 /** declarations that take no argument: a brace group after one is a group of its own, never its argument. Taken for
  *  \\centering's argument, the {\\small …} a table sat in stayed untranslated whole (five of 2608.05876's eight
  *  tables). The rules take an optional width alone (\\toprule[1pt]) */
@@ -2551,10 +2557,17 @@ function walk(s, from, to, b, ctx) {
         i = e; continue
       }
     }
-    if (CONTENT_BOX.has(name)) {
+    if (CONTENT_BOX.has(name) && !(LINE_BOXES.has(name) && ctx.boxesUnread)) {
       const { args } = argsAfter(s, end, 8)
       const content = args.filter(a => a.kind === 'req')[CONTENT_BOX.get(name) - 1]
-      if (content) { endText(); const id = b.open(s.slice(i, content.start + 1), i); walk(s, content.start + 1, content.end - 1, b, ctx); b.close(id, '}', content.end); i = content.end; continue }
+      if (content) {
+        endText()
+        // (a line box where no unit is open: a line of its own, LINE_BOXES)
+        const alone = LINE_BOXES.has(name) && !b.cur
+        const id = b.open(s.slice(i, content.start + 1), i); walk(s, content.start + 1, content.end - 1, b, ctx); b.close(id, '}', content.end)
+        if (alone) b.flush()
+        i = content.end; continue
+      }
     }
     if (INLINE_TEXT.has(name)) {
       const { args, end: e } = argsAfter(s, end, 1)
@@ -2691,7 +2704,8 @@ function walk(s, from, to, b, ctx) {
     }
     // (\\texorpdfstring's first argument whether or not the paper's packages tell the role table of it: a class may define it)
     const pdfString = PDF_STRING.has(name) && args?.args.length >= 2 && s[args.args[0].start] === '{' && s[args.args[1].start] === '{'
-    const walked = pdfString ? args.args.slice(0, 1) : branch ?? (args?.known ? args.args.filter(a => (a.role === 't' || a.role === 'c') && (s[a.start] === '{' || a.shape === '[')) : [])
+    // (a line box in PIPELINE 29's walk: one placeholder, as that walk read it, LINE_BOXES)
+    const walked = pdfString ? args.args.slice(0, 1) : branch ?? (args?.known && !(LINE_BOXES.has(name) && ctx.boxesUnread) ? args.args.filter(a => (a.role === 't' || a.role === 'c') && (s[a.start] === '{' || a.shape === '[')) : [])
     // (its call ends with its second argument: where the table does not know it, every adjacent group was read as one of its)
     const callEnd = pdfString ? args.args[1].end : args?.end
     if (walked.length) { endText(); walkArgs(s, i, callEnd, walked, b, ctx); i = callEnd; continue }

@@ -52,7 +52,10 @@ const DELIMITED = {
   etocdepthtag: 'bsgn',
 }
 const CURATED = {
-  // boxes and colours: the last argument the text they set
+  // boxes and colours: the last argument the text they set. Plain TeX's line boxes, LaTeX's own (ltplain.dtx: \\line is
+  // \\hb@xt@\\hsize, \\centerline#1 \\line{\\hss#1\\hss}, \\leftline#1 \\line{#1\\hss}, \\rightline#1 \\line{\\hss#1}), whose
+  // argument LaTeXML leaves untyped: what the page shows, a box's content (PDF-READER §18.46)
+  centerline: '{c', leftline: '{c', rightline: '{c',
   mbox: '{c', makebox: '[d[n{c', framebox: '[d[n{c', fbox: '{c', parbox: '[n[d[n{d{c', raisebox: '{d[d[d{c',
   resizebox: '*s{d{d{c', scalebox: '{d[d{c', rotatebox: '[k{d{c', reflectbox: '{c', colorbox: '[n{n{c', fcolorbox: '[n{n{n{c',
   textcolor: '[n{n{c', color: '[n{n', adjustbox: '{k{c', smash: '[n{c', phantom: '{x', hphantom: '{x', vphantom: '{x',

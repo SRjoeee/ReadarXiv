@@ -62,9 +62,11 @@ describe('the table: LaTeXML\'s prototypes, and the commands written out where t
     expect(roles('toks')).toBe('_d?s{x')
     expect(roles('parindent')).toBe('=r')
   })
-  it('an argument LaTeXML takes undigested or as a general text may be typeset (\\centerline, \\uppercase): never code', () => {
-    expect(roles('centerline')).toBe('{a')
+  it('an argument LaTeXML takes undigested or as a general text may be typeset (\\uppercase): never code', () => {
     expect(roles('uppercase')).toBe('{a')
+  })
+  it('plain TeX\'s line boxes set their argument, a box\'s content as \\mbox\'s (\\centerline, \\leftline, \\rightline: PDF-READER §18.46)', () => {
+    for (const name of ['centerline', 'leftline', 'rightline']) expect(roles(name), name).toBe('{c')
   })
   it('a package\'s form only for a paper that loads it: with no paper, the kernel\'s and those written out alone (a paper\'s \\degrees is no pstricks \\degrees[…])', () => {
     expect(roles('degrees')).toBeNull()

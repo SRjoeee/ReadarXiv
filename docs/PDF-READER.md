@@ -4646,6 +4646,84 @@ was the formula's, not the break's: no rule read it as beginning a line, and on 
   "doi:", a title after "Source paper:", a whole question set in italics after "a question arises:", a figure's value after
   its label ("Students: 29,241"). The coordinator's word is asked first (lane span-putback).
 
+### 18.45 The float lines: a float's line no unit owns, stated and counted (2026-11-11)
+
+The ledger (the engine's copy, `packages/engine/src/locate/today/ledger.mjs`) reads a line of TeX's own text inside a counted
+float that no unit owns as its float's text, the class `figures`, by its depth alone (RULES' last `figures`), before it could be an
+orphan: a line the reader should have read and did not was seen nowhere. Over the lab's 88 papers (r17) that is 787 lines in 32
+papers: algorithm listings (kept as the original's on purpose, the owner's ruling of 2026-11-08), tables read with no cell (a
+tabular inside a command whose argument the front end does not walk: a paper's own wrapper, a `\centerline`, §18.46), a cell
+table's text no cell owns (a row label, a whole row, an identifier cell kept by its rule, §18.25), sub-captions of a package not
+read. The coordinator's ruling of 2026-11-11: these lines are not gated as orphans (most are kept by decision); they are stated
+and counted, so that a miss is seen.
+
+- **The statement** (ADDED to the ledger; no class moves). Each line the depth rule reads is stated (`floatLines`, listed as the
+  orphans are, at most `ORPHAN_LINES_MAX`; `floatCount`, every one): its page; its float, the bracket `fs<n>` innermost open at its
+  first glyph, read in stream order as the depth is (a float of no counter passed over, §18.34); that float's caption type
+  (InstrumentUnit's `float`), of the caption whose start mark stands inside the bracket, else of the one TeX set against it with
+  no glyph between (float.sty's styles set a float's caption around the box `\@endfloatbox` made, which the bracket wraps:
+  ruled's above it, plain's below); its text's characters, letters and words of three letters; its box (x0, x1, baseline,
+  size); and why no unit owns it, as far as the ledger knows: `code` (a glyph of it TeX set in a code region, or its float an
+  algorithm's, the front end's `algorithm` float, whose body it keeps), `cells` (its float holds a cell, none of which owns it),
+  `nocells` (its float a table's that holds no cell), `other` (the rest).
+- **Where it goes.** Beside the units, never into them: locate's `Located.floatLines`, and `InkStats.ledger`
+  (`stats.made.ledger`): `{ orphanLetters, floatLines, floatLetters, floatWhy }`, where `orphanLetters` are the letters of the
+  orphan lines no ink unit owns once the ink units own theirs (invariant (o), today's `wrapFinal` `inkLeft`). The rebuild's
+  stage 1a carried no orphan count before; the lab's (o) check, `lab/pdf/spikes/ledger.mjs`, runs today's engine over the gate
+  pack's final passes and still covers that engine alone. Nothing of either reaches the bundle, a part, a row or the wire. Stage 1a
+  (`lab/pdf/prepare-back/run.mjs`) writes the counts in its summary line and its located file (`stats.made.ledger`, new) and the
+  listed lines there (`floatLines`, new: a paper's words, the lab's data alone); `lab/pdf/prepare-back/float-lines.mjs <run>`
+  reports them per paper and in total beside the orphan letters, against a baseline of counts (`--baseline`;
+  `lab/pdf/records/float-lines.json`, r17's: counts and kinds only, never a line's text). A report, not a gate.
+- **Over the 88** (stage 1a at this change, over r17's compiles): every bundle object and every prepare dump byte-identical to
+  r17's (2,707 of 2,707 objects, 88 of 88 dumps); the located files equal but for the two new fields and their timings. Float
+  lines 787 in 32 papers (11,820 letters): `code` 187 in 13 papers (the listings of algorithm floats), `cells` 258
+  in 21, `nocells` 326 in 2 (2610.37668v1's 317, every table inside the paper's `\fittabular`; 2608.06701v1's 9, a table inside
+  `\centerline`), `other` 16 (subfigure.sty's sub-captions, 6, which the subcaption lane reads; 9 lines of 2608.25210v2's
+  algorithm2e floats, whose captions are no unit, so nothing tells the float an algorithm's; one "Else:" in a figure of
+  2610.21765v1). Orphan letters 388 in 11 papers. The added work: one pass over a page's points and glyphs where a line is a
+  float line (`floatsOf`), and `inkLeft` over the orphan lines once.
+
+### 18.46 Plain TeX's line boxes set their argument: `\centerline`, `\leftline`, `\rightline` (2026-11-11)
+
+LaTeX keeps plain TeX's line boxes (ltplain.dtx): `\line` is `\hb@xt@\hsize`, `\centerline#1` is `\line{\hss#1\hss}`,
+`\leftline#1` `\line{#1\hss}`, `\rightline#1` `\line{\hss#1}`. Their argument is what the page shows, a box's content as
+`\mbox`'s is. The role table had LaTeXML's prototype, an untyped argument (`{a`), which the walk does not walk: outside an author
+block (where §19.13's FRONT_BOXES reads a `\centerline` row) a call was one placeholder, and a table set inside one no cell and no
+unit. 2608.06701v1 p8: Table 4 is `\centerline{\small\begin{tabular}…}` in its float, every cell English whatever the tables
+toggle, its nine lines the ledger's float lines of a table with no cell (§18.45).
+
+- **The rule** (`rules/arg-roles.mjs` CURATED, `source/latex-front.mjs` CONTENT_BOX and LINE_BOXES). The three are of `\mbox`'s
+  kind: their argument content (`{c`), walked as a box's (a pair in the paragraph it stands in; a table or a paragraph inside it
+  read as such). `\line` is no `\leavevmode`: met where no unit is open, TeX in vertical mode, the box is a line of its own and
+  the text after it begins another unit.
+- **What stays.** PIPELINE 29's walk (`olderUnits`' shadow, `boxesUnread`), by which the units an author block is cut into are
+  numbered after the others, reads the three as one placeholder still, as that walk did: else the rows' units are no longer
+  `later`, and the units after the block are numbered again (measured: 2010.11929v2's body paragraphs and footnote moved behind
+  its rows; `author-places.test.ts` and the unit cut's `authors-box` fail without it). The author block's own reading
+  (FRONT_BOXES) is unchanged.
+- **Not fixed.** The walk does not follow TeX's mode: a unit opened by placeholders alone (a `\centering`, a `\setlength`) reads a
+  box after it as inline, and text right after the box, with no blank line between, as the same unit, where TeX begins a
+  paragraph after the box. No such call in the 88. A paper's own wrapper around a tabular (2610.37668v1's
+  `\newcommand{\fittabular}[3][\maxdimen]{…}`, whose body sets its third argument into a box register twice with `\sbox` and
+  shows it once with `\usebox` inside `\resizebox` or `\makebox`) is no line box: the front end reads the paper's definitions
+  (`paperMacros`: each parameter's use by the role table, `paramUse`), but follows no parameter through a box register, so the
+  argument is no text and the call one placeholder. Reading it needs a definition reading of box registers (a parameter set into a
+  register the body then shows is content, set where the register is shown), a lane of its own.
+- **Over the 88** (the front end over every source, with the walk's every line-box call logged): 7 calls met, 6 of them
+  2010.11929v2's author block rows (read before, unchanged: 362 units, the same texts and places) and 1 2608.06701v1's table;
+  0 `\leftline` or `\rightline`; the other 39 `\centerline`s of the sources are in class and style definitions, a template no
+  file inputs or comments. 2608.06701v1: 329 units to 339, 10 cells new (Table 4's header: "Dataset", "Method", "R→U ↓", "U→R ↑"
+  and DS, GF, MM twice), none lost or changed; its body rows' method and dataset cells are the paper's macros and its numbers no
+  unit, as in its other tables. Stage 1a over r17's compiles and the two made for 2608.06701v1 (its marked compile's request
+  moves; final, not refused): 2010.11929v2's bundle and dump byte-identical to r17's; 2608.06701v1 10 units gained, all drawn,
+  none lost or changed (the twin: 42 of 42 objects, 2 of 2 dumps). Against the baseline (the 86 others r17's): lost 11 as before,
+  gained 5,342 to 5,352, changed 5,157 as before. Its float lines 63 to 60: the nine of a table with no cell gone (three now its
+  cells', six its body rows' macros and numbers, `cells`); over the 88, 787 to 784, `nocells` 326 to 317 (2610.37668v1's alone).
+  The parity (gate mode, both modes, 2608.06701v1-zh): the same worse pages as before (8 by default, 9 with every toggle on),
+  none newly worse and no worse difference come or gone; Table 4's header drawn translated, its cells' centring nearer the
+  original's than today's.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

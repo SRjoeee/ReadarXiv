@@ -6,6 +6,7 @@
 //   <out>/prepare/<id>.prepare.json the prepare dump in the baseline's format (readarxiv-lab-data/refactor-2026-11/baseline/
 //   FORMAT.md §3), for its tools/diff.mjs;
 //   <out>/located/<id>.json what the gate reads beside the dump: each unit's place, cause, member ords; the wrap's pages; parts;
+//   the float lines (`floatLines`: Located.floatLines, a paper's words: lab data alone; float-lines.mjs reports them);
 //   stdout one summary line. Exit 3: a compile no cache holds (the paper missing). Exit 4: a paragraph TeX opened where a group
 //   the instrument wrote as its content stood (Located.stats.opensLost: the gate of pipeline/instrument.mjs passThroughOf), outputs written.
 //   node --max-old-space-size=6144 --import tsx lab/pdf/prepare-back/run.mjs --dir=<paper dir> --id=<id> --out=<dir> --caches=<dir>:<dir>…
@@ -299,6 +300,7 @@ writeFileSync(join(OUT, 'located', `${id}.json`), `${JSON.stringify({
   wrapPages: addOn && !('refused' in addOn) ? [...addOn.pages].map(([p, x]) => [p, x.ok, x.why ?? null, !!x.merged]) : null,
   moves: tally?.mapping.moves.length ?? 0, stretches: tally?.mapping.stretches ?? [],
   identical: tally?.mapping.identical.filter(Boolean).length ?? 0,
+  floatLines: located?.floatLines ?? null,
   peakRss: process.resourceUsage().maxRSS,
 })}\n`)
 console.log(JSON.stringify({ id, refused: refusal, units: units.length, ...states, located: tally?.located.located ?? 0, unlocated: tally?.located.unlocated ?? {}, born: tally?.located.born ?? 0, made: tally?.located.made ?? null, wrap: tally?.wrap ?? null, ...(proofs ? { proofs: { a: proofs.glyphs.a.failed, c: proofs.glyphs.c.failed, ...(proofs.pixels ? { on: proofs.pixels.onFailed?.length, offOutside: proofs.pixels.offOutside ? Object.fromEntries(Object.entries(proofs.pixels.offOutside).map(([k, v]) => [k, v.length])) : proofs.pixels.refused } : {}) } } : {}), ms: Math.round(performance.now() - t0) }))

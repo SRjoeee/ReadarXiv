@@ -1253,6 +1253,101 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(made(false)).toEqual([])
   })
 
+  it('states each line of a float no unit owns, its float and why as far as the ledger knows, and moves nothing', () => {
+    // (a line of TeX's own text inside a counted float that no unit owns is read `figures` by its depth alone, before it could be
+    // an orphan: 787 lines in 32 of the lab's 88 papers (an algorithm's listing, a table read with no cells, a cell table's text
+    // no cell owns, a sub-caption of a package not read). Not gated: stated, each with its float (its bracket `fs<n>`, the type
+    // of the caption TeX set in it or against it) and why no unit owns it, and counted, so that a miss is seen; its class, the
+    // units and the groups as they were (PDF-READER §18.45))
+    const lines = [
+      'Body text here',
+      'Results by model',
+      'Alpha',
+      'Row label here',
+      'Memory per run',
+      'Train VRAM speed',
+      'The search procedure',
+      'Require: an input',
+      'Panel words here',
+    ]
+    const at: number[] = []
+    for (let k = 0, j = 0; j < lines.length; k += lines[j]!.length, j++) at.push(k)
+    const end = at[8]! + lines[8]!.length
+    const { B, A } = pair({
+      lines,
+      points: [
+        ['bs1', 0],
+        ['be1', at[1]!],
+        // (a table's float: its caption and a cell inside the bracket, a row label no cell holds)
+        ['fs2', at[1]!],
+        ['1s', at[1]!],
+        ['1e', at[2]!],
+        ['2s', at[2]!],
+        ['2e', at[3]!],
+        ['fe2', at[4]!],
+        // (a table's float with no cell: a table the reader read as none)
+        ['fs3', at[4]!],
+        ['3s', at[4]!],
+        ['3e', at[5]!],
+        ['fe3', at[6]!],
+        // (an algorithm's float of float.sty, its caption set against the box the bracket wraps, no glyph between)
+        ['4s', at[6]!],
+        ['4e', at[7]!],
+        ['fs4', at[7]!],
+        ['fe4', at[8]!],
+        // (a float of no caption: nothing tells what it is)
+        ['fs5', at[8]!],
+        ['fe5', end],
+      ],
+    })
+    const caption = (s: string, float: string) => ({ ...unitOf('caption', s), float })
+    const units = [
+      unitOf('para', 'Body text here'),
+      caption('Results by model', 'table'),
+      unitOf('cell', 'Alpha'),
+      caption('Memory per run', 'table'),
+      caption('The search procedure', 'algorithm'),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 2, -1, 3, -1, 4, -1, -1]]), A, align(B, A), { pages: rawOf(A) })
+    expect(L.floatLines.map((l) => [l.page, l.float, l.type, l.why, l.text, l.chars, l.letters, l.words])).toEqual([
+      [1, 2, 'table', 'cells', 'Row label here', 14, 12, 3],
+      [1, 3, 'table', 'nocells', 'Train VRAM speed', 16, 14, 3],
+      [1, 4, 'algorithm', 'code', 'Require: an input', 17, 14, 2],
+      [1, 5, null, 'other', 'Panel words here', 16, 14, 3],
+    ])
+    expect(L.floatLines[0]).toMatchObject({ x0: 72, y: 700 - 12 * 3, size: 10 })
+    expect(L.stats.made?.ledger).toEqual({
+      orphanLetters: 0,
+      floatLines: 4,
+      floatLetters: 54,
+      floatWhy: { code: 1, cells: 1, nocells: 1, other: 1 },
+    })
+    // (nothing moves: no unit is made of them, and their glyphs stay in no group, as before)
+    expect(L.units.length).toBe(units.length)
+    for (const k of [3, 5, 7, 8])
+      for (let g = at[k]!; g < at[k]! + lines[k]!.length; g++) expect(L.groups[0]!.glyphs[g]).toBeNull()
+  })
+
+  it('states a float line with glyphs TeX set in a code region `code`, whatever its float', () => {
+    const lines = ['Body text here', 'Results by model', 'run main now']
+    const { B, A } = pair({
+      lines,
+      points: [
+        ['bs1', 0],
+        ['be1', 14],
+        ['fs2', 14],
+        ['1s', 14],
+        ['1e', 30],
+        ['fe2', 42],
+      ],
+    })
+    // (a code region over "run" alone: a third of the line, short of a code line's share)
+    B.pages[0]!.marks = { paras: [], paraEnds: [], regions: [{ kind: 'code', from: 30, to: 33 }], pictures: [] }
+    const units = [unitOf('para', 'Body text here'), { ...unitOf('caption', 'Results by model'), float: 'figure' }]
+    const L = locate(instrumentOf(B, units, [[0, 1, -1]]), A, align(B, A), { pages: rawOf(A) })
+    expect(L.floatLines.map((l) => [l.float, l.type, l.why, l.text])).toEqual([[2, 'figure', 'code', 'run main now']])
+  })
+
   it('keeps a script TeX set in a text face an element of its ink unit in its own ink, as a formula’s run, never its text', () => {
     // (2610.30854v1 p1's names, no source unit's: `Lifan Jiang$^{1,2}$` under Times sets the marks' digits in the text face, 8.11
     // pt and 3.98 over the names' 10.96 pt baseline. Read as the unit's text, the marks were drawn flat at the names' size in the

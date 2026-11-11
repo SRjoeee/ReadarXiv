@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a table a paper centres with `\centerline` (or sets with `\leftline` or `\rightline`) is translated with the tables switch on, cell by cell, as any other table. Its cells had stayed in English whatever the switch, and so had a line of words set that way between paragraphs.
 - Fixed: in the PDF reader, a bold or italic label that begins a line of a list after its number, such as "(ii) *Accurate trajectory modeling.*", keeps its bold or italic in the translation, as the first item's label already did.
 - Fixed: in the PDF reader, a label the paper sets in bold or italic more than once in a paragraph, such as a research question "RQ2" named twice, keeps its bold or italic in the translation each time, and so does a label whose full stop the translation writes in its own script (the full stop of "RQ1." written as a Chinese one). They had come back regular.
 - Fixed: in the PDF reader, a figure, table or theorem whose number the paper prints in brackets, such as "Figure (1)", keeps both brackets when its label is put in your language.

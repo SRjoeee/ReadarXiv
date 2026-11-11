@@ -35,6 +35,8 @@ import {
   identifiersIn,
   inkUnitsOf,
   keptUnitsOf,
+  type FloatLine,
+  inkLeft,
   ledgerOf,
   type TodayInkUnit,
   type TodayPage,
@@ -107,6 +109,15 @@ export interface InkStats {
   code: number
   /** the figure reading's work (figure-lines.ts LinesWork) */
   lines: LinesWork
+  /** the ledger's counts, stated beside the units and never read by them (PDF-READER §18.45): the orphan letters no unit owns once
+   *  the ink units own theirs (invariant (o)'s), and the float lines, the lines the depth rule reads as their float's text, their
+   *  letters and their count by why */
+  ledger: {
+    orphanLetters: number
+    floatLines: number
+    floatLetters: number
+    floatWhy: Record<FloatLine['why'], number>
+  }
 }
 
 /** the units made on A, in today's bundle's order (ink units, kept blocks, figure texts: those drawn first), their indices from
@@ -118,6 +129,8 @@ export type DisplayLine = [number, number, number, number, number, number]
 export function inkOf(o: InkInput): {
   made: Made[]
   stats: InkStats
+  /** the float lines the ledger states (FloatLine; InkStats.ledger counts them all) */
+  floatLines: FloatLine[]
   block: AuthorBlock | null
   displays: DisplayLine[]
 } {
@@ -282,7 +295,7 @@ export function inkOf(o: InkInput): {
     for (const t of textAt.values()) if (t.page === i + 1) for (const g of t.claimed) out[g] = figureGroup(t.ks[0]!)
     return out
   })
-  const ledger = ledgerOf(pages, { glyphs: ledgerOwn }, { units })
+  const ledger = ledgerOf(pages, { glyphs: ledgerOwn }, { units, floats: ins.units.map((u) => u.float ?? null) })
   const ink = inkUnitsOf(pages, ledger, { units, from: base })
   const namedAt = new Set<string>()
   for (const u of ink)
@@ -291,6 +304,8 @@ export function inkOf(o: InkInput): {
   if (block) nameBlock(ink, ledger, (p, g) => block.page === p - 1 && block.has(g))
   const boxesBefore = own.boxes.map((row) => [...row])
   claimInk(own, ink, pages)
+  // (the orphan letters no unit owns once the ink units own theirs: today's invariant (o), wrapFinal's inkLeft; a statement)
+  const orphanLetters = inkLeft(ledger, own, pages).orphanLetters
   const kept = keptUnitsOf(
     pages,
     ledger,
@@ -523,7 +538,14 @@ export function inkOf(o: InkInput): {
       glyphs: made.reduce((n, x) => n + x.text.length + x.ph.length, 0),
       code: made.filter((x) => x.unit.why === 'figure: code').length,
       lines: work,
+      ledger: {
+        orphanLetters,
+        floatLines: ledger.floatCount.lines,
+        floatLetters: ledger.floatCount.letters,
+        floatWhy: ledger.floatCount.why,
+      },
     },
+    floatLines: ledger.floatLines,
     block,
   }
 }

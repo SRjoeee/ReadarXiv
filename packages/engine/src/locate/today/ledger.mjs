@@ -3,6 +3,8 @@
 // the formula's; a float of a type with no counter no float: its text the page's own outside the bodies): run by locate over
 // arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file
 // stays the production prepare's until the cut-over.
+// ADDED (no class moves): the float lines, each line the depth rule reads as its float's text (RULES' last `figures`), stated
+// with its float and why no unit owns it, and counted (`floatLines`, `floatCount`): PDF-READER §18.45.
 // The ledger of our final pass (docs/route/orphan-text.md, stage 1): every text glyph of every page given exactly one content
 // class (rules/content-classes.mjs), so that what no class explains — an orphan — is counted, listed and gated (the sweep's
 // invariant (o): orphan letters, none). Read from what the maker child already has: the pages pageInk read (`indices`, with
@@ -46,6 +48,15 @@ const FLOAT_BRACKET = /^f([se])(\d+)$/
 const FLOAT_UNCOUNTED = /^fn\d+$/
 /** the orphan lines a ledger lists, at most (all are counted) */
 export const ORPHAN_LINES_MAX = 200
+/** ADDED: a float's caption type that is an algorithm's (latex-front.mjs FLOAT_ENVS `algorithm`, every float the walk reads an
+ *  algorithm's by, algorithm.sty's and algorithm2e's alike: its body's lines are the original's, PSEUDOCODE), and a table's
+ *  (FLOAT_ENVS' table, table*, wraptable and sidewaystable: floatTypeOf) */
+const ALGORITHM_FLOAT = 'algorithm', TABLE_FLOAT = 'table'
+/** ADDED: why no unit owns a float line, as far as the ledger knows: `code` its glyphs TeX set in part in a code region, or its
+ *  float an algorithm's; `cells` its float holds a cell, none of which owns it (a row label, a header, a cell no unit is);
+ *  `nocells` its float a table's that holds no cell (a table the front end read as none: a tabular inside a command whose
+ *  argument it does not walk); `other` the rest (a figure's text no reading took, a sub-caption of a package not read) */
+export const FLOAT_WHY = Object.freeze(['code', 'cells', 'nocells', 'other'])
 /** an orphan line's text as listed, at most */
 const TEXT_MAX = 160
 
@@ -133,6 +144,8 @@ export const RULES = Object.freeze([
   ['contents', l => !l.outside && l.listed],
   ['orphan', () => true],
 ].map(([cls, test]) => Object.freeze({ cls, code: CLASS_CODE[cls], test })))
+/** ADDED: the line rule that reads a line no unit owns inside a float as that float's text by its depth alone */
+const DEPTH_RULE = RULES.findLast(r => r.cls === 'figures')
 
 /** a glyph's owner as own.mjs names its group: a unit's id, or a babel name's (`name`) */
 const UNIT_GROUP = /^u(\d+)(?:\.[pl])?$/
@@ -158,7 +171,7 @@ const ownerClass = (group, units) => {
  * input: layout/ink-units.mjs); letters, the letters of the document; orphanLetters; orphans: the orphan lines, at most
  * ORPHAN_LINES_MAX, each { page, text, letters, x0, x1, y } }
  */
-export function ledgerOf(pages, own, { units = null } = {}) {
+export function ledgerOf(pages, own, { units = null, floats = null } = {}) {
   const counts = Object.fromEntries(CLASS_IDS.map(id => [id, { glyphs: 0, letters: 0 }]))
   const lasts = lastEntriesOf(pages, units)
   /** where a bibliography's last entry ended: its page and the baseline of its last line, the zone's end once a glyph leaves it;
@@ -168,6 +181,8 @@ export function ledgerOf(pages, own, { units = null } = {}) {
   const famOf = name => { let f = fam.get(name); if (f === undefined) { f = classifyFont(name ?? '').fam; fam.set(name, f) } return f }
   const classes = [], orphans = [], lines = []
   let zone = null, letters = 0, orphanLetters = 0, para = null, entry = null
+  // (ADDED: the float lines, listed and counted)
+  const floatLines = [], floatCount = { lines: 0, letters: 0, why: Object.fromEntries(FLOAT_WHY.map(w => [w, 0])) }
   pages.forEach((pg, pi) => {
     lastY = null
     const G = pg.glyphs ?? [], n = G.length, P = pg.points ?? [], O = own?.glyphs?.[pi] ?? []
@@ -302,6 +317,21 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       const beside = side => run.some(r => r.gs.some(g => { const x = G[g]; return x.bottom < hi && x.top > lo && (side < 0 ? x.x1 <= x0 + 0.01 : x.x0 >= x1 - 0.01) }))
       if (beside(-1) && beside(1)) made[i][1] = RULES.find(r => r.cls === 'math')
     })
+    // (ADDED: each line the depth rule reads as its float's text, stated: its float, the float's caption type and why no unit owns it)
+    let floatAt = null
+    for (const [l, rule] of made) {
+      if (rule !== DEPTH_RULE) continue
+      floatAt ??= floatsOf(P, n, uncounted, units, floats)
+      const f = floatAt.at[l.gs[0]], held = f >= 0 ? floatAt.held.get(f) : null
+      const why = l.code > 0 || held?.type === ALGORITHM_FLOAT ? 'code' : held?.cells ? 'cells' : held?.type === TABLE_FLOAT ? 'nocells' : 'other'
+      floatCount.lines++
+      floatCount.letters += l.letters
+      floatCount.why[why]++
+      if (floatLines.length < ORPHAN_LINES_MAX) {
+        const text = textOf(l.gs.map(g => G[g]))
+        floatLines.push({ page: pi + 1, float: f >= 0 ? f : null, type: held?.type ?? null, why, chars: text.length, letters: l.letters, words: l.words, x0: l.x0, x1: l.x1, y: l.y, size: l.size, text: text.slice(0, TEXT_MAX) })
+      }
+    }
     for (const [l, rule] of made) {
       for (const g of l.gs) out[g] = rule.code
       lines.push({ page: pi + 1, cls: rule.cls, gs: l.gs, region: l.region, zone: l.zone, para: l.para, opens: l.opens, entry: l.entry, entryFrom: l.entryFrom, listed: l.listed, y: l.y, size: l.size, x0: l.x0, x1: l.x1, letters: l.letters })
@@ -319,8 +349,62 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       c.letters += k; letters += k
     }
   })
-  return { classes, counts, letters, orphanLetters, orphans, lines }
+  return { classes, counts, letters, orphanLetters, orphans, lines, floatLines, floatCount }
 }
+
+/** a unit's kind by its id (its index in `units`), whichever shape the paper's units have */
+const kindOf = (units, id) => { const u = units?.[id]; return Array.isArray(u) ? u[0] : u?.kind }
+/**
+ * ADDED: a page's counted floats as the float lines read them: `at`, each glyph's innermost counted float open at it (its bracket's
+ * number, `fs<n>`, read in stream order as regionsOf reads a float's depth; -1 for none), and `held`, what each float holds: `cells`,
+ * whether a cell's start mark stands inside its bracket, and `type`, its caption's float type (`floats`, by unit id: InstrumentUnit's
+ * `float`) — the caption whose start mark stands inside the bracket, else the caption TeX set against it, no glyph between: its end
+ * mark the last unit mark before the bracket opens (float.sty's styles set a float's caption around the box the bracket wraps, its
+ * \@endfloatbox's, ruled's above it), or its start mark the first after the bracket closes (plain's, below)
+ */
+function floatsOf(P, n, uncounted, units, floats) {
+  const at = new Int32Array(n).fill(-1), open = [], openAt = new Map(), closeAt = new Map()
+  for (let q = 0, g = 0; g < n; g++) {
+    for (; q < P.length && P[q].glyph <= g; q++) {
+      const m = FLOAT_BRACKET.exec(P[q].name)
+      if (!m) continue
+      if (m[1] === 's') { open.push(Number(m[2])); openAt.set(Number(m[2]), q) }
+      else { const i = open.lastIndexOf(Number(m[2])); if (i >= 0) open.splice(i, 1); closeAt.set(Number(m[2]), q) }
+    }
+    // (a float of a type with no counter is no float to the depth rule: the counted one around it, if any)
+    if (open.length > uncounted[g]) at[g] = open[open.length - 1 - uncounted[g]]
+  }
+  for (let q = 0; q < P.length; q++) { const m = FLOAT_BRACKET.exec(P[q].name); if (m && m[1] === 'e' && !closeAt.has(Number(m[2]))) closeAt.set(Number(m[2]), q) }
+  const captionType = id => (kindOf(units, id) === 'caption' ? (floats?.[id] ?? null) : null)
+  const held = new Map()
+  for (const [k, qs] of openAt) {
+    const qe = closeAt.get(k) ?? P.length
+    let cells = false, type = null
+    for (let q = qs + 1; q < qe; q++) {
+      const m = UNIT_START.exec(P[q].name)
+      if (!m) continue
+      if (isCellOf(units, Number(m[1]))) cells = true
+      type ??= captionType(Number(m[1]))
+    }
+    if (type === null) {
+      for (let q = qs - 1; q >= 0; q--) {
+        if (FLOAT_BRACKET.test(P[q].name) || BRACKET.test(P[q].name) || UNIT_START.test(P[q].name)) break
+        const e = UNIT_END.exec(P[q].name)
+        if (e) { if (P[q].glyph === P[qs].glyph) type = captionType(Number(e[1])); break }
+      }
+    }
+    if (type === null && qe < P.length) {
+      for (let q = qe + 1; q < P.length; q++) {
+        if (FLOAT_BRACKET.test(P[q].name) || BRACKET.test(P[q].name) || UNIT_END.test(P[q].name)) break
+        const st = UNIT_START.exec(P[q].name)
+        if (st) { if (P[q].glyph === P[qe].glyph) type = captionType(Number(st[1])); break }
+      }
+    }
+    held.set(k, { cells, type })
+  }
+  return { at, held }
+}
+const isCellOf = (units, id) => kindOf(units, id) === 'cell'
 
 /** where a page's foot begins among its glyphs (its glyph count where it has none): the run of glyphs that ends its stream,
  *  after its last mark, on one baseline, no unit's and outside the bodies, below every other glyph of the page by FOOT_GAP of
