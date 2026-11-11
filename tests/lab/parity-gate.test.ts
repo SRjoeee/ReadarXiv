@@ -4,7 +4,7 @@
 // geometry of one of his cases.
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { measurePage, pastRoomPass, recount, sharePass } from '../../lab/typeset/parity/verdict.mjs'
+import { measurePage, pastRoomPass, recount, sharePass, stylePass } from '../../lab/typeset/parity/verdict.mjs'
 // @ts-expect-error — a plain node module of the lab
 import { frameOf, labelsPass, originalOf } from '../../lab/typeset/parity/fidelity.mjs'
 
@@ -428,6 +428,38 @@ describe("labels: the target word everywhere, consistent within a paper (the own
     labelsPass(pages, recount)
     expect(pages[0]!.worse).toBe(0)
     expect(pages[1]!.diffs).toMatchObject([{ flag: 'labels', unit: 't9 caption', worse: true }])
+  })
+})
+
+describe("style: a unit's share read over the pages it spans (the paper's pass)", () => {
+  // (2610.20484v1 t62, a theorem in italics over pages 6 and 7: its equation number "(8)" is upright on A, on page 7; v2's
+  // shorter translation draws it, upright, on page 6, where the original's one line is all italic: page 6 alone read v2's
+  // share 0.81 against the original's 1, a style lost; over both pages each side and the original stand at about 0.99)
+  type D = { flag: string; unit: string; st?: string; worse: boolean; nearer: string; original: unknown; today: { value: unknown; off: number }; v2: { value: unknown; off: number } }
+  type Page = { page: number; worse: number; diffs: D[]; units: object[] }
+  const recount = (p: Page) => {
+    p.worse = p.diffs.filter((d) => d.worse).length
+  }
+  const side = (chars: number, italic: number, bold = 0) => ({ chars, italic, bold })
+  const unit = (today: object, v2: object, orig: object) => ({ key: 't62', kind: 'theorem', sides: { today, v2 }, orig })
+  const italicDiff = (t: number, v: number, o: number): D => ({ flag: 'style', unit: 't62 theorem', st: 'italic', worse: v > t, nearer: v > t ? 'today' : 'v2', original: 1, today: { value: o - t, off: t }, v2: { value: o - v, off: v } })
+  it("v2 drawing on one page a word the original sets on the next: judged over both, no difference", () => {
+    const pages: Page[] = [
+      { page: 6, worse: 1, diffs: [italicDiff(0, 0.19, 1)], units: [unit(side(5, 5), side(16, 13), { chars: 16, bold: 0, italic: 1 })] },
+      { page: 7, worse: 0, diffs: [], units: [unit(side(219, 219), side(208, 208), { chars: 420, bold: 0, italic: 417 / 420 })] },
+    ]
+    stylePass(pages, recount)
+    expect(pages.map((p) => p.diffs.filter((d) => d.flag === 'style'))).toEqual([[], []])
+    expect(pages[0]!.worse).toBe(0)
+  })
+  it('v2 setting a third of a unit bold over its two pages where the original and today set none: worse, as before', () => {
+    const boldDiff: D = { flag: 'style', unit: 't62 theorem', st: 'bold', worse: true, nearer: 'today', original: 0, today: { value: 0, off: 0 }, v2: { value: 0.33, off: 0.33 } }
+    const pages: Page[] = [
+      { page: 6, worse: 1, diffs: [boldDiff], units: [unit(side(30, 0), side(30, 0, 10), { chars: 30, bold: 0, italic: 0 })] },
+      { page: 7, worse: 0, diffs: [], units: [unit(side(200, 0), side(200, 0, 60), { chars: 200, bold: 0, italic: 0 })] },
+    ]
+    stylePass(pages, recount)
+    expect(pages[0]!.diffs).toMatchObject([{ flag: 'style', worse: true, nearer: 'today', v2: { value: 0.3 } }])
   })
 })
 

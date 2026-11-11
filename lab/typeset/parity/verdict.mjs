@@ -574,6 +574,12 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     }
     const t = u.sides.today,
       v = u.sides.v2
+    // (the original's characters of the unit on this page, arXiv's glyphs in its lines, and their shares: none where it sets none
+    // here; for the paper's pass over its pages, stylePass. A drawing whose glyphs were not read states none)
+    if (runs) {
+      const ao = aOrig.get(key)
+      u.orig = ao ? { chars: ao.chars, bold: ao.bold, italic: ao.italic } : { chars: 0, bold: 0, italic: 0 }
+    }
     if (t && v) {
       const os = v.osize ?? t.osize ?? o?.size ?? t.size
       const eps = Math.max(NEAR.positionMin, NEAR.position * (os || 10))
@@ -600,7 +606,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
           const a = t.chars ? t[st] / t.chars : 0,
             b = v.chars ? v[st] / v.chars : 0
           if (Math.abs(t[st] - v[st]) < NEAR.styleMin) continue
+          const k = out.diffs.length
           judge('style', name, `${st} share of its characters off the original's`, r2(on), { value: r2(a), d: Math.abs(a - on) }, { value: r2(b), d: Math.abs(b - on) }, NEAR.style)
+          if (out.diffs.length > k) out.diffs.at(-1).st = st
         }
       if (t.over > 0 || v.over > 0) judgeText(key)('stretch', name, 'overshoot past 1 em a word space, 0.25 em a letter gap (ems)', 0, { value: `word ${r2(t.word)}, letter ${r2(t.letter)}`, d: t.over }, { value: `word ${r2(v.word)}, letter ${r2(v.letter)}`, d: v.over }, NEAR.stretch)
     }
@@ -1333,6 +1341,65 @@ export function sharePass(pages, recount) {
       d.nearer = 'ruling'
       d.ruling = SHARE_RULING
     }
+    recount(p)
+  }
+}
+/**
+ * A unit's style read over the pages it spans (the paper's pass): a page's `style` difference of a unit drawn on two pages or
+ * more is judged again over them all, each side's characters and their bold and slanted counts summed over the pages it draws
+ * the unit on (`units[].sides`), the original's over the pages its glyphs of the unit stand on (`units[].orig`, its characters
+ * and their shares on each, arXiv's glyphs); kept with those totals where the two still differ past the floor (worse or nearer
+ * as they say), dropped where not. A translation moves words across a page break: 2610.20484v1 t62, a theorem in italics over
+ * pages 6 and 7, its equation number "(8)" upright on A on page 7, which v2's shorter translation draws, upright, on page 6,
+ * where the original's one line is all italic; read on page 6 alone v2's share was 0.81 against 1. A difference of a unit on one
+ * page, or of a drawing whose original glyphs were not read, stays as measured
+ */
+export function stylePass(pages, recount) {
+  const total = new Map()
+  for (const p of pages)
+    for (const u of p.units ?? []) {
+      const a = total.get(u.key) ?? { pages: new Set(), today: { chars: 0, bold: 0, italic: 0 }, v2: { chars: 0, bold: 0, italic: 0 }, orig: { chars: 0, bold: 0, italic: 0 }, read: true }
+      a.pages.add(p.page)
+      for (const side of ['today', 'v2']) {
+        const s = u.sides?.[side]
+        if (!s) continue
+        for (const k of ['chars', 'bold', 'italic']) a[side][k] += s[k] ?? 0
+      }
+      if (u.orig) {
+        a.orig.chars += u.orig.chars
+        a.orig.bold += u.orig.bold * u.orig.chars
+        a.orig.italic += u.orig.italic * u.orig.chars
+      } else if (u.sides?.today && u.sides?.v2) a.read = false
+      total.set(u.key, a)
+    }
+  for (const p of pages) {
+    const keep = []
+    for (const d of p.diffs) {
+      const st = d.st
+      delete d.st
+      const a = st && d.flag === 'style' ? total.get(String(d.unit).split(' ')[0]) : null
+      if (!a || a.pages.size < 2 || !a.read || !a.orig.chars || !a.today.chars || !a.v2.chars) {
+        keep.push(d)
+        continue
+      }
+      const on = a.orig[st] / a.orig.chars,
+        t = a.today[st] / a.today.chars,
+        v = a.v2[st] / a.v2.chars
+      const dt = Math.abs(t - on),
+        dv = Math.abs(v - on)
+      if (Math.abs(a.today[st] - a.v2[st]) < NEAR.styleMin || Math.abs(dv - dt) <= NEAR.style) continue
+      const at = [...a.pages].sort((x, y) => x - y)
+      keep.push({
+        ...d,
+        what: `${st} share of its characters off the original's, over the pages it spans (${at.map((x) => `p${x}`).join(', ')})`,
+        original: r2(on),
+        today: { value: r2(t), off: r2(dt) },
+        v2: { value: r2(v), off: r2(dv) },
+        nearer: dv < dt ? 'v2' : 'today',
+        worse: dv > dt,
+      })
+    }
+    p.diffs = keep
     recount(p)
   }
 }
