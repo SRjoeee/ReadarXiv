@@ -283,13 +283,27 @@ const v2Route = {
           prepare: { ...d.prepare, state: 'running', stage: 'compiling' },
           targets: {},
         })
-      // (the target still running for `runningMs` after the prepare, its rows in: the run under way, some of it there)
+      // (the target still running for `runningMs` after the prepare, the first half of its rows in: the run under way, some of
+      // it there and the rest to come, as the reader waits for a run, chrome/events.ts)
       if (m?.kind === 'not-opened' && m.runningMs && performance.now() - m.opened < (m.prepareMs ?? 800) + m.runningMs)
         return json(200, {
           ...d,
           rev: 2,
-          targets: Object.fromEntries(Object.entries(d.targets).map(([t, x]) => [t, { ...x, state: 'running' }])),
+          targets: Object.fromEntries(
+            Object.entries(d.targets).map(([t, x]) => {
+              const all = JSON.parse(rowsObjects.get(`/api/v2/o/${x.rows[0].path}`).toString('utf8'))
+              const bytes = Buffer.from(
+                JSON.stringify({ ...all, rows: all.rows.slice(0, Math.ceil(all.rows.length / 2)) }),
+              )
+              const sha256 = createHash('sha256').update(bytes).digest('hex')
+              const path = x.rows[0].path.replace(x.rows[0].sha256, sha256)
+              rowsObjects.set(`/api/v2/o/${path}`, bytes)
+              return [t, { ...x, state: 'running', rows: [{ path, sha256, bytes: bytes.length }] }]
+            }),
+          ),
         })
+      // (then the run done, its rows whole: a document newer than the running one)
+      if (m?.kind === 'not-opened' && m.runningMs) return json(200, { ...d, rev: 3 })
       // (the target's rows arriving: one delta more each `every` ms from the first follow, the run done with the last)
       if (m?.kind === 'deltas') {
         const ds = deltasOf[d.pv]
@@ -2447,7 +2461,16 @@ await check(
         const chip = '.capsule[data-kind="progress"] button[data-action]'
         let pressed = null
         if (x.site) {
-          await waitFor(page, (sel) => !!document.querySelector(sel), chip, 20_000)
+          await waitFor(page, (sel) => !!document.querySelector(sel), chip, 20_000).catch(async (e) => {
+            const at = await page.evaluate(() => ({
+              state: window.__c.reader?.state(),
+              chrome: window.__c.controller.getState(),
+              capsule: document.querySelector('.capsule')?.outerHTML ?? null,
+            }))
+            throw new Error(
+              `${e.message}: ${JSON.stringify({ rows: at.state?.rows, layer: at.state?.layer, phase: at.chrome.phase, translated: at.chrome.translated, display: at.chrome.display, capsule: at.capsule?.slice(0, 300) })}`,
+            )
+          })
           const before = await page.evaluate(() => window.__c.reader.state().view.display)
           await page.locator(chip).click()
           await waitFor(page, () => window.__c.controller.getState().display === 'translation', null, 10_000)

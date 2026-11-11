@@ -148,6 +148,15 @@ describe("reduce: the layer's states (Task 12)", () => {
     })
     expect(fold([{ type: 'coming' }, { type: 'prepared' }], p)).toMatchObject({ phase: 'ready', preparing: null })
   })
+  it('a prepare told while the original loads is the phase once the original is on screen, the translation not begun', () => {
+    // (our server's first answer can come before the original is read: loading stays loading, then the prepare's phase)
+    const loading = fold([{ type: 'preparing', position: null, progress: 0.2 }])
+    expect(loading.phase).toBe('loading')
+    expect(fold([opened], loading)).toMatchObject({ phase: 'preparing', preparing: { progress: 0.2 } })
+    // (begun: the translation's phase is its run's, a prepare beside it)
+    const begun = fold([{ type: 'translating', got: 1, total: 9, lost: 0 }], loading)
+    expect(fold([opened], begun).phase).toBe('translating')
+  })
 
   it("the prepare is a state of its own, ended by the catalog: a poll once the translation has begun moves no phase, and nothing flips (the review's probe)", () => {
     const prep = (position: number | null, progress: number): SessionEvent => ({
