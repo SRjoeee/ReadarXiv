@@ -280,7 +280,9 @@ export type Input =
       i: 'open.answered'
       t: Ticket
       doc: Doc | null
-      refused?: { why: 'quota' | 'busy' | 'rate'; afterMs: number | null }
+      /** `at`: the instant the refusal ends as our server names it (its clock's; the time said), where it names one; `afterMs`
+       *  that instant's distance from the answer (the session's own measure of it) */
+      refused?: { why: 'quota' | 'busy' | 'rate'; afterMs: number | null; at?: number | null }
     }
   | { i: 'open.failed'; t: Ticket; why: string }
   | { i: 'head'; digest: string; head: Head }
@@ -533,17 +535,29 @@ const openWanted = (s: State) => needsOf(s).some((n) => n.at === null && !s.open
  *  next ask is never sooner than WAIT_MIN_MS after the answer, and a refusal of our server's capacity or the visitor's rate
  *  answered again and again backs off: its wait doubled each time, at most BACKOFF_MAX_MS or the time our server names, the
  *  larger (a 429 naming 0 s was asked again at once, without end, once these two stopped counting toward REFUSED_ASKS) */
-function refusedFor(s: State, why: 'busy' | 'limit' | 'rate', afterMs: number | null | undefined) {
+function refusedFor(
+  s: State,
+  why: 'busy' | 'limit' | 'rate',
+  afterMs: number | null | undefined,
+  at: number | null | undefined = null,
+) {
   // (the visitor's rate of asks is no limit to stop at: its wait is a minute, waited out and asked again by itself; our server's
   // capacity neither: the paper waits in line, asked again at our server's time for as long as it answers so, the coordinator's
   // decision 5 of 2026-11-11; both backed off as said above)
   if (why === 'limit') s.refusals++
   const named = typeof afterMs === 'number' && Number.isFinite(afterMs) && afterMs >= 0 ? afterMs : WAIT_MIN_MS
-  const retryAt = s.now + named
+  // (the time said is the instant our server names, its period's end, as it names it: never its wait added to this clock, which
+  // lands past the minute, and a viewer's clock off by some seconds a minute late; PDF-READER §8.1. Where it names none, the wait
+  // from now)
+  const retryAt = typeof at === 'number' && Number.isFinite(at) ? at : s.now + named
   const wait = Math.max(WAIT_MIN_MS, named)
   s.paced = why === 'limit' ? 0 : s.paced + 1
   const own = why === 'limit' ? wait : Math.min(Math.max(BACKOFF_MAX_MS, wait), wait * 2 ** (s.paced - 1))
-  const wake = why === 'busy' || s.refusals <= REFUSED_ASKS ? s.now + own : null
+  // (the limit's time is said: the session asks again once both our server's wait has passed on this clock and this clock reads
+  // the time said, the later of the two, so that it never asks before the time it said nor before our server would take it,
+  // whichever way the viewer's clock is off. A wait no time is said for (capacity, the rate) is our server's wait alone)
+  const due = why === 'limit' ? Math.max(s.now + own, retryAt) : s.now + own
+  const wake = why === 'busy' || s.refusals <= REFUSED_ASKS ? due : null
   s.link = { s: 'stopped', why, retryAt, wake, timer: null }
 }
 /** the network itself failed: asked again by itself, at once when the browser comes online (env.online), and meanwhile, while it
@@ -691,6 +705,7 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
             s,
             x.refused.why === 'quota' ? 'limit' : x.refused.why === 'rate' ? 'rate' : 'busy',
             x.refused.afterMs,
+            x.refused.at,
           )
         else {
           s.refusals = 0
