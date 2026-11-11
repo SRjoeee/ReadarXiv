@@ -42,6 +42,9 @@ export interface InstrumentUnit {
   /** a figure text drawn twice over itself, kept as the original (F3's double rule, figure-lines.ts doubledOf): the lab's dump and
    *  parity tell it by it (the differential's (q)); the bundle does not carry it */
   double?: true
+  /** a figure text the engine cannot draw as it was set, a script or an accent set apart from its base, kept as the original
+   *  (F3's `script`, figure-lines.ts setApart): the lab's dump and parity tell it by it; the bundle does not carry it */
+  script?: true
   /** a kept block of e-mail addresses and their separators alone (today/ink-units.mjs addressesAlone): the lab's dump and parity
    *  tell such a block by it (the coordinator's ruling of 2026-11-10); the bundle does not carry it */
   address?: true

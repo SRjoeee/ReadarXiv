@@ -19,10 +19,11 @@ import {
   type TodayPage,
   type TodayShape,
   interiorOf,
+  scriptsOf,
 } from './today/today.types.ts'
 import type { DocGlyph } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
-import { classifyFont, lineEnd, TRACKING_SPACE_FACTOR } from './facts.ts'
+import { accentOver, COMBINING, classifyFont, lineEnd, TRACKING_SPACE_FACTOR } from './facts.ts'
 import { ledApart, PARA_ALIGN_TOL, type ParaLine, parasOf, sameFace } from './figure-paras.ts'
 
 /** a glyph as the figure reading reads one (pageInk's, a page of today's makers) */
@@ -69,8 +70,9 @@ export interface FigureText {
   /** boxes decorating the whole of it (a rule under all of it): hidden with its text */
   textBoxes: number[]
   /** why its ink stays: crowded (drawn twice, doubledOf, or F1's torn formula), code (a line of code, kept whole), formula (a line no word of
-   *  which stands outside its formulas, kept whole, F1), or null */
-  why: 'crowded' | 'code' | 'formula' | null
+   *  which stands outside its formulas, kept whole, F1), script (a script or an accent set apart from its base, setApart: F3), or
+   *  null */
+  why: 'crowded' | 'code' | 'formula' | 'script' | null
   /** a closed shape round all of it: its room's edges over and under its baseline (PDF units up and down from it) */
   container: { over: number; under: number } | null
   /** the depth under its baseline of the stroke under its text (roomOf's `under`) */
@@ -115,6 +117,30 @@ export function figureLinesOf(
   try {
     const out = linesOf(pages, fig, owned, fixed, textFaces)
     // (a text drawn twice keeps the original's: one of its units has its double, doubledOf; the only ink that keeps a figure text)
+    // (a text the engine cannot draw as it was set, a script or an accent set apart from its base: the original's, F3's `script`;
+    // and a unit no text holds so, kept as today's unit, marked)
+    const glyphsOn = (p: number) => (pages[p - 1]?.glyphs ?? []) as G[]
+    for (const t of out)
+      if (t.why === null && setApart(t, glyphsOn(t.page))) {
+        t.why = 'script'
+        for (const k of t.ks) if (fig.units[k]) fig.units[k]!.script = true
+      }
+    const held = new Set(out.flatMap((t) => t.ks))
+    fig.glyphs.forEach((map, pi) => {
+      const byUnit = new Map<number, number[]>()
+      for (const [g, k] of map) if (!held.has(k)) (byUnit.get(k) ?? byUnit.set(k, []).get(k)!).push(g)
+      for (const [k, gs] of byUnit) {
+        const u = fig.units[k]
+        if (!u || u.why || Math.abs((u.ux ?? 1) - 1) > 1e-6 || Math.abs(u.uy ?? 0) > 1e-6) continue
+        const G = glyphsOn(pi + 1)
+        const own = gs.filter((g) => real(G[g])).sort((a, b) => G[a]!.x0 - G[b]!.x0)
+        if (setApart({ order: [{ t: 'text', glyphs: own }], els: [] }, G)) {
+          u.why = 'crowded'
+          u.script = true
+          count('script')
+        }
+      }
+    })
     const { doubled, twins } = doubledOf(fig, pages)
     // (an overprint is drawn once only where the reading made one of its units the other's copy (judge's `copies`; ink.ts then
     // gives the copy no text of its own); where it did not, both are kept: two translations would be drawn over each other)
@@ -177,8 +203,9 @@ export type LinesWork = {
   interior: number
   /** the figure texts kept as the original's, by why: drawn twice (`double`: its string again on its page, a little off it), F1's
    *  torn formula (`torn`), a run crowded by today's reading with no ink met (`today`), a line of code or of formulas kept whole
-   *  (`code`, `formula`); and `inked`, the texts laid over ink their room met (step 2: no ink but its own double keeps a text) */
-  kept?: Record<'double' | 'torn' | 'today' | 'code' | 'formula' | 'inked', number>
+   *  (`code`, `formula`), one the engine cannot draw as it was set (`script`: setApart); and `inked`, the texts laid over ink their
+   *  room met (step 2: no ink but its own double keeps a text) */
+  kept?: Record<'double' | 'torn' | 'today' | 'code' | 'formula' | 'script' | 'inked', number>
 }
 let W: LinesWork | null = null
 /** the texts kept for being drawn twice, and those whose room met ink */
@@ -187,6 +214,61 @@ const inkedTexts = new WeakSet<FigureText>()
 const count = (k: keyof NonNullable<LinesWork['kept']>) => {
   if (W?.kept) W.kept[k]++
 }
+/** a note mark: a raised run of ∗ † ‡ § ¶ after a word, or of digits and commas at a row's end after a word (a \thanks mark, a
+ *  footnote's number), which the translation keeps as text; a superscript inside the text (cm³) is a script */
+const NOTE_SIGNS = /^[∗*†‡§¶]+$/u
+const NOTE_DIGITS = /^[0-9,]+$/u
+/**
+ * Whether a figure text holds what the engine cannot draw as it was set (F3's `script`, the coordinator's ruling of 2026-11-11:
+ * such a text is the original's, never translated flat, as a formula line is): a script among its own glyphs, row by row, by
+ * today's one definition (ink-units.mjs scriptsOf, rule 4: smaller than the row's text and off its baseline, read on the
+ * engine's hundredth of a point, no threshold; the row's text size its largest, where a line of prose's is its most frequent), a
+ * note mark aside; or a spacing accent or a combining mark set over another of its
+ * glyphs (its middle in that glyph's advance, its ink over that glyph's ink) that TeX's \accent did not set over its letter
+ * (accents.mjs accentOver, which joins a text accent to its letter: Física stays a word), its elements' glyphs too (a formula's
+ * hat over its μ, laid as two crops one after the other: 2610.20947v1 p3). Its own glyphs alone: a neighbour's smaller text in
+ * its band is no script of its (2602.23285v2 p9). 2610.22214v1 p4's "a_mn x_n = b_m", drawn "amn xn = bm"
+ */
+export function setApart(t: Pick<FigureText, 'order' | 'els'>, G: readonly G[]): boolean {
+  const rows: number[][] = [[]]
+  for (const o of t.order) {
+    if (o.t === 'br') rows.push([])
+    else if (o.t === 'text') rows.at(-1)!.push(...o.glyphs.filter((g) => real(G[g])))
+  }
+  const letter = (g: number | undefined) => g !== undefined && /\p{L}/u.test(G[g]?.u ?? '')
+  for (const row of rows) {
+    if (row.length < 2) continue
+    const sc = scriptsOf(G as never, row, true)
+    for (let i = 0; i < row.length; ) {
+      if (!sc.has(row[i]!)) {
+        i++
+        continue
+      }
+      const sign = sc.get(row[i]!)
+      let j = i
+      while (j < row.length && sc.get(row[j]!) === sign) j++
+      const run = row
+        .slice(i, j)
+        .map((g) => G[g]!.u)
+        .join('')
+      const note =
+        sign === 1 && letter(row[i - 1]) && (NOTE_SIGNS.test(run) || (NOTE_DIGITS.test(run) && j === row.length))
+      if (!note) return true
+      i = j
+    }
+  }
+  const all = [...rows.flat(), ...t.els.flatMap((e) => e.glyphs.filter((g) => real(G[g])))]
+  for (const [k, a] of all.entries()) {
+    const A = G[a]!
+    if (!COMBINING.has(A.u) && !/^\p{M}+$/u.test(A.u)) continue
+    if ([all[k - 1], all[k + 1]].some((l) => l !== undefined && accentOver(A, G[l]!) !== null)) continue
+    const m = (A.x0 + A.x1) / 2
+    if (all.some((b) => b !== a && !COMBINING.has(G[b]!.u) && G[b]!.x0 <= m && m <= G[b]!.x1 && A.bottom >= G[b]!.top))
+      return true
+  }
+  return false
+}
+
 /**
  * The figure units drawn twice: another unit of its page of the same text (its white space aside), the two inks overlapping
  * across and up, a level run's (2610.21313v1's "Psum Buffer" under a pale copy of itself, 2.4 and
@@ -283,7 +365,7 @@ function doubledOf(
   return { doubled: out, twins: pairs }
 }
 const countKept = (t: FigureText) => {
-  if (t.why === 'code' || t.why === 'formula') count(t.why)
+  if (t.why === 'code' || t.why === 'formula' || t.why === 'script') count(t.why)
   else if (t.why === 'crowded') count(keptBy.get(t) ?? 'torn')
   else if (!t.why && inkedTexts.has(t)) count('inked')
 }
@@ -1441,13 +1523,10 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
       if (!real(g)) continue
       const cx = ((g.ix0 ?? g.x0) + (g.ix1 ?? g.x1)) / 2,
         cy = (g.top + g.bottom) / 2
-      if (
-        cx > x0 &&
-        cx < x1 &&
-        cy > y0 &&
-        cy < y1 &&
-        (!shut || (W ? W.interior++ : 0, interiorOf(it.shape!.segs, cx, cy)))
-      ) {
+      if (!(cx > x0 && cx < x1 && cy > y0 && cy < y1)) continue
+      // (a point read against a closed path's inside, counted: the work's `interior`)
+      if (shut && W) W.interior++
+      if (!shut || interiorOf(it.shape!.segs, cx, cy)) {
         if (label.has(j)) labelled++
         else if (own.has(j)) held.push(j)
         else others = true

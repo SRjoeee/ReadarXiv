@@ -63,6 +63,8 @@ export interface TodayFigureUnit {
   under?: number | null
   /** (CHANGED, F3) kept for being drawn twice over itself (figure-lines.ts doubledOf): the made unit's `double` */
   double?: true
+  /** (CHANGED, F3) kept for a script or an accent set apart from its base (figure-lines.ts setApart): the made unit's `script` */
+  script?: true
 }
 /** a path's lines as pageInk keeps them (`shapes`): its segments (x0, y0, x1, y1 each), whether it is stroked and filled, its
  *  half line width */
@@ -132,6 +134,13 @@ export const inkUnitsOf = inkUnits.inkUnitsOf as (
   ledger: TodayLedger,
   o: { units: readonly TodayUnit[]; from: number },
 ) => TodayInkUnit[]
+/** a line's scripts (ink-units.mjs scriptsOf, rule 4): of its glyphs `order`, those TeX set smaller than the line's text and off its
+ *  baseline, each raised (1) or lowered (-1) */
+export const scriptsOf = inkUnits.scriptsOf as (
+  G: readonly { size: number; y: number }[],
+  order: readonly number[],
+  largest?: boolean,
+) => Map<number, 1 | -1>
 export const keptUnitsOf = inkUnits.keptUnitsOf as (
   pages: readonly TodayPage[],
   ledger: TodayLedger,

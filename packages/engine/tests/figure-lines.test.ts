@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import type { DocGlyph } from '../src/doc.ts'
 import { pageGlyphsOf } from '../src/glyph.ts'
-import { copyRunsOf, figureLinesOf } from '../src/locate/figure-lines.ts'
+import { copyRunsOf, figureLinesOf, setApart } from '../src/locate/figure-lines.ts'
 import type { TodayFigures, TodayMet, TodayPage, TodayShape } from '../src/locate/today/today.types.ts'
 
 type Glyph = {
@@ -1402,5 +1402,96 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
       ['cite', [0], 'the'],
       ['cite', [1], 'lazy'],
     ])
+  })
+})
+
+describe("F3's `script`: a figure text the engine cannot draw as it was set is the original's (2026-11-11)", () => {
+  // (glyphs of one text in its order: [character, font, size, x0, x1, baseline], their ink 0.7 of the size up and 0.2 down)
+  const gl = (spec: [string, string, number, number, number, number][]) =>
+    spec.map(([u, font, size, x0, x1, y]) => ({
+      u,
+      font,
+      size,
+      x0,
+      x1,
+      y,
+      top: y + 0.7 * size,
+      bottom: y - 0.2 * size,
+      ix0: x0,
+      ix1: x1,
+    }))
+  const text = (n: number) => ({ order: [{ t: 'text' as const, glyphs: [...Array(n).keys()] }], els: [] })
+  it("keeps 2610.22214v1 p4's a_mn x_n = b_m: its subscripts smaller and off the row's baseline (ink-units.mjs scriptsOf)", () => {
+    const G = gl([
+      ['a', 'CMMI10', 6, 100, 103, 650],
+      ['m', 'CMMI7', 4.2, 103, 106, 648.5],
+      ['n', 'CMMI7', 4.2, 106, 108, 648.5],
+      ['x', 'CMMI10', 6, 110, 113, 650],
+      ['n', 'CMMI7', 4.2, 113, 115, 648.5],
+      ['b', 'CMMI10', 6, 120, 123, 650],
+      ['m', 'CMMI7', 4.2, 123, 126, 648.5],
+    ])
+    expect(setApart(text(7), G as never)).toBe(true)
+    // (a row of one size on one baseline holds none)
+    expect(setApart(text(1), G as never)).toBe(false)
+  })
+  it('keeps a superscript inside the text (cm³), never a note mark after a word (a raised ∗, a number at the end)', () => {
+    const word = (mark: string, then: boolean) =>
+      gl([
+        ['c', 'Arial', 6, 100, 103, 650],
+        ['m', 'Arial', 6, 103, 107, 650],
+        [mark, 'Arial', 4.2, 107, 109, 652.5],
+        ...(then
+          ? ([
+              ['k', 'Arial', 6, 112, 115, 650],
+              ['m', 'Arial', 6, 115, 119, 650],
+            ] as [string, string, number, number, number, number][])
+          : []),
+      ])
+    expect(setApart(text(5), word('3', true) as never)).toBe(true)
+    expect(setApart(text(3), word('1', false) as never)).toBe(false)
+    expect(setApart(text(5), word('∗', true) as never)).toBe(false)
+  })
+  it("keeps 2610.20947v1 p3's μ̂: a formula's hat over its μ (two fonts, no text accent), its element's glyphs read too", () => {
+    const G = gl([
+      ['ˆ', 'CMR10', 6.5, 233.5, 236, 195.35],
+      ['μ', 'CMMI10', 6.5, 232.5, 237.7, 195.08],
+      ['a', 'Times', 6.5, 240, 243, 195.08],
+      ['l', 'Times', 6.5, 243, 245, 195.08],
+    ])
+    // (the hat's ink over the μ's: its bottom at 199.0, the μ's top at its x-height)
+    G[0]!.bottom = 199.0
+    G[1]!.top = 197.9
+    const t = {
+      order: [
+        { t: 'el' as const, i: 0 },
+        { t: 'text' as const, glyphs: [2, 3] },
+      ],
+      els: [{ kind: 'math' as const, glyphs: [0, 1], boxes: [] }],
+    }
+    expect(setApart(t, G as never)).toBe(true)
+  })
+  it('keeps no text accent TeX set over its letter (Física: the accent joins its letter, accents.mjs accentOver)', () => {
+    // (OT1's acute set over a dotless i in one font, its advance centred on the letter's: the reading's one character)
+    const G = gl([
+      ['F', 'CMR10', 10, 100, 106, 600],
+      ['´', 'CMR10', 10, 106.2, 110.8, 600],
+      ['ı', 'CMR10', 10, 106, 111, 600],
+      ['s', 'CMR10', 10, 111, 115, 600],
+    ])
+    G[1]!.bottom = 606.5
+    expect(setApart(text(4), G as never)).toBe(false)
+  })
+  it("leaves a text translated where a neighbour's smaller text stands in its band: its own glyphs alone (2602.23285v2 p9)", () => {
+    // ("Ours (Continuous modeling)" and a view's smaller caption under it, two units: the text's own glyphs one size, one baseline)
+    const { page, fig } = pageOf([
+      [
+        { text: 'Ours (Continuous modeling)', font: 'DejaVuSans', size: 8 },
+        { text: 'view: T', font: 'DejaVuSans', size: 5, dy: -2, x: 110 },
+      ],
+    ])
+    const texts = figureLinesOf([page], fig, () => false, null)
+    expect(fig.units.map((u) => u.script)).toEqual([undefined, undefined])
+    expect(texts.every((t) => t.why !== 'script')).toBe(true)
   })
 })
