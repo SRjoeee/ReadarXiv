@@ -1,7 +1,11 @@
 // The platform boundary's checker (DESIGN §4.2, scripts/check-boundary.mjs). The first version matched `@/…` spellings
 // only, and the adversarial review of 2026-09-13 walked past it with a relative path; every bypass it named is a case
 // here, so the next rewrite cannot lose one.
-import { describe, expect, it } from 'vitest'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node script, deliberately dependency-free and untyped
 import { platformImportsOf, resolveSpecifier, valueImportsOf, withoutComments } from '../../scripts/check-boundary.mjs'
 
@@ -84,5 +88,43 @@ describe('valueImportsOf', () => {
   it('reports every specifier of a file in the order they appear', () => {
     const text = "import a from './a'\nimport type { B } from './b'\nexport { c } from './c'\nconst d = await import('./d')\n"
     expect(valueImportsOf(text)).toEqual(['./a', './c', './d'])
+  })
+})
+
+// The gate as `pnpm lint` runs it: `node scripts/check-boundary.mjs` from the repository's root. The script is a module
+// these tests import as well, so it runs its check only when it is the program — and it must know that it is wherever the
+// checkout lies: told by a `file://` + path spelled by hand, a checkout under a path with a space in it (a URL writes
+// `%20`) ended the check having read nothing, with exit code 0
+describe('the gate run as a program, in a checkout whose path a file: URL spells otherwise', () => {
+  let root: string
+  const put = (path: string, content: string) => {
+    mkdirSync(dirname(join(root, path)), { recursive: true })
+    writeFileSync(join(root, path), content)
+  }
+  const run = () => {
+    // the files the gate reads are the ones git tracks
+    execFileSync('git', ['add', '-A'], { cwd: root })
+    const result = spawnSync(process.execPath, ['scripts/check-boundary.mjs'], { cwd: root, encoding: 'utf8' })
+    return { code: result.status, out: result.stdout, err: result.stderr }
+  }
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'axt boundary '))
+    mkdirSync(join(root, 'scripts'))
+    copyFileSync(resolve('scripts/check-boundary.mjs'), join(root, 'scripts/check-boundary.mjs'))
+    execFileSync('git', ['init', '-q'], { cwd: root })
+  })
+  afterEach(() => rmSync(root, { recursive: true, force: true }))
+
+  it('reads the core and says so', () => {
+    put('src/core/clean.ts', "import { T_CLASS } from '@/core/marks'\nexport const a = T_CLASS\n")
+    const { code, out } = run()
+    expect(code).toBe(0)
+    expect(out).toContain('boundary check: 1 core files import no platform module')
+  })
+  it('fails on a core file that imports the platform layer', () => {
+    put('src/core/leak.ts', "import { getConfig } from '@/config/storage'\nexport const a = getConfig\n")
+    const { code, err } = run()
+    expect(code).toBe(1)
+    expect(err).toContain('src/core/leak.ts: imports @/config/storage')
   })
 })

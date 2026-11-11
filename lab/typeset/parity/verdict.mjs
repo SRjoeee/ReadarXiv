@@ -105,6 +105,95 @@ export const WEIGHT = {
   'line-count': 0.5,
 }
 export const FLAGS = Object.keys(WEIGHT)
+/** the measures a unit v2 is laid with a fresh row of reads as `fresh`, never worse nor nearer (lane parity-fresh, the
+ *  coordinator's ruling of 2026-11-11): their two distances follow from the length of the text each side drew, today's stored
+ *  translation and v2's fresh one ('sentences': the highlight's granularity, sentences.mjs); every other measure judges v2
+ *  against the original as anywhere, style among them */
+export const FRESH_UNJUDGED = ['line-count', 'size', 'stretch', 'sentences']
+/** what a difference of a unit laid with a fresh row says beside its own words (tagFresh) */
+export const FRESH_SAYS = 'the two sides drew different translations: today its stored one, v2 a fresh one'
+/**
+ * The differences of page `p` that touch a unit v2 is laid with a fresh row of (v2.mjs's `fresh`), tagged `fresh: true` with
+ * FRESH_SAYS beside their words, judged or not: a unit named by its key (t<today's ord>, else p<part ord>; `todayOf` part ord ->
+ * today's ord), or a tie, a run-in, a line of several, a table's group (its `cells`) that holds one. Run once over a page every
+ * pass has added to
+ */
+export function tagFresh(p, v2, todayOf) {
+  const causeOf = new Map()
+  for (const o of v2.fresh ?? []) {
+    const c = v2.freshCause?.[o] ?? 'no-row'
+    for (const k of [todayOf.has(o) ? `t${todayOf.get(o)}` : `p${o}`, `p${o}`]) causeOf.set(k, causeOf.has(k) && causeOf.get(k) !== c ? 'mixed' : c)
+  }
+  if (!causeOf.size) return
+  let ruled = false
+  for (const d of p.diffs ?? []) {
+    const touched = [...(String(d.unit ?? '').match(/\b[tp]\d+\b/g) ?? []), ...(d.cells ?? [])].filter((k) => causeOf.has(k))
+    if (d.fresh || !touched.length) continue
+    d.fresh = true
+    // (the review mode lays every unit fresh: words beside every difference would say nothing)
+    if (v2.freshMode !== 'all') d.what = `${d.what} (${FRESH_SAYS})`
+    // (a text today kept by its name/code test, isName/isCode, and v2 sends: a difference of its words, not of its format, is
+    // the owner's ruling of 2026-11-11, never worse; its geometry is judged as any fresh unit's)
+    if (d.worse && WORDS.has(d.flag) && touched.every((k) => causeOf.get(k) === 'today-kept')) {
+      d.worse = false
+      d.nearer = 'ruling'
+      d.ruling = NAME_CODE_RULING
+      ruled = true
+    }
+  }
+  if (ruled) recount(p)
+}
+/**
+ * The review mode's mark (lane parity-fresh, --fresh=all): the units whose fresh text changed a judged measure, each unit's
+ * judged differences (`nearer` v2 or today: worse or nearer) on the gate sheet's page `gate` against the review sheet's page
+ * `review`, one entry a unit and measure whose state differs (`worse`, `nearer`, or null: none), the measures FRESH_UNJUDGED
+ * aside. A reply that differs from the stored one in wording alone changes no judged measure and is not listed
+ */
+export function judgedChanged(gate, review) {
+  const stateOf = (p) => {
+    const m = new Map()
+    for (const d of p?.diffs ?? []) {
+      if (!d.unit || (d.nearer !== 'v2' && d.nearer !== 'today')) continue
+      // (only the measures the review mode judges: never one it reads as `fresh`, the highlight's sentence pairing among them)
+      if (FRESH_UNJUDGED.includes(d.flag) || String(d.what).startsWith('its sentences paired')) continue
+      const k = `${d.unit}\u0000${d.flag}`
+      m.set(k, m.get(k) === 'worse' || d.worse ? 'worse' : 'nearer')
+    }
+    return m
+  }
+  const g = stateOf(gate),
+    r = stateOf(review)
+  const out = []
+  for (const k of new Set([...g.keys(), ...r.keys()])) {
+    if (g.get(k) === r.get(k)) continue
+    const [unit, flag] = k.split('\u0000')
+    out.push({ unit, flag, gate: g.get(k) ?? null, review: r.get(k) ?? null })
+  }
+  return out.sort((a, b) => (a.unit < b.unit ? -1 : a.unit > b.unit ? 1 : a.flag < b.flag ? -1 : a.flag > b.flag ? 1 : 0))
+}
+/** the units of page `p` v2 draws off the original's size by more than the measure's floor (NEAR.size), smaller or larger, or in
+ *  more lines than the original's (half a line): v2 against the original alone, stated in the review mode where neither is
+ *  judged against today, the farthest size first (the coordinator's ruling of 2026-11-11: a unit that only takes fewer lines is
+ *  what a CJK translation does, not listed; no second threshold) */
+export function offOriginalOf(p) {
+  const out = []
+  for (const u of p?.units ?? []) {
+    const v = u.sides?.v2
+    if (!v) continue
+    const share = v.osize && v.size ? v.size / v.osize : 1
+    const off = [
+      ...(1 - share > NEAR.size ? ['smaller'] : share - 1 > NEAR.size ? ['larger'] : []),
+      ...(v.olines !== undefined && v.lines - v.olines > 0.5 ? ['more lines'] : []),
+    ]
+    if (off.length) out.push({ unit: u.key, kind: u.kind ?? null, off, lines: v.lines, olines: v.olines ?? null, size: r2(v.size), osize: r2(v.osize ?? null), far: Math.abs(1 - share) })
+  }
+  return out.sort((a, b) => b.far - a.far).map(({ far: _far, ...x }) => x)
+}
+/** the measures of a text's words, not its format (tagFresh: the name/code ruling reads only these) */
+const WORDS = new Set(['shown', 'figures', 'groups', 'labels', 'toggles', 'style', 'weight'])
+/** what a difference of a figure text today kept by its name/code test (isName/isCode) and v2 sends rests on */
+export const NAME_CODE_RULING =
+  "the owner's ruling of 2026-11-11: a figure label's words are the translator's; v2 keeps text by how the paper set it, never by a word's shape"
 /** what each measure is, as a distance from the original */
 export const SAYS = {
   shown: "a unit today shows translated that v2 leaves the original's (one today draws in its source's own words misses none), or its label today relabels that v2 keeps the original's: a translation missing (no nearness judged)",
@@ -216,7 +305,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // holds most of its height (its ink's middle nearest the baseline where two hold as much): a formula's ink that dips into the
   // next line's band is its own line's, a raised script's its own line's, never the neighbour's)
   const withCrops = (u, crops) => {
-    const ls = raised(u.lines.filter((l) => l.n > 0).map(inkedLine))
+    const ls = raised(u.lines.filter((l) => l.n > 0).map(inkedLine), frame?.columns ?? null)
     const on = new Map()
     for (const c of crops) {
       if (c[0] !== u.id) continue
@@ -288,13 +377,31 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   for (const [ord, line] of rows ?? []) if (facts.get(ord)?.lines[0]?.[0] === n) lineOf.set(keyOfPart(ord), line)
   const faults = { today: {}, v2: {} }
   const fault = (side, flag, what) => (faults[side][flag] ??= []).push(what)
-  const diff = (flag, unit, what, origV, t, v, worse, nearer) => out.diffs.push({ flag, unit, what, original: origV, today: t, v2: v, nearer, worse })
+  const diff = (flag, unit, what, origV, t, v, worse, nearer, more) => out.diffs.push({ flag, unit, what, original: origV, today: t, v2: v, nearer, worse, ...more })
   /** two distances from the original judged: the nearer side, past the floor `eps` (equal within it) */
   const judge = (flag, unit, what, origV, t, v, eps, fmt = r2) => {
     if (t.d === null || v.d === null || Math.abs(v.d - t.d) <= eps) return
     const nearer = v.d < t.d ? 'v2' : 'today'
     diff(flag, unit, what, typeof origV === 'number' ? fmt(origV) : origV, { value: t.value, off: fmt(t.d) }, { value: v.value, off: fmt(v.d) }, nearer === 'today', nearer)
   }
+  // (the members v2 is laid with a fresh row, v2.mjs's `fresh` (lane parity-fresh: no stored row of the pair's serves its unit, or
+  // the stored row answered another unit than v2's), by their keys: today draws its stored row there, v2 the chain's, two
+  // translations. A measure whose two distances follow from the length of the text drawn (the lines it takes, the size the fit
+  // gives it, its spacing, its sentences: FRESH_UNJUDGED) is listed `fresh` there, never worse nor nearer; every other measure,
+  // style among them (each side's share against the original's own), is judged as anywhere, its difference tagged (tagFresh).
+  // The coordinator's ruling of 2026-11-11)
+  const freshKeys = new Set((v2.fresh ?? []).map(keyOfPart))
+  const judgeFresh = (flag, unit, what, origV, t, v, eps, fmt = r2) => {
+    if (t.d === null || v.d === null || Math.abs(v.d - t.d) <= eps) return
+    diff(flag, unit, what, typeof origV === 'number' ? fmt(origV) : origV, { value: t.value, off: fmt(t.d) }, { value: v.value, off: fmt(v.d) }, false, 'fresh')
+  }
+  // (and the units the part lays at one size with a fresh one, its size ties (a figure's set, a run-in head and its paragraph):
+  // the fit set the tie's size from the fresh text's length, so their size and line count follow from it too)
+  const freshTied = new Set()
+  for (const ords of v2.facts[n]?.ties ?? []) if (ords.some((o) => freshKeys.has(keyOfPart(o)))) for (const o of ords) freshTied.add(keyOfPart(o))
+  /** the judge of a text-dependent measure of the unit `key`; `tied`, a measure its size tie's fresh text moves too */
+  const judgeTied = (flag, unit, what, ...rest) => judgeFresh(flag, unit, `${what} (laid at one size with a unit laid with a fresh row)`, ...rest)
+  const judgeText = (key, tied = false) => (freshKeys.has(key) ? judgeFresh : tied && freshTied.has(key) ? judgeTied : judge)
 
   // (v2's size ties on the page, the part's (one paragraph's text is even, the owner's ruling: a run-in head with its
   // paragraph, a paragraph a display splits, laid at one scale): each tie of two members or more both sides draw here is
@@ -431,10 +538,10 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       if (os) {
         t.share = t.size / os
         v.share = v.size / os
-        if (!tieOf.has(key)) judge('size', name, 'size off the original\'s (share of it)', r2(os), { value: r2(t.size), d: Math.abs(1 - t.share) }, { value: r2(v.size), d: Math.abs(1 - v.share) }, NEAR.size)
+        if (!tieOf.has(key)) judgeText(key, true)('size', name, 'size off the original\'s (share of it)', r2(os), { value: r2(t.size), d: Math.abs(1 - t.share) }, { value: r2(v.size), d: Math.abs(1 - v.share) }, NEAR.size)
       }
       if (t.olines !== undefined && v.olines !== undefined)
-        judge('line-count', name, 'lines off the original\'s count on the page', t.olines, { value: t.lines, d: Math.abs(t.lines - t.olines) }, { value: v.lines, d: Math.abs(v.lines - v.olines) }, 0.5)
+        judgeText(key, true)('line-count', name, 'lines off the original\'s count on the page', t.olines, { value: t.lines, d: Math.abs(t.lines - t.olines) }, { value: v.lines, d: Math.abs(v.lines - v.olines) }, 0.5)
       // style: against the original's, its share of characters set in a bold and in a slanted face on arXiv's page (the part's
       // font state where no glyph of arXiv's is read)
       const ao = aOrig.get(key)
@@ -448,7 +555,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
           if (Math.abs(t[st] - v[st]) < NEAR.styleMin) continue
           judge('style', name, `${st} share of its characters off the original's`, r2(on), { value: r2(a), d: Math.abs(a - on) }, { value: r2(b), d: Math.abs(b - on) }, NEAR.style)
         }
-      if (t.over > 0 || v.over > 0) judge('stretch', name, 'overshoot past 1 em a word space, 0.25 em a letter gap (ems)', 0, { value: `word ${r2(t.word)}, letter ${r2(t.letter)}`, d: t.over }, { value: `word ${r2(v.word)}, letter ${r2(v.letter)}`, d: v.over }, NEAR.stretch)
+      if (t.over > 0 || v.over > 0) judgeText(key)('stretch', name, 'overshoot past 1 em a word space, 0.25 em a letter gap (ems)', 0, { value: `word ${r2(t.word)}, letter ${r2(t.letter)}`, d: t.over }, { value: `word ${r2(v.word)}, letter ${r2(v.letter)}`, d: v.over }, NEAR.stretch)
     }
     units.push(u)
   }
@@ -463,7 +570,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     if (t.length !== keys.length || v.length !== keys.length) continue
     const st = Math.min(...t),
       sv = Math.min(...v)
-    judge('size', `tie ${keys.join(', ')}`, "a tie (one paragraph) at its smallest member's size, off the original's (share of it)", 1, { value: r2(st), d: Math.abs(1 - st) }, { value: r2(sv), d: Math.abs(1 - sv) }, NEAR.size)
+    const jt = keys.some((k) => freshKeys.has(k)) ? judgeFresh : keys.some((k) => freshTied.has(k)) ? judgeTied : judge
+    jt('size', `tie ${keys.join(', ')}`, "a tie (one paragraph) at its smallest member's size, off the original's (share of it)", 1, { value: r2(st), d: Math.abs(1 - st) }, { value: r2(sv), d: Math.abs(1 - sv) }, NEAR.size)
   }
 
   // ------------------------------------------------ a line of several members (lineOf): its run's middle against TeX's line's
@@ -753,6 +861,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     folios: new Set([...(folios ?? [])].filter((o) => facts.has(o))),
     figurePairs: figureGroupsOf(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n),
     judge,
+    // (the judge of a text-dependent measure of part member `ord`: fresh where v2 is laid with a fresh row of it)
+    ...(freshKeys.size ? { textJudge: (ord) => judgeText(keyOfPart(ord), true), freshKeys } : {}),
     diff,
     fault,
     inkOf,
@@ -938,6 +1048,11 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   for (const u of paired.units) {
     if (!u.worse) continue
     const name = `${u.key} ${facts.get(ordOfKey.get(u.key))?.kind ?? orig.get(u.key)?.kind ?? ''}`.trim()
+    // (its sentences are the translator's: a fresh row's against today's stored one, no granularity of v2's to judge)
+    if (freshKeys.has(u.key)) {
+      diff('highlight', name, 'its sentences paired one by one on both panes (today: by sentence)', u.sentences, { value: `${u.sentences} sentences`, off: 0 }, { value: u.says, off: null }, false, 'fresh')
+      continue
+    }
     fault('v2', 'highlight', `${name}: ${u.says}`)
     diff('highlight', name, 'its sentences paired one by one on both panes (today: by sentence)', u.sentences, { value: `${u.sentences} sentences`, off: 0 }, { value: u.says, off: null }, true, 'today')
   }
@@ -1269,11 +1384,16 @@ function inkedLine(l) {
 }
 
 /** a run set smaller and raised or lowered off its line's baseline (a footnote mark, a superscript: the typesetter's rise)
- *  is part of the nearest line it stands within 0.6 of that line's size of, not a line of its own */
-function raised(lines) {
+ *  is part of the nearest line it stands within 0.6 of that line's size of, not a line of its own, in that line's column (the
+ *  paper's frame, `columns`: the column its middle stands in; either in none, any). A line of the other column on about the
+ *  same baseline is a line of its own, whatever its size (2608.06701v1 p3 t60: a right-column line read smaller made one line
+ *  across the gutter with the left's, which no sentence box covers) */
+function raised(lines, columns = null) {
   const keep = []
+  const colOf = (l) => (columns ?? []).findIndex((c) => (l.x0 + l.x1) / 2 >= c[0] - 2 && (l.x0 + l.x1) / 2 <= c[1] + 2)
+  const sameColumn = (l, h) => colOf(l) < 0 || colOf(h) < 0 || colOf(l) === colOf(h)
   for (const l of [...lines].sort((a, b) => b.size - a.size || b.n - a.n)) {
-    const host = keep.find((h) => !h.rot && !l.rot && l.size < 0.85 * h.size && Math.abs(l.y - h.y) < 0.6 * h.size)
+    const host = keep.find((h) => !h.rot && !l.rot && l.size < 0.85 * h.size && Math.abs(l.y - h.y) < 0.6 * h.size && sameColumn(l, h))
     if (!host) {
       keep.push({ ...l })
       continue
@@ -1488,6 +1608,40 @@ export function unmeasuredOf(pages) {
     if (ds.length) out.push({ pair: p.pair, page: p.page, units: ds.filter((d) => d.flag === 'shown').map((d) => d.unit), judgements: ds.length })
   }
   return { units: out.reduce((k, p) => k + p.units.length, 0), pages: out }
+}
+
+/**
+ * The units of a pair v2 is laid with a fresh row of (v2.mjs's `fresh`, `freshCause`, `freshNew`; lane parity-fresh), by page:
+ * each page of the entry's Pages a member stands on, its key (t<today's ord>, else p<part ord>) and the count of each cause
+ * ('no-row': no stored row serves its unit; 'unit': the stored row answered another unit than v2's); `never`, the units v2 sends
+ * that today never had (no unit of today's: arXiv's stamp, a figure's label today's reading did not take), each on its first
+ * page, `drawn` where its fresh row was a translation; `units`, how many members in all, `kinds` how many of each kind
+ */
+export function freshOf(pair, v2) {
+  const fresh = new Set(v2.fresh ?? [])
+  const cause = v2.freshCause ?? {}
+  const keyOf = (o) => (v2.today?.[o] ? `t${v2.today[o].today}` : `p${o}`)
+  const pages = []
+  const first = new Map()
+  for (const pg of Object.keys(v2.pages ?? {}).map(Number).sort((a, b) => a - b)) {
+    const here = [...new Set((v2.pages[pg].members ?? []).map((m) => m.ord))].sort((a, b) => a - b)
+    for (const o of here) if (!first.has(o)) first.set(o, pg)
+    const ords = here.filter((o) => fresh.has(o))
+    if (!ords.length) continue
+    const causes = {}
+    for (const o of ords) causes[cause[o] ?? 'no-row'] = (causes[cause[o] ?? 'no-row'] ?? 0) + 1
+    pages.push({ pair, page: pg, units: ords.map(keyOf), ords, causes })
+  }
+  // (each sent, whatever came back: `drawn` where its fresh row was a translation)
+  const never = (v2.freshNew ?? []).filter((o) => first.has(o)).map((o) => ({ pair, page: first.get(o), unit: keyOf(o), drawn: fresh.has(o) }))
+  // (by kind, the part's)
+  const kindOf = new Map()
+  for (const f of Object.values(v2.facts ?? {})) for (const m of f.members ?? []) if (!kindOf.has(m.ord)) kindOf.set(m.ord, m.kind)
+  const kinds = {}
+  for (const o of fresh) kinds[kindOf.get(o) ?? '?'] = (kinds[kindOf.get(o) ?? '?'] ?? 0) + 1
+  const causes = {}
+  for (const o of fresh) causes[cause[o] ?? 'no-row'] = (causes[cause[o] ?? 'no-row'] ?? 0) + 1
+  return { units: fresh.size, kinds, causes, pages, never }
 }
 
 export function summaryOf(pages) {
