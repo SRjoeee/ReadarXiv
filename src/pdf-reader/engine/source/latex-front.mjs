@@ -1523,8 +1523,10 @@ function keepRead(pieces, find) {
       const skip = k > 0 && pieces[k - 1].t === 'ph' && CONTROL_WORD.test(pieces[k - 1].src ?? '') ? /^[ \t]*(?:\r?\n)?[ \t]*/.exec(p.s)[0].length : 0
       for (let o = skip; o < p.s.length; o++) { flat += p.s[o]; at.push([k, o]) }
     } else if (CHARACTERS.has(p)) {
-      flat += p.s
-      at.push([k, 0])
+      // (a piece written as characters: each of them read, an offset each, its piece's own; a quotation mark is three of them,
+      // its UTF-8 bytes in the Latin-1 view, and one offset for all of them put a match after it on the wrong pieces, or past
+      // the end. A match never starts or ends inside one: no byte of such a character is a word's)
+      for (let o = 0; o < p.s.length; o++) { flat += p.s[o]; at.push([k, o]) }
     } else {
       flat += p.t === 'ph' ? (TEX_SPACE.test(p.src ?? '') ? ' ' : symbolText(p.src) ?? '\u0000') : '\u0000'
       at.push([k, 0])

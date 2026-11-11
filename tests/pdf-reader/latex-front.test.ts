@@ -722,6 +722,25 @@ describe("a link with no address is its argument: REVTeX's \\href@noop {} {…} 
   })
 })
 
+describe("an identifier or a grouped address read after a piece the front end writes as characters (Codex's review of B8, 2026-11-11)", () => {
+  // (keepRead's offsets: one per character it reads; a generated piece's characters are its UTF-8 bytes in a Latin-1 view, three
+  // for a quotation mark, and one offset for all of them put every match after it on the wrong pieces, or past the end)
+  const doc = (body: string, pre = '') => project(`\\documentclass{article}${pre}\\begin{document}\n${body}\n\\end{document}`)
+  const phs = (p: ReturnType<typeof project>) => (p.units as Unit[]).flatMap(u => (u.pieces as { t: string; src?: string }[]).filter(x => x.t === 'ph').map(x => x.src))
+  it("csquotes' marks, then an identifier (Codex's own input) and a grouped address", () => {
+    expect(phs(doc('Use \\enquote{a phrase} and x\\_y.', '\\usepackage{csquotes}'))).toContain('x\\_y')
+    expect(phs(doc('Use \\enquote{a phrase} and write to \\{ab,cd\\}@x.org now.', '\\usepackage{csquotes}'))).toContain('\\{ab,cd\\}@x.org')
+  })
+  it("a paper's \\enquote's marks (wrapOf), an escaped character, then the same", () => {
+    expect(phs(doc('Use \\enquote{a phrase} and x\\_y.', '\\newcommand{\\enquote}[1]{``#1\'\'}'))).toContain('x\\_y')
+    expect(phs(doc('At 5\\% of R\\&D, x\\_y and \\{ab,cd\\}@x.org.'))).toEqual(expect.arrayContaining(['x\\_y', '\\{ab,cd\\}@x.org']))
+  })
+  it("a link with no address's argument (\\href@noop), then the same", () => {
+    const p = project('\\documentclass{revtex4-2}\\begin{document}\nText.\n\\begin{thebibliography}{1}%\n\\makeatletter\n\\providecommand \\href@noop [0]{\\@secondoftwo}%\n\\makeatother\n\\bibitem{a} \\href@noop {} {Notes on x\\_y}, write to \\{ab,cd\\}@x.org.\n\\end{thebibliography}\n\\end{document}')
+    expect(phs(p)).toEqual(expect.arrayContaining(['x\\_y', '\\{ab,cd\\}@x.org']))
+  })
+})
+
 describe('a display outside a unit\'s marks (the reader\'s anchors take it from beyond them: 211 of 747 displays were lit with no unit)', () => {
   const body = (b: string) => project(`\\documentclass{article}\\begin{document}\n${b}\n\\end{document}`).units as (Unit & { lead?: string; trail?: string })[]
   const flags = (b: string) => body(b).map(u => [textOf(u).trim().split(' ')[0], typeof u.lead === 'string', typeof u.trail === 'string'])
