@@ -8,7 +8,7 @@ import type { Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { R } from '@readarxiv/ui'
 import { textOf } from '../../src/chrome/capsule-words.ts'
-import { capsuleOf, type Capsule, firstOf, lineOf, spokenOf } from '../../src/chrome/status.ts'
+import { capsuleOf, type Capsule, firstOf, lineOf, retryOffered, spokenOf } from '../../src/chrome/status.ts'
 import { eventsOf } from '../../src/chrome/events.ts'
 import { INITIAL, reduce, type ReaderState as ChromeState } from '../../src/chrome/model.ts'
 import type { StateWords } from '../../src/chrome/parts.tsx'
@@ -19,13 +19,14 @@ import {
   displayOf,
   type Input,
   init,
+  lookSaid,
   type Ref,
   resources,
   type State,
   step,
   targetOf,
 } from '../../src/session/machine.ts'
-import { rowsTold, runOf, viewOf } from '../../src/session/rows.ts'
+import { toldWait } from '../../src/session/rows.ts'
 import { LANGUAGES } from './parts.ts'
 
 const ZH = 'zh-Hans'
@@ -37,6 +38,10 @@ const WORDS: StateWords = {
   reconnecting: 'reconnecting',
   translating: (got, total, _chip, first) =>
     first ? FIRST : total > 0 ? `translating ${got}/${total}` : 'translating',
+  rate: 'too many requests',
+  network: 'network down',
+  notNow: (at) => (at === null ? 'unavailable for now' : `unavailable until ${at}`),
+  limited: (at) => (at === null ? 'new papers spent' : `new papers spent until ${at}`),
 }
 
 let digests = 0
@@ -110,6 +115,14 @@ type Beat =
   | { at: number; answer: Doc }
   /** the layer's head (and with it its units) read now (`lateHead`: on staging the objects come a second late) */
   | { at: number; head: true }
+  /** the open under way refused in its answer (our server's admission: capacity, the visitor's rate, the limit with its instant) */
+  | { at: number; refuse: { why: 'busy' | 'rate' | 'quota'; afterMs: number; at?: number } }
+  /** the open under way failed: the network (its fetch rejected), or our server out of reach (5xx twice) */
+  | { at: number; openFails: 'network' | 'server' }
+  /** the follow's end, as client.ts tells it: a 429 (capacity, the rate, the limit, with its wait), the network, our server */
+  | { at: number; lost: 'busy' | 'rate' | 'limit' | 'network' | 'server'; afterMs?: number }
+  /** the reader's retry */
+  | { at: number; retry: true }
 
 interface Shown {
   at: number
@@ -160,6 +173,8 @@ function visit(
   const counted: { at: number; got: number; total: number }[] = []
   /** every capsule drawn, by kind, with the time */
   const kinds: [number, string][] = []
+  /** every capsule drawn in turn: its words (null: none) and whether it offers an action (a retry), with the time */
+  const drawn: [number, string | null, boolean][] = []
   /** what the status region says in its own line where no run's capsule says it (StatusCapsule `spoken`), each once in turn */
   const spoken: [number, string][] = []
   /** the progress line as ProgressLine draws it: its length while on (the longest of its showing), -1 while hidden */
@@ -174,19 +189,16 @@ function visit(
     return unitsRead
   }
   const toldOf = (): ReaderState => {
-    const r = s.rows
-    // (the run as the session states it: the reader's own predicate, rows.ts runOf)
-    const run = runOf(s)
-    const view = viewOf({
+    // (the wait as the reader tells it, the reader's own: rows.ts toldWait; the look, machine.ts lookSaid)
+    const wait = toldWait(s, {
       units: viewUnits(),
       classes: s.prefs.value.classes,
       held: rows,
       shown: s.layer.s === 'ready',
       laid: s.panes.laid > 0,
-      run: run.run,
-      ahead: run.ahead,
-      failed: run.failed,
     })
+    const look = lookSaid(s)
+    const self = (on: boolean) => (on ? { self: true as const } : {})
     return {
       paper: { id: '2610.00001', version: 1, title: '', html: null, pdf: '' },
       prefs: s.prefs.value,
@@ -194,13 +206,23 @@ function visit(
       original: s.original.s === 'open' ? { s: 'open', pages: 4, ours: false } : { s: 'opening', loaded: 0, total: 0 },
       layer:
         s.layer.s === 'ready'
-          ? { s: 'ready', laid: s.panes.laid, total: 4, asOriginal: 0 }
-          : s.link.s === 'stopped'
-            ? { s: 'refused', why: s.link.why, retryAt: s.link.retryAt }
-            : s.layer.s === 'preparing'
-              ? { s: 'preparing', stage: s.layer.stage }
-              : { s: 'none' },
-      rows: rowsTold(s, view, run),
+          ? {
+              s: 'ready',
+              laid: s.panes.laid,
+              total: 4,
+              asOriginal: 0,
+              ...(wait.stopped
+                ? { stopped: { why: wait.stopped.why, retryAt: wait.stopped.retryAt, ...self(wait.stopped.self) } }
+                : {}),
+            }
+          : s.layer.s === 'refused'
+            ? { s: 'refused', why: s.layer.why, retryAt: s.layer.retryAt }
+            : look
+              ? { s: 'refused', why: look.why, retryAt: look.retryAt, ...self(look.self) }
+              : s.layer.s === 'preparing'
+                ? { s: 'preparing', stage: s.layer.stage }
+                : { s: 'none' },
+      rows: wait.rows,
       view: {
         display: displayOf(s),
         sync: { on: true, available: true },
@@ -211,8 +233,8 @@ function visit(
         outline: [],
         heading: null,
       },
-      reconnecting: false,
-      network: false,
+      reconnecting: wait.reconnecting,
+      network: wait.network,
       faces: null,
       crashed: false,
     } as ReaderState
@@ -228,6 +250,10 @@ function visit(
       WORDS,
     )
     if (c && kinds.at(-1)?.[1] !== c.kind) kinds.push([now, c.kind])
+    const words = c ? textOf(c.words) : null,
+      action = !!c && retryOffered(c)
+    const was = drawn.at(-1)
+    if (!was || was[1] !== words || was[2] !== action) drawn.push([now, words, action])
     const said = c?.kind === 'progress' ? '' : spokenOf(chrome)
     if (spoken.at(-1)?.[1] !== said) spoken.push([now, said])
     // (ProgressLine: a showing starts at its sliver, then holds the longest it reached; the prepare's stretch where it had one)
@@ -334,6 +360,24 @@ function visit(
     } else if ('head' in b) {
       readHead()
       feed({ i: 'panes.drawn' })
+    } else if ('refuse' in b) {
+      const open = live('open')
+      const r = b.refuse
+      if (open)
+        feed({
+          i: 'open.answered',
+          t: open,
+          doc: null,
+          refused: { why: r.why, afterMs: r.afterMs, ...(r.at !== undefined ? { at: r.at } : {}) },
+        })
+    } else if ('openFails' in b) {
+      const open = live('open')
+      if (open) feed({ i: 'open.failed', t: open, why: b.openFails })
+    } else if ('lost' in b) {
+      const link = live('link')
+      if (link) feed({ i: 'follow.lost', t: link, why: b.lost, afterMs: b.afterMs ?? null })
+    } else if ('retry' in b) {
+      feed({ i: 'cmd.retry' })
     } else if ('wake' in b) {
       if (s.link.s === 'stopped' && s.link.timer) feed({ i: 'time', t: s.link.timer, now })
     } else if ('laid' in b) feed({ i: 'panes.laid', laid: b.laid, total: 4 })
@@ -341,7 +385,7 @@ function visit(
   }
   const last = shown.at(-1)
   if (last && last.until === null) last.until = now
-  return { shown, counted, chrome, kinds, spoken, lines, target: targetOf(s) }
+  return { shown, counted, chrome, kinds, spoken, lines, drawn, target: targetOf(s) }
 }
 
 const stages = (shown: Shown[], stage: string) => shown.filter((x) => x.stage === stage)
@@ -939,6 +983,90 @@ function staleStoredLate() {
     { lateHead: true },
   )
 }
+type Cause = 'busy' | 'rate' | 'quota' | 'network' | 'server'
+/**
+ * Each cause of round B10 met in a wait over a layer shown (integration's B11 F1, F2; the coordinator's R6-R8 of 2026-11-12), in
+ * two contexts: `done-elsewhere`, a fresh layer whose target is done on other units (70 of its 100 held: the open asks the target
+ * again), the open refused or failed; `prepare-running`, a stale layer of 100 whose stored rows hold 70, our server's prepare
+ * running by the last document, the follow refused or failed. Twice for capacity and the rate (the session's own re-asks), once
+ * for the limit (its time, the session's own ask at it), the network once (asked again a second on), our server out of reach
+ * (the reader's retry). Then the run goes on: the target's attempt over the new units, 85 then 100 held
+ */
+function refused(context: 'done-elsewhere' | 'prepare-running', cause: Cause) {
+  const store: Store = { units: new Map(), rows: new Map() }
+  const NEW = unitsObject(store, range(0, 100))
+  const OLD = context === 'done-elsewhere' ? unitsObject(store, range(0, 70)) : unitsObject(store, range(0, 100))
+  const w = rowsObject(store, range(0, 70))
+  const h = rowsObject(store, range(70, 85))
+  const all = rowsObject(store, range(0, 100))
+  const fresh = { catalog: ref(), units: [NEW], format: 1, stale: false }
+  const shown = context === 'done-elsewhere' ? fresh : { catalog: ref(), units: [OLD], format: 1, stale: true }
+  const prep = (state: 'done' | 'running', attempt: number) => ({
+    state,
+    why: null,
+    retryAt: null,
+    stage: state === 'running' ? 'compiling' : null,
+    units: [],
+    attempt,
+  })
+  const stored = { [ZH]: target('done', { rows: [w], done: 70, total: 70, units: [OLD] }) }
+  const first = doc(1, {
+    prepare: prep(context === 'done-elsewhere' ? 'done' : 'running', 2),
+    layer: shown,
+    targets: stored,
+  })
+  const run = (rev: number, rows: Ref[], done: number, state: Target['state'] = 'running') =>
+    doc(rev, {
+      prepare: prep('done', 2),
+      layer: fresh,
+      targets: { [ZH]: target(state, { attempt: 2, rows, done, total: state === 'done' ? 100 : 30, units: [NEW] }) },
+    })
+  const beats: Beat[] = [
+    { at: 100, opened: true },
+    { at: 300, doc: first },
+    { at: 1000, laid: 1 },
+  ]
+  // (the stop, and when the session or the reader asks again; `back`: the time our server is heard again)
+  let back: number
+  const elsewhere = context === 'done-elsewhere'
+  if (cause === 'busy' || cause === 'rate') {
+    const why = cause
+    beats.push(
+      elsewhere ? { at: 1500, refuse: { why, afterMs: 1000 } } : { at: 1500, lost: why, afterMs: 1000 },
+      { at: 2500, wake: true },
+      elsewhere ? { at: 2650, refuse: { why, afterMs: 1000 } } : { at: 2650, lost: why, afterMs: 1000 },
+      { at: 4650, wake: true },
+    )
+    back = 4800
+  } else if (cause === 'quota') {
+    beats.push(
+      elsewhere
+        ? { at: 1500, refuse: { why: 'quota', afterMs: 5000, at: 6500 } }
+        : { at: 1500, lost: 'limit', afterMs: 5000 },
+      { at: 6500, wake: true },
+    )
+    back = 6650
+  } else if (cause === 'network') {
+    beats.push(elsewhere ? { at: 1500, openFails: 'network' } : { at: 1500, lost: 'network' }, { at: 2500, wake: true })
+    back = 2650
+  } else {
+    beats.push(elsewhere ? { at: 1500, openFails: 'server' } : { at: 1500, lost: 'server' }, { at: 4000, retry: true })
+    back = 4150
+  }
+  // (heard again: the open's answer where it was asked, else the follow's document; the attempt over the new layer's units)
+  beats.push(
+    elsewhere ? { at: back, answer: run(2, [w], 0) } : { at: back, doc: run(2, [w], 0) },
+    { at: back + 500, doc: run(3, [w, h], 15) },
+    { at: back + 1000, doc: run(4, [all], 100, 'done') },
+  )
+  return { v: visit(store, beats, {}, { holdOpen: true }), back }
+}
+/** the capsules drawn in turn from the wait's first (words, action), the stop's own among them */
+const turns = (drawn: [number, string | null, boolean][]) => {
+  const from = drawn.findIndex(([, w]) => w !== null)
+  return drawn.slice(from).map(([, w, a]) => [w, a] as const)
+}
+
 /** the line drawn never shorter than it was within one showing (R5: a showing that ended and a new one begun is a line of its own) */
 const lineSteady = (lines: [number, number][]) => {
   for (let i = 1; i < lines.length; i++) {
@@ -1078,6 +1206,50 @@ describe('the capsule over whole visits (the website’s words): it says what th
     expect(v.shown).toEqual([])
     // (the download's sliver, then the end held for the first page, a load: never a count's share between)
     expect(v.lines.map(([, l]) => l).filter((l) => l > 0.15 && l < 1)).toEqual([])
+  })
+  describe("a cause of round B10 met in a wait over a layer shown: one wait while the session goes on by itself (R7), the wait over where it will not (R8); the probe's cases (integration B11, F1 and F2)", () => {
+    /** the words the stop is said in, each cause's (WORDS); the limit with our server's instant, its first ask the session's own */
+    const SAID: Record<Cause, string> = {
+      busy: 'queued',
+      rate: 'too many requests',
+      network: 'network down',
+      quota: 'new papers spent until 6500',
+      server: 'unavailable for now',
+    }
+    for (const context of ['done-elsewhere', 'prepare-running'] as const)
+      for (const cause of ['busy', 'rate', 'network', 'quota', 'server'] as const)
+        it(`${context}, ${cause}`, () => {
+          const { v, back } = refused(context, cause)
+          report(`(R ${context} ${cause})`, v.shown)
+          const t = turns(v.drawn)
+          table.push(
+            `  drawn: ${v.drawn.map(([at, w, a]) => `${at} ${w ?? '-'}${a ? ' [retry]' : ''}`).join(' | ')}`,
+            `  line: ${v.lines.map(([at, l]) => `${at} ${l}`).join(' | ')}`,
+          )
+          const goesOn = cause === 'busy' || cause === 'rate' || cause === 'network'
+          // (the turns with the run's counts folded into one word: the count moving is the same capsule)
+          const folded: [string | null, boolean][] = []
+          for (const [w, a] of t) {
+            const word = w !== null && /^translating \d+\/\d+$/.test(w) ? 'count' : w
+            if (folded.at(-1)?.[0] !== word || folded.at(-1)?.[1] !== a) folded.push([word, a])
+          }
+          // (one wait while the session goes on by itself: the count, the stop's words over it as long as it lasts, never "done"
+          // between the session's re-asks, no action; then the count again. Where it will not, the wait over at the stop: the
+          // notice with its time or its retry, as round B10 words it, an action exactly where the session will not ask again by
+          // itself; the count again once it is asked)
+          expect(folded).toEqual([
+            ['count', false],
+            [SAID[cause], cause === 'server'],
+            ['count', false],
+            [null, false],
+          ])
+          if (goesOn) {
+            // (its line kept through the stop: on from its first count to its end, never shorter)
+            const during = v.lines.filter(([at]) => at >= 300 && at < back + 1000)
+            expect(during.filter(([, l]) => l < 0)).toEqual([])
+          }
+          lineSteady(v.lines)
+        })
   })
   // (AXT_CAPSULE_TABLE=<file>: the appearances of every case written there, the lane's table)
   it('writes the table where asked', () => {

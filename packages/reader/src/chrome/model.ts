@@ -4,7 +4,7 @@
 // paper on its layer (its own events) or the reader's (openReader's state, told as these events); the chrome is the same.
 import type { ProviderErrorKind } from '@readarxiv/ui'
 import type { Prefs, PrefsPatch } from '../prefs.ts'
-import { LASTING as PAPERS } from '../session/machine.ts'
+import { GOES_ON as GOES_ON_STOPS, LASTING as PAPERS } from '../session/machine.ts'
 import { LAYER_WHY } from './events.ts'
 
 export type EngineDisplay = 'original' | 'translation' | 'bilingual'
@@ -37,6 +37,9 @@ export type Unavailable =
 export const LASTING: ReadonlySet<Unavailable> = new Set<Unavailable>(
   [...PAPERS].map((why) => LAYER_WHY[why]).concat('target', 'no-pdf'),
 )
+/** the refusals for now that the session goes on from by itself (our server at capacity, the visitor's rate, the network): the
+ *  session's one table (session/machine.ts GOES_ON), as the chrome says them */
+export const GOES_ON: ReadonlySet<Unavailable> = new Set<Unavailable>([...GOES_ON_STOPS].map((why) => LAYER_WHY[why]))
 /** the sync as the chrome names it to a session: together, or off */
 export type SyncMode = 'same' | 'off'
 /** a heading of the contents: its id (its unit's), its title (translated where its row is in), the original's, its level, its page */
@@ -546,15 +549,19 @@ function reduceRunFree(
     }
     case 'unavailable': {
       const lasting = LASTING.has(event.why)
+      // (a wait the session goes on from by itself, as it says (`self`): the run it pauses stays the phase, its prepare's place
+      // and its rows' coming with it, so that its line goes on and nothing reads as done between the session's own asks: one
+      // wait, the coordinator's R7 of 2026-11-12)
+      const paused = GOES_ON.has(event.why) && !!event.self
       return {
         ...state,
-        preparing: null,
-        rowsComing: false,
+        preparing: paused ? state.preparing : null,
+        rowsComing: paused ? state.rowsComing : false,
         unavailable: { why: event.why, retryAt: event.retryAt, ...(event.self ? { self: true as const } : {}) },
         // the paper's own: its translated displays greyed; a language the layer does not set: the language's notice
         available: lasting && event.why !== 'target' ? false : state.available,
         languageSupported: event.why === 'target' ? false : state.languageSupported,
-        phase: afterRefusal(state.phase),
+        phase: paused ? state.phase : afterRefusal(state.phase),
       }
     }
   }

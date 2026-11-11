@@ -116,6 +116,18 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
         total: l.total,
         ...(l.asOriginal ? { original: l.asOriginal } : {}),
       })
+    // (our server's look stopped over the layer shown, while the view lacks what its work would bring: its cause told as where no
+    // layer is shown, again where its time or the session's own ask changes; gone, the bilingual version coming again)
+    const st = l.stopped,
+      was = pl?.s === 'ready' ? pl.stopped : undefined
+    if (st && (!was || was.why !== st.why || was.retryAt !== st.retryAt || !!was.self !== !!st.self))
+      out.push({
+        type: 'unavailable',
+        why: LAYER_WHY[st.why] ?? 'unreachable',
+        retryAt: st.retryAt,
+        ...(st.self ? { self: true as const } : {}),
+      })
+    if (!st && was) out.push({ type: 'coming' })
   }
   // (a refusal told again with another time is told again: the time said is the last our server named; and where the session
   // stops asking it again by itself, or starts to)
