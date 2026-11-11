@@ -319,6 +319,19 @@ describe("the states (the reader's design, §8)", () => {
     expect(cardOf(at({ phase: 'failed', failure: 'network' }), reason)).toMatchObject({ action: 'retry' })
     expect(R.status.noPaper).not.toBe('')
   })
+
+  it("too many requests: the card promises no retry of its own — a stopped run waits for the reader's (Part 6's interface review; the extension's today session says `rate-limit`)", () => {
+    expect(cardOf(at({ phase: 'failed', failure: 'rate-limit' }), reason)).toEqual({
+      reason: R.status.rateLimited,
+      action: 'retry',
+    })
+    // whatever the host's sentence for it
+    expect(cardOf(at({ phase: 'failed', failure: 'rate-limit' }), () => 'host')).toEqual({
+      reason: R.status.rateLimited,
+      action: 'retry',
+    })
+    expect(R.status.rateLimited).not.toMatch(/自动|shortly/)
+  })
 })
 
 describe("a host's words for the states (parts.tsx StateWords: the website's own sentences), the catalogue's where it gives none", () => {

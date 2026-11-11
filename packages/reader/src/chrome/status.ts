@@ -306,8 +306,9 @@ export interface Look {
   sign: Sign
   tone?: 'alert' | 'wait'
 }
-/** the failures that are a wait, not a fault: our server or the service out of reach for now (the one such kind a run's failure
- *  reaches the chrome as: events.ts kindOf) */
+/** the failures that are a wait, not a fault: our server or the service out of reach for now (the one such kind the website's
+ *  run reaches the chrome as: events.ts kindOf; the extension's today session says `timeout` and `rate-limit` too, its chain's
+ *  kinds as they are, but its parts draw no sign by state) */
 const WAITS: ReadonlySet<ProviderErrorKind> = new Set(['network'])
 
 /** the time a retry is due where one is still to come at `now`: a refusal's for now (its `retryAt`), else the run's failure's
@@ -375,9 +376,11 @@ export function cardOf(
   // (the original not read: its own words where the host gives them, else the network's, as the failure it is told as)
   if (state.failures.pdf !== null && words.originalLost && !words.openOriginal)
     return { reason: words.originalLost, action: 'retry' }
-  // a key's reason is the key's only where the service chosen carries one (the host's reason)
+  // the chain's own words for a rate limit promise a retry by itself; a stopped run here waits for the reader's (the extension's
+  // today session says `rate-limit`, its chain's kind as it is). A key's reason is the key's only where the service chosen
+  // carries one (the host's reason)
   return {
-    reason: words.failed?.(kind) ?? reason(kind),
+    reason: words.failed?.(kind) ?? (kind === 'rate-limit' ? R.status.rateLimited : reason(kind)),
     action: KEYS.has(kind) ? 'settings' : 'retry',
   }
 }
