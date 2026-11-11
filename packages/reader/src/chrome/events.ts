@@ -21,6 +21,8 @@ export const LAYER_WHY: Readonly<Record<LayerWhy, Unavailable>> = {
   broken: 'unreachable',
   busy: 'busy',
   limit: 'refused',
+  rate: 'rate',
+  network: 'network',
   unreachable: 'unreachable',
 }
 

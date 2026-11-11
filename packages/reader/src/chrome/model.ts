@@ -21,6 +21,11 @@ export type Unavailable =
   | 'refused'
   /** our server busy (a 429 of capacity: a host may say it in words of its own; else as `refused`) */
   | 'busy'
+  /** the visitor's rate of asks (a 429 our server words so) */
+  | 'rate'
+  /** the network itself failed, or the browser is offline */
+  | 'network'
+  /** our server out of reach or at fault */
   | 'unreachable'
   | 'target'
 /** the unavailable states that are the paper's or the language's, not a moment's: the session's lasting refusals as the chrome

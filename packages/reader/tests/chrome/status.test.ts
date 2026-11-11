@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { LOCALE_CODES, LOCALES, O, R, S, setLocale } from '@readarxiv/ui'
 import { INITIAL, type ReaderState } from '../../src/chrome/model.ts'
 import { plain, textOf, withCount } from '../../src/chrome/capsule-words.ts'
-import { capsuleOf, cardOf, heldOf, lineOf, spokenOf } from '../../src/chrome/status.ts'
+import { capsuleOf, causeOf, cardOf, heldOf, lineOf, spokenOf } from '../../src/chrome/status.ts'
 import { PREFS } from './fake-controller.ts'
 import type { StateWords } from '../../src/chrome/parts.tsx'
 import { LANGUAGES, NAMES, TEST_PARTS } from './parts.ts'
@@ -346,6 +346,8 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
     notNow: (t) => `unavailable until ${t}`,
     busy: (t) => `busy until ${t}`,
     limited: (t) => `quota until ${t}`,
+    rate: 'too many requests',
+    network: 'no connection',
     unsupported: (name) => `no ${name}`,
     failedPassages: (n) => `${n} failed`,
     narrow: 'narrow',
@@ -403,6 +405,21 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
       'unavailable until 5',
       'busy until 5',
       'quota until 5',
+    ])
+    // (the visitor's rate of asks and the network itself, each its own cause and words, with no time: the reader asks again by
+    // itself, at the rate's time, or once the connection is back)
+    const cause = (why: 'rate' | 'network') =>
+      at({ phase: 'ready', unavailable: { why, retryAt: why === 'rate' ? 5 : null } })
+    expect([said(cause('rate'))?.text, said(cause('network'))?.text]).toEqual(['too many requests', 'no connection'])
+    expect(
+      (['refused', 'busy', 'rate', 'network', 'unreachable', 'no-source'] as const).map((why) =>
+        causeOf(at({ phase: 'ready', unavailable: { why, retryAt: null } })),
+      ),
+    ).toEqual(['quota', 'busy', 'rate', 'network', 'server', null])
+    // (the catalogue's otherwise: the rate as its limit's sentence, which says to try again later; the network as out of reach)
+    expect([said(cause('rate'), {})?.text, said(cause('network'), {})?.text]).toEqual([
+      R.status.limited,
+      R.status.notNow,
     ])
     // (the catalogue's otherwise: a paper too large said as one that cannot be had, busy as the limit)
     expect(said(lasting('too-large'), {})?.text).toBe(R.status.noPdf)

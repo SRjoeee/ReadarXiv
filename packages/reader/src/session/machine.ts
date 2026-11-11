@@ -66,6 +66,10 @@ export type LayerWhy =
   | 'unreachable'
   | 'busy'
   | 'limit'
+  /** the visitor's rate of asks (a 429 our server words so) */
+  | 'rate'
+  /** the network itself failed (the fetch rejected), or the browser is offline */
+  | 'network'
   | 'no-source'
   | 'not-found'
   | 'cannot-prepare'
@@ -139,8 +143,9 @@ export type OriginalRegion =
   | { s: 'opening'; t: Ticket; pin: boolean; loaded: number; total: number }
   | { s: 'open'; t: Ticket; pin: boolean; pages: number; bytes: number }
   | { s: 'failed'; why: OriginalWhy; pin: boolean; retryAt: number | null; timer: Ticket | null; tries: number }
-/** why the look at our server stopped: a 429's (`busy`, `limit`), or our server out of reach (`unreachable`) */
-export type StopWhy = 'busy' | 'limit' | 'unreachable'
+/** why the look at our server stopped: a 429's (`busy`, `limit`, `rate`), the network itself (`network`), or our server out of
+ *  reach or at fault (`unreachable`) */
+export type StopWhy = 'busy' | 'limit' | 'rate' | 'network' | 'unreachable'
 export type LinkRegion =
   | { s: 'off' }
   /** `lost`: its stream broke, fell silent or ended while work runs, and is asked again, nothing heard since (the website's
@@ -230,6 +235,8 @@ export interface State {
   open: OpenRegion
   /** the 429s answered in a row (REFUSED_ASKS): none since an answer moved the paper on, or a retry */
   refusals: number
+  /** the network's failures in a row, since a document was heard: the pace of asking again while the browser says it is online */
+  netTries: number
   /** how long the prepare has been followed with the tab shown (its deadline's), since when it is now, and the deadline's timer */
   prepare: { spent: number; since: number | null; timer: Ticket | null }
   layer: LayerRegion
@@ -268,7 +275,7 @@ export type Input =
       i: 'open.answered'
       t: Ticket
       doc: Doc | null
-      refused?: { why: 'quota' | 'busy'; afterMs: number | null }
+      refused?: { why: 'quota' | 'busy' | 'rate'; afterMs: number | null }
     }
   | { i: 'open.failed'; t: Ticket; why: string }
   | { i: 'head'; digest: string; head: Head }
@@ -358,6 +365,7 @@ export function init(o: Init): State {
     link: { s: 'off' },
     open: { t: null, for: [], target: null, asked: [], missing: false, at: null, timer: null },
     refusals: 0,
+    netTries: 0,
     prepare: { spent: 0, since: null, timer: null },
     layer: { s: 'none' },
     bound: null,
@@ -523,11 +531,24 @@ const layerFinal = (s: State) => s.layer.s === 'ready' && !s.doc?.layer?.stale &
 const openWanted = (s: State) => needsOf(s).some((n) => n.at === null && !s.open.asked.includes(n.id))
 /** a 429: our server's time as it names it (a second where it names none), waited out and asked again (REFUSED_ASKS in a row
  *  at most), then the look stopped until a retry, which asks once that time has come */
-function refusedFor(s: State, why: 'busy' | 'limit', afterMs: number | null | undefined) {
-  s.refusals++
+function refusedFor(s: State, why: 'busy' | 'limit' | 'rate', afterMs: number | null | undefined) {
+  // (the visitor's rate of asks is no limit to stop at: its wait is a minute, waited out and asked again by itself)
+  if (why !== 'rate') s.refusals++
   const retryAt =
     s.now + (typeof afterMs === 'number' && Number.isFinite(afterMs) && afterMs >= 0 ? afterMs : WAIT_MIN_MS)
   s.link = { s: 'stopped', why, retryAt, wake: s.refusals > REFUSED_ASKS ? null : retryAt, timer: null }
+}
+/** the network itself failed: asked again by itself, at once when the browser comes online (env.online), and meanwhile, while it
+ *  says it is online, at a growing pace (a second, doubled to thirty at most); no time said */
+const networkLost = (s: State) => {
+  s.netTries++
+  s.link = {
+    s: 'stopped',
+    why: 'network',
+    retryAt: null,
+    wake: s.online ? s.now + backoff(s.netTries) : null,
+    timer: null,
+  }
 }
 const outOfReach = (s: State) => {
   s.link = { s: 'stopped', why: 'unreachable', retryAt: null, wake: null, timer: null }
@@ -549,6 +570,9 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
       // (a failed original tried again at once when the browser comes online)
       if (x.on && s.original.s === 'failed' && s.original.why === 'network')
         s.original = { ...s.original, retryAt: null, timer: null }
+      // (the look the network stopped: asked again at once when the browser comes online, not before while it is offline)
+      if (s.link.s === 'stopped' && s.link.why === 'network')
+        s.link = x.on ? { s: 'off' } : { ...s.link, wake: null, timer: null }
       break
     case 'time':
       s.now = x.now
@@ -620,6 +644,7 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
       if (s.link.s === 'on' && x.t === s.link.t) {
         const target = s.link.target
         s.link = { ...s.link, heard: true, lost: false }
+        s.netTries = 0
         heard(s, x.doc, target)
         // (an answer that moves the paper on ends a run of 429s: one in which the paper lacks nothing the open is wanted for, as
         // today's catalog or prepare under way; one of a paper still lacking it does not, as today's 404 between two prepares)
@@ -637,10 +662,11 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
           else s.open = { ...s.open, missing: true }
         } else if (x.why === 'not-found') s.layer = { s: 'refused', why: 'not-found', retryAt: null, timer: null }
         else if (x.why === 'update') s.layer = { s: 'refused', why: 'outdated', retryAt: null, timer: null }
-        else if (x.why === 'busy' || x.why === 'limit') {
+        else if (x.why === 'busy' || x.why === 'limit' || x.why === 'rate') {
           if (x.doc) heard(s, x.doc, target)
           refusedFor(s, x.why, x.afterMs)
-        } else outOfReach(s)
+        } else if (x.why === 'network') networkLost(s)
+        else outOfReach(s)
       }
       break
     case 'open.answered':
@@ -649,7 +675,12 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
         // (refused for capacity, nothing was started: its needs given back, so that the look after the wait asks them again)
         s.open = { ...o, t: null, for: [], missing: false, asked: x.refused ? o.asked : [...o.asked, ...o.for] }
         if (x.doc) heard(s, x.doc, o.target)
-        if (x.refused) refusedFor(s, x.refused.why === 'quota' ? 'limit' : 'busy', x.refused.afterMs)
+        if (x.refused)
+          refusedFor(
+            s,
+            x.refused.why === 'quota' ? 'limit' : x.refused.why === 'rate' ? 'rate' : 'busy',
+            x.refused.afterMs,
+          )
         else {
           s.refusals = 0
           // (the follow asked again at once: one of a paper in which nothing ran asks again a minute on, client.ts IDLE_MS,
@@ -664,6 +695,7 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
         if (x.why === 'update') s.layer = { s: 'refused', why: 'outdated', retryAt: null, timer: null }
         else if (x.why === 'not-found') s.layer = { s: 'refused', why: 'not-found', retryAt: null, timer: null }
         // (an open that never reached our server: given back, so that a retry asks it again)
+        else if (x.why === 'network') networkLost(s)
         else outOfReach(s)
       }
       break
@@ -818,9 +850,9 @@ export function settle(s0: State): State {
   // way given back, to be asked again once it is shown)
   if (s.away && s.open.t) s.open = { ...s.open, t: null, for: [] }
   const opening = s.open.missing
-  // (offline with no layer: out of reach, as every ask of today's failed at once)
+  // (offline with no layer: the network's, as every ask of today's failed at once; asked again once the browser is online)
   if (s.engaged && !s.online && sets && s.layer.s !== 'ready' && s.layer.s !== 'refused' && s.link.s !== 'stopped')
-    s.link = { s: 'stopped', why: 'unreachable', retryAt: null, wake: null, timer: null }
+    s.link = { s: 'stopped', why: 'network', retryAt: null, wake: null, timer: null }
   const wantLink =
     s.engaged &&
     s.online &&
