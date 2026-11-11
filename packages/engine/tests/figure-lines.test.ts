@@ -1484,6 +1484,25 @@ describe("F3's `script`: a figure text the engine cannot draw as it was set is t
     G[1]!.top = 653.2
     expect(setApart(text(3), G as never)).toBe(false)
   })
+  it('reads an accent against its own row\'s glyphs: a quote over the row under it is none (2608.06701v1 p1\'s "`rg`")', () => {
+    // (two rows: a backtick on the first, its ink over a letter of the second, a row's pitch under it)
+    const G = gl([
+      ['u', 'Arial', 6, 100, 103, 660],
+      ['`', 'Arial', 6, 103, 105, 660],
+      ['r', 'Arial', 6, 103, 106, 652],
+      ['g', 'Arial', 6, 106, 109, 652],
+    ])
+    G[1]!.bottom = 664.5
+    const t = {
+      order: [
+        { t: 'text' as const, glyphs: [0, 1] },
+        { t: 'br' as const, end: 'space' as const },
+        { t: 'text' as const, glyphs: [2, 3] },
+      ],
+      els: [],
+    }
+    expect(setApart(t, G as never)).toBe(false)
+  })
   it('keeps no text accent TeX set over its letter (Física: the accent joins its letter, accents.mjs accentOver)', () => {
     // (OT1's acute set over a dotless i in one font, its advance centred on the letter's: the reading's one character)
     const G = gl([

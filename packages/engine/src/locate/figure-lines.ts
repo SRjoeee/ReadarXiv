@@ -230,10 +230,18 @@ const NOTE_DIGITS = /^[0-9,]+$/u
  * its band is no script of its (2602.23285v2 p9). 2610.22214v1 p4's "a_mn x_n = b_m", drawn "amn xn = bm"
  */
 export function setApart(t: Pick<FigureText, 'order' | 'els'>, G: readonly G[]): boolean {
+  // (its rows: their text glyphs, for scripts; and with their elements' glyphs where the order sets them, for accents, one row's
+  // glyphs against each other: an accent of one row stands over no glyph of the row under it)
   const rows: number[][] = [[]]
+  const inked: number[][] = [[]]
   for (const o of t.order) {
-    if (o.t === 'br') rows.push([])
-    else if (o.t === 'text') rows.at(-1)!.push(...o.glyphs.filter((g) => real(G[g])))
+    if (o.t === 'br') {
+      rows.push([])
+      inked.push([])
+    } else if (o.t === 'text') {
+      rows.at(-1)!.push(...o.glyphs.filter((g) => real(G[g])))
+      inked.at(-1)!.push(...o.glyphs.filter((g) => real(G[g])))
+    } else inked.at(-1)!.push(...(t.els[o.i]?.glyphs ?? []).filter((g) => real(G[g])))
   }
   const letter = (g: number | undefined) => g !== undefined && /\p{L}/u.test(G[g]?.u ?? '')
   for (const row of rows) {
@@ -257,20 +265,20 @@ export function setApart(t: Pick<FigureText, 'order' | 'els'>, G: readonly G[]):
       i = j
     }
   }
-  const all = [...rows.flat(), ...t.els.flatMap((e) => e.glyphs.filter((g) => real(G[g])))]
-  for (const [k, a] of all.entries()) {
-    const A = G[a]!
-    if (!COMBINING.has(A.u) && !/^\p{M}+$/u.test(A.u)) continue
-    if ([all[k - 1], all[k + 1]].some((l) => l !== undefined && accentOver(A, G[l]!) !== null)) continue
-    // (over another glyph's ink: its ink's middle across inside that glyph's ink, its ink above it; a code quote beside a letter,
-    // its own advance's, is none: 2608.06701v1 p1's "`rg`")
-    const m = ((A.ix0 ?? A.x0) + (A.ix1 ?? A.x1)) / 2
-    const over = (b: number) => {
-      const B = G[b]!
-      return b !== a && !COMBINING.has(B.u) && (B.ix0 ?? B.x0) <= m && m <= (B.ix1 ?? B.x1) && A.bottom >= B.top
+  for (const all of inked)
+    for (const [k, a] of all.entries()) {
+      const A = G[a]!
+      if (!COMBINING.has(A.u) && !/^\p{M}+$/u.test(A.u)) continue
+      if ([all[k - 1], all[k + 1]].some((l) => l !== undefined && accentOver(A, G[l]!) !== null)) continue
+      // (over another glyph's ink: its ink's middle across inside that glyph's ink, its ink above it; a code quote beside a letter,
+      // its own advance's, is none: 2608.06701v1 p1's "`rg`")
+      const m = ((A.ix0 ?? A.x0) + (A.ix1 ?? A.x1)) / 2
+      const over = (b: number) => {
+        const B = G[b]!
+        return b !== a && !COMBINING.has(B.u) && (B.ix0 ?? B.x0) <= m && m <= (B.ix1 ?? B.x1) && A.bottom >= B.top
+      }
+      if (all.some(over)) return true
     }
-    if (all.some(over)) return true
-  }
   return false
 }
 
