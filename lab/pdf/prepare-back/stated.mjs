@@ -16,7 +16,7 @@ import { readingOf, scriptsKeptAsElements, scriptsKeptInAnotherOrder } from '../
 import { classifyFont } from '../../../packages/engine/src/locate/facts.ts'
 import { unitClass } from '../../../packages/engine/src/locate/today/content-classes.mjs'
 import { symbolText } from '../../../src/pdf-reader/engine/rules/text-symbols.mjs'
-import { identifiersIn } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { identifiersIn, inMemory, loadProject } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
 import { isInkless } from '../../../src/pdf-reader/engine/translate/mt.mjs'
 
 /** how a unit made on arXiv's page reads where it stands for one of the baseline's */
@@ -187,56 +187,22 @@ function writtenAs(ps, drop, marked = new Set()) {
   const re = new RegExp(`^${src}$`, 'u')
   return (x) => x === plain || re.test(x)
 }
-/** a TeX source as dump pieces, as the front end walks a call that sets its last argument: a command followed by groups an
- *  opening (`\\cmd {a} {`) to the brace of its last, its content walked, a close; a bare group alike; a command with no group a
- *  placeholder (its control word's trailing spaces with it); the rest text */
-function groupsOfSource(src) {
-  const out = []
-  const text = (s) => { if (!s) return; const l = out.at(-1); if (l?.kind === 'text') l.s += s; else out.push({ kind: 'text', s }) }
-  const end = (k) => { // the index past the group opening at k, or -1
-    let d = 0
-    for (let j = k; j < src.length; j++) {
-      if (src[j] === '\\') { j++; continue }
-      if (src[j] === '{') d++
-      else if (src[j] === '}' && --d === 0) return j + 1
-    }
-    return -1
-  }
-  const walk = (from, to) => {
-    let i = from, run = ''
-    while (i < to) {
-      const c = src[i]
-      if (c === '\\') {
-        const m = /^\\(?:([A-Za-z@]+)[ \t]*|[\s\S])/.exec(src.slice(i, to))
-        let k = i + m[0].length, last = -1
-        // (its groups: the last is its content)
-        for (let j = m[1] ? k : -1; j >= 0 && j < to; ) {
-          let q = j
-          while (q < to && /\s/.test(src[q])) q++
-          if (src[q] !== '{') break
-          const e = end(q)
-          if (e < 0 || e > to) break
-          last = q
-          j = k = e
-        }
-        text(run); run = ''
-        if (last < 0) { out.push({ kind: 'ph', src: src.slice(i, i + m[0].length) }); i += m[0].length; continue }
-        out.push({ kind: 'open', src: src.slice(i, last + 1) })
-        walk(last + 1, k - 1)
-        out.push({ kind: 'close', src: '}' })
-        i = k
-        continue
-      }
-      if (c === '{') {
-        const e = end(i)
-        if (e > 0 && e <= to) { text(run); run = ''; out.push({ kind: 'open', src: '{' }); walk(i + 1, e - 1); out.push({ kind: 'close', src: '}' }); i = e; continue }
-      }
-      run += c
-      i++
-    }
-    text(run)
-  }
-  walk(0, src.length)
+/** REVTeX's link with no address, a placeholder of today's */
+const NOOP = /^\\href@noop(?![A-Za-z@])/
+/** a placeholder's source as the front end reads it in a bibliography entry now (latex-front.mjs: REVTeX's \\href@noop one of
+ *  its text commands, step D), as dump pieces: the entry's pieces after a word of ours (an entry of no words is no unit), its
+ *  text as characters; null where it makes no entry */
+function entryPiecesOf(src) {
+  const tex = `\\documentclass{article}\\begin{document}\nSome text.\n\\begin{thebibliography}{1}\n\\bibitem{a}Qzxv ${src}\n\\end{thebibliography}\n\\end{document}\n`
+  const p = loadProject(inMemory(new Map([['main.tex', new TextEncoder().encode(tex)]])), 'main.tex')
+  const first = p.units.find((x) => x.kind === 'reference')?.pieces
+  if (first?.[0]?.t !== 'text' || !/^\s*Qzxv /.test(first[0].s)) return null
+  const u = { pieces: first }
+  const chars = (x) => new TextDecoder().decode(Uint8Array.from([...x].map((c) => c.charCodeAt(0))))
+  const out = u.pieces.map((q) => (q.t === 'text' ? { kind: 'text', s: chars(q.s) } : { kind: q.t, src: chars(q.src ?? '') }))
+  out[0].s = out[0].s.replace(/^\s*Qzxv /, '')
+  if (!out[0].s) out.shift()
+  if (out.at(-1)?.kind === 'text') out.at(-1).s = out.at(-1).s.replace(/\s+$/, '')
   return out
 }
 /** a dump unit's TeX: its text and each other piece's source, white space as one space */
@@ -695,9 +661,14 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     return out
   }
   const charactersOf = (u) => {
-    // (today's placeholder of a link with no address, REVTeX's \\href@noop {} {…}, read as the front end now reads it: its
-    // groups, each command's opening to its last argument's brace, and what they hold: latex-front.mjs BIB_TEXT, step D)
-    const ps = (u.pieces ?? []).flatMap((p) => (p.kind === 'ph' && /^\\href@noop(?![A-Za-z@])/.test(p.src ?? '') ? groupsOfSource(p.src) : [p]))
+    // (today's pieces; else, where they hold a placeholder of a link with no address, REVTeX's \\href@noop {} {…}, with each
+    // read as the front end now reads it in an entry: its groups, its letters, its placeholders; latex-front.mjs BIB_TEXT, step D)
+    const own = writtenWith(u, u.pieces ?? [])
+    if (own || !(u.pieces ?? []).some((p) => p.kind === 'ph' && NOOP.test(p.src ?? ''))) return own
+    return writtenWith(u, (u.pieces ?? []).flatMap((p) => (p.kind === 'ph' && NOOP.test(p.src ?? '') ? (entryPiecesOf(p.src) ?? [p]) : [p])))
+  }
+  /** the candidate's unit writing today's unit `u` with pieces `ps` (o), or null */
+  const writtenWith = (u, ps) => {
     // (a bare group holding no declaration of its own, the instrument's rule read off today's pieces; then a command's pair the
     // candidate does not write, read off its groups, each command's pairs all kept or all dropped by the front end's reading)
     const groups = groupsIn(ps)

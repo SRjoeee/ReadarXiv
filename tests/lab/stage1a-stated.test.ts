@@ -913,6 +913,15 @@ describe("today's unit the candidate writes with a group that carries nothing as
     const today = unit(id('a'), 34, 'reference', [text('D. M. Sussman, '), ph('\\href@noop {} {\\bibfield  {journal} {\\bibinfo  {journal} {SoftwareX}\\ }\\textbf {\\bibinfo {volume} {6}},\\ \\bibinfo {pages} {16} (\\bibinfo {year} {2017})}')])
     const v2 = { ...unit(id('b'), 34, 'reference', [text('D. M. Sussman, SoftwareX'), ph('\\ '), open('\\textbf {'), ph('6'), close(), text(','), ph('\\ '), ph('16'), text(' ('), ph('2017'), text(')')]), state: 'drawn' }
     expect(said(statedOf([today], [v2]))).toEqual([[34, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+    // (as the front end reads it in an entry: \\bibinfo's two arguments, then a group of the entry's own holding \\natexlab{b},
+    // a placeholder; an accent its letter: 2307.16209v1's)
+    const lab = unit(id('d'), 35, 'reference', [text('A. B, '), ph('\\href@noop {} {\\emph {\\bibinfo {booktitle} {Studies on the Painlev\\\'e Equations}}\\ (\\bibinfo\n  {year} {1981}{\\natexlab{b}})}')])
+    const v2lab = { ...unit(id('e'), 35, 'reference', [text('A. B, '), open('\\emph {'), text('Studies on the Painlev\u00e9 Equations'), close(), ph('\\ '), text('('), ph('1981'), ph('\\natexlab{b}'), text(')')]), state: 'drawn' }
+    expect(said(statedOf([lab], [v2lab]))).toEqual([[35, `written as ${'e'.repeat(12)}: ${CAUSE.characters}`]])
+    // (a link with no address that holds no word of its own: 2610.20451v1's `\\href@noop {} {\\  (\\bibinfo {year} {2024})}`)
+    const year = unit(id('f'), 36, 'reference', [text('A. B, Order,'), ph('\\ '), ph('\\href@noop {} {\\  (\\bibinfo {year} {2024})}'), text(',')])
+    const v2year = { ...unit(id('g'), 36, 'reference', [text('A. B, Order,'), ph('\\ '), ph('\\ '), text(' ('), ph('2024'), text('),')]), state: 'drawn' }
+    expect(said(statedOf([year], [v2year]))).toEqual([[36, `written as ${'g'.repeat(12)}: ${CAUSE.characters}`]])
     // (its words as today's: another word is another unit)
     const other = { ...unit(id('c'), 34, 'reference', [text('D. M. Sussman, SoftwareY'), ph('\\ '), open('\\textbf {'), ph('6'), close(), text(','), ph('\\ '), ph('16'), text(' ('), ph('2017'), text(')')]), state: 'drawn' }
     expect(String(said(statedOf([today], [other]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
