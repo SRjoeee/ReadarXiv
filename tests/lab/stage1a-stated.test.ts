@@ -1091,6 +1091,15 @@ describe("(p) F3's item: today's figure text its marker and its words, v2's the 
       [301, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`],
     ])
   })
+  it('reads a short mark whatever arXiv prints beside it, and a longer one only as the label prints it (2608.06007v1)', () => {
+    // (arXiv's glyphs: the dash, then the word's "i" right after it, within the label box's reach)
+    const page = [glyph('-', 260.9, 263.4, 701.53, 6.66), glyph('i', 263.5, 265.2, 701.53, 6.66), glyph('d', 265.3, 268.6, 701.53, 6.66)]
+    const glyphs = () => page
+    const out = statedOf(today('-identify'), [item('b', 'identify')], { glyphs })
+    expect(out.map((x: { cause: string }) => x.cause)).toEqual(['item'])
+    const iv = [glyph('(', 260.9, 262.4, 701.53, 6.66), glyph('i', 262.5, 264.0, 701.53, 6.66), glyph('v', 264.1, 266.6, 701.53, 6.66), glyph(')', 266.7, 268.5, 701.53, 6.66)]
+    expect(statedOf(today('(iv) Normal & Pre-seizure'), [item('b', 'Normal & Pre-seizure')], { glyphs: () => iv }).map((x: { cause: string }) => x.cause)).toEqual(['item'])
+  })
   it('is declared to the parity: the item holds today’s unit whole', () => {
     expect(HOLDER_JOIN.item).toBe('whole')
   })

@@ -650,8 +650,9 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     return !!t && holdsText(glyphTextOf(c), t)
   }
   // ((p), F3: an item of a figure, its marker the label v2 keeps as the original's ink (the dump's `label`, at today's line start),
-  // every line of today's on the item's boxes: today's glyph text the marker, then the item's text from its start. The marker what
-  // the label prints where arXiv's page is read; else a short mark, a letter or digit or three in their brackets, or a bullet)
+  // every line of today's on the item's boxes: today's glyph text the marker, then the item's text from its start. The marker a
+  // short mark (a letter or digit or three in their brackets, or a bullet), or what the label prints where arXiv's page is read
+  // (a glyph beside a narrow mark can stand within the box's reach: 2608.06007v1's "- identify", its "i")
   const MARK = /^(?:[([]?[\p{L}\p{N}]{1,3}[)\].:]?|[-\u2010-\u2014\u2022\u00b7\u25aa\u25e6\u2219*>])$/u
   const itemOf = (u, n) => {
     const L = u.lines?.[0]
@@ -665,7 +666,7 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     for (let i = 1; i <= Math.min(4, t.length - 1); i++) {
       if (!h.startsWith(t.slice(i))) continue
       const mark = t.slice(0, i)
-      if (printed !== null ? printed.replace(/\s+/g, '') === mark : MARK.test(mark)) return true
+      if (MARK.test(mark) || printed?.replace(/\s+/g, '') === mark) return true
     }
     return false
   }
