@@ -3398,7 +3398,13 @@ measure counted all three on both sides: today's reader draws them flat too.
   macro around a footnote, natbib's superscript citations, an affiliation's macro. Each glyph must now also stand on the
   baseline of the line it stands on (its ink row's, as two baselines are told: `ON_BASE`, the line's stated to a hundredth, a
   glyph's as the PDF wrote it; TeX's positions fall on a half-hundredth often, 2610.40394v1 p34's line at 476.125 stated 476.12,
-  so a hundredth's rounding is no test). A footnote's mark (El.mark) is drawn raised whatever TeX set it as, and is asked no
+  so a hundredth's rounding is no test). A line's glyphs are read as the element's text reads them (`locate.ts` asRead, facts.ts
+  joinAccents): a spacing accent TeX's `\accent` set over its letter, raised over it by the letter's height less the x-height,
+  is that letter's (2026-11-11, lane b5-fixes): 2610.21312v1 p2's "(Marčenko and Pastur, 1967)", its `\v{c}` caron 0.05 pt over
+  the line, stated no text and was drawn as one crop 114 pt wide that no line could break, the line before it 8 em short; now a
+  text the breaker breaks at its spaces. Over the 88 (stage 1a against B6's r14), 16 citations of 6 papers (24 placements on
+  their pages) gain a text (Kamiński, Candès, Veličković, Klötergens, Hénaff); a raised citation and a scripted macro
+  (1810.04805v2's BERT_LARGE) stay crops. A footnote's mark (El.mark) is drawn raised whatever TeX set it as, and is asked no
   place: newpx's superior figures stand on the baseline (2307.16209v1's 68 marks). Else the element is drawn as its ink.
 - **A symbol is drawn as its character only where TeX's ink is that symbol so drawn** (`locate.ts` Member.asInk, `bundle.ts`
   `classed`). The source's reading (today's phClass2) makes a formula of no Latin letter or digit once its commands are dropped
@@ -3619,9 +3625,27 @@ rests on his line quoted there: a translation may be made or not, never garbled.
   2610.19159v1's transcript box titles set a path in typewriter between their words, and the path was a figure text of its own,
   kept, the words before and after it translated; since §18.26 a level line's run of one pitch is an element of the line's one
   text, and a turned run keeps this cut. A paper whose body face is of one pitch keeps nothing for it, and its
-  figures' runs go on as before. A unit holding a word of another face stays translated, its typewriter run an element or a group: a
-  paragraph naming a function in `\texttt`, a figure's title line with a path in it. Titles, captions, questions and answers
-  set in a proportional face are translated.
+  figures' runs go on as before. A unit holding a word of another face stays translated, its typewriter run an element (by its
+  group, below; F0's on a figure's line): a paragraph naming a function in `\texttt`, a figure's title line with a path in it.
+  Titles, captions, questions and answers set in a proportional face are translated.
+- **By group** (`locate.ts` pitchGroupsOf; the owner's ruling of 2026-11-11 on batch 5's §1, option a). Read a unit at a time, the
+  rule kept 2608.25210v2's `\mypython{…}` prompt box, a framed `\ttfamily` box, on p2, where a blank line makes it a unit of its
+  own, and translated the same box on p3, where its source sets it in one paragraph with its lead line: one kind of box, two
+  outcomes by where its source's blank lines fall. It is read per group, as F0 reads a figure's line (§18.26): the outermost group
+  of a source unit that holds text of its own and whose every glyph is set in a face of one pitch is one element `code`, the
+  original's ink, never sent, the rest of its unit translated. Its glyphs: its letters as the unit's groups' are matched on A
+  (group-style.ts groupLettersOf, the matching a group's face is read by), the text between them, the marks at its ends its own
+  text writes (a stop inside the group; the sentence's stop after it stays the sentence's), and its elements' ink (an identifier
+  inside it, §18.25: one element, never one inside another). A group TeX set on lines no other ink of its unit shares, a vertical
+  box, keeps its rows where TeX set them, in their own measure and frame, as a display's do (Member.ownRows: its lines KEPT, its
+  class `display`); one on a line of its unit's text is drawn as its ink there, F0's class (`other`, literal, its glyphs' text its
+  copy). A group of no text of its own (a colour around an identifier element) is left as it is, and a unit placed more than once
+  (a babel name's occurrences) is read so nowhere. The lab reads the element as F0's (`keptEls` 'pitch': the dump's `keptBy`, the
+  parity's kept ink). Over the 88 (stage 1a against B6's r14), 148 groups in 86 units of 8 papers are such elements, every move
+  of the run this rule's: 2608.25210v2 p3's three boxes on rows of their own, their lead lines translated; 145 on their lines,
+  typewriter words in prose and cells (1810.04805v2's `{\tt [CLS]}` and `{\tt A}`, 2608.06007v1's `\texttt{Artifact}` and
+  `\texttt{prefetch()}`), a reference's `{\tt arXiv:…}` link text (34 in 4 papers) and 2610.40576v1's `\ctk{3.4k}` token counts.
+  The 86 units' content moves (a group a marker now), so their rows are asked anew.
 - **The facts it rests on** (`facts.ts` fixedFacesOf). A face is of one pitch where each font program of it (an embedded subset)
   sets every character one advance at its size, within a thousandth (the PDF's widths are whole thousandths), and one of them
   two distinct letters at least. Each program is read alone: 2411.13093v4's Consolas subsets set 549 on p4 and 550 on p9 and
@@ -3638,9 +3662,7 @@ rests on his line quoted there: a translation may be made or not, never garbled.
   marks each (`pitch`; the lab's dump `keptBy: 'pitch'`), the parity's ruling reads the mark (`lab/typeset/parity/README.md`),
   and the dump states it the differential's cause (k), accepted (`stated.mjs` keptWhyOf); no other unit left the original's is
   read so.
-- **Not this rule's.** A box whose source unit is one block of a proportional line and a typewriter prompt (2608.25210v2 p3)
-  stays translated, its keys garbled (its keys, `llm\_equal\_human`, are identifiers, kept since §18.25; its prose is still
-  sent); a cut at the box in the front end would keep it. A figure's name label in a proportional
+- **Not this rule's.** A figure's name label in a proportional
   face (2411.13093v4 p19's "DET", Georgia-Bold) is translated alone: today's rule that keeps a figure label that is a name or
   code (`mt.mjs` isName, isCode: 1,910 of 8,962 figure labels, 49 papers, in the baseline's prepare of the 88) is not ported.
   An algorithm in a wrapfigure (2608.27728v1 p3) is half translated: its text lines ink units, its kept blocks beside.
@@ -3933,6 +3955,38 @@ word: drawn as the page's text so that it flows and breaks, its font state is Te
   math rule; the style of a translation's groups is the translator's side. An element every capital of which is small, no full
   letter of its own to measure them by, is drawn in capitals at the run's size (none of the 88). "LIVE-|PLAN" broken over two
   lines keeps its hyphen ("Live-Plan"), as before: a case change across a hyphen is a compound's.
+
+### 18.29 A label TeX hung beside its text hangs its text at the drawn label's width (2026-11-11)
+
+The owner on the fresh-rows sheet, 2609.36054v2-zh p3: Figure 1's label and the text after it, separate blocks, by rule or a
+bug? The original sets "Figure 1." at 47 in the margin and every line of its text at 95.61 beside it (the caption package's
+`hang`); v2, and today's reader, set the second line under the label.
+
+- **The rule** (`lay/adapt.ts` `hang` and `hangGap`, `breaker/slots.mjs` `hangGap` and `hung`, `breaker/break.mjs` `tabbed`,
+  `edge` and tabOf; the coordinator's ruling of 2026-11-11). A label drawn anew is its first line's (RUN:2039-2041): its
+  rectangle was widened to the label, so the block's edge was the label's and every line after the first started there. In TeX a
+  hung caption's indent is its label box's width, the label and its separator (`\hangindent`): the original's text edge is a
+  consequence of "Figure 1." being that wide, not a position of its own. Where every text line of a member starts at one x past
+  the label's end and the label stands at its first line's measure start (Line x0 and m0, Label.ink; two text lines at least),
+  the label drawn anew keeps its place, its separator and the space TeX set after it (the original's gap from the label's ink to
+  its text, `hangGap`, at the state's scale), and its text hangs at that width: the first text after the label starts at the
+  drawn label's end and that space, and every later line of the block starts at that edge, its measure from there to the
+  original's right edge. A narrower label (Chinese "Figure 1.") hangs its text nearer, a wider one ("Abbildung 1.") farther. The
+  label and its space neither stretch nor shrink, a box as TeX's hang is (the breaker counts no space of the label's as one that
+  shrinks: the reader gate's I5 found 9 lines past their slot where it had). A label kept as the original's ink (a reference's
+  "[12]", a heading's "A.4", a caption's label not drawn anew) keeps the original's hang: its block's edge is the text's.
+- **Over the 88** (r14's parts, every page laid with identity rows by the typesetter before and after, lane b5-fixes): 55
+  captions hang their label, in 4 papers; the 35 of them whose label is drawn anew are laid otherwise (29 figures', 6 tables':
+  2307.16209v1 24, 2610.21201v1 5, 2610.21377v1 5, 2609.36054v2 1), and no other of the 63,230 members laid moves. The strip the
+  drawn label's hang gives the text, from the label's start to the original's text edge over the caption's lines, holds no ink
+  of arXiv's page but the label's and no other member's line or element, on all 55: the region is the caption's own. Laid with
+  identity rows the line count of 6 of the 35 moves against B6 (2307.16209v1 p86 t286 4 -> 5; 2610.21201v1 t13 10 -> 11, t19 9
+  -> 10, t14 10 -> 11, t87 15 -> 16; 2610.21377v1 t268 4 -> 5), and of 3 against the hang at the original's edge (2610.21201v1
+  t13 12 -> 11, t87 17 -> 16, t48 3 -> 2): a line ends sooner where the measure is wider, as an element drawn at its own width
+  does.
+- **Not this rule's.** How a caption's label is found (its float's `\fnum@<type>`, a label on a line of its own) is the label's
+  reading's (lane marks-2), not this rule's: it lays a label found, which needs Label.ink's start at the first line's measure
+  start and its end before the text lines' shared start; a label on a line of its own is no hang.
 
 ## 19. The engine's contract
 

@@ -865,3 +865,27 @@ describe("(f) over (g): a stand-in that holds today's text whole, in order, a ru
     expect(stated.map((s: { holder?: string }) => s.holder)).toEqual([id('b'), id('b')])
   })
 })
+
+describe('(k) by group: a source unit the candidate writes as one source, a group of it kept as an element for its pitch', () => {
+  // (lane b5-fixes, PDF-READER §18.22's Rule 1 read by group: 2608.25210v2 p3's `\mypython{…}` box and 1810.04805v2's
+  // `{\tt [CLS]}`, one element `code` of the candidate's unit, the dump's element `keptBy: 'pitch'`. The unit is today's, the same
+  // TeX source, but its id moved with its content: absent from the candidate, read as no statement, it was a loss)
+  const today = () =>
+    unit(id('a'), 35, 'para', [text('a token ('), { kind: 'open', src: '{' }, ph('\\tt'), text(' [CLS]'), { kind: 'close', src: '}' }, text(') first')])
+  const mine = (keptBy?: 'pitch') => {
+    const n = unit(id('b'), 35, 'para', [text('a token ('), ph('{\\tt [CLS]}'), text(') first')])
+    n.elements = [{ k: 1, kind: 'code', segs: [box(110, 140, 600, 608, 598)], ...(keptBy ? { keptBy } : {}) }]
+    return n
+  }
+  it('states it written as the candidate’s unit with its group kept as the original, holding it', () => {
+    const got = statedOf([today()], [mine('pitch')])
+    expect(said(got)).toEqual([[35, `written as ${'b'.repeat(12)}: ${CAUSE.pitchGroup}`]])
+    expect(got[0].holder).toBe(id('b'))
+  })
+  it('states none where the source differs or no element of the candidate’s is kept for its pitch', () => {
+    expect(statedOf([today()], [mine()])).toEqual([])
+    const other = mine('pitch')
+    other.pieces = [text('a token ('), ph('{\\tt [SEP]}'), text(') first')].map((p, k) => ({ k, ...p }))
+    expect(statedOf([today()], [other])).toEqual([])
+  })
+})

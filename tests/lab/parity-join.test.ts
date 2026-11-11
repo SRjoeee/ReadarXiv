@@ -221,6 +221,15 @@ describe("a member no id joined to today's unit stage 1a states its unit holds w
     for (const c of ['held', 'names', 'heldBlock'])
       expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated(c)])[107]).toEqual({ today: 98 })
   })
+  it('joins it by the holder of a group kept for its pitch, today’s unit written as v2’s with that group an element, never its row (lane b5-fixes)', () => {
+    // (stage 1a's (k) by group, stated.mjs `pitchGroup`: 1810.04805v2's `{\tt [CLS]}` and 2608.25210v2 p3's box, the unit's id moved
+    // with its content; unjoined, today's translated unit read as missing on v2's pane, 7 pages of 1810.04805v2-zh newly worse.
+    // The two contents differ, so today's row is not laid in v2's unit: `same` false)
+    expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated('pitchGroup')])[107]).toEqual({ today: 98 })
+    const free = [...(part.parts.get(1)?.flows[0] ?? [])]
+    const other = new Map([[98, { ...prepared.get(98)!, pieces: [{ kind: 'text', s: 'and' }] }]])
+    expect([...heldJoin(free, part.units, [stated('pitchGroup')], [98], other)]).toEqual([[107, { today: 98, same: false }]])
+  })
   it("joins it by the holder a names unit's stand-in of its ledger class names, its characters today's in another order (2610.30034v1)", () => {
     expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated('order')])[107]).toEqual({ today: 98 })
   })
