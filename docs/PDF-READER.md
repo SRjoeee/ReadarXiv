@@ -3856,6 +3856,70 @@ production's stored rows, never showed it (no row, the original's).
   drafts-only compile's (DESIGN §16, deleted 2026-11-09): our final pass includes each figure as arXiv's compile does, so a
   figure's text has its partners on B. The engine's tests that set a figure's text on A alone set it on B too.
 
+### 18.28 Two facts of TeX's in the marked compile: a float of no counter, a caption's label by its call (2026-11-11)
+
+The owner's decision of 2026-11-11, venue and notice lines translated, all of them, and his ruling of one label form per paper
+(2026-11-08). Two lines TeX sets were owned by nothing by an accident of their container: NeurIPS's notice ("31st Conference on
+Neural Information Processing Systems (NIPS 2017), …", "Preprint. Under review."), which its class sets in a bottom float, and
+IEEEtran's table label ("TABLE I"), which its class sets on a line of its own above the caption's text. The marked compile now
+states, for each, what TeX knows (layout/marks.mjs POINTS_TEX); one move of the compile keys for both.
+
+- **A float of a type with no counter** (`fn<n>`, beside the float's `fs<n>` in its own box). Where `\c@\@captype` is undefined
+  when the float's box ends, no `\caption` can number the float: TeX says it is no figure, table or algorithm, but the page's
+  own text the float mechanism placed. NeurIPS's styles define `\ftype@noticebox` and `\@float{noticebox}[b]` and no counter;
+  so does ICML's `\@float{copyrightbox}`. The ledger (the engine's copy, `locate/today/ledger.mjs`, CHANGED) reads such a
+  float's lines at the depth of the counted floats around them, so a line in none is text outside the bodies, a note
+  (`inknotes`, always translated, as ACM's permission block is). Not a Headers-and-footers unit: TeX ships the float before the
+  page's last mark, so it is no foot run. ICML's copyrightbox's text is units' already (its notice and affiliations): nothing of
+  it moves. Any other float of no counter is read so: that is the point.
+- **A caption's label by TeX's call** (`ka<k>`, before the label where TeX sets it). Every caption maker is handed its label,
+  `\fnum@<type>`, as an argument: LaTeX's and every class's `\@makecaption` (#1), longtable's `\LT@makecaption` (#2), float.sty's
+  styles' `\floatc@plain`/`\floatc@ruled` (#1), algorithm2e's `\algocf@captiontext` (#1), caption.sty's `\caption@@make` (#1,
+  every path of caption.sty's: a sub-caption's, subcaption setting `\@makecaption` to caption's own inside a sub-figure, a
+  rotated one's, a long table's). Each, once the document begins, hands its original the label with the point before it: no
+  assignment and nothing expanded before the original runs (longtable's starts a `\multispan`), the label's own tokens and
+  parameters as they were (algorithm2e's `\fnum@algocf` reads one). A class or package that sets its caption maker inside its
+  float's environment, after the document began (Elsevier's cas-common sets `\@makecaption` to its figure's or table's own at
+  the environment's start; algorithm2e and floatrow do so too, over a maker already handed its point), has that maker wrapped
+  again as each float begins (`\@xfloat`, every float's way in, its arguments passed on untouched), in the float's own group:
+  an assignment, no node, nothing where the maker is a wrapper already. Two wrappers of one caption set two points side by
+  side, nothing between them. Typeset only (`\protect` `\@typeset@protect`: nothing in a
+  moving argument, a file or a bookmark), never while the gate is off, and in vertical mode at the paragraph the label begins
+  (para/begin, once). own.mjs MR 5 takes a caption's label from its last label point before its start mark, whatever line it
+  stands on; a caption TeX set no point for has no label: the baseline is no longer read for a caption.
+- **Each point read by its own reader alone** (stream.mjs `READ_ALONE`): `ka<k>` by own.mjs MR 5, `fn<n>` by the ledger; every
+  other reading passes over them as over a bracket (the mark sequence an opening alone reads to, headInk's point before, the
+  sequence points, instrument.mjs's stop): 2406.06525v1 p6's cell superscript, an opening alone after its cell's end mark,
+  lost its ink where the caption's label point stood before the next mark.
+- **A label on a line of its own** (`Label.align`, FORMAT 1's optional field). It stands on none of the caption's lines, so the
+  part states no `line`, and states how TeX set that line against its measure, read as any line's alignment is (`alignOf`'s
+  centring; flush right where it ends at its measure's end and starts within it; else flush left): the label line's own, never
+  the unit's (a class may set its label flush left over a centred text). The typesetter reads it and never guesses
+  (`lay/entry.ts` labelRowOf): no line of the caption leads with the relabel; it is laid as a row of its own on the label's
+  baseline, at the label's size, in its runs by script, centred on the label's middle, from its start or to its end, its face
+  a lead's relabel's (leadOf: the label's weight, slant and fill on the caption's base style); the original label's group off
+  as for any relabel; the row lit with the caption's first sentence, as a carried label is (§17); nothing else of the caption
+  moves. IEEEtran's "TABLE I" is `\normalfont` capitals over a text in
+  `\scshape`: where the caption's base is small capitals the relabel is set in them as a lead is, which leaves a Chinese
+  relabel as it was (its CJK characters have no small capitals, its numeral "I" is a capital).
+- **Proofs of the TeX.** 23 synthetic documents in the pinned TeX Live 2025 image (classes article, IEEEtran conference and
+  journal, scrartcl, memoir, revtex4-2, amsart, llncs, elsarticle, acmart; packages caption, subcaption, float, algorithm,
+  algorithm2e, wrapfig, longtable, sidecap, floatrow, rotating, listings, subfigure, threeparttable, hyperref, cleveref, a list
+  of figures, of tables and of algorithms, Elsevier's cas-sc), each compiled before and after: every glyph and box the same,
+  every .aux, .lof, .lot, .loa and .out byte for byte, the new points alone.
+- **Proofs over the 88** (stage 1a at the head on its own compiles against the base, 664a114fa, on its own): 18 papers move,
+  and only as ruled. 8 units gained, `inknotes`, one on page 1 of each paper with a NeurIPS notice (1706.03762v7, 2608.27728v1,
+  2610.17108v1, 2610.20947v1, 2610.21026v1, 2610.21176v1, 2610.21376v1, 2610.30769v1); none removed or changed. 37 captions
+  gain their label, every one of the census's (36 on a line of their own: IEEEtran's "TABLE I" .. "TABLE X" centred, cas-sc's
+  "Table 1" .. "Table 7" flush left, SIAM's "Table 1", "Table 2" centred; one on its first line, 2610.20848v1's "Figure 1:"),
+  none lost, none changed, in all 24 classes of the 88 (the lab's label check, run by class: the first version of the TeX lost
+  cas-sc's 14 figure labels, its maker set inside its environment, which is how the float's own wrap was found). Beside them
+  only what follows from the notes: their glyphs counted in the faces table of their papers' pages, and the ords after a note
+  one more (2610.20947v1's references' links name their owners by ord). Seven captions stay without a label, none for want of
+  a call: three `\caption*` (no label is TeX's), revtex4's three "TABLE. I:" (called; refused by the label's form, MR 6, as
+  before), weco_paper's "Figure 8 |" before a macro's ink (called, its two points there; no label stated, as before: its
+  reading not taken further here).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
