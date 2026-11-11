@@ -50,3 +50,53 @@ describe('a group that carries nothing is its content', () => {
     expect(passedOf([open('{', 1), ph('\\em'), text('all'), close(1)])).toEqual([])
   })
 })
+
+// (the coordinator's ruling of 2026-11-11, lane style-wire: today's wire sends a .bbl field's pair as markers and a face group
+// that fills the field rides them, so production draws that face; with the field's pair written as its content (above) v2
+// sends the face group on no wire, upright. In a bibliography entry such a face group is `must`)
+describe("a face that fills a bibliography's field: `must` (production's markers ride the field's pair)", () => {
+  const spans = (ps: unknown[], out: { open?: string; must?: number }[] = []) => {
+    for (const p of ps as { t: string; open?: string; must?: number; content?: unknown[] }[])
+      if (p.t === 'span') {
+        out.push({ open: p.open, ...(p.must ? { must: p.must } : {}) })
+        spans(p.content ?? [], out)
+      }
+    return out
+  }
+  it('`\\bibinfo{journal}{\\emph{J}}` in a clause is `must`; a bare `\\emph{J}` in the same place is not', () => {
+    const field = [text('A. Author, '), open('\\bibinfo{journal}{', 1, 0), open('\\emph{', 2), text('Journal of Flows'), close(2), close(1), text(', 12 (2020).')]
+    expect(spans(piecesOf(field, { bib: true }))).toEqual([{ open: '\\emph{', must: 1 }])
+    const bare = [text('A. Author, '), open('\\emph{', 2), text('Journal of Flows'), close(2), text(', 12 (2020).')]
+    expect(spans(piecesOf(bare, { bib: true }))).toEqual([{ open: '\\emph{' }])
+  })
+  it('a field holding more than the one face group is not; nor the same field outside a bibliography entry', () => {
+    const more = [text('A. Author, '), open('\\bibinfo{title}{', 1, 0), text('On '), open('\\emph{', 2), text('flows'), close(2), close(1), text('.')]
+    expect(spans(piecesOf(more, { bib: true }))).toEqual([{ open: '\\emph{' }])
+    const tail = [open('\\bibinfo{title}{', 1, 0), open('\\emph{', 2), text('Flows'), close(2), text(' and more'), close(1), text('.')]
+    expect(spans(piecesOf(tail, { bib: true }))).toEqual([{ open: '\\emph{' }])
+    const field = [text('See '), open('\\bibinfo{journal}{', 1, 0), open('\\emph{', 2), text('Journal of Flows'), close(2), close(1), text('.')]
+    expect(spans(piecesOf(field))).toEqual([{ open: '\\emph{' }])
+  })
+  it("a face holding only a placeholder is not: REVTeX's `\\textbf{\\bibinfo{volume}{27}}`, the number's ink its own face", () => {
+    const volume = [text('Phys. Rev. Lett. '), open('\\textbf{', 1), open('\\bibinfo{volume}{', 2, 0), ph('27'), close(2), close(1), text(', 1 (2020).')]
+    expect(spans(piecesOf(volume, { bib: true }))).toEqual([{ open: '\\textbf{' }])
+    const field = [text('A. Author, '), open('\\bibinfo{volume}{', 1, 0), open('\\textbf{', 2), ph('27'), close(2), close(1), text(', 1.')]
+    expect(spans(piecesOf(field, { bib: true }))).toEqual([{ open: '\\textbf{' }])
+    // (a volume with text of its own on the wire, `A349`, is)
+    const label = [text('Phys. Rev. '), open('\\textbf{', 1), open('\\bibinfo{volume}{', 2, 0), text('A349'), close(2), close(1), text(', 1.')]
+    expect(spans(piecesOf(label, { bib: true }))).toEqual([{ open: '\\textbf{', must: 1 }])
+  })
+  it("REVTeX's field around a face around a field, a space after it: `\\bibfield{journal}{\\emph{\\bibinfo{journal}{J}}\\ }`", () => {
+    const revtex = [open('\\bibfield{journal}{', 1, 0), open('\\emph{', 2), open('\\bibinfo{journal}{', 3, 0), text('Phys. Rev. Lett.'), close(3), close(2), ph('\\ '), close(1), ph('12')]
+    expect(spans(piecesOf(revtex, { bib: true }))).toEqual([{ open: '\\emph{', must: 1 }])
+  })
+  it('a link stays as it is; a bare group a face declaration opens sets that face, and rides the field as today\'s does', () => {
+    const link = [open('\\bibinfo{note}{', 1, 0), open('\\href{https://x.org}{', 2), text('Online'), close(2), close(1), text('.')]
+    expect(spans(piecesOf(link, { bib: true }))).toEqual([{ open: '\\href{https://x.org}{', must: 1 }])
+    const declared = [open('\\bibinfo{journal}{', 1, 0), open('{', 2), ph('\\em'), text('Journal of Flows'), close(2), close(1), text(', 12.')]
+    expect(spans(piecesOf(declared, { bib: true }))).toEqual([{ open: '{', must: 1 }])
+    // (one a size or a family opens sets no face: as it was)
+    const sized = [open('\\bibinfo{journal}{', 1, 0), open('{', 2), ph('\\small'), text('Journal of Flows'), close(2), close(1), text(', 12.')]
+    expect(spans(piecesOf(sized, { bib: true }))).toEqual([{ open: '{' }])
+  })
+})

@@ -107,6 +107,50 @@ export function passThroughOf(pieces) {
   })
   return out
 }
+/** a bibliography's source units (the front end's: an entry, its names) */
+const BIB_UNITS = new Set(['reference', 'refnames'])
+/** the face declarations that draw nothing (TeX's shape and series switches): a bare group one opens sets that face */
+const FACE_SWITCH = /^\\(?:em|it|itshape|sl|slshape|bf|bfseries|sc|scshape)(?![A-Za-z@])/
+/**
+ * In a bibliography entry, the face groups that fill a field whose pair passThroughOf writes as its content (`\\bibinfo{journal}{
+ * \\emph{…}}`, REVTeX's `\\bibfield{journal}{\\emph{\\bibinfo{journal}{…}}\\ }`): each of the group's ends stands at such a pair's
+ * edge, outside it or inside it, white space aside. Today's wire (mt.mjs planOf) sends a .bbl field's pair as markers, a pair
+ * that sets more than a style, and a face group whose two ends stand at those markers is kept by its boundary rule, so its face
+ * comes back: on the parity's pairs, 86 of 86 such fields came back whole, 61 of them inside a clause (lane style-wire, the
+ * coordinator's ruling of 2026-11-11). With the field's pair no group (C) and a markers wire that sends `must` groups alone, v2
+ * drew those faces upright (round 8 B8's toggles-on sheet: 32 references). So such a face group is `must`: what production shows,
+ * nothing more; a face that fills no field stays upright on a markers wire, in production and in v2 alike. A face group: a
+ * command that sets italic, bold or small capitals (styleOf), or a bare group a face switch opens (`{\\em …}`), holding text of
+ * its own on the wire (not placeholders alone: a volume's number is its original's ink, its face with it). By open's index
+ */
+export function fieldFacesOf(pieces) {
+  const through = passThroughOf(pieces), out = new Set()
+  // (each close's open: a field's close is a field's by its open)
+  const openOf = new Map(), opens = []
+  pieces.forEach((p, k) => { if (p.t === 'open') opens.push(k); else if (p.t === 'close' && opens.length) openOf.set(k, opens.pop()) })
+  const field = k => { const o = pieces[k].t === 'close' ? openOf.get(k) : k; return o !== undefined && through.has(o) && pieces[o].sets === 0 && pieces[o].src !== '{' }
+  const solid = q => !(q.t === 'text' && !/\S/.test(q.s))
+  const before = k => { for (let j = k - 1; j >= 0; j--) if (solid(pieces[j])) return j; return -1 }
+  const after = k => { for (let j = k + 1; j < pieces.length; j++) if (solid(pieces[j])) return j; return -1 }
+  const stack = []
+  pieces.forEach((p, k) => {
+    if (p.t === 'open') stack.push(k)
+    else if (p.t === 'close' && stack.length) {
+      const o = stack.pop()
+      if (through.has(o)) return
+      const src = unicodeOf(pieces[o].src ?? '').trimStart(), first = pieces[after(o)]
+      const face = ['italic', 'bold', 'sc'].includes(styleOf(src)) || (src === '{' && first?.t === 'ph' && FACE_SWITCH.test(unicodeOf(first.src ?? '')))
+      // (and text of its own on the wire: a group holding placeholders alone, REVTeX's `\\textbf{\\bibinfo{volume}{27}}`, goes as one
+      // marker on today's wire and its number's ink carries its face)
+      if (!face || !pieces.slice(o + 1, k).some(q => q.t === 'text' && /\S/.test(q.s))) return
+      const b = before(o), i = after(o), e = after(k), l = before(k)
+      const opens = (b >= 0 && pieces[b].t === 'open' && field(b)) || (i >= 0 && i < k && pieces[i].t === 'open' && field(i))
+      const closes = (e >= 0 && pieces[e].t === 'close' && field(e)) || (l > o && pieces[l].t === 'close' && field(l))
+      if (opens && closes) out.add(o)
+    }
+  })
+  return out
+}
 /** where each group passThroughOf writes as its content opened, as offsets in the unit's projection (each text piece's characters,
  *  each element or nested unit one): the engine's facts pass counts a paragraph TeX opened at one, which must be none
  *  (InstrumentUnit.passed, Located.stats.opensLost) */
@@ -124,11 +168,12 @@ export function passedOf(pieces) {
  *  open wraps what came before it at its level (the group began before the unit), an open left at the end has no close; an
  *  element's wire facts (wireFacts), and a reference's item's full name where the marked compile stated one, with the language
  *  TeX declared for it (`nameOf` { name, lang }: the engine's readRefNames over marks.mjs refsTex's statements) */
-export function piecesOf(pieces, { kindOf = () => 'other', idOfNested = () => null, nameOf = () => undefined } = {}) {
+export function piecesOf(pieces, { kindOf = () => 'other', idOfNested = () => null, nameOf = () => undefined, bib = false } = {}) {
   let level = []
   const stack = []
-  // (a group that carries nothing is its content, its text joined with the text on either side: passThroughOf)
-  const through = passThroughOf(pieces)
+  // (a group that carries nothing is its content, its text joined with the text on either side: passThroughOf; in a
+  // bibliography entry a face group that fills such a field is `must`: fieldFacesOf)
+  const through = passThroughOf(pieces), faces = bib ? fieldFacesOf(pieces) : new Set()
   let seam = false
   pieces.forEach((p, k) => {
     const id = String(k)
@@ -141,7 +186,7 @@ export function piecesOf(pieces, { kindOf = () => 'other', idOfNested = () => nu
       case 'nested': level.push({ t: 'unit', id, unit: idOfNested(p.unit) ?? '0'.repeat(64), pre: unicodeOf(p.pre), post: unicodeOf(p.post) }); break
       case 'open': {
         const style = styleOf(unicodeOf(p.src))
-        const span = { t: 'span', id, style, ...(style === 'link' ? { must: 1 } : {}), open: unicodeOf(p.src), content: [] }
+        const span = { t: 'span', id, style, ...(style === 'link' || faces.has(k) ? { must: 1 } : {}), open: unicodeOf(p.src), content: [] }
         level.push(span)
         stack.push({ outer: level, span })
         level = span.content
@@ -1057,7 +1102,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const facts = unitFactsOf(paper)
   units.forEach((u, i) => {
     // (its run-in labels and what TeX set for its groups, once B's glyphs are owned: marksOf, below)
-    const content = piecesOf(u.pieces, { kindOf, idOfNested: x => ids[units.indexOf(x)] ?? null, nameOf })
+    const content = piecesOf(u.pieces, { kindOf, idOfNested: x => ids[units.indexOf(x)] ?? null, nameOf, bib: BIB_UNITS.has(u.kind) })
     const id = unitId(u.kind, content)
     ids[i] = id
     const unhidden = own.units.get(i)?.unhidden
