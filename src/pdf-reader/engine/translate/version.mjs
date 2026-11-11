@@ -105,4 +105,9 @@
 //    61,329 (-36.8 %), 5,011 of 20,062 units' wires change and 191 name units are no longer sent. An echo of each changed
 //    wire reads back, against the echo of the old: the same pieces, or the same but for white space, or the same but where
 //    a piece on no wire or a pair's empty ends come back; no word and no placeholder otherwise moved
-export const TRANSLATE_VERSION = '10'
+// 11 (round 8 B8, rebuild/style-wire's B; PIPELINE_VERSION 92 with it): TeX's `\#` is a character of the text (latex-front.mjs
+//    textCharacter), written bare, so a wire may hold a `#` of its own: where it does (`hashFree` false), the markers wire's reply
+//    is read as the HTML page reads a block holding one (src/core/protector/tokens.ts markerReader), each marker with its one `#`,
+//    every other `#` the text's, a `#` right after a marker the wire does not follow with its own refused ('doubled closer');
+//    a wire holding none is read as 10 read it
+export const TRANSLATE_VERSION = '11'
