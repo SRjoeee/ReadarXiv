@@ -2451,6 +2451,7 @@ await check(
         const { page, context, errors } = await newPage({ path: 'chrome.html' })
         await page.evaluate((o) => window.__c.open('s2-splits', o), x)
         const seen = []
+        let layer = null
         const t0 = Date.now()
         while (Date.now() - t0 < 15_000) {
           const now = await page.evaluate(() => {
@@ -2467,13 +2468,15 @@ await check(
           })
           const key = JSON.stringify(now.capsule)
           if (seen.at(-1)?.key !== key) seen.push({ key, ...now })
-          if (now.layer === 'ready') break
+          layer = now.layer
+          if (layer === 'ready') break
           await page.waitForTimeout(100)
         }
         const opens = v2log.filter((e) => e.what === 'open').length
         await context.close()
         return {
           seen: seen.map(({ key: _, ...s }) => s),
+          layer,
           opens,
           errors: errors.filter((e) => !/status of 404/.test(e)),
         }
@@ -2493,11 +2496,11 @@ await check(
         !queue.retry &&
         capsules(site).some((c) => c.said === 'Translating, the first time') &&
         !capsules(site).some((c) => c.kind === 'notNow') &&
-        site.seen.at(-1)?.layer === 'ready',
+        site.layer === 'ready',
       `the website's: ${JSON.stringify(site.seen)}`,
     )
     assert(
-      capsules(own).some((c) => c.kind === 'notNow' && c.retry) && own.seen.at(-1)?.layer === 'ready',
+      capsules(own).some((c) => c.kind === 'notNow' && c.retry) && own.layer === 'ready',
       `the extension's: ${JSON.stringify(own.seen)}`,
     )
     return {
