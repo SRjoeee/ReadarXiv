@@ -230,6 +230,16 @@ describe("a member no id joined to today's unit stage 1a states its unit holds w
     const other = new Map([[98, { ...prepared.get(98)!, pieces: [{ kind: 'text', s: 'and' }] }]])
     expect([...heldJoin(free, part.units, [stated('pitchGroup')], [98], other)]).toEqual([[107, { today: 98, same: false }]])
   })
+  it('joins it by the holder of (o), today’s unit written as v2 writes it with its escaped characters text and the groups that carry nothing their content, never its row (lane style-wire)', () => {
+    // (stage 1a's (o), stated.mjs `characters`, PDF-READER §18.30-18.33: 1810.04805v2 p16's t263 with `\%`, 2608.25210v2's
+    // `\techreport{…}`, 2610.21880v1's bare groups; the unit's id moved with its content. Unjoined (round 8 B8's first parity),
+    // today's translated unit read as missing on v2's pane ("no member of v2's part joined to it", 5 pages newly worse) and a
+    // table's grid group of such cells as kept (2 pages). The two contents differ, so today's row is not laid in v2's unit)
+    expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated('characters')])[107]).toEqual({ today: 98 })
+    const free = [...(part.parts.get(1)?.flows[0] ?? [])]
+    const other = new Map([[98, { ...prepared.get(98)!, pieces: [{ kind: 'text', s: 'and' }] }]])
+    expect([...heldJoin(free, part.units, [stated('characters')], [98], other)]).toEqual([[107, { today: 98, same: false }]])
+  })
   it("joins it by the holder a names unit's stand-in of its ledger class names, its characters today's in another order (2610.30034v1)", () => {
     expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated('order')])[107]).toEqual({ today: 98 })
   })
