@@ -233,6 +233,37 @@ describe('scripts: the original\'s raised or lowered marks, read off arXiv\'s gl
     expect([...of('scripts')(crop), ...bothOf('scripts')(crop)]).toEqual([])
     expect(of('scripts')(page([]))[0]).toMatchObject({ worse: true, today: { off: 0 }, v2: { off: 1 } })
   })
+  it('a run of two marks set apart, cut as two crops each raised as on A, is carried; one of them lost, it is not', () => {
+    // (1706.03762v7 p1 t184 with every toggle on, "Aidan N. Gomez∗ †": PDF.js gives the two marks one run, "∗ †" at 6.97 pt on
+    // 502.92, 3.61 pt over the name's baseline, 319.3–330.3; TeX set them as two elements, \footnotemark and a dagger, glue
+    // between. v2 cuts each as its own crop, raised at its source's height; the run's middle, 324.8, stands in the space between
+    // them, which neither crop's source holds: read alone, each crop carried nothing, 0 of 2. Today leaves the marks' ink outside
+    // its own lines of the unit, the original's)
+    const facts = [{ ord: 184, kind: 'author', align: 'c', style: { size: 9.96 }, lines: [[N, 2, 248.76, 330.29, 499.31, 507.83, 499.12, 108, 504, 0, 9.96]] }]
+    const prep = { ord: 184, kind: 'author', text: 'Aidan N. Gomez', lines: [{ page: N, x0: 248.76, x1: 319.41, baseline: 499.31, top: 507.3, bottom: 497.3, size: 9.96 }] }
+    const runs = [
+      [248.8, 497.3, 319.3, 507.3, 499.31, 9.96, 0, 'Aidan N. Gomez', 0],
+      [319.3, 501.5, 330.3, 508.5, 502.92, 6.97, 0, '∗ †', 0],
+    ]
+    const text = [drawnLine(246.87, 317.53, 499.31, 'Aidan N. Gomez', 9.96)]
+    const page = (crops: unknown[][]) =>
+      measurePage('1706.03762v7-zh', { pages: { [N]: { members: [{ ord: 184, state: 'laid', lines: [] }], links: [] } }, facts: { [N]: { members: facts, links: 0 } }, today: { 184: { today: 184 } } }, rec({ runs, today: { units: [{ id: 184, lines: [drawnLine(248.76, 319.41, 499.31, 'Aidan N. Gomez', 9.96)] }] }, v2: { units: [{ id: 184, lines: text }], crops } }), {
+        prepByOrd: new Map([[184, prep]]),
+        todayOf: new Map([[184, 184]]),
+        turned: new Set(),
+        led: new Map(),
+        top: new Set(),
+        frame: null,
+        groups: [],
+        keptByGroup: new Set(),
+        folios: new Set(),
+      })
+    const star = [184, 318.05, 502.545, 322.88, 506.545, '2', 318.955, 502.545, 323.785, 506.545, N]
+    const dagger = [184, 327.75, 501.055, 332.15, 508.205, '-1', 326.265, 501.055, 330.665, 508.205, N]
+    const both = page([star, dagger])
+    expect([...of('scripts')(both), ...bothOf('scripts')(both)]).toEqual([])
+    expect(of('scripts')(page([star]))[0]).toMatchObject({ worse: true, today: { off: 0 }, v2: { off: 2 } })
+  })
   it('a crop drawn on another page carries the scripts of its source page: the paper\'s pass', () => {
     // (2608.16117v1 p3 t11: "The symbol (·)′" on A's page 3, its prime 4.33 pt over the line; both translations set the crop of
     // "(·)′" on page 4, where their text flows, at its rise over their line there)

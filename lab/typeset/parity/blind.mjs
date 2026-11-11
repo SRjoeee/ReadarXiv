@@ -248,8 +248,14 @@ export function scriptsPass(pages, recount = null) {
         let u = 0
         for (const s of p.blind.units[key].scripts) {
           if (kept.some((b) => inBox(s, b)) || (own && !own.some((b) => inBox(s, b)))) continue
-          // (a crop whose source meets the script and sets it as a script: an element's ink cut as one crop, or as several)
+          // (a crop whose source meets the script and sets it as a script: an element's ink cut as one crop, or as several. A run
+          // of PDF.js's may hold several marks TeX set apart (glue between: 1706.03762v7 p1 t184's "∗ †", one run, two elements),
+          // each cut as its own crop, the run's middle in the space between them: the crops cut from it, their source's middle in
+          // its box, that set it as a script carry it where they hold its middle between them)
           if (crops.some((c) => c.page === p.page && inBox(s, c.src) && cropSets(c, s))) continue
+          const cut = crops.filter((c) => c.page === p.page && inBox({ box: c.src }, s.box) && cropSets(c, s))
+          const mid = (s.box[0] + s.box[2]) / 2
+          if (cut.length > 1 && Math.min(...cut.map((c) => c.src[0])) - 0.5 <= mid && mid <= Math.max(...cut.map((c) => c.src[2])) + 0.5) continue
           u += s.n
         }
         left.set(p, u)
