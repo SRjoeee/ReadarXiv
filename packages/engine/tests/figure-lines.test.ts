@@ -661,6 +661,48 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
   })
 })
 
+describe('figure-lines: a path’s flush rows joined where the sentence goes on (option 3, the coordinator’s ruling of 2026-11-11)', () => {
+  const T = 'ArialMT'
+  /** a box round flush-left rows, `pad` to the right of its widest row, 5 to the left of them all */
+  const box = (rows: string[], pad: number) => {
+    const { page, fig } = pageOf(rows.map((text) => [{ text, font: T, x: 80 }]))
+    const g = page.glyphs as Glyph[]
+    const x1 = Math.max(...g.map((x) => x.x1)) + pad
+    fig.holds = [{ p: 1, b: 9, ks: rows.map((_, k) => k), shape: rect(75, 700 - 14 * rows.length, x1, 712) }]
+    return figureLinesOf([page], fig, () => false, null)
+      .filter((t) => t.ks.length > 1)
+      .map((t) => [t.ks, t.para?.align])
+  }
+  it('joins a bubble whose every break is forced and whose next row goes on in lower case (2608.06701v1 p2)', () => {
+    expect(box(['Update the core', 'import validation', 'logic to accept', 'override validation'], 5)).toEqual([
+      [[0, 1, 2, 3], 'l'],
+    ])
+    // (the first letter after a row's leading punctuation: "… to inspect the" goes on from the row above; the box 4 right of its
+    // widest row, "…" unable to stand after "load")
+    expect(box(['Open the relevant', 'portion, and load', '\u2026 to inspect the', 'validation checks'], 4)).toEqual([
+      [[0, 1, 2, 3], 'l'],
+    ])
+  })
+  it('joins no rows a capital, a digit or a symbol begins, and no break the box does not force', () => {
+    // (a value over a value, 2610.37668v1's overlays: each row a statement of its own)
+    expect(box(['PSNR 29.49 dB', 'LPIPS 0.1086', 'FPS 69.7'], 5)).toEqual([])
+    // (a list of short statements, a sentence of two rows among them, 2611.03178v1 p21)
+    expect(
+      box(
+        [
+          'Review: long traces dominate',
+          'Generate new tasks and traces;',
+          'repair failed traces.',
+          'Continue SFT from R2.',
+        ],
+        5,
+      ),
+    ).toEqual([[[1, 2], 'l']])
+    // (rows in a box wide enough for the next row's first word: no break forced, rows)
+    expect(box(['Update the core', 'import validation'], 80)).toEqual([])
+  })
+})
+
 describe('figure-lines: step 2, ink that is no text never keeps a figure text (the owner’s ruling; G2, 2026-11-11)', () => {
   const crowd = (fig: TodayFigures, k: number, items: TodayMet[]) => {
     fig.units[k]!.why = 'crowded'

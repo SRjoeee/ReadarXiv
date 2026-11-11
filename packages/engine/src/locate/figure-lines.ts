@@ -22,7 +22,7 @@ import {
 import type { DocGlyph } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
 import { classifyFont, lineEnd, TRACKING_SPACE_FACTOR } from './facts.ts'
-import { PARA_ALIGN_TOL, type ParaLine, parasOf, sameFace } from './figure-paras.ts'
+import { ledApart, PARA_ALIGN_TOL, type ParaLine, parasOf, sameFace } from './figure-paras.ts'
 
 /** a glyph as the figure reading reads one (pageInk's, a page of today's makers) */
 interface G {
@@ -348,41 +348,99 @@ function linesOf(
       const stacked = F.every(
         (f, n) => !n || (F[n - 1]!.y - f.y > 0.5 * f.size && F[n - 1]!.y - f.y - F[n - 1]!.band < F[n - 1]!.band),
       )
-      if (!stacked || !F.every((f) => sameFace(F[0]!, f)) || legendOf(h.shape, F, boxes)) continue
-      // (centred: the rows' centres one and their left edges not: rows of one length show no alignment, centred or flush)
-      if (spread((l) => (l.x0 + l.x1) / 2) > tol || spread((l) => l.x0) <= tol) continue
-      const align = 'c' as const
-      const ft: FigureText = {
-        ks: L.flatMap((l) => l.ks),
-        page: p,
-        order: [],
-        els: [],
-        label: [],
-        para: { justified: false, by: 'container', align },
-        claimed: rows.flatMap((r) => r.read.gs.filter((g) => r.l.free.has(g))),
-        copies: [],
-        textBoxes: [],
-        why: null,
-        container: null,
-        under: null,
+      const legend = legendOf(h.shape, F, boxes)
+      // (one text of the rows `sub` of the hold, set as `align`, its room the path's inside; the lines they hold taken)
+      const textOfRows = (sub: number[], align: 'l' | 'c' | 'r') => {
+        const rs = sub.map((n) => rows[n]!)
+        const ft: FigureText = {
+          ks: rs.flatMap((r) => r.l.ks),
+          page: p,
+          order: [],
+          els: [],
+          label: [],
+          para: { justified: false, by: 'container', align },
+          claimed: rs.flatMap((r) => r.read.gs.filter((g) => r.l.free.has(g))),
+          copies: [],
+          textBoxes: [],
+          why: null,
+          container: null,
+          under: null,
+        }
+        rs.forEach((r, n) => {
+          if (n) ft.order.push({ t: 'br', end: endOf(glyphs, rs[n - 1]!.read.gs, r.read.gs, sourceOf, true) })
+          piecesInto(ft, r.read, false)
+        })
+        const items = itemsOf(ft.ks)
+        if (items.length) judge(ft, items, glyphs)
+        // (torn reads the lines as the text reads them: its rows in place of the runs they merged)
+        const mine = idx.filter((i) => lines[i]!.ks.every((k) => ft.ks.includes(k)))
+        const others = [...lines.filter((_, i) => !mine.includes(i)), ...rs.map((r) => r.l)]
+        if (!ft.why && rs.some((r) => torn(ft, r.l, glyphs, loose, others))) ft.why = 'crowded'
+        if (!ft.container)
+          ft.container = roomIn(
+            h.shape,
+            ft.order.flatMap((o) => (o.t === 'text' ? o.glyphs : [])),
+            glyphs,
+          )
+        out.push(ft)
+        for (const i of mine) taken.add(i)
       }
-      rows.forEach((r, n) => {
-        if (n) ft.order.push({ t: 'br', end: endOf(glyphs, rows[n - 1]!.read.gs, r.read.gs, sourceOf, true) })
-        piecesInto(ft, r.read, false)
-      })
-      const items = itemsOf(ft.ks)
-      if (items.length) judge(ft, items, glyphs)
-      // (torn reads the lines as the text reads them: its rows in place of the runs they merged)
-      const others = [...lines.filter((_, i) => !idx.includes(i)), ...L]
-      if (!ft.why && L.some((l) => torn(ft, l, glyphs, loose, others))) ft.why = 'crowded'
-      if (!ft.container)
-        ft.container = roomIn(
-          h.shape,
-          ft.order.flatMap((o) => (o.t === 'text' ? o.glyphs : [])),
-          glyphs,
+      // (centred: the rows' centres one and their left edges not: rows of one length show no alignment, centred or flush)
+      const centred = spread((l) => (l.x0 + l.x1) / 2) <= tol && spread((l) => l.x0) > tol
+      if (stacked && F.every((f) => sameFace(F[0]!, f)) && !legend && centred) {
+        textOfRows(
+          rows.map((_, n) => n),
+          'c',
         )
-      out.push(ft)
-      for (const i of idx) taken.add(i)
+        continue
+      }
+      // (rows set flush in the path (option 3, the coordinator's ruling of 2026-11-11, taken to the owner): a row joins the row
+      // above where the break between them is one a wrap made and the sentence goes on. A wrap: the two rows one under the other
+      // with no blank line, in one face, not each led by ink of its own, and the break forced, the next row's first word unable to
+      // stand on the row above within the measure the path's inside gives it at that row's height, its inset on the flush side
+      // mirrored on the other (2608.06701v1 p2's bubbles; no geometric fact tells a box hugging its rows from one text was wrapped
+      // into, 99 of 2610.37668v1's 103 value overlays read forced too). The sentence goes on: the row above ends in TeX's or a
+      // word's hyphen (lineEnd), or this row's first letter, after any punctuation it opens with, is lower case ("… to inspect
+      // the"); a capital, a digit or a symbol begins a row of its own, a value under a value, a list's next statement, as today,
+      // and a script without case never joins. A box may so hold several paragraphs; a row alone stays its own text)
+      const side = spread((l) => l.x0) <= tol ? 'l' : spread((l) => l.x1) <= tol ? 'r' : null
+      if (!side || legend) continue
+      const segs = h.shape.segs as ArrayLike<number>
+      const firstWord = (r: { read: Read }) => {
+        const gs = r.read.gs.filter((g) => real(glyphs[g]!))
+        let x1 = glyphs[gs[0]!]!.x1
+        for (let i = 1; i < gs.length; i++) {
+          const g = glyphs[gs[i]!]!
+          if (g.x0 - x1 > SPACE_GAP * g.size) break
+          x1 = g.x1
+        }
+        return x1 - glyphs[gs[0]!]!.x0
+      }
+      const joins = rows.slice(1).map((r, k) => {
+        const a = F[k]!,
+          b = F[k + 1]!,
+          al = rows[k]!.l
+        if (!(a.y - b.y > 0.5 * b.size && a.y - b.y - a.band < a.band) || !sameFace(a, b) || ledApart(a, b))
+          return false
+        const y = al.y + 0.35 * al.size
+        const xs: number[] = []
+        for (let i = 0; i + 3 < segs.length; i += 4) {
+          const ay = segs[i + 1]!,
+            by = segs[i + 3]!
+          if (ay > y !== by > y) xs.push(segs[i]! + ((y - ay) * (segs[i + 2]! - segs[i]!)) / (by - ay))
+        }
+        const right = Math.min(...xs.filter((x) => x >= al.x1 - 0.5)),
+          left = Math.max(...xs.filter((x) => x <= al.x0 + 0.5))
+        if (!Number.isFinite(right) || !Number.isFinite(left)) return false
+        const inset = side === 'l' ? al.x0 - left : right - al.x1
+        const space = a.wordSpace ?? b.wordSpace ?? SPACE_GAP * al.size
+        if (!(al.x1 - al.x0 + space + firstWord(r) > right - left - 2 * inset)) return false
+        if (endOf(glyphs, rows[k]!.read.gs, r.read.gs, sourceOf, true) !== 'space') return true
+        return /^\p{Ll}/u.test(textOf(r.read.gs, glyphs).replace(/^[\p{P}\p{Z}]+/u, ''))
+      })
+      const groups: number[][] = [[0]]
+      joins.forEach((j, k) => (j ? groups.at(-1)!.push(k + 1) : groups.push([k + 1])))
+      for (const g of groups) if (g.length > 1) textOfRows(g, side)
     }
     // ---- F3: the lines of prose that are a paragraph's, one text; a line across a justified line's stretched space read whole
     // where the paragraph takes it
