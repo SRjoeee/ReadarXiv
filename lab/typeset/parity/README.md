@@ -46,6 +46,18 @@ On the maintainer's machine (shared with other lanes' jobs, 2026-11-08) the 22 p
 all); the drawing stops when the volume of `--work` or of `--out` has under 12 GiB free (`statfs`, on any platform), and the
 pairs it did not draw make the run incomplete.
 
+## The bundles a page was laid over (the guard, 2026-11-11)
+
+A v2 file names the bundles it was laid over (`bundle`: the SHA-256 of the paper's head.json and the folder; the head names the
+paper and every part and unit chunk by its own content digest, so two folders' heads are one digest only where they hold the same
+bundle). render.mjs and measure.mjs compare it with the bundles they serve (AXT_L1_BUNDLES) before anything is drawn or measured
+and stop, naming both, where they differ (inputs.mjs bundleCheck): drawn against another bundle's composed document, the reader
+unwraps every member whose wrap group that document does not hold, half a page shown as the original's (2026-11-11, a
+toggles-on drawing run without the bundles named), and a re-measure over the default bundles read 63 pages worse. A file of
+before the guard names none: it is drawn and measured with a warning in the log and in parity.json (`warnings`), so old sheets
+can still be re-measured. The field changes every v2 file's bytes: the flag-off byte identity with the sheets drawn before it
+ends here; from it on, two lays of the same inputs are byte-identical, and a file equals its predecessor's but for the field.
+
 ## The run judged whole
 
 render.mjs writes the run's manifest before it draws anything (`<work>/raw/run.json`: its id, the pairs and pages asked, not
@@ -308,7 +320,10 @@ would make it like-for-like). A member the prepare gives a reason (`why`) or the
 sends it nothing.
 
 `--fresh=cache` (the default) reads the cache alone: a wire it lacks is never fetched, the unit left as before (no row, or its
-stored row), and the log names how many (`freshMissing`); `--fresh=fill` fills it, slowly, and lays nothing; `--fresh=off`
+stored row), and the log names how many (`freshMissing`) and what a fill would ask, counted to the end of each unit (fresh.mjs
+needOf: its first wire, which a fill asks whatever comes back, and up to its runs floor's stretches, which it asks only where the
+reply is refused; the requests as the chain cuts them), so that the fill asks between the two counts; `--fresh=fill` fills it, slowly, and lays nothing, writing what it did beside the cache (`fills.jsonl`, one entry a run: wires
+asked, requests made, refused, still missing, 429s, the pairs touched, start and end; printed at its end); `--fresh=off`
 withholds every fresh row, which gives the sheet byte for byte as before this lane. v2.mjs's file records `fresh` (the
 members laid with a fresh translation) with `freshCause`, `freshRefused` (the translator refused it: left as before),
 `freshMissing`, and `freshNew` (sent, but today had no unit of it: nothing of today's to compare, each v2's own decision to
