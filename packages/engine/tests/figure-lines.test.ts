@@ -766,6 +766,35 @@ describe('figure-lines: step 2, ink that is no text never keeps a figure text (t
       [[1], null],
     ])
   })
+  it('draws an exact overprint once: the copy hidden with its text, no unit kept (2610.22214v1’s legend)', () => {
+    // (a legend's entry drawn twice on itself: each unit's room meets every glyph of the other, each the other's twin; the first
+    // text holds the second's glyphs as its copies, and ink.ts gives a run wholly its copies no text of its own: one translation)
+    const { page, fig } = pageOf([
+      [{ text: 'Grouping range:', font: T, x: 100 }],
+      [{ text: 'Grouping range:', font: T, x: 100, dy: 14 }],
+    ])
+    const g = page.glyphs as Glyph[]
+    const n = g.length / 2
+    const first = [...Array(n).keys()].filter((i) => !g[i]!.blank),
+      second = first.map((i) => i + n)
+    fig.units[1]!.y = fig.units[0]!.y
+    crowd(
+      fig,
+      0,
+      second.map((i) => ({ g: i })),
+    )
+    crowd(
+      fig,
+      1,
+      first.map((i) => ({ g: i })),
+    )
+    const texts = figureLinesOf([page], fig, () => false, null)
+    expect(texts.map((t) => [t.ks, t.why])).toEqual([
+      [[0], null],
+      [[1], null],
+    ])
+    expect(texts[0]!.copies.sort((a, b) => a - b)).toEqual(second)
+  })
   it('keeps a text drawn twice: a copy of its string a little off it, or a pale copy under it (2610.21313v1)', () => {
     // (two copies of one label 0.7 of the size apart, each the other's ink: both kept, never two translations over each other)
     const twice = (dx: number, dy: number, fill?: number) => {
@@ -781,7 +810,7 @@ describe('figure-lines: step 2, ink that is no text never keeps a figure text (t
       return figureLinesOf([page], fig, () => false, null).filter((t) => !t.why)
     }
     expect(twice(7, 3.5)).toEqual([])
-    // ("Psum Buffer" under a pale copy of itself, 2.4 pt up and across)
+    // ("Psum Buffer" under a pale copy of itself, 2.4 pt up and across: within half its size, but another fill, no overprint)
     expect(twice(2.4, 2.4, 0xcccccc)).toEqual([])
   })
 })

@@ -115,7 +115,7 @@ export function figureLinesOf(
   try {
     const out = linesOf(pages, fig, owned, fixed, textFaces)
     // (a text drawn twice keeps the original's: one of its units has its double, doubledOf; the only ink that keeps a figure text)
-    const doubled = doubledOf(fig)
+    const doubled = doubledOf(fig, pages)
     for (const t of out)
       if (t.why === null && t.ks.some((k) => doubled.has(k))) {
         t.why = 'crowded'
@@ -174,12 +174,41 @@ const count = (k: keyof NonNullable<LinesWork['kept']>) => {
 /**
  * The figure units drawn twice: another unit of its page of the same text (its white space aside), its origin within the text's
  * size of this one's across and up, the two boxes overlapping (2610.21313v1's "Psum Buffer" under a pale copy of itself, 2.4 and
- * 4.8 pt off, its "SAMA" three times; 2610.21924v1's "CONDITIONAL RESCUE" 0.16 pt across, a bold by overprint). Both are kept the
- * original's: translated, each would be drawn over the other
+ * 4.8 pt off, its "SAMA" three times). Both are kept the original's: translated, each would be drawn over the other. A pair whose
+ * glyphs are each other's twins by the relation reading's test (the same character overlapping across, within half its size up
+ * or down) in one face, size and fill is an overprint (2610.22214v1's legend drawn on itself, 2610.21924v1's "CONDITIONAL RESCUE"
+ * 0.16 pt across, a bold): the copy is hidden with its text, one translation drawn (judge's `copies`), none kept
  */
-function doubledOf(fig: TodayFigures): Set<number> {
+function doubledOf(fig: TodayFigures, pages: readonly TodayPage[]): Set<number> {
   const out = new Set<number>()
   const by = new Map<string, TodayFigures['units']>()
+  // (a level unit's glyphs along x, real ones: its page's, by today's map)
+  const gsOf = new Map<number, number[]>()
+  fig.glyphs.forEach((map, pi) => {
+    const G = (pages[pi]?.glyphs ?? []) as G[]
+    for (const [g, k] of map) if (real(G[g]!)) (gsOf.get(k) ?? gsOf.set(k, []).get(k)!).push(g)
+    for (const [k, gs] of gsOf) if (G[gs[0]!]) gs.sort((a, b) => G[a]!.x0 - G[b]!.x0)
+  })
+  const twins = (u: TodayFigures['units'][number], v: TodayFigures['units'][number]) => {
+    const p = (u as { page?: number }).page ?? 1
+    const G = (pages[p - 1]?.glyphs ?? []) as G[]
+    const a = gsOf.get(u.k) ?? [],
+      b = gsOf.get(v.k) ?? []
+    if (!a.length || a.length !== b.length) return false
+    return a.every((ga, i) => {
+      const x = G[ga]!,
+        y = G[b[i]!]!
+      return (
+        x.u === y.u &&
+        x.font === y.font &&
+        Math.abs(x.size - y.size) <= 0.01 * x.size &&
+        (x.fill ?? 0) === (y.fill ?? 0) &&
+        (x.ix1 ?? x.x1) > (y.ix0 ?? y.x0) &&
+        (x.ix0 ?? x.x0) < (y.ix1 ?? y.x1) &&
+        Math.abs(x.y - y.y) <= 0.5 * x.size
+      )
+    })
+  }
   for (const u of fig.units) {
     const t = (u.text ?? '').replace(/\s+/gu, '')
     if (!t || u.x === undefined || u.y === undefined) continue
@@ -187,7 +216,7 @@ function doubledOf(fig: TodayFigures): Set<number> {
     const list = by.get(key) ?? by.set(key, []).get(key)!
     for (const v of list) {
       const size = Math.max((u as { size?: number }).size ?? 10, (v as { size?: number }).size ?? 10)
-      if (Math.abs(u.x - v.x!) < size && Math.abs(u.y - v.y!) < size) {
+      if (Math.abs(u.x - v.x!) < size && Math.abs(u.y - v.y!) < size && !twins(u, v)) {
         out.add(u.k)
         out.add(v.k)
       }
