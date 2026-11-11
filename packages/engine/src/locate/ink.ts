@@ -3,8 +3,9 @@
 // figure (figure texts), cut and kinded by today's rule — today's ledger, inkUnitsOf, keptUnitsOf and figureUnitsOf (copied as
 // they are under ./today, held equal to today's by tests/pdf-reader/locate-ink-today.test.ts) — run over A's page in place of
 // B's: A's glyphs, each owned where a source unit owns it (its partner's owner on B, or locate's claim: a located member's, a held
-// glyph), every other free, those B never printed among them (a figure's text inside its form where B is a draft, a supplement);
-// and B's marks (its points, paragraphs and their ends, regions, pictures) carried onto A's stream through the mapping. What the
+// glyph), every other free, those B never printed among them (a page our compile never makes, a second top-level file's; on a
+// page it sets, a glyph it never printed is arXiv's ink, which the figure reading takes none of: `ARXIV_INK`); and B's marks
+// (its points, paragraphs and their ends, regions, pictures) carried onto A's stream through the mapping. What the
 // instrument states is source units alone: these are made here, each a unit of today's shape (its id format's unitId over its
 // kind and content, today's id; an ink unit's echo, its alignment as TeX set its paragraph, a figure text's set and direction,
 // a kept block fixed) with its ink on A.
@@ -43,6 +44,11 @@ import {
   UNIT_FLAG,
 } from './today/today.types.ts'
 
+/** the owner the figure reading's input gives arXiv's ink (PDF-READER §18.27): on a page of A our compile sets, a glyph it never
+ *  printed — arXiv's margin stamp, which its newer pages show inside a form of arXiv's — is no text the paper's TeX set, and so
+ *  no figure glyph: never a unit, never sent, erased or lit, the page's ink where it stands */
+const ARXIV_INK = 'a'
+
 /** a figure text's anchor as an alignment: its start's, its centre's, its end's (Placed.align) */
 const ALIGN_OF = { start: 'l', centre: 'c', end: 'r' } as const
 
@@ -77,6 +83,8 @@ export interface InkInput {
   pageA: Int32Array
   /** whether a glyph of A (global) is a source unit's: its partner's owner on B, a located member's claim, a held glyph */
   owned: (a: number) => boolean
+  /** the pages of A our compile sets (align.ts setPagesOf): on one, a glyph with no partner on B is arXiv's ink */
+  setA: readonly boolean[]
   /** what the front half reads of an ink unit's pieces (today's classesOf, the instrument adapter's), where it is given */
   classesOf?: ((pieces: TodayPiece[]) => [string, PieceClass][]) | undefined
   /** whether glyphs (A's, global; a figure text's turned ones by [page, index]) are an artefact: set wholly in a face of one
@@ -131,6 +139,12 @@ export function inkOf(o: InkInput): {
       const ap = m.turnedPage[p]?.[j] ?? 0
       if ((ow.unit[j] as number) >= 0 && ap > 0) turnedOwned[ap - 1]![m.turnedIndex[p]![j] as number] = 'u'
     }
+  })
+  // (arXiv's ink, turned: on a page our compile sets, a turned glyph with no partner on B, whose form flag is A's alone (arXiv's
+  // stamp: turned up page 1's margin, in a form of arXiv's). The figure reading alone reads a turned glyph's owner)
+  turnedOwned.forEach((row, i) => {
+    if (!o.setA[i]) return
+    for (let j = 0; j < row.length; j++) if (row[j] === null && turnedForm[i]![j] === null) row[j] = ARXIV_INK
   })
   // (whether a glyph is shown in an included figure, and which: its partner's on B, where it has one, as TeX included it; arXiv's
   // producer may have flattened the figure's form)
@@ -211,10 +225,17 @@ export function inkOf(o: InkInput): {
 
   // ---- today's sequence (pipeline/instrument.mjs, wrapFinal's): the figure texts of what no unit owns, the ledger with them
   // owned, the ink units, their claims, then the kept blocks of what is left
-  // (the block's ink is no figure's text, though TeX drew it in the picture its title is in: a framed title box)
-  const figOwn = own.glyphs.map((row, i) =>
-    framed?.page === i ? row.map((x, g) => x ?? (framed.has(g) ? 'b' : null)) : row,
-  )
+  // (the block's ink is no figure's text, though TeX drew it in the picture its title is in: a framed title box. Nor is arXiv's
+  // ink, a level glyph with no partner on B on a page our compile sets; the ledger reads it as before, free: inside a unit our
+  // compile set it makes that unit a content difference (locate.ts), and a line of it alone in a form is the class `figures`)
+  const figOwn = own.glyphs.map((row, i) => {
+    const block = framed?.page === i
+    if (!block && !o.setA[i]) return row
+    const at = m.offA[i] as number
+    return row.map(
+      (x, g) => x ?? (block && framed.has(g) ? 'b' : o.setA[i] && (m.aToB[at + g] as number) < 0 ? ARXIV_INK : null),
+    )
+  })
   const fig = figureUnitsOf(pages, { glyphs: figOwn }, { done: shapesRead, fixed: o.fixed ?? null })
   // (the figure texts its printed lines make anew, F0's, and those the relation reading judges anew: figure-lines.ts, PDF-READER
   // §18.26. A run of none stays as today's reading made it)

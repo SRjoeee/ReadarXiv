@@ -322,6 +322,23 @@ export function fakedCaps<G extends StyleGlyph>(
   }
 }
 
+/**
+ * An element's faked small capitals, read off its own glyphs as an ink unit's are (fakedCaps' `ink` rule, the faces NFSS fakes
+ * them in: every cased glyph a capital, one at most SMALL_CAPS_SHARE of its full letters' size a small one): its glyphs with each
+ * small one its source's lowercase letter, TeX's case, and their share, `ratio` (El.style.sc). PDF.js reads a faked small capital
+ * as the capital it is drawn as, so an element's text read off its glyphs was in full capitals: 2608.06701v1's `\approach`,
+ * "LIVEPLAN", L and P at 9.96 pt, IVE and LAN at 7.97, drawn by the typesetter in full capitals at the run's size. Its glyphs
+ * alone tell: an acronym, every capital at one size, has none ("BERT"); nor has an element every capital of which is small,
+ * which no full letter of its own measures (none of the 88)
+ */
+export function elementCase<G extends DocGlyph>(gs: readonly G[]): { glyphs: readonly G[]; ratio?: number } {
+  const caps = fakedCaps(gs, null, true)
+  if (!caps.small.size || caps.ratio === undefined) return { glyphs: gs }
+  // (each a glyph of its own kind with its letter changed, glyph.ts glyphWith: a spread of a page's glyph holds none of its
+  // coordinates, and the text read off it no space)
+  return { glyphs: gs.map((g) => (caps.small.has(g) ? glyphWith(g, { u: g.u.toLowerCase() }) : g)), ratio: caps.ratio }
+}
+
 /** an element's fill (B14, maker `fillOfGlyphs` MAKE:1123): the colour more than half its glyphs are filled with, where it is
  *  not black; undefined else */
 export function fillOfGlyphs(gs: readonly DocGlyph[]): number | undefined {

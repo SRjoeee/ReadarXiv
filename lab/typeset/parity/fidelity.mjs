@@ -33,8 +33,8 @@ export const SCRIPT_SIZE = 0.85
 export const LEAD_SHARE = 0.05
 /** an accent set apart (TeX's \accent: a modifier symbol or letter, or a combining mark, alone in its run) is no script */
 export const ACCENT = /^[\p{Sk}\p{Lm}\p{M}\s]+$/u
-/** a cased letter (Unicode: it has another case) */
-const cased = (ch) => ch.toLowerCase() !== ch.toUpperCase()
+/** a letter of any script, cased or not (Unicode L) */
+const LETTER = /^\p{L}$/u
 /** a text by its letters and digits, case aside: what a drawn text and its source are compared by (`groups`, `shown`) */
 export const bare = (s) => String(s ?? '').normalize('NFC').replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase()
 
@@ -52,8 +52,8 @@ export function runsIn(runs, boxes) {
 /**
  * A text's original style and size, read off arXiv's glyphs in its lines' boxes (`runs` render.mjs's, `fonts` their PDF font
  * names): the share of its characters (white space and math fonts' aside) set in a bold and in a slanted face, and its size,
- * the size TeX was asked for: its largest cased letter's (faked small capitals set the capitals at it and the rest smaller;
- * a script is smaller, never larger), else the median character's. `except`: boxes whose glyphs are no characters of the
+ * the size TeX was asked for: its largest letter's (faked small capitals set the capitals at it and the rest smaller; a script
+ * is smaller, never larger; measure-dom.mjs reads a drawn line by the same definition), else the median character's. `except`: boxes whose glyphs are no characters of the
  * text's (an element it keeps as the original's ink, which the drawn text's share leaves uncounted alike). null where no glyph
  * stands there
  */
@@ -73,7 +73,7 @@ export function originalOf(runs, fonts, boxes, except = []) {
     if (c.bold) bold += n
     if (c.italic) italic += n
     for (let i = 0; i < n; i++) sizes.push(r[5])
-    if ([...r[7]].some(cased)) big = Math.max(big, r[5])
+    if ([...r[7]].some((ch) => LETTER.test(ch))) big = Math.max(big, r[5])
   }
   if (!chars) return null
   sizes.sort((a, b) => a - b)
@@ -447,7 +447,9 @@ export function measureFidelity(c) {
     if (v === 'mixed') fault('v2', 'groups', `${g.group}: its cells part translated, part the original's`)
     // (a group both sides draw the same, kept on both or translated on both, is no difference; one drawn otherwise than today
     // decides is worse)
-    if (t !== v) diff('groups', `group ${g.group}`, "a table's grid group translated or kept whole, as today decides (the owner's ruling)", 'whole', { value: t, off: t === 'mixed' ? 1 : 0 }, { value: v, off: 1 }, true, 'today')
+    // (a group holding a cell v2 is laid with a fresh row of names its cells, so that the difference is tagged: verdict.mjs tagFresh)
+    const named = c.freshKeys && cells.some(({ key }) => c.freshKeys.has(key)) ? { cells: cells.map(({ key }) => key) } : undefined
+    if (t !== v) diff('groups', `group ${g.group}`, "a table's grid group translated or kept whole, as today decides (the owner's ruling)", 'whole', { value: t, off: t === 'mixed' ? 1 : 0 }, { value: v, off: 1 }, true, 'today', named)
     // (a group today's decision kept whole reaches v2 as no rows: the stored rows hold no translation of its cells, so v2's own
     // decision is not exercised there and what v2 draws is today's decision. Recorded apart, as the ruling's are: never worse,
     // never nearer; a run over rows that hold the translator's answers for those cells exercises it)
@@ -593,7 +595,10 @@ export function judgeJoined(c, pairs, todays, what) {
       const s = ls.map((l) => l.size).sort((x, y) => x - y)
       return s[s.length >> 1]
     }
-    if (os) judge('size', nm, `${what}: size off the original's (share of it)`, r2(os), { value: r2(med(tl)), d: Math.abs(1 - med(tl) / os) }, { value: r2(med(vl)), d: Math.abs(1 - med(vl) / os) }, SIZE_STEP / 2)
+    // (the size the fit gives a text: `fresh` where v2 is laid with a fresh row of the member or of one its size tie holds (a
+    // figure's set), verdict.mjs judgeText)
+    const jt = c.textJudge?.(ord) ?? judge
+    if (os) jt('size', nm, `${what}: size off the original's (share of it)`, r2(os), { value: r2(med(tl)), d: Math.abs(1 - med(tl) / os) }, { value: r2(med(vl)), d: Math.abs(1 - med(vl) / os) }, SIZE_STEP / 2)
     if (!a) continue
     for (const st of ['bold', 'italic']) {
       const share = (ls) => ls.reduce((s, l) => s + l[st], 0) / Math.max(1, ls.reduce((s, l) => s + l.n, 0))

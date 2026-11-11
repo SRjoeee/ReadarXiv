@@ -2016,51 +2016,163 @@ describe('a theorem-like head in the target, laid as the reader lays a page (PDF
   })
 })
 
-describe('a small-capitals unit’s element in the page’s faked small capitals (triage S6)', () => {
-  // (a heading TeX sets in faked small capitals (Style.sc 0.8 at 10 pt), its paper's macro's text all capitals at the small
-  // capitals' size, 8 pt (El.style): today drew it in the layer's small capitals at the unit's capsRatio (smallCapsAt over
-  // its characters, each set at most SMALL_CAPS_SHARE of the unit's size), never in full capitals at the unit's size)
-  const id = 'h'.repeat(64)
-  const heading = (elSize: number) =>
-    member({
-      kind: 'heading',
-      text: id,
-      align: 'c',
-      style: { role: 'serif', size: 10, sc: 0.8, design: 'NimbusRomNo9L-Regu' },
+describe('an element drawn as the page’s text in the font state TeX set its glyphs in (El.style)', () => {
+  // (2608.06701v1 p5: `\periodicadvisor`, "Periodic Advisor", which the paper's macro sets in italic, was drawn upright in the
+  // run's style, and `\approach`, "LIVEPLAN" in faked small capitals (L and P at 9.96 pt, IVE and LAN at 7.97), in full
+  // capitals at 9.96: an element took the typewriter family alone of its own style, and small capitals only where its unit was
+  // set in them, every capital of it small (triage S6). An element is text no translation replaces: its weight, its slant and
+  // its small capitals are its own glyphs' (El.style), over the surrounding run's; the run's where it states none)
+  const look = (f: string) => (/^italic /.test(f) ? 'italic' : /^[6-9]00 /.test(f) ? 'bold' : 'regular')
+  const el = (text: string, x: number, style?: El['style']): El => ({
+    kind: 'umacro',
+    ink: [[1, x, 698, x + 30, 706, 700]],
+    text,
+    ...(style ? { style } : {}),
+  })
+  const items = (m: Placed, content: OutPiece[], to = 'de') => {
+    const r: Row = { id, ok: true, by: 'test', content }
+    const [laid] = layPage(part(m), rowsOf([r], true), to === 'de' ? rules : rulesFor(to), metrics()).members
+    expect(laid!.state).toBe('laid')
+    return laid!.lines.flatMap((l) => l[3]).flatMap((it) => ('face' in it && /\S/.test(it.s) ? [it] : []))
+  }
+  const words = (m: Placed, content: OutPiece[]) =>
+    items(m, content).flatMap((it) =>
+      it.s
+        .trim()
+        .split(/\s+/)
+        .map((w) => [w, look(it.face)]),
+    )
+  it('draws an element in its own slant and weight, over the run’s', () => {
+    const m = member({
       els: [
-        [
-          '0',
-          {
-            kind: 'umacro',
-            ink: [[1, 100, 698, 140, 706, 700]],
-            text: 'ACME',
-            style: { role: 'serif', size: elSize, upper: 1, design: 'NimbusRomNo9L-Regu' },
-          },
-        ],
+        ['1', el('Periodic Advisor', 100, { role: 'serif', size: 10, slant: 1, design: 'NimbusRomNo9L-ReguItal' })],
+        ['3', el('BERT', 150, { role: 'serif', size: 10, bold: 1, design: 'NimbusRomNo9L-Medi' })],
       ],
-      lines: [[1, 0, 100, 200, 700, 707, 698, 72, 300, 0, 8]],
-      room: { below: 12, next: 20, side: [72, 300] },
     })
-  const sizeOf = (elSize: number) => {
+    expect(
+      words(m, [
+        { t: 'text', s: 'Wir nutzen ' },
+        { t: 'el', id: '1' },
+        { t: 'text', s: ' und ' },
+        { t: 'el', id: '3' },
+        { t: 'text', s: ' hier.' },
+      ]),
+    ).toEqual([
+      ['Wir', 'regular'],
+      ['nutzen', 'regular'],
+      ['Periodic', 'italic'],
+      ['Advisor', 'italic'],
+      ['und', 'regular'],
+      ['BERT', 'bold'],
+      ['hier.', 'regular'],
+    ])
+  })
+  it('keeps the run’s style on an element that states none of its own; one that states its own is drawn so inside a group', () => {
+    // (an \emph group around two elements: one of no stated style takes the group's italic; one whose glyphs TeX set upright,
+    // `\textup`, is upright in it, as its glyphs are)
+    const m = member({
+      spans: [['2', { cmd: 'emph' }]],
+      els: [
+        ['4', el('ACME', 100)],
+        ['6', el('Zeta', 150, { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' })],
+      ],
+    })
+    expect(
+      words(m, [
+        { t: 'text', s: 'Ein ' },
+        {
+          t: 'span',
+          id: '2',
+          content: [
+            { t: 'text', s: 'Wort ' },
+            { t: 'el', id: '4' },
+            { t: 'text', s: ' und ' },
+            { t: 'el', id: '6' },
+          ],
+        },
+        { t: 'text', s: ' hier' },
+      ]),
+    ).toEqual([
+      ['Ein', 'regular'],
+      ['Wort', 'italic'],
+      ['ACME', 'italic'],
+      ['und', 'italic'],
+      ['Zeta', 'regular'],
+      ['hier', 'regular'],
+    ])
+  })
+  // (an element in faked small capitals, as the part states it: its text in TeX's case, each small capital its source's
+  // lowercase letter, and the share it is set at, El.style.sc)
+  // (each run of the element and its size over the run's, the text around it laid at the size its fit gives it)
+  const sizes = (m: Placed, k: string) => {
+    const got = items(m, [
+      { t: 'text', s: 'Wir ' },
+      { t: 'el', id: k },
+      { t: 'text', s: ' hier' },
+    ])
+    const run = got.find((it) => /Wir/.test(it.s))!
+    const of = (it: Item) => ('size' in it && 'size' in run ? Math.round((100 * it.size) / run.size) / 100 : 0)
+    return got.filter((it) => !/Wir|hier/.test(it.s)).map((it) => [it.s.trim(), of(it)])
+  }
+  const liveplan = (x = 100) => el('LivePlan', x, { role: 'serif', size: 10, sc: 0.7, design: 'NimbusRomNo9L-Regu' })
+  it('draws an element in its own faked small capitals in a paragraph: its capitals at the run’s size, its small ones at its share', () => {
+    expect(sizes(member({ els: [['1', liveplan()]] }), '1')).toEqual([
+      ['L', 1],
+      ['IVE', 0.7],
+      ['P', 1],
+      ['LAN', 0.7],
+    ])
+  })
+  it('waits for an element’s own face as for a run’s: the page’s faces hold it, never a face the run alone needs', () => {
+    // (an element drawn in its own face is a face the page needs: the lay asks it of the metrics (B.cover over every token) and
+    // the page waits for it (Page.wait.faces), as for any run's, so the reader loads its slices before it measures and paints.
+    // Drawn in the run's face before, an element's own face was never asked)
+    const m = member({
+      els: [
+        ['1', el('Periodic Advisor', 100, { role: 'serif', size: 10, slant: 1, design: 'NimbusRomNo9L-ReguItal' })],
+      ],
+    })
     const r: Row = {
       id,
       ok: true,
       by: 'test',
       content: [
-        { t: 'el', id: '0' },
-        { t: 'text', s: ' \u65b9\u6cd5' },
+        { t: 'text', s: 'Wir ' },
+        { t: 'el', id: '1' },
+        { t: 'text', s: ' hier' },
       ],
     }
-    const [laid] = layPage(part(heading(elSize)), rowsOf([r], true), rulesFor('zh'), metrics()).members
-    return laid!.lines[0]![3].filter((it) => 'face' in it && /ACME/.test(it.s)).map((it) =>
-      'size' in it ? it.size : 0,
+    const page = layPage(
+      part(m),
+      rowsOf([r], true),
+      rules,
+      metrics((face) => !/^italic /.test(face)),
     )
-  }
-  it('draws it at the unit’s capsRatio', () => {
-    expect(sizeOf(8)).toEqual([8])
+    // (each face with the characters it sets, once each: the element's own)
+    expect(page.wait.faces.map(([face, text]) => [/^italic /.test(face), text])).toEqual([
+      [true, [...new Set('Periodic Advisor')].join('')],
+    ])
+    expect(page.members.map((x) => x.state)).toEqual(['waiting'])
   })
-  it('draws an element of full capitals (an acronym at the unit’s size) at its size', () => {
-    expect(sizeOf(10)).toEqual([10])
+  it('draws it so in a small-capitals heading, at its own share; an acronym of full capitals at the run’s size', () => {
+    const heading = (e: El) =>
+      member({
+        kind: 'heading',
+        align: 'c',
+        style: { role: 'serif', size: 10, sc: 0.8, design: 'NimbusRomNo9L-Regu' },
+        els: [['0', e]],
+        lines: [[1, 0, 100, 200, 700, 707, 698, 72, 300, 0, 8]],
+        room: { below: 12, next: 20, side: [72, 300] },
+      })
+    expect(sizes(heading(liveplan()), '0')).toEqual([
+      ['L', 1],
+      ['IVE', 0.7],
+      ['P', 1],
+      ['LAN', 0.7],
+    ])
+    expect(
+      sizes(heading(el('ACME', 100, { role: 'serif', size: 10, upper: 1, design: 'NimbusRomNo9L-Regu' })), '0'),
+    ).toEqual([['ACME', 1]])
   })
 })
 
