@@ -3792,7 +3792,8 @@ wherever any ink met its band, a frame round a citation in a sentence as much as
   one (a highlight set word by word, 2610.40576v1 p17, 2411.13093v4 p19); a closed shape holding the whole text is its container,
   its room the inside (Room.over and Room.under, the set shrunk to stay under `over`); a flat stroke under two glyphs or more of
   whole words an underline; anything else unrelated, and the text stays crowded, the original's. A tone that is none of these
-  stays ground; a tone under a text kept whole is nothing to it.
+  stays ground; a tone under a text kept whole is nothing to it. Since F3's step 2 (§18.30) only another text's glyph is
+  unrelated ink that keeps a text: a shape or a line about it never does.
 - **Over the 91** (stage 1a f0f at a30b9c769, against round 8 B3's r11 on the 88; I6 the same, 2,855 objects): 48 figure texts
   hold 56 runs of one pitch as elements, on 6 papers (2610.19159v1's titles and their paths, 2611.03178v1 p1's "Project Page:" and
   its address, 2608.06701v1's actions, 2610.22197v1's labels, 2609.19644v1's `tzcnt`); 100 hold 155 decorations, on 4 papers
@@ -4034,8 +4035,11 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
   that goes with its words (2608.06701v1 p9's code chips, 0.96 of the size, where 2608.06007v1 p8's nodes stand at 1.5 and
   more), and other ink inside, a stroke or a legend's samples, is no reason. The runs it holds on one baseline are one line,
   however far apart their words stand: the path holds them together. Its lines are one text where they read as a node sets its
-  label: one under the other with no blank line between, in one face, size, weight and fill, no line an item's, and centred; its
-  room the path's inside. Lines set flush in a path are its rows (a value over a value, 2610.37668v1's PSNR / LPIPS / FPS over
+  label: one under the other with no blank line between, in one face, size, weight and fill, no line an item's, no legend's
+  entries (two rows or more each beside ink of its own inside the path, within its band: a sample, a marker; a neighbouring
+  node's edge outside the path is none), and centred: the rows' centres one and their left edges not, for rows of one length
+  show no alignment ("plain-18" over "plain-34" in a framed legend, "56-layer" over "20-layer" beside two curves, 1512.03385v1);
+  its room the path's inside. Lines set flush in a path are its rows (a value over a value, 2610.37668v1's PSNR / LPIPS / FPS over
   each image; a legend's entries): no fact of the geometry tells a box hugging its rows from one text was wrapped into (the
   bubbles of 2608.06701v1 p2 are set ragged at their natural spaces, every break forced by the path's width, as are 99 of 37668's
   103 overlays), and whether such rows join is the owner's, on real pages. A word broken in a node with no hyphen is joined where
