@@ -382,6 +382,28 @@ describe('the client: the follow and the open', () => {
     await expect(at(new Response('', { status: 426 }))).rejects.toMatchObject({ why: 'update' })
     await expect(at(new Response('', { status: 404 }))).rejects.toMatchObject({ why: 'not-found' })
   })
+  it("a refusal's time as our server names it: the instant its period ends (`retryAt`, its clock's), read as it is, and the wait beside it", async () => {
+    const at = (r: Response) => open({ fetch: async () => r, paper: { id: '2401.01234', version: 1 }, target: 'ja' })
+    // (21:00:00 at Shanghai, 2026-11-11: the hour's end, exactly)
+    const end = Date.UTC(2026, 10, 11, 13, 0, 0)
+    expect(
+      await at(new Response(JSON.stringify({ refused: { why: 'quota', retryAt: end, retryAfterS: 2570 }, doc: DOC }))),
+    ).toMatchObject({ refused: { why: 'quota', afterMs: 2_570_000, at: end } })
+    // (its wait to the millisecond where our server names it so: the session's own ask at the instant, not a rounded second on)
+    expect(
+      await at(
+        new Response(
+          JSON.stringify({
+            refused: { why: 'quota', retryAt: end, retryAfterS: 2570, retryAfterMs: 2_569_592 },
+            doc: DOC,
+          }),
+        ),
+      ),
+    ).toMatchObject({ refused: { why: 'quota', afterMs: 2_569_592, at: end } })
+    // (one that names no instant, an older server's: none, its wait alone)
+    const old = await at(new Response(JSON.stringify({ refused: { why: 'busy', retryAfterS: 30 }, doc: DOC })))
+    expect(old.refused).toEqual({ why: 'busy', afterMs: 30_000, at: null })
+  })
 })
 
 /**

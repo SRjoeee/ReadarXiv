@@ -70,9 +70,10 @@ export interface StateWords {
   htmlLink?: (href: string) => { href: string; label: string } | null
   /** the paper too large to prepare (R.status.noPdf) */
   tooLarge?: string
-  /** our server out of reach for now (R.status.notNow) */
+  /** our server out of reach for now (R.status.notNow); `retryAt`: the time to say, null for none (the chrome's to decide: while
+   *  it is to come, or while the session will ask by itself at it until that ask begins, status.ts capsuleOf) */
   notNow?: (retryAt: number | null) => string
-  /** at the limit of new papers (R.status.limited) */
+  /** at the limit of new papers (R.status.limited); `retryAt` as `notNow`'s */
   limited?: (retryAt: number | null) => string
   /** the visitor's rate of asks, the reader asking again by itself at its time (R.status.limited) */
   rate?: string

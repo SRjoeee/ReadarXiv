@@ -199,6 +199,7 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}, o: { bus
         heading: null,
       },
       reconnecting: false,
+      network: false,
       faces: null,
       crashed: false,
     } as ReaderState

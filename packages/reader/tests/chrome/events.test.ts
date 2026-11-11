@@ -32,6 +32,7 @@ const base: ReaderState = {
     heading: null,
   },
   reconnecting: false,
+  network: false,
   faces: null,
   crashed: false,
 }

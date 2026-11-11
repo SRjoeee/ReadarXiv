@@ -86,6 +86,7 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
       event: 'fetch failed',
       text: `the original could not be read (${o.why})`,
       kind: 'network',
+      ...(o.self ? { self: true as const } : {}),
     })
   const v = next.view
   if (!p || p.view.display !== v.display) out.push({ type: 'display', mode: v.display })
@@ -116,10 +117,20 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
         ...(l.asOriginal ? { original: l.asOriginal } : {}),
       })
   }
-  // (a refusal told again with another time is told again: the time said is the last our server named)
-  if (l.s === 'refused' && (pl?.s !== 'refused' || pl.why !== l.why || pl.retryAt !== l.retryAt))
-    out.push({ type: 'unavailable', why: LAYER_WHY[l.why] ?? 'unreachable', retryAt: l.retryAt })
-  if (!!p?.reconnecting !== !!next.reconnecting) out.push({ type: 'link', reconnecting: !!next.reconnecting })
+  // (a refusal told again with another time is told again: the time said is the last our server named; and where the session
+  // stops asking it again by itself, or starts to)
+  if (
+    l.s === 'refused' &&
+    (pl?.s !== 'refused' || pl.why !== l.why || pl.retryAt !== l.retryAt || !!pl.self !== !!l.self)
+  )
+    out.push({
+      type: 'unavailable',
+      why: LAYER_WHY[l.why] ?? 'unreachable',
+      retryAt: l.retryAt,
+      ...(l.self ? { self: true as const } : {}),
+    })
+  if (!!p?.reconnecting !== !!next.reconnecting || !!p?.network !== !!next.network)
+    out.push({ type: 'link', reconnecting: !!next.reconnecting, network: !!next.network })
   // the translation under way is what the view shown waits for (reader.ts `waits`, session/rows.ts viewOf), counted over the layer
   // it shows: rows read of a run done, a run that restates rows held, one on units of a layer not shown, are told by their end
   // alone. The view's wait over while the rows still come (every unit shown holds its translation) is its end
@@ -142,7 +153,7 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
       lost: r.lost,
       stopped: r.stopped ? kindOf(r.stopped) : null,
     })
-  if (r.s === 'failed' && (pr?.s !== 'failed' || pr.why.kind !== r.why.kind || recount)) {
+  if (r.s === 'failed' && (pr?.s !== 'failed' || pr.why.kind !== r.why.kind || recount || !!pr.self !== !!r.self)) {
     if (r.why.kind === 'target') {
       if (pr?.s !== 'failed' || pr.why.kind !== 'target')
         out.push({ type: 'unavailable', why: 'target', retryAt: null })
@@ -154,6 +165,7 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
         lost: r.lost,
         stopped: kindOf(r.why),
         retryAt: r.retryAt ?? null,
+        ...(r.self ? { self: true as const } : {}),
       })
   }
   return out

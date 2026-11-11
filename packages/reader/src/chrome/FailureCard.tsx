@@ -79,7 +79,7 @@ export function FailureCard({ controller, of = 'pane' }: { controller: ReaderCon
       )}
       {card.action === 'settings' ? (
         parts.slots.card?.('settings')
-      ) : (
+      ) : card.action === null ? null : (
         <button
           type="button"
           aria-disabled={waiting || undefined}

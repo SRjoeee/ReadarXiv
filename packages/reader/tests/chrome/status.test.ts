@@ -480,16 +480,18 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
       { kind: 'unavailable', text: 'no pdf' },
       { kind: 'unavailable', text: 'too large' },
     ])
+    // (a time to come: one that has come drops from the sentence, the chrome's to decide)
+    const due = Date.now() + 3_600_000
     const passing = (why: 'unreachable' | 'busy' | 'refused') =>
-      at({ phase: 'ready', unavailable: { why, retryAt: 5 } })
+      at({ phase: 'ready', unavailable: { why, retryAt: due } })
     expect(['unreachable', 'busy', 'refused'].map((w) => said(passing(w as 'busy'))?.text)).toEqual([
-      'unavailable until 5',
+      `unavailable until ${due}`,
       // (busy is the queue where the host words it: decision 5; else its own words with the time, as before)
       'queued',
-      'quota until 5',
+      `quota until ${due}`,
     ])
     const { queued: _, ...noQueue } = WORDS
-    expect(said(passing('busy'), noQueue)?.text).toBe('quota until 5')
+    expect(said(passing('busy'), noQueue)?.text).toBe(`quota until ${due}`)
     // (the visitor's rate of asks and the network itself, each its own cause and words, with no time: the reader asks again by
     // itself, at the rate's time, or once the connection is back)
     const cause = (why: 'rate' | 'network') =>
@@ -602,9 +604,11 @@ describe("the original held by the host's rules (status.ts heldOf; L11's second 
     for (const over of [busy, { narrow: true, phase: 'preparing' as const, preparing: { progress: null } }])
       expect(heldOf(at({ phase: 'ready', ...over }), {})).toBe(false)
   })
-  it("`refusal: 'original'`: a refusal for now with nothing laid, at any width; not one with pages laid, nor the paper's own", () => {
+  it("`refusal: 'original'`: a refusal for now with nothing laid, at any width; not one with pages laid, nor the paper's own, nor waiting in line", () => {
     const rules = { refusal: 'original' as const }
-    expect(heldOf(at({ phase: 'ready', ...busy }), rules)).toBe(true)
+    // (our server at capacity: the paper waits its turn, a wait as the first-time wait is, the display chosen kept)
+    expect(heldOf(at({ phase: 'ready', ...busy }), rules)).toBe(false)
+    expect(heldOf(at({ phase: 'ready', unavailable: { why: 'refused', retryAt: null } }), rules)).toBe(true)
     expect(heldOf(at({ phase: 'ready', unavailable: { why: 'unreachable', retryAt: null } }), rules)).toBe(true)
     expect(heldOf(at({ phase: 'ready', ...busy, layer: { laid: 2, total: 4 } }), rules)).toBe(false)
     expect(

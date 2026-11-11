@@ -280,7 +280,9 @@ export type Input =
       i: 'open.answered'
       t: Ticket
       doc: Doc | null
-      refused?: { why: 'quota' | 'busy' | 'rate'; afterMs: number | null }
+      /** `at`: the instant the refusal ends as our server names it (its clock's; the time said), where it names one; `afterMs`
+       *  that instant's distance from the answer (the session's own measure of it) */
+      refused?: { why: 'quota' | 'busy' | 'rate'; afterMs: number | null; at?: number | null }
     }
   | { i: 'open.failed'; t: Ticket; why: string }
   | { i: 'head'; digest: string; head: Head }
@@ -533,17 +535,29 @@ const openWanted = (s: State) => needsOf(s).some((n) => n.at === null && !s.open
  *  next ask is never sooner than WAIT_MIN_MS after the answer, and a refusal of our server's capacity or the visitor's rate
  *  answered again and again backs off: its wait doubled each time, at most BACKOFF_MAX_MS or the time our server names, the
  *  larger (a 429 naming 0 s was asked again at once, without end, once these two stopped counting toward REFUSED_ASKS) */
-function refusedFor(s: State, why: 'busy' | 'limit' | 'rate', afterMs: number | null | undefined) {
+function refusedFor(
+  s: State,
+  why: 'busy' | 'limit' | 'rate',
+  afterMs: number | null | undefined,
+  at: number | null | undefined = null,
+) {
   // (the visitor's rate of asks is no limit to stop at: its wait is a minute, waited out and asked again by itself; our server's
   // capacity neither: the paper waits in line, asked again at our server's time for as long as it answers so, the coordinator's
   // decision 5 of 2026-11-11; both backed off as said above)
   if (why === 'limit') s.refusals++
   const named = typeof afterMs === 'number' && Number.isFinite(afterMs) && afterMs >= 0 ? afterMs : WAIT_MIN_MS
-  const retryAt = s.now + named
+  // (the time said is the instant our server names, its period's end, as it names it: never its wait added to this clock, which
+  // lands past the minute, and a viewer's clock off by some seconds a minute late; PDF-READER §8.1. Where it names none, the wait
+  // from now)
+  const retryAt = typeof at === 'number' && Number.isFinite(at) ? at : s.now + named
   const wait = Math.max(WAIT_MIN_MS, named)
   s.paced = why === 'limit' ? 0 : s.paced + 1
   const own = why === 'limit' ? wait : Math.min(Math.max(BACKOFF_MAX_MS, wait), wait * 2 ** (s.paced - 1))
-  const wake = why === 'busy' || s.refusals <= REFUSED_ASKS ? s.now + own : null
+  // (the limit's time is said: the session asks again once both our server's wait has passed on this clock and this clock reads
+  // the time said, the later of the two, so that it never asks before the time it said nor before our server would take it,
+  // whichever way the viewer's clock is off. A wait no time is said for (capacity, the rate) is our server's wait alone)
+  const due = why === 'limit' ? Math.max(s.now + own, retryAt) : s.now + own
+  const wake = why === 'busy' || s.refusals <= REFUSED_ASKS ? due : null
   s.link = { s: 'stopped', why, retryAt, wake, timer: null }
 }
 /** the network itself failed: asked again by itself, at once when the browser comes online (env.online), and meanwhile, while it
@@ -560,6 +574,65 @@ const networkLost = (s: State) => {
 }
 const outOfReach = (s: State) => {
   s.link = { s: 'stopped', why: 'unreachable', retryAt: null, wake: null, timer: null }
+}
+
+/** what the session asks again by itself, none of the reader's doing, for each thing that stopped (PDF-READER §8.1: an action
+ *  is offered only where the system will not take it by itself, and a failure is told only where it is not already trying
+ *  again):
+ *  - `original`: arXiv's PDF that the network failed to bring, opened again a second on, and at once when the browser is online;
+ *  - `layer`: the look at our server stopped by a 429 the session waits out (`wake`: the rate, capacity, the limit's first
+ *    REFUSED_ASKS), or by the network (asked again once the browser is online, or at a growing pace while it says it is); or our
+ *    server's record of a prepare failed for now, whose open the session asks at the time the record names (needsOf), where
+ *    this visit has not asked it already;
+ *  - `rows`: our server's run of the target failed, whose open the session asks (needsOf): `now`, under way or due at once, `later`
+ *    at the time the record names; or a translator's wait the rows wait out by themselves (`later`). Null: nothing asks it again but
+ *    the reader's retry (our server out of reach, the limit past its asks, a key, a language, an open asked already this visit) */
+export function againOf(s: State): { original: boolean; layer: boolean; rows: 'now' | 'later' | null } {
+  const original = s.original.s === 'failed' && s.original.why === 'network'
+  const l = s.link
+  let layer = false
+  if (l.s === 'stopped') layer = l.wake !== null || l.why === 'network'
+  else if (s.layer.s === 'refused' && !LASTING.has(s.layer.why) && s.layer.retryAt !== null)
+    layer = !s.open.asked.includes(`prepare#${s.doc?.prepare.attempt ?? 0}`)
+  let rows: 'now' | 'later' | null = null
+  const r = s.rows
+  if (r.s === 'failed' && r.why.kind === 'server') {
+    const id = `${r.target}#${s.doc?.targets[r.target]?.attempt ?? 0}`
+    const need = needsOf(s).find((n) => n.id === id)
+    if (s.open.t && s.open.for.includes(id)) rows = 'now'
+    else if (need && !s.open.asked.includes(id))
+      // (the look stopped meanwhile: asked once it asks again by itself, at its time, else by the reader alone)
+      rows =
+        l.s === 'stopped'
+          ? l.wake !== null || l.why === 'network'
+            ? 'later'
+            : null
+          : need.at === null
+            ? 'now'
+            : 'later'
+  } else if (r.s === 'failed' && r.why.kind === 'unavailable' && r.retryAt !== null) rows = 'later'
+  return { original, layer, rows }
+}
+
+/**
+ * Our server's link as the reader is told it, where the view waits on it (`waits`: a translation under way that the view shown
+ * counts, its rows our server's, PDF-READER §8.1): `network`, the network failed, the browser offline or an ask's fetch rejected (the look stopped for
+ * the network, or asked again since and nothing heard yet), the session asking again by itself once it is back; `reconnecting`,
+ * the follow's stream broke while the browser is online and is opened again, nothing heard since. A view that waits for nothing
+ * (a finished translation read) is told neither. Where no layer is shown, the network's stop is told as the layer's refusal for
+ * now (reader.ts), as before
+ */
+export function linkSaid(s: State, waits: boolean): { reconnecting: boolean; network: boolean } {
+  const l = s.link
+  // (rows made here wait on the host's translator, which tells its own failures: our server's rows alone)
+  const network =
+    waits &&
+    !s.here &&
+    (!s.online ||
+      (l.s === 'stopped' && l.why === 'network') ||
+      // (asked again after the network failed, nothing heard yet: still the network's, never the count for a second)
+      (l.s === 'on' && !l.heard && s.netTries > 0))
+  return { reconnecting: !network && l.s === 'on' && !!l.lost, network }
 }
 
 /** the input folded into its region */
@@ -691,6 +764,7 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
             s,
             x.refused.why === 'quota' ? 'limit' : x.refused.why === 'rate' ? 'rate' : 'busy',
             x.refused.afterMs,
+            x.refused.at,
           )
         else {
           s.refusals = 0

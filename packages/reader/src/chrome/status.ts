@@ -15,8 +15,9 @@ export type Capsule =
   | { kind: 'unavailable'; words: CapsuleWords; href?: string; label?: string }
   /** the bilingual version cannot be had right now (our server out of reach, S-R-24; or at its limit, a 429, S-R-26: its own
    *  words): said, with its retry and the HTML version offered where there is one; passing, not remembered; not closable.
-   *  `wait`: its retry withheld until its time (a host's rule, parts.tsx `retry`: the website's) */
-  | { kind: 'notNow'; words: CapsuleWords; href?: string; label?: string; wait?: true }
+   *  `wait`: its retry withheld until its time (a host's rule, parts.tsx `retry`: the website's). `self`: the session asks again
+   *  by itself (at its time, or once the network is back): no retry offered at all (PDF-READER §8.1) */
+  | { kind: 'notNow'; words: CapsuleWords; href?: string; label?: string; wait?: true; self?: true }
   /** passages that failed (S-P-60): with its retry (S-P-61) only where the run stopped for a reason a retry mends
    *  (`failure`); the passages the typesetting left in the original fail the same way again, until a new version (I-5
    *  of 2026-10-04) */
@@ -45,6 +46,8 @@ export type Cause = 'quota' | 'busy' | 'rate' | 'network' | 'server'
 /** the cause of a refusal for now, or null where none stands: the one place a refusal's cause is named, which every state that
  *  tells one reads (the capsule's words here, a run's stage) */
 export function causeOf(state: ReaderState): Cause | null {
+  // (the network down while a run is waited for, whatever is on screen: the run's own word for it)
+  if (state.network) return 'network'
   switch (state.unavailable?.why) {
     case 'refused':
       return 'quota'
@@ -60,10 +63,11 @@ export function causeOf(state: ReaderState): Cause | null {
       return null
   }
 }
-/** `arxiv`: a link to arXiv, for an address that names no paper (S-R-20) */
+/** `arxiv`: a link to arXiv, for an address that names no paper (S-R-20); null: none, the session asking again by itself for
+ *  what failed (PDF-READER §8.1) */
 export interface Card {
   reason: string
-  action: 'retry' | 'settings' | 'arxiv'
+  action: 'retry' | 'settings' | 'arxiv' | null
 }
 
 /** the reasons a key settles: the settings are where it is fixed (the popup's rule) */
@@ -185,6 +189,9 @@ export function capsuleOf(
       action: 'language',
     }
   }
+  // the network down while a run is waited for: said over the run's count, which cannot move until it is back (the session
+  // asks again by itself then: no retry), and the count again once it is (PDF-READER §8.1)
+  if (state.network) return { kind: 'notNow', words: plain(words.network ?? R.status.notNow), self: true }
   // a run under way, where the host words it (the website's stage and count); else the progress line alone shows it
   const stage = stageOf(state)
   // (the translation not on screen and some of it there: the host's chip shows it)
@@ -199,7 +206,11 @@ export function capsuleOf(
   // more by itself, and the reader's retry is what asks again, #88 E5; busy, its capacity, the queue where the host words it
   // (stageOf), else said as the limit; the rate of asks and the network, which the reader waits out by itself, with no time)
   if (!running(state) && cause) {
-    const at = state.unavailable?.retryAt ?? null
+    // (the time is said while it is to come, and while the session will ask by itself at it, until that ask begins: never the bare
+    // sentence between the instant and the ask; one the reader is to retry at drops once it has come. The chrome decides, the
+    // host's words say the time they are given)
+    const due = state.unavailable?.retryAt ?? null
+    const at = due !== null && (state.unavailable?.self || due > (rules.now ?? Date.now())) ? due : null
     const text =
       cause === 'server'
         ? (words.notNow?.(at) ?? R.status.notNow)
@@ -209,8 +220,13 @@ export function capsuleOf(
             ? (words.rate ?? R.status.limited)
             : (words.limited?.(at) ?? R.status.limited)
     const notNow = plain(text)
-    // (its retry offered at once, or at its time where the host's rule says so: a retry before it asks nothing)
-    const wait = withheld(state, rules) ? { wait: true as const } : {}
+    // (no retry where the session asks again by itself; else offered at once, or at its time where the host's rule says so: a
+    // retry before it asks nothing)
+    const wait = state.unavailable?.self
+      ? { self: true as const }
+      : withheld(state, rules)
+        ? { wait: true as const }
+        : {}
     const html = linkOf(state.htmlVersion, words, rules.origins)
     return html ? { kind: 'notNow', words: notNow, ...html, ...wait } : { kind: 'notNow', words: notNow, ...wait }
   }
@@ -219,12 +235,17 @@ export function capsuleOf(
     return {
       kind: 'notice',
       words: withCount((words.failedPassages ?? S.failed.text)(state.failedUnits), state.failedUnits),
-      action: state.failure && !withheld(state, rules) ? 'retry' : null,
+      action: state.failure && !state.selfAsks.service && !withheld(state, rules) ? 'retry' : null,
     }
   if (state.narrow && state.display === 'bilingual' && !seen.narrowShown)
     return { kind: 'narrow', words: plain(words.narrow ?? R.status.narrow) }
   return null
 }
+
+/** whether a capsule offers a retry now: a refusal for now neither withheld until its time nor asked again by the session itself,
+ *  failed passages whose retry is offered (StatusCapsule draws the chip by this alone) */
+export const retryOffered = (c: Capsule): boolean =>
+  (c.kind === 'notNow' && !c.wait && !c.self) || (c.kind === 'notice' && c.action === 'retry')
 
 /** what is under way, said to screen readers in the status region: the progress line is decorative, and no capsule shows it
  *  (where a host's words show it, the capsule says them itself) */
@@ -272,14 +293,29 @@ export function lineOf(state: ReaderState, held = false, prepared = false): Line
   return { on: running(state), value: base + (1 - base) * state.progress }
 }
 
-/** a refusal for now with nothing of the translation laid: the bilingual version not to be had now, and none of it on screen */
-export const refusedNow = (state: ReaderState): boolean =>
+/** the causes the session goes on from by itself with no period to end and nothing of the reader's: our server at capacity (the
+ *  queue), the visitor's rate of asks (a minute at most), the network (asked again once it is back) */
+const GOES_ON: ReadonlySet<Cause> = new Set<Cause>(['busy', 'rate', 'network'])
+/** a wait the session goes on from by itself (GOES_ON): a wait, as the first-time wait is, never a refusal; the display the reader
+ *  chose is kept through it (the coordinator, 2026-11-12) */
+export const goesOnNow = (state: ReaderState): boolean => {
+  const cause = causeOf(state)
+  return cause !== null && GOES_ON.has(cause)
+}
+/** a refusal for now with nothing of the translation laid: the bilingual version not to be had now, and none of it on screen.
+ *  A wait the session goes on from by itself is none (goesOnNow): the reader asked for the translation and it comes with nothing
+ *  of theirs to do; the limit of new papers (a period's end) and our server's fault with its time are */
+export const refusedNow = (state: ReaderState): boolean => notNowBare(state) && !goesOnNow(state)
+/** the bilingual version not to be had now, whatever the cause, with nothing of it laid */
+const notNowBare = (state: ReaderState): boolean =>
   state.available && state.unavailable !== null && !LASTING.has(state.unavailable.why) && state.layer.laid === 0
 /**
  * The original held on screen by the host's rules (parts.tsx; ReaderController `hold`): a refusal for now with nothing laid,
- * where `refusal` is `original`; in a narrow window where `narrow` is `shown`, until the reader chooses a display, while the
- * paper is made (prepared, or translated after a prepare this visit) or refused for now with nothing laid (the website's
- * displayFor). Neither rule given (the extension's): never
+ * where `refusal` is `original`: the limit of new papers, our server's fault with its time; never a wait the session goes on from
+ * by itself (the queue, the rate, the network: the display the reader chose stands, as in the first-time wait). In a narrow
+ * window where `narrow` is `shown`, until the reader chooses a display, while the paper is made (prepared, or translated after a
+ * prepare this visit) or not to be had now, whatever the cause, with nothing laid (the website's displayFor). Neither rule given
+ * (the extension's): never
  */
 export function heldOf(state: ReaderState, rules: Pick<Parts, 'narrow' | 'refusal'>): boolean {
   if (state.noPaper) return false
@@ -289,7 +325,7 @@ export function heldOf(state: ReaderState, rules: Pick<Parts, 'narrow' | 'refusa
     state.preparing !== null ||
     state.phase === 'preparing' ||
     (state.made && state.phase === 'translating') ||
-    refusedNow(state)
+    notNowBare(state)
   )
 }
 
@@ -394,12 +430,13 @@ export function cardOf(
   const kind = (words.openOriginal ? state.failures.service : state.failure) ?? 'unknown'
   // (the original not read: its own words where the host gives them, else the network's, as the failure it is told as)
   if (state.failures.pdf !== null && words.originalLost && !words.openOriginal)
-    return { reason: words.originalLost, action: 'retry' }
+    return { reason: words.originalLost, action: state.selfAsks.pdf ? null : 'retry' }
   // the chain's own words for a rate limit promise a retry by itself; a stopped run here waits for the reader's (the extension's
   // today session says `rate-limit`, its chain's kind as it is). A key's reason is the key's only where the service chosen
-  // carries one (the host's reason)
+  // carries one (the host's reason). No retry where the session asks again by itself for the failure the card shows
+  const self = words.openOriginal || state.failures.pdf === null ? state.selfAsks.service : state.selfAsks.pdf
   return {
     reason: words.failed?.(kind) ?? (kind === 'rate-limit' ? R.status.rateLimited : reason(kind)),
-    action: KEYS.has(kind) ? 'settings' : 'retry',
+    action: KEYS.has(kind) ? 'settings' : self ? null : 'retry',
   }
 }

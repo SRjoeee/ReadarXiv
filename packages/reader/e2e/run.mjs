@@ -2210,7 +2210,7 @@ await check(
   },
 )
 await check(
-  "chrome: a refusal for now by the website's rules: the original alone, the translated displays greyed with swap and sync, the capsule's clock and no retry until its time, its words with the time; the extension's keeps side by side, the switch whole, its retry at once (L11 second round, gaps 1, 2, 8)",
+  "chrome: a refusal for now by the website's rules: the original alone, the translated displays greyed with swap and sync, the capsule's clock, its words with the time; the extension's keeps side by side, the switch whole; neither offers a retry, the session asking again by itself at our server's time (L11 second round, gaps 1, 2, 8; PDF-READER §8.1, flow-fixes F2)",
   async () => {
     const seg = indexOf['s1-columns'].seg
     modes[seg] = { kind: 'refused' }
@@ -2260,7 +2260,7 @@ await check(
           JSON.stringify(own.seen.translated) === '[null,null]' &&
           JSON.stringify(own.seen.sideBySide) === '[null,null]' &&
           own.seen.sign === 'info' &&
-          own.seen.retry,
+          !own.seen.retry,
         `the extension's: ${JSON.stringify(own.seen)}`,
       )
       return { site: site.seen, own: own.seen }
@@ -2320,7 +2320,7 @@ await check(
   },
 )
 await check(
-  "chrome: the original lost, where the host words its way to arXiv's PDF: the original's pane's card, the file sign, arXiv's PDF of the version its link, the translation's pane uncovered; the extension's the translation's pane's card with its retry (L11 second round, gap 3)",
+  "chrome: the original lost, where the host words its way to arXiv's PDF: the original's pane's card, the file sign, arXiv's PDF of the version its link, the translation's pane uncovered; the extension's the translation's pane's card, with no retry while the session opens the original again by itself (L11 second round, gap 3; PDF-READER §8.1, flow-fixes F2)",
   async () => {
     const paper = indexOf['s1-columns'].paper
     const look = async (x) => {
@@ -2366,7 +2366,7 @@ await check(
       `the website's: ${JSON.stringify(site.seen)}`,
     )
     assert(
-      own.seen.left === null && own.seen.right?.words === 'The original could not be read' && own.seen.right.retry,
+      own.seen.left === null && own.seen.right?.words === 'The original could not be read' && !own.seen.right.retry,
       `the extension's: ${JSON.stringify(own.seen)}`,
     )
     return { site: site.seen, own: own.seen }
@@ -2442,7 +2442,7 @@ await check(
   },
 )
 await check(
-  "chrome: our server at capacity, the open refused busy twice: the website's capsule waits in line (its words, the spinner, no retry) and goes on by itself into the first making's words; the extension's says the refusal with its retry, and goes on by itself too (the coordinator's decision 5, 2026-11-11)",
+  "chrome: our server at capacity, the open refused busy twice: the website's capsule waits in line (its words, the spinner, no retry), the display chosen standing, and goes on by itself into the first making's words; the extension's says the refusal, with no retry, and goes on by itself too (the coordinator's decision 5, 2026-11-11; PDF-READER §8.1, flow-fixes F2)",
   async () => {
     const seg = indexOf['s2-splits'].seg
     const look = async (x) => {
@@ -2458,6 +2458,7 @@ await check(
             const el = document.querySelector('.capsule:not([data-out])')
             return {
               layer: window.__c.reader?.state().layer.s ?? null,
+              display: window.__c.reader?.state().view.display ?? null,
               capsule: el && {
                 kind: el.getAttribute('data-kind'),
                 said: el.querySelector('.sr-only')?.textContent ?? '',
@@ -2466,7 +2467,7 @@ await check(
               },
             }
           })
-          const key = JSON.stringify(now.capsule)
+          const key = JSON.stringify([now.capsule, now.display])
           if (seen.at(-1)?.key !== key) seen.push({ key, ...now })
           layer = now.layer
           if (layer === 'ready') break
@@ -2496,11 +2497,14 @@ await check(
         !queue.retry &&
         capsules(site).some((c) => c.said === 'Translating, the first time') &&
         !capsules(site).some((c) => c.kind === 'notNow') &&
+        // (waiting in line is a wait, not a refusal: the display chosen stands throughout, nothing jumps when the open is taken;
+        // flow-fixes F5)
+        site.seen.every((x) => x.display !== 'original') &&
         site.layer === 'ready',
       `the website's: ${JSON.stringify(site.seen)}`,
     )
     assert(
-      capsules(own).some((c) => c.kind === 'notNow' && c.retry) && own.layer === 'ready',
+      capsules(own).some((c) => c.kind === 'notNow') && !capsules(own).some((c) => c.retry) && own.layer === 'ready',
       `the extension's: ${JSON.stringify(own.seen)}`,
     )
     return {

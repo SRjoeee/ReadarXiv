@@ -8,7 +8,7 @@ import { kindShown } from '../compose/classes.ts'
 import { committed, type Page } from '../compose/page.ts'
 import type { Prefs } from '../prefs.ts'
 import { plainOf } from './contents.ts'
-import type { RowsStop, State } from './machine.ts'
+import { againOf, type RowsStop, type State } from './machine.ts'
 
 /** the paper's context, as a translator whose replies depend on it reads it (packages/translate's PaperContext) */
 export interface PaperContext {
@@ -95,14 +95,20 @@ export function shownAsOriginal(part: string | null | undefined, page: Page | nu
   return !!page && committed(page) && !page.members.some((m) => m.state === 'laid')
 }
 /** the run the view's rows come from, as the session states it: `run`, one that may bring rows is under way (the host's
- *  translate; our server's run of the target running or to start, as the document read for it says); `failed`, it ended failed
- *  (a unit shown with no translation then is a passage that failed, whether a row says so or none came) */
-export function runOf(s: State): { run: boolean; failed: boolean } {
+ *  translate; our server's run of the target running or to start, as the document read for it says; or one that failed and is
+ *  asked again now, its open under way or due at once: `asking`); `failed`, it ended failed and nothing asks it again now (a
+ *  unit shown with no translation then is a passage that failed, whether a row says so or none came). A failure the session
+ *  asks again at once is no failure to tell: the reader waits for the run it asks (PDF-READER §8.1) */
+export function runOf(s: State): { run: boolean; failed: boolean; asking: boolean } {
   const r = s.rows
   const tg = s.docFor === r.target ? s.doc?.targets[r.target] : null
+  const asking = r.s === 'failed' && againOf(s).rows === 'now'
   return {
-    run: r.s === 'arriving' && (s.here || (tg !== null && (!tg || tg.state === 'running' || tg.state === 'none'))),
-    failed: r.s === 'failed',
+    run:
+      asking ||
+      (r.s === 'arriving' && (s.here || (tg !== null && (!tg || tg.state === 'running' || tg.state === 'none')))),
+    failed: r.s === 'failed' && !asking,
+    asking,
   }
 }
 /** what the view shown has of the translation, and whether it waits for more (PDF-READER §6.6, §8) */

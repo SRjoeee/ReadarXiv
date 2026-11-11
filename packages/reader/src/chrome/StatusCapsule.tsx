@@ -23,7 +23,17 @@ import { linkable } from './links.ts'
 import { useParts } from './parts.tsx'
 import { TippedButton } from './TippedButton.tsx'
 import { textOf } from './capsule-words.ts'
-import { type Capsule, capsuleLook, capsuleOf, cardOf, dueAt, originalCardOf, type Sign, spokenOf } from './status.ts'
+import {
+  type Capsule,
+  capsuleLook,
+  capsuleOf,
+  cardOf,
+  dueAt,
+  originalCardOf,
+  retryOffered,
+  type Sign,
+  spokenOf,
+} from './status.ts'
 import { useReader } from './use-reader.ts'
 
 /** a capsule's signs by name (status.ts Look); the spinner is the capsule's own */
@@ -66,8 +76,9 @@ export function StatusCapsule({
       ...(parts.linkOrigins ? { origins: parts.linkOrigins } : {}),
     }),
   )
-  // (a run's capsule once its wait has lasted WAIT_SHOWN_MS; every other at once)
-  const now = useWaitShown(wanted)
+  // (a run's capsule once its wait has lasted WAIT_SHOWN_MS, where it begins with nothing shown; every other at once)
+  const last = useRef<Capsule | null>(null)
+  const now = useWaitShown(wanted, last.current !== null)
   // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
   const card = useReader(controller, (s) => cardOf(s, parts.reason, parts.words))
   const originalCard = useReader(controller, (s) => originalCardOf(s, parts.reason, parts.words))
@@ -76,7 +87,6 @@ export function StatusCapsule({
   const sameTab = useReader(controller, (s) => s.prefs?.links === 'same-tab')
   // a capsule that goes is kept 160 ms, leaving (reader.css .capsule[data-out]); one that comes replaces it at once
   const [leaving, setLeaving] = useState<Capsule | null>(null)
-  const last = useRef<Capsule | null>(null)
   // biome-ignore lint/correctness/useExhaustiveDependencies: run as the capsule's words change (equal words are one object), not on every render (capsuleOf makes a new capsule each time)
   useEffect(() => {
     if (!now && last.current) {
@@ -96,8 +106,9 @@ export function StatusCapsule({
   if (now?.kind === 'progress' && stageSaid.current?.stage !== now.stage)
     stageSaid.current = { stage: now.stage, words: textOf(now.words) }
   if (now?.kind !== 'progress') stageSaid.current = null
-  // a refusal's retry, offered unless the host's rule withholds it until its time (status.ts `wait`)
-  const retryNow = capsule?.kind === 'notNow' && !capsule.wait
+  // a refusal's retry, offered unless the session asks again by itself or the host's rule withholds it until its time
+  // (status.ts retryOffered)
+  const retryNow = capsule?.kind === 'notNow' && retryOffered(capsule)
   // words alone, no chip at the end: padded there as at the start (reader.css)
   const alone =
     capsule?.kind === 'narrow' ||
@@ -206,10 +217,12 @@ export const WAIT_SHOWN_MS = 400
 /**
  * A run's capsule (a host's words for its stage) once its wait has lasted WAIT_SHOWN_MS: none before, and none at all for a wait
  * that ended sooner; once in, it stays through every change of its stage and words (a count that pauses and moves again, our
- * server heard again) until no run's capsule is wanted, when it leaves at once. Every other capsule (a refusal, a notice, a
- * toast, an error) at once
+ * server heard again) until no run's capsule is wanted, when it leaves at once. The gate is for a wait that begins with nothing
+ * shown: where a capsule is showing (`showing`: the network's words, the failed passages' notice) and the state turns into a run,
+ * the capsule changes its words in place at once, never a hole of WAIT_SHOWN_MS (the flow-demo, 2026-11-12). Every other capsule
+ * (a refusal, a notice, a toast, an error) at once
  */
-export function useWaitShown(wanted: Capsule | null): Capsule | null {
+export function useWaitShown(wanted: Capsule | null, showing = false): Capsule | null {
   const since = useRef<number | null>(null)
   const shown = useRef(false)
   const [, redraw] = useState(0)
@@ -217,7 +230,10 @@ export function useWaitShown(wanted: Capsule | null): Capsule | null {
   if (!waits) {
     since.current = null
     shown.current = false
-  } else if (since.current === null) since.current = Date.now()
+  } else if (since.current === null) {
+    since.current = Date.now()
+    if (showing) shown.current = true
+  }
   const left = waits && !shown.current ? (since.current as number) + WAIT_SHOWN_MS - Date.now() : 0
   if (waits && left <= 0) shown.current = true
   const pending = waits && !shown.current

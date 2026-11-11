@@ -11,6 +11,7 @@ import {
   holdOf,
   init,
   type Input,
+  linkSaid,
   PREPARE_DEADLINE_MS,
   type Prefs,
   REFUSED_ASKS,
@@ -656,6 +657,32 @@ describe("the session: our server's pacing (today's run)", () => {
     expect(m.has('link')).toBe(true)
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'busy', afterMs: null })
     expect(m.s.link).toMatchObject({ retryAt: 5 + 72_000_000 + 1000 })
+  })
+  it("the visitor's new papers spent: the time said is the instant our server names (its period's end), never its wait added to the viewer's clock; the session asks again once both that wait has passed and the viewer's clock reads the time said (a viewer's clock 90 s ahead, 90 s behind, on time)", () => {
+    // (our server's clock at the answer: 20:17:10 at Shanghai; its hour ends at 21:00:00; its wait, as admission.ts rounds it)
+    const server = Date.UTC(2026, 10, 11, 12, 17, 10)
+    const end = Date.UTC(2026, 10, 11, 13, 0, 0)
+    const wait = Math.ceil((end - server) / 1000) * 1000
+    for (const skew of [90_000, -90_000, 0]) {
+      const m = machine()
+      m.at(server + skew).feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+      m.feed({ i: 'open.answered', t: m.live('open'), doc: null, refused: { why: 'quota', afterMs: wait, at: end } })
+      // (said: 21:00:00 exactly, whatever the viewer's clock)
+      expect(m.s.link, `skew ${skew}`).toMatchObject({ s: 'stopped', why: 'limit', retryAt: end })
+      // (asked again at the later of the two: our server's hour over, and the viewer's clock past the time said)
+      const wake = Math.max(server + skew + wait, end)
+      expect((m.s.link as { wake: number }).wake, `skew ${skew}`).toBe(wake)
+      expect([...resources(m.s).values()]).toContainEqual({ slot: 'timer', at: wake })
+    }
+  })
+  it("the network down is said where the view waits on our server's rows (linkSaid); rows made here wait on the host's translator, which tells its own failures", () => {
+    const m = composedNow()
+    m.feed({ i: 'env.online', on: false })
+    expect(linkSaid(m.s, true)).toEqual({ reconnecting: false, network: true })
+    expect(linkSaid(m.s, false)).toEqual({ reconnecting: false, network: false })
+    const here = composedNow({ here: true })
+    here.feed({ i: 'env.online', on: false })
+    expect(linkSaid(here.s, true)).toEqual({ reconnecting: false, network: false })
   })
   it('an answer that moves the paper on ends a run of 429s', () => {
     const m = machine()
