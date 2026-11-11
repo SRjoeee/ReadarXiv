@@ -3971,7 +3971,7 @@ the next point (own.mjs MR 4), the next unit's start, across TeX's paragraph end
   found it left the unit unproven: the original's whatever its row (a stand-in row, laid offline: unproven). `\begingroup`,
   `\endgroup`, `\bgroup` and `\egroup` open or close a group and set no ink, so they are drawn as nothing, as a size switch is;
   the marking is unchanged. With it the paragraph is laid (the stand-in row: three lines) and its address's link moves with its
-  URL element, as on arXiv's page. Over the 88: 7 such elements in 5 papers move from `umacro` to `zero`, parts alone; one other
+  URL element, as on arXiv's page. Over the 88: 8 such elements in 5 papers move from `umacro` to `zero`, parts alone; one other
   unit was unproven the same way, 2610.20266v1's theorem 102 (`\begingroup`).
 
 ### 18.31 An opening point reads past an earlier unit's marks set again inside its ink (2026-11-11)
