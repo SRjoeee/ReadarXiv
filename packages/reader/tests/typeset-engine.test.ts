@@ -140,7 +140,7 @@ describe("the reader's own typesetter (openReader's engine where the host gives 
     expect(hyph).toHaveLength(2)
     expect(warm.at(-1)).toEqual([])
   })
-  it('hands the borrow past TeX’s bottom it is given to the rules (Choices.pastFoot, docs/PDF-READER.md §18.34), none by default', async () => {
+  it('hands the borrow past TeX’s bottom it is given to the rules (Choices.pastFoot, docs/PDF-READER.md §18.37), none by default', async () => {
     const { parts, rows } = fixture('s1-columns')
     const part = parts.get(1) as Part
     const off = await typesetLay({ served: served(), target: () => 'de', classes: () => DEFAULTS.classes })

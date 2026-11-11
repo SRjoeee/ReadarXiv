@@ -504,7 +504,7 @@ export function openReader(
     const s = served
     if (!s) return none
     const { pastFootOf, typesetLay } = await import('./compose/typeset.ts')
-    // (the borrow past TeX's bottom the website's address asks for the visit, the owner's test: docs/PDF-READER.md §18.34)
+    // (the borrow past TeX's bottom the website's address asks for the visit, the owner's test: docs/PDF-READER.md §18.37)
     const pastFoot = pastFootOf(typeof location === 'undefined' ? null : location)
     return typesetLay({
       served: s,

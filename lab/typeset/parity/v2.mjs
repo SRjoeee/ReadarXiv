@@ -63,7 +63,7 @@ if (FILL) {
 export const TOGGLES = args.find((a) => a.startsWith('--toggles='))?.slice(10) === 'on' ? 'on' : 'defaults'
 const classes = TOGGLES === 'on' ? { figures: true, tables: true, heads: true, references: true, names: true } : null
 /** --past-foot=<points>: the pages laid with the borrow past TeX's text block bottom the reader takes from the website's address
- *  (`axt-borrow`, docs/PDF-READER.md §18.34: the owner's test), as typesetLay is handed it; none: off, the reader's default */
+ *  (`axt-borrow`, docs/PDF-READER.md §18.37: the owner's test), as typesetLay is handed it; none: off, the reader's default */
 const PAST_FOOT = Number(args.find((a) => a.startsWith('--past-foot='))?.slice(12) ?? 0)
 if (!(PAST_FOOT >= 0)) throw new Error('v2.mjs: --past-foot=<points>: a number, 0 or more')
 mkdirSync(OUT, { recursive: true })

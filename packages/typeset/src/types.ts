@@ -45,7 +45,7 @@ export type Choices = {
    *  `refnames`, `inkreferences`); layPage leaves a member of one the original's (`left`) */
   leave?: string[]
   /** how far a unit's last line may stand under TeX's text block bottom, in points, where that keeps it from its fit's first
-   *  shrink step (docs/PDF-READER.md §18.34: an experiment for the owner's test, default off); 0 or none: never */
+   *  shrink step (docs/PDF-READER.md §18.37: an experiment for the owner's test, default off); 0 or none: never */
   pastFoot?: number
 }
 

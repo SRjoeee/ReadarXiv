@@ -70,7 +70,7 @@ export function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number):
         yield { ...st, knob }
       }
     } else if (knob === 'shrink') {
-      // (the borrow past TeX's text block bottom, where the reader asks it (P.pastFoot, docs/PDF-READER.md §18.34, an experiment
+      // (the borrow past TeX's text block bottom, where the reader asks it (P.pastFoot, docs/PDF-READER.md §18.37, an experiment
       // for the owner's test): before the first step, one state whose last line may stand that far under the bottom, the next
       // ink's bound as it is, where that adds room to a block; one it does not set goes on down the steps as without it)
       const past = (P.pastFoot as number | undefined) ?? 0
@@ -88,7 +88,7 @@ export function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number):
     }
   }
 }
-/** how far under its block's text block bottom the lowest of a layout's lines stands (§18.34), 0.01 at least */
+/** how far under its block's text block bottom the lowest of a layout's lines stands (§18.37), 0.01 at least */
 function depthOf(lines: readonly { block: number; baseline: number }[], blocks: readonly FitBlock[]): number {
   let need = 0
   for (const l of lines) {
@@ -147,7 +147,7 @@ export function layoutUnit2(
   }
   if (!last) return null
   // (a state past the bottom that set every token keeps the depth its lines took under their blocks' bottoms alone (to the
-  // hundredth, up), so that the page fill, laying it again at a looser leading, spreads it no deeper: §18.34)
+  // hundredth, up), so that the page fill, laying it again at a looser leading, spreads it no deeper: §18.37)
   if (last.st.over && last.r.rest >= last.r.total)
     last = { ...last, st: { ...last.st, over: depthOf(last.r.lines, blocks) } }
   // nothing fits in order at the last state: the text may run on past a kept region (all of it shown, out of order), at the

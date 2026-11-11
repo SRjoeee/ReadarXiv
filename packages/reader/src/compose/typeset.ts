@@ -47,7 +47,7 @@ export interface TypesetOptions {
   target(): string
   /** the reader's toggles now */
   classes(): Readonly<Partial<Record<ClassName, boolean>>> | null
-  /** the borrow past TeX's text block bottom, in points, for the visit (Choices.pastFoot, docs/PDF-READER.md §18.34: an
+  /** the borrow past TeX's text block bottom, in points, for the visit (Choices.pastFoot, docs/PDF-READER.md §18.37: an
    *  experiment for the owner's test, pastFootOf); none or 0: off */
   pastFoot?: number
 }
@@ -55,7 +55,7 @@ export interface TypesetOptions {
 /** the most a page's address may ask the borrow past TeX's bottom to be, in points: the deepest `\maxdepth` of the classes
  *  measured (article at 12 pt and IEEEtran, 6 pt; docs/PDF-READER.md §18.11); a larger value asks nothing */
 export const PAST_FOOT_MAX = 6
-/** the borrow past TeX's text block bottom a page's address asks (§18.34, the owner's test of 2026-11-11): its `axt-borrow`
+/** the borrow past TeX's text block bottom a page's address asks (§18.37, the owner's test of 2026-11-11): its `axt-borrow`
  *  parameter, in points, read on a website's page (http or https) alone, never on an extension's; 0 where it asks none, or a
  *  value that is no number in (0, PAST_FOOT_MAX] */
 export function pastFootOf(at: { protocol: string; search: string } | null): number {

@@ -11,7 +11,7 @@ const inFlow = (a, b) => a.flow === b.flow
  *  leave, Block.free: the owner's ruling of 2026-11-08) */
 const lowOf = (b, st, s) => b.B.at(-1) - Math.min(roomOf(b, st), st.borrow * (b.pitch0 ?? 1.2 * s))
 /** the room under a block's last baseline at a state: Block.free; at a state that borrows past TeX's text block bottom
- *  (FitState.over, docs/PDF-READER.md §18.34), the bottom's depth that much deeper, the next ink's bound as it is */
+ *  (FitState.over, docs/PDF-READER.md §18.37), the bottom's depth that much deeper, the next ink's bound as it is */
 function roomOf(b, st) {
   return st.over && b.toFoot !== undefined ? Math.max(0, Math.min(b.toFoot + st.over, b.toInk)) : b.free ?? 0
 }

@@ -1,5 +1,5 @@
 // The borrow past TeX's text block bottom (Choices.pastFoot, an experiment for the owner's test, default off; docs/PDF-READER.md
-// §18.34): before the fit's first shrink step, a unit whose last line would stand under its block's bottom may be laid with that
+// §18.37): before the fit's first shrink step, a unit whose last line would stand under its block's bottom may be laid with that
 // line up to `pastFoot` points under it, keeping only the depth its lines need; the page fill lays it no deeper, and a unit the
 // borrow does not buy goes down the fit's steps as without it. Off (absent or 0), every lay is today's.
 import type { Part, Placed, Row } from '@readarxiv/format'
@@ -52,7 +52,7 @@ const rulesAt = (pastFoot?: number, fill = true) => {
 const lay = (m: Placed, pastFoot?: number, fill = true, text = oneStep) =>
   layPage(part([[m]]), rowsOf([row(text)]), rulesAt(pastFoot, fill), metrics).members[0]!
 
-describe('the borrow past TeX’s text block bottom (Choices.pastFoot, §18.34)', () => {
+describe('the borrow past TeX’s text block bottom (Choices.pastFoot, §18.37)', () => {
   it('is off by default and at 0: the rules and every lay are today’s', () => {
     expect('pastFoot' in rulesFor('de').set).toBe(false)
     expect('pastFoot' in rulesFor('de', { pastFoot: 0 }).set).toBe(false)

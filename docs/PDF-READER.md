@@ -4107,7 +4107,7 @@ supplemental note, left the original's English).
   Chinese by Microsoft, the references toggle on: 2610.20030v1 p5's journal part, a crop of the original's English, is now
   "软物质 18，2168（2022）." with its numbers the original's ink; its note "“请参见[出版社将插入网址]的补充资料，获取图表S1-S3和电影字幕。”".
 
-### 18.34 A last line a little under TeX's text block bottom: an experiment for the owner's test (2026-11-11)
+### 18.37 A last line a little under TeX's text block bottom: an experiment for the owner's test (2026-11-11)
 
 **Off by default; the decision is open.** The owner looked at production's pages (2602.23285v2-ja pages 5 and 10) where a
 paragraph's last line stands 1-2.5 pt under TeX's text block bottom and keeps its size, and at v2's, which keeps TeX's bound
@@ -4125,11 +4125,14 @@ proved costly or tangled with other rules. Nothing is decided by this section bu
   `pastFoot`, or 0), every lay is today's.
 - **The switch**: no control, no string, nothing stored. The reader takes the value from the website's address, its
   `axt-borrow` parameter in points (`compose/typeset.ts` pastFootOf), read once a visit on an http or https page alone (never on
-  the extension's pages), a number in (0, 6]: 6 pt is the deepest `\maxdepth` of the classes measured (§18.11: an article at 12
-  pt, IEEEtran), so that no value asks a line deeper than TeX lets a line's depth hang; anything else asks nothing. The value
-  goes into the rules the reader lays with (their memo key carries it), so a reload with or without it lays every page again;
-  no laid page is kept anywhere. The site keeps an unknown parameter through its address rewrite, so it needs no change of its
-  own. The value tried: 1.5 pt, the bound under which the 22 parity pairs' gains are all bought (below).
+  the extension's pages), a number in (0, 6]; anything else asks nothing. Why 6: it is a ceiling against a typo, not a value
+  anyone chose, the deepest `\maxdepth` of the classes measured (§18.11: an article at 12 pt, IEEEtran), the most TeX itself
+  lets a last line's depth hang under the bottom; the borrow moves the baseline, so even 6 pt is past anything TeX does. The
+  owner's test uses **1.5 pt** (`?axt-borrow=1.5`), the value every measurement below was made at (with 0.5, 1.0 and 2.5 for the
+  counts); any other value is unmeasured and sanctioned by nothing here. The value goes into the rules the reader lays with
+  (their memo key carries it), so a reload with or without it lays every page again; no laid page is kept anywhere. The site
+  keeps an unknown parameter through its address rewrite (its `canonical` deletes `paper`, `v` and `to` alone), so it needs no
+  change of its own; that the parameter reaches the reader on the deployed site is to be seen on staging.
 - **Measured** (the 22 parity pairs at B8, 8ca1dcd1b, their 344 pages, default toggles; the same at round 5): at 1.5 pt four
   units keep their size and nothing else changes size: 2602.23285v2 unit 90 (pages 9-10, 9.71 to 9.96 pt, its last line 0.99
   pt under the bottom), unit 29 (pages 4-5, 0.55 pt; it needs 1.22 pt while laid, so 1.0 pt does not buy it), 2608.25210v2's
