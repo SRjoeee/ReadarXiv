@@ -147,8 +147,23 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
   page (the View Transitions API, 260 ms), not element by element (the maintainer: 「要学alpharxiv的方式，过渡自然」).
 - **深色时调暗页面**, a switch in the reading options, **default on** (「默认是开启这个功能的」): in the dark appearance the
   pages' canvases take `filter: invert(88.8%) hue-rotate(180deg)` and an undrawn page's background is `rgb(29 29 29)`,
-  so nothing flashes white while scrolling. Only the canvas is filtered: the highlight and the figure overlays keep their
-  colours. Off, the pages stay white in the dark chrome.
+  so nothing flashes white while scrolling. Only the page's own drawing is filtered: the canvas, and over a laid page the
+  overlay's text and its crops by the same filter (the reader's sheet), so that every run comes out as the canvas's ink does,
+  whatever fill it names — the layer's black, a CJK run's `#141414` (§11.8), a colour of a run's own — which no rule on a
+  text's fill would reach. The highlight's bands keep their colours, screened over the dark page as they are multiplied over a
+  white one. Off, the pages stay white in the dark chrome.
+- **Where the marks are read** (the website's v2 page on staging, 2026-11-12: the translation drawn black on the dimmed
+  page): the appearance is the page's, written by the chrome on `<html>` (`data-theme`, `data-axt-dim`:
+  chrome/appearance.ts); the reader's root, the element that carries `.axt-reader`, is the element a host gives `openReader`
+  (both hosts: `<body>`; the package's harness: an element of its own). The reader's sheet reads `data-axt-dim` on its root
+  or on any element above it (styles.ts `DIMMED`), as the tokens read `data-theme`, so that the look cannot depend on
+  which element a host chose and no host copies the mark; the reader's own marks are written on its root by the reader and
+  read there (`data-axt-pdf-mode`, `data-axt-narrow`, `data-axt-swapped`, `data-axt-layer-text`), and those it writes inside
+  it under it (`data-axt-scaling`, `data-axt-turn`). Before, the sheet read the mark on the root alone, and on both hosts
+  the overlay's text, the link rings, the skeleton's colours and the translating marks' light stayed light-page values; the
+  canvas, the crops and the highlight's blend were right by the chrome's own sheet. Held by the package e2e's `dim:` checks,
+  in four shapes: the class and the mark on one element (an element of the host's; `<html>`), the class on `<body>` under a
+  marked `<html>`, and both hosts' page (the chrome over the reader).
 - The night-reading switch of the earlier rounds is gone; the two items above replace it (the maintainer's point 3,
   2026-09-24).
 

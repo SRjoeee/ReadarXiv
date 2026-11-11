@@ -1932,6 +1932,211 @@ async function chromeLaid(name, o = {}, page0 = {}) {
   await waitFor(opened.page, () => (window.__c.reader?.probe().laidPages ?? 0) > 0, null, 25_000)
   return opened
 }
+
+// ---------------------------------------------------------------- the pages dimmed in the dark (docs/PDF-READER.md §4.3)
+/** the luma (Rec. 709, 0..255) of a region of the page as shown, its screenshot decoded in the page: its lightest pixel and its
+ *  median */
+async function lumaIn(page, clip, path = null) {
+  const buf = await page.screenshot({ clip, ...(path ? { path } : {}) })
+  return page.evaluate(async (b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/png' }))
+    const c = new OffscreenCanvas(bmp.width, bmp.height)
+    const x = c.getContext('2d')
+    x.drawImage(bmp, 0, 0)
+    const d = x.getImageData(0, 0, bmp.width, bmp.height).data
+    const all = []
+    for (let i = 0; i < d.length; i += 4) all.push(0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2])
+    all.sort((a, b) => a - b)
+    return { max: Math.round(all.at(-1)), median: Math.round(all[all.length >> 1]) }
+  }, buf.toString('base64'))
+}
+/** s1-columns laid with its page 1 in runs of three inks (convert.ts inked: a run that names no fill, a CJK run in its own
+ *  CJK_INK, a run of a colour of its own), the pages dimmed, the host's shape `shape`: the reader's class and the dim mark on
+ *  one element (`root`: an element of the host's; `html`), the class on <body> and the mark on <html> under the harness's
+ *  sheet alone (`body`), or both hosts' page (`chrome`: the package's chrome over openReader on <body>, the dim by its
+ *  preferences, its appearance on <html>, its sheet) */
+for (const shape of ['root', 'html', 'body', 'chrome']) {
+  await check(
+    `dim: the overlay's text in every ink, its crops and the highlight dimmed as the page's canvas is, whatever element carries the reader's class (${shape}; staging, 2026-11-12)`,
+    async () => {
+      const { page, context, errors } =
+        shape === 'chrome' ? await chromeLaid('s1-columns', { inks: true }) : await newPage()
+      if (shape !== 'chrome') {
+        await page.evaluate((shape) => {
+          const o = { host: 'web', inks: true }
+          if (shape !== 'root') {
+            // (the host's scrollers as both hosts' chrome gives them, the reader's root the element the shape names)
+            const panes = { root: shape === 'html' ? document.documentElement : document.body }
+            for (const side of ['left', 'right']) {
+              const el = document.createElement('div')
+              el.className = `viewerContainer axt-pane ${side}`
+              el.append(Object.assign(document.createElement('div'), { className: 'pdfViewer' }))
+              document.body.append(el)
+              panes[side] = el
+            }
+            o.panes = panes
+          }
+          return window.__h.reader('s1-columns', o)
+        }, shape)
+        await readerLaid(page)
+      }
+      const dim = (on) =>
+        shape === 'chrome'
+          ? page.evaluate((on) => window.__c.controller.setPrefs({ theme: 'dark', dim: on }), on)
+          : page.evaluate(
+              ([shape, on]) =>
+                (shape === 'root' ? window.__h.readers[0].root : document.documentElement).toggleAttribute(
+                  'data-axt-dim',
+                  on,
+                ),
+              [shape, on],
+            )
+      await dim(true)
+      const P1 = '.axt-slot[data-page-number="1"]'
+      await waitFor(
+        page,
+        (P1) =>
+          !!document.querySelector(`${P1} .axt-over > svg tspan[fill="#c00000"]`) &&
+          !!document.querySelector(`${P1} .axt-over > canvas.axt-crops`) &&
+          !!document.querySelector('[data-axt-dim]'),
+        P1,
+      )
+      // (the member of three inks in the right's view, the left following; a unit lit under the pointer, so that the highlight's
+      // layers are there, then the pointer away)
+      await page.evaluate((P1) => {
+        document.querySelector(`${P1} .axt-over > svg tspan[fill="#141414"]`).scrollIntoView({ block: 'center' })
+      }, P1)
+      await page.waitForTimeout(400)
+      const at = await page.evaluate((P1) => {
+        const r = document.querySelector(`${P1} .axt-over > svg tspan[fill="#141414"]`).getBoundingClientRect()
+        return [r.left + Math.min(r.width / 2, 20), r.top + r.height / 2]
+      }, P1)
+      await page.mouse.move(at[0], at[1])
+      await page.waitForTimeout(200)
+      const seen = await page.evaluate((P1) => {
+        const slot = document.querySelector(P1)
+        const f = (el) => (el ? getComputedStyle(el).filter : null)
+        const canvas = [...document.querySelectorAll('.pdfViewer .page .canvasWrapper > canvas')].find(
+          (c) => !c.closest('.axt-slot'),
+        )
+        // (the rules of the page's sheets that set `prop` on `el`: whose rule dims what)
+        const rulesOf = (el, prop) => {
+          const out = []
+          const walk = (rules) => {
+            for (const r of rules) {
+              if (r.cssRules && !r.selectorText) walk(r.cssRules)
+              else if (r.selectorText && r.style?.getPropertyValue(prop) && el?.matches(r.selectorText))
+                out.push(r.selectorText)
+            }
+          }
+          for (const sh of document.styleSheets) {
+            try {
+              walk(sh.cssRules)
+            } catch {}
+          }
+          return out.filter((x) => /dim/.test(x))
+        }
+        const crops = slot.querySelector('.axt-over > canvas.axt-crops')
+        return {
+          by: {
+            canvas: rulesOf(canvas, 'filter'),
+            svg: rulesOf(slot.querySelector('.axt-over > svg'), 'filter'),
+            crops: rulesOf(crops, 'filter'),
+            blend: rulesOf(document.querySelector('.axt-hl-layer'), 'mix-blend-mode'),
+          },
+          reader: document.querySelector('.axt-reader')?.tagName.toLowerCase() ?? null,
+          marked: document.querySelector('[data-axt-dim]')?.tagName.toLowerCase() ?? null,
+          canvas: f(canvas),
+          svg: f(slot.querySelector('.axt-over > svg')),
+          crops: f(slot.querySelector('.axt-over > canvas.axt-crops')),
+          blends: [...document.querySelectorAll('.axt-hl-layer')].map((l) => getComputedStyle(l).mixBlendMode),
+          // (what the dim gives the link rings, the skeleton and the translating marks: custom properties, read where they apply)
+          vars: Object.fromEntries(
+            [
+              ['ring', slot.querySelector('.axt-link'), '--axt-ring'],
+              ['halo', slot.querySelector('.axt-link'), '--axt-ring-halo'],
+              ['sk', slot, '--axt-sk'],
+              ['skPaper', slot, '--axt-sk-paper'],
+              ['trLight', slot, '--axt-tr-light'],
+              ['trStill', slot, '--axt-tr-still'],
+            ].map(([k, el, n]) => [k, el ? getComputedStyle(el).getPropertyValue(n).trim() : null]),
+          ),
+          capsule: (() => {
+            const c = document.querySelector('.capsule')
+            return c ? [getComputedStyle(c).backgroundColor, getComputedStyle(c).color] : null
+          })(),
+        }
+      }, P1)
+      await page.mouse.move(3, 3)
+      await page.waitForTimeout(300)
+      // (the pixels: each ink's run against the page's ground, the slot's median; the crops out of sight, so that a run's box
+      // holds its own ink alone)
+      const boxes = await page.evaluate((P1) => {
+        for (const c of document.querySelectorAll(`${P1} .axt-over > canvas.axt-crops`)) c.style.visibility = 'hidden'
+        const svg = document.querySelector(`${P1} .axt-over > svg`)
+        const g = svg.querySelector('tspan[fill="#141414"]').closest('g')
+        // (a run's box within its page's)
+        const page = document.querySelector(P1).getBoundingClientRect()
+        const box = (spans) => {
+          const rs = [...spans].map((x) => x.getBoundingClientRect()).filter((r) => r.width > 0)
+          const x0 = Math.max(page.left, Math.min(...rs.map((r) => r.left))),
+            y0 = Math.max(page.top, Math.min(...rs.map((r) => r.top))),
+            x1 = Math.min(page.right, Math.max(...rs.map((r) => r.right))),
+            y1 = Math.min(page.bottom, Math.max(...rs.map((r) => r.bottom)))
+          return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
+        }
+        const first = [...g.querySelectorAll('text')].find((t) => t.querySelector('tspan:not([fill])'))
+        const s = document.querySelector(P1).getBoundingClientRect()
+        const y0 = Math.max(s.top, 0),
+          y1 = Math.min(s.bottom, innerHeight)
+        return {
+          latin: box(first.querySelectorAll('tspan:not([fill])')),
+          cjk: box(g.querySelectorAll('tspan[fill="#141414"]')),
+          coloured: box(g.querySelectorAll('tspan[fill="#c00000"]')),
+          ground: { x: s.left, y: y0, width: s.width, height: y1 - y0 },
+        }
+      }, P1)
+      const luma = {}
+      for (const [k, clip] of Object.entries(boxes))
+        luma[k] = await lumaIn(page, clip, process.env.AXT_SHOTS ? join(HERE, '.shots', `dim-${shape}-${k}.png`) : null)
+      const ground = luma.ground.median
+      // (and undimmed: the overlay drawn as it is)
+      await dim(false)
+      await waitFor(page, () => !document.querySelector('[data-axt-dim]'))
+      const undimmed = await page.evaluate(
+        (P1) => getComputedStyle(document.querySelector(`${P1} .axt-over > svg`)).filter,
+        P1,
+      )
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      const runs = Object.fromEntries(['latin', 'cjk', 'coloured'].map((k) => [k, luma[k].max]))
+      const detail = { ...seen, ground, runs, undimmed }
+      assert(seen.canvas && seen.canvas !== 'none', `the host's canvas undimmed: ${JSON.stringify(detail)}`)
+      assert(
+        seen.svg === seen.canvas && seen.crops === seen.canvas,
+        `the overlay's filters against the canvas's: ${JSON.stringify(detail)}`,
+      )
+      assert(
+        seen.blends.length > 0 && seen.blends.every((b) => b === 'screen'),
+        `the highlight's blend: ${JSON.stringify(detail)}`,
+      )
+      assert(
+        seen.vars.ring === 'oklch(0.935 0.005 255)' &&
+          seen.vars.skPaper === 'rgb(29 29 29)' &&
+          seen.vars.trLight.includes('80%'),
+        `the rings', the skeleton's and the translating marks' dim values: ${JSON.stringify(detail)}`,
+      )
+      for (const [k, v] of Object.entries(runs))
+        assert(
+          v >= ground + 60,
+          `the ${k} run's lightest pixel ${v} against the ground's ${ground}: ${JSON.stringify(detail)}`,
+        )
+      assert(undimmed === 'none', `undimmed, the overlay's filter: ${undimmed}`)
+      return detail
+    },
+  )
+}
 await check(
   "chrome: a host's own controls in their places, each working: its way home first in the lead, its short link right after the title, its interface language the reading options' last row (L11 gap 2)",
   async () => {

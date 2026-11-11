@@ -11,7 +11,7 @@ import { createFaces, type Faces } from '../../src/compose/faces.ts'
 import { groupsOf, type Groups } from '../../src/compose/groups.ts'
 import { createHighlight, type Highlight } from '../../src/compose/highlight.ts'
 import type { Ink, Item, Page } from '../../src/compose/page.ts'
-import { fixtureLay, membersOf, pagesOf, type ReaderDump } from './convert.ts'
+import { fixtureLay, inked, membersOf, pagesOf, type ReaderDump } from './convert.ts'
 import { createPanes, type Panes } from '../../src/panes/panes.ts'
 import { createStack, type Stack } from '../../src/stack/stack.ts'
 import { eagerPages, quietRoot } from '../../src/panes/left.ts'
@@ -809,6 +809,8 @@ const h = {
       paper?: string
       /** no engine given: the reader's own typesetter (layPage over our site's faces and patterns, the reader's Metrics) */
       typeset?: boolean
+      /** page 1 laid with runs of three inks (convert.ts inked) */
+      inks?: boolean
     } = {},
   ) {
     const index = (await (await fetch(`/fixtures/${name}/index.json`)).json()) as { paper: string }
@@ -903,7 +905,7 @@ const h = {
             )
           ).json()) as ReaderDump
           const face = (fx as { face: string | null }).face
-          const laid = fixtureLay(
+          const fixed = fixtureLay(
             pagesOf(
               parts,
               dump,
@@ -911,6 +913,7 @@ const h = {
             ),
             parts,
           )
+          const laid = o.inks ? inked(fixed, 1) : fixed
           return (part, rows) => {
             h.marks.push({
               what: 'lay',

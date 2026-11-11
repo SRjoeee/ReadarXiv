@@ -1,5 +1,7 @@
 // The reader's appearance (the reader's design, §4.3): light, dark or the system's, and the pages dimmed in the dark
-// when the reader wants them so. Applied to <html> as data-theme (absent: the system's) and data-axt-dim; a change
+// when the reader wants them so. Applied to <html> as data-theme (absent: the system's) and data-axt-dim, the page's whole
+// appearance, whichever element a host gave the reader as its root: the reader's sheet reads data-axt-dim on its root or on
+// any element above it (styles.ts DIMMED), as the tokens read data-theme, so no host copies the marks; a change
 // after the first paint is one crossfade of the whole page, not element by element, unless motion is reduced — every
 // element's own transition of a colour off for the flip, or a pressed button and a switch would fade on their own and
 // flash in the crossfade (better-ui: suppress transitions on a theme switch; the maintainer, 2026-09-26). A motion is

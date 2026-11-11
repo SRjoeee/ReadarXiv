@@ -1,10 +1,19 @@
 // The reader's own sheet: the page stack's slots, the composed page's overlay, its text layer and links, the highlight's bands
 // and the translating marks. Carried from today's engine sheet (src/pdf-reader/engine/view/engine.css at baf2083e0, each rule's
-// reason there), scoped to a reader's root (`.axt-reader`, its marks on the root: `[data-axt-dim]`, `[data-axt-scaling]`) instead
-// of <html>, so that two readers on one page each style their own. PDF.js's viewer sheet is linked beside it (kit.ts `sheet`).
+// reason there), scoped to a reader's root (`.axt-reader`, the element openReader is given) instead of <html>, so that two
+// readers on one page each style their own. A mark is read where its writer puts it (docs/PDF-READER.md §4.3): the reader's
+// own marks of its root (`data-axt-pdf-mode`, `data-axt-narrow`, `data-axt-swapped`: panes.ts; `data-axt-layer-text`: the
+// composer) on the root, the marks it writes inside (`data-axt-scaling` on a stack, `data-axt-turn`, …) under it, and the
+// appearance's, which the reader does not write, on the root or on any element above it (DIMMED): the chrome writes it on
+// <html> (chrome/appearance.ts) whichever element a host made the root (both hosts: <body>), a host with no chrome may write
+// it on the root itself. PDF.js's viewer sheet is linked beside it (kit.ts `sheet`).
+
+/** a reader whose pages are dimmed: `data-axt-dim` on its root or on any element above it, as the tokens read `data-theme` */
+const DIMMED = ':is(.axt-reader[data-axt-dim], [data-axt-dim] .axt-reader)'
+
 export const READER_CSS = `
 .axt-reader { --axt-green: oklch(0.693 0.17 162.48); --axt-sk: oklch(0.945 0.004 255); --axt-sk-paper: #fff; }
-.axt-reader[data-axt-dim] { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29 29); }
+${DIMMED} { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29 29); }
 .axt-reader { position: relative; }
 .axt-reader .axt-pane { position: absolute; top: 0; bottom: 0; overflow: auto; overflow-anchor: none; }
 .axt-reader .axt-pane.left { left: 0; width: 50%; }
@@ -68,7 +77,7 @@ export const READER_CSS = `
   --axt-tr-delay: 0.3s;
   --axt-tr-fade: 0.4s;
 }
-.axt-reader[data-axt-dim] {
+${DIMMED} {
   --axt-tr-light: color-mix(in oklab, var(--axt-sk-paper) 80%, transparent);
   --axt-tr-still: color-mix(in oklab, var(--axt-sk-paper) 14%, transparent);
 }
@@ -92,7 +101,7 @@ export const READER_CSS = `
 .axt-reader .axt-hl-shape > path { fill: color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) var(--axt-hl-mix, 22%), transparent); }
 /* over a dimmed page the band is screened, as it is multiplied over a white one (by its layer: a band's own blend mode mixes
    inside the layer alone) */
-.axt-reader[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
+${DIMMED} .axt-hl-layer { mix-blend-mode: screen; }
 /* the composed page's overlay over the page view: its frame the page's size at its scale (--axt-frame-w, -h), never the floored box.
    Its text at the weight the page's canvas draws its own (docs/PDF-READER.md §11.8): the browser's own smoothing, and
    geometricPrecision unless the reader's fixed probe said auto (text-rendering.ts, decided once a reader before its first
@@ -122,7 +131,10 @@ export const READER_CSS = `
    the laid pages' text layers are out of style and layout: each span's size is a calc of --total-scale-factor, which every step
    changes. They are sized once, as the steps end; a selection in them stays, and shows again with them */
 .axt-reader [data-axt-scaling] .axt-over > .textLayer { display: none; }
-.axt-reader[data-axt-dim] .axt-over > svg, .axt-reader[data-axt-dim] .axt-over > canvas.axt-crops { filter: invert(88.8%) hue-rotate(180deg); }
+/* the pages dimmed: the overlay's drawing, its text and its crops, takes the filter the host gives the page's canvas
+   (chrome/reader.css), so that every run comes out as the canvas's ink does, whatever fill it names (the layer's black, a CJK
+   run's CJK_INK, a colour of its own), as no rule on a text's fill would reach a run that names its own */
+${DIMMED} .axt-over > svg, ${DIMMED} .axt-over > canvas.axt-crops { filter: invert(88.8%) hue-rotate(180deg); }
 /* the links over a laid page: one anchor a link, each box a span of its own, sizes a share of the page's frame */
 .axt-reader .axt-links { position: absolute; left: 0; top: 0; width: var(--axt-frame-w, 100%); height: var(--axt-frame-h, 100%); z-index: 1; pointer-events: none; }
 .axt-reader .axt-link { position: absolute; display: block; pointer-events: none; outline: none; }
@@ -132,7 +144,7 @@ export const READER_CSS = `
 .axt-reader .axt-link[data-axt-border="underline"] > .axt-link-box { border-bottom: var(--axt-link-border) solid var(--axt-link-colour); }
 @media (hover: hover) { .axt-reader .axt-link:hover > .axt-link-box { background-color: rgb(255 255 0 / 0.2); } }
 .axt-reader .axt-link { --axt-ring: oklch(0.235 0.012 255); --axt-ring-halo: oklch(1 0 0); }
-.axt-reader[data-axt-dim] .axt-link { --axt-ring: oklch(0.935 0.005 255); --axt-ring-halo: oklch(0.255 0.006 255); }
+${DIMMED} .axt-link { --axt-ring: oklch(0.935 0.005 255); --axt-ring-halo: oklch(0.255 0.006 255); }
 .axt-reader .axt-link:focus-visible > .axt-link-box { outline: 2px solid var(--axt-ring); outline-offset: 1px; box-shadow: 0 0 0 1px var(--axt-ring-halo), 0 0 0 4px var(--axt-ring-halo); }
 @media (forced-colors: active) {
   .axt-reader .axt-link > .axt-link-box { outline: 1.5px solid LinkText; }
