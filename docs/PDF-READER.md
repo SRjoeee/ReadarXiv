@@ -4947,7 +4947,8 @@ read as the caption's text; all three sentences and the label "Figure 1." stayed
   "seeding", given its two glyphs (before, an element drawn from its ink with none). 2610.40576v1: the cell of `\hlg{All good.}
   \hlp{Now, write the matrix in Python}` located and drawn (located, the pitch rule keeps its `\ctk{+2.0k}` the original's, which
   gives it a new id; the baseline's statement of its old one says so: pitchGroup). `text past its source` 31 to 29. The probe's
-  decorated texts: 28 of 2111.09276v1's calls, 23 of 2610.40576v1's, none elsewhere. The work counters (27) as r18's; the float
+  decorated texts: every highlight call of the three papers that write one (2111.09276v1's 28, 2610.40576v1's 23,
+  2610.19159v1's 1). The work counters (27) as r18's; the float
   lines 778 and the orphan letters 388 as r18's; the parity's 22 pairs' papers' bundles byte-identical (neither paper is a pair).
   The reading's own time over the 88: 131.8 ms in all, 7.9 ms the most (2307.16209v1), 0.3 % of the instrument's 49 s; 4 claims.
 - **Not fixed.** A piece of no point whose text TeX's probe does not state (a sample past INK_TEXT_MAX's 64 characters, a
