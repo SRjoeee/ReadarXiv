@@ -4282,11 +4282,14 @@ than its source writes.
   it with none of its ink before them, are marks of units numbered before its own (the source sets its units in order, so after
   a piece of unit `n` such a mark is that unit's text set again, never the next unit's) reads past them, its ink running to
   where the text after it begins; where that text is not found before the next point of another kind, or where its own ink
-  stands before those marks (nothing then tells them its ink's), as before. A piece with no text after it, or blocked by an unmarked piece, is read
-  as before.
-- **Not alone**: `\vldbauthors` writes no point today (after `\\` the marks pass it over, marks.mjs `passedOver`), so the
-  paragraph stays no unit until its marks are written (the marks lane); its whole proof (located, translated as ACM's block,
-  its names under the author names' toggle, one name per person) comes with them.
+  stands before those marks (nothing then tells them its ink's), as before. A piece with no text after it, or blocked by an
+  unmarked piece, is read as before.
+- **Over the 88, with marks-2's point before a forced break** (§18.34; stage 1a with the rule and with its two commits reverted,
+  and a census wrapping ownedOf to read every call both ways): one placeholder's owned ink changes, 2608.25210v2's p9.13a
+  (`\vldbtitle`, 55 glyphs where it owned none), and no output moves (0 of 88). The paragraph stays refused as production
+  refuses it ("text past its source"): `\vldbauthors` still writes no point, the mark probe asking its ink in the preamble,
+  where acmart's `\authors` is empty until `\maketitle` fills it, so that it is answered inkless and never marked (its own
+  item); the names' glyphs are then the paragraph's text.
 
 ## 19. The engine's contract
 
