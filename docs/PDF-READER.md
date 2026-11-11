@@ -395,7 +395,10 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
     that pauses and moves again, our server heard again) and leaves at once when no run's capsule is wanted. It is the
     family of the page's mark, which PDF.js draws after 400 ms (`--loading-icon-delay`), and of the translating marks'
     0.3 s. A refusal, an error, a notice and a toast are not delayed. The case it was made for: a stored translation's
-    first page and a settled paper's reopening, under a second each on staging, said a run's word every time.
+    first page and a settled paper's reopening, under a second each on staging, said a run's word every time. The grace is
+    for a wait that begins with nothing on screen: where a capsule is (another's words, or a run's capsule still leaving, its
+    160 ms), the run's capsule takes its place at once, in place, never a gap after a capsule that was showing (the
+    coordinator's R4, 2026-11-12).
   - **What a screen reader is told**: the words' cell is `aria-hidden`; the sentence is told whole (or `spoken`, other
     words, where it holds a count said once a stage) in a line of its own, once per change of that text. A language's
     own name (S-R-13) is a part drawn in its own `lang` (`withPart`; Devin on #313).
@@ -434,20 +437,35 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
 - **A translation under way is what the view shown waits for**, not our server's record of its runs (`session/rows.ts`
   `viewOf`, told as the reader state's `rows.waits`). One of the units of the layer shown that the paper does not keep
   and the toggles show translated has no translation held, while a run that may bring it is under way: our server's
-  run of the target running or still to start, or the host's translate. Its count is one statement over that set: those
+  run of the target running or still to start, our server still working for the view, or the host's translate. Our
+  server still works for the view, without the reader's acting, while the document read for the target says so
+  (`rows.ts` `runOf`, `aheadOf`; the coordinator's R3 of 2026-11-12, from the record's fields alone, never a time): its
+  prepare running (`prepare.state`: a layer lands at its end, and the target's run over its units follows, our server's
+  own start of a run on units it has not run, or this session's open), or a need of the visit (`needsOf`) that the session
+  asks by itself now, its open under way or not yet asked, no wait named for it and the look not stopped but for the
+  network: the prepare of a stale `layer`, the target `done` on other `units` than the layer's (an attempt covers the layer
+  where its units are the layer's own, by digest). Rows that ended meanwhile are told as arriving (`rowsTold`), and the one
+  wait goes on: on staging 2026-11-12, 2010.11929v2 (a stale layer, no translation under the chain) counted 356 of 435,
+  left the moment attempt 1 was done while the prepare still ran, and came back 6.8 s later at the new layer's attempt 2.
+  Its count is one statement over that set: those
   units with a translation held, of those units. It never passes its total, and never falls while the layer shown and
   the toggles stay, since rows held are only added to. Its total changes only with the layer shown or the toggles, and
-  then it is a new statement. Some cases are told by their end alone, so the line and the capsule say nothing of them:
-  rows read of a run done (a stored translation); a run that restates rows the view holds; a run on units of a layer
-  not shown yet (the early units of a prepare running under a stale layer). Before this rule, on staging 2026-11-11,
+  then it is a new statement; while a new layer's units are not read yet, the count is the layer's before it (the pages on
+  screen), never 0 of 0 for a moment. Some cases are told by their end alone, so the line and the capsule say nothing of them:
+  rows read of a run done with nothing more to come (a stored translation); a run that restates rows the view holds; a run on
+  units of a layer not shown yet that leaves every unit shown held. Before this rule, on staging 2026-11-11,
   2610.21924v1 opened after a deploy said "translating" three times over a paper already on screen. Its count went from
   476 of 393 to 0 of 0 to 320 of 476: the rows the tab held, over each attempt's total. The view's wait is over once
   every unit shown holds its translation, though a run that restates them may go on. The end held for the layer's
   first page (`laying`) translates nothing, so no capsule says it, in any host's words: a stored translation's first
-  page is a load, which the progress line and the page's marks show as they show the original's (the coordinator's
-  decision 2 of 2026-11-11; until then the website's capsule said the paper was being prepared there, 0.7 s on every
-  reopen of a settled paper). The layer's units not read yet, a run under way waits while nothing is laid (a first open's: its count comes
-  with the head).
+  page is a load, which the progress line and the page's marks show as they show the original's, and the status region
+  says the load there (`R.status.loading`), never the translation (the coordinator's decision 2 of 2026-11-11 and R2 of
+  2026-11-12; until then the website's capsule said the paper was being prepared there, 0.7 s on every reopen of a settled
+  paper, and then its screen-reader line said `R.status.translating` for 0.6 s, which the staging recorder of 2026-11-12 read
+  as a capsule). The layer's units not read yet, the target's run under way or to start waits while nothing is laid (a first
+  open's: its count comes with the head); our server's work ahead alone does not, and the rows' end is not told meanwhile, so
+  the wait and the end (with the line's whole length) come once the count is known: a stale layer whose every passage is held
+  stays silent with staging's objects a second late, and one missing passages never shows the whole line before them.
 - **A notice** carries a chip action and a close button, whose tooltip stands above it; closing it is remembered for this paper's visit, each notice apart — the partial one's close does not close the count of failed passages it stood before (#314).
 - **Two notes that are not a notice**: settings that cannot be read stand for as long as it is so, with a link to the settings page and no close (UI.md S-R-21); a write storage refused is told with the settings page's sentence until it is closed or a later write of this page goes through (S-R-22).
 - **When the translation's pane has nothing to show**, the same anatomy is a card centred in that pane (300 px, 14 px
@@ -628,7 +646,7 @@ No state that tells the reader nothing is shown (no "done").
 | State | When | Shown |
 |---|---|---|
 | Reading | 原文; a translation ready; a stored translation shown, offline included | nothing |
-| Loading | a large PDF is loading | the progress line by the share downloaded, its first stretch; 正在加载 said to screen readers |
+| Loading | a large PDF is loading; the translation there, its first page being laid (a stored one read, or a run's last rows in) | the progress line by the share downloaded, its first stretch; 正在加载 said to screen readers |
 | Preparing | the paper's bilingual files are being made (our server's prepare, a paper no reader opened before) | the original; the progress line's first half after the download, by the prepare's stage (§6.6); 正在准备 said to screen readers (S-R-23); the website's capsule says the translation the reader waits for, with the time a first one takes (§6.6) |
 | Translating | the paper's paragraphs being translated by the service chosen | the same line on, by the share of paragraphs done; 正在翻译 said to screen readers; each page laid on the right as its paragraphs come, the original's page until then. The paragraphs counted are those of the layer on screen that "What to translate" shows translated; one whose translation is already held is done, and a run that only restates them is not shown |
 | Not to be had now | Read arXiv's website out of reach, at its limit, or the network itself down (§8.1: each cause its own words) | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24), the retry only where the session does not ask again by itself (§8.1); passing, not remembered; a paper whose files this machine keeps opens without it |
@@ -743,7 +761,7 @@ spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while
   refusal) and for our server's fault with its time. A narrow window holds the original, as before, whatever the cause.
 - **A capsule showing that turns into a run changes its words in place** ((c)): the 400 ms gate (§6.6) is for a wait that
   begins with nothing shown; after the network's words or the failed passages' notice, the count takes the capsule's place at
-  once, never a hole of 0.4 s.
+  once, never a hole of 0.4 s; so does a run's capsule wanted again while it is still leaving (R4, 2026-11-12).
 - **Which refusals last** is one table, the session's (`LASTING`: no source, not found, cannot be prepared, too large, a
   version this reader cannot read); the chrome's is made from it. A layer the reader could not use (an object not its bytes,
   a layer refused by the side) is passing: a retry asks again.

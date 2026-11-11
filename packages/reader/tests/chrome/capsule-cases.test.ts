@@ -6,8 +6,9 @@
 import { writeFileSync } from 'node:fs'
 import type { Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
+import { R } from '@readarxiv/ui'
 import { textOf } from '../../src/chrome/capsule-words.ts'
-import { capsuleOf, type Capsule } from '../../src/chrome/status.ts'
+import { capsuleOf, type Capsule, firstOf, lineOf, spokenOf } from '../../src/chrome/status.ts'
 import { eventsOf } from '../../src/chrome/events.ts'
 import { INITIAL, reduce, type ReaderState as ChromeState } from '../../src/chrome/model.ts'
 import type { StateWords } from '../../src/chrome/parts.tsx'
@@ -24,7 +25,7 @@ import {
   step,
   targetOf,
 } from '../../src/session/machine.ts'
-import { viewOf } from '../../src/session/rows.ts'
+import { rowsTold, runOf, viewOf } from '../../src/session/rows.ts'
 import { LANGUAGES } from './parts.ts'
 
 const ZH = 'zh-Hans'
@@ -105,6 +106,10 @@ type Beat =
   | { at: number; set: Partial<Prefs> }
   /** the look's timer fired: our server's wait after a refusal over, the open asked again */
   | { at: number; wake: true }
+  /** the open under way answered now, with our server's document after it started what it asked (`holdOpen`) */
+  | { at: number; answer: Doc }
+  /** the layer's head (and with it its units) read now (`lateHead`: on staging the objects come a second late) */
+  | { at: number; head: true }
 
 interface Shown {
   at: number
@@ -124,7 +129,12 @@ interface Shown {
  * target, each once a ticket, the target's rows let go for another target), the reader's state told as reader.ts tells it,
  * folded and drawn. Returns each appearance of a run's capsule: its stage, when it came and went, the counts it showed
  */
-function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}, o: { busy?: number; rate?: number } = {}) {
+function visit(
+  store: Store,
+  beats: Beat[],
+  first: Partial<Prefs> = {},
+  o: { busy?: number; rate?: number; holdOpen?: boolean; lateHead?: boolean } = {},
+) {
   /** the opens our server refuses first: for its capacity (the admission's busy, in the open's answer), or for the visitor's
    *  rate of asks (a 429 that says so) */
   let busy = o.busy ?? 0,
@@ -150,23 +160,33 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}, o: { bus
   const counted: { at: number; got: number; total: number }[] = []
   /** every capsule drawn, by kind, with the time */
   const kinds: [number, string][] = []
-  /** the units of the layer shown, as reader.ts holds them once its head is read */
+  /** what the status region says in its own line where no run's capsule says it (StatusCapsule `spoken`), each once in turn */
+  const spoken: [number, string][] = []
+  /** the progress line as ProgressLine draws it: its length while on (the longest of its showing), -1 while hidden */
+  const lines: [number, number][] = []
+  const line = { on: false, last: 0.02, prepared: false }
+  /** the units the view counts, as reader.ts holds them: those last read (a layer's once its head is read), the layer's before
+   *  it while a new layer's are not */
+  let unitsRead: { id: string; kind: string; kept?: boolean }[] | null = null
   const viewUnits = () => {
-    if (s.layer.s !== 'ready' || headRead !== s.layer.catalog.sha256) return null
-    return s.layer.units.flatMap((r) => store.units.get(r.sha256) ?? [])
+    if (s.layer.s !== 'ready') return null
+    if (headRead === s.layer.catalog.sha256) unitsRead = s.layer.units.flatMap((r) => store.units.get(r.sha256) ?? [])
+    return unitsRead
   }
   const toldOf = (): ReaderState => {
     const r = s.rows
-    const t = s.doc?.targets[r.target]
+    // (the run as the session states it: the reader's own predicate, rows.ts runOf)
+    const run = runOf(s)
     const view = viewOf({
       units: viewUnits(),
       classes: s.prefs.value.classes,
       held: rows,
       shown: s.layer.s === 'ready',
       laid: s.panes.laid > 0,
-      run: r.s === 'arriving' && s.docFor === r.target && (!t || t.state === 'running' || t.state === 'none'),
+      run: run.run,
+      ahead: run.ahead,
+      failed: run.failed,
     })
-    const count = { got: view.got, total: view.total, lost: view.lost }
     return {
       paper: { id: '2610.00001', version: 1, title: '', html: null, pdf: '' },
       prefs: s.prefs.value,
@@ -180,14 +200,7 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}, o: { bus
             : s.layer.s === 'preparing'
               ? { s: 'preparing', stage: s.layer.stage }
               : { s: 'none' },
-      rows:
-        r.s === 'none'
-          ? { target: r.target, from: 'server', s: 'none' }
-          : r.s === 'arriving'
-            ? { target: r.target, from: 'server', s: 'arriving', ...count, waits: view.waits }
-            : r.s === 'complete'
-              ? { target: r.target, from: 'server', s: 'complete', ...count, stopped: r.stopped }
-              : { target: r.target, from: 'server', s: 'failed', why: r.why, ...count, retryAt: r.retryAt },
+      rows: rowsTold(s, view, run),
       view: {
         display: displayOf(s),
         sync: { on: true, available: true },
@@ -215,6 +228,17 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}, o: { bus
       WORDS,
     )
     if (c && kinds.at(-1)?.[1] !== c.kind) kinds.push([now, c.kind])
+    const said = c?.kind === 'progress' ? '' : spokenOf(chrome)
+    if (spoken.at(-1)?.[1] !== said) spoken.push([now, said])
+    // (ProgressLine: a showing starts at its sliver, then holds the longest it reached; the prepare's stretch where it had one)
+    const plain = lineOf(chrome, false, false),
+      making = chrome.phase === 'preparing' || firstOf(chrome)
+    if (plain.on && !line.on) Object.assign(line, { last: 0.02, prepared: making })
+    else if (making) line.prepared = true
+    line.on = plain.on
+    if (plain.on) line.last = Math.max(line.last, lineOf(chrome, false, line.prepared).value)
+    const drawnLine = plain.on ? Math.round(line.last * 1000) / 1000 : -1
+    if (lines.at(-1)?.[1] !== drawnLine) lines.push([now, drawnLine])
     const stage = c?.kind === 'progress' ? c.stage : null
     const last = shown.at(-1)
     const open = last && last.until === null ? last : null
@@ -234,18 +258,22 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}, o: { bus
       counted.push({ at: now, got, total })
     }
   }
-  /** what reader.ts does after a step: the resources it holds answered, our server's rows read */
-  const react = () => {
-    const code = s.layer.s === 'ready' && s.layer.code && !s.layer.loaded ? s.layer.code : null
-    if (code) queue.push({ i: 'code.loaded', t: code })
+  /** the layer's head read, its units with it, as reader.ts reads them once the code is in */
+  const readHead = () => {
     if (s.layer.s === 'ready' && s.layer.code && !s.layer.head && headRead !== s.layer.catalog.sha256) {
       headRead = s.layer.catalog.sha256
       queue.push({ i: 'head', digest: s.layer.catalog.sha256, head: HEAD() })
     }
+  }
+  /** what reader.ts does after a step: the resources it holds answered, our server's rows read */
+  const react = () => {
+    const code = s.layer.s === 'ready' && s.layer.code && !s.layer.loaded ? s.layer.code : null
+    if (code) queue.push({ i: 'code.loaded', t: code })
+    if (!o.lateHead) readHead()
     const composed = live('composed')
     if (composed && s.layer.s === 'ready' && !s.layer.open) queue.push({ i: 'composed.opened', t: composed })
     const open = live('open')
-    if (open && s.doc) {
+    if (open && s.doc && !o.holdOpen) {
       const refused =
         busy > 0
           ? { why: 'busy' as const, afterMs: 30_000 }
@@ -300,6 +328,12 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}, o: { bus
     } else if ('doc' in b) {
       const link = live('link')
       if (link) feed({ i: 'paper', t: link, doc: b.doc })
+    } else if ('answer' in b) {
+      const open = live('open')
+      if (open) feed({ i: 'open.answered', t: open, doc: b.answer })
+    } else if ('head' in b) {
+      readHead()
+      feed({ i: 'panes.drawn' })
     } else if ('wake' in b) {
       if (s.link.s === 'stopped' && s.link.timer) feed({ i: 'time', t: s.link.timer, now })
     } else if ('laid' in b) feed({ i: 'panes.laid', laid: b.laid, total: 4 })
@@ -307,7 +341,7 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}, o: { bus
   }
   const last = shown.at(-1)
   if (last && last.until === null) last.until = now
-  return { shown, counted, chrome, kinds, target: targetOf(s) }
+  return { shown, counted, chrome, kinds, spoken, lines, target: targetOf(s) }
 }
 
 const stages = (shown: Shown[], stage: string) => shown.filter((x) => x.stage === stage)
@@ -689,6 +723,231 @@ function queuedFirst(o: { busy?: number; rate?: number }) {
   )
 }
 
+/** a paper whose layer is stale with no translation under the chain (staging 2010.11929v2, 2026-11-12, scaled: 435 -> 100 passages):
+ *  the open starts the prepare; the target's attempt 1 on the prepare's early units brings 70 of the 100 the layer shown counts and
+ *  is DONE while the prepare still runs (laying-out, bundle); the new layer lands (its units in objects of their own, the same
+ *  passages) with attempt 2, whose first frame restates the 70, then 0/0, then the 30 missing */
+function staleNoTarget() {
+  const store: Store = { units: new Map(), rows: new Map() }
+  const old = unitsObject(store, range(0, 100))
+  const early = unitsObject(store, range(0, 70))
+  const rest = unitsObject(store, range(70, 100))
+  const h1 = rowsObject(store, range(0, 30)),
+    h2 = rowsObject(store, range(30, 70))
+  const w1 = rowsObject(store, range(0, 70))
+  const h3 = rowsObject(store, range(70, 85)),
+    h4 = rowsObject(store, range(85, 100))
+  const w2 = rowsObject(store, range(0, 100))
+  const stale = { catalog: ref(), units: [old], format: 1, stale: true }
+  const fresh = { catalog: ref(), units: [early, rest], format: 1, stale: false }
+  const prep = (state: 'done' | 'running', stage: string | null, attempt: number, units: Ref[] = []) => ({
+    state,
+    why: null,
+    retryAt: null,
+    stage,
+    units,
+    attempt,
+  })
+  const zh = (state: Target['state'], o: Partial<Target>) => ({ [ZH]: target(state, o) })
+  return visit(
+    store,
+    [
+      { at: 100, opened: true },
+      { at: 300, doc: doc(1, { prepare: prep('done', null, 6, [old]), layer: stale, targets: {} }) },
+      // (the open: the prepare started, the target asked; our server's document after it)
+      { at: 500, answer: doc(2, { prepare: prep('running', null, 7), layer: stale, targets: {} }) },
+      { at: 2000, laid: 1 },
+      { at: 2100, doc: doc(3, { prepare: prep('running', 'fetching', 7), layer: stale, targets: {} }) },
+      {
+        at: 6200,
+        doc: doc(4, {
+          prepare: prep('running', 'compiling', 7),
+          layer: stale,
+          targets: zh('running', { units: [early] }),
+        }),
+      },
+      {
+        at: 9300,
+        doc: doc(5, {
+          prepare: prep('running', 'compiling', 7),
+          layer: stale,
+          targets: zh('running', { rows: [h1], done: 30, total: 70, units: [early] }),
+        }),
+      },
+      {
+        at: 12000,
+        doc: doc(6, {
+          prepare: prep('running', 'compiling', 7),
+          layer: stale,
+          targets: zh('running', { rows: [h1, h2], done: 70, total: 70, units: [early] }),
+        }),
+      },
+      {
+        at: 15900,
+        doc: doc(7, {
+          prepare: prep('running', 'laying-out', 7, [early]),
+          layer: stale,
+          targets: zh('done', { rows: [w1], done: 70, total: 70, units: [early] }),
+        }),
+      },
+      {
+        at: 20900,
+        doc: doc(8, {
+          prepare: prep('running', 'bundle', 7, [early]),
+          layer: stale,
+          targets: zh('done', { rows: [w1], done: 70, total: 70, units: [early] }),
+        }),
+      },
+      {
+        at: 23400,
+        doc: doc(9, {
+          prepare: prep('done', null, 7, [early, rest]),
+          layer: fresh,
+          targets: zh('running', { attempt: 2, rows: [w1], done: 70, total: 70, units: [early, rest] }),
+        }),
+      },
+      {
+        at: 23500,
+        doc: doc(10, {
+          prepare: prep('done', null, 7, [early, rest]),
+          layer: fresh,
+          targets: zh('running', { attempt: 2, rows: [w1], units: [early, rest] }),
+        }),
+      },
+      {
+        at: 29000,
+        doc: doc(11, {
+          prepare: prep('done', null, 7, [early, rest]),
+          layer: fresh,
+          targets: zh('running', { attempt: 2, rows: [w1, h3], done: 15, total: 30, units: [early, rest] }),
+        }),
+      },
+      {
+        at: 31900,
+        doc: doc(12, {
+          prepare: prep('done', null, 7, [early, rest]),
+          layer: fresh,
+          targets: zh('running', { attempt: 2, rows: [w1, h3, h4], done: 30, total: 30, units: [early, rest] }),
+        }),
+      },
+      {
+        at: 32800,
+        doc: doc(13, {
+          prepare: prep('done', null, 7, [early, rest]),
+          layer: fresh,
+          targets: zh('done', { attempt: 2, rows: [w2], done: 100, total: 100, units: [early, rest] }),
+        }),
+      },
+    ],
+    {},
+    { holdOpen: true },
+  )
+}
+
+/** a stale layer whose stored rows hold 80 of its 100 passages (its target done on its units), loaded before the prepare's first
+ *  stage arrives (the open, which the stale layer asks, answered 3.5 s on), then the prepare, attempt 2 on its units bringing the
+ *  20 missing, and the new layer, which that attempt covers (the flow-staging record's case D, scripted) */
+function staleLoaded(late = false) {
+  const store: Store = { units: new Map(), rows: new Map() }
+  const old = unitsObject(store, range(0, 100))
+  const fresh = unitsObject(store, range(0, 100))
+  const w1 = rowsObject(store, range(0, 80))
+  const f2 = rowsObject(store, range(80, 100))
+  const w2 = rowsObject(store, range(0, 100))
+  const stale = { catalog: ref(), units: [old], format: 1, stale: true }
+  const made = { catalog: ref(), units: [fresh], format: 1, stale: false }
+  const prep = (state: 'done' | 'running', stage: string | null, attempt: number, units: Ref[] = []) => ({
+    state,
+    why: null,
+    retryAt: null,
+    stage,
+    units,
+    attempt,
+  })
+  const stored = { [ZH]: target('done', { rows: [w1], done: 80, total: 80, units: [old] }) }
+  return visit(
+    store,
+    [
+      { at: 100, opened: true },
+      { at: 300, doc: doc(1, { prepare: prep('done', null, 1, [old]), layer: stale, targets: stored }) },
+      ...(late ? [{ at: 1500, head: true as const }] : []),
+      { at: 2000, laid: 1 },
+      { at: 3800, answer: doc(2, { prepare: prep('running', 'fetching', 2), layer: stale, targets: stored }) },
+      { at: 5000, doc: doc(3, { prepare: prep('running', 'compiling', 2), layer: stale, targets: stored }) },
+      {
+        at: 6000,
+        doc: doc(4, {
+          prepare: prep('running', 'units', 2, [fresh]),
+          layer: stale,
+          targets: { [ZH]: target('running', { attempt: 2, rows: [w1], total: 20, units: [fresh] }) },
+        }),
+      },
+      {
+        at: 7000,
+        doc: doc(5, {
+          prepare: prep('running', 'units', 2, [fresh]),
+          layer: stale,
+          targets: { [ZH]: target('running', { attempt: 2, rows: [w1, f2], done: 20, total: 20, units: [fresh] }) },
+        }),
+      },
+      {
+        at: 7500,
+        doc: doc(6, {
+          prepare: prep('running', 'laying-out', 2, [fresh]),
+          layer: stale,
+          targets: { [ZH]: target('done', { attempt: 2, rows: [w2], done: 100, total: 100, units: [fresh] }) },
+        }),
+      },
+      {
+        at: 12000,
+        doc: doc(7, {
+          prepare: prep('done', null, 2, [fresh]),
+          layer: made,
+          targets: { [ZH]: target('done', { attempt: 2, rows: [w2], done: 100, total: 100, units: [fresh] }) },
+        }),
+      },
+    ],
+    {},
+    { holdOpen: true, lateHead: late },
+  )
+}
+
+/** a stale layer whose stored rows hold every passage (its target done on its units), its prepare running, its units read 1.2 s
+ *  after its rows (staging's objects come a second late): nothing for the view to wait for, which is known only once they are */
+function staleStoredLate() {
+  const store: Store = { units: new Map(), rows: new Map() }
+  const old = unitsObject(store, range(0, 100))
+  const w = rowsObject(store, range(0, 100))
+  const stale = { catalog: ref(), units: [old], format: 1, stale: true }
+  const running = { state: 'running' as const, why: null, retryAt: null, stage: 'compiling', units: [], attempt: 2 }
+  return visit(
+    store,
+    [
+      { at: 100, opened: true },
+      {
+        at: 300,
+        doc: doc(1, {
+          prepare: running,
+          layer: stale,
+          targets: { [ZH]: target('done', { rows: [w], done: 100, total: 100, units: [old] }) },
+        }),
+      },
+      { at: 1500, head: true },
+      { at: 2000, laid: 1 },
+    ],
+    {},
+    { lateHead: true },
+  )
+}
+/** the line drawn never shorter than it was within one showing (R5: a showing that ended and a new one begun is a line of its own) */
+const lineSteady = (lines: [number, number][]) => {
+  for (let i = 1; i < lines.length; i++) {
+    const [, was] = lines[i - 1] as [number, number],
+      [, is] = lines[i] as [number, number]
+    if (was >= 0 && is >= 0) expect(is).toBeGreaterThanOrEqual(was)
+  }
+}
+
 describe('the capsule over whole visits (the website’s words): it says what the view shown waits for', () => {
   it('a paper prepared again after a deploy, its rows stored: no capsule at all, its runs on units the view holds, its first page a load', () => {
     const v = reprepared()
@@ -707,10 +966,12 @@ describe('the capsule over whole visits (the website’s words): it says what th
     expect(t[0]?.end).toEqual([476, 476])
     steady(v.shown)
   })
-  it('a settled paper opened again: no capsule at all (its stored rows read are no run, its first page a load)', () => {
+  it('a settled paper opened again: no capsule at all (its stored rows read are no run, its first page a load), and the status region never says it is translating: its first page is a load (R2, the coordinator 2026-11-12)', () => {
     const v = settled()
     report('(c) settled reopened', v.shown)
     expect(v.shown).toEqual([])
+    expect(v.spoken.map(([, w]) => w)).not.toContain(R.status.translating)
+    expect(v.spoken.map(([, w]) => w)).toContain(R.status.loading)
   })
   it('a new paper\'s first open: one "translating", the first making\'s words from the prepare told until the layer shows, then its count over the layer shown, from 222 of 227 until 227 are held; never "preparing"', () => {
     const v = first()
@@ -767,6 +1028,56 @@ describe('the capsule over whole visits (the website’s words): it says what th
     report('(r) rate, then made', v.shown)
     expect(v.kinds[0]).toEqual([900, 'notNow'])
     expect(stages(v.shown, 'queued')).toEqual([])
+  })
+  it('a stale layer with no translation, its prepare running: one "translating" from its first count to the last passage held, through attempt 1 done while the prepare runs and the new layer landing; the count never falls nor drops to the bare word (R3, staging case B 2026-11-12)', () => {
+    const v = staleNoTarget()
+    report('(B) stale, attempt 1 done while the prepare runs', v.shown)
+    const t = stages(v.shown, 'translating')
+    expect(v.shown).toHaveLength(1)
+    expect(t).toHaveLength(1)
+    // (from the stale layer's first document, which names no target (the open makes its run), to the last of the 30 held at 31900)
+    expect([t[0]?.at, t[0]?.until]).toEqual([300, 31900])
+    expect(t[0]?.counts.filter(([, total]) => total > 0)).toEqual([
+      [0, 100],
+      [30, 100],
+      [70, 100],
+      [85, 100],
+    ])
+    // (once counted, never the bare word again: the new layer's units, not read yet, leave the count of the layer before)
+    const bare = t[0]?.said.filter(([, w]) => !/\d/.test(w)) ?? []
+    expect(bare).toEqual([])
+    expect(t[0]?.end).toEqual([100, 100])
+    steady(v.shown)
+    lineSteady(v.lines)
+  })
+  it('a stale layer whose stored rows hold 80 of its 100 passages, loaded before the prepare\'s first stage: one "translating" from the open asked to the last passage held, never "finished" between (R3, R5, staging case D 2026-11-12)', () => {
+    const v = staleLoaded()
+    report('(D) stale layer loaded before the prepare', v.shown)
+    const t = stages(v.shown, 'translating')
+    expect(v.shown).toHaveLength(1)
+    expect([t[0]?.at, t[0]?.until]).toEqual([300, 7000])
+    expect(t[0]?.counts.filter(([, total]) => total > 0)).toEqual([[80, 100]])
+    expect(t[0]?.end).toEqual([100, 100])
+    // (the line never full while 20 passages are missing and work for them goes on; within a showing it never falls)
+    const full = v.lines.filter(([at, l]) => l === 1 && at < 7000)
+    expect(full).toEqual([])
+    lineSteady(v.lines)
+  })
+  it('the same with its units read 1.2 s after its rows: the wait from the count known, the line never full before the last passage', () => {
+    const v = staleLoaded(true)
+    report('(D late) stale layer loaded before the prepare, units late', v.shown)
+    const t = stages(v.shown, 'translating')
+    expect(v.shown).toHaveLength(1)
+    expect([t[0]?.at, t[0]?.until]).toEqual([1500, 7000])
+    expect(v.lines.filter(([at, l]) => l === 1 && at < 7000)).toEqual([])
+    lineSteady(v.lines)
+  })
+  it('a stale layer whose stored rows hold every passage, its prepare running, its units read late: no capsule and no count on the line, before the count is known or after (R3: n = N stays silent)', () => {
+    const v = staleStoredLate()
+    report('(3 late) stale, all stored, units late', v.shown)
+    expect(v.shown).toEqual([])
+    // (the download's sliver, then the end held for the first page, a load: never a count's share between)
+    expect(v.lines.map(([, l]) => l).filter((l) => l > 0.15 && l < 1)).toEqual([])
   })
   // (AXT_CAPSULE_TABLE=<file>: the appearances of every case written there, the lane's table)
   it('writes the table where asked', () => {

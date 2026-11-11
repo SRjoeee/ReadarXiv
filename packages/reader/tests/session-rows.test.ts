@@ -10,10 +10,13 @@ import {
   keep,
   missingOf,
   ranked,
+  rowsTold,
+  runOf,
   shownAsOriginal,
   stopOf,
   viewOf,
 } from '../src/session/rows.ts'
+import { type Doc, init, type Ref, type State, step } from '../src/session/machine.ts'
 import { DEFAULTS } from '../src/prefs.ts'
 import type { Page } from '../src/compose/page.ts'
 
@@ -126,5 +129,104 @@ describe("the view's rows (viewOf): what the layer shown has of the translation,
     // (the layer's units not read yet: a run waits while nothing is laid, its count none yet)
     expect(viewOf({ ...base, units: null })).toEqual({ waits: true, got: 0, total: 0, lost: 0 })
     expect(viewOf({ ...base, units: null, laid: true }).waits).toBe(false)
+  })
+})
+
+describe("the run the view waits on (runOf, rowsTold): our server's work for the view, as the document read for the target states it", () => {
+  const ref = (c: string): Ref => ({ path: `p/${c}`, sha256: c.repeat(64).slice(0, 64), bytes: 1 })
+  const OLD = [ref('a')],
+    NEW = [ref('b')]
+  const stale = { catalog: ref('c'), units: OLD, format: 1, stale: true }
+  const fresh = { catalog: ref('d'), units: NEW, format: 1 }
+  const prepare = (state: Doc['prepare']['state'], attempt = 1): Doc['prepare'] => ({
+    state,
+    why: null,
+    retryAt: null,
+    stage: state === 'running' ? 'compiling' : null,
+    units: [],
+    attempt,
+  })
+  const done = (units: Ref[]) => ({
+    state: 'done' as const,
+    why: null,
+    retryAt: null,
+    rows: [ref('r')],
+    done: 70,
+    total: 70,
+    attempt: 1,
+    units,
+  })
+  /** the session with a document heard for its target, its rows `rows` (ended, or still read), and what the test sets over it */
+  function heard(doc: Omit<Doc, 'epoch' | 'rev'>, rows: 'complete' | 'arriving', over: Partial<State> = {}): State {
+    let s = init({
+      paper: { id: '2601.00001', version: 1 },
+      here: false,
+      defaults: { ...DEFAULTS, display: 'bilingual', target: 'zh-Hans' },
+      now: 0,
+      visible: true,
+      online: true,
+    })
+    const link = s.link.s === 'on' ? s.link.t : ''
+    s = step(s, { i: 'paper', t: link, doc: { epoch: 'e', rev: 1, ...doc } }).state
+    const r = rows === 'complete' ? { s: 'complete' as const, target: 'zh-Hans', stopped: null } : s.rows
+    return { ...s, rows: r, ...over }
+  }
+  const missing = { waits: true, got: 70, total: 100, lost: 0 }
+  it("rows ended while our server's prepare runs: a wait while passages of the layer shown are missing, told as arriving; none once all are held (R3)", () => {
+    const s = heard({ prepare: prepare('running', 7), layer: stale, targets: { 'zh-Hans': done(NEW) } }, 'complete')
+    expect(runOf(s).run).toBe(true)
+    expect(rowsTold(s, missing)).toMatchObject({ s: 'arriving', got: 70, total: 100, waits: true })
+    expect(rowsTold(s, { waits: false, got: 100, total: 100, lost: 0 })).toMatchObject({ s: 'complete' })
+    // (and the rows of a done attempt still being read, the same)
+    expect(
+      runOf(heard({ prepare: prepare('running', 7), layer: stale, targets: { 'zh-Hans': done(NEW) } }, 'arriving')).run,
+    ).toBe(true)
+  })
+  it('a need the session asks by itself now: the prepare of a stale layer, its open to come or under way; asked and answered with nothing started, no wait', () => {
+    const doc = { prepare: prepare('done'), layer: stale, targets: { 'zh-Hans': done(OLD) } }
+    const s = heard(doc, 'complete')
+    // (the open minted at once for prepare#1)
+    expect([s.open.for, runOf(s).run]).toEqual([['prepare#1'], true])
+    expect(runOf({ ...s, open: { ...s.open, t: null, for: [] } }).run).toBe(true)
+    expect(runOf({ ...s, open: { ...s.open, t: null, for: [], asked: ['prepare#1'] } }).run).toBe(false)
+  })
+  it("the target done on other units than the layer shown: due, its open asks it (needsOf's comparison of the units by digest)", () => {
+    const s = heard({ prepare: prepare('done'), layer: fresh, targets: { 'zh-Hans': done(OLD) } }, 'complete')
+    expect(runOf(s).run).toBe(true)
+    // (done on the layer's own units: it covers the layer, nothing more comes: a stored translation read)
+    expect(
+      runOf(heard({ prepare: prepare('done'), layer: fresh, targets: { 'zh-Hans': done(NEW) } }, 'complete')).run,
+    ).toBe(false)
+  })
+  it('the look stopped: asked again by itself for the network (a wait), never past a limit (the reader is to retry)', () => {
+    const s = heard({ prepare: prepare('done'), layer: stale, targets: { 'zh-Hans': done(OLD) } }, 'complete')
+    const quiet = { ...s.open, t: null, for: [] }
+    const stop = (why: 'network' | 'limit') =>
+      ({ s: 'stopped', why, retryAt: null, wake: null, timer: null }) as State['link']
+    expect(runOf({ ...s, open: quiet, link: stop('network') }).run).toBe(true)
+    expect(runOf({ ...s, open: quiet, link: stop('limit') }).run).toBe(false)
+  })
+  it("our server's work ahead alone and nothing counted yet (the units not read): no wait, and the rows not told ended, so no end and no whole line before the count says the view lacks nothing", () => {
+    const s = heard({ prepare: prepare('running', 7), layer: stale, targets: { 'zh-Hans': done(OLD) } }, 'complete')
+    const run = runOf(s)
+    expect([run.run, run.ahead]).toEqual([true, true])
+    const unread = viewOf({
+      units: null,
+      classes: null,
+      held: new Map(),
+      shown: true,
+      laid: false,
+      run: run.run,
+      ahead: run.ahead,
+    })
+    expect(unread).toEqual({ waits: false, got: 0, total: 0, lost: 0 })
+    expect(rowsTold(s, unread, run)).toMatchObject({ s: 'arriving', waits: false })
+    // (the target's own run to start, the count unknown: the first open's wait, as before)
+    const first = heard({ prepare: prepare('running', 7), layer: stale, targets: {} }, 'arriving')
+    expect([runOf(first).run, runOf(first).ahead]).toEqual([true, false])
+  })
+  it("rows made here: the host's run alone, whatever our server does", () => {
+    const s = heard({ prepare: prepare('running'), layer: stale, targets: {} }, 'complete', { here: true })
+    expect(runOf(s).run).toBe(false)
   })
 })
