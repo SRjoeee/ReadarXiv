@@ -285,20 +285,30 @@ export function lineOf(state: ReaderState, held = false, prepared = false): Line
   return { on: running(state), value: base + (1 - base) * state.progress }
 }
 
-/** a refusal for now with nothing of the translation laid: the bilingual version not to be had now, and none of it on screen */
+/** the paper waiting its turn: our server at capacity (`causeOf` busy), which the session asks again by itself at our server's
+ *  time: a wait, as the first-time wait is, never a refusal (the coordinator, 2026-11-12) */
+export const queuedNow = (state: ReaderState): boolean => causeOf(state) === 'busy'
+/** a refusal for now with nothing of the translation laid: the bilingual version not to be had now, and none of it on screen.
+ *  Waiting in line is none (queuedNow): the reader asked for the translation and it comes with nothing of theirs to do */
 export const refusedNow = (state: ReaderState): boolean =>
-  state.available && state.unavailable !== null && !LASTING.has(state.unavailable.why) && state.layer.laid === 0
+  state.available &&
+  state.unavailable !== null &&
+  !LASTING.has(state.unavailable.why) &&
+  !queuedNow(state) &&
+  state.layer.laid === 0
 /**
  * The original held on screen by the host's rules (parts.tsx; ReaderController `hold`): a refusal for now with nothing laid,
- * where `refusal` is `original`; in a narrow window where `narrow` is `shown`, until the reader chooses a display, while the
- * paper is made (prepared, or translated after a prepare this visit) or refused for now with nothing laid (the website's
- * displayFor). Neither rule given (the extension's): never
+ * where `refusal` is `original` (waiting in line is no refusal: the display chosen stands, as in the first-time wait); in a narrow
+ * window where `narrow` is `shown`, until the reader chooses a display, while the paper waits its turn or is made (prepared, or
+ * translated after a prepare this visit) or refused for now with nothing laid (the website's displayFor). Neither rule given
+ * (the extension's): never
  */
 export function heldOf(state: ReaderState, rules: Pick<Parts, 'narrow' | 'refusal'>): boolean {
   if (state.noPaper) return false
   if (rules.refusal === 'original' && refusedNow(state)) return true
   if (rules.narrow !== 'shown' || !state.narrow || state.chose) return false
   return (
+    queuedNow(state) ||
     state.preparing !== null ||
     state.phase === 'preparing' ||
     (state.made && state.phase === 'translating') ||

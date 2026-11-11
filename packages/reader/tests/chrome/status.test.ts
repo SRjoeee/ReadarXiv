@@ -602,9 +602,11 @@ describe("the original held by the host's rules (status.ts heldOf; L11's second 
     for (const over of [busy, { narrow: true, phase: 'preparing' as const, preparing: { progress: null } }])
       expect(heldOf(at({ phase: 'ready', ...over }), {})).toBe(false)
   })
-  it("`refusal: 'original'`: a refusal for now with nothing laid, at any width; not one with pages laid, nor the paper's own", () => {
+  it("`refusal: 'original'`: a refusal for now with nothing laid, at any width; not one with pages laid, nor the paper's own, nor waiting in line", () => {
     const rules = { refusal: 'original' as const }
-    expect(heldOf(at({ phase: 'ready', ...busy }), rules)).toBe(true)
+    // (our server at capacity: the paper waits its turn, a wait as the first-time wait is, the display chosen kept)
+    expect(heldOf(at({ phase: 'ready', ...busy }), rules)).toBe(false)
+    expect(heldOf(at({ phase: 'ready', unavailable: { why: 'refused', retryAt: null } }), rules)).toBe(true)
     expect(heldOf(at({ phase: 'ready', unavailable: { why: 'unreachable', retryAt: null } }), rules)).toBe(true)
     expect(heldOf(at({ phase: 'ready', ...busy, layer: { laid: 2, total: 4 } }), rules)).toBe(false)
     expect(

@@ -10,7 +10,15 @@ import { textOf } from '../../src/chrome/capsule-words.ts'
 import { eventsOf } from '../../src/chrome/events.ts'
 import { INITIAL, reduce, type ReaderState as ChromeState } from '../../src/chrome/model.ts'
 import type { StateWords } from '../../src/chrome/parts.tsx'
-import { type Capsule, type Card, capsuleOf, cardOf, retryOffered } from '../../src/chrome/status.ts'
+import {
+  type Capsule,
+  type Card,
+  capsuleOf,
+  cardOf,
+  heldOf,
+  refusedNow,
+  retryOffered,
+} from '../../src/chrome/status.ts'
 import { DEFAULTS, type Prefs } from '../../src/prefs.ts'
 import type { ReaderState } from '../../src/reader.ts'
 import {
@@ -110,6 +118,7 @@ type Beat =
 /** a visit: every resource the machine asks answered at once, our server's rows read as reader.ts reads them (every ref the
  *  document names for the target, each once a ticket; at the run's end read whole, its end told), drawn at the end; the opens
  *  answered by `refusals` in turn (none left: the document held), each drawn capsule kept with its time (`seen`) */
+/** `hold`: an open the refusals do not answer is answered by an `answer` beat alone */
 function visit(store: Store, beats: Beat[], refusals: Refusal[] = [], hold = false) {
   let s: State = init({
     paper: { id: '2610.00002', version: 1 },
@@ -128,7 +137,7 @@ function visit(store: Store, beats: Beat[], refusals: Refusal[] = [], hold = fal
   let told: ReaderState | null = null
   const live = (slot: string) => [...resources(s)].find(([, spec]) => spec.slot === slot)?.[0] ?? null
   const answers = [...refusals]
-  const seen: { at: number; capsule: Capsule | null; card: Card | null }[] = []
+  const seen: { at: number; capsule: Capsule | null; card: Card | null; chrome?: ChromeState }[] = []
   const toldOf = (): ReaderState => {
     const r = s.rows
     const run = runOf(s)
@@ -201,7 +210,7 @@ function visit(store: Store, beats: Beat[], refusals: Refusal[] = [], hold = fal
     const next = toldOf()
     for (const e of eventsOf(told, next)) chrome = reduce(chrome, e)
     told = next
-    seen.push({ at: now, capsule: capsuleAt(), card: cardOf(chrome, () => 'reason', WORDS) })
+    seen.push({ at: now, capsule: capsuleAt(), card: cardOf(chrome, () => 'reason', WORDS), chrome })
   }
   const react = () => {
     if (s.layer.s === 'ready' && s.layer.code && !s.layer.loaded) queue.push({ i: 'code.loaded', t: s.layer.code })
@@ -211,9 +220,9 @@ function visit(store: Store, beats: Beat[], refusals: Refusal[] = [], hold = fal
     }
     const composed = live('composed')
     if (composed && s.layer.s === 'ready' && !s.layer.open) queue.push({ i: 'composed.opened', t: composed })
-    const open = hold ? null : live('open')
+    const open = live('open')
     if (open && answers.length) queue.push({ i: 'open.answered', t: open, doc: s.doc, refused: answers.shift() })
-    else if (open && s.doc) queue.push({ i: 'open.answered', t: open, doc: s.doc })
+    else if (open && s.doc && !hold) queue.push({ i: 'open.answered', t: open, doc: s.doc })
     const t = live('rows')
     if (s.rows.s === 'arriving' && t) {
       if (reading?.t !== t) reading = { t, read: new Set() }
@@ -564,3 +573,53 @@ describe('failed passages are told only where the session is not already asking 
     expect(v.capsule).toMatchObject({ kind: 'notice', action: 'retry' })
   })
 })
+
+describe('waiting in line is a wait, not a refusal (the coordinator, 2026-11-12; the flow-demo of 2026-11-11, F5)', () => {
+  // (the recording: our server at capacity, the open refused busy at 0 s, asked again at 4.2 s and 12.4 s, then taken: the website
+  // showed the original alone, zoomed to fit, and jumped to side by side once the open was taken)
+  it("while queued the page stands as in the first-time wait: the display chosen kept, the translated displays not greyed; the narrow window's hold kept", () => {
+    const store: Store = { units: new Map(), rows: new Map() }
+    const busy: Refusal = { why: 'busy', afterMs: 4200, at: null }
+    const v = visit(
+      store,
+      [
+        { at: 100, opened: true },
+        { at: 200, lost: 'not-opened' },
+        { at: 4400, timers: true },
+        { at: 4400, lost: 'not-opened' },
+        { at: 12_800, timers: true },
+        { at: 12_800, lost: 'not-opened' },
+        { at: 12_900, answer: preparingDoc() },
+      ],
+      [busy, busy],
+      true,
+    )
+    const site = { refusal: 'original' as const, narrow: 'shown' as const }
+    const queued = v.seen.filter((x) => x.chrome?.unavailable?.why === 'busy')
+    expect(queued.length).toBeGreaterThan(1)
+    for (const x of v.seen.filter((y) => y.chrome)) {
+      const c = x.chrome as ChromeState
+      // (the site's rules: the original held, the translated displays greyed, only for a true refusal for now)
+      expect(heldOf(c, site), `held at ${x.at}`).toBe(false)
+      expect(refusedNow(c), `greyed at ${x.at}`).toBe(false)
+    }
+    // (a narrow window holds the original while the paper waits its turn, as it does while the paper is made)
+    for (const x of queued) expect(heldOf({ ...(x.chrome as ChromeState), narrow: true }, site), `narrow at ${x.at}`).toBe(true)
+    expect(heldOf({ ...v.chrome, narrow: true }, site)).toBe(true)
+    // (a true refusal for now keeps today's hold)
+    const quota = visit(store, [{ at: 100, opened: true }, { at: 200, lost: 'not-opened' }], [{ why: 'quota', afterMs: 60_000, at: null }])
+    expect(heldOf(quota.chrome, site)).toBe(true)
+    expect(refusedNow(quota.chrome)).toBe(true)
+  })
+})
+
+/** a paper being prepared for the target, its run made by the open */
+function preparingDoc(): Doc {
+  return {
+    epoch: 'e1',
+    rev: 1,
+    prepare: { state: 'running', why: null, retryAt: null, stage: 'compiling', units: [], attempt: 1 },
+    layer: null,
+    targets: { [ZH]: target('none', { attempt: 0 }) },
+  }
+}
