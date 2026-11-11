@@ -321,6 +321,19 @@ export function measureFidelity(c) {
     }
   }
 
+  // (today's element of v2's element `k` of source `src`, the `rank`-th of that source in v2's unit: today's of the same piece
+  // id where today's placeholder there is that source (a unit joined by its id, the same pieces), or where the part states no
+  // source; else today's placeholder of that source, the same occurrence (a unit whose content moved, stage 1a's (o) or (k) by
+  // group: today's `\%` a placeholder v2 writes as text, each piece after it numbered otherwise; round 8 B8, 1810.04805 p4 t47,
+  // v2's \citet read as today's \ref two pieces on); none where today's unit holds no such placeholder)
+  const todayElementOf = (tu, k, src, rank) => {
+    if (!tu) return undefined
+    const flat = (x) => (x ?? '').replace(/\s+/g, ' ').trim()
+    const at = tu.pieces?.find((p) => String(p.k) === k)
+    if (src == null || flat(at?.src) === flat(src)) return tu.elements?.find((e) => String(e.k) === k)
+    const p = (tu.pieces ?? []).filter((q) => q.kind === 'ph' && flat(q.src) === flat(src))[rank]
+    return p ? tu.elements?.find((e) => e.k === p.k) : undefined
+  }
   // ---------------- elements: an element drawn otherwise than the original sets it: its pieces apart that TeX set on one line,
   // its scripts or sizes set flat as text, or drawn as nothing where TeX set ink for it
   const wrong = { today: new Map(), v2: new Map() }
@@ -392,7 +405,10 @@ export function measureFidelity(c) {
     const today = c.todayOf.get(ord)
     const tu = today !== undefined ? prepByOrd.get(today) : undefined
     const firstLaid = Math.min(...Object.entries(v2.pages).filter(([, p]) => p.members.some((x) => x.ord === ord && x.state === 'laid')).map(([pg]) => Number(pg)))
-    for (const [k, kind, boxes, inkAll, text, raised, keep, literal] of m.els) {
+    const seen = new Map()
+    for (const [k, kind, boxes, inkAll, text, raised, keep, literal, src] of m.els) {
+      const rank = src == null ? 0 : (seen.get(src) ?? 0)
+      if (src != null) seen.set(src, rank + 1)
       if (!VISIBLE(kind) || keep) continue
       const id = `${ord}:${k}`
       if (cropped('v2', ord, boxes) || keptHere('v2', id)) continue
@@ -408,7 +424,7 @@ export function measureFidelity(c) {
       // TeX set nothing: no element missing. Missing where TeX's points hold ink: today's reading finds it on this page, or its
       // points hold ink its reading lost)
       if (text === 2 || kind === 'symbol' || ((kind === 'macro' || kind === 'umacro') && text === 1)) continue
-      const te = tu?.elements?.find((e) => String(e.k) === k)
+      const te = todayElementOf(tu, k, src, rank)
       const found = te?.segs?.some((g) => g.page === n)
       // (a piece whose ink stands outside its unit's lines, OUTSIDE, stays the original's in place on both sides: an IEEE drop
       // cap, 2610.20484 p1)

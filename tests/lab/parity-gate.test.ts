@@ -313,6 +313,26 @@ describe('elements: drawn otherwise than the original sets them', () => {
     const ll = [drawnLine(48.96, 400, 600, 'x'.repeat(20))]
     expect(of('elements')(measure(fe, sides(9, ll, ll), { prep }))).toMatchObject([{ unit: 't9 para', worse: true, v2: { value: 'element 13: drawn as nothing where TeX set ink' } }])
   })
+  it("today's element of v2's is the one of its source where the two units' pieces were numbered otherwise: none missing (1810.04805 p4 t47)", () => {
+    // (round 8 B8: today's t47 holds `\%` placeholders v2 writes as text (lane style-wire, (o)), so v2's piece 62 is the
+    // \citet whose ink is on p5 and today's piece 62 a \ref on p4; read by its id, the cite was "drawn as nothing" on p4. By its
+    // source, today's \citet is piece 66, on p5: nothing missing on p4. The \ref, v2's 58, keeps its own: drawn as nothing it is
+    // missing still)
+    const els = [
+      ['58', 'ref', [], 0, 1, 0, 0, 0, '\\ref{sec:task_ablation}'],
+      ['62', 'cite', [], 1, 1, 0, 0, 0, '\\citet{DBLP:journals/corr/JerniteBS17}'],
+    ]
+    const fe = one(47, 'para', [factLine(310, 540, 348.84)], { els })
+    const seg = (page: number) => [{ page, x0: 320, x1: 360, baseline: 348.84, top: 356, bottom: 346 }]
+    const pieces = [
+      { k: 21, kind: 'ph', src: '\\%' },
+      { k: 62, kind: 'ph', src: '\\ref{sec:task_ablation}' },
+      { k: 66, kind: 'ph', src: '\\citet{DBLP:journals/corr/JerniteBS17}' },
+    ]
+    const prep = [{ ord: 47, kind: 'para', pieces, elements: [{ k: 62, kind: 'ref', flags: [], segs: seg(N) }, { k: 66, kind: 'cite', flags: [], segs: seg(N + 1) }] }]
+    const ll = [drawnLine(310, 400, 348.84, 'x'.repeat(20))]
+    expect(of('elements')(measure(fe, sides(47, ll, ll), { prep }))).toMatchObject([{ unit: 't47 para', worse: true, v2: { value: 'element 58: drawn as nothing where TeX set ink', off: 1 } }])
+  })
 })
 
 describe("groups: a table's grid group translated or kept whole as today decides (the owner's ruling 3; 1706.03762 p9)", () => {
