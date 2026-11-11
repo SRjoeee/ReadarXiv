@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a table a paper centres with `\centerline` (or sets with `\leftline` or `\rightline`) is translated with the tables switch on, cell by cell, as any other table. Its cells had stayed in English whatever the switch, and so had a line of words set that way between paragraphs.
 - Fixed: in the PDF reader, the "Proof." in front of a proof in a SIAM paper, and the "Proof:" of an IEEE paper's proof, are in your language, as the theorems and lemmas around them already were. They had stayed in English.
 - Fixed: in the PDF reader, a theorem, proposition, lemma or corollary whose number holds its section's Roman numeral ("Corollary VI.2", "Proposition VII.1", as IEEE papers number them) is named in your language, as one numbered "V.2" already was. Their heads had stayed in English.
 - Fixed: in the PDF reader, a paragraph the paper prints only when a setting of its own is filled in, such as VLDB's "PVLDB Artifact Availability" under the abstract, is translated. It had stayed in English.

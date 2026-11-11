@@ -4603,6 +4603,46 @@ and counted, so that a miss is seen.
   2610.21765v1). Orphan letters 388 in 11 papers. The added work: one pass over a page's points and glyphs where a line is a
   float line (`floatsOf`), and `inkLeft` over the orphan lines once.
 
+### 18.46 Plain TeX's line boxes set their argument: `\centerline`, `\leftline`, `\rightline` (2026-11-11)
+
+LaTeX keeps plain TeX's line boxes (ltplain.dtx): `\line` is `\hb@xt@\hsize`, `\centerline#1` is `\line{\hss#1\hss}`,
+`\leftline#1` `\line{#1\hss}`, `\rightline#1` `\line{\hss#1}`. Their argument is what the page shows, a box's content as
+`\mbox`'s is. The role table had LaTeXML's prototype, an untyped argument (`{a`), which the walk does not walk: outside an author
+block (where §19.13's FRONT_BOXES reads a `\centerline` row) a call was one placeholder, and a table set inside one no cell and no
+unit. 2608.06701v1 p8: Table 4 is `\centerline{\small\begin{tabular}…}` in its float, every cell English whatever the tables
+toggle, its nine lines the ledger's float lines of a table with no cell (§18.45).
+
+- **The rule** (`rules/arg-roles.mjs` CURATED, `source/latex-front.mjs` CONTENT_BOX and LINE_BOXES). The three are of `\mbox`'s
+  kind: their argument content (`{c`), walked as a box's (a pair in the paragraph it stands in; a table or a paragraph inside it
+  read as such). `\line` is no `\leavevmode`: met where no unit is open, TeX in vertical mode, the box is a line of its own and
+  the text after it begins another unit.
+- **What stays.** PIPELINE 29's walk (`olderUnits`' shadow, `boxesUnread`), by which the units an author block is cut into are
+  numbered after the others, reads the three as one placeholder still, as that walk did: else the rows' units are no longer
+  `later`, and the units after the block are numbered again (measured: 2010.11929v2's body paragraphs and footnote moved behind
+  its rows; `author-places.test.ts` and the unit cut's `authors-box` fail without it). The author block's own reading
+  (FRONT_BOXES) is unchanged.
+- **Not fixed.** The walk does not follow TeX's mode: a unit opened by placeholders alone (a `\centering`, a `\setlength`) reads a
+  box after it as inline, and text right after the box, with no blank line between, as the same unit, where TeX begins a
+  paragraph after the box. No such call in the 88. A paper's own wrapper around a tabular (2610.37668v1's
+  `\newcommand{\fittabular}[3][\maxdimen]{…}`, whose body sets its third argument into a box register twice with `\sbox` and
+  shows it once with `\usebox` inside `\resizebox` or `\makebox`) is no line box: the front end reads the paper's definitions
+  (`paperMacros`: each parameter's use by the role table, `paramUse`), but follows no parameter through a box register, so the
+  argument is no text and the call one placeholder. Reading it needs a definition reading of box registers (a parameter set into a
+  register the body then shows is content, set where the register is shown), a lane of its own.
+- **Over the 88** (the front end over every source, with the walk's every line-box call logged): 7 calls met, 6 of them
+  2010.11929v2's author block rows (read before, unchanged: 362 units, the same texts and places) and 1 2608.06701v1's table;
+  0 `\leftline` or `\rightline`; the other 39 `\centerline`s of the sources are in class and style definitions, a template no
+  file inputs or comments. 2608.06701v1: 329 units to 339, 10 cells new (Table 4's header: "Dataset", "Method", "R→U ↓", "U→R ↑"
+  and DS, GF, MM twice), none lost or changed; its body rows' method and dataset cells are the paper's macros and its numbers no
+  unit, as in its other tables. Stage 1a over r17's compiles and the two made for 2608.06701v1 (its marked compile's request
+  moves; final, not refused): 2010.11929v2's bundle and dump byte-identical to r17's; 2608.06701v1 10 units gained, all drawn,
+  none lost or changed (the twin: 42 of 42 objects, 2 of 2 dumps). Against the baseline (the 86 others r17's): lost 11 as before,
+  gained 5,342 to 5,352, changed 5,157 as before. Its float lines 63 to 60: the nine of a table with no cell gone (three now its
+  cells', six its body rows' macros and numbers, `cells`); over the 88, 787 to 784, `nocells` 326 to 317 (2610.37668v1's alone).
+  The parity (gate mode, both modes, 2608.06701v1-zh): the same worse pages as before (8 by default, 9 with every toggle on),
+  none newly worse and no worse difference come or gone; Table 4's header drawn translated, its cells' centring nearer the
+  original's than today's.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

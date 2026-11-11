@@ -134,11 +134,12 @@ describe('an author block\'s names and its places, by the TeX that sets them', (
     expect(names(p)).toEqual(['Alexey Dosovitskiy, Lucas Beyer,', 'Xiaohua Zhai, Thomas Unterthiner,'])
     expect(places(p)).toEqual(['equal technical contribution, equal advising', 'Google Research, Brain Team'])
     expect(units(p).map(textOf).join('|')).not.toMatch(/google\.com/)
-    // (every unit cut there numbered after the others: the body's paragraph keeps its number; a \\centerline outside an author
-    // block one placeholder, as before)
+    // (every unit cut there numbered after the others: the body's paragraph keeps its number, PIPELINE 29's walk reading each row's
+    // box as one placeholder still (latex-front.mjs LINE_BOXES); a \\centerline outside an author block a line of its own,
+    // PDF-READER §18.46)
     expect(units(p).map(u => u.kind)).toEqual(['heading', 'para', 'author', 'author', 'affiliation', 'affiliation'])
     const body = open('Before it.\n\n\\centerline{A centred line of words.}\n\nAfter it.')
-    expect(units(body).map(textOf)).toEqual(['Before it.', 'After it.'])
+    expect(units(body).map(textOf)).toEqual(['Before it.', 'A centred line of words.', 'After it.'])
   })
   it('a class\'s own command of LaTeX\'s \\author form whose text its \\maketitle sets in the author block\'s tabular: of the block, names where it opens the tabular (ICASSP\'s spconf.sty \\name, 2610.20967v1)', () => {
     // (spconf.sty's own definitions: \\name and \\address store their text as LaTeX's \\author does, and \\@maketitle sets both in
