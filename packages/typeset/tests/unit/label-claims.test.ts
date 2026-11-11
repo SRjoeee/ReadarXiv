@@ -47,7 +47,8 @@ const part = (m: Placed): Part => ({
   paper: { faces: { fonts: [['NimbusRomNo9L-Regu', 100]] } },
   flows: [[m]],
 })
-const zh = '政策制定者应当紧急地提高对爆发的认识'
+const zh =
+  '\u653f\u7b56\u5236\u5b9a\u8005\u5e94\u5f53\u7d27\u6025\u5730\u63d0\u9ad8\u5bf9\u7206\u53d1\u7684\u8ba4\u8bc6'
 const row: Row = { id, ok: true, by: 'test', content: [{ t: 'text', s: zh.repeat(3) }] }
 const rows: Rows = { get: (k) => (k === id ? row : undefined), done: true }
 const laidOf = (m: Placed) => {
@@ -55,7 +56,7 @@ const laidOf = (m: Placed) => {
   expect(laid!.state).toBe('laid')
   return laid!.lines.map(([y, x0, , items]) => ({ y, x0, s: items.map((it) => ('face' in it ? it.s : '')).join('') }))
 }
-const LABEL = /图\s*1/u
+const LABEL = /\u56fe\s*1/u
 
 describe('the two claims on a caption’s label are exclusive', () => {
   it('a hung label (line 0) is laid in its hang on the first line, with no row of its own', () => {
