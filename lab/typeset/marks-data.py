@@ -1,7 +1,7 @@
 # lab/typeset/marks-data.py <fonts dir> [--check]: writes packages/typeset/src/data/marks.ts, the ink of the full-width marks
 # of every CJK face of the role table (src/pdf-reader/engine/rules/font-roles.mjs FACE_TABLE, read as text as
 # scripts/font-roles.py reads it), measured in the very files the website subsets and serves: each mark's default glyph (its
-# cmap's, no feature applied: the glyph the reader draws, its sheet turning `locl` off, docs/PDF-READER.md §18.47), its ink's
+# cmap's, no feature applied: the glyph the reader draws, its sheet turning `locl` off, docs/PDF-READER.md §18.48), its ink's
 # left and right edges as thousandths of its advance, the left rounded down and the right up so that the stored box holds
 # the ink. A face is CJK when its cmap holds U+4E00. Its marks are the code points of general category P it maps in the CJK
 # Symbols and Punctuation and the Halfwidth and Fullwidth Forms blocks, and the curly quotes, dashes, ellipsis and middle dot a
@@ -81,7 +81,7 @@ def module(table, sources):
         '// The ink of the full-width marks of each CJK face of the catalogue, measured in the face files the website serves (each',
         "// file's SHA-256 below, the binding digests of the engine's rules/font-coverage.mjs METRICS), written by",
         '// lab/typeset/marks-data.py; not edited by hand. A mark is its face\'s default glyph (cmap\'s, the one the reader draws:',
-        "// its sheet turns `locl` off): docs/PDF-READER.md §18.47.",
+        "// its sheet turns `locl` off): docs/PDF-READER.md §18.48.",
         '',
         "/** each CJK face's marks: per mark its code point, then its ink's left and right edges, thousandths of its advance (the",
         ' *  left rounded down, the right up: the box holds the ink) */',

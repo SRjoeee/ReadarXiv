@@ -4629,7 +4629,7 @@ if (process.env.AXT_RESIDUE_OUT)
 const punctOut = {}
 for (const target of PUNCT_TARGETS)
   await check(
-    `compose: full-width punctuation as its face draws it (s1-columns, ${target}): no mark's ink on a neighbour's, one place in its box a character in a face, every run drawn at the layout's advance (docs/PDF-READER.md §18.47)`,
+    `compose: full-width punctuation as its face draws it (s1-columns, ${target}): no mark's ink on a neighbour's, one place in its box a character in a face, every run drawn at the layout's advance (docs/PDF-READER.md §18.48)`,
     async () => {
       if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
       const { page, context, errors } = await newPage({ viewport: { width: 5000, height: 900 } })

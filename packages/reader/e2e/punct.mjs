@@ -1,4 +1,4 @@
-// The full-width punctuation's check (lane cjk-punct, docs/PDF-READER.md §18.47): fixture s1-columns laid by the reader's own
+// The full-width punctuation's check (lane cjk-punct, docs/PDF-READER.md §18.48): fixture s1-columns laid by the reader's own
 // typesetter over our site's faces in zh, zh-TW, ja and ko, from translations written for this check (CC0, no text of any
 // paper), whose lines hold 。，、：；！？（） beside CJK, Latin, digits and the fixture's element crop, and one line of no
 // script at all ("2024（3）。": digits and marks alone, the case a run's script decides a face's glyphs by, staging's

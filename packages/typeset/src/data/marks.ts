@@ -1,7 +1,7 @@
 // The ink of the full-width marks of each CJK face of the catalogue, measured in the face files the website serves (each
 // file's SHA-256 below, the binding digests of the engine's rules/font-coverage.mjs METRICS), written by
 // lab/typeset/marks-data.py; not edited by hand. A mark is its face's default glyph (cmap's, the one the reader draws:
-// its sheet turns `locl` off): docs/PDF-READER.md §18.47.
+// its sheet turns `locl` off): docs/PDF-READER.md §18.48.
 
 /** each CJK face's marks: per mark its code point, then its ink's left and right edges, thousandths of its advance (the
  *  left rounded down, the right up: the box holds the ink) */

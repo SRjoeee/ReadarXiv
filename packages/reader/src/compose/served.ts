@@ -588,7 +588,7 @@ export function createServed(o: {
       // (digits and marks alone): Source Han Serif TC under a zh-CN page drew its full stop as Simplified's, low at its em's
       // start, after a Han character, and as its own, in the middle, on a line of a digit, a bracket and the stop
       // (2611.03953v2-zh-TW p13). Off, every mark is its face's default glyph wherever it stands, the one the typesetter's
-      // measure of it is (docs/PDF-READER.md §18.47))
+      // measure of it is (docs/PDF-READER.md §18.48))
       sheet.sheet?.insertRule(
         `.${c}{font-family:${familyOf(id)};font-weight:${f?.weight ?? 400};font-style:${f?.style ?? 'normal'};font-variant-caps:${f?.caps ? 'small-caps' : 'normal'};font-synthesis:none;text-spacing-trim:space-all;font-feature-settings:"locl" 0}`,
       )

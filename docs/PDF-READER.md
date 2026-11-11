@@ -3683,7 +3683,7 @@ after it), and sets the mark's blank as glue that may shrink by half an em.
 - **A mark's class is a full-width mark's alone** (`tokens.ts`, the token's `punct`): a curly quote an alphabet's target sets
   in its Latin face is proportional and has no blank half, so no half of it hangs past a line's end, as `hangOf` hung every
   closing mark's (1810.04805v2-es p8 t155: a closing quote half an em past the measure, the only such line of the corpus's).
-  Since §18.47 the class is the face's measure of the mark (`script.ts` `markOf`): a Latin face holds none.
+  Since §18.48 the class is the face's measure of the mark (`script.ts` `markOf`): a Latin face holds none.
 - The parity counts a unit's line count the rule moves as the rule's only where the pair laid with those spaces put back sets
   today's count (the coordinator's ruling of 2026-11-10, `lab/typeset/parity/README.md`): 2 pages by default, 5 with every switch
   on, each a line holding a lone fragment saved.
@@ -7736,7 +7736,7 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   face draws no ink in, is none of the line (`breaker/break.mjs` `leadOf`, `hangOf`, the one rule the breaker's lines are
   placed by: an opening mark that starts the line loses its leading half where the target's rules compress its marks, a closing
   mark that ends it hangs its trailing half past the edge; a mark's blank half is its run's face's measure, `script.ts` `markOf`,
-  §18.47, none where its ink crosses the middle): it needs no room and stands past the anchor's edge, a turned
+  §18.48, none where its ink crosses the middle): it needs no room and stands past the anchor's edge, a turned
   text's along its run. Today's paintFigures set a translation by its advance, so a right-aligned label ending with a closing
   mark ended its ink half an em short of its original's end (1810.04805v2 p16's "Masked LM" in Chinese, in full-width
   parentheses: 3.49 pt at 6.97) and a centred one

@@ -56,7 +56,7 @@ export const faceScale = (id: string): number => {
 
 /** the page's laid members' lines as one SVG, in the page's own units (viewBox): drawn, never read (out of selection and of the
  *  accessibility tree: the text layer holds the words). In the target's language (`lang`, its tag), whatever the page's
- *  interface is: a browser picks a face's glyphs and its fallbacks by it (docs/PDF-READER.md §18.47). Each run as the layout
+ *  interface is: a browser picks a face's glyphs and its fallbacks by it (docs/PDF-READER.md §18.48). Each run as the layout
  *  measured it: its face at its size with its size correction (faceScale), its tracking after each character */
 export function svgOf(page: Page, vp: PageViewport, faces: Faces, lang = ''): SVGSVGElement {
   const [vx0, vy0, vx1, vy1] = frameOf(vp)

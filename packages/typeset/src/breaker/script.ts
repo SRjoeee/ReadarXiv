@@ -61,7 +61,7 @@ const MARKS: ReadonlyMap<string, ReadonlyMap<string, readonly [number, number]>>
   }),
 )
 /**
- * A mark's blank half as the face that draws it has one (the tokens' `punct`; docs/PDF-READER.md §18.47): `close` where its
+ * A mark's blank half as the face that draws it has one (the tokens' `punct`; docs/PDF-READER.md §18.48): `close` where its
  * glyph's ink lies within the first half of its advance (its second half blank: the half a line's end hangs past the measure,
  * a mark after it takes, a compressed line takes), `open` where within the second (its first half blank); null where its ink
  * crosses the middle, or the face holds no measure of it: it keeps its whole box. The face is the first of `ids` (a run's

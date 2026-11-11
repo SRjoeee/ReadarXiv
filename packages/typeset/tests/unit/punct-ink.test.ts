@@ -1,4 +1,4 @@
-// A full-width mark's blank half is the face's that draws it (script.ts markOf, data/marks.ts; docs/PDF-READER.md §18.47): the
+// A full-width mark's blank half is the face's that draws it (script.ts markOf, data/marks.ts; docs/PDF-READER.md §18.48): the
 // ink of each CJK face's own glyph, measured in the very files the reader draws (lab/typeset/marks-data.py), never a class by
 // character. The owner's staging case (2611.03953v2 p13, 2026-11-12): in Japanese the colon of "粒度：144" lost half its em to
 // the compression, and Harano Aji Mincho draws it in the middle of its em, so the digits after it stood on its ink; Source Han
