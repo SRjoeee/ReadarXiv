@@ -4081,6 +4081,12 @@ translator's to choose).
   or polyglossia language but English (`csquotesOf`). Another style, or a language's, is one placeholder as before: its marks are
   the style's, which the compile's glyphs would tell (the element's own text, as an element's text is read); not read here. No
   paper of the 88 loads csquotes.
+- **An argument that holds a declaration keeps the group that scopes it** (`withMarks`, `declares`): `\enquote{\bfseries bold
+  words}`, its pair written as marks alone, left the switch with no group, and the markers wire put it after the unit's text (the
+  quoted words not bold, what followed bold). Such an argument keeps a `{`…`}` group, its source the call's own braces, the marks
+  outside it as TeX prints them. A group that scopes a declaration stays a group whatever is printed around it. None of the 88's
+  53 `\enquote` calls holds one. And a piece written as characters is read at one offset per character where the front end
+  reads a unit's identifiers and grouped addresses (`keepRead`): a quotation mark is three of them, its UTF-8 bytes.
 - **Measured** over the 88 papers' stage 1a against §18.31's: 51 units of 2 papers change (2610.10069v1 43, 2307.16209v1 8, all
   references), each exactly with its `\enquote` pair out and “…” around its content; every other unit and part member the same;
   drawn units (38,366) and pages per paper the same. The 51 wires all change: tags 10,730 to 10,114 characters, markers 7,010 to
@@ -4251,6 +4257,29 @@ proved costly or tangled with other rules. Nothing is decided by this section bu
   v2's kept size would no longer be judged nearer where today's was bought so); the typesetter's own tests that no line passes
   TeX's bottom (`packages/typeset/tests/unit/entry.test.ts`, the borrowing cases) hold with the option off and would need the
   option's case beside them.
+
+### 18.38 A face that fills a bibliography field travels as production sends it (2026-11-11)
+
+Today's wire (`mt.mjs` planOf) sends a `.bbl` field's pair as markers, a pair that sets more than a style, and a face group whose
+two ends stand at those markers is kept by its boundary rule, so production draws that face: `In \bibinfo{booktitle}{\emph{
+Proceedings of …}}`, and REVTeX's `\bibfield{journal}{\emph{\bibinfo{journal}{…}}\ }`. On the parity's pairs 86 of 86 such fields
+came back whole, 61 of them inside a clause. v2's markers wire sends `must` groups alone, and since §18.31 the field's pair is
+no group at all, so v2 drew those faces upright (round 8 B8's toggles-on sheet: 32 references of 2608.25210 and 2610.22065).
+
+- **The rule** (`instrument.mjs` fieldFacesOf): in a bibliography entry, a group that sets a face (italic, bold, small capitals;
+  a bare group a face switch opens), holds text of its own on the wire, and each of whose ends stands at the edge of a field
+  pair the instrument writes as its content (outside it or inside it, white space aside) is `must`; no reference is asked for
+  it. What production shows, nothing more: a face that fills no field stays upright on a markers wire, in production and in v2
+  alike; a face around a placeholder alone (REVTeX's `\textbf{\bibinfo{volume}{27}}`) goes as production sends it, one marker,
+  its number's ink its face. A reference for a bibliography's entries was weighed and not taken: on two Japanese pairs it
+  placed 41 of 94 venues and left 46 upright (a field worded otherwise inside its entry), for 1.3 % more characters.
+- **Measured** over the 88 against round 8 B8: 186 units in 8 papers gain `must` on one group each and nothing else (`\emph`
+  171, `\textit` 6, `\textbf` 9: volume labels such as "A349"); no unit's id moves (the flag enters none), every dump the same,
+  the differential's lost round 14's 11. Of the 186, today's own plan sends 115 of those it holds and 64 of 64 of 2402.10294v1's
+  (no stored rows) as pairs; 11 stand inside REVTeX's `\href@noop` (§18.33), drawn as the original's ink before: the part the
+  stored rows do not cover, read on the page after a fill, every pair back whole on the right words. The 186's markers wires
+  grow from 44,246 to 45,690 characters. Left upright, with today's other rules: five venues of 2610.10069 whose open stood at
+  `\enquote`'s kept pair (§18.32 writes it as marks): for the tags wire's list.
 
 ## 19. The engine's contract
 
