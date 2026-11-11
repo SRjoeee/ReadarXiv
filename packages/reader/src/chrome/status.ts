@@ -62,18 +62,17 @@ const originalApart = (state: ReaderState, words: StateWords): boolean =>
   state.phase === 'failed' && !!words.openOriginal && state.failures.pdf !== null && state.failures.service === null
 /** a run under way and where it stands: our server's document not heard for now; the paper's layer being made while its
  *  prepare lasts (its place in the queue where our server names one), the rows its units start meanwhile counted under it,
- *  as the website says it, and so while the layer lays its first page where the translation shows; else the paragraphs
- *  translated. Null where none is under way. A run under the original's failure (the phase held by it) by its own marks: a
- *  prepare told, rows coming */
+ *  as the website says it; else the paragraphs translated. Null where none is under way, and where nothing a run brings is
+ *  waited for: the end held for the layer's first page (`laying`) translates nothing, a stored translation's first page is a
+ *  load, which the progress line and the page's marks show as they show the original's (PDF-READER §6.6). A run under the
+ *  original's failure (the phase held by it) by its own marks: a prepare told, rows coming */
 export function stageOf(state: ReaderState): Stage | null {
   const apart =
     state.phase === 'failed' && state.failures.pdf !== null && (state.preparing !== null || state.rowsComing)
   if (!running(state) && !apart) return null
   if (state.reconnecting) return 'reconnecting'
   if (state.preparing) return state.preparing.position != null ? 'queued' : 'preparing'
-  // (the end held for the layer's first page where the translation shows, `laying`: nothing is translated then, and the website's
-  // page said the paper is being prepared until that page is there, its runStage over swaps.ts `laying`)
-  if (state.laying) return 'preparing'
+  if (state.laying) return null
   return 'translating'
 }
 /** some of the translation is there to be read: a page laid, or the layer's pages known and rows of them in (the website's

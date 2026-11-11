@@ -629,16 +629,16 @@ function switched(stored: boolean) {
 }
 
 describe('the capsule over whole visits (the website’s words): it says what the view shown waits for', () => {
-  it('a paper prepared again after a deploy, its rows stored: no "translating" at all, its runs on units the view holds', () => {
+  it('a paper prepared again after a deploy, its rows stored: no capsule at all, its runs on units the view holds, its first page a load', () => {
     const v = reprepared()
     report('(b) re-prepared, stored rows', v.shown)
-    expect(stages(v.shown, 'translating')).toEqual([])
-    steady(v.shown)
+    expect(v.shown).toEqual([])
   })
   it('the same paper where its new layer has units no layer had: one "translating", over the new layer, until their rows come', () => {
     const v = reprepared(5)
     report('(b5) re-prepared, 5 new units', v.shown)
     const t = stages(v.shown, 'translating')
+    expect(v.shown).toHaveLength(1)
     expect(t).toHaveLength(1)
     // (from the new layer's landing, 471 of its 476 held, until the last window brings the 5: it leaves as they are held)
     expect([t[0]?.at, t[0]?.until]).toEqual([98803, 107000])
@@ -646,10 +646,10 @@ describe('the capsule over whole visits (the website’s words): it says what th
     expect(t[0]?.end).toEqual([476, 476])
     steady(v.shown)
   })
-  it('a settled paper opened again: no "translating" (its stored rows read are no run)', () => {
+  it('a settled paper opened again: no capsule at all (its stored rows read are no run, its first page a load)', () => {
     const v = settled()
     report('(c) settled reopened', v.shown)
-    expect(stages(v.shown, 'translating')).toEqual([])
+    expect(v.shown).toEqual([])
   })
   it('a new paper\'s first open: preparing, then one "translating" over the layer shown, from 222 of 227 until 227 are held', () => {
     const v = first()
@@ -664,18 +664,19 @@ describe('the capsule over whole visits (the website’s words): it says what th
     expect(stages(v.shown, 'preparing')[0]?.at).toBe(2132)
     steady(v.shown)
   })
-  it('a toggle that shows more of what was made: no "translating"', () => {
+  it('a toggle that shows more of what was made: no capsule at all', () => {
     const v = toggled()
     report('(d) toggle on', v.shown)
-    expect(stages(v.shown, 'translating')).toEqual([])
+    expect(v.shown).toEqual([])
   })
-  it('a language switched to a target with stored rows: no "translating"; to a new target: one, 0 of 120 to 60, until all 120 are held', () => {
+  it('a language switched to a target with stored rows: no capsule; to a new target: one, 0 of 120 to 60, until all 120 are held', () => {
     const a = switched(true)
     report('(e) switch, stored', a.shown)
-    expect(stages(a.shown, 'translating')).toEqual([])
+    expect(a.shown).toEqual([])
     const b = switched(false)
     report('(f) switch, new target', b.shown)
     const t = stages(b.shown, 'translating')
+    expect(b.shown).toHaveLength(1)
     expect(t).toHaveLength(1)
     expect(t[0]?.counts).toEqual([
       [0, 120],
