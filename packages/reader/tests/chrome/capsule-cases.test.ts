@@ -174,7 +174,6 @@ function visit(
     return unitsRead
   }
   const toldOf = (): ReaderState => {
-    const r = s.rows
     // (the run as the session states it: the reader's own predicate, rows.ts runOf)
     const run = runOf(s)
     const view = viewOf({
