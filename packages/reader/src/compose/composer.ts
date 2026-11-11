@@ -164,6 +164,9 @@ interface PageRec {
   stalled: boolean
   /** laid with nothing of its own, or no part: the original's by the rule */
   nothing: boolean
+  /** laid with nothing of its own at the rows' end: the units its lay read with no translation, as a commit's `gaps`. One
+   *  coming after all (a retry, a run our server started again) lays the page again */
+  gaps: ReadonlySet<string>
   /** the stall clock, from the commit to the drawing in place */
   clock: number
 }
@@ -176,6 +179,7 @@ const browserTimers: Clock = {
   cancel: (id) => cancelAnimationFrame(id),
 }
 const keyOf = (c: Commit) => `laid:${c.tick}`
+const NONE: ReadonlySet<string> = new Set()
 
 export function createComposer(o: ComposerOptions): Composer {
   const { stack, faces } = o
@@ -202,7 +206,7 @@ export function createComposer(o: ComposerOptions): Composer {
   const rec = (n: number): PageRec => {
     let P = recs.get(n)
     if (!P) {
-      P = { failed: false, stalled: false, nothing: false, clock: 0 }
+      P = { failed: false, stalled: false, nothing: false, gaps: NONE, clock: 0 }
       recs.set(n, P)
     }
     return P
@@ -513,6 +517,7 @@ export function createComposer(o: ComposerOptions): Composer {
     // (a page that hides nothing is never put in place: arXiv's page stays, never the composed page in its place)
     if (!page.members.some((m) => m.state === 'laid' && m.off)) {
       P.nothing = true
+      P.gaps = gaps
       if (commits.has(n)) uncommit(n)
       settledNow(n)
       return
@@ -596,6 +601,9 @@ export function createComposer(o: ComposerOptions): Composer {
     const P = rec(n)
     clock.clear(P.clock)
     P.clock = 0
+    // (a page committed holds something of its own: the original's by the rule no more)
+    P.nothing = false
+    P.gaps = NONE
     if (stack.near(n)) {
       // (the stall clock runs from the commit to the drawing in place: a page still waiting for its part or rows is never one)
       P.clock = clock.later(() => stalled(n, c), PAGE_MS)
@@ -670,6 +678,7 @@ export function createComposer(o: ComposerOptions): Composer {
       P.failed = false
       P.stalled = false
       P.nothing = false
+      P.gaps = NONE
     }
     // (the drawings kept off the view are the generation before's; a laid page not in place yet is let go with its drawing:
     // nothing the run before lays or draws is put in place)
@@ -971,6 +980,15 @@ export function createComposer(o: ComposerOptions): Composer {
           // (a row a page of this generation was laid with stated again otherwise, or one missing at the rows' end come since:
           // every page laid again, a generation of its own, as for another target)
           if ([...commits.values()].some((c) => c.gen === gen && (restated(c) || filled(c)))) newGeneration()
+          // (a page laid at the rows' end with nothing of its own, a translation it read missing come since: the original's by
+          // the rule no more, laid again, here or once it comes near; its gaps are its alone, so no other page is laid again)
+          for (const [n, P] of recs)
+            if (P.nothing && [...P.gaps].some((id) => rowsView.get(id)?.ok)) {
+              P.nothing = false
+              P.gaps = NONE
+              stack.refresh(n)
+              if (stack.near(n)) askLay(n)
+            }
           // (a row in: the pages waiting laid again, and the pages another generation still shows where these rows have
           // ended; a committed page is final)
           for (const [n, p] of pages) {
