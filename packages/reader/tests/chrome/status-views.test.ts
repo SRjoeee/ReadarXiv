@@ -457,6 +457,35 @@ describe("a run under way in a host's words (the website's stage and count)", ()
     return { fake, container, wait, set, kind }
   }
 
+  it("a capsule already shown that turns into a run changes its words in place: no frame without a capsule; a wait begun with nothing shown still waits 400 ms (the flow-demo, 2026-11-12: a 0.4 s hole after the network's words and after the failed passages' notice)", async () => {
+    const { wait, set, kind, container } = await mounted({ words: { ...words, network: 'network down' } })
+    const words_ = () =>
+      container.querySelector('.capsule:not([data-out]) [data-words]')?.textContent ??
+      container.querySelector('.capsule:not([data-out])')?.textContent ??
+      null
+    // (the network's words over the count, then the network back: the count at once)
+    await set({ ...translating(7), network: true })
+    expect(kind()).toBe('notNow')
+    await set({ ...translating(7), network: false })
+    expect(kind()).toBe('progress')
+    expect(words_()).toContain('7 / 10')
+    // (failed passages told, then the session's own ask begins: the count at once)
+    await set({ phase: 'ready', failedUnits: 3, failure: 'network', network: false })
+    expect(kind()).toBe('notice')
+    await set(translating(7))
+    expect(kind()).toBe('progress')
+    // (nothing shown, then a wait: none before 400 ms)
+    await set({ phase: 'ready', failedUnits: 0, failure: null })
+    await wait(1000)
+    expect(kind()).toBeNull()
+    await set(translating(8))
+    expect(kind()).toBeNull()
+    await wait(399)
+    expect(kind()).toBeNull()
+    await wait(2)
+    expect(kind()).toBe('progress')
+  })
+
   it("enters once its wait has lasted 400 ms: a wait of 300 ms shows nothing, and says nothing (the coordinator's decision 3, 2026-11-11)", async () => {
     const { container, wait, set, kind } = await mounted()
     await set(translating(3))
@@ -502,8 +531,8 @@ describe("a run under way in a host's words (the website's stage and count)", ()
     ])
   })
 
-  it('a refusal, a notice and a toast are not delayed; a run that follows a refusal waits its own 400 ms', async () => {
-    const { wait, set, kind } = await mounted({ words: { ...words, notNow: () => 'unavailable for now' } })
+  it('a refusal, a notice and a toast are not delayed; a run that follows a capsule showing takes its place at once (the gate is for a wait begun with nothing shown: the coordinator, 2026-11-12)', async () => {
+    const { set, kind } = await mounted({ words: { ...words, notNow: () => 'unavailable for now' } })
     await set({ unavailable: { why: 'unreachable', retryAt: null } })
     expect(kind()).toBe('notNow')
     await set({ unavailable: null, failedUnits: 2 })
@@ -511,8 +540,6 @@ describe("a run under way in a host's words (the website's stage and count)", ()
     await set({ failedUnits: 0, toast: { words: 'Link copied', icon: 'check' } })
     expect(kind()).toBe('toast')
     await set({ toast: null, ...translating(3) })
-    expect(kind()).toBeNull()
-    await wait(400)
     expect(kind()).toBe('progress')
   })
 
