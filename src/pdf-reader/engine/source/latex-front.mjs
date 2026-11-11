@@ -8,7 +8,7 @@
 
 // ---------------------------------------------------------------- files and bytes
 import { isMemoryError } from '@readarxiv/engine'
-import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from '../rules/arg-roles.mjs'
+import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, loads, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from '../rules/arg-roles.mjs'
 import { symbolText, TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
 import { DECLARATION_WORDS, selectsArgument } from '../rules/tex-kernel.mjs'
 /** unpacked files (a Map of relative path → bytes) as a project's file system */
@@ -66,6 +66,8 @@ const OWN_UNIT_ARG = new Set(['caption', 'subcaption', 'subcaptionbox', 'caption
 /** a figure's or a table's caption: caption's \\captionof{figure}{…} outside a float, a deluxetable's \\tablecaption{…}
  *  (their text found by the role table, 2608.24961, 2608.12606) */
 const CAPTIONS = new Set(['caption', 'subcaption', 'subcaptionbox', 'captionof', 'tablecaption'])
+/** subfigure.sty's sub-floats, commands of \subfloat's form (\let\subtable\subfigure) */
+const SUBFIGURE_STY = new Set(['subfigure', 'subtable'])
 /** the front matter's blocks of names and places: their notes (\\thanks, \\footnote) each a footnote of its own
  *  (1706.03762's author block: its footnotes stayed in English, the whole block one opaque command), and the names and
  *  places between them units of their own (frontBlock): the authors' names of kind 'author', the affiliations,
@@ -2513,10 +2515,15 @@ function walk(s, from, to, b, ctx) {
       const read = commandArgs(s, end, name, to), last = read.known ? read.args.findLast(a => a.kind === 'req' && a.role === 'c') : null
       if (last && s[last.start] === '{' && last.end === read.end) { endText(); const id = b.open(s.slice(i, last.start + 1), i); walk(s, last.start + 1, last.end - 1, b, ctx); b.close(id, '}', read.end); i = read.end; continue }
     }
-    // subfig's \subfloat[caption]{content}: the caption in the optional argument, the content walked
-    if (name === 'subfloat') {
+    // subfig's \subfloat[list entry][caption]{content}, and subfigure.sty's \subfigure and \subtable of the same form where the
+    // paper loads that package and does not define them itself (subcaption's subfigure is an environment, read as one): the
+    // caption the last optional argument — one alone is both the list's entry and the caption, as both packages define them
+    // (subfig's \sf@@subfloat, subfigure.sty's \@subfigure) —, walked as a `caption` unit of its float's `sub` type (their
+    // sub\@captype: a \subfigure in a table is a sub-table), then the content walked; a list's entry of its own goes to the
+    // list of figures alone, no unit. Read as one placeholder, subfigure.sty's left 2602.23285v2's sub-captions in English
+    if (name === 'subfloat' || (SUBFIGURE_STY.has(name) && !paper?.own.has(name) && loads(paper, 'subfigure.sty'))) {
       const { args } = argsAfter(s, end, 3)
-      const opt = args[0]?.kind === 'opt' ? args[0] : null, content = args.find(a => a.kind === 'req')
+      const at = args.findIndex(a => a.kind === 'req'), content = args[at], opt = args.slice(0, Math.max(at, 0)).findLast(a => a.kind === 'opt') ?? null
       if (content) {
         endText(); b.flush()
         if (opt) { const saved = b.kind, savedType = b.captype; b.kind = 'caption'; if (typeof b.inFloat === 'string') b.captype = `sub${b.inFloat}`; walk(s, opt.start + 1, opt.end - 1, b, ctx); b.flush(); b.kind = saved; b.captype = savedType }

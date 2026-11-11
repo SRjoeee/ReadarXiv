@@ -5391,6 +5391,13 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   whole: the pairs after it numbered one on, their texts the same). Where nothing defines a command or an environment
   (`commandArgs`, `envArgs`), and for a citation (`\citefield{key}{field}` takes two groups, a field name the translator
   must not see), every adjacent group is still taken: words left English break nothing, an argument translated breaks TeX
+- **A sub-float's caption is its last optional argument** (`source/latex-front.mjs`, the sub-float case). subfig's `\subfloat`
+  and subfigure.sty's `\subfigure` and `\subtable` (where the paper loads that package and does not define them itself;
+  subcaption's `subfigure` is an environment and read as one) take `[list entry][caption]{body}`: one optional argument alone is
+  both the entry and the caption, as both packages define them (subfig's `\sf@@subfloat`, subfigure.sty's `\@subfigure`). The
+  caption is a `caption` unit of its float's `sub` type, the body is walked, a list's entry of its own goes to the list of
+  figures alone. subfigure.sty's calls were read as one placeholder, in no unit: 2602.23285v2's and 2608.25210v2's four
+  sub-captions stayed in English, and nothing flagged them (the ledger classes a float's unowned lines with its graphic's text)
 - **An author block's options after its text are its own** (PIPELINE 29, `source/latex-front.mjs` `frontArgs`). The front
   matter's commands (`\author`, `\affil`, `\affiliation`, `\institute`, `\address`) take, after the form above, every optional
   argument that follows their text, as their classes read it by looking past it (`\@ifnextchar[`): the Elsevier classes' and
