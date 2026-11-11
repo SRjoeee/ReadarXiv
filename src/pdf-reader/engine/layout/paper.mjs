@@ -231,8 +231,8 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     if (!log) return null
     // (the texts of the macros and of the units' leads, asked last: live.mjs probeFiles)
     // (the body's and the entries' answers, as every reader takes them: marks.mjs readInkAnswers)
-    const { inkless, texts, apart } = readInkAnswers(log, paper.units)
-    return { switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)), inkless, texts, names: readNameProbe(log), lineskip: readSkipProbe(log), apart, blamed }
+    const { inkless, texts, decorated, apart } = readInkAnswers(log, paper.units)
+    return { switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)), inkless, texts, decorated, names: readNameProbe(log), lineskip: readSkipProbe(log), apart, blamed }
   })
   if (!probe) return { refused: 'probe', ms }
   // (the day the marked original and its final pass are compiled on: the host's, asked once; any failure of the host's but a
@@ -240,7 +240,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   if (sourceDate !== null && sourceDate !== undefined) {
     try { const d = typeof sourceDate === 'function' ? await sourceDate() : sourceDate; if (Number.isSafeInteger(d) && d >= 0) date = d } catch (e) { if (isMemoryError(e)) throw e }
   }
-  const { switches, inkless, texts, names, lineskip, apart, blamed } = probe
+  const { switches, inkless, texts, decorated, names, lineskip, apart, blamed } = probe
   const cm = converge ? { drafts: 0, marked: 0, settled: false } : null
   /** the result, with CM's record where it ran */
   const result = r => (cm ? { ...r, cm } : r)
@@ -278,7 +278,8 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     // which the final pass is made over)
     return asked({ main, engine, rerun: true, bibtex, overrides: files, ...(wantFinal ? { files: true } : {}) })
   })
-  const options = { engine, classes: LAYOUT_CLASSES, switches, inkless, texts, names, lineskip, complete, apart }
+  // (`decorated`, the texts TeX set beside a decoration of their own (readInkDecorated): the instrument's alone, no marks file's)
+  const options = { engine, classes: LAYOUT_CLASSES, switches, inkless, texts, decorated, names, lineskip, complete, apart }
   const record = () => ({ extra: g.extra, unmarked: [...g.unmarked].sort((a, b) => a - b), names: g.names, failed: g.failed, ...(g.judged ? { judged: g.judged } : {}) })
   const guarded = r => result(g.failed.length ? { ...r, guard: record() } : r)
   if (!marked) return guarded({ refused: 'compile', why: cm ? 'a marked pass did not run through, or the compile threw' : 'the compile threw', ms })

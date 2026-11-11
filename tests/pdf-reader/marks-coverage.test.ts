@@ -621,7 +621,7 @@ describe('the ink section asks every distinct call where it fits INK_BUDGET, the
     const units = [entry('\\natexlab{}'), entry('\\doi{10.0/x}'), entry('\\natexlab{b}')]
     expect(inkSamples(units)).toEqual(['\\natexlab{}', '\\doi{10.0/x}', '\\natexlab{b}'])
     const log = [...listing(0, '\\hbox(0.0+0.0)x0.0'), ...listing(1, ...chars('doi:10.0/x')), ...listing(2, ...chars('b'))].join('\n')
-    expect(readInkAnswers(log, units)).toEqual({ inkless: ['\\natexlab{}'], texts: [['\\doi{10.0/x}', 'doi:10.0/x'], ['\\natexlab{b}', 'b']], apart: [] })
+    expect(readInkAnswers(log, units)).toEqual({ inkless: ['\\natexlab{}'], texts: [['\\doi{10.0/x}', 'doi:10.0/x'], ['\\natexlab{b}', 'b']], decorated: [], apart: [] })
   })
 })
 

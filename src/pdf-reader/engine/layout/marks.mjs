@@ -340,11 +340,12 @@ export function inkSamples(units) {
   return out
 }
 /** the ink section's answers from the probe's log, as the layout takes them: the macros TeX said set no ink (readInkProbe), the
- *  texts it showed they and the leads set (readInkTexts), those whose box it began apart (readInkApart), each the asked
- *  source's own. The one reader every caller takes them by: layout/paper.mjs, the lab's */
+ *  texts it showed they and the leads set (readInkTexts), and those it showed set beside a decoration of their own
+ *  (readInkDecorated), those whose box it began apart (readInkApart), each the asked source's own. The one reader every caller
+ *  takes them by: layout/paper.mjs, the lab's */
 export function readInkAnswers(log, units) {
   const ink = inkSamples(units), leads = leadSamples(units, ink)
-  return { inkless: readInkProbe(log, ink), texts: readInkTexts(log, [...ink, ...leads]), apart: readInkApart(log, ink) }
+  return { inkless: readInkProbe(log, ink), texts: readInkTexts(log, [...ink, ...leads]), decorated: readInkDecorated(log, [...ink, ...leads]), apart: readInkApart(log, ink) }
 }
 const balanced = s => { let d = 0; for (let i = 0; i < s.length; i++) { if (s[i] === '\\') { i++; continue } if (s[i] === '{') d++; else if (s[i] === '}' && --d < 0) return false } return d === 0 }
 /** whether a source holds a comment or a parameter sign: a `%` or a `#` no backslash escapes (`\\%` and `\\#` set a character;
@@ -482,14 +483,42 @@ const TEXT_PASS = /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\()/
  * where no mark goes, by its text (make.mjs besideMarks), and the erasure a cell's (own.mjs, MR 5b), each glyph by leadStep
  */
 export function readInkTexts(log, samples) {
+  return inkTextsOf(log, samples, false)
+}
+/** a box TeX lists of no width, at a depth of the sample's box (its dots): what it holds moves no character of the line */
+const ZERO_BOX = /^(\.+)\\[hv]box\([-\d.]+\+[-\d.]+\)x-?0(?:\.0+)?(?:,|$)/
+/**
+ * The text each sample sets beside a decoration, from the probe's log (inkSection): each sample readInkTexts would read but for
+ * the decoration TeX painted with its characters, which sets no character of its own, as [source, text]: a box of no width
+ * holding a painted rule (a rule both wide and high, or leaders of one) and nodes that set no ink; leaders of a rule standing for
+ * glue; colour stacks; and discretionaries, whose pre-break and post-break lists TeX sets only where it breaks the line there (the
+ * unbroken text is the characters around them). soul's \\hl, \\ul and \\st, alone or in a paper's macro, set a highlight so: each
+ * syllable's ground in a box of no width (`\\hbox(…)x0.0` of `\\leaders` of a `\\rule`, a colour stack round it) before its
+ * characters, a discretionary with a ground and a hyphen between syllables, a space's ground as leaders of a rule
+ * (2111.09276v1's `\\hlyellow{high}`, 2610.40576v1's `\\hlg{All good.}`). Only a sample with such a rule is given. A character
+ * inside a box of no width or under leaders (\\rlap{x}, a dotted fill) is no answer. A log line TeX broke at max_print_line
+ * (PRINT_LINE) goes on on the next line, which is passed over. readInkTexts refuses a listing of a rule: a text it gives is all of
+ * its sample's ink, by which a lead or a cell's piece is claimed glyph by glyph (own.mjs MR 5b, make.mjs besideMarks), which would
+ * leave the rule behind; the reading that takes this text takes the boxes its glyphs were painted with too (instrument.mjs
+ * unmarkedInkOf)
+ */
+export function readInkDecorated(log, samples) {
+  return inkTextsOf(log, samples, true)
+}
+/** readInkTexts' reading, and with `decorated` readInkDecorated's: the decoration TeX painted with the characters passed over, and
+ *  only a sample that has one given */
+function inkTextsOf(log, samples, decorated) {
   const out = []
   let at = null, text = null, bad = false, done = false, math = 0
+  // (`under`: the depth of the box of no width being read, -1 for none; `drawn`: a rule painted in one; `prev` the line before;
+  // `disc` the depth of the discretionary whose break lists are being passed over, -1 for none)
+  let under = -1, drawn = false, prev = '', disc = -1
   for (const line of (log ?? '').split('\n')) {
     const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
     if (r && r.schema === PROBE_SCHEMA && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
       const i = Number(r.fields[0])
-      if (r.tag === 'ink-at') { at = i; text = null; bad = false; done = false; math = 0; continue }
-      if (at === i && done && !bad && text && text.length <= INK_TEXT_MAX && text.replaceAll(INK_ANY, '') !== '' && samples[i] !== undefined) out.push([samples[i], text])
+      if (r.tag === 'ink-at') { at = i; text = null; bad = false; done = false; math = 0; under = -1; drawn = false; prev = ''; disc = -1; continue }
+      if (at === i && done && !bad && text && text.length <= INK_TEXT_MAX && text.replaceAll(INK_ANY, '') !== '' && (!decorated || drawn) && samples[i] !== undefined) out.push([samples[i], text])
       at = null
       continue
     }
@@ -499,6 +528,30 @@ export function readInkTexts(log, samples) {
     if (/^> \\box\d+=/.test(line)) { text = ''; continue }
     if (text === null) continue
     if (/^\\hbox\(/.test(line) && !text) continue
+    if (decorated) {
+      const depth = /^\.*/.exec(line)[0].length
+      // (TeX breaks a log line at max_print_line, PRINT_LINE: a node's line that long goes on on the next line, which holds no
+      // dots, or an empty one where it ended there; a colour stack's literal of four numbers a colour does, 2610.40576v1's)
+      const wrapped = prev.length >= PRINT_LINE && depth === 0
+      prev = line
+      if (wrapped) continue
+      // (a discretionary's pre-break list, its deeper lines, and its post-break list, `.|`: TeX sets them only where it breaks the
+      // line there, the unbroken text the nodes around it; soul sets each syllable so, a ground and a hyphen before the break)
+      if (disc >= 0 && (depth > disc || /^\.+\|/.test(line))) continue
+      disc = -1
+      if (under >= 0 && depth > under) {
+        const rule = RULE_NODE.exec(line)
+        if (rule) { if ((rule[3] === '*' || Number(rule[3]) > 0) && (rule[1] === '*' || rule[2] === '*' || Number(rule[1]) + Number(rule[2]) > 0)) drawn = true }
+        else if (CHAR_NODE.test(line) || WORD_NODE.test(line) || !NO_INK_NODE.test(line)) bad = true
+        continue
+      }
+      under = -1
+      // (a box of no width, and leaders, whose rule or box below is painted the length of the glue they stand for: soul's ground
+      // under a space between two words of one highlight. A colour stack sets no ink)
+      if (math === 0 && (ZERO_BOX.test(line) || /^\.+\\[cx]?leaders /.test(line))) { under = depth; continue }
+      if (math === 0 && /^\.+\\discretionary(?: replacing \d+)?$/.test(line)) { disc = depth; continue }
+      if (/^\.+\\pdfcolorstack /.test(line)) continue
+    }
     if (/^\.+\\mathon(?![A-Za-z])/.test(line)) math++
     else if (/^\.+\\mathoff(?![A-Za-z])/.test(line) && --math < 0) { bad = true; continue }
     const c = CHAR_NODE.exec(line)

@@ -53,7 +53,7 @@ export declare const INK_BUDGET: number
 /** the ink section's samples: each macro's source once, the body's in the paper's order, then the entries', while they fit INK_BUDGET */
 export declare function inkSamples(units: readonly SourceUnit[]): string[]
 /** the ink section's answers from the probe's log, each the asked source's own: the one reader */
-export declare function readInkAnswers(log: string, units: readonly SourceUnit[]): { inkless: string[]; texts: [string, string][]; apart: string[] }
+export declare function readInkAnswers(log: string, units: readonly SourceUnit[]): { inkless: string[]; texts: [string, string][]; decorated: [string, string][]; apart: string[] }
 /** the leads' samples: the placeholders at a unit's head (headEnd) of inline code or a paper's macro that `asked` does not
  *  hold, once, in the paper's order, that TeX can set in a box of its own, while they fit what INK_BUDGET leaves `asked` */
 export declare function leadSamples(units: readonly SourceUnit[], asked?: readonly string[]): string[]
@@ -68,6 +68,8 @@ export declare const INK_ANY: string
 /** each sample's text, where the probe showed it sets characters a text names: a text font's letters, digits and ASCII's
  *  punctuation, a formula's, its glyphs it does not spell INK_ANY, one spelled at least: [source, text] */
 export declare function readInkTexts(log: string, samples: readonly string[]): [string, string][]
+/** the text each sample sets beside a decoration of no width of its own (a ground, an underline, a stroke: soul's), [source, text] */
+export declare function readInkDecorated(log: string, samples: readonly string[]): [string, string][]
 /** one glyph of a lead's ink (its text `t`) read against the text `want` up to `end` from its end: the end past it, or -1 */
 export declare function leadStep(want: string, end: number, t: string): number
 /** the samples whose box TeX began with no character (a kern, glue, a box, a formula, a colour): glued to a word, none of its letters */
@@ -223,7 +225,7 @@ export declare const RULES_PIECE: number
 export declare const OWNED_ALL: number
 /** from a PDF.js document of the marked original and its last TeX pass's log; the caller opens and destroys the
  *  document. With the paper's `units` and PDF.js's operator codes, each marked piece's own ink from its operator lists */
-export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches | null; inkless?: readonly string[] | null; texts?: readonly (readonly [string, string])[] | readonly string[] | null; names?: Partial<Record<NameKey, 0 | 1>> | null; lineskip?: readonly [number, number] | null; complete?: Complete | null; apart?: readonly string[] | null; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
+export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches | null; inkless?: readonly string[] | null; texts?: readonly (readonly [string, string])[] | readonly string[] | null; decorated?: readonly (readonly [string, string])[] | null; names?: Partial<Record<NameKey, 0 | 1>> | null; lineskip?: readonly [number, number] | null; complete?: Complete | null; apart?: readonly string[] | null; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
 /** the unit marks the left is anchored by: `<id>s` / `<id>e` → the destination's place and the word it stands by (markWords) */
 export type UnitMarks = Map<string, { page: number; x: number; y: number; t: string | null }>
 /** an owned row as a page hands it on: [name, how], or [name, how, n, glyphs (page, x0, y, size, the character itself or its

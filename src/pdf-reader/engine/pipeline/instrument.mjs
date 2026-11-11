@@ -15,7 +15,7 @@
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
 import { boxedAlignOf, framesOf, groupFacts, linkTargetOf, ownersOf, readAlign, readBoxAlign, readPdf, readRefNames, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
-import { classOf, followsOf, leadStep, readColours, readSkipProbe, refKeyOf, refKeysOf } from '../layout/marks.mjs'
+import { classOf, followsOf, headEnd, INK_ANY, leadStep, readColours, readSkipProbe, refKeyOf, refKeysOf } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
 import { READ_ALONE, regionsOf, WANT } from '../layout/stream.mjs'
 import { BACKREF_LIST, lastTexLog, startOf } from '../source/latex-front.mjs'
@@ -658,6 +658,8 @@ export function inklessPieces(units, { classes, inkless = null }) {
 /** a piece's own point: a placeholder's opening and closing (`p<u>.<k>a`, `b`; a footnote's call's `n…`; a head macro's \\axthpk
  *  opening), a trailing macro's point after its group (`g`) */
 const OWN_POINT = /^[pn](\d+)\.(\d+)([abg])$/
+/** pageInk's kind of an image's box (layout/ink.mjs, own.mjs IMAGE_BOX): a piece's ink where TeX painted it with the piece */
+const IMAGE_BOX = -3
 /** a glyph that is ink: a character TeX set, no blank and no space */
 const inked = g => /\S/.test(g?.u ?? '') && !g?.blank
 /**
@@ -989,6 +991,156 @@ export function splitInkOf(pages, units, { glyphs = [], classes = [] } = {}) {
 }
 
 /**
+ * The ink of a piece TeX set with no point of its own, or with its opening point alone, that no reading before found
+ * (lanes/soul-locate.md). The marking leaves a paper's macro glued to the word before it unmarked (a mark would part the word's
+ * hyphenation and kerns), and the piece right after a paper's macro that may read ahead (marks.mjs LOOKS_AHEAD: the probe asks
+ * TeX of no paper's macro there, AHEAD_FOLLOWS, which "is found by the text TeX sets for it"); own.mjs reads such a piece by the
+ * probe's text where it has one (MR 4, the split). Where the probe gave none (readInkTexts refuses a listing of a rule: soul's
+ * ground), or the piece is drawn from its ink (a paper's macro with an argument: classesOf's `other`, which holds no text), the
+ * ownership left its glyphs its unit's text, and locate held the unit whole, its text past its source: 2111.09276v1's Figure 1
+ * caption, `\\hlyellow{high}\\hlblue{lighted}` in one word, its three sentences the original's. TeX states what such a piece sets:
+ * the probe's text of its source (`texts`, readInkTexts'; `decorated`, readInkDecorated's: the characters it set beside a box of
+ * no width of its own, a ground, an underline, a stroke). And where it stands: from its opening point; else right after the ink
+ * of the piece of ink before it, that piece's closing point or the last glyph a reading gave it (this one's claims too, in the
+ * source's order); else, where the source writes text right before it, at the one place in its unit's text glyphs that spells
+ * that text's end (WANT characters), its own text and the text after it. Its ink is the glyphs there that spell its text from the
+ * first, character for character (spelled, a blank glyph passed over), each no unit's or its unit's text, the text after it as
+ * written (WANT characters, where the source writes text there) spelled by its unit's text glyphs right after them; and, for a
+ * decorated one, the boxes TeX painted in the stream from the glyph before its first glyph to its last, in their region, no
+ * unit's, over its glyphs: its ground, underline or stroke, which own.mjs gives no unit's text (MR 2b) and which a translation
+ * would leave behind. Not read: a text symbol and a text macro (their glyphs their unit's text, as own.mjs gives them), a piece
+ * before its unit's head ends or past its last text (glyphPiecesOf's, outsidePieces', tailInkOf's), a piece whose text TeX does
+ * not state. Returns the claims, each { unit, piece, page (0-based), glyphs, boxes }
+ */
+export function unmarkedInkOf(pages, units, { glyphs = [], boxes = [], classes = [], texts = null, decorated = null } = {}) {
+  const out = []
+  if (!texts?.size && !decorated?.size) return out
+  const { at, twice, regionOf, lastOwned, placeAt, stopOf } = pieceReading(pages, { glyphs, classes })
+  const taken = new Set()
+  const isText = (u, p, g) => glyphs[p]?.unit[g] === u && glyphs[p].role[g] === ROLE.text && !taken.has(`${p}|${g}`)
+  const real = q => q?.t === 'text' && /\S/.test(typeof q.s === 'string' ? q.s : '')
+  const inkPiece = q => (q?.t === 'ph' || q?.t === 'nested') && classOf(q) !== null
+  /** a reading's place right after glyph `g` of page `p` (pieceReading's placeAt, from a glyph) */
+  const pastGlyph = (p, g) => {
+    const pts = pages[p].points ?? []
+    let q = 0
+    while (q < pts.length && pts[q].glyph <= g) q++
+    return { p, g: g + 1, q, r: regionOf(p).glyph[g] }
+  }
+  /** whether the inked glyphs of the unit's text right after glyph `g` of page `p`, in region `r`, spell `want` from its first
+   *  character (all of it, or up to the region's end on the page, one character at least) */
+  const followedBy = (u, p, g, r, want) => {
+    if (!want) return true
+    const R = regionOf(p), pg = pages[p]
+    let n = 0
+    for (let j = g + 1; j < pg.glyphs.length && n < want.length; j++) {
+      if (R.glyph[j] !== r || !inked(pg.glyphs[j])) continue
+      const t = spelled(pg.glyphs[j].u)
+      if (!isText(u, p, j) || !t || !want.startsWith(t, n)) return n > 0 && !isText(u, p, j)
+      n += t.length
+    }
+    return n > 0
+  }
+  /** the one place in the unit's text glyphs (stream order, one page) that spells `before`, `want` and `after` in a row: the glyphs
+   *  spelling `want` [page, glyphs], null where there is none or more than one, or a glyph spells across two of them */
+  /** each unit's text glyphs of ink, in stream order: [page, glyph] (read once, at the first search) */
+  let textsBy = null
+  const placed = (u, before, want, after) => {
+    if (!textsBy) {
+      textsBy = new Map()
+      pages.forEach((pg, p) => {
+        const O = glyphs[p]
+        for (let g = 0; g < (O?.unit.length ?? 0); g++) {
+          if (O.unit[g] < 0 || O.role[g] !== ROLE.text || !inked(pg.glyphs[g])) continue
+          const l = textsBy.get(O.unit[g])
+          if (l) l.push([p, g])
+          else textsBy.set(O.unit[g], [[p, g]])
+        }
+      })
+    }
+    const list = (textsBy.get(u) ?? []).filter(([p, g]) => !taken.has(`${p}|${g}`))
+    const all = before + want + after, from = before.length, to = from + want.length
+    let found = null
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i][0], got = []
+      let n = 0, x = i, ok = true
+      while (n < all.length && x < list.length && list[x][0] === p) {
+        const t = spelled(pages[p].glyphs[list[x][1]].u)
+        if (!t || !all.startsWith(t, n) || (n < from && n + t.length > from) || (n < to && n + t.length > to)) { ok = false; break }
+        if (n >= from && n < to) got.push(list[x][1])
+        n += t.length
+        x++
+      }
+      if (!ok || n !== all.length || !got.length) continue
+      if (found) return null
+      found = [p, got]
+    }
+    return found
+  }
+  /** the boxes TeX painted with a run of glyphs: in the stream from the glyph before its first to its last, in its region, no
+   *  unit's, a painted path or an image, over one of its glyphs */
+  const paintedWith = (p, run) => {
+    const pg = pages[p], X = boxes[p], R = regionOf(p), r = R.glyph[run[0]]
+    const x0 = run[0] > 0 ? (pg.boxAt?.[run[0] - 1] ?? 0) : 0, x1 = pg.boxAt?.[run.at(-1)] ?? x0
+    const got = []
+    for (let x = x0; x < x1; x++) {
+      const path = pg.paths?.[x] ?? -1
+      if (R.box[x] !== r || (X?.unit[x] ?? -1) >= 0 || (path < 0 && path !== IMAGE_BOX)) continue
+      const bx0 = pg.boxes[4 * x], by0 = pg.boxes[4 * x + 1], bx1 = pg.boxes[4 * x + 2], by1 = pg.boxes[4 * x + 3]
+      const over = run.some(g => { const G = pg.glyphs[g], lo = Math.min(G.top, G.bottom), hi = Math.max(G.top, G.bottom); return bx0 < G.x1 && bx1 > G.x0 && Math.min(by0, by1) < hi && Math.max(by0, by1) > lo })
+      if (over) got.push(x)
+    }
+    return got
+  }
+  units.forEach((unit, u) => {
+    const P = unit?.pieces ?? []
+    if (twice.has(u)) return
+    const head = headEnd(P, 0), last = P.findLastIndex(real)
+    /** the last glyph of each piece this reading claimed: [page, glyph] */
+    const ends = new Map()
+    for (let k = head; k < last; k++) {
+      const piece = P[k]
+      if (piece.t !== 'ph' || classOf(piece) === null || symbolText(piece.src) !== null) continue
+      const cls = classes[u]?.get(String(k))?.cls
+      if (cls === 'macro' || cls === 'umacro') continue
+      if (['b', 'g'].some(x => at.has(`p${u}.${k}${x}`) || at.has(`n${u}.${k}${x}`)) || lastOwned.has(`${u}|${k}`)) continue
+      const deco = decorated?.get(piece.src), want = spelled(deco ?? texts?.get(piece.src))
+      if (!want || want.includes(INK_ANY)) continue
+      // (the text after it, to the next piece of ink, its groups' opens and closes passed over)
+      let after = ''
+      for (let q = k + 1; q < P.length && after.length < WANT; q++) {
+        if (P[q].t === 'text') after += spelled(P[q].s)
+        else if (inkPiece(P[q])) break
+      }
+      after = after.slice(0, WANT)
+      // (the piece before it, white space, groups' opens and closes and pieces of no ink passed over; and the text written
+      // before it back to the piece of ink before that)
+      let j = k - 1, before = ''
+      while (j >= 0 && !inkPiece(P[j])) { if (P[j].t === 'text') before = spelled(P[j].s) + before; j-- }
+      const mine = (p, g) => !taken.has(`${p}|${g}`) && ((glyphs[p]?.unit[g] ?? -1) < 0 || isText(u, p, g))
+      let p = -1, run = null
+      const a = at.get(`p${u}.${k}a`) ?? at.get(`n${u}.${k}a`)
+      const prevEnd = j >= 0 && !before ? (at.get(`p${u}.${j}b`) ?? at.get(`n${u}.${j}b`) ?? null) : null
+      const prevLast = j >= 0 && !before ? (ends.get(j) ?? lastOwned.get(`${u}|${j}`) ?? null) : null
+      const from = a ? placeAt(a) : prevEnd ? placeAt(prevEnd) : prevLast ? pastGlyph(prevLast[0], prevLast[1]) : null
+      if (from) {
+        run = spelledRun(pages, regionOf, from, stopOf(u, from), want, mine)
+        p = from.p
+        if (run && !followedBy(u, p, run.at(-1), from.r, after)) run = null
+      } else if (before) {
+        const hit = placed(u, before.slice(-WANT), want, after)
+        if (hit) [p, run] = hit
+      }
+      if (!run?.length) continue
+      for (const g of run) taken.add(`${p}|${g}`)
+      ends.set(k, [p, run.at(-1)])
+      out.push({ unit: u, piece: String(k), page: p, glyphs: run, boxes: deco !== undefined ? paintedWith(p, run) : [] })
+    }
+  })
+  return out
+}
+
+/**
  * The pieces TeX set before their unit's start point, as Instrument `outside` pieces (rootcause/lave.md §2): the marking passes
  * over a unit's head (marks.mjs passedOver) and patch sets the start point before the piece latex-front.mjs startOf names, so
  * whatever TeX set for a piece before that one stands before the unit's text, which begins at the point, and is never erased
@@ -1154,6 +1306,21 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
       O.unit[j] = c.unit
       O.role[j] = c.role
       O.piece[j] = Number(c.piece)
+    }
+  }
+  // (the ink of a piece of no point of its own, or of its opening point alone, that no reading found, by the text TeX states it
+  // sets where its source places it, and with it the boxes of its decoration: unmarkedInkOf)
+  for (const c of unmarkedInkOf(pages, units, { glyphs, boxes, classes: classesBy, texts: shown, decorated: textsOf(options.decorated) })) {
+    const O = glyphs[c.page], X = boxes[c.page]
+    for (const j of c.glyphs) {
+      O.unit[j] = c.unit
+      O.role[j] = ROLE.element
+      O.piece[j] = Number(c.piece)
+    }
+    for (const x of c.boxes) {
+      X.unit[x] = c.unit
+      X.role[x] = ROLE.element
+      X.piece[x] = Number(c.piece)
     }
   }
   const tail = tailInkOf(pages, units, { glyphs, classes: classesBy, inkless })

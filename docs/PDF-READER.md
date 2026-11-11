@@ -5094,6 +5094,58 @@ the layout measured it alone at 9.262 (the check reports it, before and after al
 would hold that too; it moves the drawing's structure, which the parity's reading and the checks read by line. And the
 extension's own reader (`AXT_READER` 'today', `layer-proto/layer2.mjs`) keeps its class by character.
 
+### 18.51 A piece of no point of its own is found by the text TeX set for it, its decoration with it (2026-11-12)
+
+soul's `\hl` (and `\ul`, `\st`), alone or through a paper's own macro (`\newcommand{\hlyellow}[1]{{\sethlcolor{LightYellow}\hl{#1}}}`),
+sets each syllable's ground in a box of no width before its characters. The marking gives no point to a paper's macro glued to
+the word before it (a mark would part the word's hyphenation and kerns), nor to one right after another paper's macro, which may
+read ahead (the probe asks TeX of no paper's macro there: such a macro "is found by the text TeX sets for it", marks.mjs
+`AHEAD_FOLLOWS`). But no reading found it: the probe's text of a macro (`readInkTexts`) refuses a listing of a rule, so a
+highlight's text was never known, and a paper's macro with an argument is drawn from its ink (`classesOf`'s `other`), whose
+text no reading of a piece takes. The ownership left its glyphs its unit's text, the unit's letters past its source's, and locate
+held the whole unit the original's (`text past its source`). 2111.09276v1 p1, Figure 1's caption, `…are
+\hlyellow{high}\hlblue{lighted}). Finally, …`: `\hlyellow{high}` had its two points, `\hlblue{lighted}` none, its seven letters
+read as the caption's text; all three sentences and the label "Figure 1." stayed English though the row was accepted.
+
+- **The rule** (`layout/marks.mjs` `readInkDecorated`, the probe's `decorated`; `pipeline/instrument.mjs` `unmarkedInkOf`). TeX
+  states what such a piece sets: the probe's listing of its box, the characters beside a decoration that sets no character of its
+  own (a box of no width holding a painted rule, leaders of a rule standing for a space, colour stacks, a discretionary's break
+  lists, which TeX sets only where it breaks the line there), read as the probe's `decorated` text; a sample with no such rule
+  stays `readInkTexts`' (whose text is all of its sample's ink: a lead's or a cell's piece is claimed by it glyph by glyph, and the
+  ground would stay behind). And TeX states where it stands: its opening point; else right after the ink of the piece of ink
+  before it (that piece's closing point, or the last glyph a reading gave it); else, the source writing text right before it, the
+  one place in its unit's text glyphs that spells that text's end, its own text and the text after it (WANT characters each). Its
+  ink is the glyphs there that spell its text, the text after it as written spelled right after them; with a decoration, the
+  boxes TeX painted in the stream from the glyph before them to their last, over them, no unit's: its ground, which own.mjs gives
+  no unit's text (MR 2b) and which a translation would leave behind. Read for a piece of no closing point and no ink the
+  ownership gave it, past its unit's head and before its last text, neither a text symbol nor a text macro (their glyphs their
+  unit's text); its text `decorated`'s or `texts`'. No macro's name is read: the colour macro `\add{…}` of 2610.21376v1, of no
+  rule, is found by its `texts` the same way.
+- **Before and after** (2111.09276v1, our compile of it in the pinned image, stage 1a): the caption unlocated `text past its
+  source` (claimed 241 letters, written 234: "lighted"), the paper's one; after, located and drawn, `\hlyellow{high}` and
+  `\hlblue{lighted}` two elements, each its glyphs and its ground (B's box 75, x 444.2–469.6, given no unit before), the crop
+  x 444.17–469.83 holding it; groups 846 to 849, proofs a 0, c 0. The fixture (`tests/fixtures/pdf/highlights/`, ours) holds
+  each case: two highlights in one word after a closed one and after one of its opening point alone, one at a word's start, its
+  middle and its end, one across a line's end, `\hl` itself; at the base three of its five units were held (`text past its
+  source`) and eight grounds no unit's.
+- **Over the 88** (r18's compiles, every one found by its key: the marked sources did not move): 86 papers' objects and dumps
+  byte-identical to r18's; two moved, no unit lost. 2610.21376v1: its unit 7 (a paragraph whose colour macro `\add{, i.e., …,}`,
+  unmarked after a citation, its text `texts`') from `text past its source` to drawn, 15 lines; its unit 126's `\new{),}`, glued to
+  "seeding", given its two glyphs (before, an element drawn from its ink with none). 2610.40576v1: the cell of `\hlg{All good.}
+  \hlp{Now, write the matrix in Python}` located and drawn (located, the pitch rule keeps its `\ctk{+2.0k}` the original's, which
+  gives it a new id; the baseline's statement of its old one says so: pitchGroup). `text past its source` 31 to 29. The probe's
+  decorated texts: every highlight call of the three papers that write one (2111.09276v1's 28, 2610.40576v1's 23,
+  2610.19159v1's 1). The work counters (27) as r18's; the float
+  lines 778 and the orphan letters 388 as r18's; the parity's 22 pairs' papers' bundles byte-identical (neither paper is a pair).
+  The reading's own time over the 88: 131.8 ms in all, 7.9 ms the most (2307.16209v1), 0.3 % of the instrument's 49 s; 4 claims.
+- **Not fixed.** A piece of no point whose text TeX's probe does not state (a sample past INK_TEXT_MAX's 64 characters, a
+  listing with a node neither reading knows, a probe compile that stopped before it) stays its unit's text, the unit held as
+  before. A piece of no point TeX broke over a line's end with a hyphen is not read: the hyphen is no character of its text. A
+  piece bounded by a text TeX does not set as written stays as before: 2610.40576v1's four other held cells, whose highlights
+  stand right before `\ctk{…}`, which sets `[#1]` (its brackets no source text writes) while the front end reads it as a group
+  of its argument alone; own.mjs read the bracket into the highlight before it, and this reading, spelling the text after it,
+  meets the bracket first and claims nothing.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
