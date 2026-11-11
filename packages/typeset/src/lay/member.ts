@@ -54,6 +54,9 @@ export type Prepared = {
   wide: FitBlock[] | null
   /** laid again in its row alone (S.relay) */
   noOver?: boolean
+  /** a figure text of several rows a closed path holds (lay/adapt.ts): laid on its rows' grid at their pitch, the page fill
+   *  spreading none of it */
+  onRows?: boolean
 }
 /** a member's lay: laid, with what the fill takes of it, or left the original's and why */
 export type MemberLay = { state: 'laid'; lay: FillLaid; over: boolean } | { state: Unlaid }
@@ -235,12 +238,12 @@ export function layMember(p: Prepared, R: RuleParams, trace: Trace | null = null
     share: i === all.length - 1 ? share : null,
     clear: null,
   }))
-  // (a figure text of several rows a closed path holds (FitBlock.rows) keeps its rows' pitch: a translation of fewer lines
-  // stands from the first row down and ends early, never spread over the rows' height to fill them (PDF-READER §18.36); the
-  // page fill reads its top as the original's pitch)
-  const FR = (p.blocks.some((b) => b.rows)
-    ? { ...(R as object), fillLead: null, fillLeadRel: null }
-    : R) as unknown as Parameters<typeof fillLeadsOf>[1]
+  // (a figure text of several rows a closed path holds (`onRows`) keeps its rows' pitch: a translation of fewer lines ends
+  // early, never spread over the rows' height to fill them (PDF-READER §18.36); the page fill reads its top as the original's
+  // pitch)
+  const FR = (p.onRows ? { ...(R as object), fillLead: null, fillLeadRel: null } : R) as unknown as Parameters<
+    typeof fillLeadsOf
+  >[1]
   for (const q of runUnits) fillLeadsOf(q as never, FR)
   fillLeadsOf(unit as never, FR)
   put('L9', 'S.fill.leads', {

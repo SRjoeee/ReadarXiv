@@ -169,8 +169,7 @@ describe('a figure’s paragraph and an item with its label, laid by the paragra
       }
   })
   // (2608.06701v1 p2's first bubble as the part states it: five rows of Arial at 4.787 on a pitch of 5.745, set flush left in a
-  // scroll, the scroll's inside 3.98 over the first row's baseline and 0.53 under the last row's (Room.over and Room.under, F3);
-  // each row's ink top and bottom its line's)
+  // scroll whose edge the part states (Room.over: a path's joined rows, F3))
   const scroll = (): Placed => ({
     ord: 0,
     kind: 'figure',
@@ -185,23 +184,14 @@ describe('a figure’s paragraph and an item with its label, laid by the paragra
       [1, 0, 77.72, 113.1, 696.95, 700.37, 696, 48.96, 300.02, 0, 4.79],
       [1, 0, 77.72, 114.16, 691.2, 694.63, 691.15, 48.96, 300.02, 0, 4.79],
     ],
-    room: { below: 5.8, next: 12.07, side: [48.96, 129.9], over: 3.98, under: 0.53 },
+    room: { below: 5.8, next: 12.07, side: [48.96, 129.9], over: 15.47, under: 12.02 },
   })
-  // (each drawn line's band: its baseline, a CJK item's em box 0.88 over it and 0.12 under, a Latin item's 0.75 over)
-  const bandsOf = (m: { lines: unknown[] }) =>
-    (m.lines as [number, number, number, Item[]][]).map(([y, , , items]) => {
-      const text = items.filter((it) => 'face' in it)
-      const cjk = (it: Item) => /[\u3000-\u9fff\uff00-\uffef]/u.test(it.s)
-      return {
-        y,
-        top: Math.max(...text.map((it) => y + (cjk(it) ? 0.88 : 0.75) * it.size)),
-        bottom: Math.min(...text.filter(cjk).map((it) => y - 0.12 * it.size)),
-      }
-    })
-  it('lays a path’s joined rows from the first row’s top at the rows’ pitch, ending early (2608.06701v1 p2’s first bubble)', () => {
-    // (four lines of translation for five rows: on the rows' grid lowered by what a CJK line's em box stands over the first
-    // row's capitals, at the rows' pitch, ending early; before, its lines stood on the rows' baselines at the target's leading
-    // (1.27 of the rows' pitch), its first line's em box over the scroll's inside, its ideographs into the scroll's edge)
+  const B = scroll().lines.map((l) => l[4])
+  const baselines = (m: { lines: unknown[] }) => (m.lines as [number, ...unknown[]][]).map((l) => l[0])
+  it('lays a path’s joined rows on their baselines at their pitch, ending early (2608.06701v1 p2’s first bubble)', () => {
+    // (four lines of translation for five rows: the first on the first row's baseline, as any unit's first line, each next on
+    // the next row's; before, they stood at the target's leading (1.27 of the rows' pitch, 7.30 here), and the page fill spread
+    // a bubble's lines further over its rows' height)
     const row: Row = {
       id: idOf(5),
       ok: true,
@@ -211,14 +201,13 @@ describe('a figure’s paragraph and an item with its label, laid by the paragra
     const page = layPage(part([scroll()]), rows([row]), rulesFor('zh'), metrics)
     const m = page.members.find((x) => x.ord === 0)!
     expect(m.state).toBe('laid')
-    const bands = bandsOf(m)
-    expect(bands.length).toBeLessThan(5)
-    const B = scroll().lines.map((l) => l[4])
-    for (let i = 1; i < bands.length; i++) expect(bands[i - 1]!.y - bands[i]!.y).toBeCloseTo(B[i - 1]! - B[i]!, 6)
-    expect(bands[0]!.top).toBeLessThanOrEqual(717.61 + 1e-6)
-    expect(bands[0]!.top).toBeGreaterThan(717.61 - 0.05)
+    const ys = baselines(m)
+    expect(ys.length).toBeLessThan(5)
+    ys.forEach((y, k) => {
+      expect(y).toBeCloseTo(B[k]!, 6)
+    })
   })
-  it('fits a translation longer than a path’s rows by the ladder, never past its first row’s top or the path’s inside', () => {
+  it('fits a translation longer than a path’s rows by the ladder, its size, its lines on the rows’ baselines', () => {
     const row: Row = {
       id: idOf(5),
       ok: true,
@@ -227,12 +216,16 @@ describe('a figure’s paragraph and an item with its label, laid by the paragra
     }
     const page = layPage(part([scroll()]), rows([row]), rulesFor('zh'), metrics)
     const m = page.members.find((x) => x.ord === 0)!
-    if (m.state !== 'laid') return
-    const bands = bandsOf(m)
-    const B = scroll().lines.map((l) => l[4])
-    for (let i = 1; i < bands.length; i++) expect(bands[i - 1]!.y - bands[i]!.y).toBeCloseTo(B[i - 1]! - B[i]!, 6)
-    expect(bands[0]!.top).toBeLessThanOrEqual(717.61 + 1e-6)
-    expect(bands.at(-1)!.bottom).toBeGreaterThanOrEqual(691.2 - 0.53 - 1e-6)
+    expect(m.state).toBe('laid')
+    const ys = baselines(m)
+    expect(ys.length).toBe(5)
+    ys.forEach((y, k) => {
+      expect(y).toBeCloseTo(B[k]!, 6)
+    })
+    const sizes = (m.lines as [number, number, number, Item[]][]).flatMap((l) =>
+      l[3].flatMap((it) => ('face' in it ? [it.size] : [])),
+    )
+    expect(Math.max(...sizes)).toBeLessThan(4.7871)
   })
   it('lays an item after its label, the label the original’s ink: its group never turned off', () => {
     // ("A." 100 to 109, its text from 113)

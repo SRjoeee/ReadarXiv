@@ -24,11 +24,6 @@ export type FitBlock = DecorBlock & {
   /** the ink that stays beside its lines (lay/adapt.ts, from Room.stays: a QED box after a proof's last words), each piece's box
    *  and the side of the original's line it stood on: every slot whose line reaches it keeps off it (B.slots) */
   stays?: Stay[]
-  /** a figure text of several rows a closed path holds (lay/adapt.ts, PDF-READER §18.36): laid on its rows' grid, its lines no
-   *  higher than its first line's band top meeting `ceil` (the first row's ink top) and no lower than its last line's band
-   *  bottom meeting `sill` (the last row's bottom, inside the path); `top` and `bottom` a line's band over and under its
-   *  baseline in em of its size (the target's: a CJK face's em box), B.slots */
-  rows?: { ceil: number; sill: number; top: number; bottom: number }
 }
 /** ink beside a unit's line that no translation replaces: its box, whether it stood after the line's end (else before its
  *  start), and how far off it TeX set that line (`gap`: from the line's end to it, or from it to the line's start) */

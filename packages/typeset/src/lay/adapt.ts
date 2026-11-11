@@ -552,26 +552,12 @@ export function adapt(i: AdaptInput): Adapted {
     numbered: decor.numbered,
   })
   const P = { ...(R as object), ...up.P, measure: i.measure, patterns: i.patterns } as FitParams
-  // (a figure text of several rows a closed path holds (F3: its rows joined, Room.over its path's edge over its first row's
-  // baseline, Room.under the edge under its last row's): laid on its rows' grid at their pitch, from its first row's top down,
-  // its last line no lower than its last row's bottom (its line's band, or its ink where deeper) nor than the path's inside; a
-  // translation of fewer lines ends early, one of more is fitted by the ladder (PDF-READER §18.36, the owner's rule that a
-  // translation stays inside the range the original text held: 2608.06701v1 p2's first bubble))
-  const b0 = blocks[0]
-  if (kind === 'figure' && m.room.over !== undefined && lines.length > 1 && blocks.length === 1 && b0) {
-    const l0 = lines[0]!,
-      lz = lines.at(-1)!
-    const cjk = !!(R as { cjk?: boolean }).cjk,
-      c = i.reading.cjkSize ?? 1
-    b0.rows = {
-      ceil: Math.min(l0[5], l0[4] + m.room.over),
-      sill: Math.max(
-        m.room.under !== undefined ? lz[4] - m.room.under : Number.NEGATIVE_INFINITY,
-        Math.min(lz[6], (b0.rects.at(-1) as Rect)[2]),
-      ),
-      top: cjk ? Math.max(0.75, 0.88 * c) : 0.75,
-      bottom: cjk ? -0.12 * c : -0.22,
-    }
+  // (a figure text of several rows a closed path holds (F3: its rows joined, Room.over the path's edge): laid on its rows'
+  // grid, its first line on its first row's baseline as any unit's, at the rows' pitch, never the target's looser leading nor
+  // the page fill's spread; a translation of fewer lines ends early, one of more is fitted by the ladder, its size (PDF-READER
+  // §18.36: 2608.06701v1 p2's first bubble, its four lines at 1.27 of its rows' pitch)
+  const onRows = kind === 'figure' && m.room.over !== undefined && lines.length > 1
+  if (onRows) {
     P.leadBase = 1
     P.leadFloor = 1
   }
@@ -695,6 +681,7 @@ export function adapt(i: AdaptInput): Adapted {
         : null,
     shareRow: after?.join ? { page: last[0], baseline: last[4], size: sizeOf(last, m) } : null,
     wide,
+    ...(onRows ? { onRows } : {}),
     ...(rowStart ? { rowStart } : {}),
     ...(lineOf ? { line: lineOf } : {}),
   }

@@ -323,16 +323,6 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     expect(t!.container).not.toBeNull()
     expect(texts.some((x) => x.ks.includes(3))).toBe(false)
   })
-  it('reads a joined text’s room from its rows: the edge over its first row’s baseline, the edge under its last row’s (F3)', () => {
-    // (the node's three rows at 700, 686 and 672 in a rectangle from 660 to 712, its stroke 0.2 wide: the typesetter lays the
-    // translation from the first row down and keeps its last line inside, PDF-READER §18.36)
-    const { page, fig } = node()
-    fig.holds = [{ p: 1, b: 0, ks: [0, 1, 2], shape: rect(60, 660, 130, 712) }]
-    const t = figureLinesOf([page], fig, () => false, null).find((x) => x.ks.includes(0))
-    expect(t!.para?.by).toBe('container')
-    expect(t!.container!.over).toBeCloseTo(712 - 0.2 - 700, 6)
-    expect(t!.container!.under).toBeCloseTo(672 - (660 + 0.2), 6)
-  })
   it('joins a node’s word broken with no hyphen where the paper writes it whole elsewhere: "test_password|_lookup.py" (2608.06701v1 p9)', () => {
     const gapped = (text: string, x: number) => [{ text, font: 'TimesNewRomanPSMT', gaps: true, x }]
     const end = (elsewhere: boolean) => {

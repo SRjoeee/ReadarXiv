@@ -4235,17 +4235,12 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
   rows from one text was wrapped into: 2608.06701v1 p2's bubbles are ragged at their natural spaces, every break forced, and so
   are 99 of 2610.37668v1's 103 value overlays; the sentence going on is the evidence, as a hyphen is for F3's paragraph. Census
   (91 papers): 40 breaks joined in 27 boxes on 8 papers; 2610.37668v1's six "Mip-NeRF360 / <scene> / <id>" boxes join wrongly,
-  accepted knowingly. Its room is the path's inside: the part states the path's edge over its first row's baseline
-  (`Room.over`) and under its last row's (`Room.under`). **Where a joined text is laid** (the owner's rule that a translation
-  stays inside the range the original text held; 2608.06701v1 p2's first bubble): on its rows' grid, at their pitch, from the
-  first row's top down. Its first line stands lower than the first row's baseline by what its band (a CJK target's em box,
-  0.88 em over the baseline) stands over the first row's ink top, so that no line is above that top; its last line is no lower
-  than the last row's bottom (its line's band, or its ink where deeper) nor than the path's inside. A translation of fewer lines
-  ends early, one of more is fitted by the ladder as any unit is (its size; its pitch stays the rows'). The block is anchored
-  by the rows' own extent, never by the path's: where the rows stand centred in the path vertically, the translation keeps
-  their top, not the path's centre. Before, it stood on the rows' baselines at the target's leading (1.27 of the rows' pitch
-  in that bubble) and the page fill spread it over the rows' height; its first line's ideographs reached the scroll's edge,
-  0.55 pt over the first row's capitals. Elsewhere a translated line still stands on the original's baseline. A word broken
+  accepted knowingly. Its room is the path's inside. **A joined text is laid on its rows' baselines**, at their pitch: its first
+  line on its first row's baseline, as any unit's first line stands on its original's (the owner's ruling of 2026-11-11: a
+  figure's text keeps the body's baseline rule, no rule of its own and no optical correction; the CJK line's ink stands higher
+  over the baseline than a Latin face's capitals, the faces' shapes, as in the body). A translation of fewer lines ends early;
+  one of more is fitted by the ladder, its size, on the same baselines. 2608.06701v1 p2's first bubble was the bug: its lines
+  stood at the target's leading (1.27 of its rows' pitch) and the page fill spread a bubble's lines over its rows' height. A word broken
   in a node with no hyphen is joined where the document writes it whole ("test_password|_lookup.py"). Known cost of the centred rule: four node labels whose two rows are one width to
   0.1 pt are read per row ("Utilities Matrix / Users x Foods", "Initial Idea / Generator", "Rearrange / Initial size"; "Advisor
   / redirect" comes back through option 3), two stacked curve labels and the equal-width legends saved.
