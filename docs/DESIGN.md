@@ -1215,6 +1215,11 @@ only how it meets the rest of the extension.
   ends of the place on the reply's word boundaries in the target language (`Intl.Segmenter`, `word`; `placeReferences`); the
   place then takes back the brackets and quotes the reference's ends were trimmed of where the reply sets them right beside it,
   NFKC-equal, never half a pair where the group's own pair up (`withEnds`). A reference that fails places nothing.
+  A reference is asked before the unit's reply is known, so a reply that brings the group back, or one refused, leaves it
+  needed by no one: the call owns every request it starts (`chain.ts` translateCall, every ask through the call's own `ask`),
+  and when it ends its signal cancels what is still asked and what it started settles before its last store write, so that
+  no request outlives the call and an answer that came in time is stored (Codex's review of round B11: a reference in a
+  request of its own outlived the call, out of the host's abort, its answer never stored).
   `CHAIN_RULES` `references`: every row is read again from its stored reply and no stored reply is asked again; the
   references are new requests. Over the 88 corpus papers' Chinese, of the 1,406 phrase groups of their running text (bold
   252, italic 722, colour 280, small capitals 24, a paper's style 128), 196 hold an element and are not asked; of the 1,142
