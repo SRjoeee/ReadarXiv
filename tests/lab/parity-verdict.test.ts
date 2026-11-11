@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest'
 import type { Placed } from '@readarxiv/format'
 // @ts-expect-error — a plain node module of the lab
 import { coverageOf, measurePage, staleOf, unmeasuredOf, verdictOf } from '../../lab/typeset/parity/verdict.mjs'
+// @ts-expect-error — a plain node module of the lab
+import { labelsPass } from '../../lab/typeset/parity/fidelity.mjs'
 import { rowLinesOf } from '../../packages/typeset/src/index.ts'
 
 type Line = { y: number; x0: number; x1: number; size: number; n: number; bold: number; italic: number; word: number; letter: number; text: string }
@@ -388,6 +390,47 @@ describe("a label in a translated unit: today's relabelled against v2's kept as 
   })
   it('v2 relabels a label today keeps: never judged worse', () => {
     expect(labels(page(kept, relabelled))).toEqual([])
+  })
+})
+
+describe("labels: a counter printed alone names no word, so it is no label kept or translated (2608.25210v2 p9)", () => {
+  // (a figure text "a) …" whose part states a label of kind 'number', its name part the sub-figure's letter (the engine reads a
+  // letter with no digit after it as the label's name, locate/facts.ts labelParts): LaTeX prints \thesubfigure by \alph, a
+  // counter's value, no name a target has a word for; v2 keeps its ink, the line starting past it. Beside it, a caption "Figure
+  // 1" both translate, and one "Figure 2" or an unnumbered "Remark" v2 keeps where today translates it)
+  const fig = (o: { ord: number; name: [string, number[]]; num?: [string, number[]]; kind: string; at: number; label: string }) => ({
+    ord: o.ord,
+    kind: o.kind,
+    align: 'j',
+    style: { size: 10 },
+    label: { ink: [N, o.name[1][1], o.at - 2, (o.num ?? o.name)[1][3], o.at + 7, o.at], kind: o.label, name: o.name, ...(o.num ? { num: o.num } : {}), style: { size: 10 } },
+    lines: [factLine((o.num ?? o.name)[1][3] + 3, 300, o.at)],
+  })
+  const box = (x0: number, x1: number, y: number) => [N, x0, y - 2, x1, y + 7, y]
+  const cap1 = fig({ ord: 10, kind: 'caption', label: 'float', name: ['Figure', box(72, 100, 600)], num: ['1', box(102, 106, 600)], at: 600 })
+  const sub = fig({ ord: 20, kind: 'figure', label: 'number', name: ['a', box(352.32, 354.94, 500)], at: 500 })
+  const cap2 = fig({ ord: 30, kind: 'caption', label: 'float', name: ['Figure', box(72, 100, 400)], num: ['2', box(102, 106, 400)], at: 400 })
+  const remark = fig({ ord: 40, kind: 'theorem', label: 'head', name: ['Remark', box(72, 104, 300)], at: 300 })
+  const labelled = (facts: ReturnType<typeof fig>[], today: object[], v2: object[]) => {
+    const p = measure(
+      v2Of({ members: facts.map((f) => ({ ord: f.ord, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } })), facts, today: Object.fromEntries(facts.map((f) => [f.ord, { today: f.ord }])) }),
+      rec({ today: { units: today }, v2: { units: v2 } }),
+    )
+    labelsPass([p], (q: { diffs: { worse: boolean }[]; worse: number }) => {
+      q.worse = q.diffs.filter((d) => d.worse).length
+    })
+    return (p.diffs as { flag: string; unit: string; worse: boolean }[]).filter((d) => d.flag === 'labels').map((d) => [d.unit, d.worse])
+  }
+  const translated = (id: number, y: number) => ({ id, lines: [drawnLine(72, 290, y, `Abbildung ${id === 30 ? 2 : 1}: Text`)] })
+  it("a sub-figure's letter v2 keeps, in a paper whose captions it translates: no label kept, not worse", () => {
+    // (today's figure texts are its own groups, read for no label; v2's "a)" kept as the original's ink, its line past the letter)
+    expect(labelled([cap1, sub], [translated(10, 600)], [translated(10, 600), { id: 20, lines: [drawnLine(358.4, 398.7, 500, 'Daten')] }])).toEqual([])
+  })
+  it('a numbered caption or an unnumbered theorem head v2 keeps where it translates the others: worse, as before', () => {
+    const kept2 = { id: 30, lines: [drawnLine(109, 290, 400, 'Text')] }
+    expect(labelled([cap1, cap2], [translated(10, 600), translated(30, 400)], [translated(10, 600), kept2])).toEqual([['t30 caption', true]])
+    const keptRemark = { id: 40, lines: [drawnLine(107, 290, 300, 'Text')] }
+    expect(labelled([cap1, remark], [translated(10, 600), { id: 40, lines: [drawnLine(72, 290, 300, 'Bemerkung Text')] }], [translated(10, 600), keptRemark])).toEqual([['t40 theorem', true]])
   })
 })
 

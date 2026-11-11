@@ -851,7 +851,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   out.labels = []
   for (const [key, o] of orig) {
     const name = o.label?.name
-    if (!o.first || !name?.[1] || name[1][0] !== n || (!T.has(key) && !V.has(key))) continue
+    // (a label whose name part is a counter printed alone names no word: no label kept or translated, counterOnly)
+    if (!o.first || !name?.[1] || name[1][0] !== n || counterOnly(name[0]) || (!T.has(key) && !V.has(key))) continue
     const t = T.has(key) ? labelOf(T.get(key), o.label) : null,
       v = Vall.has(key) ? labelOf(Vall.get(key), o.label) : null
     out.labels.push({ unit: `${key} ${o.kind ?? ''}`.trim(), name: name[0], today: t, v2: v })
@@ -1490,6 +1491,24 @@ function raised(lines, columns = null) {
     host.letter = Math.max(host.letter, l.letter)
   }
   return keep.sort((a, b) => b.y - a.y)
+}
+
+/**
+ * Whether a label's name part is a counter's value printed alone, not a name word: LaTeX prints a counter by \@alph or \@Alph
+ * (one letter of the Latin alphabet), \@roman or \@Roman (a roman numeral, lower or upper case: \romannumeral's canonical
+ * form) (latex.ltx), and the engine reads such a label's letters as its name where no digit follows them (locate/facts.ts
+ * labelParts: a sub-figure's "(a" is its letter). A sub-figure's "a)", an appendix's "A.", IEEEtran's section "II.", an
+ * enumeration's "(iii)" name nothing a target has a word for, and no reader draws them anew: the owner's ruling 4 (the target
+ * word everywhere) has no word to read there. Read alike for `shown`'s label and `labels` (2608.25210v2 p9's "a)", "b)", kept
+ * by v2 as the original's ink, read as two labels left untranslated in a paper whose captions are translated)
+ */
+export function counterOnly(name) {
+  const s = String(name ?? '')
+  return (
+    /^[A-Za-z]$/.test(s) ||
+    /^(?=[ivxlcdm])m{0,3}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3})$/.test(s) ||
+    /^(?=[IVXLCDM])M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$/.test(s)
+  )
 }
 
 /**
