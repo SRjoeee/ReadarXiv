@@ -79,14 +79,17 @@ describe("reduce: the layer's states (Task 12)", () => {
     ])
   })
 
-  it('laying: a translation done before a page of the layer is laid where the translation shows holds its end, the line on and the translation said, until one is; the original display waits on nothing', () => {
+  it("laying: a translation done before a page of the layer is laid where the translation shows holds its end, the line on and a load said (the page being laid, the coordinator's R2 of 2026-11-12), until one is; the original display waits on nothing", () => {
     const bilingual: SessionEvent = { type: 'display', mode: 'bilingual' }
     const start: SessionEvent = { type: 'translating', got: 0, total: 9, lost: 0 },
       end: SessionEvent = { type: 'translated', got: 9, total: 9, lost: 0, stopped: null }
     const done = fold([bilingual, opened, { type: 'coming' }, start, end])
     expect(done).toMatchObject({ phase: 'translating', progress: 1 })
     expect(lineOf(done).on).toBe(true)
-    expect(spokenOf(done)).toBe(spokenOf(fold([bilingual, opened, start])))
+    expect([spokenOf(fold([bilingual, opened, start])), spokenOf(done)]).toEqual([
+      R.status.translating,
+      R.status.loading,
+    ])
     expect(fold([laid(1)], done)).toMatchObject({ phase: 'ready', progress: 1 })
     // a page laid before the end: ready at once
     expect(fold([bilingual, opened, laid(1), start, end]).phase).toBe('ready')

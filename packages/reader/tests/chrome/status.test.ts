@@ -34,6 +34,14 @@ describe("the states (the reader's design, §8)", () => {
     ]).toEqual(['正在加载', R.status.preparing, '正在翻译', ''])
   })
 
+  it("the end held for the layer's first page (a stored translation read, a run's last rows in) is a load, never translating; the first making's end held is its wait (the coordinator's R2, 2026-11-12)", () => {
+    expect(spokenOf(at({ phase: 'translating', laying: true, progress: 1 }))).toBe('正在加载')
+    expect(spokenOf(at({ phase: 'translating', laying: true, made: true, preparing: { progress: 0.5 } }))).toBe(
+      '正在翻译',
+    )
+    expect(spokenOf(at({ phase: 'translating', laying: false, progress: 0.4 }))).toBe('正在翻译')
+  })
+
   it("keeps a notice of paragraphs that failed for the run's end, and says a narrow window while a translation runs", () => {
     expect(capsuleOf(at({ phase: 'translating', failedUnits: 3 }), none, LANGUAGES)).toBeNull()
     expect(capsuleOf(at({ phase: 'translating', narrow: true }), none, LANGUAGES)).toMatchObject({ kind: 'narrow' })

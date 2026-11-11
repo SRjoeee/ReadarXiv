@@ -248,9 +248,11 @@ export const retryOffered = (c: Capsule): boolean =>
   (c.kind === 'notNow' && !c.wait && !c.self) || (c.kind === 'notice' && c.action === 'retry')
 
 /** what is under way, said to screen readers in the status region: the progress line is decorative, and no capsule shows it
- *  (where a host's words show it, the capsule says them itself) */
+ *  (where a host's words show it, the capsule says them itself). The end held for the layer's first page (`laying`: the
+ *  translation there, a stored one read or a run's last rows in, the page being laid) is a load, never "translating" (the
+ *  coordinator's R2 of 2026-11-12: the words say what is in flight); the first making's end held is its wait still (firstOf) */
 export function spokenOf(state: ReaderState): string {
-  return state.phase === 'loading'
+  return state.phase === 'loading' || (state.phase === 'translating' && state.laying && !firstOf(state))
     ? R.status.loading
     : state.phase === 'preparing'
       ? R.status.preparing
