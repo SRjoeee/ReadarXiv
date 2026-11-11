@@ -673,7 +673,7 @@ No state that tells the reader nothing is shown (no "done").
   | Cannot be had | no bilingual version can be made of the paper | 这篇论文暂时无法翻译 | This paper can't be translated yet |
   | Too large | the paper too large to prepare | 这篇论文篇幅过大，暂时无法翻译 | This paper is too long to translate |
   | Not now, our server | out of reach or at fault; the time while it is to come | 翻译暂时不可用，{time} 后可以重试 | Translation is unavailable for now; you can retry at {time} |
-  | Not now, the limit | the visitor's new papers spent; the time while it is to come | 新论文的翻译次数已达上限，{time} 后可以重试 | You've reached the limit for new papers; you can retry at {time} |
+  | Not now, the limit | the visitor's new papers spent; the time while it is to come; then the note today's card said under it, true of this limit alone (the feature list's I7) | 新论文的翻译次数已达上限，{time} 后可以重试 · 已有译文的论文仍可打开 | You've reached the limit for new papers; you can retry at {time} · Papers already translated still open |
   | The HTML link | beside a paper that cannot be had, where arXiv has an HTML version: the extension on the page, or not (none on a phone) | 改用 HTML 翻译 · 安装扩展翻译 HTML | Translate HTML instead · Get the extension for HTML |
   | The original lost | its pane's card, with arXiv's PDF of the version | 这里暂时无法显示原文 · 在 arXiv 打开原文 PDF | The original can't be shown here for now · Open the original PDF on arXiv |
 
@@ -724,7 +724,7 @@ spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while
   formatter for every such time, the website's `home/card.ts` `clockOf`. On the visitor's next day (their zone) the sentence says tomorrow (明天 {time} 后可以重试); on a
   later day it gives the date and the time, as the website's home card writes a date.
 - **The causes apart** (`causeOf`: quota, busy, rate, network, server), each with a sentence of its own:
-  - the visitor's new papers spent (`quota`): 新论文的翻译次数已达上限，{time} 后可以重试, its time our server's;
+  - the visitor's new papers spent (`quota`): 新论文的翻译次数已达上限，{time} 后可以重试, its time our server's (the website's adds its note, 已有译文的论文仍可打开);
   - our server at capacity (`busy`): its own state (the wait's words, §6.6);
   - the visitor's rate of asks (`rate`: a 429 whose body says `rate-limited`): 请求过于频繁，请稍后再试, no time; the reader
     asks again by itself once our server's wait has passed, never counted among the three refusals in a row;
