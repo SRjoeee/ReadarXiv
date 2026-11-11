@@ -46,6 +46,18 @@ On the maintainer's machine (shared with other lanes' jobs, 2026-11-08) the 22 p
 all); the drawing stops when the volume of `--work` or of `--out` has under 12 GiB free (`statfs`, on any platform), and the
 pairs it did not draw make the run incomplete.
 
+## The bundles a page was laid over (the guard, 2026-11-11)
+
+A v2 file names the bundles it was laid over (`bundle`: the SHA-256 of the paper's head.json and the folder; the head names the
+paper and every part and unit chunk by its own content digest, so two folders' heads are one digest only where they hold the same
+bundle). render.mjs and measure.mjs compare it with the bundles they serve (AXT_L1_BUNDLES) before anything is drawn or measured
+and stop, naming both, where they differ (inputs.mjs bundleCheck): drawn against another bundle's composed document, the reader
+unwraps every member whose wrap group that document does not hold, half a page shown as the original's (2026-11-11, a
+toggles-on drawing run without the bundles named), and a re-measure over the default bundles read 63 pages worse. A file of
+before the guard names none: it is drawn and measured with a warning in the log and in parity.json (`warnings`), so old sheets
+can still be re-measured. The field changes every v2 file's bytes: the flag-off byte identity with the sheets drawn before it
+ends here; from it on, two lays of the same inputs are byte-identical, and a file equals its predecessor's but for the field.
+
 ## The run judged whole
 
 render.mjs writes the run's manifest before it draws anything (`<work>/raw/run.json`: its id, the pairs and pages asked, not

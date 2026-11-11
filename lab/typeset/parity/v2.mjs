@@ -28,7 +28,7 @@ const { tableMetrics } = await import('../../../packages/typeset/src/metrics/tab
 const { layered, servedMetrics } = await import('../served-metrics.mjs')
 const { typesetLay } = await import('../../../packages/reader/src/compose/typeset.ts')
 const { hyphenationOf } = await import('../../../packages/typeset/src/index.ts')
-const { hyphFileOf } = await import('./inputs.mjs')
+const { bundleOf, hyphFileOf } = await import('./inputs.mjs')
 const { candidateKept, candidateKeptElements, candidateKeptToday, candidateStated, heldJoin, joinedJoin, todayJoin } = await import('./join.mjs')
 const { readAsChain } = await import('./rows.mjs')
 const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
@@ -339,6 +339,9 @@ for (const pair of pairs) {
   const out = {
     pair,
     paper: paperOf(pair),
+    // (the bundles it was laid over, the head's digest: render.mjs and measure.mjs refuse to read it against others, inputs.mjs
+    // bundleCheck)
+    bundle: bundleOf(paperOf(pair)),
     toggles: TOGGLES,
     pages,
     today,
