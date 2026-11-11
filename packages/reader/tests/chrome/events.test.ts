@@ -155,6 +155,15 @@ describe("the reader's state as the chrome's", () => {
     expect(fold([base, open, first, again]).unavailable).toEqual({ why: 'refused', retryAt: 3_600_000 })
     expect(eventsOf(again, again)).toEqual([])
   })
+  it("the rows' counts after their end are the view's too, told whenever they change (Codex 4538550054)", () => {
+    // (a stored translation read whole before its layer's units are read: its end told at 0 of 0, then the units read)
+    const rows = (got: number, total: number) =>
+      ({ target: 'zh', from: 'server', s: 'complete', got, total, lost: 0, stopped: null }) as const
+    const ended = { ...open, rows: rows(0, 0) }
+    const read = { ...open, rows: rows(12, 12) }
+    expect(fold([base, open, ended, read]).translated).toEqual({ got: 12, total: 12 })
+    expect(eventsOf(read, read)).toEqual([])
+  })
   it("rows failing: a key missing is the settings' card; out of reach the network; a refusal a bad request; a target the reader does not set its own notice", () => {
     expect(kindOf({ kind: 'server' })).toBe('network')
     expect(kindOf({ kind: 'unavailable' })).toBe('network')

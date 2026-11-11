@@ -110,7 +110,11 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
     out.push({ type: 'translating', got: r.got, total: r.total, lost: r.lost })
   if (r.s === 'arriving' && !r.waits && waited)
     out.push({ type: 'translated', got: r.got, total: r.total, lost: r.lost, stopped: null })
-  if (r.s === 'complete' && pr?.s !== 'complete')
+  // (the rows' end and its counts, told again whenever the view's counts change after it: the layer's units read after the end,
+  // a toggle, the passages a run our server started again brings. One statement, the view's, told whenever it changes)
+  const counts = (x: ReaderState['rows']) => (x.s === 'none' ? '' : `${x.got} ${x.total} ${x.lost}`)
+  const recount = !!pr && pr.s === r.s && counts(pr) !== counts(r)
+  if (r.s === 'complete' && (pr?.s !== 'complete' || recount))
     out.push({
       type: 'translated',
       got: r.got,
@@ -118,9 +122,11 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
       lost: r.lost,
       stopped: r.stopped ? kindOf(r.stopped) : null,
     })
-  if (r.s === 'failed' && pr?.s !== 'failed') {
-    if (r.why.kind === 'target') out.push({ type: 'unavailable', why: 'target', retryAt: null })
-    else
+  if (r.s === 'failed' && (pr?.s !== 'failed' || pr.why.kind !== r.why.kind || recount)) {
+    if (r.why.kind === 'target') {
+      if (pr?.s !== 'failed' || pr.why.kind !== 'target')
+        out.push({ type: 'unavailable', why: 'target', retryAt: null })
+    } else
       out.push({
         type: 'translated',
         got: r.got,
