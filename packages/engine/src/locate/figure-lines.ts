@@ -4,8 +4,9 @@
 // "Project Page:" and its address, a title and its path), a line whose every word stands between glyphs of one pitch kept whole
 // (code: Rule 1's inside-a-line, read on the line); and each crowded text's ink (roomOf's `met`) judged by its relation to the
 // text, the owner's reformulation of the no-touch rule: its own, a decoration of a stretch of its glyphs (a frame, a fill, a rule;
-// a doubled copy), a container round all of it, or other ink: another text's glyph keeps the text the original's, ink that is no
-// text never does (step 2, the owner's ruling, PDF-READER §18.36). Pure arithmetic over a page's glyphs and boxes;
+// a doubled copy), a container round all of it, or other ink: no ink keeps the text the original's but its own double, the same
+// string drawn again a little off it (step 2, the owner's ruling, PDF-READER §18.36). Pure arithmetic over a page's glyphs and
+// boxes;
 // every measure the figure reading's, in its size: RUN_DY, RUN_GAP, SPACE_GAP, DRAW_BAND.
 import {
   ANCHOR_REACH,
@@ -67,7 +68,7 @@ export interface FigureText {
   copies: number[]
   /** boxes decorating the whole of it (a rule under all of it): hidden with its text */
   textBoxes: number[]
-  /** why its ink stays: crowded (another text's glyph its band meets, or F1's torn formula), code (a line of code, kept whole), formula (a line no word of
+  /** why its ink stays: crowded (drawn twice, doubledOf, or F1's torn formula), code (a line of code, kept whole), formula (a line no word of
    *  which stands outside its formulas, kept whole, F1), or null */
   why: 'crowded' | 'code' | 'formula' | null
   /** a closed shape round all of it: its room's edges over and under its baseline (PDF units up and down from it) */
@@ -113,17 +114,27 @@ export function figureLinesOf(
   W = work
   try {
     const out = linesOf(pages, fig, owned, fixed, textFaces)
-    for (const t of out) countKept(t)
-    // (step 2 over the turned units the line reading, which reads level lines, never takes: a turned run crowded by ink that is no
-    // text alone (an axis's title by its axis) is today's unit laid as it is; one another text's glyph crowds stays the original's)
-    for (const u of fig.units)
-      if (u.why === 'crowded' && (Math.abs((u.ux ?? 1) - 1) > 1e-6 || Math.abs(u.uy ?? 0) > 1e-6)) {
-        if ((fig.met.get(u.k)?.items ?? []).some((it) => 'g' in it)) count('glyph')
-        else {
-          u.why = null
-          count('inked')
-        }
+    // (a text drawn twice keeps the original's: one of its units has its double, doubledOf; the only ink that keeps a figure text)
+    const doubled = doubledOf(fig)
+    for (const t of out)
+      if (t.why === null && t.ks.some((k) => doubled.has(k))) {
+        t.why = 'crowded'
+        keptBy.set(t, 'double')
       }
+    for (const t of out) countKept(t)
+    // (the units no text holds: drawn twice, today's kept; else a turned run today crowded, which the line reading (level lines)
+    // never takes, laid as today's unit: an axis's title by its axis or its tick labels)
+    const inText = new Set(out.flatMap((t) => t.ks))
+    for (const u of fig.units) {
+      if (inText.has(u.k)) continue
+      if (doubled.has(u.k)) {
+        if (u.why !== 'crowded') u.why = 'crowded'
+        count('double')
+      } else if (u.why === 'crowded' && (Math.abs((u.ux ?? 1) - 1) > 1e-6 || Math.abs(u.uy ?? 0) > 1e-6)) {
+        u.why = null
+        count('inked')
+      }
+    }
     return out
   } finally {
     W = null
@@ -148,17 +159,42 @@ export type LinesWork = {
   ends: number
   boxed: number
   interior: number
-  /** the figure texts kept as the original's, by why: another text's glyph met (`glyph`), F1's torn formula (`torn`), a run
-   *  crowded by today's reading with no ink met (`today`), a line of code or of formulas kept whole (`code`, `formula`); and
-   *  `inked`, the texts laid over ink that is no text their room met (step 2: such ink keeps none) */
-  kept?: Record<'glyph' | 'torn' | 'today' | 'code' | 'formula' | 'inked', number>
+  /** the figure texts kept as the original's, by why: drawn twice (`double`: its string again on its page, a little off it), F1's
+   *  torn formula (`torn`), a run crowded by today's reading with no ink met (`today`), a line of code or of formulas kept whole
+   *  (`code`, `formula`); and `inked`, the texts laid over ink their room met (step 2: no ink but its own double keeps a text) */
+  kept?: Record<'double' | 'torn' | 'today' | 'code' | 'formula' | 'inked', number>
 }
 let W: LinesWork | null = null
-/** the texts the judge kept for another text's glyph, and those whose room met ink that is no text */
-const keptBy = new WeakMap<FigureText, 'glyph'>()
+/** the texts kept for being drawn twice, and those whose room met ink */
+const keptBy = new WeakMap<FigureText, 'double'>()
 const inkedTexts = new WeakSet<FigureText>()
 const count = (k: keyof NonNullable<LinesWork['kept']>) => {
   if (W?.kept) W.kept[k]++
+}
+/**
+ * The figure units drawn twice: another unit of its page of the same text (its white space aside), its origin within the text's
+ * size of this one's across and up, the two boxes overlapping (2610.21313v1's "Psum Buffer" under a pale copy of itself, 2.4 and
+ * 4.8 pt off, its "SAMA" three times; 2610.21924v1's "CONDITIONAL RESCUE" 0.16 pt across, a bold by overprint). Both are kept the
+ * original's: translated, each would be drawn over the other
+ */
+function doubledOf(fig: TodayFigures): Set<number> {
+  const out = new Set<number>()
+  const by = new Map<string, TodayFigures['units']>()
+  for (const u of fig.units) {
+    const t = (u.text ?? '').replace(/\s+/gu, '')
+    if (!t || u.x === undefined || u.y === undefined) continue
+    const key = `${(u as { page?: number }).page ?? 0}|${t}`
+    const list = by.get(key) ?? by.set(key, []).get(key)!
+    for (const v of list) {
+      const size = Math.max((u as { size?: number }).size ?? 10, (v as { size?: number }).size ?? 10)
+      if (Math.abs(u.x - v.x!) < size && Math.abs(u.y - v.y!) < size) {
+        out.add(u.k)
+        out.add(v.k)
+      }
+    }
+    list.push(u)
+  }
+  return out
 }
 const countKept = (t: FigureText) => {
   if (t.why === 'code' || t.why === 'formula') count(t.why)
@@ -1250,10 +1286,11 @@ function torn(
  * contiguous stretch of its glyphs and of no other glyph: a frame round a citation, a chip's fill; a rule of horizontal segments
  * alone under or through such a stretch; a doubled copy, a glyph of the same character over one of its own within half its size
  * across), a container (a closed shape, every segment's end met by another, holding every glyph of it, their ink strictly
- * inside), or other ink. Another text's glyph keeps the text the original's, `crowded`; ink that is no text keeps none (step
- * 2, the owner's ruling: a translation in its right place is the goal, ordinary text with ink about it is translated). A
- * decoration of a stretch is that stretch's element, carrying it (a framed citation an element, never translated); of all of
- * it, hidden with its text; a copy hidden with its text
+ * inside), or other ink, which keeps none (step 2, the owner's ruling: a translation in its right place is the goal, ordinary
+ * text with ink about it is translated; another text's glyph in its room neither: the translation stands where this text stands,
+ * as the original's rows stand beside each other; a text drawn twice is kept apart, doubledOf). A decoration of a stretch is that
+ * stretch's element, carrying it (a framed citation an element, never translated); of all of it, hidden with its text; a copy
+ * hidden with its text
  */
 function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[]): void {
   const textGs = ft.order.flatMap((o) => (o.t === 'text' ? o.glyphs : o.t === 'el' ? ft.els[o.i]!.glyphs : []))
@@ -1276,11 +1313,10 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
           Math.abs(y.y - x.y) <= 0.5 * y.size
         )
       })
+      // (another text's glyph keeps none: the translation stands where this text stands, beside it as the original's rows stand;
+      // a text drawn twice is kept apart, doubledOf)
       if (twin) ft.copies.push(it.g)
-      else {
-        unrelated = true
-        keptBy.set(ft, 'glyph')
-      }
+      else inked = true
       continue
     }
     const [x0, y0, x1, y1] = [

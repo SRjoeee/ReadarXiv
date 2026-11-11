@@ -4219,22 +4219,41 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
   \alph, \Alph, \roman, \Roman, a bullet or a dash; an opening bracket, a closing point or bracket), and another line of its
   figure opens with the next one or the one before, of its form, at its left edge (a column) or on its baseline (a row): options
   set as a grid (2411.13093v4 p19's A. B. over C. D., where "A." had come back "Answer"). One enumerated line alone is text.
-- **A node's label** (the container step). A closed path holds the lines whose glyphs' centres all stand inside it (read by its
+- **A path's text** (the container step). A closed path holds the lines whose glyphs' centres all stand inside it (read by its
   interior after its box) alone where no other glyph is inside it and no closed path inside it holds text of its own (the nodes
   of a box round a chart); a fill or a frame under words of one line, within one band's height of its baseline, is a decoration
-  that goes with its words (2608.06701v1 p9's code chips, 0.96 of the size, where 2608.06007v1 p8's nodes stand at 1.5 and
-  more), and other ink inside, a stroke or a legend's samples, is no reason. The runs it holds on one baseline are one line,
-  however far apart their words stand: the path holds them together. Its lines are one text where they read as a node sets its
-  label: one under the other with no blank line between, in one face, size, weight and fill, no line an item's, no legend's
-  entries (two rows or more each beside ink of its own inside the path, within its band: a sample, a marker; a neighbouring
-  node's edge outside the path is none), and centred: the rows' centres one and their left edges not, for rows of one length
-  show no alignment ("plain-18" over "plain-34" in a framed legend, "56-layer" over "20-layer" beside two curves, 1512.03385v1);
-  its room the path's inside. Lines set flush in a path are its rows (a value over a value, 2610.37668v1's PSNR / LPIPS / FPS over
-  each image; a legend's entries): no fact of the geometry tells a box hugging its rows from one text was wrapped into (the
-  bubbles of 2608.06701v1 p2 are set ragged at their natural spaces, every break forced by the path's width, as are 99 of 37668's
-  103 overlays), and whether such rows join is the owner's, on real pages. A word broken in a node with no hyphen is joined where
-  the document writes it whole ("test_password|_lookup.py"). The relation reading reads a closed path's inside by its interior
-  too: a diamond's branch label, inside its box and outside it, crowds nothing (2608.06701v1 p2's "Any signal detected?").
+  that goes with its words, and other ink inside, a stroke or a legend's samples, is no reason. The runs it holds on one
+  baseline are one line, however far apart their words stand. No legend's entries are joined: two rows or more each beside ink of
+  its own inside the path (a sample, a marker; a neighbouring node's edge outside it is none). Rows **centred** (their centres one
+  and their left edges not: rows of one length show no alignment, centred or flush) are a node's label: one text, one under the
+  other with no blank line, in one face, size, weight and fill, no line an item's. Rows **set flush** (option 3, the
+  coordinator's ruling of 2026-11-11, taken to the owner with its census): a row joins the row above where the break is a
+  wrap's (no blank line, one face, not each led by ink of its own, and forced: the next row's first word cannot stand on the row
+  above within the measure the path's inside gives it there, its inset on the flush side mirrored) and the sentence goes on (the
+  row above ends in a hyphen, or this row's first letter, after any punctuation it opens with, is lower case); a capital, a
+  digit or a symbol begins a row of its own, and a script without case never joins. No geometric fact tells a box hugging its
+  rows from one text was wrapped into: 2608.06701v1 p2's bubbles are ragged at their natural spaces, every break forced, and so
+  are 99 of 2610.37668v1's 103 value overlays; the sentence going on is the evidence, as a hyphen is for F3's paragraph. Census
+  (91 papers): 40 breaks joined in 27 boxes on 8 papers; 2610.37668v1's six "Mip-NeRF360 / <scene> / <id>" boxes join wrongly,
+  accepted knowingly. Its room is the path's inside. A word broken in a node with no hyphen is joined where the document
+  writes it whole ("test_password|_lookup.py"). Known cost of the centred rule: four node labels whose two rows are one width to
+  0.1 pt are read per row ("Utilities Matrix / Users x Foods", "Initial Idea / Generator", "Rearrange / Initial size"; "Advisor
+  / redirect" comes back through option 3), two stacked curve labels and the equal-width legends saved.
+- **Step 2: no ink keeps a figure text but its own double** (the owner's ruling: a translation in its right place is the goal,
+  not ink left untouched; ordinary text with ink about it is translated). A line or a shape about a figure text, an arrow across
+  it, a legend's sample beside it, an icon in its node keeps none; another text's glyph in its room neither: the second row of a
+  two-row label under its first ("LongBench v2" over "(thinking)", a subcaption's lines) is translated in its own place, as the
+  original's rows stand beside each other, where keeping it left the label half translated. A text drawn twice is kept the
+  original's: another unit of its page of the same string, its origin within the size of this one's (2610.21313v1's "Psum
+  Buffer" under a pale copy of itself, its "SAMA" three times, 2610.21924v1's "CONDITIONAL RESCUE" a bold by overprint), whose two
+  translations would be drawn over each other (the read of 20, 2026-11-11: both its faults were such copies). The reasons that
+  are not about ink stay: a line of formulas, F1's torn formula, code, a face of one pitch, born on arXiv's page, unlocated. The
+  text is laid in its own place, inside its container where the reading found one, within its own room otherwise. Turned texts
+  too: the line reading reads level lines, and a turned run today crowded (a y axis's title by its axis or its tick labels) is
+  laid as today's unit (2608.04322v1 20, 2610.21547v1 24, 2610.42112v1 70, 2608.27728v1 32). At 5249301f6 over the 91 the
+  reading kept 402 texts for ink in the open, 201 for ink inside their own path and 124 for another text's glyph
+  (`made.lines.kept`). Known and not fixed: a translation centred on the original's anchor can stand under an arrow's shaft whose
+  gap was cut for the Latin letters' ink, a CJK em taller (2610.21924v1 p5).
 - **One family.** Two fonts are one family where their names, subset tag off, are equal before the first hyphen (DejaVuSans and
   DejaVuSans-Oblique, NimbusRomNo9L-Regu and -Medi), or equal once PDF.js's own style words (its /bold/i, /italic|oblique/i,
   /Black/) and the hyphens are taken out: ArialMT and Arial-BoldMT, TimesNewRomanPSMT and TimesNewRomanPS-ItalicMT; never ArialMT

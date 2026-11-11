@@ -734,7 +734,7 @@ describe('figure-lines: step 2, ink that is no text never keeps a figure text (t
       [[1], null],
     ])
   })
-  it('frees a turned label its axis crowds, and keeps one another text’s glyph crowds (the line reading reads level lines)', () => {
+  it('frees turned labels their axis or a tick label crowds (the line reading reads level lines)', () => {
     const { page, fig } = pageOf([[{ text: 'Accuracy', font: T, x: 100 }], [{ text: 'Loss', font: T, x: 100 }]])
     // (both set turned a quarter: a y axis's title, its glyphs the page's turned ones; the first crowded by the axis line, the
     // second by a tick label's glyph)
@@ -748,32 +748,41 @@ describe('figure-lines: step 2, ink that is no text never keeps a figure text (t
     figureLinesOf([page], fig, () => false, null)
     expect([turned, fig.units.map((u) => u.why)]).toEqual([
       ['crowded', 'crowded'],
-      [null, 'crowded'],
+      [null, null],
     ])
   })
-  it('keeps a text another text’s glyph stands in the room of, and a copy set past half its size off its own', () => {
-    const { page, fig } = pageOf([[{ text: 'Psum Buffer', font: T, x: 100 }], [{ text: 'other', font: T, x: 100 }]])
+  it('lays two rows of one label each in its place, though each row’s band holds the other’s glyphs (2610.42112v1 p22)', () => {
+    // ("LongBench v2" over "(thinking)", 9 pt apart at size 10: each row's room meets the other's glyphs; neither is the other's
+    // double, and the translation of each stands where that row stands)
+    const { page, fig } = pageOf([
+      [{ text: 'LongBench v2', font: T, x: 100 }],
+      [{ text: '(thinking)', font: T, x: 104, dy: 5 }],
+    ])
     const glyphs = page.glyphs as Glyph[]
-    // (a glyph of "other" in the room of "Psum Buffer")
-    crowd(fig, 0, [{ g: glyphs.findIndex((g) => g.u === 'o') }])
-    expect(figureLinesOf([page], fig, () => false, null).filter((t) => t.ks.includes(0))).toEqual([])
-    // (two copies of one label, 0.7 of the size apart (2610.21313v1 p2): each the other's ink, neither a doubled copy of its own)
-    const twice = pageOf([[{ text: 'SAMA', font: T, x: 100 }]])
-    const g2 = twice.page.glyphs as Glyph[]
-    const n = g2.length
-    for (let i = 0; i < n; i++)
-      g2.push({
-        ...g2[i]!,
-        x0: g2[i]!.x0 + 7,
-        x1: g2[i]!.x1 + 7,
-        ix0: g2[i]!.ix0 + 7,
-        ix1: g2[i]!.ix1 + 7,
-        y: g2[i]!.y + 7,
-        top: g2[i]!.top + 7,
-        bottom: g2[i]!.bottom + 7,
-      })
-    crowd(twice.fig, 0, [{ g: n }, { g: n + 1 }])
-    expect(figureLinesOf([twice.page], twice.fig, () => true, null).filter((t) => t.ks.includes(0))).toEqual([])
+    crowd(fig, 0, [{ g: glyphs.findIndex((g) => g.u === '(') }])
+    crowd(fig, 1, [{ g: glyphs.findIndex((g) => g.u === 'L') }])
+    expect(figureLinesOf([page], fig, () => false, null).map((t) => [t.ks, t.why])).toEqual([
+      [[0], null],
+      [[1], null],
+    ])
+  })
+  it('keeps a text drawn twice: a copy of its string a little off it, or a pale copy under it (2610.21313v1)', () => {
+    // (two copies of one label 0.7 of the size apart, each the other's ink: both kept, never two translations over each other)
+    const twice = (dx: number, dy: number, fill?: number) => {
+      const { page, fig } = pageOf([
+        [{ text: 'SAMA', font: T, x: 100 }],
+        [{ text: 'SAMA', font: T, x: 100 + dx, dy: 14 + dy }],
+      ])
+      const g = page.glyphs as Glyph[]
+      if (fill !== undefined) for (const x of g.slice(4)) Object.assign(x, { fill })
+      fig.units[1]!.y = fig.units[0]!.y! + dy
+      crowd(fig, 0, [{ g: 4 }])
+      crowd(fig, 1, [{ g: 0 }])
+      return figureLinesOf([page], fig, () => false, null).filter((t) => !t.why)
+    }
+    expect(twice(7, 3.5)).toEqual([])
+    // ("Psum Buffer" under a pale copy of itself, 2.4 pt up and across)
+    expect(twice(2.4, 2.4, 0xcccccc)).toEqual([])
   })
 })
 
