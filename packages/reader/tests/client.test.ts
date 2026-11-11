@@ -68,6 +68,14 @@ describe('the client: every ask bounded and asked once more', () => {
     await expect(p).rejects.toMatchObject({ why: 'network' })
     expect(asks).toBe(2)
   })
+  it('a 5xx twice is our server at fault, not the network: its own word', async () => {
+    const timers = manualTimers()
+    const p = request({ fetch: async () => new Response('', { status: 503 }), timers }, '/x', {}, async () => 1)
+    p.catch(() => {})
+    await settle()
+    timers.advance(RETRY_MS)
+    await expect(p).rejects.toMatchObject({ why: 'server' })
+  })
   it('a 5xx is asked once more, and the second answer taken', async () => {
     const timers = manualTimers()
     const statuses = [503, 200]
@@ -114,11 +122,11 @@ describe('the client: every ask bounded and asked once more', () => {
     const gone = run([404])
     expect(await gone.p).toBe(404)
     expect(gone.asked.n).toBe(1)
-    // (a 429, then a 5xx: the 5xx was the one more ask, so out of reach; a 5xx, then a 429: the 429 read)
+    // (a 429, then a 5xx: the 5xx was the one more ask, so our server at fault; a 5xx, then a 429: the 429 read)
     const both = run([429, 503])
     await settle()
     timers.advance(5000)
-    await expect(both.p).rejects.toMatchObject({ why: 'network' })
+    await expect(both.p).rejects.toMatchObject({ why: 'server' })
     expect(both.asked.n).toBe(2)
     const after = run([503, 429])
     await settle()
@@ -339,10 +347,14 @@ describe('the client: the follow and the open', () => {
       follow({ fetch: async () => r, paper: { id: '2401.01234', version: 1 }, target: null, onDoc: () => {} }).catch(
         (e) => e as Refused,
       )
-    const limit = await at(
-      new Response(JSON.stringify(DOC), { status: 429, headers: { 'retry-after': '30', 'x-axt-refused': 'quota' } }),
+    // (the visitor's rate of asks, as our server answers it: its body's word, worker v2 routes.ts `rate-limited`)
+    const rate = await at(
+      new Response(JSON.stringify({ error: 'rate-limited', retryAfterS: 60 }), {
+        status: 429,
+        headers: { 'retry-after': '60' },
+      }),
     )
-    expect(limit).toMatchObject({ why: 'limit', afterMs: 30_000, doc: { rev: 3 } })
+    expect(rate).toMatchObject({ why: 'rate', afterMs: 60_000 })
     const busy = await at(new Response('', { status: 429 }))
     expect(busy).toMatchObject({ why: 'busy', afterMs: null, doc: null })
     expect(await at(new Response(JSON.stringify({ error: 'not-found' }), { status: 404 }))).toMatchObject({
@@ -359,6 +371,14 @@ describe('the client: the follow and the open', () => {
     expect(
       await at(new Response(JSON.stringify({ refused: { why: 'quota', retryAfterS: 60 }, doc: DOC }), { status: 429 })),
     ).toMatchObject({ refused: { why: 'quota', afterMs: 60_000 }, doc: { rev: 3 } })
+    expect(
+      await at(
+        new Response(JSON.stringify({ error: 'rate-limited', retryAfterS: 60 }), {
+          status: 429,
+          headers: { 'retry-after': '60' },
+        }),
+      ),
+    ).toMatchObject({ refused: { why: 'rate', afterMs: 60_000 }, doc: null })
     await expect(at(new Response('', { status: 426 }))).rejects.toMatchObject({ why: 'update' })
     await expect(at(new Response('', { status: 404 }))).rejects.toMatchObject({ why: 'not-found' })
   })

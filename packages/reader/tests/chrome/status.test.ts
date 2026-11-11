@@ -2,13 +2,13 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { LOCALE_CODES, LOCALES, O, R, S, setLocale } from '@readarxiv/ui'
 import { INITIAL, type ReaderState } from '../../src/chrome/model.ts'
 import { plain, textOf, withCount } from '../../src/chrome/capsule-words.ts'
-import { capsuleOf, cardOf, heldOf, lineOf, spokenOf } from '../../src/chrome/status.ts'
+import { capsuleOf, causeOf, cardOf, heldOf, lineOf, spokenOf } from '../../src/chrome/status.ts'
 import { PREFS } from './fake-controller.ts'
 import type { StateWords } from '../../src/chrome/parts.tsx'
 import { LANGUAGES, NAMES, TEST_PARTS } from './parts.ts'
 
 const at = (over: Partial<ReaderState>): ReaderState => ({ ...INITIAL, prefs: PREFS, display: 'bilingual', ...over })
-const none = { noticeClosed: false, narrowShown: false, refusalsSeen: 0 }
+const none = { noticeClosed: 0, narrowShown: false, refusalsSeen: 0 }
 /** the target the preferences hold */
 const target = (tag: string) => ({ prefs: { ...PREFS, target: tag } })
 /** a failure's sentence as the host words it (parts.tsx reason; the extension's knows whether its translator has a key) */
@@ -81,8 +81,15 @@ describe("the states (the reader's design, §8)", () => {
       words: { prefix: '', count: 3, suffix: ' 处翻译失败' },
     })
     expect(
-      capsuleOf(at({ phase: 'ready', failedUnits: 3, failure: 'network' }), { ...none, noticeClosed: true }, LANGUAGES),
+      capsuleOf(at({ phase: 'ready', failedUnits: 3, failure: 'network' }), { ...none, noticeClosed: 3 }, LANGUAGES),
     ).toBeNull()
+    // (closed, it stays closed for the visit as the count falls (passages a retry brings) or stays; told again once more fail)
+    expect(
+      capsuleOf(at({ phase: 'ready', failedUnits: 2, failure: 'network' }), { ...none, noticeClosed: 3 }, LANGUAGES),
+    ).toBeNull()
+    expect(
+      capsuleOf(at({ phase: 'ready', failedUnits: 4, failure: 'network' }), { ...none, noticeClosed: 3 }, LANGUAGES),
+    ).toMatchObject({ kind: 'notice', words: { count: 4 } })
   })
 
   it('passages the typesetting left in the original, and no stop to resume: counted, with no retry — the same translation fails the same way (the review of 2026-10-04, I-5)', () => {
@@ -92,7 +99,7 @@ describe("the states (the reader's design, §8)", () => {
       action: null,
     })
     expect(
-      capsuleOf(at({ phase: 'ready', failedUnits: 2, failure: null }), { ...none, noticeClosed: true }, LANGUAGES),
+      capsuleOf(at({ phase: 'ready', failedUnits: 2, failure: null }), { ...none, noticeClosed: 2 }, LANGUAGES),
     ).toBeNull()
   })
 
@@ -174,7 +181,7 @@ describe("the states (the reader's design, §8)", () => {
     expect(
       capsuleOf(
         at({ phase: 'ready', available: false, htmlVersion: null, failedUnits: 3, narrow: true }),
-        { ...none, noticeClosed: true },
+        { ...none, noticeClosed: 3 },
         LANGUAGES,
       ),
     ).toMatchObject({ kind: 'unavailable' })
@@ -313,7 +320,7 @@ describe("the states (the reader's design, §8)", () => {
     expect(R.status.noPaper).not.toBe('')
   })
 
-  it("too many requests: the card promises no retry of its own — a stopped run waits for the reader's (Part 6's interface review)", () => {
+  it("too many requests: the card promises no retry of its own — a stopped run waits for the reader's (Part 6's interface review; the extension's today session says `rate-limit`)", () => {
     expect(cardOf(at({ phase: 'failed', failure: 'rate-limit' }), reason)).toEqual({
       reason: R.status.rateLimited,
       action: 'retry',
@@ -339,6 +346,8 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
     notNow: (t) => `unavailable until ${t}`,
     busy: (t) => `busy until ${t}`,
     limited: (t) => `quota until ${t}`,
+    rate: 'too many requests',
+    network: 'no connection',
     unsupported: (name) => `no ${name}`,
     failedPassages: (n) => `${n} failed`,
     narrow: 'narrow',
@@ -397,6 +406,21 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
       'busy until 5',
       'quota until 5',
     ])
+    // (the visitor's rate of asks and the network itself, each its own cause and words, with no time: the reader asks again by
+    // itself, at the rate's time, or once the connection is back)
+    const cause = (why: 'rate' | 'network') =>
+      at({ phase: 'ready', unavailable: { why, retryAt: why === 'rate' ? 5 : null } })
+    expect([said(cause('rate'))?.text, said(cause('network'))?.text]).toEqual(['too many requests', 'no connection'])
+    expect(
+      (['refused', 'busy', 'rate', 'network', 'unreachable', 'no-source'] as const).map((why) =>
+        causeOf(at({ phase: 'ready', unavailable: { why, retryAt: null } })),
+      ),
+    ).toEqual(['quota', 'busy', 'rate', 'network', 'server', null])
+    // (the catalogue's otherwise: the rate as its limit's sentence, which says to try again later; the network as out of reach)
+    expect([said(cause('rate'), {})?.text, said(cause('network'), {})?.text]).toEqual([
+      R.status.limited,
+      R.status.notNow,
+    ])
     // (the catalogue's otherwise: a paper too large said as one that cannot be had, busy as the limit)
     expect(said(lasting('too-large'), {})?.text).toBe(R.status.noPdf)
     expect(said(passing('busy'), {})?.text).toBe(R.status.limited)
@@ -420,16 +444,16 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
     }
   })
   it("the cards in the host's words: a run that translated nothing by its kind, the original not read, no paper", () => {
-    const failed = at({ phase: 'failed', failure: 'rate-limit', failures: { pdf: null, service: 'rate-limit' } })
+    const failed = at({ phase: 'failed', failure: 'bad-request', failures: { pdf: null, service: 'bad-request' } })
     const lost = at({ phase: 'failed', failure: 'network', failures: { pdf: 'network', service: null } })
     const noPaper = at({ noPaper: true })
     expect([cardOf(failed, reason, WORDS), cardOf(lost, reason, WORDS), cardOf(noPaper, reason, WORDS)]).toEqual([
-      { reason: 'failed: rate-limit', action: 'retry' },
+      { reason: 'failed: bad-request', action: 'retry' },
       { reason: 'no original', action: 'retry' },
       { reason: 'no paper', action: 'arxiv' },
     ])
     expect([cardOf(failed, reason), cardOf(lost, reason), cardOf(noPaper, reason)].map((c) => c?.reason)).toEqual([
-      R.status.rateLimited,
+      reason('bad-request'),
       reason('network'),
       R.status.noPaper,
     ])
@@ -467,7 +491,7 @@ describe("the capsule beside the lost original's own card (StateWords openOrigin
       kind: 'progress',
       text: 'translating 3 / 10',
     })
-    expect(said(lost({ available: false, unavailable: { why: 'no-pdf', retryAt: null } }))).toEqual({
+    expect(said(lost({ available: false, unavailable: { why: 'no-source', retryAt: null } }))).toEqual({
       kind: 'unavailable',
       text: 'no pdf',
     })

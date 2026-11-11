@@ -18,9 +18,11 @@
 // complete or failed for that target (and again for a run our server starts again; rows made here, for a newer layer of other
 // units); arXiv's HTML version once the bilingual one cannot be had; a timer for each retry, wait and deadline held.
 //
-// Today's pacing of our server (R session/run.ts, PDF-READER §11.10, UI.md S-R-24, S-R-26): a 429 waits its time (at least a
-// second, at most ten minutes) and asks again, REFUSED_ASKS times in a row at most, then the look stops until a retry, which asks
-// at once for as many more; an answer that moves the paper on ends a run of them. Our server out of reach (an ask failed twice,
+// Our server's pacing (PDF-READER §8, §11.10, UI.md S-R-24, S-R-26): a 429 waits the time our server names, as it names it
+// (the one source of the time said, of the retry's and of the session's own next ask, which is never sooner than a second on
+// and backs off over a refusal of capacity or rate answered again and again: refusedFor), and asks again, REFUSED_ASKS times in
+// a row at most, then the look stops until a retry, which asks once that time has come, for as many more; an answer that moves
+// the paper on ends a run of them. Our server out of reach (an ask failed twice,
 // the client's) stops the look until a retry; so does a prepare followed for PREPARE_DEADLINE_MS with the tab shown. Nothing is
 // asked of our server while the tab is hidden, and that time is not counted. A head that cannot draw ends the look before a unit
 // goes to the service; a head over another original than the left shows puts our copy of it on the left before the layer is used.
@@ -46,12 +48,14 @@ export const GATE_MS = 1500
 export const PREFS_MS = 1500
 export const BACKOFF_MS = 1000
 export const BACKOFF_MAX_MS = 30_000
-/** a 429's wait, never sooner than our server asks: at least a second, at most ten minutes (R run.ts WAIT_MIN, WAIT_MAX) */
+/** a 429's wait where our server names none, and the soonest the session asks again by itself after a 429 whatever time it names
+ *  (the time said stays our server's) */
 export const WAIT_MIN_MS = 1000
+/** the longest reconnection time a stream may name that a follow waits (client.ts): its polling's pace alone, never a time said */
 export const WAIT_MAX_MS = 600_000
 /** how many 429s in a row are waited out and asked again by the reader itself; the next stops the look, said as our server's
- *  limit, and a retry asks at once (R run.ts REFUSED_ASKS: a visitor's limit lasts up to a day, and a tab left open asked again
- *  every ten minutes for as long as it stayed open, #88 E5) */
+ *  limit with its time, and a retry asks once that time has come (R run.ts REFUSED_ASKS: a visitor's limit lasts up to a day,
+ *  and a tab left open asked again for as long as it stayed open, #88 E5) */
 export const REFUSED_ASKS = 3
 /** a prepare followed this long with the tab shown is given up: the bilingual version not to be had now, a retry asks again
  *  (R run.ts PREPARE_DEADLINE_MS) */
@@ -64,6 +68,10 @@ export type LayerWhy =
   | 'unreachable'
   | 'busy'
   | 'limit'
+  /** the visitor's rate of asks (a 429 our server words so) */
+  | 'rate'
+  /** the network itself failed (the fetch rejected), or the browser is offline */
+  | 'network'
   | 'no-source'
   | 'not-found'
   | 'cannot-prepare'
@@ -89,7 +97,9 @@ export type RowsWhy =
   | { kind: 'unavailable'; retryAfterMs?: number }
   | { kind: 'unconfigured'; code: string }
   | { kind: 'target' }
-  | { kind: 'server' }
+  /** our server's run of the target failed: `retryAt` the time its document names for the next (the retry's; the session's own
+   *  next ask is its open's, needsOf) */
+  | { kind: 'server'; retryAt?: number | null }
 
 /** a document from the server's follow (L5's PaperDoc), as the machine reads it */
 export interface Doc {
@@ -135,15 +145,17 @@ export type OriginalRegion =
   | { s: 'opening'; t: Ticket; pin: boolean; loaded: number; total: number }
   | { s: 'open'; t: Ticket; pin: boolean; pages: number; bytes: number }
   | { s: 'failed'; why: OriginalWhy; pin: boolean; retryAt: number | null; timer: Ticket | null; tries: number }
-/** why the look at our server stopped: a 429's (`busy`, `limit`), or our server out of reach (`unreachable`) */
-export type StopWhy = 'busy' | 'limit' | 'unreachable'
+/** why the look at our server stopped: a 429's (`busy`, `limit`, `rate`), the network itself (`network`), or our server out of
+ *  reach or at fault (`unreachable`) */
+export type StopWhy = 'busy' | 'limit' | 'rate' | 'network' | 'unreachable'
 export type LinkRegion =
   | { s: 'off' }
   /** `lost`: its stream broke, fell silent or ended while work runs, and is asked again, nothing heard since (the website's
    *  "reconnecting"); a stream our server ended after a document in which nothing runs is not lost (client.ts follow) */
   | { s: 'on'; t: Ticket; target: string | null; heard: boolean; lost?: boolean }
-  /** the look stopped: waiting a 429's time (`retryAt`, its timer), or until a retry (`retryAt` null) */
-  | { s: 'stopped'; why: StopWhy; retryAt: number | null; timer: Ticket | null }
+  /** the look stopped: `retryAt` our server's time (a 429's, as it named it: said, and a retry before it asks nothing; null where
+   *  it named none), `wake` when the session asks again by itself (null: a retry alone asks), its timer */
+  | { s: 'stopped'; why: StopWhy; retryAt: number | null; wake: number | null; timer: Ticket | null }
 export type LayerRegion =
   | { s: 'none' }
   | { s: 'preparing'; stage: string | null; position: number | null; progress: number | null; units: Ref[] }
@@ -225,6 +237,11 @@ export interface State {
   open: OpenRegion
   /** the 429s answered in a row (REFUSED_ASKS): none since an answer moved the paper on, or a retry */
   refusals: number
+  /** the 429s of our server's capacity or the visitor's rate answered in a row, none since another answer moved the paper on:
+   *  the session's own next ask backs off over them (refusedFor) */
+  paced: number
+  /** the network's failures in a row, since a document was heard: the pace of asking again while the browser says it is online */
+  netTries: number
   /** how long the prepare has been followed with the tab shown (its deadline's), since when it is now, and the deadline's timer */
   prepare: { spent: number; since: number | null; timer: Ticket | null }
   layer: LayerRegion
@@ -263,7 +280,7 @@ export type Input =
       i: 'open.answered'
       t: Ticket
       doc: Doc | null
-      refused?: { why: 'quota' | 'busy'; afterMs: number | null }
+      refused?: { why: 'quota' | 'busy' | 'rate'; afterMs: number | null }
     }
   | { i: 'open.failed'; t: Ticket; why: string }
   | { i: 'head'; digest: string; head: Head }
@@ -329,9 +346,6 @@ export const displayOf = (s: State): Display => (holdOf(s) || s.held ? 'original
 /** whether a composed translation is to be shown: the display shows the translation and the reader sets the target (what is
  *  read ahead for laying it waits on this: a visit that shows the original asks none of it) */
 export const translationShown = (s: State): boolean => displayOf(s) !== 'original' && supported(s, targetOf(s))
-/** a 429's wait as the reader waits it: our server's, at least a second, at most ten minutes */
-export const waitOf = (ms: number | null | undefined): number =>
-  Math.min(WAIT_MAX_MS, Math.max(WAIT_MIN_MS, typeof ms === 'number' && Number.isFinite(ms) ? ms : WAIT_MIN_MS))
 
 const mint = (s: State, slot: string): [Ticket, number] => [`${slot}#${s.next}`, s.next + 1]
 
@@ -356,6 +370,8 @@ export function init(o: Init): State {
     link: { s: 'off' },
     open: { t: null, for: [], target: null, asked: [], missing: false, at: null, timer: null },
     refusals: 0,
+    paced: 0,
+    netTries: 0,
     prepare: { spent: 0, since: null, timer: null },
     layer: { s: 'none' },
     bound: null,
@@ -519,16 +535,35 @@ export function needsOf(s: State): Need[] {
 const layerFinal = (s: State) => s.layer.s === 'ready' && !s.doc?.layer?.stale && s.doc?.prepare.state !== 'running'
 /** whether the open is asked for some need now: one whose wait is over, not yet asked this visit */
 const openWanted = (s: State) => needsOf(s).some((n) => n.at === null && !s.open.asked.includes(n.id))
-/** a 429: waited out and asked again (REFUSED_ASKS in a row at most), then the look stopped until a retry, which asks at once */
-function refusedFor(s: State, why: 'busy' | 'limit', afterMs: number | null | undefined) {
-  s.refusals++
-  s.link =
-    s.refusals > REFUSED_ASKS
-      ? { s: 'stopped', why, retryAt: null, timer: null }
-      : { s: 'stopped', why, retryAt: s.now + waitOf(afterMs), timer: null }
+/** a 429: our server's time as it names it (a second where it names none), said and the retry's; waited out and asked again
+ *  (REFUSED_ASKS in a row at most), then the look stopped until a retry, which asks once that time has come. The session's own
+ *  next ask is never sooner than WAIT_MIN_MS after the answer, and a refusal of our server's capacity or the visitor's rate
+ *  answered again and again backs off: its wait doubled each time, at most BACKOFF_MAX_MS or the time our server names, the
+ *  larger (a 429 naming 0 s was asked again at once, without end, once these two stopped counting toward REFUSED_ASKS) */
+function refusedFor(s: State, why: 'busy' | 'limit' | 'rate', afterMs: number | null | undefined) {
+  // (the visitor's rate of asks is no limit to stop at: its wait is a minute, waited out and asked again by itself)
+  if (why !== 'rate') s.refusals++
+  const named = typeof afterMs === 'number' && Number.isFinite(afterMs) && afterMs >= 0 ? afterMs : WAIT_MIN_MS
+  const retryAt = s.now + named
+  const wait = Math.max(WAIT_MIN_MS, named)
+  s.paced = why === 'limit' ? 0 : s.paced + 1
+  const own = why === 'limit' ? wait : Math.min(Math.max(BACKOFF_MAX_MS, wait), wait * 2 ** (s.paced - 1))
+  s.link = { s: 'stopped', why, retryAt, wake: s.refusals > REFUSED_ASKS ? null : s.now + own, timer: null }
+}
+/** the network itself failed: asked again by itself, at once when the browser comes online (env.online), and meanwhile, while it
+ *  says it is online, at a growing pace (a second, doubled to thirty at most); no time said */
+const networkLost = (s: State) => {
+  s.netTries++
+  s.link = {
+    s: 'stopped',
+    why: 'network',
+    retryAt: null,
+    wake: s.online ? s.now + backoff(s.netTries) : null,
+    timer: null,
+  }
 }
 const outOfReach = (s: State) => {
-  s.link = { s: 'stopped', why: 'unreachable', retryAt: null, timer: null }
+  s.link = { s: 'stopped', why: 'unreachable', retryAt: null, wake: null, timer: null }
 }
 
 /** the input folded into its region */
@@ -547,6 +582,9 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
       // (a failed original tried again at once when the browser comes online)
       if (x.on && s.original.s === 'failed' && s.original.why === 'network')
         s.original = { ...s.original, retryAt: null, timer: null }
+      // (the look the network stopped: asked again at once when the browser comes online, not before while it is offline)
+      if (s.link.s === 'stopped' && s.link.why === 'network')
+        s.link = x.on ? { s: 'off' } : { ...s.link, wake: null, timer: null }
       break
     case 'time':
       s.now = x.now
@@ -618,10 +656,14 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
       if (s.link.s === 'on' && x.t === s.link.t) {
         const target = s.link.target
         s.link = { ...s.link, heard: true, lost: false }
+        s.netTries = 0
         heard(s, x.doc, target)
         // (an answer that moves the paper on ends a run of 429s: one in which the paper lacks nothing the open is wanted for, as
         // today's catalog or prepare under way; one of a paper still lacking it does not, as today's 404 between two prepares)
-        if (!openWanted(s)) s.refusals = 0
+        if (!openWanted(s)) {
+          s.refusals = 0
+          s.paced = 0
+        }
       }
       break
     case 'follow.lost':
@@ -635,10 +677,11 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
           else s.open = { ...s.open, missing: true }
         } else if (x.why === 'not-found') s.layer = { s: 'refused', why: 'not-found', retryAt: null, timer: null }
         else if (x.why === 'update') s.layer = { s: 'refused', why: 'outdated', retryAt: null, timer: null }
-        else if (x.why === 'busy' || x.why === 'limit') {
+        else if (x.why === 'busy' || x.why === 'limit' || x.why === 'rate') {
           if (x.doc) heard(s, x.doc, target)
           refusedFor(s, x.why, x.afterMs)
-        } else outOfReach(s)
+        } else if (x.why === 'network') networkLost(s)
+        else outOfReach(s)
       }
       break
     case 'open.answered':
@@ -647,9 +690,15 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
         // (refused for capacity, nothing was started: its needs given back, so that the look after the wait asks them again)
         s.open = { ...o, t: null, for: [], missing: false, asked: x.refused ? o.asked : [...o.asked, ...o.for] }
         if (x.doc) heard(s, x.doc, o.target)
-        if (x.refused) refusedFor(s, x.refused.why === 'quota' ? 'limit' : 'busy', x.refused.afterMs)
+        if (x.refused)
+          refusedFor(
+            s,
+            x.refused.why === 'quota' ? 'limit' : x.refused.why === 'rate' ? 'rate' : 'busy',
+            x.refused.afterMs,
+          )
         else {
           s.refusals = 0
+          s.paced = 0
           // (the follow asked again at once: one of a paper in which nothing ran asks again a minute on, client.ts IDLE_MS,
           // and what the open started is followed at its own pace)
           if (s.link.s === 'on') s.link = { s: 'off' }
@@ -662,6 +711,7 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
         if (x.why === 'update') s.layer = { s: 'refused', why: 'outdated', retryAt: null, timer: null }
         else if (x.why === 'not-found') s.layer = { s: 'refused', why: 'not-found', retryAt: null, timer: null }
         // (an open that never reached our server: given back, so that a retry asks it again)
+        else if (x.why === 'network') networkLost(s)
         else outOfReach(s)
       }
       break
@@ -710,7 +760,7 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
           s: 'failed',
           target: s.rows.target,
           why: x.why,
-          retryAt: after === null ? null : s.now + after,
+          retryAt: x.why.kind === 'server' ? (x.why.retryAt ?? null) : after === null ? null : s.now + after,
           timer: null,
         }
       }
@@ -816,9 +866,9 @@ export function settle(s0: State): State {
   // way given back, to be asked again once it is shown)
   if (s.away && s.open.t) s.open = { ...s.open, t: null, for: [] }
   const opening = s.open.missing
-  // (offline with no layer: out of reach, as every ask of today's failed at once)
+  // (offline with no layer: the network's, as every ask of today's failed at once; asked again once the browser is online)
   if (s.engaged && !s.online && sets && s.layer.s !== 'ready' && s.layer.s !== 'refused' && s.link.s !== 'stopped')
-    s.link = { s: 'stopped', why: 'unreachable', retryAt: null, timer: null }
+    s.link = { s: 'stopped', why: 'network', retryAt: null, wake: null, timer: null }
   const wantLink =
     s.engaged &&
     s.online &&
@@ -831,7 +881,7 @@ export function settle(s0: State): State {
   const linkTarget = s.here ? null : target
   if (s.link.s === 'stopped') {
     if (lasting) s.link = { s: 'off' }
-    else if (s.link.retryAt !== null && !s.link.timer) s.link = { ...s.link, timer: take('timer') }
+    else if (s.link.wake !== null && !s.link.timer) s.link = { ...s.link, timer: take('timer') }
   } else if (!wantLink) s.link = { s: 'off' }
   else if (s.link.s === 'off') s.link = { s: 'on', t: take('link'), target: linkTarget, heard: false }
   else if (s.link.target !== linkTarget) s.link = { s: 'on', t: take('link'), target: linkTarget, heard: false }
@@ -878,7 +928,9 @@ export function settle(s0: State): State {
     if (s.engaged && units.length && !lasting) s.rows = { s: 'arriving', t: take('rows'), target }
   }
   if (s.rows.s === 'arriving' && (!s.engaged || !units.length || lasting)) s.rows = { s: 'none', target: s.rows.target }
-  if (s.rows.s === 'failed' && s.rows.retryAt !== null && !s.rows.timer) s.rows = { ...s.rows, timer: take('timer') }
+  // (a translator's wait is the rows' own to wait out; our server's is its open's, timed by needsOf from the document)
+  if (s.rows.s === 'failed' && s.rows.retryAt !== null && !s.rows.timer && s.rows.why.kind !== 'server')
+    s.rows = { ...s.rows, timer: take('timer') }
   // 8. arXiv's HTML version, once the bilingual one cannot be had (now or for the paper, or in the language): once a visit, and
   // again where our server's word on it changes (a refusal for now that said nothing, then a lasting one saying arXiv has it)
   const said = htmlSaid(s.doc)
@@ -915,7 +967,7 @@ export function resources(s: State): Map<Ticket, Spec> {
   if (s.gate.timer) out.set(s.gate.timer, { slot: 'timer', at: s.now + GATE_MS })
   if (s.prefs.timer) out.set(s.prefs.timer, { slot: 'timer', at: s.now + PREFS_MS })
   if (s.link.s === 'on') out.set(s.link.t, { slot: 'link', target: s.link.target })
-  if (s.link.s === 'stopped' && s.link.timer) out.set(s.link.timer, { slot: 'timer', at: s.link.retryAt ?? s.now })
+  if (s.link.s === 'stopped' && s.link.timer) out.set(s.link.timer, { slot: 'timer', at: s.link.wake ?? s.now })
   if (s.prepare.timer)
     out.set(s.prepare.timer, {
       slot: 'timer',

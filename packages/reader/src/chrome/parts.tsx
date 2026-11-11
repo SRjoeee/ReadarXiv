@@ -72,6 +72,10 @@ export interface StateWords {
   busy?: (retryAt: number | null) => string
   /** at the limit of new papers (R.status.limited) */
   limited?: (retryAt: number | null) => string
+  /** the visitor's rate of asks, the reader asking again by itself at its time (R.status.limited) */
+  rate?: string
+  /** the network itself failed, or the browser is offline, the reader asking again by itself once it is back (R.status.notNow) */
+  network?: string
   /** a target the typesetter does not set, named by its own name (R.status.unsupported) */
   unsupported?: (language: string) => string
   /** passages that failed (S.failed.text) */
@@ -82,11 +86,11 @@ export interface StateWords {
   unreadable?: string
   /** a write of the settings refused (O.saveFailed) */
   saveFailed?: string
-  /** the card of a run that translated nothing, by the chain's kind (the host's `reason`; R.status.rateLimited for a limit) */
+  /** the card of a run that translated nothing, by the chain's kind (the host's `reason`) */
   failed?: (kind: ProviderErrorKind) => string
-  /** that card's lines under its reason, each a line of its own (the website's: when a retry can work, while its time is to
-   *  come; the limit's note), given the kind and the time a retry is due (null: none named); none, or null: no line */
-  cardLines?: (kind: ProviderErrorKind, retryAt: number | null) => { sub?: string | null; note?: string | null }
+  /** that card's line under its reason (the website's: when a retry can work, while its time is to come), given the kind and
+   *  the time a retry is due (null: none named); none, or null: no line */
+  cardLines?: (kind: ProviderErrorKind, retryAt: number | null) => { sub?: string | null }
   /** the card where the original could not be read (the host's `reason` of the network) */
   originalLost?: string
   /** the way to arXiv's PDF of the paper where the original could not be read: given, the loss is the original's pane's card

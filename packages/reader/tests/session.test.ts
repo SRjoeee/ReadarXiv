@@ -581,9 +581,13 @@ describe('the session: the open, wherever the document lacks what the visit need
       expect(opens(m)).toEqual([{ slot: 'open', target: ZH }])
     }
     refuse('quota', 1000)
-    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'limit', retryAt: null })
+    const due = m.s.now + 1000
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'limit', retryAt: due, wake: null })
     expect(opens(m)).toEqual([])
+    // (a retry before our server's time asks nothing; at it, at once)
     m.feed({ i: 'cmd.retry' })
+    expect(opens(m)).toEqual([])
+    m.at(due).feed({ i: 'cmd.retry' })
     expect(opens(m)).toEqual([{ slot: 'open', target: ZH }])
   })
 })
@@ -602,10 +606,13 @@ describe("the session: our server's pacing (today's run)", () => {
       expect(m.has('link')).toBe(true)
     }
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 60_000 })
-    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'limit', retryAt: null })
-    expect((m.s.link as { timer: Ticket | null }).timer).toBeNull()
-    // a retry at the limit asks at once, for three more
+    // (the fourth: our server's time kept, said and the retry's, but not asked again by the session itself)
+    const due = m.s.now + 60_000
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'limit', retryAt: due, wake: null, timer: null })
     m.feed({ i: 'cmd.retry' })
+    expect(m.has('link')).toBe(false)
+    // a retry at our server's time asks at once, for three more
+    m.at(due).feed({ i: 'cmd.retry' })
     expect(m.has('link')).toBe(true)
     expect(m.s.refusals).toBe(0)
     for (let n = 1; n <= REFUSED_ASKS; n++) {
@@ -613,15 +620,20 @@ describe("the session: our server's pacing (today's run)", () => {
       m.feed({ i: 'time', t: (m.s.link as { timer: Ticket }).timer, now: m.s.now + 1000 })
     }
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'busy', afterMs: 1000 })
-    expect(m.s.link).toMatchObject({ s: 'stopped', retryAt: null })
+    expect(m.s.link).toMatchObject({ s: 'stopped', retryAt: m.s.now + 1000, wake: null })
   })
-  it("a 429's wait is at least a second and at most ten minutes; one with no time named waits a second", () => {
+  it("a 429's wait is our server's as it names it, however long: the time said, the retry's and the session's own next ask; one with no time named waits a second", () => {
     const m = machine()
-    m.at(5).feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 86_400_000 })
-    expect(m.s.link).toMatchObject({ retryAt: 5 + WAIT_MAX_MS })
-    m.feed({ i: 'time', t: m.timerAt(5 + WAIT_MAX_MS), now: 5 + WAIT_MAX_MS })
+    // (a visitor's day of new papers spent: the window ends 20 hours on)
+    m.at(5).feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 72_000_000 })
+    expect(m.s.link).toMatchObject({ retryAt: 5 + 72_000_000, wake: 5 + 72_000_000 })
+    expect([...resources(m.s).values()]).toContainEqual({ slot: 'timer', at: 5 + 72_000_000 })
+    // (nothing asked of our server before it: not at ten minutes, the old cap)
+    expect(() => m.timerAt(5 + WAIT_MAX_MS)).toThrow()
+    m.feed({ i: 'time', t: m.timerAt(5 + 72_000_000), now: 5 + 72_000_000 })
+    expect(m.has('link')).toBe(true)
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'busy', afterMs: null })
-    expect(m.s.link).toMatchObject({ retryAt: 5 + WAIT_MAX_MS + 1000 })
+    expect(m.s.link).toMatchObject({ retryAt: 5 + 72_000_000 + 1000 })
   })
   it('an answer that moves the paper on ends a run of 429s', () => {
     const m = machine()
@@ -676,10 +688,73 @@ describe("the session: our server's pacing (today's run)", () => {
     expect(here.has('link')).toBe(false)
     expect(here.s.rows.target).toBe('ja')
   })
-  it('our server out of reach (an ask failed twice, the client’s): the look stopped, said, and asked again by a retry alone', () => {
+  it("the visitor's rate of asks (a 429 our server words `rate-limited`): its own cause, waited out and asked again by itself, never counted as a limit", () => {
+    const m = machine()
+    for (let n = 1; n <= REFUSED_ASKS + 2; n++) {
+      m.feed({ i: 'follow.lost', t: m.live('link'), why: 'rate', afterMs: 60_000 })
+      expect(m.s.link).toMatchObject({ s: 'stopped', why: 'rate', retryAt: m.s.now + 60_000, wake: m.s.now + 60_000 })
+      m.feed({ i: 'time', t: m.timerAt(m.s.now + 60_000), now: m.s.now + 60_000 })
+      expect(m.has('link')).toBe(true)
+    }
+    expect(m.s.refusals).toBe(0)
+    // (the open refused for the rate: the same)
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+    m.feed({ i: 'open.answered', t: m.live('open'), doc: null, refused: { why: 'rate', afterMs: 60_000 } })
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'rate', wake: m.s.now + 60_000 })
+  })
+  it("a 429 that names no wait (0 s) is asked again no sooner than a second on, and the same refusal again backs off, doubled to thirty seconds or our server's time at most; the time said stays our server's", () => {
+    const m = machine()
+    const asks: number[] = []
+    for (let n = 1; n <= 10; n++) {
+      m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+      asks.push(m.s.now)
+      m.feed({ i: 'open.answered', t: m.live('open'), doc: null, refused: { why: 'rate', afterMs: 0 } })
+      // (said as our server named it: due now; the session's own next ask its own)
+      expect(m.s.link).toMatchObject({ s: 'stopped', why: 'rate', retryAt: m.s.now })
+      const wake = (m.s.link as { wake: number }).wake
+      expect(wake - m.s.now, `ask ${n}`).toBe(Math.min(30_000, 1000 * 2 ** (n - 1)))
+      m.feed({ i: 'time', t: m.timerAt(wake), now: wake })
+    }
+    const gaps = asks.slice(1).map((t, k) => t - (asks[k] as number))
+    expect(gaps).toEqual([1000, 2000, 4000, 8000, 16_000, 30_000, 30_000, 30_000, 30_000])
+    // (another answer ends the run: the next refusal waits a second again)
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+    m.feed({ i: 'open.answered', t: m.live('open'), doc: preparing(1, UNITS) })
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'rate', afterMs: 0 })
+    expect((m.s.link as { wake: number }).wake - m.s.now).toBe(1000)
+    // (a time our server names past thirty seconds is the cap: never asked sooner than it)
+    m.feed({ i: 'time', t: m.timerAt(m.s.now + 1000), now: m.s.now + 1000 })
+    for (let n = 1; n <= 3; n++) {
+      m.feed({ i: 'follow.lost', t: m.live('link'), why: 'rate', afterMs: 60_000 })
+      expect((m.s.link as { wake: number }).wake - m.s.now).toBe(60_000)
+      m.feed({ i: 'time', t: m.timerAt(m.s.now + 60_000), now: m.s.now + 60_000 })
+    }
+  })
+  it('the network itself failed (the fetch rejected twice): its own cause, asked again by itself once the connection is back, or at a growing pace while the browser says it is online', () => {
     const m = machine()
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'network' })
-    expect(m.s.link).toEqual({ s: 'stopped', why: 'unreachable', retryAt: null, timer: null })
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'network', retryAt: null, wake: 1000 })
+    m.feed({ i: 'time', t: m.timerAt(1000), now: 1000 })
+    expect(m.has('link')).toBe(true)
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'network' })
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'network', wake: 3000 })
+    // (the browser offline: nothing asked until it is back, then at once)
+    m.feed({ i: 'env.online', on: false })
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'network', wake: null, timer: null })
+    m.at(50_000).feed({ i: 'env.online', on: true })
+    expect(m.has('link')).toBe(true)
+    // (a document heard: the pace begins again)
+    m.feed({ i: 'paper', t: m.live('link'), doc: preparing(1, UNITS) })
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'network' })
+    expect(m.s.link).toMatchObject({ wake: 51_000 })
+    // (a retry asks at once)
+    m.feed({ i: 'cmd.retry' })
+    expect(m.has('link')).toBe(true)
+  })
+  it('our server at fault (a 5xx twice, the client’s): the look stopped, said, and asked again by a retry alone', () => {
+    const m = machine()
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'server' })
+    expect(m.s.link).toEqual({ s: 'stopped', why: 'unreachable', retryAt: null, wake: null, timer: null })
     expect(m.has('link')).toBe(false)
     m.feed({ i: 'env.online', on: true })
     expect(m.has('link')).toBe(false)
@@ -687,7 +762,7 @@ describe("the session: our server's pacing (today's run)", () => {
     expect(m.has('link')).toBe(true)
     // (an open that never reached our server: given back, so that a retry asks it again)
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
-    m.feed({ i: 'open.failed', t: m.live('open'), why: 'network' })
+    m.feed({ i: 'open.failed', t: m.live('open'), why: 'server' })
     expect(m.s.layer).toEqual({ s: 'none' })
     expect(m.s.open).toMatchObject({ t: null, asked: [], missing: false })
     expect(m.s.link).toMatchObject({ s: 'stopped', why: 'unreachable' })
@@ -695,12 +770,14 @@ describe("the session: our server's pacing (today's run)", () => {
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
     expect(m.has('open')).toBe(true)
   })
-  it('offline with no layer is out of reach at once, as every ask would fail', () => {
+  it('offline with no layer is the network at once, as every ask would fail; back online, asked at once', () => {
     const m = machine({ online: false })
-    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'unreachable' })
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'network', wake: null })
     const later = machine()
     later.feed({ i: 'env.online', on: false })
-    expect(later.s.link).toMatchObject({ s: 'stopped', why: 'unreachable' })
+    expect(later.s.link).toMatchObject({ s: 'stopped', why: 'network' })
+    later.feed({ i: 'env.online', on: true })
+    expect(later.has('link')).toBe(true)
   })
   it('nothing is asked of our server while the tab is hidden, and it is followed again once shown', () => {
     const m = machine()

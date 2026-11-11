@@ -7,6 +7,8 @@ import {
   type SessionEvent,
   type SessionHost,
 } from '../../src/chrome/model.ts'
+import { R } from '@readarxiv/ui'
+import { plain } from '../../src/chrome/capsule-words.ts'
 import { PARTS } from '../../src/chrome/parts.tsx'
 import { capsuleOf, cardOf, lineOf, spokenOf } from '../../src/chrome/status.ts'
 import { DEFAULTS, type Prefs } from '../../src/prefs.ts'
@@ -206,13 +208,13 @@ describe("reduce: the layer's states (Task 12)", () => {
     // the translation ended, a poll after it leaves the line off and the passages that failed told
     const after = fold(seq.slice(0, 8))
     expect(lineOf(after).on).toBe(false)
-    expect(capsuleOf(after, { noticeClosed: false, narrowShown: false, refusalsSeen: 0 }, PARTS.languages)?.kind).toBe(
+    expect(capsuleOf(after, { noticeClosed: 0, narrowShown: false, refusalsSeen: 0 }, PARTS.languages)?.kind).toBe(
       'notice',
     )
   })
 
   it('no source, no PDF, a prepare that cannot succeed: the translated displays greyed, the HTML version offered', () => {
-    for (const why of ['no-source', 'no-pdf', 'cannot-prepare', 'unknown-versions'] as const) {
+    for (const why of ['no-source', 'no-pdf', 'too-large', 'cannot-prepare', 'unknown-versions'] as const) {
       expect(
         fold([opened, { type: 'preparing', position: 1, progress: 0 }, { type: 'unavailable', why, retryAt: null }]),
         why,
@@ -250,6 +252,16 @@ describe("reduce: the layer's states (Task 12)", () => {
       expect(shown.phase).toBe('ready')
       expect(shown.unavailable).toEqual(loading.unavailable)
     }
+  })
+
+  it("the extension's today session's `no-pdf` (the v1 layer API's word: no PDF of the paper to be had) is the paper's: the translated displays greyed, said as no bilingual PDF", () => {
+    // (the extension's default build tells this chrome its v1 session's events as they are, src/pdf-reader/host/today.ts)
+    const s = fold([opened, { type: 'unavailable', why: 'no-pdf', retryAt: null }])
+    expect(s).toMatchObject({ available: false, phase: 'ready', unavailable: { why: 'no-pdf', retryAt: null } })
+    expect(capsuleOf(s, { noticeClosed: 0, narrowShown: false, refusalsSeen: 0 }, PARTS.languages)).toEqual({
+      kind: 'unavailable',
+      words: plain(R.status.noPdf),
+    })
   })
 
   it('refused, unreachable: the original, passing (the displays not greyed); the layer coming after a retry clears it', () => {
@@ -402,7 +414,7 @@ describe("reduce: the layer's states (Task 12)", () => {
   })
 
   it("a stop told `unknown` (the service's own abort, the run's toldKind) is the card and its retry over nothing laid, the notice and its retry over pages laid; `aborted`, the reader's own cancel, shows neither (UI.md §3.4)", () => {
-    const seen = { noticeClosed: false, narrowShown: false, refusalsSeen: 0 }
+    const seen = { noticeClosed: 0, narrowShown: false, refusalsSeen: 0 }
     const none = fold([opened, { type: 'translated', got: 0, total: 7, lost: 7, stopped: 'unknown' }])
     expect(cardOf(none, PARTS.reason)).toEqual({ reason: PARTS.reason('unknown'), action: 'retry' })
     const part = fold([opened, laid(2), { type: 'translated', got: 3, total: 7, lost: 4, stopped: 'unknown' }])
@@ -833,7 +845,7 @@ describe('reduce: the scale and the zoom chosen', () => {
 })
 
 describe("a host's toast (ReaderController.toast: the website's share menu's word, its word for a crash with something on screen)", () => {
-  const SEEN = { noticeClosed: false, narrowShown: false, refusalsSeen: 0 }
+  const SEEN = { noticeClosed: 0, narrowShown: false, refusalsSeen: 0 }
   const fakeSession = () => ({}) as Session
   it('stands for its time (TOAST_MS by default, or its own), in its words and sign; the same words said again start their time again', () => {
     vi.useFakeTimers()

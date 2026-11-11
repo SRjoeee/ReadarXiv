@@ -37,6 +37,28 @@ export type Capsule =
   | { kind: 'progress'; stage: Stage; words: CapsuleWords; show?: true }
 /** where a run under way stands, as a host's words say it */
 export type Stage = 'queued' | 'preparing' | 'translating' | 'reconnecting'
+/** why the bilingual version is not to be had now, the causes told apart (PDF-READER §8): the visitor's new papers spent
+ *  (`quota`), our server at capacity (`busy`), the visitor's rate of asks (`rate`), the network itself (`network`), our server
+ *  out of reach or at fault (`server`) */
+export type Cause = 'quota' | 'busy' | 'rate' | 'network' | 'server'
+/** the cause of a refusal for now, or null where none stands: the one place a refusal's cause is named, which every state that
+ *  tells one reads (the capsule's words here, a run's stage) */
+export function causeOf(state: ReaderState): Cause | null {
+  switch (state.unavailable?.why) {
+    case 'refused':
+      return 'quota'
+    case 'busy':
+      return 'busy'
+    case 'rate':
+      return 'rate'
+    case 'network':
+      return 'network'
+    case 'unreachable':
+      return 'server'
+    default:
+      return null
+  }
+}
 /** `arxiv`: a link to arXiv, for an address that names no paper (S-R-20) */
 export interface Card {
   reason: string
@@ -51,7 +73,8 @@ const running = (state: ReaderState) => state.phase === 'translating' || state.p
 
 /** What the reader has done with the notices this visit (StatusCapsule keeps it). `refusalsSeen`: the refused writes closed */
 export interface Seen {
-  noticeClosed: boolean
+  /** the passages that had failed when the reader closed their notice (0: not closed): closed for the visit unless more fail */
+  noticeClosed: number
   narrowShown: boolean
   refusalsSeen: number
 }
@@ -159,16 +182,21 @@ export function capsuleOf(
   if (stage && said)
     return show ? { kind: 'progress', stage, words: said, show } : { kind: 'progress', stage, words: said }
   // the bilingual version not to be had now: the original stays readable, and a retry is offered with the HTML version
-  // (the layer-only plan's "Offline, drafted")
-  const why = state.unavailable?.why
-  // (a 429 is our server's limit, said as such: past the run's few waits it asks no more by itself, and the reader's retry is
-  // what asks again, #88 E5; busy, its capacity, said as the limit unless the host words it)
-  if (!running(state) && (why === 'refused' || why === 'busy' || why === 'unreachable')) {
+  // (the layer-only plan's "Offline, drafted"), each cause in its own words
+  const cause = causeOf(state)
+  // (a 429 of the visitor's new papers is our server's limit, said as such with its time: past the run's few waits it asks no
+  // more by itself, and the reader's retry is what asks again, #88 E5; busy, its capacity, said as the limit unless the host
+  // words it; the rate of asks and the network, which the reader waits out by itself, with no time)
+  if (!running(state) && cause) {
     const at = state.unavailable?.retryAt ?? null
     const text =
-      why === 'unreachable'
+      cause === 'server'
         ? (words.notNow?.(at) ?? R.status.notNow)
-        : ((why === 'busy' ? words.busy?.(at) : undefined) ?? words.limited?.(at) ?? R.status.limited)
+        : cause === 'network'
+          ? (words.network ?? R.status.notNow)
+          : cause === 'rate'
+            ? (words.rate ?? R.status.limited)
+            : ((cause === 'busy' ? words.busy?.(at) : undefined) ?? words.limited?.(at) ?? R.status.limited)
     const notNow = plain(text)
     // (its retry offered at once, or at its time where the host's rule says so: a retry before it asks nothing)
     const wait = withheld(state, rules) ? { wait: true as const } : {}
@@ -176,7 +204,7 @@ export function capsuleOf(
     return html ? { kind: 'notNow', words: notNow, ...html, ...wait } : { kind: 'notNow', words: notNow, ...wait }
   }
   // the paragraphs that failed are told once the run has ended, with its retry where a stop is there to resume
-  if (!running(state) && state.failedUnits > 0 && !seen.noticeClosed)
+  if (!running(state) && state.failedUnits > seen.noticeClosed)
     return {
       kind: 'notice',
       words: withCount((words.failedPassages ?? S.failed.text)(state.failedUnits), state.failedUnits),
@@ -278,8 +306,10 @@ export interface Look {
   sign: Sign
   tone?: 'alert' | 'wait'
 }
-/** the failures that are a wait, not a fault: our server or the service out of reach for now, a limit */
-const WAITS: ReadonlySet<ProviderErrorKind> = new Set(['network', 'timeout', 'rate-limit'])
+/** the failures that are a wait, not a fault: our server or the service out of reach for now (the one such kind the website's
+ *  run reaches the chrome as: events.ts kindOf; the extension's today session says `timeout` and `rate-limit` too, its chain's
+ *  kinds as they are, but its parts draw no sign by state) */
+const WAITS: ReadonlySet<ProviderErrorKind> = new Set(['network'])
 
 /** the time a retry is due where one is still to come at `now`: a refusal's for now (its `retryAt`), else the run's failure's
  *  (a rows' wait); null where none is named, or it has come */
@@ -346,8 +376,9 @@ export function cardOf(
   // (the original not read: its own words where the host gives them, else the network's, as the failure it is told as)
   if (state.failures.pdf !== null && words.originalLost && !words.openOriginal)
     return { reason: words.originalLost, action: 'retry' }
-  // the chain's own words for a rate limit promise a retry by itself; a stopped run here waits for the reader's. A key's reason
-  // is the key's only where the service chosen carries one (the host's reason)
+  // the chain's own words for a rate limit promise a retry by itself; a stopped run here waits for the reader's (the extension's
+  // today session says `rate-limit`, its chain's kind as it is). A key's reason is the key's only where the service chosen
+  // carries one (the host's reason)
   return {
     reason: words.failed?.(kind) ?? (kind === 'rate-limit' ? R.status.rateLimited : reason(kind)),
     action: KEYS.has(kind) ? 'settings' : 'retry',

@@ -561,8 +561,8 @@ No state that tells the reader nothing is shown (no "done").
 | Loading | a large PDF is loading | the progress line by the share downloaded, its first stretch; 正在加载 said to screen readers |
 | Preparing | the paper's bilingual files are being made (our server's prepare, a paper no reader opened before) | the original; the progress line's first half after the download, by the prepare's progress; 正在准备 said to screen readers (S-R-23) |
 | Translating | the paper's paragraphs being translated by the service chosen | the same line on, by the share of paragraphs done; 正在翻译 said to screen readers; each page laid on the right as its paragraphs come, the original's page until then |
-| Not to be had now | Read arXiv's website out of reach, or at its limit | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24); passing, not remembered; a paper whose files this machine keeps opens without it |
-| Some paragraphs failed | a translation with gaps | capsule: {n} 处翻译失败 · 重试 · close |
+| Not to be had now | Read arXiv's website out of reach, at its limit, or the network itself down (§8.1: each cause its own words) | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24); passing, not remembered; a paper whose files this machine keeps opens without it |
+| Some paragraphs failed | a translation with gaps: rows that are none, or a run that ended failed (§8.1) | capsule: {n} 处翻译失败 · 重试 · close |
 | Language not supported | the shared target language is not one of the reader's | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the reader's translates |
 | Nothing translated | a service failure with no paragraph done | card in the translation's pane: the reason (网络连接失败, API Key 无效或已过期, 尚未配置 API Key, …) · 重试, or 设置 when the reason is a key (opening the settings page at the services) |
 | Cannot be had | no bilingual version can be made of the paper (no source, no PDF, a prepare that cannot succeed, one this version of the reader cannot read) | 对照 and 译文 greyed in the switch; the reader shows 原文, with the capsule: 这篇论文暂不支持 PDF 翻译, and 改用 HTML 翻译 where arXiv has an HTML version (opened where `reading.openIn` says); no close |
@@ -570,12 +570,59 @@ No state that tells the reader nothing is shown (no "done").
 | Settings cannot be read | storage did not answer in a page's first 1,500 ms, or its value cannot be used | the defaults in use and the PDF opened on them, not held for the storage; capsule: 设置读取失败，当前使用默认设置 · 设置, for as long as it is so, beside an address with no paper's card too; the controls that write the settings greyed, with the reason in their tooltips; the menus keep their places |
 | Narrow window | 对照 chosen, the document area under 840 px (§5) | the translation alone; capsule, once: 窗口较窄，暂只显示译文 |
 
-- Recovery is automatic where it can be: our server's wait (a 202's, a 429's) is waited and asked again, a 429's three
-  times in a row at most (S-R-26: a visitor's limit lasts up to a day, and a tab left open asked every ten minutes for as
-  long as it stayed open; #88 E5); 重试 opens the
+- Recovery is automatic where it can be: our server's wait (a 202's, a 429's) is waited, as our server names it, and asked
+  again, a 429's three times in a row at most (S-R-26: a visitor's limit lasts up to a day, and a tab left open asked again
+  for as long as it stayed open; #88 E5), the visitor's rate of asks and the network's at every time (§8.1); 重试 opens the
   layer again and asks only for the paragraphs that are missing, the rest coming from the cache; rate limiting never shows
   (the chain retries it, and only its final giving-up counts as a failure).
 - A failure never takes focus.
+
+### 8.1 Refusals and failures: one source for a time, the causes apart, the passages that failed
+
+A status says what the reader is waiting for and what they can do; every number or time it prints has one source and is
+true (the coordinator's flow of 2026-11-11, which the owner delegated after testing staging: with the hour's new papers
+spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while our server's record said 21:00:00).
+
+- **The retry's time is our server's.** A refusal's time is the one our server names, as it names it (a 429's
+  `retryAfterS`, a failed run's `retryAt` in its document), never capped: the time printed, the moment the retry is offered
+  (the website's `retry: 'when-due'`; a press before it asks nothing) and the session's own next ask are that one time. A
+  bound remains only where it paces polling (a stream's reconnection time, `WAIT_MAX_MS`). The fourth refusal in a row keeps
+  the time and only stops the session asking by itself. A refusal told again with another time is told again, and the
+  capsule follows it. The session's own next ask has a floor and a pace of its own, never printed (integration, round B10):
+  never sooner than a second after the answer (`WAIT_MIN_MS`), and a refusal of our server's capacity or of the visitor's
+  rate answered again and again backs off, its wait doubled each time, at most thirty seconds (`BACKOFF_MAX_MS`) or the time
+  our server names, the larger; an answer that moves the paper on ends the run. A 429 naming 0 s was otherwise asked again
+  at once, without end.
+- **Printed rounded up.** The time is printed rounded up to its minute, so that at the minute printed a press works
+  (15:19:45 is said 15:20). On the visitor's next day (their zone) the sentence says tomorrow (明天 {time} 后可以重试); on a
+  later day it gives the date and the time, as the website's home card writes a date.
+- **The causes apart** (`causeOf`: quota, busy, rate, network, server), each with a sentence of its own:
+  - the visitor's new papers spent (`quota`): 新论文的翻译次数已达上限，{time} 后可以重试, its time our server's;
+  - our server at capacity (`busy`): its own state (the wait's words, §6.6);
+  - the visitor's rate of asks (`rate`: a 429 whose body says `rate-limited`): 请求过于频繁，请稍后再试, no time; the reader
+    asks again by itself once our server's wait has passed, never counted among the three refusals in a row;
+  - the network itself (`network`: a fetch that rejected twice, or the browser offline): 网络连接失败，请检查网络, no time; the
+    reader asks again by itself at once when the browser says it is online again (the `online` event), and, while it says it
+    is online, at a growing pace (a second, doubled to thirty);
+  - our server at fault (`server`: a 5xx twice, a prepare that failed by its fault): 翻译暂时不可用, with its time where its
+    record names one; a retry asks again.
+  The extension's capsules keep the catalogue's sentences (PDF 对照暂时无法加载 for our server and the network, its limit's
+  sentence for a limit and the rate).
+- **Which refusals last** is one table, the session's (`LASTING`: no source, not found, cannot be prepared, too large, a
+  version this reader cannot read); the chrome's is made from it. A layer the reader could not use (an object not its bytes,
+  a layer refused by the side) is passing: a retry asks again.
+- **Failed passages on the website.** A failed passage is a unit of the layer shown that the toggles show translated and
+  that holds no translation once the target's run has failed: a row that is none, or no row at all (our server writes no
+  row for what a failed attempt did not translate, and an attempt our server ends itself writes none). They are counted over
+  the same set as the run's count (§6.6), told whenever the count changes (a toggle, the units read, passages a later run
+  brings), and said as the extension's are: after a page is laid, the capsule {n} 处翻译失败 with its retry at our server's
+  time; before, the card (翻译暂时不可用 · 重试, its time under it). A run that ends done tells none, whatever rows are missing
+  for kept or toggled-off units. 重试 asks only for the passages that failed: our server's next run reuses every row it holds.
+  When the session's own next ask runs, the wait's own words replace the notice, and the passages it brings leave the count.
+  The notice closed stays closed for the visit unless more passages fail.
+- **A page laid with nothing of its own at the rows' end** (every member without a translation: the original's by the
+  rule) keeps the units it read missing; a translation of one of them come since (a retry, a run our server started again)
+  lays that page again, alone.
 
 ## 9. The extension around the reader
 
