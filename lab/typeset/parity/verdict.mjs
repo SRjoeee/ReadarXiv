@@ -913,7 +913,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // (the highlight as the reader sees it: a drawn line by its ink (a CJK opening mark's blank first half, a closing mark's blank
   // second half, no ink), each side's boxes as its reader paints them: today's as its shapes paint them (today/entry.mjs
   // litBoxes), v2's Laid.lit and its kept ink's boxes padded as the reader's highlight.ts paints them, PAINT_PAD beside and
-  // half the page's leading above and below (halfLeading: half the lower quartile of the gaps between a member's rows))
+  // half the page's leading above and below (halfLeading: half the lower quartile of the gaps between a member's rows); a figure
+  // text's on its band alone (Laid.lit `band`))
   const leadOf = (side) => {
     const gaps = []
     for (const m of v2.pages[n]?.members ?? [])

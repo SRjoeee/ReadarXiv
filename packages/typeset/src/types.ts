@@ -164,8 +164,16 @@ export type Laid = {
   lines: [y: number, x0: number, x1: number, items: Item[]][]
   /** per sentence, on A (left) and as drawn (right); `own`: its kept ink, the same boxes on both panes; `dir` where the member is
    *  set along a direction (a figure text the original sets turned, Placed.dir): every box of it is in its run's frame, [s0, t0,
-   *  s1, t1] along `dir` and across it (the page's point s·(ux, uy) + t·(−uy, ux)), lit turned with its text */
-  lit: { left: Box[][]; right: Box[][]; own: [piece: string, boxes: Box[]][]; dir?: [ux: number, uy: number] }
+   *  s1, t1] along `dir` and across it (the page's point s·(ux, uy) + t·(−uy, ux)), lit turned with its text; `band` a figure
+   *  text's (Placed kind 'figure'): lit on its own lines' band alone, no pad beside nor half the page's leading over and under
+   *  (that leading is the page's body text's: a 4.67 pt label padded by it reached the label behind, docs/PDF-READER.md §17.9) */
+  lit: {
+    left: Box[][]
+    right: Box[][]
+    own: [piece: string, boxes: Box[]][]
+    dir?: [ux: number, uy: number]
+    band?: true
+  }
 }
 
 /** a page, laid or waiting (design-a §1.2); `ledger` where the call asked for a trace (design-b §1.7) */

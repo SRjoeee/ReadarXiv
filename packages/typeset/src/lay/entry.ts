@@ -19,7 +19,7 @@
 // theorem-like head is drawn in the target's word (U.label's headLabelInTarget): the rules' (Rules.heads), else the paper's own
 // name unit's row (ownNamesOf over Part.paper.names), as today's headOf; a reference cleveref or \autoref generates, and a
 // citation's note, with its names in the target's (U.rename: Rules.refs, babel's names, the paper's own), as today's renameRefs.
-import { type Ink, LINE_FLAG, type OutPiece, type Part, type Placed } from '@readarxiv/format'
+import { type Box, type Ink, LINE_FLAG, type OutPiece, type Part, type Placed } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
 import { fitMeasure, fontString } from '../breaker/measure.ts'
@@ -704,6 +704,24 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
             })
           : litOfA(m, page, sentences?.src),
     }
+  })
+  // (a figure text lit on its own lines' band alone, laid or not: Laid.lit's `band`; a level one of one line inside its
+  // container where the part states one, its band cut to the closed shape's edge over its baseline (Room.over) and the stroke's
+  // depth under it (Room.under): docs/PDF-READER.md §17.9)
+  members.forEach((m, i) => {
+    if (m.kind !== 'figure') return
+    const o = out[i] as Laid
+    const one = m.lines.length === 1 && !o.lit.dir ? m.lines[0]! : null
+    const top = one && m.room.over !== undefined ? one[4] + m.room.over : Number.POSITIVE_INFINITY
+    const bottom = one && m.room.under !== undefined ? one[4] - m.room.under : Number.NEGATIVE_INFINITY
+    const inside = (b: Box): Box => {
+      const y0 = Math.max(b[1], bottom),
+        y1 = Math.min(b[3], top)
+      return y1 > y0 ? [b[0], y0, b[2], y1] : b
+    }
+    const cut = (per: Box[][]) =>
+      Number.isFinite(top) || Number.isFinite(bottom) ? per.map((bs) => bs.map(inside)) : per
+    out[i] = { ...o, lit: { ...o.lit, left: cut(o.lit.left), right: cut(o.lit.right), band: true } }
   })
   // (each crop's own ink and the page's every piece's, the reader's to cut by)
   const cut = cropInks(out, part)

@@ -23,7 +23,7 @@
 import type { Panes, Side } from '../panes/panes.ts'
 import type { Clock } from '../stack/clock.ts'
 import type { Composer } from './composer.ts'
-import type { Box, Page } from './page.ts'
+import type { Box, Laid, Page } from './page.ts'
 
 /** the pad beside a band, CSS px, its corners, and how long a point that lights nothing keeps what is lit */
 export const PAD = 3
@@ -281,6 +281,7 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     boxes: Box[],
     lead: number,
     cut?: { others: readonly Box[]; column: readonly [number, number] },
+    pad = PAD,
   ) {
     const out: { x0: number; x1: number; y0: number; y1: number; apart?: boolean }[] = []
     const sorted = [...boxes].sort((p, q) => q[3] - p[3])
@@ -289,7 +290,7 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
       const r = panes.boxOf(side, n, [b[0], b[1] - lead, b[2], b[3] + lead], { upright: true })
       if (!r) continue
       kept.push(b)
-      out.push({ x0: r.left - PAD, x1: r.left + r.width + PAD, y0: r.top, y1: r.top + r.height })
+      out.push({ x0: r.left - pad, x1: r.left + r.width + pad, y0: r.top, y1: r.top + r.height })
     }
     if (cut)
       apartRows(kept, cut.others, cut.column).forEach((a, i) => {
@@ -310,7 +311,7 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
   /** the rows of a turned member's shape (its boxes in its run's frame along `dir`) in the page's CSS px at its scale now, each
    *  a rectangle turned with its text: its centre, its length along its run padded beside, its band across it padded by half
    *  the leading, and the angle its run stands at on the page (CSS's: clockwise, y down) */
-  function turnedRowsOf(side: Side, n: number, boxes: Box[], lead: number, [ux, uy]: [number, number]) {
+  function turnedRowsOf(side: Side, n: number, boxes: Box[], lead: number, [ux, uy]: [number, number], pad = PAD) {
     const at = (s: number, t: number) => {
       const x = s * ux - t * uy,
         y = s * uy + t * ux
@@ -329,7 +330,7 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
       out.push({
         cx: c[0] as number,
         cy: c[1] as number,
-        w: (b[2] - b[0]) * k + 2 * PAD,
+        w: (b[2] - b[0]) * k + 2 * pad,
         h: (b[3] - b[1] + 2 * lead) * k,
         deg,
       })
@@ -356,12 +357,15 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
           layer.style.setProperty('--axt-frame-h', `calc(var(--total-scale-factor) * ${frame.h}px)`)
         }
         const s0 = panes.scale
-        const lead = halfLeading(page, side, committed)
+        // (a figure text on its own lines' band alone: Laid.lit's `band`)
+        const band = !!page.members.find((m) => m.ord === lit?.id)?.lit.band
+        const lead = band ? 0 : halfLeading(page, side, committed)
+        const pad = band ? 0 : PAD
         const dir = dirOf(page, lit.id)
         // (a turned member's rows turned with its text: each a band of its own about its centre, at its run's angle, scaled with
         // the page about the page's origin as any)
         if (dir)
-          for (const r of shapes.flatMap((boxes) => turnedRowsOf(side, n, boxes, lead, dir))) {
+          for (const r of shapes.flatMap((boxes) => turnedRowsOf(side, n, boxes, lead, dir, pad))) {
             const el = document.createElement('div')
             el.className = 'axt-hl'
             Object.assign(el.style, {
@@ -380,7 +384,7 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
         const column = dir || !shapes.length ? null : columnOf(mine.per, mine.own)
         const cut = column ? { others: pageBoxes(page, side, committed), column } : undefined
         for (const boxes of dir ? [] : shapes) {
-          const rows = rowsOf(side, n, boxes, lead, cut)
+          const rows = rowsOf(side, n, boxes, lead, cut, pad)
           if (!rows.length) continue
           const X0 = Math.min(...rows.map((r) => r.x0)),
             Y0 = Math.min(...rows.map((r) => r.y0))
@@ -442,10 +446,13 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     // (what is painted is what is hit: the same rows; the smaller unit winning where two overlap, a heading run into its paragraph)
     let best: Lit | null = null,
       least = Number.POSITIVE_INFINITY
-    // (a turned member's rows hit as painted: the point turned back into each row's own frame)
-    const inside = (dir: [number, number] | undefined, boxes: Box[]) =>
-      dir
-        ? turnedRowsOf(side, n, boxes, lead, dir).some((q) => {
+    // (a turned member's rows hit as painted: the point turned back into each row's own frame; a figure text's on its band)
+    const inside = (lit: Laid['lit'], boxes: Box[]) => {
+      const dir = lit.dir,
+        l = lit.band ? 0 : lead,
+        pad = lit.band ? 0 : PAD
+      return dir
+        ? turnedRowsOf(side, n, boxes, l, dir, pad).some((q) => {
             const a = (-q.deg * Math.PI) / 180,
               dx = px - q.cx,
               dy = py - q.cy
@@ -454,7 +461,8 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
               Math.abs(dx * Math.sin(a) + dy * Math.cos(a)) <= q.h / 2
             )
           })
-        : rowsOf(side, n, boxes, lead).some((q) => px >= q.x0 && px <= q.x1 && py >= q.y0 && py <= q.y1)
+        : rowsOf(side, n, boxes, l, undefined, pad).some((q) => px >= q.x0 && px <= q.x1 && py >= q.y0 && py <= q.y1)
+    }
     const take = (t: Lit, area: number) => {
       if (area < least) {
         least = area
@@ -464,12 +472,12 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     for (const m of page.members) {
       const { per, own } = entriesOf(page, m.ord, side, committed)
       for (let s = 0; s < per.length; s++)
-        if (inside(m.lit.dir, per[s] as Box[]))
+        if (inside(m.lit, per[s] as Box[]))
           take({ id: m.ord, s: per.length > 1 && m.lit.left.length > 1 ? s : -1 }, areaOf(per))
       // (a display: a block of its own, its own area)
       for (const [key, boxes] of own) {
         const s = displayS(key)
-        if (s !== null && inside(m.lit.dir, boxes)) take({ id: m.ord, s }, areaOf([boxes]))
+        if (s !== null && inside(m.lit, boxes)) take({ id: m.ord, s }, areaOf([boxes]))
       }
     }
     return best

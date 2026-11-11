@@ -2320,6 +2320,23 @@ within noise.
   measure counts a bridge too (a room the outline paints between two rows room for a line apart, across a block's row in the
   column, which holds none of its ink): over round 8 part A's drawing (5c83a7faf), with the rows' own width the cut was worse
   than today's on 34 units of 31 pages, default and every toggle on alike (2610.17024v1 p9 t129 among them), and is on none.
+- **A figure text lights its own lines' band alone** (Laid.lit `band`, every member the part states of kind `figure`, laid or
+  not, level or turned; the typesetter's `lay/entry.ts`, the reader's `compose/highlight.ts`): no pad beside and no half
+  leading over and under, on both panes and where the pointer is hit alike. The half leading is the lower quartile of the
+  page's gaps between a member's rows, its body text's, and means nothing to a 4.67 pt label: 2610.21313v1-zh p3 t179, the
+  front card of a stack of three "SAMA" cards 2.33 pt apart, padded by 2.71 pt and 3 px beside, held the middle of the label
+  behind it (member 255) on the fresh rows' sheet (the lane fresh-fixes, 2026-11-11).
+  A level one of one line is cut to its container where the part states one (Room.over, the closed shape's edge over its
+  baseline; Room.under, the stroke's depth under it): 6 member-pages of the parity's 22 pairs, by at most 0.84 pt. Every
+  other member's Laid is unchanged, and so is each page's half leading (the parity's lay, both panes). Over the 22 pairs, the
+  translated figure texts whose shape holds another member's lit middle on the right pane went from 7 to 1; by the parity's
+  highlight measure (another unit's line on arXiv's page, a display on either pane), t179's 2 blocks went to 1. The one left
+  is member 256 of that stack: its middle stands inside t179's own band, and arXiv's page paints the front card's fill over
+  it. It stays a named case. The measure reads A's lines as the part states them; the only exact fact of what arXiv's page
+  paints over is the paint order the engine reads, and a measure built on it would judge the engine by itself. The add-on
+  makes no group for such a member, so no drawing can turn it off either. Over the 88 papers, 12 members are wholly painted
+  over in this way, every one a figure text that the wrap leaves unwrapped and the entry never lays
+  (`lab/pdf/prepare-back/hidden.mjs`).
 - **What it does not settle**: a display the part states no ink of (LOST) leaves a gap with nothing in it, filled as today's;
   a display set on a text line beside a word (TeX's display after a word on its baseline) is on that line's row, lit with it;
   a sentence whose only text is a display lights nothing but the display; and a sentence that runs on past a display with no
