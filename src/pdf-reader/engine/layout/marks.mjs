@@ -967,7 +967,7 @@ export const POINTS_TEX = [
   // (a float of a type that has no counter, `fn<n>` beside its `fs<n>`, in its own box: \\c@\\@captype undefined where its box
   // ends, so that no \\caption can number it and TeX says it is no figure, table or algorithm: NeurIPS's \\@float{noticebox},
   // ICML's \\@float{copyrightbox}, which define \\ftype@<type> alone. The ledger reads its text as the page's own outside the
-  // bodies, a note (PDF-READER §18.28))
+  // bodies, a note (PDF-READER §18.29))
   '\\def\\axt@fnpt{\\ifdefined\\@captype\\ifcsname c@\\@captype\\endcsname\\else\\axt@point{fn\\axt@bn}\\fi\\fi}',
   '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\axt@fnpt\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
   // (a caption's label where TeX sets it, `ka<k>` before it: every caption maker is handed its label, \\fnum@<type>, as an
@@ -985,7 +985,7 @@ export const POINTS_TEX = [
   // \\@typeset@protect: nothing in a moving argument or a file); in vertical mode it waits for the paragraph the label begins
   // (LaTeX's para/begin, once), so that no node is put on a vertical list; never while the gate is off (a list of figures, the
   // output routine). A measured copy's point goes with its box: the label TeX ships carries one. The label is what TeX set from
-  // the point to the caption's start mark, whatever line it stands on (own.mjs MR 5, PDF-READER §18.28))
+  // the point to the caption's start mark, whatever line it stands on (own.mjs MR 5, PDF-READER §18.29))
   '\\gdef\\axt@kn{0}\\newif\\ifaxt@kwait\\def\\axt@kpt{\\xdef\\axt@kn{\\the\\numexpr\\axt@kn+1\\relax}\\axt@point{ka\\axt@kn}}\\def\\axt@klate{\\ifaxt@kwait\\global\\axt@kwaitfalse\\ifaxt@off\\else\\ifhmode\\axt@kpt\\fi\\fi\\fi}',
   '\\protected\\def\\axt@ka{\\ifaxt@off\\else\\ifhmode\\axt@kpt\\else\\ifvmode\\ifdefined\\AddToHookNext\\ifaxt@kwait\\else\\global\\axt@kwaittrue\\AddToHookNext{para/begin}{\\axt@klate}\\fi\\fi\\fi\\fi\\fi}\\def\\axt@kf{\\ifx\\protect\\@typeset@protect\\axt@ka\\fi}',
   '\\long\\def\\axt@kmcw#1#2{\\axt@kmc{\\axt@kf#1}{#2}}\\long\\def\\axt@kmfw#1#2{\\axt@kmf{\\axt@kf#1}{#2}}\\def\\axt@kmfr{\\ifdefined\\@makecaption\\ifx\\@makecaption\\axt@kmcw\\else\\ifx\\@makecaption\\axt@kmfw\\else\\let\\axt@kmf\\@makecaption\\let\\@makecaption\\axt@kmfw\\fi\\fi\\fi}',

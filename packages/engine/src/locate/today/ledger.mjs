@@ -178,7 +178,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
     // (CHANGED: each glyph's floats of a type with no counter, `fn<n>` beside the float's `fs<n>` (layout/marks.mjs): no \\caption
     // can number such a float, so TeX says it is no figure, table or algorithm but the page's own text the float mechanism
     // placed: NeurIPS's notice, \\@float{noticebox}[b]. Its lines are read at the depth of the counted floats around them, so
-    // that the rules read one at no float's depth as text outside the bodies, a note (PDF-READER §18.28), not `figures` by
+    // that the rules read one at no float's depth as text outside the bodies, a note (PDF-READER §18.29), not `figures` by
     // depth, which no figure reading takes)
     const uncounted = new Int32Array(n)
     {

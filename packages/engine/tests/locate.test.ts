@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
 import { bundle, stateOf } from '../src/bundle/bundle.ts'
 import type { Doc, DocTurned } from '../src/doc.ts'
+import { pageGlyphsOf } from '../src/glyph.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
 import { eachBetweenPaired, locate } from '../src/locate/locate.ts'
 import type { AddOn } from '../src/wrap/wrap.ts'
@@ -2470,6 +2471,70 @@ describe('an element’s ink is what TeX set for it', () => {
   const E = ROLE.element
   const elementOf = (L: ReturnType<typeof locate>, id = '1') =>
     new Map(L.members.find((x) => x.unit === 0)!.elements).get(id)!
+
+  it('states a text macro’s faked small capitals by its own glyphs’ sizes: its text in TeX’s case, their share (El.style.sc)', () => {
+    // (2608.06701v1's `\approach`, "LIVEPLAN" on A: L and P at 9.96 pt, IVE and LAN at 7.97, Times's faked small capitals, its
+    // source's lowercase letters drawn as capitals at 0.8 of the size. Its text was stated as PDF.js reads it, every letter a
+    // capital, and its style `upper`: the typesetter drew it in full capitals at the run's size. An ink unit's rule (facts.ts
+    // fakedCaps, `ink`): where every cased glyph is a capital, one at most SMALL_CAPS_SHARE of its full letters' size is a faked
+    // small capital, its source's lowercase letter. An acronym, every capital at one size, is none: "BERT". The page's glyphs as
+    // readPdf makes them (glyph.ts PageGlyph, its coordinates read by getters): a word space read between two words of it)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'see ', x: 72, y: 700 },
+          { text: 'LIVEPLAN', x: 96, y: 700 },
+          { text: 'SYS', x: 147, y: 700 },
+          { text: ' and ', x: 165, y: 700 },
+          { text: 'BERT', x: 195, y: 700 },
+          { text: ' work ', x: 219, y: 700 },
+          { text: '(HR)', x: 255, y: 700 },
+        ],
+      },
+    ])
+    // (I, V, E, L, A, N of "LIVEPLAN" and Y, S of "SYS" set at 8 pt, the rest at 10; the two words a word space apart, no
+    // glyph between them, as TeX sets a space. A formula's capital set smaller is its script, `$(H_R)$`'s R: no small capital; its text, read for its brackets, as it is)
+    const page = B.pages[0]!
+    for (const k of [5, 6, 7, 9, 10, 11, 13, 14, 32]) page.glyphs[k]!.size = 8
+    page.glyphs = pageGlyphsOf(page.glyphs)
+    const macro = (id: string, src: string) => ({ t: 'el' as const, id, kind: 'macro', src })
+    const content = [
+      text('see '),
+      macro('1', '\\approach'),
+      text(' and '),
+      macro('3', '\\bert'),
+      text(' work '),
+      { t: 'el' as const, id: '5', kind: 'math', src: '$(H_R)$' },
+    ]
+    const ins = ownedBy(
+      B,
+      [
+        paraOf(content, [
+          ['1', { cls: 'umacro' }],
+          ['3', { cls: 'umacro' }],
+          ['5', { cls: 'other' }],
+        ]),
+      ],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, T, -1],
+          [0, E, 3],
+          [0, T, -1],
+          [0, E, 5],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    const live = elementOf(L, '1')
+    expect([live.text, live.style?.sc, live.style?.upper]).toEqual(['LivePlan Sys', 0.8, undefined])
+    const bert = elementOf(L, '3')
+    expect([bert.text, bert.style?.sc, bert.style?.upper]).toEqual(['BERT', undefined, 1])
+    const formula = elementOf(L, '5')
+    expect([formula.text, formula.style?.sc]).toEqual(['(HR)', undefined])
+  })
 
   it('states one box for an overline’s rule and its nucleus on their line: the rule TeX set over the glyph (math.md R1)', () => {
     // (2610.10069v1 p10's `$\vH=\overline{\vH}$`: TeX sets \overline's rule 3θ over its nucleus, 1.03 to 1.24 pt over the glyphs'

@@ -46,7 +46,7 @@ const BRACKET = /^([bf])([se])(\d+)$/
 /** a babel name's point (marks.mjs NAMES_TEX): no piece's next mark, its text no unit's */
 const NAME_POINT = /^n\d+\.[^.]+\.[se]$/
 /** a point one reader reads alone (marks.mjs POINTS_TEX): a caption's label's `ka<k>` (own.mjs MR 5's), a float of no counter's
- *  `fn<n>` (the ledger's); every other reading passes over it as over a bracket (PDF-READER §18.28) */
+ *  `fn<n>` (the ledger's); every other reading passes over it as over a bracket (PDF-READER §18.29) */
 export const READ_ALONE = /^(?:ka|fn)\d+$/
 /** where other text begins that no unit's mark opens: the start of a babel name that heads a block of its own ("References",
  *  "Abstract", "Proof", marks.mjs NAME_MACROS; not a figure's or a table's, which a caption or a formula sets inside its own text:
