@@ -206,7 +206,11 @@ export function capsuleOf(
   // more by itself, and the reader's retry is what asks again, #88 E5; busy, its capacity, the queue where the host words it
   // (stageOf), else said as the limit; the rate of asks and the network, which the reader waits out by itself, with no time)
   if (!running(state) && cause) {
-    const at = state.unavailable?.retryAt ?? null
+    // (the time is said while it is to come, and while the session will ask by itself at it, until that ask begins: never the bare
+    // sentence between the instant and the ask; one the reader is to retry at drops once it has come. The chrome decides, the
+    // host's words say the time they are given)
+    const due = state.unavailable?.retryAt ?? null
+    const at = due !== null && (state.unavailable?.self || due > (rules.now ?? Date.now())) ? due : null
     const text =
       cause === 'server'
         ? (words.notNow?.(at) ?? R.status.notNow)

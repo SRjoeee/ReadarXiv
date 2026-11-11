@@ -441,6 +441,33 @@ describe('an action is offered only where the session will not take it by itself
     expect(before.capsuleAt(END + 60_000) && retryOffered(before.capsuleAt(END + 60_000) as Capsule)).toBe(false)
     // (asked again by itself at that time: our server followed again, and the open asked once it says the paper is not opened)
     expect(v.s.link.s).toBe('on')
+    // (the clocks agreeing and the wait to the millisecond: the session's own ask at the instant itself, its timer due then; and the
+    // sentence keeps its time until the ask begins, never the bare title between the two: the flow-demo's 0.42 s, (a))
+    expect([...resources(before.s).values()]).toContainEqual({ slot: 'timer', at: END })
+    for (const t of [END, END + 420]) expect(words(before.capsuleAt(t)), `at ${t}`).toBe(`limit until ${END}`)
+  })
+  it("a time the session does not ask at by itself drops from its sentence once it has come (the chrome's to decide, the host's words saying the time they are given)", () => {
+    const store: Store = { units: new Map(), rows: new Map() }
+    const v = visit(store, [
+      { at: 100, opened: true },
+      { at: T, lost: 'server' },
+    ])
+    expect(v.chrome.unavailable).toMatchObject({ why: 'unreachable' })
+    const beats: Beat[] = [{ at: 100, opened: true }]
+    let t = T
+    for (let n = 1; n <= REFUSED_ASKS + 1; n++) {
+      beats.push(ask(t))
+      if (n <= REFUSED_ASKS) beats.push({ at: t + 1000, timers: true })
+      t += 1000
+    }
+    const past = visit(
+      store,
+      beats,
+      Array.from({ length: REFUSED_ASKS + 1 }, () => ({ why: 'quota', afterMs: 1000, at: null })),
+    )
+    const due = (past.s.link as { retryAt: number }).retryAt
+    expect(words(past.capsuleAt(due - 1))).toBe(`limit until ${due}`)
+    expect(words(past.capsuleAt(due))).toBe('limit')
   })
   it("past the refusals the session waits out by itself, the limit is the reader's to retry: offered at its time", () => {
     const store: Store = { units: new Map(), rows: new Map() }

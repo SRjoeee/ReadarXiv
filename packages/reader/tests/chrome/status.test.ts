@@ -480,16 +480,18 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
       { kind: 'unavailable', text: 'no pdf' },
       { kind: 'unavailable', text: 'too large' },
     ])
+    // (a time to come: one that has come drops from the sentence, the chrome's to decide)
+    const due = Date.now() + 3_600_000
     const passing = (why: 'unreachable' | 'busy' | 'refused') =>
-      at({ phase: 'ready', unavailable: { why, retryAt: 5 } })
+      at({ phase: 'ready', unavailable: { why, retryAt: due } })
     expect(['unreachable', 'busy', 'refused'].map((w) => said(passing(w as 'busy'))?.text)).toEqual([
-      'unavailable until 5',
+      `unavailable until ${due}`,
       // (busy is the queue where the host words it: decision 5; else its own words with the time, as before)
       'queued',
-      'quota until 5',
+      `quota until ${due}`,
     ])
     const { queued: _, ...noQueue } = WORDS
-    expect(said(passing('busy'), noQueue)?.text).toBe('quota until 5')
+    expect(said(passing('busy'), noQueue)?.text).toBe(`quota until ${due}`)
     // (the visitor's rate of asks and the network itself, each its own cause and words, with no time: the reader asks again by
     // itself, at the rate's time, or once the connection is back)
     const cause = (why: 'rate' | 'network') =>

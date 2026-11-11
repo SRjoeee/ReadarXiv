@@ -389,6 +389,17 @@ describe('the client: the follow and the open', () => {
     expect(
       await at(new Response(JSON.stringify({ refused: { why: 'quota', retryAt: end, retryAfterS: 2570 }, doc: DOC }))),
     ).toMatchObject({ refused: { why: 'quota', afterMs: 2_570_000, at: end } })
+    // (its wait to the millisecond where our server names it so: the session's own ask at the instant, not a rounded second on)
+    expect(
+      await at(
+        new Response(
+          JSON.stringify({
+            refused: { why: 'quota', retryAt: end, retryAfterS: 2570, retryAfterMs: 2_569_592 },
+            doc: DOC,
+          }),
+        ),
+      ),
+    ).toMatchObject({ refused: { why: 'quota', afterMs: 2_569_592, at: end } })
     // (one that names no instant, an older server's: none, its wait alone)
     const old = await at(new Response(JSON.stringify({ refused: { why: 'busy', retryAfterS: 30 }, doc: DOC })))
     expect(old.refused).toEqual({ why: 'busy', afterMs: 30_000, at: null })
