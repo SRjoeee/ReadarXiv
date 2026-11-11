@@ -7,6 +7,8 @@ import {
   type SessionEvent,
   type SessionHost,
 } from '../../src/chrome/model.ts'
+import { R } from '@readarxiv/ui'
+import { plain } from '../../src/chrome/capsule-words.ts'
 import { PARTS } from '../../src/chrome/parts.tsx'
 import { capsuleOf, cardOf, lineOf, spokenOf } from '../../src/chrome/status.ts'
 import { DEFAULTS, type Prefs } from '../../src/prefs.ts'
@@ -212,7 +214,7 @@ describe("reduce: the layer's states (Task 12)", () => {
   })
 
   it('no source, no PDF, a prepare that cannot succeed: the translated displays greyed, the HTML version offered', () => {
-    for (const why of ['no-source', 'too-large', 'cannot-prepare', 'unknown-versions'] as const) {
+    for (const why of ['no-source', 'no-pdf', 'too-large', 'cannot-prepare', 'unknown-versions'] as const) {
       expect(
         fold([opened, { type: 'preparing', position: 1, progress: 0 }, { type: 'unavailable', why, retryAt: null }]),
         why,
@@ -250,6 +252,16 @@ describe("reduce: the layer's states (Task 12)", () => {
       expect(shown.phase).toBe('ready')
       expect(shown.unavailable).toEqual(loading.unavailable)
     }
+  })
+
+  it("the extension's today session's `no-pdf` (the v1 layer API's word: no PDF of the paper to be had) is the paper's: the translated displays greyed, said as no bilingual PDF", () => {
+    // (the extension's default build tells this chrome its v1 session's events as they are, src/pdf-reader/host/today.ts)
+    const s = fold([opened, { type: 'unavailable', why: 'no-pdf', retryAt: null }])
+    expect(s).toMatchObject({ available: false, phase: 'ready', unavailable: { why: 'no-pdf', retryAt: null } })
+    expect(capsuleOf(s, { noticeClosed: 0, narrowShown: false, refusalsSeen: 0 }, PARTS.languages)).toEqual({
+      kind: 'unavailable',
+      words: plain(R.status.noPdf),
+    })
   })
 
   it('refused, unreachable: the original, passing (the displays not greyed); the layer coming after a retry clears it', () => {

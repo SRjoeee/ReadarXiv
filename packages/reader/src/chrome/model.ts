@@ -9,10 +9,13 @@ import { LAYER_WHY } from './events.ts'
 
 export type EngineDisplay = 'original' | 'translation' | 'bilingual'
 /** why there is no bilingual version: for now (`refused`, a limit, its time given; `unreachable`, our server out of reach), or
- *  for this paper (`no-source`, `cannot-prepare`, `unknown-versions`: our server cannot make one for this version of the
- *  reader), or for this language (`target`) */
+ *  for this paper (`no-source`, `no-pdf`, `cannot-prepare`, `unknown-versions`: our server cannot make one for this version of
+ *  the reader), or for this language (`target`) */
 export type Unavailable =
   | 'no-source'
+  /** no PDF of the paper to be had: the v1 layer API's word, which the extension's today session tells this chrome as it is
+   *  (src/pdf-reader/session/server.ts LAYER_WHYS, host/today.ts); our server's v2 says none such */
+  | 'no-pdf'
   | 'cannot-prepare'
   /** the paper too large for our server to prepare (a host may say it in words of its own; else as `cannot-prepare`) */
   | 'too-large'
@@ -29,9 +32,10 @@ export type Unavailable =
   | 'unreachable'
   | 'target'
 /** the unavailable states that are the paper's or the language's, not a moment's: the session's lasting refusals as the chrome
- *  says them (one table, session/machine.ts LASTING), and a language the typesetter does not set */
+ *  says them (one table, session/machine.ts LASTING), a language the typesetter does not set, and the today session's `no-pdf`
+ *  (the v1 layer API's word, which no session of this package says) */
 export const LASTING: ReadonlySet<Unavailable> = new Set<Unavailable>(
-  [...PAPERS].map((why) => LAYER_WHY[why]).concat('target'),
+  [...PAPERS].map((why) => LAYER_WHY[why]).concat('target', 'no-pdf'),
 )
 /** the sync as the chrome names it to a session: together, or off */
 export type SyncMode = 'same' | 'off'
