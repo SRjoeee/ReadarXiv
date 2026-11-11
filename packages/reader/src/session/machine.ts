@@ -158,21 +158,15 @@ export type LayerRegion =
       open: boolean
     }
   | { s: 'refused'; why: LayerWhy; retryAt: number | null; timer: Ticket | null }
+/** the rows of the target: taken, ended or failed. Their counts are none of the session's: the reader counts the rows it holds
+ *  over the units of the layer shown (session/rows.ts viewOf), one statement, which neither our server's per attempt `done` and
+ *  `total` nor the rows a source told are */
 export type RowsRegion =
   | { s: 'none'; target: string }
-  | { s: 'arriving'; t: Ticket; target: string; got: number; total: number; lost: number }
+  | { s: 'arriving'; t: Ticket; target: string }
   /** `stopped`: why the units lost were lost (the service's word for them: the run stopped short), null where none was */
-  | { s: 'complete'; target: string; got: number; total: number; lost: number; stopped: RowsStop | null }
-  | {
-      s: 'failed'
-      target: string
-      why: RowsWhy
-      got: number
-      total: number
-      lost: number
-      retryAt: number | null
-      timer: Ticket | null
-    }
+  | { s: 'complete'; target: string; stopped: RowsStop | null }
+  | { s: 'failed'; target: string; why: RowsWhy; retryAt: number | null; timer: Ticket | null }
 /** the open (POST /api/v2/open: our server starts what the paper lacks): the ask under way (`t`, for the needs `for`, its target
  *  `target`), the needs an answered open was asked for this visit (`asked`: each once; a refused or failed ask gives its needs
  *  back), whether the follow said the paper is not opened (`missing`), and the timer of the soonest wait our server names for a
@@ -278,8 +272,7 @@ export type Input =
   | { i: 'code.failed'; t: Ticket }
   | { i: 'composed.opened'; t: Ticket }
   | { i: 'composed.failed'; t: Ticket }
-  | { i: 'rows.batch'; t: Ticket; got: number; total: number; lost: number }
-  | { i: 'rows.end'; t: Ticket; got: number; total: number; lost: number; stopped?: RowsStop | null }
+  | { i: 'rows.end'; t: Ticket; stopped?: RowsStop | null }
   | { i: 'rows.failed'; t: Ticket; why: RowsWhy }
   /** the paper's title as the original's document names it, or the abstract page's ('' for none): the first one known stays */
   | { i: 'paper.title'; title: string }
@@ -463,8 +456,7 @@ function rowsOfDoc(s: State, d: Doc, was: Doc['targets'][string], before: LayerR
     !was ||
     (t.attempt ?? 0) !== (was.attempt ?? 0) ||
     t.rows.some((x) => !was.rows.some((y) => y.sha256 === x.sha256))
-  if (ended && again) return { s: 'none', target: r.target }
-  return r.s === 'arriving' ? { ...r, got: t.done, total: t.total } : r
+  return ended && again ? { s: 'none', target: r.target } : r
 }
 /**
  * A document heard, read for `target` (null: none named): held where it is newer, the layer and the rows as it states them. One
@@ -707,19 +699,9 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
         s.bound = s.layer.head?.original.sha256 ?? s.bound
       }
       break
-    case 'rows.batch':
-      if (s.rows.s === 'arriving' && x.t === s.rows.t) s.rows = { ...s.rows, got: x.got, total: x.total, lost: x.lost }
-      break
     case 'rows.end':
       if (s.rows.s === 'arriving' && x.t === s.rows.t)
-        s.rows = {
-          s: 'complete',
-          target: s.rows.target,
-          got: x.got,
-          total: x.total,
-          lost: x.lost,
-          stopped: x.stopped ?? null,
-        }
+        s.rows = { s: 'complete', target: s.rows.target, stopped: x.stopped ?? null }
       break
     case 'rows.failed':
       if (s.rows.s === 'arriving' && x.t === s.rows.t) {
@@ -728,9 +710,6 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
           s: 'failed',
           target: s.rows.target,
           why: x.why,
-          got: s.rows.got,
-          total: s.rows.total,
-          lost: s.rows.lost,
           retryAt: after === null ? null : s.now + after,
           timer: null,
         }
@@ -893,12 +872,10 @@ export function settle(s0: State): State {
   const units = unitsOf(s)
   if (s.rows.target !== target && s.rows.s !== 'none') s.rows = { s: 'none', target }
   if (s.engaged && !sets) {
-    if (s.rows.s !== 'failed')
-      s.rows = { s: 'failed', target, why: { kind: 'target' }, got: 0, total: 0, lost: 0, retryAt: null, timer: null }
+    if (s.rows.s !== 'failed') s.rows = { s: 'failed', target, why: { kind: 'target' }, retryAt: null, timer: null }
   } else if (s.rows.s === 'none') {
     s.rows = { ...s.rows, target }
-    if (s.engaged && units.length && !lasting)
-      s.rows = { s: 'arriving', t: take('rows'), target, got: 0, total: 0, lost: 0 }
+    if (s.engaged && units.length && !lasting) s.rows = { s: 'arriving', t: take('rows'), target }
   }
   if (s.rows.s === 'arriving' && (!s.engaged || !units.length || lasting)) s.rows = { s: 'none', target: s.rows.target }
   if (s.rows.s === 'failed' && s.rows.retryAt !== null && !s.rows.timer) s.rows = { ...s.rows, timer: take('timer') }

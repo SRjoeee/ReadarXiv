@@ -330,6 +330,39 @@ const v2Route = {
           layer: { ...d.layer, catalog: rebuilt[d.pv].catalog },
         })
       }
+      // (the target's run started again on the rows held (staging, 2026-11-11: 2610.21924v1's attempts 3 and 4 after a deploy):
+      // done, the paper being prepared again so that the follow keeps a run's pace; then a new attempt running whose rows are the
+      // same, restated in an object of their own; then that attempt done)
+      if (m?.kind === 'again') {
+        m.start ??= performance.now()
+        const k = Math.floor((performance.now() - m.start) / m.after)
+        const t = Object.keys(d.targets)[0]
+        const was = d.targets[t].rows[0]
+        const bytes = Buffer.concat([rowsObjects.get(`/api/v2/o/${was.path}`), Buffer.from('\n')])
+        const sha256 = createHash('sha256').update(bytes).digest('hex')
+        const path = was.path.replace(was.sha256, sha256)
+        rowsObjects.set(`/api/v2/o/${path}`, bytes)
+        const again = { path, sha256, bytes: bytes.length }
+        m.again = sha256
+        m.phase = Math.min(2, k)
+        return json(200, {
+          ...d,
+          rev: 2 + m.phase,
+          prepare: m.phase < 2 ? { ...d.prepare, attempt: 2, state: 'running', stage: 'compiling' } : d.prepare,
+          targets: {
+            [t]:
+              m.phase === 0
+                ? d.targets[t]
+                : {
+                    ...d.targets[t],
+                    attempt: 2,
+                    state: m.phase === 1 ? 'running' : 'done',
+                    rows: [again],
+                    done: m.phase === 1 ? 0 : d.targets[t].done,
+                  },
+          },
+        })
+      }
       // (a newer catalog once the check says so: the same layer under the twin head. Our server makes one by a prepare again,
       // the layer before it served meanwhile, and the follow keeps its pace of a run while that prepare runs: a document in
       // which nothing runs is followed again a minute on, client.ts IDLE_MS)
@@ -2666,6 +2699,64 @@ await check(
   },
 )
 
+await check(
+  'reader: a run our server started again on the rows held (2610.21924v1 after a deploy, staging 2026-11-11) lays no page again: the rows taken again, their end told, the pages as they were',
+  async () => {
+    const seg = indexOf['s2-splits'].seg
+    modes[seg] = { kind: 'again', after: 4000 }
+    try {
+      const { page, context, errors } = await newPage()
+      await page.evaluate(() => window.__h.reader('s2-splits', { host: 'web' }))
+      const at = () =>
+        page.evaluate(() => {
+          const r = window.__h.readers[0].reader
+          const marks = window.__h.marks
+          return {
+            rows: r.state().rows.s,
+            laid: r.probe().laidPages,
+            lays: r.probe().lays,
+            gen: Math.max(0, ...marks.filter((x) => x.what === 'lay').map((x) => x.gen)),
+          }
+        })
+      await waitFor(
+        page,
+        () => {
+          const r = window.__h.readers[0].reader
+          return r.state().rows.s === 'complete' && r.probe().laidPages > 0
+        },
+        null,
+        25_000,
+      )
+      await page.waitForTimeout(500)
+      const settled = await at()
+      assert(modes[seg].phase === 0, `the run started again before the pages settled: ${JSON.stringify(settled)}`)
+      // (the run started again, then done: its rows taken and ended again)
+      const t0 = Date.now()
+      for (;;) {
+        const s = await at()
+        if (modes[seg].phase === 2 && s.rows === 'complete') break
+        if (Date.now() - t0 > 25_000) throw new Error(`the run started again never ended: ${JSON.stringify(s)}`)
+        await page.waitForTimeout(100)
+      }
+      await page.waitForTimeout(500)
+      const after = await at()
+      const asked = await page.evaluate(() => window.__h.readers[0].asked.map((a) => a.url))
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      assert(
+        asked.some((u) => u.endsWith(modes[seg].again)),
+        `the restated rows not read: ${JSON.stringify(asked)}`,
+      )
+      assert(
+        after.lays === settled.lays && after.gen === settled.gen && after.laid === settled.laid,
+        `pages laid again: ${JSON.stringify({ settled, after })}`,
+      )
+      return { settled, after }
+    } finally {
+      delete modes[seg]
+    }
+  },
+)
 await check(
   "reader: each composed document keeps its own layout: a newer catalog's pages laid by its layout, the older one's late layout dropped",
   async () => {

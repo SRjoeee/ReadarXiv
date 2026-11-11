@@ -242,14 +242,9 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}) {
         if (reading.read.has(r.sha256)) continue
         reading.read.add(r.sha256)
         for (const row of store.rows.get(r.sha256) ?? []) rows.set(row.id, row)
-        queue.push({ i: 'rows.batch', t, got: rows.size, total: tg?.total ?? 0, lost: 0 })
       }
       if (tg && (tg.state === 'done' || tg.state === 'failed') && tg.rows.every((r) => reading?.read.has(r.sha256)))
-        queue.push(
-          tg.state === 'failed'
-            ? { i: 'rows.failed', t, why: { kind: 'server' } }
-            : { i: 'rows.end', t, got: rows.size, total: tg.total, lost: 0 },
-        )
+        queue.push(tg.state === 'failed' ? { i: 'rows.failed', t, why: { kind: 'server' } } : { i: 'rows.end', t })
     }
   }
   const feed = (x: Input) => {

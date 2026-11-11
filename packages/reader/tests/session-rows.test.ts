@@ -7,7 +7,6 @@ import {
   ABSTRACT_MAX_CHARS,
   anchorOf,
   contextOf,
-  countsOf,
   keep,
   missingOf,
   ranked,
@@ -61,12 +60,13 @@ describe('the rows made here', () => {
     for (const x of UNITS.slice(0, 6)) keep(held, ok(x))
     keep(held, lost(UNITS[6] as Unit))
     expect(at(missingOf(UNITS, held))).toEqual([6, 7, 8, 9])
-    expect(countsOf(UNITS, held)).toEqual({ got: 7, lost: 1 })
+    const counts = () => viewOf({ units: UNITS, classes: null, held, shown: true, laid: true, run: false })
+    expect(counts()).toMatchObject({ got: 6, lost: 1 })
     // (a near call's failure after the first call's translation of one unit: the translation stays)
     expect(keep(held, lost(UNITS[0] as Unit))).toBe(false)
     expect(held.get(UNITS[0]?.id as string)?.ok).toBe(true)
     expect(keep(held, ok(UNITS[6] as Unit))).toBe(true)
-    expect(countsOf(UNITS, held)).toEqual({ got: 7, lost: 0 })
+    expect(counts()).toMatchObject({ got: 7, lost: 0 })
   })
   it("tells why the units lost got none: the service's most telling word, none where none was lost", () => {
     const held = new Map<string, Row>()

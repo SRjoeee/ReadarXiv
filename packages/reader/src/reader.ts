@@ -45,7 +45,6 @@ import { abstractPage, htmlVersionOf, originalPdfOf, TRANSLATE_HASH, titleOf, VI
 import {
   anchorOf,
   contextOf,
-  countsOf,
   keep,
   missingOf,
   type PaperContext,
@@ -794,12 +793,10 @@ export function openReader(
         rowsDone = false
         composer?.setLayer(composed ? { part: composed.part, pages: head?.paper.pages ?? 0 } : null, rowsSource())
       } else if (rowsDone) {
-        // (the same target's rows taken again after their end: a retry, a run our server started again, machine.ts rowsOfDoc.
-        // A page committed is final within its generation, and those laid at that end show the original where no row had come:
-        // laid again in a generation of their own as the new rows come, those laid before shown until theirs commit)
+        // (the same target's rows taken again after their end: a retry, a run our server started again, machine.ts rowsOfDoc. The
+        // rows go on, and the pages stand: the composer lays a page again where a row it was laid with comes otherwise, or one
+        // missing at the end comes, composer.ts `restated`, `filled`; a run that restates the rows held lays nothing)
         rowsDone = false
-        asOriginal.clear()
-        if (composed) composer?.setLayer({ part: composed.part, pages: head?.paper.pages ?? 0 }, rowsSource())
       }
       void (async () => {
         try {
@@ -818,8 +815,6 @@ export function openReader(
               flushing = 0
               if (signal.aborted) return
               if (pending.length) rowsIn(pending.splice(0))
-              const c = countsOf(units, rows)
-              emit({ i: 'rows.batch', t, got: c.got, total: units.length, lost: c.lost })
             }
             const take = (r: Row) => {
               pending.push(r)
@@ -846,10 +841,6 @@ export function openReader(
                   }
                 })(),
             }
-            {
-              const c = countsOf(units, rows)
-              emit({ i: 'rows.batch', t, got: c.got, total: units.length, lost: c.lost })
-            }
             const order = ranked(missingOf(units, rows), near.ids, near.anchor)
             try {
               for await (const r of translate(order, spec.target, { signal, context })) {
@@ -864,11 +855,9 @@ export function openReader(
             flush()
             rowsDone = true
             rowsIn([])
-            const c = countsOf(units, rows)
-            emit({ i: 'rows.end', t, got: c.got, total: units.length, lost: c.lost, stopped: stopOf(units, rows) })
+            emit({ i: 'rows.end', t, stopped: stopOf(units, rows) })
             return
           }
-          const total = () => rows.size
           // the server's rows: every ref the documents name for the target, each once, until its run is done or failed (a run
           // not started, `none`, is no end: the prepare's units or the open start it, machine.ts needsOf; one started again after
           // an end is the machine's to take again, rowsOfDoc)
@@ -881,7 +870,6 @@ export function openReader(
               read1.add(r.sha256)
               const o2 = JSON.parse(new TextDecoder().decode(await objectOf(r))) as { rows?: Row[] }
               rowsIn(o2.rows ?? [])
-              emit({ i: 'rows.batch', t, got: total(), total: tg?.total ?? 0, lost: 0 })
             }
             if (
               tg &&
@@ -890,11 +878,7 @@ export function openReader(
             ) {
               rowsDone = true
               rowsIn([])
-              emit(
-                tg.state === 'failed'
-                  ? { i: 'rows.failed', t, why: { kind: 'server' } }
-                  : { i: 'rows.end', t, got: total(), total: tg.total, lost: 0 },
-              )
+              emit(tg.state === 'failed' ? { i: 'rows.failed', t, why: { kind: 'server' } } : { i: 'rows.end', t })
               return
             }
             await new Promise<void>((resolve, reject) => {

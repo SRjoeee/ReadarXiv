@@ -94,22 +94,6 @@ export function shownAsOriginal(part: string | null | undefined, page: Page | nu
   if (part === null) return true
   return !!page && committed(page) && !page.members.some((m) => m.state === 'laid')
 }
-/** the counts the state tells of the rows held for `units`: those with a row, and those whose row is not a translation */
-export function countsOf(
-  units: readonly { id: string }[],
-  held: ReadonlyMap<string, Row>,
-): { got: number; lost: number } {
-  let got = 0,
-    lost = 0
-  for (const u of units) {
-    const r = held.get(u.id)
-    if (!r) continue
-    got++
-    if (!r.ok) lost++
-  }
-  return { got, lost }
-}
-
 /** what the view shown has of the translation, and whether it waits for more (PDF-READER §6.6, §8) */
 export interface ViewRows {
   /** some unit of the layer shown has no translation held while a run that may bring it is under way */

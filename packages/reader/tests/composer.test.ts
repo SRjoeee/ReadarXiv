@@ -664,6 +664,11 @@ describe('a row stated again otherwise (a run our server replaced mid-way)', () 
     return lay
   }
   const entries = (w: World, n: number) => (w.composer.page(n) as Page).members.map((m) => m.lit.left.length)
+  /** the composer's generation and its lays and commits so far */
+  const counted = (w: World) => {
+    const p = w.composer.probe()
+    return { gen: p.gen as number, lays: p.lays as number, commits: p.commits as number }
+  }
 
   it('a page laid with the row before is laid again in a generation of its own, kept until its new commit', async () => {
     const pages = new Map([[1, partOf(1, [member(10, 1, 0), member(11, 1, 1)])]])
@@ -705,6 +710,72 @@ describe('a row stated again otherwise (a run our server replaced mid-way)', () 
     expect(lay.calls).toBe(calls)
     expect(w.stack.contentOf(1)?.key).toBe(was)
     expect(entries(w, 1)).toEqual([2, 1])
+  })
+  it("a row missing when the page was laid at the rows' end, come with a run started again (a retry), lays it again once", async () => {
+    // (the page laid at the end with u11 the original's, none to come; the reader takes the rows again for a run our server
+    // started again, the rows going on (reader.ts: no generation of its own), and that run brings u11)
+    const pages = new Map([[1, partOf(1, [member(10, 1, 0), member(11, 1, 1)])]])
+    const lay = sentenceLay()
+    const w = world({ pages, lay })
+    w.stack.setNear([1])
+    const rows = statedRows('zh')
+    open(w, rows)
+    rows.state([row('u10')])
+    rows.end()
+    await settle()
+    w.stack.put(1)
+    await settle()
+    expect((w.composer.laid(1) as Page).members.map((m) => m.state)).toEqual(['laid', 'none'])
+    const before = counted(w)
+    rows.done = false
+    rows.state([row('u11')])
+    await settle()
+    const after = counted(w)
+    expect([after.gen - before.gen, after.lays - before.lays, after.commits - before.commits]).toEqual([1, 1, 1])
+    expect((w.composer.page(1) as Page).members.map((m) => m.state)).toEqual(['laid', 'laid'])
+    // (the rows ended again, the same: nothing more)
+    rows.end()
+    await settle()
+    expect(counted(w)).toMatchObject({ gen: after.gen, lays: after.lays, commits: after.commits })
+  })
+  it('the re-prepared paper (2610.21924v1, staging 2026-11-11): runs that restate the rows held lay nothing; the new layer is laid once, as its own', async () => {
+    const pages = new Map([
+      [1, partOf(1, [member(10, 1, 0), member(11, 1, 1)])],
+      [2, partOf(2, [member(20, 2, 0), member(21, 2, 1)])],
+    ])
+    const lay = sentenceLay()
+    const w = world({ pages, lay })
+    w.stack.setNear([1, 2])
+    const rows = statedRows('zh')
+    open(w, rows)
+    // (attempt 2's stored rows of the stale layer, read whole: the pages committed)
+    rows.state([row('u10'), row('u11'), row('u20'), row('u21')])
+    rows.end()
+    await settle()
+    w.stack.put(1)
+    w.stack.put(2)
+    await settle()
+    const settled = counted(w)
+    // (attempt 3 on the prepare's early units, the rows taken again: its rows the same, read anew from its own objects)
+    rows.done = false
+    rows.state([row('u10'), row('u11'), row('u20')])
+    rows.end()
+    await settle()
+    expect(counted(w)).toMatchObject({ gen: settled.gen, lays: settled.lays, commits: settled.commits })
+    // (the new layer lands: laid once, a generation of its own; attempt 4 then restates every row: nothing more)
+    w.composer.setLayer({ pages: 2, part: async (n: number) => pages.get(n) ?? null }, rows)
+    await settle()
+    const landed = counted(w)
+    // (each near page laid at most once for it, every lay committed)
+    expect(landed.gen - settled.gen).toBe(1)
+    expect(landed.lays - settled.lays).toBe(landed.commits - settled.commits)
+    expect(landed.lays - settled.lays).toBeGreaterThan(0)
+    expect(landed.lays - settled.lays).toBeLessThanOrEqual(2)
+    rows.done = false
+    rows.state([row('u10'), row('u11'), row('u20'), row('u21')])
+    rows.end()
+    await settle()
+    expect(counted(w)).toMatchObject({ gen: landed.gen, lays: landed.lays, commits: landed.commits })
   })
   it('a row the lay read where it was missing, waited for by no page, changes nothing on screen when it comes', async () => {
     // (as layPage reads the paper's own names: typeset lay/entry.ts ownNamesOf reads their rows, wait.ts waits for none, and

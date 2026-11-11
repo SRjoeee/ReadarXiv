@@ -418,7 +418,7 @@ describe('the session: the open, wherever the document lacks what the visit need
     const m = hereNow()
     m.feed({ i: 'paper', t: m.live('link'), doc: stale(1) })
     m.feed({ i: 'code.loaded', t: m.live('code') }, { i: 'head', digest: CATALOG.sha256, head: HEAD })
-    m.feed({ i: 'rows.end', t: m.live('rows'), got: 1, total: 1, lost: 0 })
+    m.feed({ i: 'rows.end', t: m.live('rows') })
     expect(m.has('rows')).toBe(false)
     // (the open's answer carries the new build's layer: a prepare another visit asked ended meanwhile)
     m.feed({ i: 'open.answered', t: m.live('open'), doc: rebuilt(2) })
@@ -428,7 +428,7 @@ describe('the session: the open, wherever the document lacks what the visit need
     const same = hereNow()
     same.feed({ i: 'paper', t: same.live('link'), doc: stale(1) })
     same.feed({ i: 'code.loaded', t: same.live('code') }, { i: 'head', digest: CATALOG.sha256, head: HEAD })
-    same.feed({ i: 'rows.end', t: same.live('rows'), got: 1, total: 1, lost: 0 })
+    same.feed({ i: 'rows.end', t: same.live('rows') })
     same.feed({
       i: 'open.answered',
       t: same.live('open'),
@@ -529,14 +529,14 @@ describe('the session: the open, wherever the document lacks what the visit need
     expect(t.s.rows).toMatchObject({ s: 'arriving', target: ZH })
     // (rows complete, then a run our server starts again, a re-prepare's new units: taken again)
     const c = composedNow()
-    c.feed({ i: 'rows.end', t: c.live('rows'), got: 1, total: 1, lost: 0 })
+    c.feed({ i: 'rows.end', t: c.live('rows') })
     expect(c.s.rows.s).toBe('complete')
     c.feed({ i: 'paper', t: c.live('link'), doc: { ...ready(2), targets: { [ZH]: run('running', { attempt: 2 }) } } })
     expect(c.s.rows).toMatchObject({ s: 'arriving', target: ZH })
     // (a run started and ended between two documents heard, a newer catalog's (staging, 1706.03762v7: the reader's rows of
     // the old units complete, the new run's never read): taken again; the same run heard again, not)
     const w = composedNow()
-    w.feed({ i: 'rows.end', t: w.live('rows'), got: 1, total: 1, lost: 0 })
+    w.feed({ i: 'rows.end', t: w.live('rows') })
     w.feed({ i: 'paper', t: w.live('link'), doc: { ...ready(2), targets: { [ZH]: run('done', { units: UNITS }) } } })
     expect(w.s.rows.s).toBe('complete')
     const NEWER = {
@@ -545,7 +545,7 @@ describe('the session: the open, wherever the document lacks what the visit need
     }
     w.feed({ i: 'paper', t: w.live('link'), doc: NEWER })
     expect(w.s.rows).toMatchObject({ s: 'arriving', target: ZH })
-    w.feed({ i: 'rows.end', t: w.live('rows'), got: 1, total: 1, lost: 0 })
+    w.feed({ i: 'rows.end', t: w.live('rows') })
     w.feed({ i: 'paper', t: w.live('link'), doc: { ...NEWER, rev: 4 } })
     expect(w.s.rows.s).toBe('complete')
   })
@@ -781,18 +781,9 @@ describe('the session: the rows', () => {
   it('arriving → complete', () => {
     const m = engagedReady()
     const r = m.live('rows')
-    m.feed(
-      { i: 'rows.batch', t: r, got: 10, total: 80, lost: 0 },
-      { i: 'rows.end', t: r, got: 80, total: 80, lost: 1, stopped: { kind: 'unavailable' } },
-    )
-    expect(m.s.rows).toEqual({
-      s: 'complete',
-      target: 'zh-Hans',
-      got: 80,
-      total: 80,
-      lost: 1,
-      stopped: { kind: 'unavailable' },
-    })
+    m.feed({ i: 'rows.end', t: r, stopped: { kind: 'unavailable' } })
+    // (no count of its own: the reader counts the rows it holds over the layer shown, session/rows.ts viewOf)
+    expect(m.s.rows).toEqual({ s: 'complete', target: 'zh-Hans', stopped: { kind: 'unavailable' } })
     expect(m.has('rows')).toBe(false)
   })
   it('failed, then arriving again at its retryAfter, by a retry not before it, and on a translator changed', () => {
@@ -809,7 +800,7 @@ describe('the session: the rows', () => {
   })
   it('a same-target retry is the rows again for the same target, nothing else let go', () => {
     const m = engagedReady({ here: true })
-    m.feed({ i: 'rows.end', t: m.live('rows'), got: 5, total: 8, lost: 3 })
+    m.feed({ i: 'rows.end', t: m.live('rows') })
     const keep = ['original', 'code', 'composed'].map(m.live)
     m.feed({ i: 'cmd.retry' })
     // (complete with gaps: the rows' handler holds its rows; a failed run is asked again at once)
@@ -1049,8 +1040,7 @@ describe('the session: tickets', () => {
       { i: 'original.mismatch', t: t.original },
       { i: 'paper', t: t.link, doc: preparing(9) },
       { i: 'follow.lost', t: t.link, why: 'network' },
-      { i: 'rows.batch', t: t.rows, got: 1, total: 1, lost: 0 },
-      { i: 'rows.end', t: t.rows, got: 1, total: 1, lost: 0 },
+      { i: 'rows.end', t: t.rows },
       { i: 'rows.failed', t: t.rows, why: { kind: 'server' } },
       { i: 'code.failed', t: 'code#999' },
       { i: 'composed.opened', t: 'composed#999' },
