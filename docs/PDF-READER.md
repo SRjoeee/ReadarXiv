@@ -3907,6 +3907,31 @@ translator's to choose).
   2307.16209v1 p143 "E. Berti，黑洞扰动理论，（2016）." and "E. Berti，“黑洞扰动理论”，（2016）."; 2610.10069v1 p24 "希克斯互补性与扰动效用模型" and "《Hicksian互补性与扰动效用模型》",
   in title marks, the translator's choice for a title in Chinese (its "Hicksian" left English this time, also the translator's).
 
+### 18.30 A link with no address is its argument: REVTeX's `\href@noop {} {…}` (2026-11-11)
+
+REVTeX's `.bbl` writes an entry's journal part that has no DOI, and a note, as `\href@noop {} {…}`, its head defining the command
+as `\@secondoftwo`: it sets its second argument as it stands and links nothing. The front end read the call whole as one
+placeholder, so its content stayed the original's ink (every journal part of 2610.20030v1: its copy text read "@noop journal
+journal Soft Matter volume 18, pages 2168 ( year 2022)"), and an entry made of it alone was no unit at all (2610.20030v1's
+supplemental note, left the original's English).
+
+- **The rule** (`latex-front.mjs` BIB_TEXT): `\href@noop` is one of the bibliography's text commands, its text the second
+  argument: a pair the head's definition reads as setting its argument alone (§18.28: written as its content), the groups it
+  holds as before (`\textbf` around a volume a group of its own, `\enquote`'s marks text, §18.29), its numbers the original's ink
+  as every entry's.
+- **The census before it**, over the 88 papers: 93 such placeholders in 6 papers (2610.20030v1 37, 2307.16209v1 26, 2610.20451v1
+  14, 2610.20595v1 14, 2610.20716v1 1, 2610.21765v1 1), every one in a reference, its address empty, no command inside it that
+  links by another route; no link of arXiv's page is owned by one or stands on its ink (one, a neighbouring paragraph's
+  `\ref`, touches a line's edge); one call more, the note, was in no unit. Every paper defines it in its head as above.
+- **Measured** over the 88 papers' stage 1a against §18.29's: 93 units of the 6 papers change, each exactly its placeholder read
+  as its argument (2307.16209v1's `Painlev\'e` a letter of its word, as everywhere); the note is a unit, drawn; an ink unit of
+  2610.20030v1 goes, the line it held now its entry's own (an entry over a page break, its second line the journal part); the
+  other 82 papers' bundles the same byte for byte; drawn units 38,366 to 38,367, pages the same. Wires of the 93: tags 14,534 to
+  21,204 characters, markers 7,990 to 11,724 (the journal names sent); no parity pair's. Stage 1a's statement (o) reads today's
+  placeholder as the front end now reads it in an entry; the differential loses round 14's 11. Laid by the reader's own lay,
+  Chinese by Microsoft, the references toggle on: 2610.20030v1 p5's journal part, a crop of the original's English, is now
+  "软物质 18，2168（2022）." with its numbers the original's ink; its note "“请参见[出版社将插入网址]的补充资料，获取图表S1-S3和电影字幕。”".
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

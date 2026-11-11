@@ -705,13 +705,14 @@ describe("a link with no address is its argument: REVTeX's \\href@noop {} {…} 
     const entry = '\\bibfield  {author} {\\bibinfo {author} {\\bibfnamefont {D.~M.}\\ \\bibnamefont {Sussman}},\\ }\\href@noop {} {\\bibfield  {journal} {\\bibinfo  {journal} {SoftwareX}\\ }\\textbf {\\bibinfo {volume} {6}},\\ \\bibinfo {pages} {16} (\\bibinfo {year} {2017})}'
     const p = project(bbl(entry))
     const u = (p.units as Unit[]).find(x => x.kind === 'reference') as Unit
-    expect(u.pieces.some(x => x.t === 'ph' && (x.src ?? '').startsWith('\\href@noop'))).toBe(false)
+    const pieces = u.pieces as { t: string; s?: string; src?: string; sets?: number }[]
+    expect(pieces.some(x => x.t === 'ph' && (x.src ?? '').startsWith('\\href@noop'))).toBe(false)
     expect(textOf(u)).toContain('SoftwareX')
-    const open = u.pieces.find(x => x.t === 'open' && (x.src ?? '').startsWith('\\href@noop')) as Unit['pieces'][number] & { sets?: number }
+    const open = pieces.find(x => x.t === 'open' && (x.src ?? '').startsWith('\\href@noop'))
     expect(open?.src).toBe('\\href@noop {} {')
     expect(open?.sets).toBe(0)
     // (\\textbf around its volume a group of its own still)
-    expect(u.pieces.some(x => x.t === 'open' && x.src === '\\textbf {')).toBe(true)
+    expect(pieces.some(x => x.t === 'open' && x.src === '\\textbf {')).toBe(true)
     expect(source(p)).toContain(entry)
   })
   it('an entry that is a link with no address alone is a unit: 2610.20030v1\'s supplemental note, its quotation marks text', () => {
