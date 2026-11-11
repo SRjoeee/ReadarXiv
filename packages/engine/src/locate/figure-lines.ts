@@ -172,8 +172,8 @@ const count = (k: keyof NonNullable<LinesWork['kept']>) => {
   if (W?.kept) W.kept[k]++
 }
 /**
- * The figure units drawn twice: another unit of its page of the same text (its white space aside), its origin within the text's
- * size of this one's across and up, the two boxes overlapping (2610.21313v1's "Psum Buffer" under a pale copy of itself, 2.4 and
+ * The figure units drawn twice: another unit of its page of the same text (its white space aside), the two inks overlapping
+ * across and up, a level run's (2610.21313v1's "Psum Buffer" under a pale copy of itself, 2.4 and
  * 4.8 pt off, its "SAMA" three times). Both are kept the original's: translated, each would be drawn over the other. A pair whose
  * glyphs are each other's twins by the relation reading's test (the same character overlapping across, within half its size up
  * or down) in one face, size and fill is an overprint (2610.22214v1's legend drawn on itself, 2610.21924v1's "CONDITIONAL RESCUE"
@@ -214,14 +214,29 @@ function doubledOf(fig: TodayFigures, pages: readonly TodayPage[]): Set<number> 
       )
     })
   }
+  // (a level unit's ink box: its glyphs' ink, across and from its lowest to its highest)
+  const boxOf = (u: TodayFigures['units'][number]) => {
+    const G = (pages[((u as { page?: number }).page ?? 1) - 1]?.glyphs ?? []) as G[]
+    const gs = (gsOf.get(u.k) ?? []).map((g) => G[g]!)
+    if (!gs.length) return null
+    return [
+      Math.min(...gs.map((g) => g.ix0 ?? g.x0)),
+      Math.min(...gs.map((g) => g.bottom)),
+      Math.max(...gs.map((g) => g.ix1 ?? g.x1)),
+      Math.max(...gs.map((g) => g.top)),
+    ]
+  }
   for (const u of fig.units) {
     const t = (u.text ?? '').replace(/\s+/gu, '')
-    if (!t || u.x === undefined || u.y === undefined) continue
+    const a = t ? boxOf(u) : null
+    if (!a) continue
     const key = `${(u as { page?: number }).page ?? 0}|${t}`
     const list = by.get(key) ?? by.set(key, []).get(key)!
     for (const v of list) {
-      const size = Math.max((u as { size?: number }).size ?? 10, (v as { size?: number }).size ?? 10)
-      if (Math.abs(u.x - v.x!) < size && Math.abs(u.y - v.y!) < size && !twins(u, v)) {
+      const b = boxOf(v)!
+      // (the two inks overlapping across and up: a token on two lines a pitch under its size apart stands apart, 2609.19644v1
+      // p38's code)
+      if (a[0]! < b[2]! && b[0]! < a[2]! && a[1]! < b[3]! && b[1]! < a[3]! && !twins(u, v)) {
         out.add(u.k)
         out.add(v.k)
       }

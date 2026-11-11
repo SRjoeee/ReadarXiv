@@ -809,6 +809,17 @@ describe('figure-lines: step 2, ink that is no text never keeps a figure text (t
     }
     expect(() => figureLinesOf([one.page, two.page], fig, () => false, null)).not.toThrow()
   })
+  it('reads no double in one token on two lines a pitch under its size apart: their ink does not overlap (2609.19644v1 p38)', () => {
+    // ("import" at the head of two lines of code 10 pt apart at size 10.5: the same string within the size, two lines)
+    const { page, fig } = pageOf([
+      [{ text: 'import', font: T, x: 100, size: 10.5 }],
+      [{ text: 'import', font: T, x: 100, size: 10.5, dy: 4 }],
+    ])
+    Object.assign(fig.units[0]!, { size: 10.5 })
+    Object.assign(fig.units[1]!, { size: 10.5 })
+    figureLinesOf([page], fig, () => false, null)
+    expect(fig.units.map((u) => u.why)).toEqual([null, null])
+  })
   it('keeps a text drawn twice: a copy of its string a little off it, or a pale copy under it (2610.21313v1)', () => {
     // (two copies of one label 0.7 of the size apart, each the other's ink: both kept, never two translations over each other)
     const twice = (dx: number, dy: number, fill?: number) => {
