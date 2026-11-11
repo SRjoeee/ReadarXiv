@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
 import { tableMetrics } from '../../src/metrics/table.ts'
 import { gatePair } from './gate.ts'
-import { gateL1Pair } from './gate-l1.ts'
+import { entryByToday, gateL1Pair } from './gate-l1.ts'
 import { hasL1 } from './l1.ts'
 import { hasDerived, hasTap, readGz, TAP } from './tap.ts'
 import { hasCache } from './today.ts'
@@ -33,5 +33,18 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache || !hasL1)('the gat
     expect(g.inv.I5).toEqual([])
     expect(g.inv.I3.length).toBeLessThanOrEqual(today.inv.I3.length)
     expect(g.selfDiffer).toEqual([])
+  })
+})
+
+describe("the entry's members compared with the runner's, by today's unit (round 8 B8)", () => {
+  // (a member of the part no unit of today's joins (its unit's text moved: lane style-wire's escaped characters, no door row) is
+  // one the runner never lays; keyed by its own part ord it took the place of the member of today's unit of that ord, 1512.03385
+  // p7's moved cell at part ord 125 standing for today's heading t125, read as "none against laid": 97 of B8's 747)
+  it("keys each joined member by its today's ord, and leaves out one no unit of today's joins", () => {
+    const m = (ord: number) => ({ ord, state: ord === 125 ? 'none' : 'laid' })
+    const unitOf = new Map([[121, { ord: 125 }], [122, { ord: 126 }]])
+    const by = entryByToday([m(121), m(122), m(125)], unitOf)
+    expect([...by.keys()]).toEqual([125, 126])
+    expect(by.get(125)).toEqual({ ord: 121, state: 'laid' })
   })
 })

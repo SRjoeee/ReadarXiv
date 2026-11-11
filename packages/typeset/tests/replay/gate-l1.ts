@@ -276,6 +276,21 @@ export function outOfDoor(row: readonly (string | number)[], source: readonly V0
   return top
 }
 
+/**
+ * The entry's members of a page by the ord of today's unit each is joined to (`unitOf`: part ord -> today's unit), the runner's
+ * members' key. A member no unit of today's joins (its unit's text moved, no door row: lane style-wire) is one the runner
+ * never lays, so it is left out: keyed by its own part ord, it stood in for the member of today's unit of that ord (round 8 B8:
+ * 97 of the entry's 747 members "not alike")
+ */
+export function entryByToday<M extends { ord: number }>(members: readonly M[], unitOf: ReadonlyMap<number, { ord: number }>): Map<number, M> {
+  const out = new Map<number, M>()
+  for (const m of members) {
+    const u = unitOf.get(m.ord)
+    if (u) out.set(u.ord, m)
+  }
+  return out
+}
+
 /** the first field of a member's setting that differs from today's prepared one, or 'equal' */
 export function settingDiff(mine: FlowMember, today: FlowMember, tokens = true): string {
   if (mine.blocks.length !== today.blocks.length) return 'U.blocks: block count'
@@ -1026,7 +1041,7 @@ export function gateL1Pair(
           const k = `${m.text.name}: ${st}`
           out.entry.names.set(k, (out.entry.names.get(k) ?? 0) + 1)
         }
-      const mine = new Map(page.members.map((m) => [unitOf.get(m.ord)?.ord ?? m.ord, m]))
+      const mine = entryByToday(page.members, unitOf)
       for (const pm of got.members) {
         const e = mine.get(pm.ord)
         const same =
