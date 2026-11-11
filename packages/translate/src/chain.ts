@@ -658,8 +658,9 @@ export function chainOf(ports: Ports = {}): Chain {
   async function* translateCall(units: readonly UnitIn[], target: Lang, o: TranslateOptions): AsyncGenerator<Result> {
     checkCall(units, o.translators)
     const seq = ++calls
-    // the call's own signal: the caller's, and the iterator's end before every unit settled (a host that stops reading lets
-    // its work go as an abort does: no request is kept for it, no timer outlives it)
+    // the call's own signal: the caller's, and the call's end, every unit settled or not (a host that stops reading lets its
+    // work go as an abort does, and a request the call started that no unit waits for goes with the call: no request is kept
+    // for it, no timer outlives it)
     const given = o.signal ?? NEVER
     const own = controller()
     const forward = () => own.abort()
@@ -684,6 +685,21 @@ export function chainOf(ports: Ports = {}): Chain {
       writes.push([key, raw])
       if (writes.length >= WRITE_EVERY) flushes.push(flush(ports.store, writes.splice(0), clock))
     }
+    // everything the call starts that is still to settle: each of its requests, and what an answer no unit waits for is
+    // written by (a phrase group's reference, asked in the unit's batch before its reply is known, which the reply may make
+    // needless). The call owns them: when it ends, its signal cancels every request still asked for it, and they are all
+    // settled before its last store write, so that no request outlives the call and every answer it got is stored (the review
+    // of round B11: a reference outlived its call, out of the host's abort, and its answer was never stored)
+    const started = new Set<Promise<unknown>>()
+    const owned = <T>(p: Promise<T>): Promise<T> => {
+      started.add(p)
+      const done = () => {
+        started.delete(p)
+      }
+      p.then(done, done)
+      return p
+    }
+    const askOf: Call['ask'] = (t, key, wire, alone, w) => owned(ask(t, target, o.context, key, wire, alone, w, signal))
     const onAbort = () => {
       for (const [i, u] of units.entries()) emit(i, { id: u.id, ok: false, why: { kind: 'aborted' } })
     }
@@ -716,6 +732,8 @@ export function chainOf(ports: Ports = {}): Chain {
           reader,
           write,
           emit,
+          ask: askOf,
+          owned,
           runs: true,
         }),
       )
@@ -732,8 +750,12 @@ export function chainOf(ports: Ports = {}): Chain {
       }
     } finally {
       given.removeEventListener('abort', forward)
-      if (settled.size < units.length) own.abort()
       signal.removeEventListener('abort', onAbort)
+      // (the call ends, every unit settled or the host gone: what it still asks is cancelled (a request another call waits for
+      // goes on for that one), then what it started settles, an answer that came in time written, before the last write)
+      own.abort()
+      // (none left, the last write goes out in this turn, as before: a host's own write beside it starts after it)
+      if (started.size) await Promise.all(started)
       if (ports.store && writes.length) flushes.push(flush(ports.store, writes.splice(0), clock))
       await Promise.all(flushes)
     }
@@ -752,6 +774,10 @@ export function chainOf(ports: Ports = {}): Chain {
     reader: (keys: readonly string[]) => Promise<(string | null)[]>
     write: (key: string, raw: string) => void
     emit: (i: number, r: Result) => void
+    /** the one way a unit reaches a translator's lane: asked under the call's signal, owned by the call (translateCall) */
+    ask: (t: Translator, key: string, wire: string, alone: boolean, w: Omit<Waiter, 'resolve'>) => Promise<Answer>
+    /** what an answer no unit waits for is written by, owned by the call so that it settles before the call's last write */
+    owned: <T>(p: Promise<T>) => Promise<T>
     runs: boolean
   }
 
@@ -838,7 +864,8 @@ export function chainOf(ports: Ports = {}): Chain {
       const w = { seq: c.seq, index: i, last, note: c.note }
       // the references of its phrase groups (a markers-wire translator's alone): each stored, else asked in the unit's batch
       // (started right before the unit is asked, in the same turn), read as any reply is; one that fails places nothing. The
-      // unit's reply is stored as it came, whatever they give
+      // unit's reply is stored as it came, whatever they give. One its reply makes needless is owned by the call (c.owned),
+      // which cancels it at its end, or stores its answer if it came in time
       const refs = refWires[k] ?? []
       let asked: Map<string, Promise<string | null>> | null = null
       const refText = (r: (typeof refs)[number], raw: string): string | null => {
@@ -857,11 +884,13 @@ export function chainOf(ports: Ports = {}): Chain {
             r.g.id,
             got !== undefined
               ? Promise.resolve(refText(r, got))
-              : ask(t, c.target, c.context, r.key, r.wire, false, w, c.signal).then((a) => {
-                  const s = 'raw' in a ? refText(r, a.raw) : null
-                  if (s !== null && 'raw' in a) c.write(r.key, a.raw)
-                  return s
-                }),
+              : c.owned(
+                  c.ask(t, r.key, r.wire, false, w).then((a) => {
+                    const s = 'raw' in a ? refText(r, a.raw) : null
+                    if (s !== null && 'raw' in a) c.write(r.key, a.raw)
+                    return s
+                  }),
+                ),
           )
         }
         return asked
@@ -923,7 +952,7 @@ export function chainOf(ports: Ports = {}): Chain {
           await clock.sleep(ms, c.signal)
           if (c.signal.aborted) return aborted(u)
         }
-        const pending = ask(t, c.target, c.context, wk.key, wk.wire, false, w, c.signal)
+        const pending = c.ask(t, wk.key, wk.wire, false, w)
         // (the references go out in the unit's request: asked in this turn, after it)
         if (refs.length) startRefs()
         a = await pending
@@ -944,7 +973,7 @@ export function chainOf(ports: Ports = {}): Chain {
         }
         // the re-ask: once, alone, by the same translator
         if (t.limits.reask === 1) {
-          const again = await ask(t, c.target, c.context, wk.key, wk.wire, true, w, c.signal)
+          const again = await c.ask(t, wk.key, wk.wire, true, w)
           if ('aborted' in again) return aborted(u)
           if ('raw' in again) {
             const r2 = judge(u, t, again.raw)
