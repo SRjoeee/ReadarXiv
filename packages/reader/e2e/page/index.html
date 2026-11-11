@@ -14,6 +14,10 @@
   .axt-reader[data-axt-pdf-mode="translation"] .axt-pane.left { width: 0; visibility: hidden; }
   .axt-reader[data-axt-pdf-mode="translation"] .axt-pane.right { left: 0; width: 100%; }
   .axt-reader .pdfViewer .page { --page-margin: 8px auto; }
+  /* a host's dimmed page, as both hosts' chrome sheet dims it (chrome/reader.css, there on <html>): the page box's ground and
+     the page view's own canvas alone, so that the reader's sheet carries all it draws over them */
+  [data-axt-dim] .pdfViewer .page { background-color: rgb(29 29 29) !important; }
+  [data-axt-dim] .pdfViewer .page .canvasWrapper > canvas { filter: invert(88.8%) hue-rotate(180deg); }
 </style>
 </head>
 <body>

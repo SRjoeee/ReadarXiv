@@ -25,7 +25,7 @@ import {
   type UiLanguage,
   useReader,
 } from '../../src/index.ts'
-import { fixtureLay, pagesOf, type ReaderDump } from './convert.ts'
+import { fixtureLay, inked, pagesOf, type ReaderDump } from './convert.ts'
 
 interface Options {
   target?: string
@@ -45,6 +45,8 @@ interface Options {
   original?: 'ours' | 'broken'
   /** the fixtures' faces (the default), or a face whose file is not there (a face lost) */
   faces?: 'fixtures' | 'missing'
+  /** page 1 laid with runs of three inks (convert.ts inked) */
+  inks?: boolean
 }
 
 /** the website's words beside HOST_WORDS: its chip that shows the translation, its way to arXiv's PDF, its link where the
@@ -151,7 +153,7 @@ const c = {
         const dump = (await (
           await fetch(`/fixtures/${name}/${fx.dumps[target] ?? `${target}.reader.json`}`)
         ).json()) as ReaderDump
-        return fixtureLay(
+        const laid = fixtureLay(
           pagesOf(
             parts,
             dump,
@@ -159,6 +161,7 @@ const c = {
           ),
           parts,
         )
+        return o.inks ? inked(laid, 1) : laid
       },
     }
     const controller = createController({

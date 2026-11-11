@@ -9,6 +9,7 @@
 // to its member by its id, equal ids by their order (the baseline's comparator's rule); a crop to the element of that member on
 // that page whose ink is of its width (its piece by number first).
 import type { El, Part, Placed } from '@readarxiv/format'
+import { CJK_INK } from '@readarxiv/typeset'
 import type { Box, FaceId, Item, Lay, Laid, Page, Rows } from '../../src/compose/page.ts'
 
 export interface DumpLine {
@@ -235,5 +236,43 @@ export function fixtureLay(pages: Map<number, Page>, parts: Map<number, Part>): 
           : l,
       ),
     }
+  }
+}
+
+/** a colour of a run's own (as a notice line's or a link's): the dimmed pages' check */
+export const COLOURED = 0xc00000
+/**
+ * Three inks on page `n` (the dimmed pages' check): its first laid member of three lines of text or more keeps its first as laid
+ * (runs that name no fill: the layer's ink), its second's runs set in CJK characters in CJK_INK (the fill the typesetter gives a
+ * CJK run, typeset display.ts), its third's in COLOURED
+ */
+export function inked(lay: Lay, n: number): Lay {
+  const texty = (l: Laid['lines'][number]) => l[3].some((it) => !('src' in it))
+  return (part, rows) => {
+    const p = lay(part, rows)
+    const at =
+      part.page === n ? p.members.findIndex((m) => m.state === 'laid' && m.lines.filter(texty).length >= 3) : -1
+    if (at < 0) return p
+    const m = p.members[at] as Laid
+    let k = 0
+    const lines = m.lines.map((l): Laid['lines'][number] => {
+      if (!texty(l)) return l
+      const which = k++
+      if (which !== 1 && which !== 2) return l
+      const items = l[3].map((it): Item => {
+        if ('src' in it) return it
+        if (which === 2) return { ...it, fill: COLOURED }
+        // (a CJK character about twice a Latin one's width: half as many, so that the line keeps within its page)
+        const n = Math.ceil([...it.s].length / 2)
+        return {
+          ...it,
+          s: '\u6c38'.repeat(n),
+          fill: CJK_INK,
+          ...(it.dx ? { dx: it.dx.filter((_, i) => i % 2 === 0).slice(0, n) } : {}),
+        }
+      })
+      return [l[0], l[1], l[2], items]
+    })
+    return { ...p, members: p.members.map((x, i) => (i === at ? { ...m, lines } : x)) }
   }
 }
