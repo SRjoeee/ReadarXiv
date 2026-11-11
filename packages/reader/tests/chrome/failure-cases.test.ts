@@ -104,11 +104,13 @@ type Beat =
   | { at: number; timers: true }
   /** the browser's word on the network */
   | { at: number; online: boolean }
+  /** the open under way answered with this document (the visit's `hold`: opens are answered by these beats alone) */
+  | { at: number; answer: Doc }
 
 /** a visit: every resource the machine asks answered at once, our server's rows read as reader.ts reads them (every ref the
  *  document names for the target, each once a ticket; at the run's end read whole, its end told), drawn at the end; the opens
  *  answered by `refusals` in turn (none left: the document held), each drawn capsule kept with its time (`seen`) */
-function visit(store: Store, beats: Beat[], refusals: Refusal[] = []) {
+function visit(store: Store, beats: Beat[], refusals: Refusal[] = [], hold = false) {
   let s: State = init({
     paper: { id: '2610.00002', version: 1 },
     here: false,
@@ -129,6 +131,7 @@ function visit(store: Store, beats: Beat[], refusals: Refusal[] = []) {
   const seen: { at: number; capsule: Capsule | null; card: Card | null }[] = []
   const toldOf = (): ReaderState => {
     const r = s.rows
+    const run = runOf(s)
     const view = viewOf({
       units:
         s.layer.s === 'ready' && headRead === s.layer.catalog.sha256
@@ -138,7 +141,8 @@ function visit(store: Store, beats: Beat[], refusals: Refusal[] = []) {
       held: rows,
       shown: s.layer.s === 'ready',
       laid: s.panes.laid > 0,
-      ...runOf(s),
+      run: run.run,
+      failed: run.failed,
     })
     const count = { got: view.got, total: view.total, lost: view.lost }
     const base = { target: r.target, from: 'server' as const }
@@ -160,7 +164,7 @@ function visit(store: Store, beats: Beat[], refusals: Refusal[] = []) {
       rows:
         r.s === 'none'
           ? { ...base, s: 'none' }
-          : r.s === 'arriving'
+          : r.s === 'arriving' || run.asking
             ? { ...base, s: 'arriving', ...count, waits: view.waits }
             : r.s === 'complete'
               ? { ...base, s: 'complete', ...count, stopped: r.stopped }
@@ -182,7 +186,7 @@ function visit(store: Store, beats: Beat[], refusals: Refusal[] = []) {
         outline: [],
         heading: null,
       },
-      ...linkSaid(s, r.s === 'arriving' && view.waits),
+      ...linkSaid(s, (r.s === 'arriving' || run.asking) && view.waits),
       faces: null,
       crashed: false,
     } as ReaderState
@@ -207,7 +211,7 @@ function visit(store: Store, beats: Beat[], refusals: Refusal[] = []) {
     }
     const composed = live('composed')
     if (composed && s.layer.s === 'ready' && !s.layer.open) queue.push({ i: 'composed.opened', t: composed })
-    const open = live('open')
+    const open = hold ? null : live('open')
     if (open && answers.length) queue.push({ i: 'open.answered', t: open, doc: s.doc, refused: answers.shift() })
     else if (open && s.doc) queue.push({ i: 'open.answered', t: open, doc: s.doc })
     const t = live('rows')
@@ -267,7 +271,10 @@ function visit(store: Store, beats: Beat[], refusals: Refusal[] = []) {
       }
       now = b.at
     } else if ('online' in b) feed({ i: 'env.online', on: b.online })
-    else feed({ i: 'cmd.retry' })
+    else if ('answer' in b) {
+      const open = live('open')
+      if (open) feed({ i: 'open.answered', t: open, doc: b.answer })
+    } else feed({ i: 'cmd.retry' })
     seen.push({ at: now, capsule: capsuleAt(), card: cardOf(chrome, () => 'reason', WORDS) })
   }
   const card: Card | null = cardOf(chrome, () => 'reason', WORDS)
@@ -511,5 +518,49 @@ describe('the network down while the reader waits on our server (PDF-READER §8.
       { at: 7000, lost: 'network' },
     ])
     expect(v.capsuleAt(7000)).toBeNull()
+  })
+})
+
+describe('failed passages are told only where the session is not already asking for them again (PDF-READER §8.1; the flow-demo of 2026-11-11, F4)', () => {
+  const failedRun = (retryAt: number | null) => {
+    const store: Store = { units: new Map(), rows: new Map() }
+    const units = unitsObject(store, ids(0, 10))
+    const layer = { catalog: ref(), units: [units], format: 1, stale: false }
+    const done = rowsObject(store, ids(0, 5))
+    const running = doc(1, layer, target('running', { units: [units], rows: [done], done: 5, total: 10 }))
+    const failed = doc(2, layer, target('failed', { why: 'translation-down', retryAt, units: [units], rows: [done] }))
+    const again = doc(3, layer, target('running', { attempt: 2, units: [units], rows: [done], total: 10 }))
+    return { store, running, failed, again }
+  }
+  const at = (v: ReturnType<typeof visit>, t: number) => v.seen.filter((x) => x.at === t).at(-1)?.capsule ?? null
+  it('a run the visit did not open, found failed with no time to wait, is asked again at once: the wait told (its count), never the notice', () => {
+    // (the recording: "3 passages failed [retry]" stood 150 ms while the session's open, asked at once, was under way)
+    const { store, running, failed, again } = failedRun(null)
+    const v = visit(store, [{ at: 100, opened: true }, { at: 1000, doc: running }, { at: 1100, laid: 1 }, { at: 2000, doc: failed }, { at: 2150, answer: again }], [], true)
+    for (const x of v.seen) expect(x.capsule?.kind, `at ${x.at}`).not.toBe('notice')
+    expect(words(at(v, 2000))).toBe('translating 5/10')
+    expect(words(at(v, 2150))).toBe('translating 5/10')
+    // (nothing laid yet: no card either)
+    const bare = visit(store, [{ at: 100, opened: true }, { at: 1000, doc: running }, { at: 2000, doc: failed }, { at: 2150, answer: again }], [], true)
+    for (const x of bare.seen) expect(x.card, `at ${x.at}`).toBeNull()
+  })
+  it("a run failed with our server's time to wait: the notice for that wait, no retry; at the time the ask begins, the wait's own words", () => {
+    const { store, running, failed, again } = failedRun(39_000)
+    const v = visit(
+      store,
+      [{ at: 100, opened: true }, { at: 1000, doc: running }, { at: 1100, laid: 1 }, { at: 2000, doc: failed }, { at: 39_000, timers: true }, { at: 39_150, answer: again }],
+      [],
+      true,
+    )
+    expect(at(v, 2000)).toMatchObject({ kind: 'notice', action: null })
+    expect(words(at(v, 2000))).toBe('5 passages failed')
+    expect(words(at(v, 39_000))).toBe('translating 5/10')
+    expect(words(at(v, 39_150))).toBe('translating 5/10')
+  })
+  it('a run failed that the session will not ask again by itself (this visit asked it already): the notice, with its retry', () => {
+    const { store, running, failed } = failedRun(null)
+    // (its open answered with the run failed still: nothing more the session asks by itself)
+    const v = visit(store, [{ at: 100, opened: true }, { at: 1000, doc: running }, { at: 1100, laid: 1 }, { at: 2000, doc: failed }, { at: 2150, answer: failed }], [], true)
+    expect(v.capsule).toMatchObject({ kind: 'notice', action: 'retry' })
   })
 })

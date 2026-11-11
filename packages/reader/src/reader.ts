@@ -1055,6 +1055,7 @@ export function openReader(
     const rowsView = { target: r.target, from: s.here ? ('here' as const) : ('server' as const) }
     // (what the view shown has of the translation and waits for: the layer's units read, counted by the rows held, as the run
     // they come from stands: one that may bring rows, one that ended failed, rows.ts runOf)
+    const run = runOf(s)
     const view = viewOf({
       units: s.layer.s === 'ready' && unitsRead?.key === unitsKey(s.layer.units) ? unitsRead.units : null,
       classes: s.prefs.value.classes,
@@ -1062,7 +1063,8 @@ export function openReader(
       held: rowsTarget === r.target ? rows : new Map(),
       shown: s.layer.s === 'ready',
       laid: s.panes.laid > 0,
-      ...runOf(s),
+      run: run.run,
+      failed: run.failed,
     })
     const count = { got: view.got, total: view.total, lost: view.lost }
     const p = panes as Panes | null
@@ -1097,10 +1099,11 @@ export function openReader(
               : s.layer.s === 'preparing'
                 ? { s: 'preparing', stage: s.layer.stage }
                 : { s: 'none' },
+      // (a failed run the session asks again at once is the run the reader waits for: told as arriving, never as failed)
       rows:
         r.s === 'none'
           ? { ...rowsView, s: 'none' }
-          : r.s === 'failed'
+          : r.s === 'failed' && !run.asking
             ? { ...rowsView, s: 'failed', why: r.why, ...count, retryAt: r.retryAt, ...self(again.rows !== null) }
             : r.s === 'complete'
               ? { ...rowsView, s: 'complete', ...count, stopped: r.stopped }
@@ -1118,7 +1121,7 @@ export function openReader(
         outline,
         heading,
       },
-      ...linkSaid(s, r.s === 'arriving' && view.waits),
+      ...linkSaid(s, (r.s === 'arriving' || run.asking) && view.waits),
       faces: facesLost ? 'lost' : null,
       crashed,
     }
