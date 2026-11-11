@@ -3941,9 +3941,22 @@ takes one capital before ".n" ("V.2") and a roman numeral with nothing after it:
   the zh table holds; rootcause/batch6.md): 566 heads in 34 papers; relabelled before 522, after 530 (stage 1a f12 against r14: exactly these 8 heads change their relabel, every other drawn alike): the 5 of 2610.21312v1 and
   the 3 of 2610.21765v1 (which today's production draws: its characters spell "Definition"). Not by this rule: 2610.21026v1's
   seven "Assumption" (`\newtheorem{assumption}{\protect\assumptionname}`: a name printed through a macro is no name unit of the
-  paper's, and the table has none), and babel's "Proof." (the names path's, by design). The same reading moves 24 other labels'
+  paper's, and the table has none). The same reading moves 24 other labels'
   parts, no relabel: ten run-in paragraph labels now read with their space ("Index Terms", SIAM's "Key words"), and fourteen
   appendix headings' "Appendix A" now name and letter (2610.21201v1, 2610.30875v1), which no table names either way.
+- **A proof's head of the class's own** (`unit/label.ts headLabelInTarget`, 2026-11-11). SIAM's classes (siamart251216,
+  siamonline250211) set a proof's head through ntheorem, `\newtheorem{proof}{Proof}`, italic in the class's blue with its stop:
+  the part states "Proof." as the proof unit's label, as it states "Proposition 7.2." before it. The port of production's rule
+  refused a head that is a babel name whole as the names path's (L2:1274, 1d5cbe1ae: amsthm's `\proofname`, whose name group
+  a label's drawing never hid in production), and no names path holds this one, TeX never setting `\proofname` there: the 29
+  heads of 2610.20266v1 (11) and 2610.20285v1 (18) stayed English, in v2 and in production, in front of translated proofs
+  beside relabelled theorems, against §19.11 (a proof's name in the target's words) and the owner's one label form per paper.
+  In the typesetter a label's glyphs are its own (a babel name the names path draws is a member of its own: amsthm's
+  "Proof." and IEEEtran's "Proof:" are, drawn in the target's word on both panes), so the refusal guards nothing and goes: the
+  29 are named as any head (ctex's word with the stop in Chinese, "Beweis." in German), every other of the 566 drawn as before. A proof with an
+  optional argument (`\begin{proof}[Proof of Lemma 3.1]`, 2610.20266v1's 6) prints the argument in the name's place, in SIAM's
+  class and in amsthm alike: the head is the author's text, a heading unit the translator translates, with no name to relabel.
+  Not this rule's: 2610.21504v1's one IEEEtran "Proof:", read as a paragraph's number label, English on both panes.
 
 ### 18.30 etoolbox's conditionals are read as TeX's own (2026-11-11)
 
