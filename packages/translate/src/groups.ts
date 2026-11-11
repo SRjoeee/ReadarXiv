@@ -177,7 +177,7 @@ export function placeGroups(unit: UnitIn, out: readonly OutPiece[]): OutPiece[] 
 const CJK = /[\u3000-\u303f\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uff00-\uffef]/
 let graphemes: Intl.Segmenter | null = null
 /** a text as a reference is matched in it: each grapheme NFKC, no white space beside a CJK character, a run of white space one
- *  space; with each character's grapheme in the text ([from, to) code units) */
+ *  space; with each of its code units' grapheme in the text ([from, to) code units) */
 function normalOf(s: string): { n: string; from: number[]; to: number[] } {
   graphemes ??= new Intl.Segmenter('und', { granularity: 'grapheme' })
   const parts: { c: string; a: number; b: number }[] = []
@@ -197,9 +197,13 @@ function normalOf(s: string): { n: string; from: number[]; to: number[] } {
       const after = parts[j]?.c
       if (!before || !after || CJK.test(before) || CJK.test(after)) continue
     }
+    // (an entry for each code unit it adds, as indexOf counts them: a character of two, an emoji's, given one moved every place
+    // after it one on)
     n += p.c
-    from.push(p.a)
-    to.push(p.b)
+    for (let u = 0; u < p.c.length; u++) {
+      from.push(p.a)
+      to.push(p.b)
+    }
   }
   return { n, from, to }
 }
