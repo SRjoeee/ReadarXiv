@@ -4907,6 +4907,66 @@ toggle, its nine lines the ledger's float lines of a table with no cell (§18.45
   none newly worse and no worse difference come or gone; Table 4's header drawn translated, its cells' centring nearer the
   original's than today's.
 
+### 18.47 A group that cuts a word is offered to no translator (the owner's ruling, 2026-11-12)
+
+The owner's report (2111.09276v1 p1 on staging, Google first): `called \textbf{I}nduce, \textbf{E}dit, \textbf{R}etrieve (IER)`.
+The unit carried a bold group round each initial, the tags wire offered each as a pair (`called <t id="1">I</t>nduce, …`), and
+Google translated the fragments: "I" as the pronoun 我, "dit" as 迪特, "R" as 拉, drawn with 我, E and 拉 bold. Our wire cut the
+words; the translator translated what it was given.
+
+- **The ruling** (the owner's, asked which is best: the whole translated word bold, or no style). A style group says
+  something about a stretch of meaning, and crosses a translation only where it is made of whole words. A group with an edge
+  inside a word describes the source word's spelling (an acronym's initials, a drop cap, a stressed syllable), and spelling has
+  no counterpart in the target: the group is offered to no translator, the word travels whole and plain, and the translated
+  word carries no style from it. Not widened to the whole word: that would state an emphasis the author did not make (three bold
+  words; a bold article for a drop cap). Correct words come before style.
+- **The rule** (`packages/translate` `words.ts` wholeWordsOf, applied once by the chain before anything reads the unit:
+  `chain.ts` settle, and rowContextOf, which keys a row's context by the unit as it is sent). A group that is not `must`, whose
+  start or end in the unit's projection stands strictly inside a word-like segment of it, is unwrapped: its words become its
+  parent's, its head (the elements before its first word, a declaration's place) stays in a copy of it holding the head alone,
+  as every wire already brings a head back (`{\bf B}olt-on`'s `\bf`, loose, would hold past the group), and its `stop` (TeX's
+  punctuation at its end) is written after its words, a row's sentences mapped back into the unit's own projection. Every wire
+  writes the unit so (the tags wire, the markers wire, the runs floor) and every reading reads the reply against it (the
+  acceptance rule, the literal put-back of §18.42, the references): one decision, before the wires, none per wire. The unit,
+  its id and its original do not change. A unit with no letter is sent nothing and keeps its groups.
+- **A word** is Unicode's (UAX #29) as the runtime gives it: `Intl.Segmenter` of the language every translator translates
+  from (SOURCE, `en`), granularity `word`, a segment it marks `isWordLike` (letters, digits, ideographs; ICU cuts a CJK run into
+  dictionary words in any locale); an element is U+FFFC there, a letter of no word; an edge where TeX sets a group's stop stands
+  on that punctuation. It is the platform's one definition for every script, in every place the chain runs (the Worker, the
+  extension's background, the lab), and it is what the put-back already matches words by. So `\textit{n}-gram` (a hyphen is a
+  boundary), `\textbf{RQ1}:` and `\textbf{Step 1}.` keep their groups, a group of whole words travels as before, and a group of
+  a whole Chinese word keeps its group (我们提出了**一种**新方法). A group with one edge inside a word and the other on a boundary
+  is a cut word too (`\textbf{pre}training`).
+- **What the rule leaves.** A `must` group, which its host states comes back exactly once: a link (it carries an address; the
+  corpus's 1,079 links are all `must`), a run-in label, and every pair of the HTML page, whose protector states each tag pair
+  (a `<b>`, a `<sub>`, a `<sup>`, an `<a>`) as a `must` group of no style (`src/core/protector/units.ts`), so the HTML page is
+  as before. The PDF's sub- and superscripts are elements, never groups (`$_2$`, `$^{1}$`, `\textsuperscript{th}`: 399
+  formulas that open with a script and 90 `\textsuperscript` in the 88, a formula or a macro whose ink is the original's, and
+  no `\textsubscript`), and a group carries a face and a colour into a
+  translation, no position (`locate/group-style.ts`, SpanAt): the PDF's 5 `\raisebox` groups cut no word. Two `must` groups of
+  the 88 cut a word and stay as they were: 2307.16209v1's run-in "**Keywords**:Linear perturbations" (no space after the colon,
+  and UAX #29 joins letters across a colon: "Keywords:Linear" is one word) and the italic "z" of 2610.20808v1's figure text
+  "zBF16(x)".
+- **Measured** over r18's 88 bundles (every unit that is not kept, as the chain is given it; scratch `word-spans/census.mts`,
+  `measure.mts`): 15,408 groups in 31,297 units, 2,961 `must`; 47 withheld (0.31 %), in 17 units of 13 papers; 15,361 kept.
+  By kind: an acronym spelled out by its initials 30 (1810.04805v2's "**B**idirectional **E**ncoder **R**epresentations from
+  **T**ransformers", twice; 2610.40394v1's TOME, 2610.22065v1's ABNAT, 2610.40576v1's PIVOT, "Inter**v**ention" among them;
+  2608.25210v2's `{\bf B}olt-on {\bf L}LM ver{\bf I}fiable {\bf P}rovenance`); a stressed syllable 1 (2610.17024v1's
+  `{\em sub}gradient`); a small capital inside a classification code 4 (2610.21377v1's `49\textsc{k}20`: the code goes plain,
+  its letter in lower case where the translator keeps it); a run of another face inside a figure's token 12 in 7 papers ("ξgw",
+  "McBS", "zNF4", "tt11", "Σα", "ug", "vg": a figure's text that comes back as it went keeps the original's ink). The tags
+  wire moves in those 17 units (8,114 characters to 7,438); the markers wire in none, since such a group already went on no
+  wire there, and the put-back no longer sets one round a letter the reply holds alone. The rule costs 6.5 µs a unit. The
+  parity's inputs (`lab/typeset/parity/rows.mjs` and `fresh.mjs` read and count against the unit as the chain sends it): the
+  22 pairs' stored rows as the parity reads them, 4,645 rows of r18's bundles, read the same before and after (5 of them rows
+  of units with a group withheld: 1810.04805v2 ×2, 2608.25210v2, 2610.17024v1, 2610.22065v1), and the fresh rows' cache, the
+  5 Microsoft replies of such units, read the same: the sheet's inputs do not move.
+- **What moves.** `CHAIN_RULES` gains `words` (`chain.ts`): the chain's identity moves, every row is made again, every stored
+  reply whose wire did not move answers (all of Microsoft's), and the 17 units' tags wires are new keys, asked again. No unit
+  changes (not `PIPELINE_VERSION`), and the engine's own wire is not touched (not `TRANSLATE_VERSION`).
+- **Not this rule's.** Production's wire (`translate/mt.mjs` classOf) keeps every pair with text on its tags wire, so Google
+  behind production would cut the same words; Microsoft, production's first, sends such a pair on no wire (`flat`).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
