@@ -216,14 +216,18 @@ const count = (k: keyof NonNullable<LinesWork['kept']>) => {
 }
 /** a note mark: a raised run of ∗ † ‡ § ¶ after a word, or of digits and commas at a row's end after a word (a \thanks mark, a
  *  footnote's number), which the translation keeps as text; a superscript inside the text (cm³) is a script */
+/** the most a script is of its row's text size: LaTeX's size tables (size10.clo, size11.clo, size12.clo) set a script at 0.67 to
+ *  0.75 of its text (10 pt's 7, 10.95 pt's 8, 12 pt's 8, 9 pt's 6, 8 pt's 6), a plotting program's mathtext at 0.7; a face that
+ *  differs from its row's by a hundredth of a point is no script (2610.19274v1 p35's "SSIM vs C", its C 9.06 beside 9.11) */
+const SCRIPT_RATIO = 0.75
 const NOTE_SIGNS = /^[∗*†‡§¶]+$/u
 const NOTE_DIGITS = /^[0-9,]+$/u
 /**
  * Whether a figure text holds what the engine cannot draw as it was set (F3's `script`, the coordinator's ruling of 2026-11-11:
  * such a text is the original's, never translated flat, as a formula line is): a script among its own glyphs, row by row, by
  * today's one definition (ink-units.mjs scriptsOf, rule 4: smaller than the row's text and off its baseline, read on the
- * engine's hundredth of a point, no threshold; the row's text size its largest, where a line of prose's is its most frequent), a
- * note mark aside; or a spacing accent or a combining mark set over another of its
+ * engine's hundredth of a point; the row's text size its largest, where a line of prose's is its most frequent), at most
+ * LaTeX's script ratio of that size (SCRIPT_RATIO: a plotting program's face a hundredth smaller is none), a note mark aside; or a spacing accent or a combining mark set over another of its
  * glyphs (its ink's middle across inside that glyph's ink, its ink above it) that TeX's \accent did not set over its letter
  * (accents.mjs accentOver, which joins a text accent to its letter: Física stays a word), its elements' glyphs too (a formula's
  * hat over its μ, laid as two crops one after the other: 2610.20947v1 p3). Its own glyphs alone: a neighbour's smaller text in
@@ -246,7 +250,8 @@ export function setApart(t: Pick<FigureText, 'order' | 'els'>, G: readonly G[]):
   const letter = (g: number | undefined) => g !== undefined && /\p{L}/u.test(G[g]?.u ?? '')
   for (const row of rows) {
     if (row.length < 2) continue
-    const sc = scriptsOf(G as never, row, true)
+    const body = Math.max(...row.map((g) => G[g]!.size))
+    const sc = new Map([...scriptsOf(G as never, row, true)].filter(([g]) => G[g]!.size <= SCRIPT_RATIO * body))
     for (let i = 0; i < row.length; ) {
       if (!sc.has(row[i]!)) {
         i++

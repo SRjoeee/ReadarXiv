@@ -1435,6 +1435,15 @@ describe("F3's `script`: a figure text the engine cannot draw as it was set is t
     // (a row of one size on one baseline holds none)
     expect(setApart(text(1), G as never)).toBe(false)
   })
+  it('keeps no glyph a hair smaller and lower: a plotting program\'s face, no script (2610.19274v1 p35\'s "SSIM vs C")', () => {
+    const G = gl([
+      ['S', 'DejaVuSans', 9.11, 100, 105, 712.89],
+      ['S', 'DejaVuSans', 9.11, 105, 110, 712.89],
+      ['v', 'DejaVuSans', 9.11, 112, 116, 712.89],
+      ['C', 'DejaVuSans-Oblique', 9.06, 120, 126, 712.66],
+    ])
+    expect(setApart(text(4), G as never)).toBe(false)
+  })
   it('keeps a superscript inside the text (cm³), never a note mark after a word (a raised ∗, a number at the end)', () => {
     const word = (mark: string, then: boolean) =>
       gl([
