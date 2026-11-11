@@ -795,6 +795,20 @@ describe('figure-lines: step 2, ink that is no text never keeps a figure text (t
     ])
     expect(texts[0]!.copies.sort((a, b) => a - b)).toEqual(second)
   })
+  it('reads each page’s units by that page’s glyphs: a long label on one page, a short one on the next (2610.21924v1)', () => {
+    // (the overprint test sorted every unit's glyphs by the last page's glyph array, and a unit of an earlier page whose glyphs
+    // that page has not crashed the paper)
+    const one = pageOf([[{ text: 'a long label of many glyphs here', font: T, x: 100 }]])
+    const two = pageOf([[{ text: 'ab', font: T, x: 100 }]])
+    const u2 = { ...two.fig.units[0]!, k: 1 }
+    const fig: TodayFigures = {
+      units: [{ ...one.fig.units[0]!, page: 1 } as never, { ...u2, page: 2 } as never],
+      glyphs: [one.fig.glyphs[0]!, new Map([...two.fig.glyphs[0]!].map(([g]) => [g, 1]))],
+      turned: [new Map(), new Map()],
+      met: new Map(),
+    }
+    expect(() => figureLinesOf([one.page, two.page], fig, () => false, null)).not.toThrow()
+  })
   it('keeps a text drawn twice: a copy of its string a little off it, or a pale copy under it (2610.21313v1)', () => {
     // (two copies of one label 0.7 of the size apart, each the other's ink: both kept, never two translations over each other)
     const twice = (dx: number, dy: number, fill?: number) => {

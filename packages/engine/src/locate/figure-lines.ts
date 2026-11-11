@@ -186,8 +186,13 @@ function doubledOf(fig: TodayFigures, pages: readonly TodayPage[]): Set<number> 
   const gsOf = new Map<number, number[]>()
   fig.glyphs.forEach((map, pi) => {
     const G = (pages[pi]?.glyphs ?? []) as G[]
-    for (const [g, k] of map) if (real(G[g]!)) (gsOf.get(k) ?? gsOf.set(k, []).get(k)!).push(g)
-    for (const [k, gs] of gsOf) if (G[gs[0]!]) gs.sort((a, b) => G[a]!.x0 - G[b]!.x0)
+    const mine = new Map<number, number[]>()
+    for (const [g, k] of map) if (G[g] && real(G[g]!)) (mine.get(k) ?? mine.set(k, []).get(k)!).push(g)
+    for (const [k, gs] of mine)
+      gsOf.set(
+        k,
+        gs.sort((a, b) => G[a]!.x0 - G[b]!.x0),
+      )
   })
   const twins = (u: TodayFigures['units'][number], v: TodayFigures['units'][number]) => {
     const p = (u as { page?: number }).page ?? 1
