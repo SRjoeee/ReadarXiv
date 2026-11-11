@@ -46,6 +46,8 @@ export type Cause = 'quota' | 'busy' | 'rate' | 'network' | 'server'
 /** the cause of a refusal for now, or null where none stands: the one place a refusal's cause is named, which every state that
  *  tells one reads (the capsule's words here, a run's stage) */
 export function causeOf(state: ReaderState): Cause | null {
+  // (the network down while a run is waited for, whatever is on screen: the run's own word for it)
+  if (state.network) return 'network'
   switch (state.unavailable?.why) {
     case 'refused':
       return 'quota'
@@ -187,6 +189,9 @@ export function capsuleOf(
       action: 'language',
     }
   }
+  // the network down while a run is waited for: said over the run's count, which cannot move until it is back (the session
+  // asks again by itself then: no retry), and the count again once it is (PDF-READER §8.1)
+  if (state.network) return { kind: 'notNow', words: plain(words.network ?? R.status.notNow), self: true }
   // a run under way, where the host words it (the website's stage and count); else the progress line alone shows it
   const stage = stageOf(state)
   // (the translation not on screen and some of it there: the host's chip shows it)

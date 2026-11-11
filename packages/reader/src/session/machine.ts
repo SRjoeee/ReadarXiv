@@ -605,6 +605,25 @@ export function againOf(s: State): { original: boolean; layer: boolean; rows: 'n
   return { original, layer, rows }
 }
 
+/**
+ * Our server's link as the reader is told it, where the view waits on it (`waits`: a translation under way that the view shown
+ * counts, PDF-READER §8.1): `network`, the network failed, the browser offline or an ask's fetch rejected (the look stopped for
+ * the network, or asked again since and nothing heard yet), the session asking again by itself once it is back; `reconnecting`,
+ * the follow's stream broke while the browser is online and is opened again, nothing heard since. A view that waits for nothing
+ * (a finished translation read) is told neither. Where no layer is shown, the network's stop is told as the layer's refusal for
+ * now (reader.ts), as before
+ */
+export function linkSaid(s: State, waits: boolean): { reconnecting: boolean; network: boolean } {
+  const l = s.link
+  const network =
+    waits &&
+    (!s.online ||
+      (l.s === 'stopped' && l.why === 'network') ||
+      // (asked again after the network failed, nothing heard yet: still the network's, never the count for a second)
+      (l.s === 'on' && !l.heard && s.netTries > 0))
+  return { reconnecting: !network && l.s === 'on' && !!l.lost, network }
+}
+
 /** the input folded into its region */
 function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
   const s: State = { ...s0 }

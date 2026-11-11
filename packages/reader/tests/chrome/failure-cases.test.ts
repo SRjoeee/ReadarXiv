@@ -15,6 +15,7 @@ import { DEFAULTS, type Prefs } from '../../src/prefs.ts'
 import type { ReaderState } from '../../src/reader.ts'
 import {
   againOf,
+  linkSaid,
   type Doc,
   displayOf,
   type Input,
@@ -181,7 +182,7 @@ function visit(store: Store, beats: Beat[], refusals: Refusal[] = []) {
         outline: [],
         heading: null,
       },
-      reconnecting: false,
+      ...linkSaid(s, r.s === 'arriving' && view.waits),
       faces: null,
       crashed: false,
     } as ReaderState
@@ -456,5 +457,59 @@ describe('an action is offered only where the session will not take it by itself
     for (const at of [9000, 38_999, 39_000]) expect(retryOffered(laid.capsuleAt(at) as Capsule), `at ${at}`).toBe(false)
     const bare = run({ end: (store) => [rowsObject(store, ids(0, 5))] })
     expect(bare.card).toMatchObject({ reason: 'failed: network', action: null })
+  })
+})
+
+describe('the network down while the reader waits on our server (PDF-READER §8.1; the flow-demo of 2026-11-11, F3)', () => {
+  // (the recording: the layer shown, "translating 7 / 17" up, the network gone: the count stood for the whole outage)
+  const counted = (more: (layer: Doc['layer'], units: Ref, store: Store) => Beat[]) => {
+    const store: Store = { units: new Map(), rows: new Map() }
+    const units = unitsObject(store, ids(0, 10))
+    const layer = { catalog: ref(), units: [units], format: 1, stale: false }
+    const w1 = rowsObject(store, ids(0, 5))
+    return visit(store, [
+      { at: 100, opened: true },
+      { at: 1000, doc: doc(1, layer, target('running', { units: [units], total: 10 })) },
+      { at: 2000, laid: 1 },
+      { at: 3000, doc: doc(2, layer, target('running', { units: [units], rows: [w1], done: 5, total: 10 })) },
+      ...more(layer, units, store),
+    ])
+  }
+  it('the browser offline: the network said over the count for as long as it is so, the count back once it is online and heard', () => {
+    const v = counted((layer, units, store) => [
+      { at: 4000, online: false },
+      { at: 9000, timers: true },
+      { at: 9500, online: true },
+      { at: 9600, doc: doc(3, layer, target('running', { units: [units], rows: [rowsObject(store, ids(0, 7))], total: 10 })) },
+    ])
+    const at = (t: number) => v.seen.filter((x) => x.at === t).at(-1)?.capsule ?? null
+    expect(words(at(3000))).toBe('translating 5/10')
+    expect(words(at(4000))).toBe('network down')
+    expect(at(4000)).toMatchObject({ kind: 'notNow' })
+    expect(retryOffered(at(4000) as Capsule)).toBe(false)
+    expect(words(at(9000))).toBe('network down')
+    expect(words(at(9600))).toBe('translating 7/10')
+    // (the progress line stays the run's: its phase stays translating, nothing jumps)
+    expect(v.chrome.phase).toBe('translating')
+  })
+  it('a rejected fetch while the browser says it is online: the network, also while the session asks again, until a document is heard', () => {
+    const v = counted((layer, units, store) => [
+      { at: 4000, lost: 'network' },
+      // (the session's own next ask, a second on: the follow asked again, nothing heard yet)
+      { at: 5000, timers: true },
+      { at: 6000, doc: doc(3, layer, target('running', { units: [units], rows: [rowsObject(store, ids(0, 7))], total: 10 })) },
+    ])
+    const at = (t: number) => v.seen.filter((x) => x.at === t).at(-1)?.capsule ?? null
+    expect(words(at(4000))).toBe('network down')
+    expect(v.seen.filter((x) => x.at === 5000).every((x) => words(x.capsule) === 'network down')).toBe(true)
+    expect(words(at(6000))).toBe('translating 7/10')
+  })
+  it('a finished translation being read: the network lost tells nothing (nothing is waited for)', () => {
+    const v = counted((layer, units, store) => [
+      { at: 5000, doc: doc(3, layer, target('done', { units: [units], rows: [rowsObject(store, ids(0, 10))], total: 10 })) },
+      { at: 6000, online: false },
+      { at: 7000, lost: 'network' },
+    ])
+    expect(v.capsuleAt(7000)).toBeNull()
   })
 })

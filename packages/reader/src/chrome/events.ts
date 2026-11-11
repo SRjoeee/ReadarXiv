@@ -129,7 +129,8 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
       retryAt: l.retryAt,
       ...(l.self ? { self: true as const } : {}),
     })
-  if (!!p?.reconnecting !== !!next.reconnecting) out.push({ type: 'link', reconnecting: !!next.reconnecting })
+  if (!!p?.reconnecting !== !!next.reconnecting || !!p?.network !== !!next.network)
+    out.push({ type: 'link', reconnecting: !!next.reconnecting, network: !!next.network })
   // the translation under way is what the view shown waits for (reader.ts `waits`, session/rows.ts viewOf), counted over the layer
   // it shows: rows read of a run done, a run that restates rows held, one on units of a layer not shown, are told by their end
   // alone. The view's wait over while the rows still come (every unit shown holds its translation) is its end

@@ -121,8 +121,9 @@ export type SessionEvent =
    *  once the network is back): no retry offered (PDF-READER §8.1). None where a session does not say (the extension's today
    *  session): a retry offered */
   | { type: 'unavailable'; why: Unavailable; retryAt: number | null; self?: true }
-  /** our server's document followed: its stream lost and asked again, nothing heard since (or heard again) */
-  | { type: 'link'; reconnecting: boolean }
+  /** our server's document followed: its stream lost and asked again, nothing heard since (or heard again); `network`: the
+   *  network failed while the run is waited for (none where a session does not say: the extension's today session) */
+  | { type: 'link'; reconnecting: boolean; network?: boolean }
 /** what a session is given: the panes it draws into, and where it tells its events */
 export interface SessionHost {
   left: HTMLElement
@@ -167,6 +168,9 @@ export interface ReaderState {
   translated: { got: number; total: number }
   /** our server's document followed, its stream lost and asked again: the run under way not heard for now */
   reconnecting: boolean
+  /** the network failed while the run under way is waited for (the browser offline, or a fetch rejected): the run cannot go on
+   *  until it is back, which the session waits for by itself (PDF-READER §8.1) */
+  network: boolean
   /** 0–1, the share of the paper's PDF downloaded, in hundredths; 0 while its size is unknown */
   loaded: number
   /** the paragraphs the service failed on: the notice's {n} */
@@ -239,6 +243,7 @@ export const INITIAL: ReaderState = {
   rowsComing: false,
   translated: { got: 0, total: 0 },
   reconnecting: false,
+  network: false,
   loaded: 0,
   failedUnits: 0,
   failure: null,
@@ -451,8 +456,12 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
         return { ...state, layer, laying: false, phase: state.phase === 'translating' ? 'ready' : state.phase }
       return layer === state.layer ? state : { ...state, layer }
     }
-    case 'link':
-      return event.reconnecting === state.reconnecting ? state : { ...state, reconnecting: event.reconnecting }
+    case 'link': {
+      const network = !!event.network
+      return event.reconnecting === state.reconnecting && network === state.network
+        ? state
+        : { ...state, reconnecting: event.reconnecting, network }
+    }
     case 'translating':
     case 'translated':
     case 'unavailable':

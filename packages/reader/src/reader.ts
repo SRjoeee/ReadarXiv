@@ -27,6 +27,7 @@ import { type Contents, createContents, type OutlineEntry, type Rect } from './s
 import {
   againOf,
   type Doc,
+  linkSaid,
   displayOf,
   type Effect,
   init,
@@ -149,8 +150,13 @@ export interface ReaderState {
     /** the contents entry being read: the last heading at or above the reading line of the pane read; null before the first */
     heading: number | null
   }
-  /** our server's document followed, its stream lost and asked again, nothing heard since (the website says "reconnecting") */
+  /** our server's document followed, its stream lost while the browser is online and asked again, nothing heard since (the
+   *  website says "reconnecting") */
   reconnecting: boolean
+  /** the network failed (the browser offline, or an ask's fetch rejected, and nothing heard since) while the view waits on our
+   *  server for a translation it counts: told whatever is on screen, the session asking again by itself once it is back
+   *  (machine.ts linkSaid, PDF-READER §8.1). A view that waits for nothing is told nothing */
+  network: boolean
   /** `lost`: a face the translation is set in could not be had (an answer no ask would mend, or a failure met twice), its
    *  passages drawn in their fallback until the page is loaded again (a host may say so: the website's faces-lost); null
    *  while none is */
@@ -1112,7 +1118,7 @@ export function openReader(
         outline,
         heading,
       },
-      reconnecting: l.s === 'on' && !!l.lost,
+      ...linkSaid(s, r.s === 'arriving' && view.waits),
       faces: facesLost ? 'lost' : null,
       crashed,
     }
