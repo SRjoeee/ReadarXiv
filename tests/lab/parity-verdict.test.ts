@@ -447,8 +447,8 @@ describe("labels: a counter printed alone names no word, so it is no label kept 
     kind: o.kind,
     align: 'j',
     style: { size: 10 },
-    label: { ink: [N, o.name[1][1], o.at - 2, (o.num ?? o.name)[1][3], o.at + 7, o.at], kind: o.label, name: o.name, ...(o.num ? { num: o.num } : {}), style: { size: 10 } },
-    lines: [factLine((o.num ?? o.name)[1][3] + 3, 300, o.at)],
+    label: { ink: [N, o.name[1][1]!, o.at - 2, (o.num ?? o.name)[1][3]!, o.at + 7, o.at], kind: o.label, name: o.name, ...(o.num ? { num: o.num } : {}), style: { size: 10 } },
+    lines: [factLine((o.num ?? o.name)[1][3]! + 3, 300, o.at)],
   })
   const box = (x0: number, x1: number, y: number) => [N, x0, y - 2, x1, y + 7, y]
   const cap1 = fig({ ord: 10, kind: 'caption', label: 'float', name: ['Figure', box(72, 100, 600)], num: ['1', box(102, 106, 600)], at: 600 })
@@ -1267,6 +1267,10 @@ describe('figures: a figure text of v2’s that holds several of today’s, its 
     expect(of(run())).toEqual([])
     expect(run().measures.figures).toMatchObject({ today: 2, v2: 1, joined: 1 })
   })
+  const prepRows = [
+    { ord: 90, kind: 'figure', lines: [{ page: N, x0: 100, x1: 185, baseline: 300, top: 306.4, bottom: 298.4, size: 8 }] },
+    { ord: 91, kind: 'figure', lines: [{ page: N, x0: 100, x1: 150, baseline: 290, top: 296.4, bottom: 288.4, size: 8 }] },
+  ]
   const rows = (o: { drawn?: boolean; lines?: number[] } = {}) =>
     measure(
       v2Of({ members: [{ ord: 60, state: o.drawn === false ? 'unwrapped' : 'laid', lines: [] }], facts: [{ ord: 60, kind: 'figure', align: 'l', style: { size: 8 }, lines: (o.lines ?? [300, 290]).map((y) => factLine(100, 185, y, 8)) }] }),
@@ -1274,10 +1278,7 @@ describe('figures: a figure text of v2’s that holds several of today’s, its 
         today: { figures: [{ id: 'f0', lines: [drawnLine(100, 160, 300, 'wxyz', 8)] }, { id: 'f1', lines: [drawnLine(100, 150, 290, 'wxyz', 8)] }] },
         v2: { units: o.drawn === false ? [] : [{ id: 60, lines: [drawnLine(100, 185, 300, 'abcdefgh', 8), drawnLine(100, 140, 290, 'abcd', 8)] }] },
       }),
-      [
-        { ord: 90, kind: 'figure', lines: [{ page: N, x0: 100, x1: 185, baseline: 300, top: 306.4, bottom: 298.4, size: 8 }] },
-        { ord: 91, kind: 'figure', lines: [{ page: N, x0: 100, x1: 150, baseline: 290, top: 296.4, bottom: 288.4, size: 8 }] },
-      ],
+      prepRows,
     )
   it('two wrapped rows today drew apart, v2 one text over both: not worse', () => {
     expect(of(rows())).toEqual([])
