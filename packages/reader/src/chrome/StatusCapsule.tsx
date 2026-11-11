@@ -76,17 +76,18 @@ export function StatusCapsule({
       ...(parts.linkOrigins ? { origins: parts.linkOrigins } : {}),
     }),
   )
-  // (a run's capsule once its wait has lasted WAIT_SHOWN_MS, where it begins with nothing shown; every other at once)
+  // a capsule that goes is kept 160 ms, leaving (reader.css .capsule[data-out]); one that comes replaces it at once
+  const [leaving, setLeaving] = useState<Capsule | null>(null)
+  // (a run's capsule once its wait has lasted WAIT_SHOWN_MS, where it begins with nothing on screen; at once where a capsule is,
+  // the one leaving too: R4. Every other at once)
   const last = useRef<Capsule | null>(null)
-  const now = useWaitShown(wanted, last.current !== null)
+  const now = useWaitShown(wanted, last.current !== null || leaving !== null)
   // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
   const card = useReader(controller, (s) => cardOf(s, parts.reason, parts.words))
   const originalCard = useReader(controller, (s) => originalCardOf(s, parts.reason, parts.words))
   // a load or a translation under way: said here, shown by the progress line alone
   const spoken = useReader(controller, spokenOf)
   const sameTab = useReader(controller, (s) => s.prefs?.links === 'same-tab')
-  // a capsule that goes is kept 160 ms, leaving (reader.css .capsule[data-out]); one that comes replaces it at once
-  const [leaving, setLeaving] = useState<Capsule | null>(null)
   // biome-ignore lint/correctness/useExhaustiveDependencies: run as the capsule's words change (equal words are one object), not on every render (capsuleOf makes a new capsule each time)
   useEffect(() => {
     if (!now && last.current) {
@@ -218,9 +219,10 @@ export const WAIT_SHOWN_MS = 400
  * A run's capsule (a host's words for its stage) once its wait has lasted WAIT_SHOWN_MS: none before, and none at all for a wait
  * that ended sooner; once in, it stays through every change of its stage and words (a count that pauses and moves again, our
  * server heard again) until no run's capsule is wanted, when it leaves at once. The gate is for a wait that begins with nothing
- * shown: where a capsule is showing (`showing`: the network's words, the failed passages' notice) and the state turns into a run,
- * the capsule changes its words in place at once, never a hole of WAIT_SHOWN_MS (the flow-demo, 2026-11-12). Every other capsule
- * (a refusal, a notice, a toast, an error) at once
+ * on screen: where a capsule is (`showing`: the network's words, the failed passages' notice, a run's capsule still leaving) and
+ * the state turns into a run, the capsule changes its words in place at once, never a hole of WAIT_SHOWN_MS (the flow-demo,
+ * 2026-11-12; the coordinator's R4: the grace never makes a gap after a capsule that was showing). Every other capsule (a refusal,
+ * a notice, a toast, an error) at once
  */
 export function useWaitShown(wanted: Capsule | null, showing = false): Capsule | null {
   const since = useRef<number | null>(null)
