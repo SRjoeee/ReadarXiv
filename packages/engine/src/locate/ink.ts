@@ -257,6 +257,7 @@ export function inkOf(o: InkInput): {
     ends: 0,
     boxed: fig.stats?.boxed ?? 0,
     interior: fig.stats?.interior ?? 0,
+    kept: { glyph: 0, held: 0, open: 0, torn: 0, today: 0, code: 0, formula: 0 },
   }
   const texts = figureLinesOf(pages, fig, (p, g) => figOwn[p - 1]?.[g] != null, o.fixed ?? null, textFaces, work)
   // (each text by its first run; the runs it takes after its first, and those wholly a doubled copy of a text's glyphs: no

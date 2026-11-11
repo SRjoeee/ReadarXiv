@@ -111,7 +111,9 @@ export function figureLinesOf(
 ): FigureText[] {
   W = work
   try {
-    return linesOf(pages, fig, owned, fixed, textFaces)
+    const out = linesOf(pages, fig, owned, fixed, textFaces)
+    for (const t of out) countKept(t)
+    return out
   } finally {
     W = null
   }
@@ -135,8 +137,21 @@ export type LinesWork = {
   ends: number
   boxed: number
   interior: number
+  /** the figure texts kept as the original's, by why: another text's glyph met (`glyph`), a shape inside the interior of the path
+   *  that holds the text (`held`), a shape where no path holds it (`open`), F1's torn formula (`torn`), a run crowded by today's
+   *  reading with no ink met (`today`), a line of code or of formulas kept whole (`code`, `formula`) */
+  kept?: Record<'glyph' | 'held' | 'open' | 'torn' | 'today' | 'code' | 'formula', number>
 }
 let W: LinesWork | null = null
+/** the reason the judge kept a text for: the first ink it found unrelated, a glyph before a shape */
+const keptBy = new WeakMap<FigureText, 'glyph' | 'held' | 'open'>()
+const count = (k: keyof NonNullable<LinesWork['kept']>) => {
+  if (W?.kept) W.kept[k]++
+}
+const countKept = (t: FigureText) => {
+  if (t.why === 'code' || t.why === 'formula') count(t.why)
+  else if (t.why === 'crowded') count(keptBy.get(t) ?? 'torn')
+}
 
 function linesOf(
   pages: readonly TodayPage[],
@@ -407,7 +422,10 @@ function linesOf(
         return
       }
       // (a run alone, as today's reading made it, judged anew where it was crowded or stands in part on a tone)
-      if (!items.length) return
+      if (!items.length) {
+        for (const k of l.ks) if (fig.units[k]!.why === 'crowded') count('today')
+        return
+      }
       for (const k of l.ks) {
         const m = fig.met.get(k)
         if (!m) continue
@@ -430,6 +448,7 @@ function linesOf(
         }
         judge(one, its, glyphs, holderOf([k]))
         if (one.els.length || (fig.units[k]!.why === 'crowded' && one.why !== 'crowded')) out.push(one)
+        else if (one.why === 'crowded') countKept(one)
       }
     })
   }
@@ -1192,7 +1211,10 @@ function judge(
         )
       })
       if (twin) ft.copies.push(it.g)
-      else unrelated = true
+      else {
+        unrelated = true
+        keptBy.set(ft, 'glyph')
+      }
       continue
     }
     const [x0, y0, x1, y1] = [
@@ -1311,6 +1333,7 @@ function judge(
       continue
     }
     unrelated = true
+    if (keptBy.get(ft) !== 'glyph') keptBy.set(ft, holder ? 'held' : 'open')
   }
   ft.why = unrelated ? 'crowded' : ft.why === 'crowded' ? null : ft.why
   if (outside && !unrelated && holder && !ft.container) ft.container = roomIn(holder, textGs, glyphs)
