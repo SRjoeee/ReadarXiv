@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import type { DocGlyph } from '../src/doc.ts'
 import { pageGlyphsOf } from '../src/glyph.ts'
-import { figureLinesOf } from '../src/locate/figure-lines.ts'
+import { copyRunsOf, figureLinesOf } from '../src/locate/figure-lines.ts'
 import type { TodayFigures, TodayMet, TodayPage, TodayShape } from '../src/locate/today/today.types.ts'
 
 type Glyph = {
@@ -804,6 +804,12 @@ describe('figure-lines: step 2, ink that is no text never keeps a figure text (t
       [[1], null],
     ])
     expect(texts[0]!.copies.sort((a, b) => a - b)).toEqual(second)
+    // (the second run, its space a glyph of its run as today's reading maps it and no copy (no ink to pair), wholly the first
+    // text's copies: no text of its own in ink.ts, one translation drawn)
+    g.forEach((x, i) => {
+      if (x.blank) fig.glyphs[0]!.set(i, i < n ? 0 : 1)
+    })
+    expect(copyRunsOf(texts[0]!, fig, [page])).toEqual([1])
   })
   it('keeps an overprint the reading did not make one text, and a run whose every glyph is set twice (2610.21924v1 p5)', () => {
     // (two units of "CONDITIONAL RESCUE" on one another, neither's room meeting the other's glyphs: no copy recorded, two

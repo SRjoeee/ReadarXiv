@@ -17,7 +17,7 @@ import { displayTextMask, type PageInk, regionMask } from '../ink.types.ts'
 import type { Instrument, InstrumentUnit, PieceClass, SpanClass } from '../instrument.ts'
 import { runIns } from '../marks/run-ins.ts'
 import { type AuthorBlock, authorBlockOf } from './author-block.ts'
-import { type FigureText, figureLinesOf, type LinesWork, textOf as lineTextOf } from './figure-lines.ts'
+import { copyRunsOf, type FigureText, figureLinesOf, type LinesWork, textOf as lineTextOf } from './figure-lines.ts'
 import {
   changeOf,
   faceKeyOf,
@@ -268,17 +268,9 @@ export function inkOf(o: InkInput): {
     if (taken.has(t.ks[0]!)) continue
     textAt.set(t.ks[0]!, t)
     for (const k of t.ks.slice(1)) taken.add(k)
-    const copyRuns = new Set<number>()
-    for (const g of t.copies) {
-      const k = fig.glyphs[t.page - 1]?.get(g)
-      if (k !== undefined && !t.ks.includes(k)) copyRuns.add(k)
-    }
-    for (const k of copyRuns) {
-      const all = [...(fig.glyphs[t.page - 1] ?? [])].filter(([, x]) => x === k).map(([g]) => g)
-      if (all.every((g) => t.copies.includes(g))) {
-        taken.add(k)
-        textAt.delete(k)
-      }
+    for (const k of copyRunsOf(t, fig, pages)) {
+      taken.add(k)
+      textAt.delete(k)
     }
   }
   const ledgerOwn = own.glyphs.map((row, i) => {

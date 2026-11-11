@@ -120,16 +120,11 @@ export function figureLinesOf(
     // gives the copy no text of its own); where it did not, both are kept: two translations would be drawn over each other)
     const textAt = new Map<number, FigureText>()
     for (const t of out) for (const k of t.ks) textAt.set(k, t)
-    const unitGlyphs = (p: number, k: number) => {
-      const G = (pages[p - 1]?.glyphs ?? []) as G[]
-      return [...(fig.glyphs[p - 1] ?? [])].filter(([g, x]) => x === k && G[g] && real(G[g]!)).map(([g]) => g)
+    const copied = (a: number, b: number) => {
+      const t = textAt.get(a)
+      return !!t && copyRunsOf(t, fig, pages).includes(b)
     }
     for (const [u, v] of twins) {
-      const p = (fig.units[u] as { page?: number }).page ?? 1
-      const copied = (a: number, b: number) => {
-        const t = textAt.get(a)
-        return !!t && !t.ks.includes(b) && unitGlyphs(p, b).every((g) => t.copies.includes(g))
-      }
       if (!copied(u, v) && !copied(v, u)) {
         doubled.add(u)
         doubled.add(v)
@@ -1676,6 +1671,23 @@ const flat = (shape: { segs: ArrayLike<number> }) => {
 }
 const inside = (g: G, x0: number, y0: number, x1: number, y1: number) =>
   (g.ix0 ?? g.x0) > x0 && (g.ix1 ?? g.x1) < x1 && g.bottom > y0 && g.top < y1
+
+/**
+ * The runs a text holds wholly as its copies (judge's `copies`): runs not its own whose every real glyph is a copy, their blanks
+ * with them (a space is no ink to pair). Each is no figure text of its own (ink.ts), and no double (figureLinesOf): one rule for
+ * both, so that a copy hidden with a text is never also a unit of its own (2610.22214v1 p2's legend drawn on itself, its labels'
+ * spaces no copies: two units, two translations drawn over each other)
+ */
+export function copyRunsOf(t: FigureText, fig: TodayFigures, pages: readonly TodayPage[]): number[] {
+  const map = fig.glyphs[t.page - 1]
+  const G = (pages[t.page - 1]?.glyphs ?? []) as G[]
+  const runs = new Set<number>()
+  for (const g of t.copies) {
+    const k = map?.get(g)
+    if (k !== undefined && !t.ks.includes(k)) runs.add(k)
+  }
+  return [...runs].filter((k) => [...(map ?? [])].every(([g, x]) => x !== k || !real(G[g]) || t.copies.includes(g)))
+}
 
 /**
  * A container's room about a text: the nearest of its edges over its baseline and under it across the text's extent, each
