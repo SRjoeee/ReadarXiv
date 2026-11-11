@@ -22,7 +22,8 @@ register('../checkpoint/items-hook.mjs', import.meta.url)
 register('./hook.mjs', import.meta.url)
 const { gateL1Pair } = await import('../../../packages/typeset/tests/replay/gate-l1.ts')
 const { ledger, readGz, TAP } = await import('../../../packages/typeset/tests/replay/tap.ts')
-const { l1Paper, todayPrepared } = await import('../../../packages/typeset/tests/replay/l1.ts')
+const { L1_BUNDLES, L1_BUNDLES_DIR, l1Paper, todayPrepared } = await import('../../../packages/typeset/tests/replay/l1.ts')
+const { bundlesLine, headsFor } = await import('../../../packages/typeset/tests/replay/bundles.ts')
 const { paperOf } = await import('../../../packages/typeset/tests/replay/today.ts')
 const { tableMetrics } = await import('../../../packages/typeset/src/metrics/table.ts')
 const { layered, servedMetrics } = await import('../served-metrics.mjs')
@@ -40,6 +41,9 @@ const args = process.argv.slice(2)
 const OUT = args.find((a) => a.startsWith('--out='))?.slice(6)
 if (!OUT) throw new Error('v2.mjs: --out=<dir> is required')
 const pairs = args.filter((a) => !a.startsWith('--'))
+// (the bundles laid over, named in the log; a pair asked that a named folder lacks is an error, bundles.ts)
+console.log(bundlesLine(L1_BUNDLES_DIR))
+headsFor(pairs, L1_BUNDLES_DIR)
 /** the fresh rows: 'cache' (offline, the default), 'off' (none), 'fill' (the cache filled from the endpoint, no page laid) */
 /** and 'all' (the review mode: every unit v2 sends laid with its own fresh row, offline) or 'fill-all' (its fill) */
 const FRESH = args.find((a) => a.startsWith('--fresh='))?.slice(8) ?? 'cache'
@@ -66,7 +70,7 @@ if (FILL) {
       exit: code,
       mode: FRESH,
       lane: 'parity-fresh',
-      bundles: process.env.AXT_L1_BUNDLES ?? null,
+      bundles: L1_BUNDLES,
       wires: fillLog.reduce((n, p) => n + p.wires, 0),
       requests: translator.requests(),
       refused: fillLog.reduce((n, p) => n + p.refused, 0),
