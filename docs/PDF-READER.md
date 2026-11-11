@@ -4145,9 +4145,9 @@ proved costly or tangled with other rules. Nothing is decided by this section bu
   fill leading 0.01 looser (1.05 to 1.06); no line moves between pages; the six new lines under the bottom are all in units set
   larger, none in a unit that gains nothing. Every borrowed line's ink stays within its class's `\maxdepth` (deepest 3.73 pt
   under the bottom, 2608.16117v1 page 24, elsarticle at 12 pt's 6 pt; 3.27 pt on 2602.23285v2 page 4, article's 5), 18 pt or
-  more over a page number. The fit tries 0.63 % more states over the parity's whole lay. None of the display gate's pages worse
-  than today by size or line count (6 and 28 at B8, default; 9 and 28 with every toggle on) is moved by it: those are cells,
-  headings, theorems a page's other rules set, never a unit today borrowed for.
+  more over a page number. The fit tries 0.34 % more states over the parity's whole lay (0.33 % with every toggle on). None of
+  the display gate's pages worse than today by size or line count (6 and 28 at B8, default; 9 and 28 with every toggle on) is
+  moved by it: those are cells, headings, theorems a page's other rules set, never a unit today borrowed for.
 - **Two shapes measured and not built.** Offering the borrow before the first step alone (round 5's L) buys the four units of
   2602.23285v2, 2608.25210v2 and 2610.21106v1 (1.0 pt buys three, 0.5 pt two) and not 2608.16117v1's two, which need a borrow
   and a shrink, at 0.14 % more states. Spending the whole allowance (the fit's state keeping the bound, not the depth it needed)
