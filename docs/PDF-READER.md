@@ -3968,6 +3968,17 @@ states, for each, what TeX knows (layout/marks.mjs POINTS_TEX); one move of the 
   algorithm2e, wrapfig, longtable, sidecap, floatrow, rotating, listings, subfigure, threeparttable, hyperref, cleveref, a list
   of figures, of tables and of algorithms, Elsevier's cas-sc), each compiled before and after: every glyph and box the same,
   every .aux, .lof, .lot, .loa and .out byte for byte, the new points alone.
+- **pdfTeX's glue under font expansion: B's alone.** Under pdfTeX's font expansion (microtype; 38 of the 88 load it), content
+  a whatsit writes into the page stream earlier in the run (a literal, direct or page mode, or a `pdf:` special) can change the
+  glue pdfTeX gives a later line: the same glyphs, fonts and advances in the same box width, its spaces set otherwise. Seen on
+  2610.20808v1 p20 (each space 0.43 pt wider, 3.47 pt by the line's end) and 2610.21098v1 p22 (0.01 pt) with the label point,
+  and between arXiv's A and our B before it on 2610.20808v1 p19 (two lines, up to 0.52 pt). Bisected one compile each: no point
+  set, an empty or unwritten `\special`, `\pdfsavepos`, or node-free definitions leave the line as it was; any emission that
+  writes the point moves it; TeX's own trace shows the line before with an invalid glue order ("foul"), so the run without the
+  point had no well-defined setting there either. It stays in B: B only locates, by the glyphs' keys in order with no position
+  threshold (align.ts), and A is what a reader sees; both papers' bundles are byte-identical with and without the point, the one
+  diagnostic that moves the line's unit's `place`, `same` to `respaced`. B cannot leave expansion off: its lines would no longer
+  break where A's do. The compile-pair check reports such a line under its own heading (`glueLines`), never as moved glyphs.
 - **Proofs over the 88** (stage 1a at the head on its own compiles against the base, 664a114fa, on its own): 18 papers move,
   and only as ruled. 8 units gained, `inknotes`, one on page 1 of each paper with a NeurIPS notice (1706.03762v7, 2608.27728v1,
   2610.17108v1, 2610.20947v1, 2610.21026v1, 2610.21176v1, 2610.21376v1, 2610.30769v1); none removed or changed. 37 captions
