@@ -4,7 +4,8 @@
 // "Project Page:" and its address, a title and its path), a line whose every word stands between glyphs of one pitch kept whole
 // (code: Rule 1's inside-a-line, read on the line); and each crowded text's ink (roomOf's `met`) judged by its relation to the
 // text, the owner's reformulation of the no-touch rule: its own, a decoration of a stretch of its glyphs (a frame, a fill, a rule;
-// a doubled copy), a container round all of it, or unrelated ink, never covered. Pure arithmetic over a page's glyphs and boxes;
+// a doubled copy), a container round all of it, or other ink: another text's glyph keeps the text the original's, ink that is no
+// text never does (step 2, the owner's ruling, PDF-READER §18.30). Pure arithmetic over a page's glyphs and boxes;
 // every measure the figure reading's, in its size: RUN_DY, RUN_GAP, SPACE_GAP, DRAW_BAND.
 import {
   ANCHOR_REACH,
@@ -66,7 +67,7 @@ export interface FigureText {
   copies: number[]
   /** boxes decorating the whole of it (a rule under all of it): hidden with its text */
   textBoxes: number[]
-  /** why its ink stays: crowded (unrelated ink its band meets), code (a line of code, kept whole), formula (a line no word of
+  /** why its ink stays: crowded (another text's glyph its band meets, or F1's torn formula), code (a line of code, kept whole), formula (a line no word of
    *  which stands outside its formulas, kept whole, F1), or null */
   why: 'crowded' | 'code' | 'formula' | null
   /** a closed shape round all of it: its room's edges over and under its baseline (PDF units up and down from it) */
@@ -137,20 +138,22 @@ export type LinesWork = {
   ends: number
   boxed: number
   interior: number
-  /** the figure texts kept as the original's, by why: another text's glyph met (`glyph`), a shape inside the interior of the path
-   *  that holds the text (`held`), a shape where no path holds it (`open`), F1's torn formula (`torn`), a run crowded by today's
-   *  reading with no ink met (`today`), a line of code or of formulas kept whole (`code`, `formula`) */
-  kept?: Record<'glyph' | 'held' | 'open' | 'torn' | 'today' | 'code' | 'formula', number>
+  /** the figure texts kept as the original's, by why: another text's glyph met (`glyph`), F1's torn formula (`torn`), a run
+   *  crowded by today's reading with no ink met (`today`), a line of code or of formulas kept whole (`code`, `formula`); and
+   *  `inked`, the texts laid over ink that is no text their room met (step 2: such ink keeps none) */
+  kept?: Record<'glyph' | 'torn' | 'today' | 'code' | 'formula' | 'inked', number>
 }
 let W: LinesWork | null = null
-/** the reason the judge kept a text for: the first ink it found unrelated, a glyph before a shape */
-const keptBy = new WeakMap<FigureText, 'glyph' | 'held' | 'open'>()
+/** the texts the judge kept for another text's glyph, and those whose room met ink that is no text */
+const keptBy = new WeakMap<FigureText, 'glyph'>()
+const inkedTexts = new WeakSet<FigureText>()
 const count = (k: keyof NonNullable<LinesWork['kept']>) => {
   if (W?.kept) W.kept[k]++
 }
 const countKept = (t: FigureText) => {
   if (t.why === 'code' || t.why === 'formula') count(t.why)
   else if (t.why === 'crowded') count(keptBy.get(t) ?? 'torn')
+  else if (!t.why && inkedTexts.has(t)) count('inked')
 }
 
 function linesOf(
@@ -293,11 +296,6 @@ function linesOf(
         const x = fig.met.get(k)?.under ?? fig.units[k]!.under ?? null
         return x === null ? u : u === null ? x : Math.min(u, x)
       }, null)
-    // (the closed path that holds a text's units alone, the innermost: the interior it is laid in (judge))
-    const holderOf = (ks: readonly number[]) =>
-      (fig.holds ?? [])
-        .filter((h) => h.p === p && ks.every((k) => h.ks.includes(k)))
-        .sort((a, b) => a.ks.length - b.ks.length)[0]?.shape ?? null
     const taken = new Set<number>()
     // ---- F3's container step: the lines a closed path holds alone (figure-text.mjs containersOf), two or more, a node's label
     // (below), every one a line of words: one text, its lines top to bottom, centred, its room the path's inside (roomIn)
@@ -363,7 +361,7 @@ function linesOf(
         piecesInto(ft, r.read, false)
       })
       const items = itemsOf(ft.ks)
-      if (items.length) judge(ft, items, glyphs, h.shape)
+      if (items.length) judge(ft, items, glyphs)
       // (torn reads the lines as the text reads them: its rows in place of the runs they merged)
       const others = [...lines.filter((_, i) => !idx.includes(i)), ...L]
       if (!ft.why && L.some((l) => torn(ft, l, glyphs, loose, others))) ft.why = 'crowded'
@@ -399,7 +397,7 @@ function linesOf(
         piecesInto(ft, x.read, k === 0)
       })
       const items = itemsOf(ks)
-      if (items.length) judge(ft, items, glyphs, holderOf(ks))
+      if (items.length) judge(ft, items, glyphs)
       // (a formula of a line of it torn from ink no line took: the paragraph the original's, F1's)
       if (!ft.why && para.lines.some((x) => torn(ft, x.l, glyphs, loose, lines))) ft.why = 'crowded'
       out.push(ft)
@@ -416,7 +414,7 @@ function linesOf(
       if (ft) {
         ft.page = p
         ft.under = underOf(l.ks)
-        if (items.length) judge(ft, items, glyphs, holderOf(l.ks))
+        if (items.length) judge(ft, items, glyphs)
         if (!ft.why && torn(ft, l, glyphs, loose, lines)) ft.why = 'crowded'
         out.push(ft)
         return
@@ -446,7 +444,7 @@ function linesOf(
           container: null,
           under: m.under,
         }
-        judge(one, its, glyphs, holderOf([k]))
+        judge(one, its, glyphs)
         if (one.els.length || (fig.units[k]!.why === 'crowded' && one.why !== 'crowded')) out.push(one)
         else if (one.why === 'crowded') countKept(one)
       }
@@ -1181,22 +1179,19 @@ function torn(
  * contiguous stretch of its glyphs and of no other glyph: a frame round a citation, a chip's fill; a rule of horizontal segments
  * alone under or through such a stretch; a doubled copy, a glyph of the same character over one of its own within half its size
  * across), a container (a closed shape, every segment's end met by another, holding every glyph of it, their ink strictly
- * inside), or unrelated ink, never covered: `crowded`. A decoration of a stretch is that stretch's element, carrying it (a
- * framed citation an element, never translated); of all of it, hidden with its text; a copy hidden with its text
+ * inside), or other ink. Another text's glyph keeps the text the original's, `crowded`; ink that is no text keeps none (step
+ * 2, the owner's ruling: a translation in its right place is the goal, ordinary text with ink about it is translated). A
+ * decoration of a stretch is that stretch's element, carrying it (a framed citation an element, never translated); of all of
+ * it, hidden with its text; a copy hidden with its text
  */
-function judge(
-  ft: FigureText,
-  items: readonly TodayMet[],
-  glyphs: readonly G[],
-  holder: TodayShape | null = null,
-): void {
+function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[]): void {
   const textGs = ft.order.flatMap((o) => (o.t === 'text' ? o.glyphs : o.t === 'el' ? ft.els[o.i]!.glyphs : []))
   // (its own: its text's and its elements' glyphs, and its label's, an item's marker, which no decoration is told by)
   const label = new Set(ft.label)
   const own = new Set([...textGs, ...ft.label])
   const at = new Map(textGs.map((g, i) => [g, i]))
   let unrelated = false,
-    outside = false
+    inked = false
   for (const it of fillsJoined(items, textGs, glyphs)) {
     if ('g' in it) {
       if (own.has(it.g)) continue
@@ -1325,46 +1320,13 @@ function judge(
         continue
       }
     }
-    // (ink on or outside the border of the closed path that holds the text alone (figure-text.mjs containersOf): the text is laid
-    // inside that path's interior, so the ink cannot be under its translation (the owner's ruling on placement; 2608.06701v1 p2's
-    // scroll, its outline one open stroke over its fill's border, a curl outside its corner the first row's room met))
-    if (holder && it.shape && !inInterior(it.shape, holder)) {
-      outside = true
-      continue
-    }
-    unrelated = true
-    if (keptBy.get(ft) !== 'glyph') keptBy.set(ft, holder ? 'held' : 'open')
+    // (step 2, the owner's ruling: ink that is no text never keeps a figure text: a line or a shape about it, an arrow across it, a
+    // legend's sample beside it, an icon in its node; the translation is laid in the text's own place, inside its container where
+    // the reading found one, within its own room otherwise. Another text's glyph alone keeps it (above))
+    inked = true
   }
   ft.why = unrelated ? 'crowded' : ft.why === 'crowded' ? null : ft.why
-  if (outside && !unrelated && holder && !ft.container) ft.container = roomIn(holder, textGs, glyphs)
-}
-
-/** whether a shape's ink stands inside a closed path's interior: a point of it (each segment's ends and its quarters) inside,
- *  farther from the path's border than both strokes' half widths and a quarter point; on the border or outside it, none */
-function inInterior(shape: TodayShape, holder: TodayShape): boolean {
-  const s = shape.segs as ArrayLike<number>,
-    h = holder.segs as ArrayLike<number>
-  const tol = (shape.hw ?? 0) + (holder.hw ?? 0) + 0.25
-  const near = (x: number, y: number) => {
-    for (let i = 0; i + 3 < h.length; i += 4) {
-      const ax = h[i]!,
-        ay = h[i + 1]!,
-        bx = h[i + 2]!,
-        by = h[i + 3]!
-      const dx = bx - ax,
-        dy = by - ay
-      const t = dx || dy ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy))) : 0
-      if (Math.hypot(x - (ax + t * dx), y - (ay + t * dy)) <= tol) return true
-    }
-    return false
-  }
-  for (let i = 0; i + 3 < s.length; i += 4)
-    for (const t of [0, 0.25, 0.5, 0.75, 1]) {
-      const x = s[i]! + t * (s[i + 2]! - s[i]!),
-        y = s[i + 1]! + t * (s[i + 3]! - s[i + 1]!)
-      if (interiorOf(h, x, y) && !near(x, y)) return true
-    }
-  return false
+  if (inked) inkedTexts.add(ft)
 }
 
 type Met =

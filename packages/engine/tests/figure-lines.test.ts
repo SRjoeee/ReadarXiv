@@ -284,13 +284,15 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     const cx = (g[0]!.x0 + g[0]!.x1) / 2
     crowd(fig, 0, [boxMet(0, rect(cx - 1.5, 700, cx + 1.5, 703, { fill: true, stroke: false }))])
     const [t] = figureLinesOf([page], fig, () => false, null)
-    expect(t).toBeUndefined()
+    // (the marker is ink that is no text: the word laid, no element of its letter (step 2))
+    expect([t?.why, t?.els]).toEqual([null, []])
   })
   it('makes no element of a mark a box holds inside a number: a decoration holds a word, a letter or a digit in it (2610.42112v1)', () => {
     const { page, fig } = pageOf([[{ text: '3.61 pp', font: 'DejaVuSans' }]])
     const g = page.glyphs as Glyph[]
     crowd(fig, 0, [boxMet(0, rect(g[1]!.x0 - 0.3, 697, g[1]!.x1 + 0.3, 708))])
-    expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
+    // (the box is ink that is no text: the number laid whole, no element of its mark (step 2))
+    expect(figureLinesOf([page], fig, () => false, null).map((t) => [t.why, t.els])).toEqual([[null, []]])
   })
   // (2608.06701v1 p2's node "Any / signal / detected?" in a diamond, its branch label "yes" beside it: inside the diamond's box,
   // outside the diamond)
@@ -465,36 +467,6 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     // "20-layer", two curves' labels))
     expect(node([[{ text: '56-layer', font: T, x: 100 }], [{ text: '65-layer', font: T, x: 100 }]], [], 75)).toEqual([])
   })
-  it('lays a text its container holds over ink on or outside the container’s border: a scroll’s open outline (2608.06701v1 p2)', () => {
-    // (a scroll: its closed fill holds two rows alone, set flush (no node's label, each row its own text); its outline one open
-    // stroke over the fill's border, a curl outside its top left corner, which the first row's room meets: today unrelated ink,
-    // the row kept; it lies on or outside the interior the text is laid in)
-    const T = 'ArialMT'
-    const { page, fig } = pageOf([
-      [{ text: 'Locate the actual', font: T, x: 80 }],
-      [{ text: 'validation checks', font: T, x: 80 }],
-    ])
-    const fill = rect(72, 680, 175, 712, { stroke: false, fill: true })
-    const outline: TodayShape = {
-      segs: [
-        74, 712, 175, 712, 175, 712, 175, 680, 175, 680, 72, 680, 72, 680, 72, 710, 72, 710, 68, 714, 68, 714, 74, 716,
-      ],
-      stroke: true,
-      fill: false,
-      hw: 0.3,
-    }
-    fig.holds = [{ p: 1, b: 0, ks: [0, 1], shape: fill }]
-    fig.units[0]!.why = 'crowded'
-    fig.met.set(0, { items: [boxMet(1, outline)], under: null })
-    const t = figureLinesOf([page], fig, () => false, null).find((x) => x.ks.includes(0))
-    expect(t?.why).toBeNull()
-    expect(t?.container).not.toBeNull()
-    // (ink inside the interior, a stroke across the row: crowded still)
-    const across: TodayShape = { segs: [100, 696, 100, 706], stroke: true, fill: false, hw: 0.3 }
-    fig.met.set(0, { items: [boxMet(1, across)], under: null })
-    const u = figureLinesOf([page], fig, () => false, null).find((x) => x.ks.includes(0))
-    expect(u === undefined || u.why === 'crowded').toBe(true)
-  })
   it('reads a closed path’s inside by its interior: a glyph inside its box and outside it crowds nothing (2608.06701v1 p2)', () => {
     // (one line in the diamond, "yes" beside it: in the diamond's box, outside the diamond)
     const { page, fig } = pageOf([
@@ -655,7 +627,7 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     const over = 721 - (20 * (x1 - x0)) / 2 / 40 - 700
     expect(t!.container!.over).toBeCloseTo(over, 6)
   })
-  it('hides a doubled copy with the text it doubles, and keeps a text crossed by unrelated ink crowded', () => {
+  it('hides a doubled copy with the text it doubles, and lays a text a curve crosses (step 2)', () => {
     const { page, fig } = pageOf([[{ text: 'import', font: 'Courier' }], [{ text: 'Loss', font: 'DejaVuSans' }]])
     const glyphs = page.glyphs as Glyph[]
     // (a copy of "i" over the first, 0.5 pt up; and a curve through "Loss")
@@ -664,7 +636,10 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     const curve: TodayShape = { segs: [60, 684, 120, 690], stroke: true, fill: false, hw: 0.5 }
     crowd(fig, 1, [boxMet(0, curve)])
     const texts = figureLinesOf([page], fig, () => true, null)
-    expect(texts.map((t) => [t.ks, t.why, t.copies.length])).toEqual([[[0], null, 1]])
+    expect(texts.map((t) => [t.ks, t.why, t.copies.length])).toEqual([
+      [[0], null, 1],
+      [[1], null, 0],
+    ])
   })
   it('gives a rule inside a code element’s extent to the element, an underline of a stretch of words its element', () => {
     const { page, fig } = pageOf([
@@ -683,6 +658,63 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     expect(t!.why).toBeNull()
     expect(t!.els[0]).toMatchObject({ kind: 'code', boxes: [0] })
     expect(t!.els[1]).toMatchObject({ kind: 'cite', boxes: [1] })
+  })
+})
+
+describe('figure-lines: step 2, ink that is no text never keeps a figure text (the owner’s ruling; G2, 2026-11-11)', () => {
+  const crowd = (fig: TodayFigures, k: number, items: TodayMet[]) => {
+    fig.units[k]!.why = 'crowded'
+    fig.met.set(k, { items, under: null })
+  }
+  const T = 'DejaVuSans'
+  it('lays a label an arrow or a plot line crosses, in its place (2610.21924v1 p5, 2610.21312v1 p3)', () => {
+    const { page, fig } = pageOf([[{ text: 'Computational Cost', font: T, x: 100 }]])
+    const arrow: TodayShape = { segs: [130, 680, 130, 720], stroke: true, fill: false, hw: 0.5 }
+    const curve: TodayShape = { segs: [90, 690, 200, 708], stroke: true, fill: false, hw: 0.75 }
+    crowd(fig, 0, [boxMet(0, arrow), boxMet(1, curve)])
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+    expect(rest).toEqual([])
+    expect([t!.ks, t!.why]).toEqual([[0], null])
+    expect(t!.container).toBeNull()
+  })
+  it('lays a legend entry beside its sample and a node label beside its icon', () => {
+    const { page, fig } = pageOf([
+      [{ text: 'Training (nominal)', font: T, x: 100 }],
+      [{ text: 'Video Databases', font: T, x: 100 }],
+    ])
+    const sample: TodayShape = { segs: [80, 703, 95, 703], stroke: true, fill: false, hw: 0.5 }
+    const icon = rect(84, 682, 96, 694, { fill: true, stroke: false })
+    crowd(fig, 0, [boxMet(0, sample)])
+    crowd(fig, 1, [boxMet(1, icon)])
+    const texts = figureLinesOf([page], fig, () => false, null)
+    expect(texts.map((t) => [t.ks, t.why])).toEqual([
+      [[0], null],
+      [[1], null],
+    ])
+  })
+  it('keeps a text another text’s glyph stands in the room of, and a copy set past half its size off its own', () => {
+    const { page, fig } = pageOf([[{ text: 'Psum Buffer', font: T, x: 100 }], [{ text: 'other', font: T, x: 100 }]])
+    const glyphs = page.glyphs as Glyph[]
+    // (a glyph of "other" in the room of "Psum Buffer")
+    crowd(fig, 0, [{ g: glyphs.findIndex((g) => g.u === 'o') }])
+    expect(figureLinesOf([page], fig, () => false, null).filter((t) => t.ks.includes(0))).toEqual([])
+    // (two copies of one label, 0.7 of the size apart (2610.21313v1 p2): each the other's ink, neither a doubled copy of its own)
+    const twice = pageOf([[{ text: 'SAMA', font: T, x: 100 }]])
+    const g2 = twice.page.glyphs as Glyph[]
+    const n = g2.length
+    for (let i = 0; i < n; i++)
+      g2.push({
+        ...g2[i]!,
+        x0: g2[i]!.x0 + 7,
+        x1: g2[i]!.x1 + 7,
+        ix0: g2[i]!.ix0 + 7,
+        ix1: g2[i]!.ix1 + 7,
+        y: g2[i]!.y + 7,
+        top: g2[i]!.top + 7,
+        bottom: g2[i]!.bottom + 7,
+      })
+    crowd(twice.fig, 0, [{ g: n }, { g: n + 1 }])
+    expect(figureLinesOf([twice.page], twice.fig, () => true, null).filter((t) => t.ks.includes(0))).toEqual([])
   })
 })
 
