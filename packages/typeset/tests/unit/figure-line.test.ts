@@ -188,44 +188,27 @@ describe('a figure’s paragraph and an item with its label, laid by the paragra
   })
   const B = scroll().lines.map((l) => l[4])
   const baselines = (m: { lines: unknown[] }) => (m.lines as [number, ...unknown[]][]).map((l) => l[0])
-  it('lays a path’s joined rows on their baselines at their pitch, ending early (2608.06701v1 p2’s first bubble)', () => {
-    // (four lines of translation for five rows: the first on the first row's baseline, as any unit's first line, each next on
-    // the next row's; before, they stood at the target's leading (1.27 of the rows' pitch, 7.30 here), and the page fill spread
-    // a bubble's lines further over its rows' height)
-    const row: Row = {
-      id: idOf(5),
-      ok: true,
-      by: 'test',
-      content: [{ t: 'text', s: '找到实际的 validate_record 实现……然后检查验证检查' }],
+  // (a translation of four lines and one of more than five, the second with one item to fit)
+  const short = '找到实际的 validate_record 实现……然后检查验证检查'
+  const long = '找到实际的 validate_record 实现，然后仔细检查其中的每一项验证检查是否完整正确'
+  const laid = (m: Placed, s: string) => {
+    const row: Row = { id: idOf(5), ok: true, by: 'test', content: [{ t: 'text', s }] }
+    return layPage(part([m]), rows([row]), rulesFor('zh'), metrics).members.find((x) => x.ord === 0)!
+  }
+  it('lays a path’s joined rows as a paragraph of the body is laid (2608.06701v1 p2’s first bubble, the owner’s ruling)', () => {
+    // (no rule of its own: its first line on its first row's baseline, its leading the ladder's and the page fill's as a body
+    // paragraph's of the same lines, its lines inside its rows. Its four lines at 7.30 here as on the page, 1.27 of the rows'
+    // pitch; laid at the rows' pitch (575148896) it ended a row early, its block 2.88 pt higher than the original's)
+    for (const s of [short, long]) {
+      const fig = laid(scroll(), s)
+      const body = laid({ ...scroll(), kind: 'para', room: { below: 5.8, next: 12.07, side: [48.96, 129.9] } }, s)
+      expect(fig.state).toBe('laid')
+      expect(baselines(fig)).toEqual(baselines(body))
+      const ys = baselines(fig)
+      expect(ys[0]).toBeCloseTo(B[0]!, 6)
+      for (const y of ys) expect(y).toBeGreaterThanOrEqual(B.at(-1)! - 1e-6)
     }
-    const page = layPage(part([scroll()]), rows([row]), rulesFor('zh'), metrics)
-    const m = page.members.find((x) => x.ord === 0)!
-    expect(m.state).toBe('laid')
-    const ys = baselines(m)
-    expect(ys.length).toBeLessThan(5)
-    ys.forEach((y, k) => {
-      expect(y).toBeCloseTo(B[k]!, 6)
-    })
-  })
-  it('fits a translation longer than a path’s rows by the ladder, its size, its lines on the rows’ baselines', () => {
-    const row: Row = {
-      id: idOf(5),
-      ok: true,
-      by: 'test',
-      content: [{ t: 'text', s: '找到实际的 validate_record 实现，然后仔细检查其中的每一项验证检查是否完整正确' }],
-    }
-    const page = layPage(part([scroll()]), rows([row]), rulesFor('zh'), metrics)
-    const m = page.members.find((x) => x.ord === 0)!
-    expect(m.state).toBe('laid')
-    const ys = baselines(m)
-    expect(ys.length).toBe(5)
-    ys.forEach((y, k) => {
-      expect(y).toBeCloseTo(B[k]!, 6)
-    })
-    const sizes = (m.lines as [number, number, number, Item[]][]).flatMap((l) =>
-      l[3].flatMap((it) => ('face' in it ? [it.size] : [])),
-    )
-    expect(Math.max(...sizes)).toBeLessThan(4.7871)
+    expect(baselines(laid(scroll(), short))[1]).toBeCloseTo(706.8775, 3)
   })
   it('lays an item after its label, the label the original’s ink: its group never turned off', () => {
     // ("A." 100 to 109, its text from 113)

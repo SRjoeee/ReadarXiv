@@ -552,15 +552,6 @@ export function adapt(i: AdaptInput): Adapted {
     numbered: decor.numbered,
   })
   const P = { ...(R as object), ...up.P, measure: i.measure, patterns: i.patterns } as FitParams
-  // (a figure text of several rows a closed path holds (F3: its rows joined, Room.over the path's edge): laid on its rows'
-  // grid, its first line on its first row's baseline as any unit's, at the rows' pitch, never the target's looser leading nor
-  // the page fill's spread; a translation of fewer lines ends early, one of more is fitted by the ladder, its size (PDF-READER
-  // §18.36: 2608.06701v1 p2's first bubble, its four lines at 1.27 of its rows' pitch)
-  const onRows = kind === 'figure' && m.room.over !== undefined && lines.length > 1
-  if (onRows) {
-    P.leadBase = 1
-    P.leadFloor = 1
-  }
   const numberCropOf: NumberCrop | null =
     decor.numbered && label ? numberCrop(label.chars, label.text, blocks[0]!) : null
   // (the row it starts on, shared with the member before: that member's last line, TeX's separation before its text)
@@ -681,7 +672,6 @@ export function adapt(i: AdaptInput): Adapted {
         : null,
     shareRow: after?.join ? { page: last[0], baseline: last[4], size: sizeOf(last, m) } : null,
     wide,
-    ...(onRows ? { onRows } : {}),
     ...(rowStart ? { rowStart } : {}),
     ...(lineOf ? { line: lineOf } : {}),
   }
