@@ -93,6 +93,31 @@ export function classifyFont(name: string): FontClass {
   return { fam, bold, italic, caps }
 }
 
+/**
+ * A font's family keys as its PostScript name tells them, subset tag off: the name before its first hyphen (DejaVuSans and
+ * DejaVuSans-Oblique, NimbusRomNo9L-Regu and -Medi), and the name without PDF.js's own style words and its hyphens. Nothing else
+ * states a family where the engine reads: PDF.js gives the main thread a font's name and its generic class (`fallbackName`), and
+ * reads `bold`, `italic` and `black` off the name only for a font it could not load (pdf.worker's Font, its fallback to a system
+ * font: /bold/i, /oblique|italic/i, /Black/); its alias table is the worker's own, and a descriptor's /FontFamily is optional
+ */
+export function familyKeysOf(name: string): readonly [string, string] {
+  const n = bare(name)
+  const styled = n
+    .replace(/bold|oblique|italic/giu, '')
+    .replace(/Black/gu, '')
+    .replace(/-/gu, '')
+  return [n.replace(/-.*$/u, ''), styled]
+}
+/** whether two fonts are one family (familyKeysOf): their names equal before the first hyphen, or equal without PDF.js's style
+ *  words and the hyphens: ArialMT and Arial-BoldMT, TimesNewRomanPSMT and TimesNewRomanPS-ItalicMT (2608.06701v1 p2's bubbles, a
+ *  bold word inside a row), never ArialMT and ArialNarrow-Bold */
+export function oneFamily(a: string, b: string): boolean {
+  return sameFamily(familyKeysOf(a), familyKeysOf(b))
+}
+/** oneFamily over keys already read */
+export const sameFamily = (a: readonly [string, string], b: readonly [string, string]) =>
+  (!!a[0] && a[0] === b[0]) || (!!a[1] && a[1] === b[1])
+
 const mostOf = <T>(xs: Iterable<T>): T | undefined => {
   const n = new Map<T, number>()
   let best: T | undefined
@@ -380,11 +405,12 @@ export interface LineEndOptions {
 const escapeRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** what a source says of the word a line's end breaks after `before` and before `after`: `hyphen` where it writes the word
  *  with a hyphen there (`anti-inflammatory`), `joined` where it writes it whole (`TensorCast`; TeX's own discretionary `\-`
- *  is no hyphen of the word's), null where it writes neither, or both */
+ *  is no hyphen of the word's), null where it writes neither, or both; in any case (a plot's capitalized label "Success-|superior"
+ *  whose paper writes "success-superior", 2610.21098v1 p8) */
 function stated(source: string, before: string, after: string): 'hyphen' | 'joined' | null {
   if (!source) return null
   const text = source.replace(/\\-/g, '').replace(/[{}]/g, '')
-  const has = (word: string) => new RegExp(`(?<!\\p{L})${escapeRe(word)}(?!\\p{L})`, 'u').test(text)
+  const has = (word: string) => new RegExp(`(?<!\\p{L})${escapeRe(word)}(?!\\p{L})`, 'iu').test(text)
   const hyphen = has(`${before}-${after}`)
   const joined = has(before + after)
   return hyphen === joined ? null : hyphen ? 'hyphen' : 'joined'
@@ -401,14 +427,20 @@ function stated(source: string, before: string, after: string): 'hyphen' | 'join
  * it (not `[hep-|th]`), and no word an explicit hyphen follows before the next space (its discretionary stops it, §899:
  * not `extreme-|mass-ratio`); never in a typewriter face (LaTeX sets their \hyphenchar to −1) nor in text it sets as written
  * (`literal`: a URL, a code mark). And a change of case across the hyphen is a compound's own hyphen, TeX's falling inside a
- * word: a capital after it (`Lee-|Thorp`), or capitals alone before it (`SWE-|bench`, `BERT-|based`)
+ * word: a capital after it (`Lee-|Thorp`), or capitals alone before it (`SWE-|bench`, `BERT-|based`); and a digit on either side
+ * of it is the author's, TeX hyphenating letters alone (`128-|bit`, `DeepSeek-|3.2`)
  */
 export function lineEnd(gs: readonly DocGlyph[], q: number, o: LineEndOptions): 'space' | 'join' | 'drop' {
   // (inside one word as written TeX set nothing where it broke the line: its text reads the line's end as its copy does)
   if (o.oneWord) return 'join'
   const h = gs[q - 1] as DocGlyph
   const g = gs[q] as DocGlyph
-  if (!HYPHENS.has(h.u) || !/^\p{L}/u.test(g.u)) return 'space'
+  if (!HYPHENS.has(h.u)) return 'space'
+  // (TeX hyphenates letters alone: a hyphen with a digit on either side, in the word, is the author's, joined: "128-|bit",
+  // "DeepSeek-|3.2", 2609.19644v1's included pages)
+  const p = gs[q - 2] as DocGlyph | undefined
+  if (/^\p{N}/u.test(g.u) || (p && /\p{N}$/u.test(p.u) && !lineChange(p, h) && !apart(p, h))) return 'join'
+  if (!/^\p{L}/u.test(g.u)) return 'space'
   // (the word before it on its line, and whether it is the first after a space: only non-letters between them)
   let before = ''
   let k = q - 2

@@ -132,3 +132,104 @@ describe('a figure text laid inside the closed shape that holds it (the owner’
     expect(sizeOf(boxed(1))).toBe('unfit')
   })
 })
+
+describe('a figure’s paragraph and an item with its label, laid by the paragraph path (F3)', () => {
+  // (three lines of prose at 10 on a pitch of 12, the block 100 to 300, justified, its last line short; its room 30 under it)
+  const para: Placed = {
+    ord: 0,
+    kind: 'figure',
+    text: idOf(3),
+    lead: 12,
+    read: ['style', 'lead'],
+    style: { role: 'serif', size: 10 },
+    align: 'j',
+    lines: [
+      [1, 0, 100, 300, 424, 431, 422, 100, 300, 0, 10],
+      [1, 0, 100, 300, 412, 419, 410, 100, 300, 0, 10],
+      [1, 0, 100, 180, 400, 407, 398, 100, 300, 0, 10],
+    ],
+    room: { below: 30, side: [100, 300] },
+  }
+  it('lays a paragraph’s translation in lines inside its block, its text group off', () => {
+    const row: Row = {
+      id: idOf(3),
+      ok: true,
+      by: 'test',
+      content: [{ t: 'text', s: '这是一段图中的文字，它的翻译按段落排在原来的行里，不超出原来的块。' }],
+    }
+    const page = layPage(part([para]), rows([row]), rulesFor('zh'), metrics)
+    const m = page.members.find((x) => x.ord === 0)!
+    expect(m.state).toBe('laid')
+    expect(m.off & 1).toBe(1)
+    expect(m.lines.length).toBeGreaterThan(1)
+    for (const l of m.lines)
+      for (const it of l[3] as Item[]) {
+        expect(it.x).toBeGreaterThanOrEqual(100 - 1e-6)
+        if ('face' in it) expect(it.x + widthOf(it.size, it.s)).toBeLessThanOrEqual(300 + 1e-6)
+      }
+  })
+  // (2608.06701v1 p2's first bubble as the part states it: five rows of Arial at 4.787 on a pitch of 5.745, set flush left in a
+  // scroll whose edge the part states (Room.over: a path's joined rows, F3))
+  const scroll = (): Placed => ({
+    ord: 0,
+    kind: 'figure',
+    text: idOf(5),
+    lead: 5.75,
+    style: { role: 'sans', size: 4.7871 },
+    align: 'l',
+    lines: [
+      [1, 0, 77.72, 115.22, 714.18, 717.61, 714.13, 48.96, 300.02, 0, 4.79],
+      [1, 0, 77.72, 110.44, 708.44, 711.86, 707.49, 48.96, 300.02, 0, 4.79],
+      [1, 0, 77.72, 114.14, 702.69, 706.12, 701.74, 48.96, 300.02, 0, 4.79],
+      [1, 0, 77.72, 113.1, 696.95, 700.37, 696, 48.96, 300.02, 0, 4.79],
+      [1, 0, 77.72, 114.16, 691.2, 694.63, 691.15, 48.96, 300.02, 0, 4.79],
+    ],
+    room: { below: 5.8, next: 12.07, side: [48.96, 129.9], over: 15.47, under: 12.02 },
+  })
+  const B = scroll().lines.map((l) => l[4])
+  const baselines = (m: { lines: unknown[] }) => (m.lines as [number, ...unknown[]][]).map((l) => l[0])
+  // (a translation of four lines and one of more than five, the second with one item to fit)
+  const short = '找到实际的 validate_record 实现……然后检查验证检查'
+  const long = '找到实际的 validate_record 实现，然后仔细检查其中的每一项验证检查是否完整正确'
+  const laid = (m: Placed, s: string) => {
+    const row: Row = { id: idOf(5), ok: true, by: 'test', content: [{ t: 'text', s }] }
+    return layPage(part([m]), rows([row]), rulesFor('zh'), metrics).members.find((x) => x.ord === 0)!
+  }
+  it('lays a path’s joined rows as a paragraph of the body is laid (2608.06701v1 p2’s first bubble, the owner’s ruling)', () => {
+    // (no rule of its own: its first line on its first row's baseline, its leading the ladder's and the page fill's as a body
+    // paragraph's of the same lines, its lines inside its rows. Its four lines at 7.30 here as on the page, 1.27 of the rows'
+    // pitch; laid at the rows' pitch (575148896) it ended a row early, its block 2.88 pt higher than the original's)
+    for (const s of [short, long]) {
+      const fig = laid(scroll(), s)
+      const body = laid({ ...scroll(), kind: 'para', room: { below: 5.8, next: 12.07, side: [48.96, 129.9] } }, s)
+      expect(fig.state).toBe('laid')
+      expect(baselines(fig)).toEqual(baselines(body))
+      const ys = baselines(fig)
+      expect(ys[0]).toBeCloseTo(B[0]!, 6)
+      for (const y of ys) expect(y).toBeGreaterThanOrEqual(B.at(-1)! - 1e-6)
+    }
+    expect(baselines(laid(scroll(), short))[1]).toBeCloseTo(706.8775, 3)
+  })
+  it('lays an item after its label, the label the original’s ink: its group never turned off', () => {
+    // ("A." 100 to 109, its text from 113)
+    const item: Placed = {
+      ord: 0,
+      kind: 'figure',
+      text: idOf(4),
+      lead: 12,
+      style: { role: 'serif', size: 10 },
+      align: 'l',
+      lines: [[1, 0, 113, 230, 400, 407, 398, 100, 300, 0, 10]],
+      label: { kind: 'number', ink: [1, 100, 398, 109, 407, 400], style: { role: 'serif', size: 10 }, line: 0 },
+      room: { below: 10, side: [100, 300] },
+    }
+    const row: Row = { id: idOf(4), ok: true, by: 'test', content: [{ t: 'text', s: '中午12:30在车上' }] }
+    const page = layPage(part([item]), rows([row]), rulesFor('zh'), metrics)
+    const m = page.members.find((x) => x.ord === 0)!
+    expect(m.state).toBe('laid')
+    expect(m.off & 4).toBe(0)
+    const text = m.lines.flatMap((l) => l[3] as Item[]).filter((it) => 'face' in it)
+    expect(text.map((it) => it.s).join('')).toContain('中午')
+    expect(Math.min(...text.map((it) => it.x))).toBeGreaterThanOrEqual(113 - 1e-6)
+  })
+})

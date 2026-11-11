@@ -3840,7 +3840,8 @@ wherever any ink met its band, a frame round a citation in a sentence as much as
   one (a highlight set word by word, 2610.40576v1 p17, 2411.13093v4 p19); a closed shape holding the whole text is its container,
   its room the inside (Room.over and Room.under, the set shrunk to stay under `over`); a flat stroke under two glyphs or more of
   whole words an underline; anything else unrelated, and the text stays crowded, the original's. A tone that is none of these
-  stays ground; a tone under a text kept whole is nothing to it.
+  stays ground; a tone under a text kept whole is nothing to it. Since F3's step 2 (§18.36) only another text's glyph is
+  unrelated ink that keeps a text: a shape or a line about it never does.
 - **Over the 91** (stage 1a f0f at a30b9c769, against round 8 B3's r11 on the 88; I6 the same, 2,855 objects): 48 figure texts
   hold 56 runs of one pitch as elements, on 6 papers (2610.19159v1's titles and their paths, 2611.03178v1 p1's "Project Page:" and
   its address, 2608.06701v1's actions, 2610.22197v1's labels, 2609.19644v1's `tzcnt`); 100 hold 155 decorations, on 4 papers
@@ -3850,7 +3851,7 @@ wherever any ink met its band, a frame round a citation in a sentence as much as
   eighteen units "lin2", which the differential pairs in their order (below).
 - **Stage 1a and the parity.** The dump marks each element so kept (`keptBy`: 'pitch', 'decoration'); today's unit now wholly
   such an element is stated (k), kept as the original for its pitch (the accepted entry's words), or (n), carried with its
-  decoration (not accepted until ruled), the holding unit named; a kept element reads as its source in a unit's glyph text, so
+  decoration (accepted, the coordinator's ruling of 2026-11-10), the holding unit named; a kept element reads as its source in a unit's glyph text, so
   the words beside it are held whole (f); today's text a contiguous part of a stand-in's is held whole by it (f), naming it, not
   "another reading, now arXiv's text" (g), which is characters our old compile did not set (restated over f0f: the 52 statements
   of (g) were each such). The parity joins several of today's units to one figure text by the exact text, its row theirs in
@@ -3859,7 +3860,9 @@ wherever any ink met its band, a frame round a citation in a sentence as much as
   their tones) have no row the parity can say, today's having translated the stretch now an element (the translator is sent them
   anew), and a figure text's bold share counts the original's command, which v2 keeps as its ink and does not count.
 - **Not this section's.** Highlighted prose is kept as the original's with its tone (2608.06701v1 p1's green "I made a mistake in
-  the path; it should be": a decoration); the backticked names there are in the figure's Helvetica, kept by their tones, not by a
+  the path; it should be": a decoration), accepted for now (kept, never garbled; the coordinator, 2026-11-10); later, after F3: a
+  tone over prose translated, its stretch a group drawn with the tone under its translation (a style group with a fill), names
+  and identifiers on tones elements still; the backticked names there are in the figure's Helvetica, kept by their tones, not by a
   face. Two of today's runs of one sentence in two faces stay two (F3). The differential pairs the units of one id in their
   order: where F0 takes some of many alike (2610.22197v1's 18 "lin2"), the pairing shifts onto others (stated, not a loss).
 
@@ -4204,6 +4207,178 @@ states, for each, what TeX knows (layout/marks.mjs POINTS_TEX); one move of the 
   label's form, MR 6, as before), weco_paper's "Figure 8 |" before a macro's ink (called, its two points there; no label stated,
   as before: its reading not taken further here). Every compile of the 88 (307) sets the same glyphs and boxes and writes the
   same .aux, .lof, .lot, .toc, .out and .bbl but for its new points and one line of the glue class above.
+
+### 18.35 A formula in a figure is never sent; a line of formulas alone is kept whole (2026-11-11)
+
+The owner's line (§18.21) holds here too: a translation may be made or not, never garbled. A figure's line was sent with its
+formulas inside its words, and the translator rewrote them. On staging (round 8 B1), 2609.19644v1's included pages came back
+with "(OOD)⋅" as "（值班）⋅" (on duty), "1+exp −" as "1+经验值 −" (a value of experience), "blend = Σ" as "混合 = Σ", a Φ as φ
+inside "-(Φ-μ_c)TΛ(Φ-μ_c)", and full-width brackets and commas put into formulas ("min（0， z−θ）"): 22 figure texts with a formula
+among its stored rows. And a formula's script set apart from its base ("low" under r, "train" under D, "true" over θ) was a
+figure text of its own, translated as a word.
+
+- **What a figure keeps, and by what.** A figure's text is kept as the original's by how the paper set it (a face of one pitch,
+  §18.22; a formula's faces and characters, here; a decoration, §18.26) or by the figure's structure (a list's enumerators,
+  §18.36), never by what a word looks like: a name, a term or a label is sent as any figure text is, and how a word comes back
+  is the translator's (the owner's ruling of 2026-11-11: "never garbled" is of format, not of words; lab-data
+  llm-probe/notes.md, last section). Where F1 reads letters, it is to tell text from a formula: a line with no word of two
+  letters outside its formulas is a formula's; a mark between two words is the words'.
+- **F1** (`figure-lines.ts`). A glyph is a formula's by (1) its character, a mathematical one outside ASCII (a math symbol, a
+  Greek letter, a mathematical alphanumeric, a letter of the letterlike block): a minus or plus-minus right before a digit is a
+  number's sign, and a mark in no math face set between two words, no space either side, is the words' (2610.11256v1's plot sets
+  its labels' hyphen as the minus sign: "Near−monopoly", "Over−priced"); or (2) its face, a math face by its name (`classifyFont`:
+  CMMI, CMSY, KaTeX_Math …), since a math italic letter's character is the plain letter. A formula is the line's glyphs no word
+  space apart that hold such a glyph, with the clusters beside it within the run gap that hold no letter (an operator, a number,
+  a bracket: "x = 3"), and a phrase touching it whose every letter is in a formula's own face (3): a face a letter of which stands
+  inside a formula's cluster, that no source unit sets text in and no figure line sets a phrase in apart from a formula
+  (KaTeX_Main's "log det", "Tr"). A line smaller than another (0.9 of its size at most), off its baseline by less than half that
+  size, within the run gap and beside a formula's glyph, is its script, read on its line. A line no word of which stands outside
+  its formulas is kept whole (`figure: formula`), as today's runs of a math face are; else each formula is an element `math`,
+  the original's ink, never sent, moved with the translation, and the words around it are one text.
+- **A formula is read whole before it moves.** An included page sets a display's main glyphs in math faces no run holds, and its
+  runs may be its scripts alone ("final", "base", "low"): a line now stands at the size and baseline most of its glyphs stand
+  at, the glyphs no run holds too, not its runs' alone (2609.19644v1 p59's equation (1) had been read as two lines at its
+  scripts' size, "scale" translated alone and the rest left in place). Scripts join their line inside the line reading, which
+  reads the lines and the glyphs no run holds again after each join (p60's "Σ_{i=1}^k", whose lower limit spans the gap between
+  the line's halves, had been read by neither half and left where it was as both moved). And where a formula element has ink no
+  line took over or under it (a fraction's other line, a limit past half the size), the element would move and that ink stay:
+  the text stays the original's, the relation reading's fallback. That ink is looked for one band's height over and under the
+  baseline, and no further: a formula's stacked parts (a limit, a denominator, a script) stand in the band directly over or under
+  its line. A glyph standing on another line's baseline is that line's, taken or not (2609.19644v1 p11: a table's number cells
+  under a group header's formula, a caption's last mark past its line's run gap). Reading the line nearest by baseline instead,
+  with no reach, was tried and withdrawn (2026-11-11): a display forms no line, so a display, its equation number or a folio 3
+  to 27 sizes below stood nearest a paragraph's last line (2609.19644v1: 33 of F1's 47 lines drawn against 39). Over the 91
+  (2026-11-11, every loose glyph over or under a formula element read each way): the band keeps 11 texts, the nearest line
+  132, the nearest line with the glyph's row inside the element's extent 11, and the band with that row 1, which loses
+  2610.35877v1 p3's denominator, a true one.
+- **The wrap's proof reads a show as it draws.** An element cuts a show of the figure's form where its text and its element meet,
+  and the split writes each chunk's codes and adjustments. The proof read the show otherwise in two ways, neither of which draws
+  anything: a show opening with an empty string, whose codes (none) the split does not write (2610.20967v1 p2), and an adjustment
+  halfway between two millionths, written -0.585938 by the split's six places and rounded -0.585937 by the proof (2610.21098v1 p8,
+  2610.42112v1 p29). It refused the page's wrap with its figures, and every figure text of the page stayed the original's (49,
+  45 and 114 texts; F0's voided run f0e on 2610.20967v1 p2 was this too). It now reads an empty string as nothing and a number at
+  the split's precision (`wrap.mjs` elementsOf).
+- **Over the 91** (stage 1a f1c at 51a36c654 against f1base at 67271cd39, F0 with round 8 B4; I6 the same). 135 lines are kept
+  whole for their formulas, on 13 papers, and 617 figure texts hold 774 formula elements, on 38 papers (the design's census:
+  about 150 lines and 39 papers). Of the base's 10,377 figure texts drawn translated, 9,189 are the same, 575 are joined into a
+  line across its formulas and translated, 165 are inside a line kept whole, 89 are wholly a formula element and 276 partly
+  (brackets, units and punctuation glued to a formula: "(0.1195s", "),"), 32 are scripts read on their base's line, and 51 are in
+  a line left the original's: 47 of 2609.19644v1 (below) and four formulas with ink off their line (a fraction "w_bh =
+  (1−ρ)/ρ · 1/h", 2610.35877v1 p3). Every text F1 stops translating was listed with the faces arXiv's PDF sets it in and read: the
+  lone words are scripts (r_low, α_content, θ_true, x_opt, D_train, σ_ON, ξ_gw^Theory, 2609.20976v1's legend), operators ("Pr",
+  "log10", "arg min") and units ("[kpc]", "Mpc]"); the one class of prose found, 2610.11256v1's six labels, is the mark between
+  two words above.
+- **Stage 1a and the parity.** The dump marks a line kept whole (`keptBy: 'formula'`) and each formula element; today's unit
+  inside one is stated (m), "kept as the original: inside a formula of a figure": the candidate's own kept line (49 over the 88)
+  or, the holder named, today's unit now wholly a formula element or held by a kept line (30). The parity's joined join reads
+  (m) as it reads (k) on elements and (n). Over the 8 pairs F1 moves (default toggles; base f1base, head f1c, both laid by this
+  code), every page newly worse is the `figures` count alone: 41 figure texts on 12 pages no longer drawn translated, each a
+  line kept for its formulas or a text holding a formula element now, a unit today's stored rows do not serve; no other measure
+  is worse, and 41 of today's undrawn texts' highlight differences are gone. Every toggle on, the same: the 12 pages, 41 texts.
+- **Gates.** The speed check passes (every time within its spread, every work counter equal: it measures today's engine, which
+  F1 does not touch); the reader gate's page times are within the two runs' spread (p50 28.83 and 29.19 ms against 29.04 and
+  28.33, p99 149.73 and 149.81 against 154.46 and 144.49, 3,215 pages); the prepare's locate time is within the runs' spread
+  (91.3 s against 88.0 in the quieter twin run).
+- **Not this rule's.** An operator name set in the body's own face stays a word of the text (a CM paper's `\log`, 2610.20285v1
+  p12's "log ⟦a_v0⟧"): its face is the source units' and no formula's own. A formula set in a text face with no mathematical
+  character ("x = 3" in Helvetica) is text. Greek prose would read as formulas (no paper of the corpus is Greek). A line F1 joins
+  across its formulas is crowded whole where another line's ink meets its band: 2609.19644v1's included pages, which today
+  translated as sentence fragments between formulas, one run at a time, keep 47 such lines English now, never fragments; their
+  own paragraph's lines and frames are F3's (§18.36). A word of a body's face set inside a display stays text, translated as
+  before (2609.19644v1 p61's `\text{Huber}` and, where CMR10 is the main paper's own face, its `\min`). One script stands a word
+  space from its base (2610.20507v1 p3's "GA" after τ): it is text of its line, translated with it, and stage 1a states it
+  absent.
+
+### 18.36 A figure's paragraph, its list and its node, each one text (2026-11-11)
+
+A figure that sets running text (an included page, a caption inside a figure, a node's label) was cut line by line: each
+line a figure text of its own, sent alone and laid on its own baseline. A sentence came back in fragments, its parts
+translated apart, and a line its own paragraph's other lines crowded stayed English among translated ones (2609.19644v1's
+included pages: blocks alternating English and Chinese). F3 reads what the figure prints: its paragraphs, its lists and the
+lines a node holds, each one text, by facts of the text and of the figure's structure, never by a guess from a line's shape.
+
+- **A paragraph, by TeX's own facts** (`figure-paras.ts`). Lines of one figure, one under the other with no blank line between,
+  in one face family, size, weight and fill, on one left edge (an indent or a hanging indent allowed on its first line), joined
+  where the text goes on by a fact: TeX's hyphen at a line's end, or a justified block (two full lines or more whose word spaces
+  are stretched: unlike between them, or unlike its short last line's, which TeX sets at its natural spaces, \parfillskip). The
+  lines stand by TeX's interline rule: the block's one pitch, \baselineskip, or, where a tall line would touch at that pitch,
+  further, \lineskip clear, one clearance on every such push (a \parskip keeps its clearance at the pitch and is no push; an
+  unpushed gap may be less clear than \lineskip, down to \lineskiplimit: 2609.19644v1 p59's 0.37 beside a push's 0.76). Ragged
+  lines are joined by nothing: stacked legend entries read the same. Tried and withdrawn: an inline formula's space to a word as
+  a word space (a math cluster beside a digit made a line read uneven; over the 91 it joined nothing and lost 3 joins).
+- **A paragraph's line ends.** TeX's break and a word's own hyphen are one glyph. As a body unit's are by its source, they are
+  told by the document's own text (every page's glyphs in their order), in any case: the word written with its hyphen keeps it
+  ("per-timestep", "high-frequency"; 2610.21098v1's plot labels "Success-|superior", which its body writes "success-superior"),
+  written whole drops it ("Suffix"); TeX's rules where the document writes neither. A hyphen with a digit on either side is the
+  author's, TeX hyphenating letters alone ("128-|bit", "DeepSeek-|3.2"), for body units too. A page's glyph is read with its
+  coordinates (glyphWith): a spread of one carried none, and every line end of a figure paragraph had read as a word's own hyphen
+  ("con-text", 126 of 2609.19644v1's 129).
+- **A list's marker is its item's label**, never sent: a line opens with an enumerator LaTeX's list counters print (\arabic,
+  \alph, \Alph, \roman, \Roman, a bullet or a dash; an opening bracket, a closing point or bracket), and another line of its
+  figure opens with the next one or the one before, of its form, at its left edge (a column) or on its baseline (a row): options
+  set as a grid (2411.13093v4 p19's A. B. over C. D., where "A." had come back "Answer"). One enumerated line alone is text.
+- **A path's text** (the container step). A closed path holds the lines whose glyphs' centres all stand inside it (read by its
+  interior after its box) alone where no other glyph is inside it and no closed path inside it holds text of its own (the nodes
+  of a box round a chart); a fill or a frame under words of one line, within one band's height of its baseline, is a decoration
+  that goes with its words, and other ink inside, a stroke or a legend's samples, is no reason. The runs it holds on one
+  baseline are one line, however far apart their words stand. No legend's entries are joined: two rows or more each beside ink of
+  its own inside the path (a sample, a marker; a neighbouring node's edge outside it is none). Rows **centred** (their centres one
+  and their left edges not: rows of one length show no alignment, centred or flush) are a node's label: one text, one under the
+  other with no blank line, in one face, size, weight and fill, no line an item's. Rows **set flush** (option 3, the
+  coordinator's ruling of 2026-11-11, taken to the owner with its census): a row joins the row above where the break is a
+  wrap's (no blank line, one face, not each led by ink of its own, and forced: the next row's first word cannot stand on the row
+  above within the measure the path's inside gives it there, its inset on the flush side mirrored) and the sentence goes on (the
+  row above ends in a hyphen, or this row's first letter, after any punctuation it opens with, is lower case); a capital, a
+  digit or a symbol begins a row of its own, and a script without case never joins. No geometric fact tells a box hugging its
+  rows from one text was wrapped into: 2608.06701v1 p2's bubbles are ragged at their natural spaces, every break forced, and so
+  are 99 of 2610.37668v1's 103 value overlays; the sentence going on is the evidence, as a hyphen is for F3's paragraph. Census
+  (91 papers): 40 breaks joined in 27 boxes on 8 papers; 2610.37668v1's six "Mip-NeRF360 / <scene> / <id>" boxes join wrongly,
+  accepted knowingly. Its room is the path's inside. **A joined text is laid as a paragraph of the body is laid** (the owner's
+  ruling of 2026-11-11: a figure's text keeps the body's rules, none of its own and no optical correction): its first line on its
+  first row's baseline, its leading the ladder's and the page fill's, as a body paragraph's of the same lines and height (a
+  translation of fewer lines takes a looser leading and fills its rows' extent), no line under its last row's baseline. A CJK
+  line's ink stands higher over the baseline than a Latin face's capitals: the faces' shapes, as in the body. Measured on
+  2608.06701v1 p2's three bubbles (the drawn lines read back; the CJK ink each span's string measured in its own face, the
+  English the part's glyph boxes): the first line on the first row's baseline in each; the first line's ink top 0.56 to 0.62 pt
+  (0.12 to 0.13 em) over the first row's capitals, and that is all that stands between them at the top. The first bubble's
+  scroll leaves 0.55 pt over its capitals (the second's 3.37, the third's 2.68), so its ideographs reach the scroll's edge:
+  the faces' shapes, which stay. Laid at its rows' pitch instead (an experiment taken out, 575148896), the translation ended a
+  row early and its block's middle stood 2.88 pt higher than the original's. A word broken
+  in a node with no hyphen is joined where the document writes it whole ("test_password|_lookup.py"). Known cost of the centred rule: four node labels whose two rows are one width to
+  0.1 pt are read per row ("Utilities Matrix / Users x Foods", "Initial Idea / Generator", "Rearrange / Initial size"; "Advisor
+  / redirect" comes back through option 3), two stacked curve labels and the equal-width legends saved.
+- **Step 2: no ink keeps a figure text but its own double** (the owner's ruling: a translation in its right place is the goal,
+  not ink left untouched; ordinary text with ink about it is translated). A line or a shape about a figure text, an arrow across
+  it, a legend's sample beside it, an icon in its node keeps none; another text's glyph in its room neither: the second row of a
+  two-row label under its first ("LongBench v2" over "(thinking)", a subcaption's lines) is translated in its own place, as the
+  original's rows stand beside each other, where keeping it left the label half translated. A text drawn twice is kept the
+  original's: another unit of its page of the same string, its origin within the size of this one's (2610.21313v1's "Psum
+  Buffer" under a pale copy of itself, its "SAMA" three times, 2610.21924v1's "CONDITIONAL RESCUE" a bold by overprint), whose two
+  translations would be drawn over each other (the read of 20, 2026-11-11: both its faults were such copies). The reasons that
+  are not about ink stay: a line of formulas, F1's torn formula, code, a face of one pitch, born on arXiv's page, unlocated. The
+  text is laid in its own place, inside its container where the reading found one, within its own room otherwise. Turned texts
+  too: the line reading reads level lines, and a turned run today crowded (a y axis's title by its axis or its tick labels) is
+  laid as today's unit (2608.04322v1 20, 2610.21547v1 24, 2610.42112v1 70, 2608.27728v1 32). At 5249301f6 over the 91 the
+  reading kept 402 texts for ink in the open, 201 for ink inside their own path and 124 for another text's glyph
+  (`made.lines.kept`). Known and not fixed: a translation centred on the original's anchor can stand under an arrow's shaft whose
+  gap was cut for the Latin letters' ink, a CJK em taller (2610.21924v1 p5).
+- **One family.** Two fonts are one family where their names, subset tag off, are equal before the first hyphen (DejaVuSans and
+  DejaVuSans-Oblique, NimbusRomNo9L-Regu and -Medi), or equal once PDF.js's own style words (its /bold/i, /italic|oblique/i,
+  /Black/) and the hyphens are taken out: ArialMT and Arial-BoldMT, TimesNewRomanPSMT and TimesNewRomanPS-ItalicMT; never ArialMT
+  and ArialNarrow-Bold. PDF.js states no family where the engine reads: the main thread gets a font's name and generic class, and
+  its weight and slant only for a font it could not load; its alias table is the worker's own; a descriptor's /FontFamily is
+  optional. A bold word in a row of ArialMT had cut the figure's run ("Open" | "the relevant") and made a row whose bold letters
+  outnumber the others read another face (2608.06701v1 p2's bubbles).
+- **An element's own box.** A rule or a frame inside an element's extent is the element's where its middle stands on the
+  element's line, inside the band its glyphs span about their baseline: a paragraph's frame round a citation on another line is
+  that citation's, however close the lines stand (2609.19644v1 p58, the same author cited on four lines, every frame taken by the
+  first citation and its crops drawn empty; p3's lines 1.6 pt apart). The test read the extent across alone since F0; no page
+  showed it before F3 put several lines in one text.
+- **Its ground.** Over the 91 papers the strong joins act on one: 2609.19644v1, whose included pages are another paper's running
+  text (18 pages of 12 lines of prose or more). The 88 hold five figure paragraphs, the same with or without the interline rule and
+  the natural spaces; on 19644 those two add 67 joins (34 need the interline rule, 44 the natural spaces), 40 of 40 read right.
+  No other paper of the corpus has included pages of running text: image grids' captions and flowcharts are the container step's
+  ground, and the fresh-paper sweep is where F3 meets new papers.
 
 ### 18.37 A last line a little under TeX's text block bottom: an experiment for the owner's test (2026-11-11)
 

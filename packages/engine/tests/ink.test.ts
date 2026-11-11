@@ -611,12 +611,15 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     const { B, ins } = finalOf(A, [unitOf('para', 'a paragraph whose word continues on its last line')])
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
     const figs = L.members.filter((m) => m.figure)
-    expect(figs.map((m) => [m.plain, m.align])).toEqual([
-      ['The entry of the box indented here', 'l'],
-      ['and its lines go on to the measure end', 'l'],
-      ['set in one block of its prose', 'l'],
-      ['its last one', 'l'],
+    // (F3, PDF-READER §18.28: the block is justified, its lines one paragraph, one figure text laid as a body paragraph is: no
+    // own text for S.figures, justified, its four lines)
+    expect(figs.map((m) => [m.plain, m.align, m.lines.length])).toEqual([[undefined, 'j', 4]])
+    expect(L.units[figs[0]!.unit]!.content).toEqual([
+      text(
+        'The entry of the box indented here and its lines go on to the measure end set in one block of its prose its last one',
+      ),
     ])
+    expect(L.units[figs[0]!.unit]!.figure).toMatchObject({ para: 'strong' })
   })
 
   it('sets a paragraph’s lines from their start where the figure’s maker set two of them a hundredth of a point larger', () => {
@@ -638,13 +641,36 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     ])
     const { B, ins } = finalOf(A, [unitOf('para', 'a paragraph whose word continues on its last line')])
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
-    expect(L.members.filter((m) => m.figure).map((m) => [m.plain, m.align])).toEqual([
-      ['The entry of the box indented here', 'l'],
-      ['and its lines go on to the measure end', 'l'],
-      ['set in one block of its prose', 'l'],
-      ['its lines set in one justified measure', 'l'],
-      ['its last one', 'l'],
+    // (F3: one paragraph, its five lines, the two set a hundredth larger its own)
+    expect(L.members.filter((m) => m.figure).map((m) => [m.plain, m.align, m.lines.length])).toEqual([
+      [undefined, 'j', 5],
     ])
+  })
+
+  it('makes an item’s marker in a figure its label, the original’s ink, its text the words after it (F3, 2411.13093v4 p19)', () => {
+    // (Figure 9's options: "A. 12:30 PM in the car" came back with its "A." read as a word. The marker is the item's label, one
+    // of a list (the next option under it): its glyphs the member's label, never in its unit's text; the member laid by the
+    // paragraph path after its label; B our compile's page, printing the figure's glyphs too: a glyph of A it never printed is
+    // arXiv's ink, §18.27)
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          { text: 'A. 12:30 PM in the car', x: 96, y: 640, form: true },
+          { text: 'B. 12:30 PM in the canteen', x: 96, y: 628, form: true },
+          { text: 'continues on its last line', y: 560 },
+        ],
+      },
+    ])
+    const { B, ins } = finalOf(A, [unitOf('para', 'a paragraph whose word continues on its last line')])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const [fig] = L.members.filter((m) => m.figure)
+    expect(L.units[fig!.unit]!.content).toEqual([text('12:30 PM in the car')])
+    expect(fig!.plain).toBeUndefined()
+    expect(fig!.label).toHaveLength(2)
+    expect(fig!.labelAt).toMatchObject({ kind: 'number' })
+    // (its label's box before its text's line, on its page)
+    expect(fig!.labelAt!.ink[3]).toBeLessThan(fig!.lines[0]![2])
   })
 
   it('keeps right-aligned labels set from their end where two of them, one text, share a start too', () => {

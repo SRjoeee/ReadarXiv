@@ -72,7 +72,7 @@
 // direction's band and room, ROOM_MAX at most.
 //
 // Pure arithmetic over the pages; an original module (no port statement).
-import { BAND_MAX, classifyFont, displayTextMask, PICTURE_END, PICTURE_START, regionMask } from './deps.mjs'
+import { BAND_MAX, classifyFont, displayTextMask, familyKeysOf, PICTURE_END, PICTURE_START, regionMask, sameFamily } from './deps.mjs'
 
 /** two glyphs on one run: their baselines within this share of their size across the run's direction */
 export const RUN_DY = 0.05
@@ -90,6 +90,8 @@ export const ANCHOR_REACH = 1.5
 export const ANCHOR_RATIO = 2
 /** the band a translation is drawn in, descent and ascent in em, at the least: a unit is crowded where other ink meets it */
 export const DRAW_BAND = Object.freeze([-0.15, 0.88])
+/** CHANGED: the band's height, in sizes (figure-lines' BAND_EM) */
+const BAND = DRAW_BAND[1] - DRAW_BAND[0]
 /** a unit's band inside its box, shrunk by this share of its size at each edge before other ink is looked for in it (an
  *  antialiased edge, a glyph's side bearing) */
 const CROWD_PAD = 0.04
@@ -193,9 +195,12 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
   // hyphen (DejaVuSans and DejaVuSans-Oblique, XCharter-Roman and XCharter-Bold), neither a math face. A plotting program sets a
   // formula's letter in the family's italic inside a label ("jury, α = 1": matplotlib's mathtext α in DejaVuSans-Oblique), and a
   // label cut there was a fragment ("jury,") whose room ended at the letter: drawn at 0.66. TeX's math faces are families of
-  // their own (CMMI10 against CMR10) and stay apart)
-  const familyOf = name => faceOf(name).replace(/-.*$/u, '')
-  const oneLine = (a, b) => faceOf(a) === faceOf(b) || (familyOf(a) === familyOf(b) && famOf(a) !== 'math' && famOf(b) !== 'math')
+  // their own (CMMI10 against CMR10) and stay apart. CHANGED: or the name without PDF.js's own style words and its hyphens
+  // (facts.ts familyKeysOf): a bold word inside a row of ArialMT is set in Arial-BoldMT, whose part before the hyphen is "Arial",
+  // and the row was cut there, "Open" | "the relevant" (2608.06701v1 p2's bubbles))
+  const family = new Map()
+  const familyOf = name => { let f = family.get(name); if (f === undefined) { f = familyKeysOf(faceOf(name)); family.set(name, f) } return f }
+  const oneLine = (a, b) => faceOf(a) === faceOf(b) || (sameFamily(familyOf(a), familyOf(b)) && famOf(a) !== 'math' && famOf(b) !== 'math')
   // (CHANGED: a run goes on over faces and colours, but never into or out of a face of one pitch: `fixed`, the faces the document
   // sets at one pitch (facts.ts fixedFacesOf, read off the glyphs' advances, per font program), which locate gives where Rule 1
   // keeps such text (PDF-READER §18.22). 2610.19159v1's transcript box titles, TeX's lines in pgf's pictures, set a path in
@@ -218,7 +223,9 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
   const met = new Map()
   // (the runs that spell a word the caps have counted, units or not)
   let taken = 0
-  const stats = { units: 0, crowded: 0, letters: 0, runs: 0, past: 0, clipped: 0, outsized: 0, sets: 0, grouped: 0, aligned: 0 }
+  const stats = { units: 0, crowded: 0, letters: 0, runs: 0, past: 0, clipped: 0, outsized: 0, sets: 0, grouped: 0, aligned: 0, boxed: 0, interior: 0 }
+  // (CHANGED: F3's containers, each closed path that holds two of a page's units or more and no other glyph: containersOf)
+  const holds = []
   pages.forEach((pg, pi) => {
     // (the page's text lines a unit's column is read from, made once a page and call, of this call's owners)
     let lines = null
@@ -326,10 +333,103 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
     // (the page's units in their columns and sets, then each one's room on its line)
     setsOf(mine, evidence, stats)
     roomsOf(pg, S, mine)
+    // (CHANGED: the closed paths that hold units alone, read while the page's shapes are kept: the lines of a node, F3)
+    holds.push(...containersOf(pg, mine.filter(m => Math.abs(m.u.ux - 1) < 1e-6 && Math.abs(m.u.uy) < 1e-6).map(m => ({ k: m.u.k, gs: m.r.gs.filter(x => !x.turned && !x.blank).map(x => x.i) })), pi + 1, stats))
     // (the page read: nothing here reads its shapes again, which a reader may let go, `done`: locate's ink step, lane mem-back)
     done?.(pi)
   })
-  return { units, glyphs: glyphMaps, turned: turnedMaps, stats, met }
+  return { units, glyphs: glyphMaps, turned: turnedMaps, stats, met, holds }
+}
+
+/**
+ * CHANGED (F3, the container step): the closed paths of a page that hold units alone. A path is closed where every segment's end
+ * is met by another's (to the hundredth of a unit); it holds a unit where every glyph of the unit has its ink's centre inside the
+ * path, the box tested first (a cheap rejection: the glyph's ink inside the path's box) and the interior deciding (the even-odd
+ * rule over its segments: a diamond's corners are no inside of it, 2608.06701v1 p2's "yes" beside "Any signal detected?"); it
+ * holds them alone where no other glyph of the page is inside it and no closed path inside it holds text of its own (the nodes
+ * of a box round a chart). Two units or more held so: one hold, the innermost of nested paths holding the same units. `stats.boxed` the paths the box test passed, `stats.interior` the points the interior read
+ */
+export function containersOf(pg, units, p, stats = { boxed: 0, interior: 0 }) {
+  const SH = pg.shapes ?? null, B = pg.boxes ?? [], G = pg.glyphs ?? [], U = pg.unseen ?? null
+  if (!SH || units.length < 2) return []
+  const out = []
+  const centre = g => [((g.ix0 ?? g.x0) + (g.ix1 ?? g.x1)) / 2, (g.top + g.bottom) / 2]
+  for (const [b, shape] of SH) {
+    if (!shape || U?.has(b) || !closedPath(shape.segs)) continue
+    const x0 = Math.min(B[4 * b], B[4 * b + 2]), x1 = Math.max(B[4 * b], B[4 * b + 2])
+    const y0 = Math.min(B[4 * b + 1], B[4 * b + 3]), y1 = Math.max(B[4 * b + 1], B[4 * b + 3])
+    const inBox = g => (g.ix0 ?? g.x0) >= x0 && (g.ix1 ?? g.x1) <= x1 && g.bottom >= y0 && g.top <= y1
+    const held = units.filter(u => u.gs.length && u.gs.every(i => G[i] && inBox(G[i])))
+    if (held.length < 2) continue
+    stats.boxed++
+    const inside = g => { stats.interior++; const [cx, cy] = centre(g); return interiorOf(shape.segs, cx, cy) }
+    if (!held.every(u => u.gs.every(i => inside(G[i])))) continue
+    const theirs = new Set(held.flatMap(u => u.gs))
+    let alone = true
+    for (let i = 0; i < G.length && alone; i++) {
+      const g = G[i]
+      if (theirs.has(i) || !g || g.blank || g.unseen || !/\S/u.test(g.u ?? '') || !inBox(g)) continue
+      if (inside(g)) alone = false
+    }
+    // (and no node of its own inside it: a closed path inside it that holds text of its own, its lines held by it, not by this one
+    // (the nodes of a box round a whole chart, 2608.06701v1 p2). A fill or a frame under words of one line, inside that line's
+    // band (one band's height over and under its baseline, the reach figure-lines' torn reads a line's own ink in), is a
+    // decoration that goes with its words: a code chip in a bubble (2608.06701v1 p9, 0.96 of the size), where a node's box
+    // stands past it (2608.06007v1 p8, 1.5 of the size and more). Other ink inside, a stroke, a legend's samples, is no reason:
+    // the coordinator's reading of 2026-11-11, what would end up in the wrong place, never whether ink is)
+    for (let c = 0; c + 3 < B.length && alone; c += 4) {
+      if (c / 4 === b || U?.has(c / 4)) continue
+      const inner = SH.get(c / 4)
+      if (!inner || !closedPath(inner.segs)) continue
+      const cx0 = Math.min(B[c], B[c + 2]), cx1 = Math.max(B[c], B[c + 2]), cy0 = Math.min(B[c + 1], B[c + 3]), cy1 = Math.max(B[c + 1], B[c + 3])
+      if (Math.abs(cx0 - x0) <= 0.5 && Math.abs(cx1 - x1) <= 0.5 && Math.abs(cy0 - y0) <= 0.5 && Math.abs(cy1 - y1) <= 0.5) continue
+      // (a path inside its box: one round it, a ground under it, is none)
+      if (cx0 < x0 || cx1 > x1 || cy0 < y0 || cy1 > y1) continue
+      let line = null
+      for (const i of theirs) {
+        const g = G[i]
+        const [mx, my] = centre(g)
+        if (mx <= cx0 || mx >= cx1 || my <= cy0 || my >= cy1) continue
+        stats.interior++
+        if (!interiorOf(inner.segs, mx, my)) continue
+        const reach = BAND * g.size
+        const under = line === null || Math.abs(g.y - line.y) <= 0.5 * Math.max(g.size, line.size)
+        if (under && cy0 >= g.y - reach && cy1 <= g.y + reach) { line ??= g; continue }
+        alone = false
+        break
+      }
+    }
+    if (!alone) continue
+    const ks = held.map(u => u.k).sort((a, c) => a - c)
+    const area = (x1 - x0) * (y1 - y0)
+    const same = out.findIndex(h => h.ks.length === ks.length && h.ks.every((k, j) => k === ks[j]))
+    if (same < 0) out.push({ p, b, ks, shape, area })
+    else if (area < out[same].area) out[same] = { p, b, ks, shape, area }
+  }
+  return out.map(({ area, ...h }) => h)
+}
+
+/** whether a path's segments (x0, y0, x1, y1 each) close: every end met by another's, to the hundredth of a unit */
+function closedPath(segs) {
+  if (!segs || segs.length < 12) return false
+  const deg = new Map()
+  for (let i = 0; i + 3 < segs.length; i += 4)
+    for (const [x, y] of [[segs[i], segs[i + 1]], [segs[i + 2], segs[i + 3]]]) {
+      const k = `${Math.round(x * 100)}|${Math.round(y * 100)}`
+      deg.set(k, (deg.get(k) ?? 0) + 1)
+    }
+  for (const d of deg.values()) if (d % 2) return false
+  return true
+}
+
+/** whether a point is inside a closed path by the even-odd rule over its segments (a ray to the right crossing them) */
+export function interiorOf(segs, x, y) {
+  let c = false
+  for (let i = 0; i + 3 < segs.length; i += 4) {
+    const ax = segs[i], ay = segs[i + 1], bx = segs[i + 2], by = segs[i + 3]
+    if ((ay > y) !== (by > y) && x < ax + ((y - ay) * (bx - ax)) / (by - ay)) c = !c
+  }
+  return c
 }
 
 /** the page's text lines a unit's column is read from: the level glyphs a unit owns (own.mjs's groups), by baseline, a line

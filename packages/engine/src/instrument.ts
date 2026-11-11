@@ -32,10 +32,16 @@ export interface InstrumentUnit {
   /** kept for its text set wholly in a face of one pitch, or a figure's word inside such a line (Rule 1, PDF-READER §18.22):
    *  the lab's dump and parity tell the units this rule keeps by it; the bundle does not carry it */
   pitch?: true
-  /** a figure text's elements kept as the original's ink (figure-lines.ts, PDF-READER §18.26): a run of one pitch (`pitch`, F0)
-   *  or a stretch its decoration holds (`decoration`), by piece id: the lab's dump and parity tell them by it; the bundle does not
-   *  carry it */
-  keptEls?: [string, 'pitch' | 'decoration'][]
+  /** a figure text's elements kept as the original's ink (figure-lines.ts, PDF-READER §18.26): a run of one pitch (`pitch`, F0),
+   *  a formula (`formula`, F1) or a stretch its decoration holds (`decoration`), by piece id: the lab's dump and parity tell them
+   *  by it; the bundle does not carry it */
+  keptEls?: [string, 'pitch' | 'formula' | 'decoration'][]
+  /** a figure's line no word of which stands outside its formulas, kept whole (F1, figure-lines.ts): the lab's dump and parity tell
+   *  it by it; the bundle does not carry it */
+  formula?: true
+  /** a figure text drawn twice over itself, kept as the original (F3's double rule, figure-lines.ts doubledOf): the lab's dump and
+   *  parity tell it by it (the differential's (q)); the bundle does not carry it */
+  double?: true
   /** a kept block of e-mail addresses and their separators alone (today/ink-units.mjs addressesAlone): the lab's dump and parity
    *  tell such a block by it (the coordinator's ruling of 2026-11-10); the bundle does not carry it */
   address?: true
@@ -74,6 +80,10 @@ export interface InstrumentUnit {
     under?: number
     /** a container's edge over its baseline (figure-lines.ts: a closed shape round all of it), PDF units up from it */
     over?: number
+    /** a paragraph of two lines or more (F3, figure-lines.ts): laid as a body paragraph is, no line's free line its room; the
+     *  evidence its lines are joined by, `strong` (TeX's hyphen, a justified line) or `container` (a closed path holds them alone):
+     *  the lab's dump reads it (`para`); the bundle does not carry it */
+    para?: 'strong' | 'container'
   }
   /** why the instrument gives it no ink of its own, where it gives none (the marks could not delimit it on B) */
   why?: string
