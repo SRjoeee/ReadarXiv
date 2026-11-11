@@ -1,6 +1,6 @@
 // U.label (design-b §1.5): a float's label in the target's name (T26) and a theorem-like head's (T27), each with the
 // original's number and punctuation, and the label the unit is then laid with. Ported from engine 065c1d973: labelInTarget
-// L2:1184-1195, spacedText L2:1230-1235, headLabelInTarget L2:1245-1259 (BABEL_HEADS L2:1274), the run's choice RUN:2029-2036,
+// L2:1184-1195, spacedText L2:1230-1235, headLabelInTarget L2:1245-1259 (not its refusal of a babel name's head, L2:1274), the run's choice RUN:2029-2036,
 // rules/tex-names.mjs headName :60-63, colourOfStyle L2:2909, hexOf L2:4569. A head is named from the parts its part states
 // (Label.name, num, punct, as TeX set them), not by today's pattern over its text (headInTarget :145-161, which took one
 // capital before a number's first dot and no more: "Corollary VI.2" stayed the original's, 2610.21312v1).
@@ -59,24 +59,6 @@ export type LabelInput = {
   names: ReadonlyMap<string, string> | null
 }
 export type Labelled = { relabel: string | null; head: HeadLabel | null; label: UnitLabel | undefined }
-
-/** babel's names in English (layout/names.mjs:12 NAME_ENGLISH): a head that is one whole is the names' own */
-const NAME_ENGLISH = [
-  'Abstract',
-  'References',
-  'Bibliography',
-  'Contents',
-  'List of Figures',
-  'List of Tables',
-  'Appendix',
-  'Index',
-  'Proof',
-  'Preface',
-  'Glossary',
-  'Figure',
-  'Table',
-]
-const BABEL_HEADS = new RegExp(`^\\s*(?:${NAME_ENGLISH.join('|')})\\s*[.:\\u2013\\u2014]?\\s*$`, 'u')
 
 /** a float's label in the target's name, its number and punctuation the original's; null where it keeps the original's
  *  (L2:1184 labelInTarget). Where its part states its float's type (`float`, the owner's ruling of 2026-11-08: one form a
@@ -141,8 +123,8 @@ const colourOfStyle = (st: Glyph['st']) =>
 
 /** a theorem-like head's label as the target names it, in its parts' styles (L2:1245 headLabelInTarget): its name in the
  *  target's word (the rules' head names, else the paper's own name unit's), its number and its punctuation as TeX printed them,
- *  a space before the punctuation where it stands apart (spacedText's reading); null for a babel name's head (the names path's),
- *  a head of no name, and a name nothing names in the target. An unnumbered head whose name ends in its own stop, a style that
+ *  a space before the punctuation where it stands apart (spacedText's reading); null for a head of no name and a name nothing
+ *  names in the target. An unnumbered head whose name ends in its own stop, a style that
  *  sets no punctuation after it ("Thm."), is named with its stop where its name alone is not */
 export function headLabelInTarget(
   head: HeadParts,
@@ -150,7 +132,10 @@ export function headLabelInTarget(
   names: LabelInput['names'],
 ): Omit<HeadLabel, 'chars'> | null {
   const chars = [head.name, head.num, head.punct].filter((c): c is Glyph => !!c)
-  if (!head.name || !head.whole || BABEL_HEADS.test(spacedText(chars))) return null
+  // (a head that is a babel name whole, "Proof.", is relabelled as any: its glyphs are the label's own, a babel name the names
+  // path draws being a member of its own, never inside another member's label; the port's refusal of it (L2:1274, for production's
+  // name group that a label's drawing never hid) left SIAM's `\newtheorem{proof}{Proof}` heads English, 2610.20266v1, 2610.20285v1)
+  if (!head.name || !head.whole) return null
   const english = head.name.ch.replace(/\s+/g, ' ').trim()
   if (!/^\p{L}/u.test(english)) return null
   // (its punctuation as TeX set it, a space before it where it stands a fifth of its size apart: "Definition 5.1 (")

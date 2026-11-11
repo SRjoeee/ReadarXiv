@@ -47,9 +47,12 @@ describe('U.label', () => {
     expect(
       headLabelInTarget({ name: one('Claim', 72), whole: true }, {}, new Map([['Claim', 'Behauptung']]))?.text,
     ).toBe('Behauptung')
+    // (a proof's head that is a theorem-like name of the paper's class, SIAM's `\newtheorem{proof}{Proof}`, "Proof." whole: the
+    // label's own glyphs, which no names group holds (a babel name the names path draws is a member of its own, its glyphs never
+    // another member's label): relabelled as any head, its stop after it; 2610.20266v1 and 2610.20285v1's 29 stayed English)
     expect(
-      headLabelInTarget({ name: one('Proof', 72), punct: one('.', 97), whole: true }, { Proof: 'Beweis' }, null),
-    ).toBeNull()
+      headLabelInTarget({ name: one('Proof', 72), punct: one('.', 97), whole: true }, { Proof: 'Beweis' }, null)?.text,
+    ).toBe('Beweis.')
   })
   it('relabels a theorem-like head from its parts as the part states them, whatever its number’s form', () => {
     // (a part's Label.name, num and punct, each one glyph of its ink: 2610.21312v1's IEEEtran heads numbered within \Roman
@@ -83,11 +86,15 @@ describe('U.label', () => {
     expect(drawn(head('Proposition', 'V.2', '('))).toBe('Satz V.2 (')
     expect(drawn(head('Definition', '1', '.'))).toBe('Definition* 1.')
     expect(drawn(head('Key Lemma', '2', '.'))).toBe('Hauptlemma 2.')
-    // (a name no table holds, nor the paper's name units: the original's; a babel name's head is the names path's)
+    // (a name no table holds, nor the paper's name units: the original's)
     expect(drawn(head('Assumption', '1', '.'))).toBeUndefined()
     // (parts that do not hold the label's every glyph, the name first: a swapped head, "3.2 Theorem", keeps the original's)
     expect(drawn(head('Corollary', null, '.', false))).toBeUndefined()
-    expect(label({ ...base, head: head('Proof', null, '.'), heads: { Proof: 'Beweis' }, names: null }).head).toBeNull()
+    // (a proof's head, its stop right after its name, SIAM's "Proof.": relabelled as any head)
+    const proof = { name: part('Proof', 49, 100), punct: part('.', 100, 103), whole: true }
+    expect(label({ ...base, kind: 'theorem', head: proof, heads: { Proof: 'Beweis' }, names: null }).label?.drawn).toBe(
+      'Beweis.',
+    )
     // (the paper's own name unit names it where no table does)
     expect(
       label({ ...base, head: head('Setting', '1', '('), heads: de, names: new Map([['Setting', 'Rahmen']]) }).label
