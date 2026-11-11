@@ -31,7 +31,7 @@ import type { Metrics } from '../types.ts'
 import { breakMaps, type Breaks, statedBreaks, type V0Piece } from '../unit/breaks.ts'
 import { cropFields, cropOfBox, cropPartsOfSegments } from '../unit/crops.ts'
 import { type ElementReading, elements, type Gap, type Res } from '../unit/elements.ts'
-import { type Glyph, type LabelInput, label as labelRule, type UnitLabel } from '../unit/label.ts'
+import { type Glyph, type HeadParts, type LabelInput, label as labelRule, type UnitLabel } from '../unit/label.ts'
 import { type RefNames, rename } from '../unit/rename.ts'
 import { cjkAdvance } from '../unit/params.ts'
 import { type Rect, rectKey } from '../util.ts'
@@ -419,6 +419,24 @@ function labelOf(m: Placed, designs: PaperReading['designs']): UnitLabel | undef
   }
 }
 
+/** a theorem-like head's parts as U.label names it from them: Label.name, num and punct, each one glyph of its ink in the
+ *  label's style, and whether they hold its every glyph; null where the part states no name (a part made before its parts
+ *  were stated, a label of no word) */
+function headOf(m: Placed, designs: PaperReading['designs']): HeadParts | null {
+  const lb = m.label
+  if (!lb?.name) return null
+  const st = { ...tstyleOf(lb.style, designs), ...(lb.style.fill ? { fill: lb.style.fill } : {}) }
+  const glyph = ([ch, ink]: [string, number[]]): Glyph => ({ ch, x0: ink[1]!, x1: ink[3]!, size: lb.style.size, st })
+  // (whether its parts hold its every glyph, the name first: from its ink's start to its end, its own 1/100 grid)
+  const whole = lb.name[1][1] <= lb.ink[1] + 0.01 && (lb.punct ?? lb.num ?? lb.name)[1][3] >= lb.ink[3] - 0.01
+  return {
+    name: glyph(lb.name),
+    ...(lb.num ? { num: glyph(lb.num) } : {}),
+    ...(lb.punct ? { punct: glyph(lb.punct) } : {}),
+    whole,
+  }
+}
+
 /** what the tokens set before the translation (RUN:2196): a name's lead (ReadInput.lead, lay/lead.ts), else the label drawn anew,
  *  its parts in their styles, or its words in its first glyph's (an opening bracket at its end glued: gap 0) */
 function leadOf(lb: UnitLabel | undefined): { parts: { text: string; st: TStyle }[]; gap?: number } | null {
@@ -527,7 +545,7 @@ export function readMember(i: ReadInput): ReadOut {
   // the label in the target where the reader draws it anew
   const lab = labelRule({
     label: labelOf(m, paper.designs),
-    head: (m.kind === 'theorem' || m.kind === 'heading') && m.label ? (labelOf(m, paper.designs)?.chars ?? null) : null,
+    head: m.kind === 'theorem' || m.kind === 'heading' ? headOf(m, paper.designs) : null,
     kind: m.kind,
     labels: !!i.labels,
     relabels: i.relabels,

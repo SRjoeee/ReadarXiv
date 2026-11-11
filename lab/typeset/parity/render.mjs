@@ -28,7 +28,7 @@ import { L1_BUNDLES, L1_BUNDLES_DIR } from '../../../packages/typeset/tests/repl
 import { bundlesLine, headsFor } from '../../../packages/typeset/tests/replay/bundles.ts'
 import { LAB, TODAY } from '../../../packages/typeset/tests/replay/tap.ts'
 import { SLICES, TABLES } from '../served-metrics.mjs'
-import { analyse } from './analyse.mjs'
+import { analyse, boxesOf } from './analyse.mjs'
 import { DEVICE_PT, inPlace } from './fidelity.mjs'
 import { bundleCheck, bundleOf, hyphFileOf, pdfOf, whyNot } from './inputs.mjs'
 import { PAIRS } from './pairs.mjs'
@@ -614,15 +614,3 @@ function textBoxesOf(rec, v2, n) {
   return out
 }
 
-/** the boxes of the page's units, PDF units [x0, y0, x1, y1]: each unit's lines on A (its original ink) and each line either
- *  side drew; a pixel that differs outside all of them differs where both should show arXiv's page */
-function boxesOf(rec, v2, n) {
-  const out = []
-  for (const m of v2.facts[n]?.members ?? [])
-    for (const l of m.lines) if (l[0] === n) out.push([l[2] - 1, l[6] - 1, l[3] + 1, l[5] + 1])
-  for (const u of [...(rec.today?.units ?? []), ...(rec.today?.figures ?? []), ...(rec.today?.names ?? []), ...(rec.v2?.units ?? [])])
-    for (const l of u.lines)
-      if (l.x0 !== null) out.push(l.rot ? [l.x0 - 1, l.y0 - 1, l.x1 + 1, l.y1 + 1] : [l.x0 - 1, l.y - 0.3 * l.size, l.x1 + 1, l.y + 1.0 * l.size])
-  for (const c of [...(rec.today?.crops ?? []), ...(rec.v2?.crops ?? [])]) out.push([c[1] - 1, c[2] - 1, c[3] + 1, c[4] + 1])
-  return out
-}

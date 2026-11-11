@@ -4,7 +4,7 @@
 // was set in (the computed style of its run, so a weight a class names counts as one an attribute names), drawn or not (a
 // crop's transparent stand-in), and slanted or not (italic, or a run skewed by its own transform). The lines of a group are
 // its characters by baseline; each line is told in PDF units (y up): its baseline, the ink extent of its drawn characters,
-// its size, how many of its characters are bold and slanted, and the widest word space and letter gap between its drawn
+// its size, how many of its characters are bold and slanted (and each one's face), and the widest word space and letter gap between its drawn
 // characters (in ems of the line's size), the places a crop stands taken out (a crop is a formula's ink, no gap). A character
 // is placed through its <text>'s own transform into the SVG's user space (a figure text turned by `rotate`, an oblique run
 // skewed about its baseline); a turned <text> is one line of its own, told `rot`, with the box its characters cover and its
@@ -167,6 +167,12 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
         word: r2(word),
         letter: r2(letter),
         text: cs.map((c) => c.ch).join(''),
+        // (each character's face beside `text`, one digit a character: 1 bold, 2 slanted, 3 both, 0 neither, white space and a
+        // crop's stand-in 0; stated where a character is bold or slanted: the verdict leaves a label drawn anew out of the
+        // share, as the original's share leaves the label's ink out)
+        ...(ink.some((c) => c.weight >= 600 || c.italic)
+          ? { st: cs.map((c) => (c.hidden || SPACE.test(c.ch) || !c.ch ? 0 : (c.weight >= 600 ? 1 : 0) + (c.italic ? 2 : 0))).join('') }
+          : {}),
       }
     })
     out.push({ id, lines })

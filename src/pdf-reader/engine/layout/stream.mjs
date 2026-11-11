@@ -81,6 +81,14 @@ function framedOf(page) {
 const OPENING = /^([pn])(\d+)\.(\d+)a$/
 /** a unit's start mark: MARK_DEF's, a cell's, a heading's */
 const START = /^[th]?(\d+)s$/
+/** a mark of a unit: its start or end mark, or a point of one of its pieces; its unit's number */
+const UNIT_MARK = /^(?:[th]?(\d+)[se]|[pn](\d+)\.\d+[ab])$/
+/** whether a point's name is a mark of a unit numbered before `id`: the source sets its units in order, so after a piece of
+ *  unit `id` it is that unit's text set again (MR 3's later occurrence), never the next unit's */
+const earlierUnit = (name, id) => {
+  const m = UNIT_MARK.exec(name)
+  return !!m && Number(m[1] ?? m[2]) < id
+}
 /** a range in a region outside the column bodies (an output routine of its own: REVTeX's, multicol's) that goes from
  *  low on a page to high on it, and right by this share of the page's width and up by this share of its height, crossed
  *  into the next column: what TeX shipped between is in it, and cannot be told apart */
@@ -500,6 +508,22 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
       const next = seq[(rank.get(`${pa}|${qa}`) ?? -2) + 1]
       if (!next || next[0] !== pa) return none(HOW['open, the next mark on another page'])
       const P = pages[pa - 1], N = P.points[next[1]]
+      // (an earlier unit's marks right after it, in its region, before the text after it: that unit's text TeX set again inside
+      // this piece's own ink — MR 3's later occurrence, a class keeping a title's or an author's argument, marks and all, that a
+      // paper's macro sets once more: acmart's \shorttitle and \authors where VLDB's Reference Format calls \vldbtitle and
+      // \vldbauthors, 2608.25210v2 p1, whose \vldbtitle owned nothing, its next point the title's start mark set again. No bound
+      // of the piece's: its ink runs past them to where the text after it begins; where that text is not found there, or where
+      // its own ink stands before them (nothing then tells them its ink's), as before)
+      if (f.want && !f.blocked && earlierUnit(N.name, Number(m[2])) && regions[pa - 1].at[next[1]] === rA) {
+        const lead = takeTo(next)
+        let r = rank.get(`${next[0]}|${next[1]}`) + 1
+        while (seq[r] && seq[r][0] === pa && regions[pa - 1].at[seq[r][1]] === rA && earlierUnit(P.points[seq[r][1]].name, Number(m[2]))) r++
+        if (!lead.glyphs.length && !lead.boxes.length && seq[r] && seq[r][0] === pa) {
+          const { glyphs, boxes } = takeTo(seq[r])
+          const end = textAt(pages, glyphs, f.want, erasure)
+          if (end > 0 && !jumps(glyphs.slice(0, end))) return cut(HOW['open, to the text after it'], glyphs, boxes, end)
+        }
+      }
       // nothing after it in its unit, its next mark outside the bodies (a footnote's, shipped below its column): the piece
       // ends with its column's body, where no body begins again before that mark
       if (!f.want && rA % 2 === 1 && regions[pa - 1].at[next[1]] % 2 === 0) {

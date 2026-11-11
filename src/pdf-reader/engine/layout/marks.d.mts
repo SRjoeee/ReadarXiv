@@ -127,6 +127,8 @@ export declare const NAME_MARK_FILE: RegExp
 export declare function withoutNameMarks(text: string): string
 /** LAYOUT_TEX's names: \\axtnma{<key>} and \\axtnmb{<key>} around each babel name macro's own text */
 export declare const NAMES_TEX: string
+export declare const CLASS_NAMES: readonly { key: string; macro: string; own: string; call: RegExp }[]
+export declare function classNamesTex(texts: readonly string[]): string
 /** LAYOUT_TEX's last part: a point (`/axt-<name> ri`) beside each destination, around each column's body and each
  *  float's box */
 export declare const POINTS_TEX: string

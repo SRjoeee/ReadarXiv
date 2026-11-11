@@ -2155,6 +2155,12 @@ const RUNNING_HEADS = new Set(['markboth', 'markright', 'titlerunning', 'authorr
  *  command as it is. The role table leaves both untyped (LaTeXML's prototype), so the call was one placeholder, and a heading
  *  wholly one no unit: 13 of 2307.16209's 14 */
 const PDF_STRING = new Set(['texorpdfstring'])
+/** the conditionals TeX reads as a macro's arguments, no \\fi (etoolbox's, ifthen's \\ifthenelse; the role table's branches
+ *  of content, arg-roles.mjs): read as TeX's own conditionals are (S4): undecided before the compile, a branch that alone
+ *  holds words walked as content, which the compile says TeX set or not (its marks set or never met); where both hold words,
+ *  neither is the translator's — the call one placeholder, as a command the table does not know is, counted (`ifUnknown`);
+ *  where neither does, one placeholder as before */
+const BRACE_CONDITIONALS = new Set(['ifdefempty', 'ifdefvoid', 'ifdef', 'ifundef', 'ifdefstring', 'ifcsdef', 'ifcsundef', 'ifcsempty', 'ifcsvoid', 'ifbool', 'iftoggle', 'ifstrequal', 'ifstrempty', 'ifblank', 'notblank', 'ifthenelse'])
 /** the parameters of a theorem-like environment: its title, optional */
 const THEOREM_PARAMS = paramsOf('[t')
 /**
@@ -2659,10 +2665,26 @@ function walk(s, from, to, b, ctx) {
     // argument in parentheses
     let from = end
     if (name === 'cmidrule') { const k0 = skipSpaces(s, argsAfter(s, end, 1).end); if (s[k0] === '(') { const c0 = s.indexOf(')', k0); if (c0 > 0 && c0 < to) from = c0 + 1 } }
-    const args = !/^[A-Za-z@]+$/.test(name) || NO_ARGS.has(name) ? null : commandArgs(s, from, name, to)
+    let args = !/^[A-Za-z@]+$/.test(name) || NO_ARGS.has(name) ? null : commandArgs(s, from, name, to)
+    // (a conditional TeX reads as a macro's arguments: its branches as the walk reads them in a dry run (probeConditional). The
+    // one branch that holds words is walked alone, the call's source and its other branch kept with its pair's open or close —
+    // so no unit's start mark falls between two of its arguments, where an empty branch's pair would end the unit's head; where
+    // both hold words neither is text, and where neither does none: the call read as one the table does not know, one
+    // placeholder, as before the table knew it)
+    let branch = null
+    if (args?.known && BRACE_CONDITIONALS.has(name)) {
+      const br = args.args.filter(a => a.role === 'c' && s[a.start] === '{')
+      const probe = br.length === 2 ? probeConditional(s, i, { thenFrom: br[0].start + 1, thenTo: br[0].end - 1, elseFrom: br[1].start + 1, elseTo: br[1].end - 1 }, b, ctx) : null
+      const worded = probe ? br.filter((_, k) => probe[k].words) : []
+      if (worded.length === 1) branch = worded
+      else {
+        if (worded.length === 2) ctx.skipped.ifUnknown = (ctx.skipped.ifUnknown ?? 0) + 1
+        args = argsAfter(s, from)
+      }
+    }
     // (\\texorpdfstring's first argument whether or not the paper's packages tell the role table of it: a class may define it)
     const pdfString = PDF_STRING.has(name) && args?.args.length >= 2 && s[args.args[0].start] === '{' && s[args.args[1].start] === '{'
-    const walked = pdfString ? args.args.slice(0, 1) : args?.known ? args.args.filter(a => (a.role === 't' || a.role === 'c') && (s[a.start] === '{' || a.shape === '[')) : []
+    const walked = pdfString ? args.args.slice(0, 1) : branch ?? (args?.known ? args.args.filter(a => (a.role === 't' || a.role === 'c') && (s[a.start] === '{' || a.shape === '[')) : [])
     // (its call ends with its second argument: where the table does not know it, every adjacent group was read as one of its)
     const callEnd = pdfString ? args.args[1].end : args?.end
     if (walked.length) { endText(); walkArgs(s, i, callEnd, walked, b, ctx); i = callEnd; continue }

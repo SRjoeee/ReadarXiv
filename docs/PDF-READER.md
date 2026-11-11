@@ -4281,6 +4281,106 @@ no group at all, so v2 drew those faces upright (round 8 B8's toggles-on sheet: 
   grow from 44,246 to 45,690 characters. Left upright, with today's other rules: five venues of 2610.10069 whose open stood at
   `\enquote`'s kept pair (§18.32 writes it as marks): for the tags wire's list.
 
+### 18.39 A theorem head is named from its parts as TeX set them (2026-11-11)
+
+The owner's batch 6 (2610.21312v1 p5 and p6): "Corollary VI.2", "Proposition VI.3", "Proposition VII.1" stayed the original's,
+where "Proposition V.2" two pages before was drawn in the target's word. The paper is IEEEtran with amsthm's
+`\newtheorem{theorem}{Theorem}[section]`: the counter is `\Roman{section}.\arabic{theorem}`. The engine read a head's parts by
+its glyphs' classes, one capital before a number's first dot and no more, so "Corollary VI.2 (" was name "CorollaryVI." and
+number "2"; and the typesetter joined the parts and read them again with today's pattern (tex-names.mjs headInTarget), which
+takes one capital before ".n" ("V.2") and a roman numeral with nothing after it: "VI.2" was neither, and nothing was drawn.
+
+- **The parts** (`packages/engine` locate/facts.ts `labelParts`). A head's number is the word after its label's last word
+  space, where that word is a number as LaTeX prints a counter (a digit in it, a roman numeral, a letter alone), as a float's
+  number is the word after its tie (\fnum@): amsthm sets `\thmname{#1}\thmnumber{ #2}`, a space between. From its first digit
+  or letter (a bracket before it is neither part's, "Eq. (3)"); where no such word stands, the digits at its end as before
+  ("Fig.S1"). Its name is the glyphs before, read as letters (Unicode's compatibility form: a ligature's glyph its letters,
+  2610.21765v1's "Deﬁnition" given as U+FB01, which no head name holds) with a space where TeX set its glue ("Key Lemma").
+- **The relabel** (`packages/typeset` unit/label.ts `headLabelInTarget`). The target's word for `Label.name` (the rules' head
+  names, else the paper's own name unit's), then `Label.num` and `Label.punct` as TeX printed them, a space before the
+  punctuation where it stands a fifth of its size apart. Today's pattern is gone. Only where the parts hold the label's every
+  glyph, the name first (`whole`, as a float's label): a swapped head (`\swapnumbers`, "3.2 Theorem"), or one with glyphs no
+  part holds, keeps the original's rather than lose its number.
+- **Over the 88** (r14's parts, every member of kind theorem or heading whose label begins with a name the paper declares or
+  the zh table holds; rootcause/batch6.md): 566 heads in 34 papers; relabelled before 522, after 530 (stage 1a f12 against r14: exactly these 8 heads change their relabel, every other drawn alike): the 5 of 2610.21312v1 and
+  the 3 of 2610.21765v1 (which today's production draws: its characters spell "Definition"). Not by this rule: 2610.21026v1's
+  seven "Assumption" (`\newtheorem{assumption}{\protect\assumptionname}`: a name printed through a macro is no name unit of the
+  paper's, and the table has none). The same reading moves 24 other labels'
+  parts, no relabel: ten run-in paragraph labels now read with their space ("Index Terms", SIAM's "Key words"), and fourteen
+  appendix headings' "Appendix A" now name and letter (2610.21201v1, 2610.30875v1), which no table names either way.
+- **A proof's head of the class's own** (`unit/label.ts headLabelInTarget`, 2026-11-11). SIAM's classes (siamart251216,
+  siamonline250211) set a proof's head through ntheorem, `\newtheorem{proof}{Proof}`, italic in the class's blue with its stop:
+  the part states "Proof." as the proof unit's label, as it states "Proposition 7.2." before it. The port of production's rule
+  refused a head that is a babel name whole as the names path's (L2:1274, 1d5cbe1ae: amsthm's `\proofname`, whose name group
+  a label's drawing never hid in production), and no names path holds this one, TeX never setting `\proofname` there: the 29
+  heads of 2610.20266v1 (11) and 2610.20285v1 (18) stayed English, in v2 and in production, in front of translated proofs
+  beside relabelled theorems, against §19.11 (a proof's name in the target's words) and the owner's one label form per paper.
+  In the typesetter a label's glyphs are its own (a babel name the names path draws is a member of its own: amsthm's
+  "Proof." and IEEEtran's "Proof:" are, drawn in the target's word on both panes), so the refusal guards nothing and goes: the
+  29 are named as any head (ctex's word with the stop in Chinese, "Beweis." in German), every other of the 566 drawn as before. A proof with an
+  optional argument (`\begin{proof}[Proof of Lemma 3.1]`, 2610.20266v1's 6) prints the argument in the name's place, in SIAM's
+  class and in amsthm alike: the head is the author's text, a heading unit the translator translates, with no name to relabel.
+- **IEEEtran's proof name** (`layout/marks.mjs` `CLASS_NAMES`, `classNamesTex`; `pipeline/live.mjs`, 2026-11-11). IEEEtran's
+  `\IEEEproof` sets "Proof:" through `\IEEEproofname`, the class's own name for a proof (`\@IEEEproof[\IEEEproofname]`), which
+  the names' wrapper did not know: it wraps babel's `\proofname` and a literal in a construct's definition (ieeecolor's
+  `\def\proof{… Proof: }`, 2610.30034v1, drawn in the target on both panes). 2610.21504v1 p4's "Proof:" was read as its
+  paragraph's number label, English on both panes. A class's own macro for a babel name's text is wrapped as babel's is (the
+  same key: the target's word, the probe's case answer), on the head's own line of the layout compile and the mark probe, only
+  where the paper's files call its construct outside a comment and babel's own macro is undefined (one key, one macro), so that
+  no other paper's bytes move. Over the 88 one paper calls `\begin{IEEEproof}`, once: its compiles move (3 made), every other
+  paper's are read from the caches (stage 1a f15: 88 made, 0 missing); 2610.21504v1 alone moves, its "Proof" a name of its own
+  before the paragraph, the paragraph's label the joint ":", as 2610.30034v1's; v2 draws the target's word and colon.
+
+### 18.40 etoolbox's conditionals are read as TeX's own (2026-11-11)
+
+The owner's batch 6 (2608.25210v2 p1): VLDB's "PVLDB Artifact Availability: …" paragraph stayed English. It is the false
+branch of `\ifdefempty{\vldbavailabilityurl}{}{…}`, and the role table did not know etoolbox's conditionals: the call was one
+placeholder, its branch of words no unit, and its glyphs fell to the unit before's last placeholder, an opening point read to
+the next point (own.mjs MR 4), the next unit's start, across TeX's paragraph end.
+
+- **The rule** (rules/arg-roles.mjs, source/latex-front.mjs `BRACE_CONDITIONALS`). etoolbox's `\ifdefempty`, `\ifdefvoid`,
+  `\ifdef`, `\ifundef`, `\ifdefstring`, `\ifcsdef`, `\ifcsundef`, `\ifcsempty`, `\ifcsvoid`, `\ifbool`, `\iftoggle`,
+  `\ifstrequal`, `\ifstrempty`, `\ifblank`, `\notblank` and ifthen's `\ifthenelse` take their branches as a macro's
+  arguments, no `\fi`. The role table states their test (a control sequence, a name, or code) and their two branches (the content
+  TeX sets one of). The walk reads the branches in a dry run as it reads TeX's own conditionals' (S4, `probeConditional`): the one
+  branch that holds words is walked alone, the call's source and its other branch kept with its pair's open or close (walked
+  both, an empty first branch's pair ended the unit's head between two of the command's arguments, and no start mark was
+  written); both of words, neither is the translator's, the call one placeholder (`ifUnknown`); neither, one placeholder as
+  before. Nothing is decided before the compile: a branch TeX does not set has no ink and stays as it is.
+- **Over the 88** (sources' calls in the document's text): `\ifdefempty` 1 (2608.25210v2), `\iftoggle` 1 (2610.37818v1's
+  acknowledgements, translated today as the ledger's ink units of orphan lines, now a heading and a paragraph of the source);
+  no other form with words in any paper's text; `\IfFileExists` (13 calls, 5 papers) was the role table's already. Two papers'
+  marked sources move.
+- **TeX's grouping draws as nothing** (layer-proto/layer1.mjs `ZERO`). The paragraph ends `\url{…}.\endgroup`, the
+  `\endgroup`'s opening point after the unit's end mark; its range to the next point, the INTRODUCTION heading's start, holds that
+  heading's number, so no reading stated that it set nothing, and as a paper's macro of unknown ink (`umacro`) whose ink was not
+  found it left the unit unproven: the original's whatever its row (a stand-in row, laid offline: unproven). `\begingroup`,
+  `\endgroup`, `\bgroup` and `\egroup` open or close a group and set no ink, so they are drawn as nothing, as a size switch is;
+  the marking is unchanged. With it the paragraph is laid (the stand-in row: three lines) and its address's link moves with its
+  URL element, as on arXiv's page. Over the 88: 8 such elements in 5 papers move from `umacro` to `zero`, parts alone; one other
+  unit was unproven the same way, 2610.20266v1's theorem 102 (`\begingroup`).
+
+### 18.41 An opening point reads past an earlier unit's marks set again inside its ink (2026-11-11)
+
+The owner's batch 6 (2608.25210v2 p1): VLDB's "PVLDB Reference Format: …" paragraph was no unit. Its `\vldbauthors` and
+`\vldbtitle` hold the title's and the authors' arguments, which acmart keeps with their marks (`\shorttitle`, `\authors`), so TeX
+sets those units' marks a second time inside the paragraph (MR 3's later occurrence). `\vldbtitle`'s opening point read to its
+next point, the title's start mark set again, and owned nothing; the title's glyphs fell to the paragraph's text, more letters
+than its source writes.
+
+- **The rule** (layout/stream.mjs `alone`, `earlierUnit`). An opening point alone whose next points in its region, right after
+  it with none of its ink before them, are marks of units numbered before its own (the source sets its units in order, so after
+  a piece of unit `n` such a mark is that unit's text set again, never the next unit's) reads past them, its ink running to
+  where the text after it begins; where that text is not found before the next point of another kind, or where its own ink
+  stands before those marks (nothing then tells them its ink's), as before. A piece with no text after it, or blocked by an
+  unmarked piece, is read as before.
+- **Over the 88, with marks-2's point before a forced break** (§18.34; stage 1a with the rule and with its two commits reverted,
+  and a census wrapping ownedOf to read every call both ways): one placeholder's owned ink changes, 2608.25210v2's p9.13a
+  (`\vldbtitle`, 55 glyphs where it owned none), and no output moves (0 of 88). The paragraph stays refused as production
+  refuses it ("text past its source"): `\vldbauthors` still writes no point, the mark probe asking its ink in the preamble,
+  where acmart's `\authors` is empty until `\maketitle` fills it, so that it is answered inkless and never marked (its own
+  item); the names' glyphs are then the paragraph's text.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

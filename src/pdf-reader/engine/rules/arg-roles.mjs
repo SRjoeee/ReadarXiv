@@ -76,6 +76,13 @@ const CURATED = {
   label: '[n{n', ref: '*s{n', eqref: '{n', pageref: '*s{n', autoref: '*s{n', cref: '*s{n', Cref: '*s{n', nameref: '*s{n',
   hyperref: '[n{t', hyperlink: '{n{t', hypertarget: '{n{t', href: '[k{n{t', url: '{v', nolinkurl: '{v', includegraphics: '*s[k[k{n',
   IfFileExists: '{n{c{c', InputIfFileExists: '{n{c{c', email: '[n{v', orcid: '[n{v', orcidlink: '{n', thanksref: '{n', inst: '{v',
+  // etoolbox's conditionals and ifthen's \ifthenelse, which TeX reads as a macro's arguments, no \fi: the test a control
+  // sequence, a name or code, the two branches the content TeX sets one of (the front end reads them as TeX's own conditionals'
+  // branches, latex-front.mjs BRACE_CONDITIONALS). Unknown, the call was one placeholder, and a branch of words no unit
+  // (2608.25210v2's "PVLDB Artifact Availability", in `\ifdefempty{\vldbavailabilityurl}{}{…}`)
+  ifdefempty: '{r{c{c', ifdefvoid: '{r{c{c', ifdef: '{r{c{c', ifundef: '{r{c{c', ifdefstring: '{r{x{c{c', ifcsdef: '{n{c{c',
+  ifcsundef: '{n{c{c', ifcsempty: '{n{c{c', ifcsvoid: '{n{c{c', ifbool: '{n{c{c', iftoggle: '{n{c{c', ifstrequal: '{x{x{c{c',
+  ifstrempty: '{x{c{c', ifblank: '{x{c{c', notblank: '{x{c{c', ifthenelse: '{x{c{c',
   // definitions: a name, an arity, a default and a body, none of them typeset where they stand
   newcommand: '*s{r[d[x{x', renewcommand: '*s{r[d[x{x', providecommand: '*s{r[d[x{x', DeclareRobustCommand: '*s{r[d[x{x',
   newenvironment: '*s{n[d[x{x{x', renewenvironment: '*s{n[d[x{x{x', newtheorem: '*s{n[n{n[n', newcolumntype: '{n[d[x{x',

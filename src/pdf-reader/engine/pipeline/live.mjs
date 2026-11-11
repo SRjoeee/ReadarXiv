@@ -6,7 +6,7 @@
 // over our base page, and the web's rows hold it.
 import { analyze } from '../source/paper-meta.mjs'
 import { paperNames, theoremNames } from '../source/paper-names.mjs'
-import { CALL_TEX, DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, probeSamples, refKeysOf, refsTex, regionsTex } from '../layout/marks.mjs'
+import { CALL_TEX, classNamesTex, DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, probeSamples, refKeysOf, refsTex, regionsTex } from '../layout/marks.mjs'
 import { documentBounds, DVI_MARK_DEF, dviEngine, FONT_PROBE, inAuthorBlock, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, texFilesOf, texText } from '../source/latex-front.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
 import { nameCells } from '../translate/mt.mjs'
@@ -228,9 +228,11 @@ export function probeFiles({ fsys, project, meta }, { marks = false, preamble = 
   const dvi = dviEngine(meta?.compiler)
   // (with the marked preamble, its line probes inert: \axtlines is LINES_TEX's, which the probe does not load, and the preamble
   // only stores the text it marks)
-  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (preamble === null ? '' : PREAMBLE_LINES) : '', probe = marks ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units))}` : ''
+  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + classNamesTex(texsOf(fsys)) + (preamble === null ? '' : PREAMBLE_LINES) : '', probe = marks ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units))}` : ''
   return new Map([[project.main, latin1Bytes(`${head}${END_TEX}${marks && preamble !== null ? preamble : text.slice(0, at)}${FONT_PROBE}\\begin{document}${probe}\\end{document}\n`)]])
 }
+/** the text of each of the paper's TeX files (a class's own name it calls: marks.mjs classNamesTex) */
+const texsOf = fsys => fsys.list().filter(p => /\.(?:tex|ltx)$/i.test(p)).map(p => latin1(fsys.read(p) ?? new Uint8Array()))
 /** \axtlines in the mark probe over the marked preamble: a protected macro, as LINES_TEX's is, that sets nothing. One line */
 const PREAMBLE_LINES = '\\protected\\def\\axtlines#1{}'
 /**
@@ -318,7 +320,7 @@ export function originalFiles({ fsys, project: read, meta }, { lines = false, sp
   const dvi = dviEngine(meta?.compiler)
   // (with `layout`, each reference's item and its name asked of TeX at the document's end: marks.mjs refsTex, none for a paper with
   // no reference, whose bytes stay as they were)
-  const head = DRAFT + MARK_DEF + (dvi ? DVI_MARK_DEF : '') + (layout ? LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (called ? CALL_TEX : '') + (names ? '' : NAMES_OFF) + regionsTex(project.codeEnvs, project.codeBodies) + refsTex(refKeysOf(project.units)) : '') + END_TEX + (lines ? LINES_TEX : '')
+  const head = DRAFT + MARK_DEF + (dvi ? DVI_MARK_DEF : '') + (layout ? LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (called ? CALL_TEX : '') + (names ? classNamesTex(texsOf(fsys)) : NAMES_OFF) + regionsTex(project.codeEnvs, project.codeBodies) + refsTex(refKeysOf(project.units)) : '') + END_TEX + (lines ? LINES_TEX : '')
   out.set(project.main, latin1Bytes(head + latin1(out.get(project.main))))
   // (`skip`: the main file's head of ours, before the paper's first byte)
   if (spans) { let found = null; spans.skip = head.length; spans.lines = () => (found ??= unitLines(raw, patched, out, project.main, head.length)) }

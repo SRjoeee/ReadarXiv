@@ -220,3 +220,21 @@ export async function analyse({ A, T, Tt, Tc, V, Vt, Vc, view, boxes, textBoxes,
     images: { a: await half(pa.canvas), t: await half(pt.canvas), v: await half(pv.canvas), d: await half(dc) },
   }
 }
+
+/** the boxes of the page's units (analyse's `boxes`), PDF units [x0, y0, x1, y1]: each unit's lines on A (its original ink) and
+ *  its label's ink there (a label drawn anew stands at the label's place, the unit's own: TeX set it before the unit's first
+ *  line, which begins after it), and each line either side drew; a pixel that differs outside all of them differs where both
+ *  should show arXiv's page. Read in Node (render.mjs) from the page's record and v2.mjs's file of the pair */
+export function boxesOf(rec, v2, n) {
+  const out = []
+  for (const m of v2.facts[n]?.members ?? []) {
+    for (const l of m.lines) if (l[0] === n) out.push([l[2] - 1, l[6] - 1, l[3] + 1, l[5] + 1])
+    const lb = m.label?.ink
+    if (lb?.[0] === n) out.push([lb[1] - 1, lb[2] - 1, lb[3] + 1, lb[4] + 1])
+  }
+  for (const u of [...(rec.today?.units ?? []), ...(rec.today?.figures ?? []), ...(rec.today?.names ?? []), ...(rec.v2?.units ?? [])])
+    for (const l of u.lines)
+      if (l.x0 !== null) out.push(l.rot ? [l.x0 - 1, l.y0 - 1, l.x1 + 1, l.y1 + 1] : [l.x0 - 1, l.y - 0.3 * l.size, l.x1 + 1, l.y + 1.0 * l.size])
+  for (const c of [...(rec.today?.crops ?? []), ...(rec.v2?.crops ?? [])]) out.push([c[1] - 1, c[2] - 1, c[3] + 1, c[4] + 1])
+  return out
+}

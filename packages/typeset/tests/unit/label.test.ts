@@ -26,10 +26,17 @@ describe('U.label', () => {
       labelInTarget({ x1: 0, text: 'Figure 3.', chars: [] }, words, { figure: 'source', table: 'target' }, 'de'),
     ).toBeNull()
   })
-  it('reads a head’s glyphs with their spaces, and names it from translator’s heads or the paper’s own names', () => {
+  it('reads a head’s parts with their spaces, and names it from translator’s heads or the paper’s own names', () => {
     const g = [...glyphs('Theorem'), ...glyphs('2.', 112)]
     expect(spacedText(g)).toBe('Theorem 2.')
-    expect(headLabelInTarget(g, { Theorem: 'Satz' }, null)).toEqual({
+    const one = (ch: string, x0: number): Glyph => ({ ...glyphs(ch, x0)[0]!, ch, x1: x0 + 5 * ch.length - 0.1 })
+    expect(
+      headLabelInTarget(
+        { name: one('Theorem', 72), num: one('2', 112), punct: one('.', 117), whole: true },
+        { Theorem: 'Satz' },
+        null,
+      ),
+    ).toEqual({
       text: 'Satz 2.',
       parts: [
         { text: 'Satz 2', st: { bold: true, italic: false, color: undefined } },
@@ -37,8 +44,66 @@ describe('U.label', () => {
       ],
       open: false,
     })
-    expect(headLabelInTarget(glyphs('Claim'), {}, new Map([['Claim', 'Behauptung']]))?.text).toBe('Behauptung')
-    expect(headLabelInTarget(glyphs('Proof.'), { Proof: 'Beweis' }, null)).toBeNull()
+    expect(
+      headLabelInTarget({ name: one('Claim', 72), whole: true }, {}, new Map([['Claim', 'Behauptung']]))?.text,
+    ).toBe('Behauptung')
+    // (a proof's head that is a theorem-like name of the paper's class, SIAM's `\newtheorem{proof}{Proof}`, "Proof." whole: the
+    // label's own glyphs, which no names group holds (a babel name the names path draws is a member of its own, its glyphs never
+    // another member's label): relabelled as any head, its stop after it; 2610.20266v1 and 2610.20285v1's 29 stayed English)
+    expect(
+      headLabelInTarget({ name: one('Proof', 72), punct: one('.', 97), whole: true }, { Proof: 'Beweis' }, null)?.text,
+    ).toBe('Beweis.')
+  })
+  it('relabels a theorem-like head from its parts as the part states them, whatever its number’s form', () => {
+    // (a part's Label.name, num and punct, each one glyph of its ink: 2610.21312v1's IEEEtran heads numbered within \Roman
+    // sections, "Corollary VI.2 (", left the original's by a pattern that took one capital before a number's dot and no more)
+    const part = (ch: string, x0: number, x1: number): Glyph => ({
+      ch,
+      x0,
+      x1,
+      size: 10,
+      st: { fam: 'serif', bold: true },
+    })
+    const de = { Corollary: 'Korollar', Proposition: 'Satz', Definition: 'Definition*', 'Key Lemma': 'Hauptlemma' }
+    const base = {
+      label: undefined,
+      kind: 'heading',
+      labels: true,
+      relabels: true,
+      to: 'de',
+      words: null,
+      captions: null,
+    }
+    const head = (name: string, num: string | null, punct: string | null, whole = true) => ({
+      name: part(name, 49, 100),
+      ...(num ? { num: part(num, 104, 117) } : {}),
+      ...(punct ? { punct: part(punct, punct === '(' ? 121 : 117, 124) } : {}),
+      whole,
+    })
+    const drawn = (h: ReturnType<typeof head>) => label({ ...base, head: h, heads: de, names: null }).label?.drawn
+    expect(drawn(head('Corollary', 'VI.2', '('))).toBe('Korollar VI.2 (')
+    expect(drawn(head('Proposition', 'VII.1', '('))).toBe('Satz VII.1 (')
+    expect(drawn(head('Proposition', 'V.2', '('))).toBe('Satz V.2 (')
+    expect(drawn(head('Definition', '1', '.'))).toBe('Definition* 1.')
+    expect(drawn(head('Key Lemma', '2', '.'))).toBe('Hauptlemma 2.')
+    // (a name no table holds, nor the paper's name units: the original's)
+    expect(drawn(head('Assumption', '1', '.'))).toBeUndefined()
+    // (parts that do not hold the label's every glyph, the name first: a swapped head, "3.2 Theorem", keeps the original's)
+    expect(drawn(head('Corollary', null, '.', false))).toBeUndefined()
+    // (a proof's head, its stop right after its name, SIAM's "Proof.": relabelled as any head)
+    const proof = { name: part('Proof', 49, 100), punct: part('.', 100, 103), whole: true }
+    expect(label({ ...base, kind: 'theorem', head: proof, heads: { Proof: 'Beweis' }, names: null }).label?.drawn).toBe(
+      'Beweis.',
+    )
+    // (the paper's own name unit names it where no table does)
+    expect(
+      label({ ...base, head: head('Setting', '1', '('), heads: de, names: new Map([['Setting', 'Rahmen']]) }).label
+        ?.drawn,
+    ).toBe('Rahmen 1 (')
+    // (an unnumbered head whose name ends in its own stop, a style that sets no punctuation after it)
+    expect(label({ ...base, head: head('Thm', null, '.'), heads: { 'Thm.': 'Satz' }, names: null }).label?.drawn).toBe(
+      'Satz',
+    )
   })
   it('draws the label anew only where the reader may and its group allows', () => {
     const base = {

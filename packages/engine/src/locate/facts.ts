@@ -703,15 +703,31 @@ function lastWordOf(t: readonly DocGlyph[], e: number): number {
     .join('')
   return COUNTER_WORD.test(word) ? k : e
 }
-/** a label's parts by its glyphs' classes: the name (its word before the number, from its first letter, with the marks the
- *  word holds: "Figure", "Theorem", an abbreviation's "Fig.", "Thm."), the number (digits with the dots, letters and dashes
- *  between them: "3", "2.1", "A.4"; a stop or dash before its first digit or letter stands between none of them, and is the
- *  name's where a name stands before it: "Fig. 4."), the punctuation after it (":", "."), each with its ink on `page`; today's
- *  head/float label readings (L2:1184-1195, L2:1245-1259) read the same three off the label's text */
+/** glyphs' text with a space where TeX set its glue between two of them (FLOAT_TIE of their size or more) */
+function wordsOf(t: readonly DocGlyph[]): string {
+  let out = ''
+  t.forEach((g, k) => {
+    const a = t[k - 1]
+    if (a && g.x0 - a.x1 >= FLOAT_TIE * Math.max(a.size, g.size)) out += ' '
+    out += g.u
+  })
+  return out
+}
+/** a label's parts as TeX set them: its name, TeX's glue, its number, its punctuation (a float's \fnum@<type>, \<type>name~
+ *  \the<type>; a theorem-like head's amsthm \thmname{#1}\thmnumber{ #2}, or LaTeX's \@begintheorem's #1 and #2). The number
+ *  is the word after the label's last word space where that word is a number as LaTeX prints a counter (a digit in it, a
+ *  roman one, a letter alone: "3", "2.1", "A.4", "S2", "TABLE I", "Corollary VI.2"), from its first digit or letter (a
+ *  bracket before it is neither part's: "Eq. (3)"); where none is, the digits with the dots, letters and dashes between them
+ *  at its end ("Fig.S1"; a stop or dash before its first digit or letter stands between none of them, and is the name's where
+ *  a name stands before it: "Fig. 4."). The name is its word or words before the number, from its first letter, with the
+ *  marks a word holds ("Figure", "Theorem", "Key Lemma", an abbreviation's "Fig.", "Thm."), read as letters: Unicode's
+ *  compatibility form (NFKC), a ligature's glyph its letters ("Deﬁnition"'s U+FB01), a space where TeX set its glue (FLOAT_TIE).
+ *  The punctuation is the marks after the number (":", ".", "("). Each with its ink on `page`. Today's head and float label
+ *  readings (L2:1184-1195, L2:1245-1259) read the three off the label's text with a pattern of their shapes, which took one
+ *  capital before a number's first dot and no more: "Corollary VI.2" was "CorollaryVI." and "2" (2610.21312v1) */
 export function labelParts(
   gs: readonly DocGlyph[],
   page: number,
-  float = false,
 ): { name?: [string, Ink]; num?: [string, Ink]; punct?: [string, Ink] } {
   const t = gs.filter(real)
   // (across their advances, as the label's own ink and today's characters, which U.decor and U.label read the parts as: a
@@ -736,12 +752,14 @@ export function labelParts(
       inkOf(t.slice(e)),
     ]
   let s = e
-  // (a float's label is TeX's \fnum@<type>, \<type>name~\the<type>: its number the word after its last tie, where that word is
-  // a number as LaTeX prints a counter (a digit in it, a roman one, a letter alone): IEEEtran's "TABLE I", a supplement's
-  // "Table S2" whose tie a justified line set tight (FLOAT_TIE))
-  const lastWord = float ? lastWordOf(t, e) : e
-  if (lastWord < e) s = lastWord
-  else while (s > 0 && /[\p{N}.\-–]/u.test((t[s - 1] as DocGlyph).u)) s--
+  // (its number the word after its last space, where that word is a number as LaTeX prints a counter: IEEEtran's "TABLE I", a
+  // supplement's "Table S2" whose tie a justified line set tight (FLOAT_TIE), amsthm's "Corollary VI.2" under IEEEtran's
+  // \Roman sections; from its first digit or letter, an opening bracket before it neither part's)
+  const lastWord = lastWordOf(t, e)
+  if (lastWord < e) {
+    s = lastWord
+    while (s < e && /^\p{Ps}$/u.test((t[s] as DocGlyph).u)) s++
+  } else while (s > 0 && /[\p{N}.\-–]/u.test((t[s - 1] as DocGlyph).u)) s--
   // (a letter of the number: "A.4", "S1" — a letter with a digit or a dot after it in the number)
   while (
     lastWord === e &&
@@ -769,7 +787,7 @@ export function labelParts(
   let w = f
   while (w >= 0 && w < s && NAME_WORD.test((t[w] as DocGlyph).u)) w++
   const name = f >= 0 ? t.slice(f, w) : []
-  if (name.length) out.name = [name.map((g) => g.u).join(''), inkOf(name)]
+  if (name.length) out.name = [wordsOf(name).normalize('NFKC'), inkOf(name)]
   return out
 }
 

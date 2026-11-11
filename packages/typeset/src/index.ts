@@ -48,7 +48,7 @@ export {
 export {
   type Glyph,
   type HeadLabel,
-  headInTarget,
+  type HeadParts,
   headLabelInTarget,
   type LabelInput,
   type LabelPart,

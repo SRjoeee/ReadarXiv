@@ -424,6 +424,49 @@ describe("a label read from the drawn text: drawn anew where the first line open
   })
 })
 
+describe("style: a label drawn anew is no character of its unit's share, as the original's share is read after the label", () => {
+  // (2610.21312v1 p5's "Corollary VI.2 (": the original's head line begins after its label's ink, its text regular, the label
+  // bold; v2 draws the label anew in the target in a bold face, today keeps the original's ink: each side's share is its text's)
+  const label = { ink: [N, 48.96, 256.26, 113.52, 265.18, 258.3], kind: 'head', name: ['Proposition', [N, 48.96, 256.26, 98.04, 265.18, 258.3]], num: ['1', [N, 101.63, 258.3, 106.61, 265.15, 258.3]], punct: ['(', [N, 110.2, 256.26, 113.52, 265.18, 258.3]] }
+  const v2 = v2Of({
+    members: [{ ord: 21, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }],
+    facts: [{ ord: 21, kind: 'theorem', align: 'j', style: { size: 10 }, label, lines: [factLine(113.52, 300, 258.3)] }],
+    today: { 21: { today: 21 } },
+  })
+  const original = {
+    links: 0,
+    fonts: ['ABCDEF+CMBX10', 'ABCDEF+CMR10'],
+    runs: [
+      [48.96, 256.26, 113.52, 265.18, 258.3, 10, 0, 'Proposition 1 (', false],
+      [113.52, 256.26, 300, 265.18, 258.3, 10, 1, 'Well-posedness). Let the field be closed', false],
+    ],
+  }
+  /** a drawn line whose first `lead` characters are set in a bold face (`st` as measure-dom.mjs states it: a space 0), its
+   *  characters counted as drawn (white space aside) */
+  const boldLead = (x0: number, text: string, lead: number) => {
+    const st = [...text].map((c, i) => (c !== ' ' && i < lead ? '1' : '0')).join('')
+    return { ...drawnLine(x0, 290, 258.3, text), n: text.replace(/ /g, '').length, bold: st.replace(/0/g, '').length, st }
+  }
+  const relabelled = boldLead(48.96, 'Satz 1 (Wohlgestelltheit).', 8)
+  const kept = { ...drawnLine(113.52, 290, 258.3, 'Wohlgestelltheit).'), n: 18 }
+  const page = (t: Line, v: Line) => {
+    const r = rec({ today: { units: [{ id: 21, lines: [t] }], lit: [21] }, v2: { units: [{ id: 21, lines: [v] }] } })
+    return measure(v2, { ...r, original })
+  }
+  const style = (p: { diffs: { flag: string; worse: boolean }[] }) => p.diffs.filter((d) => d.flag === 'style').map((d) => d.worse)
+
+  it("v2 relabels in a bold face where today keeps the original's ink: no style difference", () => {
+    expect(style(page(kept, relabelled))).toEqual([])
+  })
+  it("today relabels and v2 keeps: none either, the two sides read alike", () => {
+    expect(style(page(relabelled, kept))).toEqual([])
+  })
+  it("the text after the label set bold is still the text's: worse as before", () => {
+    const allBold = boldLead(48.96, 'Satz 1 (Wohlgestelltheit).', 26)
+    expect(style(page(kept, allBold))).toEqual([true])
+  })
+})
+
 describe("a size tie (one paragraph's text is even) judged as one paragraph", () => {
   // (a run-in head, member 57, and its paragraph, member 59, set at 10 pt on A, which v2 ties to one scale; today lays them
   // independently)
