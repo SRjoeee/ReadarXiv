@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { LOCALE_CODES, LOCALES, O, R, S, setLocale } from '@readarxiv/ui'
 import { INITIAL, type ReaderState } from '../../src/chrome/model.ts'
 import { plain, textOf, withCount } from '../../src/chrome/capsule-words.ts'
-import { capsuleOf, causeOf, cardOf, heldOf, lineOf, spokenOf } from '../../src/chrome/status.ts'
+import { capsuleOf, causeOf, cardOf, heldOf, lineOf, spokenOf, stageOf } from '../../src/chrome/status.ts'
 import { PREFS } from './fake-controller.ts'
 import type { StateWords } from '../../src/chrome/parts.tsx'
 import { LANGUAGES, NAMES, TEST_PARTS } from './parts.ts'
@@ -48,9 +48,9 @@ describe("the states (the reader's design, §8)", () => {
     // the prepare after it, as it comes along, half of the rest at most; the paragraphs translated to the end
     const steps = [
       v({ phase: 'loading', loaded: 0.5 }),
-      v({ phase: 'preparing', preparing: { position: 2, progress: null } }),
-      v({ phase: 'preparing', preparing: { position: null, progress: 0.5 } }),
-      v({ phase: 'preparing', preparing: { position: null, progress: 1 } }),
+      v({ phase: 'preparing', preparing: { progress: null } }),
+      v({ phase: 'preparing', preparing: { progress: 0.5 } }),
+      v({ phase: 'preparing', preparing: { progress: 1 } }),
       v({ phase: 'translating', progress: 0.9 }),
     ]
     for (let k = 2; k < steps.length; k++) expect(steps[k]).toBeGreaterThan(steps[k - 1] as number)
@@ -60,9 +60,30 @@ describe("the states (the reader's design, §8)", () => {
     expect(lineOf(at({ phase: 'ready', progress: 1 })).on).toBe(false)
     expect(lineOf(at({ phase: 'failed' })).on).toBe(false)
   })
+  it("the line by the prepare's stage, its places in turn on the prepare's stretch; the translation after a prepare from where the prepare left it, without one from the download (the coordinator's decision 4, 2026-11-11)", () => {
+    const v = (over: Partial<ReaderState>, prepared = false) => lineOf(at(over), false, prepared).value
+    const PREPARED = 0.15 + 0.85 * 0.5
+    const places = [0, 0.02, 0.12, 0.52, 0.68, 0.97].map((progress) =>
+      v({ phase: 'preparing', made: true, preparing: { progress } }),
+    )
+    expect(places[0]).toBeCloseTo(0.15)
+    for (let k = 1; k < places.length; k++) expect(places[k]).toBeGreaterThan(places[k - 1] as number)
+    expect(places.at(-1)).toBeLessThan(PREPARED)
+    // (the early units' run ended while the layer is made: the prepare's place, never the whole line)
+    expect(
+      v({ phase: 'translating', laying: true, made: true, progress: 1, preparing: { progress: 0.12 } }),
+    ).toBeCloseTo(places[2] as number)
+    // (the layer landed, its count not known: the prepare's end)
+    expect(v({ phase: 'translating', made: true, progress: 1, translated: { got: 0, total: 0 } })).toBeCloseTo(PREPARED)
+    // the translation takes what remains after a prepare; a visit with no prepare keeps today's line
+    expect(
+      [0, 0.5, 1].map((progress) => v({ phase: 'translating', progress, translated: { got: 1, total: 2 } }, true)),
+    ).toEqual([PREPARED, PREPARED + (1 - PREPARED) * 0.5, 1])
+    expect([0, 0.5, 1].map((progress) => v({ phase: 'translating', progress }))).toEqual([0.15, 0.15 + 0.85 * 0.5, 1])
+  })
   it("the line while the original is held on screen as the paper is made (a host's rule): the original's load, whole once read, as the website's page draws it (L11 third round, gap 3)", () => {
     const held = (over: Partial<ReaderState>) => lineOf(at({ display: 'original', loaded: 1, ...over }), true)
-    expect(held({ phase: 'preparing', preparing: { position: null, progress: 0.2 } })).toEqual({ on: true, value: 1 })
+    expect(held({ phase: 'preparing', preparing: { progress: 0.2 } })).toEqual({ on: true, value: 1 })
     expect(held({ phase: 'translating', progress: 0.3, made: true })).toEqual({ on: true, value: 1 })
     expect(held({ phase: 'preparing', loaded: 0.6 })).toEqual({ on: true, value: 0.6 })
     // (nothing under way: no line, held or not; and not held, the prepare's share as before)
@@ -337,14 +358,13 @@ describe("the states (the reader's design, §8)", () => {
 describe("a host's words for the states (parts.tsx StateWords: the website's own sentences), the catalogue's where it gives none", () => {
   /** words that name their state and what it holds, as a host's table would say them */
   const WORDS: StateWords = {
-    queued: (n) => `queued #${n}`,
-    preparing: 'preparing',
-    translating: (got, total) => `translating ${got} / ${total}`,
+    queued: 'queued',
+    translating: (got, total, _chip, first) =>
+      first ? 'translating, the first time takes 1-2 minutes' : `translating ${got} / ${total}`,
     reconnecting: 'reconnecting',
     noPdf: 'no pdf',
     tooLarge: 'too large',
     notNow: (t) => `unavailable until ${t}`,
-    busy: (t) => `busy until ${t}`,
     limited: (t) => `quota until ${t}`,
     rate: 'too many requests',
     network: 'no connection',
@@ -362,32 +382,93 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
     return c && { kind: c.kind, text: textOf(c.words) }
   }
   it("a run under way in the host's words, with its place, its count (a part of its own) and its reconnecting; the progress line alone where it gives none", () => {
-    const queued = at({ phase: 'preparing', preparing: { position: 3, progress: null } })
-    const preparing = at({ phase: 'preparing', preparing: { position: null, progress: 0.4 } })
+    const queued = at({ phase: 'ready', unavailable: { why: 'busy', retryAt: 5 } })
+    const preparing = at({ phase: 'preparing', preparing: { progress: 0.4 } })
     const translating = at({ phase: 'translating', progress: 0.25, translated: { got: 12, total: 48 } })
     expect([queued, preparing, translating].map((s) => said(s))).toEqual([
-      { kind: 'progress', text: 'queued #3' },
-      { kind: 'progress', text: 'preparing' },
+      { kind: 'progress', text: 'queued' },
+      { kind: 'progress', text: 'translating, the first time takes 1-2 minutes' },
       { kind: 'progress', text: 'translating 12 / 48' },
     ])
     expect(capsuleOf(translating, none, LANGUAGES, WORDS)?.words).toMatchObject({ prefix: 'translating ', count: 12 })
-    for (const s of [queued, preparing, translating])
+    for (const s of [preparing, translating])
       expect(said({ ...s, reconnecting: true })).toEqual({ kind: 'progress', text: 'reconnecting' })
     // (none given: no capsule, as the extension's; a stage worded and another not: that one alone)
-    for (const s of [queued, preparing, translating, { ...translating, reconnecting: true }])
+    for (const s of [preparing, translating, { ...translating, reconnecting: true }])
       expect(capsuleOf(s, none, LANGUAGES)).toBeNull()
-    expect(said(translating, { preparing: 'preparing' })).toBeNull()
-    // (rows its units start while the prepare lasts: the paper still being prepared, as the website says it)
-    expect(said({ ...translating, preparing: { position: null, progress: 0.4 } })).toEqual({
+    expect(said(translating, { reconnecting: 'reconnecting' })).toBeNull()
+    // (rows its units start while the prepare lasts: the first making still, its count not the view's)
+    expect(said({ ...translating, preparing: { progress: 0.4 } })).toEqual({
       kind: 'progress',
-      text: 'preparing',
+      text: 'translating, the first time takes 1-2 minutes',
     })
     // (a run over: nothing of it)
     expect(said(at({ phase: 'ready', reconnecting: true }))).toBeNull()
   })
-  it("the end held for the layer's first page (laying): nothing is translated then, the paper prepared as the website's page said it, never the run's count", () => {
+  it("a new paper: one stage, the translation, from its layer being made until its count shows; the making never said (the coordinator's decision 1, 2026-11-11)", () => {
+    const made = { made: true, phase: 'translating' as const }
+    const stages = [
+      at({ phase: 'preparing', made: true, preparing: { progress: 0.4 } }),
+      // (the layer landed, its units not read yet: the count not known, the first making's words still)
+      at({ ...made, translated: { got: 0, total: 0 } }),
+      at({ ...made, progress: 222 / 227, translated: { got: 222, total: 227 } }),
+    ]
+    expect(stages.map((s) => said(s))).toEqual([
+      { kind: 'progress', text: 'translating, the first time takes 1-2 minutes' },
+      { kind: 'progress', text: 'translating, the first time takes 1-2 minutes' },
+      { kind: 'progress', text: 'translating 222 / 227' },
+    ])
+    expect(stages.map((s) => stageOf(s))).toEqual(['translating', 'translating', 'translating'])
+    // (the first making's figures are the time it takes, never a count drawn in a cell of its own)
+    const one = at({
+      phase: 'preparing',
+      made: true,
+      preparing: { progress: 0 },
+      translated: { got: 1, total: 0 },
+    })
+    expect(capsuleOf(one, none, LANGUAGES, WORDS)?.words).toEqual(
+      plain('translating, the first time takes 1-2 minutes'),
+    )
+    // (the first making's end held is its wait still: the early units' rows ended while the layer is made, or the layer landed and
+    // its count is not known; once counted, an end held is a load, nothing said)
+    const held = { phase: 'translating' as const, laying: true, made: true, progress: 1 }
+    expect(said(at({ ...held, preparing: { progress: 0.5 } }))?.text).toBe(
+      'translating, the first time takes 1-2 minutes',
+    )
+    expect(said(at({ ...held, translated: { got: 0, total: 0 } }))?.text).toBe(
+      'translating, the first time takes 1-2 minutes',
+    )
+    expect(said(at({ ...held, translated: { got: 227, total: 227 } }))).toBeNull()
+    // (a run on a layer shown before this visit, its count not known: the bare stage, as before)
+    expect(
+      said(at({ phase: 'translating', translated: { got: 0, total: 0 } }), {
+        translating: (_g, _t, _c, first) => (first ? 'first' : 'bare'),
+      }),
+    ).toEqual({ kind: 'progress', text: 'bare' })
+  })
+  it("our server at capacity (the open's busy refusal, causeOf): the paper waits in line, a run's capsule with no retry, in the host's words; the extension's the refusal's words and retry as before; the visitor's rate never queued (the coordinator's decision 5, 2026-11-11)", () => {
+    const busy = at({ phase: 'ready', unavailable: { why: 'busy', retryAt: Date.now() + 30_000 } })
+    expect(stageOf(busy)).toBe('queued')
+    expect(capsuleOf(busy, none, LANGUAGES, WORDS)).toEqual({
+      kind: 'progress',
+      stage: 'queued',
+      words: plain('queued'),
+    })
+    // (no words for it, the extension's: the refusal's sentence and its retry, as before)
+    expect(said(busy, {})).toEqual({ kind: 'notNow', text: R.status.limited })
+    expect(said(busy, { limited: () => 'limit' })).toEqual({ kind: 'notNow', text: 'limit' })
+    // (the visitor's rate, our server's limit, out of reach: refusals still, never the queue)
+    for (const why of ['rate', 'refused', 'unreachable'] as const)
+      expect([
+        stageOf(at({ phase: 'ready', unavailable: { why, retryAt: 5 } })),
+        said(at({ phase: 'ready', unavailable: { why, retryAt: 5 } }))?.kind,
+      ]).toEqual([null, 'notNow'])
+  })
+  it("the end held for the layer's first page (laying): nothing is translated then, so no capsule in any host's words — a stored translation's first page is a load, the line's (the coordinator's decision 2, 2026-11-11)", () => {
     const laying = at({ phase: 'translating', laying: true, progress: 1, translated: { got: 476, total: 476 } })
-    expect(said(laying)).toEqual({ kind: 'progress', text: 'preparing' })
+    expect(said(laying)).toBeNull()
+    expect(lineOf(laying)).toEqual({ on: true, value: 1 })
+    // (our server's document not heard meanwhile is still said)
     expect(said({ ...laying, reconnecting: true })).toEqual({ kind: 'progress', text: 'reconnecting' })
     // (the extension's: no words for it, the line alone)
     expect(capsuleOf(laying, none, LANGUAGES)).toBeNull()
@@ -403,9 +484,12 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
       at({ phase: 'ready', unavailable: { why, retryAt: 5 } })
     expect(['unreachable', 'busy', 'refused'].map((w) => said(passing(w as 'busy'))?.text)).toEqual([
       'unavailable until 5',
-      'busy until 5',
+      // (busy is the queue where the host words it: decision 5; else its own words with the time, as before)
+      'queued',
       'quota until 5',
     ])
+    const { queued: _, ...noQueue } = WORDS
+    expect(said(passing('busy'), noQueue)?.text).toBe('quota until 5')
     // (the visitor's rate of asks and the network itself, each its own cause and words, with no time: the reader asks again by
     // itself, at the rate's time, or once the connection is back)
     const cause = (why: 'rate' | 'network') =>
@@ -462,9 +546,8 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
 
 describe("the capsule beside the lost original's own card (StateWords openOriginal: the website's; L11 third round, gap 5)", () => {
   const WORDS: StateWords = {
-    preparing: 'preparing',
-    queued: (n) => `queued #${n}`,
-    translating: (got, total) => `translating ${got} / ${total}`,
+    queued: 'queued',
+    translating: (got, total, _chip, first) => (first ? 'translating, first' : `translating ${got} / ${total}`),
     notNow: () => 'unavailable for now',
     noPdf: 'no pdf',
     originalLost: 'no original',
@@ -482,11 +565,11 @@ describe("the capsule beside the lost original's own card (StateWords openOrigin
       kind: 'notNow',
       text: 'unavailable for now',
     })
-    expect(said(lost({ preparing: { position: null, progress: 0.3 } }))).toEqual({
+    expect(said(lost({ preparing: { progress: 0.3 } }))).toEqual({
       kind: 'progress',
-      text: 'preparing',
+      text: 'translating, first',
     })
-    expect(said(lost({ preparing: { position: 2, progress: null } }))).toEqual({ kind: 'progress', text: 'queued #2' })
+    expect(said(lost({ unavailable: { why: 'busy', retryAt: 5 } }))).toEqual({ kind: 'progress', text: 'queued' })
     expect(said(lost({ rowsComing: true, translated: { got: 3, total: 10 } }))).toEqual({
       kind: 'progress',
       text: 'translating 3 / 10',
@@ -501,7 +584,7 @@ describe("the capsule beside the lost original's own card (StateWords openOrigin
   it("tells nothing where the card is the pane's whole answer: the extension's (no card of the original's own), a service's failure too, a load", () => {
     const states = [
       lost({ unavailable: { why: 'unreachable', retryAt: null } }),
-      lost({ preparing: { position: null, progress: 0.3 } }),
+      lost({ preparing: { progress: 0.3 } }),
       lost({ rowsComing: true, translated: { got: 3, total: 10 } }),
     ]
     const { openOriginal: _, ...extension } = WORDS
@@ -509,17 +592,14 @@ describe("the capsule beside the lost original's own card (StateWords openOrigin
       expect(said(s, extension)).toBeNull()
       expect(said({ ...s, failures: { pdf: 'network', service: 'no-key' } })).toBeNull()
     }
-    expect(said(at({ phase: 'loading', preparing: { position: null, progress: 0.3 } }))).toBeNull()
+    expect(said(at({ phase: 'loading', preparing: { progress: 0.3 } }))).toBeNull()
   })
 })
 
 describe("the original held by the host's rules (status.ts heldOf; L11's second round, gaps 7 and 8)", () => {
   const busy = { unavailable: { why: 'busy' as const, retryAt: null } }
   it("neither rule given (the extension's): never", () => {
-    for (const over of [
-      busy,
-      { narrow: true, phase: 'preparing' as const, preparing: { position: null, progress: null } },
-    ])
+    for (const over of [busy, { narrow: true, phase: 'preparing' as const, preparing: { progress: null } }])
       expect(heldOf(at({ phase: 'ready', ...over }), {})).toBe(false)
   })
   it("`refusal: 'original'`: a refusal for now with nothing laid, at any width; not one with pages laid, nor the paper's own", () => {
@@ -535,15 +615,15 @@ describe("the original held by the host's rules (status.ts heldOf; L11's second 
   it("`narrow: 'shown'`: in a narrow window while the paper is made or refused for now, until the reader chooses; a paper served, never", () => {
     const rules = { narrow: 'shown' as const }
     const narrow = { narrow: true }
-    expect(heldOf(at({ ...narrow, phase: 'preparing', preparing: { position: 2, progress: null } }), rules)).toBe(true)
+    expect(heldOf(at({ ...narrow, phase: 'preparing', preparing: { progress: null } }), rules)).toBe(true)
     // (the original still loading: a prepare told meanwhile)
-    expect(heldOf(at({ ...narrow, phase: 'loading', preparing: { position: null, progress: 0.2 } }), rules)).toBe(true)
+    expect(heldOf(at({ ...narrow, phase: 'loading', preparing: { progress: 0.2 } }), rules)).toBe(true)
     expect(heldOf(at({ ...narrow, phase: 'translating', made: true }), rules)).toBe(true)
     expect(heldOf(at({ ...narrow, phase: 'ready', ...busy }), rules)).toBe(true)
     // (a paper served, its rows read: not made this visit; the run ended; a wide window; the reader's own choice)
     expect(heldOf(at({ ...narrow, phase: 'translating' }), rules)).toBe(false)
     expect(heldOf(at({ ...narrow, phase: 'ready', made: true }), rules)).toBe(false)
-    expect(heldOf(at({ phase: 'preparing', preparing: { position: 2, progress: null } }), rules)).toBe(false)
+    expect(heldOf(at({ phase: 'preparing', preparing: { progress: null } }), rules)).toBe(false)
     expect(heldOf(at({ ...narrow, phase: 'translating', made: true, chose: true }), rules)).toBe(false)
   })
 })

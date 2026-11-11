@@ -2,7 +2,8 @@
 // region present from the first paint, so that what it says later is announced; it rises in (240 ms) and leaves lighter
 // (160 ms); a new state of the same kind changes its words in place, moving with its box (Capsule, capsule-motion.ts).
 // A load or a translation under way has no capsule: the progress line under the toolbar shows it (ProgressLine), and its
-// words are said here; a host that words a run's stages (the website's) has the capsule say them too, with the spinner.
+// words are said here; a host that words a run's stages (the website's) has the capsule say them too, with the spinner, once
+// the wait has lasted WAIT_SHOWN_MS (a wait the reader cannot perceive is not announced).
 // A host's passing words (a toast: the website's "copied") come first, in its words and sign, alone, for their time.
 // A notice has a close of its own, remembered for the visit, and its retry chip where the run stopped
 // for a reason a retry mends
@@ -58,13 +59,15 @@ export function StatusCapsule({
   const owed = parts.narrow !== 'shown' || watch.current.narrowed
   // drawn again once a retry's time has come: its clock gives way, the host's words for it drop the time
   const clock = useClock(useReader(controller, (s) => dueAt(s, Date.now())))
-  const now = useReader(controller, (s) =>
+  const wanted = useReader(controller, (s) =>
     capsuleOf(s, { noticeClosed, narrowShown: narrowShown || !owed, refusalsSeen }, parts.languages, parts.words, {
       retry: parts.retry,
       now: clock,
       ...(parts.linkOrigins ? { origins: parts.linkOrigins } : {}),
     }),
   )
+  // (a run's capsule once its wait has lasted WAIT_SHOWN_MS; every other at once)
+  const now = useWaitShown(wanted)
   // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
   const card = useReader(controller, (s) => cardOf(s, parts.reason, parts.words))
   const originalCard = useReader(controller, (s) => originalCardOf(s, parts.reason, parts.words))
@@ -117,7 +120,8 @@ export function StatusCapsule({
     <div role="status" className="capsule-slot">
       {originalCard && <span className="sr-only">{originalCard.reason}</span>}
       {card && <span className="sr-only">{card.reason}</span>}
-      {spoken && now?.kind !== 'progress' && <span className="sr-only">{spoken}</span>}
+      {/* (a run's capsule says it, once it enters; while its wait is too short to be seen, nothing says it) */}
+      {spoken && wanted?.kind !== 'progress' && <span className="sr-only">{spoken}</span>}
       {capsule && look && (
         <Drawn
           key={capsule.kind}
@@ -194,6 +198,37 @@ export function StatusCapsule({
 
 /** how long the narrow window's words are read before they leave (S-R-14; the maintainer, 2026-10-01) */
 export const NARROW_MS = 5000
+/** how long a run's wait lasts before its capsule enters (the coordinator's decision 3, 2026-11-11): a wait the reader cannot
+ *  perceive is not announced. Of the family of the page's mark, which PDF.js shows after 400 ms (`--loading-icon-delay`), and of
+ *  the translating marks' 0.3 s delay (styles.ts `--axt-tr-delay`) */
+export const WAIT_SHOWN_MS = 400
+
+/**
+ * A run's capsule (a host's words for its stage) once its wait has lasted WAIT_SHOWN_MS: none before, and none at all for a wait
+ * that ended sooner; once in, it stays through every change of its stage and words (a count that pauses and moves again, our
+ * server heard again) until no run's capsule is wanted, when it leaves at once. Every other capsule (a refusal, a notice, a
+ * toast, an error) at once
+ */
+export function useWaitShown(wanted: Capsule | null): Capsule | null {
+  const since = useRef<number | null>(null)
+  const shown = useRef(false)
+  const [, redraw] = useState(0)
+  const waits = wanted?.kind === 'progress'
+  if (!waits) {
+    since.current = null
+    shown.current = false
+  } else if (since.current === null) since.current = Date.now()
+  const left = waits && !shown.current ? (since.current as number) + WAIT_SHOWN_MS - Date.now() : 0
+  if (waits && left <= 0) shown.current = true
+  const pending = waits && !shown.current
+  // biome-ignore lint/correctness/useExhaustiveDependencies: armed as the wait begins, its time read from the wait's start
+  useEffect(() => {
+    if (!pending) return
+    const t = setTimeout(() => redraw((n) => n + 1), left)
+    return () => clearTimeout(t)
+  }, [pending])
+  return pending ? null : wanted
+}
 
 /** what the narrow window's words are owed by, where the switch shows the translation alone (the website's rule, its owner's of
  *  2026-11-03): a window that showed the paper side by side (`readWide`: some pages drawn, side by side on screen, the window wide)

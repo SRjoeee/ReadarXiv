@@ -6,6 +6,7 @@
 import { writeFileSync } from 'node:fs'
 import type { Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
+import { textOf } from '../../src/chrome/capsule-words.ts'
 import { capsuleOf, type Capsule } from '../../src/chrome/status.ts'
 import { eventsOf } from '../../src/chrome/events.ts'
 import { INITIAL, reduce, type ReaderState as ChromeState } from '../../src/chrome/model.ts'
@@ -28,12 +29,13 @@ import { LANGUAGES } from './parts.ts'
 
 const ZH = 'zh-Hans'
 const PREFS: Prefs = { ...DEFAULTS, display: 'bilingual', target: ZH }
-/** the website's words for a run's stages (its v2 words.ts: the bare word before a count) */
+/** the website's words for a run's stages (its v2 words.ts: the first making's words, the bare word before a count) */
+const FIRST = 'translating, the first time takes 1-2 minutes'
 const WORDS: StateWords = {
-  queued: () => 'queued',
-  preparing: 'preparing',
+  queued: 'queued',
   reconnecting: 'reconnecting',
-  translating: (got, total) => (total > 0 ? `translating ${got}/${total}` : 'translating'),
+  translating: (got, total, _chip, first) =>
+    first ? FIRST : total > 0 ? `translating ${got}/${total}` : 'translating',
 }
 
 let digests = 0
@@ -101,6 +103,8 @@ type Beat =
   | { at: number; opened: true }
   | { at: number; laid: number }
   | { at: number; set: Partial<Prefs> }
+  /** the look's timer fired: our server's wait after a refusal over, the open asked again */
+  | { at: number; wake: true }
 
 interface Shown {
   at: number
@@ -108,6 +112,8 @@ interface Shown {
   stage: string
   /** the counts it showed, each once in turn */
   counts: [number, number][]
+  /** its words, each once in turn, with the time they came */
+  said: [number, string][]
   /** the count the chrome held as it went (the wait's end told with its count) */
   end?: [number, number]
 }
@@ -118,7 +124,11 @@ interface Shown {
  * target, each once a ticket, the target's rows let go for another target), the reader's state told as reader.ts tells it,
  * folded and drawn. Returns each appearance of a run's capsule: its stage, when it came and went, the counts it showed
  */
-function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}) {
+function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}, o: { busy?: number; rate?: number } = {}) {
+  /** the opens our server refuses first: for its capacity (the admission's busy, in the open's answer), or for the visitor's
+   *  rate of asks (a 429 that says so) */
+  let busy = o.busy ?? 0,
+    rate = o.rate ?? 0
   let s: State = init({
     paper: { id: '2610.00001', version: 1 },
     here: false,
@@ -138,6 +148,8 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}) {
   const shown: Shown[] = []
   const live = (slot: string) => [...resources(s)].find(([, spec]) => spec.slot === slot)?.[0] ?? null
   const counted: { at: number; got: number; total: number }[] = []
+  /** every capsule drawn, by kind, with the time */
+  const kinds: [number, string][] = []
   /** the units of the layer shown, as reader.ts holds them once its head is read */
   const viewUnits = () => {
     if (s.layer.s !== 'ready' || headRead !== s.layer.catalog.sha256) return null
@@ -163,9 +175,11 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}) {
       layer:
         s.layer.s === 'ready'
           ? { s: 'ready', laid: s.panes.laid, total: 4, asOriginal: 0 }
-          : s.layer.s === 'preparing'
-            ? { s: 'preparing', position: s.layer.position, progress: s.layer.progress }
-            : { s: 'none' },
+          : s.link.s === 'stopped'
+            ? { s: 'refused', why: s.link.why, retryAt: s.link.retryAt }
+            : s.layer.s === 'preparing'
+              ? { s: 'preparing', stage: s.layer.stage }
+              : { s: 'none' },
       rows:
         r.s === 'none'
           ? { target: r.target, from: 'server', s: 'none' }
@@ -199,6 +213,7 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}) {
       LANGUAGES,
       WORDS,
     )
+    if (c && kinds.at(-1)?.[1] !== c.kind) kinds.push([now, c.kind])
     const stage = c?.kind === 'progress' ? c.stage : null
     const last = shown.at(-1)
     const open = last && last.until === null ? last : null
@@ -206,8 +221,10 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}) {
       open.until = now
       open.end = [chrome.translated.got, chrome.translated.total]
     }
-    if (stage && (!open || open.stage !== stage)) shown.push({ at: now, until: null, stage, counts: [] })
+    if (stage && (!open || open.stage !== stage)) shown.push({ at: now, until: null, stage, counts: [], said: [] })
     const cur = shown.at(-1)
+    if (c && stage && cur && cur.until === null && cur.said.at(-1)?.[1] !== textOf(c.words))
+      cur.said.push([now, textOf(c.words)])
     if (stage === 'translating' && cur && cur.until === null) {
       const { got, total } = chrome.translated
       const pair: [number, number] = [got, total]
@@ -227,7 +244,19 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}) {
     const composed = live('composed')
     if (composed && s.layer.s === 'ready' && !s.layer.open) queue.push({ i: 'composed.opened', t: composed })
     const open = live('open')
-    if (open && s.doc) queue.push({ i: 'open.answered', t: open, doc: s.doc })
+    if (open && s.doc) {
+      const refused =
+        busy > 0
+          ? { why: 'busy' as const, afterMs: 30_000 }
+          : rate > 0
+            ? { why: 'rate' as const, afterMs: 60_000 }
+            : null
+      if (refused?.why === 'busy') busy--
+      else if (refused) rate--
+      queue.push(
+        refused ? { i: 'open.answered', t: open, doc: null, refused } : { i: 'open.answered', t: open, doc: s.doc },
+      )
+    }
     const t = live('rows')
     if (s.rows.s === 'arriving' && t) {
       if (reading?.t !== t) {
@@ -270,12 +299,14 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}) {
     } else if ('doc' in b) {
       const link = live('link')
       if (link) feed({ i: 'paper', t: link, doc: b.doc })
+    } else if ('wake' in b) {
+      if (s.link.s === 'stopped' && s.link.timer) feed({ i: 'time', t: s.link.timer, now })
     } else if ('laid' in b) feed({ i: 'panes.laid', laid: b.laid, total: 4 })
     else feed({ i: 'cmd.set', prefs: b.set })
   }
   const last = shown.at(-1)
   if (last && last.until === null) last.until = now
-  return { shown, counted, chrome, target: targetOf(s) }
+  return { shown, counted, chrome, kinds, target: targetOf(s) }
 }
 
 const stages = (shown: Shown[], stage: string) => shown.filter((x) => x.stage === stage)
@@ -628,17 +659,46 @@ function switched(stored: boolean) {
   return visit(store, beats)
 }
 
+/** a new paper opened while our server is at capacity: its open refused busy twice (30 s each, in the open's answer), asked again
+ *  by itself, then admitted and prepared; `rate`: the visitor's rate of asks instead (a 429 that says so), refused once */
+function queuedFirst(o: { busy?: number; rate?: number }) {
+  const store: Store = { units: new Map(), rows: new Map() }
+  const early = unitsObject(store, range(0, 20))
+  const none = { state: 'none' as const, why: null, retryAt: null, stage: null, units: [] }
+  const running = (stage: string, units: Ref[] = []) => ({
+    ...none,
+    state: 'running' as const,
+    stage,
+    units,
+    attempt: 1,
+  })
+  const tr = { [ZH]: target('none', { attempt: 0 }) }
+  return visit(
+    store,
+    [
+      { at: 66, opened: true },
+      { at: 900, doc: doc(1, { prepare: none, targets: {} }) },
+      { at: 30_900, wake: true },
+      { at: 60_900, wake: true },
+      { at: 61_500, doc: doc(2, { prepare: running('fetching'), targets: tr }) },
+      { at: 70_000, doc: doc(3, { prepare: running('compiling', [early]), targets: tr }) },
+    ],
+    {},
+    o,
+  )
+}
+
 describe('the capsule over whole visits (the website’s words): it says what the view shown waits for', () => {
-  it('a paper prepared again after a deploy, its rows stored: no "translating" at all, its runs on units the view holds', () => {
+  it('a paper prepared again after a deploy, its rows stored: no capsule at all, its runs on units the view holds, its first page a load', () => {
     const v = reprepared()
     report('(b) re-prepared, stored rows', v.shown)
-    expect(stages(v.shown, 'translating')).toEqual([])
-    steady(v.shown)
+    expect(v.shown).toEqual([])
   })
   it('the same paper where its new layer has units no layer had: one "translating", over the new layer, until their rows come', () => {
     const v = reprepared(5)
     report('(b5) re-prepared, 5 new units', v.shown)
     const t = stages(v.shown, 'translating')
+    expect(v.shown).toHaveLength(1)
     expect(t).toHaveLength(1)
     // (from the new layer's landing, 471 of its 476 held, until the last window brings the 5: it leaves as they are held)
     expect([t[0]?.at, t[0]?.until]).toEqual([98803, 107000])
@@ -646,36 +706,42 @@ describe('the capsule over whole visits (the website’s words): it says what th
     expect(t[0]?.end).toEqual([476, 476])
     steady(v.shown)
   })
-  it('a settled paper opened again: no "translating" (its stored rows read are no run)', () => {
+  it('a settled paper opened again: no capsule at all (its stored rows read are no run, its first page a load)', () => {
     const v = settled()
     report('(c) settled reopened', v.shown)
-    expect(stages(v.shown, 'translating')).toEqual([])
+    expect(v.shown).toEqual([])
   })
-  it('a new paper\'s first open: preparing, then one "translating" over the layer shown, from 222 of 227 until 227 are held', () => {
+  it('a new paper\'s first open: one "translating", the first making\'s words from the prepare told until the layer shows, then its count over the layer shown, from 222 of 227 until 227 are held; never "preparing"', () => {
     const v = first()
     report('(a) new paper', v.shown)
     const t = stages(v.shown, 'translating')
+    expect(v.shown).toHaveLength(1)
     expect(t).toHaveLength(1)
+    // (one wait, the translation's, from the prepare told to the last of the 5 held: the making is never said)
+    expect([t[0]?.at, t[0]?.until]).toEqual([2132, 100000])
     // (nothing counted before the layer lands: the early units' run is the prepare's, the view shows no layer yet)
-    expect(t[0]?.at).toBe(90049)
+    expect(t[0]?.said).toEqual([
+      [2132, FIRST],
+      [90049, 'translating 222/227'],
+    ])
     // (222 of 227 at the landing; the restated rows of attempt 2's windows move nothing; it leaves as the 5 are held)
-    expect(t[0]?.counts).toEqual([[222, 227]])
-    expect([t[0]?.until, t[0]?.end]).toEqual([100000, [227, 227]])
-    expect(stages(v.shown, 'preparing')[0]?.at).toBe(2132)
+    expect(t[0]?.counts.filter(([, total]) => total > 0)).toEqual([[222, 227]])
+    expect(t[0]?.end).toEqual([227, 227])
     steady(v.shown)
   })
-  it('a toggle that shows more of what was made: no "translating"', () => {
+  it('a toggle that shows more of what was made: no capsule at all', () => {
     const v = toggled()
     report('(d) toggle on', v.shown)
-    expect(stages(v.shown, 'translating')).toEqual([])
+    expect(v.shown).toEqual([])
   })
-  it('a language switched to a target with stored rows: no "translating"; to a new target: one, 0 of 120 to 60, until all 120 are held', () => {
+  it('a language switched to a target with stored rows: no capsule; to a new target: one, 0 of 120 to 60, until all 120 are held', () => {
     const a = switched(true)
     report('(e) switch, stored', a.shown)
-    expect(stages(a.shown, 'translating')).toEqual([])
+    expect(a.shown).toEqual([])
     const b = switched(false)
     report('(f) switch, new target', b.shown)
     const t = stages(b.shown, 'translating')
+    expect(b.shown).toHaveLength(1)
     expect(t).toHaveLength(1)
     expect(t[0]?.counts).toEqual([
       [0, 120],
@@ -683,6 +749,23 @@ describe('the capsule over whole visits (the website’s words): it says what th
     ])
     expect(t[0]?.end).toEqual([120, 120])
     steady(b.shown)
+  })
+  it("a new paper whose open our server refuses for its capacity: \"queued\" from the refusal, with no retry, asked again by itself, then the first making's words; never a refusal's capsule (the coordinator's decision 5, 2026-11-11)", () => {
+    const v = queuedFirst({ busy: 2 })
+    report('(q) busy, then made', v.shown)
+    expect(v.shown.map((x) => [x.stage, x.at, x.until])).toEqual([
+      ['queued', 900, 61_500],
+      ['translating', 61_500, 70_000],
+    ])
+    expect(v.shown[0]?.said).toEqual([[900, 'queued']])
+    expect(v.shown[1]?.said).toEqual([[61_500, FIRST]])
+    expect(v.kinds.map(([, k]) => k)).toEqual(['progress'])
+  })
+  it("the visitor's rate of asks is not the queue: its refusal's capsule, as the sibling lane words it", () => {
+    const v = queuedFirst({ rate: 1 })
+    report('(r) rate, then made', v.shown)
+    expect(v.kinds[0]).toEqual([900, 'notNow'])
+    expect(stages(v.shown, 'queued')).toEqual([])
   })
   // (AXT_CAPSULE_TABLE=<file>: the appearances of every case written there, the lane's table)
   it('writes the table where asked', () => {

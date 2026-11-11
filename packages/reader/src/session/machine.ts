@@ -137,8 +137,6 @@ export interface Doc {
       }
     | undefined
   >
-  position?: number | null
-  progress?: number | null
 }
 
 export type OriginalRegion =
@@ -158,7 +156,9 @@ export type LinkRegion =
   | { s: 'stopped'; why: StopWhy; retryAt: number | null; wake: number | null; timer: Ticket | null }
 export type LayerRegion =
   | { s: 'none' }
-  | { s: 'preparing'; stage: string | null; position: number | null; progress: number | null; units: Ref[] }
+  /** `stage`: the prepare's, as our server's record names it (PREPARE_STAGES: fetching, compiling, units, laying-out, bundle), null
+   *  before the first */
+  | { s: 'preparing'; stage: string | null; units: Ref[] }
   | {
       s: 'ready'
       catalog: Ref
@@ -434,14 +434,7 @@ function layerOfDoc(s: State, d: Doc): LayerRegion {
   }
   if (d.layer) return { s: 'refused', why: 'outdated', retryAt: null, timer: null }
   const p = d.prepare
-  if (p.state === 'running')
-    return {
-      s: 'preparing',
-      stage: p.stage,
-      position: d.position ?? null,
-      progress: d.progress ?? null,
-      units: p.units,
-    }
+  if (p.state === 'running') return { s: 'preparing', stage: p.stage, units: p.units }
   if (p.state === 'failed')
     return {
       s: 'refused',
@@ -541,14 +534,17 @@ const openWanted = (s: State) => needsOf(s).some((n) => n.at === null && !s.open
  *  answered again and again backs off: its wait doubled each time, at most BACKOFF_MAX_MS or the time our server names, the
  *  larger (a 429 naming 0 s was asked again at once, without end, once these two stopped counting toward REFUSED_ASKS) */
 function refusedFor(s: State, why: 'busy' | 'limit' | 'rate', afterMs: number | null | undefined) {
-  // (the visitor's rate of asks is no limit to stop at: its wait is a minute, waited out and asked again by itself)
-  if (why !== 'rate') s.refusals++
+  // (the visitor's rate of asks is no limit to stop at: its wait is a minute, waited out and asked again by itself; our server's
+  // capacity neither: the paper waits in line, asked again at our server's time for as long as it answers so, the coordinator's
+  // decision 5 of 2026-11-11; both backed off as said above)
+  if (why === 'limit') s.refusals++
   const named = typeof afterMs === 'number' && Number.isFinite(afterMs) && afterMs >= 0 ? afterMs : WAIT_MIN_MS
   const retryAt = s.now + named
   const wait = Math.max(WAIT_MIN_MS, named)
   s.paced = why === 'limit' ? 0 : s.paced + 1
   const own = why === 'limit' ? wait : Math.min(Math.max(BACKOFF_MAX_MS, wait), wait * 2 ** (s.paced - 1))
-  s.link = { s: 'stopped', why, retryAt, wake: s.refusals > REFUSED_ASKS ? null : s.now + own, timer: null }
+  const wake = why === 'busy' || s.refusals <= REFUSED_ASKS ? s.now + own : null
+  s.link = { s: 'stopped', why, retryAt, wake, timer: null }
 }
 /** the network itself failed: asked again by itself, at once when the browser comes online (env.online), and meanwhile, while it
  *  says it is online, at a growing pace (a second, doubled to thirty at most); no time said */

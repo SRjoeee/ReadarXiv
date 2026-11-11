@@ -35,8 +35,9 @@ export type Capsule =
    *  none where the host words none (the progress line alone shows it, the maintainer's of 2026-09-25). `show`: the chip that
    *  shows the translation (StateWords `showTranslation`), where it is not on screen and some of it is there */
   | { kind: 'progress'; stage: Stage; words: CapsuleWords; show?: true }
-/** where a run under way stands, as a host's words say it */
-export type Stage = 'queued' | 'preparing' | 'translating' | 'reconnecting'
+/** what the reader waits for while a run is under way, as a host's words say it: its turn at our server, the translation (the
+ *  paper's first making included: what the reader waits for is its translation, never the making), our server heard again */
+export type Stage = 'queued' | 'translating' | 'reconnecting'
 /** why the bilingual version is not to be had now, the causes told apart (PDF-READER §8): the visitor's new papers spent
  *  (`quota`), our server at capacity (`busy`), the visitor's rate of asks (`rate`), the network itself (`network`), our server
  *  out of reach or at fault (`server`) */
@@ -83,20 +84,22 @@ export interface Seen {
  *  the service's beside it: the translation's state is told in the capsule beside that card, as the website's page tells it */
 const originalApart = (state: ReaderState, words: StateWords): boolean =>
   state.phase === 'failed' && !!words.openOriginal && state.failures.pdf !== null && state.failures.service === null
-/** a run under way and where it stands: our server's document not heard for now; the paper's layer being made while its
- *  prepare lasts (its place in the queue where our server names one), the rows its units start meanwhile counted under it,
- *  as the website says it, and so while the layer lays its first page where the translation shows; else the paragraphs
- *  translated. Null where none is under way. A run under the original's failure (the phase held by it) by its own marks: a
- *  prepare told, rows coming */
+/** a run under way and what the reader waits for: its turn, our server at capacity (`causeOf` busy: the reader asks again by
+ *  itself at our server's time); our server's document heard again; else the translation, the paper's layer being made included (the first time anyone opens it: the
+ *  website says the time a first one takes, `first`). Null where none is under way, and where nothing a run brings is
+ *  waited for: the end held for the layer's first page (`laying`) translates nothing, a stored translation's first page is a
+ *  load, which the progress line and the page's marks show as they show the original's (PDF-READER §6.6). A run under the
+ *  original's failure (the phase held by it) by its own marks: a prepare told, rows coming */
 export function stageOf(state: ReaderState): Stage | null {
   const apart =
     state.phase === 'failed' && state.failures.pdf !== null && (state.preparing !== null || state.rowsComing)
+  // (our server at capacity: the paper waits its turn, asked again by itself; the coordinator's decision 5, 2026-11-11)
+  if (causeOf(state) === 'busy') return 'queued'
   if (!running(state) && !apart) return null
   if (state.reconnecting) return 'reconnecting'
-  if (state.preparing) return state.preparing.position != null ? 'queued' : 'preparing'
-  // (the end held for the layer's first page where the translation shows, `laying`: nothing is translated then, and the website's
-  // page said the paper is being prepared until that page is there, its runStage over swaps.ts `laying`)
-  if (state.laying) return 'preparing'
+  // (the first making's end held is still its wait: the early units' rows ended while the layer is made, or the layer landed and
+  // its count is not known yet)
+  if (state.laying && !firstOf(state)) return null
   return 'translating'
 }
 /** some of the translation is there to be read: a page laid, or the layer's pages known and rows of them in (the website's
@@ -108,15 +111,23 @@ export const translationThere = (state: ReaderState): boolean =>
  *  reader/Toolbar.tsx), whose bar is then its page's for a paper arXiv does not have (parts.tsx `bar`) */
 export const nothingShown = (state: ReaderState): boolean =>
   state.failures.pdf !== null && !translationThere(state) && (!state.available || state.unavailable !== null)
+/** the paper's first making: its layer being made (no layer to show yet, the first time anyone opens it), or made this visit and
+ *  the count of its translation not known yet (the layer's units not read): one wait, the translation's, from the open until the
+ *  count shows (the coordinator's decision 1, 2026-11-11) */
+export const firstOf = (state: ReaderState): boolean =>
+  state.preparing !== null || (state.made && state.translated.total <= 0)
 /** a run's stage in the host's words, or null where it gives none; `chip`: the chip that shows the translation beside them */
 function stageWords(stage: Stage, state: ReaderState, words: StateWords, chip: boolean): CapsuleWords | null {
-  if (stage === 'queued') return words.queued ? plain(words.queued(state.preparing?.position ?? 0)) : null
+  if (stage === 'queued') return words.queued ? plain(words.queued) : null
   if (stage === 'translating') {
+    if (!words.translating) return null
     const { got, total } = state.translated
-    return words.translating ? withCount(words.translating(got, total, chip), got) : null
+    // (the first making's words hold no count: their figures are the time a first one takes)
+    const first = firstOf(state)
+    const text = words.translating(got, total, chip, first)
+    return first ? plain(text) : withCount(text, got)
   }
-  const w = words[stage]
-  return w ? plain(w) : null
+  return words.reconnecting ? plain(words.reconnecting) : null
 }
 
 /** the link beside a bilingual version not to be had: arXiv's HTML version, or where the host says (its address and words), or
@@ -185,8 +196,8 @@ export function capsuleOf(
   // (the layer-only plan's "Offline, drafted"), each cause in its own words
   const cause = causeOf(state)
   // (a 429 of the visitor's new papers is our server's limit, said as such with its time: past the run's few waits it asks no
-  // more by itself, and the reader's retry is what asks again, #88 E5; busy, its capacity, said as the limit unless the host
-  // words it; the rate of asks and the network, which the reader waits out by itself, with no time)
+  // more by itself, and the reader's retry is what asks again, #88 E5; busy, its capacity, the queue where the host words it
+  // (stageOf), else said as the limit; the rate of asks and the network, which the reader waits out by itself, with no time)
   if (!running(state) && cause) {
     const at = state.unavailable?.retryAt ?? null
     const text =
@@ -196,7 +207,7 @@ export function capsuleOf(
           ? (words.network ?? R.status.notNow)
           : cause === 'rate'
             ? (words.rate ?? R.status.limited)
-            : ((cause === 'busy' ? words.busy?.(at) : undefined) ?? words.limited?.(at) ?? R.status.limited)
+            : (words.limited?.(at) ?? R.status.limited)
     const notNow = plain(text)
     // (its retry offered at once, or at its time where the host's rule says so: a retry before it asks nothing)
     const wait = withheld(state, rules) ? { wait: true as const } : {}
@@ -231,8 +242,8 @@ export function spokenOf(state: ReaderState): string {
  * The progress line under the toolbar, all that shows a load or a translation under way (the maintainer, 2026-09-25):
  * one line over the whole process, which never starts again (the maintainer asked why it ran twice, 2026-10-02;
  * ProgressLine holds the longest it reached) — the PDF's download its first stretch when a translation follows it (all of
- * it when the original alone is shown), then, where the paper's layer is being prepared, half the rest as its prepare
- * comes along, then the paragraphs translated to the end
+ * it when the original alone is shown), then, where the paper's layer is being prepared, half the rest by the prepare's
+ * stage, then the paragraphs translated to the end, from where the prepare left it (the coordinator's decision 4, 2026-11-11)
  */
 export interface Line {
   on: boolean
@@ -241,16 +252,24 @@ export interface Line {
 /** the line's share for the download where a translation follows it, and the prepare's of the rest */
 const DOWNLOAD = 0.15,
   PREPARE = 0.5
+/** where the prepare's stretch ends, and the translation that follows it in the same process starts */
+const PREPARED = DOWNLOAD + (1 - DOWNLOAD) * PREPARE
 /** `held`: the original held on screen by the host's rules (heldOf): while the paper is made the line is the original's load, whole
  *  once it is read, as the website's page draws it there (its phase still the original's loading in the original's display, the
- *  maintainer's ruling that nothing a website reader sees changes at the cut-over: L11 third round, gap 3) */
-export function lineOf(state: ReaderState, held = false): Line {
+ *  maintainer's ruling that nothing a website reader sees changes at the cut-over: L11 third round, gap 3). `prepared`: this
+ *  process of the line had the paper's first making (ProgressLine): the translation takes what remains after the prepare's
+ *  stretch, never a share of the whole that leaves the line standing still; a process without one keeps the download's base */
+export function lineOf(state: ReaderState, held = false, prepared = false): Line {
   if (held && running(state)) return { on: true, value: state.loaded }
   if (state.phase === 'loading')
     return { on: true, value: state.loaded * (state.display === 'original' ? 1 : DOWNLOAD) }
-  if (state.phase === 'preparing')
-    return { on: true, value: DOWNLOAD + (1 - DOWNLOAD) * PREPARE * (state.preparing?.progress ?? 0) }
-  return { on: running(state), value: DOWNLOAD + (1 - DOWNLOAD) * state.progress }
+  // (the prepare by its stage; its early units' run ended meanwhile, the end held, is the prepare's still)
+  if (state.phase === 'preparing' || (state.laying && state.preparing))
+    return { on: running(state), value: DOWNLOAD + (PREPARED - DOWNLOAD) * (state.preparing?.progress ?? 0) }
+  // (the layer of the first making landed and the count of its translation not known yet: the prepare's end)
+  if (running(state) && firstOf(state)) return { on: true, value: PREPARED }
+  const base = prepared ? PREPARED : DOWNLOAD
+  return { on: running(state), value: base + (1 - base) * state.progress }
 }
 
 /** a refusal for now with nothing of the translation laid: the bilingual version not to be had now, and none of it on screen */

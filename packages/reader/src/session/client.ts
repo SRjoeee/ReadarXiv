@@ -241,8 +241,6 @@ export function docOf(x: unknown): Doc | null {
       ? { ...d.layer, units: Array.isArray(d.layer.units) ? d.layer.units : [d.layer.units as unknown as Ref] }
       : null,
     targets: d.targets ?? {},
-    position: d.position ?? null,
-    progress: d.progress ?? null,
   }
 }
 /** a 429's word, as our server's body says it: the visitor's rate of asks (worker v2 routes.ts `rate-limited`), else its

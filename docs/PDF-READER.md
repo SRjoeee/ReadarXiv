@@ -366,6 +366,13 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
     widths. Measured frame by frame in Chromium, Firefox and WebKit (`tests/e2e/probes/capsule.mjs`).
   - **Reduced motion**: opacity with the 2 px blur, at once; nothing slides; the width snaps, growing at once and
     shrinking once the old words have gone (150 ms); the spinner stands (the maintainer, 2026-10-04).
+  - **A run's capsule enters once its wait has lasted 400 ms** (`WAIT_SHOWN_MS`, `StatusCapsule.tsx`; the coordinator's
+    decision 3, 2026-11-11): a wait the reader cannot perceive is not announced. A wait that ends sooner shows nothing
+    and says nothing to a screen reader; once in, the capsule stays through every change of its stage and words (a count
+    that pauses and moves again, our server heard again) and leaves at once when no run's capsule is wanted. It is the
+    family of the page's mark, which PDF.js draws after 400 ms (`--loading-icon-delay`), and of the translating marks'
+    0.3 s. A refusal, an error, a notice and a toast are not delayed. The case it was made for: a stored translation's
+    first page and a settled paper's reopening, under a second each on staging, said a run's word every time.
   - **What a screen reader is told**: the words' cell is `aria-hidden`; the sentence is told whole (or `spoken`, other
     words, where it holds a count said once a stage) in a line of its own, once per change of that text. A language's
     own name (S-R-13) is a part drawn in its own `lang` (`withPart`; Devin on #313).
@@ -379,6 +386,27 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
   the status region. (The harness's fifth round moved the progress into a fill of the capsule, ink at 8 %, with the
   status words; the maintainer asked for the line back, 2026-09-25 — the status words were what had to leave the
   header, not the line — and then for no capsule while it runs: the line says it.)
+- **The prepare on the line** (the coordinator's decision 4, 2026-11-11): where a paper's layer is made in the process,
+  the half of the line after the download is the prepare's, and the line moves by the stage our server's record names
+  (`prepare.stage`, `events.ts` `PREPARE_PLACES`): each stage at a fixed place on that stretch, where it starts in the time
+  a prepare takes, the mean of the two staging timelines of 2026-11-11 (a new paper's, 2610.20266v1, 87.9 s; a paper
+  prepared again after a deploy, 2610.21924v1, 95.6 s). No stage names on screen and no time-based creeping; it never
+  runs back. The translation after it takes what remains, from the prepare's end to the whole line; a process without a
+  prepare keeps the download's base (the translation from 15 %). Until then the reader read a place in a queue and a
+  progress the record does not carry, so the line stood at 15 % for a new paper's whole prepare (88 s on staging), and
+  the early units' run ending while the layer was made filled it at 36 s.
+
+  | Stage | Its start in the two timelines | Its place on the prepare's stretch | On the line |
+  |---|---|---|---|
+  | (told, none yet) | 0 % | 0 | 15 % |
+  | fetching | 2.4 %, 1.4 % | 0.02 | 15.9 % |
+  | compiling | 12.9 %, 11.2 % | 0.12 | 20.1 % |
+  | units | 71.5 %, 33.2 % | 0.52 | 37.1 % |
+  | laying-out | 79.7 %, 55.9 % | 0.68 | 43.9 % |
+  | bundle | 95.1 %, 99.0 % | 0.97 | 56.2 % |
+  | the layer shown, its count not known | | the stretch's end | 57.5 % |
+  | the translation | | | 57.5 % to 100 % by the share translated |
+
 - The paragraphs that failed are told once the run has ended, not while it runs.
 - **A translation under way is what the view shown waits for**, not our server's record of its runs (`session/rows.ts`
   `viewOf`, told as the reader state's `rows.waits`). One of the units of the layer shown that the paper does not keep
@@ -392,9 +420,11 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
   2610.21924v1 opened after a deploy said "translating" three times over a paper already on screen. Its count went from
   476 of 393 to 0 of 0 to 320 of 476: the rows the tab held, over each attempt's total. The view's wait is over once
   every unit shown holds its translation, though a run that restates them may go on. The end held for the layer's
-  first page (`laying`) translates nothing, and the website's capsule says the paper is being prepared until that page
-  is there, as its page said it (its `runStage` over `laying`). The layer's units not read yet, a run under way waits
-  while nothing is laid (a first open's: its count comes with the head).
+  first page (`laying`) translates nothing, so no capsule says it, in any host's words: a stored translation's first
+  page is a load, which the progress line and the page's marks show as they show the original's (the coordinator's
+  decision 2 of 2026-11-11; until then the website's capsule said the paper was being prepared there, 0.7 s on every
+  reopen of a settled paper). The layer's units not read yet, a run under way waits while nothing is laid (a first open's: its count comes
+  with the head).
 - **A notice** carries a chip action and a close button, whose tooltip stands above it; closing it is remembered for this paper's visit, each notice apart — the partial one's close does not close the count of failed passages it stood before (#314).
 - **Two notes that are not a notice**: settings that cannot be read stand for as long as it is so, with a link to the settings page and no close (UI.md S-R-21); a write storage refused is told with the settings page's sentence until it is closed or a later write of this page goes through (S-R-22).
 - **When the translation's pane has nothing to show**, the same anatomy is a card centred in that pane (300 px, 14 px
@@ -422,6 +452,23 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
     translation over the original's bytes, so that pane has nothing else to show (today's page drew the translation from
     its own files and left the card to the original's pane). The translation's card, the service's, is due at the
     service's time. Without the word, the translation's pane's card with its retry.
+  - **One word for the wait** (the coordinator's decision 1, 2026-11-11, after the owner found the staging prompts
+    confusing): a status says what the reader waits for, never what the system is doing. The paper's first making (its
+    layer being made, the first time anyone opens it, until the count of its translation is known: `status.ts`
+    `firstOf`) is the stage `translating`, its words the host's `translating(got, total, chip, first)` with `first`: the
+    website says the translation with the time a first one takes, and then the count as before. No stage says the
+    paper is being prepared; a screen reader is told the stage once, the first making's words, since the count that
+    follows is the same stage. The capsule has no quieter part for the hint (its cells are the count and a part in
+    another language, both in the words' ink), so the hint is one sentence with the stage's word.
+  - **Waiting in line** (`queued`; the coordinator's decision 5, 2026-11-11): our server at capacity refuses the open
+    `busy` in its answer, with a time (30 s); the reader asks again by itself at that time for as long as it is answered
+    so, never counted with the limit's 429s (`REFUSED_ASKS`). Where the host words the queue (the website), it is a run's
+    capsule, `causeOf(state) === 'busy'` the stage `queued`: the spinner, no retry, the 400 ms of every run's, and the
+    first making's words follow it in the same capsule once the open is taken. The extension gives no words for it, so its
+    capsule is the refusal's as before (S-R-26's words and retry). The visitor's rate of asks (a 429 that says so) is never
+    the queue. Before this, our server named no place in a queue and the reader read one the record does not carry, so
+    the queue's words could not show; a busy refusal said the translation was unavailable for now, and stopped asking
+    after three.
   - `showTranslation`: the run's capsule carries a chip that shows the translation where it is not on screen and some of
     it is there (the original's display, or the original held for the narrow window), pressing it the reader's own
     choice.
@@ -559,8 +606,8 @@ No state that tells the reader nothing is shown (no "done").
 |---|---|---|
 | Reading | 原文; a translation ready; a stored translation shown, offline included | nothing |
 | Loading | a large PDF is loading | the progress line by the share downloaded, its first stretch; 正在加载 said to screen readers |
-| Preparing | the paper's bilingual files are being made (our server's prepare, a paper no reader opened before) | the original; the progress line's first half after the download, by the prepare's progress; 正在准备 said to screen readers (S-R-23) |
-| Translating | the paper's paragraphs being translated by the service chosen | the same line on, by the share of paragraphs done; 正在翻译 said to screen readers; each page laid on the right as its paragraphs come, the original's page until then |
+| Preparing | the paper's bilingual files are being made (our server's prepare, a paper no reader opened before) | the original; the progress line's first half after the download, by the prepare's stage (§6.6); 正在准备 said to screen readers (S-R-23); the website's capsule says the translation the reader waits for, with the time a first one takes (§6.6) |
+| Translating | the paper's paragraphs being translated by the service chosen | the same line on, by the share of paragraphs done; 正在翻译 said to screen readers; each page laid on the right as its paragraphs come, the original's page until then. The paragraphs counted are those of the layer on screen that "What to translate" shows translated; one whose translation is already held is done, and a run that only restates them is not shown |
 | Not to be had now | Read arXiv's website out of reach, at its limit, or the network itself down (§8.1: each cause its own words) | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24); passing, not remembered; a paper whose files this machine keeps opens without it |
 | Some paragraphs failed | a translation with gaps: rows that are none, or a run that ended failed (§8.1) | capsule: {n} 处翻译失败 · 重试 · close |
 | Language not supported | the shared target language is not one of the reader's | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the reader's translates |
@@ -570,9 +617,32 @@ No state that tells the reader nothing is shown (no "done").
 | Settings cannot be read | storage did not answer in a page's first 1,500 ms, or its value cannot be used | the defaults in use and the PDF opened on them, not held for the storage; capsule: 设置读取失败，当前使用默认设置 · 设置, for as long as it is so, beside an address with no paper's card too; the controls that write the settings greyed, with the reason in their tooltips; the menus keep their places |
 | Narrow window | 对照 chosen, the document area under 840 px (§5) | the translation alone; capsule, once: 窗口较窄，暂只显示译文 |
 
+- **The website's words** (`readarxiv-web` `web/src/reader/web-words.ts`, given to the chrome as `StateWords` by its
+  v2 page; zh-TW, ja and ko in the same table). The extension gives none and keeps the catalogue's above. A run's
+  capsule enters once its wait has lasted 400 ms (§6.6); every other capsule at once.
+
+  | State | When | zh-CN | en |
+  |---|---|---|---|
+  | The first making | the paper's layer being made (no layer to show yet: the first time anyone opens it), until the count of its translation is known | 正在翻译 · 首次约需 1–2 分钟 | Translating · the first time takes 1–2 minutes |
+  | Translating, counted | the view waits for paragraphs of the layer shown (Translating above) | 正在翻译 · {n} / {N} 段 | Translating · {n} of {N} passages (under 400 px: Translating {n} of {N}) |
+  | Translating, bare | the same, the layer's count not known yet (a layer shown before this visit), or the count beside the chip in a window under 400 px where the short count does not fit | 正在翻译 | Translating |
+  | Waiting in line | our server at capacity: the open refused `busy`, asked again by itself | 排队中 | Waiting in line |
+  | Reconnecting | our server's document not heard while a run is under way | 正在重新连接 | Reconnecting |
+  | The run's chip | beside a run's words, the translation not on screen and some of it there | 查看译文 | Show translation |
+  | Cannot be had | no bilingual version can be made of the paper | 这篇论文暂时无法翻译 | This paper can't be translated yet |
+  | Too large | the paper too large to prepare | 这篇论文篇幅过大，暂时无法翻译 | This paper is too long to translate |
+  | Not now, our server | out of reach or at fault; the time while it is to come | 翻译暂时不可用，{time} 后可以重试 | Translation is unavailable for now; you can retry at {time} |
+  | Not now, the limit | the visitor's new papers spent; the time while it is to come | 新论文的翻译次数已达上限，{time} 后可以重试 | You've reached the limit for new papers; you can retry at {time} |
+  | The HTML link | beside a paper that cannot be had, where arXiv has an HTML version: the extension on the page, or not (none on a phone) | 改用 HTML 翻译 · 安装扩展翻译 HTML | Translate HTML instead · Get the extension for HTML |
+  | The original lost | its pane's card, with arXiv's PDF of the version | 这里暂时无法显示原文 · 在 arXiv 打开原文 PDF | The original can't be shown here for now · Open the original PDF on arXiv |
+
+  A time once come drops from its sentence (the title alone). The visitor's rate of asks and the network itself are
+  the sibling lane's words (flow-refusals, 2026-11-11). Nothing the website says names the paper being prepared: the
+  word 正在准备 is the old page's (`reader/job-view.ts`, production's) and the extension's screen-reader line (S-R-23)
+  alone.
 - Recovery is automatic where it can be: our server's wait (a 202's, a 429's) is waited, as our server names it, and asked
   again, a 429's three times in a row at most (S-R-26: a visitor's limit lasts up to a day, and a tab left open asked again
-  for as long as it stayed open; #88 E5), the visitor's rate of asks and the network's at every time (§8.1); 重试 opens the
+  for as long as it stayed open; #88 E5), the visitor's rate of asks, our server at capacity (its queue) and the network's at every time (§8.1); 重试 opens the
   layer again and asks only for the paragraphs that are missing, the rest coming from the cache; rate limiting never shows
   (the chain retries it, and only its final giving-up counts as a failure).
 - A failure never takes focus.

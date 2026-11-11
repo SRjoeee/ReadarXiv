@@ -50,26 +50,25 @@ interface Options {
 /** the website's words beside HOST_WORDS: its chip that shows the translation, its way to arXiv's PDF, its link where the
  *  extension is not on the page, its card's lines */
 const SITE_WORDS: StateWords = {
-  translating: (got, total, chip) => (chip ? 'Translating' : `Translating ${got} / ${total}`),
+  translating: (got, total, chip, first) =>
+    first ? 'Translating, the first time' : chip ? 'Translating' : `Translating ${got} / ${total}`,
   showTranslation: 'Show translation',
   originalLost: 'The original cannot be shown here',
   openOriginal: 'Open the PDF on arXiv',
   htmlLink: () => ({ href: 'https://example.org/store', label: 'Install the extension' }),
   notNow: (at) => (at !== null && Date.now() < at ? 'Unavailable until later' : 'Unavailable for now'),
-  busy: (at) => (at !== null && Date.now() < at ? 'Busy until later' : 'Busy for now'),
+  limited: (at) => (at !== null && Date.now() < at ? 'Limit until later' : 'Limit for now'),
   cardLines: (_kind, at) => ({ sub: at !== null && Date.now() < at ? 'Retry later' : null }),
 }
 
 /** a host's words, each naming its state, as the website's table says its own */
 const HOST_WORDS: StateWords = {
-  queued: (n) => `Queued, number ${n}`,
-  preparing: 'Preparing the paper',
-  translating: (got, total) => `Translating ${got} / ${total}`,
+  queued: 'Waiting in line',
+  translating: (got, total, _chip, first) => (first ? 'Translating, the first time' : `Translating ${got} / ${total}`),
   reconnecting: 'Reconnecting',
   noPdf: 'No bilingual PDF of this paper',
   tooLarge: 'The paper is too large',
   notNow: () => 'Unavailable for now',
-  busy: () => 'Busy for now',
   limited: () => 'Your share of new papers is spent',
   failed: () => 'The translation is unavailable',
   originalLost: 'The original could not be read',

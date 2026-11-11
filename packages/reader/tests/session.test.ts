@@ -560,9 +560,9 @@ describe('the session: the open, wherever the document lacks what the visit need
         doc: stale((m.s.doc?.rev ?? 0) + 1, { prepare: prep('done', { retryAt: m.s.now + afterMs }) }),
         refused: { why, afterMs },
       })
-    refuse('busy', 30_000)
+    refuse('quota', 30_000)
     expect(m.s.open).toMatchObject({ t: null, asked: [] })
-    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'busy', retryAt: 30_000 })
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'limit', retryAt: 30_000 })
     expect(opens(m)).toEqual([])
     m.feed({ i: 'cmd.retry' })
     expect(opens(m)).toEqual([])
@@ -616,11 +616,33 @@ describe("the session: our server's pacing (today's run)", () => {
     expect(m.has('link')).toBe(true)
     expect(m.s.refusals).toBe(0)
     for (let n = 1; n <= REFUSED_ASKS; n++) {
-      m.feed({ i: 'follow.lost', t: m.live('link'), why: 'busy', afterMs: 1000 })
+      m.feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 1000 })
       m.feed({ i: 'time', t: (m.s.link as { timer: Ticket }).timer, now: m.s.now + 1000 })
     }
-    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'busy', afterMs: 1000 })
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 1000 })
     expect(m.s.link).toMatchObject({ s: 'stopped', retryAt: m.s.now + 1000, wake: null })
+  })
+  it("our server at capacity (busy) is a line the paper waits in: asked again by itself at our server's time however many times, never counted with the limit's 429s (the coordinator's decision 5, 2026-11-11)", () => {
+    const m = machine()
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+    for (let n = 1; n <= REFUSED_ASKS + 3; n++) {
+      m.feed({ i: 'open.answered', t: m.live('open'), doc: null, refused: { why: 'busy', afterMs: 30_000 } })
+      const due = m.s.now + 30_000
+      expect(m.s.link, `refusal ${n}`).toMatchObject({ s: 'stopped', why: 'busy', retryAt: due, wake: due })
+      expect(m.s.refusals).toBe(0)
+      m.feed({ i: 'time', t: m.timerAt(due), now: due })
+      m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+      expect(m.has('open'), `asked again after refusal ${n}`).toBe(true)
+    }
+    // (the visitor's new papers spent beside it still stop the look past their three)
+    for (let n = 1; n <= REFUSED_ASKS + 1; n++) {
+      m.feed({ i: 'open.answered', t: m.live('open'), doc: null, refused: { why: 'quota', afterMs: 1000 } })
+      if (n <= REFUSED_ASKS) {
+        m.feed({ i: 'time', t: m.timerAt(m.s.now + 1000), now: m.s.now + 1000 })
+        m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+      }
+    }
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'limit', wake: null })
   })
   it("a 429's wait is our server's as it names it, however long: the time said, the retry's and the session's own next ask; one with no time named waits a second", () => {
     const m = machine()
@@ -646,14 +668,14 @@ describe("the session: our server's pacing (today's run)", () => {
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 1000 })
     expect(m.s.link).toMatchObject({ s: 'stopped', retryAt: m.s.now + 1000 })
   })
-  it('an open refused for capacity is given back and asked again after its wait; its 429s count with the follow’s', () => {
+  it('an open refused for capacity is given back and asked again after its wait; not counted with the limit’s 429s', () => {
     const m = machine()
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
     m.feed({ i: 'open.answered', t: m.live('open'), doc: null, refused: { why: 'busy', afterMs: 30_000 } })
     expect(m.s.layer).toEqual({ s: 'none' })
     expect(m.s.open).toMatchObject({ t: null, asked: [], missing: false })
     expect(m.s.link).toMatchObject({ s: 'stopped', why: 'busy', retryAt: 30_000 })
-    expect(m.s.refusals).toBe(1)
+    expect(m.s.refusals).toBe(0)
     m.feed({ i: 'cmd.retry' })
     expect(m.s.link.s).toBe('stopped')
     m.feed({ i: 'time', t: m.timerAt(30_000), now: 30_000 })

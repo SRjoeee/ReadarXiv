@@ -89,7 +89,7 @@ export type SessionEvent =
    *  kind where it is the service's */
   | { type: 'fail'; event: 'fetch failed' | 'service' | 'crashed'; text: string; kind?: ProviderErrorKind }
   /** the paper's layer being prepared: told at each of our server's answers while it lasts */
-  | { type: 'preparing'; position: number | null; progress: number | null }
+  | { type: 'preparing'; progress: number | null }
   /** the layer is coming: a catalog, or a prepare's first objects */
   | { type: 'coming' }
   /** the layer's catalog: the paper's prepare, where there was one, is over */
@@ -134,7 +134,7 @@ export interface ReaderState {
   phase: Phase
   /** the paper's layer being prepared: its place in the queue and how far it has come, each null while not known; a state
    *  of its own beside the phase, from the prepare's first answer to the layer's catalog (`prepared`) */
-  preparing: { position: number | null; progress: number | null } | null
+  preparing: { progress: number | null } | null
   /** the translation has begun this visit: a prepare still under way after it is no longer the phase (its polls would
    *  take the phase back from the translation, and the line and the status region with it) */
   begun: boolean
@@ -396,7 +396,7 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       return { ...withFailures(state, failures), phase: drawn(state) ? 'ready' : 'failed' }
     }
     case 'preparing': {
-      const preparing = { position: event.position, progress: event.progress }
+      const preparing = { progress: event.progress }
       // the phase only before the translation has begun, and over the original on screen (loading stays loading)
       const phase = !state.begun && (state.phase === 'ready' || state.phase === 'preparing') ? 'preparing' : state.phase
       return { ...state, preparing, unavailable: null, phase, made: true }

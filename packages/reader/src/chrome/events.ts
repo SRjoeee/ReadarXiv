@@ -26,6 +26,23 @@ export const LAYER_WHY: Readonly<Record<LayerWhy, Unavailable>> = {
   unreachable: 'unreachable',
 }
 
+/**
+ * Each stage of a prepare (our server's record's `prepare.stage`, its PREPARE_STAGES in order) at a fixed place on the prepare's
+ * stretch, as a share of it: where the stage starts in the time a prepare takes, the mean of the two staging timelines of
+ * 2026-11-11 (a new paper's, 2610.20266v1: 87.9 s; a paper prepared again after a deploy, 2610.21924v1: 95.6 s). Fetching is
+ * short (10 % of the time), compiling the long one (59 % and 22 %), the units and their layout the rest, the bundle the last
+ * few seconds. No time-based creeping: the line moves as the record's stage does, never back (ProgressLine; status.ts lineOf)
+ */
+const PREPARE_PLACES: Readonly<Record<string, number>> = {
+  fetching: 0.02,
+  compiling: 0.12,
+  units: 0.52,
+  'laying-out': 0.68,
+  bundle: 0.97,
+}
+/** a prepare's stage as the share of the prepare's stretch the line stands at: 0 before its first stage, or for a stage this reader
+ *  does not know */
+export const prepareShare = (stage: string | null): number => (stage !== null && PREPARE_PLACES[stage]) || 0
 /** a rows' failure as the chrome's error kind (the chain's, which the chrome words as the popup does): a key missing or refused
  *  (rows made here), the service or our server out of reach, a refusal for good */
 export function kindOf(why: { kind: string; code?: string }): ProviderErrorKind {
@@ -85,8 +102,9 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
   if (!p || p.view.heading !== v.heading) out.push({ type: 'heading', id: v.heading })
   const l = next.layer,
     pl = p?.layer
-  if (l.s === 'preparing' && (pl?.s !== 'preparing' || pl.position !== l.position || pl.progress !== l.progress))
-    out.push({ type: 'preparing', position: l.position, progress: l.progress })
+  // (the prepare's stage, our server's record's own, as the share of the prepare the progress line stands at: status.ts)
+  if (l.s === 'preparing' && (pl?.s !== 'preparing' || pl.stage !== l.stage))
+    out.push({ type: 'preparing', progress: prepareShare(l.stage) })
   if (l.s === 'ready') {
     if (pl?.s !== 'ready') out.push({ type: 'prepared' }, { type: 'coming' })
     if (pl?.s !== 'ready' || pl.laid !== l.laid || pl.total !== l.total || pl.asOriginal !== l.asOriginal)

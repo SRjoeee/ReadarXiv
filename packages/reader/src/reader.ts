@@ -118,7 +118,8 @@ export interface ReaderState {
     | { s: 'failed'; why: OriginalWhy }
   layer:
     | { s: 'none' }
-    | { s: 'preparing'; position: number | null; progress: number | null }
+    /** `stage`: the prepare's as our server's record names it, null before the first (the progress line's place: status.ts) */
+    | { s: 'preparing'; stage: string | null }
     | { s: 'ready'; laid: number; total: number; asOriginal: number }
     | { s: 'refused'; why: LayerWhy; retryAt: number | null }
   /** the rows of the target. Their counts are the view's, one statement (session/rows.ts viewOf): the units of the layer shown
@@ -1083,7 +1084,7 @@ export function openReader(
             : l.s === 'stopped'
               ? { s: 'refused', why: l.why, retryAt: l.retryAt }
               : s.layer.s === 'preparing'
-                ? { s: 'preparing', position: s.layer.position, progress: s.layer.progress }
+                ? { s: 'preparing', stage: s.layer.stage }
                 : { s: 'none' },
       rows:
         r.s === 'none'

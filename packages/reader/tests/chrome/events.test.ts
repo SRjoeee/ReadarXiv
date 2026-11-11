@@ -53,7 +53,7 @@ const open = {
 
 describe("the reader's state as the chrome's", () => {
   it("a paper being prepared, then laid, its rows arriving, then complete: the chrome's phases in turn", () => {
-    const preparing = { ...open, layer: { s: 'preparing' as const, position: 3, progress: null } }
+    const preparing = { ...open, layer: { s: 'preparing' as const, stage: 'compiling' } }
     const ready = {
       ...open,
       layer: { s: 'ready' as const, laid: 0, total: 2, asOriginal: 0 },
@@ -75,12 +75,25 @@ describe("the reader's state as the chrome's", () => {
     expect(fold([base]).phase).toBe('loading')
     expect(fold([base, open, preparing])).toMatchObject({
       phase: 'preparing',
-      preparing: { position: 3, progress: null },
+      preparing: { progress: 0.12 },
     })
     expect(fold([base, open, preparing, ready])).toMatchObject({ phase: 'translating', progress: 4 / 15 })
     const done = fold([base, open, preparing, ready, complete])
     expect(done.phase).toBe('ready')
     expect(done.layer).toMatchObject({ laid: 2, total: 2 })
+  })
+  it("the prepare's stage, our server's record's own, told as the share of the prepare it stands at, each stage once and in turn (the coordinator's decision 4, 2026-11-11)", () => {
+    const at = (stage: string | null) => ({ ...open, layer: { s: 'preparing' as const, stage } })
+    const told: (number | null)[] = []
+    let prev: ReaderState = open
+    for (const s of [null, 'fetching', 'fetching', 'compiling', 'units', 'laying-out', 'bundle', 'bundle']) {
+      const next = at(s)
+      for (const e of eventsOf(prev, next)) if (e.type === 'preparing') told.push(e.progress)
+      prev = next
+    }
+    expect(told).toEqual([0, 0.02, 0.12, 0.52, 0.68, 0.97])
+    // (a stage this reader does not know stands at the prepare's start; no place in a queue is told: the record names none)
+    expect(eventsOf(open, at('later')).find((e) => e.type === 'preparing')).toEqual({ type: 'preparing', progress: 0 })
   })
   it('rows read of a run done, or a run that restates rows the view holds, tell no translation under way: their end alone', () => {
     const laid = { ...open, layer: { s: 'ready' as const, laid: 2, total: 2, asOriginal: 0 } }

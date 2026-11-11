@@ -138,21 +138,17 @@ describe("reduce: the layer's states (Task 12)", () => {
   })
 
   it("preparing: the original, the prepare's place and progress, then the layer as it comes", () => {
-    const p = fold([
-      opened,
-      { type: 'preparing', position: 3, progress: null },
-      { type: 'preparing', position: null, progress: 0.4 },
-    ])
-    expect(p).toMatchObject({ phase: 'preparing', preparing: { position: null, progress: 0.4 }, available: true })
+    const p = fold([opened, { type: 'preparing', progress: null }, { type: 'preparing', progress: 0.4 }])
+    expect(p).toMatchObject({ phase: 'preparing', preparing: { progress: 0.4 }, available: true })
     expect(fold([{ type: 'coming' }, { type: 'translating', got: 0, total: 9, lost: 0 }], p)).toMatchObject({
       phase: 'translating',
-      preparing: { position: null, progress: 0.4 },
+      preparing: { progress: 0.4 },
     })
     expect(fold([{ type: 'coming' }, { type: 'prepared' }], p)).toMatchObject({ phase: 'ready', preparing: null })
   })
   it('a prepare told while the original loads is the phase once the original is on screen, the translation not begun', () => {
     // (our server's first answer can come before the original is read: loading stays loading, then the prepare's phase)
-    const loading = fold([{ type: 'preparing', position: null, progress: 0.2 }])
+    const loading = fold([{ type: 'preparing', progress: 0.2 }])
     expect(loading.phase).toBe('loading')
     expect(fold([opened], loading)).toMatchObject({ phase: 'preparing', preparing: { progress: 0.2 } })
     // (begun: the translation's phase is its run's, a prepare beside it)
@@ -161,11 +157,7 @@ describe("reduce: the layer's states (Task 12)", () => {
   })
 
   it("the prepare is a state of its own, ended by the catalog: a poll once the translation has begun moves no phase, and nothing flips (the review's probe)", () => {
-    const prep = (position: number | null, progress: number): SessionEvent => ({
-      type: 'preparing',
-      position,
-      progress,
-    })
+    const prep = (_position: number | null, progress: number): SessionEvent => ({ type: 'preparing', progress })
     const seq: SessionEvent[] = [
       opened,
       prep(2, 0.1),
@@ -203,7 +195,7 @@ describe("reduce: the layer's states (Task 12)", () => {
     // said once each, never back: the status region does not flip between the two
     expect(spoken.filter((w, i) => w && w !== spoken[i - 1])).toHaveLength(2)
     // held beside the translation while it lasts, gone with the catalog
-    expect(fold(seq.slice(0, 5)).preparing).toEqual({ position: null, progress: 0.3 })
+    expect(fold(seq.slice(0, 5)).preparing).toEqual({ progress: 0.3 })
     expect(s.preparing).toBeNull()
     // the translation ended, a poll after it leaves the line off and the passages that failed told
     const after = fold(seq.slice(0, 8))
@@ -216,7 +208,7 @@ describe("reduce: the layer's states (Task 12)", () => {
   it('no source, no PDF, a prepare that cannot succeed: the translated displays greyed, the HTML version offered', () => {
     for (const why of ['no-source', 'no-pdf', 'too-large', 'cannot-prepare', 'unknown-versions'] as const) {
       expect(
-        fold([opened, { type: 'preparing', position: 1, progress: 0 }, { type: 'unavailable', why, retryAt: null }]),
+        fold([opened, { type: 'preparing', progress: 0 }, { type: 'unavailable', why, retryAt: null }]),
         why,
       ).toMatchObject({
         available: false,
@@ -538,7 +530,7 @@ describe('createController', () => {
   })
   it("a prepare told this visit marks the paper made (its run the making's)", () => {
     expect(INITIAL.made).toBe(false)
-    expect(reduce(INITIAL, { type: 'preparing', position: null, progress: null }).made).toBe(true)
+    expect(reduce(INITIAL, { type: 'preparing', progress: null }).made).toBe(true)
   })
   it("the original's download is arXiv's own PDF opened by the browser: no byte of it read through the reader", async () => {
     const session = fakeSession()
