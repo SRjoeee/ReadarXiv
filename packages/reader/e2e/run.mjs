@@ -264,8 +264,9 @@ const v2Route = {
       const d = docs[seg] ?? Object.values(docs).find((x) => x.pv.replace(/v\d+$/, '') === seg)
       if (!d) return json(404, { error: 'not-found' })
       const m = modes[d.pv]
-      // (busy for now, an hour on; a prepare that cannot be made, with our server's word on arXiv's HTML version)
-      if (m?.kind === 'refused') return json(429, { error: 'busy' }, { 'retry-after': '3600' })
+      // (a paper not opened, whose open is refused for now: the visitor's new papers spent, an hour on, in the open's answer as our
+      // server words it; a prepare that cannot be made, with our server's word on arXiv's HTML version)
+      if (m?.kind === 'refused') return json(404, { error: 'not-opened' })
       if (m?.kind === 'cannot')
         return json(200, {
           ...d,
@@ -395,6 +396,12 @@ const v2Route = {
         const d = Object.values(docs).find((x) => x.paper === ask.paper)
         if (!d) return json(404, { error: 'not-found' })
         const m = modes[d.pv]
+        if (m?.kind === 'refused') return json(200, { doc: null, refused: { why: 'quota', retryAfterS: 3600 } })
+        // (our server at capacity for the first `busy` opens: refused in the open's answer, asked again a second on)
+        if (m?.busy > 0) {
+          m.busy--
+          return json(200, { doc: null, refused: { why: 'busy', retryAfterS: 1 } })
+        }
         if (m) m.opened ??= performance.now()
         if (m?.kind === 'stale') return json(200, { doc: staleOpened(d, ask.target), follow: null })
         json(200, {
@@ -2231,7 +2238,7 @@ await check(
         }
       })
       await context.close()
-      return { seen, errors: errors.filter((e) => !/status of 429/.test(e)) }
+      return { seen, errors: errors.filter((e) => !/status of (404|429)/.test(e)) }
     }
     try {
       const site = await look(true)
@@ -2245,7 +2252,7 @@ await check(
           JSON.stringify(site.seen.sideBySide) === '["true","true"]' &&
           site.seen.sign === 'clock' &&
           !site.seen.retry &&
-          site.seen.said === 'Busy until later',
+          site.seen.said === 'Limit until later',
         `the website's: ${JSON.stringify(site.seen)}`,
       )
       assert(
@@ -2405,7 +2412,7 @@ await check(
         }
       })
       await context.close()
-      return { seen, errors: errors.filter((e) => !/status of (503|429)/.test(e)) }
+      return { seen, errors: errors.filter((e) => !/status of (503|404|429)/.test(e)) }
     }
     try {
       const site = await look({ site: true, slots: true, original: 'broken' })
@@ -2417,7 +2424,7 @@ await check(
           !site.seen.line &&
           site.seen.left &&
           site.seen.capsule?.kind === 'notNow' &&
-          /^Busy/.test(site.seen.capsule.said),
+          /^Limit/.test(site.seen.capsule.said),
         `the website's: ${JSON.stringify(site.seen)}`,
       )
       assert(
@@ -2431,6 +2438,72 @@ await check(
       return { site: site.seen, own: { capsule: own.seen.capsule, trail: own.seen.zones.trail?.length } }
     } finally {
       delete modes[seg]
+    }
+  },
+)
+await check(
+  "chrome: our server at capacity, the open refused busy twice: the website's capsule waits in line (its words, the spinner, no retry) and goes on by itself into the first making's words; the extension's says the refusal with its retry, and goes on by itself too (the coordinator's decision 5, 2026-11-11)",
+  async () => {
+    const seg = indexOf['s2-splits'].seg
+    const look = async (x) => {
+      modes[seg] = { kind: 'not-opened', prepareMs: 2500, busy: 2 }
+      try {
+        const { page, context, errors } = await newPage({ path: 'chrome.html' })
+        await page.evaluate((o) => window.__c.open('s2-splits', o), x)
+        const seen = []
+        const t0 = Date.now()
+        while (Date.now() - t0 < 15_000) {
+          const now = await page.evaluate(() => {
+            const el = document.querySelector('.capsule:not([data-out])')
+            return {
+              layer: window.__c.reader?.state().layer.s ?? null,
+              capsule: el && {
+                kind: el.getAttribute('data-kind'),
+                said: el.querySelector('.sr-only')?.textContent ?? '',
+                spinner: !!el.querySelector('svg.spin'),
+                retry: !!el.querySelector('button[data-action]'),
+              },
+            }
+          })
+          const key = JSON.stringify(now.capsule)
+          if (seen.at(-1)?.key !== key) seen.push({ key, ...now })
+          if (now.layer === 'ready') break
+          await page.waitForTimeout(100)
+        }
+        const opens = v2log.filter((e) => e.what === 'open').length
+        await context.close()
+        return {
+          seen: seen.map(({ key: _, ...s }) => s),
+          opens,
+          errors: errors.filter((e) => !/status of 404/.test(e)),
+        }
+      } finally {
+        delete modes[seg]
+      }
+    }
+    const before = v2log.length
+    const site = await look({ site: true })
+    const own = await look({})
+    assert(!site.errors.length && !own.errors.length, [...site.errors, ...own.errors].join('; '))
+    const capsules = (x) => x.seen.map((s) => s.capsule).filter(Boolean)
+    const queue = capsules(site).find((c) => c.said === 'Waiting in line')
+    assert(
+      queue?.kind === 'progress' &&
+        queue.spinner &&
+        !queue.retry &&
+        capsules(site).some((c) => c.said === 'Translating, the first time') &&
+        !capsules(site).some((c) => c.kind === 'notNow') &&
+        site.seen.at(-1)?.layer === 'ready',
+      `the website's: ${JSON.stringify(site.seen)}`,
+    )
+    assert(
+      capsules(own).some((c) => c.kind === 'notNow' && c.retry) && own.seen.at(-1)?.layer === 'ready',
+      `the extension's: ${JSON.stringify(own.seen)}`,
+    )
+    return {
+      site: capsules(site).map((c) => `${c.kind}:${c.said}`),
+      own: capsules(own).map((c) => c.kind),
+      asks: v2log.length - before,
     }
   },
 )

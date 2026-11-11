@@ -75,7 +75,7 @@ describe("the reader's state as the chrome's", () => {
     expect(fold([base]).phase).toBe('loading')
     expect(fold([base, open, preparing])).toMatchObject({
       phase: 'preparing',
-      preparing: { position: null, progress: 0.12 },
+      preparing: { progress: 0.12 },
     })
     expect(fold([base, open, preparing, ready])).toMatchObject({ phase: 'translating', progress: 4 / 15 })
     const done = fold([base, open, preparing, ready, complete])
@@ -93,11 +93,7 @@ describe("the reader's state as the chrome's", () => {
     }
     expect(told).toEqual([0, 0.02, 0.12, 0.52, 0.68, 0.97])
     // (a stage this reader does not know stands at the prepare's start; no place in a queue is told: the record names none)
-    expect(eventsOf(open, at('later')).find((e) => e.type === 'preparing')).toEqual({
-      type: 'preparing',
-      position: null,
-      progress: 0,
-    })
+    expect(eventsOf(open, at('later')).find((e) => e.type === 'preparing')).toEqual({ type: 'preparing', progress: 0 })
   })
   it('rows read of a run done, or a run that restates rows the view holds, tell no translation under way: their end alone', () => {
     const laid = { ...open, layer: { s: 'ready' as const, laid: 2, total: 2, asOriginal: 0 } }

@@ -460,6 +460,15 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
     paper is being prepared; a screen reader is told the stage once, the first making's words, since the count that
     follows is the same stage. The capsule has no quieter part for the hint (its cells are the count and a part in
     another language, both in the words' ink), so the hint is one sentence with the stage's word.
+  - **Waiting in line** (`queued`; the coordinator's decision 5, 2026-11-11): our server at capacity refuses the open
+    `busy` in its answer, with a time (30 s); the reader asks again by itself at that time for as long as it is answered
+    so, never counted with the limit's 429s (`REFUSED_ASKS`). Where the host words the queue (the website), it is a run's
+    capsule, `causeOf(state) === 'busy'` the stage `queued`: the spinner, no retry, the 400 ms of every run's, and the
+    first making's words follow it in the same capsule once the open is taken. The extension gives no words for it, so its
+    capsule is the refusal's as before (S-R-26's words and retry). The visitor's rate of asks (a 429 that says so) is never
+    the queue. Before this, our server named no place in a queue and the reader read one the record does not carry, so
+    the queue's words could not show; a busy refusal said the translation was unavailable for now, and stopped asking
+    after three.
   - `showTranslation`: the run's capsule carries a chip that shows the translation where it is not on screen and some of
     it is there (the original's display, or the original held for the narrow window), pressing it the reader's own
     choice.

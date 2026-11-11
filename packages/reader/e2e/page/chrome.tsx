@@ -57,19 +57,18 @@ const SITE_WORDS: StateWords = {
   openOriginal: 'Open the PDF on arXiv',
   htmlLink: () => ({ href: 'https://example.org/store', label: 'Install the extension' }),
   notNow: (at) => (at !== null && Date.now() < at ? 'Unavailable until later' : 'Unavailable for now'),
-  busy: (at) => (at !== null && Date.now() < at ? 'Busy until later' : 'Busy for now'),
+  limited: (at) => (at !== null && Date.now() < at ? 'Limit until later' : 'Limit for now'),
   cardLines: (_kind, at) => ({ sub: at !== null && Date.now() < at ? 'Retry later' : null }),
 }
 
 /** a host's words, each naming its state, as the website's table says its own */
 const HOST_WORDS: StateWords = {
-  queued: (n) => `Queued, number ${n}`,
+  queued: 'Waiting in line',
   translating: (got, total, _chip, first) => (first ? 'Translating, the first time' : `Translating ${got} / ${total}`),
   reconnecting: 'Reconnecting',
   noPdf: 'No bilingual PDF of this paper',
   tooLarge: 'The paper is too large',
   notNow: () => 'Unavailable for now',
-  busy: () => 'Busy for now',
   limited: () => 'Your share of new papers is spent',
   failed: () => 'The translation is unavailable',
   originalLost: 'The original could not be read',

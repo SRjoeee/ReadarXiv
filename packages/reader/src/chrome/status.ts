@@ -84,8 +84,8 @@ export interface Seen {
  *  the service's beside it: the translation's state is told in the capsule beside that card, as the website's page tells it */
 const originalApart = (state: ReaderState, words: StateWords): boolean =>
   state.phase === 'failed' && !!words.openOriginal && state.failures.pdf !== null && state.failures.service === null
-/** a run under way and what the reader waits for: our server's document heard again; its turn (its place in the queue where our
- *  server names one); else the translation, the paper's layer being made included (the first time anyone opens it: the
+/** a run under way and what the reader waits for: its turn, our server at capacity (`causeOf` busy: the reader asks again by
+ *  itself at our server's time); our server's document heard again; else the translation, the paper's layer being made included (the first time anyone opens it: the
  *  website says the time a first one takes, `first`). Null where none is under way, and where nothing a run brings is
  *  waited for: the end held for the layer's first page (`laying`) translates nothing, a stored translation's first page is a
  *  load, which the progress line and the page's marks show as they show the original's (PDF-READER §6.6). A run under the
@@ -93,9 +93,10 @@ const originalApart = (state: ReaderState, words: StateWords): boolean =>
 export function stageOf(state: ReaderState): Stage | null {
   const apart =
     state.phase === 'failed' && state.failures.pdf !== null && (state.preparing !== null || state.rowsComing)
+  // (our server at capacity: the paper waits its turn, asked again by itself; the coordinator's decision 5, 2026-11-11)
+  if (causeOf(state) === 'busy') return 'queued'
   if (!running(state) && !apart) return null
   if (state.reconnecting) return 'reconnecting'
-  if (state.preparing?.position != null) return 'queued'
   // (the first making's end held is still its wait: the early units' rows ended while the layer is made, or the layer landed and
   // its count is not known yet)
   if (state.laying && !firstOf(state)) return null
@@ -117,7 +118,7 @@ export const firstOf = (state: ReaderState): boolean =>
   state.preparing !== null || (state.made && state.translated.total <= 0)
 /** a run's stage in the host's words, or null where it gives none; `chip`: the chip that shows the translation beside them */
 function stageWords(stage: Stage, state: ReaderState, words: StateWords, chip: boolean): CapsuleWords | null {
-  if (stage === 'queued') return words.queued ? plain(words.queued(state.preparing?.position ?? 0)) : null
+  if (stage === 'queued') return words.queued ? plain(words.queued) : null
   if (stage === 'translating') {
     if (!words.translating) return null
     const { got, total } = state.translated
@@ -195,8 +196,8 @@ export function capsuleOf(
   // (the layer-only plan's "Offline, drafted"), each cause in its own words
   const cause = causeOf(state)
   // (a 429 of the visitor's new papers is our server's limit, said as such with its time: past the run's few waits it asks no
-  // more by itself, and the reader's retry is what asks again, #88 E5; busy, its capacity, said as the limit unless the host
-  // words it; the rate of asks and the network, which the reader waits out by itself, with no time)
+  // more by itself, and the reader's retry is what asks again, #88 E5; busy, its capacity, the queue where the host words it
+  // (stageOf), else said as the limit; the rate of asks and the network, which the reader waits out by itself, with no time)
   if (!running(state) && cause) {
     const at = state.unavailable?.retryAt ?? null
     const text =
@@ -206,7 +207,7 @@ export function capsuleOf(
           ? (words.network ?? R.status.notNow)
           : cause === 'rate'
             ? (words.rate ?? R.status.limited)
-            : ((cause === 'busy' ? words.busy?.(at) : undefined) ?? words.limited?.(at) ?? R.status.limited)
+            : (words.limited?.(at) ?? R.status.limited)
     const notNow = plain(text)
     // (its retry offered at once, or at its time where the host's rule says so: a retry before it asks nothing)
     const wait = withheld(state, rules) ? { wait: true as const } : {}

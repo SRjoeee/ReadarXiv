@@ -44,8 +44,10 @@ export interface Slots {
  * is due, ms since the epoch) and is asked again as it changes
  */
 export interface StateWords {
-  /** the paper waiting in our server's queue, at its place */
-  queued?: (position: number) => string
+  /** the paper waiting its turn: our server at capacity (a `busy` refusal of the open, status.ts `causeOf`), which the reader asks
+   *  again by itself at our server's time for as long as it answers so (the website's "waiting in line"); none: the refusal's
+   *  words (`busy`, else `limited`) with its retry, the extension's */
+  queued?: string
   /** the translation the reader waits for: the paragraphs translated so far of the paper's, the count drawn as a part of its own
    *  where it stands in the sentence. `chip`: `showTranslation` stands beside it (the website's says the bare stage there in a
    *  window too narrow for both). `first`: the paper's first making (its layer being made, the first time anyone opens it, or
@@ -70,8 +72,6 @@ export interface StateWords {
   tooLarge?: string
   /** our server out of reach for now (R.status.notNow) */
   notNow?: (retryAt: number | null) => string
-  /** our server busy for now (R.status.limited) */
-  busy?: (retryAt: number | null) => string
   /** at the limit of new papers (R.status.limited) */
   limited?: (retryAt: number | null) => string
   /** the visitor's rate of asks, the reader asking again by itself at its time (R.status.limited) */

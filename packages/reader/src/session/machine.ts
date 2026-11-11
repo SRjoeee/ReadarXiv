@@ -525,11 +525,14 @@ const openWanted = (s: State) => needsOf(s).some((n) => n.at === null && !s.open
 /** a 429: our server's time as it names it (a second where it names none), waited out and asked again (REFUSED_ASKS in a row
  *  at most), then the look stopped until a retry, which asks once that time has come */
 function refusedFor(s: State, why: 'busy' | 'limit' | 'rate', afterMs: number | null | undefined) {
-  // (the visitor's rate of asks is no limit to stop at: its wait is a minute, waited out and asked again by itself)
-  if (why !== 'rate') s.refusals++
+  // (the visitor's rate of asks is no limit to stop at: its wait is a minute, waited out and asked again by itself; our server's
+  // capacity neither: the paper waits in line, asked again at our server's time for as long as it answers so, the coordinator's
+  // decision 5 of 2026-11-11)
+  if (why === 'limit') s.refusals++
   const retryAt =
     s.now + (typeof afterMs === 'number' && Number.isFinite(afterMs) && afterMs >= 0 ? afterMs : WAIT_MIN_MS)
-  s.link = { s: 'stopped', why, retryAt, wake: s.refusals > REFUSED_ASKS ? null : retryAt, timer: null }
+  const wake = why === 'busy' || s.refusals <= REFUSED_ASKS ? retryAt : null
+  s.link = { s: 'stopped', why, retryAt, wake, timer: null }
 }
 /** the network itself failed: asked again by itself, at once when the browser comes online (env.online), and meanwhile, while it
  *  says it is online, at a growing pace (a second, doubled to thirty at most); no time said */

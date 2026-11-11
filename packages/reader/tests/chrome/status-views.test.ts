@@ -516,6 +516,30 @@ describe("a run under way in a host's words (the website's stage and count)", ()
     expect(kind()).toBe('progress')
   })
 
+  it("our server at capacity: the queue's capsule with the spinner and no retry, after its 400 ms like every run's; the extension's (no words for it) the refusal's capsule with its retry at once (the coordinator's decision 5, 2026-11-11)", async () => {
+    const queue = { ...words, queued: 'Waiting in line', busy: () => 'busy for now' }
+    const { container, wait, set, kind } = await mounted({ words: queue })
+    await set({ unavailable: { why: 'busy', retryAt: Date.now() + 30_000 } })
+    expect(kind()).toBeNull()
+    await wait(400)
+    const capsule = container.querySelector('.capsule:not([data-out])')
+    expect([
+      kind(),
+      capsule?.querySelector('.sr-only')?.textContent,
+      !!capsule?.querySelector('svg.spin'),
+      capsule?.querySelector('button'),
+    ]).toEqual(['progress', 'Waiting in line', true, null])
+    // (asked again and admitted: the first making's wait follows in the same capsule)
+    await set({ unavailable: null, phase: 'preparing', made: true, preparing: { progress: 0 } })
+    expect(kind()).toBe('progress')
+    vi.useRealTimers()
+    const ext = fakeController({ phase: 'ready', unavailable: { why: 'busy', retryAt: Date.now() + 30_000 } })
+    const own = await mountElement(capsuleOf(ext.controller))
+    expect([
+      own.container.querySelector('.capsule')?.getAttribute('data-kind'),
+      !!own.container.querySelector('.capsule button[data-action]'),
+    ]).toEqual(['notNow', true])
+  })
   it('the capsule with the spinner, alone; its stage said once with the count it starts at, the count that moves not said again; none without them', async () => {
     const { fake, container, wait } = await mounted()
     await act(async () => fake.set(translating(3)))
@@ -651,20 +675,20 @@ describe("a retry offered at its time by the host's rule (parts.tsx `retry`; L11
   })
   it("the website's: no chip until the time has come, the words alone; then the chip, the host's words asked again without the time", async () => {
     const fake = fakeController({ phase: 'ready' })
-    const words = { busy: (at: number | null) => (at !== null && Date.now() < at ? 'busy until later' : 'busy') }
+    const words = { limited: (at: number | null) => (at !== null && Date.now() < at ? 'limit until later' : 'limit') }
     const { container } = await mountElement(capsuleOf(fake.controller, { retry: 'when-due', words }))
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
     try {
-      await act(async () => fake.set({ unavailable: { why: 'busy', retryAt: Date.now() + 90_000 } }))
+      await act(async () => fake.set({ unavailable: { why: 'refused', retryAt: Date.now() + 90_000 } }))
       const capsule = container.querySelector('.capsule')!
       expect([
         chip(container),
         capsule.hasAttribute('data-alone'),
         capsule.querySelector('.sr-only')?.textContent,
-      ]).toEqual([null, true, 'busy until later'])
+      ]).toEqual([null, true, 'limit until later'])
       await act(async () => vi.advanceTimersByTime(90_000))
       expect(chip(container)?.textContent).toBe(S.failed.retry)
-      expect(container.querySelector('.capsule .sr-only')?.textContent).toBe('busy')
+      expect(container.querySelector('.capsule .sr-only')?.textContent).toBe('limit')
     } finally {
       vi.useRealTimers()
     }

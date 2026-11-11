@@ -54,7 +54,7 @@ describe("the progress line under the toolbar (the reader's design, §6.6)", () 
       )
     const site = await line({ narrow: 'shown' })
     const ext = await line({})
-    await act(async () => fake.set({ phase: 'preparing', preparing: { position: null, progress: 0.1 } }))
+    await act(async () => fake.set({ phase: 'preparing', preparing: { progress: 0.1 } }))
     const p = (c: HTMLElement) => Number(c.querySelector<HTMLElement>('.progress-line')?.style.getPropertyValue('--p'))
     expect(p(site.container)).toBe(1)
     // (the extension's, no rule for the narrow window: its line as before, which held the longest it reached, the download's)
@@ -71,9 +71,7 @@ describe("the progress line under the toolbar (the reader's design, §6.6)", () 
       )
     const a = await mount({ narrow: 'shown' })
     const b = await mount({})
-    await act(async () =>
-      late.set({ phase: 'preparing', loaded: 1, display: 'original', preparing: { position: null, progress: 0 } }),
-    )
+    await act(async () => late.set({ phase: 'preparing', loaded: 1, display: 'original', preparing: { progress: 0 } }))
     expect([p(a.container), p(b.container)]).toEqual([1, 0.15])
   })
 
@@ -84,11 +82,11 @@ describe("the progress line under the toolbar (the reader's design, §6.6)", () 
     const look = () =>
       seen.push(Number(container.querySelector<HTMLElement>('.progress-line')!.style.getPropertyValue('--p')))
     const steps: Parameters<typeof fake.set>[0][] = [
-      { phase: 'preparing', made: true, preparing: { position: null, progress: 0 } },
-      { preparing: { position: null, progress: 0.12 } },
+      { phase: 'preparing', made: true, preparing: { progress: 0 } },
+      { preparing: { progress: 0.12 } },
       // (the early units' rows ended while the layer is made: the end held is the prepare's, never the whole line)
-      { phase: 'translating', laying: true, progress: 1, preparing: { position: null, progress: 0.52 } },
-      { preparing: { position: null, progress: 0.97 } },
+      { phase: 'translating', laying: true, progress: 1, preparing: { progress: 0.52 } },
+      { preparing: { progress: 0.97 } },
       // (the layer landed, its count not known yet; then counted, then translated)
       { preparing: null, laying: false, translated: { got: 0, total: 0 } },
       { progress: 222 / 227, translated: { got: 222, total: 227 } },
