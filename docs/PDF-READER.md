@@ -2584,6 +2584,20 @@ within noise.
   makes no group for such a member, so no drawing can turn it off either. Over the 88 papers, 12 members are wholly painted
   over in this way, every one a figure text that the wrap leaves unwrapped and the entry never lays
   (`lab/pdf/prepare-back/hidden.mjs`).
+- **The half leading is read between a member's rows, whatever sentence each row is of** (2026-11-12, lane parity-small;
+  `compose/highlight.ts` `halfLeadingOf`, which the parity's highlight measure reads too, as `paint.mjs` reads the cut): the
+  gaps between each member's consecutive rows on the pane, two sentences' boxes on one row overlapping and making none, as
+  today's lighting read a unit's consecutive lines. It was read inside each sentence alone, so a pane whose sentences each
+  hold one row (a translation's are shorter than the original's) or whose rows a display parts held no gap and padded nothing:
+  on 2610.10069v1-zh p21 the right pane's shapes stood on their glyphs' boxes while the left's were padded by 2.98 pt, the
+  heading t171 (three CJK characters at 14.35 pt) lit from 0.12 em under its baseline to 0.88 em over it, its ink from 0.11 under to 0.83
+  over (arXiv's page set its paragraphs' rows 9.67 pt apart: now 4.84 pt a side). Over B10's drawing of the parity's 22 pairs
+  the half leading moves on 50 of the 344 right panes and 64 left ones (−1.45 to +4.84 pt), and the highlight measure changes
+  on two units, that heading and 2610.40645v1-ja p27 t228 (no longer worse), no other difference of any measure moving, by
+  default or with every toggle on. A CJK heading is lit on its em box (the tokens' band, `emit/sentences.ts`, as today's), and
+  the measure reads a drawn line as the band 0.2 em under its baseline to 0.8 over it, a Latin line's: over 12.5 pt the 0.08 em
+  between the two bottoms passes the measure's point, so on a page whose half leading is under that, a heading whose every
+  pixel of ink is lit is read uncovered (t228 now stands 0.007 pt inside the point with its page's 0.155 pt).
 - **What it does not settle**: a display the part states no ink of (LOST) leaves a gap with nothing in it, filled as today's;
   a display set on a text line beside a word (TeX's display after a word on its baseline) is on that line's row, lit with it;
   a sentence whose only text is a display lights nothing but the display; and a sentence that runs on past a display with no
@@ -5093,6 +5107,46 @@ the script of the run before it, and a kern pair across that boundary is lost: K
 the layout measured it alone at 9.262 (the check reports it, before and after alike). Drawing each run in a `<text>` of its own
 would hold that too; it moves the drawing's structure, which the parity's reading and the checks read by line. And the
 extension's own reader (`AXT_READER` 'today', `layer-proto/layer2.mjs`) keeps its class by character.
+
+### 18.50 An address goes whole to the next line unless the line it leaves would be justified and stretched (2026-11-12)
+
+The maintainer's report of 2026-11-08 (staging, 2303.11366v4 p1): the abstract's last line before
+`https://github.com/noahshinn024/reflexion` was justified at 0.205 em a gap, the URL whole on the next. Since a8c36be1f the
+breaker cuts an address (a URL's crop with its url package's break points, El.breaks: a `\url`, a DOI, an e-mail address) that
+does not fit a justified line at the last of its break points that fits; that line now holds "https://" at 0.035 em a gap. It
+cut where that bought nothing too: 2610.21880v1 p1's footnote set "sohani@mail." at a line's end and "uni-paderborn.de" on the
+next, where the original and today's reader keep the address whole and end the line before it early. An address is one thing to
+a reader (the coordinator's ruling of 2026-11-12, lane parity-small).
+
+- **The rule** (`breaker/break.mjs` `keepsWhole`, read at the one place the breaker cuts inside an address on a line it has
+  begun): an address that fits the next line whole goes there, the break before it, unless the line it leaves would be placed
+  justified and visibly stretched. Visibly stretched is the breaker's own two bounds, nothing new: placed justified, its stretch
+  a gap within the script's `cjkJust` (0.25 em: `placeItems`, `place.mjs`; past it the line is set ragged and stretches
+  nothing), and above `STRETCH_MIN` (0.05 em: under it a CJK line's stretch does not read as letter-spaced, `squeezeTakes`). So
+  a line placement would set ragged, or one nearly full, keeps the address whole; one letter-spaced to its measure has it cut at
+  its break points, as one longer than a line is (the branch for a line holding nothing yet is unchanged). By the lay's own log
+  of the line closed before each address (every fit try): 2303.11366v4's 0.205 em a gap stays cut; 2610.21880v1 t3 at 0.27 to
+  0.32 and 2610.20967v1 t2 at 1.38 keep their addresses whole after a ragged line, as today's reader shows them.
+- **A line set as Latin text** (spaces, under half its items CJK: `latinishOf`), and a target that breaks at spaces only
+  (`keepAll`), keep the cut as before: the breaker states no visible stretch of a Latin line's spaces (`spaceMax` is
+  placement's bound alone), and `STRETCH_MIN` reads a CJK line only. 1810.04805v2-es p6's GLUE address and 2608.06701v1 p12's
+  reference after "SWE-agent documentation" (a Latin line, 22 em of slack a space) are cut as they were.
+- **Blast radius** (`lab/typeset/parity/v2.mjs`, the reader's typesetLay in Node over r18's bundles, the 90 pairs with stored
+  rows, 2,568 pages, 68,737 members; base 28eac93de against the rule): by default 6 members on 6 pages move, with every toggle on
+  54 on 32 (references under the References toggle): each an address that was cut and now opens the next line whole. No member's
+  state, size, tracking or line count moves, I10 holds (0 faults), and the cuts left are 1 by default (the Spanish line) and
+  31 with every toggle on (30 Chinese lines letter-spaced or set as Latin text, the Spanish one).
+- **The parity** of the class's six pairs (2610.21880v1, 2610.20967v1, 2608.06701v1, 2608.25210v2, 2609.36054v2, 2610.21313v1;
+  laid, drawn and measured at both heads): by default 18 worse pages to 16, 2610.21880v1 p1 and 2610.20967v1 p1 no longer worse
+  (their `elements` difference, the address's two pieces drawn apart, gone, nothing else moved); with every toggle on 23 to 17,
+  those two and 2608.25210v2 p17 and 2609.36054v2 p9, p10, p11 (the nine DOIs of its references whole). Of the units the account
+  named, three stay cut by the rule: 2608.06701v1 p12 t321 (the Latin line above), 2610.21313v1 p5 t104 (its line before would
+  stand justified between the two bounds); 2608.06701v1 p11's three addresses are whole, the page worse by its two line-count
+  differences of before (t284, t294) alone. No difference
+  of any measure became worse; the bordered links' count moved nearer the original's (one border an address, not two).
+- 2303.11366v4 has no inputs the lab can lay (no compile, bundle or rows); its line is a unit test of the breaker's
+  (`packages/typeset/tests/unit/placement.test.ts`): a line of 26 characters on a measure that leaves it 0.205 em a gap is cut,
+  and holds "https://" at 0.035 em a gap, its numbers.
 
 ### 18.51 A piece of no point of its own is found by the text TeX set for it, its decoration with it (2026-11-12)
 

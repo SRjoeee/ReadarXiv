@@ -8,6 +8,7 @@ import { bare, judgeJoined, joinedOf, measureFidelity, mutualBest as bestPairs, 
 import { measureBlind } from './blind.mjs'
 import { unitClass } from '../../../packages/engine/src/locate/today/content-classes.mjs'
 import { litColumn, paintedEntries } from './paint.mjs'
+import { halfLeadingOf } from '../../../packages/reader/src/compose/highlight.ts'
 import { sentencesPaired } from './sentences.mjs'
 
 const r2 = (v) => (v === null || v === undefined ? v : Math.round(v * 100) / 100)
@@ -994,21 +995,10 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // (the highlight as the reader sees it: a drawn line by its ink (a CJK opening mark's blank first half, a closing mark's blank
   // second half, no ink), each side's boxes as its reader paints them: today's as its shapes paint them (today/entry.mjs
   // litBoxes), v2's Laid.lit and its kept ink's boxes padded as the reader's highlight.ts paints them, PAINT_PAD beside and
-  // half the page's leading above and below (halfLeading: half the lower quartile of the gaps between a member's rows); a figure
-  // text's on its band alone (Laid.lit `band`))
-  const leadOf = (side) => {
-    const gaps = []
-    for (const m of v2.pages[n]?.members ?? [])
-      for (const rows of m.lit?.[side] ?? []) {
-        const ys = [...rows].sort((a, b) => b[3] - a[3])
-        for (let i = 1; i < ys.length; i++) {
-          const g = ys[i - 1][1] - ys[i][3]
-          if (g >= 0 && g < 2 * (ys[i][3] - ys[i][1])) gaps.push(g)
-        }
-      }
-    gaps.sort((a, b) => a - b)
-    return gaps.length ? gaps[Math.floor((gaps.length - 1) / 4)] / 2 : 0
-  }
+  // half the page's leading above and below (the reader's own halfLeadingOf, read from it as paint.mjs reads its cut: half the
+  // lower quartile of the gaps between a member's rows, a turned member's none); a figure text's on its band alone (Laid.lit
+  // `band`))
+  const leadOf = (side) => halfLeadingOf((v2.pages[n]?.members ?? []).map((m) => (m.lit?.dir ? [] : (m.lit?.[side] ?? []))))
   const halfLead = { right: leadOf('right'), left: leadOf('left') }
   /** v2's boxes of a member on a side as its reader paints them (its sentences' and its kept ink's) */
   // (a turned member's boxes are in its run's frame, Laid.lit's dir: first the page's box each stands in, then the paint)

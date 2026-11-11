@@ -458,6 +458,26 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     const stretch = stretchOf(cap)
     return gaps > 0 && stretch > STRETCH_MIN * f && need <= squeezable(all, g.hang > 0, st.compress, P).length * half + gapSqueeze * gaps + 1e-9 && need / gaps < stretch
   }
+  /**
+   * Whether an address that does not fit the line in hand (`t`, a URL's crop with its url package's break points) goes whole to
+   * the next line, the break before it (the coordinator's ruling of 2026-11-12, PDF-READER §18.50: an address is one thing to
+   * a reader): it fits the next line whole, and the line in hand closed here would not be placed justified and visibly
+   * stretched. Visibly stretched is the breaker's own two bounds: placed justified, its stretch a gap within the script's
+   * cjkJust (placeItems: past it the line is set ragged, unstretched), and above STRETCH_MIN (under it the stretch does not
+   * read as letter-spaced). So a line that would be set ragged, or is nearly full, keeps the address whole; one letter-spaced to
+   * its measure (2303.11366v4 p1's abstract, 0.205 em a gap) has it cut at its break points, as one longer than a line is.
+   * STRETCH_MIN reads a CJK line alone (squeezeTakes's: a target that breaks between CJK characters, a line not set as Latin
+   * text), and the breaker states no visible stretch of a Latin line's spaces: a Latin-ish line's address is cut as before
+   */
+  const keepsWhole = (t, cap) => {
+    let n = line.items.length
+    while (n > 0 && line.items[n - 1].t.space) n--
+    if (!P.cjk || P.keepAll || latinishOf(line.items.slice(0, n), P)) return false
+    const next = slots[li + 1]
+    if (!next || tokW(t, f, st, scale) > next.x1 - next.x0 + 0.01) return false
+    const stretch = stretchOf(cap)
+    return !(stretch > STRETCH_MIN * f && stretch <= P.cjkJust * f)
+  }
   if (slots.length) open()
   // (the walk ends where the text does; a page break held on its last lines whose page got none of it is laid then, strand,
   // and the walk goes on from the line it lays again)
@@ -680,8 +700,11 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     // a line set justified: where TeX set the unit flush left or right or centred (placeItems: at its natural spacing), no line
     // is stretched, and TeX, whose \rightskip stretch there costs a short line nothing, breaks before the URL rather than inside
     // it at its url package's penalty: whole on the next line, as the original sets it (2608.25210v2 p1's VLDB footnote,
-    // \raggedright, its URL cut after "https://")
-    if (t0.crop?.breaks?.length && !line.centred && !line.flush) {
+    // \raggedright, its URL cut after "https://"). And on a justified line only where the line, the address whole on the next,
+    // would be placed justified and visibly stretched (keepsWhole): one placement would set ragged, or nearly full, keeps it
+    // whole, as the original and today's do (2610.21880v1 p1's footnote: "sohani@mail." cut where its line before would be set
+    // ragged at 0.27-0.32 em a gap)
+    if (t0.crop?.breaks?.length && !line.centred && !line.flush && !keepsWhole(t0, cap)) {
       const asp = items[0].asp ?? 0
       const cut = urlCut(t0, cap + shrink - line.x - asp, scale, false)
       if (cut) {
