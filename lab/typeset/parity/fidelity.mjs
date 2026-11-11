@@ -104,6 +104,50 @@ export function scriptedOf(runs, boxes) {
   return Math.max(...bases) - Math.min(...bases) > SCRIPT_RISE * big || Math.min(...rs.map((r) => r[5])) < SCRIPT_SIZE * big
 }
 
+/**
+ * How many times a side's drawn lines of a unit (`lines`, as measure-dom read them: a line a baseline, its text, `sz` its
+ * characters' sizes where they take two or more) carry an element's glyphs as A sets them (`rs`, A's runs of the element, its
+ * accents aside): its text as A's glyphs spell it, white space aside, found in a drawn line, at two sizes where A's glyphs on its
+ * baseline take two (its smaller under SCRIPT_SIZE of its larger: faked small capitals), and its glyphs off that baseline (a
+ * script) in a line of their own raised or lowered over that line on the side A sets them, smaller (`raisedOver`, blind.mjs: how
+ * measure-dom shows a script). A drawn text that does not spell it carries nothing
+ */
+export function carriedOf(rs, lines, raisedOver) {
+  const glyphs = [...rs].sort((a, b) => a[0] - b[0])
+  if (!glyphs.length) return 0
+  const big = Math.max(...glyphs.map((r) => r[5]))
+  const base = glyphs.find((r) => r[5] === big)[4]
+  const main = glyphs.filter((r) => Math.abs(r[4] - base) <= SCRIPT_RISE * big)
+  const off = glyphs.filter((r) => !main.includes(r))
+  const compact = (s) => String(s ?? '').replace(/[\s￼]+/gu, '')
+  const mainText = compact(main.map((r) => r[7]).join(''))
+  const offText = compact(off.map((r) => r[7]).join(''))
+  const sized = main.some((r) => r[5] < SCRIPT_SIZE * big)
+  const up = off.length ? Math.sign(off[0][4] - base) : 0
+  if (!mainText) return 0
+  const drawn = (lines ?? []).filter((l) => !l.rot && l.n > 0)
+  let got = 0
+  for (const l of drawn) {
+    // (its characters as drawn, white space and a crop's stand-in aside, each at its size: `sz`'s runs, by the text's characters)
+    const sizes = l.sz ? l.sz.flatMap(([n, s]) => Array(n).fill(s)) : null
+    const chars = [],
+      at = []
+    l.text.split('').forEach((ch, i) => {
+      if (/\s/u.test(ch) || ch === '￼') return
+      chars.push(ch)
+      at.push(sizes?.[i] ?? l.size)
+    })
+    const hay = chars.join('')
+    for (let i = hay.indexOf(mainText); i >= 0; i = hay.indexOf(mainText, i + mainText.length)) {
+      const ss = at.slice(i, i + mainText.length)
+      const two = !sized || Math.min(...ss) < SCRIPT_SIZE * Math.max(...ss)
+      const lifted = !offText || drawn.some((o) => o !== l && raisedOver(o, [l]) === l && Math.sign(o.y - l.y) === up && compact(o.text).includes(offText))
+      if (two && lifted) got++
+    }
+  }
+  return got
+}
+
 // ---------------------------------------------------------------- the paper's frame: its columns and text block
 /**
  * A paper's text frame, read off the original's own lines (until the engine states TeX's \textwidth and \columnwidth): the
@@ -396,6 +440,17 @@ export function measureFidelity(c) {
     return !!s && s.ink > 0 && s.shown >= KEPT_SHARE * s.ink
   }
   const VISIBLE = (kind) => kind !== 'space' && kind !== 'zero'
+  // (an element drawn as text whose glyphs on A take two sizes or stand on two baselines: read against what the side drew of it,
+  // its drawn lines of the unit (carriedOf), the elements of a unit A spells alike counted together, as many carried as the drawn
+  // lines carry; the rest set flat. Read without the drawing, every such element was set flat whatever the side drew: 2608.06701v1
+  // p2 t14's \approach, faked small capitals v2 draws at the original's two sizes, today flat)
+  const scripted = { today: new Map(), v2: new Map() }
+  const pend = (side, key, unit, k, boxes) => {
+    const rs = runsIn(runs, boxes).filter((r) => !r[8] && !ACCENT.test(r[7]))
+    const id = `${key}\u0000${rs.map((r) => r[7]).join('')}`
+    if (!scripted[side].has(id)) scripted[side].set(id, { key, unit, rs, ks: [] })
+    scripted[side].get(id).ks.push(k)
+  }
   // (today's element kinds that set their characters as written, as the engine's El.literal: a URL, a code mark)
   const LITERAL_KINDS = new Set(['url', 'code'])
   for (const ord of laidV2.keys()) {
@@ -416,7 +471,8 @@ export function measureFidelity(c) {
       // element (a URL, a code mark: TeX sets its characters as written, so it has no scripts) TeX broke over lines is drawn as
       // its text by design, its glyphs on two baselines its lines', no scripts)
       if (boxes.length) {
-        if (text === 1 && !raised && !literal && runs && scriptedOf(runs, boxes.map((b) => [b[0], b[1], b[2], b[3]]))) note('v2', key, `element ${k}: its scripts or sizes set flat as text`)
+        if (text === 1 && !raised && !literal && runs && scriptedOf(runs, boxes.map((b) => [b[0], b[1], b[2], b[3]])))
+          pend('v2', key, ord, k, boxes.map((b) => [b[0], b[1], b[2], b[3]]))
         continue
       }
       // (with no ink here, drawn as nothing (typeset lay/read.ts: a visible class with no ink is none), but a symbol, drawn from
@@ -441,9 +497,14 @@ export function measureFidelity(c) {
       const id = `${key.slice(1)}:${e.k}`
       // (today's `url` and `code` elements are literal as v2's: no scripts to set flat)
       if (!boxes.length || LITERAL_KINDS.has(e.kind) || cropped('today', Number(key.slice(1)), boxes) || keptHere('today', id) || e.flags?.includes('RAISED') || e.flags?.includes('EMPTY')) continue
-      if (runs && scriptedOf(runs, boxes)) note('today', key, `element ${e.k}: its scripts or sizes set flat as text`)
+      if (runs && scriptedOf(runs, boxes)) pend('today', key, Number(key.slice(1)), e.k, boxes)
     }
   }
+  for (const side of ['today', 'v2'])
+    for (const { key, unit, rs, ks } of scripted[side].values()) {
+      const lines = (rec[side].units ?? []).filter((u) => u.id === unit).flatMap((u) => u.lines)
+      for (const k of ks.slice(carriedOf(rs, lines, c.raisedOver))) note(side, key, `element ${k}: its scripts or sizes set flat as text`)
+    }
   for (const side of ['today', 'v2']) for (const [key, ws] of wrong[side]) for (const w of ws) fault(side, 'elements', `${name(key)}: ${w}`)
   for (const key of new Set([...wrong.today.keys(), ...wrong.v2.keys()])) {
     if (!T.has(key) && !V.has(key)) continue

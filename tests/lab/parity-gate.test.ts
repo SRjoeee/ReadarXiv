@@ -266,6 +266,46 @@ describe('elements: drawn otherwise than the original sets them', () => {
     const p = measure(fe, sides(6, ll, ll, { today: { crops: [crop(6, '19', [300, 597, 356, 610], [300, 597, 356, 610])] }, original: { runs, fonts: ['CMR10'] } }))
     expect(of('elements')(p)).toMatchObject([{ unit: 't6 para', worse: true, v2: { value: 'element 19: its scripts or sizes set flat as text' } }])
   })
+  // (what a side drew of an element drawn as text, read off its drawn lines (measure-dom: a line a baseline, `sz` its characters'
+  // sizes where they take two or more): 2608.06701v1 p2 t14's \approach, "LIVEPLAN" in faked small capitals on A, "L" and "P" at
+  // 9.96, "IVE" and "LAN" at 7.97; v2 draws it as text at those two sizes, today cuts it as a crop. Read without the drawing,
+  // every element drawn as text whose glyphs on A take two sizes was set flat, v2's among them)
+  const caps = [
+    [300, 598, 306, 608, 600, 9.96, 0, 'L', 0],
+    [306, 598, 318, 606, 600, 7.97, 0, 'IVE', 0],
+    [318, 598, 324, 608, 600, 9.96, 0, 'P', 0],
+    [324, 598, 337, 606, 600, 7.97, 0, 'LAN', 0],
+  ]
+  const capsEls = [['1', 'macro', [[300, 597, 337, 609, 600]], 1, 1, 0, 0]]
+  const capsCrop = [crop(14, '1', [300, 597, 337, 609], [300, 597, 337, 609])]
+  const drawnCaps = (sz?: number[][]) => [{ ...drawnLine(72, 400, 600, 'mit LIVEPLAN gelöst'), ...(sz ? { sz } : {}) }]
+  it('an element in small capitals drawn as text at its two sizes, as A sets them: not set flat', () => {
+    const fe = one(14, 'para', [factLine(72, 540, 600)], { els: capsEls })
+    const v = drawnCaps([[5, 9.96], [3, 7.97], [1, 9.96], [3, 7.97], [7, 9.96]])
+    const p = measure(fe, sides(14, l, v, { today: { crops: capsCrop }, original: { runs: caps, fonts: ['NimbusRomNo9L-Regu'] } }))
+    expect(of('elements')(p)).toEqual([])
+    expect(p.faults.elements).toBeUndefined()
+  })
+  it('the same element drawn as text at one size, or not found in the drawn text: set flat, worse as before', () => {
+    const fe = one(14, 'para', [factLine(72, 540, 600)], { els: capsEls })
+    const flat = measure(fe, sides(14, l, drawnCaps(), { today: { crops: capsCrop }, original: { runs: caps, fonts: ['NimbusRomNo9L-Regu'] } }))
+    expect(of('elements')(flat)).toMatchObject([{ unit: 't14 para', worse: true, v2: { value: 'element 1: its scripts or sizes set flat as text' } }])
+    const lost = measure(fe, sides(14, l, l, { today: { crops: capsCrop }, original: { runs: caps, fonts: ['NimbusRomNo9L-Regu'] } }))
+    expect(of('elements')(lost)).toMatchObject([{ unit: 't14 para', worse: true }])
+  })
+  it("an element whose glyphs on A stand on two baselines, drawn with its raised glyphs a line of their own over the rest: not set flat", () => {
+    // (\kmsMpc's "km s" and "Mpc" on 600, each "−1" raised 3.6 pt at 7.97 pt: drawn as "km s Mpc" with "−1 −1" a run raised over it)
+    const runs = [
+      [300, 598, 318, 608, 600, 10.91, 0, 'km s', 0],
+      [318, 601.6, 326, 609.6, 603.6, 7.97, 0, '−1', 0],
+      [328, 598, 348, 608, 600, 10.91, 0, 'Mpc', 0],
+      [348, 601.6, 356, 609.6, 603.6, 7.97, 0, '−1', 0],
+    ]
+    const fe = one(6, 'para', [factLine(72, 540, 600)], { els: [['19', 'umacro', [[300, 597, 356, 610, 600]], 1, 1, 0, 0]] })
+    const raised = [drawnLine(72, 400, 600, 'Wert 70 kms Mpc', 10.91), drawnLine(330, 380, 603.6, '−1 −1', 7.97)]
+    const p = measure(fe, sides(6, l, raised, { today: { crops: [crop(6, '19', [300, 597, 356, 610], [300, 597, 356, 610])] }, original: { runs, fonts: ['CMR10'] } }))
+    expect(of('elements')(p)).toEqual([])
+  })
   it('a URL TeX broke over two lines, drawn as text by design, has no scripts to set flat (2608.16117 p34 t202, 2610.22065 p7 t126)', () => {
     // (\url{https://link.aps.org/doi/10.1103/PhysRevE.110.014502}: its glyphs on A at the end of one line and the start of the
     // next, two baselines 14.45 apart at one size; the typesetter draws a literal element over lines as its text, every \url's

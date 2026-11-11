@@ -130,7 +130,7 @@ export function scriptsOf(runs, lines) {
 
 /** a side's drawn line set smaller than another of the unit's and off its baseline, within its reach: a run drawn as a script
  *  (measure-dom reads a line a baseline, so a raised run is a line of its own) */
-const raisedOver = (l, ls) =>
+export const raisedOver = (l, ls) =>
   ls.find((h) => h !== l && l.size < SCRIPT_SIZE * h.size && Math.abs(l.y - h.y) >= SHIFT * h.size && Math.abs(l.y - h.y) < RAISED_REACH * h.size)
 /** whether a script's run meets a box of A's ink (a crop's source, a kept element's ink): its middle across, its box up and down
  *  (a run's box is its advance's, not its ink's: a big operator's stands over its ink) */
