@@ -9,7 +9,7 @@ import type { ReaderController } from '../../src/chrome/model.ts'
 import { stubPopovers } from '../popover-stub.ts'
 import { mountElement } from '../render-hook.ts'
 import { fakeController, PREFS } from './fake-controller.ts'
-import { NAMES, withParts } from './parts.ts'
+import { NAMES, TEST_PARTS, withParts } from './parts.ts'
 
 let restore = () => {}
 // the interface's words as the maintainer reads them: the controls are found by them
@@ -547,9 +547,9 @@ describe("the signs by the host's rule (parts.tsx `signs`; L11's second round, g
     const b = await mountElement(capsuleOf(wait.controller, { signs: 'by-state' }))
     expect(drawn(b.container.querySelector('.capsule')!)).toBe(signOf(Info))
   })
-  it("the website's cards: a wait (out of reach, a limit) a clock in quiet ink; a fault the alert in the danger's", async () => {
+  it("the website's cards: a wait (out of reach) a clock in quiet ink; a fault the alert in the danger's", async () => {
     const tones = []
-    for (const failure of ['network', 'rate-limit', 'unknown'] as const) {
+    for (const failure of ['network', 'unknown'] as const) {
       const { container } = await mountElement(
         cardOf(fakeController({ phase: 'failed', failure }).controller, 'pane', { signs: 'by-state' }),
       )
@@ -558,7 +558,6 @@ describe("the signs by the host's rule (parts.tsx `signs`; L11's second round, g
       document.body.innerHTML = ''
     }
     expect(tones).toEqual([
-      [signOf(Clock), 'wait'],
       [signOf(Clock), 'wait'],
       [signOf(CircleAlert), 'alert'],
     ])
@@ -594,31 +593,30 @@ describe("a retry offered at its time by the host's rule (parts.tsx `retry`; L11
   })
   it("the website's card: its retry greyed until the time, still a stop, pressing it doing nothing; the host's lines under the reason; then offered", async () => {
     const fake = fakeController({ phase: 'loading' })
-    const cardLines = (kind: string, at: number | null) => ({
+    const cardLines = (_kind: string, at: number | null) => ({
       sub: at !== null && Date.now() < at ? 'retry later' : null,
-      note: kind === 'rate-limit' ? 'papers translated before still open' : null,
     })
     const { container } = await mountElement(
       cardOf(fake.controller, 'pane', { retry: 'when-due', words: { cardLines } }),
     )
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
     try {
-      await act(async () => fake.set({ phase: 'failed', failure: 'rate-limit', failureAt: Date.now() + 30_000 }))
+      await act(async () => fake.set({ phase: 'failed', failure: 'network', failureAt: Date.now() + 30_000 }))
       const button = () => container.querySelector<HTMLButtonElement>('.card button')!
       const lines = () => [...container.querySelectorAll('.card .lines p')].map((p) => [p.className, p.textContent])
       expect([button().getAttribute('aria-disabled'), button().disabled, lines()]).toEqual([
         'true',
         false,
         [
-          ['', R.status.rateLimited],
+          ['', TEST_PARTS.reason('network')],
           ['sub', 'retry later'],
-          ['sub', 'papers translated before still open'],
         ],
       ])
       button().click()
       expect(fake.controller.retry).not.toHaveBeenCalled()
       await act(async () => vi.advanceTimersByTime(30_000))
-      expect([button().getAttribute('aria-disabled'), lines().length]).toEqual([null, 2])
+      // (its time come: the line gone, the reason alone)
+      expect([button().getAttribute('aria-disabled'), lines().length]).toEqual([null, 0])
       button().click()
       expect(fake.controller.retry).toHaveBeenCalledOnce()
     } finally {

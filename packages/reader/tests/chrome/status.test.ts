@@ -319,19 +319,6 @@ describe("the states (the reader's design, §8)", () => {
     expect(cardOf(at({ phase: 'failed', failure: 'network' }), reason)).toMatchObject({ action: 'retry' })
     expect(R.status.noPaper).not.toBe('')
   })
-
-  it("too many requests: the card promises no retry of its own — a stopped run waits for the reader's (Part 6's interface review)", () => {
-    expect(cardOf(at({ phase: 'failed', failure: 'rate-limit' }), reason)).toEqual({
-      reason: R.status.rateLimited,
-      action: 'retry',
-    })
-    // whatever the host's sentence for it
-    expect(cardOf(at({ phase: 'failed', failure: 'rate-limit' }), () => 'host')).toEqual({
-      reason: R.status.rateLimited,
-      action: 'retry',
-    })
-    expect(R.status.rateLimited).not.toMatch(/自动|shortly/)
-  })
 })
 
 describe("a host's words for the states (parts.tsx StateWords: the website's own sentences), the catalogue's where it gives none", () => {
@@ -444,16 +431,16 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
     }
   })
   it("the cards in the host's words: a run that translated nothing by its kind, the original not read, no paper", () => {
-    const failed = at({ phase: 'failed', failure: 'rate-limit', failures: { pdf: null, service: 'rate-limit' } })
+    const failed = at({ phase: 'failed', failure: 'bad-request', failures: { pdf: null, service: 'bad-request' } })
     const lost = at({ phase: 'failed', failure: 'network', failures: { pdf: 'network', service: null } })
     const noPaper = at({ noPaper: true })
     expect([cardOf(failed, reason, WORDS), cardOf(lost, reason, WORDS), cardOf(noPaper, reason, WORDS)]).toEqual([
-      { reason: 'failed: rate-limit', action: 'retry' },
+      { reason: 'failed: bad-request', action: 'retry' },
       { reason: 'no original', action: 'retry' },
       { reason: 'no paper', action: 'arxiv' },
     ])
     expect([cardOf(failed, reason), cardOf(lost, reason), cardOf(noPaper, reason)].map((c) => c?.reason)).toEqual([
-      R.status.rateLimited,
+      reason('bad-request'),
       reason('network'),
       R.status.noPaper,
     ])

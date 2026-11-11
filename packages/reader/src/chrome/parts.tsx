@@ -86,11 +86,11 @@ export interface StateWords {
   unreadable?: string
   /** a write of the settings refused (O.saveFailed) */
   saveFailed?: string
-  /** the card of a run that translated nothing, by the chain's kind (the host's `reason`; R.status.rateLimited for a limit) */
+  /** the card of a run that translated nothing, by the chain's kind (the host's `reason`) */
   failed?: (kind: ProviderErrorKind) => string
-  /** that card's lines under its reason, each a line of its own (the website's: when a retry can work, while its time is to
-   *  come; the limit's note), given the kind and the time a retry is due (null: none named); none, or null: no line */
-  cardLines?: (kind: ProviderErrorKind, retryAt: number | null) => { sub?: string | null; note?: string | null }
+  /** that card's line under its reason (the website's: when a retry can work, while its time is to come), given the kind and
+   *  the time a retry is due (null: none named); none, or null: no line */
+  cardLines?: (kind: ProviderErrorKind, retryAt: number | null) => { sub?: string | null }
   /** the card where the original could not be read (the host's `reason` of the network) */
   originalLost?: string
   /** the way to arXiv's PDF of the paper where the original could not be read: given, the loss is the original's pane's card
