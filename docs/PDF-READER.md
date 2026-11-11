@@ -4500,6 +4500,15 @@ takes one capital before ".n" ("V.2") and a roman numeral with nothing after it:
   punctuation where it stands a fifth of its size apart. Today's pattern is gone. Only where the parts hold the label's every
   glyph, the name first (`whole`, as a float's label): a swapped head (`\swapnumbers`, "3.2 Theorem"), or one with glyphs no
   part holds, keeps the original's rather than lose its number.
+- **Every glyph in a part** (Codex on round 8's pull request; `labelParts`, `Label.unheld`, lay/read.ts `partsHold`). A number
+  TeX printed in brackets is the number's word with its bracket ("Figure (1).": number "(1", marks ")."), where this rule first
+  read the bracket as neither part's, and a relabel drew "Abbildung 1).", "Satz 1)."; at B8, before this rule, the float
+  reading kept the bracket and the head's pattern refused the tail. And a named label whose parts leave a glyph of it out says
+  how many (`unheld`: a bracket before its name, a note it holds whole, a bar after its number), and no reader draws it anew:
+  the reading's `whole` read only the parts' outer ends, so a glyph left out between them passed ("Theorem 2 (Main result)."
+  held whole drew "Satz )."). Over the 88 no label has a bracketed number after a name, and none was drawn wrong: of the 74
+  named labels whose parts leave a glyph out (45 list items "(ii)", 29 captions "Figure N |" of 2609.26457v1 and 2610.21085v1),
+  every one was the original's already, its ends unheld.
 - **Over the 88** (r14's parts, every member of kind theorem or heading whose label begins with a name the paper declares or
   the zh table holds; rootcause/batch6.md): 566 heads in 34 papers; relabelled before 522, after 530 (stage 1a f12 against r14: exactly these 8 heads change their relabel, every other drawn alike): the 5 of 2610.21312v1 and
   the 3 of 2610.21765v1 (which today's production draws: its characters spell "Definition"). Not by this rule: 2610.21026v1's
