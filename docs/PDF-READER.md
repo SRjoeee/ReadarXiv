@@ -4795,7 +4795,7 @@ and counted, so that a miss is seen.
   (`lab/pdf/prepare-back/run.mjs`) writes the counts in its summary line and its located file (`stats.made.ledger`, new) and the
   listed lines there (`floatLines`, new: a paper's words, the lab's data alone); `lab/pdf/prepare-back/float-lines.mjs <run>`
   reports them per paper and in total beside the orphan letters, against a baseline of counts (`--baseline`;
-  `lab/pdf/records/float-lines.json`, r17's: counts and kinds only, never a line's text). A report, not a gate.
+  `lab/pdf/records/float-lines.json`, r17's, remade at round B10's r18: 778 lines, the sub-captions and the `\centerline` table read: counts and kinds only, never a line's text). A report, not a gate.
 - **Over the 88** (stage 1a at this change, over r17's compiles): every bundle object and every prepare dump byte-identical to
   r17's (2,707 of 2,707 objects, 88 of 88 dumps); the located files equal but for the two new fields and their timings. Float
   lines 787 in 32 papers (11,820 letters): `code` 187 in 13 papers (the listings of algorithm floats), `cells` 258
