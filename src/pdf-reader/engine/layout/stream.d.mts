@@ -4,6 +4,8 @@ import type { InkPoint, PackedGlyphs } from '@readarxiv/engine'
 /** how a piece's ink was found, or why none was: the first OWNED are owned */
 export declare const OWNED_HOW: readonly string[]
 export declare const OWNED: number
+/** a point one reader reads alone (a caption's label's `ka<k>`, a float of no counter's `fn<n>`): every other reading passes over it */
+export declare const READ_ALONE: RegExp
 /** the glyph columns ownedOf reads of a page, and the owned rows after it */
 export declare const STREAM_COLUMNS: readonly ['x0', 'y', 'size', 'u']
 /** a page's glyphs as ownedOf reads them: packGlyphs' columns STREAM_COLUMNS (more may be there) */

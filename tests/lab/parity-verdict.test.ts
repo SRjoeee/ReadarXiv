@@ -341,6 +341,27 @@ describe("a unit's drawn lines of two columns on one baseline are two lines, wha
   })
 })
 
+describe("a caption's label on a line of its own (Label with no line): v2's relabel row is no line of the caption's text", () => {
+  // (IEEEtran's "TABLE I" centred above its caption's text: the part states it on none of the caption's lines; v2 draws its
+  // relabel as a row of its own on the label's baseline, today keeps the original's ink. The anchor and the line count read the
+  // text's lines on both sides; the labels measure reads the row)
+  const label = { ink: [N, 159.3, 727.56, 189.68, 732.93, 727.56], kind: 'float', float: 'table', align: 'c', name: ['TABLE', [N, 159.3, 727.56, 184.24, 732.93, 727.56]], num: ['I', [N, 187.03, 727.56, 189.68, 732.84, 727.56]], style: { size: 7.97 } }
+  const v2 = v2Of({
+    members: [{ ord: 14, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }],
+    facts: [{ ord: 14, kind: 'caption', align: 'c', style: { size: 7.97 }, label, lines: [factLine(74.5, 256, 718.6)] }],
+    today: { 14: { today: 14 } },
+  })
+  const text = drawnLine(74.5, 256, 718.6, 'Comparison with representative methods. ')
+  const row = drawnLine(168.2, 180.8, 727.56, 'TABELLE I')
+  const p = measure(v2, rec({ today: { units: [{ id: 14, lines: [text] }], lit: [14] }, v2: { units: [{ id: 14, lines: [row, text] }] } }))
+  it('judges no anchor and no line count against the row', () => {
+    expect(p.diffs.filter((d: { flag: string }) => d.flag === 'anchor' || d.flag === 'line-count')).toEqual([])
+  })
+  it('reads the row as the label v2 drew in the target, today\'s kept: nearer', () => {
+    expect(p.diffs.filter((d: { flag: string }) => d.flag === 'labels')).toMatchObject([{ unit: 't14 caption', nearer: 'v2', worse: false }])
+  })
+})
+
 describe("a label in a translated unit: today's relabelled against v2's kept as the original's ink", () => {
   // (a numbered head "Proposition 1 (" set on the first line at 48.96–113.52, its name word to 98.04; the unit's text after it)
   const label = { ink: [N, 48.96, 256.26, 113.52, 265.18, 258.3], kind: 'head', name: ['Proposition', [N, 48.96, 256.26, 98.04, 265.18, 258.3]], num: ['1', [N, 101.63, 258.3, 106.61, 265.15, 258.3]] }

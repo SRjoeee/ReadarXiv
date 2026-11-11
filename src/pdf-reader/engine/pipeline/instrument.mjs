@@ -17,7 +17,7 @@
 import { boxedAlignOf, framesOf, groupFacts, linkTargetOf, ownersOf, readAlign, readBoxAlign, readPdf, readRefNames, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
 import { classOf, followsOf, leadStep, readColours, readSkipProbe, refKeyOf, refKeysOf } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
-import { regionsOf, WANT } from '../layout/stream.mjs'
+import { READ_ALONE, regionsOf, WANT } from '../layout/stream.mjs'
 import { BACKREF_LIST, lastTexLog, startOf } from '../source/latex-front.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { phClass, texToText } from '../layer-proto/layer1.mjs'
@@ -746,7 +746,8 @@ export function boundedEmpty(pages, units, { glyphs = [], boxes = [] } = {}) {
   return out
 }
 
-/** a body's or a float's bracket (stream.mjs BRACKET): it bounds no piece's ink, which may run on across a column's end */
+/** a body's or a float's bracket (stream.mjs BRACKET): it bounds no piece's ink, which may run on across a column's end; nor
+ *  does a point one reader reads alone (stream.mjs READ_ALONE) */
 const BRACKET_POINT = /^[bf][se]\d+$/
 /** a text as its glyphs spell it: NFKC, case aside (TeX may set it in capitals, \MakeUppercase or faked small capitals, which the
  *  probe's box does not: own.mjs's and the maker's lead reading, leadNorm), white space out */
@@ -781,7 +782,7 @@ function pieceReading(pages, { glyphs = [], classes = [] } = {}) {
     const pts = pages[from.p].points ?? []
     for (let x = from.q; x < pts.length; x++) {
       const name = pts[x].name, e = END_POINT.exec(name)
-      if (!BRACKET_POINT.test(name) && !(e && Number(e[1]) === u)) return pts[x].glyph
+      if (!BRACKET_POINT.test(name) && !READ_ALONE.test(name) && !(e && Number(e[1]) === u)) return pts[x].glyph
     }
     return pages[from.p].glyphs.length
   }

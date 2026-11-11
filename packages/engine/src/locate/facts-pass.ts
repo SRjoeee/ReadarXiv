@@ -718,5 +718,26 @@ export function factsOf({
       if (unit.align === undefined || a !== unit.align) mem.read.push('align')
       mem.align = a
     }
+
+    // -- its label's own line, where the label stands on none of its lines (IEEEtran's "TABLE I" above its caption): that line's
+    // alignment against its measure, read as a line's above (centred by alignOf; flush right where it ends at its measure's end
+    // and starts within it; else flush left), never the unit's (a class may set the label flush left over a centred text)
+    if (mem.labelAt && mem.labelAt.line === undefined && mem.labelMeasure) {
+      const lb = mem.labelAt
+      const [m0, m1] = mem.labelMeasure
+      const l = [lb.ink[0], 0, lb.ink[1], lb.ink[3], lb.ink[5], lb.ink[4], lb.ink[2], m0, m1, 0] as Line
+      const size = lb.style.size > 0 ? lb.style.size : 10
+      const e: [number, number] = [m0, m1]
+      lb.align =
+        alignOf(
+          [l],
+          () => size,
+          () => e,
+        ) === 'c'
+          ? 'c'
+          : Math.abs(l[3] - m1) <= CENTRE && l[2] - m0 > INSET * size
+            ? 'r'
+            : 'l'
+    }
   }
 }

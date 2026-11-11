@@ -353,7 +353,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const drawn = (units, crops, keyOf) =>
     new Map(units.filter((u) => u.lines.some((l) => l.n > 0)).map((u) => [keyOf(u.id), withCrops(u, crops)]))
   const T = drawn(rec.today.units, rec.today.crops ?? [], (o) => `t${o}`)
-  const V = drawn(rec.v2.units, rec.v2.crops ?? [], keyOfPart)
+  // (v2's drawing whole, its relabel rows with it: the labels measure's)
+  const Vall = drawn(rec.v2.units, rec.v2.crops ?? [], keyOfPart)
+  const V = new Map(Vall)
   // (the original's facts of a unit: the part's where it has a member (its lines on A, TeX's alignment and font state, its
   // kind, its label), else today's prepare dump's lines)
   const orig = new Map()
@@ -367,6 +369,14 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const lb = m.label?.ink
     if (lines.length && m.lines[0]?.[0] === n && lb?.[0] === n && Math.abs(lb[5] - lines[0].y) <= 0.5) lines[0] = { ...lines[0], label: lb[1] }
     orig.set(keyOfPart(m.ord), { kind: m.kind, align: m.align, style: m.style, lines, first: m.lines[0]?.[0] === n, last: m.lines.at(-1)?.[0] === n, top: !!top?.has(m.ord), part: m.ord, size: m.style.size, label: m.label ?? null, pitch: m.pitch ?? null })
+  }
+  // (a caption's label on a line of its own (Label with no `line`, PDF-READER §18.34): v2 draws its relabel as a row of its own on
+  // the label's baseline, today keeps the original's ink there. The row is no line of the unit's text: the anchor, the line
+  // count and every measure of lines read the text's lines on both sides; the labels measure reads the row (Vall))
+  for (const [key, o] of orig) {
+    const lb = o.label
+    if (!lb || lb.line !== undefined || lb.align === undefined || lb.ink?.[0] !== n || !V.has(key)) continue
+    V.set(key, V.get(key).filter((l) => l.rot || Math.abs(l.y - lb.ink[5]) > 0.5))
   }
   for (const key of T.keys()) {
     if (orig.has(key)) continue
@@ -813,7 +823,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const name = o.label?.name
     if (!o.first || !name?.[1] || name[1][0] !== n || (!T.has(key) && !V.has(key))) continue
     const t = T.has(key) ? labelOf(T.get(key), o.label) : null,
-      v = V.has(key) ? labelOf(V.get(key), o.label) : null
+      v = Vall.has(key) ? labelOf(Vall.get(key), o.label) : null
     out.labels.push({ unit: `${key} ${o.kind ?? ''}`.trim(), name: name[0], today: t, v2: v })
     if (!T.has(key) || !V.has(key)) continue
     if (t === 'translated' && v !== null && v !== 'translated')

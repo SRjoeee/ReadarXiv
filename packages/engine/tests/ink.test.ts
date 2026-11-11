@@ -1199,6 +1199,34 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(note.lines[0]![2]).toBe(76)
   })
 
+  it('makes the text of a float of a type with no counter a note, the page’s own text (NeurIPS’s notice); a figure’s float none', () => {
+    // (NeurIPS sets "Preprint. Under review." in \\@float{noticebox}[b], a float type with \\ftype@noticebox and no counter: no
+    // \\caption can number it, so TeX says it is no figure, table or algorithm. The marked compile states it, `fn<n>` beside the
+    // float's `fs<n>` (layout/marks.mjs); the ledger reads its text as the page's own outside the bodies, a note, always
+    // translated. Read as a float, its line was `figures` by depth, which no figure reading takes: English on every pane)
+    const lines = ['Body text here', { text: 'Preprint. Under review.', x: 72, y: 80, size: 9 }]
+    const made = (fn: boolean) => {
+      const at = 'Body text here'.length
+      const { B, A } = pair({
+        lines,
+        points: [
+          ['bs1', 0],
+          ['be1', at],
+          ['fs2', at],
+          ...(fn ? ([['fn2', at]] as [string, number][]) : []),
+          ['fe2', at + 'Preprint. Under review.'.length],
+        ],
+      })
+      const L = locate(instrumentOf(B, [unitOf('para', 'Body text here')], [[0, -1]]), A, align(B, A), {
+        pages: rawOf(A),
+      })
+      return L.units.slice(1).map((u) => [u.kind, u.content.map((p) => (p.t === 'text' ? p.s : p.t)).join('')])
+    }
+    expect(made(true)).toEqual([['inknotes', 'Preprint. Under review.']])
+    // (a float of a type with a counter, a figure's or a table's: its text no unit owns stays its figure's, as before)
+    expect(made(false)).toEqual([])
+  })
+
   it('keeps a script TeX set in a text face an element of its ink unit in its own ink, as a formula’s run, never its text', () => {
     // (2610.30854v1 p1's names, no source unit's: `Lifan Jiang$^{1,2}$` under Times sets the marks' digits in the text face, 8.11
     // pt and 3.98 over the names' 10.96 pt baseline. Read as the unit's text, the marks were drawn flat at the names' size in the

@@ -25,7 +25,7 @@ import { type CjkFaces, faceOf, ownSmallCaps, type Roles, rolesFor } from '../br
 import { classifyFont, familyOfFonts } from '../breaker/font-names.types.ts'
 import { measure } from '../breaker/measure.ts'
 import { noStart } from '../breaker/script.ts'
-import { type TokenRules, type TStyle, tokens as tokensOf } from '../breaker/tokens.ts'
+import { baseOf, type TokenRules, type TStyle, tokens as tokensOf } from '../breaker/tokens.ts'
 import type { Tokens } from '../fit/types.ts'
 import type { Metrics } from '../types.ts'
 import { breakMaps, type Breaks, statedBreaks, type V0Piece } from '../unit/breaks.ts'
@@ -461,6 +461,10 @@ export type ReadInput = {
 export type ReadOut = {
   tokens: Tokens
   labelDrawn: string | null
+  /** a label that stands on none of its member's lines (Label with no `line` and its own line's `align`: IEEEtran's "TABLE I"
+   *  above its caption): its relabel, which no line of the member leads with, laid as a row of its own (entry.ts labelRowOf),
+   *  its face the relabel's as a lead's (leadOf: the label's weight, slant and fill on the unit's base style); null where none */
+  labelRow: { text: string; st: TStyle } | null
   lead: boolean
   cjkSize: number | undefined
   referenced: ReadonlySet<number>
@@ -533,6 +537,8 @@ export function readMember(i: ReadInput): ReadOut {
     heads: i.labels?.heads ?? null,
     names: i.labels?.names ?? null,
   })
+  // (a label on a line of its own: its relabel no lead of the member's first line, a row of its own)
+  const ownRow = !!m.label && m.label.line === undefined && m.label.align !== undefined && !!lab.label?.drawn
   // the unit's style: TeX's font state at its start as A's glyphs show it (Style), its size, its colour
   const st = tstyleOf(m.style, paper.designs)
   const given: TStyle = { ...st, ...(m.style.fill !== undefined ? { fill: m.style.fill } : {}) }
@@ -602,7 +608,9 @@ export function readMember(i: ReadInput): ReadOut {
     P: i.P,
     lead: i.lead
       ? { parts: i.lead.parts, ...(i.lead.gap !== undefined ? { gap: i.lead.gap } : {}) }
-      : leadOf(lab.label),
+      : ownRow
+        ? null
+        : leadOf(lab.label),
     faces,
     tagWords: true,
   })
@@ -615,6 +623,12 @@ export function readMember(i: ReadInput): ReadOut {
   return {
     tokens: toks,
     labelDrawn: i.lead ? i.lead.drawn : (lab.label?.drawn ?? null),
+    labelRow:
+      ownRow && !i.lead
+        ? // (its face the relabel's as a lead's is (leadOf over the unit's base, tokens.ts): the label's weight, slant and fill on
+          // the unit's base style)
+          { text: lab.label!.drawn!, st: { ...baseOf(unit, given), ...(leadOf(lab.label)?.parts[0]?.st ?? {}) } }
+        : null,
     lead: !!i.lead,
     cjkSize,
     referenced: br.referenced,

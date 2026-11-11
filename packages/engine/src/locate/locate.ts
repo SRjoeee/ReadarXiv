@@ -101,6 +101,9 @@ export interface Member {
    *  elementCase): its style states it (facts-pass, El.style.sc) */
   smallCaps?: Map<string, number>
   labelAt?: Label
+  /** where its label stands on none of its lines: TeX's measure for the label's own line (columnsAndMeasures), what its alignment
+   *  is read against (facts-pass.ts, Label.align) */
+  labelMeasure?: [number, number]
   style: Style
   align: 'j' | 'l' | 'c' | 'r'
   lead: number
@@ -2730,6 +2733,16 @@ function columnsAndMeasures(
   for (const [l, [m0, m1]] of measures) {
     l[7] = r2(m0)
     l[8] = r2(m1)
+  }
+  // (a label that stands on none of its member's lines, IEEEtran's "TABLE I" on a line of its own: its own line's measure, as a
+  // line's is read, the frame's column its extent meets alone, else its column)
+  for (const mem of members) {
+    const lb = mem.labelAt
+    if (!lb || lb.line !== undefined) continue
+    const f = frames.get(lb.ink[0])
+    const l = [lb.ink[0], 0, lb.ink[1], lb.ink[3], lb.ink[5], lb.ink[4], lb.ink[2], 0, 0, 0] as Line
+    const [m0, m1] = f ? frameOf(f, lb.ink[1], lb.ink[3]) : columnOf(l)
+    mem.labelMeasure = [r2(m0), r2(m1)]
   }
 }
 

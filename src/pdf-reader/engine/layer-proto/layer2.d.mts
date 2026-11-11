@@ -341,6 +341,8 @@ export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, ba
 export declare function measureTokens<T extends Token[]>(tokens: T, measure?: (s: string, face: Face) => number): T
 /** a float's label as the final sets it in the target: the target's name (capitals where the original's are), a space,
  *  the original's number and punctuation; null where the final keeps the paper's name or the name is the original's */
+/** whether a unit's label stands on its first line (`rect`: [page, x0, bottom, x1, top]): this layer relabels only such a label */
+export declare function labelOnFirstLine(label: { chars?: { page: number; yb: number }[] } | null | undefined, rect: readonly number[] | null | undefined): boolean
 export declare function labelInTarget(label: { text?: string; chars?: { ch: string }[] } | null | undefined, names: { figure: string; table: string } | null | undefined, captions: { figure?: string; table?: string } | null | undefined, to: string): string | null
 /** a babel name as the layer sets it in the target, wherever TeX identified the heading: the target's word for its key
  *  (capitals where the original's are); null where the target has none, or where the word is the original's */

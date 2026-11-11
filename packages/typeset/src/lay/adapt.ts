@@ -336,7 +336,9 @@ export function adapt(i: AdaptInput): Adapted {
   const fixed = m.fixed ?? 0
   const labelKept = !!m.label && !!(fixed & 4)
   const relabels = !!m.label && !labelKept
-  const label = labelOf(m, i.reading.labelDrawn)
+  // (a label on a line of its own is laid as a row of its own (entry.ts labelRowOf): no line of the member's starts at it)
+  const ownRow = !!m.label && m.label.line === undefined && m.label.align !== undefined
+  const label = ownRow ? null : labelOf(m, i.reading.labelDrawn)
   // (a label drawn anew is the first line's: its rectangle starts at the label, RUN:2039-2041. But a label TeX hung beside its
   // text, every text line of the member starting at one x past the label's end and the label at the measure's start (the
   // caption package's `hang`, \hangindent its label box's width, the label and its separator: 2609.36054v2 p3's "Figure 1." at

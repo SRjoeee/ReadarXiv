@@ -2026,11 +2026,16 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (labels) L2.renameRefs(prep, to, R.labels, ownNames)
     // a float's label in the target's name where the final names it so (labelInTarget): its ink erased and accounted as
     // the unit's text, and set as the line's start, in its own style, before the translation
-    const relabel = labels && relabels(p.id) ? L2.labelInTarget(prep.label, R.labels, labels.captions, to) : null
+    // (a float's label TeX set on a line of its own, found by its call (IEEEtran's "TABLE I" above the caption's text): this layer
+    // sets a relabel as the first line's start, which would carry it into the text's line, so it stays the original's ink there,
+    // as before it was found: relabelled only on the unit's first line, L2.labelOnFirstLine; v2 lays it as a row of its own.
+    // A flag of today's layer alone, no rule of reading: it goes with this layer at the cut-over, never carried into v2)
+    const relabelsP = relabels(p.id) && (!prep.label?.chars?.length || L2.labelOnFirstLine(prep.label, p.rects[0]))
+    const relabel = labels && relabelsP ? L2.labelInTarget(prep.label, R.labels, labels.captions, to) : null
     // or a theorem-like head's (its unit's body or its note), in translator's name for the target, its number and punctuation
     // the original's (headLabelInTarget, PDF-READER §19.11): read from the page's characters in the file's label box, each
     // part in its own style
-    const head = !relabel && labels && relabels(p.id) && (p.unit.kind === 'theorem' || p.unit.kind === 'heading') ? headOf(p) : null
+    const head = !relabel && labels && relabelsP && (p.unit.kind === 'theorem' || p.unit.kind === 'heading') ? headOf(p) : null
     if (head) prep.label = { ...(prep.label ?? {}), x1: Math.max(...head.chars.map(c => c.x1)), text: head.chars.map(c => c.ch).join(''), chars: head.chars, drawn: head.text, parts: head.parts, open: head.open }
     if (relabel || head) {
       if (relabel) prep.label = { ...prep.label, drawn: relabel }
@@ -2058,7 +2063,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       return joint.sort((a, b) => a.x0 - b.x0)
     }
     const joint = ld && p.rects[0]?.[0] === ld.nm.page && VIS.has(nameGroup(ld.nm.occurrence)) && !hiding?.labelKept?.(p.id) ? jointOf(ld) : null
-    if (joint && (!joint.length || relabels(p.id))) {
+    if (joint && (!joint.length || relabelsP)) {
       const jText = joint.map(c => c.ch).join('')
       // (the glue in em of the unit's own size, its first line's in the file: tokensOf2 sets it at the size the unit is drawn)
       const size0 = tex.index.unit(p.id)?.lines[6] ?? ld.nm.size
@@ -2101,7 +2106,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const byCell = p.unit.kind === 'cell' ? cellCentred(p) : null
     const centredFlag = byCell !== null ? byCell : lu.centred
     const r00 = p.rects[0]
-    const labelHides = !!prep.label?.chars?.length && !prep.label.drawn && !!r00 && prep.label.chars.every(c => c.page === r00[0]) && (relabels(p.id) || (INK_UNITS.has(p.unit.kind) && !hiding?.labelKept?.(p.id) && !VIS.has(labelGroup(p.id)) && prep.label.chars.every(c => c.x0 >= r00[1] - 0.5 && c.x1 <= r00[3] + 0.5)))
+    const labelHides = !!prep.label?.chars?.length && !prep.label.drawn && !!r00 && prep.label.chars.every(c => c.page === r00[0]) && (relabelsP || (INK_UNITS.has(p.unit.kind) && !hiding?.labelKept?.(p.id) && !VIS.has(labelGroup(p.id)) && prep.label.chars.every(c => c.x0 >= r00[1] - 0.5 && c.x1 <= r00[3] + 0.5)))
     // (centred by the file's flag: the block's first rect from the label on, so that label and text are centred together on the
     // original's middle; centred by the door's reading of its lines, or flush right: the label is inside the rect already, or the
     // block is read from the rects as they are)
@@ -2134,7 +2139,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // the original's last ones (layer2.mjs laidOut, P.lastLines). Where its class set its number before its first line, kept
     // as the original's ink there, the number goes with it, its ink copied as the line's start (`numbered`, once it is laid)
     const heading = p.unit.kind === 'heading' && !p.unit.title && !p.unit.front
-    const numbered = heading && !carried && !prep.lead && relabels(p.id) && p.blocks.length === 1 && L2.originalLines(p.blocks[0]) > 1 && !!prep.label?.chars?.length && !prep.label.drawn && prep.label.chars.every(c => c.page === p.blocks[0].page)
+    const numbered = heading && !carried && !prep.lead && relabelsP && p.blocks.length === 1 && L2.originalLines(p.blocks[0]) > 1 && !!prep.label?.chars?.length && !prep.label.drawn && prep.label.chars.every(c => c.page === p.blocks[0].page)
     // a first row TeX set on the line another unit's last row ends (a shared line, need.mjs rowLeadOf: a run-in heading's text,
     // a paragraph's part after the float that split it) starts where that unit's translation's ink ends on the row, the original's
     // separation after it (`start`, slotsAt), or at the row's own start where that unit set no text there (shareOf): not where
