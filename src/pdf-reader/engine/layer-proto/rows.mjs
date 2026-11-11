@@ -333,6 +333,7 @@ export async function runRows(bundle, { lang, send, format = 'markers', rank = i
     // a failure of the service, not of these texts (engine.mjs EngineError's `lost`): the batches after it would fail the same way
     if (how.error) { stopped = how.error; break }
   }
-  const lost = [...results.values()].filter(r => r.state === 'lost').length + (stopped && stopped !== 'aborted' ? todo.size : 0)
+  // (the units never asked are lost to a stop of the service's, its error kind `aborted` included; not to the run's own abort)
+  const lost = [...results.values()].filter(r => r.state === 'lost').length + (stopped && !signal?.aborted ? todo.size : 0)
   return { rows: new Map(final.map(r => [r[0], r])), lost, stopped }
 }
