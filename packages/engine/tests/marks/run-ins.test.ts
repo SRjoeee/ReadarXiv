@@ -148,6 +148,31 @@ describe('the run-in labels of a unit, stated must', () => {
     expect(kept(content)).toEqual(['and Electronic Engineering,'])
     expect(line).not.toHaveProperty('stop')
   })
+  // (2602.23285v2's contributions, staging zh 2026-11-11: "\\ $(ii)$ \textit{Accurate trajectory modeling.} …" came back
+  // upright while "(i) \textit{…}" at the unit's head kept its italic: the list's mark, an element, stood between the break and
+  // the label. Synthetic text in that shape)
+  it('a label after a forced break with only elements between, as one right after it: the line begins there', () => {
+    const content = [
+      t('The model keeps both properties.'),
+      el('\\\\'),
+      t('\n'),
+      el('$(ii)$', 'math'),
+      t(' '),
+      em('Accurate trajectory modeling.'),
+      t(' The trajectory is modeled as a whole.'),
+    ]
+    expect(kept(content)).toEqual(['Accurate trajectory modeling.'])
+    // (a colon label so placed: the break states the line it ends, as for one right after it)
+    const brk = el('\\\\')
+    expect(
+      kept([t('We compare two settings'), brk, el('$\\bullet$', 'math'), t(' '), bf('No XYZ'), t(': A model.')]),
+    ).toEqual(['No XYZ'])
+    expect(brk).toMatchObject({ stop: '\n' })
+    // (a word between the break and the group: its line began before it)
+    expect(
+      kept([t('Done.'), el('\\\\'), t(' see '), el('\\cite{x}', 'cite'), t(' '), bf('Next item.'), t(' And more.')]),
+    ).toEqual([])
+  })
   // (2608.25210v2 p2 on staging, 2026-11-09: `\topic{Current approaches to infer provenance are not reliable}`, the paper's
   // `\newcommand{\topic}[1]{\vspace{.5pt} \noindent{\bf #1.}}`, went on no wire and came back regular: a paper's macro was
   // never a style group, whatever TeX set it in)

@@ -4,6 +4,8 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a bold or italic label that begins a line of a list after its number, such as "(ii) *Accurate trajectory modeling.*", keeps its bold or italic in the translation, as the first item's label already did.
+- Fixed: in the PDF reader, a label the paper sets in bold or italic more than once in a paragraph, such as a research question "RQ2" named twice, keeps its bold or italic in the translation each time, and so does a label whose full stop the translation writes in its own script (the full stop of "RQ1." written as a Chinese one). They had come back regular.
 - Fixed: in the PDF reader, a figure, table or theorem whose number the paper prints in brackets, such as "Figure (1)", keeps both brackets when its label is put in your language.
 - Fixed: in the PDF reader, the "Proof." in front of a proof in a SIAM paper, and the "Proof:" of an IEEE paper's proof, are in your language, as the theorems and lemmas around them already were. They had stayed in English.
 - Fixed: in the PDF reader, a theorem, proposition, lemma or corollary whose number holds its section's Roman numeral ("Corollary VI.2", "Proposition VII.1", as IEEE papers number them) is named in your language, as one numbered "V.2" already was. Their heads had stayed in English.

@@ -8,15 +8,22 @@
 // and any translator may drop a tag pair. A group so lost loses its style: its weight, its slant, its colour (2610.17024v1
 // p9's `\textbf{(B1)}`, 2608.25210v2's `\textcolor{blue}{value}`, round 8 part A on staging).
 //
-// Its place is stated where the translation holds the group's own text as the source holds it: once, a whole word or words
+// Its place is stated where the translation holds the group's own text as the source holds it: a whole word or words
 // (Unicode's word boundaries, UAX #29) and equal by Unicode's compatibility (NFKC: a full-width "（B1）" is "(B1)"), white space
-// aside; and the source holds that text once in the same place, the group's alone (the place: the group the reply holds around
-// it, nearest, else the whole unit). A label, a name, an identifier the translator writes as it is: the group goes around it.
+// aside; an end mark the group's text ends in (a run of Unicode's Terminal_Punctuation, the class a group's stop is read in)
+// matched by its class, not its code point, and taken inside the group as the source has it ("RQ1." is the reply's "RQ1"
+// and an ideographic full stop). Where the source holds that text in the group's place (the group the reply holds around it,
+// nearest, else the whole unit) only as groups of the group's style, n of them (the group's own n = 1), and the translation
+// holds it there n times, each occurrence is a group's: one inside a copy of one of them the reply brought back is that
+// one's, and those it did not bring back take the others, a text of the place itself each, in order (the n groups are alike:
+// one style, one text). A label, a name, an identifier the translator writes as it is: the group goes around it
+// (2602.23285v2's research questions, each set bold twice in a paragraph: "RQ2 concerns …", "… ready to answer RQ2, …").
 // Not placed: a group whose words were translated (no counterpart is stated; a translator that keeps markup brings it back),
-// one whose text the translation or the source holds twice, one holding an element or another group (its pieces travel on
-// their own), one the translation holds only inside another group. Nothing else of a reply moves: a placed group splits one
-// text piece of its place, and its copy holding no text (a moved marker pair, empty or around white space) is unwrapped, its
-// white space kept where it stands. The projection, and so a row's sentences, is the reply's own: a span's edges are none of it.
+// one whose text the source also holds outside such groups or in a group of another style, or the translation another number
+// of times (a sentence the translator dropped), one holding an element or another group (its pieces travel on their own), one
+// the translation holds only inside another group. Nothing else of a reply moves: a placed group splits a text piece of its place, and its copy holding no text
+// (a moved marker pair, empty or around white space) is unwrapped, its white space kept where it stands. The projection, and
+// so a row's sentences, is the reply's own: a span's edges are none of it.
 //
 // A phrase group whose words were translated is placed too where the reply states its reference translation, the group's own
 // text translated alone by the same translator (`referencesOf`, `placeReferences`; the chain asks it of a markers-wire
@@ -66,9 +73,9 @@ function matchesIn(s: string, f: string): [number, number][] {
   return out
 }
 
-type Group = { id: string; text: string; ancestors: string[] }
+type Group = { id: string; text: string; style: string; ancestors: string[] }
 /** a unit's groups of text alone that are not `must` (any other comes back or the reply is refused), each with its own text,
- *  its enclosing groups' ids (innermost last) and those groups' contents (the whole unit's first) */
+ *  its style, its enclosing groups' ids (innermost last) and those groups' contents (the whole unit's first) */
 function groupsOf(content: readonly Piece[]): { groups: Group[]; scopes: Map<string, readonly Piece[]> } {
   const groups: Group[] = []
   const scopes = new Map<string, readonly Piece[]>([['', content]])
@@ -77,18 +84,18 @@ function groupsOf(content: readonly Piece[]): { groups: Group[]; scopes: Map<str
       if (p.t !== 'span') continue
       scopes.set(p.id, p.content)
       if (!p.must && p.content.length && p.content.every((q) => q.t === 'text') && SOLID.test(textOf(p.content)))
-        groups.push({ id: p.id, text: textOf(p.content), ancestors })
+        groups.push({ id: p.id, text: textOf(p.content), style: p.style, ancestors })
       walk(p.content, [...ancestors, p.id])
     }
   }
   walk(content, [])
   return { groups, scopes }
 }
-/** the source's text pieces of a content, at any depth, outside the group `skip` */
-function sourceTexts(ps: readonly Piece[], skip: string, out: string[] = []): string[] {
+/** the source's text pieces of a content, at any depth, outside the groups `skip` */
+function sourceTexts(ps: readonly Piece[], skip: ReadonlySet<string>, out: string[] = []): string[] {
   for (const p of ps)
     if (p.t === 'text') out.push(p.s)
-    else if (p.t === 'span' && p.id !== skip) sourceTexts(p.content, skip, out)
+    else if (p.t === 'span' && !skip.has(p.id)) sourceTexts(p.content, skip, out)
   return out
 }
 /** a reply's spans by id, each with the list that holds it */
@@ -101,14 +108,19 @@ function spansIn(ps: OutPiece[], out = new Map<string, { span: Extract<OutPiece,
   return out
 }
 
-/** a group's place in a reply: the text piece of its scope that holds its one match, the match there */
+/** what a group's place is asked for: `find`, each place a text holds it; `peers`, the groups it is placed with, its own
+ *  among them (source order), one occurrence each */
+type Wanted = { find: (s: string) => [number, number][]; peers: Group[] }
+/** a place of a group in a reply: a text piece of its scope, the place there */
 type Hit = { piece: Extract<OutPiece, { t: 'text' }>; m: [number, number] }
-/** The reply's content with each group of `wanted` the reply did not bring back placed around the one match `find` gives in
- *  its place (the group the reply holds around it, nearest, else the whole unit), where `fits` takes it. Pure */
+/** The reply's content with each group of `wanted` the reply did not bring back placed around an occurrence `find` gives in
+ *  its place (the group the reply holds around it, nearest, else the whole unit), where `fits` takes it: the place holds as
+ *  many occurrences as the group has `peers`, each one a text of the place itself or the copy of a peer the reply brought
+ *  back, and the peers it did not bring back take the free ones in order. Pure */
 function placeBy(
   unit: UnitIn,
   out: readonly OutPiece[],
-  wanted: (g: Group, scope: readonly Piece[]) => ((s: string) => [number, number][]) | null,
+  wanted: (g: Group, scope: readonly Piece[], inPlace: readonly Group[]) => Wanted | null,
   fits: (s: string, m: [number, number]) => boolean = () => true,
   widen: (g: Group, s: string, m: [number, number]) => [number, number] = (_g, _s, m) => m,
 ): OutPiece[] {
@@ -118,55 +130,120 @@ function placeBy(
     ps.map((p) => (p.t === 'span' ? { t: 'span', id: p.id, content: copy(p.content) } : { ...p }))
   const top = copy(out)
   let placed = false
+  const seen = new Set<string>()
   for (const g of groups) {
+    if (seen.has(g.id)) continue
     const spans = spansIn(top)
-    const back = spans.get(g.id)
-    if (back && SOLID.test(textOf(back.span.content))) continue
+    const backOf = (h: Group) => {
+      const b = spans.get(h.id)
+      return b && SOLID.test(textOf(b.span.content)) ? b : null
+    }
+    if (backOf(g)) continue
     // (its place: the group the reply holds around it, nearest, else the whole unit)
-    const scopeId = [...g.ancestors].reverse().find((a) => SOLID.test(textOf(spans.get(a)?.span.content ?? []))) ?? ''
-    const find = wanted(g, scopes.get(scopeId)!)
-    if (!find) continue
+    const placeOf = (h: Group) =>
+      [...h.ancestors].reverse().find((a) => SOLID.test(textOf(spans.get(a)?.span.content ?? []))) ?? ''
+    const scopeId = placeOf(g)
+    const want = wanted(
+      g,
+      scopes.get(scopeId)!,
+      groups.filter((h) => placeOf(h) === scopeId),
+    )
+    if (!want) continue
+    for (const h of want.peers) seen.add(h.id)
     const scopeOut = scopeId ? spans.get(scopeId)!.span.content : top
-    // (every place the reply holds it there, at any depth: one, in a text of the place itself)
+    // (every occurrence the reply holds there, at any depth: each a text of the place itself (free) or inside a peer's copy
+    // the reply brought back (its own), as many as the peers)
+    const mine = new Set(want.peers.filter((h) => backOf(h)).map((h) => h.id))
+    const free: Hit[] = []
     let total = 0
-    let at: Hit | null = null
-    const count = (ps: readonly OutPiece[], direct: boolean) => {
+    let owned = 0
+    const count = (ps: readonly OutPiece[], inside: string | null) => {
       for (const p of ps)
         if (p.t === 'text') {
-          const ms = find(p.s)
+          const ms = want.find(p.s)
           total += ms.length
-          if (direct && ms.length === 1) at = { piece: p, m: ms[0]! }
-        } else if (p.t === 'span') count(p.content, false)
+          if (inside === null) for (const m of ms) free.push({ piece: p, m })
+          else if (mine.has(inside)) owned += ms.length
+        } else if (p.t === 'span') count(p.content, p.id)
     }
-    count(scopeOut, true)
-    const hit = at as Hit | null
-    if (total !== 1 || !hit || !fits(hit.piece.s, hit.m)) continue
-    // (its copy the reply brought back holding no text, a moved marker pair, unwrapped: its content, none or white space, kept
-    // where it stands, so the reply's text, and the projection its sentences are counted in, are the reply's)
-    if (back) back.in.splice(back.in.indexOf(back.span), 1, ...back.span.content)
-    const { piece } = hit
-    const s = piece.s
-    const m = widen(g, s, hit.m)
-    scopeOut.splice(
-      scopeOut.indexOf(piece),
-      1,
-      ...(m[0] > 0 ? [{ t: 'text' as const, s: s.slice(0, m[0]) }] : []),
-      { t: 'span', id: g.id, content: [{ t: 'text', s: s.slice(m[0], m[1]) }] },
-      ...(m[1] < s.length ? [{ t: 'text' as const, s: s.slice(m[1]) }] : []),
+    count(scopeOut, null)
+    const lost = want.peers.filter((h) => !mine.has(h.id))
+    if (
+      total !== want.peers.length ||
+      free.length !== lost.length ||
+      owned !== mine.size ||
+      !free.every((x) => fits(x.piece.s, x.m))
     )
+      continue
+    // (each lost peer's copy the reply brought back holding no text, a moved marker pair, unwrapped: its content, none or
+    // white space, kept where it stands, so the reply's text, and the projection its sentences are counted in, are the reply's)
+    for (const h of lost) {
+      const back = spans.get(h.id)
+      if (back) back.in.splice(back.in.indexOf(back.span), 1, ...back.span.content)
+    }
+    // (the k-th lost peer around the k-th free occurrence, each text piece split at its places)
+    const byPiece = new Map<Hit['piece'], { m: [number, number]; id: string }[]>()
+    lost.forEach((h, k) => {
+      const x = free[k] as Hit
+      byPiece.set(x.piece, [...(byPiece.get(x.piece) ?? []), { m: widen(h, x.piece.s, x.m), id: h.id }])
+    })
+    for (const [piece, at] of byPiece) {
+      const s = piece.s
+      const parts: OutPiece[] = []
+      let from = 0
+      for (const { m, id } of at.sort((a, b) => a.m[0] - b.m[0])) {
+        if (m[0] > from) parts.push({ t: 'text', s: s.slice(from, m[0]) })
+        parts.push({ t: 'span', id, content: [{ t: 'text', s: s.slice(m[0], m[1]) }] })
+        from = m[1]
+      }
+      if (from < s.length) parts.push({ t: 'text', s: s.slice(from) })
+      scopeOut.splice(scopeOut.indexOf(piece), 1, ...parts)
+    }
     placed = true
   }
   return placed ? top : (out as OutPiece[])
 }
 
+/** the punctuation that ends a sentence or a clause, the class a group's stop is read in (Unicode's Terminal_Punctuation:
+ *  engine marks/faces.ts): a run of it at a group's end (white space aside) is its end mark */
+const END_MARK = /\p{Terminal_Punctuation}+\s*$/u
+const END_RUN = /^\p{Terminal_Punctuation}+/u
+/** a group's text as it is matched (above): its words folded, and whether an end mark follows them */
+type Literal = { f: string; end: boolean }
+function literalOf(text: string): Literal | null {
+  const m = END_MARK.exec(text)
+  const words = m ? fold(text.slice(0, m.index)) : ''
+  if (words) return { f: words, end: true }
+  const f = fold(text)
+  return f ? { f, end: false } : null
+}
+/** each place a text holds a literal: its words whole, and where it has an end mark, a run of that mark's class right after
+ *  them, which the place takes */
+function placesOf(s: string, lit: Literal): [number, number][] {
+  const ms = matchesIn(s, lit.f)
+  if (!lit.end) return ms
+  const out: [number, number][] = []
+  for (const [a, b] of ms) {
+    const run = END_RUN.exec(s.slice(b))
+    if (run) out.push([a, b + run[0].length])
+  }
+  return out
+}
+
 /** The reply's content with each group it did not bring back placed around its own text where the translation states it
  *  (above). Pure; the content given is not changed */
 export function placeGroups(unit: UnitIn, out: readonly OutPiece[]): OutPiece[] {
-  return placeBy(unit, out, (g, scope) => {
-    const f = fold(g.text)
-    // (the source's text there holds it once, in the group alone)
-    if (!f || sourceTexts(scope, g.id).some((s) => matchesIn(s, f).length)) return null
-    return (s) => matchesIn(s, f)
+  return placeBy(unit, out, (g, scope, inPlace) => {
+    const lit = literalOf(g.text)
+    if (!lit) return null
+    // (its peers: the groups of its place of its style and its text; the source's text there holds it in them alone)
+    const peers = inPlace.filter((h) => {
+      const l = h.style === g.style ? literalOf(h.text) : null
+      return l !== null && l.f === lit.f && l.end === lit.end
+    })
+    const find = (s: string) => placesOf(s, lit)
+    if (sourceTexts(scope, new Set(peers.map((h) => h.id))).some((s) => find(s).length)) return null
+    return { find, peers }
   })
 }
 
@@ -329,7 +406,7 @@ export function placeReferences(
     (g) => {
       const ref = refs.get(g.id)
       const want = ref === undefined ? '' : wantOf(ref)
-      return want ? (s) => referencesIn(s, want) : null
+      return want ? { find: (s) => referencesIn(s, want), peers: [g] } : null
     },
     (s, m) => onWords(s, m, target),
     (g, s, m) => withEnds(refs.get(g.id) ?? '', g.text, s, m),

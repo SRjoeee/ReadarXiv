@@ -4589,6 +4589,63 @@ than its source writes.
   where acmart's `\authors` is empty until `\maketitle` fills it, so that it is answered inkless and never marked (its own
   item); the names' glyphs are then the paragraph's text.
 
+### 18.42 A group's own text placed at every occurrence, its end mark by its class (2026-11-11)
+
+The owner's report (2602.23285v2 zh, pages 2 and 9, staging and production alike): "RQ2" and "RQ3", each set bold twice in one
+paragraph ("**RQ2** concerns …", "… ready to answer **RQ2**, …"), came back regular, and so did "**RQ1.**" where the reply wrote
+"RQ1" and an ideographic full stop (U+3002). The markers wire sends neither group (not `must`: neither starts and ends a sentence, `run-ins.ts`), and the chain's
+literal put-back (`packages/translate` `groups.ts` placeGroups, DESIGN §16) placed a group only where the source held its text
+once and the reply held it once; NFKC does not make "." the ideographic full stop. Production's wire moves such pairs to the reply's end, empty, and
+has no put-back: it lost them too (lane bold-spans).
+
+- **The rule** (`groups.ts` placeGroups, placeBy). Where the source holds a group's text in the group's place (the group the
+  reply holds around it, nearest, else the unit) only as groups of the group's style, n of them, and the reply holds that text
+  in the place exactly n times, each occurrence is a group's: one inside a copy of one of them the reply brought back is that
+  one's, and the others, each a text of the place itself, go to the groups the reply did not bring back, in order (the n
+  groups are alike: one style, one text, so no order of the translator's is assumed). Today's rule is its n = 1. A group whose
+  text ends in an end mark (a run of Unicode's Terminal_Punctuation, the class a group's `stop` is read in, `marks/faces.ts`;
+  white space aside) is matched as its words followed right away by a run of that class, whatever its code points, and the
+  place takes the run inside the group as the source has it: "RQ1." is the reply's "RQ1" with an ideographic full stop or "RQ1."; a group "RQ1" before
+  the source's "." keeps the reply's stop outside, as before. Not placed: the counts differ (Microsoft's ja reply dropped
+  "We are ready to answer RQ2": one RQ2 for two), the source holds the text outside such groups too or in a group of another
+  style, an occurrence stands inside another group, or the words come back with no end mark after them.
+- **What moves.** What a stored reply becomes, never what is sent: `CHAIN_RULES` `groups` -> `groups/2` (`chain.ts`), so every
+  row is read again from the stored replies (the store key is the wire's bytes), and no translator is asked anything.
+- **Measured** (offline, the base's placeGroups against this one; scratch `span-putback/stored.mjs`, `fresh.mjs`). The 22 parity
+  pairs' stored rows as the parity reads them (r17's bundles, 4,645 rows): 136 groups placed before, 154 now; 18 gained in 6
+  units of 4 pairs, none lost, none placed otherwise (2610.17024v1-zh 11: "E1" ×2, "E5" ×3, small capitals "proxsuite" and
+  "qpsolvers" ×2 each, "betadiff" ×2; 2602.23285v2-ja 3: "RQ1" with its ideographic full stop, "RQ3" ×2; 2610.40645v1-ja "(i)" ×2; 2608.16117v1-de
+  "a priori" ×2). The chain replayed over the fresh rows' cache for every unit of the 22 pairs (5,634 rows): 1,123 -> 1,141,
+  the same 18, none lost. Staging's zh rows of 2602.23285v2: "RQ1" with its ideographic full stop, "RQ2" ×2, "RQ3" ×2 placed, the owner's cases.
+- **Not this rule's**: a group whose words were translated, "first", "Second", "Third" of the same paper (one word, no
+  reference translation is asked for one word, DESIGN §16; a marker pair around a translated word was measured harmful: the
+  word came back untranslated or in the wrong sense, lane bold-spans' probe), and a phrase whose reference the reply does not
+  state.
+
+### 18.44 A run-in label after a forced break begins its line past the elements between (2026-11-11)
+
+2602.23285v2's contributions list (staging, zh and production alike): "(i) *Effective spatiotemporal modeling for ODE
+initialization.*" kept its italic, `\\ $(ii)$ \textit{Accurate trajectory modeling.}` came back upright. The run-in rule
+(`packages/engine` `marks/run-ins.ts`) keeps a style group whose two ends stand where the endpoint's sentence is cut anyway; a
+group at the unit's head begins its sentence (the unit's first word, past any element), and one right after a forced break
+begins its line. The second label stood after the break and then the list's mark, a formula, so the solid character before it
+was the formula's, not the break's: no rule read it as beginning a line, and on the markers wire its group went on no wire.
+
+- **The rule** (`run-ins.ts` `lineBeforeAt`). The place before a group is read past white space and the elements that are no
+  break, as `head` reads the unit's first word past its elements: a forced break so reached stands right before the group, for
+  every rule that reads one there (the boundary rule's start, a colon label after a break, and the line end such a break
+  states for it, the run-in rule's header). A word between the break and the group still ends the line's beginning.
+- **Measured** over r17's 88 bundles (every unit's content run through the rule as it stood and as it is, the same input to
+  both; scratch `span-putback/runin/count.mts`): 2 groups gain `must`, both run-in labels after a list's mark ("Accurate
+  trajectory modeling.", 2602.23285v2; "Q2 (Empirical).", 2610.21924v1); no forced break's stop moves. Stage 1a over the two
+  papers (r17's compiles): those two spans gain `must`, nothing else of either bundle moves (no id, no part); the differential
+  against B9's acceptance list reads exactly B9's (lost 11, gained 5,342, changed 5,157). `must` enters no id: the two units
+  keep their rows' ids and are sent again, their wires each a marker pair more.
+- **Not built: a label after a colon** ("… research questions: **RQ1.** Does …", its siblings after "?" kept). Read as a
+  sentence's start, a colon would add 91 groups in 17 papers, most no label: a bibliography's venue after "In:", a DOI after
+  "doi:", a title after "Source paper:", a whole question set in italics after "a question arises:", a figure's value after
+  its label ("Students: 29,241"). The coordinator's word is asked first (lane span-putback).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

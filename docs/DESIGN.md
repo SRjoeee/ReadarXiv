@@ -1181,7 +1181,11 @@ only how it meets the rest of the extension.
   `CHAIN_RULES` `groups`, so every row is read again from the stored replies, nothing asked again). A label, an identifier, a
   name a translator writes as it is gets its style back on every engine; a group whose words were translated has no
   counterpart stated and stays plain (only a translator that keeps markup brings it back), as does one holding an element or
-  another group, or one whose text the translation or the source holds twice. No wire changes, no byte is sent; reading costs
+  another group, or one whose text the source also holds outside the groups of its style or the translation another number
+  of times. "Once" is the rule's n = 1 (lane span-putback, 2026-11-11, PDF-READER §18.42): a text the source holds in the place
+  only as groups of one style, n of them, and the translation n times there, places each (2602.23285v2's "RQ2" set bold twice
+  in a paragraph); an end mark the group's text ends in is matched by its class, Unicode's Terminal_Punctuation ("RQ1." is the
+  reply's "RQ1" and an ideographic full stop); `CHAIN_RULES` `groups/2`. No wire changes, no byte is sent; reading costs
   11 µs a unit (34 µs a unit holding a group that is not `must`). Over the 88 corpus papers' stored replies read as the
   markers wire would bring them, 665 groups in 75 papers get their style back (575 a face, 90 a colour), and 2,637 that draw
   none of their own (a bibliography's fields, bare groups) go back around their words.
