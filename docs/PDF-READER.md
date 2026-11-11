@@ -3956,7 +3956,16 @@ takes one capital before ".n" ("V.2") and a roman numeral with nothing after it:
   29 are named as any head (ctex's word with the stop in Chinese, "Beweis." in German), every other of the 566 drawn as before. A proof with an
   optional argument (`\begin{proof}[Proof of Lemma 3.1]`, 2610.20266v1's 6) prints the argument in the name's place, in SIAM's
   class and in amsthm alike: the head is the author's text, a heading unit the translator translates, with no name to relabel.
-  Not this rule's: 2610.21504v1's one IEEEtran "Proof:", read as a paragraph's number label, English on both panes.
+- **IEEEtran's proof name** (`layout/marks.mjs` `CLASS_NAMES`, `classNamesTex`; `pipeline/live.mjs`, 2026-11-11). IEEEtran's
+  `\IEEEproof` sets "Proof:" through `\IEEEproofname`, the class's own name for a proof (`\@IEEEproof[\IEEEproofname]`), which
+  the names' wrapper did not know: it wraps babel's `\proofname` and a literal in a construct's definition (ieeecolor's
+  `\def\proof{… Proof: }`, 2610.30034v1, drawn in the target on both panes). 2610.21504v1 p4's "Proof:" was read as its
+  paragraph's number label, English on both panes. A class's own macro for a babel name's text is wrapped as babel's is (the
+  same key: the target's word, the probe's case answer), on the head's own line of the layout compile and the mark probe, only
+  where the paper's files call its construct outside a comment and babel's own macro is undefined (one key, one macro), so that
+  no other paper's bytes move. Over the 88 one paper calls `\begin{IEEEproof}`, once: its compiles move (3 made), every other
+  paper's are read from the caches (stage 1a f15: 88 made, 0 missing); 2610.21504v1 alone moves, its "Proof" a name of its own
+  before the paragraph, the paragraph's label the joint ":", as 2610.30034v1's; v2 draws the target's word and colon.
 
 ### 18.30 etoolbox's conditionals are read as TeX's own (2026-11-11)
 
