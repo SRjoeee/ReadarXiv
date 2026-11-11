@@ -474,6 +474,7 @@ export function inkOf(o: InkInput): {
               why: `figure: ${t ? t.why : f.why}`,
               fixed: true as const,
               ...(t?.why === 'formula' ? { formula: true as const } : {}),
+              ...(f.double ? { double: true as const } : {}),
             }
           : o.artefact?.(text, turned)
             ? { why: 'figure: code', fixed: true as const, pitch: true as const }
@@ -675,6 +676,7 @@ function figureTextOf(
             fixed: true as const,
             ...(t.why === 'code' ? { pitch: true as const } : {}),
             ...(t.why === 'formula' ? { formula: true as const } : {}),
+            ...(fig.units[t.ks[0]!]?.double ? { double: true as const } : {}),
           }
         : {}),
     },

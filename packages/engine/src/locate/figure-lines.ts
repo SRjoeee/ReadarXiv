@@ -134,6 +134,7 @@ export function figureLinesOf(
       if (t.why === null && t.ks.some((k) => doubled.has(k))) {
         t.why = 'crowded'
         keptBy.set(t, 'double')
+        for (const k of t.ks) if (fig.units[k]) fig.units[k]!.double = true
       }
     for (const t of out) countKept(t)
     // (the units no text holds: drawn twice, today's kept; else a turned run today crowded, which the line reading (level lines)
@@ -143,6 +144,7 @@ export function figureLinesOf(
       if (inText.has(u.k)) continue
       if (doubled.has(u.k)) {
         if (u.why !== 'crowded') u.why = 'crowded'
+        u.double = true
         count('double')
       } else if (u.why === 'crowded' && (Math.abs((u.ux ?? 1) - 1) > 1e-6 || Math.abs(u.uy ?? 0) > 1e-6)) {
         u.why = null

@@ -1060,3 +1060,69 @@ describe("today's unit the candidate writes with a group that carries nothing as
     expect(String(said(statedOf([today], [lost]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
   })
 })
+
+describe("(p) F3's item: today's figure text its marker and its words, v2's the words, its marker the label (the original's ink)", () => {
+  // (2602.23285v2 p8's "(b) Normal & Pre-seizure", 2608.06007v1's "- identify": F3 reads an item's marker as its label, kept as
+  // the original's ink, the text the words after it (PDF-READER §18.36); today's unit held both. 128 of the composite's units
+  // read as another reading, 10 absent: the stand-in's id another baseline unit's of the same words elsewhere)
+  const L = box(260.84, 328.68, 701.53, 706.15, 700.1)
+  const item = (i: string, words: string) => ({
+    ...on(unit(id(i), 304, 'inkfigures', [text(words)]), box(270.21, 328.68, 701.53, 706.15, 701.43)),
+    label: [{ kind: 'number', ...box(260.84, 268.57, 701.53, 706.15, 700.1) }],
+  })
+  const today = (s: string) => [on(unit(id('a'), 301, 'inkfigures', [text(s)]), L)]
+  it('states it held whole by the item, its marker its label, the item its holder', () => {
+    for (const s of ['(b) Normal & Pre-seizure', '- Normal & Pre-seizure', 'b. Normal & Pre-seizure']) {
+      const out = statedOf(today(s), [item('b', 'Normal & Pre-seizure')])
+      expect(out.map((x: { cause: string; why: string; holder?: string }) => [x.why, x.cause, x.holder])).toEqual([
+        [`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.item}`, 'item', id('b')],
+      ])
+    }
+  })
+  it('states it so where the item has the id of another of the baseline’s units, the same words elsewhere', () => {
+    const elsewhere = on(unit(id('b'), 900, 'inkfigures', [text('Normal & Pre-seizure')]), box(70, 120, 300, 305, 299))
+    const out = statedOf([...today('(c) Normal & Pre-seizure'), elsewhere], [item('b', 'Normal & Pre-seizure')])
+    expect(out.map((x: { u: { ord: number }; cause: string; holder?: string }) => [x.u.ord, x.cause, x.holder])).toEqual([[301, 'item', id('b')]])
+  })
+  it('states another reading where the item has no label at the line’s start, or more than a marker stands before its words', () => {
+    const bare = { ...item('b', 'Normal & Pre-seizure'), label: [] }
+    expect(said(statedOf(today('(b) Normal & Pre-seizure'), [bare]))).toEqual([[301, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`]])
+    expect(said(statedOf(today('Figure (b) Normal & Pre-seizure'), [item('b', 'Normal & Pre-seizure')]))).toEqual([
+      [301, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`],
+    ])
+  })
+  it('is declared to the parity: the item holds today’s unit whole', () => {
+    expect(HOLDER_JOIN.item).toBe('whole')
+  })
+})
+
+describe("(f) F3's joined text: today's row ending in a hyphen the break set, held whole by the text that joins it", () => {
+  // (2610.35877v1 p3: today's row "Use occupancy and policy propen-", v2's text of its path's two rows "Use occupancy and policy
+  // propensities directly.": the hyphen is the break's, the joined word the text's)
+  const rows = on(unit(id('b'), 281, 'inkfigures', [text('Use occupancy and policy propensities directly.')]), box(90, 180, 500, 506, 498), box(90, 150, 492, 498, 490))
+  it('states it held whole, the joined text its holder', () => {
+    const out = statedOf([on(unit(id('a'), 281, 'inkfigures', [text('Use occupancy and policy propen-')]), box(90, 180, 500, 506, 498))], [rows])
+    expect(out.map((x: { cause: string; holder?: string }) => [x.cause, x.holder])).toEqual([['held', id('b')]])
+  })
+  it('states another reading where the word goes on otherwise than the row', () => {
+    expect(said(statedOf([on(unit(id('a'), 281, 'inkfigures', [text('Use occupancy and policy propel-')]), box(90, 180, 500, 506, 498))], [rows]))).toEqual([
+      [281, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`],
+    ])
+  })
+})
+
+describe("(q) F3's double: a figure text drawn twice over itself kept as the original (the owner's ruling, PDF-READER §18.36)", () => {
+  // (2610.21313v1 p3's "SAMA" three times: today drew it, v2 keeps it, the dump's `keptBy: 'double'` its cause)
+  it('states the cause of a unit marked kept for being drawn twice', () => {
+    expect(keptWhyOf({ id: id('a'), keptBy: 'double', state: 'laid', why: 'unwrapped' })).toBe(CAUSE.double)
+  })
+})
+
+describe.skipIf(!existsSync(ACCEPTANCE))("F3's statements in the differential's acceptance list", () => {
+  const accepted = (cause: string) =>
+    (JSON.parse(readFileSync(ACCEPTANCE, 'utf8')) as { accepted: { match: string }[] }).accepted.some((e) => new RegExp(e.match).test(cause))
+  it('accepts an item held whole by its label and words, and a text kept for being drawn twice', () => {
+    expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.item}`)).toBe(true)
+    expect(accepted(CAUSE.double)).toBe(true)
+  })
+})

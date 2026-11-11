@@ -800,6 +800,8 @@ describe('figure-lines: step 2, ink that is no text never keeps a figure text (t
       if (x.blank) fig.glyphs[0]!.set(i, i < n ? 0 : 1)
     })
     expect(copyRunsOf(texts[0]!, fig, [page])).toEqual([1])
+    // (drawn once: no unit marked kept for being drawn twice)
+    expect(fig.units.map((u) => u.double)).toEqual([undefined, undefined])
   })
   it('keeps an overprint the reading did not make one text, and a run whose every glyph is set twice (2610.21924v1 p5)', () => {
     // (two units of "CONDITIONAL RESCUE" on one another, neither's room meeting the other's glyphs: no copy recorded, two
@@ -811,6 +813,8 @@ describe('figure-lines: step 2, ink that is no text never keeps a figure text (t
     fig.units[1]!.y = fig.units[0]!.y
     figureLinesOf([page], fig, () => false, null)
     expect(fig.units.map((u) => u.why)).toEqual(['crowded', 'crowded'])
+    // (each marked kept for being drawn twice: the made unit's `double`, the dump's `keptBy: 'double'`, the differential's (q))
+    expect(fig.units.map((u) => u.double)).toEqual([true, true])
     // (one run whose glyphs are each set twice, a hair apart: its text "SSEEAARRCCHH", no text to send)
     const twice = pageOf([[{ text: 'SEARCH', font: T, x: 100 }]])
     const g = twice.page.glyphs as Glyph[]
@@ -820,6 +824,7 @@ describe('figure-lines: step 2, ink that is no text never keeps a figure text (t
     for (let i = n; i < 2 * n; i++) twice.fig.glyphs[0]!.set(i, 0)
     figureLinesOf([twice.page], twice.fig, () => false, null)
     expect(twice.fig.units.map((u) => u.why)).toEqual(['crowded'])
+    expect(twice.fig.units.map((u) => u.double)).toEqual([true])
   })
   it('reads each page’s units by that page’s glyphs: a long label on one page, a short one on the next (2610.21924v1)', () => {
     // (the overprint test sorted every unit's glyphs by the last page's glyph array, and a unit of an earlier page whose glyphs

@@ -61,6 +61,8 @@ export interface TodayFigureUnit {
   before?: number
   after?: number
   under?: number | null
+  /** (CHANGED, F3) kept for being drawn twice over itself (figure-lines.ts doubledOf): the made unit's `double` */
+  double?: true
 }
 /** a path's lines as pageInk keeps them (`shapes`): its segments (x0, y0, x1, y1 each), whether it is stroked and filled, its
  *  half line width */
