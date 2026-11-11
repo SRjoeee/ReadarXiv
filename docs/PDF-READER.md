@@ -3654,10 +3654,10 @@ after it), and sets the mark's blank as glue that may shrink by half an em.
   spaces stretch past twice their width: Chinese 1 before, 4 after; the three new ones each hold a URL after a full stop, whose
   dropped space leaves the line two spaces to take its slack, one of them the URL's own line break on A, read into its text as
   a space.
-- **A mark's class is a full-width mark's alone** (`tokens.ts`, the token's `punct`, by the same definition): a curly quote an
-  alphabet's target sets in its Latin face is proportional and has no blank half, so no half of it hangs past a line's end, as
-  `hangOf` hung every closing mark's (1810.04805v2-es p8 t155: a closing quote half an em past the measure, the only such line of
-  the corpus's).
+- **A mark's class is a full-width mark's alone** (`tokens.ts`, the token's `punct`): a curly quote an alphabet's target sets
+  in its Latin face is proportional and has no blank half, so no half of it hangs past a line's end, as `hangOf` hung every
+  closing mark's (1810.04805v2-es p8 t155: a closing quote half an em past the measure, the only such line of the corpus's).
+  Since §18.47 the class is the face's measure of the mark (`script.ts` `markOf`): a Latin face holds none.
 - The parity counts a unit's line count the rule moves as the rule's only where the pair laid with those spaces put back sets
   today's count (the coordinator's ruling of 2026-11-10, `lab/typeset/parity/README.md`): 2 pages by default, 5 with every switch
   on, each a line holding a lone fragment saved.
@@ -4906,6 +4906,88 @@ toggle, its nine lines the ledger's float lines of a table with no cell (§18.45
   The parity (gate mode, both modes, 2608.06701v1-zh): the same worse pages as before (8 by default, 9 with every toggle on),
   none newly worse and no worse difference come or gone; Table 4's header drawn translated, its cells' centring nearer the
   original's than today's.
+
+### 18.47 A full-width mark's blank half is its face's, and the drawing is what the layout measured (2026-11-12)
+
+The owner's report on staging (2611.03953v2 page 13, the right pane, engine cb9f49fca): in Traditional Chinese the sentence's
+full stop stood in three places in one paragraph (one low and tight after the text, one low, one in the middle of its box); in
+Japanese the colon of "粒度：144" and "粒度：4" stood on the digits after it; in Korean the colon of "세분화: 144" touched the word
+before it. Three causes, each measured in Chromium on the faces the website serves (the same files, by their SHA-256), the
+lane's record `lanes/cjk-punct.md`:
+
+- **The half box was a class by character.** A mark's blank half came from a table (`breaker/script.ts` `PUNCT_CLOSE` and
+  `PUNCT_OPEN`: "close where its ink stands in its em's first half"), switched off for one language (the rule set's
+  `centredPunct`, Traditional Chinese), with a second list for the squeeze (`breaker/break.mjs` `SQUEEZE_MARKS`, the colon,
+  semicolon and the marks of exclamation and question left out of it, not out of the compression). The faces disagree with the
+  table: Harano Aji Mincho and Source Han Serif K draw ：；！？ in the middle of the em (the colon's ink 0.434 to 0.566 em), Source
+  Han Serif TC draws 、。，．：；！ in the middle too, its brackets one-sided. A crowded paragraph compresses every mark
+  (`compressMax` 2, the fit's first step): the colon lost half its em, and its ink stood 0.07 em into the next box, under the
+  digits' (the reader's check, Japanese: 34 marks on a neighbour's ink, up to 1.83 pt).
+- **The drawing took the interface's language.** The overlay's SVG carried no `lang` (today's engine set the target's,
+  `layer-proto/reader.mjs` `fresh`), so it took the page's, the interface's (zh-CN on that visit). The served faces keep `locl`
+  (the website's subsetter keeps the feature), and Source Han Serif TC's `locl` for Simplified Chinese swaps 、。，．：；！？ for
+  Simplified's glyphs (the full stop's ink at 0.04 to 0.33 em, on the baseline) in a run whose script is Han, Latin, kana or
+  Hangul, and not in a run of digits and marks alone, which the font's default script holds no `locl` for: the full stop after
+  "一分" and after "相對…）" Simplified's, low, the one on the line "4）。" the face's own, in the middle. Neither the browser's
+  punctuation trimming (`text-spacing-trim`, already `space-all`) nor a character's own place moved it.
+- **The drawing dropped two of the layout's numbers.** The painter drew a run at its line's size (`emit/display.ts`), where the
+  layout measured it in its face string with the face's size correction (Source Han Serif K 0.959), and drew no tracking, which
+  the layout set after each character of a run of one place (a Korean word: the correction given back, then the fit's): the Item
+  carried none to the reader. "세분화" was drawn 8.92 pt a syllable where the layout set 8.64, 0.85 pt over its box onto the
+  colon (the reader's check, Korean: 214 of 398 runs off the layout's advance, by up to 5.56 pt). Today's engine drew both.
+
+**The rule** (`breaker/script.ts` `markOf`): a full-width mark's blank half is the half of its advance its face's glyph holds no
+ink in, measured in the face files themselves (`data/marks.ts`, written by `lab/typeset/marks-data.py` from the very files the
+website subsets, each pinned by its SHA-256 to `rules/font-coverage.mjs` `METRICS`; a unit test holds the two equal): a closing
+blank where the ink lies within the first half, an opening one within the second, none where the ink crosses the middle or the
+face holds no measure of the mark, which then keeps its whole box (no hang past a line's end, no lead cut, no compression, no
+squeeze). The face is the first of the run's faces measured, the target's CJK face; a curly quote in an alphabet's Latin face has
+none. One character in one face so has one place in its box wherever it stands, and no class by character or switch by language
+is left: `SQUEEZE_MARKS` is gone and `centredPunct` is read by no part of the reader's typesetter (the published rule set keeps
+the field, its schema unchanged, and today's engine, the extension's own reader, still reads it as §9.4's table says). The space rule (§18.18) still reads the marks' side by what they do in the text (`punctOf`): a centred
+mark carries white on both sides. Per face, the ink of the marks the report names (thousandths of the em, left to right):
+
+| Face | 、 | 。 | ， | ： | ； | ！ | ？ | （ | ） |
+|---|---|---|---|---|---|---|---|---|---|
+| Source Han Serif SC | 39–290 | 42–323 | 79–227 | 170–294 | 133–294 | 194–303 | 35–458 | 651–937 | 63–349 |
+| Source Han Serif TC | 355–584 | 360–641 | 401–562 | 434–566 | 418–567 | 444–553 | 260–719 | 651–937 | 63–349 |
+| Harano Aji Mincho | 39–290 | 42–323 | 79–227 | 434–566 | 418–567 | 444–553 | 260–719 | 651–937 | 63–349 |
+| Source Han Serif K | 39–290 | 42–323 | 79–227 | 434–566 | 418–567 | 444–553 | 260–719 | 651–937 | 63–349 |
+
+**The drawing is the measure** (`packages/reader` `compose/paint.ts`, `compose/served.ts`): the SVG in the target's language;
+every run's class with `locl` off (`font-feature-settings: "locl" 0`, beside `text-spacing-trim: space-all`), so that a mark is
+its face's default glyph wherever it stands, the one measured (the layout's measure of a character alone is that glyph under
+any language: a lone mark is of no script). Under its own language too a face's `locl` draws glyphs the layout did not
+measure: Source Han Serif SC's em dash 1.000 em where its default, measured, is 0.890, and K's ASCII marks and space wider (its
+space 0.310 em where 0.256). And a run at its face's size correction (`faceScale`, the face string's own size) and with its
+tracking (`letter-spacing`, the Item's `track`), both to 1e-4 of a point. Over the corpus's laid runs only Korean words carry
+tracking, and only Source Han Serif K has a size correction.
+
+**Held by** the reader's browser check (`packages/reader/e2e/run.mjs`, `punct.mjs`): s1-columns laid by the reader's own
+typesetter over the served faces in zh, zh-TW, ja and ko, from translations written for it whose lines hold 。，、：；！？（）
+beside Han, Latin, digits and the fixture's element crop, the interface zh-CN; every laid page's drawing measured from pixels
+and the SVG: no mark's ink box on a neighbour's (a device px at 6 px a point), one place in its box a character in a face (two
+device px), every run drawn on its own at the layout's advance (0.004 pt a character, the largest measured 0.0037). Before the
+fix: zh passed; zh-TW 3 marks in more than one place (、 by 0.333 em over 17); ja 34 overlaps; ko 214 of 398 runs off. After:
+none. And by `packages/typeset/tests/unit/punct-ink.test.ts` (the faces' classes, a crowded paragraph's colons: Japanese 0.47 em before, a whole
+em after).
+
+**What it moves** (the parity's lay, `lab/typeset/parity/v2.mjs`, over the 90 pairs with stored rows on round 18's parts: 82
+zh, 4 ja, 2 es, 1 pl, 1 de; cb9f49fca against the rule): Simplified Chinese 63 of 60,386 members on 57 of 2,248 pages, 50 lines
+broken elsewhere in 12 members and 52 lines set otherwise on the same text; no member a line more or fewer, at another size, or
+no longer laid. Every one is the squeeze taking Source Han Serif SC's colon's blank half (its ink 0.17 to 0.29 em), which the
+old list left out: a line holding a full-width colon takes the group it missed (one paragraph then fits a fit step earlier,
+its marks less compressed); the old engine with only its squeeze list widened by the full-width colon, semicolon and marks of
+exclamation and question lays those pages as the rule does, all 1,036 pages of the 30 pairs that moved equal, member for member
+and line for line. Japanese, Spanish, Polish and German: nothing moved (the four Japanese pairs' translations hold no
+full-width colon, semicolon or mark of exclamation or question). Traditional Chinese and Korean have no pair with stored rows:
+the fixture's check alone measures them.
+
+**Not this rule's.** A run is shaped with the runs of its line (one `<text>` a line): a mark of no script at a run's start takes
+the script of the run before it, and a kern pair across that boundary is lost: Korean's "(k" after Hangul drawn 9.162 pt where
+the layout measured it alone at 9.262 (the check reports it, before and after alike). Drawing each run in a `<text>` of its own
+would hold that too; it moves the drawing's structure, which the parity's reading and the checks read by line. And the
+extension's own reader (`AXT_READER` 'today', `layer-proto/layer2.mjs`) keeps its class by character.
 
 ## 19. The engine's contract
 
@@ -7564,11 +7646,11 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   against the other's room as first found: a level label and a turned one never take one place); `ROOM_MAX` 6 em at most. Crowding and the anchor read alone are
   read within the reach as before, so the same units are drawn and the base is the same bytes.
 - **Its line by its ink** (v2's typesetter, `packages/typeset` S.figures): a translation is fitted to its line and set on its
-  anchor by its ink, as every line the breaker sets is. A full-width mark's ink stands in one half of its em, so the blank half
-  of a mark at the line's edge is none of the line (`breaker/break.mjs` `leadOf`, `hangOf`, the one rule the breaker's lines are
+  anchor by its ink, as every line the breaker sets is. The blank half of a mark at the line's edge, the half of its em its
+  face draws no ink in, is none of the line (`breaker/break.mjs` `leadOf`, `hangOf`, the one rule the breaker's lines are
   placed by: an opening mark that starts the line loses its leading half where the target's rules compress its marks, a closing
-  mark that ends it hangs its trailing half past the edge; a mark is a CJK one, `punctOf`, where the target's faces set the marks
-  in one half of the em, not Traditional Chinese's `centredPunct`): it needs no room and stands past the anchor's edge, a turned
+  mark that ends it hangs its trailing half past the edge; a mark's blank half is its run's face's measure, `script.ts` `markOf`,
+  §18.47, none where its ink crosses the middle): it needs no room and stands past the anchor's edge, a turned
   text's along its run. Today's paintFigures set a translation by its advance, so a right-aligned label ending with a closing
   mark ended its ink half an em short of its original's end (1810.04805v2 p16's "Masked LM" in Chinese, in full-width
   parentheses: 3.49 pt at 6.97) and a centred one

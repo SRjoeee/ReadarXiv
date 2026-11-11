@@ -10,7 +10,7 @@
 import { hangOf, leadOf } from '../breaker/break.types.ts'
 import { cover } from '../breaker/cover.ts'
 import { type FitMeasure, fitMeasure } from '../breaker/measure.ts'
-import { cjkClassRe, fullWidthPunctOf } from '../breaker/script.ts'
+import { cjkClassRe, markOf } from '../breaker/script.ts'
 import { shown, type TextPiece } from '../breaker/text.ts'
 import type { Face, Token, TStyle } from '../breaker/tokens.ts'
 import { firstCompress } from '../fit/walk.ts'
@@ -55,7 +55,7 @@ export type FigureUnit = {
   pieces?: readonly (({ t: string; s?: string; tr?: boolean } | TextPiece) & { cls?: FigureClass })[]
 }
 /** a run of a figure's translation in one face (figureRuns), and its fill where its group states one (FigureClass.fill) */
-export type FigureRun = { s: string; face: Face; cls: 'cjk' | 'latin'; fill?: number; cjkFace?: true }
+export type FigureRun = { s: string; face: Face; cls: 'cjk' | 'latin'; fill?: number }
 /** a figure text's outcome: drawn (its text, runs, size, where its anchor keeps it, its width, its turn in degrees
  *  anticlockwise, its fill) or why not */
 export type Figure = {
@@ -88,8 +88,8 @@ export type FiguresInput = {
   designs: Readonly<Record<string, string>>
   /** a style's face in a script class (B.faces) */
   faceOf: (st: TStyle, cls: 'cjk' | 'latin') => Face
-  /** the rules' cjkQuotes, the last floor (P.floorMin), and what a line's edge marks are (centredPunct, compressMax: blanksOf) */
-  rules: { cjkQuotes?: boolean; floorMin: number; centredPunct: boolean; compressMax: number }
+  /** the rules' cjkQuotes, the last floor (P.floorMin), and how far the marks are compressed (compressMax: blanksOf) */
+  rules: { cjkQuotes?: boolean; floorMin: number; compressMax: number }
   metrics: Metrics
 }
 
@@ -132,15 +132,7 @@ export function figureRuns(
   }
   return runs.map((r) => {
     const face = r.st ? faceOf(r.cls, r.st) : faceOf(r.cls)
-    // (a CJK class's run set in a face other than the Latin one the same style sets: its marks full-width, fullWidthPunctOf)
-    const cjkFace = r.cls === 'cjk' && face.id !== (r.st ? faceOf('latin', r.st) : faceOf('latin')).id
-    return {
-      s: r.s,
-      face,
-      cls: r.cls,
-      ...(typeof r.st?.fill === 'number' ? { fill: r.st.fill } : {}),
-      ...(cjkFace ? { cjkFace: true as const } : {}),
-    }
+    return { s: r.s, face, cls: r.cls, ...(typeof r.st?.fill === 'number' ? { fill: r.st.fill } : {}) }
   })
 }
 /** a translation's pieces as one text, as the figure is drawn (a piece that is no text a space, white space one space, trimmed),
@@ -183,12 +175,12 @@ export const figureRunsDepth = (runs: readonly FigureRun[], m: FitMeasure): numb
 
 /** the blank halves at the edges of a figure text's line, before its ink and after it, em of its size: its line set as the
  *  breaker sets every line (B.break leadOf, hangOf) at its target's first state (firstCompress), its first and last characters
- *  marks as the tokens class them (fullWidthPunctOf: a CJK one, where the target's faces set the marks in one half of the em;
- *  a curly quote only in its run's CJK face, none in an alphabet's Latin face, Codex on #634) */
+ *  marks as the tokens class them (script.ts markOf: a mark's blank half as its run's face draws it; none where its ink crosses
+ *  its em's middle, nor for a curly quote in an alphabet's Latin face, Codex on #634) */
 function blanksOf(runs: readonly FigureRun[], rules: FiguresInput['rules']): [number, number] {
   const compress = firstCompress(rules)
   const edge = (r: FigureRun | undefined, ch: string | undefined) => ({
-    t: { punct: r?.cls === 'cjk' && ch && !rules.centredPunct ? fullWidthPunctOf(ch, !!r.cjkFace) : null },
+    t: { punct: r?.cls === 'cjk' && ch ? markOf(ch, r.face.ids) : null },
   })
   const a = runs[0],
     z = runs.at(-1)
