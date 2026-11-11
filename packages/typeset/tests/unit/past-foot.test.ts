@@ -1,7 +1,8 @@
 // The borrow past TeX's text block bottom (Choices.pastFoot, an experiment for the owner's test, default off; docs/PDF-READER.md
-// §18.37): before the fit's first shrink step, a unit whose last line would stand under its block's bottom may be laid with that
-// line up to `pastFoot` points under it, keeping only the depth its lines need; the page fill lays it no deeper, and a unit the
-// borrow does not buy goes down the fit's steps as without it. Off (absent or 0), every lay is today's.
+// §18.37): before each of the fit's shrink steps, a unit whose last line would stand under its block's bottom may be laid with
+// that line up to `pastFoot` points under it, keeping only the depth its lines need; the page fill lays it no deeper, a unit the
+// borrow does not buy goes down the fit's steps as without it, and a unit it keeps no larger has no line under the bottom. Off
+// (absent or 0), every lay is today's.
 import type { Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
@@ -71,12 +72,37 @@ describe('the borrow past TeX’s text block bottom (Choices.pastFoot, §18.37)'
     expect(filled.lines.map(([y]) => y)).toEqual([700, 688, 676])
   })
   it('leaves a paragraph it cannot buy to the fit’s steps exactly as without it', () => {
-    // (the third line needs 1 pt under the bottom: a bound of 0.5 buys nothing)
+    // (the third line needs 1 pt under the bottom: a bound of 0.5 buys nothing, at any size)
     for (const fill of [true, false]) expect(lay(member(), 0.5, fill)).toEqual(lay(member(), undefined, fill))
-    // (and one too long by a whole line more than the room: the steps as today)
-    const long = 'wort '.repeat(40).trim()
-    for (const fill of [true, false])
-      expect(lay(member(), 1.5, fill, long)).toEqual(lay(member(), undefined, fill, long))
+    // (and where the next ink stands TeX's separation under the last line, no room is there to borrow at any size)
+    const inked = member({ room: { below: 0, next: 12, runs: [[1, 12, 11]], sep: 12 } })
+    for (const fill of [true, false]) expect(lay(inked, 1.5, fill)).toEqual(lay(inked, undefined, fill))
+  })
+  it('borrows before a later step too: a paragraph the room cannot keep at full size shrinks less, its last line as deep as it needs', () => {
+    // (2608.16117v1-de t99 p28: at its size the paragraph needs more than the line the room under it holds, so today it shrinks
+    // to the size at which its own lines hold it, 10.46 for 11.96; with the borrow it stops at the first step down at which the
+    // room's line holds the rest, 11.06, that line 1.05 pt under the bottom. Here today's 8 pt over its two lines, tightened;
+    // with the borrow 9.5 pt, the third line 1 pt under the bottom at 677)
+    const text = 'wort '.repeat(28).trim()
+    for (const fill of [true, false]) {
+      const [today, on] = [lay(member(), undefined, fill, text), lay(member(), 1.5, fill, text)]
+      expect(today.fit!.size).toBe(8)
+      expect(on.fit!.size).toBe(9.5)
+      expect(on.lines.map(([y]) => y)).toEqual([700, 688, 676])
+    }
+  })
+  it('sets a line under the bottom only for a paragraph it keeps larger: one it keeps at today’s size is today’s', () => {
+    // (B's failure, the borrow offered to every state: units that fit today sank a point for nothing. Over translations of 15
+    // to 45 words into two lines with one line of room 1 pt short, from fitting at full size to shrinking below the fit's
+    // floor: each is set larger than today, or exactly as today)
+    for (let n = 15; n <= 45; n++)
+      for (const fill of [true, false]) {
+        const text = 'wort '.repeat(n).trim()
+        const [today, on] = [lay(member(), undefined, fill, text), lay(member(), 1.5, fill, text)]
+        expect(on.fit!.size).toBeGreaterThanOrEqual(today.fit!.size)
+        if (on.fit!.size === today.fit!.size) expect(on).toEqual(today)
+        else expect(on.lines.every(([y]) => y >= 677 - 1.5 - 0.05)).toBe(true)
+      }
   })
   it('moves nothing of a neighbour in the other column: its last line stays on TeX’s bottom', () => {
     const right = member({

@@ -4116,40 +4116,43 @@ he asked for the borrow as a switch he can turn on and off on the test site, to 
 proved costly or tangled with other rules. Nothing is decided by this section but the experiment's shape.
 
 - **The rule, when on** (`Choices.pastFoot`, points; `rulesFor` puts it in `Rules.set` only above 0, so that the rules are
-  today's byte for byte when off): before the fit's first shrink step (`fit/walk.ts` statesOf, the `shrink` knob's head), one
-  state more, the borrow's whole room and each block that ends a run of its lines (`Room.runs`) holding the room under its last
-  baseline down to TeX's text block bottom plus `pastFoot`, the next ink's bound as it is (its baseline less `Room.sep`;
-  `breaker/slots.mjs` roomOf). A unit that sets every token at it keeps on its state only the depth its lines took under their
-  blocks' bottoms, to the hundredth (`layoutUnit2`), so that the page fill, laying it again at a looser leading, lays it no
-  deeper; no other step offers that room. A unit it does not set goes on down the steps exactly as without it. Off (no
-  `pastFoot`, or 0), every lay is today's.
-- **The switch**: no control, no string, nothing stored. The reader takes the value from the website's address, its
-  `axt-borrow` parameter in points (`compose/typeset.ts` pastFootOf), read once a visit on an http or https page alone (never on
-  the extension's pages), a number in (0, 6]; anything else asks nothing. Why 6: it is a ceiling against a typo, not a value
-  anyone chose, the deepest `\maxdepth` of the classes measured (§18.11: an article at 12 pt, IEEEtran), the most TeX itself
-  lets a last line's depth hang under the bottom; the borrow moves the baseline, so even 6 pt is past anything TeX does. The
-  owner's test uses **1.5 pt** (`?axt-borrow=1.5`), the value every measurement below was made at (with 0.5, 1.0 and 2.5 for the
-  counts); any other value is unmeasured and sanctioned by nothing here. The value goes into the rules the reader lays with
-  (their memo key carries it), so a reload with or without it lays every page again; no laid page is kept anywhere. The site
-  keeps an unknown parameter through its address rewrite (its `canonical` deletes `paper`, `v` and `to` alone), so it needs no
-  change of its own; that the parameter reaches the reader on the deployed site is to be seen on staging.
-- **Measured** (the 22 parity pairs at B8, 8ca1dcd1b, their 344 pages, default toggles; the same at round 5): at 1.5 pt four
-  units keep their size and nothing else changes size: 2602.23285v2 unit 90 (pages 9-10, 9.71 to 9.96 pt, its last line 0.99
-  pt under the bottom), unit 29 (pages 4-5, 0.55 pt; it needs 1.22 pt while laid, so 1.0 pt does not buy it), 2608.25210v2's
-  footnote 16 (page 2, 6.80 to 6.97 pt, 0.12 pt: the two footnotes TeX set level in the two columns stay level to the eye) and
-  2610.21106v1's theorem 16 (page 3, 11.66 to 11.96 pt, 0.08 pt); three units on 2602.23285v2 page 5 take a fill leading 0.01
-  looser (1.05 to 1.06); no line moves between pages; no unit that gains nothing has a line under the bottom. 1.0 pt buys three
-  of the four, 0.5 pt two, 2.5 pt the same four as 1.5. Every borrowed line's ink stays within its class's `\maxdepth` (deepest
-  3.27 pt under the bottom, article's 5), 19.9 pt or more over a page number. The fit tries 0.12 % more states (the reader's lay of
-  the 344 pages), 0.14 % over the parity's whole lay. None of the display gate's pages worse than today by size or line count
-  (6 and 28 at B8, default; 9 and 28 with every toggle on) is moved by it: those are cells, headings, theorems a page's other
-  rules set, never a unit today borrowed for.
-- **Two shapes measured and not built.** Spending the whole allowance (the fit's state keeping the bound, not the depth it
-  needed) buys the same units but lets the fill spread them to it: the 2608.25210v2 footnote 0.50 / 1.05 / 1.52 / 2.54 pt under
-  the bottom at 0.5 / 1.0 / 1.5 / 2.5 pt, its two columns visibly uneven at 2.5. Offering the borrow before every shrink step,
-  not the first alone, buys 2608.16117v1's units 99 and 86 too (to 11.06 and 10.76 pt, production's lines on pages 28 and 24,
-  1.05 and 1.36 pt under the bottom; never production's line on page 23, 12.1 pt under it over the page number) at 0.63 % more
-  states; it stays an experiment, the owner's to choose.
+  today's byte for byte when off): before each step down the fit's size ladder (`fit/walk.ts` statesOf, the `shrink` knob), at
+  the size it would leave, one state more, the borrow's whole room and each block that ends a run of its lines (`Room.runs`)
+  holding the room under its last baseline down to TeX's text block bottom plus `pastFoot`, the next ink's bound as it is (its
+  baseline less `Room.sep`; `breaker/slots.mjs` roomOf). So at every size the unit is tried without that room first, then with
+  it, as production borrows and shrinks; never at the floor, the last size, where the knobs after the steps (a Latin target's
+  leading) come first as today, so that a unit the borrow keeps no larger never has a line under the bottom. A unit that sets
+  every token at such a state keeps on it only the depth its lines took under their blocks' bottoms, to the hundredth
+  (`layoutUnit2`), so that the page fill, laying it again at a looser leading, lays it no deeper; no other step offers that
+  room. A unit it does not set goes on down the steps exactly as without it. Off (no `pastFoot`, or 0), every lay is today's.
+- **The switch**: no control, no string, nothing stored. The reader takes the value from the website's address, its `axt-borrow`
+  parameter in points (`compose/typeset.ts` pastFootOf), read once a visit on an http or https page alone (never on the
+  extension's pages), a number in (0, 6]; anything else asks nothing. Why 6: it is a ceiling against a typo, not a value anyone
+  chose, the deepest `\maxdepth` of the classes measured (§18.11: an article at 12 pt, IEEEtran), the most TeX itself lets a
+  last line's depth hang under the bottom; the borrow moves the baseline, so even 6 pt is past anything TeX does. The owner's
+  test uses **1.5 pt** (`?axt-borrow=1.5`), the value every measurement of this shape below was made at (the narrower shapes'
+  counts also at 0.5, 1.0 and 2.5); any other value is unmeasured and sanctioned by nothing here. The value goes into the rules
+  the reader lays with (their memo key carries it), so a reload with or without it lays every page again; no laid page is kept
+  anywhere. The site keeps an unknown parameter through its address rewrite (its `canonical` deletes `paper`, `v` and `to`
+  alone), so it needs no change of its own; that the parameter reaches the reader on the deployed site is to be seen on staging.
+- **Measured** (the 22 parity pairs at B8, 8ca1dcd1b, their 344 pages, default toggles; the same at round 5): at 1.5 pt six
+  units are set larger and nothing else changes size: 2608.16117v1's unit 99 (pages 28-29, 10.46 to 11.06 pt, ten lines on page
+  28 as production sets them, the tenth 1.05 pt under the bottom) and unit 86 (pages 23-25, 10.46 to 10.76 pt, page 24's last
+  line 1.36 pt under it, production's line there; never production's line on page 23, 12.1 pt under the bottom over the page
+  number), 2602.23285v2's unit 90 (pages 9-10, 9.71 to 9.96, 0.99 pt) and unit 29 (pages 4-5, 0.55 pt; it needs 1.22 pt while
+  laid), 2608.25210v2's footnote 16 (page 2, 6.80 to 6.97, 0.12 pt: the two footnotes TeX set level in the two columns stay
+  level to the eye) and 2610.21106v1's theorem 16 (page 3, 11.66 to 11.96, 0.08 pt); three units on 2602.23285v2 page 5 take a
+  fill leading 0.01 looser (1.05 to 1.06); no line moves between pages; the six new lines under the bottom are all in units set
+  larger, none in a unit that gains nothing. Every borrowed line's ink stays within its class's `\maxdepth` (deepest 3.73 pt
+  under the bottom, 2608.16117v1 page 24, elsarticle at 12 pt's 6 pt; 3.27 pt on 2602.23285v2 page 4, article's 5), 18 pt or
+  more over a page number. The fit tries 0.63 % more states over the parity's whole lay. None of the display gate's pages worse
+  than today by size or line count (6 and 28 at B8, default; 9 and 28 with every toggle on) is moved by it: those are cells,
+  headings, theorems a page's other rules set, never a unit today borrowed for.
+- **Two shapes measured and not built.** Offering the borrow before the first step alone (round 5's L) buys the four units of
+  2602.23285v2, 2608.25210v2 and 2610.21106v1 (1.0 pt buys three, 0.5 pt two) and not 2608.16117v1's two, which need a borrow
+  and a shrink, at 0.14 % more states. Spending the whole allowance (the fit's state keeping the bound, not the depth it needed)
+  buys the same units but lets the fill spread them to it: the 2608.25210v2 footnote 0.50 / 1.05 / 1.52 / 2.54 pt under the
+  bottom at 0.5 / 1.0 / 1.5 / 2.5 pt, its two columns visibly uneven at 2.5. The decision between them and none is the owner's.
 - **If it were ever the default**, these lab checks would flag each borrowed line, and none is changed here: the parity's
   `block` measure (`fidelity.mjs`: a line under its run's room, TeX's bottom, past 0.05 pt) and with it the verdict's
   `pastRoom` (`verdict.mjs` budgetPastRoom, pastRoomPass: a size or line count bought with a line past TeX's room is that
