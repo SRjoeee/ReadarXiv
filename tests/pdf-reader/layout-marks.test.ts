@@ -313,6 +313,31 @@ const paperOf = (src: string) => openPaper(new Map([['main.tex', new TextEncoder
 const sha = (b: Uint8Array) => createHash('sha256').update(b).digest('hex')
 const decode = (files: Map<string, Uint8Array>) => new TextDecoder().decode(files.get('main.tex'))
 
+describe("IEEEtran's proof name, \\IEEEproofname, wrapped as babel's \\proofname where the paper calls IEEEproof", () => {
+  // (2610.21504v1 p4: IEEEtran's \IEEEproof sets "Proof:" through \IEEEproofname, the class's own name for a proof, which the
+  // names' wrapper did not know (NAME_MACROS: babel's \proofname): the name was read as the paragraph's number label and stayed
+  // English on both panes, where ieeecolor's `\def\proof{… Proof: }` is a literal the wrapper knows, drawn in the target)
+  const enc = (s: string) => new TextEncoder().encode(s), dec = (b: Uint8Array | undefined) => new TextDecoder('latin1').decode(b)
+  const paper = (body: string) => openPaper(new Map([['main.tex', enc(`\\documentclass[conference]{IEEEtran}\n\\begin{document}\n${body}\n\\end{document}\n`)]]))
+  const WRAP = '\\axt@nmwrap{proof}{IEEEproofname}'
+  it('wraps it in the layout compile and the probe of a paper that calls IEEEproof, on the head\'s own line', () => {
+    const p = paper('Words before.\n\\begin{IEEEproof}\nSince the costs are positive, it holds.\n\\end{IEEEproof}')
+    const main = dec(originalFiles(p, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(main).toContain(WRAP)
+    // (no line of the paper moves: the wrap stands on LAYOUT_TEX's line, as NAMES_OFF does)
+    const plain = dec(originalFiles(p, { lines: true, layout: LAYOUT_CLASSES, names: false }).get('main.tex'))
+    expect(plain).not.toContain(WRAP)
+    expect(main.split('\n').length).toBe(plain.split('\n').length)
+    expect(dec(probeFiles(p, { marks: true }).get('main.tex'))).toContain(WRAP)
+  })
+  it("leaves a paper that does not call it as before: one that only names it in a comment, or none", () => {
+    for (const body of ['Words.', 'Words.\n% \\begin{IEEEproof} kept for later\nMore words.']) {
+      expect(dec(originalFiles(paper(body), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))).not.toContain(WRAP)
+      expect(dec(probeFiles(paper(body), { marks: true }).get('main.tex'))).not.toContain(WRAP)
+    }
+  })
+})
+
 describe('originalFiles with the layout marks', () => {
   it('originalFiles without layout is the pin\'s bytes', () => {
     for (const [name, src] of Object.entries(SOURCES)) {

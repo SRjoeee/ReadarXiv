@@ -1112,6 +1112,22 @@ export const NAMES_TEX = [
   '\\fi',
 ].join('')
 
+/** a class's own macro for a babel name's text, by the name's key, and the construct that sets it: IEEEtran's \IEEEproofname,
+ *  which its \IEEEproof sets "Proof:" with (`\@IEEEproof[\IEEEproofname]`), babel's \proofname never asked. Wrapped as
+ *  babel's own macro is (NAMES_TEX's \axt@nmwrap, the same key: the target's word, the probe's case answer), where the paper's
+ *  files call the construct, so that no other paper's bytes move, and only where babel's own macro is not defined (one key, one
+ *  macro wrapped: \axt@nmd@<key>). 2610.21504v1 p4's "Proof:" was read as its paragraph's number label, English on both panes */
+export const CLASS_NAMES = Object.freeze([{ key: 'proof', macro: 'IEEEproofname', own: 'proofname', call: /\\begin\s*\{IEEEproof\}/ }])
+/** the TeX that wraps each class name (CLASS_NAMES) of a paper whose files (`texts`, their text) call its construct outside
+ *  a comment, on the head's own line after NAMES_TEX; '' for a paper that calls none */
+export function classNamesTex(texts) {
+  const bare = texts.map(t => t.replace(/(?<!\\)%.*$/gm, ''))
+  const used = CLASS_NAMES.filter(n => bare.some(t => n.call.test(t)))
+  if (!used.length) return ''
+  const wraps = used.map(n => `\\ifdefined\\${n.own}\\else\\axt@nmwrap{${n.key}}{${n.macro}}\\fi`).join('')
+  return `\\makeatletter\\ifdefined\\axt@nmall\\ifdefined\\axt@nmwrap\\g@addto@macro\\axt@nmall{\\ifaxt@nmon${wraps}\\fi}\\fi\\fi\\makeatother`
+}
+
 /** the control sequences \axt@unmark takes out of a title's copy, each with its argument: the marks a heading or a caption
  *  can carry (\axtpma, \axtpmm, \axtpm, \axthpk, \axttg, \axthmark) and a babel name's (\axtnma, \axtnmb). One list: UNMARK_TEX builds the regex's
  *  alternation and the prefilter from it, so the two cannot drift */
