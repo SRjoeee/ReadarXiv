@@ -43,7 +43,8 @@ describe('a unit’s groups as TeX set them, stated by the adapter', () => {
     const g1 = [...set('Setup', BOLD), ...set('We use eight GPUs.', REGULAR)]
     expect(marksOf(c1, g1, spansOf(named))).toEqual([['0', { cmd: 'textbf' }]])
     expect(c1[0]).toMatchObject({ style: 'bold', must: 1 })
-    const bare = [{ t: 'text', s: 'It holds. ' }, ...head('{', 'Remark', ' it also holds.')]
+    // (a bare group with a declaration of its own to scope: one with none is no group, instrument-groups.test.ts)
+    const bare = [{ t: 'text', s: 'It holds. ' }, { t: 'open', src: '{' }, { t: 'ph', src: '\\bfseries' }, { t: 'text', s: 'Remark' }, { t: 'close', src: '}' }, { t: 'text', s: ' it also holds.' }]
     const c2 = piecesOf(bare) as unknown[]
     expect(marksOf(c2, [...set('It holds.', REGULAR), ...set('Remark', BOLD), ...set('it also holds.', REGULAR)], spansOf(bare))).toEqual([])
     expect(c2[1]).toMatchObject({ style: 'other' })

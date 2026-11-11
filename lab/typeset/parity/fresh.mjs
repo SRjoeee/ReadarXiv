@@ -12,6 +12,8 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { chainOf, Fault, keyOf, microsoft, unitInOf } from '../../../packages/translate/src/index.ts'
+import { namedOf } from '../../../packages/translate/src/names.ts'
+import { runsOf } from '../../../packages/translate/src/runs.ts'
 import { LAB } from '../../../packages/typeset/tests/replay/tap.ts'
 
 /** the cache: AXT_PARITY_FRESH_ROWS, else lab-data's parity/fresh-rows */
@@ -100,14 +102,20 @@ export function pacedFetch(pace = FILL_PACE_MS) {
   let last = 0
   let queue = Promise.resolve()
   let throttled = false
+  let requests = 0,
+    rated = 0
   const f = (url, init) => {
     const go = queue.then(async () => {
       if (throttled) throw new Error('parity fresh rows: the endpoint answered 429; no request after it')
       const wait = last + pace - Date.now()
       if (wait > 0) await new Promise((r) => setTimeout(r, wait))
       try {
+        requests++
         const r = await fetch(url, { method: init.method, headers: { ...init.headers, 'User-Agent': UA }, body: init.body, signal: init.signal })
-        if (r.status === 429) throttled = true
+        if (r.status === 429) {
+          throttled = true
+          rated++
+        }
         const text = await r.text()
         return { ok: r.ok, status: r.status, headers: { get: (k) => r.headers.get(k) }, text: async () => text }
       } finally {
@@ -118,7 +126,18 @@ export function pacedFetch(pace = FILL_PACE_MS) {
     return go
   }
   f.throttled = () => throttled
+  /** the requests sent so far, and how many the endpoint answered 429 */
+  f.requests = () => requests
+  f.rated = () => rated
   return f
+}
+
+/** the fills' log beside the cache (`fills.jsonl`): one entry a fill run, what it did */
+export const FILLS_LOG = 'fills.jsonl'
+/** a fill run's entry appended to the log in `dir` (written synchronously: also from a run that exits) */
+export function logFill(entry, dir = FRESH_ROWS) {
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, FILLS_LOG), `${JSON.stringify(entry)}\n`, { flag: 'a' })
 }
 
 /** the lock every lane honours before it sends to the keyless endpoint from this machine (the coordinator's of 2026-11-11):
@@ -174,7 +193,7 @@ export function freshTranslator(dir = FRESH_ROWS, { fill = false, fetch: f } = {
   }
   const fetch = fill ? (f ?? pacedFetch()) : none
   const t = cachedTranslator(microsoft({ fetch, limits: { inFlight: 1 } }), { dir, fill })
-  return { ...t, throttled: () => !!fetch.throttled?.() }
+  return { ...t, throttled: () => !!fetch.throttled?.(), requests: () => fetch.requests?.() ?? 0, rated: () => fetch.rated?.() ?? 0 }
 }
 
 /**
@@ -191,7 +210,56 @@ export async function freshRowsOf(units, target, { dir = FRESH_ROWS, translator 
   for await (const r of chainOf({ store: folderStore(dir) }).translate(ins, target, { translators: [t] })) rows.set(r.id, r)
   // (unavailable: the cache holds no reply of its wire, a run not told to fill, or the endpoint did not answer the fill)
   const missing = [...rows.values()].filter((r) => !r.ok && r.why.kind === 'unavailable').map((r) => r.id)
-  return { rows, missing, asked: (t.asked ?? []).reduce((a, b) => a + b, 0) - before }
+  const need = missing.length ? needOf(missing.map((id) => ins.find((u) => u.id === id)), target, t, dir) : null
+  return { rows, missing, asked: (t.asked ?? []).reduce((a, b) => a + b, 0) - before, ...(need ? { need } : {}) }
+}
+
+/**
+ * What a fill would ask for the units `ins` the cache lacks, counted offline to the end of each unit (the count of the chain's
+ * own asks stops at a unit's first uncached wire, under-reporting, integration's B8 fill: 347 wires for 295 counted): `wires`,
+ * each unit's first wire the cache lacks (the unit as the chain sends it, its names written out: names.ts namedOf), which the
+ * fill asks whatever comes back; `wiresUpTo`, with each one's runs floor (runs.ts runsOf: the stretches of two letters or more the
+ * chain asks where the reply is refused) that the cache lacks too, which it asks only where the reply is refused, so that the
+ * fill asks between the two; `requests` and `requestsUpTo`, those wires cut as the chain cuts a translator's requests (its limits'
+ * characters and units), the floor's in requests of their own (asked after the replies). Equal wires are one
+ */
+export function needOf(ins, target, t, dir = FRESH_ROWS) {
+  const lenOf = new Map()
+  const first = new Set(),
+    floor = new Set()
+  const add = (into, u) => {
+    const w = t.write(u, target)
+    const k = keyOf(t, target, w)
+    if (cachedOf(dir, k) || first.has(k) || floor.has(k)) return
+    into.add(k)
+    lenOf.set(k, w.length)
+  }
+  for (const u0 of ins) {
+    const u = namedOf(u0)?.unit ?? u0
+    add(first, u)
+    for (const [i, part] of runsOf(u).parts.entries()) if (part.send) add(floor, { id: `${u.id}~${i}`, content: [{ t: 'text', s: part.text }] })
+  }
+  const cut = (keys) => {
+    let n = 0,
+      chars = 0,
+      units = 0
+    for (const k of keys) {
+      const c = lenOf.get(k)
+      if (c > t.limits.chars) {
+        n++
+        continue
+      }
+      if (units && (chars + c > t.limits.chars || units >= t.limits.units)) {
+        n++
+        chars = 0
+        units = 0
+      }
+      chars += c
+      units++
+    }
+    return n + (units ? 1 : 0)
+  }
+  return { units: ins.length, wires: first.size, requests: cut(first), wiresUpTo: first.size + floor.size, requestsUpTo: cut(first) + cut(floor) }
 }
 
 /**

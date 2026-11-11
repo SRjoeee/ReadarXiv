@@ -257,7 +257,30 @@ describe('layoutMarking', () => {
     // aastex's deluxetable: rows the scanner does not read as cells, \\ between them, \enddata after the last
     const rows = unit('para', [text('Polarization '), ph('&'), text(' Right '), ph('\\\\'), text('\n'), ph('$\\theta$'), text(' (peak) '), ph('&'), text(' x '), ph('\\\\'), text('\n'), ph('\\cline{1-2}'), text(' Wave '), ph('\\cite{a}'), ph('\\\\'), text('\n'), ph('\\enddata')])
     const { units: marked } = layoutMarking([rows], MARK_CLASSES, { lines: false })
-    expect(srcs(marked[0])).toEqual(['text', 'ph &', 'text', 'ph \\\\', 'text', 'ph \\axtpmm{p0.5a}', 'ph $\\theta$', 'ph \\axtpm{p0.5b}', 'text', 'ph &', 'text', 'ph \\\\', 'text', 'ph \\cline{1-2}', 'text', 'ph \\axtpma{p0.13a}', 'ph \\cite{a}', 'ph \\axtpm{p0.13b}', 'ph \\\\', 'text', 'ph \\enddata'])
+    // (the piece passed over after the last row's `\\` has its opening point before the break, at the end of the row's last cell,
+    // where nothing of the row's start is: \enddata's; \cline, a kernel command of no class, none)
+    expect(srcs(marked[0])).toEqual(['text', 'ph &', 'text', 'ph \\\\', 'text', 'ph \\axtpmm{p0.5a}', 'ph $\\theta$', 'ph \\axtpm{p0.5b}', 'text', 'ph &', 'text', 'ph \\\\', 'text', 'ph \\cline{1-2}', 'text', 'ph \\axtpma{p0.13a}', 'ph \\cite{a}', 'ph \\axtpm{p0.13b}', 'ph \\axtpma{p0.16a}', 'ph \\\\', 'text', 'ph \\enddata'])
+  })
+  it('gives a placeholder after a forced break its opening point before the break, where nothing stands between the break and it', () => {
+    // (a placeholder the marking passes over after `\\` (passedOver: a table's row may begin there, read as prose) had no point
+    // at all: 2608.25210v2 u143's algorithm lines. Its opening point goes before the break, set as \axtpma sets one, so that the
+    // break's look-ahead, a row's first token, TeX's discarding at the new line's start and the vertical mode after a centred
+    // line's `\\` are the original's)
+    const after = unit('para', [text('Reference Format:'), ph('\\\\'), text('\n'), ph('\\names'), text(' and the title.')])
+    expect(srcs(layoutMarking([after], MARK_CLASSES, { lines: false }).units[0])).toEqual(['text', 'ph \\axtpma{p0.3a}', 'ph \\\\', 'text', 'ph \\names', 'text'])
+    // (a placeholder the marking gives its opening point after the break today, glued to the word after it, keeps it there)
+    const glued = unit('para', [text('Reference Format:'), ph('\\\\'), text('\n'), ph('\\vldbauthors'), text('. ')])
+    expect(srcs(layoutMarking([glued], MARK_CLASSES, { lines: false }).units[0])).toEqual(['text', 'ph \\\\', 'text', 'ph \\axtpma{p0.3a}', 'ph \\vldbauthors', 'text'])
+    // (a run of breaks: before its first)
+    const run = unit('para', [text('Line one'), ph('\\\\'), text('\n'), ph('\\\\[4pt]'), text('\n'), ph('\\foo'), text(' two')])
+    expect(srcs(layoutMarking([run], MARK_CLASSES, { lines: false }).units[0])).toEqual(['text', 'ph \\axtpma{p0.5a}', 'ph \\\\', 'text', 'ph \\\\[4pt]', 'text', 'ph \\foo', 'text'])
+    // (nothing before the break in the unit, its head: none, as today; nor after an alignment's tab, where it would stand before
+    // the tab)
+    const head = unit('para', [ph('\\\\'), text('\n'), ph('\\foo'), text(' two')])
+    // (\\axthpk's, the head's paper macro's point, as today)
+    expect(srcs(layoutMarking([head], MARK_CLASSES, { lines: false }).units[0])).toEqual(['ph \\\\', 'text', 'ph \\axthpk{p0.2a}', 'ph \\foo', 'text'])
+    const tab = unit('para', [text('a '), ph('&'), text(' '), ph('\\foo'), text(' b')])
+    expect(srcs(layoutMarking([tab], MARK_CLASSES, { lines: false }).units[0])).toEqual(['text', 'ph &', 'text', 'ph \\foo', 'text'])
   })
   it('after a cell\'s tab the same: tabularray\'s \\SetCell must open its cell', () => {
     // a tblr table read as one paragraph (2608.03994): \\SetCell[c=4]{c} after an opening mark spanned no columns
@@ -780,12 +803,45 @@ describe('LAYOUT_TEX', () => {
     expect(POINTS_TEX).toContain('\\def\\axt@vtake{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@vtg\\or\\expandafter\\axt@vtk\\or\\expandafter\\axt@vtp\\fi}')
     // a float's points around its finished box (\@endfloatbox closes it): at its start a point would give its first
     // paragraph a \parskip (2608.01890's figures)
-    expect(POINTS_TEX).toContain('\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}')
+    expect(POINTS_TEX).toContain('\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\axt@fnpt\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}')
+    // (and beside its opening point, inside its box, `fn<n>` where its type has no counter: no \caption can number it, so it is
+    // no figure, table or algorithm — NeurIPS's noticebox; \@captype is the float's own there)
+    expect(POINTS_TEX).toContain('\\def\\axt@fnpt{\\ifdefined\\@captype\\ifcsname c@\\@captype\\endcsname\\else\\axt@point{fn\\axt@bn}\\fi\\fi}')
     expect(POINTS_TEX).not.toContain('@floatboxreset')
     // after the destination's own definition, inside LAYOUT_TEX; its count a macro, no register; one line
     expect(LAYOUT_TEX.indexOf(POINTS_TEX)).toBeGreaterThan(LAYOUT_TEX.indexOf('\\def\\axt@dest#1'))
     expect(LAYOUT_TEX.endsWith(`${POINTS_TEX}\\makeatother`)).toBe(true)
     for (const word of ['\\newcount', '\\newbox', '\\newdimen', '\\typeout', '\n', '%']) expect(POINTS_TEX).not.toContain(word)
+  })
+
+  it('LAYOUT_TEX sets a point before a caption\'s label where TeX sets it: each caption maker hands its original the label with it', () => {
+    // (the label is \fnum@<type>, an argument of every caption maker: LaTeX's and every class's \@makecaption #1, longtable's
+    // \LT@makecaption #2, float.sty's styles #1, algorithm2e's \algocf@captiontext #1. Each, once the document begins, passes the
+    // original its label with `\axt@kf` before it: nothing assigned or expanded before the original runs, the label's own tokens
+    // and parameters as they were)
+    const at = POINTS_TEX.indexOf('\\AddToHook{begindocument/end}{\\ifdefined\\@makecaption')
+    expect(at).toBeGreaterThan(0)
+    const hook = POINTS_TEX.slice(at)
+    expect(POINTS_TEX).toContain('\\long\\def\\axt@kmcw#1#2{\\axt@kmc{\\axt@kf#1}{#2}}')
+    expect(hook).toContain('\\ifdefined\\@makecaption\\let\\axt@kmc\\@makecaption\\let\\@makecaption\\axt@kmcw\\fi')
+    expect(hook).toContain('\\let\\axt@klt\\LT@makecaption\\long\\def\\LT@makecaption#1#2#3{\\axt@klt#1{\\axt@kf#2}{#3}}')
+    expect(hook).toContain('\\let\\axt@kfp\\floatc@plain\\long\\def\\floatc@plain#1#2{\\axt@kfp{\\axt@kf#1}{#2}}')
+    expect(hook).toContain('\\let\\axt@kfr\\floatc@ruled\\long\\def\\floatc@ruled#1#2{\\axt@kfr{\\axt@kf#1}{#2}}')
+    expect(hook).toContain('\\let\\axt@kac\\algocf@captiontext\\long\\def\\algocf@captiontext#1#2{\\axt@kac{\\axt@kf#1}{#2}}')
+    expect(hook).toContain('\\let\\axt@kcc\\caption@@make\\long\\def\\caption@@make#1#2{\\axt@kcc{\\axt@kf#1}{#2}}')
+    // (a class that sets its caption maker inside its float's environment, after the document began: Elsevier's cas-common sets
+    // \@makecaption to its figure's or its table's own at the environment's start, 2610.21084v1's 21 captions. Each float, as
+    // it begins (\@xfloat, every float's and every class's way in, its arguments passed on untouched), hands that maker its label
+    // the same way, in the float's own group: an assignment, no node, nothing where the maker is already a wrapper)
+    expect(POINTS_TEX).toContain('\\long\\def\\axt@kmfw#1#2{\\axt@kmf{\\axt@kf#1}{#2}}')
+    expect(POINTS_TEX).toContain('\\def\\axt@kmfr{\\ifdefined\\@makecaption\\ifx\\@makecaption\\axt@kmcw\\else\\ifx\\@makecaption\\axt@kmfw\\else\\let\\axt@kmf\\@makecaption\\let\\@makecaption\\axt@kmfw\\fi\\fi\\fi}')
+    expect(hook).toContain('\\ifdefined\\@xfloat\\let\\axt@kxf\\@xfloat\\def\\@xfloat{\\axt@kmfr\\axt@kxf}\\fi')
+    expect(POINTS_TEX.slice(POINTS_TEX.indexOf('\\def\\axt@kmfr'))).not.toMatch(/^[^}]*axt@point/)
+    // (typeset only: nothing in a moving argument or a file; never while the gate is off; in vertical mode, at the paragraph
+    // the label begins, once)
+    expect(POINTS_TEX).toContain('\\def\\axt@kf{\\ifx\\protect\\@typeset@protect\\axt@ka\\fi}')
+    expect(POINTS_TEX).toContain('\\protected\\def\\axt@ka{\\ifaxt@off\\else\\ifhmode\\axt@kpt\\else\\ifvmode\\ifdefined\\AddToHookNext\\ifaxt@kwait\\else\\global\\axt@kwaittrue\\AddToHookNext{para/begin}{\\axt@klate}\\fi\\fi\\fi\\fi\\fi}')
+    expect(POINTS_TEX).toContain('\\def\\axt@kpt{\\xdef\\axt@kn{\\the\\numexpr\\axt@kn+1\\relax}\\axt@point{ka\\axt@kn}}')
   })
 })
 

@@ -336,12 +336,33 @@ export function adapt(i: AdaptInput): Adapted {
   const fixed = m.fixed ?? 0
   const labelKept = !!m.label && !!(fixed & 4)
   const relabels = !!m.label && !labelKept
-  const label = labelOf(m, i.reading.labelDrawn)
-  // (a label drawn anew is the first line's: its rectangle starts at the label, RUN:2039-2041)
+  // (a label on a line of its own is laid as a row of its own (entry.ts labelRowOf): no line of the member's starts at it)
+  const ownRow = !!m.label && m.label.line === undefined && m.label.align !== undefined
+  const label = ownRow ? null : labelOf(m, i.reading.labelDrawn)
+  // (a label drawn anew is the first line's: its rectangle starts at the label, RUN:2039-2041. But a label TeX hung beside its
+  // text, every text line of the member starting at one x past the label's end and the label at the measure's start (the
+  // caption package's `hang`, \hangindent its label box's width, the label and its separator: 2609.36054v2 p3's "Figure 1." at
+  // 47, its text's lines at 95.61, 3.94 pt after it), hangs its text by TeX's own rule at the drawn label's width: the label at
+  // its place, the space TeX set after it (`hangGap`), every text line from there to its right edge (the coordinator's ruling
+  // of 2026-11-11). Widened to the label, the block's edge was the label's and every line after the first ran under it)
+  let hang: number | undefined
+  let hangGap = 0
   if (label?.drawn) {
     const r0 = rects[0]!,
       lx0 = Math.min(...label.chars.map((c) => c.x0))
-    if (lx0 < r0[1] - 0.5 && label.chars.every((c) => c.page === r0[0])) rects[0] = [r0[0], lx0, r0[2], r0[3], r0[4]]
+    if (lx0 < r0[1] - 0.5 && label.chars.every((c) => c.page === r0[0])) {
+      const text = lines.filter((l) => !(l[9] & KEPT))
+      const hung =
+        !!m.label &&
+        text.length > 1 &&
+        text.every((l) => Math.abs(l[2] - text[0]![2]) <= 0.01) &&
+        text[0]![2] > m.label.ink[3] &&
+        Math.abs(m.label.ink[1] - lines[0]![7]) <= 0.01
+      if (hung && m.label) {
+        hang = lx0
+        hangGap = text[0]![2] - m.label.ink[3]
+      } else rects[0] = [r0[0], lx0, r0[2], r0[3], r0[4]]
+    }
   }
   const centred = m.align === 'c'
   const before = decorBefore({
@@ -370,6 +391,11 @@ export function adapt(i: AdaptInput): Adapted {
     // (TeX's \baselineskip where the part states it: Placed.lead, read off the lines where 'lead' is read)
     pitch: (m.read ?? []).includes('lead') ? null : m.lead,
   }) as FitBlock[]
+  // (the label's hang: on the block of the member's first line, whose first slot starts at the label, its text at the hang's end)
+  if (hang !== undefined && blocks[0] && blocks[0].page === rects[0]![0] && !blocks[0].centred) {
+    blocks[0].hang = hang
+    blocks[0].hangGap = hangGap
+  }
   // (the room each block may borrow under it (today's freeFor RUN:1677, which RUN:2193 gives every block but a cell's), from TeX's
   // facts alone (the owner's ruling of 2026-11-08): a block that ends a run of its text lines the part states the room under
   // (Room.runs) takes the lines down to TeX's text block bottom, the next ink staying TeX's paragraph separation (Room.sep,

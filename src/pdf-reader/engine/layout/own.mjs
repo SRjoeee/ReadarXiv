@@ -26,7 +26,9 @@
 //      group, each TAIL_PUNCT abutting the one before it — the unit's text, as the maker's line takes them (make.mjs lineOf);
 //   5. a label: the glyphs on the start's first glyph's baseline between the previous unit's end mark and the start, the
 //      placeholders' and names' ranges passed over — but the closing punctuation a head sets abutting the unit before it, that
-//      unit's text (amsthm's "(Note).") —; none for a table cell;
+//      unit's text (amsthm's "(Note).") —; none for a table cell; a caption's by TeX's call alone: what TeX set from the label
+//      point before its \fnum@<type> (`ka<k>`, layout/marks.mjs) to its start, whatever line it stands on (IEEEtran's "TABLE I"
+//      centred above its text), none where TeX set no such point;
 //   6. a babel name `n<occ>`: between `n<occ>.<key>.s` and `.e`; 6b. the counter TeX set after it on its line, no unit's, its own;
 //      6c. the number TeX set right before it at its line's start, no unit's, TeX's stream setting nothing between, its label
 //      `n<occ>.l` (names.mjs counterBefore: a heading its class numbers itself);
@@ -50,7 +52,7 @@ import { utf8 } from '../translate/mt.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { UNHIDDEN } from '@readarxiv/engine'
 import { classOf, headsOf, INK_ANY, leadStep } from './marks.mjs'
-import { columnsAt, OWNED, OWNED_HOW, ownedOf, regionsOf, spellOf } from './stream.mjs'
+import { columnsAt, OWNED, OWNED_HOW, ownedOf, READ_ALONE, regionsOf, spellOf } from './stream.mjs'
 import { isLabelForm, labelFormOf, labelText } from './label-form.mjs'
 import { counterAfter, counterBefore } from './names.mjs'
 
@@ -68,6 +70,8 @@ export const OWN_WORK = 20_000_000
 export const SPELL_LIST_MAX = 64
 
 const START = /^([th]?)(\d+)s$/
+/** the point the marked compile sets before a caption's label, \\fnum@<type>, where TeX sets it (layout/marks.mjs) */
+const LABEL_POINT = /^ka\d+$/
 const END = /^([th]?)(\d+)e$/
 /** a rule TeX paints on a line of a unit's text (MR 2b) is no thicker than this share of the line's size: its rules are a
  *  default rule's 0.4 pt (a twentieth of an 8 pt line, a sixtieth of a 24 pt one); a letter's ink, an icon's, a logo's parts
@@ -313,7 +317,10 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     const lead = { glyphs: [] }
     let g = S.glyph - 1
     work += S.glyph + q
-    const glyphAt = i => { if (R.glyph[i] !== r || gOwn[p - 1][i] !== null) return; const G = pg.glyphs[i]; if (Math.abs(G.y - F.y) < 0.5 * Math.max(G.size, F.size)) lead.glyphs.push([p, i]) }
+    // (a caption's label is TeX's call's, from its label point on, on any line; no baseline is read for it)
+    const caption = units?.[id]?.kind === 'caption'
+    let called = false
+    const glyphAt = i => { if (R.glyph[i] !== r || gOwn[p - 1][i] !== null) return; const G = pg.glyphs[i]; if (caption || Math.abs(G.y - F.y) < 0.5 * Math.max(G.size, F.size)) lead.glyphs.push([p, i]) }
     let qq = q - 1
     // (the placeholders the walk passed over, each its unit and the glyphs between its points: not yet claimed, this pass
     // running before the placeholders')
@@ -322,6 +329,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       const X = pg.points[qq]
       for (; g >= X.glyph; g--) glyphAt(g)
       if (END.test(X.name)) break
+      if (caption && LABEL_POINT.test(X.name)) { called = true; break }
       if (X.name === `${id}c`) { stated.add(id); break }
       // (a paper's macro at the unit's head, its point \\axthpk's (marks.mjs layoutMarking): the glyphs between it and the start,
       // or the next such point, are that piece's ink, and the label is what stands before it)
@@ -334,7 +342,8 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       // (a babel name passed over: what stands between it and the start is the head's joint, amsthm's "." after "Proof")
       if (o && nm) afterName.add(id)
     }
-    if (qq < 0) for (; g >= 0; g--) glyphAt(g)
+    if (qq < 0 && !caption) for (; g >= 0; g--) glyphAt(g)
+    if (caption && !called) continue
     if (!lead.glyphs.length) continue
     // a unit that opens with a placeholder of no mark of its own (a paper's macro first in it: \\bert, \\aidehuman): TeX set
     // that placeholder's ink before the start mark, after the label if the unit has one. On a unit's first line nothing but its
@@ -480,11 +489,12 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       const A = list[0], r = at(A)
       if (close.length === 1 && !before(close[0], A) && at(close[0]) === r && (close[0][0] === A[0] || r % 2 === 1)) e = { ...take(A, close[0], r), how: OWNED_HOW.indexOf('closed') }
       else if (close.length === 0) {
-        // an opening alone: to the next point in its region (a bracket's and a name's passed over)
+        // an opening alone: to the next point in its region (a bracket's, a name's and a point another reader reads alone passed
+        // over: stream.mjs READ_ALONE)
         let B = null
         for (let p = A[0]; p <= P && !B; p++) {
           const pts = pages[p - 1].points
-          for (let q = p === A[0] ? A[1] + 1 : 0; q < pts.length; q++) if (!BRACKET.test(pts[q].name) && regions[p - 1].at[q] === r) { B = [p, q]; break }
+          for (let q = p === A[0] ? A[1] + 1 : 0; q < pts.length; q++) if (!BRACKET.test(pts[q].name) && !READ_ALONE.test(pts[q].name) && regions[p - 1].at[q] === r) { B = [p, q]; break }
           if (r % 2 === 0) break
         }
         if (B) e = take(A, B, r)

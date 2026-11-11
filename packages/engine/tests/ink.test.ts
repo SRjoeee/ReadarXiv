@@ -1,6 +1,6 @@
 // The units no source unit is, made by locate on arXiv's page by today's rule (src/locate/ink.ts): ink units, kept blocks and
 // figure texts from A's glyphs no source unit owns, B's marks carried onto A.
-import { read, unitId } from '@readarxiv/format'
+import { type Piece, read, unitId } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
 import { pageGlyphsOf } from '../src/glyph.ts'
@@ -361,6 +361,166 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     const T = make('ABCDEF+CMTT10')
     expect(T.units.slice(0, 3).map((u) => !!u.kept)).toEqual([false, false, false])
     expect(T.members.filter((m) => m.figure).map((m) => m.fixed)).toEqual([false, false])
+  })
+
+  it('makes a group of a unit set wholly in a face of one pitch one element, the original’s ink, its lines kept where TeX set them on lines of their own (Rule 1 by group)', () => {
+    // (2608.25210v2 p3: the paper's `\mypython{…}` box, a framed `\ttfamily` prompt, shares a unit with its lead line where the
+    // source has no blank line between them, and was translated, where p2's same box, a unit of its own, is kept (Rule 1 reads
+    // a whole unit). The rule read per group, F0's for a figure's line in body text: a group whose every glyph is set in a face
+    // of one pitch is an element `code`, never sent, its glyphs its ink; the rest of the unit translated. TeX set the box as a
+    // vertical box of its own, on lines no other text of the unit shares: its lines stay where TeX set them, KEPT, as a
+    // display's rows (its own measure and frame). A typewriter word inside a sentence is an element on its line, drawn as its
+    // ink, F0's `code`; a group holding no text of its own (a colour around an identifier element) is left as it is)
+    const R = 'ABCDEF+CMR10',
+      TT = 'ABCDEF+CMTT10'
+    const spec: PageSpec = {
+      lines: [
+        { text: 'Body text of the paper set here', font: R, y: 700 },
+        { text: 'the prompt reads as follows.', font: R, y: 688 },
+        { text: 'Answer True or False: yes', font: TT, x: 80, y: 676 },
+        { text: 'Sentence 1: [s].', font: TT, x: 80, y: 664 },
+        { text: 'we call ', font: R, y: 652 },
+        { text: 'lookup', font: TT, x: 72 + 8 * 6, y: 652 },
+        { text: ' here now', font: R, x: 72 + 14 * 6, y: 652 },
+      ],
+    }
+    const B = docOf([spec])
+    const A = docOf([spec])
+    for (const D of [A, B])
+      for (const g of D.pages[0]!.glyphs)
+        if (g.font === R && !g.blank) g.x1 = g.x0 + (0.3 + ((g.u.codePointAt(0)! * 7) % 11) / 25) * g.size
+    const span = (id: string, open: string, content: Piece[], style = 'other'): Piece => ({
+      t: 'span',
+      id,
+      style,
+      open,
+      close: '}',
+      content,
+    })
+    const unit = (content: Piece[]): InstrumentUnit => ({ id: unitId('para', content), kind: 'para', content })
+    const units = [
+      unitOf('para', 'Body text of the paper set here'),
+      unit([
+        text('the prompt reads as follows. '),
+        span('1', '\\mypython{', [text('Answer True or False: yes Sentence 1: [s].')]),
+      ]),
+      unit([text('we call '), span('1', '\\texttt{', [text('lookup')], 'mono'), text(' here now')]),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 1, 1, 2, 2, 2]]), A, align(B, A), { pages: rawOf(A) })
+    // (the box: one element, the group's source its identity, kept by its pitch; its lines KEPT, as a display's rows)
+    const box = L.units[1]!
+    const boxEl = { t: 'el', id: '1', kind: 'code', src: '\\mypython{Answer True or False: yes Sentence 1: [s].}' }
+    expect(box.content).toEqual([text('the prompt reads as follows. '), boxEl])
+    expect(box.id).toBe(unitId('para', box.content))
+    expect(box.kept).toBeUndefined()
+    expect(box.keptEls).toEqual([['1', 'pitch']])
+    expect(new Map(box.classes).get('1')).toMatchObject({ cls: 'display' })
+    const boxMem = L.members.find((m) => m.unit === 1)!
+    expect(boxMem.id).toBe(box.id)
+    expect(boxMem.lines.map((l) => [l[2], l[4], l[9] & 1])).toEqual([
+      [72, 688, 0],
+      [80, 676, 1],
+      [80, 664, 1],
+    ])
+    const boxInk = new Map(boxMem.elements).get('1')!
+    expect(boxInk.ink.map((k) => k[5])).toEqual([676, 664])
+    expect(boxInk.keep).toBe(1)
+    // (the word: an element on its line, F0's class, its copy its text)
+    const word = L.units[2]!
+    expect(word.content).toEqual([
+      text('we call '),
+      { t: 'el', id: '1', kind: 'code', src: '\\texttt{lookup}' },
+      text(' here now'),
+    ])
+    expect(word.keptEls).toEqual([['1', 'pitch']])
+    expect(new Map(word.classes).get('1')).toEqual({ cls: 'other', literal: true, copy: 'lookup' })
+    const wordMem = L.members.find((m) => m.unit === 2)!
+    expect(wordMem.lines.map((l) => l[9] & 1)).toEqual([0])
+    expect(new Map(wordMem.elements).get('1')!.ink).toHaveLength(1)
+    // (the paper's body text in its own face: as it was)
+    expect(L.units[0]).toEqual(units[0])
+  })
+
+  it('reads a group of one pitch with its own end marks and its identifiers, and leaves a group of no text of its own as it is (Rule 1 by group)', () => {
+    // (an identifier is an element already, never sent (§18.25): a typewriter group holding one and words of its own is one
+    // element, the identifier inside it; one holding the identifier alone has no text to keep and stays a group. A stop the
+    // group's own text writes at its end is its glyph; the sentence's stop after it, in the body's face, stays the sentence's)
+    const R = 'ABCDEF+CMR10',
+      TT = 'ABCDEF+CMTT10'
+    const spec: PageSpec = {
+      lines: [
+        { text: 'Body text of the paper set here', font: R, y: 700 },
+        { text: 'run ', font: R, y: 688 },
+        { text: 'call ', font: TT, x: 72 + 4 * 6, y: 688 },
+        { text: 'f_x', font: TT, x: 72 + 9 * 6, y: 688 },
+        { text: ' now.', font: TT, x: 72 + 12 * 6, y: 688 },
+        { text: ' then', font: R, x: 72 + 17 * 6, y: 688 },
+        { text: 'g_y', font: TT, x: 72 + 22 * 6, y: 688 },
+        { text: '.', font: R, x: 72 + 25 * 6, y: 688 },
+      ],
+    }
+    const B = docOf([spec])
+    const A = docOf([spec])
+    for (const D of [A, B])
+      for (const g of D.pages[0]!.glyphs)
+        if (g.font === R && !g.blank) g.x1 = g.x0 + (0.3 + ((g.u.codePointAt(0)! * 7) % 11) / 25) * g.size
+    const tt = (id: string, content: Piece[]): Piece => ({
+      t: 'span',
+      id,
+      style: 'mono',
+      open: '\\texttt{',
+      close: '}',
+      content,
+    })
+    const code = (id: string, src: string): Piece => ({ t: 'el', id, kind: 'code', src })
+    const content: Piece[] = [
+      text('run '),
+      tt('1', [text('call '), code('2', 'f\\_x'), text(' now.')]),
+      text(' then'),
+      tt('5', [code('6', 'g\\_y')]),
+      text('.'),
+    ]
+    const units = [
+      unitOf('para', 'Body text of the paper set here'),
+      {
+        id: unitId('para', content),
+        kind: 'para',
+        content,
+        classes: [
+          ['2', { cls: 'other', literal: true, copy: 'f_x' }],
+          ['6', { cls: 'other', literal: true, copy: 'g_y' }],
+        ],
+      } as InstrumentUnit,
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 1, 1, 1, 1, 1, 1]])
+    // (the identifiers' glyphs are their elements', as the instrument owns them)
+    const O = ins.glyphs[0]!
+    B.pages[0]!.glyphs.forEach((g, j) => {
+      if (g.n === 3 || g.n === 6) {
+        O.role[j] = ROLE.element
+        O.piece[j] = g.n === 3 ? 2 : 6
+      }
+    })
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const u = L.units[1]!
+    expect(u.content).toEqual([
+      text('run '),
+      code('1', '\\texttt{call f\\_x now.}'),
+      text(' then'),
+      content[3],
+      text('.'),
+    ])
+    expect(u.keptEls).toEqual([['1', 'pitch']])
+    expect(new Map(u.classes)).toEqual(
+      new Map([
+        ['6', { cls: 'other', literal: true, copy: 'g_y' }],
+        ['1', { cls: 'other', literal: true, copy: 'call f_x now.' }],
+      ]),
+    )
+    const mem = L.members.find((m) => m.unit === 1)!
+    const els = new Map(mem.elements)
+    expect([...els.keys()].sort()).toEqual(['1', '6'])
+    expect(els.get('1')!.ink.map((k) => [k[1], k[3]])).toEqual([[72 + 4 * 6, 72 + 17 * 6]])
   })
 
   it('keeps a figure’s word set in another face inside a line of a face of one pitch, with its line, always (Rule 1)', () => {
@@ -1037,6 +1197,34 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     // (its label's ink and the line it stands on, its text's line from the text on, as a source unit's label is stated)
     expect(note.labelAt).toMatchObject({ kind: 'number', ink: [1, 72, 690.6, 75.6, 696, 691.8], line: 0 })
     expect(note.lines[0]![2]).toBe(76)
+  })
+
+  it('makes the text of a float of a type with no counter a note, the page’s own text (NeurIPS’s notice); a figure’s float none', () => {
+    // (NeurIPS sets "Preprint. Under review." in \\@float{noticebox}[b], a float type with \\ftype@noticebox and no counter: no
+    // \\caption can number it, so TeX says it is no figure, table or algorithm. The marked compile states it, `fn<n>` beside the
+    // float's `fs<n>` (layout/marks.mjs); the ledger reads its text as the page's own outside the bodies, a note, always
+    // translated. Read as a float, its line was `figures` by depth, which no figure reading takes: English on every pane)
+    const lines = ['Body text here', { text: 'Preprint. Under review.', x: 72, y: 80, size: 9 }]
+    const made = (fn: boolean) => {
+      const at = 'Body text here'.length
+      const { B, A } = pair({
+        lines,
+        points: [
+          ['bs1', 0],
+          ['be1', at],
+          ['fs2', at],
+          ...(fn ? ([['fn2', at]] as [string, number][]) : []),
+          ['fe2', at + 'Preprint. Under review.'.length],
+        ],
+      })
+      const L = locate(instrumentOf(B, [unitOf('para', 'Body text here')], [[0, -1]]), A, align(B, A), {
+        pages: rawOf(A),
+      })
+      return L.units.slice(1).map((u) => [u.kind, u.content.map((p) => (p.t === 'text' ? p.s : p.t)).join('')])
+    }
+    expect(made(true)).toEqual([['inknotes', 'Preprint. Under review.']])
+    // (a float of a type with a counter, a figure's or a table's: its text no unit owns stays its figure's, as before)
+    expect(made(false)).toEqual([])
   })
 
   it('keeps a script TeX set in a text face an element of its ink unit in its own ink, as a formula’s run, never its text', () => {

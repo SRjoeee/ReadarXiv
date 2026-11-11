@@ -790,6 +790,32 @@ describe('locate: a single line’s alignment is its TeX line’s, the row it sh
     expect(L.flows).toContainEqual([1, 2])
     expect(L.members[1]!.align).toBe('j')
   })
+  it('states a caption’s label that stands on a line of its own with no line and that line’s own alignment (IEEEtran’s TABLE I)', () => {
+    // (IEEEtran sets a table's \\fnum@table centred on a line of its own above its caption's text, the marked compile's label
+    // point telling it the caption's (own.mjs MR 5). The part states it on none of the caption's lines (no `line`) and how its
+    // own line is set against its measure, read as any line's alignment is (Label.align): the typesetter lays its relabel there)
+    const lines = [
+      { text: 'TABLE I', x: 285, y: 700 },
+      { text: 'Accuracy by probe', x: 255, y: 688 },
+      { text: 'z'.repeat(78), x: 72, y: 600 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [unitOf('caption', 'Accuracy by probe', { align: 'c' }), unitOf('para', 'z'.repeat(78))]
+    const ins = instrumentOf(B, units, [[0, 0, 1]], [[ROLE.label, ROLE.text, ROLE.text]])
+    const L = locate(ins, B, align(B, B))
+    const lb = L.members[0]!.labelAt!
+    expect(lb.ink[5]).toBe(700)
+    expect(lb.line).toBeUndefined()
+    expect(lb.align).toBe('c')
+    // (a label set flush left over its text: its own line's, not the unit's)
+    const left = docOf([{ lines: [{ text: 'TABLE I', x: 72, y: 700 }, lines[1]!, lines[2]!] }])
+    const L2 = locate(
+      instrumentOf(left, units, [[0, 0, 1]], [[ROLE.label, ROLE.text, ROLE.text]]),
+      left,
+      align(left, left),
+    )
+    expect(L2.members[0]!.labelAt!.align).toBe('l')
+  })
   it('keeps a line its block centres where it stands alone on its row', () => {
     // (an author block's name, place and e-mail, each centred under the one over it: 2303.11366v4 p1)
     const lines = [
@@ -2374,6 +2400,18 @@ describe('a paragraph TeX opened inside a unit (C13, C15: SpanAt.opens, El.opens
     ]
     expect(partOf(owned(B, units, [], [22]), B).spans?.some(([, x]) => x.opens !== undefined) ?? false).toBe(false)
   })
+  it('counts a paragraph TeX opened where a group the instrument wrote as its content stood: a gate, which no such group may meet', () => {
+    // (pipeline/instrument.mjs passThroughOf: a group that carries nothing is its content, decided before TeX's paragraph ends are
+    // read; one TeX opened a paragraph at would have nothing to state it on. Stage 1a fails a paper that has one)
+    const B = docOf([{ lines: ['An item ends with sentences.', 'llm equal two: Determine', 'whether the two agree'] }])
+    const content = [text('An item ends with sentences. \n llm equal two: Determine whether the two agree')]
+    const units: InstrumentUnit[] = [{ id: unitId('para', content), kind: 'para', content, passed: [29] }]
+    expect(locate(owned(B, units, [], [28]), B, align(B, B)).stats.opensLost).toBe(1)
+    // (an end that no such group's open meets, and one where none stood)
+    expect(locate(owned(B, units, [], [43]), B, align(B, B)).stats.opensLost).toBeUndefined()
+    const plain = [{ ...units[0]!, passed: [] }]
+    expect(locate(owned(B, plain, [], [28]), B, align(B, B)).stats.opensLost).toBeUndefined()
+  })
   it('states the element whose first glyph opens TeX’s paragraph, and none whose own glyphs the end falls inside', () => {
     const B = docOf([{ lines: ['A first paragraph ends.', 'X and the second one', 'runs on'] }])
     const content = [
@@ -2843,6 +2881,52 @@ describe('an element’s ink is what TeX set for it', () => {
     expect(elementOf(L, '3').text).toBe('4')
     expect(elementOf(L, '4').text).toBe('e.g.')
     expect(elementOf(L, '6').text).toBe('5')
+  })
+
+  it('states the text of an element whose letter TeX built from an accent over it, read with the accent joined, as a unit’s is', () => {
+    // (2610.21312v1 p2's `\citep{marchenko1967}`, "(Marčenko and Pastur, 1967)": `\v{c}` is TeX's \accent, the caron a glyph of
+    // its own set over the c and raised 0.05 pt off the line's baseline (the letter's height less the x-height). Read glyph by
+    // glyph its citation stood on two baselines, so it stated no text and was drawn as one crop 114 pt wide that no line could
+    // break; the unit's own text and an element's text read such an accent as its letter's (facts.ts joinAccents). Its siblings,
+    // with no accent, state theirs. A script's raise is still no text: the caron is no script, it is set over its letter)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'as in ', x: 72, y: 700 },
+          { text: '(Mar', x: 108, y: 700 },
+          { text: 'ˇ', x: 132, y: 700.05 },
+          { text: 'cenko and Pastur, 1967)', x: 132, y: 700 },
+          { text: ' and ', x: 270, y: 700 },
+          { text: '(Baik, 2005)', x: 300, y: 700 },
+          { text: ' now', x: 372, y: 700 },
+        ],
+      },
+    ])
+    const content = [text('as in '), el('1', '\\citep{m}'), text(' and '), el('3', '\\citep{b}'), text(' now')]
+    const ins = ownedBy(
+      B,
+      [
+        paraOf(content, [
+          ['1', { cls: 'cite' }],
+          ['3', { cls: 'cite' }],
+        ]),
+      ],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, T, -1],
+          [0, E, 3],
+          [0, T, -1],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    expect(elementOf(L).text).toBe('(Marčenko and Pastur, 1967)')
+    expect(elementOf(L).ink).toHaveLength(1)
+    expect(elementOf(L, '3').text).toBe('(Baik, 2005)')
   })
 
   it('states a symbol drawn as its ink where TeX’s glyphs are not that symbol as drawn: a letter among them, or a raise its reading lacks', () => {

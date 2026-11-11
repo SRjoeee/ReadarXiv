@@ -74,6 +74,7 @@ export function google(o: GoogleOptions): Translator {
     identity: `google:${sha256Hex(JSON.stringify(['google', GOOGLE_ENDPOINT, CLIENT, 'tags/1', 'raw/1'])).slice(0, 16)}`,
     digest: GOOGLE_DIGEST,
     context: false,
+    wire: 'tags',
     limits: { ...GOOGLE_LIMITS, ...o.limits },
     supports: async () => true,
     write: (unit) => planTags(unit).wire,

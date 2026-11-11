@@ -28,7 +28,8 @@ import { L1_BUNDLES } from '../../../packages/typeset/tests/replay/l1.ts'
 import { LAB, TODAY } from '../../../packages/typeset/tests/replay/tap.ts'
 import { SLICES, TABLES } from '../served-metrics.mjs'
 import { analyse, boxesOf } from './analyse.mjs'
-import { hyphFileOf, pdfOf, whyNot } from './inputs.mjs'
+import { DEVICE_PT, inPlace } from './fidelity.mjs'
+import { bundleCheck, bundleOf, hyphFileOf, pdfOf, whyNot } from './inputs.mjs'
 import { PAIRS } from './pairs.mjs'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
@@ -51,6 +52,8 @@ const PDFJS = join(ROOT, 'node_modules/.pnpm/pdfjs-dist@6.3.289/node_modules/pdf
 /** CSS px a point (PDF.js's scale 1) and device px a CSS px */
 export const SCALE = 96 / 72
 export const DPR = 2
+// (the measure's device pixel, fidelity.mjs DEVICE_PT, is this drawing's)
+if (Math.abs(DEVICE_PT - 1 / (SCALE * DPR)) > 1e-9) throw new Error(`DEVICE_PT ${DEVICE_PT} is not this drawing's device pixel`)
 const MIN_FREE_GIB = 12
 mkdirSync(join(WORK, 'raw'), { recursive: true })
 mkdirSync(join(OUT, 'img'), { recursive: true })
@@ -149,6 +152,9 @@ let current = null
 const sliceDir = (name) => SLICES.map((d) => join(d, name)).find((f) => existsSync(f))
 const todayDesc = new Map()
 const missing = []
+// (the v2 files laid over other bundles than the ones served here, and those of before the guard: inputs.mjs bundleCheck)
+const refusedBundles = []
+RUN.warnings = []
 for (const pair of pairs) {
   const paper = paperOf(pair)
   const target = /-([a-z]{2,3})$/.exec(pair)?.[1]
@@ -184,6 +190,14 @@ for (const pair of pairs) {
     missing.push({ pair, why: `v2.mjs laid it under the toggles ${v2.toggles ?? 'defaults'}, the drawing is asked ${TOGGLES}` })
     todayDesc.delete(pair)
     continue
+  }
+  // (its pages against the bundles' composed document it was laid over, never another's: the reader unwraps whatever the
+  // served document's groups do not hold, half a page drawn as the original's)
+  const chk = bundleCheck({ pair, ...v2 }, bundleOf(paper))
+  if (!chk.ok) refusedBundles.push(chk.why)
+  else if (chk.warning) {
+    RUN.warnings.push(chk.warning)
+    console.warn(`WARNING ${chk.warning}`)
   }
   const byId = new Map()
   for (const [pg, f] of Object.entries(v2.facts))
@@ -316,6 +330,15 @@ const routes = [
 ]
 // (the pairs that cannot be drawn, told before any is: a run that stops still names them)
 RUN.missing = missing
+// (a v2 file laid over other bundles than these: the run stops before any page is drawn, naming both)
+if (refusedBundles.length) {
+  RUN.stopped = `bundles: ${refusedBundles.join('; ')}`
+  manifest()
+  for (const w of refusedBundles) console.error(`render.mjs: refused, ${w}`)
+  console.error('render.mjs: a v2 file is drawn only against the bundles it was laid over (AXT_L1_BUNDLES): nothing drawn')
+  process.exit(2)
+}
+if (!RUN.warnings.length) delete RUN.warnings
 manifest()
 const server = await startServer({ out: BUILD, objects, routes })
 
@@ -520,10 +543,6 @@ function partBox(l) {
 }
 function prepBox(l) {
   return [l.x0, Math.min(l.top, l.bottom), l.x1, Math.max(l.top, l.bottom)]
-}
-/** whether a crop is drawn where its source stands (its page, its box within half a point) */
-function inPlace(c, n) {
-  return c[10] === n && [1, 2, 3, 4].every((i) => c[i + 5] !== null && Math.abs(c[i] - c[i + 5]) <= 0.5)
 }
 
 /**

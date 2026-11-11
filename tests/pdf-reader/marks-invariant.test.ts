@@ -216,10 +216,11 @@ describe.skipIf(!docker)('the marked original sets every text item where the pap
     expect(answers(clean)).toEqual({ text: 'BERT', inkless: false, pair: '2', marks: ['ab', 'a', ''] })
     expect(answers(broken)).toEqual(answers(clean))
   }, 900_000)
-  it('a complete macro glued to the placeholder after it (2610.21098\'s \\HarnessLimitShare{}\\%): its closing mark where TeX answered so for that follower', async () => {
+  it('a complete macro glued to the placeholder after it (\\rate{}\\S{}): its closing mark where TeX answered so for that follower; glued to a character of the text (2610.21098\'s \\HarnessLimitShare{}\\%, the percent a character of the text since 2026-11-11), none, as before a word', async () => {
     const r = await compare(doc('\\newcommand\\share{91.5}\\newcommand\\rate{0.73}', `${lines('of \\share{}\\% each')}\n\n${lines('of \\rate{}\\S{} each')}`))
     expect(r.marked).toEqual(r.own)
-    expect([r.switches['\\share'], r.marksOf('\\share{}'), r.marksOf('\\rate{}')]).toEqual(['00000000', 'ab', 'ab'])
+    // (\\share{}'s ink ends where the text after it begins, the layout's `want`, as for any macro a word follows)
+    expect([r.switches['\\share'], r.marksOf('\\share{}'), r.marksOf('\\rate{}')]).toEqual(['00000000', 'a', 'ab'])
   }, 900_000)
   it('backref\'s lists after the entries under hyperref\'s pagebackref, the class\'s \\backrefalt and backref\'s own printer (2610.37668v1): the list marked around where TeX sets it, every item where the paper sets it', async () => {
     const bib = '\\begin{thebibliography}{9}\n\n\\bibitem{a}\nA. Author and B. Writer.\n\\newblock A title of the work, 2020.\n\n\\bibitem{b}\nC. Third and D. Fourth.\n\\newblock Another title of a work here, 2021.\n\n\\bibitem{c}\nE. Never Cited.\n\\newblock A work no page cites, 2019.\n\n\\end{thebibliography}'

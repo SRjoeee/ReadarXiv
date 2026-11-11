@@ -18,9 +18,9 @@ import { doorRows } from '../../../packages/typeset/tests/replay/rows.ts'
 import { LAB, ledger } from '../../../packages/typeset/tests/replay/tap.ts'
 import { keptFacts, originalFacts, scriptsPass } from './blind.mjs'
 import { frameOf, labelsPass } from './fidelity.mjs'
-import { pdfOf, whyNot } from './inputs.mjs'
+import { bundleCheck, bundleOf, pdfOf, whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
-import { coverageOf, FLAGS, freshOf, judgedChanged, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
+import { carriedOf, coverageOf, FLAGS, freshOf, judgedChanged, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
 
 /** why a unit is laid with a fresh row (fresh.mjs freshNeeds' causes), as the sheet says it (lane parity-fresh) */
 const FRESH_CAUSE = {
@@ -68,6 +68,21 @@ for (const pair of run?.pairs ?? []) {
   if (why) notMeasured.set(pair, why)
   else drawn.set(pair, raw)
 }
+// (each v2 file against the bundles this verdict reads, before anything is measured: one laid over others refused, naming both,
+// and the run stopped; one of before the guard measured with a warning, in the log and in parity.json: inputs.mjs bundleCheck)
+const warnings = [...(run?.warnings ?? [])]
+const refusedBundles = []
+for (const [pair, raw] of drawn) {
+  const chk = bundleCheck({ pair, ...json(join(WORK, 'v2', `${pair}.json`)) }, bundleOf(raw.paper))
+  if (!chk.ok) refusedBundles.push(chk.why)
+  else if (chk.warning && !warnings.includes(chk.warning)) warnings.push(chk.warning)
+}
+if (refusedBundles.length) {
+  for (const w of refusedBundles) console.error(`measure.mjs: refused, ${w}`)
+  console.error('measure.mjs: a v2 file is measured only against the bundles it was laid over (AXT_L1_BUNDLES): nothing written')
+  process.exit(2)
+}
+for (const w of warnings) console.warn(`WARNING ${w}`)
 const pairs = [...drawn.keys()]
 // (the pairs the sheet names not drawn: the run's asked ones that were not, and the maintainer's first ones not asked)
 const missing = [...notMeasured].map(([pair, why]) => ({ pair, why, asked: true }))
@@ -263,6 +278,13 @@ const order = [...pages].sort(
   (a, b) => Number(isFirst(b)) - Number(isFirst(a)) || Number(b.worse > 0) - Number(a.worse > 0) || b.score - a.score || a.pair.localeCompare(b.pair) || a.page - b.page,
 )
 const { summary, worst } = summaryOf(pages)
+// (the differences carried from an earlier round, unjudged now on a fresh row (verdict.mjs carriedOf): lab-data's
+// parity/carried.json, AXT_PARITY_CARRIED, in the run's mode, every toggle on where its v2 files say so; each said in the notes)
+const CARRIED = process.env.AXT_PARITY_CARRIED ?? join(LAB, 'refactor-2026-11', 'parity', 'carried.json')
+const mode = [...drawn.keys()].some((pair) => json(join(WORK, 'v2', `${pair}.json`)).toggles === 'on') ? 'toggles-on' : 'default'
+const carried = existsSync(CARRIED) ? carriedOf(JSON.parse(readFileSync(CARRIED, 'utf8')).entries, pages, mode) : []
+for (const c of carried)
+  notes.push(`carried from ${c.since}: ${c.pair} p${c.page} ${c.unit} ${c.flag} (then today ${c.was?.today}, v2 ${c.was?.v2}, the original ${c.was?.original}): ${c.state}${c.now ? `; now today ${c.now.today}, v2 ${c.now.v2}, the original ${c.now.original}` : ''}`)
 const result = {
   format: 'readarxiv-parity 3',
   verdict: 'display ≥ today: no page worse than today\'s, a difference only where nearer the original, over every page the run asked',
@@ -313,6 +335,9 @@ const result = {
   facts,
   errors: pages.filter((p) => p.error).map((p) => `${p.pair} p${p.page}: ${p.error}`),
   notes,
+  // (the v2 files read unchecked: laid before the bundles guard, inputs.mjs bundleCheck)
+  ...(warnings.length ? { warnings } : {}),
+  carried,
   summary,
   worst,
   pages: order,

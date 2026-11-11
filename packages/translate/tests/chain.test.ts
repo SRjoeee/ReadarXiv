@@ -7,6 +7,7 @@ import {
   Fault,
   type Note,
   type OutPiece,
+  type PaperContext,
   type Piece,
   type Result,
   type Translator,
@@ -81,8 +82,8 @@ describe('the contract: one result per unit under every failure', () => {
       fakeTranslator({ identity: 'pass:0', script: () => ({ fault: new Fault('pass', 'malformed', 'bad') }) }),
     ],
     [
-      'halving',
-      fakeTranslator({ identity: 'halve:0', script: () => ({ fault: new Fault('halve', 'overload', 'too big') }) }),
+      'too large',
+      fakeTranslator({ identity: 'large:0', script: () => ({ fault: new Fault('pass', 'too-large', 'too big') }) }),
     ],
     ['hanging', fakeTranslator({ identity: 'hang:0', script: () => ({ hang: true }) })],
     ['short of units', fakeTranslator({ identity: 'short:0', script: () => ({ missing: [0, 2] }) })],
@@ -528,14 +529,47 @@ describe('DECISION "Faults": each remedy, on a fake clock', () => {
     expect(rs2[0]).toEqual({ id: 'p', ok: false, why: { kind: 'unavailable', retryAfterMs: 2_000 } })
     expect(always.calls.length).toBe(3)
   })
-  it('halve: a request is halved down to the unit at fault, which this translator refuses', async () => {
+  it('cool: the last translator waits only within what the chain gives one request of it (ATTEMPTS × callMs); a longer pause answers unavailable with its time, unslept (#638)', async () => {
+    // an hour: never slept, one request, the endpoint's time told (two sleeps of an hour held the call two hours)
+    const clock = fakeClock()
+    const hour = fakeTranslator({
+      identity: 'hour:0',
+      script: () => ({ fault: new Fault('cool', 'rate', '429', { retryAfterMs: 3_600_000 }) }),
+    })
+    const rs = await all(chainOf({ clock }).translate([plain], 'ja', { translators: [hour] }))
+    expect(rs[0]).toEqual({ id: 'p', ok: false, why: { kind: 'unavailable', retryAfterMs: 3_600_000 } })
+    expect(hour.calls.length).toBe(1)
+    expect(clock.now()).toBe(0)
+    // 20 s within the 30 s a request of it is given (3 × 10 s): slept once; a second 20 s would pass the bound
+    const clock2 = fakeClock()
+    const slow = fakeTranslator({
+      identity: 'slow:0',
+      script: () => ({ fault: new Fault('cool', 'rate', '429', { retryAfterMs: 20_000 }) }),
+    })
+    const rs2 = await all(chainOf({ clock: clock2 }).translate([plain], 'ja', { translators: [slow] }))
+    expect(rs2[0]).toEqual({ id: 'p', ok: false, why: { kind: 'unavailable', retryAfterMs: 20_000 } })
+    expect(slow.calls.length).toBe(2)
+    expect(clock2.now()).toBe(20_000)
+    // a gate that refuses the last translator for an hour: not slept either, the unit told the hour
+    const clock3 = fakeClock()
+    const e = echo()
+    const gate = {
+      acquire: async () => ({ ok: false as const, retryInMs: 3_600_000 }),
+      release: async () => {},
+    }
+    const rs3 = await all(chainOf({ clock: clock3, gate }).translate([plain], 'ja', { translators: [e] }))
+    expect(rs3[0]).toEqual({ id: 'p', ok: false, why: { kind: 'unavailable', retryAfterMs: 3_600_000 } })
+    expect(clock3.now()).toBe(0)
+    expect(e.calls.length).toBe(0)
+  })
+  it('too large: a request its endpoint says is too large is halved down to the unit at fault, which this translator refuses', async () => {
     const units = many(8)
     const bad = units[5] as UnitIn
     const picky = fakeTranslator({
       identity: 'picky:0',
       script: ({ wires }) =>
         wires.includes(JSON.stringify(bad.content))
-          ? { fault: new Fault('halve', 'overload', 'too large') }
+          ? { fault: new Fault('pass', 'too-large', 'too large') }
           : undefined,
     })
     const rs = await all(chainOf({ clock: fakeClock() }).translate(units, 'ja', { translators: [picky, echo()] }))
@@ -543,6 +577,49 @@ describe('DECISION "Faults": each remedy, on a fake clock', () => {
     expect(byId(rs, bad.id)).toMatchObject({ ok: true, by: 'echo:0' })
     // 8 → its halves; the first half answers, the second is halved again, down to the unit at fault alone
     expect(picky.calls.map((c) => c.length)).toEqual([8, 4, 4, 2, 1, 1, 2])
+  })
+  it('pass: a request refused for no reason of its size is handed on whole, once, and told (#636: 100 units were 199 requests)', async () => {
+    const refuser = fakeTranslator({
+      identity: 'refuser:0',
+      limits: { chars: 100_000 },
+      script: () => ({ fault: new Fault('pass', 'malformed', '400') }),
+    })
+    const notes: Note[] = []
+    const units = many(100)
+    const rs = await all(
+      chainOf({ clock: fakeClock() }).translate(units, 'ja', {
+        translators: [refuser, echo()],
+        note: (n) => notes.push(n),
+      }),
+    )
+    expect(refuser.calls.map((c) => c.length)).toEqual([100])
+    expect(rs.every((r) => r.ok && r.by === 'echo:0')).toBe(true)
+    expect(
+      notes.filter((n) => n.kind === 'passed' && n.by === 'refuser:0' && n.why.kind === 'unavailable').length,
+    ).toBe(100)
+    // alone on the chain: one request, and every unit unavailable (the service's, not the unit's), no runs floor
+    const alone = fakeTranslator({
+      identity: 'alone:0',
+      script: () => ({ fault: new Fault('pass', 'malformed', '400') }),
+    })
+    const rs2 = await all(chainOf({ clock: fakeClock() }).translate(many(4), 'ja', { translators: [alone] }))
+    expect(alone.calls.length).toBe(1)
+    expect(rs2.map((r) => (r.ok ? 'ok' : r.why.kind))).toEqual([
+      'unavailable',
+      'unavailable',
+      'unavailable',
+      'unavailable',
+    ])
+  })
+  it('pass: a translator that refuses every request is counted by the breaker, and skipped once it opens', async () => {
+    const refuser = fakeTranslator({
+      identity: 'refuser:0',
+      script: () => ({ fault: new Fault('pass', 'malformed', '400') }),
+    })
+    const chain = chainOf({ clock: fakeClock() })
+    for (let k = 0; k < BREAKER.minOutcomes + 2; k++)
+      await all(chain.translate([unit(`c${k}`, [t(`Call ${k} has words.`)])], 'ja', { translators: [refuser, echo()] }))
+    expect(refuser.calls.length).toBe(BREAKER.minOutcomes)
   })
   it('pass: the next translator; off: unconfigured only when every translator is off', async () => {
     const pass = fakeTranslator({
@@ -651,6 +728,42 @@ describe('the contract: the store', () => {
       keyOf(c, 'ja', 'w', { title: 'A', glossary: [{ term: 'x', translation: 'z' }] }),
     )
     expect(keyOf(echo(), 'ja', 'w', { title: 'A', section: 'Intro' })).toBe(keyOf(echo(), 'ja', 'w'))
+  })
+  it('a translator that says which glossary entries a wire uses (`glossaryOf`) keys each wire by those alone (#637)', async () => {
+    const reads = (wire: string, g: NonNullable<PaperContext['glossary']>) => g.filter((e) => wire.includes(e.term))
+    const c: Translator = { ...fakeTranslator({ identity: 'ctx:0', context: true }), glossaryOf: reads }
+    const kernel = { term: 'kernel', translation: 'Kern' }
+    const lattice = { term: 'lattice', translation: 'Gitter' }
+    // a wire that uses no entry keys as a context with no glossary; one entry more it does not use moves nothing
+    expect(keyOf(c, 'de', 'no term here', { title: 'A', glossary: [kernel] })).toBe(
+      keyOf(c, 'de', 'no term here', { title: 'A' }),
+    )
+    expect(keyOf(c, 'de', 'the kernel', { title: 'A', glossary: [kernel, lattice] })).toBe(
+      keyOf(c, 'de', 'the kernel', { title: 'A', glossary: [kernel] }),
+    )
+    // an entry it uses: its translation changed moves the key
+    expect(
+      keyOf(c, 'de', 'the kernel', { title: 'A', glossary: [{ term: 'kernel', translation: 'Kernel' }] }),
+    ).not.toBe(keyOf(c, 'de', 'the kernel', { title: 'A', glossary: [kernel] }))
+    // through the chain and its store: an entry added that the unit does not use sends nothing; its own term changed asks again
+    const store = memoryStore()
+    const sent = fakeTranslator({ identity: 'ctx:1', context: true })
+    const t1: Translator = { ...sent, glossaryOf: reads }
+    const u = unit('k', [t('A kernel and nothing else.')])
+    const v = unit('n', [t('A sentence without any term.')])
+    const ask = (glossary: NonNullable<PaperContext['glossary']>) =>
+      all(
+        chainOf({ store, clock: fakeClock() }).translate([u, v], 'de', {
+          translators: [t1],
+          context: { title: 'T', glossary },
+        }),
+      )
+    await ask([kernel])
+    expect(sent.calls.flat().length).toBe(2)
+    await ask([kernel, lattice])
+    expect(sent.calls.flat().length).toBe(2)
+    await ask([{ term: 'kernel', translation: 'Kernel' }, lattice])
+    expect(sent.calls.flat()).toEqual([sent.write(u, 'de'), sent.write(v, 'de'), sent.write(u, 'de')])
   })
 })
 

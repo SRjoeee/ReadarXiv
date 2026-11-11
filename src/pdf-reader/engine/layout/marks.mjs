@@ -964,7 +964,32 @@ export const POINTS_TEX = [
   '\\newif\\ifaxt@bodied',
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\axt@body{\\if@twocolumn\\if@firstcolumn1\\else2\\fi\\else0\\fi}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\global\\axt@bodiedtrue\\fi}\\fi',
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}\\fi',
-  '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
+  // (a float of a type that has no counter, `fn<n>` beside its `fs<n>`, in its own box: \\c@\\@captype undefined where its box
+  // ends, so that no \\caption can number it and TeX says it is no figure, table or algorithm: NeurIPS's \\@float{noticebox},
+  // ICML's \\@float{copyrightbox}, which define \\ftype@<type> alone. The ledger reads its text as the page's own outside the
+  // bodies, a note (PDF-READER §18.34))
+  '\\def\\axt@fnpt{\\ifdefined\\@captype\\ifcsname c@\\@captype\\endcsname\\else\\axt@point{fn\\axt@bn}\\fi\\fi}',
+  '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\axt@fnpt\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
+  // (a caption's label where TeX sets it, `ka<k>` before it: every caption maker is handed its label, \\fnum@<type>, as an
+  // argument of its own — LaTeX's \\@caption, caption.sty's and every class's to \\@makecaption (#1), longtable's to
+  // \\LT@makecaption (#2), float.sty's to its styles' \\floatc@plain and \\floatc@ruled (#1), algorithm2e's to
+  // \\algocf@captiontext (#1), caption.sty's every path, a sub-caption's (subcaption sets \\@makecaption to its own inside a
+  // subfigure) and a rotated one's too, to \\caption@@make (#1) —, so each of them, once the document begins, hands its original
+  // the label with the point
+  // before it; a class that sets its caption maker inside its float's environment, after the document began (Elsevier's
+  // cas-common: \\@makecaption its figure's or its table's own at the environment's start, 2610.21084v1), has it wrapped again
+  // as each float begins (\\@xfloat, every float's way in, its arguments passed on untouched), in the float's own group: an
+  // assignment, no node, nothing where the maker is a wrapper already. A wrapper assigns and expands nothing before the original runs (longtable's sets its \\multispan first), the
+  // label's own tokens and parameters as they were (algorithm2e's \\fnum@algocf reads one). Two makers of one caption
+  // (caption.sty's \\@makecaption hands its label on to \\caption@@make) set two points side by side, nothing between them. Typeset only (\\protect
+  // \\@typeset@protect: nothing in a moving argument or a file); in vertical mode it waits for the paragraph the label begins
+  // (LaTeX's para/begin, once), so that no node is put on a vertical list; never while the gate is off (a list of figures, the
+  // output routine). A measured copy's point goes with its box: the label TeX ships carries one. The label is what TeX set from
+  // the point to the caption's start mark, whatever line it stands on (own.mjs MR 5, PDF-READER §18.34))
+  '\\gdef\\axt@kn{0}\\newif\\ifaxt@kwait\\def\\axt@kpt{\\xdef\\axt@kn{\\the\\numexpr\\axt@kn+1\\relax}\\axt@point{ka\\axt@kn}}\\def\\axt@klate{\\ifaxt@kwait\\global\\axt@kwaitfalse\\ifaxt@off\\else\\ifhmode\\axt@kpt\\fi\\fi\\fi}',
+  '\\protected\\def\\axt@ka{\\ifaxt@off\\else\\ifhmode\\axt@kpt\\else\\ifvmode\\ifdefined\\AddToHookNext\\ifaxt@kwait\\else\\global\\axt@kwaittrue\\AddToHookNext{para/begin}{\\axt@klate}\\fi\\fi\\fi\\fi\\fi}\\def\\axt@kf{\\ifx\\protect\\@typeset@protect\\axt@ka\\fi}',
+  '\\long\\def\\axt@kmcw#1#2{\\axt@kmc{\\axt@kf#1}{#2}}\\long\\def\\axt@kmfw#1#2{\\axt@kmf{\\axt@kf#1}{#2}}\\def\\axt@kmfr{\\ifdefined\\@makecaption\\ifx\\@makecaption\\axt@kmcw\\else\\ifx\\@makecaption\\axt@kmfw\\else\\let\\axt@kmf\\@makecaption\\let\\@makecaption\\axt@kmfw\\fi\\fi\\fi}',
+  '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\ifdefined\\@makecaption\\let\\axt@kmc\\@makecaption\\let\\@makecaption\\axt@kmcw\\fi\\ifdefined\\@xfloat\\let\\axt@kxf\\@xfloat\\def\\@xfloat{\\axt@kmfr\\axt@kxf}\\fi\\ifdefined\\LT@makecaption\\let\\axt@klt\\LT@makecaption\\long\\def\\LT@makecaption#1#2#3{\\axt@klt#1{\\axt@kf#2}{#3}}\\fi\\ifdefined\\floatc@plain\\let\\axt@kfp\\floatc@plain\\long\\def\\floatc@plain#1#2{\\axt@kfp{\\axt@kf#1}{#2}}\\fi\\ifdefined\\floatc@ruled\\let\\axt@kfr\\floatc@ruled\\long\\def\\floatc@ruled#1#2{\\axt@kfr{\\axt@kf#1}{#2}}\\fi\\ifdefined\\algocf@captiontext\\let\\axt@kac\\algocf@captiontext\\long\\def\\algocf@captiontext#1#2{\\axt@kac{\\axt@kf#1}{#2}}\\fi\\ifdefined\\caption@@make\\let\\axt@kcc\\caption@@make\\long\\def\\caption@@make#1#2{\\axt@kcc{\\axt@kf#1}{#2}}\\fi}\\fi',
   '\\AtBeginDocument{\\ifdefined\\pgfsys@beginpicture\\let\\axt@pgfbp\\pgfsys@beginpicture\\def\\pgfsys@beginpicture{\\axt@pgfbp\\axt@point{zs}}\\let\\axt@pgfep\\pgfsys@endpicture\\def\\pgfsys@endpicture{\\axt@point{ze}\\axt@pgfep}\\fi}',
   // (where TeX begins a front matter environment after the author block, `fm<n>`: the abstract, the keywords, IEEEtran's index
   // terms, the role table's environments of the front matter that are no author's (rules/arg-roles.mjs FRONT_ROLES
@@ -1745,6 +1770,36 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       if (said === '1' || !closes || (looks(p) && !(cls === 'footnote' && said === '0')) || (ENDS_IN_CS.test(p.src) && !identifierPiece(p.src)) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
       return [open, piece, { t: 'ph', src: `${lead}\\axtpm{${name}b}` }]
     })
+    // (a placeholder the marking passes over after a forced break (passedOver) has its opening point before the break, before the
+    // first of a run of breaks: nothing may stand between a break and what follows it — a table's row begins with its own first
+    // token (\noalign, \omit), the break looks ahead for `*` and `[`, and TeX discards the glue, kerns and penalties at the new
+    // line's start, which a whatsit there would keep; after a centred line's `\\` (\@centercr) TeX is in vertical mode. Set as
+    // \axtpma sets one at the end of the line that ends (the glue before it taken off and put back, so that the break's \unskip
+    // takes it as before); none where the run stands in the unit's head, nor after an alignment's tab, before which it would
+    // stand. 2608.25210v2 u143's algorithm lines, PDF-READER §18.34)
+    if (own(u)) {
+      const head = headEnd(u.pieces, 0)
+      const blank = r => r.t === 'text' && !/[^ \t\r\n]/.test(r.s)
+      for (let k = 0; k < u.pieces.length; k++) {
+        const p = u.pieces[k]
+        if (p.t !== 'ph' || !BREAK.test(p.src ?? '') || out[k].length !== 1 || out[k][0] !== u.pieces[k]) continue
+        let j = k + 1
+        while (j < u.pieces.length && blank(u.pieces[j])) j++
+        const q = u.pieces[j]
+        if (q?.t !== 'ph' || BREAK.test(q.src ?? '') || q.src === '&' || !passed?.has(j) || out[j].length !== 1 || out[j][0] !== u.pieces[j]) continue
+        const cls = classOf(q)
+        if (!cls || !on.has(cls) || (cls === 'macro' && none.has(q.src))) continue
+        let f = k
+        for (let b = k - 1; b >= 0; b--) {
+          const r = u.pieces[b]
+          if (blank(r)) continue
+          if (r.t === 'ph' && BREAK.test(r.src ?? '') && out[b].length === 1) { f = b; continue }
+          break
+        }
+        if (f < head) continue
+        out[f] = [{ t: 'ph', src: `${lead}\\axtpma{${cls === 'footnote' ? 'n' : 'p'}${i}.${j}a}` }, ...out[f]]
+      }
+    }
     // (a closing mark after the punctuation mark its piece's command moves: the text after the piece cut after that mark)
     for (const [k, close] of movedAt) {
       const t = u.pieces[k + 1], cut = (a, b) => ({ ...t, s: t.s.slice(a, b), ...(t.src !== undefined ? { src: t.src.slice(a, b) } : {}) })

@@ -28,12 +28,12 @@ const { tableMetrics } = await import('../../../packages/typeset/src/metrics/tab
 const { layered, servedMetrics } = await import('../served-metrics.mjs')
 const { typesetLay } = await import('../../../packages/reader/src/compose/typeset.ts')
 const { hyphenationOf } = await import('../../../packages/typeset/src/index.ts')
-const { hyphFileOf } = await import('./inputs.mjs')
+const { bundleOf, hyphFileOf } = await import('./inputs.mjs')
 const { candidateKept, candidateKeptElements, candidateKeptToday, candidateStated, heldJoin, joinedJoin, todayJoin } = await import('./join.mjs')
 const { readAsChain } = await import('./rows.mjs')
 const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
 const { partsIn, UNJOINED, unjoinedOf, withUnjoined } = await import('./unjoin.mjs')
-const { FRESH_ROWS, freshNeeds, freshRowsOf, freshTranslator, KEYLESS_LOCK, keylessLock, withFresh } = await import('./fresh.mjs')
+const { FRESH_ROWS, freshNeeds, freshRowsOf, freshTranslator, KEYLESS_LOCK, keylessLock, logFill, withFresh } = await import('./fresh.mjs')
 const { doorRows } = await import('../../../packages/typeset/tests/replay/rows.ts')
 
 const args = process.argv.slice(2)
@@ -56,7 +56,32 @@ if (FILL) {
   process.on('exit', lock.release)
   for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(sig === 'SIGINT' ? 130 : 143))
   translator = freshTranslator(FRESH_ROWS, { fill: true })
+  // (what the fill did, one entry a run in the cache's fills.jsonl and printed at its end: wires asked, requests made, refused,
+  // 429s, the pairs touched, start and end; written on any exit, a 429's or a failure's too)
+  const start = new Date().toISOString()
+  process.on('exit', (code) => {
+    const entry = {
+      start,
+      end: new Date().toISOString(),
+      exit: code,
+      mode: FRESH,
+      lane: 'parity-fresh',
+      bundles: process.env.AXT_L1_BUNDLES ?? null,
+      wires: fillLog.reduce((n, p) => n + p.wires, 0),
+      requests: translator.requests(),
+      refused: fillLog.reduce((n, p) => n + p.refused, 0),
+      missing: fillLog.reduce((n, p) => n + p.missing, 0),
+      rate429: translator.rated(),
+      pairs: fillLog.filter((p) => p.wires || p.refused || p.missing),
+    }
+    logFill(entry)
+    console.log(`fill: ${entry.wires} wires in ${entry.requests} requests, refused ${entry.refused}, still missing ${entry.missing}, 429s ${entry.rate429}; ${entry.pairs.length} pairs touched; ${entry.start} - ${entry.end} (${FRESH_ROWS}/fills.jsonl)`)
+  })
 }
+/** each pair's part of the fill (its wires asked, refused, still missing), for the fill's log */
+const fillLog = []
+/** what the fills would ask over the run, counted offline (cache mode): fresh.mjs needOf's, summed */
+const needAll = { units: 0, wires: 0, requests: 0, wiresUpTo: 0, requestsUpTo: 0 }
 /** the reader's toggles the pages are laid under: the defaults, or (--toggles=on) every switch of "What to translate" on (figure
  *  and table text, headers and footers, references, the author block: docs/PDF-READER.md §15), so that what a reader turns on
  *  is judged too */
@@ -195,7 +220,10 @@ for (const pair of pairs) {
       if (!joinedAll0[ord] && !joinedAll.has(ord)) freshAt.newer.push(ord)
     }
     const n = (c) => Object.values(freshAt.cause).filter((x) => x === c).length
-    console.log(`${pair}: fresh ${Object.keys(freshAt.cause).length} members (no row ${n('no-row')}, kept by today's name/code rule ${n('today-kept')}, a cell today's group kept ${n('group')}, another unit's row ${n('unit')}${ALL ? `, served by a stored row ${n('served')}` : ''}) of ${needs.size} asked in ${ids.length} units; refused ${freshAt.refused.length}; not in the cache ${freshAt.missing.length}; ${freshAt.newer.length} today never had${got.asked ? `; ${got.asked} wires asked of the endpoint` : ''}`)
+    if (FILL) fillLog.push({ pair, wires: got.asked, refused: freshAt.refused.length, missing: freshAt.missing.length })
+    if (got.need) for (const k of Object.keys(needAll)) needAll[k] += got.need[k]
+    const need = got.need ? ` (${got.need.units} units: a fill asks ${got.need.wires} wires in about ${got.need.requests} requests, up to ${got.need.wiresUpTo} in ${got.need.requestsUpTo} where replies are refused and their runs floor asked)` : ''
+    console.log(`${pair}: fresh ${Object.keys(freshAt.cause).length} members (no row ${n('no-row')}, kept by today's name/code rule ${n('today-kept')}, a cell today's group kept ${n('group')}, another unit's row ${n('unit')}${ALL ? `, served by a stored row ${n('served')}` : ''}) of ${needs.size} asked in ${ids.length} units; refused ${freshAt.refused.length}; not in the cache ${freshAt.missing.length}${need}; ${freshAt.newer.length} today never had${got.asked ? `; ${got.asked} wires asked of the endpoint` : ''}`)
     if (translator?.throttled()) {
       console.log(`${pair}: the endpoint answered 429: the fill stops here (the cache keeps every reply so far; a later fill resumes)`)
       process.exit(3)
@@ -270,6 +298,24 @@ for (const pair of pairs) {
   globalThis.__parityFill = undefined
   // (the part's facts of every member with a line on a page, by page: what the measures read of the original)
   const bundle = l1Paper(paperOf(pair))
+  // (a unit's elements' sources by piece id, nested spans' too: the measures read today's element of v2's by it where the two
+  // units' pieces are numbered otherwise, fidelity.mjs todayElementOf)
+  const sources = new Map()
+  const sourcesOf = (u) => {
+    if (!u) return new Map()
+    if (!sources.has(u.id)) {
+      const out = new Map()
+      const walk = (c) => {
+        for (const q of c ?? []) {
+          if (q.t === 'el' && typeof q.src === 'string') out.set(String(q.id), q.src)
+          if (q.t === 'span') walk(q.content)
+        }
+      }
+      walk(u.content)
+      sources.set(u.id, out)
+    }
+    return sources.get(u.id)
+  }
   // (each member of the entry's Pages joined to today's unit, laid or not: the part's and today's units', join.mjs; by the
   // glyphs too, where v2's unit holds as elements the addresses today's held as text, over today's prepare dump)
   const today = bundle ? todayJoin(pages, bundle, ledger(pair).units, todayPrepared(paperOf(pair)), stated) : {}
@@ -296,7 +342,8 @@ for (const pair of pairs) {
             : {}),
           // (its elements: each [piece, kind, its ink's boxes on this page [x0, y0, x1, y1, base], how many boxes its ink has on
           // every page, its text (1 stated: its glyphs' reading; 2 stated empty: TeX set nothing; 0 none; a symbol is drawn from
-          // its source's name, by its kind), raised (a mark, a raised symbol), kept, literal (a URL, a code mark: El.literal))
+          // its source's name, by its kind), raised (a mark, a raised symbol), kept, literal (a URL, a code mark: El.literal), its
+          // source as the unit holds it (null where none: the measure then reads today's element by its piece id alone))
           ...(m.els?.length
             ? {
                 els: m.els.map(([k, e]) => [
@@ -308,6 +355,7 @@ for (const pair of pairs) {
                   e.mark || e.sym?.[1] ? 1 : 0,
                   e.keep ? 1 : 0,
                   e.literal ? 1 : 0,
+                  sourcesOf(typeof m.text === 'string' ? bundle.units.get(m.text) : undefined).get(k) ?? null,
                 ]),
               }
             : {}),
@@ -339,6 +387,9 @@ for (const pair of pairs) {
   const out = {
     pair,
     paper: paperOf(pair),
+    // (the bundles it was laid over, the head's digest: render.mjs and measure.mjs refuse to read it against others, inputs.mjs
+    // bundleCheck)
+    bundle: bundleOf(paperOf(pair)),
     toggles: TOGGLES,
     pages,
     today,
@@ -372,5 +423,6 @@ for (const pair of pairs) {
   const faults = cover ? Object.values(cover.faults).reduce((a, b) => a + b, 0) : 0
   console.log(`${pair}: ${Object.keys(pages).length} pages, ${laid} members laid, ${(performance.now() - t0).toFixed(0)} ms${heldRows.joined ? `; held: ${heldRows.joined} joined, ${heldRows.laid} given today's row` : ''}; I10 ${faults} faults${faults ? ` (${Object.entries(cover.faults).map(([k, n]) => `${k} ${n}`).join(', ')})` : ''}`)
 }
+if (needAll.units) console.log(`the cache lacks ${needAll.units} units' replies: a fill asks ${needAll.wires} wires in about ${needAll.requests} requests, up to ${needAll.wiresUpTo} in ${needAll.requestsUpTo} where replies are refused (v2.mjs --fresh=fill${ALL ? '-all' : ''})`)
 const I10faults = [...I10.faults.values()].reduce((a, b) => a + b, 0)
 console.log(`I10, the sentence cover (cover.ts): ${I10.pieces} pieces; ${I10faults} faults${I10faults ? `: ${[...I10.faults].map(([k, n]) => `${k} ${n}`).join(', ')}` : ''}`)

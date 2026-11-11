@@ -102,12 +102,15 @@ const SQUEEZE_MARKS = /^[\u3001\u3002\uFF0C\uFF0E\uFF08\uFF09\u300C\u300D\u300E\
  *  word, so no CJK line's slack or squeeze goes into it (placeItems, squeezeTakes). 2608.25210v2 p17: a URL whose line ends
  *  are joins (lane url-join), cut at its break points, was letter-spaced to the measure, 1.9-2.7 pt after each "/" */
 const inWord = it => !!(it.t.brk || it.t.cont)
+/** the index of a line's first text item set at a label's hang (`tabbed`, breakLines), -1 for none: TeX's hang is a box, so the
+ *  label before it and the room up to it take no slack (placeItems) */
+const tabOf = items => items.findIndex(it => it.tabbed)
 /** a line's gaps that take a CJK line's slack or squeeze: those between two of its items `items` (from the n-th on, n > 0),
- *  but the ones inside a word (inWord) */
-const gapsOf = items => { let n = 0; for (let k = 1; k < items.length; k++) if (!inWord(items[k])) n++; return n }
-/** whether a line is set as Latin text, its slack in its word spaces (placeItems): it has spaces, and its script breaks only
- *  at spaces or fewer than half its items are CJK */
-const latinishOf = (items, P) => items.some(it => it.t.space) && (P.keepAll || items.filter(it => it.t.cls === 'cjk').length < items.length / 2)
+ *  but the ones inside a word (inWord) and those of a hung label (tabOf) */
+const gapsOf = items => { const kt = tabOf(items); let n = 0; for (let k = 1; k < items.length; k++) if (!inWord(items[k]) && k > kt) n++; return n }
+/** whether a line is set as Latin text, its slack in its word spaces (placeItems): it has spaces (a hung label's aside), and its
+ *  script breaks only at spaces or fewer than half its items are CJK */
+const latinishOf = (items, P) => { const kt = tabOf(items); return items.some((it, k) => it.t.space && k > kt) && (P.keepAll || items.filter(it => it.t.cls === 'cjk').length < items.length / 2) }
 /** the marks of a line whose blank half a squeeze may take (placeItems): its full-width marks that have not lost one (`cut`),
  *  but the closing mark at its end where it hangs in the margin; none where the state compresses as far as the rules let it
  *  (compress 2: every mark has lost its half) or the rules compress none (compressMax 0) */
@@ -344,7 +347,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
   // shrinking as they do)
   const groupOf = (from, end) => {
     const items = []
-    let w = 0, sp = 0
+    let w = 0, sp = 0, rig = 0, edge
     let prev = line.items.at(-1)?.t ?? null
     for (let q = from; q < end; q++) {
       const t = tokens[q]
@@ -378,17 +381,45 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       // (`kern`: the explicit glue after it, an advance of its own beside its width, which trim drops at a line's end: no part of
       // what it draws, a crop's image, a word's box)
       const kern = kernOf(t, f)
+      // (the line's first text after a label TeX hung beside its text block (the slot's `hangGap`, B.slots): it starts at the hang,
+      // the drawn label's end and the space TeX set after the label, the label's own spaces after it aside (TeX's hang: the
+      // label box's width); `tabbed`, the hang's edge the group's `edge`)
+      const hung = line.hangGap !== undefined && !t.label ? line.items.concat(items) : null
+      let tab = 0, atTab = false
+      if (edge === undefined && hung?.some(it => it.t.label) && hung.every(it => it.t.label || it.t.space)) {
+        atTab = true
+        let x = 0, end = 0
+        for (const it of hung) {
+          x += (it.asp ?? 0) + it.w + (it.kern ?? 0)
+          if (it.t.label) end = x
+        }
+        tab = end + line.hangGap - (line.x + w + asp)
+        edge = line.x0 + end + line.hangGap
+      }
+      // (the label's spaces then a box's, TeX's hang: none shrinks, `rig` the line's own already counted, the group's taken out)
+      if (atTab) {
+        rig = line.items.reduce((a, it) => a + (it.t.space && !it.rigid ? it.w : 0), 0)
+        for (const it of items) if (it.t.space && !it.rigid) { it.rigid = true; sp -= it.w }
+      }
       // (`cut`: the mark has lost its blank half, which a squeezed line does not take from it again, placeItems)
-      items.push({ t, w: tw, shift, asp, ...(kern ? { kern } : {}), ...(shift ? { cut: true } : {}) })
-      w += tw + asp + kern
+      items.push({ t, w: tw, shift, asp: asp + tab, ...(atTab ? { tabbed: true } : {}), ...(kern ? { kern } : {}), ...(shift ? { cut: true } : {}) })
+      w += tw + asp + tab + kern
       prev = t
     }
     // a closing mark at the line's end hangs its blank half (hangOf)
     const hang = hangOf(items.at(-1), st.compress) * f
-    return { items, w, sp, hang }
+    return { items, w, sp, hang, rig, edge }
   }
   /** whether a group fits the line in hand: its spaces and the line's shrunk to spaceMin, a closing mark at its end hung */
-  const fits = (g, cap) => line.x - line.spaces * (1 - P.spaceMin) - g.sp * (1 - P.spaceMin) + g.w - g.hang <= cap + 0.01
+  const fits = (g, cap) => line.x - (line.spaces - g.rig) * (1 - P.spaceMin) - g.sp * (1 - P.spaceMin) + g.w - g.hang <= cap + 0.01
+  // (a group set at a hung label's end makes the label's spaces on the line a box's, TeX's hang: they shrink no more, `rig`)
+  // (and its hang's edge every later line of the hung block starts at, `hung` (B.slots): TeX's \hangindent, the label box's width)
+  const take = g => {
+    if (g.edge !== undefined) for (let q = li + 1; q < slots.length; q++) if (slots[q].hung && slots[q].block === line.block) slots[q] = { ...slots[q], x0: g.edge }
+    if (g.rig) { for (const it of line.items) if (it.t.space) it.rigid = true; line.spaces -= g.rig }
+    for (const it of g.items) { line.items.push(it); if (it.t.space && !it.rigid) line.spaces += it.w }
+    line.x += g.w
+  }
   // (a line's trailing spaces dropped, and the kern of its last token: glue TeX drops at a break, a kern the line no longer
   // needs)
   const trim = l => {
@@ -424,7 +455,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     if (!squeezes || line.centred || !line.items.length) return false
     const all = line.items.concat(g.items)
     if (latinishOf(all, P)) return false
-    const need = line.x - (line.spaces + g.sp) * (1 - P.spaceMin) + g.w - g.hang - cap
+    const need = line.x - (line.spaces - g.rig + g.sp) * (1 - P.spaceMin) + g.w - g.hang - cap
     const gaps = gapsOf(all)
     const stretch = stretchOf(cap)
     return gaps > 0 && stretch > STRETCH_MIN * f && need <= squeezable(all, g.hang > 0, st.compress, P).length * half + gapSqueeze * gaps + 1e-9 && need / gaps < stretch
@@ -549,10 +580,9 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     const shrink = line.spaces * (1 - P.spaceMin)
     let g = groupOf(i, j)
     if (j > own && !line.items.length && !fits(g, cap)) { j = own; g = groupOf(i, j) }
-    const { items, w } = g
+    const { items } = g
     if (fits(g, cap)) {
-      for (const it of items) { line.items.push(it); if (it.t.space) line.spaces += it.w }
-      line.x += w
+      take(g)
       i = j
       continue
     }
@@ -622,8 +652,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     }
     // a CJK line squeezed to take the group (squeezeTakes)
     if (squeezeTakes(g, cap)) {
-      for (const it of items) { line.items.push(it); if (it.t.space) line.spaces += it.w }
-      line.x += w
+      take(g)
       line.squeezed = true
       i = j
       continue
@@ -679,4 +708,4 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
   return { lines: lines.filter(l => l.items.length), rest: over ?? i, total: tokens.length, tokens, spilled }
 }
 
-export { breakLines, gapsOf, hangOf, inWord, latinishOf, leadOf, noLineStart, squeezable }
+export { breakLines, gapsOf, hangOf, inWord, latinishOf, leadOf, noLineStart, squeezable, tabOf }

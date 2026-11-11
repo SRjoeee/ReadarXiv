@@ -11,9 +11,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { type FetchInit, microsoft } from '@readarxiv/translate'
 import { scriptedFetch } from '@readarxiv/translate/testing'
 // @ts-expect-error — a plain node module of the lab
-import { cachedTranslator, freshNeeds, freshRowsOf, keylessLock, pacedFetch, withFresh } from '../../lab/typeset/parity/fresh.mjs'
+import { cachedTranslator, freshNeeds, freshRowsOf, keylessLock, logFill, pacedFetch, withFresh } from '../../lab/typeset/parity/fresh.mjs'
 // @ts-expect-error — a plain node module of the lab
-import { FRESH_SAYS, freshOf, judgedChanged, measurePage, NAME_CODE_RULING, offOriginalOf, tagFresh } from '../../lab/typeset/parity/verdict.mjs'
+import { carriedOf, FRESH_SAYS, freshOf, judgedChanged, measurePage, NAME_CODE_RULING, offOriginalOf, tagFresh } from '../../lab/typeset/parity/verdict.mjs'
 
 type Row = { id: string; ok: boolean; by?: string; content?: unknown[] }
 const unit = (id: string, s: string, kind = 'para') => ({ id, kind, content: [{ t: 'text', s }] })
@@ -111,6 +111,20 @@ describe("the fresh rows: the chain over Microsoft's adapter, cached by the chai
     expect(g.requests.length).toBe(0)
     expect(got.missing).toEqual(['u3'])
     expect(got.rows.get('u3')).toMatchObject({ ok: false, why: { kind: 'unavailable' } })
+  })
+  it('what a fill would ask, counted offline to the end of each unit: its first wire, and its runs floor if refused', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'parity-fresh-'))
+    dirs.push(dir)
+    const g = scriptedFetch(upper)
+    // (u5 ends in nothing it can lose; u6's reply can lose its element's marker: then the floor asks its two stretches)
+    const u6 = { id: 'u6', kind: 'para', content: [{ t: 'text', s: 'see the ' }, { t: 'el', id: '1', kind: 'math' }, { t: 'text', s: ' here now' }] }
+    const got = await freshRowsOf([unit('u5', 'five words here'), u6], 'zh', { dir, translator: cachedTranslator(microsoft({ fetch: g.fetch }), { dir }) })
+    expect(g.requests.length).toBe(0)
+    expect(got.need).toMatchObject({ units: 2, wires: 2, requests: 1, wiresUpTo: 4, requestsUpTo: 2 })
+    // (filled, nothing is left to ask)
+    await freshRowsOf([unit('u5', 'five words here'), u6], 'zh', { dir, translator: cachedTranslator(microsoft({ fetch: scriptedFetch(upper).fetch }), { dir, fill: true }) })
+    const again = await freshRowsOf([unit('u5', 'five words here'), u6], 'zh', { dir, translator: cachedTranslator(microsoft({ fetch: g.fetch }), { dir }) })
+    expect(again.need).toBeUndefined()
   })
   it('a reply the chain refuses is recorded and refused again offline, never asked twice', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'parity-fresh-'))
@@ -296,6 +310,13 @@ describe('the keyless endpoint, one sender at a time across lanes', () => {
     expect(got).toMatchObject({ ok: true, tookFrom: 'style-wire 999999 2026-11-11T00:00:00Z' })
     got.release()
   })
+  it("a fill's run is logged beside the cache, one entry a run", () => {
+    const dir = mkdtempSync(join(tmpdir(), 'parity-fills-'))
+    dirs.push(dir)
+    logFill({ start: 'a', wires: 3, requests: 1 }, dir)
+    logFill({ start: 'b', wires: 0, requests: 0 }, dir)
+    expect(readFileSync(join(dir, 'fills.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l).start)).toEqual(['a', 'b'])
+  })
   it('stops on the first 429: no request after it', async () => {
     let n = 0
     const real = globalThis.fetch
@@ -310,8 +331,34 @@ describe('the keyless endpoint, one sender at a time across lanes', () => {
       expect(f.throttled()).toBe(true)
       await expect(f('https://x', init)).rejects.toThrow(/429/)
       expect(n).toBe(1)
+      expect([f.requests(), f.rated()]).toEqual([1, 1])
     } finally {
       globalThis.fetch = real
     }
+  })
+})
+
+describe('a difference carried from a round whose unit is now on a fresh row (the coordinator, round 8 B8)', () => {
+  // (a page worse on stored rows in B7 that left the worse list only because its unit is laid with a fresh row now, unjudged on
+  // line count: carried on every later sheet with its state, so that it never vanishes. 2608.25210 p11 t214: today 5 lines, v2 4,
+  // the original 6)
+  const entry = { pair: '2608.25210v2-zh', page: 11, unit: 't214', flag: 'line-count', since: 'B7', modes: ['default'], was: { today: 5, v2: 4, original: 6 } }
+  const page = (o: { fresh?: string[]; v2?: number; worse?: boolean } = {}) => ({
+    pair: '2608.25210v2-zh',
+    page: 11,
+    units: [{ key: 't214', kind: 'para', sides: { today: { lines: 5, olines: 6 }, v2: { lines: o.v2 ?? 4, olines: 6 } } }],
+    diffs: o.worse ? [{ flag: 'line-count', unit: 't214 para', worse: true }] : [],
+    ...(o.fresh ? { fresh: { units: o.fresh } } : {}),
+  })
+  it('states it unjudged on a fresh row, with v2’s value now beside the one it was carried with', () => {
+    expect(carriedOf([entry], [page({ fresh: ['t214'] })], 'default')).toEqual([
+      { ...entry, state: 'unjudged: a fresh row', now: { today: 5, v2: 4, original: 6 } },
+    ])
+  })
+  it('states it judged worse again, judged and not worse, or its page not drawn; and none in a mode it does not name', () => {
+    expect(carriedOf([entry], [page({ worse: true })], 'default')[0].state).toBe('judged: worse')
+    expect(carriedOf([entry], [page({ v2: 6 })], 'default')[0]).toMatchObject({ state: 'judged: not worse', now: { v2: 6 } })
+    expect(carriedOf([entry], [], 'default')[0].state).toBe('page not drawn')
+    expect(carriedOf([entry], [page()], 'toggles-on')).toEqual([])
   })
 })

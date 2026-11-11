@@ -39,9 +39,12 @@ describe('the kernel: a definition that sets one of its arguments alone', () => 
 })
 
 describe('the front end: a pair\'s verdict from its command\'s definition', () => {
-  it('revtex\'s fields and name fonts set nothing, as the .bbl defines them; its quotes and the paper\'s styles are no identity', () => {
+  it('revtex\'s fields and name fonts set nothing, as the .bbl defines them; the paper\'s styles are no identity, its quotes no pair', () => {
     const u = entryOf(open({ 'main.tex': doc('Text \\cite{s20}.'), 'main.bbl': bbl(APS_HEAD) }))
-    expect(verdicts(u)).toEqual(['\\bibfield:nothing', '\\bibinfo:nothing', '\\bibfnamefont:nothing', '\\bibnamefont:nothing', '\\bibfield:nothing', '\\enquote', '\\bibinfo:nothing', '\\href', '\\bibfield:nothing', '\\emph', '\\bibinfo:nothing', '\\textbf', '\\bibinfo:nothing', '\\bibinfo:nothing', '\\bibinfo:nothing'])
+    expect(verdicts(u)).toEqual(['\\bibfield:nothing', '\\bibinfo:nothing', '\\bibfnamefont:nothing', '\\bibnamefont:nothing', '\\bibfield:nothing', '\\bibinfo:nothing', '\\href', '\\bibfield:nothing', '\\emph', '\\bibinfo:nothing', '\\textbf', '\\bibinfo:nothing', '\\bibinfo:nothing', '\\bibinfo:nothing'])
+    // (\\enquote's marks are text of the unit, PDF-READER §18.32; the front end holds UTF-8 bytes in a Latin-1 view)
+    const text = u.pieces.filter(p => p.t === 'text').map(p => p.s ?? '').join('')
+    expect(new TextDecoder().decode(Uint8Array.from([...text].map(c => c.charCodeAt(0))))).toContain('\u201cA study of flows\u201d')
   })
   it('a paper\'s own definition comes first: `\\bibnamefont` in small capitals stays a pair', () => {
     const u = entryOf(open({ 'main.tex': doc('Text \\cite{s20}.', '\\newcommand{\\bibnamefont}[1]{\\textsc{#1}}'), 'main.bbl': bbl(APS_HEAD) }))
@@ -69,7 +72,9 @@ describe('the front end: a pair\'s verdict from its command\'s definition', () =
     expect(serialize(u).wire).not.toContain('deepflows')
   })
   it('the verdict is no field of the unit: its hash, its JSON and its marks are its pieces\' as before', async () => {
-    const a = entryOf(open({ 'main.tex': doc('Text \\cite{s20}.'), 'main.bbl': bbl(APS_HEAD) })), b = entryOf(open({ 'main.tex': doc('Text \\cite{s20}.'), 'main.bbl': bbl('') }))
+    // (b's head defines \\enquote alone, so that its marks are text in both: the verdicts are what differs)
+    const quotes = '\\providecommand \\enquote  [1]{``#1\'\'}%\n'
+    const a = entryOf(open({ 'main.tex': doc('Text \\cite{s20}.'), 'main.bbl': bbl(APS_HEAD) })), b = entryOf(open({ 'main.tex': doc('Text \\cite{s20}.'), 'main.bbl': bbl(quotes) }))
     expect(JSON.stringify(a.pieces.map(p => ({ ...p })))).not.toContain('sets')
     // (the .bbl's head is no unit's piece: an entry of the same text has the same pieces and the same hash, verdict or none)
     expect(await sourceHash(a as never)).toBe(await sourceHash(b as never))

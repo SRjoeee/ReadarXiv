@@ -45,6 +45,9 @@ const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i]))
 const BRACKET = /^([bf])([se])(\d+)$/
 /** a babel name's point (marks.mjs NAMES_TEX): no piece's next mark, its text no unit's */
 const NAME_POINT = /^n\d+\.[^.]+\.[se]$/
+/** a point one reader reads alone (marks.mjs POINTS_TEX): a caption's label's `ka<k>` (own.mjs MR 5's), a float of no counter's
+ *  `fn<n>` (the ledger's); every other reading passes over it as over a bracket (PDF-READER §18.34) */
+export const READ_ALONE = /^(?:ka|fn)\d+$/
 /** where other text begins that no unit's mark opens: the start of a babel name that heads a block of its own ("References",
  *  "Abstract", "Proof", marks.mjs NAME_MACROS; not a figure's or a table's, which a caption or a formula sets inside its own text:
  *  `\[x=\text{\figurename}\,1\]`), its key in any case (a primitive \uppercase's capitals), and a biblatex entry's (marks.mjs
@@ -261,7 +264,7 @@ function headInk(P, R, q, whole = false) {
   const S = P.points[q], r = R.at[q], G = P.glyphs
   // (in the start mark's region alone: a float's caption marks shipped among the display's rows are another region's)
   let A = null
-  for (let k = q - 1; k >= 0 && !A; k--) { const n = P.points[k].name; if (R.at[k] === r && !BRACKET.test(n) && !NAME_POINT.test(n) && !BIB_ITEM.test(n)) A = P.points[k] }
+  for (let k = q - 1; k >= 0 && !A; k--) { const n = P.points[k].name; if (R.at[k] === r && !BRACKET.test(n) && !NAME_POINT.test(n) && !BIB_ITEM.test(n) && !READ_ALONE.test(n)) A = P.points[k] }
   if (A && OPENING.test(A.name)) return null
   // (the paragraph the display begins: its point, the last before the start mark and at or after the mark before, in its region —
   // a paragraph point's the region of the glyph it stands before)
@@ -389,7 +392,7 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
   pages.forEach((p, i) => p.points.forEach((pt, q) => {
     const list = where.get(pt.name)
     if (list) list.push([i + 1, q]); else where.set(pt.name, [[i + 1, q]])
-    if (!BRACKET.test(pt.name) && !NAME_POINT.test(pt.name) && !BIB_ITEM.test(pt.name) && !FRAME.test(pt.name)) seq.push([i + 1, q])
+    if (!BRACKET.test(pt.name) && !NAME_POINT.test(pt.name) && !BIB_ITEM.test(pt.name) && !FRAME.test(pt.name) && !READ_ALONE.test(pt.name)) seq.push([i + 1, q])
   }))
   const rank = new Map()
   seq.forEach(([p, q], r) => rank.set(`${p}|${q}`, r))
@@ -709,7 +712,7 @@ export function ownedPages({ follows, dropped = [], closing = () => null, heads 
   /** pages added, in order; their pieces, each { name, q, close, needPage, stop } */
   const queue = []
   let last = 0
-  const seqPoint = name => !BRACKET.test(name) && !NAME_POINT.test(name)
+  const seqPoint = name => !BRACKET.test(name) && !NAME_POINT.test(name) && !READ_ALONE.test(name)
   /** whether page pa's pieces can be found: every page each may read is in */
   const ready = (entry, ended) => {
     if (ended) return true
