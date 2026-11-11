@@ -106,6 +106,34 @@ describe('placeReferences: a phrase group placed where the reply states its refe
   })
 })
 
+describe("a character of two UTF-16 code units before, inside or after a reference's place (Codex's review of B8, 2026-11-11)", () => {
+  // (normalOf's offset maps: one entry per code unit of the normalised text, which indexOf counts in)
+  const cat = unit('c', [t('A '), span('3', 'italic', [t('cat')]), t(' and a dog.')])
+  it("before it (Codex's own input): the group around its reference, not the word after", () => {
+    expect(placeReferences(cat, [tx('😀 猫 狗')], refs({ 3: '猫' }), 'zh-Hans')).toEqual([
+      tx('😀 '),
+      sp('3', [tx('猫')]),
+      tx(' 狗'),
+    ])
+    expect(placeReferences(cat, [tx('😀 猫。')], refs({ 3: '猫' }), 'zh-Hans')).toEqual([
+      tx('😀 '),
+      sp('3', [tx('猫')]),
+      tx('。'),
+    ])
+  })
+  it('inside it and after it', () => {
+    expect(placeReferences(cat, [tx('看 猫😀狗 了')], refs({ 3: '猫😀狗' }), 'zh-Hans')).toEqual([
+      tx('看 '),
+      sp('3', [tx('猫😀狗')]),
+      tx(' 了'),
+    ])
+    expect(placeReferences(cat, [tx('猫 😀 狗')], refs({ 3: '猫' }), 'zh-Hans')).toEqual([
+      sp('3', [tx('猫')]),
+      tx(' 😀 狗'),
+    ])
+  })
+})
+
 describe('referencesOf: the groups a reference is asked for', () => {
   it('a phrase group alone: not one that is `must`, the whole unit, holds an element, or is one word', () => {
     const u = unit('r', [

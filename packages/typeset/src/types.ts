@@ -44,6 +44,9 @@ export type Choices = {
   /** the unit kinds the reader shows untranslated (design-a's `Kind[]`: a toggle's kinds, e.g. the references' `reference`,
    *  `refnames`, `inkreferences`); layPage leaves a member of one the original's (`left`) */
   leave?: string[]
+  /** how far a unit's last line may stand under TeX's text block bottom, in points, where that keeps it from its fit's first
+   *  shrink step (docs/PDF-READER.md §18.37: an experiment for the owner's test, default off); 0 or none: never */
+  pastFoot?: number
 }
 
 /** a language's hyphenation: its patterns as data (never fetched by the typesetter) and babel's minimums */
@@ -89,7 +92,12 @@ export type Rules = Readonly<{
 /** the rule set's fields as resolved for a target (rules/layout.mjs resolveRules' params): the script's, the language's over
  *  them, `cjk` from the script, babel's hyphenation minimums */
 export type RuleParams = Readonly<
-  Omit<ScriptRules, 'cjkFaces'> & { cjk: boolean; hyphenation: Readonly<Record<string, unknown>> }
+  Omit<ScriptRules, 'cjkFaces'> & {
+    cjk: boolean
+    hyphenation: Readonly<Record<string, unknown>>
+    /** the reader's Choices.pastFoot where it is above 0, else absent */
+    pastFoot?: number
+  }
 >
 
 /** the faces the typesetter sets text in: by role, weight, slant and script class; with each face's size correction */

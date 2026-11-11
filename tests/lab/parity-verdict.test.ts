@@ -1027,7 +1027,7 @@ describe("a unit the prepare keeps by a rule's mark is the original's; one no ro
   // is no translation missing; what no row can serve is not measured, listed with its page and count, never worse)
   type D = { flag: string; worse: boolean; nearer: string; ruling?: string; v2?: { value: unknown } }
   const of = (flag: string) => (p: { diffs: D[] }) => p.diffs.filter((d) => d.flag === flag).map((d) => [d.worse, d.nearer])
-  const unit = (o: { identifier?: number[]; keptToday?: [number, string][]; noRow?: number[]; joined?: boolean; state?: string }) => {
+  const unit = (o: { identifier?: number[]; formula?: number[]; keptToday?: [number, string][]; noRow?: number[]; joined?: boolean; state?: string }) => {
     const joined = o.joined !== false
     const v2 = {
       ...v2Of({
@@ -1036,6 +1036,7 @@ describe("a unit the prepare keeps by a rule's mark is the original's; one no ro
         today: joined ? { 11: { today: 7 } } : {},
       }),
       ...(o.identifier ? { identifier: o.identifier } : {}),
+      ...(o.formula ? { formula: o.formula } : {}),
       ...(o.keptToday ? { keptToday: o.keptToday } : {}),
       ...(o.noRow ? { noRow: o.noRow } : {}),
     }
@@ -1070,6 +1071,17 @@ describe("a unit the prepare keeps by a rule's mark is the original's; one no ro
       [prepFig(90, 100), prepFig(91, 200)],
     )
   }
+  it("figure texts kept for a formula (F1, §18.35) or for being drawn twice (F3's double, §18.36): the ruling's (2026-11-11)", () => {
+    // (2609.20976v1-ja p12's "Theory" and "exp", F1's formula lines; 2610.21313v1 p2's "Psum Buffer" under its pale copy)
+    expect(of('figures')(figs({ formula: [50, 51] } as never))).toEqual([[false, 'ruling']])
+    expect(of('figures')(figs({ double: [50], formula: [51] } as never))).toEqual([[false, 'ruling']])
+    const p = figs({ double: [50, 51] } as never)
+    expect((p.diffs as D[]).find((d) => d.flag === 'figures')?.ruling).toMatch(/drawn twice/)
+    expect(of('shown')(unit({ formula: [11] } as never))).toEqual([[false, 'ruling']])
+    // (and F3's script: a figure text the engine cannot draw as it was set)
+    expect(of('figures')(figs({ script: [50, 51] } as never))).toEqual([[false, 'ruling']])
+    expect((figs({ script: [50, 51] } as never).diffs as D[]).find((d) => d.flag === 'figures')?.ruling).toMatch(/cannot draw/)
+  })
   it("figure texts fewer than today's by those v2's prepare kept by a mark, any mark: the ruling's", () => {
     expect(of('figures')(figs({ identifier: [50, 51] }))).toEqual([[false, 'ruling']])
     expect(of('figures')(figs({ identifier: [50], pitch: [51] }))).toEqual([[false, 'ruling']])

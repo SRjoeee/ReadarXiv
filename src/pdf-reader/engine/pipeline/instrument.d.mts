@@ -6,7 +6,10 @@ export declare function unicodeOf(s: unknown): string
 /** today's flat pieces as nested ones, its run-in labels `must` */
 export declare function contentOf(pieces: unknown[], o?: { kindOf?: (p: unknown) => string; idOfNested?: (u: unknown) => string | null; nameOf?: (p: unknown) => { name?: string; lang?: string } | undefined }): unknown[]
 /** today's flat pieces as nested ones, its elements' wire facts; no run-in label read yet (marksOf) */
-export declare function piecesOf(pieces: unknown[], o?: { kindOf?: (p: unknown) => string; idOfNested?: (u: unknown) => string | null; nameOf?: (p: unknown) => { name?: string; lang?: string } | undefined }): unknown[]
+export declare function piecesOf(pieces: unknown[], o?: { kindOf?: (p: unknown) => string; idOfNested?: (u: unknown) => string | null; nameOf?: (p: unknown) => { name?: string; lang?: string } | undefined; bib?: boolean }): unknown[]
+/** in a bibliography entry, the face groups that fill a field whose pair passThroughOf writes as its content, by open's index:
+ *  `must` (today's wire sends the field's pair as markers and the face rides it) */
+export declare function fieldFacesOf(pieces: readonly { t: string; src?: string; s?: string; [more: string]: unknown }[]): Set<number>
 /** each source unit's text glyphs on B (the owners' ROLE.text of it), in B's stream order, by unit index */
 export declare function textGlyphsOf<G>(doc: { pages: readonly { glyphs: readonly G[] }[] }, owners: readonly (Owners | undefined)[]): Map<number, G[]>
 /** what TeX set for a source unit's groups that their source does not say (marks/faces.ts over its text glyphs on B): a face

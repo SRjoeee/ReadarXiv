@@ -24,6 +24,10 @@ export type FitBlock = DecorBlock & {
   /** the ink that stays beside its lines (lay/adapt.ts, from Room.stays: a QED box after a proof's last words), each piece's box
    *  and the side of the original's line it stood on: every slot whose line reaches it keeps off it (B.slots) */
   stays?: Stay[]
+  /** where the borrow past TeX's text block bottom is asked (§18.37, FitParams.pastFoot): the depth of that bottom under its last
+   *  baseline, and of the next ink's bound (TeX's separation over it), Room.runs' [2] and [1] - Room.sep */
+  toFoot?: number
+  toInk?: number
 }
 /** ink beside a unit's line that no translation replaces: its box, whether it stood after the line's end (else before its
  *  start), and how far off it TeX set that line (`gap`: from the line's end to it, or from it to the line's start) */
@@ -48,6 +52,9 @@ export type FitState = {
   /** a state that holds the frames' share (the cuts pageCutsOf marks `share` kept), the page fill's where that costs no frame a
    *  leading under its page's band (S.fill.page) */
   share?: number
+  /** how far under TeX's text block bottom the state's last line may stand (§18.37, statesOf's state before the first shrink
+   *  step); once it sets every token, the depth its lines took (layoutUnit2) */
+  over?: number
 }
 /** the unit's parameters: the target's rules (resolveRules' params), U.params', and the call's measure and patterns */
 export type FitParams = {

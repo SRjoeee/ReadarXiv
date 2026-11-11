@@ -22,7 +22,8 @@ register('../checkpoint/items-hook.mjs', import.meta.url)
 register('./hook.mjs', import.meta.url)
 const { gateL1Pair } = await import('../../../packages/typeset/tests/replay/gate-l1.ts')
 const { ledger, readGz, TAP } = await import('../../../packages/typeset/tests/replay/tap.ts')
-const { l1Paper, todayPrepared } = await import('../../../packages/typeset/tests/replay/l1.ts')
+const { L1_BUNDLES, L1_BUNDLES_DIR, l1Paper, todayPrepared } = await import('../../../packages/typeset/tests/replay/l1.ts')
+const { bundlesLine, headsFor } = await import('../../../packages/typeset/tests/replay/bundles.ts')
 const { paperOf } = await import('../../../packages/typeset/tests/replay/today.ts')
 const { tableMetrics } = await import('../../../packages/typeset/src/metrics/table.ts')
 const { layered, servedMetrics } = await import('../served-metrics.mjs')
@@ -40,6 +41,9 @@ const args = process.argv.slice(2)
 const OUT = args.find((a) => a.startsWith('--out='))?.slice(6)
 if (!OUT) throw new Error('v2.mjs: --out=<dir> is required')
 const pairs = args.filter((a) => !a.startsWith('--'))
+// (the bundles laid over, named in the log; a pair asked that a named folder lacks is an error, bundles.ts)
+console.log(bundlesLine(L1_BUNDLES_DIR))
+headsFor(pairs, L1_BUNDLES_DIR)
 /** the fresh rows: 'cache' (offline, the default), 'off' (none), 'fill' (the cache filled from the endpoint, no page laid) */
 /** and 'all' (the review mode: every unit v2 sends laid with its own fresh row, offline) or 'fill-all' (its fill) */
 const FRESH = args.find((a) => a.startsWith('--fresh='))?.slice(8) ?? 'cache'
@@ -66,7 +70,7 @@ if (FILL) {
       exit: code,
       mode: FRESH,
       lane: 'parity-fresh',
-      bundles: process.env.AXT_L1_BUNDLES ?? null,
+      bundles: L1_BUNDLES,
       wires: fillLog.reduce((n, p) => n + p.wires, 0),
       requests: translator.requests(),
       refused: fillLog.reduce((n, p) => n + p.refused, 0),
@@ -87,6 +91,10 @@ const needAll = { units: 0, wires: 0, requests: 0, wiresUpTo: 0, requestsUpTo: 0
  *  is judged too */
 export const TOGGLES = args.find((a) => a.startsWith('--toggles='))?.slice(10) === 'on' ? 'on' : 'defaults'
 const classes = TOGGLES === 'on' ? { figures: true, tables: true, heads: true, references: true, names: true } : null
+/** --past-foot=<points>: the pages laid with the borrow past TeX's text block bottom the reader takes from the website's address
+ *  (`axt-borrow`, docs/PDF-READER.md §18.37: the owner's test), as typesetLay is handed it; none: off, the reader's default */
+const PAST_FOOT = Number(args.find((a) => a.startsWith('--past-foot='))?.slice(12) ?? 0)
+if (!(PAST_FOOT >= 0)) throw new Error('v2.mjs: --past-foot=<points>: a number, 0 or more')
 mkdirSync(OUT, { recursive: true })
 const served = servedMetrics()
 const metricsOf = (pair) => layered(tableMetrics(readGz(join(TAP, 'metrics', `${pair}.metrics.json.gz`))), served)
@@ -165,6 +173,7 @@ for (const pair of pairs) {
     },
     target: () => target,
     classes: () => classes,
+    ...(PAST_FOOT > 0 ? { pastFoot: PAST_FOOT } : {}),
   })
   // (and each member the pair's fixed rows hold no row of, nor keep: its text a rule changed (an identifier now an element), so
   // that today's stored replies cannot say it; v2 leaves it the original's for want of one, which the verdict reads as
@@ -372,6 +381,11 @@ for (const pair of pairs) {
   const pitch = candidateKept(paperOf(pair), 'pitch')
   const address = candidateKept(paperOf(pair), 'address')
   const identifier = candidateKept(paperOf(pair), 'identifier')
+  // (F1's figure line of formulas alone, F3's double and script, the rulings of 2026-11-11: verdict.mjs FORMULA_RULING,
+  // DOUBLE_RULING, SCRIPT_RULING)
+  const formula = candidateKept(paperOf(pair), 'formula')
+  const double = candidateKept(paperOf(pair), 'double')
+  const script = candidateKept(paperOf(pair), 'script')
   const keptToday = candidateKeptToday(paperOf(pair))
   // (the ink of the elements its prepare keeps as the original's, by member: F0's run of one pitch, a stretch a decoration holds;
   // the verdict reads the original's style without it, the coordinator's ruling 1 on F0)
@@ -402,6 +416,9 @@ for (const pair of pairs) {
     ...(pitch.length ? { pitch } : {}),
     ...(address.length ? { address } : {}),
     ...(identifier.length ? { identifier } : {}),
+    ...(formula.length ? { formula } : {}),
+    ...(double.length ? { double } : {}),
+    ...(script.length ? { script } : {}),
     ...(keptToday.length ? { keptToday } : {}),
     ...(keptEls.length ? { keptEls } : {}),
     ...(noRow.size ? { noRow: [...noRow].sort((a, b) => a - b) } : {}),

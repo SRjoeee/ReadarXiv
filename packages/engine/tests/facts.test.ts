@@ -20,6 +20,7 @@ import {
   styleOf,
   fillRunsOf,
   fixedFacesOf,
+  oneFamily,
   tailOf,
   textOf,
   urlCopyOf,
@@ -1083,6 +1084,12 @@ describe('an element’s text across a line TeX ended inside a word', () => {
     // (a hyphen after no letter is no word's: the line's end a space, as before)
     expect(textOf([...word('3 -', 270, 700), ...word('x', 72, 688)])).toBe('3 - x')
   })
+  it('keeps a hyphen with a digit on either side, joined across the line’s end: TeX hyphenates letters alone', () => {
+    // (2609.19644v1's included pages "128-|bit", "DeepSeek-|3.2"; production drew "DeepSeek- V3" on a sheet's pane)
+    const word = (s: string, x: number, y: number) => [...s].map((c, i) => g(c, x + 6 * i, y))
+    expect(textOf([...word('128-', 270, 700), ...word('bit', 72, 688)])).toBe('128-bit')
+    expect(textOf([...word('DeepSeek-', 240, 700), ...word('3.2', 72, 688)])).toBe('DeepSeek-3.2')
+  })
   it('keeps the hyphens the corpus showed are a word’s own: TeX hyphenates the first word after a space alone, to its minimums', () => {
     // (the stage 1a corpus, the parts' element texts: 2307.16209v1 p138 "arXiv:gr- qc/0511111", p140 "[hep- th]", p146
     // "imrn/article- pdf/2015/18/", 2608.06701v1 p5 "SWE- bench Pro"; each was taken for TeX's break and joined)
@@ -1269,5 +1276,22 @@ describe('a face of one pitch (Rule 1)', () => {
       at('l', 88, 525, 'CCCCCC+Courier'),
     ]
     expect([...fixedFacesOf([...node, ...body, ...tt])]).toEqual(['Courier'])
+  })
+})
+
+describe('one family, as two fonts’ names tell it (PDF.js states no family where the engine reads)', () => {
+  it('is the name before its first hyphen, or the name without PDF.js’s own style words and hyphens', () => {
+    // (one family in two weights or two slants: 2608.06701v1 p2's bubbles, a bold word inside a row of ArialMT)
+    expect(oneFamily('MUFUZY+ArialMT', 'MUFUZY+Arial-BoldMT')).toBe(true)
+    expect(oneFamily('TimesNewRomanPSMT', 'AAAAAI+TimesNewRomanPS-ItalicMT')).toBe(true)
+    expect(oneFamily('ArialMT', 'Arial-BoldItalicMT')).toBe(true)
+    // (today's reading: the part before the first hyphen)
+    expect(oneFamily('KZNDUM+NimbusRomNo9L-Regu', 'PPHKCD+NimbusRomNo9L-Medi')).toBe(true)
+    expect(oneFamily('DejaVuSans', 'DejaVuSans-Oblique')).toBe(true)
+    // (two faces whose names differ by more than a style word: two families)
+    expect(oneFamily('ArialMT', 'ArialNarrow-Bold')).toBe(false)
+    expect(oneFamily('NimbusRomNo9L-Regu', 'NimbusSanL-Regu')).toBe(false)
+    expect(oneFamily('CMR10', 'CMMI10')).toBe(false)
+    expect(oneFamily('ArialMT', 'Arial-Black')).toBe(false)
   })
 })

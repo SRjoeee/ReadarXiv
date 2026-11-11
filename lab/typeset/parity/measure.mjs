@@ -13,7 +13,8 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { rowLinesOf } from '../../../packages/typeset/src/index.ts'
-import { l1Paper } from '../../../packages/typeset/tests/replay/l1.ts'
+import { L1_BUNDLES_DIR, l1Paper } from '../../../packages/typeset/tests/replay/l1.ts'
+import { bundlesLine, headsFor } from '../../../packages/typeset/tests/replay/bundles.ts'
 import { doorRows } from '../../../packages/typeset/tests/replay/rows.ts'
 import { LAB, ledger } from '../../../packages/typeset/tests/replay/tap.ts'
 import { keptFacts, originalFacts, scriptsPass } from './blind.mjs'
@@ -51,6 +52,9 @@ if (GATE) for (const p of JSON.parse(readFileSync(GATE, 'utf8')).pages) gateOf.s
 const OUT = arg('out')
 if (!WORK || !OUT) throw new Error('measure.mjs: --work=<dir> and --out=<dir> are required')
 const asked = process.argv.slice(2).filter((a) => !a.startsWith('--'))
+// (the bundles read, named in the log; a pair asked that a named folder lacks is an error, bundles.ts)
+console.log(bundlesLine(L1_BUNDLES_DIR))
+headsFor(asked, L1_BUNDLES_DIR)
 const PREPARE = join(LAB, 'refactor-2026-11', 'baseline', 'prepare')
 const json = (f) => JSON.parse(readFileSync(f, 'utf8'))
 const sha = (f) => createHash('sha256').update(readFileSync(f)).digest('hex')

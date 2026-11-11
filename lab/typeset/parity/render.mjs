@@ -24,7 +24,8 @@ import { answerBytes, startServer } from '../../../packages/reader/e2e/server.mj
 import { readerAssets } from '../../../packages/reader/src/vite.ts'
 import { doorRows } from '../../../packages/typeset/tests/replay/rows.ts'
 import { CACHE, paperOf } from '../../../packages/typeset/tests/replay/today.ts'
-import { L1_BUNDLES } from '../../../packages/typeset/tests/replay/l1.ts'
+import { L1_BUNDLES, L1_BUNDLES_DIR } from '../../../packages/typeset/tests/replay/l1.ts'
+import { bundlesLine, headsFor } from '../../../packages/typeset/tests/replay/bundles.ts'
 import { LAB, TODAY } from '../../../packages/typeset/tests/replay/tap.ts'
 import { SLICES, TABLES } from '../served-metrics.mjs'
 import { analyse, boxesOf } from './analyse.mjs'
@@ -45,6 +46,9 @@ const TOGGLES = arg('toggles') === 'on' ? 'on' : 'defaults'
 const CLASSES_ON = { figures: true, tables: true, heads: true, references: true, names: true }
 const asked = process.argv.slice(2).filter((a) => !a.startsWith('--'))
 const pairs = asked.length ? asked : PAIRS
+// (the bundles served, named in the log; a pair asked that a named folder lacks is an error, bundles.ts)
+console.log(bundlesLine(L1_BUNDLES_DIR))
+headsFor(pairs, L1_BUNDLES_DIR)
 /** the web's tree of this release (its faces' module and static index): AXT_WEB, else the worktree beside the face tables */
 const WEB = process.env.AXT_WEB ?? join(TABLES, '..', '..', '..', '..')
 const MODS = join(ROOT, 'node_modules')

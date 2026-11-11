@@ -10,7 +10,7 @@
 import { isMemoryError } from '@readarxiv/engine'
 import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from '../rules/arg-roles.mjs'
 import { symbolText, TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
-import { selectsArgument } from '../rules/tex-kernel.mjs'
+import { DECLARATION_WORDS, selectsArgument } from '../rules/tex-kernel.mjs'
 /** unpacked files (a Map of relative path → bytes) as a project's file system */
 export function inMemory(map) { return { list: () => [...map.keys()], read: p => map.get(p) ?? null } }
 /** a/./b/../c → a/c: a file as the package holds it (tar.mjs untar names each so) and as TeX's file system has it,
@@ -1523,8 +1523,10 @@ function keepRead(pieces, find) {
       const skip = k > 0 && pieces[k - 1].t === 'ph' && CONTROL_WORD.test(pieces[k - 1].src ?? '') ? /^[ \t]*(?:\r?\n)?[ \t]*/.exec(p.s)[0].length : 0
       for (let o = skip; o < p.s.length; o++) { flat += p.s[o]; at.push([k, o]) }
     } else if (CHARACTERS.has(p)) {
-      flat += p.s
-      at.push([k, 0])
+      // (a piece written as characters: each of them read, an offset each, its piece's own; a quotation mark is three of them,
+      // its UTF-8 bytes in the Latin-1 view, and one offset for all of them put a match after it on the wrong pieces, or past
+      // the end. A match never starts or ends inside one: no byte of such a character is a word's)
+      for (let o = 0; o < p.s.length; o++) { flat += p.s[o]; at.push([k, o]) }
     } else {
       flat += p.t === 'ph' ? (TEX_SPACE.test(p.src ?? '') ? ' ' : symbolText(p.src) ?? '\u0000') : '\u0000'
       at.push([k, 0])
@@ -3134,15 +3136,47 @@ function quoteMarks(s, end, ctx) {
   const [before, after] = ctx.quotes.levels[level % 2]
   return { before, after, level: level + 1 }
 }
+/** the declarations a group scopes (tex-kernel.mjs DECLARATION_WORDS) */
+const DECLARATIONS = new Set(DECLARATION_WORDS)
 /** a call that prints its argument (s[from, to)) between marks: the opening mark text with the call's source up to its argument's
  *  open, the argument walked (at the next quotation level, for csquotes), the closing mark text with the rest of the call's source
  *  to `e`; the pair's id spent as the pair's was, so that every pair after it keeps its id. Returns `e` */
 function withMarks(s, i, from, to, e, marks, b, ctx) {
+  const inner = marks.level === undefined ? ctx : { ...ctx, quoteLevel: marks.level }
+  // (an argument that holds a declaration of its own keeps the group that scopes it, `{`…`}`, the marks outside it as TeX prints
+  // them: written as text alone, `\\enquote{\\bfseries bold words}` let the switch run past the quote, the markers wire putting
+  // it after the unit's text. Whether such a group sets a face is the group's own reading)
+  if (declares(s, from, to)) {
+    b.letter(marks.before, s.slice(i, from - 1), i, from - 1, true)
+    const id = b.open('{', from - 1)
+    walk(s, from, to, b, inner)
+    b.close(id, s.slice(to, e), e)
+    b.letter(marks.after, '', e, e, true)
+    return e
+  }
   b.pairId++
   b.letter(marks.before, s.slice(i, from), i, from, true)
-  walk(s, from, to, b, marks.level === undefined ? ctx : { ...ctx, quoteLevel: marks.level })
+  walk(s, from, to, b, inner)
   b.letter(marks.after, s.slice(to, e), to, e, true)
   return e
+}
+/** a declaration a group scopes (rules/tex-kernel.mjs DECLARATION_WORDS: a face, a size, a family, an alignment; and \\color)
+ *  at the top level of s[from, to) */
+function declares(s, from, to) {
+  let depth = 0
+  for (let k = from; k < to; k++) {
+    const c = s[k]
+    if (c === '%') { while (k < to && s[k] !== '\n') k++; continue }
+    if (c === '{') depth++
+    else if (c === '}') depth--
+    else if (c === '\\') {
+      const m = /^\\([A-Za-z@]+)/.exec(s.slice(k, k + 40))
+      if (!m) { k++; continue }
+      if (!depth && (DECLARATIONS.has(m[1]) || m[1] === 'color')) return true
+      k += m[0].length - 1
+    }
+  }
+  return false
 }
 /** whether a pair's command, by its definition (`def`: paperMacros' or bibDefinitions'), sets its argument `arg` (the one the
  *  walk makes the pair's content, from 1, the last it takes) and nothing else: such a pair sets nothing over what it holds, and

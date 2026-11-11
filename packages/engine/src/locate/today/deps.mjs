@@ -4,7 +4,7 @@
 // tests/pdf-reader/locate-ink-today.test.ts. One change, named where it is: classOf reads the kind the instrument states of a
 // piece (today's classOf, which the front half's adapter ran) instead of a source. And regionsOf reads a page's body brackets
 // paired by number, nesting where a page's columns are balanced, as today's stream.mjs now reads them (CHANGED with it).
-export { classifyFont } from '../facts.ts'
+export { classifyFont, familyKeysOf, sameFamily } from '../facts.ts'
 export { displayTextMask, PICTURE_END, PICTURE_START, regionMask } from '../../ink.mjs'
 
 // ---- layout/stream.mjs:141-149 (spellOf)

@@ -7,6 +7,8 @@ import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { LAB } from '../../../packages/typeset/tests/replay/tap.ts'
+import { bundlesLine, headsFor } from '../../../packages/typeset/tests/replay/bundles.ts'
+import { L1_BUNDLES_DIR as BUNDLES } from '../../../packages/typeset/tests/replay/l1.ts'
 import { PAIRS } from './pairs.mjs'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
@@ -24,6 +26,10 @@ if (FRESH !== undefined && !['off', 'cache', 'all'].includes(FRESH)) throw new E
 const fresh = FRESH ? [`--fresh=${FRESH}`] : []
 const gate = arg('gate') ? [`--gate=${arg('gate')}`] : []
 const pairs = asked.length ? asked : PAIRS
+// (the bundles every step serves, named once here and by each step; a set AXT_L1_BUNDLES that is no bundles folder, or lacks a pair
+// asked, stops the run before any step: bundles.ts, as l1.ts resolves it)
+console.log(bundlesLine(BUNDLES))
+headsFor(pairs, BUNDLES)
 const SLOT = join(LAB, 'bin', 'heavy-slot.sh')
 const HERE = import.meta.dirname
 const step = (slot, script, ...a) => {

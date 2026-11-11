@@ -58,6 +58,13 @@ before the guard names none: it is drawn and measured with a warning in the log 
 can still be re-measured. The field changes every v2 file's bytes: the flag-off byte identity with the sheets drawn before it
 ends here; from it on, two lays of the same inputs are byte-identical, and a file equals its predecessor's but for the field.
 
+The variable itself is read one way (packages/typeset/tests/replay/bundles.ts): unset, the default (`lanes/L7`); set, it must
+name a bundles folder (one holding a paper's head.json) and hold a head of every pair the tool is asked, else the tool stops
+naming the value, never laying, drawing or measuring over the default instead (a clobbered shell variable did so twice). Each
+tool (run.mjs, v2.mjs, render.mjs, measure.mjs, gate-l1.mjs, entry-reader.mjs) prints one line of the folder it serves,
+`bundles: <path> (default)` or `(from AXT_L1_BUNDLES)`, so a gate's log names them. gate-l1.mjs run over the tap's every ledger
+(no pair named) names the pairs a set folder lacks and stops each, as before.
+
 ## The run judged whole
 
 render.mjs writes the run's manifest before it draws anything (`<work>/raw/run.json`: its id, the pairs and pages asked, not

@@ -174,6 +174,8 @@ function layLine(
   })
   // (the room under the paragraph's last line a translation may borrow: its last member's, TeX's facts)
   const free = row.at(-1)!.blocks.at(-1)!.free
+  // (and its two depths, where the borrow past TeX's bottom is asked: §18.37)
+  const { toFoot, toInk } = row.at(-1)!.blocks.at(-1)!
   // (a member's block: the paragraph's lines from TeX's `r`th on, each its room moved by `shift`, its first from `start`, on the
   // baseline the line before it there was laid at where that is not TeX's, `startY`: a CJK line TeX's \lineskip rule set lower)
   const blockOf = (
@@ -220,6 +222,7 @@ function layLine(
       exact: B.map(() => true),
       sizes: B.map(() => b0.sizes[0] ?? m.s),
       free,
+      ...(toFoot !== undefined ? { toFoot, toInk } : {}),
       flow: b0.flow,
       start,
       ...(startY !== undefined ? { startY } : {}),

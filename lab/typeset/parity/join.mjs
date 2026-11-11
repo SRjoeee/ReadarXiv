@@ -38,8 +38,8 @@ function ownIdOf(m, units) {
  *  declares (round 8 B8: this list, kept here by hand, had gained `pitchGroup` and not `characters`) */
 const HOLDS = new Set(Object.keys(HOLDER_JOIN).filter((cause) => HOLDER_JOIN[cause] === 'whole'))
 /** the causes the joined join reads: those and today's unit now wholly an element of the holder that keeps it as the original's
- *  ink, (k) on elements and (n) (HOLDER_JOIN 'element': `pitch`, `decoration`, lane fig-text): one of the units the holder holds
- *  in order, its text the element's */
+ *  ink, (k) on elements, (n) and (m) (HOLDER_JOIN 'element': `pitch`, `decoration`, `formula`, lane fig-text): one of the units
+ *  the holder holds in order, its text the element's */
 const JOINS = new Set(Object.keys(HOLDER_JOIN))
 /** the folder of the candidate's prepare dumps, stage 1a's statements in them: AXT_L1_DUMPS, else the one beside the bundles
  *  (a stage 1a run's `<run>/prepare`, its bundles `<run>/bundles`) */

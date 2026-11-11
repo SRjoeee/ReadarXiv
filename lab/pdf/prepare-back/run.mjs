@@ -223,8 +223,10 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   // addresses alone, the engine's `address`: `keptBy: 'address'`; a figure text kept for an identifier it holds, the engine's
   // `figure: identifier` (locate/ink.ts: figure texts hold no element): `keptBy: 'identifier'`; the parity reads all three,
   // join.mjs candidateKept. Never two: `pitch` marks source units and figure texts set at one pitch, `address` kept blocks,
-  // `identifier` the other figure texts)
-  const keptBy = u.pitch ? 'pitch' : u.address ? 'address' : u.why === 'figure: identifier' ? 'identifier' : null
+  // `identifier` the other figure texts; a figure's line no word of which stands outside its formulas, kept whole, the engine's
+  // `formula` (F1, rebuild/fig-text): `keptBy: 'formula'`; a figure text drawn twice, the engine's `double` (F3): `keptBy: 'double'`; one the engine cannot draw as it was set, its
+  // `script` (F3): `keptBy: 'script'`)
+  const keptBy = u.pitch ? 'pitch' : u.address ? 'address' : u.formula ? 'formula' : u.double ? 'double' : u.script ? 'script' : u.why === 'figure: identifier' ? 'identifier' : null
   const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), ...(keptBy ? { keptBy } : {}), text: textOfPieces(pieces), pieces }
   if (u.kind === 'name') { units.push({ ...base, state: 'unlaid', why: 'name: drawn by its own group, never laid as a unit' }); states.unlaid++; return }
   if (!mem || !mem.located) { units.push({ ...base, state: 'unlaid', why: mem?.cause?.startsWith('content difference') ? mem.cause : `unlocated: ${mem?.cause ?? u.why ?? 'no ink'}` }); states.unlaid++; return }
@@ -240,7 +242,8 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   // (a unit kept for its text set wholly in a face of one pitch, or for an identifier, states (k), the differential's cause,
   // before the bundle's why)
   const why = keptWhyOf(base) ?? st.why
-  units.push({ ...base, state, ...(why ? { why } : {}), ...(lines.length ? { lines } : {}), ...(elements.length ? { elements } : {}), ...(label ? { label } : {}) })
+  // (a figure's paragraph, F3: `para`, the evidence its lines are joined by ('strong'): stage 1a and the parity read it)
+  units.push({ ...base, state, ...(u.figure?.para ? { para: u.figure.para } : {}), ...(why ? { why } : {}), ...(lines.length ? { lines } : {}), ...(elements.length ? { elements } : {}), ...(label ? { label } : {}) })
 })
 if (located) for (const [o, b] of located.born) {
   const mem = located.members[o]

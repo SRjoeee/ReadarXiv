@@ -17,7 +17,7 @@ import { displayTextMask, type PageInk, regionMask } from '../ink.types.ts'
 import type { Instrument, InstrumentUnit, PieceClass, SpanClass } from '../instrument.ts'
 import { runIns } from '../marks/run-ins.ts'
 import { type AuthorBlock, authorBlockOf } from './author-block.ts'
-import { type FigureText, figureLinesOf, textOf as lineTextOf } from './figure-lines.ts'
+import { copyRunsOf, type FigureText, figureLinesOf, type LinesWork, textOf as lineTextOf } from './figure-lines.ts'
 import {
   changeOf,
   faceKeyOf,
@@ -105,6 +105,8 @@ export interface InkStats {
   glyphs: number
   /** the figure texts kept as artefacts (InkInput.artefact) */
   code: number
+  /** the figure reading's work (figure-lines.ts LinesWork) */
+  lines: LinesWork
 }
 
 /** the units made on A, in today's bundle's order (ink units, kept blocks, figure texts: those drawn first), their indices from
@@ -237,7 +239,27 @@ export function inkOf(o: InkInput): {
   const fig = figureUnitsOf(pages, { glyphs: figOwn }, { done: shapesRead, fixed: o.fixed ?? null })
   // (the figure texts its printed lines make anew, F0's, and those the relation reading judges anew: figure-lines.ts, PDF-READER
   // §18.26. A run of none stays as today's reading made it)
-  const texts = figureLinesOf(pages, fig, (p, g) => figOwn[p - 1]?.[g] != null, o.fixed ?? null)
+  // (F1: the faces the source units set their text in, a letter of theirs: no formula's own upright face)
+  const textFaces = new Set<string>()
+  own.glyphs.forEach((row, i) => {
+    const G = (pages[i]?.glyphs ?? []) as { u: string; font: string }[]
+    row.forEach((w, j) => {
+      const g = G[j]
+      if (w === 'u' && g && /\p{L}/u.test(g.u)) textFaces.add(String(g.font ?? '').replace(/^[A-Z]{6}\+/, ''))
+    })
+  })
+  const work: LinesWork = {
+    rounds: 0,
+    pairs: 0,
+    scripts: 0,
+    votes: 0,
+    faces: 0,
+    ends: 0,
+    boxed: fig.stats?.boxed ?? 0,
+    interior: fig.stats?.interior ?? 0,
+    kept: { double: 0, torn: 0, today: 0, code: 0, formula: 0, script: 0, inked: 0 },
+  }
+  const texts = figureLinesOf(pages, fig, (p, g) => figOwn[p - 1]?.[g] != null, o.fixed ?? null, textFaces, work)
   // (each text by its first run; the runs it takes after its first, and those wholly a doubled copy of a text's glyphs: no
   // figure text of their own. Of two runs each the other's copy, the first's text stands, the second's is its copy)
   const textAt = new Map<number, FigureText>()
@@ -246,17 +268,9 @@ export function inkOf(o: InkInput): {
     if (taken.has(t.ks[0]!)) continue
     textAt.set(t.ks[0]!, t)
     for (const k of t.ks.slice(1)) taken.add(k)
-    const copyRuns = new Set<number>()
-    for (const g of t.copies) {
-      const k = fig.glyphs[t.page - 1]?.get(g)
-      if (k !== undefined && !t.ks.includes(k)) copyRuns.add(k)
-    }
-    for (const k of copyRuns) {
-      const all = [...(fig.glyphs[t.page - 1] ?? [])].filter(([, x]) => x === k).map(([g]) => g)
-      if (all.every((g) => t.copies.includes(g))) {
-        taken.add(k)
-        textAt.delete(k)
-      }
+    for (const k of copyRunsOf(t, fig, pages)) {
+      taken.add(k)
+      textAt.delete(k)
     }
   }
   const ledgerOwn = own.glyphs.map((row, i) => {
@@ -417,7 +431,7 @@ export function inkOf(o: InkInput): {
   for (const k of figOrder) {
     const f = fig.units[k]!
     const t = textAt.get(k)
-    if (t && (t.ks.length > 1 || t.els.length)) {
+    if (t && (t.ks.length > 1 || t.els.length || t.label.length)) {
       made.push(figureTextOf(t, fig, pages, inkA, m, o.pageA, global))
       continue
     }
@@ -456,7 +470,13 @@ export function inkOf(o: InkInput): {
         figure: { set: f.set ?? f.k, ...(dir ? { dir } : {}), ...room },
         ...(f.anchor ? { align: ALIGN_OF[f.anchor as keyof typeof ALIGN_OF] } : {}),
         ...((t ? t.why : f.why)
-          ? { why: `figure: ${t ? t.why : f.why}`, fixed: true as const }
+          ? {
+              why: `figure: ${t ? t.why : f.why}`,
+              fixed: true as const,
+              ...(t?.why === 'formula' ? { formula: true as const } : {}),
+              ...(f.double ? { double: true as const } : {}),
+              ...(f.script ? { script: true as const } : {}),
+            }
           : o.artefact?.(text, turned)
             ? { why: 'figure: code', fixed: true as const, pitch: true as const }
             : identifiersIn((f.text ?? '').normalize('NFKC')).length
@@ -502,6 +522,7 @@ export function inkOf(o: InkInput): {
       figures: fig.units.length,
       glyphs: made.reduce((n, x) => n + x.text.length + x.ph.length, 0),
       code: made.filter((x) => x.unit.why === 'figure: code').length,
+      lines: work,
     },
     block,
   }
@@ -548,6 +569,15 @@ function figureTextOf(
   }
   let prev: (typeof G)[number] | null = null
   for (const o of t.order) {
+    // (a line's end inside a paragraph, F3: a space; a word's own hyphen kept, nothing more; TeX's hyphen dropped, the word whole)
+    if (o.t === 'br') {
+      const last = raw.at(-1)
+      if (o.end === 'space') space()
+      else if (o.end === 'drop' && last?.piece.t === 'text')
+        last.piece = { t: 'text', s: last.piece.s.replace(/[-‐\u00ad]$/u, '') }
+      prev = null
+      continue
+    }
     const gs = o.t === 'text' ? o.glyphs : t.els[o.i]!.glyphs
     const first = G[gs[0]!]!
     const spaced = !!prev && first.x0 - prev.x1 >= SPACE_GAP * first.size
@@ -600,19 +630,23 @@ function figureTextOf(
   }
   const f0 = fig.units[t.ks[0]!]!
   const fz = fig.units[t.ks.at(-1)!]!
-  const all = t.order.flatMap((o) => (o.t === 'text' ? o.glyphs : t.els[o.i]!.glyphs))
+  const all = t.order.flatMap((o) => (o.t === 'text' ? o.glyphs : o.t === 'el' ? t.els[o.i]!.glyphs : []))
   const x1 = Math.max(...all.map((g) => G[g]!.x1))
   const x0 = G[all[0]!]!.x0
-  const room = {
-    x: x0,
-    ...(Number.isFinite(f0.y) ? { y: f0.y } : {}),
-    length: x1 - x0,
-    ...(f0.anchor ? { anchor: f0.anchor } : {}),
-    ...(Number.isFinite(f0.before) ? { before: f0.before } : {}),
-    ...(Number.isFinite(fz.after) ? { after: fz.after } : {}),
-    ...(typeof f0.under === 'number' && Number.isFinite(f0.under) ? { under: f0.under } : {}),
-    ...roomOfText(t),
-  }
+  // (a paragraph, F3: laid in its lines as a body paragraph is, its room the facts pass's (its lines' sides, below it): none of
+  // a line's free line along its run; a line alone, as before)
+  const room = t.para
+    ? { ...roomOfText(t) }
+    : {
+        x: x0,
+        ...(Number.isFinite(f0.y) ? { y: f0.y } : {}),
+        length: x1 - x0,
+        ...(f0.anchor ? { anchor: f0.anchor } : {}),
+        ...(Number.isFinite(f0.before) ? { before: f0.before } : {}),
+        ...(Number.isFinite(fz.after) ? { after: fz.after } : {}),
+        ...(typeof f0.under === 'number' && Number.isFinite(f0.under) ? { under: f0.under } : {}),
+        ...roomOfText(t),
+      }
   return {
     unit: {
       id: unitId('inkfigures', content),
@@ -621,21 +655,35 @@ function figureTextOf(
       ...(classes.length ? { classes } : {}),
       ...(classes.length
         ? {
-            keptEls: classes.map(([id]): [string, 'pitch' | 'decoration'] => [
+            keptEls: classes.map(([id]): [string, 'pitch' | 'formula' | 'decoration'] => [
               id,
               (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind === 'code'
                 ? 'pitch'
-                : 'decoration',
+                : (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind === 'math'
+                  ? 'formula'
+                  : 'decoration',
             ]),
           }
         : {}),
-      figure: { set: -1 - t.ks[0]!, ...room },
-      ...(f0.anchor ? { align: ALIGN_OF[f0.anchor as keyof typeof ALIGN_OF] } : {}),
+      figure: { set: -1 - t.ks[0]!, ...(t.para ? { para: t.para.by } : {}), ...room },
+      ...(t.para
+        ? { align: t.para.justified ? ('j' as const) : (t.para.align ?? ('l' as const)) }
+        : f0.anchor
+          ? { align: ALIGN_OF[f0.anchor as keyof typeof ALIGN_OF] }
+          : {}),
       ...(t.why
-        ? { why: `figure: ${t.why}`, fixed: true as const, ...(t.why === 'code' ? { pitch: true as const } : {}) }
+        ? {
+            why: `figure: ${t.why}`,
+            fixed: true as const,
+            ...(t.why === 'code' ? { pitch: true as const } : {}),
+            ...(t.why === 'formula' ? { formula: true as const } : {}),
+            ...(fig.units[t.ks[0]!]?.double ? { double: true as const } : {}),
+            ...(t.why === 'script' ? { script: true as const } : {}),
+          }
         : {}),
     },
     text: [...textGs, ...t.copies].map(glob).sort((a, b) => a - b),
+    ...(t.label.length ? { label: t.label.map(glob).sort((a, b) => a - b) } : {}),
     ph: [],
     phId: null,
     turned: [],

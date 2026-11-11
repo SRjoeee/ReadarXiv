@@ -103,7 +103,21 @@ export const CAUSE = Object.freeze({
   // a tone under it: the dump's `keptBy: 'decoration'`), kept as the original's ink with its decoration inside the translated
   // text: accepted, the coordinator's ruling of 2026-11-10 on F0)
   decoration: 'kept as the original: a stretch a decoration holds, carried with it',
+  // ((m), F1 (rebuild/fig-text): today's unit inside a formula of a figure, kept as the original: wholly a formula element of a
+  // figure text (`keptBy: 'formula'` on the element), or held whole by a figure's line no word of which stands outside its
+  // formulas, kept whole (`keptBy: 'formula'` on the unit, whose own cause it is too); not accepted until the coordinator rules)
+  formula: 'kept as the original: inside a formula of a figure',
   another: 'another reading',
+  // ((p), F3 (rebuild/fig-text, PDF-READER §18.36): today's figure text an item's marker and its words, v2's the words, the marker
+  // its label, kept as the original's ink (the dump's `label` at today's line start): the item holds today's whole)
+  item: "held whole, its marker now its label, the original's ink",
+  // ((q), F3: a figure text drawn twice over itself, kept as the original by the owner's ruling (two translations would be drawn
+  // over each other; the dump's `keptBy: 'double'`, the engine's `double`): the candidate's own unit's cause)
+  double: 'kept as the original: drawn twice',
+  // ((r), F3, the coordinator's ruling of 2026-11-11 on the owner's principle (a garbled translation never): a figure text the engine
+  // cannot draw as it was set, a script, an accent apart from its base, an element whose boxes stand over each other, is the
+  // original's (the dump's `keptBy: 'script'`, the engine's `script`, figure-lines.ts setApart): the candidate's own unit's cause)
+  script: 'kept as the original: a figure text the engine cannot draw as it was set (a script, an accent apart from its base)',
   // ((f): a unit the candidate does not make, every line of it inside a line the engine reads as a display's formula (a display
   // TeX's marked compile states, its text-mode glyphs read as text: locate's `displays`): the display's ink, kept with it — the
   // coordinator's ruling of 2026-11-09; 2608.08481v1 t118-t121, (7)'s and (8)'s parts)
@@ -126,6 +140,8 @@ export const HOLDER_JOIN = Object.freeze({
   characters: 'whole',
   pitch: 'element',
   decoration: 'element',
+  formula: 'element',
+  item: 'whole',
 })
 /** `out` (statedOf's statements) where every one naming a holder has its cause declared in HOLDER_JOIN; else an error naming the
  *  cause, so that a run never writes a statement the parity's join would not read */
@@ -146,9 +162,22 @@ const UNMARKED = 'unlocated: marks'
  *  paragraph: acmart's reference format one ink unit), which (i) reads too (the coordinator's ruling of 2026-11-10, round 8 B3) */
 const RESET = 'unlocated: set in a paragraph that sets a unit again'
 /** (k): the cause a candidate's own unit states where the prepare keeps it for its text set wholly in a face of one pitch, or
- *  for an identifier, by the mark it writes (the dump's `keptBy`, 'pitch' or 'identifier', which the parity's rulings read too),
- *  else null: a unit kept otherwise (a code environment's kept block, a crowded figure text) states none */
-export const keptWhyOf = (u) => (u?.keptBy === 'pitch' ? CAUSE.pitch : u?.keptBy === 'identifier' ? CAUSE.identifier : null)
+ *  for an identifier, by the mark it writes (the dump's `keptBy`, 'pitch' or 'identifier', which the parity's rulings read too);
+ *  (m) where it keeps a figure's line of formulas alone (`keptBy: 'formula'`, F1), (q) a figure text drawn twice (`keptBy:
+ *  'double'`, F3); else null: a unit kept otherwise (a code
+ *  environment's kept block, a crowded figure text) states none */
+export const keptWhyOf = (u) =>
+  u?.keptBy === 'pitch'
+    ? CAUSE.pitch
+    : u?.keptBy === 'identifier'
+      ? CAUSE.identifier
+      : u?.keptBy === 'formula'
+        ? CAUSE.formula
+        : u?.keptBy === 'double'
+          ? CAUSE.double
+          : u?.keptBy === 'script'
+            ? CAUSE.script
+            : null
 
 /** (l'): TeX's ligatures of a text face's input, its font's ligature table (Knuth's cmr, and every text font after it): an em dash,
  *  an en dash, the curly double and single quotes */
@@ -461,6 +490,15 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
             : ''
     return s.replace(/\s+/g, '')
   }
+  // ((f) over a line-end hyphen, F3: today's line ending in a hyphen the break set, the holder's text going on with the word's next
+  // letter there, the joined word its (2610.35877v1 p3's "policy propen-" in its path's text "policy propensities directly."))
+  const holdsText = (h, t) => {
+    if (h.includes(t)) return true
+    if (!/[-\u2010]$/u.test(t) || t.length < 2) return false
+    const w = t.slice(0, -1)
+    for (let i = h.indexOf(w); i >= 0; i = h.indexOf(w, i + 1)) if (/\p{L}/u.test(h[i + w.length] ?? '')) return true
+    return false
+  }
   const heldBy = (u) => {
     if (!u.lines?.length) return null
     let one = null
@@ -477,7 +515,7 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     const t = glyphTextOf(u),
       h = glyphTextOf(n)
     if (!t || !h) return false
-    if (h.includes(t)) return true
+    if (holdsText(h, t)) return true
     const L = u.lines[0],
       num = labels.get(n.ord)
     const lab = (n.label ?? []).some((b) => b.page === L.page && Math.abs(b.baseline - L.baseline) <= ON && Math.abs(b.x0 - L.x0) <= ON)
@@ -603,7 +641,8 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
       for (const e of n.elements ?? []) {
         if (!e.keptBy || !u.lines.every((l) => e.segs.some((k) => inside(l, k)))) continue
         const p = (n.pieces ?? []).find((q) => q.k === e.k && q.kind === 'ph')
-        if (p && (p.src ?? '').replace(/\s+/g, '') === t) return { n, cause: e.keptBy === 'pitch' ? CAUSE.pitch : CAUSE.decoration }
+        if (p && (p.src ?? '').replace(/\s+/g, '') === t)
+          return { n, cause: e.keptBy === 'pitch' ? CAUSE.pitch : e.keptBy === 'formula' ? CAUSE.formula : CAUSE.decoration }
       }
     }
     return null
@@ -614,7 +653,28 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
   const standInHolds = (u, c) => {
     if (!u.lines?.length || !u.lines.every((l) => boxesOf(c).some((k) => across(k, l)))) return false
     const t = glyphTextOf(u)
-    return !!t && glyphTextOf(c).includes(t)
+    return !!t && holdsText(glyphTextOf(c), t)
+  }
+  // ((p), F3: an item of a figure, its marker the label v2 keeps as the original's ink (the dump's `label`, at today's line start),
+  // every line of today's on the item's boxes: today's glyph text the marker, then the item's text from its start. The marker a
+  // short mark (a letter or digit or three in their brackets, or a bullet), or what the label prints where arXiv's page is read
+  // (a glyph beside a narrow mark can stand within the box's reach: 2608.06007v1's "- identify", its "i")
+  const MARK = /^(?:[([]?[\p{L}\p{N}]{1,3}[)\].:]?|[-\u2010-\u2014\u2022\u00b7\u25aa\u25e6\u2219*>])$/u
+  const itemOf = (u, n) => {
+    const L = u.lines?.[0]
+    if (!L || !n.label?.length || !n.pieces?.length) return false
+    if (!n.label.some((b) => b.page === L.page && Math.abs(b.baseline - L.baseline) <= ON && Math.abs(b.x0 - L.x0) <= ON)) return false
+    if (!u.lines.every((l) => boxesOf(n).some((k) => across(k, l)))) return false
+    const t = glyphTextOf(u),
+      h = glyphTextOf(n)
+    if (!t || !h) return false
+    const printed = printedIn(n.label)
+    for (let i = 1; i <= Math.min(4, t.length - 1); i++) {
+      if (!h.startsWith(t.slice(i))) continue
+      const mark = t.slice(0, i)
+      if (MARK.test(mark) || printed?.replace(/\s+/g, '') === mark) return true
+    }
+    return false
   }
   // ((j): the candidate's units meeting today's lines (by their boxes), two or more, consecutive in the dump's order, today's
   // glyph text one contiguous part of their glyph texts joined in that order, every character of it)
@@ -806,11 +866,14 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     }
     // (a unit made on A stands only for one of today's ink units, kept blocks and figure texts)
     const c = /^ink/.test(u.kind) ? standsFor(u) : null
+    // (none: an item of its kind at its place holding today's marker as its label and its words, whatever its id ((p): another of
+    // the baseline's units of the same words elsewhere has it))
+    const itemN = !c && /^ink/.test(u.kind) ? units.find((n) => !n.replaced && n.kind === u.kind && itemOf(u, n)) : null
     // (none: a kept block of its kind at its place, no text of it sent: its lines the ledger reads as no unit's text, a formula's
     // interior (ledger.mjs CHANGED))
     const L0 = u.lines?.[0]
     const kept =
-      !c && /^ink/.test(u.kind) && L0
+      !c && !itemN && /^ink/.test(u.kind) && L0
         ? units.find((k) => k.kind === u.kind && !k.pieces?.length && !k.replaced && k.lines?.some((l) => meets(L0, l)))
         : null
     // (none of either: a unit of the author block's now holding its glyphs, whatever today's kind)
@@ -840,8 +903,10 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     // (a stand-in of its kind that reads otherwise, holding today's whole text: held whole (f))
     const how = c ? howOf(u, c) : null
     const standIn = how === CAUSE.another && standInHolds(u, c)
+    // (an item holding today's marker as its label, its words today's ((p)))
+    const itemC = how === CAUSE.another && !standIn && itemOf(u, c)
     // (one that holds no whole: (j) from it onward, its text the parts' in order; else (g) over the parts)
-    const parts = how === CAUSE.another && !standIn ? partsFrom(u, c) : null
+    const parts = how === CAUSE.another && !standIn && !itemC ? partsFrom(u, c) : null
     const fromIt = parts ? (parts.map(glyphTextOf).join('').includes(glyphTextOf(u)) && !!glyphTextOf(u) ? CAUSE.split : arxivParts(u, parts) ? CAUSE.arxivParts : null) : null
     // (a names unit's stand-in of its ledger class, its characters today's in another order: its kind moved, the candidate's
     // unit holding today's whole, named as the holder so that the parity joins the two (heldJoin), as while (f) stated them: the
@@ -850,10 +915,14 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     const said = c
       ? standIn
         ? { by: c, cause: CAUSE.held, holder: c }
-        : fromIt
+        : itemC
+          ? { by: c, cause: CAUSE.item, holder: c }
+          : fromIt
           ? { by: c, cause: fromIt }
           : { by: c, cause: how, ...(moved ? { holder: c } : {}) }
-      : kept
+      : itemN
+        ? { by: itemN, cause: CAUSE.item, holder: itemN }
+        : kept
         ? null
         : names
           ? { by: names, cause: CAUSE.names, holder: names }
@@ -870,13 +939,16 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
                   : null
     if (kept) out.push({ u, why: "kept on arXiv's page as the original's, no text of it sent", cause: 'keptAt' })
     else if (!said && part) out.push({ u, why: CAUSE.displayPart, cause: 'displayPart' })
-    else if (said)
+    else if (said) {
+      // ((m): held whole by a figure's line kept whole for its formulas: inside a formula, kept as the original)
+      if (said.cause === CAUSE.held && said.by?.keptBy === 'formula') said.cause = CAUSE.formula
       out.push({
         u,
         why: `made on arXiv's page as ${said.by.id.slice(0, 12)}: ${said.cause}`,
         cause: keyOf(said.cause),
         ...(said.holder ? { holder: said.holder.id } : {}),
       })
+    }
   }
   return holdersDeclared(out)
 }

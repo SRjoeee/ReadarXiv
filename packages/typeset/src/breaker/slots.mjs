@@ -9,7 +9,12 @@ import { measureOf, measureOn } from '../unit/blocks.ts'
 const inFlow = (a, b) => a.flow === b.flow
 /** a block's foot at a state: the lowest baseline a line of it is laid at, its last less what it borrows (its room TeX's facts
  *  leave, Block.free: the owner's ruling of 2026-11-08) */
-const lowOf = (b, st, s) => b.B.at(-1) - Math.min(b.free ?? 0, st.borrow * (b.pitch0 ?? 1.2 * s))
+const lowOf = (b, st, s) => b.B.at(-1) - Math.min(roomOf(b, st), st.borrow * (b.pitch0 ?? 1.2 * s))
+/** the room under a block's last baseline at a state: Block.free; at a state that borrows past TeX's text block bottom
+ *  (FitState.over, docs/PDF-READER.md §18.37), the bottom's depth that much deeper, the next ink's bound as it is */
+function roomOf(b, st) {
+  return st.over && b.toFoot !== undefined ? Math.max(0, Math.min(b.toFoot + st.over, b.toInk)) : b.free ?? 0
+}
 /**
  * The gap under a paragraph never tighter than its lines (the half-leading round, 2026-10-17, its second form): the lowest
  * baseline a unit's last line may take at a state, where the next line of its column in the original keeps its own baseline
@@ -227,4 +232,4 @@ function slotsAt(blocks, st, P, s) {
   return out
 }
 
-export { inFlow, slotsAt }
+export { inFlow, roomOf, slotsAt }
