@@ -282,7 +282,10 @@ export function outOfDoor(row: readonly (string | number)[], source: readonly V0
  * never lays, so it is left out: keyed by its own part ord, it stood in for the member of today's unit of that ord (round 8 B8:
  * 97 of the entry's 747 members "not alike")
  */
-export function entryByToday<M extends { ord: number }>(members: readonly M[], unitOf: ReadonlyMap<number, { ord: number }>): Map<number, M> {
+export function entryByToday<M extends { ord: number }>(
+  members: readonly M[],
+  unitOf: ReadonlyMap<number, { ord: number }>,
+): Map<number, M> {
   const out = new Map<number, M>()
   for (const m of members) {
     const u = unitOf.get(m.ord)

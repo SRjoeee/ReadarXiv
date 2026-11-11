@@ -42,7 +42,10 @@ describe("the entry's members compared with the runner's, by today's unit (round
   // p7's moved cell at part ord 125 standing for today's heading t125, read as "none against laid": 97 of B8's 747)
   it("keys each joined member by its today's ord, and leaves out one no unit of today's joins", () => {
     const m = (ord: number) => ({ ord, state: ord === 125 ? 'none' : 'laid' })
-    const unitOf = new Map([[121, { ord: 125 }], [122, { ord: 126 }]])
+    const unitOf = new Map([
+      [121, { ord: 125 }],
+      [122, { ord: 126 }],
+    ])
     const by = entryByToday([m(121), m(122), m(125)], unitOf)
     expect([...by.keys()]).toEqual([125, 126])
     expect(by.get(125)).toEqual({ ord: 121, state: 'laid' })
