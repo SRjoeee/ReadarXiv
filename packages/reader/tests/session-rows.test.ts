@@ -7,13 +7,14 @@ import {
   ABSTRACT_MAX_CHARS,
   anchorOf,
   contextOf,
-  countsOf,
   keep,
   missingOf,
   ranked,
   shownAsOriginal,
   stopOf,
+  viewOf,
 } from '../src/session/rows.ts'
+import { DEFAULTS } from '../src/prefs.ts'
 import type { Page } from '../src/compose/page.ts'
 
 const u = (n: number, kind = 'para', s = `unit ${n}`): Unit => ({
@@ -59,12 +60,13 @@ describe('the rows made here', () => {
     for (const x of UNITS.slice(0, 6)) keep(held, ok(x))
     keep(held, lost(UNITS[6] as Unit))
     expect(at(missingOf(UNITS, held))).toEqual([6, 7, 8, 9])
-    expect(countsOf(UNITS, held)).toEqual({ got: 7, lost: 1 })
+    const counts = () => viewOf({ units: UNITS, classes: null, held, shown: true, laid: true, run: false })
+    expect(counts()).toMatchObject({ got: 6, lost: 1 })
     // (a near call's failure after the first call's translation of one unit: the translation stays)
     expect(keep(held, lost(UNITS[0] as Unit))).toBe(false)
     expect(held.get(UNITS[0]?.id as string)?.ok).toBe(true)
     expect(keep(held, ok(UNITS[6] as Unit))).toBe(true)
-    expect(countsOf(UNITS, held)).toEqual({ got: 7, lost: 0 })
+    expect(counts()).toMatchObject({ got: 7, lost: 0 })
   })
   it("tells why the units lost got none: the service's most telling word, none where none was lost", () => {
     const held = new Map<string, Row>()
@@ -98,5 +100,31 @@ describe('the rows made here', () => {
     // (a page still waiting for its rows, or not laid yet, is not settled)
     expect(shownAsOriginal('d'.repeat(64), page(['waiting'], ['x']))).toBe(false)
     expect(shownAsOriginal('d'.repeat(64), null)).toBe(false)
+  })
+})
+
+describe("the view's rows (viewOf): what the layer shown has of the translation, and whether it waits for more", () => {
+  const units: Unit[] = [u(0), u(1), u(2), u(3, 'reference'), { ...u(4), kept: true as const }]
+  const held = (xs: Unit[], row = ok) => new Map(xs.map((x) => [x.id, row(x)]))
+  const base = { units, classes: null, held: new Map<string, Row>(), shown: true, laid: false, run: true }
+  it('counts the units the paper does not keep and the toggles show translated, by the translations held; a failure apart', () => {
+    expect(viewOf(base)).toEqual({ waits: true, got: 0, total: 3, lost: 0 })
+    const h = held(UNITS.slice(0, 2))
+    h.set(UNITS[2]?.id as string, lost(UNITS[2] as Unit))
+    expect(viewOf({ ...base, held: h })).toEqual({ waits: true, got: 2, total: 3, lost: 1 })
+    // (references on: their units counted where they are shown translated; nothing translated again for them)
+    const on = { ...DEFAULTS.classes, references: true }
+    expect(viewOf({ ...base, classes: on, held: held(units) })).toEqual({ waits: false, got: 4, total: 4, lost: 0 })
+  })
+  it('waits only for a run under way, for units of the layer shown with no translation held', () => {
+    // (every unit shown held: a run that restates them, or works on units of a layer not shown, waits for nothing)
+    expect(viewOf({ ...base, held: held(UNITS.slice(0, 3)) }).waits).toBe(false)
+    // (rows read of a run done: no run, no wait, whatever is still to be read)
+    expect(viewOf({ ...base, run: false })).toEqual({ waits: false, got: 0, total: 3, lost: 0 })
+    // (no layer shown: the prepare is what the view waits for)
+    expect(viewOf({ ...base, shown: false }).waits).toBe(false)
+    // (the layer's units not read yet: a run waits while nothing is laid, its count none yet)
+    expect(viewOf({ ...base, units: null })).toEqual({ waits: true, got: 0, total: 0, lost: 0 })
+    expect(viewOf({ ...base, units: null, laid: true }).waits).toBe(false)
   })
 })

@@ -374,9 +374,12 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       const next = withFailures(state, { ...state.failures, pdf: null })
       // a service's failure left with nothing laid keeps its card
       const failed = next.failures.service !== null && !drawn(next) && state.phase === 'failed'
+      // (a prepare told while the original loaded, the translation not begun: its phase now, the original on screen; the
+      // website's page told it again after the open, readarxiv-web v2/open.ts)
+      const ready = state.preparing !== null && !state.begun ? 'preparing' : 'ready'
       return {
         ...next,
-        phase: state.phase === 'loading' || (mends && !failed) ? 'ready' : state.phase,
+        phase: state.phase === 'loading' || (mends && !failed) ? ready : state.phase,
         download: state.download === 'none' ? 'original' : state.download,
       }
     }

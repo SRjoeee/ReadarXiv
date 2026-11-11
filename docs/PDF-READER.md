@@ -380,6 +380,21 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
   status words; the maintainer asked for the line back, 2026-09-25 — the status words were what had to leave the
   header, not the line — and then for no capsule while it runs: the line says it.)
 - The paragraphs that failed are told once the run has ended, not while it runs.
+- **A translation under way is what the view shown waits for**, not our server's record of its runs (`session/rows.ts`
+  `viewOf`, told as the reader state's `rows.waits`). One of the units of the layer shown that the paper does not keep
+  and the toggles show translated has no translation held, while a run that may bring it is under way: our server's
+  run of the target running or still to start, or the host's translate. Its count is one statement over that set: those
+  units with a translation held, of those units. It never passes its total, and never falls while the layer shown and
+  the toggles stay, since rows held are only added to. Its total changes only with the layer shown or the toggles, and
+  then it is a new statement. Some cases are told by their end alone, so the line and the capsule say nothing of them:
+  rows read of a run done (a stored translation); a run that restates rows the view holds; a run on units of a layer
+  not shown yet (the early units of a prepare running under a stale layer). Before this rule, on staging 2026-11-11,
+  2610.21924v1 opened after a deploy said "translating" three times over a paper already on screen. Its count went from
+  476 of 393 to 0 of 0 to 320 of 476: the rows the tab held, over each attempt's total. The view's wait is over once
+  every unit shown holds its translation, though a run that restates them may go on. The end held for the layer's
+  first page (`laying`) translates nothing, and the website's capsule says the paper is being prepared until that page
+  is there, as its page said it (its `runStage` over `laying`). The layer's units not read yet, a run under way waits
+  while nothing is laid (a first open's: its count comes with the head).
 - **A notice** carries a chip action and a close button, whose tooltip stands above it; closing it is remembered for this paper's visit, each notice apart — the partial one's close does not close the count of failed passages it stood before (#314).
 - **Two notes that are not a notice**: settings that cannot be read stand for as long as it is so, with a link to the settings page and no close (UI.md S-R-21); a write storage refused is told with the settings page's sentence until it is closed or a later write of this page goes through (S-R-22).
 - **When the translation's pane has nothing to show**, the same anatomy is a card centred in that pane (300 px, 14 px

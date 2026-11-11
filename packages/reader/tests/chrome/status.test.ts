@@ -376,6 +376,13 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
     // (a run over: nothing of it)
     expect(said(at({ phase: 'ready', reconnecting: true }))).toBeNull()
   })
+  it("the end held for the layer's first page (laying): nothing is translated then, the paper prepared as the website's page said it, never the run's count", () => {
+    const laying = at({ phase: 'translating', laying: true, progress: 1, translated: { got: 476, total: 476 } })
+    expect(said(laying)).toEqual({ kind: 'progress', text: 'preparing' })
+    expect(said({ ...laying, reconnecting: true })).toEqual({ kind: 'progress', text: 'reconnecting' })
+    // (the extension's: no words for it, the line alone)
+    expect(capsuleOf(laying, none, LANGUAGES)).toBeNull()
+  })
   it("why the translation is not there, in the host's words: no PDF, too large, unavailable, busy or the limit with the time a retry is due", () => {
     const lasting = (why: 'no-source' | 'too-large') =>
       at({ phase: 'ready', available: false, unavailable: { why, retryAt: null } })

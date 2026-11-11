@@ -97,10 +97,16 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
   if (l.s === 'refused' && (pl?.s !== 'refused' || pl.why !== l.why))
     out.push({ type: 'unavailable', why: LAYER_WHY[l.why] ?? 'unreachable', retryAt: l.retryAt })
   if (!!p?.reconnecting !== !!next.reconnecting) out.push({ type: 'link', reconnecting: !!next.reconnecting })
+  // the translation under way is what the view shown waits for (reader.ts `waits`, session/rows.ts viewOf), counted over the layer
+  // it shows: rows read of a run done, a run that restates rows held, one on units of a layer not shown, are told by their end
+  // alone. The view's wait over while the rows still come (every unit shown holds its translation) is its end
   const r = next.rows,
     pr = p?.rows
-  if (r.s === 'arriving' && (pr?.s !== 'arriving' || pr.got !== r.got || pr.total !== r.total || pr.lost !== r.lost))
+  const waited = pr?.s === 'arriving' && pr.waits
+  if (r.s === 'arriving' && r.waits && (!waited || pr.got !== r.got || pr.total !== r.total || pr.lost !== r.lost))
     out.push({ type: 'translating', got: r.got, total: r.total, lost: r.lost })
+  if (r.s === 'arriving' && !r.waits && waited)
+    out.push({ type: 'translated', got: r.got, total: r.total, lost: r.lost, stopped: null })
   if (r.s === 'complete' && pr?.s !== 'complete')
     out.push({
       type: 'translated',

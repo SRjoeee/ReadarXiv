@@ -602,7 +602,7 @@ describe("the client: the follow's pace (staging, 2026-11-07: a done paper follo
       tell('code', (t) => ({ i: 'code.loaded', t }))
       rt.input({ i: 'head', digest: CATALOG.sha256, head })
       tell('composed', (t) => ({ i: 'composed.opened', t }))
-      tell('rows', (t) => ({ i: 'rows.end', t, got: 9, total: 9, lost: 0 }))
+      tell('rows', (t) => ({ i: 'rows.end', t }))
       rt.input({ i: 'cmd.hold', on: true })
       rt.input({ i: 'cmd.hold', on: false })
       rt.input({ i: 'panes.laid', laid: 4, total: 4 })

@@ -283,13 +283,27 @@ const v2Route = {
           prepare: { ...d.prepare, state: 'running', stage: 'compiling' },
           targets: {},
         })
-      // (the target still running for `runningMs` after the prepare, its rows in: the run under way, some of it there)
+      // (the target still running for `runningMs` after the prepare, the first half of its rows in: the run under way, some of
+      // it there and the rest to come, as the reader waits for a run, chrome/events.ts)
       if (m?.kind === 'not-opened' && m.runningMs && performance.now() - m.opened < (m.prepareMs ?? 800) + m.runningMs)
         return json(200, {
           ...d,
           rev: 2,
-          targets: Object.fromEntries(Object.entries(d.targets).map(([t, x]) => [t, { ...x, state: 'running' }])),
+          targets: Object.fromEntries(
+            Object.entries(d.targets).map(([t, x]) => {
+              const all = JSON.parse(rowsObjects.get(`/api/v2/o/${x.rows[0].path}`).toString('utf8'))
+              const bytes = Buffer.from(
+                JSON.stringify({ ...all, rows: all.rows.slice(0, Math.ceil(all.rows.length / 2)) }),
+              )
+              const sha256 = createHash('sha256').update(bytes).digest('hex')
+              const path = x.rows[0].path.replace(x.rows[0].sha256, sha256)
+              rowsObjects.set(`/api/v2/o/${path}`, bytes)
+              return [t, { ...x, state: 'running', rows: [{ path, sha256, bytes: bytes.length }] }]
+            }),
+          ),
         })
+      // (then the run done, its rows whole: a document newer than the running one)
+      if (m?.kind === 'not-opened' && m.runningMs) return json(200, { ...d, rev: 3 })
       // (the target's rows arriving: one delta more each `every` ms from the first follow, the run done with the last)
       if (m?.kind === 'deltas') {
         const ds = deltasOf[d.pv]
@@ -328,6 +342,39 @@ const v2Route = {
           rev: 4,
           prepare: { ...d.prepare, attempt: 2 },
           layer: { ...d.layer, catalog: rebuilt[d.pv].catalog },
+        })
+      }
+      // (the target's run started again on the rows held (staging, 2026-11-11: 2610.21924v1's attempts 3 and 4 after a deploy):
+      // done, the paper being prepared again so that the follow keeps a run's pace; then a new attempt running whose rows are the
+      // same, restated in an object of their own; then that attempt done)
+      if (m?.kind === 'again') {
+        m.start ??= performance.now()
+        const k = Math.floor((performance.now() - m.start) / m.after)
+        const t = Object.keys(d.targets)[0]
+        const was = d.targets[t].rows[0]
+        const bytes = Buffer.concat([rowsObjects.get(`/api/v2/o/${was.path}`), Buffer.from('\n')])
+        const sha256 = createHash('sha256').update(bytes).digest('hex')
+        const path = was.path.replace(was.sha256, sha256)
+        rowsObjects.set(`/api/v2/o/${path}`, bytes)
+        const again = { path, sha256, bytes: bytes.length }
+        m.again = sha256
+        m.phase = Math.min(2, k)
+        return json(200, {
+          ...d,
+          rev: 2 + m.phase,
+          prepare: m.phase < 2 ? { ...d.prepare, attempt: 2, state: 'running', stage: 'compiling' } : d.prepare,
+          targets: {
+            [t]:
+              m.phase === 0
+                ? d.targets[t]
+                : {
+                    ...d.targets[t],
+                    attempt: 2,
+                    state: m.phase === 1 ? 'running' : 'done',
+                    rows: [again],
+                    done: m.phase === 1 ? 0 : d.targets[t].done,
+                  },
+          },
         })
       }
       // (a newer catalog once the check says so: the same layer under the twin head. Our server makes one by a prepare again,
@@ -2414,7 +2461,16 @@ await check(
         const chip = '.capsule[data-kind="progress"] button[data-action]'
         let pressed = null
         if (x.site) {
-          await waitFor(page, (sel) => !!document.querySelector(sel), chip, 20_000)
+          await waitFor(page, (sel) => !!document.querySelector(sel), chip, 20_000).catch(async (e) => {
+            const at = await page.evaluate(() => ({
+              state: window.__c.reader?.state(),
+              chrome: window.__c.controller.getState(),
+              capsule: document.querySelector('.capsule')?.outerHTML ?? null,
+            }))
+            throw new Error(
+              `${e.message}: ${JSON.stringify({ rows: at.state?.rows, layer: at.state?.layer, phase: at.chrome.phase, translated: at.chrome.translated, display: at.chrome.display, capsule: at.capsule?.slice(0, 300) })}`,
+            )
+          })
           const before = await page.evaluate(() => window.__c.reader.state().view.display)
           await page.locator(chip).click()
           await waitFor(page, () => window.__c.controller.getState().display === 'translation', null, 10_000)
@@ -2666,6 +2722,64 @@ await check(
   },
 )
 
+await check(
+  'reader: a run our server started again on the rows held (2610.21924v1 after a deploy, staging 2026-11-11) lays no page again: the rows taken again, their end told, the pages as they were',
+  async () => {
+    const seg = indexOf['s2-splits'].seg
+    modes[seg] = { kind: 'again', after: 4000 }
+    try {
+      const { page, context, errors } = await newPage()
+      await page.evaluate(() => window.__h.reader('s2-splits', { host: 'web' }))
+      const at = () =>
+        page.evaluate(() => {
+          const r = window.__h.readers[0].reader
+          const marks = window.__h.marks
+          return {
+            rows: r.state().rows.s,
+            laid: r.probe().laidPages,
+            lays: r.probe().lays,
+            gen: Math.max(0, ...marks.filter((x) => x.what === 'lay').map((x) => x.gen)),
+          }
+        })
+      await waitFor(
+        page,
+        () => {
+          const r = window.__h.readers[0].reader
+          return r.state().rows.s === 'complete' && r.probe().laidPages > 0
+        },
+        null,
+        25_000,
+      )
+      await page.waitForTimeout(500)
+      const settled = await at()
+      assert(modes[seg].phase === 0, `the run started again before the pages settled: ${JSON.stringify(settled)}`)
+      // (the run started again, then done: its rows taken and ended again)
+      const t0 = Date.now()
+      for (;;) {
+        const s = await at()
+        if (modes[seg].phase === 2 && s.rows === 'complete') break
+        if (Date.now() - t0 > 25_000) throw new Error(`the run started again never ended: ${JSON.stringify(s)}`)
+        await page.waitForTimeout(100)
+      }
+      await page.waitForTimeout(500)
+      const after = await at()
+      const asked = await page.evaluate(() => window.__h.readers[0].asked.map((a) => a.url))
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      assert(
+        asked.some((u) => u.endsWith(modes[seg].again)),
+        `the restated rows not read: ${JSON.stringify(asked)}`,
+      )
+      assert(
+        after.lays === settled.lays && after.gen === settled.gen && after.laid === settled.laid,
+        `pages laid again: ${JSON.stringify({ settled, after })}`,
+      )
+      return { settled, after }
+    } finally {
+      delete modes[seg]
+    }
+  },
+)
 await check(
   "reader: each composed document keeps its own layout: a newer catalog's pages laid by its layout, the older one's late layout dropped",
   async () => {

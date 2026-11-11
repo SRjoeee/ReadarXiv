@@ -94,7 +94,7 @@ describe('the reader state told to the chrome', () => {
     expect(fold([a, b]).phase).toBe('ready')
     const c = state({ original: { s: 'open', pages: 4, ours: false }, layer: { s: 'preparing', position: 2, progress: 0.4 } })
     expect(fold([a, b, c])).toMatchObject({ phase: 'preparing', preparing: { position: 2, progress: 0.4 } })
-    const d = { ...c, layer: { s: 'ready', laid: 0, total: 4, asOriginal: 0 }, rows: { target: 'de', from: 'here', s: 'arriving', got: 3, total: 10, lost: 0 } } as ReaderState
+    const d = { ...c, layer: { s: 'ready', laid: 0, total: 4, asOriginal: 0 }, rows: { target: 'de', from: 'here', s: 'arriving', got: 3, total: 10, lost: 0, waits: true } } as ReaderState
     expect(fold([a, b, c, d])).toMatchObject({ phase: 'translating', progress: 0.3 })
     const e = { ...d, layer: { s: 'ready', laid: 2, total: 4, asOriginal: 0 }, rows: { target: 'de', from: 'here', s: 'complete', got: 10, total: 10, lost: 0, stopped: null } } as ReaderState
     expect(fold([a, b, c, d, e])).toMatchObject({ phase: 'ready', layer: { laid: 2, total: 4 } })

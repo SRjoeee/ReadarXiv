@@ -45,13 +45,13 @@ import { abstractPage, htmlVersionOf, originalPdfOf, TRANSLATE_HASH, titleOf, VI
 import {
   anchorOf,
   contextOf,
-  countsOf,
   keep,
   missingOf,
   type PaperContext,
   ranked,
   shownAsOriginal,
   stopOf,
+  viewOf,
 } from './session/rows.ts'
 import { createRuntime, type Handlers, type Runtime } from './session/runtime.ts'
 import { ownedClock } from './stack/clock.ts'
@@ -120,9 +120,13 @@ export interface ReaderState {
     | { s: 'preparing'; position: number | null; progress: number | null }
     | { s: 'ready'; laid: number; total: number; asOriginal: number }
     | { s: 'refused'; why: LayerWhy; retryAt: number | null }
+  /** the rows of the target. Their counts are the view's, one statement (session/rows.ts viewOf): the units of the layer shown
+   *  that the toggles show translated (`total`), those with a translation held (`got`), those with a row that is none (`lost`);
+   *  0 of 0 while that layer's units are not read. `waits`: one of them still to come from a run under way (none for rows read
+   *  of a run done, a run that restates rows held, or one on units of a layer not shown yet) */
   rows: { target: string; from: 'server' | 'here' } & (
     | { s: 'none' }
-    | { s: 'arriving'; got: number; total: number; lost: number }
+    | { s: 'arriving'; got: number; total: number; lost: number; waits: boolean }
     /** `stopped`: why the units lost got no translation (the service's word: the run stopped short), null where none was */
     | { s: 'complete'; got: number; total: number; lost: number; stopped: RowsStop | null }
     /** `retryAt`: when a retry is due, where the translator named a wait (a retry before it asks nothing) */
@@ -303,6 +307,8 @@ export function openReader(
     for (const r of rs) keep(rows, r)
     if (contents?.take(rs)) outlineSoon()
     for (const f of [...rowsListeners]) f()
+    // (the view's count is of the rows held: told anew)
+    if (rs.length) tellSoon()
   }
   // ---- the head, the parts, the units: objects by digest, each fetched once while wanted (a failure forgotten), held to it
   let head: Head | null = null
@@ -339,10 +345,13 @@ export function openReader(
     const l = rt.state.layer
     return l.s === 'ready' && l.head ? partsOf(l.catalog, l.head)(n) : Promise.resolve(null)
   }
-  /** the layer's units, in their objects' order, read once a head (the contents' headings, the rows made here) */
+  /** the layer's units, in their objects' order, read once a head (the contents' headings, the rows made here, the view's count) */
   let unitsHeld: { key: string; units: Promise<Unit[]> } | null = null
+  /** the units last read, by their objects' digests: the view's count reads those of the layer shown (stateOf) */
+  let unitsRead: { key: string; units: readonly Unit[] } | null = null
+  const unitsKey = (refs: readonly Ref[]) => refs.map((r) => r.sha256).join()
   const unitsOf = (refs: readonly Ref[]): Promise<Unit[]> => {
-    const key = refs.map((r) => r.sha256).join()
+    const key = unitsKey(refs)
     if (unitsHeld?.key !== key) {
       const p = Promise.all(refs.map(async (u) => (read('units', await objectOf(u), u.sha256) as Units).units)).then(
         (l) => l.flat(),
@@ -354,6 +363,8 @@ export function openReader(
           if (closed || unitsHeld?.units !== p) return
           keptIds = new Set(units.filter((u) => u.kept).map((u) => u.id))
           if (keptIds.size) for (const f of [...rowsListeners]) f()
+          unitsRead = { key, units }
+          tellSoon()
         },
         () => {},
       )
@@ -782,12 +793,10 @@ export function openReader(
         rowsDone = false
         composer?.setLayer(composed ? { part: composed.part, pages: head?.paper.pages ?? 0 } : null, rowsSource())
       } else if (rowsDone) {
-        // (the same target's rows taken again after their end: a retry, a run our server started again, machine.ts rowsOfDoc.
-        // A page committed is final within its generation, and those laid at that end show the original where no row had come:
-        // laid again in a generation of their own as the new rows come, those laid before shown until theirs commit)
+        // (the same target's rows taken again after their end: a retry, a run our server started again, machine.ts rowsOfDoc. The
+        // rows go on, and the pages stand: the composer lays a page again where a row it was laid with comes otherwise, or one
+        // missing at the end comes, composer.ts `restated`, `filled`; a run that restates the rows held lays nothing)
         rowsDone = false
-        asOriginal.clear()
-        if (composed) composer?.setLayer({ part: composed.part, pages: head?.paper.pages ?? 0 }, rowsSource())
       }
       void (async () => {
         try {
@@ -806,8 +815,6 @@ export function openReader(
               flushing = 0
               if (signal.aborted) return
               if (pending.length) rowsIn(pending.splice(0))
-              const c = countsOf(units, rows)
-              emit({ i: 'rows.batch', t, got: c.got, total: units.length, lost: c.lost })
             }
             const take = (r: Row) => {
               pending.push(r)
@@ -834,10 +841,6 @@ export function openReader(
                   }
                 })(),
             }
-            {
-              const c = countsOf(units, rows)
-              emit({ i: 'rows.batch', t, got: c.got, total: units.length, lost: c.lost })
-            }
             const order = ranked(missingOf(units, rows), near.ids, near.anchor)
             try {
               for await (const r of translate(order, spec.target, { signal, context })) {
@@ -852,11 +855,9 @@ export function openReader(
             flush()
             rowsDone = true
             rowsIn([])
-            const c = countsOf(units, rows)
-            emit({ i: 'rows.end', t, got: c.got, total: units.length, lost: c.lost, stopped: stopOf(units, rows) })
+            emit({ i: 'rows.end', t, stopped: stopOf(units, rows) })
             return
           }
-          const total = () => rows.size
           // the server's rows: every ref the documents name for the target, each once, until its run is done or failed (a run
           // not started, `none`, is no end: the prepare's units or the open start it, machine.ts needsOf; one started again after
           // an end is the machine's to take again, rowsOfDoc)
@@ -869,7 +870,6 @@ export function openReader(
               read1.add(r.sha256)
               const o2 = JSON.parse(new TextDecoder().decode(await objectOf(r))) as { rows?: Row[] }
               rowsIn(o2.rows ?? [])
-              emit({ i: 'rows.batch', t, got: total(), total: tg?.total ?? 0, lost: 0 })
             }
             if (
               tg &&
@@ -878,11 +878,7 @@ export function openReader(
             ) {
               rowsDone = true
               rowsIn([])
-              emit(
-                tg.state === 'failed'
-                  ? { i: 'rows.failed', t, why: { kind: 'server' } }
-                  : { i: 'rows.end', t, got: total(), total: tg.total, lost: 0 },
-              )
+              emit(tg.state === 'failed' ? { i: 'rows.failed', t, why: { kind: 'server' } } : { i: 'rows.end', t })
               return
             }
             await new Promise<void>((resolve, reject) => {
@@ -1041,6 +1037,21 @@ export function openReader(
     const s = rt.state
     const r = s.rows
     const rowsView = { target: r.target, from: s.here ? ('here' as const) : ('server' as const) }
+    // (what the view shown has of the translation and waits for: the layer's units read, counted by the rows held; a run that may
+    // bring rows: the host's translate, or our server's run of the target running or to start, as the document read for it says)
+    const tg = s.docFor === r.target ? s.doc?.targets[r.target] : null
+    const run =
+      r.s === 'arriving' && (s.here || (tg !== null && (!tg || tg.state === 'running' || tg.state === 'none')))
+    const view = viewOf({
+      units: s.layer.s === 'ready' && unitsRead?.key === unitsKey(s.layer.units) ? unitsRead.units : null,
+      classes: s.prefs.value.classes,
+      // (the rows held are the target's once its rows are taken: another's before that)
+      held: rowsTarget === r.target ? rows : new Map(),
+      shown: s.layer.s === 'ready',
+      laid: s.panes.laid > 0,
+      run,
+    })
+    const count = { got: view.got, total: view.total, lost: view.lost }
     const p = panes as Panes | null
     const l = s.link
     told = {
@@ -1075,10 +1086,10 @@ export function openReader(
         r.s === 'none'
           ? { ...rowsView, s: 'none' }
           : r.s === 'failed'
-            ? { ...rowsView, s: 'failed', why: r.why, got: r.got, total: r.total, lost: r.lost, retryAt: r.retryAt }
+            ? { ...rowsView, s: 'failed', why: r.why, ...count, retryAt: r.retryAt }
             : r.s === 'complete'
-              ? { ...rowsView, s: 'complete', got: r.got, total: r.total, lost: r.lost, stopped: r.stopped }
-              : { ...rowsView, s: 'arriving', got: r.got, total: r.total, lost: r.lost },
+              ? { ...rowsView, s: 'complete', ...count, stopped: r.stopped }
+              : { ...rowsView, s: 'arriving', ...count, waits: view.waits },
       view: {
         display: displayOf(s),
         sync: { on: s.visit.sync ?? s.prefs.value.sync, available: !!p?.doc && syncAvailable },
