@@ -608,8 +608,8 @@ No state that tells the reader nothing is shown (no "done").
 | Loading | a large PDF is loading | the progress line by the share downloaded, its first stretch; 正在加载 said to screen readers |
 | Preparing | the paper's bilingual files are being made (our server's prepare, a paper no reader opened before) | the original; the progress line's first half after the download, by the prepare's stage (§6.6); 正在准备 said to screen readers (S-R-23); the website's capsule says the translation the reader waits for, with the time a first one takes (§6.6) |
 | Translating | the paper's paragraphs being translated by the service chosen | the same line on, by the share of paragraphs done; 正在翻译 said to screen readers; each page laid on the right as its paragraphs come, the original's page until then. The paragraphs counted are those of the layer on screen that "What to translate" shows translated; one whose translation is already held is done, and a run that only restates them is not shown |
-| Not to be had now | Read arXiv's website out of reach, at its limit, or the network itself down (§8.1: each cause its own words) | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24); passing, not remembered; a paper whose files this machine keeps opens without it |
-| Some paragraphs failed | a translation with gaps: rows that are none, or a run that ended failed (§8.1) | capsule: {n} 处翻译失败 · 重试 · close |
+| Not to be had now | Read arXiv's website out of reach, at its limit, or the network itself down (§8.1: each cause its own words) | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24), the retry only where the session does not ask again by itself (§8.1); passing, not remembered; a paper whose files this machine keeps opens without it |
+| Some paragraphs failed | a translation with gaps: rows that are none, or a run that ended failed and is not asked again at once (§8.1) | capsule: {n} 处翻译失败 · 重试 (where nothing asks again by itself) · close |
 | Language not supported | the shared target language is not one of the reader's | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the reader's translates |
 | Nothing translated | a service failure with no paragraph done | card in the translation's pane: the reason (网络连接失败, API Key 无效或已过期, 尚未配置 API Key, …) · 重试, or 设置 when the reason is a key (opening the settings page at the services) |
 | Cannot be had | no bilingual version can be made of the paper (no source, no PDF, a prepare that cannot succeed, one this version of the reader cannot read) | 对照 and 译文 greyed in the switch; the reader shows 原文, with the capsule: 这篇论文暂不支持 PDF 翻译, and 改用 HTML 翻译 where arXiv has an HTML version (opened where `reading.openIn` says); no close |
@@ -653,8 +653,18 @@ A status says what the reader is waiting for and what they can do; every number 
 true (the coordinator's flow of 2026-11-11, which the owner delegated after testing staging: with the hour's new papers
 spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while our server's record said 21:00:00).
 
-- **The retry's time is our server's.** A refusal's time is the one our server names, as it names it (a 429's
-  `retryAfterS`, a failed run's `retryAt` in its document), never capped: the time printed, the moment the retry is offered
+- **The retry's time is our server's instant.** A refusal of new work names the instant it ends, on our server's clock: the
+  visitor's period's end exactly for a quota (the hour's, or the UTC day's, as the admission knows it), its wait from the
+  admission's now for capacity. The paper's record keeps that instant as it is (`retryAt`), and the open's answer names it
+  (`refused.retryAt`) beside its distance in whole seconds, rounded up (`refused.retryAfterS`: what the session counts on its own
+  clock, and all an older reader reads). Never a wait in seconds re-anchored on another clock: the admission's
+  `ceil((until - now) / 1000)` added to the paper's clock and the viewer's landed past the minute (staging's record 21:00:00.408)
+  and was said 21:01, "tomorrow 0:01" across midnight (flow-fixes F1, 2026-11-12). The session's own next ask waits for the later
+  of two: our server's wait measured on the viewer's clock from the answer, and the viewer's clock reading the instant said; so
+  it never asks before the time it said nor before our server would take it, whichever way the viewer's clock is off (90 s
+  ahead: it asks when our server's hour is over, at 21:01:30 on that clock; 90 s behind: at 21:00:00 on that clock, our server's
+  21:01:30). A wait no time is said for (capacity, the rate) is our server's wait alone. A refusal's time is the one our server
+  names, as it names it (a failed run's `retryAt` in its document likewise), never capped: the time printed, the moment the retry is offered
   (the website's `retry: 'when-due'`; a press before it asks nothing) and the session's own next ask are that one time. A
   bound remains only where it paces polling (a stream's reconnection time, `WAIT_MAX_MS`). The fourth refusal in a row keeps
   the time and only stops the session asking by itself. A refusal told again with another time is told again, and the
@@ -663,8 +673,10 @@ spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while
   rate answered again and again backs off, its wait doubled each time, at most thirty seconds (`BACKOFF_MAX_MS`) or the time
   our server names, the larger; an answer that moves the paper on ends the run. A 429 naming 0 s was otherwise asked again
   at once, without end.
-- **Printed rounded up.** The time is printed rounded up to its minute, so that at the minute printed a press works
-  (15:19:45 is said 15:20). On the visitor's next day (their zone) the sentence says tomorrow (明天 {time} 后可以重试); on a
+- **Printed rounded up.** The time is printed in the viewer's zone, rounded up to its minute only where it is not on one, so
+  that at the minute printed a press works (15:19:45 is said 15:20; 21:00:00 is said 21:00). The hour is two digits where the
+  language writes it so (zh-CN, zh-TW, ja, ko: 00:00, 09:05, 21:00, each in its own hour cycle), English unpadded (9:05 AM): one
+  formatter for every such time, the website's `home/card.ts` `clockOf`. On the visitor's next day (their zone) the sentence says tomorrow (明天 {time} 后可以重试); on a
   later day it gives the date and the time, as the website's home card writes a date.
 - **The causes apart** (`causeOf`: quota, busy, rate, network, server), each with a sentence of its own:
   - the visitor's new papers spent (`quota`): 新论文的翻译次数已达上限，{time} 后可以重试, its time our server's;
@@ -678,6 +690,28 @@ spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while
     record names one; a retry asks again.
   The extension's capsules keep the catalogue's sentences (PDF 对照暂时无法加载 for our server and the network, its limit's
   sentence for a limit and the rate).
+- **An action is offered only where the system will not take it by itself; a failure is told only where the system is not
+  already trying again** (the coordinator's principle, 2026-11-12; flow-fixes F2, F4). At a refusal's time the retry chip came
+  and, the same instant, the session asked again by itself: the chip stood a quarter of a second. The session states, for each
+  thing that stopped, whether it asks again by itself (`againOf`): the original the network failed to bring (opened again a
+  second on, at once when the browser is online); the look a 429 stopped that it waits out (the rate, capacity, the limit's
+  first three) or the network stopped; a prepare or a run of the target whose record names a time and whose open this visit has
+  not asked; a translator's wait. The reader's state carries it (`self`), and no retry is drawn for it: not the capsule's chip
+  (`retryOffered`), not the notice's, not the failure card's button, not the original's card's (the extension's v2 build). A
+  retry is offered where nothing asks again but the reader: our server out of reach, the limit past its three asks (at its
+  time on the website), a key, a run this visit asked already. A session that does not say (the extension's today session)
+  keeps every retry as it was.
+- **The network down while a counted translation is waited for** (flow-fixes F3): where the view waits on our server for a
+  translation it counts, the browser offline, or an ask's fetch rejected with nothing heard since (the look stopped for the
+  network, or asked again and not heard yet) is the network's (`linkSaid`, the reader's state's `network`): its words over the
+  count, whatever is on screen, with no retry (the session asks again once it is back), the count again once a document is
+  heard. A stream that broke while the browser is online and is opened again is reconnecting (the system acting, nothing for the
+  reader to do). A reader only reading a finished translation is told neither: nothing is waited for. With no layer shown, the
+  network's stop is the layer's refusal for now, as before.
+- **Waiting in line is a wait, not a refusal** (flow-fixes F5): while our server is at capacity the page stands as it does in
+  the first-time wait, the display the reader chose kept and the translated displays to be chosen (`queuedNow` is no
+  `refusedNow`), so nothing jumps when the open is taken; a narrow window holds the original meanwhile, as it does while the
+  paper is made. A true refusal for now (the limit, the rate, the network, our server out of reach) keeps the website's hold.
 - **Which refusals last** is one table, the session's (`LASTING`: no source, not found, cannot be prepared, too large, a
   version this reader cannot read); the chrome's is made from it. A layer the reader could not use (an object not its bytes,
   a layer refused by the side) is passing: a retry asks again.
@@ -689,6 +723,10 @@ spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while
   time; before, the card (翻译暂时不可用 · 重试, its time under it). A run that ends done tells none, whatever rows are missing
   for kept or toggled-off units. 重试 asks only for the passages that failed: our server's next run reuses every row it holds.
   When the session's own next ask runs, the wait's own words replace the notice, and the passages it brings leave the count.
+  Told only where the session is not already asking for them again (flow-fixes F4): a failed run whose open is under way or due
+  at once (a run the visit did not open, found failed with no time to wait) is the run the reader waits for, its count, never
+  the notice (it stood 150 ms); one asked again at our server's time is the notice for that wait, with no retry, giving way to
+  the count when the ask begins; one nothing asks again but the reader is the notice with its retry.
   The notice closed stays closed for the visit unless more passages fail.
 - **A page laid with nothing of its own at the rows' end** (every member without a translation: the original's by the
   rule) keeps the units it read missing; a translation of one of them come since (a retry, a run our server started again)
