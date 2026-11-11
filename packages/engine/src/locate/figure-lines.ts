@@ -114,6 +114,16 @@ export function figureLinesOf(
   try {
     const out = linesOf(pages, fig, owned, fixed, textFaces)
     for (const t of out) countKept(t)
+    // (step 2 over the turned units the line reading, which reads level lines, never takes: a turned run crowded by ink that is no
+    // text alone (an axis's title by its axis) is today's unit laid as it is; one another text's glyph crowds stays the original's)
+    for (const u of fig.units)
+      if (u.why === 'crowded' && (Math.abs((u.ux ?? 1) - 1) > 1e-6 || Math.abs(u.uy ?? 0) > 1e-6)) {
+        if ((fig.met.get(u.k)?.items ?? []).some((it) => 'g' in it)) count('glyph')
+        else {
+          u.why = null
+          count('inked')
+        }
+      }
     return out
   } finally {
     W = null

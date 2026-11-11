@@ -692,6 +692,23 @@ describe('figure-lines: step 2, ink that is no text never keeps a figure text (t
       [[1], null],
     ])
   })
+  it('frees a turned label its axis crowds, and keeps one another text’s glyph crowds (the line reading reads level lines)', () => {
+    const { page, fig } = pageOf([[{ text: 'Accuracy', font: T, x: 100 }], [{ text: 'Loss', font: T, x: 100 }]])
+    // (both set turned a quarter: a y axis's title, its glyphs the page's turned ones; the first crowded by the axis line, the
+    // second by a tick label's glyph)
+    for (const u of fig.units) Object.assign(u, { ux: 0, uy: 1 })
+    fig.turned = [fig.glyphs[0]!]
+    fig.glyphs = [new Map()]
+    const axis: TodayShape = { segs: [96, 600, 96, 720], stroke: true, fill: false, hw: 0.4 }
+    crowd(fig, 0, [boxMet(0, axis)])
+    crowd(fig, 1, [{ g: 0 }])
+    const turned = fig.units.map((u) => u.why)
+    figureLinesOf([page], fig, () => false, null)
+    expect([turned, fig.units.map((u) => u.why)]).toEqual([
+      ['crowded', 'crowded'],
+      [null, 'crowded'],
+    ])
+  })
   it('keeps a text another text’s glyph stands in the room of, and a copy set past half its size off its own', () => {
     const { page, fig } = pageOf([[{ text: 'Psum Buffer', font: T, x: 100 }], [{ text: 'other', font: T, x: 100 }]])
     const glyphs = page.glyphs as Glyph[]
