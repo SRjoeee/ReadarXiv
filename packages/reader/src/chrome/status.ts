@@ -289,22 +289,28 @@ export function lineOf(state: ReaderState, held = false, prepared = false): Line
   return { on: running(state), value: base + (1 - base) * state.progress }
 }
 
-/** the paper waiting its turn: our server at capacity (`causeOf` busy), which the session asks again by itself at our server's
- *  time: a wait, as the first-time wait is, never a refusal (the coordinator, 2026-11-12) */
-export const queuedNow = (state: ReaderState): boolean => causeOf(state) === 'busy'
+/** the causes the session goes on from by itself with no period to end and nothing of the reader's: our server at capacity (the
+ *  queue), the visitor's rate of asks (a minute at most), the network (asked again once it is back) */
+const GOES_ON: ReadonlySet<Cause> = new Set<Cause>(['busy', 'rate', 'network'])
+/** a wait the session goes on from by itself (GOES_ON): a wait, as the first-time wait is, never a refusal; the display the reader
+ *  chose is kept through it (the coordinator, 2026-11-12) */
+export const goesOnNow = (state: ReaderState): boolean => {
+  const cause = causeOf(state)
+  return cause !== null && GOES_ON.has(cause)
+}
 /** a refusal for now with nothing of the translation laid: the bilingual version not to be had now, and none of it on screen.
- *  Waiting in line is none (queuedNow): the reader asked for the translation and it comes with nothing of theirs to do */
-export const refusedNow = (state: ReaderState): boolean =>
-  state.available &&
-  state.unavailable !== null &&
-  !LASTING.has(state.unavailable.why) &&
-  !queuedNow(state) &&
-  state.layer.laid === 0
+ *  A wait the session goes on from by itself is none (goesOnNow): the reader asked for the translation and it comes with nothing
+ *  of theirs to do; the limit of new papers (a period's end) and our server's fault with its time are */
+export const refusedNow = (state: ReaderState): boolean => notNowBare(state) && !goesOnNow(state)
+/** the bilingual version not to be had now, whatever the cause, with nothing of it laid */
+const notNowBare = (state: ReaderState): boolean =>
+  state.available && state.unavailable !== null && !LASTING.has(state.unavailable.why) && state.layer.laid === 0
 /**
  * The original held on screen by the host's rules (parts.tsx; ReaderController `hold`): a refusal for now with nothing laid,
- * where `refusal` is `original` (waiting in line is no refusal: the display chosen stands, as in the first-time wait); in a narrow
- * window where `narrow` is `shown`, until the reader chooses a display, while the paper waits its turn or is made (prepared, or
- * translated after a prepare this visit) or refused for now with nothing laid (the website's displayFor). Neither rule given
+ * where `refusal` is `original`: the limit of new papers, our server's fault with its time; never a wait the session goes on from
+ * by itself (the queue, the rate, the network: the display the reader chose stands, as in the first-time wait). In a narrow
+ * window where `narrow` is `shown`, until the reader chooses a display, while the paper is made (prepared, or translated after a
+ * prepare this visit) or not to be had now, whatever the cause, with nothing laid (the website's displayFor). Neither rule given
  * (the extension's): never
  */
 export function heldOf(state: ReaderState, rules: Pick<Parts, 'narrow' | 'refusal'>): boolean {
@@ -312,11 +318,10 @@ export function heldOf(state: ReaderState, rules: Pick<Parts, 'narrow' | 'refusa
   if (rules.refusal === 'original' && refusedNow(state)) return true
   if (rules.narrow !== 'shown' || !state.narrow || state.chose) return false
   return (
-    queuedNow(state) ||
     state.preparing !== null ||
     state.phase === 'preparing' ||
     (state.made && state.phase === 'translating') ||
-    refusedNow(state)
+    notNowBare(state)
   )
 }
 

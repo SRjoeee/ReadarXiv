@@ -695,6 +695,67 @@ describe('waiting in line is a wait, not a refusal (the coordinator, 2026-11-12;
   })
 })
 
+describe("the display the reader chose is kept while the session goes on by itself, with no period to end and nothing of the reader's (the coordinator, 2026-11-12; the flow-demo, (b))", () => {
+  const site = { refusal: 'original' as const, narrow: 'shown' as const }
+  const steps = (v: ReturnType<typeof visit>) => v.seen.filter((x) => x.chrome) as { at: number; chrome: ChromeState }[]
+  it("the visitor's rate of asks: neither held nor greyed at any step; a narrow window's hold as before", () => {
+    const store: Store = { units: new Map(), rows: new Map() }
+    const v = visit(
+      store,
+      [
+        { at: 100, opened: true },
+        { at: 355, lost: 'not-opened' },
+        { at: 4602, timers: true },
+        { at: 4602, lost: 'not-opened' },
+        { at: 4700, answer: preparingDoc() },
+      ],
+      [{ why: 'rate', afterMs: 4000, at: null }],
+      true,
+    )
+    const rated = steps(v).filter((x) => x.chrome.unavailable?.why === 'rate')
+    expect(rated.length).toBeGreaterThan(0)
+    for (const x of steps(v)) {
+      expect(heldOf(x.chrome, site), `held at ${x.at}`).toBe(false)
+      expect(refusedNow(x.chrome), `greyed at ${x.at}`).toBe(false)
+    }
+    for (const x of rated) expect(heldOf({ ...x.chrome, narrow: true }, site), `narrow at ${x.at}`).toBe(true)
+  })
+  it("the network down during a first making: neither held nor greyed at any step, back to the making once online; a narrow window's hold as before", () => {
+    const store: Store = { units: new Map(), rows: new Map() }
+    const v = visit(store, [
+      { at: 100, opened: true },
+      { at: 1000, doc: preparingDoc() },
+      { at: 2750, online: false },
+      { at: 9052, online: true },
+      { at: 9100, doc: { ...preparingDoc(), rev: 2 } },
+    ])
+    const down = steps(v).filter((x) => x.chrome.unavailable?.why === 'network')
+    expect(down.length).toBeGreaterThan(0)
+    for (const x of steps(v)) {
+      expect(heldOf(x.chrome, site), `held at ${x.at}`).toBe(false)
+      expect(refusedNow(x.chrome), `greyed at ${x.at}`).toBe(false)
+    }
+    for (const x of down) expect(heldOf({ ...x.chrome, narrow: true }, site), `narrow at ${x.at}`).toBe(true)
+  })
+  it("where the translation cannot come before a period ends (the limit) or for our server's fault with its time: held and greyed, as today's site", () => {
+    const store: Store = { units: new Map(), rows: new Map() }
+    const quota = visit(
+      store,
+      [
+        { at: 100, opened: true },
+        { at: 200, lost: 'not-opened' },
+      ],
+      [{ why: 'quota', afterMs: 60_000, at: null }],
+    )
+    expect([heldOf(quota.chrome, site), refusedNow(quota.chrome)]).toEqual([true, true])
+    const server = visit(store, [
+      { at: 100, opened: true },
+      { at: 200, lost: 'server' },
+    ])
+    expect([heldOf(server.chrome, site), refusedNow(server.chrome)]).toEqual([true, true])
+  })
+})
+
 /** a paper being prepared for the target, its run made by the open */
 function preparingDoc(): Doc {
   return {
