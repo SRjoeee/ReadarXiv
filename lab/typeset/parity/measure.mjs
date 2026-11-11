@@ -21,7 +21,7 @@ import { keptFacts, originalFacts, scriptsPass } from './blind.mjs'
 import { frameOf, labelsPass } from './fidelity.mjs'
 import { bundleCheck, bundleOf, pdfOf, whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
-import { carriedOf, coverageOf, FLAGS, freshOf, judgedChanged, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, stylePass, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
+import { carriedOf, coverageOf, FLAGS, freshOf, judgedChanged, linksPass, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, stylePass, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
 
 /** why a unit is laid with a fresh row (fresh.mjs freshNeeds' causes), as the sheet says it (lane parity-fresh) */
 const FRESH_CAUSE = {
@@ -197,6 +197,12 @@ for (const [pair, raw] of drawn) {
   )
   // (a line count v2 splits as TeX's share, the same lines in all: the ruling of 2026-11-10's, verdict.mjs sharePass)
   sharePass(
+    mine.filter((p) => !p.error),
+    recount,
+  )
+  // (a unit's links counted over the pages it spans, its text and its links moved over a page break by a translation: verdict.mjs
+  // linksPass; the pages' owners of links dropped once counted)
+  linksPass(
     mine.filter((p) => !p.error),
     recount,
   )

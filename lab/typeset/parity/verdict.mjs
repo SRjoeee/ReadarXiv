@@ -1006,6 +1006,44 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     ? { original: linksOf(rec.original.linkBoxes), today: linksOf(rec.today.shownOriginal ? rec.original.linkBoxes : rec.today.linkBoxes), v2: linksOf(rec.v2.linkBoxes) }
     : { original: rec.original?.links ?? 0, today: rec.today.shownOriginal ? (rec.original?.links ?? 0) : (rec.today.linksDrawn ?? 0), v2: rec.v2.linksDrawn ?? 0 }
   judge('links', null, "links missing against the original's annotations", L.original, { value: L.today, d: Math.max(0, L.original - L.today) }, { value: L.v2, d: Math.max(0, L.original - L.v2) }, 0.5)
+  // (each of A's annotations and each anchor a side drew with the unit it stands on, for the paper's pass (linksPass: a unit over
+  // two pages or more counts its links over them all). The anchors in PDF units: today's drawn from its viewport's origin, v2's
+  // from its slot (`rect`: its left, top, width, height), at the page's scale; an anchor on a drawn line of its side's unit is
+  // that unit's, else one on an original line of a unit (a link of text the side keeps, or of a page it shows as arXiv's) that
+  // unit's; A's annotation the unit whose original line it stands on; none, the page's alone)
+  if (boxed && rec.v2.rect) {
+    const view = rec.view ?? [0, 0, 612, 792]
+    const toPage = (b, [ox, oy, w, h]) => {
+      const kx = (view[2] - view[0]) / w,
+        ky = (view[3] - view[1]) / h
+      return [b[0], view[0] + (b[1] - ox) * kx, view[3] - (b[4] - oy) * ky, view[0] + (b[3] - ox) * kx, view[3] - (b[2] - oy) * ky, ...(b[5] ? [b[5]] : [])]
+    }
+    const holds = (l, x, y) => !l.rot && l.x0 !== null && x >= l.x0 - 1 && x <= l.x1 + 1 && y >= l.y - 0.2 * l.size - 1 && y <= l.y + 0.8 * l.size + 1
+    const ownerIn = (M, x, y) => {
+      let best = null,
+        d = Number.POSITIVE_INFINITY
+      for (const [key, ls] of M)
+        for (const l of ls)
+          if (holds(l, x, y) && Math.abs(l.y - y) < d) {
+            best = key
+            d = Math.abs(l.y - y)
+          }
+      return best
+    }
+    const onA = new Map([...orig].map(([key, o]) => [key, o.lines.map((l) => ({ x0: l.x0, x1: l.x1, y: l.y, size: l.size || o.size || 10 }))]))
+    const ownerOf = (M, b) => {
+      const x = (b[1] + b[3]) / 2,
+        y = (Math.min(b[2], b[4]) + Math.max(b[2], b[4])) / 2
+      return (M ? ownerIn(M, x, y) : null) ?? ownerIn(onA, x, y)
+    }
+    const A = rec.original.linkBoxes
+    const own = (M, boxes) => boxes.map((b) => [b, ownerOf(M, b)])
+    out.links = {
+      original: own(null, A),
+      today: rec.today.shownOriginal ? own(null, A) : own(T, rec.today.linkBoxes.map((b) => toPage(b, [0, 0, ((view[2] - view[0]) * 96) / 72, ((view[3] - view[1]) * 96) / 72]))),
+      v2: rec.v2.linkBoxes.map((b) => toPage(b, rec.v2.rect)).map((b) => [b, ownerOf(b[5] ? null : Vall, b)]),
+    }
+  }
   // (their borders, as each side draws them: the anchors drawn with one against the original's annotations PDF.js draws one round
   // (a border width above 0 and a colour), a page today shows as arXiv's the original's; a drawing of before they were read
   // judges none)
@@ -1348,6 +1386,86 @@ export function sharePass(pages, recount) {
       d.ruling = SHARE_RULING
     }
     recount(p)
+  }
+}
+/**
+ * The links of a unit over two pages or more counted over them all (the paper's pass): a translation moves a linked word over a
+ * page break with its text, and the reader follows it there. Each page's annotations and anchors carry the unit they stand on
+ * (measurePage's `links`); a unit that stands on two pages or more (drawn by a side, or set by the original, on each; an anchor
+ * or annotation of it there) has its links counted over all of them (A's annotations in their pages' order, each side's anchors
+ * page by page, linksOf), its links missing judged once, on its first page; every other annotation and anchor is counted on its
+ * page as before. A page's links difference is then its own and its units' missing summed, each side's (a unit's surplus never
+ * makes up another's lack). 2610.20484v1 t62 over pages 6 and 7: its link to equation (8) stands on A on page 7, v2's shorter
+ * translation draws it on page 6, and counted page by page v2 missed one on page 7. A paper with a page whose links were not
+ * read so (a drawing of before the boxes were) is left as measured
+ */
+export function linksPass(pages, recount) {
+  const ps = pages.filter((p) => !p.error)
+  if (!ps.length || ps.some((p) => !p.links)) {
+    for (const p of ps) delete p.links
+    return
+  }
+  const sides = ['original', 'today', 'v2']
+  const at = new Map()
+  for (const p of ps) {
+    const keys = new Set((p.units ?? []).map((u) => u.key))
+    for (const s of sides) for (const [, k] of p.links[s]) if (k) keys.add(k)
+    for (const k of keys) {
+      if (!at.has(k)) at.set(k, new Set())
+      at.get(k).add(p.page)
+    }
+  }
+  const across = new Set([...at].filter(([, pg]) => pg.size > 1).map(([k]) => k))
+  const first = (k) => Math.min(...at.get(k))
+  const of = new Map()
+  for (const p of [...ps].sort((a, b) => a.page - b.page))
+    for (const s of sides)
+      for (const [b, k] of p.links[s]) {
+        if (!k || !across.has(k)) continue
+        if (!of.has(k)) of.set(k, { original: [], today: new Map(), v2: new Map() })
+        const u = of.get(k)
+        if (s === 'original') u.original.push(b)
+        else u[s].set(p.page, [...(u[s].get(p.page) ?? []), b])
+      }
+  const countOf = (byPage) => [...byPage.values()].reduce((n, bs) => n + linksOf(bs), 0)
+  for (const p of ps) {
+    const mine = [...of.keys()].filter((k) => first(k) === p.page)
+    const touched = sides.some((s) => p.links[s].some(([, k]) => k && across.has(k)))
+    if (touched || mine.length) {
+      const rest = (s) => p.links[s].filter(([, k]) => !(k && across.has(k))).map(([b]) => b)
+      const o0 = linksOf(rest('original')),
+        t0 = linksOf(rest('today')),
+        v0 = linksOf(rest('v2'))
+      const sum = { original: o0, today: t0, v2: v0, dt: Math.max(0, o0 - t0), dv: Math.max(0, o0 - v0) }
+      const units = []
+      for (const k of mine) {
+        const u = of.get(k)
+        const o = linksOf(u.original),
+          t = countOf(u.today),
+          v = countOf(u.v2)
+        sum.original += o
+        sum.today += t
+        sum.v2 += v
+        sum.dt += Math.max(0, o - t)
+        sum.dv += Math.max(0, o - v)
+        units.push({ unit: k, pages: [...at.get(k)].sort((a, b) => a - b), original: o, today: t, v2: v })
+      }
+      p.diffs = p.diffs.filter((d) => d.flag !== 'links')
+      if (Math.abs(sum.dv - sum.dt) > 0.5)
+        p.diffs.push({
+          flag: 'links',
+          unit: null,
+          what: "links missing against the original's annotations (a unit over two pages or more counted over them all, on its first page)",
+          original: sum.original,
+          today: { value: sum.today, off: sum.dt },
+          v2: { value: sum.v2, off: sum.dv },
+          nearer: sum.dv < sum.dt ? 'v2' : 'today',
+          worse: sum.dv > sum.dt,
+        })
+      if (p.measures?.links) p.measures.links.across = units
+      recount(p)
+    }
+    delete p.links
   }
 }
 /**

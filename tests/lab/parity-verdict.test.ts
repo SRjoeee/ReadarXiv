@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Placed } from '@readarxiv/format'
 // @ts-expect-error — a plain node module of the lab
-import { coverageOf, measurePage, staleOf, unmeasuredOf, verdictOf } from '../../lab/typeset/parity/verdict.mjs'
+import { coverageOf, linksPass, measurePage, recount as recountOf, staleOf, unmeasuredOf, verdictOf } from '../../lab/typeset/parity/verdict.mjs'
 // @ts-expect-error — a plain node module of the lab
 import { labelsPass } from '../../lab/typeset/parity/fidelity.mjs'
 import { rowLinesOf } from '../../packages/typeset/src/index.ts'
@@ -137,6 +137,50 @@ describe('a page measured from what each side drew', () => {
     // (a page today shows as arXiv's has the original's; a page v2 shows as arXiv's draws A's annotations, counted as A's)
     const asOriginal = measure(v2Of(), boxed({ today: { shownOriginal: true }, v2: { linkBoxes: A.map((b) => [...b.slice(0, 5), 1]) } }, A))
     expect(asOriginal.measures.links).toMatchObject({ original: 2, today: 2, v2: 2 })
+  })
+  it("a unit over two pages counts its links over them: a translation that moves a linked word to the page before loses none", () => {
+    // (2610.20484v1 t62, a theorem over pages 6 and 7: its link to equation (8) stands on A on page 7's first line; v2's shorter
+    // translation draws that word, and its anchor, on page 6, today on page 7. Counted page by page, v2 missed one on page 7 and
+    // drew one more on page 6, a side's surplus never a link missing. Each side's anchors in CSS px of its page: today's from the
+    // viewport's origin, v2's from its slot's rect; 96/72 px a point)
+    const k = 96 / 72
+    const px = (x0: number, y0: number, x1: number, y1: number, o = [0, 0]) => [o[0]! + x0 * k, o[1]! + (792 - y1) * k, o[0]! + x1 * k, o[1]! + (792 - y0) * k]
+    const v2Rect = [25, 17, 816, 1056]
+    const f = {
+      pages: { 6: { members: [{ ord: 62, state: 'laid', lines: [] }], links: [] }, 7: { members: [{ ord: 62, state: 'laid', lines: [] }], links: [] } },
+      facts: {
+        6: { members: [{ ord: 62, kind: 'theorem', align: 'j', style: { size: 10 }, lines: [[6, 0, 72, 300, 100, 108, 98, 72, 300, 0, 10]] }], links: 0 },
+        7: { members: [{ ord: 62, kind: 'theorem', align: 'j', style: { size: 10 }, lines: [[7, 0, 72, 300, 700, 708, 698, 72, 300, 0, 10]] }], links: 0 },
+      },
+      today: { 62: { today: 62 } },
+    }
+    const pageOf = (n: number, o: { a: unknown[][]; t: { line?: number[]; boxes: unknown[][] }; v: { line?: number[]; boxes: unknown[][] } }) => {
+      const drawn = (ys: number[] | undefined) => (ys ?? []).map((y) => ({ ...line(y, 10), x0: 72, x1: 300 }))
+      const r = {
+        page: n,
+        view: [0, 0, 612, 792],
+        original: { links: o.a.length, linkBoxes: o.a },
+        today: { units: [{ id: 62, lines: drawn(o.t.line) }], figures: [], names: [], crops: [], links: 0, linksDrawn: o.t.boxes.length, linkBoxes: o.t.boxes, lit: [], litBoxes: {} },
+        v2: { committed: true, units: [{ id: 62, lines: drawn(o.v.line) }], crops: [], links: 0, linksDrawn: o.v.boxes.length, linkBoxes: o.v.boxes, lit: [], rect: v2Rect },
+        px: {},
+      }
+      return measurePage('p-zh', f, r, { prepByOrd: new Map(), todayOf: new Map([[62, 62]]), turned: new Set(), led: new Map(), top: new Set() })
+    }
+    const eq8 = (side: string, x0: number, y: number, o?: number[]) => [side === 'a' ? '#"equation.8"' : '#equation.8', ...(side === 'a' ? [x0, y - 1, x0 + 7, y + 8, 1] : px(x0, y - 1, x0 + 7, y + 8, o))]
+    const pages = (v2Moves: boolean, v2Draws = true) => [
+      pageOf(6, { a: [], t: { line: [100], boxes: [] }, v: { line: [100, 88], boxes: v2Moves && v2Draws ? [eq8('v', 120, 88, v2Rect)] : [] } }),
+      pageOf(7, { a: [eq8('a', 120, 700)], t: { line: [700], boxes: [eq8('t', 120, 700)] }, v: { line: [700], boxes: !v2Moves && v2Draws ? [eq8('v', 120, 700, v2Rect)] : [] } }),
+    ]
+    const linksOn = (ps: { diffs: { flag: string; worse: boolean }[] }[]) => ps.map((p) => p.diffs.filter((d) => d.flag === 'links').map((d) => d.worse))
+    // (page by page, as measured: v2 one fewer on page 7)
+    expect(linksOn(pages(true))).toEqual([[], [true]])
+    const moved = pages(true)
+    linksPass(moved, recountOf)
+    expect(linksOn(moved)).toEqual([[], []])
+    // (v2 drawing it nowhere: one missing, on the unit's first page)
+    const lost = pages(true, false)
+    linksPass(lost, recountOf)
+    expect(linksOn(lost)).toEqual([[true], []])
   })
   it("link borders are the anchors each side drew with one, against the original's annotations PDF.js draws one round", () => {
     // (hyperref's boxes: three bordered annotations; v2 drawing its anchors with none is worse, whatever its links; a drawing of
