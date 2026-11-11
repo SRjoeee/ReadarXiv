@@ -23,3 +23,5 @@ export const texRoomOf: (
 export const slotsAt: (blocks: readonly FitBlock[], st: FitState, P: FitParams, s: number) => Slot[] = m.slotsAt
 /** two laid lines or slots of one flow (L2:3061 inFlow) */
 export const inFlow: (a: { flow?: number }, b: { flow?: number }) => boolean = m.inFlow
+/** the room under a block's last baseline at a state (§18.34: deeper at a state that borrows past TeX's bottom) */
+export const roomOf: (b: FitBlock, st: FitState) => number = m.roomOf

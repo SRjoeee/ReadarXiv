@@ -406,7 +406,13 @@ export function adapt(i: AdaptInput): Adapted {
       const r = b.rects.at(-1) as Rect
       const j = (lineInfo.get(rectKey(r)) ?? lineInfo.get(rectKeyNoX0(r)))?.j
       const e = j === undefined ? undefined : runs.find((x) => x[0] === j)
-      if (e) b.free = r2(Math.max(0, Math.min(e[2], e[1] - sep)))
+      if (!e) continue
+      b.free = r2(Math.max(0, Math.min(e[2], e[1] - sep)))
+      // (and, where the reader asks the borrow past TeX's bottom (§18.34), the two depths it reads apart)
+      if ((R.pastFoot ?? 0) > 0) {
+        b.toFoot = r2(e[2])
+        b.toInk = r2(e[1] - sep)
+      }
     }
   // (the ink that stays beside its lines, no member's (Room.stays: a QED box after a proof's last words): on the block that holds
   // the line it stood beside, on that line's side of it, which every slot of the block reaching it keeps off (B.slots), a line
