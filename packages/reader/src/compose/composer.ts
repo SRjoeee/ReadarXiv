@@ -14,7 +14,7 @@
 //   the reader waits on is shown first (layer-side.mjs `hold`). A page commits when nothing it waits for is missing: its rows,
 //   or its faces (asked in one wave for the near pages, the middle page first, each page laid again once its own are in; a page
 //   still waiting for rows asks meanwhile those of the rows it has). Committed is final: a late row changes nothing on screen
-//   until the language, the toggles or the paper change.
+//   until the language, the toggles or the paper change, or a row it was laid with is stated again otherwise (below).
 // - **What stays the original's.** A page with no part (no layout), a page laid with nothing hidden, a page whose part or lay
 //   or drawing failed (asked again on a zoom, coming near or the next scroll), a page whose drawing is not in place PAGE_MS after
 //   its commit (one warning; asked again on the next scroll), and a member whose groups the composed document does not hold.
@@ -22,7 +22,11 @@
 // - **Another target, the toggles, again** (a generation): every page laid again from the same parts and the same composed
 //   document; a near laid page keeps its drawing (the target before's) until the new one's commits, muted meanwhile (nothing of
 //   it lit or hit); one the new generation lays with nothing, or fails, the original's; the drawings kept off the view, the
-//   generation before's, let go. The left pane is not touched.
+//   generation before's, let go. The left pane is not touched. So too where a row a page was laid with is stated again
+//   otherwise: our server's run on the source's units, begun before the bundle states which units are cut into sentences,
+//   replaced mid-way by one on the layer's, which states the same ids again with their sentences (readarxiv-web worker v2
+//   machine.ts wanted, startRecent; format.ts fits). Laid once for good, a page lit its units whole in the tab that watched
+//   its rows arrive, and by sentence after a reload (staging, 2026-11-11: 1706.03762v7 p2, 2610.21312v1 p1).
 // - **Translating marks** on near pages not laid (marks.ts).
 // - **The pages ahead**: once the rows have ended, the AHEAD_PAGES pages past the near ones the way the reader moves, laid and
 //   drawn into drawings kept off the view at background priority while the view's own pages hold nothing, so that the reader
@@ -143,6 +147,8 @@ interface Commit {
   gen: number
   /** shown in its slot (its drawing put in place) */
   shown: boolean
+  /** each row its lay read, by unit id (undefined: none then) */
+  read: Map<string, Row | undefined>
 }
 interface PageRec {
   failed: boolean
@@ -238,6 +244,33 @@ export function createComposer(o: ComposerOptions): Composer {
   }
   /** the rows as if they had ended: what a page waiting for rows reads to ask the faces of the rows in (never committed) */
   const endedView: Rows = { get: (id) => rowsView.get(id), done: true, kept: rowsView.kept }
+  /** a page laid over the rows now, with each row its lay read (Commit.read) */
+  const layRead = (part: Part): { page: Page; read: Map<string, Row | undefined> } => {
+    const read = new Map<string, Row | undefined>()
+    const view: Rows = {
+      get(id) {
+        const r = rowsView.get(id)
+        read.set(id, r)
+        return r
+      },
+      get done() {
+        return rowsView.done
+      },
+      kept: rowsView.kept,
+    }
+    return { page: held(o.lay(part, view), part), read }
+  }
+  /** whether a row a commit was laid with is stated otherwise now (the same row read anew, as its run's whole states it again,
+   *  is none: kept as the one read, so that it is compared once) */
+  const restated = (c: Commit): boolean => {
+    for (const [id, was] of c.read) {
+      const now = rowsView.get(id)
+      if (now === was) continue
+      if (JSON.stringify(now) !== JSON.stringify(was)) return true
+      c.read.set(id, now)
+    }
+    return false
+  }
 
   // ---------------------------------------------------------------- what a slot shows
   const originalOf = (n: number, isSettled: boolean): PageContent | null => {
@@ -438,8 +471,9 @@ export function createComposer(o: ComposerOptions): Composer {
     }
     counts.lays++
     let page: Page
+    let read: Map<string, Row | undefined>
     try {
-      page = held(o.lay(part, rowsView), part)
+      ;({ page, read } = layRead(part))
     } catch (e) {
       warnOnce('a page laid', e)
       failed(n)
@@ -462,7 +496,7 @@ export function createComposer(o: ComposerOptions): Composer {
       settledNow(n)
       return
     }
-    commit(n, page)
+    commit(n, page, read)
   }
   /** the page with every member whose groups the composed document does not hold made the original's (its ink would stay
    *  under its translation), its links back at A's boxes as the typesetter places a member not laid (Page.links' owner: the
@@ -526,10 +560,10 @@ export function createComposer(o: ComposerOptions): Composer {
     if (commits.has(n)) uncommit(n)
     settledNow(n)
   }
-  function commit(n: number, page: Page) {
+  function commit(n: number, page: Page, read: Map<string, Row | undefined>) {
     if (!groups) return
     groups.set(page)
-    const c: Commit = { page, tick: ++tick, gen, shown: false }
+    const c: Commit = { page, tick: ++tick, gen, shown: false, read }
     commits.set(n, c)
     counts.commits++
     // (the pages kept: the oldest committed far from the view let go past the bound, its groups back on)
@@ -793,15 +827,16 @@ export function createComposer(o: ComposerOptions): Composer {
             askLay(m)
             return
           }
-          const page = part ? held(o.lay(part, rowsView), part) : null
-          if (!page || !committed(page) || !page.members.some((x) => x.state === 'laid' && x.off)) {
+          const got = part ? layRead(part) : null
+          const page = got?.page
+          if (!got || !page || !committed(page) || !page.members.some((x) => x.state === 'laid' && x.off)) {
             aheadNothing.add(m)
             continue
           }
           pages.set(m, page)
           await backgroundTurn(ac.signal)
           if (!live() || viewBusy()) return
-          commit(m, page)
+          commit(m, page, got.read)
           const kept = await stack.ahead(m, ac.signal)
           if (!live()) return
           if (kept) counts.aheadKept++
@@ -912,6 +947,9 @@ export function createComposer(o: ComposerOptions): Composer {
       if (layer && rows) void renderingOnce()
       unrows =
         rows?.on(() => {
+          // (a row a page of this generation was laid with stated again otherwise: every page laid again, a generation of its
+          // own, as for another target)
+          if ([...commits.values()].some((c) => c.gen === gen && restated(c))) newGeneration()
           // (a row in: the pages waiting laid again, and the pages another generation still shows where these rows have
           // ended; a committed page is final)
           for (const [n, p] of pages) {

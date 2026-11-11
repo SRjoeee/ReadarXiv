@@ -616,6 +616,98 @@ describe('a generation let go', () => {
   })
 })
 
+describe('a row stated again otherwise (a run our server replaced mid-way)', () => {
+  /** a rows source whose rows the test states, each once more where it says so: our server's attempt on the source's units
+   *  (no sentences) replaced by one on the layer's units, the same ids stated again with their sentences (worker v2
+   *  machine.ts wanted, startRecent; format.ts fits) */
+  function statedRows(target: string) {
+    const got = new Map<string, Row>()
+    const ls = new Set<() => void>()
+    const r = {
+      target,
+      done: false,
+      get: (id: string) => got.get(id),
+      on(f: () => void) {
+        ls.add(f)
+        return () => ls.delete(f)
+      },
+      state(rows: Row[]) {
+        for (const x of rows) got.set(x.id, x)
+        for (const f of [...ls]) f()
+      },
+      end() {
+        r.done = true
+        for (const f of [...ls]) f()
+      },
+    }
+    return r
+  }
+  const row = (id: string, sentences?: { src: number[]; tr: number[] }): Row =>
+    ({ id, ok: true, content: [{ t: 'text', s: 'x. y.' }], by: 't', ...(sentences ? { sentences } : {}) }) as Row
+  /** the stand-in lay, a member lit by sentence (two entries) where its row states its sentences, else whole (one) */
+  function sentenceLay() {
+    const inner = standInLay()
+    const lay = ((part: Part, rows: Rows) => {
+      lay.calls++
+      const p = inner(part, rows)
+      return {
+        ...p,
+        members: p.members.map((m) => {
+          const r = rows.get(`u${m.ord}`)
+          if (m.state !== 'laid' || !r?.ok || !r.sentences) return m
+          const [b] = m.lit.left[0] as [[number, number, number, number]]
+          return { ...m, lit: { left: [[b], [b]], right: [[b], [b]], own: [] } }
+        }),
+      }
+    }) as unknown as Lay & { calls: number }
+    lay.calls = 0
+    return lay
+  }
+  const entries = (w: World, n: number) => (w.composer.page(n) as Page).members.map((m) => m.lit.left.length)
+
+  it('a page laid with the row before is laid again in a generation of its own, kept until its new commit', async () => {
+    const pages = new Map([[1, partOf(1, [member(10, 1, 0), member(11, 1, 1)])]])
+    const w = world({ pages, lay: sentenceLay() })
+    w.stack.setNear([1])
+    const rows = statedRows('zh')
+    open(w, rows)
+    // (the first attempt's rows: no sentences; the page commits, lit whole)
+    rows.state([row('u10'), row('u11')])
+    await settle()
+    w.stack.put(1)
+    await settle()
+    expect(w.composer.laid(1)).not.toBeNull()
+    expect(entries(w, 1)).toEqual([1, 1])
+    const was = w.stack.contentOf(1)?.key
+    // (the attempt that replaced it states u10 again, with its sentences, the rows going on)
+    rows.state([row('u10', { src: [3], tr: [3] })])
+    await settle()
+    expect(w.stack.contentOf(1)?.key).not.toBe(was)
+    expect(w.composer.muted(1)).toBe(false)
+    expect(entries(w, 1)).toEqual([2, 1])
+  })
+  it("the same rows stated again (the run's whole, read anew) lay nothing again", async () => {
+    const pages = new Map([[1, partOf(1, [member(10, 1, 0), member(11, 1, 1)])]])
+    const lay = sentenceLay()
+    const w = world({ pages, lay })
+    w.stack.setNear([1])
+    const rows = statedRows('zh')
+    open(w, rows)
+    rows.state([row('u10', { src: [3], tr: [3] }), row('u11')])
+    await settle()
+    w.stack.put(1)
+    await settle()
+    const calls = lay.calls
+    const was = w.stack.contentOf(1)?.key
+    rows.state([row('u10', { src: [3], tr: [3] }), row('u11')])
+    rows.end()
+    await settle()
+    expect(lay.calls).toBe(calls)
+    expect(w.stack.contentOf(1)?.key).toBe(was)
+    expect(entries(w, 1)).toEqual([2, 1])
+  })
+})
+
 describe('the translating marks', () => {
   it('mark the near pages not laid, go in the task the page is put in place, none for a hidden kind or a unit with no row', async () => {
     const pages = new Map([
