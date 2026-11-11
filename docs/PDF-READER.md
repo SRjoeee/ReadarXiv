@@ -5133,6 +5133,79 @@ the layout measured it alone at 9.262 (the check reports it, before and after al
 would hold that too; it moves the drawing's structure, which the parity's reading and the checks read by line. And the
 extension's own reader (`AXT_READER` 'today', `layer-proto/layer2.mjs`) keeps its class by character.
 
+### 18.49 A translation a line shorter than today's: what covers its block, and why the fill stays (2026-11-12)
+
+**The rule, as the fill holds it.** A translated paragraph covers its original's block by its leading alone: the page fill
+spreads it to its own fill leading (the loosest at which it is still set whole with the gap under it no tighter than that
+leading, §18.11), held under the page's band, the page's target plus `adaptiveFill.band` (§18.5), and under its fill top
+(`fillLead`, `fillLeadRel`). Its size is the original's as TeX stated it (read up the line, PIPELINE 80 in §18.10); a body
+grows only with its page, one size, where every body paragraph of the page is still short of its block (the owner's rulings of
+2026-10-09 and 2026-11-08: growth is today's page fill's, up to 1.1). The order is today's: the leading, then a CJK paragraph's
+tracking, then the page's size. A paragraph over a page or column break is filled on the page where it begins, each frame at
+its own fill leading under that page's band (§18.11): that page's lay holds every unit with a line on it, a later page's
+paragraphs are not in it, and a unit is laid alike by every page's lay (the composition's determinism, I6:
+`packages/typeset/tests/replay/purity.test.ts`). So a translation that takes N lines of a block of M ends at its own
+leading (M/N − 1) pitches over its original's last line, and more where the band holds it; that is today's fill as well.
+Over the 22 parity pairs (B10's drawing: 2,314 paragraphs, theorems, captions and notes, each on each page it is drawn on)
+v2's last line stands as near the original's last line as today's, within 2 pt, on 2,004; nearer by more than 2 pt on 230;
+farther on 80, 27 of them with a line fewer, 50 with as many lines at a closer page target (another paragraph's line count
+moving the median: 1512.03385v1 page 3, 1.35 where today's is 1.45).
+
+**The paragraphs that end a line higher than today's** (the parity's line-count class L2: 13 pages under the defaults, 14 every
+switch on; and of the four not read before, 2610.22065v1 page 1, unit 159). Each was laid again at today's drawn size, all else
+v2's, to tell whose line it is:
+
+| Unit | Original | Today | v2 | Held by | The line today has |
+|---|---|---|---|---|---|
+| 2610.40645v1 p4 t13 | 7, last 624.98 | 7 at 11.12, 624.98 | 6 at 10.91, 637.91 | page 3's band 1.05 (it begins full there) | its size: at 11.12 v2 sets 7, 624.98 |
+| 2610.40645v1 p13 t86 | 5, 385.75 | 4 at 11.07, 385.75 | 3, 397.13 | band 1.16 | its size: 4 lines, 385.75 |
+| 2610.40645v1 p22 t167 | 5, 543.41 | 5 at 11.13 | 4, 549.65 | band 1.18 | its size: 5 lines, 543.41 |
+| 2610.40645v1 p26 t210 | 8, 436.68 | 8 at 11.03 | 7, 446.16 | band 1.05 | its size: 8 lines, 436.68 |
+| 2610.40645v1 p38 t342 (switches on) | 3, 560.20 | 3 at 11.13 | 2, 573.07 | band 1.05 | its size: 3 lines on the original's |
+| 2610.21312v1 p11 t123 | 7, 655.83 | 6 at 10.16, 652.24 | 5 at 9.96, 661.57 | band 1.38 | its size: 6 lines, 648.06 |
+| 2610.22065v1 p1 t159 | 3, 389.29 | 3 at 8.13, 384.11 | 2 at 7.97, 394.57 | band 1.47 | its size: 3 lines on the original's |
+| 2610.40645v1 p23 t174 | 3, 681.94 | 3 at 10.98 | 2 at 10.64, 693.05 | band 1.18 | the fit's shrink (S4): at 10.98 v2 still shrinks to 10.70 |
+| 2608.06701v1 p5 t132 | 9, 75.55 | 7 at 9.96, 75.79 | 6, 88.71 | band 1.38 (its frame's own 1.60) | its breaking: 14 lines in all to 15 (v2 hangs a line-end comma's blank half) |
+| 2608.06701v1 p7 t217 | 3, 255.55 | 3, the last two characters alone | 2, 262.48 | band 1.42 | its breaking: a two-character last line |
+| 2610.20484v1 p6 t59 | 6, 78.18 | 4, the last two characters alone | 3, 124.89 | band 1.27 | its breaking: a two-character last line |
+| 2610.30034v1 p15 t257 | 9, 55.21 | 5, the last two characters alone | 4, 79.12 | its fill top 1.778, tracked | its breaking: a two-character last line |
+| 2609.20976v1 p10 t53 | 2, 429.05 | 2, the last three characters alone | 1, 441.01 | one line | its breaking: the full stop's blank half hung |
+| 2610.40645v1 p32 t271 | 6, 330.94 | 6 at 11.10, 331.93 | 5, 339.76 | band 1.23 | its breaking round its elements: at 11.10 v2 still sets 5 |
+| 1810.04805v2 p3 t32 | 6, 143.33 | 5, "BERT BASE" as text | 4, 151.33 | band 1.47 (its own 1.50) | the crop, narrower than today's flat text (RC4) |
+
+So the line is today's size on seven (TeX's justification read as their size, 1.1-2 % over TeX's, which v2 corrected), its
+breaking on six (a last line of two characters today sets, or a mark's blank half v2 hangs past the measure, its ink inside),
+a crop on one, the fit's shrink on one. None is the fill's: v2 spreads each as it spreads any paragraph of its page, and as
+today's fill does. The other three of the four not read before are the parity's L1 (v2's last line 0.84 pt lower than today's
+on 2608.06701v1 p9 t244, 2.4 higher on p11 t284, 0.55 lower on 2608.25210v2 p1 t11's second column).
+
+**The levers, measured** (the reader's lay over the 22 pairs, r18's bundles, 12,388 members on 344 pages; lab variants, never
+committed, lane cover-area):
+
+- A paragraph that its page's band leaves short of its block grows alone, before it spreads, a step at a time from the
+  original's size up to 1.1, the first step that sets one line more at its fit's leading ending it: 151 members grow on 104
+  pages (56 by one step, 44 by two, 30 by three, 21 to 1.1) and 5 lose their page's growth, where today grows 9 pages; with
+  the grown paragraph also held to cover its block within the band, 133 grow on 96. It reaches one of the paragraphs above
+  (2610.40645v1 p32 t271, at 1.05): five are theorems, which the page's growth never grows either (its body units are
+  paragraphs, abstracts, lists and items, today's); t13 as a unit is not short (its first frame is full); the Chinese ones
+  grown a step no longer set in their blocks at their fit's leading, 1.3, or set no line more (t257). It also breaks the
+  owner's ruling that growth is one size a page.
+- The band lifted, each paragraph at its own fill leading: 2,486 members change their leading, the lines of 674 of them, on
+  264 pages; the paragraphs above still end 2 to 9 pt over their originals' last lines (the gap's (M/N − 1) pitches and the fill
+  top), two on them (t132, t123). It ends the page's one rhythm (D6).
+- A frame held to the band of the page it stands on: the leading of 45 members on 45 pages, the lines of 28, both ways (t13
+  8.1 pt lower, t123 4.3 pt lower, 2610.21312v1 p6 t65, twenty lines, 11.4 pt higher); held there only where that band is
+  looser: 23 members on 23 pages, the lines of 15, every one lower (up to 8.1 pt). Either breaks I6: page 3's lay holds none
+  of page 4's paragraphs, so it lays the unit otherwise than page 4's lay does (the purity checks: 2610.21377v1-zh member 37,
+  page 4 against page 5). To read a later page's band, a page's lay would have to hold the later page's paragraphs and wait
+  for their rows. A later frame at its own fill leading, no band at all (which every page's lay can lay alike): the leading of
+  92 members on 85 pages, the lines of 28, all lower (t13 627.75, t123 on its original's last line), but ten of those frames
+  then stand 0.1 to 0.32 looser than their page's band (2602.23285v2 p5 t29 at 1.36, 2610.40645v1 p25 t196 at 1.37, where the
+  page's paragraphs stand at 1.0), and one ends 3.9 pt under its original's last line (1512.03385v1 p12 t275).
+
+Held by `packages/typeset/tests/unit/entry.test.ts` ("holds a frame on the next page to the band of the page its paragraph
+begins on"). No layout, unit or version moves.
+
 ### 18.50 An address goes whole to the next line unless the line it leaves would be justified and stretched (2026-11-12)
 
 The maintainer's report of 2026-11-08 (staging, 2303.11366v4 p1): the abstract's last line before

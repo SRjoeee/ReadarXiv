@@ -757,6 +757,60 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(p1.lines.map(([y]) => Math.round(y))).toEqual([580, 564, 548, 532])
     expect(p2.lines.length).toBe(2)
   })
+  it('holds a frame on the next page to the band of the page its paragraph begins on: every page’s lay sets it alike', () => {
+    // (docs/PDF-READER.md §18.49; 2610.40645v1-ja p3/p4 t13. A Japanese paragraph of five original lines at the foot of page 1
+    // and five at the top of page 2, its translation five full lines here and four there; beside it on page 1 a paragraph its
+    // translation fills, under it on page 2 one whose two lines of translation stand in four. Page 1's band is 1.05; the last
+    // frame's own fill leading, four lines over its five as the gap under it allows, 1.25; page 2's paragraph spreads to its
+    // own, 1.42. The paragraph is filled where it begins, at page 1's band: page 1's lay holds none of page 2's paragraphs, and
+    // a unit is laid alike by every page's lay (I6), so its frame on page 2 cannot read page 2's band; four lines 12.6 apart,
+    // the last 10.2 over its original's)
+    const ja = rulesFor('ja')
+    const lineAt = (page: number, y: number): Placed['lines'][number] => [
+      page,
+      0,
+      72,
+      300,
+      y,
+      y + 7,
+      y - 2,
+      72,
+      300,
+      0,
+      10,
+    ]
+    const [idA, idC] = ['b'.repeat(64), 'd'.repeat(64)]
+    const a = member({ ord: 0, text: idA, lines: [700, 688].map((y) => lineAt(1, y)), room: { below: 10, next: 12 } })
+    const m = member({
+      ord: 1,
+      lines: [
+        ...[580, 568, 556, 544, 532].map((y) => lineAt(1, y)),
+        ...[700, 688, 676, 664, 652].map((y) => lineAt(2, y)),
+      ],
+      room: { below: 10, next: 12 },
+    })
+    const c = member({
+      ord: 2,
+      text: idC,
+      lines: [640, 628, 616, 604].map((y) => lineAt(2, y)),
+      room: { below: 10, next: 12 },
+    })
+    // (45 characters a line: 228 pt of measure at 5 pt a character)
+    const rows = rowsOf([
+      row([{ t: 'text', s: '\u6587'.repeat(45 * 8 + 20) }]),
+      { ...row([{ t: 'text', s: '\u6587'.repeat(65) }]), id: idA },
+      { ...row([{ t: 'text', s: '\u6587'.repeat(65) }]), id: idC },
+    ])
+    const lay = (page: number) => layPage({ ...part(m), page, flows: [[a], [m], [c]] }, rows, ja, metrics())
+    const [p1, p2] = [lay(1), lay(2)]
+    const [m1, m2] = [p1, p2].map((p) => p.members.find((x) => x.ord === 1)!)
+    expect([m1!.state, m2!.state, m1!.fit?.size, m2!.fit?.size]).toEqual(['laid', 'laid', 10, 10])
+    expect(m1!.lines.map(([y]) => y)).toEqual([580, 568, 556, 544, 532])
+    expect(m2!.lines.map(([y]) => Math.round(y * 10) / 10)).toEqual([700, 687.4, 674.8, 662.2])
+    // (the paragraph under it, begun on page 2, at its own fill leading there: its two lines 17 apart)
+    const c2 = p2.members.find((x) => x.ord === 2)!
+    expect(Math.round((c2.lines[0]![0] - c2.lines[1]![0]) * 10) / 10).toBe(17)
+  })
   // (a paragraph of ten original lines here and three on the next page whose translation, ten lines, fits at its own leading with
   // a line borrowed under its last on the next page, seven here and three there, where TeX's share is 10 x 10/13 = 7.7, eight;
   // two paragraphs over it on the page, their translations `chars` characters in four lines each, which sets the page's band)
