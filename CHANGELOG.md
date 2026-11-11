@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, words a paper sets with part of a word in bold or italic, such as a name spelled out by its initials ("**I**nduce, **E**dit, **R**etrieve"), are translated as the words they are. Each bold letter had been translated on its own, the "I" as the pronoun "I", and the phrase made no sense; the translated words are now drawn plain.
 - Fixed: in the PDF reader, a table a paper centres with `\centerline` (or sets with `\leftline` or `\rightline`) is translated with the tables switch on, cell by cell, as any other table. Its cells had stayed in English whatever the switch, and so had a line of words set that way between paragraphs.
 - Fixed: in the PDF reader, a bold or italic label that begins a line of a list after its number, such as "(ii) *Accurate trajectory modeling.*", keeps its bold or italic in the translation, as the first item's label already did.
 - Fixed: in the PDF reader, a label the paper sets in bold or italic more than once in a paragraph, such as a research question "RQ2" named twice, keeps its bold or italic in the translation each time, and so does a label whose full stop the translation writes in its own script (the full stop of "RQ1." written as a Chinese one). They had come back regular.

@@ -28,6 +28,21 @@ describe("the parity's v2 rows: the door's replies read as the chain reads a rep
     ])
     expect(rows.done).toBe(true)
   })
+  it('places no group that cuts a word: the chain reads the reply against the unit as it sends it', () => {
+    // (`\textbf{F}ilter`: the chain offers "Filter" whole and plain, so a lone "F" in the reply is no place of the group)
+    const cut = {
+      id: 'c',
+      kind: 'para',
+      content: [
+        { t: 'text', s: 'We ' },
+        { t: 'span', id: '1', style: 'bold', open: '\\textbf{', close: '}', content: [{ t: 'text', s: 'F' }] },
+        { t: 'text', s: 'ilter it.' },
+      ],
+    }
+    const door = { id: 'c', ok: true, by: 'microsoft', content: [{ t: 'text', s: '我们 F 过滤它。' }] }
+    const rows = readAsChain({ get: () => door, done: true }, new Map([['c', cut]]))
+    expect(rows.get('c').content).toEqual([{ t: 'text', s: '我们 F 过滤它。' }])
+  })
   it('gives every other row as it is: a failed one, one of a unit the bundle does not hold', () => {
     const failed = { id: 'u', ok: false, why: { kind: 'refused' } }
     const rows = readAsChain({ get: () => failed, done: false }, new Map([['u', unit]]))

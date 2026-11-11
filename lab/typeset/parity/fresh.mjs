@@ -14,6 +14,7 @@ import { join } from 'node:path'
 import { chainOf, Fault, keyOf, microsoft, unitInOf } from '../../../packages/translate/src/index.ts'
 import { namedOf } from '../../../packages/translate/src/names.ts'
 import { runsOf } from '../../../packages/translate/src/runs.ts'
+import { wholeWordsOf } from '../../../packages/translate/src/words.ts'
 import { LAB } from '../../../packages/typeset/tests/replay/tap.ts'
 
 /** the cache: AXT_PARITY_FRESH_ROWS, else lab-data's parity/fresh-rows */
@@ -217,7 +218,8 @@ export async function freshRowsOf(units, target, { dir = FRESH_ROWS, translator 
 /**
  * What a fill would ask for the units `ins` the cache lacks, counted offline to the end of each unit (the count of the chain's
  * own asks stops at a unit's first uncached wire, under-reporting, integration's B8 fill: 347 wires for 295 counted): `wires`,
- * each unit's first wire the cache lacks (the unit as the chain sends it, its names written out: names.ts namedOf), which the
+ * each unit's first wire the cache lacks (the unit as the chain sends it, a group that cuts a word unwrapped and its names
+ * written out: words.ts wholeWordsOf, names.ts namedOf), which the
  * fill asks whatever comes back; `wiresUpTo`, with each one's runs floor (runs.ts runsOf: the stretches of two letters or more the
  * chain asks where the reply is refused) that the cache lacks too, which it asks only where the reply is refused, so that the
  * fill asks between the two; `requests` and `requestsUpTo`, those wires cut as the chain cuts a translator's requests (its limits'
@@ -235,7 +237,8 @@ export function needOf(ins, target, t, dir = FRESH_ROWS) {
     lenOf.set(k, w.length)
   }
   for (const u0 of ins) {
-    const u = namedOf(u0)?.unit ?? u0
+    const w = wholeWordsOf(u0)?.unit ?? u0
+    const u = namedOf(w)?.unit ?? w
     add(first, u)
     for (const [i, part] of runsOf(u).parts.entries()) if (part.send) add(floor, { id: `${u.id}~${i}`, content: [{ t: 'text', s: part.text }] })
   }

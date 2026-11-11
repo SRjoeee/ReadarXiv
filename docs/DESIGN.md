@@ -1166,6 +1166,17 @@ only how it meets the rest of the extension.
   Live (Microsoft, 4 of 2608.25210v2's heads, `lab/translate/live-html.ts`): kept with no stop, each head ran into the next
   sentence with no stop (「当前推断来源的方法不可靠 @b# 为了…」), and on no wire 3 of 4 came back with none; kept with the stop,
   4 of 4 came back a sentence of their own, the stop inside the group (「@a# 目前推断来源的方法并不可靠。@b#」).
+- **A group that cuts a word is offered to no translator** (the owner's ruling of 2026-11-12, lane word-spans,
+  PDF-READER §18.47). A group with an edge inside a word describes the word's spelling (an acronym's initials, a stressed
+  syllable), which no translation has: offered as a pair, Google translated the fragments (2111.09276v1's
+  `\textbf{I}nduce, \textbf{E}dit, \textbf{R}etrieve`: "I" the pronoun, "dit" and "R" sounds). The chain unwraps a group that
+  is not `must` whose start or end stands strictly inside a word-like segment of the unit's projection (UAX #29,
+  `Intl.Segmenter` of the source language; an element no letter of any word) before any wire writes the unit, its head kept
+  in a copy of it and its stop after its words (`packages/translate/src/words.ts` wholeWordsOf, called once in `chain.ts`
+  settle and rowContextOf): every wire, the runs floor, the acceptance rule and the put-back below read the unit so. The word
+  travels whole and plain, and the translation carries no style from the group. A `must` group (a link, a run-in label,
+  every pair of the HTML page) stays as its host states it. `CHAIN_RULES` `words`. Over the 88 corpus papers 47 of 15,408
+  groups (17 units, 13 papers): the tags wire moves in those 17 units, the markers wire in none.
 - **A group a reply did not bring back is placed where the translation states it** (lane style-spans, 2026-11-10). A
   group's style (its weight, slant or colour: its command's, `SpanAt.colour` from TeX's log, `SpanAt.style` read off its
   glyphs) is drawn only where the reply holds the group. The tags wire carries every group (Google keeps tags); the markers

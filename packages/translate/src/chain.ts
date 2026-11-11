@@ -29,6 +29,7 @@ import { placeGroups, placeReferences, referencesOf, referenceText } from './gro
 import { namedOf } from './names.ts'
 import { runsOf } from './runs.ts'
 import { sha256Hex } from './sha256.ts'
+import { wholeWordsOf } from './words.ts'
 
 // ---------------------------------------------------------------- the fixed policy (design-a §1.5; chain.ts, global-gate.ts)
 
@@ -73,10 +74,11 @@ export const KEY_VERSION = 't1'
  *  that abbreviates the item's name sent to every translator as that name: names.ts; a phrase group a markers-wire translator's
  *  reply did not bring back placed where it states the group's reference translation, asked of it in the unit's batch:
  *  groups.ts placeReferences; a request a translator refuses handed on whole, halved only where its endpoint said it is too
- *  large, `pass-whole`, #636: a 400 read as every unit's refusal kept the next translator's answers as rows): a change to them
- *  is a change of every row */
+ *  large, `pass-whole`, #636: a 400 read as every unit's refusal kept the next translator's answers as rows; a group that is
+ *  not `must` with an edge inside a word offered to no translator, its words whole and plain, `words`: words.ts): a change to
+ *  them is a change of every row */
 export const CHAIN_RULES =
-  'chain/1|fall-through|reask|runs>=2-whole|runs-heads|after|groups/2|names|references|pass-whole'
+  'chain/1|fall-through|reask|runs>=2-whole|runs-heads|after|groups/2|names|references|pass-whole|words'
 
 // ---------------------------------------------------------------- the platform's timers and controllers, by structure
 
@@ -155,9 +157,9 @@ export const keyOf = (t: Translator, target: Lang, wire: string, context?: Paper
   `${KEY_VERSION}|${t.identity}|${target}|${sha256Hex(wire)}|${t.context ? contextDigest(contextOfWire(t, wire, context)) : '-'}`
 
 /** The context a host's row of `unit` is keyed by (#637): the call's, its glossary narrowed to the entries some translator
- *  that reads the context uses for the unit as the chain sends it (names.ts, tailOf), in the table's order. A stretch of the
- *  runs floor is a part of that text, so it uses no entry the unit does not. The call's context itself where it holds no
- *  glossary (a row's key as before) or a translator says nothing of the entries it uses */
+ *  that reads the context uses for the unit as the chain sends it (words.ts, names.ts, tailOf), in the table's order. A
+ *  stretch of the runs floor is a part of that text, so it uses no entry the unit does not. The call's context itself where it
+ *  holds no glossary (a row's key as before) or a translator says nothing of the entries it uses */
 export function rowContextOf(
   translators: readonly Translator[],
   unit: UnitIn,
@@ -165,7 +167,8 @@ export function rowContextOf(
   context: PaperContext | undefined,
 ): PaperContext | undefined {
   if (!context?.glossary?.length) return context
-  const named = namedOf(unit)?.unit ?? unit
+  const whole = wholeWordsOf(unit)?.unit ?? unit
+  const named = namedOf(whole)?.unit ?? whole
   const sent = tailOf(named)?.unit ?? named
   const used = new Set<string>()
   const entry = (g: Glossary[number]) => JSON.stringify([g.term, g.translation])
@@ -757,8 +760,12 @@ export function chainOf(ports: Ports = {}): Chain {
   async function settle(u: UnitIn, i: number, c: Call): Promise<void> {
     let r: Result
     try {
-      const named = namedOf(u)
-      r = named ? named.back(await outcomeOf(named.unit, i, c)) : await outcomeOf(u, i, c)
+      // (a group that cuts a word offered to none, words.ts: the one place it is decided, before any wire or reading)
+      const whole = wholeWordsOf(u)
+      const w = whole?.unit ?? u
+      const named = namedOf(w)
+      r = named ? named.back(await outcomeOf(named.unit, i, c)) : await outcomeOf(w, i, c)
+      if (whole) r = whole.back(r)
     } catch {
       // (a fault of the chain's own: the unit is told unavailable, never a throw to the host, hard rule 3)
       r = { id: u.id, ok: false, why: { kind: 'unavailable' } }
