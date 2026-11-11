@@ -760,7 +760,7 @@ function wordsOf(t: readonly DocGlyph[]): string {
 export function labelParts(
   gs: readonly DocGlyph[],
   page: number,
-): { name?: [string, Ink]; num?: [string, Ink]; punct?: [string, Ink] } {
+): { name?: [string, Ink]; num?: [string, Ink]; punct?: [string, Ink]; unheld?: number } {
   const t = gs.filter(real)
   // (across their advances, as the label's own ink and today's characters, which U.decor and U.label read the parts as: a
   // label drawn anew starts its line at its first glyph's advance, 2608.04322v1 p5's "IV." at 397.89, its outline at 398.07)
@@ -772,7 +772,7 @@ export function labelParts(
     r2(Math.max(...xs.map((g) => g.top))),
     r2(mostOf(xs.map((g) => r2(g.y))) ?? (xs[0] as DocGlyph).y),
   ]
-  const out: { name?: [string, Ink]; num?: [string, Ink]; punct?: [string, Ink] } = {}
+  const out: { name?: [string, Ink]; num?: [string, Ink]; punct?: [string, Ink]; unheld?: number } = {}
   let e = t.length
   while (e > 0 && /^\p{P}$/u.test((t[e - 1] as DocGlyph).u)) e--
   if (e < t.length)
@@ -786,12 +786,11 @@ export function labelParts(
   let s = e
   // (its number the word after its last space, where that word is a number as LaTeX prints a counter: IEEEtran's "TABLE I", a
   // supplement's "Table S2" whose tie a justified line set tight (FLOAT_TIE), amsthm's "Corollary VI.2" under IEEEtran's
-  // \Roman sections; from its first digit or letter, an opening bracket before it neither part's)
+  // \Roman sections; the word as TeX printed it, an opening bracket before its first digit or letter with it: "Figure (1).",
+  // "Eq. (3)", whose bracket, read as neither part's, a relabel left out, "Abbildung 1)." (Codex on round 8's pull request))
   const lastWord = lastWordOf(t, e)
-  if (lastWord < e) {
-    s = lastWord
-    while (s < e && /^\p{Ps}$/u.test((t[s] as DocGlyph).u)) s++
-  } else while (s > 0 && /[\p{N}.\-–]/u.test((t[s - 1] as DocGlyph).u)) s--
+  if (lastWord < e) s = lastWord
+  else while (s > 0 && /[\p{N}.\-–]/u.test((t[s - 1] as DocGlyph).u)) s--
   // (a letter of the number: "A.4", "S1" — a letter with a digit or a dot after it in the number)
   while (
     lastWord === e &&
@@ -820,6 +819,13 @@ export function labelParts(
   while (w >= 0 && w < s && NAME_WORD.test((t[w] as DocGlyph).u)) w++
   const name = f >= 0 ? t.slice(f, w) : []
   if (name.length) out.name = [wordsOf(name).normalize('NFKC'), inkOf(name)]
+  // (a named label whose parts leave a glyph of it out, how many: a bracket before its name, a note it holds whole, a bar after
+  // its number; no reader draws it anew, which would draw its parts alone. A label of no name is never drawn anew, and says
+  // nothing)
+  if (name.length) {
+    const held = w - f + (out.num ? e - s : 0) + (t.length - e)
+    if (held < t.length) out.unheld = t.length - held
+  }
   return out
 }
 

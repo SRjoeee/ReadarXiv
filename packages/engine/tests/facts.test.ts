@@ -128,6 +128,33 @@ describe('a label’s parts (B16)', () => {
     })
     expect(labelParts(run('Proof.'), 1).num).toBeUndefined()
   })
+  it("holds every glyph of a label in its parts: a number's opening bracket is the number's, and a named label whose parts leave a glyph out says how many (Codex on round 8's pull request)", () => {
+    // (a number TeX printed in brackets: "Figure (1).", "Theorem (1).", "Proposition (2.1)"; read with its bracket in no part, a
+    // relabel drew "Abbildung 1).", "Satz 1).")
+    expect(labelParts(run('Figure (1).'), 1)).toMatchObject({
+      name: ['Figure', expect.anything()],
+      num: ['(1', expect.anything()],
+      punct: [').', expect.anything()],
+    })
+    expect(labelParts(run('Theorem (1).'), 1)).toMatchObject({
+      name: ['Theorem', expect.anything()],
+      num: ['(1', expect.anything()],
+      punct: [').', expect.anything()],
+    })
+    expect(labelParts(run('Proposition (2.1)'), 1)).toMatchObject({
+      name: ['Proposition', expect.anything()],
+      num: ['(2.1', expect.anything()],
+      punct: [')', expect.anything()],
+    })
+    for (const s of ['Figure (1).', 'Theorem (1).', 'Proposition (2.1)', 'Theorem 2 (', 'Figure 1.', 'Fig. 4.'])
+      expect(labelParts(run(s), 1).unheld, s).toBeUndefined()
+    // (a head that holds its note whole, its parts the name and the closing marks: "2 (Main result" in no part, said)
+    const note = labelParts(run('Theorem 2 (Main result).'), 1)
+    expect(note).toMatchObject({ name: ['Theorem', expect.anything()], punct: [').', expect.anything()] })
+    expect(note.unheld).toBe(12)
+    // (a label of no name is never drawn anew, and says nothing: a reference's "[12]", an item's "(3)")
+    expect(labelParts(run('(3)'), 1).unheld).toBeUndefined()
+  })
   it('gives an abbreviated name its own stop, which stands between no digits of the number (Fig., Tab., Eq., Thm., Def., Sec.)', () => {
     // (2610.21880v1's IEEE captions, "Fig. 4.": the name "Fig" and the number ".4" drew no target word)
     const fig = labelParts(run('Fig. 4.'), 1)
@@ -164,11 +191,14 @@ describe('a label’s parts (B16)', () => {
       name: ['Fig.', expect.anything()],
       num: ['S1', expect.anything()],
     })
-    // (a bracket before the number is no mark of the name's word: "Eq. (3)")
+    // (a bracket before the number is no mark of the name's word, and is the number's as TeX printed it: "Eq. (3)". Read as
+    // neither part's, as before, it was a glyph the parts left out, and a relabel drew the number without it, "Gl. 3)")
     expect(labelParts(run('Eq. (3)'), 1)).toMatchObject({
       name: ['Eq.', expect.anything()],
-      num: ['3', expect.anything()],
+      num: ['(3', expect.anything()],
+      punct: [')', expect.anything()],
     })
+    expect(labelParts(run('Eq. (3)'), 1).unheld).toBeUndefined()
     // (a number of no name before it keeps its marks, and a sub-figure's letter stays the name's, as before)
     expect(labelParts(run('.5'), 1).num?.[0]).toBe('.5')
     expect(labelParts(run('(a)'), 1).name?.[0]).toBe('a')
@@ -225,8 +255,9 @@ describe('a head’s label parts: amsthm’s \\thmname, a space, \\thmnumber, as
     expect(labelParts(run('Proposition V.2 ('), 1)).toMatchObject({ name: ['Proposition', any], num: ['V.2', any] })
     expect(labelParts(run('Theorem II'), 1)).toMatchObject({ name: ['Theorem', any], num: ['II', any] })
     expect(labelParts(run('Appendix A'), 1)).toMatchObject({ name: ['Appendix', any], num: ['A', any] })
-    // (the number from its first digit or letter: a bracket before it is neither part's, as before)
-    expect(labelParts(run('Eq. (3)'), 1)).toMatchObject({ name: ['Eq.', any], num: ['3', any] })
+    // (the number the word as TeX printed it, a bracket before its first digit with it: in neither part, as this rule first had
+    // it, a relabel drew the number without its bracket)
+    expect(labelParts(run('Eq. (3)'), 1)).toMatchObject({ name: ['Eq.', any], num: ['(3', any] })
     // (a word that is no counter's ends no number: the name is the whole)
     expect(labelParts(run('Main Theorem.'), 1).num).toBeUndefined()
   })

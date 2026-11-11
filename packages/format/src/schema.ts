@@ -234,7 +234,9 @@ export const SpanAt = z.object({
  *  where the source tells none; `align` where it stands on none of its member's lines (IEEEtran's "TABLE I" on a line of
  *  its own above its caption), how TeX set that line against its measure, read as any line's alignment is (l flush left, c
  *  centred, r flush right): its relabel is laid on that line, at its place, so; absent on a member's line (a part made before
- *  states none) */
+ *  states none); `unheld` how many of its glyphs a named label's parts leave out (a bracket before its name, a note it holds
+ *  whole, a bar after its number): no reader draws it anew, absent where its parts hold every one (a part made before states
+ *  none) */
 export const Label = z.object({
   kind: z.enum(['float', 'head', 'number', 'mark']),
   ink: Ink,
@@ -248,6 +250,7 @@ export const Label = z.object({
     .regex(/^[a-z][a-z0-9]{0,31}$/)
     .optional(),
   align: z.enum(['l', 'c', 'r']).optional(),
+  unheld: int.positive().optional(),
 })
 /** the room about a placement: below its last line, to the next ink under it, beside its lines (a level figure text's: the free
  *  line along its run today's figure reading gives it; a turned one's room is its run's, Placed.run), a cell's clear band; `under`
