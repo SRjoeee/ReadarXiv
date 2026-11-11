@@ -35,8 +35,9 @@ export type Capsule =
    *  none where the host words none (the progress line alone shows it, the maintainer's of 2026-09-25). `show`: the chip that
    *  shows the translation (StateWords `showTranslation`), where it is not on screen and some of it is there */
   | { kind: 'progress'; stage: Stage; words: CapsuleWords; show?: true }
-/** where a run under way stands, as a host's words say it */
-export type Stage = 'queued' | 'preparing' | 'translating' | 'reconnecting'
+/** what the reader waits for while a run is under way, as a host's words say it: its turn at our server, the translation (the
+ *  paper's first making included: what the reader waits for is its translation, never the making), our server heard again */
+export type Stage = 'queued' | 'translating' | 'reconnecting'
 /** `arxiv`: a link to arXiv, for an address that names no paper (S-R-20) */
 export interface Card {
   reason: string
@@ -60,9 +61,9 @@ export interface Seen {
  *  the service's beside it: the translation's state is told in the capsule beside that card, as the website's page tells it */
 const originalApart = (state: ReaderState, words: StateWords): boolean =>
   state.phase === 'failed' && !!words.openOriginal && state.failures.pdf !== null && state.failures.service === null
-/** a run under way and where it stands: our server's document not heard for now; the paper's layer being made while its
- *  prepare lasts (its place in the queue where our server names one), the rows its units start meanwhile counted under it,
- *  as the website says it; else the paragraphs translated. Null where none is under way, and where nothing a run brings is
+/** a run under way and what the reader waits for: our server's document heard again; its turn (its place in the queue where our
+ *  server names one); else the translation, the paper's layer being made included (the first time anyone opens it: the
+ *  website says the time a first one takes, `first`). Null where none is under way, and where nothing a run brings is
  *  waited for: the end held for the layer's first page (`laying`) translates nothing, a stored translation's first page is a
  *  load, which the progress line and the page's marks show as they show the original's (PDF-READER §6.6). A run under the
  *  original's failure (the phase held by it) by its own marks: a prepare told, rows coming */
@@ -71,8 +72,10 @@ export function stageOf(state: ReaderState): Stage | null {
     state.phase === 'failed' && state.failures.pdf !== null && (state.preparing !== null || state.rowsComing)
   if (!running(state) && !apart) return null
   if (state.reconnecting) return 'reconnecting'
-  if (state.preparing) return state.preparing.position != null ? 'queued' : 'preparing'
-  if (state.laying) return null
+  if (state.preparing?.position != null) return 'queued'
+  // (the first making's end held is still its wait: the early units' rows ended while the layer is made, or the layer landed and
+  // its count is not known yet)
+  if (state.laying && !firstOf(state)) return null
   return 'translating'
 }
 /** some of the translation is there to be read: a page laid, or the layer's pages known and rows of them in (the website's
@@ -84,15 +87,23 @@ export const translationThere = (state: ReaderState): boolean =>
  *  reader/Toolbar.tsx), whose bar is then its page's for a paper arXiv does not have (parts.tsx `bar`) */
 export const nothingShown = (state: ReaderState): boolean =>
   state.failures.pdf !== null && !translationThere(state) && (!state.available || state.unavailable !== null)
+/** the paper's first making: its layer being made (no layer to show yet, the first time anyone opens it), or made this visit and
+ *  the count of its translation not known yet (the layer's units not read): one wait, the translation's, from the open until the
+ *  count shows (the coordinator's decision 1, 2026-11-11) */
+export const firstOf = (state: ReaderState): boolean =>
+  state.preparing !== null || (state.made && state.translated.total <= 0)
 /** a run's stage in the host's words, or null where it gives none; `chip`: the chip that shows the translation beside them */
 function stageWords(stage: Stage, state: ReaderState, words: StateWords, chip: boolean): CapsuleWords | null {
   if (stage === 'queued') return words.queued ? plain(words.queued(state.preparing?.position ?? 0)) : null
   if (stage === 'translating') {
+    if (!words.translating) return null
     const { got, total } = state.translated
-    return words.translating ? withCount(words.translating(got, total, chip), got) : null
+    // (the first making's words hold no count: their figures are the time a first one takes)
+    const first = firstOf(state)
+    const text = words.translating(got, total, chip, first)
+    return first ? plain(text) : withCount(text, got)
   }
-  const w = words[stage]
-  return w ? plain(w) : null
+  return words.reconnecting ? plain(words.reconnecting) : null
 }
 
 /** the link beside a bilingual version not to be had: arXiv's HTML version, or where the host says (its address and words), or

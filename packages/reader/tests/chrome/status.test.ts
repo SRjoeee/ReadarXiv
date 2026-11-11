@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { LOCALE_CODES, LOCALES, O, R, S, setLocale } from '@readarxiv/ui'
 import { INITIAL, type ReaderState } from '../../src/chrome/model.ts'
 import { plain, textOf, withCount } from '../../src/chrome/capsule-words.ts'
-import { capsuleOf, cardOf, heldOf, lineOf, spokenOf } from '../../src/chrome/status.ts'
+import { capsuleOf, cardOf, heldOf, lineOf, spokenOf, stageOf } from '../../src/chrome/status.ts'
 import { PREFS } from './fake-controller.ts'
 import type { StateWords } from '../../src/chrome/parts.tsx'
 import { LANGUAGES, NAMES, TEST_PARTS } from './parts.ts'
@@ -331,8 +331,8 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
   /** words that name their state and what it holds, as a host's table would say them */
   const WORDS: StateWords = {
     queued: (n) => `queued #${n}`,
-    preparing: 'preparing',
-    translating: (got, total) => `translating ${got} / ${total}`,
+    translating: (got, total, _chip, first) =>
+      first ? 'translating, the first time takes 1-2 minutes' : `translating ${got} / ${total}`,
     reconnecting: 'reconnecting',
     noPdf: 'no pdf',
     tooLarge: 'too large',
@@ -358,7 +358,7 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
     const translating = at({ phase: 'translating', progress: 0.25, translated: { got: 12, total: 48 } })
     expect([queued, preparing, translating].map((s) => said(s))).toEqual([
       { kind: 'progress', text: 'queued #3' },
-      { kind: 'progress', text: 'preparing' },
+      { kind: 'progress', text: 'translating, the first time takes 1-2 minutes' },
       { kind: 'progress', text: 'translating 12 / 48' },
     ])
     expect(capsuleOf(translating, none, LANGUAGES, WORDS)?.words).toMatchObject({ prefix: 'translating ', count: 12 })
@@ -367,14 +367,55 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
     // (none given: no capsule, as the extension's; a stage worded and another not: that one alone)
     for (const s of [queued, preparing, translating, { ...translating, reconnecting: true }])
       expect(capsuleOf(s, none, LANGUAGES)).toBeNull()
-    expect(said(translating, { preparing: 'preparing' })).toBeNull()
-    // (rows its units start while the prepare lasts: the paper still being prepared, as the website says it)
+    expect(said(translating, { reconnecting: 'reconnecting' })).toBeNull()
+    // (rows its units start while the prepare lasts: the first making still, its count not the view's)
     expect(said({ ...translating, preparing: { position: null, progress: 0.4 } })).toEqual({
       kind: 'progress',
-      text: 'preparing',
+      text: 'translating, the first time takes 1-2 minutes',
     })
     // (a run over: nothing of it)
     expect(said(at({ phase: 'ready', reconnecting: true }))).toBeNull()
+  })
+  it("a new paper: one stage, the translation, from its layer being made until its count shows; the making never said (the coordinator's decision 1, 2026-11-11)", () => {
+    const made = { made: true, phase: 'translating' as const }
+    const stages = [
+      at({ phase: 'preparing', made: true, preparing: { position: null, progress: 0.4 } }),
+      // (the layer landed, its units not read yet: the count not known, the first making's words still)
+      at({ ...made, translated: { got: 0, total: 0 } }),
+      at({ ...made, progress: 222 / 227, translated: { got: 222, total: 227 } }),
+    ]
+    expect(stages.map((s) => said(s))).toEqual([
+      { kind: 'progress', text: 'translating, the first time takes 1-2 minutes' },
+      { kind: 'progress', text: 'translating, the first time takes 1-2 minutes' },
+      { kind: 'progress', text: 'translating 222 / 227' },
+    ])
+    expect(stages.map((s) => stageOf(s))).toEqual(['translating', 'translating', 'translating'])
+    // (the first making's figures are the time it takes, never a count drawn in a cell of its own)
+    const one = at({
+      phase: 'preparing',
+      made: true,
+      preparing: { position: null, progress: 0 },
+      translated: { got: 1, total: 0 },
+    })
+    expect(capsuleOf(one, none, LANGUAGES, WORDS)?.words).toEqual(
+      plain('translating, the first time takes 1-2 minutes'),
+    )
+    // (the first making's end held is its wait still: the early units' rows ended while the layer is made, or the layer landed and
+    // its count is not known; once counted, an end held is a load, nothing said)
+    const held = { phase: 'translating' as const, laying: true, made: true, progress: 1 }
+    expect(said(at({ ...held, preparing: { position: null, progress: 0.5 } }))?.text).toBe(
+      'translating, the first time takes 1-2 minutes',
+    )
+    expect(said(at({ ...held, translated: { got: 0, total: 0 } }))?.text).toBe(
+      'translating, the first time takes 1-2 minutes',
+    )
+    expect(said(at({ ...held, translated: { got: 227, total: 227 } }))).toBeNull()
+    // (a run on a layer shown before this visit, its count not known: the bare stage, as before)
+    expect(
+      said(at({ phase: 'translating', translated: { got: 0, total: 0 } }), {
+        translating: (_g, _t, _c, first) => (first ? 'first' : 'bare'),
+      }),
+    ).toEqual({ kind: 'progress', text: 'bare' })
   })
   it("the end held for the layer's first page (laying): nothing is translated then, so no capsule in any host's words — a stored translation's first page is a load, the line's (the coordinator's decision 2, 2026-11-11)", () => {
     const laying = at({ phase: 'translating', laying: true, progress: 1, translated: { got: 476, total: 476 } })
@@ -440,9 +481,8 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
 
 describe("the capsule beside the lost original's own card (StateWords openOriginal: the website's; L11 third round, gap 5)", () => {
   const WORDS: StateWords = {
-    preparing: 'preparing',
     queued: (n) => `queued #${n}`,
-    translating: (got, total) => `translating ${got} / ${total}`,
+    translating: (got, total, _chip, first) => (first ? 'translating, first' : `translating ${got} / ${total}`),
     notNow: () => 'unavailable for now',
     noPdf: 'no pdf',
     originalLost: 'no original',
@@ -462,7 +502,7 @@ describe("the capsule beside the lost original's own card (StateWords openOrigin
     })
     expect(said(lost({ preparing: { position: null, progress: 0.3 } }))).toEqual({
       kind: 'progress',
-      text: 'preparing',
+      text: 'translating, first',
     })
     expect(said(lost({ preparing: { position: 2, progress: null } }))).toEqual({ kind: 'progress', text: 'queued #2' })
     expect(said(lost({ rowsComing: true, translated: { got: 3, total: 10 } }))).toEqual({

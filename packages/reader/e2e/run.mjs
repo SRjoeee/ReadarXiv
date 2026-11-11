@@ -2015,7 +2015,7 @@ await check(
   },
 )
 await check(
-  "chrome: a host's words for the capsule's states: a paper being prepared said in them, with the spinner; the catalogue's look (the progress line alone) where it gives none (L11 differences 1, 2)",
+  "chrome: a host's words for the capsule's states: a paper being made said as the translation it waits for, the first time, with the spinner; the catalogue's look (the progress line alone) where it gives none (L11 differences 1, 2; the coordinator's decision 1, 2026-11-11)",
   async () => {
     const seg = indexOf['s2-splits'].seg
     const seen = async (words) => {
@@ -2053,8 +2053,8 @@ await check(
     const none = await seen(false)
     assert(!host.errors.length && !none.errors.length, [...host.errors, ...none.errors].join('; '))
     assert(
-      host.during?.kind === 'progress' && host.during.said === 'Preparing the paper' && host.during.spinner,
-      `the host's words while preparing: ${JSON.stringify(host.during)}`,
+      host.during?.kind === 'progress' && host.during.said === 'Translating, the first time' && host.during.spinner,
+      `the host's words while the paper is made: ${JSON.stringify(host.during)}`,
     )
     assert(host.after !== 'progress', `a capsule of the run after it: ${host.after}`)
     assert(none.during === null && none.line === true, `no words given: ${JSON.stringify(none)}`)

@@ -6,6 +6,7 @@
 import { writeFileSync } from 'node:fs'
 import type { Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
+import { textOf } from '../../src/chrome/capsule-words.ts'
 import { capsuleOf, type Capsule } from '../../src/chrome/status.ts'
 import { eventsOf } from '../../src/chrome/events.ts'
 import { INITIAL, reduce, type ReaderState as ChromeState } from '../../src/chrome/model.ts'
@@ -28,12 +29,13 @@ import { LANGUAGES } from './parts.ts'
 
 const ZH = 'zh-Hans'
 const PREFS: Prefs = { ...DEFAULTS, display: 'bilingual', target: ZH }
-/** the website's words for a run's stages (its v2 words.ts: the bare word before a count) */
+/** the website's words for a run's stages (its v2 words.ts: the first making's words, the bare word before a count) */
+const FIRST = 'translating, the first time takes 1-2 minutes'
 const WORDS: StateWords = {
   queued: () => 'queued',
-  preparing: 'preparing',
   reconnecting: 'reconnecting',
-  translating: (got, total) => (total > 0 ? `translating ${got}/${total}` : 'translating'),
+  translating: (got, total, _chip, first) =>
+    first ? FIRST : total > 0 ? `translating ${got}/${total}` : 'translating',
 }
 
 let digests = 0
@@ -108,6 +110,8 @@ interface Shown {
   stage: string
   /** the counts it showed, each once in turn */
   counts: [number, number][]
+  /** its words, each once in turn, with the time they came */
+  said: [number, string][]
   /** the count the chrome held as it went (the wait's end told with its count) */
   end?: [number, number]
 }
@@ -206,8 +210,10 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}) {
       open.until = now
       open.end = [chrome.translated.got, chrome.translated.total]
     }
-    if (stage && (!open || open.stage !== stage)) shown.push({ at: now, until: null, stage, counts: [] })
+    if (stage && (!open || open.stage !== stage)) shown.push({ at: now, until: null, stage, counts: [], said: [] })
     const cur = shown.at(-1)
+    if (c && stage && cur && cur.until === null && cur.said.at(-1)?.[1] !== textOf(c.words))
+      cur.said.push([now, textOf(c.words)])
     if (stage === 'translating' && cur && cur.until === null) {
       const { got, total } = chrome.translated
       const pair: [number, number] = [got, total]
@@ -651,17 +657,22 @@ describe('the capsule over whole visits (the website’s words): it says what th
     report('(c) settled reopened', v.shown)
     expect(v.shown).toEqual([])
   })
-  it('a new paper\'s first open: preparing, then one "translating" over the layer shown, from 222 of 227 until 227 are held', () => {
+  it('a new paper\'s first open: one "translating", the first making\'s words from the prepare told until the layer shows, then its count over the layer shown, from 222 of 227 until 227 are held; never "preparing"', () => {
     const v = first()
     report('(a) new paper', v.shown)
     const t = stages(v.shown, 'translating')
+    expect(v.shown).toHaveLength(1)
     expect(t).toHaveLength(1)
+    // (one wait, the translation's, from the prepare told to the last of the 5 held: the making is never said)
+    expect([t[0]?.at, t[0]?.until]).toEqual([2132, 100000])
     // (nothing counted before the layer lands: the early units' run is the prepare's, the view shows no layer yet)
-    expect(t[0]?.at).toBe(90049)
+    expect(t[0]?.said).toEqual([
+      [2132, FIRST],
+      [90049, 'translating 222/227'],
+    ])
     // (222 of 227 at the landing; the restated rows of attempt 2's windows move nothing; it leaves as the 5 are held)
-    expect(t[0]?.counts).toEqual([[222, 227]])
-    expect([t[0]?.until, t[0]?.end]).toEqual([100000, [227, 227]])
-    expect(stages(v.shown, 'preparing')[0]?.at).toBe(2132)
+    expect(t[0]?.counts.filter(([, total]) => total > 0)).toEqual([[222, 227]])
+    expect(t[0]?.end).toEqual([227, 227])
     steady(v.shown)
   })
   it('a toggle that shows more of what was made: no capsule at all', () => {
