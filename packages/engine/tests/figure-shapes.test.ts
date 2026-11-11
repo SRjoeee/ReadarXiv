@@ -264,6 +264,43 @@ describe('figureUnitsOf reads no line under a text in a dot (F3, 2608.06701v1 p9
     }
     expect([dot(0.08).why, dot(0.08).under]).toEqual([null, null])
   })
+  it('reads a curve of short segments under it as a line under it, as before (a contour under a label, 2501.14787v1 p41)', () => {
+    // (a gridline 0.17 em under the baseline drawn as 180 segments 1 long, each shorter than nothing but itself: a line)
+    const glyphs = [...'jury'].map((u, i) => ({
+      u,
+      n: 0,
+      k: i,
+      x0: 100 + 5 * i,
+      x1: 105 + 5 * i,
+      ix0: 100 + 5 * i,
+      ix1: 105 + 5 * i,
+      y: 100,
+      top: 107,
+      bottom: 98,
+      size: 10,
+      font: 'CMR10',
+      fill: 0,
+    }))
+    const segs: number[] = []
+    for (let x = 60; x < 240; x += 0.4) segs.push(x, 98.3, x + 0.4, 98.3)
+    const shapes = new Map([[0, { segs: Float32Array.from(segs), stroke: true, fill: false, hw: 0.25 }]])
+    const pg = {
+      glyphs,
+      turned: [],
+      boxes: [59.75, 98.05, 240.25, 98.55],
+      shapes,
+      pictures: [
+        { name: 'zs', glyph: 0, box: 0 },
+        { name: 'ze', glyph: glyphs.length, box: 1 },
+      ],
+      points: [],
+    }
+    const u = figureUnitsOf(
+      [{ ...pg, view: [0, 0, 300, 300], figures: new Map([['0:0', [0, 0, 300, 300]]]) }] as never,
+      null,
+    ).units[0]! as { under: number | null }
+    expect(u.under).toBeCloseTo(1.45, 4)
+  })
   it('reads none in a dot under it, and a rule under it as before', () => {
     expect([word([[110, 99.68, 110, 99.68]]).why, word([[110, 99.68, 110, 99.68]]).under]).toEqual([null, null])
     // (the cell's rule 2.4 under the baseline stands past the text's band: none; a gridline inside it is its stroke under, as before)
