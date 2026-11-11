@@ -118,6 +118,31 @@ export const FRESH_SAYS = 'the two sides drew different translations: today its 
  * today's ord), or a tie, a run-in, a line of several, a table's group (its `cells`) that holds one. Run once over a page every
  * pass has added to
  */
+/**
+ * The differences carried from an earlier round (lab-data parity/carried.json, measure.mjs): a page judged worse on stored rows
+ * that left the worse list only because its unit is laid with a fresh row since, unjudged on line count, size, stretch and
+ * sentence pairing (the coordinator's ruling, round 8 B8) - carried on every later sheet with its state now, so that it never
+ * vanishes from the count. Each entry `{ pair, page, unit, flag, since, modes, was }` of `mode` with `state` ('unjudged: a
+ * fresh row', 'judged: worse', 'judged: not worse', 'page not drawn') and `now`, the unit's line counts on this sheet
+ */
+export function carriedOf(entries, pages, mode) {
+  const out = []
+  for (const e of entries ?? []) {
+    if (!(e.modes ?? ['default']).includes(mode)) continue
+    const p = pages.find((x) => x.pair === e.pair && x.page === e.page)
+    if (!p) {
+      out.push({ ...e, state: 'page not drawn' })
+      continue
+    }
+    const u = (p.units ?? []).find((x) => x.key === e.unit)
+    const now = u ? { today: u.sides?.today?.lines ?? null, v2: u.sides?.v2?.lines ?? null, original: u.sides?.v2?.olines ?? u.sides?.today?.olines ?? null } : null
+    const fresh = (p.fresh?.units ?? []).includes(e.unit)
+    const worse = (p.diffs ?? []).some((d) => d.worse && d.flag === e.flag && (d.unit ?? '').split(' ')[0] === e.unit)
+    out.push({ ...e, state: worse ? 'judged: worse' : fresh ? 'unjudged: a fresh row' : 'judged: not worse', now })
+  }
+  return out
+}
+
 export function tagFresh(p, v2, todayOf) {
   const causeOf = new Map()
   for (const o of v2.fresh ?? []) {

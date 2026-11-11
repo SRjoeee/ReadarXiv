@@ -20,7 +20,7 @@ import { keptFacts, originalFacts, scriptsPass } from './blind.mjs'
 import { frameOf, labelsPass } from './fidelity.mjs'
 import { pdfOf, whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
-import { coverageOf, FLAGS, freshOf, judgedChanged, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
+import { carriedOf, coverageOf, FLAGS, freshOf, judgedChanged, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
 
 /** why a unit is laid with a fresh row (fresh.mjs freshNeeds' causes), as the sheet says it (lane parity-fresh) */
 const FRESH_CAUSE = {
@@ -263,6 +263,13 @@ const order = [...pages].sort(
   (a, b) => Number(isFirst(b)) - Number(isFirst(a)) || Number(b.worse > 0) - Number(a.worse > 0) || b.score - a.score || a.pair.localeCompare(b.pair) || a.page - b.page,
 )
 const { summary, worst } = summaryOf(pages)
+// (the differences carried from an earlier round, unjudged now on a fresh row (verdict.mjs carriedOf): lab-data's
+// parity/carried.json, AXT_PARITY_CARRIED, in the run's mode, every toggle on where its v2 files say so; each said in the notes)
+const CARRIED = process.env.AXT_PARITY_CARRIED ?? join(LAB, 'refactor-2026-11', 'parity', 'carried.json')
+const mode = [...drawn.keys()].some((pair) => json(join(WORK, 'v2', `${pair}.json`)).toggles === 'on') ? 'toggles-on' : 'default'
+const carried = existsSync(CARRIED) ? carriedOf(JSON.parse(readFileSync(CARRIED, 'utf8')).entries, pages, mode) : []
+for (const c of carried)
+  notes.push(`carried from ${c.since}: ${c.pair} p${c.page} ${c.unit} ${c.flag} (then today ${c.was?.today}, v2 ${c.was?.v2}, the original ${c.was?.original}): ${c.state}${c.now ? `; now today ${c.now.today}, v2 ${c.now.v2}, the original ${c.now.original}` : ''}`)
 const result = {
   format: 'readarxiv-parity 3',
   verdict: 'display ≥ today: no page worse than today\'s, a difference only where nearer the original, over every page the run asked',
@@ -313,6 +320,7 @@ const result = {
   facts,
   errors: pages.filter((p) => p.error).map((p) => `${p.pair} p${p.page}: ${p.error}`),
   notes,
+  carried,
   summary,
   worst,
   pages: order,
