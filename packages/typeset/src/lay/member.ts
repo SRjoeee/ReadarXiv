@@ -235,7 +235,13 @@ export function layMember(p: Prepared, R: RuleParams, trace: Trace | null = null
     share: i === all.length - 1 ? share : null,
     clear: null,
   }))
-  const FR = R as unknown as Parameters<typeof fillLeadsOf>[1]
+  // (a figure's text keeps its rows' own pitch: a translation of fewer lines than its rows stands from the first row down at
+  // that pitch and ends early, never spread over the rows' height to fill them (a path's joined rows, F3: the owner's rule that
+  // a translation stays inside the range the original text held, 2608.06701v1 p2's first bubble); the page fill reads its top
+  // as the original's pitch)
+  const FR = (p.kind === 'figure'
+    ? { ...(R as object), fillLead: null, fillLeadRel: null }
+    : R) as unknown as Parameters<typeof fillLeadsOf>[1]
   for (const q of runUnits) fillLeadsOf(q as never, FR)
   fillLeadsOf(unit as never, FR)
   put('L9', 'S.fill.leads', {

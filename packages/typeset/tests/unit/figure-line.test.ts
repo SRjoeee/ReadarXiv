@@ -168,6 +168,50 @@ describe('a figure’s paragraph and an item with its label, laid by the paragra
         if ('face' in it) expect(it.x + widthOf(it.size, it.s)).toBeLessThanOrEqual(300 + 1e-6)
       }
   })
+  it('lays a path’s joined rows from its first row at their own pitch, ending early (2608.06701v1 p2’s first bubble)', () => {
+    // (five rows set flush left at 10 on a pitch of 12, a bubble's (option 3): a translation of fewer lines stands from the first
+    // row's baseline down at the unit's leading (the target's: zh's 1.3 of a solid-set original's pitch, leadOf) and ends early,
+    // inside the rows' range, never spread over the five rows' height (the page fill's leading, 20 here before)
+    const rowsOf = (n: number) =>
+      Array.from({ length: n }, (_, i): Placed['lines'][number] => [
+        1,
+        0,
+        100,
+        190,
+        424 - 12 * i,
+        431 - 12 * i,
+        422 - 12 * i,
+        95,
+        200,
+        0,
+        10,
+      ])
+    const bubble: Placed = {
+      ord: 0,
+      kind: 'figure',
+      text: idOf(5),
+      lead: 12,
+      read: ['style', 'lead'],
+      style: { role: 'sans', size: 10 },
+      align: 'l',
+      lines: rowsOf(5),
+      room: { below: 4, side: [95, 200], over: 9, under: 4 },
+    }
+    const row: Row = {
+      id: idOf(5),
+      ok: true,
+      by: 'test',
+      content: [{ t: 'text', s: '找到实际的实现然后检查验证检查' }],
+    }
+    const page = layPage(part([bubble]), rows([row]), rulesFor('zh'), metrics)
+    const m = page.members.find((x) => x.ord === 0)!
+    expect(m.state).toBe('laid')
+    const ys = m.lines.map((l) => l[0] as number)
+    expect(ys.length).toBeLessThan(5)
+    expect(ys[0]).toBeCloseTo(424, 6)
+    for (let i = 1; i < ys.length; i++) expect(ys[i - 1]! - ys[i]!).toBeLessThanOrEqual(12 * 1.3 + 1e-6)
+    expect(ys.at(-1)!).toBeGreaterThanOrEqual(424 - 12 * 4 - 1e-6)
+  })
   it('lays an item after its label, the label the original’s ink: its group never turned off', () => {
     // ("A." 100 to 109, its text from 113)
     const item: Placed = {
