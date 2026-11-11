@@ -524,10 +524,11 @@ const EXPANDED = /^(?:\$\w+|\$\{[^}]*\}|\$\((?:[^()]|\([^()]*\))*\)|`[^`]*`|\$[@
 const STARTS_GH = /^\s*(?:\S*\/)?gh(?:\s|$)/
 /** A word as shell text again: one the shell expands inside double quotes, any other inside single ones */
 const quoted = (word, expands) => (expands ? JSON.stringify(word) : `'${word.replaceAll("'", "'\\''")}'`)
-/** An assignment that changes where `gh` looks, or where a `cd` lands: `GH_REPO=…`, `GIT_DIR=…`; `CDPATH=…` (zsh's
- *  `cdpath=(…)`), under which the shells look for a bare name before, or after, the current directory; `HOME=…`,
- *  where `cd` alone and `cd ~` go */
-const REPOINTS = /^(?:(?:GH|GIT)_\w*|CDPATH|cdpath|HOME)=/
+/** A word that changes where `gh` looks, or where a `cd` lands: an assignment to one of `gh`'s or git's variables
+ *  (`GH_REPO=…`, `GIT_DIR=…`), to `CDPATH` (zsh's `cdpath=(…)`), under which the shells look for a bare name
+ *  before, or after, the current directory, or to `HOME`, where `cd` alone and `cd ~` go; and the bare name of one,
+ *  which is how a line takes it out of the environment the lookup still has (`unset GH_REPO`, `export -n`, `env -u`) */
+const REPOINTS = /^(?:(?:GH|GIT)_\w*|CDPATH|cdpath|HOME)(?:=|$)/
 /** The operators after which the next command runs in the same shell: always (`;`, a newline), or when the one
  *  before succeeded (`&&`) */
 const SEQUENCE = /^(?:&&\n*|[;\n]+)$/

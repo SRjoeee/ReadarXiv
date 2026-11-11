@@ -290,6 +290,13 @@ describe('mergesIn', () => {
       'cd - && gh pr merge 603',
       'if true; then cd x; fi; gh pr merge 603',
       'export GH_REPO=o/r; gh pr merge 603',
+      // the lookup runs in the environment the hook was started in: a line that takes one of these variables out of
+      // it merges somewhere the lookup does not look, as a line that sets one does (#635, Codex)
+      'unset GH_REPO; gh pr merge 411 --merge',
+      'export -n GH_REPO; gh pr merge 603',
+      'typeset +x GIT_DIR && gh pr merge 603',
+      'env -u GH_REPO gh pr merge 603',
+      `unset GH_REPO; bash -c 'gh pr merge 603'`,
       'source env.sh && gh pr merge 603',
       'gh api -X PUT repos/{owner}/{repo}/pulls/603/merge; cd x; eval "$Y"; gh api -X PUT repos/{owner}/{repo}/pulls/411/merge',
     ]) {
@@ -384,6 +391,14 @@ describe('mergesIn', () => {
       expect(merges(text).at(-1)?.unreadable, text).toBe(true)
     }
     expect(merge('cd /w && while sleep 9; do gh pr merge 603 --merge && break; done')).toMatchObject({ dirs: ['/w'], unreadable: false })
+  })
+
+  it('keeps what a subshell does to the environment inside it', () => {
+    expect(merge('(unset GH_REPO; true); gh pr merge 603')).toMatchObject({ ref: '603', unreadable: false })
+    expect(merge('(unset GH_REPO; gh pr merge 603)').unreadable).toBe(true)
+    // (a word that only reads as one of the names changes nothing)
+    expect(merge('echo "$GH_REPO"; gh pr merge 603')).toMatchObject({ ref: '603', unreadable: false })
+    expect(answer('unset GH_REPO; gh pr merge 603 --merge')?.decision).toBe('ask')
   })
 
   it('reads a merge behind a wrapper only when it names its repository and its pull request (#635, Codex: `env GH_REPO=…`)', () => {
