@@ -454,8 +454,10 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
   says the load there (`R.status.loading`), never the translation (the coordinator's decision 2 of 2026-11-11 and R2 of
   2026-11-12; until then the website's capsule said the paper was being prepared there, 0.7 s on every reopen of a settled
   paper, and then its screen-reader line said `R.status.translating` for 0.6 s, which the staging recorder of 2026-11-12 read
-  as a capsule). The layer's units not read yet, a run under way waits while nothing is laid (a first open's: its count comes
-  with the head).
+  as a capsule). The layer's units not read yet, the target's run under way or to start waits while nothing is laid (a first
+  open's: its count comes with the head); our server's work ahead alone does not, and the rows' end is not told meanwhile, so
+  the wait and the end (with the line's whole length) come once the count is known: a stale layer whose every passage is held
+  stays silent with staging's objects a second late, and one missing passages never shows the whole line before them.
 - **A notice** carries a chip action and a close button, whose tooltip stands above it; closing it is remembered for this paper's visit, each notice apart — the partial one's close does not close the count of failed passages it stood before (#314).
 - **Two notes that are not a notice**: settings that cannot be read stand for as long as it is so, with a link to the settings page and no close (UI.md S-R-21); a write storage refused is told with the settings page's sentence until it is closed or a later write of this page goes through (S-R-22).
 - **When the translation's pane has nothing to show**, the same anatomy is a card centred in that pane (300 px, 14 px

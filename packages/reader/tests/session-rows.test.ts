@@ -206,6 +206,25 @@ describe("the run the view waits on (runOf, rowsTold): our server's work for the
     expect(runOf({ ...s, open: quiet, link: stop('network') }).run).toBe(true)
     expect(runOf({ ...s, open: quiet, link: stop('limit') }).run).toBe(false)
   })
+  it("our server's work ahead alone and nothing counted yet (the units not read): no wait, and the rows not told ended, so no end and no whole line before the count says the view lacks nothing", () => {
+    const s = heard({ prepare: prepare('running', 7), layer: stale, targets: { 'zh-Hans': done(OLD) } }, 'complete')
+    const run = runOf(s)
+    expect([run.run, run.ahead]).toEqual([true, true])
+    const unread = viewOf({
+      units: null,
+      classes: null,
+      held: new Map(),
+      shown: true,
+      laid: false,
+      run: run.run,
+      ahead: run.ahead,
+    })
+    expect(unread).toEqual({ waits: false, got: 0, total: 0, lost: 0 })
+    expect(rowsTold(s, unread, run)).toMatchObject({ s: 'arriving', waits: false })
+    // (the target's own run to start, the count unknown: the first open's wait, as before)
+    const first = heard({ prepare: prepare('running', 7), layer: stale, targets: {} }, 'arriving')
+    expect([runOf(first).run, runOf(first).ahead]).toEqual([true, false])
+  })
   it("rows made here: the host's run alone, whatever our server does", () => {
     const s = heard({ prepare: prepare('running'), layer: stale, targets: {} }, 'complete', { here: true })
     expect(runOf(s).run).toBe(false)

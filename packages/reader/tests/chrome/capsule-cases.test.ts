@@ -108,6 +108,8 @@ type Beat =
   | { at: number; wake: true }
   /** the open under way answered now, with our server's document after it started what it asked (`holdOpen`) */
   | { at: number; answer: Doc }
+  /** the layer's head (and with it its units) read now (`lateHead`: on staging the objects come a second late) */
+  | { at: number; head: true }
 
 interface Shown {
   at: number
@@ -131,7 +133,7 @@ function visit(
   store: Store,
   beats: Beat[],
   first: Partial<Prefs> = {},
-  o: { busy?: number; rate?: number; holdOpen?: boolean } = {},
+  o: { busy?: number; rate?: number; holdOpen?: boolean; lateHead?: boolean } = {},
 ) {
   /** the opens our server refuses first: for its capacity (the admission's busy, in the open's answer), or for the visitor's
    *  rate of asks (a 429 that says so) */
@@ -182,6 +184,7 @@ function visit(
       shown: s.layer.s === 'ready',
       laid: s.panes.laid > 0,
       run: run.run,
+      ahead: run.ahead,
       failed: run.failed,
     })
     return {
@@ -255,14 +258,18 @@ function visit(
       counted.push({ at: now, got, total })
     }
   }
-  /** what reader.ts does after a step: the resources it holds answered, our server's rows read */
-  const react = () => {
-    const code = s.layer.s === 'ready' && s.layer.code && !s.layer.loaded ? s.layer.code : null
-    if (code) queue.push({ i: 'code.loaded', t: code })
+  /** the layer's head read, its units with it, as reader.ts reads them once the code is in */
+  const readHead = () => {
     if (s.layer.s === 'ready' && s.layer.code && !s.layer.head && headRead !== s.layer.catalog.sha256) {
       headRead = s.layer.catalog.sha256
       queue.push({ i: 'head', digest: s.layer.catalog.sha256, head: HEAD() })
     }
+  }
+  /** what reader.ts does after a step: the resources it holds answered, our server's rows read */
+  const react = () => {
+    const code = s.layer.s === 'ready' && s.layer.code && !s.layer.loaded ? s.layer.code : null
+    if (code) queue.push({ i: 'code.loaded', t: code })
+    if (!o.lateHead) readHead()
     const composed = live('composed')
     if (composed && s.layer.s === 'ready' && !s.layer.open) queue.push({ i: 'composed.opened', t: composed })
     const open = live('open')
@@ -324,6 +331,9 @@ function visit(
     } else if ('answer' in b) {
       const open = live('open')
       if (open) feed({ i: 'open.answered', t: open, doc: b.answer })
+    } else if ('head' in b) {
+      readHead()
+      feed({ i: 'panes.drawn' })
     } else if ('wake' in b) {
       if (s.link.s === 'stopped' && s.link.timer) feed({ i: 'time', t: s.link.timer, now })
     } else if ('laid' in b) feed({ i: 'panes.laid', laid: b.laid, total: 4 })
@@ -837,7 +847,7 @@ function staleNoTarget() {
 /** a stale layer whose stored rows hold 80 of its 100 passages (its target done on its units), loaded before the prepare's first
  *  stage arrives (the open, which the stale layer asks, answered 3.5 s on), then the prepare, attempt 2 on its units bringing the
  *  20 missing, and the new layer, which that attempt covers (the flow-staging record's case D, scripted) */
-function staleLoaded() {
+function staleLoaded(late = false) {
   const store: Store = { units: new Map(), rows: new Map() }
   const old = unitsObject(store, range(0, 100))
   const fresh = unitsObject(store, range(0, 100))
@@ -860,7 +870,8 @@ function staleLoaded() {
     [
       { at: 100, opened: true },
       { at: 300, doc: doc(1, { prepare: prep('done', null, 1, [old]), layer: stale, targets: stored }) },
-      { at: 1000, laid: 1 },
+      ...(late ? [{ at: 1500, head: true as const }] : []),
+      { at: 2000, laid: 1 },
       { at: 3800, answer: doc(2, { prepare: prep('running', 'fetching', 2), layer: stale, targets: stored }) },
       { at: 5000, doc: doc(3, { prepare: prep('running', 'compiling', 2), layer: stale, targets: stored }) },
       {
@@ -897,7 +908,35 @@ function staleLoaded() {
       },
     ],
     {},
-    { holdOpen: true },
+    { holdOpen: true, lateHead: late },
+  )
+}
+
+/** a stale layer whose stored rows hold every passage (its target done on its units), its prepare running, its units read 1.2 s
+ *  after its rows (staging's objects come a second late): nothing for the view to wait for, which is known only once they are */
+function staleStoredLate() {
+  const store: Store = { units: new Map(), rows: new Map() }
+  const old = unitsObject(store, range(0, 100))
+  const w = rowsObject(store, range(0, 100))
+  const stale = { catalog: ref(), units: [old], format: 1, stale: true }
+  const running = { state: 'running' as const, why: null, retryAt: null, stage: 'compiling', units: [], attempt: 2 }
+  return visit(
+    store,
+    [
+      { at: 100, opened: true },
+      {
+        at: 300,
+        doc: doc(1, {
+          prepare: running,
+          layer: stale,
+          targets: { [ZH]: target('done', { rows: [w], done: 100, total: 100, units: [old] }) },
+        }),
+      },
+      { at: 1500, head: true },
+      { at: 2000, laid: 1 },
+    ],
+    {},
+    { lateHead: true },
   )
 }
 /** the line drawn never shorter than it was within one showing (R5: a showing that ended and a new one begun is a line of its own) */
@@ -1023,6 +1062,22 @@ describe('the capsule over whole visits (the website’s words): it says what th
     const full = v.lines.filter(([at, l]) => l === 1 && at < 7000)
     expect(full).toEqual([])
     lineSteady(v.lines)
+  })
+  it('the same with its units read 1.2 s after its rows: the wait from the count known, the line never full before the last passage', () => {
+    const v = staleLoaded(true)
+    report('(D late) stale layer loaded before the prepare, units late', v.shown)
+    const t = stages(v.shown, 'translating')
+    expect(v.shown).toHaveLength(1)
+    expect([t[0]?.at, t[0]?.until]).toEqual([1500, 7000])
+    expect(v.lines.filter(([at, l]) => l === 1 && at < 7000)).toEqual([])
+    lineSteady(v.lines)
+  })
+  it('a stale layer whose stored rows hold every passage, its prepare running, its units read late: no capsule and no count on the line, before the count is known or after (R3: n = N stays silent)', () => {
+    const v = staleStoredLate()
+    report('(3 late) stale, all stored, units late', v.shown)
+    expect(v.shown).toEqual([])
+    // (the download's sliver, then the end held for the first page, a load: never a count's share between)
+    expect(v.lines.map(([, l]) => l).filter((l) => l > 0.15 && l < 1)).toEqual([])
   })
   // (AXT_CAPSULE_TABLE=<file>: the appearances of every case written there, the lane's table)
   it('writes the table where asked', () => {

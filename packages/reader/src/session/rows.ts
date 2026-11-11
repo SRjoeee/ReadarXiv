@@ -97,22 +97,19 @@ export function shownAsOriginal(part: string | null | undefined, page: Page | nu
 }
 /** the run the view's rows come from, as the session states it: `run`, one that may bring rows is under way (the host's
  *  translate; our server's run of the target running or to start, as the document read for it says; one that failed and is
- *  asked again now, its open under way or due at once: `asking`; or rows that ended while our server still works for the view,
- *  `ahead`); `failed`, it ended failed and nothing asks it again now (a unit shown with no translation then is a passage that
- *  failed, whether a row says so or none came). A failure the session asks again at once is no failure to tell: the reader waits
- *  for the run it asks (PDF-READER §8.1) */
-export function runOf(s: State): { run: boolean; failed: boolean; asking: boolean } {
+ *  asked again now, its open under way or due at once: `asking`; or, none of these, rows that arrive or ended while our server
+ *  still works for the view: `ahead`); `failed`, it ended failed and nothing asks it again now (a unit shown with no translation
+ *  then is a passage that failed, whether a row says so or none came). A failure the session asks again at once is no failure
+ *  to tell: the reader waits for the run it asks (PDF-READER §8.1) */
+export function runOf(s: State): { run: boolean; failed: boolean; asking: boolean; ahead: boolean } {
   const r = s.rows
   const tg = s.docFor === r.target ? s.doc?.targets[r.target] : null
   const asking = r.s === 'failed' && againOf(s).rows === 'now'
-  return {
-    run:
-      asking ||
-      ((r.s === 'arriving' || r.s === 'complete') && aheadOf(s)) ||
-      (r.s === 'arriving' && (s.here || (tg !== null && (!tg || tg.state === 'running' || tg.state === 'none')))),
-    failed: r.s === 'failed' && !asking,
-    asking,
-  }
+  const own =
+    asking ||
+    (r.s === 'arriving' && (s.here || (tg !== null && (!tg || tg.state === 'running' || tg.state === 'none'))))
+  const ahead = !own && (r.s === 'arriving' || r.s === 'complete') && aheadOf(s)
+  return { run: own || ahead, failed: r.s === 'failed' && !asking, asking, ahead }
 }
 /**
  * More of the target's translation comes for the view without the reader's acting, as the document read for the target states
@@ -167,11 +164,13 @@ export function viewOf(o: {
   laid: boolean
   /** a run that may bring rows is under way */
   run: boolean
+  /** that run is our server's work ahead alone (runOf `ahead`): with no units read, nothing says the view lacks anything yet */
+  ahead?: boolean
   /** the run ended failed (runOf) */
   failed?: boolean
 }): ViewRows {
   if (!o.shown) return { waits: false, got: 0, total: 0, lost: 0 }
-  if (!o.units) return { waits: o.run && !o.laid, got: 0, total: 0, lost: 0 }
+  if (!o.units) return { waits: o.run && !o.ahead && !o.laid, got: 0, total: 0, lost: 0 }
   let got = 0,
     lost = 0,
     total = 0
@@ -187,7 +186,9 @@ export function viewOf(o: {
 
 /** the rows as the reader tells them (ReaderState `rows`, reader.ts): none; failed, where nothing asks the run again now; complete,
  *  where the view waits for nothing more; else arriving, with the view's count and whether it waits: a run under way, a failed one
- *  asked again at once, or rows that ended while more comes for the view (runOf), the one wait the chrome tells (events.ts) */
+ *  asked again at once, or rows that ended while more comes for the view (runOf), the one wait the chrome tells (events.ts). Rows
+ *  that ended with our server's work ahead and nothing counted yet (the units not read) are not told ended: their end (and the
+ *  line's whole length that comes with it) is told once the count says the view lacks nothing */
 export function rowsTold(s: State, view: ViewRows, run: ReturnType<typeof runOf> = runOf(s)): ReaderState['rows'] {
   const r = s.rows
   const told = { target: r.target, from: s.here ? ('here' as const) : ('server' as const) }
@@ -202,6 +203,7 @@ export function rowsTold(s: State, view: ViewRows, run: ReturnType<typeof runOf>
       retryAt: r.retryAt,
       ...(againOf(s).rows !== null ? { self: true as const } : {}),
     }
-  if (r.s === 'complete' && !view.waits) return { ...told, s: 'complete', ...count, stopped: r.stopped }
+  if (r.s === 'complete' && !view.waits && !(run.ahead && view.total === 0))
+    return { ...told, s: 'complete', ...count, stopped: r.stopped }
   return { ...told, s: 'arriving', ...count, waits: view.waits }
 }

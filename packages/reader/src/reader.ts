@@ -1067,6 +1067,7 @@ export function openReader(
       shown: s.layer.s === 'ready',
       laid: s.panes.laid > 0,
       run: run.run,
+      ahead: run.ahead,
       failed: run.failed,
     })
     const p = panes as Panes | null
