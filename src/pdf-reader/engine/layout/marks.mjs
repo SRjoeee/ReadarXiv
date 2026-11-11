@@ -1770,7 +1770,7 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
         let j = k + 1
         while (j < u.pieces.length && blank(u.pieces[j])) j++
         const q = u.pieces[j]
-        if (!q || q.t !== 'ph' || BREAK.test(q.src ?? '') || q.src === '&' || !passed?.has(j) || out[j].length !== 1 || out[j][0] !== u.pieces[j]) continue
+        if (q?.t !== 'ph' || BREAK.test(q.src ?? '') || q.src === '&' || !passed?.has(j) || out[j].length !== 1 || out[j][0] !== u.pieces[j]) continue
         const cls = classOf(q)
         if (!cls || !on.has(cls) || (cls === 'macro' && none.has(q.src))) continue
         let f = k
