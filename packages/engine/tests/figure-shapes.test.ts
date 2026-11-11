@@ -226,6 +226,44 @@ describe('figureUnitsOf reads no line under a text in a dot (F3, 2608.06701v1 p9
       null,
     ).units[0]! as { why: string | null; under: number | null }
   }
+  it("reads none in a stroke shorter than its own width (member 651's: 0.014 long, 0.16 wide)", () => {
+    const dot = (hw: number) => {
+      const glyphs = [...'jury'].map((u, i) => ({
+        u,
+        n: 0,
+        k: i,
+        x0: 100 + 5 * i,
+        x1: 105 + 5 * i,
+        ix0: 100 + 5 * i,
+        ix1: 105 + 5 * i,
+        y: 100,
+        top: 107,
+        bottom: 98,
+        size: 10,
+        font: 'CMR10',
+        fill: 0,
+      }))
+      const shapes = new Map([
+        [0, { segs: Float32Array.from([110, 99.68, 110.01, 99.69]), stroke: true, fill: false, hw }],
+      ])
+      const pg = {
+        glyphs,
+        turned: [],
+        boxes: [110 - hw, 99.68 - hw, 110.01 + hw, 99.69 + hw],
+        shapes,
+        pictures: [
+          { name: 'zs', glyph: 0, box: 0 },
+          { name: 'ze', glyph: glyphs.length, box: 1 },
+        ],
+        points: [],
+      }
+      return figureUnitsOf(
+        [{ ...pg, view: [0, 0, 300, 300], figures: new Map([['0:0', [0, 0, 300, 300]]]) }] as never,
+        null,
+      ).units[0]! as { why: string | null; under: number | null }
+    }
+    expect([dot(0.08).why, dot(0.08).under]).toEqual([null, null])
+  })
   it('reads none in a dot under it, and a rule under it as before', () => {
     expect([word([[110, 99.68, 110, 99.68]]).why, word([[110, 99.68, 110, 99.68]]).under]).toEqual([null, null])
     // (the cell's rule 2.4 under the baseline stands past the text's band: none; a gridline inside it is its stroke under, as before)

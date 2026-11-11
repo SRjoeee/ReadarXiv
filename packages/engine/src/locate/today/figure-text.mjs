@@ -923,9 +923,10 @@ function shapeRoom(shape, f, band, along1, free1, e, after = false, under1 = nul
     // (a stroke under the text: its part across the band, widened by its half width, below the baseline, and as far as its box
     // shows it under the text's box; told with its top)
     if (under) {
-      // (CHANGED, F3: a zero-length segment is no line under the text, a dot: 2608.06701v1 p9's member 651, a dot 0.32 pt under its
-      // baseline read as a stroke 0.06 under it, every CJK translation's em box crowded by it, the line left the original's)
-      if (as === ae && ts === te) continue
+      // (CHANGED, F3: a segment shorter than its own line's width is no line under the text, a dot: 2608.06701v1 p9's member 651, a
+      // stroke 0.014 long and 0.16 wide 0.32 pt under its baseline read as a stroke 0.06 under it, every CJK translation's em box
+      // crowded by it, the line left the original's)
+      if (Math.hypot(segs[i + 2] - segs[i], segs[i + 3] - segs[i + 1]) < 2 * w) continue
       const top = Math.max(ts + (te - ts) * lo, ts + (te - ts) * hi) + w
       const a = Math.max(Math.min(p, q) - w, e[0] - SHOWN_SLACK), b = Math.min(Math.max(p, q) + w, e[2] + SHOWN_SLACK)
       if (top < 0 && a <= b && b > band[0] && a < band[2]) { under1(top, a, b); continue }
