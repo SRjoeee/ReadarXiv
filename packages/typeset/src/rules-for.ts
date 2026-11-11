@@ -106,10 +106,13 @@ export function resolveRules(target: Lang) {
  */
 export function rulesFor(target: Lang, choices: Choices = {}, hyph: Readonly<Record<string, unknown>> = {}): Rules {
   const r = resolveRules(target)
+  // (the borrow past TeX's text block bottom, where the reader asks it (§18.37): in the params the fit reads; absent when off,
+  // so that the rules are today's to the byte)
+  const past = choices.pastFoot
   return {
     target,
     script: r.script as Script,
-    set: r.params,
+    set: typeof past === 'number' && past > 0 ? { ...r.params, pastFoot: past } : r.params,
     labels: r.labels,
     heads: Object.hasOwn(HEADS, target) ? { ...HEADS[target] } : null,
     refs: refsFor(target),

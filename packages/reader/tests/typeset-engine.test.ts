@@ -11,7 +11,7 @@ import { leftKinds } from '../src/compose/classes.ts'
 import type { Rows } from '../src/compose/page.ts'
 import { HYPH_WAIT } from '../src/compose/served.ts'
 import { TYPESET_TARGETS } from '../src/compose/targets.ts'
-import { ruleTag, typesetLay, warmTypeset } from '../src/compose/typeset.ts'
+import { pastFootOf, ruleTag, typesetLay, warmTypeset } from '../src/compose/typeset.ts'
 import { DEFAULTS } from '../src/prefs.ts'
 
 vi.mock('@readarxiv/typeset', async (load) => {
@@ -139,6 +139,34 @@ describe("the reader's own typesetter (openReader's engine where the host gives 
     warmTypeset(s, 'tlh')
     expect(hyph).toHaveLength(2)
     expect(warm.at(-1)).toEqual([])
+  })
+  it('hands the borrow past TeX’s bottom it is given to the rules (Choices.pastFoot, docs/PDF-READER.md §18.37), none by default', async () => {
+    const { parts, rows } = fixture('s1-columns')
+    const part = parts.get(1) as Part
+    const off = await typesetLay({ served: served(), target: () => 'de', classes: () => DEFAULTS.classes })
+    off(part, rowsOf(rows))
+    expect('pastFoot' in (vi.mocked(T.layPage).mock.calls.at(-1)?.[2].set ?? {})).toBe(false)
+    const on = await typesetLay({
+      served: served(),
+      target: () => 'de',
+      classes: () => DEFAULTS.classes,
+      pastFoot: 1.5,
+    })
+    on(part, rowsOf(rows))
+    expect(vi.mocked(T.layPage).mock.calls.at(-1)?.[2].set.pastFoot).toBe(1.5)
+  })
+  it('reads the borrow from the website’s address alone: `axt-borrow` in points, on an http(s) page, never an extension’s', () => {
+    const at = (href: string) => {
+      const u = new URL(href)
+      return pastFootOf({ protocol: u.protocol, search: u.search })
+    }
+    expect(at('https://readarxiv.com/abs/2602.23285v2?to=ja&axt-borrow=1.5')).toBe(1.5)
+    expect(at('http://localhost:8787/abs/2602.23285v2?axt-borrow=2.5&to=ja')).toBe(2.5)
+    expect(at('https://readarxiv.com/abs/2602.23285v2?to=ja')).toBe(0)
+    for (const v of ['0', '-1', 'x', '', '7', 'Infinity'])
+      expect(at(`https://readarxiv.com/abs/1?axt-borrow=${v}`)).toBe(0)
+    expect(at('chrome-extension://abcdefghijklmnop/pdf-reader.html?axt-borrow=1.5')).toBe(0)
+    expect(pastFootOf(null)).toBe(0)
   })
   it("sets the rule set's languages, Chinese by its script too", () => {
     expect(TYPESET_TARGETS.filter((t) => Object.hasOwn(T.LANGUAGES, t)).sort()).toEqual(Object.keys(T.LANGUAGES).sort())

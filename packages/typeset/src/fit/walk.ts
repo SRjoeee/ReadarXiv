@@ -6,7 +6,7 @@
 // facts: so that a page's body keeps one size); the room is TeX's (lay/adapt.ts), stated on each block (`free`).
 import { breakLines } from '../breaker/break.types.ts'
 import { laidOut } from '../breaker/place.types.ts'
-import { slotsAt } from '../breaker/slots.types.ts'
+import { roomOf, slotsAt } from '../breaker/slots.types.ts'
 import type { Token } from '../breaker/tokens.ts'
 import type { FitBlock, FitParams, FitState, Layout } from './types.ts'
 
@@ -70,17 +70,35 @@ export function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number):
         yield { ...st, knob }
       }
     } else if (knob === 'shrink') {
+      // (the borrow past TeX's text block bottom, where the reader asks it (P.pastFoot, docs/PDF-READER.md §18.37, an experiment
+      // for the owner's test): before each step down, at the size it would leave, one state more whose last line may stand that
+      // far under the bottom, the next ink's bound as it is, where that adds room to a block. So at every size but the floor
+      // the unit is tried without the room first, then with it, and it borrows only where that keeps it larger than the steps
+      // would; one that fits at none goes on down the steps, and on to the knobs after them, as without it)
+      const past = (P.pastFoot as number | undefined) ?? 0
+      const pastHere = () =>
+        past > 0 && !!P.borrow && blocks.some((b) => roomOf(b, { ...st, over: past }) > roomOf(b, st) + 1e-6)
       // (on the steps from the size it would start at uncapped, those under the cap: a cap of 0.956 stepping from itself
       // ended at 0.806 short of the floor's 0.8, where 1512.03385's cells fit, and left them the original's)
       for (let k = 1; ; k++) {
         const sc = Math.round((1 - k * P.step) * 1000) / 1000
         if (sc < P.floor - 1e-9) break
         if (sc > top + 1e-9) continue
+        if (pastHere()) yield { ...st, borrow: 99, over: past, knob: 'over' }
         st.scale = sc
         yield { ...st, knob }
       }
     }
   }
+}
+/** how far under its block's text block bottom the lowest of a layout's lines stands (§18.37), 0.01 at least */
+function depthOf(lines: readonly { block: number; baseline: number }[], blocks: readonly FitBlock[]): number {
+  let need = 0
+  for (const l of lines) {
+    const b = blocks[l.block]
+    if (b?.toFoot !== undefined) need = Math.max(need, (b.B.at(-1) as number) - b.toFoot - l.baseline)
+  }
+  return Math.max(0.01, Math.ceil(need * 100 - 1e-6) / 100)
 }
 /** two of the fit's states alike: every knob's value, and the knob that set it */
 const sameState = (x: FitState, y: FitState) =>
@@ -131,6 +149,10 @@ export function layoutUnit2(
     if (r.rest >= r.total) break
   }
   if (!last) return null
+  // (a state past the bottom that set every token keeps the depth its lines took under their blocks' bottoms alone (to the
+  // hundredth, up), so that the page fill, laying it again at a looser leading, spreads it no deeper: §18.37)
+  if (last.st.over && last.r.rest >= last.r.total)
+    last = { ...last, st: { ...last.st, over: depthOf(last.r.lines, blocks) } }
   // nothing fits in order at the last state: the text may run on past a kept region (all of it shown, out of order), at the
   // most natural state at which it then fits. The walk down to the last state bought nothing the run past keeps: laid at the
   // last, a paragraph that runs on past a display was drawn at the floor's size though it fit far larger (the M1 survey of

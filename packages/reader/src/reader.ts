@@ -503,11 +503,14 @@ export function openReader(
   const typesetOf = async (): Promise<Lay> => {
     const s = served
     if (!s) return none
-    const { typesetLay } = await import('./compose/typeset.ts')
+    const { pastFootOf, typesetLay } = await import('./compose/typeset.ts')
+    // (the borrow past TeX's bottom the website's address asks for the visit, the owner's test: docs/PDF-READER.md §18.37)
+    const pastFoot = pastFootOf(typeof location === 'undefined' ? null : location)
     return typesetLay({
       served: s,
       target: () => rowsTarget || targetOf(rt.state),
       classes: () => rt.state.prefs.value.classes,
+      ...(pastFoot > 0 ? { pastFoot } : {}),
     })
   }
   /** the paper's title: its PDF's Info Title (arXiv's margin stamp is none), else the abstract page's (one request a visit,
