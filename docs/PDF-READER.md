@@ -388,7 +388,7 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
   header, not the line — and then for no capsule while it runs: the line says it.)
 - **The prepare on the line** (the coordinator's decision 4, 2026-11-11): where a paper's layer is made in the process,
   the half of the line after the download is the prepare's, and the line moves by the stage our server's record names
-  (`prepare.stage`, `status.ts` `PREPARE_PLACES`): each stage at a fixed place on that stretch, where it starts in the time
+  (`prepare.stage`, `events.ts` `PREPARE_PLACES`): each stage at a fixed place on that stretch, where it starts in the time
   a prepare takes, the mean of the two staging timelines of 2026-11-11 (a new paper's, 2610.20266v1, 87.9 s; a paper
   prepared again after a deploy, 2610.21924v1, 95.6 s). No stage names on screen and no time-based creeping; it never
   runs back. The translation after it takes what remains, from the prepare's end to the whole line; a process without a

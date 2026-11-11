@@ -41,8 +41,8 @@ export function StatusCapsule({
   controller: ReaderController
   onChooseLanguage: () => void
 }) {
-  // the notice of failed passages closed (status.ts Seen)
-  const [noticeClosed, setNoticeClosed] = useState(false)
+  // the notice of failed passages closed, at its count (status.ts Seen)
+  const [noticeClosed, setNoticeClosed] = useState(0)
   const [narrowShown, setNarrowShown] = useState(false)
   // the refused writes closed: a new refusal is told again
   const [refusalsSeen, setRefusalsSeen] = useState(0)
@@ -181,7 +181,7 @@ export function StatusCapsule({
                     onClick={() =>
                       capsule.kind === 'saveFailed'
                         ? setRefusalsSeen(controller.getState().refusals)
-                        : setNoticeClosed(true)
+                        : setNoticeClosed(controller.getState().failedUnits)
                     }
                   >
                     <Icon node={X} size={13} />

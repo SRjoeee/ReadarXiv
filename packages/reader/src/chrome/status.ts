@@ -38,6 +38,28 @@ export type Capsule =
 /** what the reader waits for while a run is under way, as a host's words say it: its turn at our server, the translation (the
  *  paper's first making included: what the reader waits for is its translation, never the making), our server heard again */
 export type Stage = 'queued' | 'translating' | 'reconnecting'
+/** why the bilingual version is not to be had now, the causes told apart (PDF-READER §8): the visitor's new papers spent
+ *  (`quota`), our server at capacity (`busy`), the visitor's rate of asks (`rate`), the network itself (`network`), our server
+ *  out of reach or at fault (`server`) */
+export type Cause = 'quota' | 'busy' | 'rate' | 'network' | 'server'
+/** the cause of a refusal for now, or null where none stands: the one place a refusal's cause is named, which every state that
+ *  tells one reads (the capsule's words here, a run's stage) */
+export function causeOf(state: ReaderState): Cause | null {
+  switch (state.unavailable?.why) {
+    case 'refused':
+      return 'quota'
+    case 'busy':
+      return 'busy'
+    case 'rate':
+      return 'rate'
+    case 'network':
+      return 'network'
+    case 'unreachable':
+      return 'server'
+    default:
+      return null
+  }
+}
 /** `arxiv`: a link to arXiv, for an address that names no paper (S-R-20) */
 export interface Card {
   reason: string
@@ -52,7 +74,8 @@ const running = (state: ReaderState) => state.phase === 'translating' || state.p
 
 /** What the reader has done with the notices this visit (StatusCapsule keeps it). `refusalsSeen`: the refused writes closed */
 export interface Seen {
-  noticeClosed: boolean
+  /** the passages that had failed when the reader closed their notice (0: not closed): closed for the visit unless more fail */
+  noticeClosed: number
   narrowShown: boolean
   refusalsSeen: number
 }
@@ -169,16 +192,21 @@ export function capsuleOf(
   if (stage && said)
     return show ? { kind: 'progress', stage, words: said, show } : { kind: 'progress', stage, words: said }
   // the bilingual version not to be had now: the original stays readable, and a retry is offered with the HTML version
-  // (the layer-only plan's "Offline, drafted")
-  const why = state.unavailable?.why
-  // (a 429 is our server's limit, said as such: past the run's few waits it asks no more by itself, and the reader's retry is
-  // what asks again, #88 E5; busy, its capacity, said as the limit unless the host words it)
-  if (!running(state) && (why === 'refused' || why === 'busy' || why === 'unreachable')) {
+  // (the layer-only plan's "Offline, drafted"), each cause in its own words
+  const cause = causeOf(state)
+  // (a 429 of the visitor's new papers is our server's limit, said as such with its time: past the run's few waits it asks no
+  // more by itself, and the reader's retry is what asks again, #88 E5; busy, its capacity, said as the limit unless the host
+  // words it; the rate of asks and the network, which the reader waits out by itself, with no time)
+  if (!running(state) && cause) {
     const at = state.unavailable?.retryAt ?? null
     const text =
-      why === 'unreachable'
+      cause === 'server'
         ? (words.notNow?.(at) ?? R.status.notNow)
-        : ((why === 'busy' ? words.busy?.(at) : undefined) ?? words.limited?.(at) ?? R.status.limited)
+        : cause === 'network'
+          ? (words.network ?? R.status.notNow)
+          : cause === 'rate'
+            ? (words.rate ?? R.status.limited)
+            : ((cause === 'busy' ? words.busy?.(at) : undefined) ?? words.limited?.(at) ?? R.status.limited)
     const notNow = plain(text)
     // (its retry offered at once, or at its time where the host's rule says so: a retry before it asks nothing)
     const wait = withheld(state, rules) ? { wait: true as const } : {}
@@ -186,7 +214,7 @@ export function capsuleOf(
     return html ? { kind: 'notNow', words: notNow, ...html, ...wait } : { kind: 'notNow', words: notNow, ...wait }
   }
   // the paragraphs that failed are told once the run has ended, with its retry where a stop is there to resume
-  if (!running(state) && state.failedUnits > 0 && !seen.noticeClosed)
+  if (!running(state) && state.failedUnits > seen.noticeClosed)
     return {
       kind: 'notice',
       words: withCount((words.failedPassages ?? S.failed.text)(state.failedUnits), state.failedUnits),
@@ -225,23 +253,6 @@ const DOWNLOAD = 0.15,
   PREPARE = 0.5
 /** where the prepare's stretch ends, and the translation that follows it in the same process starts */
 const PREPARED = DOWNLOAD + (1 - DOWNLOAD) * PREPARE
-/**
- * Each stage of a prepare (our server's record's `prepare.stage`, its PREPARE_STAGES in order) at a fixed place on the prepare's
- * stretch, as a share of it: where the stage starts in the time a prepare takes, the mean of the two staging timelines of
- * 2026-11-11 (a new paper's, 2610.20266v1: 87.9 s; a paper prepared again after a deploy, 2610.21924v1: 95.6 s). Fetching is
- * short (10 % of the time), compiling the long one (59 % and 22 %), the units and their layout the rest, the bundle the last
- * few seconds. No time-based creeping: the line moves as the record's stage does, never back (ProgressLine)
- */
-const PREPARE_PLACES: Readonly<Record<string, number>> = {
-  fetching: 0.02,
-  compiling: 0.12,
-  units: 0.52,
-  'laying-out': 0.68,
-  bundle: 0.97,
-}
-/** a prepare's stage as the share of the prepare's stretch the line stands at: 0 before its first stage, or for a stage this reader
- *  does not know */
-export const prepareShare = (stage: string | null): number => (stage !== null && PREPARE_PLACES[stage]) || 0
 /** `held`: the original held on screen by the host's rules (heldOf): while the paper is made the line is the original's load, whole
  *  once it is read, as the website's page draws it there (its phase still the original's loading in the original's display, the
  *  maintainer's ruling that nothing a website reader sees changes at the cut-over: L11 third round, gap 3). `prepared`: this

@@ -199,7 +199,7 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}) {
     told = next
     const c: Capsule | null = capsuleOf(
       chrome,
-      { noticeClosed: false, narrowShown: false, refusalsSeen: 0 },
+      { noticeClosed: 0, narrowShown: false, refusalsSeen: 0 },
       LANGUAGES,
       WORDS,
     )

@@ -49,6 +49,7 @@ import {
   missingOf,
   type PaperContext,
   ranked,
+  runOf,
   shownAsOriginal,
   stopOf,
   viewOf,
@@ -879,7 +880,12 @@ export function openReader(
             ) {
               rowsDone = true
               rowsIn([])
-              emit(tg.state === 'failed' ? { i: 'rows.failed', t, why: { kind: 'server' } } : { i: 'rows.end', t })
+              // (a run failed: our server's time for the next, as its document names it, the retry's)
+              emit(
+                tg.state === 'failed'
+                  ? { i: 'rows.failed', t, why: { kind: 'server', retryAt: tg.retryAt ?? null } }
+                  : { i: 'rows.end', t },
+              )
               return
             }
             await new Promise<void>((resolve, reject) => {
@@ -1038,11 +1044,8 @@ export function openReader(
     const s = rt.state
     const r = s.rows
     const rowsView = { target: r.target, from: s.here ? ('here' as const) : ('server' as const) }
-    // (what the view shown has of the translation and waits for: the layer's units read, counted by the rows held; a run that may
-    // bring rows: the host's translate, or our server's run of the target running or to start, as the document read for it says)
-    const tg = s.docFor === r.target ? s.doc?.targets[r.target] : null
-    const run =
-      r.s === 'arriving' && (s.here || (tg !== null && (!tg || tg.state === 'running' || tg.state === 'none')))
+    // (what the view shown has of the translation and waits for: the layer's units read, counted by the rows held, as the run
+    // they come from stands: one that may bring rows, one that ended failed, rows.ts runOf)
     const view = viewOf({
       units: s.layer.s === 'ready' && unitsRead?.key === unitsKey(s.layer.units) ? unitsRead.units : null,
       classes: s.prefs.value.classes,
@@ -1050,7 +1053,7 @@ export function openReader(
       held: rowsTarget === r.target ? rows : new Map(),
       shown: s.layer.s === 'ready',
       laid: s.panes.laid > 0,
-      run,
+      ...runOf(s),
     })
     const count = { got: view.got, total: view.total, lost: view.lost }
     const p = panes as Panes | null

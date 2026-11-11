@@ -8,7 +8,7 @@ import { kindShown } from '../compose/classes.ts'
 import { committed, type Page } from '../compose/page.ts'
 import type { Prefs } from '../prefs.ts'
 import { plainOf } from './contents.ts'
-import type { RowsStop } from './machine.ts'
+import type { RowsStop, State } from './machine.ts'
 
 /** the paper's context, as a translator whose replies depend on it reads it (packages/translate's PaperContext) */
 export interface PaperContext {
@@ -94,13 +94,25 @@ export function shownAsOriginal(part: string | null | undefined, page: Page | nu
   if (part === null) return true
   return !!page && committed(page) && !page.members.some((m) => m.state === 'laid')
 }
+/** the run the view's rows come from, as the session states it: `run`, one that may bring rows is under way (the host's
+ *  translate; our server's run of the target running or to start, as the document read for it says); `failed`, it ended failed
+ *  (a unit shown with no translation then is a passage that failed, whether a row says so or none came) */
+export function runOf(s: State): { run: boolean; failed: boolean } {
+  const r = s.rows
+  const tg = s.docFor === r.target ? s.doc?.targets[r.target] : null
+  return {
+    run: r.s === 'arriving' && (s.here || (tg !== null && (!tg || tg.state === 'running' || tg.state === 'none'))),
+    failed: r.s === 'failed',
+  }
+}
 /** what the view shown has of the translation, and whether it waits for more (PDF-READER §6.6, §8) */
 export interface ViewRows {
   /** some unit of the layer shown has no translation held while a run that may bring it is under way */
   waits: boolean
   /** the units of the layer shown translated under the toggles (`total`), those of them with a translation held (`got`) and those
-   *  with a row that is none (`lost`): one statement over one set, so got + lost <= total, and got never falls while the layer
-   *  shown and the toggles stay (rows held are only added to, a translation never replaced by a failure: `keep`) */
+   *  that failed (`lost`: a row that is none, or, the run ended failed, no translation at all): one statement over one set, so
+   *  got + lost <= total, and got never falls while the layer shown and the toggles stay (rows held are only added to, a
+   *  translation never replaced by a failure: `keep`) */
   got: number
   total: number
   lost: number
@@ -124,6 +136,8 @@ export function viewOf(o: {
   laid: boolean
   /** a run that may bring rows is under way */
   run: boolean
+  /** the run ended failed (runOf) */
+  failed?: boolean
 }): ViewRows {
   if (!o.shown) return { waits: false, got: 0, total: 0, lost: 0 }
   if (!o.units) return { waits: o.run && !o.laid, got: 0, total: 0, lost: 0 }
@@ -135,7 +149,7 @@ export function viewOf(o: {
     total++
     const r = o.held.get(u.id)
     if (r?.ok) got++
-    else if (r) lost++
+    else if (r || o.failed) lost++
   }
   return { waits: o.run && got < total, got, total, lost }
 }

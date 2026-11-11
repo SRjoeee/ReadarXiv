@@ -74,6 +74,10 @@ export interface StateWords {
   busy?: (retryAt: number | null) => string
   /** at the limit of new papers (R.status.limited) */
   limited?: (retryAt: number | null) => string
+  /** the visitor's rate of asks, the reader asking again by itself at its time (R.status.limited) */
+  rate?: string
+  /** the network itself failed, or the browser is offline, the reader asking again by itself once it is back (R.status.notNow) */
+  network?: string
   /** a target the typesetter does not set, named by its own name (R.status.unsupported) */
   unsupported?: (language: string) => string
   /** passages that failed (S.failed.text) */

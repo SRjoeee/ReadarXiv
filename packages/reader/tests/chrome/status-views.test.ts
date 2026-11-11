@@ -51,18 +51,22 @@ describe("the capsule and the card (the reader's design, §6.6)", () => {
     expect(region.textContent).toContain('网络连接失败')
   })
 
-  it("a notice's 重试 retries, and its close is remembered for the visit", async () => {
+  it("a notice's 重试 retries, and its close is remembered for the visit unless more passages fail", async () => {
     const fake = fakeController({ phase: 'ready', failedUnits: 2, failure: 'network' })
     const { container } = await mountElement(capsuleOf(fake.controller))
     container.querySelector<HTMLElement>('button[data-action]')!.click()
     expect(fake.controller.retry).toHaveBeenCalledOnce()
     await act(async () => container.querySelector<HTMLElement>('button[aria-label="关闭"]')!.click())
-    await act(async () => fake.set({ failedUnits: 3 }))
+    // (the count falls as a retry brings passages: closed it stays)
+    await act(async () => fake.set({ failedUnits: 1 }))
     // past the closed notice's 160 ms way out
     await act(async () => {
       await new Promise((r) => setTimeout(r, 220))
     })
     expect(container.querySelector('[role="status"]')!.textContent).not.toContain('翻译失败')
+    // (more fail than were closed: told again)
+    await act(async () => fake.set({ failedUnits: 3 }))
+    expect(container.querySelector('[role="status"]')!.textContent).toContain('3 处翻译失败')
   })
 
   it("a notice's close is named in a tooltip, above it: the capsule stands near the foot of the page (P3-M11)", async () => {

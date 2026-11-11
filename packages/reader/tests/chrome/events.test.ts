@@ -2,7 +2,17 @@
 // hosts' pages go through, the website's (our server's rows, an address's target) and the extension's (rows made here, a key),
 // each as the chrome shows it.
 import { describe, expect, it } from 'vitest'
-import { DEFAULTS, eventsOf, INITIAL, kindOf, LAYER_WHY, type ReaderState, reduce } from '../../src/index.ts'
+import {
+  LASTING as CHROME_LASTING,
+  DEFAULTS,
+  eventsOf,
+  INITIAL,
+  kindOf,
+  LAYER_WHY,
+  type ReaderState,
+  reduce,
+} from '../../src/index.ts'
+import { LASTING as SESSION_LASTING } from '../../src/session/machine.ts'
 
 const base: ReaderState = {
   paper: { id: '2601.00002', version: 1, title: '', html: null, pdf: 'https://arxiv.org/pdf/2601.00002v1' },
@@ -147,6 +157,29 @@ describe("the reader's state as the chrome's", () => {
       available: true,
       unavailable: { why: 'busy', retryAt: 5 },
     })
+  })
+  it("one table says which refusals last (session/machine.ts LASTING): the chrome holds the paper's exactly where the session does", () => {
+    for (const [why, unavailable] of Object.entries(LAYER_WHY)) {
+      expect(CHROME_LASTING.has(unavailable), why).toBe(SESSION_LASTING.has(why as never))
+      const s = { ...open, layer: { s: 'refused' as const, why: why as never, retryAt: null } }
+      // (a passing refusal leaves the translated displays to be had: a retry asks again, machine.ts cmd.retry)
+      expect(fold([base, open, s]).available, why).toBe(!SESSION_LASTING.has(why as never))
+    }
+  })
+  it('a refusal told again with a new time: the chrome follows it (one source for the time said, status inventory 4.2.8)', () => {
+    const first = { ...open, layer: { s: 'refused' as const, why: 'limit' as const, retryAt: 60_000 } }
+    const again = { ...open, layer: { s: 'refused' as const, why: 'limit' as const, retryAt: 3_600_000 } }
+    expect(fold([base, open, first, again]).unavailable).toEqual({ why: 'refused', retryAt: 3_600_000 })
+    expect(eventsOf(again, again)).toEqual([])
+  })
+  it("the rows' counts after their end are the view's too, told whenever they change (Codex 4538550054)", () => {
+    // (a stored translation read whole before its layer's units are read: its end told at 0 of 0, then the units read)
+    const rows = (got: number, total: number) =>
+      ({ target: 'zh', from: 'server', s: 'complete', got, total, lost: 0, stopped: null }) as const
+    const ended = { ...open, rows: rows(0, 0) }
+    const read = { ...open, rows: rows(12, 12) }
+    expect(fold([base, open, ended, read]).translated).toEqual({ got: 12, total: 12 })
+    expect(eventsOf(read, read)).toEqual([])
   })
   it("rows failing: a key missing is the settings' card; out of reach the network; a refusal a bad request; a target the reader does not set its own notice", () => {
     expect(kindOf({ kind: 'server' })).toBe('network')
