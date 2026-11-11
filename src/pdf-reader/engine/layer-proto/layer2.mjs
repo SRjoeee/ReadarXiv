@@ -1173,6 +1173,16 @@ export function labelOf(out, unit, rects, charsByPage, gapsIn) {
   return gaps
 }
 /**
+ * Whether a unit's label stands on its first line (`rect`, the first line's rectangle: [page, x0, bottom, x1, top], tex.mjs
+ * texRects): every character on that page within the line's height. A float's label found by TeX's call may stand on a line of
+ * its own above the text (IEEEtran's "TABLE I", PDF-READER §18.29); this layer sets a relabel as its first line's start, so it
+ * relabels only a label on that line and keeps any other as the original's ink, as before such a label was found
+ */
+export function labelOnFirstLine(label, rect) {
+  const cs = label?.chars ?? []
+  return !!rect && cs.length > 0 && cs.every(c => c.page === rect[0] && c.yb >= rect[2] - 0.5 && c.yb <= rect[4] + 0.5)
+}
+/**
  * A float's label as the final sets it in the target (the table-groups brief, Problem 2): `label` the label v0 or the
  * layout file found on the unit's first line (labelOf: "Table 2:", the file's "Table2:"), `names` the target's names of a
  * figure and a table (the layout rules' labels: babel's, which the final prints), `captions` which of the two the final names so

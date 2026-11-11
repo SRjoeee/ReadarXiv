@@ -3948,6 +3948,10 @@ states, for each, what TeX knows (layout/marks.mjs POINTS_TEX); one move of the 
   moving argument, a file or a bookmark), never while the gate is off, and in vertical mode at the paragraph the label begins
   (para/begin, once). own.mjs MR 5 takes a caption's label from its last label point before its start mark, whatever line it
   stands on; a caption TeX set no point for has no label: the baseline is no longer read for a caption.
+- **Today's reader keeps an own-line label as before.** Today's layer sets a float's relabel as its first line's start; a
+  label on a line of its own would be carried into the text's line and its own line left blank, so it relabels a label only
+  on its unit's first line (`layer2.mjs` labelOnFirstLine) and keeps any other as the original's ink, as before the label was
+  found. v2 lays it as a row of its own (below).
 - **Each point read by its own reader alone** (stream.mjs `READ_ALONE`): `ka<k>` by own.mjs MR 5, `fn<n>` by the ledger; every
   other reading passes over them as over a bracket (the mark sequence an opening alone reads to, headInk's point before, the
   sequence points, instrument.mjs's stop): 2406.06525v1 p6's cell superscript, an opening alone after its cell's end mark,
