@@ -18,7 +18,9 @@
 // "no" alone, the term lost. So the break such a label follows, where no stop ends the text before it, states the line it
 // ends: its `stop` a line end, which a wire writes after the element so that the endpoint's sentence ends there (begun on its
 // own line, the label came back with its term). A break no label follows states nothing: a title or an affiliation broken
-// over lines is one phrase.
+// over lines is one phrase. A label with only elements between the break and itself (a list's mark set as a formula:
+// 2602.23285v2's "\\ $(ii)$ \textit{Accurate trajectory modeling.}", upright on staging while its "(i)" at the unit's head
+// kept its italic) begins its line as one right after the break does, as a group before the unit's first word begins the unit.
 //
 // A style group was one whose open names a style (STYLE_OPEN): a paper's macro never was, whatever TeX set it in. 2608.25210v2's
 // run-in heads are its `\newcommand{\topic}[1]{\vspace{.5pt} \noindent{\bf #1.}}` (staging, 2026-11-09: on no wire, back
@@ -156,9 +158,12 @@ export function runIns(content: Piece[], faced: ReadonlySet<Piece> = new Set()):
     for (let i = b; i < flat.length; i++) if (!SPACE.test(flat[i] as string)) return i
     return -1
   }
-  const solidBeforeAt = (a: number) => {
+  /** the solid character before a place past white space and the elements that are no break, so that a place right after a
+   *  forced break with only elements between (a list's mark set as a formula, `\\ $(ii)$ \textit{…}`) begins its line, as a
+   *  place before the unit's first word (`word`) begins the unit */
+  const lineBeforeAt = (a: number) => {
     let i = a - 1
-    while (i >= 0 && SPACE.test(flat[i] as string)) i--
+    while (i >= 0 && (SPACE.test(flat[i] as string) || (flat[i] === OBJ && !broken.has(i)))) i--
     return i
   }
   const breakAt = (i: number) => i >= 0 && broken.has(i)
@@ -192,7 +197,7 @@ export function runIns(content: Piece[], faced: ReadonlySet<Piece> = new Set()):
     // BibTeX's case protection `{GEPA}: Reflective...`)
     const label =
       !head &&
-      (starts || breakAt(solidBeforeAt(a))) &&
+      (starts || breakAt(lineBeforeAt(a))) &&
       (LABEL_END.test(inside) || LABEL_LEAD.test(next)) &&
       (s.open !== '{' || switched(s.content))
     const ends =
@@ -206,8 +211,9 @@ export function runIns(content: Piece[], faced: ReadonlySet<Piece> = new Set()):
       kept.add(s)
       edges.push(a, b)
     }
-    // (a label after a forced break, no stop ending the text before the break: the break ends the endpoint's sentence)
-    const at = solidBeforeAt(a)
+    // (a label after a forced break (elements alone between), no stop ending the text before the break: the break ends the
+    // endpoint's sentence)
+    const at = lineBeforeAt(a)
     const brk = broken.get(at)
     if (label && brk && brk.kind !== 'display' && !endsSentence(flat.slice(Math.max(0, at - WINDOW), at)))
       brk.stop = '\n'
@@ -232,8 +238,7 @@ export function runIns(content: Piece[], faced: ReadonlySet<Piece> = new Set()):
   }
   for (const [s, { a, b, starts, ends }] of seen) {
     if (kept.has(s)) continue
-    if ((starts || breakAt(solidBeforeAt(a)) || atEdge(a)) && (ends || breakAt(nextSolidAt(b)) || atEdge(b)))
-      kept.add(s)
+    if ((starts || breakAt(lineBeforeAt(a)) || atEdge(a)) && (ends || breakAt(nextSolidAt(b)) || atEdge(b))) kept.add(s)
   }
   for (const s of kept) s.must = 1
   return content

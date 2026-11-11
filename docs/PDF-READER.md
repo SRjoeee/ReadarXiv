@@ -4598,6 +4598,30 @@ has no put-back: it lost them too (lane bold-spans).
   word came back untranslated or in the wrong sense, lane bold-spans' probe), and a phrase whose reference the reply does not
   state.
 
+### 18.44 A run-in label after a forced break begins its line past the elements between (2026-11-11)
+
+2602.23285v2's contributions list (staging, zh and production alike): "(i) *Effective spatiotemporal modeling for ODE
+initialization.*" kept its italic, `\\ $(ii)$ \textit{Accurate trajectory modeling.}` came back upright. The run-in rule
+(`packages/engine` `marks/run-ins.ts`) keeps a style group whose two ends stand where the endpoint's sentence is cut anyway; a
+group at the unit's head begins its sentence (the unit's first word, past any element), and one right after a forced break
+begins its line. The second label stood after the break and then the list's mark, a formula, so the solid character before it
+was the formula's, not the break's: no rule read it as beginning a line, and on the markers wire its group went on no wire.
+
+- **The rule** (`run-ins.ts` `lineBeforeAt`). The place before a group is read past white space and the elements that are no
+  break, as `head` reads the unit's first word past its elements: a forced break so reached stands right before the group, for
+  every rule that reads one there (the boundary rule's start, a colon label after a break, and the line end such a break
+  states for it, the run-in rule's header). A word between the break and the group still ends the line's beginning.
+- **Measured** over r17's 88 bundles (every unit's content run through the rule as it stood and as it is, the same input to
+  both; scratch `span-putback/runin/count.mts`): 2 groups gain `must`, both run-in labels after a list's mark ("Accurate
+  trajectory modeling.", 2602.23285v2; "Q2 (Empirical).", 2610.21924v1); no forced break's stop moves. Stage 1a over the two
+  papers (r17's compiles): those two spans gain `must`, nothing else of either bundle moves (no id, no part); the differential
+  against B9's acceptance list reads exactly B9's (lost 11, gained 5,342, changed 5,157). `must` enters no id: the two units
+  keep their rows' ids and are sent again, their wires each a marker pair more.
+- **Not built: a label after a colon** ("… research questions: **RQ1.** Does …", its siblings after "?" kept). Read as a
+  sentence's start, a colon would add 91 groups in 17 papers, most no label: a bibliography's venue after "In:", a DOI after
+  "doi:", a title after "Source paper:", a whole question set in italics after "a question arises:", a figure's value after
+  its label ("Students: 29,241"). The coordinator's word is asked first (lane span-putback).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
