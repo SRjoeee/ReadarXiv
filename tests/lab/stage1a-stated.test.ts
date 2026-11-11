@@ -895,6 +895,50 @@ describe('(k) by group: a source unit the candidate writes as one source, a grou
 // (B of lane style-wire, the coordinator's ruling of 2026-11-11: `\%`, `\&`, `\#`, `\$`, `\{`, `\}` and textcomp's \textasciitilde,
 // \textbar, \textless, \textgreater, \textbackslash are characters of the candidate's text, so a unit holding one has a new id; it
 // is today's unit, written as today's TeX with each of those placeholders its character, wherever the two lay it)
+describe('a unit the candidate writes both ways: a group kept as an element for its pitch, the rest as (o) reads today\'s TeX', () => {
+  // (round 8 B8's merge of rebuild/b5-fixes and rebuild/style-wire: 2610.20848v1's references hold REVTeX's `\bibinfo` pairs
+  // and groups that carry nothing, which (o) writes as their content, and a link around a `{\tt …}` group the candidate keeps
+  // as an element for its pitch, which makes the whole link one placeholder of the same TeX. Each rule alone left such a unit
+  // unstated (31 units of 4 papers lost at r16); read together it is today's unit, written as v2 writes it, its one-pitch
+  // group the original's)
+  const today = () =>
+    unit(id('a'), 40, 'reference', [
+      { kind: 'open', src: '\\bibinfo{author}{' },
+      { kind: 'open', src: '{' },
+      text('De'),
+      { kind: 'close', src: '}' },
+      text(', K.'),
+      { kind: 'close', src: '}' },
+      text(', see '),
+      { kind: 'open', src: '\\href{http://x.org/1509}{' },
+      { kind: 'open', src: '{' },
+      ph('\\tt'),
+      text(' arXiv:1509'),
+      { kind: 'close', src: '}' },
+      { kind: 'close', src: '}' },
+      text('.'),
+    ])
+  const mine = (keptBy?: 'pitch') => {
+    const n = {
+      ...unit(id('b'), 40, 'reference', [text('De, K., see '), ph('\\href{http://x.org/1509}{{\\tt arXiv:1509}}'), text('.')]),
+      state: 'drawn',
+    }
+    n.elements = [{ k: 9, kind: 'code', segs: [box(110, 140, 600, 608, 598)], ...(keptBy ? { keptBy } : {}) }]
+    return n
+  }
+  it('states it written as the candidate’s unit with its group kept as the original', () => {
+    const got = statedOf([today()], [mine('pitch')])
+    expect(said(got)).toEqual([[40, `written as ${'b'.repeat(12)}: ${CAUSE.pitchGroup}`]])
+    expect(got[0].holder).toBe(id('b'))
+  })
+  it('states (o) where the placeholder holds no group kept for its pitch, and none where its TeX is not today’s', () => {
+    expect(said(statedOf([today()], [mine()]))).toEqual([[40, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+    const other = mine('pitch')
+    other.pieces = [text('De, K., see '), ph('\\href{http://x.org/1510}{{\\tt arXiv:1510}}'), text('.')].map((p, k) => ({ k, ...p }))
+    expect(said(statedOf([today()], [other]))).toEqual([])
+  })
+})
+
 describe("today's unit the candidate writes with its escaped characters as text", () => {
   it('is that unit, by its source, whatever line either lays it on', () => {
     const today = unit(id('a'), 263, 'para', [text('Gain of 5'), ph('\\%'), text(' on R'), ph('\\&'), text('D, see '), ph('$x$'), text('.')], [72, 300, 646])

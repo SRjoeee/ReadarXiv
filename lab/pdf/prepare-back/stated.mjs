@@ -144,12 +144,17 @@ const depthAt = (ps, from, at) => {
 /** today's TeX of a unit as v2 writes it: each text symbol that is a character of v2's text its character (a control word's
  *  skipped spaces and a group around it alone with it, as TeX reads them), the pieces of `drop` (the ends of the groups v2
  *  writes as their content) out, white space as one space; null where no piece is either */
-function writtenAs(ps, drop, marked = new Set()) {
+function writtenAs(ps, drop, marked = new Set(), verbatim = new Set()) {
   // (literal stretches, and where a command's pair stood that v2 writes as the marks it prints: those marks or nothing)
   const parts = ['']
-  let changed = drop.size > 0
+  let changed = drop.size > 0 || verbatim.size > 0
   for (let k = 0; k < ps.length; k++) {
     const p = ps[k]
+    // (a group v2 writes as one placeholder of the same TeX: as it is written, its symbols the source's)
+    if (verbatim.has(k)) {
+      parts[parts.length - 1] += p.kind === 'text' ? p.s : (p.src ?? '')
+      continue
+    }
     if (drop.has(k)) {
       if (marked.has(k)) parts.push(null, '')
       continue
@@ -682,6 +687,8 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     if (own || !(u.pieces ?? []).some((p) => p.kind === 'ph' && NOOP.test(p.src ?? ''))) return own
     return writtenWith(u, (u.pieces ?? []).flatMap((p) => (p.kind === 'ph' && NOOP.test(p.src ?? '') ? (entryPiecesOf(p.src) ?? [p]) : [p])))
   }
+  /** the candidates (o) found writing a group of today's as one placeholder of the same TeX (an element of theirs kept whole) */
+  const wroteVerbatim = new Set()
   /** the candidate's unit writing today's unit `u` with pieces `ps` (o), or null */
   const writtenWith = (u, ps) => {
     // (a bare group holding no declaration of its own, the instrument's rule read off today's pieces; then a command's pair the
@@ -692,9 +699,17 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     const all = units.filter((n) => {
       if (n.replaced || n.kind !== u.kind || baseIds.has(n.id)) return false
       const theirs = groupsIn(n.pieces ?? []).map((g) => g.src)
-      const drop = new Set(), marked = new Set()
+      const drop = new Set(), marked = new Set(), verbatim = new Set()
+      // (the candidate's placeholders' TeX: a group of today's it writes as one of them, an element it keeps whole (b5-fixes'
+      // group kept for its pitch, or a link around one), is today's TeX as it is written; the merge of round 8 B8)
+      const phs = new Set((n.pieces ?? []).filter((p) => p.kind === 'ph').map((p) => (p.src ?? '').replace(/\s+/g, ' ').trim()))
       let i = 0
       for (const g of groups) {
+        if (verbatim.has(g.open)) continue
+        if (g.close >= 0 && phs.has(texOf({ pieces: ps.slice(g.open, g.close + 1) }))) {
+          for (let k = g.open; k <= g.close; k++) verbatim.add(k)
+          continue
+        }
         if (bare(g)) { drop.add(g.open).add(g.close); continue }
         if (theirs[i] === g.src) { i++; continue }
         if (g.close < 0) return false
@@ -703,8 +718,10 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
         marked.add(g.open).add(g.close)
       }
       if (i !== theirs.length) return false
-      const same = writtenAs(ps, drop, marked)
-      return same?.(texOf(n)) ?? false
+      const same = writtenAs(ps, drop, marked, verbatim)
+      const ok = same?.(texOf(n)) ?? false
+      if (ok && verbatim.size) wroteVerbatim.add(n)
+      return ok
     })
     return all.find((n) => L && n.lines?.[0] && meets(L, n.lines[0])) ?? all.sort((a, b) => a.ord - b.ord)[0] ?? null
   }
@@ -719,7 +736,12 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
       }
       const n = charactersOf(u)
       if (n) {
-        out.push({ u, why: `written as ${n.id.slice(0, 12)}: ${CAUSE.characters}`, cause: 'characters', holder: n.id })
+        // ((k) by group read with (o): a group of today's the candidate writes as one placeholder of the same TeX, an element of
+        // its unit kept for its pitch, is (k) by group's statement, the rest of the unit as (o) reads it)
+        const pitched = wroteVerbatim.has(n) && (n.elements ?? []).some((e) => e.keptBy === 'pitch')
+        out.push(pitched
+          ? { u, why: `written as ${n.id.slice(0, 12)}: ${CAUSE.pitchGroup}`, cause: 'pitchGroup', holder: n.id }
+          : { u, why: `written as ${n.id.slice(0, 12)}: ${CAUSE.characters}`, cause: 'characters', holder: n.id })
         continue
       }
     }
