@@ -2373,7 +2373,7 @@ await check(
   },
 )
 await check(
-  "chrome: the original lost and the translation not to be had now, by the website's rules: its page's bare bar (its way home and the reading options alone), the capsule telling the refusal beside the original's own card; the extension's whole bar, its card, no capsule (L11 third round, gaps 4 and 5)",
+  "chrome: the original lost and the translation not to be had now, by the website's rules: its page's bare bar (its way home and the reading options alone), the capsule telling the refusal beside the original's own card; the extension's whole bar, its card with no retry (the session opens the original again by itself), no capsule (L11 third round, gaps 4 and 5; flow-fixes F2)",
   async () => {
     const seg = indexOf['s1-columns'].seg
     modes[seg] = { kind: 'refused' }
@@ -2408,7 +2408,10 @@ await check(
             said: capsule.querySelector('.sr-only')?.textContent ?? capsule.textContent,
           },
           left: !!document.querySelector('.pane[data-side="left"] .card a'),
-          right: !!document.querySelector('.pane[data-side="right"] .card button'),
+          right: document.querySelector('.pane[data-side="right"] .card') && {
+            words: document.querySelector('.pane[data-side="right"] .card p')?.textContent ?? null,
+            retry: !!document.querySelector('.pane[data-side="right"] .card button'),
+          },
         }
       })
       await context.close()
@@ -2431,7 +2434,9 @@ await check(
         own.seen.zones.lead?.includes('home') &&
           own.seen.zones.trail?.includes(en.zoom) &&
           own.seen.line &&
-          own.seen.right &&
+          // (its card, with no retry while the session opens the original again by itself: PDF-READER §8.1, flow-fixes F2)
+          own.seen.right?.words === 'The original could not be read' &&
+          !own.seen.right.retry &&
           own.seen.capsule === null,
         `the extension's: ${JSON.stringify(own.seen)}`,
       )
