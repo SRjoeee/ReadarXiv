@@ -1135,3 +1135,17 @@ describe.skipIf(!existsSync(ACCEPTANCE))("F3's statements in the differential's 
     expect(accepted(CAUSE.double)).toBe(true)
   })
 })
+
+describe("(r) F3's script: a figure text the engine cannot draw as it was set, the original's (the coordinator's ruling of 2026-11-11)", () => {
+  // (2610.22214v1 p4's a_mn x_n = b_m, 2610.20947v1 p3's μ̂: the dump's `keptBy: 'script'`, the candidate's own cause)
+  it('states the cause of a unit marked kept so', () => {
+    expect(keptWhyOf({ id: id('a'), keptBy: 'script', state: 'laid', why: 'unwrapped' })).toBe(CAUSE.script)
+  })
+})
+describe.skipIf(!existsSync(ACCEPTANCE))("F3's script in the differential's acceptance list", () => {
+  it('accepts a figure text kept as one the engine cannot draw as it was set', () => {
+    const accepted = (cause: string) =>
+      (JSON.parse(readFileSync(ACCEPTANCE, 'utf8')) as { accepted: { match: string }[] }).accepted.some((e) => new RegExp(e.match).test(cause))
+    expect(accepted(CAUSE.script)).toBe(true)
+  })
+})

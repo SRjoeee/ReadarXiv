@@ -491,9 +491,9 @@ export function lineEnd(gs: readonly DocGlyph[], q: number, o: LineEndOptions): 
 /** a glyph as accents.mjs reads one: its Unicode, font, size, its advance along its line, its baseline and its ink's top */
 type AccentGlyph = Pick<DocGlyph, 'u' | 'font' | 'size' | 'x0' | 'x1' | 'y' | 'top'>
 /** each spacing accent's combining mark (accents.mjs COMBINING) */
-const COMBINING = accents.COMBINING as ReadonlyMap<string, string>
+export const COMBINING = accents.COMBINING as ReadonlyMap<string, string>
 /** whether spacing accent `a` is set over letter `l` by TeX's \accent: the letter's accented form (NFC), or null */
-const accentOver = accents.accentOver as (a: AccentGlyph, l: AccentGlyph) => string | null
+export const accentOver = accents.accentOver as (a: AccentGlyph, l: AccentGlyph) => string | null
 /**
  * A run of glyphs (in stream order) with each spacing accent TeX set over its letter joined to that letter: one glyph, the
  * letter's, its text the accented letter. In Unicode an accent set over a letter is one character with it (NFC); TeX's

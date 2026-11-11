@@ -88,7 +88,7 @@ describe('figure-paras: TeX’s interline rule', () => {
   // (lines at size 10, \baselineskip 12: a line's ink 7 over its baseline and 2 under, 3 clear of the next; a line with a tall
   // formula, 10 over and 4 under, which TeX sets \lineskip 1 under the line above and over the line below)
   const tall = (y: number) => line(100, 296, y, { top: y + 10, bottom: y - 4 })
-  it('keeps a block whose lines TeX pushed apart for a tall one: its lines would touch at the pitch, \lineskip clear', () => {
+  it('keeps a block whose lines TeX pushed apart for a tall one: its lines would touch at the pitch, \\lineskip clear', () => {
     // (700 to 687: 13, clear 698 - 697 = 1; 687 to 675: 12, the baselineskip, clear 683 - 682 = 1; 675 to 663: 12, clear 3)
     const ls = [line(100, 290, 700), tall(687), line(100, 296, 675), line(100, 160, 663)]
     expect(joined(ls, drop)).toEqual([

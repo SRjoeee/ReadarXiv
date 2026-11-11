@@ -1078,6 +1078,9 @@ describe("a unit the prepare keeps by a rule's mark is the original's; one no ro
     const p = figs({ double: [50, 51] } as never)
     expect((p.diffs as D[]).find((d) => d.flag === 'figures')?.ruling).toMatch(/drawn twice/)
     expect(of('shown')(unit({ formula: [11] } as never))).toEqual([[false, 'ruling']])
+    // (and F3's script: a figure text the engine cannot draw as it was set)
+    expect(of('figures')(figs({ script: [50, 51] } as never))).toEqual([[false, 'ruling']])
+    expect((figs({ script: [50, 51] } as never).diffs as D[]).find((d) => d.flag === 'figures')?.ruling).toMatch(/cannot draw/)
   })
   it("figure texts fewer than today's by those v2's prepare kept by a mark, any mark: the ruling's", () => {
     expect(of('figures')(figs({ identifier: [50, 51] }))).toEqual([[false, 'ruling']])

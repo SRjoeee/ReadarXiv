@@ -114,6 +114,10 @@ export const CAUSE = Object.freeze({
   // ((q), F3: a figure text drawn twice over itself, kept as the original by the owner's ruling (two translations would be drawn
   // over each other; the dump's `keptBy: 'double'`, the engine's `double`): the candidate's own unit's cause)
   double: 'kept as the original: drawn twice',
+  // ((r), F3, the coordinator's ruling of 2026-11-11 on the owner's principle (a garbled translation never): a figure text the engine
+  // cannot draw as it was set, a script, an accent apart from its base, an element whose boxes stand over each other, is the
+  // original's (the dump's `keptBy: 'script'`, the engine's `script`, figure-lines.ts setApart): the candidate's own unit's cause)
+  script: 'kept as the original: a figure text the engine cannot draw as it was set (a script, an accent apart from its base)',
   // ((f): a unit the candidate does not make, every line of it inside a line the engine reads as a display's formula (a display
   // TeX's marked compile states, its text-mode glyphs read as text: locate's `displays`): the display's ink, kept with it — the
   // coordinator's ruling of 2026-11-09; 2608.08481v1 t118-t121, (7)'s and (8)'s parts)
@@ -171,7 +175,9 @@ export const keptWhyOf = (u) =>
         ? CAUSE.formula
         : u?.keptBy === 'double'
           ? CAUSE.double
-          : null
+          : u?.keptBy === 'script'
+            ? CAUSE.script
+            : null
 
 /** (l'): TeX's ligatures of a text face's input, its font's ligature table (Knuth's cmr, and every text font after it): an em dash,
  *  an en dash, the curly double and single quotes */

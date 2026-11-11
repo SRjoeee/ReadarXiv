@@ -240,9 +240,12 @@ function wordsOf(G, gs, fams) {
  *  footnote's mark Computer Modern sets in CMR7. A glyph set smaller on the baseline (small capitals) or off it at the line's
  *  size (a capital's accent, a raised box) is none. CHANGED: today's read a text face's glyph a formula's only after a math run,
  *  set at less than SCRIPT of the line's size within a size of the glyph before it and abutting it; every other script in a
- *  text face was the line's text, translated and drawn on its baseline at its size */
-function scriptsOf(G, order) {
-  const body = modeOf(order.map(g => r2(G[g].size)))
+ *  text face was the line's text, translated and drawn on its baseline at its size. A figure text's own glyphs are read by it
+ *  too (figure-lines.ts setApart, F3's `script`: one definition of a script for both), its row's text size its `largest`: a short
+ *  label's scripts can outnumber its letters (2610.22214v1 p4's a_mn x_n = b_m: four of seven glyphs), and a script is set
+ *  smaller than its base (TeX's \scriptstyle) */
+export function scriptsOf(G, order, largest = false) {
+  const body = largest ? Math.max(...order.map(g => r2(G[g].size))) : modeOf(order.map(g => r2(G[g].size)))
   const base = modeOf(order.filter(g => r2(G[g].size) === body).map(g => r2(G[g].y)))
   const out = new Map()
   for (const g of order) if (r2(G[g].size) < body && r2(G[g].y) !== base) out.set(g, r2(G[g].y) > base ? 1 : -1)

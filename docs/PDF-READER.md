@@ -4362,6 +4362,14 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
   reading kept 402 texts for ink in the open, 201 for ink inside their own path and 124 for another text's glyph
   (`made.lines.kept`). Known and not fixed: a translation centred on the original's anchor can stand under an arrow's shaft whose
   gap was cut for the Latin letters' ink, a CJK em taller (2610.21924v1 p5).
+- **What the engine cannot draw as it was set stays the original's** (`script`, the coordinator's ruling of 2026-11-11 on the
+  owner's principle that a garbled translation is never shown): a figure text holding a script among its own glyphs (smaller
+  than its row's text and off its baseline: today's one definition, ink-units.mjs scriptsOf, the row's text size its largest),
+  a note mark after a word aside (a raised ∗ † ‡ § ¶, or a number ending the row), or a spacing accent or a combining mark set
+  over another of its glyphs that TeX's \accent did not set over its letter (its elements' glyphs too), is kept as the original's
+  ink, as a formula line is. Translated, the first is drawn flat (2610.22214v1 p4's a_mn x_n = b_m drawn "amn xn = bm"), the
+  second apart from its base (2610.20947v1 p3's μ̂ drawn "^ μ"). Census over the 91 (offline, arXiv's glyphs): 14 texts in 9
+  papers drawn so before it, 5 of them freed by step 2. Its own glyphs alone: a neighbour's smaller text in its band is none.
 - **One family.** Two fonts are one family where their names, subset tag off, are equal before the first hyphen (DejaVuSans and
   DejaVuSans-Oblique, NimbusRomNo9L-Regu and -Medi), or equal once PDF.js's own style words (its /bold/i, /italic|oblique/i,
   /Black/) and the hyphens are taken out: ArialMT and Arial-BoldMT, TimesNewRomanPSMT and TimesNewRomanPS-ItalicMT; never ArialMT

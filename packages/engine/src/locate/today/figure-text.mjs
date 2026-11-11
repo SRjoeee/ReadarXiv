@@ -909,6 +909,13 @@ function shapeRoom(shape, f, band, along1, free1, e, after = false, under1 = nul
   const { segs, hw } = shape, w = shape.stroke ? hw : 0
   const t0 = band[1] - w, t1 = band[3] + w
   const under = under1 && shape.stroke && !shape.fill && !after
+  // (a dot: every point of the path within its own line's width of every other)
+  let dot = false
+  if (under) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+    for (let i = 0; i + 1 < segs.length; i += 2) { x0 = Math.min(x0, segs[i]); x1 = Math.max(x1, segs[i]); y0 = Math.min(y0, segs[i + 1]); y1 = Math.max(y1, segs[i + 1]) }
+    dot = x1 - x0 < 2 * w && y1 - y0 < 2 * w
+  }
   const parts = []
   for (let i = 0; i + 3 < segs.length; i += 4) {
     const as = along(f, segs[i], segs[i + 1]), ts = across(f, segs[i], segs[i + 1]), ae = along(f, segs[i + 2], segs[i + 3]), te = across(f, segs[i + 2], segs[i + 3])
@@ -925,7 +932,10 @@ function shapeRoom(shape, f, band, along1, free1, e, after = false, under1 = nul
     if (under) {
       const top = Math.max(ts + (te - ts) * lo, ts + (te - ts) * hi) + w
       const a = Math.max(Math.min(p, q) - w, e[0] - SHOWN_SLACK), b = Math.min(Math.max(p, q) + w, e[2] + SHOWN_SLACK)
-      if (top < 0 && a <= b && b > band[0] && a < band[2]) { under1(top, a, b); continue }
+      // (CHANGED, F3: a path whose extent is less than its own line's width is a dot, no line under the text: 2608.06701v1 p9's
+      // member 651, a stroke 0.014 long and 0.16 wide 0.32 pt under its baseline read as a stroke 0.06 under it, every CJK
+      // translation's em box crowded by it, the line left the original's. A curve of short segments is a line as before)
+      if (top < 0 && a <= b && b > band[0] && a < band[2]) { if (!dot) under1(top, a, b); continue }
     }
     parts.push([Math.min(p, q) - w, Math.max(p, q) + w])
   }

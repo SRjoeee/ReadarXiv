@@ -224,8 +224,9 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   // `figure: identifier` (locate/ink.ts: figure texts hold no element): `keptBy: 'identifier'`; the parity reads all three,
   // join.mjs candidateKept. Never two: `pitch` marks source units and figure texts set at one pitch, `address` kept blocks,
   // `identifier` the other figure texts; a figure's line no word of which stands outside its formulas, kept whole, the engine's
-  // `formula` (F1, rebuild/fig-text): `keptBy: 'formula'`; a figure text drawn twice, the engine's `double` (F3): `keptBy: 'double'`)
-  const keptBy = u.pitch ? 'pitch' : u.address ? 'address' : u.formula ? 'formula' : u.double ? 'double' : u.why === 'figure: identifier' ? 'identifier' : null
+  // `formula` (F1, rebuild/fig-text): `keptBy: 'formula'`; a figure text drawn twice, the engine's `double` (F3): `keptBy: 'double'`; one the engine cannot draw as it was set, its
+  // `script` (F3): `keptBy: 'script'`)
+  const keptBy = u.pitch ? 'pitch' : u.address ? 'address' : u.formula ? 'formula' : u.double ? 'double' : u.script ? 'script' : u.why === 'figure: identifier' ? 'identifier' : null
   const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), ...(keptBy ? { keptBy } : {}), text: textOfPieces(pieces), pieces }
   if (u.kind === 'name') { units.push({ ...base, state: 'unlaid', why: 'name: drawn by its own group, never laid as a unit' }); states.unlaid++; return }
   if (!mem || !mem.located) { units.push({ ...base, state: 'unlaid', why: mem?.cause?.startsWith('content difference') ? mem.cause : `unlocated: ${mem?.cause ?? u.why ?? 'no ink'}` }); states.unlaid++; return }

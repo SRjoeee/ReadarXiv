@@ -257,7 +257,7 @@ export function inkOf(o: InkInput): {
     ends: 0,
     boxed: fig.stats?.boxed ?? 0,
     interior: fig.stats?.interior ?? 0,
-    kept: { double: 0, torn: 0, today: 0, code: 0, formula: 0, inked: 0 },
+    kept: { double: 0, torn: 0, today: 0, code: 0, formula: 0, script: 0, inked: 0 },
   }
   const texts = figureLinesOf(pages, fig, (p, g) => figOwn[p - 1]?.[g] != null, o.fixed ?? null, textFaces, work)
   // (each text by its first run; the runs it takes after its first, and those wholly a doubled copy of a text's glyphs: no
@@ -475,6 +475,7 @@ export function inkOf(o: InkInput): {
               fixed: true as const,
               ...(t?.why === 'formula' ? { formula: true as const } : {}),
               ...(f.double ? { double: true as const } : {}),
+              ...(f.script ? { script: true as const } : {}),
             }
           : o.artefact?.(text, turned)
             ? { why: 'figure: code', fixed: true as const, pitch: true as const }
@@ -677,6 +678,7 @@ function figureTextOf(
             ...(t.why === 'code' ? { pitch: true as const } : {}),
             ...(t.why === 'formula' ? { formula: true as const } : {}),
             ...(fig.units[t.ks[0]!]?.double ? { double: true as const } : {}),
+            ...(t.why === 'script' ? { script: true as const } : {}),
           }
         : {}),
     },
