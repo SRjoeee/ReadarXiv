@@ -178,3 +178,63 @@ describe('figure-text: the closed paths that hold units alone (F3’s container 
     expect(containersOf(pg([rect(1, 78, 670, 122, 695)]), units, 1).map((h: { b: number }) => h.b)).toEqual([1])
   })
 })
+
+describe('figureUnitsOf reads no line under a text in a dot (F3, 2608.06701v1 p9)', () => {
+  // (a word at (100, 100), 10 pt, in a picture, and the strokes given: a zero-length path under its middle 0.32 under its baseline,
+  // half width 0.25, member 651's dot ("Thought: Let's carefully review the 'run' method logic", read as a stroke 0.06 under it,
+  // every CJK translation's em box crowded by it, the line left the original's)
+  const word = (strokes: number[][]) => {
+    const glyphs = [...'jury'].map((u, i) => ({
+      u,
+      n: 0,
+      k: i,
+      x0: 100 + 5 * i,
+      x1: 105 + 5 * i,
+      ix0: 100 + 5 * i,
+      ix1: 105 + 5 * i,
+      y: 100,
+      top: 107,
+      bottom: 98,
+      size: 10,
+      font: 'CMR10',
+      fill: 0,
+    }))
+    const boxes: number[] = []
+    const shapes = new Map()
+    for (const s of strokes) {
+      shapes.set(boxes.length / 4, { segs: Float32Array.from(s), stroke: true, fill: false, hw: 0.25 })
+      boxes.push(
+        Math.min(s[0]!, s[2]!) - 0.25,
+        Math.min(s[1]!, s[3]!) - 0.25,
+        Math.max(s[0]!, s[2]!) + 0.25,
+        Math.max(s[1]!, s[3]!) + 0.25,
+      )
+    }
+    const pg = {
+      glyphs,
+      turned: [],
+      boxes,
+      shapes,
+      pictures: [
+        { name: 'zs', glyph: 0, box: 0 },
+        { name: 'ze', glyph: glyphs.length, box: boxes.length / 4 },
+      ],
+      points: [],
+    }
+    return figureUnitsOf(
+      [{ ...pg, view: [0, 0, 300, 300], figures: new Map([['0:0', [0, 0, 300, 300]]]) }] as never,
+      null,
+    ).units[0]! as { why: string | null; under: number | null }
+  }
+  it('reads none in a dot under it, and a rule under it as before', () => {
+    expect([word([[110, 99.68, 110, 99.68]]).why, word([[110, 99.68, 110, 99.68]]).under]).toEqual([null, null])
+    // (the cell's rule 2.4 under the baseline stands past the text's band: none; a gridline inside it is its stroke under, as before)
+    const dotAnd = (y: number) =>
+      word([
+        [110, 99.68, 110, 99.68],
+        [60, y, 240, y],
+      ]).under
+    expect(dotAnd(97.6)).toBeNull()
+    expect(dotAnd(98.3)).toBeCloseTo(1.45, 4)
+  })
+})
