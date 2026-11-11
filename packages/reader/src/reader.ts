@@ -27,11 +27,11 @@ import { type Contents, createContents, type OutlineEntry, type Rect } from './s
 import {
   againOf,
   type Doc,
-  linkSaid,
   displayOf,
   type Effect,
   init,
   type LayerWhy,
+  lookSaid,
   type OriginalWhy,
   type PaperRef,
   type Prefs,
@@ -51,11 +51,9 @@ import {
   missingOf,
   type PaperContext,
   ranked,
-  rowsTold,
-  runOf,
   shownAsOriginal,
   stopOf,
-  viewOf,
+  toldWait,
 } from './session/rows.ts'
 import { createRuntime, type Handlers, type Runtime } from './session/runtime.ts'
 import { ownedClock } from './stack/clock.ts'
@@ -125,7 +123,16 @@ export interface ReaderState {
     | { s: 'none' }
     /** `stage`: the prepare's as our server's record names it, null before the first (the progress line's place: status.ts) */
     | { s: 'preparing'; stage: string | null }
-    | { s: 'ready'; laid: number; total: number; asOriginal: number }
+    /** `stopped`: our server's look stopped, or paused from one of the session's own asks to the next, while the view lacks what
+     *  its work would bring (rows.ts toldWait): its cause, our server's time, whether the session asks again by itself (the
+     *  network's is `network`) */
+    | {
+        s: 'ready'
+        laid: number
+        total: number
+        asOriginal: number
+        stopped?: { why: LayerWhy; retryAt: number | null; self?: true }
+      }
     | { s: 'refused'; why: LayerWhy; retryAt: number | null; self?: true }
   /** the rows of the target. Their counts are the view's, one statement (session/rows.ts viewOf): the units of the layer shown
    *  that the toggles show translated (`total`), those with a translation held (`got`), those with a row that is none (`lost`);
@@ -1054,24 +1061,19 @@ export function openReader(
   function stateOf(): ReaderState {
     if (told) return told
     const s = rt.state
-    const r = s.rows
     // (what the view shown has of the translation and waits for: the layer's units read (while a new layer's are not, those last
-    // read, of the layer whose pages are on screen), counted by the rows held, as the run they come from stands: one that may
-    // bring rows, one that ended failed, more coming while our server still works for the view, rows.ts runOf)
-    const run = runOf(s)
-    const view = viewOf({
+    // read, of the layer whose pages are on screen), counted by the rows held, as the run they come from stands and the system
+    // still works for it, and our server's look over it: rows.ts toldWait)
+    const wait = toldWait(s, {
       units: s.layer.s === 'ready' ? unitsRead : null,
       classes: s.prefs.value.classes,
       // (the rows held are the target's once its rows are taken: another's before that)
-      held: rowsTarget === r.target ? rows : new Map(),
+      held: rowsTarget === s.rows.target ? rows : new Map(),
       shown: s.layer.s === 'ready',
       laid: s.panes.laid > 0,
-      run: run.run,
-      ahead: run.ahead,
-      failed: run.failed,
     })
     const p = panes as Panes | null
-    const l = s.link
+    const look = lookSaid(s)
     const again = againOf(s)
     const self = (on: boolean) => (on ? { self: true as const } : {})
     told = {
@@ -1090,21 +1092,30 @@ export function openReader(
           : s.original.s === 'failed'
             ? { s: 'failed', why: s.original.why, ...self(again.original) }
             : { s: 'opening', loaded: s.original.loaded, total: s.original.total },
-      // (the look stopped with no layer to show: a 429's wait or our server out of reach, as a passing refusal; a prepare under
-      // way keeps its units, and rows made from them go on)
+      // (the look stopped, or paused from one of the session's asks to the next, with no layer to show: a 429's wait, the network or
+      // our server out of reach, as a passing refusal (lookSaid); over a layer shown, its `stopped` where the view lacks what the
+      // work would bring; a prepare under way keeps its units, and rows made from them go on)
       layer:
         s.layer.s === 'ready'
-          ? { s: 'ready', laid: s.panes.laid, total: head?.paper.pages ?? 0, asOriginal: asOriginalNow() }
+          ? {
+              s: 'ready',
+              laid: s.panes.laid,
+              total: head?.paper.pages ?? 0,
+              asOriginal: asOriginalNow(),
+              ...(wait.stopped
+                ? { stopped: { why: wait.stopped.why, retryAt: wait.stopped.retryAt, ...self(wait.stopped.self) } }
+                : {}),
+            }
           : s.layer.s === 'refused'
             ? { s: 'refused', why: s.layer.why, retryAt: s.layer.retryAt, ...self(again.layer) }
-            : l.s === 'stopped'
-              ? { s: 'refused', why: l.why, retryAt: l.retryAt, ...self(again.layer) }
+            : look
+              ? { s: 'refused', why: look.why, retryAt: look.retryAt, ...self(look.self) }
               : s.layer.s === 'preparing'
                 ? { s: 'preparing', stage: s.layer.stage }
                 : { s: 'none' },
       // (a failed run the session asks again at once, and rows ended while more comes for the view, are the run the reader waits
       // for: told as arriving, rows.ts rowsTold)
-      rows: rowsTold(s, view, run),
+      rows: wait.rows,
       view: {
         display: displayOf(s),
         sync: { on: s.visit.sync ?? s.prefs.value.sync, available: !!p?.doc && syncAvailable },
@@ -1118,7 +1129,8 @@ export function openReader(
         outline,
         heading,
       },
-      ...linkSaid(s, view.waits),
+      reconnecting: wait.reconnecting,
+      network: wait.network,
       faces: facesLost ? 'lost' : null,
       crashed,
     }

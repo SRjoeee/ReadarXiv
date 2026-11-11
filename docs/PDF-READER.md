@@ -442,9 +442,9 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
   (`rows.ts` `runOf`, `aheadOf`; the coordinator's R3 of 2026-11-12, from the record's fields alone, never a time): its
   prepare running (`prepare.state`: a layer lands at its end, and the target's run over its units follows, our server's
   own start of a run on units it has not run, or this session's open), or a need of the visit (`needsOf`) that the session
-  asks by itself now, its open under way or not yet asked, no wait named for it and the look not stopped but for the
-  network: the prepare of a stale `layer`, the target `done` on other `units` than the layer's (an attempt covers the layer
-  where its units are the layer's own, by digest). Rows that ended meanwhile are told as arriving (`rowsTold`), and the one
+  asks, its open under way or not yet asked with no wait named for it: the prepare of a stale `layer`, the target `done` on
+  other `units` than the layer's (an attempt covers the layer where its units are the layer's own, by digest). That work, and
+  the target's own run, are waited for only while the system still works for this reader by itself (§8.1, `goesOn`). Rows that ended meanwhile are told as arriving (`rowsTold`), and the one
   wait goes on: on staging 2026-11-12, 2010.11929v2 (a stale layer, no translation under the chain) counted 356 of 435,
   left the moment attempt 1 was done while the prepare still ran, and came back 6.8 s later at the new layer's attempt 2.
   Its count is one statement over that set: those
@@ -753,6 +753,25 @@ spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while
   heard. A stream that broke while the browser is online and is opened again is reconnecting (the system acting, nothing for the
   reader to do). A reader only reading a finished translation is told neither: nothing is waited for. With no layer shown, the
   network's stop is the layer's refusal for now, as before.
+- **One definition of the system still working for this reader** (the coordinator's R6 of 2026-11-12; integration's B11 F1,
+  F2): our server's look on, or stopped for a cause the session goes on from by itself, with no period to end and nothing of the
+  reader's (`GOES_ON`: our server at capacity, the visitor's rate of asks, the network; `goesOn`). The one table is the
+  session's (`machine.ts`): the view's wait reads it (`rows.ts` `runOf` `live`), the session's own next ask (a cause in it is
+  always asked again: `refusedFor`'s wake), what it asks again by itself (`againOf`) and the chrome's display and words
+  (`model.ts`, `status.ts` `GOES_ON`, made from it). Before it, the view's wait read a narrower test (the look on, or stopped for
+  the network), so a queue over a shown layer flipped the wait to done and back at every one of the session's re-asks, 1, 2, 4,
+  8 s apart, the progress line flashing each time; and a prepare running by the last document kept a wait whose look had stopped
+  for good (our server out of reach), its count still, nothing offered.
+- **A wait the session carries on by itself is one wait** (R7): its cause is said as round B10 words it (the website's
+  `queued`, `rate` and `network` words, §8's table), over the run it pauses (the queue a run's stage, the rate and the network over its
+  count), the run's phase kept (`model.ts`: an `unavailable` of a cause in `GOES_ON` the session asks again by itself), so its
+  line goes on, nothing reads as done, and the cause stays said from one of the session's asks to the next until an answer
+  moves the paper on (`lookSaid`: the refusal's cause kept, `pacing`; the network until a document is heard). Over a layer
+  shown it is said as where none is (the reader's `layer.stopped`, while the view lacks what the work would bring).
+- **Where the session will not go on by itself, the wait is over** (R8): the limit of new papers (with its time; its first
+  asks the session's own, at that time, asking nothing of the reader: no retry, §8.1's first bullet), our server out of reach
+  (a retry at once), past the limit's asks (a retry at its time): the notice as round B10 words it, over a layer shown too,
+  never a count that does not move with nothing offered.
 - **The display the reader chose is kept while the session goes on by itself** (flow-fixes F5 and (b), the coordinator,
   2026-11-12): with no period to end and nothing of the reader's (our server at capacity, the visitor's rate of asks, the network:
   `goesOnNow`), the page stands as it does in the first-time wait, the display chosen kept and the translated displays to be

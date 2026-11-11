@@ -508,6 +508,23 @@ describe("a run under way in a host's words (the website's stage and count)", ()
     expect(kind()).toBe('progress')
   })
 
+  it("a run paused by a cause the session goes on from: the pause's capsule says the wait, the region adds no run's word beside it (the first making's pause never says the paper is being prepared: the coordinator's R7, decision 1)", async () => {
+    const { set, kind, container } = await mounted({ words: { ...words, network: 'network down', rate: 'too many' } })
+    const region = () =>
+      [...container.querySelectorAll('[role="status"] > .sr-only')].map((e) => e.textContent).join(' | ')
+    // (the first making, paused by the network: its phase kept, the network's words alone)
+    await set({ phase: 'preparing', made: true, preparing: { progress: 0.12 }, network: true })
+    expect([kind(), region()]).toEqual(['notNow', ''])
+    // (a counted run paused by the visitor's rate, as the session tells it: the rate's words alone)
+    await set({
+      network: false,
+      preparing: null,
+      ...translating(7),
+      unavailable: { why: 'rate', retryAt: null, self: true },
+    })
+    expect([kind(), region()]).toEqual(['notNow', ''])
+  })
+
   it("enters once its wait has lasted 400 ms: a wait of 300 ms shows nothing, and says nothing (the coordinator's decision 3, 2026-11-11)", async () => {
     const { container, wait, set, kind } = await mounted()
     await set(translating(3))

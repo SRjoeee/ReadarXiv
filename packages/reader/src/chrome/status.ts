@@ -4,7 +4,7 @@
 // language's own name drawn in that language. Every sentence is the catalogue's, or the host's for its state where it gives
 // one (parts.tsx StateWords: the website's own)
 import { O, type ProviderErrorKind, R, S } from '@readarxiv/ui'
-import { LASTING, type ReaderState } from './model.ts'
+import { GOES_ON as GOES_ON_WHY, LASTING, type ReaderState, type Unavailable } from './model.ts'
 import { type CapsuleWords, plain, withCount, withPart } from './capsule-words.ts'
 import { ARXIV_ORIGIN, linkable } from './links.ts'
 import type { Languages, Parts, StateWords } from './parts.tsx'
@@ -48,7 +48,11 @@ export type Cause = 'quota' | 'busy' | 'rate' | 'network' | 'server'
 export function causeOf(state: ReaderState): Cause | null {
   // (the network down while a run is waited for, whatever is on screen: the run's own word for it)
   if (state.network) return 'network'
-  switch (state.unavailable?.why) {
+  return causeFor(state.unavailable?.why)
+}
+/** a refusal for now's cause, by the chrome's word for it */
+function causeFor(why: Unavailable | undefined): Cause | null {
+  switch (why) {
     case 'refused':
       return 'quota'
     case 'busy':
@@ -189,9 +193,17 @@ export function capsuleOf(
       action: 'language',
     }
   }
-  // the network down while a run is waited for: said over the run's count, which cannot move until it is back (the session
-  // asks again by itself then: no retry), and the count again once it is (PDF-READER §8.1)
-  if (state.network) return { kind: 'notNow', words: plain(words.network ?? R.status.notNow), self: true }
+  // a wait the session goes on from by itself, said over the run it pauses (the coordinator's R7, 2026-11-12): the network down
+  // while a run is waited for, over the count, which cannot move until it is back (the session asks again by itself then: no
+  // retry), and the count again once it is (PDF-READER §8.1); the visitor's rate likewise; our server at capacity is the queue, a
+  // run's stage where the host words it (stageOf)
+  const paused = running(state) && goesOnNow(state) && causeOf(state) !== 'busy'
+  if (state.network || paused)
+    return {
+      kind: 'notNow',
+      words: plain(causeOf(state) === 'rate' ? (words.rate ?? R.status.limited) : (words.network ?? R.status.notNow)),
+      self: true,
+    }
   // a run under way, where the host words it (the website's stage and count); else the progress line alone shows it
   const stage = stageOf(state)
   // (the translation not on screen and some of it there: the host's chip shows it)
@@ -205,7 +217,8 @@ export function capsuleOf(
   // (a 429 of the visitor's new papers is our server's limit, said as such with its time: past the run's few waits it asks no
   // more by itself, and the reader's retry is what asks again, #88 E5; busy, its capacity, the queue where the host words it
   // (stageOf), else said as the limit; the rate of asks and the network, which the reader waits out by itself, with no time)
-  if (!running(state) && cause) {
+  // (a run paused by a cause the session goes on from: its refusal's words where the host words no stage for it, the extension's)
+  if ((!running(state) || goesOnNow(state)) && cause) {
     // (the time is said while it is to come, and while the session will ask by itself at it, until that ask begins: never the bare
     // sentence between the instant and the ask; one the reader is to retry at drops once it has come. The chrome decides, the
     // host's words say the time they are given)
@@ -296,8 +309,9 @@ export function lineOf(state: ReaderState, held = false, prepared = false): Line
 }
 
 /** the causes the session goes on from by itself with no period to end and nothing of the reader's: our server at capacity (the
- *  queue), the visitor's rate of asks (a minute at most), the network (asked again once it is back) */
-const GOES_ON: ReadonlySet<Cause> = new Set<Cause>(['busy', 'rate', 'network'])
+ *  queue), the visitor's rate of asks (a minute at most), the network (asked again once it is back): the session's one table
+ *  (session/machine.ts GOES_ON), as the chrome names its causes */
+const GOES_ON: ReadonlySet<Cause> = new Set<Cause>([...GOES_ON_WHY].map(causeFor).filter((c): c is Cause => c !== null))
 /** a wait the session goes on from by itself (GOES_ON): a wait, as the first-time wait is, never a refusal; the display the reader
  *  chose is kept through it (the coordinator, 2026-11-12) */
 export const goesOnNow = (state: ReaderState): boolean => {

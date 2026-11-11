@@ -9,7 +9,7 @@ import { committed, type Page } from '../compose/page.ts'
 import type { Prefs } from '../prefs.ts'
 import { plainOf } from './contents.ts'
 import type { ReaderState } from '../reader.ts'
-import { againOf, needsOf, type RowsStop, type State } from './machine.ts'
+import { againOf, goesOn, type Look, linkSaid, lookSaid, needsOf, type RowsStop, type State } from './machine.ts'
 
 /** the paper's context, as a translator whose replies depend on it reads it (packages/translate's PaperContext) */
 export interface PaperContext {
@@ -95,13 +95,22 @@ export function shownAsOriginal(part: string | null | undefined, page: Page | nu
   if (part === null) return true
   return !!page && committed(page) && !page.members.some((m) => m.state === 'laid')
 }
-/** the run the view's rows come from, as the session states it: `run`, one that may bring rows is under way (the host's
- *  translate; our server's run of the target running or to start, as the document read for it says; one that failed and is
- *  asked again now, its open under way or due at once: `asking`; or, none of these, rows that arrive or ended while our server
- *  still works for the view: `ahead`); `failed`, it ended failed and nothing asks it again now (a unit shown with no translation
- *  then is a passage that failed, whether a row says so or none came). A failure the session asks again at once is no failure
- *  to tell: the reader waits for the run it asks (PDF-READER §8.1) */
-export function runOf(s: State): { run: boolean; failed: boolean; asking: boolean; ahead: boolean } {
+/** the run the view's rows come from, as the session states it: `own`, one that may bring rows is under way (the host's translate;
+ *  our server's run of the target running or to start, as the document read for it says; one that failed and is asked again now,
+ *  its open under way or due at once: `asking`); `ahead`, none of these, rows that arrive or ended while our server still has work
+ *  for the view; `live`, the system still works for this reader by itself (goesOn: our server's look on, or stopped for a cause
+ *  the session goes on from; rows made here, the host's); `run`, work (own or ahead) that goes on (live). `failed`, it ended
+ *  failed and nothing asks it again now (a unit shown with no translation then is a passage that failed, whether a row says so
+ *  or none came). A failure the session asks again at once is no failure to tell: the reader waits for the run it asks
+ *  (PDF-READER §8.1) */
+export function runOf(s: State): {
+  run: boolean
+  own: boolean
+  ahead: boolean
+  live: boolean
+  failed: boolean
+  asking: boolean
+} {
   const r = s.rows
   const tg = s.docFor === r.target ? s.doc?.targets[r.target] : null
   const asking = r.s === 'failed' && againOf(s).rows === 'now'
@@ -109,26 +118,24 @@ export function runOf(s: State): { run: boolean; failed: boolean; asking: boolea
     asking ||
     (r.s === 'arriving' && (s.here || (tg !== null && (!tg || tg.state === 'running' || tg.state === 'none'))))
   const ahead = !own && (r.s === 'arriving' || r.s === 'complete') && aheadOf(s)
-  return { run: own || ahead, failed: r.s === 'failed' && !asking, asking, ahead }
+  const live = s.here || goesOn(s)
+  return { run: (own || ahead) && live, own, ahead, live, failed: r.s === 'failed' && !asking, asking }
 }
 /**
- * More of the target's translation comes for the view without the reader's acting, as the document read for the target states
- * it (PDF-READER §8, the coordinator's R3 of 2026-11-12; never a time): our server's prepare running (`prepare.state`: a layer
- * lands at its end, and the target's run over its units follows, started by our server on units it has not run, worker v2
- * machine.ts startRecent, or asked by this session's open, needsOf); or a need of the visit (needsOf: the prepare of a stale
- * `layer`, the target `done` on other `units` than the layer's) that the session asks by itself now: its open under way, or not
- * yet asked, no wait named for it, and the look not stopped but for the network, which it asks again by itself once back. The
- * target's attempt covers the layer where its `units` are the layer's own (needsOf's comparison by digest). Rows made here: the
- * host's run alone
+ * Our server's work for the view without the reader's acting, as the document read for the target states it (PDF-READER §8, the
+ * coordinator's R3 of 2026-11-12; never a time): its prepare running (`prepare.state`: a layer lands at its end, and the target's
+ * run over its units follows, started by our server on units it has not run, worker v2 machine.ts startRecent, or asked by this
+ * session's open, needsOf); or a need of the visit (needsOf: the prepare of a stale `layer`, the target `done` on other `units`
+ * than the layer's) that the session asks: its open under way, or not yet asked with no wait named for it. The target's attempt
+ * covers the layer where its `units` are the layer's own (needsOf's comparison by digest). Whether that work goes on is the
+ * look's alone (runOf `live`, goesOn), one test for every clause. Rows made here: the host's run alone
  */
 function aheadOf(s: State): boolean {
   const d = s.doc
   if (s.here || !d || s.docFor !== s.rows.target) return false
   if (d.prepare.state === 'running') return true
-  const l = s.link
-  const asks = l.s !== 'stopped' || l.why === 'network'
   return needsOf(s).some(
-    (n) => (s.open.t !== null && s.open.for.includes(n.id)) || (asks && n.at === null && !s.open.asked.includes(n.id)),
+    (n) => (s.open.t !== null && s.open.for.includes(n.id)) || (n.at === null && !s.open.asked.includes(n.id)),
   )
 }
 /** what the view shown has of the translation, and whether it waits for more (PDF-READER §6.6, §8) */
@@ -203,7 +210,36 @@ export function rowsTold(s: State, view: ViewRows, run: ReturnType<typeof runOf>
       retryAt: r.retryAt,
       ...(againOf(s).rows !== null ? { self: true as const } : {}),
     }
-  if (r.s === 'complete' && !view.waits && !(run.ahead && view.total === 0))
+  if (r.s === 'complete' && !view.waits && !(run.ahead && run.live && view.total === 0))
     return { ...told, s: 'complete', ...count, stopped: r.stopped }
   return { ...told, s: 'arriving', ...count, waits: view.waits }
+}
+
+/**
+ * The view's wait as the reader tells it (reader.ts stateOf; the whole-visit tests read the same): what the view shown lacks of
+ * what our server's work would bring (viewOf over the run's work), waited for while the system still works for this reader by
+ * itself (runOf `live`: R6), the rows as told (rowsTold), our server's link as the count's word for it (linkSaid), and, over a
+ * layer shown, our server's look stopped or paused while the view lacks what that work would bring (`stopped`: its cause, its
+ * time, whether the session asks again by itself), so that its cause is said there as where no layer is shown: over the count
+ * while the session goes on by itself (the queue, the rate; the network is `network`'s, linkSaid), the wait over where it will not
+ * (the limit, our server out of reach: the coordinator's R7, R8 of 2026-11-12)
+ */
+export function toldWait(
+  s: State,
+  o: Omit<Parameters<typeof viewOf>[0], 'run' | 'ahead' | 'failed'>,
+): {
+  rows: ReaderState['rows']
+  stopped: Look | null
+  reconnecting: boolean
+  network: boolean
+} {
+  const run = runOf(s)
+  const lacks = viewOf({ ...o, run: run.own || run.ahead, ahead: run.ahead, failed: run.failed })
+  const view = { ...lacks, waits: lacks.waits && run.live }
+  const look = lacks.waits && !s.here ? lookSaid(s) : null
+  return {
+    rows: rowsTold(s, view, run),
+    stopped: look && look.why !== 'network' ? look : null,
+    ...linkSaid(s, view.waits),
+  }
 }

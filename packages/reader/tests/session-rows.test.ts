@@ -225,6 +225,54 @@ describe("the run the view waits on (runOf, rowsTold): our server's work for the
     const first = heard({ prepare: prepare('running', 7), layer: stale, targets: {} }, 'arriving')
     expect([runOf(first).run, runOf(first).ahead]).toEqual([true, false])
   })
+  /** what the rows are told over the layer shown (3 units, 2 held): the probe's reading (integration B11, scratchpad b11/probe) */
+  const toldOver = (s: State) => {
+    const run = runOf(s)
+    const units3 = [u(0), u(1), u(2)]
+    const view = viewOf({
+      units: units3,
+      classes: null,
+      held: new Map([units3[0], units3[1]].map((x) => [(x as Unit).id, ok(x as Unit)])),
+      shown: true,
+      laid: true,
+      run: run.run,
+      ahead: run.ahead,
+    })
+    const r = rowsTold(s, view, run)
+    return r.s === 'arriving' && r.waits ? 'waits' : r.s
+  }
+  it('a 429 of capacity the session waits out by itself, ask after ask: one wait, never told done between its re-asks (integration B11 F1)', () => {
+    let s = heard(
+      {
+        prepare: prepare('done'),
+        layer: { catalog: ref('d'), units: NEW, format: 1 },
+        targets: { 'zh-Hans': done(OLD) },
+      },
+      'complete',
+    )
+    const seen = [toldOver(s)]
+    let now = 0
+    for (let k = 0; k < 4; k++) {
+      now += 150
+      s = step(
+        s,
+        { i: 'open.answered', t: s.open.t as string, doc: null, refused: { why: 'busy', afterMs: 1000 } },
+        now,
+      ).state
+      seen.push(toldOver(s))
+      const l = s.link as Extract<State['link'], { s: 'stopped' }>
+      now = l.wake as number
+      s = step(s, { i: 'time', t: l.timer as string, now }).state
+      seen.push(toldOver(s))
+    }
+    expect(seen).toEqual(Array(9).fill('waits'))
+  })
+  it('our server out of reach while the last document says its prepare runs: the wait is over, the session asking nothing by itself (integration B11 F2)', () => {
+    let s = heard({ prepare: prepare('running', 2), layer: stale, targets: { 'zh-Hans': done(NEW) } }, 'complete')
+    expect(toldOver(s)).toBe('waits')
+    s = step(s, { i: 'follow.lost', t: s.link.s === 'on' ? s.link.t : '', why: 'server' }, 500).state
+    expect([s.link.s === 'stopped' && s.link.wake, toldOver(s)]).toEqual([null, 'complete'])
+  })
   it("rows made here: the host's run alone, whatever our server does", () => {
     const s = heard({ prepare: prepare('running'), layer: stale, targets: {} }, 'complete', { here: true })
     expect(runOf(s).run).toBe(false)

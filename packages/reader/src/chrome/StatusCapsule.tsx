@@ -132,8 +132,11 @@ export function StatusCapsule({
     <div role="status" className="capsule-slot">
       {originalCard && <span className="sr-only">{originalCard.reason}</span>}
       {card && <span className="sr-only">{card.reason}</span>}
-      {/* (a run's capsule says it, once it enters; while its wait is too short to be seen, nothing says it) */}
-      {spoken && wanted?.kind !== 'progress' && <span className="sr-only">{spoken}</span>}
+      {/* (a run's capsule says it, once it enters, and so does the capsule of its pause, the session going on by itself (`self`):
+          the wait's own words; while its wait is too short to be seen, nothing says it) */}
+      {spoken && wanted?.kind !== 'progress' && !(wanted?.kind === 'notNow' && wanted.self) && (
+        <span className="sr-only">{spoken}</span>
+      )}
       {capsule && look && (
         <Drawn
           key={capsule.kind}
