@@ -511,6 +511,19 @@ describe("lead: a paragraph set tighter than the original's leading while its bl
     const four = (pitch: number) => [0, 1, 2, 3].map((i) => drawnLine(72, 300, 700 - pitch * i, 'x'.repeat(20)))
     expect(of('lead')(measure(f, sides(140, four(12), four(11))))).toEqual([])
   })
+  it("reads the original's size over the lines the unit lays, not a kept element's lines at their own size (2608.25210 p3 t55)", () => {
+    // (round 8 B8: t55's description, two lines at 8.97 pt 10.8 apart, over a prompt box b5-fixes keeps as the original's ink,
+    // nine lines of it at 7.97 pt; v2 lays the description alone at 8.97 and 10.8 apart, as the original sets it. Read over every
+    // line, the original's size was the box's 7.97, so v2's leading 10.8 / 8.97 read tighter than 10.8 / 7.97, with the box's
+    // lines as its room. Here two lines at 9 pt and four kept lines at 8 pt, TeX's \baselineskip 10.8)
+    const text = [700, 689.2].map((y) => factLine(320, 550, y, 9))
+    const box = [674, 664.2, 654.4, 644.6].map((y) => factLine(326, 550, y, 8))
+    const kept = [['14', 'display', box.map((l) => [326, (l[6] as number) - 0.2, 550, (l[5] as number) + 0.2, l[4]]), 4, 1, 0, 1]]
+    const v = v2Of({ members: [laid(55)], facts: [{ ord: 55, kind: 'para', align: 'j', style: { size: 9 }, lines: [...text, ...box], pitch: 10.8, els: kept }], today: { 55: { today: 55 } } })
+    const two = [700, 689.2].map((y) => drawnLine(320, 550, y, 'x'.repeat(30), 9))
+    const translatedBox = [700, 689.2, 678.4, 667.6, 656.8, 646].map((y) => drawnLine(320, 550, y, 'x'.repeat(30), 8))
+    expect(of('lead')(measure(v, sides(55, translatedBox, two)))).toEqual([])
+  })
 })
 
 describe("a unit today laid with a borrowed line is judged as any (the borrowing ruling of 2026-11-08 replaced no-borrowing's)", () => {

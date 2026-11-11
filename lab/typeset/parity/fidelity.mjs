@@ -570,18 +570,30 @@ export function measureFidelity(c) {
     gaps.sort((a, b) => a - b)
     return gaps.length ? { pitch: gaps[gaps.length >> 1], size } : null
   }
+  // (the original's lines the unit lays: not those of an element v2 keeps as the original's ink at its own size, a prompt box
+  // set in a face of one pitch (lane b5-fixes; round 8 B8, 2608.25210 p3 t55: its description at 8.97 pt over a box at 7.97,
+  // the box's size read as the unit's and its lines as the unit's room). A line is the element's where its baseline is one of
+  // the element's ink boxes' on this page and the two overlap across)
+  const laidLinesOf = (o) => {
+    const kept = (facts.get(o.part)?.els ?? []).filter((e) => e[6]).flatMap((e) => e[2])
+    if (!kept.length) return o.lines
+    return o.lines.filter((l) => !kept.some((b) => Math.abs(l.y - b[4]) <= 1 && Math.min(l.x1, b[2]) - Math.max(l.x0, b[0]) > 0.5 * (b[2] - b[0])))
+  }
   const tight = { today: new Map(), v2: new Map() }
   const leadOf = new Map()
   for (const [side, M] of [['today', T], ['v2', V]])
     for (const [key, ls] of M) {
       const o = orig.get(key)
       if (!o || o.lines.length < 2 || /figure/.test(o.kind ?? '') || o.kind === 'cell') continue
+      const own = laidLinesOf(o)
+      if (!own.length) continue
       const fl = flat(ls)
+      // (with a kept element's lines set apart, TeX's \baselineskip and the size of the lines left where one line is left)
       const d = pitchOf(fl),
-        read = pitchOf(o.lines)
+        read = pitchOf(own) ?? (o.pitch && own.length < o.lines.length ? { pitch: o.pitch, size: own.map((l) => l.size).sort((x, y) => x - y)[own.length >> 1] || 10 } : null)
       if (!d || !read) continue
       const a = o.pitch ? { pitch: o.pitch, size: read.size } : read
-      const room = Math.min(...fl.map((l) => l.y)) - Math.min(...o.lines.map((l) => l.y)) >= a.pitch - 0.5
+      const room = Math.min(...fl.map((l) => l.y)) - Math.min(...own.map((l) => l.y)) >= a.pitch - 0.5
       const t = room ? Math.max(0, 1 - d.pitch / d.size / (a.pitch / a.size)) : 0
       tight[side].set(key, t)
       leadOf.set(`${side}|${key}`, d.pitch / d.size)
