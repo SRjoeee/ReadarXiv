@@ -2062,12 +2062,17 @@ for (const shape of ['root', 'html', 'body', 'chrome']) {
               ['trStill', slot, '--axt-tr-still'],
             ].map(([k, el, n]) => [k, el ? getComputedStyle(el).getPropertyValue(n).trim() : null]),
           ),
-          capsule: (() => {
-            const c = document.querySelector('.capsule')
-            return c ? [getComputedStyle(c).backgroundColor, getComputedStyle(c).color] : null
-          })(),
         }
       }, P1)
+      // (the chrome's capsule, a toast in it: the chrome's tokens under the dark theme, the page's ground beside it)
+      if (shape === 'chrome') {
+        await page.evaluate(() => window.__c.controller.toast({ words: 'The translation did not load', ms: 8000 }))
+        await page.waitForTimeout(400)
+        seen.capsule = await page.evaluate(() => {
+          const c = document.querySelector('.capsule')
+          return c ? [getComputedStyle(c).backgroundColor, getComputedStyle(c).color] : null
+        })
+      }
       await page.mouse.move(3, 3)
       await page.waitForTimeout(300)
       // (the pixels: each ink's run against the page's ground, the slot's median; the crops out of sight, so that a run's box
