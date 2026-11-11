@@ -128,7 +128,12 @@ export const PREPARE_DEADLINE_MS = 600_000
 export const REFUSED_ASKS = 3
 const waitOf = (ms: number) => Math.min(WAIT_MAX, Math.max(WAIT_MIN, Number.isFinite(ms) ? ms : WAIT_MIN))
 const isAbort = (e: unknown) => (e as Error)?.name === 'AbortError'
-const kindOf = (e: unknown): ProviderErrorKind => ((e as { kind?: ProviderErrorKind })?.kind ?? 'unknown')
+/** a kind the service gave, as the reader is told it. Each place that tells one has returned on the run's own abort first (a
+ *  retarget, a retry, the page's end), so an `aborted` there is the service's (the background withdrew the scope or retired its
+ *  chain, a translator gave up): told as `unknown`, the card and the notice with their retry, since `aborted` is the reader's own
+ *  cancel and shows nothing (UI.md §3.4) */
+const toldKind = (kind: ProviderErrorKind): ProviderErrorKind => (kind === 'aborted' ? 'unknown' : kind)
+const kindOf = (e: unknown): ProviderErrorKind => toldKind((e as { kind?: ProviderErrorKind })?.kind ?? 'unknown')
 
 /** the paper's title and abstract for an LLM's prompt, as the HTML page sends them (src/core/extractor/context.ts's cut) */
 export function contextOf(index: Parameters<typeof unitOf>[0]): { paperTitle?: string; abstract?: string } {
@@ -517,8 +522,10 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
       return emit({ type: 'fail', kind: kindOf(err) })
     }
     if (a.signal.aborted || disposed || s !== side) return
+    // (this attempt's own abort returned above: a stop here is the service's, its `aborted` included, a stop like any other: toldKind)
+    const stopped = result.stopped ? toldKind(result.stopped as ProviderErrorKind) : null
     lost = result.lost
-    rowsState = result.stopped && result.stopped !== 'aborted' ? 'failed' : 'translated'
+    rowsState = stopped ? 'failed' : 'translated'
     // the end told, the pages laid with what they hold; but a stop with no unit translated has nothing to lay (its pages would be
     // drawn as the original's, our page in place of arXiv's): no end, they stay the original's page, the pages still showing another
     // target's layer among them. A stop that ends this way ends the run as any stop does: the service's own bounds (each batch's
@@ -527,7 +534,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     if (rowsState !== 'failed' || translatedUnits() > 0) s.end()
     else s.dropOthers()
     const c = counts()
-    emit({ type: 'translated', got: c.got, total, lost: result.lost, stopped: result.stopped && result.stopped !== 'aborted' ? (result.stopped as ProviderErrorKind) : null })
+    emit({ type: 'translated', got: c.got, total, lost: result.lost, stopped })
   }
 
   // ---------------------------------------------------------------- the run

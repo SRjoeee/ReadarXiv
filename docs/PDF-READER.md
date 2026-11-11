@@ -715,6 +715,14 @@ figures' text goes through the same service: once a run has stopped, none is sen
 {n} is the paragraphs left in the source language: a paragraph a stored copy had translated keeps it when its new try
 fails, and is not counted.
 
+A stop the service makes by withdrawing the reader's scope (the background retiring its chain when a service is deleted, a
+translator that gives up with an abort) is a stop like the others (the owner's ruling, 2026-11-11): its kind, `aborted`, is
+told as `unknown` (UI.md §3.4), since `aborted` is the reader's own cancel and shows nothing; the card or the notice says it
+with its retry, and the units never asked are counted with the rest (`runRows` counts them unless the run's own signal
+stopped it). The run's own abort (a retry, another target, the page's end) returns before any of this and tells nothing.
+Before, the run read the service's `aborted` as its own: the translation told done, our page laid with nothing translated
+on it, and a notice with no retry counting the last batch alone.
+
 Texts that did not come back for a reason that is not theirs (the service's own: a network down, a timeout, a rate limit
 the background's queue has already retried) are not sent again piece by piece, since they would only fail again, once for
 each piece. They stay in the source language, counted, and the failure is kept (`EngineError.lost`, `mt.mjs`

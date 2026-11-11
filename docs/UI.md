@@ -241,6 +241,8 @@ Retired 2026-09-28: S-I-03 (an in-page notice of a switched service, never built
 | `unknown` | 翻译失败 | Retry |
 | `aborted` | (not shown) | The user cancelled it |
 
+**An abort the reader did not make is no cancel** [decided, the owner, 2026-11-11]: in the PDF reader, an `aborted` the service gives (the background withdrew the reader's scope or retired its chain, a translator gave up) stops the run as any failure of the service does, and is told as `unknown`: with nothing laid, the card with `unknown`'s sentence and its retry; over pages laid, S-P-60 with S-P-61. The run's own abort (a retry, another target, the page's end) tells nothing, as this row says. No string of its own (`pdf-reader/session/run.ts` `toldKind`).
+
 ---
 
 ### 3.5 PDF reader (S-R) [decided 2026-09-25, built in the reader's Part 3]

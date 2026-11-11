@@ -649,6 +649,18 @@ describe('runRows', () => {
     expect(out.lost).toBe(2 + (80 - (batchesOf(b, 'de')[0] as number[]).length - second.length))
     expect(rows).toHaveLength(2)
   })
+  it('a service\'s own `aborted` (the background withdrew the scope, retired its chain) is a stop of the service\'s: the units never asked are lost, as at any stop; the run\'s own signal loses none', async () => {
+    const b = longBundle(80)
+    const { send, calls } = sender((texts, call) => {
+      if (call !== 2) return
+      throw Object.assign(new Error('cancelled (chain retired)'), { kind: 'aborted', partial: texts.map(() => null), lost: new Set(texts.map((_, i) => i)) })
+    })
+    const out = await runRows(b, { lang: 'de', send, onRows: () => {}, signal: new AbortController().signal })
+    expect(calls).toHaveLength(2)
+    expect(out.stopped).toBe('aborted')
+    // the second batch lost, and every unit after it never asked: all of them but the first batch's
+    expect(out.lost).toBe(80 - (batchesOf(b, 'de')[0] as number[]).length)
+  })
   it('lets an error with no kind through: a bug is not a refusal', async () => {
     const b = longBundle(5), { send } = sender(() => { throw new Error('a bug') })
     await expect(runRows(b, { lang: 'de', send, onRows: () => {}, signal: undefined })).rejects.toThrow('a bug')

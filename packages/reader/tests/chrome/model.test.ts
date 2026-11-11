@@ -392,6 +392,17 @@ describe("reduce: the layer's states (Task 12)", () => {
     expect(fetchFailed).toMatchObject({ phase: 'ready', failure: null })
   })
 
+  it("a stop told `unknown` (the service's own abort, the run's toldKind) is the card and its retry over nothing laid, the notice and its retry over pages laid; `aborted`, the reader's own cancel, shows neither (UI.md §3.4)", () => {
+    const seen = { noticeClosed: false, narrowShown: false, refusalsSeen: 0 }
+    const none = fold([opened, { type: 'translated', got: 0, total: 7, lost: 7, stopped: 'unknown' }])
+    expect(cardOf(none, PARTS.reason)).toEqual({ reason: PARTS.reason('unknown'), action: 'retry' })
+    const part = fold([opened, laid(2), { type: 'translated', got: 3, total: 7, lost: 4, stopped: 'unknown' }])
+    expect(cardOf(part, PARTS.reason)).toBeNull()
+    expect(capsuleOf(part, seen, PARTS.languages)).toMatchObject({ kind: 'notice', action: 'retry' })
+    const own = fold([opened, { type: 'translated', got: 0, total: 7, lost: 7, stopped: 'aborted' }])
+    expect(cardOf(own, PARTS.reason)).toBeNull()
+  })
+
   it("names a failure by the chain's error kinds alone, the popup's reasons (final review)", () => {
     expect(fold([{ type: 'fail', event: 'service', text: '', kind: 'auth' }]).failure).toBe('auth')
     expect(fold([{ type: 'fail', event: 'service', text: '', kind: 'unavailable' as never }]).failure).toBe('unknown')
