@@ -151,6 +151,8 @@ function bindingsOfText(texts) {
   while (queue.length) for (const r of REQUIRES[queue.pop()] ?? []) add(r)
   return out
 }
+/** whether a paper (paperOf) loads a binding (`subfigure.sty`): its files name it, or a binding they name requires it (bindingsOf) */
+export const loads = (paper, binding) => !!paper?.bindings.has(BINDING_INDEX.get(binding))
 /** a name's parameters by the forms LaTeXML gives it: where a paper's bindings (`bindings`) define it, theirs, and none
  *  where they differ; else the engine pools'. A package's form only where the paper loads it: with no paper to tell
  *  (null), none — a paper's own \degrees is no pstricks \degrees[…] */

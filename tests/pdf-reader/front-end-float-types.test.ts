@@ -86,6 +86,70 @@ describe('floatTypes: each caption’s float type, LaTeX’s \\@captype there', 
   })
 })
 
+describe('subfigure.sty’s \\subfigure and \\subtable: the caption a sub-caption unit, the body walked', () => {
+  // (subfigure.sty's \subfigure[<list entry>][<caption>]{<body>}, \let\subtable\subfigure: one optional argument alone is both the
+  // list's entry and the caption, two are the entry then the caption; its type is sub\@captype, the float's. Read as one
+  // placeholder, both of 2602.23285v2's sub-captions on its page 18 stayed in English)
+  const sty = '\\usepackage{subfigure}'
+  it('reads the caption of one optional argument and the last of two, in a figure and in a table', () => {
+    expect(
+      types(
+        doc(
+          [
+            '\\begin{figure}\\subfigure[The left panel of the pair.]{\\includegraphics{a}}\\subfigure[Right][The right panel of the pair.]{\\includegraphics{b}}\\caption{Both panels of the pair.}\\end{figure}',
+            '\\begin{table}\\subtable[The first block of scores.]{\\begin{tabular}{l}x\\\\\\end{tabular}}\\caption{The scores in two blocks.}\\end{table}',
+          ].join('\n\n'),
+          sty,
+        ),
+      ),
+    ).toEqual([
+      ['The left panel of the pair.', 'subfigure'],
+      ['The right panel of the pair.', 'subfigure'],
+      ['Both panels of the pair.', 'figure'],
+      ['The first block of scores.', 'subtable'],
+      ['The scores in two blocks.', 'table'],
+    ])
+  })
+  it('reads subfig’s \\subfloat of two optional arguments the same: the caption the last', () => {
+    expect(types(doc('\\begin{figure}\\subfloat[Entry][The caption of the panel.]{\\includegraphics{a}}\\end{figure}', '\\usepackage{subfig}'))).toEqual([
+      ['The caption of the panel.', 'subfigure'],
+    ])
+  })
+  it('walks the body as content, and makes no unit of the list’s entry', () => {
+    const p = project(
+      doc('\\begin{figure}\\subfigure[Entry of the list][The caption of the panel.]{\\parbox{3cm}{Words set inside the panel.}}\\end{figure}', sty),
+    ) as unknown as { units: Unit[] }
+    expect(p.units.map((u) => [u.kind, textOf(u)])).toEqual([
+      ['caption', 'The caption of the panel.'],
+      ['para', 'Words set inside the panel.'],
+    ])
+  })
+  it('leaves a \\subfigure the paper does not take from subfigure.sty as it was, and subcaption’s environment as it is', () => {
+    expect(types(doc('\\begin{figure}\\subfigure[No package defines this one.]{\\includegraphics{a}}\\caption{A figure.}\\end{figure}'))).toEqual([
+      ['A figure.', 'figure'],
+    ])
+    expect(
+      types(
+        doc(
+          '\\begin{figure}\\subfigure[The paper’s own command.]{\\includegraphics{a}}\\caption{A figure.}\\end{figure}',
+          `${sty}\n\\renewcommand{\\subfigure}[2][]{#2}`,
+        ),
+      ),
+    ).toEqual([['A figure.', 'figure']])
+    expect(
+      types(
+        doc(
+          '\\begin{figure}\\begin{subfigure}[b]{0.5\\textwidth}\\includegraphics{a}\\caption{The left half of it.}\\end{subfigure}\\caption{Both halves of the figure.}\\end{figure}',
+          '\\usepackage{subcaption}',
+        ),
+      ),
+    ).toEqual([
+      ['The left half of it.', 'subfigure'],
+      ['Both halves of the figure.', 'figure'],
+    ])
+  })
+})
+
 describe('the instrument’s unit facts from the front end’s (unitFactsOf)', () => {
   it('states a caption’s float type, and keeps an algorithm float’s body as the original, its caption translated', () => {
     // (2608.25210v2 p7's Algorithm 1, algorithm2e's lines written in the float itself: a paragraph unit of 21 lines whose
