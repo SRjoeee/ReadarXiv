@@ -2588,6 +2588,19 @@ within noise.
   makes no group for such a member, so no drawing can turn it off either. Over the 88 papers, 12 members are wholly painted
   over in this way, every one a figure text that the wrap leaves unwrapped and the entry never lays
   (`lab/pdf/prepare-back/hidden.mjs`).
+- **A sentence of no word joins its neighbour on both panes** (lit.ts `worded`, `bySentence`): a translator cuts off a sentence
+  that holds no word of the source (no word of Placed.words in it: a citation after a unit's last stop, a reference's DOI, URL
+  or back-reference list, a display), or one of whose translation nothing is drawn as text (an element moved past the
+  translation's last stop). Its start had no word placed on A (`startsOnA`) or no token drawn, and the whole unit lit whole for
+  it: the lab's 8 units by default and 78 with every switch on that today pairs by sentence (the feature list's F1, D30). Such a
+  sentence now lights with the one before it (the next, where it is the first) on both panes, and every other sentence stays
+  the translator's pair. A sentence of elements drawn as text (a German reference's title kept as a group) is drawn, so it
+  stays a sentence of its own. Measured over the parity's 22 pairs with their fresh rows (r18 bundles, 2026-11-12), v2's lay
+  before and after, member by member (12,388 member-pages each): by default 6 lit whole are lit by sentence, every switch on
+  81, and nothing else moved in either (no sentence joined that was drawn, none lit whole that was not); the sentence cover
+  (I10) 0 faults before and after. Of the 8 default units the parity counted, 5 pair now. Not settled: a sentence whose first three words TeX
+  never set (1512.03385v1 t339) still lights the unit whole; three paragraphs of 2608.25210v2 (t55-t57) hold one sentence
+  and a display in v2's unit where today's unit held the display's lines as sentences, so they are one sentence by design.
 - **The band chosen paints it** (the reading options' highlight colour, §6.1 item 4): the host gives the bands its store keeps (`Prefs.bands`, each its
   colour and its strength: the extension's highlight profiles, the website's three), and the reader writes the one chosen on
   its root as the wash's two variables, `--axt-hl-color` and `--axt-hl-mix` (`prefs.ts bandPaint`: the first band where the

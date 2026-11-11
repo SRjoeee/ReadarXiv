@@ -521,6 +521,52 @@ describe('Laid.lit by sentence', () => {
     expect(lost.lit.left).toHaveLength(1)
     expect(lost.lit.right).toHaveLength(1)
   })
+  it('joins a sentence of elements alone to its neighbour on both panes, never lighting the unit whole for it (the feature list’s F1)', () => {
+    // (the lab's 8 units lit whole by default and 78 with every toggle on, where today pairs by sentence: the translator cut off
+    // a sentence of no word, a citation after the unit's last stop, a reference's DOI or back-reference list. On A its start has
+    // no word placed; as drawn, no text token: either and bySentence lit the whole unit. The sentence of no word now joins the
+    // sentence before it on both panes: the honest pairing, the translator's pair k for every other sentence)
+    const cite = { kind: 'ref', ink: [[1, 205, 674, 225, 683, 676]] } as NonNullable<Placed['els']>[number][1]
+    const m = member({ align: 'l', els: [['7', cite]] })
+    // (A: "One two three. Four five six. Seven eight nine. [7]", the element at 48, past every word; the translation's last
+    // sentence the element alone)
+    const tail: Row = {
+      id,
+      ok: true,
+      by: 'test',
+      content: [
+        { t: 'text', s: `${TR} ` },
+        { t: 'el', id: '7' },
+      ] as OutPiece[],
+      sentences: { src: [15, 30, 48], tr: [TR.indexOf('Vier'), TR.indexOf('Sieben'), TR.length + 1] },
+    }
+    const a = laidOf(m, tail)
+    expect([a.lit.left.length, a.lit.right.length]).toEqual([3, 3])
+    // (the element's ink on A and its crop as drawn, both with the third sentence)
+    const holds = (bs: readonly Box[], x: number, y: number) =>
+      bs.some((b) => b[0] <= x && x <= b[2] && b[1] <= y && y <= b[3])
+    expect(a.lit.left.map((bs) => holds(bs, 215, 679))).toEqual([false, false, true])
+    const line = a.lines.find(([, , , its]) => its.some((x) => 'piece' in x))!
+    const crop = line[3].find((x) => 'piece' in x) as { x: number }
+    expect(a.lit.right.map((bs) => holds(bs, crop.x + 1, line[0]))).toEqual([false, false, true])
+    // (the translation's last sentence the element alone, the source's a sentence of words: the two last join on both panes)
+    const moved: Row = {
+      id,
+      ok: true,
+      by: 'test',
+      content: [
+        { t: 'text', s: 'Eins zwei drei. Vier fünf sechs, sieben acht neun. ' },
+        { t: 'el', id: '7' },
+      ] as OutPiece[],
+      sentences: {
+        src: [15, 30],
+        tr: ['Eins zwei drei. '.length, 'Eins zwei drei. Vier fünf sechs, sieben acht neun. '.length],
+      },
+    }
+    const b = laidOf(m, moved)
+    expect([b.lit.left.length, b.lit.right.length]).toEqual([2, 2])
+    expect(b.lit.left[1]!.some((bx) => bx[1] <= 679 && 679 <= bx[3])).toBe(true)
+  })
   it('lights whole where the row has no sentences or the part places no words', () => {
     // (which kinds light by sentence is the prepare's alone: it marks Unit.sentences, so that a translator cuts them, and
     // states Placed.words, for running text; a heading, a cell or a figure's text gets neither, engine tests/locate.test.ts)

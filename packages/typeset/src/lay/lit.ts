@@ -597,8 +597,8 @@ function withBreaks(
   m: Placed,
   pieces: readonly V0Piece[],
   places: NonNullable<ReturnType<typeof placesOf>>,
-  starts: { a: At; p: number }[],
-): { a: At; p: number }[] {
+  starts: { a: At; p: number; j?: number }[],
+): { a: At; p: number; j?: number }[] {
   const out = [...starts]
   for (const { id, a } of breaksOnA(m)) {
     const k = pieces.findIndex((x) => (x.t === 'ph' || x.t === 'nested') && x.k === Number(id))
@@ -617,6 +617,35 @@ function withBreaks(
 }
 
 /**
+ * The translator's sentence cuts with each sentence that holds no word of the source joined to its neighbour on both panes:
+ * the one before it, the next where it is the first. Such a sentence holds no word at an offset in it (Placed.words): what a
+ * translator cuts off after a unit's last stop, a citation, a reference's DOI, URL or back-reference list, a display. Its start
+ * has no word placed on A, and the whole unit lit whole for it (startsOnA): the lab's 8 units by default and 78 with every switch
+ * on that today pairs by sentence were all such, or a translation's sentence with no token drawn (bySentence's `unlaid`: an
+ * element moved past the translation's last stop), joined the same way (the feature list's F1). Joined, the other sentences stay
+ * the translator's pairs, and the one joined lights with its neighbour on both panes (lanes/hl-display: a cut stands on both
+ * panes or on neither)
+ */
+function worded(
+  words: readonly (readonly [number, number, number])[],
+  src: readonly number[],
+  tr: readonly number[],
+): { src: number[]; tr: number[] } {
+  const drop = new Set<number>()
+  for (let s = 0; s <= src.length; s++) {
+    const a0 = s ? src[s - 1]! : 0,
+      a1 = s < src.length ? src[s]! : Number.POSITIVE_INFINITY
+    if (!words.some((w) => w[0] >= a0 && w[0] < a1)) drop.add(s ? s - 1 : 0)
+  }
+  return without({ src: [...src], tr: [...tr] }, drop)
+}
+/** the cuts but those numbered in `drop` */
+const without = (c: { src: number[]; tr: number[] }, drop: ReadonlySet<number>) => ({
+  src: c.src.filter((_, j) => !drop.has(j)),
+  tr: c.tr.filter((_, j) => !drop.has(j)),
+})
+
+/**
  * A laid member lit by sentence on page `page`, or null where it lights whole: a start not found on A (startsOnA), a start of
  * the translation's with no token of its in the layout on any page (the right finds none), a translation's text whose places
  * cannot be read, or no start at all (the translator's and its forced breaks'). Decided from the whole member (its words on
@@ -632,10 +661,32 @@ function bySentence(
   shown: readonly Shown[],
   carried: readonly Ink[],
 ): Lit | null {
-  const src = by.sentences?.src ?? [],
-    tr = by.sentences?.tr ?? []
-  if (!m.words || src.length !== tr.length) return null
-  const rowA = src.length ? startsOnA(m.words, src) : []
+  const src0 = by.sentences?.src ?? [],
+    tr0 = by.sentences?.tr ?? []
+  if (!m.words || src0.length !== tr0.length) return null
+  // (a sentence of no word on A, then each with no token drawn, joined to its neighbour: once a cut, so this ends)
+  let cuts = worded(m.words, src0, tr0)
+  for (;;) {
+    const lit = litBySentence(m, page, L, by.pieces, cuts, keep, extra, shown, carried)
+    if (lit === null || !('unlaid' in lit)) return lit
+    cuts = without(cuts, new Set([lit.unlaid]))
+  }
+}
+
+/** bySentence over the cuts `c`; `unlaid` the translator's cut whose sentence has no token drawn, to join to its neighbour */
+function litBySentence(
+  m: Placed,
+  page: number,
+  L: Layout,
+  pieces: readonly V0Piece[],
+  { src, tr }: { src: readonly number[]; tr: readonly number[] },
+  keep: (l: Line) => boolean,
+  extra: readonly Ink[],
+  shown: readonly Shown[],
+  carried: readonly Ink[],
+): Lit | { unlaid: number } | null {
+  const by = { pieces }
+  const rowA = src.length && m.words ? startsOnA(m.words, src) : []
   const places = rowA && placesOf(by.pieces)
   const rowP = places && (tr.length ? startsInPlain(places, tr) : [])
   if (!rowA || !places || !rowP) return null
@@ -643,7 +694,7 @@ function bySentence(
     m,
     by.pieces,
     places,
-    rowA.map((a, j) => ({ a, p: rowP[j]! })),
+    rowA.map((a, j) => ({ a, p: rowP[j]!, j })),
   )
   if (!merged.length) return null
   const starts = merged.map((x) => x.a)
@@ -660,7 +711,13 @@ function bySentence(
       const t = it.t as { at?: number }
       if (t.at !== undefined) found.add(map.ofPlace(t.at))
     }
-  for (let s = 0; s < n; s++) if (!found.has(s)) return null
+  for (let s = 0; s < n; s++) {
+    if (found.has(s)) continue
+    // (a translator's sentence with nothing of it drawn as text, an element moved past the last stop: joined to its neighbour;
+    // one a forced break begins lights the unit whole, as before)
+    const j = merged[s ? s - 1 : 0]?.j
+    return j === undefined ? null : { unlaid: j }
+  }
   const left = cutOnA(m, page, keep, starts, extra)
   elementsOnA(m, page, map, left)
   const elOf = (k: number) => {
