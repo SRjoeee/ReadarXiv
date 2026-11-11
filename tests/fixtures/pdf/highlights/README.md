@@ -1,7 +1,7 @@
 # highlights: soul's highlights, found where TeX set them
 
 One page of our own whose words carry soul's highlights, made as the box's prepare makes a paper's up to the instrument
-(`docs/PDF-READER.md` §18.48): two highlights of two colours glued inside one word, the second right after a closed one (a
+(`docs/PDF-READER.md` §18.51): two highlights of two colours glued inside one word, the second right after a closed one (a
 paragraph) and right after one of its opening point alone (a caption); one at a word's start, in its middle and at its end; one
 run across a line's end; `\hl` itself. The paper's own macros (`\hlsun`, `\hlsky`) are `\hl` under a colour, as arXiv papers write
 them.
