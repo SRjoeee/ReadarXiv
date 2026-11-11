@@ -168,49 +168,71 @@ describe('a figure’s paragraph and an item with its label, laid by the paragra
         if ('face' in it) expect(it.x + widthOf(it.size, it.s)).toBeLessThanOrEqual(300 + 1e-6)
       }
   })
-  it('lays a path’s joined rows from its first row at their own pitch, ending early (2608.06701v1 p2’s first bubble)', () => {
-    // (five rows set flush left at 10 on a pitch of 12, a bubble's (option 3): a translation of fewer lines stands from the first
-    // row's baseline down at the unit's leading (the target's: zh's 1.3 of a solid-set original's pitch, leadOf) and ends early,
-    // inside the rows' range, never spread over the five rows' height (the page fill's leading, 20 here before)
-    const rowsOf = (n: number) =>
-      Array.from({ length: n }, (_, i): Placed['lines'][number] => [
-        1,
-        0,
-        100,
-        190,
-        424 - 12 * i,
-        431 - 12 * i,
-        422 - 12 * i,
-        95,
-        200,
-        0,
-        10,
-      ])
-    const bubble: Placed = {
-      ord: 0,
-      kind: 'figure',
-      text: idOf(5),
-      lead: 12,
-      read: ['style', 'lead'],
-      style: { role: 'sans', size: 10 },
-      align: 'l',
-      lines: rowsOf(5),
-      room: { below: 4, side: [95, 200], over: 9, under: 4 },
-    }
+  // (2608.06701v1 p2's first bubble as the part states it: five rows of Arial at 4.787 on a pitch of 5.745, set flush left in a
+  // scroll, the scroll's inside 3.98 over the first row's baseline and 0.53 under the last row's (Room.over and Room.under, F3);
+  // each row's ink top and bottom its line's)
+  const scroll = (): Placed => ({
+    ord: 0,
+    kind: 'figure',
+    text: idOf(5),
+    lead: 5.75,
+    style: { role: 'sans', size: 4.7871 },
+    align: 'l',
+    lines: [
+      [1, 0, 77.72, 115.22, 714.18, 717.61, 714.13, 48.96, 300.02, 0, 4.79],
+      [1, 0, 77.72, 110.44, 708.44, 711.86, 707.49, 48.96, 300.02, 0, 4.79],
+      [1, 0, 77.72, 114.14, 702.69, 706.12, 701.74, 48.96, 300.02, 0, 4.79],
+      [1, 0, 77.72, 113.1, 696.95, 700.37, 696, 48.96, 300.02, 0, 4.79],
+      [1, 0, 77.72, 114.16, 691.2, 694.63, 691.15, 48.96, 300.02, 0, 4.79],
+    ],
+    room: { below: 5.8, next: 12.07, side: [48.96, 129.9], over: 3.98, under: 0.53 },
+  })
+  // (each drawn line's band: its baseline, a CJK item's em box 0.88 over it and 0.12 under, a Latin item's 0.75 over)
+  const bandsOf = (m: { lines: unknown[] }) =>
+    (m.lines as [number, number, number, Item[]][]).map(([y, , , items]) => {
+      const text = items.filter((it) => 'face' in it)
+      const cjk = (it: Item) => /[\u3000-\u9fff\uff00-\uffef]/u.test(it.s)
+      return {
+        y,
+        top: Math.max(...text.map((it) => y + (cjk(it) ? 0.88 : 0.75) * it.size)),
+        bottom: Math.min(...text.filter(cjk).map((it) => y - 0.12 * it.size)),
+      }
+    })
+  it('lays a path’s joined rows from the first row’s top at the rows’ pitch, ending early (2608.06701v1 p2’s first bubble)', () => {
+    // (four lines of translation for five rows: on the rows' grid lowered by what a CJK line's em box stands over the first
+    // row's capitals, at the rows' pitch, ending early; before, its lines stood on the rows' baselines at the target's leading
+    // (1.27 of the rows' pitch), its first line's em box over the scroll's inside, its ideographs into the scroll's edge)
     const row: Row = {
       id: idOf(5),
       ok: true,
       by: 'test',
-      content: [{ t: 'text', s: '找到实际的实现然后检查验证检查' }],
+      content: [{ t: 'text', s: '找到实际的 validate_record 实现……然后检查验证检查' }],
     }
-    const page = layPage(part([bubble]), rows([row]), rulesFor('zh'), metrics)
+    const page = layPage(part([scroll()]), rows([row]), rulesFor('zh'), metrics)
     const m = page.members.find((x) => x.ord === 0)!
     expect(m.state).toBe('laid')
-    const ys = m.lines.map((l) => l[0] as number)
-    expect(ys.length).toBeLessThan(5)
-    expect(ys[0]).toBeCloseTo(424, 6)
-    for (let i = 1; i < ys.length; i++) expect(ys[i - 1]! - ys[i]!).toBeLessThanOrEqual(12 * 1.3 + 1e-6)
-    expect(ys.at(-1)!).toBeGreaterThanOrEqual(424 - 12 * 4 - 1e-6)
+    const bands = bandsOf(m)
+    expect(bands.length).toBeLessThan(5)
+    const B = scroll().lines.map((l) => l[4])
+    for (let i = 1; i < bands.length; i++) expect(bands[i - 1]!.y - bands[i]!.y).toBeCloseTo(B[i - 1]! - B[i]!, 6)
+    expect(bands[0]!.top).toBeLessThanOrEqual(717.61 + 1e-6)
+    expect(bands[0]!.top).toBeGreaterThan(717.61 - 0.05)
+  })
+  it('fits a translation longer than a path’s rows by the ladder, never past its first row’s top or the path’s inside', () => {
+    const row: Row = {
+      id: idOf(5),
+      ok: true,
+      by: 'test',
+      content: [{ t: 'text', s: '找到实际的 validate_record 实现，然后仔细检查其中的每一项验证检查是否完整正确' }],
+    }
+    const page = layPage(part([scroll()]), rows([row]), rulesFor('zh'), metrics)
+    const m = page.members.find((x) => x.ord === 0)!
+    if (m.state !== 'laid') return
+    const bands = bandsOf(m)
+    const B = scroll().lines.map((l) => l[4])
+    for (let i = 1; i < bands.length; i++) expect(bands[i - 1]!.y - bands[i]!.y).toBeCloseTo(B[i - 1]! - B[i]!, 6)
+    expect(bands[0]!.top).toBeLessThanOrEqual(717.61 + 1e-6)
+    expect(bands.at(-1)!.bottom).toBeGreaterThanOrEqual(691.2 - 0.53 - 1e-6)
   })
   it('lays an item after its label, the label the original’s ink: its group never turned off', () => {
     // ("A." 100 to 109, its text from 113)

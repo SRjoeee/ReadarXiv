@@ -121,9 +121,12 @@ function slotsAt(blocks, st, P, s) {
   // down may go on past it into the next block of its flow where blocks2 found nothing kept between them, `through`, to
   // the foot of the last block it so runs into, `foot`; the page fill's states (`box`) the unit's last frame's no lower than
   // a leading over the next line of its column, footFloorAt)
-  const lows = blocks.map(b => lowOf(b, st, s))
+  // (a figure text of several rows a closed path holds, `rows`: its foot where its last line's band bottom meets its sill, the
+  // last row's bottom inside the path, not its last row's baseline (PDF-READER §18.36))
+  const h = s * st.scale
+  const lows = blocks.map(b => (b.rows ? b.rows.sill - b.rows.bottom * h : lowOf(b, st, s)))
   const floor = st.box ? footFloorAt(blocks, st, P, s) : null
-  if (floor !== null) lows[lows.length - 1] = floor
+  if (floor !== null) lows[lows.length - 1] = blocks.at(-1).rows ? Math.max(lows[lows.length - 1], floor) : floor
   // (and under each paragraph TeX states inside the unit, at its own leading: paraFloorAt)
   if (st.box)
     for (let bi = 0; bi + 1 < blocks.length; bi++) {
@@ -147,6 +150,10 @@ function slotsAt(blocks, st, P, s) {
     // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own; and its gaps TeX's
     // \lineskip rule opened closed to the pitch, blocks2's `E`)
     const G = onGrid && b.E ? b.E : b.G ?? b.B
+    // (`rows`: its lines on its rows' grid lower by what its first line's band top stands over the first row's ink top, so that
+    // the translation is laid from the first row's top down, never above it: a CJK face's em box stands higher over the
+    // baseline than a Latin face's capitals (2608.06701v1 p2's first bubble, its first line into the scroll's edge))
+    const drop = b.rows ? Math.max(0, (onGrid ? G[0] : b.B[0]) + b.rows.top * h - b.rows.ceil) : 0
     for (let k = 0; k < 400; k++) {
       // (the first line on a shared row stands on the baseline the line before it there was laid at, `startY`, where that is
       // not TeX's (run.mjs layout2, shareOf's `at`): the row's line, its measure the row's, whatever the block's foot)
@@ -159,6 +166,7 @@ function slotsAt(blocks, st, P, s) {
       // (the page fill's states, `head`: the unit's first block lower by the room the gap over it lacks, where the paragraph over
       // it cannot end higher (S.fill.page headOf: its last line alone on its frame's first line, TeX's widow), its foot its own)
       if (st.head && firstBlock && !shared && b.startY === undefined) y -= st.head
+      if (drop && !shared) y -= drop
       // never two lines closer than 0.7 of the pitch (a baseline the text layer could not tell)
       if (out.length && out.at(-1).block === bi && y > out.at(-1).baseline - 0.7 * pitch) y = out.at(-1).baseline - pitch
       if (y < low - 0.05 && !shared) break

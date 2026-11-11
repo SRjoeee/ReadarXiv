@@ -506,6 +506,7 @@ function linesOf(
             h.shape,
             ft.order.flatMap((o) => (o.t === 'text' ? o.glyphs : [])),
             glyphs,
+            rowsOf(ft, glyphs),
           )
         out.push(ft)
         for (const i of mine) taken.add(i)
@@ -1489,7 +1490,7 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
       closed(it.shape) &&
       [...own].every((j) => inside(glyphs[j]!, x0, y0, x1, y1))
     ) {
-      ft.container = roomIn(it.shape!, textGs, glyphs)
+      ft.container = roomIn(it.shape!, textGs, glyphs, rowsOf(ft, glyphs))
       continue
     }
     // (a rule of horizontal segments alone, its extent inside a stretch of its glyphs': an underline, a strike)
@@ -1679,17 +1680,23 @@ const inside = (g: G, x0: number, y0: number, x1: number, y1: number) =>
 /**
  * A container's room about a text: the nearest of its edges over its baseline and under it across the text's extent, each
  * segment read where it stands over that extent (a rectangle's top and bottom; a diamond's slanted sides at the extent's ends),
- * its half line width in: up and down from the baseline, PDF units
+ * its half line width in: up and down from the baseline, PDF units. A text of several rows (`rows`, its row breaks' order): the
+ * edge over its first row's baseline, the edge under its last row's, so that the typesetter lays its translation from the
+ * first row down inside the path (PDF-READER §18.36; the median of its glyphs' baselines before, which no reader can find)
  */
 function roomIn(
   shape: { segs: ArrayLike<number>; hw: number; stroke: boolean },
   gs: readonly number[],
   glyphs: readonly G[],
+  rows: readonly [number, number] | null = null,
 ) {
   const x0 = Math.min(...gs.map((g) => glyphs[g]!.x0)),
     x1 = Math.max(...gs.map((g) => glyphs[g]!.x1))
-  const ys = gs.map((g) => glyphs[g]!.y).sort((a, b) => a - b)
-  const base = ys[ys.length >> 1]!
+  const median = (list: readonly number[]) => {
+    const ys = list.map((g) => glyphs[g]!.y).sort((a, b) => a - b)
+    return ys[ys.length >> 1]!
+  }
+  const [top, bottom] = rows ?? [median(gs), median(gs)]
   const w = shape.stroke ? shape.hw : 0
   let over = Infinity,
     under = Infinity
@@ -1702,9 +1709,21 @@ function roomIn(
     for (const x of [lo, hi]) {
       const y = Math.abs(bx - ax) < 1e-9 ? Math.max(ay, by) : ay + ((x - ax) * (by - ay)) / (bx - ax)
       const ylo = Math.abs(bx - ax) < 1e-9 ? Math.min(ay, by) : y
-      if (y > base) over = Math.min(over, y - w - base)
-      if (ylo < base) under = Math.min(under, base - (ylo + w))
+      if (y > top) over = Math.min(over, y - w - top)
+      if (ylo < bottom) under = Math.min(under, bottom - (ylo + w))
     }
   }
   return { over: Number.isFinite(over) ? over : 0, under: Number.isFinite(under) ? under : 0 }
+}
+/** a text's first and last rows' baselines where it holds several (its order's row breaks), each the median of its glyphs' */
+function rowsOf(ft: FigureText, glyphs: readonly G[]): [number, number] | null {
+  const rows: number[][] = [[]]
+  for (const o of ft.order) {
+    if (o.t === 'br') rows.push([])
+    else if (o.t === 'text') rows.at(-1)!.push(...o.glyphs)
+  }
+  const bases = rows
+    .filter((r) => r.length)
+    .map((r) => r.map((g) => glyphs[g]!.y).sort((a, b) => a - b)[r.length >> 1]!)
+  return bases.length > 1 ? [bases[0]!, bases.at(-1)!] : null
 }

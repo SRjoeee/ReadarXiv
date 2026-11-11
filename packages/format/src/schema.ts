@@ -270,7 +270,9 @@ export const Room = z.object({
   under: num.optional(),
   // (a figure text's container's edge over its baseline, PDF units up from it: a closed shape round all of its glyphs, inside
   // which its translation is laid (the owner's reformulation of 2026-11-10); S.figures keeps a translation's band under it as it
-  // keeps its depth over `under`. A typesetter of before reads none and lays the band as before)
+  // keeps its depth over `under`. A typesetter of before reads none and lays the band as before. A text of several lines, its
+  // rows joined (PDF-READER §18.36): the edge over its first line's baseline, and `under` the edge under its last line's; a
+  // part made before 2026-11-11 measured both from the median of its glyphs' baselines)
   over: num.optional(),
   runs: z.array(z.tuple([int, num, num])).optional(),
   sep: num.optional(),
