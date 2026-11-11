@@ -109,6 +109,32 @@ export const CAUSE = Object.freeze({
   // coordinator's ruling of 2026-11-09; 2608.08481v1 t118-t121, (7)'s and (8)'s parts)
   displayPart: "kept on arXiv's page as part of a display",
 })
+/** how the parity joins (lab/typeset/parity/join.mjs) a member of the candidate's to the unit of today's a statement names it the
+ *  holder of, by the statement's cause: 'whole', the holder holds today's unit whole, its member is today's unit (heldJoin one
+ *  for one; joinedJoin where one holds two or more in order); 'element', today's unit is now wholly an element of the holder,
+ *  one of the units it holds in order (joinedJoin alone: joined one for one, the holder's other text would be read as today's).
+ *  Every cause a statement names a holder by is declared here, and statedOf refuses one that is not (holdersDeclared): round 8
+ *  B8's first parity read none of lane style-wire's `characters` statements, the join's own list having gained b5-fixes'
+ *  `pitchGroup` by hand and not it, nor (l')'s `seen` */
+export const HOLDER_JOIN = Object.freeze({
+  held: 'whole',
+  names: 'whole',
+  heldBlock: 'whole',
+  order: 'whole',
+  seen: 'whole',
+  pitchGroup: 'whole',
+  characters: 'whole',
+  pitch: 'element',
+  decoration: 'element',
+})
+/** `out` (statedOf's statements) where every one naming a holder has its cause declared in HOLDER_JOIN; else an error naming the
+ *  cause, so that a run never writes a statement the parity's join would not read */
+export function holdersDeclared(out) {
+  for (const s of out)
+    if (s.holder && !Object.hasOwn(HOLDER_JOIN, s.cause))
+      throw new Error(`stated.mjs: the cause '${s.cause}' names a holder, and HOLDER_JOIN does not say how the parity joins it`)
+  return out
+}
 
 /** the ledger's classes of the blocks rule 8 makes names (ink-units.mjs: notes and orphans), which a names unit outside the author
  *  block is again */
@@ -852,5 +878,5 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
         ...(said.holder ? { holder: said.holder.id } : {}),
       })
   }
-  return out
+  return holdersDeclared(out)
 }

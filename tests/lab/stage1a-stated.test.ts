@@ -11,7 +11,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { CAUSE, keptWhyOf, statedOf } from '../../lab/pdf/prepare-back/stated.mjs'
+import { CAUSE, HOLDER_JOIN, holdersDeclared, keptWhyOf, statedOf } from '../../lab/pdf/prepare-back/stated.mjs'
 import { RAW_ADDRESSES, readingOf, scriptsKeptAsElements, scriptsKeptInAnotherOrder } from '../../packages/typeset/tests/replay/l1.ts'
 import { ADDRESS_GROUP, EMAIL_ADDRESS } from '../../src/pdf-reader/engine/source/latex-front.mjs'
 
@@ -895,6 +895,22 @@ describe('(k) by group: a source unit the candidate writes as one source, a grou
 // (B of lane style-wire, the coordinator's ruling of 2026-11-11: `\%`, `\&`, `\#`, `\$`, `\{`, `\}` and textcomp's \textasciitilde,
 // \textbar, \textless, \textgreater, \textbackslash are characters of the candidate's text, so a unit holding one has a new id; it
 // is today's unit, written as today's TeX with each of those placeholders its character, wherever the two lay it)
+describe('a statement naming a holder: its cause declares how the parity joins it (HOLDER_JOIN), or the statement is refused', () => {
+  // (round 8 B8: style-wire's (o) `characters` named a holder the parity's join did not read, after b5-fixes' `pitchGroup` had
+  // been added to the join's own list by hand; the join now reads this table, and a cause it does not declare stops the run)
+  it('declares every cause a statement names a holder by, each joined whole or as an element, and no other kind', () => {
+    for (const [cause, how] of Object.entries(HOLDER_JOIN)) {
+      expect(['whole', 'element']).toContain(how)
+      expect(cause in CAUSE || cause === 'pitchGroup' || cause === 'characters').toBe(true)
+    }
+  })
+  it('refuses a statement naming a holder by a cause it does not declare, and passes one without a holder', () => {
+    expect(() => holdersDeclared([{ cause: 'newCause', holder: 'b'.repeat(64) }])).toThrow(/newCause/)
+    expect(holdersDeclared([{ cause: 'newCause' }])).toEqual([{ cause: 'newCause' }])
+    expect(holdersDeclared([{ cause: 'characters', holder: 'b'.repeat(64) }])).toHaveLength(1)
+  })
+})
+
 describe('a unit the candidate writes both ways: a group kept as an element for its pitch, the rest as (o) reads today\'s TeX', () => {
   // (round 8 B8's merge of rebuild/b5-fixes and rebuild/style-wire: 2610.20848v1's references hold REVTeX's `\bibinfo` pairs
   // and groups that carry nothing, which (o) writes as their content, and a link around a `{\tt …}` group the candidate keeps

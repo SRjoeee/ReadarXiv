@@ -133,8 +133,11 @@ are its own, set on the same lines of A (as many, each on its page at the same b
 of today's that stage 1a states its unit holds whole (`join.mjs` `heldJoin`: the candidate's prepare dump, `AXT_L1_DUMPS`,
 default the `prepare` folder beside the bundles; the statement's causes held whole (f), by the author block (b′) and by the
 block's units on its line (f′), a source unit written as the holder with a group of it an element kept for its pitch (k by
-group, PDF-READER §18.22), and one written as the holder writes today's TeX, its escaped characters text and the groups that
-carry nothing their content ((o), §18.30-18.33), each naming the holder, `lab/pdf/prepare-back/stated.mjs`): an ink unit whose
+group, PDF-READER §18.22), one written as the holder writes today's TeX, its escaped characters text and the groups that
+carry nothing their content ((o), §18.30-18.33), and an ink unit a source unit holds read as arXiv prints it ((l′)), each naming
+the holder; the causes are stage 1a's own table, `lab/pdf/prepare-back/stated.mjs` HOLDER_JOIN, which declares each cause a
+statement names a holder by as held whole or an element of the holder, and a run refuses a statement whose cause it does not
+declare): an ink unit whose
 kind moved, its id with it (rebuild/author-toggle's AND, today's inkorphan, v2's inknames), a unit whose content moved with a
 group (1810.04805v2's `{\tt [CLS]}`) or with its characters (1810.04805v2's `\%`), one of today's for one member, several of one
 id by their order. The lay is given today's row of it where the two units' contents are one (gate-l1's `held`), so that with

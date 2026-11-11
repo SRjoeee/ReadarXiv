@@ -9,6 +9,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
+import { HOLDER_JOIN } from '../../lab/pdf/prepare-back/stated.mjs'
+// @ts-expect-error — a plain node module of the lab
 import { candidateAddress, candidateKept, candidateKeptElements, candidateKeptToday, candidatePitch, heldJoin, joinedJoin, joinedPlan, todayJoin } from '../../lab/typeset/parity/join.mjs'
 import { unitId } from '../../packages/format/src/ids.ts'
 
@@ -239,6 +241,13 @@ describe("a member no id joined to today's unit stage 1a states its unit holds w
     const free = [...(part.parts.get(1)?.flows[0] ?? [])]
     const other = new Map([[98, { ...prepared.get(98)!, pieces: [{ kind: 'text', s: 'and' }] }]])
     expect([...heldJoin(free, part.units, [stated('characters')], [98], other)]).toEqual([[107, { today: 98, same: false }]])
+  })
+  it('joins one for one by every cause stage 1a declares held whole (HOLDER_JOIN), and by none it declares an element of the holder', () => {
+    // (one table, stated.mjs's, so that a lane's new cause is joined as it declares it: round 8 B8's `characters` was stated with
+    // a holder this join did not read; (l')'s `seen` likewise, outside the parity's pairs)
+    for (const [cause, how] of Object.entries(HOLDER_JOIN))
+      expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated(cause)])[107]).toEqual(how === 'whole' ? { today: 98 } : undefined)
+    expect(Object.entries(HOLDER_JOIN).filter(([, how]) => how === 'whole').map(([c]) => c)).toEqual(expect.arrayContaining(['held', 'names', 'heldBlock', 'order', 'pitchGroup', 'characters', 'seen']))
   })
   it("joins it by the holder a names unit's stand-in of its ledger class names, its characters today's in another order (2610.30034v1)", () => {
     expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated('order')])[107]).toEqual({ today: 98 })
