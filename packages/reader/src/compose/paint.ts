@@ -20,6 +20,9 @@ import type { Ink, Item, Laid, Page } from './page.ts'
 
 const SVG = 'http://www.w3.org/2000/svg'
 const n2 = (v: number) => Math.round(v * 100) / 100
+/** a run's size and tracking to 1e-4: each multiplies along its run (a size rounded to 0.01 drew a word of 40 points 0.02 points
+ *  off the layout's), where a place rounded to 0.01 is that far off once */
+const n4 = (v: number) => Math.round(v * 1e4) / 1e4
 /** an oblique run's slant, degrees (a face's own where the table names none) */
 const OBLIQUE_DEG = 12
 
@@ -43,14 +46,25 @@ export function turned<E extends Element>(el: E, vp: PageViewport): E {
 
 const isCrop = (i: Item): i is Extract<Item, { src: Ink }> => 'src' in i
 
+/** the share of its size a run's face is drawn at: the face string's own size at 100 px (FaceId: a face's size correction,
+ *  Source Han Serif K's 95.9px; served.ts parseFont), 1 for a face of a host's table, which names none */
+export const faceScale = (id: string): number => {
+  const px = /(?:^|\s)([\d.]+)px\s/.exec(id)?.[1]
+  const v = px === undefined ? Number.NaN : Number(px) / 100
+  return Number.isFinite(v) && v > 0 ? v : 1
+}
+
 /** the page's laid members' lines as one SVG, in the page's own units (viewBox): drawn, never read (out of selection and of the
- *  accessibility tree: the text layer holds the words) */
-export function svgOf(page: Page, vp: PageViewport, faces: Faces): SVGSVGElement {
+ *  accessibility tree: the text layer holds the words). In the target's language (`lang`, its tag), whatever the page's
+ *  interface is: a browser picks a face's glyphs and its fallbacks by it (docs/PDF-READER.md §18.47). Each run as the layout
+ *  measured it: its face at its size with its size correction (faceScale), its tracking after each character */
+export function svgOf(page: Page, vp: PageViewport, faces: Faces, lang = ''): SVGSVGElement {
   const [vx0, vy0, vx1, vy1] = frameOf(vp)
   const svg = document.createElementNS(SVG, 'svg')
   svg.setAttribute('viewBox', `0 0 ${n2(vx1 - vx0)} ${n2(vy1 - vy0)}`)
   svg.setAttribute('preserveAspectRatio', 'none')
   svg.setAttribute('aria-hidden', 'true')
+  if (lang) svg.setAttribute('lang', lang)
   const Y = (y: number) => n2(vy1 - y)
   const X = (x: number) => n2(x - vx0)
   for (const m of page.members) {
@@ -77,7 +91,8 @@ export function svgOf(page: Page, vp: PageViewport, faces: Faces): SVGSVGElement
           // (a superscript's raise over the line's baseline: the typesetter's Item.rise)
           span.setAttribute('y', String(Y(y + (it.rise ?? 0))))
         }
-        span.setAttribute('font-size', String(n2(it.size)))
+        span.setAttribute('font-size', String(n4(it.size * faceScale(it.face))))
+        if (it.track) span.setAttribute('letter-spacing', String(n4(it.track)))
         if (it.fill !== undefined) span.setAttribute('fill', `#${it.fill.toString(16).padStart(6, '0')}`)
         span.textContent = it.s
         if (it.skew) {

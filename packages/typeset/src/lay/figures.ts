@@ -1,7 +1,7 @@
 // S.figures over the part (design-b §1.6 L4; shared/figures.ts, today's paintFigures): a page's figure texts, each drawn in its
 // translation where it says something its source does not, in the faces of its style, each set (a size tie) at one size, on its
 // original's baseline from its anchor's edge into the free line beside its box, by its ink as the breaker sets every line (a
-// full-width mark's blank half at its edge past the anchor's edge, its target's centredPunct and compressMax), the original's
+// full-width mark's blank half at its edge past the anchor's edge, as its face draws it, and its target's compressMax), the original's
 // where it does not fit. Its facts are the part's, as the prepare states them from today's figure reading
 // (layout/figure-text.mjs): its line (its box along its run and its baseline), its anchor (Placed.align: l start, c centre, r
 // end), its room before and after its box (Room.side), the stroke under its text (Room.under), its style (size, fill, family,
@@ -143,7 +143,6 @@ export function figuresOf(
     rules: {
       cjkQuotes: o.R.cjkQuotes,
       floorMin: o.R.floorMin,
-      centredPunct: o.R.centredPunct,
       compressMax: o.R.compressMax,
     },
     metrics: o.metrics,

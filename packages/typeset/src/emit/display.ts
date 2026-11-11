@@ -152,8 +152,6 @@ export function runEdge(
 export type TextItem = Extract<Item, { face: FaceId }> & {
   /** a superscript's raise over the baseline (svgOfUnit: 0.36 of the line's size) */
   rise?: number
-  /** the tracking after each character, PDF units (a word laid out with tracking) */
-  track?: number
   /** an oblique face's slant, degrees (its points skewed about the baseline) */
   slant?: number
 }

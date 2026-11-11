@@ -6,7 +6,7 @@ import { fitFigureSet, sameAsSource } from '../../src/shared/figure-fit.ts'
 import { type FigureRow, figures, fontClassOf } from '../../src/shared/figures.ts'
 import type { Metrics } from '../../src/types.ts'
 
-const face = (family: string): Face =>
+const face = (family: string, id = 'x'): Face =>
   ({
     family,
     weight: 400,
@@ -15,8 +15,8 @@ const face = (family: string): Face =>
     stand: 'serif',
     caps: false,
     size: 1,
-    id: 'x',
-    ids: ['x'],
+    id,
+    ids: [id],
   }) as Face
 const metricsOf = (ready: (font: string, text: string) => boolean | 'never' = () => true): Metrics => ({
   ready,
@@ -50,8 +50,8 @@ const base = {
   grouped: () => true,
   designs: { serif: 'times', sans: 'helvetica', mono: 'courier' },
   faceOf: () => face('"axt-x"'),
-  // (a Simplified Chinese target's: its faces set a mark in one half of its em, its marks compressed)
-  rules: { cjkQuotes: true, floorMin: 0.6, centredPunct: false, compressMax: 2 },
+  // (a Simplified Chinese target's: its marks compressed)
+  rules: { cjkQuotes: true, floorMin: 0.6, compressMax: 2 },
 }
 const tr = (s: string) => ({ state: 'whole', pieces: [{ t: 'text', s, tr: true }] })
 
@@ -109,9 +109,10 @@ describe('S.figures sets a translation on its anchor by its ink, as the breaker 
     advance: (_f, size, text) => [...text].reduce((a, c) => a + (CJK.test(c) ? size : size / 2), 0),
     ink: () => [70, 20, 0],
   }
-  const one = (f: FigureRow, s: string, rules: Partial<typeof base.rules> = {}) =>
-    figures({ ...base, rules: { ...base.rules, ...rules }, figures: [f], unit: () => tr(s) as never, metrics })
-      .figures[0]!
+  // (Source Han Serif SC: its marks' ink in one half of their em, data/marks.ts)
+  const sc = () => face('"axt-shs-sc"', 'shs-sc-regular')
+  const one = (f: FigureRow, s: string, faceOf = sc) =>
+    figures({ ...base, faceOf, figures: [f], unit: () => tr(s) as never, metrics }).figures[0]!
   it('ends a right-aligned one’s ink at its original’s end, a closing mark’s blank half past it (1810.04805v2 p16 t476)', () => {
     // (a Chinese "Masked LM" in full-width parentheses, 50 wide at 10, its ink 40: the opening mark's first half and the closing
     // mark's second blank. By its advance
@@ -141,9 +142,14 @@ describe('S.figures sets a translation on its anchor by its ink, as the breaker 
     const got = one(row(5, { anchor: 'end', length: 40 }), '（蒙面LM）')
     expect([got.drawn, got.size, got.x]).toEqual([true, 10, 95])
   })
-  it('sets a target’s marks centred in their em by their advance, as its body lines are (centredPunct)', () => {
-    const got = one(row(6, { anchor: 'end', length: 50 }), '（蒙面LM）', { centredPunct: true })
-    expect([got.drawn, got.size, got.x]).toEqual([true, 10, 100])
+  it('keeps a mark its face draws in the middle of its em whole: Source Han Serif TC’s full stop, where SC’s hangs its blank half', () => {
+    // ("Masked LM." in Chinese, 40 wide, ending at 150: SC's full stop hangs its second half, 5; TC's has none, its ink in the
+    // middle of its em, the brackets of both one-sided)
+    const tc = () => face('"axt-shs-tc"', 'shs-tc-regular')
+    const sc = one(row(6, { anchor: 'end', length: 50 }), '蒙面LM。')
+    const tw = one(row(7, { anchor: 'end', length: 50 }), '蒙面LM。', tc)
+    const brackets = one(row(8, { anchor: 'end', length: 50 }), '（蒙面LM）', tc)
+    expect([sc.x, tw.x, brackets.x]).toEqual([115, 110, 105])
   })
 })
 

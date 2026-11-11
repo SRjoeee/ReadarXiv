@@ -9,7 +9,7 @@ import type { Faces } from '../src/compose/faces.ts'
 import { shapePath } from '../src/compose/highlight.ts'
 import { LINK_SCHEMES, linkLayer, textUnder, urlAllowed } from '../src/compose/links.ts'
 import { createMarks } from '../src/compose/marks.ts'
-import { cropsOf, svgOf } from '../src/compose/paint.ts'
+import { cropsOf, faceScale, svgOf } from '../src/compose/paint.ts'
 import type { Laid, Page } from '../src/compose/page.ts'
 import { laidText, TEXT_ITEMS_MAX, type TextContent } from '../src/compose/text.ts'
 import type { Clock } from '../src/stack/clock.ts'
@@ -812,6 +812,45 @@ describe('the page drawn (svgOf)', () => {
       { classOf: () => 'f' } as unknown as Faces,
     )
     expect([...svg.querySelectorAll('tspan')].map((t) => t.getAttribute('y'))).toEqual(['92', '88.4'])
+  })
+  it('draws in the target’s language, each run at its face’s size correction, its tracking after each character (lane cjk-punct)', () => {
+    // (the layout measures a run in its face string, a face's size correction its px: Source Han Serif K at 95.9; and lays a run of
+    // one x with its tracking. The SVG under an interface of another language took that one's glyphs: 2611.03953v2-zh-TW p13)
+    const page = {
+      page: 1,
+      wait: { rows: [], faces: [] },
+      links: [],
+      members: [
+        {
+          ord: 0,
+          page: 1,
+          state: 'laid',
+          off: 1,
+          lines: [
+            [
+              700,
+              72,
+              200,
+              [
+                { s: 'ABC', x: 72, face: '400 95.9px "axt-shs-k", "axt-nimbus-roman"', size: 9.22, track: 0.0958 },
+                { s: ':', x: 97.91, face: '400 100px "axt-nimbus-roman", "axt-lm-math"', size: 9.22 },
+              ],
+            ],
+          ],
+          lit: { left: [], right: [], own: [] },
+        },
+      ],
+    } as unknown as Page
+    const svg = svgOf(page, { viewBox: [0, 0, 612, 792], rotation: 0 } as never, { classOf: () => 'f' } as never, 'ko')
+    expect(svg.getAttribute('lang')).toBe('ko')
+    const spans = [...svg.querySelectorAll('tspan')]
+    expect(spans.map((t) => [t.getAttribute('font-size'), t.getAttribute('letter-spacing')])).toEqual([
+      ['8.842', '0.0958'],
+      ['9.22', null],
+    ])
+    expect(faceScale('400 95.9px "axt-shs-k"')).toBeCloseTo(0.959, 12)
+    expect(faceScale('italic small-caps 700 100px "axt-cmun-serif"')).toBe(1)
+    expect(faceScale('sans')).toBe(1)
   })
   it('draws a turned line at its angle about its origin, its runs along it from there (a figure text the original sets turned)', () => {
     const line = (dir: [number, number]) =>

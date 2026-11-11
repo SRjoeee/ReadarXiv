@@ -8,6 +8,8 @@ import { chunkStore } from '../../src/bytes/store.ts'
 import { DEFAULTS } from '../../src/prefs.ts'
 import { type Composer, createComposer, type RowsSource } from '../../src/compose/composer.ts'
 import { createFaces, type Faces } from '../../src/compose/faces.ts'
+import { createServed, type Served } from '../../src/compose/served.ts'
+import { typesetLay } from '../../src/compose/typeset.ts'
 import { groupsOf, type Groups } from '../../src/compose/groups.ts'
 import { createHighlight, type Highlight } from '../../src/compose/highlight.ts'
 import type { Ink, Item, Page } from '../../src/compose/page.ts'
@@ -112,6 +114,8 @@ const h = {
   highlight: null as Highlight | null,
   clock: null as ReturnType<typeof ownedClock> | null,
   faces: null as Faces | null,
+  /** the served faces and the reader's Metrics over them, where a layer is laid by the reader's own typesetter (`typeset`) */
+  served: null as Served | null,
   head: null as Head | null,
   parts: new Map<number, Part>(),
   pages: new Map<number, Page>(),
@@ -194,6 +198,10 @@ const h = {
       cut?: { piece: string; share: number; text: [string, string] }
       /** an element's crop whose own ink is the left share of its source, the rest another piece's (clipCrop) */
       clip?: { piece: string; share: number }
+      /** laid by the reader's own typesetter (compose/typeset.ts typesetLay: layPage under the target's rules, over our site's
+       *  faces and patterns, the reader's Metrics) from the fixture's parts and its `<target>.rows.json`, not from its dump; the
+       *  faces the served ones (`h.served`) */
+      typeset?: boolean
     } = {},
   ) {
     const fx = await (await fetch(`/fixtures/${name}/index.json`)).json()
@@ -218,21 +226,26 @@ const h = {
     )
     h.parts = parts
     const target = o.target ?? 'de'
-    const dump = (await (
-      await fetch(`/fixtures/${name}/${fx.dumps[target] ?? `${target}.reader.json`}`)
-    ).json()) as ReaderDump
     const all = (
       (await (await fetch(`/fixtures/${name}/${fx.rows[target] ?? `${target}.rows.json`}`)).json()) as { rows: Row[] }
     ).rows
-    const pages = o.pages
-      ? new Map(
-          Object.entries((await (await fetch(o.pages)).json()) as Record<string, Page>).map(([n, p]) => [Number(n), p]),
-        )
-      : pagesOf(
-          parts,
-          dump,
-          (m) => fx.face ?? ([...JSON.stringify(m)].some((c) => c.charCodeAt(0) > 127) ? 'cjk' : 'sans'),
-        )
+    // (the reader's own typesetter lays the pages as the composer asks: none made here)
+    const pages = o.typeset
+      ? new Map<number, Page>()
+      : o.pages
+        ? new Map(
+            Object.entries((await (await fetch(o.pages)).json()) as Record<string, Page>).map(([n, p]) => [
+              Number(n),
+              p,
+            ]),
+          )
+        : pagesOf(
+            parts,
+            (await (
+              await fetch(`/fixtures/${name}/${fx.dumps[target] ?? `${target}.reader.json`}`)
+            ).json()) as ReaderDump,
+            (m) => fx.face ?? ([...JSON.stringify(m)].some((c) => c.charCodeAt(0) > 127) ? 'cjk' : 'sans'),
+          )
     h.pages = pages
     if (o.cut && !cutCrop(pages, o.cut)) throw new Error(`no crop of ${o.cut.piece} to cut`)
     const clipped = o.clip ? clipCrop(pages, o.clip) : null
@@ -268,13 +281,18 @@ const h = {
       root,
       warn: (w, e) => console.warn(w, e),
     })
+    // (the reader's own typesetter: the served faces and the reader's Metrics over them, as the website's reader has them)
+    if (o.typeset) h.served ??= createServed({ fetch: (u, i) => fetch(u, i), root, warn: (w, e) => console.warn(w, e) })
+    const served = o.typeset ? (h.served as Served) : null
     const panes = h.panes as Panes
     h.composer?.dispose()
     const composer = createComposer({
       stack: panes.right,
       kit,
-      faces: h.faces,
-      lay: fixtureLay(pages, parts),
+      faces: served ? served.faces : h.faces,
+      lay: served
+        ? await typesetLay({ served, target: () => target, classes: () => o.classes ?? null })
+        : fixtureLay(pages, parts),
       unlaid: o.unlaid ?? 'original',
       lang: () => target,
       links: {

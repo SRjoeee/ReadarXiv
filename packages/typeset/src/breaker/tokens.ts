@@ -21,7 +21,7 @@
 // - `cls2`: each piece's class ← El.kind; `spacedSource`: the source writes CJK with spaces between ← a unit fact
 // - `faces`: B.faces' answers (faceOf over the role table and the paper's family) and whether a face has small capitals
 // - `P`: the rule set's fields resolved for the target (Rules.breaking, Rules.fit); `designs`: the paper's (A3)
-import { cjkClassRe, fullWidthPunctOf, kinsokuOf, keptPair, noStart, SPACELESS } from './script.ts'
+import { cjkClassRe, fullWidthPunctOf, kinsokuOf, keptPair, markOf, noStart, SPACELESS } from './script.ts'
 import { drawnText, plainTracker, shown, type TextPiece, transformMap } from './text.ts'
 import { dropMarks, type MarksAfter, type MarksTrace, mergeTail } from '../unit/marks.ts'
 import type { V0Piece } from '../unit/breaks.ts'
@@ -126,7 +126,6 @@ export type Reading = {
 export type TokenRules = {
   keepAll: boolean
   cjkQuotes: boolean
-  centredPunct: boolean
   latinPatterns: string
   cyrillicPatterns: string
   hyphenation: { minWord: number }
@@ -331,10 +330,10 @@ const spacelessEdge = (t: Token | null, end: boolean) => {
   return SPACELESS.test(ch) || SPACELESS_QUOTES.test(ch)
 }
 /**
- * A token whose edge is a full-width mark's blank side: its last character a closing mark (its white after its ink), or its
- * first an opening mark (its white before), by the marks' class table (script.ts punctOf), whether the target's faces set the
- * mark in one half of its em or in its middle. Full-width by Unicode: a mark of the CJK blocks (script.ts CJK: the full-width and
- * wide forms, East Asian Width F or W) wherever it stands; a curly quote (East Asian Width A, ambiguous) only where the target
+ * A token whose edge is a full-width mark's outer side: its last character a closing mark (the white after it), or its first an
+ * opening mark (the white before it), by what the mark does in the text (script.ts punctOf), wherever its face draws its ink (a
+ * mark set in the middle of its em has white on both sides). Full-width by Unicode: a mark of the CJK blocks (script.ts CJK: the
+ * full-width and wide forms, East Asian Width F or W) wherever it stands; a curly quote (East Asian Width A, ambiguous) only where the target
  * sets it in its CJK face (`cjkFace`), an em wide; an alphabet's target sets it in its Latin face, proportional. A space there is
  * no space of the text's: the mark carries the white, and a translator's space beside it doubled it (2611.03953v2-zh's
  * references, each name followed by U+FF0C and a space: about 1 em of white a name where the original's comma and space held
@@ -435,7 +434,7 @@ export function tokens(i: TokensInput): Tokens {
     if (Number.isInteger(own)) return { color: own! > 0 ? hexOf(own!) : undefined, colourRun: true }
     return {}
   }
-  const { keepAll, cjkQuotes, centredPunct: centred, latinPatterns: latinLang, cyrillicPatterns: cyrLang } = P
+  const { keepAll, cjkQuotes, latinPatterns: latinLang, cyrillicPatterns: cyrLang } = P
   const minWord = P.hyphenation.minWord
   const cjkRe = cjkClassRe(cjkQuotes)
   const kinsoku = kinsokuOf(P.noStart, P.noEnd)
@@ -563,10 +562,9 @@ export function tokens(i: TokensInput): Tokens {
               t.cont = true
             } else if (q === 0 && n > 0 && !(!keepAll && (p.cls === 'cjk' || parts[n - 1]!.cls === 'cjk')))
               t.glue = true
-            // (a mark's class where it is full-width (markBlankEdge's definition: of the CJK blocks, or set in the target's CJK
-            // face); none where an alphabet's target sets a curly quote in its Latin face, proportional, no blank half to hang or take)
-            if (p.cls === 'cjk' && s.length === 1 && !centred && P.compressMax >= 0)
-              t.punct = fullWidthPunctOf(s, face.id !== faceOf(st, 'latin').id)
+            // (a mark's blank half as its face draws it, measured in the face's own file (script.ts markOf): none where its ink
+            // crosses its em's middle, nor where an alphabet's target sets a curly quote in its Latin face, which holds no measure)
+            if (p.cls === 'cjk' && s.length === 1) t.punct = markOf(s, face.ids)
             if (
               !runs &&
               !all &&

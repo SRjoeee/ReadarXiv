@@ -11,6 +11,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
+import { judgePunct, measurePunct, PUNCT_TARGETS, punctRows } from './punct.mjs'
 import { answerBytes, startServer } from './server.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -233,6 +234,15 @@ const fixtureRoute = {
           })),
         }),
       )
+    }
+    // (the full-width punctuation's check's rows, punct.mjs: written for it, given the fixture's own units' ids)
+    const punct = /^([a-zA-Z-]+)\.rows\.json$/.exec(file ?? '')?.[1]
+    if (punct && PUNCT_TARGETS.includes(punct) && existsSync(join(f.files, 'de.rows.json'))) {
+      const rows = punctRows(punct, JSON.parse(readFileSync(join(f.files, 'de.rows.json'), 'utf8')).rows)
+      if (rows) {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        return res.end(JSON.stringify(rows))
+      }
     }
     const at = join(f.files, file)
     if (!existsSync(at)) return false
@@ -4612,6 +4622,54 @@ for (const name of Object.keys(fixtures)) {
 }
 if (process.env.AXT_RESIDUE_OUT)
   (await import('node:fs')).writeFileSync(process.env.AXT_RESIDUE_OUT, `${JSON.stringify(residues, null, 1)}\n`)
+
+// ---------------------------------------------------------------- the full-width punctuation (lane cjk-punct, punct.mjs)
+// s1-columns laid by the reader's own typesetter in each CJK target, the interface the owner's (the document zh-CN), every laid
+// page's drawing measured as the browser drew it (AXT_PUNCT_OUT=<file> writes the measures)
+const punctOut = {}
+for (const target of PUNCT_TARGETS)
+  await check(
+    `compose: full-width punctuation as its face draws it (s1-columns, ${target}): no mark's ink on a neighbour's, one place in its box a character in a face, every run drawn at the layout's advance (docs/PDF-READER.md §18.47)`,
+    async () => {
+      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      const { page, context, errors } = await newPage({ viewport: { width: 5000, height: 900 } })
+      try {
+        await page.evaluate(() => {
+          document.documentElement.lang = 'zh-CN'
+        })
+        await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
+        await page.evaluate((t) => window.__h.layer('s1-columns', { typeset: true, target: t }), target)
+        const laid = []
+        for (const n of [1, 2]) {
+          await page.evaluate((n) => window.__h.panes.goToPage('right', n), n)
+          await waitFor(page, (n) => !!window.__h.composer.laid(n), n, 60_000)
+          if (await page.evaluate((n) => window.__h.composer.laid(n).members.some((m) => m.state === 'laid'), n))
+            laid.push(n)
+        }
+        const m = await measurePunct(page, laid)
+        const v = judgePunct(m)
+        punctOut[target] = { verdict: v, measures: m }
+        assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+        assert(laid.length && !v.missing.length, `pages laid ${laid}; marks never drawn: ${v.missing.join('')}`)
+        assert(
+          !v.overlaps.length && !v.wandering.length && !v.advancesOff,
+          JSON.stringify({ overlaps: v.overlaps, wandering: v.wandering, advances: v.advances, off: v.advancesOff }),
+        )
+        return {
+          pages: laid,
+          marks: v.marks,
+          runs: v.runs,
+          worstAdvance: v.worstAdvance,
+          context: v.context,
+          beside: v.beside,
+        }
+      } finally {
+        await context.close()
+      }
+    },
+  )
+if (process.env.AXT_PUNCT_OUT)
+  (await import('node:fs')).writeFileSync(process.env.AXT_PUNCT_OUT, `${JSON.stringify(punctOut, null, 1)}\n`)
 
 await browser.close()
 await server.close()

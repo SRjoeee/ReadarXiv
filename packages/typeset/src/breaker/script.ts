@@ -2,6 +2,8 @@
 // none beside, the line-break marks (UAX 14's no-start class and the rule set's lists). Ported from engine 065c1d973:
 // rules/script.mjs (CJK_BLOCKS, CJK, cjkClassWith, SPACELESS), layer-proto/no-start.mjs (NO_START, noStart, keptPair),
 // layer-proto/layer1.mjs:197-219 (lastOf, kinsokuOf), layer-proto/layer2.mjs:2096-2104 (PUNCT_CLOSE, PUNCT_OPEN, cjkClassRe).
+// A mark's blank half is its face's measure (markOf, lane cjk-punct), no longer today's class by character.
+import { MARK_INK } from '../data/marks.ts'
 
 /** Unicode's CJK blocks, Hangul's among them, and its full-width forms (rules/script.mjs) */
 const CJK_BLOCKS: [number, number][] = [
@@ -38,17 +40,41 @@ export const cjkClassRe = (quotes: boolean) => CJK_CLASS[quotes ? 1 : 0]
 export const PUNCT_CLOSE =
   /^[\u3001\u3002\uFF0C\uFF0E\uFF1A\uFF1B\uFF01\uFF1F\uFF09\u300D\u300F\u3011\u3015\u3009\u300B\u3019\u3017”’]$/
 export const PUNCT_OPEN = /^[\uFF08\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016“‘]$/
-/** a CJK character's mark class, the tokens' `punct` (L2:2096-2104): `close` where its ink stands in its em's first half, the
- *  second blank, `open` where in its second; null where it is neither. A CJK character alone, where the rules' faces set the
- *  marks in one half of the em (not `centredPunct`) */
+/** a full-width mark's side by what it does in the text (L2:2096-2104): `close` for the marks that close or end something (the
+ *  white a space after it would double is its), `open` for those that open something (the white before it); null for any other
+ *  character. Where its face draws its ink is no part of it: that is markOf's. The space rule's alone (tokens.ts markBlankEdge) */
 export const punctOf = (s: string): 'open' | 'close' | null =>
   PUNCT_CLOSE.test(s) ? 'close' : PUNCT_OPEN.test(s) ? 'open' : null
-/** a mark's class where it is full-width, its blank half its own: a mark of the CJK blocks (CJK: the full-width and wide forms,
- *  East Asian Width F or W) wherever it stands; a curly quote (East Asian Width A, ambiguous) only where the target sets it in its
- *  CJK face (`cjkFace`), an em wide, never where an alphabet's target sets it in its Latin face, proportional (lane cjk-space,
- *  B.tokens; the figure edge's blank halves, S.figures blanksOf). None for any other character */
+/** a mark's side where it is full-width: a mark of the CJK blocks (CJK: the full-width and wide forms, East Asian Width F or W)
+ *  wherever it stands; a curly quote (East Asian Width A, ambiguous) only where the target sets it in its CJK face (`cjkFace`),
+ *  an em wide, never where an alphabet's target sets it in its Latin face, proportional (lane cjk-space, B.tokens). None for any
+ *  other character */
 export const fullWidthPunctOf = (s: string, cjkFace: boolean): 'open' | 'close' | null =>
   CJK.test(s) || cjkFace ? punctOf(s) : null
+
+/** each CJK face's marks by character: its ink's left and right edges, thousandths of its advance (data/marks.ts) */
+const MARKS: ReadonlyMap<string, ReadonlyMap<string, readonly [number, number]>> = new Map(
+  Object.entries(MARK_INK).map(([id, a]) => {
+    const m = new Map<string, readonly [number, number]>()
+    for (let i = 0; i + 2 < a.length; i += 3) m.set(String.fromCodePoint(a[i]!), [a[i + 1]!, a[i + 2]!])
+    return [id, m]
+  }),
+)
+/**
+ * A mark's blank half as the face that draws it has one (the tokens' `punct`; docs/PDF-READER.md §18.47): `close` where its
+ * glyph's ink lies within the first half of its advance (its second half blank: the half a line's end hangs past the measure,
+ * a mark after it takes, a compressed line takes), `open` where within the second (its first half blank); null where its ink
+ * crosses the middle, or the face holds no measure of it: it keeps its whole box. The face is the first of `ids` (a run's
+ * faces, Face.ids) whose marks were measured: the target's CJK face, in its own file (data/marks.ts, each face's default
+ * glyph, the one the reader draws); an alphabet's face holds none. The same character in the same face so has one place in
+ * its box wherever it stands: 2611.03953v2's colon in Japanese, whose Mincho draws it in the middle of its em, was cut by
+ * half under the digits after it; Traditional Chinese's face draws its comma, full stop and colon in the middle
+ */
+export function markOf(ch: string, ids: readonly string[] | undefined): 'open' | 'close' | null {
+  const id = ids?.find((f) => MARKS.has(f))
+  const ink = id === undefined ? undefined : MARKS.get(id)!.get(ch)
+  return !ink ? null : ink[1] <= 500 ? 'close' : ink[0] >= 500 ? 'open' : null
+}
 
 /** UAX 14's characters no line may start with (classes CL, CP, EX, IS, NS), Unicode 16 (no-start.mjs NO_START) */
 const NO_START: [number, number][] = (

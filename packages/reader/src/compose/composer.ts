@@ -123,7 +123,7 @@ export interface ComposerOptions {
   faces: Faces
   lay: Lay
   unlaid: 'original' | 'composed'
-  /** the target's language tag for the text layer */
+  /** the target's language tag: the drawing's (its SVG's `lang`, which the browser picks glyphs by) and the text layer's */
   lang(): string
   links: LinkHooks
   /** the reader's clock (default the browser's timers) */
@@ -359,7 +359,7 @@ export function createComposer(o: ComposerOptions): Composer {
     el.style.setProperty('--axt-frame-w', `calc(var(--total-scale-factor) * ${raw.pageWidth}px)`)
     el.style.setProperty('--axt-frame-h', `calc(var(--total-scale-factor) * ${raw.pageHeight}px)`)
     const up = uprightOf(at.viewport)
-    el.append(turned(svgOf(page, at.viewport, faces), at.viewport))
+    el.append(turned(svgOf(page, at.viewport, faces, o.lang()), at.viewport))
     const tSvg = performance.now()
     const pdfPage = await doc.getPage(n)
     const out = (at.view as unknown as { outputScale?: { sx: number; sy: number } }).outputScale ?? { sx: 1, sy: 1 }

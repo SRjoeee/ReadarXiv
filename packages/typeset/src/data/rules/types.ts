@@ -8,6 +8,8 @@ export type ScriptRules = {
   leadFloor: number
   trackMin: number
   compressMax: 0 | 1 | 2
+  /** the set's (schema 10) and today's engine's; read by no part of the typesetter: a mark's blank half is the measure of the
+   *  face that draws it (breaker/script.ts markOf, lane cjk-punct), whatever the target */
   centredPunct: boolean
   borrow: 0 | 1
   floor: number

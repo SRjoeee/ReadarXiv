@@ -91,11 +91,6 @@ const SQUEEZE = 0.02
  * spacing), and the line is set as before; the squeeze is for the lines a group left letter-spaced
  */
 const STRETCH_MIN = 0.05
-/** the full-width marks whose blank half a squeeze may take: those whose ink stands in one half of the em in every CJK face
- *  the layer draws (the comma, the full stop, the enumeration comma, brackets and quotes); not the colon, the semicolon and
- *  the exclamation and question marks, which a Japanese face sets in the em's middle (Harano Aji's question mark reaches
- *  0.72 em: cut by half, it ran into the next character) */
-const SQUEEZE_MARKS = /^[\u3001\u3002\uFF0C\uFF0E\uFF08\uFF09\u300C\u300D\u300E\u300F\u3010\u3011\u3014\u3015\u3008\u3009\u300A\u300B\u3018\u3019\u3016\u3017\u201C\u201D\u2018\u2019]$/
 /** whether an item continues the word of the item before it (tokensOf2's pushText: a piece after a break point inside a word,
  *  `brk` — a URL's after its `/`, `.`, `-`, a compound's after its hyphen —, or a run of one case of a word, `cont`): the gap
  *  before it is a break point with no glue, as TeX's url package sets one (\Urlmuskip 0mu: a penalty) and as TeX sets every
@@ -111,13 +106,16 @@ const gapsOf = items => { const kt = tabOf(items); let n = 0; for (let k = 1; k 
 /** whether a line is set as Latin text, its slack in its word spaces (placeItems): it has spaces (a hung label's aside), and its
  *  script breaks only at spaces or fewer than half its items are CJK */
 const latinishOf = (items, P) => { const kt = tabOf(items); return items.some((it, k) => it.t.space && k > kt) && (P.keepAll || items.filter(it => it.t.cls === 'cjk').length < items.length / 2) }
-/** the marks of a line whose blank half a squeeze may take (placeItems): its full-width marks that have not lost one (`cut`),
- *  but the closing mark at its end where it hangs in the margin; none where the state compresses as far as the rules let it
- *  (compress 2: every mark has lost its half) or the rules compress none (compressMax 0) */
-const squeezable = (items, hangs, compress, P) => (compress < P.compressMax ? items.filter((it, n) => it.t.punct && !it.cut && SQUEEZE_MARKS.test(it.t.s) && !(hangs && n === items.length - 1)) : [])
+/** the marks of a line whose blank half a squeeze may take (placeItems): its marks with one as their face draws them (the
+ *  tokens' `punct`, script.ts markOf: a mark whose ink crosses its em's middle has none, Harano Aji's colon and question mark,
+ *  Source Han Serif TC's full stop) that have not lost it (`cut`), but the closing mark at its end where it hangs in the margin;
+ *  none where the state compresses as far as the rules let it (compress 2: every mark has lost its half) or the rules compress
+ *  none (compressMax 0) */
+const squeezable = (items, hangs, compress, P) => (compress < P.compressMax ? items.filter((it, n) => it.t.punct && !it.cut && !(hangs && n === items.length - 1)) : [])
 /**
- * A full-width mark's blank half at a line's edge, which is none of the line's ink, in em of the line's size: a mark's ink
- * stands in one half of its em (a closing mark's in the first, an opening mark's in the second: the tokens' `punct`). An
+ * A full-width mark's blank half at a line's edge, which is none of the line's ink, in em of the line's size: the half of its
+ * em its face draws no ink in (a closing mark's ink in the first, an opening mark's in the second: the tokens' `punct`, the
+ * face's own measure, script.ts markOf; a mark whose ink crosses the middle has none, and keeps its whole box). An
  * opening mark that opens a line loses its leading half wherever the state compresses the marks at all (compress 1 or 2: a
  * target whose rules compress none keeps it, leadOf); a closing mark that ends a line hangs its trailing half past the line's
  * edge, unless the mark has lost that half already (`cut`; at compress 2 every mark has, hangOf). So a line stands on its
