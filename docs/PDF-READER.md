@@ -4154,11 +4154,11 @@ proved costly or tangled with other rules. Nothing is decided by this section bu
   buys the same units but lets the fill spread them to it: the 2608.25210v2 footnote 0.50 / 1.05 / 1.52 / 2.54 pt under the
   bottom at 0.5 / 1.0 / 1.5 / 2.5 pt, its two columns visibly uneven at 2.5. The decision between them and none is the owner's.
 - **If it were ever the default**, these lab checks would flag each borrowed line, and none is changed here: the parity's
-  `block` measure (`fidelity.mjs`: a line under its run's room, TeX's bottom, past 0.05 pt) and with it the verdict's
-  `pastRoom` (`verdict.mjs` budgetPastRoom, pastRoomPass: a size or line count bought with a line past TeX's room is that
-  side's fault, so v2's kept size would no longer be judged nearer where today's was bought so); the typesetter's own tests
-  that no line passes TeX's bottom (`tests/unit/entry.test.ts`, the borrowing cases) hold with the option off and would need
-  the option's case beside them.
+  `block` measure (`fidelity.mjs`: a line under its run's room, TeX's bottom, past 0.05 pt) and with it the verdict's `pastRoom`
+  (`verdict.mjs` budgetPastRoom, pastRoomPass: a size or line count bought with a line past TeX's room is that side's fault, so
+  v2's kept size would no longer be judged nearer where today's was bought so); the typesetter's own tests that no line passes
+  TeX's bottom (`packages/typeset/tests/unit/entry.test.ts`, the borrowing cases) hold with the option off and would need the
+  option's case beside them.
 
 ## 19. The engine's contract
 
