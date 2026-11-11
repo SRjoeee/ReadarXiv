@@ -55,6 +55,7 @@ import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
 import { groupLettersOf, groupStyleOf, hasScopes, namesFace } from './group-style.ts'
 import { groupStyleOf as commandStyleOf, type DisplayLine, type InkInput, type InkStats, inkOf } from './ink.ts'
+import type { FloatLine } from './today/today.types.ts'
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from './today/today.types.ts'
@@ -187,6 +188,10 @@ export interface Located {
   /** the lines on A the units made there read as a display's formula (ink.ts DisplayLine), where A's pages were given: what the
    *  lab's stage states a unit absent from the candidate by (lab/pdf/prepare-back/stated.mjs) */
   displays: DisplayLine[]
+  /** the lines on A TeX set inside a counted float that no unit owns, read as their float's text by depth alone, where A's pages
+   *  were given (ink.ts; today's ledger, PDF-READER §18.45): stated beside the units, never read by them; the lab's stage lists
+   *  them and its report counts them */
+  floatLines: FloatLine[]
   stats: {
     units: number
     located: number
@@ -431,6 +436,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // (each unit's \baselineskip where its paragraph ends, LINES_TEX's AXT-LINES: its members' lead)
   const texSkip = new Map((ins.tex.skips ?? []).map((k) => [k.unit, k.baselineskip]))
   const displays: DisplayLine[] = []
+  const floatLines: FloatLine[] = []
   const stats: Located['stats'] = {
     units: ins.units.length,
     located: 0,
@@ -1205,6 +1211,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       stats: st,
       block,
       displays: dl,
+      floatLines: fl,
     } = inkOf({
       ins,
       inkA,
@@ -1220,6 +1227,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       fixed: artefacts ? fixedFaces : null,
     })
     displays.push(...dl)
+    floatLines.push(...fl)
     // (a unit of the author block TeX sets away from the block under the title — acmart's reference format, amsart's addresses
     // at the paper's end — is the text it is there, of no toggle: `textnames` (the owner's ruling of 2026-11-09). One set in the
     // block keeps its kind; where no title is located, none is told apart)
@@ -2419,7 +2427,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       if (mem.opensLost) stats.opensLost = (stats.opensLost ?? 0) + mem.opensLost
     } else noteUnlocated(mem.cause ?? 'no ink')
   }
-  return { units, members, born, flows, ties, links, groups, figureGroups, stats, displays }
+  return { units, members, born, flows, ties, links, groups, figureGroups, stats, displays, floatLines }
 }
 
 /** a single line's alignment its block read centred (Member.byBlock), read again over the TeX line its flow says it shares: the

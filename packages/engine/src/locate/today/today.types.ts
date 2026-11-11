@@ -96,6 +96,30 @@ export interface TodayFigures {
 }
 export interface TodayLedger {
   lines: unknown[]
+  /** (ADDED) the lines the depth rule reads as their float's text, stated (listed at most ORPHAN_LINES_MAX) and counted */
+  floatLines: FloatLine[]
+  floatCount: { lines: number; letters: number; why: Record<FloatWhy, number> }
+  /** the letters of the orphan lines (class `orphan`) */
+  orphanLetters: number
+}
+/** why no unit owns a float line, as far as the ledger knows (ledger.mjs FLOAT_WHY) */
+export type FloatWhy = 'code' | 'cells' | 'nocells' | 'other'
+/** a line TeX set inside a counted float that no unit owns, read as its float's text by its depth alone (ledger.mjs, ADDED;
+ *  PDF-READER §18.45): its page, its float's bracket number (`fs<n>`) and caption type, why, its text's characters, letters and
+ *  words of three letters, its box (x0, x1, baseline y, size) and its text (a paper's words: the lab's run alone holds them) */
+export interface FloatLine {
+  page: number
+  float: number | null
+  type: string | null
+  why: FloatWhy
+  chars: number
+  letters: number
+  words: number
+  x0: number
+  x1: number
+  y: number
+  size: number
+  text: string
 }
 
 export const figureUnitsOf = fig.figureUnitsOf as (
@@ -127,7 +151,14 @@ export const DRAW_BAND = fig.DRAW_BAND as readonly [number, number]
 export const ledgerOf = ledger.ledgerOf as (
   pages: readonly TodayPage[],
   own: { glyphs: (string | null)[][] },
-  o: { units: readonly TodayUnit[] },
+  /** `floats`, each unit's caption float type by its id (InstrumentUnit's `float`), which the float lines read */
+  o: { units: readonly TodayUnit[]; floats?: readonly (string | null)[] },
+) => TodayLedger
+/** the ledger once the ink units own what they own (claimInk): its orphan letters those no unit owns still */
+export const inkLeft = ledger.inkLeft as (
+  ledger: TodayLedger,
+  own: TodayOwn,
+  pages: readonly TodayPage[],
 ) => TodayLedger
 export const inkUnitsOf = inkUnits.inkUnitsOf as (
   pages: readonly TodayPage[],

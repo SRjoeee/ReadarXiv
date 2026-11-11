@@ -4565,6 +4565,44 @@ than its source writes.
   where acmart's `\authors` is empty until `\maketitle` fills it, so that it is answered inkless and never marked (its own
   item); the names' glyphs are then the paragraph's text.
 
+### 18.45 The float lines: a float's line no unit owns, stated and counted (2026-11-11)
+
+The ledger (the engine's copy, `packages/engine/src/locate/today/ledger.mjs`) reads a line of TeX's own text inside a counted
+float that no unit owns as its float's text, the class `figures`, by its depth alone (RULES' last `figures`), before it could be an
+orphan: a line the reader should have read and did not was seen nowhere. Over the lab's 88 papers (r17) that is 787 lines in 32
+papers: algorithm listings (kept as the original's on purpose, the owner's ruling of 2026-11-08), tables read with no cell (a
+tabular inside a command whose argument the front end does not walk: a paper's own wrapper, a `\centerline`, §18.46), a cell
+table's text no cell owns (a row label, a whole row, an identifier cell kept by its rule, §18.25), sub-captions of a package not
+read. The coordinator's ruling of 2026-11-11: these lines are not gated as orphans (most are kept by decision); they are stated
+and counted, so that a miss is seen.
+
+- **The statement** (ADDED to the ledger; no class moves). Each line the depth rule reads is stated (`floatLines`, listed as the
+  orphans are, at most `ORPHAN_LINES_MAX`; `floatCount`, every one): its page; its float, the bracket `fs<n>` innermost open at its
+  first glyph, read in stream order as the depth is (a float of no counter passed over, §18.34); that float's caption type
+  (InstrumentUnit's `float`), of the caption whose start mark stands inside the bracket, else of the one TeX set against it with
+  no glyph between (float.sty's styles set a float's caption around the box `\@endfloatbox` made, which the bracket wraps:
+  ruled's above it, plain's below); its text's characters, letters and words of three letters; its box (x0, x1, baseline,
+  size); and why no unit owns it, as far as the ledger knows: `code` (a glyph of it TeX set in a code region, or its float an
+  algorithm's, the front end's `algorithm` float, whose body it keeps), `cells` (its float holds a cell, none of which owns it),
+  `nocells` (its float a table's that holds no cell), `other` (the rest).
+- **Where it goes.** Beside the units, never into them: locate's `Located.floatLines`, and `InkStats.ledger`
+  (`stats.made.ledger`): `{ orphanLetters, floatLines, floatLetters, floatWhy }`, where `orphanLetters` are the letters of the
+  orphan lines no ink unit owns once the ink units own theirs (invariant (o), today's `wrapFinal` `inkLeft`). The rebuild's
+  stage 1a carried no orphan count before; the lab's (o) check, `lab/pdf/spikes/ledger.mjs`, runs today's engine over the gate
+  pack's final passes and still covers that engine alone. Nothing of either reaches the bundle, a part, a row or the wire. Stage 1a
+  (`lab/pdf/prepare-back/run.mjs`) writes the counts in its summary line and its located file (`stats.made.ledger`, new) and the
+  listed lines there (`floatLines`, new: a paper's words, the lab's data alone); `lab/pdf/prepare-back/float-lines.mjs <run>`
+  reports them per paper and in total beside the orphan letters, against a baseline of counts (`--baseline`;
+  `lab/pdf/records/float-lines.json`, r17's: counts and kinds only, never a line's text). A report, not a gate.
+- **Over the 88** (stage 1a at this change, over r17's compiles): every bundle object and every prepare dump byte-identical to
+  r17's (2,707 of 2,707 objects, 88 of 88 dumps); the located files equal but for the two new fields and their timings. Float
+  lines 787 in 32 papers (11,820 letters): `code` 187 in 13 papers (the listings of algorithm floats), `cells` 258
+  in 21, `nocells` 326 in 2 (2610.37668v1's 317, every table inside the paper's `\fittabular`; 2608.06701v1's 9, a table inside
+  `\centerline`), `other` 16 (subfigure.sty's sub-captions, 6, which the subcaption lane reads; 9 lines of 2608.25210v2's
+  algorithm2e floats, whose captions are no unit, so nothing tells the float an algorithm's; one "Else:" in a figure of
+  2610.21765v1). Orphan letters 388 in 11 papers. The added work: one pass over a page's points and glyphs where a line is a
+  float line (`floatsOf`), and `inkLeft` over the orphan lines once.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
