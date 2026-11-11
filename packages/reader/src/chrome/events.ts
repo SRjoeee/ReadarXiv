@@ -96,7 +96,8 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
         ...(l.asOriginal ? { original: l.asOriginal } : {}),
       })
   }
-  if (l.s === 'refused' && (pl?.s !== 'refused' || pl.why !== l.why))
+  // (a refusal told again with another time is told again: the time said is the last our server named)
+  if (l.s === 'refused' && (pl?.s !== 'refused' || pl.why !== l.why || pl.retryAt !== l.retryAt))
     out.push({ type: 'unavailable', why: LAYER_WHY[l.why] ?? 'unreachable', retryAt: l.retryAt })
   if (!!p?.reconnecting !== !!next.reconnecting) out.push({ type: 'link', reconnecting: !!next.reconnecting })
   // the translation under way is what the view shown waits for (reader.ts `waits`, session/rows.ts viewOf), counted over the layer

@@ -18,9 +18,10 @@
 // complete or failed for that target (and again for a run our server starts again; rows made here, for a newer layer of other
 // units); arXiv's HTML version once the bilingual one cannot be had; a timer for each retry, wait and deadline held.
 //
-// Today's pacing of our server (R session/run.ts, PDF-READER §11.10, UI.md S-R-24, S-R-26): a 429 waits its time (at least a
-// second, at most ten minutes) and asks again, REFUSED_ASKS times in a row at most, then the look stops until a retry, which asks
-// at once for as many more; an answer that moves the paper on ends a run of them. Our server out of reach (an ask failed twice,
+// Our server's pacing (PDF-READER §8, §11.10, UI.md S-R-24, S-R-26): a 429 waits the time our server names, as it names it
+// (the one source of the time said, of the retry's and of the session's own next ask), and asks again, REFUSED_ASKS times in a
+// row at most, then the look stops until a retry, which asks once that time has come, for as many more; an answer that moves the
+// paper on ends a run of them. Our server out of reach (an ask failed twice,
 // the client's) stops the look until a retry; so does a prepare followed for PREPARE_DEADLINE_MS with the tab shown. Nothing is
 // asked of our server while the tab is hidden, and that time is not counted. A head that cannot draw ends the look before a unit
 // goes to the service; a head over another original than the left shows puts our copy of it on the left before the layer is used.
@@ -46,12 +47,13 @@ export const GATE_MS = 1500
 export const PREFS_MS = 1500
 export const BACKOFF_MS = 1000
 export const BACKOFF_MAX_MS = 30_000
-/** a 429's wait, never sooner than our server asks: at least a second, at most ten minutes (R run.ts WAIT_MIN, WAIT_MAX) */
+/** a 429's wait where our server names none */
 export const WAIT_MIN_MS = 1000
+/** the longest reconnection time a stream may name that a follow waits (client.ts): its polling's pace alone, never a time said */
 export const WAIT_MAX_MS = 600_000
 /** how many 429s in a row are waited out and asked again by the reader itself; the next stops the look, said as our server's
- *  limit, and a retry asks at once (R run.ts REFUSED_ASKS: a visitor's limit lasts up to a day, and a tab left open asked again
- *  every ten minutes for as long as it stayed open, #88 E5) */
+ *  limit with its time, and a retry asks once that time has come (R run.ts REFUSED_ASKS: a visitor's limit lasts up to a day,
+ *  and a tab left open asked again for as long as it stayed open, #88 E5) */
 export const REFUSED_ASKS = 3
 /** a prepare followed this long with the tab shown is given up: the bilingual version not to be had now, a retry asks again
  *  (R run.ts PREPARE_DEADLINE_MS) */
@@ -142,8 +144,9 @@ export type LinkRegion =
   /** `lost`: its stream broke, fell silent or ended while work runs, and is asked again, nothing heard since (the website's
    *  "reconnecting"); a stream our server ended after a document in which nothing runs is not lost (client.ts follow) */
   | { s: 'on'; t: Ticket; target: string | null; heard: boolean; lost?: boolean }
-  /** the look stopped: waiting a 429's time (`retryAt`, its timer), or until a retry (`retryAt` null) */
-  | { s: 'stopped'; why: StopWhy; retryAt: number | null; timer: Ticket | null }
+  /** the look stopped: `retryAt` our server's time (a 429's, as it named it: said, and a retry before it asks nothing; null where
+   *  it named none), `wake` when the session asks again by itself (null: a retry alone asks), its timer */
+  | { s: 'stopped'; why: StopWhy; retryAt: number | null; wake: number | null; timer: Ticket | null }
 export type LayerRegion =
   | { s: 'none' }
   | { s: 'preparing'; stage: string | null; position: number | null; progress: number | null; units: Ref[] }
@@ -329,9 +332,6 @@ export const displayOf = (s: State): Display => (holdOf(s) || s.held ? 'original
 /** whether a composed translation is to be shown: the display shows the translation and the reader sets the target (what is
  *  read ahead for laying it waits on this: a visit that shows the original asks none of it) */
 export const translationShown = (s: State): boolean => displayOf(s) !== 'original' && supported(s, targetOf(s))
-/** a 429's wait as the reader waits it: our server's, at least a second, at most ten minutes */
-export const waitOf = (ms: number | null | undefined): number =>
-  Math.min(WAIT_MAX_MS, Math.max(WAIT_MIN_MS, typeof ms === 'number' && Number.isFinite(ms) ? ms : WAIT_MIN_MS))
 
 const mint = (s: State, slot: string): [Ticket, number] => [`${slot}#${s.next}`, s.next + 1]
 
@@ -519,16 +519,16 @@ export function needsOf(s: State): Need[] {
 const layerFinal = (s: State) => s.layer.s === 'ready' && !s.doc?.layer?.stale && s.doc?.prepare.state !== 'running'
 /** whether the open is asked for some need now: one whose wait is over, not yet asked this visit */
 const openWanted = (s: State) => needsOf(s).some((n) => n.at === null && !s.open.asked.includes(n.id))
-/** a 429: waited out and asked again (REFUSED_ASKS in a row at most), then the look stopped until a retry, which asks at once */
+/** a 429: our server's time as it names it (a second where it names none), waited out and asked again (REFUSED_ASKS in a row
+ *  at most), then the look stopped until a retry, which asks once that time has come */
 function refusedFor(s: State, why: 'busy' | 'limit', afterMs: number | null | undefined) {
   s.refusals++
-  s.link =
-    s.refusals > REFUSED_ASKS
-      ? { s: 'stopped', why, retryAt: null, timer: null }
-      : { s: 'stopped', why, retryAt: s.now + waitOf(afterMs), timer: null }
+  const retryAt =
+    s.now + (typeof afterMs === 'number' && Number.isFinite(afterMs) && afterMs >= 0 ? afterMs : WAIT_MIN_MS)
+  s.link = { s: 'stopped', why, retryAt, wake: s.refusals > REFUSED_ASKS ? null : retryAt, timer: null }
 }
 const outOfReach = (s: State) => {
-  s.link = { s: 'stopped', why: 'unreachable', retryAt: null, timer: null }
+  s.link = { s: 'stopped', why: 'unreachable', retryAt: null, wake: null, timer: null }
 }
 
 /** the input folded into its region */
@@ -818,7 +818,7 @@ export function settle(s0: State): State {
   const opening = s.open.missing
   // (offline with no layer: out of reach, as every ask of today's failed at once)
   if (s.engaged && !s.online && sets && s.layer.s !== 'ready' && s.layer.s !== 'refused' && s.link.s !== 'stopped')
-    s.link = { s: 'stopped', why: 'unreachable', retryAt: null, timer: null }
+    s.link = { s: 'stopped', why: 'unreachable', retryAt: null, wake: null, timer: null }
   const wantLink =
     s.engaged &&
     s.online &&
@@ -831,7 +831,7 @@ export function settle(s0: State): State {
   const linkTarget = s.here ? null : target
   if (s.link.s === 'stopped') {
     if (lasting) s.link = { s: 'off' }
-    else if (s.link.retryAt !== null && !s.link.timer) s.link = { ...s.link, timer: take('timer') }
+    else if (s.link.wake !== null && !s.link.timer) s.link = { ...s.link, timer: take('timer') }
   } else if (!wantLink) s.link = { s: 'off' }
   else if (s.link.s === 'off') s.link = { s: 'on', t: take('link'), target: linkTarget, heard: false }
   else if (s.link.target !== linkTarget) s.link = { s: 'on', t: take('link'), target: linkTarget, heard: false }
@@ -915,7 +915,7 @@ export function resources(s: State): Map<Ticket, Spec> {
   if (s.gate.timer) out.set(s.gate.timer, { slot: 'timer', at: s.now + GATE_MS })
   if (s.prefs.timer) out.set(s.prefs.timer, { slot: 'timer', at: s.now + PREFS_MS })
   if (s.link.s === 'on') out.set(s.link.t, { slot: 'link', target: s.link.target })
-  if (s.link.s === 'stopped' && s.link.timer) out.set(s.link.timer, { slot: 'timer', at: s.link.retryAt ?? s.now })
+  if (s.link.s === 'stopped' && s.link.timer) out.set(s.link.timer, { slot: 'timer', at: s.link.wake ?? s.now })
   if (s.prepare.timer)
     out.set(s.prepare.timer, {
       slot: 'timer',

@@ -581,9 +581,13 @@ describe('the session: the open, wherever the document lacks what the visit need
       expect(opens(m)).toEqual([{ slot: 'open', target: ZH }])
     }
     refuse('quota', 1000)
-    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'limit', retryAt: null })
+    const due = m.s.now + 1000
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'limit', retryAt: due, wake: null })
     expect(opens(m)).toEqual([])
+    // (a retry before our server's time asks nothing; at it, at once)
     m.feed({ i: 'cmd.retry' })
+    expect(opens(m)).toEqual([])
+    m.at(due).feed({ i: 'cmd.retry' })
     expect(opens(m)).toEqual([{ slot: 'open', target: ZH }])
   })
 })
@@ -602,10 +606,13 @@ describe("the session: our server's pacing (today's run)", () => {
       expect(m.has('link')).toBe(true)
     }
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 60_000 })
-    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'limit', retryAt: null })
-    expect((m.s.link as { timer: Ticket | null }).timer).toBeNull()
-    // a retry at the limit asks at once, for three more
+    // (the fourth: our server's time kept, said and the retry's, but not asked again by the session itself)
+    const due = m.s.now + 60_000
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'limit', retryAt: due, wake: null, timer: null })
     m.feed({ i: 'cmd.retry' })
+    expect(m.has('link')).toBe(false)
+    // a retry at our server's time asks at once, for three more
+    m.at(due).feed({ i: 'cmd.retry' })
     expect(m.has('link')).toBe(true)
     expect(m.s.refusals).toBe(0)
     for (let n = 1; n <= REFUSED_ASKS; n++) {
@@ -613,15 +620,20 @@ describe("the session: our server's pacing (today's run)", () => {
       m.feed({ i: 'time', t: (m.s.link as { timer: Ticket }).timer, now: m.s.now + 1000 })
     }
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'busy', afterMs: 1000 })
-    expect(m.s.link).toMatchObject({ s: 'stopped', retryAt: null })
+    expect(m.s.link).toMatchObject({ s: 'stopped', retryAt: m.s.now + 1000, wake: null })
   })
-  it("a 429's wait is at least a second and at most ten minutes; one with no time named waits a second", () => {
+  it("a 429's wait is our server's as it names it, however long: the time said, the retry's and the session's own next ask; one with no time named waits a second", () => {
     const m = machine()
-    m.at(5).feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 86_400_000 })
-    expect(m.s.link).toMatchObject({ retryAt: 5 + WAIT_MAX_MS })
-    m.feed({ i: 'time', t: m.timerAt(5 + WAIT_MAX_MS), now: 5 + WAIT_MAX_MS })
+    // (a visitor's day of new papers spent: the window ends 20 hours on)
+    m.at(5).feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 72_000_000 })
+    expect(m.s.link).toMatchObject({ retryAt: 5 + 72_000_000, wake: 5 + 72_000_000 })
+    expect([...resources(m.s).values()]).toContainEqual({ slot: 'timer', at: 5 + 72_000_000 })
+    // (nothing asked of our server before it: not at ten minutes, the old cap)
+    expect(() => m.timerAt(5 + WAIT_MAX_MS)).toThrow()
+    m.feed({ i: 'time', t: m.timerAt(5 + 72_000_000), now: 5 + 72_000_000 })
+    expect(m.has('link')).toBe(true)
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'busy', afterMs: null })
-    expect(m.s.link).toMatchObject({ retryAt: 5 + WAIT_MAX_MS + 1000 })
+    expect(m.s.link).toMatchObject({ retryAt: 5 + 72_000_000 + 1000 })
   })
   it('an answer that moves the paper on ends a run of 429s', () => {
     const m = machine()
@@ -679,7 +691,7 @@ describe("the session: our server's pacing (today's run)", () => {
   it('our server out of reach (an ask failed twice, the client’s): the look stopped, said, and asked again by a retry alone', () => {
     const m = machine()
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'network' })
-    expect(m.s.link).toEqual({ s: 'stopped', why: 'unreachable', retryAt: null, timer: null })
+    expect(m.s.link).toEqual({ s: 'stopped', why: 'unreachable', retryAt: null, wake: null, timer: null })
     expect(m.has('link')).toBe(false)
     m.feed({ i: 'env.online', on: true })
     expect(m.has('link')).toBe(false)

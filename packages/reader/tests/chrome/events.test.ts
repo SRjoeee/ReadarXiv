@@ -149,6 +149,12 @@ describe("the reader's state as the chrome's", () => {
       expect(fold([base, open, s]).available, why).toBe(!SESSION_LASTING.has(why as never))
     }
   })
+  it('a refusal told again with a new time: the chrome follows it (one source for the time said, status inventory 4.2.8)', () => {
+    const first = { ...open, layer: { s: 'refused' as const, why: 'limit' as const, retryAt: 60_000 } }
+    const again = { ...open, layer: { s: 'refused' as const, why: 'limit' as const, retryAt: 3_600_000 } }
+    expect(fold([base, open, first, again]).unavailable).toEqual({ why: 'refused', retryAt: 3_600_000 })
+    expect(eventsOf(again, again)).toEqual([])
+  })
   it("rows failing: a key missing is the settings' card; out of reach the network; a refusal a bad request; a target the reader does not set its own notice", () => {
     expect(kindOf({ kind: 'server' })).toBe('network')
     expect(kindOf({ kind: 'unavailable' })).toBe('network')
