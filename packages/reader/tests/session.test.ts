@@ -11,6 +11,7 @@ import {
   holdOf,
   init,
   type Input,
+  linkSaid,
   PREPARE_DEADLINE_MS,
   type Prefs,
   REFUSED_ASKS,
@@ -673,6 +674,15 @@ describe("the session: our server's pacing (today's run)", () => {
       expect((m.s.link as { wake: number }).wake, `skew ${skew}`).toBe(wake)
       expect([...resources(m.s).values()]).toContainEqual({ slot: 'timer', at: wake })
     }
+  })
+  it("the network down is said where the view waits on our server's rows (linkSaid); rows made here wait on the host's translator, which tells its own failures", () => {
+    const m = composedNow()
+    m.feed({ i: 'env.online', on: false })
+    expect(linkSaid(m.s, true)).toEqual({ reconnecting: false, network: true })
+    expect(linkSaid(m.s, false)).toEqual({ reconnecting: false, network: false })
+    const here = composedNow({ here: true })
+    here.feed({ i: 'env.online', on: false })
+    expect(linkSaid(here.s, true)).toEqual({ reconnecting: false, network: false })
   })
   it('an answer that moves the paper on ends a run of 429s', () => {
     const m = machine()
