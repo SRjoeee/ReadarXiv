@@ -725,20 +725,27 @@ describe("the session: our server's pacing (today's run)", () => {
     expect(m.s.link).toMatchObject({ s: 'stopped', why: 'rate', wake: m.s.now + 60_000 })
   })
   it("a 429 that names no wait (0 s) is asked again no sooner than a second on, and the same refusal again backs off, doubled to thirty seconds or our server's time at most; the time said stays our server's", () => {
-    const m = machine()
-    const asks: number[] = []
-    for (let n = 1; n <= 10; n++) {
-      m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
-      asks.push(m.s.now)
-      m.feed({ i: 'open.answered', t: m.live('open'), doc: null, refused: { why: 'rate', afterMs: 0 } })
-      // (said as our server named it: due now; the session's own next ask its own)
-      expect(m.s.link).toMatchObject({ s: 'stopped', why: 'rate', retryAt: m.s.now })
-      const wake = (m.s.link as { wake: number }).wake
-      expect(wake - m.s.now, `ask ${n}`).toBe(Math.min(30_000, 1000 * 2 ** (n - 1)))
-      m.feed({ i: 'time', t: m.timerAt(wake), now: wake })
+    // (the visitor's rate, and our server at capacity, the queue's, which neither counts toward REFUSED_ASKS)
+    for (const why of ['rate', 'busy'] as const) {
+      const q = machine()
+      const asks: number[] = []
+      for (let n = 1; n <= 10; n++) {
+        q.feed({ i: 'follow.lost', t: q.live('link'), why: 'not-opened' })
+        asks.push(q.s.now)
+        q.feed({ i: 'open.answered', t: q.live('open'), doc: null, refused: { why, afterMs: 0 } })
+        // (said as our server named it: due now; the session's own next ask its own)
+        expect(q.s.link).toMatchObject({ s: 'stopped', why, retryAt: q.s.now })
+        const wake = (q.s.link as { wake: number }).wake
+        expect(wake - q.s.now, `${why} ask ${n}`).toBe(Math.min(30_000, 1000 * 2 ** (n - 1)))
+        q.feed({ i: 'time', t: q.timerAt(wake), now: wake })
+      }
+      const gaps = asks.slice(1).map((t, k) => t - (asks[k] as number))
+      expect(gaps, why).toEqual([1000, 2000, 4000, 8000, 16_000, 30_000, 30_000, 30_000, 30_000])
     }
-    const gaps = asks.slice(1).map((t, k) => t - (asks[k] as number))
-    expect(gaps).toEqual([1000, 2000, 4000, 8000, 16_000, 30_000, 30_000, 30_000, 30_000])
+    const m = machine()
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+    m.feed({ i: 'open.answered', t: m.live('open'), doc: null, refused: { why: 'rate', afterMs: 0 } })
+    m.feed({ i: 'time', t: m.timerAt(m.s.now + 1000), now: m.s.now + 1000 })
     // (another answer ends the run: the next refusal waits a second again)
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
     m.feed({ i: 'open.answered', t: m.live('open'), doc: preparing(1, UNITS) })
