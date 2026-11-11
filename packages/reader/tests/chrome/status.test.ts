@@ -60,6 +60,27 @@ describe("the states (the reader's design, §8)", () => {
     expect(lineOf(at({ phase: 'ready', progress: 1 })).on).toBe(false)
     expect(lineOf(at({ phase: 'failed' })).on).toBe(false)
   })
+  it("the line by the prepare's stage, its places in turn on the prepare's stretch; the translation after a prepare from where the prepare left it, without one from the download (the coordinator's decision 4, 2026-11-11)", () => {
+    const v = (over: Partial<ReaderState>, prepared = false) => lineOf(at(over), false, prepared).value
+    const PREPARED = 0.15 + 0.85 * 0.5
+    const places = [0, 0.02, 0.12, 0.52, 0.68, 0.97].map((progress) =>
+      v({ phase: 'preparing', made: true, preparing: { position: null, progress } }),
+    )
+    expect(places[0]).toBeCloseTo(0.15)
+    for (let k = 1; k < places.length; k++) expect(places[k]).toBeGreaterThan(places[k - 1] as number)
+    expect(places.at(-1)).toBeLessThan(PREPARED)
+    // (the early units' run ended while the layer is made: the prepare's place, never the whole line)
+    expect(
+      v({ phase: 'translating', laying: true, made: true, progress: 1, preparing: { position: null, progress: 0.12 } }),
+    ).toBeCloseTo(places[2] as number)
+    // (the layer landed, its count not known: the prepare's end)
+    expect(v({ phase: 'translating', made: true, progress: 1, translated: { got: 0, total: 0 } })).toBeCloseTo(PREPARED)
+    // the translation takes what remains after a prepare; a visit with no prepare keeps today's line
+    expect(
+      [0, 0.5, 1].map((progress) => v({ phase: 'translating', progress, translated: { got: 1, total: 2 } }, true)),
+    ).toEqual([PREPARED, PREPARED + (1 - PREPARED) * 0.5, 1])
+    expect([0, 0.5, 1].map((progress) => v({ phase: 'translating', progress }))).toEqual([0.15, 0.15 + 0.85 * 0.5, 1])
+  })
   it("the line while the original is held on screen as the paper is made (a host's rule): the original's load, whole once read, as the website's page draws it (L11 third round, gap 3)", () => {
     const held = (over: Partial<ReaderState>) => lineOf(at({ display: 'original', loaded: 1, ...over }), true)
     expect(held({ phase: 'preparing', preparing: { position: null, progress: 0.2 } })).toEqual({ on: true, value: 1 })

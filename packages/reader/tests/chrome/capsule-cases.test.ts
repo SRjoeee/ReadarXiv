@@ -168,7 +168,7 @@ function visit(store: Store, beats: Beat[], first: Partial<Prefs> = {}) {
         s.layer.s === 'ready'
           ? { s: 'ready', laid: s.panes.laid, total: 4, asOriginal: 0 }
           : s.layer.s === 'preparing'
-            ? { s: 'preparing', position: s.layer.position, progress: s.layer.progress }
+            ? { s: 'preparing', stage: s.layer.stage }
             : { s: 'none' },
       rows:
         r.s === 'none'

@@ -213,8 +213,8 @@ export function spokenOf(state: ReaderState): string {
  * The progress line under the toolbar, all that shows a load or a translation under way (the maintainer, 2026-09-25):
  * one line over the whole process, which never starts again (the maintainer asked why it ran twice, 2026-10-02;
  * ProgressLine holds the longest it reached) — the PDF's download its first stretch when a translation follows it (all of
- * it when the original alone is shown), then, where the paper's layer is being prepared, half the rest as its prepare
- * comes along, then the paragraphs translated to the end
+ * it when the original alone is shown), then, where the paper's layer is being prepared, half the rest by the prepare's
+ * stage, then the paragraphs translated to the end, from where the prepare left it (the coordinator's decision 4, 2026-11-11)
  */
 export interface Line {
   on: boolean
@@ -223,16 +223,41 @@ export interface Line {
 /** the line's share for the download where a translation follows it, and the prepare's of the rest */
 const DOWNLOAD = 0.15,
   PREPARE = 0.5
+/** where the prepare's stretch ends, and the translation that follows it in the same process starts */
+const PREPARED = DOWNLOAD + (1 - DOWNLOAD) * PREPARE
+/**
+ * Each stage of a prepare (our server's record's `prepare.stage`, its PREPARE_STAGES in order) at a fixed place on the prepare's
+ * stretch, as a share of it: where the stage starts in the time a prepare takes, the mean of the two staging timelines of
+ * 2026-11-11 (a new paper's, 2610.20266v1: 87.9 s; a paper prepared again after a deploy, 2610.21924v1: 95.6 s). Fetching is
+ * short (10 % of the time), compiling the long one (59 % and 22 %), the units and their layout the rest, the bundle the last
+ * few seconds. No time-based creeping: the line moves as the record's stage does, never back (ProgressLine)
+ */
+const PREPARE_PLACES: Readonly<Record<string, number>> = {
+  fetching: 0.02,
+  compiling: 0.12,
+  units: 0.52,
+  'laying-out': 0.68,
+  bundle: 0.97,
+}
+/** a prepare's stage as the share of the prepare's stretch the line stands at: 0 before its first stage, or for a stage this reader
+ *  does not know */
+export const prepareShare = (stage: string | null): number => (stage !== null && PREPARE_PLACES[stage]) || 0
 /** `held`: the original held on screen by the host's rules (heldOf): while the paper is made the line is the original's load, whole
  *  once it is read, as the website's page draws it there (its phase still the original's loading in the original's display, the
- *  maintainer's ruling that nothing a website reader sees changes at the cut-over: L11 third round, gap 3) */
-export function lineOf(state: ReaderState, held = false): Line {
+ *  maintainer's ruling that nothing a website reader sees changes at the cut-over: L11 third round, gap 3). `prepared`: this
+ *  process of the line had the paper's first making (ProgressLine): the translation takes what remains after the prepare's
+ *  stretch, never a share of the whole that leaves the line standing still; a process without one keeps the download's base */
+export function lineOf(state: ReaderState, held = false, prepared = false): Line {
   if (held && running(state)) return { on: true, value: state.loaded }
   if (state.phase === 'loading')
     return { on: true, value: state.loaded * (state.display === 'original' ? 1 : DOWNLOAD) }
-  if (state.phase === 'preparing')
-    return { on: true, value: DOWNLOAD + (1 - DOWNLOAD) * PREPARE * (state.preparing?.progress ?? 0) }
-  return { on: running(state), value: DOWNLOAD + (1 - DOWNLOAD) * state.progress }
+  // (the prepare by its stage; its early units' run ended meanwhile, the end held, is the prepare's still)
+  if (state.phase === 'preparing' || (state.laying && state.preparing))
+    return { on: running(state), value: DOWNLOAD + (PREPARED - DOWNLOAD) * (state.preparing?.progress ?? 0) }
+  // (the layer of the first making landed and the count of its translation not known yet: the prepare's end)
+  if (running(state) && firstOf(state)) return { on: true, value: PREPARED }
+  const base = prepared ? PREPARED : DOWNLOAD
+  return { on: running(state), value: base + (1 - base) * state.progress }
 }
 
 /** a refusal for now with nothing of the translation laid: the bilingual version not to be had now, and none of it on screen */

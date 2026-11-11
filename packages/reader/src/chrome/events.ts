@@ -6,6 +6,7 @@ import type { ProviderErrorKind } from '@readarxiv/ui'
 import type { ReaderState } from '../reader.ts'
 import type { LayerWhy } from '../session/machine.ts'
 import type { SessionEvent, Unavailable } from './model.ts'
+import { prepareShare } from './status.ts'
 
 /** the reader's reason a layer was refused, as the chrome says it: a lasting refusal keeps the original and greys the translated
  *  displays, a passing one offers a retry */
@@ -81,8 +82,9 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
   if (!p || p.view.heading !== v.heading) out.push({ type: 'heading', id: v.heading })
   const l = next.layer,
     pl = p?.layer
-  if (l.s === 'preparing' && (pl?.s !== 'preparing' || pl.position !== l.position || pl.progress !== l.progress))
-    out.push({ type: 'preparing', position: l.position, progress: l.progress })
+  // (the prepare's stage, our server's record's own, as the share of the prepare the progress line stands at: status.ts)
+  if (l.s === 'preparing' && (pl?.s !== 'preparing' || pl.stage !== l.stage))
+    out.push({ type: 'preparing', position: null, progress: prepareShare(l.stage) })
   if (l.s === 'ready') {
     if (pl?.s !== 'ready') out.push({ type: 'prepared' }, { type: 'coming' })
     if (pl?.s !== 'ready' || pl.laid !== l.laid || pl.total !== l.total || pl.asOriginal !== l.asOriginal)

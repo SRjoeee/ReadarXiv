@@ -386,6 +386,27 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
   the status region. (The harness's fifth round moved the progress into a fill of the capsule, ink at 8 %, with the
   status words; the maintainer asked for the line back, 2026-09-25 — the status words were what had to leave the
   header, not the line — and then for no capsule while it runs: the line says it.)
+- **The prepare on the line** (the coordinator's decision 4, 2026-11-11): where a paper's layer is made in the process,
+  the half of the line after the download is the prepare's, and the line moves by the stage our server's record names
+  (`prepare.stage`, `status.ts` `PREPARE_PLACES`): each stage at a fixed place on that stretch, where it starts in the time
+  a prepare takes, the mean of the two staging timelines of 2026-11-11 (a new paper's, 2610.20266v1, 87.9 s; a paper
+  prepared again after a deploy, 2610.21924v1, 95.6 s). No stage names on screen and no time-based creeping; it never
+  runs back. The translation after it takes what remains, from the prepare's end to the whole line; a process without a
+  prepare keeps the download's base (the translation from 15 %). Until then the reader read a place in a queue and a
+  progress the record does not carry, so the line stood at 15 % for a new paper's whole prepare (88 s on staging), and
+  the early units' run ending while the layer was made filled it at 36 s.
+
+  | Stage | Its start in the two timelines | Its place on the prepare's stretch | On the line |
+  |---|---|---|---|
+  | (told, none yet) | 0 % | 0 | 15 % |
+  | fetching | 2.4 %, 1.4 % | 0.02 | 15.9 % |
+  | compiling | 12.9 %, 11.2 % | 0.12 | 20.1 % |
+  | units | 71.5 %, 33.2 % | 0.52 | 37.1 % |
+  | laying-out | 79.7 %, 55.9 % | 0.68 | 43.9 % |
+  | bundle | 95.1 %, 99.0 % | 0.97 | 56.2 % |
+  | the layer shown, its count not known | | the stretch's end | 57.5 % |
+  | the translation | | | 57.5 % to 100 % by the share translated |
+
 - The paragraphs that failed are told once the run has ended, not while it runs.
 - **A translation under way is what the view shown waits for**, not our server's record of its runs (`session/rows.ts`
   `viewOf`, told as the reader state's `rows.waits`). One of the units of the layer shown that the paper does not keep
@@ -576,7 +597,7 @@ No state that tells the reader nothing is shown (no "done").
 |---|---|---|
 | Reading | 原文; a translation ready; a stored translation shown, offline included | nothing |
 | Loading | a large PDF is loading | the progress line by the share downloaded, its first stretch; 正在加载 said to screen readers |
-| Preparing | the paper's bilingual files are being made (our server's prepare, a paper no reader opened before) | the original; the progress line's first half after the download, by the prepare's progress; 正在准备 said to screen readers (S-R-23) |
+| Preparing | the paper's bilingual files are being made (our server's prepare, a paper no reader opened before) | the original; the progress line's first half after the download, by the prepare's stage (§6.6); 正在准备 said to screen readers (S-R-23); the website's capsule says the translation the reader waits for, with the time a first one takes (§6.6) |
 | Translating | the paper's paragraphs being translated by the service chosen | the same line on, by the share of paragraphs done; 正在翻译 said to screen readers; each page laid on the right as its paragraphs come, the original's page until then |
 | Not to be had now | Read arXiv's website out of reach, or at its limit | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24); passing, not remembered; a paper whose files this machine keeps opens without it |
 | Some paragraphs failed | a translation with gaps | capsule: {n} 处翻译失败 · 重试 · close |

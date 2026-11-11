@@ -127,8 +127,6 @@ export interface Doc {
       }
     | undefined
   >
-  position?: number | null
-  progress?: number | null
 }
 
 export type OriginalRegion =
@@ -146,7 +144,9 @@ export type LinkRegion =
   | { s: 'stopped'; why: StopWhy; retryAt: number | null; timer: Ticket | null }
 export type LayerRegion =
   | { s: 'none' }
-  | { s: 'preparing'; stage: string | null; position: number | null; progress: number | null; units: Ref[] }
+  /** `stage`: the prepare's, as our server's record names it (PREPARE_STAGES: fetching, compiling, units, laying-out, bundle), null
+   *  before the first */
+  | { s: 'preparing'; stage: string | null; units: Ref[] }
   | {
       s: 'ready'
       catalog: Ref
@@ -418,14 +418,7 @@ function layerOfDoc(s: State, d: Doc): LayerRegion {
   }
   if (d.layer) return { s: 'refused', why: 'outdated', retryAt: null, timer: null }
   const p = d.prepare
-  if (p.state === 'running')
-    return {
-      s: 'preparing',
-      stage: p.stage,
-      position: d.position ?? null,
-      progress: d.progress ?? null,
-      units: p.units,
-    }
+  if (p.state === 'running') return { s: 'preparing', stage: p.stage, units: p.units }
   if (p.state === 'failed')
     return {
       s: 'refused',
