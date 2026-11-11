@@ -257,7 +257,30 @@ describe('layoutMarking', () => {
     // aastex's deluxetable: rows the scanner does not read as cells, \\ between them, \enddata after the last
     const rows = unit('para', [text('Polarization '), ph('&'), text(' Right '), ph('\\\\'), text('\n'), ph('$\\theta$'), text(' (peak) '), ph('&'), text(' x '), ph('\\\\'), text('\n'), ph('\\cline{1-2}'), text(' Wave '), ph('\\cite{a}'), ph('\\\\'), text('\n'), ph('\\enddata')])
     const { units: marked } = layoutMarking([rows], MARK_CLASSES, { lines: false })
-    expect(srcs(marked[0])).toEqual(['text', 'ph &', 'text', 'ph \\\\', 'text', 'ph \\axtpmm{p0.5a}', 'ph $\\theta$', 'ph \\axtpm{p0.5b}', 'text', 'ph &', 'text', 'ph \\\\', 'text', 'ph \\cline{1-2}', 'text', 'ph \\axtpma{p0.13a}', 'ph \\cite{a}', 'ph \\axtpm{p0.13b}', 'ph \\\\', 'text', 'ph \\enddata'])
+    // (the piece passed over after the last row's `\\` has its opening point before the break, at the end of the row's last cell,
+    // where nothing of the row's start is: \enddata's; \cline, a kernel command of no class, none)
+    expect(srcs(marked[0])).toEqual(['text', 'ph &', 'text', 'ph \\\\', 'text', 'ph \\axtpmm{p0.5a}', 'ph $\\theta$', 'ph \\axtpm{p0.5b}', 'text', 'ph &', 'text', 'ph \\\\', 'text', 'ph \\cline{1-2}', 'text', 'ph \\axtpma{p0.13a}', 'ph \\cite{a}', 'ph \\axtpm{p0.13b}', 'ph \\axtpma{p0.16a}', 'ph \\\\', 'text', 'ph \\enddata'])
+  })
+  it('gives a placeholder after a forced break its opening point before the break, where nothing stands between the break and it', () => {
+    // (a placeholder the marking passes over after `\\` (passedOver: a table's row may begin there, read as prose) had no point
+    // at all: 2608.25210v2 u143's algorithm lines. Its opening point goes before the break, set as \axtpma sets one, so that the
+    // break's look-ahead, a row's first token, TeX's discarding at the new line's start and the vertical mode after a centred
+    // line's `\\` are the original's)
+    const after = unit('para', [text('Reference Format:'), ph('\\\\'), text('\n'), ph('\\names'), text(' and the title.')])
+    expect(srcs(layoutMarking([after], MARK_CLASSES, { lines: false }).units[0])).toEqual(['text', 'ph \\axtpma{p0.3a}', 'ph \\\\', 'text', 'ph \\names', 'text'])
+    // (a placeholder the marking gives its opening point after the break today, glued to the word after it, keeps it there)
+    const glued = unit('para', [text('Reference Format:'), ph('\\\\'), text('\n'), ph('\\vldbauthors'), text('. ')])
+    expect(srcs(layoutMarking([glued], MARK_CLASSES, { lines: false }).units[0])).toEqual(['text', 'ph \\\\', 'text', 'ph \\axtpma{p0.3a}', 'ph \\vldbauthors', 'text'])
+    // (a run of breaks: before its first)
+    const run = unit('para', [text('Line one'), ph('\\\\'), text('\n'), ph('\\\\[4pt]'), text('\n'), ph('\\foo'), text(' two')])
+    expect(srcs(layoutMarking([run], MARK_CLASSES, { lines: false }).units[0])).toEqual(['text', 'ph \\axtpma{p0.5a}', 'ph \\\\', 'text', 'ph \\\\[4pt]', 'text', 'ph \\foo', 'text'])
+    // (nothing before the break in the unit, its head: none, as today; nor after an alignment's tab, where it would stand before
+    // the tab)
+    const head = unit('para', [ph('\\\\'), text('\n'), ph('\\foo'), text(' two')])
+    // (\\axthpk's, the head's paper macro's point, as today)
+    expect(srcs(layoutMarking([head], MARK_CLASSES, { lines: false }).units[0])).toEqual(['ph \\\\', 'text', 'ph \\axthpk{p0.2a}', 'ph \\foo', 'text'])
+    const tab = unit('para', [text('a '), ph('&'), text(' '), ph('\\foo'), text(' b')])
+    expect(srcs(layoutMarking([tab], MARK_CLASSES, { lines: false }).units[0])).toEqual(['text', 'ph &', 'text', 'ph \\foo', 'text'])
   })
   it('after a cell\'s tab the same: tabularray\'s \\SetCell must open its cell', () => {
     // a tblr table read as one paragraph (2608.03994): \\SetCell[c=4]{c} after an opening mark spanned no columns

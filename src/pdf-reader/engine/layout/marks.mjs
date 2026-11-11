@@ -1754,6 +1754,36 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       if (said === '1' || !closes || (looks(p) && !(cls === 'footnote' && said === '0')) || (ENDS_IN_CS.test(p.src) && !identifierPiece(p.src)) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
       return [open, piece, { t: 'ph', src: `${lead}\\axtpm{${name}b}` }]
     })
+    // (a placeholder the marking passes over after a forced break (passedOver) has its opening point before the break, before the
+    // first of a run of breaks: nothing may stand between a break and what follows it — a table's row begins with its own first
+    // token (\noalign, \omit), the break looks ahead for `*` and `[`, and TeX discards the glue, kerns and penalties at the new
+    // line's start, which a whatsit there would keep; after a centred line's `\\` (\@centercr) TeX is in vertical mode. Set as
+    // \axtpma sets one at the end of the line that ends (the glue before it taken off and put back, so that the break's \unskip
+    // takes it as before); none where the run stands in the unit's head, nor after an alignment's tab, before which it would
+    // stand. 2608.25210v2 u143's algorithm lines, PDF-READER §18.29)
+    if (own(u)) {
+      const head = headEnd(u.pieces, 0)
+      const blank = r => r.t === 'text' && !/[^ \t\r\n]/.test(r.s)
+      for (let k = 0; k < u.pieces.length; k++) {
+        const p = u.pieces[k]
+        if (p.t !== 'ph' || !BREAK.test(p.src ?? '') || out[k].length !== 1 || out[k][0] !== u.pieces[k]) continue
+        let j = k + 1
+        while (j < u.pieces.length && blank(u.pieces[j])) j++
+        const q = u.pieces[j]
+        if (!q || q.t !== 'ph' || BREAK.test(q.src ?? '') || q.src === '&' || !passed?.has(j) || out[j].length !== 1 || out[j][0] !== u.pieces[j]) continue
+        const cls = classOf(q)
+        if (!cls || !on.has(cls) || (cls === 'macro' && none.has(q.src))) continue
+        let f = k
+        for (let b = k - 1; b >= 0; b--) {
+          const r = u.pieces[b]
+          if (blank(r)) continue
+          if (r.t === 'ph' && BREAK.test(r.src ?? '') && out[b].length === 1) { f = b; continue }
+          break
+        }
+        if (f < head) continue
+        out[f] = [{ t: 'ph', src: `${lead}\\axtpma{${cls === 'footnote' ? 'n' : 'p'}${i}.${j}a}` }, ...out[f]]
+      }
+    }
     // (a closing mark after the punctuation mark its piece's command moves: the text after the piece cut after that mark)
     for (const [k, close] of movedAt) {
       const t = u.pieces[k + 1], cut = (a, b) => ({ ...t, s: t.s.slice(a, b), ...(t.src !== undefined ? { src: t.src.slice(a, b) } : {}) })
