@@ -4113,7 +4113,7 @@ supplemental note, left the original's English).
   Chinese by Microsoft, the references toggle on: 2610.20030v1 p5's journal part, a crop of the original's English, is now
   "软物质 18，2168（2022）." with its numbers the original's ink; its note "“请参见[出版社将插入网址]的补充资料，获取图表S1-S3和电影字幕。”".
 
-### 18.34 A face that fills a bibliography field travels as production sends it (2026-11-11)
+### 18.38 A face that fills a bibliography field travels as production sends it (2026-11-11)
 
 Today's wire (`mt.mjs` planOf) sends a `.bbl` field's pair as markers, a pair that sets more than a style, and a face group whose
 two ends stand at those markers is kept by its boundary rule, so production draws that face: `In \bibinfo{booktitle}{\emph{
