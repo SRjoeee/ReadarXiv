@@ -366,6 +366,13 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
     widths. Measured frame by frame in Chromium, Firefox and WebKit (`tests/e2e/probes/capsule.mjs`).
   - **Reduced motion**: opacity with the 2 px blur, at once; nothing slides; the width snaps, growing at once and
     shrinking once the old words have gone (150 ms); the spinner stands (the maintainer, 2026-10-04).
+  - **A run's capsule enters once its wait has lasted 400 ms** (`WAIT_SHOWN_MS`, `StatusCapsule.tsx`; the coordinator's
+    decision 3, 2026-11-11): a wait the reader cannot perceive is not announced. A wait that ends sooner shows nothing
+    and says nothing to a screen reader; once in, the capsule stays through every change of its stage and words (a count
+    that pauses and moves again, our server heard again) and leaves at once when no run's capsule is wanted. It is the
+    family of the page's mark, which PDF.js draws after 400 ms (`--loading-icon-delay`), and of the translating marks'
+    0.3 s. A refusal, an error, a notice and a toast are not delayed. The case it was made for: a stored translation's
+    first page and a settled paper's reopening, under a second each on staging, said a run's word every time.
   - **What a screen reader is told**: the words' cell is `aria-hidden`; the sentence is told whole (or `spoken`, other
     words, where it holds a count said once a stage) in a line of its own, once per change of that text. A language's
     own name (S-R-13) is a part drawn in its own `lang` (`withPart`; Devin on #313).

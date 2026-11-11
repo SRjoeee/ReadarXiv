@@ -2024,7 +2024,8 @@ await check(
         const { page, context, errors } = await newPage({ path: 'chrome.html' })
         await page.evaluate((w) => window.__c.open('s2-splits', { words: w }), words)
         await waitFor(page, () => window.__c.reader?.state().layer.s === 'preparing', null, 20_000)
-        await page.waitForTimeout(300)
+        // (past the 400 ms a run's wait lasts before its capsule enters)
+        await page.waitForTimeout(700)
         const during = await page.evaluate(() => {
           const el = document.querySelector('.capsule:not([data-out])')
           return el
