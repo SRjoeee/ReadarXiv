@@ -36,6 +36,7 @@ import type { PageViewport, PDFPageProxy } from 'pdfjs-dist'
 import type { Kit } from '../pdfjs/kit.ts'
 import type { Faces } from './faces.ts'
 import type { Ink, Item, Laid, Page } from './page.ts'
+import { faceScale } from './paint.ts'
 
 /** PDF.js's text content of a page, and a text item of it */
 export type TextContent = Awaited<ReturnType<PDFPageProxy['getTextContent']>>
@@ -283,7 +284,12 @@ export function laidText(
         const family = face ? faces.familyOf(face) : 'sans-serif'
         const font = `axt-${face ?? 'crop'}`
         styles[font] ??= { fontFamily: family, ascent: 0.8, descent: -0.2, vertical: false }
-        const width = 'src' in it ? (it.src[3] - it.src[1]) * it.k : measure(it.s, family, size)
+        // (a run's advance as it is drawn (paint.ts svgOf): its face at its size with its size correction, its tracking after each
+        // character, as the layout measured it; docs/PDF-READER.md §18.48)
+        const width =
+          'src' in it
+            ? (it.src[3] - it.src[1]) * it.k
+            : measure(it.s, family, size * faceScale(it.face)) + (it.track ? it.track * [...it.s].length : 0)
         // (a run set along a direction, a figure text the original sets turned: its matrix turned with it, at its place along its
         // line from the line's origin, so that PDF.js's layer turns its span as it is drawn, selected and copied there)
         const dir = 'dir' in it ? it.dir : undefined

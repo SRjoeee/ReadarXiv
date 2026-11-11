@@ -451,6 +451,29 @@ describe('the laid text layer (§11.11)', () => {
       expect(at('KI').transform).toEqual([0, 8, -8, 0, 171, 648])
       expect(r.translated).toHaveLength(2)
     })
+    it("spans a run as it is drawn: its face's size correction and its tracking after each character (docs/PDF-READER.md §18.48)", () => {
+      // (a Korean run in Source Han Serif K, whose face string is 95.9 px at 100: drawn at size × 0.959 (paint.ts faceScale),
+      // a word of one x laid with tracking 0.25 after each of its characters, three syllables written by code point for the English
+      // gate; the stub measures half the size a character)
+      const m = placed(1, [[700, 50, 100]])
+      const content = contentOf([OC, item('word', 50, 700, 40), EMC, item('Foot', 50, 100, 20)])
+      const run = {
+        s: String.fromCodePoint(0xc138, 0xbd84, 0xd654),
+        x: 50,
+        face: '400 95.9px "axt-shs-k", "axt-nimbus-roman"',
+        size: 10,
+        track: 0.25,
+      }
+      const r = laidText(
+        content,
+        pageOf({ ...laid(1, [[700, 50, 100, [run]]]), off: 3 }),
+        new Map([[1, m]]),
+        facesStub,
+        measure,
+      )
+      const at = (r.content.items as { str?: string; width?: number }[]).find((x) => x.str === run.s)
+      expect(at?.width).toBeCloseTo(3 * 10 * 0.959 * 0.5 + 3 * 0.25, 9)
+    })
     it('tells two turned labels whose origins share a page y apart: a line change across their run, its size its own', () => {
       // (Codex on #632: two y-axis words turned a quarter, along (0, 1) from (100, 300) and (112, 300), size 8; read by page y
       // and page x their boundary was neither a line change nor a space, and their words ran together when copied)
