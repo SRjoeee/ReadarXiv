@@ -270,6 +270,24 @@ for (const pair of pairs) {
   globalThis.__parityFill = undefined
   // (the part's facts of every member with a line on a page, by page: what the measures read of the original)
   const bundle = l1Paper(paperOf(pair))
+  // (a unit's elements' sources by piece id, nested spans' too: the measures read today's element of v2's by it where the two
+  // units' pieces are numbered otherwise, fidelity.mjs todayElementOf)
+  const sources = new Map()
+  const sourcesOf = (u) => {
+    if (!u) return new Map()
+    if (!sources.has(u.id)) {
+      const out = new Map()
+      const walk = (c) => {
+        for (const q of c ?? []) {
+          if (q.t === 'el' && typeof q.src === 'string') out.set(String(q.id), q.src)
+          if (q.t === 'span') walk(q.content)
+        }
+      }
+      walk(u.content)
+      sources.set(u.id, out)
+    }
+    return sources.get(u.id)
+  }
   // (each member of the entry's Pages joined to today's unit, laid or not: the part's and today's units', join.mjs; by the
   // glyphs too, where v2's unit holds as elements the addresses today's held as text, over today's prepare dump)
   const today = bundle ? todayJoin(pages, bundle, ledger(pair).units, todayPrepared(paperOf(pair)), stated) : {}
@@ -296,7 +314,8 @@ for (const pair of pairs) {
             : {}),
           // (its elements: each [piece, kind, its ink's boxes on this page [x0, y0, x1, y1, base], how many boxes its ink has on
           // every page, its text (1 stated: its glyphs' reading; 2 stated empty: TeX set nothing; 0 none; a symbol is drawn from
-          // its source's name, by its kind), raised (a mark, a raised symbol), kept, literal (a URL, a code mark: El.literal))
+          // its source's name, by its kind), raised (a mark, a raised symbol), kept, literal (a URL, a code mark: El.literal), its
+          // source as the unit holds it (null where none: the measure then reads today's element by its piece id alone))
           ...(m.els?.length
             ? {
                 els: m.els.map(([k, e]) => [
@@ -308,6 +327,7 @@ for (const pair of pairs) {
                   e.mark || e.sym?.[1] ? 1 : 0,
                   e.keep ? 1 : 0,
                   e.literal ? 1 : 0,
+                  sourcesOf(typeof m.text === 'string' ? bundle.units.get(m.text) : undefined).get(k) ?? null,
                 ]),
               }
             : {}),

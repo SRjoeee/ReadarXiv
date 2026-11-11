@@ -220,6 +220,29 @@ describe("reduce: the layer's states (Task 12)", () => {
     })
   })
 
+  it('no bilingual version, told while the original still loads: the load stays the state (its line by the share downloaded, said as loading) until the original is on screen, the word kept for then', () => {
+    // the run starts beside the original's download (session/host.ts), and our server's answer can come first
+    const early: SessionEvent[] = [
+      { type: 'unavailable', why: 'no-source', retryAt: null },
+      { type: 'unavailable', why: 'unreachable', retryAt: null },
+      { type: 'layer', state: 'refused', laid: 0, total: 4 },
+    ]
+    for (const event of early) {
+      const loading = fold([
+        { type: 'display', mode: 'bilingual' },
+        { type: 'loading', loaded: 300, total: 1000 },
+        event,
+      ])
+      expect(loading.phase, JSON.stringify(event)).toBe('loading')
+      expect(lineOf(loading).on).toBe(true)
+      expect(lineOf(loading).value).toBeCloseTo(0.3 * 0.15)
+      expect(spokenOf(loading)).toBe(spokenOf(INITIAL))
+      const shown = fold([opened], loading)
+      expect(shown.phase).toBe('ready')
+      expect(shown.unavailable).toEqual(loading.unavailable)
+    }
+  })
+
   it('refused, unreachable: the original, passing (the displays not greyed); the layer coming after a retry clears it', () => {
     for (const why of ['refused', 'unreachable'] as const) {
       const s = fold([opened, { type: 'unavailable', why, retryAt: why === 'refused' ? 1234 : null }])

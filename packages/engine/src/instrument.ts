@@ -42,6 +42,10 @@ export interface InstrumentUnit {
   /** a kept block of e-mail addresses and their separators alone (today/ink-units.mjs addressesAlone): the lab's dump and parity
    *  tell such a block by it (the coordinator's ruling of 2026-11-10); the bundle does not carry it */
   address?: true
+  /** where each group the instrument wrote as its content opened (pipeline/instrument.mjs passThroughOf: a group that carries
+   *  nothing), as offsets in the unit's projection (text pieces' characters, each element or nested unit one): the facts pass
+   *  counts a paragraph TeX opened at one (`opensLost`), which must be none; the bundle does not carry it */
+  passed?: number[]
   /** an ink unit drawn with another unit's row: that unit's index */
   echo?: number
   /** a table's cell: its table, row and column, and the columns and rows it spans, whether it is a header's */

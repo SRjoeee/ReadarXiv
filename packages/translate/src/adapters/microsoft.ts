@@ -61,6 +61,9 @@ export const microsoftTarget = (target: Lang): string => REWRITE[target] ?? targ
 export const microsoftServesTarget = (target: Lang): boolean => SUPPORTED.has(microsoftTarget(target))
 
 export const MICROSOFT_LIMITS: Limits = { chars: 2_000, units: 100, inFlight: 8, callMs: 10_000, reask: 0 }
+/** the plain-text words of its 400 for a request over its cap of 50,000 characters in all (measured 2026-09-08, DESIGN §8.3):
+ *  the one 400 of it a smaller request mends */
+const OVER_CAP = /exceeds the maximum allowed translation size/i
 
 /** the behaviour digest of write and read over tests/adapters/fixtures.ts (the suite prints a new one when they move) */
 export const MICROSOFT_DIGEST = '4d1ea1ea6375b2dba046ccdc08e1025247140db4e14c602e95fadb165e81030d'
@@ -148,6 +151,7 @@ export function microsoft(o: MicrosoftOptions): Translator {
     identity: `microsoft:${sha256Hex(JSON.stringify(['microsoft', MICROSOFT_ENDPOINT, 'markers/1', RAW])).slice(0, 16)}`,
     digest: MICROSOFT_DIGEST,
     context: false,
+    wire: 'markers',
     limits,
     supports: async (target) => microsoftServesTarget(target),
     write: (unit) => planMarkers(unit).wire,
@@ -162,7 +166,7 @@ export function microsoft(o: MicrosoftOptions): Translator {
           body: JSON.stringify(wires),
           signal,
         })
-        if (!reply.ok) throw await faultOfReply('microsoft', reply)
+        if (!reply.ok) throw await faultOfReply('microsoft', reply, { cap: OVER_CAP })
         body = await reply.text()
       } catch (e) {
         throw faultOfThrow('microsoft', e, signal)

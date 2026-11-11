@@ -1,7 +1,7 @@
 // B.place (design-b §1.5, G1): each line's items placed (justified within the caps, ragged, centred, flush), and a fit's
 // breaking made a layout (laidOut). Today's code (layer2.mjs L2:3976-4038, L2:4136-4157), moved by
 // lab/typeset/move-fit.mjs; typed by place.types.ts.
-import { gapsOf, hangOf, inWord, latinishOf, lineExtent, squeezable } from './break.mjs'
+import { gapsOf, hangOf, inWord, latinishOf, lineExtent, squeezable, tabOf } from './break.mjs'
 import { inFlow, slotsAt } from './slots.mjs'
 import { toLastLines } from '../fit/last-lines.ts'
 
@@ -18,7 +18,9 @@ function placeItems(lines, f, P) {
     const end = line.items.at(-1)
     const hang = hangOf(end, P._compress) * f
     let slack = cap - natural + hang
-    const spaces = line.items.filter(it => it.t.space)
+    // (a label TeX hung beside the text, its room up to the hang's end: a box, no slack before the text's first item, tabOf)
+    const kt = tabOf(line.items)
+    const spaces = line.items.filter((it, n) => it.t.space && n > kt)
     const spW = spaces.reduce((s, it) => s + it.w, 0)
     const latinish = latinishOf(line.items, P)
     let perSpace = 0, perGap = 0
@@ -63,7 +65,7 @@ function placeItems(lines, f, P) {
     line.items.forEach((it, n) => {
       x += it.asp ?? 0
       it.x = x + (it.shift ?? 0)
-      x += it.w + (it.kern ?? 0) + (it.t.space ? perSpace : 0) + (n < line.items.length - 1 && !inWord(line.items[n + 1]) ? perGap : 0)
+      x += it.w + (it.kern ?? 0) + (it.t.space && n > kt ? perSpace : 0) + (n < line.items.length - 1 && !inWord(line.items[n + 1]) && n + 1 > kt ? perGap : 0)
     })
     line.used = x - line.x0
     line.cap = cap

@@ -99,6 +99,9 @@ export interface MarkersPlan {
   refill: readonly string[]
   /** the wire holds no `#` of its own: a `#` beside a marker is the marker's */
   hashFree: boolean
+  /** the markers (by id) the wire follows with a `#` of its own, white space between or none (`@b## of runs`, `@a# ## Root`):
+   *  a `#` there in the reply is the text's, as it went out */
+  hashAfter: ReadonlySet<number>
   /** for each wire offset (and its end), the offset in the unit's projection it came from */
   plainAt: readonly number[]
 }
@@ -439,6 +442,9 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
     off: { front: unitGroup.lead, back: unitGroup.end, heads: byGroup((g) => g.lead), tails: byGroup((g) => g.end) },
     refill: kept.sort((a, b) => b.depth - a.depth).map((k) => k.id),
     hashFree: !trimmed.replace(/@@|@[a-z]+#/g, '').includes('#'),
+    hashAfter: new Set(
+      [...trimmed.matchAll(/@@|@([a-z]+)#(?=[ \t]*#)/g)].flatMap((m) => (m[1] ? [fromAlpha(m[1])] : [])),
+    ),
     plainAt: map,
   }
 }
@@ -490,8 +496,13 @@ export const MARKER_ATOM = new RegExp(`@@|@[a-z]+(?:${CLOSER})?|${ENTITY}`, 'g')
 /** A reply → tokens, or null where it cannot be read: a marker unknown, doubled or lost, every word lost */
 export function readMarkers(text: string, plan: MarkersPlan, tolerant: boolean): Tok[] | null {
   // where the wire holds a `#` of its own, a `#` right after a marker is either Microsoft's doubled closer or the text's own
-  // moved beside it: which, nobody can tell, and either way a reader would see one `#` too many or too few (stage 4b)
-  if (!plan.hashFree && /@[a-z]+#[ \t]*#/.test(text.replace(/@@/g, ''))) return null
+  // moved beside it: which, nobody can tell, and either way a reader would see one `#` too many or too few (stage 4b). Not
+  // after a marker the wire itself follows with its text's `#` (`hashAfter`): there it is that `#`, as it went out (TeX's `\#`,
+  // a character of the text since 2026-11-11: `$k$\#`, `## Root Goal` after a list's mark; Microsoft gave back every one of
+  // 114 text `#` of the 88 papers' 24 units holding one, in Chinese, Japanese and German)
+  if (!plan.hashFree)
+    for (const m of text.replace(/@@/g, '').matchAll(/@([a-z]+)#[ \t]*#/g))
+      if (!plan.hashAfter.has(fromAlpha(m[1] as string))) return null
   const toks: Tok[] = []
   const seen = new Set<number>()
   let afterNumber = false

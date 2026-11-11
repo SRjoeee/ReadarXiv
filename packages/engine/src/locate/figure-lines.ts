@@ -5,7 +5,7 @@
 // (code: Rule 1's inside-a-line, read on the line); and each crowded text's ink (roomOf's `met`) judged by its relation to the
 // text, the owner's reformulation of the no-touch rule: its own, a decoration of a stretch of its glyphs (a frame, a fill, a rule;
 // a doubled copy), a container round all of it, or other ink: another text's glyph keeps the text the original's, ink that is no
-// text never does (step 2, the owner's ruling, PDF-READER §18.30). Pure arithmetic over a page's glyphs and boxes;
+// text never does (step 2, the owner's ruling, PDF-READER §18.36). Pure arithmetic over a page's glyphs and boxes;
 // every measure the figure reading's, in its size: RUN_DY, RUN_GAP, SPACE_GAP, DRAW_BAND.
 import {
   ANCHOR_REACH,

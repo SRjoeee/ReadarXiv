@@ -80,6 +80,46 @@ const BACKREF_GAP = '\u2002'
 /** today's flat pieces ([open … close] pairs) as nested ones, and its run-in labels `must` (runIns); a source unit's are stated
  *  once TeX's glyphs are read (piecesOf, marksOf) */
 export const contentOf = (pieces, o = {}) => runIns(piecesOf(pieces, o))
+/**
+ * The pieces of a unit's groups that carry nothing, by index, each open with its close: a pair the front end read as setting its
+ * argument alone (latex-front.mjs identityPair, the open piece's `sets` 0: RevTeX's `\\bibinfo{title}{…}` and name fonts, a
+ * `.bbl`'s `\\showarticletitle`, a paper's `\\newcommand{\\x}[1]{#1}`), or a bare group `{…}` that holds no declaration of its own
+ * (no placeholder that sets nothing at its own level, mt.mjs isInkless: a switch it would scope), both of its ends in the unit.
+ * Such a group sets no face, no fill, no link and no paragraph of its own (TeX sets its content as it would with no group), and
+ * a span of it has nothing to carry but costs a tag pair on the tags wire: it is its content (lane style-wire C, the coordinator's
+ * ruling of 2026-11-11). Over the 88 papers' bundles, 20,172 pairs and 2,943 bare groups, every fill on one also its link's around
+ * it; a group the front end says nothing of, as `\\enquote` (its quotes TeX's), stays one
+ */
+export function passThroughOf(pieces) {
+  const out = new Set()
+  pieces.forEach((p, k) => {
+    if (p.t !== 'open' || (p.sets !== 0 && p.src !== '{')) return
+    let depth = 0
+    for (let j = k + 1; j < pieces.length; j++) {
+      const q = pieces[j]
+      if (q.t === 'open') depth++
+      else if (q.t === 'close') {
+        if (depth--) continue
+        out.add(k).add(j)
+        return
+      } else if (!depth && p.sets !== 0 && q.t === 'ph' && isInkless(q)) return
+    }
+  })
+  return out
+}
+/** where each group passThroughOf writes as its content opened, as offsets in the unit's projection (each text piece's characters,
+ *  each element or nested unit one): the engine's facts pass counts a paragraph TeX opened at one, which must be none
+ *  (InstrumentUnit.passed, Located.stats.opensLost) */
+export function passedOf(pieces) {
+  const through = passThroughOf(pieces), out = []
+  let at = 0
+  pieces.forEach((p, k) => {
+    if (p.t === 'text') at += unicodeOf(p.s).length
+    else if (p.t === 'ph' || p.t === 'nested') at += 1
+    else if (p.t === 'open' && through.has(k)) out.push(at)
+  })
+  return out
+}
 /** today's flat pieces ([open … close] pairs) as nested ones: an open starts a span, a close ends the innermost; a close with no
  *  open wraps what came before it at its level (the group began before the unit), an open left at the end has no close; an
  *  element's wire facts (wireFacts), and a reference's item's full name where the marked compile stated one, with the language
@@ -87,10 +127,16 @@ export const contentOf = (pieces, o = {}) => runIns(piecesOf(pieces, o))
 export function piecesOf(pieces, { kindOf = () => 'other', idOfNested = () => null, nameOf = () => undefined } = {}) {
   let level = []
   const stack = []
+  // (a group that carries nothing is its content, its text joined with the text on either side: passThroughOf)
+  const through = passThroughOf(pieces)
+  let seam = false
   pieces.forEach((p, k) => {
     const id = String(k)
+    if (through.has(k)) { seam = true; return }
+    const joined = seam
+    seam = false
     switch (p.t) {
-      case 'text': level.push({ t: 'text', s: unicodeOf(p.s) }); break
+      case 'text': { const s = unicodeOf(p.s), last = level.at(-1); if (joined && last?.t === 'text') last.s += s; else level.push({ t: 'text', s }); break }
       case 'ph': { const n = nameOf(p); level.push({ t: 'el', id, kind: kindOf(p) ?? 'other', src: unicodeOf(p.src), ...wireFacts(p), ...(n?.name ? { name: n.name, ...(n.lang ? { nameLang: n.lang } : {}) } : {}) }); break }
       case 'nested': level.push({ t: 'unit', id, unit: idOfNested(p.unit) ?? '0'.repeat(64), pre: unicodeOf(p.pre), post: unicodeOf(p.post) }); break
       case 'open': {
@@ -313,8 +359,9 @@ function sourceFactsOf(src, k, first, colours) {
  *  destination), which the typesetter pairs the group's translation with its annotations by */
 export function spansOf(pieces, colours = null) {
   const out = []
+  const through = passThroughOf(pieces)
   pieces.forEach((p, k) => {
-    if (p.t !== 'open') return
+    if (p.t !== 'open' || through.has(k)) return
     const c = commandOf(unicodeOf(p.src))
     const to = linkTargetOf(pieces, k)
     const x = { ...(c ? { cmd: c.cmd } : {}), ...(colours?.has(k) ? { colour: colours.get(k) } : {}), ...(to ? { to } : {}) }
@@ -1014,9 +1061,9 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     const id = unitId(u.kind, content)
     ids[i] = id
     const unhidden = own.units.get(i)?.unhidden
-    const classes = classesOf(u.pieces, colours.get(i) ?? null, shown), spans = spansOf(u.pieces, colours.get(i) ?? null)
+    const classes = classesOf(u.pieces, colours.get(i) ?? null, shown), spans = spansOf(u.pieces, colours.get(i) ?? null), passed = passedOf(u.pieces)
     classesBy[i] = new Map(classes)
-    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(facts.kept.has(i) ? { kept: true } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : boxed.has(i) ? { align: boxed.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
+    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(passed.length ? { passed } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(facts.kept.has(i) ? { kept: true } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : boxed.has(i) ? { align: boxed.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
   })
   for (let i = units.length; i < inkBase; i++) {
     const content = contentOf(bundle[i][5].map(p => ({ t: 'text', s: p[1] })))

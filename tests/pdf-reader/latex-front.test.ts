@@ -618,6 +618,110 @@ describe('a letter command is the letter itself in its word: TeX\'s skipped spac
   })
 })
 
+describe('a character TeX writes escaped is a character of the text, its source beside it (\\%, \\&, \\#, \\$, \\{, \\}, \\textasciitilde, \\textbar, \\textless, \\textgreater, \\textbackslash)', () => {
+  // (a placeholder, it went out as a marker and came back where Microsoft split the term, "R&D" as "D … R&"; as text the
+  // translator reads the term, and a reply sets "96%" glued as the paper does: Microsoft's Chinese and Japanese, 2026-11-11)
+  const doc = (body: string, defs = '') => project(`\\documentclass{article}${defs}\\begin{document}\n${body}\n\\end{document}`)
+  const source = (p: ReturnType<typeof project>) => new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))
+  const kept = (p: ReturnType<typeof project>) => (p.units as Unit[]).flatMap(u => u.pieces.filter(x => x.t === 'ph').map(x => (x as { src?: string }).src))
+
+  it('each is its character in its word, no placeholder, and written back byte for byte: TeX skips the spaces after a control word, not after a control symbol', () => {
+    const forms: [string, string][] = [
+      ['5\\% of', '5% of'], ['R\\&D', 'R&D'], ['Task \\#1', 'Task #1'], ['\\$100', '$100'], ['the set \\{a, b\\}', 'the set {a, b}'],
+      ['\\textasciitilde 5', '~5'], ['a\\textbar b', 'a|b'], ['\\textless 5', '<5'], ['\\textgreater{} 5', '> 5'], ['C:\\textbackslash{}x', 'C:\\x'],
+      ['5\\%{} of', '5% of'], ['{\\%}', '%'],
+    ]
+    for (const [tex, word] of forms) {
+      const p = doc(`We see ${tex} here.`)
+      const u = (p.units as Unit[])[0] as Unit
+      expect(u.pieces.map(x => x.t), tex).toEqual(['text'])
+      expect(textOf(u).trim(), tex).toBe(`We see ${word} here.`)
+      expect(source(p), tex).toContain(`We see ${tex} here.`)
+    }
+  })
+
+  it('a placeholder still where the paper defines the command itself', () => {
+    expect(kept(doc('We see a\\textbar b here.', '\\renewcommand{\\textbar}{\\ensuremath{\\vert}}'))).toEqual(['\\textbar'])
+    expect(kept(doc('We see 5\\% here.', '\\renewcommand{\\%}{ percent}'))).toEqual(['\\%'])
+  })
+
+  it('\\_ stays with the identifier rule, and an identifier that holds one of them is one placeholder as the paper writes it, as before', () => {
+    expect(kept(doc('Set \\$HOME\\_DIR and \\{root\\_question\\} and run\\_id here, at 5\\% of it.'))).toEqual(['\\$HOME\\_DIR', '\\{root\\_question\\}', 'run\\_id'])
+  })
+
+  it('a group around one alone spends its pair\'s id, as a group around a letter does: the pairs after it keep theirs', () => {
+    const ids = (body: string) => ((doc(body).units as Unit[])[0]?.pieces ?? []).filter(x => x.t === 'open').map(x => (x as unknown as { id: number }).id)
+    expect(ids('We see {\\%} and \\emph{others} here.')).toEqual(ids('We see {x} and \\emph{others} here.').slice(1))
+  })
+})
+
+describe('what a command prints as characters is characters: \\enquote\'s quotation marks (the coordinator\'s ruling of 2026-11-11)', () => {
+  const doc = (body: string, pre = '') => project(`\\documentclass{article}${pre}\\begin{document}\n${body}\n\\end{document}`)
+  const source = (p: ReturnType<typeof project>) => new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))
+  const unitsOf = (p: ReturnType<typeof project>) => p.units as Unit[]
+  const bib = (entry: string) => `Text.\n\\begin{thebibliography}{1}\n\\bibitem{a} ${entry}\n\\end{thebibliography}`
+  /** a unit's text as UTF-8 (the front end holds a source's text as its UTF-8 bytes in a Latin-1 view) */
+  const said = (u: Unit) => new TextDecoder().decode(Uint8Array.from([...textOf(u)].map(c => c.charCodeAt(0))))
+
+  it("a paper's own \\enquote{…} that sets its argument between TeX's quotation marks: the marks text, written back byte for byte (2610.10069v1)", () => {
+    const entry = 'A. Allen (2019): \\enquote{Hicksian complementarity,} Econometrica.'
+    const p = doc(bib(entry), '\\newcommand{\\enquote}[1]{``#1\'\'}')
+    const u = unitsOf(p).find(x => x.kind === 'reference') as Unit
+    expect(u.pieces.some(x => x.t === 'open')).toBe(false)
+    expect(said(u)).toContain('\u201cHicksian complementarity,\u201d Econometrica.')
+    expect(source(p)).toContain(entry)
+  })
+  it("a .bbl's \\providecommand of it, REVTeX's (2307.16209v1), alike; a definition that sets anything else stays as it was", () => {
+    const p = project('\\documentclass{article}\\begin{document}\nText.\n\\begin{thebibliography}{1}\n\\providecommand \\enquote  [1]{``#1\'\'}\n\\bibitem{a} B. Berti, \\enquote {Black holes,} 2020.\n\\end{thebibliography}\n\\end{document}')
+    const u = unitsOf(p).find(x => x.kind === 'reference') as Unit
+    expect(said(u)).toContain('\u201cBlack holes,\u201d')
+    expect(u.pieces.some(x => x.t === 'open')).toBe(false)
+    const boxed = doc(bib('C. Chu, \\enquote{A title,} 1989.'), '\\newcommand{\\enquote}[1]{\\textit{#1}}')
+    expect((unitsOf(boxed).find(x => x.kind === 'reference') as Unit).pieces.some(x => x.t === 'open')).toBe(true)
+  })
+  it("csquotes' \\enquote: the outer level's double marks, an \\enquote inside one the inner level's single, \\enquote* from the inner level", () => {
+    const p = doc('He said \\enquote{yes \\enquote{no} maybe} and \\enquote*{so} here.', '\\usepackage{csquotes}')
+    const u = unitsOf(p)[0] as Unit
+    expect(u.pieces.some(x => x.t === 'open')).toBe(false)
+    expect(said(u).trim()).toBe('He said \u201cyes \u2018no\u2019 maybe\u201d and \u2018so\u2019 here.')
+    expect(source(p)).toContain('He said \\enquote{yes \\enquote{no} maybe} and \\enquote*{so} here.')
+  })
+  it('csquotes with a style the source alone cannot tell (another style, autostyle): \\enquote stays one placeholder, as before', () => {
+    // (its marks are the style's, which the compile's glyphs would tell: not read here)
+    for (const pre of ['\\usepackage[style=german]{csquotes}', '\\usepackage[autostyle]{csquotes}']) {
+      const u = unitsOf(doc('He said \\enquote{yes} here.', pre))[0] as Unit
+      expect(u.pieces.map(x => [x.t, (x as { src?: string }).src]), pre).toContainEqual(['ph', '\\enquote{yes}'])
+    }
+  })
+})
+
+describe("a link with no address is its argument: REVTeX's \\href@noop {} {…} (the coordinator's step D, 2026-11-11)", () => {
+  // (the .bbl's head as REVTeX's apsrev4-2 writes it, \\href@noop setting its second argument as it stands; 2610.20030v1's entries)
+  const HEAD = '\\makeatletter\n\\providecommand \\enquote  [1]{``#1\'\'}%\n\\providecommand \\href@noop [0]{\\@secondoftwo}%\n\\providecommand \\bibinfo  [0]{\\@secondoftwo}%\n\\providecommand \\bibfield  [0]{\\@secondoftwo}%\n\\makeatother\n'
+  const bbl = (entry: string) => `\\documentclass{revtex4-2}\\begin{document}\nText.\n\\begin{thebibliography}{2}%\n${HEAD}\\bibitem [{A}]{a}\\BibitemOpen\n  ${entry}\\BibitemShut {NoStop}%\n\\end{thebibliography}\n\\end{document}`
+  const said = (u: Unit) => new TextDecoder().decode(Uint8Array.from([...textOf(u)].map(c => c.charCodeAt(0))))
+  const source = (p: ReturnType<typeof project>) => new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))
+  it('an entry\'s journal part is its text, its groups as they set it, and nothing to link: a pair that sets its argument alone', () => {
+    const entry = '\\bibfield  {author} {\\bibinfo {author} {\\bibfnamefont {D.~M.}\\ \\bibnamefont {Sussman}},\\ }\\href@noop {} {\\bibfield  {journal} {\\bibinfo  {journal} {SoftwareX}\\ }\\textbf {\\bibinfo {volume} {6}},\\ \\bibinfo {pages} {16} (\\bibinfo {year} {2017})}'
+    const p = project(bbl(entry))
+    const u = (p.units as Unit[]).find(x => x.kind === 'reference') as Unit
+    const pieces = u.pieces as { t: string; s?: string; src?: string; sets?: number }[]
+    expect(pieces.some(x => x.t === 'ph' && (x.src ?? '').startsWith('\\href@noop'))).toBe(false)
+    expect(textOf(u)).toContain('SoftwareX')
+    const open = pieces.find(x => x.t === 'open' && (x.src ?? '').startsWith('\\href@noop'))
+    expect(open?.src).toBe('\\href@noop {} {')
+    expect(open?.sets).toBe(0)
+    // (\\textbf around its volume a group of its own still)
+    expect(pieces.some(x => x.t === 'open' && x.src === '\\textbf {')).toBe(true)
+    expect(source(p)).toContain(entry)
+  })
+  it('an entry that is a link with no address alone is a unit: 2610.20030v1\'s supplemental note, its quotation marks text', () => {
+    const p = project(bbl('\\href@noop {} {\\enquote {\\bibinfo {title} {See {S}upplemental {M}aterial at [url will be inserted by publisher] for {F}igures.}}\\ }'))
+    const u = (p.units as Unit[]).find(x => x.kind === 'reference')
+    expect(u && said(u).replace(/\s+/g, ' ').trim()).toBe('\u201cSee Supplemental Material at [url will be inserted by publisher] for Figures.\u201d')
+  })
+})
+
 describe('a display outside a unit\'s marks (the reader\'s anchors take it from beyond them: 211 of 747 displays were lit with no unit)', () => {
   const body = (b: string) => project(`\\documentclass{article}\\begin{document}\n${b}\n\\end{document}`).units as (Unit & { lead?: string; trail?: string })[]
   const flags = (b: string) => body(b).map(u => [textOf(u).trim().split(' ')[0], typeof u.lead === 'string', typeof u.trail === 'string'])
