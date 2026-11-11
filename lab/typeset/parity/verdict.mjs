@@ -529,12 +529,18 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
           // (a member of a line of several: judged by the line, below)
         } else if (o.align === 'c') {
           // (TeX centres a first line with its label, which a side draws anew or keeps at its place; a drawn line's middle is
-          // its ink's, as the original's glyphs')
-          const mid = median(ol.map((l) => (l.x0 + l.x1) / 2))
+          // its ink's, as the original's glyphs'. Each drawn line against the middle of the original line it stands on, the
+          // nearest by baseline: TeX centred each line, and a member's lines may be pieces of rows it shares with others, each
+          // row's own (2608.16117v1 p1 t128, an affiliation ending one row of a centred block and opening the next: read against
+          // one middle, the median of its lines', every second line stood 277 pt off on both sides)
+          const midOf = (l) => {
+            const at = ol.reduce((a, b) => (Math.abs(b.y - l.y) < Math.abs(a.y - l.y) ? b : a))
+            return (at.x0 + at.x1) / 2
+          }
           const lb = o.first ? ol[0].label : undefined
           off = Math.max(
             ...dl.map(inkOf).map((l, j) => {
-              const own = Math.abs((l.x0 + l.x1) / 2 - mid)
+              const own = Math.abs((l.x0 + l.x1) / 2 - midOf(l))
               if (j > 0 || lb === undefined) return own
               const whole = (lb + ol[0].x1) / 2
               return Math.min(own, Math.abs((l.x0 + l.x1) / 2 - whole), Math.abs((Math.min(lb, l.x0) + l.x1) / 2 - whole))

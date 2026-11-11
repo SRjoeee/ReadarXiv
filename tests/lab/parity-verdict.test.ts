@@ -756,6 +756,31 @@ describe("align: a drawn line's alignment is where its ink stands, a CJK mark's 
   })
 })
 
+describe("align: a centred member set on two rows is read line by line, each against the original line it stands on", () => {
+  // (2608.16117v1 p1 t128, every toggle on: "University of Pennsylvania," an affiliation TeX set in a centred block over two
+  // rows it shares with its neighbours, its first line ending one row (420.16–476.57 on 670.9), its second opening the next
+  // (141.38–201.86 on 658.94). Read against one middle, its lines' median (448.4), every second line stood 277 pt off on
+  // both sides, and the side whose line strayed toward that middle read nearer)
+  const f = v2Of({
+    members: [{ ord: 128, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }],
+    facts: [{ ord: 128, kind: 'affiliation', align: 'c', style: { size: 9.96 }, lines: [factLine(420.16, 476.57, 670.9, 9.96), factLine(141.38, 201.86, 658.94, 9.96)] }],
+    today: { 128: { today: 128 } },
+  })
+  const page = (t: Line[], v: Line[]) => measure(f, rec({ today: { units: [{ id: 128, lines: t }] }, v2: { units: [{ id: 128, lines: v }] } }))
+  const aligns = (p: { diffs: { flag: string; worse: boolean; nearer: string }[] }) => p.diffs.filter((d) => d.flag === 'align').map((d) => [d.worse, d.nearer])
+  const first = drawnLine(414.83, 481.9, 670.9, 'Universität von', 9.96)
+  it("v2's second line on its own original line's middle, today's 1.9 pt toward the first's: v2 nearer, not worse", () => {
+    const t = [first, drawnLine(143.25, 203.75, 658.94, 'Pennsylvania,', 9.96)]
+    const v = [first, drawnLine(141.38, 201.86, 658.94, 'Pennsylvania,', 9.96)]
+    expect(aligns(page(t, v))).toEqual([[false, 'v2']])
+  })
+  it("v2's second line 5 pt off its own original line's middle where today's stands on it: worse", () => {
+    const t = [first, drawnLine(141.38, 201.86, 658.94, 'Pennsylvania,', 9.96)]
+    const v = [first, drawnLine(136.38, 196.86, 658.94, 'Pennsylvania,', 9.96)]
+    expect(aligns(page(t, v))).toEqual([[true, 'today']])
+  })
+})
+
 describe("cross: a drawn line over a rule or another unit by its ink, a CJK mark's blank half no ink", () => {
   // (2608.06701 p1 t351: a figure text set left by its ink, opening with U+201C at 3.56 pt; its box starts the mark's blank
   // half, 1.78 pt, before its ink, which starts where the original's does, 1.19 pt past the box's rule at 416.07; read by its
