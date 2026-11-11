@@ -656,14 +656,18 @@ spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while
 - **The retry's time is our server's instant.** A refusal of new work names the instant it ends, on our server's clock: the
   visitor's period's end exactly for a quota (the hour's, or the UTC day's, as the admission knows it), its wait from the
   admission's now for capacity. The paper's record keeps that instant as it is (`retryAt`), and the open's answer names it
-  (`refused.retryAt`) beside its distance in whole seconds, rounded up (`refused.retryAfterS`: what the session counts on its own
-  clock, and all an older reader reads). Never a wait in seconds re-anchored on another clock: the admission's
+  (`refused.retryAt`) beside its distance to the millisecond (`refused.retryAfterMs`: what the session counts on its own clock)
+  and in whole seconds, rounded up (`refused.retryAfterS`: all an older reader reads). Never a wait in seconds re-anchored on another clock: the admission's
   `ceil((until - now) / 1000)` added to the paper's clock and the viewer's landed past the minute (staging's record 21:00:00.408)
   and was said 21:01, "tomorrow 0:01" across midnight (flow-fixes F1, 2026-11-12). The session's own next ask waits for the later
   of two: our server's wait measured on the viewer's clock from the answer, and the viewer's clock reading the instant said; so
   it never asks before the time it said nor before our server would take it, whichever way the viewer's clock is off (90 s
   ahead: it asks when our server's hour is over, at 21:01:30 on that clock; 90 s behind: at 21:00:00 on that clock, our server's
-  21:01:30). A wait no time is said for (capacity, the rate) is our server's wait alone. A refusal's time is the one our server
+  21:01:30); where the two clocks agree, the ask is at the instant itself (a wait counted in whole seconds asked again 0.4 s
+  past it). A wait no time is said for (capacity, the rate) is our server's wait alone. Whether a time is said is the chrome's
+  (`capsuleOf`), the host's words saying the time they are given: while it is to come, and while the session will ask by itself
+  at it, until that ask begins (never the bare sentence between the instant and the ask); one the reader is to retry at drops
+  from its sentence once it has come. A refusal's time is the one our server
   names, as it names it (a failed run's `retryAt` in its document likewise), never capped: the time printed, the moment the retry is offered
   (the website's `retry: 'when-due'`; a press before it asks nothing) and the session's own next ask are that one time. A
   bound remains only where it paces polling (a stream's reconnection time, `WAIT_MAX_MS`). The fourth refusal in a row keeps
@@ -708,10 +712,15 @@ spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while
   heard. A stream that broke while the browser is online and is opened again is reconnecting (the system acting, nothing for the
   reader to do). A reader only reading a finished translation is told neither: nothing is waited for. With no layer shown, the
   network's stop is the layer's refusal for now, as before.
-- **Waiting in line is a wait, not a refusal** (flow-fixes F5): while our server is at capacity the page stands as it does in
-  the first-time wait, the display the reader chose kept and the translated displays to be chosen (`queuedNow` is no
-  `refusedNow`), so nothing jumps when the open is taken; a narrow window holds the original meanwhile, as it does while the
-  paper is made. A true refusal for now (the limit, the rate, the network, our server out of reach) keeps the website's hold.
+- **The display the reader chose is kept while the session goes on by itself** (flow-fixes F5 and (b), the coordinator,
+  2026-11-12): with no period to end and nothing of the reader's (our server at capacity, the visitor's rate of asks, the network:
+  `goesOnNow`), the page stands as it does in the first-time wait, the display chosen kept and the translated displays to be
+  chosen, so nothing jumps when the session goes on. The original is held alone, the translated displays greyed (the website's
+  `refusal: 'original'`), where the translation cannot come before a period ends or at all (the limit of new papers, a lasting
+  refusal) and for our server's fault with its time. A narrow window holds the original, as before, whatever the cause.
+- **A capsule showing that turns into a run changes its words in place** ((c)): the 400 ms gate (§6.6) is for a wait that
+  begins with nothing shown; after the network's words or the failed passages' notice, the count takes the capsule's place at
+  once, never a hole of 0.4 s.
 - **Which refusals last** is one table, the session's (`LASTING`: no source, not found, cannot be prepared, too large, a
   version this reader cannot read); the chrome's is made from it. A layer the reader could not use (an object not its bytes,
   a layer refused by the side) is passing: a retry asks again.
