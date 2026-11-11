@@ -1934,8 +1934,8 @@ async function chromeLaid(name, o = {}, page0 = {}) {
 }
 
 // ---------------------------------------------------------------- the pages dimmed in the dark (docs/PDF-READER.md §4.3)
-/** the luma (Rec. 709, 0..255) of a region of the page as shown, its screenshot decoded in the page: its lightest pixel and its
- *  median */
+/** the luma (Rec. 709, 0..255) of a region of the page as shown, its screenshot decoded in the page: its darkest pixel, its
+ *  lightest and its median */
 async function lumaIn(page, clip, path = null) {
   const buf = await page.screenshot({ clip, ...(path ? { path } : {}) })
   return page.evaluate(async (b64) => {
@@ -1948,14 +1948,22 @@ async function lumaIn(page, clip, path = null) {
     const all = []
     for (let i = 0; i < d.length; i += 4) all.push(0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2])
     all.sort((a, b) => a - b)
-    return { max: Math.round(all.at(-1)), median: Math.round(all[all.length >> 1]) }
+    return { min: Math.round(all[0]), max: Math.round(all.at(-1)), median: Math.round(all[all.length >> 1]) }
   }, buf.toString('base64'))
 }
 /** s1-columns laid with its page 1 in runs of three inks (convert.ts inked: a run that names no fill, a CJK run in its own
  *  CJK_INK, a run of a colour of its own), the pages dimmed, the host's shape `shape`: the reader's class and the dim mark on
  *  one element (`root`: an element of the host's; `html`), the class on <body> and the mark on <html> under the harness's
  *  sheet alone (`body`), or both hosts' page (`chrome`: the package's chrome over openReader on <body>, the dim by its
- *  preferences, its appearance on <html>, its sheet) */
+ *  preferences, its appearance on <html>, its sheet). A crop (a formula of the original drawn in a translated line) read from
+ *  the pixels too, dimmed and not: under the dim its ink was lost (staging, 2026-11-12: every inline formula of a translated
+ *  paragraph a blank gap), the filter turning its ink light while its blend kept the darker of it and the dimmed page */
+/** a crop's own ground (the median of its paper's pixels as shown) against the page's (the slot's median), the difference allowed
+ *  in luma levels. A crop's paper is the page's white through the page canvas's own filter, so the two are equal: 29/29 dimmed
+ *  and 255/255 undimmed in all four shapes (2026-11-12); 2 lets a paper pixel of 250..254 beside the ink through (dimmed, 29..32)
+ *  and no box: a crop screened into the dimmed page read its paper 55. (Not the box's median: the page's crops are small
+ *  formulas, 39x10 px, more than half their pixels ink or its edge, undimmed median 248 on 255) */
+const CROP_GROUND = 2
 for (const shape of ['root', 'html', 'body', 'chrome']) {
   await check(
     `dim: the overlay's text in every ink, its crops and the highlight dimmed as the page's canvas is, whatever element carries the reader's class (${shape}; staging, 2026-11-12)`,
@@ -2106,9 +2114,138 @@ for (const shape of ['root', 'html', 'body', 'chrome']) {
       for (const [k, clip] of Object.entries(boxes))
         luma[k] = await lumaIn(page, clip, process.env.AXT_SHOTS ? join(HERE, '.shots', `dim-${shape}-${k}.png`) : null)
       const ground = luma.ground.median
-      // (and undimmed: the overlay drawn as it is)
+      // (a crop's pixels, dimmed and not: the crops shown and the overlay's text out of sight, so that a crop's box holds its own
+      // ink over the page view alone; the crop the opaque region of the crops' canvas with the most ink (a crop, or crops that
+      // touch), read from the canvas itself and brought to the middle of its pane)
+      const crop = await page.evaluate((P1) => {
+        const slot = document.querySelector(P1)
+        for (const c of slot.querySelectorAll('.axt-over > canvas.axt-crops')) c.style.visibility = ''
+        slot.querySelector('.axt-over > svg').style.visibility = 'hidden'
+        const c = slot.querySelector('.axt-over > canvas.axt-crops')
+        const w = c.width,
+          h = c.height
+        const d = c.getContext('2d').getImageData(0, 0, w, h).data
+        const luma = (p) => 0.2126 * d[p * 4] + 0.7152 * d[p * 4 + 1] + 0.0722 * d[p * 4 + 2]
+        const seen = new Uint8Array(w * h)
+        let best = null
+        for (let s = 0; s < w * h; s++) {
+          if (seen[s] || d[s * 4 + 3] === 0) continue
+          let x0 = w,
+            y0 = h,
+            x1 = 0,
+            y1 = 0,
+            ink = 0
+          const todo = [s]
+          seen[s] = 1
+          while (todo.length) {
+            const p = todo.pop(),
+              x = p % w,
+              y = (p - x) / w
+            x0 = Math.min(x0, x)
+            y0 = Math.min(y0, y)
+            x1 = Math.max(x1, x + 1)
+            y1 = Math.max(y1, y + 1)
+            if (d[p * 4 + 3] >= 128 && luma(p) < 128) ink++
+            for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1])
+              if (q >= 0 && !seen[q] && d[q * 4 + 3] > 0) {
+                seen[q] = 1
+                todo.push(q)
+              }
+          }
+          if (!best || ink > best.ink) best = { px: [x0, y0, x1, y1], ink }
+        }
+        if (!best) return null
+        // (the crop's own ground: its pixels of paper whose every neighbour is paper too, or outside the crop, so that a pixel of
+        // the shot a device pixel off still reads the crop's ground or the page's, never its ink)
+        const paperAt = (x, y) => {
+          if (x < 0 || y < 0 || x >= w || y >= h) return true
+          const p = y * w + x
+          return d[p * 4 + 3] === 0 || luma(p) >= 250
+        }
+        const paper = []
+        for (let y = best.px[1]; y < best.px[3]; y++)
+          for (let x = best.px[0]; x < best.px[2]; x++) {
+            if (d[(y * w + x) * 4 + 3] < 255) continue
+            let all = true
+            for (let dy = -1; dy <= 1 && all; dy++)
+              for (let dx = -1; dx <= 1 && all; dx++) all = paperAt(x + dx, y + dy)
+            if (all) paper.push(y * w + x)
+          }
+        const r = c.getBoundingClientRect()
+        let el = slot.parentElement
+        while (el && !(el.scrollHeight > el.clientHeight && /auto|scroll/.test(getComputedStyle(el).overflowY)))
+          el = el.parentElement
+        const s0 = el.getBoundingClientRect()
+        el.scrollTop += r.top + ((best.px[1] + best.px[3]) / 2) * (r.height / h) - (s0.top + s0.height / 2)
+        return { ...best, paper }
+      }, P1)
+      assert(crop && crop.ink > 0 && crop.paper.length > 0, `no crop of ink on page 1: ${JSON.stringify(crop)}`)
+      await page.waitForTimeout(400)
+      /** the crop as shown (its darkest and lightest pixels, and the median of its own ground's: the pixels `crop.paper`) and the
+       *  page's ground (the median of the slot's part in view) */
+      const cropShown = async (tag) => {
+        const b = await page.evaluate(
+          ([P1, px]) => {
+            const slot = document.querySelector(P1)
+            const c = slot.querySelector('.axt-over > canvas.axt-crops')
+            const r = c.getBoundingClientRect(),
+              s = slot.getBoundingClientRect()
+            const k = r.width / c.width
+            const x0 = Math.round(Math.max(s.left, r.left + px[0] * k)),
+              y0 = Math.round(Math.max(s.top, 0, r.top + px[1] * k)),
+              x1 = Math.round(Math.min(s.right, r.left + px[2] * k)),
+              y1 = Math.round(Math.min(s.bottom, innerHeight, r.top + px[3] * k))
+            const g0 = Math.max(s.top, 0),
+              g1 = Math.min(s.bottom, innerHeight)
+            return {
+              crop: { x: x0, y: y0, width: x1 - x0, height: y1 - y0 },
+              // (the canvas's pixel at the shot's top-left corner, and its pixels a CSS px)
+              at: [(x0 - r.left) / k, (y0 - r.top) / k, k, c.width],
+              ground: { x: s.left, y: g0, width: s.width, height: g1 - g0 },
+              blend: getComputedStyle(c).mixBlendMode,
+            }
+          },
+          [P1, crop.px],
+        )
+        const path = (k) => (process.env.AXT_SHOTS ? join(HERE, '.shots', `dim-${shape}-${tag}-${k}.png`) : null)
+        const buf = await page.screenshot({ clip: b.crop, ...(path('crop') ? { path: path('crop') } : {}) })
+        const shown = await page.evaluate(
+          async ([b64, at, paper]) => {
+            const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+            const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/png' }))
+            const c = new OffscreenCanvas(bmp.width, bmp.height)
+            const x = c.getContext('2d')
+            x.drawImage(bmp, 0, 0)
+            const d = x.getImageData(0, 0, bmp.width, bmp.height).data
+            const [ox, oy, k, cw] = at
+            const ground = new Set(paper)
+            const all = [],
+              own = []
+            for (let j = 0; j < bmp.height; j++)
+              for (let i = 0; i < bmp.width; i++) {
+                const p = (j * bmp.width + i) * 4
+                const l = 0.2126 * d[p] + 0.7152 * d[p + 1] + 0.0722 * d[p + 2]
+                all.push(l)
+                if (ground.has(Math.floor(oy + (j + 0.5) / k) * cw + Math.floor(ox + (i + 0.5) / k))) own.push(l)
+              }
+            const med = (v) => Math.round([...v].sort((a, b) => a - b)[v.length >> 1])
+            return {
+              min: Math.round(Math.min(...all)),
+              max: Math.round(Math.max(...all)),
+              paper: own.length ? med(own) : null,
+              paperN: own.length,
+            }
+          },
+          [buf.toString('base64'), b.at, crop.paper],
+        )
+        return { ...shown, ground: (await lumaIn(page, b.ground, path('ground'))).median, blend: b.blend, box: b.crop }
+      }
+      const crops = { dimmed: await cropShown('crop-dimmed') }
+      // (and undimmed: the overlay drawn as it is; the crop as it is, the appearance's change let settle)
       await dim(false)
       await waitFor(page, () => !document.querySelector('[data-axt-dim]'))
+      await page.waitForTimeout(600)
+      crops.light = await cropShown('crop-light')
       const undimmed = await page.evaluate(
         (P1) => getComputedStyle(document.querySelector(`${P1} .axt-over > svg`)).filter,
         P1,
@@ -2116,7 +2253,7 @@ for (const shape of ['root', 'html', 'body', 'chrome']) {
       await context.close()
       assert(!errors.length, errors.join('; '))
       const runs = Object.fromEntries(['latin', 'cjk', 'coloured'].map((k) => [k, luma[k].max]))
-      const detail = { ...seen, ground, runs, undimmed }
+      const detail = { ...seen, ground, runs, crop: { ink: crop.ink, px: crop.px, ...crops }, undimmed }
       assert(seen.canvas && seen.canvas !== 'none', `the host's canvas undimmed: ${JSON.stringify(detail)}`)
       assert(
         seen.svg === seen.canvas && seen.crops === seen.canvas,
@@ -2136,6 +2273,21 @@ for (const shape of ['root', 'html', 'body', 'chrome']) {
         assert(
           v >= ground + 60,
           `the ${k} run's lightest pixel ${v} against the ground's ${ground}: ${JSON.stringify(detail)}`,
+        )
+      // (a crop's ink shown on the page, dimmed as the runs' ink is and undimmed, and its own ground no box on it)
+      const { dimmed: cd, light: cl } = crops
+      assert(
+        cd.max >= cd.ground + 60,
+        `dimmed, the crop's lightest pixel ${cd.max} against the ground's ${cd.ground}: ${JSON.stringify(detail)}`,
+      )
+      assert(
+        cl.min <= cl.ground - 60,
+        `undimmed, the crop's darkest pixel ${cl.min} against the ground's ${cl.ground}: ${JSON.stringify(detail)}`,
+      )
+      for (const [k, x] of Object.entries(crops))
+        assert(
+          x.paperN > 0 && Math.abs(x.paper - x.ground) <= CROP_GROUND,
+          `${k}, the crop's own ground ${x.paper} (${x.paperN} px) against the page's ${x.ground}: ${JSON.stringify(detail)}`,
         )
       assert(undimmed === 'none', `undimmed, the overlay's filter: ${undimmed}`)
       return detail
