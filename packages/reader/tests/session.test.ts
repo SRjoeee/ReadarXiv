@@ -702,6 +702,34 @@ describe("the session: our server's pacing (today's run)", () => {
     m.feed({ i: 'open.answered', t: m.live('open'), doc: null, refused: { why: 'rate', afterMs: 60_000 } })
     expect(m.s.link).toMatchObject({ s: 'stopped', why: 'rate', wake: m.s.now + 60_000 })
   })
+  it("a 429 that names no wait (0 s) is asked again no sooner than a second on, and the same refusal again backs off, doubled to thirty seconds or our server's time at most; the time said stays our server's", () => {
+    const m = machine()
+    const asks: number[] = []
+    for (let n = 1; n <= 10; n++) {
+      m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+      asks.push(m.s.now)
+      m.feed({ i: 'open.answered', t: m.live('open'), doc: null, refused: { why: 'rate', afterMs: 0 } })
+      // (said as our server named it: due now; the session's own next ask its own)
+      expect(m.s.link).toMatchObject({ s: 'stopped', why: 'rate', retryAt: m.s.now })
+      const wake = (m.s.link as { wake: number }).wake
+      expect(wake - m.s.now, `ask ${n}`).toBe(Math.min(30_000, 1000 * 2 ** (n - 1)))
+      m.feed({ i: 'time', t: m.timerAt(wake), now: wake })
+    }
+    const gaps = asks.slice(1).map((t, k) => t - (asks[k] as number))
+    expect(gaps).toEqual([1000, 2000, 4000, 8000, 16_000, 30_000, 30_000, 30_000, 30_000])
+    // (another answer ends the run: the next refusal waits a second again)
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+    m.feed({ i: 'open.answered', t: m.live('open'), doc: preparing(1, UNITS) })
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'rate', afterMs: 0 })
+    expect((m.s.link as { wake: number }).wake - m.s.now).toBe(1000)
+    // (a time our server names past thirty seconds is the cap: never asked sooner than it)
+    m.feed({ i: 'time', t: m.timerAt(m.s.now + 1000), now: m.s.now + 1000 })
+    for (let n = 1; n <= 3; n++) {
+      m.feed({ i: 'follow.lost', t: m.live('link'), why: 'rate', afterMs: 60_000 })
+      expect((m.s.link as { wake: number }).wake - m.s.now).toBe(60_000)
+      m.feed({ i: 'time', t: m.timerAt(m.s.now + 60_000), now: m.s.now + 60_000 })
+    }
+  })
   it('the network itself failed (the fetch rejected twice): its own cause, asked again by itself once the connection is back, or at a growing pace while the browser says it is online', () => {
     const m = machine()
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'network' })

@@ -19,9 +19,10 @@
 // units); arXiv's HTML version once the bilingual one cannot be had; a timer for each retry, wait and deadline held.
 //
 // Our server's pacing (PDF-READER §8, §11.10, UI.md S-R-24, S-R-26): a 429 waits the time our server names, as it names it
-// (the one source of the time said, of the retry's and of the session's own next ask), and asks again, REFUSED_ASKS times in a
-// row at most, then the look stops until a retry, which asks once that time has come, for as many more; an answer that moves the
-// paper on ends a run of them. Our server out of reach (an ask failed twice,
+// (the one source of the time said, of the retry's and of the session's own next ask, which is never sooner than a second on
+// and backs off over a refusal of capacity or rate answered again and again: refusedFor), and asks again, REFUSED_ASKS times in
+// a row at most, then the look stops until a retry, which asks once that time has come, for as many more; an answer that moves
+// the paper on ends a run of them. Our server out of reach (an ask failed twice,
 // the client's) stops the look until a retry; so does a prepare followed for PREPARE_DEADLINE_MS with the tab shown. Nothing is
 // asked of our server while the tab is hidden, and that time is not counted. A head that cannot draw ends the look before a unit
 // goes to the service; a head over another original than the left shows puts our copy of it on the left before the layer is used.
@@ -47,7 +48,8 @@ export const GATE_MS = 1500
 export const PREFS_MS = 1500
 export const BACKOFF_MS = 1000
 export const BACKOFF_MAX_MS = 30_000
-/** a 429's wait where our server names none */
+/** a 429's wait where our server names none, and the soonest the session asks again by itself after a 429 whatever time it names
+ *  (the time said stays our server's) */
 export const WAIT_MIN_MS = 1000
 /** the longest reconnection time a stream may name that a follow waits (client.ts): its polling's pace alone, never a time said */
 export const WAIT_MAX_MS = 600_000
@@ -235,6 +237,9 @@ export interface State {
   open: OpenRegion
   /** the 429s answered in a row (REFUSED_ASKS): none since an answer moved the paper on, or a retry */
   refusals: number
+  /** the 429s of our server's capacity or the visitor's rate answered in a row, none since another answer moved the paper on:
+   *  the session's own next ask backs off over them (refusedFor) */
+  paced: number
   /** the network's failures in a row, since a document was heard: the pace of asking again while the browser says it is online */
   netTries: number
   /** how long the prepare has been followed with the tab shown (its deadline's), since when it is now, and the deadline's timer */
@@ -365,6 +370,7 @@ export function init(o: Init): State {
     link: { s: 'off' },
     open: { t: null, for: [], target: null, asked: [], missing: false, at: null, timer: null },
     refusals: 0,
+    paced: 0,
     netTries: 0,
     prepare: { spent: 0, since: null, timer: null },
     layer: { s: 'none' },
@@ -529,14 +535,20 @@ export function needsOf(s: State): Need[] {
 const layerFinal = (s: State) => s.layer.s === 'ready' && !s.doc?.layer?.stale && s.doc?.prepare.state !== 'running'
 /** whether the open is asked for some need now: one whose wait is over, not yet asked this visit */
 const openWanted = (s: State) => needsOf(s).some((n) => n.at === null && !s.open.asked.includes(n.id))
-/** a 429: our server's time as it names it (a second where it names none), waited out and asked again (REFUSED_ASKS in a row
- *  at most), then the look stopped until a retry, which asks once that time has come */
+/** a 429: our server's time as it names it (a second where it names none), said and the retry's; waited out and asked again
+ *  (REFUSED_ASKS in a row at most), then the look stopped until a retry, which asks once that time has come. The session's own
+ *  next ask is never sooner than WAIT_MIN_MS after the answer, and a refusal of our server's capacity or the visitor's rate
+ *  answered again and again backs off: its wait doubled each time, at most BACKOFF_MAX_MS or the time our server names, the
+ *  larger (a 429 naming 0 s was asked again at once, without end, once these two stopped counting toward REFUSED_ASKS) */
 function refusedFor(s: State, why: 'busy' | 'limit' | 'rate', afterMs: number | null | undefined) {
   // (the visitor's rate of asks is no limit to stop at: its wait is a minute, waited out and asked again by itself)
   if (why !== 'rate') s.refusals++
-  const retryAt =
-    s.now + (typeof afterMs === 'number' && Number.isFinite(afterMs) && afterMs >= 0 ? afterMs : WAIT_MIN_MS)
-  s.link = { s: 'stopped', why, retryAt, wake: s.refusals > REFUSED_ASKS ? null : retryAt, timer: null }
+  const named = typeof afterMs === 'number' && Number.isFinite(afterMs) && afterMs >= 0 ? afterMs : WAIT_MIN_MS
+  const retryAt = s.now + named
+  const wait = Math.max(WAIT_MIN_MS, named)
+  s.paced = why === 'limit' ? 0 : s.paced + 1
+  const own = why === 'limit' ? wait : Math.min(Math.max(BACKOFF_MAX_MS, wait), wait * 2 ** (s.paced - 1))
+  s.link = { s: 'stopped', why, retryAt, wake: s.refusals > REFUSED_ASKS ? null : s.now + own, timer: null }
 }
 /** the network itself failed: asked again by itself, at once when the browser comes online (env.online), and meanwhile, while it
  *  says it is online, at a growing pace (a second, doubled to thirty at most); no time said */
@@ -648,7 +660,10 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
         heard(s, x.doc, target)
         // (an answer that moves the paper on ends a run of 429s: one in which the paper lacks nothing the open is wanted for, as
         // today's catalog or prepare under way; one of a paper still lacking it does not, as today's 404 between two prepares)
-        if (!openWanted(s)) s.refusals = 0
+        if (!openWanted(s)) {
+          s.refusals = 0
+          s.paced = 0
+        }
       }
       break
     case 'follow.lost':
@@ -683,6 +698,7 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
           )
         else {
           s.refusals = 0
+          s.paced = 0
           // (the follow asked again at once: one of a paper in which nothing ran asks again a minute on, client.ts IDLE_MS,
           // and what the open started is followed at its own pace)
           if (s.link.s === 'on') s.link = { s: 'off' }

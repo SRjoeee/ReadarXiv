@@ -588,7 +588,11 @@ spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while
   (the website's `retry: 'when-due'`; a press before it asks nothing) and the session's own next ask are that one time. A
   bound remains only where it paces polling (a stream's reconnection time, `WAIT_MAX_MS`). The fourth refusal in a row keeps
   the time and only stops the session asking by itself. A refusal told again with another time is told again, and the
-  capsule follows it.
+  capsule follows it. The session's own next ask has a floor and a pace of its own, never printed (integration, round B10):
+  never sooner than a second after the answer (`WAIT_MIN_MS`), and a refusal of our server's capacity or of the visitor's
+  rate answered again and again backs off, its wait doubled each time, at most thirty seconds (`BACKOFF_MAX_MS`) or the time
+  our server names, the larger; an answer that moves the paper on ends the run. A 429 naming 0 s was otherwise asked again
+  at once, without end.
 - **Printed rounded up.** The time is printed rounded up to its minute, so that at the minute printed a press works
   (15:19:45 is said 15:20). On the visitor's next day (their zone) the sentence says tomorrow (明天 {time} 后可以重试); on a
   later day it gives the date and the time, as the website's home card writes a date.
