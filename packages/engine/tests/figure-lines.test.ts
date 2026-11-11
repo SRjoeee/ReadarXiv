@@ -439,9 +439,31 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
         [90, 680, 90.5, 712],
       ]),
     ).toEqual([])
-    // (a node's label: no ink beside its rows, or ink beside one of them alone, an icon: one text)
-    expect(beside([])).toHaveLength(1)
-    expect(beside([[78, 700, 82, 704]])).toHaveLength(1)
+  })
+  it('joins a node’s label its neighbours’ edges lead, and no rows of one length: they show no centring (2609.26457v1 p6)', () => {
+    const T = 'TimesNewRomanPSMT'
+    const node = (rows: Parameters<typeof pageOf>[0], boxes: number[][], x0: number) => {
+      const { page, fig } = pageOf(rows, boxes)
+      fig.holds = [{ p: 1, b: 9, ks: rows.map((_, k) => k), shape: rect(x0, 680, 190, 712) }]
+      return figureLinesOf([page], fig, () => false, null).filter((t) => t.ks.length > 1)
+    }
+    // ("patches an error" over "crashed an error", centred, their left edges a point apart; the edges of the nodes beside it end
+    // right before each row, outside its path: no legend's samples, the node's label one text)
+    const two = [centred(135, T, ['patches an error']), centred(135, T, ['crashed an error'])]
+    expect(node(two, [], 88.5)).toHaveLength(1)
+    expect(
+      node(
+        two,
+        [
+          [70, 699, 87, 700],
+          [70, 685, 87, 686],
+        ],
+        88.5,
+      ),
+    ).toHaveLength(1)
+    // (two rows of one length, their edges one: centred or flush, no fact says which (1512.03385v1 p1's "56-layer" over
+    // "20-layer", two curves' labels))
+    expect(node([[{ text: '56-layer', font: T, x: 100 }], [{ text: '65-layer', font: T, x: 100 }]], [], 75)).toEqual([])
   })
   it('reads a closed path’s inside by its interior: a glyph inside its box and outside it crowds nothing (2608.06701v1 p2)', () => {
     // (one line in the diamond, "yes" beside it: in the diamond's box, outside the diamond)

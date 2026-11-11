@@ -21,7 +21,7 @@ import {
 import type { DocGlyph } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
 import { classifyFont, lineEnd, TRACKING_SPACE_FACTOR } from './facts.ts'
-import { ledApart, PARA_ALIGN_TOL, type ParaLine, parasOf, sameFace } from './figure-paras.ts'
+import { PARA_ALIGN_TOL, type ParaLine, parasOf, sameFace } from './figure-paras.ts'
 
 /** a glyph as the figure reading reads one (pageInk's, a page of today's makers) */
 interface G {
@@ -312,15 +312,17 @@ function linesOf(
       const spread = (f: (l: Line) => number) => Math.max(...L.map(f)) - Math.min(...L.map(f))
       // (a node's label as its path sets it: its lines one under the other with no blank line between, in one face, size, weight
       // and fill (a title over a subtitle in another is two texts), no line an item's (a list in a node, 2608.06007v1 p1's "KV
-      // Lifecycle - identify - place"), no two lines each led by ink of its own (a framed legend's entries, its samples inside the
-      // frame: entries of one length stand centred, "plain-18" over "plain-34", 1512.03385v1 p5), and centred, as a node sets its
-      // label: lines set flush in a path are its rows (a value over a value, 2610.37668v1's PSNR / LPIPS / FPS over each image))
+      // Lifecycle - identify - place"), no legend's entries (legendOf: its rows each beside ink of its own inside the path; a
+      // leader outside it, a neighbouring node's edge, is none: 2609.26457v1 p6, 2610.22195v1 p9), and centred, as a node sets its
+      // label: lines set flush in a path are its rows (a value over a value, 2610.37668v1's PSNR / LPIPS / FPS over each image),
+      // and rows of one length show no centring ("plain-18" over "plain-34", 1512.03385v1 p5; "56-layer" over "20-layer", two
+      // curves' labels, p1))
       const stacked = F.every(
         (f, n) => !n || (F[n - 1]!.y - f.y > 0.5 * f.size && F[n - 1]!.y - f.y - F[n - 1]!.band < F[n - 1]!.band),
       )
-      if (!stacked || !F.every((f) => sameFace(F[0]!, f)) || F.some((f, n) => n > 0 && ledApart(F[n - 1]!, f))) continue
-      if (legendOf(h.shape, F, boxes)) continue
-      if (spread((l) => (l.x0 + l.x1) / 2) > tol) continue
+      if (!stacked || !F.every((f) => sameFace(F[0]!, f)) || legendOf(h.shape, F, boxes)) continue
+      // (centred: the rows' centres one and their left edges not: rows of one length show no alignment, centred or flush)
+      if (spread((l) => (l.x0 + l.x1) / 2) > tol || spread((l) => l.x0) <= tol) continue
       const align = 'c' as const
       const ft: FigureText = {
         ks: L.flatMap((l) => l.ks),
