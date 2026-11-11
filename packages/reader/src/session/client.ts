@@ -388,9 +388,7 @@ export async function follow(
  *  knows it exactly, on its clock: the time said; null where an older server names none) beside its wait (`afterMs`: that
  *  instant measured from the answer, which the session counts on its own clock, whatever the viewer's clock reads). A Refused
  *  for the rest: `update` a 426, `not-found` a 404, `network` / `server` out of reach */
-export function open(
-  a: Ask & { paper: PaperRef; target: string | null; view?: number },
-): Promise<{
+export function open(a: Ask & { paper: PaperRef; target: string | null; view?: number }): Promise<{
   doc: Doc | null
   refused?: { why: 'quota' | 'busy' | 'rate'; afterMs: number | null; at: number | null }
 }> {

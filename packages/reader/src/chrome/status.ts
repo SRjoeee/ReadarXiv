@@ -218,7 +218,11 @@ export function capsuleOf(
     const notNow = plain(text)
     // (no retry where the session asks again by itself; else offered at once, or at its time where the host's rule says so: a
     // retry before it asks nothing)
-    const wait = state.unavailable?.self ? { self: true as const } : withheld(state, rules) ? { wait: true as const } : {}
+    const wait = state.unavailable?.self
+      ? { self: true as const }
+      : withheld(state, rules)
+        ? { wait: true as const }
+        : {}
     const html = linkOf(state.htmlVersion, words, rules.origins)
     return html ? { kind: 'notNow', words: notNow, ...html, ...wait } : { kind: 'notNow', words: notNow, ...wait }
   }

@@ -602,7 +602,14 @@ export function againOf(s: State): { original: boolean; layer: boolean; rows: 'n
     if (s.open.t && s.open.for.includes(id)) rows = 'now'
     else if (need && !s.open.asked.includes(id))
       // (the look stopped meanwhile: asked once it asks again by itself, at its time, else by the reader alone)
-      rows = l.s === 'stopped' ? (l.wake !== null || l.why === 'network' ? 'later' : null) : need.at === null ? 'now' : 'later'
+      rows =
+        l.s === 'stopped'
+          ? l.wake !== null || l.why === 'network'
+            ? 'later'
+            : null
+          : need.at === null
+            ? 'now'
+            : 'later'
   } else if (r.s === 'failed' && r.why.kind === 'unavailable' && r.retryAt !== null) rows = 'later'
   return { original, layer, rows }
 }

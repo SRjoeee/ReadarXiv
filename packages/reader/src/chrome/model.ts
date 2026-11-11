@@ -397,7 +397,10 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     // (a failure the open mends is the original's own fetch failure alone: a service's, a key missing, stays with its card)
     case 'opened': {
       const mends = state.failures.pdf !== null
-      const next = { ...withFailures(state, { ...state.failures, pdf: null }), selfAsks: { ...state.selfAsks, pdf: false } }
+      const next = {
+        ...withFailures(state, { ...state.failures, pdf: null }),
+        selfAsks: { ...state.selfAsks, pdf: false },
+      }
       // a service's failure left with nothing laid keeps its card
       const failed = next.failures.service !== null && !drawn(next) && state.phase === 'failed'
       // (a prepare told while the original loaded, the translation not begun: its phase now, the original on screen; the

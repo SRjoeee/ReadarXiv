@@ -104,7 +104,9 @@ export function runOf(s: State): { run: boolean; failed: boolean; asking: boolea
   const tg = s.docFor === r.target ? s.doc?.targets[r.target] : null
   const asking = r.s === 'failed' && againOf(s).rows === 'now'
   return {
-    run: asking || (r.s === 'arriving' && (s.here || (tg !== null && (!tg || tg.state === 'running' || tg.state === 'none')))),
+    run:
+      asking ||
+      (r.s === 'arriving' && (s.here || (tg !== null && (!tg || tg.state === 'running' || tg.state === 'none')))),
     failed: r.s === 'failed' && !asking,
     asking,
   }

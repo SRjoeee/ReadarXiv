@@ -268,7 +268,8 @@ function visit(store: Store, beats: Beat[], refusals: Refusal[] = [], hold = fal
     else if ('set' in b) feed({ i: 'cmd.set', prefs: b.set })
     else if ('lost' in b) {
       const link = live('link')
-      if (link) feed({ i: 'follow.lost', t: link, why: b.lost, ...(b.afterMs !== undefined ? { afterMs: b.afterMs } : {}) })
+      if (link)
+        feed({ i: 'follow.lost', t: link, why: b.lost, ...(b.afterMs !== undefined ? { afterMs: b.afterMs } : {}) })
     } else if ('timers' in b) {
       for (;;) {
         const due = [...resources(s)]
@@ -424,7 +425,11 @@ describe('an action is offered only where the session will not take it by itself
   const ask = (at: number): Beat => ({ at, lost: 'not-opened' })
   it("the limit of new papers, asked again by the session at our server's time: no retry offered before it, at it, or after", () => {
     const store: Store = { units: new Map(), rows: new Map() }
-    const v = visit(store, [{ at: 100, opened: true }, ask(T), { at: END - 10_000, timers: true }, { at: END, timers: true }], [quota])
+    const v = visit(
+      store,
+      [{ at: 100, opened: true }, ask(T), { at: END - 10_000, timers: true }, { at: END, timers: true }],
+      [quota],
+    )
     const said = v.seen.filter((x) => x.capsule?.kind === 'notNow')
     expect(said.length).toBeGreaterThan(0)
     expect(words(said[0]?.capsule ?? null)).toBe(`limit until ${END}`)
@@ -437,7 +442,7 @@ describe('an action is offered only where the session will not take it by itself
     // (asked again by itself at that time: our server followed again, and the open asked once it says the paper is not opened)
     expect(v.s.link.s).toBe('on')
   })
-  it('past the refusals the session waits out by itself, the limit is the reader\'s to retry: offered at its time', () => {
+  it("past the refusals the session waits out by itself, the limit is the reader's to retry: offered at its time", () => {
     const store: Store = { units: new Map(), rows: new Map() }
     const beats: Beat[] = [{ at: 100, opened: true }]
     let t = T
@@ -446,7 +451,11 @@ describe('an action is offered only where the session will not take it by itself
       if (n <= REFUSED_ASKS) beats.push({ at: t + 1000, timers: true })
       t += 1000
     }
-    const v = visit(store, beats, Array.from({ length: REFUSED_ASKS + 1 }, () => ({ why: 'quota', afterMs: 1000, at: null })))
+    const v = visit(
+      store,
+      beats,
+      Array.from({ length: REFUSED_ASKS + 1 }, () => ({ why: 'quota', afterMs: 1000, at: null })),
+    )
     expect(v.s.link).toMatchObject({ s: 'stopped', why: 'limit', wake: null })
     const due = (v.s.link as { retryAt: number }).retryAt
     expect(retryOffered(v.capsuleAt(due - 1) as Capsule)).toBe(false)
@@ -454,17 +463,34 @@ describe('an action is offered only where the session will not take it by itself
   })
   it("the visitor's rate of asks and the network itself, which the session waits out by itself: never a retry", () => {
     const store: Store = { units: new Map(), rows: new Map() }
-    const rate = visit(store, [{ at: 100, opened: true }, ask(T), { at: T + 4000, timers: true }], [{ why: 'rate', afterMs: 4000, at: null }])
+    const rate = visit(
+      store,
+      [{ at: 100, opened: true }, ask(T), { at: T + 4000, timers: true }],
+      [{ why: 'rate', afterMs: 4000, at: null }],
+    )
     expect(rate.seen.some((x) => words(x.capsule) === 'too many asks')).toBe(true)
     for (const x of rate.seen) expect(offered(x), `rate at ${x.at}`).toBe(false)
-    expect(retryOffered(visit(store, [{ at: 100, opened: true }, ask(T)], [{ why: 'rate', afterMs: 4000, at: null }]).capsuleAt(T + 4000) as Capsule)).toBe(false)
-    const net = visit(store, [{ at: 100, opened: true }, { at: T, lost: 'network' }, { at: T + 500, online: false }])
+    expect(
+      retryOffered(
+        visit(store, [{ at: 100, opened: true }, ask(T)], [{ why: 'rate', afterMs: 4000, at: null }]).capsuleAt(
+          T + 4000,
+        ) as Capsule,
+      ),
+    ).toBe(false)
+    const net = visit(store, [
+      { at: 100, opened: true },
+      { at: T, lost: 'network' },
+      { at: T + 500, online: false },
+    ])
     expect(words(net.capsule)).toBe('network down')
     for (const x of net.seen) expect(offered(x), `network at ${x.at}`).toBe(false)
   })
   it('our server out of reach, which the session stops asking: its retry offered at once', () => {
     const store: Store = { units: new Map(), rows: new Map() }
-    const v = visit(store, [{ at: 100, opened: true }, { at: T, lost: 'server' }])
+    const v = visit(store, [
+      { at: 100, opened: true },
+      { at: T, lost: 'server' },
+    ])
     expect(v.capsule).toMatchObject({ kind: 'notNow' })
     expect(retryOffered(v.capsule as Capsule)).toBe(true)
   })
@@ -496,7 +522,10 @@ describe('the network down while the reader waits on our server (PDF-READER §8.
       { at: 4000, online: false },
       { at: 9000, timers: true },
       { at: 9500, online: true },
-      { at: 9600, doc: doc(3, layer, target('running', { units: [units], rows: [rowsObject(store, ids(0, 7))], total: 10 })) },
+      {
+        at: 9600,
+        doc: doc(3, layer, target('running', { units: [units], rows: [rowsObject(store, ids(0, 7))], total: 10 })),
+      },
     ])
     const at = (t: number) => v.seen.filter((x) => x.at === t).at(-1)?.capsule ?? null
     expect(words(at(3000))).toBe('translating 5/10')
@@ -513,7 +542,10 @@ describe('the network down while the reader waits on our server (PDF-READER §8.
       { at: 4000, lost: 'network' },
       // (the session's own next ask, a second on: the follow asked again, nothing heard yet)
       { at: 5000, timers: true },
-      { at: 6000, doc: doc(3, layer, target('running', { units: [units], rows: [rowsObject(store, ids(0, 7))], total: 10 })) },
+      {
+        at: 6000,
+        doc: doc(3, layer, target('running', { units: [units], rows: [rowsObject(store, ids(0, 7))], total: 10 })),
+      },
     ])
     const at = (t: number) => v.seen.filter((x) => x.at === t).at(-1)?.capsule ?? null
     expect(words(at(4000))).toBe('network down')
@@ -522,7 +554,10 @@ describe('the network down while the reader waits on our server (PDF-READER §8.
   })
   it('a finished translation being read: the network lost tells nothing (nothing is waited for)', () => {
     const v = counted((layer, units, store) => [
-      { at: 5000, doc: doc(3, layer, target('done', { units: [units], rows: [rowsObject(store, ids(0, 10))], total: 10 })) },
+      {
+        at: 5000,
+        doc: doc(3, layer, target('done', { units: [units], rows: [rowsObject(store, ids(0, 10))], total: 10 })),
+      },
       { at: 6000, online: false },
       { at: 7000, lost: 'network' },
     ])
@@ -545,19 +580,47 @@ describe('failed passages are told only where the session is not already asking 
   it('a run the visit did not open, found failed with no time to wait, is asked again at once: the wait told (its count), never the notice', () => {
     // (the recording: "3 passages failed [retry]" stood 150 ms while the session's open, asked at once, was under way)
     const { store, running, failed, again } = failedRun(null)
-    const v = visit(store, [{ at: 100, opened: true }, { at: 1000, doc: running }, { at: 1100, laid: 1 }, { at: 2000, doc: failed }, { at: 2150, answer: again }], [], true)
+    const v = visit(
+      store,
+      [
+        { at: 100, opened: true },
+        { at: 1000, doc: running },
+        { at: 1100, laid: 1 },
+        { at: 2000, doc: failed },
+        { at: 2150, answer: again },
+      ],
+      [],
+      true,
+    )
     for (const x of v.seen) expect(x.capsule?.kind, `at ${x.at}`).not.toBe('notice')
     expect(words(at(v, 2000))).toBe('translating 5/10')
     expect(words(at(v, 2150))).toBe('translating 5/10')
     // (nothing laid yet: no card either)
-    const bare = visit(store, [{ at: 100, opened: true }, { at: 1000, doc: running }, { at: 2000, doc: failed }, { at: 2150, answer: again }], [], true)
+    const bare = visit(
+      store,
+      [
+        { at: 100, opened: true },
+        { at: 1000, doc: running },
+        { at: 2000, doc: failed },
+        { at: 2150, answer: again },
+      ],
+      [],
+      true,
+    )
     for (const x of bare.seen) expect(x.card, `at ${x.at}`).toBeNull()
   })
   it("a run failed with our server's time to wait: the notice for that wait, no retry; at the time the ask begins, the wait's own words", () => {
     const { store, running, failed, again } = failedRun(39_000)
     const v = visit(
       store,
-      [{ at: 100, opened: true }, { at: 1000, doc: running }, { at: 1100, laid: 1 }, { at: 2000, doc: failed }, { at: 39_000, timers: true }, { at: 39_150, answer: again }],
+      [
+        { at: 100, opened: true },
+        { at: 1000, doc: running },
+        { at: 1100, laid: 1 },
+        { at: 2000, doc: failed },
+        { at: 39_000, timers: true },
+        { at: 39_150, answer: again },
+      ],
       [],
       true,
     )
@@ -569,7 +632,18 @@ describe('failed passages are told only where the session is not already asking 
   it('a run failed that the session will not ask again by itself (this visit asked it already): the notice, with its retry', () => {
     const { store, running, failed } = failedRun(null)
     // (its open answered with the run failed still: nothing more the session asks by itself)
-    const v = visit(store, [{ at: 100, opened: true }, { at: 1000, doc: running }, { at: 1100, laid: 1 }, { at: 2000, doc: failed }, { at: 2150, answer: failed }], [], true)
+    const v = visit(
+      store,
+      [
+        { at: 100, opened: true },
+        { at: 1000, doc: running },
+        { at: 1100, laid: 1 },
+        { at: 2000, doc: failed },
+        { at: 2150, answer: failed },
+      ],
+      [],
+      true,
+    )
     expect(v.capsule).toMatchObject({ kind: 'notice', action: 'retry' })
   })
 })
@@ -604,10 +678,18 @@ describe('waiting in line is a wait, not a refusal (the coordinator, 2026-11-12;
       expect(refusedNow(c), `greyed at ${x.at}`).toBe(false)
     }
     // (a narrow window holds the original while the paper waits its turn, as it does while the paper is made)
-    for (const x of queued) expect(heldOf({ ...(x.chrome as ChromeState), narrow: true }, site), `narrow at ${x.at}`).toBe(true)
+    for (const x of queued)
+      expect(heldOf({ ...(x.chrome as ChromeState), narrow: true }, site), `narrow at ${x.at}`).toBe(true)
     expect(heldOf({ ...v.chrome, narrow: true }, site)).toBe(true)
     // (a true refusal for now keeps today's hold)
-    const quota = visit(store, [{ at: 100, opened: true }, { at: 200, lost: 'not-opened' }], [{ why: 'quota', afterMs: 60_000, at: null }])
+    const quota = visit(
+      store,
+      [
+        { at: 100, opened: true },
+        { at: 200, lost: 'not-opened' },
+      ],
+      [{ why: 'quota', afterMs: 60_000, at: null }],
+    )
     expect(heldOf(quota.chrome, site)).toBe(true)
     expect(refusedNow(quota.chrome)).toBe(true)
   })
