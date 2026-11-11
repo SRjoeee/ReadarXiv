@@ -4,7 +4,9 @@
 // asking for the units with no row alone (those translated are held). Pure: the reader gives it the units, the rows held and the
 // reading place.
 import type { Row, Unit } from '@readarxiv/format'
+import { kindShown } from '../compose/classes.ts'
 import { committed, type Page } from '../compose/page.ts'
+import type { Prefs } from '../prefs.ts'
 import { plainOf } from './contents.ts'
 import type { RowsStop } from './machine.ts'
 
@@ -106,4 +108,50 @@ export function countsOf(
     if (!r.ok) lost++
   }
   return { got, lost }
+}
+
+/** what the view shown has of the translation, and whether it waits for more (PDF-READER §6.6, §8) */
+export interface ViewRows {
+  /** some unit of the layer shown has no translation held while a run that may bring it is under way */
+  waits: boolean
+  /** the units of the layer shown translated under the toggles (`total`), those of them with a translation held (`got`) and those
+   *  with a row that is none (`lost`): one statement over one set, so got + lost <= total, and got never falls while the layer
+   *  shown and the toggles stay (rows held are only added to, a translation never replaced by a failure: `keep`) */
+  got: number
+  total: number
+  lost: number
+}
+/**
+ * The translation as the view shown waits for it: the units of the layer it shows that the paper does not keep and the toggles
+ * show translated (`kindShown`: a toggle shows or hides what was made, so its units count where it shows them), counted by the
+ * rows held for them. It waits while one of them has no translation and a run that may bring it is under way (`run`: our
+ * server's target running or to start, the host's translate); the layer's units not read yet, it waits while nothing of the
+ * translation is laid (a first open's run: the units come with the head). Rows read of a run done (a stored translation),
+ * and a run that restates rows the view holds or works on units of a layer it does not show yet, leave it waiting for none
+ */
+export function viewOf(o: {
+  /** the units of the layer shown, once read; null before, or no layer shown */
+  units: readonly { id: string; kind: string; kept?: boolean }[] | null
+  classes: Prefs['classes'] | null
+  held: ReadonlyMap<string, Row>
+  /** a layer is shown (the session's ready) */
+  shown: boolean
+  /** a page of the layer laid */
+  laid: boolean
+  /** a run that may bring rows is under way */
+  run: boolean
+}): ViewRows {
+  if (!o.shown) return { waits: false, got: 0, total: 0, lost: 0 }
+  if (!o.units) return { waits: o.run && !o.laid, got: 0, total: 0, lost: 0 }
+  let got = 0,
+    lost = 0,
+    total = 0
+  for (const u of o.units) {
+    if (u.kept || !kindShown(u.kind, o.classes)) continue
+    total++
+    const r = o.held.get(u.id)
+    if (r?.ok) got++
+    else if (r) lost++
+  }
+  return { waits: o.run && got < total, got, total, lost }
 }

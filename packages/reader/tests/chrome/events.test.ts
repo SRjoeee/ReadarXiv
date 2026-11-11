@@ -47,7 +47,7 @@ describe("the reader's state as the chrome's", () => {
     const ready = {
       ...open,
       layer: { s: 'ready' as const, laid: 0, total: 2, asOriginal: 0 },
-      rows: { target: 'de', from: 'server' as const, s: 'arriving' as const, got: 4, total: 15, lost: 0 },
+      rows: { target: 'de', from: 'server' as const, s: 'arriving' as const, got: 4, total: 15, lost: 0, waits: true },
     }
     const complete = {
       ...ready,
@@ -71,6 +71,41 @@ describe("the reader's state as the chrome's", () => {
     const done = fold([base, open, preparing, ready, complete])
     expect(done.phase).toBe('ready')
     expect(done.layer).toMatchObject({ laid: 2, total: 2 })
+  })
+  it('rows read of a run done, or a run that restates rows the view holds, tell no translation under way: their end alone', () => {
+    const laid = { ...open, layer: { s: 'ready' as const, laid: 2, total: 2, asOriginal: 0 } }
+    const reading = {
+      ...laid,
+      rows: { target: 'de', from: 'server' as const, s: 'arriving' as const, got: 0, total: 15, lost: 0, waits: false },
+    }
+    const held = { ...reading, rows: { ...reading.rows, got: 15 } }
+    const complete = {
+      ...laid,
+      rows: {
+        target: 'de',
+        from: 'server' as const,
+        s: 'complete' as const,
+        got: 15,
+        total: 15,
+        lost: 0,
+        stopped: null,
+      },
+    }
+    expect(eventsOf(laid, reading)).toEqual([])
+    expect(eventsOf(reading, held)).toEqual([])
+    expect(eventsOf(held, complete)).toEqual([{ type: 'translated', got: 15, total: 15, lost: 0, stopped: null }])
+    for (const s of [reading, held]) expect(fold([base, laid, s]).phase).toBe('ready')
+  })
+  it("the view's wait over while the rows still come (every unit shown holds its translation) is told as the run's end", () => {
+    const laid = { ...open, layer: { s: 'ready' as const, laid: 2, total: 2, asOriginal: 0 } }
+    const waits = {
+      ...laid,
+      rows: { target: 'de', from: 'server' as const, s: 'arriving' as const, got: 10, total: 15, lost: 0, waits: true },
+    }
+    const held = { ...waits, rows: { ...waits.rows, got: 15, waits: false } }
+    expect(eventsOf(waits, held)).toEqual([{ type: 'translated', got: 15, total: 15, lost: 0, stopped: null }])
+    expect(fold([base, laid, waits])).toMatchObject({ phase: 'translating', translated: { got: 10, total: 15 } })
+    expect(fold([base, laid, waits, held])).toMatchObject({ phase: 'ready', translated: { got: 15, total: 15 } })
   })
   it("the chrome's preferences carry the target shown (the visit's), never the stored one over it", () => {
     expect(fold([base]).prefs?.target).toBe('de')
@@ -120,7 +155,7 @@ describe("the reader's state as the chrome's", () => {
     expect(fold([base, ready, waiting])).toMatchObject({ phase: 'failed', failure: 'network', failureAt: 9_000 })
     const again = {
       ...ready,
-      rows: { target: 'de', from: 'here' as const, s: 'arriving' as const, got: 1, total: 10, lost: 0 },
+      rows: { target: 'de', from: 'here' as const, s: 'arriving' as const, got: 1, total: 10, lost: 0, waits: true },
     }
     expect(fold([base, ready, waiting, again]).failureAt).toBeNull()
     const target = {
