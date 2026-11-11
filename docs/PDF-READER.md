@@ -607,7 +607,7 @@ No state that tells the reader nothing is shown (no "done").
 | Reading | 原文; a translation ready; a stored translation shown, offline included | nothing |
 | Loading | a large PDF is loading | the progress line by the share downloaded, its first stretch; 正在加载 said to screen readers |
 | Preparing | the paper's bilingual files are being made (our server's prepare, a paper no reader opened before) | the original; the progress line's first half after the download, by the prepare's stage (§6.6); 正在准备 said to screen readers (S-R-23); the website's capsule says the translation the reader waits for, with the time a first one takes (§6.6) |
-| Translating | the paper's paragraphs being translated by the service chosen | the same line on, by the share of paragraphs done; 正在翻译 said to screen readers; each page laid on the right as its paragraphs come, the original's page until then |
+| Translating | the paper's paragraphs being translated by the service chosen | the same line on, by the share of paragraphs done; 正在翻译 said to screen readers; each page laid on the right as its paragraphs come, the original's page until then. The paragraphs counted are those of the layer on screen that "What to translate" shows translated; one whose translation is already held is done, and a run that only restates them is not shown |
 | Not to be had now | Read arXiv's website out of reach, or at its limit | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24); passing, not remembered; a paper whose files this machine keeps opens without it |
 | Some paragraphs failed | a translation with gaps | capsule: {n} 处翻译失败 · 重试 · close |
 | Language not supported | the shared target language is not one of the reader's | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the reader's translates |
@@ -617,6 +617,29 @@ No state that tells the reader nothing is shown (no "done").
 | Settings cannot be read | storage did not answer in a page's first 1,500 ms, or its value cannot be used | the defaults in use and the PDF opened on them, not held for the storage; capsule: 设置读取失败，当前使用默认设置 · 设置, for as long as it is so, beside an address with no paper's card too; the controls that write the settings greyed, with the reason in their tooltips; the menus keep their places |
 | Narrow window | 对照 chosen, the document area under 840 px (§5) | the translation alone; capsule, once: 窗口较窄，暂只显示译文 |
 
+- **The website's words** (`readarxiv-web` `web/src/reader/web-words.ts`, given to the chrome as `StateWords` by its
+  v2 page; zh-TW, ja and ko in the same table). The extension gives none and keeps the catalogue's above. A run's
+  capsule enters once its wait has lasted 400 ms (§6.6); every other capsule at once.
+
+  | State | When | zh-CN | en |
+  |---|---|---|---|
+  | The first making | the paper's layer being made (no layer to show yet: the first time anyone opens it), until the count of its translation is known | 正在翻译 · 首次约需 1–2 分钟 | Translating · the first time takes 1–2 minutes |
+  | Translating, counted | the view waits for paragraphs of the layer shown (Translating above) | 正在翻译 · {n} / {N} 段 | Translating · {n} of {N} passages (under 400 px: Translating {n} of {N}) |
+  | Translating, bare | the same, the layer's count not known yet (a layer shown before this visit), or the count beside the chip in a window under 400 px where the short count does not fit | 正在翻译 | Translating |
+  | Waiting in line | our server at capacity: the open refused `busy`, asked again by itself | 排队中 | Waiting in line |
+  | Reconnecting | our server's document not heard while a run is under way | 正在重新连接 | Reconnecting |
+  | The run's chip | beside a run's words, the translation not on screen and some of it there | 查看译文 | Show translation |
+  | Cannot be had | no bilingual version can be made of the paper | 这篇论文暂时无法翻译 | This paper can't be translated yet |
+  | Too large | the paper too large to prepare | 这篇论文篇幅过大，暂时无法翻译 | This paper is too long to translate |
+  | Not now, our server | out of reach or at fault; the time while it is to come | 翻译暂时不可用，{time} 后可以重试 | Translation is unavailable for now; you can retry at {time} |
+  | Not now, the limit | the visitor's new papers spent; the time while it is to come | 新论文的翻译次数已达上限，{time} 后可以重试 | You've reached the limit for new papers; you can retry at {time} |
+  | The HTML link | beside a paper that cannot be had, where arXiv has an HTML version: the extension on the page, or not (none on a phone) | 改用 HTML 翻译 · 安装扩展翻译 HTML | Translate HTML instead · Get the extension for HTML |
+  | The original lost | its pane's card, with arXiv's PDF of the version | 这里暂时无法显示原文 · 在 arXiv 打开原文 PDF | The original can't be shown here for now · Open the original PDF on arXiv |
+
+  A time once come drops from its sentence (the title alone). The visitor's rate of asks and the network itself are
+  the sibling lane's words (flow-refusals, 2026-11-11). Nothing the website says names the paper being prepared: the
+  word 正在准备 is the old page's (`reader/job-view.ts`, production's) and the extension's screen-reader line (S-R-23)
+  alone.
 - Recovery is automatic where it can be: our server's wait (a 202's, a 429's) is waited and asked again, a 429's three
   times in a row at most (S-R-26: a visitor's limit lasts up to a day, and a tab left open asked every ten minutes for as
   long as it stayed open; #88 E5); 重试 opens the
