@@ -113,7 +113,8 @@ ${DIMMED} .axt-hl-layer { mix-blend-mode: screen; }
 .axt-reader .axt-over > svg { position: absolute; left: 0; top: 0; width: var(--axt-frame-w, 100%); height: var(--axt-frame-h, 100%); overflow: visible; font-synthesis: none; text-rendering: geometricPrecision; -webkit-font-smoothing: auto; -webkit-user-select: none; user-select: none; pointer-events: none; }
 .axt-reader[data-axt-layer-text="auto"] .axt-over > svg { text-rendering: auto; }
 .axt-reader .axt-over > svg text { white-space: pre; fill: #000; }
-/* the elements' and labels' crops, cut from the page's crop render: darkened into the page, so that paint order cannot change a pixel;
+/* the elements' and labels' crops, cut from the page's crop render: darkened into the page (lightened into a dimmed one, below),
+   so that paint order cannot change a pixel;
    in the page view's own frame and box (the frame floored to its rounding, as PDF.js floors the page box; a turned page's
    turned, never by CSS), so that its pixels are the page view's and the device's (paint.ts cropGrid) */
 /* a turned page (/Rotate, the maintainer's B-408): the overlay's drawing (its SVG, its crops, its links) and the highlight's
@@ -133,8 +134,13 @@ ${DIMMED} .axt-hl-layer { mix-blend-mode: screen; }
 .axt-reader [data-axt-scaling] .axt-over > .textLayer { display: none; }
 /* the pages dimmed: the overlay's drawing, its text and its crops, takes the filter the host gives the page's canvas
    (chrome/reader.css), so that every run comes out as the canvas's ink does, whatever fill it names (the layer's black, a CJK
-   run's CJK_INK, a colour of its own), as no rule on a text's fill would reach a run that names its own */
+   run's CJK_INK, a colour of its own), as no rule on a text's fill would reach a run that names its own. The crops' blend is
+   mirrored with it, as the highlight's is: the filter turns a crop's paper into the dimmed page's ground (rgb(29 29 29), the
+   page canvas's white through the same filter) and its ink light, so darken, which keeps a crop's ink over a white page,
+   would keep the ground over it (the website's staging, 2026-11-12: every inline formula of a translated paragraph a blank
+   gap); lighten keeps the ink and lays the crop's paper on its equal */
 ${DIMMED} .axt-over > svg, ${DIMMED} .axt-over > canvas.axt-crops { filter: invert(88.8%) hue-rotate(180deg); }
+${DIMMED} .axt-over > canvas.axt-crops { mix-blend-mode: lighten; }
 /* the links over a laid page: one anchor a link, each box a span of its own, sizes a share of the page's frame */
 .axt-reader .axt-links { position: absolute; left: 0; top: 0; width: var(--axt-frame-w, 100%); height: var(--axt-frame-h, 100%); z-index: 1; pointer-events: none; }
 .axt-reader .axt-link { position: absolute; display: block; pointer-events: none; outline: none; }

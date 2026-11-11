@@ -150,8 +150,14 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
   so nothing flashes white while scrolling. Only the page's own drawing is filtered: the canvas, and over a laid page the
   overlay's text and its crops by the same filter (the reader's sheet), so that every run comes out as the canvas's ink does,
   whatever fill it names — the layer's black, a CJK run's `#141414` (§11.8), a colour of a run's own — which no rule on a
-  text's fill would reach. The highlight's bands keep their colours, screened over the dark page as they are multiplied over a
-  white one. Off, the pages stay white in the dark chrome.
+  text's fill would reach. The crops' blend is mirrored with the filter, as the highlight's is: darkened into a white page,
+  lightened into a dimmed one (styles.ts). The filter makes a crop's paper the dimmed page's own ground (29, the canvas's white
+  through the same filter) and its ink light, so darken kept the ground over the ink: on the website's v2 page on staging
+  (2026-11-12) every inline formula of a translated paragraph was a blank gap, the display equations, the canvas's own, still
+  there. Lightened, a crop's ink comes out as the canvas's own does (`#c00000`: rgb(255 163 163) both) and its paper lies on
+  its equal, no box; only a channel the filter takes under the ground's 29 is lifted to it (`#00ffff`: rgb(0 113 113) on the
+  canvas, rgb(29 113 113) in a crop, luma 89 and 95). The highlight's bands keep their colours, screened over the dark page
+  as they are multiplied over a white one. Off, the pages stay white in the dark chrome.
 - **Where the marks are read** (the website's v2 page on staging, 2026-11-12: the translation drawn black on the dimmed
   page): the appearance is the page's, written by the chrome on `<html>` (`data-theme`, `data-axt-dim`:
   chrome/appearance.ts); the reader's root, the element that carries `.axt-reader`, is the element a host gives `openReader`
@@ -161,9 +167,11 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
   read there (`data-axt-pdf-mode`, `data-axt-narrow`, `data-axt-swapped`, `data-axt-layer-text`), and those it writes inside
   it under it (`data-axt-scaling`, `data-axt-turn`). Before, the sheet read the mark on the root alone, and on both hosts
   the overlay's text, the link rings, the skeleton's colours and the translating marks' light stayed light-page values; the
-  canvas, the crops and the highlight's blend were right by the chrome's own sheet. Held by the package e2e's `dim:` checks,
-  in four shapes: the class and the mark on one element (an element of the host's; `<html>`), the class on `<body>` under a
-  marked `<html>`, and both hosts' page (the chrome over the reader).
+  canvas's and the crops' filter and the highlight's blend were right by the chrome's own sheet (the crops' blend was never
+  right: above). Held by the package e2e's `dim:` checks, in four shapes: the class and the mark on one element (an element of the
+  host's; `<html>`), the class on `<body>` under a marked `<html>`, and both hosts' page (the chrome over the reader); each
+  reads a crop's pixels too, dimmed and not (its lightest pixel 185 on a ground of 29 dimmed, 29 before the mirror; its
+  paper's pixels the page's ground, 29 and 255).
 - The night-reading switch of the earlier rounds is gone; the two items above replace it (the maintainer's point 3,
   2026-09-24).
 
