@@ -242,9 +242,18 @@ export function factsOf({
     for (const [id, el] of mem.elements) {
       const gs = (mem.els.get(id) ?? []).map(gA)
       const fill = fillOfGlyphs(gs)
-      // (its style where it is filled otherwise than black, or where the typesetter may draw it as text: its text stated)
-      if (fill !== undefined || el.text !== undefined)
-        el.style = { ...styleOf(gs), ...(fill !== undefined ? { fill } : {}) }
+      // (its style where it is filled otherwise than black, or where the typesetter may draw it as text: its text stated; where
+      // that text is in TeX's case for its faked small capitals (locate's mem.smallCaps, facts.ts elementCase), their share, and no
+      // case change)
+      if (fill !== undefined || el.text !== undefined) {
+        const sc = mem.smallCaps?.get(id)
+        const { upper, ...read } = styleOf(gs)
+        el.style = {
+          ...read,
+          ...(sc !== undefined ? { sc } : upper ? { upper } : {}),
+          ...(fill !== undefined ? { fill } : {}),
+        }
+      }
       // (its own brackets: its first and last glyphs where they are a pair of them, "[" "]" around a citation's numbers:
       // the stated half of T12, which a translation that brackets it takes)
       const pair = bracketsOf(gs)

@@ -29,7 +29,7 @@ import {
   unitId,
 } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
-import { HUNK, hunkName } from '../align/align.ts'
+import { HUNK, hunkName, setPagesOf } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
 import type { PageInk } from '../ink.types.ts'
@@ -38,6 +38,7 @@ import { TEXT_SYMBOLS } from '../source/tables.ts'
 import {
   bracketsOf,
   centredByBlock,
+  elementCase,
   fakedCaps,
   fillRunsOf,
   fixedFacesOf,
@@ -92,6 +93,9 @@ export interface Member {
   /** the elements (by piece id) of a symbol's class whose ink is not that symbol as its reading draws it (a letter or digit among
    *  its glyphs, or a raise or a drop the reading does not draw): drawn as their ink, a formula's (bundle.ts classed) */
   asInk?: Set<string>
+  /** the share an element's faked small capitals are set at, by its id, where its text is in TeX's case for them (facts.ts
+   *  elementCase): its style states it (facts-pass, El.style.sc) */
+  smallCaps?: Map<string, number>
   labelAt?: Label
   style: Style
   align: 'j' | 'l' | 'c' | 'r'
@@ -978,8 +982,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   }
 
   // ---- the units no source unit is, made on A by today's rule (ink.ts): from A's glyphs no source unit owns after the transfer,
-  // those B never printed among them; each a member as an instrument's unit is, its ink A's own (`same`), its span on B its
-  // glyphs' partners' (a paragraph end of TeX's between two of them tells their flows apart, as it tells a source unit's)
+  // those B never printed among them but arXiv's ink (on a page our compile sets, a glyph it never printed: no figure glyph,
+  // none born); each a member as an instrument's unit is, its ink A's own (`same`), its span on B its glyphs' partners' (a
+  // paragraph end of TeX's between two of them tells their flows apart, as it tells a source unit's)
+  const setA = setPagesOf(m)
   if (o.pages) {
     const owned = (a: number) => {
       const c = claimedA[a] as number
@@ -1006,6 +1012,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       m,
       pageA,
       owned,
+      setA,
       classesOf: o.classesOf,
       ownerOf,
       artefact: figureArtefact,
@@ -1092,7 +1099,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
 
   // ---- the units born on A, from the glyphs B never printed
   const born = new Map<number, { kind: string; content: Piece[] }>()
-  for (const b of bornOf(inkA, m, claimedA, pageA)) {
+  for (const b of bornOf(inkA, m, claimedA, pageA, setA)) {
     const mem = empty(-1, b.kind, unitId(b.kind, b.content))
     mem.located = true
     // (text inside an included figure, a form XObject: a figure's text, which the wrap writes in its form, as today's figure units)
@@ -1542,8 +1549,9 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // paper's macro around a footnote, its "3" 6.58 pt and 3.16 pt over the line's baseline, was read level against its own
       // glyphs alone, stated the text "3" and drawn flat at the line's size; on staging and in today's reader both)
       const cls0 = classOf.get(id)?.cls
+      const textClass = cls0 !== undefined ? TEXT_CLASSES.has(cls0) : TEXT_KINDS.has(p.kind)
       const level =
-        !(cls0 !== undefined ? TEXT_CLASSES.has(cls0) : TEXT_KINDS.has(p.kind)) ||
+        !textClass ||
         (!bx.length &&
           groups.every((gs) => new Set(gs.filter((a) => /\S/.test(gA(a).u)).map((a) => r2(gA(a).y))).size <= 1) &&
           (!!classOf.get(id)?.mark || standsAsDrawn(groups, ink, false, gA)))
@@ -1561,9 +1569,20 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         mem.asInk.add(id)
       }
       if (asText && level && gl.length && !gl.some((a) => gA(a).nu)) {
-        el.text = textOf(gl.map(gA), lineEnds)
+        // (a text the typesetter draws as the page's text (a class of text, its glyphs on its line's baseline: `level`) in TeX's
+        // case: each faked small capital its source's lowercase letter, read off its own glyphs' sizes (facts.ts elementCase),
+        // their share stated with its style, El.style.sc (facts-pass), so that the typesetter draws it in small capitals as TeX
+        // set it. A formula's text is no drawing (it is cropped, its text read for its brackets): a capital set smaller there is
+        // a script, `\rho_{BDM}`'s BDM, no small capital)
+        const cased = textClass ? elementCase(gl.map(gA)) : { glyphs: gl.map(gA) }
+        if (cased.ratio !== undefined) {
+          mem.smallCaps ??= new Map()
+          mem.smallCaps.set(id, cased.ratio)
+        }
+        const own = cased.glyphs
+        el.text = textOf(own, lineEnds)
         // (its runs of one fill, where its glyphs hold more than one: a link's text coloured, its brackets black)
-        const runs = fillRunsOf(gl.map(gA), lineEnds)
+        const runs = fillRunsOf(own, lineEnds)
         if (runs) el.fills = runs
       }
       // (a text macro drawn as its ink for its scripts: its copy text its glyphs', where the source's reading has none (a paper's

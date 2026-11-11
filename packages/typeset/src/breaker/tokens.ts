@@ -15,8 +15,9 @@
 //   (Style.sc), `orig.size` (Style.size), `openBreaks` / `referenced` (U.breaks), `tail` / `tailOwn` (Placed.tail)
 // - `colourOf`, `fillOf`: a group's run's fill (a colour piece's, TeX's log; any other's, a link's, its glyphs' on A where it is
 //   not the fill around it) and an element's (A's glyphs) ← SpanAt.colour, El.colour, El.style.fill
-// - `fills`, `smallCaps`: each rendering's runs of one fill and its faked small capitals (its page characters today) ← El.style;
-//   `fakedCaps`: the renderings set wholly in them ← El.style (all capitals at the small size) of a Style.sc unit
+// - `fills`, `smallCaps`: each rendering's runs of one fill and its faked small capitals (its page characters today, the tap's);
+//   a rendering's own weight, slant and small capitals, faked in TeX's case at their share or its face's, ride on its
+//   resolution (`st` ← El.style, lay/read.ts)
 // - `cls2`: each piece's class ← El.kind; `spacedSource`: the source writes CJK with spaces between ← a unit fact
 // - `faces`: B.faces' answers (faceOf over the role table and the paper's family) and whether a face has small capitals
 // - `P`: the rule set's fields resolved for the target (Rules.breaking, Rules.fit); `designs`: the paper's (A3)
@@ -142,9 +143,6 @@ export type TokensInput = {
   fillOf: (k: number) => number | null
   fills: ReadonlyMap<number, { text: string; fill: number }[] | null>
   smallCaps: ReadonlyMap<number, readonly boolean[] | null>
-  /** the renderings the part states in the page's faked small capitals, by piece (lay/read.ts: an element all capitals at its
-   *  small-capitals unit's small size, El.style and Style.sc), drawn in the layer's small capitals; the tap's rounds hold none */
-  fakedCaps?: ReadonlySet<number>
   cls2: readonly (string | null)[]
   spacedSource: boolean
   to: string
@@ -484,6 +482,7 @@ export function tokens(i: TokensInput): Tokens {
     extra: { label?: true; ph?: string; k?: number; math?: true } = {},
     track: Track | null = null,
     smallAt: ((at: number) => boolean) | null = null,
+    ratio = capsK,
   ) => {
     for (const m of s.matchAll(/\s+|\S+/g)) {
       const chunk = m[0]
@@ -529,7 +528,7 @@ export function tokens(i: TokensInput): Tokens {
           const all = p.cls === 'latin' && !!st.upper
           const runs =
             !all && p.cls === 'latin' && selfCaps(face0)
-              ? caseRuns(s, capsK, upper, smallAt && ((x) => smallAt(from + x)))
+              ? caseRuns(s, ratio, upper, smallAt && ((x) => smallAt(from + x)))
               : null
           const face = runs || all ? plainOf(face0) : face0
           for (let r = 0, count = runs ? runs.length : 1; r < count; r++) {
@@ -747,22 +746,27 @@ export function tokens(i: TokensInput): Tokens {
       pushText(' ', style())
       return
     }
-    const own0: TStyle = r.math
+    // (a rendering of the page's own text in the font state TeX set its glyphs in, where the part states it (El.style, read.ts):
+    // its typewriter face, its weight, its slant and its small capitals over the run's. It is text no translation replaces, and
+    // the original's style is its own: 2608.06701v1 p5's "Periodic Advisor", italic by the paper's macro, was drawn upright in
+    // the run's style, and "LIVEPLAN", in faked small capitals, in full capitals; a group around it that TeX applied is in its
+    // glyphs (\emph's italic), and a rendering of no stated style, or an attribute its style does not state, takes the run's)
+    const own: TStyle = r.math
       ? { ...style(), italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3, caps: false }
       : r.mode === 'orig-text' && r.st && r.st.fam !== 'math'
         ? {
             ...style(),
             fam: r.st.fam === 'mono' ? 'mono' : style().fam,
             design: r.st.fam === 'mono' ? designs.mono : style().design,
+            bold: r.st.bold ?? style().bold,
+            italic: r.st.italic ?? style().italic,
+            caps: r.st.caps ?? style().caps,
           }
         : style()
-    if (r.math && own0.upper) own0.upper = false
-    // (a rendering the part states in the page's faked small capitals (`fakedCaps`): in the layer's small capitals, every
-    // capital a small one at capsRatio (caseRuns' smallAt), never in full capitals at the unit's size, whatever its unit's
-    // base; triage S6)
-    const faked =
-      r.mode === 'orig-text' && !r.math && !r.sup && !r.rename?.length && !own0.upper && !!i.fakedCaps?.has(k)
-    const own: TStyle = faked && !own0.caps ? { ...own0, caps: true } : own0
+    if (r.math && own.upper) own.upper = false
+    // (the share its faked small capitals are set at: its own (El.style.sc, its text in TeX's case, each small one a lowercase
+    // letter caseRuns draws so), else the unit's)
+    const ratio = r.mode === 'orig-text' && typeof r.st?.sc === 'number' ? r.st.sc : capsK
     const fill = i.fillOf(k)
     const st = !own.colourRun && Number.isInteger(fill) && fill! >= 0 ? { ...own, color: hexOf(fill!) } : own
     const fills = r.mode === 'orig-text' && !r.math && !own.colourRun ? (i.fills.get(k) ?? null) : null
@@ -779,11 +783,7 @@ export function tokens(i: TokensInput): Tokens {
         : null
     if (renamed) runs = renamed
     const flags =
-      !renamed && r.mode === 'orig-text' && !r.math && own.caps && !own.upper
-        ? faked
-          ? Array.from({ length: r.text.length }, () => true)
-          : (i.smallCaps.get(k) ?? null)
-        : null
+      !renamed && r.mode === 'orig-text' && !r.math && own.caps && !own.upper ? (i.smallCaps.get(k) ?? null) : null
     const capsAt = flags ? (x: number) => !!flags[x] : null
     if (r.sup) {
       for (const run of runs ?? [{ text: r.text, st }]) {
@@ -794,10 +794,10 @@ export function tokens(i: TokensInput): Tokens {
       let at = 0
       for (const run of runs) {
         const from = at
-        pushText(run.text, run.st, { ph: r.mode, k }, null, capsAt && ((x) => capsAt(from + x)))
+        pushText(run.text, run.st, { ph: r.mode, k }, null, capsAt && ((x) => capsAt(from + x)), ratio)
         at += run.text.length
       }
-    } else pushText(r.text, st, { ph: r.mode, k, ...(r.math ? { math: true as const } : {}) }, null, capsAt)
+    } else pushText(r.text, st, { ph: r.mode, k, ...(r.math ? { math: true as const } : {}) }, null, capsAt, ratio)
   })
   // (U.marks, T17: the class's own marks after the unit's text, in place of the translation's of their kinds at its end)
   if (resolved.tail?.length) {

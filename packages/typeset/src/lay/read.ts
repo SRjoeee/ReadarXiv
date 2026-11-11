@@ -34,7 +34,6 @@ import { type ElementReading, elements, type Gap, type Res } from '../unit/eleme
 import { type Glyph, type HeadParts, type LabelInput, label as labelRule, type UnitLabel } from '../unit/label.ts'
 import { type RefNames, rename } from '../unit/rename.ts'
 import { cjkAdvance } from '../unit/params.ts'
-import { SMALL_CAPS_SHARE } from '../shared/names.ts'
 import { type Rect, rectKey } from '../util.ts'
 
 type Line = Placed['lines'][number]
@@ -316,9 +315,17 @@ function readingsOf(
       gap = { text, lines, nu: el?.text === undefined, proof: true, box: boxOf(S), n: [...text].length }
     }
     const page = ink[0]?.[0] ?? 1
-    // (the style most of its glyphs are set in, as drawnAs reads it: only a typewriter face is the tokens')
+    // (the style most of its glyphs are set in (El.style), its own font state where it is drawn as the page's text: its
+    // typewriter face, weight, slant and small capitals, faked (El.style.sc, its text in TeX's case) or its face's own, over
+    // the run's (tokens.ts); none where the part states none, the run's then)
     const gst: TStyle | null = el?.style
-      ? { fam: el.style.role, bold: !!el.style.bold, italic: !!el.style.slant }
+      ? {
+          fam: el.style.role,
+          bold: !!el.style.bold,
+          italic: !!el.style.slant,
+          caps: el.style.sc !== undefined || (!!el.style.design && !!classifyFont(el.style.design).caps),
+          ...(el.style.sc !== undefined ? { sc: el.style.sc } : {}),
+        }
       : null
     const literal = !!el?.literal
     const drawn0 = gap ? drawnAs(cls, gap, supSrc, copy, page, gst, literal, mark) : null
@@ -605,17 +612,6 @@ export function readMember(i: ReadInput): ReadOut {
       }),
     ),
     smallCaps: new Map(),
-    // (a rendering wholly in the page's faked small capitals, where its unit is set in them (Style.sc): its glyphs all capitals
-    // set at most SMALL_CAPS_SHARE of the unit's size (El.style), as today's smallCapsAt read its characters: a paper's macro
-    // in a small-capitals heading, drawn at the unit's capsRatio, triage S6)
-    fakedCaps: new Set(
-      m.style.sc === undefined
-        ? []
-        : pieces.flatMap((p, k) => {
-            const e = p.t === 'ph' || p.t === 'nested' ? els.get(String(p.k)) : undefined
-            return e?.style?.upper && e.text && e.style.size <= SMALL_CAPS_SHARE * m.style.size ? [k] : []
-          }),
-    ),
     cls2,
     spacedSource: false,
     to: i.to,

@@ -297,6 +297,50 @@ describe('the highlight judged as the reader sees it: ink is ink, boxes as paint
   })
 })
 
+describe("a unit's drawn lines of two columns on one baseline are two lines, whatever their sizes", () => {
+  // (2608.06701v1 p3 t60, the merged el-facts tree: a paragraph running from the left column into the right, its right line at
+  // 123.73 read at 7.97 pt beside its left line at 123.5 read at 9.96; raised() took the right one for a raised mark of the
+  // left (smaller, within 0.6 of its size across) and made one line from 48.96 to 563 across the gutter, which no sentence box
+  // covers: "1 of 11 drawn lines not covered". A raised mark stands in its line's column; a line of the other column
+  // stands in another column, and is a line of its own (the paper's frame); a mark set a word space after its word (today's
+  // 2609.20976v1 p5 t19, 3.64 pt) is still its line's)
+  const left = drawnLine(72, 300, 400, 'x'.repeat(20), 10)
+  const right = (size: number) => drawnLine(312, 540, 400.2, 'x'.repeat(20), size)
+  const boxes = [
+    [72, 397, 300, 409],
+    [312, 397, 540, 409],
+  ]
+  const v2 = v2Of({
+    members: [{ ord: 11, state: 'laid', lines: [], lit: { left: [[[71, 397, 541, 409]]], right: [boxes], own: [] } }],
+    facts: [{ ord: 11, kind: 'para', align: 'j', style: { size: 10 }, lines: [factLine(72, 300, 400), factLine(312, 540, 400)] }],
+    today: { 11: { today: 7 } },
+  })
+  // (the paper's frame: two columns, the gutter between them)
+  const frame = { columns: [[72, 300], [312, 540]], block: [72, 540] }
+  const withFrame = (r: ReturnType<typeof rec>) =>
+    measurePage('p-zh', v2, r, { prepByOrd: new Map(), todayOf: new Map([[11, 7]]), turned: new Set(), led: new Map(), top: new Set(), frame })
+  const page = (size: number) =>
+    withFrame(
+      rec({
+        today: { units: [{ id: 7, lines: [left, right(10)] }], lit: [7], litBoxes: { 7: { right: boxes, left: [[71, 397, 541, 409]] } } },
+        v2: { units: [{ id: 11, lines: [left, right(size)] }], lit: [11] },
+      }),
+    )
+  it('a smaller line in the other column on the same baseline is no raised mark: covered by its own box', () => {
+    expect(page(8).diffs.filter((d: { flag: string }) => d.flag === 'highlight')).toEqual([])
+  })
+  it('a raised mark in its line\'s column is still part of it, a word space after it too', () => {
+    const mark = drawnLine(303.3, 306.7, 403, '1', 7)
+    const withMark = withFrame(
+      rec({
+        today: { units: [{ id: 7, lines: [left, mark, right(10)] }], lit: [7], litBoxes: { 7: { right: boxes, left: [[71, 397, 541, 409]] } } },
+        v2: { units: [{ id: 11, lines: [left, mark, right(10)] }], lit: [11] },
+      }),
+    )
+    expect(withMark.diffs.filter((d: { flag: string }) => d.flag === 'highlight')).toEqual([])
+  })
+})
+
 describe("a label in a translated unit: today's relabelled against v2's kept as the original's ink", () => {
   // (a numbered head "Proposition 1 (" set on the first line at 48.96–113.52, its name word to 98.04; the unit's text after it)
   const label = { ink: [N, 48.96, 256.26, 113.52, 265.18, 258.3], kind: 'head', name: ['Proposition', [N, 48.96, 256.26, 98.04, 265.18, 258.3]], num: ['1', [N, 101.63, 258.3, 106.61, 265.15, 258.3]] }
