@@ -8,7 +8,7 @@ import type { StateWords } from '../../src/chrome/parts.tsx'
 import { LANGUAGES, NAMES, TEST_PARTS } from './parts.ts'
 
 const at = (over: Partial<ReaderState>): ReaderState => ({ ...INITIAL, prefs: PREFS, display: 'bilingual', ...over })
-const none = { noticeClosed: false, narrowShown: false, refusalsSeen: 0 }
+const none = { noticeClosed: 0, narrowShown: false, refusalsSeen: 0 }
 /** the target the preferences hold */
 const target = (tag: string) => ({ prefs: { ...PREFS, target: tag } })
 /** a failure's sentence as the host words it (parts.tsx reason; the extension's knows whether its translator has a key) */
@@ -81,8 +81,15 @@ describe("the states (the reader's design, §8)", () => {
       words: { prefix: '', count: 3, suffix: ' 处翻译失败' },
     })
     expect(
-      capsuleOf(at({ phase: 'ready', failedUnits: 3, failure: 'network' }), { ...none, noticeClosed: true }, LANGUAGES),
+      capsuleOf(at({ phase: 'ready', failedUnits: 3, failure: 'network' }), { ...none, noticeClosed: 3 }, LANGUAGES),
     ).toBeNull()
+    // (closed, it stays closed for the visit as the count falls (passages a retry brings) or stays; told again once more fail)
+    expect(
+      capsuleOf(at({ phase: 'ready', failedUnits: 2, failure: 'network' }), { ...none, noticeClosed: 3 }, LANGUAGES),
+    ).toBeNull()
+    expect(
+      capsuleOf(at({ phase: 'ready', failedUnits: 4, failure: 'network' }), { ...none, noticeClosed: 3 }, LANGUAGES),
+    ).toMatchObject({ kind: 'notice', words: { count: 4 } })
   })
 
   it('passages the typesetting left in the original, and no stop to resume: counted, with no retry — the same translation fails the same way (the review of 2026-10-04, I-5)', () => {
@@ -92,7 +99,7 @@ describe("the states (the reader's design, §8)", () => {
       action: null,
     })
     expect(
-      capsuleOf(at({ phase: 'ready', failedUnits: 2, failure: null }), { ...none, noticeClosed: true }, LANGUAGES),
+      capsuleOf(at({ phase: 'ready', failedUnits: 2, failure: null }), { ...none, noticeClosed: 2 }, LANGUAGES),
     ).toBeNull()
   })
 
@@ -174,7 +181,7 @@ describe("the states (the reader's design, §8)", () => {
     expect(
       capsuleOf(
         at({ phase: 'ready', available: false, htmlVersion: null, failedUnits: 3, narrow: true }),
-        { ...none, noticeClosed: true },
+        { ...none, noticeClosed: 3 },
         LANGUAGES,
       ),
     ).toMatchObject({ kind: 'unavailable' })

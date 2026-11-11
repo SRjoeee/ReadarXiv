@@ -91,7 +91,9 @@ export type RowsWhy =
   | { kind: 'unavailable'; retryAfterMs?: number }
   | { kind: 'unconfigured'; code: string }
   | { kind: 'target' }
-  | { kind: 'server' }
+  /** our server's run of the target failed: `retryAt` the time its document names for the next (the retry's; the session's own
+   *  next ask is its open's, needsOf) */
+  | { kind: 'server'; retryAt?: number | null }
 
 /** a document from the server's follow (L5's PaperDoc), as the machine reads it */
 export interface Doc {
@@ -710,7 +712,7 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
           s: 'failed',
           target: s.rows.target,
           why: x.why,
-          retryAt: after === null ? null : s.now + after,
+          retryAt: x.why.kind === 'server' ? (x.why.retryAt ?? null) : after === null ? null : s.now + after,
           timer: null,
         }
       }
@@ -878,7 +880,9 @@ export function settle(s0: State): State {
     if (s.engaged && units.length && !lasting) s.rows = { s: 'arriving', t: take('rows'), target }
   }
   if (s.rows.s === 'arriving' && (!s.engaged || !units.length || lasting)) s.rows = { s: 'none', target: s.rows.target }
-  if (s.rows.s === 'failed' && s.rows.retryAt !== null && !s.rows.timer) s.rows = { ...s.rows, timer: take('timer') }
+  // (a translator's wait is the rows' own to wait out; our server's is its open's, timed by needsOf from the document)
+  if (s.rows.s === 'failed' && s.rows.retryAt !== null && !s.rows.timer && s.rows.why.kind !== 'server')
+    s.rows = { ...s.rows, timer: take('timer') }
   // 8. arXiv's HTML version, once the bilingual one cannot be had (now or for the paper, or in the language): once a visit, and
   // again where our server's word on it changes (a refusal for now that said nothing, then a lasting one saying arXiv has it)
   const said = htmlSaid(s.doc)

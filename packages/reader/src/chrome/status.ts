@@ -51,7 +51,8 @@ const running = (state: ReaderState) => state.phase === 'translating' || state.p
 
 /** What the reader has done with the notices this visit (StatusCapsule keeps it). `refusalsSeen`: the refused writes closed */
 export interface Seen {
-  noticeClosed: boolean
+  /** the passages that had failed when the reader closed their notice (0: not closed): closed for the visit unless more fail */
+  noticeClosed: number
   narrowShown: boolean
   refusalsSeen: number
 }
@@ -176,7 +177,7 @@ export function capsuleOf(
     return html ? { kind: 'notNow', words: notNow, ...html, ...wait } : { kind: 'notNow', words: notNow, ...wait }
   }
   // the paragraphs that failed are told once the run has ended, with its retry where a stop is there to resume
-  if (!running(state) && state.failedUnits > 0 && !seen.noticeClosed)
+  if (!running(state) && state.failedUnits > seen.noticeClosed)
     return {
       kind: 'notice',
       words: withCount((words.failedPassages ?? S.failed.text)(state.failedUnits), state.failedUnits),
