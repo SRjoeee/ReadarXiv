@@ -158,6 +158,7 @@ export function freshResolve(p, q, { incomparable = new Map(), unsentenced = new
     if (r.ruling) d.ruling = r.ruling
     // (worse by its measure on the re-lay and covered there by an owner's ruling, rulings.mjs)
     if (r.covered) d.covered = r.covered
+    if (r.coveredSays) d.coveredSays = r.coveredSays
     d.what = `${d.base ?? d.what} (judged again with today's own text laid in v2's unit: v2 ${r.v2?.value ?? ''}, off ${r.v2?.off ?? ''})`
   }
   if (moved) recount(p)

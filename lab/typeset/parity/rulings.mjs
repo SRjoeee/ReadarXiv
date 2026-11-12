@@ -6,10 +6,11 @@
 // code (`holds`), his words as he wrote them, the date and the example he saw. A difference worse by its measure that a ruling's
 // condition holds for is `covered` (its measure's reading kept: `nearer` today, `worse` false, `covered` the ruling's id): the
 // sheet lists it apart from the differences no ruling covers, and the gate passes only when no page is worse outside his rulings.
-// No floor is widened: a bound a condition needs is a measure's own noise floor (verdict.mjs NEAR), a fact the page states, or a
-// number in his own words.
+// T2 is his answer of the same day on the readiness page (`seen`). No floor is widened: a bound a condition needs is a measure's
+// own noise floor (verdict.mjs NEAR), the engine's own grain (SIZE_STEP), a fact the page states, or a number in his own words. What
+// the page states beside a covered difference (L2's cause, S4's steps) is reported (`coveredSays`), never a condition.
 import { NEAR } from './verdict.mjs'
-import { OVER_MIN } from './fidelity.mjs'
+import { OVER_MIN, SIZE_STEP } from './fidelity.mjs'
 
 /** the date of the owner's verdicts, and the page he gave them on */
 export const DATE = '2026-11-12'
@@ -118,15 +119,19 @@ export const RULINGS = [
     example:
       "2610.40645v1-ja p4 t13: 6 lines at 10.91 pt against today's and the original's 7 (today at 11.12), its last baseline 12.93 pt over theirs on a leading of 14.23; 2608.06701v1-zh p5 t132: 6 lines against today's 7 at the same size, 13 pt over today's last, the paragraph's 14 lines in all against today's 15",
     condition:
-      "line-count: v2 sets the unit in exactly one line fewer than today on the page (both at most the original's count), at the original's size (within the size floor), its last row higher than today's by no more than one of its own lines (its leading on the page, else today's, else the original's, and the position floor): the room of under a line he saw left under it; and the line has one of the two causes the lanes traced (cover-area C1, C2), each read off the page: (C1) today draws the unit larger than the original's by more than the size floor (today's misread of TeX's justification as size), or (C2) the translation's punctuation rule: v2's own lay of the pair with no CJK line squeezed to take the group it misses (its marks' blank halves, light compression before stretching; v2.mjs `unsqueezed`) sets the unit, over the pages it stands on, in more lines than v2 and no fewer than today",
+      "line-count: the look he judged, no cause asked: v2 sets the unit in exactly one line fewer than today on the page (both at most the original's count), at the original's size (within the size floor), its last row higher than today's by no more than one of its own lines (its leading on the page, else today's, else the original's, and the position floor): under a line left under it; and the unit whole (WHOLE: no measure that reads lost or changed content, `shown`, `elements`, `scripts`, `labels`, finds v2 farther on it on any of its pages). The cause the lanes traced is reported beside, never a condition: (1) today draws the unit larger than the original's by more than the size floor (its misread of TeX's justification as size); (2) the translation's punctuation rule: v2's own lay with no CJK line squeezed (v2.mjs `unsqueezed`) sets the unit, over its pages, in more lines than v2 and no fewer than today; else not read",
     holds(d, x) {
       const f = lineFewer(d, x)
-      if (!f || !(f.vEnd > f.tEnd)) return false
+      if (!f || !(f.vEnd > f.tEnd) || !x.whole(f.u.key)) return false
       const line = f.vPitch ?? f.tPitch ?? f.oPitch
-      if (line === null || f.vEnd - f.tEnd > line + posFloor(f.size)) return false
-      const tShare = shareOf(f.u.sides.today)
-      if (tShare !== null && tShare - 1 > NEAR.size) return true
-      return x.squeezeSaved(f.u)
+      return line !== null && f.vEnd - f.tEnd <= line + posFloor(f.size)
+    },
+    says(d, x) {
+      const f = lineFewer(d, x)
+      const tShare = f && shareOf(f.u.sides.today)
+      if (tShare !== null && tShare - 1 > NEAR.size) return `cause 1: today ${Math.round((tShare - 1) * 1000) / 10} % larger than the original`
+      if (f && x.squeezeSaved(f.u)) return "cause 2: with no CJK line squeezed v2 sets today's count"
+      return 'cause not read'
     },
   },
   {
@@ -205,10 +210,20 @@ export const RULINGS = [
     words: null,
     example:
       "2610.40645v1-ja p22 t174: a theorem v2 sets at 10.64 pt where today sets 10.98, the original's 10.91",
-    condition: null,
-    unstated:
-      "no condition of the page tells a theorem v2 must shrink a little more than today's from one v2 shrinks more than it needs: on his own example the theorem ends a line above its original's last on the next page (p23), so the page does not show the shrink was needed, and how much more is a little would be a number of the gate's, not his. Its pages stay worse",
-    holds: null,
+    condition:
+      "size, a theorem: v2 sets it under the original's size and under today's by no more than one step of the fit's own grain (SIZE_STEP, 2.5 % of the original's size: the steps v2's sizes come in, which the reader's eye passed unremarked between the old reader's paragraphs, lanes/even-page), the unit whole (WHOLE). His own example is 1.26 steps under today's (10.64 against 10.98 on 10.91): not covered",
+    holds(d, x) {
+      if (d.flag !== 'size' || !d.unit) return false
+      const u = x.unit(d)
+      const v = u?.sides?.v2,
+        t = u?.sides?.today
+      if (u?.kind !== 'theorem' || !v?.osize || !t || !(v.size < v.osize) || !(v.size < t.size) || !x.whole(u.key)) return false
+      return (t.size - v.size) / v.osize <= SIZE_STEP + 1e-9
+    },
+    says(d, x) {
+      const u = x.unit(d)
+      return `${Math.round(((u.sides.today.size - u.sides.v2.size) / u.sides.v2.osize / SIZE_STEP) * 100) / 100} of a fit step under today's`
+    },
   },
   {
     id: 'E1',
@@ -338,7 +353,26 @@ export const RULINGS = [
       })
     },
   },
+  {
+    id: 'T2',
+    title: "a table's header row with a cell kept as the original, the others translated",
+    verdict: '①照现在',
+    date: DATE,
+    seen: "verification/readiness.zh.html, its question on a table's header row with a cell kept as the original (option 1: as v2 draws it now); his answer at 15:22, verification/owner-comments-readiness-2026-11-12.json item-4",
+    words: '重构阶段现在的效果就已经满意了，可以放行。只是长期来说，如果你有更加智能、用户体验更好的做法可以实现的话，那欢迎你提建议给我',
+    example:
+      '1810.04805v2-zh p7, table 4\'s header: v2 translates "System" and "Dev" and keeps "Test" as the original, where today keeps the whole row the original\'s ("Dev" did not fit today); 2608.06701v1-zh p10, table 7\'s header: v2 keeps "#Instances" (the translator gave it back as it went) and translates the rest, where today translates the whole row',
+    condition:
+      "groups, a header group of TeX's grid (its group named `:h`): today draws the whole row one way (all translated or all the original's) and v2 draws it mixed, some cells translated and the others in their own words: the kept cell stays the original's, the others translated. A column or a body group is not this class, and a translated cell running past its own room is judged as before (`frame`)",
+    holds(d) {
+      if (d.flag !== 'groups' || !/^group \S+:h$/.test(d.unit ?? '')) return false
+      return (d.today?.value === 'original' || d.today?.value === 'target') && d.v2?.value === 'mixed'
+    },
+  },
 ]
+/** the measures that read a unit's content lost or changed against the original: a unit none of them finds v2 farther on (worse,
+ *  or covered) on any of its pages is whole (the rulings L2 and S4) */
+export const WHOLE = ['shown', 'elements', 'scripts', 'labels']
 /** the classes he accepted that hold no page of the sheets the rulings were read against (round B13): no entry */
 export const NO_PAGE_LEFT = [
   { id: 'W', title: 'figure text drawn lighter', date: DATE, words: '我看到你好像在小标题加粗的地方已经修了呀？没有看到什么肉眼可见的问题', why: "the gate's correction 10 (verification/gate-corrections.md): the `weight` measure reads each class's ink at another weight than the original's; both pages left worse before it (2608.25210 p2, 2609.20976 p11) are not worse" },
@@ -367,6 +401,9 @@ export function rulingsPass(pages, { recOf, v2, laid, unsqueezed }, recount) {
   for (const p of pages) for (const u of p.units ?? []) if (typeof u.sides?.today?.lines === 'number') todayLines.set(u.key, (todayLines.get(u.key) ?? 0) + u.sides.today.lines)
   const laidOf = (ord) => Object.values(laid ?? {}).reduce((n, pg) => n + (pg?.members ?? []).filter((m) => m.ord === ord).reduce((k, m) => k + (m.lines?.length ?? 0), 0), 0)
   const unsqueezedOf = (ord) => Object.values(unsqueezed ?? {}).reduce((n, pg) => n + (pg?.[ord] ?? 0), 0)
+  // (the units a measure of content finds v2 farther on, before any ruling covers a difference: not whole)
+  const notWhole = new Set()
+  for (const p of pages) for (const d of p.diffs ?? []) if ((d.worse || d.covered) && WHOLE.includes(d.flag) && d.unit) notWhole.add(d.unit.split(' ')[0])
   for (const p of pages) {
     if (p.error) continue
     const rec = recOf(p.page)
@@ -379,6 +416,7 @@ export function rulingsPass(pages, { recOf, v2, laid, unsqueezed }, recount) {
       v2,
       figurePairs: new Map(p.figurePairs ?? []),
       unit: (d) => p.units?.find((u) => u.key === d.unit.split(' ')[0]),
+      whole: (key) => !notWhole.has(key),
       member: (ord) => facts.get(ord) ?? Object.values(v2.facts ?? {}).flatMap((f) => f.members ?? []).find((m) => m.ord === ord),
       squeezeSaved: (u) => {
         if (!unsqueezed) return false
@@ -395,6 +433,9 @@ export function rulingsPass(pages, { recOf, v2, laid, unsqueezed }, recount) {
       if (!r) continue
       d.worse = false
       d.covered = r.id
+      // (what the page states beside the ruling, never its condition: L2's cause, S4's steps)
+      const says = r.says?.(d, x)
+      if (says) d.coveredSays = says
       moved = true
     }
     if (moved) recount(p)
@@ -408,9 +449,14 @@ export function rulingsOf(pages) {
     date: DATE,
     seen: SEEN,
     general: GENERAL,
-    rulings: RULINGS.map(({ holds: _h, ...r }) => {
+    rulings: RULINGS.map(({ holds: _h, says: _s, ...r }) => {
       const on = pages.filter((p) => p.diffs?.some((d) => d.covered === r.id))
-      return { ...r, pages: on.map((p) => `${p.pair} p${p.page}${p.worse ? ' (worse beside it)' : ''}`), differences: on.reduce((k, p) => k + p.diffs.filter((d) => d.covered === r.id).length, 0) }
+      const said = (p) => [...new Set(p.diffs.filter((d) => d.covered === r.id && d.coveredSays).map((d) => d.coveredSays))]
+      return {
+        ...r,
+        pages: on.map((p) => `${p.pair} p${p.page}${said(p).length ? ` (${said(p).join('; ')})` : ''}${p.worse ? ' (worse beside it)' : ''}`),
+        differences: on.reduce((k, p) => k + p.diffs.filter((d) => d.covered === r.id).length, 0),
+      }
     }),
     noPageLeft: NO_PAGE_LEFT,
   }

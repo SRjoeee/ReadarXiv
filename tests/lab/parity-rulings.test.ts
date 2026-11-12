@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { recount } from '../../lab/typeset/parity/verdict.mjs'
 // @ts-expect-error — a plain node module of the lab
-import { NO_PAGE_LEFT, RULINGS, rowsOf, rulingsOf, rulingsPass } from '../../lab/typeset/parity/rulings.mjs'
+import { NO_PAGE_LEFT, RULINGS, rowsOf, rulingsOf, rulingsPass, WHOLE } from '../../lab/typeset/parity/rulings.mjs'
 
 const N = 4
 type Diff = { flag: string; unit: string; original: unknown; today: { value: unknown; off: unknown }; v2: { value: unknown; off: unknown }; nearer: string; worse: boolean; covered?: string; relaid?: object }
@@ -57,9 +57,9 @@ describe('L1: a paragraph a line shorter than today, in the height today takes',
   it("v2's last line on today's, at the original's size: covered by L1", () => {
     expect(page({})).toEqual([['t7 para', false, 'L1']])
   })
-  it("its last line half a line or more over today's (here 9 pt on today's 15.30), the same size on both and no squeeze behind it: worse", () => {
-    // (v2's 9 lines 16.08 apart end at 276.13, 9.08 pt over today's; today at v2's size, so no misread; no lay without the squeeze)
-    expect(page({ vPitch: 16.08, tSize: 9.96 })).toEqual([['t7 para', true, null]])
+  it("its last line half a line or more over today's (here 9 pt on today's 15.30): not L1's, but L2's look (below)", () => {
+    // (v2's 9 lines 16.08 apart end at 276.13, 9.08 pt over today's)
+    expect(page({ vPitch: 16.08, tSize: 9.96 })).toEqual([['t7 para', false, 'L2']])
   })
   it("v2 smaller than the original's: worse", () => {
     expect(page({ vSize: 9.5 })).toEqual([['t7 para', true, null]])
@@ -69,40 +69,47 @@ describe('L1: a paragraph a line shorter than today, in the height today takes',
   })
 })
 
-describe('L2: a paragraph a line shorter than today, ending higher', () => {
+describe('L2: a paragraph a line shorter than today, ending higher: the look he judged, its cause reported, never asked', () => {
   // (2610.40645v1-ja p4 t13: the original's and today's 7 lines from 709.04, 13.99 and 14.01 apart, today at 11.12 pt (the original's
   // 10.91); v2 6 at 10.91, 14.23 apart, its last 12.93 over theirs)
   const ol = Array.from({ length: 7 }, (_, i) => fact(72, 540, 709.04 - i * 14.01, 10.91))
   const v2 = { facts: { [N]: { members: [{ ord: 13, kind: 'para', align: 'j', style: { size: 10.91 }, lines: ol }], ties: [] } } }
-  const page = (o: { tSize?: number; vPitch?: number; vLines?: number; unsqueezed?: number }) => {
+  const page = (o: { tSize?: number; vSize?: number; vPitch?: number; vLines?: number; unsqueezed?: number; more?: Diff[] }) => {
     const vl = o.vLines ?? 6,
-      ts = o.tSize ?? 11.12
-    return judged(
+      ts = o.tSize ?? 11.12,
+      vs = o.vSize ?? 10.91
+    const { page: p } = judged(
       {
-        diffs: [worse('line-count', 't13 para', 7, 7, vl, [0, 7 - vl])],
-        units: [{ key: 't13', kind: 'para', part: 13, align: 'j', sides: { today: side(7, ts, 10.91, 7), v2: side(vl, 10.91, 10.91, 7) } }],
+        diffs: [worse('line-count', 't13 para', 7, 7, vl, [0, 7 - vl]), ...(o.more ?? [])],
+        units: [{ key: 't13', kind: 'para', part: 13, align: 'j', sides: { today: side(7, ts, 10.91, 7), v2: side(vl, vs, 10.91, 7) } }],
       },
       {
         v2,
-        rec: rec({ units: [{ id: 13, lines: paragraph(7, 709.04, 14.01, ts, 72, 540) }] }, { units: [{ id: 13, lines: paragraph(vl, 709.04, o.vPitch ?? 14.23, 10.91, 72, 540) }] }),
+        rec: rec({ units: [{ id: 13, lines: paragraph(7, 709.04, 14.01, ts, 72, 540) }] }, { units: [{ id: 13, lines: paragraph(vl, 709.04, o.vPitch ?? 14.23, vs, 72, 540) }] }),
         laid: { [N]: { members: [{ ord: 13, lines: Array.from({ length: vl }, () => []) }] } },
         unsqueezed: o.unsqueezed === undefined ? null : { [N]: { 13: o.unsqueezed } },
       },
-    ).out
+    )
+    const d = (p.diffs as (Diff & { coveredSays?: string })[]).find((x) => x.flag === 'line-count')
+    return [d?.worse, d?.covered ?? null, d?.coveredSays ?? null]
   }
-  it('C1, today larger than the original by its misread, v2 at the original size, under a line higher: covered by L2', () => {
-    expect(page({})).toEqual([['t13 para', false, 'L2']])
+  it('a line fewer, at the original size, under one of its lines higher, the unit whole: covered by L2, its cause reported', () => {
+    expect(page({})).toEqual([false, 'L2', 'cause 1: today 1.9 % larger than the original'])
+    expect(page({ tSize: 10.91, unsqueezed: 7 })).toEqual([false, 'L2', "cause 2: with no CJK line squeezed v2 sets today's count"])
+    // (no cause the page states: the look is what he accepted)
+    expect(page({ tSize: 10.91, unsqueezed: 6 })).toEqual([false, 'L2', 'cause not read'])
+    expect(page({ tSize: 10.91 })).toEqual([false, 'L2', 'cause not read'])
   })
-  it('C2, both at the same size, and the lay with no CJK line squeezed sets today\'s 7: covered by L2', () => {
-    expect(page({ tSize: 10.91, unsqueezed: 7 })).toEqual([['t13 para', false, 'L2']])
-  })
-  it("both at the same size, the lay with no squeeze still 6 (the squeeze not its cause), or none recorded: worse", () => {
-    expect(page({ tSize: 10.91, unsqueezed: 6 })).toEqual([['t13 para', true, null]])
-    expect(page({ tSize: 10.91 })).toEqual([['t13 para', true, null]])
-  })
-  it('more than one of its lines over today\'s last (today larger all the same): worse', () => {
+  it('more than one of its lines over today\'s last: worse', () => {
     // (6 lines 11 apart end at 654.04, 29.88 over today's last on a leading of 11)
-    expect(page({ vPitch: 11 })).toEqual([['t13 para', true, null]])
+    expect(page({ vPitch: 11 })).toEqual([true, null, null])
+  })
+  it("v2 smaller than the original's: worse", () => {
+    expect(page({ vSize: 10.4 })).toEqual([true, null, null])
+  })
+  it('the unit not whole (an element of it drawn as nothing, a translation missing in it): worse', () => {
+    expect(page({ more: [worse('elements', 't13 para', 0, null, 'element 3: drawn as nothing where TeX set ink')] })).toEqual([true, null, null])
+    expect(page({ more: [worse('shown', 't13 para', null, 'translated', 'label')] })).toEqual([true, null, null])
   })
 })
 
@@ -177,14 +184,38 @@ describe('S3: a heading kept on its one line at a smaller size; a small-capitals
   })
 })
 
-describe('S4: a theorem shrunk a little more than today, accepted with no condition the page states', () => {
-  it('is listed with its reason and covers nothing: its pages stay worse', () => {
-    const s4 = RULINGS.find((r: { id: string }) => r.id === 'S4')
-    expect(s4.holds).toBeNull()
-    expect(s4.unstated).toMatch(/no condition of the page/)
-    const v2 = { facts: { [N]: { members: [{ ord: 174, kind: 'theorem', align: 'j', style: { size: 10.91 }, lines: [fact(72, 540, 108.16, 10.91)] }], ties: [] } } }
-    const { out } = judged({ diffs: [worse('size', 't174 theorem', 10.91, 10.98, 10.64, [0.01, 0.02])], units: [{ key: 't174', kind: 'theorem', part: 174, sides: { today: side(1, 10.98, 10.91, 2), v2: side(1, 10.64, 10.91, 2) } }] }, { v2, rec: rec() })
-    expect(out).toEqual([['t174 theorem', true, null]])
+describe("S4: a theorem shrunk no more than one fit step under today's", () => {
+  // (2610.40645v1-ja p33 t283: a theorem v2 sets at 10.36 pt (two fit steps under the original's 10.91), today at 10.53: 0.61 of a
+  // step under today's. Its p22 t174, the example he saw: 10.64 against today's 10.98, 1.26 steps)
+  const v2 = { facts: { [N]: { members: [{ ord: 283, kind: 'theorem', align: 'j', style: { size: 10.91 }, lines: [fact(72, 540, 257.9, 10.91)] }], ties: [] } } }
+  const page = (t: number, v: number, kind = 'theorem', more: Diff[] = []) => {
+    const { page: p } = judged(
+      { diffs: [worse('size', `t283 ${kind}`, 10.91, t, v, [Math.abs(1 - t / 10.91), Math.abs(1 - v / 10.91)]), ...more], units: [{ key: 't283', kind, part: 283, sides: { today: side(5, t, 10.91, 6), v2: side(5, v, 10.91, 6) } }] },
+      { v2, rec: rec() },
+    )
+    const d = (p.diffs as (Diff & { coveredSays?: string })[]).find((x) => x.flag === 'size')
+    return [d?.worse, d?.covered ?? null, d?.coveredSays ?? null]
+  }
+  it('0.61 of a fit step under today\'s, the unit whole: covered by S4, its steps reported', () => {
+    expect(page(10.53, 10.36363)).toEqual([false, 'S4', "0.61 of a fit step under today's"])
+  })
+  it("1.26 steps under today's (his own example), a paragraph, or the unit not whole: worse", () => {
+    expect(page(10.98, 10.63637)).toEqual([true, null, null])
+    expect(page(10.53, 10.36363, 'para')).toEqual([true, null, null])
+    expect(page(10.53, 10.36363, 'theorem', [worse('scripts', 't283 theorem', 2, 0, 2)])).toEqual([true, null, null])
+  })
+})
+
+describe("T2: a table's header row with a cell kept as the original, the others translated (his answer ①, 15:22)", () => {
+  const page = (unit: string, today: string, v2: string) =>
+    judged({ diffs: [worse('groups', unit, 'whole', today, v2)] }, { v2: { facts: { [N]: { members: [], ties: [] } } }, rec: rec() }).out
+  it("a header row v2 draws mixed where today keeps it whole the original's (1810.04805 p7) or translates it whole (2608.06701 p10): covered", () => {
+    expect(page('group 4:h', 'original', 'mixed')).toEqual([['group 4:h', false, 'T2']])
+    expect(page('group 7:h', 'target', 'mixed')).toEqual([['group 7:h', false, 'T2']])
+  })
+  it('a column group drawn mixed, or a header row v2 keeps whole where today translates it: worse', () => {
+    expect(page('group 4:c2', 'target', 'mixed')).toEqual([['group 4:c2', true, null]])
+    expect(page('group 4:h', 'target', 'original')).toEqual([['group 4:h', true, null]])
   })
 })
 
@@ -299,13 +330,14 @@ describe('the rulings file', () => {
     for (const r of RULINGS) {
       expect(r.id).toMatch(/^[A-Z]\d?$/)
       expect(r.title.length).toBeGreaterThan(10)
-      expect(r.verdict).toBe('\u53ef\u4ee5\u63a5\u53d7')
+      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : r.verdict === '\u53ef\u4ee5\u63a5\u53d7').toBe(true)
       expect(r.date).toBe('2026-11-12')
       expect(r.example.length).toBeGreaterThan(20)
       expect(r.condition === null ? r.unstated : r.condition).toBeTruthy()
       expect(r.condition === null).toBe(r.holds === null)
     }
     expect(NO_PAGE_LEFT.map((x: { id: string }) => x.id)).toEqual(['W'])
+    expect(WHOLE).toEqual(['shown', 'elements', 'scripts', 'labels'])
   })
   it('names each ruling\'s pages in the sheet\'s summary, a covered page apart from a worse one', () => {
     const pages = [

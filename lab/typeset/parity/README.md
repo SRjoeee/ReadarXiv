@@ -347,20 +347,20 @@ measure, covered whole), `rulings` (each with the pages it covers, a page with a
 | Ruling | Class | The condition the gate reads |
 |---|---|---|
 | L1 | a paragraph a line shorter than today's, in the height today's takes | `line-count`: exactly one line fewer than today on the page (both at most the original's), v2 at the original's size (the size floor), its last row within half a line of today's last row: line-count's own floor (half a line) read on the drawn extent, a line the smaller of the two leadings there |
-| L2 | a paragraph a line shorter than today's, ending higher | the same, its last row higher than today's by no more than one of its own lines (and the position floor); and one of the two causes the lanes traced: today larger than the original by more than the size floor (its misread), or the translation's punctuation rule: the pair laid with no CJK line squeezed (`unsqueezed`) sets the unit, over its pages, in more lines than v2 and no fewer than today |
+| L2 | a paragraph a line shorter than today's, ending higher | the look he judged, no cause asked: the same, its last row higher than today's by no more than one of its own lines (and the position floor), the unit whole (`WHOLE`: none of `shown`, `elements`, `scripts`, `labels` finds v2 farther on it on any of its pages). Its cause is reported beside (`coveredSays`): today larger than the original by more than the size floor (its misread); the translation's punctuation rule (the pair laid with no CJK line squeezed, `unsqueezed`, sets the unit in more lines than v2 and no fewer than today); or not read |
 | S1 | a figure's labels at their group's size | `size` of a figure text in a size tie of the part, every text of which v2 draws translated at one size, where today translates some of the tie's texts and not all |
 | S2 | a table cell's text smaller than today's, kept to its cell | `size` of a cell where today runs past the cell's own room (the owner's ruling 3) by more than the position floor and v2 less by more than that floor, its text still reaching the room's edge |
 | S3 | a heading on its one line at a smaller size; a small-capitals heading at TeX's size | `size` of a heading v2 sets on the original's line count, smaller than today's, today on more lines; or of one the part states set in small capitals (letters at `sc` of TeX's size, as the measure reads the original) that v2 draws at TeX's size |
-| S4 | a theorem shrunk a little more than today's | none: no condition of the page tells a theorem that must shrink a little more from one shrunk more than it needs (his example ends a line above its original's last on the next page); its pages stay worse |
+| S4 | a theorem shrunk a little more than today's | `size` of a theorem v2 sets under the original's size and under today's by no more than one step of the fit's own grain (`SIZE_STEP`, 2.5 % of the original's size), the unit whole; the steps reported beside. His own example is 1.26 steps under today's: not covered |
 | E1 | an address cut over two lines at its own break point | `elements`, pieces drawn apart: the element they are cut from is one TeX sets as written (El.literal), its pieces in order, each two placed as on arXiv's page or cut at a line's end (the first ends its row, the next opens the row under it) |
 | A1 | a last line of one character | `align`: v2 at the original's size and line count, every line where TeX's alignment puts it but the last, which holds one character at the unit's own margin |
 | O | a translated figure text touching the figure where today keeps it English | `over` of a figure text v2 draws translated at the original's place (anchor, alignment) and size where today draws no translation of it; the page's figure texts where, less those texts, v2 is within the floor of today |
 | A2 | a reference's next line set flush as today's | `align`: each line of v2's off the original's starts has a line of today's on its row that is a row of crops alone (which `align` reads no start of) starting where v2's starts |
+| T2 | a table's header row with a cell kept as the original, the others translated (his answer on the readiness page, 15:22: option 1, as v2 draws it now) | `groups` of a header group (`:h`) v2 draws mixed where today draws the whole row one way; a translated cell past its own room is judged by `frame` as before |
 
 He accepted W too (figure text drawn lighter): no page of it is left since the gate's correction 10, so it has no entry
 (`NO_PAGE_LEFT`). Not ruled, and worse as before: S5 (the author block's names smaller, to discuss), T1's two units of
-2610.21313 (kept as the original where today's translation garbles or drops a mark), T2 (1810.04805 p7's table header half
-translated).
+2610.21313 (kept as the original where today's translation garbles or drops a mark), L3 (a proof one line longer).
 
 ## Fresh rows: what a reader gets where no stored row serves v2's unit (lane parity-fresh, 2026-11-11)
 
