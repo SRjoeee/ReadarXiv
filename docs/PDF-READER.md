@@ -5559,6 +5559,74 @@ put-back places no group holding an element (packages/translate groups.ts), and 
   no edge there, and by the coordinator's rulings no phrase pair goes on the markers wire and no reference is asked for a
   bibliography's groups. A tags wire carries the group.
 
+### 18.57 A paragraph tighter than its page takes the fit's own knobs, one size step at most; at a column's foot the room past TeX's bottom it needs (2026-11-12)
+
+**The rule.** In the page's fill, a body paragraph a frame of which (two lines or more) stands under the page's band floor, the
+target less `adaptiveFill.band`, is laid again at its fitted state with the fit's own knobs in the fit's own order, each kept for
+the next as the walk keeps them: its tracking to the fit's bound (`trackMin`), the room TeX left under its blocks (the borrow
+knob, `Block.free`: §18.11's room, never past TeX's text block bottom), then one step of the fit's sizes (`step`, 0.975 of the
+original's size and never lower; a paragraph the fit set smaller already takes none). Each try is laid at the band floor's
+leading, on the pages the fit set it on, no frame gaining a line (the share TeX's breaks gave each column and page kept), and its
+fill leadings are found again (§18.11); the first that leaves no frame of two lines or more under the floor is kept, else the
+paragraph stays as it was. Its vote is its own, never the evened one's: the page's target, its anchor and every other page's
+reading are as before, so every lay reads the page alike (I6). `packages/typeset/src/shared/fill-page.ts` `evenOf`;
+`packages/typeset/tests/unit/tight-paragraph.test.ts`.
+
+**Why, and the one bound.** The owner's guidance of 2026-11-12 on the parity's class L2: one size a page and a fixed leading
+are means, the aim is a page that looks naturally even, and a difference the eye does not see is allowed; the coordinator's
+ruling under it fixes the size bound at one step, taken only where it brings the paragraph into the band, tracking and the room
+tried before it. One step (2.5 %) rests on what the owner was shown: today's reader, reading a size along the line (pdfTeX's
+expansion, §18.10's PIPELINE 80), set neighbouring paragraphs of one TeX size 2.5 to 5 % apart on 52 places of the 22 parity
+pairs he reviewed page by page, with no remark (the tap's ledgers: drawn size against U.blocks' size); he accepted a theorem
+the fit set a step smaller than today's (class S4, 2026-11-12); and he did see 5 % (2610.10069v1 page 5, two panes side by
+side). The leading's own bound is the band, the page's one line spacing (D6); the least contrast he has reported is 11 %
+(1706.03762v7 page 2: 1.33 among 1.5 to 1.55). He took the rule on the before-and-after pages of 2026-11-12 (17:25 JST):
+「看起来调整过之后挺舒服…计算量多 4.8% 可以接受，段落字号小一级也不是问题，只要用户感受不到就行。」 (it looks comfortable
+after the adjustment; 4.8 % more computation is acceptable; a paragraph a size step smaller is no problem as long as the reader
+does not feel it).
+
+**At a column's foot: the room past TeX's text block bottom it needs (the owner's ruling of 2026-11-12).** Where none of the
+knobs above brings it into the band, a tight paragraph whose frame ends a column may take the room past TeX's text block bottom
+(the borrow's own room, §18.37: `FitState.over`, B.slots `roomOf`), on its tracking and TeX's room, then with the size step:
+never deeper than a line of its own pitch, never nearer the next ink than TeX's paragraph separation, and only as deep as the
+band's floor needs (its frames set no looser than the floor, the borrow's own measure: as deep as it needs, not as deep as it
+may). This lifts the 2026-11-09 bound on TeX's text block bottom for this one case, as §18.37 lifted it by 1.5 pt for a size
+kept, by his ruling on the same pages: 「挺好」. 2602.23285v2 page 15, unit 131 (two lines at TeX's pitch, 11.0 pt apart, among
+paragraphs spread to 16.0-16.5): its two lines at 1.41, the second 4.5 pt under the bottom, 24 pt over the page number's
+baseline. Over the 90 pairs it brings 81 frames more into the band (639 in all), 74 lines past the bottom, median 3.6 pt, the
+deepest 10.9 (a line is 11 to 13.5). The two rules stay one: the foot is the knobs' last try, and a paragraph it lifts takes
+it on the knobs before it (one at a page's foot over a page break takes it as 2602.23285's does: its first frame spread, a line
+the tracking freed on the next page; `packages/typeset/tests/unit/entry.test.ts`'s share case).
+
+**What it does** (the 90 pairs with stored rows, the borrow of §18.37 on; every body frame of two lines or more under its page's
+band floor: 1,468 on 871 pages, the same with the borrow off): 558 come into the band (the tracking alone 128, with the room 240,
+with a size step 190). 1810.04805v2 page 3 unit 30 ("we denote the number of layers"): 6 lines at 1.17 among 1.47, now 5 at
+9.75 pt and 1.41. The median range of a page's body leadings falls from 11.0 to 8.1 %; 562 members move on 474 pages, the 556
+evened and on five pages the page's one size, now that every body unit there is short of its frame (2610.21924v1 p3 among them):
+the growth rule as it is (the body 5 to 7.5 % larger, its line counts unchanged: the same behaviour as on any page that grows, no
+exception). Lays 4.8 % more layouts. No unit not evened gains a line or shrinks.
+
+**The pages where a tight paragraph stays beside one evened: left as they are (the coordinator's ruling of 2026-11-12, the owner
+having handed it to him).** On 12 pages with both rules (13 with the knobs alone) a paragraph that stays tight stands further
+from the median of its page's other paragraphs than before, 11 % or more where it stood under (1706.03762v7 page 3, unit 25: 7.2
+to 14.8 %; 2610.40645v1 page 12, unit 82: 9.5 to 18.4 %). That paragraph is exactly as it was, its leading, its size and the
+page's target unchanged; the figure rises only because its tight neighbour left the comparison set, and the page holds one tight
+paragraph fewer. Every coupling rule measured would undo 30 to 55 % of the evening and add a second pass: evening undone on a
+page that keeps a tight paragraph past the band's width, or past the 11 % reported (a number of evidence, not a rule), or a page's
+tight paragraphs all evened or none. None is built.
+
+**Out of reach.** 910 frames stay under the band: 529 a line short that no knob frees within one step (1706.03762v7 page 2's
+"Attention mechanisms", three lines of four), 303 as long as their original frame in the middle of a column, the rest split or
+at a column's foot.
+
+**Tried and dropped: the page held to its band floor.** Where a tight paragraph stays, every unit of the page set no looser
+than the target less the band (still the band, D6): it brought 2 frames into the band and narrowed the rest (the frames 11 % or
+more tighter than their page 679 to 413), but moved 8,705 members on 969 pages (cells, headings, captions with the paragraphs),
+gave 97 untouched paragraphs a letter-spaced line more through the fill's tracking, and set 186 borrowing units closer: the
+family the owner turned down on 2026-11-08 (one leading a column) and 2026-11-10 (no list item looser than the tightest). Not
+built. Two size steps: not offered (5 % is what he saw). The study, its counts and the crops: lab-data
+`refactor-2026-11/lanes/even-page.md`.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

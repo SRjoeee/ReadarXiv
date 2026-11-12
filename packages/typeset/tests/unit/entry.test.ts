@@ -879,10 +879,15 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
   })
   it('leaves the fit’s split where holding the share would set a frame under the page’s band: no frame solid', () => {
     // (2610.37668v1-zh p17, 2610.21084v1-zh p1: the share set a column's foot solid, two lines at the original's pitch among
-    // paragraphs spread to 1.38-1.5, which read worse than the one line its fit left there; its neighbours here spread to 1.67)
+    // paragraphs spread to 1.38-1.5, which read worse than the one line its fit left there; its neighbours here spread to 1.67.
+    // Its first frame, 7 lines in a block of 10 at the page's foot, stands under the band (1.5 of 1.617) and takes §18.57's
+    // foot: at the fit's tracking bound its text frees a line on page 2, and its 7 lines here spread to the band's floor, its
+    // last line as far under TeX's text block bottom (471) as that needs, a line of its pitch at most)
     const [p1, p2] = sharePage(80)
-    expect([p1.lines.length, p2.lines.length]).toEqual([7, 3])
+    expect([p1.lines.length, p2.lines.length]).toEqual([7, 2])
     expect(p1.lines[0]![0] - p1.lines[1]![0]).toBeGreaterThan(12.5)
+    expect(p1.lines.at(-1)![0]).toBeLessThan(471)
+    expect(p1.lines.at(-1)![0]).toBeGreaterThanOrEqual(471 - 12 - 0.05)
   })
   it('holds the gap under a paragraph to its own leading alone, never the next paragraph’s: one that nearly fills its block keeps its own', () => {
     // (the owner's ruling of 2026-11-08, chosen on the preview of two rules: a paragraph whose translation takes 7 lines of its 8
