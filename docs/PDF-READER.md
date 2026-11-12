@@ -6238,7 +6238,21 @@ word: its offset in the unit's source projection (what `Row.sentences.src` count
   member's laid line at that line's baseline begins with the paragraph's first thing. One not so laid fails the run; a point with
   no anchor flows on and is counted by why. In the lab the first word of a point stated at a group or an element is read from the
   unit's source, so the gate holds today's group points to the fallback the part will state. The release check's
-  `sentence-cover` reads the count (its pass is not changed by it).
+  `sentence-cover` reads the count (its pass is not changed by it). Of several facts that state one line, the point is the first
+  in the source (2609.36054v2's author block states each line at its name's group and at its affiliation's after it). A point
+  not opened is told "run on" (its first thing begins no laid line) or "begins a line at another baseline".
+- **Measured** (the base c331582c6 against this lay, round B15's parts, no part stating a first word): the reader's own lay
+  (`lab/typeset/parity/v2.mjs`) over the 90 pairs and the two added ones (2111.09276v1-zh, 2611.03953v2-zh), on the door rows
+  and on the lab's Google store, default and every switch on: 368 of 368 files identical. The reader gate at this lay: every
+  number it read before as at the base (90 pairs, door: entry 24,056 alike / 244, I3 3, I4 0, I5 2, I10 0 over 3,145,577
+  pieces, I6 0 other; Google: 23,544 / 827, I3 3, I10 0 over 3,569,346, I6 0 other). The points: 27 stated over the 90 (all at
+  a group), 3 not on TeX's line on both stores, each beginning a line of its own at the member's own pitch (2608.25210v2 p1 ord
+  8, 2610.21924v1 p2 ord 17, 2610.30151v1 p1 ord 0: CJK leading, a title's); on the door rows 24 belong to members with no
+  door row. 2111.09276v1-zh: Google's rows 8 of 8 open; the door rows (Microsoft's replies in today's reading) 6 not, 5 of them
+  run on (COIN, Youcook2, Howto-GEN, "Token Replacement", "Step Aggregation Model", "IER": run-in titles whose groups the reply
+  dropped). A copy of its parts stating COIN's and Youcook2's first words (the lab's simulation) opens those two on TeX's lines
+  (179.84, 585.36) on the door rows; one stating every such point's first word, and its words in every part that holds the
+  member, opens all six (the gate 0) and moves no other unit across the pages' lays (I6 0 other).
 
 ## 19. The engine's contract
 
