@@ -8837,6 +8837,21 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   ink 0.09 em over a curve 0.127 em under). The figure gate's O and R stay 0: `under` 2 on the pack (1512.03385v1) and 1 on
   the 25-paper set's bases (2610.21085v1's "jury,"); its zh model, held to the em box, leaves 1512.03385v1's "110-layer"
   (its curve 0.115 em under) the original's at its whole size, where the layer reads the ink of its ideographs.
+- **The stroke under the text is an edge, as a container's** (the coordinator's ruling of 2026-11-13 on the readiness list's
+  D02, the owner's mechanism of 2026-11-10 for a container's edge, `Room.over`): the typesetter (`packages/typeset`
+  `shared/figure-fit.ts` fitFigureSet) shrinks a set until each translation's ink under its baseline (its depth as above, the
+  served face's, a CJK run's held to its em box) clears the stroke's top (`Room.under`), to the set's floor at the least, and
+  the set's other labels step with it (one size a set); one that would need less than the floor stays the original's
+  (`crowded`), as before. Before, a translation that reached the stroke at the size its set gave it stayed the original's
+  whatever a smaller size would have cleared. A stroke through the letters, at or above the baseline, is no `Room.under` (the
+  figure reading states one only wholly below the baseline): that case waits for the figure reading to state it. Measured at
+  round B15's head over the 46 figure texts whose stroke stands nearer than a CJK em box's depth (19 pairs, the reader gate's
+  lay): with Google's rows 9 drawn that were the original's, each set at the factor its stroke asks (0.684 to 0.968), 7 of
+  their sets' labels stepping with them, 20 still the original's (19 asking a factor under the floor, the subscript "out" of
+  2610.22065v1's W_out at its baseline); with the door's rows 3 drawn, 2 labels stepping; every drawn one's ink above its
+  stroke; no other figure text and no other unit moved. Drawn by the reader package itself over the same Google rows, in the
+  browser's faces, one more is drawn: 2610.35877v1 p15's "; distance", whose stroke asks 0.576 by the gate's measure of its
+  semicolon, with its set's "Moved mass".
 - **Its set and its room** (the owner's rule of 2026-10-29, after 2010.11929v2's legends in Chinese: "All" drawn smaller
   than the other entries, "Patch size" starting further right than its column, "Head 3" smaller than "Head 1", each label
   fitted to its own box and anchored by what it read alone; `figure-text.mjs` `setsOf`, `roomsOf`): the labels of one group are set at one size, the original's by default; each keeps the original's alignment
