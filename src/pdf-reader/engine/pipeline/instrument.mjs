@@ -1237,13 +1237,14 @@ export function nameGroupOf(g) {
  * index: `float`, a caption's float type (LaTeX's \\@captype there, `floatTypes`: the part's Label.float, by which its label
  * is drawn in the target's word); `kept`, a unit the paper keeps as it is, never translated: its names (nameCells) and the body
  * of an algorithm float (`pseudocode`: kept as the original as code is, the owner's ruling of 2026-11-08; its caption is the
- * float's, translated)
+ * float's, translated); `why`, each kept unit's reason, the rule that keeps it ('pseudocode' first, then 'name': a cell or a
+ * figure text of names or markup tokens alone, nameCells), which the lab's dump states (`keptBy`) and the bundle does not carry
  */
 export function unitFactsOf(paper) {
   const float = new Map(paper.floatTypes ?? [])
-  const kept = new Set(paper.pseudocode ?? [])
-  paper.units.forEach((u, i) => { if (paper.kept?.has(u)) kept.add(i) })
-  return { float, kept }
+  const why = new Map((paper.pseudocode ?? []).map(i => [i, 'pseudocode']))
+  paper.units.forEach((u, i) => { if (paper.kept?.has(u) && !why.has(i)) why.set(i, 'name') })
+  return { float, kept: new Set(why.keys()), why }
 }
 
 /**
@@ -1319,7 +1320,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     const unhidden = own.units.get(i)?.unhidden
     const classes = classesOf(u.pieces, colours.get(i) ?? null, shown), spans = spansOf(u.pieces, colours.get(i) ?? null), passed = passedOf(u.pieces)
     classesBy[i] = new Map(classes)
-    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(passed.length ? { passed } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(facts.kept.has(i) ? { kept: true } : {}), ...(held.has(i) ? { fixed: true, decorated: 'token' } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : boxed.has(i) ? { align: boxed.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
+    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(passed.length ? { passed } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(facts.kept.has(i) ? { kept: true, ...(facts.why.get(i) === 'pseudocode' ? { pseudocode: true } : { nameCell: true }) } : {}), ...(held.has(i) ? { fixed: true, decorated: 'token' } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : boxed.has(i) ? { align: boxed.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
   })
   for (let i = units.length; i < inkBase; i++) {
     const content = contentOf(bundle[i][5].map(p => ({ t: 'text', s: p[1] })))

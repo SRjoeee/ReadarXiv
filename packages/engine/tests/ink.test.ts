@@ -273,6 +273,37 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     ])
   })
 
+  it('states why each kept block is kept: one of e-mail addresses alone `address`, any other `block` (rule 10; the lab’s dump reads it)', () => {
+    // (lane gate-finds, the coordinator's ruling of 2026-11-12: every kept unit carries its reason from where it is decided, the
+    // lab's alone; the bundle states `kept` and no reason)
+    const keptOf = (line: { text: string; font?: string }) => {
+      const spec = { lines: ['Body text here', 'Body text goes on', line, 'More body text after it'] }
+      const B = docOf([
+        {
+          ...spec,
+          points: [
+            ['bs1', 0],
+            ['be1', 31],
+          ],
+        } as PageSpec,
+      ])
+      const A = docOf([spec as PageSpec])
+      const ins = instrumentOf(
+        B,
+        [unitOf('para', 'Body text here Body text goes on More body text after it')],
+        [[0, 0, -1, 0]],
+      )
+      const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+      return L.units.filter((u) => u.kept).map((u) => [u.kind, u.fixed ?? null, u.address ?? null, u.block ?? null])
+    }
+    // (a line of code a typewriter face sets between the paragraph's lines, no unit's: a kept block of rule 10)
+    expect(keptOf({ text: 'int main() { return 0; }', font: 'ABCDEF+CMTT10' })).toEqual([
+      ['inknotes', true, null, true],
+    ])
+    // (a line of e-mail addresses alone: a kept block that says so, no other reason)
+    expect(keptOf({ text: 'alan.chan@example.org, bo.writer@example.ac' })).toEqual([['inknotes', true, true, null]])
+  })
+
   it('writes a TeX special of an ink unit’s math run by the command that sets it in a formula: a brace alone an inline formula, never a display', () => {
     // (a brace a formula sets, `\{` (amsmath's set {0, …, J−1}, 2610.21377v1 p42) or a title's `$\{$Intra-Operator$\}$` in a
     // bibliography (2608.06007v1 p17): its glyph `{` in the symbol font's math face, a run of its own. The maker stripped TeX's
