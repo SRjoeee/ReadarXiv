@@ -25,13 +25,18 @@ import { tableMetrics } from '../../packages/typeset/src/metrics/table.ts'
 import { layered, servedMetrics } from './served-metrics.mjs'
 import { accept as acceptReading } from '../../packages/translate/src/accept.ts'
 import { unitInOf } from '../../packages/translate/src/bundle.ts'
+import { ADDED_HEADING, apartOf, runApart } from './added.mjs'
 
 const args = process.argv.slice(2)
 const OUT = args.find(a => a.startsWith('--out='))?.slice(6) ?? join(LAB, 'refactor-2026-11', 'lanes', 'L3', 'gate', 'l1')
 const named = args.filter(a => !a.startsWith('--'))
 // (AXT_GATE_LIST=<class prefix>: each member whose setting's first difference starts so, printed with its pair and ord; `*` every member)
 const LIST = process.env.AXT_GATE_LIST
-const pairs = named.length ? named : readdirSync(join(TAP, 'ledgers')).map(f => f.replace(/\.ledger\.json\.gz$/, '')).sort()
+// (the added pairs, lab/typeset/added.mjs: walked after the set's in a run of their own, `--apart`, their numbers printed apart under
+// its heading, their dumps under <dir>/added/; a run asked for added pairs alone is that run)
+const { pairs, later, apart } = apartOf(named.length ? named : readdirSync(join(TAP, 'ledgers')).map(f => f.replace(/\.ledger\.json\.gz$/, '')).sort(), { named: named.length > 0 })
+if (!pairs.length && later.length) process.exit(runApart(import.meta.filename, later, { dirs: { out: OUT } }))
+if (apart) console.log(`${ADDED_HEADING} ${pairs.join(', ')}`)
 // (the bundles served, named in the log; a pair named here that a named folder lacks is an error, bundles.ts; of the tap's every
 // ledger, those the folder lacks are said and stopped as before, "no L1 bundle of the paper")
 console.log(bundlesLine(L1_BUNDLES_DIR))
@@ -281,3 +286,7 @@ if (ENTRY && !entry.cover.pieces) {
 if (selfDiffer.length) console.log(`laid otherwise from another page's part: ${selfDiffer.slice(0, 10).join('; ')}`)
 if (threw.length) console.log(`threw (${threw.length}): ${threw.slice(0, 8).join(' | ')}`)
 console.log(`dumps: ${join(OUT, 'reader')}`)
+if (later.length) {
+  const status = runApart(import.meta.filename, later, { dirs: { out: OUT } })
+  if (status) process.exitCode = Math.max(Number(process.exitCode ?? 0), status)
+}

@@ -10,6 +10,7 @@ import { LAB } from '../../../packages/typeset/tests/replay/tap.ts'
 import { bundlesLine, headsFor } from '../../../packages/typeset/tests/replay/bundles.ts'
 import { L1_BUNDLES_DIR as BUNDLES } from '../../../packages/typeset/tests/replay/l1.ts'
 import { PAIRS } from './pairs.mjs'
+import { ADDED_HEADING, apartOf, runApart } from '../added.mjs'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
 /** --toggles=on: both readers with every switch of "What to translate" on, its sheet in parity/toggles-on/ */
@@ -25,7 +26,12 @@ const FRESH = arg('fresh')
 if (FRESH !== undefined && !['off', 'cache', 'all'].includes(FRESH)) throw new Error(`run.mjs: --fresh=${FRESH}: off, cache or all (a fill is v2.mjs's own step)`)
 const fresh = FRESH ? [`--fresh=${FRESH}`] : []
 const gate = arg('gate') ? [`--gate=${arg('gate')}`] : []
-const pairs = asked.length ? asked : PAIRS
+// (the added pairs, lab/typeset/added.mjs: drawn and judged after the set's in a run of their own, `--apart`, its sheet and work
+// under <out>/added and <work>/added, its verdict printed after the set's under its heading, its exit joined to the set's; a run
+// asked for added pairs alone is that run)
+const { pairs, later, apart } = apartOf(asked.length ? asked : PAIRS, { named: asked.length > 0 })
+if (!pairs.length && later.length) process.exit(runApart(import.meta.filename, later, { dirs: { out: OUT, work: WORK } }))
+if (apart) console.log(`${ADDED_HEADING} ${pairs.join(', ')}`)
 // (the bundles every step serves, named once here and by each step; a set AXT_L1_BUNDLES that is no bundles folder, or lacks a pair
 // asked, stops the run before any step: bundles.ts, as l1.ts resolves it)
 console.log(bundlesLine(BUNDLES))
@@ -39,4 +45,5 @@ const step = (slot, script, ...a) => {
 }
 if (step('test', 'v2.mjs', `--out=${join(WORK, 'v2')}`, ...toggles, ...fresh, ...pairs)) process.exit(2)
 if (step('e2e', 'render.mjs', `--work=${WORK}`, `--out=${OUT}`, ...pages, ...pairs)) process.exit(2)
-process.exit(step(null, 'measure.mjs', `--work=${WORK}`, `--out=${OUT}`, ...gate, ...pairs))
+const status = step(null, 'measure.mjs', `--work=${WORK}`, `--out=${OUT}`, ...gate, ...pairs)
+process.exit(Math.max(status, runApart(import.meta.filename, later, { dirs: { out: OUT, work: WORK } })))

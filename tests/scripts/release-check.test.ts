@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, INVARIANTS, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
+import { ADDED_HEADING } from '../../lab/typeset/added.mjs'
 import { cutoverOf, gatesOf, invariantLine, markdownOf, privateResultOf, targetLines, verdictOf } from '../../lab/release-check/verdict.mjs'
 
 const dirs: string[] = []
@@ -308,6 +309,12 @@ describe('the equivalence gates, in either shape of their tools', () => {
     expect(none.pass).toBe(false)
     expect(none.findings).toBeUndefined()
     expect(cover.judge!(ctx, [run(1, said(100, 0))]).findings).toBeUndefined()
+    // (the added pairs walked apart after the set, lab/typeset/added.mjs: the set's numbers read before the heading, theirs after
+    // it as `added`; a fault of theirs fails the gate, the set's count unmoved)
+    const apart = (faults: number) => `${said(4767634, 0)}\n${ADDED_HEADING} a-zh, b-zh\n${said(5000, faults).replace('"pairs":123', '"pairs":2')}`
+    expect(cover.judge!(ctx, [run(0, apart(0))])).toMatchObject({ pass: true, numbers: { I10: 0, pieces: 4767634, pairs: 123, added: { pairs: 2, I10: 0, pieces: 5000, I6other: 0 } } })
+    expect(cover.judge!(ctx, [run(0, apart(3))])).toMatchObject({ pass: false, numbers: { I10: 0, added: { I10: 3 } } })
+    expect(typesetOf(apart(3))).toMatchObject({ pairs: 123, I10: 0, added: { pairs: 2, I10: 3 } })
     // (the display gate reads the parity's lay of its pairs the same way)
     expect(gate('display').judge!(ctx, [run(0, 'I10, the sentence cover (cover.ts): 599484 pieces; 2 faults: x'), run(0), run(0, 'parity: 9 pages of 1 pairs; 0 worse than today; missing none')]).findings).toEqual({ I10: { held: false, count: 2 } })
   })
@@ -320,7 +327,13 @@ describe('the equivalence gates, in either shape of their tools', () => {
     const ctx = ctxAt('/repo', '/work')
     const judged = gate('display').judge!(ctx, [run(0), run(0), run(1, text)])
     expect(judged).toMatchObject({ pass: false, numbers: { pages: 365, pairs: 22, worse: 2, weight: '0 pages worse, 4 nearer', cross: '2 pages worse, 1 nearer' } })
-    expect(gate('display').judge!(ctx, [run(0), run(0), run(0, 'parity: 9 pages of 1 pairs; 0 worse than today; missing none')]).pass).toBe(true)
+    const passed = (added: string) => [run(0), run(0), run(0, 'parity: 9 pages of 1 pairs; 0 worse than today; missing none'), run(0), run(0), run(added === 'worse' ? 1 : 0, `parity: 27 pages of 2 pairs; ${added === 'worse' ? 1 : 0} worse than today; missing none`)]
+    expect(gate('display').judge!(ctx, passed('none')).pass).toBe(true)
+    // (the added pairs judged in steps of their own, their numbers apart from the set's; a page of theirs worse fails the gate)
+    expect(gate('display').judge!(ctx, passed('none')).numbers).toMatchObject({ pages: 9, pairs: 1, worse: 0, added: { pages: 27, pairs: 2, worse: 0 } })
+    expect(gate('display').judge!(ctx, passed('worse'))).toMatchObject({ pass: false, numbers: { worse: 0, added: { worse: 1 } } })
+    // (the set's three steps alone are not the gate's whole run)
+    expect(gate('display').judge!(ctx, passed('none').slice(0, 3)).pass).toBe(false)
     // (a run not judged whole fails by measure.mjs's exit; its count is reported)
     const whole = gate('display').judge!(ctx, [run(0), run(0), run(1, 'parity: 8 pages of 1 pairs; 0 worse than today; missing none\nincomplete: 1 (a-zh p3: not drawn)')])
     expect(whole).toMatchObject({ pass: false, numbers: { pages: 8, worse: 0, incomplete: 1 } })

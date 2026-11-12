@@ -498,6 +498,21 @@ Pages are ordered by a score: each measure's worse differences (8 at most) times
 ## The release check
 
 `pnpm release-check --tier full` runs it as the gate `display` ("display ≥ today: no page worse than today's, a difference
-only where nearer the original"; stage reader, after `prepare`, over that run's bundles): the three steps, judged by
-measure.mjs's exit code (no page worse, and the run judged whole). It is a cut-over blocker: the report's cut-over verdict
+only where nearer the original"; stage reader, after `prepare`, over that run's bundles): the three steps over the 22 pairs, then
+the same three over the added pairs (below) with their numbers apart (`numbers.added`), judged by measure.mjs's exit codes (no
+page worse, and each run judged whole). It is a cut-over blocker: the report's cut-over verdict
 stays NO-GO until it passes (`lab/release-check/CI.md`).
+
+## The added pairs (lab/typeset/added.mjs, 2026-11-13)
+
+Pairs the owner found a fault on that no pair held are added to the lab: 2111.09276v1-zh (the 91st) and 2611.03953v2-zh (the
+92nd), papers of his staging review of 2026-11-13. They replace none of the 22, and their numbers are never summed into the 22's,
+so that a round's totals stay comparable with the rounds before: run.mjs draws and judges the 22 (or the pairs named) as before,
+then the added pairs in a run of its own (`--apart`), its sheet and work under `<out>/added`, `<work>/added`, its verdict printed
+after the 22's under added.mjs's heading, its exit joined to the 22's; the reader gate (`lab/typeset/gate-l1.mjs`) walks them so
+too. Their today's side was made in the lab, as the release sweep's was made by staging: today's layer by the release's own prepare (the
+release of engine 065c1d973: on a paper staging prepared, the catalog and every object byte-equal to staging's), today's door
+rows by the release's own translation code over Microsoft's keyless endpoint, today's prepare dump and reader dump by the
+baseline's tools, the tap's ledgers and metrics by its pass 1. It is lab-data's `refactor-2026-11/baseline/added/`, read through a
+root of links (added.mjs `addedEnv`: the set's folders hold their own files and the added pairs' side by side) so that no folder
+another tool walks whole changes. A round's bundles must hold the added papers (the chain's list of 90 papers).
