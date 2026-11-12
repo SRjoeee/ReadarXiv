@@ -588,17 +588,45 @@ export function measureFidelity(c) {
     if (ink.today !== ink.v2) diff('ink', null, "units whose original ink is black drawn in another fill (the owner's ruling: the PDF's own black)", 0, { value: ink.today, off: ink.today }, { value: ink.v2, off: ink.v2 }, ink.v2 > ink.today, ink.v2 < ink.today ? 'v2' : 'today')
   }
 
-  // ---------------- weight of figure texts, captions and cells, against the original's darkness of the same texts
+  // ---------------- weight of figure texts, captions and cells: the share of their ink each side draws at another weight than the
+  // original sets it, both ways. Read against A's darkness, a class's darkness compared scripts: a translation's script is lighter
+  // than the original's at a size whatever its weight (2608.25210v2 p2's Figure 1: the texts the original sets regular, drawn
+  // regular by both, read 0.59 on A and 0.44 drawn), and its bold's contrast is another (0.55 against 0.44 drawn, 0.67 against 0.59
+  // on A), so a darker drawing read nearer whatever its weight: today's, its regular texts drawn bold, against v2's, each text at
+  // the original's. Each text's weight on A is its share of glyphs set in a bold face (originalOf); a side's, its share of
+  // characters drawn bold (the faces it drew them in, measure-dom's). A side's distance: its texts' |drawn share - A's| weighted by
+  // its ink (their glyph pixels, CLASS_PIXELS a class at least), so a drawing bolder than the original is as far as one lighter by
+  // the same share; judged as a share of characters is (NEAR.style, the style measure's floor). Where every text of the class is
+  // written in Latin letters on A and in each drawing (a Latin target: Unicode's script of their letters), the darkness is one
+  // script's and read against A's as before as well (2608.16117v1's captions)
   if (fid) {
     const cls = { figure: [], caption: [], cell: [] }
+    const shareOf = (ls) => {
+      const xs = (ls ?? []).filter((l) => l.n > 0)
+      const k = xs.reduce((m, l) => m + l.n, 0)
+      return k ? xs.reduce((m, l) => m + l.bold, 0) / k : null
+    }
+    // (a text written in Latin letters: every letter of it of Unicode's Latin script, one at least)
+    const latin = (s) => {
+      const ls = String(s ?? '').match(/\p{L}/gu) ?? []
+      return ls.length > 0 && ls.every((ch) => /\p{Script=Latin}/u.test(ch))
+    }
+    const latinOf = (ls) => latin((ls ?? []).filter((l) => l.n > 0).map((l) => l.text).join(''))
+    const latinOnA = (lines) => latin(runsIn(runs, lines.map((l) => [l.x0, l.bottom ?? l.y - 0.2 * l.size, l.x1, l.top ?? l.y + 0.8 * l.size])).map((r) => r[7]).join(''))
+    const onA = (lines) => (runs ? originalOf(runs, fonts, lines.map((l) => [l.x0, l.bottom ?? l.y - 0.2 * l.size, l.x1, l.top ?? l.y + 0.8 * l.size]))?.bold ?? null : null)
     for (const key of both) {
       const k = kindOf(key)
-      const id = orig.get(key)?.part !== null && orig.get(key)?.part !== undefined ? `p:${orig.get(key).part}` : `q:${key.slice(1)}`
-      const entry = { t: fid.dark.today[`t:${key.slice(1)}`], v: fid.dark.v2[`p:${ordOfV.get(key)}`], o: fid.orig[id] }
-      if (k === 'caption') cls.caption.push(entry)
-      else if (k === 'cell') cls.cell.push(entry)
+      if (k !== 'caption' && k !== 'cell') continue
+      const o = orig.get(key)
+      const id = o?.part !== null && o?.part !== undefined ? `p:${o.part}` : `q:${key.slice(1)}`
+      cls[k].push({ t: fid.dark.today[`t:${key.slice(1)}`], v: fid.dark.v2[`p:${ordOfV.get(key)}`], o: fid.orig[id], a: onA(o?.lines ?? []), ts: shareOf(T.get(key)), vs: shareOf(V.get(key)), latin: latinOf(T.get(key)) && latinOf(V.get(key)) && latinOnA(o?.lines ?? []) })
     }
-    for (const [ord, fgId] of c.figurePairs ?? new Map()) cls.figure.push({ t: fid.dark.today[`f:${fgId}`], v: fid.dark.v2[`p:${ord}`], o: fid.orig[`p:${ord}`] })
+    const todayGroups = new Map((rec.today.figures ?? []).map((g) => [g.id, g]))
+    for (const [ord, fgId] of c.figurePairs ?? new Map()) {
+      const m = facts.get(ord)
+      const lines = (m?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], x1: l[3], y: l[4], top: Math.max(l[5], l[6]), bottom: Math.min(l[5], l[6]), size: l[10] ?? m.style?.size ?? 0 }))
+      cls.figure.push({ t: fid.dark.today[`f:${fgId}`], v: fid.dark.v2[`p:${ord}`], o: fid.orig[`p:${ord}`], a: onA(lines), ts: shareOf(todayGroups.get(fgId)?.lines), vs: shareOf(V.get(keyOfPart(ord))), latin: latinOf(todayGroups.get(fgId)?.lines) && latinOf(V.get(keyOfPart(ord))) && latinOnA(lines) })
+    }
     const pool = (xs) => {
       let s = 0,
         k = 0
@@ -606,12 +634,27 @@ export function measureFidelity(c) {
       return k ? { mean: s / k, pixels: k } : null
     }
     for (const [k, xs] of Object.entries(cls)) {
-      const full = xs.filter((x) => x.t && x.v && x.o)
+      const full = xs.filter((x) => x.t && x.v && x.o && x.a !== null && x.ts !== null && x.vs !== null)
       const t = pool(full.map((x) => x.t)),
-        v = pool(full.map((x) => x.v)),
-        o = pool(full.map((x) => x.o))
-      if (!t || !v || !o || t.pixels < CLASS_PIXELS || v.pixels < CLASS_PIXELS) continue
-      judge('weight', `${k}s`, `the ${k === 'figure' ? 'figure texts' : `${k}s`}' darkness off the original's (the same texts on arXiv's page)`, r2(o.mean), { value: r2(t.mean), d: Math.abs(t.mean - o.mean) }, { value: r2(v.mean), d: Math.abs(v.mean - o.mean) }, NEAR.weight * o.mean, (x) => (x === null ? x : Math.round(x * 10000) / 10000))
+        v = pool(full.map((x) => x.v))
+      if (!t || !v || t.pixels < CLASS_PIXELS || v.pixels < CLASS_PIXELS) continue
+      const sideOf = (dk, sh) => {
+        let off = 0,
+          px = 0
+        for (const x of full) {
+          off += Math.abs(x[sh] - x.a) * x[dk].pixels
+          px += x[dk].pixels
+        }
+        return { off: px ? off / px : 0 }
+      }
+      const ts = sideOf('t', 'ts'),
+        vs = sideOf('v', 'vs')
+      const said = (x) => `${r2(x.off)} of its ink at another weight`
+      judge('weight', `${k}s`, `the ${k === 'figure' ? 'figure texts' : `${k}s`}' weight: the share of their ink drawn at another weight than the original sets it (its bold share on A)`, 0, { value: said(ts), d: ts.off }, { value: said(vs), d: vs.off }, NEAR.style)
+      // (and, written in one script on A and in both drawings, their darkness against A's, the same texts)
+      const o = pool(full.map((x) => x.o))
+      if (o && full.every((x) => x.latin))
+        judge('weight', `${k}s`, `the ${k === 'figure' ? 'figure texts' : `${k}s`}' darkness off the original's (the same texts on arXiv's page, all in Latin letters)`, r2(o.mean), { value: r2(t.mean), d: Math.abs(t.mean - o.mean) }, { value: r2(v.mean), d: Math.abs(v.mean - o.mean) }, NEAR.weight * o.mean, (x) => (x === null ? x : Math.round(x * 10000) / 10000))
     }
   }
 

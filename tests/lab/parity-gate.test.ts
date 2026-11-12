@@ -446,6 +446,41 @@ describe("page numbers keep their size, set right-aligned (the owner's ruling 6;
   })
 })
 
+describe("weight of a figure's texts: their darkness over each drawing's own regular weight, against the original's (2608.25210v2 p2)", () => {
+  // (three figure texts on A: 50 set bold, a lead-in; 51 and 52 regular. A translation's script is lighter than A's at a size,
+  // whatever its weight: the texts A sets regular and both draw regular read 0.59 on A and 0.44 drawn. Today draws 51 bold as well,
+  // v2 draws 50 bold and the others regular: read against A's darkness, today's darker drawing was the nearer)
+  const box = (x: number) => [x, 298, x + 40, 306]
+  const facts = [50, 51, 52].map((ord, i) => ({ ord, kind: 'figure', align: 'l', style: { size: 8 }, lines: [factLine(100 + 60 * i, 140 + 60 * i, 300, 8)] }))
+  const prep = [90, 91, 92].map((ord, i) => ({ ord, kind: 'figure', lines: [{ page: N, x0: 100 + 60 * i, x1: 140 + 60 * i, baseline: 300, top: 306.4, bottom: 298.4, size: 8 }] }))
+  const v2 = v2Of({ members: [50, 51, 52].map((o) => ({ ord: o, state: 'laid', lines: [] })), facts })
+  const runs = [0, 1, 2].map((i) => [...box(100 + 60 * i), 300, 8, i === 0 ? 0 : 1, 'xxxx', 0])
+  // (the drawings in another script than A's, as a Chinese target's: Greek letters here)
+  const drawnFig = (i: number, bold: boolean) => [{ ...drawnLine(100 + 60 * i, 140 + 60 * i, 300, '\u03b1\u03b2\u03b3\u03b4', 8), bold: bold ? 4 : 0 }]
+  const dark = (mean: number) => ({ mean, pixels: 600 })
+  const page = (t: [number, boolean][], v: [number, boolean][]) =>
+    measure(
+      v2,
+      rec({
+        today: { figures: t.map(([, b], i) => ({ id: `f${i}`, lines: drawnFig(i, b) })) },
+        v2: { units: v.map(([, b], i) => ({ id: 50 + i, lines: drawnFig(i, b) })) },
+        original: { runs, fonts: ['ABCDEF+LMSans10-Bold', 'ABCDEF+LMSans10-Regular'] },
+        px: fid({
+          dark: { today: Object.fromEntries(t.map(([m], i) => [`f:f${i}`, dark(m)])), v2: Object.fromEntries(v.map(([m], i) => [`p:${50 + i}`, dark(m)])) },
+          orig: { 'p:50': dark(0.67), 'p:51': dark(0.6), 'p:52': dark(0.59) },
+        }),
+      }),
+      { prep },
+    )
+  const weights = (p: { diffs: { flag: string; unit: string; worse: boolean; nearer: string }[] }) => p.diffs.filter((d) => d.flag === 'weight' && d.unit === 'figures').map((d) => [d.worse, d.nearer])
+  it("today drawing a regular text bold is farther in weight than v2 drawing each at the original's: v2 nearer, not worse", () => {
+    expect(weights(page([[0.55, true], [0.55, true], [0.44, false]], [[0.55, true], [0.44, false], [0.44, false]]))).toEqual([[false, 'v2']])
+  })
+  it('a text the original sets bold drawn regular by v2, bold by today: worse, as before', () => {
+    expect(weights(page([[0.55, true], [0.44, false], [0.44, false]], [[0.44, false], [0.44, false], [0.44, false]]))).toEqual([[true, 'today']])
+  })
+})
+
 describe("ink: the PDF's own black (the owner's ruling 7)", () => {
   const f = one(5, 'para', [factLine(72, 540, 600)])
   const at = (fill: string) => [{ ...drawnLine(72, 540, 600, 'x'.repeat(30)), fill }]
