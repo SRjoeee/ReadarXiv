@@ -501,7 +501,7 @@ describe("figures: today's texts standing in a figure member held whole for a de
     const r = rec({ today: { figures: today }, v2: { units: [60, 61].map((id, i) => ({ id, lines: fig(at(i), at(i) + 40) })) } })
     const p = { pair: 'p-zh', ...measure(v2, r, { prep }) }
     rulingsPass([p], { recOf: () => r, v2, laid: {}, unsqueezed: null }, recount)
-    return { figures: p.measures.figures, d: of('figures')(p)[0] as { worse: boolean; covered?: string } }
+    return { figures: p.measures.figures, d: of('figures')(p)[0] as unknown as { worse: boolean; covered?: string } }
   }
   it('counts the texts of today standing in the held members, however today cut them, and the page is covered by T4', () => {
     const { figures, d } = page([62, 63])
