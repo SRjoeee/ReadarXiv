@@ -42,7 +42,9 @@ import {
   type LocateOptions,
   type Member,
   open,
+  type Phase,
   piecesOf,
+  type Work,
 } from './work.ts'
 
 export { eachBetweenPaired, FREE, HELD, type Located, type LocateOptions, type Member }
@@ -50,43 +52,50 @@ export { urlBreaks } from './geometry.ts'
 export { TEXT_NAMES } from './page-units.ts'
 export type { Place } from './work.ts'
 
+// ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
+const facts: Phase = (w) => {
+  const { ins, inkA, m, unitB, roleB, pieceB, pageA, framesA } = w.ix
+  const { members, claimedA, units } = w
+  factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB, units, framed: new Set(framesA.keys()) })
+}
+
+/** locate's phases in the order they run, which is the contract: each phase's file says what it reads of the record and what
+ *  it writes, and a field one phase assigns is read only after it (work.ts `field`) */
+const PHASES: readonly Phase[] = [
+  placeUnits,
+  claimTrails,
+  keepArtefacts,
+  unitsMadeOnA,
+  unitsBornOnA,
+  lineGeometry,
+  sentenceStarts,
+  frameMeasures,
+  endMarks,
+  rooms,
+  leadNames,
+  facts,
+  flowsAndTies,
+  rowAligns,
+  linksOnA,
+]
+
 export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions = {}): Located {
   const w = open(ins, inkA, m)
-  const { unitB, roleB, pieceB, pageA, framesA } = w.ix
-  const { claimedA, units, members, stats, displays, floatLines } = w
+  for (const p of PHASES) p(w, o)
+  return close(w)
+}
+
+/** what locate states, read off the record its phases wrote: the wrap's groups, the counts */
+function close(w: Work): Located {
+  const { ins, inkA, m, pageA } = w.ix
+  const { units, members, stats, displays, floatLines } = w
+  const born = field(w, 'born')
+  const flows = field(w, 'flows')
+  const ties = field(w, 'ties')
+  const links = field(w, 'links')
   const noteUnlocated = (c: string) => {
     stats.unlocated[c] = (stats.unlocated[c] ?? 0) + 1
   }
-  placeUnits(w)
-
-  claimTrails(w)
-
-  keepArtefacts(w)
-
-  unitsMadeOnA(w, o)
-
-  unitsBornOnA(w)
-  const born = field(w, 'born')
-
-  lineGeometry(w)
-
-  sentenceStarts(w)
-
-  frameMeasures(w)
-  endMarks(w)
-  rooms(w)
-  leadNames(w)
-  // ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
-  factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB, units, framed: new Set(framesA.keys()) })
-
-  flowsAndTies(w)
-  const flows = field(w, 'flows')
-  const ties = field(w, 'ties')
-  rowAligns(w)
-
-  linksOnA(w, o)
-  const links = field(w, 'links')
-
   // ---- groups for the wrap
   const groups = inkA.pages.map((pg) => ({
     glyphs: new Array<string | null>(pg.glyphs.length).fill(null),
