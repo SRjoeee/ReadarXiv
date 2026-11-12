@@ -269,6 +269,11 @@ spaces put back sets today's count on the page: `v2.mjs` lays each pair first wi
 a lab global, its pages not kept) and records each member's line count on each page of that lay (`spaced`); `verdict.mjs`
 markSpaceRuling. A count those spaces do not explain is judged as any.
 
+One more lay of each pair, for the owner's ruling L2 of 2026-11-12 (below, "The owner's rulings of 2026-11-12"): with no CJK line
+squeezed to take the group it misses (the breaker's `squeezes`, its marks' blank halves and SQUEEZE em a gap, light compression
+before stretching; `hook.mjs` behind `__parityNoSqueeze`, its pages not kept), each member's line count on each page of that lay
+(`unsqueezed`), and the same of the fresh rule's re-lay (`relay.unsqueezed`).
+
 The coordinator's ruling of 2026-11-10 (rebuild/mail-group), on the owner's principle that translating or keeping are both
 fine and a garbled translation never: an e-mail address is a literal, never sent, and a line of addresses alone that the
 candidate's prepare keeps whole (a kept block of addresses and their separators alone: the engine's `address`, the dump's

@@ -253,6 +253,25 @@ for (const pair of pairs) {
     // (a fresh row is the chain's own Result, its groups placed already: read as it is)
     return lay(part, withFresh(readAsChain(rows0, units), fresh))
   }
+  /** each member's line count on each page of a lay of the pair with the lab's global `flag` set (hook.mjs), its pages not kept nor
+   *  its passes' targets: a counterfactual a ruling reads */
+  const countsWithout = (flag) => {
+    const out = {}
+    const kept = { page: globalThis.__ckPage, fill: globalThis.__parityFill }
+    globalThis.__ckPage = (p, pg, page) => {
+      if (p === pair) out[pg] = Object.fromEntries(page.members.filter((m) => m.page === pg).map((m) => [m.ord, m.lines?.length ?? 0]))
+    }
+    globalThis.__parityFill = undefined
+    globalThis[flag] = true
+    try {
+      gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held, joined })
+    } finally {
+      globalThis[flag] = undefined
+      globalThis.__ckPage = kept.page
+      globalThis.__parityFill = kept.fill
+    }
+    return out
+  }
   // (first without option (i): each pass's target and each member's line count on each page alone)
   const before = {},
     offTargets = {}
@@ -280,6 +299,10 @@ for (const pair of pairs) {
   } finally {
     globalThis.__parityMarkSpaces = undefined
   }
+  // (then with no CJK line squeezed to take the group it misses, hook.mjs: each member's line count on each page of that lay, its
+  // pages not kept, nor its passes' targets; the owner's ruling L2 reads it, rulings.mjs, 2026-11-12: a paragraph a line shorter
+  // than today's by the translation's punctuation rule)
+  const unsqueezed = countsWithout('__parityNoSqueeze')
   globalThis.__ckPage = keep
   globalThis.__parityFill = targets(fills)
   heldRows.joined = 0
@@ -329,8 +352,12 @@ for (const pair of pairs) {
       const said = rows0 ? { ...rows0, get: (k) => r.said.get(k) ?? rows0.get(k) } : rows0
       return lay(part, withFresh(readAsChain(said, units), left))
     }
+    let unsqueezed = null
     try {
       gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held, joined })
+      // (and that lay with no CJK line squeezed, as the pair's own above: the owner's ruling L2 reads a difference judged on the
+      // re-lay against it)
+      unsqueezed = countsWithout('__parityNoSqueeze')
     } finally {
       globalThis.__ckPage = kept.page
       globalThis.__parityFill = kept.fill
@@ -342,6 +369,7 @@ for (const pair of pairs) {
       how: Object.fromEntries(r.how),
       incomparable: Object.fromEntries(r.incomparable),
       ...(r.unsentenced.size ? { unsentenced: [...r.unsentenced].sort((a, b) => a - b) } : {}),
+      unsqueezed,
       ms: Math.round(performance.now() - r0),
     }
     console.log(`${pair}: the re-lay with today's own text: ${Object.keys(relay.pages).length} pages changed; ${r.how.size} members given today's text (said ${[...r.how.values()].filter((x) => x === 'said').length}, its stored row ${[...r.how.values()].filter((x) => x === 'stored').length}, nothing sent ${[...r.how.values()].filter((x) => x === 'unsent').length}), ${r.incomparable.size} not comparable; ${relay.ms} ms`)
@@ -455,6 +483,7 @@ for (const pair of pairs) {
     fills,
     before,
     spaced,
+    unsqueezed,
     unjoined,
     ...(missing ? { notes: [missing] } : {}),
     ...(pitch.length ? { pitch } : {}),
