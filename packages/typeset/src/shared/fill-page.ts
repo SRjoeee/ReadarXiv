@@ -406,10 +406,17 @@ function headOf(q: FillLaid, onPage: readonly { u: FillLaid; l: Layout; st: FitS
 }
 
 /** the fit's knobs a unit under its page's band may take in the fill (§18.57): its tracking, the room TeX left under its
- *  blocks, one step of its sizes */
-type EvenKnob = 'track' | 'room' | 'size'
-/** the tries, in the fit's own order (fit/walk.ts statesOf), each knob kept for the next as the walk keeps them */
-const EVEN_TRIES: readonly (readonly EvenKnob[])[] = [['track'], ['track', 'room'], ['track', 'room', 'size']]
+ *  blocks, one step of its sizes; and at a column's foot the room past TeX's text block bottom (the borrow's own, §18.37) */
+type EvenKnob = 'track' | 'room' | 'size' | 'foot'
+/** the tries, in the fit's own order (fit/walk.ts statesOf), each knob kept for the next as the walk keeps them; the room past
+ *  TeX's bottom last, on the tracking and TeX's room alone, then with the size step */
+const EVEN_TRIES: readonly (readonly EvenKnob[])[] = [
+  ['track'],
+  ['track', 'room'],
+  ['track', 'room', 'size'],
+  ['track', 'room', 'foot'],
+  ['track', 'room', 'size', 'foot'],
+]
 
 /** each frame of a unit (framesOf: a page's or a column's, a paragraph TeX states inside it), its lines in `laid` (else the
  *  layout its fill leadings were found at, else its fit's) and the fill leading S.fill.leads found for it */
@@ -430,8 +437,9 @@ function underBand(p: FillLaid, floor: number, laid?: Layout): boolean {
 }
 /** a fitted state with one knob more, as the fit's walk takes it to its bound: the tracking at the fit's bound (P.trackMin),
  *  the room TeX left under the unit's blocks (Block.free, the borrow knob), one step of the fit's sizes under the original's
- *  size and no lower (1 - P.step: one step, never two; a unit its fit set smaller already takes none), under its cap; null where
- *  the knob has nothing more to give */
+ *  size and no lower (1 - P.step: one step, never two; a unit its fit set smaller already takes none), under its cap; the room
+ *  past TeX's text block bottom by a line of the unit's own pitch, the next ink kept at TeX's separation (FitState.over, B.slots
+ *  roomOf: the borrow's, §18.37), where its blocks state the bottom; null where the knob has nothing more to give */
 function knobOf(p: FillLaid, P: PageRules, st: FitState, knob: EvenKnob): FitState | null {
   const r3 = (x: number) => Math.round(x * 1000) / 1000
   if (knob === 'track') {
@@ -440,6 +448,11 @@ function knobOf(p: FillLaid, P: PageRules, st: FitState, knob: EvenKnob): FitSta
     return st.trackLatin > bound + 1e-9 ? { ...st, trackLatin: bound } : null
   }
   if (knob === 'room') return st.borrow < 99 && p.blocks.some((b) => (b.free ?? 0) > 0) ? { ...st, borrow: 99 } : null
+  if (knob === 'foot') {
+    const b = p.blocks.at(-1)!,
+      line = Math.round((b.pitch0 ?? 1.2 * p.s) * 100) / 100
+    return b.toFoot !== undefined && (st.over ?? 0) < line ? { ...st, borrow: 99, over: line } : null
+  }
   const scale = r3(st.scale - P.step)
   return scale < r3(1 - P.step) - 1e-9 || scale > (p.P.capScale ?? 1) + 1e-9 ? null : { ...st, scale, knob: 'shrink' }
 }
@@ -479,7 +492,8 @@ function evenOf(p: FillLaid, P: PageRules, floor: number): FillLaid | null {
     const l = layoutAt(p.tokens, p.blocks, p.s, p.P, { ...st, lead: Math.max(st.lead, floor) })
     if (l.clipped || !keepsPages(p.layout.lines, l.lines, p.tokens) || pagesOf(l) !== pages || gains(l)) continue
     // (no line freed and no room added: its fill leadings cannot rise, nothing more is laid)
-    if (st.borrow === p.layout.state.borrow && framesAt(p, l).every((f, i) => f.lines === lines[i])) continue
+    const adds = st.borrow !== p.layout.state.borrow || (st.over ?? 0) > (p.layout.state.over ?? 0)
+    if (!adds && framesAt(p, l).every((f, i) => f.lines === lines[i])) continue
     const q = { ...p, layout: Object.assign(l, { extents: p.layout.extents }) } as FillLaid
     delete q.fillLeads
     delete q.lastLead
@@ -487,6 +501,18 @@ function evenOf(p: FillLaid, P: PageRules, floor: number): FillLaid | null {
     delete q.fillShare
     fillLeadsOf(q, P)
     if (q.fillLead === null || q.fillLead === undefined) continue
+    // (past TeX's bottom only as deep as the band's floor needs: no frame looser than the floor, the borrow's own measure of a
+    // line it takes there, §18.37: as deep as it needs, not as deep as it may)
+    if (took.includes('foot')) {
+      const cap = (v: number | undefined) => (v === undefined ? v : Math.min(v, floor))
+      // (the fields fillLeadsOf set again, read as it typed them)
+      const [last, leads] = [q.lastLead as number | undefined, q.fillLeads as FillLaid['fillLeads']]
+      q.fillLead = Math.min(q.fillLead, floor)
+      if (last !== undefined) q.lastLead = cap(last)
+      if (leads) q.fillLeads = leads.map(cap)
+      delete q.fillLaid
+      delete q.fillShare
+    }
     // (fillLeadsOf's layout at its fill leading, where it found one for the unit as one frame; else laid at its fill leadings)
     const found = q.fillLaid as FillLaid['fillLaid']
     const lf =

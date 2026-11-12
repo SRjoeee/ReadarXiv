@@ -102,3 +102,52 @@ describe('a paragraph tighter than its page takes the fit’s own knobs, one siz
     expect([m!.size, m!.lines.length, m!.lead]).toEqual([9.75, 8, 1])
   })
 })
+
+// A paragraph at a column's foot (the second rule of §18.57, the owner's look of 2026-11-12: 2602.23285v2-zh p15's two foot lines
+// at TeX's pitch among paragraphs spread to 1.46): where none of the fit's knobs above brings it into the band, it may take the room
+// past TeX's text block bottom, the next ink kept at TeX's separation and never deeper than a line of its own pitch, and only as
+// deep as the band's floor needs.
+describe('a paragraph tighter than its page at a column’s foot takes the room past TeX’s bottom it needs, a line at most (§18.57)', () => {
+  /** two paragraphs of 4 lines spread to 1.667, then one of `n` lines at the column's foot: TeX's text block bottom on its last
+   *  line, the next ink `ink` pt under it */
+  const foot = (n: number, chars: number, ink = 200) => {
+    const room = (k: number, i: number) =>
+      ({ below: ink, next: ink, runs: [[k - 1, ink, 0]], sep: 12 }) as unknown as Placed['room']
+    const flow: Placed[] = [4, 4, n].map((k, i) => ({
+      ord: i,
+      kind: 'para',
+      text: ids[i]!,
+      lead: 12,
+      style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+      align: 'j',
+      lines: ys(700 - 53 * i, k),
+      room: i === 2 ? room(k, i) : { below: 17, next: 17 },
+    }))
+    const by = new Map([60, 60, chars].map((c, i) => [ids[i]!, row(ids[i]!, c)]))
+    const rows: Rows = { get: (k) => by.get(k), done: true }
+    const part = { format: 1, page: 1, paper: { faces: { fonts: [['NimbusRomNo9L-Regu', 100]] } }, flows: [flow] }
+    return layPage(part as never, rows, zh, metrics).members.map((m) => ({
+      lead: m.fit!.lead,
+      size: m.fit!.size,
+      lines: m.lines.map(([y]) => y),
+    }))
+  }
+  it('spreads its two lines to the band’s floor, the second as far under the bottom as that needs, a line at most', () => {
+    // (two lines of 45 characters at TeX's pitch, 1.0, among two paragraphs at 1.667: the band floor 1.617. No tracking, room or
+    // size step frees a line of two full ones; past the bottom its second line stands 0.617 of a pitch under it, 7.4 pt)
+    const [a, b, m] = foot(2, 90)
+    expect(m!.lines.length).toBe(2)
+    expect(m!.lead).toBeCloseTo(1.617, 3)
+    expect(m!.size).toBe(10)
+    const bottom = 594 - 12
+    expect(bottom - m!.lines[1]!).toBeCloseTo(0.617 * 12, 1)
+    expect(bottom - m!.lines[1]!).toBeLessThanOrEqual(12)
+    expect([a!.lead, b!.lead]).toEqual([1.667, 1.667])
+  })
+  it('stays as it was where the next ink stands TeX’s separation under the bottom, or a line past it is not enough', () => {
+    // (the next ink at the bottom's separation: no room under it)
+    expect(foot(2, 90, 12)[2]!.lead).toBe(1)
+    // (three full lines at the foot: the floor needs 14.8 pt past the bottom, more than a line of 12)
+    expect(foot(3, 135)[2]!.lead).toBe(1)
+  })
+})

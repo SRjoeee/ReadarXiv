@@ -5510,7 +5510,7 @@ put-back places no group holding an element (packages/translate groups.ts), and 
   no edge there, and by the coordinator's rulings no phrase pair goes on the markers wire and no reference is asked for a
   bibliography's groups. A tags wire carries the group.
 
-### 18.57 A paragraph tighter than its page takes the fit's own knobs, one size step at most (2026-11-12)
+### 18.57 A paragraph tighter than its page takes the fit's own knobs, one size step at most; at a column's foot the room past TeX's bottom it needs (2026-11-12)
 
 **The rule.** In the page's fill, a body paragraph a frame of which (two lines or more) stands under the page's band floor, the
 target less `adaptiveFill.band`, is laid again at its fitted state with the fit's own knobs in the fit's own order, each kept for
@@ -5531,7 +5531,23 @@ expansion, §18.10's PIPELINE 80), set neighbouring paragraphs of one TeX size 2
 pairs he reviewed page by page, with no remark (the tap's ledgers: drawn size against U.blocks' size); he accepted a theorem
 the fit set a step smaller than today's (class S4, 2026-11-12); and he did see 5 % (2610.10069v1 page 5, two panes side by
 side). The leading's own bound is the band, the page's one line spacing (D6); the least contrast he has reported is 11 %
-(1706.03762v7 page 2: 1.33 among 1.5 to 1.55).
+(1706.03762v7 page 2: 1.33 among 1.5 to 1.55). He took the rule on the before-and-after pages of 2026-11-12 (17:25 JST):
+「看起来调整过之后挺舒服…计算量多 4.8% 可以接受，段落字号小一级也不是问题，只要用户感受不到就行。」 (it looks comfortable
+after the adjustment; 4.8 % more computation is acceptable; a paragraph a size step smaller is no problem as long as the reader
+does not feel it).
+
+**At a column's foot: the room past TeX's text block bottom it needs (the owner's ruling of 2026-11-12).** Where none of the
+knobs above brings it into the band, a tight paragraph whose frame ends a column may take the room past TeX's text block bottom
+(the borrow's own room, §18.37: `FitState.over`, B.slots `roomOf`), on its tracking and TeX's room, then with the size step:
+never deeper than a line of its own pitch, never nearer the next ink than TeX's paragraph separation, and only as deep as the
+band's floor needs (its frames set no looser than the floor, the borrow's own measure: as deep as it needs, not as deep as it
+may). This lifts the 2026-11-09 bound on TeX's text block bottom for this one case, as §18.37 lifted it by 1.5 pt for a size
+kept, by his ruling on the same pages: 「挺好」. 2602.23285v2 page 15, unit 131 (two lines at TeX's pitch, 11.0 pt apart, among
+paragraphs spread to 16.0-16.5): its two lines at 1.41, the second 4.5 pt under the bottom, 24 pt over the page number's
+baseline. Over the 90 pairs it brings 81 frames more into the band (639 in all), 74 lines past the bottom, median 3.3 pt, the
+deepest 10.9 (a line is 11 to 13.5). The two rules stay one: the foot is the knobs' last try, and a paragraph it lifts takes
+it on the knobs before it (one at a page's foot over a page break takes it as 2602.23285's does: its first frame spread, a line
+the tracking freed on the next page; `tests/unit/entry.test.ts`'s share case).
 
 **What it does** (the 90 pairs with stored rows, the borrow of §18.37 on; every body frame of two lines or more under its page's
 band floor: 1,468 on 871 pages, the same with the borrow off): 558 come into the band (the tracking alone 128, with the room 240,
