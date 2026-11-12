@@ -455,6 +455,15 @@ The pack of the ink units' accents and labels (`74c3d51e`, LAYOUT 39: an ink uni
 letter and leaves its label out) is `3426c25e`'s with each output's `layout.json` and `base.json` made again the same way: every
 base page byte for byte the one before, every layout file the one before but for its version (the pack's layout files hold no ink
 unit). 14 new objects.
+The pack of round B15's marked compile (`04dfd071`, LAYOUT 40: a paragraph's end point stated whatever node its list ends in but
+an empty list, a glue or a box, `docs/PDF-READER.md` §18.66) is `74c3d51e`'s with each output's `layout.json`, `base.pdf` and
+`base.json` made again the same way, every compile made again, by the round's engine (PIPELINE 98), and by the same steps: every
+other file is `74c3d51e`'s own bytes (the translations, references, geometry, faces, patterns and sources: the instrument is the
+same). Each base page is glyph for glyph the one before (every page's text items, pages and boxes the same); its operator lists
+differ by the end points, rendering intents (no ink), and the text runs they part or join. Each layout file is the round's
+engine's: besides its version it holds what the engine changed under LAYOUT 39 after `74c3d51e` was made (PIPELINE 74 to 98),
+which made no pack: 1512.03385v1 is cut into 366 units where the file before held 371, and the placeholder rows move on six
+papers; 2608.16117v1's alone is the one before but for its version. 21 new objects.
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source
