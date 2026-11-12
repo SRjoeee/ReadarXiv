@@ -4,11 +4,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULTS, eventsOf, INITIAL, type ReaderState, reduce } from '@readarxiv/reader'
 import { DEFAULT_CONFIG } from '@/config/schema'
-import { hostFetch, hostPrefs, surfaceStore, v2Open } from '@/pdf-reader/host/v2'
-
-/** the reader package's openReader, where a test gives one of its own (the rest of the package as it is) */
-const opened = vi.hoisted(() => ({ reader: null as unknown }))
-vi.mock('@readarxiv/reader', async real => ({ ...(await real<object>()), openReader: () => opened.reader }))
+import { crashTold, hostFetch, hostPrefs, surfaceStore, v2Open } from '@/pdf-reader/host/v2'
 
 const API = 'https://readarxiv.com'
 
@@ -145,18 +141,21 @@ describe('the reader state told to the chrome', () => {
     const s = state()
     expect(eventsOf(s, s)).toEqual([])
   })
-  it('a session that crashed is told to the chrome as a session that could not be opened is: a failure, once (the website shows its own)', async () => {
-    let current = state()
-    const listeners = new Set<() => void>()
-    opened.reader = { state: () => current, subscribe: (l: () => void) => { listeners.add(l); return () => listeners.delete(l) }, do: vi.fn(), probe: vi.fn(), close: vi.fn() }
-    const emitted: { type: string; event?: string }[] = []
-    await v2Open({ host: {} as never, paper: '2600.00001v1', visit: undefined, original: '' })({ left: document.createElement('div'), right: document.createElement('div'), emit: (e: { type: string; event?: string }) => emitted.push(e) } as never)
-    const crashes = () => emitted.filter(e => e.type === 'fail' && e.event === 'crashed').length
-    expect(crashes()).toBe(0)
-    current = { ...current, crashed: true }
-    for (const l of listeners) l()
-    for (const l of listeners) l()
-    expect(crashes()).toBe(1)
+  it('an address that names no paper (S-R-20): no reader opened, nothing asked; what the reader chooses written as settings', async () => {
+    const written: unknown[] = []
+    const prefs = { read: vi.fn(), write: vi.fn(async (p: unknown) => { written.push(p) }), watch: vi.fn() }
+    const emitted: unknown[] = []
+    const session = await v2Open({ host: { prefs } as never, paper: '', visit: undefined, original: '' })({ left: document.createElement('div'), right: document.createElement('div'), emit: (e: unknown) => emitted.push(e) } as never)
+    session.setDisplay('translation')
+    session.retry()
+    expect([written, emitted]).toEqual([[{ display: 'translation' }], []])
+  })
+  it('a session that crashed is told to the chrome as a session that could not be opened is: a failure, once (the website shows its own)', () => {
+    const before = state(), crashed = { ...before, crashed: true }
+    const fails = (events: { type: string; event?: string }[]) => events.filter(e => e.type === 'fail' && e.event === 'crashed').length
+    expect(fails(crashTold(eventsOf(before, crashed), crashed, before))).toBe(1)
+    expect(fails(crashTold(eventsOf(crashed, crashed), crashed, crashed))).toBe(0)
+    expect(fails(crashTold(eventsOf(null, before), before, null))).toBe(0)
   })
 })
 

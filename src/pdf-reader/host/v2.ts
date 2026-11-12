@@ -3,7 +3,7 @@
 // referrer), where arXiv's bytes are read (the tab's own PDF), the preferences over the extension's configuration, and the
 // rows made here through the background; the reader's state is told to the chrome as the chrome's events (the package's
 // `eventsOf`), and the chrome's commands are the reader's.
-import { eventsOf, type Prefs, type PrefStore, type Reader, type ReaderState, type Session as ChromeSession, type SessionHost as ChromeHost, type Host, type PrefsPatch } from '@readarxiv/reader'
+import type { Host, Prefs, PrefStore, PrefsPatch, ReaderState, Session as ChromeSession, SessionEvent, SessionHost as ChromeHost } from '@readarxiv/reader'
 import type { PaperStore } from '@/cache/paper-store'
 import type { SurfaceConfig } from '@/shared/surface-config'
 import type { TranslationTransport } from '@/providers/transport'
@@ -79,51 +79,39 @@ export function extensionHost(o: { api: string; loopback: boolean; pdf: (ref: st
   return { fetch: storedFetch({ fetch: hostFetch(o), store: o.store ?? null, api: o.api }), original: o.pdf, prefs: o.prefs, translate: hostTranslate({ transport: o.transport, paper: o.paper }) }
 }
 
-/** the chrome's `open`: the reader package in the chrome's panes */
+/** the session of an address that names no paper: nothing to show or load; what the reader chooses written as settings */
+function noPaper(prefs: PrefStore): ChromeSession {
+  // (the extension's store merges a patch's classes and highlight into the stored ones: host/prefs.ts withPrefs)
+  const write = (patch: PrefsPatch) => void prefs.write(patch as Partial<Prefs>).catch(() => {})
+  return {
+    setDisplay: display => write({ display }),
+    setSyncMode: m => write({ sync: m === 'same' }),
+    zoomBy: () => {},
+    zoomTo: () => {},
+    goToPage: () => {},
+    setPrefs: write,
+    pdfBytes: async () => null,
+    openOriginal: () => {},
+    goToUnit: () => {},
+    lead: () => {},
+    retry: () => {},
+    setNarrow: () => {},
+    pinch: () => {},
+  }
+}
+
+/** a crash of the session told as a session that could not be opened is (the chrome's attach): the failure the chrome shows,
+ *  once. The extension's own telling: the website shows a crash its own way */
+export const crashTold = (events: readonly SessionEvent[], s: ReaderState, before: ReaderState | null): SessionEvent[] =>
+  s.crashed && !before?.crashed ? [...events, { type: 'fail', event: 'crashed', text: 'the session crashed' }] : [...events]
+
+/** the chrome's `open`: the reader package's session over the extension's Host (the package's openSession: the page's end, the
+ *  probes, the commands); an address that names no paper opens none (S-R-20) */
 export function v2Open(o: { host: Host; paper: string; visit: Parameters<typeof import('@readarxiv/reader').openReader>[1]['visit']; original: string }): (chrome: ChromeHost) => Promise<ChromeSession> {
   return async chrome => {
-    const { openReader } = await import('@readarxiv/reader')
-    // the reader's marks and sheets on the page's body: its root's own placement rule (styles.ts) on the chrome's document area
-    // (main.doc) overrode that area's and left the panes no height. (Tailwind reads this directory's comments: no utility's name
-    // here, or the page's sheet gains its rule)
-    const root = document.body
-    const reader: Reader = openReader(root, { host: o.host, paper: o.paper, ...(o.visit ? { visit: o.visit } : {}), panes: { left: chrome.left, right: chrome.right } } as Parameters<typeof openReader>[1])
-    let told: ReaderState | null = null
-    const tell = () => {
-      const s = reader.state()
-      for (const e of eventsOf(told, s)) chrome.emit(e)
-      // a session that crashed is told as one that could not be opened is (the chrome's attach): the failure the chrome shows.
-      // Here, not in eventsOf: the website shows a crash its own way
-      if (s.crashed && !told?.crashed) chrome.emit({ type: 'fail', event: 'crashed', text: 'the session crashed' })
-      told = s
-    }
-    reader.subscribe(tell)
-    tell()
-    addEventListener('pagehide', () => reader.close(), { once: true })
-    // (the probes' hook: beside the controller the chrome's parts gave it, main.tsx, never in its place)
-    const probes = globalThis as { __reader?: object }
-    probes.__reader ??= {}
-    Object.assign(probes.__reader, { probe: () => reader.probe(), reader })
-    const set = (prefs: PrefsPatch) => {
-      const now = reader.state().prefs
-      reader.do({ do: 'set', prefs: { ...prefs, ...(prefs.classes ? { classes: { ...now.classes, ...prefs.classes } } : {}), ...(prefs.highlight ? { highlight: { ...now.highlight, ...prefs.highlight } } : {}) } as Partial<Prefs> })
-    }
-    return {
-      setDisplay: display => set({ display }),
-      setSyncMode: m => set({ sync: m === 'same' }),
-      zoomBy: factor => reader.do({ do: 'zoomBy', factor }),
-      zoomTo: to => reader.do({ do: 'zoom', to }),
-      goToPage: (side, page) => reader.do({ do: 'page', side, page }),
-      setPrefs: set,
-      pdfBytes: async () => null,
-      // arXiv's own PDF, opened by the browser in a tab of its own: never read through the reader
-      openOriginal: () => reader.do({ do: 'original' } as never),
-      goToUnit: id => reader.do({ do: 'heading', id }),
-      lead: side => reader.do({ do: 'lead', side }),
-      retry: () => reader.do({ do: 'retry' }),
-      setNarrow: on => reader.do({ do: 'narrow', on }),
-      pinch: (side, factor, at) => reader.do({ do: 'pinch', side, factor, at }),
-    }
+    if (!o.paper) return noPaper(o.host.prefs)
+    const { openSession } = await import('@readarxiv/reader')
+    return openSession({ host: o.host, paper: o.paper, ...(o.visit ? { visit: o.visit } : {}), tell: crashTold })(chrome)
   }
 }
 

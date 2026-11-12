@@ -1132,7 +1132,11 @@ set -- cannot scroll"); at no width it draws no page. The translation's pane in 
 A page shown from the back-forward cache: the reader meets a persisted `pagehide` and `pageshow` itself, as it meets the
 document's visibility and the browser's online state: away, our server is neither followed nor asked and no timer runs; back,
 the document is followed anew, the panes as they were (today's web `session/job.ts putAway`). A `pagehide` that is not
-persisted is the host's to close the reader on.
+persisted closes the reader, and only that one: the package's one glue of a reader and the chrome's session
+(`chrome/open.ts` `openSession`, both hosts; the coordinator's ruling of 2026-11-13: a page the browser may restore is never
+closed for good). The glue tells the reader's state as the chrome's events (`eventsOf`), runs the chrome's commands, and
+takes from a host only what differs: its telling of some events (the website's arXiv HTML link, the extension's crash as a
+failure), what it watches, whether the chrome may hold the original, what goes at the page's end.
 
 Where its host gives no engine, the reader lays with lane L3's typesetter (`packages/reader/src/compose/typeset.ts`):
 `layPage` under the rule set's rules for the target the rows are of, the reader's "What to translate" as the rules' `leave`
