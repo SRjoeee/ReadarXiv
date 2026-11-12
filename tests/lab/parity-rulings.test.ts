@@ -331,6 +331,35 @@ describe("T2: a table's header row with a cell kept as the original, the others 
   })
 })
 
+describe("T1: a line of an algorithm's pseudocode kept as the original (his ruling 5 of 2026-11-08, stated by the prepare)", () => {
+  // (2608.25210v2-zh p8 t164, v2's ord 152: today translates the line, v2 leaves it the original's; the run's dump states it
+  // `keptBy: 'pseudocode'` (lane keep-reasons), v2.mjs's `pseudocode`)
+  const page = (o: { pseudocode?: number[]; member?: object; drawn?: boolean; today?: string } = {}) => {
+    const { page: p } = judged(
+      {
+        diffs: [worse('shown', 't164 para', null, o.today ?? 'translated', 'none', [null, null])],
+        units: [{ key: 't164', kind: 'para', part: 152, align: 'l', sides: { today: side(1, 5.98, 5.98, 1) } }],
+      },
+      {
+        v2: { facts: { [N]: { members: [], ties: [] } }, pages: { [N]: { members: [{ ord: 152, state: 'none', off: 0, lines: [], ...(o.member ?? {}) }] } }, ...(o.pseudocode ? { pseudocode: o.pseudocode } : {}) },
+        rec: rec({}, o.drawn ? { units: [{ id: 152, lines: [drawn(449.48, 100, 140, 5.98, '\u6587\u5b57')] }] } : {}),
+      },
+    )
+    const d = (p.diffs as (Diff & { coveredSays?: string })[])[0]!
+    return [d.worse, d.covered ?? null]
+  }
+  it('stated kept as pseudocode, drawn as the original where today translates it: covered by T1', () => {
+    expect(page({ pseudocode: [152] })).toEqual([false, 'T1'])
+  })
+  it('no statement (a dump before lane keep-reasons, or a unit kept for no stated reason), another member stated, or v2 drawing it: worse', () => {
+    expect(page()).toEqual([true, null])
+    expect(page({ pseudocode: [144] })).toEqual([true, null])
+    expect(page({ pseudocode: [152], drawn: true })).toEqual([true, null])
+    expect(page({ pseudocode: [152], member: { state: 'laid', lines: [[449.48, 100, 140, []]] } })).toEqual([true, null])
+    expect(page({ pseudocode: [152], member: { off: 1 } })).toEqual([true, null])
+  })
+})
+
 describe('T4: figure texts held whole as the original for a decorated word, counted fewer than today (his answer to W11 (a))', () => {
   // (2608.06701v1-zh p1: today draws 45 figure texts translated, v2 24; v2's prepare holds 15 figure members whole for a decorated
   // word in their label (the dump's `keptBy: 'decorated'`), in which 21 of today's drawn texts stand)
@@ -479,9 +508,10 @@ describe('the rulings file', () => {
     for (const r of RULINGS) {
       expect(r.id).toMatch(/^[A-Z][A-Za-z0-9]{0,2}$/)
       expect(r.title.length).toBeGreaterThan(10)
-      // (his verdicts: accepted, taken, option 1 (T2), agreed with the recommendation (T4))
-      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528', '\u540c\u610f\u4f60\u7684\u5efa\u8bae'].includes(r.verdict)).toBe(true)
-      expect(r.date).toBe('2026-11-12')
+      // (his verdicts: accepted, taken, option 1 (T2), agreed with the recommendation (T4); T1 his ruling of 2026-11-08 as the
+      // record states it, relayed in English)
+      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : r.id === 'T1' ? r.verdict === 'pseudocode kept' : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528', '\u540c\u610f\u4f60\u7684\u5efa\u8bae'].includes(r.verdict)).toBe(true)
+      expect(r.date).toBe(r.id === 'T1' ? '2026-11-08' : '2026-11-12')
       expect(r.example.length).toBeGreaterThan(20)
       expect(r.condition === null ? r.unstated : r.condition).toBeTruthy()
       expect(r.condition === null).toBe(r.holds === null)

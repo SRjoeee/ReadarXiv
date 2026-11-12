@@ -484,6 +484,27 @@ export const RULINGS = [
     },
   },
   {
+    id: 'T1',
+    title: "a line of an algorithm's pseudocode kept as the original where today translates it",
+    verdict: 'pseudocode kept',
+    date: '2026-11-08',
+    seen: "the owner's ruling 5 of 2026-11-08 on the ten questions, relayed in English (so the record is quoted, not his words): the lab's STATE.md, 11-08, \"OWNER RULINGS on the 10 questions ... pseudocode kept\"; this README's ruling 5 (kept as the original by default); src/pdf-reader/engine/pipeline/instrument.mjs unitFactsOf (the body of an algorithm float kept as the original, as code is). The prepare states it since lane keep-reasons (e8a63d6af): the dump's `keptBy: 'pseudocode'`; the condition the coordinator's, 2026-11-12",
+    words: null,
+    example:
+      "2608.25210v2-zh p8 t164 (v2's ord 152): a line of Algorithm 1's body, kept as the original by v2 (the dump: kept as the original, a line of an algorithm's pseudocode), translated by today",
+    condition:
+      "shown: today translates the unit and v2 draws it as the original (not laid, no group of it turned off, no line of v2's text drawn of it), its member one the prepare states kept as pseudocode: the dump of the run v2 is laid from (AXT_L1_DUMPS, `<paper>.prepare.json`, a unit's `keptBy: 'pseudocode'`), which v2.mjs reads into the v2 file's `pseudocode`. A unit drawn as the original that states no reason still counts; so does every unit where the run's dump predates the statement (lane keep-reasons, e8a63d6af): there the reason is not stated",
+    holds(d, x) {
+      if (d.flag !== 'shown' || !d.unit || d.today?.value !== 'translated') return false
+      const ord = x.unit(d)?.part
+      if (ord === null || ord === undefined || !(x.v2.pseudocode ?? []).includes(ord)) return false
+      const m = x.laid(ord)
+      const drawn = (x.rec.v2?.units ?? []).some((u) => u.id === ord && u.lines.some((l) => l.n > 0))
+      return !!m && m.state !== 'laid' && !(m.off ?? 0) && !(m.lines?.length ?? 0) && !drawn
+    },
+    says: () => "the prepare states it a line of an algorithm's pseudocode (the dump's keptBy), drawn as the original",
+  },
+  {
     id: 'T4',
     title: 'figure texts held whole as the original for a decorated word in their label, counted fewer than today',
     verdict: '同意你的建议',

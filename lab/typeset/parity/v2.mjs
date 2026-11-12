@@ -457,6 +457,9 @@ for (const pair of pairs) {
   // (a figure text or a cell held whole as the original for a decorated word, lane decorated-whole: the owner's ruling T4 reads it,
   // rulings.mjs)
   const decorated = candidateKept(paperOf(pair), 'decorated')
+  // (a line of an algorithm's pseudocode, kept as the original (the owner's ruling 5 of 2026-11-08; stated by the prepare since lane
+  // keep-reasons): the ruling T1 reads it, rulings.mjs. None where the run's dump predates that statement)
+  const pseudocode = candidateKept(paperOf(pair), 'pseudocode')
   const keptToday = candidateKeptToday(paperOf(pair))
   // (the ink of the elements its prepare keeps as the original's, by member: F0's run of one pitch, a stretch a decoration holds;
   // the verdict reads the original's style without it, the coordinator's ruling 1 on F0)
@@ -492,6 +495,7 @@ for (const pair of pairs) {
     ...(double.length ? { double } : {}),
     ...(script.length ? { script } : {}),
     ...(decorated.length ? { decorated } : {}),
+    ...(pseudocode.length ? { pseudocode } : {}),
     ...(keptToday.length ? { keptToday } : {}),
     ...(keptEls.length ? { keptEls } : {}),
     ...(noRow.size ? { noRow: [...noRow].sort((a, b) => a - b) } : {}),

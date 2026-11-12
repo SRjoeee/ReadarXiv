@@ -247,9 +247,10 @@ The gate judges by them where they and today's output differ.
    room (`frame`: a cell's frame is its own original's extent).
 4. **Labels**: the target word everywhere, one form within a paper; a paper mixing translated and kept labels is a fault on
    either side (`labels`).
-5. **Pseudocode** kept as the original by default. Not judged yet: neither the part nor today's prepare dump states that a
-   unit is pseudocode (2608.25210 p7's algorithm is a `para` in both); `elements` catches what v2 drew of it as nothing.
-   Judged once a stated fact names it.
+5. **Pseudocode** kept as the original by default. Judged since lane keep-reasons (e8a63d6af), where the prepare's dump states
+   it (`keptBy: 'pseudocode'`, v2.mjs `pseudocode`): the ruling T1 below; a run whose dump predates that statement states nothing,
+   and its unit stays worse (2608.25210 p7's algorithm is a `para` in the part and in today's dump); `elements` catches what v2
+   drew of it as nothing.
 6. **Page numbers** keep their size, right-aligned (`folio`).
 7. **Ink**: the PDF's own black (`ink`).
 8. **A paragraph's leading spans its frames** (2026-11-09, the owner: "as you recommend", on 2610.20967v1-zh p4). Where a
@@ -371,6 +372,7 @@ measure, covered whole), `rulings` (each with the pages it covers, a page with a
 | O | a translated figure text touching the figure where today keeps it English | `over` of a figure text v2 draws translated at the original's place (anchor, alignment) and size where today draws no translation of it; the page's figure texts where, less those texts, v2 is within the floor of today |
 | A2 | a reference's next line set flush as today's | `align`: each line of v2's off the original's starts has a line of today's on its row that is a row of crops alone (which `align` reads no start of) starting where v2's starts |
 | T2 | a table's header row with a cell kept as the original, the others translated (his answer on the readiness page, 15:22: option 1, as v2 draws it now) | `groups` of a header group (`:h`) v2 draws mixed where today draws the whole row one way; a translated cell past its own room is judged by `frame` as before |
+| T1 | a line of an algorithm's pseudocode kept as the original where today translates it (his ruling 5 of 2026-11-08, above, as the record states it) | `shown`: today translates the unit, v2 draws it as the original (not laid, nothing turned off, no line drawn), its member stated kept as pseudocode by the dump of the run v2 is laid from (`keptBy: 'pseudocode'`, v2.mjs `pseudocode`); a unit kept for no stated reason, or a run whose dump predates the statement, stays worse |
 | T4 | figure texts held whole as the original for a decorated word in their label, counted fewer than today (his answer to the readiness page's W11 (a), "agreed with your recommendation": hold the whole label or cell until a ground can follow its word; lane decorated-whole) | `figures`, the page's count: v2 fewer than today by no more than today's texts standing in v2's figure members the prepare states held for a decorated word (the dump's `keptBy: 'decorated'`, v2.mjs `decorated`; `measures.figures.decorated`, each of today's groups whose middle stands in such a member's lines), beyond the measure's own set-asides (marks, no row); every such member drawn as the original (not laid, nothing turned off, no line of v2's text). A text left the original's with no such statement counts against the page |
 
 TRS, Fm and ruling 1's borrow read two fields of the Page member the typesetter states (packages/typeset lay/page.ts, types.ts

@@ -875,7 +875,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // `decorated`, PDF-READER's hold of a decorated word, lane decorated-whole): the owner's ruling T4 reads the figure texts today
   // translated in them, rulings.mjs; counted apart from the texts no row serves)
   const decorated = new Set(v2.decorated ?? [])
-  const keptToday = new Map(v2.keptToday ?? [])
+  // (a mark the gate holds a ruling for alone: every kept unit of the dump states its reason since lane keep-reasons, and a reason
+  // with no ruling is no set-aside)
+  const keptToday = new Map((v2.keptToday ?? []).filter(([, mark]) => Object.hasOwn(RULING_OF, mark)))
   for (const key of T.keys()) {
     if (V.has(key)) continue
     const o = orig.get(key)

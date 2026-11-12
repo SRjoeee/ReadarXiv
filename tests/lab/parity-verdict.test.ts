@@ -1199,6 +1199,8 @@ describe("a unit the prepare keeps by a rule's mark is the original's; one no ro
     expect(of('shown')(unit({ noRow: [12] }))).toEqual([[true, 'today']])
     expect(of('shown')(unit({ identifier: [12] }))).toEqual([[true, 'today']])
     expect(of('shown')(unit({ joined: false, keptToday: [[8, 'identifier']] }))).toEqual([[true, 'today']])
+    // (a reason the dump states that no ruling of the gate's holds: every kept unit states one since lane keep-reasons)
+    expect(of('shown')(unit({ joined: false, keptToday: [[7, 'block']] }))).toEqual([[true, 'today']])
   })
   const figFact = (ord: number, x0: number) => ({ ord, kind: 'figure', align: 'l', style: { size: 8 }, lines: [factLine(x0, x0 + 40, 300, 8)] })
   const prepFig = (ord: number, x0: number) => ({ ord, kind: 'figure', lines: [{ page: N, x0, x1: x0 + 40, baseline: 300, top: 306.4, bottom: 298.4, size: 8 }] })
