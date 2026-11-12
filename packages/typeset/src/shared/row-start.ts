@@ -47,14 +47,15 @@ export type RunRow = { page: number; baseline: number; x0: number; x1: number }
  */
 export type RowLine = {
   ords: readonly number[]
-  align: 'c' | 'r'
+  align: 'c' | 'r' | 'l'
   rows: readonly RunRow[]
   left: number
   right: number
 }
 
 /** the room a line of a run is laid in: centred, as far to either side of the line's middle as its room allows on both (U.decor's
- *  widen of a centred line), never narrower than TeX's line; flush right, from its room's left to the line's end */
+ *  widen of a centred line), never narrower than TeX's line; flush right, from its room's left to the line's end; flush left,
+ *  from the line's start to its room's right (§18.59) */
 export function lineRoom(
   align: RowLine['align'],
   line: Pick<RunRow, 'x0' | 'x1'>,
@@ -62,15 +63,16 @@ export function lineRoom(
   right: number,
 ): [number, number] {
   if (align === 'r') return [Math.min(left, line.x0), line.x1]
+  if (align === 'l') return [line.x0, Math.max(right, line.x1)]
   const mid = (line.x0 + line.x1) / 2,
     half = Math.max((line.x1 - line.x0) / 2, Math.min(right - mid, mid - left))
   return [mid - half, mid + half]
 }
 
 /** how far a line of a run laid over [lo, hi] (its first glyph's start to its last one's end) moves to stand as TeX set the
- *  line: centred on the line's middle, or ending at its end */
+ *  line: centred on the line's middle, ending at its end, or starting at its start */
 export const lineShift = (align: RowLine['align'], line: Pick<RunRow, 'x0' | 'x1'>, lo: number, hi: number): number =>
-  align === 'r' ? line.x1 - hi : (line.x0 + line.x1) / 2 - (lo + hi) / 2
+  align === 'r' ? line.x1 - hi : align === 'l' ? line.x0 - lo : (line.x0 + line.x1) / 2 - (lo + hi) / 2
 
 /** S.rowStart: sets the first block's start, startY, onLead and flowX where the unit is laid from the row (RUN:2152) */
 export function rowStart(i: RowStartInput): RowStart {

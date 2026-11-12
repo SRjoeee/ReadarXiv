@@ -925,7 +925,18 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const end = m.bToA[mem.bLast] as number
     if (end < 0) continue
     const last = gA(end)
-    let prev = last
+    // (an author's ink ends where its element boxes on its last glyph's band end, an ORCID icon after the name, no glyph: what
+    // TeX set right after the icon is glued to the member, and a gap is read from there, as the crop it travels in ends there)
+    let boxEnd = last.x1
+    if (AUTHOR_KINDS.has(mem.kind))
+      for (const l of mem.elBoxes.values())
+        for (const [p, i] of l) {
+          const bx = inkA.pages[p - 1]?.boxes
+          if (p !== pageA[end] || !bx || (bx[4 * i] as number) < last.x0) continue
+          if ((bx[4 * i + 1] as number) < last.top && (bx[4 * i + 3] as number) > last.bottom)
+            boxEnd = Math.max(boxEnd, bx[4 * i + 2] as number)
+        }
+    let prev = boxEnd > last.x1 ? { ...last, x1: boxEnd } : last
     const trail: number[] = []
     let apart = false
     let glued = 0
@@ -2226,12 +2237,24 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // has none), to the follower's first line: S.rowStart lays the follower from the translation's ink end (S.share's `ink`), so
   // the separation it keeps is the original's from its ink; today's shared row is the file's row, its glyphs' ink (make.mjs
   // rowsOf), 2610.40645v1 p34's "Proof of Proposition 4.4." and its theorem 4.49 pt apart drawn where v2's were 3.33)
+  // (and its elements' boxes on that line, no glyph's, which travel with it in their crops: an ORCID icon after a name. Read
+  // from the glyphs alone, the next member was laid the icon's width after it, the mark TeX set right after the icon apart from
+  // the name: 2609.20976v1 p1, §18.59. An element's glyphs are among the line's glyphs already, read by their ink)
   const inkEnd = (lead: Member, a: Line) => {
     let x = Number.NEGATIVE_INFINITY
-    for (const g of lead.lines.at(-1) === a ? (lead.lineGlyphs.at(-1) ?? []) : []) {
+    const last = lead.lines.at(-1) === a
+    for (const g of last ? (lead.lineGlyphs.at(-1) ?? []) : []) {
       const d = gA(g)
       if (isInk(d)) x = Math.max(x, d.ix1 > d.ix0 ? d.ix1 : d.x1)
     }
+    if (last)
+      for (const l of lead.elBoxes.values())
+        for (const [p, i] of l) {
+          const bx = inkA.pages[p - 1]?.boxes
+          if (p !== a[0] || !bx) continue
+          if ((bx[4 * i + 1] as number) < a[5] && (bx[4 * i + 3] as number) > a[6])
+            x = Math.max(x, bx[4 * i + 2] as number)
+        }
     return Number.isFinite(x) ? x : a[3]
   }
   const sepOf = (lead: Member, b: Line) => r2(b[2] - inkEnd(lead, lead.lines.at(-1)!))

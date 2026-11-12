@@ -2654,6 +2654,71 @@ describe('an element’s ink is what TeX set for it', () => {
     expect([formula.text, formula.style?.sc]).toEqual(['(HR)', undefined])
   })
 
+  it('reads the separation to the next member on the row from the member’s ink end, its element’s box with it (§18.59)', () => {
+    // (2609.20976v1 p1, JCAP: "Gautam Bhuyan," then his ORCID icon, an element of his unit (a box), then the next name. The join
+    // was read from his glyphs' ink end, the icon left out: the icon's crop travels with the name, so the next one was laid the
+    // icon's width (9.84 pt) after it, its mark apart from the name TeX set it after)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Gautam Bhuyan,', x: 72, y: 700 },
+          { text: 'Tathagata', x: 72 + 14 * 6 + 9.84 + 11.25, y: 700 },
+        ],
+        boxes: [[14, 0, 156, 698, 165.84, 707.84]],
+      },
+    ])
+    const content = [text('Gautam Bhuyan,'), el('1', '\\orcidlink{0000}')]
+    const gautam: InstrumentUnit = {
+      id: unitId('author', content),
+      kind: 'author',
+      content,
+      classes: [['1', { cls: 'other' }]],
+    }
+    const ins = ownedBy(
+      B,
+      [gautam, unitOf('author', 'Tathagata')],
+      [
+        [
+          [0, T, -1],
+          [1, T, -1],
+        ],
+      ],
+      [[[0, E, 1]]],
+    )
+    const L = locate(ins, B, align(B, B))
+    expect(elementOf(L).ink).toEqual([[1, 156, 698, 165.84, 707.84, 700]])
+    expect(L.flows[0]).toEqual([0, 1])
+    expect(L.members[1]!.join).toEqual([11.25])
+    // (a mark TeX set right after the icon, no unit's (2610.20451v1 p1's ",1"): the name's trail, glued to its ink end, the icon
+    // with it; read from the last glyph across the icon it was stated 9.84 pt apart, and laid that far after the icon's crop)
+    const B2 = docOf([
+      {
+        lines: [
+          { text: 'Gautam Bhuyan,', x: 72, y: 700 },
+          { text: '1', x: 165.84, y: 703.6, size: 7 },
+          { text: 'Tathagata', x: 165.84 + 4.2 + 3.6, y: 700 },
+        ],
+        boxes: [[14, 0, 156, 698, 165.84, 707.84]],
+      },
+    ])
+    const ins2 = ownedBy(
+      B2,
+      [gautam, unitOf('author', 'Tathagata')],
+      [
+        [
+          [0, T, -1],
+          [-1, 0, -1],
+          [1, T, -1],
+        ],
+      ],
+      [[[0, E, 1]]],
+    )
+    const L2 = locate(ins2, B2, align(B2, B2))
+    expect(L2.members[0]!.elements.filter(([k]) => k === '~').map(([, e]) => [e.copy, e.trail, e.sep])).toEqual([
+      ['1', 1, undefined],
+    ])
+    expect(L2.members[1]!.join).toEqual([3.6])
+  })
   it('states one box for an overline’s rule and its nucleus on their line: the rule TeX set over the glyph (math.md R1)', () => {
     // (2610.10069v1 p10's `$\vH=\overline{\vH}$`: TeX sets \overline's rule 3θ over its nucleus, 1.03 to 1.24 pt over the glyphs'
     // ink in the parts; joined to the element's glyphs only within 0.5 pt, it was an ink of its own on its own baseline, which the
