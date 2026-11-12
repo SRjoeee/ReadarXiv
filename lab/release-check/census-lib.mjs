@@ -388,7 +388,10 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
       f.functions.push(fn)
       fnStack.push(fn)
     }
-    const stmt = stmtStack.at(-1)
+    // (a statement's comment; an exported declaration's is its export statement's, where the parser hangs it)
+    const inner = stmtStack.at(-1)
+    const outer = stmtStack.at(-2)
+    const stmt = (outer?.type === 'ExportNamedDeclaration' || outer?.type === 'ExportDefaultDeclaration') && outer.declaration === inner ? outer : inner
     const near = n => `${leading(stmt)}\n${sameLine(n)}`
     switch (node.type) {
       case 'BinaryExpression':
@@ -551,7 +554,7 @@ const sentencesOf = value =>
     .filter(Boolean)
 const isConst = n => n?.type === 'TSTypeReference' && n.typeName?.type === 'Identifier' && n.typeName.name === 'const'
 const idsOf = p => (!p ? [] : p.type === 'Identifier' ? [p.name] : p.type === 'ObjectPattern' ? p.properties.flatMap(x => idsOf(x.value ?? x.argument)) : p.type === 'ArrayPattern' ? p.elements.flatMap(idsOf) : p.type === 'AssignmentPattern' ? idsOf(p.left) : p.type === 'RestElement' ? idsOf(p.argument) : [])
-const stmtDeclName = s => (s?.type === 'VariableDeclaration' ? s.declarations[0]?.id : s?.type === 'ExportNamedDeclaration' && s.declaration?.type === 'VariableDeclaration' ? s.declaration.declarations[0]?.id : s?.id ?? null)
+const stmtDeclName = s => (s?.type === 'VariableDeclaration' ? s.declarations[0]?.id : (s?.type === 'ExportNamedDeclaration' || s?.type === 'ExportDefaultDeclaration') && s.declaration ? stmtDeclName(s.declaration) : (s?.id ?? null))
 const countLines = kinds => ({ code: kinds.filter(k => k === 'code').length, comment: kinds.filter(k => k === 'comment').length, blank: kinds.filter(k => k === 'blank').length })
 const withoutRanges = (text, ranges) => {
   const a = text.split('')

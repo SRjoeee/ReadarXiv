@@ -149,6 +149,17 @@ describe('rule debt', () => {
     expect(thresholdOf({ value: 0x3000, raw: '0x3000', name: null, comment: '', line: 1, context: 'comparison' }).class).toBe('code')
   })
 
+  it("reads an exported declaration's comment off its export statement, where the parser hangs it", () => {
+    // (a list and a comparison in an exported declaration, each under a comment that cites a definition; the same two
+    // declared without `export` read alike)
+    const text = "// Unicode's hyphens: U+002D, U+2010, U+2011\nexport const HYPHENS = ['-', '\u2010', '\u2011']\n// TeX's \\hbadness default\nexport const loose = (b: number) => b > 7\n"
+    for (const t of [text, text.replace(/export /g, '')]) {
+      const f = factsOf('src/engine/marks.ts', t)
+      expect(f.lists?.[0]).toMatchObject({ name: 'HYPHENS', class: 'defined' })
+      expect(f.thresholds?.find(x => x.raw === '7')).toMatchObject({ class: 'borderline', reason: true, cites: 'TeX' })
+    }
+  })
+
   it('counts the engine\'s thresholds, lists, special cases and version constants', () => {
     const d = c.trees.NOW.debt
     // GAP 0.35 (evidence), 0.8 (no reason), 3 (Math.min): tuned; LIMIT borderline; PT_PER_IN a conversion; FLAGS an enumeration
