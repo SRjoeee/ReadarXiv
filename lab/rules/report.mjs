@@ -65,7 +65,7 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
     const gone = rows.filter(r => r.area === id && (r.verdict === 'remove' || r.verdict === 'cited paper silent')).sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)
     if (!gone.length) continue
     L.push(`## Area ${id}${deferred.includes(id) ? ', removal scheduled' : ''}: the rules that decide nothing, by name (${gone.length})`, '', `${saysOf(id)}.`, '')
-    for (const r of gone) L.push(`- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key})${r.verdict === 'cited paper silent' ? ' [cited paper silent: confirm]' : ''}: ${recordedOf(r)}`)
+    for (const r of gone) L.push(`- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key})${r.verdict === 'cited paper silent' ? ` [cited paper silent: confirm; before it is folded, the removal lane says which rule now takes the case its comment describes on ${r.citation.papers.join(', ')}, from that paper's record: a case merely not reached is not a case handled]` : ''}: ${recordedOf(r)}`)
     L.push('')
   }
   // the sites to fold in rules that stay, and the entries to remove

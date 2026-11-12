@@ -41,7 +41,7 @@ function made(specs: Record<string, Spec>, inputs: Recording['inputs'] = {}) {
     }
   }
   const map: SiteMap = { format: 'readarxiv/rule-sites 1', commit: null, digest: 'd', rules, sites, files: {} }
-  const recording: Recording = { format: 'readarxiv/rules-recording 1', map: 'd', commit: 'c0ffee', records: 1, inputs: { corpus: { records: 1, papers: ['2401.00001v1'], ms: 1 }, ...inputs }, agreement: { rules: 0, ran: 0, sites: 0, sitesRun: 0, line: '' }, sites: per, rules: {} }
+  const recording: Recording = { format: 'readarxiv/rules-recording 1', map: 'd', commit: 'c0ffee', records: 1, inputs: { corpus: { records: 1, papers: ['2401.00001v1'], ms: 1 }, ...inputs }, agreement: { rules: 0, ran: 0, sites: 0, sitesRun: 0, line: '' }, sites: per, rules: {}, paperModules: { '2401.00001': [FILE], '2509.12345': [FILE] } }
   return { map, recording }
 }
 const n = (t: number, f: number, more: Partial<SiteSums> = {}) => ({ n: t + f, t, f, ...more })
@@ -140,7 +140,7 @@ describe('the report', () => {
     expect(r.counts.a?.verdicts.remove).toBe(6)
     // (six removed and PAPER, its cited paper silent on the corpus: a candidate the coordinator confirms)
     expect(r.byArea).toContain('## Area a, removal scheduled: the rules that decide nothing, by name (7)')
-    expect(r.byArea).toContain('`PAPER` (packages/engine/src/locate/rules::(top)::PAPER) [cited paper silent: confirm]')
+    expect(r.byArea).toContain('`PAPER` (packages/engine/src/locate/rules::(top)::PAPER) [cited paper silent: confirm; before it is folded, the removal lane says which rule now takes the case its comment describes on 2401.00001v1, from that paper\'s record: a case merely not reached is not a case handled]')
     expect(r.byArea).toContain(`- ${FILE}:12 \`ONE\` (packages/engine/src/locate/rules::(top)::ONE): corpus: 7 runs, 0 true, 7 false`)
   })
   it('prints each flagged citation whole, the magnitudes beside the unmeasured budgets, the lists not judged', () => {

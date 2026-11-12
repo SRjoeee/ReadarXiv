@@ -14,9 +14,10 @@
 // 4. A citation, flagged from the whole comment (the coordinator confirms or strikes each flag before a removal lane acts;
 //    a comment that cites a definition and a paper is flagged a definition, its paper still sent to the holdout, the row
 //    holding both):
-//    (a) an arXiv id: the paper joins the holdout and the row is judged again: recorded there (or among the corpus's
-//    papers) and silent, the rule is a removal candidate marked `cited paper silent`; not yet recorded, `cited paper`
-//    (kept, waiting); (b) a definition (TeX,
+//    (a) an arXiv id: the paper joins the holdout and the row is judged again: its own record reached the rule's
+//    module and the rule did not take its other side there: a removal candidate marked `cited paper silent` (before it
+//    is folded, the removal lane says which rule now takes the case the comment describes); not recorded, or recorded
+//    without reaching the module (silence says nothing), `cited paper` (kept, waiting); (b) a definition (TeX,
 //    the PDF, Unicode, a font's table, a standard: the census's CITES_DEFINITION) or a section of our own documents:
 //    `definition`, kept, listed as cited and silent where it never decided; (c) "measured", "corpus", "on the N papers"
 //    with no id: `measurement`, kept, listed as "cites a measurement, not reproduced"; (d) "tuned" or "empiric" alone:
@@ -164,8 +165,11 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
       folds: [],
     }
     // (a citation's verdict, where nothing decides)
+    // (a cited paper is silent where its own record reached the rule's module (some site of the file ran on it) and the
+    // rule did not take its other side there; a record that never reached the module says nothing: the row waits)
+    const reached = p => (recording.paperModules?.[base(p)] ?? []).includes(rule.file)
     const cited = () => {
-      if (cite.flag === 'paper') return cite.papers.every(p => held.has(base(p))) ? 'cited paper silent' : 'cited paper'
+      if (cite.flag === 'paper') return cite.papers.every(p => held.has(base(p)) && reached(p)) ? 'cited paper silent' : 'cited paper'
       return cite.flag === 'definition' ? 'definition' : 'measurement'
     }
     const foldable = s => s.state === 'one' || s.state === 'never'

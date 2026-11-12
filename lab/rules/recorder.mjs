@@ -27,7 +27,16 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
   let flushes = 0
   const t0 = performance.now()
 
-  const recOf = id => (R[id] ??= { n: 0, t: 0, f: 0, nan: 0, near: [null, null], tests: [null, null], hits: null, reads: null })
+  const recOf = id => (R[id] ??= { n: 0, t: 0, f: 0, nan: 0, near: [null, null], tests: [null, null], hits: null, reads: null, pl: undefined, ps: null })
+  // (a run counted, and the paper it ran on noted where the paper changed since the site's last run: the papers a site
+  // ran on, for a process that lays several (the lay's runner); one comparison a run)
+  const ran = r => {
+    r.n += 1
+    if (r.pl !== ctx.paper) {
+      r.pl = ctx.paper
+      if (ctx.paper) (r.ps ??= new Set()).add(ctx.paper)
+    }
+  }
   const noteTest = (r, slot) => {
     const t = ctx.test
     if (!t) return
@@ -73,7 +82,7 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
   }
   const cmp = (id, a, b, result) => {
     const r = recOf(id)
-    r.n++
+    ran(r)
     if (result) r.t++
     else r.f++
     const bd = S[id].bounds[0]
@@ -83,7 +92,7 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
   }
   const outcome = (id, result) => {
     const r = recOf(id)
-    r.n++
+    ran(r)
     if (result) r.t++
     else r.f++
     noteTest(r, result ? 1 : 0)
@@ -93,7 +102,7 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
   const minmax = (id, args, min) => {
     const res = min ? Math.min(...args) : Math.max(...args)
     const r = recOf(id)
-    r.n++
+    ran(r)
     const bd = S[id].bounds[0]
     const at = typeof bd?.at === 'number' ? bd.at : -1
     if (at < 0 || at >= args.length) return res
@@ -255,7 +264,7 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
     mn: (id, ...args) => minmax(id, args, true),
     mx: (id, ...args) => minmax(id, args, false),
     v: (id, x) => {
-      recOf(id).n++
+      ran(recOf(id))
       return x
     },
     ls: (id, arr) => (Array.isArray(arr) ? Object.setPrototypeOf(arr, protoFor(`l${id}`, () => listProto(id))) : arr),
@@ -293,6 +302,7 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
           ...(r.tests[0] || r.tests[1] ? { tests: r.tests.map(s => (s ? { kept: [...s.kept], more: s.more } : null)) } : {}),
           ...(r.hits ? { hits: Object.fromEntries(r.hits) } : {}),
           ...(r.reads ? { reads: r.reads } : {}),
+          ...(r.ps ? { ps: [...r.ps] } : {}),
         }
       }
       return { format: RAW_FORMAT, map: map.digest, input, file: ctx.file, pid: process.pid, paper: ctx.paper, papers: [...papers], argv: process.argv.slice(1), ms: Math.round(performance.now() - t0), ...extra, loaded: [...loaded].sort(), sites }
