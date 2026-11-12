@@ -873,6 +873,49 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
         ['"sec.2"', 'dort'],
       ])
     })
+    it('pairs a citation’s annotation the part gives to the text with the citation that holds none of its kind', () => {
+      // (2610.37818v1-zh p8: "[24, 4]", two \citenum; hyperref's link round "4" takes in the closing bracket by its margin, so the
+      // part gives it to the text (the element owns one of its two glyphs, not more than half), and it was dropped. The
+      // citations of a member go by the order tier as its references do: hyperref names a citation's destination cite.<key>)
+      const cite = (text: string, x0: number, copy: string) => ({
+        kind: 'other',
+        cmd: 'citenum',
+        copy,
+        text,
+        style: { role: 'serif' as const, size: 10 },
+        ink: [[1, x0, 698, x0 + 5 * text.length, 707, 700]] as [number, number, number, number, number, number][],
+      })
+      const both = member({
+        els: [
+          ['3', cite('24', 150, 'a')],
+          ['5', cite('4', 165, 'b')],
+        ],
+      })
+      const rc = row([
+        { t: 'text', s: 'Wie in [' },
+        { t: 'el', id: '3' },
+        { t: 'text', s: ', ' },
+        { t: 'el', id: '5' },
+        { t: 'text', s: '] gezeigt.' },
+      ])
+      const first: Link = { box: [149, 697, 163, 708], to: { dest: '"cite.a"' }, owner: [0, '3'], text: '24,' }
+      const second: Link = { box: [164, 697, 172, 708], to: { dest: '"cite.b"' }, owner: [0, ''], text: '4]' }
+      // (as the part would state it were the element's glyph points more than half: the fate it must have)
+      const owned: LinkFate[] = []
+      const q = layPage(part(both, [first, { ...second, owner: [0, '5'] }]), rowsOf([rc]), rules, metrics(), {
+        linkFates: owned,
+      })
+      expect(owned[1]).not.toBe('unmatched')
+      const fates: LinkFate[] = []
+      const p = layPage(part(both, [first, second]), rowsOf([rc]), rules, metrics(), { linkFates: fates })
+      expect(fates).toEqual(owned)
+      expect(p.links.map(([b, to]) => [b, to])).toEqual(q.links.map(([b, to]) => [b, to]))
+      // (a citation's annotation over the text with no citation of the member's left without one of its kind: none, as before)
+      const alone = member({ els: [['3', cite('24', 150, 'a')]] })
+      const f2: LinkFate[] = []
+      layPage(part(alone, [first, second]), rowsOf([rc]), rules, metrics(), { linkFates: f2 })
+      expect(f2[1]).toBe('unmatched')
+    })
     it('pairs none where they are not as many (a destination no piece of its kind is left for)', () => {
       // (two such annotations, one reference: as today's assign, none of them, never a guess)
       const other: Link = { box: [250, 697, 258, 708], to: { dest: '"table.8"' }, owner: [0, ''], text: '8.' }
