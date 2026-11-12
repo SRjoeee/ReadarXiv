@@ -670,6 +670,13 @@ export function linkSaid(s: State, waits: boolean): { reconnecting: boolean; net
   return { reconnecting: !network && l.s === 'on' && !!l.lost, network }
 }
 
+/** the rows once another translator is named (cmd.translator, or a landing whose `translator` differs): a run that stopped
+ *  short, failed (whatever wait the translator before named) or complete with units lost, asked again, which asks only for
+ *  the units with no translation (rows.ts missingOf); any other rows as they are. The extension's reader before this one did
+ *  the same on a change of its services (its settings.ts followOf `retry`) */
+const askedAgain = (r: RowsRegion): RowsRegion =>
+  r.s === 'failed' || (r.s === 'complete' && r.stopped) ? { s: 'none', target: r.target } : r
+
 /** the input folded into its region */
 function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
   const s: State = { ...s0 }
@@ -715,6 +722,8 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
       for (const k of s.prefs.chosen) value[k] = (s.prefs.value as unknown as Record<string, unknown>)[k]
       s.prefs = { ...s.prefs, s: 'landed', value: value as unknown as Prefs, timer: null }
       if (s.rows.s === 'none') s.rows = { s: 'none', target: targetOf(s) }
+      // (another translator named: what stopped short is asked of it, as cmd.translator)
+      if (v.translator !== s0.prefs.value.translator) s.rows = askedAgain(s.rows)
       break
     }
     case 'prefs.refused':
@@ -930,7 +939,7 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
       s.held = x.on
       break
     case 'cmd.translator':
-      if (s.rows.s === 'failed') s.rows = { s: 'none', target: s.rows.target }
+      s.rows = askedAgain(s.rows)
       break
     case 'close':
       s.closed = true

@@ -827,6 +827,12 @@ its own toggle, below; until then the switch showed or hid it too.
   original's page where the new one's service fails or stops short with nothing translated. The line and the phase are an open's (Translating, §8). A hold
   for the language before (one the layer does not set) is lifted and the translated display shown again; a hold for the
   paper's own reason stays.
+- **Another service** (`provider` or `services` changed, here or elsewhere; most often the key the card sent the reader to
+  set, §8): a translation that stopped short, failed or ended with passages lost, is asked again of it at once, whatever wait
+  the service before named, and only for the passages with no translation (`settings.ts` `followOf` `retry`). The rebuilt
+  reader (`packages/reader`) reads the services as the preferences' `translator`, the chain's revision (`host/prefs.ts`): a
+  landing that names another one is the session's `cmd.translator` (`session/machine.ts` `askedAgain`). The website's
+  preferences name none (its rows are our server's), so nothing there asks again.
 
 **New**, a `pdfReader` group; `CONFIG_VERSION` 18 → 19, with a migration that adds it with its defaults:
 

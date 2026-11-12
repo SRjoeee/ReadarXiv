@@ -944,6 +944,35 @@ describe('the session: the rows', () => {
     f.feed({ i: 'cmd.retry' })
     expect([...resources(f.s).values()]).toContainEqual(expect.objectContaining({ slot: 'rows', target: 'zh-Hans' }))
   })
+  it("another translator asks again what stopped short (the extension's settings.ts followOf `retry`): a failed run before its wait, a run complete with units lost; told by cmd.translator or by a landing that names another translator", () => {
+    const failed = () => {
+      const m = engagedReady({ here: true })
+      m.feed({ i: 'rows.failed', t: m.live('rows'), why: { kind: 'unavailable', retryAfterMs: 60_000 } })
+      return m
+    }
+    const lost = () => {
+      const m = engagedReady({ here: true })
+      m.feed({ i: 'rows.end', t: m.live('rows'), stopped: { kind: 'unavailable' } })
+      return m
+    }
+    // (the translator changed: the old one's wait does not hold the new one)
+    for (const m of [failed(), lost()]) {
+      m.feed({ i: 'prefs.landed', value: { ...PREFS, translator: 'another' } })
+      expect(m.s.rows.s).toBe('arriving')
+    }
+    const told = lost()
+    told.feed({ i: 'cmd.translator' })
+    expect(told.s.rows.s).toBe('arriving')
+    // the same translator landing again, or a run with nothing lost: nothing asked
+    for (const m of [failed(), lost()]) {
+      m.feed({ i: 'prefs.landed', value: { ...PREFS } })
+      expect(m.s.rows.s).not.toBe('arriving')
+    }
+    const whole = engagedReady({ here: true })
+    whole.feed({ i: 'rows.end', t: whole.live('rows') })
+    whole.feed({ i: 'prefs.landed', value: { ...PREFS, translator: 'another' } }, { i: 'cmd.translator' })
+    expect(whole.s.rows).toMatchObject({ s: 'complete', stopped: null })
+  })
   it('a language switch lets the old rows and the link go, keeps the original, the code and the composed document', () => {
     const m = engagedReady()
     const keep = ['original', 'code', 'composed'].map(m.live)
