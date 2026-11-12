@@ -441,4 +441,16 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     taken: true,
     why: 'an element glued after another’s own stop: the stop out, then the space before it taken back (text.ts glueOf)',
   },
+  {
+    unit: 7,
+    raw: 'a &lt; b &amp; c &gt; d @ &#x5bb6; # 95<x id="1"/>准确率。',
+    taken: true,
+    why: 'a hex character reference is its character, no string of the tokens’ form (tags.ts tokensIn)',
+  },
+  {
+    unit: 7,
+    raw: 'a &lt; b &amp; c &gt; d @ 家 # 95<x id="1"/>准确率（&#120;1）。',
+    taken: false,
+    why: 'a reference spelling a string of the tokens’ form the text does not hold: the wire’s contract broken (tags.ts tokensIn)',
+  },
 ]

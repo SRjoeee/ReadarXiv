@@ -72,10 +72,15 @@ const elementTag = (as: ElementTag, n: number): string =>
 /** a string of the tokens' form standing as a token would: `x` and digits, with no ASCII letter, digit or underscore right
  *  before it (inside a longer word or number it is none: `max1`, `0x1F`) and no digit right after it (`x12` holds no `x1`) */
 export const TOKEN_FORM = /(?<![A-Za-z0-9_])x[0-9]+(?![0-9])/g
-/** each string of the tokens' form in a text, how often */
-const tokensIn = (s: string): Map<string, number> => {
+/** a text of the wire as the reading keeps it: its entities read (a character reference is one character), its invisible
+ *  code points out */
+const keptOf = (s: string): string => decode(s).replace(INVISIBLE, '')
+/** each string of the tokens' form outside the elements of a wire, the unit's as sent or a reply, how often: counted in its
+ *  text as the reading keeps it (`&#x42;` is "B", no `x42`; `&#120;1` is "x1"), each tag a break; one definition for both */
+const tokensIn = (wire: string): Map<string, number> => {
   const out = new Map<string, number>()
-  for (const m of s.matchAll(new RegExp(TOKEN_FORM.source, 'g'))) out.set(m[0], (out.get(m[0]) ?? 0) + 1)
+  const text = keptOf(wire.replace(new RegExp(TAG_RE.source, 'g'), ' '))
+  for (const m of text.matchAll(new RegExp(TOKEN_FORM.source, 'g'))) out.set(m[0], (out.get(m[0]) ?? 0) + 1)
   return out
 }
 const SOLID = /\S/
@@ -357,7 +362,7 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
       const slot = plan.slots[n - 1]
       if (slot?.t !== 'void' || seen.has(n)) return null
       // (an element written as a word holds its own token and nothing else: the wire's contract, as for a lost element)
-      if (m[10] !== undefined && m[10].trim() !== tokenOf(n)) return null
+      if (m[10] !== undefined && keptOf(m[10]).trim() !== tokenOf(n)) return null
       seen.add(n)
       toks.push({ t: 'void', out: slot.out })
       afterOwn = slot.own
@@ -385,10 +390,9 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
   // a reply that moved an element to another word and left its token behind as text, or that wrote a number of the text in
   // the tokens' form, shows a reader our wire's artefact, and is unread as one with an element lost is; a paper's own `x1`
   // reads as its text. Google's replies in lane stray-stop's fill: 1706.03762v7's Table 1 caption left `x1` behind,
-  // 2610.40576v1 wrote its `50` as `x50`)
-  const source = tokensIn(wireText)
-  for (const [token, n] of tokensIn(text.replace(new RegExp(TAG_RE.source, 'g'), ' ')))
-    if (n > (source.get(token) ?? 0)) return null
+  // 2610.40576v1 wrote its `50` as `x50`; counted in the text as read, the reply's and the wire's alike: tokensIn)
+  const source = tokensIn(plan.wire)
+  for (const [token, n] of tokensIn(raw)) if (n > (source.get(token) ?? 0)) return null
   if (
     !toks.some((t) => t.t === 'text' && SAYS.test(decode(t.s).split(SENTINEL).join(''))) &&
     LETTER.test(decode(wireText))
