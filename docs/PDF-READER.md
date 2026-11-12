@@ -1360,7 +1360,14 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   High), so a wave of 28 slices in flight held each read of the original the composed document makes, one after another,
   to a share of the line in 29. v0's checks are unchanged: they find the slices loaded or loading, and a run the wave did
   not foresee (a bold word in a paragraph, a character only the original's text holds) asks its own as before. A slice is
-  asked once.
+  asked once. The reader package's served faces (`packages/reader` served.ts `addIn`) add the slices one ask needs to the
+  document together, in one stretch once every one of them is in, and a slice counts as loaded for the typesetter's measure
+  only from then on: Chromium re-lays every text node laid out at each change of the document's fonts ("Fonts changed"), and
+  a slice added as it came made 41 and 48 such whole-document relayouts a scroll of 2610.20808v1 and 2610.40645v1, today's
+  reader 22 and 25 (it adds a wave's faces in one task; lane reader-perf, 2026-11-12, `verification/reader-perf.md` §3f). An
+  ask is one page's (the composer asks each page's faces apart, the page in the middle first), so a page still never waits for
+  another page's slices, and none is measured or drawn with a fallback face. A slice that comes in for an ask whose page went
+  meanwhile is added all the same, ready for the next ask.
   Before any part, the first page's CJK slices are asked early (`firstPageUnits`, `warmEarly`). On a first open the rows come
   while the box runs and its head and parts at the end, so the page's wave began only with part 1 and its slices were the
   page's last wait: on staging (2e627695, 2026-10-30) the door made page 1 ready 40 to 110 ms after its last slice came in all
