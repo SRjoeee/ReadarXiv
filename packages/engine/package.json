@@ -7,7 +7,8 @@
   "description": "source, marks, ink, align, locate, wrap, bundle and prepare: a paper in, its bundle out",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./today": "./src/today.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

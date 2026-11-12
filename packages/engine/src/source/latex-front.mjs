@@ -7,7 +7,7 @@
 // are Uint8Arrays.
 
 // ---------------------------------------------------------------- files and bytes
-import { isMemoryError } from '@readarxiv/engine'
+import { isMemoryError } from '../memory.mjs'
 import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, loads, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from './arg-roles.mjs'
 import { symbolText, TEXT_SYMBOLS } from './text-symbols.mjs'
 import { DECLARATION_WORDS, selectsArgument } from './tex-kernel.mjs'
