@@ -6,6 +6,7 @@
 // from the different text; still there, it is judged as any; with no text of today's to lay, not comparable, its reason said.
 import { readingOf } from '../../../packages/typeset/tests/replay/l1.ts'
 import { doorSentences } from '../../../packages/typeset/tests/replay/rows.ts'
+import { switchesOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
 
 /** TeX's special characters a backslash escapes, each printing itself */
 const ESCAPED = /^\\([#$%&_{}])$/
@@ -25,7 +26,7 @@ export function flatOf(content) {
       else if (p.t === 'el') out.push({ t: 'ph', src: p.src, id: p.id })
       else if (p.t === 'unit') out.push({ t: 'nested', id: p.id })
       else {
-        if (p.open !== undefined) out.push({ t: 'open', src: p.open })
+        if (p.open !== undefined) out.push({ t: 'open', src: p.open, ...(p.style ? { style: p.style } : {}) })
         walk(p.content)
         if (p.close !== undefined) out.push({ t: 'close', src: p.close })
       }
@@ -39,6 +40,11 @@ export function flatOf(content) {
  *  door row cites it by, with its source); its groups' opens and closes none (l1.ts atomsOf's) */
 const atomsOf = (today) =>
   today.pieces.flatMap((p, k) => (p.kind === 'text' ? (p.s ?? '').split('').map((c) => ({ c })) : p.kind === 'ph' ? [{ k, src: p.src ?? '' }] : []))
+/** today's placeholders that are a face switch first in a bare group (`{\\em …}`), by piece index: the face each sets. v2 states
+ *  such a switch as its group's face, no element (instrument.mjs switchesOf, PDF-READER §18.56); today's unit kept it a
+ *  placeholder that sets nothing where it stands. The one reading of both: switchesOf over today's pieces */
+export const switchFacesOf = (today) =>
+  new Map([...switchesOf(today.pieces.map((p) => ({ t: p.kind, src: p.src, s: p.s }))).values()].map((x) => [x.at, x.face]))
 
 /**
  * v2's unit (its flat pieces) read against today's unit of the same text (its atoms), in order, all of both read; groups read
@@ -49,14 +55,25 @@ const atomsOf = (today) =>
  * characters v2 holds for it (`text`); the elements read by their characters with their runs of today's atoms; each of today's
  * atoms' offset in v2's projection (each element one character, a group's edges none) and its length; null where the two differ
  */
-export function readAlike(flat, atoms) {
+export function readAlike(flat, atoms, faces = new Map()) {
   const map = new Map()
   const runs = []
   const at = []
   let j = 0,
     o = 0
   for (const p of flat) {
-    if (p.t === 'open' || p.t === 'close') continue
+    if (p.t === 'close') continue
+    if (p.t === 'open') {
+      // (a bare group a face switch opens: v2 states the switch as the group's face, today as a placeholder first in the group,
+      // which prints nothing; both state the same letters in the same face, so today's switch reads as nothing, where its face
+      // is the group's (`faces`: switchFacesOf). A switch of another face, or a group v2 states with no face, reads as before)
+      const a = atoms[j]
+      if (p.style && a && 'k' in a && faces.get(a.k) === p.style) {
+        map.set(a.k, { text: '' })
+        at[j++] = o
+      }
+      continue
+    }
     if (p.t === 'text') {
       for (let i = 0; i < p.s.length; ) {
         const a = atoms[j]
@@ -116,7 +133,7 @@ export function readAlike(flat, atoms) {
 export function todaySaid(row, today, unit) {
   const flat = flatOf(unit.content)
   const atoms = atomsOf(today)
-  const alike = readAlike(flat, atoms)
+  const alike = readAlike(flat, atoms, switchFacesOf(today))
   if (!alike) return { why: "v2's unit is cut otherwise than today's: their texts do not read alike" }
   // (the translation as today's atoms: the row's strings and the texts it cites, character by character, today's placeholders it
   // cites; a group's edges none)

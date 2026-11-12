@@ -40,6 +40,21 @@ describe("today's door row said in v2's unit", () => {
     const row = [7, ['Wir machen R', 1, 'D. Es geht.'], 'whole', 'ms', { src: [0, 11], tr: [0, 16] }]
     expect(todaySaid(row, t, unit)).toEqual({ content: [{ t: 'text', s: 'Wir machen R&D. Es geht.' }], sentences: { src: [0, 11], tr: [0, 16] } })
   })
+  it("a bare group a face switch opens reads alike: today's switch a placeholder, v2's the group's face (the same letters, the same face)", () => {
+    // (today: "see " {\em " Book"}, the switch a placeholder that sets nothing where it stands; v2 since §18.56: "see " {" Book"},
+    // the group's style italic, no element. Today's row cites the switch: "siehe " \em " Buch")
+    const t = today([{ kind: 'text', s: 'see ' }, { kind: 'open', src: '{' }, { kind: 'ph', src: '\\em' }, { kind: 'text', s: ' Book' }, { kind: 'close', src: '}' }])
+    const unit = { content: [text('see '), { t: 'span' as const, id: '1', style: 'italic', open: '{', close: '}', content: [text(' Book')] }] }
+    expect(todaySaid([7, ['siehe ', 2, ' Buch'], 'whole', 'ms'], t, unit)).toEqual({ content: [{ t: 'text', s: 'siehe  Buch' }] })
+  })
+  it("a switch of another face than v2's group's, or a group v2 states with no face, is still cut otherwise", () => {
+    // (today's switch sets bold where v2's group is italic; and v2's bare group with no face of its own)
+    const t = (sw: string) => today([{ kind: 'open', src: '{' }, { kind: 'ph', src: sw }, { kind: 'text', s: ' Book' }, { kind: 'close', src: '}' }])
+    const group = (style?: string) => ({ content: [{ t: 'span' as const, id: '0', ...(style ? { style } : {}), open: '{', close: '}', content: [text(' Book')] }] })
+    expect(todaySaid([7, [1, ' Buch'], 'whole', 'ms'], t('\\bf'), group('italic')).why).toMatch(/cut otherwise/)
+    expect(todaySaid([7, [1, ' Buch'], 'whole', 'ms'], t('\\em'), group()).why).toMatch(/cut otherwise/)
+    expect(todaySaid([7, [1, ' Buch'], 'whole', 'ms'], t('\\em'), group('italic'))).toEqual({ content: [{ t: 'text', s: ' Buch' }] })
+  })
   it('not comparable where v2 cuts the unit otherwise, or the row cites a placeholder no piece of v2\'s is', () => {
     // (v2's unit joins a name today kept apart: "SIG-Im2col Unit" against today's "Unit")
     expect(todaySaid([7, ['Einheit'], 'whole', 'ms'], today([{ kind: 'text', s: 'Unit' }]), { content: [text('SIG-Im2col Unit')] }).why).toMatch(/cut otherwise/)
