@@ -22,6 +22,7 @@ import { frameOf, labelsPass } from './fidelity.mjs'
 import { bundleCheck, bundleOf, pdfOf, whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
 import { coverageOf, FLAGS, freshOf, freshResolve, judgedChanged, linksPass, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, stylePass, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
+import { rulingsOf, rulingsPass } from './rulings.mjs'
 
 /** why a unit is laid with a fresh row (fresh.mjs freshNeeds' causes), as the sheet says it (lane parity-fresh) */
 const FRESH_CAUSE = {
@@ -258,6 +259,13 @@ for (const [pair, raw] of drawn) {
     stylePass(drawnAgain, recount)
     labelsPass(drawnAgain, recount)
     scriptsPass(drawnAgain, recount)
+    // (the owner's rulings of 2026-11-12 read on the re-lay's drawing, rulings.mjs: a difference judged there carries the ruling that
+    // covers it to its page, freshResolve; the re-lay's own lay with no CJK line squeezed, `relay.unsqueezed`)
+    const relayRec = (pg) => {
+      const rec = raw.pages.find((r) => r.page === pg)
+      return rec && v2.relay.pages[pg] && rec.relay && !rec.relay.error ? { ...rec, v2: { ...rec.v2, ...rec.relay } } : rec
+    }
+    rulingsPass(drawnAgain, { recOf: relayRec, v2: relayV2, laid: relayV2.pages, unsqueezed: v2.relay.unsqueezed ?? null }, recount)
     for (const p of mine) freshResolve(p, again.find((q) => q?.page === p.page) ?? null, { incomparable, unsentenced })
     relayTimes.push({ pair, lay: v2.relay.ms ?? null, drawing: raw.relayMs ?? null, pages: Object.keys(v2.relay.pages).length })
   }
@@ -320,6 +328,13 @@ for (const [pair, raw] of drawn) {
       p.fresh = { units: at?.units ?? [], causes: at?.causes ?? {}, said, ...(ties.length ? { ties } : {}), tint: rec ? tintOf(rec, ords) : [] }
     }
   }
+  // (the owner's rulings of 2026-11-12, rulings.mjs: each difference worse by its measure that a ruling's condition holds for is
+  // covered, listed apart; the pair's lay with no CJK line squeezed, `unsqueezed`, for the ruling L2)
+  rulingsPass(
+    mine.filter((p) => !p.error),
+    { recOf: (pg) => raw.pages.find((r) => r.page === pg), v2, laid: v2.pages, unsqueezed: v2.unsqueezed ?? null },
+    recount,
+  )
   pages.push(...mine)
 }
 const incomplete = coverageOf(run, { asked: asked.length ? asked : null, notMeasured, drawn, pages })
@@ -328,7 +343,8 @@ const verdict = verdictOf(incomplete, pages)
 // ---------------------------------------------------------------- the summary, the file and the sheet
 const isFirst = (p) => (p.pair === '1706.03762v7-zh' && p.page === 10) || (p.pair === '2303.11366v4-zh' && p.page === 1)
 const order = [...pages].sort(
-  (a, b) => Number(isFirst(b)) - Number(isFirst(a)) || Number(b.worse > 0) - Number(a.worse > 0) || b.score - a.score || a.pair.localeCompare(b.pair) || a.page - b.page,
+  (a, b) =>
+    Number(isFirst(b)) - Number(isFirst(a)) || Number(b.worse > 0) - Number(a.worse > 0) || Number(b.covered > 0) - Number(a.covered > 0) || b.score - a.score || a.pair.localeCompare(b.pair) || a.page - b.page,
 )
 const { summary, worst } = summaryOf(pages)
 // (the fresh rule's second look over the run: the differences it set aside, by what each came to (verdict.mjs freshResolve), the
@@ -339,8 +355,10 @@ const relaySummary = relayTimes.length
   ? {
       text: setAside.filter((x) => x.d.nearer === 'text').length,
       judged: setAside.filter((x) => x.d.relaid).length,
-      worse: setAside.filter((x) => x.d.relaid && x.d.worse).length,
-      worsePages: [...new Set(setAside.filter((x) => x.d.relaid && x.d.worse).map((x) => `${x.p.pair} p${x.p.page}`))],
+      // (worse by its measure: those an owner's ruling covers among them, `covered`)
+      worse: setAside.filter((x) => x.d.relaid && (x.d.worse || x.d.covered)).length,
+      worsePages: [...new Set(setAside.filter((x) => x.d.relaid && (x.d.worse || x.d.covered)).map((x) => `${x.p.pair} p${x.p.page}`))],
+      covered: setAside.filter((x) => x.d.relaid && x.d.covered).length,
       incomparable: setAside.filter((x) => x.d.nearer === 'incomparable').length,
       why: setAside
         .filter((x) => x.d.nearer === 'incomparable')
@@ -364,7 +382,13 @@ const result = {
   missing,
   incomplete,
   pagesDrawn: pages.length,
+  // (worse than today outside the owner's rulings: the gate's count; and the pages worse by a measure that his rulings cover whole,
+  // each ruling with its pages, `rulings`)
   pagesWorse: verdict.worse,
+  pagesCovered: verdict.covered,
+  rulings: rulingsOf(pages),
+  // (what the earlier corrections set apart, never worse: each kind's differences and pages)
+  apart: apartOf(pages),
   // (the pages where both sides depart from the original alike, a defect the verdict of v2 against today cannot see: blind.mjs)
   pagesBoth: pages.filter((p) => p.both?.length).length,
   // (the units no row of the pair's fixed rows serves, not measured: each page with them and their count, the coordinator's
@@ -412,6 +436,10 @@ const result = {
 writeFileSync(join(OUT, 'parity.json'), `${JSON.stringify(result)}\n`)
 writeFileSync(join(OUT, 'index.html'), sheet(result))
 console.log(`parity: ${pages.length} pages of ${pairs.length} pairs; ${result.pagesWorse} worse than today; missing ${missing.map((m) => m.pair).join(', ') || 'none'}`)
+console.log(`the owner's rulings of ${result.rulings.date}: ${result.pagesCovered} more pages worse by a measure and covered by them whole; by ruling:`)
+for (const r of result.rulings.rulings)
+  console.log(`  ${r.id.padEnd(3)} ${!r.condition ? 'no condition the gate can read (its pages stay worse)' : `${r.pages.length} pages, ${r.differences} differences${r.pages.length ? `: ${r.pages.join('; ')}` : ''}`}`)
+console.log(`apart (the earlier corrections and rulings, never worse): ${Object.entries(result.apart).map(([k, x]) => `${k} ${x.differences} on ${x.pages} pages`).join('; ')}`)
 for (const x of notes) console.log(x)
 if (result.fresh) {
   const f = result.fresh
@@ -434,13 +462,31 @@ for (const w of worst) console.log(`  ${w.pair} p${w.page} (${w.score}): ${Objec
 process.exitCode = verdict.pass ? 0 : 1
 
 
+/** what the earlier corrections and rulings set apart, never worse, by kind (a difference's `nearer`): its differences and pages */
+function apartOf(pages) {
+  const KINDS = {
+    ruling: 'a ruling of before 2026-11-12 (the owner\'s or the coordinator\'s, named on the difference)',
+    text: 'follows from the different text (the fresh rule\'s second look)',
+    incomparable: 'not comparable on the fresh rule\'s second look (its reason named)',
+    fresh: 'unjudged: a fresh row',
+    unmeasured: 'unmeasured: no row serves the unit',
+    unexercised: 'a group v2 is handed decided: not exercised',
+  }
+  return Object.fromEntries(
+    Object.entries(KINDS).map(([k, says]) => {
+      const on = pages.filter((p) => p.diffs?.some((d) => d.nearer === k))
+      return [k, { says, differences: on.reduce((n, p) => n + p.diffs.filter((d) => d.nearer === k).length, 0), pages: on.length }]
+    }),
+  )
+}
+
 function esc(s) {
   return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 }
 function sheet(r) {
   const rows = FLAGS.map((f) => {
     const x = r.summary[f]
-    return `<tr><th>${f}</th><td class="bad">${x.worsePages}</td><td>${x.worseUnits}</td><td class="good">${x.nearerPages}</td><td>${x.v2FaultPages}</td><td>${x.todayFaultPages}</td><td>${x.bothPages ?? 0}</td><td class="says">${esc(SAYS[f])}</td></tr>`
+    return `<tr><th>${f}</th><td class="bad">${x.worsePages}</td><td>${x.worseUnits}</td><td class="cov">${x.coveredPages}</td><td class="good">${x.nearerPages}</td><td>${x.v2FaultPages}</td><td>${x.todayFaultPages}</td><td>${x.bothPages ?? 0}</td><td class="says">${esc(SAYS[f])}</td></tr>`
   }).join('')
   const miss = r.missing.map((m) => `<article class="card missing${m.asked ? ' flagged' : ''}"><h2>${esc(m.pair)}</h2><p>Not drawn: ${esc(m.why)}${m.asked ? ' (asked of this run: the gate fails)' : ''}.</p></article>`).join('')
   const inc = r.incomplete.length
@@ -456,6 +502,22 @@ function sheet(r) {
     : fr
     ? `<article class="card"><h2>Drawn with a fresh translation: ${fr.units} units on ${fr.pages.length} pages</h2><p>Units no stored row of the pair's serves, or whose stored row answered another unit than v2's, laid with the row a reader gets (the translate package's chain, Microsoft's keyless adapter, from lab-data's cache), tinted on v2's pane. Their line count, size, spacing and sentence pairing follow from the length of the text drawn: each such difference is judged again on v2 laid with today's own text in v2's unit${fr.relay ? ` (${fr.relay.pages} pages laid and drawn again)` : ''}: gone there, it follows from the different text (${fr.relay?.text ?? 0}, listed with the two texts' lengths); still there, it is judged as any (${fr.relay?.judged ?? 0}, ${fr.relay?.worse ?? 0} worse); where today's text cannot be laid in v2's unit, not comparable (${fr.relay?.incomparable ?? 0}, each with its reason)${fr.unjudged ? `; ${fr.unjudged} still unjudged` : ''}. Every other measure judges them. By kind: ${esc(Object.entries(fr.kinds).map(([k, n]) => `${k} ${n}`).join(', '))}. By cause: ${esc(Object.entries(fr.causes).map(([k, n]) => `${FRESH_CAUSE[k] ?? k} ${n}`).join(', '))}.</p><ul>${fr.pages.map((u) => `<li><a href="#${esc(`${u.pair}-p${u.page}`)}">${esc(u.pair)} p${u.page}</a>: ${u.units.length} (${esc(u.units.join(', '))})${u.causes.unit ? `; ${u.causes.unit} whose stored row answered another unit` : ''}</li>`).join('')}</ul></article><article class="card${fr.never.length ? ' flagged' : ''}"><h2>Sent by v2, never by today: ${fr.never.length} units</h2><p>Units v2 sends a translator that today had no unit of (nothing of today's to compare): each is v2's own decision to translate.</p><ul>${fr.never.map((x) => `<li><a href="#${esc(`${x.pair}-p${x.page}`)}">${esc(x.pair)} p${x.page}</a>: ${esc(x.unit)}${x.drawn ? '' : ' (not drawn: refused or not in the cache)'}</li>`).join('')}</ul></article>`
     : ''
+  // (the owner's rulings of 2026-11-12, rulings.mjs: each with his words, its condition and the pages it covers; the classes he
+  // accepted that no condition tells apart, and those with no page left; then what the earlier corrections set apart)
+  const R = r.rulings
+  const rulingCard = R
+    ? `<article class="card" id="rulings"><h2>The owner's rulings of ${esc(R.date)}: ${r.pagesCovered} pages worse by a measure and covered by them whole</h2><p>He looked at one example a class (${esc(R.seen)}) and gave his verdict; each ruling is the class stated by a condition the gate reads on the page, so that a page of the same kind is judged the same way and one that only looks like it stays worse. A difference a ruling covers keeps its measure's reading and is listed on its page as covered, never as worse. His general words: <q lang="zh">${esc(R.general)}</q></p><table class="diffs"><thead><tr><th>ruling</th><th>class</th><th>his verdict and words</th><th>the condition the gate reads</th><th>the example he saw</th><th>pages covered</th></tr></thead><tbody>${R.rulings
+        .map(
+          (x) =>
+            `<tr id="ruling-${esc(x.id)}" class="${x.condition ? 'covered' : 'worse'}"><td><b>${esc(x.id)}</b></td><td>${esc(x.title)}</td><td lang="zh">${esc(x.verdict)}${x.words ? `<br><q>${esc(x.words)}</q>` : ''}</td><td>${x.condition ? esc(x.condition) : `<b>no condition the gate can read: its pages stay worse.</b> ${esc(x.unstated ?? '')}`}</td><td>${esc(x.example)}</td><td>${x.pages.length ? `${x.differences} differences on ${x.pages.length} pages: ${x.pages.map((pg) => `<a href="#${esc(pg.replace(/ \(.*$/, '').replace(' p', '-p'))}">${esc(pg)}</a>`).join(', ')}` : 'none'}</td></tr>`,
+        )
+        .join('')}</tbody></table>${R.noPageLeft?.length ? `<p class="h">Accepted, with no page left on the sheets the rulings were read against (no entry): ${R.noPageLeft.map((x) => `${esc(x.id)} (${esc(x.title)}: ${esc(x.why)})`).join('; ')}.</p>` : ''}</article>`
+    : ''
+  const apartCard = r.apart
+    ? `<article class="card"><h2>Apart: what the earlier corrections and rulings set aside, never worse</h2><ul>${Object.entries(r.apart)
+        .map(([, x]) => `<li>${esc(x.says)}: ${x.differences} differences on ${x.pages} pages</li>`)
+        .join('')}</ul></article>`
+    : ''
   const said = r.notes?.length ? `<article class="card flagged"><h2>Not applied</h2><ul>${r.notes.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></article>` : ''
   const side = (x) => `${x.value === null || x.value === undefined ? '' : `${esc(x.value)} `}${x.off === null || x.off === undefined ? '' : `<span class="off">off ${esc(x.off)}</span>`}`
   const cards = r.pages
@@ -463,7 +525,7 @@ function sheet(r) {
       const id = `${p.pair}-p${p.page}`
       const diffs = p.diffs.length
         ? `<table class="diffs"><thead><tr><th>measure</th><th>unit</th><th>what</th><th>original</th><th>today</th><th>v2</th><th>nearer</th></tr></thead><tbody>${p.diffs
-            .map((d) => `<tr class="${d.worse ? 'worse' : d.nearer === 'fresh' || d.nearer === 'text' || d.nearer === 'incomparable' ? 'fresh' : 'better'}"><td><b>${d.flag}</b></td><td>${esc(d.unit ?? 'page')}</td><td>${esc(d.what)}</td><td>${esc(d.original)}</td><td>${side(d.today)}</td><td>${side(d.v2)}</td><td class="n">${d.nearer === 'v2' ? 'v2' : d.nearer === 'unexercised' ? 'not exercised' : d.nearer === 'unmeasured' ? 'unmeasured' : d.nearer === 'fresh' ? 'fresh (unjudged)' : d.nearer === 'text' ? `follows from the different text${d.chars ? ` (today ${d.chars.today} characters, v2 ${d.chars.v2})` : ''}` : d.nearer === 'incomparable' ? `not comparable: ${esc(d.why ?? '')}` : d.nearer === 'ruling' ? `<span title="${esc(d.ruling ?? '')}">the ruling's</span>` : 'today'}</td></tr>`)
+            .map((d) => `<tr class="${d.worse ? 'worse' : d.covered ? 'covered' : d.nearer === 'fresh' || d.nearer === 'text' || d.nearer === 'incomparable' ? 'fresh' : 'better'}"><td><b>${d.flag}</b></td><td>${esc(d.unit ?? 'page')}</td><td>${esc(d.what)}</td><td>${esc(d.original)}</td><td>${side(d.today)}</td><td>${side(d.v2)}</td><td class="n">${d.covered ? `today by the measure; <a href="#ruling-${esc(d.covered)}">covered by the owner's ruling ${esc(d.covered)}</a>` : d.nearer === 'v2' ? 'v2' : d.nearer === 'unexercised' ? 'not exercised' : d.nearer === 'unmeasured' ? 'unmeasured' : d.nearer === 'fresh' ? 'fresh (unjudged)' : d.nearer === 'text' ? `follows from the different text${d.chars ? ` (today ${d.chars.today} characters, v2 ${d.chars.v2})` : ''}` : d.nearer === 'incomparable' ? `not comparable: ${esc(d.why ?? '')}` : d.nearer === 'ruling' ? `<span title="${esc(d.ruling ?? '')}">the ruling's</span>` : 'today'}</td></tr>`)
             .join('')}</tbody></table>`
         : '<p class="ok">no difference past a noise floor</p>'
       const shared = p.both?.length
@@ -497,7 +559,9 @@ function sheet(r) {
         : p.fresh
         ? `<p class="h">Drawn with a fresh translation (tinted; size and lines against the original's, not judged against today's):</p><ul class="freshlist">${p.fresh.said.filter((x) => x.cause !== 'today-kept').map(freshLi).join('')}${(p.fresh.ties ?? []).map(tieLi).join('')}</ul>${ruleKept.length ? `<p class="h">Kept by today's name/code rule, sent by v2: ${ruleKept.length}</p><ul class="freshlist">${ruleKept.map(freshLi).join('')}</ul>` : ''}`
         : ''
-      const verdict = p.error ? '' : p.worse ? `<span class="v bad">worse than today: ${p.worse}</span>` : '<span class="v good">not worse than today</span>'
+      const rulingIds = [...new Set(p.diffs.filter((d) => d.covered).map((d) => d.covered))]
+      const covers = rulingIds.length ? `; worse by a measure and covered by the owner's ruling${rulingIds.length > 1 ? 's' : ''} ${rulingIds.join(', ')}: ${p.covered}` : ''
+      const verdict = p.error ? '' : p.worse ? `<span class="v bad">worse than today: ${p.worse}${covers}</span>` : p.covered ? `<span class="v cov">covered by the owner's ruling${rulingIds.length > 1 ? 's' : ''} ${rulingIds.join(', ')}: ${p.covered} worse by a measure</span>` : '<span class="v good">not worse than today</span>'
       return `<article class="card${p.worse ? ' flagged' : ''}" id="${esc(id)}"><h2>${esc(p.pair)} · page ${p.page} ${verdict}</h2>${nums}${freshList}${diffs}${shared}${fl ? `<div class="faults"><p class="h">Faults against the bounds (each side's, shared ones no verdict):</p>${fl}</div>` : ''}<div class="panes">${img('a', 'original')}${img('t', 'today')}${img('v', 'v2')}<figure class="diff"><figcaption>v2 against today (red v2's ink alone, blue today's)</figcaption><img loading="lazy" src="img/${id}-d.webp" alt="${esc(`difference, ${p.pair} page ${p.page}`)}"></figure></div></article>`
     })
     .join('\n')
@@ -508,9 +572,9 @@ function sheet(r) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Display parity sheet</title>
 <style>
-:root { --bg: #f6f6f4; --card: #fff; --ink: #1b1b1b; --muted: #666; --line: #ddd; --bad: #c0392b; --good: #2e7d32; --today: #2e6db4; --badbg: #fbeaea; --goodbg: #eaf5ea; --bothbg: #fdf3e1; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #161616; --card: #202020; --ink: #eee; --muted: #aaa; --line: #3a3a3a; --badbg: #3a2020; --goodbg: #1f331f; --bothbg: #3a3020; } }
-:root[data-theme="dark"] { --bg: #161616; --card: #202020; --ink: #eee; --muted: #aaa; --line: #3a3a3a; --badbg: #3a2020; --goodbg: #1f331f; --bothbg: #3a3020; }
+:root { --bg: #f6f6f4; --card: #fff; --ink: #1b1b1b; --muted: #666; --line: #ddd; --bad: #c0392b; --good: #2e7d32; --today: #2e6db4; --badbg: #fbeaea; --goodbg: #eaf5ea; --bothbg: #fdf3e1; --cov: #6a4c93; --covbg: #f1ecf7; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #161616; --card: #202020; --ink: #eee; --muted: #aaa; --line: #3a3a3a; --badbg: #3a2020; --goodbg: #1f331f; --bothbg: #3a3020; --cov: #c3a6e8; --covbg: #2c2438; } }
+:root[data-theme="dark"] { --bg: #161616; --card: #202020; --ink: #eee; --muted: #aaa; --line: #3a3a3a; --badbg: #3a2020; --goodbg: #1f331f; --bothbg: #3a3020; --cov: #c3a6e8; --covbg: #2c2438; }
 body { margin: 0; padding: 16px; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, sans-serif; }
 h1 { font-size: 20px; margin: 0 0 4px; }
 table { border-collapse: collapse; background: var(--card); }
@@ -525,7 +589,8 @@ td.bad, .v.bad { color: var(--bad); font-weight: 600; } td.good, .v.good { color
 .nums, .ok, .h { color: var(--muted); margin: 0 0 6px; font-size: 13px; }
 .err { color: var(--bad); }
 .diffs { font-size: 13px; margin: 6px 0; width: 100%; }
-.diffs tr.worse { background: var(--badbg); } .diffs tr.better { background: var(--goodbg); } .diffs tr.both { background: var(--bothbg); }
+.diffs tr.worse { background: var(--badbg); } .diffs tr.better { background: var(--goodbg); } .diffs tr.both { background: var(--bothbg); } .diffs tr.covered { background: var(--covbg); }
+td.cov, .v.cov { color: var(--cov); }
 .diffs td.n { font-weight: 600; } .diffs tr.worse td.n { color: var(--bad); } .diffs tr.better td.n { color: var(--good); }
 .off { color: var(--muted); }
 .fault summary { cursor: pointer; font-size: 13px; }
@@ -541,9 +606,9 @@ td.bad, .v.bad { color: var(--bad); font-weight: 600; } td.good, .v.good { color
 </head>
 <body>
 <h1>Display ≥ today: v2 against today's output, judged against arXiv's page</h1>
-<p>${r.pagesDrawn} pages of ${r.pairs.length} pairs drawn offline${r.run?.toggles === 'on' ? ', every switch of "What to translate" on (figure and table text, headers and footers, references, the author block) on both sides' : ', under the default toggles'}, with the same rows on both sides (today: the door over the release's bundle; v2: the reader drawing the entry's Page). A difference between the two passes only where v2 is nearer the original; <b>${r.pagesWorse} pages are worse than today's</b>${r.incomplete.length ? `, and the run is not judged whole (${r.incomplete.length})` : ''}: the gate ${r.pass ? 'passes' : 'fails'}. ${r.fresh ? `${r.fresh.units} units are drawn with a fresh translation where no stored row serves v2's unit (tinted, listed below). ` : ''}${(r.unmeasured?.units ?? 0) ? `${r.unmeasured.units} units on ${r.unmeasured.pages.length} pages are unmeasured: ${r.fresh ? 'neither a stored row nor a fresh one serves them' : "no row of the pair's serves them"} (listed below). ` : ''}On ${r.pagesBoth} pages both sides depart from the original alike (scripts drawn flat, a unit the toggles keep drawn translated): listed apart on each page, no verdict. Each difference below shows the original's value, both sides' and their distance from it (“off”), and which is nearer. Measures, noise floors and bounds: lab/typeset/parity/README.md.</p>
-<table class="summary"><thead><tr><th>measure</th><th>pages worse</th><th>differences worse</th><th>pages v2 nearer</th><th>v2 faults (pages)</th><th>today faults (pages)</th><th>both depart (pages)</th><th>distance from the original</th></tr></thead><tbody>${rows}</tbody></table>
-${inc}${said}${freshCard}${unmeasured}
+<p>${r.pagesDrawn} pages of ${r.pairs.length} pairs drawn offline${r.run?.toggles === 'on' ? ', every switch of "What to translate" on (figure and table text, headers and footers, references, the author block) on both sides' : ', under the default toggles'}, with the same rows on both sides (today: the door over the release's bundle; v2: the reader drawing the entry's Page). A difference between the two passes only where v2 is nearer the original, or where the owner's rulings cover it; <b>${r.pagesWorse} pages are worse than today's</b> outside his rulings, ${r.pagesCovered ?? 0} more worse by a measure and covered by them (<a href="#rulings">below</a>)${r.incomplete.length ? `, and the run is not judged whole (${r.incomplete.length})` : ''}: the gate ${r.pass ? 'passes' : 'fails'}. ${r.fresh ? `${r.fresh.units} units are drawn with a fresh translation where no stored row serves v2's unit (tinted, listed below). ` : ''}${(r.unmeasured?.units ?? 0) ? `${r.unmeasured.units} units on ${r.unmeasured.pages.length} pages are unmeasured: ${r.fresh ? 'neither a stored row nor a fresh one serves them' : "no row of the pair's serves them"} (listed below). ` : ''}On ${r.pagesBoth} pages both sides depart from the original alike (scripts drawn flat, a unit the toggles keep drawn translated): listed apart on each page, no verdict. Each difference below shows the original's value, both sides' and their distance from it (“off”), and which is nearer. Measures, noise floors and bounds: lab/typeset/parity/README.md.</p>
+<table class="summary"><thead><tr><th>measure</th><th>pages worse</th><th>differences worse</th><th>pages covered by a ruling</th><th>pages v2 nearer</th><th>v2 faults (pages)</th><th>today faults (pages)</th><th>both depart (pages)</th><th>distance from the original</th></tr></thead><tbody>${rows}</tbody></table>
+${inc}${rulingCard}${apartCard}${said}${freshCard}${unmeasured}
 ${miss}
 ${cards}
 </body>

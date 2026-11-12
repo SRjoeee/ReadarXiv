@@ -8,7 +8,8 @@ never from the translator. **The verdict is per page: v2 is never worse than tod
 arXiv's page itself (the original's anchoring, alignment, separation, size, style, spacing, room, ink and links), taken for
 today's side and for v2's; where the two differ by more than the measure's noise floor, the difference passes only when v2
 is the nearer. A unit today shows translated that v2 leaves English is a translation missing and fails whatever its
-nearness.
+nearness. A difference worse by its measure that one of the owner's rulings of 2026-11-12 covers (a class he accepted, stated
+by a condition the gate reads on the page: below, "The owner's rulings of 2026-11-12") is listed apart, never as worse.
 
 It exists because the maintainer found on staging what the numeric gates never showed (a lighter text weight, a title
 anchored at its last line, centred lines set left, bold and italic spreading, an over-stretched line, missing links, a
@@ -31,7 +32,7 @@ default run judges the defaults (references and the author block the original's)
 laid under, and the drawing refuses one laid under others.
 
 Defaults: the sheet and `parity.json` in `$AXT_LAB_DATA/refactor-2026-11/parity/`, the work files in its `work/`. Exit 1
-when a page is worse than today's, or when the run is not judged whole: the gate passes only over every page the run asked
+when a page is worse than today's outside the owner's rulings, or when the run is not judged whole: the gate passes only over every page the run asked
 (see "The run judged whole"). The three steps can be run alone (heavy ones through `heavy-slot.sh`):
 
 | Step | Command | What it does |
@@ -323,6 +324,43 @@ text's share leaves the element's ink uncounted (`fidelity.mjs` originalOf's `ex
 pair's serves, left the original's (its stretch now an element, today's row having translated it: `noRow`), is unmeasured in
 `figures` as in `shown`: a count fewer by no more than the texts the rulings keep and those is "unmeasured", never worse (the
 measure's `unmeasured` count).
+
+## The owner's rulings of 2026-11-12
+
+On 2026-11-12 the owner looked at one example of each class of difference the gate still read as worse (lab-data
+`verification/display-classes.zh.html`: the original, today's and v2's crops of one page a class) and gave his verdict on each
+(`verification/owner-comments-display-classes-2026-11-12.json`). `rulings.mjs` holds them, one entry a class: its title, the
+condition the gate reads in words and in code (`holds`), his verdict and words as he wrote them, the date, the example he saw.
+A ruling is a class stated by a condition measured on the page, never a list of pages or units, so that the next paper's page
+of the same kind is judged the same way and a page that only looks like it stays worse. A bound a condition needs is a
+measure's own noise floor (`NEAR`), a fact the page states, or a number in his own words; no floor is widened.
+
+After every other pass (`rulingsPass`, the paper's pass, last; on the fresh rule's re-lay before its differences are resolved,
+so that one judged there carries its ruling), each difference worse by its measure is tried against the rulings in order and
+the first whose condition holds covers it: `worse` false, `covered` the ruling's id, its measure's reading (`nearer` today)
+kept. A page's `worse` counts the differences no ruling covers, `covered` those one does; the gate passes only with no page
+worse outside his rulings (`verdictOf`). `parity.json` states `pagesWorse` (outside the rulings), `pagesCovered` (worse by a
+measure, covered whole), `rulings` (each with the pages it covers, a page with an uncovered difference beside named so) and
+`apart` (what the earlier corrections and rulings set aside: `ruling`, `text`, `incomparable`, `fresh`, `unmeasured`,
+`unexercised`, each counted); the sheet shows the three apart, each covered difference with its ruling.
+
+| Ruling | Class | The condition the gate reads |
+|---|---|---|
+| L1 | a paragraph a line shorter than today's, in the height today's takes | `line-count`: exactly one line fewer than today on the page (both at most the original's), v2 at the original's size (the size floor), its last row within half a line of today's last row: line-count's own floor (half a line) read on the drawn extent, a line the smaller of the two leadings there |
+| L2 | a paragraph a line shorter than today's, ending higher | the same, its last row higher than today's by no more than one of its own lines (and the position floor); and one of the two causes the lanes traced: today larger than the original by more than the size floor (its misread), or the translation's punctuation rule: the pair laid with no CJK line squeezed (`unsqueezed`) sets the unit, over its pages, in more lines than v2 and no fewer than today |
+| S1 | a figure's labels at their group's size | `size` of a figure text in a size tie of the part, every text of which v2 draws translated at one size, where today translates some of the tie's texts and not all |
+| S2 | a table cell's text smaller than today's, kept to its cell | `size` of a cell where today runs past the cell's own room (the owner's ruling 3) by more than the position floor and v2 less by more than that floor, its text still reaching the room's edge |
+| S3 | a heading on its one line at a smaller size; a small-capitals heading at TeX's size | `size` of a heading v2 sets on the original's line count, smaller than today's, today on more lines; or of one the part states set in small capitals (letters at `sc` of TeX's size, as the measure reads the original) that v2 draws at TeX's size |
+| S4 | a theorem shrunk a little more than today's | none: no condition of the page tells a theorem that must shrink a little more from one shrunk more than it needs (his example ends a line above its original's last on the next page); its pages stay worse |
+| E1 | an address cut over two lines at its own break point | `elements`, pieces drawn apart: the element they are cut from is one TeX sets as written (El.literal), its pieces in order, each two placed as on arXiv's page or cut at a line's end (the first ends its row, the next opens the row under it) |
+| A1 | a last line of one character | `align`: v2 at the original's size and line count, every line where TeX's alignment puts it but the last, which holds one character at the unit's own margin |
+| O | a translated figure text touching the figure where today keeps it English | `over` of a figure text v2 draws translated at the original's place (anchor, alignment) and size where today draws no translation of it; the page's figure texts where, less those texts, v2 is within the floor of today |
+| A2 | a reference's next line set flush as today's | `align`: each line of v2's off the original's starts has a line of today's on its row that is a row of crops alone (which `align` reads no start of) starting where v2's starts |
+
+He accepted W too (figure text drawn lighter): no page of it is left since the gate's correction 10, so it has no entry
+(`NO_PAGE_LEFT`). Not ruled, and worse as before: S5 (the author block's names smaller, to discuss), T1's two units of
+2610.21313 (kept as the original where today's translation garbles or drops a mark), T2 (1810.04805 p7's table header half
+translated).
 
 ## Fresh rows: what a reader gets where no stored row serves v2's unit (lane parity-fresh, 2026-11-11)
 
