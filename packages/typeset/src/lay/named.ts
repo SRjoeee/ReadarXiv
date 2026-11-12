@@ -207,7 +207,9 @@ export function namedRows(part: Pick<Part, 'paper'>, rows: Rows, leave: Readonly
       if (!n) return rows.get(id)
       if (made.has(id)) return made.get(id)
       const own = rows.get(id)
-      const got = !own?.ok ? own : n[1] ? inVariant(c, own, n) : inOwnRow(c, own, n)
+      // (no person of it shown: its own row, as it came, the variant's and the block's never read, as none is waited for)
+      const got =
+        !own?.ok || !shownOf(n, c.persons, leave).length ? own : n[1] ? inVariant(c, own, n) : inOwnRow(c, own, n)
       made.set(id, got)
       return got
     },
@@ -218,13 +220,21 @@ export function namedRows(part: Pick<Part, 'paper'>, rows: Rows, leave: Readonly
   }
 }
 
+/** the persons a unit that names the block's holds that the toggles show (`leave` holds none of their kinds): the one test of
+ *  what a page laid with it reads (namedRows) and of what it waits for (namedWaits). The composer keeps a page laid once
+ *  nothing it waits for is missing, so a lay that read a row its page did not wait for drew what that row's coming later
+ *  changes (2611.03953v2-zh p1, staging round B14: the correspondence footnote's variant late, the names off, the footnote
+ *  the original's until a toggle laid the page again with its own row) */
+function shownOf(n: Named, persons: readonly Person[], leave: ReadonlySet<string>): Person[] {
+  return n[2].map((x) => persons[x[1]]).filter((p): p is Person => !!p && !leave.has(p[1]))
+}
+
 /** the rows besides its own a unit the part states names a person of the block waits for while rows may come: its variant's
- *  and the block members', where the names are shown (`leave` holds none of their kinds) */
+ *  and the block members', where the names are shown (shownOf) */
 export function namedWaits(part: Pick<Part, 'paper'>, id: string, leave: ReadonlySet<string>): string[] {
   const n = part.paper.named?.find((x) => x[0] === id)
   if (!n) return []
-  const persons = part.paper.persons ?? []
-  const shown = n[2].map((x) => persons[x[1]]).filter((p): p is Person => !!p && !leave.has(p[1]))
+  const shown = shownOf(n, part.paper.persons ?? [], leave)
   if (!shown.length) return []
   return [...(n[1] ? [n[1]] : []), ...shown.map((p) => p[0])]
 }

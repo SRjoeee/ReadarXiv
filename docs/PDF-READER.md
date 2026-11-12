@@ -801,9 +801,18 @@ spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while
   the notice (it stood 150 ms); one asked again at our server's time is the notice for that wait, with no retry, giving way to
   the count when the ask begins; one nothing asks again but the reader is the notice with its retry.
   The notice closed stays closed for the visit unless more passages fail.
-- **A page laid with nothing of its own at the rows' end** (every member without a translation: the original's by the
-  rule) keeps the units it read missing; a translation of one of them come since (a retry, a run our server started again)
-  lays that page again, alone.
+- **A page laid is a lay over the rows as they stand** (2026-11-13). A page laid, committed or laid with nothing of its own
+  (every member without a translation: the original's by the rule), keeps every row its lay read and what it saw of it (a
+  translation, a refusal, none in yet); a row that lands otherwise than it saw (one come, a refusal translated after all by
+  another service or a retry, a row stated again otherwise) lays that page again, alone, its drawing kept and muted until the
+  new one commits (`packages/reader/src/compose/composer.ts` `moved`). One condition in place of three: a row stated again
+  otherwise laid every page again in a generation of its own; a row missing at the rows' end, come since, did too; a page laid
+  with nothing kept only the units it read missing once the rows had ended. A page laid with nothing BEFORE the end, every
+  unit refused while the run went on (a refusing service, the extension's `src/pdf-reader/host/translate.ts`), kept nothing,
+  and the translations another service brought later laid it again never (the V5 lane's e2e: 3 runs of 5, `laidPages: 0`).
+  A row read and waited for by no page (the paper's own names, §19.14) lays its page again when it comes, once. The law test:
+  `packages/reader/tests/composer.test.ts` "the toggles turned and turned back", each sequence of landings, the run's end and
+  each option turned, every drawing a fresh lay's.
 
 ## 9. The extension around the reader
 
@@ -9377,6 +9386,14 @@ The toggle still governs the block under the title alone (§19.13, the ruling of
     - a whole-stretch unit keeps its own translation of that name.
   - **Waiting:** a page waits for the variant's row and the anchors' rows besides the unit's own, while rows may come. Nothing
     committed is laid again; a toggle lays every page again.
+  - **What a page reads is what it waits for** (2026-11-13). One test, the persons of the unit the toggles show (`shownOf`),
+    decides both. Where none is shown (the names off) the unit is its own row as it came, and neither the variant's row nor an
+    anchor's is read. Before, the variant's row was read first: with the names off and that row not in yet, the unit read as
+    still to come, though its page waited for nothing more, so the page committed with it the original's, and a toggle turned
+    and turned back drew it from its own row (staging round B14, 2611.03953v2-zh p1: the ICML correspondence footnote, the
+    original's at the first lay, its own row's translation after the names on then off). Over the round's bundles with the Google store (each variant's
+    row made from its unit's), a page laid over only the rows it waits for against over every row: 6 of 90 first pages and 11
+    of the 60 pages that hold a variant differed by default, all 60 with the references on; none after.
 - **Measured** (stage 1a over the 88 at this change, against the base's run):
   - 29 papers state 117 units naming 192 persons elsewhere, every other object the same:
     - 96 references (self-citations);
