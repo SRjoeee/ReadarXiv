@@ -42,13 +42,16 @@
 import { asOut, headLength, holdsEl, textOf } from '../accept.ts'
 import type { OutPiece, Piece, UnitIn } from '../contract.ts'
 import {
+  type Beside as GlueBeside,
   DISPLAY,
   decode,
   displayEnds,
+  endsOf,
   ENTITY,
   escapeMarkers,
   GLUED_LEAD,
   GLUED_SPACE,
+  type GlueEl,
   glueOf,
   INVISIBLE,
   inWord,
@@ -75,6 +78,8 @@ type Item =
       word: boolean
       /** each element it holds sets nothing (`silent`): alone, it goes on no wire */
       silent: boolean
+      /** its first and last elements, as the glue reads them (text.ts glueOf); none where it holds none */
+      ends: { first: GlueEl; last: GlueEl } | null
     }
   | { t: 'open'; id: string; at: number; letters: boolean; depth: number }
   | { t: 'close'; id: string; at: number }
@@ -98,7 +103,8 @@ export interface MarkersPlan {
   stops: ReadonlySet<number>
   numbers: ReadonlySet<number>
   numbersAfter: ReadonlySet<number>
-  /** markers the wire set a space of its own before, and after: where the source set the element glued to the text there */
+  /** markers the source set glued to the piece before them, and after them (text.ts glueOf), the white space a reply sets there
+   *  taken back: a text there, where the wire set a space of its own, or another element, where it set none */
   gluedBefore: ReadonlySet<number>
   gluedAfter: ReadonlySet<number>
   /** markers after which the wire wrote their element's own stop */
@@ -230,6 +236,7 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
           stop: p.stop,
           word: inWord(p),
           silent: !!p.silent,
+          ends: { first: p, last: p },
         })
         at += 1
       } else if (!p.must) {
@@ -252,6 +259,7 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
             stop: stopOf(elsOf(head)),
             word: elsOf(head).every(inWord),
             silent: elsOf(head).every((q) => !!q.silent),
+            ends: endsOf(elsOf(head)),
           })
           at += len
         }
@@ -275,6 +283,7 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
           stop: stopOf(elsOf(p.content)),
           word: elsOf(p.content).every(inWord),
           silent: false,
+          ends: endsOf(elsOf(p.content)),
         })
         at += len
       }
@@ -322,6 +331,7 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
         voids.findLast((x) => x.stop !== undefined && LINE_END.test(x.stop))?.stop,
       word: false,
       silent: false,
+      ends: endsOf(voids.flatMap((x) => (x.ends ? [x.ends.first, x.ends.last] : []))),
     })
     i = last
   }
@@ -365,6 +375,14 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
   const done: Group[] = []
   const seen = () => {
     for (const g of groups) g.seen = true
+  }
+  /** what the source sets beside item `i` on the wire (`d` its side), past what goes on none: its text, or the element there (a
+   *  void's last before it, its first after it), '' at an edge or a group's marker */
+  const besideOf = (i: number, d: 1 | -1): GlueBeside => {
+    let j = i + d
+    while (isOff(items[j])) j += d
+    const x = items[j]
+    return x?.t === 'text' ? x.s : x?.t === 'void' && x.ends ? (d < 0 ? x.ends.last : x.ends.first) : ''
   }
   /** the text item next to `i` on the wire (`d` its side), past what goes on none */
   const textBeside = (i: number, d: 1 | -1): string => {
@@ -410,13 +428,21 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
     const line = LINE_END.test(stop)
     if (line) lines.add(n)
     else if (stop) own.add(n)
-    // (glued to the text beside it in the source, a space of ours there; none inside a word: text.ts glueOf)
-    const glued = glueOf(textBeside(i, -1), wire, nextText, it.t === 'void' && it.word, line)
-    const before = glued.before ? ' ' : ''
-    const after = glued.after ? ' ' : ''
+    // (glued to the piece beside it in the source, a text or another element; a space of ours where it touches the wire's text,
+    // none inside a word: text.ts glueOf)
+    const glued = glueOf(
+      besideOf(i, -1),
+      wire,
+      besideOf(i, 1),
+      it.t === 'void' && it.word,
+      line,
+      it.t === 'void' ? it.ends : null,
+    )
+    const before = glued.spaced.before ? ' ' : ''
+    const after = glued.spaced.after ? ' ' : ''
     const end = it.t === 'void' ? it.at + it.len : it.at
-    if (before) gluedBefore.add(n)
-    if (after) gluedAfter.add(n)
+    if (glued.before) gluedBefore.add(n)
+    if (glued.after) gluedAfter.add(n)
     put(before, it.at)
     put(`@${toAlpha(n)}#`, it.at)
     put(stop, end)

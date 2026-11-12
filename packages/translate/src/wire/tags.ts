@@ -10,11 +10,14 @@ import { asOut, projectionOf, textOf } from '../accept.ts'
 import type { OutPiece, Piece, UnitIn } from '../contract.ts'
 import { contentOf, refill, type Tok } from './markers.ts'
 import {
+  type Beside,
   decode,
   displayEnds,
+  endsOf,
   escapeTags,
   GLUED_LEAD,
   GLUED_SPACE,
+  type GlueEl,
   glueOf,
   INVISIBLE,
   inWord,
@@ -37,8 +40,8 @@ export interface TagsPlan {
   /** where each marked sentence after the first begins in the unit's projection */
   cuts: number[]
   refill: string[]
-  /** element slots the source set glued to the text before them, and after them (text.ts glueOf): the white space a reply
-   *  sets there is taken back */
+  /** element slots the source set glued to the piece before them, and after them, a text or another element (text.ts
+   *  glueOf): the white space a reply sets there is taken back */
   gluedBefore: ReadonlySet<number>
   gluedAfter: ReadonlySet<number>
   /** for each boundary marker set right after its sentence's stop (planTags: on the wire a sentence ends at its stop), the
@@ -153,6 +156,8 @@ type Item =
       word: boolean
       /** it states a line end (no text of the source glued after it) */
       line: boolean
+      /** its first and last elements, as the glue reads them (text.ts glueOf); none where it holds none */
+      ends: { first: GlueEl; last: GlueEl } | null
     }
   | { t: 'open'; id: string; letters: boolean; depth: number }
   | { t: 'close' }
@@ -205,6 +210,7 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
           stop: ownStop(p.stop),
           word: inWord(p),
           line: LINE_END.test(p.stop ?? ''),
+          ends: { first: p, last: p },
         })
         at += 1
       } else if (SOLID.test(textOf(p.content))) {
@@ -229,6 +235,7 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
           stop: last?.t === 'el' ? ownStop(last.stop) : undefined,
           word: elsOf(p.content).every(inWord),
           line: last?.t === 'el' && LINE_END.test(last.stop ?? ''),
+          ends: endsOf(elsOf(p.content)),
         })
         at += len
       }
@@ -239,12 +246,13 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
   const slots: TagSlot[] = []
   const gluedBefore = new Set<number>()
   const gluedAfter = new Set<number>()
-  /** the source's text beside item `i` (`d` its side), past the wire's own spans' tags: '' where an element stands there */
-  const textBeside = (i: number, d: 1 | -1): string => {
+  /** what the source sets beside item `i` (`d` its side), past the wire's own spans' tags: its text, or the element there (a
+   *  void's last before it, its first after it), '' at an edge */
+  const besideOf = (i: number, d: 1 | -1): Beside => {
     let j = i + d
     while (items[j]?.t === 'open' || items[j]?.t === 'close') j += d
     const x = items[j]
-    return x?.t === 'text' ? x.s : ''
+    return x?.t === 'text' ? x.s : x?.t === 'void' && x.ends ? (d < 0 ? x.ends.last : x.ends.first) : ''
   }
   const kept: { id: string; depth: number }[] = []
   const open: number[] = []
@@ -273,9 +281,9 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
       reach(it.at)
       slots.push({ t: 'void', out: it.out, own: false })
       const next = items[i + 1]
-      // (glued to the text beside it in the source: the white space a reply sets there taken back; text.ts glueOf, the
-      // wire up to it read past its own spans' tags)
-      const glued = glueOf(textBeside(i, -1), bare, textBeside(i, 1), it.word, it.line)
+      // (glued to the piece beside it in the source, a text or another element: the white space a reply sets there taken
+      // back; text.ts glueOf, the wire up to it read past its own spans' tags)
+      const glued = glueOf(besideOf(i, -1), bare, besideOf(i, 1), it.word, it.line, it.ends)
       if (glued.before) gluedBefore.add(slots.length)
       if (glued.after) gluedAfter.add(slots.length)
       const stop = it.stop && !LEAD_PUNCT.test(next?.t === 'text' ? next.s : '') ? it.stop : ''

@@ -66,7 +66,7 @@ export const MICROSOFT_LIMITS: Limits = { chars: 2_000, units: 100, inFlight: 8,
 const OVER_CAP = /exceeds the maximum allowed translation size/i
 
 /** the behaviour digest of write and read over tests/adapters/fixtures.ts (the suite prints a new one when they move) */
-export const MICROSOFT_DIGEST = '4d1ea1ea6375b2dba046ccdc08e1025247140db4e14c602e95fadb165e81030d'
+export const MICROSOFT_DIGEST = '6fec7ab7dd7c0407c0972f3b1220033e30a3379a85746afd4a2461a85b931990'
 
 export interface MicrosoftOptions {
   fetch: Fetch

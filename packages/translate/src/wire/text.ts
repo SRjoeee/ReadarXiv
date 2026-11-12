@@ -59,26 +59,50 @@ export const DISPLAY = 'display'
 export const inWord = (q: { kind: string }): boolean =>
   q.kind !== 'other' && q.kind !== DISPLAY && (standInOf(q.kind) ?? 'x') === 'x'
 
+/** an element as the glue reads it: its kind and the stop it states */
+export type GlueEl = { kind: string; stop?: string | undefined }
+/** a void's first and last elements, as the glue reads them; null where it holds none */
+export const endsOf = (els: readonly GlueEl[]): { first: GlueEl; last: GlueEl } | null =>
+  els.length ? { first: els[0] as GlueEl, last: els[els.length - 1] as GlueEl } : null
+/** what stands right beside an element in the source, on one side, past the wire's own tags: the source's text there ('' at an
+ *  edge or a group's), or another element, set with nothing between them */
+export type Beside = string | GlueEl
+/** two elements the source sets one right after the other, nothing between: TeX sets no space between them, unless one of them
+ *  is its own space or breaks the line (a tie, the source reader's `space`; a forced `break`, or one that states a line end) */
+const joined = (a: GlueEl, b: GlueEl): boolean =>
+  [a, b].every((q) => q.kind !== 'space' && q.kind !== 'break' && !LINE_END.test(q.stop ?? ''))
+
 /**
- * Where the source set an element glued to the text beside it, one definition for both wires (DESIGN §6.2): before it, the
- * wire up to it (`wire`, its own spans' tags apart) ends with a letter, a digit, a mark or a full stop; after it, the source's
- * text after it (`next`) begins with a letter, a digit or a mark, and the element states no line end (`line`); neither where
- * it stands inside a word (`inside`: it can, `inWord`, and a letter or a mark of the source is right before it, `prev`, and
- * right after it). The markers wire sets a space of its own there (a marker touching a word is read as part of it); every
- * reading takes back the white space a reply sets there (GLUED_SPACE, GLUED_LEAD)
+ * Where the source set an element glued to the piece beside it, one definition for both wires and every pair of pieces
+ * (DESIGN §6.2): before it, the wire up to it (`wire`, its own spans' tags apart) ends with a letter, a digit, a mark or a full
+ * stop, or the piece right before it (`prev`) is an element the two of which are `joined`; after it, the source's text after
+ * it (`next`) begins with a letter, a digit or a mark, or it is an element the two of which are joined, and the element states
+ * no line end (`line`). `self`: the element's own first and last elements (a void of several holds more), what an element
+ * beside it is joined to. Neither side where it stands inside a word (`inside`: it can, `inWord`, and a letter or a mark of
+ * the source is right before it and right after it). Every reading takes back the white space a reply sets on a glued side
+ * (GLUED_SPACE, GLUED_LEAD); the markers wire sets a space of its own where a glued side touches the wire's text (`spaced`:
+ * a marker touching a word is read as part of it), none between two elements, which touch no word
  */
 export function glueOf(
-  prev: string,
+  prev: Beside,
   wire: string,
-  next: string,
+  next: Beside,
   word: boolean,
   line: boolean,
-): { inside: boolean; before: boolean; after: boolean } {
-  const inside = word && /[\p{L}\p{M}]$/u.test(prev) && /^[\p{L}\p{M}]/u.test(next)
+  self: { first: GlueEl; last: GlueEl } | null,
+): { inside: boolean; before: boolean; after: boolean; spaced: { before: boolean; after: boolean } } {
+  const p = typeof prev === 'string' ? prev : ''
+  const n = typeof next === 'string' ? next : ''
+  const inside = word && /[\p{L}\p{M}]$/u.test(p) && /^[\p{L}\p{M}]/u.test(n)
+  const spaced = {
+    before: !inside && /[\p{L}\p{N}\p{M}.]$/u.test(wire),
+    after: !inside && !line && /^[\p{L}\p{N}\p{M}]/u.test(n),
+  }
   return {
     inside,
-    before: !inside && /[\p{L}\p{N}\p{M}.]$/u.test(wire),
-    after: !inside && !line && /^[\p{L}\p{N}\p{M}]/u.test(next),
+    before: spaced.before || (!!self && typeof prev !== 'string' && joined(prev, self.first)),
+    after: spaced.after || (!!self && !line && typeof next !== 'string' && joined(self.last, next)),
+    spaced,
   }
 }
 /** the white space before an element, and after one, where the source set it glued to the text there (glueOf): TeX set no
