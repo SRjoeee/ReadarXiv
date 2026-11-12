@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { google, readTagged } from '../../src/adapters/google.ts'
+import { chrome } from '../../src/adapters/chrome.ts'
+import { google, readTagged, tagsWire } from '../../src/adapters/google.ts'
 import { chainOf } from '../../src/chain.ts'
 import type { FetchInit, Piece, Result } from '../../src/contract.ts'
 import { echo, NEVER, scriptedFetch } from '../../src/testing/fakes.ts'
@@ -50,22 +51,22 @@ describe('google: the wire, byte for byte (golden)', () => {
   it('writes each fixture unit as tags, with boundary markers where a unit lights by sentence', () => {
     expect(UNITS.map((u) => t.write(u, 'zh-Hans'))).toEqual([
       'We study the problem. <x id="1"/>It is hard.',
-      'Let <x id="1"/> be as in <x id="2"/>. <x id="4"/>See Section <x id="3"/> for more.',
+      'Let <span id="1" translate="no">x1</span> be as in <span id="2" translate="no">x2</span>. <x id="4"/>See Section <span id="3" translate="no">x3</span> for more.',
       '<t id="1">Bold words</t> and <t id="2">a link <t id="3">inside</t></t> end.',
-      'We have<x id="1"/>. <x id="2"/>Then we go on.',
-      'Values <x id="1"/> <x id="2"/>, and <x id="3"/><x id="4"/> hold.',
+      'We have<span id="1" translate="no">x1</span>. <x id="2"/>Then we go on.',
+      'Values <span id="1" translate="no">x1</span> <span id="2" translate="no">x2</span>, and <span id="3" translate="no">x3</span><span id="4" translate="no">x4</span> hold.',
       '<t id="1">Whole bold heading</t>',
       '<t id="1">Setup:</t> we train the model for 3 epochs.',
-      'a &lt; b &amp; c &gt; d @ home # 95<x id="1"/> accuracy.',
-      'A link around a formula: <x id="1"/> done.',
-      'Words<x id="1"/>. <x id="2"/>More words follow here.',
-      'It matters on seasonal timescales<x id="1"/>, alters the jet stream<x id="2"/> and the surface<x id="3"/>, as the quasi-biennial oscillation and El Ni<x id="4"/>o southern oscillations do.',
-      'We use the 30 km zonal wind threshold:<x id="1"/> thresholds<x id="2"/> hold.',
-      'We can quantify the forecast skill of the emulator using the RMSE: <x id="1"/>',
-      'The model <x id="1"/> reads.',
-      'At each step the model is auto-regressive<x id="1"/>, consuming the previously generated symbols.',
-      'We reach 95<x id="1"/> accuracy.',
-      'a 3<x id="1"/>10 speed-up',
+      'a &lt; b &amp; c &gt; d @ home # 95<span id="1" translate="no">x1</span> accuracy.',
+      'A link around a formula: <span id="1" translate="no">x1</span> done.',
+      'Words<span id="1" translate="no">x1</span>. <x id="2"/>More words follow here.',
+      'It matters on seasonal timescales<span id="1" translate="no">x1</span>, alters the jet stream<span id="2" translate="no">x2</span> and the surface<span id="3" translate="no">x3</span>, as the quasi-biennial oscillation and El Ni<span id="4" translate="no">x4</span>o southern oscillations do.',
+      'We use the 30 km zonal wind threshold:<span id="1" translate="no">x1</span> thresholds<span id="2" translate="no">x2</span> hold.',
+      'We can quantify the forecast skill of the emulator using the RMSE: <span id="1" translate="no">x1</span>',
+      'The model <span id="1" translate="no">x1</span> reads.',
+      'At each step the model is auto-regressive<span id="1" translate="no">x1</span>, consuming the previously generated symbols.',
+      'We reach 95<span id="1" translate="no">x1</span> accuracy.',
+      'a 3<span id="1" translate="no">x1</span>10 speed-up',
     ])
   })
   it('asks the endpoint its own shape: [[items, from, to], client], its public key, the target by region', async () => {
@@ -75,6 +76,69 @@ describe('google: the wire, byte for byte (golden)', () => {
     }
     expect(JSON.parse(f.requests[0]?.init.body ?? '')).toEqual([[['one'], 'en', 'zh-CN'], 'wt_lib'])
     expect(f.requests[0]?.init.headers['Content-Type']).toBe('application/json+protobuf')
+  })
+})
+
+// (Google's translateHtml takes an element that holds no text of its own, or one HTML does not know, as a break between two
+// texts it translates apart, each closed with a full stop of its own: "… into a matrix <x/>. The keys …" came back
+// "…矩阵中。<x/> 。键和值…", the owner's report of 2026-11-12 on 1706.03762v7; as HTML's inline element holding a token that
+// HTML's `translate` attribute keeps, the element is a word of its sentence. Lane stray-stop's probe, DESIGN §6.2)
+describe('google: an element is a word of its sentence', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  const u = unit(
+    'u',
+    [
+      t('The values are stored in a table '),
+      el('m', 'math'),
+      t('. The rows and columns are kept in '),
+      el('a', 'math'),
+      t(' and '),
+      el('b', 'math'),
+      t('.'),
+    ],
+    true,
+  )
+  it('is written as an inline element holding its number, not to be translated; a boundary marker stays a void', () => {
+    expect(g.write(u, 'zh-Hans')).toBe(
+      'The values are stored in a table <span id="1" translate="no">x1</span>. <x id="4"/>The rows and columns are kept in <span id="2" translate="no">x2</span> and <span id="3" translate="no">x3</span>.',
+    )
+  })
+  it('is read back where the reply sets it, its token not read as text', () => {
+    const r = readTagged(
+      u,
+      '这些值存储在表<span id="1" translate="no">x1</span>中。<x id="4"/>行和列保存在<span id="2" translate="no">x2</span>和<span id="3" translate="no">x3</span>中。',
+    )
+    expect(r?.content).toEqual([
+      { t: 'text', s: '这些值存储在表' },
+      { t: 'el', id: 'm' },
+      { t: 'text', s: '中。行和列保存在' },
+      { t: 'el', id: 'a' },
+      { t: 'text', s: '和' },
+      { t: 'el', id: 'b' },
+      { t: 'text', s: '中。' },
+    ])
+    expect(r?.sentences).toEqual({ src: [36], tr: [10] })
+  })
+  it('a reply to the wire before it, its elements voids, still reads (stored replies are read again)', () => {
+    const r = readTagged(u, '这些值存储在表<x id="1"/>中。<x id="4"/>行和列保存在<x id="2"/>和<x id="3"/>中。')
+    expect(r?.content.filter((p) => p.t === 'el').map((p) => (p as { id: string }).id)).toEqual(['m', 'a', 'b'])
+  })
+  it('an element twice, or lost, refuses the reply as a void does', () => {
+    expect(
+      readTagged(
+        u,
+        '表<span id="1" translate="no">x1</span><span id="1" translate="no">x1</span>。<x id="4"/>行<span id="2" translate="no">x2</span>和<span id="3" translate="no">x3</span>。',
+      ),
+    ).toBeNull()
+    expect(
+      readTagged(u, '表。<x id="4"/>行<span id="2" translate="no">x2</span>和<span id="3" translate="no">x3</span>。'),
+    ).toBeNull()
+  })
+  it('the tags wire an LLM is sent, and Chrome’s, keep the void', () => {
+    expect(tagsWire.write(u)).toBe(
+      'The values are stored in a table <x id="1"/>. <x id="4"/>The rows and columns are kept in <x id="2"/> and <x id="3"/>.',
+    )
+    expect(chrome({ api: null }).write(u, 'zh-Hans')).toBe(tagsWire.write(u))
   })
 })
 
@@ -104,6 +168,7 @@ describe('google: the sentences a unit is asked in, where a reference or a citat
     const n = own(content)
     return g
       .write(u, 'zh-Hans')
+      .replace(/<span id="\d+" translate="no">x\d+<\/span>/g, '#')
       .replace(/<x id="(\d+)"\/>/g, (_, d: string) => (Number(d) > n ? '‖' : '#'))
       .replace(/<\/?t(?: id="\d+")?>/g, '')
       .split('‖')
@@ -158,7 +223,7 @@ describe('google: the sentences a unit is asked in, where a reference or a citat
   })
   it('the fixture unit the digest holds it by: boundary markers before the citation and before the next sentence alone', () => {
     expect(g.write(SOURCE_LINES, 'zh-Hans')).toBe(
-      'Sampling remains computationally expensive. <x id="2"/><x id="1"/> proposes a one-step sampler. <x id="3"/>Then we go on.',
+      'Sampling remains computationally expensive. <x id="2"/><span id="1" translate="no">x1</span> proposes a one-step sampler. <x id="3"/>Then we go on.',
     )
   })
 })
@@ -194,7 +259,7 @@ describe('google: a display that states no stop of its own', () => {
   it('ends its sentence where the text after it begins one: a stop after it, and the cutter cuts there; not where it goes on', () => {
     const g = google({ fetch: scriptedFetch(googleEcho).fetch })
     expect(g.write(DISPLAY_ENDS, 'zh-Hans')).toBe(
-      'Each part is formalized as: <x id="1"/>. <x id="3"/>The next field is a list of effects, formalized as a tuple: <x id="2"/> where kind is its kind.',
+      'Each part is formalized as: <span id="1" translate="no">x1</span>. <x id="3"/>The next field is a list of effects, formalized as a tuple: <span id="2" translate="no">x2</span> where kind is its kind.',
     )
   })
   it("reads the reply's stop after it as the one the wire wrote, taken back", () => {
@@ -220,7 +285,9 @@ describe('google: a character TeX writes escaped, sent as text', () => {
   it('"&", "<" and ">" travel as entities and come back as the characters, beside a tag on either side', () => {
     const u = unit('u', [t('R&D <'), el('1'), t('> 5% of A&B'), el('2'), t('&.')])
     const wire = g.write(u, 'zh-Hans')
-    expect(wire).toBe('R&amp;D &lt;<x id="1"/>&gt; 5% of A&amp;B<x id="2"/>&amp;.')
+    expect(wire).toBe(
+      'R&amp;D &lt;<span id="1" translate="no">x1</span>&gt; 5% of A&amp;B<span id="2" translate="no">x2</span>&amp;.',
+    )
     expect(readTagged(u, wire)?.content).toEqual([
       { t: 'text', s: 'R&D <' },
       { t: 'el', id: '1' },

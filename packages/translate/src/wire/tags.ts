@@ -1,8 +1,9 @@
 // The tags wire, over typed pieces, for the engines that keep tags (Google's translateHtml: tags 100 %; Chrome's built-in
-// translator): an element as `<x id="n"/>`, a span with text as `<t id="n">…</t>` (every span: these engines keep their
-// words inside it), a span with none as one void. For a unit that lights by sentence, a void boundary marker of an id past
-// the unit's own goes where each sentence after the first begins (Google brings `<x id="N"/>` back exactly where it was
-// set; `<s/>` gets closers appended, `<wbr>` is dropped: measured), and where they land are the translation's sentences.
+// translator): an element as `<x id="n"/>` (to Google as a word of its sentence: ElementTag), a span with text as
+// `<t id="n">…</t>` (every span: these engines keep their words inside it), a span with none as one void. For a unit that
+// lights by sentence, a void boundary marker of an id past the unit's own goes where each sentence after the first begins
+// (Google brings `<x id="N"/>` back exactly where it was set; `<s/>` gets closers appended, `<wbr>` is dropped: measured),
+// and where they land are the translation's sentences.
 import { sentenceCuts } from '@readarxiv/text'
 import { asOut, projectionOf, textOf } from '../accept.ts'
 import type { OutPiece, Piece, UnitIn } from '../contract.ts'
@@ -22,9 +23,29 @@ export interface TagsPlan {
 }
 
 /** the model's and the engines' spellings of a tag (the extension's tokens.ts TAG_RE): `<x id="1"/>`, `<x id="1" />`,
- *  single or no quotes, `<x id="1"></x>`; an open `<t id="1">`; a close `</t>` */
+ *  single or no quotes, `<x id="1"></x>`; an open `<t id="1">`; a close `</t>`; an element written as a word
+ *  (`ElementTag` 'word'), `<span id="1" …>…</span>` whole, whatever it holds (its token is no text of the translation) */
 export const TAG_RE =
-  /<x\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*(?:\/>|>\s*<\/x\s*>)|<t\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*>|<\/t\s*>/g
+  /<x\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*(?:\/>|>\s*<\/x\s*>)|<t\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*>|<\/t\s*>|<span\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))[^<>]*>[^<>]*<\/span\s*>/g
+
+/**
+ * How a tags wire writes an element (a formula, a citation, a reference, a note's mark: a void slot; a boundary marker is
+ * always a void). 'void', `<x id="n"/>`: an empty element, what an LLM is told a void tag is (the extension's prompt) and
+ * Chrome's translator is sent. 'word', `<span id="n" translate="no">xn</span>`: in the terms of the HTML an engine that
+ * translates HTML reads (Google's translateHtml), an inline element holding a token that HTML's `translate` attribute keeps
+ * untranslated, a word of its sentence; the token an identifier (what a formula is), never a quantity or an article.
+ * Measured (lane stray-stop, 2026-11-12, a probe of 42 units of two papers, zh and ja, after the owner's report on
+ * 1706.03762v7): Google takes an element that holds no text (`<x/>`, `<x></x>`, `<span></span>`) or that HTML does not know
+ * (`<x>n</x>`, with `translate="no"` or without) as a break between two texts it translates apart, each closed with a full
+ * stop of its own: "… a matrix <x/>. The keys …" -> "…矩阵中。<x/> 。键和值…", 51 of 164 element groups in zh and 53 in ja, 18 of
+ * them a stop on both sides, the element never moved across a word. Written as a word, none (1 and 5 left, each the
+ * target's word order setting the element first in its sentence), the elements and boundary markers all back, the token as
+ * sent 424 of 424 (without the attribute 91 of 424 changed); a number for the token read as a quantity beside a word ("3 In"
+ * -> inches, 4 and 4 replies), the identifier 0 and 1
+ */
+export type ElementTag = 'void' | 'word'
+const elementTag = (as: ElementTag, n: number): string =>
+  as === 'word' ? `<span id="${n}" translate="no">x${n}</span>` : `<x id="${n}"/>`
 const SOLID = /\S/
 const LEAD_PUNCT = /^\s*[.,;:!?。．，、；：！？]/
 const OWN_MARKS = '.,;:。．，、；：।۔،؛'
@@ -42,8 +63,8 @@ type Item =
 const ownStop = (stop: string | undefined): string | undefined =>
   stop !== undefined && LINE_END.test(stop) ? undefined : stop
 
-/** A unit's tags wire */
-export function planTags(unit: UnitIn): TagsPlan {
+/** A unit's tags wire, each element written `as` (ElementTag) */
+export function planTags(unit: UnitIn, as: ElementTag = 'void'): TagsPlan {
   // (a display that ends its sentence states the stop it ends it with: written after it, taken back on reading, read by the
   // cutter as its sentence's end)
   const content = displayEnds(unit.content)
@@ -125,7 +146,7 @@ export function planTags(unit: UnitIn): TagsPlan {
       const next = items[i + 1]
       const stop = it.stop && !LEAD_PUNCT.test(next?.t === 'text' ? next.s : '') ? it.stop : ''
       if (stop) (slots[slots.length - 1] as { own: boolean }).own = true
-      wire += `<x id="${slots.length}"/>${stop}`
+      wire += `${elementTag(as, slots.length)}${stop}`
     } else if (it.t === 'open') {
       pending ??= wire.length
       slots.push({ t: 'pair', id: it.id })
@@ -226,7 +247,7 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
   for (const m of text.matchAll(new RegExp(TAG_RE.source, 'g'))) {
     push(text.slice(last, m.index))
     last = (m.index ?? 0) + m[0].length
-    const v = m[1] ?? m[2] ?? m[3]
+    const v = m[1] ?? m[2] ?? m[3] ?? m[7] ?? m[8] ?? m[9]
     const o = m[4] ?? m[5] ?? m[6]
     if (v !== undefined) {
       const n = Number(v)
