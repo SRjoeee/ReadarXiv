@@ -25,7 +25,7 @@ import {
   textOf,
   urlCopyOf,
 } from '../src/locate/facts.ts'
-import { locate, urlBreaks } from '../src/locate/locate.ts'
+import { locate, urlBreaks } from './helpers/locate.ts'
 import { mappedOf, unmapped } from '../src/read.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
 

@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
 import type { Doc } from '../src/doc.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
-import { END, locate } from '../src/locate/locate.ts'
+import { END, locate } from './helpers/locate.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
 
 const T = ROLE.text

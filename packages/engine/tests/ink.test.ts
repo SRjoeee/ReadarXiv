@@ -9,7 +9,7 @@ import type { Doc, DocTurned } from '../src/doc.ts'
 import type { PageInk } from '../src/ink.types.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
 import { carry, spansOf } from '../src/locate/ink.ts'
-import { locate } from '../src/locate/locate.ts'
+import { locate } from './helpers/locate.ts'
 import type { AddOn } from '../src/wrap/wrap.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
 

@@ -17,7 +17,6 @@
 //   figure's set. Links: A's annotations, each owned by the element or the text its rectangle lies over.
 // - Groups (design §4.5): per member and page, `<ord>.<page>.t` its text (and a name's or figure text's word), `.e` its
 //   travelling elements, `.l` its label; a display, a kept block and what is not located are in no group.
-import type { Piece } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
 import type { Doc } from '../doc.ts'
 import type { Instrument } from '../instrument.ts'
@@ -30,20 +29,11 @@ import { flowsAndTies, rowAligns } from './flows.ts'
 import { leadNames } from './leads.ts'
 import { linksOnA } from './links.ts'
 import { placeUnits } from './members.ts'
-import { type Owned, ownershipOf } from './ownership.ts'
+import { groupsOf, type Owned, ownershipOf } from './ownership.ts'
 import { sentenceStarts } from './sentences.ts'
 import { unitsBornOnA, unitsMadeOnA } from './page-units.ts'
 import { claimTrails } from './trails.ts'
-import {
-  eachBetweenPaired,
-  field,
-  type Located,
-  type LocateOptions,
-  type Member,
-  open,
-  piecesOf,
-  type Work,
-} from './work.ts'
+import { eachBetweenPaired, field, type Located, type LocateOptions, type Member, open, type Work } from './work.ts'
 
 export { eachBetweenPaired, type Located, type LocateOptions, type Member }
 export { urlBreaks } from './geometry.ts'
@@ -81,12 +71,12 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   flowsAndTies(w) // 13
   rowAligns(w) // 14
   linksOnA(w, owned, o) // 15
-  return close(w)
+  return close(w, owned)
 }
 
-/** what locate states, read off the record its phases wrote: the wrap's groups, the counts */
-function close(w: Work): Located {
-  const { ins, inkA, m, pageA } = w.ix
+/** what locate states, read off the record its phases wrote: the wrap's groups, the ownership's check, the counts */
+function close(w: Work, owned: Owned): Located {
+  const { ins } = w.ix
   const { units, members, stats, displays, floatLines } = w
   const born = field(w, 'born')
   const flows = field(w, 'flows')
@@ -95,54 +85,9 @@ function close(w: Work): Located {
   const noteUnlocated = (c: string) => {
     stats.unlocated[c] = (stats.unlocated[c] ?? 0) + 1
   }
-  // ---- groups for the wrap
-  const groups = inkA.pages.map((pg) => ({
-    glyphs: new Array<string | null>(pg.glyphs.length).fill(null),
-    boxes: new Array<string | null>(pg.kinds.length).fill(null),
-    turned: new Array<string | null>(pg.turned?.length ?? 0).fill(null),
-  }))
-  const figureGroups = new Set<string>()
-  const set = (a: number, g: string) => {
-    const p = (pageA[a] as number) - 1
-    groups[p]!.glyphs[a - (m.offA[p] as number)] = g
-  }
-  for (const mem of members) {
-    if (!mem.located || mem.fixed) continue
-    const unit = mem.unit >= 0 ? units[mem.unit] : undefined
-    const pieces = unit ? piecesOf(unit.content) : new Map<string, Piece>()
-    const name = (a: number, c: string) => `${mem.ord}.${pageA[a]}.${c}`
-    // (an element whose ink stays, a display's, one outside the unit or on a held line: in no group)
-    const keptEl = new Set(mem.elements.filter(([, el]) => el.keep).map(([id]) => id))
-    for (const a of mem.text) {
-      set(a, name(a, 't'))
-      if (mem.figure) figureGroups.add(name(a, 't'))
-    }
-    // (a figure item's label, F3's: a figure group too, written inside the form its text is shown in)
-    for (const a of mem.label) {
-      set(a, name(a, 'l'))
-      if (mem.figure) figureGroups.add(name(a, 'l'))
-    }
-    for (const [ap, aj] of mem.turned) {
-      groups[ap - 1]!.turned[aj] = `${mem.ord}.${ap}.t`
-      if (mem.figure) figureGroups.add(`${mem.ord}.${ap}.t`)
-    }
-    // (a figure text's elements' groups figures' too: the wrap writes them inside the form they are shown in, as their text's)
-    for (const [id, l] of mem.els) {
-      if ((pieces.get(id) as { kind?: string } | undefined)?.kind === 'display' || keptEl.has(id)) continue
-      for (const a of l) {
-        set(a, name(a, 'e'))
-        if (mem.figure) figureGroups.add(name(a, 'e'))
-      }
-    }
-    for (const [ap, ai] of mem.textBoxes) groups[ap - 1]!.boxes[ai] = `${mem.ord}.${ap}.t`
-    for (const [id, l] of mem.elBoxes) {
-      if ((pieces.get(id) as { kind?: string } | undefined)?.kind === 'display' || keptEl.has(id)) continue
-      for (const [ap, ai] of l) {
-        groups[ap - 1]!.boxes[ai] = `${mem.ord}.${ap}.e`
-        if (mem.figure) figureGroups.add(`${mem.ord}.${ap}.e`)
-      }
-    }
-  }
+  // ---- groups for the wrap (ownership.ts), and the check: the members' lists and the groups against the owners
+  const { groups, figureGroups } = groupsOf(w.ix, units, members)
+  const disagreements = owned.check(members, groups)
 
   for (const mem of members) {
     if (mem.unit < 0 || mem.unit >= ins.units.length) continue
@@ -157,7 +102,7 @@ function close(w: Work): Located {
       }
     } else noteUnlocated(mem.cause ?? 'no ink')
   }
-  return { units, members, born, flows, ties, links, groups, figureGroups, stats, displays, floatLines }
+  return { units, members, born, flows, ties, links, groups, figureGroups, stats, displays, floatLines, disagreements }
 }
 
 export { END, TRAIL }

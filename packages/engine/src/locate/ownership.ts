@@ -4,7 +4,9 @@
 // phase asks who owns a glyph. Made of three arrays (A's size, A's partners on B, B's units), it knows no record of locate's.
 // After the last claim it is frozen: a write then throws. The check states what the lists and the wrap's groups say against
 // the table (Located.disagreements).
-import type { Disagreement, Located, Member } from './work.ts'
+import type { Piece } from '@readarxiv/format'
+import type { InstrumentUnit } from '../instrument.ts'
+import { type Disagreement, type Index, type Located, type Member, piecesOf } from './work.ts'
 
 /** the table's owner of a glyph no member owns: free (a trail, an end mark or a unit born on A may take it), or held as A's ink
  *  inside a unit that stays the original's */
@@ -254,4 +256,66 @@ export function ownershipOf(of: { size: number; aToB: ArrayLike<number>; unitB: 
       return owned
     },
   }
+}
+
+/**
+ * The wrap's groups (Located.groups), read off the members' lists, which this module writes: per member and page,
+ * `<ord>.<page>.t` its text (and a name's or a figure text's word, its turned glyphs, its text's boxes), `.e` its travelling
+ * elements, `.l` its label; a member not located, a fixed one, a display and an element whose ink stays are in no group. And
+ * the groups that are figure texts' (Located.figureGroups)
+ */
+export function groupsOf(
+  ix: Pick<Index, 'inkA' | 'm' | 'pageA'>,
+  units: readonly InstrumentUnit[],
+  members: readonly Member[],
+): Pick<Located, 'groups' | 'figureGroups'> {
+  const { inkA, m, pageA } = ix
+  const groups = inkA.pages.map((pg) => ({
+    glyphs: new Array<string | null>(pg.glyphs.length).fill(null),
+    boxes: new Array<string | null>(pg.kinds.length).fill(null),
+    turned: new Array<string | null>(pg.turned?.length ?? 0).fill(null),
+  }))
+  const figureGroups = new Set<string>()
+  const set = (a: number, g: string) => {
+    const p = (pageA[a] as number) - 1
+    groups[p]!.glyphs[a - (m.offA[p] as number)] = g
+  }
+  for (const mem of members) {
+    if (!mem.located || mem.fixed) continue
+    const unit = mem.unit >= 0 ? units[mem.unit] : undefined
+    const pieces = unit ? piecesOf(unit.content) : new Map<string, Piece>()
+    const name = (a: number, c: string) => `${mem.ord}.${pageA[a]}.${c}`
+    // (an element whose ink stays, a display's, one outside the unit or on a held line: in no group)
+    const keptEl = new Set(mem.elements.filter(([, el]) => el.keep).map(([id]) => id))
+    for (const a of mem.text) {
+      set(a, name(a, 't'))
+      if (mem.figure) figureGroups.add(name(a, 't'))
+    }
+    // (a figure item's label, F3's: a figure group too, written inside the form its text is shown in)
+    for (const a of mem.label) {
+      set(a, name(a, 'l'))
+      if (mem.figure) figureGroups.add(name(a, 'l'))
+    }
+    for (const [ap, aj] of mem.turned) {
+      groups[ap - 1]!.turned[aj] = `${mem.ord}.${ap}.t`
+      if (mem.figure) figureGroups.add(`${mem.ord}.${ap}.t`)
+    }
+    // (a figure text's elements' groups figures' too: the wrap writes them inside the form they are shown in, as their text's)
+    for (const [id, l] of mem.els) {
+      if ((pieces.get(id) as { kind?: string } | undefined)?.kind === 'display' || keptEl.has(id)) continue
+      for (const a of l) {
+        set(a, name(a, 'e'))
+        if (mem.figure) figureGroups.add(name(a, 'e'))
+      }
+    }
+    for (const [ap, ai] of mem.textBoxes) groups[ap - 1]!.boxes[ai] = `${mem.ord}.${ap}.t`
+    for (const [id, l] of mem.elBoxes) {
+      if ((pieces.get(id) as { kind?: string } | undefined)?.kind === 'display' || keptEl.has(id)) continue
+      for (const [ap, ai] of l) {
+        groups[ap - 1]!.boxes[ai] = `${mem.ord}.${ap}.e`
+        if (mem.figure) figureGroups.add(`${mem.ord}.${ap}.e`)
+      }
+    }
+  }
+  return { groups, figureGroups }
 }

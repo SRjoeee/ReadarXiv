@@ -145,6 +145,9 @@ export interface Located {
   groups: { glyphs: (string | null)[]; boxes: (string | null)[]; turned: (string | null)[] }[]
   /** groups that are figure texts' (the wrap writes their runs inside a form in the form) */
   figureGroups: Set<string>
+  /** what the ownership's check finds (ownership.ts): each glyph whose owner and the members' lists disagree, and a fixed
+   *  member's glyph in a group; read by the package's tests (none found) and the lab's stage 1a (`ownership/<id>.json`) */
+  disagreements: Disagreement[]
   /** the lines on A the units made there read as a display's formula (ink.ts DisplayLine), where A's pages were given: what the
    *  lab's stage states a unit absent from the candidate by (lab/pdf/prepare-back/stated.mjs) */
   displays: DisplayLine[]

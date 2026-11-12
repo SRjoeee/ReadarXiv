@@ -6,7 +6,7 @@ import { unitId } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
-import { locate } from '../src/locate/locate.ts'
+import { locate } from './helpers/locate.ts'
 import { docOf } from './helpers/doc.ts'
 
 const cell = (s: string): InstrumentUnit => {

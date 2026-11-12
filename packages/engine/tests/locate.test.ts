@@ -5,7 +5,7 @@ import { bundle, stateOf } from '../src/bundle/bundle.ts'
 import type { Doc, DocTurned } from '../src/doc.ts'
 import { pageGlyphsOf } from '../src/glyph.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
-import { eachBetweenPaired, locate } from '../src/locate/locate.ts'
+import { eachBetweenPaired, locate } from './helpers/locate.ts'
 import type { AddOn } from '../src/wrap/wrap.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
 

@@ -1,9 +1,19 @@
-// The ownership of A's glyphs (locate/ownership.ts), the module alone: made from three arrays, no document. A member takes ink
+// The ownership of A's glyphs (locate/ownership.ts). The module alone, made from three arrays, no document: a member takes ink
 // and the table and its lists are written together; a reading phase asks who owns a glyph; after the freeze a write throws;
-// the check states every glyph whose lists and table disagree, and a fixed member's glyph in a group.
+// the check states every glyph whose lists and table disagree, and a fixed member's glyph in a group. Then locate over pages
+// made by hand (each glyph 6 pt wide at 10 pt, no paper's text): its check finds nothing, and on a figure's line holding an
+// element exactly that element's glyphs, carried (the seed of that fault's test). The package's other locate cases are
+// checked through tests/helpers/locate.ts, which requires the check to find nothing but the carried.
+import { type Piece, unitId } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
+import { align } from '../src/align/align.ts'
+import type { Doc, DocGlyph } from '../src/doc.ts'
+import type { PageInk } from '../src/ink.types.ts'
+import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
+import { locate } from '../src/locate/locate.ts'
 import { ownershipOf } from '../src/locate/ownership.ts'
 import type { Located, Member } from '../src/locate/work.ts'
+import { docOf } from './helpers/doc.ts'
 
 /** a member of unit `unit` holding nothing yet (place.ts `empty`'s shape) */
 const memberOf = (ord: number, unit: number, fixed = false): Member => ({
@@ -228,5 +238,143 @@ describe('ownership: the check', () => {
       { kind: 'listed, not owned', page: 1, glyph: 2, member: 0, role: '0', owner: -1, carried: true },
       { kind: 'owned, not listed', page: 1, glyph: 3, member: 0, role: '', owner: 0, carried: true },
     ])
+  })
+})
+
+const text = (s: string) => ({ t: 'text' as const, s })
+const unitOf = (kind: string, content: Piece[], more: Partial<InstrumentUnit> = {}): InstrumentUnit => ({
+  id: unitId(kind, content),
+  kind,
+  content,
+  ...more,
+})
+/** an instrument over B, each glyph's [unit, role, piece] by `ownerOf` (docOf's glyph `n` is its line) */
+const instrumentOf = (
+  B: Doc,
+  units: InstrumentUnit[],
+  ownerOf: (p: number, g: DocGlyph, j: number) => [unit: number, role: number, piece: number],
+): Instrument => ({
+  ink: B,
+  units,
+  glyphs: B.pages.map((pg, p) => {
+    const O = ownersOf(pg.glyphs.length)
+    pg.glyphs.forEach((g, j) => {
+      const [u, r, k] = ownerOf(p, g, j)
+      O.unit[j] = u
+      O.role[j] = r
+      O.piece[j] = k
+    })
+    return O
+  }),
+  boxes: B.pages.map((pg) => ownersOf(pg.kinds.length)),
+  tex: {},
+  made: { compiler: 'pdflatex', tree: '2025', front: 'test' },
+})
+/** A's pages as pageInk would give them (read.ts `raw`): its glyphs, boxes and their kinds */
+const rawOf = (doc: Doc): PageInk[] =>
+  doc.pages.map(
+    (pg) =>
+      ({
+        glyphs: pg.glyphs.map((g) => ({ ...g })),
+        boxes: pg.boxes,
+        paths: pg.kinds,
+        boxAt: pg.boxAt,
+        points: [],
+        paras: [],
+        paraEnds: [],
+        regions: [],
+        turned: [],
+        pictures: [],
+        shapes: new Map(),
+        figures: new Map(),
+        unseen: new Set(),
+        cut: new Map(),
+        capped: false,
+        timedOut: false,
+        degraded: false,
+        mergedAt: null,
+        rotated: false,
+      }) as unknown as PageInk,
+  )
+
+describe('ownership: what locate states', () => {
+  it('finds nothing where a unit has a label and an element, a block is kept and a unit is born on A', () => {
+    // (B's one page: a heading with its number, a paragraph holding a formula, a kept block; A's page 2 is B's none: born)
+    const lines = ['1 Intro', 'see x2 here', 'kept words']
+    const B = docOf([{ lines }])
+    const A = docOf([{ lines }, { lines: ['a page of its own'] }])
+    const units = [
+      unitOf('heading', [text('Intro')]),
+      unitOf('para', [text('see '), { t: 'el', id: '1', kind: 'math', src: '$x_2$' }, text(' here')]),
+      unitOf('para', [text('kept words')], { kept: true, fixed: true }),
+    ]
+    const ins = instrumentOf(B, units, (_, g) => {
+      if (g.n === 0) return [0, g.u === '1' ? ROLE.label : ROLE.text, -1]
+      if (g.n === 1)
+        return [1, g.u === 'x' || g.u === '2' ? ROLE.element : ROLE.text, g.u === 'x' || g.u === '2' ? 1 : -1]
+      return [2, ROLE.text, -1]
+    })
+    const L = locate(ins, A, align(B, A))
+    expect(L.members.map((m) => [m.kind, m.located, m.fixed, m.label.length, [...m.els.keys()]])).toEqual([
+      ['heading', true, false, 1, []],
+      ['para', true, false, 0, ['1']],
+      ['para', true, true, 0, []],
+      ['inkorphan', true, false, 0, []],
+    ])
+    expect(L.disagreements).toEqual([])
+  })
+
+  it("states a figure's line holding an element as carried: the element's glyphs listed, owned by none (F0, ink.ts)", () => {
+    // (the case of ink.test.ts's F0 title and its path: TeX's line in a picture, its path in a face of one pitch an element of
+    // the one figure text. ink.ts states the element's glyphs in `els` and claims none of them (its `ph` empty): each of them is
+    // listed and free, carried by `takeAsStated` until that fault's fix, and nothing else is found)
+    const line = 'Action: Write /tmp/f_a.py (scope cut)'
+    const at = 'a paragraph whose word'.length
+    const path = [line.indexOf('/'), line.indexOf('py') + 2] as const
+    const docWith = (marks: boolean): Doc => {
+      const d = docOf([
+        { lines: ['a paragraph whose word', { text: line, y: 640 }, { text: 'continues on its last line', y: 600 }] },
+      ])
+      const pg = d.pages[0]!
+      pg.glyphs.slice(at, at + line.length).forEach((g, j) => {
+        const f = j >= path[0] && j < path[1] ? 'LMMono10-Regular' : 'LMSans10-Bold'
+        Object.assign(g, { font: `ABCDEF+${f}`, base: f })
+      })
+      for (const g of pg.glyphs)
+        if (!g.font.endsWith('Mono10-Regular') && !g.blank)
+          g.x1 = g.x0 + (0.55 + (g.u.codePointAt(0)! % 3) * 0.05) * g.size
+      if (marks)
+        pg.marks = {
+          paras: [],
+          paraEnds: [],
+          regions: [],
+          pictures: [
+            { name: 'zs', glyph: at, box: 0 },
+            { name: 'ze', glyph: at + line.length, box: 0 },
+          ],
+        }
+      return d
+    }
+    const B = docWith(true)
+    const A = docWith(false)
+    const ins = instrumentOf(
+      B,
+      [unitOf('para', [text('a paragraph whose word continues on its last line')])],
+      (_, g) => [g.n === 1 ? -1 : 0, ROLE.text, -1],
+    )
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const fig = L.members.find((m) => m.figure && m.unit >= 0)!
+    expect(fig.els.get('1')).toHaveLength(path[1] - path[0])
+    expect(L.disagreements).toEqual(
+      Array.from({ length: path[1] - path[0] }, (_, j) => ({
+        kind: 'listed, not owned',
+        page: 1,
+        glyph: at + path[0] + j,
+        member: fig.ord,
+        role: '1',
+        owner: -1,
+        carried: true,
+      })),
+    )
   })
 })

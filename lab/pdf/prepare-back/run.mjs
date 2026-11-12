@@ -7,8 +7,13 @@
 //   FORMAT.md §3), for its tools/diff.mjs;
 //   <out>/located/<id>.json what the gate reads beside the dump: each unit's place, cause, member ords; the wrap's pages; parts;
 //   the float lines (`floatLines`: Located.floatLines, a paper's words: lab data alone; float-lines.mjs reports them);
-//   stdout one summary line. Exit 3: a compile no cache holds (the paper missing). Exit 4: a paragraph TeX opened where a group
-//   the instrument wrote as its content stood (Located.stats.opensLost: the gate of pipeline/instrument.mjs passThroughOf), outputs written.
+//   <out>/ownership/<id>.json what the ownership's check finds (Located.disagreements, packages/engine/src/locate/ownership.ts),
+//   in a file of its own so that every object and dump the chain compares stays as it was: the carried (today's figure text
+//   made of a printed line, its element's glyphs listed and owned by none: `takeAsStated`) and the found counted apart and by
+//   kind, each with its page, glyph, member, unit and role, and the table's owner (`rows`);
+//   stdout one summary line (the ownership's two counts in it). Exit 3: a compile no cache holds (the paper missing). Exit 4: a
+//   paragraph TeX opened where a group the instrument wrote as its content stood (Located.stats.opensLost: the gate of
+//   pipeline/instrument.mjs passThroughOf), outputs written.
 //   node --max-old-space-size=6144 --import tsx lab/pdf/prepare-back/run.mjs --dir=<paper dir> --id=<id> --out=<dir> --caches=<dir>:<dir>…
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -312,7 +317,18 @@ writeFileSync(join(OUT, 'located', `${id}.json`), `${JSON.stringify({
   floatLines: located?.floatLines ?? null,
   peakRss: process.resourceUsage().maxRSS,
 })}\n`)
-console.log(JSON.stringify({ id, refused: refusal, units: units.length, ...states, located: tally?.located.located ?? 0, unlocated: tally?.located.unlocated ?? {}, born: tally?.located.born ?? 0, made: tally?.located.made ?? null, wrap: tally?.wrap ?? null, ...(proofs ? { proofs: { a: proofs.glyphs.a.failed, c: proofs.glyphs.c.failed, ...(proofs.pixels ? { on: proofs.pixels.onFailed?.length, offOutside: proofs.pixels.offOutside ? Object.fromEntries(Object.entries(proofs.pixels.offOutside).map(([k, v]) => [k, v.length])) : proofs.pixels.refused } : {}) } } : {}), ms: Math.round(performance.now() - t0) }))
+// ---- the ownership's check: each glyph whose owner and the members' lists disagree, and a fixed member's glyph in a group;
+// the carried (a fault known before the check, carried as it is) and the found apart
+const disagreements = located?.disagreements ?? []
+const ownership = { found: disagreements.filter((d) => !d.carried).length, carried: disagreements.filter((d) => d.carried).length }
+if (located) {
+  const byKind = {}
+  for (const d of disagreements) (byKind[d.kind] ??= { found: 0, carried: 0 })[d.carried ? 'carried' : 'found']++
+  const row = (d) => ({ kind: d.kind, page: d.page, glyph: d.glyph, member: d.member, unit: located.members[d.member]?.id ?? null, role: d.role, owner: d.owner })
+  mkdirSync(join(OUT, 'ownership'), { recursive: true })
+  writeFileSync(join(OUT, 'ownership', `${id}.json`), `${JSON.stringify({ id, ...ownership, byKind, rows: { found: disagreements.filter((d) => !d.carried).map(row), carried: disagreements.filter((d) => d.carried).map(row) } })}\n`)
+}
+console.log(JSON.stringify({ id, refused: refusal, units: units.length, ...states, located: tally?.located.located ?? 0, unlocated: tally?.located.unlocated ?? {}, born: tally?.located.born ?? 0, made: tally?.located.made ?? null, wrap: tally?.wrap ?? null, ownership, ...(proofs ? { proofs: { a: proofs.glyphs.a.failed, c: proofs.glyphs.c.failed, ...(proofs.pixels ? { on: proofs.pixels.onFailed?.length, offOutside: proofs.pixels.offOutside ? Object.fromEntries(Object.entries(proofs.pixels.offOutside).map(([k, v]) => [k, v.length])) : proofs.pixels.refused } : {}) } } : {}), ms: Math.round(performance.now() - t0) }))
 for (const t of tasks) await t.destroy().catch(() => {})
 // (the gate of a group written as its content (pipeline/instrument.mjs passThroughOf, decided before TeX's paragraph ends are read):
 // a paragraph TeX opened at one has nothing to state it on, so the paper fails, exit 4, its outputs written)
