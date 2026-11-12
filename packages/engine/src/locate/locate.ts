@@ -30,6 +30,7 @@ import { flowsAndTies, rowAligns } from './flows.ts'
 import { leadNames } from './leads.ts'
 import { linksOnA } from './links.ts'
 import { placeUnits } from './members.ts'
+import type { Owned } from './ownership.ts'
 import { sentenceStarts } from './sentences.ts'
 import { unitsBornOnA, unitsMadeOnA } from './page-units.ts'
 import { claimTrails } from './trails.ts'
@@ -54,8 +55,9 @@ export type { Place } from './work.ts'
 // ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
 function facts(w: Work): void {
   const { ins, inkA, m, unitB, roleB, pieceB, pageA, framesA } = w.ix
-  const { members, claimedA, units } = w
-  factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB, units, framed: new Set(framesA.keys()) })
+  const { members, units } = w
+  const owned: Owned = w.claims
+  factsOf({ ins, inkA, m, members, owned, pageA, unitB, roleB, pieceB, units, framed: new Set(framesA.keys()) })
 }
 
 /** locate's phases, called in the order they run, which is the contract: each phase's file says what it reads of the record

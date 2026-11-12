@@ -1,7 +1,7 @@
 // A's geometry of each member, phases 6, 8 and 10 of locate (locate.ts).
 // Phase 6, lineGeometry: each member's lines on A (its text's, a display's rows, its held lines), its style, its lead, its
-// elements' ink, text and copy, its trail's element, its label. Reads the index, the record's `members`, `units`, `claimedA` (a
-// held line's glyphs are no member's), `jointPiece` (phase 4's) and `trailSep` (phase 2's); writes the members' lines, line
+// elements' ink, text and copy, its trail's element, its label. Reads the index, the record's `members`, `units`, the ownership
+// (a held line's glyphs are no member's), `jointPiece` (phase 4's) and `trailSep` (phase 2's); writes the members' lines, line
 // glyphs, pages, style, lead, read facts, elements, asInk, smallCaps, label, span fills and faces, plain text and counter.
 // Phase 8, frameMeasures: each line's column and measure (TeX's frame where it shipped the page's), a label's own line's
 // measure. Reads the index and the record's `members` and `units`; writes the members' lines' columns and measures and their
@@ -29,6 +29,7 @@ import {
 import { groupStyleOf, hasScopes, namesFace } from './group-style.ts'
 import { groupStyleOf as commandStyleOf } from './ink.ts'
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
+import type { Owned } from './ownership.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from './today/today.types.ts'
 import { field, INKED_CLASSES, type Member, ON_ROW, piecesOf, standsOn, type Work } from './work.ts'
@@ -67,7 +68,8 @@ const ON_BASE = 0.05
 
 export function lineGeometry(w: Work): void {
   const { ins, B, inkA, m, pageA, pageB, placeSpan, unitB, roleB, emptyPiece, outsidePiece, gA, atA } = w.ix
-  const { members, units, claimedA, jointPiece } = w
+  const { members, units, jointPiece } = w
+  const owned: Owned = w.claims
   const trailSep = field(w, 'trailSep')
   /** A's boxes ([page, index]) as rows.ts takes them */
   const boxesOf_ = (l: readonly [number, number][]): RowBox[] =>
@@ -165,7 +167,7 @@ export function lineGeometry(w: Work): void {
       const textForm = firstText >= 0 && !!gA(firstText).form
       for (let a = own[0] as number; a <= (own.at(-1) as number); a++) {
         const b = m.aToB[a] as number
-        if ((claimedA[a] as number) >= 0 || b < 0 || (unitB[b] as number) >= 0) continue
+        if (owned.member(a) >= 0 || b < 0 || (unitB[b] as number) >= 0) continue
         if (depthOf(b) !== textDepth || (!textForm && gA(a).form)) continue
         const g = gA(a)
         const q = box.get(pageA[a] as number)

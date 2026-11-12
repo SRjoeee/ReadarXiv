@@ -1,14 +1,16 @@
 // Phase 15 of locate (locate.ts): the links, A's annotations, each owned by the member (and within it the element) that
 // owns most of the glyphs under it.
-// Reads: the index, the options' annotations; the record's `members` (their lines and elements) and `claimedA` (a glyph's owner).
+// Reads: the index, the options' annotations; the record's `members` (their lines and elements); the ownership (a glyph's owner).
 // Writes: `links` (assigned: read by close).
 import type { LinkBorder } from '@readarxiv/format'
 import { r2 } from './lines.ts'
+import type { Owned } from './ownership.ts'
 import { assign, type Located, type LocateOptions, type Member, type Work } from './work.ts'
 
 export function linksOnA(w: Work, o: LocateOptions): void {
   const { inkA, m, pageA } = w.ix
-  const { members, claimedA } = w
+  const { members } = w
+  const owned: Owned = w.claims
   // ---- links: A's annotations, each owned by the member that owns most of the glyphs under it (today's links.mjs ownersOf: the
   // unit whose rectangles hold more than half of its glyph points; by exact ownership, the member that owns more than half of
   // them), and within it by the element that owns more than half of them, else its text; where its label's glyphs are more than
@@ -59,8 +61,10 @@ export function linksOnA(w: Work, o: LocateOptions): void {
       let owning: Member | undefined
       if (pts.length) {
         const by = new Map<number, number>()
-        for (const a of pts)
-          if ((claimedA[a] as number) >= 0) by.set(claimedA[a] as number, (by.get(claimedA[a] as number) ?? 0) + 1)
+        for (const a of pts) {
+          const c = owned.member(a)
+          if (c >= 0) by.set(c, (by.get(c) ?? 0) + 1)
+        }
         const top = [...by].find(([, n]) => 2 * n > pts.length)
         if (top) {
           const mem = members[top[0]]!

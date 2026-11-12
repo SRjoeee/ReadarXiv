@@ -60,6 +60,7 @@ function flatOf(content: readonly Piece[], out: Flat[] = []): Flat[] {
   }
   return out
 }
+import type { Owned } from './ownership.ts'
 import type { Member } from './work.ts'
 
 export interface FactsInput {
@@ -67,7 +68,8 @@ export interface FactsInput {
   inkA: Doc
   m: Mapping
   members: Member[]
-  claimedA: Int32Array
+  /** the member that owns each glyph of A (ownership.ts) */
+  owned: Pick<Owned, 'member'>
   pageA: Int32Array
   unitB: Int32Array
   roleB: Uint8Array
@@ -109,7 +111,7 @@ interface FactsIndex {
   inkA: Doc
   m: Mapping
   members: Member[]
-  claimedA: Int32Array
+  owned: Pick<Owned, 'member'>
   pageA: Int32Array
   unitB: Int32Array
   roleB: Uint8Array
@@ -154,7 +156,7 @@ function open({
   inkA,
   m,
   members,
-  claimedA,
+  owned,
   pageA,
   unitB,
   roleB,
@@ -213,7 +215,7 @@ function open({
     const o = m.offA[p - 1] as number
     const out: InkBox[] = []
     inkA.pages[p - 1]!.glyphs.forEach((g, j) => {
-      if (isInk(g) && !g.unseen && (claimedA[o + j] as number) < 0)
+      if (isInk(g) && !g.unseen && owned.member(o + j) < 0)
         out.push({ x0: g.x0, x1: g.x1, y0: g.bottom, y1: g.top, y: g.y })
     })
     for (const b of boxes(p)) if (!ownedBox.has(`${p}|${b.j}`)) out.push(b)
@@ -269,7 +271,7 @@ function open({
     inkA,
     m,
     members,
-    claimedA,
+    owned,
     pageA,
     unitB,
     roleB,
@@ -772,7 +774,7 @@ function readLineFlags(fx: FactsIndex, r: MemberReading): void {
 
 /** the room beside its lines, a cell's band and walls, a figure text's room */
 function readRoom(fx: FactsIndex, r: MemberReading): void {
-  const { inkA, m, claimedA, boxes, ownedBox, staysOn, blockOf } = fx
+  const { inkA, m, owned, boxes, ownedBox, staysOn, blockOf } = fx
   const { mem, unit } = r
   // -- room beside its lines, a cell's band
   const mine = new Set(mem.textBoxes.map(([p, j]) => `${p}|${j}`))
@@ -786,7 +788,7 @@ function readRoom(fx: FactsIndex, r: MemberReading): void {
     // (a glyph nothing of which is shown, wholly outside its clip or at an alpha of 0, is no ink beside it: 1706.03762v7 p13's
     // heading, whose side stopped at a figure's title clipped out of its form, the checkpoint's measure-9)
     inkA.pages[p - 1]!.glyphs.forEach((g, j) => {
-      const c = claimedA[o + j] as number
+      const c = owned.member(o + j)
       if (isInk(g) && !g.unseen && c !== mem.ord && c !== mem.leader)
         f!.push({ x0: g.x0, x1: g.x1, y0: g.bottom, y1: g.top, y: g.y })
     })
