@@ -41,6 +41,8 @@ describe('the extension host prefs over the configuration surface', () => {
       start: vi.fn(),
       patch: vi.fn(async (change: (c: typeof DEFAULT_CONFIG) => typeof DEFAULT_CONFIG) => { const next = change(state.config ?? DEFAULT_CONFIG); patches.push(next); state = { ...state, config: next }; for (const l of listeners) l(); return next }),
       land(c: typeof DEFAULT_CONFIG, fallbackReason: unknown = null) { state = { ...state, config: c, fallbackReason: fallbackReason as null }; for (const l of listeners) l() },
+      /** a publish of the surface's that lands no configuration: a language pack loading, a reset's line */
+      publish(more: { pack?: unknown; resetFailed?: boolean }) { state = { ...state, ...(more as object) }; for (const l of listeners) l() },
       patches,
     }
   }
@@ -95,6 +97,26 @@ describe('the extension host prefs over the configuration surface', () => {
     await Promise.resolve()
     late.land({ ...late.state().config!, pdfReader: { ...late.state().config!.pdfReader, original: true } })
     expect(told).toHaveBeenLastCalledWith(expect.objectContaining({ display: 'original' }))
+  })
+  it('a publish that lands nothing stored (a language pack, a reset\'s line) is no landing: the value read before a choice is not told again over it', async () => {
+    // (met on the v2 build's e2e: a write refused while the stored settings could not be read published the wanted pack first,
+    // with the configuration from before the choice still in place; told as a landing, it undid the reader's choice)
+    const s = surface({ ...DEFAULT_CONFIG, mode: 'only' })
+    const store = hostPrefs(s as never)
+    const told = vi.fn()
+    store.watch(told)
+    await expect(store.read()).resolves.toMatchObject({ display: 'translation' })
+    s.publish({ pack: 'deu' })
+    s.publish({ resetFailed: true })
+    expect(told).not.toHaveBeenCalled()
+    s.land({ ...DEFAULT_CONFIG, mode: 'side' })
+    s.publish({ pack: 'zho' })
+    expect(told).toHaveBeenCalledTimes(1)
+    expect(told).toHaveBeenLastCalledWith(expect.objectContaining({ display: 'bilingual' }))
+    // (the same configuration landing unreadable is a landing: the verdict changed)
+    s.land(s.state().config!, { kind: 'invalid', where: 'mode', message: 'nonsense' })
+    expect(told).toHaveBeenLastCalledWith(null)
+    expect(told).toHaveBeenCalledTimes(2)
   })
   it('a write is a patch on the latest stored, every other field untouched; a landing from elsewhere is told', async () => {
     const s = surface(DEFAULT_CONFIG)

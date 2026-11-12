@@ -40,6 +40,16 @@ export function hostFetch(o: { api: string; loopback: boolean; fetch?: typeof fe
 export function hostPrefs(surface: Pick<SurfaceConfig, 'state' | 'subscribe' | 'start' | 'patch'>, o: { askedToTranslate?: boolean } = {}): PrefStore {
   // (asked: the original let go at the first landing; written: read as let go until the write lands, or is refused)
   let letGo: 'asked' | 'written' | 'done' = o.askedToTranslate ? 'asked' : 'done'
+  // the landing last told, the configuration and its verdict: a publish of the surface's that lands neither (a language pack, a
+  // reset's line) is no landing, and the value read before a choice the reader made since, told again, would undo it (the
+  // reader follows every landing but the first after a choice: session/machine.ts `prefs.landed`)
+  let told: { config: unknown; reason: unknown } | null = null
+  const fresh = () => {
+    const s = surface.state()
+    if (told && s.config === told.config && s.fallbackReason === told.reason) return false
+    if (s.config) told = { config: s.config, reason: s.fallbackReason }
+    return true
+  }
   /** the preferences as stored now: undefined before the first landing, null where the stored ones cannot be read */
   const now = (): Prefs | null | undefined => {
     const s = surface.state()
@@ -59,11 +69,15 @@ export function hostPrefs(surface: Pick<SurfaceConfig, 'state' | 'subscribe' | '
     read: () =>
       new Promise<Prefs | null>(resolve => {
         const p = now()
-        if (p !== undefined) return resolve(p)
+        if (p !== undefined) {
+          fresh()
+          return resolve(p)
+        }
         const off = surface.subscribe(() => {
           const q = now()
           if (q !== undefined) {
             off()
+            fresh()
             resolve(q)
           }
         })
@@ -72,6 +86,7 @@ export function hostPrefs(surface: Pick<SurfaceConfig, 'state' | 'subscribe' | '
     write: patch => surface.patch(c => withPrefs(c, patch as PrefsPatch)).then(() => undefined),
     watch(listener) {
       return surface.subscribe(() => {
+        if (!fresh()) return
         const p = now()
         if (p !== undefined) listener(p)
       })
