@@ -2042,7 +2042,8 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     left made 8.7 → 8.5 ms (median of 7), a page's geometry 0.070 → 0.079 ms; 2610.19159v1 44 → 58 ms and 0.047 → 0.094 ms.
     The 1 357 left: 2610.19159v1's framed transcripts, which the figures' text takes (1 016), algorithms inside floats, arXiv's
     stamp, lines our compile sets elsewhere. A page
-    moved (our lines elsewhere than arXiv's) lights as a page in place since BUNDLE 12 (below).
+    moved (our lines elsewhere than arXiv's) lights as a page in place since BUNDLE 12 (below). On the rebuilt reader a display
+    TeX set that no unit owns is one block whatever its lines' baselines, its number with it, as a unit's display is (§18.57).
   - **A block lights on both panes or on neither** (the owner, 2026-10-30: 「为什么修改后还有一边不亮的情况？我们可以从根本上解决吗？
     …如果实在分不出来，我们就两边统一亮，或者划成一整块亮」): on a page in place a block's area on each pane is its boxes. On the left
     each box lights the tokens of arXiv's page under it where they are and itself where none is (a display or a formula drawn as
@@ -5502,6 +5503,33 @@ put-back places no group holding an element (packages/translate groups.ts), and 
   of its sentence as a pair of its own and its quotes dropped; since §18.32 the quotes are text, the run-in rule's boundary finds
   no edge there, and by the coordinator's rulings no phrase pair goes on the markers wire and no reference is asked for a
   bibliography's groups. A tags wire carries the group.
+
+### 18.57 A display no unit owns is one block, its number with it (2026-11-12)
+
+On staging (round B12), 1706.03762v7 p4's display (1), `Attention(Q, K, V) = softmax(QKᵀ/√d_k)V`, was hovered as three pieces,
+each lit alone on both panes: "Attention(Q, K, V) = softmax(", the fraction, ")V"; its number "(1)" lit with none. No source unit
+owns the display (its paragraph ends at "as:", the next begins under it), so it is kept blocks (`today/ink-units.mjs`
+keptUnitsOf, §17.1's "Text no unit owns is a kept block"), each a member lit whole (`lay/lit.ts` litOfA). The ledger makes a line
+of the glyphs TeX set on one baseline (0.6 of their size: `today/ledger.mjs` LINE_DY), so the display was five lines: the
+formula's run to "softmax(" on 311.23, the numerator on 317.97, the radical on 311.53, d_k on 303.78, ")V" on 311.23. A block took
+the next line in TeX's stream only where it stood under the block's lowest baseline (0.6 of its size) and met the block across: a
+listing's rule. The numerator, 6.74 pt over the baseline and right of "softmax(", began a second block, the radical and d_k joined
+it, ")V", right of the fraction, began a third; "(1)", no letter pair, began none and met none across. Today's ledger read no
+display (§18.19): the fraction's lines and ")V" were `symbols` and lit nothing, and today's reader lit "Attention(Q, K, V) =
+softmax(" alone on both panes, and the rest with the paragraph before on arXiv's pane alone (its left part's span).
+
+- **The rule** (`keptUnitsOf`, its one change to today's; `locate-ink-today.test.ts`). A display TeX set is one block (§18.19:
+  TeX states each display it sets, from its start point to its last end, `regions` of kind `display`): a line in it, by the
+  display holding at least half of its inked glyphs as the ledger reads a display's line, joins its display's block whatever
+  its baseline and extent across (a fraction's numerator and denominator, a radical, a big operator's limits, an alignment's
+  rows) and whatever TeX set between its lines inside it (its text a unit translates, an `\underbrace`'s label, that unit's own
+  piece), and no other block; a display's own line of no letter pair starts its block. Its number joins it: TeX sets it right
+  after the display's end (`\eqno`: on the last line, or on a line of its own under it where it does not fit; an alignment's
+  numbers are inside its region already), so the line that holds the first ink TeX set after the display's end, on its page and
+  in its column's body, is the display's (with the stop TeX set after the formula's end point on that line, 2608.04322v1 p5's
+  (9)). A unit's display is one block with its numbers (§17.1, `units.mjs` displayBlockId, Laid.lit's `own`); a display no unit
+  owns now lights as one too, an alignment of several rows one block in all, as a unit's alignment is. A line of no display
+  joins a block as before.
 
 ## 19. The engine's contract
 

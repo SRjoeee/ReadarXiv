@@ -287,6 +287,77 @@ describe('today’s ink makers in the engine package', () => {
     const ledger = (T as unknown as Impl).ledgerOf([pg], own, { units: units.slice(0, 1) }) as { lines: { cls: string; gs: number[] }[] }
     expect(ledger.lines.map((l) => [l.cls, l.gs.length])).toEqual([['orphan', 57], ['math', 17]])
   })
+  it('make each display no unit owns one kept block, whatever its lines’ baselines and extents, its number with it (the kept blocks’ one change)', () => {
+    // (1706.03762v7 p4, display (1): "Attention(Q, K, V) = softmax(", the fraction's numerator and denominator, ")V" and its
+    // number "(1)" — the ledger's lines, each on its own baseline. The block rule of a listing (each line below the block's
+    // lowest and meeting it across) cut the display into three blocks, three hover pieces, and left its number in none. TeX
+    // states the display (its region, from its start point to its last end) and sets its number right after its end)
+    /** the copy's kept blocks of a page whose first `owned` glyphs and those from `from` on are a unit's: each its glyphs' text */
+    const blocks = (pg: ReturnType<typeof pageOf>, owned: (g: number) => boolean) => {
+      const own = { glyphs: [pg.glyphs.map((_, g) => (owned(g) ? 'u0' : null))], boxes: [[]] }
+      const ledger = (T as unknown as Impl).ledgerOf([pg], own, { units: units.slice(0, 1) })
+      const ink = (T as unknown as Impl).inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 })
+      ;(T as unknown as Impl).claimInk(own, ink, [pg])
+      const kept = (T as unknown as Impl).keptUnitsOf([pg], ledger, (p, g) => own.glyphs[p - 1]?.[g] ?? null, { from: 1 + ink.length })
+      return { ink: ink.length, kept: (kept as { glyphs: { text: [number, number][] } }[]).map((u) => u.glyphs.text.map(([, g]) => (pg.glyphs[g] as G).u).join('')) }
+    }
+    const one = pageOf([
+      { s: 'Body owned text', y: 700 },
+      { s: 'Attention(Q, K, V) = softmax(', x: 200, y: 311 },
+      { s: 'QK', x: 346, y: 318 },
+      { s: 'dk', x: 346, y: 304 },
+      { s: ')V', x: 357, y: 311 },
+      { s: '(1)', x: 480, y: 311 },
+      { s: 'Body owned text again', y: 280 },
+    ], { points: [['bs1', 0], ['be1', 74]], regions: [{ kind: 'display', from: 15, to: 50 }] })
+    expect(blocks(one, (g) => g < 15 || g >= 53)).toEqual({ ink: 0, kept: ['Attention(Q, K, V) = softmax(QKdk)V(1)'] })
+    // (two displays TeX set one under the other, nothing between: a block each, each with its number; by the listing's rule
+    // they were one block, their numbers in none)
+    const two = pageOf([
+      { s: 'Body owned text', y: 700 },
+      { s: 'x = a + b', x: 200, y: 650 },
+      { s: '(2)', x: 480, y: 650 },
+      { s: 'y = c + d', x: 200, y: 635 },
+      { s: '(3)', x: 480, y: 635 },
+    ], { points: [['bs1', 0], ['be1', 39]], regions: [{ kind: 'display', from: 15, to: 24 }, { kind: 'display', from: 27, to: 36 }] })
+    expect(blocks(two, (g) => g < 15)).toEqual({ ink: 0, kept: ['x = a + b(2)', 'y = c + d(3)'] })
+    // (a display's number TeX could not set on its last line, set on a line of its own under it: the first ink after its end)
+    const under = pageOf([
+      { s: 'Body owned text', y: 700 },
+      { s: 'z = e + f + g', x: 200, y: 650 },
+      { s: '(4)', x: 480, y: 635 },
+      { s: 'Body owned text again', y: 600 },
+    ], { points: [['bs1', 0], ['be1', 52]], regions: [{ kind: 'display', from: 15, to: 28 }] })
+    expect(blocks(under, (g) => g < 15 || g >= 31)).toEqual({ ink: 0, kept: ['z = e + f + g(4)'] })
+    // (a stop TeX set at the formula's end on its number's line, after a big delimiter on a baseline of its own: the line its
+    // number, though its stop is the formula's, and not the next display's (2608.04322v1 p5's (9) and (10))
+    const stop = pageOf([
+      { s: 'Body owned text', y: 700 },
+      { s: 'w = v', x: 200, y: 650 },
+      { s: ')', x: 225, y: 640 },
+      { s: '. (5)', x: 230, y: 650 },
+      { s: 'u = t', x: 200, y: 630 },
+      { s: '(6)', x: 480, y: 630 },
+    ], { points: [['bs1', 0], ['be1', 34]], regions: [{ kind: 'display', from: 15, to: 22 }, { kind: 'display', from: 26, to: 31 }] })
+    expect(blocks(stop, (g) => g < 15)).toEqual({ ink: 0, kept: ['w = v). (5)', 'u = t(6)'] })
+    // (a display whose text TeX set in text mode a unit owns, translated, between its formula's parts: an \underbrace's label,
+    // 2608.25210v2 p10 — the parts one block about it, the label its own unit)
+    const braced = pageOf([
+      { s: 'Body owned text', y: 700 },
+      { s: 'a + b', x: 200, y: 650 },
+      { s: 'one failure', x: 200, y: 640 },
+      { s: '+ c', x: 230, y: 650 },
+    ], { points: [['bs1', 0], ['be1', 34]], regions: [{ kind: 'display', from: 15, to: 34 }] })
+    expect(blocks(braced, (g) => g < 15 || (g >= 20 && g < 31))).toEqual({ ink: 0, kept: ['a + b+ c'] })
+    // (lines of no display keep the listing's rule: a code listing's lines one block, its brace in it)
+    const listing = pageOf([
+      { s: 'Body owned text', y: 700 },
+      { s: 'def f(x):', x: 100, y: 650, font: 'ABCDEF+CMTT10' },
+      { s: 'return x', x: 120, y: 638, font: 'ABCDEF+CMTT10' },
+      { s: '}', x: 100, y: 626, font: 'ABCDEF+CMTT10' },
+    ], { points: [['bs1', 0], ['be1', 33]] })
+    expect(blocks(listing, (g) => g < 15)).toEqual({ ink: 0, kept: ['def f(x):return x}'] })
+  })
   it('state the glyphs of the label they read out of a unit’s text, those glyphs its text’s still as today’s (the one addition)', () => {
     // (2610.22065v1 p1: an affiliation the class prints from its own lists, its raised "2" no text of the unit's (labelLength);
     // today's left its glyph among the unit's text glyphs alone, so locate, which states a label from the glyphs it is told,
