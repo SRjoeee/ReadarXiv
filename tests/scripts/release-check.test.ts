@@ -303,6 +303,10 @@ describe('the equivalence gates, in either shape of their tools', () => {
     // counted, I6 counted against)
     expect(cover.judge!(ctx, [run(1, said(4767634, 0, 1))])).toMatchObject({ pass: false, findings: { I10: { held: true, count: 0 }, I6: { held: false, count: 1 } } })
     expect(cover.judge!(ctx, [run(0, said(4767634, 5))])).toMatchObject({ pass: false, findings: { I10: { held: false, count: 5 } } })
+    // (a paragraph point the row anchors not opened on TeX's line (paras-gate.ts): the run exits 1 and ends whole, I10 and I6
+    // still counted, the points' count reported)
+    const points = `${said(4767634, 0)}\nthe paragraph points (paras-gate.ts): 8 stated (8 group); 6 with an anchor in their row (6 sentence; 2 no row); of those, their member laid: 4 opened on TeX's line, 2 NOT; not laid: none`
+    expect(cover.judge!(ctx, [run(1, points)])).toMatchObject({ pass: true, numbers: { I10: 0, I6other: 0, parasAnchored: 6, parasOff: 2 }, findings: { I10: { held: true, count: 0 } } })
     // (nothing laid: no finding, no pass; a run that did not end whole: its count is not read)
     const none = cover.judge!(ctx, [run(1, said(0, 0))])
     expect(none.pass).toBe(false)

@@ -6232,6 +6232,13 @@ word: its offset in the unit's source projection (what `Row.sentences.src` count
 - **Stated** (`Laid.paras`, where the part states a point and the member is laid): `[opened, noStart, noSentences]`: the points
   opened on their line (by their own pair, or by a stronger fact the row holds there), those that flowed on for want of a start
   the lay can open at their word, those for want of the row's sentences.
+- **The gate** (the reader gate, `lab/typeset/gate-l1.mjs --entry`, `packages/typeset/tests/replay/paras-gate.ts`): each point a
+  part states (a group's open, an element, a first word) whose row carries its anchor (the group or the element between the
+  row's texts, else the sentence start paired with its first word) is laid with its first line on the line TeX opened it on: the
+  member's laid line at that line's baseline begins with the paragraph's first thing. One not so laid fails the run; a point with
+  no anchor flows on and is counted by why. In the lab the first word of a point stated at a group or an element is read from the
+  unit's source, so the gate holds today's group points to the fallback the part will state. The release check's
+  `sentence-cover` reads the count (its pass is not changed by it).
 
 ## 19. The engine's contract
 

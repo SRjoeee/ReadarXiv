@@ -36,6 +36,7 @@ import { inkEndOf } from '../../src/shared/share.ts'
 import type { Metrics, RuleParams, Rows } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
 import { type Cover, coverDone, coverOf, newCover } from './cover.ts'
+import { newParasGate, type ParasGate, parasGate } from './paras-gate.ts'
 import { walkCase } from './fit-input.ts'
 import type { GateUnit } from './gate.ts'
 import { keptJoin, keptRow, type L1Placed, l1Paper, type TodayPrepared, todayPrepared, todayUnitOf } from './l1.ts'
@@ -102,6 +103,8 @@ export type GateL1 = {
     cover: Cover
     /** I6 across the pages' lays (cross-lay.ts): each unit begun on a pass page as every page's lay that runs that pass lays it */
     crossLay?: CrossLay
+    /** the paragraph points (paras-gate.ts): each the part states whose row carries its anchor laid opening on TeX's line */
+    paras: ParasGate
   }
 }
 
@@ -578,6 +581,7 @@ export function gateL1Pair(
             figures: new Map(),
             lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 },
             cover: newCover(),
+            paras: newParasGate(),
           },
         }
       : {}),
@@ -1118,6 +1122,7 @@ export function gateL1Pair(
         laysOf.set(x.ord, by.set(pg, x))
       }
       coverOf(out.entry.cover, page, part as Part, metrics, pair)
+      parasGate(out.entry.paras, pair, pg, page, part as Part, entryRows, bundle.units)
       // (the links' fates, the dropped with an example each; the laid members' boxes on both panes)
       ;((part as Part).links ?? []).forEach((l, i) => {
         // (an annotation of a member's other page, which the part holds with its page: counted apart)

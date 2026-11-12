@@ -291,6 +291,10 @@ export function typesetOf(text) {
   // head pass's known cause, and by another, which fails the run)
   const across = /^I6 across the pages' lays \(cross-lay\.ts\): \d+ units begun on a pass page, (\d+) laid by two pages' lays or more; \d+ laid otherwise: (\d+) by the head pass .*, (\d+) by another cause$/m.exec(text)
   if (across) Object.assign(out, { I6twice: num(across[1]), I6head: num(across[2]), I6other: num(across[3]) })
+  // (the paragraph points, the runner with --entry (paras-gate.ts): those stated on the pages walked, those whose row carries
+  // their anchor, of those laid opening on TeX's line and not, which fails the run)
+  const paras = /^the paragraph points \(paras-gate\.ts\): (\d+) stated .*?; (\d+) with an anchor in their row .*?: (\d+) opened on TeX's line, (\d+) NOT/m.exec(text)
+  if (paras) Object.assign(out, { parasStated: num(paras[1]), parasAnchored: num(paras[2]), parasOpened: num(paras[3]), parasOff: num(paras[4]) })
   const lay = /a page's lay \(layPagePrepared[^)]*\), ms: p50 ([\d.]+), p90 ([\d.]+), p99 ([\d.]+), max ([\d.]+) over (\d+) pages/.exec(text)
   if (lay) Object.assign(out, { layP50: num(lay[1]), layP90: num(lay[2]), layP99: num(lay[3]), layMax: num(lay[4]), layPages: num(lay[5]) })
   const first = /^\{"pairs":.*\}$/m.exec(text)
@@ -600,16 +604,18 @@ export const GATES = [
       { cmd: ['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', `--out=${join(ctx.work, 'sentence-cover')}`], slot: 'test', env: { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }, fresh: join(ctx.work, 'sentence-cover') },
     ],
     // (counted over the pieces the entry drew: a run that laid nothing, or did not end whole, has no count and fails; a run whose
-    // exit is a unit laid otherwise by two pages' lays alone (I6 across the lays, another cause than the head pass's) ended whole)
+    // exit is a unit laid otherwise by two pages' lays alone (I6 across the lays, another cause than the head pass's) ended whole,
+    // and one whose exit is a paragraph point not opened on TeX's line (paras-gate.ts, design-display 2a's gate): its count is
+    // reported, the gate's pass the coordinator's to rule on)
     judge: (ctx, steps) => {
       const t = typesetOf(steps[0]?.text ?? '')
-      const whole = steps[0]?.exit === 0 || (steps[0]?.exit === 1 && t.I6other > 0 && t.I10pieces > 0)
+      const whole = steps[0]?.exit === 0 || (steps[0]?.exit === 1 && (t.I6other > 0 || t.parasOff > 0) && t.I10pieces > 0)
       const counted = whole && t.I10 != null
       const across = whole && t.I6other != null
       const findings = { ...(counted ? { I10: { held: t.I10 === 0, count: t.I10 } } : {}), ...(across ? { I6: { held: t.I6other === 0, count: t.I6other } } : {}) }
       return {
         pass: counted && t.I10 === 0 && across && t.I6other === 0,
-        numbers: { ...(t.I10 != null ? { I10: t.I10 } : {}), pieces: t.I10pieces ?? 0, pairs: t.pairs, ...(t.I6other != null ? { I6twice: t.I6twice, I6head: t.I6head, I6other: t.I6other } : {}) },
+        numbers: { ...(t.I10 != null ? { I10: t.I10 } : {}), pieces: t.I10pieces ?? 0, pairs: t.pairs, ...(t.I6other != null ? { I6twice: t.I6twice, I6head: t.I6head, I6other: t.I6other } : {}), ...(t.parasOff != null ? { parasAnchored: t.parasAnchored, parasOff: t.parasOff } : {}) },
         ...(Object.keys(findings).length ? { findings } : {}),
       }
     },
