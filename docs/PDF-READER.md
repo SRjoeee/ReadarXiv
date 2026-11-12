@@ -3550,7 +3550,8 @@ the row (`ON_ROW`) and no word's gap after the one before (the ink units' word r
 of no piece in its group `.e`, on its last line. The typesetter draws it as its crop right after the member's own tokens,
 glued; the follower runs on from its end at TeX's separation, and the room beside the member is no longer fenced by it (a
 `\thanks` mark in an `\rlap`, 1706.03762v7's first name). Ink past a skip (an `\hspace`, a proof's QED box after `\hfill`)
-is no trail; what TeX pushed to the measure's end is the unit's end mark (§18.52), the rest stays. One rule with §18.12's:
+is no trail; what TeX pushed to the measure's end is the unit's end mark (§18.52), and an author's ink of no letter past a
+word's gap on its last line is its trail too, the gap stated (§18.59); the rest stays. One rule with §18.12's:
 what TeX set on a line is laid as the line, with the alignment TeX gave it. The
 crop stands on the member's last line, the line TeX set it on, as every element's crop stands on its line's baseline: drawn by
 its glyphs' own baseline, which a trail of raised marks alone holds off the line, each mark came down onto the line (45 of
@@ -5711,6 +5712,109 @@ softmax(" alone on both panes, and the rest with the paragraph before on arXiv's
   of every paper as they were (a kept block's unit is its kind's, of no content).
 - **Not done.** A display the source ends with `$$` (no region, §18.19) keeps the listing's rule; a number TeX sets before its
   display (`\leqno`: none in the 88); a display inside a float, which no kept block takes.
+
+### 18.59 What TeX set on an author's line after it moves with it, past a word's gap (2026-11-12)
+
+With the author block switched on, a name or a row of places was drawn 10 to 25 % smaller than the original though the line had
+room beside it (the display class S5). The owner (2026-11-12): normal size, using the room that is there, without the overlap of
+today's marks after the name, and only if it can be done simply. Over the lay of the 90 pairs with stored rows, every switch on
+(round B13's bundles, r20), 63 author-block members (author, affiliation, the block's ink names) were drawn below their own
+size: 15 fenced by ink that stays beside them, 3 on a flush-left line (§18.60), 2 by an icon box before a name and 2 by an
+"and" left as ink of no unit (both open), 31 inside a run the lab could not lay (a connector's ink unit whose id moved has no
+stored row; a reader asks for it), 10 with no room on either side (a line of names filling its column, four columns of names).
+Of the 15, every one is a mark or a number TeX set right after a name or a place on its line, past a word's gap:
+
+- 1706.03762v7 p1 t187, the last NeurIPS name (`Illia Polosukhin\footnotemark[1]\hspace{1.7mm} \thanks{…}\\`): the call
+  points of §18.16 stop at the last block (no unit follows its `\thanks` in the block, so no call is written there), the glue
+  rule broke at the 3.22 pt after the star, and the ‡ stayed (`Room.stays`), the right end of the centred name's room: v2 drew
+  it at 0.875; today keeps 9.96 by drawing its star over the ‡, 2.8 pt of overlap.
+- 2608.16117v1 p1 t129-t131, "Philadelphia, 19104, Pennsylvania, United States of America": the postal code is no unit's
+  (a number), between two places on one centred line. It stayed, parted the line's flows (TeX's separation past it 35.8 pt, more
+  than a shared row's), and the places after it were laid as a run centred on its own middle with its left fenced by the
+  number: 0.8 for the German; today keeps the size by a break TeX never set, 2.74 pt off the line's middle.
+- 2608.08481v1, 2610.20266v1, 2610.21288v1 (and, drawn at their size but fenced, 2610.20030v1, 2610.21765v1, 2610.21770v1): a
+  `\thanks` mark after `\,` (1.66 to 1.83 pt) after the last name's own marks.
+
+**The rule** (`locate.ts`, the trail). An author's member (the block's names and places, `AUTHOR_KINDS`) also owns, past a
+word's gap, the ink of no letter TeX set after it on its last line, in B's stream up to the next unit's ink: what TeX set as
+part of its line moves with it, decided by TeX's order and the line, never by a mark's shape. A blank glyph a producer wrote
+decides nothing. Ink holding a letter is text: where a letter stands on the line after the run, the paragraph's own text goes
+on (acmart's reference format "Ru Huang. 2027. ABNAT", an "and" a class sets between names, an ink unit's, translated), and
+nothing past the gap is claimed, as the end mark's walk reads text no unit owns after a unit's end (§18.52); a member of no
+author block keeps the glue rule alone; a row of another line (an e-mail under a name), a mark the next unit owns (its label,
+own.mjs MR 5), stay as before. The distance TeX set from the member's ink end (its last glyph, or an element's box after it:
+§18.60) to the run's first glyph, where the run opens past the gap, is stated on the trail: `El.sep` (FORMAT 1, optional; a typesetter of before reads none and glues the trail). A run
+glued first and gapped after (2608.08481v1's "1,∗") is one crop with its gap inside it. The claimed ink is the member's: its
+line reaches it, no stay of any member's, and the member after it on the row is joined to it at TeX's separation (16117's
+five places one flow).
+
+**The lay** (`lay/adapt.ts`): the trail's crop after the member's tokens as before, `sep` laid before it as the kern an
+`\hspace` element's is (`kernW` on the token before, at the member's scale), so that no line breaks there.
+
+**Before and after** (stage 1a over the 88, r20's compiles: the marked TeX unchanged, every compile found by its key). s1 and
+its twin: 88 made, none missing a compile, none failed; 2,707 of 2,707 objects and 88 of 88 dumps the same (I6). 11 papers
+move, the units (the wire) byte-identical in each, their parts and add-ons alone: trails in 1706.03762v7 (‡, `sep` 3.23),
+2608.16117v1 pp1-3 ("19104,", 3.56), 2610.20285v1 († 4.23; its alignment, read off the page, now c: the line with its mark is
+centred, 250.25 against the column's 248.53), 2610.20451v1 (",1" 8.47, "2" 6.8), 2610.21084v1 pp1-2 (two postal codes
+"30322,", "29634,", 1.99), and the `\,` marks joined to glued trails in 2608.08481v1, 2610.20030v1, 2610.20266v1, 2610.21288v1,
+2610.21765v1, 2610.21770v1; flows joined over the codes (16117 pp1-3, 21084's two rows), joins and rooms with them. A place's
+class's tail (the comma TeX set after "Philadelphia", its source writing none) is read with its trail aside, as an end mark is
+(facts-pass.ts): read with the trail as its last element glyph, as every trail was since §18.16, the place had no tail, its comma
+erased with its text and drawn nowhere ("Philadelphia 19104," on the lay, caught by the lane's own reading). The differential against acceptance-b13: lost 11, the LOST
+lines r20's; gained 5,838 as r20's; changed 5,256 to 5,258 (1706.03762v7 t187, 2608.16117v1 t129: their trails). Float lines
+778 and orphan letters 388 as recorded.
+
+### 18.60 A line its members share whole TeX set flush left is laid from its start as one run (2026-11-12)
+
+2609.20976v1 p1 (JCAP, `\author[a]{Gautam Bhuyan,\orcidlink{…}}`, each `#2$^{#1}$\ `): three names on one flush-left line, each
+with its ORCID icon (its element), each mark after a name the next name's label (own.mjs MR 5: the class stores the list in the
+preamble, so no call is stated). A line TeX set flush left was never laid as a run (`rowLinesOf` took centred and flush-right
+lines alone: "its members run on from its first one's start already", S.rowStart). They do run on, but each member is fitted in
+its own block first, widened to its `Room.side`, and the first name's side ended at the next name's label (210.56), half its
+size before it: 118 pt for the Japanese name with its icon, drawn at 0.9, the size tie taking the others with it, though that
+label moves with the next name (laid from this one's end) and the line had 28 pt free after its last name. Nothing that moves
+with a member may fence its room or its neighbour's (the owner's S5, §18.59).
+
+- **The rule** (`lay/adapt.ts` `rowLinesOf`, `shared/row-start.ts` `lineRoom`/`lineShift`, `lay/flow.ts` `layLine`). A line of
+  several members TeX set flush left (their own marks' alignment, alike) is a run as a centred or flush-right one is: laid from
+  the line's start, its room to the run's right (its last member's side, the column's end), each member from the one before's
+  ink end at TeX's separation, then placed starting where TeX started the line. A follower's label that goes with it on the row
+  (S.rowStart's row label: a flush-left follower's, which U.decor does not carry) admits it to the run and is drawn before its
+  first token, the first word glued to it, as `layOne` draws it. Where the translation does not fit the line's room, `layLine`
+  refuses the run and the members are laid one by one, as before (the test lays a full row so and compares it with the row its
+  marks state no alignment for). The parity's verdict asks `rowLinesOf` without flush-left lines (`left`, the lay's alone): a
+  flush-left member is judged by its start and a follower by its gap, which is the line's reading already.
+- **The separation** (`locate.ts` `inkEnd`, a prepare change). The join to the next member on a row was read from the member's
+  glyphs' ink end; its element's box on that line (no glyph's: the ORCID icon) travels with it in its crop, so the next name was
+  laid the icon's width late (9.84 pt), its mark apart from the name TeX set it right after. It is read from the member's ink
+  end, its elements' boxes with it; an element's glyphs are among the line's glyphs already, read by their ink (read by the
+  element's stated box, its glyphs' advances, 173 joins in 24 papers moved by under a point: tried, not kept). An author's
+  trail starts there too (§18.59): a mark TeX set right after the icon is glued to the member (2610.20451v1's ",1"); read from
+  the last glyph across the icon it was stated 8.47 pt apart and laid that far after the icon's crop.
+- **Before and after, §18.59 and this together** (stage 1a s5 over the 88, r20's compiles; its twin 2,707 of 2,707 objects and 88
+  of 88 dumps the same). 13 papers move: §18.59's 11, and by the ink end 2609.20976v1 (two joins, 22.54 to 11.25 and 21.55 to
+  10.26: from the icons' ends), 2610.20451v1 (",2" after an icon now its name's trail, glued; its "and" ink unit the word alone)
+  and 2610.10492v1 (the mark after the first name's icon its trail, so the "and" after it is an ink unit of the block, joined:
+  units 49,689 to 49,690, the paper's later ink units numbered one on). The differential: lost 11, the LOST lines r20's; gained
+  5,838 to 5,839 (that "and"); changed 5,256 to 5,258; float lines 778 and orphan letters 388 as recorded. The lay of the 90 pairs
+  with stored rows, every switch on, against 75602aecb over r20: 40 members move on 17 pages (10492's renumbered ink units
+  aside, the same lay), 19 drawn larger, none smaller: 1706.03762v7 t187 (es, pl, zh) 0.875-0.9 to 1, 2608.08481v1's five 0.8 to
+  1 (a run fenced by the last name's `\,` mark), 2608.16117v1-de's places 0.8 to 1, 2609.20976v1's names 0.9 to 1,
+  2610.21288v1's three 0.9 to 1, 2610.20266v1's three 0.9 to 0.93 (its run still refused for an "and" with no stored row); a
+  flush-left run's last member no longer tracked by the page's fill (2609.26457v1, 2610.19274v1, 2610.21084v1: its share of its
+  line, as a centred run's), 2610.21084v1 t496 laid where it was unfit. Author-block members drawn below their size: 63 to 47; the
+  47 are runs the lab cannot lay (34: a connector's ink unit with no stored row, a reader asks for it), no room on either side
+  (10), an icon box that leads a name (2610.21547v1, 2) and an "and" no unit owns between two names (2610.20716v1 t3): open.
+  The three named units, with every switch on (base, after; today):
+  1706.03762v7-zh t187 0.875 and 1 (today 1); its line with its marks centred on the original's middle 307.83, -3.44 and 0.00
+  (the base centred the name without its ‡); its ∗ 4.03 pt before its ‡ (TeX 3.22, the crops' margins), no overlap (today's ∗,
+  drawn as text, 2.82 pt over the ‡). 2608.16117v1-de t127-t131 two rows at 1 (the base 0.8 for t130/t131; today 1 by a third
+  line TeX never set), each row centred on TeX's middle 306.14 (the base's lower row 3.36 off), "Philadelphia, 19104,". 2609.20976v1
+  t1-t3 0.9 and 1 (today 0.975, 1, 1), from TeX's start 84.95. The parity of the three pairs, every switch on: 5 pages worse to
+  3, none newly worse; 2608.16117v1-de p1 (t128's align, the tie t130/t131) and 2609.20976v1-ja p1 (the tie t1-t3) no longer
+  worse, 1706.03762v7-zh p1's t187 size gone (the page worse by its abstract's line count alone, t8). By default (the author block
+  the original's) the lay of the 90 pairs is the base's member for member (10492's ink units read one number on), and the parity
+  of the three pairs the same: 3 pages worse, the same differences.
 
 ## 19. The engine's contract
 

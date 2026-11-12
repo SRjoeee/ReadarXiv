@@ -28,6 +28,7 @@ import {
   sourceEndMarks,
   staysOf,
   styleOf,
+  TRAIL,
   tailOf,
 } from './facts.ts'
 import { isInk, r2 } from './lines.ts'
@@ -568,8 +569,9 @@ export function factsOf({
     // -- the class's tail: its own text after its last letter, digit or element glyph, all on its last line
     if (unit) {
       // (a display's glyphs among them: a unit that ends with a display has no tail after its text before it)
-      // (its end mark aside, END: ink TeX pushed past the text, no part of it, as before it was claimed)
-      const elGlyphs = [...mem.els].flatMap(([id, l]) => (id === END ? [] : l))
+      // (its end mark aside, END: ink TeX pushed past the text, no part of it, as before it was claimed; and its trail, TRAIL: ink
+      // TeX set after its text, no part of it, the comma before 2608.16117v1's "19104," its class's tail, §18.59)
+      const elGlyphs = [...mem.els].flatMap(([id, l]) => (id === END || id === TRAIL ? [] : l))
       const seq = [...mem.text, ...elGlyphs].sort((x, y) => x - y)
       const isEl = new Set(elGlyphs)
       let last = -1

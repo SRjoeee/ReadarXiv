@@ -239,8 +239,16 @@ function layLine(
   // one to the next but at a space, and after the label it carries, the separator TeX set before it (IJCAI's \and's comma),
   // which closes the line before where the member goes on to the next. A CJK name holds no space: it goes on whole, where cut
   // between its characters by the fit, a name of three characters stood over two lines, two and one (2611.00342v1's "Woohyeon Kwon" on staging); one longer than a line is cut by the breaker as before)
+  // (a follower's own label on the row that U.decor does not carry, a flush-left line's mark before a name (§18.60): its crop
+  // before its first token, on the row TeX set it on, as S.rowStart's row label goes with a member laid from the one before
+  // (layOne): laid with `rowStart` unset here, it went with nothing, and the member was no line's)
+  const rowLabelOf = (m: FlowMember, k: number) => {
+    const rs = m.rowStart
+    return k > 0 && rs && !rs.carried && rs.ownLabel && rs.label ? rs.label : null
+  }
   const tokensOf = (m: FlowMember, k: number) => {
-    const own = marks[k] ? m.tokens.slice(1) : m.tokens,
+    const lab = rowLabelOf(m, k)
+    const own = marks[k] ? m.tokens.slice(1) : lab ? [lab.crop(m.rowStart!.row.baseline), ...m.tokens] : m.tokens,
       next = marks[k + 1]?.token
     const t = next ? [...own, next] : own
     const lead = k > 0 && !marks[k] && m.rowStart?.carried && t[0]?.crop ? 1 : 0
@@ -259,11 +267,14 @@ function layLine(
       const r = k === 0 ? 0 : ys.length - 1
       const y = ys[r]
       const tokens = tokensOf(m, k)
+      // (the label drawn so, its first line's head is the line's own: RUN:2215-2224, as layOne sets it)
+      const lab = rowLabelOf(m, k)
+      const P0 = lab && m.P.halfLead ? { ...m.P, halfLead: { ...m.P.halfLead, head: lab.head } } : m.P
       const layFrom = (from: number, start: number, startY: number | undefined) =>
         layOne(
           {
             ...m,
-            ...(fixed ? { P: { ...m.P, ...fixed } } : {}),
+            P: fixed ? { ...P0, ...fixed } : P0,
             tokens,
             blocks: [blockOf(m, from, start, shift, startY)],
             rowStart: undefined,

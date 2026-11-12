@@ -1272,6 +1272,39 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const three = layPage({ ...part(liu), flows: [[liu, zhao, shang]] }, rows3, rules, inked).members
     expect(three[2]!.lines[0]![1]).toBeCloseTo(three[1]!.lines[0]![2] + 3, 5)
   })
+  it('lays a trail TeX set past a word’s gap that far after the translation’s end (El.sep, 1706.03762v7’s last name)', () => {
+    // (NeurIPS' `Illia Polosukhin\footnotemark[1]\hspace{1.7mm} \thanks{…}`: the ‡, 7.3 pt after the name, its trail (§18.59);
+    // glued, it stood against the translation's last character where TeX set a skip)
+    const illia = member({
+      ord: 0,
+      kind: 'author',
+      align: 'c',
+      lines: [[1, 0, 200, 279.5, 700, 707, 698, 72, 540, 0, 10]],
+      els: [['~', { kind: 'other', copy: '‡', ink: [[1, 275.3, 699, 279.5, 706, 703.6]], trail: 1, sep: 7.3 }]],
+      room: { below: 20, next: 24, side: [72, 540] },
+    })
+    const laid = layPage(part(illia), rowsOf([row([{ t: 'text', s: 'Illia' }])], true), rules, metrics()).members
+    expect(laid[0]!.state).toBe('laid')
+    const items = laid[0]!.lines[0]![3]
+    const crop = items.find((it) => 'src' in it) as Item & { x: number }
+    const text = items.find((it) => 'face' in it) as Item & { x: number }
+    // (the text 25 pt, TeX's gap, then the crop: its rectangle opens 0.4 before its ink, as a glued trail's does)
+    expect(laid[0]!.fit?.size).toBe(10)
+    expect(crop.x).toBeCloseTo(text.x + 25 + 7.3, 5)
+    // (the unit's own skip at its end, `\hspace{1.7mm}` an element, lies inside the gap TeX set: the gap is laid, not the skip
+    // and the gap. Added, 1706.03762v7's ‡ stood 8.85 pt after the star where TeX set it 3.22 pt)
+    const skip: El = { kind: 'zero', ink: [], glue: [4.82, 'bp', 1] }
+    const ended = { ...illia, els: [['2', skip], ...(illia.els ?? [])] as Placed['els'] }
+    const rowSkip = row([
+      { t: 'text', s: 'Illia' },
+      { t: 'el', id: '2' },
+    ])
+    const laid2 = layPage(part(ended), rowsOf([rowSkip], true), rules, metrics()).members
+    const items2 = laid2[0]!.lines[0]![3]
+    const crop2 = items2.find((it) => 'src' in it) as Item & { x: number }
+    const text2 = items2.find((it) => 'face' in it) as Item & { x: number }
+    expect(crop2.x).toBeCloseTo(text2.x + 25 + 7.3, 5)
+  })
   it('lays a line of several members TeX centred as one run, centred where TeX centred the line (2610.21106v1’s “A AND B”)', () => {
     // (amsart's authors: one centred paragraph, its names two units and the "AND" between them text no unit owns, made on A;
     // each member's translation shorter than its original. Laid each by itself, the first name stood centred on its own
@@ -1382,6 +1415,76 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const [fa, , fc] = ends(filled)
     expect(filled.slice(0, 3).map((m) => m.fit?.track)).toEqual([0, 0, 0])
     expect((fa![0] + fc![1]) / 2).toBeCloseTo((230 + 376) / 2, 5)
+  })
+  it('lays a line of several members TeX set flush left as one run from its start, at their size (2609.20976v1’s names)', () => {
+    // (JCAP's \author: `#2$^{#1}$\ ` for each, its names one flush-left line, each mark after a name the next name's label. Each
+    // laid by itself, a member's room ended at the next one's label (Room.side), half its size before it, though that label
+    // moves with the next member, laid from this one's end: the first name shrank to 0.9 there and the tie took the others
+    // with it, the line's room free after the last. TeX set the line as a whole: its names and marks run on from its start)
+    const ids = ['b', 'c'].map((c) => c.repeat(64))
+    const ln = (x0: number, x1: number) => [1, 0, x0, x1, 700, 707, 698, 72, 540, 0, 10] as Placed['lines'][number]
+    const mark = (x: number): Placed['label'] => ({
+      kind: 'number',
+      ink: [1, x, 703, x + 4, 708, 703],
+      style: { role: 'serif', size: 7, design: 'NimbusRomNo9L-Regu' },
+      line: 0,
+    })
+    const name = (o: Partial<Placed>) => member({ kind: 'author', align: 'l', ...o })
+    const a = name({ ord: 0, lines: [ln(72, 130)], room: { below: 20, side: [72, 136] } })
+    const b = name({
+      ord: 1,
+      text: ids[0],
+      join: [16, 1],
+      label: mark(136),
+      lines: [ln(146, 200)],
+      room: { below: 20, side: [130, 206] },
+    })
+    const c = name({
+      ord: 2,
+      text: ids[1],
+      join: [16, 1],
+      label: mark(206),
+      lines: [ln(216, 270)],
+      room: { below: 20, side: [200, 540] },
+    })
+    const rows3 = rowsOf(
+      [
+        row([{ t: 'text', s: 'Gautam Bhuyan' }]),
+        { ...row([{ t: 'text', s: 'Tathagata' }]), id: ids[0]! },
+        { ...row([{ t: 'text', s: 'Surhud' }]), id: ids[1]! },
+      ],
+      true,
+    )
+    const inked: Metrics = { ...metrics(), ink: (_f, size, t) => [0.7, 0.2, (size * [...t].length) / 2] }
+    const lay = (flows: Placed[][]) => layPage({ ...part(a), flows }, rows3, rules, inked).members
+    const laid = lay([[a, b, c]])
+    expect(laid.map((m) => m.state)).toEqual(['laid', 'laid', 'laid'])
+    // (every name at its size, the first from TeX's start, each after the one before at TeX's separation, its mark before it)
+    expect(laid.map((m) => m.fit?.size)).toEqual([10, 10, 10])
+    expect(laid[0]!.lines[0]![1]).toBeCloseTo(72, 5)
+    const start = (k: number) => Math.min(...laid[k]!.lines[0]![3].map((it) => it.x))
+    expect(start(1)).toBeCloseTo(laid[0]!.lines[0]![2] + 6, 5)
+    expect(start(2)).toBeCloseTo(laid[1]!.lines[0]![2] + 6, 5)
+    // (what stays as before: a line whose members no alignment of TeX's states alike, its marks' (here `read` says the prepare
+    // read it off the page), each laid by itself as before; and a run that does not hold the translation, its line full to the
+    // column's end, laid member by member as before)
+    const unread = (m: Placed): Placed => ({ ...m, read: ['align'] })
+    expect(lay([[unread(a), unread(b), unread(c)]]).map((m) => m.fit?.size)).toEqual([9, 10, 10])
+    const full = (m: Placed, k: number): Placed => (k === 2 ? { ...m, lines: [ln(216, 540)] } : m)
+    const longRows = rowsOf(
+      [
+        row([{ t: 'text', s: 'Gautam Bhuyan Gautam Bhuyan Gautam Bhuyan' }]),
+        { ...row([{ t: 'text', s: 'Tathagata Tathagata Tathagata Tathagata' }]), id: ids[0]! },
+        { ...row([{ t: 'text', s: 'Surhud More Surhud More Surhud More Surhud More' }]), id: ids[1]! },
+      ],
+      true,
+    )
+    const fullRow = [a, b, c].map(full)
+    const before = layPage({ ...part(a), flows: [fullRow.map(unread)] }, longRows, rules, inked).members
+    const after = layPage({ ...part(a), flows: [fullRow] }, longRows, rules, inked).members
+    expect(after.map((m) => [m.fit?.size, m.lines.map((l) => [l[0], l[1], l[2]])])).toEqual(
+      before.map((m) => [m.fit?.size, m.lines.map((l) => [l[0], l[1], l[2]])]),
+    )
   })
   it('lays the names of a centred paragraph over several lines as one run, each line centred as TeX centred it (2611.00342v1)', () => {
     // (IJCAI's \author: its names one centred paragraph TeX broke over three lines, each \and's comma the next name's stated
