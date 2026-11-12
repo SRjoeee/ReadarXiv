@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a citation number whose link on the original also takes in the bracket after it, such as the "4" of "[24, 4]", keeps its link in the translation. It had been dropped.
 - Fixed: with Google translating, two pieces the paper sets side by side with nothing between them, such as a word it highlights in two colours or a formula followed by its footnote mark, stay side by side. Google had put a space between them.
 - Fixed: in the PDF reader, a word and what the paper ties to it with an unbreakable space (`~`), such as a footnote's mark, "Figure 3" or "et al." and its citation, stay on one line in the translation, as in the original. A footnote's mark could begin a line of its own.
 - Fixed: in the PDF reader, a paragraph that opens with a bold title run into its first line, such as "Howto-GEN" after a paragraph ending in a footnote mark, starts on its own line where the original starts it, when the paper writes several such paragraphs one after another with no blank line between them. It had been drawn on from the last line of the paragraph before it, its footnote mark beside the next title.
