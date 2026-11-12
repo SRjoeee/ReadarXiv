@@ -4,7 +4,7 @@
 const RIGHT = 'section.pane[data-side="right"]'
 
 export async function layerChecks(t) {
-  const { context, worker, id, api, PAPER, PV, LINK, echo, readerState, sessionState, probe, openReader, paperOpened, laid, setConfig, clearPaperStore, section, check, control, note, sleep, SHOTS } = t
+  const { context, api, PAPER, PV, LINK, echo, readerState, sessionState, probe, openReader, paperOpened, laid, setConfig, clearPaperStore, section, check, control, note, sleep, SHOTS } = t
   const rightText = page => page.evaluate(sel => document.querySelector(sel)?.textContent ?? '', RIGHT)
   /** a laid page's translation on the right (its text layer is built after the page is put in place) */
   const echoed = (page, timeout = 15_000) => page.waitForFunction(sel => (document.querySelector(sel)?.textContent ?? '').includes('[echo]'), RIGHT, { timeout }).then(() => true, () => false)

@@ -57,7 +57,7 @@ const measure = () => [...document.querySelectorAll('section.pane[data-side="rig
   const over = slot.querySelector('.axt-over')
   const view = slot.querySelector('.axt-slot-view')
   const canvas = view?.querySelector('canvas:not(.axt-crops)')
-  if (!over || !view || !canvas || !canvas.width) return []
+  if (!over || !canvas?.width) return []
   const box = r => { const b = r.getBoundingClientRect(); return [b.width, b.height, b.left, b.top] }
   const svg = over.querySelector('svg')
   return [{ page: Number(slot.dataset.pageNumber), dpr: devicePixelRatio, slot: box(view), canvas: [canvas.width, canvas.height], over: box(over), svg: svg ? box(svg) : null }]
