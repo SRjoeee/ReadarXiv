@@ -1,8 +1,9 @@
-// The prepare's one entry (src/front.ts): what arXiv's PDF says read once; the tree decided once, before anything is
-// compiled; the source's units handed out before any compile of the marks, as the bundle states them; a stored instrument
-// taken only for the original it was made with, its plan handing instrumentOf every option the marked compile gave and the
-// .bbl it was opened with; and the frames: what the front half is handed and makes beside the instrument is let go before the
-// back half begins. The marked compile and instrumentOf are spies here: no TeX runs. Every paper and PDF is made here.
+// The prepare's one entry (src/prepare.ts `prepare`) and its front half (src/front.ts): what arXiv's PDF says read once; the
+// tree decided once, before anything is compiled; the source's units handed out before any compile of the marks, as the bundle
+// states them; a stored instrument taken only for the original it was made with, its plan handing instrumentOf every option the
+// marked compile gave and the .bbl it was opened with; the frames: what the front half is handed and makes beside the
+// instrument is let go before the back half begins; and the back half given the front half's own classesOf. The marked compile
+// and instrumentOf are spies here: no TeX runs. Every paper and PDF is made here.
 import { setFlagsFromString } from 'node:v8'
 import { runInNewContext } from 'node:vm'
 import { deflateSync, inflateSync } from 'node:zlib'
