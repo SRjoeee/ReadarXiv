@@ -4,7 +4,7 @@
 // read. Nothing here is a new gate: a gate's pass is its own (its exit code, or the counts its own output states against the
 // bound its own header names), and an invariant no gate holds is said so (`gap`). Not shipped.
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { CACHE as SWEEP_CACHE } from '../../packages/typeset/tests/replay/today.ts'
 import { PAIRS as PARITY_PAIRS } from '../typeset/parity/pairs.mjs'
 import { SLICES, TABLES } from '../typeset/served-metrics.mjs'
@@ -301,11 +301,20 @@ export function typesetOf(text) {
   return out
 }
 
-/** a corpus runner's log.tsv (lab/pdf/prepare-back/corpus.sh): one line a paper, `id <tab> exit <tab> summary` */
+/** a corpus runner's log.tsv (lab/pdf/prepare-back/corpus.sh): one line a paper, `id <tab> exit <tab> summary`. The table
+ *  keeps 400 characters of a summary, and run.mjs's is longer since it states what locate made (60c263fd1): a paper's summary
+ *  is read whole from its own log beside the table (`logs/<id>.log`, its last line that is the paper's JSON), the table's
+ *  where the log has none */
 export function corpusLogOf(file) {
   const rows = readFileSync(file, 'utf8').split('\n').filter(Boolean).map(l => l.split('\t'))
   const out = { papers: rows.length, made: 0, failed: [], refused: [], missingCompile: [], proofs: { a: 0, c: 0, on: 0, offOutside: 0 } }
-  for (const [id, rc, summary] of rows) {
+  const wholeOf = (id, cut) => {
+    const log = join(dirname(file), 'logs', `${id}.log`)
+    if (!existsSync(log)) return cut
+    return readFileSync(log, 'utf8').split('\n').findLast(l => l.startsWith(`{"id":${JSON.stringify(id)}`)) ?? cut
+  }
+  for (const [id, rc, cut] of rows) {
+    const summary = rc === '0' ? wholeOf(id, cut) : cut
     if (rc === 'refused') { out.refused.push(`${id} (${summary})`); continue }
     if (rc === '3') { out.missingCompile.push(id); continue }
     if (rc !== '0') { out.failed.push(`${id}: exit ${rc}: ${summary}`); continue }

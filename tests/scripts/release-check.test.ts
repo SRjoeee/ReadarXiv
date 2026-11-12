@@ -137,6 +137,17 @@ describe("a gate's output, read as the gate states it", () => {
     expect(corpusLogOf(join(d, 'log.tsv'))).toEqual({ papers: 7, made: 4, failed: ['e: exit 1: Error: x', 'g: no summary'], refused: ['d (11 GiB free)'], missingCompile: ['c'], proofs: { a: 2, c: 0, on: 0, offOutside: 1 } })
   })
 
+  it("reads a paper's summary whole from its own log where the runner's table cuts it, and its proofs from there", () => {
+    const d = mkdtempSync(join(tmpdir(), 'release-check-'))
+    dirs.push(d)
+    mkdirSync(join(d, 'logs'))
+    // (corpus.sh keeps 400 characters of a summary in log.tsv; run.mjs's summary is longer since it states what locate made)
+    const whole = JSON.stringify({ id: 'p', refused: null, made: { glyphs: 262, ledger: 'x'.repeat(400) }, proofs: { a: 2, c: 0 } })
+    writeFileSync(join(d, 'logs', 'p.log'), `a warning\n${whole}\n`)
+    writeFileSync(join(d, 'log.tsv'), [`p\t0\t${whole.slice(0, 400)}`, `q\t0\t${JSON.stringify({ id: 'q', proofs: { a: 0, c: 1 } })}`].join('\n'))
+    expect(corpusLogOf(join(d, 'log.tsv'))).toMatchObject({ papers: 2, made: 2, failed: [], proofs: { a: 2, c: 1 } })
+  })
+
   it('reads a proof the prover refused as a failure of that paper, named, never as a count', () => {
     const d = mkdtempSync(join(tmpdir(), 'release-check-'))
     dirs.push(d)
