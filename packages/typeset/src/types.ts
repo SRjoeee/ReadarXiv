@@ -182,6 +182,10 @@ export type Laid = {
   /** a tight paragraph the page's fill evened (§18.57): `by` the fit's knobs it took that its final lines carry, in the order
    *  taken (none carried: not stated); `lines` its line count on this page at its fitted layout, before them */
   evened?: { by: EvenKnob[]; lines: number }
+  /** a member of a size tie (one paragraph of TeX's the front end cut, a figure's set) laid at the tie's one size, the least its
+   *  members need (docs/PDF-READER.md §18.64): that scale of its own size, and the member whose own need set it (`by`, itself
+   *  where it is that member, which then states the size step among its `evened` knobs where its page's fill took it) */
+  tie?: { scale: number; by: number }
   /** its laid lines on this page, baseline first (a turned line, its items' `dir`: from its origin (x0, y), x1 − x0 its length
    *  along it) */
   lines: [y: number, x0: number, x1: number, items: Item[]][]

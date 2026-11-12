@@ -6137,6 +6137,23 @@ begin on two pages or more (28 members: 2608.16117v1 57/59 and 115/119, 2610.104
 the door's rows and on Google's; given the runner's members' rows alone, ord 12 on page 2 at 10.91 pt, its page-1 size, where it
 was 10.64. No PIPELINE, TRANSLATE or CHAIN_RULES: the lay is the reader's, and no stored byte moves.
 
+**What the page states of it** (2026-11-13, round B16, the coordinator's ruling). A member laid at its tie's cap states `tie:
+{ scale, by }` (`types.ts` Laid, `lay/page.ts` tieStated): the cap, a scale of its own size, and the member whose own need set
+it, in the round that set it (`tieCaps`' TieOrigin, followed back through a cap that member was itself laid at). That member
+states the tie too, by itself; where its own page's fill set it there (the evening's size step, §18.57) and its final lines
+stand that step under its own size, its `evened` names the size step among the knobs its final lines carry, with its line
+count on the page at its fitted layout of the final round. The statement is of the final lay, never a merged history: a knob of
+an earlier round's is named only where the final lines carry it. 2608.25210v2-zh page 11, traced over the rounds: in the first,
+unit 200 (today's t212) was evened by its tracking and a size step, 0.975, and unit 199 (t211), one paragraph of TeX's with
+it, capped there; in the second, 200 laid again at its own size took its tracking alone; in the third it was capped in turn
+through 199, whose cap is 200's own step, and the final page stated `{ track }` on 200 and nothing on 199, so that the display
+gate read the tie one step small with no reason. Both at 0.975 is no fault of the drawing: one paragraph has one size, and the
+step is the only size both fit at (200 at its own size needs it while 199 stands at its own). Now 199 states `tie { 0.975, by
+200 }` and 200 `tie { 0.975, by 200 }`, `evened { track, size }`. The display gate's TRS reads a tie's members' statements
+(the measure's `tie t211, t212`, which it could not read before): a member stating `tie` is covered where the member that set
+it is (`lab/typeset/parity/rulings.mjs`). Nothing drawn moves. `packages/typeset/tests/unit/tie-cap.test.ts`,
+`tight-paragraph.test.ts`.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

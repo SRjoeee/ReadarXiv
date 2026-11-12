@@ -259,3 +259,62 @@ describe('an evened paragraph states only the knobs its final lines carry (§18.
     expect(m.evened).toEqual({ by: ['track'], lines: 6 })
   })
 })
+
+// A size tie laid at the size one member's evening took (§18.64, what the page states of it): each member laid at the tie's cap
+// states `tie`, the cap and the member whose own need set it; that member states the tie too, by itself, and the size step
+// among the knobs its final lines carry. The statement is of the final lay
+describe('a size tie at the step an evening took states the member that took it', () => {
+  /** page()'s three paragraphs, the members `ords` one size tie (one paragraph of TeX's the front end cut) */
+  const tied = (ords: number[], chars: number[]) => {
+    let y = 700
+    const flow = [4, 8, 4].map((k, i): Placed => {
+      const m: Placed = {
+        ord: i,
+        kind: 'para',
+        text: ids[i]!,
+        lead: 12,
+        style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+        align: 'j',
+        lines: ys(y, k),
+        room: { below: i === 2 ? 200 : 17, next: i === 2 ? 212 : 17 },
+      }
+      y -= 12 * k + 5
+      return m
+    })
+    const by = new Map(chars.map((c, i) => [ids[i]!, row(ids[i]!, c)]))
+    const rows: Rows = { get: (k) => by.get(k), done: true }
+    const part = {
+      format: 1,
+      page: 1,
+      paper: { faces: { fonts: [['NimbusRomNo9L-Regu', 100]] } },
+      flows: [flow],
+      ties: [{ rule: 'size', ords }],
+    }
+    return layPage(part as never, rows, zh, metrics).members.map((m) => ({
+      size: m.fit!.size,
+      evened: m.evened,
+      tie: m.tie,
+    }))
+  }
+  it('two members: the one evened a size step states it and the tie by itself, the other the tie by it', () => {
+    // (the size step's page: 291 characters evened a step, 9.75 pt; the paragraph after it, one of TeX's with it, capped there)
+    const [, m, b] = tied([1, 2], [100, 291, 100])
+    expect([m!.size, b!.size]).toEqual([9.75, 9.75])
+    expect(m!.tie).toEqual({ scale: 0.975, by: 1 })
+    expect(m!.evened?.by).toContain('size')
+    expect([b!.tie, b!.evened]).toEqual([{ scale: 0.975, by: 1 }, undefined])
+  })
+  it('three members, the one evened not the first: both others state the tie by it', () => {
+    const [a, m, b] = tied([0, 1, 2], [100, 291, 100])
+    expect([a!.size, m!.size, b!.size]).toEqual([9.75, 9.75, 9.75])
+    expect([a!.tie, m!.tie, b!.tie]).toEqual([
+      { scale: 0.975, by: 1 },
+      { scale: 0.975, by: 1 },
+      { scale: 0.975, by: 1 },
+    ])
+    expect(m!.evened?.by).toContain('size')
+  })
+  it('states no tie where no member is capped', () => {
+    expect(tied([0, 2], [100, 291, 100]).map((x) => x.tie)).toEqual([undefined, undefined, undefined])
+  })
+})

@@ -88,6 +88,53 @@ describe("TRS and Fm: the page fill's evening (his rules of 2026-11-12, 17:25), 
   })
 })
 
+describe("TRS through a size tie (PDF-READER §18.64): a member laid at its tie's one size, the step its tie-mate's evening took", () => {
+  // (2608.25210v2-zh p11: t211 and t212 one paragraph of TeX's (parts 199 and 200), both at 8.74 where the original sets 8.97: 200
+  // evened by a size step, 199 laid at the tie's size; the measure reads the tie's size as one difference, `tie t211, t212`)
+  const ol = (n: number, top: number) => Array.from({ length: n }, (_, i) => fact(312, 563, top - i * 11, 8.97))
+  const v2Of = (m199: object, m200: object) => ({
+    facts: {
+      [N]: {
+        members: [
+          { ord: 199, kind: 'para', align: 'j', style: { size: 8.97 }, lines: ol(2, 500) },
+          { ord: 200, kind: 'para', align: 'j', style: { size: 8.97 }, lines: ol(5, 470) },
+        ],
+        ties: [[199, 200]],
+      },
+    },
+    pages: { [N]: { members: [{ ord: 199, state: 'laid', lines: [], ...m199 }, { ord: 200, state: 'laid', lines: [], ...m200 }] } },
+  })
+  const tie = { tie: { scale: 0.975, by: 200 } }
+  const step = { ...tie, evened: { by: ['track', 'size'], lines: 5 } }
+  const page = (diff: Diff, m199: object, m200: object, size200 = 8.75) => {
+    const { page: p } = judged(
+      {
+        diffs: [{ ...diff }],
+        units: [
+          { key: 't211', kind: 'para', part: 199, align: 'j', sides: { today: side(2, 8.97, 8.97, 2), v2: side(2, 8.75, 8.97, 2) } },
+          { key: 't212', kind: 'para', part: 200, align: 'j', sides: { today: side(5, 8.97, 8.97, 5), v2: side(4, size200, 8.97, 5) } },
+        ],
+      },
+      { v2: v2Of(m199, m200), rec: rec() },
+    )
+    const d = (p.diffs as (Diff & { coveredSays?: string })[]).find((x) => x.flag === diff.flag)
+    return [d?.worse, d?.covered ?? null, d?.coveredSays ?? null]
+  }
+  const tied = worse('size', 'tie t211, t212', 1, 1, 0.97, [0, 0.03])
+  const own = worse('size', 't211 para', 8.97, 8.97, 8.75, [0, 0.22])
+  it("the tie's size, each member stating the tie by the one whose evening took the step: covered by TRS", () => {
+    expect(page(tied, tie, step)).toEqual([false, 'TRS', 'its size tie at the step of its member 200, evened by track + size; 5 lines on this page before'])
+  })
+  it('a member stating the tie, its own size one step under: covered by TRS through the member that took the step', () => {
+    expect(page(own, tie, step)).toEqual([false, 'TRS', 'its size tie at the step of its member 200, evened by track + size; 5 lines on this page before'])
+  })
+  it('a member stating no tie, a member that took the step stating no size, or that member two steps small: worse', () => {
+    expect(page(tied, {}, step)).toEqual([true, null, null])
+    expect(page(tied, tie, { ...tie, evened: { by: ['track'], lines: 5 } })).toEqual([true, null, null])
+    expect(page(own, tie, step, 8.52)).toEqual([true, null, null])
+  })
+})
+
 describe('L1: a paragraph a line shorter than today, in the height today takes', () => {
   // (2610.21312v1-zh p1 t7: the original's 13 lines from 404.77 at 11.95; today 10 at 10.16 pt, 15.30 apart; v2 9 at 9.96 pt,
   // 17.21 apart; both last baselines at 267.05)

@@ -837,6 +837,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       off,
       ...(x?.fit ? { fit: x.fit } : {}),
       ...(x?.evened ? { evened: x.evened } : {}),
+      ...(x?.tie ? { tie: x.tie } : {}),
       lines,
       lit:
         st === 'laid'

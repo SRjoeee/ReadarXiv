@@ -122,6 +122,37 @@ export function cutBeforeBoundary(lines, slots) {
   return null
 }
 
+/** a side's size exactly one fit step under the original's (to the hundredth) */
+const oneStepOf = (v) => !!v?.osize && Math.abs(v.size - (1 - SIZE_STEP) * v.osize) <= 0.01 + 1e-9
+/**
+ * TRS's size, a member's or a size tie's (the measure's `tie <key>, <key>`): each member on the page one step under the original,
+ * whole, and its step one an evening of the page's fill took, as the lay states it: its own `evened` names the size step, or it
+ * states a `tie` (PDF-READER §18.64: laid at its tie's one size) whose member `by`, the one whose own need set it, states an
+ * evening by the size step at one step under its original. The member whose statement covers it (its own part's ord, or `by`),
+ * or null where any member's is not covered
+ */
+function tieStep(d, x) {
+  const keys = d.unit.startsWith('tie ') ? d.unit.slice(4).split(', ') : [d.unit.split(' ')[0]]
+  let at = null
+  for (const key of keys) {
+    const u = x.p.units?.find((w) => w.key === key)
+    if (!u?.sides?.v2 || u.part === null || u.part === undefined || !x.whole(key) || !oneStepOf(u.sides.v2)) return null
+    const m = x.laid(u.part)
+    const by = m?.evened?.by?.includes('size') ? u.part : m?.tie?.by
+    if (by === undefined || by === null) return null
+    if (by !== u.part) {
+      // (the member that set it: its statement on this page, read as its own would be; where it begins on another page, its
+      // own page's statement, its drawn size its fit's against the part's)
+      const o = x.p.units?.find((w) => w.part === by)
+      const om = x.laid(by) ?? Object.values(x.v2.pages ?? {}).flatMap((pg) => pg.members ?? []).find((q) => q.ord === by)
+      const ov = o?.sides?.v2 ?? (om?.fit && { size: om.fit.size, osize: x.member(by)?.style?.size })
+      if (!om?.evened?.by?.includes('size') || !oneStepOf(ov) || (o && !x.whole(o.key))) return null
+    }
+    at ??= by
+  }
+  return at
+}
+
 /**
  * The rulings, in the order a difference is tried against them (the first whose condition holds covers it). `holds(d, x)`: d a
  * difference worse by its measure, x the page's context (rulingsPass). An entry with no `holds` is a class he accepted that no
@@ -137,17 +168,17 @@ export const RULINGS = [
     words: '看起来调整过之后挺舒服。只是你说的有 13 页会出现反效果，因为我不太了解会是什么样子，所以你来帮我判断一下，我们到底应该怎么做。\n计算量多 4.8% 可以接受，段落字号小一级也不是问题，只要用户感受不到就行。',
     example: '1810.04805v2-zh p3, 2602.23285v2-ja p15 (the pages of his look)',
     condition:
-      "what the lay states, never an inference from the geometry: v2's Page member states the unit evened (`evened`: `by` the knobs the page's fill took, in the order taken, of `track`, `room`, `size`, `foot`; `lines` its line count on the page at its fitted layout, before them; the fill keeps an evening only where every frame of the unit then stands in the page's band). size: evened by `size`, at exactly one fit step under the original's size (to the hundredth), the unit whole. line-count: evened, its count against today's other by no more than the knobs changed it, the same way (v2's count before them is today's or nearer it), at the original's size or, evened by `size`, one step under it, the unit whole. A unit one step small, or a line count other, that the lay did not even is judged as before",
+      "what the lay states, never an inference from the geometry: v2's Page member states the unit evened (`evened`: `by` the knobs the page's fill took, in the order taken, of `track`, `room`, `size`, `foot`; `lines` its line count on the page at its fitted layout, before them; the fill keeps an evening only where every frame of the unit then stands in the page's band). size: evened by `size`, at exactly one fit step under the original's size (to the hundredth), the unit whole; a member of a size tie (the measure's `tie` difference, or one member's) where every member on the page is one step under the original, whole, and states the step itself or a `tie` (laid at its tie's one size, PDF-READER §18.64) whose member `by`, the one whose own need set it, states that evening by `size` one step under its original. line-count: evened, its count against today's other by no more than the knobs changed it, the same way (v2's count before them is today's or nearer it), at the original's size or, evened by `size`, one step under it, the unit whole. A unit one step small, or a line count other, that the lay did not even is judged as before",
     holds(d, x) {
       if (!d.unit) return false
+      if (d.flag === 'size') return tieStep(d, x) !== null
       const u = x.unit(d)
       const v = u?.sides?.v2
       if (!v || u.part === null || u.part === undefined || !x.whole(u.key)) return false
       const ev = x.laid(u.part)?.evened
       if (!ev?.by?.length) return false
       const knobs = ev.by
-      const oneStep = !!v.osize && Math.abs(v.size - (1 - SIZE_STEP) * v.osize) <= 0.01 + 1e-9
-      if (d.flag === 'size') return knobs.includes('size') && oneStep
+      const oneStep = oneStepOf(v)
       if (d.flag !== 'line-count') return false
       const t = d.today?.value,
         n = d.v2?.value
@@ -156,8 +187,10 @@ export const RULINGS = [
       return sized && Math.sign(n - t) === Math.sign(n - ev.lines) && Math.abs(n - t) <= Math.abs(n - ev.lines)
     },
     says(d, x) {
-      const ev = x.laid(x.unit(d).part).evened
-      return `evened by ${ev.by.join(' + ')}; ${ev.lines} lines on this page before`
+      const by = d.flag === 'size' ? tieStep(d, x) : null
+      const ev = x.laid(by ?? x.unit(d).part).evened
+      const tied = by !== null && (d.unit.startsWith('tie ') || by !== x.unit(d).part)
+      return `${tied ? `its size tie at the step of its member ${by}, ` : ''}evened by ${ev.by.join(' + ')}; ${ev.lines} lines on this page before`
     },
   },
   {
