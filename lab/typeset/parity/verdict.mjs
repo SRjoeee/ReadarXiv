@@ -351,11 +351,37 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       return { ...l, x0: Math.min(l.x0, x0), x1: Math.max(l.x1, x1), ix0: Math.min(l.ix0, x0), ix1: Math.max(l.ix1, x1) }
     })
   }
-  const drawn = (units, crops, keyOf) =>
-    new Map(units.filter((u) => u.lines.some((l) => l.n > 0)).map((u) => [keyOf(u.id), withCrops(u, crops)]))
-  const T = drawn(rec.today.units, rec.today.crops ?? [], (o) => `t${o}`)
+  // (the rows a unit's crops make apart from its drawn lines: a crop is drawn by the canvas, no character of the SVG, so a row of
+  // crops alone (2609.20976v1 p1 t110's third address on its own line) is read as no line of the drawing; each side's, by key, for
+  // its line count. Crops standing on no drawn line of their unit (a band of none, withCrops's), as many rows as their vertical
+  // extents make, one where they overlap)
+  const cropRows = { today: new Map(), v2: new Map() }
+  const rowsApart = (u, crops, ls) => {
+    const free = crops
+      .filter((c) => c[0] === u.id && !ls.some((l) => !l.rot && c[2] < l.y + 0.8 * l.size && c[4] > l.y - 0.2 * l.size))
+      .map((c) => [c[2], c[4]])
+      .sort((a, b) => a[0] - b[0])
+    let rows = 0,
+      hi = Number.NEGATIVE_INFINITY
+    for (const [lo, top] of free) {
+      if (lo >= hi) rows++
+      hi = Math.max(hi, top)
+    }
+    return rows
+  }
+  const drawn = (units, crops, keyOf, side) =>
+    new Map(
+      units
+        .filter((u) => u.lines.some((l) => l.n > 0))
+        .map((u) => {
+          const ls = withCrops(u, crops)
+          cropRows[side].set(keyOf(u.id), rowsApart(u, crops, ls))
+          return [keyOf(u.id), ls]
+        }),
+    )
+  const T = drawn(rec.today.units, rec.today.crops ?? [], (o) => `t${o}`, 'today')
   // (v2's drawing whole, its relabel rows with it: the labels measure's)
-  const Vall = drawn(rec.v2.units, rec.v2.crops ?? [], keyOfPart)
+  const Vall = drawn(rec.v2.units, rec.v2.crops ?? [], keyOfPart, 'v2')
   const V = new Map(Vall)
   // (the original's facts of a unit: the part's where it has a member (its lines on A, TeX's alignment and font state, its
   // kind, its label), else today's prepare dump's lines)
@@ -484,7 +510,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       if (!all) continue
       // (a turned line, a figure's rotated text, is measured by its box alone: no baseline, start or gap to read)
       const ls = all.filter((l) => !l.rot)
-      const s = { lines: all.length, size: median(all.map((l) => l.size)), chars: sum(all, 'n'), bold: sum(all, 'bold'), italic: sum(all, 'italic') }
+      const s = { lines: all.length + (cropRows[side].get(key) ?? 0), size: median(all.map((l) => l.size)), chars: sum(all, 'n'), bold: sum(all, 'bold'), italic: sum(all, 'italic') }
       // (a label the side draws anew is no character of the text's share: the original's share is read over the unit's lines,
       // which begin after the label's ink (originalOf), so a relabelled head's bold label is no bold text; a label kept as the
       // original's ink is a crop's stand-in, never counted)

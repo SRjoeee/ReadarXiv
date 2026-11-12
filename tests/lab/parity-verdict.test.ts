@@ -825,6 +825,32 @@ describe("align: a centred member set on two rows is read line by line, each aga
   })
 })
 
+describe('line-count: a row of crops alone is a drawn line of its unit', () => {
+  // (2609.20976v1 p1 t110 with every toggle on: "E-mail: a, b, c", three addresses on two lines of A; v2 draws the label and the
+  // first two as crops after its text on the first line, the third a crop alone on the second; a crop is drawn by the canvas,
+  // no character of the SVG, so the drawing read one line where v2 draws two, as the original and today do)
+  const f = v2Of({
+    members: [{ ord: 112, state: 'laid', lines: [] }],
+    facts: [{ ord: 112, kind: 'inknames', align: 'j', style: { size: 10.91 }, lines: [factLine(92.89, 407.93, 363.29, 10.91), factLine(92.89, 170.39, 349.74, 10.91)] }],
+    today: { 112: { today: 110 } },
+  })
+  const crop = (x0: number, y0: number, x1: number, y1: number, piece: string) => [112, x0, y0, x1, y1, piece, x0, y0, x1, y1, N]
+  const first = drawnLine(92.89, 413.39, 363.29, 'Mail: , ,', 10.91)
+  const today = [drawnLine(92.89, 407.92, 363.29, 'E-mail: a, b,', 10.91), drawnLine(92.89, 170.76, 349.74, 'c', 10.91)]
+  const counts = (p: { diffs: { flag: string; worse: boolean }[]; units: { key: string; sides: { v2?: { lines: number } } }[] }) => [
+    p.diffs.filter((d) => d.flag === 'line-count').map((d) => d.worse),
+    p.units.find((u) => u.key === 't110')?.sides.v2?.lines,
+  ]
+  it('the third address a crop alone on the second row: two lines, as today draws, no difference', () => {
+    const crops = [crop(129, 361, 281, 371, '1'), crop(287, 361, 402, 371, '3'), crop(93, 349, 171, 358, '5')]
+    expect(counts(measure(f, rec({ today: { units: [{ id: 110, lines: today }] }, v2: { units: [{ id: 112, lines: [first] }], crops } })))).toEqual([[], 2])
+  })
+  it('the third address lost, no crop on the second row: one line, worse as before', () => {
+    const crops = [crop(129, 361, 281, 371, '1'), crop(287, 361, 402, 371, '3')]
+    expect(counts(measure(f, rec({ today: { units: [{ id: 110, lines: today }] }, v2: { units: [{ id: 112, lines: [first] }], crops } })))).toEqual([[true], 1])
+  })
+})
+
 describe("cross: a drawn line over a rule or another unit by its ink, a CJK mark's blank half no ink", () => {
   // (2608.06701 p1 t351: a figure text set left by its ink, opening with U+201C at 3.56 pt; its box starts the mark's blank
   // half, 1.78 pt, before its ink, which starts where the original's does, 1.19 pt past the box's rule at 416.07; read by its
