@@ -48,7 +48,32 @@ export { cutLines } from './locate/lines.ts'
 // cell whole, the front half's adapter's decoratedCellsOf (PDF-READER §18.61))
 export { holdsLetter } from './locate/figure-lines.ts'
 export { type Located, locate, type Member, type Place } from './locate/locate.ts'
-export { type PrepareDeps, prepareBack, readArxiv, type Tally } from './prepare.ts'
+// (the prepare's one entry, front half then back half, which the box and the lab call alike; and its two halves)
+export {
+  type PrepareDeps,
+  type PrepareEnd,
+  type PrepareHost,
+  type PrepareInputs,
+  prepare,
+  prepareBack,
+  readArxiv,
+  type Tally,
+} from './prepare.ts'
+export {
+  type FrontHalf,
+  type FrontInput,
+  type FrontResult,
+  type OriginalFacts,
+  originalFactsOf,
+  type PreparePdfJs,
+  type PrepareStage,
+  type PrepareWhy,
+  prepareFront,
+  type Refusal,
+  type StoredInstrument,
+  type TreeDecision,
+  treeOf,
+} from './front.ts'
 export { OPS_PDFJS, type OpsPage, type OpsReader, readOps } from './opstream.ts'
 export { type PdfJs, type ReadPage, type Recovered, readPdf } from './read.ts'
 export { type Hole, type Holes, holesOf, PACKED_MAGIC, pack, unpack } from './sparse.ts'

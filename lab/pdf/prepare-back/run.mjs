@@ -1,7 +1,9 @@
-// lab/pdf/prepare-back/run.mjs: one paper through the rebuild's back half (stage 1a), from the lab's cached compiles. Not shipped.
-// Today's front end as the box runs it (the tree, the job's BibTeX make, the units, the marked original and our final pass:
-// the baseline's tools/prepare.mjs, whose compile-cache key this keeps so that the same cached compiles are hit), then the
-// adapter (src/pdf-reader/engine/pipeline/instrument.mjs) and the package's prepareBack over arXiv's PDF. Writes:
+// lab/pdf/prepare-back/run.mjs: one paper through the prepare (stage 1a), from the lab's cached compiles. Not shipped.
+// The package's one entry, `prepare` (packages/engine/src/prepare.ts), as the box calls it: the tree, the job's BibTeX make, the
+// units, the marked original and our final pass, the instrument over it, then the back half over arXiv's PDF, every object as it
+// is made. The lab gives it what the box's host gives it but the compiles, which it reads from its caches by the key the
+// baseline's tools/prepare.mjs computes, so that the same cached compiles are hit; and it decides the tree first by the entry's
+// own rule (treeOf), as the box's service runs a paper on the tree the box answers. Writes:
 //   <out>/bundles/<id>/<digest>.<kind> each object, and head.json (the head, as written);
 //   <out>/prepare/<id>.prepare.json the prepare dump in the baseline's format (readarxiv-lab-data/refactor-2026-11/baseline/
 //   FORMAT.md §3), for its tools/diff.mjs;
@@ -13,7 +15,8 @@
 //   kind, each with its page, glyph, member, unit and role, and the table's owner (`rows`);
 //   stdout one summary line (the ownership's two counts in it). Exit 3: a compile no cache holds (the paper missing). Exit 4: a
 //   paragraph TeX opened where a group the instrument wrote as its content stood (Located.stats.opensLost: the gate of
-//   pipeline/instrument.mjs passThroughOf), outputs written.
+//   instrument/instrument.mjs passThroughOf), outputs written. A paper the prepare refuses is written with its refusal's
+//   detail (the dump's `refused`), as the box states it.
 //   node --max-old-space-size=6144 --import tsx lab/pdf/prepare-back/run.mjs --dir=<paper dir> --id=<id> --out=<dir> --caches=<dir>:<dir>…
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -21,9 +24,8 @@ import { dirname, join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { constants as Z, deflateSync, inflateRawSync, inflateSync } from 'node:zlib'
 import * as PL from '@cantoo/pdf-lib'
-import { isMemoryError, prepareBack, readArxiv, stateOf } from '@readarxiv/engine'
+import { analyze, inMemory, isMemoryError, originalFactsOf, prepare, readArxiv, stateOf, treeOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { classesOf, instrumentOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
 import { flatOf, pieceKOf } from './pieces.mjs'
 import { keptWhyOf, statedOf, trailsOf } from './stated.mjs'
 
@@ -34,16 +36,15 @@ const BASELINE = argOf('baseline')
 const CACHES = (argOf('caches') ?? '').split(':').filter(Boolean)
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..')
 const PINS = JSON.parse(readFileSync(join(ROOT, 'lab/pdf/compile-images.json'), 'utf8'))
-const E = join(ROOT, 'src/pdf-reader/engine'), im = f => import(pathToFileURL(join(E, f)).href)
 const { LITE } = await import(pathToFileURL(join(ROOT, 'lab/pdf/spikes/lite-pdfjs.mjs')).href)
 // (layer2.mjs makes a measuring canvas at its load: a stub, nothing here measures)
 globalThis.OffscreenCanvas ??= class { getContext() { return { measureText: () => ({ width: 0 }), font: '' } } }
-const live = await im('pipeline/live.mjs'), tar = await im('source/tar.mjs'), paperM = await im('layout/paper.mjs')
-const guard = await im('layout/guard.mjs'), baseM = await im('layout/base.mjs')
+const tar = await import(pathToFileURL(join(ROOT, 'src/pdf-reader/engine/source/tar.mjs')).href)
 const NM = join(ROOT, 'node_modules/pdfjs-dist/')
 // (--warnings: PDF.js's warnings, the channel its recover branches tell on (a page's list ended early, a font read as none, …),
 // kept by the step whose documents were being read: arXiv's PDF for the front half (`front`), the compiles' PDFs the front half
-// reads (`compiles`), our final pass (`B`), arXiv's PDF for the back half (`A`); in <out>/warnings/<id>.json. Nothing else moves)
+// reads (`compiles`), our final pass (`B`), arXiv's PDF for the back half (`A`); in <out>/warnings/<id>.json. Nothing else moves.
+// The steps follow the prepare's stages: `compiling` reads the compiles' PDFs alone, `units` B, `laying-out` and `bundle` A)
 const WARNINGS = process.argv.includes('--warnings')
 const warned = [], step = { now: 'front' }
 if (WARNINGS) {
@@ -54,7 +55,10 @@ if (WARNINGS) {
     else warn(...a)
   }
 }
+const STEP = { compiling: 'compiles', units: 'B', 'laying-out': 'A', bundle: 'A' }
 const docOpts = { cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: WARNINGS ? 1 : 0, useSystemFonts: false }
+// (every document the prepare reads is opened with these, as the box opens every one with its own)
+const pdfjs = { getDocument, OPS }, documentOptions = { ...docOpts, ...LITE }
 const tasks = []
 const open = (bytes, o = LITE) => { const t = getDocument({ data: bytes.slice(), ...o, ...docOpts }); tasks.push(t); return t.promise }
 const sha = b => createHash('sha256').update(b).digest('hex')
@@ -63,15 +67,11 @@ const t0 = performance.now()
 const m = /^(.+)v(\d+)$/.exec(id), paperRef = { id: m[1], version: Number(m[2]) }
 const sourceBytes = readFileSync(join(DIR, 'source.gz')), arxivBytes = new Uint8Array(readFileSync(join(DIR, 'arxiv.pdf')))
 const { files: source } = await tar.unpackSource(new Uint8Array(sourceBytes))
-let paper = live.openPaper(source)
-const arxivDoc0 = await open(arxivBytes)
-// ---- the tree, as the box decides it (the baseline's prepare.mjs, dump.mjs's)
+// ---- the tree, by the entry's rule, before the prepare (which decides it again and would answer another): the image it is on
 const SERVED = Object.keys(PINS.images)
-const declared = paper.meta.tlVersion == null ? null : String(paper.meta.tlVersion)
-let year = declared && SERVED.includes(declared) ? declared : null
-const banner = await guard.texLiveOfPdf(arxivDoc0).catch(() => null)
-if (!year && declared === null && banner && SERVED.includes(String(banner))) year = String(banner)
-year ??= PINS.default
+const facts = await originalFactsOf(arxivBytes, { pdfjs, documentOptions })
+const tree = treeOf({ files: source, banner: facts.banner, served: SERVED, fallback: PINS.default })
+const year = tree.tree, declared = tree.declared, banner = facts.banner
 const IMAGE = PINS.images[year].texlive
 // ---- compiles: only read, by the cache key every lane computes (the image, the request's shape and every file)
 const filesUnder = (d, rel = '') => readdirSync(join(d, rel), { withFileTypes: true }).flatMap(x => (x.isDirectory() ? filesUnder(d, join(rel, x.name)) : [join(rel, x.name)]))
@@ -89,61 +89,66 @@ async function compile(req) {
   return { ok: req.draft ? true : !!pdf?.length, pdf, log: readFileSync(join(dir, 'out.log'), 'latin1'), ...(files ? { files } : {}) }
 }
 const HOST_ENGINES = ['pdflatex', 'xelatex', 'lualatex', 'latex']
-if (typeof paperM.bibliographyKept === 'function' && paperM.bibliographyKept(paper) === null) {
-  const r = await paperM.madeBibliography(paper, { compile, engines: HOST_ENGINES })
-  if ('paper' in r) paper = r.paper
-}
-const day = await baseM.creationEpochOf(arxivDoc0)
-const textOf = async pdf => { const was = step.now; step.now = 'compiles'; try { const d = await open(pdf); return await baseM.textOfPdf(d) } finally { step.now = was } }
-const made = await paperM.markedOfPaper(paper, { compile, compileBudgetMs: null, engines: HOST_ENGINES, pages: async () => arxivDoc0.numPages, ...(day ? { sourceDate: day } : {}), textOf })
-const tFront = performance.now()
-const meta = await arxivDoc0.getMetadata().catch(() => null)
-const info = meta?.info ?? {}
-const paperOut = {
-  id: paperRef.id, version: paperRef.version, pages: arxivDoc0.numPages,
-  arxivPdf: { sha256: sha(arxivBytes), bytes: arxivBytes.length, pdfVersion: info.PDFFormatVersion ?? null, producer: info.Producer ?? null, creator: info.Creator ?? null },
-  source: { sha256: sha(sourceBytes), bytes: sourceBytes.length },
-  tex: { tree: year, declared, banner: banner == null ? null : String(banner), image: IMAGE, compiler: paper.meta.compiler ?? 'pdflatex' },
-}
-const finalPdf = made.base?.pdf instanceof Uint8Array ? made.base.pdf : null
-const refusal = made.refused ? `marked: ${made.refused}` : !finalPdf ? `final: ${made.base?.refused ? `refused: ${made.base.why ?? ''}`.slice(0, 200) : 'none'}` : null
 const deflate = b => new Uint8Array(deflateSync(b))
 // (the bounded inflate's refusal and a failed allocation thrown as they came: only a stream zlib refuses is read again raw. A
 // failed allocation read again raw came back as a data error the wrap took for its page's: memory.mjs)
 const inflate = (b, limit) => { const o = { finishFlush: Z.Z_SYNC_FLUSH, maxOutputLength: limit + 1 }; try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if (e?.code === 'ERR_BUFFER_TOO_LARGE' || isMemoryError(e)) throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) } }
 
-// ---- the back half
+// ---- the prepare
 const bundleDir = join(OUT, 'bundles', id)
 mkdirSync(bundleDir, { recursive: true })
-let ins = null, tally = null, head = null
+let ins = null, tally = null, head = null, refusal = null, finalPdf = null
 const parts = []
 let unitsBytes = 0
-const tIns0 = performance.now()
-if (!refusal) {
-  step.now = 'B'
-  const fi = (await (await open(finalPdf)).getMetadata().catch(() => null))?.info ?? {}
-  paperOut.ours = { producer: fi.Producer ?? null, creator: fi.Creator ?? null }
-  if (process.argv.includes('--keep-b')) writeFileSync(join(bundleDir, 'B.pdf'), finalPdf)
-  const r = await instrumentOf({ paper, finalPdf, options: made.options ?? {}, log: made.log ?? '', pdfjs: { getDocument, OPS }, documentOptions: { ...docOpts, ...LITE }, made: { compiler: paperOut.tex.compiler, tree: year, front: 'today' } })
-  ins = r.instrument
-  if (process.env.DEBUG_B) console.error('B', ins.ink.pages.slice(0, 3).map(pg => [pg.glyphs.length, pg.glyphs.filter(g => g.form).length, pg.unread]))
-}
-const tIns = performance.now()
-if (ins) {
-  const madeId = sha(Buffer.concat([Buffer.from(sha(sourceBytes)), Buffer.from(sha(arxivBytes)), Buffer.from(IMAGE)]))
-  // (the box's way, what is read let go once located, but where a step after reads the instrument's ink and A's pages: the claims
-  // and the review; the proofs read A's pages again, as the back half read them)
-  const keep = process.argv.includes('--claims') || process.argv.includes('--review') || process.argv.includes('--hidden')
-  step.now = 'A'
-  for await (const x of prepareBack(ins, arxivBytes, { pdfjs: { getDocument, OPS }, pdfOptions: { ...docOpts, ...LITE }, PL, deflate, inflate, paper: paperRef, made: madeId, now: () => performance.now(), classesOf, keep })) {
-    if (x.kind === 'tally') { tally = x; continue }
+const madeId = sha(Buffer.concat([Buffer.from(sha(sourceBytes)), Buffer.from(sha(arxivBytes)), Buffer.from(IMAGE)]))
+// (the box's way, what is read let go once located, but where a step after reads the instrument's ink and A's pages: the claims
+// and the review; the proofs read A's pages again, as the back half read them)
+const keep = process.argv.includes('--claims') || process.argv.includes('--review') || process.argv.includes('--hidden')
+// (when the front half ended (the instrument begins: `units`) and the back half began (`laying-out`): the located file's times)
+const at = {}
+const end = await prepare(() => ({ files: source, original: arxivBytes, stored: null }), {
+  paper: paperRef,
+  made: madeId,
+  tree: { year, served: SERVED, fallback: PINS.default },
+  engines: HOST_ENGINES,
+  pdfjs,
+  documentOptions,
+  PL,
+  deflate,
+  inflate,
+  ...(keep ? { keep: true } : {}),
+  compile,
+  stage: (s) => { at[s] ??= performance.now(); step.now = STEP[s] },
+  units: async () => {},
+  // (B, our final pass, where TeX made it: the dump's `ours` and --keep-b)
+  instrument: async (name, bytes) => { if (name === 'b.pdf') finalPdf = bytes },
+  object: async (x) => {
     writeFileSync(join(bundleDir, `${x.digest}.${x.kind}`), x.bytes)
     if (x.kind === 'part') parts.push({ page: x.page, digest: x.digest, bytes: x.bytes.length, flows: x.flows, members: x.members })
     if (x.kind === 'units') unitsBytes += x.bytes.length
     if (x.kind === 'head') { head = x.head; writeFileSync(join(bundleDir, 'head.json'), `${JSON.stringify(head)}\n`) }
-  }
-}
+  },
+  note: () => {},
+  now: () => performance.now(),
+})
 const tBack = performance.now()
+if ('wrongTree' in end) throw new Error(`${id}: the prepare answers the tree ${end.wrongTree}, the lab decided ${year}`)
+if (end.ok) { ins = end.instrument; tally = end.tally } else refusal = end.detail
+step.now = 'front'
+const arxivInfo = (await (await open(arxivBytes)).getMetadata().catch(() => null))?.info ?? {}
+const paperOut = {
+  id: paperRef.id, version: paperRef.version, pages: facts.pages,
+  arxivPdf: { sha256: sha(arxivBytes), bytes: arxivBytes.length, pdfVersion: arxivInfo.PDFFormatVersion ?? null, producer: arxivInfo.Producer ?? null, creator: arxivInfo.Creator ?? null },
+  source: { sha256: sha(sourceBytes), bytes: sourceBytes.length },
+  tex: { tree: year, declared, banner, image: IMAGE, compiler: ins?.made.compiler ?? analyze(inMemory(source)).compiler ?? 'pdflatex' },
+}
+if (finalPdf) {
+  step.now = 'B'
+  const fi = (await (await open(finalPdf)).getMetadata().catch(() => null))?.info ?? {}
+  paperOut.ours = { producer: fi.Producer ?? null, creator: fi.Creator ?? null }
+  if (process.argv.includes('--keep-b')) writeFileSync(join(bundleDir, 'B.pdf'), finalPdf)
+}
+const tFront = at.units ?? tBack, tIns = at['laying-out'] ?? tBack
 step.now = 'after'
 if (WARNINGS) { mkdirSync(join(OUT, 'warnings'), { recursive: true }); writeFileSync(join(OUT, 'warnings', `${id}.json`), `${JSON.stringify(warned)}\n`) }
 // ---- (--claims) the A glyphs a unit holds with no partner on B, classed (claims.mjs)
@@ -302,7 +307,7 @@ const placeOf = {}
 if (located) for (const mem of located.members) if (mem.unit >= 0 && mem.name === undefined) placeOf[allUnits[mem.unit].id] = (placeOf[allUnits[mem.unit].id] ?? []).concat([[mem.ord, mem.located ? mem.place : null, mem.cause ?? null, mem.lines.length]])
 mkdirSync(join(OUT, 'located'), { recursive: true })
 writeFileSync(join(OUT, 'located', `${id}.json`), `${JSON.stringify({
-  id, refused: refusal, stats: tally?.located ?? null, wrap: tally?.wrap ?? null, ms: { front: Math.round(tFront - t0), instrument: Math.round(tIns - tIns0), back: Math.round(tBack - tIns), ...(tally ? Object.fromEntries(Object.entries(tally.ms).map(([k, v]) => [k, Math.round(v)])) : {}) },
+  id, refused: refusal, stats: tally?.located ?? null, wrap: tally?.wrap ?? null, ms: { front: Math.round(tFront - t0), instrument: Math.round(tIns - tFront), back: Math.round(tBack - tIns), ...(tally ? Object.fromEntries(Object.entries(tally.ms).map(([k, v]) => [k, Math.round(v)])) : {}) },
   bytes: { arxiv: arxivBytes.length, addOn: addOn && !('refused' in addOn) ? addOn.bytes.length : 0, units: unitsBytes, parts: parts.reduce((n, p) => n + p.bytes, 0), head: head ? Buffer.byteLength(JSON.stringify(head)) : 0 },
   parts, places: placeOf, dumpOrds, proofs,
   wrapPages: addOn && !('refused' in addOn) ? [...addOn.pages].map(([p, x]) => [p, x.ok, x.why ?? null, !!x.merged]) : null,

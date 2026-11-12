@@ -1030,15 +1030,32 @@ only how it meets the rest of the extension.
   PDF-READER §18.54); the gates measure what the product runs (`lab/typeset/gate.mjs` over today's members,
   `lab/typeset/gate-l1.mjs` over the prepare's parts, both against the frozen baseline).
 - **The prepare's two halves** (`@readarxiv/engine`; our server runs them, the extension neither). The front half is
-  today's front end: it reads a paper's source into units (`src/pdf-reader/engine/source/latex-front.mjs`), writes the
-  marks that bracket each unit for TeX and compiles the marked source, an instrument no reader sees
-  (`layout/paper.mjs`, `layout/marks.mjs`); its adapter (`src/pdf-reader/engine/pipeline/instrument.mjs`) states what it
-  gives, the instrument: the owner of each glyph of that compile (`layout/own.mjs`) and what the source says of each
-  element and group. The back half, `prepareBack(instrument, arXiv's PDF)`, reads arXiv's PDF once, carries that ownership
-  onto arXiv's glyphs by aligning the two glyph sequences (`align`, `locate`), wraps arXiv's own runs in optional content
-  groups by unit (`wrap`) and makes the bundle's objects (`bundle`; their schema is `@readarxiv/format`'s). Both panes then
-  show arXiv's own page: the left as it is, the right with the laid units' groups off and their translations in their
-  place. The halves' gates are `lab/pdf/prepare-back/`, run by `pnpm release-check` (§11).
+  today's front end, moved into the package as it was (`packages/engine/src/{source,marks,own,compile,instrument}/`): it
+  reads a paper's source into units (`source/latex-front.mjs`), writes the marks that bracket each unit for TeX and
+  compiles the marked source, an instrument no reader sees (`compile/paper.mjs`, `marks/marks.mjs`); its adapter
+  (`instrument/instrument.mjs`) states what it gives, the instrument: the owner of each glyph of that compile
+  (`own/own.mjs`) and what the source says of each element and group. The back half, `prepareBack(instrument, arXiv's
+  PDF)`, reads arXiv's PDF once, carries that ownership onto arXiv's glyphs by aligning the two glyph sequences (`align`,
+  `locate`), wraps arXiv's own runs in optional content groups by unit (`wrap`) and makes the bundle's objects (`bundle`;
+  their schema is `@readarxiv/format`'s). Both panes then show arXiv's own page: the left as it is, the right with the laid
+  units' groups off and their translations in their place. The halves' gates are `lab/pdf/prepare-back/`, run by `pnpm
+  release-check` (§11).
+  **One entry, typed** (`src/prepare.ts`, the front half `src/front.ts`). `prepare(take, host)` runs the two in order and
+  is what both callers run: the box, and the lab's runner (`lab/pdf/prepare-back/run.mjs`), so that the lab makes a paper
+  through the product's door.
+  It takes the inputs once (`take`: the source's files, arXiv's PDF and, where a compile of the same original made them,
+  the instrument's four stored objects), reads what arXiv's PDF says (`originalFactsOf`: its page count, its day, its
+  banner's TeX Live year), decides the tree (`treeOf`: the paper's declaration, else the banner's year, else the default)
+  and answers a paper of another tree before anything is compiled, runs the front half (`prepareFront`: the
+  bibliography, the source's units handed out before any compile of the marks, the marked compile and its final pass,
+  the instrument; or the instrument made again from the stored objects with no TeX, where the original's facts are the
+  ones they were made for) and then the back half, every object handed to the host as it is made. Everything the host
+  owns enters as `host`: the compile, PDF.js and its options, zlib, pdf-lib, the TeX engines and trees it runs, where each
+  object goes. The front half's own reading of an element's class (`classesOf`) is the package's, never the host's.
+  The front half runs in a frame of its own, so that the source's files and what it makes beside the instrument are let
+  go before the back half begins (`packages/engine/tests/front.test.ts`). Every input of the marked compile is decided in
+  `front.ts` and what it imports, the two halves' orchestration in `prepare.ts`: a host that keys the instrument by the
+  code its front half runs reads `front.ts`'s closure, and a change of the orchestration keys nothing anew.
   **One front half, today's** (2026-11-09). A rebuilt front half (a typed source reader under TeX's definitions, a marks
   writer and a drafts-only compile plan, in `packages/engine/src/{source,marks,compile}/`) was run beside today's over
   the 87 corpus papers and deleted (its last state is the tag `f2-final-2026-11-09`): it stated none of the element
