@@ -1,5 +1,5 @@
 // census-lib.mjs's types, for its tests (tests/scripts/census.test.ts)
-export interface Threshold { value: number; raw: string; name: string | null; line: number; context: string; class: 'conversion' | 'structural' | 'code' | 'borderline' | 'tuned'; evidence: boolean; reason: boolean; cites: string | null; other?: string }
+export interface Threshold { value: number; raw: string; name: string | null; line: number; context: string; class: 'conversion' | 'structural' | 'code' | 'budget' | 'borderline' | 'tuned'; evidence: boolean; reason: boolean; cites: string | null; other?: string; unit?: 'time' | 'bytes' | 'pixels' | 'count'; source?: 'measured' | 'platform' | null }
 export interface Facts {
   path: string
   kind: 'code' | 'decl' | 'style' | 'data' | 'html' | 'other'
@@ -10,9 +10,13 @@ export interface Facts {
   parsed: boolean
   thresholds?: Threshold[]
   lists?: { line: number; name: string | null; size: number; form: 'list' | 'regex'; sample: string[]; class: 'defined' | 'listed' }[]
+  vocabularies?: { line: number; name: string | null; size: number; form: 'list'; sample: string[]; class: 'vocabulary' }[]
   papers?: { id: string; line: number }[]
   texFiles?: { name: string; line: number }[]
-  versions?: { name: string; value: string | number; line: number }[]
+  versions?: { name: string; value: string | number; line: number; schema: boolean }[]
+  functions?: { line: number; endLine: number; name: string | null; code: number; tokens?: number; digest?: string | null }[]
+  casts?: { cast: number[]; unsafe: number[]; nonNull: number }
+  history?: { todays: number[]; dated: number[]; measuredDates: number[]; named: number[] }
   [k: string]: unknown
 }
 export interface Profile {
