@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, GATES, type Gate, INVARIANTS, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
+import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, INVARIANTS, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
 import { cutoverOf, gatesOf, invariantLine, markdownOf, privateResultOf, targetLines, verdictOf } from '../../lab/release-check/verdict.mjs'
 
 const dirs: string[] = []
@@ -156,6 +156,46 @@ describe("a gate's output, read as the gate states it", () => {
   it("holds the canvas's papers to the bound its header names", () => {
     const line = (o: object) => JSON.stringify({ id: 'p', canvas: 'gpu', pages: 4, splitShows: 1, outsidePages: [], shareMax: 0, maxDelta: 0, ...o })
     expect(canvasOf([line({}), line({ id: 'q', shareMax: 0.0037, maxDelta: 81 }), line({ id: 'r', outsidePages: [[97, 53]] })].join('\n')).over).toEqual(['q: outside [], share 0.0037, Δ 81', 'r: outside [[97,53]], share 0, Δ 0'])
+  })
+})
+
+describe("the prepare's corpus, as the round's stage 1a runs it", () => {
+  const corpus = (ids: string[]) => GATES.filter(g => ids.includes(g.id))
+
+  it('reads a compile cache chain from a corpus run\'s flags.txt or from a list, one line or one a line', () => {
+    expect(cachesOf('--caches=/a/compiles:/b/cache\n--prove\n--baseline=/lab/baseline/prepare\n')).toBe('/a/compiles:/b/cache')
+    expect(cachesOf('/a/compiles:/b/cache\n')).toBe('/a/compiles:/b/cache')
+    expect(cachesOf('# the round chain\n/a/compiles\n\n/b/cache # the second\n')).toBe('/a/compiles:/b/cache')
+  })
+
+  it('runs the 88 papers on the caches RELEASE_CHECK_CACHES names, a run and its twin with the same flags, the baseline\'s dumps read', () => {
+    const refactor = mkdtempSync(join(tmpdir(), 'release-check-lab-'))
+    dirs.push(refactor)
+    writeFileSync(join(refactor, 'flags.txt'), '--caches=/round/r21/compiles:/round/r20/compiles\n--prove\n')
+    const ctx: Ctx = { root: '/repo', labData: refactor, refactor, work: '/work', online: false, minFree: 0 }
+    process.env.RELEASE_CHECK_CACHES = join(refactor, 'flags.txt')
+    try {
+      const [prepare, same] = corpus(['prepare', 'prepare-same']).map(g => g.steps!(ctx)[0]!.cmd)
+      expect(prepare).toEqual(['bash', 'lab/pdf/prepare-back/corpus.sh', join(refactor, 'lanes/L1-papers88.tsv'), '/work/prepare', '/round/r21/compiles:/round/r20/compiles', '2', '--prove', `--baseline=${join(refactor, 'baseline/prepare')}`])
+      expect(same?.slice(4)).toEqual(prepare?.slice(4))
+      for (const g of corpus(['prepare', 'prepare-same', 'pixels'])) expect(g.needs!(ctx).map(n => n.path)).toContain(join(refactor, 'flags.txt'))
+    } finally {
+      delete process.env.RELEASE_CHECK_CACHES
+    }
+    // (without it, the lab's list for these papers)
+    expect(corpus(['prepare'])[0]!.needs!(ctx).map(n => n.path)).toContain(join(refactor, 'lanes/L1-caches88.txt'))
+  })
+
+  it('counts the units drawn only on the papers the baseline holds, beside its own count', () => {
+    const d = mkdtempSync(join(tmpdir(), 'release-check-'))
+    dirs.push(d)
+    for (const sub of ['run', 'baseline']) mkdirSync(join(d, sub))
+    const dump = (n: number) => JSON.stringify({ units: Array.from({ length: n }, () => ({ kind: 'para', state: 'drawn' })) })
+    writeFileSync(join(d, 'run', 'a.prepare.json'), dump(2))
+    writeFileSync(join(d, 'run', 'gained.prepare.json'), dump(5))
+    writeFileSync(join(d, 'baseline', 'a.prepare.json'), dump(1))
+    expect(drawnOf(join(d, 'run'))).toMatchObject({ papers: 2, source: 7 })
+    expect(drawnOf(join(d, 'run'), join(d, 'baseline'))).toMatchObject({ papers: 1, source: 2 })
   })
 })
 

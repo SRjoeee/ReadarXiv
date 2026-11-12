@@ -330,11 +330,12 @@ export function corpusLogOf(file) {
 }
 
 /** the candidate's prepare dumps (baseline FORMAT.md §3): units drawn by group, and the papers refused whole (no source
- *  unit drawn), as baseline/tools/acceptance.mjs counts them */
-export function drawnOf(dir) {
+ *  unit drawn), as baseline/tools/acceptance.mjs counts them; `within` a directory of dumps (the baseline's): only the papers
+ *  it holds a dump of, so that a count stands beside the baseline's own (a paper the corpus gained after it is left out) */
+export function drawnOf(dir, within = null) {
   const groupOf = u => (u.kind === 'name' ? 'names' : u.kind === 'inkfigures' ? 'figures' : /^ink/.test(u.kind ?? '') ? 'ink' : 'source')
   const out = { source: 0, ink: 0, figures: 0, refusedWhole: 0, papers: 0 }
-  for (const f of readdirSync(dir).filter(f => f.endsWith('.prepare.json'))) {
+  for (const f of readdirSync(dir).filter(f => f.endsWith('.prepare.json') && (!within || existsSync(join(within, f))))) {
     const d = JSON.parse(readFileSync(join(dir, f), 'utf8'))
     out.papers++
     let source = 0
@@ -385,6 +386,30 @@ const e2e = (script, title, holds = [], extra = {}) => ({
 })
 const lab = (ctx, ...p) => join(ctx.refactor, ...p)
 const exists = (what, path) => ({ what, path })
+
+// The corpus the prepare's gates run, as the integration round's stage 1a runs it (lanes/converge-7/round*-chain.sh): its 88
+// papers; the compile caches its chain reads, whose newest directories hold the compiles of the marks the round moved
+// (RELEASE_CHECK_CACHES, else the lab's list for these papers); and its flags, the baseline's dumps read for the units of
+// today's the candidate makes otherwise (run.mjs --baseline: the stated causes the acceptance list reads). A run and its twin
+// take the same flags: same.mjs compares two runs only where their flags agree.
+const PAPERS = 'lanes/L1-papers88.tsv'
+const cachesFile = ctx => process.env.RELEASE_CHECK_CACHES ?? lab(ctx, 'lanes/L1-caches88.txt')
+/** a compile cache chain, colon-joined, from its file: a list of directories (joined by `:` or one a line, `#` a comment), or
+ *  a corpus run's flags.txt (corpus.sh writes the chain it read as its `--caches=` line) */
+export function cachesOf(text) {
+  const flag = /^--caches=(.*)$/m.exec(text)
+  if (flag) return flag[1].trim()
+  return text
+    .split('\n')
+    .map(l => l.replace(/#.*$/, '').trim())
+    .flatMap(l => l.split(':'))
+    .filter(Boolean)
+    .join(':')
+}
+const corpusNeeds = ctx => [exists('the 88 papers', lab(ctx, PAPERS)), exists("the compile caches' list (RELEASE_CHECK_CACHES)", cachesFile(ctx)), exists("the baseline's prepare dumps", lab(ctx, 'baseline/prepare'))]
+/** corpus.sh's arguments: the papers, the output, the caches and two papers at once, then run.mjs's flags */
+const corpusArgs = (ctx, out, ...flags) => ['bash', 'lab/pdf/prepare-back/corpus.sh', lab(ctx, PAPERS), out, cachesOf(readFileSync(cachesFile(ctx), 'utf8')), '2', ...flags]
+const stage1a = ctx => ['--prove', `--baseline=${lab(ctx, 'baseline/prepare')}`]
 
 export const GATES = [
   // ---------------------------------------------------------------- unit (hosted CI, every pull request)
@@ -449,13 +474,13 @@ export const GATES = [
   // ---------------------------------------------------------------- pipeline (the self-hosted runner, with lab data)
   {
     id: 'prepare',
-    title: "the prepare's back half on the 87 papers from cached compiles, with PDF.js's proofs (I1 (a), I2 (c′))",
+    title: "the prepare's back half on the 88 papers from cached compiles, with PDF.js's proofs (I1 (a), I2 (c′)), as the round's stage 1a runs it",
     tier: 'full',
     stage: 'pipeline',
     holds: ['I1', 'I2'],
     disk: true,
-    needs: ctx => [exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv')), exists('the compile caches\' list', lab(ctx, 'lanes/L1-caches.txt'))],
-    steps: ctx => [{ cmd: ['bash', 'lab/pdf/prepare-back/corpus.sh', lab(ctx, 'lanes/L1-papers87.tsv'), join(ctx.work, 'prepare'), readFileSync(lab(ctx, 'lanes/L1-caches.txt'), 'utf8').trim(), '2', '--prove'], slot: 'test', fresh: join(ctx.work, 'prepare') }],
+    needs: corpusNeeds,
+    steps: ctx => [{ cmd: corpusArgs(ctx, join(ctx.work, 'prepare'), ...stage1a(ctx)), slot: 'test', fresh: join(ctx.work, 'prepare') }],
     judge: ctx => corpusJudge(ctx, join(ctx.work, 'prepare'), ['a', 'c']),
   },
   {
@@ -467,19 +492,19 @@ export const GATES = [
     after: ['prepare'],
     needs: ctx => [exists('the frozen baseline', lab(ctx, 'baseline/acceptance.json'))],
     steps: ctx => [{ cmd: ['node', lab(ctx, 'baseline/tools/diff.mjs'), lab(ctx, 'baseline'), join(ctx.work, 'prepare'), '--scope=prepare', `--json=${join(ctx.work, 'prepare-diff.json')}`] }],
-    judge: (ctx, steps) => ({ pass: steps[0].exit === 0, numbers: { ...diffOf(steps[0].text), ...drawnOf(join(ctx.work, 'prepare', 'prepare')) } }),
+    judge: (ctx, steps) => ({ pass: steps[0].exit === 0, numbers: { ...diffOf(steps[0].text), ...drawnOf(join(ctx.work, 'prepare', 'prepare'), lab(ctx, 'baseline/prepare')) } }),
   },
   {
     id: 'prepare-same',
-    title: 'the same inputs give the same bytes: the prepare run again and compared object by object (lab/pdf/prepare-back/same.mjs)',
+    title: "the same inputs give the same bytes: the prepare run again with the same flags and compared object by object (lab/pdf/prepare-back/same.mjs), as the round's twin run",
     tier: 'full',
     stage: 'pipeline',
     holds: ['I6'],
     disk: true,
     after: ['prepare'],
-    needs: ctx => [exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv')), exists('the compile caches\' list', lab(ctx, 'lanes/L1-caches.txt'))],
+    needs: corpusNeeds,
     steps: ctx => [
-      { cmd: ['bash', 'lab/pdf/prepare-back/corpus.sh', lab(ctx, 'lanes/L1-papers87.tsv'), join(ctx.work, 'prepare-2'), readFileSync(lab(ctx, 'lanes/L1-caches.txt'), 'utf8').trim(), '2'], slot: 'test', fresh: join(ctx.work, 'prepare-2') },
+      { cmd: corpusArgs(ctx, join(ctx.work, 'prepare-2'), ...stage1a(ctx)), slot: 'test', fresh: join(ctx.work, 'prepare-2') },
       { cmd: ['node', 'lab/pdf/prepare-back/same.mjs', join(ctx.work, 'prepare'), join(ctx.work, 'prepare-2')] },
     ],
     judge: (ctx, steps) => {
@@ -660,13 +685,13 @@ export const GATES = [
   // ---------------------------------------------------------------- corpus (before a release, the owner's machine)
   {
     id: 'pixels',
-    title: "the prepare's pixel proofs on every page of the 87 papers: all groups on is arXiv's page under Splash (I1 (b)), each kind off changes only its ink under Cairo (I2 (c))",
+    title: "the prepare's pixel proofs on every page of the 88 papers: all groups on is arXiv's page under Splash (I1 (b)), each kind off changes only its ink under Cairo (I2 (c))",
     tier: 'release',
     stage: 'corpus',
     holds: ['I1', 'I2'],
     disk: true,
-    needs: ctx => [exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv')), exists('the compile caches\' list', lab(ctx, 'lanes/L1-caches.txt')), exists('poppler (pdftoppm, pdftocairo)', which('pdftocairo'))],
-    steps: ctx => [{ cmd: ['bash', 'lab/pdf/prepare-back/corpus.sh', lab(ctx, 'lanes/L1-papers87.tsv'), join(ctx.work, 'pixels'), readFileSync(lab(ctx, 'lanes/L1-caches.txt'), 'utf8').trim(), '2', '--prove', '--pixels', '--cairo'], slot: 'test', fresh: join(ctx.work, 'pixels') }],
+    needs: ctx => [...corpusNeeds(ctx), exists('poppler (pdftoppm, pdftocairo)', which('pdftocairo'))],
+    steps: ctx => [{ cmd: corpusArgs(ctx, join(ctx.work, 'pixels'), '--prove', '--pixels', '--cairo'), slot: 'test', fresh: join(ctx.work, 'pixels') }],
     judge: ctx => corpusJudge(ctx, join(ctx.work, 'pixels'), ['a', 'c', 'on', 'offOutside']),
   },
   {
@@ -676,8 +701,8 @@ export const GATES = [
     stage: 'corpus',
     holds: ['I1'],
     after: ['prepare'],
-    needs: ctx => [exists("spike S1c's papers (lane L1's canvas runs)", lab(ctx, 'lanes/L1-canvas.jsonl')), exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv'))],
-    steps: ctx => [{ cmd: ['node', '--import', 'tsx', 'lab/pdf/prepare-back/canvas.mjs', join(ctx.work, 'prepare'), lab(ctx, 'lanes/L1-papers87.tsv'), ...canvasIds(ctx)], slot: 'e2e' }],
+    needs: ctx => [exists("spike S1c's papers (lane L1's canvas runs)", lab(ctx, 'lanes/L1-canvas.jsonl')), exists('the 88 papers', lab(ctx, PAPERS))],
+    steps: ctx => [{ cmd: ['node', '--import', 'tsx', 'lab/pdf/prepare-back/canvas.mjs', join(ctx.work, 'prepare'), lab(ctx, PAPERS), ...canvasIds(ctx)], slot: 'e2e' }],
     judge: (ctx, steps) => {
       const c = canvasOf(steps[0].text, canvasIds(ctx))
       return { pass: steps[0].exit === 0 && c.papers > 0 && !c.over.length, numbers: { papers: c.papers, pages: c.pages, over: c.over.length }, note: c.over.slice(0, 4).join('; ') }

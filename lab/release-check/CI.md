@@ -72,7 +72,11 @@ maintainer's machine, registered to this repository alone, with labels `self-hos
   (a corpus run writes about 400 MB; the corpus runners refuse a paper under 12 GiB free, and release-check reports such a
   gate as skipped, never passed). The report is the run's artifact; the run fails on NO-GO.
 - **Inputs**: `$AXT_LAB_DATA/refactor-2026-11/` (`baseline/`: the frozen dumps, `acceptance.json`, the tap;
-  `lanes/L1-papers87.tsv` and `lanes/L1-caches.txt`: the 87 papers and the cached compiles, partly on the external disk;
+  `lanes/L1-papers88.tsv` and the compile caches, partly on the external disk: the corpus the integration round's stage 1a
+  runs, with its flags (`--prove`, `--baseline` = the baseline's prepare dumps), a run and its twin alike. The caches are
+  `RELEASE_CHECK_CACHES` (a list of directories, or a corpus run's `flags.txt`, whose `--caches=` line is the chain that run
+  read), else `lanes/L1-caches88.txt`: a round whose marks move fills new compiles into a directory of its own, and the list
+  must name it, or every paper is "missing a compile" (exit 3; at `75602aecb` all 87, the list predating the rounds' chain);
   `lanes/L3/replay/`: the typesetter's derived inputs; `lanes/L6/capture.jsonl`: today's readers' replies; `lanes/L1-out4/`: the harness's corpus
   bundles); today's engine at `065c1d973` checked out beside the worktree (`AXT_TODAY`); the release sweep's cache and the
   reader's served faces, which the typeset runners read (`AXT_SWEEP_CACHE`, `AXT_FACE_TABLES`, `AXT_FACE_SLICES`);

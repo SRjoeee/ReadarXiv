@@ -36,5 +36,6 @@ export declare function vitestOf(text: string): { tests?: number; failed?: numbe
 export declare function diffOf(text: string): Partial<Record<'files' | 'of' | 'units' | 'shownBefore' | 'shown' | 'lost' | 'accepted' | 'gained' | 'changed', number>>
 export declare function typesetOf(text: string): Record<string, number>
 export declare function corpusLogOf(file: string): { papers: number; made: number; failed: string[]; refused: string[]; missingCompile: string[]; proofs: { a: number; c: number; on: number; offOutside: number } }
-export declare function drawnOf(dir: string): { source: number; ink: number; figures: number; refusedWhole: number; papers: number }
+export declare function drawnOf(dir: string, within?: string | null): { source: number; ink: number; figures: number; refusedWhole: number; papers: number }
+export declare function cachesOf(text: string): string
 export declare function canvasOf(text: string, ids?: string[]): { papers: number; pages: number; over: string[] }
