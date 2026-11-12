@@ -43,13 +43,24 @@ export function viewport(view: readonly number[], scale = SCALE): (x: number, y:
   return (x, y) => [x * m[0]! + y * m[2]! + m[4]!, x * m[1]! + y * m[3]! + m[5]!]
 }
 
-/** the baseline's reader-dump unit (FORMAT.md §4), as far as the typesetter decides it */
+/** the baseline's reader-dump unit (FORMAT.md §4), as far as the typesetter decides it; and `sizes`, the size each of its lines
+ *  is drawn at, where one is drawn at another than `size` (a unit laid a run at a time, fit/runs.ts: `size` is its layout's
+ *  own, its first run's, and each line is drawn at its run's, D.display's segOf). Not the baseline's: its harness states one
+ *  size a unit, so a comparison with it reads the four fields alone (`baselineOf`); a unit's two lays (I6) read it whole */
 export type DumpUnit = {
   size: number | null
   leading: number | null
   lines: { page: number; x0: number; x1: number; baseline: number; text: string | null }[]
   elements?: { k: number | null; page: number; x0: number; x1: number; top: number; bottom: number }[]
+  sizes?: number[]
 }
+/** a dumped unit as the baseline's reader dump states one (FORMAT.md §4): its size, leading, lines and elements */
+export const baselineOf = (d: DumpUnit): DumpUnit => ({
+  size: d.size,
+  leading: d.leading,
+  lines: d.lines,
+  ...(d.elements ? { elements: d.elements } : {}),
+})
 
 /**
  * A laid unit as the baseline's harness reads today's drawing of it: its record's size, leading and lines, each line's text
@@ -124,11 +135,15 @@ export function dumpUnit(p: Pick<PassUnit, 'layout'>, view: (page: number) => re
     if (j >= 0) used.add(j)
     return { page, x0: r2(l.x0), x1: r2(l.x0 + (l.used ?? 0)), baseline, text: j >= 0 ? svg[j]!.text : null }
   })
+  // (each line at the size its run is drawn at: displayLines' segOf, the line's own fit where the unit was laid in runs)
+  const size = L.f ? r2(L.f) : null
+  const sizes = L.lines.map((l) => r2(l.seg?.f ?? L.f))
   return {
-    size: L.f ? r2(L.f) : null,
+    size,
     leading: L.state?.lead ?? null,
     lines,
     ...(elements.length ? { elements } : {}),
+    ...(size !== null && sizes.some((s) => s !== size) ? { sizes } : {}),
   }
 }
 
@@ -247,7 +262,7 @@ export function displayReplay(pair: string): DisplayResult {
       else out.ruled.cells++
       continue
     }
-    const d = firstDifference(mine, want, '')
+    const d = firstDifference(baselineOf(mine), want, '')
     if (d && framed(p)) out.ruled.frames++
     else if (d && gap.units.has(u.ord)) out.ruled.gap++
     else if (d && room.units.has(u.ord)) out.ruled.room++
