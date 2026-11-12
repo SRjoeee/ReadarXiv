@@ -264,6 +264,12 @@ export async function follow(
     /** the stream ended or broke, and is asked again: told before the ask (the next document heard ends it) */
     onQuiet?(): void
     pollMs?: number
+    /**
+     * Once the last document heard says nothing runs, what the follow waits for before it asks again, in place of IDLE_MS: a
+     * promise that settles when the document is to be asked again (design-performance-2026-11-13 Q9: a settled tab asked once
+     * a minute, 60 asks an hour). Asked each time the follow settles; the follow's signal ends the wait. Absent: IDLE_MS
+     */
+    wake?(): Promise<void>
   },
 ): Promise<never> {
   const timers = a.timers ?? realTimers
@@ -281,6 +287,8 @@ export async function follow(
     a.onDoc(d)
   }
   const idle = () => last !== null && !runs(last, a.target)
+  /** settled: the caller's wake, else IDLE_MS (at least `ms`) */
+  const rest = (ms: number) => (a.wake ? woken(a, a.wake) : sleep(Math.max(IDLE_MS, ms), a))
   for (;;) {
     let told = false
     const outcome = await request(a, url, { headers: { accept: 'text/event-stream' } }, async (r) => {
@@ -299,7 +307,7 @@ export async function follow(
       return r
     })
     if (outcome === 'poll') {
-      await sleep(idle() ? Math.max(IDLE_MS, pollMs) : pollMs, a)
+      await (idle() ? rest(pollMs) : sleep(pollMs, a))
       continue
     }
     // the stream: `data:` lines, a frame each blank line; each read within REQUEST_MS of silence
@@ -363,9 +371,26 @@ export async function follow(
     if (quiet >= 2) throw new Refused('network')
     // (a stream that told a document in which nothing runs ended as our server ends it: not lost, followed again at its pace)
     if (!told || !idle()) a.onQuiet?.()
-    await sleep(Math.max(RETRY_MS, named, idle() ? IDLE_MS : 0), a)
+    await (idle() ? rest(Math.max(RETRY_MS, named)) : sleep(Math.max(RETRY_MS, named), a))
   }
 }
+/** a wake waited for until the ask's signal ends it */
+const woken = (a: Ask, wake: () => Promise<void>) =>
+  new Promise<void>((resolve, reject) => {
+    if (a.signal?.aborted) return reject(a.signal.reason)
+    const stop = () => reject(a.signal?.reason)
+    a.signal?.addEventListener('abort', stop, { once: true })
+    wake().then(
+      () => {
+        a.signal?.removeEventListener('abort', stop)
+        resolve()
+      },
+      (e) => {
+        a.signal?.removeEventListener('abort', stop)
+        reject(e)
+      },
+    )
+  })
 
 /** the open: what the paper lacks started; its document (format's OpenAnswer; none where the answer is not one), or a refusal
  *  with its wait: of the work, for the visitor's new papers (`quota`) or our server's capacity (`busy`), in its answer; of the

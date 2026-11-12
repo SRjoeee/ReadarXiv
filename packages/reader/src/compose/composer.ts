@@ -47,7 +47,17 @@ import type { Groups } from './groups.ts'
 import { type LinkHooks, linkLayer } from './links.ts'
 import { createMarks, type MarkBox } from './marks.ts'
 import { committed, type Lay, type Laid, type Page, type Rows } from './page.ts'
-import { cropGrid, cropsFor, type Rounding, svgOf, turned, uprightOf } from './paint.ts'
+import {
+  cropGrid,
+  cropsAway,
+  cropsBack,
+  cropsFor,
+  cropsFree,
+  type Rounding,
+  svgOf,
+  turned,
+  uprightOf,
+} from './paint.ts'
 import { canvasMeasure, laidText, releaseText, type TextContent, textContentOf, textLayerOf } from './text.ts'
 import { ATTRIBUTE, decideOnce } from './text-rendering.ts'
 
@@ -58,6 +68,11 @@ function roundingOf(at: SlotAt): Rounding {
   const px = (v: string | undefined) => Number.parseFloat(v ?? '') || 1
   return { x: px(st?.getPropertyValue('--scale-round-x')), y: px(st?.getPropertyValue('--scale-round-y')) }
 }
+/** the device pixels a CSS px of a slot's page view (its output scale) */
+const outputScaleOf = (at: SlotAt) =>
+  (at.view as unknown as { outputScale?: { sx: number; sy: number } }).outputScale ?? { sx: 1, sy: 1 }
+/** the crops' grid of a slot's page view as it stands: its device pixels, its rounding */
+const cropGridOf = (at: SlotAt) => cropGrid(at.viewport, outputScaleOf(at), roundingOf(at))
 
 /** the laid pages a reader keeps, at most (a page's Page is some kilobytes; past it the least recently shown is let go) */
 export const PAGES_KEPT = 600
@@ -304,7 +319,13 @@ export function createComposer(o: ComposerOptions): Composer {
         own: false,
         over: (at) => overlay(n, page, doc, g, at),
         again: (el, at) => cropsAgain(page, doc, g, el, at),
-        free: releaseText,
+        // (a far page's crops kept as a copy of their box, back in the task it returns: design-performance-2026-11-13 Q7)
+        away: cropsAway,
+        back: (el, at) => cropsBack(el, cropGridOf(at).px),
+        free: (el) => {
+          releaseText(el)
+          cropsFree(el)
+        },
       }
     }
     return originalOf(n, settledOriginal(n))
@@ -347,7 +368,7 @@ export function createComposer(o: ComposerOptions): Composer {
     el.append(turned(svgOf(page, at.viewport, faces, o.lang()), at.viewport))
     const tSvg = performance.now()
     const pdfPage = await doc.getPage(n)
-    const out = (at.view as unknown as { outputScale?: { sx: number; sy: number } }).outputScale ?? { sx: 1, sy: 1 }
+    const out = outputScaleOf(at)
     // (each crop cut from its own page: this one, or another of a member laid across a page break)
     const crops = await cropsFor(page, (k) => doc.getPage(k), at.viewport, g.crops, out, at.signal, roundingOf(at))
     if (crops) el.append(crops)
@@ -368,9 +389,9 @@ export function createComposer(o: ComposerOptions): Composer {
   async function cropsAgain(page: Page, doc: PDFDocumentProxy, g: Groups, el: HTMLElement, at: SlotAt) {
     const was = el.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops')
     if (!was) return
-    const out = (at.view as unknown as { outputScale?: { sx: number; sy: number } }).outputScale ?? { sx: 1, sy: 1 }
+    const out = outputScaleOf(at)
     const round = roundingOf(at)
-    if (was.width === cropGrid(at.viewport, out, round).px[0]) return
+    if (was.width === cropGridOf(at).px[0]) return
     const next = await cropsFor(page, (k) => doc.getPage(k), at.viewport, g.crops, out, at.signal, round)
     if (!next || at.signal.aborted || was.parentNode !== el) return
     was.replaceWith(next)

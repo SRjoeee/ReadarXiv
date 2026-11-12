@@ -3,7 +3,7 @@
 // (triage-1 B: 2608.16117v1-de t11, its p3 element on p4's line): its pixels are its own page's, as today's crops were.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Item, Page } from '../src/compose/page.ts'
-import { cropsFor, cropsOf } from '../src/compose/paint.ts'
+import { cropsAway, cropsBack, cropsBox, cropsFor, cropsOf } from '../src/compose/paint.ts'
 
 /** a viewport of a page `h` points high at `scale`, upright: PDF units to CSS px, y down */
 const viewportOf = (h: number, scale: number) => ({
@@ -135,6 +135,136 @@ describe("a laid page's crops", () => {
       sy: 1,
     })
     expect(modes).toEqual(['darken', 'darken'])
+  })
+})
+
+describe('a far page holds one bitmap: its crops copied out of the page-sized canvas, and back in the task it returns', () => {
+  // (design-performance-2026-11-13 Q7: a kept page's crops canvas let go, its crops' box kept in a canvas of its own; the
+  // compositor only ever sees the page-sized canvas, so that a page back is the page that left)
+  afterEach(() => vi.restoreAllMocks())
+  it("the crops' box: the smallest rectangle of whole device pixels that holds where they are drawn, within the grid", () => {
+    expect(
+      cropsBox(
+        [
+          [10.4, 20.6, 30.2, 5.1],
+          [50.5, 22, 3, 3],
+        ],
+        100,
+        100,
+      ),
+    ).toEqual({ x: 10, y: 20, w: 44, h: 6 })
+    // (a crop drawn past the grid's edge: the box within it; none drawn: an empty box)
+    expect(cropsBox([[-2.5, 95.5, 10, 10]], 100, 100)).toEqual({ x: 0, y: 95, w: 8, h: 5 })
+    expect(cropsBox([], 100, 100)).toEqual({ x: 0, y: 0, w: 0, h: 0 })
+  })
+  it("away: the page-sized bitmap let go, the crops' box copied one to one into a canvas off the document, the CPU's; back: drawn at its place one to one; no copy fits another grid", async () => {
+    const crop = (x: number, y: number, piece: string): Item => ({
+      s: piece,
+      x,
+      src: [5, x, y - 3, x + 50, y + 7, y],
+      k: 1,
+      piece,
+    })
+    const page: Page = {
+      page: 5,
+      wait: { rows: [], faces: [] },
+      links: [],
+      members: [
+        {
+          ord: 1,
+          page: 5,
+          state: 'laid',
+          off: 3,
+          lit: { left: [], right: [], own: [] },
+          lines: [
+            [600, 0, 600, [crop(100.3, 600, 'a')]],
+            [580, 0, 600, [crop(240.7, 580, 'b')]],
+          ],
+        },
+      ],
+    }
+    const draws: { to: HTMLCanvasElement; from: unknown; args: number[]; smooth: boolean; mode: string }[] = []
+    const asked = new Map<HTMLCanvasElement, unknown>()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (
+      this: HTMLCanvasElement,
+      ...a: unknown[]
+    ) {
+      const to = this
+      if (!asked.has(to)) asked.set(to, a[1])
+      return {
+        globalCompositeOperation: 'source-over',
+        imageSmoothingEnabled: true,
+        drawImage(
+          this: { imageSmoothingEnabled: boolean; globalCompositeOperation: string },
+          from: unknown,
+          ...args: number[]
+        ) {
+          draws.push({ to, from, args, smooth: this.imageSmoothingEnabled, mode: this.globalCompositeOperation })
+        },
+      } as never
+    })
+    const pdfPage = {
+      getViewport: () => viewportOf(792, 2),
+      render: () => ({ promise: Promise.resolve(), cancel: () => {} }),
+    }
+    const out = (await cropsFor(
+      page,
+      async () => pdfPage as never,
+      viewportOf(792, 2) as never,
+      Promise.resolve({} as never),
+      {
+        sx: 1.5,
+        sy: 1.5,
+      },
+    )) as HTMLCanvasElement
+    const over = document.createElement('div')
+    over.append(out)
+    const grid: [number, number] = [out.width, out.height]
+    // (where the crops were drawn on the grid: their union, floored and ceiled)
+    const placed = draws.filter((d) => d.to === out).map((d) => d.args.slice(4) as [number, number, number, number])
+    expect(placed).toHaveLength(2)
+    const x0 = Math.floor(Math.min(...placed.map((r) => r[0]))),
+      y0 = Math.floor(Math.min(...placed.map((r) => r[1]))),
+      x1 = Math.ceil(Math.max(...placed.map((r) => r[0] + r[2]))),
+      y1 = Math.ceil(Math.max(...placed.map((r) => r[1] + r[3])))
+    const box = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
+    draws.length = 0
+    expect(cropsAway(over)).toBe(box.w * box.h)
+    expect([out.width, out.height]).toEqual([0, 0])
+    expect(out.dataset.axtAway).toBe(`${box.x},${box.y},${box.w},${box.h}`)
+    expect(draws).toHaveLength(1)
+    const copy = draws[0]?.to as HTMLCanvasElement
+    expect([copy.isConnected, copy.width, copy.height, asked.get(copy)]).toEqual([
+      false,
+      box.w,
+      box.h,
+      { willReadFrequently: true },
+    ])
+    expect(draws[0]).toMatchObject({ from: out, args: [box.x, box.y, box.w, box.h, 0, 0, box.w, box.h], smooth: false })
+    // (away again: nothing more let go or copied)
+    expect(cropsAway(over)).toBe(box.w * box.h)
+    expect(draws).toHaveLength(1)
+    // (back on another grid, the scale moved while it was away: no copy fits, the canvas left as it is for a drawing anew)
+    expect(cropsBack(over, [grid[0] + 3, grid[1]])).toBe(false)
+    expect([out.width, out.height]).toEqual([0, 0])
+    // (back on its grid: the page-sized canvas again, the copy drawn at its place, one to one, over nothing)
+    draws.length = 0
+    expect(cropsBack(over, grid)).toBe(true)
+    expect([out.width, out.height]).toEqual(grid)
+    expect(out.dataset.axtAway).toBeUndefined()
+    expect(draws).toEqual([
+      {
+        to: out,
+        from: copy,
+        args: [0, 0, box.w, box.h, box.x, box.y, box.w, box.h],
+        smooth: false,
+        mode: 'source-over',
+      },
+    ])
+    // (back again, and back where nothing went away: nothing to do)
+    expect(cropsBack(over, grid)).toBe(true)
+    expect(cropsBack(document.createElement('div'), grid)).toBe(true)
+    expect(draws).toHaveLength(1)
   })
 })
 

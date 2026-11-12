@@ -488,6 +488,84 @@ const MINUTES_MS = 30_000
 
 describe("the client: the follow's pace (staging, 2026-11-07: a done paper followed 30-50 times a second)", () => {
   it(
+    'once nothing runs, a follow given a wake asks nothing until it wakes: no ask in an hour, then one ask a wake',
+    async () => {
+      // (design-performance-2026-11-13 Q9: a settled tab asked once a minute, 60 asks an hour a tab)
+      const timers = manualTimers()
+      const server = paperObject(timers, { doneAt: 90_000, target: 'zh' })
+      const ac = new AbortController()
+      let woken: (() => void) | null = null
+      let waits = 0
+      const p = follow({
+        fetch: server.fetch,
+        timers,
+        signal: ac.signal,
+        paper: { id: '1706.03762', version: 7 },
+        target: 'zh',
+        onDoc: () => {},
+        wake: () => {
+          waits++
+          return new Promise<void>((go) => {
+            woken = go
+          })
+        },
+      })
+      p.catch(() => {})
+      await settle()
+      // an hour: the run's one stream for its 90 s, ended by the done document, and nothing after it
+      await run(timers, 3_600_000)
+      expect([server.at, waits]).toEqual([[0], 1])
+      // each wake: one ask, the done document again, and nothing after it for another hour
+      for (const k of [1, 2]) {
+        ;(woken as (() => void) | null)?.()
+        await settle()
+        await run(timers, 3_600_000)
+        expect([server.at.length, waits]).toEqual([1 + k, 1 + k])
+      }
+      ac.abort()
+      await expect(p).rejects.toBeDefined()
+    },
+    MINUTES_MS,
+  )
+  it(
+    'a JSON answer in which nothing runs is polled again on a wake alone, where the follow is given one',
+    async () => {
+      const timers = manualTimers()
+      const at: number[] = []
+      const ac = new AbortController()
+      const json = (d: unknown) => new Response(JSON.stringify(d), { headers: { 'content-type': 'application/json' } })
+      let woken: (() => void) | null = null
+      const p = follow({
+        fetch: async (_u, init) => {
+          if (at.length >= 50) return never(init)
+          at.push(timers.now)
+          return json(timers.now < 4000 ? DOC : { ...DOC, rev: 4, prepare: { ...DOC.prepare, state: 'done' } })
+        },
+        timers,
+        signal: ac.signal,
+        paper: { id: '2401.01234', version: 2 },
+        target: null,
+        onDoc: () => {},
+        pollMs: 2000,
+        wake: () =>
+          new Promise<void>((go) => {
+            woken = go
+          }),
+      })
+      p.catch(() => {})
+      await settle()
+      await run(timers, 3_600_000)
+      expect(at).toEqual([0, 2000, 4000])
+      ;(woken as (() => void) | null)?.()
+      await settle()
+      await run(timers, 600_000)
+      // (asked at once on its wake, at the hour's end)
+      expect(at).toEqual([0, 2000, 4000, 3_600_000])
+      ac.abort()
+    },
+    MINUTES_MS,
+  )
+  it(
     "a document in which nothing runs is its stream's last frame: asked again after the server's retry, a minute, never at once",
     async () => {
       const timers = manualTimers()

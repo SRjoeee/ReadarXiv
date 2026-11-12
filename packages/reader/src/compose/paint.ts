@@ -362,6 +362,14 @@ export async function cropsFor(
       ] as const
     }
   const at = devOf(vp)
+  boxes.set(
+    out,
+    cropsBox(
+      list.map((c) => at(c.at)),
+      w,
+      h,
+    ),
+  )
   for (const from of new Set(list.map((c) => c.from))) {
     const pdfPage = await pageOf(from)
     const v = from === page.page ? vp : pdfPage.getViewport({ scale: vp.scale, rotation: turnOf(vp) })
@@ -392,6 +400,105 @@ export async function cropsFor(
     source.height = 0
   }
   return out
+}
+
+/** a box of device pixels on a crops' grid */
+export interface PxBox {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+/**
+ * The smallest rectangle of whole device pixels that holds where a page's crops are drawn (`rects`, [x, y, w, h] device px on
+ * their grid of `w` × `h`; a crop's clip lies inside its place, and a crop is drawn inside its place), within the grid: every
+ * pixel the crops paint is in it. Empty where none is drawn
+ */
+export function cropsBox(rects: readonly (readonly [number, number, number, number])[], w: number, h: number): PxBox {
+  let x0 = Number.POSITIVE_INFINITY,
+    y0 = Number.POSITIVE_INFINITY,
+    x1 = Number.NEGATIVE_INFINITY,
+    y1 = Number.NEGATIVE_INFINITY
+  for (const [x, y, dw, dh] of rects) {
+    x0 = Math.min(x0, x)
+    y0 = Math.min(y0, y)
+    x1 = Math.max(x1, x + dw)
+    y1 = Math.max(y1, y + dh)
+  }
+  const bx = Math.max(0, Math.floor(x0)),
+    by = Math.max(0, Math.floor(y0)),
+    ex = Math.min(w, Math.ceil(x1)),
+    ey = Math.min(h, Math.ceil(y1))
+  return ex > bx && ey > by ? { x: bx, y: by, w: ex - bx, h: ey - by } : { x: 0, y: 0, w: 0, h: 0 }
+}
+/** each crops canvas's box (cropsFor), and what a canvas let go while its page is away holds: its grid, its box, the copy */
+const boxes = new WeakMap<HTMLCanvasElement, PxBox>()
+const held = new WeakMap<HTMLCanvasElement, { grid: [number, number]; box: PxBox; copy: HTMLCanvasElement | null }>()
+const cropsIn = (over: HTMLElement) => over.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops')
+
+/**
+ * A page kept off the view lets its crops canvas's page-sized bitmap go (design-performance-2026-11-13 Q7): the crops' box
+ * (`cropsBox`) copied one to one into a canvas of its own, never in the document and read by the CPU (`willReadFrequently`:
+ * its pixels the renderer's, not the GPU's), and the canvas made 0 × 0, the element kept in place. The device pixels the copy
+ * holds (what the page keeps beside its page view), its box marked on the canvas (`data-axt-away`) while it is away
+ */
+export function cropsAway(over: HTMLElement): number {
+  const c = cropsIn(over)
+  if (!c) return 0
+  const was = held.get(c)
+  if (was) return was.box.w * was.box.h
+  if (!c.width || !c.height) return 0
+  const box = boxes.get(c) ?? { x: 0, y: 0, w: c.width, h: c.height }
+  let copy: HTMLCanvasElement | null = null
+  if (box.w && box.h) {
+    copy = document.createElement('canvas')
+    copy.width = box.w
+    copy.height = box.h
+    const x = copy.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D
+    x.imageSmoothingEnabled = false
+    x.drawImage(c, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h)
+  }
+  held.set(c, { grid: [c.width, c.height], box, copy })
+  c.width = 0
+  c.height = 0
+  c.dataset.axtAway = `${box.x},${box.y},${box.w},${box.h}`
+  return box.w * box.h
+}
+/**
+ * A page coming back: its crops canvas made page-sized again on `grid` (the page view's device pixels now) and its copy drawn
+ * at its place, one to one, over nothing, in the caller's task: the canvas holds the pixels it held before it went away, and the
+ * compositor never sees another canvas. True where it is whole (put back, or nothing was let go); false where no copy fits (the
+ * scale moved while it was away): its crops are then to be drawn anew (the composer's `cropsAgain`)
+ */
+export function cropsBack(over: HTMLElement, grid: readonly [number, number]): boolean {
+  const c = cropsIn(over)
+  const h = c && held.get(c)
+  if (!c || !h) return true
+  if (h.grid[0] !== grid[0] || h.grid[1] !== grid[1]) return false
+  held.delete(c)
+  delete c.dataset.axtAway
+  c.width = h.grid[0]
+  c.height = h.grid[1]
+  if (h.copy) {
+    const x = c.getContext('2d') as CanvasRenderingContext2D
+    x.globalCompositeOperation = 'source-over'
+    x.imageSmoothingEnabled = false
+    x.drawImage(h.copy, 0, 0, h.box.w, h.box.h, h.box.x, h.box.y, h.box.w, h.box.h)
+    h.copy.width = 0
+    h.copy.height = 0
+  }
+  return true
+}
+/** the copy of a page's crops let go with its drawing */
+export function cropsFree(over: HTMLElement) {
+  const c = cropsIn(over)
+  const h = c && held.get(c)
+  if (!c || !h) return
+  held.delete(c)
+  if (h.copy) {
+    h.copy.width = 0
+    h.copy.height = 0
+  }
 }
 
 /** the laid members of a page (state 'laid'), the ones the overlay draws */

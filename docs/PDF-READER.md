@@ -1358,6 +1358,21 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   it is held, out again at its end where still far. A kept page's words are not found by the
   browser's find while it is far, as today's are not (the coordinator's word, 2026-11-12: equal to production is the bar).
   Held by the harness's check "a far laid page kept out of the layout tree, back pixel for pixel, the scroll height unmoved".
+  **A kept page holds one bitmap** (design-performance-2026-11-13 Q7): its page view's. Its crops canvas, page-sized so that the
+  compositor draws it as it draws the page view, holds a few formulas' pixels on most pages; kept, it let every laid page hold a
+  second page of pixels (2610.20808v1 and 2610.40645v1 after a scroll: 27 and 35 of them, 62.6 and 74.3 MiB; the GPU process
+  595-605 and 658 MiB against 420-433 with them let go, lane crops-probe, 2026-11-13). As the page is kept, the smallest box of
+  whole device pixels that holds where its crops are drawn (`packages/reader` paint.ts `cropsBox`) is copied one to one into a
+  canvas of its own that is never in the document and is read by the CPU (`willReadFrequently`), and the crops canvas's bitmap
+  is let go (`cropsAway`); as the page comes back, in the task that puts it back into the layout tree (the jump's own frame or
+  the near observer's), the canvas is made page-sized again and the copy drawn at its place, one to one (`cropsBack`): the page
+  comes back as it left, the same canvas and the same pixels, alpha included, no crop render made. A canvas cut to the box and
+  shown so (lane reader-perf's C) is not taken: Chromium composites a layer of another size differently, 14 of the harness's 37
+  shots unlike though the canvas's own pixels were identical (lane crops-probe). Where no copy fits (the scale moved while the
+  page was far) the crops are drawn anew (`cropsAgain`) and the page goes back into the layout tree once they are in: never
+  shown without them, nor with the old scale's. The budget counts what a kept page holds: its page view and its copy.
+  Held by the same check (the crops canvas 0 × 0 while far, the budget, the canvas in the jump's frame equal to what it held,
+  no crop drawn again; after a zoom while far, the crops at the new grid as the page goes back) and paint.test.ts.
 - **The faces, in one wave** (`layer-proto/warm.mjs`). v0 checks and loads the faces of a unit as it lays it, one unit after
   another (E2), so a page whose units brought new characters waited a round trip a unit: 2602.23285v2 in Chinese asked 38
   font files in 12 waves before its first page, 4.3 to 9.2 s of a cold visit (production, 2026-10-24). The side asks the
@@ -2683,6 +2698,19 @@ within noise.
   typesetting and the streams' reads make them). The package's sweep, one look a frame: 0.105 ms a look at its median, 0.040
   after. While a pinch is shown its pages stand where its transform draws them, which no place kept holds: the page is read as
   shown for those frames, as before.
+- **The right's page told reads no layout either** (design-performance-2026-11-13 Q8): the page number the chrome shows for
+  the right pane (`panes.ts` tellRightPage) is the page at its shown top, told in every scroll and each time the stack puts a
+  page in place (its `shown`). It read the pane's width (`shown()`), its scrollTop and each page's offsetTop / offsetHeight,
+  and a page put in place leaves the layout dirty: over a scroll of 2610.20808v1 (zh) 56 layouts were forced there, 344 ms
+  (a trace with the scripts' stacks: readarxiv-lab-data `lanes/reader-q7`). Keeping the width alone moved them to the next
+  read (`shownAt`'s scrollTop: 56, 337 ms). Now it reads the width kept (read as the panes are made and where the reader
+  changes a pane's display, kept by a ResizeObserver of each pane), the scroll position the pane's scroll events keep, and the
+  page from the pointer's kept places (each page's end as the layout read gave it): 0 such forced layouts over the same
+  scroll. Where the pane moved before its scroll event came (the reader's own placing after an open or a relayout, or a scale,
+  a display or a resize that read the places again) it reads fresh until that event: told from kept values there, the page
+  differed on 2 of 248 tells over the lab paper's display change and narrow view (the kept position the old scale's, the
+  places the new one's); with the fresh reads, the page told equals the layout's on every tell, 58 on sample-1 and 252 on
+  2610.20808v1, over a scroll, jumps, zooms, display changes, the narrow view and resizes.
 - **What it does not settle**: a display the part states no ink of (LOST) leaves a gap with nothing in it, filled as today's;
   a display set on a text line beside a word (TeX's display after a word on its baseline) is on that line's row, lit with it;
   a sentence whose only text is a display lights nothing but the display; and a sentence that runs on past a display with no
