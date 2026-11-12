@@ -139,7 +139,7 @@ export function layPagePrepared(
  * `cap`, never under its floor (the tie's, else the member's own) and never above a cap set before; `fitOf` the scale each
  * member is laid at, its page's fill passes run, `ownOf` the scale its own lay set it at before any page's fill and any tie's
  * cap, `firstOf` the page each begins on. Whether a cap was lowered. A tie caps a member from the scales the passes up to its own first page leave its
- * tie-mates at (the coordinator's ruling of 2026-11-12, docs/PDF-READER.md §18.64): a tie-mate begun on that page or before as
+ * tie-mates at (docs/PDF-READER.md §18.64): a tie-mate begun on that page or before as
  * laid and filled, one begun after it as its own lay set it, never as a later page's fill set it, nor a cap that fill set. Every lay that draws a unit
  * runs the pass of the page it begins on, and a later page's pass runs in some of them alone (a page's lay runs its own page's
  * and the first page of each member on it), so a later page's fill (its shrink, its evening, §18.57) capping a tie-mate begun

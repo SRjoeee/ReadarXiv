@@ -386,10 +386,11 @@ export function createServed(o: {
   /**
    * The slices of `keys` loaded and not in the document yet, added in one stretch, and only then ready to be measured: one
    * change of the document's fonts an ask instead of one a slice. Chromium re-lays every text node laid out at each change
-   * ("Fonts changed"), so a slice added as it came made up to two whole-document relayouts a page (41-48 a scroll, against
-   * today's 22-25, which adds a wave's faces in one task: verification/reader-perf.md §3f). An ask is one page's (the
-   * composer asks a page's faces apart, so that no page waits for another's), so no page is held by another's slices; and none
-   * is measured or drawn with a fallback face, since a slice is ready (`loaded`) only once it is in the document
+   * ("Fonts changed"), so a slice added as it comes makes up to two whole-document relayouts a page (measured over a scroll of
+   * two papers: 41-48 such relayouts, against 22-25 in the released reader, which adds a wave's faces in one task:
+   * verification/reader-perf.md §3f). An ask is one page's (the composer asks a page's faces apart, so that no page waits for
+   * another's), so no page is held by another's slices; and none is measured or drawn with a fallback face, since a slice is
+   * ready (`loaded`) only once it is in the document
    */
   const addIn = (keys: Iterable<string>) => {
     if (gone) return
