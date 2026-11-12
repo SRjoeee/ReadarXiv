@@ -4726,6 +4726,21 @@ of the page's address, so it stays.
   2602.23285v2 page 5 take a fill leading 0.01 looser (1.05 to 1.06); no line moves between pages; the six new lines under the
   bottom are all in units set larger, none in a unit that gains nothing. The fit tries 0.34 % more states over the parity's
   whole lay (0.33 % with every toggle on). Staging drew 2608.16117v1-de's two units at the lab's sizes, 10.76 and 11.06 pt.
+- **Measured on by default** (round B13's inputs, r20, against B13's head 75602aecb). The reader gate over the tap's 123 pairs:
+  twelve units or runs are set larger and none smaller, by 0.17 to 0.99 pt (median 0.30): the six above, and 2610.20581v1-zh's
+  unit 140 (10.64 to 10.91), 2610.21026v1-zh's theorem 217 (8.97 to 9.96), 2610.21376v1-zh's unit 63 (9.71 to 9.96) and
+  2610.20595v1-zh's unit 63's run after its display (9.46 to 9.96; a unit split by its displays is laid a run at a time,
+  §18.7); German 2 (each also in the pack's pair), Japanese 2, Chinese 6. Its 12 lines past TeX's bottom (0.08 to 1.42 pt, none
+  before) are all in those units; 21 pages move, all theirs; the invariants as B13's (I3 the same 58 overlaps, I4 0, I5 the
+  same 2, I10 0), and the entry's comparison with the runner's lay, line for line. The display gate's 22 pairs, both toggle
+  states alike: the six units, 11 pages moved, 6 lines past the bottom. Pages worse than production: 42 to 46 by default, 49
+  to 53 with every toggle on, the same four pages in both, and none no longer worse. Two are the borrowed lines themselves,
+  which the gate's `block` measure reads as faults under its ruling of 2026-11-08 (nothing past TeX's bottom): 2608.25210v2's
+  footnote (0.12 pt) and 2610.21106v1's theorem (0.08 pt), where production borrows nothing. Two are 2608.16117v1's unit 86 on
+  pages 24 and 25, set 10.76 pt where production sets 11.06 and the original 11.96: nearer the original than at 10.46, but the
+  gate had excused the difference while production alone stood past TeX's room (its line on page 23 over the page number) and
+  now judges it as any size. The gate's rulings are its own to bring to this ruling; this section changes none of its
+  measures.
 - **Two shapes measured and not built.** Offering the borrow before the first step alone (round 5's L) buys the four units of
   2602.23285v2, 2608.25210v2 and 2610.21106v1 (1.0 pt buys three, 0.5 pt two; 2.5 pt lays the 22 pairs as 1.5 does) and not
   2608.16117v1's two, which need a borrow and a shrink, at 0.14 % more states. Spending the whole allowance (the fit's state
