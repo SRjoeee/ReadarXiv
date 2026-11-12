@@ -191,12 +191,11 @@ export function factsOf({
     if (framed.has(l[0]) || l[7] < l[2] - 0.01 || l[8] > l[3] + 0.01) return [l[7], l[8]]
     return hull.get(l[1] === 2 ? `${l[0]}|*` : `${l[0]}|${l[1]}`) ?? [l[2], l[3]]
   }
-  // (B's paragraph ends, globally)
-  const ends: number[] = []
-  ;(ins.tex.paragraphEnds ?? []).forEach((l, p) => {
-    for (const g of l) ends.push((m.offB[p] as number) + g)
-  })
-  ends.sort((x, y) => x - y)
+  // (B's paragraph ends, globally, each glyph position once: two paragraphs TeX ended with nothing set between them, a box's last
+  // and the one around it, end at one position, one end there)
+  const ends = [
+    ...new Set((ins.tex.paragraphEnds ?? []).flatMap((l, p) => l.map((g) => (m.offB[p] as number) + g))),
+  ].sort((x, y) => x - y)
   // (each element's opening point on B, by unit and piece: the glyph before which it begins, global; and its end point, the
   // glyph before which what follows it begins)
   const placeAt = new Map<string, number>()

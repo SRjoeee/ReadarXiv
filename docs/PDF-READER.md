@@ -3656,7 +3656,11 @@ target sets no space there (after a full-width closing mark, before one no line 
 glued. A translator's U+00A0 is the translator's, no tie. A tied group longer than the line is broken where its glue alone
 ends, as a mark's joined group is. Before, a tie was an ordinary space, and a reply that set the source's stop after the mark
 began a line with it (2111.09276v1 p5, round B14: the paragraph's last line ending in its word, the mark 12 and the stop
-opening the next, §18.66). Over the 88 papers' parts 180
+opening the next, §18.66). Over the 90 pairs (the reader gate's runner, 2026-11-13): with the door's rows 251 of 23,016 units lay
+otherwise (a line broken elsewhere 214, a line more or fewer 14; zh 237, ja 8, es 6, de and pl none), 2 a size step down; with
+Google's 226 of 22,996 (zh 215, ja 6, es 5), 8 a size step down, 5 of them 1810.04805v2-es (a tie holding a word to a citation
+the translation sets as text, which then breaks inside the citation); last lines that hold no letter 133 -> 130 and 143 -> 137;
+no invariant of the gate moves. Over the 88 papers' parts 180
 marks (155 of them digits, 17 in author blocks) and 92 raised symbols (10 in author blocks) move from text to their ink. Today draws them as text
 too, so the parity never told it.
 
@@ -6039,6 +6043,24 @@ it. Not this round's: staging drew the same at round B10's engine; the lay follo
 - **The gate.** A paragraph end of B inside a unit (the unit's glyphs on both sides of it) that states no point is counted, by
   what stands where the next paragraph begins in the source (`Located.stats.opensUnstated`, the dump's `counts`): an open or
   an element (`anchored`, this report's class, which must count none) or plain text (`plain`: no anchor exists for it today).
+- **Measured** (stage 1a over the 88 papers and 2111.09276v1, cb10a1f7d against this rule): points stated 7 more, in 2 papers
+  (2111.09276v1 ords 60 (two), 63, 87 at "Youcook2", 99 at "Step Aggregation Model", 127 at "IER"; 2610.21924v1 ord 17), none
+  lost; bundle objects move in those 2 papers alone. `opensUnstated` anchored 7 -> 3, plain 57 -> 57 (30 papers). The 3 left are
+  2608.25210v2 page 3's prompt frames (ords 55 to 57): an end before `\mypython{…}` whose glyphs the instrument owns by an inner
+  piece the unit's content holds inside its element 14, stated a display, a block of its own; before the rule those ends found
+  no piece either and went uncounted. The reader gate over the 90 pairs: no invariant moves on either store.
+- **The end itself, in the marked compile.** A paragraph end the marked compile does not state is no fact of this pass:
+  2111.09276v1's "Howto-GEN" and "COIN" follow paragraphs that end in a footnote, and B's paragraph ends held none at either.
+  LaTeX's para/end point (`layout/marks.mjs` `\axt@peat`) was set only where the list ended in a character, a rule, an
+  insertion, a mark, a ligature or a formula; these lists end in whatsits (the element's own end point after the footnote, and
+  under hyperref's colour links the link's end and the colour stack's pop after its mark: `\showlists` at para/end), as every
+  paragraph that ends in an element or in a unit's own end mark does. A paragraph's end is a fact of TeX's mode, not of its
+  last node: the point is now set whatever node ends the list, but on an empty list (TeX builds no line for it, the point would
+  build one) and on one that still ends in a glue after its last space, kerns and penalties are taken off (`\\`'s
+  `\hfil\break`, after which the point would be a line of its own; a leaders' glue, which `\hskip` cannot put back).
+  `lab/pdf/spikes/para-end-cases.mjs`: a paragraph after a hyperref'd footnote, after a
+  plain `\href`, after a citation and after a full stop, with microtype, each end stated before the next paragraph's first
+  glyph and no glyph moved by the points (four ends missing before). The facts pass reads two ends at one glyph position as one.
 
 ## 19. The engine's contract
 
