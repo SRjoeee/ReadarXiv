@@ -51,6 +51,7 @@ export { type Located, locate, type Member, type Place } from './locate/locate.t
 export { type PrepareDeps, prepareBack, readArxiv, type Tally } from './prepare.ts'
 export { OPS_PDFJS, type OpsPage, type OpsReader, readOps } from './opstream.ts'
 export { type PdfJs, type ReadPage, type Recovered, readPdf } from './read.ts'
+export { type Hole, type Holes, holesOf, PACKED_MAGIC, pack, unpack } from './sparse.ts'
 export { RECOVER_SITES, reasonOf, siteOf } from './warnings.ts'
 export { type AddOn, textGroupOf, type WrapPageA, wrap, wrapPageOf } from './wrap/wrap.ts'
 
