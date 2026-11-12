@@ -53,3 +53,40 @@ export { OPS_PDFJS, type OpsPage, type OpsReader, readOps } from './opstream.ts'
 export { type PdfJs, type ReadPage, type Recovered, readPdf } from './read.ts'
 export { RECOVER_SITES, reasonOf, siteOf } from './warnings.ts'
 export { type AddOn, textGroupOf, type WrapPageA, wrap, wrapPageOf } from './wrap/wrap.ts'
+
+// ---- the front half moved into this package as it is (JavaScript), typed by its one transition facade: the names the
+// website's prepare imports (the source reader's paper, the marked compile, the instrument, the PDF's facts)
+export {
+  analyze,
+  bibliographyKept,
+  bundleUnitsOf,
+  type Compiled,
+  type CompileRequest,
+  classesOf,
+  compilerOfPdf,
+  contentOf,
+  creationEpochOf,
+  DRIVER_OUTPUT_MARK,
+  DRIVER_OUTPUT_TRUNCATED,
+  driverOutputGiven,
+  driverOutputTruncated,
+  elementKindOf,
+  float32Outlines,
+  inMemory,
+  instrumentOf,
+  LINK_TEXT_PIXELS,
+  LITE_PDFJS,
+  limitOf,
+  liteWorkerSource,
+  madeBibliography,
+  markedOfPaper,
+  NO_DRIVER_GROUP,
+  NO_IMAGE_PIXELS,
+  openPaper,
+  type Paper,
+  ranThrough,
+  texLiveOfPdf,
+  texRan,
+  textOfPdf,
+  unitFactsOf,
+} from './front.types.ts'
