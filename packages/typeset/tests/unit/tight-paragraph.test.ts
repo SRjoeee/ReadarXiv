@@ -176,3 +176,78 @@ describe('a paragraph tighter than its page at a column’s foot takes the room 
     expect([foot(2, 90, 12)[2]!.evened, foot(2, 90, 12)[2]!.over]).toEqual([undefined, undefined])
   })
 })
+
+// What the page states of an evened paragraph is what its final lines took (§18.57, "What the page states of it"): a knob its last
+// lay no longer carries is not named. The fill's head pass (fill-page.ts headOf) lays a paragraph again, lower by what the gap
+// over it lacks, with no room under it (`borrow: 0`), where the paragraph over it ends on a line alone at the column's top.
+describe('an evened paragraph states only the knobs its final lines carry (§18.57)', () => {
+  /** a column of two paragraphs, the second over a column break, its last line alone at the next column's top (TeX's widow);
+   *  under it in that column the paragraph `chars` characters long, a block of 8 lines with 28 pt of TeX's room under it, then
+   *  one more */
+  const widow = (chars: number) => {
+    const at = (y: number, x0: number, x1: number): Placed['lines'][number] => [
+      1,
+      0,
+      x0,
+      x1,
+      y,
+      y + 7,
+      y - 2,
+      x0,
+      x1,
+      0,
+      10,
+    ]
+    const col = (y0: number, n: number, x0 = 72, x1 = 300) =>
+      Array.from({ length: n }, (_, i) => at(y0 - 12 * i, x0, x1))
+    const four = ['b', 'c', 'd', 'e'].map((c) => c.repeat(64))
+    const st = { role: 'serif' as const, size: 10, design: 'NimbusRomNo9L-Regu' }
+    const room = { below: 45, next: 45, runs: [[7, 45, 300]], sep: 17 } as unknown as Placed['room']
+    const flow: Placed[] = [
+      {
+        ord: 0,
+        kind: 'para',
+        text: four[0]!,
+        lead: 12,
+        style: st,
+        align: 'j',
+        lines: col(700, 4),
+        room: { below: 17, next: 17 },
+      },
+      {
+        ord: 1,
+        kind: 'para',
+        text: four[1]!,
+        lead: 12,
+        style: st,
+        align: 'j',
+        lines: [...col(647, 4), ...col(700, 1, 320, 548)],
+        room: { below: 17, next: 17 },
+      },
+      { ord: 2, kind: 'para', text: four[2]!, lead: 12, style: st, align: 'j', lines: col(683, 8, 320, 548), room },
+      {
+        ord: 3,
+        kind: 'para',
+        text: four[3]!,
+        lead: 12,
+        style: st,
+        align: 'j',
+        lines: col(554, 4, 320, 548),
+        room: { below: 200, next: 212 },
+      },
+    ]
+    const by = new Map([60, 165, chars, 60].map((c, i) => [four[i]!, row(four[i]!, c)]))
+    const rows: Rows = { get: (k) => by.get(k), done: true }
+    const part = { format: 1, page: 1, paper: { faces: { fonts: [['NimbusRomNo9L-Regu', 100]] } }, flows: [flow] }
+    return layPage(part as never, rows, zh, metrics).members[2]!
+  }
+  it('names no room TeX left under it where the head pass laid it again with none', () => {
+    // (290 characters, 7 lines at the fit; the fill evened them by TeX's room and a size step, 6 lines at 9.75 pt; the paragraph
+    // over it ending on a line alone at the column's top, the head pass laid it 6 pt lower with no room borrowed: its six lines
+    // stand inside its block, the size step alone stays)
+    const m = widow(290)
+    expect([m.fit!.size, m.fit!.borrowed, m.lines.length]).toEqual([9.75, 0, 6])
+    expect(m.lines.at(-1)![0]).toBeGreaterThanOrEqual(683 - 84 - 0.05)
+    expect(m.evened).toEqual({ by: ['size'], lines: 7 })
+  })
+})

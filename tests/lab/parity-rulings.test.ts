@@ -165,6 +165,46 @@ describe('L2: a paragraph a line shorter than today, ending higher: the look he 
   })
 })
 
+describe("L1R: a paragraph a line shorter than today's, the page's fill spreading it into TeX's room (L1 and TRS composed)", () => {
+  // (2610.21312v1-zh p2 t17: the original's 11 lines from 703.23, 11.95 apart; today 10 at 10.16 pt, 14.82 apart, its last at
+  // 569.82; v2 9 at the original's 9.96, its fit's 9, evened by TeX's room alone: 17.81 apart, its last at 560.73, 9.09 pt under
+  // today's, past half a line)
+  const ol = Array.from({ length: 11 }, (_, i) => fact(312, 563, 703.23 - i * 11.95, 9.96))
+  const v2Of = (evened: object | null) => ({
+    facts: { [N]: { members: [{ ord: 17, kind: 'para', align: 'j', style: { size: 9.96 }, lines: ol }], ties: [] } },
+    pages: { [N]: { members: [{ ord: 17, state: 'laid', lines: [], fit: { size: 9.96, lead: 1.49, track: -0.03, borrowed: 99 }, ...(evened ? { evened } : {}) }] } },
+  })
+  const page = (o: { evened?: object | null; vLines?: number; vSize?: number; past?: boolean; more?: Diff[] } = {}) => {
+    const vl = o.vLines ?? 9,
+      vs = o.vSize ?? 9.96
+    const { page: p } = judged(
+      {
+        diffs: [worse('line-count', 't17 para', 11, 10, vl, [1, 11 - vl]), ...(o.more ?? [])],
+        units: [{ key: 't17', kind: 'para', part: 17, align: 'j', sides: { today: side(10, 10.16, 9.96, 11), v2: side(vl, vs, 9.96, 11) } }],
+        ...(o.past ? { pastRoom: { today: [], v2: ['t17'] } } : {}),
+      },
+      {
+        v2: v2Of(o.evened === undefined ? { by: ['room'], lines: 9 } : o.evened),
+        rec: rec({ units: [{ id: 17, lines: paragraph(10, 703.23, 14.823, 10.16) }] }, { units: [{ id: 17, lines: paragraph(vl, 703.23, 17.8125, vs) }] }),
+      },
+    )
+    const d = (p.diffs as Diff[]).find((x) => x.flag === 'line-count')
+    return [d?.worse, d?.covered ?? null]
+  }
+  it("a line fewer at the original's size, its fit's count, evened by TeX's room alone, its lines inside TeX's room: covered by L1R", () => {
+    expect(page()).toEqual([false, 'L1R'])
+  })
+  it("no evening stated, evened by more than the room, a count the knobs moved, a line past TeX's room, smaller, or not whole: worse", () => {
+    expect(page({ evened: null })).toEqual([true, null])
+    expect(page({ evened: { by: ['track', 'room'], lines: 9 } })).toEqual([true, null])
+    // (two lines fewer, or the knobs' count: TRS's to judge, L1R's never)
+    expect(page({ vLines: 8 })).toEqual([true, null])
+    expect(page({ past: true })).toEqual([true, null])
+    expect(page({ vSize: 9.71 })).toEqual([true, null])
+    expect(page({ more: [worse('elements', 't17 para', 0, null, 'element 2: drawn as nothing where TeX set ink')] })).toEqual([true, null])
+  })
+})
+
 describe('S1: a figure\'s labels at their group\'s size', () => {
   // (1512.03385v1-zh p6, Figure 5's "relu" labels: a tie of the part's (a figure's set at one size), v2 translates every one at
   // 4.37 pt; today translates two of them, at 4.95, the rest the original's)

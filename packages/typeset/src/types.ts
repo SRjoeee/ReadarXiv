@@ -179,8 +179,8 @@ export type Laid = {
    *  page fill's foot step, §18.57): how far under that bottom its lowest line stands, points, to the hundredth up; none where
    *  no line of it stands there */
   fit?: { size: number; lead: number; track: number; borrowed: number; over?: number }
-  /** a tight paragraph the page's fill evened (§18.57): `by` the fit's knobs it took, in the order taken; `lines` its line count
-   *  on this page at its fitted layout, before them */
+  /** a tight paragraph the page's fill evened (§18.57): `by` the fit's knobs it took that its final lines carry, in the order
+   *  taken (none carried: not stated); `lines` its line count on this page at its fitted layout, before them */
   evened?: { by: EvenKnob[]; lines: number }
   /** its laid lines on this page, baseline first (a turned line, its items' `dir`: from its origin (x0, y), x1 − x0 its length
    *  along it) */

@@ -231,6 +231,28 @@ export const RULINGS = [
     },
   },
   {
+    id: 'L1R',
+    title: "a paragraph a line shorter than today's, the page's fill spreading it into the room TeX left under it",
+    verdict: ACCEPTED,
+    date: DATE,
+    seen: "not judged on a card of its own: two looks he accepted composed, as the coordinator states the condition (design-display-2026-11-13, X4): L1 (a paragraph a line shorter than today's, in the height today takes) and TRS (a tight paragraph the page's fill evened by TeX's room, his verdict 17:25)",
+    words: null,
+    example:
+      "2610.21312v1-zh p2 t17: 9 lines at the original's 9.96 pt against today's 10 at 10.16 (its fit's 9 before the evening), spread from 1.37 to 1.49 into TeX's room under it, its last line 9.09 pt under today's",
+    condition:
+      "line-count: v2 sets the unit in exactly one line fewer than today on the page (both at most the original's count), at the original's size (within the size floor), as L1 reads it; its count the fit's (v2's Page member states it evened, `evened.lines` its count before the knobs, the count it draws), evened by TeX's room alone (`evened.by` the room and nothing else: no knob moved its count); its lines inside TeX's room (the block measure: none past TeX's text block bottom beyond a stated borrow, or nearer the next ink than TeX's paragraph separation, on any of its pages); the unit whole (WHOLE). Where its last row stands against today's is not asked: the room's bound is TeX's",
+    holds(d, x) {
+      const f = lineFewer(d, x)
+      if (!f || !x.whole(f.u.key) || x.pastV2.has(f.u.key)) return false
+      const ev = x.laid(f.u.part)?.evened
+      return ev?.by?.length === 1 && ev.by[0] === 'room' && ev.lines === d.v2.value
+    },
+    says(d, x) {
+      const f = lineFewer(d, x)
+      return `its last row ${r2(f.tEnd - f.vEnd)} pt under today's, in TeX's room`
+    },
+  },
+  {
     id: 'L3',
     title: "a proof one line longer than today's, in the room under it",
     verdict: ACCEPTED,
