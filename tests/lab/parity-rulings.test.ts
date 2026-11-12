@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { recount } from '../../lab/typeset/parity/verdict.mjs'
 // @ts-expect-error — a plain node module of the lab
-import { NO_PAGE_LEFT, RULINGS, rowsOf, rulingsOf, rulingsPass, WHOLE } from '../../lab/typeset/parity/rulings.mjs'
+import { cutBeforeBoundary, NO_PAGE_LEFT, RULINGS, rowsOf, rulingsOf, rulingsPass, WHOLE } from '../../lab/typeset/parity/rulings.mjs'
 
 const N = 4
 type Diff = { flag: string; unit: string; original: unknown; today: { value: unknown; off: unknown }; v2: { value: unknown; off: unknown }; nearer: string; worse: boolean; covered?: string; relaid?: object }
@@ -24,11 +24,11 @@ const worse = (flag: string, unit: string, original: unknown, today: unknown, v2
   nearer: 'today',
   worse: true,
 })
-type Ctx = { rec: object; v2: object; laid?: object; unsqueezed?: object | null }
+type Ctx = { rec: object; v2: object; laid?: object; unsqueezed?: object | null; todayCut?: ((key: string) => object | null) | null }
 /** the pass over one page: its diffs as they come out (each worse or covered, by which ruling) */
 const judged = (p: { diffs: Diff[]; units?: object[]; figurePairs?: [number, string][]; pastRoom?: object }, c: Ctx) => {
   const page = { pair: 'p-zh', page: N, worse: 0, units: [], figurePairs: [], ...p }
-  rulingsPass([page], { recOf: () => c.rec, v2: c.v2, laid: c.laid ?? {}, unsqueezed: c.unsqueezed ?? null }, recount)
+  rulingsPass([page], { recOf: () => c.rec, v2: c.v2, laid: c.laid ?? {}, unsqueezed: c.unsqueezed ?? null, todayCut: c.todayCut ?? null }, recount)
   return { page, out: page.diffs.map((d) => [d.unit, d.worse, d.covered ?? null]) }
 }
 const rec = (today: object = {}, v2: object = {}, px: object = {}) => ({ page: N, today: { units: [], crops: [], ...today }, v2: { units: [], crops: [], ...v2 }, px })
@@ -503,6 +503,63 @@ describe("A2: a reference's next line set flush where the original indents it, a
   })
 })
 
+describe('WB: no word is cut by a boundary between runs (the coordinator\'s ruling of 2026-11-13), read from today\'s dumps', () => {
+  // (today's two dumps of a unit, as baseline/reader and baseline/tap hold them: the reader dump's drawn lines with their text,
+  // today's copy writing a space after a Latin line's last word unless the breaker hyphenated it; the tap's X.cut slot, its lines
+  // [page, baseline, x0, x1, mode, block, items] and its blocks' `after`. The example: 2608.16117v1-de t28, whose line before
+  // display (33) today ends "Periodizitätsbezie-" (p10); the same paper's t35 carries the fact too (p14, "erhal-") and reads
+  // nothing worse, its v2 lay no other than today's in size and line count)
+  const laid = [
+    [N, 500, 72, 300, 'just', 0, 5],
+    [N, 488, 72, 300, 'just', 1, 5],
+    [N, 476, 72, 200, 'last', 1, 3],
+  ]
+  const tap = (after: number[]) => [{ by: 'X.cut', round: 1, value: { layoutLines: laid, walkedBlocks: after.map((a) => ({ after: a })) } }]
+  const reader = (end: string, y = 500) => [
+    { page: N, x0: 72, x1: 300, baseline: y, text: `abc abcd${end}` },
+    { page: N, x0: 72, x1: 300, baseline: 488, text: 'efgh ijk lmn ' },
+    { page: N, x0: 72, x1: 200, baseline: 476, text: 'opq rst ' },
+  ]
+  it('reads the fact where the line before a kept region ends in the breaker\'s hyphen, joined by page and baseline as the harness pairs them', () => {
+    expect(cutBeforeBoundary(reader('-'), tap([0, 1]))).toEqual({ page: N, baseline: 500, text: 'abc abcd-' })
+    expect(cutBeforeBoundary(reader('-', 500.04), tap([0, 1]))).toEqual({ page: N, baseline: 500.04, text: 'abc abcd-' })
+  })
+  it('reads none for a hard hyphen there (a space after it in today\'s copy), a hyphen on a line inside a run, or a line the harness would not pair', () => {
+    expect(cutBeforeBoundary(reader('- '), tap([0, 1]))).toBeNull()
+    expect(cutBeforeBoundary(reader('-'), tap([0, 0]))).toBeNull()
+    expect(cutBeforeBoundary(reader('-', 500.06), tap([0, 1]))).toBeNull()
+    expect(cutBeforeBoundary(undefined, tap([0, 1]))).toBeNull()
+  })
+  // (the page: v2 a step smaller than today and two lines fewer, the unit whole)
+  const v2 = { facts: { [N]: { members: [], ties: [] } }, pages: { [N]: { members: [] } } }
+  const unit = { key: 't28', kind: 'para', part: 28, align: 'j', sides: { today: side(17, 10.46, 11.96, 22), v2: side(15, 10.16, 11.96, 22) } }
+  const diffs = () => [worse('size', 't28 para', 11.96, 10.46, 10.16, [0.125, 0.15]), worse('line-count', 't28 para', 22, 17, 15, [5, 7])]
+  const cutOf = (fact: object | null) => (key: string) => (key === 't28' ? fact : null)
+  it("a unit today reached its size and line count by such a cut: both covered by WB, today's cut reported", () => {
+    const { out, page } = judged({ diffs: diffs(), units: [unit] }, { v2, rec: rec(), todayCut: cutOf(cutBeforeBoundary(reader('-'), tap([0, 1]))) })
+    expect(out).toEqual([
+      ['t28 para', false, 'WB'],
+      ['t28 para', false, 'WB'],
+    ])
+    expect((page.diffs[0] as Diff & { coveredSays?: string }).coveredSays).toBe(`today ends its line before a boundary between runs on p${N} at 500 in the breaker's hyphen ("…abc abcd-")`)
+  })
+  it('the same unit without the fact in today\'s dumps, with none stated, or not whole: worse', () => {
+    expect(judged({ diffs: diffs(), units: [unit] }, { v2, rec: rec(), todayCut: cutOf(cutBeforeBoundary(reader('- '), tap([0, 1]))) }).out).toEqual([
+      ['t28 para', true, null],
+      ['t28 para', true, null],
+    ])
+    expect(judged({ diffs: diffs(), units: [unit] }, { v2, rec: rec() }).out).toEqual([
+      ['t28 para', true, null],
+      ['t28 para', true, null],
+    ])
+    const fact = cutOf(cutBeforeBoundary(reader('-'), tap([0, 1])))
+    expect(judged({ diffs: [...diffs(), worse('elements', 't28 para', 0, null, 'element 2: drawn as nothing where TeX set ink')], units: [unit] }, { v2, rec: rec(), todayCut: fact }).out.slice(0, 2)).toEqual([
+      ['t28 para', true, null],
+      ['t28 para', true, null],
+    ])
+  })
+})
+
 describe('the rulings file', () => {
   it('states each ruling with its class, condition, verdict, date and example; one with no condition says why', () => {
     for (const r of RULINGS) {
@@ -510,8 +567,9 @@ describe('the rulings file', () => {
       expect(r.title.length).toBeGreaterThan(10)
       // (his verdicts: accepted, taken, option 1 (T2), agreed with the recommendation (T4); T1 his ruling of 2026-11-08 as the
       // record states it, relayed in English)
-      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : r.id === 'T1' ? r.verdict === 'pseudocode kept' : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528', '\u540c\u610f\u4f60\u7684\u5efa\u8bae'].includes(r.verdict)).toBe(true)
-      expect(r.date).toBe(r.id === 'T1' ? '2026-11-08' : '2026-11-12')
+      // (WB the coordinator's ruling of 2026-11-13 on the owner's report of the day before, the law it rests on built in B.break)
+      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : r.id === 'T1' ? r.verdict === 'pseudocode kept' : r.id === 'WB' ? r.verdict === "the coordinator's ruling" : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528', '\u540c\u610f\u4f60\u7684\u5efa\u8bae'].includes(r.verdict)).toBe(true)
+      expect(r.date).toBe(r.id === 'T1' ? '2026-11-08' : r.id === 'WB' ? '2026-11-13' : '2026-11-12')
       expect(r.example.length).toBeGreaterThan(20)
       expect(r.condition === null ? r.unstated : r.condition).toBeTruthy()
       expect(r.condition === null).toBe(r.holds === null)

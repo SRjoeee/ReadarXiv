@@ -25,7 +25,7 @@ import { frameOf, labelsPass } from './fidelity.mjs'
 import { bundleCheck, bundleOf, pdfOf, whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
 import { coverageOf, FLAGS, freshOf, freshResolve, judgedChanged, linksPass, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, stylePass, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
-import { rulingsOf, rulingsPass } from './rulings.mjs'
+import { cutBeforeBoundary, rulingsOf, rulingsPass } from './rulings.mjs'
 
 /** why a unit is laid with a fresh row (fresh.mjs freshNeeds' causes), as the sheet says it (lane parity-fresh) */
 const FRESH_CAUSE = {
@@ -168,6 +168,19 @@ for (const [pair, raw] of drawn) {
   // (today's ledger); the cells whose door row today's group decision kept, whose translator's answer v2 is never handed)
   const frame = frameOf(v2.facts)
   const groups = (ledger(pair)?.tables ?? []).map((t) => ({ group: t.group, ids: t.ids }))
+  // (the ruling WB: where today's drawing of a unit ends a line before a boundary between runs inside a word, read from today's two
+  // dumps, its reader dump's lines and its tap ledger's slots, rulings.mjs cutBeforeBoundary; by the unit's key, today's ord)
+  const readerFile = join(LAB, 'refactor-2026-11', 'baseline', 'reader', `${pair}.reader.json`)
+  const todayLines = new Map((existsSync(readerFile) ? JSON.parse(readFileSync(readerFile, 'utf8')).units : []).map((u) => [u.ord, u.lines]))
+  const cuts = new Map()
+  const todayCut = (key) => {
+    if (!cuts.has(key)) {
+      const ord = Number(String(key).slice(1))
+      const u = ledger(pair)?.units?.find((x) => x.ord === ord)
+      cuts.set(key, u ? cutBeforeBoundary(todayLines.get(ord), u.slots) : null)
+    }
+    return cuts.get(key)
+  }
   const keptByGroup = new Set([...(doorRows(pair)?.values() ?? [])].filter((r) => r[2] === 'kept' && (r[5] === 'whole' || r[5] === 'partial')).map((r) => r[0]))
   // (lane parity-fresh: a cell handed a fresh row, v2's own decision run on it, is no longer undecided)
   for (const o of v2.fresh ?? []) if (todayOf.has(o)) keptByGroup.delete(todayOf.get(o))
@@ -273,7 +286,7 @@ for (const [pair, raw] of drawn) {
       const rec = raw.pages.find((r) => r.page === pg)
       return rec && v2.relay.pages[pg] && rec.relay && !rec.relay.error ? { ...rec, v2: { ...rec.v2, ...rec.relay } } : rec
     }
-    rulingsPass(drawnAgain, { recOf: relayRec, v2: relayV2, laid: relayV2.pages, unsqueezed: v2.relay.unsqueezed ?? null }, recount)
+    rulingsPass(drawnAgain, { recOf: relayRec, v2: relayV2, laid: relayV2.pages, unsqueezed: v2.relay.unsqueezed ?? null, todayCut }, recount)
     for (const p of mine) freshResolve(p, again.find((q) => q?.page === p.page) ?? null, { incomparable, unsentenced })
     relayTimes.push({ pair, lay: v2.relay.ms ?? null, drawing: raw.relayMs ?? null, pages: Object.keys(v2.relay.pages).length })
   }
@@ -340,7 +353,7 @@ for (const [pair, raw] of drawn) {
   // covered, listed apart; the pair's lay with no CJK line squeezed, `unsqueezed`, for the ruling L2)
   rulingsPass(
     mine.filter((p) => !p.error),
-    { recOf: (pg) => raw.pages.find((r) => r.page === pg), v2, laid: v2.pages, unsqueezed: v2.unsqueezed ?? null },
+    { recOf: (pg) => raw.pages.find((r) => r.page === pg), v2, laid: v2.pages, unsqueezed: v2.unsqueezed ?? null, todayCut },
     recount,
   )
   pages.push(...mine)
