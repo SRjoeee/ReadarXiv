@@ -27,7 +27,9 @@ type Pass = {
  *  holds a unit over a page or column break whose frames the port fills each at its own leading (`framed`), or one that differs
  *  where today's held a unit's gap to the next paragraph's leading (tap.ts flooredIn): the owner's 2026-11-08; or one on a page
  *  of a unit a run of which the room ruling lays otherwise (tap.ts roomUnderIn); or one that holds a unit whose fill leadings
- *  option (i) moves (laysOf `lead`: the owner's of 2026-11-10, the page's target reading its vote) */
+ *  option (i) moves (laysOf `lead`: the owner's of 2026-11-10, the page's target reading its vote); or one that holds a unit
+ *  the fill lays again with the fit's own knobs, under the page's band where today's left it (FillLaid.evened, §18.57: the
+ *  coordinator's ruling of 2026-11-12 under the owner's guidance) */
 export type PassResult = { page: number; d: string | null; missing?: number[]; filled: number; ruled?: true }
 
 const fin = (v: unknown) => (typeof v === 'number' ? (Number.isFinite(v) ? v : String(v)) : (v ?? null))
@@ -191,7 +193,9 @@ export function passesOf(
     }
     const ruled =
       !!d &&
-      (gap.pages.has(pass.page) || room.pages.has(pass.page) || ids.some((id) => framed(lays.get(id)) || moved.has(id)))
+      (gap.pages.has(pass.page) ||
+        room.pages.has(pass.page) ||
+        ids.some((id) => framed(lays.get(id)) || moved.has(id) || !!lays.get(id)?.evened))
     out.push({ page: pass.page, d: ruled ? null : d, filled: took.length, ...(ruled ? { ruled: true as const } : {}) })
   }
   return out
