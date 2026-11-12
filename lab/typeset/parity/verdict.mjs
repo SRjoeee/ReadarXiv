@@ -156,6 +156,9 @@ export function freshResolve(p, q, { incomparable = new Map(), unsentenced = new
     d.worse = r.worse
     d.nearer = r.nearer
     if (r.ruling) d.ruling = r.ruling
+    // (worse by its measure on the re-lay and covered there by an owner's ruling, rulings.mjs)
+    if (r.covered) d.covered = r.covered
+    if (r.coveredSays) d.coveredSays = r.coveredSays
     d.what = `${d.base ?? d.what} (judged again with today's own text laid in v2's unit: v2 ${r.v2?.value ?? ''}, off ${r.v2?.off ?? ''})`
   }
   if (moved) recount(p)
@@ -329,7 +332,7 @@ export function linksOf(boxes) {
  * turned on A, `led` the part's run-ins (follower ord → its leader's ord: Placed.join, a bound name's lead), `top` its title and
  * front matter (Placed.title, Placed.front: anchored at their first line). A page either side did not draw is an error: no comparison made, and the gate incomplete (coverageOf)
  */
-export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios, kept, rows }) {
+export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios, kept, rows, cellRooms, floor, pastFoot }) {
   const n = rec.page
   const out = { pair, page: n, worse: 0, diffs: [], both: [], faults: {}, measures: {}, units: [] }
   const error =
@@ -1021,6 +1024,17 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     todayOf,
     prepByOrd,
     frame: frame ?? null,
+    // (each cell's Room.side and walls, the part's, and the fit's floor of the target: a cell's room as PDF-READER §18.13 gives it,
+    // fidelity.mjs cellRoomOf)
+    cellRooms: cellRooms ?? null,
+    floor: floor ?? null,
+    // (the borrow's bound past TeX's text block bottom, the fit's own (fit/walk.ts PAST_FOOT), and v2's Page member of a unit, whose
+    // `fit.over` states the depth its lines took: the block measure's rule 1, fidelity.mjs)
+    pastFoot: pastFoot ?? 0,
+    laidOf: (key) => {
+      const o = orig.get(key)
+      return o?.part === null || o?.part === undefined ? null : (v2.pages?.[n]?.members ?? []).find((m) => m.ord === o.part && m.fit)
+    },
     groups: groups ?? [],
     keptByGroup: keptByGroup ?? new Set(),
     // (today's ords of the cells a rule's mark keeps or no row serves: no group's state, the coordinator's rulings of 2026-11-10)
@@ -1038,7 +1052,15 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     band,
     NEAR,
   }
-  const { borrowed } = measureFidelity(fc)
+  const { borrowed, past, rooms, pastLines } = measureFidelity(fc)
+  // (each side's lines past TeX's room, with how far under its text block bottom and over the next ink: the ruling Fm reads them)
+  for (const u of units) for (const side of ['today', 'v2']) if (u.sides[side] && pastLines[side].has(u.key)) u.sides[side].block = pastLines[side].get(u.key)
+  // (each cell's room as the frame measure read it, and each side's line past it: the owner's ruling S2 reads them, rulings.mjs)
+  for (const u of units) {
+    if (!rooms.has(u.key)) continue
+    u.room = rooms.get(u.key).map(r2)
+    for (const side of ['today', 'v2']) if (u.sides[side] && past[side].has(u.key)) u.sides[side].frame = r2(past[side].get(u.key))
+  }
   judgeJoined(fc, fc.figurePairs, new Map((rec.today.figures ?? []).map((u) => [u.id, u])), 'a figure text')
   const namePairs = joinedOf(rec.today.names ?? [], V, facts, keyOfPart, /^name$/, band)
   judgeJoined(fc, namePairs, new Map((rec.today.names ?? []).map((u) => [u.id, u])), 'a name')
@@ -1295,6 +1317,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   markSpaceRuling(out, { v2, n, orig })
   recount(out)
   out.units = units
+  // (the figure texts both sides translate, v2's member ord -> today's group: the owner's rulings read which texts of a figure's set
+  // today translates, rulings.mjs)
+  out.figurePairs = [...fc.figurePairs]
   return out
 }
 
@@ -1707,10 +1732,12 @@ function urlJoinRuling(p, { v2, n, orig }) {
 }
 
 /** a page's differences ordered, its worse ones counted and its score (each measure's worse differences, 8 at most, times its
- *  weight): again after the paper's pass adds its own */
+ *  weight): again after the paper's pass adds its own. `covered`: those worse by their measure that an owner's ruling covers
+ *  (rulings.mjs), counted apart, never in `worse` */
 export function recount(out) {
-  out.diffs.sort((x, y) => Number(y.worse) - Number(x.worse) || FLAGS.indexOf(x.flag) - FLAGS.indexOf(y.flag))
+  out.diffs.sort((x, y) => Number(y.worse) - Number(x.worse) || Number(!!y.covered) - Number(!!x.covered) || FLAGS.indexOf(x.flag) - FLAGS.indexOf(y.flag))
   out.worse = out.diffs.filter((d) => d.worse).length
+  out.covered = out.diffs.filter((d) => d.covered).length
   const by = new Map()
   for (const d of out.diffs) if (d.worse) by.set(d.flag, (by.get(d.flag) ?? 0) + 1)
   out.score = [...by].reduce((s, [f, k]) => s + WEIGHT[f] * Math.min(k, 8), 0)
@@ -1989,10 +2016,13 @@ export function coverageOf(run, { asked = null, notMeasured = new Map(), drawn =
   return out
 }
 
-/** the gate: complete coverage (coverageOf none) and no page worse than today's */
+/** the gate: complete coverage (coverageOf none) and no page worse than today's outside the owner's rulings (a difference worse by
+ *  its measure that a ruling covers is no page's worse: rulings.mjs); `covered`, the pages worse by a measure that his rulings
+ *  cover whole */
 export function verdictOf(incomplete, pages) {
   const worse = pages.filter((p) => p.worse).length
-  return { pass: incomplete.length === 0 && worse === 0, worse, incomplete }
+  const covered = pages.filter((p) => !p.worse && p.covered).length
+  return { pass: incomplete.length === 0 && worse === 0, worse, covered, incomplete }
 }
 
 /** each measure's count of pages (worse, nearer, each side's faults) and the ten worst pages */
@@ -2052,6 +2082,9 @@ export function summaryOf(pages) {
       says: SAYS[f],
       worsePages: worse.length,
       worseUnits: pages.reduce((n, p) => n + p.diffs.filter((d) => d.flag === f && d.worse).length, 0),
+      // (worse by the measure, covered by an owner's ruling: rulings.mjs)
+      coveredPages: pages.filter((p) => p.diffs.some((d) => d.flag === f && d.covered)).length,
+      coveredUnits: pages.reduce((n, p) => n + p.diffs.filter((d) => d.flag === f && d.covered).length, 0),
       nearerPages: pages.filter((p) => p.diffs.some((d) => d.flag === f && d.nearer === 'v2')).length,
       v2FaultPages: pages.filter((p) => p.faults[f]?.v2).length,
       todayFaultPages: pages.filter((p) => p.faults[f]?.today).length,
