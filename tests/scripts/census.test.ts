@@ -183,6 +183,15 @@ describe('rule debt', () => {
     expect(g.thresholds?.find(x => x.name === 'PAD')).toMatchObject({ class: 'tuned', reason: true, cites: null })
   })
 
+  it('reads a file of a TeX distribution named by its extension as a definition, never a package named alone', () => {
+    const f = factsOf('src/engine/marks.ts', "const A = 1\n// the marks cite.sty and natmove.sty look for and set first\nconst FOLLOWERS = ['.', ',', ';']\n// the marks biblatex looks for\nconst SEEN = ['!', '?', ':']\n// latex.ltx's \\@empty, a definition still\nconst EMPTY = ['a', 'b', 'c']\n")
+    expect(f.lists?.map(l => [l.name, l.class, l.cites])).toEqual([
+      ['FOLLOWERS', 'defined', 'cite.sty'],
+      ['SEEN', 'listed', null],
+      ['EMPTY', 'defined', 'latex.ltx'],
+    ])
+  })
+
   it('counts the engine\'s thresholds, lists, special cases and version constants', () => {
     const d = c.trees.NOW.debt
     // GAP 0.35 (evidence), 0.8 (no reason), 3 (Math.min): tuned; LIMIT borderline; PT_PER_IN a conversion; FLAGS an enumeration

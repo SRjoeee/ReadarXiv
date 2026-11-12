@@ -125,8 +125,10 @@ export const ENDPOINTS = [
   { kind: 'google', re: /translate-pa\.googleapis\.com|translate\.googleapis\.com/ },
   { kind: 'deepl', re: /api(?:-free)?\.deepl\.com/ },
 ]
-/** a citation of a definition, in a declaration's comment: TeX's, LaTeX's, the PDF's, Unicode's, a font's, a standard's */
-export const CITES_DEFINITION = /\b(?:TeX(?:book)?|LaTeX|latex\.ltx|plain\.tex|PDF(?:'s| spec| reference)|ISO[ -]32000|Unicode|UAX ?#?\d+|UTS ?#?\d+|CLDR|OpenType|TrueType|PostScript|Type ?1|the font's|font's own|JIS ?X ?4051|W3C|clreq|jlreq|klreq|CSS'?s?|ECMA|RFC ?\d+|IEEE ?754|PDF\.js's|Chromium's)\b/
+/** a citation of a definition, in a declaration's comment: TeX's, LaTeX's, a file of a TeX distribution named by its
+ *  extension (cite.sty, article.cls, latex.ltx: a package's name alone is no citation), the PDF's, Unicode's, a font's, a
+ *  standard's; plain.tex by name (`.tex` is every paper's extension) */
+export const CITES_DEFINITION = /\b(?:TeX(?:book)?|LaTeX|[\w@-]+\.(?:sty|cls|clo|def|ltx|bst|bbx|cbx|lbx|fd|cfg|dtx)|plain\.tex|PDF(?:'s| spec| reference)|ISO[ -]32000|Unicode|UAX ?#?\d+|UTS ?#?\d+|CLDR|OpenType|TrueType|PostScript|Type ?1|the font's|font's own|JIS ?X ?4051|W3C|clreq|jlreq|klreq|CSS'?s?|ECMA|RFC ?\d+|IEEE ?754|PDF\.js's|Chromium's)\b/
 /** a citation of evidence: a paper, the corpus, a measurement */
 export const CITES_EVIDENCE = /\b\d{4}\.\d{4,5}(?:v\d+)?\b|\bcorpus\b|\bmeasured\b|\btuned\b|\bempiric|\bon the \d+ papers\b|\bseen on\b/i
 /** the exact factors between units and the bounds of a representation: a literal of one of these values whose name or comment
@@ -628,7 +630,8 @@ export function thresholdOf(t) {
 
 /** a list of names (census.mjs DEFINITIONS `lists`): `defined` where its comment cites a definition, `listed` otherwise */
 function listOf(l) {
-  return { line: l.line, name: l.name ?? null, size: l.entries.length, form: l.form, sample: l.entries.slice(0, 4), class: CITES_DEFINITION.test(l.comment ?? '') ? 'defined' : 'listed' }
+  const cites = CITES_DEFINITION.exec(l.comment ?? '')?.[0] ?? null
+  return { line: l.line, name: l.name ?? null, size: l.entries.length, form: l.form, sample: l.entries.slice(0, 4), class: cites ? 'defined' : 'listed', cites }
 }
 
 // ---------------------------------------------------------------- resolution
