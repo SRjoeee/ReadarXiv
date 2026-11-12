@@ -194,20 +194,19 @@ function pairOf(pieces, q) {
   return [m, gap, at]
 }
 // ---- the probe document: sections, each writing tagged rows
-/** the probe's schema: raised when a row's shape changes; a new section adds rows of a tag of its own, and changes no
- *  other's */
-export const PROBE_SCHEMA = 1
-/** the TeX that writes one row: `LAYOUT-PROBE <schema> <tag> <fields…>`, fields separated by spaces, each written by
- *  TeX (a macro's expansion) or given here; never a line the run reads as a reading (no `AXT-`) */
-export const probeRow = (tag, ...fields) => `\\typeout{LAYOUT-PROBE ${PROBE_SCHEMA} ${tag} ${fields.join(' ')}}`
+/** the TeX that writes one row: `LAYOUT-PROBE 1 <tag> <fields…>`, fields separated by spaces, each written by TeX (a
+ *  macro's expansion) or given here; never a line the run reads as a reading (no `AXT-`). The marker is a fixed string, its
+ *  `1` no number anyone raises: the probe's writer and its readers are one build, and a stored log is keyed by the compile
+ *  that wrote it. A new section adds rows of a tag of its own, and changes no other's */
+export const probeRow = (tag, ...fields) => `\\typeout{LAYOUT-PROBE 1 ${tag} ${fields.join(' ')}}`
 /** the probe document's body, after \begin{document} of the font probe's compile (the paper's own preamble): its
  *  sections' TeX, each a self-contained group of tests that writes its own rows, in order */
 export const probeTex = sections => `\\makeatletter${sections.join('\n')}\\makeatother\n`
-/** every row a probe's log holds: { schema, tag, fields }, in order. Rows of another schema or of a tag the caller does
- *  not know are the caller's to pass over */
+/** every row a probe's log holds: { tag, fields }, in order. A row of a tag the caller does not know is the caller's to
+ *  pass over */
 export function readProbe(log) {
   const out = []
-  for (const m of (log ?? '').matchAll(/^LAYOUT-PROBE (\d+) ([a-z][a-z0-9-]*)((?: [^ \n]+)*) *$/gm)) out.push({ schema: Number(m[1]), tag: m[2], fields: m[3].trim().split(' ').filter(Boolean) })
+  for (const m of (log ?? '').matchAll(/^LAYOUT-PROBE 1 ([a-z][a-z0-9-]*)((?: [^ \n]+)*) *$/gm)) out.push({ tag: m[1], fields: m[2].trim().split(' ').filter(Boolean) })
   return out
 }
 
@@ -410,7 +409,7 @@ export function readInkProbe(log, samples) {
   let at = null, nodes = null, bad = false, done = false
   for (const line of (log ?? '').split('\n')) {
     const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
-    if (r && r.schema === PROBE_SCHEMA && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
+    if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
       const i = Number(r.fields[0])
       if (r.tag === 'ink-at') { at = i; nodes = null; bad = false; done = false; continue }
       if (at === i && nodes && !bad && samples[i] !== undefined) out.push(samples[i])
@@ -506,7 +505,7 @@ function inkTextsOf(log, samples, decorated) {
   let under = -1, drawn = false, prev = '', disc = -1
   for (const line of (log ?? '').split('\n')) {
     const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
-    if (r && r.schema === PROBE_SCHEMA && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
+    if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
       const i = Number(r.fields[0])
       if (r.tag === 'ink-at') { at = i; text = null; bad = false; done = false; math = 0; under = -1; drawn = false; prev = ''; disc = -1; continue }
       if (at === i && done && !bad && text && text.length <= INK_TEXT_MAX && text.replaceAll(INK_ANY, '') !== '' && (!decorated || drawn) && samples[i] !== undefined) out.push([samples[i], text])
@@ -598,7 +597,7 @@ export function readInkApart(log, samples) {
   let at = null, first = null, listed = false, bad = false, done = false
   for (const line of (log ?? '').split('\n')) {
     const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
-    if (r && r.schema === PROBE_SCHEMA && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
+    if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
       const i = Number(r.fields[0])
       if (r.tag === 'ink-at') { at = i; first = null; listed = false; bad = false; done = false; continue }
       if (at === i && done && !bad && first !== null && APART_NODE.test(first) && samples[i] !== undefined) out.push(samples[i])
@@ -628,10 +627,10 @@ export function nameSection() {
   return NAME_KEYS.map(k => `\\ifcsname axt@nmt@${k}\\endcsname\\begingroup\\protected@edef\\axt@qa{\\csname axt@nmt@${k}\\endcsname}\\uppercase\\expandafter{\\expandafter\\def\\expandafter\\axt@qb\\expandafter{\\axt@qa}}\\ifx\\axt@qa\\axt@qb${probeRow('name', k, 0)}\\else${probeRow('name', k, 1)}\\fi\\endgroup\\fi`).join('')
 }
 /** each name's answer from the probe's log (nameSection): { key: 1 its own text holds a lowercase letter, 0 not }, the
- *  keys TeX answered for; a row of another schema, shape or key is passed over */
+ *  keys TeX answered for; a row of another shape or key is passed over */
 export function readNameProbe(log) {
   const out = {}
-  for (const r of readProbe(log)) if (r.schema === PROBE_SCHEMA && r.tag === 'name' && r.fields.length === 2 && NAME_KEYS.includes(r.fields[0]) && /^[01]$/.test(r.fields[1])) out[r.fields[0]] = Number(r.fields[1])
+  for (const r of readProbe(log)) if (r.tag === 'name' && r.fields.length === 2 && NAME_KEYS.includes(r.fields[0]) && /^[01]$/.test(r.fields[1])) out[r.fields[0]] = Number(r.fields[1])
   return out
 }
 
@@ -652,9 +651,9 @@ const BP_PER_PT = 72 / 72.27
  */
 export const skipSection = () => probeRow('lineskip', '\\the\\dimexpr\\lineskip\\relax', '\\space\\the\\lineskiplimit')
 /** the paper's \lineskip and \lineskiplimit from the probe's log (skipSection), in PDF units: [lineskip, limit], or null
- *  where no row of the schema and shape is there, one is twice, or a value is past TeX's \maxdimen (under 16384pt) */
+ *  where no row of that shape is there, one is twice, or a value is past TeX's \maxdimen (under 16384pt) */
 export function readSkipProbe(log) {
-  const rows = readProbe(log).filter(r => r.schema === PROBE_SCHEMA && r.tag === 'lineskip')
+  const rows = readProbe(log).filter(r => r.tag === 'lineskip')
   if (rows.length !== 1 || rows[0].fields.length !== 2) return null
   const pt = rows[0].fields.map(f => Number(TEX_PT.exec(f)?.[1] ?? NaN))
   return pt.every(x => Number.isFinite(x) && Math.abs(x) <= 16384) ? pt.map(x => x * BP_PER_PT) : null
@@ -773,7 +772,7 @@ const TEX_ERROR = /^(?:! |[^\s:]+:\d+: |Missing character: There is no .* in fon
  * the box as the paper sets it or with `{}` leaves the follower no answer at all (`x`); in the box with its opening mark,
  * no mark (2); in the box with both marks, no closing mark (1); in a second call's, none between (2); in either box of a 3's
  * pair, no mark (2). A sample with no
- * row (the probe stopped short of it), a row of another schema or another shape is no answer at all. layoutMarking sets
+ * row (the probe stopped short of it), a row of another shape is no answer at all. layoutMarking sets
  * no mark where there is no answer. And per look-ahead pair (aheadSamples, by its rows `ahead`), its key (aheadKey) and its
  * one code: an error in the box let go or as the paper sets it no answer (`x`), in the one with the two openings or the one
  * asking what the list ends with 2, in the one with every mark at most 1
@@ -784,7 +783,7 @@ export function readMarkProbe(log, samples) {
   for (const line of (log ?? '').split('\n')) {
     if (TEX_ERROR.test(line)) { if (at) (errored.get(at[0]) ?? errored.set(at[0], new Set()).get(at[0])).add(at[1]); continue }
     const [r] = readProbe(line)
-    if (!r || r.schema !== PROBE_SCHEMA) continue
+    if (!r) continue
     if (r.tag === 'punct-at' && r.fields.length === 3) { at = [`${r.fields[0]}:${r.fields[1]}`, r.fields[2]]; continue }
     if (r.tag === 'ahead-at' && r.fields.length === 2) { at = [`ahead:${r.fields[0]}`, r.fields[1]]; continue }
     at = null

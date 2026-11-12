@@ -84,8 +84,6 @@ export type Rules = Readonly<{
   hyph: Readonly<Record<string, unknown>>
   /** the CJK font group the target's text is set in */
   cjkFaces: { group: string } | null
-  /** the rule set's version */
-  version: number
   captions: NonNullable<Choices['captions']>
   leave: readonly string[]
 }>

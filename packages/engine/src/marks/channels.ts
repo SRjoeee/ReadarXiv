@@ -134,9 +134,9 @@ const TEX_PT = /^(-?\d+(?:\.\d+)?)pt$/
 const BP_PER_PT = 72 / 72.27
 /** the paper's \lineskip and \lineskiplimit in PDF units from the probe's row (marks.mjs readSkipProbe) */
 export function readLineskip(log: string): [number, number] | null {
-  const rows = [...log.matchAll(/^LAYOUT-PROBE (\d+) ([a-z][a-z0-9-]*)((?: [^ \n]+)*) *$/gm)]
-    .map((m) => ({ schema: Number(m[1]), tag: m[2], fields: (m[3] as string).trim().split(' ').filter(Boolean) }))
-    .filter((r) => r.schema === 1 && r.tag === 'lineskip')
+  const rows = [...log.matchAll(/^LAYOUT-PROBE 1 ([a-z][a-z0-9-]*)((?: [^ \n]+)*) *$/gm)]
+    .map((m) => ({ tag: m[1], fields: (m[2] as string).trim().split(' ').filter(Boolean) }))
+    .filter((r) => r.tag === 'lineskip')
   if (rows.length !== 1 || rows[0]?.fields.length !== 2) return null
   const pt = rows[0].fields.map((f) => Number(TEX_PT.exec(f)?.[1] ?? Number.NaN))
   return pt.every((x) => Number.isFinite(x) && Math.abs(x) <= 16384)

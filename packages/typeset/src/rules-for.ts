@@ -7,7 +7,7 @@
 // reference names (data/rules/refs.ts: the names cleveref and hyperref generate, that tex-names.mjs refInTarget reads).
 // Each call answers fresh objects: a caller may change its own.
 import { HEADS } from './data/rules/heads.ts'
-import { HYPHENATION, LANGUAGES, SCRIPTS, VERSION } from './data/rules/index.ts'
+import { HYPHENATION, LANGUAGES, SCRIPTS } from './data/rules/index.ts'
 import { REFS } from './data/rules/refs.ts'
 import type { ScriptRules } from './data/rules/types.ts'
 import type { Choices, Lang, RuleParams, Rules, Script } from './types.ts'
@@ -96,7 +96,6 @@ export function resolveRules(target: Lang) {
     labels: copy(lang.labels ?? {}),
     patterns,
     cjkFaces: field('cjkFaces'),
-    version: VERSION,
   }
 }
 
@@ -119,7 +118,6 @@ export function rulesFor(target: Lang, choices: Choices = {}, hyph: Readonly<Rec
     patterns: r.patterns,
     hyph,
     cjkFaces: r.cjkFaces,
-    version: r.version,
     captions: choices.captions ?? { figure: 'target', table: 'target' },
     leave: choices.leave ?? [],
   }

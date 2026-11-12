@@ -23,7 +23,7 @@ import { ZH } from './zh.ts'
 import { ZH_TW } from './zh-tw.ts'
 import type { LanguageRules } from './types.ts'
 
-export { HYPHENATION, SCRIPTS, VERSION } from './scripts.ts'
+export { HYPHENATION, SCRIPTS } from './scripts.ts'
 export type { LanguageRules, ScriptRules } from './types.ts'
 
 /** each language's own fields, by its tag */
