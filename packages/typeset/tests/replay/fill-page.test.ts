@@ -20,4 +20,15 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)('S.fill.page: repl
       expect(passes.filter((r) => r.missing || r.d)).toEqual([])
       expect(passes.reduce((a, r) => a + r.filled, 0)).toBeGreaterThan(0)
     })
+  // (a unit whose walk measures a text today's never measured, which the tap's table therefore lacks: named among the chain's
+  // differences and laid by no lay, so that its passes read "not replayed" and the pair's other passes replay; it threw out of
+  // laysOf and ended the corpus replay at its pair since round 8 B5 (literal-fixes, 1a01e7206): 2608.25210v2-zh's "Comput-")
+  it('names a unit whose walk measures a text the tap lacks and replays the rest (2608.25210v2-zh)', {
+    timeout: 120_000,
+  }, () => {
+    const { lays, differ } = laysOf('2608.25210v2-zh')
+    expect(differ.filter((d) => /a measure the tap lacks/.test(d)).length).toBeGreaterThan(0)
+    expect(lays.size).toBeGreaterThan(0)
+    expect(passesOf('2608.25210v2-zh', lays).some((r) => r.missing?.length)).toBe(true)
+  })
 })

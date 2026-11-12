@@ -14,12 +14,14 @@ const pairs = process.argv.slice(2).length
   ? process.argv.slice(2)
   : readdirSync(join(TAP, 'ledgers')).map(f => f.replace(/\.ledger\.json\.gz$/, '')).sort()
 const count = { pairs: 0, passes: 0, equal: 0, ruled: 0, differ: 0, notReplayed: 0, threw: 0, filled: 0, chainsDiffer: 0 }
-const classes = new Map(), missing = []
+const classes = new Map(), missing = [], lacks = []
 const t0 = performance.now()
 for (const pair of pairs) {
   count.pairs++
   const { lays, differ } = laysOf(pair)
   count.chainsDiffer += differ.length
+  // (a unit whose walk measures a text the tap's table lacks: laid by no lay, its passes not replayed, pass.ts laysOf)
+  for (const d of differ) if (/a measure the tap lacks/.test(d)) lacks.push(`${pair} ${d}`)
   let results
   try { results = passesOf(pair, lays) } catch (e) { count.threw++; console.log(`${pair} threw: ${e?.stack ?? e}`); continue }
   for (const r of results) {
@@ -36,6 +38,7 @@ for (const pair of pairs) {
 }
 console.log(JSON.stringify({ ...count, seconds: Math.round((performance.now() - t0) / 100) / 10 }))
 if (missing.length) console.log(`not replayed (a unit the chain did not lay): ${missing.slice(0, 10).join('; ')}`)
+if (lacks.length) console.log(`units whose walk measures a text the tap lacks, laid by no lay (${lacks.length}): ${lacks.slice(0, 10).join('; ')}`)
 for (const [cls, list] of [...classes].sort((a, b) => b[1].length - a[1].length)) {
   console.log(`${list.length} ${cls}`)
   for (const x of list.slice(0, 5)) console.log(`  ${x}`)
