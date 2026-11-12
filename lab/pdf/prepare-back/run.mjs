@@ -19,6 +19,7 @@ import * as PL from '@cantoo/pdf-lib'
 import { isMemoryError, prepareBack, readArxiv, stateOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { classesOf, instrumentOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import { flatOf, pieceKOf } from './pieces.mjs'
 import { keptWhyOf, statedOf, trailsOf } from './stated.mjs'
 
 const argOf = n => process.argv.find(a => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null
@@ -187,16 +188,9 @@ const located = tally?.locatedAll ?? null
 const addOn = tally?.addOn ?? null
 const r2 = v => Math.round(v * 100) / 100
 const OBJ = '￼'
-/** a unit's pieces as FORMAT.md's flat list (§2): text, ph, open, close, nested; k their place in today's order */
-function flat(content, out = []) {
-  for (const p of content) {
-    if (p.t === 'text') out.push({ k: out.length, kind: 'text', s: p.s })
-    else if (p.t === 'el') out.push({ k: out.length, kind: 'ph', src: p.src })
-    else if (p.t === 'unit') out.push({ k: out.length, kind: 'nested', pre: p.pre, unit: p.unit, post: p.post })
-    else { if (p.open !== undefined) out.push({ k: out.length, kind: 'open', src: p.open }); flat(p.content, out); if (p.close !== undefined) out.push({ k: out.length, kind: 'close', src: p.close }) }
-  }
-  return out
-}
+// (a unit's pieces as FORMAT.md's flat list, §2, each its k by place, and each element's `k` its piece's: pieces.mjs flatOf,
+// pieceKOf, lane lost-11)
+/** the flat pieces' text, a placeholder or a nested unit U+FFFC */
 const textOfPieces = ps => ps.map(p => (p.kind === 'text' ? p.s : p.kind === 'ph' || p.kind === 'nested' ? OBJ : '')).join('')
 const LABEL_KIND = { float: 'caption', head: 'number', number: 'number', mark: 'footnote' }
 const units = []
@@ -217,7 +211,7 @@ const figsSorted = [...figs].sort((a, b) => (laysFigure(a) ? 0 : 1) - (laysFigur
 figs.forEach((at, q) => { order[at] = figsSorted[q] })
 order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   if (u.name !== undefined) return
-  const pieces = flat(u.content)
+  const { pieces, kOf } = flatOf(u.content)
   const mem = memberOf.get(i)
   if (mem) dumpOrds.push([ord, mem.ord])
   // (a unit kept for its text set wholly in a face of one pitch, the engine's `pitch`: `keptBy: 'pitch'`; a kept block of e-mail
@@ -244,7 +238,7 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   // (a figure text's element kept as the original's ink, the engine's `keptEls` (a run of one pitch, F0's; a stretch its decoration
   // holds): `keptBy`, which the parity reads, join.mjs candidatePitch)
   const keptEl = new Map(u.keptEls ?? [])
-  const elements = mem.elements.filter(([, el]) => el.ink.length).map(([k, el]) => ({ k: Number(k), kind: el.kind, flags: el.keep ? ['KEPT'] : [], ...(keptEl.has(k) ? { keptBy: keptEl.get(k) } : {}), segs: el.ink.map(x => ({ page: x[0], x0: x[1], x1: x[3], baseline: x[5], top: x[4], bottom: x[2] })) }))
+  const elements = mem.elements.filter(([, el]) => el.ink.length).map(([k, el]) => ({ k: pieceKOf(kOf, k), kind: el.kind, flags: el.keep ? ['KEPT'] : [], ...(keptEl.has(k) ? { keptBy: keptEl.get(k) } : {}), segs: el.ink.map(x => ({ page: x[0], x0: x[1], x1: x[3], baseline: x[5], top: x[4], bottom: x[2] })) }))
   const label = mem.labelAt ? [{ kind: LABEL_KIND[mem.labelAt.kind] ?? 'number', page: mem.labelAt.ink[0], x0: mem.labelAt.ink[1], x1: mem.labelAt.ink[3], baseline: mem.labelAt.ink[5], top: mem.labelAt.ink[4], bottom: mem.labelAt.ink[2] }] : null
   // (a unit kept for its text set wholly in a face of one pitch, or for an identifier, states (k), the differential's cause,
   // before the bundle's why)
@@ -255,7 +249,7 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
 if (located) for (const [o, b] of located.born) {
   const mem = located.members[o]
   const st = stateOf(mem, addOn)
-  const pieces = flat(b.content)
+  const { pieces } = flatOf(b.content)
   states[st.drawn ? 'drawn' : 'laid']++
   dumpOrds.push([ord, mem.ord])
   units.push({ id: mem.id, ord: ord++, kind: b.kind, text: textOfPieces(pieces), pieces, state: st.drawn ? 'drawn' : 'laid', why: 'born on arXiv\'s page', lines: mem.lines.map(l => ({ page: l[0], x0: l[2], x1: l[3], baseline: l[4], top: l[5], bottom: l[6], size: mem.style.size })) })
