@@ -8,7 +8,23 @@ import { sentenceCuts } from '@readarxiv/text'
 import { asOut, projectionOf, textOf } from '../accept.ts'
 import type { OutPiece, Piece, UnitIn } from '../contract.ts'
 import { contentOf, refill, type Tok } from './markers.ts'
-import { decode, displayEnds, escapeTags, INVISIBLE, LETTER, LINE_END, SAYS, SENTINEL, standInOf } from './text.ts'
+import {
+  decode,
+  displayEnds,
+  escapeTags,
+  GLUED_LEAD,
+  GLUED_SPACE,
+  glueOf,
+  INVISIBLE,
+  inWord,
+  LEAD_PUNCT,
+  LETTER,
+  LINE_END,
+  OWN_LEAD,
+  SAYS,
+  SENTINEL,
+  standInOf,
+} from './text.ts'
 
 export type TagSlot = { t: 'void'; out: OutPiece[]; own: boolean } | { t: 'pair'; id: string }
 export interface TagsPlan {
@@ -20,6 +36,10 @@ export interface TagsPlan {
   /** where each marked sentence after the first begins in the unit's projection */
   cuts: number[]
   refill: string[]
+  /** element slots the source set glued to the text before them, and after them (text.ts glueOf): the white space a reply
+   *  sets there is taken back */
+  gluedBefore: ReadonlySet<number>
+  gluedAfter: ReadonlySet<number>
 }
 
 /** the model's and the engines' spellings of a tag (the extension's tokens.ts TAG_RE): `<x id="1"/>`, `<x id="1" />`,
@@ -47,16 +67,26 @@ export type ElementTag = 'void' | 'word'
 const elementTag = (as: ElementTag, n: number): string =>
   as === 'word' ? `<span id="${n}" translate="no">x${n}</span>` : `<x id="${n}"/>`
 const SOLID = /\S/
-const LEAD_PUNCT = /^\s*[.,;:!?。．，、；：！？]/
-const OWN_MARKS = '.,;:。．，、；：।۔،؛'
-const OWN_LEAD = new RegExp(`^([ \\t\\n\\f\\r\\ue000]*)[${OWN_MARKS}]+`)
 
 type Item =
   /** `fixed`: no text of the source (a group's stop, written at its end): no sentence begins in it */
   | { t: 'text'; s: string; at: number; fixed?: true }
-  | { t: 'void'; out: OutPiece[]; at: number; len: number; stop: string | undefined }
+  | {
+      t: 'void'
+      out: OutPiece[]
+      at: number
+      len: number
+      stop: string | undefined
+      /** each element it holds can stand inside a word (text.ts inWord) */
+      word: boolean
+      /** it states a line end (no text of the source glued after it) */
+      line: boolean
+    }
   | { t: 'open'; id: string; letters: boolean; depth: number }
   | { t: 'close' }
+
+const elsOf = (content: readonly Piece[]): Extract<Piece, { t: 'el' }>[] =>
+  content.flatMap((p): Extract<Piece, { t: 'el' }>[] => (p.t === 'el' ? [p] : p.t === 'span' ? elsOf(p.content) : []))
 
 /** an element's own stop as the tags wire reads it: its punctuation; a line end is the markers wire's (Microsoft cuts its
  *  sentence there; here our cutter reads the sentences, and the tags' white space is none) */
@@ -91,7 +121,15 @@ export function planTags(unit: UnitIn, as: ElementTag = 'void'): TagsPlan {
         at += p.s.length
       } else if (p.t === 'el') {
         kinds.set(at, { kind: p.kind, stop: ownStop(p.stop), reads: p.reads })
-        items.push({ t: 'void', out: [{ t: 'el', id: p.id }], at, len: 1, stop: ownStop(p.stop) })
+        items.push({
+          t: 'void',
+          out: [{ t: 'el', id: p.id }],
+          at,
+          len: 1,
+          stop: ownStop(p.stop),
+          word: inWord(p),
+          line: LINE_END.test(p.stop ?? ''),
+        })
         at += 1
       } else if (SOLID.test(textOf(p.content))) {
         items.push({ t: 'open', id: p.id, letters: LETTER.test(textOf(p.content)), depth })
@@ -113,6 +151,8 @@ export function planTags(unit: UnitIn, as: ElementTag = 'void'): TagsPlan {
           at,
           len,
           stop: last?.t === 'el' ? ownStop(last.stop) : undefined,
+          word: elsOf(p.content).every(inWord),
+          line: last?.t === 'el' && LINE_END.test(last.stop ?? ''),
         })
         at += len
       }
@@ -121,6 +161,15 @@ export function planTags(unit: UnitIn, as: ElementTag = 'void'): TagsPlan {
   }
   const length = walk(content, 0, 0)
   const slots: TagSlot[] = []
+  const gluedBefore = new Set<number>()
+  const gluedAfter = new Set<number>()
+  /** the source's text beside item `i` (`d` its side), past the wire's own spans' tags: '' where an element stands there */
+  const textBeside = (i: number, d: 1 | -1): string => {
+    let j = i + d
+    while (items[j]?.t === 'open' || items[j]?.t === 'close') j += d
+    const x = items[j]
+    return x?.t === 'text' ? x.s : ''
+  }
   const kept: { id: string; depth: number }[] = []
   const open: number[] = []
   let wire = ''
@@ -144,6 +193,17 @@ export function planTags(unit: UnitIn, as: ElementTag = 'void'): TagsPlan {
       reach(it.at)
       slots.push({ t: 'void', out: it.out, own: false })
       const next = items[i + 1]
+      // (glued to the text beside it in the source: the white space a reply sets there taken back; text.ts glueOf, the
+      // wire up to it read past its own spans' tags)
+      const glued = glueOf(
+        textBeside(i, -1),
+        wire.replace(/(?:<t id="\d+">|<\/t>)+$/, ''),
+        textBeside(i, 1),
+        it.word,
+        it.line,
+      )
+      if (glued.before) gluedBefore.add(slots.length)
+      if (glued.after) gluedAfter.add(slots.length)
       const stop = it.stop && !LEAD_PUNCT.test(next?.t === 'text' ? next.s : '') ? it.stop : ''
       if (stop) (slots[slots.length - 1] as { own: boolean }).own = true
       wire += `${elementTag(as, slots.length)}${stop}`
@@ -200,7 +260,15 @@ export function planTags(unit: UnitIn, as: ElementTag = 'void'): TagsPlan {
     }
     wire = sent + wire.slice(at)
   }
-  return { wire, slots, marks, cuts, refill: kept.sort((a, b) => b.depth - a.depth).map((k) => k.id) }
+  return {
+    wire,
+    slots,
+    marks,
+    cuts,
+    refill: kept.sort((a, b) => b.depth - a.depth).map((k) => k.id),
+    gluedBefore,
+    gluedAfter,
+  }
 }
 
 /** the boundary markers of a reply: each once and in order, the sentences between them none empty, replaced by the
@@ -236,19 +304,25 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
   const seen = new Set<number>()
   const stack: number[] = []
   let afterOwn = false
-  const push = (s0: string) => {
+  let afterGlued = false
+  // (the white space beside an element the source glued there taken back, as the markers reading takes it: text.ts glueOf)
+  const push = (s0: string, takeBack: RegExp | null) => {
     let s = s0
+    if (takeBack) s = s.replace(takeBack, '')
     if (afterOwn) s = s.replace(OWN_LEAD, '$1')
     afterOwn = false
-    s = decode(s).replace(INVISIBLE, '')
+    s = decode(s)
+    if (afterGlued) s = s.replace(GLUED_LEAD, '')
+    afterGlued = false
+    s = s.replace(INVISIBLE, '')
     if (s) toks.push({ t: 'text', s })
   }
   let last = 0
   for (const m of text.matchAll(new RegExp(TAG_RE.source, 'g'))) {
-    push(text.slice(last, m.index))
-    last = (m.index ?? 0) + m[0].length
     const v = m[1] ?? m[2] ?? m[3] ?? m[7] ?? m[8] ?? m[9]
     const o = m[4] ?? m[5] ?? m[6]
+    push(text.slice(last, m.index), v !== undefined && plan.gluedBefore.has(Number(v)) ? GLUED_SPACE : null)
+    last = (m.index ?? 0) + m[0].length
     if (v !== undefined) {
       const n = Number(v)
       const slot = plan.slots[n - 1]
@@ -256,6 +330,7 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
       seen.add(n)
       toks.push({ t: 'void', out: slot.out })
       afterOwn = slot.own
+      afterGlued = plan.gluedAfter.has(n)
     } else if (o !== undefined) {
       const n = Number(o)
       const slot = plan.slots[n - 1]
@@ -270,7 +345,7 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
       toks.push({ t: 'close', id: slot.id })
     }
   }
-  push(text.slice(last))
+  push(text.slice(last), null)
   if (stack.length) return null
   // every element back; a span may be lost (the rule decides: one that is not `must` comes back unstyled)
   for (const [k, s] of plan.slots.entries()) if (s.t === 'void' && !seen.has(k + 1)) return null

@@ -397,4 +397,10 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     why: 'a bare `<`, an entity past U+10FFFF kept, a zero width space dropped',
   },
   { unit: 8, raw: '围绕公式的链接：<x id="1"/>完成。', taken: true },
+  {
+    unit: 10,
+    raw: '它在季节性时间尺度 <x id="1"/>上很重要，改变了急流 <x id="2"/>和地表 <x id="3"/>，正如准两年振荡和厄尔尼<x id="4"/>奥南方涛动那样。',
+    taken: true,
+    why: 'a space the reply sets before an element the source glued to its word: taken back (text.ts glueOf)',
+  },
 ]

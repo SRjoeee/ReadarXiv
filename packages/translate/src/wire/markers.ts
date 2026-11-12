@@ -41,9 +41,25 @@
 //   the wire holds no `#` of its own; a marker without its `#` not at all for a unit stated `strict` (contract.ts).
 import { asOut, headLength, holdsEl, textOf } from '../accept.ts'
 import type { OutPiece, Piece, UnitIn } from '../contract.ts'
-import { decode, displayEnds, ENTITY, escapeMarkers, INVISIBLE, LETTER, LINE_END, SAYS, standInOf } from './text.ts'
+import {
+  DISPLAY,
+  decode,
+  displayEnds,
+  ENTITY,
+  escapeMarkers,
+  GLUED_LEAD,
+  GLUED_SPACE,
+  glueOf,
+  INVISIBLE,
+  inWord,
+  LEAD_PUNCT,
+  LETTER,
+  LINE_END,
+  OWN_LEAD,
+  SAYS,
+} from './text.ts'
 
-export const DISPLAY = 'display'
+export { DISPLAY }
 
 type Item =
   /** `fixed`: no text of the source, every character of it at `at` (a group's stop, written at its end) */
@@ -124,7 +140,6 @@ export function fromAlpha(s: string): number {
 }
 
 const SOLID = /\S/
-const LEAD_PUNCT = /^\s*[.,;:!?。．，、；：！？]/
 const projLength = (ps: readonly Piece[]): number =>
   ps.reduce((n, p) => n + (p.t === 'text' ? p.s.length : p.t === 'el' ? 1 : projLength(p.content)), 0)
 
@@ -180,14 +195,6 @@ const ends = (q: El | undefined): boolean => !!q && (q.kind === DISPLAY || q.alo
  *  them states (what follows a forced break in its stretch sets no word: a switch, a skip) */
 const stopOf = (els: readonly El[]): string | undefined =>
   els.findLast((q) => !q.silent)?.stop ?? els.findLast((q) => q.stop !== undefined && LINE_END.test(q.stop))?.stop
-/**
- * Whether an element can stand inside a word, its characters the word's: one that reads as a word to the sentence splitter
- * (text.ts standInOf: a formula; a macro, an escaped character, code, which it reads as none). Never one its reader states
- * nothing of (`other`: the PDF's source reader's kind for a skip, a switch, which set no character; a tie is its `space`, a
- * forced break its `break`),
- * a display, a space or a break, a reference's number or an annotation
- */
-const inWord = (q: El): boolean => q.kind !== 'other' && q.kind !== DISPLAY && (standInOf(q.kind) ?? 'x') === 'x'
 const elsOf = (content: readonly Piece[]): El[] =>
   content.flatMap((p): El[] => (p.t === 'el' ? [p] : p.t === 'span' ? elsOf(p.content) : []))
 const holdsEnd = (content: readonly Piece[]): boolean =>
@@ -396,10 +403,6 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
     if (it.t === 'open' && it.letters) kept.push({ id: it.id, depth: it.depth })
     const n = slots.length
     const nextText = textBeside(i, 1)
-    // (an element inside a word: a letter of the source right before it and right after it, no space of ours beside it)
-    const inside =
-      it.t === 'void' && it.word && /[\p{L}\p{M}]$/u.test(textBeside(i, -1)) && /^[\p{L}\p{M}]/u.test(nextText)
-    const before = !inside && /[\p{L}\p{N}\p{M}.]$/u.test(wire) ? ' ' : ''
     if (wire.endsWith('.')) stops.add(n)
     if (/\p{N}$/u.test(wire)) numbers.add(n)
     if (/^\p{N}/u.test(nextText)) numbersAfter.add(n)
@@ -407,7 +410,10 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
     const line = LINE_END.test(stop)
     if (line) lines.add(n)
     else if (stop) own.add(n)
-    const after = !inside && !line && /^[\p{L}\p{N}\p{M}]/u.test(nextText) ? ' ' : ''
+    // (glued to the text beside it in the source, a space of ours there; none inside a word: text.ts glueOf)
+    const glued = glueOf(textBeside(i, -1), wire, nextText, it.t === 'void' && it.word, line)
+    const before = glued.before ? ' ' : ''
+    const after = glued.after ? ' ' : ''
     const end = it.t === 'void' ? it.at + it.len : it.at
     if (before) gluedBefore.add(n)
     if (after) gluedAfter.add(n)
@@ -481,15 +487,6 @@ const LINE_LEAD = /^[ \t\f\r\ue000]*\n[ \t\n\f\r\ue000]*/
 /** our space after a digit before a marker, and before a digit after one */
 const NUMBER_SPACE = /(?<=\p{N})[ \t\n\f\r]+$/u
 const NUMBER_LEAD = /^[ \t\n\f\r]+(?=\p{N})/u
-/** our space before a marker, and after one, where the source set its element glued to the text there: TeX set no space
- *  between a word and the mark, the script or the accent it carries, so neither does the translation, whatever the reply
- *  keeps of ours or whatever stands beside it now (2610.20967v1 p1 on staging: its names' marks 4.3 pt off the names, CJK's,
- *  where TeX's are 1.35; its places' marks a space before them) */
-const GLUED_SPACE = /[ \t\n\f\r]+$/
-const GLUED_LEAD = /^[ \t\n\f\r]+/
-/** what a reply may set for an element's own stop right after its marker: any script's stop, comma, semicolon or colon */
-const OWN_MARKS = '.,;:。．，、；：।۔،؛'
-const OWN_LEAD = new RegExp(`^([ \\t\\n\\f\\r\\ue000]*)[${OWN_MARKS}]+`)
 /** what the wire writes as one thing: a marker (read tolerantly too), an escaped `@`, an entity */
 export const MARKER_ATOM = new RegExp(`@@|@[a-z]+(?:${CLOSER})?|${ENTITY}`, 'g')
 

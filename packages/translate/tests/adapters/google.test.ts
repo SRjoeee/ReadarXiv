@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chrome } from '../../src/adapters/chrome.ts'
+import { CHROME_DIGEST, chrome } from '../../src/adapters/chrome.ts'
 import { google, readTagged, tagsWire } from '../../src/adapters/google.ts'
 import { chainOf } from '../../src/chain.ts'
 import type { FetchInit, Piece, Result } from '../../src/contract.ts'
@@ -139,6 +139,42 @@ describe('google: an element is a word of its sentence', () => {
       'The values are stored in a table <x id="1"/>. <x id="4"/>The rows and columns are kept in <x id="2"/> and <x id="3"/>.',
     )
     expect(chrome({ api: null }).write(u, 'zh-Hans')).toBe(tagsWire.write(u))
+    // (Chrome's codec, so Chrome's behaviour digest: the LLM services' identity moves with it)
+    expect(tagsWire.digest).toBe(CHROME_DIGEST)
+  })
+})
+
+// (TeX set no space between a word and the mark, the script or the accent it carries: where the source glued an element to
+// the text beside it, the white space a reply sets there is taken back, as the markers reading takes it; text.ts glueOf, one
+// definition for both wires. A space the source has stays; a stop of the text after an element is no glue)
+describe('google: an element the source glued to its word comes back glued', () => {
+  const u = unit('g', [t('The name Smith'), el('n', 'math'), t(' and a size of 3'), el('k', 'math'), t('k units.')])
+  it('the space before a glued element, and after one, taken back; the source’s own spaces kept', () => {
+    const r = readTagged(u, '名字史密斯 <x id="1"/> 和 3 <x id="2"/> k 单位的大小。')
+    expect(r?.content).toEqual([
+      { t: 'text', s: '名字史密斯' },
+      { t: 'el', id: 'n' },
+      { t: 'text', s: ' 和 3' },
+      { t: 'el', id: 'k' },
+      { t: 'text', s: 'k 单位的大小。' },
+    ])
+  })
+  it('read the same from the words Google is sent', () => {
+    const r = readTagged(
+      u,
+      '名字史密斯 <span id="1" translate="no">x1</span> 和 3 <span id="2" translate="no">x2</span> k 单位的大小。',
+    )
+    expect(r?.content.map((p) => (p.t === 'text' ? p.s : `#${p.id}`)).join('')).toBe(
+      '名字史密斯#n 和 3#kk 单位的大小。',
+    )
+  })
+  it('a stop of the text right after an element is no glue: the space before it stays', () => {
+    const q = unit('q', [t('Packed into a matrix '), el('m', 'math'), t('.')])
+    expect(readTagged(q, '打包成一个矩阵<x id="1"/> 。')?.content).toEqual([
+      { t: 'text', s: '打包成一个矩阵' },
+      { t: 'el', id: 'm' },
+      { t: 'text', s: ' 。' },
+    ])
   })
 })
 
