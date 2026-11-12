@@ -5559,7 +5559,11 @@ softmax(" alone on both panes, and the rest with the paragraph before on arXiv's
   pages of 7 papers the page's column reading (`locate.ts` columnsAndMeasures: two columns where three lines keep to each half),
   which the split blocks' narrow lines had made two-column (1706.03762v7 p4: the fraction and ")V" in the right half), 74
   members' lines from "spans" to the one column, and with it 4 lines' PINNED of 3 of those pages (a line's block is read by
-  page and column); the paper's faces in 21 papers, which the typesetter reads alike (`lay/read.ts` paperOf, 63 of 63).
+  page and column); the paper's faces in 21 papers, which the typesetter reads alike (`lay/read.ts` paperOf, 63 of 63). The
+  reader gate over the 37 pairs of the 20 of those papers it holds, each laid from both runs' parts (its entry, every member's
+  `Laid.lit` written a line, `AXT_GATE_LIT`): every member's boxes on every page alike but the kept displays' (1,773 entries
+  gone, 173 come, all `inkorphan`), the members a column moved too; the entry 8,560 laid alike and 93 not on both, its boxes
+  11,157 members, 29,244 lines, 14,839 boxes on both, I10 no fault on both.
 - **The version.** PIPELINE moves: the parts of 21 of the 88 papers (the kept members and their ties, the column reading, the
   faces) and the add-ons of 13, whose groups are named by the index of each unit made on A (`axt<unit>.<page>.t`: the figure
   texts made after the merged blocks, numbered on from them); TRANSLATE stays (a kept block is never sent); the units objects
