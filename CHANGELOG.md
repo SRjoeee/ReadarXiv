@@ -4,6 +4,8 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a page whose passages a translation service refused, and which another service or a retry then translated, shows the translation. It had stayed as printed until the page was laid again by a scroll or a setting.
+- Fixed: in the PDF reader, turning a reading option on and off again shows the page as it was before, every passage as it was. A note that names one of the paper's authors, such as a correspondence line, could show as printed when the paper opened and translated after the authors' option was turned on and off.
 - Fixed: with Google translating, a phrase a paper sets in italics, bold or as a link is translated as part of its sentence. Google had translated the words before it alone, put "……" where the phrase belongs and set the phrase after it, sometimes translating its words out of their meaning ("order" as a command).
 - Fixed: in the PDF reader, where a translation's words between two formulas set on their own lines are too many for the room the paper leaves there and run on past the second formula, the line before that formula ends at a word's end, as a paragraph's last line does. An English word had been cut with a hyphen there, its first letters before the formula and the rest after it.
 - Fixed: in the PDF reader, a paragraph that runs over a page break and is set at one size with the text after it on the next page, such as a sentence whose list runs on there, is drawn at the same size on both pages. A step of the next page's spacing could make its lines before the break one size and those after it another.

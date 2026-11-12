@@ -190,6 +190,32 @@ describe('what a page holding such a unit waits for', () => {
   it('waits for nothing of a member of a kind left the original’s (a self-citation with the references off)', () => {
     expect(waitOf(part('reference'), rowsOf([]), new Set(['reference']))).toEqual([])
   })
+  // (the law the composer keeps a commit by, docs/PDF-READER.md §15: a page laid once nothing it waits for is missing is final
+  // until the toggles change, so a lay may read as still to come only a row its page waits for; 2611.03953v2-zh p1, staging
+  // round B14: the correspondence footnote's variant late, the names off, the footnote committed as the original's, and drawn
+  // with its own row after the names were turned on and off again)
+  it('reads the unit’s own row with the names toggle off whatever the variant’s, as it waits for nothing more', () => {
+    for (const given of [[rowE], [rowE, rowV], [rowE, block]]) {
+      expect(waitOf(part('footnote'), rowsOf(given), OFF)).toEqual([])
+      expect(namedRows(variantPart, rowsOf(given), OFF).get(E)).toBe(rowE)
+    }
+  })
+  it('reads, while rows may come, no row its page does not wait for, the names shown or not', () => {
+    for (const leave of [SHOWN, OFF]) {
+      const read = new Set<string>()
+      const given = rowsOf([rowE])
+      const recorded: Rows = {
+        get: (k) => {
+          read.add(k)
+          return given.get(k)
+        },
+        done: false,
+      }
+      namedRows(variantPart, recorded, leave).get(E)
+      const waits = new Set([E, ...waitOf(part('footnote'), rowsOf([]), leave)])
+      expect([...read].filter((k) => !waits.has(k))).toEqual([])
+    }
+  })
 })
 
 describe('layPage over such a unit', () => {
