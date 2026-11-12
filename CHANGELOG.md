@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a word and what the paper ties to it with an unbreakable space (`~`), such as a footnote's mark, "Figure 3" or "et al." and its citation, stay on one line in the translation, as in the original. A footnote's mark could begin a line of its own.
 - Fixed: in the PDF reader, a paragraph that opens with a bold title run into its first line, such as "Howto-GEN" after a paragraph ending in a footnote mark, starts on its own line where the original starts it, when the paper writes several such paragraphs one after another with no blank line between them. It had been drawn on from the last line of the paragraph before it, its footnote mark beside the next title.
 - Fixed: in the PDF reader, a formula set on its own line between paragraphs lights as one piece when you point at it, its number with it, on both pages. A formula with a fraction, a root or a sum's limits had lit in two or three pieces, and its number not at all.
 - Changed: in the PDF reader, a figure's label or a table's cell that holds a highlighted, struck or underlined word stays as printed, whole, until a highlight can follow the translated words. Only the marked word had stayed in English, the rest of its line translated around it, a line half in each language. A highlighted number stays inside its translated line as before.

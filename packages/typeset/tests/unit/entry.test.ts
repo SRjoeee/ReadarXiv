@@ -2126,6 +2126,50 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(glued!.state).toBe('laid')
     expect(glued!.lines.length).toBe(2)
     for (const l of glued!.lines) expect('src' in l[3][0]!).toBe(false)
+    // (a tie before the mark, the source's `~` (El.tie): TeX's \penalty10000 and its interword glue, a space no line breaks at,
+    // so the mark stays with the word before it whatever stands between them in the translation, and the space is drawn where
+    // the target sets one. 2111.09276v1 p5's `editing.~\footnote{…}`: a reply that set the stop after the mark began a line
+    // with the mark, the paragraph's last line before it ending in its word)
+    const tied = member({
+      els: [
+        ['2', { kind: 'space', copy: ' ', ink: [], tie: 1 }],
+        ['1', { kind: 'num', mark: 1, ink: [ink], text: '7', style: { role: 'serif', size: 7 } }],
+      ],
+      lines: two.lines,
+    })
+    for (const [s, after] of [
+      [`${'\u4e2d'.repeat(48)}\u3002`, ''],
+      ['\u4e2d'.repeat(49), '\u3002'],
+      ['\u4e2d'.repeat(50), '\u3002'],
+    ] as const) {
+      const r = row([
+        { t: 'text', s },
+        { t: 'el', id: '2' },
+        { t: 'el', id: '1' },
+        { t: 'text', s: `${after}${'\u4e2d'.repeat(30)}` },
+      ])
+      const [laid] = layPage(part(tied), rowsOf([r]), zh, metrics()).members
+      expect(laid!.state).toBe('laid')
+      for (const l of laid!.lines) expect('src' in l[3][0]!).toBe(false)
+    }
+    // (in a target whose words are spaced, the tie's space is a space, drawn between the word and its mark: `Abbildung~\footnote`
+    // at a full line's end keeps both on it, where the line broke at the space and opened the next with the mark)
+    for (const k of [8, 9]) {
+      const r = row([
+        { t: 'text', s: `${'aaaa '.repeat(k)}Abbildung` },
+        { t: 'el', id: '2' },
+        { t: 'el', id: '1' },
+        { t: 'text', s: ' weiter und so fort und so weiter und so fort' },
+      ])
+      const [laid] = layPage(part(member({ els: tied.els })), rowsOf([r]), rules, metrics()).members
+      expect(laid!.state).toBe('laid')
+      for (const l of laid!.lines) expect('src' in l[3][0]!).toBe(false)
+      const items = laid!.lines.flatMap((l) => l[3])
+      const at = items.findIndex((it) => 'src' in it)
+      const word = items[at - 1] as Extract<Item, { face: string }>
+      expect(word.s.trim()).toBe('Abbildung')
+      expect(items[at]!.x).toBeGreaterThan(word.x + metrics().advance(word.face, word.size, 'Abbildung') + 1)
+    }
     // (a symbol TeX set on the line, no superscript, stays the page's text, as before)
     const level = drawn({ kind: 'symbol', sym: ['\u2264'], copy: '\u2264', ink: [[1, 150, 699, 156, 705, 700]] })
     expect(crop(level)).toBeUndefined()

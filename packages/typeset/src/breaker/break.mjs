@@ -595,9 +595,17 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     // that no rule glues. The line breaks before the group, never before the mark: kinsoku's push-out, the word or the
     // character before the mark going down with it. `own`: the group as its glue alone makes it, which a line it opens
     // takes where the joined group is longer than the line: the break the breaker always made there, nothing else fitting)
+    // (and a tie, the source's `~`: TeX's \penalty10000 and its interword glue, a space no line breaks at: the group runs on
+    // through its space, the token after it and what is glued to that; the space stays in the group, drawn and stretched as
+    // the line's spaces are (groupOf's `sp`). A tied group longer than the line is broken at `own`, as a joined one is)
     const own = j
     if (!tokens[i].space) for (;;) {
       let q = j
+      if (q + 1 < tokens.length && tokens[q].tie && !tokens[q + 1].space) {
+        j = q + 2
+        while (j < tokens.length && tokens[j].glue && !tokens[j].space) j++
+        continue
+      }
       while (q < tokens.length && tokens[q].space) q++
       if (q >= tokens.length || !barred(tokens[q])) break
       j = q + 1

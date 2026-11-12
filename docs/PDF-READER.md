@@ -3646,7 +3646,17 @@ TeX set raised in its own font at its script size: a footnote's or a `\thanks` m
 superscript (`El.sym`'s second) are now drawn as their ink on one line, a crop on their line's baseline, as an `other` element;
 a symbol set on the line stays text, and a mark's link goes with its crop. Its crop is glued to what precedes it, as its text
 was a superscript's: TeX sets no glue between a word and its mark, and a crop after a CJK character, free to break as between
-two, began a line of its own (1810.04805v2 p7's footnote 12 after its sentence's full stop). Over the 88 papers' parts 180
+two, began a line of its own (1810.04805v2 p7's footnote 12 after its sentence's full stop). Where the source sets a tie before
+it (`word.~\footnote{…}`), the tie is glue TeX sets and never breaks at: `~` is `\nobreakspace`, `\penalty10000` and its
+interword glue. The part states it (`El.tie`, the instrument's `isTie`: the source's `~`, the one spelling the front end makes a
+tie's placeholder of; the command `\nobreakspace` it reads as one that sets no ink), and the typesetter's tie is a space no line
+breaks at: break.mjs's group runs on through it, the token after it and what is glued to that, so the mark is held to its word
+by the tie itself; the space is drawn and stretched as the line's other spaces are, as TeX draws it, and where a rule of the
+target sets no space there (after a full-width closing mark, before one no line opens with) the no-break stays, what follows
+glued. A translator's U+00A0 is the translator's, no tie. A tied group longer than the line is broken where its glue alone
+ends, as a mark's joined group is. Before, a tie was an ordinary space, and a reply that set the source's stop after the mark
+began a line with it (2111.09276v1 p5, round B14: the paragraph's last line ending in its word, the mark 12 and the stop
+opening the next, §18.66). Over the 88 papers' parts 180
 marks (155 of them digits, 17 in author blocks) and 92 raised symbols (10 in author blocks) move from text to their ink. Today draws them as text
 too, so the parity never told it.
 
