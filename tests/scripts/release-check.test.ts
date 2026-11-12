@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, INVARIANTS, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
+import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, INVARIANTS, PARAS_HELD, sentenceCoverJudge, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
 import { cutoverOf, gatesOf, invariantLine, markdownOf, privateResultOf, targetLines, verdictOf } from '../../lab/release-check/verdict.mjs'
 
 const dirs: string[] = []
@@ -303,10 +303,13 @@ describe('the equivalence gates, in either shape of their tools', () => {
     // counted, I6 counted against)
     expect(cover.judge!(ctx, [run(1, said(4767634, 0, 1))])).toMatchObject({ pass: false, findings: { I10: { held: true, count: 0 }, I6: { held: false, count: 1 } } })
     expect(cover.judge!(ctx, [run(0, said(4767634, 5))])).toMatchObject({ pass: false, findings: { I10: { held: false, count: 5 } } })
-    // (a paragraph point the row anchors not opened on TeX's line (paras-gate.ts): the run exits 1 and ends whole, I10 and I6
-    // still counted, the points' count reported)
-    const points = `${said(4767634, 0)}\nthe paragraph points (paras-gate.ts): 8 stated (8 group); 6 with an anchor in their row (6 sentence; 2 no row); of those, their member laid: 4 opened on TeX's line, 2 NOT; not laid: none`
-    expect(cover.judge!(ctx, [run(1, points)])).toMatchObject({ pass: true, numbers: { I10: 0, I6other: 0, parasAnchored: 6, parasOff: 2 }, findings: { I10: { held: true, count: 0 } } })
+    // (a paragraph point the row anchors and the page runs on (paras-gate.ts): the run exits 1 and ends whole, I10 and I6 still
+    // counted, the points' counts reported; held, it fails the gate, from the round the engine half lands in: PARAS_HELD)
+    const points = `${said(4767634, 0)}\nthe paragraph points (paras-gate.ts): 8 stated (8 group); 6 with an anchor in their row (6 sentence; 2 no row); of those, their member laid: 4 opened (their first word starts a line of the member), 3 of them on TeX's line, 2 NOT (run on); not laid: none`
+    expect(PARAS_HELD).toBe(false)
+    expect(cover.judge!(ctx, [run(1, points)])).toMatchObject({ pass: true, numbers: { I10: 0, I6other: 0, parasAnchored: 6, parasOpened: 4, parasOnTexLine: 3, parasOff: 2 }, findings: { I10: { held: true, count: 0 } } })
+    expect(sentenceCoverJudge([run(1, points)], true).pass).toBe(false)
+    expect(sentenceCoverJudge([run(0, points.replace('2 NOT', '0 NOT'))], true).pass).toBe(true)
     // (nothing laid: no finding, no pass; a run that did not end whole: its count is not read)
     const none = cover.judge!(ctx, [run(1, said(0, 0))])
     expect(none.pass).toBe(false)

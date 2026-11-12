@@ -68,7 +68,7 @@ const LEAVE = new Map([
   ['every option on', leftKinds({ figures: true, tables: true, heads: true, references: true, names: true })],
 ])
 const reads = new Map([...LEAVE.keys()].map((k) => [k, { pages: 0, reads: 0, outside: 0, outsidePages: 0, ex: [] }]))
-const entry = { paras: { stated: new Map(), anchor: new Map(), opened: 0, off: [], offBy: new Map(), notLaid: new Map(), openedEx: [], noneEx: [] }, crossLay: { units: 0, twice: 0, head: [], other: [] }, alike: 0, differ: 0, ex: [], ms: [], names: new Map(), links: new Map(), linkEx: new Map(), figures: new Map(), lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 }, cover: { members: 0, pieces: 0, faults: new Map(), ex: new Map(), byPair: new Map() } }
+const entry = { paras: { stated: new Map(), anchor: new Map(), opened: 0, onTexLine: 0, off: [], offBy: new Map(), notLaid: new Map(), openedEx: [], noneEx: [] }, crossLay: { units: 0, twice: 0, head: [], other: [] }, alike: 0, differ: 0, ex: [], ms: [], names: new Map(), links: new Map(), linkEx: new Map(), figures: new Map(), lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 }, cover: { members: 0, pieces: 0, faults: new Map(), ex: new Map(), byPair: new Map() } }
 /** Whether the entry is given a door row. The rows are today's stored replies in today's reading; one that says nothing (the
  *  chain's rule, accept.ts: no letter or digit where the unit has a letter, 'empty') is no translation of its unit under any
  *  reading, and the chain makes no row of it whatever its translator: the entry is given none and leaves the unit the
@@ -105,6 +105,7 @@ const addParas = (x) => {
   const P = entry.paras
   for (const k of ['stated', 'anchor', 'notLaid', 'offBy']) for (const [a, n] of x[k]) P[k].set(a, (P[k].get(a) ?? 0) + n)
   P.opened += x.opened
+  P.onTexLine += x.onTexLine
   P.off.push(...x.off)
   P.openedEx.push(...x.openedEx.slice(0, Math.max(0, 6 - P.openedEx.length)))
   P.noneEx.push(...x.noneEx.slice(0, Math.max(0, 12 - P.noneEx.length)))
@@ -284,13 +285,14 @@ if (ENTRY) {
   for (const [k, n] of [...C.faults].sort((a, b) => b[1] - a[1])) console.log(`  ${n} ${k}: ${(C.ex.get(k) ?? []).join(' | ')}`)
   for (const [pair, line] of C.byPair) console.log(`  ${pair}: ${line}`)
   // (the paragraph points, paras-gate.ts: each the part states (a group's open, an element, its first word) whose row carries
-  // its anchor (the group or the element between its texts, else a sentence start paired with its first word) laid opening on
-  // TeX's line; one not so laid fails the run. Those with no anchor flow on, counted by why)
+  // its anchor (the group or the element between its texts, else a sentence start paired with its first word) laid with its
+  // first word starting a line of the member; one run on fails the run. Those on TeX's baseline counted beside; those with no
+  // anchor flow on, counted by why)
   {
     const P = entry.paras, n = m => [...m.values()].reduce((a, b) => a + b, 0)
     const anchored = n(P.anchor) - [...P.anchor].filter(([k]) => k.startsWith('none') || k === 'no row').reduce((a, [, v]) => a + v, 0)
-    console.log(`the paragraph points (paras-gate.ts): ${n(P.stated)} stated (${top(P.stated)}); ${anchored} with an anchor in their row (${top(P.anchor)}); of those, their member laid: ${P.opened} opened on TeX's line, ${P.off.length} NOT${P.off.length ? ` (${top(P.offBy)})` : ''}; not laid: ${top(P.notLaid) || 'none'}`)
-    for (const x of P.off) console.log(`  not opened on TeX's line: ${x}`)
+    console.log(`the paragraph points (paras-gate.ts): ${n(P.stated)} stated (${top(P.stated)}); ${anchored} with an anchor in their row (${top(P.anchor)}); of those, their member laid: ${P.opened} opened (their first word starts a line of the member), ${P.onTexLine} of them on TeX's line, ${P.off.length} NOT (run on); not laid: ${top(P.notLaid) || 'none'}`)
+    for (const x of P.off) console.log(`  not opened: ${x}`)
     for (const x of P.openedEx) console.log(`  opened, e.g.: ${x}`)
     for (const x of P.noneEx) console.log(`  no anchor, e.g.: ${x}`)
     if (P.off.length) process.exitCode = 1

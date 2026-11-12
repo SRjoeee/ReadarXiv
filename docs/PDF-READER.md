@@ -6384,10 +6384,13 @@ plain new paragraph the source writes no blank line before), and a point stated 
 Microsoft's rows the bold markers of 2111.09276v1's run-in titles come back at the unit's end, and the reading places a lost group
 only where its text stands once in the source: "COIN", three times there, runs on). The fact for both is the paragraph's first
 word: its offset in the unit's source projection (what `Row.sentences.src` counts in) and the line TeX opened it on, the part's
-`paras` (stated by the engine's half, a later round; until then no part holds it and nothing drawn moves).
+`paras`. A paragraph point is a fact of the source, and a group or an element is one carrier of it that a reply can drop: the
+part states the first word of EVERY point, whatever stronger anchor it also has, and the lay reads the strongest carrier the row
+kept (the coordinator's ruling of 2026-11-13, in place of the design's "stated once, by the strongest fact"). The engine's half
+states it, in a later round; until then no part holds it and nothing drawn moves.
 
 - **The lay** (`unit/breaks.ts` `paraPieces`, `pairing`). A point on a line no stronger fact the row holds opens (a group's open
-  or an element between the row's texts, a forced break: `statedBreaks`, the paragraph stated once) is paired with the row's
+  or an element between the row's texts, a forced break: `statedBreaks`; one opening a line) is paired with the row's
   sentence whose start on A is that word: the row's cuts each holding a word of A (`lay/lit.ts` `worded`), the first of
   `Placed.words` at or after the start (`firstWordAt`, the highlight's own start rule) being the point's word on the point's
   line. Its place in the translation is the highlight's too (`startsInProjection`: the start's first letter, digit or element,
@@ -6406,13 +6409,17 @@ word: its offset in the unit's source projection (what `Row.sentences.src` count
   the lay can open at their word, those for want of the row's sentences.
 - **The gate** (the reader gate, `lab/typeset/gate-l1.mjs --entry`, `packages/typeset/tests/replay/paras-gate.ts`): each point a
   part states (a group's open, an element, a first word) whose row carries its anchor (the group or the element between the
-  row's texts, else the sentence start paired with its first word) is laid with its first line on the line TeX opened it on: the
-  member's laid line at that line's baseline begins with the paragraph's first thing. One not so laid fails the run; a point with
-  no anchor flows on and is counted by why. In the lab the first word of a point stated at a group or an element is read from the
-  unit's source, so the gate holds today's group points to the fallback the part will state. The release check's
-  `sentence-cover` reads the count (its pass is not changed by it). Of several facts that state one line, the point is the first
-  in the source (2609.36054v2's author block states each line at its name's group and at its affiliation's after it). A point
-  not opened is told "run on" (its first thing begins no laid line) or "begins a line at another baseline".
+  row's texts, else the sentence start paired with its first word) is laid with its first word starting a line of the member: a
+  laid line of the member on the page of TeX's line begins with the paragraph's first thing. The defect a reader sees is a
+  paragraph that starts on the last line of the one before; one that starts a line of its member has none, whether that line
+  stands on TeX's baseline or not (the coordinator's ruling of 2026-11-13: the baseline is the spacing design's). A point run on
+  fails the run; those on TeX's baseline are counted beside, never failed; a point with no anchor flows on and is counted by why.
+  In the lab the first word of a point stated at a group or an element is read from the unit's source, so the gate holds today's
+  group points to the fallback the part will state. Of several facts that state one line, the point is the first in the source
+  (2609.36054v2's author block states each line at its name's group and at its affiliation's after it). The release check's
+  `sentence-cover` reads the counts and fails on a point run on once `PARAS_HELD` (`lab/release-check/gates.mjs`) is on: the
+  engine half's lane turns it on in the round it lands in; until then a point a reply's dropped group leaves has no first word
+  to fall back to.
 - **Measured** (the base c331582c6 against this lay, round B15's parts, no part stating a first word): the reader's own lay
   (`lab/typeset/parity/v2.mjs`) over the 90 pairs and the two added ones (2111.09276v1-zh, 2611.03953v2-zh), on the door rows
   and on the lab's Google store, default and every switch on: 368 of 368 files identical. The reader gate at this lay: every

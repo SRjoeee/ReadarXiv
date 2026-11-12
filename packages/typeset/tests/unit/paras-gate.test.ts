@@ -6,7 +6,7 @@ import type { OutPiece, Part, Placed, Row, Unit } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
 import { rulesFor } from '../../src/rules-for.ts'
-import type { Metrics, Rows } from '../../src/types.ts'
+import type { Metrics, Page, Rows } from '../../src/types.ts'
 import { newParasGate, parasGate } from '../replay/paras-gate.ts'
 
 const metrics: Metrics = {
@@ -105,5 +105,70 @@ describe('the reader gate’s paragraph points (tests/replay/paras-gate.ts): wha
     parasGate(g, 'test-de', 1, layPage(part(m), r, rules, metrics), part(m), r, new Map([[id, unit]]))
     expect([...g.anchor]).toEqual([['none: no sentences', 1]])
     expect(g.off).toEqual([])
+  })
+})
+
+describe('the gate’s pass: the point’s first word starts a line of the member (the coordinator’s ruling of 2026-11-13)', () => {
+  // (a page drawn by hand: the member laid at its own pitch, the second paragraph on a line of its own one point under TeX's
+  // baseline; then the same paragraph run on after the first)
+  const spans: Placed['spans'] = [['1', { cmd: 'textbf', opens: 2 }]]
+  const held: OutPiece[] = [
+    { t: 'text', s: FIRST_DE },
+    { t: 'span', id: '1', content: [{ t: 'text', s: 'Der zweite' }] },
+    { t: 'text', s: SECOND_DE.slice('Der zweite'.length) },
+  ]
+  const item = (s: string) => ({ s, x: 72, face: 'serif' as never, size: 10 })
+  const pageOf = (lines: [number, string][]): Page => ({
+    page: 1,
+    wait: { rows: [], faces: [] },
+    members: [
+      {
+        ord: 0,
+        page: 1,
+        state: 'laid',
+        off: 1,
+        lines: lines.map(([y, s]) => [y, 72, 72 + s.length * 5, [item(s)]]),
+        lit: { left: [], right: [], own: [] },
+      },
+    ],
+    links: [],
+  })
+  const gateOf = (page: Page) => {
+    const g = newParasGate()
+    const m = member({ spans })
+    parasGate(g, 'test-de', 1, page, part(m), rowsOf(row(held, cuts)), new Map())
+    return g
+  }
+  it('passes a paragraph that starts a line of its own at another baseline than TeX’s, counted apart from TeX’s line', () => {
+    const g = gateOf(
+      pageOf([
+        [700, 'Der erste Absatz endet hier.'],
+        [675, 'Der zweite Absatz beginnt hier und'],
+        [663, 'läuft bis zu seinem Ende weiter.'],
+      ]),
+    )
+    expect(g.opened).toBe(1)
+    expect(g.onTexLine).toBe(0)
+    expect(g.off).toEqual([])
+  })
+  it('counts it on TeX’s line where its line stands on TeX’s baseline', () => {
+    const g = gateOf(
+      pageOf([
+        [700, 'Der erste Absatz endet hier.'],
+        [676, 'Der zweite Absatz beginnt hier und'],
+      ]),
+    )
+    expect([g.opened, g.onTexLine]).toEqual([1, 1])
+  })
+  it('fails it run on, its first word starting no line of the member', () => {
+    const g = gateOf(
+      pageOf([
+        [700, 'Der erste Absatz endet hier. Der zweite'],
+        [688, 'Absatz beginnt hier und läuft bis zu'],
+      ]),
+    )
+    expect(g.opened).toBe(0)
+    expect(g.off.length).toBe(1)
+    expect([...g.offBy]).toEqual([['run on', 1]])
   })
 })

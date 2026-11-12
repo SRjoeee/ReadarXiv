@@ -1,10 +1,13 @@
 // The paragraph points' gate (design-display 2a, row F1; lane pairs-91's "the gate that is missing"): each paragraph TeX opened
 // inside a member's text that its part states (at a group's open, SpanAt.opens; at an element, El.opens; at its first word,
 // Placed.paras) and whose row carries its anchor (the group or the element between the row's texts, else the sentence start
-// paired with the point's first word: unit/breaks.ts `pairing`) is laid with its first line on the line TeX opened it on: the
-// member's laid line at that line's baseline (the comparator's 0.01 pt) begins with the paragraph's first thing (its first
-// letter or digit, NFKC, either case; an element's crop by its piece). Read off the entry's Page (layPage, the product's lay),
-// on the page that holds the line; a member not laid there shows the original's (counted apart). A point the row gives no
+// paired with the point's first word: unit/breaks.ts `pairing`) is laid with its first word starting a line of the member: a
+// laid line of the member on the page of TeX's line begins with the paragraph's first thing (its first letters and digits,
+// NFKC, either case; an element's crop by its piece). The defect a reader sees is a paragraph that starts on the last line of the
+// one before; one that starts a line of its member has none, whether that line stands on TeX's baseline or not (the
+// coordinator's ruling of 2026-11-13: the baseline belongs to the spacing design). Those whose line stands on TeX's baseline
+// (the comparator's 0.01 pt) are counted beside, never failed. Read off the entry's Page (layPage, the product's lay), on the
+// page that holds TeX's line; a member not laid there shows the original's (counted apart). A point the row gives no
 // anchor flows on (counted, by why). In the lab, the first word of a point stated at a group or an element is read from the
 // unit's source (its piece's offset in the source projection, the first of Placed.words at or after it, on the point's line):
 // what the part states as Placed.paras once the engine does (design-display 2a: the group's text a reply dropped, the case of
@@ -21,10 +24,12 @@ export type ParasGate = {
   /** each by the anchor its row carries (group, element, sentence), or `none: ` and why, or `no row` (the member's row failed
    *  or none came: the original's) */
   anchor: Map<string, number>
-  /** of those with an anchor, their member laid on the page: opened on TeX's line */
+  /** of those with an anchor, their member laid on the page: opened, their first word starting a line of the member */
   opened: number
-  /** of those with an anchor, their member laid: not opened on TeX's line (the gate's fails), each named, and by how: run on
-   *  (its first thing begins no laid line), or beginning a laid line at another baseline */
+  /** of the opened, those whose line stands on TeX's baseline (a count, never a fail) */
+  onTexLine: number
+  /** of those with an anchor, their member laid: run on, their first word starting no line of the member (the gate's fails),
+   *  each named; `offBy` their count by how ('run on') */
   off: string[]
   offBy: Map<string, number>
   /** of those with an anchor, their member not laid on the page (the original's shows), by its state */
@@ -37,6 +42,7 @@ export const newParasGate = (): ParasGate => ({
   stated: new Map(),
   anchor: new Map(),
   opened: 0,
+  onTexLine: 0,
   off: [],
   offBy: new Map(),
   notLaid: new Map(),
@@ -178,25 +184,25 @@ export function parasGate(
         add(g.notLaid, x?.state ?? 'absent')
         continue
       }
-      // (the laid line at TeX's baseline, the nearest across to TeX's line start where two stand on it)
-      const drawn = x.lines
-        .filter((l) => Math.abs(l[0] - line[4]) <= 0.01)
-        .sort((a, b) => Math.abs(a[1] - line[2]) - Math.abs(b[1] - line[2]))[0]
       const shown = (l?: Laid['lines'][number]) =>
         l ? `"${textOf(l).trim().slice(0, 28)}" at ${l[0]}` : 'no laid line there'
-      if (drawn && first && begins(drawn, first)) {
+      // (the member's laid lines its first thing begins: the one at TeX's baseline first, the nearest across to TeX's line start
+      // where two stand on it; a line at another baseline where none there does)
+      const starting = first ? x.lines.filter((l) => begins(l, first!)) : []
+      const onTex = starting
+        .filter((l) => Math.abs(l[0] - line[4]) <= 0.01)
+        .sort((a, b) => Math.abs(a[1] - line[2]) - Math.abs(b[1] - line[2]))[0]
+      const where = onTex ?? starting[0]
+      if (where) {
         g.opened++
-        if (g.openedEx.length < 12) g.openedEx.push(`${name} by ${anchor}: ${shown(drawn)}`)
+        if (onTex) g.onTexLine++
+        if (g.openedEx.length < 12)
+          g.openedEx.push(`${name} by ${anchor}: ${shown(where)}${onTex ? '' : `, TeX's line at ${line[4]}`}`)
         continue
       }
-      // (what the member drew where: the line its paragraph's first thing begins, if any)
-      // (and how: run on, its first thing beginning no laid line of the member; or beginning one at another baseline: its block
-      // opened, the member laid at another pitch than TeX's, or a run-on whose paragraph before happens to end its line)
-      const where = first ? x.lines.find((l) => begins(l, first!)) : undefined
-      const how = where ? 'begins a line at another baseline' : 'run on'
-      add(g.offBy, how)
+      add(g.offBy, 'run on')
       g.off.push(
-        `${name} by ${anchor}, ${how}: TeX's line at ${line[4]}: ${shown(drawn)}; its first thing "${(first?.text ?? '').slice(0, 16)}"${first?.el !== undefined ? ` (element ${first.el})` : ''} ${where ? `begins ${shown(where)}` : 'begins no laid line'}`,
+        `${name} by ${anchor}, run on: TeX's line at ${line[4]}; its first thing "${(first?.text ?? '').slice(0, 16)}"${first?.el !== undefined ? ` (element ${first.el})` : ''} starts no laid line`,
       )
     }
   }

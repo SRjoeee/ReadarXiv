@@ -35,6 +35,9 @@ export declare function checksOf(text: string): { passed?: number; checks?: numb
 export declare function vitestOf(text: string): { tests?: number; failed?: number; skipped?: number; files?: number }
 export declare function diffOf(text: string): Partial<Record<'files' | 'of' | 'units' | 'shownBefore' | 'shown' | 'lost' | 'accepted' | 'gained' | 'changed', number>>
 export declare function typesetOf(text: string): Record<string, number>
+/** whether sentence-cover fails on a paragraph point run on: the engine half's lane turns it on (gates.mjs) */
+export declare const PARAS_HELD: boolean
+export declare function sentenceCoverJudge(steps: StepRun[], parasHeld?: boolean): Judged
 export declare function corpusLogOf(file: string): { papers: number; made: number; failed: string[]; refused: string[]; missingCompile: string[]; proofs: { a: number; c: number; on: number; offOutside: number } }
 export declare function drawnOf(dir: string, within?: string | null): { source: number; ink: number; figures: number; refusedWhole: number; papers: number }
 export declare function cachesOf(text: string): string
