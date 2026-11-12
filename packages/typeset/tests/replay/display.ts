@@ -14,7 +14,7 @@ import type { Layout } from '../../src/fit/types.ts'
 import { displayLines } from '../../src/emit/display.ts'
 import type { PassUnit } from '../../src/shared/fill-pass.ts'
 import { framed, laysOf, passesOf, trackedCells } from './pass.ts'
-import { firstDifference, flooredIn, LAB, ledger, roomUnderIn } from './tap.ts'
+import { firstDifference, flooredIn, LAB, lastLineIn, ledger, roomUnderIn } from './tap.ts'
 import { CACHE, paperOf } from './today.ts'
 
 /** the harness's CSS pixels a PDF unit (reader-entry.mjs SCALE; dpr 1: its audit's device pixels too) */
@@ -216,8 +216,9 @@ export type DisplayResult = {
    *  are today's; and those on a page where today's held a paragraph's gap to the next one's leading that it lays otherwise
    *  (tap.ts flooredIn: the gap ruling of 2026-11-08); and those on a page of a unit a run of which the room ruling lays
    *  otherwise that it lays otherwise (tap.ts roomUnderIn); and those on a page of a unit whose fill leadings option (i) moves
-   *  (pass.ts laysOf `lead`: the owner's of 2026-11-10) that it lays otherwise */
-  ruled: { frames: number; cells: number; gap: number; room: number; lead: number }
+   *  (pass.ts laysOf `lead`: the owner's of 2026-11-10) that it lays otherwise; and those whose line before a run's boundary
+   *  today's run past set as any full line, which the ruling of 2026-11-13 sets as a last line (tap.ts lastLineIn) */
+  ruled: { frames: number; cells: number; gap: number; room: number; lead: number; last: number }
 }
 
 /** D.display replayed on every laid unit of a pair's reader dump */
@@ -236,10 +237,11 @@ export function displayReplay(pair: string): DisplayResult {
     differ: [],
     unlaid: [],
     chains: [...chains, ...off],
-    ruled: { frames: 0, cells: 0, gap: 0, room: 0, lead: 0 },
+    ruled: { frames: 0, cells: 0, gap: 0, room: 0, lead: 0, last: 0 },
   }
   const gap = flooredIn(pair)
   const room = roomUnderIn(pair)
+  const last = lastLineIn(pair)
   for (const u of readerDump(pair).units) {
     out.units++
     const p = lays.get(u.ord)
@@ -258,6 +260,7 @@ export function displayReplay(pair: string): DisplayResult {
       if (d && gap.units.has(u.ord)) out.ruled.gap++
       else if (d && room.units.has(u.ord)) out.ruled.room++
       else if (d && lead.units.has(u.ord)) out.ruled.lead++
+      else if (d && last.has(u.ord)) out.ruled.last++
       else if (d) out.differ.push({ ord: u.ord, d })
       else out.ruled.cells++
       continue
@@ -267,6 +270,7 @@ export function displayReplay(pair: string): DisplayResult {
     else if (d && gap.units.has(u.ord)) out.ruled.gap++
     else if (d && room.units.has(u.ord)) out.ruled.room++
     else if (d && lead.units.has(u.ord)) out.ruled.lead++
+    else if (d && last.has(u.ord)) out.ruled.last++
     else if (d) out.differ.push({ ord: u.ord, d })
     else {
       out.equal++

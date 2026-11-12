@@ -50,6 +50,9 @@ export type PreparedPage = {
   /** every member laid in the call, on any page (a member of a tie the page's part holds may have no line on it): its scale of
    *  its own size */
   fits: [ord: number, scale: number][]
+  /** the same members' scales as their own lays set them, before any page's fill (a tie reads a member begun on a page after
+   *  another's first page so, as the page's first lay set it: tieCaps) */
+  unfilled: [ord: number, scale: number][]
   /** every member begun on a pass page of the call, as laid and filled (a member of a pass page with no line on this one too) */
   passed: UnitLay[]
 }
@@ -82,7 +85,8 @@ export type PageTie =
  * part at its size, its part after the float shrunk; the maintainer's ruling: the text of one paragraph is to be even). By scale,
  * not by points: a run-in head TeX set smaller than its paragraph keeps the original's ratio to it, and neither shrinks the other
  * for being of another size (the coordinator's decision under that ruling, 2026-11-08: 2610.30034v1 p2's head at 8.97 capped its
- * paragraph at 8.97, 0.9 of its 9.96)
+ * paragraph at 8.97, 0.9 of its 9.96). The least a member is capped at is its tie-mates' begun on its own first page or before
+ * (tieCaps, §18.64): a later page's pass never reaches back over the page break
  */
 export function layPagePrepared(
   page: number,
@@ -110,23 +114,16 @@ export function layPagePrepared(
   // own scale its walk sets it otherwise (t115 p38, 15 lines borrowed at 0.875, 14 capped there). Each round lowers a cap, never
   // under the floor: it ends)
   const cap = new Map<number, number>()
+  const firstOf = new Map<number, number>()
+  for (const f of flows) for (const m of f) firstOf.set(m.ord, firstPage(m))
+  // (each member's scale as its own lay set it, before any page's fill and any tie's cap: the same in every lay that lays it.
+  // The FIRST lay's, read in every round: a later round's lay of a member is set under the cap a page's fill gave it, which
+  // carried that fill back to a tie-mate begun earlier (2610.21098v1 ord 12); and read, not left out: a later tie-mate's own fit
+  // still caps (left out, 2608.16117v1's ord 115 grew past it). §18.64)
+  const own = new Map(first.unfilled)
   let laid = first
   for (;;) {
-    const fitOf = new Map(laid.fits)
-    let lowered = false
-    for (const t of sizes) {
-      const on = t.ords.filter((o) => fitOf.has(o))
-      if (on.length < (t.least === undefined ? 2 : 1)) continue
-      const least = Math.min(...on.map((o) => fitOf.get(o) as number), t.least ?? Number.POSITIVE_INFINITY)
-      for (const o of on) {
-        const c = Math.max(least, t.floor ?? floorOf.get(o) ?? floor)
-        if ((fitOf.get(o) as number) > c + SAME && c < (cap.get(o) ?? Number.POSITIVE_INFINITY) - SAME) {
-          cap.set(o, c)
-          lowered = true
-        }
-      }
-    }
-    if (!lowered) return laid
+    if (!tieCaps(sizes, new Map(laid.fits), own, firstOf, (o) => floorOf.get(o) ?? floor, cap)) return laid
     const capped = flows.map((f) =>
       f.map((m) => {
         const c = cap.get(m.ord)
@@ -135,6 +132,46 @@ export function layPagePrepared(
     )
     laid = layPageTied(page, capped, cells, R, trace)
   }
+}
+
+/**
+ * One round of a page's size ties (layPagePrepared): each tied member laid larger than the least of its tie capped there, in
+ * `cap`, never under its floor (the tie's, else the member's own) and never above a cap set before; `fitOf` the scale each
+ * member is laid at, its page's fill passes run, `ownOf` the scale its own lay set it at before any page's fill and any tie's
+ * cap, `firstOf` the page each begins on. Whether a cap was lowered. A tie caps a member from the scales the passes up to its own first page leave its
+ * tie-mates at (docs/PDF-READER.md §18.64): a tie-mate begun on that page or before as
+ * laid and filled, one begun after it as its own lay set it, never as a later page's fill set it, nor a cap that fill set. Every lay that draws a unit
+ * runs the pass of the page it begins on, and a later page's pass runs in some of them alone (a page's lay runs its own page's
+ * and the first page of each member on it), so a later page's fill (its shrink, its evening, §18.57) capping a tie-mate begun
+ * earlier set it at one size in one lay and another in the next (I6 across the pages' lays: 2610.21098v1 ord 12, its first
+ * page at 1 and its second at the 0.975 page 2's fill set its list's last item at). A tie may so stand one fill step apart
+ * across a page break, the member begun earlier keeping its size: I6 outranks the tie's evenness
+ */
+export function tieCaps(
+  sizes: readonly Extract<PageTie, { rule: 'size' }>[],
+  fitOf: ReadonlyMap<number, number>,
+  ownOf: ReadonlyMap<number, number>,
+  firstOf: ReadonlyMap<number, number>,
+  floorOf: (ord: number) => number,
+  cap: Map<number, number>,
+): boolean {
+  let lowered = false
+  for (const t of sizes) {
+    const on = t.ords.filter((o) => fitOf.has(o))
+    if (on.length < (t.least === undefined ? 2 : 1)) continue
+    for (const o of on) {
+      const from = firstOf.get(o) ?? 0
+      const at = (q: number) =>
+        ((firstOf.get(q) ?? 0) <= from ? fitOf.get(q) : (ownOf.get(q) ?? fitOf.get(q))) as number
+      const least = Math.min(...on.map(at), t.least ?? Number.POSITIVE_INFINITY)
+      const c = Math.max(least, t.floor ?? floorOf(o))
+      if ((fitOf.get(o) as number) > c + SAME && c < (cap.get(o) ?? Number.POSITIVE_INFINITY) - SAME) {
+        cap.set(o, c)
+        lowered = true
+      }
+    }
+  }
+  return lowered
 }
 
 function layPageTied(
@@ -188,6 +225,7 @@ function layPageTied(
         passes: [],
         tables: [],
         fits: [],
+        unfilled: [],
         passed: [],
       }
     }
@@ -261,6 +299,7 @@ function layPageOnce(
     ...new Set([page, ...all.filter((x) => x.m.pages.includes(page)).map((x) => firstPage(x.m))]),
   ].sort((a, b) => a - b)
   const passes: PreparedPage['passes'] = []
+  const unfilled = all.flatMap((x) => (x.unit?.layout ? [[x.m.ord, x.unit.layout.scale] as [number, number]] : []))
   if (R.adaptiveFill)
     for (const f of passPages) {
       const laid = all.filter((x) => x.unit && x.m.pages.includes(f)).map((x) => x.unit!)
@@ -329,5 +368,5 @@ function layPageOnce(
           : {}),
       }
     })
-  return { page, members, passes, tables, fits, passed }
+  return { page, members, passes, tables, fits, unfilled, passed }
 }

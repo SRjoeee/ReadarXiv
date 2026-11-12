@@ -143,6 +143,35 @@ const NOT_VERSION = /^(?:MAX|MIN)_/
 const VERSION_FILE = /(?:^|\/)versions?\.(?:m|c)?[jt]s$/
 /** a comment that says its constant is raised by hand: "raised with every change", "rises only if", "bump it when" */
 const RAISED = /\b(?:raised|rises|bumped|raise it|bump it)\b(?:\s+\w+){0,2}\s+(?:with|when|whenever|if|only|on|for|every)\b|\ba change to (?:it|them|this) is a change of\b/i
+/** a store's schema number (census.mjs DEFINITIONS `versions`): its name says so, or a comment that is its own or names it
+ *  says it numbers the form of what is stored */
+const SCHEMA_NAME = /(?:^|_)(?:SCHEMA|FORMAT)$/
+const STORED_FORM = /\b(?:schema|shape|grammar)\b/i
+/** a comment that says what is computed changed: "raised with any change to what the maker writes", "changes what" */
+const COMPUTED_CHANGED = /\bchanges? (?:to|of|in) what\b|\bchanges what\b/i
+/** a budget's name (census.mjs DEFINITIONS `budgets`): a time, a size or a count the code may spend or hold, by the
+ *  name's last or first word (an UPPER_CASE constant's, or a camelCase property's of a table) */
+const BUDGET_UPPER = /(?:^|_)(?:MS|SECONDS|TIMEOUT|BYTES|KIB|MIB|PX|PIXELS|MAX|CAP|LIMIT|BUDGET)$|^(?:KEEP|MAX)_/
+const BUDGET_CAMEL = /[a-z0-9](?:Ms|Seconds|Timeout|Bytes|KiB|MiB|Px|Pixels|Max|Cap|Limit|Budget)$|^(?:keep|max)[A-Z]/
+/** a document's own measures: a bound in one of these is a reading's rule, not a budget */
+const TYPE_UNITS = /\b(?:em|ems|pt|bp|sp)\b/
+/** a budget's measurement on record: a paper, the corpus, a measurement */
+const BUDGET_MEASURED = /\b\d{4}\.\d{4,5}(?:v\d+)?\b|\bcorpus\b|\bmeasured\b|\bmeasurements?\b|\bon the \d+ papers\b|\bseen on\b/i
+const BUDGET_UNITS = [
+  { unit: 'time', name: /(?:MS|SECONDS|TIMEOUT|Ms|Seconds|Timeout)$/, words: /\b(?:ms|milliseconds?|seconds?|minutes?)\b/i },
+  { unit: 'bytes', name: /(?:BYTES|KIB|MIB|Bytes|KiB|MiB)$/, words: /\b(?:bytes?|KiB|MiB|GiB|KB|MB)\b/ },
+  { unit: 'pixels', name: /(?:PX|PIXELS|Px|Pixels)$/, words: /\b(?:px|pixels?)\b/i },
+]
+/** a platform's limit on record: a definition the census already reads (CITES_DEFINITION), or a platform's limit named */
+const PLATFORM_LIMIT = /\b(?:Chrome|Chromium|V8|Cloudflare|Workers?|Durable Objects?|R2|D1|KV|Node(?:\.js)?|IndexedDB|PDF\.js|WebGL|the browser|the platform)(?:'s)?\b[^.;]{0,60}\b(?:limits?|caps?|maximum|ceiling|quota|allows?)\b/i
+/** a comment line that tells history (census.mjs DEFINITIONS `history`) */
+export const HISTORY = {
+  todays: /\btoday['’]s\b/i,
+  dated: /\b20\d\d-\d\d-\d\d\b/,
+  named: /\b(?:Codex|Devin|Copilot|CodeRabbit)\b|\bround (?:[A-Z]{1,2})?\d+\b|\b(?:Plan|Task) \d+[a-z]?\b/,
+}
+/** a date beside it that names a measurement: the one date a comment keeps */
+const MEASUREMENT = /\bmeasured\b|\bmeasurements?\b/i
 const UPPER = /^[A-Z][A-Z0-9_]*$/
 
 const pluginsOf = path => {
@@ -191,6 +220,7 @@ export function factsOf(path, text, { tokens = true } = {}) {
   if (kind === 'style' || kind === 'html' || kind === 'data' || kind === 'other') {
     const comments = kind === 'style' ? commentsByScan(text, true) : kind === 'html' ? [...text.matchAll(/<!--[\s\S]*?-->/g)].map(m => [m.index, m.index + m[0].length]) : []
     f.lines = countLines(lineKinds(text, comments))
+    if (kind === 'style') f.history = historyIn(text, comments.map(([s, e]) => ({ start: s, value: text.slice(s, e) })))
     f.imports = kind === 'html' ? [...text.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(m => ({ spec: m[1].startsWith('.') || m[1].startsWith('/') ? (m[1].startsWith('/') ? `.${m[1]}` : m[1]) : `./${m[1]}`, names: ['*'], type: false, line: 1 })) : kind === 'style' ? [...withoutRanges(text, comments).matchAll(/@import\s+(?:url\()?["']([^"')]+)["']/g)].map(m => ({ spec: m[1], names: ['*'], type: false, line: 1 })) : []
     return f
   }
@@ -216,6 +246,7 @@ export function factsOf(path, text, { tokens = true } = {}) {
   f.lines = countLines(kinds)
   const commentsOnLine = new Map()
   for (const c of ast.comments) for (let l = lineAt[c.start]; l <= lineAt[c.end - 1]; l++) commentsOnLine.set(l, [...(commentsOnLine.get(l) ?? []), c.value])
+  f.history = historyIn(text, ast.comments)
   // (a statement's own comments: those that open their line; the parser hands a comment that ends the line before to the
   // next statement too)
   const leading = node =>
@@ -224,6 +255,20 @@ export function factsOf(path, text, { tokens = true } = {}) {
       .map(c => c.value)
       .join('\n')
   const sameLine = node => (commentsOnLine.get(lineAt[node.start]) ?? []).join('\n')
+  // (the comment right before a statement, its line comments joined, nothing but white space and no blank line between it and
+  // the statement; not the file's opening comment, which is the file's: `leading` holds every comment before a statement)
+  const adjacent = node => {
+    const block = []
+    let end = node?.start ?? 0
+    for (const c of [...(node?.leadingComments ?? [])].reverse()) {
+      const between = text.slice(c.end, end)
+      if (!/^[ \t]*\n?[ \t]*$/.test(between) || !/^\s*$/.test(text.slice(text.lastIndexOf('\n', c.start - 1) + 1, c.start))) break
+      block.unshift(c)
+      end = c.start
+    }
+    if (!block.length || /^\s*$/.test(text.slice(0, block[0].start))) return ''
+    return block.map(c => c.value).join('\n')
+  }
 
   f.imports = []
   f.exports = []
@@ -237,8 +282,11 @@ export function factsOf(path, text, { tokens = true } = {}) {
   f.calls = new Set()
   f.endpoints = []
   f.any = 0
+  f.casts = { cast: [], unsafe: [], nonNull: 0 }
+  f.vocabularies = []
   f.nocheck = ast.comments.some(c => /^\s*@ts-nocheck\b/.test(c.value))
-  f.suppressions = ast.comments.filter(c => /^\s*@ts-(?:ignore|expect-error)\b/.test(c.value)).length
+  f.suppressionLines = ast.comments.filter(c => /^\s*@ts-(?:ignore|expect-error)\b/.test(c.value)).map(c => lineAt[c.start])
+  f.suppressions = f.suppressionLines.length
   f.functions = []
   f.llm = false
   f.barrel = ast.program.body.length > 0 && ast.program.body.every(s => s.type === 'ImportDeclaration' || (s.type === 'ExportNamedDeclaration' && (s.source || !s.declaration)) || s.type === 'ExportAllDeclaration')
@@ -279,6 +327,7 @@ export function factsOf(path, text, { tokens = true } = {}) {
   }
 
   // version constants and module constants: the module's top level
+  const opening = ast.comments.filter(c => c.end <= (ast.program.body[0]?.start ?? text.length))
   const tops = ast.program.body.flatMap(s => (s.type === 'ExportNamedDeclaration' && s.declaration ? [{ s, d: s.declaration }] : [{ s, d: s }]))
   const constNodes = new Set()
   for (const { s, d } of tops) {
@@ -289,7 +338,14 @@ export function factsOf(path, text, { tokens = true } = {}) {
       const comment = `${leading(s)}\n${sameLine(v)}`
       const lit = stringOf(v.init) ?? (v.init.type === 'NumericLiteral' ? v.init.value : v.init.type === 'TSAsExpression' ? (stringOf(v.init.expression) ?? (v.init.expression.type === 'NumericLiteral' ? v.init.expression.value : null)) : null)
       if (lit != null && UPPER.test(name)) f.constants.push({ name, value: lit, line: lineAt[v.start] })
-      if (lit != null && UPPER.test(name) && !NOT_VERSION.test(name) && (VERSION_NAME.test(name) || VERSION_FILE.test(path) || RAISED.test(leading(s).replace(/\n\s*\*?\s*/g, ' ')))) f.versions.push({ name, value: lit, line: lineAt[v.start] })
+      if (lit != null && UPPER.test(name) && !NOT_VERSION.test(name) && (VERSION_NAME.test(name) || VERSION_FILE.test(path) || RAISED.test(leading(s).replace(/\n\s*\*?\s*/g, ' ')))) {
+        // (its own comment's first sentence, or a sentence of the file's opening comment that names it: a version's later
+        // sentences, and other comments, are often history, which names the schemas of other things)
+        const naming = new RegExp(`(?<![\\w$])${name}(?![\\w$])`)
+        const own = sentencesOf(`${adjacent(s)}\n${sameLine(v)}`)[0] ?? ''
+        const schema = SCHEMA_NAME.test(name) || (!COMPUTED_CHANGED.test(own) && (STORED_FORM.test(own) || opening.some(c => sentencesOf(c.value).some(t => naming.test(t) && STORED_FORM.test(t)))))
+        f.versions.push({ name, value: lit, line: lineAt[v.start], schema })
+      }
       if (UPPER.test(name)) {
         const value = numberOf(v.init)
         if (value != null) {
@@ -321,7 +377,9 @@ export function factsOf(path, text, { tokens = true } = {}) {
     if (isStmt) stmtStack.push(node)
     let fn = null
     if (FUNCTION.has(node.type) && node.body) {
-      fn = { line: lineAt[node.start], endLine: lineAt[node.end - 1], start: node.start, end: node.end, parent: fnStack.at(-1) ?? null, name: nameOf(node.id) ?? nameOf(node.key) ?? (parent?.type === 'VariableDeclarator' ? nameOf(parent.id) : null) }
+      // (a function's name: its own, else the name it is bound to: a variable, a property, a class field, an assignment's target)
+      const bound = parent?.type === 'VariableDeclarator' ? nameOf(parent.id) : /^(?:ObjectProperty|ClassProperty|ClassPrivateProperty)$/.test(parent?.type ?? '') ? (nameOf(parent.key) ?? parent.key?.id?.name ?? null) : parent?.type === 'AssignmentExpression' ? textOf(text, parent.left).slice(0, 40) : null
+      fn = { line: lineAt[node.start], endLine: lineAt[node.end - 1], start: node.start, end: node.end, parent: fnStack.at(-1) ?? null, name: nameOf(node.id) ?? nameOf(node.key) ?? node.key?.id?.name ?? bound }
       f.functions.push(fn)
       fnStack.push(fn)
     }
@@ -358,12 +416,30 @@ export function factsOf(path, text, { tokens = true } = {}) {
       case 'TSAnyKeyword':
         f.any++
         break
+      case 'TSAsExpression':
+      case 'TSTypeAssertion': {
+        // (a cast: `x as T` or `<T>x`, `as const` apart; a cast of a cast is one, counted on the outer; `as never`, `as any`
+        // and a cast through another type are unsafe)
+        if (isConst(node.typeAnnotation) || parent?.type === 'TSAsExpression' || parent?.type === 'TSTypeAssertion') break
+        const line = lineAt[node.start]
+        f.casts.cast.push(line)
+        const t = node.typeAnnotation?.type
+        if (t === 'TSNeverKeyword' || t === 'TSAnyKeyword' || node.expression?.type === 'TSAsExpression' || node.expression?.type === 'TSTypeAssertion') f.casts.unsafe.push(line)
+        break
+      }
+      case 'TSNonNullExpression':
+        f.casts.nonNull++
+        break
       case 'ArrayExpression': {
         const strings = node.elements.map(stringOf)
         // (names: strings of 40 characters at most; a list of longer ones is text, TeX code, a message)
         if (strings.length >= 3 && strings.every(s => s != null && s.length <= 40)) {
           const owner = parent?.type === 'VariableDeclarator' ? nameOf(parent.id) : parent?.type === 'NewExpression' ? nameOf(stmtDeclName(stmt)) : nameOf(stmtDeclName(stmt))
-          f.lists.push(listOf({ entries: strings, line: lineAt[node.start], name: owner, comment: near(node), form: 'list' }))
+          const l = listOf({ entries: strings, line: lineAt[node.start], name: owner, comment: near(node), form: 'list' })
+          // (our own vocabulary: declared `as const`, its type the literal's, or a schema's enum: not a name list)
+          const vocabulary = ((parent?.type === 'TSAsExpression' || parent?.type === 'TSTypeAssertion') && isConst(parent.typeAnnotation)) || (parent?.type === 'CallExpression' && parent.arguments[0] === node && parent.callee?.type === 'MemberExpression' && nameOf(parent.callee.property) === 'enum')
+          if (vocabulary) f.vocabularies.push({ ...l, class: 'vocabulary' })
+          else f.lists.push(l)
         }
         break
       }
@@ -420,6 +496,10 @@ export function factsOf(path, text, { tokens = true } = {}) {
     }
   }
   for (const fn of f.functions) {
+    // (a function's length: the code lines from its first line to its last, its nested functions' among them)
+    let code = 0
+    for (let l = fn.line; l <= fn.endLine; l++) if (kinds[l - 1] === 'code') code++
+    fn.code = code
     delete fn.start
     delete fn.end
   }
@@ -427,6 +507,44 @@ export function factsOf(path, text, { tokens = true } = {}) {
   return f
 }
 
+/** the comment lines of a text that tell history (HISTORY), by line number: each comment `{ start, value }` cut at its
+ *  newlines, so that a line's comment text is the part of a comment that stands on it */
+function historyIn(text, comments) {
+  const breaks = []
+  for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) breaks.push(i)
+  // (a line's number: one more than the line breaks before the offset)
+  const lineOf = offset => {
+    let lo = 0
+    let hi = breaks.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (breaks[mid] < offset) lo = mid + 1
+      else hi = mid
+    }
+    return lo + 1
+  }
+  const byLine = new Map()
+  for (const c of comments) {
+    const first = lineOf(c.start)
+    c.value.split('\n').forEach((part, i) => byLine.set(first + i, `${byLine.get(first + i) ?? ''} ${part}`))
+  }
+  const h = { todays: [], dated: [], measuredDates: [], named: [] }
+  for (const [line, t] of [...byLine].sort((a, b) => a[0] - b[0])) {
+    if (HISTORY.todays.test(t)) h.todays.push(line)
+    if (HISTORY.dated.test(t)) (MEASUREMENT.test(t) ? h.measuredDates : h.dated).push(line)
+    if (HISTORY.named.test(t)) h.named.push(line)
+  }
+  return h
+}
+/** a comment's sentences: its text with JSDoc's stars and line breaks out, cut after a full stop or a semicolon */
+const sentencesOf = value =>
+  value
+    .replace(/^\s*\*+\s?/gm, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(/(?<=[.;])\s+/)
+    .filter(Boolean)
+const isConst = n => n?.type === 'TSTypeReference' && n.typeName?.type === 'Identifier' && n.typeName.name === 'const'
 const idsOf = p => (!p ? [] : p.type === 'Identifier' ? [p.name] : p.type === 'ObjectPattern' ? p.properties.flatMap(x => idsOf(x.value ?? x.argument)) : p.type === 'ArrayPattern' ? p.elements.flatMap(idsOf) : p.type === 'AssignmentPattern' ? idsOf(p.left) : p.type === 'RestElement' ? idsOf(p.argument) : [])
 const stmtDeclName = s => (s?.type === 'VariableDeclaration' ? s.declarations[0]?.id : s?.type === 'ExportNamedDeclaration' && s.declaration?.type === 'VariableDeclaration' ? s.declaration.declarations[0]?.id : s?.id ?? null)
 const countLines = kinds => ({ code: kinds.filter(k => k === 'code').length, comment: kinds.filter(k => k === 'comment').length, blank: kinds.filter(k => k === 'blank').length })
@@ -464,19 +582,28 @@ export function alternativesOf(pattern) {
   return words.filter(w => /^\\?[A-Za-z@][A-Za-z@*-]+$/.test(w))
 }
 
-/** a numeric literal's class (census.mjs DEFINITIONS `thresholds`): `conversion` (a unit's factor or a representation's
- *  bound, its name or comment naming the unit), `structural` (0, 1 or -1: a sign, an emptiness, the first), `code` (written
- *  in hex, octal or binary: a code point or a mask), `borderline` (its comment cites a definition, which the census cannot
- *  hold the value to; or a unit factor whose unit is not named), else `tuned` (`evidence`: its comment cites a paper, the
- *  corpus or a measurement; `reason`: it has a comment at all) */
+/** a numeric literal's class (census.mjs DEFINITIONS `thresholds`, `budgets`): `conversion` (a unit's factor or a
+ *  representation's bound, its name or comment naming the unit), `structural` (0, 1 or -1: a sign, an emptiness, the
+ *  first), `code` (written in hex, octal or binary: a code point or a mask), `budget` (a whole number named as a time, a
+ *  size or a count the code may spend or hold, not in a document's unit: with its `unit` and its `source`, `measured`,
+ *  `platform` or null), `borderline` (its comment cites a definition, which the census cannot hold the value to; or a unit
+ *  factor whose unit is not named), else `tuned` (`evidence`: its comment cites a paper, the corpus or a measurement;
+ *  `reason`: it has a comment at all) */
 export function thresholdOf(t) {
   // (its comment kept short: the reason the list prints beside it)
   const why = (t.comment ?? '').replace(/^\s*\*+\s?/gm, '').replace(/\s+/g, ' ').trim().slice(0, 140)
   const out = { ...t, comment: undefined, why }
   const words = `${t.name ?? ''}\n${t.comment ?? ''}`
+  const parts = (t.name ?? '').split('.').filter(Boolean)
   if (/^-?0[xXoObB]/.test(t.raw)) out.class = 'code'
   else if (t.value === 0 || t.value === 1 || t.value === -1) out.class = 'structural'
-  else if (UNIT_FACTORS.has(Math.abs(t.value))) out.class = UNIT_WORDS.test(words) ? 'conversion' : 'borderline'
+  else if (parts.some(p => (UPPER.test(p) ? BUDGET_UPPER : BUDGET_CAMEL).test(p)) && Number.isInteger(t.value) && !TYPE_UNITS.test(t.comment ?? '')) {
+    // a budget: what the code may spend or hold, its unit by its name or comment, its source a measurement or a platform's limit
+    out.class = 'budget'
+    const first = sentencesOf(t.comment ?? '')[0] ?? ''
+    out.unit = (BUDGET_UNITS.find(u => parts.some(p => u.name.test(p))) ?? BUDGET_UNITS.find(u => u.words.test(first)))?.unit ?? 'count'
+    out.source = BUDGET_MEASURED.test(t.comment ?? '') ? 'measured' : CITES_DEFINITION.test(t.comment ?? '') || PLATFORM_LIMIT.test(t.comment ?? '') ? 'platform' : null
+  } else if (UNIT_FACTORS.has(Math.abs(t.value))) out.class = UNIT_WORDS.test(words) ? 'conversion' : 'borderline'
   else if (CITES_DEFINITION.test(t.comment ?? '') && !CITES_EVIDENCE.test(t.comment ?? '')) out.class = 'borderline'
   else out.class = 'tuned'
   out.evidence = CITES_EVIDENCE.test(t.comment ?? '')

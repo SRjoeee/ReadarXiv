@@ -259,6 +259,24 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     const prev = lines[k]
     return !!prev && prev.page === sl.page && sl.baseline > prev.baseline + 0.05 && Math.min(prev.x1, sl.x1) > Math.max(prev.x0, sl.x0)
   }
+  // (the line before a run's boundary is the run's last line, TeX's own law: where a display begins, TeX breaks the paragraph
+  // so far as a paragraph, \parfillskip appended (The TeXbook ch. 19; tex.web §1145, init_math's line_break), so that line
+  // ends where its text ends, ragged, and never in a discretionary hyphen. A boundary is a kept region TeX set between two
+  // partial paragraphs of the unit, whatever it holds: the next slot the walk opens lies after more of them (a slot's
+  // `after`) than the line's own. On the in-order walk the region's break ends that line (below, the blockTo token); where a
+  // run's text fits its own slots at no state and the walk's last resort runs it on past the region (layoutUnit2's
+  // `strict` false: `spilled`), the line before the region is still its run's last: it ends at a legal break that is no
+  // hyphenation point, and is set ragged (advance). 2610.21106v1-zh p3's remark with Google's text: "Hes-" before the display
+  // and "sian" after it)
+  const nextSlotOf = from => {
+    let q = from + 1
+    while (q < slots.length && overLast(slots[q])) q++
+    return q
+  }
+  const beforeBoundary = () => {
+    const q = nextSlotOf(li)
+    return q < slots.length && (slots[q].after ?? 0) > (slots[li].after ?? 0)
+  }
   // (the frame breaks the lines hold (the pageBreak token, below: a page's or a column's), in the text's order: { pg, fr, at,
   // line, sent }, `fr` the frame it sends the text to (the unit's block it begins with, `blockBase` the run's first block's
   // place in the unit: a run laid alone), `pg` its page, `at` the token's index and `line` the line that holds it, `sent` once
@@ -330,13 +348,14 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       carry(was)
       return
     }
-    li++
-    while (li < slots.length && overLast(slots[li])) li++
+    li = nextSlotOf(li)
     if (li >= slots.length) return
     if ((slots[li].after ?? 0) > consumed) {
       if (strict === true) { stop = true; return }
       spilled = true
     }
+    // (the line left before a run's boundary is the run's last: ragged, as a region's break ends it, beforeBoundary)
+    if ((slots[li].after ?? 0) > (line.after ?? 0)) { trim(line); line.ends = true }
     open()
   }
   // a group's widths, tokens `from` to `end` on the line in hand, with its punctuation compressed: at the line's start an
@@ -694,8 +713,9 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       i = j
       continue
     }
-    // a word hyphenated: the most of it that fits, with its hyphen
-    if (P.hyphen && t0.hyph && t0.s) {
+    // a word hyphenated: the most of it that fits, with its hyphen; never on the line before a run's boundary, its run's last
+    // line (beforeBoundary)
+    if (P.hyphen && t0.hyph && t0.s && !beforeBoundary()) {
       const word = t0.s
       const pts = breakPoints(word.replace(/[^A-Za-zÀ-ɏЀ-ӿ]+$/, ''), t0.hyph, P.patterns?.[t0.hyph] ?? null, P.hyphenation[t0.hyph])
       const asp = items[0].asp

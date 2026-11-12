@@ -4,11 +4,14 @@
 // fills each at its own leading or holds TeX's share (pass.ts framed), one on a page where today's held a paragraph's gap to the
 // next one's leading (tap.ts flooredIn: the gap ruling of 2026-11-08), and one on a page of a unit whose fill leadings option (i)
 // moves (pass.ts laysOf `lead`: the owner's of 2026-11-10). The corpus: lab/typeset/gate.mjs.
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { type MeasureTable, MissingMeasure, tableMetrics } from '../../src/metrics/table.ts'
+import type { Metrics } from '../../src/types.ts'
 import { readerDump } from './display.ts'
 import { framed, laysOf, trackedCells } from './pass.ts'
 import { gatePair } from './gate.ts'
-import { firstDifference, flooredIn, hasDerived, hasTap, roomUnderIn } from './tap.ts'
+import { firstDifference, flooredIn, hasDerived, hasTap, readGz, roomUnderIn, TAP } from './tap.ts'
 import { hasCache } from './today.ts'
 
 const PAIRS = ['2610.21377v1-zh', '1512.03385v1-ja.pack', '1706.03762v7-de.pack']
@@ -59,3 +62,40 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)(
       })
   },
 )
+
+// The runner measures with the Metrics it is given (lab/typeset/gate.mjs: the tap's table, then the reader's served faces, as
+// gate-l1.mjs). 2608.25210v2-zh's ord 425: the port's breaker cuts "Comput-" where today's walk never cut (round 8 B5's
+// literal-fixes), so the tap's table, today's measures alone, holds no width of it and the unit is left unfit; given a
+// measurer of what the table lacks, it is laid.
+describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)('the runner: the Metrics its lays measure with', () => {
+  const PAIR = '2608.25210v2-zh'
+  const ORD = 425
+  const table = tableMetrics(readGz(join(TAP, 'metrics', `${PAIR}.metrics.json.gz`)) as MeasureTable)
+  // (the test's own measurer of a text the table lacks: half an em a character, an ink 0.7 em over and 0.2 under)
+  const halfEm = (size: number, text: string) => (size * [...text].length) / 2
+  const lacking =
+    <A extends unknown[], R>(f: (...a: A) => R, g: (...a: A) => R) =>
+    (...a: A): R => {
+      try {
+        return f(...a)
+      } catch (e) {
+        if (!(e instanceof MissingMeasure)) throw e
+        return g(...a)
+      }
+    }
+  const layered: Metrics = {
+    ready: table.ready,
+    advance: lacking(table.advance, (_f, size, text) => halfEm(size, text)),
+    ink: lacking(
+      table.ink,
+      (_f, size, text) => [size * 0.7, size * 0.2, halfEm(size, text)] as [number, number, number],
+    ),
+  }
+
+  it(`leaves ${PAIR} ord ${ORD} unfit on the tap's table alone, and lays it on a Metrics that measures what the table lacks`, {
+    timeout: 180_000,
+  }, () => {
+    expect(gatePair(PAIR).units.some((u) => u.ord === ORD)).toBe(false)
+    expect(gatePair(PAIR, { metricsOf: () => layered }).units.some((u) => u.ord === ORD)).toBe(true)
+  })
+})

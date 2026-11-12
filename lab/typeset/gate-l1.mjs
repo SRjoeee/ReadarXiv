@@ -12,6 +12,8 @@
 // stands past its ink (round B13, the coordinator's ruling (b): an end mark set flush to the measure's end, as TeX set it).
 // With --entry, I6 across the pages' lays (gate-l1.ts, cross-lay.ts): each unit begun on a pass page as every page's lay that
 // runs that pass lays it; one laid otherwise by another cause than the head pass's known one fails the run (exit 1).
+// I3 (no unit's ink over another's, gate-l1.ts invariantsOf) reads a line from its first item to its last glyph's ink (the
+// product's inkEndOf), a run's ink right the table lacks the served faces' (the google-lay lane, 2026-11-12).
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { readerDump } from '../../packages/typeset/tests/replay/display.ts'
@@ -129,7 +131,7 @@ for (const pair of pairs) {
   if (process.env.AXT_GATE_OVER || process.env.AXT_GATE_PAIRS) console.log(`PAIR ${pair}`)
   let g
   judging = pair
-  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf }), reading: READING, substitute: SUBST, entry: ENTRY, accept }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
+  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf, served }), reading: READING, substitute: SUBST, entry: ENTRY, accept }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
   count.laid += g.units.length
   count.adapted += g.setting.size
   count.pages += g.pages

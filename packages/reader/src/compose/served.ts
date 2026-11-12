@@ -14,8 +14,9 @@
 // for now. A table (the index, a group's, a language's patterns) is asked once a visit: one not there, or failing for now, is
 // none for the visit (the faces it would give lost, told once each; the language hyphenates nothing). A slice is fetched as
 // data and made a FontFace of its face's family, weight and style, its code points as its unicode-range (never imported:
-// compose/faces.ts says why), added to the document while the reader lives and taken out with it; one not there is lost at
-// once, one failing for now asked again by the next wave that wants it, and lost if it fails again.
+// compose/faces.ts says why), added to the document with the other slices of the ask that needs it, in one stretch once they
+// are all in (`addIn`: one change of the document's fonts an ask), while the reader lives, and taken out with it; one not there
+// is lost at once, one failing for now asked again by the next wave that wants it, and lost if it fails again.
 // A face is the typesetter's font string (typeset types.ts FaceId: `400 100px "axt-nimbus-roman", "axt-lm-math"`), each family
 // the catalogue's (typeset data/faces.ts FACES), never a system face nor a generic family.
 //
@@ -380,6 +381,28 @@ export function createServed(o: {
     lost = new Set<string>(),
     told = new Set<string>()
   const added: FontFaceLike[] = []
+  /** the slices loaded and not in the document yet: each added with the others of the ask that needs it (`addIn`) */
+  const inn = new Map<string, FontFaceLike>()
+  /**
+   * The slices of `keys` loaded and not in the document yet, added in one stretch, and only then ready to be measured: one
+   * change of the document's fonts an ask instead of one a slice. Chromium re-lays every text node laid out at each change
+   * ("Fonts changed"), so a slice added as it comes makes up to two whole-document relayouts a page (measured over a scroll of
+   * two papers: 41-48 such relayouts, against 22-25 in the released reader, which adds a wave's faces in one task:
+   * verification/reader-perf.md §3f). An ask is one page's (the composer asks a page's faces apart, so that no page waits for
+   * another's), so no page is held by another's slices; and none is measured or drawn with a fallback face, since a slice is
+   * ready (`loaded`) only once it is in the document
+   */
+  const addIn = (keys: Iterable<string>) => {
+    if (gone) return
+    for (const k of keys) {
+      const f = inn.get(k)
+      if (!f) continue
+      inn.delete(k)
+      f.add()
+      added.push(f)
+      loaded.add(k)
+    }
+  }
   /** a face lost: its texts left the original's, told once; one lost while only the text rendering's probe asked it
    *  (`quiet`), told once a page's text asks it (a face no page draws is no loss of the page's) */
   const unseen = new Set<string>()
@@ -413,7 +436,7 @@ export function createServed(o: {
   /** the demands of each slice waiting for its slot: let go there, never asked, where none of them wants it any more */
   const demands = new Map<string, (() => boolean)[]>()
   const loadSlice = (face: ServedFace, slice: Slice, wanted: () => boolean, quiet = false): Promise<void> => {
-    if (loaded.has(slice.key) || lost.has(slice.key)) return Promise.resolve()
+    if (loaded.has(slice.key) || inn.has(slice.key) || lost.has(slice.key)) return Promise.resolve()
     let p = loading.get(slice.key)
     if (p) {
       demands.get(slice.key)?.push(wanted)
@@ -438,9 +461,8 @@ export function createServed(o: {
           unicodeRange: unicodeRangeOf(slice.ranges),
         })
         if (gone) return
-        f.add()
-        added.push(f)
-        loaded.add(slice.key)
+        // (in the document with the others of its ask, once they are all in: addIn)
+        inn.set(slice.key, f)
       } finally {
         free()
       }
@@ -489,17 +511,19 @@ export function createServed(o: {
       runsCache.clear()
     }
   }
-  /** the tables a font string needs read, then the slices its text needs loaded, while `wanted` */
-  const load = async (font: string, text: string, wanted: () => boolean, quiet = false) => {
+  /** the tables a font string needs read, then the slices its text needs loaded, while `wanted`: the slices' keys (added to
+   *  the document by the ask, addIn) */
+  const load = async (font: string, text: string, wanted: () => boolean, quiet = false): Promise<string[]> => {
     await tablesOf(font, quiet)
     // (a face whose table only the probe found not to be had, now asked by a page: told)
     if (!quiet) for (const f of facesOf(font)?.faces ?? []) if (unseen.has(f.id) && !f.slices?.length) tellLost(f.id)
-    if (gone || !wanted()) return
+    if (gone || !wanted()) return []
     const runs = runsOf(font, text)
-    if (!runs || runs === 'never') return
+    if (!runs || runs === 'never') return []
     await Promise.all(runs.map((r) => loadSlice(r.face, r.slice, wanted, quiet)))
     // (a slice only the probe found lost, now needed by a page: its face told)
     if (!quiet) for (const r of runs) if (unseen.has(r.face.id) && lost.has(r.slice.key)) tellLost(r.face.id)
+    return runs.map((r) => r.slice.key)
   }
   // ---- the patterns
   const hyphs = new Map<string, Promise<Patterns | null>>()
@@ -596,18 +620,33 @@ export function createServed(o: {
     },
     familyOf,
     async probeFace(text) {
-      await load(PROBE_FACE, text, () => true, true).catch((e) => o.warn?.(`the faces of ${PROBE_FACE}`, e))
+      addIn(
+        await load(PROBE_FACE, text, () => true, true).catch((e) => {
+          o.warn?.(`the faces of ${PROBE_FACE}`, e)
+          return []
+        }),
+      )
       return metrics.ready(PROBE_FACE, text) === true ? PROBE_FACE : null
     },
     async ready(items, wanted = () => true) {
       const waits: Promise<unknown>[] = []
+      const keys: string[] = []
       for (const it of items) {
         if (typeof it === 'string') continue
         const [id, text] = it
         if (id === HYPH_WAIT) waits.push(hyphOf(text))
-        else waits.push(load(id, text, wanted).catch((e) => o.warn?.(`the faces of ${id}`, e)))
+        else
+          waits.push(
+            load(id, text, wanted).then(
+              (k) => void keys.push(...k),
+              (e) => o.warn?.(`the faces of ${id}`, e),
+            ),
+          )
       }
       await Promise.all(waits)
+      // (the ask's slices in the document together, once every one is in, or let go: those of a page gone that did come in
+      // are added all the same, ready for the page that asks them next)
+      addIn(keys)
     },
     get asked() {
       return asked
@@ -621,6 +660,7 @@ export function createServed(o: {
       for (const go of waiting.splice(0)) go(false)
       for (const f of added) f.remove()
       added.length = 0
+      inn.clear()
       sheet.remove()
     },
   }
