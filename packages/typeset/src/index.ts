@@ -259,7 +259,7 @@ export {
 } from './emit/links.ts'
 export { layMember, type MemberLay, type Prepared } from './lay/member.ts'
 export { type FlowLay, type FlowMember, layFlowPrepared } from './lay/flow.ts'
-export { layPagePrepared, type PageMember, type PreparedPage } from './lay/page.ts'
+export { layPagePrepared, type PageMember, type PreparedPage, type UnitLay } from './lay/page.ts'
 export { type EntryOptions, layPage } from './lay/entry.ts'
 export { type Adapted, type AdaptInput, adapt, rectOf, rowLinesOf } from './lay/adapt.ts'
 export { measured, paperOf, readMember, rowPieces, srcOfEl, srcOfSpan } from './lay/read.ts'

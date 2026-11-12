@@ -35,7 +35,7 @@ import { figuresOf } from './figures.ts'
 import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
 import { type LinkFate, type LinkOwner, linksOf } from './links.ts'
 import { inFrame, inkOfLine, litLaid, litOfA, pageBoxOf, runBoxOfA, widened } from './lit.ts'
-import { layPagePrepared, SAME } from './page.ts'
+import { layPagePrepared, SAME, type UnitLay } from './page.ts'
 import { type CellAnswer, namesGroup, type TableGroup, tableGroups, unchanged } from '../shared/table-groups.ts'
 import { carriedOf, tokenBand, tokenBox } from '../emit/sentences.ts'
 import { CJK, cjkClassRe } from '../breaker/script.ts'
@@ -48,6 +48,9 @@ import { waitOf } from './wait.ts'
 export type EntryOptions = {
   /** where given, what became of each of the part's links (lay/links.ts LinkFate, by its index): the gate's count */
   linkFates?: LinkFate[]
+  /** where given, every member begun on a pass page of the call, as laid and filled (lay/page.ts UnitLay), a member of a pass
+   *  page with no line on this one too: the cross-lay check's (I6, every page's lay that runs a pass lays its units alike) */
+  lays?: UnitLay[]
 }
 
 const LABEL_KEPT = 4
@@ -498,6 +501,26 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   let fig = figuresOf(part, figs, rows, { paper, R, metrics })
   faces.push(...fig.wait)
   for (const [ord, w] of fig.why) state.set(ord, w)
+  // (the factor of every figure's set whose figure texts the paragraph path lays in this call, S.figures' over the figure texts
+  // of the set's own page: the part of a later page holds that page's flows where it is a pass page (design-a §1.3 (b)), and
+  // every page's lay that holds the set caps them at it alike (I6). Read off this page's figure texts alone, a later page's lay
+  // found no factor and laid them at their own size: 2610.19159v1-ja p57's set at 0.66 by page 57's lay, at 1.0 by page 58's.
+  // Its faces waited for as any: the factor is measured. A set whose figure texts stood on two pages would take the least of
+  // its pages', whichever page lays it)
+  const plain = new Set(figs.map((m) => m.ord))
+  const setPages = new Set<number>()
+  for (const t of part.ties ?? [])
+    if (t.rule === 'size' && !t.ords.every((o) => plain.has(o)))
+      for (const m of figs) {
+        const p = m.lines[0]?.[0]
+        if (p !== undefined && p !== page && t.ords.includes(m.ord)) setPages.add(p)
+      }
+  const setScales = new Map(fig.scales)
+  for (const p of setPages) {
+    const there = figuresOf(part, figs, rows, { paper, R, metrics, page: p })
+    faces.push(...there.wait)
+    for (const [first, k] of there.scales) setScales.set(first, Math.min(k, setScales.get(first) ?? k))
+  }
   // (one state per call: a face not loaded leaves the whole page waiting, as a row not in does)
   if (faces.length) return waitAll(faces)
   // (each read member's setting, its flow taken from its end: a run-in head's follower is open only where the follower is set,
@@ -626,7 +649,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
               rule: 'size' as const,
               ords: t.ords,
               ...(t.ords.some((o) => figureOrds.has(o))
-                ? { floor: R.floorMin, ...(fig.scales.has(t.ords[0]!) ? { least: fig.scales.get(t.ords[0]!)! } : {}) }
+                ? { floor: R.floorMin, ...(setScales.has(t.ords[0]!) ? { least: setScales.get(t.ords[0]!)! } : {}) }
                 : {}),
             },
           ],
@@ -651,6 +674,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
     ties,
     R,
   )
+  o.lays?.push(...laid.passed)
   const fitOf = new Map(laid.fits)
   const caps = new Map<number, number>()
   for (const [first, k] of fig.scales) {

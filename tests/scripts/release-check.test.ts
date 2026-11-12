@@ -121,6 +121,12 @@ describe("a gate's output, read as the gate states it", () => {
     expect(typesetOf('I10, the sentence cover (cover.ts): 100 pieces; 0 faults').I10).toBe(0)
     // (an entry that laid nothing counted nothing: "0 faults" over 0 pieces is no count)
     expect(typesetOf('I10, the sentence cover (cover.ts): 0 member-pages lit, 0 pieces; 0 faults').I10).toBeUndefined()
+    // (I6 across the pages' lays: the head pass's known cause apart from any other)
+    expect(
+      typesetOf(
+        "I6 across the pages' lays (cross-lay.ts): 2272 units begun on a pass page, 272 laid by two pages' lays or more; 3 laid otherwise: 2 by the head pass (known: headOf reads the paragraph over the unit as one lay filled it and the other did not), 1 by another cause",
+      ),
+    ).toEqual({ I6twice: 272, I6head: 2, I6other: 1 })
   })
 
   it("reads the corpus runner's log: a refused paper, a missing compile, a failure and the proofs' counts apart", () => {
@@ -198,14 +204,17 @@ describe('the equivalence gates, in either shape of their tools', () => {
   it('holds I10 by a gate of its own, the runner with the reading from the part, counted only where the entry laid pieces', () => {
     const cover = gate('sentence-cover')
     const ctx = ctxAt('/repo', '/work')
-    expect(cover.holds).toEqual(['I10'])
+    expect(cover.holds).toEqual(['I10', 'I6'])
     expect(cover.steps!(ctx)[0]?.cmd).toEqual(['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', '--out=/work/sentence-cover'])
     // (typeset-parts, today's reading, lays no entry: it holds no I10 and asks for none)
     expect(gate('typeset-parts').holds).not.toContain('I10')
     expect(gate('typeset-parts').steps!(ctx)[0]?.cmd).not.toContain('--entry')
-    const said = (pieces: number, faults: number) =>
-      `{"pairs":123,"laid":1,"pages":2}\nI10, the sentence cover (cover.ts): 9 member-pages lit, ${pieces} pieces; ${faults} faults`
-    expect(cover.judge!(ctx, [run(0, said(4767634, 0))])).toMatchObject({ pass: true, numbers: { I10: 0, pieces: 4767634 }, findings: { I10: { held: true, count: 0 } } })
+    const said = (pieces: number, faults: number, other = 0) =>
+      `{"pairs":123,"laid":1,"pages":2}\nI10, the sentence cover (cover.ts): 9 member-pages lit, ${pieces} pieces; ${faults} faults\nI6 across the pages' lays (cross-lay.ts): 90 units begun on a pass page, 9 laid by two pages' lays or more; ${2 + other} laid otherwise: 2 by the head pass (known: headOf reads the paragraph over the unit as one lay filled it and the other did not), ${other} by another cause`
+    expect(cover.judge!(ctx, [run(0, said(4767634, 0))])).toMatchObject({ pass: true, numbers: { I10: 0, pieces: 4767634, I6head: 2, I6other: 0 }, findings: { I10: { held: true, count: 0 }, I6: { held: true, count: 0 } } })
+    // (a unit laid otherwise by two pages' lays, another cause than the head pass's: the run exits 1 and ends whole, I10 still
+    // counted, I6 counted against)
+    expect(cover.judge!(ctx, [run(1, said(4767634, 0, 1))])).toMatchObject({ pass: false, findings: { I10: { held: true, count: 0 }, I6: { held: false, count: 1 } } })
     expect(cover.judge!(ctx, [run(0, said(4767634, 5))])).toMatchObject({ pass: false, findings: { I10: { held: false, count: 5 } } })
     // (nothing laid: no finding, no pass; a run that did not end whole: its count is not read)
     const none = cover.judge!(ctx, [run(1, said(0, 0))])

@@ -27,7 +27,8 @@ import { MissingMeasure } from '../../src/metrics/table.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { V0Piece } from '../../src/unit/breaks.ts'
 import { type DoorRow, doorRows, doorSentences } from './rows.ts'
-import { layPagePrepared, type PageMember } from '../../src/lay/page.ts'
+import { layPagePrepared, type PageMember, type UnitLay } from '../../src/lay/page.ts'
+import { type CrossLay, crossLayOf } from './cross-lay.ts'
 import { type FitMeasure, fitMeasure } from '../../src/breaker/measure.ts'
 import type { Face } from '../../src/breaker/tokens.ts'
 import type { Metrics, RuleParams, Rows } from '../../src/types.ts'
@@ -97,6 +98,8 @@ export type GateL1 = {
     /** I10, the sentence cover over every member lit (cover.ts): each piece drawn in exactly one sentence on each pane, the
      *  panes' sentences the same */
     cover: Cover
+    /** I6 across the pages' lays (cross-lay.ts): each unit begun on a pass page as every page's lay that runs that pass lays it */
+    crossLay?: CrossLay
   }
 }
 
@@ -979,6 +982,8 @@ export function gateL1Pair(
       said: (k) => said.has(k),
     }
   }
+  // (the entry's lays of each unit begun on a pass page, by the page whose lay laid it: I6 across the lays, cross-lay.ts)
+  const laysOf = new Map<number, Map<number, UnitLay>>()
   for (const [pg, part] of [...bundle.parts].sort((a, b) => a[0] - b[0])) {
     out.pages++
     // (its flows, cut where a member is not set: the one after it starts where TeX set it, as after a member left)
@@ -1038,14 +1043,19 @@ export function gateL1Pair(
     if (got && out.entry && entryRows && metrics) {
       const t1 = performance.now()
       const linkFates: LinkFate[] = []
+      const lays: UnitLay[] = []
       const page = layPage(
         part as Part,
         entryRows,
         { ...rulesFor(L.target as never), set: R, hyph: patternsSeen ?? {} },
         metrics,
-        { linkFates },
+        { linkFates, lays },
       )
       out.entry.ms.push(performance.now() - t1)
+      for (const x of lays) {
+        const by = laysOf.get(x.ord) ?? new Map<number, UnitLay>()
+        laysOf.set(x.ord, by.set(pg, x))
+      }
       coverOf(out.entry.cover, page, part as Part, metrics, pair)
       // (the links' fates, the dropped with an example each; the laid members' boxes on both panes)
       ;((part as Part).links ?? []).forEach((l, i) => {
@@ -1158,6 +1168,7 @@ export function gateL1Pair(
     }
   }
   if (out.entry) coverDone(out.entry.cover, pair)
+  if (out.entry && laysOf.size) out.entry.crossLay = crossLayOf(laysOf)
   for (const u of L.units) {
     const x = dumped.get(u.ord)
     if (x)

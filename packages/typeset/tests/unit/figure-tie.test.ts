@@ -6,6 +6,7 @@
 import type { Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
+import type { UnitLay } from '../../src/lay/page.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { Item, Metrics, Rows } from '../../src/types.ts'
 
@@ -76,5 +77,58 @@ describe('one size a group: a label and a figure text laid as a paragraph in one
     ])
     expect(sizes(partOf([label, para], false), rows)).toEqual({ 0: ['laid', [10]], 1: ['laid', [6.75]] })
     expect(sizes(partOf([label, para], true), rows)).toEqual({ 0: ['laid', [6.75]], 1: ['laid', [6.75]] })
+  })
+  it('lays the paragraph at its set’s factor from every page’s lay that holds it (I6)', () => {
+    // (2610.19159v1-ja p57: a figure's set on a page whose paragraph runs on to the next page. The next page's part holds every
+    // flow with a line on that paragraph's first page (design-a §1.3 (b)), the set's too, and its lay runs that page's pass;
+    // it laid the tied figure text at its own size, 1.0, where the figure's page lays it at the set's 0.66: the set's factor
+    // was S.figures' over the figure texts of the page laid alone)
+    const label = member(0, 400, 160, 170, 'Sand the top')
+    const para = member(1, 388, 180, 300)
+    const line = (page: number, y: number): Placed['lines'][number] => [
+      page,
+      0,
+      100,
+      300,
+      y,
+      y + 7.5,
+      y - 2.5,
+      100,
+      300,
+      0,
+      10,
+    ]
+    const runOn: Placed = {
+      ord: 2,
+      kind: 'para',
+      text: idOf(3),
+      lead: 12,
+      style: { role: 'sans', size: 10, design: 'LMSans10-Regular' },
+      align: 'j',
+      lines: [line(1, 120), line(1, 108), line(2, 700), line(2, 688)],
+      room: { below: 20, next: 24 },
+    }
+    // (ideographs, escaped: the label's ten at 10 take 100 of its 70, its set at 0.7; the paragraph's seven fit at its size)
+    const rows = rowsOf([
+      [1, '\u6587'.repeat(10)],
+      [2, '\u6587'.repeat(7)],
+      [3, '\u6587'.repeat(72)],
+    ])
+    const laysOf = (page: number) => {
+      const part: Part = {
+        ...partOf([label, para, runOn], false),
+        page,
+        ties: [{ rule: 'size', ords: [0, 1] }],
+      }
+      const lays: UnitLay[] = []
+      layPage(part, rows, rulesFor('zh'), metrics, { lays })
+      return lays.filter((x) => x.page === 1)
+    }
+    const [one, two] = [laysOf(1), laysOf(2)]
+    expect(one.map((x) => [x.ord, x.state, x.scale])).toEqual([
+      [1, 'laid', 0.7],
+      [2, 'laid', 1],
+    ])
+    expect(two).toEqual(one)
   })
 })

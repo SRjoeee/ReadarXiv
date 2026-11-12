@@ -8,6 +8,7 @@ import type { PageRules } from '../shared/fill-page.ts'
 import { fillPass, type PassUnit } from '../shared/fill-pass.ts'
 import type { FillTarget } from '../shared/fill-target.ts'
 import { tableSettle } from '../shared/table-settle.ts'
+import type { FitState } from '../fit/types.ts'
 import type { LedgerSlot, RuleParams, Unlaid } from '../types.ts'
 import { type FlowMember, layFlowPrepared } from './flow.ts'
 import { fin, layoutOf, linesOf } from './trace.ts'
@@ -24,6 +25,18 @@ export type PageMember = {
   error?: string
   slots: LedgerSlot[]
 }
+/** a member begun on a pass page of the call, as the call laid it and that page's fill left it: every page's lay that runs that
+ *  pass lays it alike (I6), which the cross-lay check compares (EntryOptions.lays) */
+export type UnitLay = {
+  ord: number
+  /** its first page, whose pass filled it */
+  page: number
+  state: PageMember['state']
+  /** where laid: its scale of its own size, the state it was laid at, each line's page and baseline */
+  scale?: number
+  at?: FitState
+  lines?: [page: number, baseline: number][]
+}
 export type PreparedPage = {
   page: number
   members: PageMember[]
@@ -32,6 +45,8 @@ export type PreparedPage = {
   /** every member laid in the call, on any page (a member of a tie the page's part holds may have no line on it): its scale of
    *  its own size */
   fits: [ord: number, scale: number][]
+  /** every member begun on a pass page of the call, as laid and filled (a member of a pass page with no line on this one too) */
+  passed: UnitLay[]
 }
 
 /** two scales of a tie alike: within the fit's thousandths (its caps are floored to them: U.params, a cell's cap) */
@@ -160,6 +175,7 @@ function layPageTied(
         passes: [],
         tables: [],
         fits: [],
+        passed: [],
       }
     }
     return out
@@ -279,5 +295,18 @@ function layPageOnce(
       }
     })
   const fits = all.flatMap((x) => (x.unit?.layout ? [[x.m.ord, x.unit.layout.scale] as [number, number]] : []))
-  return { page, members, passes, tables, fits }
+  const passed = all
+    .filter((x) => passPages.includes(firstPage(x.m)))
+    .map((x): UnitLay => {
+      const L = x.unit?.layout
+      return {
+        ord: x.m.ord,
+        page: firstPage(x.m),
+        state: x.unit ? 'laid' : x.state === 'laid' ? 'cells' : x.state,
+        ...(L
+          ? { scale: L.scale, at: L.state, lines: L.lines.map((l): [number, number] => [l.page, l.baseline]) }
+          : {}),
+      }
+    })
+  return { page, members, passes, tables, fits, passed }
 }

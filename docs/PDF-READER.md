@@ -5148,8 +5148,9 @@ grows only with its page, one size, where every body paragraph of the page is st
 tracking, then the page's size. A paragraph over a page or column break is filled on the page where it begins, each frame at
 its own fill leading under that page's band (§18.11): that page's lay holds every unit with a line on it, a later page's
 paragraphs are not in it, and a unit is laid alike by every page's lay (the composition's determinism, I6:
-`packages/typeset/tests/replay/purity.test.ts`). So a translation that takes N lines of a block of M ends at its own
-leading (M/N − 1) pitches over its original's last line, and more where the band holds it; that is today's fill as well.
+`packages/typeset/tests/replay/purity.test.ts`, and across the pages' lays `lab/typeset/gate-l1.mjs --entry`, §18.54). So a
+translation that takes N lines of a block of M ends at its own leading (M/N − 1) pitches over its original's last line, and
+more where the band holds it; that is today's fill as well.
 Over the 22 parity pairs (B10's drawing: 2,314 paragraphs, theorems, captions and notes, each on each page it is drawn on)
 v2's last line stands as near the original's last line as today's, within 2 pt, on 2,004; nearer by more than 2 pt on 230;
 farther on 80, 27 of them with a line fewer, 50 with as many lines at a closer page target (another paragraph's line count
@@ -5432,6 +5433,38 @@ within one bullet item.
 - **Versions.** PIPELINE must move (the parts' ties); the format does not (a tie's ords as before). A reader of before this
   rule given parts of after it ties the paragraph members among themselves, at the body's floor, and its labels as before; a
   reader of after it given parts of before it lays them as before (no paragraph member in a figure's tie).
+- **Every page's lay alike (I6, 2026-11-12).** The tie's `least` was S.figures' factor over the figure texts of the page laid
+  (`figuresOf` read the part's page alone). A later page's part holds the set's flows where the set's page is one of its pass
+  pages (the first page of a member on it: design-a §1.3 (b)), and its lay runs that page's fill; it found no factor and laid
+  the tie's paragraph members at their own size. 2610.19159v1-ja p57, unit 3883 (a figure text the paragraph path lays, in a
+  set of 14 whose labels S.figures sets at 0.66): 0.66 by page 57's lay, 1.0 by page 58's, whose part holds page 57's flows
+  (a paragraph begun there runs on to it). Nothing was drawn otherwise: the unit's one line is on page 57, drawn from page
+  57's lay; page 58's lay draws nothing of it, and its fill of page 57 had the same target and laid every other unit alike.
+  It would show where such a text tells its page's target (no body unit of two lines begun on the page:
+  `shared/fill-target.ts`) and a unit begun there runs on to the next page, whose lines there come from that page's lay:
+  drawn at a leading of another target than its lines before the break. Now every page's lay reads the factor off S.figures
+  over the figure texts of the set's own page (`lay/entry.ts`, `figuresOf`'s `page`; the least of its pages' should a set
+  stand on two), their faces waited for as any measured face. 36 of the 90 pairs' 2,568 page lays run it, over one other
+  page each (51 sets).
+  `figure-tie.test.ts` ("lays the paragraph at its set's factor from every page's lay that holds it"): a set on page 1 and a
+  paragraph from page 1 to page 2, page 2's lay laid the tied text at 1 where page 1's lays it at 0.7, red at the base.
+- **The check across the pages' lays.** The purity tests compare a member on two pages; a unit of a pass page with no line on
+  the page laid is in no page's members. `layPage` hands, where asked (`EntryOptions.lays`, `lay/page.ts` `UnitLay`), every
+  unit begun on a pass page as it laid and filled it, and `lab/typeset/gate-l1.mjs --entry` (the release check's
+  `sentence-cover`) compares each unit across every page's lay that runs its pass
+  (`packages/typeset/tests/replay/cross-lay.ts`). One laid otherwise fails the run (exit 1), but where the head pass's known
+  cause tells it: §18.11's head (`fill-page.ts` headOf) reads the paragraph over the unit from that paragraph's current
+  layout, filled where its first page is a pass page of the lay and at its fit where not, so the unit under the one-line end
+  of a paragraph begun on the page before is laid lower by one lay than by the other (lane page-target's trace; a ruling waits
+  on its two remedies). Told by what it moves (the head, and else only what the head pass's lay sets: no borrow, the first
+  frame's leading, over the fill's state, and the baselines), counted and listed: over the 90 pairs (r20's parts), 26,251
+  units begun on a pass page, 9,770 laid by two pages' lays or more, 11 laid otherwise, all the head pass's, the same before
+  this change and after.
+  Over the 90 pairs with stored rows (r20's bundles; v2.mjs's lay, the lane's hook): the units begun on a pass page and laid by
+  two pages' lays or more, 10,181 under the defaults and 10,683 every switch on, laid otherwise 12 in each mode, 11 by the
+  head pass and this unit; after, the 11. The drawing the same: no member, line or link moved on the 2,568 pages, both modes.
+  The gate lays the stored rows the runner hands the entry, not v2.mjs's (a joined unit's, a fresh row): 3883 has none
+  there, so the unit test holds this case.
 
 ### 18.55 A list's marker joins no line of the column before it (2026-11-12)
 
