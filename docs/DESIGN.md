@@ -1014,8 +1014,10 @@ only how it meets the rest of the extension.
   ends; `layPagePrepared(page, flows, ties, rules)` lays one page from its own part alone — its flows, its table groups
   (drawn whole or not at all), the page's fill — and gives what is drawn, line by line. No DOM, no clock and no pixel is
   read: widths come from a metrics table (`tableMetrics`), so the same inputs give the same display list
-  (`packages/typeset/tests/replay/purity.test.ts`), and the gates measure what the product runs (`lab/typeset/gate.mjs` over
-  today's members, `lab/typeset/gate-l1.mjs` over the prepare's parts, both against the frozen baseline).
+  (`packages/typeset/tests/replay/purity.test.ts`), and a unit is laid alike by every page's lay that holds it (the lay of a
+  page runs the fill of the first page of each member on it too: `lab/typeset/gate-l1.mjs --entry` compares them,
+  PDF-READER §18.54); the gates measure what the product runs (`lab/typeset/gate.mjs` over today's members,
+  `lab/typeset/gate-l1.mjs` over the prepare's parts, both against the frozen baseline).
 - **The prepare's two halves** (`@readarxiv/engine`; our server runs them, the extension neither). The front half is
   today's front end: it reads a paper's source into units (`src/pdf-reader/engine/source/latex-front.mjs`), writes the
   marks that bracket each unit for TeX and compiles the marked source, an instrument no reader sees

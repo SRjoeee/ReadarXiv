@@ -37,7 +37,7 @@ export const INVARIANTS = [
   {
     id: 'I6',
     says: 'the same inputs give the same bytes (prepare) and the same display list (typesetting on table metrics)',
-    gap: 'the display list is held on one pair (`purity.test.ts`, with lab data); no corpus check of typesetting twice',
+    gap: 'a page laid twice gives the same display list on one pair alone (`purity.test.ts`, with lab data); over the corpus only a unit as every page\'s lay that runs its first page\'s fill lays it (`sentence-cover`)',
   },
   {
     id: 'I7',
@@ -140,6 +140,10 @@ export function typesetOf(text) {
     out.I10pieces = num(cover[1])
     if (out.I10pieces > 0) out.I10 = num(cover[2])
   }
+  // (I6 across the pages' lays, the runner with --entry: the units laid by two pages' lays or more, those laid otherwise by the
+  // head pass's known cause, and by another, which fails the run)
+  const across = /^I6 across the pages' lays \(cross-lay\.ts\): \d+ units begun on a pass page, (\d+) laid by two pages' lays or more; \d+ laid otherwise: (\d+) by the head pass .*, (\d+) by another cause$/m.exec(text)
+  if (across) Object.assign(out, { I6twice: num(across[1]), I6head: num(across[2]), I6other: num(across[3]) })
   const lay = /a page's lay \(layPagePrepared[^)]*\), ms: p50 ([\d.]+), p90 ([\d.]+), p99 ([\d.]+), max ([\d.]+) over (\d+) pages/.exec(text)
   if (lay) Object.assign(out, { layP50: num(lay[1]), layP90: num(lay[2]), layP99: num(lay[3]), layMax: num(lay[4]), layPages: num(lay[5]) })
   const first = /^\{"pairs":.*\}$/m.exec(text)
@@ -380,10 +384,10 @@ export const GATES = [
   },
   {
     id: 'sentence-cover',
-    title: "the sentence cover over this run's prepared parts: each page laid by the entry over the release's stored rows, the reading from the part (lab/typeset/gate-l1.mjs --entry --reading=part); every drawn piece in exactly one sentence on both panes",
+    title: "the sentence cover over this run's prepared parts: each page laid by the entry over the release's stored rows, the reading from the part (lab/typeset/gate-l1.mjs --entry --reading=part); every drawn piece in exactly one sentence on both panes; and each unit laid alike by every page's lay that holds it (I6 across the lays, the head pass's known cause counted apart)",
     tier: 'full',
     stage: 'reader',
-    holds: ['I10'],
+    holds: ['I10', 'I6'],
     after: ['prepare'],
     needs: ctx => [
       exists('the tap', lab(ctx, 'baseline/tap/ledgers')),
@@ -396,11 +400,19 @@ export const GATES = [
     steps: ctx => [
       { cmd: ['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', `--out=${join(ctx.work, 'sentence-cover')}`], slot: 'test', env: { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }, fresh: join(ctx.work, 'sentence-cover') },
     ],
-    // (counted over the pieces the entry drew: a run that laid nothing, or did not end whole, has no count and fails)
+    // (counted over the pieces the entry drew: a run that laid nothing, or did not end whole, has no count and fails; a run whose
+    // exit is a unit laid otherwise by two pages' lays alone (I6 across the lays, another cause than the head pass's) ended whole)
     judge: (ctx, steps) => {
       const t = typesetOf(steps[0]?.text ?? '')
-      const counted = steps[0]?.exit === 0 && t.I10 != null
-      return { pass: counted && t.I10 === 0, numbers: { ...(t.I10 != null ? { I10: t.I10 } : {}), pieces: t.I10pieces ?? 0, pairs: t.pairs }, ...(counted ? { findings: { I10: { held: t.I10 === 0, count: t.I10 } } } : {}) }
+      const whole = steps[0]?.exit === 0 || (steps[0]?.exit === 1 && t.I6other > 0 && t.I10pieces > 0)
+      const counted = whole && t.I10 != null
+      const across = whole && t.I6other != null
+      const findings = { ...(counted ? { I10: { held: t.I10 === 0, count: t.I10 } } : {}), ...(across ? { I6: { held: t.I6other === 0, count: t.I6other } } : {}) }
+      return {
+        pass: counted && t.I10 === 0 && across && t.I6other === 0,
+        numbers: { ...(t.I10 != null ? { I10: t.I10 } : {}), pieces: t.I10pieces ?? 0, pairs: t.pairs, ...(t.I6other != null ? { I6twice: t.I6twice, I6head: t.I6head, I6other: t.I6other } : {}) },
+        ...(Object.keys(findings).length ? { findings } : {}),
+      }
     },
   },
   {

@@ -60,23 +60,24 @@ function unitOf(row: Row | undefined, m: Placed, designs: PaperReading['designs'
 }
 
 /**
- * The figure texts of page `page` among `members` (kind `figure`): each one's outcome, a laid line where drawn, a state where
- * not, and the faces to wait for; and the factor of their sizes each size tie's drawn ones are set at (`scales`, by the tie's
- * first member), which the tie's figure texts another path lays are capped at (one size a group). `caps`: by a tie's first
- * member, the most of their sizes its units are drawn at, where another path laid a figure text of it smaller
+ * The figure texts of the part's page (or `o.page`, another page whose figure texts the part holds) among `members` (kind
+ * `figure`): each one's outcome, a laid line where drawn, a state where not, and the faces to wait for; and the factor of their
+ * sizes each size tie's drawn ones are set at (`scales`, by the tie's first member), which the tie's figure texts another path
+ * lays are capped at (one size a group). `caps`: by a tie's first member, the most of their sizes its units are drawn at, where
+ * another path laid a figure text of it smaller
  */
 export function figuresOf(
   part: Part,
   members: readonly Placed[],
   rows: Rows,
-  o: { paper: PaperReading; R: RuleParams; metrics: Metrics; caps?: ReadonlyMap<number, number> },
+  o: { paper: PaperReading; R: RuleParams; metrics: Metrics; caps?: ReadonlyMap<number, number>; page?: number },
 ): {
   laid: Map<number, Laid['lines']>
   why: Map<number, Unlaid>
   wait: [FaceId, string][]
   scales: Map<number, number>
 } {
-  const page = part.page
+  const page = o.page ?? part.page
   const laid = new Map<number, Laid['lines']>()
   const why = new Map<number, Unlaid>()
   const scales = new Map<number, number>()

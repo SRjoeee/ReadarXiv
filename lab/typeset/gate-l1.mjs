@@ -10,6 +10,8 @@
 // I5 (each line past its slot, gate-l1.ts invariantsOf) reads what is drawn past it: a crop that ends a line by the ink box the
 // part states for it (its element's El.ink, its label's), not by the box it is cut with, whose antialiased margin (0.4 pt a side)
 // stands past its ink (round B13, the coordinator's ruling (b): an end mark set flush to the measure's end, as TeX set it).
+// With --entry, I6 across the pages' lays (gate-l1.ts, cross-lay.ts): each unit begun on a pass page as every page's lay that
+// runs that pass lays it; one laid otherwise by another cause than the head pass's known one fails the run (exit 1).
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { readerDump } from '../../packages/typeset/tests/replay/display.ts'
@@ -54,7 +56,7 @@ if (ENTRY && READING !== 'part') {
   console.error("gate-l1.mjs: --entry needs --reading=part (the entry is laid over the door's rows, read for that reading alone)")
   process.exit(2)
 }
-const entry = { alike: 0, differ: 0, ex: [], ms: [], names: new Map(), links: new Map(), linkEx: new Map(), figures: new Map(), lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 }, cover: { members: 0, pieces: 0, faults: new Map(), ex: new Map(), byPair: new Map() } }
+const entry = { crossLay: { units: 0, twice: 0, head: [], other: [] }, alike: 0, differ: 0, ex: [], ms: [], names: new Map(), links: new Map(), linkEx: new Map(), figures: new Map(), lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 }, cover: { members: 0, pieces: 0, faults: new Map(), ex: new Map(), byPair: new Map() } }
 /** Whether the entry is given a door row. The rows are today's stored replies in today's reading; one that says nothing (the
  *  chain's rule, accept.ts: no letter or digit where the unit has a letter, 'empty') is no translation of its unit under any
  *  reading, and the chain makes no row of it whatever its translator: the entry is given none and leaves the unit the
@@ -85,6 +87,14 @@ const addCover = (pair, c) => {
     n += v
   }
   if (n) C.byPair.set(pair, [...c.faults].map(([k, v]) => `${k} ${v}`).join(', '))
+}
+/** I6 across the pages' lays (cross-lay.ts) over the pairs: each unit laid otherwise, by its cause */
+const addCrossLay = (pair, x) => {
+  if (!x) return
+  const X = entry.crossLay
+  X.units += x.units
+  X.twice += x.twice
+  for (const d of x.differ) X[d.cause === 'head' ? 'head' : 'other'].push(`${pair} p${d.page} ord ${d.ord} by p${d.by.join('/p')}: ${d.what}`)
 }
 const metricsOf = pair => (METRICS === 'served' ? served : layered(tableMetrics(readGz(join(TAP, 'metrics', `${pair}.metrics.json.gz`))), served))
 const count = { pairs: 0, laid: 0, adapted: 0, pages: 0, twoPages: 0, twoPagesDiffer: 0, threw: 0 }
@@ -124,7 +134,7 @@ for (const pair of pairs) {
   count.adapted += g.setting.size
   count.pages += g.pages
   pageMs.push(...g.ms)
-  if (g.entry) { entry.alike += g.entry.alike; entry.differ += g.entry.differ; entry.ms.push(...g.entry.ms); for (const x of g.entry.ex) if (entry.ex.length < 8) entry.ex.push(`${pair} ${x}`); for (const [k, n] of g.entry.names) entry.names.set(k, (entry.names.get(k) ?? 0) + n); for (const [k, n] of g.entry.links) entry.links.set(k, (entry.links.get(k) ?? 0) + n); for (const [k, n] of g.entry.figures) entry.figures.set(k, (entry.figures.get(k) ?? 0) + n); for (const [k, xs] of g.entry.linkEx) entry.linkEx.set(k, [...(entry.linkEx.get(k) ?? []), ...xs].slice(0, 4)); for (const k of Object.keys(entry.lit)) entry.lit[k] += g.entry.lit[k]; addCover(pair, g.entry.cover) }
+  if (g.entry) { entry.alike += g.entry.alike; entry.differ += g.entry.differ; entry.ms.push(...g.entry.ms); for (const x of g.entry.ex) if (entry.ex.length < 8) entry.ex.push(`${pair} ${x}`); for (const [k, n] of g.entry.names) entry.names.set(k, (entry.names.get(k) ?? 0) + n); for (const [k, n] of g.entry.links) entry.links.set(k, (entry.links.get(k) ?? 0) + n); for (const [k, n] of g.entry.figures) entry.figures.set(k, (entry.figures.get(k) ?? 0) + n); for (const [k, xs] of g.entry.linkEx) entry.linkEx.set(k, [...(entry.linkEx.get(k) ?? []), ...xs].slice(0, 4)); for (const k of Object.keys(entry.lit)) entry.lit[k] += g.entry.lit[k]; addCover(pair, g.entry.cover); addCrossLay(pair, g.entry.crossLay) }
   adaptMs += g.adaptMs
   readMs += g.readMs ?? 0
   inv.laid += g.inv.laid
@@ -252,6 +262,14 @@ if (ENTRY) {
   console.log(`I10, the sentence cover (cover.ts): ${C.members} member-pages lit, ${C.pieces} pieces; ${faults} faults${faults ? ':' : ''}`)
   for (const [k, n] of [...C.faults].sort((a, b) => b[1] - a[1])) console.log(`  ${n} ${k}: ${(C.ex.get(k) ?? []).join(' | ')}`)
   for (const [pair, line] of C.byPair) console.log(`  ${pair}: ${line}`)
+  // (I6 across the pages' lays, cross-lay.ts: a unit laid otherwise by two pages' lays fails the run, but where the head pass's
+  // known cause tells it (headOf reading the paragraph over it filled by one lay, at its fit by the other: LATER.md), counted
+  // and listed apart)
+  const X = entry.crossLay
+  console.log(`I6 across the pages' lays (cross-lay.ts): ${X.units} units begun on a pass page, ${X.twice} laid by two pages' lays or more; ${X.head.length + X.other.length} laid otherwise: ${X.head.length} by the head pass (known: headOf reads the paragraph over the unit as one lay filled it and the other did not), ${X.other.length} by another cause`)
+  for (const x of X.head) console.log(`  head: ${x}`)
+  for (const x of X.other) console.log(`  other: ${x}`)
+  if (X.other.length) process.exitCode = 1
 }
 // (an entry that laid nothing counted I10 over no piece: no count, the run fails)
 if (ENTRY && !entry.cover.pieces) {
