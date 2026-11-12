@@ -51,7 +51,7 @@ const firstOf = (s: string): string => {
 type First = { el?: string; text: string }
 /** the first thing the row's pieces draw from piece `q`, character `c` on: an element that draws something (its piece, its
  *  text), or the text from its first character that is no white space, over the pieces after it to the next such element (a
- *  group's text and what follows it: "IER" then "当在…") */
+ *  group's text and what follows it: a three-letter title, then the paragraph's first words) */
 function firstFrom(m: Placed, pieces: readonly V0Piece[], q: number, c: number): First | null {
   const els = new Map(m.els ?? [])
   let text = ''
