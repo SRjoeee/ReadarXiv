@@ -12,7 +12,7 @@ import type { LinkFate } from '../../src/lay/links.ts'
 import { keptBefore, ledBy } from '../../src/lay/lead.ts'
 import type { FlowMember } from '../../src/lay/flow.ts'
 import { appendFileSync } from 'node:fs'
-import { adapt, type Reading, rectOf } from '../../src/lay/adapt.ts'
+import { adapt, type Reading, rectOf, rowLinesOf, sharedPaper } from '../../src/lay/adapt.ts'
 import {
   paperOf as paperReading,
   type PaperReading,
@@ -31,6 +31,8 @@ import { layPagePrepared, type PageMember, type UnitLay } from '../../src/lay/pa
 import { type CrossLay, crossLayOf } from './cross-lay.ts'
 import { type FitMeasure, fitMeasure } from '../../src/breaker/measure.ts'
 import type { Face } from '../../src/breaker/tokens.ts'
+import type { LaidLine, Layout } from '../../src/fit/types.ts'
+import { inkEndOf } from '../../src/shared/share.ts'
 import type { Metrics, RuleParams, Rows } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
 import { type Cover, coverDone, coverOf, newCover } from './cover.ts'
@@ -130,6 +132,9 @@ export function invariantsOf(
   R: RuleParams,
   inv: GateL1['inv'],
   inksOf?: (ord: number) => readonly (readonly number[])[] | undefined,
+  /** the measure I3 reads a run's ink right from where the lay's own has none: the served faces' (the reader's canvas always
+   *  gives one; the tap's table lacks the right of a run today never asked it of) */
+  served?: FitMeasure | null,
 ) {
   const floor = Math.min(Number((R as Raw).floor ?? 1), Number((R as Raw).floorMin ?? 1))
   const boxes: { ord: number; x0: number; x1: number; y0: number; y1: number }[] = []
@@ -176,12 +181,25 @@ export function invariantsOf(
         if (cls.startsWith('past') || cls.startsWith('squeezed'))
           inv.I5.push(`ord ${pm.ord}: a line ${over.toFixed(2)} pt past its slot (${cls})`)
       }
-      // (I3 reads ink, design §4.9: the line to its last glyph's ink, not its advance, so that a CJK mark's blank half (a run-in
-      // head's ideographic full stop, its follower set after its ink and the original's separation, today's shareOf `ink`) overlaps nothing)
+      // (I3 reads ink, design §4.9: the line from its first item to its last glyph's ink, not its measure nor its advance, so that
+      // a CJK mark's blank half (a run-in head's ideographic full stop, its follower set after its ink and the original's
+      // separation, today's shareOf `ink`) overlaps nothing, and a line set flush right or centred starts where its text does,
+      // not at its measure's start, which widened into the paper beside it (U.decor widen: a right-hand running head's measure
+      // to the left one's ink; the google-lay lane: 4 of the round's I3 were Google's longer left head ending inside the right
+      // head's measure, 55 pt clear of its first glyph). Never from before the measure's start: what the breaker sets there is
+      // an opening mark it hangs (B.break leadOf), whose ink the measure does not place within its box; read from the
+      // measure's start, as before (read from its box, 3 of typeset-today's lines did overlap the line before by a hung
+      // bracket's box, none by its ink). Its end the product's, S.share's inkEndOf: the run's own ink right, its tracking, its
+      // slant)
+      const first = l.items.find((it) => !(it.t as { space?: boolean }).space)
+      if (process.env.AXT_GATE_HUNG && first?.x !== undefined && first.x < l.x0 - 0.01)
+        console.log(
+          `HUNG p${page} ord ${pm.ord} ${(l.x0 - first.x).toFixed(2)} ${JSON.stringify((first.t as { s?: string }).s ?? ((first.t as { crop?: unknown }).crop ? 'crop' : '?'))} ${(first.t as { punct?: string }).punct ?? ''}`,
+        )
       boxes.push({
         ord: pm.ord,
-        x0: l.x0,
-        x1: inkEnd(l, size, (pm.lay!.P as { measure?: FitMeasure }).measure) ?? l.x0 + used,
+        x0: Math.max(l.x0, first?.x ?? l.x0),
+        x1: inkEnd(l, L, (pm.lay!.P as { measure?: FitMeasure }).measure, served) ?? l.x0 + used,
         y0: l.baseline - 0.215 * size,
         y1: l.baseline + 0.683 * size,
       })
@@ -219,27 +237,34 @@ export function invariantsOf(
       const a = boxes[i]!,
         b = boxes[j]!
       if (a.ord === b.ord) continue
-      if (Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 0.5 && Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > 0.5)
+      if (Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 0.5 && Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > 0.5) {
         inv.I3.push(`ords ${a.ord} and ${b.ord}: their lines overlap on p${page}`)
+        // (AXT_GATE_I3=1: each overlap's two boxes, as I3 reads them)
+        if (process.env.AXT_GATE_I3) console.log(`I3BOX p${page} ${JSON.stringify(a)} ${JSON.stringify(b)}`)
+      }
     }
 }
 const l0Page = (L: { lines: readonly { page: number }[] }) => L.lines[0]?.page
-/** where a laid line's ink ends: its last item's (a crop's box; a text's ink, the blank right side of its last glyph off),
- *  null where the measure has no ink for it (a table of today's measures lacks it: MissingMeasure) */
-function inkEnd(
-  l: { items: readonly { t: unknown; x?: number; w: number }[] },
-  size: number,
-  m: FitMeasure | undefined,
-): number | null {
-  const last = [...l.items].reverse().find((it) => !(it.t as { space?: boolean }).space)
-  if (!last || last.x === undefined || !m) return null
-  const t = last.t as { crop?: unknown; s?: string; face?: Face; sup?: boolean; sc?: number }
-  if (t.crop) return last.x + last.w
-  if (!t.s || !t.face) return null
+/** where a laid line's ink ends: the product's reading of it (S.share's inkEndOf: its last item's, a crop's box, a text's own
+ *  ink right at the size it is drawn, never past its advance), its run's ink right `served`'s where the lay's measure has none
+ *  (the tap's table holds no right of a run today never asked it of: read by its advance, a CJK closing mark's blank half was
+ *  ink, the google-lay lane's four I3 of 2610.37818v1's header cells ending in an ideographic full stop); null where the
+ *  measure lacks the run (MissingMeasure) */
+export function inkEnd(l: LaidLine, L: Layout, m: FitMeasure | undefined, served?: FitMeasure | null): number | null {
+  if (!m) return null
+  const right = (s: string, face: Face): number | null => {
+    const r = m.inkRight100(s, face)
+    if (r !== null || !served) return r
+    try {
+      return served.inkRight100(s, face)
+    } catch (e) {
+      // (a run no served face holds: the reader draws it in a face of the system's, no measure of ours)
+      if (e instanceof MissingMeasure || (e as Error)?.name === 'Unserved') return null
+      throw e
+    }
+  }
   try {
-    const right = m.inkRight100(t.s, t.face)
-    if (right === null) return null
-    return last.x + last.w - ((m.w100(t.s, t.face) - right) * (t.sup ? 0.62 : 1) * (t.sc ?? 1) * size) / 100
+    return inkEndOf(l, L, { ...m, inkRight100: right })
   } catch (e) {
     if (e instanceof MissingMeasure) return null
     throw e
@@ -495,6 +520,8 @@ export function gateL1Pair(
   pair: string,
   o: {
     metricsOf?: (pair: string) => Metrics
+    /** the measurer I3 reads an ink right from where `metricsOf`'s has none (the lab's served faces, served-metrics.mjs) */
+    served?: Metrics | null
     reading?: 'today' | 'part'
     substitute?: readonly Substitute[]
     /** each page laid again by design-a's entry (layPage over the part and the rows), compared with the runner's lay */
@@ -520,6 +547,7 @@ export function gateL1Pair(
   } = {},
 ): GateL1 {
   const measure = o.metricsOf ? fitMeasure(o.metricsOf(pair)) : null
+  const servedMeasure = o.served ? fitMeasure(o.served) : null
   const metrics = o.metricsOf?.(pair) ?? null
   const out: GateL1 = {
     units: [],
@@ -598,6 +626,23 @@ export function gateL1Pair(
             leader: b?.kind === 'name' && b.bound ? b : null,
           })
       })
+  // (the free paper a member shares on its baseline with a member beside it, and the line of TeX's it shares whole with the
+  // members beside it, as the entry reads them over a page's part (entry.ts: sharedPaper, rowLinesOf with flush-left lines),
+  // from the part of the page its first line stands on: the gate judges what the reader draws (the google-lay lane: without
+  // them the runner gave a right-hand running head its measure from the left one's ink, the reader from the middle of the
+  // paper between them)
+  const sharedOf = new Map<number, readonly [number, number]>()
+  const lineOf = new Map<number, NonNullable<Parameters<typeof adapt>[0]['line']>>()
+  for (const [pg, part] of bundle.parts) {
+    const sh = sharedPaper(part.flows, pg)
+    const rl = rowLinesOf(part.flows, { left: true })
+    for (const flow of part.flows)
+      for (const m of flow) {
+        if (m.lines[0]?.[0] !== pg) continue
+        if (sh.has(m.ord) && !sharedOf.has(m.ord)) sharedOf.set(m.ord, sh.get(m.ord)!)
+        if (rl.has(m.ord) && !lineOf.has(m.ord)) lineOf.set(m.ord, rl.get(m.ord)!)
+      }
+  }
   const rules0 = rulesFor(L.target as never)
   // (L1's members joined to today's units by content id, equal ids by order among equals: the baseline's join rule)
   const todayById = new Map<string, (typeof L.units)[number][]>()
@@ -735,6 +780,13 @@ export function gateL1Pair(
     const c = walkCase(pair, u.ord, rounds.at(-1)!)
     if (typeof c === 'string') {
       stop(`today's round: ${c}`)
+      continue
+    }
+    // (a unit the paper keeps as it is (Unit.kept: its names, code, an algorithm's body) is never translated, whatever row is
+    // given of it, as the entry leaves it (entry.ts contentOf): a row of it laid here was laid by the runner alone (the
+    // google-lay lane: the lab's Google fill asked for 45 kept code cells of 2608.06007v1, which the product never asks)
+    if (bundle.units.get(x.m.text)?.kept) {
+      stop('a unit the paper keeps (Unit.kept): never translated')
       continue
     }
     patternsSeen ??= (c.P as Raw).patterns as Record<string, unknown> | undefined
@@ -883,6 +935,8 @@ export function gateL1Pair(
       rulesOf: (pg) => today?.rules(pg),
       lineskip: (bundle.parts.values().next().value?.paper.lineskip as [number, number] | undefined) ?? null,
       reading,
+      ...(sharedOf.has(x.m.ord) ? { shared: sharedOf.get(x.m.ord)! } : {}),
+      ...(lineOf.has(x.m.ord) ? { line: lineOf.get(x.m.ord)! } : {}),
     })
     out.adaptMs += performance.now() - ta
     if ('stop' in got) {
@@ -1046,7 +1100,7 @@ export function gateL1Pair(
     } catch (e) {
       out.threw.push(`p${pg}: ${String((e as Error)?.message ?? e).slice(0, 120)}`)
     }
-    if (got) invariantsOf(pg, got.members, R, out.inv, (ord) => inksBy.get(ord))
+    if (got) invariantsOf(pg, got.members, R, out.inv, (ord) => inksBy.get(ord), servedMeasure)
     if (got && out.entry && entryRows && metrics) {
       const t1 = performance.now()
       const linkFates: LinkFate[] = []
@@ -1174,6 +1228,18 @@ export function gateL1Pair(
             L.lines.map((l) => [l.page, l.block, l.baseline, l.x0, l.x1, l.used, (l.items as unknown[]).length]),
           ),
         )
+        // (and AXT_GATE_ITEMS=1: each line's items, where each starts, its width and its text)
+        if (process.env.AXT_GATE_ITEMS)
+          for (const l of L.lines as { page: number; items: { x?: number; w: number; t: Raw }[] }[])
+            console.log(
+              `ITEMS p${l.page}`,
+              l.items
+                .map(
+                  (it) =>
+                    `${(it.x ?? Number.NaN).toFixed(2)}+${it.w.toFixed(2)}:${String(it.t.s ?? (it.t.crop ? 'crop' : it.t.space ? '_' : '?'))}`,
+                )
+                .join(' '),
+            )
       }
       if (pm.state !== 'laid' || !pm.lay) continue
       const d = dumpUnit(pm.lay, (p) => views.get(p))

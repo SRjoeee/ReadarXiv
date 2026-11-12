@@ -6005,6 +6005,44 @@ past its source).
   marked is the wrap's (`unwrapped` 128, `page` 7: no keep). The differential: lost 11 (+5,422 accepted), gained 5,823, changed
   5,256, the same lists as dw2's; 65 of the gained units and 23 of the changed now say their cause.
 
+### 18.63 The reader gate judges what the reader draws: I3 by ink, the runner set up as the entry, a kept unit never laid (2026-11-12)
+
+Round B14 ran the reader gate (`lab/typeset/gate-l1.mjs --entry --reading=part`) over Google's rows beside the door's
+(production's Microsoft replies), the launch's first translator never measured before; the faults it found on one store
+alone were traced (lane google-lay) to the gate, not the reader, but for one (§18.64).
+
+- **I3 reads a line from its first item to its last glyph's ink** (`packages/typeset/tests/replay/gate-l1.ts` invariantsOf). It
+  read a line from its measure's start, which a flush-right or centred line's text does not begin at: a single line's measure is
+  widened into the paper beside it (U.decor `widen`, to the next glyph on its baseline less half its size), so a right-hand
+  running head's measure ran to the left head's ink, and Google's longer left head, ending inside it 55 pt clear of the right
+  head's first glyph, was an overlap (2610.22065v1 p3, p5, p7; 2610.21377v1, 51 pages, the same shape on both stores). Never
+  from before the measure's start: what the breaker sets there is an opening mark it hangs (B.break leadOf: each of the 1,591
+  lines whose first item stands before it, over the door's and Google's runs and typeset-today's, begins with one), whose ink
+  the measure does not place within its box: read from its box, typeset-today's I3 rose 36 -> 39 by three such brackets, none overlapping by
+  its ink. Its end is now the product's reading of a line's ink, S.share's `inkEndOf` (the run's own ink right at the size
+  drawn, its tracking, its slant), the run's ink right taken from the served faces where the tap's table holds none: read by its
+  advance, a CJK closing mark's blank half was ink (2610.37818v1 p19 and p21, header cells ending in an ideographic full stop).
+  Over the 90 pairs: 58 overlaps on each store before, 3 after, the same 3 on both, none entered: 2610.40576v1 p7 ords 69 and
+  71, a paragraph beside a wrapped figure laid at its column's full measure over the figure's caption (its lines beside the
+  figure are one block of the widest line's measure: a real overlap, the entry draws it alike on the door's rows), and
+  2610.21176v1 p13 ords 98, 99 and 101 (the runner lays cell 101 307 pt left of its original). Both open, both before this
+  change on both stores. Typeset-today's I3 (the release check's, today's members) 36 before and after, paper by paper.
+- **The runner sets a member up as the entry does** (`gateL1Pair`'s `adapt` call): the free paper it shares on its baseline with
+  a member beside it (`sharedPaper`, its half) and the line of TeX's it shares whole (`rowLinesOf`, flush-left lines too), from
+  the part of the page its first line stands on. Without them the runner gave a right-hand running head its measure from the
+  left one's ink, the reader from the middle of the paper between them: the entry's members laid otherwise than the runner's,
+  door 544 -> 244, of them "laid against laid" 337 -> 47.
+- **A unit the paper keeps (Unit.kept) is never laid by the runner**, as the entry leaves it (entry.ts `contentOf`): the door
+  holds rows of 40 kept units stored before they were kept, and the lab's Google fill asked for kept units the product never
+  asks (1,286 of the 33,419 units it read again, 1,133 of them answered by a translator, 18,471 source characters; 45 code cells
+  of 2608.06007v1): "none against laid" 10 and 35 -> 0.
+- **Like for like.** With every unit's Google row, the entry lays members the runner, bounded by today's laid members, never
+  lays, and a page's fill meets them: over the 90 pairs the entry's lines differ from the runner's for 1,164 members (door 544);
+  given the rows of the runner's members alone (the lane's hook, `AXT_LIKE`), 625 before these fixes and 281 after (door 244),
+  "laid against laid" 328 and 34 (door 337 and 47). The rest is the table's names rule (`decideTables`, which the runner has
+  not): a body column whose cells came back as they went kept whole as the original's, more often with Google's replies ("cells
+  against laid", 107 against the door's 19).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
