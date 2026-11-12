@@ -389,8 +389,8 @@ const v2Route = {
         })
       }
       // (a newer catalog once the check says so: the same layer under the twin head. Our server makes one by a prepare again,
-      // the layer before it served meanwhile, and the follow keeps its pace of a run while that prepare runs: a document in
-      // which nothing runs is followed again a minute on, client.ts IDLE_MS)
+      // the layer before it served meanwhile, and the follow keeps its pace of a run while that prepare runs; a document in
+      // which nothing runs is followed again on the reader's wake alone, reader.ts: an object answered gone)
       if (m?.kind === 'recatalog')
         return m.switched
           ? json(200, { ...d, rev: 3, layer: { ...d.layer, catalog: twins[d.pv] } })
@@ -3580,6 +3580,45 @@ await check(
     } finally {
       delete modes[seg]
     }
+  },
+)
+// A settled paper is asked nothing more until the reader's wake (design-performance-2026-11-13 Q9: a settled tab asked once a
+// minute, 60 asks an hour): its head answered gone (the paper's objects replaced) asks the document once; an hour of the page's
+// clock after that, nothing
+await check(
+  'reader: a settled paper asked nothing more but on the wake: the head answered gone asks the document once, then an hour of nothing',
+  async () => {
+    const name = 's2-splits'
+    const seg = indexOf[name].seg
+    const head = `/api/v2/o/${docs[seg].layer.catalog.path}`
+    const { page, context, errors } = await newPage()
+    // (the page's clock faked from here, flowing as the real one until the check moves it)
+    await page.clock.install()
+    let gone = 0
+    await context.route(`**${head}`, async (route) => {
+      if (gone++ === 0) return route.fulfill({ status: 404, body: '' })
+      return route.fallback()
+    })
+    const from = v2log.length
+    const follows = () => v2log.slice(from).filter((x) => x.what === 'follow' && x.seg === seg).length
+    await page.evaluate((n) => window.__h.reader(n, { host: 'web' }), name)
+    // (the first document, the head answered gone, and the one ask that follows it)
+    const t0 = Date.now()
+    while (follows() < 2 && Date.now() - t0 < 10_000) await page.waitForTimeout(100)
+    await page.waitForTimeout(2000)
+    const afterGone = follows()
+    // (an hour of the page's clock, the paper settled)
+    await page.clock.fastForward('01:00:00')
+    await page.waitForTimeout(2000)
+    const afterHour = follows()
+    await context.close()
+    assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+    assert(
+      gone >= 1 && afterGone === 2,
+      `follows: ${afterGone} by the head answered gone (asked ${gone} times), 2 wanted`,
+    )
+    assert(afterHour === afterGone, `follows in an hour of a settled paper: ${afterHour - afterGone}`)
+    return { follows: afterHour, headAsked: gone }
   },
 )
 await check(
