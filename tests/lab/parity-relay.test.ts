@@ -27,6 +27,12 @@ describe("today's door row said in v2's unit", () => {
     const r = todaySaid([7, ['auf NL', 1, 'DEV und Qasper'], 'whole', 'ms'], t, unit)
     expect(r).toEqual({ content: [{ t: 'text', s: 'auf ' }, { t: 'el', id: '1' }, { t: 'text', s: ' und Qasper' }] })
   })
+  it("each element named by its own id, the source's piece number, not its flat place (1512.03385v1 t324's year: element 19, 16th flat)", () => {
+    // (v2's unit: "see " {\em Book}, " 2000." an element; its ids the source's numbers, a group's edges taking two of them)
+    const t = today([{ kind: 'text', s: 'see ' }, { kind: 'open', src: '{' }, { kind: 'ph', src: '\\em' }, { kind: 'text', s: 'Book' }, { kind: 'close', src: '}' }, { kind: 'text', s: ', ' }, { kind: 'ph', src: '2000.' }])
+    const unit = { content: [text('see '), { t: 'span' as const, id: '2', open: '{', close: '}', content: [el('3', '\\em'), text('Book')] }, text(', '), el('7', '2000.')] }
+    expect(todaySaid([7, ['siehe ', 2, 'Buch, ', 6], 'whole', 'ms'], t, unit)).toEqual({ content: [{ t: 'text', s: 'siehe ' }, { t: 'el', id: '3' }, { t: 'text', s: 'Buch, ' }, { t: 'el', id: '7' }] })
+  })
   it("today's sentences counted in v2's projection", () => {
     // (two sentences, the second after "R&D." : today's offsets count its placeholder one character, as v2 counts "&")
     const t = today([{ kind: 'text', s: 'We do R' }, { kind: 'ph', src: '\\&' }, { kind: 'text', s: 'D. It works.' }])

@@ -241,8 +241,10 @@ for (const [pair, raw] of drawn) {
       freshCause: Object.fromEntries(Object.entries(v2.freshCause ?? {}).filter(([o]) => still.has(Number(o)))),
     }
     const keyOf = (o) => (todayOf.has(o) ? `t${todayOf.get(o)}` : `p${o}`)
-    const incomparable = new Map(Object.entries(v2.relay.incomparable ?? {}).map(([o, why]) => [keyOf(Number(o)), why]))
-    const unsentenced = new Set((v2.relay.unsentenced ?? []).map(keyOf))
+    // (by both keys a difference may name a member by: today's ord where it has one, and its part ord, as a figure text's and a
+    // name's are named, fidelity.mjs judgeJoined)
+    const incomparable = new Map(Object.entries(v2.relay.incomparable ?? {}).flatMap(([o, why]) => [[keyOf(Number(o)), why], [`p${o}`, why]]))
+    const unsentenced = new Set((v2.relay.unsentenced ?? []).flatMap((o) => [keyOf(o), `p${o}`]))
     const again = raw.pages.map((rec) => {
       if (rec.error) return null
       if (!v2.relay.pages[rec.page]) return measurePage(pair, relayV2, rec, ctxOf(rec))
