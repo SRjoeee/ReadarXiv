@@ -600,7 +600,8 @@ export function thresholdOf(t) {
   else if (parts.some(p => (UPPER.test(p) ? BUDGET_UPPER : BUDGET_CAMEL).test(p)) && Number.isInteger(t.value) && !TYPE_UNITS.test(t.comment ?? '')) {
     // a budget: what the code may spend or hold, its unit by its name or comment, its source a measurement or a platform's limit
     out.class = 'budget'
-    out.unit = BUDGET_UNITS.find(u => parts.some(p => u.name.test(p)) || u.words.test(t.comment ?? ''))?.unit ?? 'count'
+    const first = sentencesOf(t.comment ?? '')[0] ?? ''
+    out.unit = (BUDGET_UNITS.find(u => parts.some(p => u.name.test(p))) ?? BUDGET_UNITS.find(u => u.words.test(first)))?.unit ?? 'count'
     out.source = BUDGET_MEASURED.test(t.comment ?? '') ? 'measured' : CITES_DEFINITION.test(t.comment ?? '') || PLATFORM_LIMIT.test(t.comment ?? '') ? 'platform' : null
   } else if (UNIT_FACTORS.has(Math.abs(t.value))) out.class = UNIT_WORDS.test(words) ? 'conversion' : 'borderline'
   else if (CITES_DEFINITION.test(t.comment ?? '') && !CITES_EVIDENCE.test(t.comment ?? '')) out.class = 'borderline'
