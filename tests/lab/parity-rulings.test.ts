@@ -300,6 +300,7 @@ describe('the rulings file', () => {
       expect(r.id).toMatch(/^[A-Z]\d?$/)
       expect(r.title.length).toBeGreaterThan(10)
       expect(r.verdict).toBe('\u53ef\u4ee5\u63a5\u53d7')
+      expect(r.date).toBe('2026-11-12')
       expect(r.example.length).toBeGreaterThan(20)
       expect(r.condition === null ? r.unstated : r.condition).toBeTruthy()
       expect(r.condition === null).toBe(r.holds === null)

@@ -94,6 +94,7 @@ export const RULINGS = [
     id: 'L1',
     title: "a paragraph a line shorter than today's, in the height today's takes",
     verdict: ACCEPTED,
+    date: DATE,
     words: null,
     example:
       "2610.21312v1-zh p1 t7: 9 lines at 9.96 pt (the original's size) against today's 10 at 10.16, the original's 13, both last baselines at 267.05; 1706.03762v7-zh p1 t8: 10 lines against 11, the original's 15, the last baselines 0.55 pt apart",
@@ -111,6 +112,7 @@ export const RULINGS = [
     id: 'L2',
     title: "a paragraph a line shorter than today's, ending higher",
     verdict: ACCEPTED,
+    date: DATE,
     words:
       '这其中你提到是不是要开放“一页一个字号”，以及行距是否必须全部固定。\n其实这并不是一个定死的项，我们最终想达到的目的是页面自然均匀。\n所以，是否要完全做到“一页一个字号”，或者行距一定要固定，这些限制我们可以不设。只要肉眼看起来字号和行距没有明显的差别，就是 OK 的。\n实际上，如果我们做了一些高级的设计和调整，用户看起来没有什么差别，但页面实际上更加自然均匀了，这也是没有问题的。',
     example:
@@ -131,6 +133,7 @@ export const RULINGS = [
     id: 'S1',
     title: "a figure's labels at their group's size",
     verdict: ACCEPTED,
+    date: DATE,
     words: null,
     example:
       "1512.03385v1-zh p6, Figure 5's five \"relu\" labels (p523-p527): v2 translates all five at one size, 4.37 pt (the original's 5.46); today translates the two lowest, at 4.95, and leaves three the original's",
@@ -157,6 +160,7 @@ export const RULINGS = [
     id: 'S2',
     title: "a table cell's text smaller than today's, kept to its cell",
     verdict: ACCEPTED,
+    date: DATE,
     words: null,
     example:
       "2608.04322v1-zh p10 t256: v2 at 6.10 pt, 2.67 pt past its cell and centred, where today keeps the original's 6.97 by running 12.98 pt past it, 6.49 off its centre; 2602.23285v2-ja p18 t156: 6.48 against today's 6.66 (the original's 7.4), 6.13 pt past its cell against today's 7.39",
@@ -175,6 +179,7 @@ export const RULINGS = [
     id: 'S3',
     title: 'a heading kept on its one line at a smaller size; a small-capitals heading at the size TeX set it',
     verdict: ACCEPTED,
+    date: DATE,
     words: '这里如果你按样式的话，主站和现在其实都行。关键取决于我们怎么做性能更好、实现更简洁长期更好维护，效果我们都可以接受。',
     example:
       "2608.16117v1-de p4 t12: on its original one line at 11.06 pt where today keeps the original's 11.96 on two lines; 2610.21312v1-zh p6 t70: a heading TeX sets in small capitals at 9.96 pt (its letters at 0.8 of it, 7.97, as the measure reads the original), v2's translation at 9.96, today's at 9.76",
@@ -196,6 +201,7 @@ export const RULINGS = [
     id: 'S4',
     title: "a theorem shrunk a little more than today's",
     verdict: ACCEPTED,
+    date: DATE,
     words: null,
     example:
       "2610.40645v1-ja p22 t174: a theorem v2 sets at 10.64 pt where today sets 10.98, the original's 10.91",
@@ -208,6 +214,7 @@ export const RULINGS = [
     id: 'E1',
     title: 'a web or e-mail address cut over two lines at its own break point',
     verdict: ACCEPTED,
+    date: DATE,
     words: '不想破坏通用性。我感觉现在这样也行，除非你认为这是一个非常大的问题，那我们再讨论要不要修',
     example: '2610.21880v1-zh p1 t3: a footnote\'s e-mail address cut after "uni-" (since round B12 drawn whole there: an address stays whole unless the line before it would be justified and visibly stretched)',
     condition:
@@ -246,6 +253,7 @@ export const RULINGS = [
     id: 'A1',
     title: 'a last line of one character',
     verdict: ACCEPTED,
+    date: DATE,
     words: '看起来效果我都能接受，用当前最简洁最干净最长期好维护的方式去做就行',
     example:
       '2610.30034v1-zh p7 t139, t140: two items of a theorem, each with its last line one character before its display, at the original\'s 9.96 pt on the original\'s two lines, where today shrinks them to 9.71 to keep one',
@@ -276,6 +284,7 @@ export const RULINGS = [
     id: 'O',
     title: 'a translated figure text touching the figure where today keeps it English',
     verdict: ACCEPTED,
+    date: DATE,
     words: null,
     example:
       '2610.21312v1-zh p5, Figure 2(c)\'s legend "(isotropic)": v2 draws it translated at the original\'s place and size, over the top of the orange bar (173 device px); today keeps it English',
@@ -298,6 +307,7 @@ export const RULINGS = [
     id: 'A2',
     title: "a reference's next line set flush where the original indents it, as today's",
     verdict: ACCEPTED,
+    date: DATE,
     words: null,
     example:
       "2610.10069v1-zh p27 t238 (every switch on): its second line starts 11.7 pt left of the original's indented one on both sides; today's is a row of crops alone, which the measure gave no reading",
@@ -331,7 +341,7 @@ export const RULINGS = [
 ]
 /** the classes he accepted that hold no page of the sheets the rulings were read against (round B13): no entry */
 export const NO_PAGE_LEFT = [
-  { id: 'W', title: 'figure text drawn lighter', words: '我看到你好像在小标题加粗的地方已经修了呀？没有看到什么肉眼可见的问题', why: "the gate's correction 10 (verification/gate-corrections.md): the `weight` measure reads each class's ink at another weight than the original's; both pages left worse before it (2608.25210 p2, 2609.20976 p11) are not worse" },
+  { id: 'W', title: 'figure text drawn lighter', date: DATE, words: '我看到你好像在小标题加粗的地方已经修了呀？没有看到什么肉眼可见的问题', why: "the gate's correction 10 (verification/gate-corrections.md): the `weight` measure reads each class's ink at another weight than the original's; both pages left worse before it (2608.25210 p2, 2609.20976 p11) are not worse" },
 ]
 
 /** a figure member v2 draws translated, at the original's place and size, where today draws no translation of it (the O ruling) */

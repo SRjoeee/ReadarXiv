@@ -438,7 +438,7 @@ writeFileSync(join(OUT, 'index.html'), sheet(result))
 console.log(`parity: ${pages.length} pages of ${pairs.length} pairs; ${result.pagesWorse} worse than today; missing ${missing.map((m) => m.pair).join(', ') || 'none'}`)
 console.log(`the owner's rulings of ${result.rulings.date}: ${result.pagesCovered} more pages worse by a measure and covered by them whole; by ruling:`)
 for (const r of result.rulings.rulings)
-  console.log(`  ${r.id.padEnd(3)} ${!r.condition ? 'no condition the gate can read (its pages stay worse)' : `${r.pages.length} pages, ${r.differences} differences${r.pages.length ? `: ${r.pages.join('; ')}` : ''}`}`)
+  console.log(`  ${r.id.padEnd(3)} ${!r.condition ? 'no condition the gate can read (its pages stay worse)' : `${r.pages.length} page${r.pages.length === 1 ? '' : 's'}, ${r.differences} difference${r.differences === 1 ? '' : 's'}${r.pages.length ? `: ${r.pages.join('; ')}` : ''}`}`)
 console.log(`apart (the earlier corrections and rulings, never worse): ${Object.entries(result.apart).map(([k, x]) => `${k} ${x.differences} on ${x.pages} pages`).join('; ')}`)
 for (const x of notes) console.log(x)
 if (result.fresh) {
@@ -509,7 +509,7 @@ function sheet(r) {
     ? `<article class="card" id="rulings"><h2>The owner's rulings of ${esc(R.date)}: ${r.pagesCovered} pages worse by a measure and covered by them whole</h2><p>He looked at one example a class (${esc(R.seen)}) and gave his verdict; each ruling is the class stated by a condition the gate reads on the page, so that a page of the same kind is judged the same way and one that only looks like it stays worse. A difference a ruling covers keeps its measure's reading and is listed on its page as covered, never as worse. His general words: <q lang="zh">${esc(R.general)}</q></p><table class="diffs"><thead><tr><th>ruling</th><th>class</th><th>his verdict and words</th><th>the condition the gate reads</th><th>the example he saw</th><th>pages covered</th></tr></thead><tbody>${R.rulings
         .map(
           (x) =>
-            `<tr id="ruling-${esc(x.id)}" class="${x.condition ? 'covered' : 'worse'}"><td><b>${esc(x.id)}</b></td><td>${esc(x.title)}</td><td lang="zh">${esc(x.verdict)}${x.words ? `<br><q>${esc(x.words)}</q>` : ''}</td><td>${x.condition ? esc(x.condition) : `<b>no condition the gate can read: its pages stay worse.</b> ${esc(x.unstated ?? '')}`}</td><td>${esc(x.example)}</td><td>${x.pages.length ? `${x.differences} differences on ${x.pages.length} pages: ${x.pages.map((pg) => `<a href="#${esc(pg.replace(/ \(.*$/, '').replace(' p', '-p'))}">${esc(pg)}</a>`).join(', ')}` : 'none'}</td></tr>`,
+            `<tr id="ruling-${esc(x.id)}" class="${x.condition ? 'covered' : 'worse'}"><td><b>${esc(x.id)}</b></td><td>${esc(x.title)}</td><td lang="zh">${esc(x.verdict)}${x.words ? `<br><q>${esc(x.words)}</q>` : ''}</td><td>${x.condition ? esc(x.condition) : `<b>no condition the gate can read: its pages stay worse.</b> ${esc(x.unstated ?? '')}`}</td><td>${esc(x.example)}</td><td>${x.pages.length ? `${x.differences} difference${x.differences === 1 ? '' : 's'} on ${x.pages.length} page${x.pages.length === 1 ? '' : 's'}: ${x.pages.map((pg) => `<a href="#${esc(pg.replace(/ \(.*$/, '').replace(' p', '-p'))}">${esc(pg)}</a>`).join(', ')}` : 'none'}</td></tr>`,
         )
         .join('')}</tbody></table>${R.noPageLeft?.length ? `<p class="h">Accepted, with no page left on the sheets the rulings were read against (no entry): ${R.noPageLeft.map((x) => `${esc(x.id)} (${esc(x.title)}: ${esc(x.why)})`).join('; ')}.</p>` : ''}</article>`
     : ''
