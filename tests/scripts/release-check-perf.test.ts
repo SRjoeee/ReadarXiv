@@ -5,7 +5,7 @@
 // compared with the newest round recorded that passed or was accepted; and the gates read the lab's run by its last line.
 import { describe, expect, it } from 'vitest'
 import { GATES, TARGETS } from '../../lab/release-check/gates.mjs'
-import { batchVerdict, compare, lastRound, MEASURES, perfOf, prepareRepOf, type Rep, repOf, storedToday, type Visit, WORK_TOLERANCE } from '../../lab/release-check/perf.mjs'
+import { batchVerdict, compare, lastRound, MEASURES, perfOf, prepareRepOf, type Rep, repOf, stallOf, storedToday, type Visit, voidOf, WORK_TOLERANCE } from '../../lab/release-check/perf.mjs'
 import { targetLines } from '../../lab/release-check/verdict.mjs'
 
 const visit = (o: Partial<Visit> & { first?: number; commits?: [number, number][] } = {}): Visit => ({
@@ -105,9 +105,55 @@ describe('two sides compared', () => {
     expect(lastRound([{ at: 'x', pass: false }])).toBe(null)
   })
 
+  it('never compares a batch with a round marked void', () => {
+    const rounds = [
+      { at: '2026-11-12T10:45:00Z', pass: true, commit: 'round 1' },
+      { at: '2026-11-12T11:05:00Z', pass: true, commit: 'round 2', void: 'repetition 2 stalled' },
+    ]
+    expect(lastRound(rounds)?.commit).toBe('round 1')
+  })
+
   it('names every measure once, lower being better for each', () => {
     const ids = MEASURES.map((m) => m.id)
     expect(new Set(ids).size).toBe(ids.length)
+  })
+})
+
+describe('a repetition that measured the machine, not the reader', () => {
+  // (the fixture: round 2 of 2026-11-12 as it was recorded, the per-batch gate's papers, three repetitions; repetition 2 met a
+  // stall of the machine: a 22,927 ms task on the shortest paper, a 1,599 ms one on the next, the same minute)
+  const scrolled = (pair: string, rep: number, ms: number, longestTask: number): Visit => visit({ pair, rep, scroll: { ...visit().scroll, ms, longestTask } })
+  const round = [
+    [scrolled('2608.08481v1-zh', 1, 7059, 60), scrolled('2610.21491v1-zh', 1, 11083, 83), scrolled('2610.37818v1-zh', 1, 42200, 218)],
+    [scrolled('2608.08481v1-zh', 2, 30954, 22927), scrolled('2610.21491v1-zh', 2, 15429, 1599), scrolled('2610.37818v1-zh', 2, 28060, 140)],
+    [scrolled('2608.08481v1-zh', 3, 7018, 59), scrolled('2610.21491v1-zh', 3, 11113, 77), scrolled('2610.37818v1-zh', 3, 28100, 141)],
+  ]
+
+  it('voids the repetition whose task outlasted the rest of its own scroll, and no other', () => {
+    expect(round.map((visits) => voidOf(visits).length)).toEqual([0, 1, 0])
+    expect(voidOf(round[1]!)[0]).toEqual({ pair: '2608.08481v1-zh', rep: 2, taskMs: 22927, scrollMs: 30954, ownMs: 8027 })
+    // (a long task inside a long scroll is the reader's: the slowest visit of round 1, 340 ms in 49,351)
+    expect(stallOf(scrolled('2610.37818v1-zh', 2, 49351, 340))).toBe(null)
+    // (the bound is the visit's own: the same task in a scroll twice its length measured the reader)
+    expect(stallOf(scrolled('x', 1, 2 * 22927 + 1, 22927))).toBe(null)
+    // (a visit that took no scroll has nothing to void)
+    expect(stallOf({ ...visit(), scroll: undefined })).toBe(null)
+  })
+
+  it('would have left the longest task unjudged had the void repetition been counted', () => {
+    const longest = (visits: Visit[][]): Rep[] => visits.map((v) => ({ reader: repOf(v) }))
+    const counted = compare(longest(round), longest(round)).longestTask!
+    expect(counted.spreadA).toBeGreaterThan(20000)
+    const valid = round.filter((v) => !voidOf(v).length)
+    expect(compare(longest(valid), longest(valid)).longestTask!.spreadA).toBe(218 - 141)
+  })
+
+  it('reads a round the machine could not measure as skipped, never as a pass or a fail', () => {
+    const batch = GATES.find((g) => g.id === 'perf-batch')!
+    const line = '{"perf":{"mode":"batch","pass":false,"unmeasured":"repetition 2 stalled twice: 2608.08481v1-zh repetition 2: a 22927 ms task in a 30954 ms scroll (its own 8027 ms)"}}'
+    const r = batch.judge!({} as never, [{ cmd: [], exit: 3, ms: 0, log: '', text: line }])
+    expect(r).toMatchObject({ skip: expect.stringMatching(/^the machine could not measure: repetition 2 stalled twice/) })
+    expect(r.pass).toBeUndefined()
   })
 })
 

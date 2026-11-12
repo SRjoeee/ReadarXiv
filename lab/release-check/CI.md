@@ -123,7 +123,11 @@ ordinary load: no integration round can give it the whole machine, so its spread
 on what load moves least (TeX's passes and compiles, bytes, CPU seconds, the main thread's task time) beside the wall times,
 which the same rule judges only by large moves. About 9 minutes and the waits for its slots; it uses Docker (the round's box
 image, PERF_NEW_IMAGE) where the rest of this tier does not. A regression understood is recorded with `--accept` so that the next
-round is compared with it.
+round is compared with it. A repetition that holds a visit whose longest task outlasted the rest of its own scroll (the scroll's
+measured duration less that task: perf.mjs `stallOf`) measured the machine, not the reader: it is void and run again before the
+round is recorded; void twice in a row, the round ends as "the machine could not measure" (the run's exit 3), which the gate
+reads as skipped, never as a pass, and records nothing. A round recorded before the rule with such a repetition is marked
+`void` in its record and is never a base.
 
 **Cut-over blocker: `perf-release`** (the release tier): TODAY (production's release) against NEW on every measure, on papers
 chosen by a stated rule from the 90 pairs, the same stored translation on both sides, each side measured by one instrument

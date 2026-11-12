@@ -33,6 +33,7 @@ export declare const MEASURES: Measure[]
 export type Bytes = { [k: string]: number | Record<string, number> | undefined; wire?: Record<string, number> }
 /** one visit of reader.mjs (the fields the summary reads) */
 export interface Visit {
+  pair?: string
   rep?: number
   warmup?: boolean
   firstOk?: boolean
@@ -40,7 +41,7 @@ export interface Visit {
   mainToFirstMs?: number | null
   page1?: Bytes | null
   whole?: Bytes | null
-  scroll?: { commitList?: [number, number][]; frames?: number; framesOverBudget?: number; longTasks?: number; longestTask?: number }
+  scroll?: { commitList?: [number, number][]; frames?: number; framesOverBudget?: number; longTasks?: number; longestTask?: number; ms?: number }
   memory?: { jsHeapMiB?: number | null; canvasMiB?: number; rendererMiB?: number; gpuMiB?: number }
   switch?: { ms: number | null; askedAgain?: [string, string, number][] }
   code?: [string, number][]
@@ -63,5 +64,9 @@ export interface Compared { label: string; reading: 'better' | 'worse' | 'equal'
 export declare function compare(a: Rep[], b: Rep[], measures?: Measure[]): Record<string, Compared>
 export declare function failingOf(c: Record<string, Compared>): string[]
 export declare function batchVerdict(head: Rep[], base: Rep[]): { pass: boolean; worse: string[]; measures: Record<string, Compared> }
-export declare function lastRound<R extends { at: string; pass?: boolean; accepted?: boolean }>(records: R[]): R | null
+export declare function lastRound<R extends { at: string; pass?: boolean; accepted?: boolean; void?: string }>(records: R[]): R | null
+export interface Stall { pair: string | null; rep: number | null; taskMs: number; scrollMs: number; ownMs: number }
+export declare function stallOf(visit: Visit): Stall | null
+export declare function voidOf(visits: Visit[]): Stall[]
+export declare function stallWords(x: Stall): string
 export declare function perfOf(text: string): Record<string, unknown> | null

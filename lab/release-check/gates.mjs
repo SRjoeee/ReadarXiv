@@ -667,6 +667,8 @@ function perfJudge(steps) {
   const s = steps.at(-1)
   const p = perfOf(s?.text ?? '')
   if (!p) return { pass: false, note: 'no verdict: the run printed no {"perf": …} line' }
+  // (a round whose repetition stalled twice in a row: the machine could not measure; skipped, never a pass: perf.mjs stallOf)
+  if (p.unmeasured) return { skip: `the machine could not measure: ${p.unmeasured}` }
   const { mode, pass, worse, ...numbers } = p
   return { pass: s.exit === 0 && pass === true, numbers, note: worse?.length ? `worse: ${worse.join(', ')}` : undefined }
 }
