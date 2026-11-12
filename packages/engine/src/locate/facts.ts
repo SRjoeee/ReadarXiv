@@ -977,7 +977,7 @@ export function sideOf(
  * (a mark set after a space, a frame's rule beside a framed paragraph, a contents line's page number after an entry no source
  * unit is), and no translation replaces it: whatever line a translation lays there, borrowed or not, keeps off it. A unit's
  * end mark (amsthm's QED box TeX pushed to the measure's end after the unit's end point) is the unit's, claimed before this
- * reads the page (locate.ts endMarks, El.end): no stay. Undefined where none
+ * reads the page (end-marks.ts endMarks, El.end): no stay. Undefined where none
  */
 export function staysOf(
   lines: readonly Line[],
