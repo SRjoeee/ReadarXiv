@@ -1,10 +1,14 @@
 // lab/typeset/parity/join.mjs: the parity's join of v2's members to today's units, which v2.mjs writes into its file
 // (`today`: part ord -> today's ord) and measure.mjs keys both sides by. Every member the entry's Pages carry is joined, laid
 // or not and whatever gate-l1's runner did with it (its stops record nothing): the join is the part's and today's, not a lay's.
-// The baseline's rule: a member's unit id, its rank among the part's members of that id by ord, today's unit of that id at
-// that rank by ord. A member's unit id is its text, but an ink unit's that echoes a source unit: the part names the echoed
-// unit's id as its text (packages/engine/src/bundle/bundle.ts placedOf, `echo ?? mem.id`: a contents line its heading's, a
-// note its source footnote's, an author block's names their author's), its kind its own; locate made it of the echoed
+// First by what a reader sees, the same glyphs of A: a member and today's unit both dumps state on the same lines of A, one to
+// one (seenJoin; lane pairs-91: the two front ends spell some characters apart, `\#` today's placeholder and v2's text "#", and
+// a unit's id hashes that spelling). Then the baseline's rule over what the lines left: a member's unit id, its rank among those
+// members of that id by ord, today's unit of that id at that rank by ord (by rank alone, a repeated text whose occurrence today
+// spelled otherwise shifted every later one onto another page's unit).
+// A member's unit id is its text, but an ink unit's that echoes a source unit: the part names the echoed unit's id as its text
+// (packages/engine/src/bundle/bundle.ts placedOf, `echo ?? mem.id`: a contents line its heading's, a note its source
+// footnote's, an author block's names their author's), its kind its own; locate made it of the echoed
 // content (locate/ink.ts), so its own id is the format's unitId over its kind and that content, today's id of the ink unit.
 // Echoes are ink units' alone (inkUnitsOf's kinds, INK_KIND): a figure text's placement, of kind 'figure' over its unit of
 // kind 'inkfigures', names its own unit; one whose glyphs set a run in another face holds a group of it, today's unit its text
@@ -234,6 +238,31 @@ export function joinedJoin(members, units, stated, free, prepared = null) {
   return out
 }
 
+/** two positions one dump states to the hundredth and the other to the hundredth: the same within that (keptJoin's) */
+const near = (a, b) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= 0.01 + 1e-9
+/**
+ * The members `members` joined to today's units `today` (today's prepare dump's, those the ledger holds) by what a reader sees:
+ * the same glyphs of A, so the same text as arXiv's page sets it, whatever either front end spelled it as (`\#` a placeholder of
+ * today's and v2's text "#"; `\%` the same; `{\em …}` a placeholder of today's inside the group, none of v2's): both dumps state
+ * each line of the unit on A (page, baseline and the extent of its glyphs, x0 to x1), to the hundredth. A member and a unit of
+ * today's whose lines are the same, as many and each the same, are joined where each is the only one of its side on those lines;
+ * a member or a unit the dump states no lines of (drawn nothing of on A) joins nothing so. Returns member ord -> today's ord
+ */
+export function seenJoin(members, today) {
+  const same = (m, t) =>
+    !!m.lines?.length &&
+    t.lines?.length === m.lines.length &&
+    t.lines.every((l, j) => l.page === m.lines[j][0] && near(l.baseline, m.lines[j][4]) && near(l.x0, m.lines[j][2]) && near(l.x1, m.lines[j][3]))
+  const out = new Map()
+  for (const m of members) {
+    const on = today.filter((t) => same(m, t))
+    if (on.length !== 1) continue
+    if (members.filter((x) => same(x, on[0])).length !== 1) continue
+    out.set(m.ord, on[0].ord)
+  }
+  return out
+}
+
 /**
  * `pages` the entry's Pages by page (each `{ members: [{ ord, … }] }`), `bundle` the paper's L1 bundle (its parts' flows and
  * its units by id: l1Paper), `units` today's units ({ ord, id }: the ledger's), `prepared` today's prepare dump's units by ord
@@ -241,18 +270,26 @@ export function joinedJoin(members, units, stated, free, prepared = null) {
  * none, no join by them). Returns `{ [part ord]: { today: today's ord } }` for every member of the Pages that joins one.
  */
 export function todayJoin(pages, bundle, units, prepared = null, stated = []) {
-  const byId = new Map()
-  for (const u of [...units].sort((a, b) => a.ord - b.ord)) {
-    if (!u.id) continue
-    if (!byId.has(u.id)) byId.set(u.id, [])
-    byId.get(u.id).push(u.ord)
-  }
   // (every member of the part once, from the first page that holds it)
   const members = new Map()
   for (const part of bundle.parts.values()) for (const flow of part.flows) for (const m of flow) if (!members.has(m.ord)) members.set(m.ord, m)
   const join = new Map()
+  // (first, by what a reader sees: the member and today's unit set on the same lines of A, one to one: seenJoin)
+  if (prepared) {
+    const ledgered = new Set(units.map((u) => u.ord))
+    for (const [ord, t] of seenJoin([...members.values()], [...prepared.values()].filter((t) => ledgered.has(t.ord)))) join.set(ord, t)
+  }
+  // (then by the unit's id, over what the lines left: the members of an id by their order, today's units of it by theirs)
+  const seen = new Set(join.values())
+  const byId = new Map()
+  for (const u of [...units].sort((a, b) => a.ord - b.ord)) {
+    if (!u.id || seen.has(u.ord)) continue
+    if (!byId.has(u.id)) byId.set(u.id, [])
+    byId.get(u.id).push(u.ord)
+  }
   const rank = new Map()
   for (const [ord, m] of [...members].sort((a, b) => a[0] - b[0])) {
+    if (join.has(ord)) continue
     const id = ownIdOf(m, bundle.units)
     if (!id) continue
     const k = rank.get(id) ?? 0

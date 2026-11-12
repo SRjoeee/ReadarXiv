@@ -77,6 +77,50 @@ describe("every member the entry's Pages carry is joined, whatever the runner di
   })
 })
 
+describe('a member is joined first by what a reader sees: today\'s unit set on the same lines of A, one to one', () => {
+  // (2111.09276v1 p6: a header cell of the shape `\textbf{\# of items}`: today's front end holds `\#` as a placeholder, v2's
+  // as the text "#", so the two units' ids, the format's hash of their kind and content, differ; both dumps state the cell's one
+  // line on A at the same place, page 6, baseline 712.36, its glyphs from 112.04 to 145.26)
+  const cell = (ord: number, x0: number, x1: number, id = P) => member(ord, 'cell', id, { lines: [[6, 0, x0, x1, 712.36]] })
+  const prepared = (units: { ord: number; x0: number; x1: number; baseline?: number }[]) =>
+    new Map(units.map((u) => [u.ord, { ord: u.ord, id: null, kind: 'cell', text: '', pieces: [], lines: [{ page: 6, baseline: u.baseline ?? 712.36, x0: u.x0, x1: u.x1 }] }]))
+  const part = (ms: ReturnType<typeof member>[]) => bundle({ 6: ms }, [{ id: P, kind: 'cell', content: text('# of items') }])
+  const pages = pagesOf({ 6: [[89, 'laid']] })
+  it("joins the cell to today's unit on its line whatever either front end spelled its characters as", () => {
+    expect(todayJoin(pages, part([cell(89, 112.04, 145.26)]), [{ ord: 89, id: Q }], prepared([{ ord: 89, x0: 112.04, x1: 145.26 }]))[89]).toEqual({ today: 89 })
+  })
+  it("joins nothing so to a unit of another extent or baseline, where two of today's stand on those lines, or without today's dump", () => {
+    const one = part([cell(89, 112.04, 145.26)])
+    expect(todayJoin(pages, one, [{ ord: 89, id: Q }], prepared([{ ord: 89, x0: 112.04, x1: 150 }]))[89]).toBeUndefined()
+    expect(todayJoin(pages, one, [{ ord: 89, id: Q }], prepared([{ ord: 89, x0: 112.04, x1: 145.26, baseline: 700 }]))[89]).toBeUndefined()
+    const two = prepared([
+      { ord: 89, x0: 112.04, x1: 145.26 },
+      { ord: 90, x0: 112.04, x1: 145.26 },
+    ])
+    expect(todayJoin(pages, one, [{ ord: 89, id: Q }, { ord: 90, id: R }], two)[89]).toBeUndefined()
+    expect(todayJoin(pages, one, [{ ord: 89, id: Q }])[89]).toBeUndefined()
+  })
+  it('joins only units the ledger holds', () => {
+    expect(todayJoin(pages, part([cell(89, 112.04, 145.26)]), [{ ord: 70, id: Q }], prepared([{ ord: 89, x0: 112.04, x1: 145.26 }]))[89]).toBeUndefined()
+  })
+  it('joins a repeated text by its lines before its rank: a member whose own occurrence today spelled otherwise takes no other page\'s', () => {
+    // (2111.09276v1: a figure's step label on p1 and the same words on p3; today's p1 label is no unit of that id (spelled
+    // otherwise), so by rank alone v2's p3 member took today's p1 unit and the p1 member nothing of its own)
+    const fig = (ord: number, page: number, x0: number) => member(ord, 'figure', G, { lines: [[page, 0, x0, x0 + 40, 500]] })
+    const both = bundle({ 1: [fig(270, 1, 380)], 3: [fig(345, 3, 100)] }, [{ id: G, kind: 'inkfigures', content: text('Step one') }])
+    const today = [
+      { ord: 120, id: R },
+      { ord: 326, id: G },
+    ]
+    const at = new Map([
+      [120, { ord: 120, id: R, kind: 'inkfigures', text: '', pieces: [], lines: [{ page: 1, baseline: 500, x0: 380, x1: 420 }] }],
+      [326, { ord: 326, id: G, kind: 'inkfigures', text: '', pieces: [], lines: [{ page: 3, baseline: 500, x0: 100, x1: 140 }] }],
+    ])
+    const got = todayJoin(pagesOf({ 1: [[270, 'laid']], 3: [[345, 'laid']] }), both, today, at)
+    expect([got[270], got[345]]).toEqual([{ today: 120 }, { today: 326 }])
+  })
+})
+
 describe("an ink unit that echoes a source unit is joined by what it is: the ink unit's own id", () => {
   // (a contents line, the ink unit 40 whose text the part names as its heading's (5), and a note set as its source footnote,
   // 110, the footnote no member of its own; today's units: the heading and its contents line, the footnote and its note's ink)
