@@ -1,7 +1,7 @@
 // The highlight over a figure text the original sets turned (docs/PDF-READER.md §17; Laid.lit's `dir`): its boxes in its run's
 // frame, painted as a band turned with its text about its own centre, and hit where it is painted. Over a stand-in of the panes
 // (one upright page 600 × 800 at scale 1: a PDF unit a CSS px, y down) and of the composer (one laid Page).
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { Composer } from '../src/compose/composer.ts'
 import { createHighlight, PAD } from '../src/compose/highlight.ts'
 import type { Box, Page } from '../src/compose/page.ts'
@@ -17,10 +17,6 @@ function setUp(page: Page) {
     el.className = 'page'
     el.dataset.pageNumber = '1'
     el.dataset.side = side
-    // (its box on the screen at the page's origin, 600 CSS px wide: a point of the screen is the page's own)
-    Object.defineProperty(el, 'offsetWidth', { value: 600 })
-    el.getBoundingClientRect = () =>
-      ({ left: 0, top: 0, width: 600, height: H, right: 600, bottom: H, x: 0, y: 0 }) as DOMRect
     document.body.append(el)
   }
   const panes = {
@@ -28,6 +24,9 @@ function setUp(page: Page) {
     right: { pages: 1, on: () => () => {} },
     on: () => () => {},
     pageElement: (side: 'left' | 'right') => els[side],
+    // (each pane's page at the screen's origin, 600 CSS px wide: a point of the screen is the page's own)
+    pointAt: (_side: string, x: number, y: number) =>
+      x >= 0 && x <= 600 && y >= 0 && y <= H ? { page: 1, x, y } : null,
     containerOf: () => document.body,
     frameOf: () => ({ turn: 0, w: 600, h: H, width: 600, height: H }),
     boxOf: (_side: string, _n: number, r: Box) => ({
@@ -92,13 +91,11 @@ describe('the highlight of a figure text set turned', () => {
   })
   it('is hit where it is painted: over its turned band, not beside it', () => {
     const { els, hl } = setUp(page)
-    const spy = vi.spyOn(document, 'elementFromPoint').mockReturnValue(els.right)
     // (its band covers x 144-152 and, padded, y 397-423 on the screen)
     expect(hl.at('right', 148, 400)).toEqual({ id: 7, s: -1 })
     expect(hl.at('right', 150, 421)).toEqual({ id: 7, s: -1 })
     expect(hl.at('right', 160, 410)).toBeNull()
     expect(hl.at('right', 148, 380)).toBeNull()
-    spy.mockRestore()
     hl.dispose()
     for (const el of Object.values(els)) el.remove()
   })
@@ -134,7 +131,6 @@ describe('the highlight by sentence', () => {
   }
   it('lights the sentence under the pointer and its translation, and only it, on both panes', () => {
     const { els, hl } = setUp(page)
-    const spy = vi.spyOn(document, 'elementFromPoint').mockReturnValue(els.left)
     // (a point of the second sentence's second row on A, x 100, y 690 up: 110 down)
     const t = hl.at('left', 100, 110)
     expect(t).toEqual({ id: 3, s: 1 })
@@ -147,7 +143,6 @@ describe('the highlight by sentence', () => {
     expect(shape('right').getAttribute('class')).toContain('axt-hl-shape')
     expect(shape('right').style.left).toBe(`${80 - PAD}px`)
     // (its translation's third sentence from the right: one row there, two on A)
-    spy.mockReturnValue(els.right)
     const third = hl.at('right', 200, 800 - 680)
     expect(third).toEqual({ id: 3, s: 2 })
     hl.light(third)
@@ -157,7 +152,6 @@ describe('the highlight by sentence', () => {
     // (lit whole: every sentence's shape)
     hl.light({ id: 3, s: -1 })
     expect(hl.bands()).toEqual({ left: 3, right: 3 })
-    spy.mockRestore()
     hl.dispose()
     for (const el of Object.values(els)) el.remove()
   })
@@ -259,7 +253,6 @@ describe('the highlight never fills a display nor bridges two rows across anothe
   }
   it('lights a sentence across its display as a bar on each of its rows, the display unlit, on both panes', () => {
     const { els, hl } = setUp(page)
-    const spy = vi.spyOn(document, 'elementFromPoint').mockReturnValue(els.left)
     const t = hl.at('left', 100, H - 690)
     expect(t).toEqual({ id: 3, s: 1 })
     hl.light(t)
@@ -268,13 +261,11 @@ describe('the highlight never fills a display nor bridges two rows across anothe
       expect(outlines).toHaveLength(2)
       expect(outlines.some((o) => inside(middleOf(D), o))).toBe(false)
     }
-    spy.mockRestore()
     hl.dispose()
     for (const el of Object.values(els)) el.remove()
   })
   it('lights the display alone where the pointer is over it, and never with its member lit whole', () => {
     const { els, hl } = setUp(page)
-    const spy = vi.spyOn(document, 'elementFromPoint').mockReturnValue(els.right)
     const t = hl.at('right', ...middleOf(D))
     expect(t).toEqual({ id: 3, s: -2 - 3 })
     hl.light(t)
@@ -285,7 +276,6 @@ describe('the highlight never fills a display nor bridges two rows across anothe
     expect(hl.bands()).toEqual({ left: 2, right: 2 })
     for (const side of ['left', 'right'] as const)
       expect(painted(els, side).some((o) => inside(middleOf(D), o))).toBe(false)
-    spy.mockRestore()
     hl.dispose()
     for (const el of Object.values(els)) el.remove()
   })
@@ -321,7 +311,6 @@ describe('the highlight never fills a display nor bridges two rows across anothe
       ],
     }
     const { els, hl } = setUp(whole)
-    const spy = vi.spyOn(document, 'elementFromPoint').mockReturnValue(els.left)
     const t = hl.at('left', 100, H - 714)
     expect(t).toEqual({ id: 5, s: -1 })
     hl.light(t)
@@ -341,7 +330,6 @@ describe('the highlight never fills a display nor bridges two rows across anothe
       expect(painted(els, 'left').some((o) => inside(middleOf(d), o))).toBe(true)
       expect(painted(els, 'left').some((o) => inside(middleOf(j ? D1 : D2), o))).toBe(false)
     }
-    spy.mockRestore()
     hl.dispose()
     for (const el of Object.values(els)) el.remove()
   })
@@ -489,12 +477,10 @@ describe('the highlight of a figure text is its own line band', () => {
       const shapes = [...els[side].querySelectorAll<HTMLElement>('.axt-hl')]
       expect(shapes.map(box)).toEqual([['400px', `${H - 605}px`, '20px', '5px']])
     }
-    const spy = vi.spyOn(document, 'elementFromPoint').mockReturnValue(els.right)
     expect(hl.at('right', 410, H - 602)).toEqual({ id: 9, s: -1 })
     // (a point beside it by the pad, or over it by the page's half leading, is none of it)
     expect(hl.at('right', 421.5, H - 602)).toBeNull()
     expect(hl.at('right', 410, H - 606)).toBeNull()
-    spy.mockRestore()
     hl.dispose()
     for (const el of Object.values(els)) el.remove()
   })

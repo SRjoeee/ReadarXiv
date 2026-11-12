@@ -338,7 +338,8 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   // (the free paper two members share on one baseline, each its half: two authors side by side; a cell widens by its own side)
   const shared = sharedPaper(part.flows, page)
   // (the lines of TeX's several members share whole, set centred or flush right: each laid as one run, lay/flow.ts)
-  const rowLines = rowLinesOf(part.flows)
+  // (a flush-left line too, the lay's alone: §18.60)
+  const rowLines = rowLinesOf(part.flows, { left: true })
   const lineskip = (part.paper.lineskip as [number, number] | undefined) ?? null
   // (a theorem-like head's word where the target's packages name none: the paper's own name unit's translation, PDF-READER
   // §19.14, today's ownNames)

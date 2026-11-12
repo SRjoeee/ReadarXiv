@@ -434,23 +434,23 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     }
   }
   function at(side: Side, x: number, y: number): Lit | null {
-    const el = document.elementFromPoint(x, y)?.closest?.('.page') as HTMLElement | null
-    const n = Number(el?.dataset.pageNumber)
-    if (!el || !n || panes.pageElement(side, n) !== el) return null
+    // (the page under the point and the point in its box by arithmetic over the places the panes keep (pointAt), the follower's
+    // shift and the scroll as their events give them: no element tested and no layout read in the pointer's frame (§17.4) but
+    // while a pinch is shown; the DOM's hit test here, elementFromPoint in every frame of a scroll, was a tenth of a scroll's
+    // main-thread time, §17.9)
+    const hit = panes.pointAt(side, x, y)
+    if (!hit) return null
+    const n = hit.page
     if (side === 'right' && composer.muted(n)) return null
     const page = composer.page(n)
-    const r = el.getBoundingClientRect()
-    // (the page's own scale, the follower's transform and a pinch included: the box as it shows)
-    const box1 = panes.boxOf(side, n, [0, 0, 1, 1])
-    if (!page || !box1) return null
-    const k = r.width / Math.max(1, el.offsetWidth)
-    let px = (x - r.left - el.clientLeft * k) / k,
-      py = (y - r.top - el.clientTop * k) / k
-    // (on a turned page, the point turned back into the page's own frame, where the rows are)
     const f = panes.frameOf(side, n)
-    if (f?.turn === 90) [px, py] = [py, f.height - px]
-    else if (f?.turn === 180) [px, py] = [f.width - px, f.height - py]
-    else if (f?.turn === 270) [px, py] = [f.width - py, px]
+    if (!page || !f) return null
+    let px = hit.x,
+      py = hit.y
+    // (on a turned page, the point turned back into the page's own frame, where the rows are)
+    if (f.turn === 90) [px, py] = [py, f.height - px]
+    else if (f.turn === 180) [px, py] = [f.width - px, f.height - py]
+    else if (f.turn === 270) [px, py] = [f.width - py, px]
     const committed = !!composer.laid(n)
     const lead = halfLeading(page, side, committed)
     // (what is painted is what is hit: the same rows; the smaller unit winning where two overlap, a heading run into its paragraph)

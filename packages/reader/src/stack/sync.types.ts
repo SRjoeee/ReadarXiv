@@ -26,7 +26,8 @@ export interface Follower<P extends FollowPane = FollowPane> {
   invalidate(): void
   reset(): void
   shift(pane: P): number
-  shownAt(pane: P): number
+  /** `top(p)`: a pane's scrollTop as its scroll events gave it, read in its place (none: read off the pane) */
+  shownAt(pane: P, top?: (p: P) => number): number
   levelError(side: P): number | null
   driver(): P | null
   motion(): 'scroll' | 'glide' | 'spring' | null

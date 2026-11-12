@@ -1326,7 +1326,23 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   that zoom, its ten page views drawn), and a phone of 4 GB 64 MiB, some ten pages of its screen at the fit. A page let go past
   it is laid again from the door's kept markup as before. A drawing kept across a zoom comes back as it was and is drawn again
   at the new k. A later attempt, a fork or another target lets every kept drawing go (they are the door before's), as do
-  `dropOthers()`, a refusal and the dispose. A host may give its own budget (`keepPixels`; 0 keeps none).
+  `dropOthers()`, a refusal and the dispose. A host may give its own budget (`keepPixels`; 0 keeps none). The reader package's
+  page stack keeps the drawing in its own slot instead of detached, and out of the layout tree as today's is out of the
+  document: the slot marked `data-axt-kept` while its drawing is kept, its holder `display: none` (`packages/reader` stack.ts
+  `keep`, styles.ts). Kept in layout, every laid page of a paper was laid out again at each face added to the document (a face
+  added re-lays every text node laid out): over a scroll of 2610.20808v1 41 such relayouts of 10k to 41k objects, the longest
+  134 ms, most of the reader's long tasks (lane reader-perf, 2026-11-12, `verification/reader-perf.md` §1); out of it, the
+  relayouts walk the near pages and the left's (15.6k objects, as today's 16k), and Blink's heap holds 147 MiB less after that
+  scroll. `display: none` rather than `content-visibility: hidden`: the same relayouts measured, no layout objects kept, and
+  every browser the website serves has it (`content-visibility` only from Safari 18). The slot keeps its box, so the pane's
+  height and the sync's places never move; what changed while the drawing was out (a zoom, a face) is laid out as it comes
+  back, one pane height before it shows, and a zoom's page view is drawn again then. A jump straight to a kept page (a link,
+  the outline, a page number) puts it back in the jump's own frame, in the stack's frame callback on the pane's scroll, before
+  that frame is laid out and painted: the near observer tells it only in a task after the frame, which would show the bare page
+  box for a frame. A pinch's preview, a transform the near observer is held through, holds every kept drawing in layout while
+  it is held, out again at its end where still far. A kept page's words are not found by the
+  browser's find while it is far, as today's are not (the coordinator's word, 2026-11-12: equal to production is the bar).
+  Held by the harness's check "a far laid page kept out of the layout tree, back pixel for pixel, the scroll height unmoved".
 - **The faces, in one wave** (`layer-proto/warm.mjs`). v0 checks and loads the faces of a unit as it lays it, one unit after
   another (E2), so a page whose units brought new characters waited a round trip a unit: 2602.23285v2 in Chinese asked 38
   font files in 12 waves before its first page, 4.3 to 9.2 s of a cold visit (production, 2026-10-24). The side asks the
@@ -2042,7 +2058,8 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     left made 8.7 → 8.5 ms (median of 7), a page's geometry 0.070 → 0.079 ms; 2610.19159v1 44 → 58 ms and 0.047 → 0.094 ms.
     The 1 357 left: 2610.19159v1's framed transcripts, which the figures' text takes (1 016), algorithms inside floats, arXiv's
     stamp, lines our compile sets elsewhere. A page
-    moved (our lines elsewhere than arXiv's) lights as a page in place since BUNDLE 12 (below).
+    moved (our lines elsewhere than arXiv's) lights as a page in place since BUNDLE 12 (below). On the rebuilt reader a display
+    TeX set that no unit owns is one block whatever its lines' baselines, its number with it, as a unit's display is (§18.58).
   - **A block lights on both panes or on neither** (the owner, 2026-10-30: 「为什么修改后还有一边不亮的情况？我们可以从根本上解决吗？
     …如果实在分不出来，我们就两边统一亮，或者划成一整块亮」): on a page in place a block's area on each pane is its boxes. On the left
     each box lights the tokens of arXiv's page under it where they are and itself where none is (a display or a formula drawn as
@@ -2623,6 +2640,21 @@ within noise.
   dark or dimmed. The choice was stored and never painted: every band was the sheet's green at 22 % (the feature list's E2,
   2026-11-12; today's look sheet wrote both, `src/core/renderer/style-preset.ts appearanceRule`). Held by the package's e2e
   `highlight: the band chosen …`.
+- **The pointer's look is arithmetic** (§17.4's rule, kept by the rebuilt reader since 2026-11-12): the page under a point and
+  the point in it come from the places the panes keep (`panes.ts` pointAt: each pane's box on the screen and its pages' boxes in
+  its scroll coordinates, read once its layout changed: a pane, its page stack or the window resized, a scale, a display, a
+  document opened; the scroll and the follower's shift as their events give them, `sync.mjs` shownAt with the panes' kept
+  scrollY), never from the document's hit test nor a scrollTop read. A scroll under a resting pointer still lights what comes
+  under it, one look a frame, as §17.4 has it. The look tested the document by `elementFromPoint` and read the page's box again
+  in every frame of a scroll: on one scroll of 2610.20808v1-zh (the perf lane's tools, `refactor-2026-11/perf/tools`, NEW's
+  website at 26c7c1a3; readarxiv-lab-data `lanes/formula-hover`) 404 ms of the profile's main-thread time came from the look's
+  `elementFromPoint`, and the reader's animation-frame callbacks took 425 ms of its long frames, 375 of them a layout they
+  forced; read without the hit test but through scrollTop, the layout was forced there instead (412 ms, 411); with the scroll
+  as kept, none of the look's frames is long (0 ms) and the hit test is gone from the profile (the driver's own probe aside).
+  The count of long tasks over the scroll does not move past its spread (37 / 32 / 41 before, 29 / 35 / 40 after: the
+  typesetting and the streams' reads make them). The package's sweep, one look a frame: 0.105 ms a look at its median, 0.040
+  after. While a pinch is shown its pages stand where its transform draws them, which no place kept holds: the page is read as
+  shown for those frames, as before.
 - **What it does not settle**: a display the part states no ink of (LOST) leaves a gap with nothing in it, filled as today's;
   a display set on a text line beside a word (TeX's display after a word on its baseline) is on that line's row, lit with it;
   a sentence whose only text is a display lights nothing but the display; and a sentence that runs on past a display with no
@@ -3534,7 +3566,8 @@ the row (`ON_ROW`) and no word's gap after the one before (the ink units' word r
 of no piece in its group `.e`, on its last line. The typesetter draws it as its crop right after the member's own tokens,
 glued; the follower runs on from its end at TeX's separation, and the room beside the member is no longer fenced by it (a
 `\thanks` mark in an `\rlap`, 1706.03762v7's first name). Ink past a skip (an `\hspace`, a proof's QED box after `\hfill`)
-is no trail; what TeX pushed to the measure's end is the unit's end mark (§18.52), the rest stays. One rule with §18.12's:
+is no trail; what TeX pushed to the measure's end is the unit's end mark (§18.52), and an author's ink of no letter past a
+word's gap on its last line is its trail too, the gap stated (§18.59); the rest stays. One rule with §18.12's:
 what TeX set on a line is laid as the line, with the alignment TeX gave it. The
 crop stands on the member's last line, the line TeX set it on, as every element's crop stands on its line's baseline: drawn by
 its glyphs' own baseline, which a trail of raised marks alone holds off the line, each mark came down onto the line (45 of
@@ -5657,6 +5690,161 @@ gave 97 untouched paragraphs a letter-spaced line more through the fill's tracki
 family the owner turned down on 2026-11-08 (one leading a column) and 2026-11-10 (no list item looser than the tightest). Not
 built. Two size steps: not offered (5 % is what he saw). The study, its counts and the crops: lab-data
 `refactor-2026-11/lanes/even-page.md`.
+
+### 18.58 A display no unit owns is one block, its number with it (2026-11-12)
+
+On staging (round B12), 1706.03762v7 p4's display (1), `Attention(Q, K, V) = softmax(QKᵀ/√d_k)V`, was hovered as three pieces,
+each lit alone on both panes: "Attention(Q, K, V) = softmax(", the fraction, ")V"; its number "(1)" lit with none. No source unit
+owns the display (its paragraph ends at "as:", the next begins under it), so it is kept blocks (`today/ink-units.mjs`
+keptUnitsOf, §17.1's "Text no unit owns is a kept block"), each a member lit whole (`lay/lit.ts` litOfA). The ledger makes a line
+of the glyphs TeX set on one baseline (0.6 of their size: `today/ledger.mjs` LINE_DY), so the display was five lines: the
+formula's run to "softmax(" on 311.23, the numerator on 317.97, the radical on 311.53, d_k on 303.78, ")V" on 311.23. A block took
+the next line in TeX's stream only where it stood under the block's lowest baseline (0.6 of its size) and met the block across: a
+listing's rule. The numerator, 6.74 pt over the baseline and right of "softmax(", began a second block, the radical and d_k joined
+it, ")V", right of the fraction, began a third; "(1)", no letter pair, began none and met none across. Today's ledger read no
+display (§18.19): the fraction's lines and ")V" were `symbols` and lit nothing, and today's reader lit "Attention(Q, K, V) =
+softmax(" alone on both panes, and the rest with the paragraph before on arXiv's pane alone (its left part's span).
+
+- **The rule** (`keptUnitsOf`, its one change to today's; `locate-ink-today.test.ts`). A display TeX set is one block (§18.19:
+  TeX states each display it sets, from its start point to its last end, `regions` of kind `display`): a line in it, by the
+  display holding at least half of its inked glyphs as the ledger reads a display's line, joins its display's block whatever
+  its baseline and extent across (a fraction's numerator and denominator, a radical, a big operator's limits, an alignment's
+  rows) and whatever TeX set between its lines inside it (its text a unit translates, an `\underbrace`'s label, that unit's own
+  piece), and no other block; a display's own line of no letter pair starts its block. Its number joins it: TeX sets it right
+  after the display's end (`\eqno`: on the last line, or on a line of its own under it where it does not fit; an alignment's
+  numbers are inside its region already), so the line that holds the first ink TeX set after the display's end, on its page and
+  in its column's body, is the display's (with the stop TeX set after the formula's end point on that line, 2608.04322v1 p5's
+  (9)). A unit's display is one block with its numbers (§17.1, `units.mjs` displayBlockId, Laid.lit's `own`); a display no unit
+  owns now lights as one too, an alignment of several rows one block in all, as a unit's alignment is. A line of no display
+  joins a block as before.
+- **Measured** over the 88 papers (the 90 pairs: a kept block is one for every target), the round's head (r20, B13) against the
+  rule (`lab/pdf/prepare-back/display-pieces.mjs`, each display's lines by its region as Located.displays now states them;
+  readarxiv-lab-data `lanes/formula-hover`): 78 parts on a page of displays TeX set that no unit owns, in 22 papers, 752 formula
+  lines (a unit's display is one placeholder, one piece, as before: 4,476 of them in 2,318 members, no two of one member on one
+  row). Lit as more than one piece 51 → 0: on one row 29 (ink off its baseline: a fraction, a radical, a big operator's limits,
+  a script), over rows 22 (an alignment's rows or a formula broken over lines, each row cut too: 2610.21288v1 p10's (A7)-(A9),
+  each number a piece of its own, 26 pieces → 1; 2307.16209v1 p27's metric broken over two lines, 18 → 1); one piece 24 → 74.
+  Lit by nothing in part 8 → 4, the four as before: 2610.21377v1 p41's three displays inside Algorithm 1 (a float, whose lines
+  no kept block takes) and one line of 2610.21765v1 p10's, a big delimiter whose baseline its font sets at its ink's top, which
+  the probe reads outside its row. Numbers: 45 displays in 12 papers light their number with them, 3 of those set under the
+  formula; each was lit by nothing. Nothing else moves but what the blocks carry: the ords of the units made after them; on 16
+  pages of 7 papers the page's column reading (`locate.ts` columnsAndMeasures: two columns where three lines keep to each half),
+  which the split blocks' narrow lines had made two-column (1706.03762v7 p4: the fraction and ")V" in the right half), 74
+  members' lines from "spans" to the one column, and with it 4 lines' PINNED of 3 of those pages (a line's block is read by
+  page and column); the paper's faces in 21 papers, which the typesetter reads alike (`lay/read.ts` paperOf, 63 of 63). The
+  reader gate over the 37 pairs of the 20 of those papers it holds, each laid from both runs' parts (its entry, every member's
+  `Laid.lit` written a line, `AXT_GATE_LIT`): every member's boxes on every page alike but the kept displays' (1,773 entries
+  gone, 173 come, all `inkorphan`), the members a column moved too; the entry 8,560 laid alike and 93 not on both, its boxes
+  11,157 members, 29,244 lines, 14,839 boxes on both, I10 no fault on both.
+- **The version.** PIPELINE moves: the parts of 21 of the 88 papers (the kept members and their ties, the column reading, the
+  faces) and the add-ons of 13, whose groups are named by the index of each unit made on A (`axt<unit>.<page>.t`: the figure
+  texts made after the merged blocks, numbered on from them); TRANSLATE stays (a kept block is never sent); the units objects
+  of every paper as they were (a kept block's unit is its kind's, of no content).
+- **Not done.** A display the source ends with `$$` (no region, §18.19) keeps the listing's rule; a number TeX sets before its
+  display (`\leqno`: none in the 88); a display inside a float, which no kept block takes.
+
+### 18.59 What TeX set on an author's line after it moves with it, past a word's gap (2026-11-12)
+
+With the author block switched on, a name or a row of places was drawn 10 to 25 % smaller than the original though the line had
+room beside it (the display class S5). The owner (2026-11-12): normal size, using the room that is there, without the overlap of
+today's marks after the name, and only if it can be done simply. Over the lay of the 90 pairs with stored rows, every switch on
+(round B13's bundles, r20), 63 author-block members (author, affiliation, the block's ink names) were drawn below their own
+size: 15 fenced by ink that stays beside them, 3 on a flush-left line (§18.60), 2 by an icon box before a name and 2 by an
+"and" left as ink of no unit (both open), 31 inside a run the lab could not lay (a connector's ink unit whose id moved has no
+stored row; a reader asks for it), 10 with no room on either side (a line of names filling its column, four columns of names).
+Of the 15, every one is a mark or a number TeX set right after a name or a place on its line, past a word's gap:
+
+- 1706.03762v7 p1 t187, the last NeurIPS name (`Illia Polosukhin\footnotemark[1]\hspace{1.7mm} \thanks{…}\\`): the call
+  points of §18.16 stop at the last block (no unit follows its `\thanks` in the block, so no call is written there), the glue
+  rule broke at the 3.22 pt after the star, and the ‡ stayed (`Room.stays`), the right end of the centred name's room: v2 drew
+  it at 0.875; today keeps 9.96 by drawing its star over the ‡, 2.8 pt of overlap.
+- 2608.16117v1 p1 t129-t131, "Philadelphia, 19104, Pennsylvania, United States of America": the postal code is no unit's
+  (a number), between two places on one centred line. It stayed, parted the line's flows (TeX's separation past it 35.8 pt, more
+  than a shared row's), and the places after it were laid as a run centred on its own middle with its left fenced by the
+  number: 0.8 for the German; today keeps the size by a break TeX never set, 2.74 pt off the line's middle.
+- 2608.08481v1, 2610.20266v1, 2610.21288v1 (and, drawn at their size but fenced, 2610.20030v1, 2610.21765v1, 2610.21770v1): a
+  `\thanks` mark after `\,` (1.66 to 1.83 pt) after the last name's own marks.
+
+**The rule** (`locate.ts`, the trail). An author's member (the block's names and places, `AUTHOR_KINDS`) also owns, past a
+word's gap, the ink of no letter TeX set after it on its last line, in B's stream up to the next unit's ink: what TeX set as
+part of its line moves with it, decided by TeX's order and the line, never by a mark's shape. A blank glyph a producer wrote
+decides nothing. Ink holding a letter is text: where a letter stands on the line after the run, the paragraph's own text goes
+on (acmart's reference format "Ru Huang. 2027. ABNAT", an "and" a class sets between names, an ink unit's, translated), and
+nothing past the gap is claimed, as the end mark's walk reads text no unit owns after a unit's end (§18.52); a member of no
+author block keeps the glue rule alone; a row of another line (an e-mail under a name), a mark the next unit owns (its label,
+own.mjs MR 5), stay as before. The distance TeX set from the member's ink end (its last glyph, or an element's box after it:
+§18.60) to the run's first glyph, where the run opens past the gap, is stated on the trail: `El.sep` (FORMAT 1, optional; a typesetter of before reads none and glues the trail). A run
+glued first and gapped after (2608.08481v1's "1,∗") is one crop with its gap inside it. The claimed ink is the member's: its
+line reaches it, no stay of any member's, and the member after it on the row is joined to it at TeX's separation (16117's
+five places one flow).
+
+**The lay** (`lay/adapt.ts`): the trail's crop after the member's tokens as before, `sep` laid before it as the kern an
+`\hspace` element's is (`kernW` on the token before, at the member's scale), so that no line breaks there.
+
+**Before and after** (stage 1a over the 88, r20's compiles: the marked TeX unchanged, every compile found by its key). s1 and
+its twin: 88 made, none missing a compile, none failed; 2,707 of 2,707 objects and 88 of 88 dumps the same (I6). 11 papers
+move, the units (the wire) byte-identical in each, their parts and add-ons alone: trails in 1706.03762v7 (‡, `sep` 3.23),
+2608.16117v1 pp1-3 ("19104,", 3.56), 2610.20285v1 († 4.23; its alignment, read off the page, now c: the line with its mark is
+centred, 250.25 against the column's 248.53), 2610.20451v1 (",1" 8.47, "2" 6.8), 2610.21084v1 pp1-2 (two postal codes
+"30322,", "29634,", 1.99), and the `\,` marks joined to glued trails in 2608.08481v1, 2610.20030v1, 2610.20266v1, 2610.21288v1,
+2610.21765v1, 2610.21770v1; flows joined over the codes (16117 pp1-3, 21084's two rows), joins and rooms with them. A place's
+class's tail (the comma TeX set after "Philadelphia", its source writing none) is read with its trail aside, as an end mark is
+(facts-pass.ts): read with the trail as its last element glyph, as every trail was since §18.16, the place had no tail, its comma
+erased with its text and drawn nowhere ("Philadelphia 19104," on the lay, caught by the lane's own reading). The differential against acceptance-b13: lost 11, the LOST
+lines r20's; gained 5,838 as r20's; changed 5,256 to 5,258 (1706.03762v7 t187, 2608.16117v1 t129: their trails). Float lines
+778 and orphan letters 388 as recorded.
+
+### 18.60 A line its members share whole TeX set flush left is laid from its start as one run (2026-11-12)
+
+2609.20976v1 p1 (JCAP, `\author[a]{Gautam Bhuyan,\orcidlink{…}}`, each `#2$^{#1}$\ `): three names on one flush-left line, each
+with its ORCID icon (its element), each mark after a name the next name's label (own.mjs MR 5: the class stores the list in the
+preamble, so no call is stated). A line TeX set flush left was never laid as a run (`rowLinesOf` took centred and flush-right
+lines alone: "its members run on from its first one's start already", S.rowStart). They do run on, but each member is fitted in
+its own block first, widened to its `Room.side`, and the first name's side ended at the next name's label (210.56), half its
+size before it: 118 pt for the Japanese name with its icon, drawn at 0.9, the size tie taking the others with it, though that
+label moves with the next name (laid from this one's end) and the line had 28 pt free after its last name. Nothing that moves
+with a member may fence its room or its neighbour's (the owner's S5, §18.59).
+
+- **The rule** (`lay/adapt.ts` `rowLinesOf`, `shared/row-start.ts` `lineRoom`/`lineShift`, `lay/flow.ts` `layLine`). A line of
+  several members TeX set flush left (their own marks' alignment, alike) is a run as a centred or flush-right one is: laid from
+  the line's start, its room to the run's right (its last member's side, the column's end), each member from the one before's
+  ink end at TeX's separation, then placed starting where TeX started the line. A follower's label that goes with it on the row
+  (S.rowStart's row label: a flush-left follower's, which U.decor does not carry) admits it to the run and is drawn before its
+  first token, the first word glued to it, as `layOne` draws it. Where the translation does not fit the line's room, `layLine`
+  refuses the run and the members are laid one by one, as before (the test lays a full row so and compares it with the row its
+  marks state no alignment for). The parity's verdict asks `rowLinesOf` without flush-left lines (`left`, the lay's alone): a
+  flush-left member is judged by its start and a follower by its gap, which is the line's reading already.
+- **The separation** (`locate.ts` `inkEnd`, a prepare change). The join to the next member on a row was read from the member's
+  glyphs' ink end; its element's box on that line (no glyph's: the ORCID icon) travels with it in its crop, so the next name was
+  laid the icon's width late (9.84 pt), its mark apart from the name TeX set it right after. It is read from the member's ink
+  end, its elements' boxes with it; an element's glyphs are among the line's glyphs already, read by their ink (read by the
+  element's stated box, its glyphs' advances, 173 joins in 24 papers moved by under a point: tried, not kept). An author's
+  trail starts there too (§18.59): a mark TeX set right after the icon is glued to the member (2610.20451v1's ",1"); read from
+  the last glyph across the icon it was stated 8.47 pt apart and laid that far after the icon's crop.
+- **Before and after, §18.59 and this together** (stage 1a s5 over the 88, r20's compiles; its twin 2,707 of 2,707 objects and 88
+  of 88 dumps the same). 13 papers move: §18.59's 11, and by the ink end 2609.20976v1 (two joins, 22.54 to 11.25 and 21.55 to
+  10.26: from the icons' ends), 2610.20451v1 (",2" after an icon now its name's trail, glued; its "and" ink unit the word alone)
+  and 2610.10492v1 (the mark after the first name's icon its trail, so the "and" after it is an ink unit of the block, joined:
+  units 49,689 to 49,690, the paper's later ink units numbered one on). The differential: lost 11, the LOST lines r20's; gained
+  5,838 to 5,839 (that "and"); changed 5,256 to 5,258; float lines 778 and orphan letters 388 as recorded. The lay of the 90 pairs
+  with stored rows, every switch on, against 75602aecb over r20: 40 members move on 17 pages (10492's renumbered ink units
+  aside, the same lay), 19 drawn larger, none smaller: 1706.03762v7 t187 (es, pl, zh) 0.875-0.9 to 1, 2608.08481v1's five 0.8 to
+  1 (a run fenced by the last name's `\,` mark), 2608.16117v1-de's places 0.8 to 1, 2609.20976v1's names 0.9 to 1,
+  2610.21288v1's three 0.9 to 1, 2610.20266v1's three 0.9 to 0.93 (its run still refused for an "and" with no stored row); a
+  flush-left run's last member no longer tracked by the page's fill (2609.26457v1, 2610.19274v1, 2610.21084v1: its share of its
+  line, as a centred run's), 2610.21084v1 t496 laid where it was unfit. Author-block members drawn below their size: 63 to 47; the
+  47 are runs the lab cannot lay (34: a connector's ink unit with no stored row, a reader asks for it), no room on either side
+  (10), an icon box that leads a name (2610.21547v1, 2) and an "and" no unit owns between two names (2610.20716v1 t3): open.
+  The three named units, with every switch on (base, after; today):
+  1706.03762v7-zh t187 0.875 and 1 (today 1); its line with its marks centred on the original's middle 307.83, -3.44 and 0.00
+  (the base centred the name without its ‡); its ∗ 4.03 pt before its ‡ (TeX 3.22, the crops' margins), no overlap (today's ∗,
+  drawn as text, 2.82 pt over the ‡). 2608.16117v1-de t127-t131 two rows at 1 (the base 0.8 for t130/t131; today 1 by a third
+  line TeX never set), each row centred on TeX's middle 306.14 (the base's lower row 3.36 off), "Philadelphia, 19104,". 2609.20976v1
+  t1-t3 0.9 and 1 (today 0.975, 1, 1), from TeX's start 84.95. The parity of the three pairs, every switch on: 5 pages worse to
+  3, none newly worse; 2608.16117v1-de p1 (t128's align, the tie t130/t131) and 2609.20976v1-ja p1 (the tie t1-t3) no longer
+  worse, 1706.03762v7-zh p1's t187 size gone (the page worse by its abstract's line count alone, t8). By default (the author block
+  the original's) the lay of the 90 pairs is the base's member for member (10492's ink units read one number on), and the parity
+  of the three pairs the same: 3 pages worse, the same differences.
 
 ## 19. The engine's contract
 

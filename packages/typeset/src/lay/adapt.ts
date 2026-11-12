@@ -80,7 +80,7 @@ export type AdaptInput = {
   /** the middle of the free paper it shares on its baseline with a member that may widen into it too, left and right
    *  (sharedPaper; NaN where it shares none) */
   shared?: readonly [number, number]
-  /** the line of TeX's it shares whole with the members beside it, set centred or flush right (rowLinesOf) */
+  /** the line of TeX's it shares whole with the members beside it, set centred, flush right or flush left (rowLinesOf) */
   line?: Omit<RowLine, 'left' | 'right'>
 }
 export type Adapted = { member: FlowMember } | { stop: string }
@@ -198,13 +198,20 @@ export function sharedPaper(flows: readonly (readonly Placed[])[], page: number)
  * them (S.names sets a babel name on its own, or as the lead of the member it binds), no cell nor figure text (set in boxes of
  * their own). Its alignment is TeX's: the one its members' own marks state (Placed.align where `read` holds no 'align'), all
  * alike; a member made on A (an ink unit: text TeX set that no unit owns, amsart's "AND" between two names) states none of
- * TeX's for the line and takes the line's. A line TeX set justified or flush left needs nothing: its members run on from its
- * first one's start already (S.rowStart). Its rows are TeX's lines, each from its first glyph's start (a member's label's,
+ * TeX's for the line and takes the line's. A line TeX set justified needs nothing: its members run on from its first one's start
+ * already (S.rowStart). One TeX set flush left (`left`, the lay's; docs/PDF-READER.md §18.60) is a run from its start too: laid
+ * member by member, each member's room ended at the next one's label or text (Room.side), though that moves with the next member,
+ * laid from this one's end, and the first name shrank where the line had room after its last (2609.20976v1 p1, JCAP's names at
+ * 0.9). The parity's verdict asks without it: a flush-left line's members are judged by their starts and gaps, which is the
+ * line's reading already. Its rows are TeX's lines, each from its first glyph's start (a member's label's,
  * where it stands first on it) to its last one's end: IJCAI's names, one centred paragraph over three lines, each \and's comma
  * the next name's label, a name over two lines (2611.00342v1 p1). A paragraph of several lines is the run's whole, nothing of
  * the page before its first member nor after its last on their lines
  */
-export function rowLinesOf(flows: readonly (readonly Placed[])[]): Map<number, Omit<RowLine, 'left' | 'right'>> {
+export function rowLinesOf(
+  flows: readonly (readonly Placed[])[],
+  o: { left?: boolean } = {},
+): Map<number, Omit<RowLine, 'left' | 'right'>> {
   const out = new Map<number, Omit<RowLine, 'left' | 'right'>>()
   const onRow = (a: Placed, b: Placed) => {
     const l = a.lines.at(-1),
@@ -249,7 +256,7 @@ export function rowLinesOf(flows: readonly (readonly Placed[])[]): Map<number, O
         continue
       const told = row.filter((m) => !ink.has(m.kind) && !(m.read ?? []).includes('align')).map((m) => m.align)
       const align = told[0]
-      if ((align !== 'c' && align !== 'r') || told.some((a) => a !== align)) continue
+      if ((align !== 'c' && align !== 'r' && !(o.left && align === 'l')) || told.some((a) => a !== align)) continue
       // (its rows: the first member's lines, then each member's lines after its first, each TeX's next line under the one before)
       const rows: RunRow[] = []
       let lines = true
@@ -637,8 +644,20 @@ export function adapt(i: AdaptInput): Adapted {
       k: TRAIL_K,
       gap: { box: { x0, x1, bottom: y0, top: y1 } },
     }
+    // (one TeX set past a word's gap (El.sep, §18.59: an author's mark after `\hspace` or `\,`, a postal code after a space)
+    // that far after the translation's end, at its scale: the kern after the last token, as an `\hspace` element's (tokens.ts
+    // kernOn), so that no line breaks there and the crop is glued after it; after a space the translation ends with, none. The
+    // gap holds whatever TeX set in it, the unit's own skip at its end too (1706.03762v7's `\hspace{1.7mm}`, an element whose kern
+    // the last token carries): the gap is laid in its place, not after it, or the ‡ stood 8.85 pt after the star for TeX's 3.22)
+    const sep = trail[1].sep ?? 0
+    const t = tokens.at(-1)!
+    const before = sep > 0 && !t.space ? { ...t, kernW: (100 * sep) / s, kernEnd: true as const } : t
     tokens = Object.assign(
-      [...tokens, { crop, cw: box.crop[2] - box.crop[0], glue: true, w100: 0 } as unknown as (typeof tokens)[number]],
+      [
+        ...tokens.slice(0, -1),
+        before,
+        { crop, cw: box.crop[2] - box.crop[0], glue: true, w100: 0 } as unknown as (typeof tokens)[number],
+      ],
       {
         base: (tokens as { base?: unknown }).base,
       },
@@ -696,10 +715,12 @@ export function adapt(i: AdaptInput): Adapted {
   }
   // (the line of TeX's it shares whole, laid as one run (lay/flow.ts layLine), with the room its own line may take beside it,
   // as U.decor's widen reads it (sideOf): the run's left its first member's, its right its last one's. None where its label
-  // stays where TeX set it (neither drawn anew nor carried as its crop): its text would leave it)
+  // stays where TeX set it (neither drawn anew nor carried as its crop, nor going with it on the row as S.rowStart's crop: a
+  // flush-left follower's mark, §18.60): its text would leave it)
   const own = i.line && blocks[0] ? sideOf(blocks[0]) : undefined
+  const goesWith = !!rowStart?.ownLabel && !!rowStart.label
   const lineOf: RowLine | undefined =
-    i.line && own && !(label && !label.drawn && !decor.carried)
+    i.line && own && !(label && !label.drawn && !decor.carried && !goesWith)
       ? {
           ...i.line,
           left: Math.max(own.column[0], ...own.left),

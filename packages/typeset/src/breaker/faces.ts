@@ -8,9 +8,10 @@
 // roleFaceOf :89-100 (faceOf :388 with the role table set), CJK_SLANT_DEG :83; rules/script.mjs scriptOf :11. The catalogue
 // (each face's family, weight, style, size, letters, smcp) is data/faces.ts, written from today's tables.
 //
-// Module state removed on the way (no behaviour): today's alphabetOf and scriptOf cache by their argument; the port
-// computes them each call. Its inputs: the target, the paper's English family (A3, read off page 1) and the target's CJK
-// family (the rule set's `cjkFaces`) ← Rules.faces, built by rulesFor.
+// alphabetOf and scriptOf are cached by their argument, as today's are (pure functions of a language tag; computed each call
+// they were a third of the typesetter's main-thread time while a paper was scrolled: lane perf-check, 2026-11-12). Its
+// inputs: the target, the paper's English family (A3, read off page 1) and the target's CJK family (the rule set's
+// `cjkFaces`) ← Rules.faces, built by rulesFor.
 import { FACES, HOLDS, SMCP } from '../data/faces.ts'
 import type { Face, TStyle } from './tokens.ts'
 
@@ -35,8 +36,22 @@ export type Run = {
   caps: boolean
 }
 
-/** the script a BCP 47 tag is written in: its likely script (rules/script.mjs:11 scriptOf) */
-export const scriptOf = (lang: string): string | undefined => new Intl.Locale(lang).maximize().script
+/** the most tags a cache below holds: the tags it is asked are the targets a reader lays (the product's language table, a few
+ *  dozen), so it holds one entry a target; past this many (a caller with tags of its own) it computes and keeps nothing more */
+export const TAGS_CACHED = 256
+/** `f`, a pure function of a language tag, cached by the tag (at most TAGS_CACHED tags) */
+function byTag<T>(f: (tag: string) => T): (tag: string) => T {
+  const kept = new Map<string, T>()
+  return (tag) => {
+    if (kept.has(tag)) return kept.get(tag) as T
+    const v = f(tag)
+    if (kept.size < TAGS_CACHED) kept.set(tag, v)
+    return v
+  }
+}
+
+/** the script a BCP 47 tag is written in: its likely script (rules/script.mjs:11 scriptOf), cached by the tag as today's is */
+export const scriptOf = byTag((lang: string): string | undefined => new Intl.Locale(lang).maximize().script)
 
 const CJK_GROUPS = /^axt-(shs-|mincho|fandolkai|bkai00mp)/
 const familyOf = (group: string) => {
@@ -97,11 +112,12 @@ const styleOf = (bold: boolean, italic: boolean) =>
   bold ? (italic ? 'bolditalic' : 'bold') : italic ? 'italic' : 'regular'
 /** the languages with letters of their own (font-roles.mjs:372 LETTERS' keys: what letters each holds is data/faces.ts HOLDS) */
 const LETTERS = new Set(['de', 'fr', 'es', 'pt', 'ru', 'it', 'nl', 'pl', 'tr', 'cs', 'sv', 'uk'])
-/** the alphabet a target's letters are: its language's own, else its script's (font-roles.mjs:386 alphabetOf) */
-const alphabetOf = (target: string) => {
+/** the alphabet a target's letters are: its language's own, else its script's (font-roles.mjs:386 alphabetOf), cached by the
+ *  target as today's is */
+export const alphabetOf = byTag((target: string): string => {
   const language = new Intl.Locale(target).language
   return LETTERS.has(language) ? language : scriptOf(target) === 'Cyrl' ? 'Cyrl' : 'Latn'
-}
+})
 const setsAll = (id: string, alphabet: string) => !!HOLDS[id]?.includes(alphabet)
 /** the face of a group at a weight and slant, else its nearest style that holds the target's letters (font-roles.mjs:403) */
 function styled(group: string, bold: boolean, italic: boolean, alphabet: string): string | null {

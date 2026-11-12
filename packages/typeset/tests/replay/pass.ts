@@ -66,7 +66,17 @@ export function laysOf(pair: string): {
     if (last === undefined) continue
     const c = walkCase(pair, u.ord, last)
     if (typeof c === 'string') continue
-    const got = chain(c)
+    // (a unit whose walk measures a text today's never measured, which the tap's table lacks (MissingMeasure: a word broken
+    // where today's walk never broke it, since round 8 B5's literal-fixes): a difference of the chain's, named, and laid by no
+    // lay, so that its passes are not replayed and the pair's others are; it threw out of here and ended the corpus replay)
+    let got: ReturnType<typeof chain>
+    try {
+      got = chain(c)
+    } catch (e) {
+      if (!(e instanceof MissingMeasure)) throw e
+      differ.push(`ord ${u.ord}: a measure the tap lacks: ${JSON.stringify(e.text)}`)
+      continue
+    }
     if (got.lead) moved.add(u.ord)
     // (a unit the room ruling lays otherwise: the port's own lay, which its page's pass fills)
     const ruled = !!got.d && room.runs.has(u.ord)

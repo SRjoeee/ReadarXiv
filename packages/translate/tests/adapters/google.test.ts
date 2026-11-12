@@ -1,13 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { CHROME_DIGEST, chrome } from '../../src/adapters/chrome.ts'
 import { google, readTagged, tagsWire } from '../../src/adapters/google.ts'
+import { GLUED_LEAD, GLUED_SPACE, SENTINEL } from '../../src/wire/text.ts'
 import { chainOf } from '../../src/chain.ts'
 import type { FetchInit, Piece, Result } from '../../src/contract.ts'
 import { echo, NEVER, scriptedFetch } from '../../src/testing/fakes.ts'
 import { fakeClock } from '../../src/testing/ports.ts'
 import { translatorSuite } from '../../src/testing/suite.ts'
 import { el, span, t, unit } from '../pieces.ts'
-import { DISPLAY_ENDS, GOOGLE_REPLIES, HEAD_STOP, LABEL_AFTER_BREAK, SOURCE_LINES, UNITS } from './fixtures.ts'
+import {
+  DISPLAY_ENDS,
+  GOOGLE_REPLIES,
+  HEAD_STOP,
+  LABEL_AFTER_BREAK,
+  GLUED_PAST,
+  SOURCE_LINES,
+  UNITS,
+} from './fixtures.ts'
 
 /** the endpoint giving each item back as its translation */
 export const googleEcho = (_url: string, init: FetchInit) => {
@@ -18,7 +27,7 @@ export const googleEcho = (_url: string, init: FetchInit) => {
 translatorSuite('google', {
   make: (fetch) => google({ fetch }),
   target: 'zh-Hans',
-  units: [...UNITS, HEAD_STOP, DISPLAY_ENDS, SOURCE_LINES],
+  units: [...UNITS, HEAD_STOP, DISPLAY_ENDS, SOURCE_LINES, GLUED_PAST],
   echo: googleEcho,
   replies: GOOGLE_REPLIES,
   faults: [
@@ -236,6 +245,26 @@ describe('google: a reply that writes a string of the tokens’ form the text do
       { t: 'text', s: '不同。' },
     ])
     expect(readTagged(u, `x50 剂量与${w(1)}不同（x50）。`)).toBeNull()
+  })
+})
+
+describe('google: a glued element’s white space taken back past the wire’s own pair tags and sentence marks', () => {
+  it('into a pair after the element, and from a pair before it; a space the source has kept', () => {
+    const r = readTagged(GLUED_PAST, '设为（<x id="1"/><t id="2"> A34</t>）和<t id="3">单词 </t><x id="4"/> 其余。')
+    expect(r?.content).toEqual([
+      { t: 'text', s: '设为（' },
+      { t: 'el', id: 'a' },
+      { t: 'span', id: 's', content: [{ t: 'text', s: 'A34' }] },
+      { t: 'text', s: '）和' },
+      { t: 'span', id: 'w', content: [{ t: 'text', s: '单词' }] },
+      { t: 'el', id: 'b' },
+      { t: 'text', s: ' 其余。' },
+    ])
+  })
+  it('past a sentence start a reading marks there, the mark kept', () => {
+    expect(`${SENTINEL} G`.replace(GLUED_LEAD, '')).toBe(`${SENTINEL}G`)
+    expect(`word ${SENTINEL}`.replace(GLUED_SPACE, '')).toBe(`word${SENTINEL}`)
+    expect('word '.replace(GLUED_SPACE, '')).toBe('word')
   })
 })
 

@@ -123,8 +123,10 @@ export interface InkStats {
 /** the units made on A, in today's bundle's order (ink units, kept blocks, figure texts: those drawn first), their indices from
  *  `ins.units.length` on (an echo's index, of a source unit or of an ink unit before it, in that one list) */
 /** a line on A the engine reads as a display's formula (a ledger line of the class math at least half of whose glyphs TeX set in a
- *  display, not in its text mode): [page, x0, bottom, x1, top, baseline] — what the lab's stage reads a display's ink by */
-export type DisplayLine = [number, number, number, number, number, number]
+ *  display, not in its text mode): [page, x0, bottom, x1, top, baseline, display] — what the lab's stage reads a display's ink
+ *  by; `display` the display's number on its page (its region's index among the page's displays as carried onto A), so
+ *  that the lab tells a display's lines apart from another's (lab/pdf/prepare-back/display-pieces.mjs) */
+export type DisplayLine = [number, number, number, number, number, number, number]
 
 export function inkOf(o: InkInput): {
   made: Made[]
@@ -533,6 +535,7 @@ export function inkOf(o: InkInput): {
     const n = inkA.pages[i]!.glyphs.length
     return [regionMask(c.regions, n, 'display'), displayTextMask(c.regions, n)] as const
   })
+  const displayRegions = carried.map((c) => c.regions.filter((r) => r.kind === 'display'))
   for (const L of ledger.lines as { page: number; cls: string; gs: number[]; x0: number; x1: number; y: number }[]) {
     if (L.cls !== 'math' || !L.gs.length) continue
     const [d, t] = masks[L.page - 1]!
@@ -545,7 +548,12 @@ export function inkOf(o: InkInput): {
       bottom = Math.min(bottom, G[g]!.bottom)
       top = Math.max(top, G[g]!.top)
     }
-    if (k > 0 && k >= 0.5 * L.gs.length) displays.push([L.page, L.x0, bottom, L.x1, top, L.y])
+    if (k > 0 && k >= 0.5 * L.gs.length) {
+      // (the display holding most of its glyphs)
+      const ds = displayRegions[L.page - 1]!
+      const held = ds.map((r) => L.gs.filter((g) => g >= r.from && g < r.to).length)
+      displays.push([L.page, L.x0, bottom, L.x1, top, L.y, held.indexOf(Math.max(...held))])
+    }
   }
   return {
     displays,
