@@ -14,6 +14,7 @@ import {
   HEAD_STOP,
   LABEL_AFTER_BREAK,
   GLUED_PAST,
+  OWN_GLUED,
   SOURCE_LINES,
   UNITS,
 } from './fixtures.ts'
@@ -27,7 +28,7 @@ export const googleEcho = (_url: string, init: FetchInit) => {
 translatorSuite('google', {
   make: (fetch) => google({ fetch }),
   target: 'zh-Hans',
-  units: [...UNITS, HEAD_STOP, DISPLAY_ENDS, SOURCE_LINES, GLUED_PAST],
+  units: [...UNITS, HEAD_STOP, DISPLAY_ENDS, SOURCE_LINES, GLUED_PAST, OWN_GLUED],
   echo: googleEcho,
   replies: GOOGLE_REPLIES,
   faults: [
@@ -261,7 +262,18 @@ describe('google: a glued element’s white space taken back past the wire’s o
       { t: 'text', s: ' 其余。' },
     ])
   })
+  it('an element glued after another’s own stop: the reply’s space before that stop is no glue’s either', () => {
+    const u = unit('o', [t('Values '), el('a', 'math', '.'), el('b', 'math'), t(' hold.')])
+    expect(readTagged(u, '数值<x id="1"/> 。<x id="2"/> 成立。')?.content).toEqual([
+      { t: 'text', s: '数值' },
+      { t: 'el', id: 'a' },
+      { t: 'el', id: 'b' },
+      { t: 'text', s: ' 成立。' },
+    ])
+  })
   it('past a sentence start a reading marks there, the mark kept', () => {
+    expect(`word ${SENTINEL} `.replace(GLUED_SPACE, '')).toBe(`word${SENTINEL}`)
+    expect(` ${SENTINEL} G`.replace(GLUED_LEAD, '')).toBe(`${SENTINEL}G`)
     expect(`${SENTINEL} G`.replace(GLUED_LEAD, '')).toBe(`${SENTINEL}G`)
     expect(`word ${SENTINEL}`.replace(GLUED_SPACE, '')).toBe(`word${SENTINEL}`)
     expect('word '.replace(GLUED_SPACE, '')).toBe('word')
