@@ -5299,6 +5299,24 @@ read as the caption's text; all three sentences and the label "Figure 1." stayed
   of its argument alone; own.mjs read the bracket into the highlight before it, and this reading, spelling the text after it,
   meets the bracket first and claims nothing.
 
+### 18.56 An italic figure label is drawn slanted in a CJK target, as a name and a display are (2026-11-12)
+
+A CJK run of an italic text is its upright face sheared 13° (the owner's ruling of 2026-10-19; `breaker/faces.ts` `faceOf`
+states it as the face's `oblique`). The names path (`lay/entry.ts`) and the displays (`emit/display.ts`) write it into each
+item as its skew; S.figures (`lay/figures.ts` `figuresOf`) wrote a figure text's runs with their text, place, face, size, fill
+and direction and no skew, so an italic label translated into Chinese, Japanese or Korean stood upright (Codex's P2 at
+225f0959f, unanswered until this lane; verification R07).
+
+- **The rule.** Each item of a run whose face is oblique carries the skew and the slant, a turned label's too (the reader's
+  painter shears it about its baseline in the run's frame, `compose/paint.ts`). A Latin run of the label is set in its italic
+  face and takes none, nor does Korean's word space, a Latin run. The width is its advances' as before: the fit and the anchor
+  read advances, and the lean past the last one is the face's, as a name's is.
+- **Before and after** (`figure-slant.test.ts`, red at the base on two of its three cases): an italic label in ja, ko and zh,
+  a turned one, an upright one. On the parity's 22 pairs (v2's lay over r19's bundles, gate mode): 53 figure texts on 11 pages
+  of 6 pairs, all zh (2608.04322v1, 2608.06701v1, 2608.25210v2, 2610.21313v1, 2610.21504v1, 2610.22065v1), gain the skew;
+  nothing else of any page moves. The parity on those pairs, both modes: 19 italic labels now read as the original's italic
+  (`style`, v2 nearer; today's drawn upright), no page newly worse. No version moves: the reader's lay alone.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

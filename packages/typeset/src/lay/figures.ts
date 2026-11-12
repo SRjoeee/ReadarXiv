@@ -170,12 +170,15 @@ export function figuresOf(
     for (const r of f.runs!) {
       // (a run in its group's fill where the part states one, black none: TeX's label before its address in the link's colour)
       const fill = r.fill ?? f.fill
+      // (an oblique face's slant, a CJK face's synthetic italic: the run skewed, as the names path's and D.display's)
+      const slant = r.face.oblique ? { skew: 1 as const, slant: r.face.oblique } : {}
       items.push({
         s: r.s,
         x,
         face: fontString(r.face, 100),
         size: f.size!,
         ...(fill ? { fill } : {}),
+        ...slant,
         ...turn,
       })
       x += (w100(r.s, r.face) / 100) * f.size!
