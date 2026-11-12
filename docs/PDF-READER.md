@@ -2624,6 +2624,14 @@ within noise.
   dark or dimmed. The choice was stored and never painted: every band was the sheet's green at 22 % (the feature list's E2,
   2026-11-12; today's look sheet wrote both, `src/core/renderer/style-preset.ts appearanceRule`). Held by the package's e2e
   `highlight: the band chosen …`.
+- **The pointer's look is arithmetic** (§17.4's rule, kept by the rebuilt reader since 2026-11-12): the page under a point and
+  the point in it come from the places the panes keep (`panes.ts` pointAt: each pane's box on the screen and its pages' boxes in
+  its scroll coordinates, read once its layout changed: a pane, its page stack or the window resized, a scale, a display, a
+  document opened; the scroll and the follower's shift as their events give them), never from the document's hit test. A scroll
+  under a resting pointer still lights what comes under it, one look a frame, as §17.4 has it. The look tested the document by
+  `elementFromPoint` and read the page's box again in every frame of a scroll: 404 of the 4,094 ms of main-thread time of one
+  scroll of 2610.20808v1 (the perf lane's profile, `refactor-2026-11/perf/tools/profile.mjs`). While a pinch is shown its pages
+  stand where its transform draws them, which no place kept holds: the page is read as shown for those frames, as before.
 - **What it does not settle**: a display the part states no ink of (LOST) leaves a gap with nothing in it, filled as today's;
   a display set on a text line beside a word (TeX's display after a word on its baseline) is on that line's row, lit with it;
   a sentence whose only text is a display lights nothing but the display; and a sentence that runs on past a display with no
