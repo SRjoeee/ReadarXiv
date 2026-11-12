@@ -312,6 +312,7 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS } = {}) 
     for (const [ns, to] of spaces) for (const [k, rs] of constants) if (k.startsWith(`${to}\u0000`)) spaceRules.set(`${ns}.${k.split('\u0000')[1]}`, rs)
     if (!local.size && !spaceRules.size) continue
     const shadowed = new Map()
+    const seen = new WeakSet()
     const isShadowed = (name, ps) =>
       ps.some(p => {
         if (p.type === 'CatchClause') return p.param?.type === 'Identifier' && p.param.name === name
@@ -330,6 +331,10 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS } = {}) 
         if (/^(?:Import|Export)(?:Default|Namespace)?Specifier$/.test(par?.type ?? '')) return
         if ((par?.type === 'MemberExpression' || par?.type === 'OptionalMemberExpression') && par.property === n && !par.computed) return
         if (/^(?:ObjectProperty|ClassProperty|ObjectMethod|ClassMethod)$/.test(par?.type ?? '') && par.key === n && !par.computed && !par.shorthand) return
+        // (a shorthand property `{ GAP }`: its key and its value are two nodes at one place; the value is the read, once)
+        if (par?.type === 'ObjectProperty' && par.shorthand && par.key === n && par.value !== n) return
+        if (seen.has(n)) return
+        seen.add(n)
         if (isShadowed(n.name, ps)) return
         rs = local.get(n.name)
         // (a table's entry: its member read; the table read whole is a read of every entry)

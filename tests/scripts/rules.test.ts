@@ -81,9 +81,10 @@ export function heads(list) {
   const s = new Set([...HEADS])
   return list.filter(k => s.has(k))
 }
+export const opts = () => ({ GAP, at: 1 })
 `
 const RUN = `import { apart, wide, clamp, short, isHead, marked, named, padded, kindOf, own } from './packages/engine/src/rules.ts'
-import { near, nearR, heads } from './packages/engine/src/use.mjs'
+import { near, nearR, heads, opts } from './packages/engine/src/use.mjs'
 const out = []
 for (const [d, em] of [[2, 10], [4, 10], [3.5, 10], [1, 1]]) out.push(apart(d, em))
 for (const w of [3, 3.5, 4]) out.push(wide(w))
@@ -94,17 +95,20 @@ for (const s of ['star', 'plus']) out.push(marked(s))
 for (const s of ['alpha one', 'delta', 'gamma ray']) out.push(named(s))
 out.push(padded(1), kindOf(7), kindOf(3), own(1), own(3))
 for (const d of [0.1, 0.3, 0.5]) out.push(near(d), nearR(d))
-out.push(heads(['subsection', 'caption']).join(','))
+out.push(heads(['subsection', 'caption']).join(','), opts().GAP)
 console.log(JSON.stringify(out))
 `
 
 let map: ReturnType<typeof siteMapOfCheckout>
+const must = <T>(x: T | null | undefined, what: string): T => {
+  if (x == null) throw new Error(`missing: ${what}`)
+  return x
+}
 const rule = (suffix: string) => {
   const k = Object.keys(map.rules).find(x => x.endsWith(suffix))
-  if (!k) throw new Error(`no rule ${suffix}: ${Object.keys(map.rules).join(' ')}`)
-  return map.rules[k]
+  return must(k ? map.rules[k] : null, `rule ${suffix} among ${Object.keys(map.rules).join(' ')}`)
 }
-const sitesOfRule = (suffix: string) => rule(suffix).sites.map((id: number) => map.sites[id])
+const sitesOfRule = (suffix: string) => rule(suffix).sites.map(id => must(map.sites[id], `site ${id}`))
 
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), 'axt-rules-'))
@@ -121,12 +125,12 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }))
 describe('the site map', () => {
   it("holds every tuned threshold and name list the census counts, keyed by file, function and signature", () => {
     const f = factsOf('packages/engine/src/rules.ts', RULES)
-    const tuned = f.thresholds.filter((t: { class: string }) => t.class === 'tuned')
+    const tuned = (f.thresholds ?? []).filter(t => t.class === 'tuned')
     const c = countsOf(map)
     // (GAP, LIMITS.wide, LIMITS.tall, KIND, PAD, the 10 of Math.min, the 4 of short, the 2.75 of own)
     expect(tuned.length).toBe(8)
     expect(c.thresholdsTuned).toBe(tuned.length)
-    expect(c.lists).toBe(f.lists.length)
+    expect(c.lists).toBe(f.lists?.length)
     expect(Object.keys(map.rules).sort()).toEqual(
       [
         'packages/engine/src/rules::(top)::GAP',
@@ -145,30 +149,31 @@ describe('the site map', () => {
   })
   it("finds a constant's comparisons in its module and in the modules that import it, and its shape", () => {
     const gap = sitesOfRule('::GAP')
-    expect(gap.map((s: { file: string; kind: string; fn: string }) => `${s.file} ${s.kind} ${s.fn}`).sort()).toEqual(['packages/engine/src/rules.ts cmp apart', 'packages/engine/src/use.mjs cmp near', 'packages/engine/src/use.mjs cmp nearR'])
-    const shapes = gap.map((s: { bounds: { shape: string }[] }) => s.bounds[0].shape).sort()
-    expect(shapes).toEqual(['direct', 'direct', 'scale'])
+    // (and a shorthand property's read, once)
+    expect(gap.map(s => `${s.file} ${s.kind} ${s.fn}`).sort()).toEqual(['packages/engine/src/rules.ts cmp apart', 'packages/engine/src/use.mjs cmp near', 'packages/engine/src/use.mjs cmp nearR', 'packages/engine/src/use.mjs val opts'])
+    const shapes = gap.map(s => s.bounds[0]?.shape).sort()
+    expect(shapes).toEqual(['direct', 'direct', 'read', 'scale'])
     // (a parameter of the same name is not the constant)
     expect(sitesOfRule('::own::<2.75#1')).toHaveLength(1)
-    expect(sitesOfRule('::GAP').some((s: { fn: string }) => s.fn === 'own')).toBe(false)
+    expect(sitesOfRule('::GAP').some(s => s.fn === 'own')).toBe(false)
   })
   it('reads a table entry, an equality, a factor and the lists where they decide or are made', () => {
-    expect(sitesOfRule('::LIMITS.wide').map((s: { kind: string }) => s.kind)).toEqual(['cmp'])
+    expect(sitesOfRule('::LIMITS.wide').map(s => s.kind)).toEqual(['cmp'])
     expect(sitesOfRule('::LIMITS.tall')).toEqual([])
-    expect(sitesOfRule('::KIND').map((s: { kind: string }) => s.kind)).toEqual(['eq'])
-    expect(sitesOfRule('::PAD').map((s: { kind: string }) => s.kind)).toEqual(['val'])
-    expect(sitesOfRule('::HEADS#1').map((s: { kind: string }) => s.kind)).toEqual(['set'])
-    expect(sitesOfRule('::MARKS#1').map((s: { kind: string }) => s.kind)).toEqual(['list'])
-    expect(sitesOfRule('::NAMED#1').map((s: { kind: string }) => s.kind)).toEqual(['re'])
+    expect(sitesOfRule('::KIND').map(s => s.kind)).toEqual(['eq'])
+    expect(sitesOfRule('::PAD').map(s => s.kind)).toEqual(['val'])
+    expect(sitesOfRule('::HEADS#1').map(s => s.kind)).toEqual(['set'])
+    expect(sitesOfRule('::MARKS#1').map(s => s.kind)).toEqual(['list'])
+    expect(sitesOfRule('::NAMED#1').map(s => s.kind)).toEqual(['re'])
     expect(countsOf(map).noSite).toEqual(['packages/engine/src/rules::(top)::LIMITS.tall'])
   })
   it("agrees with the census's items one by one, and says which it lacks", () => {
     const f = factsOf('packages/engine/src/rules.ts', RULES)
     const place = (x: object) => ({ ...x, file: 'packages/engine/src/rules.ts', headline: true })
-    const census = { trees: { AFTER: { debt: { thresholds: { list: f.thresholds.map(place) }, lists: { list: f.lists.map(place) } } } } }
+    const census = { trees: { AFTER: { debt: { thresholds: { list: (f.thresholds ?? []).map(place) }, lists: { list: (f.lists ?? []).map(place) } } } } }
     const a = agreementOf(census, map)
     expect([a.onlyCensus, a.onlyMap]).toEqual([[], []])
-    expect(a.noSite.map((r: { key: string; why: string }) => `${r.key}: ${r.why}`)).toEqual(['packages/engine/src/rules::(top)::LIMITS.tall: read nowhere'])
+    expect(a.noSite.map(r => `${r.key}: ${r.why}`)).toEqual(['packages/engine/src/rules::(top)::LIMITS.tall: read nowhere'])
     census.trees.AFTER.debt.lists.list.pop()
     expect(agreementOf(census, map).onlyMap).toEqual(['packages/engine/src/rules.ts:11:regex:3'])
   })
@@ -187,14 +192,14 @@ describe('a recording', () => {
     execFileSync(process.execPath, ['--import', join(ROOT, 'lab/rules/register.mjs'), 'run.mjs'], {
       cwd: dir,
       encoding: 'utf8',
-      env: { ...process.env, AXT_RULES_SITES: join(dir, 'sites.json'), AXT_RULES_OUT: out, AXT_RULES_ROOT: dir, AXT_RULES_PAPER: '2401.00001v1' },
+      env: { ...process.env, AXT_RULES_SITES: join(dir, 'sites.json'), AXT_RULES_OUT: out, AXT_RULES_ROOT: dir, AXT_RULES_PAPER: '2401.00001v1', AXT_RULES_INPUT: 'corpus' },
     })
   it('changes no output, and records each outcome, the nearest cases and the hits', () => {
     const out = join(dir, 'records')
     expect(recorded(out)).toBe(plain())
     expect(readdirSync(out)).toHaveLength(1)
     const rec = mergeRecords(map, [out])
-    const site = (suffix: string, file = 'rules.ts') => rec.sites.corpus[String(sitesOfRule(suffix).find((s: { file: string }) => s.file.endsWith(file))?.id)]
+    const site = (suffix: string, file = 'rules.ts') => must(rec.sites.corpus?.[String(sitesOfRule(suffix).find(s => s.file.endsWith(file) && s.kind !== 'val')?.id)], `${suffix} in ${file}`)
     // apart: d > GAP * em over (2, 10), (4, 10), (3.5, 10), (1, 1): GAP decides at d / em (0.2, 0.4, 0.35, 1), the
     // nearest each side 0.35 and 0.2
     const apart = site('::GAP')
@@ -216,22 +221,23 @@ describe('a recording', () => {
     expect(site('::MARKS#1').hits).toEqual({ star: 1 })
     expect(site('::NAMED#1').hits).toEqual({ alpha: 1, gamma: 1 })
     expect([site('::NAMED#1').t, site('::NAMED#1').f]).toEqual([2, 1])
-    expect(site('::PAD').n).toBe(1)
+    expect(must(rec.sites.corpus?.[String(sitesOfRule('::PAD')[0]?.id)], 'PAD').n).toBe(1)
+    expect(must(rec.sites.corpus?.[String(sitesOfRule('::GAP').find(s => s.kind === 'val')?.id)], 'GAP read').n).toBe(1)
     expect([site('::KIND').t, site('::KIND').f]).toEqual([1, 1])
     // per rule: its sites summed (GAP's three comparisons)
     // (apart 3 / 1, near 2 / 1, nearR 1 / 2)
-    expect(rec.rules['packages/engine/src/rules::(top)::GAP'].corpus).toMatchObject({ n: 10, t: 6, f: 4 })
+    expect(rec.rules['packages/engine/src/rules::(top)::GAP']?.corpus).toMatchObject({ n: 10, t: 6, f: 4, reads: 1 })
     expect(rec.agreement.ran).toBe(10)
   })
   it('names the test that takes each outcome, and keeps a recorder per site map', () => {
     const r = recorderOf(map, { paper: null })
-    const id = sitesOfRule('::short::<4#1')[0].id
+    const id = must(sitesOfRule('::short::<4#1')[0], 'short').id
     r.context({ test: 'a > short' })
     r.lt(id, 2, 4)
     r.context({ test: 'b > long' })
     r.lt(id, 9, 4)
     r.lt(id, 8, 4)
-    const s = r.snapshot().sites[id]
+    const s = must(r.snapshot().sites[id], 'the record')
     expect(s.tests).toEqual([{ kept: ['b > long'], more: 0 }, { kept: ['a > short'], more: 0 }])
     expect(r.snapshot().input).toBe('corpus')
   })

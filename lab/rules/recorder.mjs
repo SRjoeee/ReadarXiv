@@ -302,14 +302,14 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
 }
 
 /** the process's recorder, made once from AXT_RULES_SITES (the site map) and AXT_RULES_OUT (where records go); the paper
- *  from AXT_RULES_PAPER or the runner's `--id=`; the input from AXT_RULES_INPUT */
-export function install() {
+ *  from AXT_RULES_PAPER or the runner's `--id=`; the input from `input` (vitest-setup.mjs: `tests`), else AXT_RULES_INPUT */
+export function install({ input = null } = {}) {
   if (globalThis.__axtRules) return globalThis.__axtRules
   const sites = process.env.AXT_RULES_SITES
   if (!sites) throw new Error('lab/rules: AXT_RULES_SITES (the site map, sites.json) is not set')
   const map = JSON.parse(readFileSync(sites, 'utf8'))
   const paper = process.env.AXT_RULES_PAPER ?? process.argv.find(a => a.startsWith('--id='))?.slice(5) ?? null
   // (the input a record is of: `tests`, `corpus` (the default), `holdout`, as the run says)
-  globalThis.__axtRules = recorderOf(map, { out: process.env.AXT_RULES_OUT ?? null, paper, input: process.env.AXT_RULES_INPUT ?? 'corpus' })
+  globalThis.__axtRules = recorderOf(map, { out: process.env.AXT_RULES_OUT ?? null, paper, input: input ?? process.env.AXT_RULES_INPUT ?? 'corpus' })
   return globalThis.__axtRules
 }

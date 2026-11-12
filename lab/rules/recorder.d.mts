@@ -27,4 +27,4 @@ export interface Recorder {
 }
 export declare const RAW_FORMAT: string
 export declare function recorderOf(map: SiteMap, options?: { out?: string | null; paper?: string | null; input?: string }): Recorder
-export declare function install(): Recorder
+export declare function install(options?: { input?: string | null }): Recorder

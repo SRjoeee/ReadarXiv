@@ -4,8 +4,8 @@ import { relative } from 'node:path'
 import { afterAll, beforeEach, expect } from 'vitest'
 import { install } from './recorder.mjs'
 
-process.env.AXT_RULES_INPUT ??= 'tests'
-const rec = install()
+// (the input named here, not in the environment, which a test's child processes would inherit)
+const rec = install({ input: 'tests' })
 const fileOf = () => relative(process.cwd(), expect.getState().testPath ?? '')
 beforeEach(() => {
   rec.context({ test: `${fileOf()} > ${expect.getState().currentTestName ?? ''}` })
