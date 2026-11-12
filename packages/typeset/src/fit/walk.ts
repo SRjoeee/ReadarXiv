@@ -101,15 +101,19 @@ export function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number):
     }
   }
 }
-/** how far under its block's text block bottom the lowest of a layout's lines stands (§18.37), 0.01 at least */
-function depthOf(lines: readonly { block: number; baseline: number }[], blocks: readonly FitBlock[]): number {
+/** how far under its block's text block bottom the lowest of `lines` stands (§18.37), to the hundredth, up; 0 where none does
+ *  (the Page member states it, lay/page.ts) */
+export function depthUnder(lines: readonly { block: number; baseline: number }[], blocks: readonly FitBlock[]): number {
   let need = 0
   for (const l of lines) {
     const b = blocks[l.block]
     if (b?.toFoot !== undefined) need = Math.max(need, (b.B.at(-1) as number) - b.toFoot - l.baseline)
   }
-  return Math.max(0.01, Math.ceil(need * 100 - 1e-6) / 100)
+  return Math.max(0, Math.ceil(need * 100 - 1e-6) / 100)
 }
+/** the depth a state past the bottom keeps (depthUnder), 0.01 at least: the state stays one past the bottom */
+const depthOf = (lines: readonly { block: number; baseline: number }[], blocks: readonly FitBlock[]) =>
+  Math.max(0.01, depthUnder(lines, blocks))
 /** two of the fit's states alike: every knob's value, and the knob that set it */
 const sameState = (x: FitState, y: FitState) =>
   x.lead === y.lead &&

@@ -53,6 +53,8 @@ const page = (n: number[], chars: number[], room?: Placed['room'], gap = 0) => {
     size: m.fit!.size,
     track: m.fit!.track,
     lines: m.lines.map(([y]) => y),
+    evened: m.evened,
+    over: m.fit!.over,
   }))
 }
 
@@ -101,6 +103,15 @@ describe('a paragraph tighter than its page takes the fit’s own knobs, one siz
     const [, m] = page([4, 8, 4], [100, 390, 100])
     expect([m!.size, m!.lines.length, m!.lead]).toEqual([9.75, 8, 1])
   })
+  it('states on its page member what it took, in the order taken, and its lines there before them; its neighbours nothing', () => {
+    // (the size step's page above: its fit set its tracking at the bound already, so the fill took the step alone; 7 lines before
+    // it, 6 after. No line under TeX's bottom)
+    const [a, m, b] = page([4, 8, 4], [100, 291, 100])
+    expect([m!.evened, m!.over, m!.track]).toEqual([{ by: ['size'], lines: 7 }, undefined, -0.03])
+    expect([a!.evened, b!.evened, a!.over, b!.over]).toEqual([undefined, undefined, undefined, undefined])
+    // (one that stays as it was states nothing)
+    expect(page([4, 8, 4], [100, 330, 100])[1]!.evened).toBeUndefined()
+  })
 })
 
 // A paragraph at a column's foot (the second rule of §18.57, the owner's look of 2026-11-12: 2602.23285v2-zh p15's two foot lines
@@ -130,6 +141,8 @@ describe('a paragraph tighter than its page at a column’s foot takes the room 
       lead: m.fit!.lead,
       size: m.fit!.size,
       lines: m.lines.map(([y]) => y),
+      evened: m.evened,
+      over: m.fit!.over,
     }))
   }
   it('spreads its two lines to the band’s floor, the second as far under the bottom as that needs, a line at most', () => {
@@ -149,5 +162,17 @@ describe('a paragraph tighter than its page at a column’s foot takes the room 
     expect(foot(2, 90, 12)[2]!.lead).toBe(1)
     // (three full lines at the foot: the floor needs 14.8 pt past the bottom, more than a line of 12)
     expect(foot(3, 135)[2]!.lead).toBe(1)
+  })
+  it('states on its page member the foot among what it took, and how deep under TeX’s bottom its lines went: the depth, not a line', () => {
+    // (the two lines above: the foot alone (no tracking, room or size step frees a line of two full ones); 2 lines before as
+    // after. Its state lets it a line, 12 pt, past the bottom; its second line went 0.617 of a pitch, 7.404 pt, stated to the
+    // hundredth up)
+    const [a, b, m] = foot(2, 90)
+    expect(m!.evened).toEqual({ by: ['foot'], lines: 2 })
+    expect(m!.over).toBe(7.41)
+    expect(m!.over).toBeGreaterThanOrEqual(582 - m!.lines[1]!)
+    expect([a!.evened, b!.evened, a!.over, b!.over]).toEqual([undefined, undefined, undefined, undefined])
+    // (one that stays as it was states neither)
+    expect([foot(2, 90, 12)[2]!.evened, foot(2, 90, 12)[2]!.over]).toEqual([undefined, undefined])
   })
 })

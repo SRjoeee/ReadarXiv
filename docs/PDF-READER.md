@@ -4712,6 +4712,12 @@ of the page's address, so it stays.
   offers that room. A unit it does not set goes on down the steps as where no such room is. The adapter states the two
   depths apart on every block that ends a run (`toFoot`, `toInk`: `Room.runs`' third, and its second less `Room.sep`), which
   nothing but such a state reads.
+- **What the page states of it** (2026-11-12, lane gate-close): the Page member of a unit whose lines a state let past the
+  bottom carries `fit.over` (`types.ts` Laid, `lay/page.ts`): how far under TeX's text block bottom its lowest such line stands
+  as laid, to the hundredth up (`fit/walk.ts` depthUnder, the walk's own measure), absent where no line of it went past. The
+  state's own `over` is what it allows; this is where the lines went (after the page fill, which may lay them higher). Nothing
+  of the lay reads it; the display gate does (`lab/typeset/parity/fidelity.mjs` block: a line within the stated depth and the
+  bound, the next ink at TeX's separation, is the borrow, not a fault).
 - **Why 1.5 pt.** It is the bound the owner judged the pages at. The six units it keeps larger on the parity's pairs (below)
   need 0.08 to 1.36 pt past the bottom while they are laid (2610.21106v1's theorem 0.08, 2608.25210v2's footnote 0.12,
   2602.23285v2's unit 90 0.99 and unit 29 1.22, 2608.16117v1's unit 99 1.05 and unit 86 1.36: the last four the units
@@ -5614,6 +5620,14 @@ deepest 10.9 (a line is 11 to 13.5). The two rules stay one: the foot is the kno
 it on the knobs before it (one at a page's foot over a page break takes it as 2602.23285's does: its first frame spread, a line
 the tracking freed on the next page; `packages/typeset/tests/unit/entry.test.ts`'s share case). `axt-borrow=0` turns off the
 fit's borrow; the fill's foot step is not an option.
+
+**What the page states of it** (2026-11-12, lane gate-close). The Page member of an evened paragraph carries `evened: { by,
+lines }` (`types.ts` Laid, `lay/page.ts`, from the fill's `FillLaid.evened`): the knobs the fill took, in the order taken (a knob
+that gave nothing is not named: a paragraph its fit set at the tracking's bound already takes the size step alone), and its
+line count on that page at its fitted layout, before them; one the foot lifted carries `fit.over` too, how deep its lines went
+under TeX's bottom (§18.37's statement, the depth and not the line its state allows). Nothing of the lay reads either; the
+display gate's rulings TRS and Fm do (`lab/typeset/parity/rulings.mjs`), so that a paragraph one step small, a line short or
+a line past the bottom is accepted only where the lay says it evened it so.
 
 **What it does** (the 90 pairs with stored rows, the borrow of §18.37 on; every body frame of two lines or more under its page's
 band floor: 1,468 on 871 pages, the same with the borrow off): 558 come into the band (the tracking alone 128, with the room 240,

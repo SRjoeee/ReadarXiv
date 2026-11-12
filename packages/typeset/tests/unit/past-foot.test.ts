@@ -71,6 +71,17 @@ describe('the borrow past TeX’s text block bottom (§18.37)', () => {
     expect(filled.fit!.size).toBe(11)
     expect(filled.lines.map(([y]) => y)).toEqual([700, 688, 676])
   })
+  it('states on its page member how deep under the bottom its lines went, the fill’s lay as the fit’s; nothing where none went', () => {
+    // (the third line 1 pt under the bottom at 677, with and without the page's fill (which grows it on the same lines); its
+    // twin with no room past the bottom shrinks onto its two lines and states nothing; no fill evened either)
+    for (const fill of [false, true]) {
+      const on = lay(member(), fill)
+      expect([on.fit!.over, on.evened]).toEqual([1, undefined])
+      expect(lay(bounded(), fill).fit!.over).toBeUndefined()
+    }
+    // (the bottom 10.6 pt under the last line: the third line 1.4 pt under it)
+    expect(lay(member({}, 10.6), false).fit!.over).toBe(1.4)
+  })
   it('takes PAST_FOOT under the bottom and no more; nothing where the next ink stands TeX’s separation under its last line', () => {
     // (the bottom 10.6 pt under the last line: the third line needs 1.4 pt past it, and is laid there at full size)
     expect(lay(member({}, 10.6), false).fit!.size).toBe(10)

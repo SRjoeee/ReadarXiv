@@ -46,9 +46,10 @@ export type FillLaid = {
   fillLaid?: { state: FitState; lead: number | null; l: Layout }
   /** its frames at a state that holds the frames' share (S.fill.leads frameShareOf) */
   fillShare?: FillShare
-  /** the fit's knobs a unit under its page's band took in the page's fill to stand in it (§18.57, evenOf): `track`, `room`,
-   *  `size`, joined by `+` in the order taken */
-  evened?: string
+  /** a unit under its page's band the page's fill evened (§18.57, evenOf): `by` the fit's knobs it took to stand in the band,
+   *  in the order taken; `lines` its line count on each of its pages at its fitted layout, before them (the Page member states
+   *  both, lay/page.ts) */
+  evened?: { by: EvenKnob[]; lines: [page: number, lines: number][] }
   [more: string]: unknown
 }
 /** the run's rules the fill reads (P.adaptiveFill, the script, the size's step, the fill leadings') */
@@ -407,7 +408,7 @@ function headOf(q: FillLaid, onPage: readonly { u: FillLaid; l: Layout; st: FitS
 
 /** the fit's knobs a unit under its page's band may take in the fill (§18.57): its tracking, the room TeX left under its
  *  blocks, one step of its sizes; and at a column's foot the room past TeX's text block bottom (the borrow's own, §18.37) */
-type EvenKnob = 'track' | 'room' | 'size' | 'foot'
+export type EvenKnob = 'track' | 'room' | 'size' | 'foot'
 /** the tries, in the fit's own order (fit/walk.ts statesOf), each knob kept for the next as the walk keeps them; the room past
  *  TeX's bottom last, on the tracking and TeX's room alone, then with the size step */
 const EVEN_TRIES: readonly (readonly EvenKnob[])[] = [
@@ -467,7 +468,7 @@ function knobOf(p: FillLaid, P: PageRules, st: FitState, knob: EvenKnob): FitSta
  * (5 %) he saw. Each try laid at the band floor's leading, no closer, on the pages its fit set it on, no frame gaining a line
  * (the share TeX's breaks gave each column and page kept); its fill leadings found again there (S.fill.leads) and taken at the
  * first that leaves no frame of two lines or more under the floor. Returns the unit as the fill then reads it (its layout and
- * fill leadings, `evened` the knobs taken), or null: it stays as it was. Its vote is the unit's own (fillLead, fitLines), never
+ * fill leadings, `evened` the knobs taken and its lines before them), or null: it stays as it was. Its vote is the unit's own (fillLead, fitLines), never
  * the stand-in's: the page's target is read before and every lay reads the page alike
  */
 function evenOf(p: FillLaid, P: PageRules, floor: number): FillLaid | null {
@@ -525,7 +526,9 @@ function evenOf(p: FillLaid, P: PageRules, floor: number): FillLaid | null {
             ...(q.fillLeads ? { leads: q.fillLeads as number[] } : {}),
           })
     if (lf.clipped || pagesOf(lf) !== pages || gains(lf) || underBand(q, floor, lf)) continue
-    q.evened = took.join('+')
+    const before = new Map<number, number>()
+    for (const x of p.layout.lines) before.set(x.page, (before.get(x.page) ?? 0) + 1)
+    q.evened = { by: took, lines: [...before] }
     return q
   }
   return null
