@@ -37,7 +37,7 @@ const v2Of = (
   ...(o.fills ? { fills: o.fills } : {}),
   ...(o.spaced ? { spaced: { [N]: o.spaced } } : {}),
 })
-type Extra = { prep?: { ord: number }[]; pair?: string; frame?: object; groups?: object[]; keptByGroup?: Set<number>; folios?: Set<number>; ruled?: Set<number> }
+type Extra = { prep?: { ord: number }[]; pair?: string; frame?: object; groups?: object[]; keptByGroup?: Set<number>; folios?: Set<number>; ruled?: Set<number>; cellRooms?: Map<number, object>; floor?: number; pastFoot?: number }
 const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, x: Extra = {}) =>
   measurePage(x.pair ?? 'p-zh', v2, r, {
     prepByOrd: new Map((x.prep ?? []).map((u) => [u.ord, u])),
@@ -50,6 +50,9 @@ const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, x: Extr
     keptByGroup: x.keptByGroup ?? new Set(),
     folios: x.folios ?? new Set(),
     ruled: x.ruled ?? new Set(),
+    cellRooms: x.cellRooms ?? null,
+    floor: x.floor ?? null,
+    pastFoot: x.pastFoot ?? 0,
   })
 const of = (flag: string) => (p: { diffs: { flag: string }[] }) => p.diffs.filter((d) => d.flag === flag)
 const laid = (ord: number, lit: object = {}) => ({ ord, state: 'laid', lines: [], lit: { left: [], right: [], own: [], ...lit } })
@@ -210,6 +213,40 @@ describe("block: borrowing bounded by TeX's facts, the owner's ruling of 2026-11
   it('a part that states no room under the run: no line is judged', () => {
     const f = one(26, 'para', ys.map((y) => factLine(72, 300, y)))
     expect(of('block')(measure(f, sides(26, lines(10), lines(10, 652, 640, 628))))).toEqual([])
+  })
+})
+
+describe("block: the borrow past TeX's text block bottom, the owner's ruling of 2026-11-12 (the fit's bound, the lay's stated depth)", () => {
+  // (the paragraph above: its last line at 664, TeX's text block bottom 24 pt under it at 640, the next ink 60 pt down, the
+  // separation 12; the fit's bound PAST_FOOT 1.5 pt (fit/walk.ts), handed in as the measure reads it from the typesetter)
+  const ys = [700, 688, 676, 664]
+  const lines = (sz: number, ...more: number[]) => [...ys, ...more].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), sz))
+  const unit = (over: number | null, runs = [[3, 60, 24]]) =>
+    v2Of({
+      members: [{ ...laid(26), ...(over === null ? {} : { fit: { size: 10, lead: 1.2, track: 0, borrowed: 99, over } }) }],
+      facts: [{ ord: 26, kind: 'para', align: 'j', style: { size: 10 }, lines: ys.map((y) => factLine(72, 300, y)), room: { runs, sep: 12 } }],
+      today: { 26: { today: 26 } },
+    })
+  const v2At = (y: number) => lines(10, 652, y)
+  it("a line the lay states it borrowed, within its depth and the fit's bound, the next ink at TeX's separation: no fault", () => {
+    const p = measure(unit(1), sides(26, lines(10, 652), v2At(639)), { pastFoot: 1.5 })
+    expect(of('block')(p)).toEqual([])
+    expect(p.faults.block).toBeUndefined()
+  })
+  it('one no state names, deeper than its stated depth, with no bound in the typesetter, or nearer the next ink: a fault, as before', () => {
+    expect(of('block')(measure(unit(null), sides(26, lines(10, 652), v2At(639)), { pastFoot: 1.5 }))).toMatchObject([{ worse: true }])
+    expect(of('block')(measure(unit(1), sides(26, lines(10, 652), v2At(638)), { pastFoot: 1.5 }))).toMatchObject([{ worse: true }])
+    expect(of('block')(measure(unit(1), sides(26, lines(10, 652), v2At(639)), { pastFoot: 0 }))).toMatchObject([{ worse: true }])
+    // (the next ink 30 pt under the last line, at 634: the line at 639 stands 5 pt over it, the separation 12)
+    expect(of('block')(measure(unit(1, [[3, 30, 24]]), sides(26, lines(10, 652), v2At(639)), { pastFoot: 1.5 }))).toMatchObject([{ worse: true }])
+  })
+  it("production's line within the bound is no fault; past it, its fault, and v2's smaller size inside the room not worse", () => {
+    const within = measure(unit(null), sides(26, lines(10, 652, 639), lines(9.5, 652)), { pastFoot: 1.5 })
+    expect(within.faults.block).toBeUndefined()
+    expect(of('size')(within)).toMatchObject([{ worse: true }])
+    const past = measure(unit(null), sides(26, lines(10, 652, 637), lines(9.5, 652)), { pastFoot: 1.5 })
+    expect(past.faults.block.today).toBe(1)
+    expect(of('size')(past)).toMatchObject([{ worse: false, nearer: 'v2' }])
   })
 })
 
@@ -814,5 +851,29 @@ describe("groups: a cell kept by a rule's mark, or one no row can serve, holds n
   })
   it('mixed by any other cell: worse, as before', () => {
     expect(of('groups')(page({ keptToday: [[72, 'identifier']] }))).toMatchObject([{ unit: 'group 2:1', worse: true }])
+  })
+})
+
+describe("frame: a cell's room is what the recorded rule gives it (PDF-READER §18.13; gate correction 16)", () => {
+  // (1810.04805v2-zh p7 t129 "Dev": a centred \multicolumn header, its advances 443.39-458.11, the glyphs beside it ending at
+  // 376.15 and starting at 465.58 (Room.side); v2's three characters at 7.62 pt (0.85 of 8.97) drawn 439.66-462.08: clipped at the floor
+  // 0.8 in its own advances, widened half way to the glyph beside it, centred: its room 439.655-461.845)
+  const facts = { ord: 129, kind: 'cell', align: 'c', style: { size: 8.97 }, lines: [[N, 1, 443.39, 458.11, 768.18, 774.12, 768.06, 307.28, 525.54, 0, 8.97]] }
+  const v2 = v2Of({ members: [laid(129)], facts: [facts], today: { 129: { today: 129 } } })
+  const page = (x0: number, x1: number, size: number, o: { side?: number[]; floor?: number } = {}) =>
+    measure(v2, rec({ v2: { units: [{ id: 129, lines: [drawnLine(x0, x1, 768.18, '\u5f00\u53d1\u8005', size)] }] } }), {
+      cellRooms: new Map([[129, { side: o.side ?? [376.15, 465.58], wall: 0 }]]),
+      floor: o.floor ?? 0.8,
+    })
+  const frames = (p: { faults: { frame?: { v2: number } } }) => p.faults.frame?.v2 ?? 0
+  it('a cell clipped at the floor in its own advances, drawn inside the half-way room: no line past its room', () => {
+    expect(frames(page(439.66, 462.08, 7.62))).toBe(0)
+  })
+  it("one past the half-way room, or one drawn past its advances whose text fits them at the floor (widened above the floor): past its room", () => {
+    // (centred 434-467: 5.2 pt past the half-way room's right edge)
+    expect(frames(page(434, 467, 7.62))).toBe(1)
+    // (a 14 pt line at 8.97 drawn 441-455 or 440-455: at the floor 11.2 wide, inside its 14.72 of advances: not widened, 2.4 and 3.4
+    // pt past them)
+    expect(frames(page(441, 455, 8.97, { side: [376.15, 465.58] })) + frames(page(440, 455, 8.97))).toBe(2)
   })
 })

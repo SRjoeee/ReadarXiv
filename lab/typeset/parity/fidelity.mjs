@@ -162,6 +162,40 @@ export function carriedOf(rs, lines, raisedOver) {
   return got
 }
 
+// ---------------------------------------------------------------- a cell's room
+/**
+ * A table cell's own room, as the recorded rule gives it (PDF-READER §18.13; the typesetter's lay/adapt.ts cellSideOf and
+ * unit/decor.ts widen, the fit's further step `widen`): its line's advances on A (`o`, the original's facts of the unit), and,
+ * for a cell of one line whose text v2 draws (`drawn`, its lines by their ink; one room for both sides, the one the lay gives
+ * the translation both draw) would not fit that room at the fit's floor
+ * (its drawn width at the floor's size, `floor` of the original's, wider than its advances by more than the position floor
+ * `tol`: clipped at the floor in its own ink's width), its single line widened over the paper beside it: half way to the glyph
+ * beside it (the part's Room.side, `room.side`), a quarter of its size off a wall (`room.wall`: 1 left, 2 right), to its
+ * column's edge where nothing stands; a centred cell as far to either side as the nearer allows, on its advances' middle; one
+ * set flush right to its left alone. A cell its side's text fits at the floor keeps its advances (widened there it is past its
+ * room). [x0, x1]
+ */
+export function cellRoomOf(o, drawn, room, floor, tol) {
+  const own = [Math.min(...o.lines.map((l) => l.x0)), Math.max(...o.lines.map((l) => l.x1))]
+  if (o.lines.length !== 1 || drawn.length !== 1 || !room?.side || !floor) return own
+  const l = o.lines[0],
+    d = drawn[0]
+  const size = l.size || o.size
+  if (!d.size || d.x0 === null || !((d.x1 - d.x0) * ((floor * size) / d.size) > own[1] - own[0] + tol)) return own
+  const quarter = 0.25 * size,
+    wall = room.wall ?? 0,
+    [s0, s1] = room.side
+  const left = s0 > l.m0 + 0.01 ? (wall & 1 ? s0 + quarter : (s0 + l.x0) / 2) : l.m0
+  const right = s1 < l.m1 - 0.01 ? (wall & 2 ? s1 - quarter : (s1 + l.x1) / 2) : l.m1
+  if (o.align === 'c') {
+    const mid = (l.x0 + l.x1) / 2,
+      half = Math.min(right - mid, mid - left)
+    return half > (l.x1 - l.x0) / 2 ? [mid - half, mid + half] : own
+  }
+  if (o.align === 'r') return [Math.min(left, l.x0), l.x1]
+  return [l.x0, Math.max(l.x1, right)]
+}
+
 // ---------------------------------------------------------------- the paper's frame: its columns and text block
 /**
  * A paper's text frame, read off the original's own lines (until the engine states TeX's \textwidth and \columnwidth): the
@@ -267,11 +301,14 @@ export function measureFidelity(c) {
   const overshoot = (key, ls) => {
     const o = orig.get(key)
     if (!o?.lines.length || /figure/.test(o.kind ?? '')) return null
-    const f = o.kind === 'cell' ? [Math.min(...o.lines.map((l) => l.x0)), Math.max(...o.lines.map((l) => l.x1))] : frameFor(c.frame, o.lines)
+    // (a cell's one room for both sides: the one v2's lay gives the translation both draw, read off v2's drawn text)
+    const f = o.kind === 'cell' ? cellRoomOf(o, flat(V.get(key)).map(inkOf), c.cellRooms?.get(o.part), c.floor, pos(key)) : frameFor(c.frame, o.lines)
     if (!f) return null
+    if (o.kind === 'cell') rooms.set(key, f)
     return Math.max(0, ...flat(ls).map(inkOf).map((l) => Math.max(l.x1 - f[1], f[0] - l.x0)))
   }
   const past = { today: new Map(), v2: new Map() }
+  const rooms = new Map()
   for (const [side, M] of [['today', T], ['v2', V]])
     for (const [key, ls] of M) {
       const d = overshoot(key, ls)
@@ -283,7 +320,7 @@ export function measureFidelity(c) {
     const t = T.has(key) ? past.today.get(key) : 0,
       v = past.v2.get(key)
     if (t === undefined || v === undefined) continue
-    judge('frame', name(key), kindOf(key) === 'cell' ? "a line past the cell's own room (its original's extent), points" : "a line past its column or the original's text block, points", 0, { value: r2(t), d: t }, { value: r2(v), d: v }, pos(key))
+    judge('frame', name(key), kindOf(key) === 'cell' ? "a line past the cell's own room (its original's extent, widened half way to the glyph beside it where its text is clipped there at the floor: PDF-READER §18.13), points" : "a line past its column or the original's text block, points", 0, { value: r2(t), d: t }, { value: r2(v), d: v }, pos(key))
   }
 
   // ---------------- block: lines borrowed past TeX's room (the owner's ruling of 2026-11-08: a paragraph may take lines in the
@@ -297,6 +334,7 @@ export function measureFidelity(c) {
   // beside a float TeX set inside the paragraph: 2608.16117v1 p17 t57, p19 t59) borrows nothing under its last. A run the
   // part states no room under, no judgement (no TeX fact to judge by); one with no separation stated, its bottom alone
   const borrowed = { today: new Map(), v2: new Map() }
+  const pastLines = { today: new Map(), v2: new Map() }
   const roomOf = (key) => {
     const o = orig.get(key)
     const m = o?.part !== null && o?.part !== undefined ? c.facts.get(o.part) : null
@@ -317,7 +355,20 @@ export function measureFidelity(c) {
         const free = r.sep === undefined ? run.foot : Math.min(run.foot, run.ink - r.sep)
         const past = over.y - Math.max(0, free) - l.y
         if (!(past > NEAR.room)) continue
+        // (the borrow past TeX's text block bottom, the owner's ruling of 2026-11-12: a last line under the bottom by no more than
+        // the fit's bound (fit/walk.ts PAST_FOOT, `c.pastFoot`), the next ink kept at TeX's separation, is no fault: v2's where its
+        // Page member states the depth its lines took (`fit.over`) and the line is within it; today's (production's own borrow, no
+        // state to read) where it is within the bound. Past the bound, nearer the next ink, or a v2 line no state names: as before)
+        const below = over.y - run.foot - l.y,
+          toInk = l.y - (over.y - run.ink)
+        const sepKept = r.sep === undefined || toInk >= r.sep - NEAR.room
+        const bound = c.pastFoot ?? 0
+        const stated = side === 'v2' ? (c.laidOf?.(key)?.fit?.over ?? 0) : bound
+        if (sepKept && stated > 0 && below <= Math.min(stated, bound) + NEAR.room) continue
         k++
+        // (each such line: how far under TeX's text block bottom it stands, and how far over the next ink's baseline, the room's
+        // separation beside: the owner's ruling Fm reads them, rulings.mjs)
+        ;(pastLines[side].get(key) ?? pastLines[side].set(key, []).get(key)).push({ below: r2(below), toInk: r2(toInk), sep: r.sep ?? null })
         fault(side, 'block', r.sep !== undefined && run.ink - r.sep < run.foot ? `${name(key)}: a line ${r2(past)} pt nearer the next ink than TeX's paragraph separation` : `${name(key)}: a line ${r2(past)} pt past TeX's text block bottom`)
       }
       borrowed[side].set(key, k)
@@ -724,7 +775,7 @@ export function measureFidelity(c) {
     judge('lead', name(key), "its leading tighter than the original's while its block has room (share of the original's pitch over size)", 0, { value: r2(leadOf.get(`today|${key}`) ?? null), d: t }, { value: r2(leadOf.get(`v2|${key}`)), d: v }, LEAD_SHARE)
   }
 
-  return { borrowed, past }
+  return { borrowed, past, rooms, pastLines }
 }
 
 /**

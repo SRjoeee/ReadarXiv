@@ -710,8 +710,12 @@ describe('the run judged whole', () => {
   it('complete coverage passes with no page worse, and fails with one', () => {
     const drawn = new Map([['a-zh', raw([1], [1])], ['b-ja', raw([1], [1])]])
     const pages = [page('a-zh', 1), page('b-ja', 1)]
-    expect(verdictOf(coverageOf(run, { drawn, pages }), pages)).toEqual({ pass: true, worse: 0, incomplete: [] })
+    expect(verdictOf(coverageOf(run, { drawn, pages }), pages)).toEqual({ pass: true, worse: 0, covered: 0, incomplete: [] })
     expect(verdictOf([], [page('a-zh', 1, { worse: 2 })])).toMatchObject({ pass: false, worse: 1 })
+  })
+  it("passes with a page worse by a measure that the owner's rulings cover whole, counted apart; fails with one worse beside it", () => {
+    expect(verdictOf([], [page('a-zh', 1, { worse: 0, covered: 2 })])).toEqual({ pass: true, worse: 0, covered: 1, incomplete: [] })
+    expect(verdictOf([], [page('a-zh', 1, { worse: 1, covered: 2 })])).toEqual({ pass: false, worse: 1, covered: 0, incomplete: [] })
   })
 })
 
