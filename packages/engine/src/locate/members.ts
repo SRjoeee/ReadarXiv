@@ -1,8 +1,9 @@
 // Phase 1 of locate (locate.ts): the instrument's units placed on A (place.ts), a babel name's every occurrence a member
 // of its own, an author block's unit TeX set inside a paragraph that sets a unit again left unplaced.
-// Reads: the index; the record's `members` (an ord is their count) and `claimedA` (in place.ts).
-// Writes: `members` (each placement pushed; its glyph and box lists and `claimedA`'s four writes, in place.ts); `released`
-// (assigned: the units left unplaced, which phase 4 reads).
+// Reads: the index; the record's `members` (an ord is their count) and the ownership (in place.ts: a glyph another unit holds).
+// Writes: `members` (each placement pushed); the ownership (in place.ts: each placement's ink taken, the glyphs a unit that
+// stays the original's holds; here the units left unplaced, released); `released` (assigned: the same units, which phase 4
+// reads).
 import { isInk } from './lines.ts'
 import { empty, place } from './place.ts'
 import { AUTHOR_KINDS, assign, type Work } from './work.ts'
@@ -14,7 +15,7 @@ const MARK_KEY = /^([ht]?\d+)([se])$/
 
 export function placeUnits(w: Work): void {
   const { ins, B, m, glyphsOf, boxesOf, turnedOf, pageB, gB } = w.ix
-  const { members } = w
+  const { members, claims } = w
   // ---- an author block's unit TeX set inside a paragraph that sets another unit again: a template's paragraph, made of the
   // paper's own front matter (ACM's reference format: the authors, the year, the title a second time), whose text is the page's,
   // read and translated as one unit (ink.ts), never cut by the unit. 2610.22065v1 p1: its block under the title written out by
@@ -48,7 +49,10 @@ export function placeUnits(w: Work): void {
         let from = Number.NEGATIVE_INFINITY
         for (const e of paraEnds) if (e <= (list[0] as number)) from = e
         const to = paraEnds.find((e) => e > (list.at(-1) as number)) ?? Number.POSITIVE_INFINITY
-        if (again.some((g) => g >= from && g < to)) released.add(u)
+        if (again.some((g) => g >= from && g < to)) {
+          released.add(u)
+          claims.release(u)
+        }
       }
   }
 

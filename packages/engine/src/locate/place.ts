@@ -1,14 +1,16 @@
 // A unit's transfer to A, phase 1's (members.ts placeUnits calls `place` for each placement of an instrument's unit): its B
 // glyphs' partners in their roles and pieces, A's own glyphs between two of its partners where the alignment shows they are its
 // text, its rules' and images' partners, or the cause it stays the original's. `place` is the only code here that writes the
-// record (`claimedA`); `empty` makes a member of nothing, for phases 1, 4 and 5, and writes nothing.
+// ownership (`claims`: the ink its member takes, the glyphs a unit that stays the original's holds); `empty` makes a member of
+// nothing, for phases 1, 4 and 5, and writes nothing.
 import type { Piece } from '@readarxiv/format'
 import { HUNK, hunkName } from '../align/align.ts'
 import { isImage, isPath } from '../doc.ts'
 import { ROLE } from '../instrument.ts'
 import { TEXT_SYMBOLS } from '../source/tables.ts'
 import { cutLines, isInk } from './lines.ts'
-import { eachBetweenPaired, FREE, HELD, INKED_CLASSES, lettersIn, type Member, piecesOf, type Work } from './work.ts'
+import type { Ink } from './ownership.ts'
+import { eachBetweenPaired, INKED_CLASSES, lettersIn, type Member, piecesOf, type Work } from './work.ts'
 
 /** a LaTeX text symbol's character (\S, \%, alone or before `{}`), by the kernel's table (source/tables.ts TEXT_SYMBOLS, today's
  *  rules/text-symbols.mjs), read here so that the back half needs nothing of the front half but the table */
@@ -116,7 +118,7 @@ export function place(
   turnedB: [number, number][] = [],
 ): Member {
   const { ins, B, m, inkA, roleB, pieceB, unitB, gA, gB, atA, atB, pageA, pageB } = w.ix
-  const { claimedA } = w
+  const { claims } = w
   const unit = ins.units[u]!
   const mem = empty(w, u, name !== undefined ? 'name' : unit.kind, unit.id)
   if (name !== undefined) mem.name = name
@@ -206,7 +208,7 @@ export function place(
   // text: it stays unclaimed (born.ts gives it to a figure text). Any other is text A sets inside the unit that our compile
   // does not: a content difference, and the unit stays the original's (as for B's glyphs with no partner; no fuzzy rescue).
   // A unit that stays the original's holds those glyphs as A's ink (HELD): they are no unit born on A)
-  const claims: [number, [number, number]][] = []
+  const unpaired: [number, [number, number]][] = []
   if (aIdx.length) {
     const sorted = [...aIdx].sort((x, y) => x - y)
     const lo = sorted[0] as number
@@ -223,7 +225,7 @@ export function place(
           run = nx
           between = undefined
         }
-        if (m.offpageA[a] || (claimedA[a] as number) !== FREE) return
+        if (m.offpageA[a] || !claims.free(a)) return
         const bp = m.aToB[pv] as number
         const bn = m.aToB[nx] as number
         if (unitB[bp] !== u || unitB[bn] !== u) return
@@ -237,11 +239,11 @@ export function place(
         if (own) {
           const rp = roleOfB(bp)
           const rn = roleOfB(bn)
-          claims.push([a, rp[0] === rn[0] && rp[1] === rn[1] ? rp : [ROLE.text, -1]])
+          unpaired.push([a, rp[0] === rn[0] && rp[1] === rn[1] ? rp : [ROLE.text, -1]])
           return
         }
         if (gA(a).form && !gA(pv).form && !gA(nx).form) return
-        claims.push([a, [ROLE.none, -1]])
+        unpaired.push([a, [ROLE.none, -1]])
         const h = hunkName(m.hunkA[a] as number)
         bad ??= `content difference: ${h === 'none' || h === 'hyphen' ? 'aonly' : h}`
       },
@@ -254,14 +256,14 @@ export function place(
   // The unit stays the original's)
   if (!bad) bad = notFound(w, u, list, boxes)
   if (bad || (!aIdx.length && !turnedA.length)) {
-    for (const [a] of claims) claimedA[a] = HELD
+    for (const [a] of unpaired) claims.hold(a)
     mem.cause = bad ?? 'no ink'
     return mem
   }
-  for (const [a, r] of claims) roleAt.set(a, r)
+  for (const [a, r] of unpaired) roleAt.set(a, r)
   mem.located = true
-  mem.turned = turnedA
   if (!aIdx.length) {
+    claims.take(mem, { turned: turnedA })
     mem.place = turnedSame ? 'same' : 'shifted'
     return mem
   }
@@ -277,7 +279,7 @@ export function place(
     const cut = (a: number) => loose.some((x) => x > a && x < firstText)
     for (const [a, [role, k]] of sortedRoles)
       if ((role === ROLE.element && k < 0) || (role === ROLE.label && cut(a))) {
-        claimedA[a] = HELD
+        claims.hold(a)
         roleAt.delete(a)
       }
   }
@@ -293,36 +295,45 @@ export function place(
       if (role !== ROLE.label && !(role === ROLE.element && k >= 0)) claimed += lettersIn(gA(a).u)
     const written = writtenOf(w, u)
     if (claimed > written) {
-      for (const [a] of claims) claimedA[a] = HELD
+      for (const [a] of unpaired) claims.hold(a)
       mem.located = false
-      mem.turned = []
       mem.cause = 'text past its source'
       return mem
     }
   }
+  // (its ink, each glyph in its role (text, label, an element by piece) and each box's partner, taken whole)
+  const ink = {
+    text: [] as number[],
+    label: [] as number[],
+    els: new Map<string, number[]>(),
+    textBoxes: [] as [number, number][],
+    elBoxes: new Map<string, [number, number][]>(),
+    elBoxesB: new Map<string, [number, number][]>(),
+    turned: turnedA,
+  } satisfies Ink
   for (const [a, [role, k]] of [...roleAt].sort((x, y) => x[0] - y[0])) {
-    claimedA[a] = mem.ord
-    if (role === ROLE.label) mem.label.push(a)
+    if (role === ROLE.label) ink.label.push(a)
     else if (role === ROLE.element && k >= 0) {
       const id = String(k)
-      const l = mem.els.get(id)
+      const l = ink.els.get(id)
       if (l) l.push(a)
-      else mem.els.set(id, [a])
-    } else mem.text.push(a)
+      else ink.els.set(id, [a])
+    } else ink.text.push(a)
   }
   for (const [ap, ai, p, x] of boxPartners) {
     const role = ins.boxes[p]!.role[x] as number
     const k = ins.boxes[p]!.piece[x] as number
     if (role === ROLE.element && k >= 0) {
       const id = String(k)
-      const l = mem.elBoxes.get(id)
+      const l = ink.elBoxes.get(id)
       if (l) l.push([ap, ai])
-      else mem.elBoxes.set(id, [[ap, ai]])
-      const lb = mem.elBoxesB.get(id)
+      else ink.elBoxes.set(id, [[ap, ai]])
+      const lb = ink.elBoxesB.get(id)
       if (lb) lb.push([p, x])
-      else mem.elBoxesB.set(id, [[p, x]])
-    } else mem.textBoxes.push([ap, ai])
+      else ink.elBoxesB.set(id, [[p, x]])
+    } else ink.textBoxes.push([ap, ai])
   }
+  claims.take(mem, ink)
   // where it stands on A against B
   {
     const own = list.filter((b) => (m.bToA[b] as number) >= 0)
