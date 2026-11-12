@@ -415,7 +415,9 @@ export function cachesOf(text) {
     .filter(Boolean)
     .join(':')
 }
-const corpusNeeds = ctx => [exists('the 88 papers', lab(ctx, PAPERS)), exists("the compile caches' list (RELEASE_CHECK_CACHES)", cachesFile(ctx)), exists("the baseline's prepare dumps", lab(ctx, 'baseline/prepare'))]
+const corpusNeeds = ctx => [exists('the 88 papers', lab(ctx, PAPERS)), exists("the compile caches' list (RELEASE_CHECK_CACHES)", cachesFile(ctx))]
+/** a run with the round's flags reads the baseline's dumps besides */
+const stage1aNeeds = ctx => [...corpusNeeds(ctx), exists("the baseline's prepare dumps", lab(ctx, 'baseline/prepare'))]
 /** corpus.sh's arguments: the papers, the output, the caches and two papers at once, then run.mjs's flags */
 const corpusArgs = (ctx, out, ...flags) => ['bash', 'lab/pdf/prepare-back/corpus.sh', lab(ctx, PAPERS), out, cachesOf(readFileSync(cachesFile(ctx), 'utf8')), '2', ...flags]
 const stage1a = ctx => ['--prove', `--baseline=${lab(ctx, 'baseline/prepare')}`]
@@ -488,7 +490,7 @@ export const GATES = [
     stage: 'pipeline',
     holds: ['I1', 'I2'],
     disk: true,
-    needs: corpusNeeds,
+    needs: stage1aNeeds,
     steps: ctx => [{ cmd: corpusArgs(ctx, join(ctx.work, 'prepare'), ...stage1a(ctx)), slot: 'test', fresh: join(ctx.work, 'prepare') }],
     judge: ctx => corpusJudge(ctx, join(ctx.work, 'prepare'), ['a', 'c']),
   },
@@ -511,7 +513,7 @@ export const GATES = [
     holds: ['I6'],
     disk: true,
     after: ['prepare'],
-    needs: corpusNeeds,
+    needs: stage1aNeeds,
     steps: ctx => [
       { cmd: corpusArgs(ctx, join(ctx.work, 'prepare-2'), ...stage1a(ctx)), slot: 'test', fresh: join(ctx.work, 'prepare-2') },
       { cmd: ['node', 'lab/pdf/prepare-back/same.mjs', join(ctx.work, 'prepare'), join(ctx.work, 'prepare-2')] },

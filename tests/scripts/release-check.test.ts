@@ -190,6 +190,8 @@ describe("the prepare's corpus, as the round's stage 1a runs it", () => {
       expect(prepare).toEqual(['bash', 'lab/pdf/prepare-back/corpus.sh', join(refactor, 'lanes/L1-papers88.tsv'), '/work/prepare', '/round/r21/compiles:/round/r20/compiles', '2', '--prove', `--baseline=${join(refactor, 'baseline/prepare')}`])
       expect(same?.slice(4)).toEqual(prepare?.slice(4))
       for (const g of corpus(['prepare', 'prepare-same', 'pixels'])) expect(g.needs!(ctx).map(n => n.path)).toContain(join(refactor, 'flags.txt'))
+      // (the baseline's dumps where the run reads them, the round's flags; the pixel proofs' run takes its own)
+      expect(corpus(['prepare', 'prepare-same', 'pixels']).map(g => g.needs!(ctx).some(n => n.path === join(refactor, 'baseline/prepare')))).toEqual([true, true, false])
     } finally {
       delete process.env.RELEASE_CHECK_CACHES
     }
