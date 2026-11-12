@@ -814,8 +814,9 @@ describe('a row stated again otherwise (a run our server replaced mid-way)', () 
     expect(counted(w)).toMatchObject({ gen: landed.gen, lays: landed.lays, commits: landed.commits })
   })
   it('a row the lay read where it was missing, waited for by no page, lays the page again, once, when it comes', async () => {
-    // (as layPage reads the paper's own names: typeset lay/entry.ts ownNamesOf reads their rows, wait.ts waits for none, and
-    // the page commits before one is in; once it comes the page is a lay over the rows as they stand, the law over time)
+    // (a stand-in lay that reads a row its page waits for not, as the typesetter's read the paper's own names before round B16
+    // (it now waits for them where a member can draw one, wait.ts drawsName): the page commits before the row is in; once it
+    // comes the page is a lay over the rows as they stand, the law over time, whatever lay reads it)
     const pages = new Map([[1, partOf(1, [member(10, 1, 0), member(11, 1, 1)])]])
     const inner = sentenceLay()
     const lay = ((part: Part, rows: Rows) => {
@@ -1507,6 +1508,46 @@ describe('the toggles turned and turned back: the drawing a function of the part
     const second = await turn(flip)
     expect(await turn(!flip)).toEqual(first)
     expect(await turn(flip)).toEqual(second)
+  })
+  it("a page whose head the paper names waits for the paper's names: a late name row lays it once, never twice (§19.14)", async () => {
+    // (a heading whose head name, "Hypothesis", no package names in German: the paper's own name unit's word. Its own row and
+    // the paragraph's come first, the name's after: the page waits for it, then commits once, the head drawn in its word; it
+    // committed the English head and was laid again when the name came)
+    const N = '9'.repeat(64)
+    const H = '8'.repeat(64)
+    const head = {
+      ...at(5, 'heading', H, 700),
+      label: {
+        ink: [1, 72, 698, 120, 707, 700],
+        name: ['Hypothesis', [1, 72, 698, 120, 707, 700]],
+        style: { role: 'serif', size: 10 },
+      },
+    } as unknown as Placed
+    const named = {
+      ...part,
+      paper: { faces: part.paper.faces, names: [['Hypothesis', N]] },
+      flows: [[head], [at(2, 'para', P, 600)]],
+    } as unknown as Part
+    const lay = ((q: Part, rows: Rows) => {
+      lay.calls++
+      return layPage(q, rows as never, rulesFor('de', { leave: leftKinds(DEFAULTS) }), metrics) as unknown as Page
+    }) as unknown as ReturnType<typeof standInLay>
+    lay.calls = 0
+    const w = world({ pages: new Map([[1, named]]), classes: { ...DEFAULTS }, lay })
+    w.stack.setNear([1])
+    const rows = statedOnce('de')
+    open(w, rows)
+    rows.state([row(H, [T('Eine Annahme')]), ROWS[P]!])
+    await settle()
+    w.stack.put(1)
+    await settle()
+    expect(Number(w.composer.probe().laidPages)).toBe(0)
+    rows.state([row(N, [T('Hypothese')])])
+    await settle()
+    w.stack.put(1)
+    await settle()
+    expect(Number(w.composer.probe().commits)).toBe(1)
+    expect(drawn(w)?.find(([ord]) => ord === 5)?.[2]).toMatch(/^Hypothese/)
   })
   // (the law over time: after any sequence of row landings, the run's end and toggle changes, page 1 as drawn equals a fresh lay
   // over the rows and toggles as they now stand; a fresh lay that still waits is not judged, the composer keeps the drawing

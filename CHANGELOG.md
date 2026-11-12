@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a page with a theorem or a cross-reference whose name the paper defines, such as its own "Hypothesis", is drawn once with that name in your language. It could be drawn first with the name as printed and drawn again when the name's translation came.
 - Fixed: with Google translating, a sentence's full stop stays where a footnote mark, a note's call or a line break follows it. Google had dropped the stop, so the sentence ran into the next one.
 - Fixed: in the PDF reader, a page whose passages a translation service refused, and which another service or a retry then translated, shows the translation. It had stayed as printed until the page was laid again by a scroll or a setting.
 - Fixed: in the PDF reader, turning a reading option on and off again shows the page as it was before, every passage as it was. A note that names one of the paper's authors, such as a correspondence line, could show as printed when the paper opened and translated after the authors' option was turned on and off.

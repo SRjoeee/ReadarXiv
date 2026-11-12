@@ -90,12 +90,15 @@ export function figuresOf(
   for (const m of members) {
     const l = m.lines[0]
     if (!l || l[0] !== page) continue
-    // (a unit the paper keeps as it is has no row, whatever row is given of it: the entry's contentOf)
-    const kept = typeof m.text === 'string' && !!rows.kept?.(m.text)
-    const row = typeof m.text === 'string' && !kept ? rows.get(m.text) : undefined
+    // (a unit the paper keeps as it is has no row, whatever row is given of it: the entry's contentOf. Its row read only where
+    // the rows may set it: one the prepare leaves the original's (its why) or the paper keeps reads none, as its page waits for
+    // none, wait.ts ownRowOf)
+    const kept = !m.why && typeof m.text === 'string' && !!rows.kept?.(m.text)
+    const stays = (m.dir && !m.run) || m.lines.length !== 1 || m.align === 'j'
+    const row = m.why || kept || stays || typeof m.text !== 'string' ? undefined : rows.get(m.text)
     if (m.why) why.set(m.ord, m.why)
     else if (kept) why.set(m.ord, 'kept')
-    else if ((m.dir && !m.run) || m.lines.length !== 1 || m.align === 'j') why.set(m.ord, 'kind')
+    else if (stays) why.set(m.ord, 'kind')
     // (a row that failed: its reason kept, as the entry's contentOf keeps it, #631's review; S.figures fits no set over it)
     else if (row && !row.ok) why.set(m.ord, row.why.kind)
     else {

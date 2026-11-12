@@ -6085,6 +6085,15 @@ alone were traced (lane google-lay) to the gate, not the reader, but for one (§
   "laid against laid" 328 and 34 (door 337 and 47). The rest is the table's names rule (`decideTables`, which the runner has
   not): a body column whose cells came back as they went kept whole as the original's, more often with Google's replies ("cells
   against laid", 107 against the door's 19).
+- **The reads gate** (2026-11-13, round B16, design-display row F6). The runner lays each page again under the reader's default
+  reading options and with every option on (`gateL1Pair`'s `leave`: the kinds their toggles leave, the reader's
+  `compose/classes.ts` leftKinds), its rows recording every id the lay reads (`reads`), and counts each id its page's wait set
+  (waitOf over no row in, the rows going on) does not hold: no exemption, 0 to pass (`gate-l1.mjs` exits 1 otherwise). It is the
+  law of §19.15 ("what a page reads is what it waits for") as a gate: a lay that reads a row its page does not wait for draws
+  what that row's coming later changes, and the composer lays such a page again once (§8.1). Over the 90 pairs before this
+  round: 469 reads on 110 pages of members the prepare, the toggles or the paper leave as the original (their sentences read for
+  the highlight, a figure text's row read before its reason), and the paper's own names, 29,522 on 1,890 pages; now none
+  (§19.14's names, wait.ts `ownRowOf`).
 
 ### 18.64 A size tie caps a member from the passes up to its own first page (the coordinator's ruling, 2026-11-12)
 
@@ -9318,6 +9327,22 @@ layer wherever such a name is drawn (the owner's other ground truth of 2026-10-2
   2610.21312v1's "Setting", 2610.21884v1's "Notation", 2610.35877v1's "Result"), 3 figure units and 6 ink units that had taken
   them go (the ink units after them numbered one on), their 9 label rows stay in the layout (#541's rule had dropped them under
   those units), and no source unit's text group moves; 216 of 216 local sources keep every unit's hash.
+- **Waited for where drawn** (2026-11-13, round B16, the coordinator's ruling on design-display row F6). The reader's typesetter
+  read every name's row on every page of a paper with names (`ownNamesOf`, 29,522 reads on 1,890 pages of the 90 pairs) and
+  waited for none, so a page committed before a name's row came drew the original's head or reference and was laid again once
+  it came. Now a name's row is read only when a member's head or reference asks it (`unit/rename.ts` ownNamesOf: a lookup that
+  reads a row when asked), and one predicate (`lay/wait.ts` drawsName) says which members can: a theorem's or a heading's head
+  name (Label.name), or an element whose source a cross-referencing package generates or a citation's note (U.rename's
+  sources). Such a member waits, beside its own row, for every name of its paper; no other member is given them. What it costs a
+  reader: the server asks for the names first (the website's windows: the name units lead the first window whether or not the
+  layer's catalog is known), and over the 90 pairs' 83 papers every name stands in that first window (47 papers name their own,
+  610 names, at most 330 characters against the first window's 2,500); the reader orders them first too
+  (`session/rows.ts` ranked). A refused row ends the wait, as any row does. Where a page's own rows come from before and a name's
+  does not (asked again), the page waits for the first window, which holds the names and the page in view. A name's row that
+  comes after a page's own now lays that page once, where it laid it twice, the head first drawn as printed
+  (`packages/reader/tests/composer.test.ts`); the reads gate counts no name read outside a page's wait set (§18.63). Nothing a
+  page draws moves: over the 90 pairs, on the door's rows and Google's, the lay draws every page as before but the highlight
+  boxes of members a toggle leaves (no longer read by sentence from rows the reader answers refused: what the reader draws).
 - **Limits.** The translator sees a name alone, with no sentence around it: a word of two senses may come back in the other
   ("Note", "Line"). A name only a macro of the paper's prints (`\newcommand{\thmname}{Satz}`) is not read.
 
