@@ -9,8 +9,8 @@ is taken as about twice as slow on the CPU-bound steps.
 | Tier | When | Runner | Command | Minutes a run | Secret |
 |---|---|---|---|---|---|
 | fast | every pull request and every push to `next`, `main`, `rebuild/v2` | GitHub-hosted `ubuntu-latest` | three jobs (below) | 14 wall clock, about 28 of runner time | the fixtures' read token (exists) |
-| full | every merge into `rebuild/v2` (later `next`), newest first | self-hosted, the maintainer's machine, with the lab data | `pnpm release-check --tier full --work=<external disk>` | 26 (measured), and 16 for `display`, one runner | none |
-| release | before a release, by hand (`workflow_dispatch`) | self-hosted, the same machine | `pnpm release-check --tier release --online --work=<external disk>` | about 80 | none here; the private repository's own |
+| full | every merge into `rebuild/v2` (later `next`), newest first | self-hosted, the maintainer's machine, with the lab data | `pnpm release-check --tier full --work=<external disk>` | 26 (measured), 16 for `display` and about 9 for `perf-batch`, one runner | none |
+| release | before a release, by hand (`workflow_dispatch`) | self-hosted, the same machine | `pnpm release-check --tier release --online --work=<external disk>` | about 80, and 100 to 130 for `perf-release` | none here; the private repository's own |
 
 ## fast: every pull request (hosted)
 
@@ -112,6 +112,27 @@ The private repository's platform tier (its whole local gate: the Worker, the pa
 workerd, the routes' contract suite) runs on every pull request there, on its own runners; release-check names it in this
 tier's report and does not run it.
 
+**Performance, every batch: `perf-batch`** (lab/release-check/perf.mjs judges; the lab's `perf/tools/run.mjs --mode=batch`
+measures). NEW's prepare in the round's compile image (one paper, three times, each in a container of its own sized as the box:
+one CPU, 3 GiB, no network, the amd64 image under this Mac's emulation, a warm box) and its reader on the round's website build
+(three papers, three visits each after a warm-up, in Chromium, offline, every request served from stored data); every measure
+against the last round recorded (`perf/rounds/`, the newest that passed or was accepted), worse only past the two rounds'
+run-to-run spreads added (the speed check's rule; an exact measure such as bytes or TeX's passes past its 0.5 % tolerance); a
+measure the round could not take fails it. It holds only the slots of its own kinds, each while its part runs (the docker slot
+for each prepare, the only one of its kind; one e2e slot for the reader; one test slot to remake the rows), under the machine's
+ordinary load: no integration round can give it the whole machine, so its spreads are that load's and its judged measures lean
+on what load moves least (TeX's passes and compiles, bytes, CPU seconds, the main thread's task time) beside the wall times,
+which the same rule judges only by large moves. About 9 minutes and the waits for its slots; it uses Docker (the round's box
+image, PERF_NEW_IMAGE) where the rest of this tier does not. A regression understood is recorded with `--accept` so that the next
+round is compared with it.
+
+**Cut-over blocker: `perf-release`** (the release tier): TODAY (production's release) against NEW on every measure, on papers
+chosen by a stated rule from the 90 pairs, the same stored translation on both sides, each side measured by one instrument
+(lab data `perf/README.md`): the reader (six papers, three visits a side, interleaved), the language switch (three papers), the
+prepare (the same six papers, three times a side, interleaved paper by paper), a re-prepare with the stored instrument; it fails
+where NEW is worse than TODAY on any judged measure past the spreads, or a measure is missing. About 100 to 130 minutes holding
+every heavy slot of the machine (`perf/tools/quiet.sh`): run only in a window the coordinator gives.
+
 ## release: before a release (by hand, the same machine)
 
 - **Command**: `RELEASE_CHECK_BASE=<a worktree of the last release> pnpm release-check --tier release --online
@@ -120,7 +141,8 @@ tier's report and does not run it.
 - **Adds to full**: the prepare's pixel proofs on every page of the 87 papers (poppler's `pdftoppm` and `pdftocairo`); the
   reader's canvas on spike S1c's papers (Chromium); today's engine's speed check against the last release; the online scripts (`pnpm build:staging`, then `e2e`, `e2e:pdf`, `e2e:floating`, `e2e:popup`, `e2e:layout`,
   `e2e:local-endpoint`, `e2e:image`) and the live placeholder run (`e2e:placeholders`), each under the project's
-  User-Agent and never against our production server (`tests/e2e/lib/online.mjs`).
+  User-Agent and never against our production server (`tests/e2e/lib/online.mjs`); performance ≥ today (`perf-release`,
+  above: a cut-over blocker).
 - **The private repository's gates**, named in the report with their commands there and never run here: its platform
   tier; the security suite of its compile jail on native amd64 (invariant I9); the corpus through its prepare, byte for
   byte the lab's (I6); its website's reader e2e (I8); the staging soak's measurements (design §7's prepare times and the
