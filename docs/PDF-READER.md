@@ -5454,6 +5454,54 @@ column's bullet as an element of their own.
 - **Over the 88**: nothing moves (units, members and parts as with §18.57 alone; the dumps r19's). The class is this paper's.
 - **Versions.** PIPELINE must move (2111.09276v1's units).
 
+### 18.60 A face switch first in a bare group is the group's face (2026-11-12)
+
+With the References toggle on, a reference's italic venue or title was drawn upright (the toggles-on sheet's class Y2). Read
+against arXiv's page over round B12's bundles (r19, the 88 papers: each bibliography member's glyphs on A inside its lines,
+matched to its unit's letters by the engine's own reading, group-style.ts `groupLettersOf`, each italic letter by its font's
+name), 610 of its 4,847 bibliography members (22 papers) held an italic stretch of three letters or more that their unit stated as
+no italic group, 16,858 of their 118,059 italic letters; 589 of them, in 15 papers (16,680 letters), in a bare group a face switch
+opens: BibTeX's styles' `{\em Proc. IEEE Globecom}`, `{\it …}`. The instrument read the switch as an element of the group's text:
+the group was `other`, its face carried by the silent element alone. No wire carried that face as a group's (the tags wire sent an
+empty element first in the pair, `<t id="6"><x id="7"/> IEEE …</t>`, which a translator is free to set apart from the words), the
+put-back places no group holding an element (packages/translate groups.ts), and no reference was asked for one.
+
+- **The rule** (`instrument.mjs` switchesOf). A face switch that draws nothing (`\em`, `\it`, `\itshape`, `\sl`, `\slshape`
+  italic; `\bf`, `\bfseries` bold; `\sc`, `\scshape` small capitals) standing first, white space aside, in a bare group is the
+  group's style and its command (SpanAt.cmd), no element of its text: `{\em x}` is stated as `\emph{x}` is, TeX setting the two
+  alike. A size, a family, a colour, or a switch that is not first stays as it was: an element of a group of style `other`. The
+  run-in rule reads such a group as one a switch opens (`{\bf Remark:}` stays `must`, `run-ins.ts`); a face that fills a
+  bibliography field rides it as before (§18.38). The typesetter reads the group's command as it reads `\emph{`'s: `\em{` toggles
+  from the face around it as TeX's `\em` does, and counts in the base style's majority (`tokens.ts` baseOf) as the switch inside
+  the group did. Stage 1a's statement (o) reads the switch out of today's unit (`stated.mjs`; the acceptance list's `characters`
+  entry already holds the clause). A note mark glued after a name (`\textdagger`, 2610.42112v1's author block) is no face switch
+  and stays an element: the earlier attempt that wrote the kernel's whole symbol table as text lost that block's person (lane
+  style-wire B, never merged), and a test holds it.
+- **Measured** over the 88 against r19: 731 units in 29 papers change, every one this rule's (932 switches: references 569,
+  paragraphs 129, cells 9, named variants 8, captions 7, theorems 5, abstracts 3, a footnote); no unit lost or gained otherwise,
+  no `must` moved; the differential's lost r19's 11 lines, its accepted 4,936 to 5,416; the float lines 778 and the orphan letters
+  388 as recorded; the twin run identical. The italic letters on arXiv's page no group states: 610 members to 21 (7 papers),
+  16,858 letters to 178, none in such a group (the rest an element's own glyphs, a URL inside an `\emph`, and a few of no group).
+  The translator: the markers wire changes in no unit (a group not `must` goes on no wire, and the switch, silent, went on none);
+  the tags wire in 688 units, 251,674 characters to 232,943; a markers translator is asked 52 references more (2,094 characters:
+  phrase groups of running text, and venues of the named variants of entries, now groups of text alone). The parity's eleven pairs
+  that move and 2610.10069v1 (199 pages, gate mode, no translator asked: the cache lacks no reply): no page newly worse in either
+  mode; default 23 to 22 and every switch on 28 to 26 worse pages, the pages that left (2608.25210v2 p1 t11, 2610.40645v1 p38
+  t342, line counts) only because their units, their ids moved, are laid with a fresh row, whose line count the gate does not
+  judge. With every switch on, v2 draws italics in 56 references and 3 paragraphs and bold in 6 that it drew upright. Four units
+  lose the italics today's stored reply gave them on v2's side (2608.25210v2 p3 t44 and p4 t99, 2610.20484v1 p10 t119 and p11
+  t129): today's wire had kept those groups beside a pair v2 does not keep (a paper's macro, `\newblock`), and their ids moved, so
+  v2's side now reads v2's own reply, as v2's reader always did; today draws 0, 8, 21 and 27 italic characters there, and the gate
+  judges none of the four worse.
+- **What it does not reach.** On Microsoft's markers wire a group that is not `must` comes back only where the reply holds its
+  words as the source does (§18.42's put-back, now open to these groups): 729 of 841 face groups on the parity's pairs sit inside
+  a clause, upright in production and in v2 alike (§18.38). 2610.10069v1's three references on pages 25 and 26 are of that kind,
+  not of this rule's: their `\emph{venue}` is stated italic. Production kept them because its `\enquote` was a kept pair (a pair
+  that sets more than a style) whose marker edge the venue stood at (`mt.mjs` classOf's boundary rule), the quoted title cut out
+  of its sentence as a pair of its own and its quotes dropped; since §18.32 the quotes are text, the run-in rule's boundary finds
+  no edge there, and by the coordinator's rulings no phrase pair goes on the markers wire and no reference is asked for a
+  bibliography's groups. A tags wire carries the group.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

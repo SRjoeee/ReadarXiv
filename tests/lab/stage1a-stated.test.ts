@@ -1017,6 +1017,15 @@ describe("today's unit the candidate writes with a group that carries nothing as
     const v2 = { ...unit(id('b'), 30, 'reference', [text('A. Author, A study of GPU kernels, '), open('\\emph{'), text('Nature'), close(), text(' 5%.')]), state: 'drawn' }
     expect(said(statedOf([today], [v2]))).toEqual([[30, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
   })
+  it('is that unit where a face switch first in a bare group is the group\'s face, no element of v2\'s text (`{\\em …}` as `\\emph{…}`)', () => {
+    const today = unit(id('a'), 32, 'reference', [text('J. Doe, On eddies, '), open('{'), ph('\\em'), text(' Annals of Flow'), close(), text(', 4.')])
+    const v2 = { ...unit(id('b'), 32, 'reference', [text('J. Doe, On eddies, '), open('{'), text(' Annals of Flow'), close(), text(', 4.')]), state: 'drawn' }
+    expect(said(statedOf([today], [v2]))).toEqual([[32, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+    // (a size first stays an element: v2 writing it out is another unit)
+    const sized = unit(id('c'), 33, 'reference', [open('{'), ph('\\small'), text(' Annals'), close()])
+    const v2s = { ...unit(id('d'), 33, 'reference', [open('{'), text(' Annals'), close()]), state: 'drawn' }
+    expect(String(said(statedOf([sized], [v2s]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
+  })
   it('is that unit where a pair v2 writes as nothing stood between two spaces, white space read as one space (2608.25210v2)', () => {
     const today = unit(id('a'), 31, 'para', [text('The cost of '), open('\\techreport{'), text(' the plan '), close(), text(' is computed.')])
     const v2 = { ...unit(id('b'), 31, 'para', [text('The cost of the plan is computed.')]), state: 'drawn' }

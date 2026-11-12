@@ -4,7 +4,7 @@
 import type { Placed } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { rectOf } from '../../src/lay/adapt.ts'
-import { measured, paperOf, readMember, type RowUnit, sourcePieces } from '../../src/lay/read.ts'
+import { measured, paperOf, readMember, type RowUnit, rowPieces, sourcePieces } from '../../src/lay/read.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { Metrics } from '../../src/types.ts'
 import type { V0Piece } from '../../src/unit/breaks.ts'
@@ -303,5 +303,37 @@ describe('the reading from the part', () => {
     const toks = got.tokens as unknown as { s?: string; st?: { bold?: boolean } }[]
     expect(toks.find((t) => t.s === 'Fett')!.st!.bold).toBe(true)
     expect(toks.find((t) => t.s === 'Rest')!.st!.bold).toBe(false)
+  })
+  it('draws a bare group a face switch opens (`{\\em …}`, its switch the command the part states) in that face, a majority of it the base’s as `\\emph`’s is', () => {
+    // (the original's glyphs mostly the group's, italic: the base read off them is italic; the group's \em toggles from the
+    // base its own majority gives back, upright, as TeX's \em toggles from the face around it)
+    const m = member({
+      style: { role: 'serif', size: 10, slant: 1, design: 'NimbusRomNo9L-ReguItal' },
+      spans: [['1', { cmd: 'em' }]],
+    })
+    const got = read(
+      m,
+      rowPieces(m, [
+        { t: 'span', id: '1', content: [{ t: 'text', s: 'Annalen der Physik' }] },
+        { t: 'text', s: ', Band 4.' },
+      ]),
+    )
+    const toks = got.tokens as unknown as { s?: string; st?: { italic?: boolean } }[]
+    expect(toks.find((t) => t.s === 'Annalen')!.st!.italic).toBe(true)
+    expect(toks.find((t) => t.s === 'Band')!.st!.italic).toBe(false)
+    const bold = member({
+      style: { role: 'serif', size: 10, bold: 1, design: 'NimbusRomNo9L-Medi' },
+      spans: [['1', { cmd: 'bf' }]],
+    })
+    const b = read(
+      bold,
+      rowPieces(bold, [
+        { t: 'span', id: '1', content: [{ t: 'text', s: 'Satz eins' }] },
+        { t: 'text', s: ' gilt.' },
+      ]),
+    )
+    const bt = b.tokens as unknown as { s?: string; st?: { bold?: boolean } }[]
+    expect(bt.find((t) => t.s === 'Satz')!.st!.bold).toBe(true)
+    expect(bt.find((t) => t.s === 'gilt.')!.st!.bold).toBe(false)
   })
 })

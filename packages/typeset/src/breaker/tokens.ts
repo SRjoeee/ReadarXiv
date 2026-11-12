@@ -252,10 +252,13 @@ export function baseOf(unit: TokensInput['unit'], base: TStyle): TStyle {
   for (const p of unit.pieces) {
     if (p.t === 'open') {
       const src = p.src as string
+      // (a bare group a face switch opens is stated with that switch as its command, `\em{` (SpanAt.cmd: the instrument's
+      // switchesOf), and sets its group's face as the switch inside it did, declared's)
       const bits =
         (/^\\(?:textit|emph|itshape|textsl)\b/.test(src) ? GROUP_ITALIC : 0) |
         (/^\\(?:textbf|bfseries)\b/.test(src) ? GROUP_BOLD : 0) |
-        (/^\\(?:textsc|scshape)\b/.test(src) ? GROUP_CAPS : 0)
+        (/^\\(?:textsc|scshape)\b/.test(src) ? GROUP_CAPS : 0) |
+        declared(/^(\\[A-Za-z]+)\{$/.exec(src)?.[1])
       open.push(bits)
       if (bits & GROUP_ITALIC) nItalic++
       if (bits & GROUP_BOLD) nBold++

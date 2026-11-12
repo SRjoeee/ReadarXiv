@@ -18,6 +18,7 @@ import { unitClass } from '../../../packages/engine/src/locate/today/content-cla
 import { symbolText } from '../../../src/pdf-reader/engine/rules/text-symbols.mjs'
 import { identifiersIn, inMemory, loadProject } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
 import { isInkless } from '../../../src/pdf-reader/engine/translate/mt.mjs'
+import { switchesOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
 
 /** how a unit made on arXiv's page reads where it stands for one of the baseline's */
 export const CAUSE = Object.freeze({
@@ -47,9 +48,10 @@ export const CAUSE = Object.freeze({
   // TeX with each kernel or textcomp text symbol that is a character of its text now (latex-front.mjs textCharacter: `\%`, `\&`,
   // `\#`, `\$`, `\{`, `\}`, \textasciitilde, \textbar, \textless, \textgreater, \textbackslash) its character, and each group
   // that carries nothing its content (instrument.mjs passThroughOf), and the marks a command prints around its argument text
-  // (latex-front.mjs wrapOf: \\enquote's quotation marks): the same unit, its id moved with its pieces, wherever either lays it
-  // (its holder the candidate's unit))
-  characters: 'the same unit as v2 writes it: its escaped characters text, a group that carries nothing its content, the marks a command prints text, a link with no address its argument',
+  // (latex-front.mjs wrapOf: \\enquote's quotation marks), and a face switch first in a bare group the group's face, no element
+  // (instrument.mjs switchesOf: `{\\em …}` stated as `\\emph{…}` is): the same unit, its id moved with its pieces, wherever
+  // either lays it (its holder the candidate's unit))
+  characters: 'the same unit as v2 writes it: its escaped characters text, a group that carries nothing its content, the marks a command prints text, a link with no address its argument, a face switch first in a group its face',
   // ((f)'s holding by a kept block, no text of it sent (2608.06007v1's biblatex bibliography kept whole): no text to read, stated
   // apart, not accepted)
   heldKept: 'held whole by a kept block, no text of it sent',
@@ -782,6 +784,8 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     // candidate does not write, read off its groups, each command's pairs all kept or all dropped by the front end's reading)
     const groups = groupsIn(ps)
     const bare = (g) => g.src === '{' && g.close >= 0 && !ps.slice(g.open + 1, g.close).some((q, j) => q.kind === 'ph' && isInkless({ t: 'ph', src: q.src }) && depthAt(ps, g.open + 1, g.open + 1 + j) === 0)
+    // (a face switch first in a bare group: the group's face, no element of v2's text, instrument.mjs switchesOf)
+    const switched = new Set([...switchesOf(ps.map((q) => ({ ...q, t: q.kind }))).values()].map((x) => x.at))
     const L = u.lines?.[0]
     const all = units.filter((n) => {
       if (n.replaced || n.kind !== u.kind || baseIds.has(n.id)) return false
@@ -805,6 +809,7 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
         marked.add(g.open).add(g.close)
       }
       if (i !== theirs.length) return false
+      for (const k of switched) drop.add(k)
       const same = writtenAs(ps, drop, marked, verbatim)
       const ok = same?.(texOf(n)) ?? false
       if (ok && verbatim.size) wroteVerbatim.add(n)

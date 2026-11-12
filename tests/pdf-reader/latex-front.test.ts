@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
+import { piecesOf } from '@/pdf-reader/engine/pipeline/instrument.mjs'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { identifierSource, inMemory, lineBreaks, loadProject, localizeNames, markUnits, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { serialize } from '@/pdf-reader/engine/translate/mt.mjs'
@@ -104,6 +105,17 @@ describe('the front matter: its notes (1706.03762) and its names and places (the
     const p = project(`\\documentclass{article}\\begin{document}\\title{The Paper}${AUTHORS}\\maketitle\nWords here.\\end{document}`)
     expect((p.units as Unit[]).filter(u => u.kind === 'footnote').map(textOf)).toEqual(['Equal contribution. Listing order is random.', 'Work performed while at X.'])
     expect(authors(p)).toEqual(['Alice', 'Bob'])
+  })
+
+  it('a note mark glued after an author\'s name stays an element of its unit, never a letter of the name (2610.42112v1\'s `Millidge\\textdagger`: as text the dagger joined the name, its person and its named variants were lost)', () => {
+    const p = project('\\documentclass{article}\\title{The Paper}\\author{Ada Lovelace\\textdagger, Alan Turing\\textdagger\\\\ Somewhere}\\begin{document}\\maketitle\nWords here.\\end{document}')
+    const names = (p.units as Unit[]).filter(u => u.kind === 'author')
+    expect(names.map(textOf).join('|')).not.toMatch(/†/)
+    const marks = names.flatMap(u => u.pieces.filter(q => q.t === 'ph').map(q => (q as { src?: string }).src))
+    expect(marks.filter(s => s === '\\textdagger')).toHaveLength(2)
+    // (and the instrument keeps each an element of the unit's content: no face switch, no text symbol read as text)
+    const content = names.flatMap(u => piecesOf(u.pieces) as { t: string; src?: string }[])
+    expect(content.filter(q => q.t === 'el' && q.src === '\\textdagger')).toHaveLength(2)
   })
 
   it('an affiliation and its note; the title\'s note stays the title\'s, and the title is still the title', () => {

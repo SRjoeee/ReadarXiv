@@ -37,17 +37,18 @@ describe('a unit’s groups as TeX set them, stated by the adapter', () => {
     expect(content[0]).toMatchObject({ style: 'other' })
     expect(content[0]).not.toHaveProperty('must')
   })
-  it('no face for a group whose command the tables name (\\textbf), nor a bare group: their style is read as before', () => {
+  it('no face read for a group whose command the tables name (\\textbf), nor for a bare group a face switch opens: its switch its style and command', () => {
     const named = head('\\textbf{', 'Setup', '  \nWe use eight GPUs.')
     const c1 = piecesOf(named) as { must?: number; style: string }[]
     const g1 = [...set('Setup', BOLD), ...set('We use eight GPUs.', REGULAR)]
     expect(marksOf(c1, g1, spansOf(named))).toEqual([['0', { cmd: 'textbf' }]])
     expect(c1[0]).toMatchObject({ style: 'bold', must: 1 })
-    // (a bare group with a declaration of its own to scope: one with none is no group, instrument-groups.test.ts)
+    // (a bare group a face switch opens: the switch its style and command, no element of its text (switchesOf); one with no
+    // declaration of its own is no group, instrument-groups.test.ts)
     const bare = [{ t: 'text', s: 'It holds. ' }, { t: 'open', src: '{' }, { t: 'ph', src: '\\bfseries' }, { t: 'text', s: 'Remark' }, { t: 'close', src: '}' }, { t: 'text', s: ' it also holds.' }]
     const c2 = piecesOf(bare) as unknown[]
-    expect(marksOf(c2, [...set('It holds.', REGULAR), ...set('Remark', BOLD), ...set('it also holds.', REGULAR)], spansOf(bare))).toEqual([])
-    expect(c2[1]).toMatchObject({ style: 'other' })
+    expect(marksOf(c2, [...set('It holds.', REGULAR), ...set('Remark', BOLD), ...set('it also holds.', REGULAR)], spansOf(bare))).toEqual([['1', { cmd: 'bfseries' }]])
+    expect(c2[1]).toMatchObject({ style: 'bold', content: [{ t: 'text', s: 'Remark' }] })
   })
   it('a paper’s macro TeX set in the face around it: nothing stated, no style group (\\revised{…} inside a sentence)', () => {
     const pieces = [{ t: 'text', s: 'One could leverage ' }, ...head('\\revised{', 'retrieval approaches', ' ranking them.')]
