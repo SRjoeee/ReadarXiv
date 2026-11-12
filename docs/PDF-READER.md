@@ -652,7 +652,7 @@ No state that tells the reader nothing is shown (no "done").
 | Not to be had now | Read arXiv's website out of reach, at its limit, or the network itself down (§8.1: each cause its own words) | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24), the retry only where the session does not ask again by itself (§8.1); passing, not remembered; a paper whose files this machine keeps opens without it |
 | Some paragraphs failed | a translation with gaps: rows that are none, or a run that ended failed and is not asked again at once (§8.1) | capsule: {n} 处翻译失败 · 重试 (where nothing asks again by itself) · close |
 | Language not supported | the shared target language is not one of the reader's | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the reader's translates |
-| Nothing translated | a service failure with no paragraph done | card in the translation's pane: the reason (网络连接失败, API Key 无效或已过期, 尚未配置 API Key, …) · 重试, or 设置 when the reason is a key (opening the settings page at the services) |
+| Nothing translated | a service failure with no paragraph done | card in the translation's pane: the reason (网络连接失败, API Key 无效或已过期, 尚未配置 API Key, 请求过于频繁, …) · 重试, or 设置 when the reason is a key (opening the settings page at the services). The reason is the unit's `Why` read by format's one reading of it (`kindOfWhy`, which the extension's `errorOf` and so the HTML page's words read too): a reply no translator gave back whole an invalid response; a translator out of reach the network, a rate limit where it named a wait; a key refused the key's; no model or no translator for the target a bad request; any other unconfigured code a missing key's. Our server's run of the target failed is the network's |
 | Cannot be had | no bilingual version can be made of the paper (no source, no PDF, a prepare that cannot succeed, one this version of the reader cannot read) | 对照 and 译文 greyed in the switch; the reader shows 原文, with the capsule: 这篇论文暂不支持 PDF 翻译, and 改用 HTML 翻译 where arXiv has an HTML version (opened where `reading.openIn` says); no close |
 | No paper | the address names none (a hand-typed one) | the phase is ready, not loading; 对照 and 译文 greyed and 原文 selected whatever the saved display; a card in the document area: 找不到这篇论文 · 前往 arXiv (a link, opened where `reading.openIn` says) |
 | Settings cannot be read | storage did not answer in a page's first 1,500 ms, or its value cannot be used | the defaults in use and the PDF opened on them, not held for the storage; capsule: 设置读取失败，当前使用默认设置 · 设置, for as long as it is so, beside an address with no paper's card too; the controls that write the settings greyed, with the reason in their tooltips; the menus keep their places |
@@ -827,6 +827,12 @@ its own toggle, below; until then the switch showed or hid it too.
   original's page where the new one's service fails or stops short with nothing translated. The line and the phase are an open's (Translating, §8). A hold
   for the language before (one the layer does not set) is lifted and the translated display shown again; a hold for the
   paper's own reason stays.
+- **Another service** (`provider` or `services` changed, here or elsewhere; most often the key the card sent the reader to
+  set, §8): a translation that stopped short, failed or ended with passages lost, is asked again of it at once, whatever wait
+  the service before named, and only for the passages with no translation (`settings.ts` `followOf` `retry`). The rebuilt
+  reader (`packages/reader`) reads the services as the preferences' `translator`, the chain's revision (`host/prefs.ts`): a
+  landing that names another one is the session's `cmd.translator` (`session/machine.ts` `askedAgain`). The website's
+  preferences name none (its rows are our server's), so nothing there asks again.
 
 **New**, a `pdfReader` group; `CONFIG_VERSION` 18 → 19, with a migration that adds it with its defaults:
 

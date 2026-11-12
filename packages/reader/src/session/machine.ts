@@ -26,7 +26,7 @@
 // the client's) stops the look until a retry; so does a prepare followed for PREPARE_DEADLINE_MS with the tab shown. Nothing is
 // asked of our server while the tab is hidden, and that time is not counted. A head that cannot draw ends the look before a unit
 // goes to the service; a head over another original than the left shows puts our copy of it on the left before the layer is used.
-import type { Head } from '@readarxiv/format'
+import { type FailureReason, FORMATS, fold, type Head, type PaperDoc, type Ref } from '@readarxiv/format'
 import type { Prefs } from '../prefs.ts'
 
 export type { Prefs }
@@ -36,12 +36,8 @@ export interface PaperRef {
   id: string
   version: number | null
 }
-/** an immutable object on our server (L5's Ref) */
-export interface Ref {
-  path: string
-  sha256: string
-  bytes: number
-}
+/** an immutable object on our server (format's Ref) */
+export type { Ref }
 
 /** the policy's constants, the same in both hosts (design-b §4) */
 export const GATE_MS = 1500
@@ -60,8 +56,8 @@ export const REFUSED_ASKS = 3
 /** a prepare followed this long with the tab shown is given up: the bilingual version not to be had now, a retry asks again
  *  (R run.ts PREPARE_DEADLINE_MS) */
 export const PREPARE_DEADLINE_MS = 600_000
-/** the formats of the bundle this reader reads */
-export const FORMATS = [1] as const
+/** the formats of the bundle this reader reads (format's) */
+export { FORMATS }
 
 export type OriginalWhy = 'network' | 'not-found' | 'unreadable'
 export type LayerWhy =
@@ -101,43 +97,8 @@ export type RowsWhy =
    *  next ask is its open's, needsOf) */
   | { kind: 'server'; retryAt?: number | null }
 
-/** a document from the server's follow (L5's PaperDoc), as the machine reads it */
-export interface Doc {
-  epoch: string
-  rev: number
-  /** the paper's version the document is of (the latest, for an id followed with none) */
-  version?: number
-  prepare: {
-    state: 'none' | 'running' | 'done' | 'failed'
-    why: string | null
-    retryAt: number | null
-    stage: string | null
-    units: Ref[]
-    /** the prepare's attempt, numbered by our server (0 before any; none: it does not say) */
-    attempt?: number
-    /** after a prepare that cannot be made (`cannot`, `too-large`): whether arXiv has an HTML version of the paper, as our
-     *  server knows it (null, or none: it does not say) */
-    html?: boolean | null
-  }
-  /** `stale`: made by another build than the one our server runs, served while the paper is prepared again */
-  layer: { catalog: Ref; units: Ref[]; format: number; stale?: boolean } | null
-  /** the target the document was asked for, alone: its run, where an open made one */
-  targets: Record<
-    string,
-    | {
-        state: 'none' | 'running' | 'done' | 'failed'
-        why: string | null
-        retryAt: number | null
-        rows: Ref[]
-        done: number
-        total: number
-        /** the run's attempt (0 before any), and the units it was given (null before it is) */
-        attempt?: number
-        units?: Ref[] | null
-      }
-    | undefined
-  >
-}
+/** a document from the server (format's PaperDoc: the follow's, and the open's) */
+export type Doc = PaperDoc
 
 export type OriginalRegion =
   | { s: 'opening'; t: Ticket; pin: boolean; loaded: number; total: number }
@@ -407,8 +368,8 @@ export function init(o: Init): State {
   return settle(s)
 }
 
-/** a document is newer than the one held: another epoch, or a higher revision */
-const newer = (held: Doc | null, d: Doc) => !held || d.epoch !== held.epoch || d.rev > held.rev
+/** a document is newer than the one held: another epoch, or a higher revision (format's fold) */
+const newer = (held: Doc | null, d: Doc) => fold(held, d) === d && d !== held
 const sameRefs = (a: readonly Ref[], b: readonly Ref[]) =>
   a.length === b.length && a.every((x, i) => x.sha256 === b[i]?.sha256)
 
@@ -419,20 +380,18 @@ const backoff = (tries: number) => Math.min(BACKOFF_MAX_MS, BACKOFF_MS * 2 ** Ma
  * our server's own trouble, which is no fault of the paper's and passes: its internal failure, a step past its deadline, its
  * translator or its boxes out of reach, all `unreachable`, said as our server's for now with the time our server's document
  * names for its next attempt (status.ts `server`: "translation unavailable for now, retry at {time}", PDF-READER §8.1). A
- * word this table does not name is our server's for now too; the website's tests hold the server's words and this table
- * equal, so a word added there fails them until it is named here. `cannot` and `limit` are older spellings
+ * word the document can hold is named here: the server's words are format's, one closed set, so a word added there fails this
+ * table's type until it is named here
  */
-export const PREPARE_WHY: Readonly<Record<string, LayerWhy>> = {
+export const PREPARE_WHY: Readonly<Record<FailureReason, LayerWhy>> = {
   'not-found': 'not-found',
   'no-source': 'no-source',
-  cannot: 'cannot-prepare',
   'cannot-typeset': 'cannot-prepare',
   'no-main': 'cannot-prepare',
   corrupt: 'cannot-prepare',
   'too-large': 'too-large',
   busy: 'busy',
   quota: 'limit',
-  limit: 'limit',
   internal: 'unreachable',
   deadline: 'unreachable',
   'translation-down': 'unreachable',
@@ -462,7 +421,7 @@ function layerOfDoc(s: State, d: Doc): LayerRegion {
   if (p.state === 'failed')
     return {
       s: 'refused',
-      why: (p.why && Object.hasOwn(PREPARE_WHY, p.why) && PREPARE_WHY[p.why]) || 'unreachable',
+      why: p.why ? PREPARE_WHY[p.why] : 'unreachable',
       retryAt: p.retryAt,
       timer: l.s === 'refused' ? l.timer : null,
     }
@@ -474,7 +433,7 @@ function layerOfDoc(s: State, d: Doc): LayerRegion {
  *  or only ended (frames coalesce, a follow asked again lands after the end): the target's run running, or another attempt or
  *  rows than the document before named (`was`). Rows made here are the host's, of the layer's units: those that ended are taken
  *  again where the layer is now of other units than the one before (`before`: a stale layer's replacement) */
-function rowsOfDoc(s: State, d: Doc, was: Doc['targets'][string], before: LayerRegion): RowsRegion {
+function rowsOfDoc(s: State, d: Doc, was: Doc['targets'][string] | undefined, before: LayerRegion): RowsRegion {
   const r = s.rows
   if (s.here) {
     const same = before.s === 'ready' && s.layer.s === 'ready' && sameRefs(before.units, s.layer.units)
@@ -670,6 +629,13 @@ export function linkSaid(s: State, waits: boolean): { reconnecting: boolean; net
   return { reconnecting: !network && l.s === 'on' && !!l.lost, network }
 }
 
+/** the rows once another translator is named (cmd.translator, or a landing whose `translator` differs): a run that stopped
+ *  short, failed (whatever wait the translator before named) or complete with units lost, asked again, which asks only for
+ *  the units with no translation (rows.ts missingOf); any other rows as they are. The extension's reader before this one did
+ *  the same on a change of its services (its settings.ts followOf `retry`) */
+const askedAgain = (r: RowsRegion): RowsRegion =>
+  r.s === 'failed' || (r.s === 'complete' && r.stopped) ? { s: 'none', target: r.target } : r
+
 /** the input folded into its region */
 function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
   const s: State = { ...s0 }
@@ -715,6 +681,8 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
       for (const k of s.prefs.chosen) value[k] = (s.prefs.value as unknown as Record<string, unknown>)[k]
       s.prefs = { ...s.prefs, s: 'landed', value: value as unknown as Prefs, timer: null }
       if (s.rows.s === 'none') s.rows = { s: 'none', target: targetOf(s) }
+      // (another translator named: what stopped short is asked of it, as cmd.translator)
+      if (v.translator !== s0.prefs.value.translator) s.rows = askedAgain(s.rows)
       break
     }
     case 'prefs.refused':
@@ -930,7 +898,7 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
       s.held = x.on
       break
     case 'cmd.translator':
-      if (s.rows.s === 'failed') s.rows = { s: 'none', target: s.rows.target }
+      s.rows = askedAgain(s.rows)
       break
     case 'close':
       s.closed = true

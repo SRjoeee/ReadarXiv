@@ -10,7 +10,7 @@
 // the caller's abort is the caller's, never asked again. An object is read within its bound and held to its digest before
 // anything parses it; past a content-encoding a response's content-length is the body's as sent, not the bytes read here, so
 // only the read counts them (W open.ts bodyWithin, layer/files.ts).
-import { BOUNDS } from '@readarxiv/format'
+import { BOUNDS, OpenAnswer, PaperDoc } from '@readarxiv/format'
 import { type Fetch, realTimers, type Timers } from '../bytes/source.ts'
 import { type Doc, FORMATS, type PaperRef, type Ref, WAIT_MAX_MS } from './machine.ts'
 
@@ -223,25 +223,10 @@ export function objectStore(a: Ask) {
 /** the directory an object of a layer lies in, by its catalog: objects the catalog names by digest are at `<dir>/<sha256>` */
 export const dirOf = (catalog: Ref): string => catalog.path.slice(0, catalog.path.lastIndexOf('/'))
 
-/** a document as the server writes it, read for what the machine reads (unknown fields stripped) */
+/** a document as the server writes it (format's PaperDoc, unknown fields stripped), or null where it is none */
 export function docOf(x: unknown): Doc | null {
-  const d = x as Partial<Doc> & { prepare?: Doc['prepare']; targets?: Doc['targets'] }
-  if (!d || typeof d !== 'object' || typeof d.rev !== 'number' || !d.prepare) return null
-  const prepare = d.prepare as Doc['prepare'] & { units: unknown }
-  return {
-    epoch: String(d.epoch ?? ''),
-    rev: d.rev,
-    ...(typeof d.version === 'number' ? { version: d.version } : {}),
-    // (L5's prepare names its units one Ref; stage 2's fixtures a list of them)
-    prepare: {
-      ...prepare,
-      units: Array.isArray(prepare.units) ? prepare.units : prepare.units ? [prepare.units as Ref] : [],
-    },
-    layer: d.layer
-      ? { ...d.layer, units: Array.isArray(d.layer.units) ? d.layer.units : [d.layer.units as unknown as Ref] }
-      : null,
-    targets: d.targets ?? {},
-  }
+  const d = PaperDoc.safeParse(x)
+  return d.success ? d.data : null
 }
 /** a 429's word, as our server's body says it: the visitor's rate of asks (worker v2 routes.ts `rate-limited`), else its
  *  capacity */
@@ -382,13 +367,13 @@ export async function follow(
   }
 }
 
-/** the open: what the paper lacks started; its document, or a refusal with its wait: of the work, for the visitor's new papers
- *  (`quota`) or our server's capacity (`busy`), in its answer; of the ask, for the visitor's rate of asks (`rate`, a 429 whose
- *  body says so). A refusal of the work names the instant it ends (`at`: the visitor's period's end, as our server's admission
- *  knows it exactly, on its clock: the time said; null where an older server names none) beside its wait (`afterMs`: that
- *  instant measured from the answer, to the millisecond where our server names it so (`retryAfterMs`), else its whole seconds,
- *  which the session counts on its own clock, whatever the viewer's clock reads). A Refused for the rest: `update` a 426,
- *  `not-found` a 404, `network` / `server` out of reach */
+/** the open: what the paper lacks started; its document (format's OpenAnswer; none where the answer is not one), or a refusal
+ *  with its wait: of the work, for the visitor's new papers (`quota`) or our server's capacity (`busy`), in its answer; of the
+ *  ask, for the visitor's rate of asks (`rate`, a 429 whose body says so; or its capacity), after its Retry-After. A refusal of
+ *  the work names the instant it ends (`at`: the visitor's period's end, as our server's admission knows it exactly, on its
+ *  clock: the time said) beside its wait (`afterMs`: that instant measured from the answer, to the millisecond, which the
+ *  session counts on its own clock, whatever the viewer's clock reads). A Refused for the rest: `update` a 426, `not-found` a
+ *  404, `network` / `server` out of reach */
 export function open(a: Ask & { paper: PaperRef; target: string | null; view?: number }): Promise<{
   doc: Doc | null
   refused?: { why: 'quota' | 'busy' | 'rate'; afterMs: number | null; at: number | null }
@@ -407,31 +392,18 @@ export function open(a: Ask & { paper: PaperRef; target: string | null; view?: n
     async (r) => {
       if (r.status === 426) throw new Refused('update')
       if (r.status === 404) throw new Refused('not-found')
-      const v = (await jsonOf(r)) as {
-        doc?: unknown
-        refused?: { why?: 'quota' | 'busy'; retryAfterS?: number; retryAfterMs?: number; retryAt?: number }
-      } | null
-      if (r.status === 429 || v?.refused) {
-        const s = v?.refused?.retryAfterS
-        const ms = v?.refused?.retryAfterMs
-        const at = v?.refused?.retryAt
-        return {
-          doc: docOf(v?.doc),
-          refused: {
-            why: v?.refused?.why ?? rateOf(v),
-            // (the wait to the millisecond where our server names it so: a second rounded up asked again 0.4 s past the instant)
-            afterMs:
-              typeof ms === 'number' && Number.isFinite(ms)
-                ? ms
-                : typeof s === 'number' && Number.isFinite(s)
-                  ? s * 1000
-                  : afterOf(r),
-            at: typeof at === 'number' && Number.isFinite(at) ? at : null,
-          },
-        }
-      }
+      const v = await jsonOf(r)
+      // (the ask refused: the visitor's rate of asks, or our server's capacity, as its body says, after its Retry-After)
+      if (r.status === 429) return { doc: null, refused: { why: rateOf(v), afterMs: afterOf(r), at: null } }
       if (!r.ok) throw new Refused('network')
-      return { doc: docOf(v?.doc ?? v) }
+      // the answer (format's OpenAnswer): its document, and the refusal of its new work where there is one, to the
+      // millisecond (a second rounded up asked again 0.4 s past the instant)
+      const answer = OpenAnswer.safeParse(v)
+      if (!answer.success) return { doc: null }
+      const { doc, refused } = answer.data
+      return refused
+        ? { doc, refused: { why: refused.why, afterMs: refused.retryAfterMs, at: refused.retryAt } }
+        : { doc }
     },
   )
 }

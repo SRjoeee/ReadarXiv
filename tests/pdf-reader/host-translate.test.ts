@@ -2,13 +2,13 @@
 // out (the chain's, in the background), in calls of production's batches of plain source, one at a time, under one scope
 // withdrawn when done; through the background's own transport and chain, the requests and round trips of a 3-page open
 import { describe, expect, it } from 'vitest'
-import type { Unit } from '@readarxiv/format'
+import { kindOfWhy, type Unit } from '@readarxiv/format'
 import { chainOf, type FetchInit, type FetchReply, google, microsoft, type Translator, type UnitIn } from '@readarxiv/translate'
 import { fakeClock, scriptedFetch } from '@readarxiv/translate/testing'
 import { MockLanguageModelV4 } from 'ai/test'
 import { DEFAULT_CONFIG, type Config } from '@/config/schema'
 import { FIRST_BATCH as ENGINE_FIRST_BATCH, NEXT_BATCH as ENGINE_NEXT_BATCH } from '@/pdf-reader/engine/translate.mjs'
-import { FIRST_BATCH, hostTranslate, NEXT_BATCH } from '@/pdf-reader/host/translate'
+import { FIRST_BATCH, hostTranslate, NEXT_BATCH, WHY_OF } from '@/pdf-reader/host/translate'
 import { llmTranslator } from '@/providers/llm'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport, type TranslationTransport } from '@/providers/transport'
@@ -106,6 +106,14 @@ describe('the reader host translate through the background', () => {
     const { transport } = fake({ status: { available: false, demotions: [{ id: 'microsoft', kind: 'no-key' }] } })
     const rows = await all(hostTranslate({ transport, paper: 'p' })([unit('u1', [{ t: 'text', s: 'a' }])], 'de', { signal: new AbortController().signal }))
     expect(rows).toEqual([{ id: 'u1', ok: false, why: { kind: 'unconfigured', code: 'no-key' } }])
+  })
+  it('a failure the transport names by its kind is the Why the chain would write: format\'s kindOfWhy reads it back to that kind (a refused key the key\'s, not a missing one)', async () => {
+    const { transport } = fake({ status: { available: false, demotions: [{ id: 'microsoft', kind: 'auth' }] } })
+    const rows = await all(hostTranslate({ transport, paper: 'p' })([unit('u1', [{ t: 'text', s: 'a' }])], 'de', { signal: new AbortController().signal }))
+    expect(rows).toEqual([{ id: 'u1', ok: false, why: { kind: 'unconfigured', code: 'key-refused' } }])
+    for (const kind of ['no-key', 'auth', 'bad-request', 'invalid-response', 'network'] as const) expect(kindOfWhy(WHY_OF[kind])).toBe(kind)
+    // (no Why holds these: the network's, a translator out of reach; a call the transport cancelled is asked again)
+    for (const kind of ['timeout', 'unknown', 'rate-limit', 'aborted'] as const) expect(kindOfWhy(WHY_OF[kind])).toBe('network')
   })
   it('a call that cannot run stops the run: what came is given, the rest unavailable', async () => {
     const { transport, asked } = fake({ fail: n => (n === 2 ? 'network' : null) })

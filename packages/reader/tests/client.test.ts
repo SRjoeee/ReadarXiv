@@ -20,6 +20,7 @@ import {
 import { type Doc, type Input, init, type Ref, type Ticket } from '../src/session/machine.ts'
 import { createRuntime, type Handlers } from '../src/session/runtime.ts'
 import { flush, manualTimers } from './helpers/ranged-server.ts'
+import { layerOf, paperDoc, prepareOf, runOf } from './helpers/doc.ts'
 
 const enc = (s: string) => new TextEncoder().encode(s)
 const sha = async (b: Uint8Array) =>
@@ -42,7 +43,11 @@ const stalled = (first: Uint8Array, init?: RequestInit) =>
 const settle = async (n = 6) => {
   for (let i = 0; i < n; i++) await flush()
 }
-const DOC = { epoch: 'e', rev: 3, prepare: { state: 'running', why: null, retryAt: null, stage: 'units', units: [] } }
+const DOC = paperDoc({
+  epoch: 'e',
+  rev: 3,
+  prepare: prepareOf({ state: 'running', why: null, retryAt: null, stage: 'units', units: [] }),
+})
 const CATALOG: Ref = { path: 'p/1706_03762v7/x/catalog', sha256: 'c'.repeat(64), bytes: 1 }
 
 describe('the client: every ask bounded and asked once more', () => {
@@ -367,10 +372,15 @@ describe('the client: the follow and the open', () => {
   })
   it('the open: its document, a refusal for capacity with its wait, and its other words', async () => {
     const at = (r: Response) => open({ fetch: async () => r, paper: { id: '2401.01234', version: 1 }, target: 'ja' })
-    expect(await at(new Response(JSON.stringify({ doc: DOC })))).toMatchObject({ doc: { rev: 3 } })
-    expect(
-      await at(new Response(JSON.stringify({ refused: { why: 'quota', retryAfterS: 60 }, doc: DOC }), { status: 429 })),
-    ).toMatchObject({ refused: { why: 'quota', afterMs: 60_000 }, doc: { rev: 3 } })
+    expect(await at(new Response(JSON.stringify({ doc: DOC, follow: null })))).toMatchObject({ doc: { rev: 3 } })
+    // (a refusal of the open's new work: in the answer, format's OpenAnswer, its document beside it)
+    const refused = { why: 'busy', retryAt: 60_000, retryAfterMs: 60_000, retryAfterS: 60 }
+    expect(await at(new Response(JSON.stringify({ refused, doc: DOC, follow: null })))).toMatchObject({
+      refused: { why: 'busy', afterMs: 60_000 },
+      doc: { rev: 3 },
+    })
+    // (an answer that is not the contract's, a bare document of an early fixture: no document)
+    expect(await at(new Response(JSON.stringify(DOC)))).toEqual({ doc: null })
     expect(
       await at(
         new Response(JSON.stringify({ error: 'rate-limited', retryAfterS: 60 }), {
@@ -386,23 +396,23 @@ describe('the client: the follow and the open', () => {
     const at = (r: Response) => open({ fetch: async () => r, paper: { id: '2401.01234', version: 1 }, target: 'ja' })
     // (21:00:00 at Shanghai, 2026-11-11: the hour's end, exactly)
     const end = Date.UTC(2026, 10, 11, 13, 0, 0)
-    expect(
-      await at(new Response(JSON.stringify({ refused: { why: 'quota', retryAt: end, retryAfterS: 2570 }, doc: DOC }))),
-    ).toMatchObject({ refused: { why: 'quota', afterMs: 2_570_000, at: end } })
-    // (its wait to the millisecond where our server names it so: the session's own ask at the instant, not a rounded second on)
+    // (its wait to the millisecond: the session's own ask at the instant, not a rounded second on)
     expect(
       await at(
         new Response(
           JSON.stringify({
             refused: { why: 'quota', retryAt: end, retryAfterS: 2570, retryAfterMs: 2_569_592 },
             doc: DOC,
+            follow: null,
           }),
         ),
       ),
     ).toMatchObject({ refused: { why: 'quota', afterMs: 2_569_592, at: end } })
-    // (one that names no instant, an older server's: none, its wait alone)
-    const old = await at(new Response(JSON.stringify({ refused: { why: 'busy', retryAfterS: 30 }, doc: DOC })))
-    expect(old.refused).toEqual({ why: 'busy', afterMs: 30_000, at: null })
+    // (one that names no instant nor its wait to the millisecond is not the contract's answer: no document, no refusal)
+    const old = await at(
+      new Response(JSON.stringify({ refused: { why: 'busy', retryAfterS: 30 }, doc: DOC, follow: null })),
+    )
+    expect(old).toEqual({ doc: null })
   })
 })
 
@@ -422,14 +432,14 @@ function paperObject(
     ...DOC,
     rev: 1,
     prepare: { ...DOC.prepare, units },
-    targets: { [o.target]: { state: 'running', rows: [], done: 0, total: 9 } },
+    targets: { [o.target]: runOf({ state: 'running', rows: [], done: 0, total: 9 }) },
   }
   const done = {
     ...DOC,
     rev: 2,
     prepare: { ...DOC.prepare, state: 'done', stage: null, units },
-    layer: { catalog: CATALOG, units, format: 1 },
-    targets: { [o.target]: { state: 'done', rows: [], done: 9, total: 9 } },
+    layer: layerOf({ catalog: CATALOG, units, format: 1 }),
+    targets: { [o.target]: runOf({ state: 'done', rows: [], done: 9, total: 9 }) },
   }
   const frame = (d: unknown, retry: number | null) =>
     enc(`${retry === null ? '' : `retry: ${retry}\n`}id: ${(d as Doc).rev}\ndata: ${JSON.stringify(d)}\n\n`)

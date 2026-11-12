@@ -5,6 +5,7 @@
 // so page translation and the settings page's connection test share one path (issue #42):
 // - createLocalTransport (this file), in the background;
 // - createMessageTransport (src/shared/transport.ts): every method a message, in content scripts and extension pages.
+import { kindOfWhy } from '@readarxiv/format'
 import { type Chain, Fault, identityOf, type Note, type PaperContext, type Result, rowContextOf, sha256Hex, type Translator, type UnitIn, type Why } from '@readarxiv/translate'
 import { chainRevision } from '@/config/revision'
 import type { Config } from '@/config/schema'
@@ -131,28 +132,36 @@ function rowOf(raw: string | null | undefined): Omit<Extract<Result, { ok: true 
   }
 }
 
-/** What a failure is to a page: one of the kinds its words are keyed on (locale packs, `ui/strings.ts`) */
-export function errorOf(why: Why, status?: number): ErrorInfo {
+/** the log's words for a failure, beside its kind */
+function messageOf(why: Why): string {
   switch (why.kind) {
     case 'refused':
-      return { kind: 'invalid-response', message: 'no translator rebuilt the placeholders of the source' }
+      return 'no translator rebuilt the placeholders of the source'
     case 'unavailable':
-      return why.retryAfterMs ? { kind: 'rate-limit', message: `unavailable for ${why.retryAfterMs} ms` } : { kind: 'network', message: 'the translators could not be reached' }
+      return why.retryAfterMs ? `unavailable for ${why.retryAfterMs} ms` : 'the translators could not be reached'
     case 'aborted':
-      return { kind: 'aborted', message: 'cancelled' }
+      return 'cancelled'
     case 'unconfigured':
       switch (why.code) {
         case 'no-key':
+          return 'no API key configured'
         case 'needs-gesture':
-          return { kind: 'no-key', message: why.code === 'no-key' ? 'no API key configured' : 'the language pack needs a user gesture to download' }
+          return 'the language pack needs a user gesture to download'
         case 'key-refused':
-          return { kind: 'auth', message: 'the endpoint refused the key', ...(status !== undefined ? { status } : {}) }
+          return 'the endpoint refused the key'
         case 'no-model':
-          return { kind: 'bad-request', message: 'the endpoint has no such model' }
+          return 'the endpoint has no such model'
         case 'no-language':
-          return { kind: 'bad-request', message: 'no translator serves the target language' }
+          return 'no translator serves the target language'
       }
   }
+}
+
+/** What a failure is to a page: one of the kinds its words are keyed on (locale packs, `ui/strings.ts`), as format's one reading
+ *  of a `Why` says it (kindOfWhy, the PDF reader's too), with the log's words and a refused key's HTTP status */
+export function errorOf(why: Why, status?: number): ErrorInfo {
+  const kind = kindOfWhy(why)
+  return { kind, message: messageOf(why), ...(kind === 'auth' && status !== undefined ? { status } : {}) }
 }
 
 const within = <T>(p: Promise<T>, ms: number, fallback: T): Promise<T> =>

@@ -4,7 +4,7 @@
 // (eventsOf), folded (reduce) and drawn (capsuleOf) in the website's words. Each case counts the capsule's appearances by
 // stage and checks the count it shows: one statement over the layer shown, never falling within an appearance.
 import { writeFileSync } from 'node:fs'
-import type { Row } from '@readarxiv/format'
+import type { PrepareStage, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { R } from '@readarxiv/ui'
 import { textOf } from '../../src/chrome/capsule-words.ts'
@@ -28,6 +28,7 @@ import {
 } from '../../src/session/machine.ts'
 import { toldWait } from '../../src/session/rows.ts'
 import { LANGUAGES } from './parts.ts'
+import { layerOf, paperDoc, prepareOf, runOf } from '../helpers/doc.ts'
 
 const ZH = 'zh-Hans'
 const PREFS: Prefs = { ...DEFAULTS, display: 'bilingual', target: ZH }
@@ -84,24 +85,8 @@ const HEAD = (pages = 4) =>
   }) as never
 
 type Target = NonNullable<Doc['targets'][string]>
-const target = (state: Target['state'], o: Partial<Target> = {}): Target => ({
-  state,
-  why: null,
-  retryAt: null,
-  rows: [],
-  done: 0,
-  total: 0,
-  attempt: 1,
-  ...o,
-})
-const doc = (rev: number, o: Partial<Doc>): Doc => ({
-  epoch: 'e1',
-  rev,
-  prepare: { state: 'none', why: null, retryAt: null, stage: null, units: [] },
-  layer: null,
-  targets: {},
-  ...o,
-})
+const target = (state: Target['state'], o: Partial<Target> = {}): Target => runOf({ state, ...o })
+const doc = (rev: number, o: Partial<Doc>): Doc => paperDoc({ rev, ...o })
 
 /** what happens at a time of a visit: a document heard, the original opened, the first page laid, a setting changed */
 type Beat =
@@ -427,16 +412,10 @@ function reprepared(fresh = 0) {
   const h4 = rowsObject(store, layerIds.slice(0, 320)),
     f4 = [0, 1, 2, 3].map((k) => rowsObject(store, layerIds.slice(320 + 39 * k, k === 3 ? 476 : 320 + 39 * (k + 1))))
   const w4 = rowsObject(store, layerIds)
-  const staleLayer = { catalog: c0, units: [old], format: 1, stale: true }
-  const done = { state: 'done' as const, why: null, retryAt: null, stage: null, units: [] }
-  const running = (stage: string, units: Ref[] = []) => ({
-    state: 'running' as const,
-    why: null,
-    retryAt: null,
-    stage,
-    units,
-    attempt: 2,
-  })
+  const staleLayer = layerOf({ catalog: c0, units: [old], format: 1, stale: true })
+  const done = prepareOf({ state: 'done', why: null, retryAt: null, stage: null, units: [] })
+  const running = (stage: PrepareStage, units: Ref[] = []) =>
+    prepareOf({ state: 'running', why: null, retryAt: null, stage, units, attempt: 2 })
   const tr = (o: Partial<Target>) => ({ [ZH]: target('done', o) })
   const beats: Beat[] = [
     { at: 1900, opened: true },
@@ -509,7 +488,7 @@ function reprepared(fresh = 0) {
       at: 98803,
       doc: doc(53, {
         prepare: { ...done, attempt: 2 },
-        layer: { catalog: c1, units: [early, bundle], format: 1, stale: false },
+        layer: layerOf({ catalog: c1, units: [early, bundle], format: 1, stale: false }),
         targets: tr({ state: 'running', attempt: 4, rows: [w3], done: 393, total: 393, units: [early, bundle] }),
       }),
     },
@@ -517,7 +496,7 @@ function reprepared(fresh = 0) {
       at: 98869,
       doc: doc(54, {
         prepare: { ...done, attempt: 2 },
-        layer: { catalog: c1, units: [early, bundle], format: 1, stale: false },
+        layer: layerOf({ catalog: c1, units: [early, bundle], format: 1, stale: false }),
         targets: tr({ state: 'running', attempt: 4, rows: [w3], done: 0, total: 0, units: [early, bundle] }),
       }),
     },
@@ -525,7 +504,7 @@ function reprepared(fresh = 0) {
       at: 104993,
       doc: doc(55, {
         prepare: { ...done, attempt: 2 },
-        layer: { catalog: c1, units: [early, bundle], format: 1, stale: false },
+        layer: layerOf({ catalog: c1, units: [early, bundle], format: 1, stale: false }),
         targets: tr({ state: 'running', attempt: 4, rows: [w3, h4], done: 320, total: 476, units: [early, bundle] }),
       }),
     },
@@ -533,7 +512,7 @@ function reprepared(fresh = 0) {
       at: 105500 + 500 * k,
       doc: doc(56 + k, {
         prepare: { ...done, attempt: 2 },
-        layer: { catalog: c1, units: [early, bundle], format: 1, stale: false },
+        layer: layerOf({ catalog: c1, units: [early, bundle], format: 1, stale: false }),
         targets: tr({
           state: 'running' as const,
           attempt: 4,
@@ -548,7 +527,7 @@ function reprepared(fresh = 0) {
       at: 107432,
       doc: doc(61, {
         prepare: { ...done, attempt: 2 },
-        layer: { catalog: c1, units: [early, bundle], format: 1, stale: false },
+        layer: layerOf({ catalog: c1, units: [early, bundle], format: 1, stale: false }),
         targets: tr({ attempt: 4, rows: [w4], done: 476, total: 476, units: [early, bundle] }),
       }),
     },
@@ -561,8 +540,8 @@ function settled() {
   const store: Store = { units: new Map(), rows: new Map() }
   const units = unitsObject(store, range(0, 203))
   const w = rowsObject(store, range(0, 203))
-  const layer = { catalog: ref(), units: [units], format: 1, stale: false }
-  const prepare = { state: 'done' as const, why: null, retryAt: null, stage: null, units: [] }
+  const layer = layerOf({ catalog: ref(), units: [units], format: 1, stale: false })
+  const prepare = prepareOf({ state: 'done', why: null, retryAt: null, stage: null, units: [] })
   return visit(store, [
     { at: 150, opened: true },
     {
@@ -589,16 +568,10 @@ function first() {
   const h2 = rowsObject(store, range(0, 98))
   const f2 = [0, 1, 2, 3].map((k) => rowsObject(store, range(98 + 31 * k, k === 3 ? 227 : 98 + 31 * (k + 1))))
   const w2 = rowsObject(store, range(0, 227))
-  const layer = { catalog: ref(), units: [early, bundle], format: 1, stale: false }
-  const running = (stage: string | null, units: Ref[] = []) => ({
-    state: 'running' as const,
-    why: null,
-    retryAt: null,
-    stage,
-    units,
-    attempt: 1,
-  })
-  const done = { state: 'done' as const, why: null, retryAt: null, stage: null, units: [], attempt: 1 }
+  const layer = layerOf({ catalog: ref(), units: [early, bundle], format: 1, stale: false })
+  const running = (stage: PrepareStage | null, units: Ref[] = []) =>
+    prepareOf({ state: 'running', why: null, retryAt: null, stage, units, attempt: 1 })
+  const done = prepareOf({ state: 'done', why: null, retryAt: null, stage: null, units: [], attempt: 1 })
   const tr = (state: Target['state'], o: Partial<Target> = {}) => ({ [ZH]: target(state, o) })
   return visit(store, [
     { at: 66, opened: true },
@@ -671,8 +644,8 @@ function toggled() {
   const body = unitsObject(store, range(0, 100))
   const refs = unitsObject(store, range(100, 140), 'reference')
   const w = rowsObject(store, range(0, 140))
-  const layer = { catalog: ref(), units: [body, refs], format: 1, stale: false }
-  const prepare = { state: 'done' as const, why: null, retryAt: null, stage: null, units: [] }
+  const layer = layerOf({ catalog: ref(), units: [body, refs], format: 1, stale: false })
+  const prepare = prepareOf({ state: 'done', why: null, retryAt: null, stage: null, units: [] })
   return visit(store, [
     { at: 100, opened: true },
     {
@@ -696,8 +669,8 @@ function switched(stored: boolean) {
   const zh = rowsObject(store, range(0, 120), 'zh')
   const ja = rowsObject(store, range(0, 120), 'ja')
   const jaHalf = rowsObject(store, range(0, 60), 'ja')
-  const layer = { catalog: ref(), units: [units], format: 1, stale: false }
-  const prepare = { state: 'done' as const, why: null, retryAt: null, stage: null, units: [] }
+  const layer = layerOf({ catalog: ref(), units: [units], format: 1, stale: false })
+  const prepare = prepareOf({ state: 'done', why: null, retryAt: null, stage: null, units: [] })
   const zhDone = target('done', { rows: [zh], done: 120, total: 120, units: [units] })
   const beats: Beat[] = [
     { at: 100, opened: true },
@@ -743,8 +716,8 @@ function switched(stored: boolean) {
 function queuedFirst(o: { busy?: number; rate?: number }) {
   const store: Store = { units: new Map(), rows: new Map() }
   const early = unitsObject(store, range(0, 20))
-  const none = { state: 'none' as const, why: null, retryAt: null, stage: null, units: [] }
-  const running = (stage: string, units: Ref[] = []) => ({
+  const none = prepareOf({ state: 'none', why: null, retryAt: null, stage: null, units: [] })
+  const running = (stage: PrepareStage, units: Ref[] = []) => ({
     ...none,
     state: 'running' as const,
     stage,
@@ -782,16 +755,10 @@ function staleNoTarget() {
   const h3 = rowsObject(store, range(70, 85)),
     h4 = rowsObject(store, range(85, 100))
   const w2 = rowsObject(store, range(0, 100))
-  const stale = { catalog: ref(), units: [old], format: 1, stale: true }
-  const fresh = { catalog: ref(), units: [early, rest], format: 1, stale: false }
-  const prep = (state: 'done' | 'running', stage: string | null, attempt: number, units: Ref[] = []) => ({
-    state,
-    why: null,
-    retryAt: null,
-    stage,
-    units,
-    attempt,
-  })
+  const stale = layerOf({ catalog: ref(), units: [old], format: 1, stale: true })
+  const fresh = layerOf({ catalog: ref(), units: [early, rest], format: 1, stale: false })
+  const prep = (state: 'done' | 'running', stage: PrepareStage | null, attempt: number, units: Ref[] = []) =>
+    prepareOf({ state, why: null, retryAt: null, stage, units, attempt })
   const zh = (state: Target['state'], o: Partial<Target>) => ({ [ZH]: target(state, o) })
   return visit(
     store,
@@ -898,16 +865,10 @@ function staleLoaded(late = false) {
   const w1 = rowsObject(store, range(0, 80))
   const f2 = rowsObject(store, range(80, 100))
   const w2 = rowsObject(store, range(0, 100))
-  const stale = { catalog: ref(), units: [old], format: 1, stale: true }
-  const made = { catalog: ref(), units: [fresh], format: 1, stale: false }
-  const prep = (state: 'done' | 'running', stage: string | null, attempt: number, units: Ref[] = []) => ({
-    state,
-    why: null,
-    retryAt: null,
-    stage,
-    units,
-    attempt,
-  })
+  const stale = layerOf({ catalog: ref(), units: [old], format: 1, stale: true })
+  const made = layerOf({ catalog: ref(), units: [fresh], format: 1, stale: false })
+  const prep = (state: 'done' | 'running', stage: PrepareStage | null, attempt: number, units: Ref[] = []) =>
+    prepareOf({ state, why: null, retryAt: null, stage, units, attempt })
   const stored = { [ZH]: target('done', { rows: [w1], done: 80, total: 80, units: [old] }) }
   return visit(
     store,
@@ -962,8 +923,8 @@ function staleStoredLate() {
   const store: Store = { units: new Map(), rows: new Map() }
   const old = unitsObject(store, range(0, 100))
   const w = rowsObject(store, range(0, 100))
-  const stale = { catalog: ref(), units: [old], format: 1, stale: true }
-  const running = { state: 'running' as const, why: null, retryAt: null, stage: 'compiling', units: [], attempt: 2 }
+  const stale = layerOf({ catalog: ref(), units: [old], format: 1, stale: true })
+  const running = prepareOf({ state: 'running', why: null, retryAt: null, stage: 'compiling', units: [], attempt: 2 })
   return visit(
     store,
     [
@@ -999,16 +960,10 @@ function refused(context: 'done-elsewhere' | 'prepare-running', cause: Cause) {
   const w = rowsObject(store, range(0, 70))
   const h = rowsObject(store, range(70, 85))
   const all = rowsObject(store, range(0, 100))
-  const fresh = { catalog: ref(), units: [NEW], format: 1, stale: false }
-  const shown = context === 'done-elsewhere' ? fresh : { catalog: ref(), units: [OLD], format: 1, stale: true }
-  const prep = (state: 'done' | 'running', attempt: number) => ({
-    state,
-    why: null,
-    retryAt: null,
-    stage: state === 'running' ? 'compiling' : null,
-    units: [],
-    attempt,
-  })
+  const fresh = layerOf({ catalog: ref(), units: [NEW], format: 1, stale: false })
+  const shown = context === 'done-elsewhere' ? fresh : layerOf({ catalog: ref(), units: [OLD], format: 1, stale: true })
+  const prep = (state: 'done' | 'running', attempt: number) =>
+    prepareOf({ state, stage: state === 'running' ? 'compiling' : null, attempt })
   const stored = { [ZH]: target('done', { rows: [w], done: 70, total: 70, units: [OLD] }) }
   const first = doc(1, {
     prepare: prep(context === 'done-elsewhere' ? 'done' : 'running', 2),

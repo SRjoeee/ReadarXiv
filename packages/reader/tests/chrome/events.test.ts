@@ -178,11 +178,12 @@ describe("the reader's state as the chrome's", () => {
     expect(fold([base, open, ended, read]).translated).toEqual({ got: 12, total: 12 })
     expect(eventsOf(read, read)).toEqual([])
   })
-  it("rows failing: a key missing is the settings' card; out of reach the network; a refusal a bad request; a target the reader does not set its own notice", () => {
+  it("rows failing: a key missing is the settings' card; out of reach the network, a rate limit where the translator named a wait; a refusal an invalid response; a key refused the key's; a target the reader does not set its own notice (format kindOfWhy, the extension's own reading)", () => {
     expect(kindOf({ kind: 'server' })).toBe('network')
     expect(kindOf({ kind: 'unavailable' })).toBe('network')
-    expect(kindOf({ kind: 'refused' })).toBe('bad-request')
-    expect(kindOf({ kind: 'unconfigured', code: 'auth' })).toBe('auth')
+    expect(kindOf({ kind: 'unavailable', retryAfterMs: 5000 })).toBe('rate-limit')
+    expect(kindOf({ kind: 'refused' })).toBe('invalid-response')
+    expect(kindOf({ kind: 'unconfigured', code: 'key-refused' })).toBe('auth')
     const ready = { ...open, layer: { s: 'ready' as const, laid: 0, total: 2, asOriginal: 0 } }
     const noKey = {
       ...ready,

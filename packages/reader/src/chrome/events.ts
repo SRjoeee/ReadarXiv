@@ -2,9 +2,10 @@
 // words the chrome's model folds, as it folds the extension's today session's. One fold for every host that mounts the chrome
 // over openReader (the extension's v2 page and the website's had a copy each, L11's gap 1): a host's `open` tells the chrome
 // `eventsOf(told, reader.state())` at each of the reader's changes.
+import { kindOfWhy } from '@readarxiv/format'
 import type { ProviderErrorKind } from '@readarxiv/ui'
 import type { ReaderState } from '../reader.ts'
-import type { LayerWhy } from '../session/machine.ts'
+import type { LayerWhy, RowsStop, RowsWhy } from '../session/machine.ts'
 import type { SessionEvent, Unavailable } from './model.ts'
 
 /** the reader's reason a layer was refused, as the chrome says it: a lasting refusal keeps the original and greys the translated
@@ -43,13 +44,13 @@ const PREPARE_PLACES: Readonly<Record<string, number>> = {
 /** a prepare's stage as the share of the prepare's stretch the line stands at: 0 before its first stage, or for a stage this reader
  *  does not know */
 export const prepareShare = (stage: string | null): number => (stage !== null && PREPARE_PLACES[stage]) || 0
-/** a rows' failure as the chrome's error kind (the chain's, which the chrome words as the popup does): a key missing or refused
- *  (rows made here), the service or our server out of reach, a refusal for good */
-export function kindOf(why: { kind: string; code?: string }): ProviderErrorKind {
-  if (why.kind === 'unconfigured') return why.code === 'auth' ? 'auth' : 'no-key'
-  if (why.kind === 'unavailable' || why.kind === 'server') return 'network'
-  if (why.kind === 'refused') return 'bad-request'
-  return 'unknown'
+/** a rows' failure as the chrome's error kind, which the chrome words as the popup does: a unit's (the translator's `Why`) read
+ *  by format's one reading of it (kindOfWhy, the extension's own errorOf too); our server's run of the target failed, the
+ *  network (a wait, not a fault: status.ts WAITS); a target the reader does not set is told apart (eventsOf) */
+export function kindOf(why: RowsWhy | RowsStop): ProviderErrorKind {
+  if (why.kind === 'server') return 'network'
+  if (why.kind === 'target') return 'unknown'
+  return kindOfWhy(why)
 }
 
 /** what changed from `prev` (null: the first state) to `next`, as the chrome's events, in the order the chrome folds them */

@@ -3,7 +3,9 @@ import { FORMAT_PURPOSE } from '../src/index.ts'
 
 describe('@readarxiv/format', () => {
   it('states what the package is for', () => {
-    expect(FORMAT_PURPOSE).toBe('the schema of the bundle, read and write')
+    expect(FORMAT_PURPOSE).toBe(
+      'the schema of the bundle and of the documents our server gives a reader, read and write',
+    )
   })
   it('runs in Node, with no DOM', () => {
     expect('document' in globalThis).toBe(false)

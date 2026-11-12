@@ -36,6 +36,8 @@ import {
 } from '../../src/session/machine.ts'
 import { runOf, viewOf } from '../../src/session/rows.ts'
 import { LANGUAGES } from './parts.ts'
+import type { FailureReason } from '@readarxiv/format'
+import { layerOf, paperDoc, prepareOf, runOf as targetRun } from '../helpers/doc.ts'
 
 const ZH = 'zh-Hans'
 const PREFS: Prefs = { ...DEFAULTS, display: 'bilingual', target: ZH }
@@ -81,23 +83,15 @@ const HEAD = {
   addOn: { digest: 'd'.repeat(64), bytes: 10 },
 }
 type Target = NonNullable<Doc['targets'][string]>
-const target = (state: Target['state'], o: Partial<Target> = {}): Target => ({
-  state,
-  why: null,
-  retryAt: null,
-  rows: [],
-  done: 0,
-  total: 0,
-  attempt: 1,
-  ...o,
-})
-const doc = (rev: number, layer: Doc['layer'], t: Target): Doc => ({
-  epoch: 'e1',
-  rev,
-  prepare: { state: 'done', why: null, retryAt: null, stage: null, units: [], attempt: 1 },
-  layer,
-  targets: { [ZH]: t },
-})
+const target = (state: Target['state'], o: Partial<Target> = {}): Target => targetRun({ state, ...o })
+const doc = (rev: number, layer: Doc['layer'], t: Target): Doc =>
+  paperDoc({
+    epoch: 'e1',
+    rev,
+    prepare: prepareOf({ state: 'done', why: null, retryAt: null, stage: null, units: [], attempt: 1 }),
+    layer,
+    targets: { [ZH]: t },
+  })
 
 type Refusal = { why: 'quota' | 'busy' | 'rate'; afterMs: number | null; at?: number | null }
 type Beat =
@@ -298,7 +292,7 @@ const words = (c: Capsule | null) => (c && 'words' in c ? textOf(c.words) : null
  *  the next 39 s: its rows then as `end` names them), the first page laid at `laidAt` where given, then `more` */
 function run(o: {
   end: (store: Store) => Ref[]
-  why?: string
+  why?: FailureReason
   state?: 'failed' | 'done'
   laidAt?: number
   more?: (layer: Doc['layer'], units: Ref, store: Store) => Beat[]
@@ -309,7 +303,7 @@ function run(o: {
     { id: 'r2', kind: 'reference' },
     { id: 'k1', kind: 'para', kept: true },
   ])
-  const layer = { catalog: ref(), units: [units], format: 1, stale: false }
+  const layer = layerOf({ catalog: ref(), units: [units], format: 1, stale: false })
   const w1 = rowsObject(store, ids(0, 5))
   const state = o.state ?? 'failed'
   const beats: Beat[] = [
@@ -534,7 +528,7 @@ describe('the network down while the reader waits on our server (PDF-READER §8.
   const counted = (more: (layer: Doc['layer'], units: Ref, store: Store) => Beat[]) => {
     const store: Store = { units: new Map(), rows: new Map() }
     const units = unitsObject(store, ids(0, 10))
-    const layer = { catalog: ref(), units: [units], format: 1, stale: false }
+    const layer = layerOf({ catalog: ref(), units: [units], format: 1, stale: false })
     const w1 = rowsObject(store, ids(0, 5))
     return visit(store, [
       { at: 100, opened: true },
@@ -596,7 +590,7 @@ describe('failed passages are told only where the session is not already asking 
   const failedRun = (retryAt: number | null) => {
     const store: Store = { units: new Map(), rows: new Map() }
     const units = unitsObject(store, ids(0, 10))
-    const layer = { catalog: ref(), units: [units], format: 1, stale: false }
+    const layer = layerOf({ catalog: ref(), units: [units], format: 1, stale: false })
     const done = rowsObject(store, ids(0, 5))
     const running = doc(1, layer, target('running', { units: [units], rows: [done], done: 5, total: 10 }))
     const failed = doc(2, layer, target('failed', { why: 'translation-down', retryAt, units: [units], rows: [done] }))
@@ -785,23 +779,23 @@ describe("the display the reader chose is kept while the session goes on by itse
 
 /** a paper being prepared for the target, its run made by the open */
 function preparingDoc(): Doc {
-  return {
+  return paperDoc({
     epoch: 'e1',
     rev: 1,
-    prepare: { state: 'running', why: null, retryAt: null, stage: 'compiling', units: [], attempt: 1 },
+    prepare: prepareOf({ state: 'running', why: null, retryAt: null, stage: 'compiling', units: [], attempt: 1 }),
     layer: null,
     targets: { [ZH]: target('none', { attempt: 0 }) },
-  }
+  })
 }
 
 describe("a prepare our server failed by its own trouble, not the paper's (the feature list's R08: these words were in no table)", () => {
   /** the paper's prepare failed for `why`, our server's next attempt at `retryAt` */
-  const failedPrepare = (why: string, retryAt: number): Doc => ({
+  const failedPrepare = (why: FailureReason, retryAt: number): Doc => ({
     ...preparingDoc(),
     rev: 2,
-    prepare: { state: 'failed', why, retryAt, stage: null, units: [], attempt: 1 },
+    prepare: prepareOf({ state: 'failed', why, retryAt, stage: null, units: [], attempt: 1 }),
   })
-  for (const why of ['internal', 'deadline', 'translation-down', 'unavailable'])
+  for (const why of ['internal', 'deadline', 'translation-down', 'unavailable'] as const)
     it(`${why}: our server's for now, with the time of its next attempt, never the paper's own (the wait flow's "server" cause)`, () => {
       const store: Store = { units: new Map(), rows: new Map() }
       const v = visit(store, [
