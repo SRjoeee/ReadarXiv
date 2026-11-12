@@ -8,7 +8,10 @@
 // held (no dump says `unhidden`). Today's S.figures set a translation by its advance, as a line whose marks' ems hold no blank
 // half: replayed with `marks: 'today'`, its faces state no measure of their marks (Face.ids none: script.ts markOf finds no
 // blank half, which S.figures' blanksOf alone reads of them), the rest the target's own; else by its ink, as v2 sets every
-// line.
+// line. One rule departs from today's on purpose (the coordinator's ruling of 2026-11-13 on D02): a text today left `crowded`
+// over a stroke under it that its set's shrink now clears (shared/figure-fit.ts: drawn under its size, its row stating the
+// stroke) is `cleared`, and each other text of its set that moves only where its line starts, its size stepping with the set's,
+// `stepped`: neither is a difference.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { faceOf } from '../../src/breaker/faces.ts'
@@ -76,7 +79,7 @@ const idsOf = (paper: string) => {
 export function replayFigures(
   pair: string,
   o: { marks?: 'today' } = {},
-): { equal: number; total: number; differ: string[]; extra: string[] } {
+): { equal: number; total: number; differ: string[]; extra: string[]; cleared: string[]; stepped: string[] } {
   const L = ledger(pair)
   const paper = paperOf(pair)
   const tf = todayFigures(paper)
@@ -84,7 +87,15 @@ export function replayFigures(
     readFileSync(join(LAB, 'refactor-2026-11', 'baseline', 'reader', `${pair}.reader.json`), 'utf8'),
   ) as { figures: DumpFigure[]; pages: { page: number }[] }
   const want = new Map(dump.figures.map((f) => [`${f.ord}|${f.page}`, f]))
-  if (!tf) return { equal: 0, total: dump.figures.length, differ: ['no bundle in the cache'], extra: [] }
+  if (!tf)
+    return {
+      equal: 0,
+      total: dump.figures.length,
+      differ: ['no bundle in the cache'],
+      extra: [],
+      cleared: [],
+      stepped: [],
+    }
   rules ??= derived('rules')
   const R = rules!.targets[L.target]!.params as { cjkQuotes?: boolean; floorMin: number; compressMax: number }
   const info = L.info.paper as { designs: Record<string, string> }
@@ -92,7 +103,9 @@ export function replayFigures(
   const metrics = tableMetrics(readGz(join(TAP, 'metrics', `${pair}.metrics.json.gz`)) as MeasureTable)
   const unit = figureUnits(pair, paper)
   const differ: string[] = [],
-    extra: string[] = []
+    extra: string[] = [],
+    cleared: string[] = [],
+    stepped: string[] = []
   let equal = 0
   const seen = new Set<string>()
   for (const { page } of dump.pages) {
@@ -108,6 +121,14 @@ export function replayFigures(
       rules: R,
       metrics,
     })
+    // (the texts today left crowded over a stroke under them that the set's shrink draws now, and their sets)
+    const rowOf = new Map(rows.map((r) => [r.id, r]))
+    const clears = (f: Figure) => {
+      const r = rowOf.get(f.id),
+        w = want.get(`${f.id}|${f.page}`)
+      return !!r && !!w && !w.drawn && w.why === 'crowded' && f.drawn && Number.isFinite(r.under) && f.size! < r.size
+    }
+    const clearedSets = new Set(got.figures.filter(clears).map((f) => rowOf.get(f.id)!.set ?? rowOf.get(f.id)!.group))
     for (const f of got.figures) {
       const key = `${f.id}|${f.page}`
       seen.add(key)
@@ -116,11 +137,18 @@ export function replayFigures(
         extra.push(`ord ${f.id} p${f.page}: not in the dump`)
         continue
       }
+      if (clears(f)) {
+        cleared.push(`ord ${f.id} p${f.page}`)
+        continue
+      }
       const d = firstDifference(dumpOf(f, idsOf(paper)[f.id] ?? null, tf.view(page)!), w, `ord ${f.id} p${f.page}`)
-      if (d) differ.push(d)
+      const r = rowOf.get(f.id)
+      if (d && r && clearedSets.has(r.set ?? r.group) && /^ord \d+ p\d+\.line\.x0: /.test(d))
+        stepped.push(`ord ${f.id} p${f.page}`)
+      else if (d) differ.push(d)
       else equal++
     }
   }
   for (const [key] of want) if (!seen.has(key)) differ.push(`${key}: in the dump, not replayed`)
-  return { equal, total: dump.figures.length, differ, extra }
+  return { equal, total: dump.figures.length, differ, extra, cleared, stepped }
 }
