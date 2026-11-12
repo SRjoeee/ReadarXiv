@@ -94,15 +94,82 @@ export const TARGETS = [
   },
   { id: 'commit', measure: "A page's commit at 1×, p50", baseline: '42 ms', target: 'under 20 ms', from: 'harness', value: n => n.commitP50 != null && `${n.commitP50} ms over ${n.commitPages} laid pages of the fixtures (the fixtures' pages are lighter than a paper's)`, met: n => n.commitP50 < 20 },
   { id: 'switch', measure: 'Switching language', baseline: 'every page read again', target: 'rows and layout only', from: 'harness', value: n => n.languageSwitch != null && (n.languageSwitch ? 'no object asked again (the harness\'s check)' : 'objects asked again'), met: n => n.languageSwitch === true },
-  { id: 'thresholds', measure: 'Geometric thresholds and name tables in the prepare', baseline: 'about 150 and about 100', target: 'each one left listed with its reason', from: null, why: 'no census script exists' },
-  { id: 'versions', measure: 'Version numbers raised by hand', baseline: 'about 12', target: '1', from: null, why: 'no gate counts them' },
-  { id: 'unchecked', measure: 'Engine lines never type-checked', baseline: 'about 55,000', target: '0', from: null, why: "no gate counts them; `src/pdf-reader/engine` (today's engine, still shipped) is JavaScript outside `tsc`" },
-  { id: 'imports', measure: "The website's imports of engine internals", baseline: '262, and 142 of the interface source', target: '0: package entries only', from: 'private-platform', why: "the private repository's boundary" },
+  // (the census rows: lab/release-check/census.mjs, its definitions there; each value is TODAY → NOW → AFTER, AFTER being this
+  // tree less what the cut-over deletes, found on the import graph; the website's numbers where its tree is given)
+  {
+    id: 'thresholds',
+    measure: 'Geometric thresholds and name tables in the prepare (the census: tuned thresholds and name lists of the engine and the typesetter)',
+    baseline: 'about 150 and about 100',
+    target: 'each one left listed with its reason',
+    from: 'census',
+    value: n => n.thresholdsNow != null && `tuned thresholds ${n.thresholdsToday ?? '?'} → ${n.thresholdsNow} → ${n.thresholdsAfter} (after the cut-over ${n.thresholdsNoReason} with no comment, ${n.thresholdsBorderline} borderline); name lists ${n.listsToday ?? '?'} → ${n.listsAfter}; each listed with its file and line in the census`,
+    met: n => n.thresholdsNoReason === 0,
+  },
+  {
+    id: 'versions',
+    measure: 'Version numbers raised by hand (the census: version constants of product code, and their mirrors)',
+    baseline: 'about 12',
+    target: '1',
+    from: 'census',
+    value: n => n.versionsNow != null && `${n.versionsToday ?? '?'} → ${n.versionsNow} → ${n.versionsAfter}, and ${n.mirrorsAfter} mirrors after the cut-over${n.partial ? " (this repository's alone: the website's tree not given)" : ''}`,
+    met: n => (n.versionsAfter > 1 ? false : n.partial ? null : true),
+  },
+  {
+    id: 'unchecked',
+    measure: 'Engine lines never type-checked (the census: code lines of the engine no tsc project reads)',
+    baseline: 'about 55,000',
+    target: '0',
+    from: 'census',
+    value: n => n.uncheckedNow != null && `${n.uncheckedToday ?? '?'} → ${n.uncheckedNow} → ${n.uncheckedAfter} code lines (every line of those files ${n.uncheckedAllToday ?? '?'} → ${n.uncheckedAllAfter})`,
+    met: n => n.uncheckedAfter === 0,
+  },
+  {
+    id: 'imports',
+    measure: "The website's imports of engine internals (the census: import statements of the website's tree into the pin that are not a package entry)",
+    baseline: '262, and 142 of the interface source',
+    target: '0: package entries only',
+    from: 'census',
+    value: n => (n.importsNow == null ? (n.trees ? "not measured here: the website's tree was not given (census.mjs --web-profile)" : false) : `${n.importsToday ?? '?'} → ${n.importsNow} → ${n.importsAfter}, and of the extension's source ${n.extImportsToday ?? '?'} → ${n.extImportsNow} → ${n.extImportsAfter}`),
+    met: n => (n.importsNow == null ? null : n.importsAfter === 0 && n.extImportsAfter === 0),
+  },
+  {
+    id: 'engine-lines',
+    measure: "The engine's lines (code size, reported and not targeted: today's engine and the packages that replace it, every line of their code, declaration and style files)",
+    baseline: '64,000 (2026-11-01)',
+    target: 'about 30,000 (an estimate)',
+    from: 'census',
+    value: n => n.engineNow != null && `${n.engineToday ?? '?'} → ${n.engineNow} → ${n.engineAfter}; the cut-over deletes ${n.deletedFiles} product files, ${n.deletedCode} code lines${n.partial ? " (the website's tree not given: what its box keeps of the engine is not seen)" : ''}`,
+    met: () => null,
+  },
+  {
+    id: 'chains',
+    measure: 'Translate chains (the census: product modules that put translators of two or more kinds in an order)',
+    baseline: "two: the website's and the extension's",
+    target: '1',
+    from: 'census',
+    value: n => n.chainsNow != null && `${n.chainsToday ?? '?'} → ${n.chainsNow} → ${n.chainsAfter}`,
+    met: n => (n.partial ? null : n.chainsAfter <= 1),
+  },
+  {
+    id: 'gpl',
+    measure: 'Ported GPL request code a build reaches (the census: files headed "Ported from reference/")',
+    baseline: 'the ported request layer, in both builds',
+    target: '0 (design stage 4: no ported request code remains)',
+    from: 'census',
+    value: n => n.gplReachedNow != null && `reached now ${n.gplReachedNow}, after the cut-over ${n.gplReachedAfter}; ported files left after it ${n.gplFilesAfter}`,
+    met: n => (n.partial ? null : n.gplReachedAfter === 0 && n.gplFilesAfter === 0),
+  },
   { id: 'tiers', measure: 'Tiers that run on a pull request', baseline: "unit tests, the gate's model tier", target: 'every pull-request tier of §4.9', from: null, why: 'planned in lab/release-check/CI.md; the workflows are not written yet' },
 ]
 
 // ---------------------------------------------------------------- reading a gate's output
 const num = s => Number(String(s).replace(/,/g, ''))
+
+/** the census's numbers: its `census-numbers: {json}` line (lab/release-check/census.mjs numbersOf) */
+export function censusOf(text) {
+  const m = /^census-numbers: (\{.*\})$/m.exec(text)
+  return m ? JSON.parse(m[1]) : {}
+}
 
 /** "N of M checks passed" (the reader's harness) or "N/M passed" (the extension's e2e scripts) */
 export function checksOf(text) {
@@ -262,6 +329,16 @@ export const GATES = [
     judge: (ctx, steps) => ({ pass: steps[0].exit === 0, numbers: vitestOf(steps[0].text) }),
   },
   { id: 'build', title: 'the build (wxt build, scripts/check-output.mjs)', tier: 'fast', stage: 'unit', holds: [], steps: () => [pnpm('build')] },
+  {
+    id: 'census',
+    title: "the complexity and debt census (lab/release-check/census.mjs): today's tree, this one, and this one less what the cut-over deletes, the website's where its profile is on this machine, reported against design §7; judged by its ratchet: no measure of its ledger (census-ledger.json, the last integrated round's values) above its recorded value",
+    tier: 'fast',
+    stage: 'unit',
+    holds: [],
+    steps: ctx => [{ cmd: ['node', 'lab/release-check/census.mjs', `--out=${join(ctx.work, 'census')}`] }],
+    // (its exit: 0 no measure rose, 1 one rose (its lines name the measure, the values and the new entries), 2 a usage error)
+    judge: (ctx, steps) => ({ pass: steps[0].exit === 0, numbers: censusOf(steps[0].text), note: [...steps[0].text.matchAll(/^census-ratchet: (RISE .*)$/gm)].map(m => m[1]).join('; ') || `the census: ${join(ctx.work, 'census', 'census.md')}` }),
+  },
   // ---------------------------------------------------------------- reader (hosted CI, every pull request: offline browsers)
   {
     id: 'harness',
