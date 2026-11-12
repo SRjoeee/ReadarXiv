@@ -379,6 +379,12 @@ describe('the client: the follow and the open', () => {
       refused: { why: 'busy', afterMs: 60_000 },
       doc: { rev: 3 },
     })
+    // (a refusal in a word this reader does not know: `other`, the generic failure, format's doc.ts)
+    expect(
+      await at(
+        new Response(JSON.stringify({ refused: { ...refused, why: 'a-later-refusal' }, doc: DOC, follow: null })),
+      ),
+    ).toMatchObject({ refused: { why: 'other', afterMs: 60_000 } })
     // (an answer that is not the contract's, a bare document of an early fixture: no document)
     expect(await at(new Response(JSON.stringify(DOC)))).toEqual({ doc: null })
     expect(

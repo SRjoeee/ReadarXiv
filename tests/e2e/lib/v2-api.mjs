@@ -34,7 +34,7 @@
 // `prepareMs` from its first open; and a fault on our server's every route, the static files included: a server error (5xx), the
 // connection reset, or no answer at all. It records every request (method, path and query, the headers, the body's text).
 import { createHash } from 'node:crypto'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { FORMATS, OpenAnswer, PaperDoc } from '../../../packages/format/src/index.ts'

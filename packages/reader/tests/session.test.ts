@@ -282,6 +282,21 @@ describe('the session: engaged, the link, the layer', () => {
     m.feed({ i: 'cmd.retry' })
     expect(m.s.layer.s).toBe('refused')
   })
+  it("a word of our server's this reader does not know (format's doc.ts, read openly): a failed prepare's why is the generic failure at the record's time; a refusal's, the generic failure at its time, no re-ask of capacity and no limit", () => {
+    const failed = machine()
+    failed.feed({
+      i: 'paper',
+      t: failed.live('link'),
+      doc: doc(1, { prepare: prepareOf({ state: 'failed', why: null, retryAt: 7000, stage: null, units: [] }) }),
+    })
+    expect(failed.s.layer).toMatchObject({ s: 'refused', why: 'unreachable', retryAt: 7000 })
+    const refused = machine({ display: 'bilingual' })
+    refused.feed({ i: 'paper', t: refused.live('link'), doc: doc(1) })
+    const open = refused.live('open')
+    refused.feed({ i: 'open.answered', t: open, doc: null, refused: { why: 'other', afterMs: 5000, at: 5000 } })
+    expect(refused.s.layer).toMatchObject({ s: 'refused', why: 'unreachable', retryAt: 5000 })
+    expect([refused.s.pacing, refused.s.refusals]).toEqual([null, 0])
+  })
   it('a deployment newer than the tab: outdated, told once, whether the follow, the open or the layer says it', () => {
     const byLayer = machine()
     byLayer.feed({

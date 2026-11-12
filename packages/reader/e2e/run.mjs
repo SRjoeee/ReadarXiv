@@ -282,7 +282,7 @@ const v2Route = {
           ...d,
           rev: 2,
           layer: null,
-          prepare: { ...d.prepare, state: 'failed', why: 'cannot', html: m.html },
+          prepare: { ...d.prepare, state: 'failed', why: 'cannot-typeset', html: m.html },
           targets: {},
         })
       if (m?.kind === 'not-opened' && !m.opened) return json(404, { error: 'not-opened' })
