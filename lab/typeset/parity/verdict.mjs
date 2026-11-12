@@ -106,44 +106,67 @@ export const WEIGHT = {
   'line-count': 0.5,
 }
 export const FLAGS = Object.keys(WEIGHT)
-/** the measures a unit v2 is laid with a fresh row of reads as `fresh`, never worse nor nearer (lane parity-fresh, the
- *  coordinator's ruling of 2026-11-11): their two distances follow from the length of the text each side drew, today's stored
- *  translation and v2's fresh one ('sentences': the highlight's granularity, sentences.mjs); every other measure judges v2
- *  against the original as anywhere, style among them */
+/** the measures a unit v2 is laid with a fresh row of reads as `fresh` at first (lane parity-fresh, the coordinator's ruling of
+ *  2026-11-11): their two distances follow from the length of the text each side drew, today's stored translation and v2's fresh
+ *  one ('sentences': the highlight's granularity, sentences.mjs). Each such difference is then judged again on v2 laid with today's
+ *  own text in v2's unit (freshResolve, the coordinator's ruling of 2026-11-12): following from the text, judged, or not
+ *  comparable, never left aside unsaid. Every other measure judges v2 against the original as anywhere, style among them */
 export const FRESH_UNJUDGED = ['line-count', 'size', 'stretch', 'sentences']
 /** what a difference of a unit laid with a fresh row says beside its own words (tagFresh) */
 export const FRESH_SAYS = 'the two sides drew different translations: today its stored one, v2 a fresh one'
+/**
+ * The fresh rule's second look (the coordinator's ruling of 2026-11-12): each difference of page `p` set aside on a unit laid with
+ * a fresh row (`nearer: 'fresh'`: its two distances follow from the length of the text each side drew, FRESH_UNJUDGED) judged
+ * again on `q`, the same page measured on the drawing of v2 laid with today's own text in v2's unit (relay.mjs, render.mjs's
+ * `relay`), found there by its measure, its unit and its words before the rule's (`base`):
+ *  - not there: it follows from the different text (`nearer: 'text'`), listed with the two texts' lengths (`chars`), never worse;
+ *  - there: judged as any difference is, worse where v2 is farther, nearer, or a ruling's, the re-lay's values beside (`relaid`);
+ *  - a unit of it whose text of today's cannot be laid in v2's unit (`incomparable`, key -> why: no row of today's for it, the
+ *    unit cut otherwise), a sentence pairing whose sentences of today's cannot be counted in v2's unit (`unsentenced`), or a page
+ *    the re-lay was not drawn on: not comparable (`nearer: 'incomparable'`, its `why`), never worse.
+ * Counted apart on the sheet, never dropped. A page's worse count is taken again
+ */
+export function freshResolve(p, q, { incomparable = new Map(), unsentenced = new Set() } = {}) {
+  if (!p || p.error) return
+  let moved = false
+  for (const d of p.diffs ?? []) {
+    if (d.nearer !== 'fresh') continue
+    moved = true
+    const keys = String(d.unit ?? '').match(/\b[tp]\d+\b/g) ?? []
+    const why =
+      keys.map((k) => incomparable.get(k)).find(Boolean) ??
+      (d.flag === 'highlight' && keys.some((k) => unsentenced.has(k)) ? "today's sentences cannot be counted in v2's unit" : null) ??
+      (!q || q.error ? 'the re-lay of its page was not drawn' : null)
+    if (why) {
+      d.nearer = 'incomparable'
+      d.why = why
+      continue
+    }
+    const r = q.diffs.find((x) => x.flag === d.flag && x.unit === d.unit && (x.base ?? x.what) === (d.base ?? d.what))
+    if (!r) {
+      d.nearer = 'text'
+      continue
+    }
+    if (r.nearer === 'fresh' || r.nearer === 'incomparable') {
+      d.nearer = 'incomparable'
+      d.why = 'a unit of it is laid with a fresh row on the re-lay too'
+      continue
+    }
+    d.relaid = { today: r.today, v2: r.v2 }
+    d.worse = r.worse
+    d.nearer = r.nearer
+    if (r.ruling) d.ruling = r.ruling
+    d.what = `${d.base ?? d.what} (judged again with today's own text laid in v2's unit: v2 ${r.v2?.value ?? ''}, off ${r.v2?.off ?? ''})`
+  }
+  if (moved) recount(p)
+}
+
 /**
  * The differences of page `p` that touch a unit v2 is laid with a fresh row of (v2.mjs's `fresh`), tagged `fresh: true` with
  * FRESH_SAYS beside their words, judged or not: a unit named by its key (t<today's ord>, else p<part ord>; `todayOf` part ord ->
  * today's ord), or a tie, a run-in, a line of several, a table's group (its `cells`) that holds one. Run once over a page every
  * pass has added to
  */
-/**
- * The differences carried from an earlier round (lab-data parity/carried.json, measure.mjs): a page judged worse on stored rows
- * that left the worse list only because its unit is laid with a fresh row since, unjudged on line count, size, stretch and
- * sentence pairing (the coordinator's ruling, round 8 B8) - carried on every later sheet with its state now, so that it never
- * vanishes from the count. Each entry `{ pair, page, unit, flag, since, modes, was }` of `mode` with `state` ('unjudged: a
- * fresh row', 'judged: worse', 'judged: not worse', 'page not drawn') and `now`, the unit's line counts on this sheet
- */
-export function carriedOf(entries, pages, mode) {
-  const out = []
-  for (const e of entries ?? []) {
-    if (!(e.modes ?? ['default']).includes(mode)) continue
-    const p = pages.find((x) => x.pair === e.pair && x.page === e.page)
-    if (!p) {
-      out.push({ ...e, state: 'page not drawn' })
-      continue
-    }
-    const u = (p.units ?? []).find((x) => x.key === e.unit)
-    const now = u ? { today: u.sides?.today?.lines ?? null, v2: u.sides?.v2?.lines ?? null, original: u.sides?.v2?.olines ?? u.sides?.today?.olines ?? null } : null
-    const fresh = (p.fresh?.units ?? []).includes(e.unit)
-    const worse = (p.diffs ?? []).some((d) => d.worse && d.flag === e.flag && (d.unit ?? '').split(' ')[0] === e.unit)
-    out.push({ ...e, state: worse ? 'judged: worse' : fresh ? 'unjudged: a fresh row' : 'judged: not worse', now })
-  }
-  return out
-}
-
 export function tagFresh(p, v2, todayOf) {
   const causeOf = new Map()
   for (const o of v2.fresh ?? []) {
@@ -453,16 +476,19 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // style among them (each side's share against the original's own), is judged as anywhere, its difference tagged (tagFresh).
   // The coordinator's ruling of 2026-11-11)
   const freshKeys = new Set((v2.fresh ?? []).map(keyOfPart))
-  const judgeFresh = (flag, unit, what, origV, t, v, eps, fmt = r2) => {
+  // (each such difference keeps its words before the fresh rule's (`base`, what the second look on the re-lay finds it by,
+  // freshResolve) and, where they are read, the characters each side drew of it (`chars`: the two texts' lengths, the sheet's why))
+  const judgeFresh = (flag, unit, what, origV, t, v, eps, fmt = r2, base = what) => {
     if (t.d === null || v.d === null || Math.abs(v.d - t.d) <= eps) return
-    diff(flag, unit, what, typeof origV === 'number' ? fmt(origV) : origV, { value: t.value, off: fmt(t.d) }, { value: v.value, off: fmt(v.d) }, false, 'fresh')
+    const chars = t.chars !== undefined && v.chars !== undefined ? { chars: { today: t.chars, v2: v.chars } } : {}
+    diff(flag, unit, what, typeof origV === 'number' ? fmt(origV) : origV, { value: t.value, off: fmt(t.d) }, { value: v.value, off: fmt(v.d) }, false, 'fresh', { base, ...chars })
   }
   // (and the units the part lays at one size with a fresh one, its size ties (a figure's set, a run-in head and its paragraph):
   // the fit set the tie's size from the fresh text's length, so their size and line count follow from it too)
   const freshTied = new Set()
   for (const ords of v2.facts[n]?.ties ?? []) if (ords.some((o) => freshKeys.has(keyOfPart(o)))) for (const o of ords) freshTied.add(keyOfPart(o))
   /** the judge of a text-dependent measure of the unit `key`; `tied`, a measure its size tie's fresh text moves too */
-  const judgeTied = (flag, unit, what, ...rest) => judgeFresh(flag, unit, `${what} (laid at one size with a unit laid with a fresh row)`, ...rest)
+  const judgeTied = (flag, unit, what, origV, t, v, eps, fmt = r2) => judgeFresh(flag, unit, `${what} (laid at one size with a unit laid with a fresh row)`, origV, t, v, eps, fmt, what)
   const judgeText = (key, tied = false) => (freshKeys.has(key) ? judgeFresh : tied && freshTied.has(key) ? judgeTied : judge)
 
   // (v2's size ties on the page, the part's (one paragraph's text is even, the owner's ruling: a run-in head with its
@@ -623,10 +649,10 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       if (os) {
         t.share = t.size / os
         v.share = v.size / os
-        if (!tieOf.has(key)) judgeText(key, true)('size', name, 'size off the original\'s (share of it)', r2(os), { value: r2(t.size), d: Math.abs(1 - t.share) }, { value: r2(v.size), d: Math.abs(1 - v.share) }, NEAR.size)
+        if (!tieOf.has(key)) judgeText(key, true)('size', name, 'size off the original\'s (share of it)', r2(os), { value: r2(t.size), d: Math.abs(1 - t.share), chars: t.chars }, { value: r2(v.size), d: Math.abs(1 - v.share), chars: v.chars }, NEAR.size)
       }
       if (t.olines !== undefined && v.olines !== undefined)
-        judgeText(key, true)('line-count', name, 'lines off the original\'s count on the page', t.olines, { value: t.lines, d: Math.abs(t.lines - t.olines) }, { value: v.lines, d: Math.abs(v.lines - v.olines) }, 0.5)
+        judgeText(key, true)('line-count', name, 'lines off the original\'s count on the page', t.olines, { value: t.lines, d: Math.abs(t.lines - t.olines), chars: t.chars }, { value: v.lines, d: Math.abs(v.lines - v.olines), chars: v.chars }, 0.5)
       // style: against the original's, its share of characters set in a bold and in a slanted face on arXiv's page (the part's
       // font state where no glyph of arXiv's is read)
       const ao = aOrig.get(key)
@@ -642,7 +668,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
           judge('style', name, `${st} share of its characters off the original's`, r2(on), { value: r2(a), d: Math.abs(a - on) }, { value: r2(b), d: Math.abs(b - on) }, NEAR.style)
           if (out.diffs.length > k) out.diffs.at(-1).st = st
         }
-      if (t.over > 0 || v.over > 0) judgeText(key)('stretch', name, 'overshoot past 1 em a word space, 0.25 em a letter gap (ems)', 0, { value: `word ${r2(t.word)}, letter ${r2(t.letter)}`, d: t.over }, { value: `word ${r2(v.word)}, letter ${r2(v.letter)}`, d: v.over }, NEAR.stretch)
+      if (t.over > 0 || v.over > 0) judgeText(key)('stretch', name, 'overshoot past 1 em a word space, 0.25 em a letter gap (ems)', 0, { value: `word ${r2(t.word)}, letter ${r2(t.letter)}`, d: t.over, chars: t.chars }, { value: `word ${r2(v.word)}, letter ${r2(v.letter)}`, d: v.over, chars: v.chars }, NEAR.stretch)
     }
     units.push(u)
   }
@@ -658,7 +684,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const st = Math.min(...t),
       sv = Math.min(...v)
     const jt = keys.some((k) => freshKeys.has(k)) ? judgeFresh : keys.some((k) => freshTied.has(k)) ? judgeTied : judge
-    jt('size', `tie ${keys.join(', ')}`, "a tie (one paragraph) at its smallest member's size, off the original's (share of it)", 1, { value: r2(st), d: Math.abs(1 - st) }, { value: r2(sv), d: Math.abs(1 - sv) }, NEAR.size)
+    const chars = (k) => keys.reduce((n, key) => n + (units.find((u) => u.key === key)?.sides[k]?.chars ?? 0), 0)
+    jt('size', `tie ${keys.join(', ')}`, "a tie (one paragraph) at its smallest member's size, off the original's (share of it)", 1, { value: r2(st), d: Math.abs(1 - st), chars: chars('today') }, { value: r2(sv), d: Math.abs(1 - sv), chars: chars('v2') }, NEAR.size)
   }
 
   // ------------------------------------------------ a line of several members (lineOf): its run's middle against TeX's line's
@@ -1220,7 +1247,11 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const name = `${u.key} ${facts.get(ordOfKey.get(u.key))?.kind ?? orig.get(u.key)?.kind ?? ''}`.trim()
     // (its sentences are the translator's: a fresh row's against today's stored one, no granularity of v2's to judge)
     if (freshKeys.has(u.key)) {
-      diff('highlight', name, 'its sentences paired one by one on both panes (today: by sentence)', u.sentences, { value: `${u.sentences} sentences`, off: 0 }, { value: u.says, off: null }, false, 'fresh')
+      const sides = units.find((x) => x.key === u.key)?.sides
+      diff('highlight', name, 'its sentences paired one by one on both panes (today: by sentence)', u.sentences, { value: `${u.sentences} sentences`, off: 0 }, { value: u.says, off: null }, false, 'fresh', {
+        base: 'its sentences paired one by one on both panes (today: by sentence)',
+        ...(sides?.today && sides?.v2 ? { chars: { today: sides.today.chars, v2: sides.v2.chars } } : {}),
+      })
       continue
     }
     fault('v2', 'highlight', `${name}: ${u.says}`)

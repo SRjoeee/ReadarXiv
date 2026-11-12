@@ -13,7 +13,7 @@ import { scriptedFetch } from '@readarxiv/translate/testing'
 // @ts-expect-error — a plain node module of the lab
 import { cachedTranslator, freshNeeds, freshRowsOf, keylessLock, logFill, pacedFetch, withFresh } from '../../lab/typeset/parity/fresh.mjs'
 // @ts-expect-error — a plain node module of the lab
-import { carriedOf, FRESH_SAYS, freshOf, judgedChanged, measurePage, NAME_CODE_RULING, offOriginalOf, tagFresh } from '../../lab/typeset/parity/verdict.mjs'
+import { FRESH_SAYS, freshOf, freshResolve, judgedChanged, measurePage, NAME_CODE_RULING, offOriginalOf, tagFresh, verdictOf } from '../../lab/typeset/parity/verdict.mjs'
 
 type Row = { id: string; ok: boolean; by?: string; content?: unknown[] }
 const unit = (id: string, s: string, kind = 'para') => ({ id, kind, content: [{ t: 'text', s }] })
@@ -338,27 +338,54 @@ describe('the keyless endpoint, one sender at a time across lanes', () => {
   })
 })
 
-describe('a difference carried from a round whose unit is now on a fresh row (the coordinator, round 8 B8)', () => {
-  // (a page worse on stored rows in B7 that left the worse list only because its unit is laid with a fresh row now, unjudged on
-  // line count: carried on every later sheet with its state, so that it never vanishes. 2608.25210 p11 t214: today 5 lines, v2 4,
-  // the original 6)
-  const entry = { pair: '2608.25210v2-zh', page: 11, unit: 't214', flag: 'line-count', since: 'B7', modes: ['default'], was: { today: 5, v2: 4, original: 6 } }
-  const page = (o: { fresh?: string[]; v2?: number; worse?: boolean } = {}) => ({
-    pair: '2608.25210v2-zh',
-    page: 11,
-    units: [{ key: 't214', kind: 'para', sides: { today: { lines: 5, olines: 6 }, v2: { lines: o.v2 ?? 4, olines: 6 } } }],
-    diffs: o.worse ? [{ flag: 'line-count', unit: 't214 para', worse: true }] : [],
-    ...(o.fresh ? { fresh: { units: o.fresh } } : {}),
+describe("the fresh rule's second look: each difference it sets aside judged again with today's own text laid in v2's unit", () => {
+  // (a paragraph of three lines on A, today drawing three; v2 laid with a fresh row draws two: its line count set aside, the two
+  // sides drew different translations. The re-lay (relay.mjs) lays v2 with today's text in v2's unit; the same page measured on
+  // that drawing tells whether the difference follows from the text, stays, or cannot be compared)
+  const N = 3
+  const factLine = (y: number) => [N, 0, 72, 300, y, y + 8, y - 2, 48, 300, 0, 10]
+  const drawn = (ys: number[], n = 20) => ys.map((y) => ({ y, x0: 72, x1: 300, size: 10, n, bold: 0, italic: 0, word: 0.3, letter: 0, text: 'x'.repeat(n) }))
+  const v2Of = (fresh: number[]) => ({
+    pages: { [N]: { members: [{ ord: 21, state: 'laid', lines: [] }], links: [] } },
+    facts: { [N]: { members: [{ ord: 21, kind: 'para', align: 'j', style: { size: 10 }, lines: [factLine(700), factLine(688), factLine(676)] }], links: 0 } },
+    today: { 21: { today: 21 } },
+    fresh,
+    freshCause: Object.fromEntries(fresh.map((o) => [o, 'no-row'])),
   })
-  it('states it unjudged on a fresh row, with v2’s value now beside the one it was carried with', () => {
-    expect(carriedOf([entry], [page({ fresh: ['t214'] })], 'default')).toEqual([
-      { ...entry, state: 'unjudged: a fresh row', now: { today: 5, v2: 4, original: 6 } },
-    ])
+  const rec = (v2Lines: number[]) => ({
+    page: N,
+    original: { links: 0 },
+    today: { units: [{ id: 21, lines: drawn([700, 688, 676], 30) }], figures: [], names: [], crops: [], links: 0, linksDrawn: 0, lit: [], litBoxes: {} },
+    v2: { committed: true, units: [{ id: 21, lines: drawn(v2Lines) }], crops: [], links: 0, linksDrawn: 0, lit: [] },
+    px: {},
   })
-  it('states it judged worse again, judged and not worse, or its page not drawn; and none in a mode it does not name', () => {
-    expect(carriedOf([entry], [page({ worse: true })], 'default')[0].state).toBe('judged: worse')
-    expect(carriedOf([entry], [page({ v2: 6 })], 'default')[0]).toMatchObject({ state: 'judged: not worse', now: { v2: 6 } })
-    expect(carriedOf([entry], [], 'default')[0].state).toBe('page not drawn')
-    expect(carriedOf([entry], [page()], 'toggles-on')).toEqual([])
+  const ctx = { prepByOrd: new Map(), todayOf: new Map([[21, 21]]), turned: new Set(), led: new Map(), top: new Set() }
+  type D = { flag: string; worse: boolean; nearer: string; why?: string; chars?: { today: number; v2: number } }
+  const lineCount = (p: { diffs: D[] }) => p.diffs.filter((d) => d.flag === 'line-count')
+  const main = () => measurePage('p-zh', v2Of([21]), rec([700, 688]), ctx)
+  it('set aside on the fresh row, as before the second look', () => {
+    expect(lineCount(main())).toMatchObject([{ nearer: 'fresh', worse: false, chars: { today: 90, v2: 40 } }])
+  })
+  it('with today\'s text v2 draws today\'s three lines: it follows from the different text, listed with the two lengths, not worse', () => {
+    const p = main()
+    freshResolve(p, measurePage('p-zh', v2Of([]), rec([700, 688, 676]), ctx))
+    expect(lineCount(p)).toMatchObject([{ nearer: 'text', worse: false, chars: { today: 90, v2: 40 } }])
+    expect(p.worse).toBe(0)
+  })
+  it('with today\'s text v2 still draws two: judged as any difference, worse though its row is fresh, and the gate fails', () => {
+    const p = main()
+    freshResolve(p, measurePage('p-zh', v2Of([]), rec([700, 688]), ctx))
+    expect(lineCount(p)).toMatchObject([{ nearer: 'today', worse: true, relaid: { v2: { value: 2, off: 1 } } }])
+    expect(p.worse).toBe(1)
+    expect(verdictOf([], [p])).toMatchObject({ pass: false, worse: 1 })
+  })
+  it('today\'s text not placed in v2\'s unit, or no drawing of the re-lay: not comparable, with its reason, not worse', () => {
+    const p = main()
+    freshResolve(p, measurePage('p-zh', v2Of([]), rec([700, 688]), ctx), { incomparable: new Map([['t21', "v2's unit is cut otherwise than today's"]]) })
+    expect(lineCount(p)).toMatchObject([{ nearer: 'incomparable', worse: false, why: "v2's unit is cut otherwise than today's" }])
+    const q = main()
+    freshResolve(q, null)
+    expect(lineCount(q)).toMatchObject([{ nearer: 'incomparable', why: 'the re-lay of its page was not drawn' }])
+    expect(q.worse).toBe(0)
   })
 })

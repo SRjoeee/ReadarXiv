@@ -35,6 +35,7 @@ const { readAsChain } = await import('./rows.mjs')
 const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
 const { partsIn, UNJOINED, unjoinedOf, withUnjoined } = await import('./unjoin.mjs')
 const { FRESH_ROWS, freshNeeds, freshRowsOf, freshTranslator, KEYLESS_LOCK, keylessLock, logFill, withFresh } = await import('./fresh.mjs')
+const { relayOf } = await import('./relay.mjs')
 const { doorRows } = await import('../../../packages/typeset/tests/replay/rows.ts')
 
 const args = process.argv.slice(2)
@@ -183,6 +184,9 @@ for (const pair of pairs) {
   // a cell today's group decision kept (its door row `kept`, the reply not stored) among them, so that v2's own decision runs)
   let fresh = null
   const freshAt = { cause: {}, refused: [], missing: [], newer: [] }
+  // (what the fresh rule's second look reads: the members laid with a fresh translation and their causes, today's unit of each,
+  // today's door rows and prepare dump: relay.mjs)
+  let relayIn = null
   if (FRESH !== 'off') {
     const bundle0 = l1Paper(paperOf(pair))
     const all = new Map()
@@ -228,6 +232,7 @@ for (const pair of pairs) {
       // (today never had it: no unit of today's joined to it, nor several joined as one, B6's joinedJoin)
       if (!joinedAll0[ord] && !joinedAll.has(ord)) freshAt.newer.push(ord)
     }
+    if (!ALL && !FILL) relayIn = { needs: new Map([...needs].filter(([o]) => freshAt.cause[o] !== undefined)), todayOf: (o) => joinedAll0[o]?.today, doors }
     const n = (c) => Object.values(freshAt.cause).filter((x) => x === c).length
     if (FILL) fillLog.push({ pair, wires: got.asked, refused: freshAt.refused.length, missing: freshAt.missing.length })
     if (got.need) for (const k of Object.keys(needAll)) needAll[k] += got.need[k]
@@ -301,6 +306,45 @@ for (const pair of pairs) {
       globalThis.__parityFill = kept.fill
       Object.assign(heldRows, kept.held)
     }
+  }
+  // (the fresh rule's second look, the coordinator's ruling of 2026-11-12, relay.mjs: the pair laid once more with each member
+  // laid with a fresh translation given today's own text in v2's unit (today's door row said in it; its stored row where that is
+  // today's row of another unit said in v2's; nothing where today sent nothing), a member whose text of today's cannot be laid so
+  // keeping its fresh row, every other row as before; the pages that lay changes kept, `relay`, with what each member was given,
+  // those not comparable and why, and the time it took. render.mjs draws those pages; the verdict judges each difference the
+  // fresh rule set aside on that drawing again, verdict.mjs freshResolve)
+  let relay = null
+  if (relayIn?.needs.size) {
+    const r0 = performance.now()
+    const r = relayOf(relayIn.needs, { todayOf: relayIn.todayOf, doors: relayIn.doors, prepared: prepared0, units })
+    const left = new Map([...(fresh ?? [])].filter(([id]) => !r.drop.has(id) && !r.said.has(id)))
+    const relayPages = {}
+    const kept = { page: globalThis.__ckPage, fill: globalThis.__parityFill, held: { ...heldRows } }
+    globalThis.__ckPage = (p, pg, page) => {
+      if (p === pair)
+        relayPages[pg] = { members: page.members.filter((m) => m.page === pg), links: page.links, wait: page.wait, ...(page.inks ? { inks: page.inks } : {}) }
+    }
+    globalThis.__parityFill = targets({})
+    globalThis.__parityLay = (part, rows0) => {
+      const said = rows0 ? { ...rows0, get: (k) => r.said.get(k) ?? rows0.get(k) } : rows0
+      return lay(part, withFresh(readAsChain(said, units), left))
+    }
+    try {
+      gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held, joined })
+    } finally {
+      globalThis.__ckPage = kept.page
+      globalThis.__parityFill = kept.fill
+      Object.assign(heldRows, kept.held)
+    }
+    const changed = Object.fromEntries(Object.entries(relayPages).filter(([pg, x]) => JSON.stringify(x) !== JSON.stringify(pages[pg])))
+    relay = {
+      pages: changed,
+      how: Object.fromEntries(r.how),
+      incomparable: Object.fromEntries(r.incomparable),
+      ...(r.unsentenced.size ? { unsentenced: [...r.unsentenced].sort((a, b) => a - b) } : {}),
+      ms: Math.round(performance.now() - r0),
+    }
+    console.log(`${pair}: the re-lay with today's own text: ${Object.keys(relay.pages).length} pages changed; ${r.how.size} members given today's text (said ${[...r.how.values()].filter((x) => x === 'said').length}, its stored row ${[...r.how.values()].filter((x) => x === 'stored').length}, nothing sent ${[...r.how.values()].filter((x) => x === 'unsent').length}), ${r.incomparable.size} not comparable; ${relay.ms} ms`)
   }
   globalThis.__ckPage = undefined
   globalThis.__parityLay = undefined
@@ -430,6 +474,7 @@ for (const pair of pairs) {
     ...(freshAt.missing.length ? { freshMissing: freshAt.missing.sort((a, b) => a - b) } : {}),
     ...(freshAt.newer.length ? { freshNew: freshAt.newer.sort((a, b) => a - b) } : {}),
     ...(ALL ? { freshMode: 'all' } : {}),
+    ...(relay ? { relay } : {}),
     held: heldRows,
     threw: got.threw,
     laidPages: Object.keys(pages).length,

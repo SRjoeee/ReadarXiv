@@ -355,6 +355,24 @@ scripts, toggles, shown, labels, figures, groups, the highlight's coverage, and 
 original's own) is judged as anywhere, and each difference that touches a fresh unit is tagged (`fresh`, its words saying the
 two sides drew different translations: `tagFresh`). A page worse through a judged measure of a fresh unit is v2's finding.
 
+The fresh rule's second look, the coordinator's ruling of 2026-11-12: a difference set aside so is never left unsaid. `v2.mjs`
+lays each pair once more (`relay`, `relay.mjs`) with every member laid with a fresh translation given today's own text in v2's
+unit: today's door row said in it where the two units read alike (`todaySaid`, exact or none: each of today's placeholders the
+element of v2's of its own source, or the characters it prints where v2's unit holds them as text, `\&` for "&"; each element of
+v2's today held as text where today's translation holds that text, at one way of placing them; today's group edges dropped, v2's
+groups placed by the chain's reading; today's sentences counted in v2's projection), its stored row where that is today's row of
+another unit said in v2's (cause `unit`), nothing where today sent nothing (`today-kept`, `group`, a door row kept or none); a
+member whose text of today's cannot be laid so keeps its fresh row and is not comparable, its reason kept (no unit of today's
+joined to it, no row of today's, the two units cut otherwise, a placeholder of today's no piece of v2's is, an element at no place
+or two). `render.mjs` draws the pages that lay changes (`relay` on the page's record, read back as v2's is, no pixels), and
+`measure.mjs` measures every page again on that drawing, the paper's passes with it; each set-aside difference is then judged
+again there (`verdict.mjs` freshResolve): gone, it follows from the different text (`nearer` "text", shown with the characters each
+side drew); still there, it is judged as any difference, worse where v2 is farther (`relaid`: the values with today's text);
+not comparable (`nearer` "incomparable", its `why`), never worse. Both listed kinds are counted apart on the sheet and in
+`parity.json` (`fresh.relay`: text, judged, worse and their pages, incomparable and why, the time the re-lay took to lay and to
+draw). No list of acceptances is read, nor `carried.json` (the list of B7's differences the first fresh rule hid, read until
+then: superseded, every such difference is now judged or listed with its reason).
+
 The owner's ruling of 2026-11-11 on the figure texts today keeps by its name/code test (today's figureUnits: mt.mjs isName or
 isCode, a label of names or a markup token: "<pad>", "MedQA", "ResNet-32"), which v2 sends: "never garble" is about format,
 not words; how a word is translated belongs to the translator, and no hard rule guesses from a word's shape. Such a text's
