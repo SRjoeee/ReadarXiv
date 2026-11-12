@@ -27,8 +27,8 @@ export interface PromptTemplate {
 }
 
 /**
- * The built-in prompts by id, in the order the lists show them. Their wording enters what the model is sent: a change
- * of meaning bumps PROMPT_VERSION (prompt.ts)
+ * The built-in prompts by id, in the order the lists show them. Their wording enters what the model is sent, and the
+ * prompt's digest (prompt.ts PROMPT_DIGEST) with it: any change to it is another translator identity
  */
 export const BUILT_IN_PROMPTS: Readonly<Record<string, PromptTemplate>> = Object.freeze({
   default: {
@@ -135,8 +135,9 @@ export function renderTemplate(text: string, values: Record<PromptToken, string>
 }
 
 /**
- * What the prompt in use is, for the translator's identity (llm.ts hashes it): a built-in's id, whose wording
- * PROMPT_VERSION stands for; one's own as its two parts, each whole, so that any change to either is another identity
+ * What the prompt in use is, for the translator's identity (llm.ts hashes it): a built-in's id, whose wording the prompt's
+ * digest holds (prompt.ts PROMPT_DIGEST); one's own as its two parts, each whole, so that any change to either is another
+ * identity
  */
 export function promptKey(config: PromptsConfig = DEFAULT_PROMPTS_CONFIG): string {
   const prompt = selectPrompt(config)

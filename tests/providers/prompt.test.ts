@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { PROMPT_VERSION, PROTOCOL_BLOCK, buildPrompts, formatGlossary } from '@/providers/prompt'
-import { DEFAULT_PROMPTS_CONFIG } from '@/providers/prompt-library'
+import { englishName } from '@/config/languages'
+import { PROMPT_DIGEST, PROTOCOL_BLOCK, buildPrompts, formatGlossary, promptDigestOf } from '@/providers/prompt'
+import { BUILT_IN_PROMPTS, DEFAULT_PROMPTS_CONFIG } from '@/providers/prompt-library'
 import type { TranslateRequest } from '@/providers/types'
 
 const request: TranslateRequest = {
@@ -29,8 +30,25 @@ describe('prompt', () => {
     expect(buildPrompts(request, withTarget).prompt.startsWith('Target language:')).toBe(false)
   })
 
-  it('carries a version: raised to 3 when the target language became its English name', () => {
-    expect(PROMPT_VERSION).toBe('5')
+  it('is named by its digest, taken at load: a SHA-256 of what the model is sent besides the request and a prompt of its own', () => {
+    expect(PROMPT_DIGEST).toMatch(/^[0-9a-f]{64}$/)
+    expect(promptDigestOf()).toBe(PROMPT_DIGEST)
+  })
+
+  it('its digest moves with each part of what the model is sent: the protocol block, a built-in prompt, any target\'s English name (PROMPT_VERSION 5\'s change), buildPrompts\' own rules (4\'s: the glossary added to a prompt that lacks it)', () => {
+    expect(promptDigestOf({ protocol: `${PROTOCOL_BLOCK}\n5. Be brief.` })).not.toBe(PROMPT_DIGEST)
+    const precise = BUILT_IN_PROMPTS['precision-rewrite']!
+    expect(promptDigestOf({ builtIns: { ...BUILT_IN_PROMPTS, 'precision-rewrite': { ...precise, prompt: `${precise.prompt}\nBe brief.` } } })).not.toBe(PROMPT_DIGEST)
+    expect(promptDigestOf({ nameOf: code => (code === 'cmn' ? 'Simplified Mandarin Chinese' : englishName(code)) })).not.toBe(PROMPT_DIGEST)
+    // (a target other than the one the probes are rendered for: its name is in the digest too)
+    expect(promptDigestOf({ nameOf: code => (code === 'jpn' ? `${englishName(code)} (Japan)` : englishName(code)) })).not.toBe(PROMPT_DIGEST)
+    const noGlossaryAdded: typeof buildPrompts = (r, p) => {
+      const b = buildPrompts(r, p)
+      return { ...b, prompt: b.prompt.replace(/^Glossary:\n[^\n]*\n\n/, '') }
+    }
+    expect(promptDigestOf({ build: noGlossaryAdded })).not.toBe(PROMPT_DIGEST)
+    // (the same parts, the same digest: it is a function of them alone)
+    expect(promptDigestOf({ protocol: PROTOCOL_BLOCK, builtIns: BUILT_IN_PROMPTS, nameOf: englishName, build: buildPrompts })).toBe(PROMPT_DIGEST)
   })
 
   it('system prompt = the prompt library\'s template + the protocol block; the protocol block spells out placeholders and the output shape', () => {
