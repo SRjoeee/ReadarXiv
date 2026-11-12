@@ -23,8 +23,10 @@ export type ParasGate = {
   anchor: Map<string, number>
   /** of those with an anchor, their member laid on the page: opened on TeX's line */
   opened: number
-  /** of those with an anchor, their member laid: not opened on TeX's line (the gate's fails), each named */
+  /** of those with an anchor, their member laid: not opened on TeX's line (the gate's fails), each named, and by how: run on
+   *  (its first thing begins no laid line), or beginning a laid line at another baseline */
   off: string[]
+  offBy: Map<string, number>
   /** of those with an anchor, their member not laid on the page (the original's shows), by its state */
   notLaid: Map<string, number>
   /** examples: the opened, the points with no anchor */
@@ -36,16 +38,18 @@ export const newParasGate = (): ParasGate => ({
   anchor: new Map(),
   opened: 0,
   off: [],
+  offBy: new Map(),
   notLaid: new Map(),
   openedEx: [],
   noneEx: [],
 })
 const add = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1)
 
-/** a string's first four letters and digits, NFKC, lower case; where it holds none, its first character that is no white space */
+/** a string's first twelve letters and digits, NFKC, lower case (enough that the paragraph's first word met again later in it, a
+ *  title such as "Youcook2", is not taken for its start); where it holds none, its first character that is no white space */
 const firstOf = (s: string): string => {
   const t = s.normalize('NFKC')
-  const ls = (t.match(/[\p{L}\p{N}]/gu) ?? []).slice(0, 4).join('')
+  const ls = (t.match(/[\p{L}\p{N}]/gu) ?? []).slice(0, 12).join('')
   return (ls || (/\S/.exec(t)?.[0] ?? '')).toLowerCase()
 }
 type First = { el?: string; text: string }
@@ -89,7 +93,7 @@ function firstWordOf(m: Placed, unit: Unit | undefined, id: string, j: number): 
   return w && w[1] === j ? w[0] : undefined
 }
 const textOf = (l: Laid['lines'][number]) => l[3].map((it) => it.s).join('')
-/** whether a laid line begins with `f`: its first item a crop of that element, or its text's first four letters and digits
+/** whether a laid line begins with `f`: its first item a crop of that element, or its text's first twelve letters and digits
  *  `f`'s (as many as the shorter holds: a line that ends in its first word, a paragraph's text an element follows) */
 const begins = (l: Laid['lines'][number], f: First): boolean => {
   const it = l[3][0]
@@ -115,9 +119,13 @@ export function parasGate(
     // (its points by line: a group's open, an element, a first word's offset; the offset stated of a point a group or an
     // element states is that point's)
     const at = new Map<number, { by: string; id?: string; o?: number }>()
-    for (const [id, s] of m.spans ?? []) if (s.opens !== undefined) at.set(s.opens, { by: 'group', id })
+    // (of several a line is stated by, the first in the source: where the paragraph begins; 2609.36054v2's author block states
+    // each line at its name's group and at its affiliation's after it)
+    const first0 = (j: number, id: string) => !at.has(j) || Number(id) < Number(at.get(j)!.id)
+    for (const [id, s] of m.spans ?? [])
+      if (s.opens !== undefined && first0(s.opens, id)) at.set(s.opens, { by: 'group', id })
     for (const [id, e] of m.els ?? [])
-      if (e.opens !== undefined && !at.has(e.opens)) at.set(e.opens, { by: 'element', id })
+      if (e.opens !== undefined && first0(e.opens, id)) at.set(e.opens, { by: 'element', id })
     for (const [o, j] of parasOf(m)) {
       const x = at.get(j)
       if (x) x.o = o
@@ -182,9 +190,13 @@ export function parasGate(
         continue
       }
       // (what the member drew where: the line its paragraph's first thing begins, if any)
+      // (and how: run on, its first thing beginning no laid line of the member; or beginning one at another baseline: its block
+      // opened, the member laid at another pitch than TeX's, or a run-on whose paragraph before happens to end its line)
       const where = first ? x.lines.find((l) => begins(l, first!)) : undefined
+      const how = where ? 'begins a line at another baseline' : 'run on'
+      add(g.offBy, how)
       g.off.push(
-        `${name} by ${anchor}: TeX's line at ${line[4]}: ${shown(drawn)}; its first thing "${(first?.text ?? '').slice(0, 16)}"${first?.el !== undefined ? ` (element ${first.el})` : ''} ${where ? `begins ${shown(where)}` : 'begins no laid line'}`,
+        `${name} by ${anchor}, ${how}: TeX's line at ${line[4]}: ${shown(drawn)}; its first thing "${(first?.text ?? '').slice(0, 16)}"${first?.el !== undefined ? ` (element ${first.el})` : ''} ${where ? `begins ${shown(where)}` : 'begins no laid line'}`,
       )
     }
   }
