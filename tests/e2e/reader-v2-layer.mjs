@@ -1,7 +1,11 @@
 // The second half of the rebuilt reader's browser checks (reader-v2.mjs): the reader on the layer the stand-in serves, as the
 // extension's host gives it what it needs. Called by reader-v2.mjs with its context, its stand-in and its reporting.
+import AxeBuilder from '@axe-core/playwright'
+
 /** the right pane (the chrome's): its laid pages' text layers hold the translation's spans and the page's own words */
 const RIGHT = 'section.pane[data-side="right"]'
+/** the left pane: arXiv's pages, PDF.js's */
+const LEFT = 'section.pane[data-side="left"]'
 
 export async function layerChecks(t) {
   const { context, api, PAPER, PV, LINK, echo, readerState, sessionState, probe, openReader, paperOpened, laid, setConfig, clearPaperStore, section, check, control, note, sleep, SHOTS } = t
@@ -45,6 +49,37 @@ export async function layerChecks(t) {
     const opener = tab ? await tab.evaluate(() => window.opener === null) : null
     check('a link of a laid page out of the paper opens in a new tab through the host, with no opener, the reader staying', found && tab?.url() === LINK && opener === true && page.url().includes('pdf-reader.html'), `found ${found}, opened ${tab?.url() ?? 'nothing'}, no opener ${opener}`)
     await tab?.close()
+    // the laid pages' links name themselves to assistive technology: axe's link-name over the right, none failing
+    const links = await page.locator(`${RIGHT} .axt-links a`).count()
+    const axe = await new AxeBuilder({ page }).include(RIGHT).withRules(['link-name', 'nested-interactive', 'aria-hidden-focus']).analyze().catch(e => ({ violations: [{ id: `axe did not run: ${e.message}` }] }))
+    check('axe over the laid pages\' links: there are some, none without a name, none hidden while focusable', links > 0 && axe.violations.length === 0, `${links} link(s); ${axe.violations.map(v => v.id).join(', ') || 'no violation'}`)
+    // the keyboard: Tab reaches a link of a laid page, its ring drawn; the ring reads on the page in the dark theme, on white
+    // paper and on dimmed pages alike, 3:1 at least on the paper under it (WCAG 2.2 SC 1.4.11), its colour drawn on a canvas
+    let tabs = 0, reached = null
+    for (; links > 0 && tabs < 400 && !reached; tabs++) {
+      await page.keyboard.press('Tab')
+      reached = await page.evaluate(sel => { const a = document.activeElement, box = a?.matches?.(`${sel} a.axt-link`) ? a.querySelector('.axt-link-box') : null; return box ? { ring: getComputedStyle(box).outlineStyle, width: getComputedStyle(box).outlineWidth } : null }, RIGHT)
+    }
+    const look = await t.worker.evaluate(() => chrome.storage.local.get('config').then(({ config }) => ({ theme: config.theme, dimPages: config.pdfReader.dimPages })))
+    const ringOn = async dim => {
+      await setConfig({ theme: 'dark', pdfReader: { dimPages: dim } })
+      await page.waitForFunction(d => document.documentElement.dataset.theme === 'dark' && document.documentElement.hasAttribute('data-axt-dim') === d, dim, { timeout: 10_000 }).catch(() => undefined)
+      return page.evaluate(([sel, dim]) => {
+        const box = document.activeElement?.matches?.(`${sel} a.axt-link`) ? document.activeElement.querySelector('.axt-link-box') : null
+        if (!box) return null
+        const c = document.createElement('canvas').getContext('2d', { willReadFrequently: true })
+        const rgb = colour => { c.clearRect(0, 0, 1, 1); c.fillStyle = '#000'; c.fillStyle = colour; c.fillRect(0, 0, 1, 1); return [...c.getImageData(0, 0, 1, 1).data.slice(0, 3)] }
+        const lum = ([r, g, b]) => { const f = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b) }
+        const ratio = (x, y) => (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
+        const ring = rgb(getComputedStyle(box).outlineColor)
+        // (the paper: white, or white through the dimming filter, invert(88.8%): 0.112 of each channel)
+        const paper = dim ? [29, 29, 29] : [255, 255, 255]
+        return { ring, contrast: Math.round(ratio(lum(ring), lum(paper)) * 10) / 10 }
+      }, [RIGHT, dim])
+    }
+    const white = reached ? await ringOn(false) : null, dimmed = reached ? await ringOn(true) : null
+    await setConfig({ theme: look.theme, pdfReader: { dimPages: look.dimPages } })
+    check('Tab reaches a link of a laid page, its ring drawn (2 px, solid), reading in the dark theme on white paper and on dimmed pages alike (3:1 at least)', reached?.ring === 'solid' && reached.width === '2px' && (white?.contrast ?? 0) >= 3 && (dimmed?.contrast ?? 0) >= 3, `${tabs} Tab(s): ${JSON.stringify(reached)}; white ${JSON.stringify(white)}, dimmed ${JSON.stringify(dimmed)}`)
     // the original's download: arXiv's PDF in a tab of its own, at #axt-viewer, no reader laid over it
     const viewerOpened = context.waitForEvent('page', { timeout: 10_000 }).catch(() => null)
     await page.evaluate(() => window.__reader.controller.download('original'))
@@ -59,6 +94,15 @@ export async function layerChecks(t) {
     if (span) await page.mouse.move(span.x, span.y)
     const lit = span ? await page.waitForFunction(() => window.__reader.probe().lit !== null, null, { timeout: 5_000 }).then(() => true, () => false) : false
     check('the pointer over a laid paragraph lights its unit (the reader\'s highlight, its both panes the package\'s e2e)', lit, JSON.stringify({ span, lit: (await probe(page)).lit }))
+    // the heading read follows the scroll: further down the paper, a later heading of the contents
+    const top = (await readerState(page)).currentHeading
+    const L = await page.locator(LEFT).boundingBox()
+    await page.mouse.move(L.x + L.width / 2, L.y + L.height / 2)
+    await page.mouse.wheel(0, 6000)
+    await sleep(1500)
+    const deep = (await readerState(page)).currentHeading
+    const at = id => outline.findIndex(e => e.id === id)
+    check('the heading read follows the scroll: further down, a later heading of the contents', deep !== null && at(deep) > Math.max(0, at(top)), `${top} (${at(top)}), then ${deep} (${at(deep)}) of ${outline.length}`)
     await page.screenshot({ path: `${SHOTS}/reader-v2-laid.png` })
     await page.close()
   }

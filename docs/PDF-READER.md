@@ -1138,6 +1138,13 @@ closed for good). The glue tells the reader's state as the chrome's events (`eve
 takes from a host only what differs: its telling of some events (the website's arXiv HTML link, the extension's crash as a
 failure), what it watches, whether the chrome may hold the original, what goes at the page's end.
 
+The extension's reader never comes back from the back-forward cache: it is shown only in a frame over arXiv's PDF page
+(`entrypoints/pdf.content.ts`), and Chrome does not cache a page that embeds an extension's frame. Its reasons, read through
+the DevTools protocol (`Page.backForwardCacheNotUsed`; the page's own `notRestoredReasons` says only `masked` for the frame,
+another origin's), measured on Chrome for Testing 153 in 2026-11 by `tests/e2e/reader-v2.mjs`: `SupportPending:EmbedderExtensionFrame`,
+`SupportPending:ContainsPlugins`, `Circumstantial:BrowsingInstanceNotSwapped`. The page comes back loaded again, its reader
+opened anew. The check keeps the restored branch: a Chrome that caches such a page sends it to the reader's own resume.
+
 Where its host gives no engine, the reader lays with lane L3's typesetter (`packages/reader/src/compose/typeset.ts`):
 `layPage` under the rule set's rules for the target the rows are of, the reader's "What to translate" as the rules' `leave`
 (a toggle lays the pages again under them), the hyphenation patterns the rules read (our site's `/hyph/<lang>.json`), and the
