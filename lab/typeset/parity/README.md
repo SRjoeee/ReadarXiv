@@ -364,8 +364,9 @@ lays each pair once more (`relay`, `relay.mjs`) with every member laid with a fr
 unit: today's door row said in it where the two units read alike (`todaySaid`, exact or none: each of today's placeholders the
 element of v2's of its own source, or the characters it prints where v2's unit holds them as text, `\&` for "&"; each element of
 v2's today held as text where today's translation holds that text, at one way of placing them; a face switch first in a bare
-group, which today states as a placeholder and v2 as the group's face (`{\em …}`, PDF-READER §18.56), read as the same letters in
-the same face, a switch of another face than v2's group's as cut otherwise; today's group edges dropped, v2's
+group, white space aside, which today states as a placeholder and v2 as the group's face (`{\em …}`, `{ \em …}`, PDF-READER
+§18.56; the group and its switch as the engine's switchesOf names them over today's pieces), read as the same letters in the same
+face where v2's group opens where today's does, a switch of another face than v2's group's as cut otherwise; today's group edges dropped, v2's
 groups placed by the chain's reading; today's sentences counted in v2's projection), its stored row where that is today's row of
 another unit said in v2's (cause `unit`), nothing where today sent nothing (`today-kept`, `group`, a door row kept or none); a
 member whose text of today's cannot be laid so keeps its fresh row and is not comparable, its reason kept (no unit of today's

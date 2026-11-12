@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { relayOf, todaySaid } from '../../lab/typeset/parity/relay.mjs'
+import { piecesOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
 
 type P = { kind: string; s?: string; src?: string }
 const today = (pieces: P[]) => ({ ord: 7, id: null, kind: 'para', text: '', pieces, lines: [] })
@@ -46,6 +47,20 @@ describe("today's door row said in v2's unit", () => {
     const t = today([{ kind: 'text', s: 'see ' }, { kind: 'open', src: '{' }, { kind: 'ph', src: '\\em' }, { kind: 'text', s: ' Book' }, { kind: 'close', src: '}' }])
     const unit = { content: [text('see '), { t: 'span' as const, id: '1', style: 'italic', open: '{', close: '}', content: [text(' Book')] }] }
     expect(todaySaid([7, ['siehe ', 2, ' Buch'], 'whole', 'ms'], t, unit)).toEqual({ content: [{ t: 'text', s: 'siehe  Buch' }] })
+  })
+  it("a bare group whose switch stands after white space (`{ \\em Book}`) reads alike as the engine states it: the switch is the group's face", () => {
+    // (today: "see " { " " \em " Book" }; v2's unit the engine's own statement of those pieces (instrument.mjs piecesOf: the group
+    // italic, its white space and text one, no element). Red before: the switch was read only first at the group's open, so the
+    // walk met it after the white space: "cut otherwise". Today's row cites the white space and the switch: "siehe " " " \em " Buch")
+    const ps = [{ kind: 'text', s: 'see ' }, { kind: 'open', src: '{' }, { kind: 'text', s: ' ' }, { kind: 'ph', src: '\\em' }, { kind: 'text', s: ' Book' }, { kind: 'close', src: '}' }]
+    const stated = (q: P[]) => ({ content: piecesOf(q.map((p) => ({ t: p.kind, s: p.s, src: p.src }))) })
+    expect(stated(ps).content).toEqual([text('see '), { t: 'span', id: '1', style: 'italic', open: '{', close: '}', content: [text('  Book')] }])
+    expect(todaySaid([7, ['siehe ', 2, 3, ' Buch'], 'whole', 'ms'], today(ps), stated(ps))).toEqual({ content: [{ t: 'text', s: 'siehe   Buch' }] })
+    // (still cut otherwise: the same group whose letters differ; a switch after white space of another face than v2's group's)
+    const books = ps.map((p) => (p.s === ' Book' ? { ...p, s: ' Books' } : p))
+    expect(todaySaid([7, ['siehe ', 2, 3, ' Buch'], 'whole', 'ms'], today(ps), stated(books)).why).toMatch(/cut otherwise/)
+    const bold = ps.map((p) => (p.src === '\\em' ? { ...p, src: '\\bf' } : p))
+    expect(todaySaid([7, ['siehe ', 2, 3, ' Buch'], 'whole', 'ms'], today(bold), stated(ps)).why).toMatch(/cut otherwise/)
   })
   it("a switch of another face than v2's group's, or a group v2 states with no face, is still cut otherwise", () => {
     // (today's switch sets bold where v2's group is italic; and v2's bare group with no face of its own)
