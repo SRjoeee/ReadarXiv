@@ -190,6 +190,65 @@ export function flooredIn(pair: string): { floored: Set<number>; pages: Set<numb
   return out
 }
 
+/** the modes a line of today's is set in as any full line (placeItems: justified, or ragged where TeX set the unit flush left) */
+const FULL = new Set(['just', 'ragged'])
+/** whether line `k` of a summary's lines ([page, baseline, x0, x1, mode, block, items], trace.ts linesOf) stands before a run's
+ *  boundary: the next line on a block after more kept regions (`after`) than its own */
+const beforeRegion = (ls: unknown[], k: number, blocks: readonly { after?: unknown }[]): boolean => {
+  const l = ls[k],
+    n = ls[k + 1]
+  if (!Array.isArray(l) || !Array.isArray(n)) return false
+  const after = (b: unknown) => Number(blocks[b as number]?.after ?? 0)
+  return after(n[5]) > after(l[5])
+}
+/**
+ * Today's lines as the ruling of 2026-11-13 sets them (lane run-split, B.break; docs/PDF-READER.md §18.7: no word is cut by a
+ * boundary between runs; the line before a run's boundary is a last line, TeX's own law for the paragraph so far before a
+ * display, tex.web §1145 `line_break(display_widow_penalty)` with its \parfillskip, §816): a line before a boundary that today's
+ * run past a display (layoutUnit2's last resort) set as any full line, `just` or `ragged`, is set as a last line, `last`, its
+ * text and its extent as they were. `blocks` the walk's blocks, read for their `after`; every summary's lines (`layoutLines`,
+ * `lines`, as wordGlued reads them). A line today's run past ended inside a word (its hyphen) is not restated: such a unit's lay
+ * is the ruling's (lastLineIn)
+ */
+export function lastBeforeRegion(v: unknown, blocks: readonly { after?: unknown }[], key = ''): unknown {
+  const lines = (ls: unknown[]) =>
+    ls.map((l, k) =>
+      Array.isArray(l) && FULL.has(l[4] as string) && beforeRegion(ls, k, blocks)
+        ? [...l.slice(0, 4), 'last', ...l.slice(5)]
+        : l,
+    )
+  if (Array.isArray(v)) return /ayoutLines$|^lines$/.test(key) || key === '' ? lines(v) : v
+  if (v && typeof v === 'object' && !(v instanceof Map) && !(v instanceof Set))
+    return Object.fromEntries(
+      Object.entries(v as Record<string, unknown>).map(([k, x]) => [
+        k,
+        /ayoutLines$|^lines$/.test(k) && Array.isArray(x) ? lines(x) : x,
+      ]),
+    )
+  return v
+}
+const lastLineOf = new Map<string, Set<number>>()
+/**
+ * The units of a pair whose lay the ruling of 2026-11-13 changes (lastBeforeRegion): those today's walk laid with a line before
+ * a run's boundary set as any full line (its run past a display), at any round. A replay of their drawing, or of a page's fill
+ * that holds them, that differs is the ruling's: a last line is set ragged, and a word today's run past cut there now stands
+ * whole after the boundary, which may cost its unit a state of the fit (2608.16117v1-de's unit 28, one size step)
+ */
+export function lastLineIn(pair: string): Set<number> {
+  const got = lastLineOf.get(pair)
+  if (got) return got
+  const out = new Set<number>()
+  for (const u of ledger(pair).units)
+    for (const s of u.slots.filter((x) => x.by === 'X.cut')) {
+      const v = s.value as { layoutLines?: unknown[]; walkedBlocks?: { after?: unknown }[] } | null
+      const ls = v?.layoutLines ?? []
+      if (ls.some((l, k) => Array.isArray(l) && FULL.has(l[4] as string) && beforeRegion(ls, k, v?.walkedBlocks ?? [])))
+        out.add(u.ord)
+    }
+  lastLineOf.set(pair, out)
+  return out
+}
+
 const roomUnderOf = new Map<string, { runs: Set<number>; pages: Set<number>; units: Set<number> }>()
 /**
  * What the room ruling (fit/walk.ts: a room under a whole line offered too) changes of a pair's record that ruledRoom cannot

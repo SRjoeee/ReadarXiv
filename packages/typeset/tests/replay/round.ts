@@ -14,7 +14,7 @@ import type { FillLaid } from '../../src/shared/fill-page.ts'
 import type { RuleParams } from '../../src/types.ts'
 import { cellBands } from '../../src/unit/params.ts'
 import { blockOfTap, num, type WalkCase } from './fit-input.ts'
-import { borrowsAt, firstDifference, inWordOf, ledger, ruledRoom, wordGlued } from './tap.ts'
+import { borrowsAt, firstDifference, inWordOf, lastBeforeRegion, ledger, ruledRoom, wordGlued } from './tap.ts'
 import { paperOf, todayBundle } from './today.ts'
 
 type Raw = Record<string, unknown>
@@ -125,7 +125,9 @@ function stepsAfter(
   // (a round whose tokens hold an item that continues its word: its lines' ends read to a millionth of a point, lane
   // literal-fixes' rule moving a line's slack between its gaps and never its end (tap.ts wordGlued); counted where it decides)
   const inWord = inWordOf(c.tokens as unknown[])
-  const glued = (a: unknown, b: unknown, label: string): string | null => {
+  // (and today's lines before a run's boundary as the ruling of 2026-11-13 sets them, last lines: tap.ts lastBeforeRegion)
+  const glued = (a: unknown, b0: unknown, label: string): string | null => {
+    const b = lastBeforeRegion(b0, c.blocks as { after?: unknown }[])
     const d = firstDifference(a, b, label)
     if (!d || !inWord) return d
     const g = firstDifference(wordGlued(a), wordGlued(b), label)
