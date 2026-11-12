@@ -5623,6 +5623,45 @@ was that it may stay the original's where the highlight forces it.
   size set its own, 2610.40576v1's four cells' ids); no other unit's id or text moves, nor the format (`unwrapped` is the part's
   existing PrepWhy). TRANSLATE stays: today's engine reads none of it.
 
+### 18.58 Every kept unit states the rule that keeps it, in the lab's dump (2026-11-12)
+
+The display gate could not apply the owner's ruling of 2026-11-08 that an algorithm's pseudocode stays the original
+(2608.25210v2 page 8, "Return P", which today translates): the bundle states a kept unit `kept` and nothing more, the reader's
+page states it 'none' as it states a unit whose row has not come, and the lab's dump marked the rule (`keptBy`) for some keeps
+alone (Rule 1's pitch, an address block, the figure reading's identifier, formula, double and script, a decorated word). Each
+keep now carries its reason from the line that decides it, as the family before it does: a flag of the instrument's unit
+(`InstrumentUnit`) that the lab's dump reads and the bundle does not carry, so no bundle byte moves.
+
+- `pseudocode`: a unit of an algorithm float's body (the front end's `pseudocode`, read by `pipeline/instrument.mjs`
+  `unitFactsOf`, which now states each kept unit's reason beside the set: 'pseudocode' first, then 'name'). The dump's
+  `keptBy: 'pseudocode'`.
+- `nameCell`: a cell or a figure text of names or markup tokens alone (`translate/mt.mjs` nameCells). `keptBy: 'name'`.
+- `crowded`: a figure text the figure reading keeps whole as crowded (a translation with no room beside other ink, a formula it
+  would tear) and for no reason of its own besides (`double`, `script` stay first). `keptBy: 'crowded'`.
+- `block`: a kept block of rule 10 (`locate/today/ink-units.mjs` keptUnitsOf: a listing, a page number, a URL alone, a
+  bibliography not cut into entries), beside `address` for a block of e-mail addresses alone. `keptBy: 'block'`.
+- A figure text the lone-text path keeps as a line of code states `pitch`, as the paragraph path's already does
+  (`locate/ink.ts`); no unit of the corpus moved by it.
+
+Each mark is a cause of the candidate's own unit (`lab/pdf/prepare-back/stated.mjs` CAUSE: `address`, `crowded`,
+`pseudocode`, `nameCell`, `block`; keptWhyOf), which the acceptance list does not accept by this: its entries are the
+coordinator's. The order of `keptBy` is the rules': a unit two marks state is kept by the first.
+
+Left out, each with its reason: the reader's toggles (a kind they leave is the page's 'left', no keep of the prepare; the dump
+states a unit of today's that such a member holds as `names`, "a line of the author block, kept by the names toggle"); a babel
+name (its own group, in no dump); an element kept as ink inside a translated unit (`El.keep`: a display row, a held line; no
+unit kept); a unit not located (its `why`, `unlocated: …`, already says so: 2610.21313v1's "Peak Performance [GOPS]" cell, text
+past its source).
+
+- **Stage 1a** over the 88 papers and 2111.09276v1 at this change (lane gate-finds, run kr1) against lane decorated-whole's last
+  run of the same code without it (dw2): every bundle object the same (`same.mjs`, 2,722 of 2,722), so no PIPELINE, no FORMAT;
+  the dumps differ in `keptBy` and `why` alone (0 other fields over 50,595 units). New marks: `block` 3,840 (running heads
+  2,141, orphan lines 1,530, references 92, contents 64, notes 13), `name` 2,712 (2,140 cells drawn, 541 figure texts and 31
+  cells not located), `crowded` 9, `pseudocode` 6 (2608.25210v2 ords 144 and 152, 2608.06007v1 224 and 225, 2610.21924v1 563
+  and 564); `address` now with its cause on 69. Every unit the dump states kept names its rule; a figure text neither drawn nor
+  marked is the wrap's (`unwrapped` 128, `page` 7: no keep). The differential: lost 11 (+5,422 accepted), gained 5,823, changed
+  5,256, the same lists as dw2's; 65 of the gained units and 23 of the changed now say their cause.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

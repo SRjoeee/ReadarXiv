@@ -131,7 +131,7 @@ export declare function textsOf(texts: unknown): ReadonlyMap<string, string> | n
 export declare function nameGroupOf(g: string | null | undefined): { occurrence: string; role: number } | null
 /** each unit's facts from the front end's beside it, by index: a caption's float type, a unit kept as it is (its names, an
  *  algorithm float's body) */
-export declare function unitFactsOf(paper: import('./live.mjs').Paper): { float: Map<number, string>; kept: Set<number> }
+export declare function unitFactsOf(paper: import('./live.mjs').Paper): { float: Map<number, string>; kept: Set<number>; why: Map<number, 'pseudocode' | 'name'> }
 /** the cells held whole as the original for a decorated word they hold (PDF-READER §18.57), by unit index: a table's cell not
  *  kept already holding a placeholder the probe states TeX set beside a decoration of its own, a letter in its text */
 export declare function decoratedCellsOf(

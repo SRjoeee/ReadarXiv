@@ -415,7 +415,8 @@ export function inkOf(o: InkInput): {
         content,
         kept: true,
         fixed: true,
-        ...(u.address ? { address: true as const } : {}),
+        // (why it is kept, for the lab's dump: a block of e-mail addresses alone, else a block of rule 10's)
+        ...(u.address ? { address: true as const } : { block: true as const }),
       },
       text: [],
       ph: [],
@@ -510,6 +511,9 @@ export function inkOf(o: InkInput): {
           ? {
               why: `figure: ${t ? t.why : f.why}`,
               fixed: true as const,
+              // (a line of code is kept for its pitch as the paragraph path's is, below; one kept as crowded says so)
+              ...(t?.why === 'code' ? { pitch: true as const } : {}),
+              ...((t ? t.why : f.why) === 'crowded' ? { crowded: true as const } : {}),
               ...(t?.why === 'formula' ? { formula: true as const } : {}),
               ...(f.double ? { double: true as const } : {}),
               ...(f.script ? { script: true as const } : {}),
@@ -725,6 +729,7 @@ function figureTextOf(
             why: `figure: ${t.why}`,
             fixed: true as const,
             ...(t.why === 'code' ? { pitch: true as const } : {}),
+            ...(t.why === 'crowded' ? { crowded: true as const } : {}),
             ...(t.why === 'formula' ? { formula: true as const } : {}),
             ...(fig.units[t.ks[0]!]?.double ? { double: true as const } : {}),
             ...(t.why === 'script' ? { script: true as const } : {}),
