@@ -39,13 +39,13 @@ const v2Of = (
   ...(o.fills ? { fills: o.fills } : {}),
   ...(o.spaced ? { spaced: { [N]: o.spaced } } : {}),
 })
-type Extra = { prep?: { ord: number }[]; pair?: string; frame?: object; groups?: object[]; keptByGroup?: Set<number>; folios?: Set<number>; ruled?: Set<number>; cellRooms?: Map<number, object>; floor?: number; pastFoot?: number }
+type Extra = { prep?: { ord: number }[]; pair?: string; frame?: object; groups?: object[]; keptByGroup?: Set<number>; folios?: Set<number>; ruled?: Set<number>; cellRooms?: Map<number, object>; floor?: number; pastFoot?: number; led?: Map<number, number> }
 const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, x: Extra = {}) =>
   measurePage(x.pair ?? 'p-zh', v2, r, {
     prepByOrd: new Map((x.prep ?? []).map((u) => [u.ord, u])),
     todayOf: new Map(Object.entries(v2.today).map(([k, t]) => [Number(k), t.today])),
     turned: new Set(),
-    led: new Map(),
+    led: x.led ?? new Map(),
     top: new Set(),
     frame: x.frame ?? null,
     groups: x.groups ?? [],
@@ -411,6 +411,35 @@ describe('elements: drawn otherwise than the original sets them', () => {
     const prep = [{ ord: 47, kind: 'para', pieces, elements: [{ k: 62, kind: 'ref', flags: [], segs: seg(N) }, { k: 66, kind: 'cite', flags: [], segs: seg(N + 1) }] }]
     const ll = [drawnLine(310, 400, 348.84, 'x'.repeat(20))]
     expect(of('elements')(measure(fe, sides(47, ll, ll), { prep }))).toMatchObject([{ unit: 't47 para', worse: true, v2: { value: 'element 58: drawn as nothing where TeX set ink', off: 1 } }])
+  })
+})
+
+describe("a run-in paragraph read from the join the part states: its first line the head's last, whatever column it ends in", () => {
+  // (2611.03953v2 p3: a run-in heading (37) ends its line at 181.45 and its paragraph (38) starts on it at 191.41, runs down the
+  // first column and on into the second, whose first line stands higher on the page (714.98) than the shared one (144.3); the
+  // part's join (Placed.join, `led` 38 -> 37) states the two share the heading's last line)
+  const head = { ord: 37, kind: 'heading', align: 'l', style: { size: 10 }, lines: [factLine(55.44, 181.45, 144.3)] }
+  const ys = [144.3, 132.34, 120.39, 108.43]
+  const col2 = [714.98, 702.98]
+  const para = { ord: 38, kind: 'para', align: 'j', style: { size: 10 }, lines: [factLine(191.41, 289.44, 144.3), ...ys.slice(1).map((y) => factLine(55.44, 289.44, y)), ...col2.map((y) => factLine(307.44, 541.44, y))] }
+  /** a side's drawing: its head translated, ending at `end`, the paragraph's first line starting `sep` after it */
+  const side = (end: number, sep: number) => [
+    { id: 37, lines: [drawnLine(55.44, end, 144.3, '\u5f15\u8a00')] },
+    { id: 38, lines: [drawnLine(end + sep, 289.44, 144.3, '\u6587'.repeat(8)), ...ys.slice(1).map((y) => drawnLine(55.44, 289.44, y, '\u6587'.repeat(20))), ...col2.map((y) => drawnLine(307.44, 541.44, y, '\u6587'.repeat(20)))] },
+  ]
+  const page = (sep: { today: number; v2: number }, led = new Map([[38, 37]])) =>
+    measure(
+      v2Of({ members: [laid(37), laid(38)], facts: [head, para], today: { 37: { today: 37 }, 38: { today: 38 } } }),
+      rec({ today: { units: side(120, sep.today) }, v2: { units: side(110, sep.v2) } }),
+      { led },
+    )
+  it("its first line is the follower's, judged by the gap after its head, not as a line's start off the original's", () => {
+    const p = page({ today: 9.96, v2: 9.96 })
+    expect(of('align')(p)).toEqual([])
+    expect(p.units.find((u: { key: string }) => u.key === 't38').sides.v2.gap).toEqual({ original: 9.96, drawn: 9.96 })
+  })
+  it('a gap v2 draws wider than the original by more than the floor is read there', () => {
+    expect(of('gap')(page({ today: 9.96, v2: 30 }))).toMatchObject([{ unit: 't38 para after t37 heading', worse: true }])
   })
 })
 

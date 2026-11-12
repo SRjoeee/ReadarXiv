@@ -440,7 +440,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   }
   // (the run-ins the part states (`led`, follower ord -> its leader's): a follower it joins to the member before it in its flow
   // (Placed.join: the two share that one's last line, TeX's separation between them), and the member a bound name leads
-  // (lay/lead.ts); each judged where its first line on this page is the leader's last. Two units set on one line otherwise
+  // (lay/lead.ts); each judged where its first line on this page is the leader's last, each read in the part's order (a
+  // paragraph that runs on into the next column stands higher there than on the line it shares: 2611.03953v2 p3, p9). Two units set on one line otherwise
   // (an author's address in a column of its own beside another's, a table's cells, a figure's texts) are no run-in: each
   // stands where TeX set it, judged by anchor and align)
   const APART = new Set(['cell', 'figure', 'inkfigures'])
@@ -451,12 +452,13 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const hk = keyOfPart(lead),
       h = orig.get(hk)
     if (!h?.lines.length || APART.has(h.kind)) continue
-    const hl = [...h.lines].sort((a, b) => a.y - b.y)[0]
-    const fl = [...f.lines].sort((a, b) => b.y - a.y)[0]
+    if (!h.last) continue
+    const hl = h.lines.at(-1)
+    const fl = f.lines[0]
     if (Math.abs(fl.y - hl.y) > 0.5) continue
     runIns.push({ hk, h, hl, fk, f, fl, sz: fl.size || f.size || 10, sep: fl.x0 - hl.x1 })
   }
-  const followers = new Set(runIns.map((r) => r.fk))
+  const runInOf = new Map(runIns.map((r) => [r.fk, r]))
   // (the lines of TeX's several members share whole, set centred or flush right, as the lay reads them (`rows`: the typesetter's
   // rowLinesOf over the part's flows, measure.mjs; the coordinator's ruling of 2026-11-09): TeX placed the whole line, so a
   // member's place follows from the run, and each is judged by the line (its run's middle, or end, below), never by its own
@@ -609,13 +611,18 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
         } else if (o.align === 'l' || o.align === 'j') {
           // (a follower's first line starts after its head, whose translation is another width: the gap measures it; every
           // other line starts where one of the original's lines (but an indented first) starts: its column's margin, a margin
-          // beside a float, the margin after a display)
+          // beside a float, the margin after a display. A follower's first line is the one it shares with its head (runIns):
+          // the original's first in the part's order, the drawn one on a row of the head's drawn lines (else its highest), so a
+          // paragraph that runs on into the next column is judged on its own lines there, 2611.03953v2 p3, p9)
+          const r = runInOf.get(key)
+          const joined = r ? (ls.filter((l) => (M.get(r.hk) ?? []).some((x) => !x.rot && Math.abs(x.y - l.y) <= 0.5)).sort((a, b) => b.y - a.y)[0] ?? dl[0]) : null
+          const own = r ? o.lines.filter((l) => l !== r.fl) : []
           const first =
-            o.first && !followers.has(key)
+            o.first && !r
               ? Math.min(startOff(dl[0], ol[0].x0), ol[0].label !== undefined ? startOff(dl[0], ol[0].label) : Number.POSITIVE_INFINITY)
               : 0
-          const starts = (ol.length > 1 && o.first ? ol.slice(1) : ol).map((l) => l.x0)
-          const rest = dl.slice(o.first ? 1 : 0).map((l) => Math.min(...starts.map((x) => startOff(l, x))))
+          const starts = (r ? (own.length ? own : ol) : ol.length > 1 && o.first ? ol.slice(1) : ol).map((l) => l.x0)
+          const rest = (r ? ls.filter((l) => l !== joined) : dl.slice(o.first ? 1 : 0)).map((l) => Math.min(...starts.map((x) => startOff(l, x))))
           off = Math.max(first, ...rest)
           how = `${o.align === 'l' ? 'left' : 'justified'}: a line's start`
         }
@@ -757,7 +764,10 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       // (a head v2 lays with no line of its own stands in its follower's first line, a bound name set as its lead: the two are
       // one drawn line there, no separation between units to read)
       if (side === 'v2' && !flat(hk)?.length && stateOf.get(h.part) === 'laid') continue
-      const fd = flat(fk)?.length ? [...flat(fk)].sort((a, b) => b.y - a.y)[0] : { y: fl.y, x0: fl.x0 }
+      // (its first drawn line the one it shares with its head's: on a row of one of the head's drawn lines, the highest such; a
+      // side that draws the head on no row of its follower's, the follower's highest)
+      const shared = (flat(fk) ?? []).filter((l) => flat(hk)?.some((x) => Math.abs(x.y - l.y) <= 0.5))
+      const fd = flat(fk)?.length ? [...(shared.length ? shared : flat(fk))].sort((a, b) => b.y - a.y)[0] : { y: fl.y, x0: fl.x0 }
       const hd = flat(hk)?.length ? flat(hk).find((l) => Math.abs(l.y - fd.y) <= 0.5) : Math.abs(hl.y - fd.y) <= 0.5 ? hl : null
       if (!hd || (!flat(fk)?.length && !flat(hk)?.length)) continue
       g[side] = fd.x0 - hd.x1
