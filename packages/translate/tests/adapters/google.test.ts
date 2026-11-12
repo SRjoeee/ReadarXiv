@@ -16,6 +16,7 @@ import {
   GLUED_PAST,
   OWN_GLUED,
   SOURCE_LINES,
+  GLUED_STOP,
   STYLED_OBJECT,
   UNITS,
 } from './fixtures.ts'
@@ -29,7 +30,7 @@ export const googleEcho = (_url: string, init: FetchInit) => {
 translatorSuite('google', {
   make: (fetch) => google({ fetch }),
   target: 'zh-Hans',
-  units: [...UNITS, HEAD_STOP, DISPLAY_ENDS, SOURCE_LINES, GLUED_PAST, OWN_GLUED, STYLED_OBJECT],
+  units: [...UNITS, HEAD_STOP, DISPLAY_ENDS, SOURCE_LINES, GLUED_PAST, OWN_GLUED, STYLED_OBJECT, GLUED_STOP],
   echo: googleEcho,
   replies: GOOGLE_REPLIES,
   faults: [
@@ -209,6 +210,67 @@ describe('google: a styled group is a span of its sentence', () => {
     expect(readTagged(STYLED_OBJECT, reply('<span id="1">学习到的先验</t>'))).toBeNull()
     expect(readTagged(STYLED_OBJECT, reply('<span id="1">学习到的先验'))).toBeNull()
     expect(readTagged(STYLED_OBJECT, reply('<t id="1">学习到的先验</span>'))).toBeNull()
+  })
+})
+
+// (Google kept no stop before an element written as a word that the source glues after its sentence's stop: "…to its
+// left.<x1>" -> "…上下文<x1>", 0 of 80 such places of the lab's Google store kept it, Microsoft 0 of 75 note marks, footnotes
+// and breaks lost; with the boundary marker right after the stop, 77 of 80 came back, no stray stop added. Lane reply-dots'
+// probe, 2026-11-13, DESIGN §6.2. The sentence stays the source's: its stop and the element glued after it)
+describe('google: on the wire a sentence ends at its stop', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  const w = (n: number) => `<span id="${n}" translate="no">x${n}</span>`
+  it('the boundary marker stands right after the stop, before an element the source glues after it; at the unit’s end too', () => {
+    expect(g.write(GLUED_STOP, 'zh-Hans')).toBe(
+      `Every token attends to its left.<x id="3"/>${w(1)} We report two sizes.<x id="4"/>${w(2)}`,
+    )
+    const one = unit('o', [t('We used other seeds.'), el('n', 'note-mark')], true)
+    expect(g.write(one, 'zh-Hans')).toBe(`We used other seeds.<x id="2"/>${w(1)}`)
+  })
+  it('only where the cutter ends a sentence: an abbreviation’s dot is none', () => {
+    const abbr = unit('a', [t('As shown in Prop.'), el('t', 'other'), el('r', 'ref')], true)
+    expect(g.write(abbr, 'zh-Hans')).toBe(`As shown in Prop.${w(1)}${w(2)}`)
+    const mid = unit('m', [t('See Fig.'), el('t', 'other'), el('r', 'ref'), t(' for the layout. It ends.')], true)
+    expect(g.write(mid, 'zh-Hans')).toBe(`See Fig.${w(1)}${w(2)} for the layout. <x id="3"/>It ends.`)
+  })
+  it('a reply keeping stop, marker and element in order reads today’s pairs: the boundary after the element on both sides', () => {
+    const r = readTagged(GLUED_STOP, `每个标记都关注其左侧。<x id="3"/>${w(1)}我们报告两种规模。<x id="4"/>${w(2)}`)
+    expect(r?.content).toEqual([
+      { t: 'text', s: '每个标记都关注其左侧。' },
+      { t: 'el', id: 'f' },
+      { t: 'text', s: '我们报告两种规模。' },
+      { t: 'el', id: 'g' },
+    ])
+    // (the source's boundary at "We", after the mark; the translation's at 我, after the mark: as a reply with the marker
+    // after the element reads, today's wire; no sentence of the end's mark alone)
+    expect(r?.sentences).toEqual({ src: [34], tr: [12] })
+    expect(
+      readTagged(GLUED_STOP, `每个标记都关注其左侧。${w(1)}<x id="3"/>我们报告两种规模。<x id="4"/>${w(2)}`)?.sentences,
+    ).toEqual({ src: [34], tr: [12] })
+  })
+  it('the end’s marker is the wire’s alone: missing, or after the element, the sentences read the same', () => {
+    expect(
+      readTagged(GLUED_STOP, `每个标记都关注其左侧。<x id="3"/>${w(1)}我们报告两种规模。${w(2)}`)?.sentences,
+    ).toEqual({
+      src: [34],
+      tr: [12],
+    })
+    expect(
+      readTagged(GLUED_STOP, `每个标记都关注其左侧。<x id="3"/>${w(1)}我们报告两种规模${w(2)}<x id="4"/>`)?.sentences,
+    ).toEqual({
+      src: [34],
+      tr: [12],
+    })
+  })
+  it('a reply that moved the element past a word reads as a moved element reads: where the reply set it, the boundary at the marker', () => {
+    const r = readTagged(GLUED_STOP, `每个标记都关注其左侧。<x id="3"/>我们${w(1)}报告两种规模。<x id="4"/>${w(2)}`)
+    expect(r?.content).toEqual([
+      { t: 'text', s: '每个标记都关注其左侧。我们' },
+      { t: 'el', id: 'f' },
+      { t: 'text', s: '报告两种规模。' },
+      { t: 'el', id: 'g' },
+    ])
+    expect(r?.sentences).toEqual({ src: [34], tr: [11] })
   })
 })
 

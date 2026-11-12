@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: with Google translating, a sentence's full stop stays where a footnote mark, a note's call or a line break follows it. Google had dropped the stop, so the sentence ran into the next one.
 - Fixed: in the PDF reader, a page whose passages a translation service refused, and which another service or a retry then translated, shows the translation. It had stayed as printed until the page was laid again by a scroll or a setting.
 - Fixed: in the PDF reader, turning a reading option on and off again shows the page as it was before, every passage as it was. A note that names one of the paper's authors, such as a correspondence line, could show as printed when the paper opened and translated after the authors' option was turned on and off.
 - Fixed: with Google translating, a phrase a paper sets in italics, bold or as a link is translated as part of its sentence. Google had translated the words before it alone, put "……" where the phrase belongs and set the phrase after it, sometimes translating its words out of their meaning ("order" as a command).

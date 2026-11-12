@@ -12,6 +12,7 @@ import {
   GLUED_PAST,
   OWN_GLUED,
   SOURCE_LINES,
+  GLUED_STOP,
   STYLED_OBJECT,
   UNITS,
 } from './fixtures.ts'
@@ -48,7 +49,7 @@ function api(
 translatorSuite('chrome', {
   make: () => chrome({ api: api() }),
   target: 'zh-Hans',
-  units: [...UNITS, HEAD_STOP, DISPLAY_ENDS, SOURCE_LINES, GLUED_PAST, OWN_GLUED, STYLED_OBJECT],
+  units: [...UNITS, HEAD_STOP, DISPLAY_ENDS, SOURCE_LINES, GLUED_PAST, OWN_GLUED, STYLED_OBJECT, GLUED_STOP],
   echo: () => ({ status: 200, body: '' }),
   replies: GOOGLE_REPLIES,
   faults: [],

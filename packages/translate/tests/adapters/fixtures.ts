@@ -281,6 +281,13 @@ export const STYLED_OBJECT: UnitIn = unit(
   ],
   true,
 )
+/** a note's mark glued after its sentence's stop, inside the unit and at its end, words of our own (lane reply-dots,
+ *  2026-11-13: Google kept no stop before such an element written as a word; the boundary marker right after the stop) */
+export const GLUED_STOP: UnitIn = unit(
+  'glued-stop',
+  [t('Every token attends to its left.'), el('f', 'note-mark'), t(' We report two sizes.'), el('g', 'note-mark')],
+  true,
+)
 export const MICROSOFT_UNITS: UnitIn[] = [
   ...UNITS,
   /* 17 */ BERT_ABSTRACT,
@@ -486,5 +493,11 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     raw: '该方法使权重保持可训练，因此专家充当<span id="1">学习到的先验</span>，而不将其限制在这个范围内。<x id="5"/>其中 x2 它达到 81%，而基线为 70% <span id="2" translate="no">x2</span>代码可在<span id="3" translate="no">x3</span>处获取<span id="4" translate="no">x4</span>',
     taken: false,
     why: 'an element’s token left as text besides its span: the wire’s contract broken (tags.ts tokensIn)',
+  },
+  {
+    unit: 23,
+    raw: '每个标记都关注其左侧。<x id="3"/><span id="1" translate="no">x1</span>我们报告两种规模。<x id="4"/><span id="2" translate="no">x2</span>',
+    taken: true,
+    why: 'the stops back where the boundary markers stand right after them; the sentence starts after the marks (tags.ts leads)',
   },
 ]
