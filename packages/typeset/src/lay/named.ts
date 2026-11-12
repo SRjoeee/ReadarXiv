@@ -223,7 +223,7 @@ export function namedRows(part: Pick<Part, 'paper'>, rows: Rows, leave: Readonly
 /** the persons a unit that names the block's holds that the toggles show (`leave` holds none of their kinds): the one test of
  *  what a page laid with it reads (namedRows) and of what it waits for (namedWaits). The composer keeps a page laid once
  *  nothing it waits for is missing, so a lay that read a row its page did not wait for drew what that row's coming later
- *  changes (2611.03953v2-zh p1, staging round B14: the correspondence footnote's variant late, the names off, the footnote
+ *  changes (2611.03953v2-zh p1: the correspondence footnote's variant late, the names off, the footnote
  *  the original's until a toggle laid the page again with its own row) */
 function shownOf(n: Named, persons: readonly Person[], leave: ReadonlySet<string>): Person[] {
   return n[2].map((x) => persons[x[1]]).filter((p): p is Person => !!p && !leave.has(p[1]))

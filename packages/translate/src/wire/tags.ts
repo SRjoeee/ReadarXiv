@@ -70,13 +70,13 @@ const SPAN_CLOSE = /<\/span\s*>/y
  * article); a span with text `<span id="n">…</span>`, the words of its sentence it holds. A boundary marker is always a void.
  * Measured: Google takes an element that holds no text (`<x/>`, `<x></x>`, `<span></span>`) or that HTML does not know
  * (`<x>n</x>`, with `translate="no"` or without) as a break between two texts it translates apart, each closed with a full
- * stop of its own (lane stray-stop, 2026-11-12, a probe of 42 units of two papers, zh and ja, after the owner's report on
- * 1706.03762v7): "… a matrix <x/>. The keys …" -> "…矩阵中。<x/> 。键和值…", 51 of 164 element groups in zh and 53 in ja, 18 of
+ * stop of its own (measured on a probe of 42 units of two papers, 1706.03762v7 one of them, zh and ja):
+ * "… a matrix <x/>. The keys …" -> "…矩阵中。<x/> 。键和值…", 51 of 164 element groups in zh and 53 in ja, 18 of
  * them a stop on both sides, the element never moved across a word. Written as a word, none (1 and 5 left, each the target's
  * word order setting the element first in its sentence), the elements and boundary markers all back, the token as sent 424
  * of 424 (without the attribute 91 of 424 changed); a number for the token read as a quantity beside a word ("3 In" ->
- * inches, 4 and 4 replies), the identifier 0 and 1. A span written `<t>` is such a break too (lane reply-dots, 2026-11-13,
- * after the owner's report on 2611.03953v2's abstract): Google translated the text before it alone, wrote "……" where the
+ * inches, 4 and 4 replies), the identifier 0 and 1. A span written `<t>` is such a break too (measured on 2611.03953v2's
+ * abstract and the lab's Google store): Google translated the text before it alone, wrote "……" where the
  * span's words belong and set the span after it ("act as <t>parameter priors</t> without…" -> "可以作为……<t>参数先验</t>而不…"),
  * 65 places of 13,233 zh spans in the lab's Google store, and translated a span's words out of their sentence ("the {order}
  * we take" -> 命令, "each of the {m} coordinates" -> 米); written as a `<span>`, the dots were gone in 61 of 61 units and those
@@ -360,8 +360,8 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
     // (on the wire a sentence ends at its stop: where the source glues an element after it, a note's mark, a footnote's call,
     // a forced break, the boundary marker stands right after the stop, before it; the cutter's sentence ends alone, an
     // abbreviation's dot none. Google kept no stop before an element written as a word at a sentence's end, 0 of 80 such
-    // places, and 77 with the marker so: lane reply-dots, 2026-11-13. The sentence stays the source's, the stop and the
-    // element with it: a reading sets the boundary after the element, `leads`)
+    // places, and 77 with the marker so, measured over the lab's Google store. The sentence stays the source's, the stop and
+    // the element with it: a reading sets the boundary after the element, `leads`)
     for (const q of sentenceCuts(projection, standIn)) {
       const c = orig[q] as number
       const g = glued(q)
