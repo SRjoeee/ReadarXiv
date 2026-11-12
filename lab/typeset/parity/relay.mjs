@@ -6,7 +6,7 @@
 // from the different text; still there, it is judged as any; with no text of today's to lay, not comparable, its reason said.
 import { readingOf } from '../../../packages/typeset/tests/replay/l1.ts'
 import { doorSentences } from '../../../packages/typeset/tests/replay/rows.ts'
-import { switchesOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import * as instrument from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
 
 /** TeX's special characters a backslash escapes, each printing itself */
 const ESCAPED = /^\\([#$%&_{}])$/
@@ -42,9 +42,13 @@ const atomsOf = (today) =>
   today.pieces.flatMap((p, k) => (p.kind === 'text' ? (p.s ?? '').split('').map((c) => ({ c })) : p.kind === 'ph' ? [{ k, src: p.src ?? '' }] : []))
 /** today's placeholders that are a face switch first in a bare group (`{\\em …}`), by piece index: the face each sets. v2 states
  *  such a switch as its group's face, no element (instrument.mjs switchesOf, PDF-READER §18.56); today's unit kept it a
- *  placeholder that sets nothing where it stands. The one reading of both: switchesOf over today's pieces */
+ *  placeholder that sets nothing where it stands. The one reading of both: the engine's own switchesOf over today's pieces. An
+ *  engine without it (round B12's and before) states no switch as a group's face: its unit holds the switch as an element, which
+ *  reads against today's placeholder by its source, and none is needed */
 export const switchFacesOf = (today) =>
-  new Map([...switchesOf(today.pieces.map((p) => ({ t: p.kind, src: p.src, s: p.s }))).values()].map((x) => [x.at, x.face]))
+  instrument.switchesOf
+    ? new Map([...instrument.switchesOf(today.pieces.map((p) => ({ t: p.kind, src: p.src, s: p.s }))).values()].map((x) => [x.at, x.face]))
+    : new Map()
 
 /**
  * v2's unit (its flat pieces) read against today's unit of the same text (its atoms), in order, all of both read; groups read
