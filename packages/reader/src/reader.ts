@@ -817,8 +817,8 @@ export function openReader(
         composer?.setLayer(composed ? { part: composed.part, pages: head?.paper.pages ?? 0 } : null, rowsSource())
       } else if (rowsDone) {
         // (the same target's rows taken again after their end: a retry, a run our server started again, machine.ts rowsOfDoc. The
-        // rows go on, and the pages stand: the composer lays a page again where a row it was laid with comes otherwise, or one
-        // missing at the end comes, composer.ts `restated`, `filled`; a run that restates the rows held lays nothing)
+        // rows go on, and the pages stand: the composer lays a page again where a row its lay read lands otherwise than it saw
+        // it, composer.ts `moved`; a run that restates the rows held lays nothing)
         rowsDone = false
       }
       void (async () => {

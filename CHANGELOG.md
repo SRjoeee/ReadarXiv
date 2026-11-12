@@ -4,6 +4,8 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a page whose passages a translation service refused, and which another service or a retry then translated, shows the translation. It had stayed as printed until the page was laid again by a scroll or a setting.
+- Fixed: in the PDF reader, turning a reading option on and off again shows the page as it was before, every passage as it was. A note that names one of the paper's authors, such as a correspondence line, could show as printed when the paper opened and translated after the authors' option was turned on and off.
 - Fixed: in the PDF reader, a formula set on its own line between paragraphs lights as one piece when you point at it, its number with it, on both pages. A formula with a fraction, a root or a sum's limits had lit in two or three pieces, and its number not at all.
 - Changed: in the PDF reader, a figure's label or a table's cell that holds a highlighted, struck or underlined word stays as printed, whole, until a highlight can follow the translated words. Only the marked word had stayed in English, the rest of its line translated around it, a line half in each language. A highlighted number stays inside its translated line as before.
 - Fixed: in the PDF reader, a reference's journal or book title that the paper's bibliography sets in italics the older way (`{\em …}`, as many BibTeX styles do), and a bold or small-capital phrase set the same way in the text, keep their italics, bold or small capitals in the translation wherever the translation keeps the phrase as a phrase, as titles set with `\emph` already did. They had come back upright.

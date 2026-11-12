@@ -801,9 +801,18 @@ spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while
   the notice (it stood 150 ms); one asked again at our server's time is the notice for that wait, with no retry, giving way to
   the count when the ask begins; one nothing asks again but the reader is the notice with its retry.
   The notice closed stays closed for the visit unless more passages fail.
-- **A page laid with nothing of its own at the rows' end** (every member without a translation: the original's by the
-  rule) keeps the units it read missing; a translation of one of them come since (a retry, a run our server started again)
-  lays that page again, alone.
+- **A page laid is a lay over the rows as they stand** (2026-11-13). A page laid, committed or laid with nothing of its own
+  (every member without a translation: the original's by the rule), keeps every row its lay read and what it saw of it (a
+  translation, a refusal, none in yet); a row that lands otherwise than it saw (one come, a refusal translated after all by
+  another service or a retry, a row stated again otherwise) lays that page again, alone, its drawing kept and muted until the
+  new one commits (`packages/reader/src/compose/composer.ts` `moved`). One condition in place of three: a row stated again
+  otherwise laid every page again in a generation of its own; a row missing at the rows' end, come since, did too; a page laid
+  with nothing kept only the units it read missing once the rows had ended. A page laid with nothing BEFORE the end, every
+  unit refused while the run went on (a refusing service, the extension's `src/pdf-reader/host/translate.ts`), kept nothing,
+  and the translations another service brought later laid it again never (the V5 lane's e2e: 3 runs of 5, `laidPages: 0`).
+  A row read and waited for by no page (the paper's own names, §19.14) lays its page again when it comes, once. The law test:
+  `packages/reader/tests/composer.test.ts` "the toggles turned and turned back", each sequence of landings, the run's end and
+  each option turned, every drawing a fresh lay's.
 
 ## 9. The extension around the reader
 
