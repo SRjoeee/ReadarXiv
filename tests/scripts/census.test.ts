@@ -7,8 +7,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { execFileSync } from 'node:child_process'
 import { alternativesOf, factsOf, lineKinds, scanTree, thresholdOf } from '../../lab/release-check/census-lib.mjs'
-import { type Census, census, DEFINITIONS, headlineOf, numbersOf } from '../../lab/release-check/census.mjs'
+import { type Census, census, DEFINITIONS, headlineOf, numbersOf, ratchetOf } from '../../lab/release-check/census.mjs'
+import { newLinesOf, record } from '../../lab/release-check/census-ratchet.mjs'
 import { censusOf, GATES } from '../../lab/release-check/gates.mjs'
 import { targetLines } from '../../lab/release-check/verdict.mjs'
 
@@ -108,10 +110,16 @@ beforeAll(async () => {
   write('engine/tests/old.test.ts', "import { oldPage } from '../src/old'\nimport { widthOf } from '../src/copy'\noldPage()\nwidthOf([], 0)\n")
   write('web/package.json', JSON.stringify({ name: 'w' }))
   write('web/app/main.ts', "import { newPage } from '@vendor/new'\nimport { shared } from '../vendor/e/src/engine/shared.mjs'\nexport const page = () => newPage() + shared()\n")
-  const engine = scanTree('engine', join(dir, 'engine'), ENGINE)
-  const web = scanTree('web', join(dir, 'web'), WEB)
-  c = await census({ today: null, now: [engine, web] })
+  // (the engine's tree a checkout, so that the ratchet names the lines a change added)
+  const git = (...a: string[]) => execFileSync('git', ['-C', join(dir, 'engine'), '-c', 'user.name=census', '-c', 'user.email=census@example.invalid', '-c', 'commit.gpgsign=false', ...a], { encoding: 'utf8' })
+  git('init', '-q')
+  git('add', '.')
+  git('commit', '-q', '-m', 'fixture')
+  commit = git('rev-parse', 'HEAD').trim()
+  c = await take()
 })
+let commit = ''
+const take = () => census({ today: null, now: [scanTree('engine', join(dir, 'engine'), ENGINE), scanTree('web', join(dir, 'web'), WEB)] })
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
 describe('lines', () => {
@@ -150,7 +158,7 @@ describe('rule debt', () => {
     expect(alternativesOf('\\b(?:Fig|Table|Eq)\\b')).toEqual(['Fig', 'Table', 'Eq'])
     expect(d.papers).toEqual([{ id: '2401.01234', at: 'src/engine/legacy.mjs:15' }])
     expect(d.texFiles).toEqual([{ name: 'subfigure.sty', at: 'src/engine/legacy.mjs:15' }])
-    expect(d.versions.list).toEqual([{ name: 'PIPELINE_VERSION', value: '7', at: 'src/engine/legacy.mjs:3' }])
+    expect(d.versions.list).toEqual([expect.objectContaining({ name: 'PIPELINE_VERSION', value: '7', at: 'src/engine/legacy.mjs:3', mirror: false })])
   })
 })
 
@@ -159,7 +167,7 @@ describe('the graph', () => {
     const now = c.trees.NOW
     expect(now.graph.cycles).toMatchObject({ count: 1, modules: 2 })
     expect(now.chains.chains.map(x => [x.file, x.kinds])).toEqual([['src/new.ts', ['google', 'microsoft']]])
-    expect(now.gpl).toEqual([{ file: 'src/ported.ts', code: 1, role: 'product', reachedBy: [{ build: 'engine/app', path: ['src/entrypoints/main.ts', 'src/new.ts', 'src/ported.ts'] }, { build: 'web/site', path: ['web:app/main.ts', 'src/new.ts', 'src/ported.ts'] }] }])
+    expect(now.gpl).toEqual([{ file: 'src/ported.ts', repo: 'engine', path: 'src/ported.ts', code: 1, role: 'product', reachedBy: [{ build: 'engine/app', path: ['src/entrypoints/main.ts', 'src/new.ts', 'src/ported.ts'] }, { build: 'web/site', path: ['web:app/main.ts', 'src/new.ts', 'src/ported.ts'] }] }])
   })
 
   it("counts the website's imports of the engine: an entry is not an internal", () => {
@@ -224,5 +232,53 @@ describe("release-check's census rows", () => {
     const lines = Object.fromEntries(targetLines({ census: { status: 'pass', numbers } }).map(t => [t.id, t]))
     expect(lines.imports).toMatchObject({ status: 'reported', value: expect.stringMatching(/not measured here/) })
     expect(lines.versions).toMatchObject({ status: 'reported' })
+  })
+})
+
+describe('the ratchet', () => {
+  const first = () => {
+    const r = ratchetOf(c, { engine: null, web: null })
+    const web = r.web!
+    return { engine: record(null, r.engine.current, r.engine.lines, { commit, at: 't0', about: 'a fixture' }), web: record(null, web.current, web.lines, { commit, at: 't0', about: 'a fixture' }) }
+  }
+
+  it('records every measure of NOW and AFTER, per repository', () => {
+    const l = first()
+    expect(l.engine.trees.NOW?.values).toMatchObject({ thresholds: 3, thresholdsNoReason: 2, lists: 2, versions: 1, unchecked: 18, cycles: 1, chains: 1, gplReached: 1, productModules: 12 })
+    expect(l.engine.trees.AFTER?.values).toMatchObject({ thresholds: 0, versions: 0, unchecked: 6 })
+    expect(l.web.trees.NOW?.values).toMatchObject({ webImports: 1, webExtensionImports: 0 })
+    expect(l.engine.trees.NOW?.files.thresholds).toEqual({ 'src/engine/legacy.mjs': 3 })
+  })
+
+  it('fails a rise, naming the measure, both values and the new entry by file and line', async () => {
+    const l = first()
+    write('engine/src/engine/shared.mjs', 'export function shared() {\n  return 2\n}\nexport function unused() {\n  return 3\n}\nexport const tight = x => x > 0.42\n')
+    try {
+      const after = await take()
+      const r = ratchetOf(after, { engine: l.engine, web: l.web }, { engine: newLinesOf(join(dir, 'engine'), commit) })
+      const rise = r.engine.lines.find(x => x.status === 'rise' && x.tree === 'NOW' && x.measure === 'thresholds')
+      expect(rise).toMatchObject({ recorded: 3, value: 4, added: [{ file: 'src/engine/shared.mjs', from: 0, to: 1, entries: ['src/engine/shared.mjs:7'] }] })
+      // (a raise without its reason is refused; with one, it is kept with the reason and the commit)
+      expect(() => record(l.engine, r.engine.current, r.engine.lines, { raise: ['thresholds'], commit, at: 't1', about: '' })).toThrow(/without --reason/)
+      expect(() => record(l.engine, r.engine.current, r.engine.lines, { commit, at: 't1', about: '' })).toThrow(/NOW thresholds rose 3 → 4/)
+      // (the line added a rule with no comment, one code line no checker reads, an export nothing imports)
+      const raised = record(l.engine, r.engine.current, r.engine.lines, { raise: ['thresholds', 'thresholdsNoReason', 'unchecked', 'deadExports', 'productCode'], reason: 'a fixture rule', commit, at: 't1', about: '' })
+      expect(raised.raises).toEqual(expect.arrayContaining([{ tree: 'NOW', measure: 'thresholds', from: 3, to: 4, reason: 'a fixture rule', commit, at: 't1' }]))
+      expect(raised.trees.NOW?.values.thresholds).toBe(4)
+      // the tree as it was, against the raised ledger: a fall, which passes and can be lowered
+      const back = ratchetOf(c, { engine: raised, web: l.web })
+      expect(back.engine.lines.filter(x => x.status === 'rise')).toEqual([])
+      expect(back.engine.lines.find(x => x.tree === 'NOW' && x.measure === 'thresholds')).toMatchObject({ status: 'fall', recorded: 4, value: 3 })
+    } finally {
+      write('engine/src/engine/shared.mjs', 'export function shared() {\n  return 2\n}\nexport function unused() {\n  return 3\n}\n')
+    }
+  })
+
+  it("skips what needs the website's tree where it was not given, and judges the rest", async () => {
+    const l = first()
+    const alone = await census({ today: null, now: [scanTree('engine', join(dir, 'engine'), ENGINE)] })
+    const r = ratchetOf(alone, { engine: l.engine })
+    const by = Object.fromEntries(r.engine.lines.map(x => [`${x.tree} ${x.measure}`, x.status]))
+    expect(by).toMatchObject({ 'NOW thresholds': 'hold', 'NOW deadModules': 'skipped', 'NOW gplReached': 'skipped', 'AFTER thresholds': 'skipped' })
   })
 })

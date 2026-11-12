@@ -327,12 +327,13 @@ export const GATES = [
   { id: 'build', title: 'the build (wxt build, scripts/check-output.mjs)', tier: 'fast', stage: 'unit', holds: [], steps: () => [pnpm('build')] },
   {
     id: 'census',
-    title: "the complexity and debt census (lab/release-check/census.mjs): today's tree, this one, and this one less what the cut-over deletes; the website's where its profile is on this machine; reported against design §7, never judged here",
+    title: "the complexity and debt census (lab/release-check/census.mjs): today's tree, this one, and this one less what the cut-over deletes, the website's where its profile is on this machine, reported against design §7; judged by its ratchet: no measure of its ledger (census-ledger.json, the last integrated round's values) above its recorded value",
     tier: 'fast',
     stage: 'unit',
     holds: [],
     steps: ctx => [{ cmd: ['node', 'lab/release-check/census.mjs', `--out=${join(ctx.work, 'census')}`] }],
-    judge: (ctx, steps) => ({ pass: steps[0].exit === 0, numbers: censusOf(steps[0].text), note: `the census: ${join(ctx.work, 'census', 'census.md')}` }),
+    // (its exit: 0 no measure rose, 1 one rose (its lines name the measure, the values and the new entries), 2 a usage error)
+    judge: (ctx, steps) => ({ pass: steps[0].exit === 0, numbers: censusOf(steps[0].text), note: [...steps[0].text.matchAll(/^census-ratchet: (RISE .*)$/gm)].map(m => m[1]).join('; ') || `the census: ${join(ctx.work, 'census', 'census.md')}` }),
   },
   // ---------------------------------------------------------------- reader (hosted CI, every pull request: offline browsers)
   {

@@ -15,12 +15,14 @@
 //   --out          where census.json and census.md go (default lab/release-check/out/census)
 // Exit 0 when the census was taken (its numbers are reported against design §7's targets by release-check, never judged
 // here), 2 on a usage error.
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { cyclesOf, graphOf, pathTo, reach, scanTree, typeCheckedOf } from './census-lib.mjs'
 import { ENGINE_PROFILE } from './census-profile.mjs'
+import { itemsOf, judge, LEDGER_FORMAT, MEASURES, newLinesOf, partOf, record, reportOf } from './census-ratchet.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 
@@ -208,7 +210,7 @@ export function graphMeasures(view) {
     between: Object.fromEntries(Object.entries(between).sort((a, b) => b[1] - a[1])),
     areaPairs: Object.keys(between).length,
     betweenStatements: sum(Object.values(between)),
-    cycles: { count: cycles.length, modules: sum(cycles.map(c => c.length)), largest: cycles.slice(0, 5).map(c => ({ size: c.length, sample: c.slice(0, 4).map(id => id.replace(/^engine:/, '')) })) },
+    cycles: { count: cycles.length, modules: sum(cycles.map(c => c.length)), all: cycles, largest: cycles.slice(0, 5).map(c => ({ size: c.length, sample: c.slice(0, 4).map(id => id.replace(/^engine:/, '')) })) },
     areaCycles: areaCycles.map(c => c.join(' <-> ')),
     unresolved: graph.unresolved.filter(u => view.byId.has(u.from) && view.byId.get(u.from).f.role === 'product').length,
   }
@@ -221,7 +223,7 @@ export function webImportsOf(view) {
   if (!web || !engine) return null
   const entries = publicEntriesOf(engine)
   const engineAreas = new Set(engine.profile.engineAreas ?? [])
-  const out = { product: { engine: 0, extension: 0, entries: 0, other: 0 }, test: { engine: 0, extension: 0, entries: 0, other: 0 }, modules: { engine: new Set(), extension: new Set() }, top: {} }
+  const out = { product: { engine: 0, extension: 0, entries: 0, other: 0 }, test: { engine: 0, extension: 0, entries: 0, other: 0 }, modules: { engine: new Set(), extension: new Set() }, top: {}, items: [] }
   for (const e of view.graph.edges) {
     const from = view.byId.get(e.from)
     if (from?.repo !== 'web' || !e.to.startsWith('engine:')) continue
@@ -231,6 +233,7 @@ export function webImportsOf(view) {
     const cls = entries.has(to) ? 'entries' : t?.role === 'product' ? (engineAreas.has(t.area) ? 'engine' : 'extension') : 'other'
     side[cls]++
     if (cls === 'engine' || cls === 'extension') {
+      out.items.push({ repo: 'web', file: from.path, line: e.line, cls })
       out.modules[cls].add(to)
       out.top[to] = (out.top[to] ?? 0) + 1
     }
@@ -242,6 +245,7 @@ export function webImportsOf(view) {
     extensionSource: out.product.extension + out.test.extension,
     distinct: { engine: out.modules.engine.size, extension: out.modules.extension.size },
     top: Object.entries(out.top).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([m, n]) => `${m} ${n}`),
+    items: out.items,
   }
 }
 
@@ -304,6 +308,8 @@ export function chainsOf(view, roots) {
     .filter(x => x.f.role === 'product' && x.f.kind === 'code' && calledKinds(x).size >= 2)
     .map(x => ({
       id: x.id,
+      repo: x.repo,
+      path: x.path,
       file: at(x, 1).replace(/:1$/, ''),
       kinds: [...calledKinds(x)].sort(),
       builds: roots.builds.filter(b => b.repo === x.repo || true).filter(b => reach(graph, view.label === 'AFTER' ? b.after : b.now, new Set(), view.alive).has(x.id)).map(b => `${b.repo}/${b.name}`),
@@ -318,7 +324,7 @@ export function gplOf(view, roots) {
       .map(b => ({ b, r: reach(view.graph, view.label === 'AFTER' ? b.after : b.now, new Set(), view.alive) }))
       .filter(({ r }) => r.has(x.id))
       .map(({ b, r }) => ({ build: `${b.repo}/${b.name}`, path: pathTo(r, x.id).map(id => id.replace(/^engine:/, '')) }))
-    return { file: at(x, 1).replace(/:1$/, ''), code: x.f.lines.code, role: x.f.role, reachedBy: by }
+    return { file: at(x, 1).replace(/:1$/, ''), repo: x.repo, path: x.path, code: x.f.lines.code, role: x.f.role, reachedBy: by }
   })
 }
 
@@ -328,18 +334,22 @@ export function debtOf(view) {
   const product = view.files.filter(x => x.f.role === 'product' && x.f.kind === 'code' && !x.f.generated)
   // (a sub-area: the directory the file is in, four levels deep: src/pdf-reader/engine/layout, packages/engine/src/locate)
   const sub = x => `${x.repo}/${x.path.split('/').slice(0, 4).join('/').replace(/\.[a-z]+$/, '')}`
-  const thresholds = product.flatMap(x => (x.f.thresholds ?? []).map(t => ({ ...t, at: at(x, t.line), area: areaKey(x), sub: sub(x), headline: x.repo === 'engine' && headline.has(x.f.area) })))
-  const lists = product.flatMap(x => (x.f.lists ?? []).map(l => ({ ...l, at: at(x, l.line), area: areaKey(x), sub: sub(x), headline: x.repo === 'engine' && headline.has(x.f.area) })))
+  const place = x => ({ repo: x.repo, file: x.path, area: areaKey(x), sub: sub(x), headline: x.repo === 'engine' && headline.has(x.f.area) })
+  const thresholds = product.flatMap(x => (x.f.thresholds ?? []).map(t => ({ ...t, at: at(x, t.line), ...place(x) })))
+  const lists = product.flatMap(x => (x.f.lists ?? []).map(l => ({ ...l, at: at(x, l.line), ...place(x) })))
   const count = (xs, by) => xs.reduce((o, x) => ((o[by(x)] = (o[by(x)] ?? 0) + 1), o), {})
   // (a version constant's mirror: a literal constant of another file with its name, less _VERSION, and its value)
-  const own = product.flatMap(x => (x.f.versions ?? []).map(v => ({ ...v, at: at(x, v.line), repo: x.repo, id: x.id })))
+  const own = product.flatMap(x => (x.f.versions ?? []).map(v => ({ ...v, at: at(x, v.line), repo: x.repo, file: x.path, id: x.id })))
   const keyOf = v => `${v.name.replace(/_VERSION$/, '')}=${v.value}`
   const keys = new Set(own.map(keyOf))
-  const mirrored = product.flatMap(x => (x.f.constants ?? []).filter(v => keys.has(keyOf(v)) && !(x.f.versions ?? []).some(o => o.name === v.name)).map(v => ({ ...v, at: at(x, v.line), repo: x.repo, id: x.id })))
+  const mirrored = product.flatMap(x => (x.f.constants ?? []).filter(v => keys.has(keyOf(v)) && !(x.f.versions ?? []).some(o => o.name === v.name)).map(v => ({ ...v, at: at(x, v.line), repo: x.repo, file: x.path, id: x.id })))
   const versions = [...own, ...mirrored]
   const groups = {}
   for (const v of versions) (groups[keyOf(v)] ??= []).push(v)
   const mirrors = Object.values(groups).filter(g => new Set(g.map(v => v.id)).size > 1)
+  // (in a group of one name and value in several files, the first (this repository's before the website's, then by path) is
+  // the constant, every other its mirror)
+  for (const g of mirrors) g.sort((a, b) => (a.repo === b.repo ? a.at.localeCompare(b.at) : a.repo === 'engine' ? -1 : 1)).slice(1).forEach(v => (v.mirror = true))
   return {
     thresholds: {
       all: count(thresholds, t => t.class),
@@ -361,7 +371,7 @@ export function debtOf(view) {
     },
     papers: product.flatMap(x => (x.f.papers ?? []).map(p => ({ id: p.id, at: at(x, p.line) }))),
     texFiles: product.flatMap(x => (x.f.texFiles ?? []).map(p => ({ name: p.name, at: at(x, p.line) }))),
-    versions: { count: versions.length - sum(mirrors.map(g => g.length - 1)), mirrors: sum(mirrors.map(g => g.length - 1)), list: versions.map(v => ({ name: v.name, value: v.value, at: v.at })), mirrorGroups: mirrors.map(g => g.map(v => `${v.at} ${v.name}=${v.value}`)) },
+    versions: { count: versions.length - sum(mirrors.map(g => g.length - 1)), mirrors: sum(mirrors.map(g => g.length - 1)), list: versions.map(v => ({ name: v.name, value: v.value, at: v.at, repo: v.repo, file: v.file, line: v.line, mirror: Boolean(v.mirror) })), mirrorGroups: mirrors.map(g => g.map(v => `${v.at} ${v.name}=${v.value}`)) },
   }
 }
 
@@ -381,6 +391,7 @@ export function typesOf(view, checked) {
     any: sum(product.map(x => x.f.any ?? 0)),
     suppressions: sum(product.map(x => x.f.suppressions ?? 0)),
     checkJs: [...checked.values()].some(c => c.checkJs),
+    files: unchecked.map(x => ({ repo: x.repo, file: x.path, code: x.f.lines.code, engine: x.repo === 'engine' && engineAreas.has(x.f.area) })),
   }
 }
 
@@ -406,13 +417,15 @@ export function duplicatesOf(view, min = 60) {
     pairs[areas].groups++
     pairs[areas].lines += span * (keep.length - 1)
     lines += span * (keep.length - 1)
-    list.push({ lines: span, copies: keep.map(m => `${at(m.x, m.fn.line)}${m.fn.name ? ` ${m.fn.name}` : ''}`) })
+    const first = [...keep].sort((a, b) => (a.x.repo === b.x.repo ? a.x.path.localeCompare(b.x.path) : a.x.repo === 'engine' ? -1 : 1))[0]
+    list.push({ lines: span, repo: keep.every(m => m.x.repo === 'engine') ? 'engine' : 'web', file: first.x.path, line: first.fn.line, copies: keep.map(m => `${at(m.x, m.fn.line)}${m.fn.name ? ` ${m.fn.name}` : ''}`) })
   }
   return {
     groups: list.length,
     lines,
     pairs: Object.fromEntries(Object.entries(pairs).sort((a, b) => b[1].lines - a[1].lines)),
-    largest: list.sort((a, b) => b.lines - a.lines).slice(0, 15),
+    all: list,
+    largest: [...list].sort((a, b) => b.lines - a.lines).slice(0, 15),
     copied: view.files.filter(x => x.f.copied && x.f.kind === 'code').map(x => `${at(x, 1).replace(/:1$/, '')} (${x.f.lines.code})`),
   }
 }
@@ -464,7 +477,9 @@ export function deadOf(view, roots) {
     exports: exports.length,
     deadExports: deadExports.length,
     testOnlyExports: testOnly.length,
-    deadExportList: deadExports.slice(0, 400).map(e => `${at(e.x, e.ex.line)} ${e.ex.name}`),
+    deadExportList: deadExports.map(e => `${at(e.x, e.ex.line)} ${e.ex.name}`),
+    moduleItems: deadModules.map(x => ({ repo: x.repo, file: x.path, line: null, code: x.f.lines.code })),
+    exportItems: deadExports.map(e => ({ repo: e.x.repo, file: e.x.path, line: e.ex.line, name: e.ex.name })),
   }
 }
 
@@ -475,7 +490,7 @@ export async function census({ today, now }) {
   const out = { definitions: DEFINITIONS, trees: {} }
   const take = async (label, scans, graph, alive, roots, checked) => {
     const view = viewOf(label, scans, graph, alive)
-    return {
+    const t = {
       repos: scans.map(s => ({ repo: s.repo, root: s.root })),
       size: sizeOf(view),
       graph: graphMeasures(view),
@@ -488,6 +503,9 @@ export async function census({ today, now }) {
       duplicates: duplicatesOf(view),
       dead: deadOf(view, roots),
     }
+    // (the ratchet's items: kept out of census.json, the ledger holds what it needs of them)
+    Object.defineProperty(t, 'items', { value: itemsOf(t, view, Object.fromEntries(scans.map(s => [s.repo, s.profile]))), enumerable: false })
+    return t
   }
   const checkedOf = (scans, graph) => new Map(scans.map(s => [s.repo, typeCheckedOf(s, graph)]))
   if (today) {
@@ -516,6 +534,7 @@ export async function census({ today, now }) {
   }
   out.cutover = {
     partial: cut.partial,
+    keptOld: keptOldOf(now, g, cut, fileOf),
     seeds: cut.roots.seeds.map(s => ({ ...s, code: linesOf(s.id) })),
     switches: cut.roots.switches,
     builds: cut.roots.builds.map(b => ({ build: `${b.repo}/${b.name}`, old: b.old, why: b.why })),
@@ -523,7 +542,105 @@ export async function census({ today, now }) {
     deleted: { files: cut.deleted.size, code: sum([...cut.deleted].map(linesOf)), byArea, list: [...cut.deleted].sort().map(id => `${id} (${linesOf(id)})`) },
     goWith: { files: cut.goWith.size, code: sum([...cut.goWith].map(linesOf)), list: [...cut.goWith].sort().map(id => `${id} (${linesOf(id)})`) },
   }
+  if (today) out.growth = growthOf(today, now, cut, fileOf)
   return out
+}
+
+/** what of today's engine the kept builds still reach after the cut-over, module by module, and through which imports from
+ *  outside it (an entry edge: an import of a module outside today's engine, the cut-over's kept code, into one inside): a
+ *  module only one entry edge reaches is freed by cutting that one import, the candidates for decoupling */
+export function keptOldOf(scans, graph, cut, fileOf) {
+  const isOld = id => id.startsWith('engine:') && fileOf(id)?.area === 'today-engine'
+  const alive = id => cut.reachAfter.has(id)
+  const entries = new Map()
+  for (const e of graph.edges) if (!e.type && !isOld(e.from) && isOld(e.to) && alive(e.from)) entries.set(`${e.from} -> ${e.to}`, e)
+  const via = new Map()
+  for (const [key, e] of entries) {
+    const seen = new Set([e.to])
+    const queue = [e.to]
+    for (let i = 0; i < queue.length; i++)
+      for (const f of graph.out.get(queue[i]) ?? []) if (!f.type && isOld(f.to) && !seen.has(f.to)) seen.add(f.to), queue.push(f.to)
+    for (const m of seen) (via.get(m) ?? via.set(m, []).get(m)).push(key)
+  }
+  const strip = id => id.replace(/^engine:/, '')
+  // (a module reached through the imports of one module outside today's engine alone: change that module's imports and it goes)
+  const importersOf = id => [...new Set((via.get(id) ?? []).map(k => entries.get(k).from))]
+  const modules = [...cut.reachAfter.keys()]
+    .filter(id => isOld(id) && fileOf(id)?.kind === 'code' && !fileOf(id).generated)
+    .map(id => ({ file: strip(id), code: fileOf(id).lines.code, importers: importersOf(id).map(strip) }))
+    .sort((a, b) => b.code - a.code)
+  const byImporter = {}
+  for (const m of modules)
+    if (m.importers.length === 1) {
+      const from = m.importers[0]
+      const fromId = from.includes(':') ? from : `engine:${from}`
+      byImporter[from] ??= { importer: from, chain: pathTo(cut.reachAfter, fromId).map(strip), imports: [...new Set([...entries.values()].filter(e => e.from === fromId).map(e => strip(e.to)))], modules: [], code: 0 }
+      byImporter[from].modules.push(m.file)
+      byImporter[from].code += m.code
+    }
+  // (today's engine's modules AFTER keeps that no build reaches even now: dead, kept by no import)
+  const engine = scans.find(s => s.repo === 'engine')
+  const deadCode = engine ? [...engine.files].filter(([p, f]) => f.area === 'today-engine' && f.kind === 'code' && !f.generated && !cut.reachAfter.has(`engine:${p}`) && !cut.deleted.has(`engine:${p}`)).reduce((n2, [, f]) => n2 + f.lines.code, 0) : 0
+  // (each import of the kept code on a way into today's engine, by the code of today's engine that cutting it alone frees: the
+  // decoupling's candidates at every depth, the one importer's above among them)
+  const oldAlive = modules.map(m => `engine:${m.file}`)
+  const towards = new Set()
+  const queue = [...oldAlive]
+  for (let i = 0; i < queue.length; i++)
+    for (const e of graph.into.get(queue[i]) ?? []) if (!e.type && alive(e.from) && !isOld(e.from) && !towards.has(e.from)) towards.add(e.from), queue.push(e.from)
+  const codeOf = id => fileOf(id)?.lines.code ?? 0
+  const candidates = new Map()
+  for (const id of towards) for (const e of graph.out.get(id) ?? []) if (!e.type && (towards.has(e.to) || isOld(e.to))) candidates.set(`${e.from} -> ${e.to}`, e)
+  const seeds = new Set(cut.roots.seeds.map(s2 => s2.id))
+  const freed = [...candidates]
+    .map(([key, skip]) => {
+      const seen = new Set(cut.roots.after.filter(r => !seeds.has(r)))
+      const q = [...seen]
+      for (let i = 0; i < q.length; i++)
+        for (const e of graph.out.get(q[i]) ?? []) if (!e.type && !seeds.has(e.to) && !seen.has(e.to) && !(e.from === skip.from && e.to === skip.to)) seen.add(e.to), q.push(e.to)
+      return { edge: key.replace(/engine:/g, ''), code: oldAlive.filter(id => !seen.has(id)).reduce((n2, id) => n2 + codeOf(id), 0) }
+    })
+    .filter(x => x.code > 0)
+    .sort((a, b) => b.code - a.code)
+  // (each module outside today's engine that imports it: the code its imports reach, and the code they alone reach)
+  const importers = [...new Set(modules.flatMap(m => m.importers))]
+    .map(i => ({ importer: i, reaches: sum(modules.filter(m => m.importers.includes(i)), 'code'), alone: byImporter[i]?.code ?? 0 }))
+    .sort((a, b) => b.reaches - a.reaches)
+  return { modules, code: sum(modules, 'code'), single: sum(modules.filter(m => m.importers.length === 1), 'code'), deadCode, byImporter: Object.values(byImporter).sort((a, b) => b.code - a.code), importers, freed }
+}
+
+/** where AFTER's product code lines differ from TODAY's, area by area: files new since TODAY, files of TODAY kept (their
+ *  lines then and now), files of TODAY gone (deleted before NOW or at the cut-over), and the code the cut-over deletes. A file
+ *  is the same file by its path: a move is a file gone and a file new */
+export function growthOf(today, now, cut, fileOf) {
+  const code = f => (f?.kind === 'code' && f.role === 'product' && !f.generated ? f.lines.code : 0)
+  const rows = {}
+  const row = k => (rows[k] ??= { area: k, today: 0, after: 0, newFiles: 0, keptToday: 0, keptAfter: 0, gone: 0, cutover: 0 })
+  const afterHas = (repo, p) => now.some(s => s.repo === repo && s.files.has(p)) && !cut.deleted.has(`${repo}:${p}`) && !cut.goWith.has(`${repo}:${p}`)
+  for (const s of today)
+    for (const [p, f] of s.files) {
+      if (!code(f)) continue
+      const r = row(`${s.repo}/${f.area}`)
+      r.today += code(f)
+      if (afterHas(s.repo, p)) {
+        const nf = now.find(n2 => n2.repo === s.repo).files.get(p)
+        r.keptToday += code(f)
+        r.keptAfter += code(nf)
+      } else r.gone += code(f)
+    }
+  for (const s of now)
+    for (const [p, f] of s.files) {
+      if (!code(f)) continue
+      const id = `${s.repo}:${p}`
+      const r = row(`${s.repo}/${f.area}`)
+      if (cut.deleted.has(id)) {
+        r.cutover += code(f)
+        continue
+      }
+      r.after += code(f)
+      if (!today.some(t => t.repo === s.repo && t.files.has(p) && code(t.files.get(p)))) r.newFiles += code(f)
+    }
+  return Object.values(rows).sort((a, b) => b.after - b.today - (a.after - a.today))
 }
 
 // ---------------------------------------------------------------- the report
@@ -578,6 +695,26 @@ export function markdownOf(c) {
   if (c.cutover.keptBySurvivor.length) {
     L.push('', 'Old modules the kept code still imports (the cut-over must change these importers too; a type-only import marked):', '')
     for (const k of c.cutover.keptBySurvivor) L.push(`- ${k.seed} imported by ${k.by}:${k.line}${k.type ? ' (type only)' : ''}`)
+  }
+  const k = c.cutover.keptOld
+  L.push('', `What the kept builds still reach of today's engine: ${k.modules.length} modules, ${n(k.code)} code lines (and ${n(k.deadCode)} lines of its modules no build reaches even now); ${n(k.single)} of them in modules the imports of one module outside today's engine alone reach (the candidates for decoupling: change that module's imports and they go):`, '')
+  L.push("| The one importer (outside today's engine) | Its chain from an entry point | Its imports of today's engine | Modules it alone keeps | Code lines |", '|---|---|---|---|---|')
+  for (const e of k.byImporter) L.push(`| ${cell(e.importer)} | ${cell(e.chain.join(' > '))} | ${cell(e.imports.join(', '))} | ${cell(e.modules.join(', '))} | ${n(e.code)} |`)
+  L.push('', "Each module outside today's engine that imports it, by the code of today's engine its imports reach (alone: what no other importer reaches):", '', '| Importer | Reaches | Alone |', '|---|---|---|', ...k.importers.map(i => `| ${cell(i.importer)} | ${n(i.reaches)} | ${n(i.alone)} |`))
+  L.push('', "The imports of the kept code on a way into today's engine that free some of it when cut alone (edges whose removal leaves the code unreached):", '', '| Import | Code of today\'s engine it alone frees |', '|---|---|', ...k.freed.slice(0, 20).map(f => `| ${cell(f.edge)} | ${n(f.code)} |`))
+  L.push('', "<details><summary>Every module of today's engine kept, with the modules outside it whose imports reach it</summary>", '', ...k.modules.map(m => `- ${m.file} (${m.code}): ${m.importers.length === 1 ? `one importer, ${m.importers[0]}` : `${m.importers.length} importers: ${m.importers.join(', ')}`}`), '', '</details>', '')
+  if (c.growth) {
+    const g = c.growth
+    const tot = key => sum(g, key)
+    L.push(`Where AFTER's product code differs from TODAY's (${n(tot('today'))} → ${n(tot('after'))}, ${tot('after') - tot('today') >= 0 ? '+' : ''}${n(tot('after') - tot('today'))}), by area (a file is the same file by its path):`, '')
+    L.push('| Area | TODAY | Files of TODAY gone | Files of TODAY kept: then → after | New files | AFTER | Δ | Deleted at the cut-over (NOW) |', '|---|---|---|---|---|---|---|---|')
+    for (const r of g) L.push(`| ${r.area} | ${n(r.today)} | ${n(r.gone)} | ${n(r.keptToday)} → ${n(r.keptAfter)} | ${n(r.newFiles)} | ${n(r.after)} | ${r.after - r.today >= 0 ? '+' : ''}${n(r.after - r.today)} | ${n(r.cutover)} |`)
+    L.push(`| all | ${n(tot('today'))} | ${n(tot('gone'))} | ${n(tot('keptToday'))} → ${n(tot('keptAfter'))} | ${n(tot('newFiles'))} | ${n(tot('after'))} | ${tot('after') - tot('today') >= 0 ? '+' : ''}${n(tot('after') - tot('today'))} | ${n(tot('cutover'))} |`, '')
+  }
+  if (c.ratchet) {
+    L.push('## The ratchet', '', `Each measure may only fall or hold against its ledger (${MEASURES.map(m => m.id).join(', ')}): ${c.ratchet.rises} rose, ${c.ratchet.lowerable} can be lowered, ${c.ratchet.skipped} skipped, ${c.ratchet.unrecorded} not recorded yet${c.ratchet.recorded ? '; recorded in this run' : ''}.`, '')
+    for (const l of c.ratchet.report) L.push(`- ${l}`)
+    L.push('')
   }
   L.push('', '<details><summary>Every file deleted</summary>', '', ...c.cutover.deleted.list.map(x => `- ${x}`), '', '</details>', '')
   L.push('<details><summary>Tests, lab and tooling going with them</summary>', '', ...c.cutover.goWith.list.map(x => `- ${x}`), '', '</details>', '')
@@ -656,8 +793,24 @@ export function numbersOf(c) {
     gplReachedNow: T.NOW.gpl.filter(g => g.reachedBy.length).length,
     gplReachedAfter: T.AFTER.gpl.filter(g => g.reachedBy.length).length,
     gplFilesAfter: T.AFTER.gpl.length,
+    ...(c.ratchet ? { ratchetRises: c.ratchet.rises, ratchetLowerable: c.ratchet.lowerable, ratchetSkipped: c.ratchet.skipped, ratchetUnrecorded: c.ratchet.unrecorded } : {}),
   }
 }
+
+/** the ratchet over a census: each repository's ledger (`ledgers`: { engine, web? }, a ledger or null) judged against this
+ *  run's measures of it (census-ratchet.mjs); `newLines`: per repository, the lines new since its ledger's commit */
+export function ratchetOf(c, ledgers, newLines = {}) {
+  const web = c.trees.NOW.repos.some(r => r.repo === 'web')
+  const out = {}
+  for (const repo of Object.keys(ledgers)) {
+    const current = { NOW: partOf(c.trees.NOW.items, repo), AFTER: c.cutover.partial ? null : partOf(c.trees.AFTER.items, repo) }
+    out[repo] = { current, lines: judge(ledgers[repo], current, { web, newLines: newLines[repo] ?? null, repo }) }
+  }
+  return out
+}
+
+const LEDGER_ABOUT = repo =>
+  `The census's ledger (${repo === 'engine' ? 'this repository' : "the website's repository"}): the measures that may only fall or hold (lab/release-check/census-ratchet.mjs MEASURES), for the tree NOW and for AFTER (NOW less what the cut-over deletes), as the last integrated round measured them. Generated by \`node lab/release-check/census.mjs --record\`, never edited by hand; a value is raised only by \`--record --raise=<measure> --reason="…"\`, kept below in \`raises\` with its reason and commit.`
 
 // ---------------------------------------------------------------- the command
 
@@ -668,13 +821,22 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     return a ? a.slice(name.length + 3) : null
   }
   const labData = process.env.AXT_LAB_DATA ?? join(homedir(), 'Developer', 'readarxiv-lab-data')
+  const nowDir = resolve(opt('now') ?? ROOT)
   const todayDir = argv.includes('--no-today') ? null : (opt('today') ?? process.env.AXT_TODAY ?? join(ROOT, '..', 'refactor-read'))
   const webProfileFile = opt('web-profile') ?? join(labData, 'refactor-2026-11', 'verification', 'census-web.json')
   const outDir = resolve(opt('out') ?? join(ROOT, 'lab/release-check/out/census'))
+  const ledgerFile = resolve(opt('ledger') ?? join(ROOT, 'lab/release-check/census-ledger.json'))
+  const recording = argv.includes('--record')
+  const raise = opt('raise')?.split(',').filter(Boolean) ?? []
+  const reason = opt('reason') ?? ''
+  if (!recording && (raise.length || reason)) {
+    console.error('census: --raise and --reason go with --record')
+    process.exit(2)
+  }
   const t0 = performance.now()
   const webProfile = existsSync(webProfileFile) ? JSON.parse(readFileSync(webProfileFile, 'utf8')) : null
   const engineToday = todayDir && existsSync(join(todayDir, 'src/pdf-reader/engine')) ? scanTree('engine', todayDir, ENGINE_PROFILE) : null
-  const now = [scanTree('engine', ROOT, ENGINE_PROFILE)]
+  const now = [scanTree('engine', nowDir, ENGINE_PROFILE)]
   let today = engineToday ? [engineToday] : null
   if (webProfile) {
     if (webProfile.now && existsSync(webProfile.now)) now.push(scanTree('web', webProfile.now, webProfile))
@@ -683,11 +845,56 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (today && today.length !== now.length) today = today.filter(s => now.some(n2 => n2.repo === s.repo))
   const c = await census({ today, now })
   c.taken = { at: new Date().toISOString(), ms: Math.round(performance.now() - t0), webProfile: webProfile ? webProfileFile : null, today: engineToday ? todayDir : null }
+
+  // the ratchet: each repository's ledger
+  const rootOf = repo => now.find(s => s.repo === repo).root
+  const files = { engine: ledgerFile, ...(now.some(s => s.repo === 'web') ? { web: resolve(dirname(webProfileFile), webProfile.ledger ?? 'census-web-ledger.json') } : {}) }
+  const ledgers = Object.fromEntries(Object.entries(files).map(([repo, f]) => [repo, existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null]))
+  for (const [repo, l] of Object.entries(ledgers))
+    if (l && l.format !== LEDGER_FORMAT) {
+      console.error(`census: ${files[repo]} is no ledger of ${LEDGER_FORMAT}`)
+      process.exit(2)
+    }
+  const commitOf = root => {
+    try {
+      return execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    } catch {
+      return null
+    }
+  }
+  const newLines = Object.fromEntries(Object.entries(ledgers).map(([repo, l]) => [repo, l?.recorded?.commit ? newLinesOf(rootOf(repo), l.recorded.commit) : null]))
+  const r = ratchetOf(c, ledgers, newLines)
+  if (recording) {
+    const at = new Date().toISOString()
+    const next = {}
+    try {
+      for (const [repo, x] of Object.entries(r)) next[repo] = record(ledgers[repo], x.current, x.lines, { raise, reason, commit: commitOf(rootOf(repo)), at, about: LEDGER_ABOUT(repo) })
+    } catch (e) {
+      console.error(e.message)
+      process.exit(2)
+    }
+    for (const [repo, l] of Object.entries(next)) {
+      writeFileSync(files[repo], `${JSON.stringify(l, null, 1)}\n`)
+      console.log(`census: recorded ${files[repo]} at ${l.recorded.commit}`)
+    }
+  }
+  const lines = Object.entries(r).flatMap(([repo, x]) => x.lines.map(l => ({ ...l, repo })))
+  c.ratchet = {
+    rises: lines.filter(l => l.status === 'rise').length,
+    lowerable: lines.filter(l => l.status === 'fall').length,
+    skipped: lines.filter(l => l.status === 'skipped').length,
+    unrecorded: lines.filter(l => l.status === 'new').length,
+    recorded: recording,
+    report: Object.entries(r).flatMap(([repo, x]) => reportOf(repo, x.lines, recording ? JSON.parse(readFileSync(files[repo], 'utf8')) : ledgers[repo], recording)),
+  }
   mkdirSync(outDir, { recursive: true })
   writeFileSync(join(outDir, 'census.json'), `${JSON.stringify(c, (k, v) => (v instanceof Set ? [...v] : v), 1)}\n`)
   writeFileSync(join(outDir, 'census.md'), markdownOf(c))
   writeFileSync(join(outDir, 'census-debt.md'), debtListOf(c))
   for (const h of headlineOf(c)) console.log(`census: ${h.measure}: ${h.values.map(x => n(x)).join(' / ')}${h.target ? ` (target ${h.target})` : ''}`)
   console.log(`census: the cut-over deletes ${c.cutover.deleted.files} product files (${c.cutover.deleted.code} code lines)${c.cutover.partial ? " (partial: the website's tree not given)" : ''}; ${join(outDir, 'census.md')}`)
+  for (const l of c.ratchet.report) console.log(`census-ratchet: ${l}`)
   console.log(`census-numbers: ${JSON.stringify(numbersOf(c))}`)
+  // (judged: a measure above its recorded value fails; a run that recorded has passed its refusals)
+  process.exit(!recording && c.ratchet.rises ? 1 : 0)
 }

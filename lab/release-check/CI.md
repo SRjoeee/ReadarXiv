@@ -40,7 +40,7 @@ is the maintainer's machine's alone; where it is absent the gates run directly. 
 | `typecheck`, `lint`, `build` | 3 s, 2 s, 3 s | in `check` |
 | `test` (vitest, 566 files, 9,075 tests) | 146 s | in `check` |
 | `contract` (tests/contract: 2 files, 98 tests) | 1 s | in `check` (inside `pnpm test`) |
-| `census` (lab/release-check/census.mjs: the complexity and debt census, design §7's census rows; measured 2026-11-12 at `75602aecb`) | 6 s this tree alone; 20 s with today's engine and the website's two trees (its profile in the lab's notes) | in `check`, this tree alone: `node lab/release-check/census.mjs --no-today` (its numbers reported, never judged) |
+| `census` (lab/release-check/census.mjs: the complexity and debt census, design §7's census rows; measured 2026-11-12 at `75602aecb`) | 6 s this tree alone; 20 s with today's engine and the website's two trees (its profile in the lab's notes) | in `check`, this tree alone: `node lab/release-check/census.mjs --no-today`; judged by its ratchet (census-ledger.json): a measure above the last integrated round's value fails, naming the entries that added to it; the measures that need the website's tree (AFTER, dead modules and exports, ported files reached) are skipped there with their reason |
 | `harness` (packages/reader/e2e/run.mjs: 49 checks) | 109 s | about 4 min |
 | `e2e:small-caps` (three browsers) | 46 s | about 1.5 min |
 | `e2e:reader` (158 checks) | 177 s | about 6 min |
