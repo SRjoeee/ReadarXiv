@@ -52,6 +52,9 @@ const CLAUSE_LEAD = /^[:;\uff1a\uff1b]/
 const LABEL_END = /[:\uff1a]["'\u201d\u2019)\]]*$/
 const LABEL_LEAD = /^[:\uff1a]/
 const CAPITAL_LEAD = /^\p{Lu}/u
+/** the faces a bare group's first switch sets, which the instrument states as the group's style and command, no element of its
+ *  text (pipeline/instrument.mjs switchesOf): such a group is one a switch opens */
+const FACED = new Set(['italic', 'bold', 'sc'])
 const SOLID = /\S/
 const SPACE = /\s/
 /** a sentence's end is read in the last characters before a place, its start in the first after it (mt.mjs WINDOW) */
@@ -199,7 +202,7 @@ export function runIns(content: Piece[], faced: ReadonlySet<Piece> = new Set()):
       !head &&
       (starts || breakAt(lineBeforeAt(a))) &&
       (LABEL_END.test(inside) || LABEL_LEAD.test(next)) &&
-      (s.open !== '{' || switched(s.content))
+      (s.open !== '{' || FACED.has(s.style) || switched(s.content))
     const ends =
       tail ||
       endsSentence(inside) ||

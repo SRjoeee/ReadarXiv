@@ -111,6 +111,33 @@ export function passThroughOf(pieces) {
 const BIB_UNITS = new Set(['reference', 'refnames'])
 /** the face declarations that draw nothing (TeX's shape and series switches): a bare group one opens sets that face */
 const FACE_SWITCH = /^\\(?:em|it|itshape|sl|slshape|bf|bfseries|sc|scshape)(?![A-Za-z@])/
+/** the face each of those switches sets, as a group's style names it */
+const SWITCH_FACE = { em: 'italic', it: 'italic', itshape: 'italic', sl: 'italic', slshape: 'italic', bf: 'bold', bfseries: 'bold', sc: 'sc', scshape: 'sc' }
+/**
+ * Each bare group whose first piece (white space aside) is a face switch that draws nothing (`{\\em …}`, `{\\bfseries …}`,
+ * `{\\scshape …}`): by its open's index, the switch's index, its name and the face it sets. TeX sets `{\\em x}` as it sets
+ * `\\emph{x}`: the switch gives the group its face and sets nothing where it stands, so it is the group's face and command (its
+ * style, SpanAt.cmd), no element of its text, and the group is stated as `\\emph{…}`'s is. Read as an element, the group was
+ * `other`: the typesetter drew its face off the element alone, so a translation that lost the element lost the face; a group
+ * holding an element is placed nowhere (packages/translate groups.ts); the tags wire sent an empty element first in its pair.
+ * Over r19's bundles (2026-11-12) 610 bibliography units in 22 papers held an italic stretch on arXiv's page their unit stated as
+ * no italic group, 589 of them in such a group (16,680 letters; PDF-READER §18.60). A size, a family, a colour, a switch that is
+ * not first: as before
+ */
+export function switchesOf(pieces) {
+  const out = new Map()
+  pieces.forEach((p, k) => {
+    if (p.t !== 'open' || unicodeOf(p.src ?? '').trim() !== '{') return
+    let j = k + 1
+    while (pieces[j]?.t === 'text' && !/\S/.test(pieces[j].s)) j++
+    const q = pieces[j]
+    const m = q?.t === 'ph' && isInkless(q) ? /^\\([A-Za-z]+)\s*$/.exec(unicodeOf(q.src ?? '')) : null
+    if (m && Object.hasOwn(SWITCH_FACE, m[1])) out.set(k, { at: j, cmd: m[1], face: SWITCH_FACE[m[1]] })
+  })
+  return out
+}
+/** the indices of the switches switchesOf makes their groups' faces (no element of the unit's text) */
+const switchedOf = pieces => new Set([...switchesOf(pieces).values()].map(x => x.at))
 /**
  * In a bibliography entry, the face groups that fill a field whose pair passThroughOf writes as its content (`\\bibinfo{journal}{
  * \\emph{…}}`, REVTeX's `\\bibfield{journal}{\\emph{\\bibinfo{journal}{…}}\\ }`): each of the group's ends stands at such a pair's
@@ -155,11 +182,11 @@ export function fieldFacesOf(pieces) {
  *  each element or nested unit one): the engine's facts pass counts a paragraph TeX opened at one, which must be none
  *  (InstrumentUnit.passed, Located.stats.opensLost) */
 export function passedOf(pieces) {
-  const through = passThroughOf(pieces), out = []
+  const through = passThroughOf(pieces), switched = switchedOf(pieces), out = []
   let at = 0
   pieces.forEach((p, k) => {
     if (p.t === 'text') at += unicodeOf(p.s).length
-    else if (p.t === 'ph' || p.t === 'nested') at += 1
+    else if ((p.t === 'ph' && !switched.has(k)) || p.t === 'nested') at += 1
     else if (p.t === 'open' && through.has(k)) out.push(at)
   })
   return out
@@ -173,11 +200,13 @@ export function piecesOf(pieces, { kindOf = () => 'other', idOfNested = () => nu
   const stack = []
   // (a group that carries nothing is its content, its text joined with the text on either side: passThroughOf; in a
   // bibliography entry a face group that fills such a field is `must`: fieldFacesOf)
-  const through = passThroughOf(pieces), faces = bib ? fieldFacesOf(pieces) : new Set()
+  // (a face switch first in a bare group is the group's face, no element of its text: switchesOf)
+  const through = passThroughOf(pieces), faces = bib ? fieldFacesOf(pieces) : new Set(), switches = switchesOf(pieces)
+  const switched = new Set([...switches.values()].map(x => x.at))
   let seam = false
   pieces.forEach((p, k) => {
     const id = String(k)
-    if (through.has(k)) { seam = true; return }
+    if (through.has(k) || switched.has(k)) { seam = true; return }
     const joined = seam
     seam = false
     switch (p.t) {
@@ -185,7 +214,7 @@ export function piecesOf(pieces, { kindOf = () => 'other', idOfNested = () => nu
       case 'ph': { const n = nameOf(p); level.push({ t: 'el', id, kind: kindOf(p) ?? 'other', src: unicodeOf(p.src), ...wireFacts(p), ...(n?.name ? { name: n.name, ...(n.lang ? { nameLang: n.lang } : {}) } : {}) }); break }
       case 'nested': level.push({ t: 'unit', id, unit: idOfNested(p.unit) ?? '0'.repeat(64), pre: unicodeOf(p.pre), post: unicodeOf(p.post) }); break
       case 'open': {
-        const style = styleOf(unicodeOf(p.src))
+        const style = switches.get(k)?.face ?? styleOf(unicodeOf(p.src))
         const span = { t: 'span', id, style, ...(style === 'link' || faces.has(k) ? { must: 1 } : {}), open: unicodeOf(p.src), content: [] }
         level.push(span)
         stack.push({ outer: level, span })
@@ -399,15 +428,18 @@ function sourceFactsOf(src, k, first, colours) {
   if (colours?.has(k)) x.colour = colours.get(k)
   return x
 }
-/** each group's facts by its open piece's id: the command its open begins with, the fill TeX set its run in, and a link
- *  group's target where its source names it (the engine's linkTargetOf: an \href's or a \url's address, a \hyperlink's
- *  destination), which the typesetter pairs the group's translation with its annotations by */
+/** each group's facts by its open piece's id: the command its open begins with (a bare group's, the face switch it opens:
+ *  switchesOf), the fill TeX set its run in, and a link group's target where its source names it (the engine's linkTargetOf:
+ *  an \href's or a \url's address, a \hyperlink's destination), which the typesetter pairs the group's translation with its
+ *  annotations by */
 export function spansOf(pieces, colours = null) {
   const out = []
-  const through = passThroughOf(pieces)
+  const through = passThroughOf(pieces), switches = switchesOf(pieces)
   pieces.forEach((p, k) => {
     if (p.t !== 'open' || through.has(k)) return
-    const c = commandOf(unicodeOf(p.src))
+    // (a bare group a face switch opens: that switch its command, as `\\emph{`'s is its group's, switchesOf)
+    const sw = switches.get(k)
+    const c = sw ? { cmd: sw.cmd } : commandOf(unicodeOf(p.src))
     const to = linkTargetOf(pieces, k)
     const x = { ...(c ? { cmd: c.cmd } : {}), ...(colours?.has(k) ? { colour: colours.get(k) } : {}), ...(to ? { to } : {}) }
     if (Object.keys(x).length) out.push([String(k), x])
@@ -451,7 +483,10 @@ export function classesOf(pieces, colours = null, texts = null) {
   const out = []
   const first = new Map()
   const shown = urlsShown(pieces)
+  // (a face switch first in a bare group is the group's face, no element: no class of its own, switchesOf)
+  const switched = switchedOf(pieces)
   pieces.forEach((p, k) => {
+    if (switched.has(k)) return
     // (a nested unit: its mark a footnote mark's, placeholdersOf L2:1066)
     if (p.t === 'nested') { out.push([String(k), { cls: 'num', copy: texToText2('\\footnotemark') || '', mark: true, nested: true }]); return }
     if (p.t !== 'ph') return

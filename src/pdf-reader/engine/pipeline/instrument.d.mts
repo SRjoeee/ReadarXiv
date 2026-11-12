@@ -33,6 +33,11 @@ export declare function spansOf(
   pieces: readonly { t: string; src?: string; [more: string]: unknown }[],
   colours?: ReadonlyMap<number, number> | null,
 ): [string, SpanClass][]
+/** each bare group a face switch that draws nothing opens first (`{\\em …}`), by its open's index: the switch's index, its name
+ *  and the face it sets, the group's style and command (its switch no element of the unit's text) */
+export declare function switchesOf(
+  pieces: readonly { t: string; src?: string; s?: string; [more: string]: unknown }[],
+): Map<number, { at: number; cmd: string; face: 'italic' | 'bold' | 'sc' }>
 /** where each group written as its content (passThroughOf) opened, as offsets in the unit's projection: the engine's facts pass
  *  counts a paragraph TeX opened at one (InstrumentUnit.passed, Located.stats.opensLost) */
 export declare function passedOf(pieces: readonly { t: string; src?: string; s?: string; [more: string]: unknown }[]): number[]
