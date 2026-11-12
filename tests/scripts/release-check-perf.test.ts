@@ -71,6 +71,12 @@ describe('two sides compared', () => {
     expect(compare(passes(1000 + 1000 * WORK_TOLERANCE * 2), passes(1000)).passes!.reading).toBe('worse')
     expect(compare(passes(1000), passes(1000)).passes!.reading).toBe('equal')
     expect(compare(passes(4), passes(5)).passes!.reading).toBe('better')
+    // (the code and the whole paper's data: the same bytes every visit, so a few bytes more is equal and 1 % more is worse)
+    const code = (n: number): Rep[] => [{ reader: { codeBytes: n } }, { reader: { codeBytes: n } }]
+    expect(compare(code(2_833_346), code(2_833_224)).codeBytes!.reading).toBe('equal')
+    expect(compare(code(2_833_224 * 1.01), code(2_833_224)).codeBytes!.reading).toBe('worse')
+    const whole = (n: number): Rep[] => [{ reader: { wholeData: n } }, { reader: { wholeData: n } }]
+    expect(compare(whole(1_000_100), whole(1_000_000)).wholeData!.reading).toBe('equal')
   })
 
   it('says a measure one side lacks, or lacks in a repetition, is missing, and fails the batch on it; one neither side took is not measured', () => {

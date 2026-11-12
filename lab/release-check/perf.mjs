@@ -34,8 +34,11 @@ export const MEASURES = [
   { id: 'mainToFirst', label: "the main thread's task time until the first translated page was drawn (ms, CDP TaskDuration), median over the papers", of: (r) => r.reader?.mainToFirstMs, exact: false },
   { id: 'page1Bytes', label: 'bytes on the wire to see page 1, everything (code, faces, layer, rows, PDF; the faces are equalised: reported, not judged), median over the papers', of: (r) => r.reader?.page1Bytes, exact: false, judged: false },
   { id: 'page1Data', label: "the paper's data on the wire to see page 1 (layer, rows, arXiv's PDF; JSON gzipped as the edge sends it), median over the papers", of: (r) => r.reader?.page1Data, exact: false },
-  { id: 'wholeData', label: "the paper's data on the wire once the whole paper was scrolled, median over the papers", of: (r) => r.reader?.wholeData, exact: false },
-  { id: 'codeBytes', label: 'script and worker bytes the reader page loaded (as served, every request)', of: (r) => r.reader?.codeBytes, exact: false },
+  // (the whole paper's data and the code are the same bytes every visit, so a spread is none and would make one byte more a
+  // regression: judged by the tolerance, as the counts of work are. Page 1's data is not: a range of arXiv's PDF lands before or
+  // after page 1 by timing, so it keeps the spread rule)
+  { id: 'wholeData', label: "the paper's data on the wire once the whole paper was scrolled, median over the papers", of: (r) => r.reader?.wholeData, exact: true },
+  { id: 'codeBytes', label: 'script and worker bytes the reader page loaded (as served, every request)', of: (r) => r.reader?.codeBytes, exact: true },
   { id: 'switchMs', label: 'switching language: from the switch to the first page drawn in the new language (ms), median', of: (r) => r.reader?.switchMs, exact: false },
   { id: 'switchAgain', label: 'switching language: layer objects asked again (count, summed)', of: (r) => r.reader?.switchAgain, exact: false },
   { id: 'prepareWall', label: 'prepare in the box, wall (s), median over the papers', of: (r) => r.prepare?.wallS, exact: false },
