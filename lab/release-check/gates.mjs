@@ -617,7 +617,8 @@ export const GATES = [
     stage: 'corpus',
     holds: [],
     needs: (ctx) => [exists('the performance tools', lab(ctx, 'perf/tools/run.mjs')), exists('the quiet window', lab(ctx, 'perf/tools/quiet.sh')), exists("the readers' builds (PERF_BUILD: each website's build and tree)", perfBuild())],
-    steps: (ctx) => [{ cmd: ['bash', lab(ctx, 'perf/tools/quiet.sh'), '--', 'node', lab(ctx, 'perf/tools/run.mjs'), '--mode=batch', `--work=${join(ctx.work, 'perf-batch')}`], env: { ENGINE: ctx.root, PERF_BUILD: perfBuild() }, fresh: join(ctx.work, 'perf-batch') }],
+    // (the reader is given this run's own bundles where the prepare gate made them, else the lab's last round's)
+    steps: (ctx) => [{ cmd: ['bash', lab(ctx, 'perf/tools/quiet.sh'), '--', 'node', lab(ctx, 'perf/tools/run.mjs'), '--mode=batch', `--work=${join(ctx.work, 'perf-batch')}`], env: { ENGINE: ctx.root, PERF_BUILD: perfBuild(), ...bundlesOf(ctx) }, fresh: join(ctx.work, 'perf-batch') }],
     judge: (ctx, steps) => perfJudge(steps),
   },
   {
@@ -629,7 +630,7 @@ export const GATES = [
     // (the maintainer's base threshold for the refactor: performance better than the production site's)
     cutover: true,
     needs: (ctx) => [exists('the performance tools', lab(ctx, 'perf/tools/run.mjs')), exists('the quiet window', lab(ctx, 'perf/tools/quiet.sh')), exists("the readers' builds (PERF_BUILD: each website's build and tree)", perfBuild())],
-    steps: (ctx) => [{ cmd: ['bash', lab(ctx, 'perf/tools/quiet.sh'), '--', 'node', lab(ctx, 'perf/tools/run.mjs'), '--mode=release', `--work=${join(ctx.work, 'perf-release')}`], env: { ENGINE: ctx.root, PERF_BUILD: perfBuild() }, fresh: join(ctx.work, 'perf-release') }],
+    steps: (ctx) => [{ cmd: ['bash', lab(ctx, 'perf/tools/quiet.sh'), '--', 'node', lab(ctx, 'perf/tools/run.mjs'), '--mode=release', `--work=${join(ctx.work, 'perf-release')}`], env: { ENGINE: ctx.root, PERF_BUILD: perfBuild(), ...bundlesOf(ctx) }, fresh: join(ctx.work, 'perf-release') }],
     judge: (ctx, steps) => perfJudge(steps),
   },
   // the online scripts: arXiv, the free engines and staging, under the project's User-Agent (tests/e2e/lib/online.mjs)
@@ -648,6 +649,8 @@ export const GATES = [
 
 /** the readers' builds the performance gates measure: PERF_BUILD, else where the lab's performance lane builds them */
 const perfBuild = () => process.env.PERF_BUILD ?? '/Volumes/SanDisk_Dev/readarxiv-lab-archive/perf-check/build'
+/** NEW's bundles the reader is served: the prepare gate's of this run where it made them (PERF_V2_BUNDLES), else none set */
+const bundlesOf = (ctx) => (existsSync(join(ctx.work, 'prepare', 'bundles')) ? { PERF_V2_BUNDLES: join(ctx.work, 'prepare', 'bundles') } : {})
 /** a performance gate's reading: the lab's run's last line (perf.mjs perfOf), its pass the run's own exit and verdict */
 function perfJudge(steps) {
   const s = steps.at(-1)
