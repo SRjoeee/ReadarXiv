@@ -542,6 +542,12 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       // (a turned line, a figure's rotated text, is measured by its box alone: no baseline, start or gap to read)
       const ls = all.filter((l) => !l.rot)
       const s = { lines: all.length + (cropRows[side].get(key) ?? 0), size: median(all.map((l) => l.size)), chars: sum(all, 'n'), bold: sum(all, 'bold'), italic: sum(all, 'italic') }
+      // (a tie's member is read at the least of its drawn lines' sizes, its scripts aside (raisedOver): the size of its run the
+      // tie caps, below)
+      if (tieOf.has(key)) {
+        const own = ls.filter((l) => l.n > 0 && !raisedOver(l, ls))
+        if (own.length) s.least = Math.min(...own.map((l) => l.size))
+      }
       // (a label the side draws anew is no character of the text's share: the original's share is read over the unit's lines,
       // which begin after the label's ink (originalOf), so a relabelled head's bold label is no bold text; a label kept as the
       // original's ink is a crop's stand-in, never counted)
@@ -665,6 +671,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       if (os) {
         t.share = t.size / os
         v.share = v.size / os
+        if (t.least !== undefined) t.leastShare = t.least / os
+        if (v.least !== undefined) v.leastShare = v.least / os
         if (!tieOf.has(key)) judgeText(key, true)('size', name, 'size off the original\'s (share of it)', r2(os), { value: r2(t.size), d: Math.abs(1 - t.share), chars: t.chars }, { value: r2(v.size), d: Math.abs(1 - v.share), chars: v.chars }, NEAR.size)
       }
       if (t.olines !== undefined && v.olines !== undefined)
@@ -691,9 +699,18 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
 
   // ------------------------------------------------ size of a tie: one paragraph, its smallest member's share of the original's
   // size on each side (today's members laid one by one, its smallest over the same members): a tie member under today's
-  // smallest is worse, the tie's members at today's smallest equal
+  // smallest is worse, the tie's members at today's smallest equal. Each member at the least of its runs: the tie caps a unit's
+  // fit, and a unit its displays split is laid a run at a time, each run at that scale or more naturally (PDF-READER §18.7, a
+  // unit split by its displays), so its lines' median may be a later run's, larger (2611.03953v2 p12: a paragraph tied to its
+  // run-in head at 0.95, three lines before its display and four after it at 1.0 on both sides, read at 1.0)
   for (const keys of ties) {
-    const side = (k) => keys.map((key) => units.find((u) => u.key === key)?.sides[k]?.share).filter(Number.isFinite)
+    const side = (k) =>
+      keys
+        .map((key) => {
+          const s = units.find((u) => u.key === key)?.sides[k]
+          return s?.leastShare ?? s?.share
+        })
+        .filter(Number.isFinite)
     const t = side('today'),
       v = side('v2')
     if (t.length !== keys.length || v.length !== keys.length) continue
