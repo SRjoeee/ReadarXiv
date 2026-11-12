@@ -907,10 +907,11 @@ export function gateL1Pair(
       // (nor the fields of a shared row no rule reads: the follower's row is read by its page and baseline, S.share's by its
       // page, baseline and size; today's rows carry the lead's id and extent beside them. Nor a block's borrow room, `free`:
       // today's its page's pixel map's and a share of a pitch, the port's TeX's (Room.runs, Room.sep: the owner's ruling of
-      // 2026-11-08))
+      // 2026-11-08), nor the two depths it is read from, which the borrow past TeX's bottom reads apart (`toFoot`, `toInk`:
+      // the ruling of 2026-11-12, PDF-READER §18.37), which today's has not)
       const rest = differences(mem, td).filter(
         (d) =>
-          !/\.(h|pitch): .* against undefined$|^\.noOver: undefined against false$|^\.(follower\.row|shareRow)\.(id|x0|x1|size): undefined against|\.free: /.test(
+          !/\.(h|pitch): .* against undefined$|^\.noOver: undefined against false$|^\.(follower\.row|shareRow)\.(id|x0|x1|size): undefined against|\.(free|toFoot|toInk): /.test(
             d,
           ),
       )

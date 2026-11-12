@@ -4,7 +4,7 @@
 // lays it again under rules that leave the kinds it leaves; a page of a target whose patterns are still to come waits on them;
 // the targets it sets are the rule set's.
 import { readdirSync, readFileSync } from 'node:fs'
-import { type Head, type Part, read, type Row } from '@readarxiv/format'
+import { type Head, type Part, type Placed, read, type Row } from '@readarxiv/format'
 import * as T from '@readarxiv/typeset'
 import { describe, expect, it, vi } from 'vitest'
 import { leftKinds } from '../src/compose/classes.ts'
@@ -140,33 +140,56 @@ describe("the reader's own typesetter (openReader's engine where the host gives 
     expect(hyph).toHaveLength(2)
     expect(warm.at(-1)).toEqual([])
   })
-  it('hands the borrow past TeX’s bottom it is given to the rules (Choices.pastFoot, docs/PDF-READER.md §18.37), none by default', async () => {
-    const { parts, rows } = fixture('s1-columns')
-    const part = parts.get(1) as Part
-    const off = await typesetLay({ served: served(), target: () => 'de', classes: () => DEFAULTS.classes })
-    off(part, rowsOf(rows))
-    expect('pastFoot' in (vi.mocked(T.layPage).mock.calls.at(-1)?.[2].set ?? {})).toBe(false)
-    const on = await typesetLay({
-      served: served(),
-      target: () => 'de',
-      classes: () => DEFAULTS.classes,
-      pastFoot: 1.5,
-    })
-    on(part, rowsOf(rows))
-    expect(vi.mocked(T.layPage).mock.calls.at(-1)?.[2].set.pastFoot).toBe(1.5)
-  })
-  it('reads the borrow from the website’s address alone: `axt-borrow` in points, on an http(s) page, never an extension’s', () => {
+  it('lays a page with the borrow past TeX’s bottom the address sets: none, the rule; `axt-borrow=0`, off (PDF-READER §18.37)', async () => {
+    // (the owner's switch, read on a website's page alone: 0 off, a number to PAST_FOOT_MAX the bound, anything else nothing)
     const at = (href: string) => {
       const u = new URL(href)
       return pastFootOf({ protocol: u.protocol, search: u.search })
     }
-    expect(at('https://readarxiv.com/abs/2602.23285v2?to=ja&axt-borrow=1.5')).toBe(1.5)
-    expect(at('http://localhost:8787/abs/2602.23285v2?axt-borrow=2.5&to=ja')).toBe(2.5)
-    expect(at('https://readarxiv.com/abs/2602.23285v2?to=ja')).toBe(0)
-    for (const v of ['0', '-1', 'x', '', '7', 'Infinity'])
-      expect(at(`https://readarxiv.com/abs/1?axt-borrow=${v}`)).toBe(0)
-    expect(at('chrome-extension://abcdefghijklmnop/pdf-reader.html?axt-borrow=1.5')).toBe(0)
-    expect(pastFootOf(null)).toBe(0)
+    expect(at('https://readarxiv.com/abs/2608.16117v1?to=de')).toBeUndefined()
+    expect(at('https://readarxiv.com/abs/2608.16117v1?to=de&axt-borrow=0')).toBe(0)
+    expect(at('http://localhost:8787/abs/2608.16117v1?axt-borrow=1.5&to=de')).toBe(1.5)
+    for (const v of ['-1', 'x', '', '7', 'Infinity'])
+      expect(at(`https://readarxiv.com/abs/1?axt-borrow=${v}`)).toBeUndefined()
+    expect(at('chrome-extension://abcdefghijklmnop/pdf-reader.html?axt-borrow=0')).toBeUndefined()
+    // (a paragraph of two lines at 10 pt whose translation is three characters too long for them, TeX's text block bottom 11 pt
+    // under its last line and no ink under it: a third line at the pitch of 12 stands 1 pt past the bottom. The rule lays it
+    // there at its size, which the page's fill, the page's one paragraph, then grows to 1.1 on that line; off, it shrinks a
+    // step onto its two lines)
+    const id = 'a'.repeat(64)
+    const member: Placed = {
+      ord: 0,
+      kind: 'para',
+      text: id,
+      lead: 12,
+      style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+      align: 'j',
+      lines: [
+        [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
+      ],
+      room: { below: 0, next: 300, runs: [[1, 200, 11]], sep: 12 },
+    }
+    const part: Part = {
+      format: 1,
+      page: 1,
+      paper: { faces: { fonts: [['NimbusRomNo9L-Regu', 100]] } },
+      flows: [[member]],
+    }
+    const row: Row = { id, ok: true, by: 'test', content: [{ t: 'text', s: `${'wort '.repeat(18)}xxx` }] }
+    const laid = async (href: string) => {
+      const pastFoot = at(href)
+      const lay = await typesetLay({
+        served: served(),
+        target: () => 'de',
+        classes: () => DEFAULTS.classes,
+        ...(pastFoot !== undefined ? { pastFoot } : {}),
+      })
+      const m = lay(part, rowsOf([row])).members[0]!
+      return [m.fit?.size, m.lines.map(([y]) => y)]
+    }
+    expect(await laid('https://readarxiv.com/abs/1?to=de')).toEqual([11, [700, 688, 676]])
+    expect(await laid('https://readarxiv.com/abs/1?to=de&axt-borrow=0')).toEqual([9.75, [700, 688]])
   })
   it("sets the rule set's languages, Chinese by its script too", () => {
     expect(TYPESET_TARGETS.filter((t) => Object.hasOwn(T.LANGUAGES, t)).sort()).toEqual(Object.keys(T.LANGUAGES).sort())

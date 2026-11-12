@@ -481,12 +481,15 @@ const SPECS: readonly RuleSpec[] = [
       'fit.borrow',
       'fit.floor',
       'fit.step',
+      'fit.pastFoot',
+      'k.PAST_FOOT 1.5',
     ],
     file: 'fit/walk.ts',
-    ruling: "2026-11-08 borrowing bounded by TeX's facts, before shrinking: a room under a whole line offered too",
+    ruling:
+      "2026-11-08 borrowing bounded by TeX's facts, before shrinking: a room under a whole line offered too; 2026-11-12 a last line up to 1.5 pt under TeX's text block bottom before each step down the sizes, on by default, the reader's switch turning it off",
     state: {
       is: 'changed',
-      why: "the borrow knob offers the whole of TeX's room wherever a block has any, where today's offered it only where a block's room held a whole line at its pitch: a line TeX's \\lineskip rule sets lower takes a fraction of a line, which the room holds (2602.23285v2-ja p5 t32: 1.25 pt of 10.82, a pitch 10.96, shrunk to 9.71 where today kept 9.96), and a state after it (a looser leading) lays into it too. The replays read today's room as today's walk offered it (tests/replay/tap.ts ruledRoom, roomUnderIn)",
+      why: "the borrow knob offers the whole of TeX's room wherever a block has any, where today's offered it only where a block's room held a whole line at its pitch: a line TeX's \\lineskip rule sets lower takes a fraction of a line, which the room holds (2602.23285v2-ja p5 t32: 1.25 pt of 10.82, a pitch 10.96, shrunk to 9.71 where today kept 9.96), and a state after it (a looser leading) lays into it too. The replays read today's room as today's walk offered it (tests/replay/tap.ts ruledRoom, roomUnderIn). And before each step down the sizes (the shrink knob), at the size it would leave, a state whose last line may stand PAST_FOOT under TeX's text block bottom, the next ink's bound as it is, keeping only the depth its lines took (the owner's ruling of 2026-11-12, docs/PDF-READER.md §18.37): today borrowed past the bottom by its pixel map's room, a share of a pitch, as deep as it ran (2602.23285v2-ja t29 2.50 pt, 2608.16117v1-de p23 12.1 pt over the folio); the port by TeX's bottom and a bound in points",
       replay:
         "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164, a borrowed line's 19 among them), as on the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record), today's room as its walk offered it",
       cases: 164,

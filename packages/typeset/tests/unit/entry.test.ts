@@ -4,6 +4,7 @@
 // drawn on a laid line off with it.
 import type { El, OutPiece, Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
+import { PAST_FOOT } from '../../src/fit/walk.ts'
 import { rowLinesOf } from '../../src/lay/adapt.ts'
 import { layPage } from '../../src/lay/entry.ts'
 import { rowPieces, srcOfEl } from '../../src/lay/read.ts'
@@ -472,8 +473,9 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect([p1.state, p1.fit?.size, p1.fit?.borrowed]).toEqual(['laid', 10, 1])
     expect(p1.lines.map(([y]) => y)).toEqual([700, 688, 676])
     expect(p2.lines.map(([y]) => y)).toEqual([700])
-    // (TeX's bottom 11 pt under it: no line's room, never past it; the whole paragraph shrinks evenly to its own lines)
-    const short = overBreak({ below: 0, next: 300, runs: [[1, 200, 11]], sep: 12 })
+    // (TeX's bottom 10 pt under it: a third line would stand 2 pt past it, more than the borrow past the bottom takes
+    // (PAST_FOOT, §18.37); the whole paragraph shrinks evenly to its own lines)
+    const short = overBreak({ below: 0, next: 300, runs: [[1, 200, 10]], sep: 12 })
     const [q1, q2] = [lay(short, 1), lay(short, 2)]
     expect(q1.fit!.size).toBeLessThan(10)
     expect(q2.fit!.size).toBe(q1.fit!.size)
@@ -526,10 +528,11 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect([y1, roomy.lines.length]).toEqual([700, 2])
     expect(y2).toBeLessThan(688 - 1)
     expect(y2).toBeGreaterThanOrEqual(688 - 8)
-    // (1 pt of room: the line set lower is past TeX's bottom, never laid there; the paragraph shrinks)
-    const tight = lay(1)
+    // (no room: the bottom on the last line, the line set lower about 2 pt past it, more than the borrow past the bottom takes
+    // (PAST_FOOT, §18.37); the paragraph shrinks, no line past the bottom by more than that)
+    const tight = lay(0)
     expect(tight.fit!.size).toBeLessThan(10)
-    expect(tight.lines.every(([y]) => y >= 687 - 0.05)).toBe(true)
+    expect(tight.lines.every(([y]) => y >= 688 - PAST_FOOT - 0.05)).toBe(true)
   })
   it('keeps every line it lays off the ink that stays beside its lines, borrowed or not (Room.stays: a QED box)', () => {
     // (2610.40645v1-ja p12 t80: amsthm's QED box at the end of the proof's last line (it ends at 200, the box at 290-297); the
