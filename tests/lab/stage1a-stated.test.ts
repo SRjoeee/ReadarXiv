@@ -798,6 +798,16 @@ describe("(k) an identifier is never sent: what the prepare keeps whole as ident
   })
 })
 
+describe("(s) a figure text or a cell held whole for a decorated word it holds (the owner's ruling of 2026-11-12)", () => {
+  // (PDF-READER §18.61: until a decoration can follow its words, a label or a cell holding a decorated word is the original's
+  // whole, never translated around it; the candidate's own unit's cause, by the mark the prepare writes (the dump's
+  // `keptBy: 'decorated'`, the engine's `decorated`), held `unwrapped` as a held figure text is)
+  it("states the cause of a unit marked held for its decorated word, and of no other", () => {
+    expect(keptWhyOf({ id: id('a'), keptBy: 'decorated', state: 'laid', why: 'unwrapped' })).toBe(CAUSE.decorated)
+    expect(keptWhyOf({ id: id('a'), state: 'laid', why: 'unwrapped' })).toBe(null)
+  })
+})
+
 const ACCEPTANCE ='/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11/baseline/acceptance.json'
 describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (lab-data's baseline/acceptance.json)", () => {
   const accepted = (cause: string) =>
@@ -811,6 +821,8 @@ describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (la
     expect(accepted(CAUSE.pitch)).toBe(true)
     // ((n), the coordinator's ruling of 2026-11-10 to lane fig-text: a stretch a decoration holds, kept with it)
     expect(accepted(CAUSE.decoration)).toBe(true)
+    // ((s), the owner's ruling of 2026-11-12: a figure text or a cell held whole for a decorated word it holds)
+    expect(accepted(CAUSE.decorated)).toBe(true)
     expect(accepted(CAUSE.identifier)).toBe(true)
     expect(accepted('unwrapped')).toBe(false)
     expect(accepted('laid')).toBe(false)

@@ -120,6 +120,11 @@ export const CAUSE = Object.freeze({
   // cannot draw as it was set, a script, an accent apart from its base, an element whose boxes stand over each other, is the
   // original's (the dump's `keptBy: 'script'`, the engine's `script`, figure-lines.ts setApart): the candidate's own unit's cause)
   script: 'kept as the original: a figure text the engine cannot draw as it was set (a script, an accent apart from its base)',
+  // ((s), the owner's ruling of 2026-11-12 (the readiness sheet's question on figure and table text after the research, part (a):
+  // hold the whole label or cell until a decoration can follow its words; PDF-READER §18.61): a figure text a word of which a
+  // decoration holds, or a table's cell holding a piece TeX set beside a decoration of its own with a letter in it, held whole as
+  // the original, `unwrapped` (the dump's `keptBy: 'decorated'`, the engine's `decorated`): the candidate's own unit's cause)
+  decorated: 'kept as the original whole: a decorated word inside it',
   // ((f): a unit the candidate does not make, every line of it inside a line the engine reads as a display's formula (a display
   // TeX's marked compile states, its text-mode glyphs read as text: locate's `displays`): the display's ink, kept with it — the
   // coordinator's ruling of 2026-11-09; 2608.08481v1 t118-t121, (7)'s and (8)'s parts)
@@ -166,7 +171,8 @@ const RESET = 'unlocated: set in a paragraph that sets a unit again'
 /** (k): the cause a candidate's own unit states where the prepare keeps it for its text set wholly in a face of one pitch, or
  *  for an identifier, by the mark it writes (the dump's `keptBy`, 'pitch' or 'identifier', which the parity's rulings read too);
  *  (m) where it keeps a figure's line of formulas alone (`keptBy: 'formula'`, F1), (q) a figure text drawn twice (`keptBy:
- *  'double'`, F3); else null: a unit kept otherwise (a code
+ *  'double'`, F3), (r) one it cannot draw as it was set (`keptBy: 'script'`), (s) a figure text or a cell held whole for a
+ *  decorated word (`keptBy: 'decorated'`, §18.61); else null: a unit kept otherwise (a code
  *  environment's kept block, a crowded figure text) states none */
 export const keptWhyOf = (u) =>
   u?.keptBy === 'pitch'
@@ -179,7 +185,9 @@ export const keptWhyOf = (u) =>
           ? CAUSE.double
           : u?.keptBy === 'script'
             ? CAUSE.script
-            : null
+            : u?.keptBy === 'decorated'
+              ? CAUSE.decorated
+              : null
 
 /** (l'): TeX's ligatures of a text face's input, its font's ligature table (Knuth's cmr, and every text font after it): an em dash,
  *  an en dash, the curly double and single quotes */

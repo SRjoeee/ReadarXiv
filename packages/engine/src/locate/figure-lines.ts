@@ -70,9 +70,12 @@ export interface FigureText {
   /** boxes decorating the whole of it (a rule under all of it): hidden with its text */
   textBoxes: number[]
   /** why its ink stays: crowded (drawn twice, doubledOf, or F1's torn formula), code (a line of code, kept whole), formula (a line no word of
-   *  which stands outside its formulas, kept whole, F1), script (a script or an accent set apart from its base, setApart: F3), or
-   *  null */
-  why: 'crowded' | 'code' | 'formula' | 'script' | null
+   *  which stands outside its formulas, kept whole, F1), script (a script or an accent set apart from its base, setApart: F3),
+   *  decoration (a word of it a decoration holds, an element `cite`: the text held whole, §18.61), or null */
+  why: 'crowded' | 'code' | 'formula' | 'script' | 'decoration' | null
+  /** held with its label (§18.61): its `why` `decoration` for a word a decoration holds in another line of its label, or in
+   *  another text of its printed line, none of its own */
+  withLabel?: true
   /** a closed shape round all of it: its room's edges over and under its baseline (PDF units up and down from it) */
   container: { over: number; under: number } | null
   /** the depth under its baseline of the stroke under its text (roomOf's `under`) */
@@ -81,6 +84,9 @@ export interface FigureText {
 
 const WORD = /\p{L}{2}/u
 const LETTER = /\p{L}/u
+/** whether a text holds a letter (Unicode's): what makes a figure's decorated stretch a word (`cite`) and not a number or a mark
+ *  (`ref`), and a cell's decorated piece one that holds its cell whole (PDF-READER §18.61) */
+export const holdsLetter = (s: string): boolean => LETTER.test(s)
 const bare = (name: string) => String(name ?? '').replace(/^[A-Z]{6}\+/, '')
 const real = (g: G | undefined): g is G => !!g && !g.blank && !g.unseen && /\S/u.test(g.u ?? '')
 /** the band a translation is drawn in, DRAW_BAND's em: two of it is a line with its leading at most (a ground one line tall) */
@@ -115,7 +121,9 @@ export function figureLinesOf(
 ): FigureText[] {
   W = work
   try {
-    const out = linesOf(pages, fig, owned, fixed, textFaces)
+    // (each label the paragraph reading pairs: the runs of its lines, §18.61)
+    const labels: number[][] = []
+    const out = linesOf(pages, fig, owned, fixed, textFaces, labels)
     // (a text drawn twice keeps the original's: one of its units has its double, doubledOf; the only ink that keeps a figure text)
     // (a text the engine cannot draw as it was set, a script or an accent set apart from its base: the original's, F3's `script`;
     // and a unit no text holds so, kept as today's unit, marked)
@@ -162,6 +170,32 @@ export function figureLinesOf(
         keptBy.set(t, 'double')
         for (const k of t.ks) if (fig.units[k]) fig.units[k]!.double = true
       }
+    // (a text a word of which a decoration holds, an element `cite` (judge's decorate): the original's whole, its words never
+    // translated around the decorated one until a decoration can follow its words (the owner's ruling of 2026-11-12, §18.61);
+    // kept here, before ink.ts ties the labels' sizes, so that it keeps a set of its own as every text kept whole does. One kept
+    // for another reason keeps that one; a decorated stretch with no letter (`ref`) holds nothing, an element in the translation)
+    for (const t of out) if (t.why === null && t.els.some((e) => e.kind === 'cite')) t.why = 'decoration'
+    // (and its whole label with it: every text and run of a label the paragraph reading pairs it in (its lines one under the other
+    // in one face, its pitch and its left edge, down to a line that opens an item; and what stands on its printed line), held
+    // `decoration` with its label, none kept for another reason touched. The reading refuses to join such lines on a guess, since
+    // a wrong join damages a translation; a hold risks only a line left the original's, so the pairing too weak to join is enough
+    // to hold. The author's phrase as a unit (the figure-text research's P1) replaces this pairing when it comes, §18.61)
+    const own = new Set(out.flatMap((t) => (t.why === 'decoration' ? t.ks : [])))
+    if (own.size) {
+      const textAtK = new Map(out.flatMap((t) => t.ks.map((k) => [k, t] as const)))
+      for (const label of labels) {
+        if (!label.some((k) => own.has(k))) continue
+        for (const k of label) {
+          const t = textAtK.get(k)
+          if (t) {
+            if (t.why === null) {
+              t.why = 'decoration'
+              t.withLabel = true
+            }
+          } else if (fig.units[k] && !fig.units[k]!.why) fig.units[k]!.decorated = 'label'
+        }
+      }
+    }
     for (const t of out) countKept(t)
     // (the units no text holds: drawn twice, today's kept; else a turned run today crowded, which the line reading (level lines)
     // never takes, laid as today's unit: an axis's title by its axis or its tick labels)
@@ -203,9 +237,9 @@ export type LinesWork = {
   interior: number
   /** the figure texts kept as the original's, by why: drawn twice (`double`: its string again on its page, a little off it), F1's
    *  torn formula (`torn`), a run crowded by today's reading with no ink met (`today`), a line of code or of formulas kept whole
-   *  (`code`, `formula`), one the engine cannot draw as it was set (`script`: setApart); and `inked`, the texts laid over ink their
-   *  room met (step 2: no ink but its own double keeps a text) */
-  kept?: Record<'double' | 'torn' | 'today' | 'code' | 'formula' | 'script' | 'inked', number>
+   *  (`code`, `formula`), one the engine cannot draw as it was set (`script`: setApart), one a word of which a decoration holds
+   *  (`decoration`, §18.61); and `inked`, the texts laid over ink their room met (step 2: no ink but its own double keeps a text) */
+  kept?: Record<'double' | 'torn' | 'today' | 'code' | 'formula' | 'script' | 'decoration' | 'inked', number>
 }
 let W: LinesWork | null = null
 /** the texts kept for being drawn twice, and those whose room met ink */
@@ -383,7 +417,7 @@ function doubledOf(
   return { doubled: out, twins: pairs }
 }
 const countKept = (t: FigureText) => {
-  if (t.why === 'code' || t.why === 'formula' || t.why === 'script') count(t.why)
+  if (t.why === 'code' || t.why === 'formula' || t.why === 'script' || t.why === 'decoration') count(t.why)
   else if (t.why === 'crowded') count(keptBy.get(t) ?? 'torn')
   else if (!t.why && inkedTexts.has(t)) count('inked')
 }
@@ -394,6 +428,7 @@ function linesOf(
   owned: (p: number, g: number) => boolean,
   fixed: ReadonlySet<string> | null,
   textFaces: ReadonlySet<string> | null,
+  labels: number[][] = [],
 ): FigureText[] {
   const out: FigureText[] = []
   const pitch = (g: G) => !!fixed && fixed.has(bare(g.font))
@@ -700,7 +735,7 @@ function linesOf(
     }
     // ---- F3: the lines of prose that are a paragraph's, one text; a line across a justified line's stretched space read whole
     // where the paragraph takes it
-    for (const para of figureParas(lines, reads, glyphs, boxes, pitch, math, sourceOf, taken)) {
+    for (const para of figureParas(lines, reads, glyphs, boxes, pitch, math, sourceOf, taken, labels)) {
       const ks = para.lines.flatMap((x) => x.l.ks)
       const ft: FigureText = {
         ks,
@@ -1307,6 +1342,7 @@ function figureParas(
   math: Formulas,
   source: () => string,
   skip: ReadonlySet<number> = new Set(),
+  labels: number[][] = [],
 ): {
   lines: ProseLine[]
   ends: ('space' | 'join' | 'drop')[]
@@ -1372,7 +1408,25 @@ function figureParas(
   const live = entries.filter((e) => prose(e.x.read))
   const facts = live.map((e) => proseFacts(e.x, glyphs, boxes))
   const end = (a: number, b: number) => endOf(glyphs, live[a]!.x.read.gs, live[b]!.x.read.gs, source)
-  return parasOf(facts, end).map((para) => ({
+  // (the labels the reading pairs, as `labels` takes them, the runs of each: its lines the blocks pair, one under the other, cut
+  // where a line opens an item, and the fragments it bridged on one printed line; only those of two lines or runs or more)
+  const pairs: [number, number][] = []
+  const paras = parasOf(facts, end, pairs)
+  const up = live.map((_, i) => i)
+  const root = (i: number): number => {
+    while (up[i] !== i) i = up[i]!
+    return i
+  }
+  for (const [a, b] of pairs) if (!facts[b]!.marker) up[root(b)] = root(a)
+  const groups = new Map<number, number[]>()
+  live.forEach((e, i) => {
+    const ks = e.of.flatMap((j) => lines[j]!.ks)
+    const g = groups.get(root(i))
+    if (g) g.push(...ks)
+    else groups.set(root(i), ks)
+  })
+  for (const ks of groups.values()) if (ks.length > 1) labels.push(ks)
+  return paras.map((para) => ({
     lines: para.lines.map((k) => live[k]!.x),
     ends: para.ev.map((e) => (e === 'hyphen-drop' ? 'drop' : e === 'hyphen-join' ? 'join' : 'space')),
     justified: para.justified,
@@ -1755,7 +1809,7 @@ function decorate(ft: FigureText, stretch: number[], bs: number[], glyphs: reado
     return
   }
   // (cut out of the text pieces it lies in: an element of its own, `cite` where it holds a letter, `ref` where it holds none)
-  const kind = stretch.some((g) => LETTER.test(glyphs[g]!.u)) ? 'cite' : 'ref'
+  const kind = stretch.some((g) => holdsLetter(glyphs[g]!.u)) ? 'cite' : 'ref'
   const order: FigureText['order'] = []
   const i = ft.els.length
   ft.els.push({ kind, glyphs: [...stretch], boxes: [...bs] })
