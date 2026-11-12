@@ -409,4 +409,10 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     taken: false,
     why: 'an element emptied, its token left behind as text: the wire’s contract broken (tags.ts tokenOf)',
   },
+  {
+    unit: 4,
+    raw: '数值<x id="1"/> <x id="2"/>，以及<x id="3"/><x id="4"/>成立（x7）。',
+    taken: false,
+    why: 'a string of the tokens’ form the text does not hold: the wire’s contract broken (tags.ts TOKEN_FORM)',
+  },
 ]

@@ -69,9 +69,15 @@ export type ElementTag = 'void' | 'word'
 export const tokenOf = (n: number): string => `x${n}`
 const elementTag = (as: ElementTag, n: number): string =>
   as === 'word' ? `<span id="${n}" translate="no">${tokenOf(n)}</span>` : `<x id="${n}"/>`
-/** how often a token stands in a text as itself (not inside a longer identifier or number: `x12` holds no `x1`) */
-const countOf = (s: string, token: string): number =>
-  s.match(new RegExp(`(?<![A-Za-z0-9_])${token}(?![0-9])`, 'g'))?.length ?? 0
+/** a string of the tokens' form standing as a token would: `x` and digits, with no ASCII letter, digit or underscore right
+ *  before it (inside a longer word or number it is none: `max1`, `0x1F`) and no digit right after it (`x12` holds no `x1`) */
+export const TOKEN_FORM = /(?<![A-Za-z0-9_])x[0-9]+(?![0-9])/g
+/** each string of the tokens' form in a text, how often */
+const tokensIn = (s: string): Map<string, number> => {
+  const out = new Map<string, number>()
+  for (const m of s.matchAll(new RegExp(TOKEN_FORM.source, 'g'))) out.set(m[0], (out.get(m[0]) ?? 0) + 1)
+  return out
+}
 const SOLID = /\S/
 
 type Item =
@@ -358,12 +364,14 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
   // every element back; a span may be lost (the rule decides: one that is not `must` comes back unstyled)
   for (const [k, s] of plan.slots.entries()) if (s.t === 'void' && !seen.has(k + 1)) return null
   const wireText = plan.wire.replace(new RegExp(TAG_RE.source, 'g'), '')
-  // (and no element's token outside it, beyond what the unit's own text holds of that string: a reply that moved an element to
-  // another word and left its token behind as text, which a reader would see, broke the wire's contract and is unread, as
-  // one with an element lost is; Google's reply to 1706.03762v7's Table 1 caption, lane stray-stop's fill)
-  const outside = text.replace(new RegExp(TAG_RE.source, 'g'), ' ')
-  for (const [k, s] of plan.slots.entries())
-    if (s.t === 'void' && countOf(outside, tokenOf(k + 1)) > countOf(wireText, tokenOf(k + 1))) return null
+  // (and no string of the tokens' form outside the elements more often than the unit's own text holds it, whatever its number:
+  // a reply that moved an element to another word and left its token behind as text, or that wrote a number of the text in
+  // the tokens' form, shows a reader our wire's artefact, and is unread as one with an element lost is; a paper's own `x1`
+  // reads as its text. Google's replies in lane stray-stop's fill: 1706.03762v7's Table 1 caption left `x1` behind,
+  // 2610.40576v1 wrote its `50` as `x50`)
+  const source = tokensIn(wireText)
+  for (const [token, n] of tokensIn(text.replace(new RegExp(TAG_RE.source, 'g'), ' ')))
+    if (n > (source.get(token) ?? 0)) return null
   if (
     !toks.some((t) => t.t === 'text' && SAYS.test(decode(t.s).split(SENTINEL).join(''))) &&
     LETTER.test(decode(wireText))

@@ -215,6 +215,30 @@ describe('google: a reply that leaves an element’s token as text is unread, as
   })
 })
 
+// (the contract counts the tokens' form, not only the plan's own tokens: Google wrote a number of the text in the tokens' form,
+// "increasing <x4> to 50" -> "将<x4>升级到 x50" (2610.40576v1, lane stray-stop's fill); a paper's own string of that form reads)
+describe('google: a reply that writes a string of the tokens’ form the text does not hold is unread', () => {
+  const w = (n: number) => `<span id="${n}" translate="no">x${n}</span>`
+  it('a number of the text written as a token', () => {
+    const u = unit('n', [t('Raising '), el('k', 'math'), t(' to 50 brings no benefit.')])
+    expect(readTagged(u, `将${w(1)}提高到 x50 没有带来好处。`)).toBeNull()
+    expect(readTagged(u, `将${w(1)}提高到 50 没有带来好处。`)?.content).toEqual([
+      { t: 'text', s: '将' },
+      { t: 'el', id: 'k' },
+      { t: 'text', s: '提高到 50 没有带来好处。' },
+    ])
+  })
+  it('the paper’s own string of that form reads, as often as it writes it', () => {
+    const u = unit('o', [t('The x50 dose and '), el('k', 'math'), t(' differ.')])
+    expect(readTagged(u, `x50 剂量与${w(1)}不同。`)?.content).toEqual([
+      { t: 'text', s: 'x50 剂量与' },
+      { t: 'el', id: 'k' },
+      { t: 'text', s: '不同。' },
+    ])
+    expect(readTagged(u, `x50 剂量与${w(1)}不同（x50）。`)).toBeNull()
+  })
+})
+
 describe('google: sentences from boundary markers', () => {
   it("where they came back, once each and in order, are the translation's sentence starts", () => {
     const r = readTagged(UNITS[0] as never, '我们研究这个问题。<x id="1"/>这很难。')
