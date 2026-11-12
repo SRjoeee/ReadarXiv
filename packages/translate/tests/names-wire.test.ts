@@ -22,7 +22,8 @@ describe('a variant’s person element on every wire', () => {
   const v = unit('v', [t('Corresponding author: '), el('n0', 'person'), t('.')], true)
   it('goes as an element, its name on no wire', () => {
     for (const w of tags) expect(w.write(v, 'zh-Hans')).not.toContain('Wenyong')
-    expect(tags[0].write(v, 'zh-Hans')).toContain('Corresponding author: <x id="1"/>.')
+    expect(tags[0].write(v, 'zh-Hans')).toContain('Corresponding author: <span id="1" translate="no">x1</span>.')
+    expect(tags[1].write(v, 'zh-Hans')).toContain('Corresponding author: <x id="1"/>.')
     expect(microsoft({ fetch }).write(v, 'zh-Hans')).toContain('Corresponding author: @a#.')
   })
   it('comes back as the element it went as', () => {

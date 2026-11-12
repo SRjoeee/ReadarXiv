@@ -3742,6 +3742,21 @@ after it), and sets the mark's blank as glue that may shrink by half an em.
   spaces stretch past twice their width: Chinese 1 before, 4 after; the three new ones each hold a URL after a full stop, whose
   dropped space leaves the line two spaces to take its slack, one of them the URL's own line break on A, read into its text as
   a space.
+- **Nor before a full-width mark no line opens with, whatever stands before it** (`tokens.ts` `markBarredStart`, in the same final
+  filter; the coordinator's ruling of 2026-11-12, lane stray-stop): an ordinary space (space, tab, line end; never a no-break,
+  narrow or ideographic space, which are the text's own) directly before a full-width mark of the breaker's `barred` class (UAX
+  14's no-start classes or the target's `noStart`; full-width as above) is not set, an element, a Latin word or a digit before
+  it alike. Google sets such a space after an element before the text's own full stop or comma in every such place of the lane's
+  probe (35 in Chinese, 16 in Japanese over 42 units; the source sets the mark glued to the element in each), drawn as a gap of a
+  quarter em before the mark. TeX's packages keep exactly this one case: xeCJK 3.10.4 and ctexart 2.6.4 on this machine set a
+  typed space between a Latin letter or a formula and a full-width closing mark (a word, `Q`, a space and the ideographic full
+  stop: 46.84 pt against 43.33 without the space; the comma and the closing bracket alike; `xeCJK.sty` :3886
+  `\xeCJK_Boundary_and_FullRight:N` takes a space back there only after another mark's glue) and drop it in every other case.
+  The grounds for not setting it here: the typesetter already sets none before such a mark after a CJK character (the rule for
+  two CJK characters) and none after a full-width mark, and what the mark needs on its left does not depend on what stands
+  there, since it carries its own blank half; in TeX the space is an author's keystroke after a Latin word, here an engine's
+  output that no writer of Chinese or Japanese sets; and it rewrites no word and no mark, setting no glue the script lacks, for
+  every engine and every unit. A half-width mark keeps the space before it in every target (French writes one before ; : ! ?).
 - **A mark's class is a full-width mark's alone** (`tokens.ts`, the token's `punct`): a curly quote an alphabet's target sets
   in its Latin face is proportional and has no blank half, so no half of it hangs past a line's end, as `hangOf` hung every
   closing mark's (1810.04805v2-es p8 t155: a closing quote half an em past the measure, the only such line of the corpus's).

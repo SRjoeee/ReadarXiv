@@ -47,6 +47,53 @@ export function standInOf(kind: string): 'annotation' | 'citation' | string | un
  *  markers wire writes where Microsoft cuts its sentence; never punctuation of the element's own */
 export const LINE_END = /^\s+$/
 
+/** a display's kind (the source reader's) */
+export const DISPLAY = 'display'
+/**
+ * Whether an element can stand inside a word, its characters the word's: one that reads as a word to the sentence splitter
+ * (standInOf: a formula; a macro, an escaped character, code, which it reads as none). Never one its reader states
+ * nothing of (`other`: the PDF's source reader's kind for a skip, a switch, which set no character; a tie is its `space`, a
+ * forced break its `break`),
+ * a display, a space or a break, a reference's number or an annotation
+ */
+export const inWord = (q: { kind: string }): boolean =>
+  q.kind !== 'other' && q.kind !== DISPLAY && (standInOf(q.kind) ?? 'x') === 'x'
+
+/**
+ * Where the source set an element glued to the text beside it, one definition for both wires (DESIGN §6.2): before it, the
+ * wire up to it (`wire`, its own spans' tags apart) ends with a letter, a digit, a mark or a full stop; after it, the source's
+ * text after it (`next`) begins with a letter, a digit or a mark, and the element states no line end (`line`); neither where
+ * it stands inside a word (`inside`: it can, `inWord`, and a letter or a mark of the source is right before it, `prev`, and
+ * right after it). The markers wire sets a space of its own there (a marker touching a word is read as part of it); every
+ * reading takes back the white space a reply sets there (GLUED_SPACE, GLUED_LEAD)
+ */
+export function glueOf(
+  prev: string,
+  wire: string,
+  next: string,
+  word: boolean,
+  line: boolean,
+): { inside: boolean; before: boolean; after: boolean } {
+  const inside = word && /[\p{L}\p{M}]$/u.test(prev) && /^[\p{L}\p{M}]/u.test(next)
+  return {
+    inside,
+    before: !inside && /[\p{L}\p{N}\p{M}.]$/u.test(wire),
+    after: !inside && !line && /^[\p{L}\p{N}\p{M}]/u.test(next),
+  }
+}
+/** the white space before an element, and after one, where the source set it glued to the text there (glueOf): TeX set no
+ *  space between a word and the mark, the script or the accent it carries, so neither does the translation, whatever the
+ *  reply keeps of ours or whatever stands beside it now (2610.20967v1 p1 on staging: its names' marks 4.3 pt off the names,
+ *  CJK's, where TeX's are 1.35; its places' marks a space before them) */
+export const GLUED_SPACE = /[ \t\n\f\r]+$/
+export const GLUED_LEAD = /^[ \t\n\f\r]+/
+/** a stop of the text right after an element: the element's own stop is written only where the text does not begin so */
+export const LEAD_PUNCT = /^\s*[.,;:!?。．，、；：！？]/
+/** what a reply may set for an element's own stop right after it: any script's stop, comma, semicolon or colon; taken out
+ *  where the element states its own (it draws it), the white space before it kept */
+export const OWN_MARKS = '.,;:。．，、；：।۔،؛'
+export const OWN_LEAD = new RegExp(`^([ \\t\\n\\f\\r\\ue000]*)[${OWN_MARKS}]+`)
+
 /** the stop a display that states none of its own ends its sentence with, where TeX set it at that sentence's end */
 export const DISPLAY_END = '.'
 /** a text that begins a sentence: its first letter upper case (Unicode Lu, Lt) */

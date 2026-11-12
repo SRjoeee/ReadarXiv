@@ -353,6 +353,23 @@ const markBlankEdge = (t: Token | null, end: boolean, cjkFace: (t: Token) => boo
   return fullWidthPunctOf(ch, cjkFace(t)) === (end ? 'close' : 'open')
 }
 
+/**
+ * A token that opens with a full-width mark no line opens with (the breaker's `barred`: UAX 14's no-start classes or the target's
+ * rules' P.noStart; full-width by markBlankEdge's definition: a mark of the class table, of the CJK blocks wherever it stands or a
+ * curly quote in the target's CJK face): an ordinary space before it is not set, whatever stands before it, as none is after a
+ * closing mark (markBlankEdge) or between two characters of a spaceless script (a CJK character, a space, a full stop). The
+ * mark carries its own blank half; the space before it is an engine's (Google sets one after an element before the text's own
+ * full stop or comma in every such place of lane stray-stop's probe), never a CJK writer's. xeCJK and ctex keep this one case, a typed space between a
+ * Latin letter or a formula and a full-width closing mark (xeCJK.sty 3.10.4 :3886 `\xeCJK_Boundary_and_FullRight:N`; measured
+ * with ctexart 2.6.4: a CJK word, Q, a space and the ideographic full stop 46.84 pt against 43.33 without the space), where it is an author's keystroke; here it is not set, the
+ * coordinator's ruling of 2026-11-12 (docs/PDF-READER.md §18.18). A half-width mark keeps the space before it in every target
+ */
+const markBarredStart = (t: Token | null, cjkFace: (t: Token) => boolean, barred: (ch: string) => boolean) => {
+  if (t?.cls !== 'cjk' || typeof t.s !== 'string' || !t.s) return false
+  const ch = [...t.s][0]!
+  return fullWidthPunctOf(ch, cjkFace(t)) !== null && barred(ch)
+}
+
 /** a target's capitals: its language's case mapping, the root's where it names none a locale reads (L2:2454 upperOf) */
 export function upperOf(to: string): (s: string) => string {
   let loc = 'und'
@@ -445,7 +462,13 @@ export function tokens(i: TokensInput): Tokens {
   const minWord = P.hyphenation.minWord
   const cjkRe = cjkClassRe(cjkQuotes)
   const kinsoku = kinsokuOf(P.noStart, P.noEnd)
+  /** a character no line opens with: UAX 14's (no-start.mjs) or the target's rules' (P.noStart): break.mjs `barred`'s */
+  const barredChar = (ch: string) => noStart(ch) || kinsoku.starts(ch)
   const lastIsSpace = () => tokens.length > 0 && !!tokens.at(-1)!.space
+  /** the space tokens a chunk of white space made that holds more than ordinary collapsible white space (space, tab, line
+   *  ends): a no-break space U+00A0, a narrow one U+202F, the ideographic space U+3000; a text's own, which no rule of the
+   *  marks takes (the rule before a full-width mark no line opens with, below) */
+  const hardSpaces = new WeakSet<Token>()
   let noBreakNext = false,
     afterHead = false
   const push = (t: Token) => {
@@ -496,6 +519,7 @@ export function tokens(i: TokensInput): Tokens {
         if (tokens.length && !lastIsSpace() && !tokens.at(-1)!.leadEnd && !tokens.at(-1)!.kernEnd) {
           const face = plainOf(faceOf(st, 'latin'))
           tokens.push({ space: true, st, face, w100: 0, ...(afterHead ? { keep: true as const } : {}) })
+          if (/[^ \t\n\f\r]/.test(chunk)) hardSpaces.add(tokens.at(-1)!)
         }
         afterHead = false
         continue
@@ -823,7 +847,8 @@ export function tokens(i: TokensInput): Tokens {
   }
   while (tokens.at(-1)?.space) tokens.pop()
   // (a space is not set between two characters of a spaceless script, nor beside a full-width mark's blank side whatever
-  // stands on its other side (markBlankEdge): a space after its head (`keep`) and one in a monospaced run are the text's)
+  // stands on its other side (markBlankEdge), nor before a full-width mark no line opens with whatever stands before it
+  // (markBarredStart; an ordinary space alone): a space after its head (`keep`) and one in a monospaced run are the text's)
   const spaceless = !keepAll && !i.spacedSource
   const drawnAt = (q: number, step: number) => {
     for (; q >= 0 && q < tokens.length; q += step) if (!tokens[q]!.space) return tokens[q]!
@@ -836,6 +861,7 @@ export function tokens(i: TokensInput): Tokens {
     const before = drawnAt(q - 1, -1),
       after = drawnAt(q + 1, 1)
     if (markBlankEdge(before, true, cjkFace) || markBlankEdge(after, false, cjkFace)) return false
+    if (!hardSpaces.has(t) && markBarredStart(after, cjkFace, barredChar)) return false
     return !(spaceless && spacelessEdge(before, true) && spacelessEdge(after, false))
   })
   if (kept.length < tokens.length) {

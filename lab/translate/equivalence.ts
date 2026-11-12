@@ -8,7 +8,7 @@
 // accepted class's count is not the one stated. Run: npx tsx lab/translate/equivalence.ts <capture.jsonl> <out-dir>
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { accept, type Fetch, google, microsoft, type Piece, type UnitIn } from '../../packages/translate/src/index.ts'
+import { accept, type Fetch, google, microsoft, type Piece, tagsWire, type UnitIn } from '../../packages/translate/src/index.ts'
 import * as mt from '../../src/pdf-reader/engine/translate/mt.mjs'
 
 type Rec = { src: 'pdf' | 'html' | 'web'; format: 'markers' | 'tags'; wire: string; reply: string; today: boolean; reason?: string | null; kind?: string | null; pieces?: TexPiece[]; test?: string | null; file?: string | null }
@@ -20,7 +20,9 @@ const noFetch: Fetch = async () => {
   throw new Error('no network')
 }
 const MS = microsoft({ fetch: noFetch })
-const GG = google({ fetch: noFetch })
+// (the recorded replies answer wires whose elements are voids: Google's reader, the tags wire written with voids as today's
+// was; Google itself now writes its elements as words, packages/translate wire/tags.ts ElementTag)
+const GG = { ...google({ fetch: noFetch }), write: (u: UnitIn) => tagsWire.write(u) }
 
 // ---------------------------------------------------------------- a PDF unit's TeX pieces, typed as the source reader would
 const SPACE = /^(?:~|\\ |\\[,;:!>]|\\(?:quad|qquad|enspace|thinspace|enskip|space)(?![A-Za-z@])|\\hspace\*?\s*\{[^{}]*\})\s*$/

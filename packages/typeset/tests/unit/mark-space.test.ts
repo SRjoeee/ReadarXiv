@@ -114,3 +114,49 @@ describe('B.tokens: a curly quote an alphabet sets proportional is no full-width
     expect(lines.map(([, , x1]) => x1 <= 172 + 1e-6)).toEqual(lines.map(() => true))
   })
 })
+
+describe('B.tokens: no space before a full-width mark no line opens with, whatever stands before it', () => {
+  // (the coordinator's ruling of 2026-11-12: Google sets a space after an element before the text's own full stop or comma in
+  // every such place of lane stray-stop's probe; the mark carries its own blank half, as the rule after a closing mark and the
+  // spaceless rule between two CJK characters already read it. xeCJK and ctex keep this one case, a typed space between a Latin
+  // letter or a formula and a closing mark, an author's keystroke there: measured with ctexart 2.6.4, PDF-READER §18.18)
+  /** a member holding a formula (element 1, a crop): its first line's items */
+  const withFormula = (tail: string) => {
+    const m: Placed = { ...entry(300, 'para'), els: [['1', { kind: 'math', ink: [[1, 150, 698, 170, 707, 700]] }]] }
+    const r: Row = {
+      id,
+      ok: true,
+      by: 'test',
+      content: [
+        { t: 'text', s: '打包到矩阵' },
+        { t: 'el', id: '1' },
+        { t: 'text', s: tail },
+      ],
+    }
+    const rows: Rows = { get: (k) => (k === id ? r : undefined), done: true }
+    return layPage(part(m), rows, rulesFor('zh'), metrics).members[0]!.lines[0]![3] as {
+      s: string
+      x: number
+      w?: number
+    }[]
+  }
+  it('after a Latin letter: a full stop, a comma, a closing bracket', () => {
+    expect(linesOf('打包到矩阵Q 。键和值。', 300)[0]).toBe('打包到矩阵Q。键和值。')
+    expect(linesOf('打包到矩阵Q ，键和值。', 300)[0]).toBe('打包到矩阵Q，键和值。')
+    expect(linesOf('见矩阵（Q ）和键。', 300)[0]).toBe('见矩阵（Q）和键。')
+  })
+  it('after a formula: the full stop set at the crop’s end, as with no space', () => {
+    const spaced = withFormula(' 。键和值。')
+    const crop = spaced.find((it) => 'src' in it)!
+    const after = spaced[spaced.indexOf(crop) + 1]!
+    expect(after.s).toBe('。键和值。')
+    expect(after.x).toBeCloseTo(crop.x + crop.w!, 6)
+    expect(after.x).toBeCloseTo(withFormula('。键和值。').find((it) => it.s === '。键和值。')!.x, 6)
+  })
+  it('keeps a space between a CJK character and a Latin letter, before a half-width mark, and a no-break space', () => {
+    expect(linesOf('如图 Q 所示。', 300)[0]).toBe('如图 Q 所示。')
+    expect(linesOf('打包到矩阵Q . 键和值', 300)[0]).toBe('打包到矩阵Q . 键和值')
+    expect(linesOf('打包到矩阵Q 。键和值。', 300)[0]).not.toBe('打包到矩阵Q。键和值。')
+    expect(linesOf('Ein Wort Q . Und mehr.', 300, 'de')[0]!.trim()).toBe('Ein Wort Q . Und mehr.')
+  })
+})

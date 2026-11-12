@@ -28,7 +28,7 @@ export const googleTarget = (target: Lang): string => REWRITE[target] ?? target
 
 export const GOOGLE_LIMITS: Limits = { chars: 8_000, units: 100, inFlight: 2, callMs: 10_000, reask: 0 }
 /** the behaviour digest of write and read over tests/adapters/fixtures.ts */
-export const GOOGLE_DIGEST = 'd4f61bc8d534ae4627dbef07d09e17d328046b28094ae4a549e0e491d27570fc'
+export const GOOGLE_DIGEST = 'a6455d006abc83901868b4d14cd66482cc5d25a66ca2a0ebbc82bb9d9916456c'
 
 const startOf = (text: string, at: number): number => {
   let i = at
@@ -56,12 +56,16 @@ export function readTagged(unit: UnitIn, raw: string): { content: OutPiece[]; se
   return out.src.length ? { content: r.content, sentences: out } : { content: r.content }
 }
 
-/** The tags wire as a host's own translator that keeps tags writes and reads it (the extension's LLM services): Google's
- *  and Chrome's codec, so its behaviour digest is theirs */
+/** the behaviour digest of the tags wire with its elements as voids (Chrome's codec, chrome.ts CHROME_DIGEST) */
+export const TAGS_DIGEST = '8cf96b0290912f64741187a3f6b87610d48cdf0678c4e40c38d6d93b9b4fc558'
+
+/** The tags wire as a host's own translator that keeps tags writes and reads it (the extension's LLM services): Chrome's
+ *  codec, its elements voids (what the prompt tells a model a void tag is), so its behaviour digest is Chrome's; Google
+ *  reads the same way and writes its elements as words (wire/tags.ts ElementTag) */
 export const tagsWire = {
   write: (unit: UnitIn): string => planTags(unit).wire,
   read: readTagged,
-  digest: GOOGLE_DIGEST,
+  digest: TAGS_DIGEST,
 } as const
 
 export interface GoogleOptions {
@@ -77,7 +81,9 @@ export function google(o: GoogleOptions): Translator {
     wire: 'tags',
     limits: { ...GOOGLE_LIMITS, ...o.limits },
     supports: async () => true,
-    write: (unit) => planTags(unit).wire,
+    // (each element a word of its sentence: as an empty element Google translates the texts on either side of it apart,
+    // each closed with a full stop of its own; wire/tags.ts ElementTag)
+    write: (unit) => planTags(unit, 'word').wire,
     read: readTagged,
     async *send(wires, call, signal) {
       let body: string
