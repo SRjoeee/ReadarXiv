@@ -328,7 +328,7 @@ export function factsOf(path, text, { tokens = true } = {}) {
 
   // version constants and module constants: the module's top level
   const opening = ast.comments.filter(c => c.end <= (ast.program.body[0]?.start ?? text.length))
-  const tops =ast.program.body.flatMap(s => (s.type === 'ExportNamedDeclaration' && s.declaration ? [{ s, d: s.declaration }] : [{ s, d: s }]))
+  const tops = ast.program.body.flatMap(s => (s.type === 'ExportNamedDeclaration' && s.declaration ? [{ s, d: s.declaration }] : [{ s, d: s }]))
   const constNodes = new Set()
   for (const { s, d } of tops) {
     if (d.type !== 'VariableDeclaration' || d.kind !== 'const') continue
