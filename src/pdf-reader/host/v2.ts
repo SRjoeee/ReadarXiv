@@ -29,11 +29,25 @@ export function hostFetch(o: { api: string; loopback: boolean; fetch?: typeof fe
 }
 
 /** the preferences over the extension's configuration surface (shared/surface-config.ts): a read is its first landing, a write
- *  its patch on the latest stored (host/prefs.ts withPrefs), a landing from elsewhere told */
-export function hostPrefs(surface: Pick<SurfaceConfig, 'state' | 'subscribe' | 'start' | 'patch'>): PrefStore {
+ *  its patch on the latest stored (host/prefs.ts withPrefs), a landing from elsewhere told. Asked to translate (`#readarxiv` on
+ *  the PDF's address, the PDF page's `ask=translate`: PDF-READER §2), the first read lets a stored original display go, so that the reader
+ *  opens in the translated display the settings name and the next PDF opens as this one does (the old reader's session/host.ts
+ *  displayFrom and its write of `pdfReader.original`) */
+export function hostPrefs(surface: Pick<SurfaceConfig, 'state' | 'subscribe' | 'start' | 'patch'>, o: { askedToTranslate?: boolean } = {}): PrefStore {
+  // (asked: the original let go at the first landing; written: read as let go until the write lands, or is refused)
+  let letGo: 'asked' | 'written' | 'done' = o.askedToTranslate ? 'asked' : 'done'
   const now = () => {
     const s = surface.state()
-    return s.config ? prefsOf(s.config, { revision: s.revision }) : null
+    if (!s.config) return null
+    let config = s.config
+    if (letGo !== 'done' && config.pdfReader.original) {
+      if (letGo === 'asked') {
+        letGo = 'written'
+        surface.patch(c => ({ ...c, pdfReader: { ...c.pdfReader, original: false } })).catch(() => { letGo = 'done' })
+      }
+      config = { ...config, pdfReader: { ...config.pdfReader, original: false } }
+    } else letGo = 'done'
+    return prefsOf(config, { revision: s.revision })
   }
   return {
     read: () =>
@@ -76,12 +90,17 @@ export function v2Open(o: { host: Host; paper: string; visit: Parameters<typeof 
     const tell = () => {
       const s = reader.state()
       for (const e of eventsOf(told, s)) chrome.emit(e)
+      // a session that crashed is told as one that could not be opened is (the chrome's attach): the failure the chrome shows.
+      // Here, not in eventsOf: the website shows a crash its own way
+      if (s.crashed && !told?.crashed) chrome.emit({ type: 'fail', event: 'crashed', text: 'the session crashed' })
       told = s
     }
     reader.subscribe(tell)
     tell()
     addEventListener('pagehide', () => reader.close(), { once: true })
-    Object.assign(globalThis as object, { __reader: { probe: () => reader.probe(), reader } })
+    // (the probes' hook: beside the controller the chrome's parts gave it, main.tsx, never in its place)
+    const probes = globalThis as { __reader?: object }
+    Object.assign((probes.__reader ??= {}), { probe: () => reader.probe(), reader })
     const set = (prefs: PrefsPatch) => {
       const now = reader.state().prefs
       reader.do({ do: 'set', prefs: { ...prefs, ...(prefs.classes ? { classes: { ...now.classes, ...prefs.classes } } : {}), ...(prefs.highlight ? { highlight: { ...now.highlight, ...prefs.highlight } } : {}) } as Partial<Prefs> })
@@ -131,9 +150,11 @@ export async function startV2(o: { params: URLSearchParams; paper: string }) {
   ])
   const surface = createSurfaceConfig({ localeStale, reload: () => location.reload() })
   const pdf = (ref: string) => readerAddresses(o.params, ref, READER_API).pdf
-  const host = extensionHost({ api: READER_API, loopback: LOOPBACK_ALLOWED, pdf, prefs: hostPrefs(surface), transport: createMessageTransport(), paper: o.paper })
+  // the display the address names (a probe's page), else the settings', asked to translate a translated one
   const mode = o.params.get('mode')
   const visit = mode === 'original' || mode === 'bilingual' || mode === 'translation' ? { display: mode as Prefs['display'] } : undefined
+  const prefs = hostPrefs(surface, { askedToTranslate: !visit && o.params.get('ask') === 'translate' })
+  const host = extensionHost({ api: READER_API, loopback: LOOPBACK_ALLOWED, pdf, prefs, transport: createMessageTransport(), paper: o.paper })
   const store = surfaceStore(surface)
   return { store, open: v2Open({ host, paper: o.paper, visit, original: pdf(o.paper) }) }
 }

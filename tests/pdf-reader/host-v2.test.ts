@@ -4,7 +4,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULTS, eventsOf, INITIAL, type ReaderState, reduce } from '@readarxiv/reader'
 import { DEFAULT_CONFIG } from '@/config/schema'
-import { hostFetch, hostPrefs, surfaceStore } from '@/pdf-reader/host/v2'
+import { hostFetch, hostPrefs, surfaceStore, v2Open } from '@/pdf-reader/host/v2'
+
+/** the reader package's openReader, where a test gives one of its own (the rest of the package as it is) */
+const opened = vi.hoisted(() => ({ reader: null as unknown }))
+vi.mock('@readarxiv/reader', async real => ({ ...(await real<object>()), openReader: () => opened.reader }))
 
 const API = 'https://readarxiv.com'
 
@@ -59,6 +63,30 @@ describe('the extension host prefs over the configuration surface', () => {
     s.land({ ...DEFAULT_CONFIG, theme: 'dark' })
     expect(store.state()).not.toBe(first)
     expect(store.state().config?.theme).toBe('dark')
+  })
+  it('asked to translate (the PDF page\'s ask=translate): the first read lets a stored original display go, written as the old reader wrote it, the mode untouched; read as let go until the write lands', async () => {
+    for (const mode of ['side', 'stack', 'only'] as const) {
+      const s = surface({ ...DEFAULT_CONFIG, mode, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: true } })
+      const store = hostPrefs(s as never, { askedToTranslate: true })
+      await expect(store.read()).resolves.toMatchObject({ display: mode === 'only' ? 'translation' : 'bilingual' })
+      expect(s.patches).toEqual([{ ...DEFAULT_CONFIG, mode, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: false } }])
+    }
+    // (not asked: the original stays, nothing written; asked where the original is not stored: nothing written either)
+    const plain = surface({ ...DEFAULT_CONFIG, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: true } })
+    await expect(hostPrefs(plain as never).read()).resolves.toMatchObject({ display: 'original' })
+    const translated = surface(DEFAULT_CONFIG)
+    await expect(hostPrefs(translated as never, { askedToTranslate: true }).read()).resolves.toMatchObject({ display: 'bilingual' })
+    expect([...plain.patches, ...translated.patches]).toEqual([])
+    // (a landing before the write's: still let go; once it has landed, a later original display chosen elsewhere is followed)
+    const late = surface(null)
+    const store = hostPrefs(late as never, { askedToTranslate: true })
+    const told = vi.fn()
+    store.watch(told)
+    late.land({ ...DEFAULT_CONFIG, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: true } })
+    expect(told).toHaveBeenLastCalledWith(expect.objectContaining({ display: 'bilingual' }))
+    await Promise.resolve()
+    late.land({ ...late.state().config!, pdfReader: { ...late.state().config!.pdfReader, original: true } })
+    expect(told).toHaveBeenLastCalledWith(expect.objectContaining({ display: 'original' }))
   })
   it('a write is a patch on the latest stored, every other field untouched; a landing from elsewhere is told', async () => {
     const s = surface(DEFAULT_CONFIG)
@@ -117,4 +145,18 @@ describe('the reader state told to the chrome', () => {
     const s = state()
     expect(eventsOf(s, s)).toEqual([])
   })
+  it('a session that crashed is told to the chrome as a session that could not be opened is: a failure, once (the website shows its own)', async () => {
+    let current = state()
+    const listeners = new Set<() => void>()
+    opened.reader = { state: () => current, subscribe: (l: () => void) => { listeners.add(l); return () => listeners.delete(l) }, do: vi.fn(), probe: vi.fn(), close: vi.fn() }
+    const emitted: { type: string; event?: string }[] = []
+    await v2Open({ host: {} as never, paper: '2600.00001v1', visit: undefined, original: '' })({ left: document.createElement('div'), right: document.createElement('div'), emit: (e: { type: string; event?: string }) => emitted.push(e) } as never)
+    const crashes = () => emitted.filter(e => e.type === 'fail' && e.event === 'crashed').length
+    expect(crashes()).toBe(0)
+    current = { ...current, crashed: true }
+    for (const l of listeners) l()
+    for (const l of listeners) l()
+    expect(crashes()).toBe(1)
+  })
 })
+
