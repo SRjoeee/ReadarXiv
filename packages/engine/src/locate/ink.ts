@@ -270,7 +270,7 @@ export function inkOf(o: InkInput): {
     ends: 0,
     boxed: fig.stats?.boxed ?? 0,
     interior: fig.stats?.interior ?? 0,
-    kept: { double: 0, torn: 0, today: 0, code: 0, formula: 0, script: 0, inked: 0 },
+    kept: { double: 0, torn: 0, today: 0, code: 0, formula: 0, script: 0, decoration: 0, inked: 0 },
   }
   const texts = figureLinesOf(pages, fig, (p, g) => figOwn[p - 1]?.[g] != null, o.fixed ?? null, textFaces, work)
   // (each text by its first run; the runs it takes after its first, and those wholly a doubled copy of a text's glyphs: no
@@ -436,7 +436,8 @@ export function inkOf(o: InkInput): {
   // (each figure text's set, its size tie (the owner's rule of 2026-10-29: the labels of one group at one size): the set today's
   // figure reading gave its line (setsOf: its column, its baseline); a text the paragraph path lays (figureTextOf: lines joined,
   // an element, a label) stands among the labels of its lines' sets, which it joins into one: one member, drawn at one size. One
-  // kept as the original's (its why: a formula, code, a script, a double) is laid by no path and keeps a set of its own)
+  // kept as the original's (its why: a formula, code, a script, a double, a decorated word) is laid by no path and keeps a set
+  // of its own)
   const setRoot = new Map<number, number>()
   const setOf = (k: number): number => {
     let s = fig.units[k]!.set ?? k
@@ -722,6 +723,7 @@ function figureTextOf(
             ...(t.why === 'formula' ? { formula: true as const } : {}),
             ...(fig.units[t.ks[0]!]?.double ? { double: true as const } : {}),
             ...(t.why === 'script' ? { script: true as const } : {}),
+            ...(t.why === 'decoration' ? { decorated: true as const } : {}),
           }
         : {}),
     },

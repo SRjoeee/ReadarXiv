@@ -5503,6 +5503,98 @@ put-back places no group holding an element (packages/translate groups.ts), and 
   no edge there, and by the coordinator's rulings no phrase pair goes on the markers wire and no reference is asked for a
   bibliography's groups. A tags wire carries the group.
 
+### 18.57 A figure's label or a table's cell that holds a decorated word stays whole as the original (the owner's ruling, 2026-11-12)
+
+A figure's label and a table's cell can hold a decorated token: a word on a ground (a highlight), struck or underlined. The
+engine withholds such a token from the translator and keeps it as the original's ink with its decoration, an element carried in
+the translation (a figure text's `cite`, §18.26; a cell's placeholder, its ink a crop), and translated the rest of the line: the
+reader saw a line half in each language. 2608.06701v1 p1, the figure's box numbered 10: "I'm still not finding `CallbackBase`."
+stayed English, on its blue ground, inside a translated box; 2111.09276v1: 23 figure lines ("Sprinkle the [ginger] on the
+[fish]") and 12 cells of Table 1 ("Put the [ham] in the oven."). The research on figure and table text put the choice to the
+owner until a decoration can follow its words (the ground, the strike or the underline drawn anew under the translated stretch):
+keep the mixed line, or hold the whole label or cell as the original. On 2026-11-12 he agreed to hold the whole label or cell (the
+readiness sheet's question on figure and table text after the research, part (a)); his earlier word on a caption a highlight holds
+was that it may stay the original's where the highlight forces it.
+
+- **The rule.** A figure text or a table cell that holds a word its decoration keeps as the original's ink is held whole as the
+  original, never translated around it. It is stated on the unit (`InstrumentUnit.decorated`, with `fixed`), at the two places
+  where each kind of unit's other keeps are decided, because the decoration is known from two readings: a figure text in
+  `figure-lines.ts` `figureLinesOf`, where an element `cite` (judge's decoration: a tone, a frame or a flat stroke holding whole
+  words) makes its `why` `decoration`, after the double and the script reasons and before `ink.ts` ties the labels' sizes, so that
+  it keeps a set of its own as every text kept whole does; a cell in `instrument.mjs` `decoratedCellsOf`, a table's cell the
+  paper does not keep already holding a placeholder whose source the probe states TeX set beside a decoration of its own
+  (`decorated`, `marks.mjs` readInkDecorated, §18.51: soul's ground, underline or strike, alone or in a paper's macro). Nothing is
+  detected anew, no third place reads it: the reader and the typesetter learn it from the stated unit, whose member is fixed (no
+  group of its text) and stated `unwrapped` in the part (`bundle.ts` stateOf: a fixed member that is no kept unit, which before
+  this rule was a figure member alone), so that nothing is laid over it.
+- **A word: a letter in it.** The hold exists to prevent a half-original line. A decorated token with no letter (a number, a
+  symbol) makes none and stays an element in the translated line as before. The condition is the engine's one predicate,
+  `holdsLetter` (`figure-lines.ts`, Unicode's letter), which already tells a figure's decorated word (`cite`) from a decorated
+  number (`ref`) and now reads a cell's decorated text too. A figure text whose decorated word is all its text but its marks
+  (2608.06701v1's "`CallbackBase.host_label(result)`" between backticks) is held like the others: no special case.
+- **A cell is held, not kept.** The table-group rule (`lay/entry.ts` decideTables: a body column whose cells mostly came back from
+  the translator as they went is a column of names, kept whole; a kept cell counts as one that came back as it went) judges what
+  kind of content a column holds from the translator's replies. A cell held for its decoration is ordinary translatable text held
+  for a reason of drawing: no evidence about its column. Stated `unwrapped`, it tells the decision nothing, and its column is
+  decided by its other cells' replies. Stated `kept` (as Rule 1 keeps a cell, §18.22) the decorated cells alone would have passed
+  NAMES_SHARE in every column that holds them and kept 17 more cells whole (2111.09276v1 Table 1's columns 0 and 2, 3 each;
+  2610.40576v1's tables 9, 10 and 12, 4, 3 and 4); the owner's ruling names the label or the cell, and his ruling on header rows
+  goes the same way (a kept cell does not hold its row, "as now"). A held cell is still sent to the translator and its reply still
+  comes back (the bundle marks it no `kept`), as a held figure text's is; accepted for the same reason.
+- **Not this section's.** Captions and body text: their decorated tokens stay elements in the translated line (§18.51: Figure 1's
+  caption of 2111.09276v1 translated with its two highlights as crops). A table's header row's other cells (the owner's "as now").
+  A style group whose edge is inside a word (§18.47). A colour alone withholds no word today (a figure's run is one fill, a
+  source's colour group is a group of its text), so nothing is held for one.
+- **What it does not reach.** A cell whose decorated piece the probe's reading refuses: its characters past the reading's set
+  (an apostrophe, a question mark: `marks.mjs` CHAR_NODE's punctuation), a text past INK_TEXT_MAX. 2610.40576v1's cell of
+  `\hlp{Let's use different notation.}` (ord 237) stays a mixed line; the decoration's definition did not change with this rule.
+  And a token the figure reading reads as the ground under its whole run (no element) is translated as before, its ground left
+  where it stood (2111.09276v1 Figure 5(a)'s seven such tokens). A label printed over two lines or more is as many figure texts
+  (the unit is the printed line, the research's first finding): the line that holds the decorated word is held, its other lines
+  translated (Figure 5(a)'s "Paint [cabinets] for an" held, its next line "authentic look" translated); a unit of the author's
+  phrase (the research's P1) makes them one.
+- **Before and after.** `figure-lines.test.ts`: a figure text whose word a tone holds is held (`why` `decoration`), one whose
+  toned stretch is a number keeps it an element `ref` (red at the base: `null`); the eight texts the relation reading's tests free
+  with a framed or toned word are now held for it. `highlights.test.ts`: of a table's six cells, the two whose decorated piece sets
+  a letter are held, not the one of a decorated number, nor a paragraph or a caption holding one, nor a cell the paper keeps (red at
+  the base: no such reading). `locate.test.ts`: a held cell's member stated `unwrapped`, a cell Rule 1 keeps as before (red at the
+  base: no why).
+- **Measured** (stage 1a, the lane's dw1 against round B13's r20 over the 88, the same flags and compiles; 2111.09276v1 against
+  its base at 75602aecb over soul-locate's compiles). The counts the research read, exactly: figure texts held 8 in 2 papers
+  (2608.06701v1's six on page 1: box 10's "Thought: I'm still not finding `CallbackBase`. …", "`host_label` static method in
+  `CallbackBase`" and four lines of the plan's chips, `CallbackBase.host_label(result)` and a path; 2610.40576v1's two), cells
+  held 8 in 1 paper (2610.40576v1's tables 9, 10 and 12: four
+  drawn before, four unlocated before and after; its two cells the paper keeps as names unchanged); 2111.09276v1's 23 figure texts
+  and 12 cells (Table 1's every cell with a highlight). Two figure texts no ink locates (2610.19274v1, 2610.40576v1) are marked held
+  too and stay unlaid. Shown 38,204 to 38,192. No other unit's state, id or text moves, but four of 2610.40576v1's held cells:
+  Rule 1 by group (§18.22) had made each one's `\ctk{…}` an element `code` and given it a new id; held before locate, the cell is
+  passed over by that reading as every fixed unit is, its id the instrument's again (today's), and through those glyphs the paper's
+  face counts every part of it states move (+5 and +20 glyphs of two faces), nothing else on its pages but the held members' why.
+  2608.06701v1's figure on pages 1 and 2: the six members' why, and their sets: the two size ties they stood in lose them (6 to 4
+  ords, 21 to 17). The twin run identical (I6: 2,722 objects, 89 dumps); the float lines 778 and the orphan letters 388 as
+  recorded; the differential's lost lines r20's 11, its accepted the same 5,416 units (three of 2610.40576v1's cells now accepted
+  by (s), before as written by Rule 1 by group), gained 5,838 to 5,826 (the twelve held units, v2's own, no longer shown).
+  2111.09276v1 laid with staging's stored Google rows (the served metrics, the reader's `typesetLay`, pages 1, 3, 4 and 8): its
+  35 held members unwrapped, every other member of those pages in the state and at the size it had; Table 1's other 19 cells laid
+  as before, its columns decided as before. v2's lay of the two pairs of the lab's that move (`v2.mjs`, the lab's store, no
+  translator asked): 2608.06701v1-zh p1, the six held texts unwrapped, and four labels of the figure's "New Plan" box, whose size
+  tie no longer holds them, drawn at 4.35 pt where they were at 4.24; 2610.40576v1-zh, its four drawn cells and two figure texts
+  unwrapped (none had a stored reply: the store lacks 43 of its units' replies, 37 now), tables 9 and 12 decided as before for
+  every other cell, and table 10's column 0 (its three segment rows, "Student prefix · tokens 0--512" …) translated where the base
+  held it as names: the base read its two decorated cells, with no reply in the store, as cells that came back as they went (a
+  cell no translator was sent counts so), two of five, the share; held, they tell nothing, and its three other cells came back
+  changed. That column moved by the store's gap, which the base read as evidence; with every reply in, the replies alone decide
+  it in both.
+- **Stage 1a, the differential and the parity.** The dump marks each held unit `keptBy: 'decorated'`; its cause is the
+  candidate's own (`stated.mjs` CAUSE.decorated, keptWhyOf), "kept as the original whole: a decorated word inside it", which the
+  acceptance list accepts on the owner's ruling ((s), the coordinator, 2026-11-12). The parity's gate (`lab/typeset/parity`) reads
+  no `keptBy: 'decorated'`: today translates these lines, mixed, and v2 now draws them as the original's, which its `shown`
+  measure may read as a translation missing; that reading is the gate's to rule on (its keeps are listed by mark, `join.mjs`
+  candidateKept), not this section's.
+- **Versions.** PIPELINE must move (members held and stated unwrapped, their groups gone from the add-on, a held figure text's
+  size set its own, 2610.40576v1's four cells' ids); no other unit's id or text moves, nor the format (`unwrapped` is the part's
+  existing PrepWhy). TRANSLATE stays: today's engine reads none of it.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

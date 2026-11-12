@@ -270,7 +270,8 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     const frame = rect(g[12]!.x0 - 0.5, 696, g[23]!.x1 + 0.5, 709)
     crowd(fig, 0, [boxMet(0, frame)])
     const [t] = figureLinesOf([page], fig, () => false, null)
-    expect(t!.why).toBeNull()
+    // (no ink keeps it crowded; a word of it its decoration holds keeps it whole, §18.57)
+    expect(t!.why).toBe('decoration')
     expect(t!.els).toEqual([
       { kind: 'cite', glyphs: Array.from({ length: 12 }, (_, i) => 12 + i).filter((i) => !g[i]!.blank), boxes: [0] },
     ])
@@ -519,6 +520,24 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     const [u] = figureLinesOf([one.page], one.fig, () => false, null)
     expect(u!.els.map((e) => e.kind)).toEqual(['cite'])
   })
+  it('holds a text whole as the original where a decoration holds a word of it; a decorated number stays a crop in its translation (§18.57)', () => {
+    // (the owner's ruling of 2026-11-12: until a decoration can follow its words, a label that holds a decorated word is never
+    // translated around it, no half-original line; a decorated stretch with no letter makes none and stays an element)
+    const word = pageOf([[{ text: 'Sprinkle the ginger on the fish', font: 'ArialMT' }]])
+    const g = word.page.glyphs as Glyph[]
+    const tone = (G: Glyph[], a: number, b: number): TodayMet => ({
+      ...boxMet(0, rect(G[a]!.x0 - 0.5, 697, G[b]!.x1 + 0.5, 709, { stroke: false, fill: true, hw: 0 })),
+      ground: true,
+    })
+    word.fig.met.set(0, { items: [tone(g, 13, 18)], under: null })
+    const [t] = figureLinesOf([word.page], word.fig, () => false, null)
+    expect([t!.why, t!.els.map((e) => e.kind)]).toEqual(['decoration', ['cite']])
+    const number = pageOf([[{ text: 'Step 12 of the recipe', font: 'ArialMT' }]])
+    const h = number.page.glyphs as Glyph[]
+    number.fig.met.set(0, { items: [tone(h, 5, 6)], under: null })
+    const [u] = figureLinesOf([number.page], number.fig, () => false, null)
+    expect([u!.why, u!.els.map((e) => e.kind)]).toEqual([null, ['ref']])
+  })
   it('makes a stretch a tone under it holds whole an element carrying the tone, in a text nothing crowds (2608.06701v1 p1)', () => {
     // ("`host_label` static method in `CallbackBase`": a blue bar under each name, its backticks outside it, painted before it)
     const { page, fig } = pageOf([[{ text: '`host_label` static method in `CallbackBase`', font: 'ArialMT' }]])
@@ -532,7 +551,8 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     fig.met.set(0, { items: [first, second], under: null })
     const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
     expect(rest).toEqual([])
-    expect(t!.why).toBeNull()
+    // (no ink keeps it crowded; a word of it its decoration holds keeps it whole, §18.57)
+    expect(t!.why).toBe('decoration')
     expect(t!.els.map((e) => [e.kind, e.boxes, e.glyphs.length])).toEqual([
       ['cite', [0], 10],
       ['cite', [1], 12],
@@ -655,7 +675,8 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     crowd(fig, 0, [])
     crowd(fig, 2, [boxMet(0, under), boxMet(1, line)])
     const [t] = figureLinesOf([page], fig, () => false, MONO)
-    expect(t!.why).toBeNull()
+    // (no ink keeps it crowded; a word of it its decoration holds keeps it whole, §18.57)
+    expect(t!.why).toBe('decoration')
     expect(t!.els[0]).toMatchObject({ kind: 'code', boxes: [0] })
     expect(t!.els[1]).toMatchObject({ kind: 'cite', boxes: [1] })
   })
@@ -1350,7 +1371,8 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     fig.met.set(1, { items: [{ g: 2 }, boxMet(0, frame)], under: null })
     const [t] = figureLinesOf([page], fig, () => false, null)
     expect(t!.ks).toEqual([0, 1, 2])
-    expect(t!.why).toBeNull()
+    // (no ink keeps it crowded; a word of it its decoration holds keeps it whole, §18.57)
+    expect(t!.why).toBe('decoration')
     expect(t!.els.map((e) => [e.kind, e.boxes])).toEqual([['cite', [0]]])
   })
   it('makes a framed citation an element where its brackets’ and commas’ ink crosses the frame (2609.19644v1 p58)', () => {
@@ -1368,7 +1390,8 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
     expect(rest).toEqual([])
     expect(t!.ks).toEqual([0, 1, 2])
-    expect(t!.why).toBeNull()
+    // (no ink keeps it crowded; a word of it its decoration holds keeps it whole, §18.57)
+    expect(t!.why).toBe('decoration')
     expect(t!.els.map((e) => [e.kind, e.glyphs.map((g) => G[g]!.u).join('')])).toEqual([['cite', '(Garzaetal.,']])
   })
   it('reads a frame its paragraph’s runs each met once: its box on its element once', () => {
@@ -1386,7 +1409,8 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
     expect(rest).toEqual([])
     expect(t!.ks).toEqual([0, 1, 2])
-    expect(t!.why).toBeNull()
+    // (no ink keeps it crowded; a word of it its decoration holds keeps it whole, §18.57)
+    expect(t!.why).toBe('decoration')
     expect(t!.els.map((e) => [e.kind, e.boxes])).toEqual([['cite', [0]]])
   })
   it('gives a frame on another line its own element, never one an element of this line spans across (2609.19644v1 p58)', () => {
@@ -1411,7 +1435,8 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     fig.met.set(4, { items: [boxMet(1, rect(136, 683, 153, 695))], under: null })
     const [t] = figureLinesOf([page], fig, () => false, null)
     expect(t!.ks).toEqual([0, 1, 2, 3, 4, 5])
-    expect(t!.why).toBeNull()
+    // (no ink keeps it crowded; a word of it its decoration holds keeps it whole, §18.57)
+    expect(t!.why).toBe('decoration')
     expect(t!.els.map((e) => [e.kind, e.boxes])).toEqual([
       ['cite', [0]],
       ['cite', [1]],
@@ -1441,7 +1466,8 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     fig.met.set(1, { items: [boxMet(1, start)], under: null })
     const [t] = figureLinesOf([page], fig, () => false, null)
     expect(t!.ks).toEqual([0, 1, 2])
-    expect(t!.why).toBeNull()
+    // (no ink keeps it crowded; a word of it its decoration holds keeps it whole, §18.57)
+    expect(t!.why).toBe('decoration')
     expect(t!.els.map((e) => [e.kind, e.boxes, e.glyphs.map((g) => G[g]!.u).join('')])).toEqual([
       ['cite', [0], 'the'],
       ['cite', [1], 'lazy'],

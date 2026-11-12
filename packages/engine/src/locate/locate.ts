@@ -80,6 +80,10 @@ export interface Member {
   place?: Place
   /** its ink stays (a kept block): in no group */
   fixed: boolean
+  /** its unit is the paper's as it is, never translated (InstrumentUnit.kept): a fixed one holds no text a translation could
+   *  stand for (a kept block); a fixed one not kept holds text held for its drawing (a figure text the figure reading keeps, a
+   *  cell held for its decorated word, §18.57), which the bundle states unwrapped (bundle.ts stateOf) */
+  kept: boolean
   figure: boolean
   /** its elements made of a group set wholly in a face of one pitch on lines of their own (Rule 1 by group, PDF-READER §18.22):
    *  TeX's vertical box, its rows kept where TeX set them as a display's are, by piece id */
@@ -459,6 +463,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     kind,
     located: false,
     fixed: false,
+    kept: false,
     figure: false,
     text: [],
     label: [],
@@ -550,6 +555,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const mem = empty(u, name !== undefined ? 'name' : unit.kind, unit.id)
     if (name !== undefined) mem.name = name
     mem.fixed = !!unit.fixed
+    mem.kept = !!unit.kept
     mem.figure = !!unit.figure
     if (unit.figure?.dir) mem.dir = unit.figure.dir
     if (list.length) {
@@ -1013,6 +1019,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     if (!artefact(mem.text)) continue
     units[mem.unit] = { ...units[mem.unit]!, kept: true, fixed: true, pitch: true }
     mem.fixed = true
+    mem.kept = true
     stats.artefacts.units++
   }
   // (and read by group, as F0 reads a figure's line (figure-lines.ts): a group of a unit's that holds text of its own and whose
@@ -1247,6 +1254,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       if (x.els) for (const id of piecesOf(x.unit.content).keys()) if (!x.els.has(id)) jointPiece.add(`${u}|${id}`)
       const mem = empty(u, x.unit.kind, x.unit.id)
       mem.fixed = !!x.unit.fixed
+      mem.kept = !!x.unit.kept
       mem.figure = !!x.unit.figure
       if (x.unit.figure?.dir) mem.dir = x.unit.figure.dir
       mem.align = x.unit.align ?? 'j'

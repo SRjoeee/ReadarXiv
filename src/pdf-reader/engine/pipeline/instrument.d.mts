@@ -132,5 +132,12 @@ export declare function nameGroupOf(g: string | null | undefined): { occurrence:
 /** each unit's facts from the front end's beside it, by index: a caption's float type, a unit kept as it is (its names, an
  *  algorithm float's body) */
 export declare function unitFactsOf(paper: import('./live.mjs').Paper): { float: Map<number, string>; kept: Set<number> }
+/** the cells held whole as the original for a decorated word they hold (PDF-READER §18.57), by unit index: a table's cell not
+ *  kept already holding a placeholder the probe states TeX set beside a decoration of its own, a letter in its text */
+export declare function decoratedCellsOf(
+  units: readonly unknown[],
+  decorated: ReadonlyMap<string, string> | null | undefined,
+  kept?: ReadonlySet<number>,
+): Set<number>
 /** the Instrument of today's marked compile */
 export declare function instrumentOf(o: Record<string, unknown>): Promise<{ instrument: Instrument; today: unknown }>

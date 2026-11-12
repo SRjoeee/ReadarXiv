@@ -14,7 +14,7 @@
 // drawn in the target's word, never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
-import { boxedAlignOf, framesOf, groupFacts, linkTargetOf, ownersOf, readAlign, readBoxAlign, readPdf, readRefNames, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
+import { boxedAlignOf, framesOf, groupFacts, holdsLetter, linkTargetOf, ownersOf, readAlign, readBoxAlign, readPdf, readRefNames, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
 import { classOf, followsOf, headEnd, INK_ANY, leadStep, readColours, readSkipProbe, refKeyOf, refKeysOf } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
 import { READ_ALONE, regionsOf, WANT } from '../layout/stream.mjs'
@@ -1246,6 +1246,26 @@ export function unitFactsOf(paper) {
   return { float, kept }
 }
 
+/**
+ * The cells held whole as the original for a decorated word they hold (PDF-READER §18.57, the owner's ruling of 2026-11-12: until
+ * a decoration can follow its words, a cell is never translated around one, no half-original line), by unit index: each a table's
+ * cell (the front end's `cell`) the paper does not keep already (`kept`, unitFactsOf's), holding a placeholder whose source the
+ * probe states TeX set beside a decoration of its own (`decorated`, marks.mjs readInkDecorated: soul's ground, underline or
+ * strike, alone or in a paper's macro), a letter in the text it sets (the engine's holdsLetter, which tells a figure's decorated
+ * word from a number: a decorated number or mark makes no half-original line, an element in the translation as before). The
+ * instrument states each `fixed` and `decorated`, never `kept`: its text could be translated and is held for its drawing alone,
+ * so its table's group decision reads it as no evidence of what its column holds (bundle.ts stateOf: unwrapped)
+ */
+export function decoratedCellsOf(units, decorated, kept = new Set()) {
+  const out = new Set()
+  if (!decorated?.size) return out
+  units.forEach((u, i) => {
+    if (!u?.cell || kept.has(i)) return
+    if ((u.pieces ?? []).some(p => p.t === 'ph' && holdsLetter(decorated.get(p.src) ?? ''))) out.add(i)
+  })
+  return out
+}
+
 export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pdfjs, documentOptions = {}, made = {} }) {
   const units = paper.units
   const bundle = bundleUnitsOf(paper)
@@ -1288,6 +1308,9 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const kindOf = elementKindOf
   const classesBy = []
   const facts = unitFactsOf(paper)
+  // (the probe's decorated texts: the cells a decorated word holds whole, and the pieces of no point found by their text below)
+  const decorated = textsOf(options.decorated)
+  const held = decoratedCellsOf(units, decorated, facts.kept)
   units.forEach((u, i) => {
     // (its run-in labels and what TeX set for its groups, once B's glyphs are owned: marksOf, below)
     const content = piecesOf(u.pieces, { kindOf, idOfNested: x => ids[units.indexOf(x)] ?? null, nameOf, bib: BIB_UNITS.has(u.kind) })
@@ -1296,7 +1319,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     const unhidden = own.units.get(i)?.unhidden
     const classes = classesOf(u.pieces, colours.get(i) ?? null, shown), spans = spansOf(u.pieces, colours.get(i) ?? null), passed = passedOf(u.pieces)
     classesBy[i] = new Map(classes)
-    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(passed.length ? { passed } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(facts.kept.has(i) ? { kept: true } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : boxed.has(i) ? { align: boxed.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
+    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(passed.length ? { passed } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(facts.kept.has(i) ? { kept: true } : {}), ...(held.has(i) ? { fixed: true, decorated: true } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : boxed.has(i) ? { align: boxed.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
   })
   for (let i = units.length; i < inkBase; i++) {
     const content = contentOf(bundle[i][5].map(p => ({ t: 'text', s: p[1] })))
@@ -1345,7 +1368,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   }
   // (the ink of a piece of no point of its own, or of its opening point alone, that no reading found, by the text TeX states it
   // sets where its source places it, and with it the boxes of its decoration: unmarkedInkOf)
-  for (const c of unmarkedInkOf(pages, units, { glyphs, boxes, classes: classesBy, texts: shown, decorated: textsOf(options.decorated) })) {
+  for (const c of unmarkedInkOf(pages, units, { glyphs, boxes, classes: classesBy, texts: shown, decorated })) {
     const O = glyphs[c.page], X = boxes[c.page]
     for (const j of c.glyphs) {
       O.unit[j] = c.unit

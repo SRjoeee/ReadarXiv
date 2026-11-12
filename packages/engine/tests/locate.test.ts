@@ -1861,6 +1861,23 @@ describe('review of #605', () => {
     expect(placed.find((x) => x.ord === 1)).toMatchObject({ kind: 'figure', why: 'unwrapped' })
     expect(placed.find((x) => x.ord === 2)?.why).toBeUndefined()
   })
+  it('says a cell held for its decorated word is unwrapped too: text held, not kept, no evidence for its column (§18.57)', () => {
+    // (the instrument holds a cell whose decorated piece sets a letter `fixed`, never `kept`: its ink stays, no group of it; the
+    // part says why, so the typesetter lays nothing over it and its table's group decision reads nothing of it; a cell the paper
+    // keeps as it is (Rule 1's, kept and fixed) as before)
+    const B = docOf([{ lines: ['Put the ham in the oven.', 'Slice the bread thin.', 'max_tokens'] }])
+    const units = [
+      unitOf('cell', 'Put the ham in the oven.', { fixed: true, decorated: true }),
+      unitOf('cell', 'Slice the bread thin.'),
+      unitOf('cell', 'max_tokens', { kept: true, fixed: true, pitch: true }),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 2]]), B, align(B, B))
+    expect(L.members.map((m) => m.located)).toEqual([true, true, true])
+    const addOn = addOnOf(L, 1)
+    expect(stateOf(L.members[0]!, addOn)).toEqual({ why: 'unwrapped', drawn: false, fixed: 0 })
+    expect(stateOf(L.members[1]!, addOn)).toMatchObject({ drawn: true })
+    expect(stateOf(L.members[2]!, addOn)).toEqual({ drawn: false, fixed: 0 })
+  })
   it('lays no member one of whose images the wrap could not group (planOf’s lost)', () => {
     const B = docOf([{ lines: ['a unit with an image'] }])
     const L = locate(instrumentOf(B, [unitOf('para', 'a unit with an image')], [[0]]), B, align(B, B))

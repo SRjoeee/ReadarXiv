@@ -70,9 +70,9 @@ export interface FigureText {
   /** boxes decorating the whole of it (a rule under all of it): hidden with its text */
   textBoxes: number[]
   /** why its ink stays: crowded (drawn twice, doubledOf, or F1's torn formula), code (a line of code, kept whole), formula (a line no word of
-   *  which stands outside its formulas, kept whole, F1), script (a script or an accent set apart from its base, setApart: F3), or
-   *  null */
-  why: 'crowded' | 'code' | 'formula' | 'script' | null
+   *  which stands outside its formulas, kept whole, F1), script (a script or an accent set apart from its base, setApart: F3),
+   *  decoration (a word of it a decoration holds, an element `cite`: the text held whole, §18.57), or null */
+  why: 'crowded' | 'code' | 'formula' | 'script' | 'decoration' | null
   /** a closed shape round all of it: its room's edges over and under its baseline (PDF units up and down from it) */
   container: { over: number; under: number } | null
   /** the depth under its baseline of the stroke under its text (roomOf's `under`) */
@@ -81,6 +81,9 @@ export interface FigureText {
 
 const WORD = /\p{L}{2}/u
 const LETTER = /\p{L}/u
+/** whether a text holds a letter (Unicode's): what makes a figure's decorated stretch a word (`cite`) and not a number or a mark
+ *  (`ref`), and a cell's decorated piece one that holds its cell whole (PDF-READER §18.57) */
+export const holdsLetter = (s: string): boolean => LETTER.test(s)
 const bare = (name: string) => String(name ?? '').replace(/^[A-Z]{6}\+/, '')
 const real = (g: G | undefined): g is G => !!g && !g.blank && !g.unseen && /\S/u.test(g.u ?? '')
 /** the band a translation is drawn in, DRAW_BAND's em: two of it is a line with its leading at most (a ground one line tall) */
@@ -162,6 +165,11 @@ export function figureLinesOf(
         keptBy.set(t, 'double')
         for (const k of t.ks) if (fig.units[k]) fig.units[k]!.double = true
       }
+    // (a text a word of which a decoration holds, an element `cite` (judge's decorate): the original's whole, its words never
+    // translated around the decorated one until a decoration can follow its words (the owner's ruling of 2026-11-12, §18.57);
+    // kept here, before ink.ts ties the labels' sizes, so that it keeps a set of its own as every text kept whole does. One kept
+    // for another reason keeps that one; a decorated stretch with no letter (`ref`) holds nothing, an element in the translation)
+    for (const t of out) if (t.why === null && t.els.some((e) => e.kind === 'cite')) t.why = 'decoration'
     for (const t of out) countKept(t)
     // (the units no text holds: drawn twice, today's kept; else a turned run today crowded, which the line reading (level lines)
     // never takes, laid as today's unit: an axis's title by its axis or its tick labels)
@@ -203,9 +211,9 @@ export type LinesWork = {
   interior: number
   /** the figure texts kept as the original's, by why: drawn twice (`double`: its string again on its page, a little off it), F1's
    *  torn formula (`torn`), a run crowded by today's reading with no ink met (`today`), a line of code or of formulas kept whole
-   *  (`code`, `formula`), one the engine cannot draw as it was set (`script`: setApart); and `inked`, the texts laid over ink their
-   *  room met (step 2: no ink but its own double keeps a text) */
-  kept?: Record<'double' | 'torn' | 'today' | 'code' | 'formula' | 'script' | 'inked', number>
+   *  (`code`, `formula`), one the engine cannot draw as it was set (`script`: setApart), one a word of which a decoration holds
+   *  (`decoration`, §18.57); and `inked`, the texts laid over ink their room met (step 2: no ink but its own double keeps a text) */
+  kept?: Record<'double' | 'torn' | 'today' | 'code' | 'formula' | 'script' | 'decoration' | 'inked', number>
 }
 let W: LinesWork | null = null
 /** the texts kept for being drawn twice, and those whose room met ink */
@@ -383,7 +391,7 @@ function doubledOf(
   return { doubled: out, twins: pairs }
 }
 const countKept = (t: FigureText) => {
-  if (t.why === 'code' || t.why === 'formula' || t.why === 'script') count(t.why)
+  if (t.why === 'code' || t.why === 'formula' || t.why === 'script' || t.why === 'decoration') count(t.why)
   else if (t.why === 'crowded') count(keptBy.get(t) ?? 'torn')
   else if (!t.why && inkedTexts.has(t)) count('inked')
 }
@@ -1755,7 +1763,7 @@ function decorate(ft: FigureText, stretch: number[], bs: number[], glyphs: reado
     return
   }
   // (cut out of the text pieces it lies in: an element of its own, `cite` where it holds a letter, `ref` where it holds none)
-  const kind = stretch.some((g) => LETTER.test(glyphs[g]!.u)) ? 'cite' : 'ref'
+  const kind = stretch.some((g) => holdsLetter(glyphs[g]!.u)) ? 'cite' : 'ref'
   const order: FigureText['order'] = []
   const i = ft.els.length
   ft.els.push({ kind, glyphs: [...stretch], boxes: [...bs] })
