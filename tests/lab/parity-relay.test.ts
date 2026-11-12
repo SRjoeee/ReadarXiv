@@ -14,7 +14,7 @@ const el = (id: string, src: string) => ({ t: 'el' as const, id, kind: 'other', 
 
 describe("today's door row said in v2's unit", () => {
   it("a placeholder of today's that prints a character v2's unit holds as text is that character; an element of one source is it", () => {
-    // (today: "R" \& "D work, see " \cite{x}; v2: "R&D work, see " \cite{x}. Today's row: "R" \& "D 工作，参见" \cite{x})
+    // (today: "R" \& "D work, see " \cite{x}; v2: "R&D work, see " \cite{x}. Today's row: "R" \& "D Arbeit, siehe " \cite{x})
     const t = today([{ kind: 'text', s: 'R' }, { kind: 'ph', src: '\\&' }, { kind: 'text', s: 'D work, see ' }, { kind: 'ph', src: '\\cite{x}' }])
     const unit = { content: [text('R&D work, see '), el('1', '\\cite{x}')] }
     const r = todaySaid([7, ['R', 1, 'D Arbeit, siehe ', 3], 'whole', 'ms'], t, unit)
