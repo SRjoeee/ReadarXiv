@@ -7,13 +7,22 @@
 // alike from each page's part. Then: node <baseline>/tools/diff.mjs <baseline> <dir> --scope=reader. The members from lane
 // L1's parts (the adapter, Placed to Prepared) are this runner's next stage. Run from the worktree's root (heavy: through
 // heavy-slot.sh test).
+// --metrics=table: the tap's table alone, a measure it lacks throws MissingMeasure and leaves its unit unfit; default: the
+// table, then the served measurer (served-metrics.mjs: the reader's faces, Skia's canvas) for a measure today never made, as
+// gate-l1.mjs measures: the port's breaker cuts words today's walk never cut (round 8 B5's literal-fixes, 1a01e7206), whose
+// widths the table cannot hold and the reader's canvas measures; --metrics=served: the measurer alone
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { tableMetrics } from '../../packages/typeset/src/metrics/table.ts'
 import { readerDump } from '../../packages/typeset/tests/replay/display.ts'
 import { gatePair } from '../../packages/typeset/tests/replay/gate.ts'
-import { LAB, TAP } from '../../packages/typeset/tests/replay/tap.ts'
+import { LAB, readGz, TAP } from '../../packages/typeset/tests/replay/tap.ts'
+import { layered, servedMetrics } from './served-metrics.mjs'
 
 const args = process.argv.slice(2)
+const METRICS = args.find(a => a.startsWith('--metrics='))?.slice(10) ?? 'layered'
+const served = METRICS === 'table' ? null : servedMetrics()
+const metricsOf = pair => (METRICS === 'served' ? served : layered(tableMetrics(readGz(join(TAP, 'metrics', `${pair}.metrics.json.gz`))), served))
 const OUT = args.find(a => a.startsWith('--out='))?.slice(6) ?? join(LAB, 'refactor-2026-11', 'lanes', 'L3', 'gate', 'today')
 const named = args.filter(a => !a.startsWith('--'))
 const pairs = named.length ? named : readdirSync(join(TAP, 'ledgers')).map(f => f.replace(/\.ledger\.json\.gz$/, '')).sort()
@@ -24,7 +33,7 @@ const I5by = new Map(), byPaper = new Map(), below = []
 const inv = { laid: 0, I3: 0, I4: 0, I5: 0 }, invEx = { I3: [], I4: [], I5: [] }
 for (const pair of pairs) {
   count.pairs++
-  const g = gatePair(pair)
+  const g = gatePair(pair, METRICS === 'table' ? {} : { metricsOf })
   count.prepared += g.prepared.size
   count.laid += g.units.length
   count.pages += g.pages
@@ -52,4 +61,4 @@ if (process.env.AXT_GATE_BELOW) writeFileSync(process.env.AXT_GATE_BELOW, `${bel
 console.log(`I5, each line past its slot by the placement's rule (count, largest excess pt): ${[...I5by].map(([k, b]) => `${k} ${b.n} (${b.max.toFixed(2)})`).join('; ')}`)
 console.log(`invariants over the laid members: ${JSON.stringify(inv)}; ${['I3', 'I4', 'I5'].map(k => `${k}: ${invEx[k].join(' | ')}`).join('; ')}`)
 if (selfDiffer.length) console.log(`laid otherwise from another page's part: ${selfDiffer.slice(0, 10).join('; ')}`)
-console.log(`dumps: ${join(OUT, 'reader')}`)
+console.log(`dumps: ${join(OUT, 'reader')}; metrics: ${METRICS === 'table' ? "the tap's table alone" : METRICS === 'served' ? 'the served faces alone' : "the tap's table, then the served faces"}`)

@@ -4,7 +4,7 @@
 // read. Nothing here is a new gate: a gate's pass is its own (its exit code, or the counts its own output states against the
 // bound its own header names), and an invariant no gate holds is said so (`gap`). Not shipped.
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { CACHE as SWEEP_CACHE } from '../../packages/typeset/tests/replay/today.ts'
 import { PAIRS as PARITY_PAIRS } from '../typeset/parity/pairs.mjs'
 import { SLICES, TABLES } from '../typeset/served-metrics.mjs'
@@ -301,11 +301,20 @@ export function typesetOf(text) {
   return out
 }
 
-/** a corpus runner's log.tsv (lab/pdf/prepare-back/corpus.sh): one line a paper, `id <tab> exit <tab> summary` */
+/** a corpus runner's log.tsv (lab/pdf/prepare-back/corpus.sh): one line a paper, `id <tab> exit <tab> summary`. The table
+ *  keeps 400 characters of a summary, and run.mjs's is longer since it states what locate made (60c263fd1): a paper's summary
+ *  is read whole from its own log beside the table (`logs/<id>.log`, its last line that is the paper's JSON), the table's
+ *  where the log has none */
 export function corpusLogOf(file) {
   const rows = readFileSync(file, 'utf8').split('\n').filter(Boolean).map(l => l.split('\t'))
   const out = { papers: rows.length, made: 0, failed: [], refused: [], missingCompile: [], proofs: { a: 0, c: 0, on: 0, offOutside: 0 } }
-  for (const [id, rc, summary] of rows) {
+  const wholeOf = (id, cut) => {
+    const log = join(dirname(file), 'logs', `${id}.log`)
+    if (!existsSync(log)) return cut
+    return readFileSync(log, 'utf8').split('\n').findLast(l => l.startsWith(`{"id":${JSON.stringify(id)}`)) ?? cut
+  }
+  for (const [id, rc, cut] of rows) {
+    const summary = rc === '0' ? wholeOf(id, cut) : cut
     if (rc === 'refused') { out.refused.push(`${id} (${summary})`); continue }
     if (rc === '3') { out.missingCompile.push(id); continue }
     if (rc !== '0') { out.failed.push(`${id}: exit ${rc}: ${summary}`); continue }
@@ -330,11 +339,12 @@ export function corpusLogOf(file) {
 }
 
 /** the candidate's prepare dumps (baseline FORMAT.md §3): units drawn by group, and the papers refused whole (no source
- *  unit drawn), as baseline/tools/acceptance.mjs counts them */
-export function drawnOf(dir) {
+ *  unit drawn), as baseline/tools/acceptance.mjs counts them; `within` a directory of dumps (the baseline's): only the papers
+ *  it holds a dump of, so that a count stands beside the baseline's own (a paper the corpus gained after it is left out) */
+export function drawnOf(dir, within = null) {
   const groupOf = u => (u.kind === 'name' ? 'names' : u.kind === 'inkfigures' ? 'figures' : /^ink/.test(u.kind ?? '') ? 'ink' : 'source')
   const out = { source: 0, ink: 0, figures: 0, refusedWhole: 0, papers: 0 }
-  for (const f of readdirSync(dir).filter(f => f.endsWith('.prepare.json'))) {
+  for (const f of readdirSync(dir).filter(f => f.endsWith('.prepare.json') && (!within || existsSync(join(within, f))))) {
     const d = JSON.parse(readFileSync(join(dir, f), 'utf8'))
     out.papers++
     let source = 0
@@ -385,6 +395,32 @@ const e2e = (script, title, holds = [], extra = {}) => ({
 })
 const lab = (ctx, ...p) => join(ctx.refactor, ...p)
 const exists = (what, path) => ({ what, path })
+
+// The corpus the prepare's gates run, as the integration round's stage 1a runs it (lanes/converge-7/round*-chain.sh): its 88
+// papers; the compile caches its chain reads, whose newest directories hold the compiles of the marks the round moved
+// (RELEASE_CHECK_CACHES, else the lab's list for these papers); and its flags, the baseline's dumps read for the units of
+// today's the candidate makes otherwise (run.mjs --baseline: the stated causes the acceptance list reads). A run and its twin
+// take the same flags: same.mjs compares two runs only where their flags agree.
+const PAPERS = 'lanes/L1-papers88.tsv'
+const cachesFile = ctx => process.env.RELEASE_CHECK_CACHES ?? lab(ctx, 'lanes/L1-caches88.txt')
+/** a compile cache chain, colon-joined, from its file: a list of directories (joined by `:` or one a line, `#` a comment), or
+ *  a corpus run's flags.txt (corpus.sh writes the chain it read as its `--caches=` line) */
+export function cachesOf(text) {
+  const flag = /^--caches=(.*)$/m.exec(text)
+  if (flag) return flag[1].trim()
+  return text
+    .split('\n')
+    .map(l => l.replace(/#.*$/, '').trim())
+    .flatMap(l => l.split(':'))
+    .filter(Boolean)
+    .join(':')
+}
+const corpusNeeds = ctx => [exists('the 88 papers', lab(ctx, PAPERS)), exists("the compile caches' list (RELEASE_CHECK_CACHES)", cachesFile(ctx))]
+/** a run with the round's flags reads the baseline's dumps besides */
+const stage1aNeeds = ctx => [...corpusNeeds(ctx), exists("the baseline's prepare dumps", lab(ctx, 'baseline/prepare'))]
+/** corpus.sh's arguments: the papers, the output, the caches and two papers at once, then run.mjs's flags */
+const corpusArgs = (ctx, out, ...flags) => ['bash', 'lab/pdf/prepare-back/corpus.sh', lab(ctx, PAPERS), out, cachesOf(readFileSync(cachesFile(ctx), 'utf8')), '2', ...flags]
+const stage1a = ctx => ['--prove', `--baseline=${lab(ctx, 'baseline/prepare')}`]
 
 export const GATES = [
   // ---------------------------------------------------------------- unit (hosted CI, every pull request)
@@ -449,13 +485,13 @@ export const GATES = [
   // ---------------------------------------------------------------- pipeline (the self-hosted runner, with lab data)
   {
     id: 'prepare',
-    title: "the prepare's back half on the 87 papers from cached compiles, with PDF.js's proofs (I1 (a), I2 (c′))",
+    title: "the prepare's back half on the 88 papers from cached compiles, with PDF.js's proofs (I1 (a), I2 (c′)), as the round's stage 1a runs it",
     tier: 'full',
     stage: 'pipeline',
     holds: ['I1', 'I2'],
     disk: true,
-    needs: ctx => [exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv')), exists('the compile caches\' list', lab(ctx, 'lanes/L1-caches.txt'))],
-    steps: ctx => [{ cmd: ['bash', 'lab/pdf/prepare-back/corpus.sh', lab(ctx, 'lanes/L1-papers87.tsv'), join(ctx.work, 'prepare'), readFileSync(lab(ctx, 'lanes/L1-caches.txt'), 'utf8').trim(), '2', '--prove'], slot: 'test', fresh: join(ctx.work, 'prepare') }],
+    needs: stage1aNeeds,
+    steps: ctx => [{ cmd: corpusArgs(ctx, join(ctx.work, 'prepare'), ...stage1a(ctx)), slot: 'test', fresh: join(ctx.work, 'prepare') }],
     judge: ctx => corpusJudge(ctx, join(ctx.work, 'prepare'), ['a', 'c']),
   },
   {
@@ -467,19 +503,19 @@ export const GATES = [
     after: ['prepare'],
     needs: ctx => [exists('the frozen baseline', lab(ctx, 'baseline/acceptance.json'))],
     steps: ctx => [{ cmd: ['node', lab(ctx, 'baseline/tools/diff.mjs'), lab(ctx, 'baseline'), join(ctx.work, 'prepare'), '--scope=prepare', `--json=${join(ctx.work, 'prepare-diff.json')}`] }],
-    judge: (ctx, steps) => ({ pass: steps[0].exit === 0, numbers: { ...diffOf(steps[0].text), ...drawnOf(join(ctx.work, 'prepare', 'prepare')) } }),
+    judge: (ctx, steps) => ({ pass: steps[0].exit === 0, numbers: { ...diffOf(steps[0].text), ...drawnOf(join(ctx.work, 'prepare', 'prepare'), lab(ctx, 'baseline/prepare')) } }),
   },
   {
     id: 'prepare-same',
-    title: 'the same inputs give the same bytes: the prepare run again and compared object by object (lab/pdf/prepare-back/same.mjs)',
+    title: "the same inputs give the same bytes: the prepare run again with the same flags and compared object by object (lab/pdf/prepare-back/same.mjs), as the round's twin run",
     tier: 'full',
     stage: 'pipeline',
     holds: ['I6'],
     disk: true,
     after: ['prepare'],
-    needs: ctx => [exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv')), exists('the compile caches\' list', lab(ctx, 'lanes/L1-caches.txt'))],
+    needs: stage1aNeeds,
     steps: ctx => [
-      { cmd: ['bash', 'lab/pdf/prepare-back/corpus.sh', lab(ctx, 'lanes/L1-papers87.tsv'), join(ctx.work, 'prepare-2'), readFileSync(lab(ctx, 'lanes/L1-caches.txt'), 'utf8').trim(), '2'], slot: 'test', fresh: join(ctx.work, 'prepare-2') },
+      { cmd: corpusArgs(ctx, join(ctx.work, 'prepare-2'), ...stage1a(ctx)), slot: 'test', fresh: join(ctx.work, 'prepare-2') },
       { cmd: ['node', 'lab/pdf/prepare-back/same.mjs', join(ctx.work, 'prepare'), join(ctx.work, 'prepare-2')] },
     ],
     judge: (ctx, steps) => {
@@ -513,7 +549,13 @@ export const GATES = [
     tier: 'full',
     stage: 'reader',
     holds: ['D', 'I3', 'I4', 'I5'],
-    needs: ctx => [exists('the tap', lab(ctx, 'baseline/tap/ledgers')), exists("lane L3's derived inputs", lab(ctx, 'lanes/L3/replay')), exists("the release sweep's cache (AXT_SWEEP_CACHE): the views and rules today's reader read", join(SWEEP_CACHE, 'papers'))],
+    needs: ctx => [
+      exists('the tap', lab(ctx, 'baseline/tap/ledgers')),
+      exists("lane L3's derived inputs", lab(ctx, 'lanes/L3/replay')),
+      exists("the release sweep's cache (AXT_SWEEP_CACHE): the views and rules today's reader read", join(SWEEP_CACHE, 'papers')),
+      exists("the reader's served faces' tables (AXT_FACE_TABLES), the measurer of a width the tap lacks", join(TABLES, 'index.json')),
+      exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
+    ],
     steps: ctx => [
       { cmd: ['node', 'lab/typeset/gate.mjs', `--out=${join(ctx.work, 'typeset-today')}`], slot: 'test', fresh: join(ctx.work, 'typeset-today') },
       { cmd: ['node', lab(ctx, 'baseline/tools/diff.mjs'), lab(ctx, 'baseline'), join(ctx.work, 'typeset-today'), '--scope=reader', `--json=${join(ctx.work, 'typeset-today-diff.json')}`] },
@@ -621,7 +663,9 @@ export const GATES = [
     stage: 'reader',
     holds: [],
     needs: ctx => [exists('the tap', lab(ctx, 'baseline/tap/samples'))],
-    steps: () => ['fit', 'fill', 'emit', 'names', 'figures', 'display'].map(r => ({ cmd: ['node', `lab/typeset/replay-${r}.mjs`], slot: 'test', all: true })),
+    // (the figures under today's mark rule, `--marks=today`: v2 sets a figure text by its ink where today's set it by its
+    // advance (PDF-READER §19.12, 9abd1c9e1), which alone moves 609 of the 14,351, and §19.12 reads the port's figures so)
+    steps: () => ['fit', 'fill', 'emit', 'names', 'figures', 'display'].map(r => ({ cmd: ['node', `lab/typeset/replay-${r}.mjs`, ...(r === 'figures' ? ['--marks=today'] : [])], slot: 'test', all: true })),
     judge: (ctx, steps) => ({ pass: steps.every(s => s.exit === 0), numbers: Object.fromEntries(steps.map(s => [s.cmd[1].replace(/^.*replay-|\.mjs$/g, ''), s.exit === 0 ? 'equal' : `exit ${s.exit}: ${lastLine(s.text)}`])) }),
   },
   {
@@ -632,10 +676,13 @@ export const GATES = [
     holds: [],
     // (today's engine at 065c1d973, read only: AXT_TODAY, else the worktree beside this one that packages/typeset/tests/replay/tap.ts names)
     needs: ctx => [exists("today's engine at 065c1d973 (AXT_TODAY)", join(process.env.AXT_TODAY ?? join(ctx.root, '..', 'refactor-read'), 'src/pdf-reader/engine/rules/tex-names.json'))],
+    // (not move-fit.mjs --check, which held the breaker's five moved files to today's code and the changes it lists: the
+    // typesetter's rulings edit those files in place since a8c36be1f (2026-11-08, a URL broken where its url package lets TeX
+    // break it), about forty commits of PDF-READER §18 and §19, so the file it would write is no longer the package's and the
+    // check failed on every one; the moved code is held as the ported files are, by the replays and the reader's gates)
     steps: () => [
       { cmd: ['node', 'lab/typeset/faces-data.mjs', '--check'], all: true },
       { cmd: ['node', 'lab/typeset/rules-data.mjs', '--check'], all: true },
-      { cmd: ['node', 'lab/typeset/move-fit.mjs', '--check'], all: true },
       { cmd: ['node', '--import', './lab/typeset/register.mjs', 'lab/typeset/derive.mjs'], all: true },
       { cmd: ['pnpm', 'exec', 'vitest', 'run', '--config', 'lab/typeset/vitest.config.ts'], all: true },
     ],
@@ -660,13 +707,13 @@ export const GATES = [
   // ---------------------------------------------------------------- corpus (before a release, the owner's machine)
   {
     id: 'pixels',
-    title: "the prepare's pixel proofs on every page of the 87 papers: all groups on is arXiv's page under Splash (I1 (b)), each kind off changes only its ink under Cairo (I2 (c))",
+    title: "the prepare's pixel proofs on every page of the 88 papers: all groups on is arXiv's page under Splash (I1 (b)), each kind off changes only its ink under Cairo (I2 (c))",
     tier: 'release',
     stage: 'corpus',
     holds: ['I1', 'I2'],
     disk: true,
-    needs: ctx => [exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv')), exists('the compile caches\' list', lab(ctx, 'lanes/L1-caches.txt')), exists('poppler (pdftoppm, pdftocairo)', which('pdftocairo'))],
-    steps: ctx => [{ cmd: ['bash', 'lab/pdf/prepare-back/corpus.sh', lab(ctx, 'lanes/L1-papers87.tsv'), join(ctx.work, 'pixels'), readFileSync(lab(ctx, 'lanes/L1-caches.txt'), 'utf8').trim(), '2', '--prove', '--pixels', '--cairo'], slot: 'test', fresh: join(ctx.work, 'pixels') }],
+    needs: ctx => [...corpusNeeds(ctx), exists('poppler (pdftoppm, pdftocairo)', which('pdftocairo'))],
+    steps: ctx => [{ cmd: corpusArgs(ctx, join(ctx.work, 'pixels'), '--prove', '--pixels', '--cairo'), slot: 'test', fresh: join(ctx.work, 'pixels') }],
     judge: ctx => corpusJudge(ctx, join(ctx.work, 'pixels'), ['a', 'c', 'on', 'offOutside']),
   },
   {
@@ -676,8 +723,8 @@ export const GATES = [
     stage: 'corpus',
     holds: ['I1'],
     after: ['prepare'],
-    needs: ctx => [exists("spike S1c's papers (lane L1's canvas runs)", lab(ctx, 'lanes/L1-canvas.jsonl')), exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv'))],
-    steps: ctx => [{ cmd: ['node', '--import', 'tsx', 'lab/pdf/prepare-back/canvas.mjs', join(ctx.work, 'prepare'), lab(ctx, 'lanes/L1-papers87.tsv'), ...canvasIds(ctx)], slot: 'e2e' }],
+    needs: ctx => [exists("spike S1c's papers (lane L1's canvas runs)", lab(ctx, 'lanes/L1-canvas.jsonl')), exists('the 88 papers', lab(ctx, PAPERS))],
+    steps: ctx => [{ cmd: ['node', '--import', 'tsx', 'lab/pdf/prepare-back/canvas.mjs', join(ctx.work, 'prepare'), lab(ctx, PAPERS), ...canvasIds(ctx)], slot: 'e2e' }],
     judge: (ctx, steps) => {
       const c = canvasOf(steps[0].text, canvasIds(ctx))
       return { pass: steps[0].exit === 0 && c.papers > 0 && !c.over.length, numbers: { papers: c.papers, pages: c.pages, over: c.over.length }, note: c.over.slice(0, 4).join('; ') }
@@ -685,15 +732,16 @@ export const GATES = [
   },
   {
     id: 'speed',
-    title: "today's engine's speed check, head against a base worktree (lab/pdf/spikes/layer-gate/run-speed.sh; CLAUDE.md's rule before a release)",
+    title: "today's engine's speed check, head against the released tree (lab/pdf/spikes/layer-gate/run-speed.sh; CLAUDE.md's rule before a release): src/pdf-reader/engine, which the extension's reader still runs (AXT_READER 'today', stage 5a) and which perf-batch and perf-release, measuring the website's readers, do not",
     tier: 'release',
     stage: 'corpus',
     holds: [],
     // (the driver is a zsh script and only measures: its runs' logs go to the work directory, and the verdict is speed.mjs's
-    // over them, exit 0 PASS, 1 FAIL, 2 INCOMPARABLE; a measurement with no verdict is no pass)
-    needs: ctx => [exists('a base worktree (RELEASE_CHECK_BASE)', process.env.RELEASE_CHECK_BASE ?? ''), exists('the layer gate\'s fixture pack (PACK)', packOf(ctx)), exists('zsh', which('zsh'))],
+    // over them, exit 0 PASS, 1 FAIL, 2 INCOMPARABLE; a measurement with no verdict is no pass. It goes with today's engine,
+    // deleted at the cut-over: design §6.2 stage 6, "nothing of the old paths in either tree")
+    needs: ctx => [exists("the base: today's released engine at 065c1d973 (RELEASE_CHECK_BASE, else AXT_TODAY, else the worktree beside this one)", join(speedBase(ctx), 'src/pdf-reader/engine')), exists('the layer gate\'s fixture pack (PACK)', packOf(ctx)), exists('zsh', which('zsh'))],
     steps: ctx => [
-      { cmd: ['zsh', 'lab/pdf/spikes/layer-gate/run-speed.sh', ctx.root, process.env.RELEASE_CHECK_BASE ?? '', '3'], slot: 'e2e', env: { PACK: packOf(ctx), SPEED_LOGS: join(ctx.work, 'speed') }, fresh: join(ctx.work, 'speed') },
+      { cmd: ['zsh', 'lab/pdf/spikes/layer-gate/run-speed.sh', ctx.root, speedBase(ctx), '3'], slot: 'e2e', env: { PACK: packOf(ctx), SPEED_LOGS: join(ctx.work, 'speed') }, fresh: join(ctx.work, 'speed') },
       { cmd: ['node', 'lab/pdf/spikes/layer-gate/speed.mjs', join(ctx.work, 'speed')] },
     ],
     judge: (ctx, steps) => {
@@ -766,6 +814,9 @@ function perfJudge(steps) {
 const canvasIds = ctx => readFileSync(lab(ctx, 'lanes/L1-canvas.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l).id)
 /** the layer gate's fixture pack: PACK, else where the rules gate restores it */
 const packOf = ctx => process.env.PACK ?? join(ctx.root, 'lab/pdf/out/gate-pack')
+/** the speed check's base: RELEASE_CHECK_BASE, else the last release's tree, today's engine at 065c1d973, as the gates that
+ *  read today's engine take it (AXT_TODAY, else the worktree beside this one) */
+const speedBase = ctx => process.env.RELEASE_CHECK_BASE ?? process.env.AXT_TODAY ?? join(ctx.root, '..', 'refactor-read')
 
 const lastLine = t => t.trim().split('\n').filter(l => !/^\s*at /.test(l)).at(-1)?.slice(0, 200) ?? ''
 

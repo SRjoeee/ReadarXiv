@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, GATES, type Gate, INVARIANTS, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
+import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, INVARIANTS, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
 import { cutoverOf, gatesOf, invariantLine, markdownOf, privateResultOf, targetLines, verdictOf } from '../../lab/release-check/verdict.mjs'
 
 const dirs: string[] = []
@@ -137,6 +137,17 @@ describe("a gate's output, read as the gate states it", () => {
     expect(corpusLogOf(join(d, 'log.tsv'))).toEqual({ papers: 7, made: 4, failed: ['e: exit 1: Error: x', 'g: no summary'], refused: ['d (11 GiB free)'], missingCompile: ['c'], proofs: { a: 2, c: 0, on: 0, offOutside: 1 } })
   })
 
+  it("reads a paper's summary whole from its own log where the runner's table cuts it, and its proofs from there", () => {
+    const d = mkdtempSync(join(tmpdir(), 'release-check-'))
+    dirs.push(d)
+    mkdirSync(join(d, 'logs'))
+    // (corpus.sh keeps 400 characters of a summary in log.tsv; run.mjs's summary is longer since it states what locate made)
+    const whole = JSON.stringify({ id: 'p', refused: null, made: { glyphs: 262, ledger: 'x'.repeat(400) }, proofs: { a: 2, c: 0 } })
+    writeFileSync(join(d, 'logs', 'p.log'), `a warning\n${whole}\n`)
+    writeFileSync(join(d, 'log.tsv'), [`p\t0\t${whole.slice(0, 400)}`, `q\t0\t${JSON.stringify({ id: 'q', proofs: { a: 0, c: 1 } })}`].join('\n'))
+    expect(corpusLogOf(join(d, 'log.tsv'))).toMatchObject({ papers: 2, made: 2, failed: [], proofs: { a: 2, c: 1 } })
+  })
+
   it('reads a proof the prover refused as a failure of that paper, named, never as a count', () => {
     const d = mkdtempSync(join(tmpdir(), 'release-check-'))
     dirs.push(d)
@@ -159,6 +170,70 @@ describe("a gate's output, read as the gate states it", () => {
   })
 })
 
+describe("the prepare's corpus, as the round's stage 1a runs it", () => {
+  const corpus = (ids: string[]) => GATES.filter(g => ids.includes(g.id))
+
+  it('reads a compile cache chain from a corpus run\'s flags.txt or from a list, one line or one a line', () => {
+    expect(cachesOf('--caches=/a/compiles:/b/cache\n--prove\n--baseline=/lab/baseline/prepare\n')).toBe('/a/compiles:/b/cache')
+    expect(cachesOf('/a/compiles:/b/cache\n')).toBe('/a/compiles:/b/cache')
+    expect(cachesOf('# the round chain\n/a/compiles\n\n/b/cache # the second\n')).toBe('/a/compiles:/b/cache')
+  })
+
+  it('runs the 88 papers on the caches RELEASE_CHECK_CACHES names, a run and its twin with the same flags, the baseline\'s dumps read', () => {
+    const refactor = mkdtempSync(join(tmpdir(), 'release-check-lab-'))
+    dirs.push(refactor)
+    writeFileSync(join(refactor, 'flags.txt'), '--caches=/round/r21/compiles:/round/r20/compiles\n--prove\n')
+    const ctx: Ctx = { root: '/repo', labData: refactor, refactor, work: '/work', online: false, minFree: 0 }
+    process.env.RELEASE_CHECK_CACHES = join(refactor, 'flags.txt')
+    try {
+      const [prepare, same] = corpus(['prepare', 'prepare-same']).map(g => g.steps!(ctx)[0]!.cmd)
+      expect(prepare).toEqual(['bash', 'lab/pdf/prepare-back/corpus.sh', join(refactor, 'lanes/L1-papers88.tsv'), '/work/prepare', '/round/r21/compiles:/round/r20/compiles', '2', '--prove', `--baseline=${join(refactor, 'baseline/prepare')}`])
+      expect(same?.slice(4)).toEqual(prepare?.slice(4))
+      for (const g of corpus(['prepare', 'prepare-same', 'pixels'])) expect(g.needs!(ctx).map(n => n.path)).toContain(join(refactor, 'flags.txt'))
+      // (the baseline's dumps where the run reads them, the round's flags; the pixel proofs' run takes its own)
+      expect(corpus(['prepare', 'prepare-same', 'pixels']).map(g => g.needs!(ctx).some(n => n.path === join(refactor, 'baseline/prepare')))).toEqual([true, true, false])
+    } finally {
+      delete process.env.RELEASE_CHECK_CACHES
+    }
+    // (without it, the lab's list for these papers)
+    expect(corpus(['prepare'])[0]!.needs!(ctx).map(n => n.path)).toContain(join(refactor, 'lanes/L1-caches88.txt'))
+  })
+
+  it('counts the units drawn only on the papers the baseline holds, beside its own count', () => {
+    const d = mkdtempSync(join(tmpdir(), 'release-check-'))
+    dirs.push(d)
+    for (const sub of ['run', 'baseline']) mkdirSync(join(d, sub))
+    const dump = (n: number) => JSON.stringify({ units: Array.from({ length: n }, () => ({ kind: 'para', state: 'drawn' })) })
+    writeFileSync(join(d, 'run', 'a.prepare.json'), dump(2))
+    writeFileSync(join(d, 'run', 'gained.prepare.json'), dump(5))
+    writeFileSync(join(d, 'baseline', 'a.prepare.json'), dump(1))
+    expect(drawnOf(join(d, 'run'))).toMatchObject({ papers: 2, source: 7 })
+    expect(drawnOf(join(d, 'run'), join(d, 'baseline'))).toMatchObject({ papers: 1, source: 2 })
+  })
+})
+
+describe("the typesetter's replays", () => {
+  it("replays the figures under today's mark rule, which PDF-READER §19.12 reads the port's figures by, every other replay as it is", () => {
+    const ctx: Ctx = { root: '/repo', labData: null, refactor: '/lab', work: '/work', online: false, minFree: 12 }
+    expect(GATES.find(g => g.id === 'typeset-replays')!.steps!(ctx).map(s => s.cmd.slice(1))).toEqual([
+      ['lab/typeset/replay-fit.mjs'],
+      ['lab/typeset/replay-fill.mjs'],
+      ['lab/typeset/replay-emit.mjs'],
+      ['lab/typeset/replay-names.mjs'],
+      ['lab/typeset/replay-figures.mjs', '--marks=today'],
+      ['lab/typeset/replay-display.mjs'],
+    ])
+  })
+})
+
+describe("the typesetter's data", () => {
+  it("checks the generated data and today's readings, never the breaker's moved files against today's code, which the rulings edit", () => {
+    const ctx: Ctx = { root: '/repo', labData: null, refactor: '/lab', work: '/work', online: false, minFree: 12 }
+    const scripts = GATES.find(g => g.id === 'typeset-data')!.steps!(ctx).map(s => s.cmd.findLast(a => /\.(?:m?js|ts)$/.test(a)) ?? s.cmd.join(' '))
+    expect(scripts).toEqual(['lab/typeset/faces-data.mjs', 'lab/typeset/rules-data.mjs', 'lab/typeset/derive.mjs', 'lab/typeset/vitest.config.ts'])
+  })
+})
+
 describe('the speed check', () => {
   const speed = GATES.find(g => g.id === 'speed')!
   const ctx: Ctx = { root: '/repo', labData: null, refactor: '/lab', work: '/work', online: false, minFree: 12 }
@@ -170,8 +245,20 @@ describe('the speed check', () => {
       const steps = speed.steps!(ctx)
       expect(steps.map(s => s.cmd.slice(0, 2))).toEqual([['zsh', 'lab/pdf/spikes/layer-gate/run-speed.sh'], ['node', 'lab/pdf/spikes/layer-gate/speed.mjs']])
       expect(steps[0]?.env?.SPEED_LOGS).toBe(steps[1]?.cmd[2])
+      expect(steps[0]?.cmd.slice(2, 4)).toEqual(['/repo', '/base'])
     } finally {
       delete process.env.RELEASE_CHECK_BASE
+    }
+  })
+
+  it('measures against the released tree, today\'s engine at 065c1d973, where no base is given', () => {
+    const today = process.env.AXT_TODAY
+    delete process.env.AXT_TODAY
+    try {
+      expect(speed.steps!(ctx)[0]?.cmd.slice(2, 4)).toEqual(['/repo', '/refactor-read'])
+      expect(speed.needs!(ctx)[0]?.path).toBe('/refactor-read/src/pdf-reader/engine')
+    } finally {
+      if (today !== undefined) process.env.AXT_TODAY = today
     }
   })
 
