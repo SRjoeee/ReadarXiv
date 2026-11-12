@@ -4,10 +4,8 @@
 // unreadable let it through, so that the prepare refuses the paper for its memory rather than reading its files in another
 // encoding, its calls as placeholders, or its tree and compiler as none declared.
 import { describe, expect, it } from 'vitest'
-import { isMemoryError } from '@readarxiv/engine'
-import { openPaper } from '../../src/pdf-reader/engine/pipeline/live.mjs'
-import { inMemory } from '../../src/pdf-reader/engine/source/latex-front.mjs'
-import { analyze } from '../../src/pdf-reader/engine/source/paper-meta.mjs'
+import { analyze, inMemory, openPaper } from '../../src/front.types.ts'
+import { isMemoryError } from '../../src/index.ts'
 
 /** V8's own failed allocation, as it throws one */
 function v8Failure(): Error {

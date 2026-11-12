@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error: the moved JavaScript (packages/engine/src/source/arg-roles.mjs) has no declaration in the package; its old path, which nothing
 // else imported, is gone
-import * as argRoles from '../../packages/engine/src/source/arg-roles.mjs'
+import * as argRoles from '../../src/source/arg-roles.mjs'
 // @ts-expect-error: the moved JavaScript (packages/engine/src/source/arg-roles.mjs) has no declaration in the package; its old path, which nothing
 // else imported, is gone
-import { bindingsOf, commandParams, environmentParams, readArgs, textArgsOf, textless } from '../../packages/engine/src/source/arg-roles.mjs'
+import { bindingsOf, commandParams, environmentParams, readArgs, textArgsOf, textless } from '../../src/source/arg-roles.mjs'
 
 // The role table: what each argument of a command is (text, a dimension, keys, a name …), from LaTeXML's prototypes and
 // the commands written out by hand where LaTeXML leaves an argument untyped
