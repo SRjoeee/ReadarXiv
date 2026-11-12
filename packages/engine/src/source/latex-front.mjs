@@ -823,9 +823,8 @@ function endOfEnv(s, i, name) { // i just after \begin{name}; returns [bodyEnd, 
   re.lastIndex = i
   let depth = 1, m
   while ((m = re.exec(s))) {
-    // a match inside a comment does not count
-    const lineStart = s.lastIndexOf('\n', m.index) + 1
-    if (/(^|[^\\])%/.test(s.slice(lineStart, m.index))) continue
+    // a match inside a comment does not count (one after `\\%` too: a line break, then the comment)
+    if (inComment(s, m.index)) continue
     if (m[1] === 'begin') depth++
     else if (--depth === 0) return [m.index, m.index + m[0].length]
   }
@@ -836,21 +835,35 @@ function endOfEnv(s, i, name) { // i just after \begin{name}; returns [bodyEnd, 
 // every formula after a `$…\)` as text and the text between as formulas, to the document's end: 2610.21377v1 p. 35, its
 // appendix one unit TeX's marks never closed. A shift closes the formula at its own level alone: inside a group of it, as a
 // text box's `\text{for $y>0$}`, a `$` or \( \) is the box's own formula, and a closing shift in a group of math proper is an
-// error TeX reports; an escaped brace, `\{` or `\}`, opens or closes no group)
+// error TeX reports; an escaped brace, `\{` or `\}`, opens or closes no group. What a comment holds TeX never reads: an
+// unescaped `%` ends its line for TeX, a brace or a closing delimiter after it with it (`\%` is the character, `\\%` a line
+// break and then a comment). Counted, a commented `{` kept `$x % { note⏎+y$` open past its `$`, its letters sent as text and the
+// words up to the next formula made one; a commented `\]` or `$$` closed a display before its end, F37)
 function mathEnd(s, i) { // s[i] is '$' or starts \( \[ ; returns index after the closing delimiter
-  if (s.startsWith('$$', i)) { const e = s.indexOf('$$', i + 2); return e < 0 ? -1 : e + 2 }
+  if (s.startsWith('$$', i)) {
+    for (let j = i + 2; j < s.length; j++) {
+      if (s[j] === '\\') { j++; continue }
+      if (s[j] === '%') { j = skipComment(s, j); continue }
+      if (s[j] === '$' && s[j + 1] === '$') return j + 2
+    }
+    return -1
+  }
   if (s[i] === '$' || s[i + 1] === '(') {
     let depth = 0
     for (let j = s[i] === '$' ? i + 1 : i + 2; j < s.length; j++) {
       if (s[j] === '\\') { if (s[j + 1] === ')' && depth <= 0) return j + 2; j++; continue }
+      if (s[j] === '%') { j = skipComment(s, j); continue }
       if (s[j] === '{') depth++
       else if (s[j] === '}') depth--
       else if (s[j] === '$' && depth <= 0) return j + 1
     }
     return -1
   }
-  const e = s.indexOf('\\]', i + 2)
-  return e < 0 ? -1 : e + 2
+  for (let j = i + 2; j < s.length; j++) {
+    if (s[j] === '\\') { if (s[j + 1] === ']') return j + 2; j++; continue }
+    if (s[j] === '%') j = skipComment(s, j)
+  }
+  return -1
 }
 
 /**
@@ -1664,8 +1677,7 @@ function tikzText(s, from, to, b, ctx) {
   re.lastIndex = from
   let m
   while ((m = re.exec(s)) && m.index < to) {
-    const lineStart = s.lastIndexOf('\n', m.index) + 1
-    if (/(^|[^\\])%/.test(s.slice(lineStart, m.index))) continue
+    if (inComment(s, m.index)) continue
     let k = m.index + m[0].length
     if (/node$/.test(m[0])) {
       // between `node` and its text TikZ allows options, a name and a position, in any order
@@ -2351,11 +2363,12 @@ function walk(s, from, to, b, ctx) {
     if (name === '(' || name === '[') { const e = mathEnd(s, i); if (e > 0 && e <= to) { endText(); b.ph(s.slice(i, e), i, e, name === '['); i = e; continue } }
     const shorthand = ctx.envMacros.get(name)
     if (shorthand?.side === 'begin' && (MATH_ENVS.test(shorthand.env) || ctx.displayEnvs.has(shorthand.env) || SKIP_ENVS.test(shorthand.env) || ctx.skipEnvs.has(shorthand.env))) {
-      // the block ends at the partner macro or at a literal \end{env}
+      // the block ends at the partner macro or at a literal \end{env}, one TeX reads: none in a comment
       const ends = [...ctx.envMacros].filter(([, v]) => v.side === 'end' && v.env === shorthand.env).map(([k]) => k)
       const re = new RegExp(`\\\\(?:${ends.map(e => e.replace(/[@*]/g, m => `\\${m}`)).join('|') || '(?!)'})(?![A-Za-z@])|\\\\end\\s*\\{${shorthand.env.replace(/\*/g, '\\*')}\\}`, 'g')
       re.lastIndex = end
-      const m = re.exec(s)
+      let m = re.exec(s)
+      while (m && inComment(s, m.index)) m = re.exec(s)
       const stop = m && m.index < to ? m.index + m[0].length : end
       endText(); b.ph(s.slice(i, stop), i, stop, displayEnv(shorthand.env) || ctx.displayEnvs.has(shorthand.env)); i = stop; continue
     }

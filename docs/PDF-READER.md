@@ -6549,6 +6549,19 @@ own), each part carrying its pages' cell rules (`rules`).
     address's placeholder or a letter past ASCII (a letter of the name to XeTeX and LuaTeX) follows it. A paper that makes the
     space active anywhere, its class's files among its own (`\obeyspaces`, a `\catcode` of the space set to 13), keeps every
     indent, which TeX reads there; none of the 231 does.
+  - *A formula ends where TeX ends it, past what a comment in it holds* (F37, 2026-11-13; a reviewer's finding on round B15's
+    pull request). An unescaped `%` ends its line for TeX, a brace or a closing delimiter after it with it (`\%` is the
+    character, `\\%` a line break and then a comment). The scan for an inline formula's end (`latex-front.mjs` `mathEnd`)
+    counted a commented brace, so `Take $x % { note⏎+y$ and $z$ here.` sent `x` and `+y` as text and made ` and ` a formula;
+    a display's `$$` and `\]` were found by searching, a commented one taken for the end. Every scan for where a formula,
+    a display or an environment ends now passes over a comment as the file's group reader does (`matchGroup`: a backslash and
+    the character after it a pair, then `%` to its line's end), or asks `inComment` of a match it found by searching:
+    `mathEnd` for `$…$`, `\(…\)`, `$$…$$` and `\[…\]`; the end of the paper's own begin and end commands for a display
+    (`\beq … \eeq`); `endOfEnv` and the TikZ node reader, whose own test read `\\%` as an escaped percent. Over para-start's 89
+    papers nothing moves: the front end's units and project byte for byte as before, and stage 1a's bundles (2,722 objects)
+    and dumps (89) identical, every compile its cached one. Their 47 formulas that hold a comment are all displays, whose
+    commented braces and dollars no scan counted before either (`packages/engine/tests/front/math-comment.test.ts` holds the
+    cases).
   - *What the guard's retries bought* (staging, PIPELINE 46 to 48, 82 prepares of 60 papers): it compiled more than the
     marked original on three, 160 s of the box's CPU, and saved none, for on none did it find a unit to blame, and its last
     remedy, the name marks off, changed nothing where it ran: 2610.37818v1 above (the name marks off, the unmarked original, refused: 114 s);
