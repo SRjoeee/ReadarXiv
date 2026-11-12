@@ -6181,8 +6181,18 @@ it. Not this round's: staging drew the same at round B10's engine; the lay follo
   follows the node list's memory, no single point causes it; its reproduction in the lab's lane note para-start), and a paper
   production serves is not refused. Its cost: five members of two papers keep B14's "justified" where the page centres them
   (2610.21313v1's affiliation 7, 2610.42112v1's author 1 and affiliations 486 to 488: an end after the box they are set in is
-  what tells their alignment, `marks/channels.ts` boxedAlignOf, right wherever it was read). It goes when the marked compile is
-  robust to such a paper.
+  what tells their alignment, `marks/channels.ts` boxedAlignOf, right wherever it was read), and one paragraph TeX opens inside
+  2307.16209v1's centred two-line title (its second line a `\resizebox`) is not stated. It goes when the marked compile is
+  robust to such a paper. Three opens the ends after boxes gave went with them, all false: each at a member's first line after
+  a column or a page break, mid-sentence (2610.20716v1 84, 2610.20848v1 80, 2610.19159v1 513), read from another paragraph's end
+  set between the member's lines on B (a float's image, the outer paragraph of a box split across the page). That the pass can
+  read such an end as the unit's own is a debt of its own; at the final rule no point of the 89 stands at a break but a run-in
+  title's, its paragraph opening on the next page (2111.09276v1 ord 60, "Object Replacement").
+- **Measured at the final rule** (stage 1a over the 89 at the marked compile's final rule, its compiles made anew): B states
+  26,124 paragraph ends (10,412 before), none lost; points 3 more than the facts pass alone gave (2111.09276v1 ord 87 at
+  "Howto-GEN" and "COIN", 2610.21765v1 ord 42), none lost; the alignment of 4 members moves against B14, each now as the page
+  sets it (2307.16209v1 424 and 2608.25210v2 270 centred; 2609.20976v1 112 and 2610.37668v1 434 flush left); no join of the
+  flows lost or new; `opensUnstated` anchored 3 (the frames above), plain 63. 2610.30769v1 compiles, its bundle as before the rule.
 - **A running head reads no body paragraph's end as its own.** With more ends stated, a paragraph's end at the foot of B's page
   was read as the next page's running head's (2610.30854v1 p8, p9: flush right read as justified). An end is carried onto A before
   the partner of B's next glyph, so where A breaks the page later than B, it lands right after the next A page's head. The end
@@ -6190,9 +6200,9 @@ it. Not this round's: staging drew the same at round B10's engine; the lay follo
   (`locate/ink.ts` carry keeps each end's place on B and each A glyph's place after its partner; `today/ink-units.mjs`
   alignOf); and the points between are read by their glyphs, A's list of points not being in glyph order (the points carried
   from B's page before come first).
-  `lab/pdf/spikes/para-end-cases.mjs`: a paragraph after a hyperref'd footnote, after a
-  plain `\href`, after a citation and after a full stop, with microtype, each end stated before the next paragraph's first
-  glyph and no glyph moved by the points (four ends missing before). The facts pass reads two ends at one glyph position as one.
+- **The end's gate**, `lab/pdf/spikes/para-end-cases.mjs`: a paragraph after a hyperref'd footnote, after a plain `\href`,
+  after a citation and after a full stop, with microtype, each end stated before the next paragraph's first glyph and no glyph
+  moved by the points (four ends missing before). The facts pass reads two ends at one glyph position as one.
 
 ## 19. The engine's contract
 
