@@ -200,6 +200,9 @@ export const El = z.object({
   same: z.string().optional(),
   colour: int.optional(),
   nested: flag.optional(),
+  // a tie, the source's `~`: TeX's \nobreakspace, \penalty10000 and its interword glue, a space no line breaks at (the
+  // typesetter keeps the words on its two sides on one line; a typesetter of before reads it as any space element, breakable)
+  tie: flag.optional(),
   // where a URL TeX set on one line may break, as its url package lets it: after a run of \UrlBreaks' and \UrlBigBreaks'
   // characters, each the x between two of its glyphs on its ink's line and how much of its copy text stands before it, in UTF-16
   // code units (as the text holds them: a space between two glyphs, a ligature's letters, an astral character's two): the unit

@@ -69,6 +69,9 @@ export type Token = {
   at?: number
   end?: number
   space?: true
+  /** a space no line breaks at: a tie's, the source's `~` (TeX's \penalty10000 and its interword glue): break.mjs's group runs
+   *  on through it; the space is drawn and stretched with the line's other spaces */
+  tie?: true
   keep?: true
   crop?: Record<string, unknown>
   cw?: number
@@ -106,6 +109,8 @@ export type TRes = {
   rename?: [number, number, string][]
   /** a mark's crop: glued to what precedes it (unit/elements.ts Res.mark) */
   mark?: true
+  /** a tie's space (unit/elements.ts Res.tie) */
+  tie?: true
   brk?: true
   room?: number
   brkAt?: number
@@ -764,7 +769,11 @@ export function tokens(i: TokensInput): Tokens {
         // (a mark's crop glued to what precedes it, as its text was a superscript's: TeX sets no glue between a word and its
         // mark, so no line begins with it; after a CJK character, free to break as between two, a footnote's mark after a
         // sentence's full stop began a line of its own, 1810.04805v2 p7's 12)
-        const glue = tokens.length > 0 && !lastIsSpace() && (!!r.mark || !(n === 0 && ecglue))
+        // (and after a tie that set no space token of its own, held to what precedes it: noBreakNext, as push reads it)
+        const glue =
+          (n === 0 && noBreakNext && tokens.length > 0) ||
+          (tokens.length > 0 && !lastIsSpace() && (!!r.mark || !(n === 0 && ecglue)))
+        if (n === 0) noBreakNext = false
         const c = q.crop as number[]
         tokens.push({ crop: q, cw: c[2]! - c[0]!, glue, w100: 0 })
       }
@@ -773,6 +782,14 @@ export function tokens(i: TokensInput): Tokens {
     if (!r.text) return
     if (r.text === ' ') {
       pushText(' ', style())
+      // (a tie: TeX's `~`, \penalty10000 and its interword glue, a space no line breaks at; the space stays a space, drawn and
+      // stretched as TeX draws it, and holds what follows it to what precedes it, a footnote's mark to its word. Where no space
+      // token stands for it (one before it already, or none set after a head's or a kern's end), what follows is glued)
+      if (r.tie) {
+        const t = tokens.at(-1)
+        if (t?.space) t.tie = true
+        else noBreakNext = true
+      }
       return
     }
     // (a rendering of the page's own text in the font state TeX set its glyphs in, where the part states it (El.style, read.ts):
@@ -865,6 +882,12 @@ export function tokens(i: TokensInput): Tokens {
     return !(spaceless && spacelessEdge(before, true) && spacelessEdge(after, false))
   })
   if (kept.length < tokens.length) {
+    // (a tie's space not set keeps its no-break: what follows it is glued to what precedes it)
+    const set = new Set(kept)
+    tokens.forEach((t, q) => {
+      const after = t.tie && !set.has(t) ? drawnAt(q + 1, 1) : null
+      if (after) after.glue = true
+    })
     tokens.length = 0
     for (const t of kept) tokens.push(t)
   }

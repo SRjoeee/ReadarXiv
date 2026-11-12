@@ -188,6 +188,12 @@ describe('the instrument adapter’s element classes', () => {
 describe('the kind the adapter states of an element', () => {
   it('a tie is a space and a forced line break a break, as TeX sets them; any other today’s classOf’s, `other` for none', () => {
     expect(elementKindOf(ph('~'))).toBe('space')
+    // (and states it a tie, TeX's \penalty10000 and interword glue, which no line breaks at; a control space `\ ` is a space a
+    // line may break at, no tie: El.tie, the typesetter's no-break)
+    const ties = new Map(classesOf([ph('~'), ph('\\ '), ph('\\,')]))
+    expect(ties.get('0')).toMatchObject({ cls: 'space', tie: true })
+    expect(ties.get('1')?.tie).toBeUndefined()
+    expect(ties.get('2')?.tie).toBeUndefined()
     for (const s of ['\\\\', '\\\\*', '\\\\[2pt]', '\\newline']) expect(elementKindOf(ph(s))).toBe('break')
     expect(elementKindOf(ph('\\ref{fig:std}'))).toBe('ref')
     expect(elementKindOf(ph('\\cite{x}'))).toBe('cite')

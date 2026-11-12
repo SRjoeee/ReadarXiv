@@ -290,7 +290,10 @@ for (let p = 1; p <= N; p++) {
 }
 // (paragraphs TeX opened where a group the instrument wrote as its content stood: none stated, and none may be: the gate below)
 const opensLost = tally?.located?.opensLost ?? 0
-const counts = { units: units.length, ...states, byKind: {}, pages: N, pagesDrawn: pages.filter(p => p.drawn).length, ...(opensLost ? { opensLost } : {}) }
+// (paragraph ends of B inside a unit that state no point (facts-pass.ts): where an open or an element stands where the next
+// paragraph begins in the source (anchored) and where plain text does (plain))
+const opensUnstated = tally?.located?.opensUnstated ?? null
+const counts = { units: units.length, ...states, byKind: {}, pages: N, pagesDrawn: pages.filter(p => p.drawn).length, ...(opensLost ? { opensLost } : {}), ...(opensUnstated ? { opensUnstated } : {}) }
 for (const u of units) { const k = (counts.byKind[u.kind] ??= { drawn: 0, laid: 0, unlaid: 0 }); k[u.state]++ }
 mkdirSync(join(OUT, 'prepare'), { recursive: true })
 // (the lines the candidate reads as a display's formula, locate's `displays`, which restate.mjs states a unit by as run.mjs does)

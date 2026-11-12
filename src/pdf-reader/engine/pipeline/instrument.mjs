@@ -393,7 +393,11 @@ export const FORCED_BREAK = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
  * after `\\` ran on into the next only by the source's own line end (lane fig-cut, 2026-11-10). Neither enters a unit's id
  * (format's unitId reads an element's source)
  */
-export const elementKindOf = p => (p?.src === '~' ? 'space' : FORCED_BREAK.test(p?.src ?? '') ? 'break' : (classOf(p) ?? 'other'))
+export const elementKindOf = p => (isTie(p) ? 'space' : FORCED_BREAK.test(p?.src ?? '') ? 'break' : (classOf(p) ?? 'other'))
+/** a tie: the front end's placeholder for the source's `~` (latex-front.mjs, its one spelling of TeX's \nobreakspace; the
+ *  command `\nobreakspace` itself is read as one that sets no ink, marks.mjs INVISIBLE_WORDS): \penalty10000 and interword
+ *  glue, a space no line breaks at (PieceClass.tie, El.tie) */
+export const isTie = p => p?.src === '~'
 /** a citation's note: its last optional argument, its ties and control spaces a space, where it holds a letter (layer2.mjs
  *  renameRefs' CITE_NOTE L2:1279-1305) */
 const CITE_NOTE = /^\\(?:cite[a-z]*|parencite|textcite|autocite)\*?((?:\s*\[[^\]]*\])+)\s*\{/
@@ -500,6 +504,7 @@ export function classesOf(pieces, colours = null, texts = null) {
       x.sym = own !== null ? [own] : [copy.replace(/^\^\(?|\)$/g, ''), ...(/^\$?\^/.test(src.replace(/^\$/, '')) || /^\^/.test(copy) ? [true] : [])]
     }
     if (/^\\footnotemark/.test(src)) x.mark = true
+    if (isTie(p)) x.tie = true
     // (a text piece, TeX setting its characters as written: a code or URL mark, a plain-text source; no formula, drawnAs
     // L2:1778 formulaOf)
     if (textPieceOf(src)) x.literal = true

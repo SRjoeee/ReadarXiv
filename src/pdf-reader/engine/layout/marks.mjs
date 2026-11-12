@@ -1073,22 +1073,33 @@ export const POINTS_TEX = [
   '\\gdef\\axt@pq{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/begin}{\\ifvoid\\IndentBox\\else\\xdef\\axt@pq{\\the\\numexpr\\axt@pq+1\\relax}\\global\\setbox\\IndentBox\\hbox{\\axt@point{q\\axt@pq}\\box\\IndentBox}\\fi}\\fi\\fi',
   // (each paragraph's end, `qe<n><code>` at LaTeX's para/end: in horizontal mode, before TeX breaks the paragraph, so with the
   // \leftskip, \rightskip and \parfillskip it breaks it by (`code` readAlign's: c centred, l flush left, r flush right, j
-  // justified, of their stretch's order and amount, \axt@pecode). Placed right after the paragraph's last character, rule, mark,
-  // insertion or formula: its one last glue (which TeX's line breaking takes away), then its kerns and penalties after that
+  // justified, of their stretch's order and amount, \axt@pecode). Placed right after the paragraph's last node of content: its
+  // one last glue (which TeX's line breaking takes away), then its kerns and penalties after that
   // content (an italic correction, amsart's caption kern, a \nobreak), are taken off, the point set, and they are put back after
   // it in their order, so that TeX breaks the lines as before and a class that strips them off a line it takes back finds them
-  // (\axt@pepop). None where what then ends the list is a glue (a paragraph ending in \\, `\hfil\break` and the line's space,
-  // whose last line the point would make a line of its own: 2602.23285v2), a box (a minipage, a \parbox: the end would be read
-  // as the box's own last paragraph's where that one has none, 90 justified source units of the 87 under a centred paragraph's
-  // end), a whatsit or an adjustment (a unit's own end mark, which AXT-ALIGN reads: one more whatsit after it moved
-  // 2610.21098v1's last line by 0.04 pt in microtype's final pass) or a discretionary, nor on an empty list. Every paragraph TeX
+  // (\axt@pepop). A paragraph's end is a fact of TeX's mode, not of the node its list ends in: the point is set whatever node
+  // then ends the list (a character, a rule, an insertion, a mark, a whatsit (hyperref's link end and colour pop after a
+  // footnote's mark, the point of an element of ours, a unit's end mark), an adjustment, a discretionary, a formula), but where
+  // it would make TeX build a line it does not build: on an empty list (TeX builds none for an empty paragraph) and on a list
+  // that still ends in a glue (a paragraph ending in \\, `\hfil\break` and the line's space, whose last line the point would
+  // make a line of its own: 2602.23285v2; and a leaders' glue, which \hskip cannot put back). Until 2026-11-13 a whatsit, an
+  // adjustment and a discretionary stated none either, and a paragraph that ends in a footnote under hyperref's colour links or
+  // in an element's point stated no end: the unit's paragraph after it ran on from it (2111.09276v1 p5, docs/PDF-READER.md
+  // §18.66; lab/pdf/spikes/para-end-cases.mjs, with microtype, moves no glyph). A list that ends in a box (an \hbox, a \vbox)
+  // states none still, for a debt and not a rule: with points after boxes as well as after whatsits, pdfTeX 1.40.28 segfaults on
+  // 2610.30769v1 (a link of the paper's own that ends in another nesting level than it starts, which its own compile warns of;
+  // the crash follows the node list's memory, no one point causes it), and a paper production serves is not refused. Its cost: an
+  // end after a box tells the alignment of a unit TeX set in it (marks/channels.ts boxedAlignOf), right where read: five members
+  // of two papers keep B14's "justified" where the page centres them (2610.21313v1's affiliation 7, 2610.42112v1's author 1 and
+  // affiliations 486 to 488). The exclusion goes when the marked compile is robust to such a paper (refactor-2026-11 LATER.md).
+  // Every paragraph TeX
   // ends, a unit's or none's, but while the gate is off (a contents list, the output routine, where points made 2610.30769v1's
   // hyperref links unstable and pdfTeX crash), as no mark is: an ink unit's alignment where no unit's end mark tells it
   // (ink-units.mjs alignOf))
   '\\def\\axt@pos#1{\\ifnum\\gluestretchorder#1>\\z@ 1\\else\\ifdim\\gluestretch#1>\\z@ 1\\else0\\fi\\fi}',
   '\\def\\axt@pecode{\\edef\\axt@pel{\\axt@pos\\leftskip}\\edef\\axt@per{\\axt@pos\\rightskip}\\edef\\axt@pef{\\axt@pos\\parfillskip}\\edef\\axt@pec{\\ifnum\\axt@pel\\axt@per=11 \\ifnum\\axt@pef=0 c\\else\\ifnum\\gluestretchorder\\parfillskip<\\gluestretchorder\\leftskip\\ifnum\\gluestretchorder\\parfillskip<\\gluestretchorder\\rightskip c\\else j\\fi\\else j\\fi\\fi\\else\\ifnum\\axt@pel=1 r\\else\\ifnum\\axt@per=1 l\\else j\\fi\\fi\\fi}}',
   '\\def\\axt@pepop{\\let\\axt@penext\\relax\\ifnum\\lastnodetype=12 \\edef\\axt@peg{\\kern\\the\\lastkern\\relax\\axt@peg}\\unkern\\let\\axt@penext\\axt@pepop\\else\\ifnum\\lastnodetype=13 \\edef\\axt@peg{\\penalty\\the\\lastpenalty\\relax\\axt@peg}\\unpenalty\\let\\axt@penext\\axt@pepop\\fi\\fi\\axt@penext}',
-  '\\def\\axt@peat{\\ifcase\\numexpr\\lastnodetype+1\\relax 0\\or1\\or0\\or0\\or1\\or1\\or1\\or0\\or1\\or0\\or0\\or1\\else0\\fi}',
+  '\\def\\axt@peat{\\ifnum\\lastnodetype=1 0\\else\\ifnum\\lastnodetype=2 0\\else\\ifnum\\lastnodetype=11 0\\else\\ifnum\\lastnodetype=-1 0\\else1\\fi\\fi\\fi\\fi}',
   '\\gdef\\axt@pe{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/end}{\\ifaxt@off\\else\\ifnum\\lastnodetype=-1 \\else\\xdef\\axt@pe{\\the\\numexpr\\axt@pe+1\\relax}\\axt@pecode\\edef\\axt@pen{qe\\axt@pe\\axt@pec}\\let\\axt@peg\\@empty\\ifnum\\lastnodetype=11 \\edef\\axt@peg{\\hskip\\the\\lastskip\\relax}\\unskip\\fi\\axt@pepop\\edef\\axt@pet{\\axt@peat}\\if1\\axt@pet\\axt@point{\\axt@pen}\\fi\\axt@peg\\fi\\fi}\\fi\\fi',
   // (each display TeX sets, wherever it stands and whatever opened it, an environment's or \\[ … \\]'s: its ink between `dps<n>`
   // and `dpe<n>` (layout/ink.mjs REGION_POINT, the region `display`), n the display's number in the pass, so that every reader

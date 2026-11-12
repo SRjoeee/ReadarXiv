@@ -367,6 +367,7 @@ function readingsOf(
       ...(el?.unknown ? { unknown: true as const } : {}),
       fixed,
       inked: cls === 'space' && ink.length > 0,
+      ...(el?.tie ? { tie: true as const } : {}),
       symbol:
         cls === 'symbol'
           ? { leads: !!el?.leads, res: { mode: 'symbol', text: el?.sym?.[0] ?? '', math: true, sup: !!el?.sym?.[1] } }
