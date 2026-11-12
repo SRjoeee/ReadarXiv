@@ -76,6 +76,7 @@ pnpm fixtures:fetch      # download and verify the fixtures the repository may n
 pnpm fixtures:stats      # rule coverage audit over the fixtures
 pnpm zip                 # the store archive; pnpm icons regenerates the icons
 pnpm tokens              # src/styles/tokens.css from src/shared/tokens.ts; a test fails while the two differ
+pnpm digests             # every behaviour digest of packages/translate recomputed against its literal; --write writes those that moved (rows are asked again)
 # the PDF engine's lab gates and their commands: lab/pdf/README.md
 AXT_MEASURE=1 pnpm vitest run tests/perf       # the cost measurements (readings, not assertions)
 AXT_CHROME=<binary> pnpm e2e                   # the e2e suite on a chosen Chrome; probes live in tests/e2e/probes/

@@ -307,6 +307,19 @@ export const GLUED_STOP: UnitIn = unit(
   [t('Every token attends to its left.'), el('f', 'note-mark'), t(' We report two sizes.'), el('g', 'note-mark')],
   true,
 )
+/** the tags wire's fixture units: Google's and the built-in translator's (their behaviour digests are taken over these with
+ *  GOOGLE_REPLIES, tests/digests.ts) */
+export const TAGS_UNITS: UnitIn[] = [
+  ...UNITS,
+  HEAD_STOP,
+  DISPLAY_ENDS,
+  SOURCE_LINES,
+  GLUED_PAST,
+  OWN_GLUED,
+  STYLED_OBJECT,
+  GLUED_STOP,
+  SIDE_BY_SIDE,
+]
 export const MICROSOFT_UNITS: UnitIn[] = [
   ...UNITS,
   /* 17 */ BERT_ABSTRACT,

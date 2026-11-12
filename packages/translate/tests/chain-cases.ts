@@ -2,8 +2,8 @@
 // translators, and its outcome is every unit's result; the digest is the SHA-256 of the outcomes of every case, in the
 // table's order, as canonical JSON (an object's keys sorted, so that only what a result says moves it). Each of the chain's
 // own rules has a case here whose outcome that rule alone decides: without the rule the case's results differ. A change to
-// a rule that changes an outcome fails tests/chain-digest.test.ts until the new digest is written, and the chain's identity
-// (identityOf) moves with it: every row of every chain is asked again.
+// a rule that changes an outcome fails tests/chain-digest.test.ts until `pnpm digests --write` writes the new digest, and the
+// chain's identity (identityOf) moves with it: every row of every chain is asked again.
 //
 // The texts are ASCII and Latin-script, so that no case reads a word boundary ICU's dictionaries decide (a CJK text's), which
 // a Node with another ICU could cut otherwise. A case is added with the change it holds, never alone: a case added moves

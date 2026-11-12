@@ -759,8 +759,9 @@ decision: clearing it costs a re-translation and nothing else.
   (it keeps no refusal). A row's key moves with the chain: another engine, another order, a translator's behaviour digest,
   the acceptance rule's, the chain's own rules' (`CHAIN_DIGEST`: the hash of the chain's outcomes over its case table,
   `packages/translate/tests/chain-cases.ts`, each rule with a case it alone decides; a test holds the literal). No number is
-  raised by hand for any of them: a digest literal is what its case table gives, and a change of one is the announcement
-  that rows are asked again.
+  raised by hand for any of them: a digest literal is what its case table gives. `pnpm digests` recomputes every behaviour
+  digest (`scripts/digests.ts` over `packages/translate/tests/digests.ts`) and `pnpm digests --write` writes the literals
+  that moved; that diff is the announcement that rows are asked again.
 - **The recogniser's readings** (`ocr`, §15.2): by `ocrCacheKey` (`src/cache/ocr-key.ts`), apart from translation's.
 - **Bounds, per table**: 30 days from the write, 20,000 entries and 50 MiB, the least recently read going first past either
   cap (counted incrementally from a `bytes` index; the reading time written back apart, not awaited); a value of at most

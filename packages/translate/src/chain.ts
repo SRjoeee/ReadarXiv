@@ -66,8 +66,9 @@ export const GATE_MS = 1_000
 /** the store key's grammar; it rises only if the grammar changes */
 export const KEY_VERSION = 't1'
 /** The behaviour digest of the chain's own outcome rules: the SHA-256 of the chain's outcomes over the case table of
- *  tests/chain-cases.ts, held by tests/chain-digest.test.ts. The rules, each with a case there that it alone decides: fall-through per unit; one re-ask where a translator asks it; the runs floor of stretches of
- *  two letters or more, every stretch given or none (a stretch no translator gives leaves the unit the original's, never its
+ *  tests/chain-cases.ts, held by tests/chain-digest.test.ts and written by `pnpm digests --write`. The rules, each with a
+ *  case there that it alone decides: fall-through per unit; one re-ask where a translator asks it; the runs floor of stretches
+ *  of two letters or more, every stretch given or none (a stretch no translator gives leaves the unit the original's, never its
  *  English between translated stretches), a span that is no edge keeping its head in a copy of itself: runs.ts; an element
  *  set after the unit's text given to no translator, put back after the translation: tailOf; a group a reply did not bring
  *  back placed around its own text where the translation states it, as often as the source holds that text in groups of its

@@ -14,8 +14,8 @@ import {
   type Translator,
   type UnitIn,
 } from '../contract.ts'
-import { sha256Hex } from '../sha256.ts'
 import { NEVER, type Scripted, scriptedFetch } from './fakes.ts'
+import { goldenOf } from './golden.ts'
 
 export interface AdapterFixtures {
   /** the adapter, built over the fetch the suite scripts (null for an adapter with no fetch of its own) */
@@ -31,20 +31,6 @@ export interface AdapterFixtures {
   faults: readonly { name: string; answer: Scripted; remedy: Remedy; code?: FaultCode; retryAfterMs?: number }[]
   /** a string that must reach no fault's message (an adapter's key), where it has one */
   secret?: string
-}
-
-/** what the behaviour digest is taken over: write's output on every fixture unit, read's on every recorded reply */
-export function goldenOf(t: Translator, f: Pick<AdapterFixtures, 'target' | 'units' | 'replies'>): string {
-  const writes = f.units.map((u) => t.write(u, f.target))
-  const reads = f.replies.map((r) => {
-    const unit = f.units[r.unit] as UnitIn
-    try {
-      return t.read(unit, r.raw)
-    } catch (e) {
-      return { threw: String(e) }
-    }
-  })
-  return sha256Hex(JSON.stringify({ writes, reads }))
 }
 
 /** drain an adapter's send */

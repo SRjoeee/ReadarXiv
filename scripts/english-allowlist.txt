@@ -148,7 +148,8 @@ CHANGELOG.md 1  # 2026-11-02: +1, the reader-facing line for #554 quotes the dou
 tests/entry/abstract.test.ts 1  # 2026-11-04: the abstract page's link in Korean, the expectation
 tests/pdf-reader/layer-links-moved.test.ts 1  # 2026-11-04: the gate counts kana and hangul now: a Japanese heading, the expectation
 tests/e2e/probes/ui-shots.mjs 1  # 2026-11-04: the interface languages' own names heading the index's sections (product data, UI.md §6)
-packages/translate/tests/accept.test.ts 34  # 2026-11-07: Chinese readings of a unit, the inputs and expectations of the acceptance rule (packages/translate)
+packages/translate/tests/accept-cases.ts 17  # 2026-11-13: moved from accept.test.ts with the golden cases ACCEPT_DIGEST is taken over, so that `pnpm digests` reads them with no test runner (lane r7-identities); 2026-11-07: Chinese readings of a unit, the inputs of the acceptance rule (packages/translate)
+packages/translate/tests/accept.test.ts 17  # 2026-11-13: -17, the golden cases moved to accept-cases.ts (lane r7-identities); 2026-11-07: Chinese readings of a unit, the inputs and expectations of the acceptance rule (packages/translate)
 packages/translate/tests/host-statements.test.ts 6  # 2026-11-07: Chinese replies in Microsoft's shapes the HTML page met live (a marker without its #, jammed, inside a word, away from its #), the inputs of the strict reading
 packages/translate/tests/sha256.test.ts 1  # 2026-11-07: a multilingual text, the input of a digest checked against Node's
 packages/translate/src/groups.ts 1  # 2026-11-10: a full-width parenthesis quoted as the example of Unicode's compatibility folding a group's text is read under (lane style-spans)
