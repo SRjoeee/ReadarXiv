@@ -4,6 +4,8 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a word and what the paper ties to it with an unbreakable space (`~`), such as a footnote's mark, "Figure 3" or "et al." and its citation, stay on one line in the translation, as in the original. A footnote's mark could begin a line of its own.
+- Fixed: in the PDF reader, a paragraph that opens with a bold title run into its first line, such as "Howto-GEN" after a paragraph ending in a footnote mark, starts on its own line where the original starts it, when the paper writes several such paragraphs one after another with no blank line between them. It had been drawn on from the last line of the paragraph before it, its footnote mark beside the next title.
 - Fixed: with Google translating, a sentence's full stop stays where a footnote mark, a note's call or a line break follows it. Google had dropped the stop, so the sentence ran into the next one.
 - Fixed: in the PDF reader, a page whose passages a translation service refused, and which another service or a retry then translated, shows the translation. It had stayed as printed until the page was laid again by a scroll or a setting.
 - Fixed: in the PDF reader, turning a reading option on and off again shows the page as it was before, every passage as it was. A note that names one of the paper's authors, such as a correspondence line, could show as printed when the paper opened and translated after the authors' option was turned on and off.

@@ -880,7 +880,7 @@ function alignOf(lines, pages, directOnly = false) {
     const out = [], ends = P.paraEnds ?? [], points = P.points ?? []
     let e = 0
     for (let q = 0; q <= points.length; q++) {
-      for (; e < ends.length && (ends[e].point ?? points.length) <= q; e++) out.push({ glyph: ends[e].glyph, end: endCode(ends[e].name), point: ends[e].point, para: ends[e].para })
+      for (; e < ends.length && (ends[e].point ?? points.length) <= q; e++) out.push({ glyph: ends[e].glyph, end: endCode(ends[e].name), point: ends[e].point, para: ends[e].para, b: ends[e].b })
       const m = q < points.length ? BRACKET.exec(points[q].name) : null
       if (m) out.push({ glyph: points[q].glyph, bracket: m[1] + m[2], n: m[3] })
     }
@@ -893,12 +893,25 @@ function alignOf(lines, pages, directOnly = false) {
   // 2610.21084v1's captions), a float's or a body's bracket, is no end of the unit's paragraph; a name's or a placeholder's mark,
   // inside a paragraph, is no paragraph's end)
   const L = pages[last[0] - 1]
+  // (the points between: those the page lists before the end, after the unit's last glyph. A page's points are not in glyph order:
+  // those carried from B's page before (locate/ink.ts carry, a page broken elsewhere on A than on B) are listed before the page's
+  // own, so no count of the points up to the unit's last glyph tells where its points end in the list (2610.30854v1 p8: the
+  // Conclusion's end mark `185e`, carried to the next page's head, was skipped so); each point is read by its glyph)
   const nothingBetween = x => {
     if (x.para !== undefined && x.para !== (L?.paras ?? []).filter(q => q.glyph <= last[1]).length) return false
     if (x.point === undefined) return true
     const pts = L?.points ?? []
-    for (let q = pts.filter(t => t.glyph <= last[1]).length; q < x.point; q++) { const n = pts[q]?.name ?? ''; if (CLOSES.test(n) || OPENS.test(n)) return false }
-    return true
+    return !pts.some((t, q) => q < x.point && t.glyph > last[1] && t.glyph <= x.glyph && (CLOSES.test(t.name) || OPENS.test(t.name)))
+  }
+  // (an end right after the unit's last glyph on A stood right after it in the list TeX set: on B, on the page of that glyph's
+  // partner, at the first glyph after it that A has too (the end's `b` and the page's `afterB`, carried by locate/ink.ts). An end is
+  // put on A before the partner of B's next glyph, so a paragraph's end at the foot of B's page, where A breaks the page later,
+  // lands right after the next A page's running head: not the head's (2610.30854v1 p8, p9). A page carried with no B place reads
+  // A's adjacency alone, as before)
+  const rightAfterOnB = x => {
+    const after = L?.afterB
+    if (!after || !x.b) return true
+    return after[2 * last[1]] === x.b[0] && after[2 * last[1] + 1] === x.b[1]
   }
   // (a unit inside a paragraph, not its last line: its paragraph's start (q<n>, ink.mjs `paras`) before its first glyph on its page
   // with no paragraph end and no unit's end mark or bracket between them, and nothing between its last glyph and the end
@@ -921,7 +934,7 @@ function alignOf(lines, pages, directOnly = false) {
       if (p === last[0] && x.glyph <= last[1]) continue
       if (between) { if (x.bracket === 'bs') between = false; continue }
       if (float !== null) { if (x.bracket === 'fe' && x.n === float) float = null; continue }
-      if (x.end) { told = x.end; const clear = p === last[0] && nothingBetween(x); direct = clear && x.glyph === last[1] + 1; within = clear && !direct && insideOf(x); break walk }
+      if (x.end) { told = x.end; const clear = p === last[0] && nothingBetween(x); direct = clear && x.glyph === last[1] + 1 && rightAfterOnB(x); within = clear && !direct && insideOf(x); break walk }
       if (x.bracket === 'be') between = true
       else if (x.bracket === 'fs') float = x.n
       else break walk

@@ -2559,6 +2559,69 @@ describe('a paragraph TeX opened inside a unit (C13, C15: SpanAt.opens, El.opens
     )
     expect(inside.els?.find(([id]) => id === '3')?.[1].opens).toBeUndefined()
   })
+  // (2111.09276v1 p5-p6: `…editing.~\footnote{…} \medbreak \noindent \textbf{Howto-GEN} To evaluate …`, no blank line, so one
+  // unit holds several of TeX's paragraphs, each after the first opening with a bold run-in title. The source side and B's side
+  // of a paragraph end are read by the same facts: a piece bounds the text window where TeX set ink for it in this compile (its
+  // glyphs on B), whatever its class; and a side whose glyph is an element's is met by that piece itself, as the after side is)
+  const runIn = (before: Piece[], classes: InstrumentUnit['classes']) => {
+    const content: Piece[] = [
+      ...before,
+      text(' \n'),
+      { t: 'el' as const, id: '6', kind: 'macro', src: '\\medbreak' },
+      text('\n'),
+      { t: 'el' as const, id: '7', kind: 'other', src: '\\noindent' },
+      text('\n'),
+      { t: 'span' as const, id: '8', style: 'bold', open: '\\textbf{', close: '}', content: [text('Title')] },
+      text(' The second one runs on'),
+    ]
+    const units: InstrumentUnit[] = [
+      {
+        id: unitId('para', content),
+        kind: 'para',
+        content,
+        classes: [
+          ...(classes ?? []),
+          ['6', { cls: 'umacro', cmd: 'medbreak', bare: true, unknown: true }],
+          ['7', { cls: 'zero', cmd: 'noindent', bare: true }],
+        ],
+        spans: [['8', { cmd: 'textbf' }]],
+      },
+    ]
+    return units
+  }
+  it('meets a group after an element TeX set no ink for (`\\medbreak`, a macro of no glyph on B), whatever its class', () => {
+    const B = docOf([{ lines: ['A first paragraph ends.', 'Title The second one', 'runs on'] }])
+    const units = runIn([text('A first paragraph ends.')], [])
+    const m = partOf(owned(B, units, [], [23]), B)
+    expect(m.spans).toEqual([['8', { cmd: 'textbf', opens: 1 }]])
+  })
+  it('meets a group after the paragraph before ends with an element: that piece is the before side (a footnote’s mark)', () => {
+    const B = docOf([{ lines: ['A first paragraph ends.1', 'Title The second one', 'runs on'] }])
+    const units = runIn(
+      [
+        text('A first paragraph ends.'),
+        { t: 'unit' as const, id: '5', unit: '0'.repeat(64), pre: '\\footnote{', post: '}' },
+      ],
+      [['5', { cls: 'num', mark: true, nested: true }]],
+    )
+    const m = partOf(owned(B, units, [[23, 5]], [24]), B)
+    expect(m.spans).toEqual([['8', { cmd: 'textbf', opens: 1 }]])
+    // (an element whose class sets no ink by name, which TeX set ink for here: it bounds the window as the mark does)
+    const units2 = runIn(
+      [text('A first paragraph ends.'), { t: 'el' as const, id: '5', kind: 'other', src: '\\mymark' }],
+      [['5', { cls: 'zero', cmd: 'mymark' }]],
+    )
+    expect(partOf(owned(B, units2, [[23, 5]], [24]), B).spans).toEqual([['8', { cmd: 'textbf', opens: 1 }]])
+  })
+  it('counts a paragraph end inside a unit that states no point: an open where the next paragraph begins, or plain text', () => {
+    const B = docOf([{ lines: ['A first paragraph ends.', 'Title The second one', 'runs on'] }])
+    const stats = (units: InstrumentUnit[], ends: number[]) => locate(owned(B, units, [], ends), B, align(B, B)).stats
+    expect(stats(runIn([text('A first paragraph ends.')], []), [23]).opensUnstated).toBeUndefined()
+    // (the source's text before the open is not B's before the end: the group's content is what TeX's paragraph begins with)
+    expect(stats(runIn([text('A first paragraph closes.')], []), [23]).opensUnstated).toEqual({ anchored: 1, plain: 0 })
+    // (an end inside the second paragraph's text, at no group's open and no element)
+    expect(stats(runIn([text('A first paragraph ends.')], []), [33]).opensUnstated).toEqual({ anchored: 0, plain: 1 })
+  })
 })
 
 describe('an element’s ink is what TeX set for it', () => {

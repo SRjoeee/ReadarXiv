@@ -3674,7 +3674,21 @@ TeX set raised in its own font at its script size: a footnote's or a `\thanks` m
 superscript (`El.sym`'s second) are now drawn as their ink on one line, a crop on their line's baseline, as an `other` element;
 a symbol set on the line stays text, and a mark's link goes with its crop. Its crop is glued to what precedes it, as its text
 was a superscript's: TeX sets no glue between a word and its mark, and a crop after a CJK character, free to break as between
-two, began a line of its own (1810.04805v2 p7's footnote 12 after its sentence's full stop). Over the 88 papers' parts 180
+two, began a line of its own (1810.04805v2 p7's footnote 12 after its sentence's full stop). Where the source sets a tie before
+it (`word.~\footnote{…}`), the tie is glue TeX sets and never breaks at: `~` is `\nobreakspace`, `\penalty10000` and its
+interword glue. The part states it (`El.tie`, the instrument's `isTie`: the source's `~`, the one spelling the front end makes a
+tie's placeholder of; the command `\nobreakspace` it reads as one that sets no ink), and the typesetter's tie is a space no line
+breaks at: break.mjs's group runs on through it, the token after it and what is glued to that, so the mark is held to its word
+by the tie itself; the space is drawn and stretched as the line's other spaces are, as TeX draws it, and where a rule of the
+target sets no space there (after a full-width closing mark, before one no line opens with) the no-break stays, what follows
+glued. A translator's U+00A0 is the translator's, no tie. A tied group longer than the line is broken where its glue alone
+ends, as a mark's joined group is. Before, a tie was an ordinary space, and a reply that set the source's stop after the mark
+began a line with it (2111.09276v1 p5, round B14: the paragraph's last line ending in its word, the mark 12 and the stop
+opening the next, §18.66). Over the 90 pairs (the reader gate's runner, 2026-11-13): with the door's rows 251 of 23,016 units lay
+otherwise (a line broken elsewhere 214, a line more or fewer 14; zh 237, ja 8, es 6, de and pl none), 2 a size step down; with
+Google's 226 of 22,996 (zh 215, ja 6, es 5), 8 a size step down, 5 of them 1810.04805v2-es (a tie holding a word to a citation
+the translation sets as text, which then breaks inside the citation); last lines that hold no letter 133 -> 130 and 143 -> 137;
+no invariant of the gate moves. Over the 88 papers' parts 180
 marks (155 of them digits, 17 in author blocks) and 92 raised symbols (10 in author blocks) move from text to their ink. Today draws them as text
 too, so the parity never told it.
 
@@ -6121,6 +6135,63 @@ begin on two pages or more (28 members: 2608.16117v1 57/59 and 115/119, 2610.104
 12-16, 2610.21827v1 47-59, 2610.22197v1 72/74): what the entry draws of each, page by page, is the same before and after on
 the door's rows and on Google's; given the runner's members' rows alone, ord 12 on page 2 at 10.91 pt, its page-1 size, where it
 was 10.64. No PIPELINE, TRANSLATE or CHAIN_RULES: the lay is the reader's, and no stored byte moves.
+
+### 18.66 A paragraph TeX opened inside a unit is read by the same facts on both sides of its end (2026-11-13)
+
+The owner's report on staging (round B14, 2111.09276v1, pages 5 and 6): a paragraph that opens with a bold run-in title and
+follows another was drawn from the last line of the paragraph before it, right after its last character (the paragraph's
+footnote mark 12, then "Howto-GEN" on one line), one line above the original's first line of it, and "COIN" early too. The
+source writes no blank line between them, `…editing.~\footnote{…} \medbreak \noindent \textbf{Howto-GEN} To evaluate …`, so the
+front end ends no unit there: one unit holds four of TeX's paragraphs (§19.10's "A group TeX set as a paragraph of its own").
+TeX ends a paragraph at each `\medbreak` (`\par`, then `\medskip`), and the marked compile states each end; the facts pass found
+no group to state it on, so the part held no `SpanAt.opens` and the reader laid the unit as one paragraph, its fill spreading
+it. Not this round's: staging drew the same at round B10's engine; the lay follows §18.11 on what the part states.
+
+- **The rule** (`locate/facts-pass.ts`): the source side and B's side of a paragraph end are read by the same facts. What bounds
+  a text window is a piece TeX set ink for in this compile: its glyphs on B, the unit's, of an element's role (an element's own,
+  or a nested unit's mark, which `pipeline/instrument.mjs` owns as its piece's), whatever its class; B's run of the unit's text
+  stops at such a glyph, so the source's window stops at such a piece. `\medbreak`, `\noindent`, any command that set no ink
+  here bounds nothing (the class list `VISIBLE` had made `\medbreak`, an unknown macro, a bound: its window held only the white
+  space after it, and no group was met). Each side of the end is met by what stands there, one rule both ways (`sideB` and
+  `sideOf`): where the unit's glyph next to the end is a piece's and no letter or digit stands between, by that piece itself (a
+  footnote's mark ending the paragraph before: no text to compare stood there); else by its text, spelled, `WANT` characters,
+  as before. TeX opened the paragraph at the group so met on both sides (one group alone, the outermost of those opened
+  together), else at the element B's next glyph opens where its side before is met too (`El.opens`).
+- **The gate.** A paragraph end of B inside a unit (the unit's glyphs on both sides of it) that states no point is counted, by
+  what stands where the next paragraph begins in the source (`Located.stats.opensUnstated`, the dump's `counts`): an open or
+  an element (`anchored`, this report's class, which must count none) or plain text (`plain`: no anchor exists for it today).
+- **Measured** (stage 1a over the 88 papers and 2111.09276v1, cb10a1f7d against this rule): points stated 7 more, in 2 papers
+  (2111.09276v1 ords 60 (two), 63, 87 at "Youcook2", 99 at "Step Aggregation Model", 127 at "IER"; 2610.21924v1 ord 17), none
+  lost; bundle objects move in those 2 papers alone. `opensUnstated` anchored 7 -> 3, plain 57 -> 57 (30 papers). The 3 left are
+  2608.25210v2 page 3's prompt frames (ords 55 to 57): an end before `\mypython{…}` whose glyphs the instrument owns by an inner
+  piece the unit's content holds inside its element 14, stated a display, a block of its own; before the rule those ends found
+  no piece either and went uncounted. The reader gate over the 90 pairs: no invariant moves on either store.
+- **The end itself, in the marked compile.** A paragraph end the marked compile does not state is no fact of this pass:
+  2111.09276v1's "Howto-GEN" and "COIN" follow paragraphs that end in a footnote, and B's paragraph ends held none at either.
+  LaTeX's para/end point (`layout/marks.mjs` `\axt@peat`) was set only where the list ended in a character, a rule, an
+  insertion, a mark, a ligature or a formula; these lists end in whatsits (the element's own end point after the footnote, and
+  under hyperref's colour links the link's end and the colour stack's pop after its mark: `\showlists` at para/end), as every
+  paragraph that ends in an element or in a unit's own end mark does. A paragraph's end is a fact of TeX's mode, not of its
+  last node: the point is now set whatever node ends the list, but on an empty list (TeX builds no line for it, the point would
+  build one) and on one that still ends in a glue after its last space, kerns and penalties are taken off (`\\`'s
+  `\hfil\break`, after which the point would be a line of its own; a leaders' glue, which `\hskip` cannot put back). A list
+  that ends in a box states none yet, a debt with a stated end and no rule: with points after boxes as well as after whatsits,
+  pdfTeX 1.40.28 segfaults on 2610.30769v1 (a link of the paper's own ending in another nesting level than it starts; the crash
+  follows the node list's memory, no single point causes it; its reproduction in the lab's lane note para-start), and a paper
+  production serves is not refused. Its cost: five members of two papers keep B14's "justified" where the page centres them
+  (2610.21313v1's affiliation 7, 2610.42112v1's author 1 and affiliations 486 to 488: an end after the box they are set in is
+  what tells their alignment, `marks/channels.ts` boxedAlignOf, right wherever it was read). It goes when the marked compile is
+  robust to such a paper.
+- **A running head reads no body paragraph's end as its own.** With more ends stated, a paragraph's end at the foot of B's page
+  was read as the next page's running head's (2610.30854v1 p8, p9: flush right read as justified). An end is carried onto A before
+  the partner of B's next glyph, so where A breaks the page later than B, it lands right after the next A page's head. The end
+  right after a unit's last glyph is the unit's own only where, on B, it stood right after that glyph's partner, on its page
+  (`locate/ink.ts` carry keeps each end's place on B and each A glyph's place after its partner; `today/ink-units.mjs`
+  alignOf); and the points between are read by their glyphs, A's list of points not being in glyph order (the points carried
+  from B's page before come first).
+  `lab/pdf/spikes/para-end-cases.mjs`: a paragraph after a hyperref'd footnote, after a
+  plain `\href`, after a citation and after a full stop, with microtype, each end stated before the next paragraph's first
+  glyph and no glyph moved by the points (four ends missing before). The facts pass reads two ends at one glyph position as one.
 
 ## 19. The engine's contract
 

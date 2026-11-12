@@ -46,12 +46,12 @@ const WANT = 8
 const HEAD_FOOT = new Set(['inkheads', 'inknotes'])
 
 /** a unit's pieces in the source's order, a group as its open and its close */
-type Flat = { t: 'text'; s: string } | { t: 'el'; id: string } | { t: 'open' | 'close'; id: string } | { t: 'unit' }
+type Flat = { t: 'text'; s: string } | { t: 'el' | 'unit'; id: string } | { t: 'open' | 'close'; id: string }
 function flatOf(content: readonly Piece[], out: Flat[] = []): Flat[] {
   for (const p of content) {
     if (p.t === 'text') out.push({ t: 'text', s: p.s })
     else if (p.t === 'el') out.push({ t: 'el', id: p.id })
-    else if (p.t === 'unit') out.push({ t: 'unit' })
+    else if (p.t === 'unit') out.push({ t: 'unit', id: p.id })
     else {
       out.push({ t: 'open', id: p.id })
       flatOf(p.content, out)
@@ -191,12 +191,11 @@ export function factsOf({
     if (framed.has(l[0]) || l[7] < l[2] - 0.01 || l[8] > l[3] + 0.01) return [l[7], l[8]]
     return hull.get(l[1] === 2 ? `${l[0]}|*` : `${l[0]}|${l[1]}`) ?? [l[2], l[3]]
   }
-  // (B's paragraph ends, globally)
-  const ends: number[] = []
-  ;(ins.tex.paragraphEnds ?? []).forEach((l, p) => {
-    for (const g of l) ends.push((m.offB[p] as number) + g)
-  })
-  ends.sort((x, y) => x - y)
+  // (B's paragraph ends, globally, each glyph position once: two paragraphs TeX ended with nothing set between them, a box's last
+  // and the one around it, end at one position, one end there)
+  const ends = [
+    ...new Set((ins.tex.paragraphEnds ?? []).flatMap((l, p) => l.map((g) => (m.offB[p] as number) + g))),
+  ].sort((x, y) => x - y)
   // (each element's opening point on B, by unit and piece: the glyph before which it begins, global; and its end point, the
   // glyph before which what follows it begins)
   const placeAt = new Map<string, number>()
@@ -435,48 +434,91 @@ export function factsOf({
       if (e) el.ends = e
     }
     // (a paragraph TeX opened inside the unit (C13, C15): a paragraph end of B's between its glyphs, its first line on A the line
-    // of the unit's next glyph. Where that glyph is an element's first, TeX opened it at that element (El.opens), or at the group
-    // the source opens right before it, nothing between them that sets ink (SpanAt.opens: the outermost); where it is a text's,
-    // at the group whose open the unit's text meets there, as an opening point is found by its text (today's stream.mjs WANT):
-    // the text the source sets before the open, spelled, ends with the unit's glyphs before the end, and the text the group's
-    // content begins with (inside it, as today's paragraphBreaks asks: the group closed after it) begins with its glyphs from it,
-    // WANT characters each, one group alone so met. An end inside an element's own glyphs opened none at it; one inside a text,
-    // at no group's open, none either)
+    // of the unit's next glyph. The source side and B's side of the end are read by the same facts. What bounds a window is a
+    // piece TeX set ink for in this compile: its glyphs on B, the unit's, an element's (an element's own, or a nested unit's mark,
+    // which the instrument owns as its piece's: pipeline/instrument.mjs), whatever its class; a piece TeX set none for here
+    // (`\medbreak`, `\noindent`, a footnote whose mark it set elsewhere) bounds nothing, as B's run holds no glyph of it. Each side
+    // of the end is met by what stands there (sideB, sideOf: one rule, both directions): where the unit's glyph next to the end
+    // is a piece's and no letter or digit stands between, by that piece itself (a footnote's mark ending the paragraph before, an
+    // element opening the next); else by its text, spelled, WANT characters (today's stream.mjs WANT): the source's text before a
+    // group's open ends B's before the end, and the text the group's content begins with (inside it, as today's paragraphBreaks
+    // asks: the group closed after it) begins B's after it. TeX opened the paragraph at the group so met on both sides, one group
+    // alone (SpanAt.opens: the outermost of those opened together), else at the element B's next glyph opens, where its side
+    // before is met too (El.opens). An end inside a piece's own glyphs opened none at it; one at no group's open and no element,
+    // none either: counted (`opensUnstated`), apart as an open or an element stands where the next paragraph begins in the source
+    // (the class of 2111.09276v1 p5's run-in titles, which must be none) or plain text does (no anchor exists for it))
     if (mem.bFirst >= 0 && unit) {
       const seq = flatOf(unit.content)
-      const classes = new Map(unit.classes ?? [])
-      // (a piece that sets ink: a visible element, a nested unit; a text, its characters)
-      const inked = (x: Flat) => x.t === 'unit' || (x.t === 'el' && VISIBLE.has(classes.get(x.id)?.cls ?? 'other'))
+      // (each piece's first and last glyph on B, the unit's, of an element's role)
+      const firstOf = new Map<number, number>()
+      const lastOf = new Map<number, number>()
+      for (let b = mem.bFirst; b <= mem.bLast; b++) {
+        if ((unitB[b] as number) !== mem.unit || roleB[b] !== ROLE.element || (pieceB[b] as number) < 0) continue
+        if (!firstOf.has(pieceB[b] as number)) firstOf.set(pieceB[b] as number, b)
+        lastOf.set(pieceB[b] as number, b)
+      }
+      // (a piece TeX set ink for in this compile; a text's characters are read by their spelling)
+      const inked = (x: Flat) => (x.t === 'el' || x.t === 'unit') && firstOf.has(Number(x.id))
       const groupBefore = (q: number): string | null => {
         let g: string | null = null
         for (let r = q - 1; r >= 0; r--) {
           const x = seq[r]!
           if (x.t === 'open') g = x.id
-          else if (x.t === 'text' ? /\S/.test(x.s) : x.t !== 'el' || inked(x)) break
+          else if (x.t === 'text' ? /\S/.test(x.s) : x.t === 'close' || inked(x)) break
         }
         return g
       }
-      // (the text the source sets before a group's open, up to the piece before it that sets ink, and the text its content
-      // begins with, up to its close or a piece that sets ink, spelled: the group holds the text after the end, as today's
-      // paragraphBreaks asks of it, closed after that text)
-      const textBefore = (q: number) => {
+      type Side = { piece: string } | { text: string } | null
+      /** the source at a point of `seq`, on one side: from piece q back (step -1) or on (step 1, up to the close of the group
+       *  `close` where given): the nearest piece TeX set ink for, where no letter or digit stands before it; else the text up to
+       *  that piece, spelled, the WANT characters next to the point */
+      const sideOf = (q: number, step: 1 | -1, close?: string): Side => {
         let s = ''
-        for (let r = q - 1; r >= 0 && !inked(seq[r]!); r--)
-          if (seq[r]!.t === 'text') s = (seq[r] as { s: string }).s + s
-        return spellOf(s).slice(-WANT)
-      }
-      const textInside = (q: number) => {
-        const id = (seq[q] as { id: string }).id
-        let s = ''
-        for (let r = q + 1; r < seq.length && !inked(seq[r]!); r++) {
+        for (let r = q; r >= 0 && r < seq.length; r += step) {
           const x = seq[r]!
-          if (x.t === 'close' && x.id === id) break
-          if (x.t === 'text') s += x.s
+          if (close !== undefined && x.t === 'close' && x.id === close) break
+          if (inked(x)) {
+            if (!spellOf(s)) return { piece: (x as { id: string }).id }
+            break
+          }
+          if (x.t === 'text') s = step > 0 ? s + x.s : x.s + s
         }
-        return spellOf(s).slice(0, WANT)
+        const t = step > 0 ? spellOf(s).slice(0, WANT) : spellOf(s).slice(-WANT)
+        return t ? { text: t } : null
       }
-      // (the text before a projection offset, up to the piece before it that sets ink, and from it, spelled: as textBefore and
-      // textInside read a group's open)
+      // (B's glyphs of the unit at a glyph, on one side, read as sideOf reads the source: an element's glyph where no letter or
+      // digit of its text stands before it, its piece; else its text's glyphs, spelled, up to a glyph of the unit that is no
+      // text's, WANT characters)
+      const pB = (b: number) => {
+        let p = 0
+        while (p + 1 < m.offB.length && (m.offB[p + 1] as number) <= b) p++
+        return p
+      }
+      const charB = (b: number) => {
+        const p = pB(b)
+        return spellOf(ins.ink.pages[p]?.glyphs[b - (m.offB[p] as number)]?.u ?? '')
+      }
+      const sideB = (from: number, step: 1 | -1): Side => {
+        let s = ''
+        for (let b = from; b >= mem.bFirst && b <= mem.bLast && s.length < WANT; b += step) {
+          if ((unitB[b] as number) !== mem.unit) continue
+          if (roleB[b] !== ROLE.text) {
+            if (!s && roleB[b] === ROLE.element && (pieceB[b] as number) >= 0) return { piece: String(pieceB[b]) }
+            break
+          }
+          s = step > 0 ? s + charB(b) : charB(b) + s
+        }
+        const t = step > 0 ? s.slice(0, WANT) : s.slice(-WANT)
+        return t ? { text: t } : null
+      }
+      const meets = (src: Side, at: Side, step: 1 | -1) =>
+        !!src &&
+        !!at &&
+        ('piece' in src
+          ? 'piece' in at && src.piece === at.piece
+          : 'text' in at && (step < 0 ? at.text.endsWith(src.text) : at.text.startsWith(src.text)))
+      // (the text before a projection offset, up to the piece before it that sets ink, and from it, spelled: as sideOf reads a
+      // group's open)
       const textAt = (o: number, step: 1 | -1) => {
         const at: { s: string; inked: boolean }[] = []
         for (const x of seq)
@@ -487,29 +529,6 @@ export function factsOf({
           s = step > 0 ? s + at[k]!.s : at[k]!.s + s
         return step > 0 ? spellOf(s).slice(0, WANT) : spellOf(s).slice(-WANT)
       }
-      // (B's glyphs of the unit's text before b, and from it, spelled, up to an element's)
-      const pB = (b: number) => {
-        let p = 0
-        while (p + 1 < m.offB.length && (m.offB[p + 1] as number) <= b) p++
-        return p
-      }
-      const charB = (b: number) => {
-        const p = pB(b)
-        return spellOf(ins.ink.pages[p]?.glyphs[b - (m.offB[p] as number)]?.u ?? '')
-      }
-      const spelledB = (from: number, step: 1 | -1, n: number) => {
-        let s = ''
-        for (let b = from; b >= mem.bFirst && b <= mem.bLast && s.length < n; b += step) {
-          if ((unitB[b] as number) !== mem.unit) continue
-          if (roleB[b] !== ROLE.text) break
-          s = step > 0 ? s + charB(b) : charB(b) + s
-        }
-        return step > 0 ? s.slice(0, n) : s.slice(-n)
-      }
-      const firstOf = new Map<number, number>()
-      for (let b = mem.bFirst; b <= mem.bLast; b++)
-        if ((unitB[b] as number) === mem.unit && roleB[b] === ROLE.element && !firstOf.has(pieceB[b] as number))
-          firstOf.set(pieceB[b] as number, b)
       for (const e of ends) {
         // (the paragraph that ended is its own: its glyph before the end is the unit's, not a float's or a footnote's that TeX's
         // output routine put between two of its lines)
@@ -519,35 +538,49 @@ export function factsOf({
         if (b > mem.bLast) continue
         const j = lineOf.get(m.bToA[b] as number)
         if (j === undefined || j <= 0) continue
+        const before = sideB(e - 1, -1)
+        const after = sideB(b, 1)
+        // (an end inside a piece's own glyphs: the piece began before it, or goes on after it)
+        if (after && 'piece' in after && (firstOf.get(Number(after.piece)) as number) < e) continue
+        if (before && 'piece' in before && (lastOf.get(Number(before.piece)) as number) >= e) continue
         let at: { el: string } | { group: string } | null = null
-        if (roleB[b] === ROLE.element) {
-          if ((firstOf.get(pieceB[b] as number) as number) < e) continue
-          const id = String(pieceB[b])
-          const g = groupBefore(seq.findIndex((x) => x.t === 'el' && x.id === id))
-          at = g !== null ? { group: g } : { el: id }
-        } else if (roleB[b] === ROLE.text) {
-          const before = spelledB(e - 1, -1, WANT),
-            after = spelledB(b, 1, WANT)
-          const met = seq.flatMap((x, q) => {
-            if (x.t !== 'open') return []
-            const tb = textBefore(q),
-              ta = textInside(q)
-            return tb && ta && before.endsWith(tb) && after.startsWith(ta) ? [groupBefore(q + 1)!] : []
-          })
-          if (new Set(met).size === 1) at = { group: met[0]! }
-          // (where no group's open meets the end, a group the instrument wrote as its content that stood there, read as a group's
-          // open is: a paragraph TeX opened at it, which nothing states now, counted (a gate))
-          else if (
+        const met = seq.flatMap((x, q) =>
+          x.t === 'open' && meets(sideOf(q - 1, -1), before, -1) && meets(sideOf(q + 1, 1, x.id), after, 1)
+            ? [groupBefore(q + 1)!]
+            : [],
+        )
+        if (new Set(met).size === 1) at = { group: met[0]! }
+        else if (!met.length && after && 'piece' in after) {
+          const q = seq.findIndex((x) => (x.t === 'el' || x.t === 'unit') && x.id === after.piece)
+          if (q >= 0 && groupBefore(q) === null && meets(sideOf(q - 1, -1), before, -1)) at = { el: after.piece }
+        }
+        if (!at) {
+          // (where no group's open meets the end, a group the instrument wrote as its content that stood there, read as a
+          // group's open is: a paragraph TeX opened at it, which nothing states now, counted (a gate))
+          if (
             !met.length &&
+            before &&
+            after &&
+            'text' in before &&
+            'text' in after &&
             unit.passed?.some((o) => {
               const tb = textAt(o, -1),
                 ta = textAt(o, 1)
-              return tb && ta && before.endsWith(tb) && after.startsWith(ta)
+              return tb && ta && before.text.endsWith(tb) && after.text.startsWith(ta)
             })
-          )
+          ) {
             mem.opensLost = (mem.opensLost ?? 0) + 1
+            continue
+          }
+          // (no point stated: an open or an element stands where the next paragraph begins in the source (its side after met by
+          // a group's open, or B's next glyph an element's), or plain text does)
+          const anchored =
+            (!!after && 'piece' in after) ||
+            seq.some((x, q) => x.t === 'open' && meets(sideOf(q + 1, 1, x.id), after, 1))
+          mem.opensUnstated ??= [0, 0]
+          mem.opensUnstated[anchored ? 0 : 1]++
+          continue
         }
-        if (!at) continue
         if ('el' in at) {
           const el = mem.elements.find(([id]) => id === at.el)?.[1]
           if (el && el.opens === undefined) el.opens = j
