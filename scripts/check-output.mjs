@@ -7,8 +7,9 @@ import { basename, join, relative, sep } from 'node:path'
 import { contentScriptsRunningOn } from './site-isolation.mjs'
 
 const OUT = '.output/chrome-mv3'
-/** a build of the reader package's page (wxt.config.ts AXT_READER=v2), not today's reader: the stage-5a build constant */
-const V2 = process.env.AXT_READER === 'v2'
+/** a build of the reader package's page (wxt.config.ts AXT_READER, `v2` its default), not today's reader (AXT_READER=today):
+ *  the stage-5a build constant */
+const V2 = (process.env.AXT_READER ?? 'v2') === 'v2'
 const CONTENT_DIR = join(OUT, 'content-scripts')
 
 const isNoncharacter = code =>

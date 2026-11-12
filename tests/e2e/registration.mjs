@@ -17,7 +17,8 @@
 // was measured here; a copy is now always rendered from the composed document, and what it hides is glyph-exact by its groups:
 // the pixel gates of lab/pdf/spikes/ocg-gate.mjs and lab/pdf/spikes/ocg-reader.mjs.)
 //
-// Usage: pnpm build && pnpm e2e:registration     (first time: npx playwright install chromium)
+// Usage: AXT_READER=today pnpm build && pnpm e2e:registration     (first time: npx playwright install chromium); a default
+// build (v2) runs registration-v2.mjs
 // Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build; AXT_DPR=1.1,1.8 runs those ratios alone;
 // AXT_BASE=delta cuts the sample as a layer held as a delta over arXiv's PDF.
 // AXT_MEASURE=1 checks nothing and measures the copy instead, at the fit and at 100 %: each laid copy's render (ms, the median

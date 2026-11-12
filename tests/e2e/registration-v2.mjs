@@ -15,7 +15,7 @@
 // pixel, is the old reader's mechanism; the rebuilt reader's laid page far and back is its very drawing: the reader package's
 // e2e, "port: a laid page far and back is its very drawing".)
 //
-// Usage: AXT_READER=v2 pnpm build && pnpm e2e:registration
+// Usage: pnpm build && pnpm e2e:registration     (AXT_READER's default, v2)
 // Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build; AXT_DPR=1.1,1.8 runs those ratios alone.
 import { readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'

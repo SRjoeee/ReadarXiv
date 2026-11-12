@@ -27,7 +27,8 @@
 //   - the reader's states on the layer: none for the paper, refused, a server error, a reset and its retry, and arXiv's
 //     bytes not the layer's base (our copy shown).
 //
-// Usage: pnpm build && pnpm e2e:reader     (first time: npx playwright install chromium)
+// Usage: AXT_READER=today pnpm build && pnpm e2e:reader     (first time: npx playwright install chromium); a default build (v2)
+// runs reader-v2.mjs
 // Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build; AXT_BASE=delta cuts the sample as a layer whose base
 // is a delta over arXiv's PDF (lib/layer-cut.mjs `base: 'delta'`: one byte source, the original's, then the delta object and the tails;
 // no /api/v1/base), else as a layer over our whole base page (`full`, /api/v1/base by ranges): the states section asserts either.
@@ -76,7 +77,7 @@ const LAYER_HOSTS = ['https://readarxiv.com', ...['https://app-staging.readarxiv
 const LINK = 'https://example.invalid/sample-1'
 /** whether the build holds the reading view: its places' code, in a chunk */
 const viewBuilt = readdirSync(`${BUILD}/chunks`).some(f => f.endsWith('.js') && readFileSync(`${BUILD}/chunks/${f}`, 'utf8').includes('axt-place-view'))
-if (!viewBuilt) throw new Error(`no chunk of ${BUILD} holds the reading view: build it with pnpm build`)
+if (!viewBuilt) throw new Error(`no chunk of ${BUILD} holds the reading view: build it with AXT_READER=today pnpm build`)
 /** the panel's and the popup's two entries, by their words in either interface language */
 const ENTRY = { html: /Translate HTML|HTML 翻译/, pdf: /Translate PDF|PDF 翻译/ }
 

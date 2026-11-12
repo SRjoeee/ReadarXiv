@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Changed: in the PDF reader, the papers the previous version kept for reading offline are let go once, as the new reader cannot read the form they were kept in; each paper you open is kept again.
 - Fixed: in the PDF reader, where a translation's words between two formulas set on their own lines are too many for the room the paper leaves there and run on past the second formula, the line before that formula ends at a word's end, as a paragraph's last line does. An English word had been cut with a hyphen there, its first letters before the formula and the rest after it.
 - Fixed: in the PDF reader, a paragraph that runs over a page break and is set at one size with the text after it on the next page, such as a sentence whose list runs on there, is drawn at the same size on both pages. A step of the next page's spacing could make its lines before the break one size and those after it another.
 - Fixed: in the PDF reader, a page whose passages a translation service refused, and which another service or a retry then translated, shows the translation. It had stayed as printed until the page was laid again by a scroll or a setting.
