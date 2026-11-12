@@ -12,8 +12,9 @@
 // 3. A margin is information for whoever reads the row: it never decides a removal. Removal follows from `one` or `never`
 //    alone.
 // 4. A citation, flagged from the whole comment (the coordinator confirms or strikes each flag before a removal lane acts):
-//    (a) an arXiv id: the paper joins the holdout and the row is judged again: silent there too, the rule is a removal
-//    candidate marked `cited paper silent`; not yet recorded there, `cited paper` (kept, waiting); (b) a definition (TeX,
+//    (a) an arXiv id: the paper joins the holdout and the row is judged again: recorded there (or among the corpus's
+//    papers) and silent, the rule is a removal candidate marked `cited paper silent`; not yet recorded, `cited paper`
+//    (kept, waiting); (b) a definition (TeX,
 //    the PDF, Unicode, a font's table, a standard: the census's CITES_DEFINITION) or a section of our own documents:
 //    `definition`, kept, listed as cited and silent where it never decided; (c) "measured", "corpus", "on the N papers"
 //    with no id: `measurement`, kept, listed as "cites a measurement, not reproduced"; (d) "tuned" or "empiric" alone:
@@ -72,13 +73,14 @@ export function readsOf(sites) {
   return out
 }
 
-/** the ledger of a site map and a recording; `holdout`: the papers recorded under the input `holdout` (by default the
- *  recording's own list) */
+/** the ledger of a site map and a recording; `holdout`: the papers a cited paper is judged on (by default every paper the
+ *  recording ran on an input that is not a test of our own: the corpus, the holdout, the tests that read the lab's data) */
 export function ledgerOf(map, recording, { holdout = null } = {}) {
   const inputs = Object.keys(recording.sites)
-  // (a paper by its number: a comment may cite it with or without its version)
-  const base = p => p.replace(/v\d+$/, '')
-  const held = new Set((holdout ?? recording.inputs.holdout?.papers ?? []).map(base))
+  // (a paper by its number: a comment may cite it with or without its version, a pair names it with its language)
+  const base = p => p.replace(/-[a-z]{2,3}$/, '').replace(/v\d+$/, '')
+  const ran = Object.entries(recording.inputs).filter(([k]) => k !== OWN_INPUT).flatMap(([, v]) => v.papers ?? [])
+  const held = new Set((holdout ?? ran).map(base))
   const siteOf = id => {
     const s = map.sites[id]
     const per = {}
