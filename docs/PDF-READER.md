@@ -309,6 +309,12 @@ the extension's reader passes none (its narrow window keeps §5's rule).
   「空间占用有点太大……两者都更紧凑简洁」).
 - Each row: the **translated title**, one line, truncating, in the language it is in (`lang`); the original title in its tooltip; the page number at the end
   (11 px, tabular, ink-2 — §4.1). A fold's tooltip says 展开 or 收起, to its right; the fold is named by the section (UI.md S-R-02a).
+  Both titles are text, never TeX: each element of the heading (a paper's macro, a formula, a reference, a citation) is its
+  copy text as its part states it (`El.text`, the glyphs TeX set, else `El.copy`, the source's plain text: a formula as linear
+  text, "τ_V"), a forced break a space, and an element no part has stated, or one that states neither, nothing, as today's
+  reader drops every element (`packages/reader` session/contents.ts `copyTextOf`). The rebuilt reader showed the element's
+  source there, "\sys" and the translated words for "Overview of BLIP" (2608.25210v2; 177 contents entries of 38 papers at
+  B15).
 - The section being read is marked (the fill, 600) and its branch expanded; the mark follows the reading as it scrolls.
   A row jumps both sides to the heading.
 - The headings and their levels come from the paper's source as the engine reads it: the source parser

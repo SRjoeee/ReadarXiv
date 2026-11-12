@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a contents entry whose heading names something the paper defines, such as its system's name, a formula, a reference or a code word, shows that name as the paper prints it ("Overview of BLIP", "τ_V", "Theorem 2", "Sequential_Greedy"), in the title and in its tooltip. The rebuilt reader had shown the paper's TeX there ("\sys", "$\tau_V$", "\ref{…}"), and the reader before it left the name out.
 - Changed: in the PDF reader, the papers the previous version kept for reading offline are let go once, as the new reader cannot read the form they were kept in; each paper you open is kept again.
 - Fixed: in the PDF reader, two pieces of the original the paper sets side by side in one word, such as a word highlighted in two colours, are drawn as close together as the paper sets them, with no white gap between them.
 - Fixed: when Google answers with a page of its own instead of a translation, such as a check that you are not a robot, the next translation service takes over for a while, as it does when Google refuses. Each passage had waited for Google twice first, for as long as the page was served.

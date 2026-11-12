@@ -4,12 +4,13 @@
 // its sections 2); a heading with no depth (a \paragraph) is not in the contents once any has one. Each is at its member's first
 // line once a part places it, else at the page the head's outline gives it (the located headings, by member), else at the page
 // the original's own outline gives a heading of its title (matched in order), else at none; titled by its row once taken, else by
-// its source. The heading read is the last of them at or above the reading line of the pane read. Pure: the reader tells it what
-// comes and asks it what to show.
-import type { Head, OutPiece, Piece, Placed, Row, Unit } from '@readarxiv/format'
+// its source; in either, each element as its copy text (the part's), never its TeX source. The heading read is the last of them
+// at or above the reading line of the pane read. Pure: the reader tells it what comes and asks it what to show.
+import type { El, Head, OutPiece, Piece, Placed, Row, Unit } from '@readarxiv/format'
 
 /** a contents entry: `id` its place in the contents (stable for a layer), `title` its row's text once taken else `original`, the
- *  source's; `level` 1 to 3; `page` the page it is on, null where none is known */
+ *  source's, each element in both as its copy text (copyTextOf); `level` 1 to 3; `page` the page it is on, null where none is
+ *  known */
 export interface OutlineEntry {
   id: number
   title: string
@@ -38,27 +39,47 @@ const normal = (s: unknown) =>
     .replace(/^\s*(?:\d+(?:\.\d+)*|[ivxlcdm]+|[a-z])[.)]?\s+(?=\S)/, '')
     .replace(/[^\p{L}\p{N}]+/gu, '')
 
-/** a unit's plain source: its text, an element by its source, a nested unit by what is around it */
+/** a unit's plain source: its text, an element by its source, a nested unit by what is around it (what a heading is matched to
+ *  the original's own outline by; never shown) */
 export function plainOf(pieces: readonly Piece[]): string {
   let out = ''
   for (const p of pieces)
     out += p.t === 'text' ? p.s : p.t === 'el' ? p.src : p.t === 'span' ? plainOf(p.content) : `${p.pre}${p.post}`
   return out.replace(/\s+/g, ' ').trim()
 }
-/** a row's plain text: its text, an element as the unit's source of it */
-function plainOfRow(content: readonly OutPiece[], els: ReadonlyMap<string, string>): string {
+/**
+ * An element's copy text in a title, as its part states it (format's El): `text`, its glyphs' text on A ('' where TeX set nothing
+ * for it), else `copy`, its source's plain text (a formula's as linear text: "τ_V"); a forced break a space. An element no part has
+ * stated yet, or one that states neither (its ink not found: 2608.06701v1's `\sage`), is nothing, as today's reader drops every
+ * element (R engine/translate/mt.mjs plainTranslated): never its TeX source, which the contents showed as "\sys" and the translated
+ * words for "Overview of BLIP" (2608.25210v2; 177 entries of 38 papers at B15)
+ */
+export function copyTextOf(kind: string | undefined, el: El | undefined): string {
+  if (kind === 'break' || el?.brk) return ' '
+  return el?.text !== undefined ? el.text : (el?.copy ?? '')
+}
+/** a unit's text as a title: its text, each element as its copy text, a nested unit nothing (its mark) */
+function titleOf(pieces: readonly Piece[], copyOf: (id: string) => string): string {
   let out = ''
-  for (const p of content)
-    out += p.t === 'text' ? p.s : p.t === 'el' ? (els.get(p.id) ?? '') : plainOfRow(p.content, els)
+  for (const p of pieces)
+    out += p.t === 'text' ? p.s : p.t === 'el' ? copyOf(p.id) : p.t === 'span' ? titleOf(p.content, copyOf) : ''
   return out
 }
-function elsOf(pieces: readonly Piece[], into = new Map<string, string>()): Map<string, string> {
+/** a row's text as a title: its text, each element as its copy text */
+function titleOfRow(content: readonly OutPiece[], copyOf: (id: string) => string): string {
+  let out = ''
+  for (const p of content) out += p.t === 'text' ? p.s : p.t === 'el' ? copyOf(p.id) : titleOfRow(p.content, copyOf)
+  return out
+}
+/** a unit's elements' kinds, by id */
+function kindsOf(pieces: readonly Piece[], into = new Map<string, string>()): Map<string, string> {
   for (const p of pieces) {
-    if (p.t === 'el') into.set(p.id, p.src)
-    else if (p.t === 'span') elsOf(p.content, into)
+    if (p.t === 'el') into.set(p.id, p.kind)
+    else if (p.t === 'span') kindsOf(p.content, into)
   }
   return into
 }
+const spaced = (s: string) => s.replace(/\s+/g, ' ').trim()
 
 /** the three depths a paper's contents show: the smallest it uses */
 const depthsOf = (hs: readonly { depth?: number }[]) =>
@@ -125,19 +146,33 @@ export function createContents(units: readonly Unit[], head: Pick<Head, 'outline
   for (const h of headings) if (h.ord !== null) byOrd.set(h.ord, h)
   const byUnit = new Map<string, Heading[]>()
   for (const h of headings) (byUnit.get(h.unit.id) ?? byUnit.set(h.unit.id, []).get(h.unit.id))?.push(h)
-  const els = new Map<string, Map<string, string>>()
-  /** each entry's first rectangle once a part places it; the pages the original's outline gives; the rows' titles, by unit */
+  /** each entry's first rectangle once a part places it; the pages the original's outline gives; by unit, the rows taken, its
+   *  elements' kinds and the copy texts its members' parts state (Placed.els) */
   const first = new Map<number, Rect>()
   const outlined = new Map<number, number>()
-  const texts = new Map<string, string>()
+  const rowOf = new Map<string, readonly OutPiece[]>()
+  const kinds = new Map<string, Map<string, string>>()
+  const copies = new Map<string, Map<string, El>>()
   const pageOf = (id: number) => first.get(id)?.[0] ?? headings[id]?.page ?? outlined.get(id) ?? null
+  const copyOf = (unit: Unit) => {
+    const k = kinds.get(unit.id) ?? kinds.set(unit.id, kindsOf(unit.content)).get(unit.id)
+    const c = copies.get(unit.id)
+    return (id: string) => copyTextOf(k?.get(id), c?.get(id))
+  }
+  /** a heading's source as a title, and its title: its row's text once taken (a row of no text, the source), each element as its
+   *  copy text */
+  const sourceTitle = (unit: Unit) => spaced(titleOf(unit.content, copyOf(unit)))
+  const title = (unit: Unit) => {
+    const row = rowOf.get(unit.id)
+    return (row && spaced(titleOfRow(row, copyOf(unit)))) || sourceTitle(unit)
+  }
 
   return {
     entries: () =>
       headings.map((h) => ({
         id: h.id,
-        title: texts.get(h.unit.id) ?? h.src,
-        original: h.src,
+        title: title(h.unit),
+        original: sourceTitle(h.unit),
         level: (h.depth === undefined ? 1 : depths.indexOf(h.depth) + 1) as 1 | 2 | 3,
         page: pageOf(h.id),
       })),
@@ -145,11 +180,19 @@ export function createContents(units: readonly Unit[], head: Pick<Head, 'outline
       let moved = false
       for (const m of members) {
         const h = byOrd.get(m.ord)
+        if (!h) continue
         const l = m.lines[0]
-        if (!h || first.has(h.id) || !l) continue
-        // (a line: page, column, x0, x1, baseline, top, bottom, …)
-        first.set(h.id, [l[0], l[2], l[6], l[3], l[5]])
-        moved = true
+        if (!first.has(h.id) && l) {
+          // (a line: page, column, x0, x1, baseline, top, bottom, …)
+          first.set(h.id, [l[0], l[2], l[6], l[3], l[5]])
+          moved = true
+        }
+        // (its elements' copy texts, the first a part states for each: a title that gains one is told as moved)
+        if (!m.els?.length) continue
+        const was = [title(h.unit), sourceTitle(h.unit)]
+        const c = copies.get(h.unit.id) ?? copies.set(h.unit.id, new Map()).get(h.unit.id)
+        for (const [id, el] of m.els) if (!c?.has(id)) c?.set(id, el)
+        if (title(h.unit) !== was[0] || sourceTitle(h.unit) !== was[1]) moved = true
       }
       return moved
     },
@@ -159,21 +202,16 @@ export function createContents(units: readonly Unit[], head: Pick<Head, 'outline
         const hs = byUnit.get(r.id)
         if (!hs) continue
         const unit = (hs[0] as Heading).unit
-        const e = els.get(unit.id) ?? elsOf(unit.content)
-        els.set(unit.id, e)
-        const text = r.ok ? plainOfRow(r.content, e).replace(/\s+/g, ' ').trim() : ''
-        if (text) {
-          if (texts.get(r.id) !== text) {
-            texts.set(r.id, text)
-            moved = true
-          }
-        } else if (texts.delete(r.id)) moved = true
+        const was = title(unit)
+        if (r.ok) rowOf.set(r.id, r.content)
+        else rowOf.delete(r.id)
+        if (title(unit) !== was) moved = true
       }
       return moved
     },
     clearTexts() {
-      const had = texts.size > 0
-      texts.clear()
+      const had = rowOf.size > 0
+      rowOf.clear()
       return had
     },
     async outline(doc) {
