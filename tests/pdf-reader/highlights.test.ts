@@ -15,7 +15,7 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { type Located, type PdfJs, prepareBack, type Tally } from '@readarxiv/engine'
 import { readInkDecorated, readInkTexts } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classesOf, instrumentOf } from '@/pdf-reader/engine/pipeline/instrument.mjs'
+import { classesOf, decoratedCellsOf, instrumentOf } from '@/pdf-reader/engine/pipeline/instrument.mjs'
 import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { deflate, DOCUMENT_OPTIONS, inflate } from './helpers/ocg-pdfs'
 
@@ -139,5 +139,42 @@ describe('the probe\'s text of a highlight: the characters TeX set beside the de
     expect(readInkDecorated(sample(0, [...rlap, ...chars('word')]), ['\\over{word}'])).toEqual([])
     expect(readInkDecorated(sample(0, chars('word')), ['\\plain{word}'])).toEqual([])
     expect(readInkTexts(sample(0, chars('word')), ['\\plain{word}'])).toEqual([['\\plain{word}', 'word']])
+  })
+})
+
+describe('a cell holding a decorated word is held whole as the original (decoratedCellsOf, PDF-READER §18.61)', () => {
+  // (the owner's ruling of 2026-11-12: until a decoration can follow its words, a figure's label or a table's cell that holds a
+  // decorated word is never translated around it, no half-original line; 2111.09276v1's Table 1, "Put the [ham] in the oven.")
+  const tex = [
+    '\\documentclass{article}',
+    '\\usepackage{soul}',
+    '\\begin{document}',
+    'A paragraph with a \\hl{marked} word in it stays a paragraph.',
+    '\\begin{table}',
+    '\\begin{tabular}{ccc}',
+    'Put the \\hl{ham} in the oven. & Step \\hl{12} of the recipe. & Plain words alone here. \\\\',
+    'Cut the fins with \\st{kitchen} shears. & Slice the bread thin. & Bake it for an hour. \\\\',
+    '\\end{tabular}',
+    '\\caption{The \\hl{yellow} words are replaced.}',
+    '\\end{table}',
+    '\\end{document}',
+  ].join('\n')
+  const paper = openPaper(new Map([['main.tex', new TextEncoder().encode(tex)]])) as { units: (Unit & { cell?: unknown })[] }
+  const texts = (u: Unit) => u.pieces.map((p) => (p.t === 'text' ? p.s : p.t === 'ph' ? '·' : '')).join('').replace(/\s+/g, ' ').trim()
+  // (what the probe answers for each such call: the characters TeX set beside the decoration, readInkDecorated's)
+  const decorated = new Map([
+    ['\\hl{marked}', 'marked'],
+    ['\\hl{ham}', 'ham'],
+    ['\\hl{12}', '12'],
+    ['\\st{kitchen}', 'kitchen'],
+    ['\\hl{yellow}', 'yellow'],
+  ])
+  it('holds a cell whose decorated piece sets a letter; not one of a number, nor a paragraph or a caption, nor a cell already kept', () => {
+    const held = decoratedCellsOf(paper.units, decorated)
+    expect(paper.units.filter((_, i) => held.has(i)).map(texts)).toEqual(['Put the · in the oven.', 'Cut the fins with · shears.'])
+    expect(paper.units.filter((u) => u.cell).length).toBe(6)
+    const first = paper.units.findIndex((u) => texts(u) === 'Put the · in the oven.')
+    expect(decoratedCellsOf(paper.units, decorated, new Set([first])).has(first)).toBe(false)
+    expect(decoratedCellsOf(paper.units, null).size).toBe(0)
   })
 })

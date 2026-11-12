@@ -189,8 +189,28 @@ export function batchVerdict(head, base) {
 /** the last round a batch is compared with: the newest record that passed (or was accepted), else none. `records`: { at, pass,
  *  accepted?, commit } each */
 export function lastRound(records) {
-  return [...records].filter((r) => r.pass || r.accepted).sort((x, y) => String(y.at).localeCompare(String(x.at)))[0] ?? null
+  return [...records].filter((r) => (r.pass || r.accepted) && !r.void).sort((x, y) => String(y.at).localeCompare(String(x.at)))[0] ?? null
 }
+
+/**
+ * A visit that did not measure the reader: its longest task outlasted the rest of its own scroll. No work of the scroll can
+ * outlast the scroll; a stall of the machine (another job, a swap) can, and it lengthens the scroll it stalls by its own
+ * length, so the bound is the scroll's measured duration less that task, read off the visit itself (no constant). A
+ * repetition holding such a visit is void: it is run again before the round is recorded, and a repetition void twice in a
+ * row ends the round as "the machine could not measure" (run.mjs; the gate reads it as skipped, never as a pass).
+ */
+export function stallOf(visit) {
+  const s = visit?.scroll
+  if (!s || !Number.isFinite(s.ms) || !Number.isFinite(s.longestTask)) return null
+  const own = s.ms - s.longestTask
+  return s.longestTask > own ? { pair: visit.pair ?? null, rep: visit.rep ?? null, taskMs: s.longestTask, scrollMs: s.ms, ownMs: own } : null
+}
+
+/** a repetition's stalled visits (none: the repetition measured the reader) */
+export const voidOf = (visits) => visits.map(stallOf).filter(Boolean)
+
+/** the words for a stall, in a round's record and the gate's reason */
+export const stallWords = (x) => `${x.pair} repetition ${x.rep}: a ${x.taskMs} ms task in a ${x.scrollMs} ms scroll (its own ${x.ownMs} ms)`
 
 /** the gate's line of the lab's run: its last line `{"perf": …}` (the run's verdict and numbers), or null */
 export function perfOf(text) {

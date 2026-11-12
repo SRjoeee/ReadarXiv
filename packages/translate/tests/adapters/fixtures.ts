@@ -262,6 +262,9 @@ export const GLUED_PAST: UnitIn = unit('glued-past', [
   el('b', 'math'),
   t(' rest.'),
 ])
+/** an element glued after another element's own stop (the reply's space before that stop is the glued element's to take back
+ *  once the stop is out: text.ts glueOf) */
+export const OWN_GLUED: UnitIn = unit('own-glued', [t('Values '), el('a', 'math', '.'), el('b', 'math'), t(' hold.')])
 export const MICROSOFT_UNITS: UnitIn[] = [
   ...UNITS,
   /* 17 */ BERT_ABSTRACT,
@@ -431,5 +434,11 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     raw: '设为（<x id="1"/><t id="2"> A34</t>）和<t id="3">单词 </t><x id="4"/> 其余。',
     taken: true,
     why: 'the white space beside a glued element taken back past the wire’s own pair tags (text.ts glueOf)',
+  },
+  {
+    unit: 21,
+    raw: '数值<x id="1"/> 。<x id="2"/> 成立。',
+    taken: true,
+    why: 'an element glued after another’s own stop: the stop out, then the space before it taken back (text.ts glueOf)',
   },
 ]

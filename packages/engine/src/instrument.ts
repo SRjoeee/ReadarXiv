@@ -45,9 +45,29 @@ export interface InstrumentUnit {
   /** a figure text the engine cannot draw as it was set, a script or an accent set apart from its base, kept as the original
    *  (F3's `script`, figure-lines.ts setApart): the lab's dump and parity tell it by it; the bundle does not carry it */
   script?: true
+  /** a figure text or a table cell held whole as the original for a decorated word (PDF-READER §18.61, the owner's ruling of
+   *  2026-11-12): `token`, one that holds the word, a figure text a word of which a decoration holds (figure-lines.ts, its element
+   *  `cite`) or a cell holding a piece TeX set beside a decoration of its own with a letter in its text (the probe's `decorated`,
+   *  pipeline/instrument.mjs decoratedCellsOf); `label`, a figure text of the same label or printed line as such a text, by the
+   *  paragraph reading's pairing (figure-lines.ts figureLinesOf). `fixed`, never `kept`: its text could be translated and is
+   *  held for its drawing alone. The lab's dump and parity tell it by it; the bundle does not carry it */
+  decorated?: 'token' | 'label'
   /** a kept block of e-mail addresses and their separators alone (today/ink-units.mjs addressesAlone): the lab's dump and parity
    *  tell such a block by it (the coordinator's ruling of 2026-11-10); the bundle does not carry it */
   address?: true
+  /** a kept block of any other text no unit owns (today/ink-units.mjs keptUnitsOf, rule 10: a code listing, a URL alone, a page
+   *  number, a bibliography not cut into entries): the lab's dump tells it by it; the bundle does not carry it */
+  block?: true
+  /** a line of an algorithm float's body, kept as the original as code is (the front end's `pseudocode`, pipeline/instrument.mjs
+   *  unitFactsOf; the owner's ruling of 2026-11-08): the lab's dump tells it by it; the bundle does not carry it (`kept` alone) */
+  pseudocode?: true
+  /** a table's cell or a figure text of names or markup tokens alone, kept as the original (translate/mt.mjs nameCells): the lab's
+   *  dump tells it by it; the bundle does not carry it (`kept` alone) */
+  nameCell?: true
+  /** a figure text the figure reading keeps whole as crowded (a formula it would tear, a translation with no room beside other
+   *  ink: figure-lines.ts, today/figure-text.mjs) and for no reason of its own besides (`double`, `script`): the lab's dump tells
+   *  it by it; the bundle does not carry it (`unwrapped`, as a wrap failure is) */
+  crowded?: true
   /** where each group the instrument wrote as its content opened (pipeline/instrument.mjs passThroughOf: a group that carries
    *  nothing), as offsets in the unit's projection (text pieces' characters, each element or nested unit one): the facts pass
    *  counts a paragraph TeX opened at one (`opensLost`), which must be none; the bundle does not carry it */

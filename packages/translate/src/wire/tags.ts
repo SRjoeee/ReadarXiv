@@ -320,9 +320,10 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
   // (the white space beside an element the source glued there taken back, as the markers reading takes it: text.ts glueOf)
   const push = (s0: string, takeBack: RegExp | null) => {
     let s = s0
-    if (takeBack) s = s.replace(takeBack, '')
+    // (the element's own stop out first: the white space a reply set before it is then the glued element's to take back)
     if (afterOwn) s = s.replace(OWN_LEAD, '$1')
     afterOwn = false
+    if (takeBack) s = s.replace(takeBack, '')
     s = decode(s)
     if (afterGlued) s = s.replace(GLUED_LEAD, '')
     // (past the wire's own pair tags: a glued element's next text may stand inside a pair it opens or after one it closes)

@@ -434,6 +434,7 @@ function framesAt(p: FillLaid, laid?: Layout): { lines: number; lead: number }[]
  *  page's band floor `floor` (the target less the band) */
 function underBand(p: FillLaid, floor: number, laid?: Layout): boolean {
   if (p.parent || p.runs?.length || p.refused || p.fillLead === null || p.fillLead === undefined) return false
+  // (a frame of two lines or more: the band's voting frame, a line alone having no leading to read)
   return BODY_KINDS.includes(p.unit.kind) && framesAt(p, laid).some((f) => f.lines >= 2 && f.lead < floor - 1e-9)
 }
 /** a fitted state with one knob more, as the fit's walk takes it to its bound: the tracking at the fit's bound (P.trackMin),
@@ -448,7 +449,10 @@ function knobOf(p: FillLaid, P: PageRules, st: FitState, knob: EvenKnob): FitSta
     if (p.P.cjk) return st.track > bound + 1e-9 ? { ...st, track: bound } : null
     return st.trackLatin > bound + 1e-9 ? { ...st, trackLatin: bound } : null
   }
-  if (knob === 'room') return st.borrow < 99 && p.blocks.some((b) => (b.free ?? 0) > 0) ? { ...st, borrow: 99 } : null
+  if (knob === 'room')
+    // (99 lines: all of the room TeX left under its blocks, the walk's last borrow state, fit/walk.ts; slots.mjs lowOf caps it
+    // at the room)
+    return st.borrow < 99 && p.blocks.some((b) => (b.free ?? 0) > 0) ? { ...st, borrow: 99 } : null
   if (knob === 'foot') {
     const b = p.blocks.at(-1)!,
       line = Math.round((b.pitch0 ?? 1.2 * p.s) * 100) / 100

@@ -44,6 +44,9 @@ export {
   readSkips,
 } from './marks/channels.ts'
 export { cutLines } from './locate/lines.ts'
+// (whether a text holds a letter: a figure's decorated stretch a word (`cite`), and a cell's decorated piece one that holds its
+// cell whole, the front half's adapter's decoratedCellsOf (PDF-READER §18.61))
+export { holdsLetter } from './locate/figure-lines.ts'
 export { type Located, locate, type Member, type Place } from './locate/locate.ts'
 export { type PrepareDeps, prepareBack, readArxiv, type Tally } from './prepare.ts'
 export { OPS_PDFJS, type OpsPage, type OpsReader, readOps } from './opstream.ts'

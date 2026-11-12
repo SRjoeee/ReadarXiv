@@ -272,7 +272,7 @@ export function inkOf(o: InkInput): {
     ends: 0,
     boxed: fig.stats?.boxed ?? 0,
     interior: fig.stats?.interior ?? 0,
-    kept: { double: 0, torn: 0, today: 0, code: 0, formula: 0, script: 0, inked: 0 },
+    kept: { double: 0, torn: 0, today: 0, code: 0, formula: 0, script: 0, decoration: 0, inked: 0 },
   }
   const texts = figureLinesOf(pages, fig, (p, g) => figOwn[p - 1]?.[g] != null, o.fixed ?? null, textFaces, work)
   // (each text by its first run; the runs it takes after its first, and those wholly a doubled copy of a text's glyphs: no
@@ -417,7 +417,8 @@ export function inkOf(o: InkInput): {
         content,
         kept: true,
         fixed: true,
-        ...(u.address ? { address: true as const } : {}),
+        // (why it is kept, for the lab's dump: a block of e-mail addresses alone, else a block of rule 10's)
+        ...(u.address ? { address: true as const } : { block: true as const }),
       },
       text: [],
       ph: [],
@@ -438,7 +439,8 @@ export function inkOf(o: InkInput): {
   // (each figure text's set, its size tie (the owner's rule of 2026-10-29: the labels of one group at one size): the set today's
   // figure reading gave its line (setsOf: its column, its baseline); a text the paragraph path lays (figureTextOf: lines joined,
   // an element, a label) stands among the labels of its lines' sets, which it joins into one: one member, drawn at one size. One
-  // kept as the original's (its why: a formula, code, a script, a double) is laid by no path and keeps a set of its own)
+  // kept as the original's (its why: a formula, code, a script, a double, a decorated word) is laid by no path and keeps a set
+  // of its own)
   const setRoot = new Map<number, number>()
   const setOf = (k: number): number => {
     let s = fig.units[k]!.set ?? k
@@ -475,6 +477,7 @@ export function inkOf(o: InkInput): {
     // (a run alone the relation reading judged: its doubled copy's glyphs hidden with its text, its decoration's boxes)
     if (t) for (const g of t.copies) text.push(global(t.page, g))
     const turned = figTurned.get(k) ?? []
+    const held = t ? t.why === 'decoration' : !f.why && !!f.decorated
     // (its text in the runs its glyphs set in another face than its own: each a group of its own, its style its glyphs')
     const { content, styles } = figureRuns(f.text ?? '', streamOfFigure(text, turned, pages, inkA, m, o.pageA))
     const ux = f.ux ?? 1
@@ -503,21 +506,28 @@ export function inkOf(o: InkInput): {
         id: unitId('inkfigures', content),
         kind: 'inkfigures',
         content,
-        figure: { set: setOf(k), ...(dir ? { dir } : {}), ...room },
+        // (one held with its label's decorated word, §18.61: a set of its own, as a text the decoration holds keeps)
+        figure: { set: held ? -1 - k : setOf(k), ...(dir ? { dir } : {}), ...room },
         ...(f.anchor ? { align: ALIGN_OF[f.anchor as keyof typeof ALIGN_OF] } : {}),
         ...((t ? t.why : f.why)
           ? {
               why: `figure: ${t ? t.why : f.why}`,
               fixed: true as const,
+              // (a line of code is kept for its pitch as the paragraph path's is, below; one kept as crowded says so)
+              ...(t?.why === 'code' ? { pitch: true as const } : {}),
+              ...((t ? t.why : f.why) === 'crowded' ? { crowded: true as const } : {}),
               ...(t?.why === 'formula' ? { formula: true as const } : {}),
               ...(f.double ? { double: true as const } : {}),
               ...(f.script ? { script: true as const } : {}),
+              ...(t?.why === 'decoration' ? { decorated: t.withLabel ? ('label' as const) : ('token' as const) } : {}),
             }
-          : o.artefact?.(text, turned)
-            ? { why: 'figure: code', fixed: true as const, pitch: true as const }
-            : identifiersIn((f.text ?? '').normalize('NFKC')).length
-              ? { why: 'figure: identifier', fixed: true as const }
-              : {}),
+          : f.decorated
+            ? { why: 'figure: decoration', fixed: true as const, decorated: f.decorated }
+            : o.artefact?.(text, turned)
+              ? { why: 'figure: code', fixed: true as const, pitch: true as const }
+              : identifiersIn((f.text ?? '').normalize('NFKC')).length
+                ? { why: 'figure: identifier', fixed: true as const }
+                : {}),
       },
       text,
       ph: [],
@@ -727,9 +737,11 @@ function figureTextOf(
             why: `figure: ${t.why}`,
             fixed: true as const,
             ...(t.why === 'code' ? { pitch: true as const } : {}),
+            ...(t.why === 'crowded' ? { crowded: true as const } : {}),
             ...(t.why === 'formula' ? { formula: true as const } : {}),
             ...(fig.units[t.ks[0]!]?.double ? { double: true as const } : {}),
             ...(t.why === 'script' ? { script: true as const } : {}),
+            ...(t.why === 'decoration' ? { decorated: t.withLabel ? ('label' as const) : ('token' as const) } : {}),
           }
         : {}),
     },

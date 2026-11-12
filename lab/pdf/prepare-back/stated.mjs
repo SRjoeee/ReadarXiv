@@ -120,6 +120,22 @@ export const CAUSE = Object.freeze({
   // cannot draw as it was set, a script, an accent apart from its base, an element whose boxes stand over each other, is the
   // original's (the dump's `keptBy: 'script'`, the engine's `script`, figure-lines.ts setApart): the candidate's own unit's cause)
   script: 'kept as the original: a figure text the engine cannot draw as it was set (a script, an accent apart from its base)',
+  // ((s), the owner's ruling of 2026-11-12 (the readiness sheet's question on figure and table text after the research, part (a):
+  // hold the whole label or cell until a decoration can follow its words; PDF-READER §18.61): a figure text a word of which a
+  // decoration holds, or a table's cell holding a piece TeX set beside a decoration of its own with a letter in it, held whole as
+  // the original, `unwrapped` (the dump's `keptBy: 'decorated'`, the engine's `decorated`): the candidate's own unit's cause)
+  decorated: 'kept as the original whole: a decorated word inside it',
+  // (the candidate's own unit kept by a rule of its own, each by the mark the prepare writes (the dump's `keptBy`; lane gate-finds,
+  // the coordinator's ruling of 2026-11-12: every kept unit states its reason, the lab's alone; none accepted by this, the
+  // acceptance list's entries are the coordinator's): a block of e-mail addresses alone (`address`); a figure text the figure
+  // reading keeps as crowded (`crowded`); a line of an algorithm float's body, kept as code is by the owner's ruling of 2026-11-08
+  // (`pseudocode`); a cell or a figure text of names or markup tokens alone (`name`, nameCells); a block of text no unit owns,
+  // rule 10 (`block`))
+  address: 'kept as the original: e-mail addresses alone',
+  crowded: 'kept as the original: a figure text crowded by the ink about it, or a formula it would tear',
+  pseudocode: "kept as the original: a line of an algorithm's pseudocode",
+  nameCell: 'kept as the original: names or markup tokens alone',
+  block: 'kept as the original: a block of text no unit owns',
   // ((f): a unit the candidate does not make, every line of it inside a line the engine reads as a display's formula (a display
   // TeX's marked compile states, its text-mode glyphs read as text: locate's `displays`): the display's ink, kept with it — the
   // coordinator's ruling of 2026-11-09; 2608.08481v1 t118-t121, (7)'s and (8)'s parts)
@@ -166,8 +182,9 @@ const RESET = 'unlocated: set in a paragraph that sets a unit again'
 /** (k): the cause a candidate's own unit states where the prepare keeps it for its text set wholly in a face of one pitch, or
  *  for an identifier, by the mark it writes (the dump's `keptBy`, 'pitch' or 'identifier', which the parity's rulings read too);
  *  (m) where it keeps a figure's line of formulas alone (`keptBy: 'formula'`, F1), (q) a figure text drawn twice (`keptBy:
- *  'double'`, F3); else null: a unit kept otherwise (a code
- *  environment's kept block, a crowded figure text) states none */
+ *  'double'`, F3), (r) one it cannot draw as it was set (`keptBy: 'script'`), (s) a figure text or a cell held whole for a
+ *  decorated word (`keptBy: 'decorated'`, §18.61); and each other keep by its rule's mark (`address`, `crowded`, `pseudocode`,
+ *  `name`, `block`: every kept unit states its reason); else null: a unit no rule keeps */
 export const keptWhyOf = (u) =>
   u?.keptBy === 'pitch'
     ? CAUSE.pitch
@@ -179,7 +196,19 @@ export const keptWhyOf = (u) =>
           ? CAUSE.double
           : u?.keptBy === 'script'
             ? CAUSE.script
-            : null
+            : u?.keptBy === 'decorated'
+              ? CAUSE.decorated
+              : u?.keptBy === 'address'
+                ? CAUSE.address
+                : u?.keptBy === 'crowded'
+                  ? CAUSE.crowded
+                  : u?.keptBy === 'pseudocode'
+                    ? CAUSE.pseudocode
+                    : u?.keptBy === 'name'
+                      ? CAUSE.nameCell
+                      : u?.keptBy === 'block'
+                        ? CAUSE.block
+                        : null
 
 /** (l'): TeX's ligatures of a text face's input, its font's ligature table (Knuth's cmr, and every text font after it): an em dash,
  *  an en dash, the curly double and single quotes */

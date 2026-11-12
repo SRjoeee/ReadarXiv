@@ -171,7 +171,7 @@ describe('the instrument’s unit facts from the front end’s (unitFactsOf)', (
         ],
       ]),
     ) as unknown as { units: Unit[] }
-    const facts = unitFactsOf(paper as never) as { float: Map<number, string>; kept: Set<number> }
+    const facts = unitFactsOf(paper as never)
     const rows = paper.units.map((u, i) => [u.kind, textOf(u), facts.float.get(i) ?? null, facts.kept.has(i)])
     expect(rows).toEqual([
       ['para', 'The text before the algorithm goes on here.', null, false],
@@ -179,5 +179,33 @@ describe('the instrument’s unit facts from the front end’s (unitFactsOf)', (
       ['para', expect.stringContaining('set the best one aside'), null, true],
       ['caption', 'The tables ranked.', 'figure', false],
     ])
+    // (each kept unit with the reason it is kept, for the lab's dump (`keptBy`): the algorithm's body its pseudocode)
+    expect([...facts.why]).toEqual([[2, 'pseudocode']])
+  })
+  it('states a cell of names alone kept for its names, and a cell of an algorithm float kept as its pseudocode', () => {
+    const paper = openPaper(
+      new Map([
+        [
+          'main.tex',
+          enc(
+            doc(
+              [
+                'We compare GSM8K with the larger benchmark of the study, and MATH with the others.',
+                '\\begin{tabular}{ll}Data & Score \\\\ GSM8K & the best one \\end{tabular}',
+                '\\begin{algorithm}\\caption{Rank}\\begin{tabular}{l}MATH\\end{tabular}\\end{algorithm}',
+              ].join('\n\n'),
+              '\\usepackage{algorithm2e}',
+            ),
+          ),
+        ],
+      ]),
+    ) as unknown as { units: Unit[] }
+    const facts = unitFactsOf(paper as never)
+    const why = paper.units.flatMap((u, i) => (facts.why.has(i) ? [[u.kind, textOf(u), facts.why.get(i)]] : []))
+    expect(why).toEqual([
+      ['cell', 'GSM8K', 'name'],
+      ['cell', 'MATH', 'pseudocode'],
+    ])
+    expect([...facts.why.keys()].every((i) => facts.kept.has(i))).toBe(true)
   })
 })

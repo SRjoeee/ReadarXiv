@@ -798,6 +798,34 @@ describe("(k) an identifier is never sent: what the prepare keeps whole as ident
   })
 })
 
+describe("(s) a figure text or a cell held whole for a decorated word it holds (the owner's ruling of 2026-11-12)", () => {
+  // (PDF-READER §18.61: until a decoration can follow its words, a label or a cell holding a decorated word is the original's
+  // whole, never translated around it; the candidate's own unit's cause, by the mark the prepare writes (the dump's
+  // `keptBy: 'decorated'`, the engine's `decorated`), held `unwrapped` as a held figure text is)
+  it("states the cause of a unit marked held for its decorated word, and of no other", () => {
+    expect(keptWhyOf({ id: id('a'), keptBy: 'decorated', state: 'laid', why: 'unwrapped' })).toBe(CAUSE.decorated)
+    expect(keptWhyOf({ id: id('a'), state: 'laid', why: 'unwrapped' })).toBe(null)
+  })
+})
+
+describe('every kept unit states the rule that keeps it (lane gate-finds, the coordinator\'s ruling of 2026-11-12)', () => {
+  // (the candidate's own unit's cause by the mark the prepare writes on it, the lab's alone: a block of e-mail addresses alone, a
+  // figure text kept as crowded, a line of an algorithm float's body (the owner's ruling of 2026-11-08: pseudocode kept as the
+  // original), a cell or a figure text of names or markup tokens alone, any other block of text no unit owns)
+  it('states the cause of each mark, one cause a mark, and none for a unit no rule keeps', () => {
+    const by = (keptBy: string) => keptWhyOf({ id: id('a'), keptBy, state: 'laid' })
+    expect(['address', 'crowded', 'pseudocode', 'name', 'block'].map(by)).toEqual([
+      CAUSE.address,
+      CAUSE.crowded,
+      CAUSE.pseudocode,
+      CAUSE.nameCell,
+      CAUSE.block,
+    ])
+    expect(new Set(Object.values(CAUSE)).size).toBe(Object.keys(CAUSE).length)
+    expect(keptWhyOf({ id: id('a'), kept: true, state: 'drawn' })).toBe(null)
+  })
+})
+
 const ACCEPTANCE ='/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11/baseline/acceptance.json'
 describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (lab-data's baseline/acceptance.json)", () => {
   const accepted = (cause: string) =>
@@ -811,6 +839,8 @@ describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (la
     expect(accepted(CAUSE.pitch)).toBe(true)
     // ((n), the coordinator's ruling of 2026-11-10 to lane fig-text: a stretch a decoration holds, kept with it)
     expect(accepted(CAUSE.decoration)).toBe(true)
+    // ((s), the owner's ruling of 2026-11-12: a figure text or a cell held whole for a decorated word it holds)
+    expect(accepted(CAUSE.decorated)).toBe(true)
     expect(accepted(CAUSE.identifier)).toBe(true)
     expect(accepted('unwrapped')).toBe(false)
     expect(accepted('laid')).toBe(false)
