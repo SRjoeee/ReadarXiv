@@ -4,7 +4,6 @@
 // more with each such member given today's own text where it can be placed in v2's unit (relayOf), render.mjs draws the pages that
 // lay changes, and the verdict judges each set-aside difference again on that drawing (verdict.mjs freshResolve): gone, it follows
 // from the different text; still there, it is judged as any; with no text of today's to lay, not comparable, its reason said.
-import { sourcePieces } from '../../../packages/typeset/src/lay/read.ts'
 import { readingOf } from '../../../packages/typeset/tests/replay/l1.ts'
 import { doorSentences } from '../../../packages/typeset/tests/replay/rows.ts'
 
@@ -13,6 +12,28 @@ const ESCAPED = /^\\([#$%&_{}])$/
 /** the characters a placeholder of today's prints where v2's unit holds them as text: l1.ts readingOf's (an address, a formula's
  *  run, an identifier, a brace's text symbol, a tie, an underscore), or a TeX escape of a special character (`\&` prints "&") */
 export const printedOf = (src) => readingOf(src) ?? ESCAPED.exec(src ?? '')?.[1] ?? null
+
+/** a unit's pieces flat, in the source's order (read.ts sourcePieces's reading: text, `ph` an element, `open` / `close` a group's
+ *  edges, `nested` a unit), each element with its own id: the id a row names it by. The format's element ids are the source's
+ *  piece numbers, not the flat order's (a group's edges collapsed in the tree: 1512.03385v1 t324's year, element 19, the 16th
+ *  piece flat), so a row naming an element by its flat place names another or none, and the lay draws it nowhere */
+export function flatOf(content) {
+  const out = []
+  const walk = (ps) => {
+    for (const p of ps) {
+      if (p.t === 'text') out.push({ t: 'text', s: p.s })
+      else if (p.t === 'el') out.push({ t: 'ph', src: p.src, id: p.id })
+      else if (p.t === 'unit') out.push({ t: 'nested', id: p.id })
+      else {
+        if (p.open !== undefined) out.push({ t: 'open', src: p.open })
+        walk(p.content)
+        if (p.close !== undefined) out.push({ t: 'close', src: p.close })
+      }
+    }
+  }
+  walk(content)
+  return out
+}
 
 /** what today's unit holds, in its order: each character of its texts, each placeholder (`k` its piece's index, the number its
  *  door row cites it by, with its source); its groups' opens and closes none (l1.ts atomsOf's) */
@@ -58,7 +79,7 @@ export function readAlike(flat, atoms) {
     if (p.t !== 'ph') return null
     const a = atoms[j]
     if (a && 'k' in a && a.src === p.src) {
-      map.set(a.k, { el: p.k })
+      map.set(a.k, { el: p.id })
       at[j++] = o++
       continue
     }
@@ -75,7 +96,7 @@ export function readAlike(flat, atoms) {
       at[j] = j === from ? o : -1
       j++
     }
-    runs.push({ k: p.k, from, to: j })
+    runs.push({ id: p.id, from, to: j })
     o++
   }
   return j === atoms.length ? { map, runs, at, len: o } : null
@@ -93,7 +114,7 @@ export function readAlike(flat, atoms) {
  * is said without them (`unsentenced`)
  */
 export function todaySaid(row, today, unit) {
-  const flat = sourcePieces(unit.content)
+  const flat = flatOf(unit.content)
   const atoms = atomsOf(today)
   const alike = readAlike(flat, atoms)
   if (!alike) return { why: "v2's unit is cut otherwise than today's: their texts do not read alike" }
@@ -109,7 +130,7 @@ export function todaySaid(row, today, unit) {
   const same = (a, b) => ('c' in a ? 'c' in b && a.c === b.c : 'k' in b && a.k === b.k)
   // (the elements of v2's today held as text, placed by their runs of today's atoms in the translation, in their order, one way
   // only: l1.ts keptRow's placing)
-  const els = alike.runs.map((r) => ({ k: r.k, pat: atoms.slice(r.from, r.to) }))
+  const els = alike.runs.map((r) => ({ id: r.id, pat: atoms.slice(r.from, r.to) }))
   const fits = (e, i) => els[e].pat.every((x, d) => tr[i + d] !== undefined && same(tr[i + d], x))
   const ways = Array.from({ length: els.length + 1 }, () => new Array(tr.length + 1).fill(0))
   ways[els.length].fill(1)
@@ -135,7 +156,7 @@ export function todaySaid(row, today, unit) {
     if (runAt.has(i)) {
       const e = runAt.get(i)
       flush()
-      content.push({ t: 'el', id: String(els[e].k) })
+      content.push({ t: 'el', id: String(els[e].id) })
       trAt[i] = o++
       for (let d = 1; d < els[e].pat.length; d++) trAt[i + d] = -1
       i += els[e].pat.length
