@@ -9229,6 +9229,14 @@ The toggle still governs the block under the title alone (§19.13, the ruling of
     - a whole-stretch unit keeps its own translation of that name.
   - **Waiting:** a page waits for the variant's row and the anchors' rows besides the unit's own, while rows may come. Nothing
     committed is laid again; a toggle lays every page again.
+  - **What a page reads is what it waits for** (2026-11-13). One test, the persons of the unit the toggles show (`shownOf`),
+    decides both. Where none is shown (the names off) the unit is its own row as it came, and neither the variant's row nor an
+    anchor's is read. Before, the variant's row was read first: with the names off and that row not in yet, the unit read as
+    still to come, though its page waited for nothing more, so the page committed with it the original's, and a toggle turned
+    and turned back drew it from its own row (staging round B14, 2611.03953v2-zh p1: the ICML correspondence footnote, the
+    original's at the first lay, its own row's translation after the names on then off). Over the round's bundles with the Google store (each variant's
+    row made from its unit's), a page laid over only the rows it waits for against over every row: 6 of 90 first pages and 11
+    of the 60 pages that hold a variant differed by default, all 60 with the references on; none after.
 - **Measured** (stage 1a over the 88 at this change, against the base's run):
   - 29 papers state 117 units naming 192 persons elsewhere, every other object the same:
     - 96 references (self-citations);

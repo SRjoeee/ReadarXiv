@@ -3,7 +3,7 @@
 // at a time (the hold), what stays the original's, the stall clock, failures asked again, another target and the toggles in
 // place, the translating marks, the pages ahead, the faces' wave; and the faces' own rules (four at a time, asked once, a lasting
 // answer never asked again); the served faces' tables that cannot be had under it (no lay, no table asked again and again).
-import type { Part, Placed, Row } from '@readarxiv/format'
+import type { OutPiece, Part, Placed, Row } from '@readarxiv/format'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AHEAD_SETTLE_MS,
@@ -19,6 +19,8 @@ import type { Lay, Laid, Page, Rows } from '../src/compose/page.ts'
 import { createServed, type Served } from '../src/compose/served.ts'
 import { PROBE_TEXT } from '../src/compose/text-rendering.ts'
 import type { Clock } from '../src/stack/clock.ts'
+import { layPage, rulesFor } from '@readarxiv/typeset'
+import { leftKinds } from '../src/compose/classes.ts'
 import type { PageContent, Stack, StackEvents } from '../src/stack/stack.ts'
 
 // ---------------------------------------------------------------- the stand-ins
@@ -1410,4 +1412,112 @@ describe("the served faces' tables that cannot be had, under the composer", () =
       served.faces.dispose()
     },
   )
+})
+
+describe('the toggles turned and turned back: the drawing a function of the part, the rows and the toggles', () => {
+  // (the law, docs/PDF-READER.md §15: every reading option turned on and off again returns the first drawing, member by member,
+  // and on again the second. Laid by the reader's own typesetter (layPage under the rules the toggles leave, as typeset.ts
+  // makes them), over a part of our own: a paragraph, a block name, and a footnote that names the block's person elsewhere
+  // (§19.15: its variant, the name an element). Its rows come as a run brings them: the paragraph's, the block's and the
+  // footnote's own first, the footnote's variant after the page is laid: staging, round B14, 2611.03953v2-zh p1)
+  const E = 'e'.repeat(64) // the footnote
+  const V = 'f'.repeat(64) // its variant
+  const B = 'b'.repeat(64) // the block's name
+  const P = 'a'.repeat(64) // a paragraph
+  const metrics = {
+    ready: () => true,
+    advance: (_f: string, size: number, t: string) => (size * [...t].length) / 2,
+    ink: () => [0.7, 0.2, 0] as [number, number, number],
+  }
+  const at = (ord: number, kind: string, text: string, y: number): Placed =>
+    ({
+      ord,
+      kind,
+      text,
+      lead: 12,
+      style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+      align: 'l',
+      lines: [[1, 0, 72, 400, y, y + 7, y - 2, 72, 400, 0, 10]],
+      room: { below: 20, next: 24 },
+    }) as unknown as Placed
+  const part = {
+    format: 1,
+    page: 1,
+    paper: {
+      faces: { fonts: [['NimbusRomNo9L-Regu', 100]] },
+      named: [[E, V, [['n0', 0, 12, 22]]]],
+      persons: [[B, 'author', 0]],
+      splits: [[B, [], [], [0]]],
+    },
+    flows: [[at(1, 'author', B, 740)], [at(2, 'para', P, 600)], [at(3, 'inknotes', E, 120)]],
+  } as unknown as Part
+  const T = (s: string) => ({ t: 'text' as const, s })
+  const row = (id: string, content: OutPiece[]): Row => ({ id, ok: true, by: 'microsoft:test', content }) as Row
+  const ROWS: Record<string, Row> = {
+    [P]: row(P, [T('Ein Absatz.')]),
+    [B]: row(B, [T('Wenyong Zhou')]),
+    [E]: row(E, [T('Korrespondenz: W. Zhou.')]),
+    [V]: row(V, [T('Korrespondenz: '), { t: 'el', id: 'n0' }, T('.')]),
+  }
+  const OPTIONS = ['figures', 'tables', 'heads', 'references', 'names'] as const
+  const DEFAULTS = { figures: true, tables: true, heads: true, references: false, names: false }
+  /** what page 1 draws: each member's state and its lines' text */
+  const drawn = (w: World) =>
+    (w.composer.laid(1) as Page | null)?.members.map((m) => [
+      m.ord,
+      m.state,
+      m.lines.map((l) => l[3].map((i) => i.s).join('')).join('|'),
+    ])
+  it.each(OPTIONS)('%s: off, on, off, on again draw the first and the second drawings', async (option) => {
+    let classes: Record<(typeof OPTIONS)[number], boolean> = { ...DEFAULTS }
+    const lay = ((p: Part, rows: Rows) => {
+      lay.calls++
+      return layPage(p, rows as never, rulesFor('de', { leave: leftKinds(classes) }), metrics) as unknown as Page
+    }) as unknown as ReturnType<typeof standInLay>
+    lay.calls = 0
+    const w = world({ pages: new Map([[1, part]]), classes, lay })
+    w.stack.setNear([1])
+    const rows = statedOnce('de')
+    open(w, rows)
+    rows.state([ROWS[P]!, ROWS[B]!, ROWS[E]!])
+    await settle()
+    w.stack.put(1)
+    const first = drawn(w)
+    expect(first).toBeTruthy()
+    // (the variant's row comes once the page is laid; the run goes on)
+    rows.state([ROWS[V]!])
+    await settle()
+    const turn = async (on: boolean) => {
+      classes = { ...classes, [option]: on }
+      w.composer.setClasses(classes)
+      await settle()
+      w.clock.advance(HOLD_MS)
+      await settle()
+      w.stack.put(1)
+      await settle()
+      return drawn(w)
+    }
+    const flip = !DEFAULTS[option]
+    const second = await turn(flip)
+    expect(await turn(!flip)).toEqual(first)
+    expect(await turn(flip)).toEqual(second)
+  })
+  /** a rows source whose rows the test states as a run brings them (never ended) */
+  function statedOnce(target: string) {
+    const got = new Map<string, Row>()
+    const ls = new Set<() => void>()
+    return {
+      target,
+      done: false,
+      get: (id: string) => got.get(id),
+      on(f: () => void) {
+        ls.add(f)
+        return () => ls.delete(f)
+      },
+      state(list: Row[]) {
+        for (const x of list) got.set(x.id, x)
+        for (const f of [...ls]) f()
+      },
+    }
+  }
 })
