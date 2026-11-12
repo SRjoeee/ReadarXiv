@@ -332,7 +332,7 @@ export function linksOf(boxes) {
  * turned on A, `led` the part's run-ins (follower ord → its leader's ord: Placed.join, a bound name's lead), `top` its title and
  * front matter (Placed.title, Placed.front: anchored at their first line). A page either side did not draw is an error: no comparison made, and the gate incomplete (coverageOf)
  */
-export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios, kept, rows, cellRooms, floor }) {
+export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios, kept, rows, cellRooms, floor, pastFoot }) {
   const n = rec.page
   const out = { pair, page: n, worse: 0, diffs: [], both: [], faults: {}, measures: {}, units: [] }
   const error =
@@ -1028,6 +1028,13 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     // fidelity.mjs cellRoomOf)
     cellRooms: cellRooms ?? null,
     floor: floor ?? null,
+    // (the borrow's bound past TeX's text block bottom, the fit's own (fit/walk.ts PAST_FOOT), and v2's Page member of a unit, whose
+    // `fit.over` states the depth its lines took: the block measure's rule 1, fidelity.mjs)
+    pastFoot: pastFoot ?? 0,
+    laidOf: (key) => {
+      const o = orig.get(key)
+      return o?.part === null || o?.part === undefined ? null : (v2.pages?.[n]?.members ?? []).find((m) => m.ord === o.part && m.fit)
+    },
     groups: groups ?? [],
     keptByGroup: keptByGroup ?? new Set(),
     // (today's ords of the cells a rule's mark keeps or no row serves: no group's state, the coordinator's rulings of 2026-11-10)

@@ -37,7 +37,7 @@ const v2Of = (
   ...(o.fills ? { fills: o.fills } : {}),
   ...(o.spaced ? { spaced: { [N]: o.spaced } } : {}),
 })
-type Extra = { prep?: { ord: number }[]; pair?: string; frame?: object; groups?: object[]; keptByGroup?: Set<number>; folios?: Set<number>; ruled?: Set<number>; cellRooms?: Map<number, object>; floor?: number }
+type Extra = { prep?: { ord: number }[]; pair?: string; frame?: object; groups?: object[]; keptByGroup?: Set<number>; folios?: Set<number>; ruled?: Set<number>; cellRooms?: Map<number, object>; floor?: number; pastFoot?: number }
 const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, x: Extra = {}) =>
   measurePage(x.pair ?? 'p-zh', v2, r, {
     prepByOrd: new Map((x.prep ?? []).map((u) => [u.ord, u])),
@@ -52,6 +52,7 @@ const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, x: Extr
     ruled: x.ruled ?? new Set(),
     cellRooms: x.cellRooms ?? null,
     floor: x.floor ?? null,
+    pastFoot: x.pastFoot ?? 0,
   })
 const of = (flag: string) => (p: { diffs: { flag: string }[] }) => p.diffs.filter((d) => d.flag === flag)
 const laid = (ord: number, lit: object = {}) => ({ ord, state: 'laid', lines: [], lit: { left: [], right: [], own: [], ...lit } })
@@ -212,6 +213,40 @@ describe("block: borrowing bounded by TeX's facts, the owner's ruling of 2026-11
   it('a part that states no room under the run: no line is judged', () => {
     const f = one(26, 'para', ys.map((y) => factLine(72, 300, y)))
     expect(of('block')(measure(f, sides(26, lines(10), lines(10, 652, 640, 628))))).toEqual([])
+  })
+})
+
+describe("block: the borrow past TeX's text block bottom, the owner's ruling of 2026-11-12 (the fit's bound, the lay's stated depth)", () => {
+  // (the paragraph above: its last line at 664, TeX's text block bottom 24 pt under it at 640, the next ink 60 pt down, the
+  // separation 12; the fit's bound PAST_FOOT 1.5 pt (fit/walk.ts), handed in as the measure reads it from the typesetter)
+  const ys = [700, 688, 676, 664]
+  const lines = (sz: number, ...more: number[]) => [...ys, ...more].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), sz))
+  const unit = (over: number | null, runs = [[3, 60, 24]]) =>
+    v2Of({
+      members: [{ ...laid(26), ...(over === null ? {} : { fit: { size: 10, lead: 1.2, track: 0, borrowed: 99, over } }) }],
+      facts: [{ ord: 26, kind: 'para', align: 'j', style: { size: 10 }, lines: ys.map((y) => factLine(72, 300, y)), room: { runs, sep: 12 } }],
+      today: { 26: { today: 26 } },
+    })
+  const v2At = (y: number) => lines(10, 652, y)
+  it("a line the lay states it borrowed, within its depth and the fit's bound, the next ink at TeX's separation: no fault", () => {
+    const p = measure(unit(1), sides(26, lines(10, 652), v2At(639)), { pastFoot: 1.5 })
+    expect(of('block')(p)).toEqual([])
+    expect(p.faults.block).toBeUndefined()
+  })
+  it('one no state names, deeper than its stated depth, with no bound in the typesetter, or nearer the next ink: a fault, as before', () => {
+    expect(of('block')(measure(unit(null), sides(26, lines(10, 652), v2At(639)), { pastFoot: 1.5 }))).toMatchObject([{ worse: true }])
+    expect(of('block')(measure(unit(1), sides(26, lines(10, 652), v2At(638)), { pastFoot: 1.5 }))).toMatchObject([{ worse: true }])
+    expect(of('block')(measure(unit(1), sides(26, lines(10, 652), v2At(639)), { pastFoot: 0 }))).toMatchObject([{ worse: true }])
+    // (the next ink 30 pt under the last line, at 634: the line at 639 stands 5 pt over it, the separation 12)
+    expect(of('block')(measure(unit(1, [[3, 30, 24]]), sides(26, lines(10, 652), v2At(639)), { pastFoot: 1.5 }))).toMatchObject([{ worse: true }])
+  })
+  it("production's line within the bound is no fault; past it, its fault, and v2's smaller size inside the room not worse", () => {
+    const within = measure(unit(null), sides(26, lines(10, 652, 639), lines(9.5, 652)), { pastFoot: 1.5 })
+    expect(within.faults.block).toBeUndefined()
+    expect(of('size')(within)).toMatchObject([{ worse: true }])
+    const past = measure(unit(null), sides(26, lines(10, 652, 637), lines(9.5, 652)), { pastFoot: 1.5 })
+    expect(past.faults.block.today).toBe(1)
+    expect(of('size')(past)).toMatchObject([{ worse: false, nearer: 'v2' }])
   })
 })
 

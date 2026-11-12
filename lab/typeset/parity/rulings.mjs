@@ -101,7 +101,7 @@ export const RULINGS = [
     words: '看起来调整过之后挺舒服。只是你说的有 13 页会出现反效果，因为我不太了解会是什么样子，所以你来帮我判断一下，我们到底应该怎么做。\n计算量多 4.8% 可以接受，段落字号小一级也不是问题，只要用户感受不到就行。',
     example: '1810.04805v2-zh p3, 2602.23285v2-ja p15 (the pages of his look)',
     condition:
-      "what the lay states, never an inference from the geometry: v2's Page member states the unit evened (`evened`: the knobs the page's fill took, `track`, `room`, `size`, `foot`, the line count on the page before them; the fill keeps an evening only where every frame of the unit then stands in the page's band). size: evened by `size`, at exactly one fit step under the original's size (to the hundredth), the unit whole. line-count: evened, its count against today's other by no more than the knobs changed it, the same way (v2's count before them is today's or nearer it), at the original's size or, evened by `size`, one step under it, the unit whole. A unit one step small, or a line count other, that the lay did not even is judged as before",
+      "what the lay states, never an inference from the geometry: v2's Page member states the unit evened (`evened`: `by` the knobs the page's fill took, `track`, `room`, `size`, `foot`; `lines` its line count on the page before them; the fill keeps an evening only where every frame of the unit then stands in the page's band). size: evened by `size`, at exactly one fit step under the original's size (to the hundredth), the unit whole. line-count: evened, its count against today's other by no more than the knobs changed it, the same way (v2's count before them is today's or nearer it), at the original's size or, evened by `size`, one step under it, the unit whole. A unit one step small, or a line count other, that the lay did not even is judged as before",
     holds(d, x) {
       if (!d.unit) return false
       const u = x.unit(d)
@@ -133,21 +133,22 @@ export const RULINGS = [
     words: '挺好',
     example: '2602.23285v2-ja p15, 1706.03762v7-zh p2 (the pages of his look)',
     condition:
-      "block: v2's Page member states the unit evened by `foot` with the depth its state allows past TeX's text block bottom (`evened.over`: a line of its own pitch at most), and every line of the unit the block measure reads past TeX's room stands under that bottom by no more than that depth (within the bound's own precision, NEAR.room) and over the next ink's baseline by TeX's paragraph separation at least; the unit whole. A line past the bottom the lay does not state as the foot's, or nearer the next ink, is judged as before",
+      "block: v2's Page member states the unit evened by `foot` (`evened.by`) and the depth its lines took past TeX's text block bottom (`fit.over`, the fit state's: a line of its own pitch at most), and every line of the unit the block measure reads past TeX's room stands under that bottom by no more than that depth (within the bound's own precision, NEAR.room) and over the next ink's baseline by TeX's paragraph separation at least; the unit whole. A line past the bottom the lay does not state as the foot's, or nearer the next ink, is judged as before",
     holds(d, x) {
       if (d.flag !== 'block' || !d.unit) return false
       const u = x.unit(d)
       if (!u?.sides?.v2 || u.part === null || u.part === undefined || !x.whole(u.key)) return false
-      const ev = x.laid(u.part)?.evened
-      if (!ev?.by || !String(ev.by).split('+').includes('foot') || !Number.isFinite(ev.over)) return false
+      const m = x.laid(u.part)
+      const over = m?.fit?.over
+      if (!m?.evened?.by || !String(m.evened.by).split('+').includes('foot') || !Number.isFinite(over)) return false
       const lines = u.sides.v2.block ?? []
-      return lines.length > 0 && lines.every((l) => l.below <= ev.over + NEAR.room && (l.sep === null || l.toInk >= l.sep - NEAR.room))
+      return lines.length > 0 && lines.every((l) => l.below <= over + NEAR.room && (l.sep === null || l.toInk >= l.sep - NEAR.room))
     },
     says(d, x) {
       const u = x.unit(d)
-      const ev = x.laid(u.part).evened
+      const over = x.laid(u.part).fit.over
       const lines = u.sides.v2.block
-      return `${Math.max(...lines.map((l) => l.below))} pt under TeX's text block bottom (the lay's depth ${ev.over}), ${Math.min(...lines.map((l) => l.toInk))} over the next ink (TeX's separation ${lines[0].sep ?? 'none'})`
+      return `${Math.max(...lines.map((l) => l.below))} pt under TeX's text block bottom (the lay's depth ${over}), ${Math.min(...lines.map((l) => l.toInk))} over the next ink (TeX's separation ${lines[0].sep ?? 'none'})`
     },
   },
   {

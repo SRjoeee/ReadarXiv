@@ -355,10 +355,20 @@ export function measureFidelity(c) {
         const free = r.sep === undefined ? run.foot : Math.min(run.foot, run.ink - r.sep)
         const past = over.y - Math.max(0, free) - l.y
         if (!(past > NEAR.room)) continue
+        // (the borrow past TeX's text block bottom, the owner's ruling of 2026-11-12: a last line under the bottom by no more than
+        // the fit's bound (fit/walk.ts PAST_FOOT, `c.pastFoot`), the next ink kept at TeX's separation, is no fault: v2's where its
+        // Page member states the depth its lines took (`fit.over`) and the line is within it; today's (production's own borrow, no
+        // state to read) where it is within the bound. Past the bound, nearer the next ink, or a v2 line no state names: as before)
+        const below = over.y - run.foot - l.y,
+          toInk = l.y - (over.y - run.ink)
+        const sepKept = r.sep === undefined || toInk >= r.sep - NEAR.room
+        const bound = c.pastFoot ?? 0
+        const stated = side === 'v2' ? (c.laidOf?.(key)?.fit?.over ?? 0) : bound
+        if (sepKept && stated > 0 && below <= Math.min(stated, bound) + NEAR.room) continue
         k++
         // (each such line: how far under TeX's text block bottom it stands, and how far over the next ink's baseline, the room's
         // separation beside: the owner's ruling Fm reads them, rulings.mjs)
-        ;(pastLines[side].get(key) ?? pastLines[side].set(key, []).get(key)).push({ below: r2(over.y - run.foot - l.y), toInk: r2(l.y - (over.y - run.ink)), sep: r.sep ?? null })
+        ;(pastLines[side].get(key) ?? pastLines[side].set(key, []).get(key)).push({ below: r2(below), toInk: r2(toInk), sep: r.sep ?? null })
         fault(side, 'block', r.sep !== undefined && run.ink - r.sep < run.foot ? `${name(key)}: a line ${r2(past)} pt nearer the next ink than TeX's paragraph separation` : `${name(key)}: a line ${r2(past)} pt past TeX's text block bottom`)
       }
       borrowed[side].set(key, k)

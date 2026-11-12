@@ -42,7 +42,7 @@ describe("TRS and Fm: the page fill's evening (his rules of 2026-11-12, 17:25), 
   const ol = Array.from({ length: 6 }, (_, i) => fact(312, 563, 700 - i * 12, 10))
   const v2Of = (evened: object | null) => ({
     facts: { [N]: { members: [{ ord: 40, kind: 'para', align: 'j', style: { size: 10 }, lines: ol }], ties: [] } },
-    pages: { [N]: { members: [{ ord: 40, state: 'laid', lines: [], ...(evened ? { evened } : {}) }] } },
+    pages: { [N]: { members: [{ ord: 40, state: 'laid', lines: [], ...(evened ? { evened, fit: { size: 10, lead: 1.3, track: 0, borrowed: 99, ...('over' in evened ? { over: (evened as { over: number }).over } : {}) } } : {}) }] } },
   })
   const page = (diff: Diff, v: { size: number; lines: number; block?: object[] }, evened: object | null, more: Diff[] = []) => {
     const { page: p } = judged(

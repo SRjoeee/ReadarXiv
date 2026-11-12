@@ -13,6 +13,9 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { rowLinesOf, rulesFor } from '../../../packages/typeset/src/index.ts'
+// (the fit's own bound past TeX's text block bottom, where the typesetter states one: fit/walk.ts PAST_FOOT, the borrow the owner
+// made the default on 2026-11-12; none in a tree before it, so no line past the bottom is the borrow's)
+import * as walk from '../../../packages/typeset/src/fit/walk.ts'
 import { L1_BUNDLES_DIR, l1Paper } from '../../../packages/typeset/tests/replay/l1.ts'
 import { bundlesLine, headsFor } from '../../../packages/typeset/tests/replay/bundles.ts'
 import { doorRows } from '../../../packages/typeset/tests/replay/rows.ts'
@@ -197,7 +200,7 @@ for (const [pair, raw] of drawn) {
       }
     : null
   const mine = []
-  const ctxOf = (rec) => ({ prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [], kept, rows, cellRooms, floor })
+  const ctxOf = (rec) => ({ prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [], kept, rows, cellRooms, floor, pastFoot: walk.PAST_FOOT ?? 0 })
   for (const rec of raw.pages) mine.push(measurePage(pair, v2, rec, ctxOf(rec)))
   // (a unit's size and line count today bought with a line past TeX's room on one of its pages: today's fault on each)
   pastRoomPass(
