@@ -1,5 +1,5 @@
 import { chunkDigests } from '@readarxiv/format'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest'
 import { composedSource } from '../src/bytes/composed.ts'
 import { type RangedLib, openRanged } from '../src/bytes/ranged.ts'
 import { RangeRefusal, rangeSource, STALL_MS } from '../src/bytes/source.ts'
@@ -326,37 +326,93 @@ describe("the composed document's source", () => {
 })
 
 describe('a ranged open', () => {
+  // (each chunk's digest late by a turn of the timer and more, as a loaded machine gives it: crypto.subtle digests off the main
+  // thread, and its answer comes when it comes. A wait that counted turns of the timer for a chunk read lost to it once, in a
+  // whole run at load 143-194, 2026-11-13: the checks below wait for what they read)
+  let slow: MockInstance | null = null
+  beforeEach(() => {
+    const subtle = globalThis.crypto.subtle
+    const digest = subtle.digest.bind(subtle)
+    slow = vi.spyOn(subtle, 'digest').mockImplementation(async (algorithm, data) => {
+      await new Promise((r) => setTimeout(r, 20))
+      return digest(algorithm, data)
+    })
+  })
+  afterEach(() => {
+    slow?.mockRestore()
+    slow = null
+  })
+  /** a promise and what settles it: what the stand-in of PDF.js is told, awaited by the check that reads it */
+  const told = () => {
+    let go: () => void = () => {}
+    const p = new Promise<void>((r) => {
+      go = r
+    })
+    return { p, go }
+  }
+  /** `s`'s fetch, and a wait for its n-th ask to have gone out (an ask is recorded as its fetch is called) */
+  const counting = (s: ReturnType<typeof rangedServer>) => {
+    const waits: { n: number; go: () => void }[] = []
+    const fetch: typeof s.fetch = (u, i) => {
+      const p = s.fetch(u, i)
+      for (const w of waits.filter((x) => s.asks.length >= x.n)) {
+        waits.splice(waits.indexOf(w), 1)
+        w.go()
+      }
+      return p
+    }
+    const until = (n: number) =>
+      s.asks.length >= n ? Promise.resolve() : new Promise<void>((go) => waits.push({ n, go }))
+    return { fetch, until }
+  }
+  /** every read of `src` kept, so that a check of what was told can wait for each to have settled */
+  const keepReads = (src: ReturnType<typeof own>) => {
+    const reads: Promise<unknown>[] = []
+    const read = src.read.bind(src)
+    src.read = (b, e) => {
+      const p = read(b, e)
+      reads.push(p)
+      return p
+    }
+    return reads
+  }
   it('gives PDF.js the first chunk, asks the end beside it, and every range whole at its begin, its chunks read one by one', async () => {
     const s = rangedServer(objects())
-    const src = own(s.fetch)
+    const out = counting(s)
+    const src = own(out.fetch)
     const given: [number, number][] = []
     let transport: {
       requestDataRange(b: number, e: number): void
       onDataRange(b: number, c: Uint8Array): void
     } | null = null
     let initial: Uint8Array | null = null
+    const made = told(),
+      gave = told()
     const lib: RangedLib = {
       PDFDataRangeTransport: class {
         constructor(_length: number, data: Uint8Array | null) {
           initial = data
           transport = this
+          made.go()
         }
         requestDataRange() {}
         onDataRange(b: number, c: Uint8Array) {
           given.push([b, c.length])
+          gave.go()
         }
         abort() {}
       } as unknown as RangedLib['PDFDataRangeTransport'],
       getDocument: () => ({ promise: new Promise(() => {}), destroy: async () => {}, onProgress: null }) as never,
     }
     const t = openRanged(lib, src, { options: {} })
-    await flush()
-    await flush()
+    // (the transport made once the first chunk is read and digested, and the end's two chunks asked)
+    await made.p
+    await out.until(3)
     expect(initial).toEqual(A.slice(0, CHUNK))
     // chunks 4 and 5, the end, asked beside chunk 0
     expect(s.asks.map((x) => x.range[0] / CHUNK)).toEqual([0, 4, 5])
     ;(transport as unknown as { requestDataRange(b: number, e: number): void }).requestDataRange(2 * CHUNK, 6 * CHUNK)
-    for (let i = 0; i < 6; i++) await flush()
+    await gave.p
     expect(given).toEqual([[2 * CHUNK, A.length - 2 * CHUNK]])
     // the end's chunks taken from the early asks, not asked again
     expect(s.asks.map((x) => x.range[0] / CHUNK)).toEqual([0, 4, 5, 2, 3])
@@ -368,11 +424,14 @@ describe('a ranged open', () => {
     // (the fifth ask answers other bytes: chunks 0, 4, 5 at the open, then 1, then 2)
     const s = rangedServer(objects(), () => (++n === 5 ? { kind: 'shift' } : null))
     const src = own(s.fetch)
+    const reads = keepReads(src)
     let transport: { requestDataRange(b: number, e: number): void } | null = null
+    let made = told()
     const lib: RangedLib = {
       PDFDataRangeTransport: class {
         constructor() {
           transport = this
+          made.go()
         }
         requestDataRange() {}
         onDataRange() {}
@@ -381,22 +440,35 @@ describe('a ranged open', () => {
       getDocument: () => ({ promise: new Promise(() => {}), destroy: async () => {}, onProgress: null }) as never,
     }
     const refused: string[] = []
-    openRanged(lib, src, { options: {}, refused: (e) => refused.push(e.kind) })
-    for (let i = 0; i < 4; i++) await flush()
+    const refusal = told()
+    openRanged(lib, src, {
+      options: {},
+      refused: (e) => {
+        refused.push(e.kind)
+        refusal.go()
+      },
+    })
+    await made.p
     const t = transport as unknown as { requestDataRange(b: number, e: number): void }
     t.requestDataRange(CHUNK, 3 * CHUNK)
     t.requestDataRange(3 * CHUNK, 4 * CHUNK)
-    for (let i = 0; i < 8; i++) await flush()
+    // (told, then once: every read settled, and the turn after the last, before the count)
+    await refusal.p
+    await Promise.allSettled(reads)
+    await flush()
     expect(refused).toEqual(['bytes'])
     // (a source let go is no refusal: never told)
     const quiet: string[] = []
     const s2 = rangedServer(objects(), () => null)
     const src2 = own(s2.fetch)
+    const reads2 = keepReads(src2)
+    made = told()
     openRanged(lib, src2, { options: {}, refused: (e) => quiet.push(e.kind) })
-    for (let i = 0; i < 4; i++) await flush()
+    await made.p
     src2.abort()
     ;(transport as unknown as { requestDataRange(b: number, e: number): void }).requestDataRange(CHUNK, 2 * CHUNK)
-    for (let i = 0; i < 4; i++) await flush()
+    await Promise.allSettled(reads2)
+    await flush()
     expect(quiet).toEqual([])
   })
 })
