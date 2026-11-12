@@ -246,7 +246,7 @@ export const CASES: readonly ChainCase[] = [
   },
   {
     rule: 'groups/2',
-    name: "a group's end mark matched by its class, the reply's own stop inside the group (RQ1. as RQ1。)",
+    name: "a group's end mark matched by its class, the reply's own stop inside the group (RQ1. as RQ1 and an ideographic full stop)",
     target: 'de',
     units: [unit('i', [t('In summary, '), span('2', 'bold', [t('RQ1.')]), t(' The model keeps its accuracy.')])],
     translators: () => [
