@@ -15,13 +15,15 @@ import { type FlowMember, layFlowPrepared } from './flow.ts'
 import { fin, layoutOf, linesOf } from './trace.ts'
 
 /** a member on the page as laid: its state, its fit, its lines as drawn (D.display), its trace; where its fit or its page's fill
- *  let its lines past TeX's text block bottom, how far they went (`fit.over`), and where the fill evened it, what it took
- *  (`evened`): types.ts Laid */
+ *  let its lines past TeX's text block bottom, how far they went (`fit.over`), where the fill evened it, what it took
+ *  (`evened`), and where it is laid at its size tie's one size, that size and the member whose need set it (`tie`): types.ts
+ *  Laid */
 export type PageMember = {
   ord: number
   state: 'laid' | Unlaid
   fit?: { size: number; lead: number; track: number; borrowed: number; over?: number }
   evened?: { by: EvenKnob[]; lines: number }
+  tie?: { scale: number; by: number }
   lines: DisplayLine[]
   /** the unit as its lay and its fill left it (the gate's dump reads it) */
   lay?: PassUnit
@@ -121,9 +123,13 @@ export function layPagePrepared(
   // carried that fill back to a tie-mate begun earlier (2610.21098v1 ord 12); and read, not left out: a later tie-mate's own fit
   // still caps (left out, 2608.16117v1's ord 115 grew past it). §18.64)
   const own = new Map(first.unfilled)
+  // (each cap's origin: the member whose own need set it, and whether its page's fill did, the evening's size step)
+  const origin = new Map<number, TieOrigin>()
   let laid = first
   for (;;) {
-    if (!tieCaps(sizes, new Map(laid.fits), own, firstOf, (o) => floorOf.get(o) ?? floor, cap)) return laid
+    const of = { of: origin, filledOf: new Map(laid.unfilled) }
+    if (!tieCaps(sizes, new Map(laid.fits), own, firstOf, (o) => floorOf.get(o) ?? floor, cap, of))
+      return tieStated(laid, cap, origin, own)
     const capped = flows.map((f) =>
       f.map((m) => {
         const c = cap.get(m.ord)
@@ -154,24 +160,96 @@ export function tieCaps(
   firstOf: ReadonlyMap<number, number>,
   floorOf: (ord: number) => number,
   cap: Map<number, number>,
+  origin?: { of: Map<number, TieOrigin>; filledOf: ReadonlyMap<number, number> },
 ): boolean {
   let lowered = false
+  // (the caps and their origins as the round was laid at: a cap lowered in this call is not yet a scale of any member's)
+  const was = new Map(cap)
+  const wasOf = new Map(origin?.of ?? [])
   for (const t of sizes) {
     const on = t.ords.filter((o) => fitOf.has(o))
     if (on.length < (t.least === undefined ? 2 : 1)) continue
     for (const o of on) {
       const from = firstOf.get(o) ?? 0
-      const at = (q: number) =>
-        ((firstOf.get(q) ?? 0) <= from ? fitOf.get(q) : (ownOf.get(q) ?? fitOf.get(q))) as number
+      const before = (q: number) => (firstOf.get(q) ?? 0) <= from
+      const at = (q: number) => (before(q) ? fitOf.get(q) : (ownOf.get(q) ?? fitOf.get(q))) as number
       const least = Math.min(...on.map(at), t.least ?? Number.POSITIVE_INFINITY)
       const c = Math.max(least, t.floor ?? floorOf(o))
       if ((fitOf.get(o) as number) > c + SAME && c < (cap.get(o) ?? Number.POSITIVE_INFINITY) - SAME) {
         cap.set(o, c)
         lowered = true
+        if (origin) origin.of.set(o, originOf(t, on, at, before, least, fitOf, was, wasOf, origin.filledOf))
       }
     }
   }
   return lowered
+}
+
+/** the origin of a cap a tie sets: the member laid at the tie's least (`least`), one laid at its own need first where two
+ *  stand there: one laid at a cap of its own in the round hands on that cap's origin; a figure's set laid at its labels' factor
+ *  (`least` the set's own, PageTie's) is the set's, its first member's. `fill` where its page's fill set it there in the round,
+ *  under its scale before the fill (`filledOf`: the evening's size step, §18.57), never one read at its own lay (`before` false) */
+export type TieOrigin = { by: number; fill: boolean }
+function originOf(
+  t: Extract<PageTie, { rule: 'size' }>,
+  on: readonly number[],
+  at: (q: number) => number,
+  before: (q: number) => boolean,
+  least: number,
+  fitOf: ReadonlyMap<number, number>,
+  was: ReadonlyMap<number, number>,
+  wasOf: ReadonlyMap<number, TieOrigin>,
+  filledOf: ReadonlyMap<number, number>,
+): TieOrigin {
+  const capped = (q: number) => before(q) && was.has(q) && Math.abs((fitOf.get(q) as number) - was.get(q)!) <= SAME
+  const there = on.filter((q) => at(q) <= least + SAME)
+  const q = there.find((x) => !capped(x)) ?? there[0]
+  if (q === undefined) return { by: t.ords[0]!, fill: false }
+  if (capped(q) && wasOf.has(q)) return wasOf.get(q)!
+  const fit = fitOf.get(q) as number
+  return { by: q, fill: before(q) && (filledOf.get(q) ?? fit) - fit > SAME }
+}
+
+/** EVEN_TRIES' order of the knobs, which a stated `evened.by` keeps */
+const KNOBS: readonly EvenKnob[] = ['track', 'room', 'size', 'foot']
+/**
+ * The final round of a page's size ties, stated (docs/PDF-READER.md §18.64): each member laid at its tie's cap states `tie`,
+ * the cap and the member whose own need set it, in the round that set it (TieOrigin, followed back through the caps); that
+ * member states the tie too, by itself, at its own scale. Where its own page's fill set it there (the evening's size step,
+ * §18.57) and its final lines still stand the step under its own size, its `evened` names the size step among the knobs its
+ * final lines carry, and its line count on the page at its fitted layout of the final round: a later round lays it at the cap
+ * its own step set, where the size knob has nothing more to give, and its statement lost the step (2608.25210v2-zh p11: ord
+ * 200 evened by a size step in the first round, ord 199 capped there, 200 capped in turn through 199 in the third and stating
+ * its tracking alone). The statement is of the final lay, its lines: no knob of an earlier round's but the step its scale holds
+ */
+function tieStated(
+  laid: PreparedPage,
+  cap: ReadonlyMap<number, number>,
+  origin: ReadonlyMap<number, TieOrigin>,
+  own: ReadonlyMap<number, number>,
+): PreparedPage {
+  const fits = new Map(laid.fits)
+  const atCap = (o: number) => cap.has(o) && fits.has(o) && Math.abs(fits.get(o)! - cap.get(o)!) <= SAME
+  const by = new Map<number, TieOrigin>()
+  for (const o of cap.keys()) if (atCap(o) && origin.has(o)) by.set(o, origin.get(o)!)
+  const origins = new Map([...by.values()].map((x) => [x.by, x]))
+  const members = laid.members.map((m): PageMember => {
+    const of = by.get(m.ord)
+    const self = origins.get(m.ord)
+    if (!of && !self) return m
+    const tie = of ? { scale: cap.get(m.ord)!, by: of.by } : { scale: fits.get(m.ord) ?? 1, by: m.ord }
+    if (tie.by !== m.ord) return { ...m, tie }
+    // (the originating member: the size step its scale holds, where its page's fill took it)
+    const step = (self ?? of)!.fill && fits.has(m.ord) && fits.get(m.ord)! < (own.get(m.ord) ?? 1) - SAME
+    if (!step || m.evened?.by.includes('size')) return { ...m, tie }
+    const knobs = new Set([...(m.evened?.by ?? []), 'size'])
+    return {
+      ...m,
+      tie,
+      evened: { by: KNOBS.filter((k) => knobs.has(k)), lines: m.evened?.lines ?? m.lines.length },
+    }
+  })
+  return { ...laid, members }
 }
 
 function layPageTied(

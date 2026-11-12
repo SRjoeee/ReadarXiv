@@ -68,10 +68,15 @@ export type { OutlineEntry, PaperContext }
 /** a translation result as the host's translate yields it (packages/translate's Result: format's Row) */
 export type Result = Row
 
+/**
+ * The host's store of the preferences. A read, and each landing a watch tells, is one of three: the values stored; nothing
+ * stored (the host's defaults, given as values); or `null`, stored and unreadable (the values in use stay, the settings said
+ * unreadable until a readable landing: S-R-21)
+ */
 export interface PrefStore {
-  read(): Promise<Prefs>
+  read(): Promise<Prefs | null>
   write(patch: Partial<Prefs>): Promise<void>
-  watch(listener: (p: Prefs) => void): () => void
+  watch(listener: (p: Prefs | null) => void): () => void
 }
 export interface Host {
   fetch: Fetch
@@ -229,6 +234,23 @@ export function openReader(
   const scheduler = createScheduler()
   const listeners = new Set<() => void>()
   let closed = false
+  /**
+   * The follows' wakes (design-performance-2026-11-13 Q9): a follow that settles (the last document says nothing runs) waits for
+   * one instead of asking again a minute later, 60 asks an hour a settled tab. The wake is the session's own word: an object
+   * answered `gone` (the paper's objects replaced) asks the document again, once a catalog. The page shown again, the network
+   * back, the back-forward cache and a new target need none: the session ends the follow and starts another, which asks at
+   * once (machine.ts, the link). A wake given while no follow waits (its stream still read) is kept for its next wait
+   */
+  const wakes = new Set<{ due: boolean; go: (() => void) | null }>()
+  const woken = new Set<string>()
+  const wakeFollows = () => {
+    for (const w of wakes) {
+      const go = w.go
+      w.go = null
+      if (go) go()
+      else w.due = true
+    }
+  }
   /** when each first moment came, ms from the open (the probe's: the harness's order checks and timings) */
   const t0 = performance.now()
   const moments: Record<string, number> = {}
@@ -631,11 +653,19 @@ export function openReader(
       }
     },
     link(spec, t, emit, signal) {
+      const w: { due: boolean; go: (() => void) | null } = { due: false, go: null }
+      wakes.add(w)
+      signal.addEventListener('abort', () => wakes.delete(w), { once: true })
       follow({
         fetch: host.fetch,
         paper,
         target: spec.target,
         signal,
+        wake: () => {
+          if (!w.due) return new Promise<void>((go) => (w.go = go))
+          w.due = false
+          return Promise.resolve()
+        },
         onDoc: (doc) => emit({ i: 'paper', t, doc }),
         onQuiet: () => emit({ i: 'link.quiet', t }),
       }).catch((e) => {
@@ -1004,12 +1034,15 @@ export function openReader(
           if (original?.doc) void original.source.prove(head.original.chunks)
           rt.input({ i: 'head', digest: r.sha256, head })
         },
-        (e) =>
-          rt.input({
-            i: 'object.refused',
-            digest: r.sha256,
-            why: e instanceof Refused ? (e.why as 'gone' | 'bad' | 'network') : 'network',
-          }),
+        (e) => {
+          const why = e instanceof Refused ? (e.why as 'gone' | 'bad' | 'network') : 'network'
+          rt.input({ i: 'object.refused', digest: r.sha256, why })
+          // (the paper's objects replaced: the document asked again, once a catalog)
+          if (why === 'gone' && !woken.has(r.sha256)) {
+            woken.add(r.sha256)
+            wakeFollows()
+          }
+        },
       )
     }
     void ready.then(() => {

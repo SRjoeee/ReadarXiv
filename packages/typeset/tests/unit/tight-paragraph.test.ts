@@ -176,3 +176,145 @@ describe('a paragraph tighter than its page at a column’s foot takes the room 
     expect([foot(2, 90, 12)[2]!.evened, foot(2, 90, 12)[2]!.over]).toEqual([undefined, undefined])
   })
 })
+
+// What the page states of an evened paragraph is what its final lines took (§18.57, "What the page states of it"): a knob its last
+// lay no longer carries is not named. The fill's head pass (fill-page.ts headOf) lays a paragraph again, lower by what the gap
+// over it lacks, with no room under it (`borrow: 0`), where the paragraph over it ends on a line alone at the column's top.
+describe('an evened paragraph states only the knobs its final lines carry (§18.57)', () => {
+  /** a column of two paragraphs, the second over a column break, its last line alone at the next column's top (TeX's widow);
+   *  under it in that column the paragraph `chars` characters long, a block of 8 lines with 28 pt of TeX's room under it, then
+   *  one more */
+  const widow = (chars: number) => {
+    const at = (y: number, x0: number, x1: number): Placed['lines'][number] => [
+      1,
+      0,
+      x0,
+      x1,
+      y,
+      y + 7,
+      y - 2,
+      x0,
+      x1,
+      0,
+      10,
+    ]
+    const col = (y0: number, n: number, x0 = 72, x1 = 300) =>
+      Array.from({ length: n }, (_, i) => at(y0 - 12 * i, x0, x1))
+    const four = ['b', 'c', 'd', 'e'].map((c) => c.repeat(64))
+    const st = { role: 'serif' as const, size: 10, design: 'NimbusRomNo9L-Regu' }
+    const room = { below: 45, next: 45, runs: [[7, 45, 300]], sep: 17 } as unknown as Placed['room']
+    const flow: Placed[] = [
+      {
+        ord: 0,
+        kind: 'para',
+        text: four[0]!,
+        lead: 12,
+        style: st,
+        align: 'j',
+        lines: col(700, 4),
+        room: { below: 17, next: 17 },
+      },
+      {
+        ord: 1,
+        kind: 'para',
+        text: four[1]!,
+        lead: 12,
+        style: st,
+        align: 'j',
+        lines: [...col(647, 4), ...col(700, 1, 320, 548)],
+        room: { below: 17, next: 17 },
+      },
+      { ord: 2, kind: 'para', text: four[2]!, lead: 12, style: st, align: 'j', lines: col(683, 8, 320, 548), room },
+      {
+        ord: 3,
+        kind: 'para',
+        text: four[3]!,
+        lead: 12,
+        style: st,
+        align: 'j',
+        lines: col(554, 4, 320, 548),
+        room: { below: 200, next: 212 },
+      },
+    ]
+    const by = new Map([60, 165, chars, 60].map((c, i) => [four[i]!, row(four[i]!, c)]))
+    const rows: Rows = { get: (k) => by.get(k), done: true }
+    const part = { format: 1, page: 1, paper: { faces: { fonts: [['NimbusRomNo9L-Regu', 100]] } }, flows: [flow] }
+    return layPage(part as never, rows, zh, metrics).members[2]!
+  }
+  it('names no room TeX left under it where the head pass laid it again with none', () => {
+    // (290 characters, 7 lines at the fit; the fill evened them by TeX's room and a size step, 6 lines at 9.75 pt; the paragraph
+    // over it ending on a line alone at the column's top, the head pass laid it 6 pt lower with no room borrowed: its six lines
+    // stand inside its block, the size step alone stays)
+    const m = widow(290)
+    expect([m.fit!.size, m.fit!.borrowed, m.lines.length]).toEqual([9.75, 0, 6])
+    expect(m.lines.at(-1)![0]).toBeGreaterThanOrEqual(683 - 84 - 0.05)
+    expect(m.evened).toEqual({ by: ['size'], lines: 7 })
+  })
+  it("still names the tracking it took where the fill's own tracking spreads its lines on from there", () => {
+    // (250 characters: evened by the tracking's bound and TeX's room, 6 lines; the head pass laid it again with no room, and the
+    // fill, the paragraph still short of its frame, tracked it 5 steps on from the knob's -0.03 em, to 0.02: the room is no longer
+    // in its lines, the tracking's step is: without it the fill's 5 steps would stand at 0.05)
+    const m = widow(250)
+    expect([m.fit!.track, m.fit!.borrowed, m.lines.length]).toEqual([0.02, 0, 6])
+    expect(m.evened).toEqual({ by: ['track'], lines: 6 })
+  })
+})
+
+// A size tie laid at the size one member's evening took (§18.64, what the page states of it): each member laid at the tie's cap
+// states `tie`, the cap and the member whose own need set it; that member states the tie too, by itself, and the size step
+// among the knobs its final lines carry. The statement is of the final lay
+describe('a size tie at the step an evening took states the member that took it', () => {
+  /** page()'s three paragraphs, the members `ords` one size tie (one paragraph of TeX's the front end cut) */
+  const tied = (ords: number[], chars: number[]) => {
+    let y = 700
+    const flow = [4, 8, 4].map((k, i): Placed => {
+      const m: Placed = {
+        ord: i,
+        kind: 'para',
+        text: ids[i]!,
+        lead: 12,
+        style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+        align: 'j',
+        lines: ys(y, k),
+        room: { below: i === 2 ? 200 : 17, next: i === 2 ? 212 : 17 },
+      }
+      y -= 12 * k + 5
+      return m
+    })
+    const by = new Map(chars.map((c, i) => [ids[i]!, row(ids[i]!, c)]))
+    const rows: Rows = { get: (k) => by.get(k), done: true }
+    const part = {
+      format: 1,
+      page: 1,
+      paper: { faces: { fonts: [['NimbusRomNo9L-Regu', 100]] } },
+      flows: [flow],
+      ties: [{ rule: 'size', ords }],
+    }
+    return layPage(part as never, rows, zh, metrics).members.map((m) => ({
+      size: m.fit!.size,
+      evened: m.evened,
+      tie: m.tie,
+    }))
+  }
+  it('two members: the one evened a size step states it and the tie by itself, the other the tie by it', () => {
+    // (the size step's page: 291 characters evened a step, 9.75 pt; the paragraph after it, one of TeX's with it, capped there)
+    const [, m, b] = tied([1, 2], [100, 291, 100])
+    expect([m!.size, b!.size]).toEqual([9.75, 9.75])
+    expect(m!.tie).toEqual({ scale: 0.975, by: 1 })
+    expect(m!.evened?.by).toContain('size')
+    expect([b!.tie, b!.evened]).toEqual([{ scale: 0.975, by: 1 }, undefined])
+  })
+  it('three members, the one evened not the first: both others state the tie by it', () => {
+    const [a, m, b] = tied([0, 1, 2], [100, 291, 100])
+    expect([a!.size, m!.size, b!.size]).toEqual([9.75, 9.75, 9.75])
+    expect([a!.tie, m!.tie, b!.tie]).toEqual([
+      { scale: 0.975, by: 1 },
+      { scale: 0.975, by: 1 },
+      { scale: 0.975, by: 1 },
+    ])
+    expect(m!.evened?.by).toContain('size')
+  })
+  it('states no tie where no member is capped', () => {
+    expect(tied([0, 2], [100, 291, 100]).map((x) => x.tie)).toEqual([undefined, undefined, undefined])
+  })
+})

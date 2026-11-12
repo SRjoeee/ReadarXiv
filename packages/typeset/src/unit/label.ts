@@ -13,6 +13,7 @@
 // - `relabels`: the unit's label group exists and the wrap does not keep the label as the original's ← Placed.fixed (bit 4)
 // - `words`: babel's names in the target (Rules.words); `heads`: translator's dictionary's head names in the target
 //   (rules/tex-names.json, a data file of Rules); `names`: the paper's own name units' translations (A6, other rows)
+import type { OwnNames } from './rename.ts'
 
 /** a glyph of a label as the rule reads it: its character, its extent, its size and its font state */
 export type Glyph = {
@@ -56,7 +57,7 @@ export type LabelInput = {
   words: Readonly<Record<string, string>> | null
   captions: Readonly<Partial<Record<'figure' | 'table', string>>> | null
   heads: Readonly<Record<string, string>> | null
-  names: ReadonlyMap<string, string> | null
+  names: OwnNames | null
 }
 export type Labelled = { relabel: string | null; head: HeadLabel | null; label: UnitLabel | undefined }
 

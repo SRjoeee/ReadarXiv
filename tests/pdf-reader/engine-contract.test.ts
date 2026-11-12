@@ -107,7 +107,8 @@ describe('the engine\'s imports', () => {
   })
 
   it('reach the core by the four allowed modules alone, each file of them naming modules by relative path only', () => {
-    const outside = closure.filter(f => !f.startsWith(`${ENGINE}/`))
+    // (the front half moved into the engine package, reached through its transition paths, is the engine's own code)
+    const outside = closure.filter(f => !f.startsWith(`${ENGINE}/`) && !f.startsWith('packages/engine/src/'))
     // (the entries reach three of the four: names.ts is the figures' and the extension's session's)
     expect(outside.every(core), outside.join(' ')).toBe(true)
     expect(outside.length).toBeGreaterThanOrEqual(2)
@@ -124,6 +125,9 @@ describe('what the translation, the rules and the browser load', () => {
   // the marks, the content walk the wrap reads (remove.mjs), the ownership and the wrap, and the pixel checker. The anchors and
   // the versions are the pipeline's too, and leaves that every reader takes
   const server = (f: string) => f.startsWith(`${ENGINE}/source/`)
+    || /^packages\/engine\/src\/source\/(?:latex-front|paper-meta|paper-names)\.mjs$/.test(f)
+    || /^packages\/engine\/src\/(?:marks\/marks|own\/own|own\/stream)\.mjs$/.test(f)
+    || /^packages\/engine\/src\/(?:compile\/(?:live|tex-errors|tex|paper)|instrument\/instrument)\.mjs$/.test(f)
     || (f.startsWith(`${ENGINE}/pipeline/`) && !/\/pipeline\/(?:anchors|versions|memory)\.mjs$/.test(f))
     || /\/layout\/(?:make|marks|paper|remove|wrap|own|carry|match|stream)\.mjs$/.test(f)
     || f.endsWith('/layer/check.mjs')
@@ -148,7 +152,7 @@ describe('the licence of what a reader loads', () => {
 
   // What section 19.3 says the web carries with the engine and the shared interface is so, and the registry holds its rows
   it('has the notices the web carries: LaTeXML\'s table is in the closures of pipeline and layer, and the registry names LaTeXML, Lucide and Noto', () => {
-    for (const name of ['pipeline', 'layer'] as const) expect([...closureOf([entryFile(name)])], name).toContain(`${ENGINE}/rules/latexml-args.mjs`)
+    for (const name of ['pipeline', 'layer'] as const) expect([...closureOf([entryFile(name)])], name).toContain('packages/engine/src/source/latexml-args.mjs')
     const registry = readFileSync('docs/THIRD_PARTY.md', 'utf8')
     for (const word of ['LaTeXML', 'Lucide', 'Noto Sans SC']) expect(registry, word).toContain(word)
     expect(shared).toContain('packages/ui/src/controls/Icon.tsx')
@@ -164,6 +168,41 @@ describe('the licence of what a reader loads', () => {
     expect(shared.length).toBeGreaterThan(30)
     expect(portedInClosure(shared)).toEqual([])
     expect([...closureOf(shared)].filter((f: string) => f.startsWith('src/'))).toEqual([])
+  })
+})
+
+// The front half moved from the engine into packages/engine: each old path re-exports its module through a transition path of
+// the package (`@readarxiv/engine/today/<folder>/<file>`), a hole in the package's wall that only the old engine and the lab
+// may use, until the cut-over deletes both
+describe('the transition paths of the moved front half', () => {
+  const manifest = JSON.parse(readFileSync('packages/engine/package.json', 'utf8')) as { exports: Record<string, string> }
+  const paths = Object.entries(manifest.exports).filter(([k]) => k.startsWith('./today/'))
+  const code = (f: string) => /\.(?:[cm]?[jt]sx?)$/.test(f) && !/\.d\.[cm]?ts$/.test(f)
+
+  it('name each moved module one by one (no pattern), at its own place under the package\'s src/', () => {
+    const tracked = new Set(trackedFiles())
+    expect(paths.length).toBeGreaterThan(0)
+    for (const [key, target] of paths) {
+      expect(key, key).not.toContain('*')
+      expect(target, key).toBe(`./src/${key.slice('./today/'.length)}`)
+      expect(tracked.has(`packages/engine/${target.slice(2)}`), key).toBe(true)
+    }
+  })
+
+  it('are imported by the old paths under src/pdf-reader/engine/ and the lab alone, each path one the package names', () => {
+    const named = new Set(paths.map(([key]) => `@readarxiv/engine/today/${key.slice('./today/'.length)}`))
+    const importers: string[] = [], strays: string[] = []
+    for (const file of trackedFiles().filter(code)) {
+      const text = readFileSync(file, 'utf8')
+      if (!text.includes('@readarxiv/engine/today')) continue
+      for (const { spec } of namedModulesOf(text) as { spec: string | null }[]) {
+        if (spec === null || !spec.startsWith('@readarxiv/engine/today')) continue
+        if (!named.has(spec) || !/^(?:src\/pdf-reader\/engine|lab)\//.test(file)) strays.push(`${file}: ${spec}`)
+        else importers.push(file)
+      }
+    }
+    expect(importers.filter(f => f.startsWith(`${ENGINE}/`)).length).toBeGreaterThan(0)
+    expect(strays).toEqual([])
   })
 })
 

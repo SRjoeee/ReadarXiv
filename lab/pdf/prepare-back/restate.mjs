@@ -3,18 +3,23 @@
 // made again (with the trails and labels its bundles' parts carry), numbered after the dump's own units as run.mjs numbers them, its counts
 // made again. For a change to how the statement reads (an acceptance ruling) measured on a run already made; the differential
 // then reads <out>. With --papers=<tsv> (a corpus list: each paper's id and the folder of its arxiv.pdf) arXiv's glyphs are read
-// as the back half reads A (readArxiv), for the causes that read a line's glyphs ((f'), stated.mjs); without, those are not stated.
-//   node --import tsx lab/pdf/prepare-back/restate.mjs <baseline prepare dir> <run dir> <out dir> [--papers=<tsv>]
+// as the back half reads A (readArxiv), for the causes that read a line's glyphs ((f'), (l'), (t), stated.mjs); without, those are
+// not stated. With --keys-from-bundles, a run whose run.mjs keyed an element by its content id (before lane lost-11, round B15
+// and every run before it): each own unit's elements keyed by their pieces' k first (pieces.mjs keyedByPiece), from the run's
+// bundles' units; never for a run made since, whose dumps are keyed so already.
+//   node --import tsx lab/pdf/prepare-back/restate.mjs <baseline prepare dir> <run dir> <out dir> [--papers=<tsv>] [--keys-from-bundles]
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { keyedByPiece } from './pieces.mjs'
 import { statedOf, trailsOf } from './stated.mjs'
 
 const args = process.argv.slice(2)
 const [BASELINE, RUN, OUT] = args.filter((a) => !a.startsWith('--'))
 const PAPERS = args.find((a) => a.startsWith('--papers='))?.slice('--papers='.length)
+const REKEY = args.includes('--keys-from-bundles')
 if (!BASELINE || !RUN || !OUT) {
-  console.error('restate.mjs <baseline prepare dir> <run dir> <out dir> [--papers=<tsv>]')
+  console.error('restate.mjs <baseline prepare dir> <run dir> <out dir> [--papers=<tsv>] [--keys-from-bundles]')
   process.exit(2)
 }
 // (arXiv's PDF of each paper, and A's glyphs on each page as the back half reads them: readArxiv, run.mjs's)
@@ -42,8 +47,24 @@ const read = PAPERS
 mkdirSync(join(OUT, 'prepare'), { recursive: true })
 let papers = 0,
   stated = 0
+const keyed = { units: 0, elements: 0, moved: 0, unbundled: 0 }
+/** a run's paper's bundle units by id (head.json's units objects), for --keys-from-bundles */
+const bundleUnits = (paper) => {
+  const dir = join(RUN, 'bundles', paper)
+  if (!existsSync(join(dir, 'head.json'))) return new Map()
+  const by = new Map()
+  for (const d of JSON.parse(readFileSync(join(dir, 'head.json'), 'utf8')).units ?? [])
+    for (const u of JSON.parse(readFileSync(join(dir, `${d}.units`), 'utf8')).units) if (!by.has(u.id)) by.set(u.id, u.content)
+  return by
+}
 for (const f of readdirSync(join(RUN, 'prepare')).filter((f) => f.endsWith('.prepare.json')).sort()) {
   const dump = JSON.parse(readFileSync(join(RUN, 'prepare', f), 'utf8'))
+  if (REKEY) {
+    const by = bundleUnits(f.slice(0, -'.prepare.json'.length))
+    const r = keyedByPiece(dump.units, (id) => by.get(id))
+    dump.units = r.units
+    for (const k of Object.keys(keyed)) keyed[k] += r.counts[k]
+  }
   // (a unit of the dump's own a statement was written on, (i), its own reason again)
   const units = dump.units
     .filter((u) => !u.replaced)
@@ -92,4 +113,4 @@ for (const f of readdirSync(join(RUN, 'prepare')).filter((f) => f.endsWith('.pre
   writeFileSync(join(OUT, 'prepare', f), `${JSON.stringify({ ...dump, counts, units })}\n`)
   papers++
 }
-console.log(JSON.stringify({ papers, stated }))
+console.log(JSON.stringify({ papers, stated, ...(REKEY ? { keyed } : {}) }))

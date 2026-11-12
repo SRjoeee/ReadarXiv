@@ -75,6 +75,74 @@ describe('the contents', () => {
     expect(c.clearTexts()).toBe(true)
     expect(c.entries()[2]?.title).toBe('2 Method')
   })
+  it('titles a heading with each element as its copy text, a forced break a space, never its TeX source', () => {
+    // ("Overview of \sys\\ and $\tau_V$ functions against \sage": a paper's own macro whose glyphs the part reads ("BLIP"), a
+    // forced break, a formula whose copy text the part states, and a macro whose ink was not found, of no copy text: 2608.25210v2's
+    // "\sys" before its translated words and 2608.06701v1's \sage in the contents)
+    const heading: Unit = {
+      id: id('a'),
+      kind: 'heading',
+      depth: 1,
+      content: [
+        { t: 'text', s: 'Overview of ' },
+        { t: 'el', id: '1', kind: 'macro', src: '\\sys' },
+        { t: 'el', id: '2', kind: 'break', src: '\\\\' },
+        { t: 'text', s: 'and ' },
+        { t: 'el', id: '3', kind: 'math', src: '$\\tau_V$' },
+        { t: 'text', s: ' functions against ' },
+        { t: 'el', id: '4', kind: 'macro', src: '\\sage' },
+      ],
+    }
+    const units = [unit('2', 'abstract', 'We study things.'), heading]
+    const c = createContents(units, { outline: [[1, 3, id('a')]] })
+    const raw = (s: string) => /\\|\$/.test(s)
+    // (no part read yet: what no part has stated contributes nothing, as today's reader drops every element)
+    expect(c.entries()[0]).toMatchObject({
+      title: 'Overview of and functions against',
+      original: 'Overview of and functions against',
+    })
+    // (its part read: each element as the part states it, El.text where TeX set glyphs, else El.copy; one stating neither, nothing)
+    const member = {
+      ord: 1,
+      kind: 'heading',
+      text: id('a'),
+      lines: [[3, 0, 72, 300, 700, 712, 698, 72, 300, 0]],
+      els: [
+        ['1', { kind: 'umacro', unknown: 1, ink: [[3, 120, 698, 150, 712, 700]], text: 'BLIP' }],
+        ['3', { kind: 'other', ink: [], copy: 'τ_V' }],
+        ['4', { kind: 'umacro', unknown: 1, ink: [] }],
+      ],
+    } as unknown as Placed
+    expect(c.place([member])).toBe(true)
+    expect(c.entries()[0]).toMatchObject({
+      title: 'Overview of BLIP and τ_V functions against',
+      original: 'Overview of BLIP and τ_V functions against',
+    })
+    // (its row taken: the row's text, each element as its copy text, the break a space)
+    const r: Row = {
+      id: id('a'),
+      ok: true,
+      content: [
+        { t: 'el', id: '1' },
+        { t: 'text', s: ': Überblick' },
+        { t: 'el', id: '2' },
+        { t: 'text', s: 'und ' },
+        { t: 'el', id: '3' },
+        { t: 'text', s: '-Funktionen gegenüber ' },
+        { t: 'el', id: '4' },
+      ],
+      by: 'x',
+    }
+    expect(c.take([r])).toBe(true)
+    expect(c.entries()[0]?.title).toBe('BLIP: Überblick und τ_V-Funktionen gegenüber')
+    expect(c.entries().some((e) => raw(e.title) || raw(e.original))).toBe(false)
+    // (the same row taken before any part: the elements nothing yet)
+    const d = createContents(units, { outline: [[1, 3, id('a')]] })
+    d.take([r])
+    expect(d.entries()[0]?.title).toBe(': Überblick und -Funktionen gegenüber')
+    expect(d.place([member])).toBe(true)
+    expect(d.entries()[0]?.title).toBe('BLIP: Überblick und τ_V-Funktionen gegenüber')
+  })
   it("gives a heading the head does not place the page the original's own outline gives it, matched in order by title", async () => {
     const c = createContents(UNITS, HEAD)
     const doc: OutlineDoc = {

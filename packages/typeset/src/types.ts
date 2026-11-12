@@ -113,12 +113,14 @@ export type Given = { lead?: number; track?: number; size?: number; leave?: Unla
 /**
  * Why a member stays the original's (design-a §1.2's typesetter `Why`, named `Unlaid` here: `packages/format`'s `Why` is a
  * row's failure, what the translate chain yields): the prepare's reasons (format's PrepWhy), the rows' reason kinds
- * (format's Why['kind']), no row (`none`), the reader's leave (`left`), and the typesetter's own
+ * (format's Why['kind']), no row by the rows' end (`none`), a unit the paper keeps as it is (`kept`: format's Unit.kept, never
+ * sent, its row never coming), the reader's leave (`left`), and the typesetter's own
  */
 export type Unlaid =
   | PrepWhy
   | RowWhy['kind']
   | 'none'
+  | 'kept'
   | 'left'
   | 'waiting'
   | 'unfit'
@@ -178,9 +180,13 @@ export type Laid = {
    *  page fill's foot step, §18.57): how far under that bottom its lowest line stands, points, to the hundredth up; none where
    *  no line of it stands there */
   fit?: { size: number; lead: number; track: number; borrowed: number; over?: number }
-  /** a tight paragraph the page's fill evened (§18.57): `by` the fit's knobs it took, in the order taken; `lines` its line count
-   *  on this page at its fitted layout, before them */
+  /** a tight paragraph the page's fill evened (§18.57): `by` the fit's knobs it took that its final lines carry, in the order
+   *  taken (none carried: not stated); `lines` its line count on this page at its fitted layout, before them */
   evened?: { by: EvenKnob[]; lines: number }
+  /** a member of a size tie (one paragraph of TeX's the front end cut, a figure's set) laid at the tie's one size, the least its
+   *  members need (docs/PDF-READER.md §18.64): that scale of its own size, and the member whose own need set it (`by`, itself
+   *  where it is that member, which then states the size step among its `evened` knobs where its page's fill took it) */
+  tie?: { scale: number; by: number }
   /** the paragraph points its part states by their first word (Placed.paras, design-display 2a), where it states one: how many
    *  opened a block on the line TeX opened them on, how many flowed on for want of a sentence start of its row at the point's
    *  word, how many for want of its row's sentences (unit/breaks.ts paraPieces). A part that states none, none */

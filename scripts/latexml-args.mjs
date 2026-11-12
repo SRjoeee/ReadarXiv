@@ -15,7 +15,7 @@ import { join, resolve as resolvePath } from 'node:path'
 
 const root = process.argv[2]
 if (!root) { console.error('usage: node scripts/latexml-args.mjs <LaTeXML checkout> [out]'); process.exit(2) }
-const out = process.argv[3] ?? new URL('../src/pdf-reader/engine/rules/latexml-args.mjs', import.meta.url).pathname
+const out = process.argv[3] ?? new URL('../packages/engine/src/source/latexml-args.mjs', import.meta.url).pathname
 const lib = join(root, 'lib/LaTeXML')
 let commit = 'unknown'
 try { commit = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD']).toString().trim() } catch {}

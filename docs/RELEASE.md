@@ -19,6 +19,20 @@ The release commit is made **on the branch, before the merge**, so that the tree
 5. A GitHub release for the tag, with the archive attached and the changelog section as its notes.
 6. The Chrome Web Store submission (below), with the privacy policy URL. Until it is listed, the README's "load unpacked" path is the install.
 
+**The reader's entries online, before the first release of the rebuilt reader** (lane V5, 2026-11-13): run on a staging
+build (`pnpm build:staging`, the rebuilt reader by default) against a staging that serves the release's round, by the
+coordinator, with the owner's word for the translator calls; once each, `AXT_E2E_ONLINE=1`, stopping at the first sign
+arXiv or staging slows or refuses (`tests/e2e/lib/online.mjs` refuses a build that talks to production). Not run on the
+rebuild line, where staging serves another round behind a tester gate a fresh profile does not pass:
+
+- `pnpm e2e:pdf`: arXiv (the abstract, the PDF page and the HTML version); staging's `/api/v2` (the reader opened from the
+  PDF page with `#readarxiv`: its open, its follow and its objects); the default translator (the HTML version translated,
+  its translations counted).
+- `pnpm e2e:popup`: arXiv (its search, the abstract, PDF and HTML pages the popup acts on and opens); the default
+  translator (an entry opens the HTML version translating).
+- `pnpm e2e:floating`: arXiv (the abstract, the PDF and the full-text pages); the default translator (the full-text page
+  translated by a click, its translations counted).
+
 **Release day of 0.5.0, on the maintainer's go** (the archive built for review on `release/0.5.0` is not the release: it is built from a branch, not from the tag, and its hash is refreshed on release day). In this order:
 
 1. Fill in the dates on the release branch: the `## 0.5.0` heading of `CHANGELOG.md` and the `Effective:` line of `PRIVACY.md`.
@@ -27,6 +41,25 @@ The release commit is made **on the branch, before the merge**, so that the tree
 4. Push the annotated tag `v0.5.0` on the merge commit.
 5. `pnpm build && pnpm zip` from the tag with a clean tree; the console line must read `[build] ref: v0.5.0`. Build `pnpm zip:staging` too if a test build is wanted.
 6. Put the new sha256 of the archive in the pull request and in the owner's upload kit, then submit to the store.
+
+## Going back a version: the reader's stores
+
+The first release whose PDF reader is the rebuilt one (`AXT_READER` `v2`, the build's default since 2026-11-13) steps two
+of the reader's stores in IndexedDB. What a reader who goes back to the version before it (0.5.2) finds, measured with Dexie
+4.4 (`tests/cache/paper-store.test.ts`, `tests/cache/translate-store.test.ts`; PDF-READER §9.3):
+
+- **`axt-layer`, the papers kept for reading offline**, at version 5: its step deletes the old reader's three tables
+  (`objects`, `papers`, `refs`), so the papers the old reader kept are let go once (the changelog says so). A build of
+  version 4 opens the database at 5.1 (Dexie adapts to a version above the one it declares), its tables made again,
+  empty, beside the new: it works and keeps papers again from then on; the new reader's papers stay beside, unread.
+- **`axt-translation-cache`**, at version 3 (the per-text table dropped): a build of version 2 opens it at 3.1, `entries`
+  made again, empty: it works, translating again what it had kept.
+- Coming forward again, this build works on its own rows. Nothing breaks either way.
+
+**The recipe after a rollback**: what a return leaves is the old tables beside the new (at most the old store's 200 MB),
+until a version step names them null again. The release that comes forward after a rollback carries that step:
+`axt-layer` version 6 with `objects`, `papers` and `refs` null; `axt-translation-cache` version 4 with `entries` null.
+Without a rollback, no step is needed.
 
 ## The store listing
 

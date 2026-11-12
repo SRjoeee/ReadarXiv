@@ -9,6 +9,7 @@ export interface Tree {
   chains: { count: number; orders: number; chains: { file: string; kinds: string[]; builds: string[]; implementation: string[] }[]; implementations: { id: string; file: string; hosts: string[] }[] }
   gpl: { file: string; repo: string; path: string; code: number; role: string; reachedBy: { build: string; path: string[] }[] }[]
   debt: {
+    rules: { ledger: boolean; recorded: string | null; unexplained: number; magnitudes: number; notJudged: number; list: { at: string; key: string | null; repo: string; file: string; line: number }[] }
     thresholds: { all: Counts; headline: Counts; headlineTunedNoReason: number; list: { class: string; name: string | null; unit?: string; source?: string | null; at: string }[] }
     budgets: { count: number; unmeasured: number; headline: number; headlineUnmeasured: number; byUnit: Counts; bySource: Counts }
     vocabularies: { count: number; headline: number; list: { form: string; size: number; name: string | null; at: string }[] }
@@ -29,7 +30,7 @@ export interface Census {
   cutover: { partial: boolean; deleted: { files: number; code: number; list: string[] }; goWith: { files: number; code: number; list: string[] } }
 }
 export declare const DEFINITIONS: Record<string, string>
-export declare function census(trees: { today: Scan[] | null; now: Scan[] }): Promise<Census>
+export declare function census(trees: { today: Scan[] | null; now: Scan[]; rulesLedger?: { recorded?: { commit?: string | null }; rules: Record<string, { verdict: string }> } | null }): Promise<Census>
 export declare function headlineOf(c: Census): { id: string; measure: string; values: unknown[]; target: string | null }[]
 export declare function numbersOf(c: Census): Record<string, unknown>
 type Judged = { current: { NOW: Part; AFTER: Part | null }; lines: Line[] }

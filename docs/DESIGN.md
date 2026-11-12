@@ -572,8 +572,14 @@ offers its retry by: a Retry-After of an hour, slept twice, had held a call two 
 translator (50 % of 20, never the chain's last), halving only where an endpoint says a request is too large (a 413, or the
 words of its stated cap: Microsoft's plain-text 400) while any other refused request goes whole to the next translator and
 counts against its own as a failure of its endpoint does (a 400 to every request had been halved into 7 requests for an
-LLM's 4 units and 199 for Google's 100, #636), one acceptance rule,
-fall-through to the next translator per unit, one re-ask where a translator asks it (an LLM), the runs floor past the last,
+LLM's 4 units and 199 for Google's 100, #636), and so does a request answered whole in no shape of its translator's, asked once
+more (`malformed`: a 200 that is a captcha's HTML page where Google's JSON belongs had been counted by no breaker, every
+request paying its second try for as long as the page was served), one acceptance rule,
+fall-through to the next translator per unit, the units of one call that fall from a translator handed to the next together
+once every unit of the call has its outcome from the earlier one, its lane cutting them by its own limits, no timer (`chain.ts`
+`stagesOf`: the lab's fill of the 90 pairs sent 290 of Microsoft's 318 requests with one unit each, as the Google reply that
+refused it was read; no unit's wire moves, Microsoft answered 43 stored units sent 2 to 9 a request byte for byte as it had
+answered each alone, lane reply-dots 2026-11-13), one re-ask where a translator asks it (an LLM), the runs floor past the last,
 whole or not at all: where a stretch comes back from no translator the unit is refused and its original stays, never its
 English between translated stretches (PDF-READER §18.21).
 An element its reader states TeX sets after the unit's text (`el.after`: the PDF's backref list of the pages citing a
@@ -1005,13 +1011,15 @@ only how it meets the rest of the extension.
 - **Two readers behind one chrome** (the rebuild's stage 5a; `AXT_READER` in `wxt.config.ts`). The chrome — the toolbar,
   the capsule, the menus, the two panes' scrollers — is the reader package's (`mountChrome`, `@readarxiv/reader`), given its
   settings, slots and words by the extension's host (`src/pdf-reader/host/`). Behind it the build chooses the reader:
-  `today`, the default and what a release ships, is the session the bullets below describe (`session/`, the engine's
-  reading view, our server's v1 layer); `v2` (`AXT_READER=v2 pnpm build`) is the reader package whole, `openReader(root, {
-  host, paper, engine })` with the extension's `Host` (`host/v2.ts`): the network as the reader may use it (our server and
-  arXiv, by https, never the visitor's credentials or a referrer: only the paper's id and version leave the machine), the
-  preferences over the extension's configuration (a write is a patch on the latest stored), and the rows made through the background's
-  chain (§8). Until the typesetter is joined to the reader's `engine.lay`, a `v2` reader draws the paper's pages and lays
-  none, so the shipped build stays `today` until it is; going back is that one build setting.
+  `v2`, the default since 2026-11-13 (lane V5: every feature of today's reader present, its browser checks ported, PDF-READER
+  §9.3, §11), is the reader package whole, `openReader(root, { host, paper })` with the extension's `Host` (`host/v2.ts`,
+  the package's `openSession` glue): the network as the reader may use it (our server and arXiv, by https, never the
+  visitor's credentials or a referrer: only the paper's id and version leave the machine), the papers it kept answered
+  first (`host/stored-fetch.ts`, `cache/paper-store.ts`), the preferences over the extension's configuration (a write is a
+  patch on the latest stored), and the rows made through the background's chain (§8), laid by the reader's own typesetter.
+  `today` (`AXT_READER=today pnpm build`) is the session the bullets below describe (`session/`, the engine's reading view,
+  our server's v1 layer): the reader the released extension (0.5.2) reads with, built and tested until the cut-over removes
+  it; going back is that one build setting.
 - **The typesetter** (`@readarxiv/typeset`) is two pure functions of data and the translated text: `layFlowPrepared(members,
   rules)` lays a flow's members in order, each that continues the one before it on a shared line starting where that one
   ends; `layPagePrepared(page, flows, ties, rules)` lays one page from its own part alone — its flows, its table groups

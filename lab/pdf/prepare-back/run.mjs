@@ -7,8 +7,13 @@
 //   FORMAT.md §3), for its tools/diff.mjs;
 //   <out>/located/<id>.json what the gate reads beside the dump: each unit's place, cause, member ords; the wrap's pages; parts;
 //   the float lines (`floatLines`: Located.floatLines, a paper's words: lab data alone; float-lines.mjs reports them);
-//   stdout one summary line. Exit 3: a compile no cache holds (the paper missing). Exit 4: a paragraph TeX opened where a group
-//   the instrument wrote as its content stood (Located.stats.opensLost: the gate of pipeline/instrument.mjs passThroughOf), outputs written.
+//   <out>/ownership/<id>.json what the ownership's check finds (Located.disagreements, packages/engine/src/locate/ownership.ts),
+//   in a file of its own so that every object and dump the chain compares stays as it was: the carried (the figure text
+//   made of a printed line, its element's glyphs listed and owned by none: `takeAsStated`) and the found counted apart and by
+//   kind, each with its page, glyph, member, unit and role, and the table's owner (`rows`);
+//   stdout one summary line (the ownership's two counts in it). Exit 3: a compile no cache holds (the paper missing). Exit 4: a
+//   paragraph TeX opened where a group the instrument wrote as its content stood (Located.stats.opensLost: the gate of
+//   pipeline/instrument.mjs passThroughOf), outputs written.
 //   node --max-old-space-size=6144 --import tsx lab/pdf/prepare-back/run.mjs --dir=<paper dir> --id=<id> --out=<dir> --caches=<dir>:<dir>…
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -19,6 +24,7 @@ import * as PL from '@cantoo/pdf-lib'
 import { isMemoryError, prepareBack, readArxiv, stateOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { classesOf, instrumentOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import { flatOf, pieceKOf } from './pieces.mjs'
 import { keptWhyOf, statedOf, trailsOf } from './stated.mjs'
 
 const argOf = n => process.argv.find(a => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null
@@ -187,16 +193,9 @@ const located = tally?.locatedAll ?? null
 const addOn = tally?.addOn ?? null
 const r2 = v => Math.round(v * 100) / 100
 const OBJ = '￼'
-/** a unit's pieces as FORMAT.md's flat list (§2): text, ph, open, close, nested; k their place in today's order */
-function flat(content, out = []) {
-  for (const p of content) {
-    if (p.t === 'text') out.push({ k: out.length, kind: 'text', s: p.s })
-    else if (p.t === 'el') out.push({ k: out.length, kind: 'ph', src: p.src })
-    else if (p.t === 'unit') out.push({ k: out.length, kind: 'nested', pre: p.pre, unit: p.unit, post: p.post })
-    else { if (p.open !== undefined) out.push({ k: out.length, kind: 'open', src: p.open }); flat(p.content, out); if (p.close !== undefined) out.push({ k: out.length, kind: 'close', src: p.close }) }
-  }
-  return out
-}
+// (a unit's pieces as FORMAT.md's flat list, §2, each its k by place, and each element's `k` its piece's: pieces.mjs flatOf,
+// pieceKOf, lane lost-11)
+/** the flat pieces' text, a placeholder or a nested unit U+FFFC */
 const textOfPieces = ps => ps.map(p => (p.kind === 'text' ? p.s : p.kind === 'ph' || p.kind === 'nested' ? OBJ : '')).join('')
 const LABEL_KIND = { float: 'caption', head: 'number', number: 'number', mark: 'footnote' }
 const units = []
@@ -217,7 +216,7 @@ const figsSorted = [...figs].sort((a, b) => (laysFigure(a) ? 0 : 1) - (laysFigur
 figs.forEach((at, q) => { order[at] = figsSorted[q] })
 order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   if (u.name !== undefined) return
-  const pieces = flat(u.content)
+  const { pieces, kOf } = flatOf(u.content)
   const mem = memberOf.get(i)
   if (mem) dumpOrds.push([ord, mem.ord])
   // (a unit kept for its text set wholly in a face of one pitch, the engine's `pitch`: `keptBy: 'pitch'`; a kept block of e-mail
@@ -244,7 +243,7 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   // (a figure text's element kept as the original's ink, the engine's `keptEls` (a run of one pitch, F0's; a stretch its decoration
   // holds): `keptBy`, which the parity reads, join.mjs candidatePitch)
   const keptEl = new Map(u.keptEls ?? [])
-  const elements = mem.elements.filter(([, el]) => el.ink.length).map(([k, el]) => ({ k: Number(k), kind: el.kind, flags: el.keep ? ['KEPT'] : [], ...(keptEl.has(k) ? { keptBy: keptEl.get(k) } : {}), segs: el.ink.map(x => ({ page: x[0], x0: x[1], x1: x[3], baseline: x[5], top: x[4], bottom: x[2] })) }))
+  const elements = mem.elements.filter(([, el]) => el.ink.length).map(([k, el]) => ({ k: pieceKOf(kOf, k), kind: el.kind, flags: el.keep ? ['KEPT'] : [], ...(keptEl.has(k) ? { keptBy: keptEl.get(k) } : {}), segs: el.ink.map(x => ({ page: x[0], x0: x[1], x1: x[3], baseline: x[5], top: x[4], bottom: x[2] })) }))
   const label = mem.labelAt ? [{ kind: LABEL_KIND[mem.labelAt.kind] ?? 'number', page: mem.labelAt.ink[0], x0: mem.labelAt.ink[1], x1: mem.labelAt.ink[3], baseline: mem.labelAt.ink[5], top: mem.labelAt.ink[4], bottom: mem.labelAt.ink[2] }] : null
   // (a unit kept for its text set wholly in a face of one pitch, or for an identifier, states (k), the differential's cause,
   // before the bundle's why)
@@ -255,7 +254,7 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
 if (located) for (const [o, b] of located.born) {
   const mem = located.members[o]
   const st = stateOf(mem, addOn)
-  const pieces = flat(b.content)
+  const { pieces } = flatOf(b.content)
   states[st.drawn ? 'drawn' : 'laid']++
   dumpOrds.push([ord, mem.ord])
   units.push({ id: mem.id, ord: ord++, kind: b.kind, text: textOfPieces(pieces), pieces, state: st.drawn ? 'drawn' : 'laid', why: 'born on arXiv\'s page', lines: mem.lines.map(l => ({ page: l[0], x0: l[2], x1: l[3], baseline: l[4], top: l[5], bottom: l[6], size: mem.style.size })) })
@@ -312,7 +311,18 @@ writeFileSync(join(OUT, 'located', `${id}.json`), `${JSON.stringify({
   floatLines: located?.floatLines ?? null,
   peakRss: process.resourceUsage().maxRSS,
 })}\n`)
-console.log(JSON.stringify({ id, refused: refusal, units: units.length, ...states, located: tally?.located.located ?? 0, unlocated: tally?.located.unlocated ?? {}, born: tally?.located.born ?? 0, made: tally?.located.made ?? null, wrap: tally?.wrap ?? null, ...(proofs ? { proofs: { a: proofs.glyphs.a.failed, c: proofs.glyphs.c.failed, ...(proofs.pixels ? { on: proofs.pixels.onFailed?.length, offOutside: proofs.pixels.offOutside ? Object.fromEntries(Object.entries(proofs.pixels.offOutside).map(([k, v]) => [k, v.length])) : proofs.pixels.refused } : {}) } } : {}), ms: Math.round(performance.now() - t0) }))
+// ---- the ownership's check: each glyph whose owner and the members' lists disagree, and a fixed member's glyph in a group;
+// the carried (a fault known before the check, carried as it is) and the found apart
+const disagreements = located?.disagreements ?? []
+const ownership = { found: disagreements.filter((d) => !d.carried).length, carried: disagreements.filter((d) => d.carried).length }
+if (located) {
+  const byKind = {}
+  for (const d of disagreements) (byKind[d.kind] ??= { found: 0, carried: 0 })[d.carried ? 'carried' : 'found']++
+  const row = (d) => ({ kind: d.kind, page: d.page, glyph: d.glyph, member: d.member, unit: located.members[d.member]?.id ?? null, role: d.role, owner: d.owner })
+  mkdirSync(join(OUT, 'ownership'), { recursive: true })
+  writeFileSync(join(OUT, 'ownership', `${id}.json`), `${JSON.stringify({ id, ...ownership, byKind, rows: { found: disagreements.filter((d) => !d.carried).map(row), carried: disagreements.filter((d) => d.carried).map(row) } })}\n`)
+}
+console.log(JSON.stringify({ id, refused: refusal, units: units.length, ...states, located: tally?.located.located ?? 0, unlocated: tally?.located.unlocated ?? {}, born: tally?.located.born ?? 0, made: tally?.located.made ?? null, wrap: tally?.wrap ?? null, ownership, ...(proofs ? { proofs: { a: proofs.glyphs.a.failed, c: proofs.glyphs.c.failed, ...(proofs.pixels ? { on: proofs.pixels.onFailed?.length, offOutside: proofs.pixels.offOutside ? Object.fromEntries(Object.entries(proofs.pixels.offOutside).map(([k, v]) => [k, v.length])) : proofs.pixels.refused } : {}) } } : {}), ms: Math.round(performance.now() - t0) }))
 for (const t of tasks) await t.destroy().catch(() => {})
 // (the gate of a group written as its content (pipeline/instrument.mjs passThroughOf, decided before TeX's paragraph ends are read):
 // a paragraph TeX opened at one has nothing to state it on, so the paper fails, exit 4, its outputs written)

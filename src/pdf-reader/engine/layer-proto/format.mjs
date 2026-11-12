@@ -33,6 +33,8 @@ import { checkFigures } from './figure-rows.mjs'
 import { sourceUnitsOf } from './rows.mjs'
 import { CELL, EDGES, unitStands } from './units.mjs'
 import { CLASS_IDS } from '../rules/content-classes.mjs'
+import { WHY_MAX } from '@readarxiv/engine/today/instrument/format.mjs'
+export { WHY_MAX, whyText } from '@readarxiv/engine/today/instrument/format.mjs'
 
 // ---------------------------------------------------------------- the versions and the bounds
 /** the format: raised with any change to the shape of a head, part, left part or catalog, and with it the CTAG. 6: a part
@@ -183,11 +185,6 @@ export const RETRY_LIMITS = Object.freeze(['wall', 'budget'])
  * A fault of the host's machinery (a failed allocation, a jail that fails) is no refusal: it is thrown, and retried as before
  */
 export const baseRefusalRetryable = r => r !== null && typeof r === 'object' && RETRY_LIMITS.includes(r.limit)
-export const WHY_MAX = 300
-/** a why as a record holds it: a run of control characters (a TeX log's raw bytes, a terminal's escapes) one space, within
- *  WHY_MAX */
-// biome-ignore lint/suspicious/noControlCharactersInRegex: the control characters a why is kept without
-export const whyText = s => String(s ?? '').replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').replace(/ {2,}/g, ' ').trim().slice(0, WHY_MAX)
 /** whether a part's `layout` as given or on the wire is a refusal's record, not a layout part (which holds no `refused`) */
 export const isLayoutRefusal = v => isObject(v) && Object.hasOwn(v, 'refused')
 /** why the parts end before the paper does (the catalog's `end.refused`), amendment M4: FINAL, the paper's own, which a new

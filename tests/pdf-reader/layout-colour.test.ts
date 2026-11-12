@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { cmykToRgb, fillOfColour } from '@/pdf-reader/engine/layout/colour.mjs'
+// @ts-expect-error: the moved JavaScript (packages/engine/src/marks/colour.mjs) has no declaration in the package; its old path,
+// which nothing else imported, is gone
+import { cmykToRgb, fillOfColour } from '../../packages/engine/src/marks/colour.mjs'
 
 // The fill TeX set a run in, from its driver's colour string (layout/colour.mjs): what the marked original writes at a colour
 // piece (marks.mjs AXT-COLOUR), as PDF.js turns a PDF fill to RGB

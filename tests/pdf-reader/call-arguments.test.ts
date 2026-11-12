@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { readArgs, paperParams } from '@/pdf-reader/engine/rules/arg-roles.mjs'
+// @ts-expect-error: the moved JavaScript (packages/engine/src/source/arg-roles.mjs) has no declaration in the package; its old path, which nothing
+// else imported, is gone
+import { readArgs, paperParams } from '../../packages/engine/src/source/arg-roles.mjs'
 
 // A command and its arguments are one piece of the source: no unit begins or ends between them, so nothing of the
 // reader's — a lead, a mark, a line probe — is written there. #407's review: `\vbox{…}\begin{center}` was marked
@@ -60,7 +62,7 @@ describe('the role table reads TeX\'s own syntax as TeX does', () => {
     const params = paperParams(name, null)
     if (!params) throw new Error(`no parameters for ${name}`)
     const r = readArgs(src, 0, params)
-    return r.complete ? r.args.map(a => src.slice(a.start, a.end).trim()) : null
+    return r.complete ? r.args.map((a: { start: number; end: number }) => src.slice(a.start, a.end).trim()) : null
   }
   it('a dimension is never a group; a box\'s specification is `to` or `spread` and a dimension', () => {
     expect(read('{words} more', 'hbox')).toEqual(['{words}'])

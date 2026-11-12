@@ -48,8 +48,8 @@ export type FillLaid = {
   /** its frames at a state that holds the frames' share (S.fill.leads frameShareOf) */
   fillShare?: FillShare
   /** a unit under its page's band the page's fill evened (§18.57, evenOf): `by` the fit's knobs it took to stand in the band,
-   *  in the order taken; `lines` its line count on each of its pages at its fitted layout, before them (the Page member states
-   *  both, lay/page.ts) */
+   *  in the order taken, those its final lines carry (carried: a pass that lays it again after may take one back); `lines` its
+   *  line count on each of its pages at its fitted layout, before them (the Page member states both, lay/page.ts) */
   evened?: { by: EvenKnob[]; lines: [page: number, lines: number][] }
   [more: string]: unknown
 }
@@ -344,10 +344,11 @@ export function fillPage(
     const keep = p.layout.extents
     p.P = { ...p.P, leadBase: st.lead }
     // (its fit's knob kept, a step past its states among them (widen, below-floor), but the page's size grown; an evened unit's
-    // the knob its stand-in was laid at, and the knobs it took)
+    // the knob its stand-in was laid at, and the knobs it took that its final lines still carry, carried)
     const q = even.get(p)
     if (st.knob !== 'grow') l.knob = (q ?? p).layout.knob
-    if (q) p.evened = q.evened
+    const by = q?.evened?.by.filter((k) => carried(k, st, q.layout.state)) ?? []
+    if (q?.evened && by.length) p.evened = { by, lines: q.evened.lines }
     p.layout = l
     p.layout.extents = keep
     // (laid anew, and settled as it was tried (`free`): its clearance at its new size, before it is recorded or painted; the
@@ -534,6 +535,21 @@ function evenOf(p: FillLaid, P: PageRules, floor: number): FillLaid | null {
     return q
   }
   return null
+}
+
+/**
+ * Whether the state a unit's final lines are laid at (`st`) still carries evening knob `knob` as its stand-in took it (`even`,
+ * evenOf's state): the room TeX left under it borrowed and the room past TeX's bottom as the knob set them, and its size; the
+ * pass lays an evened unit again after evenOf and may put one back: the head pass with no room borrowed (headOf, `borrow: 0`:
+ * B.slots lowOf reads no room and no depth past the bottom then), the page's size grown (its scale replaced). Its tracking stays:
+ * the fill's own tracking of a CJK unit short of its frame adds its steps to the knob's (the most that sets it, from there), so
+ * that the knob moves its final lines still (§18.57: the page states what its final lines took)
+ */
+function carried(knob: EvenKnob, st: FitState, even: FitState): boolean {
+  if (knob === 'track') return true
+  if (knob === 'room') return st.borrow === even.borrow
+  if (knob === 'foot') return st.borrow === even.borrow && (st.over ?? 0) === (even.over ?? 0)
+  return st.scale === even.scale
 }
 
 /** a unit's decision in the fill (the tap's passes[].units, less today's `next` and `closer`: the gap ruling of 2026-11-08):

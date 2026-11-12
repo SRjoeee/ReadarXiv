@@ -11,7 +11,8 @@
 // at its angle (its items' `dir`), as today's svgOfFigure turns it. A figure text drawn is one laid line of its runs, its text
 // group off. What is not drawn stays the original's: one whose ink stays (the part's why, `unwrapped`: a label today's figure
 // reading leaves where it stands), a turned one a part made before the prepare stated its run (`kind`), one whose anchor the
-// part does not state (`kind`, align 'j'), its row none (`none`) or failed (the row's why, as the entry's contentOf), the same
+// part does not state (`kind`, align 'j'), its unit one the paper keeps (`kept`), its row none (`none`) or failed (the row's why,
+// as the entry's contentOf), the same
 // as its source (`none`), unfit or crowded (`unfit`), a face no served face holds (`served`). A part made before the prepare
 // stated a figure text's own text (Placed.plain) is not read here: the entry reads its figure texts as it did before
 // (entry.ts).
@@ -89,12 +90,15 @@ export function figuresOf(
   for (const m of members) {
     const l = m.lines[0]
     if (!l || l[0] !== page) continue
-    // (a unit the paper keeps as it is has no row, whatever row is given of it: the entry's contentOf)
-    const kept = typeof m.text === 'string' && !!rows.kept?.(m.text)
-    const row = typeof m.text === 'string' && !kept ? rows.get(m.text) : undefined
+    // (a unit the paper keeps as it is has no row, whatever row is given of it: the entry's contentOf. Its row read only where
+    // the rows may set it: one the prepare leaves the original's (its why) or the paper keeps reads none, as its page waits for
+    // none, wait.ts ownRowOf)
+    const kept = !m.why && typeof m.text === 'string' && !!rows.kept?.(m.text)
+    const stays = (m.dir && !m.run) || m.lines.length !== 1 || m.align === 'j'
+    const row = m.why || kept || stays || typeof m.text !== 'string' ? undefined : rows.get(m.text)
     if (m.why) why.set(m.ord, m.why)
-    else if (kept) why.set(m.ord, 'none')
-    else if ((m.dir && !m.run) || m.lines.length !== 1 || m.align === 'j') why.set(m.ord, 'kind')
+    else if (kept) why.set(m.ord, 'kept')
+    else if (stays) why.set(m.ord, 'kind')
     // (a row that failed: its reason kept, as the entry's contentOf keeps it, #631's review; S.figures fits no set over it)
     else if (row && !row.ok) why.set(m.ord, row.why.kind)
     else {
