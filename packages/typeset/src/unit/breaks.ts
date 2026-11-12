@@ -565,9 +565,10 @@ export const clsOf = (pieces: readonly V0Piece[], els: ReadonlyMap<string, El>):
     return el ? (el.sym ? 'symbol' : el.kind) : 'zero'
   })
 
-/** a paragraph TeX opened inside a member's text at no group's open, element, forced break or region, stated by its first word
- *  (design-display 2a): the offset of that word in the unit's source projection (what Row.sentences.src counts in) and the index
- *  in Placed.lines of the line TeX opened it on */
+/** a paragraph TeX opened inside a member's text, stated by its first word (design-display 2a): the offset of that word in the
+ *  unit's source projection (what Row.sentences.src counts in) and the index in Placed.lines of the line TeX opened it on. One at
+ *  a line a stronger fact also states (a group's open, an element) is read only where the row does not hold that fact between
+ *  its texts (a group the reply dropped) */
 export type ParaPoint = readonly [offset: number, line: number]
 /** the member's paragraph points (the part's `paras`, which packages/format's Placed carries once the engine states it),
  *  ascending; none where its part states none (a part made before) */
