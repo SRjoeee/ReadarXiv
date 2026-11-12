@@ -8,8 +8,8 @@ import { readFileSync, writeFileSync } from 'node:fs'
 
 const E = new URL('../../src/pdf-reader/engine/', import.meta.url)
 const OUT = new URL('../../packages/engine/src/marks/tex.ts', import.meta.url)
-const M = await import(new URL('layout/marks.mjs', E).href)
-const marks = readFileSync(new URL('layout/marks.mjs', E), 'utf8')
+const M = await import(new URL('../../../packages/engine/src/marks/marks.mjs', E).href)
+const marks = readFileSync(new URL('../../../packages/engine/src/marks/marks.mjs', E), 'utf8')
 
 /** the regular expression literal `const NAME = /…/flags` (or `, NAME = /…/` on a line of two) in a module's text */
 function regexOf(src, name) {

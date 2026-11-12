@@ -126,6 +126,7 @@ describe('what the translation, the rules and the browser load', () => {
   // the versions are the pipeline's too, and leaves that every reader takes
   const server = (f: string) => f.startsWith(`${ENGINE}/source/`)
     || /^packages\/engine\/src\/source\/(?:latex-front|paper-meta|paper-names)\.mjs$/.test(f)
+    || /^packages\/engine\/src\/(?:marks\/marks|own\/own|own\/stream)\.mjs$/.test(f)
     || (f.startsWith(`${ENGINE}/pipeline/`) && !/\/pipeline\/(?:anchors|versions|memory)\.mjs$/.test(f))
     || /\/layout\/(?:make|marks|paper|remove|wrap|own|carry|match|stream)\.mjs$/.test(f)
     || f.endsWith('/layer/check.mjs')

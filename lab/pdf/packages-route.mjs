@@ -12,6 +12,9 @@ export const PACKAGES_IMPORTS = Object.freeze({
   // (the transition paths of the front half moved into the engine package: an old path re-exports its module through one,
   // `@readarxiv/engine/today/<folder>/<file>`, a folder of the package's src/ each; deleted at the cut-over)
   '@readarxiv/engine/today/source/': '/packages/engine/src/source/',
+  '@readarxiv/engine/today/marks/': '/packages/engine/src/marks/',
+  '@readarxiv/engine/today/own/': '/packages/engine/src/own/',
+  '@readarxiv/engine/today/instrument/': '/packages/engine/src/instrument/',
   '@readarxiv/format': '/packages/format/src/index.ts',
   '@readarxiv/text': '/packages/text/src/index.ts',
   zod: '/zod/index.js',
