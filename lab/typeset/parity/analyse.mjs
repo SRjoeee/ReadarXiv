@@ -9,12 +9,9 @@
 //             original's fill is a colour, so the mean tells the weight and the antialiasing a face is drawn with. The
 //             original's own (`originalText`): arXiv's page over the original lines of the units either side lays
 //             (`textBoxes`), the ink the translation stands for.
-//   diff      today's pane against v2's: the pixels whose luminance differs by DIFF_MIN or more; and each pane against arXiv's
-//             page outside every unit's box, where each should be arXiv's page ink for ink (`outside`: v2's, `outsideToday`:
-//             today's, whose composed page may be our compile's on a delta's replaced page): a pixel counted where no pixel
-//             within one device pixel of it, in either image, matches it (ink, not its sub-pixel phase); where a side moved an
-//             element's ink from (`vacated`: its crops' sources, an end mark set at the translation's end), its place shown blank
-//             is the move, and the element's ink still shown there counts (pixels.mjs strayOf).
+//   diff      today's pane against v2's: the pixels whose luminance differs by DIFF_MIN or more. Each pane against arXiv's page
+//             outside every unit's box (`outside`, `outsideToday`) is read by `strays` below, once every page of the pair is
+//             drawn.
 //   rules     the vertical rules of arXiv's page, read off its pixels (the bundle's rules list the horizontal ones alone): a
 //             straight run of dark pixels RULE_LONG points long or more, at most RULE_THICK points wide, light on both sides
 //             (a glyph's stem is shorter than a line's height; a table's column rule spans a row at least).
@@ -25,7 +22,7 @@
 //             each of its elements' ink (`elements`) it shows in place.
 // Returns the numbers and the sheet's images (WebP, half the device resolution): the original, today's, v2's, and the
 // difference (the original faint, v2's ink alone red, today's alone blue).
-export async function analyse({ A, T, Tt, Tc, V, Vt, Vc, view, boxes, textBoxes, figBoxes = [], groups = null, origs = [], regions = null, moved = null, vacated = null, elements = null, scale }) {
+export async function analyse({ A, T, Tt, Tc, V, Vt, Vc, view, boxes, textBoxes, figBoxes = [], groups = null, origs = [], regions = null, moved = null, elements = null, scale }) {
   const DARK_MIN = 0.1
   const DIFF_MIN = 0.25
   const RULE_LONG = 12
@@ -74,11 +71,6 @@ export async function analyse({ A, T, Tt, Tc, V, Vt, Vc, view, boxes, textBoxes,
   const inside = maskOf(boxes)
   const fig = maskOf(figBoxes)
   const notFig = fig.map((v) => (v ? 0 : 1))
-  // (each side against arXiv's page outside the units' boxes, pixels.mjs strayOf: a pixel off it where no pixel of either within
-  // one device pixel matches it; where the side moved an element's ink from (`vacated`, render.mjs), its place shown blank is the
-  // move and the element's ink still shown there is stray)
-  const outside = globalThis.parityPixels.strayOf(pa.data, pv.data, inside, maskOf(vacated?.v2 ?? []), W, H, DIFF_MIN)
-  const outsideToday = globalThis.parityPixels.strayOf(pa.data, pt.data, inside, maskOf(vacated?.today ?? []), W, H, DIFF_MIN)
   let diff = 0
   const dc = new OffscreenCanvas(W, H)
   const dx = dc.getContext('2d')
@@ -200,8 +192,39 @@ export async function analyse({ A, T, Tt, Tc, V, Vt, Vc, view, boxes, textBoxes,
     darkness: { original: darkness(pa.data), originalText: darkness(pa.data, maskOf(textBoxes)), today: darkness(ptt.data, notFig), v2: darkness(pvt.data, notFig) },
     fidelity,
     rules: vrules,
-    diff: { pixels: diff, share: Math.round((diff / (W * H)) * 1e6) / 1e6, outside, outsideToday, insideShare: Math.round((inside.reduce((n, v) => n + v, 0) / (W * H)) * 1e4) / 1e4 },
+    diff: { pixels: diff, share: Math.round((diff / (W * H)) * 1e6) / 1e6, insideShare: Math.round((inside.reduce((n, v) => n + v, 0) / (W * H)) * 1e4) / 1e4 },
     images: { a: await half(pa.canvas), t: await half(pt.canvas), v: await half(pv.canvas), d: await half(dc) },
+  }
+}
+
+/**
+ * Each pane against arXiv's page outside every unit's box, where each should be arXiv's page ink for ink: `outside` v2's,
+ * `outsideToday` today's (whose composed page may be our compile's on a delta's replaced page), the `pixels` measure (pixels.mjs
+ * strayOf: a pixel counted where no pixel within one device pixel of it, in either image, matches it: ink, not its sub-pixel
+ * phase). Where a side moved an element's ink from (`vacated`, by side: its crops' sources on this page, whichever page each is
+ * drawn on, fidelity.mjs vacatedOf; an end mark set at the end of its translation), its place shown blank is the move, and the
+ * element's ink still shown there counts. render.mjs hands it to the lab's page as analyse, once every page of the pair is
+ * drawn: A, T and V the page's shots (PNG, base64), each pane drawn at its own size from the corner of a canvas of A's size
+ */
+export async function strays({ A, T, V, view, boxes, vacated, scale }) {
+  const decode = async (b64) => createImageBitmap(await (await fetch(`data:image/png;base64,${b64}`)).blob())
+  const bmA = await decode(A)
+  const W = bmA.width,
+    H = bmA.height
+  const pixels = async (bm) => {
+    const c = new OffscreenCanvas(W, H)
+    const x = c.getContext('2d', { willReadFrequently: true })
+    x.fillStyle = '#fff'
+    x.fillRect(0, 0, W, H)
+    x.drawImage(bm, 0, 0)
+    return x.getImageData(0, 0, W, H).data
+  }
+  const P = globalThis.parityPixels
+  const [a, t, v] = [await pixels(bmA), await pixels(await decode(T)), await pixels(await decode(V))]
+  const inside = P.maskOf(boxes, view, scale, W, H)
+  return {
+    outside: P.strayOf(a, v, inside, P.maskOf(vacated.v2, view, scale, W, H), W, H),
+    outsideToday: P.strayOf(a, t, inside, P.maskOf(vacated.today, view, scale, W, H), W, H),
   }
 }
 

@@ -28,8 +28,8 @@ import { L1_BUNDLES, L1_BUNDLES_DIR } from '../../../packages/typeset/tests/repl
 import { bundlesLine, headsFor } from '../../../packages/typeset/tests/replay/bundles.ts'
 import { LAB, TODAY } from '../../../packages/typeset/tests/replay/tap.ts'
 import { SLICES, TABLES } from '../served-metrics.mjs'
-import { analyse, boxesOf } from './analyse.mjs'
-import { DEVICE_PT, inPlace } from './fidelity.mjs'
+import { analyse, boxesOf, strays } from './analyse.mjs'
+import { DEVICE_PT, inPlace, vacatedOf } from './fidelity.mjs'
 import { bundleCheck, bundleOf, hyphFileOf, pdfOf, putsInPlace, whyNot } from './inputs.mjs'
 import { PAIRS } from './pairs.mjs'
 
@@ -416,6 +416,9 @@ for (const pair of pairs) {
   // (the pages this run is to draw of the pair: every page of arXiv's, or those --pages names)
   const expected = Array.from({ length: opened.orig }, (_, i) => i + 1).filter((n) => !PAGES || PAGES.includes(n))
   const out = { pair, paper, target, run: RUN.id, v2: sha(v2Bytes), expected, opened, pages: [] }
+  // (each page's shots of arXiv's page and both panes, and its units' boxes: the pixels off arXiv's page are read once every page
+  // of the pair is drawn, below)
+  const shots = new Map()
   for (const n of expected) {
     const rec = { page: n }
     try {
@@ -496,11 +499,26 @@ for (const pair of pairs) {
       for (const [k, b64] of Object.entries(px.images)) writeFileSync(join(OUT, 'img', `${pair}-p${n}-${k}.webp`), Buffer.from(b64, 'base64'))
       delete px.images
       rec.px = px
+      shots.set(n, { A, T, V, view: o.view, boxes })
     } catch (e) {
       rec.error = String(e?.message ?? e).slice(0, 300)
     }
     out.pages.push(rec)
   }
+  // (each side's pixels off arXiv's page outside the units' boxes, the `pixels` measure (analyse.mjs strays), read once every page
+  // of the pair is drawn: the places a side moved an element's ink from are the sources on the page of the crops it draws away from
+  // them, whichever page each crop is drawn on (fidelity.mjs vacatedOf: an end mark set at the end of a translation that ends on
+  // another page than the original's mark))
+  for (const rec of out.pages) {
+    const s = shots.get(rec.page)
+    if (!s || rec.error) continue
+    try {
+      Object.assign(rec.px.diff, await labPage.evaluate(strays, { ...s, vacated: vacatedOf(out.pages, rec.page), scale: SCALE * DPR }))
+    } catch (e) {
+      rec.error = `the pixels off arXiv's page: ${String(e?.message ?? e).slice(0, 270)}`
+    }
+  }
+  shots.clear()
   // (today's sentence boxes of each page drawn, read once every page is: a unit's sentences are known once all its pages are told,
   // as in a reading session; today/entry.mjs litBoxes)
   for (const rec of out.pages) {
@@ -610,8 +628,9 @@ function prepBox(l) {
  * today's units `t:<ord>`, figure texts `f:<id>`, names `n:<id>`; v2's members `p:<ord>`), the original's lines of every unit
  * either side draws (`origs`: the part's `p:<ord>`, today's prepare dump's `q:<ord>`), the figure texts' drawn boxes (outside
  * which the page's darkness is read), each side's translated units' original lines (`regions`, its figure texts aside) and its
- * crops drawn away from their source (`moved`) and those sources on the page (`vacated`), and each element's ink on A
- * (`elements`, `<group>:<piece>`: v2's the part's El.ink, today's its prepare dump's segments)
+ * crops drawn away from their source (`moved`), and each element's ink on A (`elements`, `<group>:<piece>`: v2's the part's
+ * El.ink, today's its prepare dump's segments). The places each side moved an element's ink from are read once every page of the
+ * pair is drawn (fidelity.mjs vacatedOf, analyse.mjs strays)
  */
 function fidelityOf(rec, v2, n, prep) {
   const facts = new Map((v2.facts[n]?.members ?? []).map((m) => [m.ord, m]))
@@ -647,17 +666,13 @@ function fidelityOf(rec, v2, n, prep) {
     today: (rec.today?.crops ?? []).filter((c) => !inPlace(c, n)).map((c) => c.slice(1, 5)),
     v2: (rec.v2?.crops ?? []).filter((c) => !inPlace(c, n)).map((c) => c.slice(1, 5)),
   }
-  // (the places each side moved an element's ink from: the sources on this page of its crops drawn away from them, analyse.mjs
-  // `vacated` (pixels.mjs strayOf): an end mark erased where TeX set it and drawn at the translation's end, PDF-READER §18.52)
-  const vacatedOf = (crops) => (crops ?? []).filter((c) => !inPlace(c, n) && c[10] === n && [6, 7, 8, 9].every((i) => c[i] !== null)).map((c) => c.slice(6, 10))
-  const vacated = { today: vacatedOf(rec.today?.crops), v2: vacatedOf(rec.v2?.crops) }
   const elements = {
     today: (rec.today?.units ?? []).flatMap((u) =>
       (prep.get(u.id)?.elements ?? []).map((e) => ({ id: `${u.id}:${e.k}`, boxes: (e.segs ?? []).filter((g) => g.page === n).map(prepBox) })).filter((e) => e.boxes.length),
     ),
     v2: [...facts.values()].flatMap((m) => (m.els ?? []).map(([k, , boxes]) => ({ id: `${m.ord}:${k}`, boxes: boxes.map((b) => [b[0], b[1], b[2], b[3]]) })).filter((e) => e.boxes.length)),
   }
-  return { figBoxes, groups, origs, regions, moved, vacated, elements }
+  return { figBoxes, groups, origs, regions, moved, elements }
 }
 
 /** the original lines of the units either side lays on the page (PDF units [x0, y0, x1, y1], their fonts' boxes): where the

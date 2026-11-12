@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 import { darkOf, overOf, partsOf, pixelsOf, shownOf, strayOf } from '../../lab/typeset/parity/pixels.mjs'
 // @ts-expect-error — a plain node module of the lab
 import { boxesOf } from '../../lab/typeset/parity/analyse.mjs'
+// @ts-expect-error — a plain node module of the lab
+import { vacatedOf } from '../../lab/typeset/parity/fidelity.mjs'
 
 const W = 12,
   H = 8
@@ -101,6 +103,40 @@ describe("the pixels off arXiv's page outside the units' boxes (pixels.mjs stray
     expect(strayOf(shot(), shot(rect(1, 1, 4, 4)), none, none, W, H)).toBe(1)
     expect(strayOf(shot(rect(1, 1, 5, 5)), shot(rect(2, 1, 6, 5)), none, none, W, H)).toBe(0)
     expect(strayOf(A, shot(mark), inside, none, W, H)).toBe(0)
+  })
+})
+
+describe("the places a side moved an element's ink from, over the pair's pages (fidelity.mjs vacatedOf)", () => {
+  // (a proof's end mark on page 10, a 4.5 × 4.5 pt box at 293.8, 510.8, outside its unit's lines there; a shorter translation
+  // ends on page 9, where the lay sets the mark at its last line's end. Each record: a page's crops, [group, x0, y0, x1, y1
+  // drawn, piece, sx0, sy0, sx1, sy1 its source, its source's page]. Red before: the places were read off the page's own record
+  // alone, which draws no crop of it, so page 10's blank place read as stray)
+  const src = [293.8, 510.8, 298.3, 515.3]
+  const moved = [195, 120.1, 523.6, 124.6, 528.1, '-2', ...src, 10]
+  const p9 = { page: 9, v2: { crops: [moved] }, today: { crops: [] } }
+  const p10 = { page: 10, v2: { crops: [] }, today: { crops: [] } }
+  // (page 10's pixels at 1 device px a point from the view's top-left corner (290, 517): the mark's ink the device pixels x 4..8,
+  // y 1..6; its source box covers x 3..9, y 1..7)
+  const [vx, , , vy] = [290, 505, 302, 517] as const
+  const markPx = rect(4, 1, 8, 6)
+  const maskBoxes = (boxes: [number, number, number, number][]) =>
+    mask(boxes.flatMap(([x0, y0, x1, y1]) => rect(Math.floor(x0 - vx), Math.floor(vy - y1), Math.ceil(x1 - vx), Math.ceil(vy - y0))))
+  const none = new Uint8Array(W * H)
+  it("a crop drawn on another page vacates its source's place on its own page", () => {
+    expect(vacatedOf([p9, p10], 10)).toEqual({ today: [], v2: [src] })
+    expect(vacatedOf([p9, p10], 9)).toEqual({ today: [], v2: [] })
+    // (the moved mark's place shown blank on page 10: no stray pixel; read off page 10's record alone, 6 as before)
+    expect(strayOf(shot(markPx), shot(), none, maskBoxes(vacatedOf([p9, p10], 10).v2), W, H)).toBe(0)
+    expect(strayOf(shot(markPx), shot(), none, maskBoxes(vacatedOf([p10], 10).v2), W, H)).toBe(6)
+  })
+  it('a crop is in place by the page it is drawn on: one drawn on page 9 at its page-10 source\'s coordinates is moved', () => {
+    const same = [195, ...src, '-2', ...src, 10]
+    expect(vacatedOf([{ page: 9, v2: { crops: [same] } }, p10], 10).v2).toEqual([src])
+    expect(vacatedOf([{ page: 10, v2: { crops: [same] } }], 10).v2).toEqual([])
+  })
+  it('still stray: the mark left on its source page and drawn on page 9 (every pixel of it); a mark erased and drawn nowhere', () => {
+    expect(strayOf(shot(markPx), shot(markPx), none, maskBoxes(vacatedOf([p9, p10], 10).v2), W, H)).toBe(20)
+    expect(strayOf(shot(markPx), shot(), none, maskBoxes(vacatedOf([{ ...p9, v2: { crops: [] } }, p10], 10).v2), W, H)).toBe(6)
   })
 })
 

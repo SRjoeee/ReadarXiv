@@ -28,6 +28,20 @@ export const DEVICE_PT = 72 / 96 / 2
 export function inPlace(c, n) {
   return c[10] === n && [1, 2, 3, 4].every((i) => c[i + 5] !== null && Math.abs(c[i] - c[i + 5]) <= DEVICE_PT)
 }
+/**
+ * The places on page `n` each side moved an element's ink from (pixels.mjs strayOf's `vacated`): the sources on `n` of the crops
+ * it draws away from them, whichever page of the pair each is drawn on (`records`: the pair's page records, each its `page` and
+ * each side's `crops`), each crop in place or not by the page it is drawn on (inPlace). A translation that ends on another page
+ * than its original's end mark draws the mark there (PDF-READER §18.52): page `n`'s own record draws no crop of it, and its place
+ * on `n` is vacated all the same. Each side's [x0, y0, x1, y1], PDF units
+ */
+export function vacatedOf(records, n) {
+  const of = (side) =>
+    records.flatMap((r) =>
+      (r[side]?.crops ?? []).filter((c) => c[10] === n && !inPlace(c, r.page) && [6, 7, 8, 9].every((i) => c[i] !== null)).map((c) => c.slice(6, 10)),
+    )
+  return { today: of('today'), v2: of('v2') }
+}
 /** an original glyph shown in part (an erasure's sliver): at least this many device px of it shown, and at least SLIVER_SHARE
  *  of it, at most PART_SHARE (more is the glyph kept, its edge a sub-pixel phase off) */
 export const SLIVER_PX = 6
