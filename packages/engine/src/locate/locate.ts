@@ -25,14 +25,12 @@ import {
   type LinkBorder,
   type Piece,
   type Room,
-  type Style,
   unitId,
 } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
-import { HUNK, hunkName, setPagesOf } from '../align/align.ts'
+import { HUNK, hunkName } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
-import type { PageInk } from '../ink.types.ts'
 import { type Instrument, type InstrumentUnit, ROLE, type TexFrame } from '../instrument.ts'
 import { TEXT_SYMBOLS } from '../source/tables.ts'
 import {
@@ -43,7 +41,6 @@ import {
   elementCase,
   fakedCaps,
   fillRunsOf,
-  fixedFacesOf,
   joinAccents,
   type StyleGlyph,
   sourceText,
@@ -57,193 +54,43 @@ import {
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
 import { groupLettersOf, groupStyleOf, hasScopes, namesFace } from './group-style.ts'
-import { groupStyleOf as commandStyleOf, type DisplayLine, type InkInput, type InkStats, inkOf } from './ink.ts'
-import type { FloatLine } from './today/today.types.ts'
+import { groupStyleOf as commandStyleOf, inkOf } from './ink.ts'
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from './today/today.types.ts'
-import { bySentence, elementsOf, type Word, wordsOn } from './words.ts'
+import {
+  AUTHOR_KINDS,
+  BRACKET,
+  CALL,
+  eachBetweenPaired,
+  FREE,
+  HELD,
+  INKED_CLASSES,
+  type Located,
+  type LocateOptions,
+  lettersIn,
+  type Member,
+  ON_ROW,
+  open,
+  piecesOf,
+  sameColumn,
+  standsOn,
+  UNIT_MARK,
+} from './work.ts'
+import { bySentence, elementsOf, wordsOn } from './words.ts'
 
-/** where a located unit stands on A against B */
-export type Place = 'same' | 'shifted' | 'respaced' | 'rebroken'
-
-export interface Member {
-  ord: number
-  /** the instrument's unit (-1: born on A) */
-  unit: number
-  id: string
-  kind: string
-  /** a babel name's key, for a name's occurrence */
-  name?: string
-  located: boolean
-  /** why it is not located: the class of its first unmatched glyph, `box`, `no ink` or the instrument's why */
-  cause?: string
-  place?: Place
-  /** its ink stays (a kept block): in no group */
-  fixed: boolean
-  /** its unit is the paper's as it is, never translated (InstrumentUnit.kept): a fixed one holds no text a translation could
-   *  stand for (a kept block); a fixed one not kept holds text held for its drawing (a figure text the figure reading keeps, a
-   *  cell held for its decorated word, §18.61), which the bundle states unwrapped (bundle.ts stateOf) */
-  kept: boolean
-  figure: boolean
-  /** its elements made of a group set wholly in a face of one pitch on lines of their own (Rule 1 by group, PDF-READER §18.22):
-   *  TeX's vertical box, its rows kept where TeX set them as a display's are, by piece id */
-  ownRows?: Set<string>
-  /** A's glyphs (global) by role; elements by piece id */
-  text: number[]
-  label: number[]
-  els: Map<string, number[]>
-  /** A's boxes ([page, index]) by role */
-  textBoxes: [number, number][]
-  elBoxes: Map<string, [number, number][]>
-  /** each element box's partner on B ([page index, index]), by piece id, in elBoxes' order: where TeX shipped it in B's stream */
-  elBoxesB: Map<string, [number, number][]>
-  /** A's turned glyphs ([page, index among the page's turned]): a figure text set turned */
-  turned: [number, number][]
-  lines: Line[]
-  elements: [string, El][]
-  /** the elements (by piece id) of a symbol's class whose ink is not that symbol as its reading draws it (a letter or digit among
-   *  its glyphs, or a raise or a drop the reading does not draw): drawn as their ink, a formula's (bundle.ts classed) */
-  asInk?: Set<string>
-  /** the share an element's faked small capitals are set at, by its id, where its text is in TeX's case for them (facts.ts
-   *  elementCase): its style states it (facts-pass, El.style.sc) */
-  smallCaps?: Map<string, number>
-  labelAt?: Label
-  /** where its label stands on none of its lines: TeX's measure for the label's own line (columnsAndMeasures), what its alignment
-   *  is read against (facts-pass.ts, Label.align) */
-  labelMeasure?: [number, number]
-  style: Style
-  align: 'j' | 'l' | 'c' | 'r'
-  lead: number
-  room: Room
-  pages: number[]
-  join?: [number] | [number, 1]
-  dir?: [number, number]
-  /** a figure text set turned (`dir`): its run, its first glyph's origin, its box's length along `dir` and its room before and
-   *  after its box along it (Placed.run; its line is its box on the page), as today's figure reading tells them */
-  run?: [x: number, y: number, length: number, before: number, after: number]
-  /** a babel name's own text on A, as the text layer reads it (Placed.plain: S.names tells by it a target word the original's) */
-  plain?: string
-  /** a babel name TeX set right before a unit on that unit's first line (amsthm's "Proof.", IEEEtran's "Abstract—"): the ord of
-   *  the member it leads (Placed.bound: drawn as that member's lead, in its flow before it) */
-  leads?: number
-  /** the name that leads it, by its ord: its glyphs are its lead's, no ink beside its first line */
-  leader?: number
-  /** a babel name's counter TeX set after it on its line, where it leads no unit (IEEEtran's "APPENDIX A", "Appendix A:" in a
-   *  contents list: Word.counter): its A glyphs, those of its occurrence after its end point on B (marks.mjs `n<occ>.<key>.e`;
-   *  the wrap gives them the name's group, own.mjs, names.mjs counterAfter) */
-  counterA?: number[]
-  counter?: [string, Ink]
-  /** its first and last glyph on B (global), -1 for none */
-  bFirst: number
-  bLast: number
-  /** the class's marks after its text (C20) */
-  tail?: [string, Style][]
-  /** the groups TeX opened a paragraph at inside it (C13, C15: SpanAt.opens), by their open piece's id: that paragraph's first
-   *  line */
-  spanOpens?: Map<string, number>
-  /** paragraphs TeX opened inside it where a group the instrument wrote as its content stood (InstrumentUnit.passed): none is
-   *  stated, and stage 1a fails the paper (Located.stats.opensLost) */
-  opensLost?: number
-  /** paragraph ends of B inside it (its glyphs on both sides) that state no point (no SpanAt.opens, no El.opens): where an open or
-   *  an element stands where the next paragraph begins in the source, and where plain text does (facts-pass.ts) */
-  opensUnstated?: [anchored: number, plain: number]
-  /** a figure text's runs in another face than its own, by their group's piece id: each one's style, read off its glyphs on A
-   *  (ink.ts figureRuns; SpanAt.style) */
-  spanStyles?: [string, Style][]
-  /** its groups whose text TeX set in a fill other than the fill around it, read off its glyphs on A (group-style.ts;
-   *  SpanAt.colour where the instrument states none): each one's open piece id and fill */
-  spanFills?: [string, number][]
-  /** its groups whose command names no face and whose own text TeX set in a face other than the face around it, read off its
-   *  glyphs on A (group-style.ts; SpanAt.style where the instrument states none): each one's open piece id and style */
-  spanFaces?: [string, Style][]
-  /** the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them) */
-  read: string[]
-  /** its alignment read centred by its own block (facts.ts centredByBlock, a single line's stack): read again on TeX's line once
-   *  the flows say which members share it (the row's) */
-  byBlock?: true
-  /** each line's glyphs on A (global), by line, for the facts read after the lines */
-  lineGlyphs: number[][]
-  /** where on A a sentence of its may begin: each word of its projection at its first glyph (words.ts; Placed.words), for a
-   *  unit lit by sentence */
-  words?: Word[]
-}
-
-export interface Located {
-  /** the units the members are of (a member's `unit` its index here): the instrument's, then those locate made on A (ink.ts:
-   *  its ink units, kept blocks and figure texts) */
-  units: InstrumentUnit[]
-  members: Member[]
-  /** the units born on A (their content, for Units) by member ord */
-  born: Map<number, { kind: string; content: Piece[] }>
-  flows: number[][]
-  ties: ({ rule: 'cells'; cells: number[][]; head?: 1 } | { rule: 'size'; ords: number[] })[]
-  links: Map<
-    number,
-    {
-      box: [number, number, number, number]
-      to: { url: string } | { dest: string }
-      owner?: [number, string]
-      text?: string
-      label?: 1
-      whole?: 1
-      page?: number
-      border?: LinkBorder
-    }[]
-  >
-  /** per A page (index p - 1): each glyph's and each box's group (the wrap's plan), null for none */
-  groups: { glyphs: (string | null)[]; boxes: (string | null)[]; turned: (string | null)[] }[]
-  /** groups that are figure texts' (the wrap writes their runs inside a form in the form) */
-  figureGroups: Set<string>
-  /** the lines on A the units made there read as a display's formula (ink.ts DisplayLine), where A's pages were given: what the
-   *  lab's stage states a unit absent from the candidate by (lab/pdf/prepare-back/stated.mjs) */
-  displays: DisplayLine[]
-  /** the lines on A TeX set inside a counted float that no unit owns, read as their float's text by depth alone, where A's pages
-   *  were given (ink.ts; today's ledger, PDF-READER §18.45): stated beside the units, never read by them; the lab's stage lists
-   *  them and its report counts them */
-  floatLines: FloatLine[]
-  stats: {
-    units: number
-    located: number
-    unlocated: Record<string, number>
-    places: Record<Place, number>
-    born: number
-    bornGlyphs: number
-    /** the units made on A by today's rule (ink.ts), where A's pages were given */
-    made?: InkStats
-    /** the source units kept as artefacts (Rule 1, PDF-READER §18.22), and whether the paper's body face is one of one pitch */
-    artefacts?: { units: number; bodyFixed: boolean; groups?: number; read?: number }
-    /** paragraphs TeX opened inside a unit where a group the instrument wrote as its content stood (InstrumentUnit.passed), no
-     *  group left to state it on (SpanAt.opens): a gate, which must count none (stage 1a fails a paper with one) */
-    opensLost?: number
-    /** paragraph ends of B inside a unit that state no point, by what stands where the next paragraph begins in the source: an
-     *  open or an element (`anchored`: a gate, which must count none) or plain text (`plain`: no anchor exists for it) */
-    opensUnstated?: { anchored: number; plain: number }
-    /** the units' end marks claimed after their end points (El.end) */
-    ends?: number
-  }
-}
-
-/** an A glyph's owner in `claimedA` where no member owns it: free (born.ts may make a unit of it), or held as A's ink inside a
- *  unit that stays the original's */
-export const FREE = -1
-export const HELD = -2
+export { eachBetweenPaired, FREE, HELD, type Located, type LocateOptions, type Member }
+export type { Place } from './work.ts'
 
 /** an element kind whose glyphs are a reading of it: its text is stated */
 /** a babel name's end point on B (marks.mjs NAMES_TEX: `n<occurrence>.<key>.e`) */
 const NAME_END = /^n\d+\.[a-z]{1,16}\.e$/
 const TEXT_KINDS = new Set(['cite', 'ref', 'eqref', 'url', 'number', 'footnote', 'macro'])
-/** the kinds of the author block's units (latex-front.mjs AUTHOR_KINDS: its names and its places) */
-const AUTHOR_KINDS = new Set(['author', 'affiliation'])
 /** the kind of a member of the author block's units set away from the block under the title (author-block.ts): the text it is
  *  there, of no toggle (the reader's and the content classes' tables name it nowhere: always translated) */
 export const TEXT_NAMES = 'textnames'
 /** the classes the typesetter draws as the page's text (drawnAs L2:1757: a citation, a reference, a macro) */
 const TEXT_CLASSES = new Set(['cite', 'num', 'macro', 'umacro'])
-/** the classes of an element the typesetter draws from the ink TeX set for it (its reading's VISIBLE, a symbol aside: drawn from
- *  its source where it has no ink): one of no ink states which of three it is, TeX set nothing for it (El.text ''), it stands
- *  outside the unit's text (El.keep), or neither (its ink not found: the typesetter leaves its unit the original's) */
-const INKED_CLASSES = new Set(['cite', 'num', 'other', 'display', 'macro', 'umacro'])
 const LABEL_KIND: Record<string, Label['kind']> = {
   caption: 'float',
   heading: 'head',
@@ -252,18 +99,6 @@ const LABEL_KIND: Record<string, Label['kind']> = {
   // (a babel name's: the number a class set right before a heading it sets itself, the wrap's `n<occ>.l` (own.mjs MR 6c),
   // a heading's number as a section's is: 2610.20967v1's "9. REFERENCES")
   name: 'head',
-}
-
-/** a unit's pieces by id, spans opened */
-function piecesOf(content: readonly Piece[], out = new Map<string, Piece>()): Map<string, Piece> {
-  for (const p of content) {
-    if (p.t === 'el' || p.t === 'unit') out.set(p.id, p)
-    else if (p.t === 'span') {
-      out.set(p.id, p)
-      piecesOf(p.content, out)
-    }
-  }
-  return out
 }
 
 /** a group's TeX as its unit writes it: each piece's source in order (a text's characters, an element's source, a group's open,
@@ -278,9 +113,6 @@ function texOf(list: readonly Piece[]): string {
   return out
 }
 
-/** the letters of a text, a modifier letter aside (a spacing accent TeX sets as a glyph of its own: ˇ, ˆ), a decomposed character's
- *  marks aside (č is one letter, as its source's \\v{c} is) */
-const lettersIn = (t: string): number => (t.normalize('NFKD').match(/[\p{Lu}\p{Ll}\p{Lt}\p{Lo}]/gu) ?? []).length
 /** a LaTeX text symbol's character (\S, \%, alone or before `{}`), by the kernel's table (source/tables.ts TEXT_SYMBOLS, today's
  *  rules/text-symbols.mjs), read here so that the back half needs nothing of the front half but the table */
 const symbolText = (src: string): string | null => {
@@ -303,102 +135,37 @@ const mostOf = <T>(xs: Iterable<T>): T | undefined => {
   return best
 }
 
-/** Each index of lo..hi with no partner that stands between two with one, with `pv` the last paired index before it and `nx` the
- * first after it. One walk: `pv` is the last paired index passed, `nx` found once for the whole run of unpaired indices it ends,
- * so each index is read at most twice (linear in the span; a walk back and forth from each unpaired index is quadratic in its run:
- * PR #620's finding 1, and the same walk in the units made on A) */
-export function eachBetweenPaired(
-  lo: number,
-  hi: number,
-  paired: (i: number) => boolean,
-  visit: (i: number, pv: number, nx: number) => void,
-): void {
-  let pv = lo - 1
-  let nx = lo - 1
-  for (let i = lo; i <= hi; i++) {
-    // (`nx`, once found, is paired: not read again)
-    if (i === nx || paired(i)) {
-      pv = i
-      continue
-    }
-    if (i > nx) {
-      nx = i + 1
-      while (nx <= hi && !paired(nx)) nx++
-    }
-    if (pv >= lo && nx <= hi) visit(i, pv, nx)
-  }
-}
-
-export interface LocateOptions {
-  /** each A page's annotations as PDF.js gives them (getAnnotations), for the links */
-  annotations?: (unknown[] | null)[]
-  /** each A page as pageInk read it (read.ts `raw`): given, locate makes the units no source unit is on A (ink.ts) */
-  pages?: (PageInk | null)[]
-  /** the pages are locate's (prepareBack's, unless it keeps them): it lets each go (its entry null) once the ink step has read it,
-   *  and each page's shapes once its figure texts are read; untaken, it reads them and leaves them as they are */
-  take?: boolean
-  /** what the front half reads of an ink unit's pieces (the adapter's classesOf) */
-  classesOf?: InkInput['classesOf']
-}
-
 export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions = {}): Located {
-  const B = ins.ink
-  const NB = m.offB[B.pages.length] as number
-  const NA = m.offA[inkA.pages.length] as number
-  // flat owners of B, and each document's glyph by global index
-  const unitB = new Int32Array(NB).fill(-1)
-  const roleB = new Uint8Array(NB)
-  const pieceB = new Int32Array(NB).fill(-1)
-  const pageB = new Int32Array(NB)
-  B.pages.forEach((pg, p) => {
-    const o0 = m.offB[p] as number
-    const ow = ins.glyphs[p]
-    for (let j = 0; j < pg.glyphs.length; j++) {
-      pageB[o0 + j] = p + 1
-      if (!ow) continue
-      unitB[o0 + j] = ow.unit[j] as number
-      roleB[o0 + j] = ow.role[j] as number
-      pieceB[o0 + j] = ow.piece[j] as number
-    }
-  })
-  // (each placeholder's span on B between its two points (the marked compile's p<unit>.<piece>a and b), global, by unit and piece;
-  // NaN for a side the instrument does not state)
-  const placeSpan = new Map<string, [number, number]>()
-  for (const pl of ins.places ?? []) {
-    const k = `${pl.unit}|${pl.piece}`
-    const at = (m.offB[pl.page - 1] as number) + pl.glyph
-    const was = placeSpan.get(k)
-    if (!pl.end) placeSpan.set(k, [at, was?.[1] ?? Number.NaN])
-    else placeSpan.set(k, [was?.[0] ?? Number.NaN, at])
-  }
-  // (the pieces TeX said set no ink, or whose points prove they set none of their own: the instrument's `empty`; and those TeX
-  // set before their unit's start point, outside its text: its `outside`)
-  const emptyPiece = new Set((ins.empty ?? []).map((x) => `${x.unit}|${x.piece}`))
-  const outsidePiece = new Set((ins.outside ?? []).map((x) => `${x.unit}|${x.piece}`))
-  // (an ink unit's elements of no kept run of its (inkOf: each element its own run's; an echoed unit's that sets nothing, for which
-  // the ink unit has no run): none of their own, as the instrument's `empty` states it of a source unit's piece; by unit and
-  // piece. One whose run's glyphs another unit owns is not found, as before)
-  const jointPiece = new Set<string>()
-  const pageA = new Int32Array(NA)
-  inkA.pages.forEach((pg, p) => {
-    for (let j = 0; j < pg.glyphs.length; j++) pageA[(m.offA[p] as number) + j] = p + 1
-  })
-  const gA = (a: number): DocGlyph => {
-    const p = (pageA[a] as number) - 1
-    return inkA.pages[p]!.glyphs[a - (m.offA[p] as number)]!
-  }
-  const gB = (b: number): DocGlyph => {
-    const p = (pageB[b] as number) - 1
-    return B.pages[p]!.glyphs[b - (m.offB[p] as number)]!
-  }
-  const atA = (a: number) => ({ page: pageA[a] as number, g: gA(a) })
+  const w = open(ins, inkA, m)
+  const {
+    B,
+    NB,
+    unitB,
+    roleB,
+    pieceB,
+    pageB,
+    placeSpan,
+    emptyPiece,
+    outsidePiece,
+    pageA,
+    gA,
+    gB,
+    atA,
+    atB,
+    glyphsOf,
+    boxesOf,
+    turnedOf,
+    setA,
+    fixedFaces,
+    framesA,
+  } = w.ix
+  const { claimedA, units, members, stats, jointPiece, displays, floatLines } = w
   /** A's boxes ([page, index]) as rows.ts takes them */
   const boxesOf_ = (l: readonly [number, number][]): RowBox[] =>
     l.map(([ap, ai]) => {
       const b = inkA.pages[ap - 1]!.boxes
       return { page: ap, x0: b[4 * ai]!, y0: b[4 * ai + 1]!, x1: b[4 * ai + 2]!, y1: b[4 * ai + 3]! }
     })
-  const atB = (b: number) => ({ page: pageB[b] as number, g: gB(b) })
   // (each B glyph's region by B's brackets, stream.mjs regionsOf's: a float's depth, a column's body or not; read once a page)
   const regionsB = new Map<number, Int32Array>()
   const regionB = (b: number): number => {
@@ -411,55 +178,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
     return r[b - (m.offB[p] as number)] as number
   }
-
-  // each unit's B glyphs and boxes
-  const glyphsOf = new Map<number, number[]>()
-  for (let b = 0; b < NB; b++) {
-    const u = unitB[b] as number
-    if (u < 0) continue
-    const l = glyphsOf.get(u)
-    if (l) l.push(b)
-    else glyphsOf.set(u, [b])
-  }
-  const boxesOf = new Map<number, [number, number][]>()
-  B.pages.forEach((pg, p) => {
-    const ow = ins.boxes[p]
-    if (!ow) return
-    for (let x = 0; x < pg.kinds.length; x++) {
-      const u = ow.unit[x] as number
-      if (u < 0) continue
-      const l = boxesOf.get(u)
-      if (l) l.push([p, x])
-      else boxesOf.set(u, [[p, x]])
-    }
-  })
-
-  const turnedOf = new Map<number, [number, number][]>()
-  ;(ins.turned ?? []).forEach((ow, p) => {
-    for (let j = 0; j < ow.unit.length; j++) {
-      const u = ow.unit[j] as number
-      if (u < 0) continue
-      const l = turnedOf.get(u)
-      if (l) l.push([p, j])
-      else turnedOf.set(u, [[p, j]])
-    }
-  })
-  const claimedA = new Int32Array(NA).fill(FREE)
-  /** the instrument's units, then those made on A */
-  const units: InstrumentUnit[] = [...ins.units]
-  const members: Member[] = []
   // (each unit's \baselineskip where its paragraph ends, LINES_TEX's AXT-LINES: its members' lead)
   const texSkip = new Map((ins.tex.skips ?? []).map((k) => [k.unit, k.baselineskip]))
-  const displays: DisplayLine[] = []
-  const floatLines: FloatLine[] = []
-  const stats: Located['stats'] = {
-    units: ins.units.length,
-    located: 0,
-    unlocated: {},
-    places: { same: 0, shifted: 0, respaced: 0, rebroken: 0 },
-    born: 0,
-    bornGlyphs: 0,
-  }
   const noteUnlocated = (c: string) => {
     stats.unlocated[c] = (stats.unlocated[c] ?? 0) + 1
   }
@@ -1014,7 +734,6 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // are set in, is one of one pitch: a paper typeset in a typewriter face is translated as any. The pitch is read off the
   // document's glyphs (facts.ts fixedFacesOf), never a face's name, a macro's or the font's FixedPitch flag. A unit holding a
   // word of another face (a line of prose naming a function) is none
-  const fixedFaces = fixedFacesOf(inkA.pages.flatMap((pg) => pg.glyphs))
   const bodyFace = (() => {
     const n = new Map<string, number>()
     for (const mem of members) {
@@ -1251,7 +970,6 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // those B never printed among them but arXiv's ink (on a page our compile sets, a glyph it never printed: no figure glyph,
   // none born); each a member as an instrument's unit is, its ink A's own (`same`), its span on B its glyphs' partners' (a
   // paragraph end of TeX's between two of them tells their flows apart, as it tells a source unit's)
-  const setA = setPagesOf(m)
   if (o.pages) {
     const owned = (a: number) => {
       const c = claimedA[a] as number
@@ -2158,8 +1876,6 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
     }
   }
-  // (each A page's text frame as TeX shipped it, B's carried onto A by its partners)
-  const framesA = framesOnA(ins.tex.frames, B, m, pageA, gA, gB)
   columnsAndMeasures(members, inkA, gA, (mem) => (mem.unit >= 0 ? units[mem.unit]?.cell?.table : undefined), framesA)
   endMarks()
   const ink = inkIndex(inkA)
@@ -2804,24 +2520,9 @@ export function urlBreaks(gs: readonly DocGlyph[], copy: string): [number, numbe
   return out
 }
 
-/** whether a run-in lead's line and the line TeX set after it stand in one column as columnsAndMeasures reads them: the same,
- *  or either over both (2). One rule for a name that leads a unit and a run-in head before its paragraph: on a one-column page
- *  that reads as two (a table's cells on both halves, 1706.03762v7 p10), the head's line keeps to the left half and its
- *  paragraph's first line, after it on its row, spans both. Members a tabular row sets side by side (an author block's names,
- *  the middle one over the page's middle, 1706.03762v7 p1) are no lead and its text: their columns must be the same */
-const sameColumn = (a: number, b: number) => a === b || a === 2 || b === 2
-/** an author's call the marked compile states: the point `<i>c` before the command or the \and that opens unit i's block */
-const CALL = /^\d+c$/
-/** a unit's start or end mark: `<i>s`, `<i>e`, a heading's `h<i>…`, a cell's `t<i>…` */
-const UNIT_MARK = /^[ht]?\d+[se]$/
 /** the same, its unit's key and whether it starts or ends a setting */
 const MARK_KEY = /^([ht]?\d+)([se])$/
-/** a body's or a float's bracket in B's stream (LAYOUT_TEX) */
-const BRACKET = /^[bf][se]\d+$/
 
-/** a glyph stands on a row where its baseline is within this share of the row's size of the row's (today's keptBetween and
- *  ownLabelOnRow, RUN:1592-1626; columnsAndMeasures' label on its line, MAKE's) */
-const ON_ROW = 0.4
 /** how far apart two baselines are told (PDF units): a line's is stated to a hundredth, its glyphs' on A as the PDF wrote them */
 const ON_BASE = 0.05
 /** a word ends where two glyphs stand this share of their size apart, and a trail with it (the ink units' word rule, today's
@@ -2834,63 +2535,6 @@ export { END, TRAIL }
  *  running head's title and folio, two minipages' titles, 2609.36054v2 p1's footer "page 1 of 14" 4.3 em after a footnote's
  *  last line), not one line of a paragraph */
 const SHARED_SEP = 3
-/**
- * Each A page's text frame as TeX shipped it (Instrument.tex.frames, B's pages), by A page: a B page's frame on the A page its
- * glyphs' partners stand on most, moved by the shift along x most of them share (the page set elsewhere as a whole; none where
- * A and B share their geometry, arXiv's compile of the same source, nor on a page TeX set its lines apart on A and B: a list
- * of figures whose entries' numbers differ in width moved most of its words by 3 pt and its numbers by none, 2610.19274v1
- * p67, a median of them 1.9 pt), the B page with the most partners there where two land on one
- */
-function framesOnA(
-  frames: readonly (TexFrame | null)[] | undefined,
-  B: Doc,
-  m: Mapping,
-  pageA: Int32Array,
-  gA: (a: number) => DocGlyph,
-  gB: (b: number) => DocGlyph,
-): Map<number, TexFrame> {
-  const out = new Map<number, TexFrame>()
-  const most = new Map<number, number>()
-  if (!frames?.length) return out
-  frames.forEach((f, pb) => {
-    if (!f || !B.pages[pb]) return
-    const o0 = m.offB[pb] as number
-    const dx = new Map<number, number[]>()
-    const dy = new Map<number, number[]>()
-    for (let j = 0; j < B.pages[pb]!.glyphs.length; j++) {
-      const a = m.bToA[o0 + j] as number
-      if (a < 0) continue
-      const pa = pageA[a] as number
-      ;(dx.get(pa) ?? dx.set(pa, []).get(pa)!).push(gA(a).x0 - gB(o0 + j).x0)
-      ;(dy.get(pa) ?? dy.set(pa, []).get(pa)!).push(gA(a).y - gB(o0 + j).y)
-    }
-    let best = 0
-    let on: number[] = []
-    for (const [pa, d] of dx)
-      if (d.length > on.length) {
-        best = pa
-        on = d
-      }
-    if (!best || on.length <= (most.get(best) ?? 0)) return
-    // (the shift most of them share, along x and, for the text block's bottom, along y; none where none is shared)
-    const shared = (ds: readonly number[]) => {
-      const by100 = new Map<number, number>()
-      for (const d of ds) by100.set(r2(d), (by100.get(r2(d)) ?? 0) + 1)
-      let v = 0
-      for (const [d, n] of by100) if (2 * n > ds.length) v = d
-      return v
-    }
-    const shift = shared(on)
-    const by = (x: [number, number]): [number, number] => [r2(x[0] + shift), r2(x[1] + shift)]
-    most.set(best, on.length)
-    out.set(best, {
-      block: by(f.block),
-      columns: f.columns.map(by),
-      ...(f.foot !== undefined ? { foot: r2(f.foot + shared(dy.get(best) ?? [])) } : {}),
-    })
-  })
-  return out
-}
 
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
  *  keeps to the left half (0), the right (1), or spans (2); its measure TeX's frame of it where TeX shipped the page's frame
@@ -3018,9 +2662,6 @@ function columnsAndMeasures(
   }
 }
 
-/** the unit's own text line an ink stands on (the line TeX set it on: a radical's glyph origin is at its bar, a subscript's below
- *  the line, a footnote's mark raised over it): of its text lines on the ink's page whose band (its fonts' boxes, half a point
- *  out) the ink, `lo` to `hi`, meets, the one nearest its own baseline; -1 for none */
 /** a line's glyphs of an element as its text is read (facts.ts textOf): each spacing accent TeX set over its letter joined to it
  *  (joinAccents), the accent no glyph of its own. TeX's \accent raises the accent over its letter by the letter's height less
  *  the x-height, so `\v{c}`'s caron stands 0.05 pt over the line's baseline (2610.21312v1 p2's "(Marčenko and Pastur, 1967)"):
@@ -3045,20 +2686,6 @@ function standsAsDrawn(
       return raised ? g.y > base + ON_BASE : Math.abs(g.y - base) <= ON_BASE
     }),
   )
-}
-
-function standsOn(lines: readonly Line[], page: number, lo: number, hi: number, own: number): number {
-  let best = -1
-  let d = Number.POSITIVE_INFINITY
-  lines.forEach((l, j) => {
-    if (l[9] & 1 || l[0] !== page || hi < l[6] - 0.5 || lo > l[5] + 0.5) return
-    const e = Math.abs(l[4] - own)
-    if (e < d) {
-      d = e
-      best = j
-    }
-  })
-  return best
 }
 
 /** the first ink under a height on a page across x0..x1: the highest top under `foot` of a glyph that is ink (isInk, whatever its

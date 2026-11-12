@@ -60,7 +60,7 @@ function flatOf(content: readonly Piece[], out: Flat[] = []): Flat[] {
   }
   return out
 }
-import type { Member } from './locate.ts'
+import type { Member } from './work.ts'
 
 export interface FactsInput {
   ins: Instrument
