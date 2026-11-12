@@ -474,6 +474,7 @@ export function inkOf(o: InkInput): {
     // (a run alone the relation reading judged: its doubled copy's glyphs hidden with its text, its decoration's boxes)
     if (t) for (const g of t.copies) text.push(global(t.page, g))
     const turned = figTurned.get(k) ?? []
+    const held = t ? t.why === 'decoration' : !f.why && !!f.decorated
     // (its text in the runs its glyphs set in another face than its own: each a group of its own, its style its glyphs')
     const { content, styles } = figureRuns(f.text ?? '', streamOfFigure(text, turned, pages, inkA, m, o.pageA))
     const ux = f.ux ?? 1
@@ -502,7 +503,8 @@ export function inkOf(o: InkInput): {
         id: unitId('inkfigures', content),
         kind: 'inkfigures',
         content,
-        figure: { set: setOf(k), ...(dir ? { dir } : {}), ...room },
+        // (one held with its label's decorated word, §18.57: a set of its own, as a text the decoration holds keeps)
+        figure: { set: held ? -1 - k : setOf(k), ...(dir ? { dir } : {}), ...room },
         ...(f.anchor ? { align: ALIGN_OF[f.anchor as keyof typeof ALIGN_OF] } : {}),
         ...((t ? t.why : f.why)
           ? {
@@ -511,12 +513,15 @@ export function inkOf(o: InkInput): {
               ...(t?.why === 'formula' ? { formula: true as const } : {}),
               ...(f.double ? { double: true as const } : {}),
               ...(f.script ? { script: true as const } : {}),
+              ...(t?.why === 'decoration' ? { decorated: t.withLabel ? ('label' as const) : ('token' as const) } : {}),
             }
-          : o.artefact?.(text, turned)
-            ? { why: 'figure: code', fixed: true as const, pitch: true as const }
-            : identifiersIn((f.text ?? '').normalize('NFKC')).length
-              ? { why: 'figure: identifier', fixed: true as const }
-              : {}),
+          : f.decorated
+            ? { why: 'figure: decoration', fixed: true as const, decorated: f.decorated }
+            : o.artefact?.(text, turned)
+              ? { why: 'figure: code', fixed: true as const, pitch: true as const }
+              : identifiersIn((f.text ?? '').normalize('NFKC')).length
+                ? { why: 'figure: identifier', fixed: true as const }
+                : {}),
       },
       text,
       ph: [],
@@ -723,7 +728,7 @@ function figureTextOf(
             ...(t.why === 'formula' ? { formula: true as const } : {}),
             ...(fig.units[t.ks[0]!]?.double ? { double: true as const } : {}),
             ...(t.why === 'script' ? { script: true as const } : {}),
-            ...(t.why === 'decoration' ? { decorated: true as const } : {}),
+            ...(t.why === 'decoration' ? { decorated: t.withLabel ? ('label' as const) : ('token' as const) } : {}),
           }
         : {}),
     },

@@ -110,9 +110,15 @@ function geomJoin(
 
 /**
  * The paragraphs of a page's lines of prose. `end(a, b)`: what line a's end before line b is where a ends in a hyphen and b
- * begins with a letter (facts.ts lineEnd: `drop` TeX's own break, `join` a word's hyphen), else `space`.
+ * begins with a letter (facts.ts lineEnd: `drop` TeX's own break, `join` a word's hyphen), else `space`. `pairs`, where given:
+ * each pair of lines [a, b] the reading reads as one block by geometry (geomJoin, b under a), whether or not its text goes on:
+ * what holds a label whole where a decorated word holds one of its lines (figure-lines.ts, PDF-READER §18.57)
  */
-export function parasOf(lines: readonly ParaLine[], end: (a: number, b: number) => 'space' | 'join' | 'drop'): Para[] {
+export function parasOf(
+  lines: readonly ParaLine[],
+  end: (a: number, b: number) => 'space' | 'join' | 'drop',
+  pairs?: [number, number][],
+): Para[] {
   const out: Para[] = []
   const byFig = new Map<string, number[]>()
   lines.forEach((l, i) => {
@@ -159,6 +165,7 @@ export function parasOf(lines: readonly ParaLine[], end: (a: number, b: number) 
         if (!j) break
         st = j
         block.push(b)
+        pairs?.push([a, b])
         a = b
       }
       const size = lines[first]!.size

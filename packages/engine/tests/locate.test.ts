@@ -1867,7 +1867,7 @@ describe('review of #605', () => {
     // keeps as it is (Rule 1's, kept and fixed) as before)
     const B = docOf([{ lines: ['Put the ham in the oven.', 'Slice the bread thin.', 'max_tokens'] }])
     const units = [
-      unitOf('cell', 'Put the ham in the oven.', { fixed: true, decorated: true }),
+      unitOf('cell', 'Put the ham in the oven.', { fixed: true, decorated: 'token' }),
       unitOf('cell', 'Slice the bread thin.'),
       unitOf('cell', 'max_tokens', { kept: true, fixed: true, pitch: true }),
     ]

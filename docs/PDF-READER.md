@@ -5528,6 +5528,21 @@ was that it may stay the original's where the highlight forces it.
   detected anew, no third place reads it: the reader and the typesetter learn it from the stated unit, whose member is fixed (no
   group of its text) and stated `unwrapped` in the part (`bundle.ts` stateOf: a fixed member that is no kept unit, which before
   this rule was a figure member alone), so that nothing is laid over it.
+- **The whole label, by the paragraph reading's pairing** (the coordinator's ruling of 2026-11-12, option (b)). A figure's label is
+  often printed over several lines that the engine cuts as several texts (the unit is the printed line: ragged lines are joined
+  on no guess, §18.36), or on one printed line cut where the face changes (an italic lead and its roman text, §18.26); held by the
+  line with the decorated word alone, the label read as a sentence in two languages, which the owner's ruling (the WHOLE label)
+  does not allow. So the hold spreads, in `figureLinesOf` right after the text with the word is held, to every text and run of its
+  label as the paragraph reading pairs it: the lines `figure-paras.ts` parasOf reads as one block by geometry (geomJoin: one face
+  family, weight, size and fill, its pitch by TeX's interline rule, its left edge), whether or not its text goes on, cut where a
+  line opens an item (the same marker that ends a paragraph there), and the fragments it bridges on one printed line
+  (`figureParas`). Nothing else is read: the reading hands over the pairs it computes (parasOf's `pairs`), no test or number is
+  new. Such a text is held for the same reason, `decorated`, `label` where `token` names one holding the word itself (the dump's
+  `decorated`, beside `keptBy: 'decorated'`), fixed, no kept unit, in a size set of its own as the text holding the word; one
+  kept for another reason keeps it. The ground: the reading refuses to JOIN ragged lines on a guess because a wrong join damages a
+  translation; a HOLD risks only that a line stays in the original, so the pairing test that is too weak to join is enough to
+  hold. The author's phrase as a unit (the figure-text research's P1, the PDF's paragraph marks and a list's items, after the
+  cut-over) replaces this pairing when it comes: the pairing is not to be grown for this purpose.
 - **A word: a letter in it.** The hold exists to prevent a half-original line. A decorated token with no letter (a number, a
   symbol) makes none and stays an element in the translated line as before. The condition is the engine's one predicate,
   `holdsLetter` (`figure-lines.ts`, Unicode's letter), which already tells a figure's decorated word (`cite`) from a decorated
@@ -5550,10 +5565,12 @@ was that it may stay the original's where the highlight forces it.
   (an apostrophe, a question mark: `marks.mjs` CHAR_NODE's punctuation), a text past INK_TEXT_MAX. 2610.40576v1's cell of
   `\hlp{Let's use different notation.}` (ord 237) stays a mixed line; the decoration's definition did not change with this rule.
   And a token the figure reading reads as the ground under its whole run (no element) is translated as before, its ground left
-  where it stood (2111.09276v1 Figure 5(a)'s seven such tokens). A label printed over two lines or more is as many figure texts
-  (the unit is the printed line, the research's first finding): the line that holds the decorated word is held, its other lines
-  translated (Figure 5(a)'s "Paint [cabinets] for an" held, its next line "authentic look" translated); a unit of the author's
-  phrase (the research's P1) makes them one.
+  where it stood (2111.09276v1 Figure 5(a)'s seven such tokens). The pairing knows a label only as far as its geometry and an
+  item's marker tell it, known and accepted: where a list's bullet is no marker to the paragraph reading (a glyph of its own
+  before the line, 2111.09276v1 Figure 1), the next item one pitch under a held label's last line, on its edge and in its face, is
+  its block (Figure 1's "Wash the [fish]" under "yourself", held for its own word there); and two labels one under the other in
+  one face, the first line standing in or out, are one block (Figure 2's "Source Step: Wash the chicken thoroughly", held with
+  the "Target Step: Wash the [fish] thoroughly" under it: a line left in the original that could have been translated).
 - **Before and after.** `figure-lines.test.ts`: a figure text whose word a tone holds is held (`why` `decoration`), one whose
   toned stretch is a number keeps it an element `ref` (red at the base: `null`); the eight texts the relation reading's tests free
   with a framed or toned word are now held for it. `highlights.test.ts`: of a table's six cells, the two whose decorated piece sets
@@ -5577,7 +5594,13 @@ was that it may stay the original's where the highlight forces it.
   by (s), before as written by Rule 1 by group), gained 5,838 to 5,826 (the twelve held units, v2's own, no longer shown).
   2111.09276v1 laid with staging's stored Google rows (the served metrics, the reader's `typesetLay`, pages 1, 3, 4 and 8): its
   35 held members unwrapped, every other member of those pages in the state and at the size it had; Table 1's other 19 cells laid
-  as before, its columns decided as before. v2's lay of the two pairs of the lab's that move (`v2.mjs`, the lab's store, no
+  as before, its columns decided as before. With the whole label (the lane's dw2 against dw1): the 88, 9 texts more, every one
+  2608.06701v1's (box 1's first row, the plan's items 2 and 3's four other lines each); 2111.09276v1, 17 more (Figure 1's
+  "yourself"; Figure 2's four leads and the two texts of "Source Step: Wash the chicken thoroughly"; Figure 5's ten continuation
+  lines); nothing else moves (the dump states `decorated` on the units held before); shown 38,192 to 38,183; the differential's
+  lost lines as before, accepted 5,416 to 5,422 (six of 2608.06701v1's lines, today's units too, by (s)), gained 5,826 to 5,823;
+  the float lines as before; 2111.09276v1 laid with staging's rows: the 17 unwrapped, no other member's state or size moved, and
+  no label of its Figures 1, 2, 5(a) or 5(b) reads in two languages by lines. v2's lay of the two pairs of the lab's that move (`v2.mjs`, the lab's store, no
   translator asked): 2608.06701v1-zh p1, the six held texts unwrapped, and four labels of the figure's "New Plan" box, whose size
   tie no longer holds them, drawn at 4.35 pt where they were at 4.24; 2610.40576v1-zh, its four drawn cells and two figure texts
   unwrapped (none had a stored reply: the store lacks 43 of its units' replies, 37 now), tables 9 and 12 decided as before for

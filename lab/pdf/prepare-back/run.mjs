@@ -229,7 +229,8 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   // `script` (F3): `keptBy: 'script'`; a figure text or a cell held whole for a decorated word it holds, the engine's `decorated`
   // (§18.57): `keptBy: 'decorated'`)
   const keptBy = u.pitch ? 'pitch' : u.address ? 'address' : u.formula ? 'formula' : u.double ? 'double' : u.script ? 'script' : u.decorated ? 'decorated' : u.why === 'figure: identifier' ? 'identifier' : null
-  const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), ...(keptBy ? { keptBy } : {}), text: textOfPieces(pieces), pieces }
+  // (and a unit held for a decorated word, whether it holds the word (`token`) or stands in its label (`label`): `decorated`)
+  const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), ...(keptBy ? { keptBy } : {}), ...(u.decorated ? { decorated: u.decorated } : {}), text: textOfPieces(pieces), pieces }
   if (u.kind === 'name') { units.push({ ...base, state: 'unlaid', why: 'name: drawn by its own group, never laid as a unit' }); states.unlaid++; return }
   if (!mem || !mem.located) { units.push({ ...base, state: 'unlaid', why: mem?.cause?.startsWith('content difference') ? mem.cause : `unlocated: ${mem?.cause ?? u.why ?? 'no ink'}` }); states.unlaid++; return }
   const st = stateOf(mem, addOn)

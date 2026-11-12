@@ -1195,6 +1195,42 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     // (a digit beside the hyphen: TeX hyphenates letters alone, the author's hyphen, joined: 2609.19644v1's "128-|bit")
     expect(end([gapped('in 2024 a 128-'), gapped('bit vector')])).toEqual({ t: 'br', end: 'join' })
   })
+  it('holds a decorated word’s whole label: its other lines the paragraph reading pairs it with, to a line that opens an item (§18.57)', () => {
+    // (2111.09276v1 p8's "Paint [cabinets] for an / authentic look": the hold spreads by the pairing the reading refuses to join
+    // on, one face, its pitch, its left edge; the next item, and a line on another edge, stay translated)
+    const { page, fig } = pageOf([
+      body('1. Paint the cabinets for an'),
+      body('authentic and warm look'),
+      body('2. Wash the fish thoroughly'),
+      [{ text: 'a note set apart', font: 'NimbusRomNo9L-Regu', x: 160 }],
+    ])
+    const G = page.glyphs as Glyph[]
+    const at = G.findIndex(
+      (g, i) =>
+        g.u === 'c' &&
+        G.slice(i, i + 8)
+          .map((x) => x.u)
+          .join('') === 'cabinets',
+    )
+    fig.met.set(0, {
+      items: [
+        {
+          ...boxMet(0, rect(G[at]!.x0 - 0.5, 697, G[at + 7]!.x1 + 0.5, 709, { stroke: false, fill: true, hw: 0 })),
+          ground: true,
+        },
+      ],
+      under: null,
+    })
+    const texts = figureLinesOf([page], fig, () => false, null)
+    const first = texts.find((t) => t.ks.includes(0))!
+    expect([first.why, first.withLabel ?? false]).toEqual(['decoration', false])
+    expect(fig.units[1]!.decorated).toBe('label')
+    expect([
+      texts.find((t) => t.ks.includes(2))?.why ?? null,
+      fig.units[2]!.decorated,
+      fig.units[3]!.decorated,
+    ]).toEqual([null, undefined, undefined])
+  })
   it('makes an item’s marker its label, never its text: "A. 12:30 PM in the car", an item of a list (2411.13093v4 p19)', () => {
     // (each marker with the next item's, one under the other at one left edge: a list)
     for (const [marker, next] of [

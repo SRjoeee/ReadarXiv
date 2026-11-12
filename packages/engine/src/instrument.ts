@@ -45,12 +45,13 @@ export interface InstrumentUnit {
   /** a figure text the engine cannot draw as it was set, a script or an accent set apart from its base, kept as the original
    *  (F3's `script`, figure-lines.ts setApart): the lab's dump and parity tell it by it; the bundle does not carry it */
   script?: true
-  /** a figure text or a table cell held whole as the original for a decorated word it holds (PDF-READER §18.57, the owner's ruling
-   *  of 2026-11-12): a figure text a word of which a decoration holds (figure-lines.ts, its element `cite`), a cell holding a piece
-   *  TeX set beside a decoration of its own with a letter in its text (the probe's `decorated`, pipeline/instrument.mjs
-   *  decoratedCellsOf); `fixed`, never `kept`: its text could be translated and is held for its drawing alone. The lab's dump and
-   *  parity tell it by it; the bundle does not carry it */
-  decorated?: true
+  /** a figure text or a table cell held whole as the original for a decorated word (PDF-READER §18.57, the owner's ruling of
+   *  2026-11-12): `token`, one that holds the word, a figure text a word of which a decoration holds (figure-lines.ts, its element
+   *  `cite`) or a cell holding a piece TeX set beside a decoration of its own with a letter in its text (the probe's `decorated`,
+   *  pipeline/instrument.mjs decoratedCellsOf); `label`, a figure text of the same label or printed line as such a text, by the
+   *  paragraph reading's pairing (figure-lines.ts figureLinesOf). `fixed`, never `kept`: its text could be translated and is
+   *  held for its drawing alone. The lab's dump and parity tell it by it; the bundle does not carry it */
+  decorated?: 'token' | 'label'
   /** a kept block of e-mail addresses and their separators alone (today/ink-units.mjs addressesAlone): the lab's dump and parity
    *  tell such a block by it (the coordinator's ruling of 2026-11-10); the bundle does not carry it */
   address?: true

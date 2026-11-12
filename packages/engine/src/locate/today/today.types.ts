@@ -65,6 +65,9 @@ export interface TodayFigureUnit {
   double?: true
   /** (CHANGED, F3) kept for a script or an accent set apart from its base (figure-lines.ts setApart): the made unit's `script` */
   script?: true
+  /** (CHANGED, §18.57) held with its label, a decorated word standing in another line of it or on its printed line
+   *  (figure-lines.ts figureLinesOf): the made unit's `decorated: 'label'` */
+  decorated?: 'label'
 }
 /** a path's lines as pageInk keeps them (`shapes`): its segments (x0, y0, x1, y1 each), whether it is stroked and filled, its
  *  half line width */
