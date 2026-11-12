@@ -86,6 +86,42 @@ function lineFewer(d, x) {
   return { u, size, tr, vr, orow, tEnd: tr.at(-1), vEnd: vr.at(-1), tPitch: pitchOf(tr), vPitch: pitchOf(vr), oPitch: pitchOf(orow) }
 }
 
+/** the harness's own pairing of a drawn line with a lay's line: one page, baselines within this (baseline/tools/reader.mjs: each
+ *  laid line's SVG text found so); no bound of a ruling's own */
+const PAIRED = 0.05
+/**
+ * Where TODAY's drawing of a unit ends a line before a boundary between runs inside a word: the line's place and text, or null.
+ * Read from today's two dumps, never from v2's lay. The breaker's hyphen: today's copy puts a space after a Latin line's last
+ * word unless that word is hyphenated (today's layer2.mjs:4691-4693), so in today's reader dump (baseline/reader, each drawn
+ * line's text) a line ending in "-" with no space after it ends in the breaker's hyphen, and a hard hyphen there reads "- ".
+ * The boundary: today's tap ledger (baseline/tap, the walk's trace, read by the gate already for its tables) states each line's
+ * block (X.cut's `layoutLines`, the drawn lines in X.walk's and S.fill.page's `lines`: [page, baseline, x0, x1, mode, block,
+ * items]) and each block's `after` (X.cut's `walkedBlocks`: the kept regions TeX set before it), so a line before a boundary is
+ * one whose next line stands on a block after more of them. The two are joined by page and baseline as the harness pairs them
+ * (PAIRED). `lines` the unit's lines in the reader dump, `slots` its slots in the ledger ({ by, round, value }). Both dumps are
+ * today's side, which C1 freezes before the old engine goes (the reader dumps and the tap), so the fact stays readable after the
+ * cut-over
+ */
+export function cutBeforeBoundary(lines, slots) {
+  for (const s of slots ?? []) {
+    if (s.by !== 'X.cut') continue
+    const blocks = s.value?.walkedBlocks ?? []
+    const after = (b) => Number(blocks[b]?.after ?? 0)
+    const laid = [s, ...(slots ?? []).filter((q) => q.round === s.round && (q.by === 'X.walk' || q.by === 'S.fill.page'))]
+    for (const q of laid) {
+      const ls = q.value?.layoutLines ?? q.value?.lines ?? []
+      for (let k = 0; k + 1 < ls.length; k++) {
+        const l = ls[k],
+          n = ls[k + 1]
+        if (!Array.isArray(l) || !Array.isArray(n) || !(after(n[5]) > after(l[5]))) continue
+        const d = (lines ?? []).find((x) => x.page === l[0] && Math.abs(x.baseline - l[1]) <= PAIRED)
+        if (d && typeof d.text === 'string' && d.text.endsWith('-')) return { page: d.page, baseline: d.baseline, text: d.text }
+      }
+    }
+  }
+  return null
+}
+
 /**
  * The rulings, in the order a difference is tried against them (the first whose condition holds covers it). `holds(d, x)`: d a
  * difference worse by its measure, x the page's context (rulingsPass). An entry with no `holds` is a class he accepted that no
@@ -536,6 +572,28 @@ export const RULINGS = [
       return `today ${d.today.value}, v2 ${d.v2.value}: ${f.decorated} of today's texts stand in the ${f.decoratedOrds.length} held for a decorated word, drawn as the original${f.pitch || f.identifier ? `; ${(f.pitch ?? 0) + (f.identifier ?? 0)} kept by a mark` : ''}${f.unmeasured ? `; ${f.unmeasured} no row serves` : ''}`
     },
   },
+  {
+    id: 'WB',
+    title: 'no word is cut by a boundary between runs: a unit today reached its size or its line count by such a cut',
+    verdict: "the coordinator's ruling",
+    date: '2026-11-13',
+    seen: "lanes/run-split.md (lab-data refactor-2026-11): the owner's report of 2026-11-12 on 2610.21106v1-zh p3 (\"Hes-\" | display | \"sian\" with Google's text), the law built in B.break (PDF-READER §18.7: the line before a run's boundary is a last line, TeX's own, tex.web §1145 and §816); the crops lanes/run-split/crop-remark-google-3.png and crop-16117-de-u28.png; the coordinator's ruling of 2026-11-13 accepting the step it costs",
+    words: null,
+    example:
+      '2608.16117v1-de p9 and p10 t28: today fits the paragraph of nine displays at 0.875 of its size only by ending the line before display (33) in "Periodizitätsbezie-" and setting "hung:" after it; v2, the word whole, at 0.85 (10.16 pt against today\'s 10.46; 15 lines against 17 on p9). The same paper\'s t35 carries the fact too (p14, "erhal-") and reads nothing worse',
+    condition:
+      "size or line-count: TODAY's drawing of the unit ends a line before a boundary between runs inside a word, read from today's own dumps, exact, with no bound of its own (cutBeforeBoundary: the reader dump's line ending in the breaker's hyphen, today's copy writing no space after a hyphenated last word; the tap ledger's line on a block before a kept region, the next line's block after more of them; the two joined by page and baseline as the harness pairs a drawn line with a laid one), the unit whole. Today's size and line count of that unit were reached by a cut the law forbids (PDF-READER §18.7), so they are no reference for it. A unit today laid with no such cut is judged as before. The facts are today's dumps (baseline/reader, baseline/tap), which C1 freezes before the old engine goes, so the condition stays readable after the cut-over",
+    holds(d, x) {
+      if ((d.flag !== 'size' && d.flag !== 'line-count') || !d.unit) return false
+      const u = x.unit(d)
+      if (!u?.sides?.today || !u.sides.v2 || !x.whole(u.key)) return false
+      return !!x.todayCut(u.key)
+    },
+    says(d, x) {
+      const c = x.todayCut(x.unit(d).key)
+      return `today ends its line before a boundary between runs on p${c.page} at ${c.baseline} in the breaker's hyphen ("…${c.text.slice(-24)}")`
+    },
+  },
 ]
 /** the measures that read a unit's content lost or changed against the original: a unit none of them finds v2 farther on (worse,
  *  or covered) on any of its pages is whole (the rulings L2 and S4) */
@@ -562,7 +620,7 @@ function inPlaceKept(ord, x) {
  * drawing's record of page n as measured (the re-lay's merged in for its pages), `v2` the pair's v2 file, `laid` the v2 Pages
  * laid (n -> Page), `unsqueezed` the lay with no CJK line squeezed (n -> ord -> lines)
  */
-export function rulingsPass(pages, { recOf, v2, laid, unsqueezed }, recount) {
+export function rulingsPass(pages, { recOf, v2, laid, unsqueezed, todayCut = null }, recount) {
   // (each unit's line count over the paper's pages: today's drawn, v2's laid, and with no CJK line squeezed)
   const todayLines = new Map()
   for (const p of pages) for (const u of p.units ?? []) if (typeof u.sides?.today?.lines === 'number') todayLines.set(u.key, (todayLines.get(u.key) ?? 0) + u.sides.today.lines)
@@ -591,6 +649,9 @@ export function rulingsPass(pages, { recOf, v2, laid, unsqueezed }, recount) {
       sizesOf: (key) => sizes.get(key) ?? [],
       laid: (ord) => (v2.pages?.[p.page]?.members ?? []).find((m) => m.ord === ord),
       pastV2,
+      // (WB: where today's drawing of a unit (its key, today's ord) ends a line before a boundary between runs inside a word, read from
+      // today's dumps by the caller, cutBeforeBoundary; none where the caller states nothing)
+      todayCut: (key) => todayCut?.(key) ?? null,
       member: (ord) => facts.get(ord) ?? Object.values(v2.facts ?? {}).flatMap((f) => f.members ?? []).find((m) => m.ord === ord),
       squeezeSaved: (u) => {
         if (!unsqueezed) return false
