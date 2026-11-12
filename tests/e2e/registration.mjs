@@ -36,7 +36,8 @@ import { seedService } from './options-page.mjs'
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const BUILD = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
 // a build of the rebuilt reader (AXT_READER=v2: the reader package's PDF.js files at its root) runs the rebuilt reader's
-// registration, which ends the run
+// registration, which ends the run; a build of today's reader (AXT_READER=today) runs today's below, which the released
+// extension still reads with: the cut-over that removes today's reader removes this body with it, and this choice
 if (existsSync(`${BUILD}/pdfjs`)) await import('./registration-v2.mjs')
 const EXT = `${HERE}.ext-registration`
 /** the window: a laptop's (the owner's fit, 87 %, at a pixel ratio of 2) */

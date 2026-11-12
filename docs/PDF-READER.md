@@ -921,9 +921,10 @@ With the reader closed, a PDF page gets the abstract page's entry view: the two 
   - **a paper kept**: the Reading state: the original, and the translation laid from the store and from the passages the
     background keeps (the rows, DESIGN §9), no capsule; a passage never translated before is asked of the service, which may
     itself be out of reach: the passages that failed, with their retry and close (S-R-15), once the run has ended;
-  - **none kept**: the original, the translated displays as they are, and the capsule of Not to be had now (§8, §8.1): with the
-    browser online, our server unreachable, the bilingual version not to be had now, with its retry (S-R-24); with the browser offline, the network's
-    sentence with no retry, asked again once it is back.
+  - **none kept**: the original, the translated displays as they are, and the capsule of Not to be had now (§8, §8.1): our
+    server answering with a failure (a 5xx), the bilingual version not to be had now, with its retry (S-R-24); no answer at
+    all (the browser offline, a connection reset), the network's sentence with no retry, the session asking again by itself
+    (`tests/e2e/reader-v2-layer.mjs`, the states section, both with nothing kept).
   The database is the old reader's (`axt-layer`) at version 5. **The version step** deletes the old reader's three tables
   (objects by digest, catalogs, who held what), which no address of the rebuilt reader reaches, on the first open by this
   build. **The way back**, measured (`tests/cache/paper-store.test.ts`, Dexie 4.4): a build of version 4 meets the database
