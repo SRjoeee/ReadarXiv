@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: when Google answers with a page of its own instead of a translation, such as a check that you are not a robot, the next translation service takes over for a while, as it does when Google refuses. Each passage had waited for Google twice first, for as long as the page was served.
 - Fixed: with Google translating, a sentence's full stop stays where a footnote mark, a note's call or a line break follows it. Google had dropped the stop, so the sentence ran into the next one.
 - Fixed: in the PDF reader, a page whose passages a translation service refused, and which another service or a retry then translated, shows the translation. It had stayed as printed until the page was laid again by a scroll or a setting.
 - Fixed: in the PDF reader, turning a reading option on and off again shows the page as it was before, every passage as it was. A note that names one of the paper's authors, such as a correspondence line, could show as printed when the paper opened and translated after the authors' option was turned on and off.
