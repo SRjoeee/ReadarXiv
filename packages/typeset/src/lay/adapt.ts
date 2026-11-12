@@ -412,11 +412,9 @@ export function adapt(i: AdaptInput): Adapted {
       const e = j === undefined ? undefined : runs.find((x) => x[0] === j)
       if (!e) continue
       b.free = r2(Math.max(0, Math.min(e[2], e[1] - sep)))
-      // (and, where the reader asks the borrow past TeX's bottom (§18.37), the two depths it reads apart)
-      if ((R.pastFoot ?? 0) > 0) {
-        b.toFoot = r2(e[2])
-        b.toInk = r2(e[1] - sep)
-      }
+      // (and the two depths apart, which the borrow past TeX's bottom reads before a step down the sizes: §18.37)
+      b.toFoot = r2(e[2])
+      b.toInk = r2(e[1] - sep)
     }
   // (the ink that stays beside its lines, no member's (Room.stays: a mark TeX set after a space, a frame's rule; a QED box in a
   // part made before its end mark was stated, El.end): on the block that holds

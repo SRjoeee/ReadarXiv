@@ -16,6 +16,16 @@ type RunTrack = { track: number; trackLatin: number; compress: number }
  *  marks without their blank halves, B.break leadOf and hangOf), else 0. A figure text is set at it (S.figures) */
 export const firstCompress = (P: { compressMax: number }): number => (P.compressMax > 0 ? 1 : 0)
 
+/**
+ * How far under TeX's text block bottom a unit's last line may stand, in points, where that keeps the unit from a step down
+ * the size ladder (docs/PDF-READER.md §18.37, the owner's ruling of 2026-11-12). Production borrows past the bottom; 1.5 is the
+ * value the owner looked at the pages with on the test site before he ruled. Over the 22 parity pairs it keeps six units
+ * larger, each needing 0.08 to 1.36 pt while laid (2608.16117v1-de unit 86 1.36, unit 99 1.05; 2602.23285v2-ja unit 29 1.22,
+ * unit 90 0.99: the four production keeps at their size with a line past the bottom); a borrowed line's ink stays inside its
+ * class's `\maxdepth`, the depth TeX itself lets a last line hang under the bottom (deepest 3.73 pt, elsarticle at 12 pt's 6)
+ */
+export const PAST_FOOT = 1.5
+
 /** the fit's states, from the most natural, each knob in the order given taken to its bound before the next */
 export function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number): Generator<FitState> {
   // (step 3: the CJK runs' tracking from P.trackStart, a face's size correction given back, run.mjs; down from it)
@@ -70,12 +80,12 @@ export function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number):
         yield { ...st, knob }
       }
     } else if (knob === 'shrink') {
-      // (the borrow past TeX's text block bottom, where the reader asks it (P.pastFoot, docs/PDF-READER.md §18.37, an experiment
-      // for the owner's test): before each step down, at the size it would leave, one state more whose last line may stand that
-      // far under the bottom, the next ink's bound as it is, where that adds room to a block. So at every size but the floor
-      // the unit is tried without the room first, then with it, and it borrows only where that keeps it larger than the steps
-      // would; one that fits at none goes on down the steps, and on to the knobs after them, as without it)
-      const past = (P.pastFoot as number | undefined) ?? 0
+      // (the borrow past TeX's text block bottom, docs/PDF-READER.md §18.37: before each step down, at the size it would leave,
+      // one state more whose last line may stand PAST_FOOT under the bottom (the reader's P.pastFoot where it sets one, 0 off),
+      // the next ink's bound as it is, where that adds room to a block. So at every size but the floor the unit is tried
+      // without that room first, then with it, and it borrows past the bottom only where that keeps it larger than the steps
+      // would; one that fits at none goes on down the steps, and on to the knobs after them)
+      const past = (P.pastFoot as number | undefined) ?? PAST_FOOT
       const pastHere = () =>
         past > 0 && !!P.borrow && blocks.some((b) => roomOf(b, { ...st, over: past }) > roomOf(b, st) + 1e-6)
       // (on the steps from the size it would start at uncapped, those under the cap: a cap of 0.956 stepping from itself

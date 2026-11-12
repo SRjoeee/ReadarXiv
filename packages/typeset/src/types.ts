@@ -44,8 +44,8 @@ export type Choices = {
   /** the unit kinds the reader shows untranslated (design-a's `Kind[]`: a toggle's kinds, e.g. the references' `reference`,
    *  `refnames`, `inkreferences`); layPage leaves a member of one the original's (`left`) */
   leave?: string[]
-  /** how far a unit's last line may stand under TeX's text block bottom, in points, where that keeps it from its fit's first
-   *  shrink step (docs/PDF-READER.md §18.37: an experiment for the owner's test, default off); 0 or none: never */
+  /** how far a unit's last line may stand under TeX's text block bottom, in points, where that keeps it from a step down its
+   *  fit's sizes (docs/PDF-READER.md §18.37): none, the rule's (fit/walk.ts PAST_FOOT); 0, never (the owner's switch) */
   pastFoot?: number
 }
 
@@ -95,7 +95,7 @@ export type RuleParams = Readonly<
   Omit<ScriptRules, 'cjkFaces'> & {
     cjk: boolean
     hyphenation: Readonly<Record<string, unknown>>
-    /** the reader's Choices.pastFoot where it is above 0, else absent */
+    /** the reader's Choices.pastFoot where it gives one, else absent (the fit's PAST_FOOT) */
     pastFoot?: number
   }
 >
