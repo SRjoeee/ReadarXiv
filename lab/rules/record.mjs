@@ -117,14 +117,15 @@ export function agreementOf(census, map, recording = null) {
 }
 
 /** old keys to new (P4): a key kept where its rule is the same rule (its value, or its entries); else, among the keys
- *  neither side kept, in turn: the same function, signature and ordinal in another file (`function`); the same signature
+ *  neither side kept, in turn: the same file name (a module moved whole to another folder), function, signature and
+ *  ordinal (`file`); the same function, signature and ordinal in another file (`function`); the same signature
  *  and ordinal (`ordinal`); for a comparison, the same signature and the same text of its other operand (`operand`). Each
  *  stage pairs a key only where what it reads is one key on each side: what is left is printed, never guessed */
 export function remapOf(from, to) {
   const partsOf = k => {
-    const [, fn, ...rest] = k.split('::')
+    const [file, fn, ...rest] = k.split('::')
     const sig = rest.join('::')
-    return { fn, sig: sig.replace(/#\d+$/, ''), ord: /#(\d+)$/.exec(sig)?.[1] ?? '0' }
+    return { stem: file.split('/').pop(), fn, sig: sig.replace(/#\d+$/, ''), ord: /#(\d+)$/.exec(sig)?.[1] ?? '0' }
   }
   const idOf = r => JSON.stringify([r.kind, r.kind === 'list' ? r.entries : r.value])
   let kept = 0
@@ -137,6 +138,7 @@ export function remapOf(from, to) {
     } else oldLeft.add(k)
   }
   const STAGES = [
+    ['file', (k, r) => [partsOf(k).stem, partsOf(k).fn, partsOf(k).sig, partsOf(k).ord, idOf(r)].join('\u0000')],
     ['function', (k, r) => [partsOf(k).fn, partsOf(k).sig, partsOf(k).ord, idOf(r)].join('\u0000')],
     ['ordinal', (k, r) => [partsOf(k).sig, partsOf(k).ord, idOf(r)].join('\u0000')],
     ['operand', (k, r) => (r.other ? [partsOf(k).sig, idOf(r), r.other].join('\u0000') : null)],

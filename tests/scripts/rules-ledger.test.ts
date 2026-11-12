@@ -168,6 +168,14 @@ describe('remap', () => {
     expect(m.how).toEqual({ 'a::columns::>=3#1': 'function', 'a::columns/of::>=3#1': 'function', 'a::locate::>0.5#1': 'operand', 'a::locate::>0.5#2': 'operand' })
     expect(m.unmatched).toEqual({ old: [], new: [] })
   })
+  it('follows two modules moved whole by their file names, where one constant stands in both', () => {
+    const k = (value: number) => ({ kind: 'threshold', value })
+    const from = { rules: { 'src/layout/guard::(top)::CONTEXT': k(3), 'src/pipeline/tex-errors::(top)::CONTEXT': k(3) } }
+    const to = { rules: { 'packages/compile/guard::(top)::CONTEXT': k(3), 'packages/compile/tex-errors::(top)::CONTEXT': k(3) } }
+    const m = remapOf(from, to)
+    expect(m.moved).toEqual({ 'src/layout/guard::(top)::CONTEXT': 'packages/compile/guard::(top)::CONTEXT', 'src/pipeline/tex-errors::(top)::CONTEXT': 'packages/compile/tex-errors::(top)::CONTEXT' })
+    expect(Object.values(m.how)).toEqual(['file', 'file'])
+  })
 })
 
 describe("the census's reading of the ledger", () => {
