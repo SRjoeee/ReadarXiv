@@ -111,7 +111,7 @@ describe('a paragraph tighter than its page at a column’s foot takes the room 
   /** two paragraphs of 4 lines spread to 1.667, then one of `n` lines at the column's foot: TeX's text block bottom on its last
    *  line, the next ink `ink` pt under it */
   const foot = (n: number, chars: number, ink = 200) => {
-    const room = (k: number, i: number) =>
+    const room = (k: number) =>
       ({ below: ink, next: ink, runs: [[k - 1, ink, 0]], sep: 12 }) as unknown as Placed['room']
     const flow: Placed[] = [4, 4, n].map((k, i) => ({
       ord: i,
@@ -121,7 +121,7 @@ describe('a paragraph tighter than its page at a column’s foot takes the room 
       style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
       align: 'j',
       lines: ys(700 - 53 * i, k),
-      room: i === 2 ? room(k, i) : { below: 17, next: 17 },
+      room: i === 2 ? room(k) : { below: 17, next: 17 },
     }))
     const by = new Map([60, 60, chars].map((c, i) => [ids[i]!, row(ids[i]!, c)]))
     const rows: Rows = { get: (k) => by.get(k), done: true }
