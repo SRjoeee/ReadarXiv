@@ -93,6 +93,64 @@ function lineFewer(d, x) {
  */
 export const RULINGS = [
   {
+    id: 'TRS',
+    title: "a tight paragraph the page's fill evened with the fit's own knobs (its tracking, TeX's room under it, one size step)",
+    verdict: '采用',
+    date: DATE,
+    seen: 'verification/even-page.zh.html, its first rule (TRS); his verdict 17:25, verification/owner-comments-even-page-2026-11-12.json; the rule as built: PDF-READER §18.57 (rebuild/even-page)',
+    words: '看起来调整过之后挺舒服。只是你说的有 13 页会出现反效果，因为我不太了解会是什么样子，所以你来帮我判断一下，我们到底应该怎么做。\n计算量多 4.8% 可以接受，段落字号小一级也不是问题，只要用户感受不到就行。',
+    example: '1810.04805v2-zh p3, 2602.23285v2-ja p15 (the pages of his look)',
+    condition:
+      "what the lay states, never an inference from the geometry: v2's Page member states the unit evened (`evened`: the knobs the page's fill took, `track`, `room`, `size`, `foot`, the line count on the page before them; the fill keeps an evening only where every frame of the unit then stands in the page's band). size: evened by `size`, at exactly one fit step under the original's size (to the hundredth), the unit whole. line-count: evened, its count against today's other by no more than the knobs changed it, the same way (v2's count before them is today's or nearer it), at the original's size or, evened by `size`, one step under it, the unit whole. A unit one step small, or a line count other, that the lay did not even is judged as before",
+    holds(d, x) {
+      if (!d.unit) return false
+      const u = x.unit(d)
+      const v = u?.sides?.v2
+      if (!v || u.part === null || u.part === undefined || !x.whole(u.key)) return false
+      const ev = x.laid(u.part)?.evened
+      if (!ev?.by) return false
+      const knobs = String(ev.by).split('+')
+      const oneStep = !!v.osize && Math.abs(v.size - (1 - SIZE_STEP) * v.osize) <= 0.01 + 1e-9
+      if (d.flag === 'size') return knobs.includes('size') && oneStep
+      if (d.flag !== 'line-count') return false
+      const t = d.today?.value,
+        n = d.v2?.value
+      if (![t, n, ev.lines].every(Number.isFinite) || n === t) return false
+      const sized = knobs.includes('size') ? oneStep : atOriginal(v)
+      return sized && Math.sign(n - t) === Math.sign(n - ev.lines) && Math.abs(n - t) <= Math.abs(n - ev.lines)
+    },
+    says(d, x) {
+      const ev = x.laid(x.unit(d).part).evened
+      return `evened by ${ev.by}; ${ev.lines} lines on this page before`
+    },
+  },
+  {
+    id: 'Fm',
+    title: "a column's last tight paragraph past TeX's text block bottom, as deep as its band needs",
+    verdict: '采用',
+    date: DATE,
+    seen: 'verification/even-page.zh.html, its second rule (Fm); his verdict 17:25, verification/owner-comments-even-page-2026-11-12.json; the rule as built: PDF-READER §18.57 (rebuild/even-page). It lifts, for this case, the bound of the ruling of 2026-11-09 the `block` measure reads',
+    words: '挺好',
+    example: '2602.23285v2-ja p15, 1706.03762v7-zh p2 (the pages of his look)',
+    condition:
+      "block: v2's Page member states the unit evened by `foot` with the depth its state allows past TeX's text block bottom (`evened.over`: a line of its own pitch at most), and every line of the unit the block measure reads past TeX's room stands under that bottom by no more than that depth (within the bound's own precision, NEAR.room) and over the next ink's baseline by TeX's paragraph separation at least; the unit whole. A line past the bottom the lay does not state as the foot's, or nearer the next ink, is judged as before",
+    holds(d, x) {
+      if (d.flag !== 'block' || !d.unit) return false
+      const u = x.unit(d)
+      if (!u?.sides?.v2 || u.part === null || u.part === undefined || !x.whole(u.key)) return false
+      const ev = x.laid(u.part)?.evened
+      if (!ev?.by || !String(ev.by).split('+').includes('foot') || !Number.isFinite(ev.over)) return false
+      const lines = u.sides.v2.block ?? []
+      return lines.length > 0 && lines.every((l) => l.below <= ev.over + NEAR.room && (l.sep === null || l.toInk >= l.sep - NEAR.room))
+    },
+    says(d, x) {
+      const u = x.unit(d)
+      const ev = x.laid(u.part).evened
+      const lines = u.sides.v2.block
+      return `${Math.max(...lines.map((l) => l.below))} pt under TeX's text block bottom (the lay's depth ${ev.over}), ${Math.min(...lines.map((l) => l.toInk))} over the next ink (TeX's separation ${lines[0].sep ?? 'none'})`
+    },
+  },
+  {
     id: 'L1',
     title: "a paragraph a line shorter than today's, in the height today's takes",
     verdict: ACCEPTED,
@@ -468,6 +526,7 @@ export function rulingsPass(pages, { recOf, v2, laid, unsqueezed }, recount) {
       unit: (d) => p.units?.find((u) => u.key === d.unit.split(' ')[0]),
       whole: (key) => !notWhole.has(key),
       sizesOf: (key) => sizes.get(key) ?? [],
+      laid: (ord) => (v2.pages?.[p.page]?.members ?? []).find((m) => m.ord === ord),
       pastV2,
       member: (ord) => facts.get(ord) ?? Object.values(v2.facts ?? {}).flatMap((f) => f.members ?? []).find((m) => m.ord === ord),
       squeezeSaved: (u) => {

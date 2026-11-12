@@ -36,6 +36,53 @@ const rec = (today: object = {}, v2: object = {}, px: object = {}) => ({ page: N
 const paragraph = (k: number, top: number, pitch: number, size: number, x0 = 312, x1 = 563) => Array.from({ length: k }, (_, i) => drawn(top - i * pitch, x0, x1, size, '\u5b57'.repeat(20)))
 const side = (lines: number, size: number, osize: number, olines: number, more: object = {}) => ({ lines, size, osize, olines, ...more })
 
+describe("TRS and Fm: the page fill's evening (his rules of 2026-11-12, 17:25), read from what the lay states", () => {
+  // (a tight paragraph the page's fill evened: v2's Page member states it, `evened`: the knobs taken, its line count on the page
+  // before them, and for the foot the depth its state allows past TeX's text block bottom)
+  const ol = Array.from({ length: 6 }, (_, i) => fact(312, 563, 700 - i * 12, 10))
+  const v2Of = (evened: object | null) => ({
+    facts: { [N]: { members: [{ ord: 40, kind: 'para', align: 'j', style: { size: 10 }, lines: ol }], ties: [] } },
+    pages: { [N]: { members: [{ ord: 40, state: 'laid', lines: [], ...(evened ? { evened } : {}) }] } },
+  })
+  const page = (diff: Diff, v: { size: number; lines: number; block?: object[] }, evened: object | null, more: Diff[] = []) => {
+    const { page: p } = judged(
+      { diffs: [{ ...diff }, ...more], units: [{ key: 't40', kind: 'para', part: 40, align: 'j', sides: { today: side(5, 10, 10, 6), v2: side(v.lines, v.size, 10, 6, v.block ? { block: v.block } : {}) } }] },
+      { v2: v2Of(evened), rec: rec() },
+    )
+    const d = (p.diffs as (Diff & { coveredSays?: string })[]).find((x) => x.flag === diff.flag)
+    return [d?.worse, d?.covered ?? null, d?.coveredSays ?? null]
+  }
+  const size = worse('size', 't40 para', 10, 10, 9.75, [0, 0.025])
+  const count = worse('line-count', 't40 para', 6, 5, 4, [1, 2])
+  it('a unit the lay states evened by size, one fit step under the original: its size covered by TRS', () => {
+    expect(page(size, { size: 9.75, lines: 4 }, { by: 'track+size', lines: 5 })).toEqual([false, 'TRS', 'evened by track+size; 5 lines on this page before'])
+  })
+  it('its line count a line fewer than today, where the knobs took it from today\'s count: covered by TRS', () => {
+    expect(page(count, { size: 9.75, lines: 4 }, { by: 'track+size', lines: 5 })).toEqual([false, 'TRS', 'evened by track+size; 5 lines on this page before'])
+    expect(page(count, { size: 10, lines: 4 }, { by: 'track', lines: 5 })).toEqual([false, 'TRS', 'evened by track; 5 lines on this page before'])
+  })
+  it('one step small with no evening stated, evened by tracking alone yet one step small, a count the knobs do not explain, or not whole: worse', () => {
+    expect(page(size, { size: 9.75, lines: 4 }, null)).toEqual([true, null, null])
+    expect(page(size, { size: 9.75, lines: 4 }, { by: 'track', lines: 5 })).toEqual([true, null, null])
+    // (two lines fewer than today where the knobs saved one: v2 set 4 before them, today 5, v2 3)
+    expect(page(worse('line-count', 't40 para', 6, 5, 3, [1, 3]), { size: 10, lines: 3 }, { by: 'track', lines: 4 })).toEqual([true, null, null])
+    expect(page(size, { size: 9.75, lines: 4 }, { by: 'size', lines: 5 }, [worse('elements', 't40 para', 0, null, 'element 2: drawn as nothing where TeX set ink')])).toEqual([true, null, null])
+  })
+  const block = worse('block', 't40 para', 0, 0, 1)
+  it("a line past TeX's text block bottom by no more than the foot's stated depth, TeX's separation to the next ink kept: covered by Fm", () => {
+    expect(page(block, { size: 10, lines: 6, block: [{ below: 3.55, toInk: 14, sep: 12 }] }, { by: 'room+foot', lines: 6, over: 12 })).toEqual([
+      false,
+      'Fm',
+      "3.55 pt under TeX's text block bottom (the lay's depth 12), 14 over the next ink (TeX's separation 12)",
+    ])
+  })
+  it("a line past the bottom with no foot stated, deeper than its stated depth, or nearer the next ink than TeX's separation: worse", () => {
+    expect(page(block, { size: 10, lines: 6, block: [{ below: 3.55, toInk: 14, sep: 12 }] }, { by: 'room', lines: 6 })).toEqual([true, null, null])
+    expect(page(block, { size: 10, lines: 6, block: [{ below: 13, toInk: 14, sep: 12 }] }, { by: 'foot', lines: 6, over: 12 })).toEqual([true, null, null])
+    expect(page(block, { size: 10, lines: 6, block: [{ below: 3.55, toInk: 10, sep: 12 }] }, { by: 'foot', lines: 6, over: 12 })).toEqual([true, null, null])
+  })
+})
+
 describe('L1: a paragraph a line shorter than today, in the height today takes', () => {
   // (2610.21312v1-zh p1 t7: the original's 13 lines from 404.77 at 11.95; today 10 at 10.16 pt, 15.30 apart; v2 9 at 9.96 pt,
   // 17.21 apart; both last baselines at 267.05)
@@ -367,9 +414,9 @@ describe("A2: a reference's next line set flush where the original indents it, a
 describe('the rulings file', () => {
   it('states each ruling with its class, condition, verdict, date and example; one with no condition says why', () => {
     for (const r of RULINGS) {
-      expect(r.id).toMatch(/^[A-Z]\d?$/)
+      expect(r.id).toMatch(/^[A-Z][A-Za-z0-9]{0,2}$/)
       expect(r.title.length).toBeGreaterThan(10)
-      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : r.verdict === '\u53ef\u4ee5\u63a5\u53d7').toBe(true)
+      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528'].includes(r.verdict)).toBe(true)
       expect(r.date).toBe('2026-11-12')
       expect(r.example.length).toBeGreaterThan(20)
       expect(r.condition === null ? r.unstated : r.condition).toBeTruthy()

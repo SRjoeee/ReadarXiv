@@ -1045,7 +1045,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     band,
     NEAR,
   }
-  const { borrowed, past, rooms } = measureFidelity(fc)
+  const { borrowed, past, rooms, pastLines } = measureFidelity(fc)
+  // (each side's lines past TeX's room, with how far under its text block bottom and over the next ink: the ruling Fm reads them)
+  for (const u of units) for (const side of ['today', 'v2']) if (u.sides[side] && pastLines[side].has(u.key)) u.sides[side].block = pastLines[side].get(u.key)
   // (each cell's room as the frame measure read it, and each side's line past it: the owner's ruling S2 reads them, rulings.mjs)
   for (const u of units) {
     if (!rooms.has(u.key)) continue

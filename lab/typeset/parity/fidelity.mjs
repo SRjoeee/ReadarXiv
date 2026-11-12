@@ -334,6 +334,7 @@ export function measureFidelity(c) {
   // beside a float TeX set inside the paragraph: 2608.16117v1 p17 t57, p19 t59) borrows nothing under its last. A run the
   // part states no room under, no judgement (no TeX fact to judge by); one with no separation stated, its bottom alone
   const borrowed = { today: new Map(), v2: new Map() }
+  const pastLines = { today: new Map(), v2: new Map() }
   const roomOf = (key) => {
     const o = orig.get(key)
     const m = o?.part !== null && o?.part !== undefined ? c.facts.get(o.part) : null
@@ -355,6 +356,9 @@ export function measureFidelity(c) {
         const past = over.y - Math.max(0, free) - l.y
         if (!(past > NEAR.room)) continue
         k++
+        // (each such line: how far under TeX's text block bottom it stands, and how far over the next ink's baseline, the room's
+        // separation beside: the owner's ruling Fm reads them, rulings.mjs)
+        ;(pastLines[side].get(key) ?? pastLines[side].set(key, []).get(key)).push({ below: r2(over.y - run.foot - l.y), toInk: r2(l.y - (over.y - run.ink)), sep: r.sep ?? null })
         fault(side, 'block', r.sep !== undefined && run.ink - r.sep < run.foot ? `${name(key)}: a line ${r2(past)} pt nearer the next ink than TeX's paragraph separation` : `${name(key)}: a line ${r2(past)} pt past TeX's text block bottom`)
       }
       borrowed[side].set(key, k)
@@ -761,7 +765,7 @@ export function measureFidelity(c) {
     judge('lead', name(key), "its leading tighter than the original's while its block has room (share of the original's pitch over size)", 0, { value: r2(leadOf.get(`today|${key}`) ?? null), d: t }, { value: r2(leadOf.get(`v2|${key}`)), d: v }, LEAD_SHARE)
   }
 
-  return { borrowed, past, rooms }
+  return { borrowed, past, rooms, pastLines }
 }
 
 /**
