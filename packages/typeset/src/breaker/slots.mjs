@@ -192,8 +192,9 @@ function slotsAt(blocks, st, P, s) {
       const em = s * st.scale
       let x1 = mx1
       for (const d of b.shortSkips ?? []) if (d.top < y && d.top > y - SHORT_SKIP * em && Math.min(x1, d.x1) > Math.max(x0, d.x0)) x1 = Math.min(x1, d.x0 - PREDISPLAY * em)
-      // (ink that stays beside the original's lines, no member's (`stays`, Room.stays: amsthm's QED box after a proof's last
-      // words, four rules TeX set at the measure's end): a line whose reach meets it, from its descent's (SHORT_SKIP, as a
+      // (ink that stays beside the original's lines, no member's (`stays`, Room.stays: a mark TeX set after a space, a frame's
+      // rule; amsthm's QED box in a part made before a unit's end mark was stated, El.end, lay/adapt.ts, which follows the
+      // translation's end since): a line whose reach meets it, from its descent's (SHORT_SKIP, as a
       // display's top above) to its em over its baseline (no text glyph rises past its body), ends before it, or, where it stood
       // before the original's line, starts after it, as far off it as TeX set that line (`gap`: 2610.20484v1 p1 t6's start 1.49
       // pt after an initial) and half an em at most, as the line widened beside a glyph keeps (U.decor widen; a QED box TeX's

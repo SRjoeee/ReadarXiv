@@ -14,7 +14,7 @@ import { type NumberCrop, numberCrop } from '../fit/numbered.ts'
 import type { FitBlock, FitParams, Stay, Tokens } from '../fit/types.ts'
 import type { Row, RowLine, RunRow } from '../shared/row-start.ts'
 import type { RuleParams } from '../types.ts'
-import { blocks as blocksOf, type LineInfo } from '../unit/blocks.ts'
+import { blocks as blocksOf, type LineInfo, measureOf } from '../unit/blocks.ts'
 import type { Breaks } from '../unit/breaks.ts'
 import {
   carriedCrop,
@@ -39,6 +39,8 @@ const KEPT = 1,
 
 /** a trail's crop's element index (Tok.crop.k): no piece's (a piece's is its index, 0 up), never a label's (none) */
 const TRAIL_K = -1
+/** an end mark's crop's element index, the one the prepare claimed after the unit's end point (El.end): no piece's */
+const END_K = -2
 
 /** what the reading (L5) and the tokens (L7) decided of the member, handed in until the adapter makes them */
 export type Reading = {
@@ -416,7 +418,8 @@ export function adapt(i: AdaptInput): Adapted {
         b.toInk = r2(e[1] - sep)
       }
     }
-  // (the ink that stays beside its lines, no member's (Room.stays: a QED box after a proof's last words): on the block that holds
+  // (the ink that stays beside its lines, no member's (Room.stays: a mark TeX set after a space, a frame's rule; a QED box in a
+  // part made before its end mark was stated, El.end): on the block that holds
   // the line it stood beside, on that line's side of it, which every slot of the block reaching it keeps off (B.slots), a line
   // borrowed under it too. Not a cell's: its room is its walls')
   const stays = kind === 'cell' ? [] : (m.room.stays ?? [])
@@ -620,7 +623,7 @@ export function adapt(i: AdaptInput): Adapted {
   // (its trail, the ink TeX set glued after its last glyph that no unit owns (El.trail: a class's marks and separator after a
   // name, a \thanks mark): cut from where TeX set it and drawn right after its own tokens' last, glued to it as TeX set it, so
   // that the member after it on the row is laid from its end and no hole stands where the original's longer text was (2604.14228v3)
-  const trail = i.reading.own ? (m.els ?? []).find(([, e]) => e.trail && e.ink.length === 1) : undefined
+  const trail = i.reading.own ? (m.els ?? []).find(([, e]) => e.trail && !e.end && e.ink.length === 1) : undefined
   if (trail && tokens.length) {
     const [p, x0, y0, x1, y1, base] = trail[1].ink[0]!
     // (on the line TeX set it on, its member's last (El.trail): a crop's baseline is its line's (crops.ts), so that a mark raised
@@ -642,6 +645,56 @@ export function adapt(i: AdaptInput): Adapted {
         base: (tokens as { base?: unknown }).base,
       },
     ) as typeof tokens
+  }
+  // (its end mark (El.end, docs/PDF-READER.md §18.54; the coordinator's ruling of 2026-11-12): ink TeX pushed to the end of the
+  // unit's last line after its text, amsthm's QED box. It belongs to the end of the translation, wherever that ends: its crop the
+  // last token, set at the end of the line the text ends on, as far from that line's right edge as TeX set it from its own
+  // (`pad`, its rectangle's right edge to the slot's on the line TeX set it on), on that line where the text ends the keep-off
+  // distance before it (`gap`, TeX's own distance and half an em at most: B.slots' rule for ink that stays), else on a line of its
+  // own (breaker/break.mjs). Left where TeX set it, a translation a line longer stood it beside a line mid-paragraph (2610.40645v1-ja
+  // p12 t80), one a line shorter alone under the text. The prepare's claim after the unit's end point, no piece's, is drawn as its
+  // own crop; the author's own mark (`\qed` written in the text, an element of the unit's) is set so where the translation ends
+  // with it, and drawn where the translation sets it otherwise)
+  const endEl = i.reading.own ? (m.els ?? []).find(([, e]) => e.end && e.ink.length === 1) : undefined
+  if (endEl && tokens.length) {
+    const [p, x0, y0, x1, y1] = endEl[1].ink[0]!
+    // (the line TeX set it on: the member's last on its page, its text line; its block's rectangle of it, by its rest where a
+    // label drawn anew moved its start, as U.blocks reads it)
+    const j = lines.findLastIndex((l) => l[0] === p && !(l[9] & KEPT))
+    const l = lines[j]
+    const lineOfRect = (r: Rect) => (lineInfo.get(rectKey(r)) ?? lineInfo.get(rectKeyNoX0(r)))?.j
+    const b = l ? blocks.find((q) => q.rects.some((r) => lineOfRect(r as Rect) === j)) : undefined
+    if (l && b) {
+      const k = b.rects.findIndex((r) => lineOfRect(r as Rect) === j)
+      const right = measureOf(b, l[4], k)[1]
+      const box = cropOfBox({ x0, x1, bottom: y0, top: y1, baseline: l[4] })
+      // (TeX's own distance from the line's text to it, where its line's extent leaves it out; else none stated: the bound)
+      const endMark = { pad: right - box.crop[2], gap: x0 > l[3] ? x0 - l[3] : Number.POSITIVE_INFINITY }
+      const piece = Number(endEl[0])
+      if (Number.isInteger(piece)) {
+        // (the author's mark: its token where the translation ends with it)
+        let q = tokens.length - 1
+        while (q >= 0 && tokens[q]!.space) q--
+        const t = tokens[q]
+        if (t?.crop && (t.crop as { k?: number }).k === piece)
+          tokens = Object.assign([...tokens.slice(0, q), { ...t, glue: false, endMark }], {
+            base: (tokens as { base?: unknown }).base,
+          }) as typeof tokens
+      } else {
+        const crop = {
+          mode: 'crop' as const,
+          page: p,
+          ...box,
+          text: endEl[1].copy ?? '',
+          k: END_K,
+          gap: { box: { x0, x1, bottom: y0, top: y1 } },
+        }
+        tokens = Object.assign(
+          [...tokens, { crop, cw: box.crop[2] - box.crop[0], w100: 0, endMark } as unknown as (typeof tokens)[number]],
+          { base: (tokens as { base?: unknown }).base },
+        ) as typeof tokens
+      }
+    }
   }
   // (the line of TeX's it shares whole, laid as one run (lay/flow.ts layLine), with the room its own line may take beside it,
   // as U.decor's widen reads it (sideOf): the run's left its first member's, its right its last one's. None where its label

@@ -15,6 +15,7 @@ import {
   CENTRE,
   cellCentred,
   centredByBlock,
+  END,
   FORCED_BREAK,
   fillOfGlyphs,
   INSET,
@@ -567,8 +568,10 @@ export function factsOf({
     // -- the class's tail: its own text after its last letter, digit or element glyph, all on its last line
     if (unit) {
       // (a display's glyphs among them: a unit that ends with a display has no tail after its text before it)
-      const seq = [...mem.text, ...[...mem.els.values()].flat()].sort((x, y) => x - y)
-      const isEl = new Set([...mem.els.values()].flat())
+      // (its end mark aside, END: ink TeX pushed past the text, no part of it, as before it was claimed)
+      const elGlyphs = [...mem.els].flatMap(([id, l]) => (id === END ? [] : l))
+      const seq = [...mem.text, ...elGlyphs].sort((x, y) => x - y)
+      const isEl = new Set(elGlyphs)
       let last = -1
       seq.forEach((a, q) => {
         if (isEl.has(a) || /[\p{L}\p{N}]/u.test(gA(a).u)) last = q

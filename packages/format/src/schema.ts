@@ -210,6 +210,17 @@ export const El = z.object({
   // the translation's end. A typesetter of before reads it as an element no piece names, never drawn: its unit's group, and
   // nothing moves where the unit is the original's
   trail: flag.optional(),
+  // its unit's end mark: ink TeX pushed to the end of the unit's last line, after its text (amsthm's `\qed`: `\hfill\quad`
+  // and the box; a class's or an author's mark after `\hfill`), its box's right edge at that line's measure end. It belongs to
+  // the end of the unit's text, wherever a translation ends: laid at the end of the translation's last line, keeping its
+  // distance to the measure's end as TeX set it, on a line of its own where that line's text does not end the keep-off
+  // distance before it (docs/PDF-READER.md §18.54). Left where TeX set it, a translation a line longer stood it beside a line
+  // in the middle of the paragraph, one a line shorter left it alone under the text. Stated on the element of no piece the
+  // prepare claims after the unit's end point (its id `~$`, `trail` too: a typesetter of before draws it glued after the
+  // translation's end rather than erasing it unseen with the unit's elements). On a piece's element (the author's `\qed`
+  // written in the text) the typesetter sets it so where the translation ends with it; no prepare states that yet (a fill in
+  // its setting is no fact the part holds). A typesetter of before reads none, and lays as before
+  end: flag.optional(),
 })
 /** where a link goes: an address, or a destination in the paper (PDF.js's dest as JSON: a named one `"name"`) */
 export const LinkTo = z.union([z.object({ url: z.string() }), z.object({ dest: z.string() })])
@@ -283,8 +294,9 @@ export const Room = z.object({
   sep: num.optional(),
   // (the ink that stays beside its text lines: ink no member owns (a glyph no unit claims, a rule or an image no member's) on a
   // line's band within its text block, wholly before the line's start or after its end, each side's pieces as one box: [that
-  // line's index, x0, y0, x1, y1]. TeX set it on the line (amsthm's QED box after a proof's last words) and no translation
-  // replaces it: a translation's line laid over it, borrowed or not, keeps off it)
+  // line's index, x0, y0, x1, y1]. TeX set it on the line and no translation replaces it: a translation's line laid over it,
+  // borrowed or not, keeps off it. A unit's end mark (El.end: amsthm's QED box TeX pushed to its last line's end) is the
+  // unit's, claimed and stated as its element, no stay; a part made before states it here)
   stays: z.array(z.tuple([int, num, num, num, num])).optional(),
 })
 /** a generated word (a babel name's key, Rules.words), its counter where it leads one */

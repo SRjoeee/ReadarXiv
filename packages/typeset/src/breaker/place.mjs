@@ -12,7 +12,11 @@ import { toLastLines } from '../fit/last-lines.ts'
 function placeItems(lines, f, P) {
   const last = lines.at(-1)
   for (const line of lines) {
-    const cap = line.x1 - line.x0
+    // (the unit's end mark at the end of its line, Token.endMark (breakLines): set at its place, as far from the line's right edge as
+    // TeX set it; the text before it in the room it leaves, the keep-off distance before its ink)
+    const mark = line.items.at(-1)?.t.endMark ? line.items.pop() : null
+    const full = line.x1 - line.x0
+    const cap = mark && line.items.length ? full - mark.t.endMark.pad - mark.w - Math.min(0.5 * f, mark.t.endMark.gap) : full
     const natural = line.items.reduce((s, it) => s + it.w + (it.asp ?? 0) + (it.kern ?? 0), 0)
     // a closing mark at the line's end may stand in the margin by its blank half (hangOf)
     const end = line.items.at(-1)
@@ -69,6 +73,12 @@ function placeItems(lines, f, P) {
     })
     line.used = x - line.x0
     line.cap = cap
+    if (mark) {
+      mark.x = line.x1 - mark.t.endMark.pad - mark.w
+      line.items.push(mark)
+      line.used = mark.x + mark.w - line.x0
+      line.cap = full
+    }
   }
 }
 /** a fit's breaking at its state made a layout: its lines placed, and what it set and lost counted; the lines TeX's rule
