@@ -125,11 +125,12 @@ function bandRulesOf(m: Placed): (page: number) => number[] | undefined {
 const holdsTable = (why: Unlaid, spanning: boolean) => why !== 'unwrapped' || spanning
 
 /** a member's row content, or why it has none to be set from: a unit the paper keeps as it is (Unit.kept: its names, an
- *  algorithm's body) has none whatever row is given of it (one stored before the unit was kept), never translated */
+ *  algorithm's body) has none whatever row is given of it (one stored before the unit was kept), never translated: `kept`,
+ *  told apart from a row that did not come by the rows' end (`none`) */
 function contentOf(m: Placed, rows: Rows): OutPiece[] | Unlaid {
   if (m.why) return m.why
   if (typeof m.text !== 'string') return m.kind === 'name' ? 'name' : 'kind'
-  if (rows.kept?.(m.text)) return 'none'
+  if (rows.kept?.(m.text)) return 'kept'
   const row = rows.get(m.text)
   if (!row) return 'none'
   if (!row.ok) return row.why.kind
@@ -158,7 +159,7 @@ function decideTables(
     const m = byOrd.get(o)
     if (!m || m.why || leave.has(m.kind) || typeof m.text !== 'string') return null
     const c = contentOf(m, rows)
-    if (c === 'none') return 'same'
+    if (c === 'none' || c === 'kept') return 'same'
     if (typeof c === 'string') return 'changed'
     return typeof m.plain === 'string' && unchanged(m.plain, textOfContent(c)) ? 'same' : 'changed'
   }
@@ -420,7 +421,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       const content = contentOf(m, rows)
       if (typeof content === 'string') {
         state.set(m.ord, content)
-        if (!m.why && (typeof m.text !== 'string' || content === 'none')) unmeant.add(m.ord)
+        if (!m.why && (typeof m.text !== 'string' || content === 'none' || content === 'kept')) unmeant.add(m.ord)
         continue
       }
       // (a cell of a group kept whole as names: the original's, and its group with it, holdsTable below)

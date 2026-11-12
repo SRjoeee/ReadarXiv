@@ -67,7 +67,27 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     // of the unit stored before it was kept, or today's door row the parity hands in, drew it erased and set as one line)
     const kept: Rows = { ...rowsOf([row([{ t: 'text', s: 'ein Satz' }])], true), kept: (k) => k === id }
     const p = layPage(part(member()), kept, rules, metrics())
-    expect(p.members[0]).toMatchObject({ state: 'none', off: 0, lines: [] })
+    // (stated `kept`, never `none`: `none` is a row that did not come by the rows' end, the test before)
+    expect(p.members[0]).toMatchObject({ state: 'kept', off: 0, lines: [] })
+    // (while rows still come, the same: its row never comes, so nothing waits for it)
+    const going = layPage(part(member()), { ...rowsOf([]), kept: (k) => k === id }, rules, metrics())
+    expect([going.wait.rows, going.members[0]!.state]).toEqual([[], 'kept'])
+  })
+  it('states a kept figure text kept, as a kept member of any other kind', () => {
+    const fig = member({
+      kind: 'figure',
+      plain: 'Time',
+      align: 'l',
+      lines: [[1, 0, 100, 120, 200, 208, 198, 100, 120, 0, 10]],
+      room: { below: 20, side: [60, 400] },
+    })
+    const p = layPage(
+      part(fig),
+      { ...rowsOf([row([{ t: 'text', s: 'Zeit' }])], true), kept: (k) => k === id },
+      rules,
+      metrics(),
+    )
+    expect(p.members[0]!.state).toBe('kept')
   })
   it('waits for a face not loaded, as for a row', () => {
     const p = layPage(

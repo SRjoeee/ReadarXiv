@@ -6018,6 +6018,13 @@ Each mark is a cause of the candidate's own unit (`lab/pdf/prepare-back/stated.m
 `pseudocode`, `nameCell`, `block`; keptWhyOf), which the acceptance list does not accept by this: its entries are the
 coordinator's. The order of `keptBy` is the rules': a unit two marks state is kept by the first.
 
+**The page states it `kept`** (2026-11-13, round B16). A Page member whose unit the paper keeps (`Rows.kept`, the bundle's
+`Unit.kept`) is stated `kept` (`types.ts` Unlaid; `lay/entry.ts` contentOf, `lay/figures.ts` for a figure text), and `none`
+means one thing again: a row that had not come when the rows ended. Nothing the page draws moves: both are the original's, both
+hold no table group (a kept cell counts as one that came back as it went, as before) and neither is waited for; the reader
+reads `state === 'laid'` alone. The lab's display gate read both as "left the original's", a kept unit and a missing row
+alike (lab-data `refactor-2026-11/LATER.md`, 2026-11-12).
+
 Left out, each with its reason: the reader's toggles (a kind they leave is the page's 'left', no keep of the prepare; the dump
 states a unit of today's that such a member holds as `names`, "a line of the author block, kept by the names toggle"); a babel
 name (its own group, in no dump); an element kept as ink inside a translated unit (`El.keep`: a display row, a held line; no

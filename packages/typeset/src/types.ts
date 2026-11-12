@@ -112,12 +112,14 @@ export type Given = { lead?: number; track?: number; size?: number; leave?: Unla
 /**
  * Why a member stays the original's (design-a §1.2's typesetter `Why`, named `Unlaid` here: `packages/format`'s `Why` is a
  * row's failure, what the translate chain yields): the prepare's reasons (format's PrepWhy), the rows' reason kinds
- * (format's Why['kind']), no row (`none`), the reader's leave (`left`), and the typesetter's own
+ * (format's Why['kind']), no row by the rows' end (`none`), a unit the paper keeps as it is (`kept`: format's Unit.kept, never
+ * sent, its row never coming), the reader's leave (`left`), and the typesetter's own
  */
 export type Unlaid =
   | PrepWhy
   | RowWhy['kind']
   | 'none'
+  | 'kept'
   | 'left'
   | 'waiting'
   | 'unfit'

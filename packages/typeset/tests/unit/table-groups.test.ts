@@ -100,7 +100,7 @@ describe('a table decided by group (S.table.groups: today’s decideGroups over 
   it('counts a cell the paper keeps as it is (never asked) as one that came back as it went', () => {
     // (the paper's own name rule kept "ByteNet" and "GNMT" before asking: no row, never to come; the others translated)
     const rows = rowsOf({ ...translated, 2: null, 3: null, 4: 'KonvS2S', 5: 'Basis', 6: 'groß' }, [2, 3])
-    expect(states(table, rows).slice(2, 7)).toEqual(['none', 'none', 'cells', 'cells', 'cells'])
+    expect(states(table, rows).slice(2, 7)).toEqual(['kept', 'kept', 'cells', 'cells', 'cells'])
   })
   it('never keeps the header as names: a header of names stays translated where it was', () => {
     const rows = rowsOf({ ...translated, 0: 'Model', 1: 'Training' })
