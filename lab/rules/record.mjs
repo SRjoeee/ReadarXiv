@@ -116,38 +116,54 @@ export function agreementOf(census, map, recording = null) {
   }
 }
 
-/** old keys to new (P4): a key kept where its rule is the same rule; else, among the keys neither side kept, by the
- *  signature, the rule's value (or entries) and the ordinal; a group that still has more than one way is not matched */
+/** old keys to new (P4): a key kept where its rule is the same rule (its value, or its entries); else, among the keys
+ *  neither side kept, in turn: the same function, signature and ordinal in another file (`function`); the same signature
+ *  and ordinal (`ordinal`); for a comparison, the same signature and the same text of its other operand (`operand`). Each
+ *  stage pairs a key only where what it reads is one key on each side: what is left is printed, never guessed */
 export function remapOf(from, to) {
-  const sigOf = k => k.split('::').slice(2).join('::').replace(/#\d+$/, '')
-  const ordOf = k => Number(/#(\d+)$/.exec(k)?.[1] ?? 0)
+  const partsOf = k => {
+    const [, fn, ...rest] = k.split('::')
+    const sig = rest.join('::')
+    return { fn, sig: sig.replace(/#\d+$/, ''), ord: /#(\d+)$/.exec(sig)?.[1] ?? '0' }
+  }
   const idOf = r => JSON.stringify([r.kind, r.kind === 'list' ? r.entries : r.value])
-  const pairs = {}
-  const oldLeft = []
+  let kept = 0
+  const oldLeft = new Set()
   const newLeft = new Set(Object.keys(to.rules))
   for (const [k, r] of Object.entries(from.rules)) {
     if (to.rules[k] && idOf(to.rules[k]) === idOf(r)) {
-      pairs[k] = k
+      kept++
       newLeft.delete(k)
-    } else oldLeft.push(k)
+    } else oldLeft.add(k)
   }
-  const groupOf = (keys, rules) => keys.reduce((m, k) => m.set(`${sigOf(k)}\u0000${idOf(rules[k])}`, [...(m.get(`${sigOf(k)}\u0000${idOf(rules[k])}`) ?? []), k]), new Map())
-  const oldGroups = groupOf(oldLeft, from.rules)
-  const newGroups = groupOf([...newLeft], to.rules)
+  const STAGES = [
+    ['function', (k, r) => [partsOf(k).fn, partsOf(k).sig, partsOf(k).ord, idOf(r)].join('\u0000')],
+    ['ordinal', (k, r) => [partsOf(k).sig, partsOf(k).ord, idOf(r)].join('\u0000')],
+    ['operand', (k, r) => (r.other ? [partsOf(k).sig, idOf(r), r.other].join('\u0000') : null)],
+  ]
   const moved = {}
-  const unmatched = { old: [], new: [] }
-  for (const [g, olds] of oldGroups) {
-    const news = newGroups.get(g) ?? []
-    newGroups.delete(g)
-    const byOrd = news.filter(n => olds.filter(o => ordOf(o) === ordOf(n)).length === 1 && news.filter(x => ordOf(x) === ordOf(n)).length === 1)
-    for (const n of byOrd) moved[olds.find(o => ordOf(o) === ordOf(n))] = n
-    const restOld = olds.filter(o => !moved[o])
-    const restNew = news.filter(n => !byOrd.includes(n))
-    unmatched.old.push(...restOld)
-    unmatched.new.push(...restNew)
+  const how = {}
+  for (const [stage, read] of STAGES) {
+    const index = (keys, rules) => {
+      const m = new Map()
+      for (const k of keys) {
+        const x = read(k, rules[k])
+        if (x != null) m.set(x, [...(m.get(x) ?? []), k])
+      }
+      return m
+    }
+    const olds = index(oldLeft, from.rules)
+    const news = index(newLeft, to.rules)
+    for (const [x, os] of olds) {
+      const ns = news.get(x)
+      if (os.length !== 1 || ns?.length !== 1) continue
+      moved[os[0]] = ns[0]
+      how[os[0]] = stage
+      oldLeft.delete(os[0])
+      newLeft.delete(ns[0])
+    }
   }
-  for (const news of newGroups.values()) unmatched.new.push(...news)
-  return { kept: Object.keys(pairs).length, moved, unmatched }
+  return { kept, moved, how, unmatched: { old: [...oldLeft].sort(), new: [...newLeft].sort() } }
 }
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
@@ -232,8 +248,9 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
     const to = JSON.parse(readFileSync(opt('to'), 'utf8'))
     const m = remapOf(from, to)
     if (opt('out')) writeFileSync(opt('out'), `${JSON.stringify(m, null, 1)}\n`)
-    console.log(`rules: ${m.kept} keys kept, ${Object.keys(m.moved).length} followed across a move, ${m.unmatched.old.length} old and ${m.unmatched.new.length} new not matched`)
-    for (const [o, n] of Object.entries(m.moved)) console.log(`rules: moved: ${o} -> ${n}`)
+    const byStage = Object.values(m.how).reduce((o, s) => ((o[s] = (o[s] ?? 0) + 1), o), {})
+    console.log(`rules: ${m.kept} keys kept, ${Object.keys(m.moved).length} followed across a move (${Object.entries(byStage).map(([s, n]) => `${s} ${n}`).join(', ') || 'none'}), ${m.unmatched.old.length} old and ${m.unmatched.new.length} new not matched`)
+    for (const [o, n] of Object.entries(m.moved)) console.log(`rules: moved (${m.how[o]}): ${o} -> ${n}`)
     for (const k of m.unmatched.old) console.log(`rules: not followed (old): ${k}`)
     for (const k of m.unmatched.new) console.log(`rules: not followed (new): ${k}`)
     process.exit(m.unmatched.old.length ? 1 : 0)

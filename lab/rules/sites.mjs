@@ -131,7 +131,7 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS, keysOnl
       })
     for (const t of f.thresholds ?? []) {
       if (!RULE_CLASSES.has(t.class) || !t.nodes) continue
-      const base = { kind: 'threshold', file: path, line: t.line, value: t.value, raw: t.raw, class: t.class, context: t.context, name: t.name ?? null, comment: commentText(t.nodes.comment), reason: t.reason, evidence: t.evidence, cites: t.cites, area: f.area, after: alive ? alive.has(id(path)) : null, sites: [] }
+      const base = { kind: 'threshold', file: path, line: t.line, value: t.value, raw: t.raw, class: t.class, context: t.context, name: t.name ?? null, other: t.other ?? null, comment: commentText(t.nodes.comment), reason: t.reason, evidence: t.evidence, cites: t.cites, area: f.area, after: alive ? alive.has(id(path)) : null, sites: [] }
       if (t.context === 'constant' || t.context === 'table') {
         const key = `${fk}::(top)::${t.name}`
         rules[key] = { key, ...base, fn: '' }

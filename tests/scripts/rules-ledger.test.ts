@@ -158,6 +158,16 @@ describe('remap', () => {
     expect(m.moved).toEqual({ 'a::f::<0.5#1': 'b::g::<0.5#1', 'a::f::<0.5#2': 'b::g::<0.5#2', 'a::f::>3#1': 'b::h::>3#1' })
     expect(m.unmatched).toEqual({ old: ['a::f::<2#1'], new: ['a::f::<2.5#1'] })
   })
+  it('follows a function into another file by its name, and two equal comparisons into two functions by their other operands', () => {
+    const cmp = (value: number, other: string) => ({ kind: 'threshold', value, other })
+    // (columns keeps its name in another file; its >=3#1 and its inner one's >=3#1 alike by signature and ordinal)
+    const from = { rules: { 'a::columns::>=3#1': cmp(3, 'xs.length'), 'a::columns/of::>=3#1': cmp(3, 'n'), 'a::locate::>0.5#1': cmp(0.5, 'share'), 'a::locate::>0.5#2': cmp(0.5, 'ratio') } }
+    const to = { rules: { 'g::columns::>=3#1': cmp(3, 'xs.length'), 'g::columns/of::>=3#1': cmp(3, 'n'), 'f::flows::>0.5#1': cmp(0.5, 'ratio'), 'l::leads::>0.5#1': cmp(0.5, 'share') } }
+    const m = remapOf(from, to)
+    expect(m.moved).toEqual({ 'a::columns::>=3#1': 'g::columns::>=3#1', 'a::columns/of::>=3#1': 'g::columns/of::>=3#1', 'a::locate::>0.5#1': 'l::leads::>0.5#1', 'a::locate::>0.5#2': 'f::flows::>0.5#1' })
+    expect(m.how).toEqual({ 'a::columns::>=3#1': 'function', 'a::columns/of::>=3#1': 'function', 'a::locate::>0.5#1': 'operand', 'a::locate::>0.5#2': 'operand' })
+    expect(m.unmatched).toEqual({ old: [], new: [] })
+  })
 })
 
 describe("the census's reading of the ledger", () => {

@@ -15,6 +15,7 @@ export interface Rule {
   value?: number
   raw?: string
   context?: string
+  other?: string | null
   why?: string
   comment?: string
   reason?: boolean
