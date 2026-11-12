@@ -646,7 +646,9 @@ export const GATES = [
     stage: 'reader',
     holds: [],
     needs: ctx => [exists('the tap', lab(ctx, 'baseline/tap/samples'))],
-    steps: () => ['fit', 'fill', 'emit', 'names', 'figures', 'display'].map(r => ({ cmd: ['node', `lab/typeset/replay-${r}.mjs`], slot: 'test', all: true })),
+    // (the figures under today's mark rule, `--marks=today`: v2 sets a figure text by its ink where today's set it by its
+    // advance (PDF-READER §19.12, 9abd1c9e1), which alone moves 609 of the 14,351, and §19.12 reads the port's figures so)
+    steps: () => ['fit', 'fill', 'emit', 'names', 'figures', 'display'].map(r => ({ cmd: ['node', `lab/typeset/replay-${r}.mjs`, ...(r === 'figures' ? ['--marks=today'] : [])], slot: 'test', all: true })),
     judge: (ctx, steps) => ({ pass: steps.every(s => s.exit === 0), numbers: Object.fromEntries(steps.map(s => [s.cmd[1].replace(/^.*replay-|\.mjs$/g, ''), s.exit === 0 ? 'equal' : `exit ${s.exit}: ${lastLine(s.text)}`])) }),
   },
   {

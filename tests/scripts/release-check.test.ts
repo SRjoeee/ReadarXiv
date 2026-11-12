@@ -199,6 +199,20 @@ describe("the prepare's corpus, as the round's stage 1a runs it", () => {
   })
 })
 
+describe("the typesetter's replays", () => {
+  it("replays the figures under today's mark rule, which PDF-READER §19.12 reads the port's figures by, every other replay as it is", () => {
+    const ctx: Ctx = { root: '/repo', labData: null, refactor: '/lab', work: '/work', online: false, minFree: 12 }
+    expect(GATES.find(g => g.id === 'typeset-replays')!.steps!(ctx).map(s => s.cmd.slice(1))).toEqual([
+      ['lab/typeset/replay-fit.mjs'],
+      ['lab/typeset/replay-fill.mjs'],
+      ['lab/typeset/replay-emit.mjs'],
+      ['lab/typeset/replay-names.mjs'],
+      ['lab/typeset/replay-figures.mjs', '--marks=today'],
+      ['lab/typeset/replay-display.mjs'],
+    ])
+  })
+})
+
 describe("the typesetter's data", () => {
   it("checks the generated data and today's readings, never the breaker's moved files against today's code, which the rulings edit", () => {
     const ctx: Ctx = { root: '/repo', labData: null, refactor: '/lab', work: '/work', online: false, minFree: 12 }
