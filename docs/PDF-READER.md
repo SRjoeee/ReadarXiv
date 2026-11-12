@@ -5615,8 +5615,9 @@ was that it may stay the original's where the highlight forces it.
   alike, 692 not; I3 58, I4 0, I5 2; I10 no fault) and the sentence cover as round B13's. The parity's gate (`lab/typeset/parity`,
   as round B13 left it) reads no `keptBy: 'decorated'`: of its 22 pairs one moves, 2608.06701v1-zh, and its page 1 is newly worse
   in both modes (default 6 to 7 worse pages, every switch on 7 to 8), by `figures` alone (class T4, "figure texts counted fewer"):
-  today draws 45 of its figure texts translated, v2 34 (42 before), the eight of today's texts the six held labels cover now the
-  original's. No other difference moved. That reading is the gate's to rule on (its keeps are listed by mark, `join.mjs`
+  today draws 45 of its figure texts translated, v2 24 with the whole label (42 before, 34 with the decorated lines alone), the
+  labels held whole now the original's. No other difference moved, with the decorated lines alone or with their labels; the
+  reader gate with the labels as without them (I10's pieces 4,377,696: the nine members held with their labels draw none). That reading is the gate's to rule on (its keeps are listed by mark, `join.mjs`
   candidateKept), not this section's.
 - **Versions.** PIPELINE must move (members held and stated unwrapped, their groups gone from the add-on, a held figure text's
   size set its own, 2610.40576v1's four cells' ids); no other unit's id or text moves, nor the format (`unwrapped` is the part's
