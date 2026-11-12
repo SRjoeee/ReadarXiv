@@ -757,7 +757,10 @@ decision: clearing it costs a re-translation and nothing else.
   language pack, which may answer next time (the chain's per-unit notes tell which). So a block Microsoft mangles and
   Google answers is not asked of Microsoft again on the next open, the case the chain's answer store alone cannot avoid
   (it keeps no refusal). A row's key moves with the chain: another engine, another order, a translator's behaviour digest,
-  the acceptance rule's.
+  the acceptance rule's, the chain's own rules' (`CHAIN_DIGEST`: the hash of the chain's outcomes over its case table,
+  `packages/translate/tests/chain-cases.ts`, each rule with a case it alone decides; a test holds the literal). No number is
+  raised by hand for any of them: a digest literal is what its case table gives, and a change of one is the announcement
+  that rows are asked again.
 - **The recogniser's readings** (`ocr`, §15.2): by `ocrCacheKey` (`src/cache/ocr-key.ts`), apart from translation's.
 - **Bounds, per table**: 30 days from the write, 20,000 entries and 50 MiB, the least recently read going first past either
   cap (counted incrementally from a `bytes` index; the reading time written back apart, not awaited); a value of at most
@@ -1188,7 +1191,7 @@ only how it meets the rest of the extension.
   in a copy of it and its stop after its words (`packages/translate/src/words.ts` wholeWordsOf, called once in `chain.ts`
   settle and rowContextOf): every wire, the runs floor, the acceptance rule and the put-back below read the unit so. The word
   travels whole and plain, and the translation carries no style from the group. A `must` group (a link, a run-in label,
-  every pair of the HTML page) stays as its host states it. `CHAIN_RULES` `words`. Over the 88 corpus papers 47 of 15,408
+  every pair of the HTML page) stays as its host states it. A case of the chain's digest (`CHAIN_DIGEST`, §9). Over the 88 corpus papers 47 of 15,408
   groups (17 units, 13 papers): the tags wire moves in those 17 units, the markers wire in none.
 - **A group a reply did not bring back is placed where the translation states it** (lane style-spans, 2026-11-10). A
   group's style (its weight, slant or colour: its command's, `SpanAt.colour` from TeX's log, `SpanAt.style` read off its
@@ -1202,14 +1205,14 @@ only how it meets the rest of the extension.
   equal (NFKC: a full-width parenthesis, U+FF08, is "("), white space aside, once in the translation as whole words (UAX #29's word
   boundaries, `Intl.Segmenter`) in the place the reply holds around the group (its nearest group the reply brought back, else
   the unit), and once in the source's same place, the group's alone (`packages/translate/src/groups.ts` placeGroups;
-  `CHAIN_RULES` `groups`, so every row is read again from the stored replies, nothing asked again). A label, an identifier, a
+  a case of the chain's digest, `CHAIN_DIGEST`, so every row is read again from the stored replies, nothing asked again). A label, an identifier, a
   name a translator writes as it is gets its style back on every engine; a group whose words were translated has no
   counterpart stated and stays plain (only a translator that keeps markup brings it back), as does one holding an element or
   another group, or one whose text the source also holds outside the groups of its style or the translation another number
   of times. "Once" is the rule's n = 1 (lane span-putback, 2026-11-11, PDF-READER §18.42): a text the source holds in the place
   only as groups of one style, n of them, and the translation n times there, places each (2602.23285v2's "RQ2" set bold twice
   in a paragraph); an end mark the group's text ends in is matched by its class, Unicode's Terminal_Punctuation ("RQ1." is the
-  reply's "RQ1" and an ideographic full stop); `CHAIN_RULES` `groups/2`. No wire changes, no byte is sent; reading costs
+  reply's "RQ1" and an ideographic full stop); two cases of the chain's digest. No wire changes, no byte is sent; reading costs
   11 µs a unit (34 µs a unit holding a group that is not `must`). Over the 88 corpus papers' stored replies read as the
   markers wire would bring them, 665 groups in 75 papers get their style back (575 a face, 90 a colour), and 2,637 that draw
   none of their own (a bibliography's fields, bare groups) go back around their words.
@@ -1233,7 +1236,7 @@ only how it meets the rest of the extension.
   and when it ends its signal cancels what is still asked and what it started settles before its last store write, so that
   no request outlives the call and an answer that came in time is stored (Codex's review of round B11: a reference in a
   request of its own outlived the call, out of the host's abort, its answer never stored).
-  `CHAIN_RULES` `references`: every row is read again from its stored reply and no stored reply is asked again; the
+  A case of the chain's digest: every row is read again from its stored reply and no stored reply is asked again; the
   references are new requests. Over the 88 corpus papers' Chinese, of the 1,406 phrase groups of their running text (bold
   252, italic 722, colour 280, small capitals 24, a paper's style 128), 196 hold an element and are not asked; of the 1,142
   asked (68 more are a span around the whole unit beside elements that set nothing, or hold another group), 20 are placed by
