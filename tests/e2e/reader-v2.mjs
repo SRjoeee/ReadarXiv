@@ -277,8 +277,12 @@ try {
     check('the reader is off the page again before the popup\'s entry is pressed', leftAgain && !(await readerOnPage()), `way back taken ${leftAgain}, reader over the page ${await readerOnPage()}`)
     const popup = track(await context.newPage())
     await popup.goto(`chrome-extension://${id}/popup.html`)
+    // (the popup reads the active tab once, as it starts (popup/data.ts tabUrl): opened in a tab of its own, it may ask before
+    // the PDF page is in front again and find itself, no paper, no entry (2 of 20 runs). So the PDF page brought to the
+    // front, then the popup started again over it, as the toolbar's popup starts over the tab in front)
     await page.bringToFront()
-    await sleep(2500)
+    await popup.reload()
+    await popup.waitForFunction(({ html, pdf }) => [...document.querySelectorAll('button')].filter(b => new RegExp(`${html}|${pdf}`).test(b.textContent ?? '')).length === 2, sources, { timeout: 10_000 }).catch(() => undefined)
     const popupEntries = await panelEntries(popup)
     check('the popup on the PDF page offers the same two entries', popupEntries.length === 2 && popupEntries.some(e => /PDF/.test(e.text) && !e.disabled), JSON.stringify(popupEntries))
     await pressEntry(popup, 'pdf')
