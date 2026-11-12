@@ -95,7 +95,12 @@ export async function layerChecks(t) {
     const postsBefore = echo.seen.post
     await setConfig({ provider: 'svc-e2eecho0' })
     const mended = (await laid(failing, 1, 30_000)) && (await echoed(failing))
-    check('another service chosen: what stopped short asked of it by itself, no retry pressed, the page laid', mended && echo.seen.post > postsBefore && /\[echo\]/.test(await rightText(failing)), `${echo.seen.post - postsBefore} asks of the new service; ${(await probe(failing)).laidPages} laid`)
+    const where = await failing.evaluate(() => {
+      const s = window.__reader.reader.state()
+      const { s: layer, open, loaded, composed } = s.layer
+      return { visible: document.visibilityState, rows: s.rows, layer: { layer, open, loaded, composed: composed === undefined ? undefined : composed !== null }, display: s.view.display, panes: s.panes, probe: window.__reader.reader.probe() }
+    })
+    check('another service chosen: what stopped short asked of it by itself, no retry pressed, the page laid', mended && echo.seen.post > postsBefore && /\[echo\]/.test(await rightText(failing)), `${echo.seen.post - postsBefore} asks of the new service; ${(await probe(failing)).laidPages} laid; ${JSON.stringify(where)}`)
     await failing.close()
     await setConfig({ targetLanguage: 'deu', fallback: { enabled: true } })
   }

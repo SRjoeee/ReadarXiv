@@ -297,6 +297,11 @@ try {
     // asked anew; or Chrome does not cache the page, and the case cannot arise: which, the navigation's type says)
     const page = track(await context.newPage())
     await page.addInitScript(() => { addEventListener('pageshow', e => { window.__axtShown = [...(window.__axtShown ?? []), e.persisted] }) })
+    // (Chrome's reasons unmasked, through the DevTools protocol: the page's own API masks a cross-origin frame's, the reader's)
+    const notUsed = []
+    const cdp = await context.newCDPSession(page)
+    await cdp.send('Page.enable')
+    cdp.on('Page.backForwardCacheNotUsed', e => { for (const x of e.notRestoredExplanations ?? []) notUsed.push(`${x.type}:${x.reason}`) })
     await setConfig({ targetLanguage: 'deu' })
     await page.goto(`https://arxiv.org/pdf/${PAPER}`)
     const frameOf = async () => (await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 20_000 }).catch(() => null))?.contentFrame()
@@ -314,6 +319,8 @@ try {
       const reasons = r => (r ? [...(r.reasons ?? []).map(x => x.reason ?? x), ...(r.children ?? []).flatMap(reasons)] : [])
       return { type: n?.type ?? null, shown: window.__axtShown ?? [], notRestored: reasons(why) }
     })
+    nav.chrome = [...new Set(notUsed)]
+    await cdp.detach().catch(() => undefined)
     reader = await frameOf()
     const restored = nav.shown.includes(true)
     const kept = reader ? await reader.evaluate(() => window.__axtMark === 'before').catch(() => false) : false
@@ -484,12 +491,21 @@ try {
     b.on('pageerror', e => errors.push(e.message))
     const unreadableBefore = (await readerState(b)).settingsUnreadable
     const displayBefore = await display(b)
+    // (the session's settings, chosen display and refusals at each change from here, for the check's detail)
+    await b.evaluate(() => {
+      const r = window.__reader.reader
+      window.__trail = []
+      let last = ''
+      r.subscribe(() => { const s = r.state(); const k = `${s.settings.s}:${s.prefs.display}:${s.settings.refused}`; if (k !== last) window.__trail.push(k); last = k })
+    })
     await b.evaluate(c0 => chrome.storage.local.set({ config: { ...c0, mode: 'nonsense' } }), stored0)
     await settle(b)
+    await b.evaluate(() => window.__trail.push('-- chosen: original'))
     await chosen(b, 'original')
     const after = await readerState(b)
     check('unreadable settings: a refused write says so, and it was not so before', unreadableBefore === false && after.settingsUnreadable === true, `before ${unreadableBefore}, after ${after.settingsUnreadable}`)
-    check('unreadable settings: the display chosen holds', displayBefore !== 'original' && after.display === 'original', `${displayBefore}, then ${after.display}`)
+    const inSession = await b.evaluate(() => { const s = window.__reader.reader.state(); return { shown: s.view.display, chosen: s.prefs.display, ...s.settings, trail: window.__trail } })
+    check('unreadable settings: the display chosen holds', displayBefore !== 'original' && after.display === 'original', `${displayBefore}, then ${after.display}; the session's ${JSON.stringify(inSession)}`)
     check('unreadable settings: nothing thrown', errors.length === 0, errors.join('; '))
     const d = await open({ mode: 'original' })
     check('unreadable settings: a reader opened on them knows at once', (await readerState(d)).settingsUnreadable === true)

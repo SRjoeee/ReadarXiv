@@ -7,7 +7,10 @@
 // fit and at each step of the zoom menu (among them those where PDF.js floors away most of a CSS px of the page's width), on
 // every page laid:
 //   - the page's drawing is on the slot's box at the pixel ratio, as PDF.js sizes a page view's canvas;
-//   - the overlay and its SVG are the page's box, not a floored size over it.
+//   - the overlay is the slot's box, and its SVG the page's own size from the slot's corner: PDF.js draws the page at the
+//     zoom's scale and rounds the slot's box down (to its --scale-round-x and -y, a CSS px at an integral ratio), so the
+//     translation drawn at that scale registers with the page's drawing only where it is not rounded with the box (the SVG
+//     past the slot by less than that step; the reader package's e2e "I1" measures the residue on the pixels).
 // (The old reader's half of this script, its copy of the composed document kept far from the view and drawn again pixel for
 // pixel, is the old reader's mechanism; the rebuilt reader's laid page far and back is its very drawing: the reader package's
 // e2e, "port: a laid page far and back is its very drawing".)
@@ -60,7 +63,15 @@ const measure = () => [...document.querySelectorAll('section.pane[data-side="rig
   if (!over || !canvas?.width) return []
   const box = r => { const b = r.getBoundingClientRect(); return [b.width, b.height, b.left, b.top] }
   const svg = over.querySelector('svg')
-  return [{ page: Number(slot.dataset.pageNumber), dpr: devicePixelRatio, slot: box(view), canvas: [canvas.width, canvas.height], over: box(over), svg: svg ? box(svg) : null }]
+  // (PDF.js's rounding of the page view's box, CSS px: the denominator of its output scale's fraction, 1 at an integral ratio)
+  const round = ['x', 'y'].map(a => Number.parseFloat(getComputedStyle(canvas).getPropertyValue(`--scale-round-${a}`)) || 1)
+  // (the page's own size at the zoom, unrounded, apart from the overlay's own sizing: its SVG's page units at PDF.js's scale
+  // factor, the viewer's; sorted, as a turned page's box is its frame's turned)
+  const css = name => Number.parseFloat(getComputedStyle(canvas).getPropertyValue(name))
+  const vb = svg?.viewBox?.baseVal
+  const factor = css('--scale-factor') * (css('--user-unit') || 1)
+  const own = vb?.width && factor ? [vb.width * factor, vb.height * factor] : null
+  return [{ page: Number(slot.dataset.pageNumber), dpr: devicePixelRatio, slot: box(view), canvas: [canvas.width, canvas.height], over: box(over), svg: svg ? box(svg) : null, round, own }]
 })
 
 const echo = await startEchoEndpoint()
@@ -95,9 +106,19 @@ try {
           const atRatio = [Math.round(p.slot[0] * dpr), Math.round(p.slot[1] * dpr)]
           check(`DPR ${dpr}, zoom ${z}, page ${p.page}: the page's drawing is on the slot's box at the pixel ratio`, Math.abs(p.canvas[0] - atRatio[0]) <= 1 && Math.abs(p.canvas[1] - atRatio[1]) <= 1, `canvas ${JSON.stringify(p.canvas)}, the box at ${dpr} ${JSON.stringify(atRatio)}`)
           const near = (a, b) => !!a && a.every((v, i) => Math.abs(v - b[i]) <= 0.05)
-          check(`DPR ${dpr}, zoom ${z}, page ${p.page}: the overlay and its SVG are the slot's box`, near(p.over, p.slot) && (!p.svg || near(p.svg, p.slot)), JSON.stringify({ slot: p.slot, over: p.over, svg: p.svg }))
+          // (the SVG from the slot's corner, the page's size: the slot's, or past it by what the rounding down took, under its step)
+          const framed = (svg, slot) => near(svg.slice(2), slot.slice(2)) && [0, 1].every(i => svg[i] >= slot[i] - 0.05 && svg[i] - slot[i] < p.round[i] + 0.05) && !!p.own && near(svg.slice(0, 2).sort((a, b) => a - b), [...p.own].sort((a, b) => a - b))
+          check(`DPR ${dpr}, zoom ${z}, page ${p.page}: the overlay is the slot's box, its SVG the page's own size from the slot's corner`, near(p.over, p.slot) && (!p.svg || framed(p.svg, p.slot)), JSON.stringify({ slot: p.slot, over: p.over, svg: p.svg, round: p.round, own: p.own }))
         }
-        if (!m.length) check(`DPR ${dpr}, zoom ${z}: a laid page measured`, false, 'none')
+        if (!m.length) {
+          // (what the right's first slots hold, where none measured: their parts and canvases)
+          const seen = await page.evaluate(() => [...document.querySelectorAll('section.pane[data-side="right"] .axt-slot')].slice(0, 2).map(s => ({
+            n: s.dataset.pageNumber,
+            parts: [...s.querySelectorAll('*')].slice(0, 12).map(e => `${e.tagName.toLowerCase()}.${typeof e.className === 'string' ? e.className.split(' ').join('.') : ''}`),
+            canvases: [...s.querySelectorAll('canvas')].map(c => `${c.className || '-'} ${c.width}x${c.height}`),
+          })))
+          check(`DPR ${dpr}, zoom ${z}: a laid page measured`, false, `none; ${JSON.stringify(seen)}`)
+        }
       }
       check(`DPR ${dpr}: no request left the route table`, guard.violations.length === 0, guard.violations.map(v => `${v.method} ${v.url}`).join('; '))
       check(`DPR ${dpr}: no page of the reader threw`, pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '))
