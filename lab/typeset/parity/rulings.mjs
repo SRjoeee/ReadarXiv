@@ -483,6 +483,38 @@ export const RULINGS = [
       return (d.today?.value === 'original' || d.today?.value === 'target') && d.v2?.value === 'mixed'
     },
   },
+  {
+    id: 'T4',
+    title: 'figure texts held whole as the original for a decorated word in their label, counted fewer than today',
+    verdict: '同意你的建议',
+    date: DATE,
+    seen: "verification/readiness.zh.html, item-15 (W11, the three questions after the figure and table text research), part (a): until a ground can follow its word, hold the whole label or cell as the original (the recommendation he agreed to); his verdict, verification/owner-comments-readiness-2026-11-12.json item-15; the rule as built: lane decorated-whole, the prepare's `keptBy: 'decorated'` (`decorated: 'token' | 'label'` on the unit); the condition the coordinator's, 2026-11-12",
+    words: null,
+    example:
+      "2608.06701v1-zh p1, the figure's box 1, box 10 and the plan's items 2 and 3, each holding a highlighted word: v2 holds 15 figure texts as the original (6 for their own word, 9 the other lines of their label), today translates them; figure texts drawn translated, today 45, v2 24",
+    condition:
+      "figures, the page's count: v2 draws fewer figure texts translated than today by no more than today's texts that stand in v2's figure members the prepare states held whole for a decorated word (the dump's `keptBy: 'decorated'`, v2.mjs `decorated`; each of today's drawn groups whose middle stands in such a member's lines, however today cut it), beyond what the measure's own set-asides explain (the texts kept by a mark, those no row serves); and every such member on the page drawn as the original: not laid, no group of it turned off, no line of v2's text drawn of it, so its ink stays where TeX set it at its size. A figure text v2 leaves the original's with no such statement still counts against the page",
+    holds(d, x) {
+      if (d.flag !== 'figures' || d.unit) return false
+      const f = x.p.measures?.figures
+      const ords = f?.decoratedOrds ?? []
+      if (!ords.length || !(f.decorated > 0)) return false
+      const t = d.today?.value,
+        v = d.v2?.value
+      if (![t, v].every(Number.isFinite)) return false
+      const apart = (f.pitch ?? 0) + (f.identifier ?? 0) + (f.unmeasured ?? 0)
+      if (t - v > apart + f.decorated) return false
+      return ords.every((o) => {
+        const m = x.laid(o)
+        const drawn = (x.rec.v2?.units ?? []).some((u) => u.id === o && u.lines.some((l) => l.n > 0))
+        return !!m && m.state !== 'laid' && !(m.off ?? 0) && !(m.lines?.length ?? 0) && !drawn
+      })
+    },
+    says(d, x) {
+      const f = x.p.measures.figures
+      return `today ${d.today.value}, v2 ${d.v2.value}: ${f.decorated} of today's texts stand in the ${f.decoratedOrds.length} held for a decorated word, drawn as the original${f.pitch || f.identifier ? `; ${(f.pitch ?? 0) + (f.identifier ?? 0)} kept by a mark` : ''}${f.unmeasured ? `; ${f.unmeasured} no row serves` : ''}`
+    },
+  },
 ]
 /** the measures that read a unit's content lost or changed against the original: a unit none of them finds v2 farther on (worse,
  *  or covered) on any of its pages is whole (the rulings L2 and S4) */

@@ -331,6 +331,43 @@ describe("T2: a table's header row with a cell kept as the original, the others 
   })
 })
 
+describe('T4: figure texts held whole as the original for a decorated word, counted fewer than today (his answer to W11 (a))', () => {
+  // (2608.06701v1-zh p1: today draws 45 figure texts translated, v2 24; v2's prepare holds 15 figure members whole for a decorated
+  // word in their label (the dump's `keptBy: 'decorated'`), in which 21 of today's drawn texts stand)
+  const held = Array.from({ length: 15 }, (_, i) => 300 + i)
+  const page = (o: { decorated?: number; ords?: number[]; laid?: (ord: number) => object; drawn?: number; v2?: number; more?: object } = {}) => {
+    const ords = o.ords ?? held
+    const members = ords.map((ord) => ({ ord, state: 'unwrapped', off: 0, lines: [], ...(o.laid?.(ord) ?? {}) }))
+    const figures = { today: 45, v2: o.v2 ?? 24, v2Laid: 30, ...(ords.length ? { decorated: o.decorated ?? 21, decoratedOrds: ords } : {}), ...(o.more ?? {}) }
+    const { page: p } = judged(
+      { diffs: [{ ...worse('figures', null as unknown as string, null, 45, o.v2 ?? 24), off: null } as Diff], measures: { figures } } as never,
+      {
+        v2: { facts: { [N]: { members: [], ties: [] } }, pages: { [N]: { members } } },
+        rec: rec({}, o.drawn === undefined ? {} : { units: [{ id: o.drawn, lines: [drawn(500, 100, 140, 5, '\u6587\u5b57')] }] }),
+      },
+    )
+    const d = (p.diffs as (Diff & { coveredSays?: string })[])[0]!
+    return [d.worse, d.covered ?? null, d.coveredSays ?? null]
+  }
+  it('fewer by no more than the texts standing in the held members, each drawn as the original: covered by T4, the count reported', () => {
+    expect(page()).toEqual([false, 'T4', "today 45, v2 24: 21 of today's texts stand in the 15 held for a decorated word, drawn as the original"])
+    // (with the measure's own set-asides: 2 kept by a mark, 1 no row serves, 18 in the held members)
+    expect(page({ decorated: 18, more: { pitch: 2, unmeasured: 1 } })).toEqual([
+      false,
+      'T4',
+      "today 45, v2 24: 18 of today's texts stand in the 15 held for a decorated word, drawn as the original; 2 kept by a mark; 1 no row serves",
+    ])
+  })
+  it('fewer than the held members explain, one of them drawn or laid or a group of it off, or no statement: worse', () => {
+    // (a figure text v2 leaves the original's with no statement: 3 more than the held members hold)
+    expect(page({ decorated: 18 })).toEqual([true, null, null])
+    expect(page({ drawn: 303 })).toEqual([true, null, null])
+    expect(page({ laid: (ord) => (ord === 305 ? { state: 'laid', lines: [[500, 100, 140, []]] } : {}) })).toEqual([true, null, null])
+    expect(page({ laid: (ord) => (ord === 305 ? { off: 1 } : {}) })).toEqual([true, null, null])
+    expect(page({ ords: [] })).toEqual([true, null, null])
+  })
+})
+
 describe('E1: a web or e-mail address cut over two lines at its own break point', () => {
   // (2608.06701v1-zh p12 t321: "https://" | "swe-agent.com/…" from one line of arXiv's page, drawn at the end of v2's first line
   // and the start of its second)
@@ -442,7 +479,8 @@ describe('the rulings file', () => {
     for (const r of RULINGS) {
       expect(r.id).toMatch(/^[A-Z][A-Za-z0-9]{0,2}$/)
       expect(r.title.length).toBeGreaterThan(10)
-      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528'].includes(r.verdict)).toBe(true)
+      // (his verdicts: accepted, taken, option 1 (T2), agreed with the recommendation (T4))
+      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528', '\u540c\u610f\u4f60\u7684\u5efa\u8bae'].includes(r.verdict)).toBe(true)
       expect(r.date).toBe('2026-11-12')
       expect(r.example.length).toBeGreaterThan(20)
       expect(r.condition === null ? r.unstated : r.condition).toBeTruthy()

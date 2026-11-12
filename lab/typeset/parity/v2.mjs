@@ -454,6 +454,9 @@ for (const pair of pairs) {
   const formula = candidateKept(paperOf(pair), 'formula')
   const double = candidateKept(paperOf(pair), 'double')
   const script = candidateKept(paperOf(pair), 'script')
+  // (a figure text or a cell held whole as the original for a decorated word, lane decorated-whole: the owner's ruling T4 reads it,
+  // rulings.mjs)
+  const decorated = candidateKept(paperOf(pair), 'decorated')
   const keptToday = candidateKeptToday(paperOf(pair))
   // (the ink of the elements its prepare keeps as the original's, by member: F0's run of one pitch, a stretch a decoration holds;
   // the verdict reads the original's style without it, the coordinator's ruling 1 on F0)
@@ -488,6 +491,7 @@ for (const pair of pairs) {
     ...(formula.length ? { formula } : {}),
     ...(double.length ? { double } : {}),
     ...(script.length ? { script } : {}),
+    ...(decorated.length ? { decorated } : {}),
     ...(keptToday.length ? { keptToday } : {}),
     ...(keptEls.length ? { keptEls } : {}),
     ...(noRow.size ? { noRow: [...noRow].sort((a, b) => a - b) } : {}),
