@@ -236,9 +236,13 @@ describe('the equivalence gates, in either shape of their tools', () => {
     const blocker = gate('display')
     expect(blocker.cutover).toBe(true)
     const other = gate('typecheck')
-    expect(cutoverOf(GATES, [other], { typecheck: { status: 'pass' } })).toMatchObject({ verdict: 'NO-GO', why: ['display: not in this run (tier full)'] })
+    expect(cutoverOf(GATES, [other], { typecheck: { status: 'pass' } })).toMatchObject({ verdict: 'NO-GO', why: ['display: not in this run (tier full)', 'perf-release: not in this run (tier release)'] })
     expect(cutoverOf(GATES, [other, blocker], { typecheck: { status: 'pass' }, display: { status: 'fail' } }).verdict).toBe('NO-GO')
-    expect(cutoverOf(GATES, [other, blocker], { typecheck: { status: 'fail' }, display: { status: 'pass' } })).toMatchObject({ verdict: 'GO', why: [] })
+    // (performance ≥ today is a blocker too, the release tier's: GO only with both passed)
+    const perf = gate('perf-release')
+    expect(perf.cutover).toBe(true)
+    expect(cutoverOf(GATES, [other, blocker], { typecheck: { status: 'fail' }, display: { status: 'pass' } })).toMatchObject({ verdict: 'NO-GO', why: ['perf-release: not in this run (tier release)'] })
+    expect(cutoverOf(GATES, [other, blocker, perf], { typecheck: { status: 'fail' }, display: { status: 'pass' }, 'perf-release': { status: 'pass' } })).toMatchObject({ verdict: 'GO', why: [] })
     expect(markdownOf({ tier: 'full', verdict: 'NO-GO', why: [], cutover: { verdict: 'NO-GO', why: ['display: fail'], blockers: ['display'] }, invariants: [], gates: [], targets: [] })).toContain('**Cut-over: NO-GO.**')
   })
 })
@@ -256,7 +260,7 @@ describe("the private repository's results", () => {
 
 describe('the report', () => {
   it('gives each target of §7 its value where a gate of the run measured it, met or missed, else why not', () => {
-    const lines = targetLines({ 'prepare-diff': { status: 'pass', numbers: { source: 27271, ink: 2700, figures: 8000, lost: 0, accepted: 3, gained: 356 } }, harness: { status: 'pass', numbers: { commitP50: 25, commitPages: 8 } } })
+    const lines = targetLines({ 'prepare-diff': { status: 'pass', numbers: { source: 27271, ink: 2700, figures: 8000, lost: 0, accepted: 3, gained: 356 } }, 'perf-batch': { status: 'pass', numbers: { m: { commitP50: [25, 24, 'equal'] } } } })
     expect(lines.find(t => t.id === 'units')).toMatchObject({ status: 'met' })
     expect(lines.find(t => t.id === 'commit')).toMatchObject({ status: 'missed' })
     expect(lines.find(t => t.id === 'reuse')).toMatchObject({ status: 'not measured', why: expect.stringMatching(/no gate/) })
