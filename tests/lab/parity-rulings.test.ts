@@ -397,6 +397,50 @@ describe('T4: figure texts held whole as the original for a decorated word, coun
   })
 })
 
+describe('T5: a cell or a figure label held whole as the original for a decorated word, where today translates it (his answer to W11 (a))', () => {
+  // (2111.09276v1-zh p4, a table's body: cells each holding a decorated word, held whole as the original by v2 (the dump's
+  // `keptBy: 'decorated'`, v2.mjs's `decorated`), translated by today; two of its columns drawn mixed by them where today translates
+  // them whole. Three cells here: 28 and 30 held, 29 translated by both)
+  type O = { decorated?: number[]; member?: (ord: number) => object; drawn?: number }
+  const ctx = (o: O) => ({
+    v2: {
+      facts: { [N]: { members: [], ties: [] } },
+      pages: { [N]: { members: [28, 29, 30].map((ord) => ({ ord, ...(ord === 29 ? { state: 'laid', off: 0, lines: [[690, 300, 330, []]] } : { state: 'unwrapped', off: 0, lines: [] }), ...(o.member?.(ord) ?? {}) })) } },
+      ...(o.decorated ? { decorated: o.decorated } : {}),
+    },
+    rec: rec({}, { units: [{ id: 29, lines: [drawn(690, 300, 330, 8.19, '\u6587\u5b57')] }, ...(o.drawn === undefined ? [] : [{ id: o.drawn, lines: [drawn(690, 200, 230, 8.19, '\u6587\u5b57')] }])] }),
+  })
+  const units = [28, 29, 30].map((o) => ({ key: `t${o}`, kind: 'cell', part: o, align: 'c', sides: { today: side(1, 8.19, 8.19, 1) } }))
+  const one = (d: Diff, o: O) => {
+    const { page: p } = judged({ diffs: [d], units }, ctx(o))
+    const x = (p.diffs as (Diff & { coveredSays?: string })[])[0]!
+    return [x.worse, x.covered ?? null]
+  }
+  const shown = (o: O = {}) => one(worse('shown', 't28 cell', null, 'translated', 'unwrapped', [null, null]), o)
+  /** the column's difference as fidelity.mjs writes it: its cells, and those each side draws as the original */
+  const column = (o: O & { today?: string; asOriginal?: string[] | null } = {}) =>
+    one({ ...worse('groups', 'group 1:c0', 'whole', o.today ?? 'target', 'mixed'), cells: ['t28', 't29', 't30'], ...(o.asOriginal === null ? {} : { asOriginal: { today: o.today === 'original' ? ['t28', 't29', 't30'] : [], v2: o.asOriginal ?? ['t28', 't30'] } }) } as Diff, o)
+  it('stated held for a decorated word, drawn as the original where today translates it: covered by T5', () => {
+    expect(shown({ decorated: [28, 30] })).toEqual([false, 'T5'])
+  })
+  it('no statement, another member stated, or v2 drawing it, laying it or turning a group of it off: worse', () => {
+    expect(shown()).toEqual([true, null])
+    expect(shown({ decorated: [30] })).toEqual([true, null])
+    expect(shown({ decorated: [28, 30], drawn: 28 })).toEqual([true, null])
+    expect(shown({ decorated: [28, 30], member: (ord) => (ord === 28 ? { state: 'laid', lines: [[690, 200, 230, []]] } : {}) })).toEqual([true, null])
+    expect(shown({ decorated: [28, 30], member: (ord) => (ord === 28 ? { off: 1 } : {}) })).toEqual([true, null])
+  })
+  it('a group today translates whole that v2 draws mixed only by cells so held, each drawn as the original: covered by T5', () => {
+    expect(column({ decorated: [28, 30] })).toEqual([false, 'T5'])
+  })
+  it('a cell v2 leaves the original\'s with no statement, one held cell drawn, a group today keeps whole, or no cells stated: worse', () => {
+    expect(column({ decorated: [28] })).toEqual([true, null])
+    expect(column({ decorated: [28, 30], drawn: 30 })).toEqual([true, null])
+    expect(column({ decorated: [28, 30], today: 'original' })).toEqual([true, null])
+    expect(column({ decorated: [28, 30], asOriginal: null })).toEqual([true, null])
+  })
+})
+
 describe('E1: a web or e-mail address cut over two lines at its own break point', () => {
   // (2608.06701v1-zh p12 t321: "https://" | "swe-agent.com/…" from one line of arXiv's page, drawn at the end of v2's first line
   // and the start of its second)

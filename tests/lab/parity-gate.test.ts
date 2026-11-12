@@ -425,6 +425,10 @@ describe("groups: a table's grid group translated or kept whole as today decides
     const r = rec({ v2: { units: [{ id: 118, lines: [drawnLine(370, 380, 653, '\u5217\u8f66', 9.96)] }, { id: 121, lines: [drawnLine(480, 490, 653, '\u53c2\u6570', 9.96)] }] } })
     expect(of('groups')(measure(v2, r, { prep, groups }))).toMatchObject([{ unit: 'group 3:h', worse: true, v2: { value: 'mixed' }, today: { value: 'original' } }])
   })
+  it('states its cells and those each side draws as the original, which the ruling T5 reads (rulings.mjs)', () => {
+    const r = rec({ v2: { units: [{ id: 118, lines: [drawnLine(370, 380, 653, '\u5217\u8f66', 9.96)] }, { id: 121, lines: [drawnLine(480, 490, 653, '\u53c2\u6570', 9.96)] }] } })
+    expect(of('groups')(measure(v2, r, { prep, groups }))).toMatchObject([{ cells: ['t118', 't119', 't120', 't121'], asOriginal: { today: ['t118', 't119', 't120', 't121'], v2: ['t119', 't120'] } }])
+  })
   it("a group today's decision kept whole, handed to v2 as rows already decided and drawn the same: not exercised, never worse", () => {
     // (the stored rows hold no translation for a group today kept, so v2's own decision cannot be exercised on it: recorded
     // apart, as the ruling's are)

@@ -581,12 +581,13 @@ export function measureFidelity(c) {
 
   // ---------------- groups: a table's grid groups (TeX's grid: the header, each column, the cells spanning the same columns),
   // translated or kept whole as today decides (the owner's ruling 3)
+  const cellState = (M, { key, src }) => {
+    const ls = M.get(key)
+    if (!ls) return 'original'
+    return bare(ls.map((l) => l.text).join('')) === bare(src) ? 'original' : 'target'
+  }
   const groupState = (side, M, cells) => {
-    const st = cells.map(({ key, src }) => {
-      const ls = M.get(key)
-      if (!ls) return 'original'
-      return bare(ls.map((l) => l.text).join('')) === bare(src) ? 'original' : 'target'
-    })
+    const st = cells.map((c) => cellState(M, c))
     return st.every((x) => x === st[0]) ? st[0] : 'mixed'
   }
   for (const g of c.groups ?? []) {
@@ -603,8 +604,12 @@ export function measureFidelity(c) {
     if (v === 'mixed') fault('v2', 'groups', `${g.group}: its cells part translated, part the original's`)
     // (a group both sides draw the same, kept on both or translated on both, is no difference; one drawn otherwise than today
     // decides is worse)
-    // (a group holding a cell v2 is laid with a fresh row of names its cells, so that the difference is tagged: verdict.mjs tagFresh)
-    const named = c.freshKeys && cells.some(({ key }) => c.freshKeys.has(key)) ? { cells: cells.map(({ key }) => key) } : undefined
+    // (the difference names its cells, so that one holding a cell v2 is laid with a fresh row of is tagged (verdict.mjs tagFresh),
+    // and those each side draws as the original, which the ruling T5 reads: a group mixed only by cells held for a decorated word)
+    const named = {
+      cells: cells.map(({ key }) => key),
+      asOriginal: { today: cells.filter((x) => cellState(T, x) === 'original').map(({ key }) => key), v2: cells.filter((x) => cellState(V, x) === 'original').map(({ key }) => key) },
+    }
     if (t !== v) diff('groups', `group ${g.group}`, "a table's grid group translated or kept whole, as today decides (the owner's ruling)", 'whole', { value: t, off: t === 'mixed' ? 1 : 0 }, { value: v, off: 1 }, true, 'today', named)
     // (a group today's decision kept whole reaches v2 as no rows: the stored rows hold no translation of its cells, so v2's own
     // decision is not exercised there and what v2 draws is today's decision. Recorded apart, as the ruling's are: never worse,
