@@ -20,6 +20,8 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
   const R = new Array(S.length)
   // (the context: the paper or pair, the test and its file, and the page a lab runner says it lays: lab/typeset's gate)
   let ctx = Object.freeze({ paper, test: null, file: null, page: null })
+  // (every paper a process records cases of: a lay's runner lays several in one process)
+  const papers = new Set(paper ? [paper] : [])
   let flushes = 0
   const t0 = performance.now()
 
@@ -265,6 +267,7 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
     /** the context the next cases are recorded with: a paper, a test */
     context: next => {
       ctx = Object.freeze({ ...ctx, ...next })
+      if (next.paper) papers.add(next.paper)
     },
     get current() {
       return ctx
@@ -286,7 +289,7 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
           ...(r.reads ? { reads: r.reads } : {}),
         }
       }
-      return { format: RAW_FORMAT, map: map.digest, input, file: ctx.file, pid: process.pid, paper: ctx.paper, argv: process.argv.slice(1), ms: Math.round(performance.now() - t0), ...extra, sites }
+      return { format: RAW_FORMAT, map: map.digest, input, file: ctx.file, pid: process.pid, paper: ctx.paper, papers: [...papers], argv: process.argv.slice(1), ms: Math.round(performance.now() - t0), ...extra, sites }
     },
     /** the record written under AXT_RULES_OUT (or `out`), with `extra` fields (vitest-setup.mjs: `labRead`), and the
      *  recorder emptied */

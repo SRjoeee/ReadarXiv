@@ -33,7 +33,11 @@ function made(specs: Record<string, Spec>, inputs: Recording['inputs'] = {}) {
       const id = sites.length
       sites.push({ id, kind: s.kind, file: FILE, line: line++, fn: 'f', rules: [key], bounds: [{ rule: key, shape: s.kind === 'val' ? 'read' : 'direct', at: 'right', value: 0.5 }], ...(spec.entries ? { entries: spec.entries } : {}) })
       rules[key]?.sites.push(id)
-      for (const [input, r] of Object.entries(s.per)) (per[input] ??= {})[id] = { n: 0, t: 0, f: 0, nan: 0, near: [null, null], tests: [null, null], hits: null, reads: null, papers: 1, ...r }
+      for (const [input, r] of Object.entries(s.per)) {
+        const into = per[input] ?? {}
+        into[id] = { n: 0, t: 0, f: 0, nan: 0, near: [null, null], tests: [null, null], hits: null, reads: null, papers: 1, ...r }
+        per[input] = into
+      }
     }
   }
   const map: SiteMap = { format: 'readarxiv/rule-sites 1', commit: null, digest: 'd', rules, sites, files: {} }
@@ -54,7 +58,7 @@ const SPECS: Record<string, Spec> = {
   HANDED: { sites: [], wholeReads: 1 },
   NOWHERE: { sites: [] },
   PAPER: { comment: 'the column gap of 2401.00001v1', sites: [{ kind: 'cmp', per: { corpus: n(2, 0) } }] },
-  PAPER_AWAY: { comment: 'as 2509.12345v2 sets it', sites: [{ kind: 'cmp', per: { corpus: n(2, 0) } }] },
+  PAPER_AWAY: { comment: 'as 2509.12345v2 sets it (2509.12345, p3)', sites: [{ kind: 'cmp', per: { corpus: n(2, 0) } }] },
   DEFINITION: { comment: "the TeXbook's \\parskip, 0pt plus 1pt", sites: [{ kind: 'cmp', per: { corpus: n(2, 0) } }] },
   SECTION: { comment: 'PDF-READER §18.61 states it', sites: [{ kind: 'cmp', per: {} }] },
   MEASURED: { comment: 'on the 88 papers no line is shorter', sites: [{ kind: 'cmp', per: { corpus: n(0, 2) } }] },
@@ -98,7 +102,8 @@ describe('the classifier', () => {
     expect(rowOf(l, 'TUNED')).toMatchObject({ verdict: 'remove', citation: { flag: 'tuned' } })
     expect(l.holdoutAdds).toEqual(['2401.00001v1', '2509.12345v2'])
     // (the cited paper recorded in the holdout and still silent: a removal candidate)
-    const again = ledgerOf(map, recording, { holdout: ['2401.00001v1'] })
+    // (by its number: the holdout's 2401.00001v2 is the cited 2401.00001v1)
+    const again = ledgerOf(map, recording, { holdout: ['2401.00001v2'] })
     expect(rowOf(again, 'PAPER')).toMatchObject({ verdict: 'cited paper silent', folds: [rowOf(again, 'PAPER').sites[0]?.id] })
     expect(citationsOf('a gap of 3 pt (measured on 2610.19860v1 p4)')).toMatchObject({ flag: 'paper', papers: ['2610.19860v1'], measurement: false })
   })

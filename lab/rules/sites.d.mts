@@ -16,6 +16,7 @@ export interface Rule {
   raw?: string
   context?: string
   why?: string
+  comment?: string
   reason?: boolean
   evidence?: boolean
   cites?: string | null

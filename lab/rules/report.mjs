@@ -46,12 +46,13 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
   L.push('', ...Object.entries(VERDICTS).map(([v, x]) => `- **${v}**: ${x.says}`), '')
   if (ledger.holdoutAdds?.length) L.push(`Papers the rules' comments cite, to join the holdout beyond its 30: ${ledger.holdoutAdds.join(', ')}.`, '')
 
-  // the flagged citations, whole
-  L.push('## Citations to confirm or strike (each before a removal lane acts on its area)', '')
-  for (const id of AREA_IDS) {
-    const flagged = rows.filter(r => r.area === id && r.citation.flag).sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)
+  // the flagged citations, whole: first those whose flag makes the verdict, then those that decide or go whatever they cite
+  L.push('## Citations to confirm or strike (each before a removal lane acts on its area)', '', 'First, per area, the rows whose verdict the flag makes (kept by it, or sent to the holdout, or a tuned flag that exempts nothing); then the flagged rows whose verdict the recording makes alone.', '')
+  const byFlag = r => r.verdict === 'definition' || r.verdict === 'measurement' || r.verdict === 'value' || r.verdict.startsWith('cited paper') || (r.citation.flag === 'tuned' && r.verdict === 'remove')
+  for (const [id, first] of AREA_IDS.flatMap(a => [[a, true], [a, false]])) {
+    const flagged = rows.filter(r => r.area === id && r.citation.flag && byFlag(r) === first).sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)
     if (!flagged.length) continue
-    L.push(`### Area ${id}: ${flagged.length}`, '')
+    L.push(`### Area ${id}: ${flagged.length} ${first ? 'whose verdict the flag makes' : 'whose verdict the recording makes'}`, '')
     for (const r of flagged) L.push(`- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}): flag **${r.citation.flag}**${r.citation.papers.length ? ` (${r.citation.papers.join(', ')})` : r.citation.definition ? ` (${r.citation.definition})` : r.citation.section ? ` (${r.citation.section})` : ''}; verdict ${r.verdict}${r.citation.flag === 'tuned' ? ' (no exemption)' : ''}; recorded: ${recordedOf(r)}.`, `  Comment: ${r.comment || '(none)'}`)
     L.push('')
   }
@@ -80,7 +81,8 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
   }
   // the magnitudes, beside the unmeasured budgets
   const unmeasured = {}
-  for (const b of budgets ?? []) if (b.class === 'budget' && !b.source) (unmeasured[areaOf(b.file)] ??= []).push(b)
+  // (the budgets of the four areas: the rest of product code is no area of the reduction)
+  for (const b of budgets ?? []) if (b.class === 'budget' && !b.source && areaOf(b.file) !== 'other') (unmeasured[areaOf(b.file)] ??= []).push(b)
   L.push('## Magnitudes with no stated source, beside the unmeasured budgets (reported, not counted as decisions)', '')
   for (const id of AREA_IDS) {
     const m = rows.filter(r => r.area === id && r.verdict === 'magnitude')

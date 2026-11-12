@@ -54,7 +54,7 @@ export function mergeRecords(map, dirs) {
     const into = (byInput[input] ??= {})
     const meta = (inputs[input] ??= { records: 0, papers: new Set(), ms: 0 })
     meta.records++
-    if (raw.paper) meta.papers.add(raw.paper)
+    for (const p of raw.papers ?? (raw.paper ? [raw.paper] : [])) meta.papers.add(p)
     meta.ms += raw.ms ?? 0
     for (const [id, r] of Object.entries(raw.sites)) addInto((into[id] ??= emptySite()), r)
   }

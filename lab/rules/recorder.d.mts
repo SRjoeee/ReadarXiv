@@ -4,7 +4,7 @@ import type { SiteMap } from './sites.mjs'
 export interface Case { d: number; eff: number; x: unknown; b: unknown; k: number; paper: string | null; page?: number | null; test: string | null }
 export interface Tests { kept: string[]; more: number }
 export interface RawSite { n: number; t: number; f: number; nan?: number; near?: (Case | null)[]; tests?: (Tests | null)[]; hits?: Record<string, number>; reads?: Record<string, number> }
-export interface Raw { format: string; map: string; input: string; file?: string | null; labRead?: boolean; pid: number; paper: string | null; argv: string[]; ms: number; sites: Record<string, RawSite> }
+export interface Raw { format: string; map: string; input: string; file?: string | null; labRead?: boolean; pid: number; paper: string | null; papers?: string[]; argv: string[]; ms: number; sites: Record<string, RawSite> }
 export interface Recorder {
   map: SiteMap
   lt(id: number, a: unknown, b: unknown): boolean
