@@ -89,10 +89,14 @@ const declaredIn = scope => {
   return out
 }
 
+/** a comment as one line of text: JSDoc's stars and the line breaks out */
+const commentText = c => (c ?? '').replace(/^\s*\*+\s?/gm, '').replace(/\s+/g, ' ').trim()
+
 /** the sites of a tree: `scan` a census scan read with `nodes` for these files (census-lib scanTree), `graph` its import
- *  graph (graphOf), `alive` the ids AFTER keeps (or null: unknown). Returns `{ rules, sites, files }`: rules keyed by
- *  `ruleKeyOf`, sites numbered across the tree, each file's edits */
-export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS } = {}) {
+ *  graph (graphOf), `alive` the ids AFTER keeps (or null: unknown). Returns `{ rules, sites, files, keyOfItem }`: rules
+ *  keyed as `keyed` says, sites numbered across the tree, each file's edits, and (not for JSON) each census item's key by
+ *  the item. `keysOnly`: the rules and their keys alone (the census's reading of the ledger) */
+export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS, keysOnly = false } = {}) {
   const inScope = (p, f) => f.role === 'product' && f.kind === 'code' && !f.generated && areas.includes(f.area) && f.ast
   const files = [...scan.files].filter(([p, f]) => inScope(p, f)).sort((a, b) => a[0].localeCompare(b[0]))
   const rules = {}
@@ -115,6 +119,7 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS } = {}) 
   const constants = new Map() // `${path}\u0000${name}` -> [rule] (a table: one rule a property)
   const literalRules = new Map() // the literal node -> rule
   const listRules = []
+  const keyOfItem = new Map() // a census item (factsOf's object) -> its rule's key
   const parentsOf = new Map()
   for (const [path, f] of files) {
     const fk = fileKeyOf(path)
@@ -126,10 +131,11 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS } = {}) 
       })
     for (const t of f.thresholds ?? []) {
       if (!RULE_CLASSES.has(t.class) || !t.nodes) continue
-      const base = { kind: 'threshold', file: path, line: t.line, value: t.value, raw: t.raw, class: t.class, context: t.context, name: t.name ?? null, why: t.why, reason: t.reason, evidence: t.evidence, cites: t.cites, area: f.area, after: alive ? alive.has(id(path)) : null, sites: [] }
+      const base = { kind: 'threshold', file: path, line: t.line, value: t.value, raw: t.raw, class: t.class, context: t.context, name: t.name ?? null, comment: commentText(t.nodes.comment), reason: t.reason, evidence: t.evidence, cites: t.cites, area: f.area, after: alive ? alive.has(id(path)) : null, sites: [] }
       if (t.context === 'constant' || t.context === 'table') {
         const key = `${fk}::(top)::${t.name}`
         rules[key] = { key, ...base, fn: '' }
+        keyOfItem.set(t, key)
         const bind = t.name.split('.')[0]
         const k = `${path}\u0000${bind}`
         constants.set(k, [...(constants.get(k) ?? []), rules[key]])
@@ -139,6 +145,7 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS } = {}) 
         const key = keyed(fk, fnPathOf(ps), `${op}${t.raw}`)
         rules[key] = { key, ...base, fn: fnPathOf(ps) }
         literalRules.set(t.nodes.literal, rules[key])
+        keyOfItem.set(t, key)
       }
     }
     for (const l of f.lists ?? []) {
@@ -147,10 +154,13 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS } = {}) 
       const fnPath = fnPathOf(ps)
       // (a list by the name of the declaration it stands in, else by its first two entries)
       const key = keyed(fk, fnPath, l.name ?? `${l.form}[${l.nodes.entries.slice(0, 2).join(',')}]`)
-      rules[key] = { key, kind: 'list', file: path, line: l.line, form: l.form, name: l.name ?? null, size: l.size, entries: l.nodes.entries, class: l.class, area: f.area, after: alive ? alive.has(id(path)) : null, fn: fnPath, sites: [] }
+      rules[key] = { key, kind: 'list', file: path, line: l.line, form: l.form, name: l.name ?? null, size: l.size, entries: l.nodes.entries, class: l.class, comment: commentText(l.nodes.comment), area: f.area, after: alive ? alive.has(id(path)) : null, fn: fnPath, sites: [] }
+      keyOfItem.set(l, key)
       listRules.push({ path, rule: rules[key], node: l.nodes.literal, parent: l.nodes.parent })
     }
   }
+
+  if (keysOnly) return { rules, sites, files: {}, keyOfItem }
 
   // ---- what each file's names import: local name -> { path, name } of its definer, through re-exports
   const edgeOf = (fromPath, spec) => (graph.out.get(id(fromPath)) ?? []).find(e => e.spec === spec)
@@ -413,6 +423,7 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS } = {}) 
   }
 
   const out = { rules, sites, files: {} }
+  Object.defineProperty(out, 'keyOfItem', { value: keyOfItem })
   for (const [path, f] of files) out.files[path] = { sha256: createHash('sha256').update(f.text).digest('hex'), edits: edits.get(path), sites: sites.filter(s => s.file === path).map(s => s.id) }
   return out
 }
@@ -426,9 +437,10 @@ export function sitesOfTree(root, profile, { alive = null, areas = RULE_AREAS } 
   return { scan, graph, ...sitesOf(scan, graph, { alive, areas }) }
 }
 
-/** the site map as written to sites.json: everything but the scan */
+/** the site map as written to sites.json: everything but the scan. Its digest is of what a record indexes (the sites and
+ *  each module's edits): a rule's description may change and the records made over the map still read */
 export function siteMapOf(s, { commit = null } = {}) {
   const map = { format: SITES_FORMAT, commit, rules: s.rules, sites: s.sites, files: s.files }
-  map.digest = createHash('sha256').update(JSON.stringify([map.rules, map.sites, map.files])).digest('hex').slice(0, 16)
+  map.digest = createHash('sha256').update(JSON.stringify([map.sites, map.files])).digest('hex').slice(0, 16)
   return map
 }

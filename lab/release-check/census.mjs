@@ -23,6 +23,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { cyclesOf, graphOf, pathTo, reach, scanTree, typeCheckedOf } from './census-lib.mjs'
 import { ENGINE_PROFILE } from './census-profile.mjs'
 import { itemsOf, judge, LEDGER_FORMAT, MEASURES, newLinesOf, partOf, record, reportOf } from './census-ratchet.mjs'
+import { VERDICTS } from '../rules/ledger.mjs'
+import { sitesOf } from '../rules/sites.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 
@@ -47,6 +49,7 @@ export const DEFINITIONS = {
   history: "A history comment line, in the packages (product code and style sheets under a profile's workspace directories), is a line whose comment text says today's, holds a date (yyyy-mm-dd) that names no measurement (a date beside 'measured' or 'measurement' is kept), or names a reviewer (Codex, Devin, Copilot, CodeRabbit), a round (`round B14`) or a plan or task (`Plan 8b`, `Task 5`); each line counted once.",
   duplicates: 'A duplicated rule is a function of 60 tokens or more (comments and white space aside, names and literals as written) whose tokens equal a function\'s in another file of product, lab or tooling code, counted at the outermost such function; a copy note is a file whose first 12 lines say COPIED or "copied from".',
   dead: "A dead module is a product module no build's entry point reaches, a type-only import counted (the website's builds counted where its tree is given); a dead export is an exported name of a product module (not an entry) that no module of either tree imports, through re-exports followed; `tests only` where only tests, the lab or tooling import it.",
+  rules: "A rule (a tuned threshold or a name list of the debt areas) is unexplained where its comment cites no definition (a borderline threshold, a defined list) and the rule ledger (lab/rules/ledger.json, keyed by file without extension, enclosing function, signature and ordinal: lab/rules/sites.mjs) holds no row whose verdict gives it a reason (lab/rules/ledger.mjs VERDICTS); a magnitude with no stated source and a list whose entries are not judged are reported apart, not counted; with no ledger, every tuned threshold and every list citing no definition is unexplained.",
   cutover: "What the cut-over deletes: the product files the builds' entry points (each build's shared and old-arm entries, and its new-arm ones) reach now and no longer reach from its shared and new-arm entries once each build's old-arm modules (the profile's `cut.seeds`, from the design's \"what goes\") are taken out of the graph; with them, every test, lab or tooling file that imports one of them.",
 }
 
@@ -353,15 +356,17 @@ export function gplOf(view, roots) {
   })
 }
 
-export function debtOf(view) {
+export function debtOf(view, rulesLedger = null) {
   const engine = view.scans.find(s => s.repo === 'engine')
   const headline = new Set(engine?.profile.debtAreas ?? [])
+  // (each item's key in the rule ledger, where the scan kept the debt areas' syntax trees: census.mjs's command keeps them)
+  const ruleKeyOf = view.keys ?? new Map()
   const product = view.files.filter(x => x.f.role === 'product' && x.f.kind === 'code' && !x.f.generated)
   // (a sub-area: the directory the file is in, four levels deep: src/pdf-reader/engine/layout, packages/engine/src/locate)
   const sub = x => `${x.repo}/${x.path.split('/').slice(0, 4).join('/').replace(/\.[a-z]+$/, '')}`
   const place = x => ({ repo: x.repo, file: x.path, area: areaKey(x), sub: sub(x), headline: x.repo === 'engine' && headline.has(x.f.area) })
-  const thresholds = product.flatMap(x => (x.f.thresholds ?? []).map(t => ({ ...t, at: at(x, t.line), ...place(x) })))
-  const lists = product.flatMap(x => (x.f.lists ?? []).map(l => ({ ...l, at: at(x, l.line), ...place(x) })))
+  const thresholds = product.flatMap(x => (x.f.thresholds ?? []).map(t => ({ ...t, at: at(x, t.line), ...place(x), ...(ruleKeyOf.has(t) ? { key: ruleKeyOf.get(t) } : {}) })))
+  const lists = product.flatMap(x => (x.f.lists ?? []).map(l => ({ ...l, at: at(x, l.line), ...place(x), ...(ruleKeyOf.has(l) ? { key: ruleKeyOf.get(l) } : {}) })))
   const vocabularies = product.flatMap(x => (x.f.vocabularies ?? []).map(l => ({ ...l, at: at(x, l.line), ...place(x) })))
   const budgets = thresholds.filter(t => t.class === 'budget')
   const count = (xs, by) => xs.reduce((o, x) => ((o[by(x)] = (o[by(x)] ?? 0) + 1), o), {})
@@ -379,7 +384,20 @@ export function debtOf(view) {
   for (const g of mirrors) g.sort((a, b) => (a.repo === b.repo ? a.at.localeCompare(b.at) : a.repo === 'engine' ? -1 : 1)).slice(1).forEach(v => (v.mirror = true))
   // (a group's constant and its mirrors number one thing: a schema number where any of them says so)
   for (const g of mirrors) if (g.some(v => v.schema)) for (const v of g) v.schema = true
+  // (DEFINITIONS.rules: a rule the ledger gives no reason; a magnitude and a list not judged by entry reported apart)
+  const verdictOf = x => (x.key ? (rulesLedger?.rules?.[x.key]?.verdict ?? null) : null)
+  const candidates = [...thresholds.filter(t => t.headline && t.class === 'tuned'), ...lists.filter(l => l.headline && l.class === 'listed')]
+  const rules = { ledger: Boolean(rulesLedger), recorded: rulesLedger?.recorded?.commit ?? null, unexplained: [], magnitudes: [], notJudged: [] }
+  for (const x of candidates) {
+    const v = verdictOf(x)
+    const reason = v ? VERDICTS[v]?.reason : false
+    if (reason === true) continue
+    if (v === 'magnitude') rules.magnitudes.push(x)
+    else if (v === 'not judged') rules.notJudged.push(x)
+    else rules.unexplained.push(x)
+  }
   return {
+    rules: { ledger: rules.ledger, recorded: rules.recorded, unexplained: rules.unexplained.length, magnitudes: rules.magnitudes.length, notJudged: rules.notJudged.length, list: rules.unexplained.map(x => ({ at: x.at, key: x.key ?? null, repo: x.repo, file: x.file, line: x.line })) },
     thresholds: {
       all: count(thresholds, t => t.class),
       headline: count(thresholds.filter(t => t.headline), t => t.class),
@@ -574,10 +592,18 @@ export function deadOf(view, roots) {
 // ---------------------------------------------------------------- the census
 
 /** the census of the trees: TODAY's scans (or null), NOW's, and AFTER derived from NOW */
-export async function census({ today, now }) {
+export async function census({ today, now, rulesLedger = null }) {
   const out = { definitions: DEFINITIONS, trees: {} }
+  // (the rule ledger's keys of this checkout's items, where its scan kept the debt areas' syntax trees)
+  const keysOf = (scans, graph) => {
+    const engine = scans.find(s => s.repo === 'engine')
+    if (!engine || ![...engine.files.values()].some(f => f.ast)) return null
+    return sitesOf(engine, graph, { keysOnly: true, areas: engine.profile.debtAreas ?? [] }).keyOfItem
+  }
+  let keys = null
   const take = async (label, scans, graph, alive, roots, checked) => {
     const view = viewOf(label, scans, graph, alive)
+    if (label !== 'TODAY') view.keys = keys
     const t = {
       repos: scans.map(s => ({ repo: s.repo, root: s.root })),
       size: sizeOf(view),
@@ -586,7 +612,7 @@ export async function census({ today, now }) {
       boundary: await boundaryOf(view),
       chains: chainsOf(view, roots),
       gpl: gplOf(view, roots),
-      debt: debtOf(view),
+      debt: debtOf(view, label === 'TODAY' ? null : rulesLedger),
       types: typesOf(view, checked),
       duplicates: duplicatesOf(view),
       dead: deadOf(view, roots),
@@ -603,6 +629,7 @@ export async function census({ today, now }) {
     out.trees.TODAY = await take('TODAY', today, g, null, rootsOf(today), checkedOf(today, g))
   }
   const g = graphOf(now)
+  keys = keysOf(now, g)
   const checked = checkedOf(now, g)
   const roots = rootsOf(now)
   out.trees.NOW = await take('NOW', now, g, null, roots, checked)
@@ -753,6 +780,7 @@ export function headlineOf(c) {
     { id: 'gpl', measure: 'Ported GPL files, and those a build reaches', values: v(t => `${t.gpl.length}; ${t.gpl.filter(g => g.reachedBy.length).length}`), target: '0 reached (design stage 4: no ported request code remains)' },
     { id: 'thresholds', measure: 'Tuned thresholds in the engine and typesetter, budgets apart (borderline; with no reason)', values: v(t => `${n(t.debt.thresholds.headline.tuned ?? 0)} (${n(t.debt.thresholds.headline.borderline ?? 0)}; ${n(t.debt.thresholds.headlineTunedNoReason)})`), target: 'each one left listed with its reason (baseline about 150 in the maker)' },
     { id: 'budgets', measure: 'Budgets, product code (unmeasured; in the engine and typesetter)', values: v(t => `${n(t.debt.budgets.count)} (${n(t.debt.budgets.unmeasured)}; ${n(t.debt.budgets.headline)})`), target: 'each with its unit and a measurement or a platform limit on record' },
+    { id: 'rules', measure: 'Rules with no reason: tuned thresholds and name lists citing no definition that the rule ledger gives no reason (magnitudes with no stated source; lists whose entries are not judged)', values: v(t => `${n(t.debt.rules.unexplained)} (${n(t.debt.rules.magnitudes)}; ${n(t.debt.rules.notJudged)})${t.debt.rules.ledger ? '' : ', no ledger'}`), target: '0 (design §3c): a citation or recorded cases' },
     { id: 'lists', measure: 'Name lists in the engine and typesetter, vocabularies apart (entries)', values: v(t => `${n(sum(Object.values(t.debt.lists.headline)))} (${n(t.debt.lists.headlineEntries)})`), target: 'each one left listed with its reason (baseline about 100 name tables)' },
     { id: 'vocabularies', measure: 'Vocabularies, product code (in the engine and typesetter)', values: v(t => `${t.debt.vocabularies.count} (${t.debt.vocabularies.headline})`), target: null },
     { id: 'special', measure: 'Per-paper literals; per-package (.sty/.cls) literals, product code', values: v(t => `${t.debt.papers.length}; ${t.debt.texFiles.length}`), target: null },
@@ -898,6 +926,10 @@ export function numbersOf(c) {
     contentVersionsToday: T.TODAY?.debt.versions.content,
     contentVersionsAfter: T.AFTER.debt.versions.content,
     schemaNumbersAfter: T.AFTER.debt.versions.schema,
+    rulesUnexplainedAfter: T.AFTER.debt.rules.unexplained,
+    rulesLedger: T.AFTER.debt.rules.recorded,
+    magnitudesAfter: T.AFTER.debt.rules.magnitudes,
+    notJudgedAfter: T.AFTER.debt.rules.notJudged,
     budgetsAfter: T.AFTER.debt.budgets.count,
     budgetsUnmeasuredAfter: T.AFTER.debt.budgets.unmeasured,
     vocabulariesAfter: T.AFTER.debt.vocabularies.count,
@@ -943,6 +975,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const nowDir = resolve(opt('now') ?? ROOT)
   const todayDir = argv.includes('--no-today') ? null : (opt('today') ?? process.env.AXT_TODAY ?? join(ROOT, '..', 'refactor-read'))
   const webProfileFile = opt('web-profile') ?? join(labData, 'refactor-2026-11', 'verification', 'census-web.json')
+  // (the rule ledger: its rows give the debt areas' rules their reasons, design §3c)
+  const rulesLedgerFile = resolve(opt('rules-ledger') ?? join(ROOT, 'lab/rules/ledger.json'))
+  const rulesLedger = existsSync(rulesLedgerFile) ? JSON.parse(readFileSync(rulesLedgerFile, 'utf8')) : null
   const outDir = resolve(opt('out') ?? join(ROOT, 'lab/release-check/out/census'))
   const ledgerFile = resolve(opt('ledger') ?? join(ROOT, 'lab/release-check/census-ledger.json'))
   const recording = argv.includes('--record')
@@ -955,14 +990,19 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const t0 = performance.now()
   const webProfile = existsSync(webProfileFile) ? JSON.parse(readFileSync(webProfileFile, 'utf8')) : null
   const engineToday = todayDir && existsSync(join(todayDir, 'src/pdf-reader/engine')) ? scanTree('engine', todayDir, ENGINE_PROFILE) : null
-  const now = [scanTree('engine', nowDir, ENGINE_PROFILE)]
+  // (the debt areas' syntax trees kept: the rule ledger's keys are read off them)
+  const inDebt = p => {
+    const a = ENGINE_PROFILE.areas.find(x => p.startsWith(x.prefix))
+    return a?.role === 'product' && (ENGINE_PROFILE.debtAreas ?? []).includes(a.area)
+  }
+  const now = [scanTree('engine', nowDir, ENGINE_PROFILE, { nodes: inDebt })]
   let today = engineToday ? [engineToday] : null
   if (webProfile) {
     if (webProfile.now && existsSync(webProfile.now)) now.push(scanTree('web', webProfile.now, webProfile))
     if (today && webProfile.today && existsSync(webProfile.today)) today.push(scanTree('web', webProfile.today, webProfile))
   }
   if (today && today.length !== now.length) today = today.filter(s => now.some(n2 => n2.repo === s.repo))
-  const c = await census({ today, now })
+  const c = await census({ today, now, rulesLedger })
   c.taken = { at: new Date().toISOString(), ms: Math.round(performance.now() - t0), webProfile: webProfile ? webProfileFile : null, today: engineToday ? todayDir : null }
 
   // the ratchet: each repository's ledger

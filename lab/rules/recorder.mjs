@@ -2,8 +2,9 @@
 // instrumented code (transform.mjs, the site map of sites.mjs) calls `globalThis.__axtRules` at each site; this records,
 // per site: how often it ran and each outcome's count; for a comparison and a Math.min / max, the nearest case on each
 // side of the bound (the rule's value): the effective operand (the value of the rule's literal or constant at which that
-// case would decide the other way), the paper (or the test) and the run's ordinal; for a list, each entry's hits; for
-// each outcome, the tests that took it. Writes one raw record a process (or a test file) under AXT_RULES_OUT; merge.mjs
+// case would decide the other way), both operands, the paper (or the test), the page where the lab's runner sets it, and
+// the run's ordinal; for a list, each entry's hits; for each outcome, the tests that took it. A margin is information
+// for whoever reads a row: it never decides a removal (ledger.mjs). Writes one raw record a process (or a test file) under AXT_RULES_OUT; merge.mjs
 // sums them. Installed once a process: by register.mjs (Node) or vitest-setup.mjs. Not shipped.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -17,7 +18,8 @@ const MARK = Symbol.for('axt.rules.site')
 export function recorderOf(map, { out = null, paper = null, input = 'corpus' } = {}) {
   const S = map.sites
   const R = new Array(S.length)
-  let ctx = Object.freeze({ paper, test: null })
+  // (the context: the paper or pair, the test and its file, and the page a lab runner says it lays: lab/typeset's gate)
+  let ctx = Object.freeze({ paper, test: null, file: null, page: null })
   let flushes = 0
   const t0 = performance.now()
 
@@ -63,7 +65,7 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
     const d = Math.abs(eff - centre)
     const slot = result ? 1 : 0
     const cur = r.near[slot]
-    if (!cur || d < cur.d) r.near[slot] = { d, eff, x: other, b: side, k: r.n, paper: ctx.paper, test: ctx.test }
+    if (!cur || d < cur.d) r.near[slot] = { d, eff, x: other, b: side, k: r.n, paper: ctx.paper, page: ctx.page, test: ctx.test }
   }
   const cmp = (id, a, b, result) => {
     const r = recOf(id)
@@ -268,7 +270,7 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
       return ctx
     },
     /** what is recorded so far, as a raw record (merge.mjs) */
-    snapshot: () => {
+    snapshot: (extra = {}) => {
       const sites = {}
       for (let id = 0; id < R.length; id++) {
         const r = R[id]
@@ -284,12 +286,13 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
           ...(r.reads ? { reads: r.reads } : {}),
         }
       }
-      return { format: RAW_FORMAT, map: map.digest, input, pid: process.pid, paper: ctx.paper, argv: process.argv.slice(1), ms: Math.round(performance.now() - t0), sites }
+      return { format: RAW_FORMAT, map: map.digest, input, file: ctx.file, pid: process.pid, paper: ctx.paper, argv: process.argv.slice(1), ms: Math.round(performance.now() - t0), ...extra, sites }
     },
-    /** the record written under AXT_RULES_OUT (or `out`), and the recorder emptied */
-    flush: (label = null) => {
+    /** the record written under AXT_RULES_OUT (or `out`), with `extra` fields (vitest-setup.mjs: `labRead`), and the
+     *  recorder emptied */
+    flush: (label = null, extra = {}) => {
       if (!out) return null
-      const snap = api.snapshot()
+      const snap = api.snapshot(extra)
       if (!Object.keys(snap.sites).length) return null
       mkdirSync(out, { recursive: true })
       const name = `${(label ?? ctx.paper ?? 'run').replace(/[^\w.-]+/g, '_')}-${process.pid}-${flushes++}.json`

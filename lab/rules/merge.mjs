@@ -1,5 +1,6 @@
 // lab/rules/merge.mjs: raw records (recorder.mjs, one a process or a test file) summed into one recording: per site and
-// per input (the tests, the corpus's runs, the holdout: the record's `input`), how often it ran and each outcome's count,
+// per input (the record's `input`: `tests`, the corpus's runs, `holdout`; a test file that read the lab's data is
+// `tests-lab`, the corpus again, not a case someone wrote: design-reduction §8.9), how often it ran and each outcome's count,
 // the nearest case on each side of the bound, each list entry's hits, the tests per outcome; per rule, its sites' sums.
 // A record made over another site map is refused. Pure but for reading the records. Not shipped.
 import { readdirSync, readFileSync, statSync } from 'node:fs'
@@ -49,7 +50,7 @@ export function mergeRecords(map, dirs) {
     if (raw.format !== RAW_FORMAT) continue
     if (raw.map !== map.digest) throw new Error(`lab/rules: ${file} was recorded over another site map (${raw.map}, not ${map.digest})`)
     records++
-    const input = raw.input ?? 'corpus'
+    const input = raw.input === 'tests' && raw.labRead ? 'tests-lab' : (raw.input ?? 'corpus')
     const into = (byInput[input] ??= {})
     const meta = (inputs[input] ??= { records: 0, papers: new Set(), ms: 0 })
     meta.records++

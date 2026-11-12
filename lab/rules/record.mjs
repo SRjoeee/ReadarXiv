@@ -11,6 +11,14 @@
 //       the census's AFTER headline items (its tuned thresholds and name lists) matched one by one to the map's rules (by
 //       file, line, form and value or name): what one holds and the other lacks; the rules with no site and why; with a
 //       recording, the rules that ran, by area (areas.mjs)
+//   node lab/rules/record.mjs ledger --sites=<sites.json> --recording=<recording.json> [--out=lab/rules/ledger.json]
+//       the ledger (ledger.mjs): every rule's row, its sites' states, its verdict
+//   node lab/rules/record.mjs report --ledger=<ledger.json> [--census=<census.json>] [--out=<dir>] [--deferred=a,b]
+//                                    [--profile="<what the inputs were>"]
+//       the report by area and by file (report.mjs) into <dir>/report.md and report-by-file.md
+//   node lab/rules/record.mjs remap --from=<old sites.json or ledger.json> --to=<new sites.json> [--out=<remap.json>]
+//       old keys matched to new where code moved between functions or files: by signature, value and ordinal; every key
+//       it cannot follow printed. A recording is never re-keyed by it: a moved tree is recorded again
 //
 // A recording run: AXT_RULES_SITES=<dir>/sites.json AXT_RULES_OUT=<records> node --import ./lab/rules/register.mjs
 // [--import tsx] <runner> …; the tests: AXT_RULES_SITES=… AXT_RULES_OUT=… pnpm exec vitest run --config
@@ -24,7 +32,9 @@ import { graphOf, scanTree } from '../release-check/census-lib.mjs'
 import { ENGINE_PROFILE } from '../release-check/census-profile.mjs'
 import { cutoverOf } from '../release-check/census.mjs'
 import { AREAS, areaOf } from './areas.mjs'
+import { ledgerOf } from './ledger.mjs'
 import { mergeRecords } from './merge.mjs'
+import { reportOf } from './report.mjs'
 import { RULE_AREAS, siteMapOf, sitesOf } from './sites.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
@@ -106,6 +116,40 @@ export function agreementOf(census, map, recording = null) {
   }
 }
 
+/** old keys to new (P4): a key kept where its rule is the same rule; else, among the keys neither side kept, by the
+ *  signature, the rule's value (or entries) and the ordinal; a group that still has more than one way is not matched */
+export function remapOf(from, to) {
+  const sigOf = k => k.split('::').slice(2).join('::').replace(/#\d+$/, '')
+  const ordOf = k => Number(/#(\d+)$/.exec(k)?.[1] ?? 0)
+  const idOf = r => JSON.stringify([r.kind, r.kind === 'list' ? r.entries : r.value])
+  const pairs = {}
+  const oldLeft = []
+  const newLeft = new Set(Object.keys(to.rules))
+  for (const [k, r] of Object.entries(from.rules)) {
+    if (to.rules[k] && idOf(to.rules[k]) === idOf(r)) {
+      pairs[k] = k
+      newLeft.delete(k)
+    } else oldLeft.push(k)
+  }
+  const groupOf = (keys, rules) => keys.reduce((m, k) => m.set(`${sigOf(k)}\u0000${idOf(rules[k])}`, [...(m.get(`${sigOf(k)}\u0000${idOf(rules[k])}`) ?? []), k]), new Map())
+  const oldGroups = groupOf(oldLeft, from.rules)
+  const newGroups = groupOf([...newLeft], to.rules)
+  const moved = {}
+  const unmatched = { old: [], new: [] }
+  for (const [g, olds] of oldGroups) {
+    const news = newGroups.get(g) ?? []
+    newGroups.delete(g)
+    const byOrd = news.filter(n => olds.filter(o => ordOf(o) === ordOf(n)).length === 1 && news.filter(x => ordOf(x) === ordOf(n)).length === 1)
+    for (const n of byOrd) moved[olds.find(o => ordOf(o) === ordOf(n))] = n
+    const restOld = olds.filter(o => !moved[o])
+    const restNew = news.filter(n => !byOrd.includes(n))
+    unmatched.old.push(...restOld)
+    unmatched.new.push(...restNew)
+  }
+  for (const news of newGroups.values()) unmatched.new.push(...news)
+  return { kept: Object.keys(pairs).length, moved, unmatched }
+}
+
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const [cmd, ...rest] = process.argv.slice(2)
   const opt = n => rest.find(a => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null
@@ -156,6 +200,44 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
     }
     process.exit(0)
   }
-  console.error('usage: record.mjs sites|merge|agree …')
+  if (cmd === 'ledger') {
+    const map = JSON.parse(readFileSync(opt('sites') ?? process.env.AXT_RULES_SITES, 'utf8'))
+    const recording = JSON.parse(readFileSync(opt('recording'), 'utf8'))
+    if (recording.map !== map.digest) {
+      console.error(`rules: the recording was made over the site map ${recording.map}, not ${map.digest}`)
+      process.exit(2)
+    }
+    const ledger = ledgerOf(map, recording)
+    const out = opt('out') ?? join(ROOT, 'lab/rules/ledger.json')
+    writeFileSync(out, `${JSON.stringify(ledger, null, 1)}\n`)
+    const by = {}
+    for (const r of Object.values(ledger.rules)) by[r.verdict] = (by[r.verdict] ?? 0) + 1
+    console.log(`rules: the ledger of ${Object.keys(ledger.rules).length} rules into ${out}: ${JSON.stringify(by)}`)
+    process.exit(0)
+  }
+  if (cmd === 'report') {
+    const ledger = JSON.parse(readFileSync(opt('ledger') ?? join(ROOT, 'lab/rules/ledger.json'), 'utf8'))
+    const census = opt('census') ? JSON.parse(readFileSync(opt('census'), 'utf8')) : null
+    const out = resolve(opt('out') ?? join(ROOT, 'lab/rules/out'))
+    const r = reportOf(ledger, { budgets: census?.trees.AFTER.debt.thresholds.list ?? null, profile: opt('profile'), deferred: opt('deferred')?.split(',') ?? [] })
+    mkdirSync(out, { recursive: true })
+    writeFileSync(join(out, 'report.md'), r.byArea)
+    writeFileSync(join(out, 'report-by-file.md'), r.byFile)
+    for (const [a, c] of Object.entries(r.counts)) if (c.rules) console.log(`rules: area ${a}: ${c.rules} rules, ${JSON.stringify(c.verdicts)}, sites to fold ${c.folds}, entries to remove ${c.entries}`)
+    console.log(`rules: ${join(out, 'report.md')}, ${join(out, 'report-by-file.md')}`)
+    process.exit(0)
+  }
+  if (cmd === 'remap') {
+    const from = JSON.parse(readFileSync(opt('from'), 'utf8'))
+    const to = JSON.parse(readFileSync(opt('to'), 'utf8'))
+    const m = remapOf(from, to)
+    if (opt('out')) writeFileSync(opt('out'), `${JSON.stringify(m, null, 1)}\n`)
+    console.log(`rules: ${m.kept} keys kept, ${Object.keys(m.moved).length} followed across a move, ${m.unmatched.old.length} old and ${m.unmatched.new.length} new not matched`)
+    for (const [o, n] of Object.entries(m.moved)) console.log(`rules: moved: ${o} -> ${n}`)
+    for (const k of m.unmatched.old) console.log(`rules: not followed (old): ${k}`)
+    for (const k of m.unmatched.new) console.log(`rules: not followed (new): ${k}`)
+    process.exit(m.unmatched.old.length ? 1 : 0)
+  }
+  console.error('usage: record.mjs sites|merge|agree|ledger|report|remap …')
   process.exit(2)
 }

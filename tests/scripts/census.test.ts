@@ -261,8 +261,9 @@ describe('the ratchet', () => {
       // (a raise without its reason is refused; with one, it is kept with the reason and the commit)
       expect(() => record(l.engine, r.engine.current, r.engine.lines, { raise: ['thresholds'], commit, at: 't1', about: '' })).toThrow(/without --reason/)
       expect(() => record(l.engine, r.engine.current, r.engine.lines, { commit, at: 't1', about: '' })).toThrow(/NOW thresholds rose 3 → 4/)
-      // (the line added a rule with no comment, one code line no checker reads, an export nothing imports)
-      const raised = record(l.engine, r.engine.current, r.engine.lines, { raise: ['thresholds', 'thresholdsNoReason', 'unchecked', 'deadExports', 'productCode'], reason: 'a fixture rule', commit, at: 't1', about: '' })
+      // (the line added a rule with no comment and no row in the rule ledger, one code line no checker reads, an export
+      // nothing imports)
+      const raised = record(l.engine, r.engine.current, r.engine.lines, { raise: ['thresholds', 'thresholdsNoReason', 'rulesUnexplained', 'unchecked', 'deadExports', 'productCode'], reason: 'a fixture rule', commit, at: 't1', about: '' })
       expect(raised.raises).toEqual(expect.arrayContaining([{ tree: 'NOW', measure: 'thresholds', from: 3, to: 4, reason: 'a fixture rule', commit, at: 't1' }]))
       expect(raised.trees.NOW?.values.thresholds).toBe(4)
       // the tree as it was, against the raised ledger: a fall, which passes and can be lowered

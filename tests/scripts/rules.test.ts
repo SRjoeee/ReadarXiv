@@ -178,7 +178,8 @@ describe('the site map', () => {
     expect(agreementOf(census, map).onlyMap).toEqual(['packages/engine/src/rules.ts:11:regex:3'])
   })
   it("tells the reduction's areas by path, before and after the front half moves", () => {
-    expect(['packages/engine/src/locate/locate.ts', 'src/pdf-reader/engine/layout/marks.mjs', 'packages/engine/src/source/latex-front.mjs', 'packages/engine/src/marks/colour.mjs', 'packages/typeset/src/fit/walk.ts', 'packages/engine/src/ink.mjs', 'packages/engine/src/wrap/x.ts', 'packages/translate/src/chain.ts', 'packages/engine/src/marks/channels.ts', 'packages/engine/src/inkling.ts'].map(areaOf)).toEqual(['a', 'b', 'b', 'b', 'c', 'd', 'd', 'd', 'other', 'other'])
+    expect(['packages/engine/src/locate/locate.ts', 'src/pdf-reader/engine/layout/marks.mjs', 'packages/engine/src/source/latex-front.mjs', 'packages/engine/src/marks/colour.mjs', 'packages/typeset/src/fit/walk.ts', 'packages/engine/src/ink.mjs', 'packages/engine/src/wrap/x.ts', 'packages/translate/src/chain.ts', 'packages/engine/src/marks/channels.ts', 'packages/engine/src/inkling.ts'].map(areaOf)).toEqual(['a', 'b', 'b', 'b', 'c', 'd', 'd', 'd', 'd', 'd'])
+    expect(areaOf('src/core/x.ts')).toBe('other')
   })
   it('refuses a text the map was not made from, and nests wraps inside out', () => {
     expect(() => instrument(map, 'packages/engine/src/rules.ts', `${RULES}\n`)).toThrow(/not the text the site map was made from/)
@@ -240,6 +241,24 @@ describe('a recording', () => {
     const s = must(r.snapshot().sites[id], 'the record')
     expect(s.tests).toEqual([{ kept: ['b > long'], more: 0 }, { kept: ['a > short'], more: 0 }])
     expect(r.snapshot().input).toBe('corpus')
+    // (the page a lab runner sets is the nearest case's)
+    r.context({ test: null, paper: '2401.00002v1-zh', page: 3 })
+    r.lt(id, 3.9, 4)
+    expect(must(r.snapshot().sites[id], 'the record').near?.[1]).toMatchObject({ eff: 3.9, paper: '2401.00002v1-zh', page: 3 })
+  })
+  it("reads a test file that read the lab's data as the corpus", () => {
+    const out = join(dir, 'records-tests')
+    const r = recorderOf(map, { out, input: 'tests' })
+    const id = must(sitesOfRule('::short::<4#1')[0], 'short').id
+    r.context({ file: 'tests/own.test.ts', test: 'own > one' })
+    r.lt(id, 2, 4)
+    r.flush('own', { labRead: false })
+    r.context({ file: 'tests/lab.test.ts', test: 'lab > one' })
+    r.lt(id, 9, 4)
+    r.flush('lab', { labRead: true })
+    const rec = mergeRecords(map, [out])
+    expect(Object.keys(rec.sites).sort()).toEqual(['tests', 'tests-lab'])
+    expect([rec.sites.tests?.[id]?.t, rec.sites['tests-lab']?.[id]?.f]).toEqual([1, 1])
   })
   it("wraps a module's text under vitest as the hook does", () => {
     const plugin = rulesPlugin({ sites: join(dir, 'sites.json'), root: dir })

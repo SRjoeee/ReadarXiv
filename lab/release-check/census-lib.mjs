@@ -354,7 +354,7 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
       if (UPPER.test(name)) {
         const value = numberOf(v.init)
         if (value != null) {
-          f.thresholds.push(keep(thresholdOf({ value, raw: textOf(text, v.init), name, comment, line: lineAt[v.start], context: 'constant' }), { literal: v.init, declarator: v }))
+          f.thresholds.push(keep(thresholdOf({ value, raw: textOf(text, v.init), name, comment, line: lineAt[v.start], context: 'constant' }), { literal: v.init, declarator: v, comment }))
           constNodes.add(v.init)
         }
         const obj = v.init.type === 'CallExpression' && v.init.callee?.property?.name === 'freeze' ? v.init.arguments[0] : v.init.type === 'TSAsExpression' ? v.init.expression : v.init
@@ -365,7 +365,7 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
           const enumeration = props.length >= 3 && values.every(Number.isInteger) && new Set(values).size === values.length
           for (const p of props) {
             const t = thresholdOf({ value: numberOf(p.value), raw: textOf(text, p.value), name: `${name}.${nameOf(p.key) ?? '?'}`, comment: `${comment}\n${leading(p)}\n${sameLine(p)}`, line: lineAt[p.start], context: 'table' })
-            f.thresholds.push(keep(enumeration ? { ...t, class: 'code' } : t, { literal: p.value, declarator: v, property: p }))
+            f.thresholds.push(keep(enumeration ? { ...t, class: 'code' } : t, { literal: p.value, declarator: v, property: p, comment: `${comment}\n${leading(p)}\n${sameLine(p)}` }))
             constNodes.add(p.value)
           }
         }
@@ -394,13 +394,13 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
       case 'BinaryExpression':
         if (RELATIONAL.has(node.operator))
           for (const side of [node.left, node.right])
-            if (isNumberLiteral(side) && !constNodes.has(side)) f.thresholds.push(keep(thresholdOf({ value: numberOf(side), raw: textOf(text, side), name: null, comment: near(node), line: lineAt[side.start], context: 'comparison', other: textOf(text, side === node.left ? node.right : node.left).slice(0, 60) }), { literal: side, site: node }))
+            if (isNumberLiteral(side) && !constNodes.has(side)) f.thresholds.push(keep(thresholdOf({ value: numberOf(side), raw: textOf(text, side), name: null, comment: near(node), line: lineAt[side.start], context: 'comparison', other: textOf(text, side === node.left ? node.right : node.left).slice(0, 60) }), { literal: side, site: node, comment: near(node) }))
         break
       case 'CallExpression': {
         const c = node.callee
         if (c?.type === 'Identifier') f.calls.add(c.name)
         if (c?.type === 'MemberExpression' && c.object?.name === 'Math' && ['min', 'max'].includes(c.property?.name))
-          for (const a of node.arguments) if (isNumberLiteral(a) && !constNodes.has(a)) f.thresholds.push(keep(thresholdOf({ value: numberOf(a), raw: textOf(text, a), name: null, comment: near(node), line: lineAt[a.start], context: `Math.${c.property.name}` }), { literal: a, site: node }))
+          for (const a of node.arguments) if (isNumberLiteral(a) && !constNodes.has(a)) f.thresholds.push(keep(thresholdOf({ value: numberOf(a), raw: textOf(text, a), name: null, comment: near(node), line: lineAt[a.start], context: `Math.${c.property.name}` }), { literal: a, site: node, comment: near(node) }))
         if (c?.type === 'Import' || c?.name === 'require') addImport(stringOf(node.arguments[0]), ['*'], false, node)
         if (c?.type === 'MemberExpression' && ((c.object?.name === 'Translator' && c.property?.name === 'create') || c.property?.name === 'createTranslator')) f.endpoints.push({ kind: 'chrome', line: lineAt[node.start] })
         break
@@ -444,13 +444,13 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
           // (our own vocabulary: declared `as const`, its type the literal's, or a schema's enum: not a name list)
           const vocabulary = ((parent?.type === 'TSAsExpression' || parent?.type === 'TSTypeAssertion') && isConst(parent.typeAnnotation)) || (parent?.type === 'CallExpression' && parent.arguments[0] === node && parent.callee?.type === 'MemberExpression' && nameOf(parent.callee.property) === 'enum')
           if (vocabulary) f.vocabularies.push({ ...l, class: 'vocabulary' })
-          else f.lists.push(keep(l, { literal: node, parent, entries: strings }))
+          else f.lists.push(keep(l, { literal: node, parent, entries: strings, comment: near(node) }))
         }
         break
       }
       case 'RegExpLiteral': {
         const words = alternativesOf(node.pattern)
-        if (words.length >= 3) f.lists.push(keep(listOf({ entries: words, line: lineAt[node.start], name: nameOf(stmtDeclName(stmt)), comment: near(node), form: 'regex' }), { literal: node, parent, entries: words }))
+        if (words.length >= 3) f.lists.push(keep(listOf({ entries: words, line: lineAt[node.start], name: nameOf(stmtDeclName(stmt)), comment: near(node), form: 'regex' }), { literal: node, parent, entries: words, comment: near(node) }))
         if (ARXIV_ID.test(node.pattern.replace(/\\\./g, '.'))) f.papers.push({ id: ARXIV_ID.exec(node.pattern.replace(/\\\./g, '.'))[0], line: lineAt[node.start] })
         break
       }

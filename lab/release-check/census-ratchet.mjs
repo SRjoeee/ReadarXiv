@@ -38,6 +38,7 @@ export const MEASURES = [
   { id: 'historyComments', says: 'comment lines in the packages telling history' },
   { id: 'unsafeCasts', says: '`as never`, `as any` and casts of a cast in product TypeScript' },
   { id: 'suppressions', says: '@ts-ignore and @ts-expect-error in product code' },
+  { id: 'rulesUnexplained', says: "tuned thresholds and name lists with neither a definition cited nor a reason in the rule ledger (lab/rules/ledger.json); magnitudes and lists not judged by entry reported apart" },
 ]
 const IDS = MEASURES.map(m => m.id)
 
@@ -72,6 +73,7 @@ export function itemsOf(t, view, profiles) {
   }
   for (const h of t.history.byFile) for (const line of h.at) items.historyComments.push(one(h.repo, h.file, line))
   for (const c of t.types.unsafeCastItems) items.unsafeCasts.push(one(c.repo, c.file, c.line))
+  for (const r of t.debt.rules?.list ?? []) items.rulesUnexplained.push(one(r.repo, r.file, r.line))
   for (const c of t.types.suppressionItems) items.suppressions.push(one(c.repo, c.file, c.line))
   for (const f of t.types.files) if (f.repo !== 'engine' || f.engine) items.unchecked.push(one(f.repo, f.file, null, f.code))
   for (const i of t.webImports?.items ?? []) (i.cls === 'engine' ? items.webImports : items.webExtensionImports).push(one(i.repo, i.file, i.line))
