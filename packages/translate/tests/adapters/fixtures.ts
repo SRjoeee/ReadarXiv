@@ -265,6 +265,22 @@ export const GLUED_PAST: UnitIn = unit('glued-past', [
 /** an element glued after another element's own stop (the reply's space before that stop is the glued element's to take back
  *  once the stop is out: text.ts glueOf) */
 export const OWN_GLUED: UnitIn = unit('own-glued', [t('Values '), el('a', 'math', '.'), el('b', 'math'), t(' hold.')])
+/** an abstract's shape, words of our own (lane reply-dots, 2026-11-13: an abstract on staging): a styled group as the object of
+ *  its sentence's verb, and a paper's conditional (`\ifx…` … `\fi`, of no ink) glued after a sentence's stop, then a link */
+export const STYLED_OBJECT: UnitIn = unit(
+  'styled-object',
+  [
+    t('The method keeps the weights trainable, so the experts serve as '),
+    span('p', 'italic', [t('learned priors')]),
+    t(' without tying it to this range. It reaches 81% against 70% for the baseline.'),
+    el('i', 'macro'),
+    t(' Code is available at '),
+    el('u', 'url'),
+    t('.'),
+    el('f', 'macro'),
+  ],
+  true,
+)
 export const MICROSOFT_UNITS: UnitIn[] = [
   ...UNITS,
   /* 17 */ BERT_ABSTRACT,
@@ -452,5 +468,23 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     raw: 'a &lt; b &amp; c &gt; d @ 家 # 95<x id="1"/>准确率（&#120;1）。',
     taken: false,
     why: 'a reference spelling a string of the tokens’ form the text does not hold: the wire’s contract broken (tags.ts tokensIn)',
+  },
+  {
+    unit: 22,
+    raw: '该方法使权重保持可训练，因此专家充当<span id="1">学习到的先验</span>，而不将其限制在这个范围内。<x id="5"/>它达到 81%，而基线为 70% <span id="2" translate="no">x2</span>代码可在<span id="3" translate="no">x3</span>处获取<span id="4" translate="no">x4</span>',
+    taken: true,
+    why: 'a styled group as HTML’s own span, read as the group by its id; the stops Google dropped before the elements stay dropped (tags.ts TagSpelling)',
+  },
+  {
+    unit: 22,
+    raw: '该方法使权重保持可训练，因此专家可以作为……<t id="1">学习到的先验</t>而不将其限制在这个范围内。<x id="5"/>它达到 81%，而基线为 70% <span id="2" translate="no">x2</span>代码可在<span id="3" translate="no">x3</span>处获取<span id="4" translate="no">x4</span>',
+    taken: true,
+    why: 'the wire before it, its group a `<t>`: Google’s "……" where the group’s words belonged, read as it came',
+  },
+  {
+    unit: 22,
+    raw: '该方法使权重保持可训练，因此专家充当<span id="1">学习到的先验</span>，而不将其限制在这个范围内。<x id="5"/>其中 x2 它达到 81%，而基线为 70% <span id="2" translate="no">x2</span>代码可在<span id="3" translate="no">x3</span>处获取<span id="4" translate="no">x4</span>',
+    taken: false,
+    why: 'an element’s token left as text besides its span: the wire’s contract broken (tags.ts tokensIn)',
   },
 ]

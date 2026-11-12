@@ -1,9 +1,10 @@
 // The tags wire, over typed pieces, for the engines that keep tags (Google's translateHtml: tags 100 %; Chrome's built-in
-// translator): an element as `<x id="n"/>` (to Google as a word of its sentence: ElementTag), a span with text as
-// `<t id="n">…</t>` (every span: these engines keep their words inside it), a span with none as one void. For a unit that
-// lights by sentence, a void boundary marker of an id past the unit's own goes where each sentence after the first begins
-// (Google brings `<x id="N"/>` back exactly where it was set; `<s/>` gets closers appended, `<wbr>` is dropped: measured),
-// and where they land are the translation's sentences.
+// translator): an element as `<x id="n"/>`, a span with text as `<t id="n">…</t>` (every span: these engines keep their words
+// inside it), a span with none as one void; to Google each in HTML's own inline element (TagSpelling 'html': an element a
+// `<span translate="no">` holding its token, a word of its sentence; a span with text a `<span>` holding its words). For a
+// unit that lights by sentence, a void boundary marker of an id past the unit's own goes where each sentence after the first
+// begins (Google brings `<x id="N"/>` back exactly where it was set; `<s/>` gets closers appended, `<wbr>` is dropped:
+// measured), and where they land are the translation's sentences.
 import { sentenceCuts } from '@readarxiv/text'
 import { asOut, projectionOf, textOf } from '../accept.ts'
 import type { OutPiece, Piece, UnitIn } from '../contract.ts'
@@ -43,43 +44,83 @@ export interface TagsPlan {
 }
 
 /** the model's and the engines' spellings of a tag (the extension's tokens.ts TAG_RE): `<x id="1"/>`, `<x id="1" />`,
- *  single or no quotes, `<x id="1"></x>`; an open `<t id="1">`; a close `</t>`; an element written as a word
- *  (`ElementTag` 'word'), `<span id="1" …>…</span>` whole, what it holds its tenth group (its token: no text of the
- *  translation, and it must be its own, readTags) */
+ *  single or no quotes, `<x id="1"></x>` (its id the first three groups); an open `<t id="1">` (the next three); a close
+ *  `</t>`; HTML's own inline element (TagSpelling 'html'), an open `<span id="1" …>` (the next three) and a close `</span>`:
+ *  what a span is, an element holding its token or a group holding its words, its id says (the unit's slot), never its
+ *  attributes (readTags) */
 export const TAG_RE =
-  /<x\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*(?:\/>|>\s*<\/x\s*>)|<t\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*>|<\/t\s*>|<span\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))[^<>]*>([^<>]*)<\/span\s*>/g
+  /<x\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*(?:\/>|>\s*<\/x\s*>)|<t\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*>|<\/t\s*>|<span\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))[^<>]*>|<\/span\s*>/g
+const SPAN_CLOSE = /<\/span\s*>/y
 
 /**
- * How a tags wire writes an element (a formula, a citation, a reference, a note's mark: a void slot; a boundary marker is
- * always a void). 'void', `<x id="n"/>`: an empty element, what an LLM is told a void tag is (the extension's prompt) and
- * Chrome's translator is sent. 'word', `<span id="n" translate="no">xn</span>`: in the terms of the HTML an engine that
- * translates HTML reads (Google's translateHtml), an inline element holding a token that HTML's `translate` attribute keeps
- * untranslated, a word of its sentence; the token an identifier (what a formula is), never a quantity or an article.
- * Measured (lane stray-stop, 2026-11-12, a probe of 42 units of two papers, zh and ja, after the owner's report on
- * 1706.03762v7): Google takes an element that holds no text (`<x/>`, `<x></x>`, `<span></span>`) or that HTML does not know
+ * How a tags wire writes its tags. 'void': an element (a formula, a citation, a reference, a note's mark: a void slot) as
+ * `<x id="n"/>`, an empty element, what an LLM is told a void tag is (the extension's prompt) and Chrome's translator is sent;
+ * a span with text as `<t id="n">…</t>`. 'html', what Google's translateHtml is sent: HTML's own inline element for both, in
+ * the terms of the HTML it reads: an element `<span id="n" translate="no">xn</span>`, a token that HTML's `translate`
+ * attribute keeps untranslated, a word of its sentence (the token an identifier, what a formula is, never a quantity or an
+ * article); a span with text `<span id="n">…</span>`, the words of its sentence it holds. A boundary marker is always a void.
+ * Measured: Google takes an element that holds no text (`<x/>`, `<x></x>`, `<span></span>`) or that HTML does not know
  * (`<x>n</x>`, with `translate="no"` or without) as a break between two texts it translates apart, each closed with a full
- * stop of its own: "… a matrix <x/>. The keys …" -> "…矩阵中。<x/> 。键和值…", 51 of 164 element groups in zh and 53 in ja, 18 of
- * them a stop on both sides, the element never moved across a word. Written as a word, none (1 and 5 left, each the
- * target's word order setting the element first in its sentence), the elements and boundary markers all back, the token as
- * sent 424 of 424 (without the attribute 91 of 424 changed); a number for the token read as a quantity beside a word ("3 In"
- * -> inches, 4 and 4 replies), the identifier 0 and 1
+ * stop of its own (lane stray-stop, 2026-11-12, a probe of 42 units of two papers, zh and ja, after the owner's report on
+ * 1706.03762v7): "… a matrix <x/>. The keys …" -> "…矩阵中。<x/> 。键和值…", 51 of 164 element groups in zh and 53 in ja, 18 of
+ * them a stop on both sides, the element never moved across a word. Written as a word, none (1 and 5 left, each the target's
+ * word order setting the element first in its sentence), the elements and boundary markers all back, the token as sent 424
+ * of 424 (without the attribute 91 of 424 changed); a number for the token read as a quantity beside a word ("3 In" ->
+ * inches, 4 and 4 replies), the identifier 0 and 1. A span written `<t>` is such a break too (lane reply-dots, 2026-11-13,
+ * after the owner's report on 2611.03953v2's abstract): Google translated the text before it alone, wrote "……" where the
+ * span's words belong and set the span after it ("act as <t>parameter priors</t> without…" -> "可以作为……<t>参数先验</t>而不…"),
+ * 65 places of 13,233 zh spans in the lab's Google store, and translated a span's words out of their sentence ("the {order}
+ * we take" -> 命令, "each of the {m} coordinates" -> 米); written as a `<span>`, the dots were gone in 61 of 61 units and those
+ * words read in their sentences (顺序, "m 个"); 3 of 122 units refused by the token contract (Google moved an element and
+ * left its token as text: the next translator's)
  */
-export type ElementTag = 'void' | 'word'
+export type TagSpelling = 'void' | 'html'
 /** the token an element written as a word holds: its slot's number after an `x` */
 export const tokenOf = (n: number): string => `x${n}`
-const elementTag = (as: ElementTag, n: number): string =>
-  as === 'word' ? `<span id="${n}" translate="no">${tokenOf(n)}</span>` : `<x id="${n}"/>`
+const elementTag = (as: TagSpelling, n: number): string =>
+  as === 'html' ? `<span id="${n}" translate="no">${tokenOf(n)}</span>` : `<x id="${n}"/>`
+const openTag = (as: TagSpelling, n: number): string => (as === 'html' ? `<span id="${n}">` : `<t id="${n}">`)
+const closeTag = (as: TagSpelling): string => (as === 'html' ? '</span>' : '</t>')
 /** a string of the tokens' form standing as a token would: `x` and digits, with no ASCII letter, digit or underscore right
  *  before it (inside a longer word or number it is none: `max1`, `0x1F`) and no digit right after it (`x12` holds no `x1`) */
 export const TOKEN_FORM = /(?<![A-Za-z0-9_])x[0-9]+(?![0-9])/g
 /** a text of the wire as the reading keeps it: its entities read (a character reference is one character), its invisible
  *  code points out */
 const keptOf = (s: string): string => decode(s).replace(INVISIBLE, '')
+/** where an element's span ends from `from`, right after its open: the start of its close and the end of it, its content
+ *  holding no tag; null where no close follows its content */
+function elementEnd(s: string, from: number): { at: number; end: number } | null {
+  const at = s.indexOf('<', from)
+  if (at < 0) return null
+  SPAN_CLOSE.lastIndex = at
+  const c = SPAN_CLOSE.exec(s)
+  return c ? { at, end: at + c[0].length } : null
+}
+/** a wire's text outside its elements, the unit's as sent or a reply: each element out with what it holds (a void; a span
+ *  whose id is an element's slot, what it holds its token), every other tag a break */
+function outsideElements(wire: string, plan: TagsPlan): string {
+  let out = ''
+  let last = 0
+  const re = new RegExp(TAG_RE.source, 'g')
+  for (let m = re.exec(wire); m; m = re.exec(wire)) {
+    out += `${wire.slice(last, m.index)} `
+    last = m.index + m[0].length
+    const sp = m[7] ?? m[8] ?? m[9]
+    if (sp !== undefined && plan.slots[Number(sp) - 1]?.t === 'void') {
+      const end = elementEnd(wire, last)
+      if (end) {
+        last = end.end
+        re.lastIndex = last
+      }
+    }
+  }
+  return out + wire.slice(last)
+}
 /** each string of the tokens' form outside the elements of a wire, the unit's as sent or a reply, how often: counted in its
  *  text as the reading keeps it (`&#x42;` is "B", no `x42`; `&#120;1` is "x1"), each tag a break; one definition for both */
-const tokensIn = (wire: string): Map<string, number> => {
+const tokensIn = (wire: string, plan: TagsPlan): Map<string, number> => {
   const out = new Map<string, number>()
-  const text = keptOf(wire.replace(new RegExp(TAG_RE.source, 'g'), ' '))
+  const text = keptOf(outsideElements(wire, plan))
   for (const m of text.matchAll(new RegExp(TOKEN_FORM.source, 'g'))) out.set(m[0], (out.get(m[0]) ?? 0) + 1)
   return out
 }
@@ -110,8 +151,8 @@ const elsOf = (content: readonly Piece[]): Extract<Piece, { t: 'el' }>[] =>
 const ownStop = (stop: string | undefined): string | undefined =>
   stop !== undefined && LINE_END.test(stop) ? undefined : stop
 
-/** A unit's tags wire, each element written `as` (ElementTag) */
-export function planTags(unit: UnitIn, as: ElementTag = 'void'): TagsPlan {
+/** A unit's tags wire, its tags written `as` (TagSpelling) */
+export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
   // (a display that ends its sentence states the stop it ends it with: written after it, taken back on reading, read by the
   // cutter as its sentence's end)
   const content = displayEnds(unit.content)
@@ -190,6 +231,8 @@ export function planTags(unit: UnitIn, as: ElementTag = 'void'): TagsPlan {
   const kept: { id: string; depth: number }[] = []
   const open: number[] = []
   let wire = ''
+  /** the wire as written so far without its spans' tags: what glue reads before an element (text.ts glueOf) */
+  let bare = ''
   /** for each projection offset, the wire offset a sentence beginning there is cut at: before the opens leading to it */
   const cutAt: number[] = new Array(length + 1).fill(-1)
   let pending: number | null = null
@@ -202,9 +245,11 @@ export function planTags(unit: UnitIn, as: ElementTag = 'void'): TagsPlan {
       for (let k = 0; k < it.s.length; k++) {
         const ch = it.s[k] as string
         if (!it.fixed) reach(it.at + k)
-        if (/\s/.test(ch)) {
-          if (!/\s$/.test(wire) && !(k > 0 && /\s/.test(it.s[k - 1] as string))) wire += ' '
-        } else wire += escapeTags(ch)
+        let w = ''
+        if (!/\s/.test(ch)) w = escapeTags(ch)
+        else if (!/\s$/.test(wire) && !(k > 0 && /\s/.test(it.s[k - 1] as string))) w = ' '
+        wire += w
+        bare += w
       }
     } else if (it.t === 'void') {
       reach(it.at)
@@ -212,27 +257,22 @@ export function planTags(unit: UnitIn, as: ElementTag = 'void'): TagsPlan {
       const next = items[i + 1]
       // (glued to the text beside it in the source: the white space a reply sets there taken back; text.ts glueOf, the
       // wire up to it read past its own spans' tags)
-      const glued = glueOf(
-        textBeside(i, -1),
-        wire.replace(/(?:<t id="\d+">|<\/t>)+$/, ''),
-        textBeside(i, 1),
-        it.word,
-        it.line,
-      )
+      const glued = glueOf(textBeside(i, -1), bare, textBeside(i, 1), it.word, it.line)
       if (glued.before) gluedBefore.add(slots.length)
       if (glued.after) gluedAfter.add(slots.length)
       const stop = it.stop && !LEAD_PUNCT.test(next?.t === 'text' ? next.s : '') ? it.stop : ''
       if (stop) (slots[slots.length - 1] as { own: boolean }).own = true
       wire += `${elementTag(as, slots.length)}${stop}`
+      bare += `${elementTag(as, slots.length)}${stop}`
     } else if (it.t === 'open') {
       pending ??= wire.length
       slots.push({ t: 'pair', id: it.id })
       if (it.letters) kept.push({ id: it.id, depth: it.depth })
       open.push(slots.length)
-      wire += `<t id="${slots.length}">`
+      wire += openTag(as, slots.length)
     } else {
       open.pop()
-      wire += '</t>'
+      wire += closeTag(as)
     }
   }
   cutAt[length] = wire.length
@@ -319,7 +359,7 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
   const { text, marked } = unmark(raw, plan.marks)
   const toks: Tok[] = []
   const seen = new Set<number>()
-  const stack: number[] = []
+  const stack: { n: number; span: boolean }[] = []
   let afterOwn = false
   let afterGlued = false
   // (the white space beside an element the source glued there taken back, as the markers reading takes it: text.ts glueOf)
@@ -349,35 +389,46 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
     }
   }
   let last = 0
-  for (const m of text.matchAll(new RegExp(TAG_RE.source, 'g'))) {
-    const v = m[1] ?? m[2] ?? m[3] ?? m[7] ?? m[8] ?? m[9]
+  const re = new RegExp(TAG_RE.source, 'g')
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    const x = m[1] ?? m[2] ?? m[3]
     const o = m[4] ?? m[5] ?? m[6]
+    const sp = m[7] ?? m[8] ?? m[9]
+    // (a span is an element or a group by its id, as the unit's slots know it, whatever its attributes came back as)
+    const v = x ?? (sp !== undefined && plan.slots[Number(sp) - 1]?.t === 'void' ? sp : undefined)
     const between = text.slice(last, m.index)
     const glued = v !== undefined && plan.gluedBefore.has(Number(v))
     push(between, glued ? GLUED_SPACE : null)
     if (glued && !between) takeBackBefore()
-    last = (m.index ?? 0) + m[0].length
+    last = m.index + m[0].length
     if (v !== undefined) {
       const n = Number(v)
       const slot = plan.slots[n - 1]
       if (slot?.t !== 'void' || seen.has(n)) return null
-      // (an element written as a word holds its own token and nothing else: the wire's contract, as for a lost element)
-      if (m[10] !== undefined && keptOf(m[10]).trim() !== tokenOf(n)) return null
+      if (sp !== undefined) {
+        // (an element written as a word holds its own token and nothing else, then its close: the wire's contract, as for a
+        // lost element)
+        const end = elementEnd(text, last)
+        if (end === null || keptOf(text.slice(last, end.at)).trim() !== tokenOf(n)) return null
+        last = end.end
+        re.lastIndex = last
+      }
       seen.add(n)
       toks.push({ t: 'void', out: slot.out })
       afterOwn = slot.own
       afterGlued = plan.gluedAfter.has(n)
-    } else if (o !== undefined) {
-      const n = Number(o)
+    } else if (o !== undefined || sp !== undefined) {
+      const n = Number(o ?? sp)
       const slot = plan.slots[n - 1]
       if (slot?.t !== 'pair' || seen.has(n)) return null
       seen.add(n)
-      stack.push(n)
+      stack.push({ n, span: sp !== undefined })
       toks.push({ t: 'open', id: slot.id })
     } else {
-      const n = stack.pop()
-      const slot = n === undefined ? undefined : plan.slots[n - 1]
-      if (slot?.t !== 'pair') return null
+      // (a close is the innermost open's, in its own spelling)
+      const top = stack.pop()
+      const slot = top === undefined ? undefined : plan.slots[top.n - 1]
+      if (slot?.t !== 'pair' || top?.span !== m[0].startsWith('</span')) return null
       toks.push({ t: 'close', id: slot.id })
     }
   }
@@ -385,14 +436,14 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
   if (stack.length) return null
   // every element back; a span may be lost (the rule decides: one that is not `must` comes back unstyled)
   for (const [k, s] of plan.slots.entries()) if (s.t === 'void' && !seen.has(k + 1)) return null
-  const wireText = plan.wire.replace(new RegExp(TAG_RE.source, 'g'), '')
+  const wireText = outsideElements(plan.wire, plan)
   // (and no string of the tokens' form outside the elements more often than the unit's own text holds it, whatever its number:
   // a reply that moved an element to another word and left its token behind as text, or that wrote a number of the text in
   // the tokens' form, shows a reader our wire's artefact, and is unread as one with an element lost is; a paper's own `x1`
   // reads as its text. Google's replies in lane stray-stop's fill: 1706.03762v7's Table 1 caption left `x1` behind,
   // 2610.40576v1 wrote its `50` as `x50`; counted in the text as read, the reply's and the wire's alike: tokensIn)
-  const source = tokensIn(plan.wire)
-  for (const [token, n] of tokensIn(raw)) if (n > (source.get(token) ?? 0)) return null
+  const source = tokensIn(plan.wire, plan)
+  for (const [token, n] of tokensIn(raw, plan)) if (n > (source.get(token) ?? 0)) return null
   if (
     !toks.some((t) => t.t === 'text' && SAYS.test(decode(t.s).split(SENTINEL).join(''))) &&
     LETTER.test(decode(wireText))

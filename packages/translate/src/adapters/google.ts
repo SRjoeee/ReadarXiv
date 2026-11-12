@@ -28,7 +28,7 @@ export const googleTarget = (target: Lang): string => REWRITE[target] ?? target
 
 export const GOOGLE_LIMITS: Limits = { chars: 8_000, units: 100, inFlight: 2, callMs: 10_000, reask: 0 }
 /** the behaviour digest of write and read over tests/adapters/fixtures.ts */
-export const GOOGLE_DIGEST = '9921d9b1f1b481b1d8b30fd82ec3a29cedeff707bc38d10780f37f555fe942b4'
+export const GOOGLE_DIGEST = '6b40c2308f957cd5b34f70fa42e87752d8bd4d171d635724128cb3d0702e4816'
 
 const startOf = (text: string, at: number): number => {
   let i = at
@@ -57,11 +57,11 @@ export function readTagged(unit: UnitIn, raw: string): { content: OutPiece[]; se
 }
 
 /** the behaviour digest of the tags wire with its elements as voids (Chrome's codec, chrome.ts CHROME_DIGEST) */
-export const TAGS_DIGEST = 'a0c9ae73f1f21812e3fbaf4b907e1e8af6fce98f56cd75ee9ed176acff322e5e'
+export const TAGS_DIGEST = 'c196a1b2631cb6ce9b8f7619da2766cf1cd150b21d997c0a342242d58a351f14'
 
 /** The tags wire as a host's own translator that keeps tags writes and reads it (the extension's LLM services): Chrome's
  *  codec, its elements voids (what the prompt tells a model a void tag is), so its behaviour digest is Chrome's; Google
- *  reads the same way and writes its elements as words (wire/tags.ts ElementTag) */
+ *  reads the same way and writes its tags as HTML's own inline elements (wire/tags.ts TagSpelling) */
 export const tagsWire = {
   write: (unit: UnitIn): string => planTags(unit).wire,
   read: readTagged,
@@ -81,9 +81,10 @@ export function google(o: GoogleOptions): Translator {
     wire: 'tags',
     limits: { ...GOOGLE_LIMITS, ...o.limits },
     supports: async () => true,
-    // (each element a word of its sentence: as an empty element Google translates the texts on either side of it apart,
-    // each closed with a full stop of its own; wire/tags.ts ElementTag)
-    write: (unit) => planTags(unit, 'word').wire,
+    // (each element a word of its sentence and each styled group the words it holds, in HTML's own inline element: as an
+    // empty element or one HTML does not know Google translates the texts on either side of it apart, each closed with a
+    // full stop of its own, and a group's words apart from their sentence; wire/tags.ts TagSpelling)
+    write: (unit) => planTags(unit, 'html').wire,
     read: readTagged,
     async *send(wires, call, signal) {
       let body: string

@@ -97,8 +97,8 @@ describe('a group with an edge inside a word goes on no wire: the word travels w
       span('1', 'italic', [t('the '), span('2', 'bold', [t('I')]), t('nduce step')]),
       t(' runs.'),
     ])
-    const { sent, result } = await viaGoogle(u, () => '然后<t id="1">归纳步骤</t>运行。')
-    expect(sent).toEqual(['Then <t id="1">the Induce step</t> runs.'])
+    const { sent, result } = await viaGoogle(u, () => '然后<span id="1">归纳步骤</span>运行。')
+    expect(sent).toEqual(['Then <span id="1">the Induce step</span> runs.'])
     expect(ok(result).content).toEqual([tx('然后'), sp('1', [tx('归纳步骤')]), tx('运行。')])
   })
   it('a group whose head is a declaration keeps its head in a copy of itself; its words go plain', async () => {
@@ -125,18 +125,18 @@ describe('a group with an edge inside a word goes on no wire: the word travels w
 describe('a group of whole words travels as before', () => {
   it('one whole word, and several', async () => {
     const one = unit('w', [t('This is the '), span('1', 'bold', [t('key')]), t(' step.')])
-    expect((await viaGoogle(one, () => '这是<t id="1">关键</t>步骤。')).sent).toEqual([
-      'This is the <t id="1">key</t> step.',
+    expect((await viaGoogle(one, () => '这是<span id="1">关键</span>步骤。')).sent).toEqual([
+      'This is the <span id="1">key</span> step.',
     ])
     const several = unit('v', [span('1', 'italic', [t('Whole words here')]), t(' stay styled.')])
-    const { sent, result } = await viaGoogle(several, () => '<t id="1">这里的整词</t>保持样式。')
-    expect(sent).toEqual(['<t id="1">Whole words here</t> stay styled.'])
+    const { sent, result } = await viaGoogle(several, () => '<span id="1">这里的整词</span>保持样式。')
+    expect(sent).toEqual(['<span id="1">Whole words here</span> stay styled.'])
     expect(ok(result).content).toEqual([sp('1', [tx('这里的整词')]), tx('保持样式。')])
   })
   it('a letter before a hyphen: `\\textit{n}-gram` (the hyphen is a word boundary)', async () => {
     const u = unit('g', [t('An '), span('1', 'italic', [t('n')]), t('-gram model.')])
-    expect((await viaGoogle(u, () => '一个<t id="1">n</t>-gram 模型。')).sent).toEqual([
-      'An <t id="1">n</t>-gram model.',
+    expect((await viaGoogle(u, () => '一个<span id="1">n</span>-gram 模型。')).sent).toEqual([
+      'An <span id="1">n</span>-gram model.',
     ])
   })
   it('a group next to punctuation: `\\textbf{RQ1}:`, `\\textbf{Step 1}.`', async () => {
@@ -146,20 +146,20 @@ describe('a group of whole words travels as before', () => {
       span('2', 'bold', [t('Step 1')]),
       t('.'),
     ])
-    const { sent, result } = await viaGoogle(u, () => '<t id="1">RQ1</t>：成立吗？见<t id="2">步骤 1</t>。')
-    expect(sent).toEqual(['<t id="1">RQ1</t>: does it hold? See <t id="2">Step 1</t>.'])
+    const { sent, result } = await viaGoogle(u, () => '<span id="1">RQ1</span>：成立吗？见<span id="2">步骤 1</span>。')
+    expect(sent).toEqual(['<span id="1">RQ1</span>: does it hold? See <span id="2">Step 1</span>.'])
     expect(ok(result).content).toEqual([sp('1', [tx('RQ1')]), tx('：成立吗？见'), sp('2', [tx('步骤 1')]), tx('。')])
   })
   it('a CJK sentence with a group of a whole word (ICU’s dictionary words)', async () => {
     const u = unit('c', [t('我们提出了'), span('1', 'bold', [t('一种')]), t('新方法。')])
-    const { sent, result } = await viaGoogle(u, () => 'We propose <t id="1">a</t> new method.')
-    expect(sent).toEqual(['我们提出了<t id="1">一种</t>新方法。'])
+    const { sent, result } = await viaGoogle(u, () => 'We propose <span id="1">a</span> new method.')
+    expect(sent).toEqual(['我们提出了<span id="1">一种</span>新方法。'])
     expect(ok(result).content).toEqual([tx('We propose '), sp('1', [tx('a')]), tx(' new method.')])
   })
   it('a group beside an element: an element is no letter of a word', async () => {
     const u = unit('x', [span('1', 'bold', [t('RQ')]), el('2'), t(' holds.')])
-    expect((await viaGoogle(u, () => '<t id="1">RQ</t><x id="2"/> 成立。')).sent).toEqual([
-      '<t id="1">RQ</t><span id="2" translate="no">x2</span> holds.',
+    expect((await viaGoogle(u, () => '<span id="1">RQ</span><x id="2"/> 成立。')).sent).toEqual([
+      '<span id="1">RQ</span><span id="2" translate="no">x2</span> holds.',
     ])
   })
 })
@@ -168,12 +168,12 @@ describe('what the rule leaves as it is', () => {
   it('a `must` group (a link, a run-in label, every pair of the HTML page) comes back as the host states, wherever its edges stand', async () => {
     // (a label glued to the next word by a colon: UAX #29 reads "Keywords:Linear" as one word)
     const u = unit('k', [span('1', 'bold', [t('Keywords')], true), t(':Linear maps, groups.')])
-    expect((await viaGoogle(u, () => '<t id="1">关键词</t>：线性映射、群。')).sent).toEqual([
-      '<t id="1">Keywords</t>:Linear maps, groups.',
+    expect((await viaGoogle(u, () => '<span id="1">关键词</span>：线性映射、群。')).sent).toEqual([
+      '<span id="1">Keywords</span>:Linear maps, groups.',
     ])
     const link = unit('l', [span('1', 'link', [t('Git')], true), t('Hub hosts it.')])
-    expect((await viaGoogle(link, () => '<t id="1">Git</t>Hub 托管它。')).sent).toEqual([
-      '<t id="1">Git</t>Hub hosts it.',
+    expect((await viaGoogle(link, () => '<span id="1">Git</span>Hub 托管它。')).sent).toEqual([
+      '<span id="1">Git</span>Hub hosts it.',
     ])
   })
   it('a unit with no letter is sent nothing and keeps its groups', async () => {
