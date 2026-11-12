@@ -12,7 +12,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { rowLinesOf } from '../../../packages/typeset/src/index.ts'
+import { rowLinesOf, rulesFor } from '../../../packages/typeset/src/index.ts'
 import { L1_BUNDLES_DIR, l1Paper } from '../../../packages/typeset/tests/replay/l1.ts'
 import { bundlesLine, headsFor } from '../../../packages/typeset/tests/replay/bundles.ts'
 import { doorRows } from '../../../packages/typeset/tests/replay/rows.ts'
@@ -142,6 +142,11 @@ for (const [pair, raw] of drawn) {
   // flows, the lay's facts, so that the measure judges by the line exactly the lines the lay sets as one run)
   const rows = new Map()
   for (const [, part] of bundle?.parts ?? []) for (const [o, line] of rowLinesOf(part.flows)) rows.set(o, line)
+  // (each cell's room beside it, the part's Room.side and walls, and the fit's floor of the target: a cell's room as the recorded
+  // rule gives it, PDF-READER §18.13, fidelity.mjs cellRoomOf)
+  const cellRooms = new Map()
+  for (const [, part] of bundle?.parts ?? []) for (const f of part.flows) for (const m of f) if (m.kind === 'cell' && m.room?.side && !cellRooms.has(m.ord)) cellRooms.set(m.ord, { side: m.room.side, wall: m.room.wall ?? 0 })
+  const floor = rulesFor(raw.target ?? pair.split('-').at(-1)).set.floor
   for (const [pg, part] of bundle?.parts ?? [])
     for (const f of part.flows)
       f.forEach((m, k) => {
@@ -192,7 +197,7 @@ for (const [pair, raw] of drawn) {
       }
     : null
   const mine = []
-  const ctxOf = (rec) => ({ prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [], kept, rows })
+  const ctxOf = (rec) => ({ prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [], kept, rows, cellRooms, floor })
   for (const rec of raw.pages) mine.push(measurePage(pair, v2, rec, ctxOf(rec)))
   // (a unit's size and line count today bought with a line past TeX's room on one of its pages: today's fault on each)
   pastRoomPass(

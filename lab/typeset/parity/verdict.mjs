@@ -332,7 +332,7 @@ export function linksOf(boxes) {
  * turned on A, `led` the part's run-ins (follower ord → its leader's ord: Placed.join, a bound name's lead), `top` its title and
  * front matter (Placed.title, Placed.front: anchored at their first line). A page either side did not draw is an error: no comparison made, and the gate incomplete (coverageOf)
  */
-export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios, kept, rows }) {
+export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios, kept, rows, cellRooms, floor }) {
   const n = rec.page
   const out = { pair, page: n, worse: 0, diffs: [], both: [], faults: {}, measures: {}, units: [] }
   const error =
@@ -1024,6 +1024,10 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     todayOf,
     prepByOrd,
     frame: frame ?? null,
+    // (each cell's Room.side and walls, the part's, and the fit's floor of the target: a cell's room as PDF-READER §18.13 gives it,
+    // fidelity.mjs cellRoomOf)
+    cellRooms: cellRooms ?? null,
+    floor: floor ?? null,
     groups: groups ?? [],
     keptByGroup: keptByGroup ?? new Set(),
     // (today's ords of the cells a rule's mark keeps or no row serves: no group's state, the coordinator's rulings of 2026-11-10)
@@ -1041,7 +1045,13 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     band,
     NEAR,
   }
-  const { borrowed } = measureFidelity(fc)
+  const { borrowed, past, rooms } = measureFidelity(fc)
+  // (each cell's room as the frame measure read it, and each side's line past it: the owner's ruling S2 reads them, rulings.mjs)
+  for (const u of units) {
+    if (!rooms.has(u.key)) continue
+    u.room = rooms.get(u.key).map(r2)
+    for (const side of ['today', 'v2']) if (u.sides[side] && past[side].has(u.key)) u.sides[side].frame = r2(past[side].get(u.key))
+  }
   judgeJoined(fc, fc.figurePairs, new Map((rec.today.figures ?? []).map((u) => [u.id, u])), 'a figure text')
   const namePairs = joinedOf(rec.today.names ?? [], V, facts, keyOfPart, /^name$/, band)
   judgeJoined(fc, namePairs, new Map((rec.today.names ?? []).map((u) => [u.id, u])), 'a name')

@@ -37,7 +37,7 @@ const v2Of = (
   ...(o.fills ? { fills: o.fills } : {}),
   ...(o.spaced ? { spaced: { [N]: o.spaced } } : {}),
 })
-type Extra = { prep?: { ord: number }[]; pair?: string; frame?: object; groups?: object[]; keptByGroup?: Set<number>; folios?: Set<number>; ruled?: Set<number> }
+type Extra = { prep?: { ord: number }[]; pair?: string; frame?: object; groups?: object[]; keptByGroup?: Set<number>; folios?: Set<number>; ruled?: Set<number>; cellRooms?: Map<number, object>; floor?: number }
 const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, x: Extra = {}) =>
   measurePage(x.pair ?? 'p-zh', v2, r, {
     prepByOrd: new Map((x.prep ?? []).map((u) => [u.ord, u])),
@@ -50,6 +50,8 @@ const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, x: Extr
     keptByGroup: x.keptByGroup ?? new Set(),
     folios: x.folios ?? new Set(),
     ruled: x.ruled ?? new Set(),
+    cellRooms: x.cellRooms ?? null,
+    floor: x.floor ?? null,
   })
 const of = (flag: string) => (p: { diffs: { flag: string }[] }) => p.diffs.filter((d) => d.flag === flag)
 const laid = (ord: number, lit: object = {}) => ({ ord, state: 'laid', lines: [], lit: { left: [], right: [], own: [], ...lit } })
@@ -814,5 +816,29 @@ describe("groups: a cell kept by a rule's mark, or one no row can serve, holds n
   })
   it('mixed by any other cell: worse, as before', () => {
     expect(of('groups')(page({ keptToday: [[72, 'identifier']] }))).toMatchObject([{ unit: 'group 2:1', worse: true }])
+  })
+})
+
+describe("frame: a cell's room is what the recorded rule gives it (PDF-READER §18.13; gate correction 16)", () => {
+  // (1810.04805v2-zh p7 t129 "Dev": a centred \multicolumn header, its advances 443.39-458.11, the glyphs beside it ending at
+  // 376.15 and starting at 465.58 (Room.side); v2's three characters at 7.62 pt (0.85 of 8.97) drawn 439.66-462.08: clipped at the floor
+  // 0.8 in its own advances, widened half way to the glyph beside it, centred: its room 439.655-461.845)
+  const facts = { ord: 129, kind: 'cell', align: 'c', style: { size: 8.97 }, lines: [[N, 1, 443.39, 458.11, 768.18, 774.12, 768.06, 307.28, 525.54, 0, 8.97]] }
+  const v2 = v2Of({ members: [laid(129)], facts: [facts], today: { 129: { today: 129 } } })
+  const page = (x0: number, x1: number, size: number, o: { side?: number[]; floor?: number } = {}) =>
+    measure(v2, rec({ v2: { units: [{ id: 129, lines: [drawnLine(x0, x1, 768.18, '\u5f00\u53d1\u8005', size)] }] } }), {
+      cellRooms: new Map([[129, { side: o.side ?? [376.15, 465.58], wall: 0 }]]),
+      floor: o.floor ?? 0.8,
+    })
+  const frames = (p: { faults: { frame?: { v2: number } } }) => p.faults.frame?.v2 ?? 0
+  it('a cell clipped at the floor in its own advances, drawn inside the half-way room: no line past its room', () => {
+    expect(frames(page(439.66, 462.08, 7.62))).toBe(0)
+  })
+  it("one past the half-way room, or one drawn past its advances whose text fits them at the floor (widened above the floor): past its room", () => {
+    // (centred 434-467: 5.2 pt past the half-way room's right edge)
+    expect(frames(page(434, 467, 7.62))).toBe(1)
+    // (a 14 pt line at 8.97 drawn 441-455 or 440-455: at the floor 11.2 wide, inside its 14.72 of advances: not widened, 2.4 and 3.4
+    // pt past them)
+    expect(frames(page(441, 455, 8.97, { side: [376.15, 465.58] })) + frames(page(440, 455, 8.97))).toBe(2)
   })
 })

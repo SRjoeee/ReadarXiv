@@ -20,6 +20,7 @@ export const SEEN = 'verification/display-classes.zh.html (lab-data refactor-202
 export const GENERAL =
   '是否要完全做到“一页一个字号”，或者行距一定要固定，这些限制我们可以不设。只要肉眼看起来字号和行距没有明显的差别，就是 OK 的。'
 
+const r2 = (v) => Math.round(v * 100) / 100
 /** his verdict on each class ruled here, as he gave it */
 const ACCEPTED = '可以接受'
 /** a position's noise floor at a size (anchor, align, gap, frame: a tenth of the size, a point at least) */
@@ -135,6 +136,42 @@ export const RULINGS = [
     },
   },
   {
+    id: 'L3',
+    title: "a proof one line longer than today's, in the room under it",
+    verdict: ACCEPTED,
+    date: DATE,
+    seen: "not judged on a card of its own: follows from two rulings of his, as the coordinator states it (2026-11-12): the borrow (README ruling 1 of 2026-11-08: a paragraph takes lines in the room TeX left under its lines before it shrinks, bounded by TeX's facts; default since 2026-11-12) and A1 (a last line of one character, accepted 2026-11-12, his words beside)",
+    words: '看起来效果我都能接受，用当前最简洁最干净最长期好维护的方式去做就行',
+    example:
+      "2610.40645v1-ja p12 t80: a proof at the original's 10.91 pt in 5 lines where TeX and today set 4 (today at 10.57), its fifth line holding one character and its stop, 15.68 pt over the heading under it (TeX's separation 13.55)",
+    condition:
+      "line-count, a theorem (a proof): v2 sets it in exactly one line more than today, today on the original's count, v2 at the original's size (the size floor) where today is smaller than that by more than the size floor, v2's lines inside the room the borrow keeps (the block measure: none of the unit's past TeX's text block bottom or nearer the next ink than TeX's paragraph separation, on any of its pages), the unit whole (WHOLE). Reported beside: today's size, and where today's last line ends against TeX's end box",
+    holds(d, x) {
+      if (d.flag !== 'line-count' || !d.unit) return false
+      const t = d.today?.value,
+        v = d.v2?.value
+      if (![t, v, d.original].every(Number.isFinite) || v - t !== 1 || t !== d.original) return false
+      const u = x.unit(d)
+      if (u?.kind !== 'theorem' || !u.sides?.today || !atOriginal(u.sides.v2) || x.pastV2.has(u.key) || !x.whole(u.key)) return false
+      const ts = shareOf(u.sides.today)
+      return ts !== null && shareOf(u.sides.v2) - ts > NEAR.size
+    },
+    says(d, x) {
+      const u = x.unit(d)
+      const tl = (x.rec.today?.units ?? []).filter((w) => w.id === Number(u.key.slice(1))).flatMap((w) => w.lines.filter((l) => !l.rot && l.n > 0 && l.x0 !== null))
+      const last = tl.length ? tl.reduce((a, b) => (b.y < a.y ? b : a)) : null
+      // (TeX's end box: the source on arXiv's page of v2's crop of the unit's end mark, END_K -2, its crop margin of 0.4 off)
+      const end = (x.rec.v2?.crops ?? []).find((c) => c[0] === u.part && String(c[5]) === '-2' && c[10] === x.n)
+      let at = ''
+      if (last && end) {
+        const b0 = end[6] + 0.4,
+          b1 = end[8] - 0.4
+        at = last.x1 >= b1 ? `; today's last line ends at ${last.x1}, past TeX's end box (${r2(b0)}-${r2(b1)}): drawn over it` : last.x1 > b0 ? `; today's last line ends at ${last.x1}, ${r2(last.x1 - b0)} pt into TeX's end box (${r2(b0)}-${r2(b1)})` : `; today's last line ends at ${last.x1}, ${r2(b0 - last.x1)} pt before TeX's end box`
+      }
+      return `today ${u.sides.today.size} pt (${Math.round(shareOf(u.sides.today) * 1000) / 1000} of the original's)${at}`
+    },
+  },
+  {
     id: 'S1',
     title: "a figure's labels at their group's size",
     verdict: ACCEPTED,
@@ -168,16 +205,23 @@ export const RULINGS = [
     date: DATE,
     words: null,
     example:
-      "2608.04322v1-zh p10 t256: v2 at 6.10 pt, 2.67 pt past its cell and centred, where today keeps the original's 6.97 by running 12.98 pt past it, 6.49 off its centre; 2602.23285v2-ja p18 t156: 6.48 against today's 6.66 (the original's 7.4), 6.13 pt past its cell against today's 7.39",
+      "2608.04322v1-zh p10 t256: v2 at 6.10 pt, inside its cell's room and centred, where today keeps the original's 6.97 by running 9.99 pt past that room (12.98 past its own ink's width), 6.49 off its centre; 2602.23285v2-ja p18 t156: 6.48 against today's 6.66 (the original's 7.4), inside the room where today runs 0.49 past it",
     condition:
-      "size, a cell: v2 draws it smaller than today where today runs past the cell's own room (the owner's ruling 3: a cell's frame is its own original's extent) and v2 runs past it less (the frame measure on the same unit: today past it by more than the position floor, v2 nearer by more than that floor), its text still reaching the room's edge (v2's own reading past it more than none): the size given for room, never more than the room asks",
+      "size, a cell: v2 draws it smaller than today, inside the cell's room (the frame measure's room: its own advances, widened half way to the glyph beside it where its text is clipped there at the floor, PDF-READER §18.13; v2's line past it by no more than the position floor) where today's runs further past that room, at the largest of the fit's steps whose text stands inside it (one step larger, its drawn line, scaled about where the cell aligns it, would stand past the room): the size given for room, never more than the room asks",
     holds(d, x) {
       if (d.flag !== 'size' || !d.unit || !(d.v2?.value < d.today?.value)) return false
-      if (x.unit(d)?.kind !== 'cell') return false
-      const fr = x.p.diffs.find((y) => y.flag === 'frame' && y.unit === d.unit)
-      if (fr?.nearer !== 'v2') return false
-      const floor = posFloor(d.original)
-      return fr.today?.value > floor && fr.v2?.value > 0 && fr.today.value - fr.v2.value > floor
+      const u = x.unit(d)
+      const t = u?.sides?.today,
+        v = u?.sides?.v2
+      if (u?.kind !== 'cell' || !u.room || !v?.osize || !(v.frame <= posFloor(v.osize)) || !(t?.frame > v.frame)) return false
+      const ls = (x.rec.v2?.units ?? []).filter((w) => w.id === u.part).flatMap((w) => w.lines.filter((l) => !l.rot && l.n > 0 && l.x0 !== null))
+      if (ls.length !== 1) return false
+      const l = ls[0],
+        w = (l.x1 - l.x0) * ((v.size + SIZE_STEP * v.osize) / v.size),
+        [r0, r1] = u.room
+      const mid = (l.x0 + l.x1) / 2
+      const [a, b] = u.align === 'c' ? [mid - w / 2, mid + w / 2] : u.align === 'r' ? [l.x1 - w, l.x1] : [l.x0, l.x0 + w]
+      return a < r0 || b > r1
     },
   },
   {
@@ -211,18 +255,20 @@ export const RULINGS = [
     example:
       "2610.40645v1-ja p22 t174: a theorem v2 sets at 10.64 pt where today sets 10.98, the original's 10.91",
     condition:
-      "size, a theorem: v2 sets it under the original's size and under today's by no more than one step of the fit's own grain (SIZE_STEP, 2.5 % of the original's size: the steps v2's sizes come in, which the reader's eye passed unremarked between the old reader's paragraphs, lanes/even-page), the unit whole (WHOLE). His own example is 1.26 steps under today's (10.64 against 10.98 on 10.91): not covered",
+      "size, a theorem: v2 draws it at exactly one step of the fit's own grain under the original's size (SIZE_STEP, 2.5 % of the original's size: the step v2's sizes come in; to the hundredth of a point the drawing reads sizes at), the unit whole (WHOLE). Today's own size is reported beside, never asked: today may stand above the original (its misread of TeX's justification as size). The size read is the median of the unit's drawn lines on the page, each line at its own run's size (a unit a display splits is laid a run at a time, only a cramped run shrinking: the owner's ruling of 2026-10-09), never its first run's alone",
     holds(d, x) {
       if (d.flag !== 'size' || !d.unit) return false
       const u = x.unit(d)
-      const v = u?.sides?.v2,
-        t = u?.sides?.today
-      if (u?.kind !== 'theorem' || !v?.osize || !t || !(v.size < v.osize) || !(v.size < t.size) || !x.whole(u.key)) return false
-      return (t.size - v.size) / v.osize <= SIZE_STEP + 1e-9
+      const v = u?.sides?.v2
+      if (u?.kind !== 'theorem' || !v?.osize || !u.sides.today || !x.whole(u.key)) return false
+      return Math.abs(v.size - (1 - SIZE_STEP) * v.osize) <= 0.01 + 1e-9
     },
     says(d, x) {
       const u = x.unit(d)
-      return `${Math.round(((u.sides.today.size - u.sides.v2.size) / u.sides.v2.osize / SIZE_STEP) * 100) / 100} of a fit step under today's`
+      const t = u.sides.today,
+        v = u.sides.v2
+      const others = x.sizesOf(u.key).filter((o) => o.page !== x.n && Math.abs(o.size - v.size) > 0.01)
+      return `today ${t.size} pt (${Math.round((t.size / v.osize) * 1000) / 1000} of the original's)${others.length ? `; its lines on ${others.map((o) => `p${o.page} at ${o.size}`).join(', ')}: another run of it, laid at its own size` : ''}`
     },
   },
   {
@@ -403,6 +449,10 @@ export function rulingsPass(pages, { recOf, v2, laid, unsqueezed }, recount) {
   const unsqueezedOf = (ord) => Object.values(unsqueezed ?? {}).reduce((n, pg) => n + (pg?.[ord] ?? 0), 0)
   // (the units a measure of content finds v2 farther on, before any ruling covers a difference: not whole)
   const notWhole = new Set()
+  // (each unit's size on each page, and the units v2 sets a line of past TeX's room on any page: the block measure's)
+  const sizes = new Map()
+  for (const p of pages) for (const u of p.units ?? []) if (typeof u.sides?.v2?.size === 'number') (sizes.get(u.key) ?? sizes.set(u.key, []).get(u.key)).push({ page: p.page, size: u.sides.v2.size })
+  const pastV2 = new Set(pages.flatMap((p) => p.pastRoom?.v2 ?? []))
   for (const p of pages) for (const d of p.diffs ?? []) if ((d.worse || d.covered) && WHOLE.includes(d.flag) && d.unit) notWhole.add(d.unit.split(' ')[0])
   for (const p of pages) {
     if (p.error) continue
@@ -417,6 +467,8 @@ export function rulingsPass(pages, { recOf, v2, laid, unsqueezed }, recount) {
       figurePairs: new Map(p.figurePairs ?? []),
       unit: (d) => p.units?.find((u) => u.key === d.unit.split(' ')[0]),
       whole: (key) => !notWhole.has(key),
+      sizesOf: (key) => sizes.get(key) ?? [],
+      pastV2,
       member: (ord) => facts.get(ord) ?? Object.values(v2.facts ?? {}).flatMap((f) => f.members ?? []).find((m) => m.ord === ord),
       squeezeSaved: (u) => {
         if (!unsqueezed) return false
