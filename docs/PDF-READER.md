@@ -4721,7 +4721,8 @@ of the page's address, so it stays.
 - **The switch.** No control, no string, nothing stored. The reader takes the page's address's `axt-borrow` (`compose/typeset.ts`
   pastFootOf), once a visit, on an http or https page alone (never on the extension's pages): `0` turns the borrow off; a number
   above 0 and up to 6 (`PAST_FOOT_MAX`: a ceiling against a typo, the deepest `\maxdepth` of the classes measured, §18.11) is
-  its bound in points; no parameter, or anything else, leaves the rule's 1.5. It goes into the rules the visit lays with
+  its bound in points; no parameter, or anything else, leaves the rule's 1.5. `axt-borrow=0` turns off the fit's borrow; the
+  fill's foot step (§18.57) is not an option. It goes into the rules the visit lays with
   (`Choices.pastFoot`, in `Rules.set` only where given). The lay is made in the browser at reading time and kept in memory
   alone (the composer's maps; `typesetLay`'s rules by target and toggles, the bound fixed for the lay), so no stored layout,
   row or key depends on it and no version names it: the bundle's tag (`b<BUNDLE>-j<PDFJS>-p<PIPELINE>-l<LAYOUT>-r<REMOVAL>`,
@@ -5611,7 +5612,8 @@ paragraphs spread to 16.0-16.5): its two lines at 1.41, the second 4.5 pt under 
 baseline. Over the 90 pairs it brings 81 frames more into the band (639 in all), 74 lines past the bottom, median 3.6 pt, the
 deepest 10.9 (a line is 11 to 13.5). The two rules stay one: the foot is the knobs' last try, and a paragraph it lifts takes
 it on the knobs before it (one at a page's foot over a page break takes it as 2602.23285's does: its first frame spread, a line
-the tracking freed on the next page; `packages/typeset/tests/unit/entry.test.ts`'s share case).
+the tracking freed on the next page; `packages/typeset/tests/unit/entry.test.ts`'s share case). `axt-borrow=0` turns off the
+fit's borrow; the fill's foot step is not an option.
 
 **What it does** (the 90 pairs with stored rows, the borrow of §18.37 on; every body frame of two lines or more under its page's
 band floor: 1,468 on 871 pages, the same with the borrow off): 558 come into the band (the tracking alone 128, with the room 240,
