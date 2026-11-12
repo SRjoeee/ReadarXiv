@@ -1358,6 +1358,21 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   it is held, out again at its end where still far. A kept page's words are not found by the
   browser's find while it is far, as today's are not (the coordinator's word, 2026-11-12: equal to production is the bar).
   Held by the harness's check "a far laid page kept out of the layout tree, back pixel for pixel, the scroll height unmoved".
+  **A kept page holds one bitmap** (design-performance-2026-11-13 Q7): its page view's. Its crops canvas, page-sized so that the
+  compositor draws it as it draws the page view, holds a few formulas' pixels on most pages; kept, it let every laid page hold a
+  second page of pixels (2610.20808v1 and 2610.40645v1 after a scroll: 27 and 35 of them, 62.6 and 74.3 MiB; the GPU process
+  595-605 and 658 MiB against 420-433 with them let go, lane crops-probe, 2026-11-13). As the page is kept, the smallest box of
+  whole device pixels that holds where its crops are drawn (`packages/reader` paint.ts `cropsBox`) is copied one to one into a
+  canvas of its own that is never in the document and is read by the CPU (`willReadFrequently`), and the crops canvas's bitmap
+  is let go (`cropsAway`); as the page comes back, in the task that puts it back into the layout tree (the jump's own frame or
+  the near observer's), the canvas is made page-sized again and the copy drawn at its place, one to one (`cropsBack`): the page
+  comes back as it left, the same canvas and the same pixels, alpha included, no crop render made. A canvas cut to the box and
+  shown so (lane reader-perf's C) is not taken: Chromium composites a layer of another size differently, 14 of the harness's 37
+  shots unlike though the canvas's own pixels were identical (lane crops-probe). Where no copy fits (the scale moved while the
+  page was far) the crops are drawn anew (`cropsAgain`) and the page goes back into the layout tree once they are in: never
+  shown without them, nor with the old scale's. The budget counts what a kept page holds: its page view and its copy.
+  Held by the same check (the crops canvas 0 × 0 while far, the budget, the canvas in the jump's frame equal to what it held,
+  no crop drawn again; after a zoom while far, the crops at the new grid as the page goes back) and paint.test.ts.
 - **The faces, in one wave** (`layer-proto/warm.mjs`). v0 checks and loads the faces of a unit as it lays it, one unit after
   another (E2), so a page whose units brought new characters waited a round trip a unit: 2602.23285v2 in Chinese asked 38
   font files in 12 waves before its first page, 4.3 to 9.2 s of a cold visit (production, 2026-10-24). The side asks the

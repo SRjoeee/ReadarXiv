@@ -876,7 +876,9 @@ for (const name of Object.keys(fixtures)) {
 // its drawing held out of the layout tree while it is kept (`data-axt-kept`), so that no relayout of the document walks it (a
 // face added to the document re-lays every text node laid out: verification/reader-perf.md §1), its slot keeping its box; and
 // put back as it was as the page comes near: no new drawing, the same pixels on the page's grid, the pane's scroll height never
-// moved. A pane a third of a page high: page 1 is far (past one pane's height) once the pane is at its end.
+// moved. Kept, it holds one bitmap, its page view's: its crops canvas let go and a copy of its crops' box kept off the
+// document, drawn back in the task it returns (§11.8 "A kept page holds one bitmap"). A pane a third of a page high: page 1 is
+// far (past one pane's height) once the pane is at its end.
 await check(
   'stack: a far laid page kept out of the layout tree, back pixel for pixel, the scroll height unmoved (s1-columns)',
   async () => {
@@ -893,6 +895,8 @@ await check(
         const pane = document.querySelector('.axt-pane.right')
         const holder = s?.querySelector(':scope > .axt-slot-view')
         const p = window.__h.panes.probe()
+        const crops = s?.querySelector('.axt-over > canvas.axt-crops')
+        const view = s?.querySelector('.canvasWrapper > canvas')
         return {
           kept: !!s?.hasAttribute('data-axt-kept'),
           boxes: holder ? holder.getClientRects().length : -1,
@@ -900,7 +904,23 @@ await check(
           made: p['right.made'],
           restored: p['right.restored'],
           keptN: p['right.kept'],
+          agains: p['right.agains'],
+          keptPx: p['right.keptPixels'],
+          // (its crops canvas's bitmap, and the box of its crops a copy holds while the page is away)
+          crops: crops ? [crops.width, crops.height] : null,
+          away: crops?.dataset.axtAway?.split(',').map(Number) ?? null,
+          viewPx: view ? view.width * view.height : 0,
         }
+      }, slot)
+    /** page 1's crops canvas: its size and its pixels' digest, every channel (FNV-1a over getImageData) */
+    const cropsOf = () =>
+      page.evaluate((sel) => {
+        const c = document.querySelector(`${sel} .axt-over > canvas.axt-crops`)
+        if (!c?.width || !c.height) return null
+        const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+        let h = 2166136261
+        for (let i = 0; i < d.length; i++) h = Math.imul(h ^ d[i], 16777619)
+        return [c.width, c.height, h >>> 0]
       }, slot)
     const toTop = () => page.evaluate(() => (document.querySelector('.axt-pane.right').scrollTop = 0))
     // (no pointer moved in this check: nothing lit on either pane)
@@ -908,6 +928,7 @@ await check(
     await page.waitForTimeout(300)
     const before = await page.locator(`${slot} > .axt-slot-view`).screenshot({ animations: 'disabled' })
     const s0 = await state()
+    const crops0 = await cropsOf()
     await page.evaluate(() => {
       const p = document.querySelector('.axt-pane.right')
       p.scrollTop = p.scrollHeight
@@ -917,19 +938,32 @@ await check(
     const s1 = await state()
     // (the jump back: in the frame that draws it, page 1's drawing already in the layout tree. A callback asked from the jump's
     // scroll event runs in that frame before its layout and paint, after the stack's own, asked from the same event earlier)
-    const inJumpFrame = await page.evaluate(
+    // (and its crops canvas in that frame: the page-sized canvas again, its pixels the ones it held before it went far)
+    const jump = await page.evaluate(
       (sel) =>
         new Promise((done) => {
           const p = document.querySelector('.axt-pane.right')
           p.addEventListener(
             'scroll',
-            () => requestAnimationFrame(() => done(document.querySelector(sel).hasAttribute('data-axt-kept'))),
+            () =>
+              requestAnimationFrame(() => {
+                const c = document.querySelector(`${sel} .axt-over > canvas.axt-crops`)
+                let crops = null
+                if (c?.width && c.height) {
+                  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+                  let h = 2166136261
+                  for (let i = 0; i < d.length; i++) h = Math.imul(h ^ d[i], 16777619)
+                  crops = [c.width, c.height, h >>> 0]
+                }
+                done({ kept: document.querySelector(sel).hasAttribute('data-axt-kept'), crops })
+              }),
             { once: true },
           )
           p.scrollTop = 0
         }),
       slot,
     )
+    const inJumpFrame = jump.kept
     await waitFor(page, () => window.__h.panes.right.near(1))
     await page.waitForTimeout(300)
     const s2 = await state()
@@ -941,6 +975,19 @@ await check(
       p.scrollTop = p.scrollHeight
     })
     await waitFor(page, () => !window.__h.panes.right.near(1))
+    const s3 = await state()
+    // (the moment it goes back into the layout tree, whenever that is (the zoom may bring it near): its crops canvas then,
+    // before any frame is drawn of it)
+    await page.evaluate((sel) => {
+      const s = document.querySelector(sel)
+      window.__backAt = null
+      new MutationObserver((ms, o) => {
+        if (s.hasAttribute('data-axt-kept')) return
+        const c = s.querySelector('.axt-over > canvas.axt-crops')
+        window.__backAt = c ? [c.width, c.height] : null
+        o.disconnect()
+      }).observe(s, { attributes: true, attributeFilter: ['data-axt-kept'] })
+    }, slot)
     await page.evaluate(() => window.__h.panes.zoomBy(1.25))
     await page.waitForTimeout(800)
     const zoomed = await page.evaluate(() => window.__h.panes.scale)
@@ -954,6 +1001,8 @@ await check(
       zoomed,
     )
     await page.waitForTimeout(300)
+    const s4 = await state()
+    const backAt = await page.evaluate(() => window.__backAt)
     const z = await page.evaluate((sel) => {
       const s = document.querySelector(sel)
       const r = (e) => {
@@ -981,6 +1030,25 @@ await check(
       `page 1 back: ${JSON.stringify({ far: s1, back: s2 })}`,
     )
     assert(inJumpFrame === false, 'page 1 still out of the layout tree in the frame that draws the jump back to it')
+    // (Q7: a far kept page holds one bitmap, its page view's, and a copy of its crops' box; the budget counts both)
+    assert(
+      crops0 && s1.crops?.[0] * s1.crops?.[1] === 0 && s1.away?.length === 4,
+      `page 1 far and kept: its crops canvas ${JSON.stringify(s1.crops)} (near ${JSON.stringify(crops0)}), its copy ${JSON.stringify(s1.away)}`,
+    )
+    assert(
+      s1.keptN === 1 && s1.keptPx === s1.viewPx + s1.away[2] * s1.away[3],
+      `page 1 kept: the budget counts ${s1.keptPx} px for its page view's ${s1.viewPx} and its copy's ${JSON.stringify(s1.away)}`,
+    )
+    // (back in the jump's own frame with the crops it held, pixel for pixel with alpha, from the copy: no crop render)
+    assert(
+      JSON.stringify(jump.crops) === JSON.stringify(crops0) && s2.agains === s1.agains,
+      `page 1 back: its crops canvas in the jump's frame ${JSON.stringify(jump.crops)}, before it went far ${JSON.stringify(crops0)}; crops drawn again ${s1.agains} -> ${s2.agains}`,
+    )
+    // (a zoom while it was far: no copy fits; its crops drawn again at the new scale before it goes back into the layout tree)
+    assert(
+      backAt?.[0] > 0 && s3.away?.length === 4 && backAt[0] !== crops0[0] && s4.agains > s3.agains,
+      `page 1 back after a zoom while far: its crops canvas as it went back into the layout tree ${JSON.stringify(backAt)} (the grid before ${crops0?.slice(0, 2)}); crops drawn again ${s3.agains} -> ${s4.agains}`,
+    )
     assert(before.equals(after), 'page 1 back is not the same pixels as before it went far')
     const near = (a, b) => a && b && a.every((v, i) => Math.abs(v - b[i]) <= 1)
     assert(
@@ -992,7 +1060,8 @@ await check(
       made: s2.made,
       restored: s2.restored,
       bytes: after.length,
-      zoomed: { scale: zoomed, ...z },
+      copy: s1.away,
+      zoomed: { scale: zoomed, ...z, back: backAt, agains: [s3.agains, s4.agains] },
     }
   },
 )
