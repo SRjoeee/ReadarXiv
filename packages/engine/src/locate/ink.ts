@@ -433,6 +433,23 @@ export function inkOf(o: InkInput): {
     return t ? (t.why === 'crowded' ? 1 : 0) : fig.units[k]!.why ? 1 : 0
   }
   const figOrder = [...fig.units.keys()].filter((k) => !taken.has(k)).sort((a, b) => whyOf(a) - whyOf(b) || a - b)
+  // (each figure text's set, its size tie (the owner's rule of 2026-10-29: the labels of one group at one size): the set today's
+  // figure reading gave its line (setsOf: its column, its baseline); a text the paragraph path lays (figureTextOf: lines joined,
+  // an element, a label) stands among the labels of its lines' sets, which it joins into one: one member, drawn at one size. One
+  // kept as the original's (its why: a formula, code, a script, a double) is laid by no path and keeps a set of its own)
+  const setRoot = new Map<number, number>()
+  const setOf = (k: number): number => {
+    let s = fig.units[k]!.set ?? k
+    while (setRoot.has(s)) s = setRoot.get(s)!
+    return s
+  }
+  const laidAsParagraph = (t: FigureText) => !t.why && (t.ks.length > 1 || t.els.length > 0 || t.label.length > 0)
+  for (const t of textAt.values()) {
+    if (!laidAsParagraph(t)) continue
+    const sets = [...new Set(t.ks.map(setOf))]
+    const root = Math.min(...sets)
+    for (const s of sets) if (s !== root) setRoot.set(s, root)
+  }
   // (each figure text's glyphs: its level ones (global, stream order) and its turned ones ([page, index]), in today's reading's
   // order of them)
   const figText = new Map<number, number[]>()
@@ -447,7 +464,9 @@ export function inkOf(o: InkInput): {
     const f = fig.units[k]!
     const t = textAt.get(k)
     if (t && (t.ks.length > 1 || t.els.length || t.label.length)) {
-      made.push(figureTextOf(t, fig, pages, inkA, m, o.pageA, global))
+      made.push(
+        figureTextOf(t, laidAsParagraph(t) ? setOf(t.ks[0]!) : -1 - t.ks[0]!, fig, pages, inkA, m, o.pageA, global),
+      )
       continue
     }
     const text = (figText.get(k) ?? []).sort((a, b) => a - b)
@@ -482,7 +501,7 @@ export function inkOf(o: InkInput): {
         id: unitId('inkfigures', content),
         kind: 'inkfigures',
         content,
-        figure: { set: f.set ?? f.k, ...(dir ? { dir } : {}), ...room },
+        figure: { set: setOf(k), ...(dir ? { dir } : {}), ...room },
         ...(f.anchor ? { align: ALIGN_OF[f.anchor as keyof typeof ALIGN_OF] } : {}),
         ...((t ? t.why : f.why)
           ? {
@@ -565,10 +584,12 @@ function roomOfText(t: FigureText): { under?: number; over?: number } {
  * a stretch a decoration holds), a space between two where their glyphs stand SPACE_GAP of their size apart; each element drawn
  * from its ink (its class `other`, a code one `literal`, its glyphs' text its copy), its glyphs and its boxes (a ground's, a
  * decoration's) its own. Laid by the paragraph path (it states no own text, locate): its room the line's, from its first run's
- * room before to its last run's after, alone in its set (no size tie with the labels S.figures sets)
+ * room before to its last run's after; in `set`, the set of the labels its lines stand among, whose size tie holds it with the
+ * labels S.figures sets (one size a group); one kept as the original's, a set of its own
  */
 function figureTextOf(
   t: FigureText,
+  set: number,
   fig: ReturnType<typeof figureUnitsOf>,
   pages: readonly TodayPage[],
   inkA: Doc,
@@ -687,7 +708,7 @@ function figureTextOf(
             ]),
           }
         : {}),
-      figure: { set: -1 - t.ks[0]!, ...(t.para ? { para: t.para.by } : {}), ...room },
+      figure: { set, ...(t.para ? { para: t.para.by } : {}), ...room },
       ...(t.para
         ? { align: t.para.justified ? ('j' as const) : (t.para.align ?? ('l' as const)) }
         : f0.anchor

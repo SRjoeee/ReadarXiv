@@ -1199,6 +1199,50 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
       expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
     }
   })
+  it('joins a list’s marker no run holds to no line of the column before it, however near (2111.09276v1 p8)', () => {
+    // (Figure 5: two columns of a list, the second's bullets set in a symbol face no run holds, three quarters of an em before
+    // their items, the first column's word "furniture" ending 0.62 pt before one of them: the bullet joined that line as the
+    // nearest, one cluster with the word, and the word and the bullet were kept as one formula. A list's marker opens its item's
+    // line: it joins none that begins before it)
+    const width = (s: string) => [...s].reduce((w, u) => w + (u === ' ' ? 3 : 5 + (u.codePointAt(0)! % 3)), 0)
+    const at = 190
+    const row = (left: string, right: string, end: number) => [
+      { text: left, font: 'NimbusRomNo9L-Regu', x: end - width(left) },
+      { text: '•', font: 'SymbolMT', run: false, x: at },
+      { text: right, font: 'NimbusRomNo9L-Regu', x: at + 5 + 7.5 },
+    ]
+    const { page, fig } = pageOf([
+      row('Wipe down the boards', 'Choose a light stain', at - 0.6),
+      row('Sand the top', 'Apply the coat', at - 40),
+      row('Rinse the cloth', 'Let it dry', at - 30),
+    ])
+    const G = page.glyphs as Glyph[]
+    const texts = figureLinesOf([page], fig, () => false, null)
+    // (no line holds a bullet: the first column's lines are plain words, the bullets the page's ink where they stand)
+    expect(texts.flatMap((t) => t.els.map((e) => [e.kind, e.glyphs.map((g) => G[g]!.u).join('')]))).toEqual([])
+    expect(
+      texts.flatMap((t) => [...t.claimed, ...t.order.flatMap((o) => (o.t === 'text' ? o.glyphs : []))]),
+    ).not.toContain(G.findIndex((g) => g.u === '•'))
+  })
+  it('keeps a formula’s raised star with its formula, though stars stand in a column before another column’s words (2610.10492v1 p10)', () => {
+    // (a legend's "Model c∗1" over "Model c∗2", the star a superscript no run holds, the next column's entries on the same rows:
+    // a star in MARKER's class, in a column, a line of words after it; but raised off its row's baseline, no list's marker)
+    const row = (n: string) => [
+      { text: 'Model c', font: 'NimbusRomNo9L-Regu', x: 129 },
+      { text: '∗', font: 'CMSY7', run: false, size: 7, dy: 3.5 },
+      { text: n, font: 'CMR7', run: false, size: 7, dy: -1.5 },
+      { text: 'IBM model run', font: 'NimbusRomNo9L-Regu', x: 184 },
+    ]
+    const { page, fig } = pageOf([row('1'), row('2')])
+    const G = page.glyphs as Glyph[]
+    const els = figureLinesOf([page], fig, () => false, null).flatMap((t) =>
+      t.els.map((e) => [e.kind, e.glyphs.map((g) => G[g]!.u).join('')]),
+    )
+    expect(els).toEqual([
+      ['math', 'c∗1'],
+      ['math', 'c∗2'],
+    ])
+  })
   it('reads options set as a grid as a list: the next marker one apart on one baseline or at one left edge (2411.13093v4 p19)', () => {
     // (A. B. / C. D.: two options a row, A over C and B over D, at two left edges)
     const { page, fig } = pageOf([

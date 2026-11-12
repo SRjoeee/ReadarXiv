@@ -61,17 +61,25 @@ function unitOf(row: Row | undefined, m: Placed, designs: PaperReading['designs'
 
 /**
  * The figure texts of page `page` among `members` (kind `figure`): each one's outcome, a laid line where drawn, a state where
- * not, and the faces to wait for
+ * not, and the faces to wait for; and the factor of their sizes each size tie's drawn ones are set at (`scales`, by the tie's
+ * first member), which the tie's figure texts another path lays are capped at (one size a group). `caps`: by a tie's first
+ * member, the most of their sizes its units are drawn at, where another path laid a figure text of it smaller
  */
 export function figuresOf(
   part: Part,
   members: readonly Placed[],
   rows: Rows,
-  o: { paper: PaperReading; R: RuleParams; metrics: Metrics },
-): { laid: Map<number, Laid['lines']>; why: Map<number, Unlaid>; wait: [FaceId, string][] } {
+  o: { paper: PaperReading; R: RuleParams; metrics: Metrics; caps?: ReadonlyMap<number, number> },
+): {
+  laid: Map<number, Laid['lines']>
+  why: Map<number, Unlaid>
+  wait: [FaceId, string][]
+  scales: Map<number, number>
+} {
   const page = part.page
   const laid = new Map<number, Laid['lines']>()
   const why = new Map<number, Unlaid>()
+  const scales = new Map<number, number>()
   // (its set: the size tie that holds it, by the tie's first member; else its own)
   const setOf = new Map<number, string>()
   for (const t of part.ties ?? []) if (t.rule === 'size') for (const ord of t.ords) setOf.set(ord, `s${t.ords[0]}`)
@@ -126,8 +134,11 @@ export function figuresOf(
       })
     }
   }
-  if (!rowsOf.length) return { laid, why, wait: [] }
+  if (!rowsOf.length) return { laid, why, wait: [], scales }
   const got = figures({
+    ...(o.caps?.size
+      ? { caps: (set: string) => (set[0] === 's' ? o.caps!.get(Number(set.slice(1))) : undefined) }
+      : {}),
     figures: rowsOf,
     unit: (id) => {
       const t = byOrd.get(id)!.text
@@ -164,23 +175,28 @@ export function figuresOf(
     }
     // (its runs one after another along its line from its origin, a turned one's places along its run from x0)
     const m = byOrd.get(f.id)!
+    // (its tie's factor: one for every one of its set drawn, fitFigureSet's)
+    if (f.set?.[0] === 's') scales.set(Number(f.set.slice(1)), f.size! / m.style.size)
     const turn = m.dir ? { dir: m.dir } : {}
     const items: TextItem[] = []
     let x = f.x!
     for (const r of f.runs!) {
       // (a run in its group's fill where the part states one, black none: TeX's label before its address in the link's colour)
       const fill = r.fill ?? f.fill
+      // (an oblique face's slant, a CJK face's synthetic italic: the run skewed, as the names path's and D.display's)
+      const slant = r.face.oblique ? { skew: 1 as const, slant: r.face.oblique } : {}
       items.push({
         s: r.s,
         x,
         face: fontString(r.face, 100),
         size: f.size!,
         ...(fill ? { fill } : {}),
+        ...slant,
         ...turn,
       })
       x += (w100(r.s, r.face) / 100) * f.size!
     }
     laid.set(f.id, [[f.y!, f.x!, x, items]])
   }
-  return { laid, why, wait: got.wait }
+  return { laid, why, wait: got.wait, scales }
 }

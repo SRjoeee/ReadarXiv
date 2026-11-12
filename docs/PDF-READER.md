@@ -4599,6 +4599,7 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
   \alph, \Alph, \roman, \Roman, a bullet or a dash; an opening bracket, a closing point or bracket), and another line of its
   figure opens with the next one or the one before, of its form, at its left edge (a column) or on its baseline (a row): options
   set as a grid (2411.13093v4 p19's A. B. over C. D., where "A." had come back "Answer"). One enumerated line alone is text.
+  A marker no run holds joins no line of the column before it (§18.58).
 - **A path's text** (the container step). A closed path holds the lines whose glyphs' centres all stand inside it (read by its
   interior after its box) alone where no other glyph is inside it and no closed path inside it holds text of its own (the nodes
   of a box round a chart); a fill or a frame under words of one line, within one band's height of its baseline, is a decoration
@@ -5371,6 +5372,87 @@ measure's edge, on a line of its own only where it does not fit; decided by what
   margin narrowed TeX's `\linewidth`): a paragraph's own measure, `\linewidth` and `\@totalleftmargin` where its paragraph
   ends, is no fact the part states. 2608.25210v2's example mark, set after a space, is no push. The two marks before a heading
   number no unit owns stay. PIPELINE must move (the parts, the add-ons); TRANSLATE, LAYOUT, CHAIN_RULES and FORMAT do not.
+
+### 18.56 An italic figure label is drawn slanted in a CJK target, as a name and a display are (2026-11-12)
+
+A CJK run of an italic text is its upright face sheared 13° (the owner's ruling of 2026-10-19; `breaker/faces.ts` `faceOf`
+states it as the face's `oblique`). The names path (`lay/entry.ts`) and the displays (`emit/display.ts`) write it into each
+item as its skew; S.figures (`lay/figures.ts` `figuresOf`) wrote a figure text's runs with their text, place, face, size, fill
+and direction and no skew, so an italic label translated into Chinese, Japanese or Korean stood upright (Codex's P2 at
+225f0959f, unanswered until this lane; verification R07).
+
+- **The rule.** Each item of a run whose face is oblique carries the skew and the slant, a turned label's too (the reader's
+  painter shears it about its baseline in the run's frame, `compose/paint.ts`). A Latin run of the label is set in its italic
+  face and takes none, nor does Korean's word space, a Latin run. The width is its advances' as before: the fit and the anchor
+  read advances, and the lean past the last one is the face's, as a name's is.
+- **Before and after** (`figure-slant.test.ts`, red at the base on two of its three cases): an italic label in ja, ko and zh,
+  a turned one, an upright one. On the parity's 22 pairs (v2's lay over r19's bundles, gate mode): 53 figure texts on 11 pages
+  of 6 pairs, all zh (2608.04322v1, 2608.06701v1, 2608.25210v2, 2610.21313v1, 2610.21504v1, 2610.22065v1), gain the skew;
+  nothing else of any page moves. The parity on those pairs, both modes: 19 italic labels now read as the original's italic
+  (`style`, v2 nearer; today's drawn upright), no page newly worse. No version moves: the reader's lay alone.
+
+### 18.57 One size a group: a figure text the paragraph path lays is in its labels' size tie (2026-11-12)
+
+The labels of one group are set at one size (the owner's rule of 2026-10-29, §19.12 "Its set and its room"): today's figure
+reading puts each line in a set (`setsOf`: its column, its baseline), the part states each set as a size tie, and S.figures
+fits the set by one factor (`fitFigureSet`). A figure text the paragraph path lays (an element in its line, F0's and F1's;
+lines joined, F3's; an item's marker its label) was given a set of its own (`locate/ink.ts` `figureTextOf`, `-1 - k`), so it
+took part in no tie and the paragraph path fitted it alone: 2111.09276v1 p8, Figure 5, a list's column whose plain items were
+drawn at 0.73 of their 4.99 pt and whose items holding a highlighted token, or wrapped over two lines, at 4.99, 4.86 and 4.74,
+within one bullet item.
+
+- **The rule.** A text the paragraph path lays stands in the set its lines would have joined as plain labels; where its lines
+  stood in two sets, it joins them (one member, drawn at one size). One the figure keeps as the original's (a formula, code, a
+  script, a double) is laid by no path and keeps a set of its own. In the typesetter (`lay/entry.ts`, `lay/page.ts`,
+  `lay/figures.ts`, `shared/figure-fit.ts`): the tie's paragraph members are laid at the factor S.figures set its labels at at
+  the most (the tie's `least`), from the page's first lay, and the set's floor is S.figures' (`floorMin`, to which a set shrinks
+  as one; a body paragraph's tie keeps the fit's floor); where one of them is laid smaller still, the others are capped at its
+  scale as any tie's (`layPagePrepared`) and the set's labels fitted again at it (`fitFigureSet`'s `cap`, never under the
+  floor). No number is new: the sets are today's figure reading's, the floor S.figures'.
+- **Speed.** Capped only after a first lay, each page with such a tie was laid twice: 2111.09276v1 p8 (189 figure texts) took
+  36 ms against 51, p1 26 against 38 (`layPage`, the same code over the part before and after, 40 runs interleaved). Capped
+  from the first lay, the page is laid once where no paragraph member needs less than its labels: 38 against 37 ms, 30 against
+  31, within the runs' spread.
+- **Before and after.** `ink.test.ts` ("ties a figure text laid as a paragraph to the labels of its column"): a column of two
+  labels, a line holding a run of one pitch and a hyphenated pair, red at the base (the tie held the two labels alone).
+  `figure-tie.test.ts`: a label shrunk to 0.7 with a paragraph that fits at its size, and a paragraph laid at 0.675 with a label
+  that fits, each drawn at one size (red at the base: 7 against 10, 6.75 against 10). 2111.09276v1 (stage 1a over our compile
+  of it, soul-locate's compiles; laid with staging's stored Google rows, the served metrics and the reader's `typesetLay`): units
+  byte-identical, the ties of its figures on pages 1, 3 and 8 gain 36 members; page 8's list columns drawn at 3.64 pt throughout
+  (10 members from 4.74 to 4.99; two more are §18.58's lines, whose new units staging holds no row of) and its second figure at
+  4.04 (6 members from 4.99), page 1's figure at 4.30 (5 members from 4.77); no member changes state.
+- **Over the 88** (stage 1a, r19's flags and caches, against r19): 44 papers' parts move, by their size ties alone: 307 ties
+  (201 new, 106 grown; a figure's tie is stated in each part that holds it) gain 843 members, every one a figure text the
+  paragraph path lays or a label that stood alone in its set, no tie cut and no two existing ties joined; units, members, the
+  prepare dumps and the differential are r19's byte for byte. v2's lay of the parity's 22 pairs (gate mode, both modes alike):
+  59 figure texts on 6 pages of 4 pairs set at their tie's one size, none changing state (2602.23285v2-ja p8: three at 7.11,
+  7.78 and 8.89 pt to 6.67; 2608.04322v1 p3; 2608.06701v1 p1, p4, p9, where 53 of them stand; 2610.21313v1 p2); every other page
+  as before.
+- **Versions.** PIPELINE must move (the parts' ties); the format does not (a tie's ords as before). A reader of before this
+  rule given parts of after it ties the paragraph members among themselves, at the body's floor, and its labels as before; a
+  reader of after it given parts of before it lays them as before (no paragraph member in a figure's tie).
+
+### 18.58 A list's marker joins no line of the column before it (2026-11-12)
+
+A glyph no run of today's figure reading holds joins the nearest line on its baseline within the run gap (`locate/figure-
+lines.ts` `linesOf`), and a cluster holding a formula's glyph is a formula (F1, §18.35). A list's bullet set in a symbol face
+three quarters of an em before its item, 0.62 pt after the last word of the column before it, joined that word: 2111.09276v1
+p8, Figure 5, "Wipe down the furniture•" with "furniture•" one element kept as a formula, and three lines more holding the next
+column's bullet as an element of their own.
+
+- **The rule** (F3's list reading, read before any line takes a glyph, and so before the formula's clusters): a glyph no run
+  holds that spells a marker (`MARKER`), stands on no run's line, and stands on the baseline (RUN_DY, one row as the figure reading
+  reads one) of a line holding a word that begins a word space or more after it, another such of its character in its column
+  (PARA_ALIGN_TOL): a list's marker, as `listed` reads a list. It opens its item's line and joins no line that begins before it.
+  A formula's raised script is no marker: 2610.10492v1 p10's legend "c∗1" over "c∗2", the next column's entries after them, its
+  star in MARKER's class and in a column, keeps its formula (a first reading of "its baseline" as the join's half a size took it
+  for one, and the corpus showed it).
+- **Before and after.** `figure-lines.test.ts`: two columns of a list, the bullet 0.6 pt after the first column's word, red at
+  the base ("boards•" one formula element); the raised star kept with its formula. 2111.09276v1 (stage 1a): three units lost and
+  two gained, the four lines' (members 454, 469, 535, 553 on p8): "Wipe down the furniture" plain words, "Wipe down the [cabinets]"
+  its highlight alone, "Pour hot water into the" twice a plain label; every bullet the page's ink where it stands.
+- **Over the 88**: nothing moves (units, members and parts as with §18.57 alone; the dumps r19's). The class is this paper's.
+- **Versions.** PIPELINE must move (2111.09276v1's units).
 
 ## 19. The engine's contract
 
@@ -8009,7 +8091,8 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   than the other entries, "Patch size" starting further right than its column, "Head 3" smaller than "Head 1", each label
   fitted to its own box and anchored by what it read alone; `figure-text.mjs` `setsOf`, `roomsOf`): the labels of one group are set at one size, the original's by default; each keeps the original's alignment
   and anchor; a translation may take free space, never touching other ink nor leaving its figure; only a group that cannot
-  fit shrinks, all of it by one factor, never a label alone. A **column** is the runs of one figure, size and direction whose
+  fit shrinks, all of it by one factor, never a label alone; a figure text the paragraph path lays stands in its lines' set and
+  is drawn at its factor (§18.57). A **column** is the runs of one figure, size and direction whose
   starts, ends or middles agree within `ALIGN_TOL` 0.08 of their size, two units or more among them; its other runs, a
   number or a "…", count for its edge (2010.11929v2's "Head 1/2/3", one length, read their end alone, the frame being
   nearer after them than their markers before; the column's "…" shares their start alone). A unit in a column takes the

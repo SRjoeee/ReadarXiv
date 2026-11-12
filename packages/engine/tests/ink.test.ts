@@ -673,6 +673,59 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(fig!.labelAt!.ink[3]).toBeLessThan(fig!.lines[0]![2])
   })
 
+  it('ties a figure text laid as a paragraph to the labels of its column, one size a group (the owner’s rule of 2026-10-29)', () => {
+    // (2111.09276v1 p8, Figure 5: a column of a list's items, the plain ones one set at one size, each line holding a kept
+    // element laid by the paragraph path alone in a set of its own, drawn at another size within one item. Its lines' sets
+    // as today's figure reading read them (setsOf: its column): the text takes part in that set's size tie; the same for a
+    // paragraph of two lines, its lines' sets joined)
+    const lines = [
+      'Choose a light stain',
+      'Wipe the board /tmp/f_a.py dry',
+      'Sand the top along the grain',
+      'Apply the coat with a well-',
+      'worn brush and let it dry',
+    ]
+    const at = 'a paragraph whose word'.length
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          ...lines.map((s, i) => ({ text: s, x: 96, y: 640 - 12 * i, form: true })),
+          { text: 'continues on its last line', y: 560 },
+        ],
+      },
+    ])
+    const pg = A.pages[0]!
+    // (the second line's path in a face of one pitch, the rest proportional: Rule 1's element of the line, F0)
+    let g0 = at
+    for (const s of lines) {
+      const [p0, p1] = s.includes('/') ? [s.indexOf('/'), s.indexOf('py') + 2] : [-1, -1]
+      pg.glyphs.slice(g0, g0 + s.length).forEach((g, j) => {
+        const f = j >= p0 && j < p1 ? 'LMMono10-Regular' : 'LMSans10-Regular'
+        Object.assign(g, { font: `ABCDEF+${f}`, base: f })
+      })
+      g0 += s.length
+    }
+    for (const g of pg.glyphs)
+      if (!g.font.endsWith('Mono10-Regular') && !g.blank)
+        g.x1 = g.x0 + (0.55 + (g.u.codePointAt(0)! % 3) * 0.05) * g.size
+    const { B, ins } = finalOf(A, [unitOf('para', 'a paragraph whose word continues on its last line')])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const figs = L.members.filter((m) => m.figure && m.unit >= 0)
+    // (two plain labels; the line with its element and the hyphenated pair laid by the paragraph path, no own text)
+    expect(figs.map((m) => [m.plain === undefined ? 'paragraph' : 'label', m.lines.length])).toEqual([
+      ['label', 1],
+      ['paragraph', 1],
+      ['label', 1],
+      ['paragraph', 2],
+    ])
+    // (all four in one size tie: one size a group)
+    const tie = L.ties.find((t) => t.rule === 'size' && t.ords.includes(figs[0]!.ord))
+    expect(tie && tie.rule === 'size' ? [...tie.ords].sort((a, b) => a - b) : null).toEqual(
+      figs.map((m) => m.ord).sort((a, b) => a - b),
+    )
+  })
+
   it('keeps right-aligned labels set from their end where two of them, one text, share a start too', () => {
     // (the 88's figures read under a looser measure, any two runs of an end column sharing a start: 1,175 labels of 27 papers
     // turned to be set from their start: 2608.04322v1 p3's axis labels "GSM8K" "MATH" "HellaSwag", 2610.10492v1's two "Population

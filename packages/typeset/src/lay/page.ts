@@ -35,13 +35,17 @@ export type PreparedPage = {
 }
 
 /** two scales of a tie alike: within the fit's thousandths (its caps are floored to them: U.params, a cell's cap) */
-const SAME = 0.0005
+export const SAME = 0.0005
 /** the pages a member has lines on (its pages) begin with its first */
 const firstPage = (m: FlowMember) => m.pages[0] ?? 0
 
 /** a part's tie as the page lays it: a table group's members' ords (`cells`), or members laid at one size (`size`: one paragraph
- *  of TeX's the front end cut at a float, a figure's set) */
-export type PageTie = { rule: 'cells'; cells: readonly number[] } | { rule: 'size'; ords: readonly number[] }
+ *  of TeX's the front end cut at a float, a figure's set). A figure's set states the scale its members S.figures sets are drawn
+ *  at (`least`: one size a group, the figure texts the paragraph path lays capped at it too) and its floor (`floor`: the set's,
+ *  S.figures' floorMin, which a set shrinks to as one) */
+export type PageTie =
+  | { rule: 'cells'; cells: readonly number[] }
+  | { rule: 'size'; ords: readonly number[]; least?: number; floor?: number }
 
 /**
  * Page `page` laid from its part's flows (each member prepared), its ties, the rules: design-b's L8-L11 and E1. The members of a
@@ -84,10 +88,10 @@ export function layPagePrepared(
     let lowered = false
     for (const t of sizes) {
       const on = t.ords.filter((o) => fitOf.has(o))
-      if (on.length < 2) continue
-      const least = Math.min(...on.map((o) => fitOf.get(o) as number))
+      if (on.length < (t.least === undefined ? 2 : 1)) continue
+      const least = Math.min(...on.map((o) => fitOf.get(o) as number), t.least ?? Number.POSITIVE_INFINITY)
       for (const o of on) {
-        const c = Math.max(least, floorOf.get(o) ?? floor)
+        const c = Math.max(least, t.floor ?? floorOf.get(o) ?? floor)
         if ((fitOf.get(o) as number) > c + SAME && c < (cap.get(o) ?? Number.POSITIVE_INFINITY) - SAME) {
           cap.set(o, c)
           lowered = true

@@ -91,6 +91,9 @@ export type FiguresInput = {
   /** the rules' cjkQuotes, the last floor (P.floorMin), and how far the marks are compressed (compressMax: blanksOf) */
   rules: { cjkQuotes?: boolean; floorMin: number; compressMax: number }
   metrics: Metrics
+  /** the most of their sizes a set's units are drawn at (fitFigureSet's `cap`): a figure text of its size tie another path laid
+   *  smaller; none, their own fit's */
+  caps?: (set: string) => number | undefined
 }
 
 // ---- fonts.mjs classifyFont: the family, weight and slant a font's name tells (what figures read of it)
@@ -284,8 +287,8 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
     list.push(c)
   }
   const fits = new Map<(typeof ready)[number], ReturnType<typeof fitFigureSet>[number]>()
-  for (const list of bySet.values())
-    fitFigureSet(list, i.rules.floorMin).forEach((fit, k) => {
+  for (const [key, list] of bySet)
+    fitFigureSet(list, i.rules.floorMin, i.caps?.(key) ?? 1).forEach((fit, k) => {
       fits.set(list[k]!, fit)
     })
   for (const c of ready) {
