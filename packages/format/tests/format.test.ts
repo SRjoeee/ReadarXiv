@@ -9,6 +9,7 @@ import {
   groupName,
   groupOf,
   type Head,
+  kindOfWhy,
   type Part,
   type Piece,
   read,
@@ -16,6 +17,7 @@ import {
   type Units,
   unitId,
   utf8,
+  type Why,
   write,
 } from '../src/index.ts'
 
@@ -280,5 +282,25 @@ describe('the rows object', () => {
     const { bytes } = write('rows', { format: 1, rows: [row] })
     expect(read('rows', bytes).rows).toHaveLength(1)
     expect(() => read('rows', utf8(JSON.stringify({ format: 1, rows: [row, row] })))).toThrow(/a unit id twice/)
+  })
+})
+
+describe('kindOfWhy: what a reader is told of a row that failed', () => {
+  it('reads every Why: a refusal an invalid response; out of reach the network, a rate limit where a wait is named; a translator not set up by its code; an abort as it is', () => {
+    const cases: [Why, string][] = [
+      [{ kind: 'refused' }, 'invalid-response'],
+      [{ kind: 'unavailable' }, 'network'],
+      [{ kind: 'unavailable', retryAfterMs: 0 }, 'network'],
+      [{ kind: 'unavailable', retryAfterMs: 5000 }, 'rate-limit'],
+      [{ kind: 'unconfigured', code: 'no-key' }, 'no-key'],
+      [{ kind: 'unconfigured', code: 'needs-gesture' }, 'no-key'],
+      [{ kind: 'unconfigured', code: 'key-refused' }, 'auth'],
+      [{ kind: 'unconfigured', code: 'no-model' }, 'bad-request'],
+      [{ kind: 'unconfigured', code: 'no-language' }, 'bad-request'],
+      // (a code of a later version's: the settings are where it is mended, as a missing key's)
+      [{ kind: 'unconfigured', code: 'another' }, 'no-key'],
+      [{ kind: 'aborted' }, 'aborted'],
+    ]
+    for (const [why, kind] of cases) expect([why, kindOfWhy(why)]).toEqual([why, kind])
   })
 })

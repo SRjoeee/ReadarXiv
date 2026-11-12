@@ -5,14 +5,31 @@
 // the store are the background's); `axt:cancel-scope` withdraws the scope, on the reader's abort and when the page goes (an
 // extension page is no tab the background watches). A unit goes as a translator is given it (packages/translate unitInOf: what
 // the wires read of it, a nested unit its mark), never format's unit itself, whose nested unit no wire can write.
-import type { Row as Result, Unit } from '@readarxiv/format'
+import type { Row as Result, Unit, Why } from '@readarxiv/format'
 import { type UnitIn, unitInOf } from '@readarxiv/translate'
 import type { TranslationTransport } from '@/providers/transport'
-import { isPermanentErrorKind } from '@/providers/types'
+import type { ProviderErrorKind } from '@/providers/types'
 
-/** the chain's error kinds a reader fixes in the settings: the rows unconfigured, with the kind as its code */
-const KEYS = new Set(['no-key', 'auth'])
-const failed = (id: string, kind: string): Result => (KEYS.has(kind) ? { id, ok: false, why: { kind: 'unconfigured', code: kind } } : isPermanentErrorKind(kind as never) ? { id, ok: false, why: { kind: 'refused' } } : { id, ok: false, why: { kind: 'unavailable' } })
+/**
+ * A failure the transport names by its kind (the status's demotion of the service chosen, a whole call's stop) as the `Why` a
+ * unit's row carries, the one the chain would have written for it: format's kindOfWhy reads each back to the same kind, so
+ * the reader's card says what the popup says. A kind no `Why` holds (a timeout, an error of the transport's own) is the
+ * network's, as the chain says a translator out of reach; a rate limit whose wait the status does not name too. A call the
+ * transport cancelled (its chain retired by a change of the services, its scope withdrawn) is no abort of the reader's, which
+ * ends its own run before any of this: the units it held are asked again, as a translator out of reach's are
+ */
+export const WHY_OF: Readonly<Record<ProviderErrorKind, Why>> = {
+  'no-key': { kind: 'unconfigured', code: 'no-key' },
+  auth: { kind: 'unconfigured', code: 'key-refused' },
+  'bad-request': { kind: 'unconfigured', code: 'no-language' },
+  'invalid-response': { kind: 'refused' },
+  aborted: { kind: 'unavailable' },
+  'rate-limit': { kind: 'unavailable' },
+  network: { kind: 'unavailable' },
+  timeout: { kind: 'unavailable' },
+  unknown: { kind: 'unavailable' },
+}
+const failed = (id: string, kind: string): Result => ({ id, ok: false, why: WHY_OF[kind as ProviderErrorKind] ?? { kind: 'unavailable' } })
 
 /**
  * The characters of plain source a call holds at most, as production's reader batches a paper (its names and values, the PDF

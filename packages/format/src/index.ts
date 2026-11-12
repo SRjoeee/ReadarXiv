@@ -41,5 +41,7 @@ export {
   Unit,
   Units,
   Why,
+  type WhyKind,
+  kindOfWhy,
   Word,
 } from './schema.ts'

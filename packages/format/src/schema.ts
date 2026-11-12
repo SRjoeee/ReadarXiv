@@ -519,5 +519,25 @@ export type Part = z.infer<typeof Part>
 export type Original = z.infer<typeof Original>
 export type Head = z.infer<typeof Head>
 export type Why = z.infer<typeof Why>
+/** what a reader is told of a unit that got no translation, by the kind its words are keyed on (packages/ui
+ *  ProviderErrorKind, which holds these): a reply no translator gave back whole is an invalid response; a translator out of
+ *  reach is the network, or a rate limit where it named a wait; a translator not set up is told by its code (the translate
+ *  package's UnconfiguredCode), the key's where the endpoint refused it, a bad request where no model or no translator serves
+ *  the target, else the missing key's, which the settings mend; an abort as it is. The one reading of `Why` for every host */
+export type WhyKind = 'invalid-response' | 'rate-limit' | 'network' | 'no-key' | 'auth' | 'bad-request' | 'aborted'
+export function kindOfWhy(why: Why): WhyKind {
+  switch (why.kind) {
+    case 'refused':
+      return 'invalid-response'
+    case 'unavailable':
+      return why.retryAfterMs ? 'rate-limit' : 'network'
+    case 'aborted':
+      return 'aborted'
+    case 'unconfigured':
+      if (why.code === 'key-refused') return 'auth'
+      if (why.code === 'no-model' || why.code === 'no-language') return 'bad-request'
+      return 'no-key'
+  }
+}
 export type Row = z.infer<typeof Row>
 export type Rows = z.infer<typeof Rows>
