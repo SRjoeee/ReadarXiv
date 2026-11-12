@@ -82,8 +82,9 @@ export function runsIn(runs, boxes) {
  * names): the share of its characters (white space and math fonts' aside) set in a bold and in a slanted face, and its size,
  * the size TeX was asked for: its largest letter's (faked small capitals set the capitals at it and the rest smaller; a script
  * is smaller, never larger; measure-dom.mjs reads a drawn line by the same definition), else the median character's. `except`: boxes whose glyphs are no characters of the
- * text's (an element it keeps as the original's ink, which the drawn text's share leaves uncounted alike). null where no glyph
- * stands there
+ * text's (an element it keeps as the original's ink, which the drawn text's share leaves uncounted alike). `math`: the characters
+ * of its glyphs set in a math face, which the shares leave out (a drawn text's share leaves as many of them out: shareOf, the
+ * weight measure). null where no glyph stands there
  */
 export function originalOf(runs, fonts, boxes, except = []) {
   const out = new Set(runsIn(runs, except))
@@ -92,10 +93,14 @@ export function originalOf(runs, fonts, boxes, except = []) {
     bold = 0,
     italic = 0,
     big = 0
-  const sizes = []
+  const sizes = [],
+    math = []
   for (const r of rs) {
     const c = classifyFont(fonts?.[r[6]] ?? '')
-    if (c.fam === 'math') continue
+    if (c.fam === 'math') {
+      math.push(...[...r[7]].filter((ch) => /\S/.test(ch)))
+      continue
+    }
     const n = [...r[7]].filter((ch) => /\S/.test(ch)).length
     chars += n
     if (c.bold) bold += n
@@ -105,7 +110,34 @@ export function originalOf(runs, fonts, boxes, except = []) {
   }
   if (!chars) return null
   sizes.sort((a, b) => a - b)
-  return { chars, bold: bold / chars, italic: italic / chars, size: big || sizes[sizes.length >> 1] }
+  return { chars, bold: bold / chars, italic: italic / chars, size: big || sizes[sizes.length >> 1], math }
+}
+
+/**
+ * The characters a side draws of a text (`lines`, measure-dom's: each line's `text`, its faces beside it `st`) that A sets in a
+ * math face (`math`, originalOf's): as many of each character as A sets so, found in the drawn text by the character, and how
+ * many of them it draws bold and slanted. The shares of a drawn text leave them out as the original's leave its math glyphs out:
+ * the share is the letters' own, a symbol TeX set in math beside a bold group not counted with them (2111.09276v1 p8: an arrow
+ * after a bold head, which today draws bold with the head's translation and v2 regular, as TeX set it)
+ */
+export function mathDrawn(lines, math = []) {
+  const left = new Map()
+  for (const ch of math ?? []) left.set(ch, (left.get(ch) ?? 0) + 1)
+  const out = { n: 0, bold: 0, italic: 0 }
+  if (!left.size) return out
+  for (const l of lines ?? []) {
+    if (!(l.n > 0)) continue
+    const st = l.st ? [...l.st] : null
+    ;[...(l.text ?? '')].forEach((ch, i) => {
+      if (!(left.get(ch) > 0)) return
+      left.set(ch, left.get(ch) - 1)
+      out.n++
+      const f = st ? Number(st[i]) : 0
+      if (f & 1) out.bold++
+      if (f & 2) out.italic++
+    })
+  }
+  return out
 }
 
 /** whether an element's glyphs on A (the runs in its ink's boxes) stand on two baselines or at two sizes: scripts a flat text
@@ -671,10 +703,13 @@ export function measureFidelity(c) {
   // script's and read against A's as before as well (2608.16117v1's captions)
   if (fid) {
     const cls = { figure: [], caption: [], cell: [] }
-    const shareOf = (ls) => {
+    // (a side's share of its characters drawn bold, those A sets in a math face left out as the original's share leaves them:
+    // mathDrawn)
+    const shareOf = (ls, math = []) => {
       const xs = (ls ?? []).filter((l) => l.n > 0)
-      const k = xs.reduce((m, l) => m + l.n, 0)
-      return k ? xs.reduce((m, l) => m + l.bold, 0) / k : null
+      const m = mathDrawn(xs, math)
+      const k = xs.reduce((s, l) => s + l.n, 0) - m.n
+      return k ? (xs.reduce((s, l) => s + l.bold, 0) - m.bold) / k : null
     }
     // (a text written in Latin letters: every letter of it of Unicode's Latin script, one at least)
     const latin = (s) => {
@@ -683,19 +718,21 @@ export function measureFidelity(c) {
     }
     const latinOf = (ls) => latin((ls ?? []).filter((l) => l.n > 0).map((l) => l.text).join(''))
     const latinOnA = (lines) => latin(runsIn(runs, lines.map((l) => [l.x0, l.bottom ?? l.y - 0.2 * l.size, l.x1, l.top ?? l.y + 0.8 * l.size])).map((r) => r[7]).join(''))
-    const onA = (lines) => (runs ? originalOf(runs, fonts, lines.map((l) => [l.x0, l.bottom ?? l.y - 0.2 * l.size, l.x1, l.top ?? l.y + 0.8 * l.size]))?.bold ?? null : null)
+    const onA = (lines) => (runs ? (originalOf(runs, fonts, lines.map((l) => [l.x0, l.bottom ?? l.y - 0.2 * l.size, l.x1, l.top ?? l.y + 0.8 * l.size])) ?? null) : null)
     for (const key of both) {
       const k = kindOf(key)
       if (k !== 'caption' && k !== 'cell') continue
       const o = orig.get(key)
       const id = o?.part !== null && o?.part !== undefined ? `p:${o.part}` : `q:${key.slice(1)}`
-      cls[k].push({ t: fid.dark.today[`t:${key.slice(1)}`], v: fid.dark.v2[`p:${ordOfV.get(key)}`], o: fid.orig[id], a: onA(o?.lines ?? []), ts: shareOf(T.get(key)), vs: shareOf(V.get(key)), latin: latinOf(T.get(key)) && latinOf(V.get(key)) && latinOnA(o?.lines ?? []) })
+      const a = onA(o?.lines ?? [])
+      cls[k].push({ t: fid.dark.today[`t:${key.slice(1)}`], v: fid.dark.v2[`p:${ordOfV.get(key)}`], o: fid.orig[id], a: a?.bold ?? null, ts: shareOf(T.get(key), a?.math), vs: shareOf(V.get(key), a?.math), latin: latinOf(T.get(key)) && latinOf(V.get(key)) && latinOnA(o?.lines ?? []) })
     }
     const todayGroups = new Map((rec.today.figures ?? []).map((g) => [g.id, g]))
     for (const [ord, fgId] of c.figurePairs ?? new Map()) {
       const m = facts.get(ord)
       const lines = (m?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], x1: l[3], y: l[4], top: Math.max(l[5], l[6]), bottom: Math.min(l[5], l[6]), size: l[10] ?? m.style?.size ?? 0 }))
-      cls.figure.push({ t: fid.dark.today[`f:${fgId}`], v: fid.dark.v2[`p:${ord}`], o: fid.orig[`p:${ord}`], a: onA(lines), ts: shareOf(todayGroups.get(fgId)?.lines), vs: shareOf(V.get(keyOfPart(ord))), latin: latinOf(todayGroups.get(fgId)?.lines) && latinOf(V.get(keyOfPart(ord))) && latinOnA(lines) })
+      const a = onA(lines)
+      cls.figure.push({ t: fid.dark.today[`f:${fgId}`], v: fid.dark.v2[`p:${ord}`], o: fid.orig[`p:${ord}`], a: a?.bold ?? null, ts: shareOf(todayGroups.get(fgId)?.lines, a?.math), vs: shareOf(V.get(keyOfPart(ord)), a?.math), latin: latinOf(todayGroups.get(fgId)?.lines) && latinOf(V.get(keyOfPart(ord))) && latinOnA(lines) })
     }
     const pool = (xs) => {
       let s = 0,

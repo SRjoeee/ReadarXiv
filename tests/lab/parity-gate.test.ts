@@ -583,6 +583,50 @@ describe("weight of a figure's texts: their darkness over each drawing's own reg
   })
 })
 
+describe("a cell's weight and style: the bold share is the letters' own, a symbol A sets in math not counted with them (2111.09276v1 p8)", () => {
+  // (a header cell `\textbf{Rank}$\downarrow$`: A sets the letters bold and the arrow in a math face, which the original's share
+  // leaves out (originalOf); today draws the translation and the arrow all bold, v2 the translation bold and the arrow regular, as
+  // TeX set it. Two such cells, so that the class holds ink enough; `k` arrows each)
+  const facts = [60, 61].map((ord, i) => ({ ord, kind: 'cell', align: 'c', style: { size: 9 }, lines: [factLine(100 + 80 * i, 150 + 80 * i, 400, 9)] }))
+  const v2 = v2Of({ members: [60, 61].map((o) => ({ ord: o, state: 'laid', lines: [] })), facts, today: { 60: { today: 60 }, 61: { today: 61 } } })
+  const runsOf = (k: number) =>
+    [0, 1].flatMap((i) => [
+      [100 + 80 * i, 398, 140 + 80 * i, 406, 400, 9, 0, 'Rank', 0],
+      [141 + 80 * i, 398, 150 + 80 * i, 406, 400, 9, 1, '\u2193'.repeat(k), 0],
+    ])
+  /** a drawn cell: two letters and its arrows, the arrows bold or not */
+  const cell = (i: number, arrowBold: boolean, k: number) => [
+    { ...drawnLine(100 + 80 * i, 150 + 80 * i, 400, `\u533b\u7597${'\u2193'.repeat(k)}`, 9), bold: arrowBold ? 2 + k : 2, st: `11${(arrowBold ? '1' : '0').repeat(k)}` },
+  ]
+  const dark = { mean: 0.6, pixels: 900 }
+  const page = (todayArrow: boolean, v2Arrow: boolean, { k = 1, fonts = ['ABCDEF+NimbusRomNo9L-Medi', 'ABCDEF+CMSY10'] } = {}) =>
+    measure(
+      v2,
+      rec({
+        today: { units: [60, 61].map((id, i) => ({ id, lines: cell(i, todayArrow, k) })) },
+        v2: { units: [60, 61].map((id, i) => ({ id, lines: cell(i, v2Arrow, k) })) },
+        original: { runs: runsOf(k), fonts },
+        px: fid({ dark: { today: { 't:60': dark, 't:61': dark }, v2: { 'p:60': dark, 'p:61': dark } }, orig: { 'p:60': dark, 'p:61': dark } }),
+      }),
+    )
+  const read = (flag: string, unit?: string) => (p: { diffs: { flag: string; unit: string; worse: boolean; nearer: string }[] }) =>
+    p.diffs.filter((d) => d.flag === flag && (unit === undefined || d.unit === unit)).map((d) => [d.unit, d.worse, d.nearer])
+  it("the arrow A sets in math, drawn regular by v2 and bold by today, moves neither side's weight: no difference", () => {
+    expect(read('weight', 'cells')(page(true, false))).toEqual([])
+  })
+  it("nor either side's style, three arrows a cell", () => {
+    expect(read('style')(page(true, false, { k: 3 }))).toEqual([])
+  })
+  it('an arrow A sets in the bold text face is counted with the letters: v2 drawing it regular is worse, as before', () => {
+    const bold = { fonts: ['ABCDEF+NimbusRomNo9L-Medi', 'ABCDEF+NimbusRomNo9L-Medi'] }
+    expect(read('weight', 'cells')(page(true, false, bold))).toEqual([['cells', true, 'today']])
+    expect(read('style')(page(true, false, { ...bold, k: 3 }))).toEqual([
+      ['t60 cell', true, 'today'],
+      ['t61 cell', true, 'today'],
+    ])
+  })
+})
+
 describe("ink: the PDF's own black (the owner's ruling 7)", () => {
   const f = one(5, 'para', [factLine(72, 540, 600)])
   const at = (fill: string) => [{ ...drawnLine(72, 540, 600, 'x'.repeat(30)), fill }]

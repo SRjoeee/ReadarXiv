@@ -4,7 +4,7 @@
 // differences past a noise floor judged (v2 nearer passes, farther fails the page), and each side's faults against the
 // absolute bounds. `coverageOf` holds the run to what it asked: every asked pair drawn by this run from the pages v2.mjs laid
 // for it, every page of each drawn and measured. `verdictOf`: the gate passes only on complete coverage with no page worse.
-import { bare, judgeJoined, joinedOf, measureFidelity, mutualBest as bestPairs, originalOf, SIZE_STEP } from './fidelity.mjs'
+import { bare, judgeJoined, joinedOf, mathDrawn, measureFidelity, mutualBest as bestPairs, originalOf, SIZE_STEP } from './fidelity.mjs'
 import { measureBlind, raisedOver } from './blind.mjs'
 import { unitClass } from '../../../packages/engine/src/locate/today/content-classes.mjs'
 import { litColumn, paintedEntries } from './paint.mjs'
@@ -553,6 +553,12 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
           s.italic -= d.italic
         }
       }
+      // (nor are the characters A sets in a math face, which the original's share leaves out: the share is the letters' own,
+      // fidelity.mjs mathDrawn)
+      const m = mathDrawn(all, aOrig.get(key)?.math)
+      s.chars -= m.n
+      s.bold -= m.bold
+      s.italic -= m.italic
       if (o?.lines.length && ls.length) {
         const ol = [...o.lines].sort((a, b) => b.y - a.y)
         const dl = [...ls].sort((a, b) => b.y - a.y)
