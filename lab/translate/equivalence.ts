@@ -191,13 +191,21 @@ const records: Rec[] = [
 /** the differences the package makes on purpose, each with its cause, the test that puts a disagreement in it (read from the
  *  record, not from the package's code) and the count on the capture (lanes/L6/capture.jsonl): a count other than this one
  *  is a change, as a disagreement of no class is */
+/** the markers a text follows with a `#` (its `@@` read first): a marker's own closer then a `#`, white space between */
+const hashAfter = (s: string): Set<string> => new Set([...s.replace(/@@/g, '').matchAll(/@([a-z]+)#[ \t]*#/g)].map(m => m[1] as string))
 const ACCEPTED: { name: string; cause: string; count: number; test: (r: Rec, why: string | null) => boolean }[] = [
   {
+    // (3 until 96d7f1daa, lane style-wire, round 8 B8: a `#` right after a marker is the text's own where the wire sets one
+    // there, as today reads it; since then the capture's `@@a @a##` and `case @a##3 holds` echoes agree)
     name: 'a `#` of its own',
     cause:
-      "a block whose text holds a `#` of its own, a reply with a `#` right after a marker: refused here, taken today. Microsoft's doubled closer (`@a##`) and the text's own `#` moved beside the marker cannot be told apart, and either way a reader would see one `#` too many or too few; the reply goes to the next translator (stage 4b, lanes/L6-translate.md \"Stage 4b, checks\", check 1; packages/translate/src/wire/markers.ts readMarkers)",
-    count: 3,
-    test: (r, why) => r.format === 'markers' && r.today && why === 'unread' && r.wire.replace(/@@|@[a-z]+#/g, '').includes('#') && /@[a-z]+#[ \t]*#/.test(r.reply.replace(/@@/g, '')),
+      "a block whose text holds a `#` of its own, a reply with a `#` right after a marker where the wire sets none there: refused here, taken today. Microsoft's doubled closer (`@a##`) and the text's own `#` moved beside the marker cannot be told apart, and either way a reader would see one `#` too many or too few; the reply goes to the next translator (stage 4b, lanes/L6-translate.md \"Stage 4b, checks\", check 1; packages/translate/src/wire/markers.ts readMarkers)",
+    count: 1,
+    test: (r, why) => {
+      if (r.format !== 'markers' || !r.today || why !== 'unread' || !r.wire.replace(/@@|@[a-z]+#/g, '').includes('#')) return false
+      const wire = hashAfter(r.wire)
+      return [...hashAfter(r.reply)].some(m => !wire.has(m))
+    },
   },
 ]
 const seen = new Set<string>()

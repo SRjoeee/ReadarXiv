@@ -249,6 +249,51 @@ describe('google: a reply that writes a string of the tokens’ form the text do
   })
 })
 
+// (the contract counts in the text as the reading keeps it: its entities decoded, its invisible code points out, on both
+// sides. A character reference is one character, never a token: `&#x42;` is "B", though its spelling holds `x42` (a reply the
+// equivalence gate's capture holds, tests/protector/rehydrate.test.ts, read today, refused by the count on the raw reply); and
+// `&#120;1` is "x1", a string of the tokens' form a reader would see)
+describe('google: the tokens’ form is counted in the text as the reading keeps it, not in the wire’s spelling', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  const w = (n: number, s = `x${n}`) => `<span id="${n}" translate="no">${s}</span>`
+  const u = unit('h', [t('Letters A and B, then '), el('k', 'math'), t('.')])
+  it('a hex character reference is its character: read', () => {
+    expect(readTagged(u, `字母 &#65; 和 &#x42;，然后${w(1)}。`)?.content).toEqual([
+      { t: 'text', s: '字母 A 和 B，然后' },
+      { t: 'el', id: 'k' },
+      { t: 'text', s: '。' },
+    ])
+    expect(readTagged(u, `字母 A 和 &#X42;&#x5bb6;，然后${w(1)}。`)?.content[0]).toEqual({
+      t: 'text',
+      s: '字母 A 和 B家，然后',
+    })
+  })
+  it('a reference that spells the tokens’ form is that string: unread where the text does not hold it, read where it does', () => {
+    expect(readTagged(u, `字母 A 和 B，然后${w(1)}（&#120;1）。`)).toBeNull()
+    expect(readTagged(u, `字母 A 和 B，然后${w(1)}（&#x78;&#49;）。`)).toBeNull()
+    // (an invisible code point the reading drops does not hide one either)
+    expect(readTagged(u, `字母 A 和 B，然后${w(1)}（x​1）。`)).toBeNull()
+    const own = unit('o', [t('The value x1 is set by '), el('n', 'math'), t('.')])
+    expect(readTagged(own, `值 &#120;1 由${w(1)}设定。`)?.content[0]).toEqual({ t: 'text', s: '值 x1 由' })
+  })
+  it('an element holding its own token spelled with a reference holds its token', () => {
+    expect(readTagged(u, `字母 A 和 B，然后${w(1, '&#120;1')}。`)?.content[1]).toEqual({ t: 'el', id: 'k' })
+    expect(readTagged(u, `字母 A 和 B，然后${w(1, 'x&#x31;')}。`)?.content[1]).toEqual({ t: 'el', id: 'k' })
+    expect(readTagged(u, `字母 A 和 B，然后${w(1, '&#120;2')}。`)).toBeNull()
+  })
+  it('the wire’s own escaping counts alike on both sides: a paper’s literal `&#x42;` is its text, as often as it writes it', () => {
+    const lit = unit('l', [t('Write B as &#x42; in HTML, as '), el('k', 'math'), t(' shows.')])
+    expect(g.write(lit, 'zh-Hans')).toBe(
+      'Write B as &amp;#x42; in HTML, as <span id="1" translate="no">x1</span> shows.',
+    )
+    expect(readTagged(lit, `在 HTML 中把 B 写成 &amp;#x42;，如${w(1)}所示。`)?.content[0]).toEqual({
+      t: 'text',
+      s: '在 HTML 中把 B 写成 &#x42;，如',
+    })
+    expect(readTagged(lit, `在 HTML 中把 B 写成 &amp;#x42;，如${w(1)}所示（&amp;#x42;）。`)).toBeNull()
+  })
+})
+
 describe('google: a glued element’s white space taken back past the wire’s own pair tags and sentence marks', () => {
   it('into a pair after the element, and from a pair before it; a space the source has kept', () => {
     const r = readTagged(GLUED_PAST, '设为（<x id="1"/><t id="2"> A34</t>）和<t id="3">单词 </t><x id="4"/> 其余。')
