@@ -246,7 +246,6 @@ export interface Pitch {
  * by their writer and read through `field`, which throws where the writer has not run:
  * - `jointPiece`: written by 4 unitsMadeOnA; read by 6 lineGeometry.
  * - `displays`, `floatLines`: written by 4 unitsMadeOnA; read by close.
- * - `released`: written by 1 placeUnits; read by 4 unitsMadeOnA.
  * - `trailSep`: written by 2 claimTrails; read by 6 lineGeometry.
  * - `pitch`: written by 3 keepArtefacts; read by 4 unitsMadeOnA.
  * - `born`: written by 5 unitsBornOnA; read by 7 sentenceStarts and close.
@@ -275,7 +274,6 @@ export interface Work {
 
 /** the fields of the record one phase assigns once (Work's comment names each one's writer and readers) */
 export interface Assigned {
-  released: Set<number>
   trailSep: Map<number, number>
   pitch: Pitch
   born: Map<number, { kind: string; content: Piece[] }>

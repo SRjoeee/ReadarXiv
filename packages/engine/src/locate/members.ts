@@ -2,11 +2,10 @@
 // of its own, an author block's unit TeX set inside a paragraph that sets a unit again left unplaced.
 // Reads: the index; the record's `members` (an ord is their count) and the ownership (in place.ts: a glyph another unit holds).
 // Writes: `members` (each placement pushed); the ownership (in place.ts: each placement's ink taken, the glyphs a unit that
-// stays the original's holds; here the units left unplaced, released); `released` (assigned: the same units, which phase 4
-// reads).
+// stays the original's holds; here the units left unplaced, released: their glyphs' partners no source unit's, phase 4 reads).
 import { isInk } from './lines.ts'
 import { empty, place } from './place.ts'
-import { AUTHOR_KINDS, assign, type Work } from './work.ts'
+import { AUTHOR_KINDS, type Work } from './work.ts'
 
 /** a babel name's end point on B (marks.mjs NAMES_TEX: `n<occurrence>.<key>.e`) */
 const NAME_END = /^n\d+\.[a-z]{1,16}\.e$/
@@ -94,5 +93,4 @@ export function placeUnits(w: Work): void {
       members.push(mem)
     }
   }
-  assign(w, 'released', released)
 }
