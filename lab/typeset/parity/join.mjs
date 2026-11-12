@@ -240,17 +240,26 @@ export function joinedJoin(members, units, stated, free, prepared = null) {
 
 /** two positions one dump states to the hundredth and the other to the hundredth: the same within that (keptJoin's) */
 const near = (a, b) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= 0.01 + 1e-9
+/** a member's own unit kind, the one its own id names (ownIdOf): an ink unit's that echoes a source unit its own, else its unit's */
+function ownKindOf(m, units) {
+  const named = typeof m.text === 'string' ? units.get(m.text) : undefined
+  if (named && INK.has(m.kind) && named.kind !== m.kind) return m.kind
+  return named ? named.kind : m.kind
+}
 /**
  * The members `members` joined to today's units `today` (today's prepare dump's, those the ledger holds) by what a reader sees:
  * the same glyphs of A, so the same text as arXiv's page sets it, whatever either front end spelled it as (`\#` a placeholder of
  * today's and v2's text "#"; `\%` the same; `{\em …}` a placeholder of today's inside the group, none of v2's): both dumps state
  * each line of the unit on A (page, baseline and the extent of its glyphs, x0 to x1), to the hundredth. A member and a unit of
- * today's whose lines are the same, as many and each the same, are joined where each is the only one of its side on those lines;
- * a member or a unit the dump states no lines of (drawn nothing of on A) joins nothing so. Returns member ord -> today's ord
+ * today's of the kind the member's own id names (ownKindOf: the id hashes the kind as well as the spelling, and an ink unit that
+ * echoes a source unit is today's ink unit, not the source unit on its lines) whose lines are the same, as many and each the
+ * same, are joined where each is the only one of its side on those lines; a member or a unit the dump states no lines of (drawn
+ * nothing of on A) joins nothing so. `units` the bundle's units by id. Returns member ord -> today's ord
  */
-export function seenJoin(members, today) {
+export function seenJoin(members, today, units) {
   const same = (m, t) =>
     !!m.lines?.length &&
+    t.kind === ownKindOf(m, units) &&
     t.lines?.length === m.lines.length &&
     t.lines.every((l, j) => l.page === m.lines[j][0] && near(l.baseline, m.lines[j][4]) && near(l.x0, m.lines[j][2]) && near(l.x1, m.lines[j][3]))
   const out = new Map()
@@ -277,7 +286,7 @@ export function todayJoin(pages, bundle, units, prepared = null, stated = []) {
   // (first, by what a reader sees: the member and today's unit set on the same lines of A, one to one: seenJoin)
   if (prepared) {
     const ledgered = new Set(units.map((u) => u.ord))
-    for (const [ord, t] of seenJoin([...members.values()], [...prepared.values()].filter((t) => ledgered.has(t.ord)))) join.set(ord, t)
+    for (const [ord, t] of seenJoin([...members.values()], [...prepared.values()].filter((t) => ledgered.has(t.ord)), bundle.units)) join.set(ord, t)
   }
   // (then by the unit's id, over what the lines left: the members of an id by their order, today's units of it by theirs)
   const seen = new Set(join.values())

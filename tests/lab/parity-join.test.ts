@@ -100,6 +100,21 @@ describe('a member is joined first by what a reader sees: today\'s unit set on t
     expect(todayJoin(pages, one, [{ ord: 89, id: Q }, { ord: 90, id: R }], two)[89]).toBeUndefined()
     expect(todayJoin(pages, one, [{ ord: 89, id: Q }])[89]).toBeUndefined()
   })
+  it("joins only a unit of the kind the member's own id names: an ink unit that echoes a source unit is not that unit", () => {
+    // (2608.08481v1 p1: v2's names ink unit over an affiliation, its own id today's names ink unit's (the echo rule, below); today's
+    // affiliation, a source unit, stands on exactly its line, today's ink unit a little wider: the member stays today's ink unit's)
+    const note = text('Department of Physics.')
+    const echo = bundle({ 1: [member(106, 'inknames', F, { lines: [[1, 0, 100, 300, 727.55]] })] }, [{ id: F, kind: 'affiliation', content: note }])
+    const today = [
+      { ord: 2, id: F },
+      { ord: 106, id: unitId('inknames', note) },
+    ]
+    const at = new Map([
+      [2, { ord: 2, id: F, kind: 'affiliation', text: '', pieces: [], lines: [{ page: 1, baseline: 727.55, x0: 100, x1: 300 }] }],
+      [106, { ord: 106, id: null, kind: 'inknames', text: '', pieces: [], lines: [{ page: 1, baseline: 727.55, x0: 99, x1: 301 }] }],
+    ])
+    expect(todayJoin(pagesOf({ 1: [[106, 'laid']] }), echo, today, at)[106]).toEqual({ today: 106 })
+  })
   it('joins only units the ledger holds', () => {
     expect(todayJoin(pages, part([cell(89, 112.04, 145.26)]), [{ ord: 70, id: Q }], prepared([{ ord: 89, x0: 112.04, x1: 145.26 }]))[89]).toBeUndefined()
   })
