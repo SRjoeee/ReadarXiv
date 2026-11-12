@@ -4,9 +4,11 @@
 // rows made here through the background; the reader's state is told to the chrome as the chrome's events (the package's
 // `eventsOf`), and the chrome's commands are the reader's.
 import { eventsOf, type Prefs, type PrefStore, type Reader, type ReaderState, type Session as ChromeSession, type SessionHost as ChromeHost, type Host, type PrefsPatch } from '@readarxiv/reader'
+import type { PaperStore } from '@/cache/paper-store'
 import type { SurfaceConfig } from '@/shared/surface-config'
 import type { TranslationTransport } from '@/providers/transport'
 import { prefsOf, withPrefs } from './prefs'
+import { storedFetch } from './stored-fetch'
 import { hostTranslate } from './translate'
 
 /** the network as the reader may use it: our server (a path, resolved against it) and arXiv, by https; a server on this
@@ -73,8 +75,8 @@ export function hostPrefs(surface: Pick<SurfaceConfig, 'state' | 'subscribe' | '
   }
 }
 
-export function extensionHost(o: { api: string; loopback: boolean; pdf: (ref: string) => string; prefs: PrefStore; transport: TranslationTransport; paper: string }): Host {
-  return { fetch: hostFetch(o), original: o.pdf, prefs: o.prefs, translate: hostTranslate({ transport: o.transport, paper: o.paper }) }
+export function extensionHost(o: { api: string; loopback: boolean; pdf: (ref: string) => string; prefs: PrefStore; transport: TranslationTransport; paper: string; store?: PaperStore | null }): Host {
+  return { fetch: storedFetch({ fetch: hostFetch(o), store: o.store ?? null, api: o.api }), original: o.pdf, prefs: o.prefs, translate: hostTranslate({ transport: o.transport, paper: o.paper }) }
 }
 
 /** the chrome's `open`: the reader package in the chrome's panes */
@@ -100,7 +102,8 @@ export function v2Open(o: { host: Host; paper: string; visit: Parameters<typeof 
     addEventListener('pagehide', () => reader.close(), { once: true })
     // (the probes' hook: beside the controller the chrome's parts gave it, main.tsx, never in its place)
     const probes = globalThis as { __reader?: object }
-    Object.assign((probes.__reader ??= {}), { probe: () => reader.probe(), reader })
+    probes.__reader ??= {}
+    Object.assign(probes.__reader, { probe: () => reader.probe(), reader })
     const set = (prefs: PrefsPatch) => {
       const now = reader.state().prefs
       reader.do({ do: 'set', prefs: { ...prefs, ...(prefs.classes ? { classes: { ...now.classes, ...prefs.classes } } : {}), ...(prefs.highlight ? { highlight: { ...now.highlight, ...prefs.highlight } } : {}) } as Partial<Prefs> })
@@ -142,11 +145,12 @@ export function surfaceStore(surface: Pick<SurfaceConfig, 'state' | 'subscribe' 
 /** the v2 reader's pieces for the extension's page: the configuration surface (one store for the preferences and the slots),
  *  the Host, the chrome's `open` */
 export async function startV2(o: { params: URLSearchParams; paper: string }) {
-  const [{ createSurfaceConfig }, { localeStale }, { createMessageTransport }, { READER_API, LOOPBACK_ALLOWED, readerAddresses }] = await Promise.all([
+  const [{ createSurfaceConfig }, { localeStale }, { createMessageTransport }, { READER_API, LOOPBACK_ALLOWED, readerAddresses }, { createPaperStore }] = await Promise.all([
     import('@/shared/surface-config'),
     import('@/ui/locale-stale'),
     import('@/shared/transport'),
     import('../addresses'),
+    import('@/cache/paper-store'),
   ])
   const surface = createSurfaceConfig({ localeStale, reload: () => location.reload() })
   const pdf = (ref: string) => readerAddresses(o.params, ref, READER_API).pdf
@@ -154,7 +158,7 @@ export async function startV2(o: { params: URLSearchParams; paper: string }) {
   const mode = o.params.get('mode')
   const visit = mode === 'original' || mode === 'bilingual' || mode === 'translation' ? { display: mode as Prefs['display'] } : undefined
   const prefs = hostPrefs(surface, { askedToTranslate: !visit && o.params.get('ask') === 'translate' })
-  const host = extensionHost({ api: READER_API, loopback: LOOPBACK_ALLOWED, pdf, prefs, transport: createMessageTransport(), paper: o.paper })
+  const host = extensionHost({ api: READER_API, loopback: LOOPBACK_ALLOWED, pdf, prefs, transport: createMessageTransport(), paper: o.paper, store: createPaperStore() })
   const store = surfaceStore(surface)
   return { store, open: v2Open({ host, paper: o.paper, visit, original: pdf(o.paper) }) }
 }

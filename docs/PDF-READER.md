@@ -905,7 +905,35 @@ With the reader closed, a PDF page gets the abstract page's entry view: the two 
   arXiv's PDFs or not: `#readarxiv` opens it either way.
 - **数据** gains a line for the PDF translations kept on this machine, `{n} 篇 · {size}`, and 清除 through the existing
   `Confirm` (two presses; it disarms after 4 s), beside the HTML translations' line (the maintainer: 「其他暂时这样」 on
-  the proposal). The settings page is on the extension's origin and calls the store's `usage()` and `clear()` directly.
+  the proposal). The settings page is on the extension's origin and calls the store's `usage()` and `clear()` directly: the
+  store of the reader the build runs (`AXT_READER`), never the other's.
+- **The papers this machine keeps** (the rebuilt reader, `packages/reader` behind the extension's host): the owner's rule of
+  2026-10-08, offline nothing new is drawn and a paper kept still opens. The store is the reader's network seen through this
+  machine (`host/stored-fetch.ts` over `cache/paper-store.ts`, at the Host's one seam, its `fetch`): what never changes at its
+  address (an object of a layer or a range of one, our copy of arXiv's PDF where it was read, a face's file) is read there
+  first and kept as it is read; what may change (the faces' tables, a language's patterns) and the paper's document (the
+  open's answer, the follow's documents) are asked of our server first, the last document with a layer kept for each paper
+  version, and answered from the store where our server is out of reach (a fetch that rejects and is no abort of the reader's,
+  or a 5xx). arXiv's own bytes are never kept, as the old reader's store kept none. Each answer is checked against the digest
+  of its bytes as kept, every time it is read (and a whole object against the digest its address names before it is kept);
+  past 200 MB the paper versions opened least recently go first, with all they hold, the faces' files last; every failure of
+  the store is a miss. What a reader sees, our server out of reach (the existing words only):
+  - **a paper kept**: the Reading state: the original, and the translation laid from the store and from the passages the
+    background keeps (the rows, DESIGN §9), no capsule; a passage never translated before is asked of the service, which may
+    itself be out of reach: the passages that failed, with their retry and close (S-R-15), once the run has ended;
+  - **none kept**: the original, the translated displays as they are, and the capsule of Not to be had now (§8, §8.1): with the
+    browser online, our server unreachable, the bilingual version not to be had now, with its retry (S-R-24); with the browser offline, the network's
+    sentence with no retry, asked again once it is back.
+  The database is the old reader's (`axt-layer`) at version 5. **The version step** deletes the old reader's three tables
+  (objects by digest, catalogs, who held what), which no address of the rebuilt reader reaches, on the first open by this
+  build. **The way back**, measured (`tests/cache/paper-store.test.ts`, Dexie 4.4): a build of version 4 meets the database
+  of version 5 and works, Dexie opening it at 5.1 with the old tables made again beside the new; its papers kept from then
+  on are its own, and this build, back again, works on its own rows. Nothing breaks either way; what a return leaves is the
+  old tables beside the new (at most the old store's 200 MB), until a later version step names them null again: the
+  rollback recipe is that step in the release that comes forward after a rollback (`axt-layer` version 6, `objects`,
+  `papers`, `refs` null). The background's `axt-translation-cache` at version 3 (cache/translate-store.ts, the per-text
+  table dropped) goes back the same way, measured (`tests/cache/translate-store.test.ts`): a build of version 2 works at
+  3.1 with its `entries` made again, this build again on its own rows; its recipe the same, `entries` null in version 4.
 
 ### 9.4 The shared `Menu`, made accessible
 
