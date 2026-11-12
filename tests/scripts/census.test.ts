@@ -149,6 +149,49 @@ describe('rule debt', () => {
     expect(thresholdOf({ value: 0x3000, raw: '0x3000', name: null, comment: '', line: 1, context: 'comparison' }).class).toBe('code')
   })
 
+  it("reads an exported declaration's comment off its export statement, where the parser hangs it", () => {
+    // (a list and a comparison in an exported declaration, each under a comment that cites a definition; the same two
+    // declared without `export` read alike)
+    const text = "// a module of rules\n\n// Unicode's hyphens: U+002D, U+2010, U+2011\nexport const HYPHENS = ['-', '\u2010', '\u2011']\n// TeX's \\hbadness default\nexport const loose = (b: number) => b > 7\n"
+    for (const t of [text, text.replace(/export /g, '')]) {
+      const f = factsOf('src/engine/marks.ts', t)
+      expect(f.lists?.[0]).toMatchObject({ name: 'HYPHENS', class: 'defined' })
+      expect(f.thresholds?.find(x => x.raw === '7')).toMatchObject({ class: 'borderline', reason: true, cites: 'TeX' })
+    }
+  })
+
+  it("reads a rule's comment as the block directly before its declaration: not the file's opening comment, not a block a blank line apart", () => {
+    // (the file's opening comment cites TeX and a paper; the first list follows it after a blank line; a block that cites
+    // Unicode stands a blank line above the constant; the comparison's own comment is directly before it)
+    const text = "// src/engine/rules.ts: the module's rules, after TeX and 2401.00001v1\n\nexport const KINDS = ['a', 'b', 'c']\n// Unicode's dashes\n\nconst GAP = 0.3\n// the TeXbook's \\hbadness\nexport const loose = (b: number) => b > 7\n"
+    const f = factsOf('src/engine/rules.ts', text)
+    expect(f.lists?.[0]).toMatchObject({ name: 'KINDS', class: 'listed' })
+    expect(f.thresholds?.find(x => x.name === 'GAP')).toMatchObject({ class: 'tuned', reason: false })
+    expect(f.thresholds?.find(x => x.raw === '7')).toMatchObject({ class: 'borderline', reason: true })
+    // (the module's first statement with its own block directly before it, the file's opening comment above it apart)
+    const g = factsOf('src/engine/first.ts', "// the module\n\n// Unicode's hyphens\nconst HYPHENS = ['-', '\u2010', '\u2011']\n")
+    expect(g.lists?.[0]).toMatchObject({ class: 'defined' })
+  })
+
+  it("cuts a rule's comment where its kind changes: a block comment directly before a declaration is its own, a run of line comments one block", () => {
+    // (a header of line comments runs into the first declaration's own JSDoc with no blank line: the header is the file's,
+    // the JSDoc the declaration's)
+    const f = factsOf('src/engine/tail.mjs', "// the module: TeX's and the PDF's bounds\n// read from its bytes\n/** the bytes at the end looked at, after the PDF reference */\nconst WINDOW = 0.5\n")
+    expect(f.thresholds?.find(x => x.name === 'WINDOW')).toMatchObject({ class: 'borderline', reason: true, cites: 'PDF reference' })
+    // (a block comment above a run of line comments with no blank line: the run alone is the declaration's)
+    const g = factsOf('src/engine/rules.ts', "const A = 1\n/* Unicode's section */\n// a pad\n// of our own\nconst PAD = 2.5\n")
+    expect(g.thresholds?.find(x => x.name === 'PAD')).toMatchObject({ class: 'tuned', reason: true, cites: null })
+  })
+
+  it('reads a file of a TeX distribution named by its extension as a definition, never a package named alone', () => {
+    const f = factsOf('src/engine/marks.ts', "const A = 1\n// the marks cite.sty and natmove.sty look for and set first\nconst FOLLOWERS = ['.', ',', ';']\n// the marks biblatex looks for\nconst SEEN = ['!', '?', ':']\n// latex.ltx's \\@empty, a definition still\nconst EMPTY = ['a', 'b', 'c']\n")
+    expect(f.lists?.map(l => [l.name, l.class, l.cites])).toEqual([
+      ['FOLLOWERS', 'defined', 'cite.sty'],
+      ['SEEN', 'listed', null],
+      ['EMPTY', 'defined', 'latex.ltx'],
+    ])
+  })
+
   it('counts the engine\'s thresholds, lists, special cases and version constants', () => {
     const d = c.trees.NOW.debt
     // GAP 0.35 (evidence), 0.8 (no reason), 3 (Math.min): tuned; LIMIT borderline; PT_PER_IN a conversion; FLAGS an enumeration
@@ -261,8 +304,9 @@ describe('the ratchet', () => {
       // (a raise without its reason is refused; with one, it is kept with the reason and the commit)
       expect(() => record(l.engine, r.engine.current, r.engine.lines, { raise: ['thresholds'], commit, at: 't1', about: '' })).toThrow(/without --reason/)
       expect(() => record(l.engine, r.engine.current, r.engine.lines, { commit, at: 't1', about: '' })).toThrow(/NOW thresholds rose 3 → 4/)
-      // (the line added a rule with no comment, one code line no checker reads, an export nothing imports)
-      const raised = record(l.engine, r.engine.current, r.engine.lines, { raise: ['thresholds', 'thresholdsNoReason', 'unchecked', 'deadExports', 'productCode'], reason: 'a fixture rule', commit, at: 't1', about: '' })
+      // (the line added a rule with no comment and no row in the rule ledger, one code line no checker reads, an export
+      // nothing imports)
+      const raised = record(l.engine, r.engine.current, r.engine.lines, { raise: ['thresholds', 'thresholdsNoReason', 'rulesUnexplained', 'unchecked', 'deadExports', 'productCode'], reason: 'a fixture rule', commit, at: 't1', about: '' })
       expect(raised.raises).toEqual(expect.arrayContaining([{ tree: 'NOW', measure: 'thresholds', from: 3, to: 4, reason: 'a fixture rule', commit, at: 't1' }]))
       expect(raised.trees.NOW?.values.thresholds).toBe(4)
       // the tree as it was, against the raised ledger: a fall, which passes and can be lowered

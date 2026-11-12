@@ -1058,8 +1058,13 @@ export function gateL1Pair(
   }
   // (the entry's lays of each unit begun on a pass page, by the page whose lay laid it: I6 across the lays, cross-lay.ts)
   const laysOf = new Map<number, Map<number, UnitLay>>()
+  // (the rule ledger's recorder, where a lab run installed it (lab/rules/register.mjs): the pair, the page of each case)
+  type Recorder = { context(next: { paper?: string; page?: number | null }): void }
+  const ledgerRecorder = (globalThis as { __axtRules?: Recorder }).__axtRules
+  ledgerRecorder?.context({ paper: pair, page: null })
   for (const [pg, part] of [...bundle.parts].sort((a, b) => a[0] - b[0])) {
     out.pages++
+    ledgerRecorder?.context({ page: pg })
     // (its flows, cut where a member is not set: the one after it starts where TeX set it, as after a member left)
     const flows: FlowMember[][] = []
     for (const flow of part.flows) {
@@ -1304,6 +1309,7 @@ export function gateL1Pair(
       prev.sizes.push(...sizes)
     }
   }
+  ledgerRecorder?.context({ page: null })
   if (out.entry) coverDone(out.entry.cover, pair)
   if (out.entry && laysOf.size) out.entry.crossLay = crossLayOf(laysOf)
   for (const u of L.units) {
