@@ -1011,13 +1011,15 @@ only how it meets the rest of the extension.
 - **Two readers behind one chrome** (the rebuild's stage 5a; `AXT_READER` in `wxt.config.ts`). The chrome — the toolbar,
   the capsule, the menus, the two panes' scrollers — is the reader package's (`mountChrome`, `@readarxiv/reader`), given its
   settings, slots and words by the extension's host (`src/pdf-reader/host/`). Behind it the build chooses the reader:
-  `today`, the default and what a release ships, is the session the bullets below describe (`session/`, the engine's
-  reading view, our server's v1 layer); `v2` (`AXT_READER=v2 pnpm build`) is the reader package whole, `openReader(root, {
-  host, paper, engine })` with the extension's `Host` (`host/v2.ts`): the network as the reader may use it (our server and
-  arXiv, by https, never the visitor's credentials or a referrer: only the paper's id and version leave the machine), the
-  preferences over the extension's configuration (a write is a patch on the latest stored), and the rows made through the background's
-  chain (§8). Until the typesetter is joined to the reader's `engine.lay`, a `v2` reader draws the paper's pages and lays
-  none, so the shipped build stays `today` until it is; going back is that one build setting.
+  `v2`, the default since 2026-11-13 (lane V5: every feature of today's reader present, its browser checks ported, PDF-READER
+  §9.3, §11), is the reader package whole, `openReader(root, { host, paper })` with the extension's `Host` (`host/v2.ts`,
+  the package's `openSession` glue): the network as the reader may use it (our server and arXiv, by https, never the
+  visitor's credentials or a referrer: only the paper's id and version leave the machine), the papers it kept answered
+  first (`host/stored-fetch.ts`, `cache/paper-store.ts`), the preferences over the extension's configuration (a write is a
+  patch on the latest stored), and the rows made through the background's chain (§8), laid by the reader's own typesetter.
+  `today` (`AXT_READER=today pnpm build`) is the session the bullets below describe (`session/`, the engine's reading view,
+  our server's v1 layer): the reader the released extension (0.5.2) reads with, built and tested until the cut-over removes
+  it; going back is that one build setting.
 - **The typesetter** (`@readarxiv/typeset`) is two pure functions of data and the translated text: `layFlowPrepared(members,
   rules)` lays a flow's members in order, each that continues the one before it on a shared line starting where that one
   ends; `layPagePrepared(page, flows, ties, rules)` lays one page from its own part alone — its flows, its table groups

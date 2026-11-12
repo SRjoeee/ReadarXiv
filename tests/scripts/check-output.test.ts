@@ -18,8 +18,11 @@ const put = (path: string, content: string | Uint8Array) => {
 }
 
 /** The script's verdict on the check whose line starts with `name`: '✓', '✗', or undefined when no line names it */
-const verdict = (name: string, env: Record<string, string> = {}) => {
-  const result = spawnSync(process.execPath, [SCRIPT], { cwd: root, encoding: 'utf8', env: { ...process.env, ...env } })
+const verdict = (name: string, env: Record<string, string | undefined> = {}) => {
+  // (a variable given as undefined is one the run does not have, whatever this process's environment holds)
+  const run = { ...process.env, ...env }
+  for (const [k, v] of Object.entries(env)) if (v === undefined) delete run[k]
+  const result = spawnSync(process.execPath, [SCRIPT], { cwd: root, encoding: 'utf8', env: run })
   return `${result.stdout}\n${result.stderr}`.split('\n').find(line => line.slice(2).startsWith(name))?.[0]
 }
 
@@ -94,15 +97,25 @@ describe('a production build fails check-output when', () => {
 // anywhere in a production one; the web-accessible resources and the offscreen document as they were
 describe('the layer reader\'s package', () => {
   const VIEW = `${OUT} holds the reading view, the reader`
+  const PACKAGE_VIEW = `${OUT} holds the reader package's, not today's reading view`
   const NO_TEX = `${OUT} names no TeX page`
   const HOSTS = 'the host permissions are exactly'
   const NO_STAGING = 'a production build names no staging host'
   const RELEASE = ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*', 'https://arxiv.org/*', 'https://readarxiv.com/*']
-  it('holds the reading view: its places\' code in a chunk, not only their rule in the style sheet', () => {
+  it('a build of today\'s reader (AXT_READER=today) holds the reading view: its places\' code in a chunk, not only their rule in the style sheet', () => {
+    const today = { AXT_READER: 'today' }
     put(`${OUT}/assets/pdf-reader.css`, '.axt-place-view{position:absolute;inset:0}\n')
-    expect(verdict(VIEW)).toBe('✗')
+    expect(verdict(VIEW, today)).toBe('✗')
     put(`${OUT}/chunks/host-Ab12.js`, "const holder = document.createElement('div'); holder.className = 'axt-place-view'\n")
-    expect(verdict(VIEW)).toBe('✓')
+    expect(verdict(VIEW, today)).toBe('✓')
+  })
+  it('a build that names no reader is the rebuilt reader\'s (wxt.config.ts readerPath\'s default), held to its checks: none of today\'s reading view', () => {
+    const unnamed = { AXT_READER: undefined }
+    expect(verdict(PACKAGE_VIEW, unnamed)).toBe('✓')
+    expect(verdict(VIEW, unnamed)).toBeUndefined()
+    put(`${OUT}/chunks/host-Ab12.js`, "const holder = document.createElement('div'); holder.className = 'axt-place-view'\n")
+    expect(verdict(PACKAGE_VIEW, unnamed)).toBe('✗')
+    expect(verdict(PACKAGE_VIEW, { AXT_READER: 'v2' })).toBe('✗')
   })
   it('names no TeX page and holds nothing of the LaTeX front end', () => {
     expect(verdict(NO_TEX)).toBe('✓')

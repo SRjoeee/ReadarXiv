@@ -67,15 +67,16 @@ function apiOf(mode: string): string {
 }
 
 /**
- * Which reader the PDF page runs (stage 5a): `today`, the build's default, today's session (the engine's reading view, its run on
- * our server's v1 layer, today's typesetter) under the reader package's chrome; `v2`, the reader package whole (`openReader`
- * with the extension's Host, our server's v2 bundle, `engine.lay` the seam lane L3's `layPage` fills), which also takes the
- * package's PDF.js data files. `AXT_READER=v2 pnpm build` makes the other one, so the e2e scripts run both side by side. Today's
- * goes once the typesetter passes its gate (the stage's deletion list)
+ * Which reader the PDF page runs (stage 5a): `v2`, the build's default (lane V5, 2026-11-13), the reader package whole
+ * (`openReader` with the extension's Host, our server's v2 documents, the reader's own typesetter), which also takes the
+ * package's PDF.js data files; `today`, today's session (the engine's reading view, its run on our server's v1 layer, today's
+ * typesetter) under the reader package's chrome, the reader the released extension still reads with. `AXT_READER=today pnpm
+ * build` makes that one, so that a fix to it before the cut-over is built and tested (the e2e scripts choose by the build they
+ * are given); it goes with the cut-over (the stage's deletion list)
  */
 const READERS = ['today', 'v2'] as const
 function readerPath(): (typeof READERS)[number] {
-  const named = process.env.AXT_READER ?? 'today'
+  const named = process.env.AXT_READER ?? 'v2'
   if (!(READERS as readonly string[]).includes(named)) throw new Error(`AXT_READER names ${named}: ${READERS.join(' or ')}`)
   return named as (typeof READERS)[number]
 }

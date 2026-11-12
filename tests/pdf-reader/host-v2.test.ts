@@ -4,7 +4,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULTS, eventsOf, INITIAL, type ReaderState, reduce } from '@readarxiv/reader'
 import { DEFAULT_CONFIG } from '@/config/schema'
-import { hostFetch, hostPrefs, surfaceStore } from '@/pdf-reader/host/v2'
+import { crashTold, hostFetch, hostPrefs, surfaceStore, v2Open } from '@/pdf-reader/host/v2'
 
 const API = 'https://readarxiv.com'
 
@@ -40,7 +40,9 @@ describe('the extension host prefs over the configuration surface', () => {
       subscribe: (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } },
       start: vi.fn(),
       patch: vi.fn(async (change: (c: typeof DEFAULT_CONFIG) => typeof DEFAULT_CONFIG) => { const next = change(state.config ?? DEFAULT_CONFIG); patches.push(next); state = { ...state, config: next }; for (const l of listeners) l(); return next }),
-      land(c: typeof DEFAULT_CONFIG) { state = { ...state, config: c }; for (const l of listeners) l() },
+      land(c: typeof DEFAULT_CONFIG, fallbackReason: unknown = null) { state = { ...state, config: c, fallbackReason: fallbackReason as null }; for (const l of listeners) l() },
+      /** a publish of the surface's that lands no configuration: a language pack loading, a reset's line */
+      publish(more: { pack?: unknown; resetFailed?: boolean }) { state = { ...state, ...(more as object) }; for (const l of listeners) l() },
       patches,
     }
   }
@@ -51,6 +53,18 @@ describe('the extension host prefs over the configuration surface', () => {
     s.land({ ...DEFAULT_CONFIG, theme: 'dark' })
     await expect(p).resolves.toMatchObject({ theme: 'dark', translator: 'r1' })
   })
+  it('stored and unreadable (the surface fell back to the defaults): told as null, the read too; a readable landing after it told as values', async () => {
+    const s = surface(null)
+    const store = hostPrefs(s as never)
+    const told = vi.fn()
+    store.watch(told)
+    const read = store.read()
+    s.land(DEFAULT_CONFIG, { kind: 'invalid', where: 'mode', message: 'nonsense' })
+    await expect(read).resolves.toBeNull()
+    expect(told).toHaveBeenLastCalledWith(null)
+    s.land({ ...DEFAULT_CONFIG, theme: 'dark' })
+    expect(told).toHaveBeenLastCalledWith(expect.objectContaining({ theme: 'dark' }))
+  })
   it('the slots\' store: the same snapshot until the surface changes (useSyncExternalStore loops on a new one each read)', () => {
     const s = surface(DEFAULT_CONFIG)
     const store = surfaceStore(s as never)
@@ -59,6 +73,50 @@ describe('the extension host prefs over the configuration surface', () => {
     s.land({ ...DEFAULT_CONFIG, theme: 'dark' })
     expect(store.state()).not.toBe(first)
     expect(store.state().config?.theme).toBe('dark')
+  })
+  it('asked to translate (the PDF page\'s ask=translate): the first read lets a stored original display go, written as the old reader wrote it, the mode untouched; read as let go until the write lands', async () => {
+    for (const mode of ['side', 'stack', 'only'] as const) {
+      const s = surface({ ...DEFAULT_CONFIG, mode, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: true } })
+      const store = hostPrefs(s as never, { askedToTranslate: true })
+      await expect(store.read()).resolves.toMatchObject({ display: mode === 'only' ? 'translation' : 'bilingual' })
+      expect(s.patches).toEqual([{ ...DEFAULT_CONFIG, mode, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: false } }])
+    }
+    // (not asked: the original stays, nothing written; asked where the original is not stored: nothing written either)
+    const plain = surface({ ...DEFAULT_CONFIG, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: true } })
+    await expect(hostPrefs(plain as never).read()).resolves.toMatchObject({ display: 'original' })
+    const translated = surface(DEFAULT_CONFIG)
+    await expect(hostPrefs(translated as never, { askedToTranslate: true }).read()).resolves.toMatchObject({ display: 'bilingual' })
+    expect([...plain.patches, ...translated.patches]).toEqual([])
+    // (a landing before the write's: still let go; once it has landed, a later original display chosen elsewhere is followed)
+    const late = surface(null)
+    const store = hostPrefs(late as never, { askedToTranslate: true })
+    const told = vi.fn()
+    store.watch(told)
+    late.land({ ...DEFAULT_CONFIG, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: true } })
+    expect(told).toHaveBeenLastCalledWith(expect.objectContaining({ display: 'bilingual' }))
+    await Promise.resolve()
+    late.land({ ...late.state().config!, pdfReader: { ...late.state().config!.pdfReader, original: true } })
+    expect(told).toHaveBeenLastCalledWith(expect.objectContaining({ display: 'original' }))
+  })
+  it('a publish that lands nothing stored (a language pack, a reset\'s line) is no landing: the value read before a choice is not told again over it', async () => {
+    // (met on the v2 build's e2e: a write refused while the stored settings could not be read published the wanted pack first,
+    // with the configuration from before the choice still in place; told as a landing, it undid the reader's choice)
+    const s = surface({ ...DEFAULT_CONFIG, mode: 'only' })
+    const store = hostPrefs(s as never)
+    const told = vi.fn()
+    store.watch(told)
+    await expect(store.read()).resolves.toMatchObject({ display: 'translation' })
+    s.publish({ pack: 'deu' })
+    s.publish({ resetFailed: true })
+    expect(told).not.toHaveBeenCalled()
+    s.land({ ...DEFAULT_CONFIG, mode: 'side' })
+    s.publish({ pack: 'zho' })
+    expect(told).toHaveBeenCalledTimes(1)
+    expect(told).toHaveBeenLastCalledWith(expect.objectContaining({ display: 'bilingual' }))
+    // (the same configuration landing unreadable is a landing: the verdict changed)
+    s.land(s.state().config!, { kind: 'invalid', where: 'mode', message: 'nonsense' })
+    expect(told).toHaveBeenLastCalledWith(null)
+    expect(told).toHaveBeenCalledTimes(2)
   })
   it('a write is a patch on the latest stored, every other field untouched; a landing from elsewhere is told', async () => {
     const s = surface(DEFAULT_CONFIG)
@@ -117,4 +175,21 @@ describe('the reader state told to the chrome', () => {
     const s = state()
     expect(eventsOf(s, s)).toEqual([])
   })
+  it('an address that names no paper (S-R-20): no reader opened, nothing asked; what the reader chooses written as settings', async () => {
+    const written: unknown[] = []
+    const prefs = { read: vi.fn(), write: vi.fn(async (p: unknown) => { written.push(p) }), watch: vi.fn() }
+    const emitted: unknown[] = []
+    const session = await v2Open({ host: { prefs } as never, paper: '', visit: undefined, original: '' })({ left: document.createElement('div'), right: document.createElement('div'), emit: (e: unknown) => emitted.push(e) } as never)
+    session.setDisplay('translation')
+    session.retry()
+    expect([written, emitted]).toEqual([[{ display: 'translation' }], []])
+  })
+  it('a session that crashed is told to the chrome as a session that could not be opened is: a failure, once (the website shows its own)', () => {
+    const before = state(), crashed = { ...before, crashed: true }
+    const fails = (events: { type: string; event?: string }[]) => events.filter(e => e.type === 'fail' && e.event === 'crashed').length
+    expect(fails(crashTold(eventsOf(before, crashed), crashed, before))).toBe(1)
+    expect(fails(crashTold(eventsOf(crashed, crashed), crashed, crashed))).toBe(0)
+    expect(fails(crashTold(eventsOf(null, before), before, null))).toBe(0)
+  })
 })
+

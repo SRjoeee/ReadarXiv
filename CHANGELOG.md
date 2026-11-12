@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Changed: in the PDF reader, the papers the previous version kept for reading offline are let go once, as the new reader cannot read the form they were kept in; each paper you open is kept again.
 - Fixed: in the PDF reader, two pieces of the original the paper sets side by side in one word, such as a word highlighted in two colours, are drawn as close together as the paper sets them, with no white gap between them.
 - Fixed: when Google answers with a page of its own instead of a translation, such as a check that you are not a robot, the next translation service takes over for a while, as it does when Google refuses. Each passage had waited for Google twice first, for as long as the page was served.
 - Fixed: with Google translating, two pieces the paper sets side by side with nothing between them, such as a word it highlights in two colours or a formula followed by its footnote mark, stay side by side. Google had put a space between them.

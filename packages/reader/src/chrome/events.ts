@@ -74,7 +74,8 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
       title: next.paper.title,
     })
   if (next.paper.html !== (p?.paper.html ?? null)) out.push({ type: 'html', url: next.paper.html })
-  if (!p || p.settings.s !== next.settings.s)
+  // (none while the first read is out: the host's own first read is what the chrome shows meanwhile)
+  if ((!p || p.settings.s !== next.settings.s) && next.settings.s !== 'reading')
     out.push({ type: 'notice', why: next.settings.s === 'unreadable' ? 'unreadable' : null })
   for (let n = p?.settings.refused ?? 0; n < next.settings.refused; n++) out.push({ type: 'refused' })
   const o = next.original

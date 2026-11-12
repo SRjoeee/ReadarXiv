@@ -51,6 +51,8 @@ export {
   type Unavailable,
 } from './chrome/model.ts'
 export { eventsOf, kindOf, LAYER_WHY } from './chrome/events.ts'
+// a reader made into the chrome's session, for every host (what a host gives is only what differs)
+export { type ChromeOpen, openSession } from './chrome/open.ts'
 // a failed prepare's word, as our server's document names it, to the layer's refusal (the website's tests hold it to its server's words)
 export { PREPARE_WHY } from './session/machine.ts'
 export { type Cause, causeOf } from './chrome/status.ts'
