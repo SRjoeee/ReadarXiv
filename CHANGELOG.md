@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a contents entry whose heading names something the paper defines, such as its system's name, a formula, a reference or a code word, shows that name as the paper prints it ("Overview of BLIP", "τ_V", "Theorem 2", "Sequential_Greedy"), in the title and in its tooltip. The rebuilt reader had shown the paper's TeX there ("\sys", "$\tau_V$", "\ref{…}"), and the reader before it left the name out.
 - Fixed: with Google translating, two pieces the paper sets side by side with nothing between them, such as a word it highlights in two colours or a formula followed by its footnote mark, stay side by side. Google had put a space between them.
 - Fixed: in the PDF reader, a word and what the paper ties to it with an unbreakable space (`~`), such as a footnote's mark, "Figure 3" or "et al." and its citation, stay on one line in the translation, as in the original. A footnote's mark could begin a line of its own.
 - Fixed: in the PDF reader, a paragraph that opens with a bold title run into its first line, such as "Howto-GEN" after a paragraph ending in a footnote mark, starts on its own line where the original starts it, when the paper writes several such paragraphs one after another with no blank line between them. It had been drawn on from the last line of the paragraph before it, its footnote mark beside the next title.
