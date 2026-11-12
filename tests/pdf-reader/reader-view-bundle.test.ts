@@ -14,7 +14,10 @@ import { ENGINE_ALLOW, ENGINE_PACKAGES } from '../../scripts/check-boundary.mjs'
 
 const ROOT = resolve(__dirname, '../..')
 const ENGINE = 'src/pdf-reader/engine/'
-const SERVER = [/^packages\/engine\/src\/(?!(?:ink|memory|delta-wire|tail)\.)/, /^src\/pdf-reader\/engine\/pipeline\/(?!(?:anchors|versions|memory)\.mjs$)/, /^src\/pdf-reader\/engine\/source\//, /^src\/pdf-reader\/engine\/layout\/(?:make|remove|own|wrap|wrap-final)\.mjs$/]
+/** the engine's modules a reader takes that moved into packages/engine with the front half, read through their transition
+ *  paths: the engine's own code at its new place (the source reader beside them stays the server's) */
+const MOVED = /^packages\/engine\/src\/source\/(?:arg-roles|latexml-args|tex-kernel|tex-names|text-piece|text-symbols)\.(?:mjs|json)$/
+const SERVER = [/^packages\/engine\/src\/(?!(?:ink|memory|delta-wire|tail)\.)(?!source\/(?:arg-roles|latexml-args|tex-kernel|tex-names|text-piece|text-symbols)\.(?:mjs|json)$)/, /^src\/pdf-reader\/engine\/pipeline\/(?!(?:anchors|versions|memory)\.mjs$)/, /^src\/pdf-reader\/engine\/source\//, /^src\/pdf-reader\/engine\/layout\/(?:make|remove|own|wrap|wrap-final)\.mjs$/]
 
 /** the files a browser build of `entries` reads, repository-relative: of the engine package (packages/engine, today's
  *  modules the rebuild moved into it, read through its one entry) and of the packages it names (format), those whose code the
@@ -28,7 +31,7 @@ async function inputsOf(entries: string[]): Promise<string[]> {
 /** the package a file of node_modules belongs to (pnpm's layout: …/node_modules/<name>/…, the last one) */
 const packageOf = (f: string) => /(?:^|\/)node_modules\/((?:@[^/]+\/)?[^/]+)\/(?!.*\/node_modules\/)/.exec(f)?.[1] ?? null
 const PACKAGES = (ENGINE_PACKAGES as { name: string }[]).map(p => p.name)
-const allowed = (f: string) => f.startsWith(ENGINE) || /^packages\/engine\/src\/(?:ink|memory|delta-wire|tail)\.(?:mjs|types\.ts)$/.test(f) || (ENGINE_ALLOW as string[]).some(c => f === `${c}.ts` || f === `${c}/index.ts`) || PACKAGES.includes(packageOf(f) ?? '')
+const allowed = (f: string) => f.startsWith(ENGINE) || MOVED.test(f) || /^packages\/engine\/src\/(?:ink|memory|delta-wire|tail)\.(?:mjs|types\.ts)$/.test(f) || (ENGINE_ALLOW as string[]).some(c => f === `${c}.ts` || f === `${c}/index.ts`) || PACKAGES.includes(packageOf(f) ?? '')
 
 describe('the reading view, bundled for the browser', () => {
   it('reads nothing outside the engine and the allowlist, no package, and nothing of the server\'s', async () => {

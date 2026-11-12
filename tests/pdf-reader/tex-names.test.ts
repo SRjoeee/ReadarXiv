@@ -18,7 +18,7 @@ const renamed = (text: string, to: string) => {
 }
 
 describe('the table is TeX Live\'s', () => {
-  const file = JSON.parse(readFileSync('src/pdf-reader/engine/rules/tex-names.json', 'utf8'))
+  const file = JSON.parse(readFileSync('packages/engine/src/source/tex-names.json', 'utf8'))
   it('names the image and the files it was read from, each by its digest', () => {
     expect(file.image).toMatch(/^texlive\/texlive:TL2025-historic@sha256:[0-9a-f]{64}$/)
     for (const f of ['cleveref.sty', 'hyperref.sty', 't1enc.dfu', 't2aenc.dfu', 'ctex-name-utf8.cfg', 'translator-theorem-dictionary-ChineseUTF8.dict']) expect(file.files[f]).toMatch(/^[0-9a-f]{64}$/)

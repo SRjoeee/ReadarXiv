@@ -373,13 +373,19 @@ function sourceOf(path, root) {
   return [bare, ...EXTENSIONS.map(e => bare + e), ...twins].find(c => isFile(root, c)) ?? null
 }
 
-/** The files `file` imports for their values that the repository holds: aliases and relative paths, no package */
+/** The transition paths of the front half that moved from the engine into the engine package (packages/engine/package.json's
+ *  `./today/…` exports, each one moved module's): an old path of the engine re-exports its module through one, so a closure
+ *  follows it to the module, which is the engine's own code at its new place. Deleted at the cut-over with the old paths */
+export const TRANSITION = '@readarxiv/engine/today/'
+
+/** The files `file` imports for their values that the repository holds: aliases, relative paths and the transition paths, no
+ *  other package */
 function importsOf(file, root) {
   let text
   try { text = readFileSync(resolve(root, file), 'utf8') } catch { return [] }
   const out = []
   for (const spec of valueImportsOf(text)) {
-    const local = localPath(file, spec.replace(QUERY, ''))
+    const local = spec.startsWith(TRANSITION) ? `packages/engine/src/${spec.slice(TRANSITION.length)}` : localPath(file, spec.replace(QUERY, ''))
     const found = local === null ? null : sourceOf(local, root)
     if (found !== null) out.push(found)
   }
@@ -387,7 +393,8 @@ function importsOf(file, root) {
 }
 
 /** The entries and every file their value imports reach, once each. A stylesheet or a data file reached is in the closure
- *  and imports nothing; a package and a `node:` module are not in it. Throws for an entry the repository does not hold */
+ *  and imports nothing; a package (but a module reached by a transition path, TRANSITION) and a `node:` module are not in it.
+ *  Throws for an entry the repository does not hold */
 export function closureOf(entries, { root = '.' } = {}) {
   const seen = new Set()
   const todo = entries.map(entry => {

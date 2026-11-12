@@ -30,7 +30,17 @@ const loadedFrom = (entries: string[]): Set<string> => {
   }
   return seen
 }
-const named = (imports: Record<string, string>) => Object.keys(imports).filter((k) => k.startsWith('@readarxiv/'))
+const named = (imports: Record<string, string>) => Object.keys(imports).filter((k) => /^@readarxiv\/[a-z]+$/.test(k))
+/** a map's transition paths (`@readarxiv/engine/today/<folder>/`: the front half moved into the engine package, which the old
+ *  paths re-export) and the folders the package's manifest names them for */
+const transitions = (imports: Record<string, string>) => Object.keys(imports).filter((k) => k.startsWith('@readarxiv/engine/today/'))
+const TODAY_FOLDERS = [
+  ...new Set(
+    Object.keys(JSON.parse(readFileSync(join(ROOT, 'packages/engine/package.json'), 'utf8')).exports as Record<string, string>)
+      .filter((k) => k.startsWith('./today/'))
+      .map((k) => k.split('/')[2] as string),
+  ),
+].sort()
 /** the import map a page of the lab writes by hand */
 const pageImports = (page: string): Record<string, string> => {
   const html = readFileSync(join(ROOT, page), 'utf8')
@@ -49,5 +59,12 @@ describe("the lab's import maps of the workspace packages", () => {
   it.each(PAGES)('%s, which writes its map by hand, names the same', (file) => {
     const page = pageImports(file)
     for (const p of loadedFrom(named(page))) expect(page[p], p).toBe(PACKAGES_IMPORTS[p])
+    for (const t of transitions(PACKAGES_IMPORTS)) expect(page[t], t).toBe(PACKAGES_IMPORTS[t])
+  })
+  it("map the engine package's transition paths, one a folder the manifest names, to that folder of its src/", () => {
+    const map: Readonly<Record<string, string>> = PACKAGES_IMPORTS
+    expect(TODAY_FOLDERS.length).toBeGreaterThan(0)
+    expect(transitions(map).map((t) => t.split('/')[3]).sort()).toEqual(TODAY_FOLDERS)
+    for (const t of transitions(map)) expect(map[t], t).toBe(`/packages/engine/src/${t.split('/')[3]}/`)
   })
 })

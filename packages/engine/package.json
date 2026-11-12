@@ -6,9 +6,17 @@
   "license": "GPL-3.0-only",
   "description": "source, marks, ink, align, locate, wrap, bundle and prepare: a paper in, its bundle out",
   "sideEffects": false,
+  "//": "The ./today/… exports are the transition paths of the front half moved from src/pdf-reader/engine, one a moved module: only the old paths there and the lab import them (tests/pdf-reader/engine-contract.test.ts holds it). The cut-over deletes them with the old paths.",
   "exports": {
     ".": "./src/index.ts",
-    "./today": "./src/today.ts"
+    "./today/source/latex-front.mjs": "./src/source/latex-front.mjs",
+    "./today/source/paper-meta.mjs": "./src/source/paper-meta.mjs",
+    "./today/source/paper-names.mjs": "./src/source/paper-names.mjs",
+    "./today/source/arg-roles.mjs": "./src/source/arg-roles.mjs",
+    "./today/source/tex-kernel.mjs": "./src/source/tex-kernel.mjs",
+    "./today/source/tex-names.mjs": "./src/source/tex-names.mjs",
+    "./today/source/text-symbols.mjs": "./src/source/text-symbols.mjs",
+    "./today/source/text-piece.mjs": "./src/source/text-piece.mjs"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
