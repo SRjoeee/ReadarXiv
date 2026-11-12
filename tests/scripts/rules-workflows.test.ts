@@ -23,15 +23,16 @@ const pathsOf = (yml: string) => [...(/^\s+paths:\n((?:\s+- '.*'\n)+)/m.exec(yml
 const matches = (pattern: string, path: string) => new RegExp(`^${pattern.split('**').map(part => part.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*')).join('.*')}$`).test(path)
 const covered = (patterns: string[], path: string) => patterns.some(p => matches(p, path))
 
-/** the files a file loads by a relative import, followed to the end */
+/** the files a file loads by a relative import or a transition path of the front half moved into the engine package
+ *  (`@readarxiv/engine/today/…`, the engine's own code at its new place), followed to the end */
 function closure(entries: string[]): string[] {
   const seen = new Set<string>()
   const visit = (file: string) => {
     if (seen.has(file)) return
     seen.add(file)
     if (!/\.m?js$/.test(file)) return
-    for (const m of readFileSync(file, 'utf8').matchAll(/(?:from\s+|import\s*\(\s*|import\s+)['"](\.[^'"]+)['"]/g)) {
-      const target = resolve(dirname(file), m[1]!)
+    for (const m of readFileSync(file, 'utf8').matchAll(/(?:from\s+|import\s*\(\s*|import\s+)['"](\.[^'"]+|@readarxiv\/engine\/today\/[^'"]+)['"]/g)) {
+      const target = m[1]!.startsWith('.') ? resolve(dirname(file), m[1]!) : join(ROOT, 'packages/engine/src', m[1]!.slice('@readarxiv/engine/today/'.length))
       if (existsSync(target)) visit(target)
     }
   }

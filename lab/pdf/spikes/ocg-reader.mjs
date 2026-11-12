@@ -34,7 +34,7 @@ mkdirSync(join(OUT, NAME), { recursive: true })
 // ---- the wrap, as the maker child makes it, kept by the base's digest
 const FX = join(PACK, 'fixtures', NAME)
 const baseBytes = new Uint8Array(readFileSync(join(FX, 'base.pdf')))
-const digest = createHash('sha256').update(baseBytes).update(readFileSync(join(REPO, 'src/pdf-reader/engine/layout/wrap-final.mjs'))).update(readFileSync(join(REPO, 'packages/engine/src/wrap.mjs'))).update(readFileSync(join(REPO, 'src/pdf-reader/engine/layout/own.mjs'))).update(existsSync(join(FX, 'base.json')) ? readFileSync(join(FX, 'base.json')) : 'no record').digest('hex').slice(0, 16)
+const digest = createHash('sha256').update(baseBytes).update(readFileSync(join(REPO, 'src/pdf-reader/engine/layout/wrap-final.mjs'))).update(readFileSync(join(REPO, 'packages/engine/src/wrap.mjs'))).update(readFileSync(join(REPO, 'packages/engine/src/own/own.mjs'))).update(existsSync(join(FX, 'base.json')) ? readFileSync(join(FX, 'base.json')) : 'no record').digest('hex').slice(0, 16)
 const wrappedPath = join(OUT, NAME, `wrapped-${digest}.pdf`), headPath = join(OUT, NAME, `wrapped-${digest}.json`), glyphsPath = join(OUT, NAME, `wrapped-${digest}-ink2.json`)
 if (!existsSync(wrappedPath) || !existsSync(glyphsPath)) {
   const { wrapFinal } = await import(join(REPO, 'src/pdf-reader/engine/layout/wrap-final.mjs'))

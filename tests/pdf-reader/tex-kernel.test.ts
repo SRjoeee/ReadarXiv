@@ -9,7 +9,9 @@ import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { classOf, INVISIBLE, LAYOUT_CLASSES, layoutMarking, MARK_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { BREAK_HINTS, INK_FREE_LEAD, INK_FREE_SYMBOLS, INK_FREE_WORDS, inkFree } from '@/pdf-reader/engine/rules/tex-kernel.mjs'
-import { textless } from '@/pdf-reader/engine/rules/arg-roles.mjs'
+// @ts-expect-error: the moved JavaScript (packages/engine/src/source/arg-roles.mjs) has no declaration in the package; its old path, which nothing
+// else imported, is gone
+import { textless } from '../../packages/engine/src/source/arg-roles.mjs'
 import { PH_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { compileImageRef } from '../../lab/pdf/spikes/compile-image.mjs'
 

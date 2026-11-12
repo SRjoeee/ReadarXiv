@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import * as argRoles from '@/pdf-reader/engine/rules/arg-roles.mjs'
-import { bindingsOf, commandParams, environmentParams, readArgs, textArgsOf, textless } from '@/pdf-reader/engine/rules/arg-roles.mjs'
+// @ts-expect-error: the moved JavaScript (packages/engine/src/source/arg-roles.mjs) has no declaration in the package; its old path, which nothing
+// else imported, is gone
+import * as argRoles from '../../packages/engine/src/source/arg-roles.mjs'
+// @ts-expect-error: the moved JavaScript (packages/engine/src/source/arg-roles.mjs) has no declaration in the package; its old path, which nothing
+// else imported, is gone
+import { bindingsOf, commandParams, environmentParams, readArgs, textArgsOf, textless } from '../../packages/engine/src/source/arg-roles.mjs'
 
 // The role table: what each argument of a command is (text, a dimension, keys, a name …), from LaTeXML's prototypes and
 // the commands written out by hand where LaTeXML leaves an argument untyped
 
-const roles = (name: string, bindings: Set<number> | null = null) => commandParams(name, bindings)?.map(p => p.shape + p.role).join('') ?? null
+const roles = (name: string, bindings: Set<number> | null = null) => commandParams(name, bindings)?.map((p: { shape: string; role: string }) => p.shape + p.role).join('') ?? null
 
 describe('the table: LaTeXML\'s prototypes, and the commands written out where they say less', () => {
   it('a rule, a length set, a row\'s rules: every argument a dimension or a register, as LaTeXML types them', () => {
@@ -37,7 +41,7 @@ describe('the table: LaTeXML\'s prototypes, and the commands written out where t
     expect(roles('firstname', bindingsOf(['\\documentclass{moderncv}']))).toBe('{n')
     expect(roles('firstname', bindingsOf(['\\documentclass{article}']))).toBeNull()
     // enumitem's keys after a list's \begin, the kernel's list none
-    expect(environmentParams('enumerate', bindingsOf(['\\usepackage{enumitem}']))?.map(p => p.shape + p.role).join('')).toBe('[k')
+    expect(environmentParams('enumerate', bindingsOf(['\\usepackage{enumitem}']))?.map((p: { shape: string; role: string }) => p.shape + p.role).join('')).toBe('[k')
   })
   it('a class LaTeXML has no binding for is read as the longest one its name begins with (revtex4-2 as revtex4), and what that one loads', () => {
     const b = bindingsOf(['\\documentclass[aps,prl]{revtex4-2}'])
@@ -80,11 +84,11 @@ describe('readArgs: the arguments as TeX takes them', () => {
     const s = '\\setlength\\tabcolsep{1mm}{the tables}'
     const r = readArgs(s, 10, params('setlength'))
     expect(r.complete).toBe(true)
-    expect(r.args.map(a => s.slice(a.start, a.end))).toEqual(['\\tabcolsep', '{1mm}'])
+    expect(r.args.map((a: { start: number; end: number }) => s.slice(a.start, a.end))).toEqual(['\\tabcolsep', '{1mm}'])
     expect(s.slice(r.end)).toBe('{the tables}')
   })
   it('an optional argument only where it is given; TeX\'s own syntax for a dimension; a required one missing is not complete', () => {
-    expect(readArgs('\\rule{1pt}{2pt}', 5, params('rule')).args.map(a => a.role)).toEqual(['d', 'd'])
+    expect(readArgs('\\rule{1pt}{2pt}', 5, params('rule')).args.map((a: { role: string }) => a.role)).toEqual(['d', 'd'])
     const v = readArgs('\\vskip 3pt plus 1fil Text', 6, params('vskip'))
     expect('\\vskip 3pt plus 1fil Text'.slice(v.end)).toBe(' Text')
     expect(readArgs('\\setcounter{x}}', 11, params('setcounter')).complete).toBe(false)
