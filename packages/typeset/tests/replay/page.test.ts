@@ -70,7 +70,6 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)(
 describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)('the runner: the Metrics its lays measure with', () => {
   const PAIR = '2608.25210v2-zh'
   const ORD = 425
-  const table = tableMetrics(readGz(join(TAP, 'metrics', `${PAIR}.metrics.json.gz`)) as MeasureTable)
   // (the test's own measurer of a text the table lacks: half an em a character, an ink 0.7 em over and 0.2 under)
   const halfEm = (size: number, text: string) => (size * [...text].length) / 2
   const lacking =
@@ -83,18 +82,21 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)('the runner: the M
         return g(...a)
       }
     }
-  const layered: Metrics = {
-    ready: table.ready,
-    advance: lacking(table.advance, (_f, size, text) => halfEm(size, text)),
-    ink: lacking(
-      table.ink,
-      (_f, size, text) => [size * 0.7, size * 0.2, halfEm(size, text)] as [number, number, number],
-    ),
-  }
 
   it(`leaves ${PAIR} ord ${ORD} unfit on the tap's table alone, and lays it on a Metrics that measures what the table lacks`, {
     timeout: 180_000,
   }, () => {
+    // (the tap's table read here, not in the describe's body: vitest runs the body to collect even a skipped suite, and a
+    // machine without the lab's data has no table to read)
+    const table = tableMetrics(readGz(join(TAP, 'metrics', `${PAIR}.metrics.json.gz`)) as MeasureTable)
+    const layered: Metrics = {
+      ready: table.ready,
+      advance: lacking(table.advance, (_f, size, text) => halfEm(size, text)),
+      ink: lacking(
+        table.ink,
+        (_f, size, text) => [size * 0.7, size * 0.2, halfEm(size, text)] as [number, number, number],
+      ),
+    }
     expect(gatePair(PAIR).units.some((u) => u.ord === ORD)).toBe(false)
     expect(gatePair(PAIR, { metricsOf: () => layered }).units.some((u) => u.ord === ORD)).toBe(true)
   })
