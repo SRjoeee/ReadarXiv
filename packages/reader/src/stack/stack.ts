@@ -16,7 +16,11 @@
 //   it shows, the follower's transform and all: nothing is lent). A far slot lets its drawing go, canvas and all, but a laid
 //   page's (one with an overlay), which is kept off the view within the device's budget, the farthest from the view let go
 //   first, and put back as it comes near (no flash coming back, §11.8); and a page that holds the focus, kept in place until
-//   the focus leaves it (read a task later: a native Tab clears the focus before it arrives at the next link).
+//   the focus leaves it (read a task later: a native Tab clears the focus before it arrives at the next link). A kept drawing
+//   stays in its slot out of the layout tree (`data-axt-kept` on the slot, `display: none` on its holder: styles.ts says why):
+//   every face added to the document re-lays every text node laid out, and a reader keeping a whole paper's drawings in layout
+//   paid that over 41-49k objects a time (verification/reader-perf.md §1); its slot keeps its box, so the pane's height, the
+//   sync's places and the near observer never see it go.
 // - **Scale.** One scale for every slot; a zoom's steps scale the page views by CSS at once and draw them again `drawingDelay`
 //   after the last (PDF.js's own update), the stack marked `data-axt-scaling` from the first step to TEXT_BACK_MS after the
 //   redraw (the laid pages' text layers out of layout meanwhile, styles.ts); a laid page's own drawings (its crops) drawn again
@@ -56,6 +60,8 @@ export const RECOPY_MS = 600
 export const LEFT_WAIT_MS = 1500
 /** the pages of a laid page's document kept parsed (operator lists, decoded images) after their drawings go (visibility.mjs) */
 export const WARM_PAGES = 4
+/** the mark of a slot whose drawing is kept off the view: the reader's sheet holds the drawing out of the layout tree */
+export const KEPT = 'data-axt-kept'
 /** the most device pixels of laid pages' drawings kept off the view on any device, on iOS and iPadOS, and the share of a device's
  *  memory they may take (layer-side.mjs KEEP_PIXELS, IOS_KEEP_PIXELS, KEEP_SHARE, KEEP_MEMORY_GB: docs/PDF-READER.md §11.8) */
 export const KEEP_PIXELS = 2 ** 25
@@ -793,8 +799,7 @@ export function createStack(o: StackOptions): Stack {
       if (!s.near && s.shown === d) {
         const px = d.over ? pixelsOf(d) : 0
         if (px && px <= keepPixels) {
-          s.kept = px
-          s.keptAt = ++keepTick
+          keep(s, px)
           trim(s.n)
         } else {
           release(d, s)
@@ -839,9 +844,17 @@ export function createStack(o: StackOptions): Stack {
       name(s)
       return
     }
-    s.kept = px
-    s.keptAt = ++keepTick
+    keep(s, px)
     trim(s.n)
+  }
+  /** slot s's drawing kept off the view (`px` its device pixels), marked so that the sheet holds it out of the layout tree; 0:
+   *  kept no more, back in it */
+  function keep(s: Slot, px: number) {
+    s.kept = px
+    if (px) {
+      s.keptAt = ++keepTick
+      s.div.setAttribute(KEPT, '')
+    } else s.div.removeAttribute(KEPT)
   }
   /** the laid drawings kept past the budget let go, the farthest from the page in the middle of the view first (else from the
    *  page just kept), the one kept longest first between two as far */
@@ -854,7 +867,7 @@ export function createStack(o: StackOptions): Stack {
   }
   /** slot s's kept drawing taken out of the keep: let go (`drop`), or shown again (it came near) */
   function unkeep(s: Slot, drop: boolean) {
-    s.kept = 0
+    keep(s, 0)
     if (!drop) {
       counts.restored++
       return
@@ -892,6 +905,13 @@ export function createStack(o: StackOptions): Stack {
     areaFrame = clock.frame(() => {
       areaFrame = 0
       const view = scroller.getBoundingClientRect()
+      // (a kept drawing a jump brought into view back in the layout tree in the jump's own frame, before it is laid out and
+      // painted: the near observer tells it only in a task after that frame, which would show the bare page box for a frame)
+      for (const s of slots) {
+        if (!s.kept || !s.div.hasAttribute(KEPT)) continue
+        const r = s.div.getBoundingClientRect()
+        if (r.bottom > view.top && r.top < view.bottom) s.div.removeAttribute(KEPT)
+      }
       for (const s of slots) {
         const d = s.shown
         const pv = d?.view
@@ -1000,7 +1020,7 @@ export function createStack(o: StackOptions): Stack {
       release(s.shown, s)
       s.next = null
       s.shown = null
-      s.kept = 0
+      keep(s, 0)
     }
     keptForFocus.clear()
     waiting.clear()
@@ -1214,13 +1234,17 @@ export function createStack(o: StackOptions): Stack {
       pending = { n, until: clock.now() + FOCUS_WAIT_MS }
     },
     holdNear(on) {
+      // (a pinch's preview is a transform the near observer is held through: the kept drawings in the layout tree while it is
+      // held, so that a page it brings into view is drawn there, and out of it again at its end where they are still far)
       if (on) {
         nearHeld ??= new Map()
+        for (const s of slots) if (s.kept) s.div.removeAttribute(KEPT)
         return
       }
       const held = nearHeld
       nearHeld = null
       if (held?.size) nearEntries([...held].map(([target, on]) => ({ target, on })))
+      for (const s of slots) if (s.kept) s.div.setAttribute(KEPT, '')
       areaSoon()
     },
     hold(on) {

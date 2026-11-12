@@ -1326,7 +1326,23 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   that zoom, its ten page views drawn), and a phone of 4 GB 64 MiB, some ten pages of its screen at the fit. A page let go past
   it is laid again from the door's kept markup as before. A drawing kept across a zoom comes back as it was and is drawn again
   at the new k. A later attempt, a fork or another target lets every kept drawing go (they are the door before's), as do
-  `dropOthers()`, a refusal and the dispose. A host may give its own budget (`keepPixels`; 0 keeps none).
+  `dropOthers()`, a refusal and the dispose. A host may give its own budget (`keepPixels`; 0 keeps none). The reader package's
+  page stack keeps the drawing in its own slot instead of detached, and out of the layout tree as today's is out of the
+  document: the slot marked `data-axt-kept` while its drawing is kept, its holder `display: none` (`packages/reader` stack.ts
+  `keep`, styles.ts). Kept in layout, every laid page of a paper was laid out again at each face added to the document (a face
+  added re-lays every text node laid out): over a scroll of 2610.20808v1 41 such relayouts of 10k to 41k objects, the longest
+  134 ms, most of the reader's long tasks (lane reader-perf, 2026-11-12, `verification/reader-perf.md` §1); out of it, the
+  relayouts walk the near pages and the left's (15.6k objects, as today's 16k), and Blink's heap holds 147 MiB less after that
+  scroll. `display: none` rather than `content-visibility: hidden`: the same relayouts measured, no layout objects kept, and
+  every browser the website serves has it (`content-visibility` only from Safari 18). The slot keeps its box, so the pane's
+  height and the sync's places never move; what changed while the drawing was out (a zoom, a face) is laid out as it comes
+  back, one pane height before it shows, and a zoom's page view is drawn again then. A jump straight to a kept page (a link,
+  the outline, a page number) puts it back in the jump's own frame, in the stack's frame callback on the pane's scroll, before
+  that frame is laid out and painted: the near observer tells it only in a task after the frame, which would show the bare page
+  box for a frame. A pinch's preview, a transform the near observer is held through, holds every kept drawing in layout while
+  it is held, out again at its end where still far. A kept page's words are not found by the
+  browser's find while it is far, as today's are not (the coordinator's word, 2026-11-12: equal to production is the bar).
+  Held by the harness's check "a far laid page kept out of the layout tree, back pixel for pixel, the scroll height unmoved".
 - **The faces, in one wave** (`layer-proto/warm.mjs`). v0 checks and loads the faces of a unit as it lays it, one unit after
   another (E2), so a page whose units brought new characters waited a round trip a unit: 2602.23285v2 in Chinese asked 38
   font files in 12 waves before its first page, 4.3 to 9.2 s of a cold visit (production, 2026-10-24). The side asks the

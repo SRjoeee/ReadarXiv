@@ -32,6 +32,15 @@ ${DIMMED} { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29 29); }
    have them); its size is PDF.js's rule over the stack's --scale-factor; what it shows sits in its holder, which fills it */
 .axt-reader .pdfViewer .page.axt-slot { container-type: inline-size; }
 .axt-reader .axt-slot-view { position: absolute; inset: 0; }
+/* a drawing kept off the view while its slot is far (stack.ts keep): out of the layout tree, as today's reader held it out of the
+   document. A face added to the document re-lays every text node that is laid out ("Fonts changed"), and a reader keeping a
+   whole paper's drawings laid out paid it over 41-49k objects a time, 134 ms at the end of a 30-page paper
+   (verification/reader-perf.md §1). display: none and not content-visibility: hidden: the same relayouts measured, but none
+   keeps the drawing's layout objects (Blink's heap 147 MiB less after a scroll of that paper), and every browser the reader
+   serves has it (content-visibility only from Safari 18; the website serves Safari 17.4). The holder is absolute in a slot of
+   its own size, so the pane's height and the sync's places never see it go; what changed while it was out (a zoom, a face) is
+   laid out as it comes back, one pane's height before it shows. Not found by the browser's find while far, as today's. */
+.axt-reader .pdfViewer .page.axt-slot[data-axt-kept] > .axt-slot-view { display: none; }
 .axt-reader .pdfViewer .page.axt-slot .axt-slot-view > .page { position: absolute !important; inset: 0; margin: 0 !important; border: 0 !important; box-shadow: none !important; }
 /* the left's drawing of the page, while the slot waits for its layer (stack.ts copyLeft): placed as PDF.js places its own canvas in
    its page box, the slot's box being the left page box's; dimmed by the host sheet's rule for a page's canvas, as the left's is */

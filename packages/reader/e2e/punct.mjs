@@ -169,8 +169,12 @@ export async function measurePunct(page, laidPages) {
   const out = { glyphs: [], crops: [], runs: [] }
   for (const n of laidPages) {
     await page.evaluate((n) => window.__h.panes.goToPage('right', n), n)
+    // (its drawing in place and in the layout tree: a page kept far while the other was laid comes back a frame after the jump)
     await page.waitForFunction(
-      (n) => !!document.querySelector(`.axt-pane.right .axt-slot[data-page-number="${n}"] .axt-over > svg`),
+      (n) =>
+        !!document.querySelector(
+          `.axt-pane.right .axt-slot[data-page-number="${n}"]:not([data-axt-kept]) .axt-over > svg`,
+        ),
       n,
       { timeout: 20_000, polling: 50 },
     )
