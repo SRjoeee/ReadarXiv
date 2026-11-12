@@ -2,19 +2,19 @@
 // wire text with its opaque pieces as markers (DESIGN §6: `@a#`, `@@` for a literal @), comes back as pieces again;
 // the engine's slips are forgiven where they are unambiguous, and what still fails goes as runs — each stretch of text
 // between opaque pieces on its own — so that nothing is left untranslated.
-import { tokens } from '../pipeline/anchors.mjs'
-import { bySentence } from '../view/highlight.mjs'
-import { MIXED } from './mixed.mjs'
-import { fromAlpha, MARKER_CLOSER, markerReader, TAG_RE, toAlpha } from '../../../core/protector/tokens.ts'
-import { balancedRuns, delimiterResidue, RUN_SEPARATOR } from '../../../core/protector/math-runs.ts'
-import { ABBR, sentenceCuts } from '../../../core/sentences/index.ts'
-import { AUX_WORDS, BREAK_HINTS, DECLARATION_WORDS, INK_FREE_SYMBOLS, INK_FREE_WORDS, PENALTY_WORDS, PREFIX_WORDS, ROW_RULES, SPACE_SYMBOLS, spaceLead, spaceSource } from '../rules/tex-kernel.mjs'
+import { tokens } from '../../../../src/pdf-reader/engine/pipeline/anchors.mjs'
+import { bySentence } from '../../../../src/pdf-reader/engine/view/highlight.mjs'
+import { MIXED } from '../../../../src/pdf-reader/engine/translate/mixed.mjs'
+import { fromAlpha, MARKER_CLOSER, markerReader, TAG_RE, toAlpha } from '../../../../src/core/protector/tokens.ts'
+import { balancedRuns, delimiterResidue, RUN_SEPARATOR } from '../../../../src/core/protector/math-runs.ts'
+import { ABBR, sentenceCuts } from '../../../../src/core/sentences/index.ts'
+import { AUX_WORDS, BREAK_HINTS, DECLARATION_WORDS, INK_FREE_SYMBOLS, INK_FREE_WORDS, PENALTY_WORDS, PREFIX_WORDS, ROW_RULES, SPACE_SYMBOLS, spaceLead, spaceSource } from '../../../../src/pdf-reader/engine/rules/tex-kernel.mjs'
 
 // This file is the translation's: the wire a unit goes out as, and the reading back of a reply. A change here that alters
 // what is sent for a unit or what its reply is read as raises TRANSLATE_VERSION, the identity of the translation rules
 // (translate/version.mjs holds what it covers); one that alters a unit's cutting or text raises PIPELINE_VERSION
 // (versions.mjs) too.
-export { TRANSLATE_VERSION } from './version.mjs'
+export { TRANSLATE_VERSION } from '../../../../src/pdf-reader/engine/translate/version.mjs'
 
 // ---------------------------------------------------------------- markers wire format
 export { fromAlpha, toAlpha }

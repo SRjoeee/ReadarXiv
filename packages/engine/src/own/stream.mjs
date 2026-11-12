@@ -8,7 +8,7 @@
 // mid-paragraph or at a column's head — lies outside the region of its opening point, and is cut: a region is in a
 // column's body or not, at a depth of floats.
 // Imports a label's form alone (label-form.mjs): pure arithmetic over what pageInk read.
-import { isLabelForm, LABEL_NAME, labelText } from './label-form.mjs'
+import { isLabelForm, LABEL_NAME, labelText } from '../marks/label-form.mjs'
 
 /** how a piece's ink was found, or why none was: the first OWNED are owned (its glyphs and rules, maybe none), the rest
  *  are not, and the maker writes the piece LOST — but 'in the display before it', a later display of a display group,

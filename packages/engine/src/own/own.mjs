@@ -48,13 +48,13 @@
 //
 // Pure arithmetic over what pageInk read (layout/ink.mjs, `indices`); imports the stream's regions and a unit's source text.
 // An original module (no port statement).
-import { utf8 } from '../translate/mt.mjs'
-import { symbolText } from '../rules/text-symbols.mjs'
+import { utf8 } from '../instrument/mt.mjs'
+import { symbolText } from '../../../../src/pdf-reader/engine/rules/text-symbols.mjs'
 import { UNHIDDEN } from '@readarxiv/engine'
-import { classOf, headsOf, INK_ANY, leadStep } from './marks.mjs'
+import { classOf, headsOf, INK_ANY, leadStep } from '../marks/marks.mjs'
 import { columnsAt, OWNED, OWNED_HOW, ownedOf, READ_ALONE, regionsOf, spellOf } from './stream.mjs'
-import { isLabelForm, labelFormOf, labelText } from './label-form.mjs'
-import { counterAfter, counterBefore } from './names.mjs'
+import { isLabelForm, labelFormOf, labelText } from '../marks/label-form.mjs'
+import { counterAfter, counterBefore } from '../marks/names.mjs'
 
 export { UNHIDDEN }
 /** a label's form, the paper's theorem names beside the standard ones: layout/label-form.mjs */

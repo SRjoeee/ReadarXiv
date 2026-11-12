@@ -13,21 +13,21 @@
 // into, and sets nothing there. The native cases (lab/pdf/spikes/
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
 // lines they carry and lose, and fails on a loss of no accepted cause.
-import { BACKREF_LIST, calledAt, frontMarks, identifierSource, lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
-import { textless } from '../rules/arg-roles.mjs'
-import { symbolText } from '../rules/text-symbols.mjs'
-import { INK_FREE_LEAD, prefixWord } from '../rules/tex-kernel.mjs'
-import { tokenAtMark, tokenizeDocument } from '../pipeline/anchors.mjs'
-import { DISPLAY, plainTranslated } from '../translate/mt.mjs'
-import { readLines } from '../pipeline/typeset/tex.mjs'
-import { annotsOf, linkKindOf, MAX_GLYPHS, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
+import { BACKREF_LIST, calledAt, frontMarks, identifierSource, lastTexLog, markUnits, NO_ARG_COMMANDS } from '../../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { textless } from '../../../../src/pdf-reader/engine/rules/arg-roles.mjs'
+import { symbolText } from '../../../../src/pdf-reader/engine/rules/text-symbols.mjs'
+import { INK_FREE_LEAD, prefixWord } from '../../../../src/pdf-reader/engine/rules/tex-kernel.mjs'
+import { tokenAtMark, tokenizeDocument } from '../../../../src/pdf-reader/engine/pipeline/anchors.mjs'
+import { DISPLAY, plainTranslated } from '../instrument/mt.mjs'
+import { readLines } from '../../../../src/pdf-reader/engine/pipeline/typeset/tex.mjs'
+import { annotsOf, linkKindOf, MAX_GLYPHS, MAX_LINKS, readAnnots } from '../../../../src/pdf-reader/engine/layer-proto/links.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from '@readarxiv/engine'
-import { listOf, orNull } from './oplist.mjs'
+import { listOf, orNull } from '../../../../src/pdf-reader/engine/layout/oplist.mjs'
 import { isMemoryError } from '@readarxiv/engine'
 import { NAME_ENGLISH, NAME_KEYS } from './names.mjs'
 import { fillOfColour } from './colour.mjs'
-import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
-import { OWNED, OWNED_HOW, ownedPages, spellOf, STREAM_COLUMNS, WANT } from './stream.mjs'
+import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from '../../../../src/pdf-reader/engine/layout/json.mjs'
+import { OWNED, OWNED_HOW, ownedPages, spellOf, STREAM_COLUMNS, WANT } from '../own/stream.mjs'
 
 // ---------------------------------------------------------------- the classes
 /** every class, in this order */
@@ -782,7 +782,7 @@ export function literalNames(text) {
 // LaTeX's text symbols (TEXT_SYMBOLS, each the one character it sets), the one table the layer reads too
 // (rules/text-symbols.mjs): the layout draws one the marking cannot mark (glued to the word before it, at a unit's head) as
 // text, where arXiv's page shows that character on the unit's line (make.mjs); symbolText, a symbol's text
-export { symbolText, TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
+export { symbolText, TEXT_SYMBOLS } from '../../../../src/pdf-reader/engine/rules/text-symbols.mjs'
 /** a line TeX logs for an error: `! …`, or `<file>:<line>: …` under -file-line-error; and a character it set no glyph for in
  *  \\nullfont, which a box is in only where a sample left TeX's state broken past what PROBE_UNWIND closes (a picture's own
  *  \\nullfont, in its box): that box's answer is none, never a box that sets no ink, nor one a mark leaves as it was */
