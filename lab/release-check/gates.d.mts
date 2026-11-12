@@ -30,6 +30,7 @@ export declare const STAGES: Stage[]
 export declare const INVARIANTS: Invariant[]
 export declare const TARGETS: Target[]
 export declare const GATES: Gate[]
+export declare function censusOf(text: string): Numbers
 export declare function checksOf(text: string): { passed?: number; checks?: number }
 export declare function vitestOf(text: string): { tests?: number; failed?: number; skipped?: number; files?: number }
 export declare function diffOf(text: string): Partial<Record<'files' | 'of' | 'units' | 'shownBefore' | 'shown' | 'lost' | 'accepted' | 'gained' | 'changed', number>>
