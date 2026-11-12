@@ -1,11 +1,11 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, nothing else but eight changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
+// marked COPY, nothing else but nine changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
 // head's number of its phrase no folio, phrased; a unit's label's glyphs stated, `glyphs.label`; each kept run's glyphs by its
 // placeholder stated, `glyphs.runs`; an e-mail address or an identifier a kept run of its own, addressed, and a group of local parts before their
 // domain one over its words and lines, groupedAddresses; a formula's TeX specials written as TeX sets
 // them, never stripped, MATH_SPECIAL; a script a kept run whatever its face, written as TeX writes one, a label a first line's
 // leading raised scripts, no run over a line's break at a script, scriptsOf; a line of no text word the next of its paragraph's unit;
-// a paragraph TeX ended between two lines parts them): run
+// a paragraph TeX ended between two lines parts them; a display TeX set one kept block, its number with it, keptUnitsOf): run
 // by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file stays the production prepare's until the cut-over.
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
@@ -69,7 +69,8 @@
 //      form XObject, on an image) whatever its line's class, nor a line beside a unit's text on its baseline, within BESIDE of
 //      its size across in its column (its label, its number); a line part an ink unit claimed keeps its other runs (a running
 //      head's folio). Its rows the lines' boxes alone (no erase, no placeholder: nothing is
-//      drawn over it), no pieces (nothing is sent), its glyphs in no group (the wrap and its ledger as before).
+//      drawn over it), no pieces (nothing is sent), its glyphs in no group (the wrap and its ledger as before). A display TeX set
+//      (its region, pageInk's `regions`) is one block whatever its lines' places, its number with it (CHANGED).
 // Pure arithmetic; an original module (no port statement).
 import { unitClass } from './content-classes.mjs'
 import { accentTexts } from './accents.mjs'
@@ -704,6 +705,17 @@ export function keptUnitsOf(pages, ledger, owner, { from }) {
     return list
   }
   const graphic = (p, x) => x.form === true || imagesOf(p).some(([x0, y0, x1, y1]) => { const mx = (x.x0 + x.x1) / 2, my = (x.top + x.bottom) / 2; return mx >= x0 && mx <= x1 && my >= y0 && my <= y1 })
+  // (CHANGED: each line's display, the one TeX set it in — pageInk's `regions` of kind `display`, from the display's start point
+  // to its last end (PDF-READER §18.19) — that holds at least half of its inked glyphs, as the ledger reads a display's line; and
+  // the first glyph TeX inked at or after a place of a page's stream, -1 for none)
+  const displaysOn = new Map()
+  const displayOf = (p, run) => {
+    let ds = displaysOn.get(p)
+    if (!ds) displaysOn.set(p, (ds = (pages[p - 1]?.regions ?? []).filter(r => r.kind === 'display')))
+    const G = pages[p - 1]?.glyphs ?? [], inked = run.filter(g => inkedAt(G, g))
+    return (inked.length && ds.find(r => 2 * inked.filter(g => g >= r.from && g < r.to).length >= inked.length)) || null
+  }
+  const firstInk = (p, from) => { const G = pages[p - 1]?.glyphs ?? []; for (let g = from; g < G.length; g++) if (inkedAt(G, g)) return g; return -1 }
   const lines = []
   for (const L of ledger.lines ?? []) {
     const depth = L.region >> 1, body = (L.region & 1) === 1
@@ -719,19 +731,31 @@ export function keptUnitsOf(pages, ledger, owner, { from }) {
       // (beside a unit's text on its baseline, its stream's neighbour a unit's glyph close across: that unit's label or number,
       // the original's ink its unit lights)
       if (besideUnit(pages[L.page - 1], part, owner)) continue
-      lines.push({ ...part, words, body, lo: Math.min(...run), hi: Math.max(...run) })
+      lines.push({ ...part, words, body, lo: Math.min(...run), hi: Math.max(...run), display: displayOf(L.page, run) })
     }
   }
+  // CHANGED: a display TeX set is one block, its number with it (PDF-READER §18.58). Its lines join its block whatever their
+  // baselines and extents across — a fraction's numerator above the formula's baseline and right of what TeX set before it, its
+  // denominator, a big operator's limits, an alignment's rows — and whatever TeX set between them inside it (its text a unit
+  // translates, an \underbrace's label: that unit's own), and no other block; its number joins it too: TeX sets it right after
+  // the display's end (\eqno: on its last line or, where it does not fit, on a line of its own under it), so the line that holds
+  // the first ink TeX set after the display's end is the display's (a stop TeX set after the formula's end point on the
+  // number's line with it). Today's cut a display by the listing's rule below (1706.03762v7 p4's (1): "Attention(Q, K, V) =
+  // softmax(", the fraction, ")V", three blocks lit each alone, and its number "(1)" in none). A line of no display joins as
+  // before, and so does a display's own line of no letter pair start a block
   const blocks = []
   for (const s of lines) {
     const b = blocks.at(-1), prev = b?.lines.at(-1)
-    const joins = !!b && prev.page === s.page && prev.region === s.region && (s.cls === b.cls || s.cls === 'symbols') &&
-      s.y <= b.low + BASELINE * s.size && b.low - s.y <= KEPT_DY * Math.max(s.size, prev.size) && s.x0 < b.x1 && s.x1 > b.x0 &&
-      nothingOwnedBetween(s.page, prev.hi, s.lo, owner, pages)
+    const near = !!b && prev.page === s.page && prev.region === s.region
+    const joins = near && (s.display
+      ? b.display === s.display
+      : nothingOwnedBetween(s.page, prev.hi, s.lo, owner, pages) &&
+        (((s.cls === b.cls || s.cls === 'symbols') && s.y <= b.low + BASELINE * s.size && b.low - s.y <= KEPT_DY * Math.max(s.size, prev.size) && s.x0 < b.x1 && s.x1 > b.x0) ||
+          (!!b.display && s.gs.includes(firstInk(s.page, b.display.to)))))
     if (joins) { b.lines.push(s); b.low = Math.min(b.low, s.y); b.x0 = Math.min(b.x0, s.x0); b.x1 = Math.max(b.x1, s.x1); continue }
-    // (a line of no letter pair in a column's body starts no block: a brace, a mark beside the text)
-    if (s.cls === 'symbols' && s.body) continue
-    blocks.push({ cls: s.cls, body: s.body, lines: [s], low: s.y, x0: s.x0, x1: s.x1 })
+    // (a line of no letter pair in a column's body starts no block: a brace, a mark beside the text; a display's own line does)
+    if (s.cls === 'symbols' && s.body && !s.display) continue
+    blocks.push({ cls: s.cls, body: s.body, display: s.display, lines: [s], low: s.y, x0: s.x0, x1: s.x1 })
   }
   return blocks.map((b, j) => {
     const id = from + j, kind = INK_KIND[b.cls] ?? (b.body ? INK_KIND.orphan : INK_KIND.heads)
@@ -794,6 +818,9 @@ function besideUnit(page, L, owner) {
   while (b < G.length && (G[b]?.blank || !/\S/u.test(G[b]?.u ?? ''))) b++
   return (a >= 0 && near(a)) || (b < G.length && near(b))
 }
+
+/** CHANGED: whether a page's glyph `g` is ink TeX set: a glyph, no blank */
+const inkedAt = (G, g) => !!G[g] && !G[g].blank && /\S/u.test(G[g].u ?? '')
 
 /** whether no glyph between two of a page's stream places (exclusive) is a unit's; false where they are not in stream order */
 function nothingOwnedBetween(page, a, b, owner, pages) {

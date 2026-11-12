@@ -2042,7 +2042,8 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     left made 8.7 → 8.5 ms (median of 7), a page's geometry 0.070 → 0.079 ms; 2610.19159v1 44 → 58 ms and 0.047 → 0.094 ms.
     The 1 357 left: 2610.19159v1's framed transcripts, which the figures' text takes (1 016), algorithms inside floats, arXiv's
     stamp, lines our compile sets elsewhere. A page
-    moved (our lines elsewhere than arXiv's) lights as a page in place since BUNDLE 12 (below).
+    moved (our lines elsewhere than arXiv's) lights as a page in place since BUNDLE 12 (below). On the rebuilt reader a display
+    TeX set that no unit owns is one block whatever its lines' baselines, its number with it, as a unit's display is (§18.58).
   - **A block lights on both panes or on neither** (the owner, 2026-10-30: 「为什么修改后还有一边不亮的情况？我们可以从根本上解决吗？
     …如果实在分不出来，我们就两边统一亮，或者划成一整块亮」): on a page in place a block's area on each pane is its boxes. On the left
     each box lights the tokens of arXiv's page under it where they are and itself where none is (a display or a formula drawn as
@@ -2623,6 +2624,21 @@ within noise.
   dark or dimmed. The choice was stored and never painted: every band was the sheet's green at 22 % (the feature list's E2,
   2026-11-12; today's look sheet wrote both, `src/core/renderer/style-preset.ts appearanceRule`). Held by the package's e2e
   `highlight: the band chosen …`.
+- **The pointer's look is arithmetic** (§17.4's rule, kept by the rebuilt reader since 2026-11-12): the page under a point and
+  the point in it come from the places the panes keep (`panes.ts` pointAt: each pane's box on the screen and its pages' boxes in
+  its scroll coordinates, read once its layout changed: a pane, its page stack or the window resized, a scale, a display, a
+  document opened; the scroll and the follower's shift as their events give them, `sync.mjs` shownAt with the panes' kept
+  scrollY), never from the document's hit test nor a scrollTop read. A scroll under a resting pointer still lights what comes
+  under it, one look a frame, as §17.4 has it. The look tested the document by `elementFromPoint` and read the page's box again
+  in every frame of a scroll: on one scroll of 2610.20808v1-zh (the perf lane's tools, `refactor-2026-11/perf/tools`, NEW's
+  website at 26c7c1a3; readarxiv-lab-data `lanes/formula-hover`) 404 ms of the profile's main-thread time came from the look's
+  `elementFromPoint`, and the reader's animation-frame callbacks took 425 ms of its long frames, 375 of them a layout they
+  forced; read without the hit test but through scrollTop, the layout was forced there instead (412 ms, 411); with the scroll
+  as kept, none of the look's frames is long (0 ms) and the hit test is gone from the profile (the driver's own probe aside).
+  The count of long tasks over the scroll does not move past its spread (37 / 32 / 41 before, 29 / 35 / 40 after: the
+  typesetting and the streams' reads make them). The package's sweep, one look a frame: 0.105 ms a look at its median, 0.040
+  after. While a pinch is shown its pages stand where its transform draws them, which no place kept holds: the page is read as
+  shown for those frames, as before.
 - **What it does not settle**: a display the part states no ink of (LOST) leaves a gap with nothing in it, filled as today's;
   a display set on a text line beside a word (TeX's display after a word on its baseline) is on that line's row, lit with it;
   a sentence whose only text is a display lights nothing but the display; and a sentence that runs on past a display with no
@@ -5643,6 +5659,58 @@ gave 97 untouched paragraphs a letter-spaced line more through the fill's tracki
 family the owner turned down on 2026-11-08 (one leading a column) and 2026-11-10 (no list item looser than the tightest). Not
 built. Two size steps: not offered (5 % is what he saw). The study, its counts and the crops: lab-data
 `refactor-2026-11/lanes/even-page.md`.
+
+### 18.58 A display no unit owns is one block, its number with it (2026-11-12)
+
+On staging (round B12), 1706.03762v7 p4's display (1), `Attention(Q, K, V) = softmax(QKᵀ/√d_k)V`, was hovered as three pieces,
+each lit alone on both panes: "Attention(Q, K, V) = softmax(", the fraction, ")V"; its number "(1)" lit with none. No source unit
+owns the display (its paragraph ends at "as:", the next begins under it), so it is kept blocks (`today/ink-units.mjs`
+keptUnitsOf, §17.1's "Text no unit owns is a kept block"), each a member lit whole (`lay/lit.ts` litOfA). The ledger makes a line
+of the glyphs TeX set on one baseline (0.6 of their size: `today/ledger.mjs` LINE_DY), so the display was five lines: the
+formula's run to "softmax(" on 311.23, the numerator on 317.97, the radical on 311.53, d_k on 303.78, ")V" on 311.23. A block took
+the next line in TeX's stream only where it stood under the block's lowest baseline (0.6 of its size) and met the block across: a
+listing's rule. The numerator, 6.74 pt over the baseline and right of "softmax(", began a second block, the radical and d_k joined
+it, ")V", right of the fraction, began a third; "(1)", no letter pair, began none and met none across. Today's ledger read no
+display (§18.19): the fraction's lines and ")V" were `symbols` and lit nothing, and today's reader lit "Attention(Q, K, V) =
+softmax(" alone on both panes, and the rest with the paragraph before on arXiv's pane alone (its left part's span).
+
+- **The rule** (`keptUnitsOf`, its one change to today's; `locate-ink-today.test.ts`). A display TeX set is one block (§18.19:
+  TeX states each display it sets, from its start point to its last end, `regions` of kind `display`): a line in it, by the
+  display holding at least half of its inked glyphs as the ledger reads a display's line, joins its display's block whatever
+  its baseline and extent across (a fraction's numerator and denominator, a radical, a big operator's limits, an alignment's
+  rows) and whatever TeX set between its lines inside it (its text a unit translates, an `\underbrace`'s label, that unit's own
+  piece), and no other block; a display's own line of no letter pair starts its block. Its number joins it: TeX sets it right
+  after the display's end (`\eqno`: on the last line, or on a line of its own under it where it does not fit; an alignment's
+  numbers are inside its region already), so the line that holds the first ink TeX set after the display's end, on its page and
+  in its column's body, is the display's (with the stop TeX set after the formula's end point on that line, 2608.04322v1 p5's
+  (9)). A unit's display is one block with its numbers (§17.1, `units.mjs` displayBlockId, Laid.lit's `own`); a display no unit
+  owns now lights as one too, an alignment of several rows one block in all, as a unit's alignment is. A line of no display
+  joins a block as before.
+- **Measured** over the 88 papers (the 90 pairs: a kept block is one for every target), the round's head (r20, B13) against the
+  rule (`lab/pdf/prepare-back/display-pieces.mjs`, each display's lines by its region as Located.displays now states them;
+  readarxiv-lab-data `lanes/formula-hover`): 78 parts on a page of displays TeX set that no unit owns, in 22 papers, 752 formula
+  lines (a unit's display is one placeholder, one piece, as before: 4,476 of them in 2,318 members, no two of one member on one
+  row). Lit as more than one piece 51 → 0: on one row 29 (ink off its baseline: a fraction, a radical, a big operator's limits,
+  a script), over rows 22 (an alignment's rows or a formula broken over lines, each row cut too: 2610.21288v1 p10's (A7)-(A9),
+  each number a piece of its own, 26 pieces → 1; 2307.16209v1 p27's metric broken over two lines, 18 → 1); one piece 24 → 74.
+  Lit by nothing in part 8 → 4, the four as before: 2610.21377v1 p41's three displays inside Algorithm 1 (a float, whose lines
+  no kept block takes) and one line of 2610.21765v1 p10's, a big delimiter whose baseline its font sets at its ink's top, which
+  the probe reads outside its row. Numbers: 45 displays in 12 papers light their number with them, 3 of those set under the
+  formula; each was lit by nothing. Nothing else moves but what the blocks carry: the ords of the units made after them; on 16
+  pages of 7 papers the page's column reading (`locate.ts` columnsAndMeasures: two columns where three lines keep to each half),
+  which the split blocks' narrow lines had made two-column (1706.03762v7 p4: the fraction and ")V" in the right half), 74
+  members' lines from "spans" to the one column, and with it 4 lines' PINNED of 3 of those pages (a line's block is read by
+  page and column); the paper's faces in 21 papers, which the typesetter reads alike (`lay/read.ts` paperOf, 63 of 63). The
+  reader gate over the 37 pairs of the 20 of those papers it holds, each laid from both runs' parts (its entry, every member's
+  `Laid.lit` written a line, `AXT_GATE_LIT`): every member's boxes on every page alike but the kept displays' (1,773 entries
+  gone, 173 come, all `inkorphan`), the members a column moved too; the entry 8,560 laid alike and 93 not on both, its boxes
+  11,157 members, 29,244 lines, 14,839 boxes on both, I10 no fault on both.
+- **The version.** PIPELINE moves: the parts of 21 of the 88 papers (the kept members and their ties, the column reading, the
+  faces) and the add-ons of 13, whose groups are named by the index of each unit made on A (`axt<unit>.<page>.t`: the figure
+  texts made after the merged blocks, numbered on from them); TRANSLATE stays (a kept block is never sent); the units objects
+  of every paper as they were (a kept block's unit is its kind's, of no content).
+- **Not done.** A display the source ends with `$$` (no region, §18.19) keeps the listing's rule; a number TeX sets before its
+  display (`\leqno`: none in the 88); a display inside a float, which no kept block takes.
 
 ## 19. The engine's contract
 

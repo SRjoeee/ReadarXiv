@@ -1085,6 +1085,23 @@ export function gateL1Pair(
           const k = `${m.dir ? 'turned' : 'level'}: ${st}`
           out.entry.figures.set(k, (out.entry.figures.get(k) ?? 0) + 1)
         }
+      // (AXT_GATE_LIT=<file>: each member's boxes on both panes a line, its pair, page, unit, kind and state, never its ord (a
+      // kept block merged moves the ords of the units made after it), to compare two runs' highlights piece by piece)
+      if (process.env.AXT_GATE_LIT) {
+        const byOrd = new Map((part as Part).flows.flat().map((m) => [m.ord, m]))
+        const r2 = (v: unknown): unknown =>
+          typeof v === 'number' ? Math.round(v * 100) / 100 : Array.isArray(v) ? v.map(r2) : v
+        appendFileSync(
+          process.env.AXT_GATE_LIT,
+          page.members
+            .map((x) => {
+              const m = byOrd.get(x.ord)
+              const unit = typeof m?.text === 'string' ? m.text : JSON.stringify(m?.text ?? null)
+              return `${pair}\tp${pg}\t${unit}\t${m?.kind ?? ''}\t${x.state}\t${JSON.stringify(r2(x.lit))}\n`
+            })
+            .join(''),
+        )
+      }
       for (const x of page.members) {
         if (x.state !== 'laid' || !x.lines.length) continue
         const lit = out.entry.lit

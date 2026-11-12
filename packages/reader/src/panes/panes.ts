@@ -155,6 +155,12 @@ export interface Panes {
    *  in CSS px at its scale now (`width`, `height`), both unturned */
   frameOf(side: Side, page: number): { turn: number; w: number; h: number; width: number; height: number } | null
   pageElement(side: Side, n: number): HTMLElement | null
+  /** the page of a pane under a point of the screen and the point in that page's box (its content box as laid out, CSS px, its
+   *  turn not undone), by arithmetic over the places of the pane and its pages kept since its layout last changed and its scroll
+   *  and the follower's shift as their events give them (PDF-READER §17.4: the pointer's frame tests no element and reads no
+   *  layout, its scrollTop either); null off its pages.
+   *  While a pinch is shown its pages stand where its transform draws them, which the places do not hold: read as shown then */
+  pointAt(side: Side, x: number, y: number): { page: number; x: number; y: number } | null
   /** a pane's scroller */
   containerOf(side: Side): HTMLElement
   /** what the right shows of page n that is not laid: the left's own drawing of it while it waits for its layer and the left
@@ -186,8 +192,14 @@ export function createPanes(o: PanesOptions): Panes {
   let disposed = false
   const warn = (what: string, e: unknown) => o.warn?.(what, e)
   const listeners = new Map<keyof PaneEvents, Set<(e: unknown) => void>>()
+  // (the pointer's places, kept and read again where the layout changed: below, `placesOf`)
+  type Places = { left: number; top: number; pages: ({ top: number; left: number; w: number; h: number } | null)[] }
+  const places = new Map<PaneSide, Places>()
+  const replace = () => places.clear()
   const tell = <K extends keyof PaneEvents>(type: K, e: PaneEvents[K]) => {
     if (disposed) return
+    // (a scale, a display or a document opened moves the pages: their places read again at the next look)
+    if (type === 'scale' || type === 'display' || type === 'opened') replace()
     for (const f of [...(listeners.get(type) ?? [])]) {
       try {
         f(e)
@@ -385,6 +397,52 @@ export function createPanes(o: PanesOptions): Panes {
     return lo
   }
   const shown = (s: PaneSide) => s.container.clientWidth > 0
+
+  // ---------------------------------------------------------------- the pointer's places (PDF-READER §17.4)
+  /** each pane's content box on the screen and its pages' content boxes in its scroll coordinates, read once its layout changed
+   *  (`replace`: a pane or its page stack resized, the window resized, a scale, a display, a document opened or laid) and kept,
+   *  so that the page under the pointer is arithmetic in every frame of a scroll: the highlight's DOM hit test there
+   *  (elementFromPoint, and the page's box read again each look) was a tenth of a scroll's main-thread time (§17.9) */
+  /** an element's border box's top left on the screen as its layout places it, a transform left out (a follower's glide on the
+   *  compositor, the contents panel's slide, a pinch shown): the offsets' chain, which no transform moves, to the whole pixel;
+   *  its box on the screen, exact, where the two agree (today's view/pointer.mjs placeOf) */
+  function screenPlaceOf(el: HTMLElement): { left: number; top: number } {
+    let x = el.offsetLeft,
+      y = el.offsetTop
+    for (let p = el.offsetParent as HTMLElement | null; p; p = p.offsetParent as HTMLElement | null) {
+      x += p.offsetLeft + p.clientLeft - p.scrollLeft
+      y += p.offsetTop + p.clientTop - p.scrollTop
+    }
+    const b = el.getBoundingClientRect()
+    return Math.abs(b.left - x) < 1 && Math.abs(b.top - y) < 1 ? b : { left: x, top: y }
+  }
+  function placesOf(s: PaneSide): Places {
+    const known = places.get(s)
+    if (known) return known
+    const c = s.container,
+      b = screenPlaceOf(c),
+      pages: Places['pages'] = []
+    // (every page view the pane holds, laid or not yet: the left's from PDF.js's pages' init on)
+    const total = s === L ? viewer.pagesCount : right.pages
+    for (let n = 1; n <= total; n++) {
+      const div = pageDiv(s, n),
+        top = pageTop(s, n)
+      const inStack = div?.offsetParent === s.stack
+      pages.push(
+        div && top !== null
+          ? {
+              top,
+              left: div.offsetLeft + div.clientLeft + (inStack ? s.stack.offsetLeft + s.stack.clientLeft : 0),
+              w: div.clientWidth,
+              h: div.clientHeight,
+            }
+          : null,
+      )
+    }
+    const p = { left: b.left + c.clientLeft, top: b.top + c.clientTop, pages }
+    places.set(s, p)
+    return p
+  }
   const bothShown = () => mode === 'bilingual' && !narrow
   const available = () => !!doc && laid && right.pages > 0
   const active = () => syncOn && available() && bothShown()
@@ -536,6 +594,14 @@ export function createPanes(o: PanesOptions): Panes {
     }),
   )
   for (const s of sides) refit.observe(s.container)
+  // (the pointer's places read again where a pane, its page stack or the window is resized: the contents panel's slide, the
+  // narrow view, a page laid, a zoom's pages)
+  const placed = observe(new ResizeObserver(replace))
+  for (const s of sides) {
+    placed.observe(s.container)
+    placed.observe(s.stack)
+  }
+  globalThis.addEventListener('resize', replace, { signal })
 
   // ---------------------------------------------------------------- the original's pages on the right; the pages ahead
   let settled: (n: number) => boolean = () => false,
@@ -1411,6 +1477,27 @@ export function createPanes(o: PanesOptions): Panes {
       }
     },
     pageElement: (side, n) => pageDiv(side === 'left' ? L : R, n),
+    pointAt(side, x, y) {
+      const s = side === 'left' ? L : R
+      // (a pinch shown and not committed, a gesture's few frames: the page as it shows, the preview's transform in its box)
+      if (preview) {
+        const el = document.elementFromPoint(x, y)?.closest?.('.page') as HTMLElement | null
+        const n = Number(el?.dataset.pageNumber)
+        if (!el || !n || pageDiv(s, n) !== el) return null
+        const r = el.getBoundingClientRect(),
+          k = r.width / Math.max(1, el.offsetWidth)
+        return { page: n, x: (x - r.left - el.clientLeft * k) / k, y: (y - r.top - el.clientTop * k) / k }
+      }
+      const p = placesOf(s),
+        X = x - p.left + s.scrollX,
+        Y = y - p.top + follower.shownAt(s, (q) => q.scrollY)
+      for (let i = 0; i < p.pages.length; i++) {
+        const g = p.pages[i]
+        if (g && Y >= g.top && Y <= g.top + g.h && X >= g.left && X <= g.left + g.w)
+          return { page: i + 1, x: X - g.left, y: Y - g.top }
+      }
+      return null
+    },
     containerOf: (side) => (side === 'left' ? L : R).container,
     originalOf,
     settle(fn) {

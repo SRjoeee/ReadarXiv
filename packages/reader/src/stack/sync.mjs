@@ -144,8 +144,11 @@ export function createFollower(o) {
     clock.frame(tick)
     anim.onfinish = () => { if (glass.anim !== anim) return; bake(); rebase(); arm() }
   }
-  /** a pane's position as the screen shows it: its scrollTop, and the transform's shift while it follows on the compositor */
-  const shownAt = pane => pane.container.scrollTop + (glass.side === pane ? glass.shift() : 0)
+  /** a pane's position as the screen shows it: its scrollTop, and the transform's shift while it follows on the compositor;
+   *  `top(p)`, where given, a pane's scrollTop as its scroll events gave it, the driver's too (the pointer's frame reads no
+   *  layout, PDF-READER §17.4: scrollTop read there laid the page out again in every frame of a scroll) */
+  const shownAt = (pane, top = p => p.container.scrollTop) =>
+    top(pane) + (glass.side === pane ? (glass.kind === 'scroll' ? glass.shift(top(glass.from)) : glass.shift()) : 0)
   /** where `to` stands level with `from` at rest: either end of `from`'s document takes it to the same end; else
    *  `o.target`; null where that is not known */
   function levelTarget(from) {
