@@ -6005,6 +6005,31 @@ past its source).
   marked is the wrap's (`unwrapped` 128, `page` 7: no keep). The differential: lost 11 (+5,422 accepted), gained 5,823, changed
   5,256, the same lists as dw2's; 65 of the gained units and 23 of the changed now say their cause.
 
+### 18.66 A paragraph TeX opened inside a unit is read by the same facts on both sides of its end (2026-11-13)
+
+The owner's report on staging (round B14, 2111.09276v1, pages 5 and 6): a paragraph that opens with a bold run-in title and
+follows another was drawn from the last line of the paragraph before it, right after its last character (the paragraph's
+footnote mark 12, then "Howto-GEN" on one line), one line above the original's first line of it, and "COIN" early too. The
+source writes no blank line between them, `…editing.~\footnote{…} \medbreak \noindent \textbf{Howto-GEN} To evaluate …`, so the
+front end ends no unit there: one unit holds four of TeX's paragraphs (§19.10's "A group TeX set as a paragraph of its own").
+TeX ends a paragraph at each `\medbreak` (`\par`, then `\medskip`), and the marked compile states each end; the facts pass found
+no group to state it on, so the part held no `SpanAt.opens` and the reader laid the unit as one paragraph, its fill spreading
+it. Not this round's: staging drew the same at round B10's engine; the lay follows §18.11 on what the part states.
+
+- **The rule** (`locate/facts-pass.ts`): the source side and B's side of a paragraph end are read by the same facts. What bounds
+  a text window is a piece TeX set ink for in this compile: its glyphs on B, the unit's, of an element's role (an element's own,
+  or a nested unit's mark, which `pipeline/instrument.mjs` owns as its piece's), whatever its class; B's run of the unit's text
+  stops at such a glyph, so the source's window stops at such a piece. `\medbreak`, `\noindent`, any command that set no ink
+  here bounds nothing (the class list `VISIBLE` had made `\medbreak`, an unknown macro, a bound: its window held only the white
+  space after it, and no group was met). Each side of the end is met by what stands there, one rule both ways (`sideB` and
+  `sideOf`): where the unit's glyph next to the end is a piece's and no letter or digit stands between, by that piece itself (a
+  footnote's mark ending the paragraph before: no text to compare stood there); else by its text, spelled, `WANT` characters,
+  as before. TeX opened the paragraph at the group so met on both sides (one group alone, the outermost of those opened
+  together), else at the element B's next glyph opens where its side before is met too (`El.opens`).
+- **The gate.** A paragraph end of B inside a unit (the unit's glyphs on both sides of it) that states no point is counted, by
+  what stands where the next paragraph begins in the source (`Located.stats.opensUnstated`, the dump's `counts`): an open or
+  an element (`anchored`, this report's class, which must count none) or plain text (`plain`: no anchor exists for it today).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

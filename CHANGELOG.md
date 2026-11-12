@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a paragraph that opens with a bold title run into its first line, such as "Howto-GEN" after a paragraph ending in a footnote mark, starts on its own line where the original starts it, when the paper writes several such paragraphs one after another with no blank line between them. It had been drawn on from the last line of the paragraph before it, its footnote mark beside the next title.
 - Fixed: in the PDF reader, a formula set on its own line between paragraphs lights as one piece when you point at it, its number with it, on both pages. A formula with a fraction, a root or a sum's limits had lit in two or three pieces, and its number not at all.
 - Changed: in the PDF reader, a figure's label or a table's cell that holds a highlighted, struck or underlined word stays as printed, whole, until a highlight can follow the translated words. Only the marked word had stayed in English, the rest of its line translated around it, a line half in each language. A highlighted number stays inside its translated line as before.
 - Fixed: in the PDF reader, a reference's journal or book title that the paper's bibliography sets in italics the older way (`{\em …}`, as many BibTeX styles do), and a bold or small-capital phrase set the same way in the text, keep their italics, bold or small capitals in the translation wherever the translation keeps the phrase as a phrase, as titles set with `\emph` already did. They had come back upright.

@@ -145,6 +145,9 @@ export interface Member {
   /** paragraphs TeX opened inside it where a group the instrument wrote as its content stood (InstrumentUnit.passed): none is
    *  stated, and stage 1a fails the paper (Located.stats.opensLost) */
   opensLost?: number
+  /** paragraph ends of B inside it (its glyphs on both sides) that state no point (no SpanAt.opens, no El.opens): where an open or
+   *  an element stands where the next paragraph begins in the source, and where plain text does (facts-pass.ts) */
+  opensUnstated?: [anchored: number, plain: number]
   /** a figure text's runs in another face than its own, by their group's piece id: each one's style, read off its glyphs on A
    *  (ink.ts figureRuns; SpanAt.style) */
   spanStyles?: [string, Style][]
@@ -213,6 +216,9 @@ export interface Located {
     /** paragraphs TeX opened inside a unit where a group the instrument wrote as its content stood (InstrumentUnit.passed), no
      *  group left to state it on (SpanAt.opens): a gate, which must count none (stage 1a fails a paper with one) */
     opensLost?: number
+    /** paragraph ends of B inside a unit that state no point, by what stands where the next paragraph begins in the source: an
+     *  open or an element (`anchored`: a gate, which must count none) or plain text (`plain`: no anchor exists for it) */
+    opensUnstated?: { anchored: number; plain: number }
     /** the units' end marks claimed after their end points (El.end) */
     ends?: number
   }
@@ -2673,6 +2679,11 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       stats.located++
       if (mem.place) stats.places[mem.place]++
       if (mem.opensLost) stats.opensLost = (stats.opensLost ?? 0) + mem.opensLost
+      if (mem.opensUnstated) {
+        stats.opensUnstated ??= { anchored: 0, plain: 0 }
+        stats.opensUnstated.anchored += mem.opensUnstated[0]
+        stats.opensUnstated.plain += mem.opensUnstated[1]
+      }
     } else noteUnlocated(mem.cause ?? 'no ink')
   }
   return { units, members, born, flows, ties, links, groups, figureGroups, stats, displays, floatLines }
