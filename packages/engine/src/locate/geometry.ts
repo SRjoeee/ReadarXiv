@@ -66,10 +66,9 @@ const mostOf = <T>(xs: Iterable<T>): T | undefined => {
 /** how far apart two baselines are told (PDF units): a line's is stated to a hundredth, its glyphs' on A as the PDF wrote them */
 const ON_BASE = 0.05
 
-export function lineGeometry(w: Work): void {
+export function lineGeometry(w: Work, owned: Owned): void {
   const { ins, B, inkA, m, pageA, pageB, placeSpan, unitB, roleB, emptyPiece, outsidePiece, gA, atA } = w.ix
   const { members, units, jointPiece } = w
-  const owned: Owned = w.claims
   const trailSep = field(w, 'trailSep')
   /** A's boxes ([page, index]) as rows.ts takes them */
   const boxesOf_ = (l: readonly [number, number][]): RowBox[] =>

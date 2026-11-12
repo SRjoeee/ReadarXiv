@@ -7,13 +7,25 @@
 import type { Disagreement, Located, Member } from './work.ts'
 
 /** the table's owner of a glyph no member owns: free (a trail, an end mark or a unit born on A may take it), or held as A's ink
- *  inside a unit that stays the original's. work.ts `open` fills the record's table with the same FREE until the table leaves
- *  the record */
+ *  inside a unit that stays the original's */
 const FREE = -1
 const HELD = -2
 
 /** a member's seven lists (work.ts Member): A's glyphs by role, its boxes, its turned glyphs */
 export type Ink = Pick<Member, 'text' | 'label' | 'els' | 'textBoxes' | 'elBoxes' | 'elBoxesB' | 'turned'>
+
+/** the seven lists as this module writes them: Member's are read-only everywhere else, and this is the one cast. The lists
+ *  `empty` makes are plain arrays and maps, and every list written here is the module's own copy */
+interface Lists {
+  text: number[]
+  label: number[]
+  els: Map<string, number[]>
+  textBoxes: [number, number][]
+  elBoxes: Map<string, [number, number][]>
+  elBoxesB: Map<string, [number, number][]>
+  turned: [number, number][]
+}
+const listsOf = (mem: Member): Lists => mem as unknown as Lists
 
 /** what a reading phase is handed, and what `freeze` returns */
 export interface Owned {
@@ -56,13 +68,12 @@ export interface Ownership extends Claims {
 
 /**
  * The ownership of A's `size` glyphs, every one free. `aToB` and `unitB` (A's partners on B, B's units) are read by `taken` and
- * `unit`. `table`: the table to write, the record's while the phases still read it there (work.ts `claimedA`)
+ * `unit`
  */
-export function ownershipOf(
-  of: { size: number; aToB: ArrayLike<number>; unitB: ArrayLike<number> },
-  table: Int32Array = new Int32Array(of.size).fill(FREE),
-): Ownership {
+export function ownershipOf(of: { size: number; aToB: ArrayLike<number>; unitB: ArrayLike<number> }): Ownership {
   const { size, aToB, unitB } = of
+  /** each glyph's owner: a member's ord, FREE or HELD */
+  const table = new Int32Array(size).fill(FREE)
   /** each member's unit by its ord, from its first claim */
   const unitOf: number[] = []
   /** the units released (`release`) */
@@ -108,6 +119,7 @@ export function ownershipOf(
   const write = (mem: Member, ink: Partial<Ink>, own: boolean) => {
     open()
     unitOf[mem.ord] = mem.unit
+    const to = listsOf(mem)
     const claim = own
       ? (a: number) => {
           table[a] = mem.ord
@@ -115,17 +127,17 @@ export function ownershipOf(
       : undefined
     for (const a of ink.text ?? []) {
       claim?.(a)
-      mem.text.push(a)
+      to.text.push(a)
     }
     for (const a of ink.label ?? []) {
       claim?.(a)
-      mem.label.push(a)
+      to.label.push(a)
     }
-    for (const [id, l] of ink.els ?? []) append(mem.els, id, l, claim)
-    for (const x of ink.textBoxes ?? []) mem.textBoxes.push(x)
-    for (const [id, l] of ink.elBoxes ?? []) append(mem.elBoxes, id, l)
-    for (const [id, l] of ink.elBoxesB ?? []) append(mem.elBoxesB, id, l)
-    for (const x of ink.turned ?? []) mem.turned.push(x)
+    for (const [id, l] of ink.els ?? []) append(to.els, id, l, claim)
+    for (const x of ink.textBoxes ?? []) to.textBoxes.push(x)
+    for (const [id, l] of ink.elBoxes ?? []) append(to.elBoxes, id, l)
+    for (const [id, l] of ink.elBoxesB ?? []) append(to.elBoxesB, id, l)
+    for (const x of ink.turned ?? []) to.turned.push(x)
   }
   const take = (mem: Member, ink: Partial<Ink>): void => write(mem, ink, true)
   const takeAsStated = (mem: Member, ink: Partial<Ink>, claimed: readonly number[]): void => {
@@ -152,20 +164,21 @@ export function ownershipOf(
     nested: readonly string[],
   ): readonly number[] => {
     open()
-    const own = [...text, ...nested.flatMap((n) => mem.els.get(n) ?? [])].sort((a, b) => a - b)
-    const boxes = nested.flatMap((n) => mem.elBoxes.get(n) ?? [])
-    const boxesB = nested.flatMap((n) => mem.elBoxesB.get(n) ?? [])
+    const to = listsOf(mem)
+    const own = [...text, ...nested.flatMap((n) => to.els.get(n) ?? [])].sort((a, b) => a - b)
+    const boxes = nested.flatMap((n) => to.elBoxes.get(n) ?? [])
+    const boxesB = nested.flatMap((n) => to.elBoxesB.get(n) ?? [])
     for (const n of nested) {
-      mem.els.delete(n)
-      mem.elBoxes.delete(n)
-      mem.elBoxesB.delete(n)
+      to.els.delete(n)
+      to.elBoxes.delete(n)
+      to.elBoxesB.delete(n)
     }
     const gone = new Set(text)
-    mem.text = mem.text.filter((a) => !gone.has(a))
-    mem.els.set(id, own)
+    to.text = to.text.filter((a) => !gone.has(a))
+    to.els.set(id, own)
     if (boxes.length) {
-      mem.elBoxes.set(id, boxes)
-      mem.elBoxesB.set(id, boxesB)
+      to.elBoxes.set(id, boxes)
+      to.elBoxesB.set(id, boxesB)
     }
     return own
   }

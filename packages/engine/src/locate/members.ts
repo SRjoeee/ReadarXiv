@@ -4,6 +4,7 @@
 // Writes: `members` (each placement pushed); the ownership (in place.ts: each placement's ink taken, the glyphs a unit that
 // stays the original's holds; here the units left unplaced, released: their glyphs' partners no source unit's, phase 4 reads).
 import { isInk } from './lines.ts'
+import type { Claims } from './ownership.ts'
 import { empty, place } from './place.ts'
 import { AUTHOR_KINDS, type Work } from './work.ts'
 
@@ -12,9 +13,9 @@ const NAME_END = /^n\d+\.[a-z]{1,16}\.e$/
 /** the same, its unit's key and whether it starts or ends a setting */
 const MARK_KEY = /^([ht]?\d+)([se])$/
 
-export function placeUnits(w: Work): void {
+export function placeUnits(w: Work, claims: Claims): void {
   const { ins, B, m, glyphsOf, boxesOf, turnedOf, pageB, gB } = w.ix
-  const { members, claims } = w
+  const { members } = w
   // ---- an author block's unit TeX set inside a paragraph that sets another unit again: a template's paragraph, made of the
   // paper's own front matter (ACM's reference format: the authors, the year, the title a second time), whose text is the page's,
   // read and translated as one unit (ink.ts), never cut by the unit. 2610.22065v1 p1: its block under the title written out by
@@ -67,7 +68,7 @@ export function placeUnits(w: Work): void {
       continue
     }
     if (unit.name === undefined) {
-      members.push(place(w, u, list, boxes, undefined, turnedOf.get(u) ?? []))
+      members.push(place(w, claims, u, list, boxes, undefined, turnedOf.get(u) ?? []))
       continue
     }
     // (a name's occurrences: each maximal run of its glyphs in B's stream on one page)
@@ -77,9 +78,9 @@ export function placeUnits(w: Work): void {
       if (last && last.at(-1) === b - 1 && pageB[b] === pageB[b - 1]) last.push(b)
       else runs.push([b])
     }
-    if (!runs.length) members.push(place(w, u, [], []))
+    if (!runs.length) members.push(place(w, claims, u, [], []))
     for (const r of runs) {
-      const mem = place(w, u, r, [], unit.name)
+      const mem = place(w, claims, u, r, [], unit.name)
       // (its counter: its glyphs after its end point, which stands inside the run)
       const p = (pageB[r[0] as number] as number) - 1
       const o = m.offB[p] as number

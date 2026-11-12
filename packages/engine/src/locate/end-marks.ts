@@ -8,6 +8,7 @@ import type { Line } from '@readarxiv/format'
 import { isImage, isPath } from '../doc.ts'
 import { CENTRE, END } from './facts.ts'
 import { isInk, r2 } from './lines.ts'
+import type { Claims } from './ownership.ts'
 import { BRACKET, CALL, type Member, ON_ROW, UNIT_MARK, type Work } from './work.ts'
 
 // ---- a unit's end mark (docs/PDF-READER.md §18.52; the coordinator's ruling of 2026-11-12): what TeX pushed to the end of the
@@ -32,9 +33,9 @@ import { BRACKET, CALL, type Member, ON_ROW, UNIT_MARK, type Work } from './work
 // element TeX set after a word space on a full last line, a reference's year, a caption's formula (34 of them on the first 47
 // papers of the 88, against the corpus's 26 `\qed`): what TeX pushed it there with, a fill in its setting, is no fact the part
 // or B's stream states. The typesetter lays such an element as an end mark where a part states it (El.end), none does
-export function endMarks(w: Work): void {
+export function endMarks(w: Work, claims: Claims): void {
   const { ins, B, m, inkA, pageA, pageB, unitB, gA, gB } = w.ix
-  const { members, units, stats, claims } = w
+  const { members, units, stats } = w
   const memberOf = new Map<number, Member>()
   for (const x of members) if (x.unit >= 0 && x.name === undefined && !memberOf.has(x.unit)) memberOf.set(x.unit, x)
   // (whether ink at `a` on A stands on unit u's first line, before its text: its head, whatever member holds it)

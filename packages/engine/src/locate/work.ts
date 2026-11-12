@@ -10,7 +10,6 @@ import type { Instrument, InstrumentUnit, TexFrame } from '../instrument.ts'
 import { fixedFacesOf } from './facts.ts'
 import type { DisplayLine, InkInput, InkStats } from './ink.ts'
 import { r2 } from './lines.ts'
-import { type Ownership, ownershipOf } from './ownership.ts'
 import type { FloatLine } from './today/today.types.ts'
 import type { Word } from './words.ts'
 
@@ -39,17 +38,18 @@ export interface Member {
   /** its elements made of a group set wholly in a face of one pitch on lines of their own (Rule 1 by group, PDF-READER §18.22):
    *  TeX's vertical box, its rows kept where TeX set them as a display's are, by piece id */
   ownRows?: Set<string>
-  /** A's glyphs (global) by role; elements by piece id */
-  text: number[]
-  label: number[]
-  els: Map<string, number[]>
+  /** A's glyphs (global) by role; elements by piece id. These seven lists are written by the ownership alone (ownership.ts),
+   *  with the owner of each glyph of `text`, `label` and `els`: read-only everywhere else */
+  readonly text: readonly number[]
+  readonly label: readonly number[]
+  readonly els: ReadonlyMap<string, readonly number[]>
   /** A's boxes ([page, index]) by role */
-  textBoxes: [number, number][]
-  elBoxes: Map<string, [number, number][]>
+  readonly textBoxes: readonly [number, number][]
+  readonly elBoxes: ReadonlyMap<string, readonly [number, number][]>
   /** each element box's partner on B ([page index, index]), by piece id, in elBoxes' order: where TeX shipped it in B's stream */
-  elBoxesB: Map<string, [number, number][]>
+  readonly elBoxesB: ReadonlyMap<string, readonly [number, number][]>
   /** A's turned glyphs ([page, index among the page's turned]): a figure text set turned */
-  turned: [number, number][]
+  readonly turned: readonly [number, number][]
   lines: Line[]
   elements: [string, El][]
   /** the elements (by piece id) of a symbol's class whose ink is not that symbol as its reading draws it (a letter or digit among
@@ -174,11 +174,6 @@ export interface Located {
   }
 }
 
-/** an A glyph's owner in `claimedA` where no member owns it: free (born.ts may make a unit of it), or held as A's ink inside a
- *  unit that stays the original's */
-export const FREE = -1
-export const HELD = -2
-
 /** what the ownership's check finds (ownership.ts): a glyph a member's lists and the table state otherwise, or a fixed member's
  *  glyph in a group */
 export interface Disagreement {
@@ -251,17 +246,13 @@ export interface Pitch {
  * - `born`: written by 5 unitsBornOnA; read by 7 sentenceStarts and close.
  * - `flows`, `ties`: written by 13 flowsAndTies; read by 14 rowAligns and close (`flows`), close (`ties`).
  * - `links`: written by 15 linksOnA; read by close.
- * Four fields have several writers, and are named so: `claimedA` (an owner per glyph of A: written by 1 placeUnits in place.ts,
- * 2 claimTrails, 4 unitsMadeOnA, 5 unitsBornOnA, 9 endMarks), `members` (pushed by 1, 4, 5; their glyph and box lists written by 1, 2,
- * 3 keepArtefacts, 4, 5, 9; their other facts by the phases after), `units` (written by 3 and 4), `stats` (by 3, 4, 5, 9 and
- * close).
+ * Three fields have several writers, and are named so: `members` (pushed by 1, 4, 5; their glyph and box lists written by
+ * the ownership alone, through which 1 placeUnits, 2 claimTrails, 3 keepArtefacts, 4 unitsMadeOnA, 5 unitsBornOnA and 9 endMarks
+ * claim; their other facts by the phases after), `units` (written by 3 and 4), `stats` (by 3, 4, 5, 9 and close). The ownership
+ * of A's glyphs is no field: locate makes it and hands each phase the face it may use (ownership.ts).
  */
 export interface Work {
   readonly ix: Index
-  readonly claimedA: Int32Array
-  /** the ownership of A's glyphs (ownership.ts), writing `claimedA`: what the phases take their ink through and ask who owns a
-   *  glyph, until locate hands it to them */
-  readonly claims: Ownership
   readonly members: Member[]
   readonly units: InstrumentUnit[]
   readonly stats: Located['stats']
@@ -393,7 +384,6 @@ export function open(ins: Instrument, inkA: Doc, m: Mapping): Work {
       else turnedOf.set(u, [[p, j]])
     }
   })
-  const claimedA = new Int32Array(NA).fill(FREE)
   /** the instrument's units, then those made on A */
   const units: InstrumentUnit[] = [...ins.units]
   const members: Member[] = []
@@ -439,8 +429,6 @@ export function open(ins: Instrument, inkA: Doc, m: Mapping): Work {
       fixedFaces,
       framesA,
     },
-    claimedA,
-    claims: ownershipOf({ size: NA, aToB: m.aToB, unitB }, claimedA),
     members,
     units,
     stats,

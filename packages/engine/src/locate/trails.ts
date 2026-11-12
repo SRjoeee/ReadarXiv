@@ -5,15 +5,16 @@
 // which phase 6 states).
 import { TRAIL } from './facts.ts'
 import { isInk, r2 } from './lines.ts'
+import type { Claims } from './ownership.ts'
 import { AUTHOR_KINDS, assign, BRACKET, CALL, lettersIn, type Member, UNIT_MARK, type Work } from './work.ts'
 
 /** a word ends where two glyphs stand this share of their size apart, and a trail with it (the ink units' word rule, today's
  *  wordsOf: ink-units.mjs WORD_GAP) */
 const WORD_GAP = 0.12
 
-export function claimTrails(w: Work): void {
+export function claimTrails(w: Work, claims: Claims): void {
   const { B, NB, m, inkA, ins, pageA, pageB, unitB, gA } = w.ix
-  const { members, claims } = w
+  const { members } = w
   // ---- a member's trail: the ink TeX set right after its last glyph, glued to it on its row, that no unit owns (a class's marks
   // after a name and its separator: Meta FAIR's \authorformat sets `#2$^{#1}$` and \addtolist ", " after each \author's text; the
   // \thanks mark \maketitle sets in an \rlap after a name), claimed as its element TRAIL, which travels with its text (its group

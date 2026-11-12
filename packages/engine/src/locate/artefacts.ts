@@ -10,6 +10,7 @@ import type { InstrumentUnit } from '../instrument.ts'
 import { textOf } from './facts.ts'
 import { groupLettersOf } from './group-style.ts'
 import { cutLines, isInk } from './lines.ts'
+import type { Claims } from './ownership.ts'
 import { assign, type Member, type Work } from './work.ts'
 
 /** a group's TeX as its unit writes it: each piece's source in order (a text's characters, an element's source, a group's open,
@@ -24,9 +25,9 @@ function texOf(list: readonly Piece[]): string {
   return out
 }
 
-export function keepArtefacts(w: Work): void {
+export function keepArtefacts(w: Work, claims: Pick<Claims, 'asElement'>): void {
   const { inkA, gA, atA, fixedFaces } = w.ix
-  const { members, units, stats, claims } = w
+  const { members, units, stats } = w
   // ---- artefacts (Rule 1, the owner's ruling of 2026-11-10, PDF-READER §18.22): a unit whose text is set wholly in a face of one
   // pitch, a typewriter's, is an artefact the paper presents exactly (code, a command, a prompt, JSON, an identifier, an OCR or
   // a model's sample): kept as the original, never translated, as a code environment's lines are (its unit kept, its member

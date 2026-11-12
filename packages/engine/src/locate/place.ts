@@ -9,7 +9,7 @@ import { isImage, isPath } from '../doc.ts'
 import { ROLE } from '../instrument.ts'
 import { TEXT_SYMBOLS } from '../source/tables.ts'
 import { cutLines, isInk } from './lines.ts'
-import type { Ink } from './ownership.ts'
+import type { Claims, Ink } from './ownership.ts'
 import { eachBetweenPaired, INKED_CLASSES, lettersIn, type Member, piecesOf, type Work } from './work.ts'
 
 /** a LaTeX text symbol's character (\S, \%, alone or before `{}`), by the kernel's table (source/tables.ts TEXT_SYMBOLS, today's
@@ -111,6 +111,7 @@ function writtenOf(w: Work, u: number): number {
 /** one placement of unit u from its B glyphs `list` and boxes `boxes` */
 export function place(
   w: Work,
+  claims: Claims,
   u: number,
   list: number[],
   boxes: [number, number][],
@@ -118,7 +119,6 @@ export function place(
   turnedB: [number, number][] = [],
 ): Member {
   const { ins, B, m, inkA, roleB, pieceB, unitB, gA, gB, atA, atB, pageA, pageB } = w.ix
-  const { claims } = w
   const unit = ins.units[u]!
   const mem = empty(w, u, name !== undefined ? 'name' : unit.kind, unit.id)
   if (name !== undefined) mem.name = name

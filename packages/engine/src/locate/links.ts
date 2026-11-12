@@ -7,10 +7,9 @@ import { r2 } from './lines.ts'
 import type { Owned } from './ownership.ts'
 import { assign, type Located, type LocateOptions, type Member, type Work } from './work.ts'
 
-export function linksOnA(w: Work, o: LocateOptions): void {
+export function linksOnA(w: Work, owned: Owned, o: LocateOptions): void {
   const { inkA, m, pageA } = w.ix
   const { members } = w
-  const owned: Owned = w.claims
   // ---- links: A's annotations, each owned by the member that owns most of the glyphs under it (today's links.mjs ownersOf: the
   // unit whose rectangles hold more than half of its glyph points; by exact ownership, the member that owns more than half of
   // them), and within it by the element that owns more than half of them, else its text; where its label's glyphs are more than

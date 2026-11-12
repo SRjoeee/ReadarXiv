@@ -51,18 +51,18 @@ describe('ownership: a member takes ink', () => {
   it('writes the table and appends to the lists in the order given, an element new to the member after its others', () => {
     const own = six()
     const mem = memberOf(0, 0)
-    mem.els.set('7', [9])
+    own.take(mem, { els: new Map([['7', [5]]]) })
     own.take(mem, { text: [1, 0], label: [2], els: new Map([['3', [4]]]), textBoxes: [[1, 2]], turned: [[1, 0]] })
     expect(mem.text).toEqual([1, 0])
     expect(mem.label).toEqual([2])
     expect([...mem.els]).toEqual([
-      ['7', [9]],
+      ['7', [5]],
       ['3', [4]],
     ])
     expect(mem.textBoxes).toEqual([[1, 2]])
     expect(mem.turned).toEqual([[1, 0]])
-    expect([0, 1, 2, 3, 4, 5].map(own.member)).toEqual([0, 0, 0, -1, 0, -1])
-    expect([0, 1, 2, 3, 4, 5].map(own.free)).toEqual([false, false, false, true, false, true])
+    expect([0, 1, 2, 3, 4, 5].map(own.member)).toEqual([0, 0, 0, -1, 0, 0])
+    expect([0, 1, 2, 3, 4, 5].map(own.free)).toEqual([false, false, false, true, false, false])
   })
   it('copies what it is given: the caller keeps its own lists', () => {
     const own = six()
@@ -190,9 +190,9 @@ describe('ownership: the check', () => {
     own.take(a, { text: [0, 1] })
     // (glyph 1 taken again: b owns it, a lists it; and b lists glyph 3 in two roles)
     own.take(b, { text: [1, 3], label: [3] })
-    // (glyph 4 owned by a, which lists it nowhere: a write past the module's)
+    // (glyph 4 owned by a, which lists it nowhere: a write past the module's, which the read-only lists refuse elsewhere)
     own.take(a, { text: [4] })
-    a.text.pop()
+    ;(a.text as number[]).pop()
     expect(own.check([a, b], groupsOf([3, 3]))).toEqual([
       { kind: 'listed, not owned', page: 1, glyph: 1, member: 0, role: 'text', owner: 1 },
       { kind: 'listed twice', page: 1, glyph: 1, member: 1, role: 'text', owner: 1 },
@@ -212,7 +212,7 @@ describe('ownership: the check', () => {
     const own = six()
     const mem = memberOf(0, 0)
     own.take(mem, { text: [2] })
-    mem.text.length = 0
+    ;(mem.text as number[]).length = 0
     expect(own.check([mem], groupsOf([2, 0, 4]))).toEqual([
       { kind: 'owned, not listed', page: 3, glyph: 0, member: 0, role: '', owner: 0 },
     ])

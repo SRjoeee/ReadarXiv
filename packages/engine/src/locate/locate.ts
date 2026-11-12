@@ -30,15 +30,13 @@ import { flowsAndTies, rowAligns } from './flows.ts'
 import { leadNames } from './leads.ts'
 import { linksOnA } from './links.ts'
 import { placeUnits } from './members.ts'
-import type { Owned } from './ownership.ts'
+import { type Owned, ownershipOf } from './ownership.ts'
 import { sentenceStarts } from './sentences.ts'
 import { unitsBornOnA, unitsMadeOnA } from './page-units.ts'
 import { claimTrails } from './trails.ts'
 import {
   eachBetweenPaired,
-  FREE,
   field,
-  HELD,
   type Located,
   type LocateOptions,
   type Member,
@@ -47,40 +45,42 @@ import {
   type Work,
 } from './work.ts'
 
-export { eachBetweenPaired, FREE, HELD, type Located, type LocateOptions, type Member }
+export { eachBetweenPaired, type Located, type LocateOptions, type Member }
 export { urlBreaks } from './geometry.ts'
 export { TEXT_NAMES } from './page-units.ts'
 export type { Place } from './work.ts'
 
 // ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
-function facts(w: Work): void {
+function facts(w: Work, owned: Owned): void {
   const { ins, inkA, m, unitB, roleB, pieceB, pageA, framesA } = w.ix
   const { members, units } = w
-  const owned: Owned = w.claims
   factsOf({ ins, inkA, m, members, owned, pageA, unitB, roleB, pieceB, units, framed: new Set(framesA.keys()) })
 }
 
 /** locate's phases, called in the order they run, which is the contract: each phase's file says what it reads of the record
- *  and what it writes, and a field one phase assigns is read only after it (work.ts `field`) */
+ *  and what it writes, and a field one phase assigns is read only after it (work.ts `field`). The ownership of A's glyphs is
+ *  no field of the record: locate makes it and hands each phase the face it may use (ownership.ts), `Claims` to the phases
+ *  that claim, `Owned` to those that read who owns a glyph, nothing to the others */
 export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions = {}): Located {
   const w = open(ins, inkA, m)
-  placeUnits(w) // 1
-  claimTrails(w) // 2
-  keepArtefacts(w) // 3
-  unitsMadeOnA(w, o) // 4
-  unitsBornOnA(w) // 5
-  lineGeometry(w) // 6
+  const claims = ownershipOf({ size: w.ix.pageA.length, aToB: m.aToB, unitB: w.ix.unitB })
+  placeUnits(w, claims) // 1
+  claimTrails(w, claims) // 2
+  keepArtefacts(w, claims) // 3
+  unitsMadeOnA(w, claims, o) // 4
+  unitsBornOnA(w, claims) // 5
+  lineGeometry(w, claims) // 6: reads an ownership still open
   sentenceStarts(w) // 7
   frameMeasures(w) // 8
-  endMarks(w) // 9
-  // (the last claim made: a write after it throws)
-  w.claims.freeze()
+  endMarks(w, claims) // 9: the last claim
+  // (frozen: a write after this throws; the phases after read it)
+  const owned = claims.freeze()
   rooms(w) // 10
   leadNames(w) // 11
-  facts(w) // 12
+  facts(w, owned) // 12
   flowsAndTies(w) // 13
   rowAligns(w) // 14
-  linksOnA(w, o) // 15
+  linksOnA(w, owned, o) // 15
   return close(w)
 }
 

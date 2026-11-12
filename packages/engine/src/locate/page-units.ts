@@ -11,6 +11,7 @@ import { HUNK, hunkName } from '../align/align.ts'
 import { bornOf } from './born.ts'
 import { sourceText } from './facts.ts'
 import { inkOf } from './ink.ts'
+import type { Claims } from './ownership.ts'
 import { empty } from './place.ts'
 import { AUTHOR_KINDS, assign, eachBetweenPaired, field, type LocateOptions, piecesOf, type Work } from './work.ts'
 
@@ -18,9 +19,9 @@ import { AUTHOR_KINDS, assign, eachBetweenPaired, field, type LocateOptions, pie
  *  there, of no toggle (the reader's and the content classes' tables name it nowhere: always translated) */
 export const TEXT_NAMES = 'textnames'
 
-export function unitsMadeOnA(w: Work, o: LocateOptions): void {
+export function unitsMadeOnA(w: Work, claims: Claims, o: LocateOptions): void {
   const { ins, inkA, m, pageA, setA, fixedFaces, gA } = w.ix
-  const { members, units, stats, jointPiece, displays, floatLines, claims } = w
+  const { members, units, stats, jointPiece, displays, floatLines } = w
   const { artefacts, figureArtefact } = field(w, 'pitch')
   // ---- the units no source unit is, made on A by today's rule (ink.ts): from A's glyphs no source unit owns after the transfer,
   // those B never printed among them but arXiv's ink (on a page our compile sets, a glyph it never printed: no figure glyph,
@@ -137,9 +138,9 @@ export function unitsMadeOnA(w: Work, o: LocateOptions): void {
   }
 }
 
-export function unitsBornOnA(w: Work): void {
+export function unitsBornOnA(w: Work, claims: Claims): void {
   const { inkA, m, pageA, setA } = w.ix
-  const { members, stats, claims } = w
+  const { members, stats } = w
   // ---- the units born on A, from the glyphs B never printed
   const born = new Map<number, { kind: string; content: Piece[] }>()
   for (const b of bornOf(inkA, m, claims, pageA, setA)) {
