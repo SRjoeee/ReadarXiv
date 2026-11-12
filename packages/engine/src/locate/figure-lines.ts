@@ -449,6 +449,36 @@ function linesOf(
       if (map.has(g) || owned(p, g) || !real(x) || !(x.form || (x.pid ?? 0) > 0)) continue
       free.push(g)
     }
+    // (F3: a list's marker no run holds is its item's, read before any line takes a glyph (and so before a formula's clusters):
+    // a glyph spelling a marker (MARKER), on no run's line (within half its size of that line's baseline, as a glyph joins one),
+    // standing on the baseline of a line holding a word (RUN_DY, one baseline as the figure reading reads a row) that begins a
+    // word space or more after it (its item's text), another such of its character in its column (PARA_ALIGN_TOL of its size):
+    // a list, as `listed` reads one. It opens its item's line and joins no line that begins before it: the line of the column
+    // before, whose end it may stand nearer (2111.09276v1 p8, Figure 5: the next column's bullet 0.62 pt after "furniture", one
+    // cluster with the word, the two kept as one formula). A formula's script is raised off the row's baseline and is none:
+    // 2610.10492v1 p10's "c∗1" over "c∗2", the next legend column after them
+    const near = (g: G, l: Line) => l.fig === figOf(g) && Math.abs(g.y - l.y) <= 0.5 * Math.max(g.size, l.size)
+    const opens = (q: number) => {
+      const g = glyphs[q]!
+      if (!MARKER.test(g.u) || lines.some((l) => near(g, l) && l.x0 < g.x1 && l.x1 > g.x0)) return false
+      return lines.some(
+        (l) =>
+          l.fig === figOf(g) &&
+          Math.abs(g.y - l.y) <= RUN_DY * l.size &&
+          l.x0 - g.x1 >= SPACE_GAP * g.size &&
+          WORD.test(textOf(l.gs, glyphs).normalize('NFKC')),
+      )
+    }
+    const opening = free.filter(opens)
+    const markers = new Set(
+      opening.filter((q) => {
+        const g = glyphs[q]!
+        return opening.some((r) => {
+          const h = glyphs[r]!
+          return r !== q && h.u === g.u && figOf(h) === figOf(g) && Math.abs(h.x0 - g.x0) <= PARA_ALIGN_TOL * g.size
+        })
+      }),
+    )
     for (let again = true; again; ) {
       again = false
       if (W) W.rounds++
@@ -484,6 +514,7 @@ function linesOf(
         for (const l of lines) {
           if (l.fig !== figOf(g) || Math.abs(g.y - l.y) > 0.5 * Math.max(g.size, l.size)) continue
           if (g.x0 > l.x1 + RUN_GAP * l.size || g.x1 < l.x0 - RUN_GAP * l.size) continue
+          if (markers.has(free[q]!) && l.x0 < g.x1) continue
           if (!best || Math.abs(g.y - l.y) < Math.abs(g.y - best.y)) best = l
         }
         if (!best) continue

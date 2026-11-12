@@ -4598,6 +4598,7 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
   \alph, \Alph, \roman, \Roman, a bullet or a dash; an opening bracket, a closing point or bracket), and another line of its
   figure opens with the next one or the one before, of its form, at its left edge (a column) or on its baseline (a row): options
   set as a grid (2411.13093v4 p19's A. B. over C. D., where "A." had come back "Answer"). One enumerated line alone is text.
+  A marker no run holds joins no line of the column before it (§18.58).
 - **A path's text** (the container step). A closed path holds the lines whose glyphs' centres all stand inside it (read by its
   interior after its box) alone where no other glyph is inside it and no closed path inside it holds text of its own (the nodes
   of a box round a chart); a fill or a frame under words of one line, within one band's height of its baseline, is a decoration
@@ -5357,6 +5358,28 @@ within one bullet item.
 - **Versions.** PIPELINE must move (the parts' ties); the format does not (a tie's ords as before). A reader of before this
   rule given parts of after it ties the paragraph members among themselves, at the body's floor, and its labels as before; a
   reader of after it given parts of before it lays them as before (no paragraph member in a figure's tie).
+
+### 18.58 A list's marker joins no line of the column before it (2026-11-12)
+
+A glyph no run of today's figure reading holds joins the nearest line on its baseline within the run gap (`locate/figure-
+lines.ts` `linesOf`), and a cluster holding a formula's glyph is a formula (F1, §18.35). A list's bullet set in a symbol face
+three quarters of an em before its item, 0.62 pt after the last word of the column before it, joined that word: 2111.09276v1
+p8, Figure 5, "Wipe down the furniture•" with "furniture•" one element kept as a formula, and three lines more holding the next
+column's bullet as an element of their own.
+
+- **The rule** (F3's list reading, read before any line takes a glyph, and so before the formula's clusters): a glyph no run
+  holds that spells a marker (`MARKER`), stands on no run's line, and stands on the baseline (RUN_DY, one row as the figure reading
+  reads one) of a line holding a word that begins a word space or more after it, another such of its character in its column
+  (PARA_ALIGN_TOL): a list's marker, as `listed` reads a list. It opens its item's line and joins no line that begins before it.
+  A formula's raised script is no marker: 2610.10492v1 p10's legend "c∗1" over "c∗2", the next column's entries after them, its
+  star in MARKER's class and in a column, keeps its formula (a first reading of "its baseline" as the join's half a size took it
+  for one, and the corpus showed it).
+- **Before and after.** `figure-lines.test.ts`: two columns of a list, the bullet 0.6 pt after the first column's word, red at
+  the base ("boards•" one formula element); the raised star kept with its formula. 2111.09276v1 (stage 1a): three units lost and
+  two gained, the four lines' (members 454, 469, 535, 553 on p8): "Wipe down the furniture" plain words, "Wipe down the [cabinets]"
+  its highlight alone, "Pour hot water into the" twice a plain label; every bullet the page's ink where it stands.
+- **Over the 88**: nothing moves (units, members and parts as with §18.57 alone; the dumps r19's). The class is this paper's.
+- **Versions.** PIPELINE must move (2111.09276v1's units).
 
 ## 19. The engine's contract
 
