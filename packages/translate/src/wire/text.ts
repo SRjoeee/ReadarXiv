@@ -85,8 +85,10 @@ export function glueOf(
  *  space between a word and the mark, the script or the accent it carries, so neither does the translation, whatever the
  *  reply keeps of ours or whatever stands beside it now (2610.20967v1 p1 on staging: its names' marks 4.3 pt off the names,
  *  CJK's, where TeX's are 1.35; its places' marks a space before them) */
-export const GLUED_SPACE = /[ \t\n\f\r]+$/
-export const GLUED_LEAD = /^[ \t\n\f\r]+/
+export const GLUED_SPACE = /[ \t\n\f\r]+(?=\ue000*$)/
+export const GLUED_LEAD = /(?<=^\ue000*)[ \t\n\f\r]+/
+// (each past a sentence's start a reading marks there, SENTINEL: a boundary between the element and its glued text is no
+// white space of the text's; the sentinel stays)
 /** a stop of the text right after an element: the element's own stop is written only where the text does not begin so */
 export const LEAD_PUNCT = /^\s*[.,;:!?。．，、；：！？]/
 /** what a reply may set for an element's own stop right after it: any script's stop, comma, semicolon or colon; taken out
