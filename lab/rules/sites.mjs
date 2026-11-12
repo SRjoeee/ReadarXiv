@@ -1,0 +1,429 @@
+// lab/rules/sites.mjs: the rule ledger's instrument, its static half (design-reduction-2026-11-13.md §3c, R4). The rules are
+// the census's own (lab/release-check/census-lib.mjs factsOf, read with its `nodes` option): every threshold of class tuned
+// or borderline and every name list of a product file in RULE_AREAS. For each rule, the places where it decides at run time
+// (its sites), and for each file the edits that wrap them in a call of the recorder (recorder.mjs), applied at load time by
+// the Node hook (hook.mjs) and the vitest plugin (vitest.mjs): product code is never edited on disk.
+//
+// A site is one of: `cmp`, a relational comparison whose operand is the rule's literal, or holds the rule's constant (or
+// table entry) as the whole operand or inside it; `eq`, an equality against the constant; `mm`, a Math.min or Math.max
+// whose argument is the literal or holds the constant; `val`, any other read of a constant (an argument, a factor, a
+// property's value: counted, not judged); `list`, `set`, `re`, a list's literal wrapped where it is made, so that every
+// membership test of it (has, includes, indexOf, some, find, filter, a regular expression's every match) is seen wherever
+// it is made, in this module or another. `newset`: every `new Set(x)` of an instrumented file, so that a set made from a
+// list keeps the list's sites. Not shipped.
+import { createHash } from 'node:crypto'
+import { scanTree, graphOf } from '../release-check/census-lib.mjs'
+
+export const SITES_FORMAT = 'readarxiv/rule-sites 1'
+/** the areas whose rules the ledger holds: the census's debt areas (the prepare, today's and the packages', and the
+ *  typesetter) and the translate package (R5d's area, outside the census's headline) */
+export const RULE_AREAS = ['today-engine', 'pkg:engine', 'pkg:typeset', 'pkg:translate']
+/** the threshold classes the ledger records: a budget (R5e's), a conversion, a structural number and a code are not rules */
+const RULE_CLASSES = new Set(['tuned', 'borderline'])
+const REL = { '<': 'lt', '<=': 'le', '>': 'gt', '>=': 'ge' }
+const EQ = { '===': 'eq', '!==': 'ne', '==': 'leq', '!=': 'lne' }
+const SKIP_KEYS = new Set(['loc', 'start', 'end', 'leadingComments', 'trailingComments', 'innerComments', 'extra', 'range', 'type', 'tokens', 'comments', 'errors'])
+const FUNCTION = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression', 'ClassMethod', 'ClassPrivateMethod', 'ObjectMethod'])
+// (TypeScript's nodes that hold an expression; every other TS node is a type, never run)
+const TS_EXPRESSION = new Set(['TSAsExpression', 'TSSatisfiesExpression', 'TSNonNullExpression', 'TSTypeAssertion', 'TSInstantiationExpression', 'TSParameterProperty', 'TSEnumDeclaration', 'TSEnumMember', 'TSExportAssignment'])
+// (what an operand may pass through between the constant and its comparison while the comparison still reads the constant's
+// value: arithmetic, a sign, a cast, parentheses)
+const ARITH = new Set(['+', '-', '*', '/', '%', '**'])
+
+/** a file's key: its path without the extension (a module typed from .mjs to .ts keeps its rules' keys) */
+export const fileKeyOf = path => path.replace(/\.(?:m|c)?[jt]sx?$/, '')
+
+const walk = (node, visit, parents = []) => {
+  if (!node || typeof node.type !== 'string') return
+  if (node.type.startsWith('TS') && !TS_EXPRESSION.has(node.type)) return
+  if (visit(node, parents) === false) return
+  parents.push(node)
+  for (const k of Object.keys(node)) {
+    if (SKIP_KEYS.has(k) || k === 'typeAnnotation' || k === 'returnType' || k === 'typeParameters' || k === 'superTypeParameters') continue
+    const v = node[k]
+    if (Array.isArray(v)) for (const x of v) walk(x, visit, parents)
+    else if (v && typeof v.type === 'string') walk(v, visit, parents)
+  }
+  parents.pop()
+}
+
+/** a function's name as the census names it: its own, else what it is bound to */
+const fnNameOf = (fn, parent) => {
+  const own = fn.id?.name ?? (fn.key?.type === 'Identifier' ? fn.key.name : fn.key?.type === 'StringLiteral' ? fn.key.value : fn.key?.id?.name)
+  if (own) return own
+  if (parent?.type === 'VariableDeclarator' && parent.id?.type === 'Identifier') return parent.id.name
+  if (/^(?:ObjectProperty|ClassProperty|ClassPrivateProperty)$/.test(parent?.type ?? '') && parent.key) return parent.key.name ?? parent.key.value ?? parent.key.id?.name ?? '(anonymous)'
+  if (parent?.type === 'AssignmentExpression' && parent.left.type === 'MemberExpression' && !parent.left.computed) return parent.left.property.name
+  return '(anonymous)'
+}
+/** the enclosing function's path, outermost first, '/'-joined; '' at the module's top */
+const fnPathOf = parents => {
+  const names = []
+  for (let i = 0; i < parents.length; i++) if (FUNCTION.has(parents[i].type)) names.push(fnNameOf(parents[i], parents[i - 1]))
+  return names.join('/')
+}
+
+/** the names a function or the module declares (its parameters, its var, let, const, function and class names, its
+ *  imports), nested functions apart: a reference whose name one of these holds is not the module's constant */
+const declaredIn = scope => {
+  const out = new Set()
+  const ids = p => {
+    if (!p) return
+    if (p.type === 'Identifier') out.add(p.name)
+    else if (p.type === 'ObjectPattern') for (const x of p.properties) ids(x.value ?? x.argument)
+    else if (p.type === 'ArrayPattern') for (const x of p.elements) ids(x)
+    else if (p.type === 'AssignmentPattern') ids(p.left)
+    else if (p.type === 'RestElement') ids(p.argument)
+    else if (p.type === 'TSParameterProperty') ids(p.parameter)
+  }
+  if (FUNCTION.has(scope.type)) for (const p of scope.params) ids(p)
+  walk(scope.body ?? scope, (n, ps) => {
+    if (n !== (scope.body ?? scope) && FUNCTION.has(n.type)) {
+      if (n.type === 'FunctionDeclaration') ids(n.id)
+      return false
+    }
+    if (n.type === 'VariableDeclarator') ids(n.id)
+    else if (n.type === 'ClassDeclaration') ids(n.id)
+    else if (n.type === 'CatchClause') ids(n.param)
+  })
+  return out
+}
+
+/** the sites of a tree: `scan` a census scan read with `nodes` for these files (census-lib scanTree), `graph` its import
+ *  graph (graphOf), `alive` the ids AFTER keeps (or null: unknown). Returns `{ rules, sites, files }`: rules keyed by
+ *  `ruleKeyOf`, sites numbered across the tree, each file's edits */
+export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS } = {}) {
+  const inScope = (p, f) => f.role === 'product' && f.kind === 'code' && !f.generated && areas.includes(f.area) && f.ast
+  const files = [...scan.files].filter(([p, f]) => inScope(p, f)).sort((a, b) => a[0].localeCompare(b[0]))
+  const rules = {}
+  const sites = []
+  const edits = new Map(files.map(([p]) => [p, []]))
+  const fileOf = p => scan.files.get(p)
+  const id = p => `${scan.repo}:${p}`
+
+  // ---- the rules: the census's items, keyed
+  const ordinals = new Map()
+  // (a key: the file without its extension, the enclosing function's path ('(top)' at the module's top), the rule's
+  // signature, and for any rule but a module constant the ordinal among its file's and function's rules of that signature)
+  const keyed = (fk, fn, sig) => {
+    const k = `${fk}::${fn || '(top)'}::${sig}`
+    const n = (ordinals.get(k) ?? 0) + 1
+    ordinals.set(k, n)
+    return `${k}#${n}`
+  }
+  /** a module constant's rule (or a table entry's): by name; everything else by function, signature and ordinal */
+  const constants = new Map() // `${path}\u0000${name}` -> [rule] (a table: one rule a property)
+  const literalRules = new Map() // the literal node -> rule
+  const listRules = []
+  const parentsOf = new Map()
+  for (const [path, f] of files) {
+    const fk = fileKeyOf(path)
+    // (the parents of the nodes the rules stand in: for the function path)
+    const wanted = new Set([...(f.thresholds ?? []).map(t => t.nodes?.site).filter(Boolean), ...(f.lists ?? []).map(l => l.nodes?.literal).filter(Boolean)])
+    if (wanted.size)
+      walk(f.ast.program, (n, ps) => {
+        if (wanted.has(n)) parentsOf.set(n, ps.slice())
+      })
+    for (const t of f.thresholds ?? []) {
+      if (!RULE_CLASSES.has(t.class) || !t.nodes) continue
+      const base = { kind: 'threshold', file: path, line: t.line, value: t.value, raw: t.raw, class: t.class, context: t.context, name: t.name ?? null, why: t.why, reason: t.reason, evidence: t.evidence, cites: t.cites, area: f.area, after: alive ? alive.has(id(path)) : null, sites: [] }
+      if (t.context === 'constant' || t.context === 'table') {
+        const key = `${fk}::(top)::${t.name}`
+        rules[key] = { key, ...base, fn: '' }
+        const bind = t.name.split('.')[0]
+        const k = `${path}\u0000${bind}`
+        constants.set(k, [...(constants.get(k) ?? []), rules[key]])
+      } else {
+        const ps = parentsOf.get(t.nodes.site) ?? []
+        const op = t.context === 'comparison' ? t.nodes.site.operator : t.context.slice(5)
+        const key = keyed(fk, fnPathOf(ps), `${op}${t.raw}`)
+        rules[key] = { key, ...base, fn: fnPathOf(ps) }
+        literalRules.set(t.nodes.literal, rules[key])
+      }
+    }
+    for (const l of f.lists ?? []) {
+      if (!l.nodes) continue
+      const ps = parentsOf.get(l.nodes.literal) ?? []
+      const fnPath = fnPathOf(ps)
+      // (a list by the name of the declaration it stands in, else by its first two entries)
+      const key = keyed(fk, fnPath, l.name ?? `${l.form}[${l.nodes.entries.slice(0, 2).join(',')}]`)
+      rules[key] = { key, kind: 'list', file: path, line: l.line, form: l.form, name: l.name ?? null, size: l.size, entries: l.nodes.entries, class: l.class, area: f.area, after: alive ? alive.has(id(path)) : null, fn: fnPath, sites: [] }
+      listRules.push({ path, rule: rules[key], node: l.nodes.literal, parent: l.nodes.parent })
+    }
+  }
+
+  // ---- what each file's names import: local name -> { path, name } of its definer, through re-exports
+  const edgeOf = (fromPath, spec) => (graph.out.get(id(fromPath)) ?? []).find(e => e.spec === spec)
+  const definerOf = (path, name, depth = 0) => {
+    const f = fileOf(path)
+    if (!f || depth > 20) return null
+    if ((f.exports ?? []).some(e => e.name === name)) return { path, name }
+    for (const r of f.reexports ?? []) {
+      if (r.star || r.exported !== name) continue
+      const e = edgeOf(path, r.spec)
+      return e?.to.startsWith(`${scan.repo}:`) ? definerOf(e.to.slice(scan.repo.length + 1), r.local, depth + 1) : null
+    }
+    for (const r of f.reexports ?? []) {
+      if (!r.star) continue
+      const e = edgeOf(path, r.spec)
+      if (!e?.to.startsWith(`${scan.repo}:`)) continue
+      const d = definerOf(e.to.slice(scan.repo.length + 1), name, depth + 1)
+      if (d) return d
+    }
+    return null
+  }
+  const importsOf = (path, f) => {
+    const named = new Map()
+    const spaces = new Map()
+    for (const s of f.ast.program.body) {
+      if (s.type !== 'ImportDeclaration' || s.importKind === 'type') continue
+      const e = edgeOf(path, s.source.value)
+      if (!e?.to.startsWith(`${scan.repo}:`)) continue
+      const to = e.to.slice(scan.repo.length + 1)
+      for (const x of s.specifiers) {
+        if (x.importKind === 'type') continue
+        if (x.type === 'ImportNamespaceSpecifier') spaces.set(x.local.name, to)
+        else {
+          const d = definerOf(to, x.type === 'ImportDefaultSpecifier' ? 'default' : (x.imported.name ?? x.imported.value))
+          if (d) named.set(x.local.name, d)
+        }
+      }
+    }
+    return { named, spaces }
+  }
+
+  // ---- sites
+  const add = (path, site) => {
+    site.id = sites.length
+    site.file = path
+    sites.push(site)
+    for (const r of site.rules) rules[r].sites.push(site.id)
+    return site.id
+  }
+  // (a token between two offsets: the first whose start is at or past `from`, by halving)
+  const tokenAt = (f, from, to, ops) => {
+    const ts = f.ast.tokens ?? []
+    let lo = 0
+    let hi = ts.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (ts[mid].start < from) lo = mid + 1
+      else hi = mid
+    }
+    for (let i = lo; i < ts.length && ts[i].end <= to; i++) {
+      const t = ts[i]
+      const label = typeof t.type === 'string' ? t.type : t.type?.label
+      if (ops.includes(t.value) || ops.includes(label)) return t
+    }
+    return null
+  }
+  const lineOf = n => n.loc?.start.line ?? null
+  /** a comparison's or call's site, made once and shared by every rule it holds; its edits written once */
+  const siteByNode = new Map()
+  const decisionSite = (path, f, node, ps, kind) => {
+    if (siteByNode.has(node)) return siteByNode.get(node)
+    let site
+    if (kind === 'cmp' || kind === 'eq') {
+      const table = kind === 'cmp' ? REL : EQ
+      const tok = tokenAt(f, node.left.end, node.right.start, [node.operator])
+      if (!tok) return null
+      site = { kind, op: node.operator, call: table[node.operator], line: lineOf(node), fn: fnPathOf(ps), rules: [], bounds: [] }
+      add(path, site)
+      edits.get(path).push({ at: node.start, end: node.end, pre: `__axtRules.${site.call}(${site.id}, `, post: ')' }, { replace: [tok.start, tok.end], text: ',' })
+    } else {
+      // (Math.min / Math.max: the callee and its opening parenthesis replaced by the recorder's call)
+      const open = tokenAt(f, node.callee.end, node.arguments[0]?.start ?? node.end, ['('])
+      if (!open || node.optional || node.arguments.some(a => a.type === 'SpreadElement')) return null
+      site = { kind: 'mm', op: node.callee.property.name, call: node.callee.property.name === 'min' ? 'mn' : 'mx', args: node.arguments.length, line: lineOf(node), fn: fnPathOf(ps), rules: [], bounds: [] }
+      add(path, site)
+      edits.get(path).push({ replace: [node.callee.start, open.end], text: `__axtRules.${site.call}(${site.id}, ` })
+    }
+    siteByNode.set(node, site)
+    return site
+  }
+  const bind = (site, rule, bound) => {
+    if (!site.rules.includes(rule.key)) {
+      site.rules.push(rule.key)
+      rule.sites.push(site.id)
+    }
+    site.bounds.push({ rule: rule.key, ...bound })
+  }
+
+  // (1) the literals of comparisons and of Math.min / Math.max
+  for (const [path, f] of files)
+    for (const t of f.thresholds ?? []) {
+      const rule = literalRules.get(t.nodes?.literal)
+      if (!rule) continue
+      const ps = parentsOf.get(t.nodes.site) ?? []
+      const site = decisionSite(path, f, t.nodes.site, ps, t.context === 'comparison' ? 'cmp' : 'mm')
+      if (!site) {
+        rule.unsited = 'a form the instrument does not wrap (a spread argument, an optional call)'
+        continue
+      }
+      const at = t.context === 'comparison' ? (t.nodes.site.left === t.nodes.literal ? 'left' : 'right') : t.nodes.site.arguments.indexOf(t.nodes.literal)
+      bind(site, rule, { at, shape: 'direct', value: t.value })
+    }
+
+  // (2) the constants' references, in their module and in every module that imports them
+  /** what a reference's value meets on its way up: a comparison, an equality, a Math.min / max, or a plain read; the
+   *  operand's shape between the reference and the comparison (`direct`, `scale`, `inverse`, `shift+`, `shift-`, `other`) */
+  const usageOf = (ref, ps) => {
+    let child = ref
+    let shape = 'direct'
+    for (let i = ps.length - 1; i >= 0; i--) {
+      const p = ps[i]
+      if (p.type === 'BinaryExpression' && REL[p.operator]) return { kind: 'cmp', node: p, at: p.left === child ? 'left' : 'right', shape, ps: ps.slice(0, i) }
+      if (p.type === 'BinaryExpression' && EQ[p.operator]) return shape === 'direct' ? { kind: 'eq', node: p, at: p.left === child ? 'left' : 'right', shape, ps: ps.slice(0, i) } : { kind: 'val' }
+      if (p.type === 'CallExpression' && p.callee?.type === 'MemberExpression' && p.callee.object?.name === 'Math' && ['min', 'max'].includes(p.callee.property?.name) && p.arguments.includes(child)) return { kind: 'mm', node: p, at: p.arguments.indexOf(child), shape, ps: ps.slice(0, i) }
+      if (p.type === 'ParenthesizedExpression' || TS_EXPRESSION.has(p.type)) {
+        child = p
+        continue
+      }
+      if (p.type === 'UnaryExpression' && (p.operator === '-' || p.operator === '+')) {
+        shape = 'other'
+        child = p
+        continue
+      }
+      if (p.type === 'BinaryExpression' && ARITH.has(p.operator)) {
+        const left = p.left === child
+        // (one step's shape: a factor keeps a scale, a divisor inverts it; a term shifts; anything else, or a mix, is other)
+        const step = p.operator === '*' ? 'scale' : p.operator === '/' ? (left ? 'scale' : 'inverse') : p.operator === '+' ? 'shift+' : p.operator === '-' ? (left ? 'shift+' : 'shift-') : 'other'
+        shape = shape === 'direct' ? step : shape === step && (step === 'scale' || step === 'shift+') ? step : (shape === 'scale' && step === 'inverse') || (shape === 'inverse' && step === 'scale') ? 'inverse' : 'other'
+        child = p
+        continue
+      }
+      return { kind: 'val' }
+    }
+    return { kind: 'val' }
+  }
+  for (const [path, f] of files) {
+    const { named, spaces } = importsOf(path, f)
+    // (the constants this file may name: its own, and those its imports bind, by local name)
+    const local = new Map()
+    for (const [k, rs] of constants) {
+      const [p, name] = k.split('\u0000')
+      if (p === path) local.set(name, rs)
+    }
+    for (const [loc, d] of named) {
+      const rs = constants.get(`${d.path}\u0000${d.name}`)
+      if (rs) local.set(loc, rs)
+    }
+    const spaceRules = new Map()
+    for (const [ns, to] of spaces) for (const [k, rs] of constants) if (k.startsWith(`${to}\u0000`)) spaceRules.set(`${ns}.${k.split('\u0000')[1]}`, rs)
+    if (!local.size && !spaceRules.size) continue
+    const shadowed = new Map()
+    const isShadowed = (name, ps) =>
+      ps.some(p => {
+        if (p.type === 'CatchClause') return p.param?.type === 'Identifier' && p.param.name === name
+        if (!FUNCTION.has(p.type)) return false
+        if (!shadowed.has(p)) shadowed.set(p, declaredIn(p))
+        return shadowed.get(p).has(name)
+      })
+    walk(f.ast.program, (n, ps) => {
+      let rs = null
+      let ref = n
+      let entry = null
+      if (n.type === 'Identifier' && local.has(n.name)) {
+        const par = ps.at(-1)
+        // (a name that is not a read: a declaration, an import or export's name, a property's key, a member's name)
+        if (par?.type === 'VariableDeclarator' && par.id === n) return
+        if (/^(?:Import|Export)(?:Default|Namespace)?Specifier$/.test(par?.type ?? '')) return
+        if ((par?.type === 'MemberExpression' || par?.type === 'OptionalMemberExpression') && par.property === n && !par.computed) return
+        if (/^(?:ObjectProperty|ClassProperty|ObjectMethod|ClassMethod)$/.test(par?.type ?? '') && par.key === n && !par.computed && !par.shorthand) return
+        if (isShadowed(n.name, ps)) return
+        rs = local.get(n.name)
+        // (a table's entry: its member read; the table read whole is a read of every entry)
+        if (rs.length > 1 || rs[0].name.includes('.')) {
+          if ((par?.type === 'MemberExpression' || par?.type === 'OptionalMemberExpression') && par.object === n) {
+            const prop = par.computed ? (par.property.type === 'StringLiteral' ? par.property.value : null) : par.property.name
+            entry = rs.find(r => r.name.endsWith(`.${prop}`))
+            if (!entry) return
+            ref = par
+            rs = [entry]
+          } else {
+            for (const r of rs) r.wholeReads = (r.wholeReads ?? 0) + 1
+            return
+          }
+        }
+      } else if (n.type === 'MemberExpression' && !n.computed && n.object.type === 'Identifier' && spaceRules.has(`${n.object.name}.${n.property.name}`)) {
+        rs = spaceRules.get(`${n.object.name}.${n.property.name}`)
+        if (rs.length > 1) return
+      } else return
+      const rule = rs[0]
+      const rps = ref === n ? ps : ps.slice(0, -1)
+      const use = usageOf(ref, rps)
+      if (use.kind === 'val') {
+        const par = rps.at(-1)
+        // (a member written, deleted or called is no read the instrument may wrap)
+        if ((par?.type === 'AssignmentExpression' && par.left === ref) || par?.type === 'UpdateExpression' || (par?.type === 'UnaryExpression' && par.operator === 'delete') || ((par?.type === 'CallExpression' || par?.type === 'NewExpression') && par.callee === ref)) {
+          rule.unwrapped = (rule.unwrapped ?? 0) + 1
+          return false
+        }
+        const site = { kind: 'val', line: lineOf(ref), fn: fnPathOf(rps), rules: [], bounds: [] }
+        add(path, site)
+        bind(site, rule, { shape: 'read' })
+        const src = f.text.slice(ref.start, ref.end)
+        if (par?.type === 'ObjectProperty' && par.shorthand && par.value === ref) edits.get(path).push({ at: ref.start, end: ref.end, pre: `${src}: __axtRules.v(${site.id}, `, post: ')' })
+        else edits.get(path).push({ at: ref.start, end: ref.end, pre: `__axtRules.v(${site.id}, `, post: ')' })
+        return false
+      }
+      const site = decisionSite(path, f, use.node, use.ps, use.kind)
+      if (!site) {
+        rule.unsited = 'a form the instrument does not wrap (a spread argument, an optional call)'
+        return false
+      }
+      bind(site, rule, { at: use.at, shape: use.shape, value: rule.value })
+      return false
+    })
+  }
+
+  // (3) the lists: each literal wrapped where it is made; a Set made of one, the Set
+  for (const { path, rule, node, parent } of listRules) {
+    if (node.type === 'RegExpLiteral') {
+      const site = { kind: 're', line: lineOf(node), fn: fnPathOf(parentsOf.get(node) ?? []), rules: [], bounds: [], entries: rule.entries, flags: node.flags }
+      add(path, site)
+      bind(site, rule, { shape: 'list' })
+      edits.get(path).push({ at: node.start, end: node.end, pre: `__axtRules.re(${site.id}, `, post: ')' })
+      continue
+    }
+    const inSet = parent?.type === 'NewExpression' && parent.callee?.type === 'Identifier' && parent.callee.name === 'Set' && parent.arguments[0] === node
+    const target = inSet ? parent : node
+    const site = { kind: inSet ? 'set' : 'list', line: lineOf(node), fn: fnPathOf(parentsOf.get(node) ?? []), rules: [], bounds: [], entries: rule.entries }
+    add(path, site)
+    bind(site, rule, { shape: 'list' })
+    edits.get(path).push({ at: target.start, end: target.end, pre: `__axtRules.${inSet ? 'st' : 'ls'}(${site.id}, `, post: ')', listNode: inSet })
+  }
+  // (4) every other `new Set(x)` of an instrumented file: a Set made from a list (or from lists spread) keeps their sites
+  for (const [path, f] of files) {
+    const text = f.text
+    walk(f.ast.program, n => {
+      if (n.type !== 'NewExpression' || n.callee?.type !== 'Identifier' || n.callee.name !== 'Set' || !n.arguments.length) return
+      if (edits.get(path).some(e => e.listNode && e.at === n.start)) return
+      const a = n.arguments[0]
+      const sources = a.type === 'ArrayExpression' ? a.elements.filter(e => e?.type === 'SpreadElement').map(e => e.argument) : [a]
+      const plain = sources.filter(s => s.type === 'Identifier' || (s.type === 'MemberExpression' && !s.computed && s.object.type === 'Identifier'))
+      if (!plain.length) return
+      edits.get(path).push({ at: n.start, end: n.end, pre: '__axtRules.ns(', post: `, ${plain.map(s => text.slice(s.start, s.end)).join(', ')})` })
+    })
+  }
+
+  const out = { rules, sites, files: {} }
+  for (const [path, f] of files) out.files[path] = { sha256: createHash('sha256').update(f.text).digest('hex'), edits: edits.get(path), sites: sites.filter(s => s.file === path).map(s => s.id) }
+  return out
+}
+
+/** the sites of a checkout: its scan with the nodes of the rule areas' files kept, its graph, AFTER's ids where `alive`
+ *  is given (a set of ids) */
+export function sitesOfTree(root, profile, { alive = null, areas = RULE_AREAS } = {}) {
+  const inArea = p => profile.areas.find(a => p.startsWith(a.prefix))
+  const scan = scanTree('engine', root, profile, { tokens: true, nodes: p => areas.includes(inArea(p)?.area) && inArea(p)?.role === 'product' })
+  const graph = graphOf([scan])
+  return { scan, graph, ...sitesOf(scan, graph, { alive, areas }) }
+}
+
+/** the site map as written to sites.json: everything but the scan */
+export function siteMapOf(s, { commit = null } = {}) {
+  const map = { format: SITES_FORMAT, commit, rules: s.rules, sites: s.sites, files: s.files }
+  map.digest = createHash('sha256').update(JSON.stringify([map.rules, map.sites, map.files])).digest('hex').slice(0, 16)
+  return map
+}
