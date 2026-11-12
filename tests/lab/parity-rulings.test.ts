@@ -55,31 +55,36 @@ describe("TRS and Fm: the page fill's evening (his rules of 2026-11-12, 17:25), 
   const size = worse('size', 't40 para', 10, 10, 9.75, [0, 0.025])
   const count = worse('line-count', 't40 para', 6, 5, 4, [1, 2])
   it('a unit the lay states evened by size, one fit step under the original: its size covered by TRS', () => {
-    expect(page(size, { size: 9.75, lines: 4 }, { by: 'track+size', lines: 5 })).toEqual([false, 'TRS', 'evened by track+size; 5 lines on this page before'])
+    expect(page(size, { size: 9.75, lines: 4 }, { by: ['track', 'size'], lines: 5 })).toEqual([false, 'TRS', 'evened by track + size; 5 lines on this page before'])
   })
   it('its line count a line fewer than today, where the knobs took it from today\'s count: covered by TRS', () => {
-    expect(page(count, { size: 9.75, lines: 4 }, { by: 'track+size', lines: 5 })).toEqual([false, 'TRS', 'evened by track+size; 5 lines on this page before'])
-    expect(page(count, { size: 10, lines: 4 }, { by: 'track', lines: 5 })).toEqual([false, 'TRS', 'evened by track; 5 lines on this page before'])
+    expect(page(count, { size: 9.75, lines: 4 }, { by: ['track', 'size'], lines: 5 })).toEqual([false, 'TRS', 'evened by track + size; 5 lines on this page before'])
+    expect(page(count, { size: 10, lines: 4 }, { by: ['track'], lines: 5 })).toEqual([false, 'TRS', 'evened by track; 5 lines on this page before'])
   })
   it('one step small with no evening stated, evened by tracking alone yet one step small, a count the knobs do not explain, or not whole: worse', () => {
     expect(page(size, { size: 9.75, lines: 4 }, null)).toEqual([true, null, null])
-    expect(page(size, { size: 9.75, lines: 4 }, { by: 'track', lines: 5 })).toEqual([true, null, null])
+    expect(page(size, { size: 9.75, lines: 4 }, { by: ['track'], lines: 5 })).toEqual([true, null, null])
     // (two lines fewer than today where the knobs saved one: v2 set 4 before them, today 5, v2 3)
-    expect(page(worse('line-count', 't40 para', 6, 5, 3, [1, 3]), { size: 10, lines: 3 }, { by: 'track', lines: 4 })).toEqual([true, null, null])
-    expect(page(size, { size: 9.75, lines: 4 }, { by: 'size', lines: 5 }, [worse('elements', 't40 para', 0, null, 'element 2: drawn as nothing where TeX set ink')])).toEqual([true, null, null])
+    expect(page(worse('line-count', 't40 para', 6, 5, 3, [1, 3]), { size: 10, lines: 3 }, { by: ['track'], lines: 4 })).toEqual([true, null, null])
+    expect(page(size, { size: 9.75, lines: 4 }, { by: ['size'], lines: 5 }, [worse('elements', 't40 para', 0, null, 'element 2: drawn as nothing where TeX set ink')])).toEqual([true, null, null])
+    // (two steps under the original, evened by size: the fill takes one step, never two)
+    expect(page(worse('size', 't40 para', 10, 10, 9.5, [0, 0.05]), { size: 9.5, lines: 4 }, { by: ['track', 'size'], lines: 5 })).toEqual([true, null, null])
   })
   const block = worse('block', 't40 para', 0, 0, 1)
   it("a line past TeX's text block bottom by no more than the foot's stated depth, TeX's separation to the next ink kept: covered by Fm", () => {
-    expect(page(block, { size: 10, lines: 6, block: [{ below: 3.55, toInk: 14, sep: 12 }] }, { by: 'room+foot', lines: 6, over: 12 })).toEqual([
+    expect(page(block, { size: 10, lines: 6, block: [{ below: 3.55, toInk: 14, sep: 12 }] }, { by: ['room', 'foot'], lines: 6, over: 3.55 })).toEqual([
       false,
       'Fm',
-      "3.55 pt under TeX's text block bottom (the lay's depth 12), 14 over the next ink (TeX's separation 12)",
+      "3.55 pt under TeX's text block bottom (the lay's depth 3.55), 14 over the next ink (TeX's separation 12)",
     ])
   })
   it("a line past the bottom with no foot stated, deeper than its stated depth, or nearer the next ink than TeX's separation: worse", () => {
-    expect(page(block, { size: 10, lines: 6, block: [{ below: 3.55, toInk: 14, sep: 12 }] }, { by: 'room', lines: 6 })).toEqual([true, null, null])
-    expect(page(block, { size: 10, lines: 6, block: [{ below: 13, toInk: 14, sep: 12 }] }, { by: 'foot', lines: 6, over: 12 })).toEqual([true, null, null])
-    expect(page(block, { size: 10, lines: 6, block: [{ below: 3.55, toInk: 10, sep: 12 }] }, { by: 'foot', lines: 6, over: 12 })).toEqual([true, null, null])
+    expect(page(block, { size: 10, lines: 6, block: [{ below: 3.55, toInk: 14, sep: 12 }] }, { by: ['room'], lines: 6 })).toEqual([true, null, null])
+    // (a depth the lay states for the borrow (fit.over, 1.2 pt, the fit's bound 1.5), the unit evened by tracking and a size step,
+    // not by the foot: a line 3.55 pt under the bottom is neither the borrow's nor the foot's)
+    expect(page(block, { size: 10, lines: 6, block: [{ below: 3.55, toInk: 14, sep: 12 }] }, { by: ['track', 'size'], lines: 6, over: 1.2 })).toEqual([true, null, null])
+    expect(page(block, { size: 10, lines: 6, block: [{ below: 3.7, toInk: 14, sep: 12 }] }, { by: ['foot'], lines: 6, over: 3.55 })).toEqual([true, null, null])
+    expect(page(block, { size: 10, lines: 6, block: [{ below: 3.55, toInk: 10, sep: 12 }] }, { by: ['foot'], lines: 6, over: 3.55 })).toEqual([true, null, null])
   })
 })
 
@@ -233,9 +238,10 @@ describe('S3: a heading kept on its one line at a smaller size; a small-capitals
   })
 })
 
-describe("S4: a theorem at exactly one fit step under the original's size", () => {
+describe("S4: a theorem a step under the original's size, or within a step of today's", () => {
   // (2610.40645v1-ja p22 t174, his example: v2 at 10.64 pt, one step (2.5 %) under the original's 10.91; today at 10.98, above the
-  // original by its misread. Its p33 t283: v2 at 10.36, two steps under)
+  // original by its misread, 1.26 steps over v2. Its p33 t283: v2 at 10.36, two steps under the original, today at 10.53, 0.62 of a
+  // step over v2. A step: SIZE_STEP of the original's size, 0.2727 pt)
   const v2 = { facts: { [N]: { members: [{ ord: 174, kind: 'theorem', align: 'j', style: { size: 10.91 }, lines: [fact(72, 540, 108.16, 10.91)] }], ties: [] } } }
   const page = (t: number, v: number, kind = 'theorem', more: Diff[] = []) => {
     const { page: p } = judged(
@@ -245,50 +251,70 @@ describe("S4: a theorem at exactly one fit step under the original's size", () =
     const d = (p.diffs as (Diff & { coveredSays?: string })[]).find((x) => x.flag === 'size')
     return [d?.worse, d?.covered ?? null, d?.coveredSays ?? null]
   }
-  it("one step under the original's size, the unit whole: covered by S4, today's size reported", () => {
-    expect(page(10.98, 10.64)).toEqual([false, 'S4', "today 10.98 pt (1.006 of the original's)"])
+  it("one step under the original's size, the unit whole: covered by S4, today's size and the steps reported", () => {
+    expect(page(10.98, 10.64)).toEqual([false, 'S4', "one step under the original's: today 10.98 pt (1.006 of the original's), v2 1.25 of a step under it"])
   })
-  it('two steps under (2610.40645 p33), a paragraph, or the unit not whole: worse', () => {
-    expect(page(10.53, 10.36)).toEqual([true, null, null])
+  it("two steps under the original's but within a step of today's (2610.40645 p33): covered by S4", () => {
+    expect(page(10.53, 10.36)).toEqual([false, 'S4', "within a step of today's: today 10.53 pt (0.965 of the original's), v2 0.62 of a step under it"])
+  })
+  it("more than a step under today's and not one step under the original's, a paragraph, or the unit not whole: worse", () => {
+    // (10.70 against 10.36: 1.25 steps under today's; 10.36 two steps under the original's)
+    expect(page(10.7, 10.36)).toEqual([true, null, null])
+    // (today on the original's, v2 two steps under it)
+    expect(page(10.91, 10.36)).toEqual([true, null, null])
     expect(page(10.98, 10.64, 'para')).toEqual([true, null, null])
+    expect(page(10.53, 10.36, 'para')).toEqual([true, null, null])
     expect(page(10.98, 10.64, 'theorem', [worse('scripts', 't174 theorem', 2, 0, 2)])).toEqual([true, null, null])
+    expect(page(10.53, 10.36, 'theorem', [worse('scripts', 't174 theorem', 2, 0, 2)])).toEqual([true, null, null])
   })
 })
 
 describe("L3: a proof one line longer than today's, in the room under it", () => {
   // (2610.40645v1-ja p12 t80: TeX's and today's 4 lines from 405.35, today at 10.57 pt; v2 5 at the original's 10.91 in the room
-  // under it (the block measure: no line past TeX's room); TeX's end box at 532.12-539.4 on the last line)
-  const ol = [405.35, 391.8, 376.66, 361.21].map((y) => fact(72, 540, y, 10.91))
-  const v2 = { facts: { [N]: { members: [{ ord: 80, kind: 'theorem', align: 'j', style: { size: 10.91 }, lines: ol }], ties: [] } } }
-  const page = (o: { tSize?: number; vLines?: number; past?: boolean; kind?: string } = {}) => {
+  // under it (the block measure: no line past TeX's room); TeX's end box at 532.12-539.4 on the last line. Its p30 t253: today at
+  // 10.85, 0.55 % under the original's, within the size floor)
+  const ol = (measure: number) => [405.35, 391.8, 376.66, 361.21].map((y) => [N, 0, 72, 540, y, y + 8.73, y - 2.18, 72, measure, 0, 10.91])
+  const v2Of = (measure: number) => ({ facts: { [N]: { members: [{ ord: 80, kind: 'theorem', align: 'j', style: { size: 10.91 }, lines: ol(measure) }], ties: [] } } })
+  const page = (o: { tSize?: number; vSize?: number; vLines?: number; past?: boolean; kind?: string; measure?: number; more?: Diff[] } = {}) => {
     const vl = o.vLines ?? 5,
       ts = o.tSize ?? 10.57,
+      vs = o.vSize ?? 10.91,
       kind = o.kind ?? 'theorem'
     const { page: p } = judged(
       {
-        diffs: [worse('line-count', `t80 ${kind}`, 4, 4, vl, [0, vl - 4])],
-        units: [{ key: 't80', kind, part: 80, align: 'j', sides: { today: side(4, ts, 10.91, 4), v2: side(vl, 10.91, 10.91, 4) } }],
+        diffs: [worse('line-count', `t80 ${kind}`, 4, 4, vl, [0, vl - 4]), ...(o.more ?? [])],
+        units: [{ key: 't80', kind, part: 80, align: 'j', sides: { today: side(4, ts, 10.91, 4), v2: side(vl, vs, 10.91, 4) } }],
         ...(o.past ? { pastRoom: { today: [], v2: ['t80'] } } : {}),
       },
       {
-        v2,
+        v2: v2Of(o.measure ?? 563),
         rec: rec(
           { units: [{ id: 80, lines: [...paragraph(3, 405.35, 14.6, ts, 72, 542), drawn(361.52, 72, 541.33, ts, 'x'.repeat(30))] }] },
-          { units: [{ id: 80, lines: paragraph(vl, 405.35, 14.6, 10.91, 72, 542) }], crops: [[80, 531.72, 347.09, 539.8, 355.6, '-2', 531.72, 360.63, 539.8, 369.14, N]] },
+          { units: [{ id: 80, lines: paragraph(vl, 405.35, 14.6, vs, 72, 542) }], crops: [[80, 531.72, 347.09, 539.8, 355.6, '-2', 531.72, 360.63, 539.8, 369.14, N]] },
         ),
       },
     )
     const d = (p.diffs as (Diff & { coveredSays?: string })[]).find((x) => x.flag === 'line-count')
     return [d?.worse, d?.covered ?? null, d?.coveredSays ?? null]
   }
-  it('one line more than today, at the original size in the room the borrow keeps, today a step smaller: covered by L3, today reported', () => {
+  it('one line more than today, at the original size in the room the borrow keeps: covered by L3, what today does there reported', () => {
     expect(page()).toEqual([false, 'L3', "today 10.57 pt (0.969 of the original's); today's last line ends at 541.33, past TeX's end box (532.12-539.4): drawn over it"])
   })
-  it("today within the size floor of the original (2610.40645 p30, 10.85), a line past TeX's room, two lines more, or a paragraph: worse", () => {
-    expect(page({ tSize: 10.85 })).toEqual([true, null, null])
+  it("today's size not asked: today within the size floor of the original's (2610.40645 p30, 10.85) is covered too", () => {
+    expect(page({ tSize: 10.85 })).toEqual([false, 'L3', "today 10.85 pt (0.995 of the original's); today's last line ends at 541.33, past TeX's end box (532.12-539.4): drawn over it"])
+  })
+  it("today's line past TeX's measure is reported beside", () => {
+    // (TeX's measure ending at 540: today's lines end at 542, 2 pt past it)
+    expect(page({ tSize: 10.85, measure: 540 })[2]).toBe(
+      "today 10.85 pt (0.995 of the original's); today's line at 405.35 ends at 542, 2 pt past TeX's measure (540); today's last line ends at 541.33, past TeX's end box (532.12-539.4): drawn over it",
+    )
+  })
+  it("a line past TeX's room, two lines more, v2 under the original's size, a paragraph, or the unit not whole: worse", () => {
     expect(page({ past: true })).toEqual([true, null, null])
     expect(page({ vLines: 6 })).toEqual([true, null, null])
+    expect(page({ vSize: 10.64 })).toEqual([true, null, null])
     expect(page({ kind: 'para' })).toEqual([true, null, null])
+    expect(page({ tSize: 10.85, more: [worse('elements', 't80 theorem', 0, null, 'element 2: drawn as nothing where TeX set ink')] })).toEqual([true, null, null])
   })
 })
 

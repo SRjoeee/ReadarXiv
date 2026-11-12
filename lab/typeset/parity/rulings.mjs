@@ -101,15 +101,15 @@ export const RULINGS = [
     words: '看起来调整过之后挺舒服。只是你说的有 13 页会出现反效果，因为我不太了解会是什么样子，所以你来帮我判断一下，我们到底应该怎么做。\n计算量多 4.8% 可以接受，段落字号小一级也不是问题，只要用户感受不到就行。',
     example: '1810.04805v2-zh p3, 2602.23285v2-ja p15 (the pages of his look)',
     condition:
-      "what the lay states, never an inference from the geometry: v2's Page member states the unit evened (`evened`: `by` the knobs the page's fill took, `track`, `room`, `size`, `foot`; `lines` its line count on the page before them; the fill keeps an evening only where every frame of the unit then stands in the page's band). size: evened by `size`, at exactly one fit step under the original's size (to the hundredth), the unit whole. line-count: evened, its count against today's other by no more than the knobs changed it, the same way (v2's count before them is today's or nearer it), at the original's size or, evened by `size`, one step under it, the unit whole. A unit one step small, or a line count other, that the lay did not even is judged as before",
+      "what the lay states, never an inference from the geometry: v2's Page member states the unit evened (`evened`: `by` the knobs the page's fill took, in the order taken, of `track`, `room`, `size`, `foot`; `lines` its line count on the page at its fitted layout, before them; the fill keeps an evening only where every frame of the unit then stands in the page's band). size: evened by `size`, at exactly one fit step under the original's size (to the hundredth), the unit whole. line-count: evened, its count against today's other by no more than the knobs changed it, the same way (v2's count before them is today's or nearer it), at the original's size or, evened by `size`, one step under it, the unit whole. A unit one step small, or a line count other, that the lay did not even is judged as before",
     holds(d, x) {
       if (!d.unit) return false
       const u = x.unit(d)
       const v = u?.sides?.v2
       if (!v || u.part === null || u.part === undefined || !x.whole(u.key)) return false
       const ev = x.laid(u.part)?.evened
-      if (!ev?.by) return false
-      const knobs = String(ev.by).split('+')
+      if (!ev?.by?.length) return false
+      const knobs = ev.by
       const oneStep = !!v.osize && Math.abs(v.size - (1 - SIZE_STEP) * v.osize) <= 0.01 + 1e-9
       if (d.flag === 'size') return knobs.includes('size') && oneStep
       if (d.flag !== 'line-count') return false
@@ -121,7 +121,7 @@ export const RULINGS = [
     },
     says(d, x) {
       const ev = x.laid(x.unit(d).part).evened
-      return `evened by ${ev.by}; ${ev.lines} lines on this page before`
+      return `evened by ${ev.by.join(' + ')}; ${ev.lines} lines on this page before`
     },
   },
   {
@@ -133,14 +133,14 @@ export const RULINGS = [
     words: '挺好',
     example: '2602.23285v2-ja p15, 1706.03762v7-zh p2 (the pages of his look)',
     condition:
-      "block: v2's Page member states the unit evened by `foot` (`evened.by`) and the depth its lines took past TeX's text block bottom (`fit.over`, the fit state's: a line of its own pitch at most), and every line of the unit the block measure reads past TeX's room stands under that bottom by no more than that depth (within the bound's own precision, NEAR.room) and over the next ink's baseline by TeX's paragraph separation at least; the unit whole. A line past the bottom the lay does not state as the foot's, or nearer the next ink, is judged as before",
+      "block: v2's Page member states the unit evened by `foot` (among `evened.by`) and the depth its lines took past TeX's text block bottom (`fit.over`: how far under it its lowest line stands where a state of its let it past, the foot's a line of its own pitch at most), and every line of the unit the block measure reads past TeX's room stands under that bottom by no more than that depth (within the bound's own precision, NEAR.room) and over the next ink's baseline by TeX's paragraph separation at least; the unit whole. A line past the bottom the lay does not state as the foot's, or nearer the next ink, is judged as before",
     holds(d, x) {
       if (d.flag !== 'block' || !d.unit) return false
       const u = x.unit(d)
       if (!u?.sides?.v2 || u.part === null || u.part === undefined || !x.whole(u.key)) return false
       const m = x.laid(u.part)
       const over = m?.fit?.over
-      if (!m?.evened?.by || !String(m.evened.by).split('+').includes('foot') || !Number.isFinite(over)) return false
+      if (!m?.evened?.by?.includes('foot') || !Number.isFinite(over)) return false
       const lines = u.sides.v2.block ?? []
       return lines.length > 0 && lines.every((l) => l.below <= over + NEAR.room && (l.sep === null || l.toInk >= l.sep - NEAR.room))
     },
@@ -204,21 +204,25 @@ export const RULINGS = [
     example:
       "2610.40645v1-ja p12 t80: a proof at the original's 10.91 pt in 5 lines where TeX and today set 4 (today at 10.57), its fifth line holding one character and its stop, 15.68 pt over the heading under it (TeX's separation 13.55)",
     condition:
-      "line-count, a theorem (a proof): v2 sets it in exactly one line more than today, today on the original's count, v2 at the original's size (the size floor) where today is smaller than that by more than the size floor, v2's lines inside the room the borrow keeps (the block measure: none of the unit's past TeX's text block bottom or nearer the next ink than TeX's paragraph separation, on any of its pages), the unit whole (WHOLE). Reported beside: today's size, and where today's last line ends against TeX's end box",
+      "line-count, a theorem (a proof): v2 sets it in exactly one line more than today, today on the original's count, v2 at the original's size (the size floor), v2's lines inside the room the borrow keeps (the block measure: none of the unit's past TeX's text block bottom beyond the depth the lay states it borrowed within the fit's bound, or nearer the next ink than TeX's paragraph separation, on any of its pages), the unit whole (WHOLE). Today's size is not asked (the coordinator's ruling of 2026-11-12: 2610.40645 p30, today 0.55 % under the original, is the look of p12). Reported beside, what today does there instead: its size against the original's, a line of its past TeX's measure, where its last line ends against TeX's end box",
     holds(d, x) {
       if (d.flag !== 'line-count' || !d.unit) return false
       const t = d.today?.value,
         v = d.v2?.value
       if (![t, v, d.original].every(Number.isFinite) || v - t !== 1 || t !== d.original) return false
       const u = x.unit(d)
-      if (u?.kind !== 'theorem' || !u.sides?.today || !atOriginal(u.sides.v2) || x.pastV2.has(u.key) || !x.whole(u.key)) return false
-      const ts = shareOf(u.sides.today)
-      return ts !== null && shareOf(u.sides.v2) - ts > NEAR.size
+      return u?.kind === 'theorem' && !!u.sides?.today && atOriginal(u.sides.v2) && !x.pastV2.has(u.key) && x.whole(u.key)
     },
     says(d, x) {
       const u = x.unit(d)
       const tl = (x.rec.today?.units ?? []).filter((w) => w.id === Number(u.key.slice(1))).flatMap((w) => w.lines.filter((l) => !l.rot && l.n > 0 && l.x0 !== null))
       const last = tl.length ? tl.reduce((a, b) => (b.y < a.y ? b : a)) : null
+      // (TeX's measure: the end of the unit's original lines on the page (the part's, [8]); today's line ending furthest past it,
+      // past the bound's precision, NEAR.room)
+      const ol = (x.member(u.part)?.lines ?? []).filter((l) => l[0] === x.n)
+      const measure = ol.length ? Math.max(...ol.map((l) => l[8])) : null
+      const far = measure === null || !tl.length ? null : tl.reduce((a, b) => (b.x1 > a.x1 ? b : a))
+      const past = far && far.x1 - measure > NEAR.room ? `; today's line at ${far.y} ends at ${far.x1}, ${r2(far.x1 - measure)} pt past TeX's measure (${r2(measure)})` : ''
       // (TeX's end box: the source on arXiv's page of v2's crop of the unit's end mark, END_K -2, its crop margin of 0.4 off)
       const end = (x.rec.v2?.crops ?? []).find((c) => c[0] === u.part && String(c[5]) === '-2' && c[10] === x.n)
       let at = ''
@@ -227,7 +231,7 @@ export const RULINGS = [
           b1 = end[8] - 0.4
         at = last.x1 >= b1 ? `; today's last line ends at ${last.x1}, past TeX's end box (${r2(b0)}-${r2(b1)}): drawn over it` : last.x1 > b0 ? `; today's last line ends at ${last.x1}, ${r2(last.x1 - b0)} pt into TeX's end box (${r2(b0)}-${r2(b1)})` : `; today's last line ends at ${last.x1}, ${r2(b0 - last.x1)} pt before TeX's end box`
       }
-      return `today ${u.sides.today.size} pt (${Math.round(shareOf(u.sides.today) * 1000) / 1000} of the original's)${at}`
+      return `today ${u.sides.today.size} pt (${Math.round(shareOf(u.sides.today) * 1000) / 1000} of the original's)${past}${at}`
     },
   },
   {
@@ -310,24 +314,29 @@ export const RULINGS = [
     title: "a theorem shrunk a little more than today's",
     verdict: ACCEPTED,
     date: DATE,
+    seen: "his verdict on the card whose example is 2610.40645 p22; the condition's two halves the coordinator's ruling of 2026-11-12: each a statement of one fit step against what the reader can compare the theorem with, the original beside it or production",
     words: null,
     example:
-      "2610.40645v1-ja p22 t174: a theorem v2 sets at 10.64 pt where today sets 10.98, the original's 10.91",
+      "2610.40645v1-ja p22 t174: a theorem v2 sets at 10.64 pt where today sets 10.98, the original's 10.91 (one step under the original's); its p33 t283: v2 at 10.36 against today's 10.53 (0.62 of a step under today's)",
     condition:
-      "size, a theorem: v2 draws it at exactly one step of the fit's own grain under the original's size (SIZE_STEP, 2.5 % of the original's size: the step v2's sizes come in; to the hundredth of a point the drawing reads sizes at), the unit whole (WHOLE). Today's own size is reported beside, never asked: today may stand above the original (its misread of TeX's justification as size). The size read is the median of the unit's drawn lines on the page, each line at its own run's size (a unit a display splits is laid a run at a time, only a cramped run shrinking: the owner's ruling of 2026-10-09), never its first run's alone",
+      "size, a theorem v2 draws under the original's size, the unit whole (WHOLE), and either (a) at exactly one step of the fit's own grain under the original's size (SIZE_STEP, 2.5 % of the original's size: the step v2's sizes come in; set against the original beside it) or (b) at most one such step under today's size (set against production), each to the hundredth of a point the drawing reads sizes at. A theorem more than a step under today's and not exactly a step under the original's is judged as before. Today's size and the steps are reported beside: today may stand above the original (its misread of TeX's justification as size). The size read is the median of the unit's drawn lines on the page, each line at its own run's size (a unit a display splits is laid a run at a time, only a cramped run shrinking: the owner's ruling of 2026-10-09), never its first run's alone",
     holds(d, x) {
       if (d.flag !== 'size' || !d.unit) return false
       const u = x.unit(d)
-      const v = u?.sides?.v2
-      if (u?.kind !== 'theorem' || !v?.osize || !u.sides.today || !x.whole(u.key)) return false
-      return Math.abs(v.size - (1 - SIZE_STEP) * v.osize) <= 0.01 + 1e-9
+      const v = u?.sides?.v2,
+        t = u?.sides?.today
+      if (u?.kind !== 'theorem' || !v?.osize || !t || !x.whole(u.key) || !(v.size < v.osize)) return false
+      const step = SIZE_STEP * v.osize
+      return Math.abs(v.size - (v.osize - step)) <= 0.01 + 1e-9 || t.size - v.size <= step + 0.01 + 1e-9
     },
     says(d, x) {
       const u = x.unit(d)
       const t = u.sides.today,
         v = u.sides.v2
+      const step = SIZE_STEP * v.osize
+      const half = Math.abs(v.size - (v.osize - step)) <= 0.01 + 1e-9 ? "one step under the original's" : "within a step of today's"
       const others = x.sizesOf(u.key).filter((o) => o.page !== x.n && Math.abs(o.size - v.size) > 0.01)
-      return `today ${t.size} pt (${Math.round((t.size / v.osize) * 1000) / 1000} of the original's)${others.length ? `; its lines on ${others.map((o) => `p${o.page} at ${o.size}`).join(', ')}: another run of it, laid at its own size` : ''}`
+      return `${half}: today ${t.size} pt (${Math.round((t.size / v.osize) * 1000) / 1000} of the original's), v2 ${r2((t.size - v.size) / step)} of a step under it${others.length ? `; its lines on ${others.map((o) => `p${o.page} at ${o.size}`).join(', ')}: another run of it, laid at its own size` : ''}`
     },
   },
   {
