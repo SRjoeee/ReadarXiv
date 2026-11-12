@@ -5521,7 +5521,7 @@ leading, on the pages the fit set it on, no frame gaining a line (the share TeX'
 fill leadings are found again (§18.11); the first that leaves no frame of two lines or more under the floor is kept, else the
 paragraph stays as it was. Its vote is its own, never the evened one's: the page's target, its anchor and every other page's
 reading are as before, so every lay reads the page alike (I6). `packages/typeset/src/shared/fill-page.ts` `evenOf`;
-`tests/unit/tight-paragraph.test.ts`.
+`packages/typeset/tests/unit/tight-paragraph.test.ts`.
 
 **Why, and the one bound.** The owner's guidance of 2026-11-12 on the parity's class L2: one size a page and a fixed leading
 are means, the aim is a page that looks naturally even, and a difference the eye does not see is allowed; the coordinator's
@@ -5544,10 +5544,10 @@ band's floor needs (its frames set no looser than the floor, the borrow's own me
 may). This lifts the 2026-11-09 bound on TeX's text block bottom for this one case, as §18.37 lifted it by 1.5 pt for a size
 kept, by his ruling on the same pages: 「挺好」. 2602.23285v2 page 15, unit 131 (two lines at TeX's pitch, 11.0 pt apart, among
 paragraphs spread to 16.0-16.5): its two lines at 1.41, the second 4.5 pt under the bottom, 24 pt over the page number's
-baseline. Over the 90 pairs it brings 81 frames more into the band (639 in all), 74 lines past the bottom, median 3.3 pt, the
+baseline. Over the 90 pairs it brings 81 frames more into the band (639 in all), 74 lines past the bottom, median 3.6 pt, the
 deepest 10.9 (a line is 11 to 13.5). The two rules stay one: the foot is the knobs' last try, and a paragraph it lifts takes
 it on the knobs before it (one at a page's foot over a page break takes it as 2602.23285's does: its first frame spread, a line
-the tracking freed on the next page; `tests/unit/entry.test.ts`'s share case).
+the tracking freed on the next page; `packages/typeset/tests/unit/entry.test.ts`'s share case).
 
 **What it does** (the 90 pairs with stored rows, the borrow of §18.37 on; every body frame of two lines or more under its page's
 band floor: 1,468 on 871 pages, the same with the borrow off): 558 come into the band (the tracking alone 128, with the room 240,
