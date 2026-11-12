@@ -17,6 +17,17 @@ export const BUILD = join(REPO, '.output/chrome-mv3')
  * Chrome 145, 153 and 154: the warm-up's report)
  */
 const PLAYWRIGHT_OFF = ['AvoidUnnecessaryBeforeUnloadCheckSync', 'DestroyProfileOnBrowserClose', 'DialMediaRouteProvider', 'GlobalMediaControls', 'HttpsUpgrades', 'LensOverlay', 'MediaRouter', 'PaintHolding', 'BlockOriginHeaderModificationOnRedirect', 'Translate', 'AutoDeElevate', 'OptimizationHints']
+/**
+ * And one of Chrome's own: its performance manager's process priority policy, which gives a renderer none of whose tabs is in
+ * front the lowest priority (4 on macOS, darwin background), Playwright's `--disable-renderer-backgrounding` notwithstanding. A
+ * machine busy with other work gives such a process next to no CPU, and the checks drive pages while another tab is in front: the
+ * reader behind the tab its link opened, the popup beside the PDF page, an arXiv page behind an extension page. Measured
+ * 2026-11-13 under the load of other jobs (100 to 300 on 14 cores): the reader's process went from 37 to 4 the moment the tab of
+ * its link opened, and the click on the link, its input not acknowledged, timed out at 30 s (held 90 s and 224 s where given
+ * longer); brought to the front, the reader acknowledged it 20 ms later. With the policy off, every renderer stays at 37 whichever
+ * tab is in front: each page the checks drive is given what a reader's Chrome gives the tab they are looking at
+ */
+const CHROME_OFF = ['PMProcessPriorityPolicy']
 
 /**
  * { context, worker, id, readerUrl(query) }: `profile` names the temporary profile's directory, `extension` another
@@ -66,7 +77,7 @@ export async function launchWithReader({ profile = 'reader', extension = BUILD, 
   let context
   try {
     // (AXT_CHROME: another Chrome, the floor's for one, as the other suites take it)
-    context = await chromium.launchPersistentContext(profileDir, { ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }), headless, viewport, ...(deviceScaleFactor ? { deviceScaleFactor } : {}), args: [`--disable-features=${PLAYWRIGHT_OFF.join(',')}`, `--disable-extensions-except=${extension}`, `--load-extension=${extension}`, ...args] })
+    context = await chromium.launchPersistentContext(profileDir, { ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }), headless, viewport, ...(deviceScaleFactor ? { deviceScaleFactor } : {}), args: [`--disable-features=${[...PLAYWRIGHT_OFF, ...CHROME_OFF].join(',')}`, `--disable-extensions-except=${extension}`, `--load-extension=${extension}`, ...args] })
   } catch (e) {
     removeTemporary()
     throw e
