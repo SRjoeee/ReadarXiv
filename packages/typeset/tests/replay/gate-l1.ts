@@ -101,7 +101,33 @@ export type GateL1 = {
 }
 
 /** I3-I5 over a page's laid members (their lines on the page, as their lay and the page's fill left them) */
-export function invariantsOf(page: number, members: readonly PageMember[], R: RuleParams, inv: GateL1['inv']) {
+/**
+ * How far a line's last item, a crop, stands past the ink it is cut from (`inks`: the ink boxes the part states for the member,
+ * its elements' El.ink and its label's, [page, x0, y0, x1, y1, baseline]), in the line's drawn units: its antialiased margin
+ * (crops.ts cropOfBox, 0.4 pt a side) at the scale it is drawn at; 0 for a text item, a crop cut at its right edge between two
+ * glyphs (no margin there), or one whose ink the part does not state (read by its box, as before)
+ */
+export function pastInk(end: unknown, inks: readonly (readonly number[])[] | undefined): number {
+  const it = end as { t?: { crop?: { page?: number; crop?: number[]; cut?: number } }; w?: number } | undefined
+  const c = it?.t?.crop
+  if (!c?.crop || !inks?.length || ((c.cut ?? 0) & 2) !== 0) return 0
+  const [x0, y0, x1, y1] = c.crop as [number, number, number, number]
+  // (the ink box it is cut from: on its page and within it, across and up and down; of a crop of several, the one ending last)
+  let ink: number | null = null
+  for (const k of inks)
+    if (k[0] === c.page && k[1]! >= x0 - 0.01 && k[3]! <= x1 + 0.01 && k[2]! >= y0 - 0.01 && k[4]! <= y1 + 0.01)
+      ink = ink === null ? k[3]! : Math.max(ink, k[3]!)
+  if (ink === null || x1 <= x0) return 0
+  return ((x1 - ink) * (it?.w ?? x1 - x0)) / (x1 - x0)
+}
+
+export function invariantsOf(
+  page: number,
+  members: readonly PageMember[],
+  R: RuleParams,
+  inv: GateL1['inv'],
+  inksOf?: (ord: number) => readonly (readonly number[])[] | undefined,
+) {
   const floor = Math.min(Number((R as Raw).floor ?? 1), Number((R as Raw).floorMin ?? 1))
   const boxes: { ord: number; x0: number; x1: number; y0: number; y1: number }[] = []
   for (const pm of members) {
@@ -113,11 +139,14 @@ export function invariantsOf(page: number, members: readonly PageMember[], R: Ru
       if (l.page !== page) continue
       inv.lines++
       const used = (l.used as number | undefined) ?? l.x1 - l.x0
-      const over = used - (l.x1 - l.x0)
       // (I5 restated, the placement's own guarantee (B.place placeItems L2:3976-4038): a line ends within its slot but for the
       // blank half of a closing mark it ends with (`hang`, half the size, at a compression under 2), and for a line whose
       // items cannot be set narrower: no word space to shrink and no gap a squeeze took (an overfull box, TeX's); each line
-      // past its slot classed by which, its largest excess beside its count)
+      // past its slot classed by which, its largest excess beside its count. What is drawn past the slot: a crop that ends the
+      // line is read by its ink, the box the part states for it (pastInk), not by the box it is cut with, whose antialiased
+      // margin stands past its ink (round B13, the coordinator's ruling (b): an end mark TeX set flush to the measure's end is
+      // drawn there, PDF-READER §18.52; its crop's margin, 0.4 pt, is no ink past the slot)
+      const over = used - (l.x1 - l.x0) - pastInk(l.items.at(-1), inksOf?.(pm.ord))
       if (over > 1e-6) {
         const end = l.items.at(-1) as { t?: { punct?: string }; cut?: boolean } | undefined
         const hang =
@@ -967,6 +996,17 @@ export function gateL1Pair(
       }
       if (cur.length) flows.push(cur)
     }
+    // (the ink boxes the part states for each member laid, by its laid ord: its elements' and its label's, which I5 reads a crop
+    // ending a line by)
+    const inksBy = new Map<number, number[][]>()
+    for (const m of part.flows.flat()) {
+      const a = adapted.get(m.ord)
+      if (a)
+        inksBy.set(a.ord, [
+          ...(m.els ?? []).flatMap(([, e]) => e.ink as number[][]),
+          ...(m.label?.ink ? [m.label.ink as number[]] : []),
+        ])
+    }
     // (a table's cells, and the members laid at one size: one paragraph of TeX's the front end cut at a float, a figure's set;
     // a table decided over the cells handed in, as today's settleGroup over the cells whose rows are translated: a cell left
     // out that holds its table is tieHeld's, and one handed whole with a cell left out, settleTies skips: the entry's rule)
@@ -994,7 +1034,7 @@ export function gateL1Pair(
     } catch (e) {
       out.threw.push(`p${pg}: ${String((e as Error)?.message ?? e).slice(0, 120)}`)
     }
-    if (got) invariantsOf(pg, got.members, R, out.inv)
+    if (got) invariantsOf(pg, got.members, R, out.inv, (ord) => inksBy.get(ord))
     if (got && out.entry && entryRows && metrics) {
       const t1 = performance.now()
       const linkFates: LinkFate[] = []

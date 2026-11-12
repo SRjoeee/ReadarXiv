@@ -7,6 +7,9 @@
 // members not set by what stops them, the first field of each adapted member's setting that differs from today's, and risk 1
 // (a member laid alike from each page's part). Then: node <baseline>/tools/diff.mjs <baseline> <dir> --scope=reader. Run from
 // the worktree's root (heavy: through heavy-slot.sh test).
+// I5 (each line past its slot, gate-l1.ts invariantsOf) reads what is drawn past it: a crop that ends a line by the ink box the
+// part states for it (its element's El.ink, its label's), not by the box it is cut with, whose antialiased margin (0.4 pt a side)
+// stands past its ink (round B13, the coordinator's ruling (b): an end mark set flush to the measure's end, as TeX set it).
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { readerDump } from '../../packages/typeset/tests/replay/display.ts'
