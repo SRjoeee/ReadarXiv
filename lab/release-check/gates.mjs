@@ -538,7 +538,13 @@ export const GATES = [
     tier: 'full',
     stage: 'reader',
     holds: ['D', 'I3', 'I4', 'I5'],
-    needs: ctx => [exists('the tap', lab(ctx, 'baseline/tap/ledgers')), exists("lane L3's derived inputs", lab(ctx, 'lanes/L3/replay')), exists("the release sweep's cache (AXT_SWEEP_CACHE): the views and rules today's reader read", join(SWEEP_CACHE, 'papers'))],
+    needs: ctx => [
+      exists('the tap', lab(ctx, 'baseline/tap/ledgers')),
+      exists("lane L3's derived inputs", lab(ctx, 'lanes/L3/replay')),
+      exists("the release sweep's cache (AXT_SWEEP_CACHE): the views and rules today's reader read", join(SWEEP_CACHE, 'papers')),
+      exists("the reader's served faces' tables (AXT_FACE_TABLES), the measurer of a width the tap lacks", join(TABLES, 'index.json')),
+      exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
+    ],
     steps: ctx => [
       { cmd: ['node', 'lab/typeset/gate.mjs', `--out=${join(ctx.work, 'typeset-today')}`], slot: 'test', fresh: join(ctx.work, 'typeset-today') },
       { cmd: ['node', lab(ctx, 'baseline/tools/diff.mjs'), lab(ctx, 'baseline'), join(ctx.work, 'typeset-today'), '--scope=reader', `--json=${join(ctx.work, 'typeset-today-diff.json')}`] },
