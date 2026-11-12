@@ -8,6 +8,14 @@
 // instrument is stated by the maker (B = A: each run's glyphs its unit's, in their role), so that the bundle is lane L1's own
 // back half (`prepareBack`) over it: head, units, parts and the add-on, as the prepare makes them.
 //
+// Each link is stated as TeX's hyperref makes it, never as an annotation over a bare word (a shape TeX never gives, which the
+// typesetter drops as no group or element of the unit's: packages/typeset lay/links.ts `unmatched`): a URI link over the word
+// an `\href` group sets (the unit's span piece, its open and close the source's, and its SpanAt: the command and the target,
+// as the instrument states a group's, SpanClass), the translation carrying the group round its word; a link inside the paper
+// over the number a `\ref` element sets (a reference, class `num`, command `ref`), which the translation carries as it carries
+// any element; a URI link round a figure's frame, ink no unit owns (`\href` round an `\includegraphics`), which stays at its
+// box. The reader's browser check judges each one's fate as the typesetter lays it (packages/reader/e2e/run.mjs).
+//
 // The translation is the original's words, each written backwards (the same letters: the same width in the same face), with a
 // word put before some units' text so that their elements move; its rows are the translate package's Result shape. The
 // reader dump (readarxiv-lab-data/refactor-2026-11/baseline/FORMAT.md §4) is laid by a greedy breaker over Helvetica's widths on
@@ -49,7 +57,7 @@ const PAPERS = {
         { u: 'p1', kind: 'para', size: 10, x: 72, y: 582, w: 228, lead: 12, text: words(70, 7), el: { at: 22, s: 'f(x)=x+1', src: '$f(x)=x+1$' }, link: { word: 31, url: 'https://example.invalid/reader' } },
         { u: 'p2', kind: 'para', size: 10, x: 72, y: 430, w: 228, lead: 12, text: words(60, 19) },
         { u: 'h2', kind: 'heading', font: 'HB', size: 12, x: 312, y: 600, w: 228, label: '2', text: 'Method' },
-        { u: 'p3', kind: 'para', size: 10, x: 312, y: 582, w: 228, lead: 12, runIn: { u: 'r3', text: 'Pages.' }, text: words(64, 11), el: { at: 40, s: 'g(y)', src: '$g(y)$' }, goTo: { word: 12, page: 2 } },
+        { u: 'p3', kind: 'para', size: 10, x: 312, y: 582, w: 228, lead: 12, runIn: { u: 'r3', text: 'Pages.' }, text: words(64, 11), el: { at: 40, s: 'g(y)', src: '$g(y)$' }, ref: { at: 52, s: '3', src: '\\ref{sec:landscape}', page: 2 } },
         { u: 'p4', kind: 'para', size: 10, x: 312, y: 420, w: 228, lead: 12, text: words(52, 29) },
         { u: 'fn1', kind: 'footnote', size: 8, x: 72, y: 90, w: 468, lead: 9.6, label: '1', text: words(30, 5) },
       ] },
@@ -57,6 +65,8 @@ const PAPERS = {
         { u: 'h3', kind: 'heading', font: 'HB', size: 12, x: 72, y: 540, w: 648, label: '3', text: 'A Landscape Page' },
         { u: 'p5', kind: 'para', size: 10, x: 72, y: 520, w: 648, lead: 12, runIn: { u: 'r5', text: 'Wide.' }, text: words(90, 2), el: { at: 50, s: 'h(z)=2z', src: '$h(z)=2z$' } },
         { u: 'p6', kind: 'para', size: 10, x: 72, y: 400, w: 648, lead: 12, text: words(70, 23) },
+        // (a figure, a frame of no text, that links out: \href round an \includegraphics; no unit owns its ink)
+        { figure: [120, 190, 672, 330], href: 'https://example.invalid/figure' },
         { u: 'cap1', kind: 'caption', size: 9, x: 120, y: 160, w: 552, lead: 10.8, label: 'Figure 1:', text: words(24, 9) },
       ] },
     ],
@@ -79,7 +89,7 @@ const PAPERS = {
       { size: [612, 792], rotate: 90, blocks: [
         { u: 'title', kind: 'heading', font: 'HB', size: 14, x: 72, y: 720, w: 468, text: 'A Page Turned a Quarter' },
         { u: 'h1', kind: 'heading', font: 'HB', size: 12, x: 72, y: 690, w: 468, label: '1', text: 'Turned' },
-        { u: 'p1', kind: 'para', size: 10, x: 72, y: 672, w: 468, lead: 12, text: words(80, 4), el: { at: 30, s: 'k(t)=3t', src: '$k(t)=3t$' }, link: { word: 12, url: 'https://example.invalid/turned' } },
+        { u: 'p1', kind: 'para', size: 10, x: 72, y: 672, w: 468, lead: 12, text: words(80, 4), el: { at: 30, s: 'k(t)=3t', src: '$k(t)=3t$' }, link: { word: 42, url: 'https://example.invalid/turned' } },
         { u: 'p2', kind: 'para', size: 10, x: 72, y: 560, w: 468, lead: 12, runIn: { u: 'r2', text: 'Quarter.' }, text: words(60, 17) },
         { u: 'cap1', kind: 'caption', size: 9, x: 120, y: 200, w: 372, lead: 10.8, label: 'Table 1:', text: words(22, 8) },
       ] },
@@ -136,14 +146,24 @@ async function write(paper) {
     for (const [k, f] of Object.entries(fonts)) page.node.setFontDictionary(PL.PDFName.of(k), f.ref)
     shows.push([])
   }
+  // (`flat`: the next piece's id, its place in the unit as the front end counts it: a text piece, an element, a group's open and
+  // its close one place each, a group's content between; `spans` and `classes` what the instrument states of its groups and
+  // elements, by piece id)
   const unitOf = (name, kind) => {
-    if (!units.has(name)) units.set(name, { name, kind, pieces: [], labels: '' })
+    if (!units.has(name)) units.set(name, { name, kind, pieces: [], labels: '', flat: 0, spans: [], classes: [] })
     return units.get(name)
   }
   const streams = paper.pages.map(() => [])
   paper.pages.forEach((pg, p) => {
     const out = streams[p], S = shows[p]
     for (const b of pg.blocks) {
+      if (b.figure) {
+        // (its frame stroked, no glyph: hyperref's annotation over the graphic's box)
+        const [x0, y0, x1, y1] = b.figure
+        out.push(`q 0.5 w ${x0} ${y0} ${x1 - x0} ${y1 - y0} re S Q`)
+        annots.push([p, b.figure, { url: b.href }])
+        continue
+      }
       const font = b.font ?? 'H', size = b.size
       const unit = unitOf(b.u, b.kind)
       const runIn = b.runIn ? unitOf(b.runIn.u, 'heading') : null
@@ -153,7 +173,9 @@ async function write(paper) {
       if (runIn) toks.push({ s: b.runIn.text, unit: runIn, role: 'text', font: 'HB', runIn: true })
       b.text.split(' ').forEach((w, i) => {
         if (b.el && i === b.el.at) toks.push({ s: b.el.s, unit, role: 'element', font: 'TI', el: b.el })
-        toks.push({ s: w, unit, role: 'text', font, word: i })
+        // (a \ref: the number it sets, in the text's face, an element of its own)
+        if (b.ref && i === b.ref.at) toks.push({ s: b.ref.s, unit, role: 'element', font, el: { ...b.ref, kind: 'ref' }, ref: b.ref })
+        toks.push({ s: w, unit, role: 'text', font, word: i, ...(b.link && i === b.link.word ? { link: b.link.url } : {}) })
       })
       // the lines: greedy over the width, each line's tokens left to right
       let line = [], width = 0
@@ -180,8 +202,7 @@ async function write(paper) {
         for (const t of l) {
           const x = b.x + t.dx
           const piece = t.el ? addEl(t.unit, t.el) : null
-          if (t.role === 'text' && !t.runIn) addText(t.unit, t.s)
-          if (t.role === 'text' && t.runIn) addText(t.unit, t.s)
+          if (t.role === 'text') addText(t.unit, t.s, t.link)
           if (t.role === 'label') t.unit.labels += t.s
           const sameRun = run && run.font === t.font && run.unit === t.unit && run.role === t.role && t.role === 'text'
           // (the run-in head and its text: two units in one show, the TJ's kern between them)
@@ -189,8 +210,9 @@ async function write(paper) {
           if (sameRun) { const last = run.parts.at(-1); last.text += ` ${t.s}` }
           else if (splitRun) run.parts.push({ unit: t.unit, role: t.role, text: ` ${t.s}`, runIn: false })
           else { flush(); run = { font: t.font, unit: t.unit, role: t.role, x, parts: [{ unit: t.unit, role: t.role, piece, text: t.s, runIn: !!t.runIn }] } }
-          if (t.role === 'text' && b.link && t.word === b.link.word) annots.push([p, [x, y - 2, x + fonts[t.font].widthOfTextAtSize(t.s, size), y + size * 0.8], { url: b.link.url }])
-          if (t.role === 'text' && b.goTo && t.word === b.goTo.word) annots.push([p, [x, y - 2, x + fonts[t.font].widthOfTextAtSize(t.s, size), y + size * 0.8], { page: b.goTo.page }])
+          // (hyperref's annotations: over the \href group's word, over the number the \ref sets)
+          if (t.link) annots.push([p, [x, y - 2, x + fonts[t.font].widthOfTextAtSize(t.s, size), y + size * 0.8], { url: t.link }])
+          if (t.ref) annots.push([p, [x, y - 2, x + fonts[t.font].widthOfTextAtSize(t.s, size), y + size * 0.8], { page: t.ref.page }])
           // (an element is its own run, then the text after it a new one)
           if (t.el) flush()
         }
@@ -198,15 +220,34 @@ async function write(paper) {
       })
     }
   })
-  // (the units' content: a unit's text pieces between its elements; its id by its content)
-  function addText(u, s) {
+  // (the units' content: a unit's text pieces between its elements and groups; its id by its content)
+  function addText(u, s, url) {
     const last = u.pieces.at(-1)
+    if (url) {
+      // (an \href group round the word: the space before it the text's, the group's content the word; its open and close the
+      // source's, its command and target what the instrument states of it)
+      if (last?.t === 'text') last.s += ' '
+      else if (u.pieces.length) {
+        u.pieces.push({ t: 'text', s: ' ' })
+        u.flat++
+      }
+      const id = String(u.flat)
+      u.pieces.push({ t: 'span', id, style: 'link', open: `\\href{${url}}{`, close: '}', content: [{ t: 'text', s }] })
+      u.flat += 3
+      u.spans.push([id, { cmd: 'href', to: { url } }])
+      return
+    }
     if (last?.t === 'text') last.s += ` ${s}`
-    else u.pieces.push({ t: 'text', s: u.pieces.length ? ` ${s}` : s })
+    else {
+      u.pieces.push({ t: 'text', s: u.pieces.length ? ` ${s}` : s })
+      u.flat++
+    }
   }
   function addEl(u, el) {
-    const id = String(u.pieces.length)
-    u.pieces.push({ t: 'el', id, kind: 'math', src: el.src })
+    const id = String(u.flat++)
+    u.pieces.push({ t: 'el', id, kind: el.kind ?? 'math', src: el.src })
+    // (a reference: a number, its command the source's)
+    if (el.kind === 'ref') u.classes.push([id, { cls: 'num', cmd: 'ref' }])
     // (the text after it starts with its space)
     return Number(id)
   }
@@ -235,7 +276,7 @@ async function instrumentOf(bytes, written, reading = pdfjs) {
   const index = new Map(written.units.map((u, i) => [u, i]))
   const units = written.units.map(u => {
     const content = u.pieces.length ? u.pieces : [{ t: 'text', s: u.labels }]
-    return { id: unitId(u.kind, content), kind: u.kind, content }
+    return { id: unitId(u.kind, content), kind: u.kind, content, ...(u.spans.length ? { spans: u.spans } : {}), ...(u.classes.length ? { classes: u.classes } : {}) }
   })
   const glyphs = r.doc.pages.map((pg, p) => {
     const O = { unit: new Int32Array(pg.glyphs.length).fill(-1), role: new Uint8Array(pg.glyphs.length), piece: new Int32Array(pg.glyphs.length).fill(-1) }
@@ -265,24 +306,34 @@ async function instrumentOf(bytes, written, reading = pdfjs) {
 
 // ---------------------------------------------------------------- the translation and its dump
 const backwards = s => s.split(/(\s+)/).map(w => (/\s/.test(w) ? w : [...w].reverse().join(''))).join('')
-/** the translation of a unit: its text pieces written backwards, its elements where they are; a word put first in some units */
+/** the translation of a unit: its text pieces written backwards, its elements where they are, its groups round their text's
+ *  translation; a word put first in some units */
 function translationOf(unit, k) {
-  const out = []
-  unit.content.forEach((p, i) => {
-    if (p.t === 'text') out.push({ t: 'text', s: (i === 0 && k % 3 === 1 ? 'Zur ' : '') + backwards(p.s) })
-    else if (p.t === 'el') out.push({ t: 'el', id: p.id })
-  })
-  return out
+  const of = (ps, top) =>
+    ps.flatMap((p, i) =>
+      p.t === 'text'
+        ? [{ t: 'text', s: (top && i === 0 && k % 3 === 1 ? 'Zur ' : '') + backwards(p.s) }]
+        : p.t === 'el'
+          ? [{ t: 'el', id: p.id }]
+          : p.t === 'span'
+            ? [{ t: 'span', id: p.id, content: of(p.content, false) }]
+            : [],
+    )
+  return of(unit.content, true)
 }
 
 /** the dump's lines of one member laid: its tokens (words, its elements' widths) broken greedily over its own lines' measures
  *  (then lines below them at its lead, within its room), at its size or the first of 95 % steps that fits */
 function layMember(m, row, els, widthOf) {
   const toks = []
-  for (const p of row.content) {
-    if (p.t === 'text') for (const w of p.s.split(' ').filter(Boolean)) toks.push({ w })
-    else if (p.t === 'el') { const e = els.get(p.id); const ink = e?.ink?.[0]; if (ink) toks.push({ el: p.id, ink }) }
+  const walk = ps => {
+    for (const p of ps) {
+      if (p.t === 'text') for (const w of p.s.split(' ').filter(Boolean)) toks.push({ w })
+      else if (p.t === 'el') { const e = els.get(p.id); const ink = e?.ink?.[0]; if (ink) toks.push({ el: p.id, ink }) }
+      else if (p.t === 'span') walk(p.content)
+    }
   }
+  walk(row.content)
   const lines = m.lines.filter(l => l[0] === m.lines[0][0])
   const page = lines[0][0]
   for (let k = 1; k >= 0.7; k -= 0.05) {

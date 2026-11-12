@@ -1676,7 +1676,13 @@ the highlight's layer, outside the dark filter (the left's links keep their colo
   the link of the same rank, else to the place; its page is not let go far from the view while it holds it (above).
 
 The rows are `tests/pdf-reader/links-view.test.ts` (LV1–LV4 on links.mjs, LS1–LS7 on the side over the fake door) and the
-real door's in `layer-side-door.test.ts`.
+real door's in `layer-side-door.test.ts`. The rebuilt reader's (`packages/reader` `compose/links.ts` over the typesetter's
+`Page.links`, `packages/typeset` `lay/links.ts`) are held by its browser check, which lays the CC0 fixtures through the
+reader's own typesetter and judges every part link by its fate (each drawn, an anchor a record; an address out through the
+host, a reference jumped, one no unit owns at its box): `packages/reader/e2e/run.mjs`. The fixtures state each link as
+hyperref sets it (`lab/pdf/reader-fixtures/make.mjs`: an `\href` group, a `\ref` element, a link round a figure), never as an
+annotation over a bare word of a unit's text, which no group or element of the unit takes and the typesetter drops as above
+(`unmatched`, lane laid-links, 2026-11-13).
 
 ### 11.10 The extension's run on the layer
 

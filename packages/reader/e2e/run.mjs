@@ -984,43 +984,113 @@ await check(
   },
 )
 
+// ---------------------------------------------------------------- the links of a page laid by the reader's own typesetter
+/** the fates of a part's link that draw it (packages/typeset lay/links.ts LinkFate: at its box, or moved with what it is over);
+ *  `unmatched`, `unplaced`, `targets`, `off` drop it, `away` is another page's */
+const DRAWN_FATES = ['free', 'unlaid', 'kept', 'crop', 'text', 'pair', 'whole']
+/** page n's links as the reader's own typesetter made them: each part link of the page with its fate, the fates' lay against
+ *  the committed page (one lay), an anchor each record; what is wrong, a sentence each */
+async function typesetLinks(page, n) {
+  const f = await page.evaluate((n) => window.__h.linkFatesOf(n), n)
+  const anchors = await page.evaluate((n) => window.__h.linksOf(n), n)
+  const wrong = []
+  if (!f) return { f, anchors, here: [], wrong: [`page ${n}: no lay of its part`] }
+  const here = f.links.filter((l) => l.page === n)
+  for (const l of here)
+    if (!DRAWN_FATES.includes(l.fate))
+      wrong.push(`page ${n}: the link to ${JSON.stringify(l.to)} owned by ${JSON.stringify(l.owner)} ${l.fate}`)
+  if (JSON.stringify(f.laid) !== JSON.stringify(f.committed))
+    wrong.push(
+      `page ${n}: the fates' lay ${JSON.stringify(f.laid)} is not the committed ${JSON.stringify(f.committed)}`,
+    )
+  if (anchors.length !== (f.committed?.length ?? -1) || (f.committed?.length ?? 0) < here.length)
+    wrong.push(`page ${n}: ${here.length} links, ${f.committed?.length} records, ${anchors.length} anchors`)
+  return { f, anchors, here, wrong }
+}
 await check(
-  "compose: a laid page's links, out of the paper through the host, inside it on the right (s1-columns)",
+  "compose: a laid page's links through the reader's own typesetter, every part link drawn by its fate and an anchor each: out of the paper through the host, inside it on the right, one no member owns at its own box (s1-columns)",
   async () => {
+    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
     const { page, context, errors } = await newPage()
     await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
-    await page.evaluate(() => window.__h.layer('s1-columns'))
+    await page.evaluate(() => window.__h.layer('s1-columns', { typeset: true }))
     await laidShown(page, 1)
-    const links = await page.evaluate(() => window.__h.linksOf(1))
-    const ext = links.find((l) => l.href?.startsWith('https:')),
-      inner = links.find((l) => l.href?.startsWith('#'))
-    assert(ext && inner, `links ${JSON.stringify(links)}`)
-    await page.mouse.click(ext.rect.x + ext.rect.width / 2, ext.rect.y + ext.rect.height / 2)
-    await page.mouse.click(inner.rect.x + inner.rect.width / 2, inner.rect.y + inner.rect.height / 2)
-    const hit = await page.evaluate(
-      ([x, y]) => {
-        const e = document.elementFromPoint(x, y)
-        return `${e?.tagName}.${e?.className} in ${e?.closest('a')?.getAttribute('href')}`
-      },
-      [inner.rect.x + inner.rect.width / 2, inner.rect.y + inner.rect.height / 2],
-    )
+    const p1 = await typesetLinks(page, 1)
+    const ext = p1.anchors.find((l) => l.href === 'https://example.invalid/reader'),
+      inner = p1.anchors.find((l) => l.href?.startsWith('#'))
+    if (ext) await page.mouse.click(ext.rect.x + ext.rect.width / 2, ext.rect.y + ext.rect.height / 2)
+    if (inner) await page.mouse.click(inner.rect.x + inner.rect.width / 2, inner.rect.y + inner.rect.height / 2)
     // (a document this short ends before page 2 can stand at the top: the jump brings it into view)
-    await waitFor(
-      page,
-      () => window.__h.panes.right.inView(2) && document.querySelector('.axt-pane.right').scrollTop > 0,
-    ).catch(async (e) => {
-      throw new Error(
-        `${e.message}: hit ${hit}, right page ${await page.evaluate(() => window.__h.panes.pageOf('right'))}, scroll ${await page.evaluate(() => document.querySelector('.axt-pane.right').scrollTop)}, inner ${JSON.stringify(inner)}`,
-      )
-    })
+    const jumped = inner
+      ? await waitFor(
+          page,
+          () => window.__h.panes.right.inView(2) && document.querySelector('.axt-pane.right').scrollTop > 0,
+        ).then(
+          () => true,
+          () => false,
+        )
+      : false
+    // (page 2: the figure's link, which no member owns, at its own box on A)
+    const shown2 = await laidShown(page, 2).then(
+      () => true,
+      () => false,
+    )
+    const p2 = shown2 ? await typesetLinks(page, 2) : { f: null, anchors: [], here: [], wrong: ['page 2 not laid'] }
+    const free = p2.here.find((l) => l.owner === null)
+    const rec = free && (p2.f.committed ?? []).findIndex(([, to]) => JSON.stringify(to) === JSON.stringify(free.to))
+    const boxes2 = shown2 ? await page.evaluate(() => window.__h.linkBoxesOf(2)) : []
+    const freeA = free && p2.anchors.find((l) => l.href === free.to.url)
+    const near = (a, b) => !!a && !!b && ['x', 'y', 'width', 'height'].every((k) => Math.abs(a[k] - b[k]) <= 1)
+    if (freeA) await page.mouse.click(freeA.rect.x + freeA.rect.width / 2, freeA.rect.y + freeA.rect.height / 2)
     const external = await page.evaluate(() => window.__h.external)
     await context.close()
     assert(!errors.length, errors.join('; '))
+    const wrong = [...p1.wrong, ...p2.wrong]
+    assert(!wrong.length, wrong.join('; '))
+    assert(ext && inner, `page 1's anchors ${JSON.stringify(p1.anchors)}`)
+    assert(jumped, `the link inside the paper ${JSON.stringify(inner)} did not bring page 2 into view`)
     assert(
-      external.length === 1 && external[0] === 'https://example.invalid/reader',
+      free?.fate === 'free' && rec >= 0 && JSON.stringify(p2.f.committed[rec][0]) === JSON.stringify(free.box),
+      `the link no member owns ${JSON.stringify(free)} not at its box: ${JSON.stringify(p2.f?.committed)}`,
+    )
+    assert(
+      near(freeA?.rect, boxes2[rec]),
+      `its anchor ${JSON.stringify(freeA?.rect)} against its box ${JSON.stringify(boxes2[rec])}`,
+    )
+    assert(
+      JSON.stringify(external) === JSON.stringify(['https://example.invalid/reader', 'https://example.invalid/figure']),
       `opened ${JSON.stringify(external)}`,
     )
-    return { links: links.length, external }
+    return {
+      fates: [...p1.here, ...p2.here].map((l) => l.fate),
+      anchors: [p1.anchors.length, p2.anchors.length],
+      external,
+    }
+  },
+)
+await check(
+  "compose: a turned page's link through the reader's own typesetter, drawn by its fate, an anchor over its box, out of the paper through the host (s3-turned)",
+  async () => {
+    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), indexOf['s3-turned'].original)
+    await page.evaluate(() => window.__h.layer('s3-turned', { typeset: true }))
+    await laidShown(page, 1)
+    const p1 = await typesetLinks(page, 1)
+    const boxes = await page.evaluate(() => window.__h.linkBoxesOf(1))
+    const a = p1.anchors.find((l) => l.href === 'https://example.invalid/turned')
+    if (a) await page.mouse.click(a.rect.x + a.rect.width / 2, a.rect.y + a.rect.height / 2)
+    const external = await page.evaluate(() => window.__h.external)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(!p1.wrong.length, p1.wrong.join('; '))
+    const near = (x, y) => !!x && !!y && ['x', 'y', 'width', 'height'].every((k) => Math.abs(x[k] - y[k]) <= 1)
+    assert(
+      a && boxes.length === 1 && near(a.rect, boxes[0]),
+      `the turned page's link ${JSON.stringify(a?.rect)} against its box ${JSON.stringify(boxes)}`,
+    )
+    assert(external.includes('https://example.invalid/turned'), `a click on it opened ${JSON.stringify(external)}`)
+    return { fates: p1.here.map((l) => l.fate), anchors: p1.anchors.length }
   },
 )
 await check(
