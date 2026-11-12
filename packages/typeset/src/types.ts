@@ -3,7 +3,6 @@
 // (layPage, layFlow) is built from the rules once each rule is proven against today's recorded outputs (the tap).
 import type { Box, Id, Ink, Link, Part, Placed, PrepWhy, Row, Why as RowWhy } from '@readarxiv/format'
 import type { ScriptRules } from './data/rules/types.ts'
-import type { EvenKnob } from './shared/fill-page.ts'
 import type { RefNames } from './unit/rename.ts'
 
 /** a target language's tag (BCP 47, as the rule set's `languages` names it) */
@@ -162,6 +161,10 @@ export type Item =
    *  carried to the end of the name before, lay/flow.ts): lit, cut and counted as that member's */
   | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3; ink?: Box[]; of?: number }
 
+/** the fit's knobs a unit under its page's band may take in the fill (shared/fill-page.ts evenOf, docs/PDF-READER.md §18.57): its
+ *  tracking, the room TeX left under its blocks, one step of its sizes; and at a column's foot the room past TeX's text block bottom
+ *  (the borrow's own, §18.37). Here, where Laid states it, so that the page's fill imports it and no type cycle runs through it */
+export type EvenKnob = 'track' | 'room' | 'size' | 'foot'
 /** one member on one page, as laid (design-a §1.2) */
 export type Laid = {
   ord: number

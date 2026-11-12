@@ -13,6 +13,7 @@ import { keepsShare } from './share.ts'
 import { settleLayout } from './settle.ts'
 import type { Token } from '../breaker/tokens.ts'
 import type { FitBlock, FitParams, FitState, Layout } from '../fit/types.ts'
+import type { EvenKnob } from '../types.ts'
 import type { Band } from '../unit/params.ts'
 import type { FillRules, FillShare } from './fill-leads.types.ts'
 import type { FillTarget, Voter } from './fill-target.ts'
@@ -406,9 +407,6 @@ function headOf(q: FillLaid, onPage: readonly { u: FillLaid; l: Layout; st: FitS
   return 0
 }
 
-/** the fit's knobs a unit under its page's band may take in the fill (§18.57): its tracking, the room TeX left under its
- *  blocks, one step of its sizes; and at a column's foot the room past TeX's text block bottom (the borrow's own, §18.37) */
-export type EvenKnob = 'track' | 'room' | 'size' | 'foot'
 /** the tries, in the fit's own order (fit/walk.ts statesOf), each knob kept for the next as the walk keeps them; the room past
  *  TeX's bottom last, on the tracking and TeX's room alone, then with the size step */
 const EVEN_TRIES: readonly (readonly EvenKnob[])[] = [

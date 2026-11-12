@@ -4,13 +4,13 @@
 // pass); the table groups settled (L11, S.table.settle: a group on two pages or with a cell unfit is withheld whole); the
 // page's members as drawn (E1, D.display). Pure: the flows are laid anew on each call, nothing is kept between calls.
 import { type DisplayLine, displayLines } from '../emit/display.ts'
-import type { EvenKnob, PageRules } from '../shared/fill-page.ts'
+import type { PageRules } from '../shared/fill-page.ts'
 import { fillPass, type PassUnit } from '../shared/fill-pass.ts'
 import type { FillTarget } from '../shared/fill-target.ts'
 import { tableSettle } from '../shared/table-settle.ts'
 import { depthUnder } from '../fit/walk.ts'
 import type { FitBlock, FitState, Layout } from '../fit/types.ts'
-import type { LedgerSlot, RuleParams, Unlaid } from '../types.ts'
+import type { EvenKnob, LedgerSlot, RuleParams, Unlaid } from '../types.ts'
 import { type FlowMember, layFlowPrepared } from './flow.ts'
 import { fin, layoutOf, linesOf } from './trace.ts'
 
