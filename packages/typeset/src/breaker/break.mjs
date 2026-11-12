@@ -95,8 +95,10 @@ const STRETCH_MIN = 0.05
  *  `brk` — a URL's after its `/`, `.`, `-`, a compound's after its hyphen —, or a run of one case of a word, `cont`): the gap
  *  before it is a break point with no glue, as TeX's url package sets one (\Urlmuskip 0mu: a penalty) and as TeX sets every
  *  word, so no CJK line's slack or squeeze goes into it (placeItems, squeezeTakes). 2608.25210v2 p17: a URL whose line ends
- *  are joins (lane url-join), cut at its break points, was letter-spaced to the measure, 1.9-2.7 pt after each "/" */
-const inWord = it => !!(it.t.brk || it.t.cont)
+ *  are joins (lane url-join), cut at its break points, was letter-spaced to the measure, 1.9-2.7 pt after each "/". And an
+ *  element set right after the one before it, nothing between in the source or the row (`tight`, tokens.ts): one word as TeX set it
+ *  (2111.09276v1 p1, two highlights of one word drawn apart by the line's slack) */
+const inWord = it => !!(it.t.brk || it.t.cont || it.t.tight)
 /** the index of a line's first text item set at a label's hang (`tabbed`, breakLines), -1 for none: TeX's hang is a box, so the
  *  label before it and the room up to it take no slack (placeItems) */
 const tabOf = items => items.findIndex(it => it.tabbed)

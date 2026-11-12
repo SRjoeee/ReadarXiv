@@ -72,6 +72,9 @@ export type Token = {
   /** a space no line breaks at: a tie's, the source's `~` (TeX's \penalty10000 and its interword glue): break.mjs's group runs
    *  on through it; the space is drawn and stretched with the line's other spaces */
   tie?: true
+  /** set right after the token before it with nothing between, two elements the source sets side by side (consecutive pieces of
+   *  its unit) and the row too: one word, glued, and the gap before it inside the word (break.mjs inWord: no slack, no squeeze) */
+  tight?: true
   keep?: true
   crop?: Record<string, unknown>
   cw?: number
@@ -671,7 +674,42 @@ export function tokens(i: TokensInput): Tokens {
     t.kernEnd = true
     if (!g.brk) noBreakNext = true
   }
+  // (two elements the source sets side by side, nothing between them there (consecutive pieces of its unit: `k`, the source's
+  // index) and in the row (no token between): one word, as TeX set it, whatever their kinds. The later one's first token is glued
+  // and set tight (no slack of a justified line between them); two crops TeX set on one line keep TeX's distance between their
+  // starts, the earlier one's advance its box less the margins its crop adds (unit/crops.ts cropOfBox) and what its ink
+  // overhangs, a kern after it that a line's end drops (2111.09276v1 p1's `\hlyellow{high}\hlblue{lighted}`, inks 0.25 pt
+  // over each other: 0.97 pt of white between the two drawn). The tie's rule (r.tie, below) holds a token to the one before it
+  // across a space TeX set; this one where TeX set nothing)
+  let prev: { p: V0Piece; from: number; beside: Token | null } | null = null
+  const sideBySide = () => {
+    if (!prev?.beside || tokens.length <= prev.from) return
+    const a = prev.beside,
+      b = tokens[prev.from]!
+    // (what both set is drawn: a crop or a text, never a control token, a forced break's newline or a kept region's blockTo)
+    if (b.space || (b.crop === undefined && typeof b.s !== 'string')) return
+    b.glue = true
+    b.tight = true
+    const qa = a.crop as { page?: number; crop?: number[]; baseline?: number } | undefined
+    const qb = b.crop as { page?: number; crop?: number[]; baseline?: number } | undefined
+    const size = resolved.orig?.size
+    if (qa?.crop && qb?.crop && qa.page === qb.page && qa.baseline === qb.baseline && size! > 0)
+      a.kernW = (100 * (qb.crop[0]! - qa.crop[0]! - a.cw!)) / size!
+  }
   unit.pieces.forEach((p, k) => {
+    sideBySide()
+    const last = tokens.at(-1)
+    const beside =
+      p.t === 'ph' &&
+      prev?.p.t === 'ph' &&
+      prev.p.k !== undefined &&
+      p.k === prev.p.k + 1 &&
+      tokens.length > prev.from &&
+      (last?.crop !== undefined || typeof last?.s === 'string') &&
+      !last.space
+        ? last
+        : null
+    prev = { p, from: tokens.length, beside }
     if (p.t === 'text') {
       const raw = drawnText(p as TextPiece)
       let s = raw
@@ -845,6 +883,7 @@ export function tokens(i: TokensInput): Tokens {
       }
     } else pushText(r.text, st, { ph: r.mode, k, ...(r.math ? { math: true as const } : {}) }, null, capsAt, ratio)
   })
+  sideBySide()
   // (U.marks, T17: the class's own marks after the unit's text, in place of the translation's of their kinds at its end)
   if (resolved.tail?.length) {
     marks.tail = [resolved.tail.length, mergeTail(tokens, resolved.tail, resolved.tailOwn ?? null)]

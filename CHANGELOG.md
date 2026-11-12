@@ -4,6 +4,8 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, two pieces of the original the paper sets side by side in one word, such as a word highlighted in two colours, are drawn as close together as the paper sets them, with no white gap between them.
+- Fixed: when Google answers with a page of its own instead of a translation, such as a check that you are not a robot, the next translation service takes over for a while, as it does when Google refuses. Each passage had waited for Google twice first, for as long as the page was served.
 - Fixed: with Google translating, two pieces the paper sets side by side with nothing between them, such as a word it highlights in two colours or a formula followed by its footnote mark, stay side by side. Google had put a space between them.
 - Fixed: in the PDF reader, a word and what the paper ties to it with an unbreakable space (`~`), such as a footnote's mark, "Figure 3" or "et al." and its citation, stay on one line in the translation, as in the original. A footnote's mark could begin a line of its own.
 - Fixed: in the PDF reader, a paragraph that opens with a bold title run into its first line, such as "Howto-GEN" after a paragraph ending in a footnote mark, starts on its own line where the original starts it, when the paper writes several such paragraphs one after another with no blank line between them. It had been drawn on from the last line of the paragraph before it, its footnote mark beside the next title.

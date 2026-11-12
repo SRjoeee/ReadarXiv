@@ -572,7 +572,9 @@ offers its retry by: a Retry-After of an hour, slept twice, had held a call two 
 translator (50 % of 20, never the chain's last), halving only where an endpoint says a request is too large (a 413, or the
 words of its stated cap: Microsoft's plain-text 400) while any other refused request goes whole to the next translator and
 counts against its own as a failure of its endpoint does (a 400 to every request had been halved into 7 requests for an
-LLM's 4 units and 199 for Google's 100, #636), one acceptance rule,
+LLM's 4 units and 199 for Google's 100, #636), and so does a request answered whole in no shape of its translator's, asked once
+more (`malformed`: a 200 that is a captcha's HTML page where Google's JSON belongs had been counted by no breaker, every
+request paying its second try for as long as the page was served), one acceptance rule,
 fall-through to the next translator per unit, one re-ask where a translator asks it (an LLM), the runs floor past the last,
 whole or not at all: where a stretch comes back from no translator the unit is refused and its original stays, never its
 English between translated stretches (PDF-READER §18.21).

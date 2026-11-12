@@ -260,8 +260,11 @@ const UNCONFIGURED: Partial<Record<Fault['code'], UnconfiguredCode>> = {
 /** the failures that are the endpoint's health, which the breaker counts (chain.ts ENGINE_FAILURES) */
 const HEALTH = new Set<Fault['code']>(['network', 'timeout', 'overload'])
 /** a request its translator refused whole for no reason of its size or the language (`pass`): the same at any size, so it is
- *  this translator's, counted by the breaker as a failure of its endpoint is (a 400 to every request stops being asked) */
-const refusedWhole = (f: Fault): boolean => f.remedy === 'pass' && f.code !== 'too-large' && f.code !== 'unsupported'
+ *  this translator's, counted by the breaker as a failure of its endpoint is (a 400 to every request stops being asked). A
+ *  request answered whole in no shape of its translator's (`malformed`, whatever its remedy: a 200 that is a captcha's HTML
+ *  page where the endpoint's JSON belongs, asked once more) is refused the same way, at any size: counted alike */
+const refusedWhole = (f: Fault): boolean =>
+  f.code === 'malformed' || (f.remedy === 'pass' && f.code !== 'too-large' && f.code !== 'unsupported')
 
 export function chainOf(ports: Ports = {}): Chain {
   const clock = ports.clock ?? realClock()

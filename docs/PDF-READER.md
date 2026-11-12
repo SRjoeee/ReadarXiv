@@ -6204,6 +6204,35 @@ it. Not this round's: staging drew the same at round B10's engine; the lay follo
   after a citation and after a full stop, with microtype, each end stated before the next paragraph's first glyph and no glyph
   moved by the points (four ends missing before). The facts pass reads two ends at one glyph position as one.
 
+### 18.67 Two elements the source sets side by side are one word, at TeX's distance (the coordinator's ruling, 2026-11-13)
+
+The owner's report on staging (round B12, 2111.09276v1 p1, a caption): `the tokens that have been edited are
+\hlyellow{high}\hlblue{lighted}`, one word in two highlights, was drawn with white between the two colours. The row set the two
+elements with nothing between them and the breaker made no space token; the gap was the typesetter's: each crop advanced by its
+padded box (`unit/crops.ts` cropOfBox, 0.4 pt each side) where TeX set the second's ink 0.25 pt over the first's, and the CJK
+line's justification put its slack between the two (`break.mjs` inWord read only `brk` and `cont`): 0.97 pt of white. On Google's
+wire a reply also set a space there (3,122 of 3,290 such pairs over the lab's 90 pairs), which the reading now takes back (DESIGN
+§6.2's glue rule, one rule for every pair of pieces): spacing and places are restored from the source on reading, and the row
+carries the adjacency.
+
+The rule (`breaker/tokens.ts` sideBySide): two elements consecutive in the source (their pieces' index `k`, one after the other,
+nothing between) and in the row (no token between them), each drawn (a crop or a text; never a forced break's newline or a kept
+region's blockTo, control tokens), are one word as TeX set it, whatever their kinds: the later one's first token is glued and
+`tight`, inside the word for `inWord` (no slack of a justified line and no squeeze between them), and two crops TeX set on one
+line (one page, one baseline) keep TeX's distance between their starts: a kern after the first, that distance less its box, which
+a line's end drops. A tie between them is TeX's own space (the tie's rule holds them across it); a forced break, its line end.
+
+Measured over the 90 pairs (r21's bundles, the reader gate's runner, base = the round's typesetter, Google's rows read with the
+glue rule): with the door rows 6 of 23,006 units move, with Google's 5 of 22,939, each holding such a pair (2501.14787v1 ord
+404, a typewriter symbol and its superscript; 2610.21098v1 ord 13, a minus sign and a macro's number, its paragraph one character
+re-broken on three lines; 2610.21376v1 ords 40, 46, 85, 131, a formula and a revision macro of the paper's own after it, a
+typewriter word and a formula): the
+crops' places by at most 2.5 pt, one line's end by 0.8 pt; I3 (3), I4 (0), I5 (2) and I6 (11, the head pass's) as before on both, a closing mark's blank half past
+its slot 3,537 -> 3,536 on the door's rows (2610.21098v1's re-broken lines, the one unit whose lines moved there), 3,121 on Google's. The owner's caption: the two highlights
+16.26 pt apart, TeX's distance, where they stood 17.48. The display gate's lay (its 22 pairs, the door's rows, default and every switch on): one page
+of 344 moves, 2608.25210v2-zh p9, a formula and the element right after it on one line, the line's other items 0.01 pt at most. A first build glued the control token after such an element (2608.06701v1
+p1: a page's fill threw, I6 caught it) and was corrected before it was committed: both sides must draw.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

@@ -14,6 +14,7 @@ import {
   type UnitIn,
 } from '../src/contract.ts'
 import { sha256Hex } from '../src/sha256.ts'
+import { google } from '../src/adapters/google.ts'
 import { microsoft } from '../src/adapters/microsoft.ts'
 import { echo, fakeTranslator, mangler, scriptedFetch } from '../src/testing/fakes.ts'
 import { countingGate, fakeClock, memoryStore } from '../src/testing/ports.ts'
@@ -620,6 +621,31 @@ describe('DECISION "Faults": each remedy, on a fake clock', () => {
     for (let k = 0; k < BREAKER.minOutcomes + 2; k++)
       await all(chain.translate([unit(`c${k}`, [t(`Call ${k} has words.`)])], 'ja', { translators: [refuser, echo()] }))
     expect(refuser.calls.length).toBe(BREAKER.minOutcomes)
+  })
+  it('a 200 that is no reply of its translator (a captcha page) is counted by the breaker as a refusal is, and the gate told so', async () => {
+    // (Google's endpoint answering every request with an HTML page and status 200: its adapter reads no translations array,
+    // a malformed reply it asks once more; each try an outcome of the endpoint's, as a refused request's is)
+    const page = scriptedFetch(() => ({
+      status: 200,
+      body: '<html><body>Our systems have detected unusual traffic</body></html>',
+    }))
+    const captcha = google({ fetch: page.fetch })
+    const chain = chainOf({ clock: fakeClock() })
+    for (let k = 0; k < BREAKER.minOutcomes / 2 + 2; k++) {
+      const rs = await all(
+        chain.translate([unit(`c${k}`, [t(`Call ${k} has words.`)])], 'ja', { translators: [captcha, echo()] }),
+      )
+      expect(rs[0]).toMatchObject({ ok: true, by: 'echo:0' })
+    }
+    // two tries a request, each a failed outcome: open after minOutcomes of them, the next requests not sent
+    expect(page.requests.length).toBe(BREAKER.minOutcomes)
+    const gate = countingGate()
+    const once = google({ fetch: scriptedFetch(() => ({ status: 200, body: '<html></html>' })).fetch })
+    await all(chainOf({ clock: fakeClock(), gate }).translate([plain], 'ja', { translators: [once, echo()] }))
+    expect(gate.released.filter((r) => r.lease.startsWith('google:')).map((r) => r.outcome)).toEqual([
+      'failed',
+      'failed',
+    ])
   })
   it('pass: the next translator; off: unconfigured only when every translator is off', async () => {
     const pass = fakeTranslator({
