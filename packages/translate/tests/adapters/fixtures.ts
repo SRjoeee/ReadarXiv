@@ -403,4 +403,10 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     taken: true,
     why: 'a space the reply sets before an element the source glued to its word: taken back (text.ts glueOf)',
   },
+  {
+    unit: 1,
+    raw: '设<span id="1" translate="no">x1</span>如<span id="2" translate="no"></span>所述。x2<x id="4"/>更多内容见第<span id="3" translate="no">x3</span>节。',
+    taken: false,
+    why: 'an element emptied, its token left behind as text: the wire’s contract broken (tags.ts tokenOf)',
+  },
 ]

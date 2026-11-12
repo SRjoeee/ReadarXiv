@@ -44,9 +44,10 @@ export interface TagsPlan {
 
 /** the model's and the engines' spellings of a tag (the extension's tokens.ts TAG_RE): `<x id="1"/>`, `<x id="1" />`,
  *  single or no quotes, `<x id="1"></x>`; an open `<t id="1">`; a close `</t>`; an element written as a word
- *  (`ElementTag` 'word'), `<span id="1" …>…</span>` whole, whatever it holds (its token is no text of the translation) */
+ *  (`ElementTag` 'word'), `<span id="1" …>…</span>` whole, what it holds its tenth group (its token: no text of the
+ *  translation, and it must be its own, readTags) */
 export const TAG_RE =
-  /<x\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*(?:\/>|>\s*<\/x\s*>)|<t\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*>|<\/t\s*>|<span\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))[^<>]*>[^<>]*<\/span\s*>/g
+  /<x\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*(?:\/>|>\s*<\/x\s*>)|<t\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*>|<\/t\s*>|<span\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))[^<>]*>([^<>]*)<\/span\s*>/g
 
 /**
  * How a tags wire writes an element (a formula, a citation, a reference, a note's mark: a void slot; a boundary marker is
@@ -64,8 +65,13 @@ export const TAG_RE =
  * -> inches, 4 and 4 replies), the identifier 0 and 1
  */
 export type ElementTag = 'void' | 'word'
+/** the token an element written as a word holds: its slot's number after an `x` */
+export const tokenOf = (n: number): string => `x${n}`
 const elementTag = (as: ElementTag, n: number): string =>
-  as === 'word' ? `<span id="${n}" translate="no">x${n}</span>` : `<x id="${n}"/>`
+  as === 'word' ? `<span id="${n}" translate="no">${tokenOf(n)}</span>` : `<x id="${n}"/>`
+/** how often a token stands in a text as itself (not inside a longer identifier or number: `x12` holds no `x1`) */
+const countOf = (s: string, token: string): number =>
+  s.match(new RegExp(`(?<![A-Za-z0-9_])${token}(?![0-9])`, 'g'))?.length ?? 0
 const SOLID = /\S/
 
 type Item =
@@ -327,6 +333,8 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
       const n = Number(v)
       const slot = plan.slots[n - 1]
       if (slot?.t !== 'void' || seen.has(n)) return null
+      // (an element written as a word holds its own token and nothing else: the wire's contract, as for a lost element)
+      if (m[10] !== undefined && m[10].trim() !== tokenOf(n)) return null
       seen.add(n)
       toks.push({ t: 'void', out: slot.out })
       afterOwn = slot.own
@@ -350,6 +358,12 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
   // every element back; a span may be lost (the rule decides: one that is not `must` comes back unstyled)
   for (const [k, s] of plan.slots.entries()) if (s.t === 'void' && !seen.has(k + 1)) return null
   const wireText = plan.wire.replace(new RegExp(TAG_RE.source, 'g'), '')
+  // (and no element's token outside it, beyond what the unit's own text holds of that string: a reply that moved an element to
+  // another word and left its token behind as text, which a reader would see, broke the wire's contract and is unread, as
+  // one with an element lost is; Google's reply to 1706.03762v7's Table 1 caption, lane stray-stop's fill)
+  const outside = text.replace(new RegExp(TAG_RE.source, 'g'), ' ')
+  for (const [k, s] of plan.slots.entries())
+    if (s.t === 'void' && countOf(outside, tokenOf(k + 1)) > countOf(wireText, tokenOf(k + 1))) return null
   if (
     !toks.some((t) => t.t === 'text' && SAYS.test(decode(t.s).split(SENTINEL).join(''))) &&
     LETTER.test(decode(wireText))

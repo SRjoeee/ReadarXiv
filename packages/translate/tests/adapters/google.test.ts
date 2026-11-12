@@ -178,6 +178,43 @@ describe('google: an element the source glued to its word comes back glued', () 
   })
 })
 
+// (the wire's contract: an element written as a word comes back as itself holding its own token and nothing else, once, and
+// no token stands outside its element beyond what the unit's own text holds of it. Google moved one to another word and left
+// its token behind as text (1706.03762v7's Table 1 caption, lane stray-stop's fill): a reader would have seen "x1")
+describe('google: a reply that leaves an element’s token as text is unread, as a lost element is', () => {
+  const u = unit('c', [
+    t('Costs for different layer types. '),
+    el('n', 'math'),
+    t(' is the length, '),
+    el('d', 'math'),
+    t(' the width.'),
+  ])
+  const w = (n: number, s = `x${n}`) => `<span id="${n}" translate="no">${s}</span>`
+  it('moved to another word, its token left behind', () => {
+    expect(readTagged(u, `不同${w(1)}类型的成本。x1 为长度，${w(2)}为宽度。`)).toBeNull()
+  })
+  it('emptied, its token left behind; doubled; another element’s token', () => {
+    expect(readTagged(u, `不同类型的成本。${w(1, '')}x1 为长度，${w(2)}为宽度。`)).toBeNull()
+    expect(readTagged(u, `不同类型的成本。${w(1)}为长度 x1，${w(2)}为宽度。`)).toBeNull()
+    expect(readTagged(u, `不同类型的成本。${w(1, 'x2')}为长度，${w(2)}为宽度。`)).toBeNull()
+  })
+  it('read where each element holds its own token and no token is left; the paper’s own `x1` is its text', () => {
+    expect(readTagged(u, `不同类型的成本。${w(1)}为长度，${w(2)}为宽度。`)?.content).toEqual([
+      { t: 'text', s: '不同类型的成本。' },
+      { t: 'el', id: 'n' },
+      { t: 'text', s: '为长度，' },
+      { t: 'el', id: 'd' },
+      { t: 'text', s: '为宽度。' },
+    ])
+    const own = unit('o', [t('The value x1 is set by '), el('n', 'math'), t('.')])
+    expect(readTagged(own, `值 x1 由${w(1)}设定。`)?.content).toEqual([
+      { t: 'text', s: '值 x1 由' },
+      { t: 'el', id: 'n' },
+      { t: 'text', s: '设定。' },
+    ])
+  })
+})
+
 describe('google: sentences from boundary markers', () => {
   it("where they came back, once each and in order, are the translation's sentence starts", () => {
     const r = readTagged(UNITS[0] as never, '我们研究这个问题。<x id="1"/>这很难。')
