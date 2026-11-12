@@ -54,7 +54,7 @@ describe('`alone`: a marker of its own, and nothing else', () => {
 })
 
 describe('`reads`: what an element reads as to the sentence cutter, and nothing else', () => {
-  // (every void of the wire, a boundary marker or an element, which Google's wire writes as a word: wire/tags.ts ElementTag)
+  // (every void of the wire, a boundary marker or an element, which Google's wire writes as a word: wire/tags.ts TagSpelling)
   const marks = (u: UnitIn) =>
     (g.write(u, 'zh-Hans').match(/<x id="\d+"\/>|<span id="\d+" translate="no">x\d+<\/span>/g) ?? []).length - 1
   it('a sentence that begins with a formula after a full stop: cut where the formula reads as a capital, not as `x`', () => {

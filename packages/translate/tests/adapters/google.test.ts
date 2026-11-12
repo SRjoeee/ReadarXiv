@@ -16,6 +16,7 @@ import {
   GLUED_PAST,
   OWN_GLUED,
   SOURCE_LINES,
+  STYLED_OBJECT,
   UNITS,
 } from './fixtures.ts'
 
@@ -28,7 +29,7 @@ export const googleEcho = (_url: string, init: FetchInit) => {
 translatorSuite('google', {
   make: (fetch) => google({ fetch }),
   target: 'zh-Hans',
-  units: [...UNITS, HEAD_STOP, DISPLAY_ENDS, SOURCE_LINES, GLUED_PAST, OWN_GLUED],
+  units: [...UNITS, HEAD_STOP, DISPLAY_ENDS, SOURCE_LINES, GLUED_PAST, OWN_GLUED, STYLED_OBJECT],
   echo: googleEcho,
   replies: GOOGLE_REPLIES,
   faults: [
@@ -62,11 +63,11 @@ describe('google: the wire, byte for byte (golden)', () => {
     expect(UNITS.map((u) => t.write(u, 'zh-Hans'))).toEqual([
       'We study the problem. <x id="1"/>It is hard.',
       'Let <span id="1" translate="no">x1</span> be as in <span id="2" translate="no">x2</span>. <x id="4"/>See Section <span id="3" translate="no">x3</span> for more.',
-      '<t id="1">Bold words</t> and <t id="2">a link <t id="3">inside</t></t> end.',
+      '<span id="1">Bold words</span> and <span id="2">a link <span id="3">inside</span></span> end.',
       'We have<span id="1" translate="no">x1</span>. <x id="2"/>Then we go on.',
       'Values <span id="1" translate="no">x1</span> <span id="2" translate="no">x2</span>, and <span id="3" translate="no">x3</span><span id="4" translate="no">x4</span> hold.',
-      '<t id="1">Whole bold heading</t>',
-      '<t id="1">Setup:</t> we train the model for 3 epochs.',
+      '<span id="1">Whole bold heading</span>',
+      '<span id="1">Setup:</span> we train the model for 3 epochs.',
       'a &lt; b &amp; c &gt; d @ home # 95<span id="1" translate="no">x1</span> accuracy.',
       'A link around a formula: <span id="1" translate="no">x1</span> done.',
       'Words<span id="1" translate="no">x1</span>. <x id="2"/>More words follow here.',
@@ -151,6 +152,63 @@ describe('google: an element is a word of its sentence', () => {
     expect(chrome({ api: null }).write(u, 'zh-Hans')).toBe(tagsWire.write(u))
     // (Chrome's codec, so Chrome's behaviour digest: the LLM services' identity moves with it)
     expect(tagsWire.digest).toBe(CHROME_DIGEST)
+  })
+})
+
+// (Google's translateHtml takes a styled group written as an element HTML does not know, `<t id="n">…</t>`, as a break: it
+// translated the text before it alone, wrote "……" where the group's words belong and set the group after ("so the experts act
+// as <t>parameter priors</t> without…" -> "因此专家可以作为……<t>参数先验</t>而不…"), and translated the group's words out of their
+// sentence ("the {order} we take…" -> 命令); as HTML's own inline element the sentence came back whole, "因此专家充当<span>参数先验
+// </span>，而不…". Lane reply-dots' probes, 2026-11-13: dots gone in 61 of 61 units, DESIGN §6.2)
+describe('google: a styled group is a span of its sentence', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  const reply = (group: string, el2 = '<span id="2" translate="no">x2</span>') =>
+    `该方法使权重保持可训练，因此专家充当${group}，而不将其限制在这个范围内。<x id="5"/>它达到 81%，而基线为 70% ${el2}代码可在<span id="3" translate="no">x3</span>处获取<span id="4" translate="no">x4</span>`
+  const read = [
+    { t: 'text', s: '该方法使权重保持可训练，因此专家充当' },
+    { t: 'span', id: 'p', content: [{ t: 'text', s: '学习到的先验' }] },
+    { t: 'text', s: '，而不将其限制在这个范围内。它达到 81%，而基线为 70%' },
+    { t: 'el', id: 'i' },
+    { t: 'text', s: '代码可在' },
+    { t: 'el', id: 'u' },
+    { t: 'text', s: '处获取' },
+    { t: 'el', id: 'f' },
+  ]
+  it('is written as HTML’s inline element holding its words; an element as one holding its token, not to be translated', () => {
+    expect(g.write(STYLED_OBJECT, 'zh-Hans')).toBe(
+      'The method keeps the weights trainable, so the experts serve as <span id="1">learned priors</span> without tying it to this range. <x id="5"/>It reaches 81% against 70% for the baseline.<span id="2" translate="no">x2</span> Code is available at <span id="3" translate="no">x3</span>.<span id="4" translate="no">x4</span>',
+    )
+  })
+  it('a returned span is a group or an element by its id, as the unit’s content knows it', () => {
+    const r = readTagged(STYLED_OBJECT, reply('<span id="1">学习到的先验</span>'))
+    expect(r?.content).toEqual(read)
+    expect(r?.sentences).toEqual({ src: [111], tr: [38] })
+  })
+  it('an element’s span is the element whether or not `translate` came back', () => {
+    expect(
+      readTagged(STYLED_OBJECT, reply('<span id="1">学习到的先验</span>', '<span id="2">x2</span>'))?.content,
+    ).toEqual(read)
+  })
+  it('a group’s span holding a token-shaped text is still the group', () => {
+    const u = unit('v', [t('The variable '), span('v', 'italic', [t('x2')]), t(' is set by '), el('m', 'math'), t('.')])
+    expect(g.write(u, 'zh-Hans')).toBe(
+      'The variable <span id="1">x2</span> is set by <span id="2" translate="no">x2</span>.',
+    )
+    expect(readTagged(u, '变量<span id="1">x2</span>由<span id="2" translate="no">x2</span>设定。')?.content).toEqual([
+      { t: 'text', s: '变量' },
+      { t: 'span', id: 'v', content: [{ t: 'text', s: 'x2' }] },
+      { t: 'text', s: '由' },
+      { t: 'el', id: 'm' },
+      { t: 'text', s: '设定。' },
+    ])
+  })
+  it('a reply to the wire before it, its group a `<t>`, still reads (stored replies are read again)', () => {
+    expect(readTagged(STYLED_OBJECT, reply('<t id="1">学习到的先验</t>'))?.content).toEqual(read)
+  })
+  it('a group’s span closed by another tag’s close, or never closed, is unread', () => {
+    expect(readTagged(STYLED_OBJECT, reply('<span id="1">学习到的先验</t>'))).toBeNull()
+    expect(readTagged(STYLED_OBJECT, reply('<span id="1">学习到的先验'))).toBeNull()
+    expect(readTagged(STYLED_OBJECT, reply('<t id="1">学习到的先验</span>'))).toBeNull()
   })
 })
 
@@ -353,7 +411,7 @@ describe('google: the sentences a unit is asked in, where a reference or a citat
       .write(u, 'zh-Hans')
       .replace(/<span id="\d+" translate="no">x\d+<\/span>/g, '#')
       .replace(/<x id="(\d+)"\/>/g, (_, d: string) => (Number(d) > n ? '‖' : '#'))
-      .replace(/<\/?t(?: id="\d+")?>/g, '')
+      .replace(/<span id="\d+">|<\/span>/g, '')
       .split('‖')
       .map((s) => s.trim())
   }
@@ -416,7 +474,7 @@ describe('google: a stop TeX sets at a group’s end', () => {
   it('is written before the group’s close, and read by the cutter as the sentence’s end', () => {
     const t = google({ fetch: scriptedFetch(googleEcho).fetch })
     expect(t.write(HEAD_STOP, 'zh-Hans')).toBe(
-      '<t id="1">Current methods are not reliable.</t> <x id="3"/>To infer the source, one could rank sentences. <x id="4"/>We call it <t id="2">verifiable sources.</t> <x id="5"/>Then we go on.',
+      '<span id="1">Current methods are not reliable.</span> <x id="3"/>To infer the source, one could rank sentences. <x id="4"/>We call it <span id="2">verifiable sources.</span> <x id="5"/>Then we go on.',
     )
   })
 })

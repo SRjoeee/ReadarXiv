@@ -21,7 +21,7 @@ const noFetch: Fetch = async () => {
 }
 const MS = microsoft({ fetch: noFetch })
 // (the recorded replies answer wires whose elements are voids: Google's reader, the tags wire written with voids as today's
-// was; Google itself now writes its elements as words, packages/translate wire/tags.ts ElementTag)
+// was; Google itself now writes its elements as words and its groups as spans, packages/translate wire/tags.ts TagSpelling)
 const GG = { ...google({ fetch: noFetch }), write: (u: UnitIn) => tagsWire.write(u) }
 
 // ---------------------------------------------------------------- a PDF unit's TeX pieces, typed as the source reader would
