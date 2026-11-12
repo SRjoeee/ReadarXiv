@@ -20,7 +20,12 @@ const zh = rulesFor('zh')
 const ids = ['b', 'c', 'd'].map((c) => c.repeat(64))
 const lineAt = (y: number): Placed['lines'][number] => [1, 0, 72, 300, y, y + 7, y - 2, 72, 300, 0, 10]
 const ys = (y0: number, n: number) => Array.from({ length: n }, (_, i) => lineAt(y0 - 12 * i))
-const row = (id: string, n: number): Row => ({ id, ok: true, by: 'test', content: [{ t: 'text', s: '\u6587'.repeat(n) }] })
+const row = (id: string, n: number): Row => ({
+  id,
+  ok: true,
+  by: 'test',
+  content: [{ t: 'text', s: '\u6587'.repeat(n) }],
+})
 /** three paragraphs down one column at a pitch of 12, `n` lines each, 5 pt of skip between them (the middle one's `room` its own
  *  where given, its gap under it that room's more), their translations `chars` characters long */
 const page = (n: number[], chars: number[], room?: Placed['room'], gap = 0) => {
