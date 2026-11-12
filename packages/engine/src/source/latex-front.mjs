@@ -8,9 +8,9 @@
 
 // ---------------------------------------------------------------- files and bytes
 import { isMemoryError } from '@readarxiv/engine'
-import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, loads, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from '../rules/arg-roles.mjs'
-import { symbolText, TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
-import { DECLARATION_WORDS, selectsArgument } from '../rules/tex-kernel.mjs'
+import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, loads, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from './arg-roles.mjs'
+import { symbolText, TEXT_SYMBOLS } from './text-symbols.mjs'
+import { DECLARATION_WORDS, selectsArgument } from './tex-kernel.mjs'
 /** unpacked files (a Map of relative path → bytes) as a project's file system */
 export function inMemory(map) { return { list: () => [...map.keys()], read: p => map.get(p) ?? null } }
 /** a/./b/../c → a/c: a file as the package holds it (tar.mjs untar names each so) and as TeX's file system has it,
