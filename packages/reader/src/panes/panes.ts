@@ -157,7 +157,8 @@ export interface Panes {
   pageElement(side: Side, n: number): HTMLElement | null
   /** the page of a pane under a point of the screen and the point in that page's box (its content box as laid out, CSS px, its
    *  turn not undone), by arithmetic over the places of the pane and its pages kept since its layout last changed and its scroll
-   *  as its events give it (PDF-READER §17.4: the pointer's frame tests no element and reads no layout); null off its pages.
+   *  and the follower's shift as their events give them (PDF-READER §17.4: the pointer's frame tests no element and reads no
+   *  layout, its scrollTop either); null off its pages.
    *  While a pinch is shown its pages stand where its transform draws them, which the places do not hold: read as shown then */
   pointAt(side: Side, x: number, y: number): { page: number; x: number; y: number } | null
   /** a pane's scroller */
@@ -1489,7 +1490,7 @@ export function createPanes(o: PanesOptions): Panes {
       }
       const p = placesOf(s),
         X = x - p.left + s.scrollX,
-        Y = y - p.top + follower.shownAt(s)
+        Y = y - p.top + follower.shownAt(s, (q) => q.scrollY)
       for (let i = 0; i < p.pages.length; i++) {
         const g = p.pages[i]
         if (g && Y >= g.top && Y <= g.top + g.h && X >= g.left && X <= g.left + g.w)
