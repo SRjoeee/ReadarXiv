@@ -274,9 +274,12 @@ The coordinator's ruling of 2026-11-10 (lane cjk-space): B.tokens sets no space 
 rule, PDF-READER §18.18); where that saves a unit a line, the line it saves held a lone fragment (one character on
 2610.30034v1-zh p3 t36 and on 2610.10069v1-zh p27 t227, a lone year in 2608.04322v1-zh p12's references), and the line count is
 an instrument. A `line-count` difference is the ruling's (`nearer` "ruling", never worse) only where the pair laid with those
-spaces put back sets today's count on the page: `v2.mjs` lays each pair first with B.tokens' mark-space line skipped (`hook.mjs`,
-a lab global, its pages not kept) and records each member's line count on each page of that lay (`spaced`); `verdict.mjs`
-markSpaceRuling. A count those spaces do not explain is judged as any.
+spaces put back sets today's count on the page: `v2.mjs` lays each pair first with B.tokens' blank-side line skipped (`hook.mjs`,
+`markBlankEdge`, a lab global `__parityBlankSides`, its pages not kept) and records each member's line count on each page of that
+lay (`spaced`); `verdict.mjs` markSpaceRuling. That line alone: the next one, no ordinary space before a full-width mark no line
+opens with (`markBarredStart`, the coordinator's ruling of 2026-11-12, PDF-READER §18.18, against xeCJK's, which keeps that
+space), is a ruling of its own this one does not cover, and stays in that lay. A count those spaces do not explain is judged as
+any.
 
 One more lay of each pair, for the owner's ruling L2 of 2026-11-12 (below, "The owner's rulings of 2026-11-12"): with no CJK line
 squeezed to take the group it misses (the breaker's `squeezes`, its marks' blank halves and SQUEEZE em a gap, light compression

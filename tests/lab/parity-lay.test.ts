@@ -35,15 +35,16 @@ describe("the parity's lay is the reader's", () => {
   })
 })
 
-describe("the parity's lay with the spaces beside a full-width mark put back (the coordinator's ruling of 2026-11-10)", () => {
+describe("the parity's lay with the spaces beside a full-width mark's blank side put back (the coordinator's ruling of 2026-11-10)", () => {
   const TOKENS = resolve(__dirname, '../../packages/typeset/src/breaker/tokens.ts')
   const source = readFileSync(TOKENS, 'utf8')
   const RULE = '    if (markBlankEdge(before, true, cjkFace) || markBlankEdge(after, false, cjkFace)) return false\n'
-  it("skips B.tokens' mark-space line while the lab's global asks it, and nowhere else in the file", async () => {
+  it("skips B.tokens' blank-side line while the lab's global asks it, and nowhere else in the file: the barred-start line stays", async () => {
     expect(source.split(RULE).length).toBe(2)
     const after = await hooked(source, `file://${TOKENS}`)
-    expect(after).toContain('if (!(globalThis as any).__parityMarkSpaces && (markBlankEdge(before, true, cjkFace) || markBlankEdge(after, false, cjkFace))) return false')
-    expect(after.replace(/if \(!\(globalThis as any\)\.__parityMarkSpaces && \(([^\n]*)\)\) return false/, 'if ($1) return false')).toBe(source)
+    expect(after).toContain('if (!(globalThis as any).__parityBlankSides && (markBlankEdge(before, true, cjkFace) || markBlankEdge(after, false, cjkFace))) return false')
+    expect(after.replace(/if \(!\(globalThis as any\)\.__parityBlankSides && \(([^\n]*)\)\) return false/, 'if ($1) return false')).toBe(source)
+    expect(after).toContain('    if (!hardSpaces.has(t) && markBarredStart(after, cjkFace, barredChar)) return false\n')
   })
   it('throws where tokens.ts no longer holds the line once', async () => {
     await expect(hooked(source.replace(RULE, ''), `file://${TOKENS}`)).rejects.toThrow(/no longer holds/)

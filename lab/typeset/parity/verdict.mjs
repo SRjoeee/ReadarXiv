@@ -1663,7 +1663,9 @@ function bandMoved(ord, v2, n) {
  * coordinator's ruling of 2026-11-10 on lane cjk-space's parity: xeCJK's rule; where it saves a line, the line held a lone
  * fragment, and the line-count measure is an instrument): the difference is the ruling's, not worse, only where the pair laid
  * with those spaces put back (v2.mjs's first lay, hook.mjs: `spaced`, each member's line count on each page) sets today's count
- * on the page. A count those spaces do not explain, or a pair laid without that lay, is judged as any
+ * on the page. Those spaces alone: the space the typesetter sets before a full-width mark no line opens with (markBarredStart,
+ * the coordinator's ruling of 2026-11-12, against xeCJK's) is no part of this ruling and stays out of that lay. A count those
+ * spaces do not explain, or a pair laid without that lay, is judged as any
  */
 function markSpaceRuling(p, { v2, n, orig }) {
   for (const d of p.diffs) {
