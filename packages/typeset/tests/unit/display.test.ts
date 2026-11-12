@@ -193,5 +193,32 @@ describe('D.display: items and the harness\u2019s reading', () => {
     ])
     expect(d.elements).toEqual([{ k: 4, page: 1, x0: 150, x1: 170, top: 712, bottom: 698 }])
     expect(viewport(view)(10, 812)).toEqual([0, 0])
+    // (a unit of one size states no size a line)
+    expect(d.sizes).toBeUndefined()
+  })
+  it('reads each line at the size it is drawn at where a run of the unit is drawn at another (X.runs: the dump and I6 read it)', () => {
+    // (a unit split by its display, laid a run at a time (fit/runs.ts): its first run cramped to 0.975, its second at 1.0, on
+    // the next page; the layout's own size is its first run's, the drawing reads each line's run)
+    const first = { f: 9.75, scale: 0.975, state },
+      second = { f: 10, scale: 1, state }
+    const L = {
+      ...layoutOf([
+        { baseline: 100, items: [item({ s: '\u4e2d', cls: 'cjk', face: CJK }, 72)], seg: first },
+        { page: 2, baseline: 700, items: [item({ s: '\u6587', cls: 'cjk', face: CJK }, 72)], seg: second },
+        { page: 2, baseline: 686, items: [item({ s: '\u5b57', cls: 'cjk', face: CJK }, 72)], seg: second },
+      ]),
+      f: 9.75,
+      scale: 0.975,
+    } as Layout
+    const d = dumpUnit({ layout: L } as never, () => [0, 0, 612, 792])
+    expect(displayLines(L, 2)[0]![3][0]).toMatchObject({ size: 10 })
+    expect(d.size).toBe(9.75)
+    expect(d.sizes).toEqual([9.75, 10, 10])
+    // (two pages' lays of it that differ only in the size its second run is drawn at are two dumps, not one)
+    const other = dumpUnit(
+      { layout: { ...L, lines: L.lines.map((l, j) => (j ? { ...l, seg: first } : l)) } } as never,
+      () => [0, 0, 612, 792],
+    )
+    expect(JSON.stringify(other)).not.toBe(JSON.stringify(d))
   })
 })

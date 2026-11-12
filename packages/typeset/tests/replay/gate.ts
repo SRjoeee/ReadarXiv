@@ -58,7 +58,13 @@ export function gatePair(pair: string): GatePair {
   const views = viewsOf(paperOf(pair))
   const dumped = new Map<
     number,
-    { first: number; d: DumpUnit; lines: DumpUnit['lines']; elements: NonNullable<DumpUnit['elements']> }
+    {
+      first: number
+      d: DumpUnit
+      lines: DumpUnit['lines']
+      elements: NonNullable<DumpUnit['elements']>
+      sizes: number[]
+    }
   >()
   const out: GatePair = {
     units: [],
@@ -94,10 +100,12 @@ export function gatePair(pair: string): GatePair {
       if (pm.state !== 'laid' || !pm.lay) continue
       const d = dumpUnit(pm.lay, (p) => views.get(p))
       const lines = d.lines.filter((l) => l.page === pg),
-        elements = (d.elements ?? []).filter((e) => e.page === pg)
+        elements = (d.elements ?? []).filter((e) => e.page === pg),
+        // (the size each line on the page is drawn at by the page's own lay: a unit laid in runs, each its run's)
+        sizes = d.lines.flatMap((l, j) => (l.page === pg ? [d.sizes?.[j] ?? (d.size as number)] : []))
       const prev = dumped.get(pm.ord)
       if (!prev) {
-        dumped.set(pm.ord, { first: pg, d, lines, elements })
+        dumped.set(pm.ord, { first: pg, d, lines, elements, sizes })
         continue
       }
       out.twoPages++
@@ -105,6 +113,7 @@ export function gatePair(pair: string): GatePair {
         out.selfDiffer.push(`ord ${pm.ord}: p${prev.first} against p${pg}`)
       prev.lines.push(...lines)
       prev.elements.push(...elements)
+      prev.sizes.push(...sizes)
     }
   }
   out.ms = performance.now() - t0
@@ -119,6 +128,7 @@ export function gatePair(pair: string): GatePair {
         leading: x.d.leading,
         lines: x.lines,
         ...(x.elements.length ? { elements: x.elements } : {}),
+        ...(x.sizes.some((s) => s !== x.d.size) ? { sizes: x.sizes } : {}),
       })
   }
   return out
