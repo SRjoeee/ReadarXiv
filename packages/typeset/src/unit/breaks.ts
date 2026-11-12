@@ -17,8 +17,10 @@
 // The SHORT test (a line ending half an em short of its frame's measure) is a guard of the re-derivation: TeX states the line
 // a forced break ends (El.ends), which makes it void once stated.
 // What the part states is paired by `statedBreaks` (the layPage's reading): each break's line and room TeX's (El.ends), each
-// paragraph's line TeX's paragraph point (El.opens, SpanAt.opens); the translation's order decides the rest, as today's.
+// paragraph's line TeX's paragraph point (El.opens, SpanAt.opens, and a paragraph's first word, Placed.paras: `paraPieces` cuts
+// the row at the sentence start paired with it); the translation's order decides the rest, as today's.
 import type { El, Placed, SpanAt } from '@readarxiv/format'
+import { firstWordAt, projectionOf, type Sentences, startsInProjection, worded } from '../lay/lit.ts'
 import { blocksOf2, measureOf } from './blocks.ts'
 import { type Rect, rectKey } from '../util.ts'
 
@@ -38,13 +40,17 @@ export type LayoutUnit = {
  *  slant) */
 export type OpenFace = { role: 'serif' | 'sans' | 'mono'; bold?: 1 | undefined; slant?: 1 | 2 | undefined }
 /** a piece of a row as today's unit holds it (rows.mjs unitOf: the translation's pieces in its order, `k` the source's; a
- *  group's open with the face TeX set it in, where its part states one) */
+ *  group's open with the face TeX set it in, where its part states one); `par` a piece of the typesetter's own, never in a Row
+ *  nor on a wire: a paragraph TeX opened at its first word (Placed.paras), cut into the row where a sentence start pairs with
+ *  that word (paraPieces), `next` the line TeX opened it on; it sets nothing and stands in the translation's projection as a
+ *  group's edge does, for none */
 export type V0Piece =
   | { t: 'text'; s: string; k?: number }
   | { t: 'ph'; src: string; k?: number }
   | { t: 'open'; src?: string; id?: unknown; k?: number; face?: OpenFace }
   | { t: 'close'; src?: string; id?: unknown; k?: number }
   | { t: 'nested'; src?: string; k?: number }
+  | { t: 'par'; next: number; src?: undefined; k?: undefined }
 /** where a break ends a line: the file's line after it, TeX's room after it in pitches and its frame's pitch (null where the
  *  next line opens another frame), and whether it is a group's paragraph */
 export type Break = { next: number; room: number | null; pitch: number | null; paragraph?: true }
@@ -519,12 +525,157 @@ export function statedBreaks(
   // paragraphs TeX opened at a group or an element (TEX:222-255)
   const forcedNext = new Set([...out.values()].map((b) => b.next))
   const said = (p: V0Piece) => p.t === 'text' && /\S/.test(p.s ?? '')
-  pieces.forEach((p, i) => {
-    const j = p.t === 'open' ? f.spans.get(String(p.k))?.opens : elOf(p)?.opens
+  const open = (i: number, j: number | undefined) => {
     if (j === undefined || j <= 0 || j >= n || out.has(i) || forcedNext.has(j)) return
     if (L[j - 1]![9] & KEPT || L[j]![9] & KEPT) return
     if (pieces.slice(0, i).some(said) && pieces.slice(i + 1).some(said))
       out.set(i, { next: j, room: null, pitch: null, paragraph: true })
+  }
+  pieces.forEach((p, i) => {
+    if (p.t !== 'par') open(i, p.t === 'open' ? f.spans.get(String(p.k))?.opens : elOf(p)?.opens)
+  })
+  // (then each paragraph its first word states, cut into the row at the sentence start paired with it (paraPieces): on a line
+  // no stronger fact the row holds opens, the paragraph stated once)
+  pieces.forEach((p, i) => {
+    if (p.t === 'par' && ![...out.values()].some((b) => b.next === p.next)) open(i, p.next)
   })
   return out
+}
+
+/** what statedBreaks reads of a member, as the reading reads it (lay/read.ts readMember): its lines, its elements and groups
+ *  by id, whether its breaks' lines are read off the page (Placed.read 'breaks'), its frames' pitch (Placed.lead, where it is
+ *  TeX's) */
+export function factsOf(m: Placed): StatedFacts {
+  const read = m.read ?? []
+  return {
+    lines: m.lines,
+    els: new Map(m.els ?? []),
+    spans: new Map(m.spans ?? []),
+    read: read.includes('breaks'),
+    pitch: read.includes('lead') ? null : m.lead,
+  }
+}
+
+/** each piece's class as the reading reads it (lay/read.ts readingsOf; today's phClass2): an element's El.kind, 'symbol' where
+ *  it states a drawn symbol, 'zero' where the part states nothing of it; null for every other piece */
+export const clsOf = (pieces: readonly V0Piece[], els: ReadonlyMap<string, El>): (string | null)[] =>
+  pieces.map((p) => {
+    if (p.t !== 'ph') return null
+    const el = els.get(String(p.k))
+    return el ? (el.sym ? 'symbol' : el.kind) : 'zero'
+  })
+
+/** a paragraph TeX opened inside a member's text at no group's open, element, forced break or region, stated by its first word
+ *  (design-display 2a): the offset of that word in the unit's source projection (what Row.sentences.src counts in) and the index
+ *  in Placed.lines of the line TeX opened it on */
+export type ParaPoint = readonly [offset: number, line: number]
+/** the member's paragraph points (the part's `paras`, which packages/format's Placed carries once the engine states it),
+ *  ascending; none where its part states none (a part made before) */
+export const parasOf = (m: Placed): readonly ParaPoint[] => (m as Placed & { paras?: readonly ParaPoint[] }).paras ?? []
+/** what the lay states of a member's paragraph points (Laid.paras): how many opened a block on their line (by their own
+ *  sentence start or by a stronger fact the row holds there), how many did not for want of a sentence start the lay can open
+ *  there (the row's starts hold none at the point's word), how many did not for want of the row's sentences (none came) */
+export type ParasStated = [opened: number, noStart: number, noSentences: number]
+
+/**
+ * How a member's row pairs a paragraph's first word (its offset `o` in the source projection, `j` the line TeX opened it on)
+ * with one of its sentence starts: the row's sentences (Row.sentences), each cut holding a word of A (lit.ts `worded`), the one
+ * whose first word on A (lit.ts's start rule: the first of Placed.words at or after its start, `firstWordAt`) is that word on
+ * that line; its place the start's in the translation's projection (lit.ts `startsInProjection`: its first letter, digit or
+ * element, back over the opening marks set against it). 'sentences' where the row carries none, 'start' where none pairs (an
+ * offset inside a sentence, a start the translation sets on no letter)
+ */
+export function pairing(
+  m: Placed,
+  pieces: readonly V0Piece[],
+  sentences: Sentences | undefined,
+): 'sentences' | ((o: number, j: number) => number | 'start') {
+  const src = sentences?.src ?? [],
+    tr = sentences?.tr ?? []
+  if (!src.length || src.length !== tr.length) return 'sentences'
+  const words = m.words ?? []
+  const cuts = worded(words, src, tr)
+  const starts = startsInProjection(projectionOf(pieces).text, cuts.tr)
+  return (o, j) => {
+    const k = cuts.src.findIndex((s) => {
+      const w = words[firstWordAt(words, s)]
+      return w?.[0] === o && w[1] === j
+    })
+    return k < 0 || !starts ? 'start' : starts[k]!
+  }
+}
+
+/**
+ * The member's row pieces with its paragraph points cut into them (design-display 2a): a point on a line no stronger fact the
+ * row holds opens (a group's open or an element between its texts, a forced break: statedBreaks) is paired with a sentence
+ * start of the row (`pairing`), and a piece of the typesetter's own (`par`) stands in the translation where that sentence
+ * begins: before the piece that holds its first character and before the groups opened right there, a text piece cut in two.
+ * The row's projection is unchanged: a `par` stands for no character. statedBreaks reads it as a group's open with `opens` its
+ * line, under the same guards; one it does not open is taken out. Where no sentence start is paired the text flows on, no
+ * nearest start and no proportional place taken (an end inside a sentence, a float set in the middle of one, must flow). The
+ * statement (`paras`) is present where the part states a point; the pieces are `pieces` itself where it states none
+ */
+export function paraPieces(
+  m: Placed,
+  pieces: V0Piece[],
+  sentences: Sentences | undefined,
+): { pieces: V0Piece[]; paras?: ParasStated } {
+  const points = parasOf(m)
+  if (!points.length) return { pieces }
+  const f = factsOf(m)
+  const paras: ParasStated = [0, 0, 0]
+  const stronger = new Set([...statedBreaks(f, pieces, clsOf(pieces, f.els)).values()].map((b) => b.next))
+  const waiting = points.filter(([, j]) => !stronger.has(j))
+  paras[0] = points.length - waiting.length
+  if (!waiting.length) return { pieces, paras }
+  const pair = pairing(m, pieces, sentences)
+  if (pair === 'sentences') {
+    paras[2] = waiting.length
+    return { pieces, paras }
+  }
+  // (each paired point's place in the translation's projection, and its line)
+  const at = new Map<number, number>()
+  for (const [o, j] of waiting) {
+    const p = pair(o, j)
+    if (p === 'start') paras[1]++
+    else at.set(p, j)
+  }
+  if (!at.size) return { pieces, paras }
+  const proj = projectionOf(pieces)
+  // (the pieces cut, each with the offset it begins at in the projection)
+  const cut: V0Piece[] = [],
+    cutFrom: number[] = []
+  const push = (p: V0Piece, o: number) => {
+    cut.push(p)
+    cutFrom.push(o)
+  }
+  pieces.forEach((p, q) => {
+    const from = proj.from[q]!
+    // (at a piece's first character: before it and the groups opened right there)
+    if ((p.t === 'text' ? p.s.length > 0 : p.t === 'ph' || p.t === 'nested') && at.has(from)) {
+      let g = cut.length
+      while (g > 0 && cut[g - 1]!.t === 'open' && cutFrom[g - 1] === from) g--
+      cut.splice(g, 0, { t: 'par', next: at.get(from)! })
+      cutFrom.splice(g, 0, from)
+    }
+    if (p.t !== 'text') {
+      push(p, from)
+      return
+    }
+    // (inside a text piece: the piece cut there)
+    let last = 0
+    for (const o of [...at.keys()].filter((x) => x > from && x < from + p.s.length).sort((a, b) => a - b)) {
+      push({ ...p, s: p.s.slice(last, o - from) }, from + last)
+      push({ t: 'par', next: at.get(o)! }, o)
+      last = o - from
+    }
+    push(last ? { ...p, s: p.s.slice(last) } : p, from + last)
+  })
+  // (statedBreaks decides each: one it does not open (its line's guards) is taken out, counted with the unpaired)
+  const opens = statedBreaks(f, cut, clsOf(cut, f.els))
+  const out = cut.filter((p, i) => p.t !== 'par' || opens.has(i))
+  const kept = out.filter((p) => p.t === 'par').length
+  paras[0] += kept
+  paras[1] += at.size - kept
+  return { pieces: out, paras }
 }

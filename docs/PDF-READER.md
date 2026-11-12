@@ -6204,6 +6204,35 @@ it. Not this round's: staging drew the same at round B10's engine; the lay follo
   after a citation and after a full stop, with microtype, each end stated before the next paragraph's first glyph and no glyph
   moved by the points (four ends missing before). The facts pass reads two ends at one glyph position as one.
 
+### 18.67 A paragraph TeX opened in plain text opens where the row's sentence start pairs with its first word (2026-11-13)
+
+§18.66 states a paragraph TeX opened inside a unit where a group or an element stands at its start. Two cases remain (the
+display design of 2026-11-13, 2a): a paragraph that opens in plain text (`A. \smallbreak\noindent B.`, a class's separator, a
+plain new paragraph the source writes no blank line before), and a point stated at a group the translator's reply dropped (with
+Microsoft's rows the bold markers of 2111.09276v1's run-in titles come back at the unit's end, and the reading places a lost group
+only where its text stands once in the source: "COIN", three times there, runs on). The fact for both is the paragraph's first
+word: its offset in the unit's source projection (what `Row.sentences.src` counts in) and the line TeX opened it on, the part's
+`paras` (stated by the engine's half, a later round; until then no part holds it and nothing drawn moves).
+
+- **The lay** (`unit/breaks.ts` `paraPieces`, `pairing`). A point on a line no stronger fact the row holds opens (a group's open
+  or an element between the row's texts, a forced break: `statedBreaks`, the paragraph stated once) is paired with the row's
+  sentence whose start on A is that word: the row's cuts each holding a word of A (`lay/lit.ts` `worded`), the first of
+  `Placed.words` at or after the start (`firstWordAt`, the highlight's own start rule) being the point's word on the point's
+  line. Its place in the translation is the highlight's too (`startsInProjection`: the start's first letter, digit or element,
+  back over the opening marks set against it). A piece of the typesetter's own (`par`, never in a Row, never on a wire) stands
+  there, before the groups opened right there, a text piece cut in two; it stands for no character, so the row's projection,
+  its sentences and the highlight's places do not move. `statedBreaks` reads it as a group's open with `opens` its line, under
+  the same guards; one it does not open is taken out. The blocks, the tokens' `blockTo` and the breaker run unchanged; the white
+  space at the cut is dropped as at any block's edge. A named variant pairs after `lay/named.ts` has given its sentences back in
+  the unit's own projection.
+- **No pair, no guess.** Where the row carries no sentences (they did not reconstruct; Chrome's translator) or no start of it is
+  the point's word (an end inside a sentence: a float TeX set in the middle of one), no block opens and the text flows on through
+  the member's lines, as before: no nearest start and no proportional place is taken, which would set half a sentence on a line
+  of its own.
+- **Stated** (`Laid.paras`, where the part states a point and the member is laid): `[opened, noStart, noSentences]`: the points
+  opened on their line (by their own pair, or by a stronger fact the row holds there), those that flowed on for want of a start
+  the lay can open at their word, those for want of the row's sentences.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

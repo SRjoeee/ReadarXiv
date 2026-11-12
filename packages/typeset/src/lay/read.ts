@@ -28,7 +28,7 @@ import { noStart } from '../breaker/script.ts'
 import { baseOf, type TokenRules, type TStyle, tokens as tokensOf } from '../breaker/tokens.ts'
 import type { Tokens } from '../fit/types.ts'
 import type { Metrics } from '../types.ts'
-import { breakMaps, type Breaks, statedBreaks, type V0Piece } from '../unit/breaks.ts'
+import { breakMaps, type Breaks, clsOf, factsOf, statedBreaks, type V0Piece } from '../unit/breaks.ts'
 import { cropFields, cropOfBox, cropPartsOfSegments } from '../unit/crops.ts'
 import { type ElementReading, elements, type Gap, type Res } from '../unit/elements.ts'
 import { type Glyph, type HeadParts, type LabelInput, label as labelRule, type UnitLabel } from '../unit/label.ts'
@@ -230,11 +230,7 @@ function readingsOf(
   L: LineKeys,
 ): { readings: Map<number, ElementReading>; cls2: (string | null)[] } {
   const readings = new Map<number, ElementReading>()
-  const cls2 = pieces.map((p) => {
-    if (p.t !== 'ph') return null
-    const el = els.get(String(p.k))
-    return el ? (el.sym ? 'symbol' : el.kind) : 'zero'
-  })
+  const cls2 = clsOf(pieces, els)
   pieces.forEach((p, k) => {
     if (p.t === 'nested' && !els.get(String(p.k))?.ink.length) {
       const source: Res = { mode: 'source', text: '*', math: false, sup: true }
@@ -507,8 +503,8 @@ export type ReadOut = {
 export function readMember(i: ReadInput): ReadOut {
   const { m, unit, paper } = i
   const pieces = unit.pieces
-  const els = new Map(m.els ?? [])
-  const spans = new Map(m.spans ?? [])
+  const facts = factsOf(m)
+  const { els, spans } = facts
   const L = linesOf(m, i.rects)
   const { readings, cls2 } = readingsOf(pieces, els, L)
   // (the lines its source does not write, held: KEPT lines no display's rows are; a display's rows, touched)
@@ -521,10 +517,9 @@ export function readMember(i: ReadInput): ReadOut {
   // kept resolution's region
   const kept = new Map<number, string[]>()
   for (const [k, r] of res) if (r.mode === 'kept' && r.gap) kept.set(k, [...r.gap.lines, ...(r.gap.held ?? [])])
-  const read = (m.read ?? []).includes('breaks')
-  // (a frame's pitch TeX's \baselineskip where the part states it, Placed.lead: no 'lead' read)
-  const pitch = (m.read ?? []).includes('lead') ? null : m.lead
-  const br = breakMaps(statedBreaks({ lines: m.lines, els, spans, read, pitch }, pieces, cls2), {
+  // (its breaks' lines read off the page where Placed.read says 'breaks'; a frame's pitch TeX's \baselineskip where the part
+  // states it, Placed.lead: no 'lead' read)
+  const br = breakMaps(statedBreaks(facts, pieces, cls2), {
     pieces,
     rects: [...i.rects],
     lineInfo: new Map(i.rects.map((r, j) => [rectKey(r), { j }])),
