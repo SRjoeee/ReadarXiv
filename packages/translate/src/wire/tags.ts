@@ -41,6 +41,12 @@ export interface TagsPlan {
    *  sets there is taken back */
   gluedBefore: ReadonlySet<number>
   gluedAfter: ReadonlySet<number>
+  /** for each boundary marker set right after its sentence's stop (planTags: on the wire a sentence ends at its stop), the
+   *  elements the source glues after that stop, by id: the sentence's own, whose boundary a reading sets after them */
+  leads: ReadonlyMap<number, readonly string[]>
+  /** a boundary marker set right after the unit's last stop, before the elements glued after it: the wire's alone, no
+   *  sentence's start (absent where the unit ends otherwise) */
+  endMark?: number
 }
 
 /** the model's and the engines' spellings of a tag (the extension's tokens.ts TAG_RE): `<x id="1"/>`, `<x id="1" />`,
@@ -125,6 +131,14 @@ const tokensIn = (wire: string, plan: TagsPlan): Map<string, number> => {
   return out
 }
 const SOLID = /\S/
+/** an element in a projection (accept.ts projectionOf) */
+const OBJ = '\uFFFC'
+const WHITE = /\s/
+/** a sentence's stop (Unicode's Sentence_Terminal), and the closing marks after it */
+const STOP = /\p{Sentence_Terminal}/u
+const CLOSER = /[\p{Pe}\p{Pf}"'”’]/u
+/** the first word of a sentence after the unit's last: what the cutter is asked whether the last stop ends a sentence by */
+const NEXT = 'The'
 
 type Item =
   /** `fixed`: no text of the source (a group's stop, written at its end): no sentence begins in it */
@@ -160,6 +174,8 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
   /** each group's stop and the projection offset of its end, in order: the cutter reads it there */
   const stopsAt: [number, string][] = []
   const kinds = new Map<number, { kind: string; stop: string | undefined; reads: string | undefined }>()
+  /** each element's id by its projection offset */
+  const idAt = new Map<number, string>()
   /** the elements of pieces that go as one void, by their projection offsets: what each reads as to the cutter */
   const readsOf = (ps: readonly Piece[], at0: number): number => {
     let at = at0
@@ -167,6 +183,7 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
       if (p.t === 'text') at += p.s.length
       else if (p.t === 'el') {
         kinds.set(at, { kind: p.kind, stop: ownStop(p.stop), reads: p.reads })
+        idAt.set(at, p.id)
         at += 1
       } else at = readsOf(p.content, at)
     }
@@ -179,6 +196,7 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
         at += p.s.length
       } else if (p.t === 'el') {
         kinds.set(at, { kind: p.kind, stop: ownStop(p.stop), reads: p.reads })
+        idAt.set(at, p.id)
         items.push({
           t: 'void',
           out: [{ t: 'el', id: p.id }],
@@ -281,6 +299,8 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
   wire = wire.trim()
   const cuts: number[] = []
   const marks: number[] = []
+  const leads = new Map<number, string[]>()
+  let endMark: number | undefined
   if (unit.sentences) {
     // (the projection the cutter reads: each group's stop at its end, as the source would write it, `orig` each of its
     // offsets' in the unit's projection, a stop's that of the group's end)
@@ -306,14 +326,53 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
       const s = byKind !== 'annotation' && k?.reads !== undefined ? k.reads : byKind
       return k?.stop ? `${s === undefined || s === 'annotation' || s === 'citation' ? 'Xx' : s}${k.stop}` : s
     }
-    for (const q of sentenceCuts(projection, standIn)) {
-      const c = orig[q] as number
-      const w = Math.min(wire.length, Math.max(0, (cutAt[c] as number) - lead))
-      if (w <= at || w >= wire.length) continue
+    const wireAt = (c: number) => Math.min(wire.length, Math.max(0, (cutAt[c] as number) - lead))
+    /** the elements the source glues right after a sentence's stop, before projection offset `q` (only elements and white
+     *  space between them and `q`, none between the stop, with its closing marks, and the first): the first's offset, and
+     *  each one's id; null where the text before `q` is otherwise */
+    const glued = (q: number): { first: number; ids: string[] } | null => {
+      let k = q - 1
+      let first = -1
+      while (k >= 0 && (projection[k] === OBJ || WHITE.test(projection[k] as string))) {
+        if (projection[k] === OBJ) first = k
+        k--
+      }
+      if (first < 0 || k !== first - 1) return null
+      while (k >= 0 && CLOSER.test(projection[k] as string)) k--
+      if (k < 0 || !STOP.test(projection[k] as string)) return null
+      const ids: string[] = []
+      for (let i = first; i < q; i++) if (projection[i] === OBJ) ids.push(idAt.get(orig[i] as number) as string)
+      return { first, ids }
+    }
+    const mark = (w: number) => {
       marks.push(slots.length + marks.length + 1)
       sent += `${wire.slice(at, w)}<x id="${marks[marks.length - 1]}"/>`
       at = w
+    }
+    // (on the wire a sentence ends at its stop: where the source glues an element after it, a note's mark, a footnote's call,
+    // a forced break, the boundary marker stands right after the stop, before it; the cutter's sentence ends alone, an
+    // abbreviation's dot none. Google kept no stop before an element written as a word at a sentence's end, 0 of 80 such
+    // places, and 77 with the marker so: lane reply-dots, 2026-11-13. The sentence stays the source's, the stop and the
+    // element with it: a reading sets the boundary after the element, `leads`)
+    for (const q of sentenceCuts(projection, standIn)) {
+      const c = orig[q] as number
+      const g = glued(q)
+      const moved = g ? wireAt(orig[g.first] as number) : null
+      const w = moved !== null && moved > at ? moved : wireAt(c)
+      if (w <= at || w >= wire.length) continue
+      if (g && w === moved) leads.set(slots.length + marks.length + 1, g.ids)
+      mark(w)
       cuts.push(c)
+    }
+    // (the unit's last stop with elements glued after it, where the cutter would end a sentence were one to follow: a marker
+    // of the wire's alone there, no sentence's start)
+    const g = glued(projection.length)
+    if (g && sentenceCuts(`${projection} ${NEXT}`, standIn).includes(projection.length + 1)) {
+      const w = wireAt(orig[g.first] as number)
+      if (w > at && w < wire.length) {
+        endMark = slots.length + marks.length + 1
+        mark(w)
+      }
     }
     wire = sent + wire.slice(at)
   }
@@ -325,13 +384,20 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
     refill: kept.sort((a, b) => b.depth - a.depth).map((k) => k.id),
     gluedBefore,
     gluedAfter,
+    leads,
+    ...(endMark !== undefined ? { endMark } : {}),
   }
 }
 
-/** the boundary markers of a reply: each once and in order, the sentences between them none empty, replaced by the
- *  sentinel; else every one taken out, and no sentences */
-function unmark(text: string, marks: readonly number[]): { text: string; marked: boolean } {
-  if (!marks.length) return { text, marked: false }
+/** the boundary markers of a reply: each once and in order (the wire's own end marker, `endMark`, may be missing), the
+ *  sentences between them none empty (what follows the end marker may be: the elements glued after the last stop, or
+ *  nothing), replaced by the sentinel, with the ids of the markers found in order; else every one taken out, and no sentences */
+function unmark(
+  text: string,
+  marks: readonly number[],
+  endMark?: number,
+): { text: string; marked: boolean; ids: number[] } {
+  if (!marks.length) return { text, marked: false, ids: [] }
   const wanted = new Set(marks)
   const found: { at: number; end: number; id: number }[] = []
   for (const m of text.matchAll(new RegExp(TAG_RE.source, 'g'))) {
@@ -339,24 +405,28 @@ function unmark(text: string, marks: readonly number[]): { text: string; marked:
     const id = raw === undefined ? Number.NaN : Number(raw)
     if (wanted.has(id)) found.push({ at: m.index ?? 0, end: (m.index ?? 0) + m[0].length, id })
   }
-  const exact = found.length === marks.length && found.every((f, i) => f.id === marks[i])
+  const inOrder = (want: readonly number[]) => found.length === want.length && found.every((f, i) => f.id === want[i])
+  const exact = inOrder(marks) || (endMark !== undefined && inOrder(marks.filter((m) => m !== endMark)))
   let out = ''
   let last = 0
   let empty = false
+  /** whether the text from `last` follows the end marker */
+  let afterEnd = false
   for (const f of found) {
-    if (!SOLID.test(text.slice(last, f.at))) empty = true
+    if (!afterEnd && !SOLID.test(text.slice(last, f.at))) empty = true
     out += text.slice(last, f.at) + (exact ? SENTINEL : '')
     last = f.end
+    afterEnd = f.id === endMark
   }
-  if (!SOLID.test(text.slice(last))) empty = true
+  if (!afterEnd && !SOLID.test(text.slice(last))) empty = true
   out += text.slice(last)
-  if (exact && empty) return { text: out.split(SENTINEL).join(''), marked: false }
-  return { text: out, marked: exact }
+  if (exact && empty) return { text: out.split(SENTINEL).join(''), marked: false, ids: [] }
+  return { text: out, marked: exact, ids: exact ? found.map((f) => f.id) : [] }
 }
 
 /** A reply → content, and where its marked sentences begin, or null where it cannot be read */
 export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at?: number[] } | null {
-  const { text, marked } = unmark(raw, plan.marks)
+  const { text, marked, ids } = unmark(raw, plan.marks, plan.endMark)
   const toks: Tok[] = []
   const seen = new Set<number>()
   const stack: { n: number; span: boolean }[] = []
@@ -452,25 +522,44 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
   const content = contentOf(refill(toks, plan.refill), [])
   if (!content) return null
   if (!marked) return { content }
-  // the sentinels' places in the translation's projection, then the sentinels out
+  // the sentinels' places in the translation's projection, then the sentinels out. The end marker is the wire's alone: no
+  // sentence's start. A marker set right after its sentence's stop (`leads`) places its sentence's start after the elements
+  // the source glues after that stop, where the reply sets them right after it (past white space), as the source's sentence
+  // holds them; where the reply set another word first (it moved one), at the marker, as a reading takes a moved element
   const at: number[] = []
   let n = 0
+  let k = 0
+  let held: { at: number; left: Set<string> } | null = null
+  const settle = (to: number) => {
+    if (held) at.push(to)
+    held = null
+  }
   const strip = (ps: OutPiece[]): OutPiece[] =>
     ps.flatMap((p): OutPiece[] => {
       if (p.t === 'el') {
         n++
+        if (held?.left.delete(p.id) && !held.left.size) settle(n)
         return [p]
       }
       if (p.t === 'span') return [{ ...p, content: strip(p.content) }]
       let s = ''
       for (const ch of p.s) {
-        if (ch === SENTINEL) at.push(n)
-        else {
+        if (ch === SENTINEL) {
+          settle(held?.at ?? n)
+          const id = ids[k++] as number
+          const lead = plan.leads.get(id)
+          if (id === plan.endMark) continue
+          if (lead?.length) held = { at: n, left: new Set(lead) }
+          else at.push(n)
+        } else {
+          if (held && !WHITE.test(ch)) settle(held.at)
           s += ch
           n += ch.length
         }
       }
       return s ? [{ t: 'text', s }] : []
     })
-  return { content: strip(content), at }
+  const out = strip(content)
+  settle(held === null ? n : (held as { at: number }).at)
+  return { content: out, at }
 }

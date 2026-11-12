@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: with Google translating, a sentence's full stop stays where a footnote mark, a note's call or a line break follows it. Google had dropped the stop, so the sentence ran into the next one.
 - Fixed: with Google translating, a phrase a paper sets in italics, bold or as a link is translated as part of its sentence. Google had translated the words before it alone, put "……" where the phrase belongs and set the phrase after it, sometimes translating its words out of their meaning ("order" as a command).
 - Fixed: in the PDF reader, a formula set on its own line between paragraphs lights as one piece when you point at it, its number with it, on both pages. A formula with a fraction, a root or a sum's limits had lit in two or three pieces, and its number not at all.
 - Changed: in the PDF reader, a figure's label or a table's cell that holds a highlighted, struck or underlined word stays as printed, whole, until a highlight can follow the translated words. Only the marked word had stayed in English, the rest of its line translated around it, a line half in each language. A highlighted number stays inside its translated line as before.
