@@ -1,11 +1,11 @@
 // Phase 2 of locate (locate.ts): each member's trail, the ink TeX set right after its last glyph that no unit owns,
 // claimed as its element TRAIL.
-// Reads: the index; the record's `members` and `claimedA` (a glyph another member holds is no trail).
-// Writes: `claimedA` (each trail's glyphs its member's), `members` (a trail's glyphs, its element TRAIL's), `trailSep`
-// (assigned: an author's trail's gap, which phase 6 states).
+// Reads: the index; the record's `members`; the ownership (a glyph another member holds is no trail).
+// Writes: the ownership (each trail taken by its member, its element TRAIL), `trailSep` (assigned: an author's trail's gap,
+// which phase 6 states).
 import { TRAIL } from './facts.ts'
 import { isInk, r2 } from './lines.ts'
-import { AUTHOR_KINDS, assign, BRACKET, CALL, FREE, lettersIn, type Member, UNIT_MARK, type Work } from './work.ts'
+import { AUTHOR_KINDS, assign, BRACKET, CALL, lettersIn, type Member, UNIT_MARK, type Work } from './work.ts'
 
 /** a word ends where two glyphs stand this share of their size apart, and a trail with it (the ink units' word rule, today's
  *  wordsOf: ink-units.mjs WORD_GAP) */
@@ -13,7 +13,7 @@ const WORD_GAP = 0.12
 
 export function claimTrails(w: Work): void {
   const { B, NB, m, inkA, ins, pageA, pageB, unitB, gA } = w.ix
-  const { members, claimedA } = w
+  const { members, claims } = w
   // ---- a member's trail: the ink TeX set right after its last glyph, glued to it on its row, that no unit owns (a class's marks
   // after a name and its separator: Meta FAIR's \authorformat sets `#2$^{#1}$` and \addtolist ", " after each \author's text; the
   // \thanks mark \maketitle sets in an \rlap after a name), claimed as its element TRAIL, which travels with its text (its group
@@ -98,7 +98,7 @@ export function claimTrails(w: Work): void {
     if (run?.line)
       for (let b = mem.bLast + 1; b < run.at && b < NB && (unitB[b] as number) < 0; b++) {
         const a = m.bToA[b] as number
-        if (a < 0 || (claimedA[a] as number) !== FREE || pageA[a] !== pageA[end]) continue
+        if (a < 0 || !claims.free(a) || pageA[a] !== pageA[end]) continue
         const g = gA(a)
         if (isInk(g) && (g.top <= last.bottom || g.bottom >= last.top)) {
           call = -1
@@ -109,14 +109,14 @@ export function claimTrails(w: Work): void {
       if (call >= 0) {
         if (b >= call) break
         const a = m.bToA[b] as number
-        if (a < 0 || (claimedA[a] as number) !== FREE || pageA[a] !== pageA[end]) continue
+        if (a < 0 || !claims.free(a) || pageA[a] !== pageA[end]) continue
         const g = gA(a)
         // (on the member's last line alone: another row before the call, an e-mail a block sets under its place, is no trail)
         if (isInk(g) && g.top > last.bottom && g.bottom < last.top) trail.push(a)
         continue
       }
       const a = m.bToA[b] as number
-      if (a < 0 || (claimedA[a] as number) !== FREE || pageA[a] !== pageA[end]) break
+      if (a < 0 || !claims.free(a) || pageA[a] !== pageA[end]) break
       const g = gA(a)
       // (a glyph that paints nothing, a word space a producer wrote as one, decides nothing for an author's member: the ink after
       // it does, past the gap it stands in)
@@ -141,8 +141,7 @@ export function claimTrails(w: Work): void {
       prev = g
     }
     if (!trail.length) continue
-    for (const a of trail) claimedA[a] = mem.ord
-    mem.els.set(TRAIL, trail)
+    claims.take(mem, { els: new Map([[TRAIL, trail]]) })
     if (sep !== undefined) trailSep.set(mem.ord, sep)
   }
   assign(w, 'trailSep', trailSep)
