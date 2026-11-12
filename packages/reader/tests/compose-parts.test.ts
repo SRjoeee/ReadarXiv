@@ -9,7 +9,7 @@ import type { Faces } from '../src/compose/faces.ts'
 import { shapePath } from '../src/compose/highlight.ts'
 import { LINK_SCHEMES, linkLayer, textUnder, urlAllowed } from '../src/compose/links.ts'
 import { createMarks } from '../src/compose/marks.ts'
-import { CLIP_PAD, cropsOf, svgOf } from '../src/compose/paint.ts'
+import { cropsOf, faceScale, svgOf } from '../src/compose/paint.ts'
 import type { Laid, Page } from '../src/compose/page.ts'
 import { laidText, TEXT_ITEMS_MAX, type TextContent } from '../src/compose/text.ts'
 import type { Clock } from '../src/stack/clock.ts'
@@ -127,7 +127,7 @@ describe("a link's name, order and border (S-R-25)", () => {
     expect(CATALOGUE_WORDS.linkName({ url: 'mailto:a%40b.org' })).toBe('Email a@b.org')
     expect(CATALOGUE_WORDS.linkName({ url: 'ftp://x' })).toBe('Link')
   })
-  it('leaves out a box of no area and an address off the list; orders by the text; draws the PDF border', () => {
+  it('leaves out a box of no area and an address off the list; orders by the text; draws the border its link states', () => {
     expect(LINK_SCHEMES).toEqual(['http:', 'https:', 'mailto:'])
     expect(urlAllowed('javascript:alert(1)')).toBe(false)
     expect(urlAllowed('data:text/html,x')).toBe(false)
@@ -140,38 +140,36 @@ describe("a link's name, order and border (S-R-25)", () => {
       page: 1,
       wait: { rows: [], faces: [] },
       members: [],
+      // (each link's border its own annotation's on A, as the typesetter carries it (Page.links' fourth field), whatever box it
+      // is drawn over now: the reader matches nothing against the original's annotations; the mail link's dashed one past the
+      // widest drawn; the reference's none, none on A)
       links: [
-        [[0, 45, 30, 60], { dest: 'sec' }],
-        [[38, 95, 75, 110], { url: 'https://example.org/' }],
+        [[0, 45, 30, 60], { dest: 'sec' }, 3],
+        [[38, 95, 75, 110], { url: 'https://example.org/' }, undefined, [1, 0xff0000]],
         [[0, 0, 0, 10], { url: 'https://zero.example/' }],
         [[10, 10, 20, 20], { url: 'javascript:x' }],
-        [[300, 300, 320, 320], { url: 'mailto:a@b.org' }],
+        [[300, 300, 320, 320], { url: 'mailto:a@b.org' }, 4, [40, 0x00ffff, 'dashed']],
       ],
     }
     const c = contentOf([item('see the', 0, 100, 35), item('figure', 40, 100, 30), item('other', 0, 50, 25)])
-    const borders = [
-      {
-        to: 'https://example.org/',
-        w: 37,
-        h: 15,
-        box: [38, 95, 75, 110] as [number, number, number, number],
-        border: { width: 1, rgb: [255, 0, 0] as [number, number, number], style: 'solid' as const },
-      },
-    ]
     const opened: string[] = []
     const layer = linkLayer(
       page,
       vp,
       { open: (u) => opened.push(u), follow: () => {}, unnamed: (to) => CATALOGUE_WORDS.linkName(to) },
       c,
-      borders,
     ) as HTMLElement
     const as = [...layer.querySelectorAll<HTMLAnchorElement>('a.axt-link')]
     // (in the text's order: "figure" before "other"; the mail link, over no text, after them)
     expect(as.map((a) => a.getAttribute('aria-label'))).toEqual(['figure', 'other', 'Email a@b.org'])
     expect(as[0]?.dataset.axtBorder).toBe('solid')
+    expect(as[0]?.style.getPropertyValue('--axt-link-border')).toBe('1px')
     expect(as[0]?.style.getPropertyValue('--axt-link-colour')).toBe('rgb(255 0 0)')
     expect(as[1]?.dataset.axtBorder).toBeUndefined()
+    expect(as[1]?.style.getPropertyValue('--axt-link-border')).toBe('')
+    expect(as[2]?.dataset.axtBorder).toBe('dashed')
+    expect(as[2]?.style.getPropertyValue('--axt-link-border')).toBe('20px')
+    expect(as[2]?.style.getPropertyValue('--axt-link-colour')).toBe('rgb(0 255 255)')
     as[0]?.click()
     expect(opened).toEqual(['https://example.org/'])
   })
@@ -181,6 +179,7 @@ const facesStub = {
   classOf: () => 'f',
   familyOf: () => 'sans-serif',
   ready: async () => {},
+  probeFace: async () => null,
   dispose: () => {},
   asked: 0,
   most: 0,
@@ -451,6 +450,87 @@ describe('the laid text layer (§11.11)', () => {
       // (16 along the run from the origin)
       expect(at('KI').transform).toEqual([0, 8, -8, 0, 171, 648])
       expect(r.translated).toHaveLength(2)
+    })
+    it("spans a run as it is drawn: its face's size correction and its tracking after each character (docs/PDF-READER.md §18.48)", () => {
+      // (a Korean run in Source Han Serif K, whose face string is 95.9 px at 100: drawn at size × 0.959 (paint.ts faceScale),
+      // a word of one x laid with tracking 0.25 after each of its characters, three syllables written by code point for the English
+      // gate; the stub measures half the size a character)
+      const m = placed(1, [[700, 50, 100]])
+      const content = contentOf([OC, item('word', 50, 700, 40), EMC, item('Foot', 50, 100, 20)])
+      const run = {
+        s: String.fromCodePoint(0xc138, 0xbd84, 0xd654),
+        x: 50,
+        face: '400 95.9px "axt-shs-k", "axt-nimbus-roman"',
+        size: 10,
+        track: 0.25,
+      }
+      const r = laidText(
+        content,
+        pageOf({ ...laid(1, [[700, 50, 100, [run]]]), off: 3 }),
+        new Map([[1, m]]),
+        facesStub,
+        measure,
+      )
+      const at = (r.content.items as { str?: string; width?: number }[]).find((x) => x.str === run.s)
+      expect(at?.width).toBeCloseTo(3 * 10 * 0.959 * 0.5 + 3 * 0.25, 9)
+    })
+    it('tells two turned labels whose origins share a page y apart: a line change across their run, its size its own', () => {
+      // (Codex on #632: two y-axis words turned a quarter, along (0, 1) from (100, 300) and (112, 300), size 8; read by page y
+      // and page x their boundary was neither a line change nor a space, and their words ran together when copied)
+      const word = (ord: number, x: number) =>
+        ({ ...placed(ord, []), lines: [[1, 0, x - 6, x + 2, 300, 330, 300, x - 6, x + 2, 0]] }) as unknown as Placed
+      const content = contentOf([
+        OC,
+        { ...item('Loss', 100, 300, 16), transform: [0, 8, -8, 0, 100, 300] },
+        EMC,
+        OC,
+        { ...item('Gain', 112, 300, 16), transform: [0, 8, -8, 0, 112, 300] },
+        EMC,
+      ])
+      const turned = (ord: number, x: number, s: string): Laid => ({
+        ...laid(ord, [[300, x, x + 28, [{ s, x, face: 'sans', size: 8, dir: [0, 1] }]]]),
+        off: 1,
+      })
+      const r = laidText(
+        content,
+        pageOf(turned(1, 100, 'Verlust'), turned(2, 112, 'Gewinn')),
+        new Map([
+          [1, word(1, 100)],
+          [2, word(2, 112)],
+        ]),
+        facesStub,
+        measure,
+      )
+      const items = r.content.items as { str?: string; hasEOL?: boolean }[]
+      expect(items.map((x) => x.str)).toEqual(['Verlust', 'Gewinn'])
+      // (12 apart across their run, their size 8: two lines)
+      expect(items[0]!.hasEOL).toBe(true)
+      // (one run on along the same turned line by another's, half a point on: one line, no space at its size 8, 0.15 of it;
+      // read at the size 1 a quarter turn gave, half a point took one)
+      const on = laidText(
+        contentOf([
+          OC,
+          { ...item('Loss', 100, 300, 16), transform: [0, 8, -8, 0, 100, 300] },
+          EMC,
+          OC,
+          { ...item('Gain', 100, 328.5, 16), transform: [0, 8, -8, 0, 100, 328.5] },
+          EMC,
+        ]),
+        pageOf(turned(1, 100, 'Verlust'), {
+          ...laid(2, [[328.5, 100, 128, [{ s: 'Gewinn', x: 100, face: 'sans', size: 8, dir: [0, 1] }]]]),
+          off: 1,
+        }),
+        new Map([
+          [1, word(1, 100)],
+          [2, { ...word(2, 100), lines: [[1, 0, 94, 102, 328.5, 358.5, 328.5, 94, 102, 0]] } as unknown as Placed],
+        ]),
+        facesStub,
+        measure,
+      ).content.items as { str?: string; hasEOL?: boolean }[]
+      expect(on.map((x) => [x.str, !!x.hasEOL])).toEqual([
+        ['Verlust', false],
+        ['Gewinn', false],
+      ])
     })
     it("gives a run split evenly between a unit's element and its line to the element, whole: never split", () => {
       // (2406.06525v1 p. 1: a mark "2∗", "2" on the element's ink, "∗" above it on the line alone; the unit keeps its elements)
@@ -756,6 +836,45 @@ describe('the page drawn (svgOf)', () => {
     )
     expect([...svg.querySelectorAll('tspan')].map((t) => t.getAttribute('y'))).toEqual(['92', '88.4'])
   })
+  it('draws in the target’s language, each run at its face’s size correction, its tracking after each character (lane cjk-punct)', () => {
+    // (the layout measures a run in its face string, a face's size correction its px: Source Han Serif K at 95.9; and lays a run of
+    // one x with its tracking. The SVG under an interface of another language took that one's glyphs: 2611.03953v2-zh-TW p13)
+    const page = {
+      page: 1,
+      wait: { rows: [], faces: [] },
+      links: [],
+      members: [
+        {
+          ord: 0,
+          page: 1,
+          state: 'laid',
+          off: 1,
+          lines: [
+            [
+              700,
+              72,
+              200,
+              [
+                { s: 'ABC', x: 72, face: '400 95.9px "axt-shs-k", "axt-nimbus-roman"', size: 9.22, track: 0.0958 },
+                { s: ':', x: 97.91, face: '400 100px "axt-nimbus-roman", "axt-lm-math"', size: 9.22 },
+              ],
+            ],
+          ],
+          lit: { left: [], right: [], own: [] },
+        },
+      ],
+    } as unknown as Page
+    const svg = svgOf(page, { viewBox: [0, 0, 612, 792], rotation: 0 } as never, { classOf: () => 'f' } as never, 'ko')
+    expect(svg.getAttribute('lang')).toBe('ko')
+    const spans = [...svg.querySelectorAll('tspan')]
+    expect(spans.map((t) => [t.getAttribute('font-size'), t.getAttribute('letter-spacing')])).toEqual([
+      ['8.842', '0.0958'],
+      ['9.22', null],
+    ])
+    expect(faceScale('400 95.9px "axt-shs-k"')).toBeCloseTo(0.959, 12)
+    expect(faceScale('italic small-caps 700 100px "axt-cmun-serif"')).toBe(1)
+    expect(faceScale('sans')).toBe(1)
+  })
   it('draws a turned line at its angle about its origin, its runs along it from there (a figure text the original sets turned)', () => {
     const line = (dir: [number, number]) =>
       ({
@@ -804,7 +923,7 @@ describe('the page drawn (svgOf)', () => {
 })
 
 describe('a crop cut from its element’s ink between two glyphs (a URL broken where TeX’s url package breaks it)', () => {
-  it('reaches past its ink by the antialiased margin on its own edges, and not at all on a cut one', () => {
+  it('is cut as the typesetter states its source: its own edges with their margin, a cut one at the cut', () => {
     const page: Page = {
       page: 1,
       wait: { rows: [], faces: [] },
@@ -823,12 +942,12 @@ describe('a crop cut from its element’s ink between two glyphs (a URL broken w
       ],
       links: [],
     }
-    const [head, tail] = cropsOf(page)
-    expect(head!.src[0]).toBeCloseTo(235 - CLIP_PAD, 5)
+    const [head, tail] = cropsOf(page, { x: 0.5, y: 0.5 })
+    expect(head!.src[0]).toBeCloseTo(235, 5)
     expect(head!.src[2]).toBeCloseTo(277.1, 5)
     expect(head!.at[2]).toBeCloseTo(72 + 277.1 - 235, 5)
     expect(tail!.src[0]).toBeCloseTo(277.1, 5)
     expect(tail!.at[0]).toBeCloseTo(72, 5)
-    expect(tail!.src[2]).toBeCloseTo(450 + CLIP_PAD, 5)
+    expect(tail!.src[2]).toBeCloseTo(450, 5)
   })
 })

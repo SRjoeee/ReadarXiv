@@ -4,6 +4,8 @@ import type { InkPoint, PackedGlyphs } from '@readarxiv/engine'
 /** how a piece's ink was found, or why none was: the first OWNED are owned */
 export declare const OWNED_HOW: readonly string[]
 export declare const OWNED: number
+/** a point one reader reads alone (a caption's label's `ka<k>`, a float of no counter's `fn<n>`): every other reading passes over it */
+export declare const READ_ALONE: RegExp
 /** the glyph columns ownedOf reads of a page, and the owned rows after it */
 export declare const STREAM_COLUMNS: readonly ['x0', 'y', 'size', 'u']
 /** a page's glyphs as ownedOf reads them: packGlyphs' columns STREAM_COLUMNS (more may be there) */
@@ -31,6 +33,9 @@ export interface Follow { closing: boolean; want: string; rest?: string; display
 export declare function spellOf(s: string): string
 /** a page's columns as the maker reads them: an x range's column, 0 or 1 on a page of two, 2 across both, 0 on a page of one */
 export declare function columnsAt(page: { points?: readonly { name: string }[]; view?: readonly number[] }): (x0: number, x1: number) => 0 | 1 | 2
+/** each glyph's, box's and point's region by the page's brackets: depth * 2 + 1 in a column's body, a body's brackets paired by
+ *  number (they nest on a balanced page); `bodies` whether the page brackets any */
+export declare function regionsOf(page: { glyphs: { n: number }; boxes: ArrayLike<number>; points: readonly { name: string; glyph: number; box: number }[] }): { glyph: Int32Array; box: Int32Array; at: Int32Array; bodies: boolean }
 export interface Owned { how: number; glyphs: [page: number, index: number][]; boxes: [page: number, index: number][] }
 /** a display a unit opens with, which the marking passes over (marks.mjs headsOf), by its unit's start mark: the opening mark's
  *  name it would have had, and its display group's later displays' (none of them a point) */

@@ -7,8 +7,14 @@ import { measureOf, measureOn } from '../unit/blocks.ts'
  *  layout file with only the unit's own lines between, in one frame, and no kept region the text passes; every other block
  *  a flow of its own) */
 const inFlow = (a, b) => a.flow === b.flow
-/** a block's foot at a state: the lowest baseline a line of it is laid at, its last less what it borrows */
-const lowOf = (b, st, s) => b.B.at(-1) - Math.min(b.free, st.borrow * (b.pitch0 ?? 1.2 * s))
+/** a block's foot at a state: the lowest baseline a line of it is laid at, its last less what it borrows (its room TeX's facts
+ *  leave, Block.free: the owner's ruling of 2026-11-08) */
+const lowOf = (b, st, s) => b.B.at(-1) - Math.min(roomOf(b, st), st.borrow * (b.pitch0 ?? 1.2 * s))
+/** the room under a block's last baseline at a state: Block.free; at a state that borrows past TeX's text block bottom
+ *  (FitState.over, docs/PDF-READER.md §18.37), the bottom's depth that much deeper, the next ink's bound as it is */
+function roomOf(b, st) {
+  return st.over && b.toFoot !== undefined ? Math.max(0, Math.min(b.toFoot + st.over, b.toInk)) : b.free ?? 0
+}
 /**
  * The gap under a paragraph never tighter than its lines (the half-leading round, 2026-10-17, its second form): the lowest
  * baseline a unit's last line may take at a state, where the next line of its column in the original keeps its own baseline
@@ -16,10 +22,12 @@ const lowOf = (b, st, s) => b.B.at(-1) - Math.min(b.free, st.borrow * (b.pitch0 
  * first line stays on the original's first baseline, as TeX set it, whatever is over it (a heading, a figure, a skip, the
  * page's head): a first line moved under it by half the leading drifted from the original by (L - 1) / 2 of a pitch on 56 %
  * of the paragraph starts in CJK, 70 % of them with a leading's room over them already (the maintainer's question). So the
- * room a gap lacks is the paragraph's above it: where the next line would stand nearer its last line than a leading, L p0, of
- * either paragraph (its own, `lead`, or the next one's, `next`, the page fill's: run.mjs fillPage) and the original's own
- * skip there past its pitch, it ends higher by the deficit, its last baseline no lower than that line's plus L p0 of the
- * larger and the skip, its fill spread over a shorter height
+ * room a gap lacks is the paragraph's above it: where the next line would stand nearer its last line than its own leading,
+ * L p0, and the original's own skip there past its pitch, it ends higher by the deficit, its last baseline no lower than that
+ * line's plus L p0 and the skip, its fill spread over a shorter height. Its own leading alone, never the next paragraph's
+ * (the owner's ruling of 2026-11-08, chosen on a preview of the rules: today's held the gap to the larger of both, and a
+ * paragraph whose translation nearly fills its block was pulled under the leading its own block allows, 1810.04805v2 p8 t156
+ * at 1.08 among neighbours at 1.38-1.5, its own 1.14)
  * (the page fill's states, `box`: slotsAt stops its last frame's slots there, so that the lines a frame holds still fall with
  * the leading and the fill's search is monotone). Where the original leaves that much or more (a heading's room, nothing under
  * it in its column) nothing changes. Null where nothing is asked: at the original's pitch or
@@ -27,18 +35,42 @@ const lowOf = (b, st, s) => b.B.at(-1) - Math.min(b.free, st.borrow * (b.pitch0 
  * last frame of one line (no room to give), no line under it
  */
 function footFloorAt(blocks, st, P, s) {
-  const e = P.halfLead, L = Math.max(st.lead, st.next ?? 0)
-  if (!e?.foot || !(L > 1 + 1e-9) || !blocks.length || !Number.isFinite(e.below)) return null
-  const bl = blocks.at(-1), low = lowOf(bl, st, s)
-  if (!(bl.B[0] - low > 0.05)) return null
+  const e = P.halfLead
+  if (!e?.foot || !blocks.length) return null
+  return floorOver(blocks.at(-1), e.below, st.lead, st, s)
+}
+/** the floor of block `b`'s last line at leading L, the original's next line of its column `below` under its last baseline: the
+ *  gap under a paragraph at its own leading (footFloorAt), or null */
+function floorOver(b, below, L, st, s) {
+  if (!(L > 1 + 1e-9) || !Number.isFinite(below)) return null
+  const low = lowOf(b, st, s)
+  if (!(b.B[0] - low > 0.05)) return null
   // (and the original's own skip at that boundary, its room past its pitch, capped at a pitch as the gate's measure caps
   // it, measure.mjs paraGapsOf: a NeurIPS \parskip of 5.5 pt under 11 is kept over the leading, where without it a gap of a
   // pitch and a skip equalled a leading of 1.5 and the paragraphs ran together)
-  const p0 = bl.pitch0 ?? 1.2 * s, skip = Math.min(Math.max(0, e.below - p0), p0)
-  const floor = bl.B.at(-1) - e.below + L * p0 + skip
+  const p0 = b.pitch0 ?? 1.2 * s, skip = Math.min(Math.max(0, below - p0), p0)
+  let floor = b.B.at(-1) - below + L * p0 + skip
+  // (a state that borrows room under it, TeX's (Room.runs, Room.sep): the gap measured from the borrow's limit, its foot,
+  // which stands TeX's separation over the next ink; at its own leading that much higher, the original's skip past the
+  // separation (a list's \itemsep, flush bottom's stretch) the borrow's. Lab option (i) of 2026-11-09, shown to the owner alone and with (iii):
+  // 1810.04805v2's references that need every line of theirs stood at the original's pitch among entries spread to 1.38)
+  if (b.B.at(-1) - low > 1e-9) floor = Math.min(floor, low + (L - 1) * p0)
   return floor > low + 1e-9 ? floor : null
 }
-/** footFloorAt for the page fill's guesses of a closer leading (run.mjs guessCloser): the floor a state asks, or null */
+/**
+ * The same floor under each paragraph TeX states inside the unit (the owner's ruling of 2026-11-08, (a): the gap under a
+ * paragraph follows its own leading, a paragraph's that ends a unit or one that ends inside it): a block whose next block opens
+ * a paragraph (`opens`: SpanAt.opens, El.opens) in its column, the original's next line that paragraph's first, its leading
+ * the block's own (`leads`, the page fill's: each paragraph filled at its own). 2608.25210v2 p3's prompt boxes: an item's
+ * run-in text, then its prompt in a frame; a first paragraph filled to its block's foot stood a pitch of the original over the
+ * second, its own lines half again as far apart. Null where nothing is asked
+ */
+function paraFloorAt(blocks, bi, st, s) {
+  const b = blocks[bi], n = blocks[bi + 1]
+  if (!n?.opens || n.page !== b.page || !(Math.min(b.x1, n.x1) > Math.max(b.x0, n.x0))) return null
+  return floorOver(b, b.B.at(-1) - n.B[0], st.leads?.[bi] ?? st.lead, st, s)
+}
+/** footFloorAt for the fill leadings' guesses of a closer leading (run.mjs guessCloser): the floor a state asks, or null */
 export const footFloorOf = (blocks, st, P, s) => footFloorAt(blocks, st, P, s)
 /** of a line's size: a display whose top stands under its baseline nearer than this is in reach of its descent (TeX's
  *  \abovedisplayshortskip, nothing but stretch, sets one that near; its \abovedisplayskip does not) */
@@ -97,6 +129,12 @@ function slotsAt(blocks, st, P, s) {
   const lows = blocks.map(b => lowOf(b, st, s))
   const floor = st.box ? footFloorAt(blocks, st, P, s) : null
   if (floor !== null) lows[lows.length - 1] = floor
+  // (and under each paragraph TeX states inside the unit, at its own leading: paraFloorAt)
+  if (st.box)
+    for (let bi = 0; bi + 1 < blocks.length; bi++) {
+      const f = paraFloorAt(blocks, bi, st, s)
+      if (f !== null) lows[bi] = f
+    }
   const feet = lows.slice()
   for (let bi = blocks.length - 2; bi >= 0; bi--) if (blocks[bi].through) feet[bi] = feet[bi + 1]
   // (a run's blocks are laid alone, layoutRuns: the unit's first line is the first block's of the unit, P.blockBase the run's
@@ -104,8 +142,11 @@ function slotsAt(blocks, st, P, s) {
   const base = P.blockBase ?? 0
   for (const [bi, b] of blocks.entries()) {
     const p0 = b.pitch0 ?? 1.2 * s
-    const pitch = p0 * st.lead
-    const onGrid = Math.abs(st.lead - 1) < 1e-6
+    // (a block of a frame before the unit's last filled at a leading of its own, `leads` (S.fill.leads: each frame of a paragraph
+    // over a page or column break filled over its own block); the unit's last frame's the state's)
+    const lead = st.leads?.[bi] ?? st.lead
+    const pitch = p0 * lead
+    const onGrid = Math.abs(lead - 1) < 1e-6
     const low = lows[bi]
     const firstBlock = bi + base === 0
     // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own; and its gaps TeX's
@@ -120,6 +161,9 @@ function slotsAt(blocks, st, P, s) {
       // has its first line a pitch under it)
       const flows = firstBlock && b.onLead && k > 0
       let y = shared ? b.startY : flows ? b.startY - k * pitch : onGrid ? (k < G.length ? G[k] : G.at(-1) - (k - G.length + 1) * pitch) : b.B[0] - k * pitch
+      // (the page fill's states, `head`: the unit's first block lower by the room the gap over it lacks, where the paragraph over
+      // it cannot end higher (S.fill.page headOf: its last line alone on its frame's first line, TeX's widow), its foot its own)
+      if (st.head && firstBlock && !shared && b.startY === undefined) y -= st.head
       // never two lines closer than 0.7 of the pitch (a baseline the text layer could not tell)
       if (out.length && out.at(-1).block === bi && y > out.at(-1).baseline - 0.7 * pitch) y = out.at(-1).baseline - pitch
       if (y < low - 0.05 && !shared) break
@@ -132,7 +176,15 @@ function slotsAt(blocks, st, P, s) {
       const [mx0, mx1] = flows && b.flowX && y >= b.flowX.y - 0.05 ? flowMeasureAt(b, y) : measureOf(b, y, (onGrid || shared) && !flows && k < G.length ? k : -1)
       // (the first line's start: the block's indent, or where a shared line leaves it, `start`, run.mjs layout2)
       // (and a block a forced break's region opens, `opens` (blocksOf2): its first line TeX's paragraph's, at its indent)
-      const x0 = firstBlock && k === 0 && b.start !== undefined ? b.start : (firstBlock || b.opens) && k === 0 && !b.centred ? b.x0 + b.indent : mx0
+      let x0 = firstBlock && k === 0 && b.start !== undefined ? b.start : (firstBlock || b.opens) && k === 0 && !b.centred ? b.x0 + b.indent : mx0
+      // (a label TeX hung beside the block's text (`hang`, lay/adapt.ts): the first line starts at the label, `hangGap` the space
+      // TeX set after it at the state's scale, which breakLines hangs the text at the drawn label's end by; the block's later
+      // lines starting at its text's edge, `hung`, take the edge it sets)
+      let hangGap, hung
+      if (firstBlock && k === 0 && b.start === undefined && b.hang !== undefined && !b.centred && b.hang < x0) {
+        hangGap = (b.hangGap ?? 0) * st.scale
+        x0 = b.hang
+      } else if (firstBlock && k > 0 && b.hang !== undefined && !b.centred && Math.abs(x0 - mx0) < 0.01) hung = true
       // (a line laid over a display TeX set with its short skip, `shortSkips` (tex.mjs shortSkipsOf: under a line of the unit
       // that ends 2 em before it), whose top stands under its baseline in reach of its descent: it ends 2 em before the display,
       // as TeX's own test asks of the line before a display set so, and what no longer fits is the fit's. 2608.16117 page 23,
@@ -140,9 +192,25 @@ function slotsAt(blocks, st, P, s) {
       const em = s * st.scale
       let x1 = mx1
       for (const d of b.shortSkips ?? []) if (d.top < y && d.top > y - SHORT_SKIP * em && Math.min(x1, d.x1) > Math.max(x0, d.x0)) x1 = Math.min(x1, d.x0 - PREDISPLAY * em)
+      // (ink that stays beside the original's lines, no member's (`stays`, Room.stays: a mark TeX set after a space, a frame's
+      // rule; amsthm's QED box in a part made before a unit's end mark was stated, El.end, lay/adapt.ts, which follows the
+      // translation's end since): a line whose reach meets it, from its descent's (SHORT_SKIP, as a
+      // display's top above) to its em over its baseline (no text glyph rises past its body), ends before it, or, where it stood
+      // before the original's line, starts after it, as far off it as TeX set that line (`gap`: 2610.20484v1 p1 t6's start 1.49
+      // pt after an initial) and half an em at most, as the line widened beside a glyph keeps (U.decor widen; a QED box TeX's
+      // \hfill set 101 pt off). Borrowed or not: a ragged last line missed it by its shortness alone, and a line borrowed under it
+      // made the row full (2610.40645v1-ja p12 t80)
+      for (const k of b.stays ?? []) {
+        if (!(k.y0 < y + em && k.y1 > y - SHORT_SKIP * em)) continue
+        const gap = Math.min(0.5 * em, k.gap)
+        if (k.right) x1 = Math.min(x1, k.x0 - gap)
+        else x0 = Math.max(x0, k.x1 + gap)
+      }
       // a sliver beside a formula (narrower than 1.5 em) holds no text: its words were the formula's
       if (x1 - x0 < 1.5 * s * st.scale) continue
       const slot = { block: bi, page: b.page, x0, x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, foot: feet[bi], flow: b.flow ?? bi }
+      if (hangGap !== undefined) slot.hangGap = hangGap
+      if (hung) slot.hung = true
       // (a unit TeX set flush left or flush right, run.mjs: placeItems sets its lines by it)
       if (b.flush) slot.flush = b.flush
       out.push(slot)
@@ -165,4 +233,4 @@ function slotsAt(blocks, st, P, s) {
   return out
 }
 
-export { inFlow, slotsAt }
+export { inFlow, roomOf, slotsAt }

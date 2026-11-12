@@ -228,7 +228,7 @@ describe("the original held by the host's rules, told to the session (L11's seco
     expect(fake.controller.hold).not.toHaveBeenCalled()
     await act(async () => fake.set({ unavailable: { why: 'busy', retryAt: null } }))
     await act(async () => fake.set({ unavailable: null, narrow: true, phase: 'preparing', made: true }))
-    await act(async () => fake.set({ preparing: { position: 1, progress: null } }))
+    await act(async () => fake.set({ preparing: { progress: null } }))
     await act(async () => fake.set({ chose: true }))
     expect(fake.controller.hold.mock.calls).toEqual([[true], [false]])
     await m.unmount()

@@ -279,13 +279,10 @@ export function createPageSession(deps: SessionDeps): PageSession {
     if (!paper) return { started: false, reason: 'not-paper' }
     if (blocks.length === 0) return { started: false, reason: 'nothing-to-translate' }
     const tStart = now()
-    const config = await deps.config.get()
-    // The glossary goes out with every batch (§8.2). **An empty glossary omits the field**: with it every existing cache key would change at once, invalidating everything
-    const context: TranslateContext = config.glossary.length > 0 ? { ...deps.context, glossary: config.glossary } : deps.context
     // The engine chain lives in the background; only the capabilities batch planning and render-path choice need are taken here (§2 item 3)
     // The session id is minted before the status is asked: the status request carries it, and the background binds
     // the session to the chain it answers about — a chain built from the configuration as stored now (`fresh`). The
-    // target and the revision the session runs on come from that chain, not from the configuration read above: a
+    // target and the revision the session runs on come from that chain, not from the configuration read below: a
     // save between the two would otherwise leave the session pinned to a chain other than the settings it records
     // (local review). Nothing awaits after the state below is committed
     const session = newSessionId()
@@ -306,6 +303,20 @@ export function createPageSession(deps: SessionDeps): PageSession {
     }
     // The first choice unavailable while the chain still has a fallback: start as usual, the requests land straight on the free engine (§8.5)
     if (!status.available && !status.fallback) return release('no-service')
+    // The settings the session starts on, read **after** the status: a change the reader made while it was out (the
+    // popup's figures switch, the hover highlight, the whole paper) reaches `onConfig` while no session of this start
+    // is in force to take it, and a read made before the wait would start the session on the settings before it. The
+    // last await of a start, so nothing moves between this read and the commit below. A read that fails releases the
+    // scope the status bound, as a refusal does
+    let config: Config
+    try {
+      config = await deps.config.get()
+    } catch (e) {
+      void backend.cancel(session)
+      throw e
+    }
+    // The glossary goes out with every batch (§8.2). **An empty glossary omits the field**: with it every existing cache key would change at once, invalidating everything
+    const context: TranslateContext = config.glossary.length > 0 ? { ...deps.context, glossary: config.glossary } : deps.context
     // The reader may have restored the page while the two reads above were in flight
     if (from !== undefined && live?.id !== from) return release('session-over')
     if (epoch !== undefined && epoch !== epochNow()) return release('session-over')

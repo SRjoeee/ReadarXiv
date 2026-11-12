@@ -8,7 +8,15 @@ import * as T from '@readarxiv/typeset'
 import { describe, expect, it, vi } from 'vitest'
 import type { Timers } from '../src/bytes/source.ts'
 import { WAVE_SLOTS } from '../src/compose/faces.ts'
-import { BUSY_MAX_MS, createServed, HYPH_WAIT, partsOf, type Platform, unicodeRangeOf } from '../src/compose/served.ts'
+import {
+  BUSY_MAX_MS,
+  createServed,
+  HYPH_WAIT,
+  PROBE_FACE,
+  partsOf,
+  type Platform,
+  unicodeRangeOf,
+} from '../src/compose/served.ts'
 import { typesetLay } from '../src/compose/typeset.ts'
 import { REQUEST_MS, RETRY_MS } from '../src/session/client.ts'
 
@@ -20,7 +28,17 @@ const TABLES: Record<string, unknown> = {
   '/static-fonts/index.json': {
     schema: 1,
     fonts: '6',
-    faces: { 'nimbus-roman-regular': { group: 'nimbus-roman' }, 'shs-sc-regular': { group: 'shs-sc' } },
+    faces: {
+      'nimbus-roman-regular': { group: 'nimbus-roman' },
+      'shs-sc-regular': { group: 'shs-sc' },
+      'cmun-serif-regular': { group: 'cmun-serif' },
+    },
+  },
+  '/static-fonts/cmun-serif.json?fonts=6': {
+    schema: 1,
+    group: 'cmun-serif',
+    slices: [LATIN],
+    faces: { 'cmun-serif-regular': [{ path: 'static-fonts/0000000000000004.woff2' }] },
   },
   '/static-fonts/nimbus-roman.json?fonts=6': {
     schema: 1,
@@ -58,6 +76,8 @@ function site(
     /** the answers each url's asks get first, in order (its own after them) */
     answers?: Record<string, Given[]>
     timers?: Timers
+    /** a slice's face loaded only once this resolves (by its unicode-range) */
+    faceGate?: (range: string) => Promise<void>
   } = {},
 ) {
   const asked: string[] = []
@@ -92,6 +112,9 @@ function site(
     return new Response('', { status: 404 })
   }
   const faces: { family: string; range: string; added: boolean }[] = []
+  /** the faces added, by the synchronous stretch each was added in (one stretch: one change of the document's fonts) */
+  const adds: string[][] = []
+  let stretch: string[] | null = null
   const measured: [string, string, boolean][] = []
   const platform: Platform = {
     // (each character 50 units wide at 100 px, a CJK one 100; its ink 70 over, 20 under, ending at its advance)
@@ -101,11 +124,21 @@ function site(
       return { width, ascent: 70, descent: 20, right: width }
     },
     async face(family, _bytes, d) {
+      await o.faceGate?.(d.unicodeRange)
       const f = { family, range: d.unicodeRange, added: false }
       faces.push(f)
       return {
         add: () => {
           f.added = true
+          if (!stretch) {
+            const now: string[] = []
+            stretch = now
+            adds.push(now)
+            queueMicrotask(() => {
+              stretch = null
+            })
+          }
+          stretch.push(f.range)
         },
         remove: () => {
           f.added = false
@@ -123,7 +156,11 @@ function site(
     warn: (what) => warned.push(what),
     ...(o.timers ? { timers: o.timers } : {}),
   })
-  return { s, asked, faces, measured, lost, warned }
+  return { s, asked, faces, adds, measured, lost, warned }
+}
+/** the event loop's turns taken until `ready` holds (at most 100) */
+const turns = async (ready: () => boolean = () => false) => {
+  for (let i = 0; i < 100 && !ready(); i++) await new Promise((go) => setTimeout(go, 0))
 }
 /** timers moved by hand: `run` lets what falls due run, in order, the promises they start settled between (a timer one of them
  *  sets that falls due within the run included) */
@@ -156,6 +193,32 @@ function handTimers() {
 }
 
 describe('the served faces and the Metrics over them', () => {
+  it("the text rendering's probe face: a served Latin face, Computer Modern's serif, loaded for the probe's text; none where it cannot be had", async () => {
+    const { s, asked, faces } = site()
+    expect(PROBE_FACE).toBe('400 100px "axt-cmun-serif"')
+    expect(await s.faces.probeFace('Sphinx')).toBe(PROBE_FACE)
+    expect(s.metrics.ready(PROBE_FACE, 'Sphinx')).toBe(true)
+    expect(asked).toEqual([
+      '/static-fonts/index.json',
+      '/static-fonts/cmun-serif.json?fonts=6',
+      '/static-fonts/0000000000000004.woff2',
+    ])
+    expect(faces).toEqual([{ family: 'axt-cmun-serif', range: unicodeRangeOf(LATIN), added: true }])
+    // (its slice not there, or its table: no probe face, the sheet's geometricPrecision (a system face would tell nothing), and
+    // no face lost told for it: no page draws in it; told once a page's text asks it)
+    const FACE = '400 100px "axt-cmun-serif"'
+    const gone = site({ missing: ['/static-fonts/0000000000000004.woff2'] })
+    expect(await gone.s.faces.probeFace('Sphinx')).toBeNull()
+    expect(gone.lost).toEqual([])
+    await gone.s.faces.ready([[FACE, 'Satz']])
+    expect([gone.s.metrics.ready(FACE, 'Satz'), gone.lost]).toEqual(['never', ['cmun-serif-regular']])
+    const table = site({ missing: ['/static-fonts/cmun-serif.json?fonts=6'] })
+    expect(await table.s.faces.probeFace('Sphinx')).toBeNull()
+    expect(table.lost).toEqual([])
+    await table.s.faces.ready([[FACE, 'Satz']])
+    expect(table.lost).toEqual(['cmun-serif-regular'])
+    s.faces.dispose()
+  })
   it('nothing ready before the tables are read; the slices a text needs loaded, no other; a character no face holds never ready', async () => {
     const { s, asked, faces } = site()
     expect(s.metrics.ready(FONT, 'Satz')).toBe(false)
@@ -178,6 +241,42 @@ describe('the served faces and the Metrics over them', () => {
     expect(s.metrics.ready('400 100px "Arial"', 'a')).toBe('never')
     s.faces.dispose()
     expect(faces.every((f) => !f.added)).toBe(true)
+  })
+  it("one ask's slices added to the document together, in one stretch, once every one of them is in; none ready before; an ask never held by another's", async () => {
+    // (each change of the document's fonts re-lays every text node laid out: one change an ask, not one a slice,
+    // docs/PDF-READER.md §11.8 "The faces, in one wave")
+    const L = unicodeRangeOf(LATIN),
+      A = unicodeRangeOf(ACCENTS),
+      H = unicodeRangeOf(HAN)
+    const open = new Map<string, () => void>()
+    const { s, faces, adds } = site({ faceGate: (r) => new Promise<void>((go) => open.set(r, go)) })
+    const ask = s.faces.ready([[FONT, 'Größe \u4e2d']])
+    await turns(() => open.size === 3)
+    open.get(L)?.()
+    open.get(H)?.()
+    await turns()
+    // (two of its three slices in: none of them in the document, nothing of the ask's text ready to be measured)
+    expect(faces.filter((f) => f.added)).toEqual([])
+    expect([s.metrics.ready(FONT, 'Gr'), s.metrics.ready(FONT, '\u4e2d')]).toEqual([false, false])
+    open.get(A)?.()
+    await ask
+    expect(adds.map((x) => [...x].sort())).toEqual([[L, A, H].sort()])
+    expect(s.metrics.ready(FONT, 'Größe \u4e2d')).toBe(true)
+    s.faces.dispose()
+    // (two asks, two pages: the first's slice in, the first's faces added and ready while the second's is still loading)
+    const gates = new Map<string, () => void>()
+    const two = site({ faceGate: (r) => new Promise<void>((go) => gates.set(r, go)) })
+    const first = two.s.faces.ready([[FONT, 'Satz']])
+    const second = two.s.faces.ready([[FONT, '\u4e2d\u6587']])
+    await turns(() => gates.size === 2)
+    gates.get(L)?.()
+    await first
+    expect([two.s.metrics.ready(FONT, 'Satz'), two.s.metrics.ready(FONT, '\u4e2d')]).toEqual([true, false])
+    gates.get(H)?.()
+    await second
+    expect(two.adds).toEqual([[L], [H]])
+    expect(two.s.metrics.ready(FONT, '\u4e2d\u6587')).toBe(true)
+    two.s.faces.dispose()
   })
   it('measures a text in runs cut where its slice changes, a CJK run unkerned and cut between two punctuation marks, never in small capitals', async () => {
     const { s, measured } = site()
@@ -409,6 +508,10 @@ describe('the served faces and the Metrics over them', () => {
     expect(s.faces.familyOf(FONT)).toBe('"axt-nimbus-roman", "axt-shs-sc"')
     expect(rule).toMatch(/font-weight: 700/)
     expect(rule).toMatch(/font-style: italic/)
+    // (no trim of CJK punctuation and no glyph of another language's: a mark is its face's default glyph wherever it stands,
+    // the one the typesetter measured, docs/PDF-READER.md §18.48)
+    expect(rule).toMatch(/text-spacing-trim: space-all/)
+    expect(rule).toMatch(/font-feature-settings: "locl" 0/)
     expect(s.faces.classOf(`italic small-caps 700 100px "axt-nimbus-roman", "axt-shs-sc"`)).toBe(c)
   })
 })

@@ -14,10 +14,13 @@ import {
   pinnedOf,
   shortSkipLines,
   sideOf,
+  staysOf,
   centredByBlock,
   sourceEndMarks,
   styleOf,
   fillRunsOf,
+  fixedFacesOf,
+  oneFamily,
   tailOf,
   textOf,
   urlCopyOf,
@@ -99,6 +102,9 @@ describe('the class’s tail (C20)', () => {
   it('reads the source’s end marks through ligatures, spaces and inkless elements', () => {
     expect(sourceEndMarks(p("as ``said''."))).toEqual(['”', '.'])
     expect(sourceEndMarks([...p('word.'), { t: 'el', id: '1', kind: 'other', src: '\\label{x}' }])).toEqual(['.'])
+    // (a forced break and a tie set no ink either, stated `break` and `space`)
+    expect(sourceEndMarks([...p('Ltd.'), { t: 'el', id: '1', kind: 'break', src: '\\\\' }])).toEqual(['.'])
+    expect(sourceEndMarks([...p('Inc.'), { t: 'el', id: '1', kind: 'space', src: '~' }])).toEqual(['.'])
     expect(sourceEndMarks([...p('cost'), { t: 'el', id: '1', kind: 'symbol', src: '\\%' }])).toBeNull()
   })
 })
@@ -122,6 +128,147 @@ describe('a label’s parts (B16)', () => {
     })
     expect(labelParts(run('Proof.'), 1).num).toBeUndefined()
   })
+  it("holds every glyph of a label in its parts: a number's opening bracket is the number's, and a named label whose parts leave a glyph out says how many (Codex on round 8's pull request)", () => {
+    // (a number TeX printed in brackets: "Figure (1).", "Theorem (1).", "Proposition (2.1)"; read with its bracket in no part, a
+    // relabel drew "Abbildung 1).", "Satz 1).")
+    expect(labelParts(run('Figure (1).'), 1)).toMatchObject({
+      name: ['Figure', expect.anything()],
+      num: ['(1', expect.anything()],
+      punct: [').', expect.anything()],
+    })
+    expect(labelParts(run('Theorem (1).'), 1)).toMatchObject({
+      name: ['Theorem', expect.anything()],
+      num: ['(1', expect.anything()],
+      punct: [').', expect.anything()],
+    })
+    expect(labelParts(run('Proposition (2.1)'), 1)).toMatchObject({
+      name: ['Proposition', expect.anything()],
+      num: ['(2.1', expect.anything()],
+      punct: [')', expect.anything()],
+    })
+    for (const s of ['Figure (1).', 'Theorem (1).', 'Proposition (2.1)', 'Theorem 2 (', 'Figure 1.', 'Fig. 4.'])
+      expect(labelParts(run(s), 1).unheld, s).toBeUndefined()
+    // (a head that holds its note whole, its parts the name and the closing marks: "2 (Main result" in no part, said)
+    const note = labelParts(run('Theorem 2 (Main result).'), 1)
+    expect(note).toMatchObject({ name: ['Theorem', expect.anything()], punct: [').', expect.anything()] })
+    expect(note.unheld).toBe(12)
+    // (a label of no name is never drawn anew, and says nothing: a reference's "[12]", an item's "(3)")
+    expect(labelParts(run('(3)'), 1).unheld).toBeUndefined()
+  })
+  it('gives an abbreviated name its own stop, which stands between no digits of the number (Fig., Tab., Eq., Thm., Def., Sec.)', () => {
+    // (2610.21880v1's IEEE captions, "Fig. 4.": the name "Fig" and the number ".4" drew no target word)
+    const fig = labelParts(run('Fig. 4.'), 1)
+    expect(fig.name?.[0]).toBe('Fig.')
+    expect(fig.num?.[0]).toBe('4')
+    expect(fig.punct?.[0]).toBe('.')
+    // (the name's ink takes its stop in, the number's begins at its digit)
+    const gs = run('Fig. 4.')
+    expect(fig.name?.[1][3]).toBe(Math.round(gs[3]!.x1 * 100) / 100)
+    expect(fig.num?.[1][1]).toBe(Math.round(gs[5]!.x0 * 100) / 100)
+    expect(labelParts(run('FIG. 3:'), 1)).toMatchObject({
+      name: ['FIG.', expect.anything()],
+      num: ['3', expect.anything()],
+      punct: [':', expect.anything()],
+    })
+    expect(labelParts(run('Tab. 2'), 1)).toMatchObject({
+      name: ['Tab.', expect.anything()],
+      num: ['2', expect.anything()],
+    })
+    expect(labelParts(run('Thm. 2.1.'), 1)).toMatchObject({
+      name: ['Thm.', expect.anything()],
+      num: ['2.1', expect.anything()],
+      punct: ['.', expect.anything()],
+    })
+    expect(labelParts(run('Def. 3'), 1)).toMatchObject({
+      name: ['Def.', expect.anything()],
+      num: ['3', expect.anything()],
+    })
+    expect(labelParts(run('Sec. A.4'), 1)).toMatchObject({
+      name: ['Sec.', expect.anything()],
+      num: ['A.4', expect.anything()],
+    })
+    expect(labelParts(run('Fig.S1'), 1)).toMatchObject({
+      name: ['Fig.', expect.anything()],
+      num: ['S1', expect.anything()],
+    })
+    // (a bracket before the number is no mark of the name's word, and is the number's as TeX printed it: "Eq. (3)". Read as
+    // neither part's, as before, it was a glyph the parts left out, and a relabel drew the number without it, "Gl. 3)")
+    expect(labelParts(run('Eq. (3)'), 1)).toMatchObject({
+      name: ['Eq.', expect.anything()],
+      num: ['(3', expect.anything()],
+      punct: [')', expect.anything()],
+    })
+    expect(labelParts(run('Eq. (3)'), 1).unheld).toBeUndefined()
+    // (a number of no name before it keeps its marks, and a sub-figure's letter stays the name's, as before)
+    expect(labelParts(run('.5'), 1).num?.[0]).toBe('.5')
+    expect(labelParts(run('(a)'), 1).name?.[0]).toBe('a')
+    // (a ligature's one glyph, whose text is two letters: amsthm's "Deﬁnition 3." of 2501.14787v1, which the first stage 1a
+    // of this rule read as "De")
+    const lig = run('Definition 3.')
+    lig.splice(2, 2, { ...lig[2]!, u: 'fi', x1: lig[3]!.x1 })
+    expect(labelParts(lig, 1)).toMatchObject({ name: ['Definition', expect.anything()], num: ['3', expect.anything()] })
+  })
+})
+
+describe('a float label’s parts: TeX’s \\fnum@<type>, its name, a tie, its number', () => {
+  it('reads its number as its last word: a roman one, and one whose tie a justified line set tight', () => {
+    // (IEEEtran's "TABLE I.": no digit, so no number was read and the name was "TABLEI"; 2610.30875v1 p15's "Table S2:", its tie
+    // 0.19 em on a justified line, under the 0.2 em that keeps a capital before a digit the name's: name "TableS". The tie on
+    // the 87 papers' float labels measured 0.19 to 0.48 em, a kern inside their words -0.09 to 0)
+    const any = expect.anything()
+    expect(labelParts(run('TABLE I.'), 1)).toMatchObject({
+      name: ['TABLE', any],
+      num: ['I', any],
+      punct: ['.', any],
+    })
+    const tight = run('TableS2:').map((x, k) => (k >= 5 ? { ...x, x0: x.x0 + 1.9, x1: x.x1 + 1.9 } : x))
+    expect(labelParts(tight, 1)).toMatchObject({ name: ['Table', any], num: ['S2', any], punct: [':', any] })
+    expect(labelParts(run('Table IV:'), 1)).toMatchObject({ name: ['Table', any], num: ['IV', any] })
+    // (as before where the number is no last word of its own: one word, a number with a digit read already)
+    expect(labelParts(run('Fig. 4.'), 1)).toMatchObject({
+      name: ['Fig.', any],
+      num: ['4', any],
+      punct: ['.', any],
+    })
+    expect(labelParts(run('Figure 1.1 –'), 1)).toMatchObject({ name: ['Figure', any], num: ['1.1', any] })
+    expect(labelParts(run('Fig.S1'), 1)).toMatchObject({ name: ['Fig.', any], num: ['S1', any] })
+    expect(labelParts(run('(a)'), 1).name?.[0]).toBe('a')
+    expect(labelParts(run('(a)'), 1).num).toBeUndefined()
+    // (an unnumbered label's last word is its name's: no number)
+    expect(labelParts(run('Figure:'), 1).num).toBeUndefined()
+    // (a head's label as before)
+    expect(labelParts(run('Theorem 2.1.'), 1)).toMatchObject({ name: ['Theorem', any], num: ['2.1', any] })
+  })
+})
+
+describe('a head’s label parts: amsthm’s \\thmname, a space, \\thmnumber, as a float’s', () => {
+  it('reads its number as its last word, whatever its counter prints: a roman section’s number before its own', () => {
+    // (2610.21312v1, IEEEtran with \newtheorem{theorem}{Theorem}[section]: "Corollary VI.2 (" was read "CorollaryVI." and "2",
+    // the I abutting the V; "Proposition V.2 (" was read right, its one capital standing a space after the name)
+    const any = expect.anything()
+    expect(labelParts(run('Corollary VI.2 ('), 1)).toMatchObject({
+      name: ['Corollary', any],
+      num: ['VI.2', any],
+      punct: ['(', any],
+    })
+    expect(labelParts(run('Proposition VII.1 ('), 1)).toMatchObject({ name: ['Proposition', any], num: ['VII.1', any] })
+    expect(labelParts(run('Proposition V.2 ('), 1)).toMatchObject({ name: ['Proposition', any], num: ['V.2', any] })
+    expect(labelParts(run('Theorem II'), 1)).toMatchObject({ name: ['Theorem', any], num: ['II', any] })
+    expect(labelParts(run('Appendix A'), 1)).toMatchObject({ name: ['Appendix', any], num: ['A', any] })
+    // (the number the word as TeX printed it, a bracket before its first digit with it: in neither part, as this rule first had
+    // it, a relabel drew the number without its bracket)
+    expect(labelParts(run('Eq. (3)'), 1)).toMatchObject({ name: ['Eq.', any], num: ['(3', any] })
+    // (a word that is no counter's ends no number: the name is the whole)
+    expect(labelParts(run('Main Theorem.'), 1).num).toBeUndefined()
+  })
+  it('reads its name as letters, a ligature’s glyph its letters, its words spaced as TeX set them', () => {
+    // (2610.21765v1's "Deﬁnition 1.": PDF.js gave the ligature as one character, U+FB01, which no head name holds)
+    const lig = run('Definition 1.')
+    lig.splice(2, 2, { ...lig[2]!, u: 'ﬁ', x1: lig[3]!.x1 })
+    expect(labelParts(lig, 1)).toMatchObject({ name: ['Definition', expect.anything()], num: ['1', expect.anything()] })
+    expect(labelParts(run('Key Lemma 2.'), 1)).toMatchObject({ name: ['Key Lemma', expect.anything()] })
+    expect(labelParts(run('Main Theorem.'), 1)).toMatchObject({ name: ['Main Theorem', expect.anything()] })
+  })
 })
 
 describe('forced breaks and the room after them (C14)', () => {
@@ -130,6 +277,13 @@ describe('forced breaks and the room after them (C14)', () => {
     expect(breakEnd(lines, 1, new Set([1]))).toEqual([1, 1])
     expect(breakEnd(lines, 0, new Set([0]))).toEqual([0, 0])
     expect(breakEnd(lines, 3, new Set([3]))).toBeNull()
+  })
+  it('reads its room against TeX’s \\baselineskip where the paragraph states it, not the median of its gaps', () => {
+    // (a frame whose other gaps are TeX's \lineskip rule's (14 pt, tall lines) and its \baselineskip 12: the break's gap of 24
+    // is one line of room at 12, under one at the median's 14)
+    const lines = [L(72, 300, 700), L(72, 300, 686), L(72, 200, 672), L(72, 300, 648), L(72, 300, 636)]
+    expect(breakEnd(lines, 2, new Set([2]))).toEqual([2, 0.714])
+    expect(breakEnd(lines, 2, new Set([2]), undefined, 12)).toEqual([2, 1])
   })
 })
 
@@ -159,14 +313,14 @@ describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', (
         () => ink,
         () => [50, 500],
       ),
-    ).toEqual([60, 400])
+    ).toEqual({ side: [60, 400], wall: 0 })
     expect(
       sideOf(
         [L(100, 200, 700)],
         () => [],
         () => [50, 500],
       ),
-    ).toEqual([50, 500])
+    ).toEqual({ side: [50, 500], wall: 0 })
   })
   it('reads a cell’s room to its column’s rules too: a painted box beside its line whose height meets its band', () => {
     // (1706.03762v7 p10's Table 4: the "Training" column's cell between the rules at 296.4 and 409, its neighbours' ink at
@@ -188,7 +342,9 @@ describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', (
         () => glyphs,
         () => [107.5, 505.6],
       ),
-    ).toEqual([290.6, 429.01])
+    ).toEqual({ side: [290.6, 429.01], wall: 0 })
+    // (and says which sides stop at a wall, not a glyph: today's further widening keeps a quarter of its size off a rule and
+    // goes half way to another's text (run.mjs paperTo), so the typesetter must tell them apart)
     expect(
       sideOf(
         line,
@@ -196,7 +352,42 @@ describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', (
         () => [107.5, 505.6],
         () => walls,
       ),
-    ).toEqual([296.4, 409])
+    ).toEqual({ side: [296.4, 409], wall: 3 })
+    expect(
+      sideOf(
+        line,
+        () => [{ x0: 380, x1: 392, y0: 676, y1: 685, y: 678.91 }].map((g) => ({ ...g, x0: 404, x1: 408 })),
+        () => [107.5, 505.6],
+        () => walls,
+      ),
+    ).toEqual({ side: [296.4, 404], wall: 1 })
+  })
+  it('reads the ink that stays beside each text line, rules and images too: a QED box at the end of a proof’s last line', () => {
+    // (2610.40645v1 p12 t80: amsthm's \openbox, four rules after the last line's text (it ends at 430.87), owned by no unit;
+    // the line over it full. A rule across the last line's band under its text, a glyph left of its start and one in the
+    // margin out of its column, one on the line over it, and ink beside a kept line (a display's row))
+    const qed = [
+      { x0: 532.09, x1: 532.48, y0: 361.01, y1: 368.77 },
+      { x0: 532.29, x1: 539.23, y0: 368.17, y1: 368.57 },
+      { x0: 532.29, x1: 539.23, y0: 361.21, y1: 361.6 },
+      { x0: 539.03, x1: 539.43, y0: 361.01, y1: 368.77 },
+    ]
+    const lines = [L(72, 540, 376.66), L(100, 430.87, 361.21), L(150, 300, 346, 1)]
+    const block = () => [72, 540] as [number, number]
+    expect(staysOf(lines, () => qed, block)).toEqual([[1, 532.09, 361.01, 539.43, 368.77]])
+    const more = [
+      ...qed,
+      { x0: 72, x1: 540, y0: 360.5, y1: 360.9 },
+      { x0: 80, x1: 86, y0: 359, y1: 366, y: 361.21 },
+      { x0: 40, x1: 46, y0: 359, y1: 366, y: 361.21 },
+      { x0: 300, x1: 306, y0: 365, y1: 372, y: 367 },
+      { x0: 320, x1: 330, y0: 344, y1: 352, y: 346 },
+    ]
+    expect(staysOf(lines, () => more, block)).toEqual([
+      [1, 80, 359, 86, 366],
+      [1, 532.09, 361.01, 539.43, 368.77],
+    ])
+    expect(staysOf(lines, () => [], block)).toBeUndefined()
   })
   it('reads a cell’s band between the rules over and under its lines', () => {
     const rules = [
@@ -204,7 +395,7 @@ describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', (
       { x0: 50, x1: 400, y0: 695, y1: 695.4 },
       { x0: 500, x1: 600, y0: 705, y1: 705.4 },
     ]
-    expect(bandOf([L(100, 200, 700)], () => rules)).toEqual([695.4, 712])
+    expect(bandOf([L(100, 200, 700)], () => rules)).toEqual({ band: [695.4, 712] })
     expect(bandOf([L(100, 200, 700)], () => [])).toBeUndefined()
   })
   it('pins a line whose baseline holds ink that stays beside it', () => {
@@ -319,6 +510,32 @@ describe('locate states the facts on arXiv’s page', () => {
       [264, 15],
     ])
   })
+  it('reads a piece the instrument states sets a URL as a URL whatever its command: a \\urldef’d one shown by a macro', () => {
+    // (ACM's references: `\urldef\tempurl\url{…}` stores the URL, `\showDOI{\tempurl}` sets it; the piece is a paper's macro by its
+    // command, read as a text macro, its copy the glyphs with a space at a line's end and no break point, drawn as text: its
+    // link annotations could not pair with what it drew, 2610.22065v1 p7 t126's \showURL)
+    const B = docOf([{ lines: ['We release it at https://a.io/b_c.'] }])
+    const content: Piece[] = [
+      text('We release it at '),
+      { t: 'el', id: '1', kind: 'macro', src: '\\showDOI{\\tempurl}' },
+      text('.'),
+    ]
+    const u: InstrumentUnit = {
+      id: unitId('para', content),
+      kind: 'para',
+      content,
+      classes: [['1', { cls: 'other', literal: true, url: true, copy: 'https://a.io/b_c', cmd: 'showDOI' }]],
+    }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 17 && j < 33 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const el = new Map(locate(ins, B, align(B, B)).members[0]!.elements).get('1')!
+    expect(el.copy).toBe('https://a.io/b_c')
+    expect(el.breaks).toEqual([
+      [222, 8],
+      [234, 10],
+      [252, 13],
+      [264, 15],
+    ])
+  })
   it('counts what stands before a URL’s break in its copy text’s code units: an astral character two, a ligature its letters (Devin on #630)', () => {
     // (the typesetter cuts the crop's copy text with String.slice: a count of glyphs put every cut after "𠮷" (U+20BB7, two
     // code units) or "ﬁ" (one glyph, two letters in a copy that holds its letters) a character early)
@@ -378,9 +595,63 @@ describe('locate states the facts on arXiv’s page', () => {
     const ins = instrument(B, [u], (_, _n, j) => (j >= 4 && j < 27 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
     const el = new Map(locate(ins, B, align(B, B)).members[0]!.elements).get('1')!
     expect(el.ink.length).toBe(2)
-    expect(el.text).toBe('https://a.io/lo/ ng/path')
+    // (its text too: the line's end TeX set inside it is a join, as its copy reads it (lane url-join, 2026-11-10: 301 URLs of
+    // the 88 drawn with a space where TeX broke them))
+    expect(el.text).toBe('https://a.io/lo/ng/path')
     expect(el.copy).toBe('https://a.io/lo/ng/path')
     expect(el.copy).not.toMatch(/\s/)
+  })
+  it('states a URL TeX broke after its "/" with no space in its text (1706.03762v7: https://github.com/ tensorflow/…)', () => {
+    // (the typesetter draws a URL over lines as its text, El.text: the space PDF.js reads at a line's end was drawn inside the
+    // URL. Its copy, urlCopyOf, never held one; the text is read by the same rule: a line's end inside a URL is a join)
+    const B = docOf([{ lines: ['is at https://github.com/', 'tensorflow/tensor2tensor.'] }])
+    const content: Piece[] = [
+      text('is at '),
+      { t: 'el', id: '1', kind: 'url', src: '\\url{https://github.com/tensorflow/tensor2tensor}' },
+      text('.'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 6 && j < 49 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const el = new Map(locate(ins, B, align(B, B)).members[0]!.elements).get('1')!
+    expect(el.ink.length).toBe(2)
+    expect([el.text, el.copy]).toEqual([
+      'https://github.com/tensorflow/tensor2tensor',
+      'https://github.com/tensorflow/tensor2tensor',
+    ])
+  })
+  it('states a literal mark its copy reads as one word with no space where TeX broke it (a DOI: 2610.19274v1’s)', () => {
+    // (a DOI a macro sets as written, broken after its "022-" (TeX's url-like break, no hyphen of its own): its copy, the source's
+    // reading, holds no space, so its line's end holds none; 9 such elements of the 88 kept the space after the URL rule alone)
+    const B = docOf([{ lines: ['doi 10.1007/s10489-022-', '03676-0 here.'] }])
+    const content: Piece[] = [
+      text('doi '),
+      { t: 'el', id: '1', kind: 'other', src: '\\doi{10.1007/s10489-022-03676-0}' },
+      text(' here.'),
+    ]
+    const u: InstrumentUnit = {
+      id: unitId('para', content),
+      kind: 'para',
+      content,
+      classes: [['1', { cls: 'other', literal: true, copy: '10.1007/s10489-022-03676-0' }]],
+    }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 4 && j < 30 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const el = new Map(locate(ins, B, align(B, B)).members[0]!.elements).get('1')!
+    expect(el.ink.length).toBe(2)
+    expect(el.text).toBe('10.1007/s10489-022-03676-0')
+  })
+  it('keeps a code mark’s line end a space where its copy holds one (TeX broke it at a space)', () => {
+    // (\texttt{…} breaks at its spaces: a line's end inside it is the space TeX dropped there)
+    const B = docOf([{ lines: ['run make all', 'targets now.'] }])
+    const content: Piece[] = [
+      text('run '),
+      { t: 'el', id: '1', kind: 'code', src: '\\texttt{make all targets}' },
+      text(' now.'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 4 && j < 19 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const el = new Map(locate(ins, B, align(B, B)).members[0]!.elements).get('1')!
+    expect(el.ink.length).toBe(2)
+    expect(el.text).toBe('make all targets')
   })
   it('states a URL’s copy text as its glyphs on the page, not the source’s reading of it (#630’s 30 URLs: "_1" read as a subscript)', () => {
     // (2609.26457v1's "…/3-540-44668-0_13": the instrument's copy, texToText2 over \url{…}, read "_1" as the subscript "₁"; the
@@ -431,7 +702,7 @@ describe('locate states the facts on arXiv’s page', () => {
     const u: InstrumentUnit = {
       id: unitId('para', [text('x')]),
       kind: 'para',
-      content: [text('first line of it a here last line of it')],
+      content: [text('first line of it a line here last line of it')],
     }
     const ins = instrument(B, [u], (_, n, j) => (n === 1 && j >= 18 && j <= 22 ? [-1, 0, -1] : [0, ROLE.text, -1]))
     const M = locate(ins, B, align(B, B)).members[0]!
@@ -604,6 +875,163 @@ describe('forced breaks with no point on B, set one after the other', () => {
   })
 })
 
+describe('forced breaks with no point on B, placed by TeX’s points around them', () => {
+  it('places a break by the next piece’s point, nothing that sets ink between, whatever a break at the unit’s end reads', () => {
+    // (2608.16117v1 p3 t11: "… concludes our paper.\\\\ \n$\textbf{Notation}$: …from 1 to 2.\\\\": the author's empty line
+    // before "Notation", and two more breaks at the paragraph's end on its last line. One short line against two groups paired
+    // nothing, and the translation ran on through the blank line)
+    const B = docOf([
+      {
+        lines: [
+          'a long first line of it here',
+          'short',
+          { text: 'Notation and a third line ok', y: 664 },
+          { text: 'end', y: 652 },
+        ],
+      },
+    ])
+    const content: Piece[] = [
+      text('a long first line of it here short'),
+      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '2', kind: 'other', src: '\\\\' },
+      text('\n'),
+      { t: 'el', id: '3', kind: 'math', src: '$\\textbf{Notation}$' },
+      text(' and a third line ok end'),
+      { t: 'el', id: '4', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '5', kind: 'other', src: '\\\\' },
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins: Instrument = {
+      ...instrument(B, [u], (_, _n, j) => (j >= 33 && j <= 40 ? [0, ROLE.element, 3] : [0, ROLE.text, -1])),
+      places: [
+        { unit: 0, piece: '3', page: 1, glyph: 33, end: false },
+        { unit: 0, piece: '3', page: 1, glyph: 41, end: true },
+      ],
+    }
+    const M = locate(ins, B, align(B, B)).members[0]!
+    const ends = (id: string) => M.elements.find(([k]) => k === id)?.[1].ends
+    expect(ends('1')?.[0]).toBe(1)
+    expect(ends('2')?.[0]).toBe(1)
+    expect(ends('1')?.[1]).toBeCloseTo(1, 1)
+    // (the breaks at the end end its last line: no line after them to state)
+    expect(ends('4')).toBeUndefined()
+    expect(ends('5')).toBeUndefined()
+    // (TeX's point placed it: no line read by its short end)
+    expect(M.read).not.toContain('breaks')
+  })
+  it('places a break by the point before it, across a page, where its line fills the measure', () => {
+    // (the text before the break fills its line, the last of page 1, and the formula after it opens page 2: no short end to
+    // read, the formula's point states the line)
+    const B = docOf([
+      { lines: ['a long first line of it here', 'a long second one fills it x'] },
+      { lines: ['xy and more text of the unit', 'end'] },
+    ])
+    const content: Piece[] = [
+      text('a long first line of it here a long second one fills it x'),
+      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '2', kind: 'math', src: '$xy$' },
+      text(' and more text of the unit end'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins: Instrument = {
+      ...instrument(B, [u], (p, _n, j) => (p === 1 && j <= 1 ? [0, ROLE.element, 2] : [0, ROLE.text, -1])),
+      places: [
+        { unit: 0, piece: '2', page: 2, glyph: 0, end: false },
+        { unit: 0, piece: '2', page: 2, glyph: 2, end: true },
+      ],
+    }
+    const M = locate(ins, B, align(B, B)).members[0]!
+    expect(M.elements.find(([k]) => k === '1')?.[1].ends).toEqual([1, 0])
+  })
+  it('pairs the breaks between two of TeX’s points with the lines that end there, where every one of them ends at a break', () => {
+    // (a centred title "A Much Longer First Title Line\\ Second": its first line the longest, no short end to read; the
+    // unit's start and end bound one line end and one break)
+    const B = docOf([{ lines: ['A Much Longer First Title Line', { text: 'Second', x: 144 }] }])
+    const content: Piece[] = [
+      text('A Much Longer First Title Line'),
+      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      text('Second'),
+    ]
+    const u: InstrumentUnit = { id: unitId('heading', content), kind: 'heading', content }
+    const M = locate(
+      instrument(B, [u], () => [0, ROLE.text, -1]),
+      B,
+      align(B, B),
+    ).members[0]!
+    expect(M.elements.find(([k]) => k === '1')?.[1].ends).toEqual([0, 0])
+    expect(M.read).not.toContain('breaks')
+  })
+  it('takes a paragraph’s end TeX states at the break for the break’s own line end (a centred `\\\\`, \\@centercr)', () => {
+    // (2610.30034v1 p1's title: in a centred block LaTeX's `\\` is \@centercr, which ends a paragraph, so TeX's paragraph end
+    // stands at the break; 2608.25210v2 t8's second `\\`, after \raggedright, the same)
+    const B = docOf([{ lines: ['A Much Longer First Title Line', { text: 'Second', x: 144 }] }])
+    const content: Piece[] = [
+      text('A Much Longer First Title Line'),
+      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      text('Second'),
+    ]
+    const u: InstrumentUnit = { id: unitId('heading', content), kind: 'heading', content }
+    const ins: Instrument = { ...instrument(B, [u], () => [0, ROLE.text, -1]), tex: { paragraphEnds: [[30]] } }
+    const M = locate(ins, B, align(B, B)).members[0]!
+    expect(M.elements.find(([k]) => k === '1')?.[1].ends).toEqual([0, 0])
+  })
+  it('places a break at TeX’s paragraph end in a block TeX set centred, past a line TeX wrapped itself', () => {
+    // (2610.21504v1 p1's title "Receiver-Specific Interventional Valuation of / Semantic Atoms for\\ Budget-…": TeX wraps the
+    // first line, the break ends the second; centred, every line short, two line ends for one break. TeX states the title
+    // centred (`c`), where `\\` is \@centercr and its paragraph end, qe, stands at the break)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Receiver Specific Valuation of', x: 90 },
+          { text: 'Semantic Atoms for', x: 126 },
+          'Budget Constrained Multi Agent Talk',
+        ],
+      },
+    ])
+    const content: Piece[] = [
+      text('Receiver Specific Valuation of Semantic Atoms for'),
+      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      text('\nBudget Constrained Multi Agent Talk'),
+    ]
+    const unit = (align?: 'c'): InstrumentUnit => ({
+      id: unitId('heading', content),
+      kind: 'heading',
+      content,
+      ...(align ? { align } : {}),
+    })
+    const ends = (u: InstrumentUnit) => {
+      const ins: Instrument = { ...instrument(B, [u], () => [0, ROLE.text, -1]), tex: { paragraphEnds: [[48]] } }
+      return locate(ins, B, align(B, B)).members[0]!.elements.find(([k]) => k === '1')?.[1].ends
+    }
+    expect(ends(unit('c'))).toEqual([1, 0])
+    // (TeX states no alignment: the paragraph's end may be the source's own, and the window states nothing)
+    expect(ends(unit())).toBeUndefined()
+  })
+  it('reads short ends between two points only, where the breaks there are as many: one window’s count is not another’s', () => {
+    // (a paragraph with a natural line end and a break, text on both sides of it, between the unit's start and a formula's
+    // point, then a break at the unit's end: the window holds two line ends and one break, read by the short one; the break at
+    // the end is no window's, and paired nothing before)
+    const B = docOf([{ lines: ['a long first line of it here', 'short', 'ab xy a long third line of i', 'end'] }])
+    const content: Piece[] = [
+      text('a long first line of it here short'),
+      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      text('ab '),
+      { t: 'el', id: '2', kind: 'math', src: '$xy$' },
+      text(' a long third line of i end'),
+      { t: 'el', id: '3', kind: 'other', src: '\\\\' },
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins: Instrument = {
+      ...instrument(B, [u], (_, _n, j) => (j >= 36 && j <= 37 ? [0, ROLE.element, 2] : [0, ROLE.text, -1])),
+      places: [{ unit: 0, piece: '2', page: 1, glyph: 36, end: false }],
+    }
+    const M = locate(ins, B, align(B, B)).members[0]!
+    expect(M.elements.find(([k]) => k === '1')?.[1].ends?.[0]).toBe(1)
+    expect(M.read).toContain('breaks')
+    expect(M.elements.find(([k]) => k === '3')?.[1].ends).toBeUndefined()
+  })
+})
+
 describe('a glyph whose Unicode is no reading of it (A17, today’s nu)', () => {
   it('reads a font’s own map and tells a glyph it gives no character of, or one no Unicode stands for', () => {
     const map = mappedOf({ toUnicode: { _map: [undefined, 'a', 'ﬁ', '∑'] } })
@@ -686,6 +1114,12 @@ describe('an element’s text across a line TeX ended inside a word', () => {
     expect(textOf([...word('e-', 270, 700), ...word('mail', 72, 688)])).toBe('e-mail')
     // (a hyphen after no letter is no word's: the line's end a space, as before)
     expect(textOf([...word('3 -', 270, 700), ...word('x', 72, 688)])).toBe('3 - x')
+  })
+  it('keeps a hyphen with a digit on either side, joined across the line’s end: TeX hyphenates letters alone', () => {
+    // (2609.19644v1's included pages "128-|bit", "DeepSeek-|3.2"; production drew "DeepSeek- V3" on a sheet's pane)
+    const word = (s: string, x: number, y: number) => [...s].map((c, i) => g(c, x + 6 * i, y))
+    expect(textOf([...word('128-', 270, 700), ...word('bit', 72, 688)])).toBe('128-bit')
+    expect(textOf([...word('DeepSeek-', 240, 700), ...word('3.2', 72, 688)])).toBe('DeepSeek-3.2')
   })
   it('keeps the hyphens the corpus showed are a word’s own: TeX hyphenates the first word after a space alone, to its minimums', () => {
     // (the stage 1a corpus, the parts' element texts: 2307.16209v1 p138 "arXiv:gr- qc/0511111", p140 "[hep- th]", p146
@@ -788,5 +1222,107 @@ describe('an element’s text in runs of one fill (today’s fillRunsOf)', () =>
       [')', 0],
     ])
     expect(fillRunsOf([g('a'), g('b', 78)])).toBeNull()
+  })
+})
+
+describe('an element’s text with each accent TeX set over its letter joined to it (\\accent; Unicode’s NFC)', () => {
+  it('reads a spacing accent set over its letter as the accented letter, before it or after it, in its text and its runs', () => {
+    // (2602.23285v2 p2's citation "(Klötergens et al." as OT1's \accent sets it: the accent, a move back over it, the letter; the
+    // text read "(Kl¨otergens")
+    const kl = [g('('), g('K', 78), g('l', 84), g('¨', 90), g('o', 90), ...run('tergens', 96)]
+    expect(textOf(kl)).toBe('(Klötergens')
+    // (the letter first, its accent set back over it; a capital's accent raised over it, by its height less the x-height)
+    expect(textOf([g('e'), g('´', 72, 701.5)])).toBe('é')
+    expect(textOf([g('P'), g('E', 78), g('´', 78, 702)])).toBe('PÉ')
+    // (a dotless i under its accent is the dotted letter's: Física)
+    expect(textOf([g('F'), g('´', 78), g('ı', 78), ...run('sica', 84)])).toBe('Física')
+    // (a mark that advances as any glyph does is no letter's accent: a URL's "~user"; nor one of another font, a formula's \hat)
+    expect(textOf([g('~'), g('u', 78)])).toBe('~u')
+    expect(textOf([g('a'), g('´', 72, 700, { base: 'CMMI10', font: 'CMMI10' })])).toBe('a´')
+    // (its runs of one fill: the accented letter in its letter's)
+    const blue = { fill: 0xff }
+    expect(
+      fillRunsOf([
+        g('('),
+        g('K', 78, 700, blue),
+        g('l', 84, 700, blue),
+        g('¨', 90, 700, blue),
+        g('o', 90, 700, blue),
+        g(')', 96),
+      ]),
+    ).toEqual([
+      ['(', 0],
+      ['Klö', 0xff],
+      [')', 0],
+    ])
+  })
+})
+
+describe('a face of one pitch (Rule 1)', () => {
+  it('reads one advance per font program of a face, within its unit, a thousandth of the size, its subsets each their own', () => {
+    // (2411.13093v4's Consolas: the subsets of p4's figure set 549 thousandths of their size, p9's and p19's 550; read as one
+    // advance for the face, its code boxes on p19 were translated while its bold's, all at 550, were kept)
+    const at = (u: string, x: number, advance: number, font: string, size = 10) =>
+      ({
+        ...g(u, x, 700, { base: font.replace(/^[A-Z]{6}\+/, ''), size }),
+        font,
+        x1: x + (advance * size) / 1000,
+      }) as DocGlyph
+    const glyphs = [
+      at('r', 72, 549, 'AAAAAA+Consolas'),
+      at('e', 80, 549, 'AAAAAA+Consolas', 8),
+      at('q', 88, 549.6, 'BBBBBB+Consolas', 9.5),
+      at('u', 96, 550.3, 'BBBBBB+Consolas', 4.8),
+      at('i', 72, 278, 'CCCCCC+Times'),
+      at('m', 80, 778, 'CCCCCC+Times'),
+      at('a', 72, 444, 'DDDDDD+Pair'),
+      at('e', 80, 444, 'DDDDDD+Pair'),
+      at('i', 88, 278, 'DDDDDD+Pair'),
+      at('a', 72, 444, 'EEEEEE+Solo'),
+      at('i', 80, 278, 'FFFFFF+Solo'),
+    ]
+    expect([...fixedFacesOf(glyphs)]).toEqual(['Consolas'])
+  })
+  it('reads no face of one pitch off letters a proportional face sets at one advance too: a narrow letter and a wider one, at one advance', () => {
+    // (Codex on #634, 7dcb71534: a figure's label "node" in Helvetica, its four letters 556 thousandths each, as Helvetica's
+    // lowercase n, o, d and e all are, beside Times body text: no typewriter's evidence, the label translated)
+    const at = (u: string, x: number, advance: number, font: string) =>
+      ({
+        ...g(u, x, 700, { base: font.replace(/^[A-Z]{6}\+/, ''), size: 10 }),
+        font,
+        x1: x + advance / 100,
+      }) as DocGlyph
+    const node = [
+      at('n', 72, 556, 'AAAAAA+Helvetica'),
+      at('o', 80, 556, 'AAAAAA+Helvetica'),
+      at('d', 88, 556, 'AAAAAA+Helvetica'),
+      at('e', 96, 556, 'AAAAAA+Helvetica'),
+    ]
+    const body = [at('i', 72, 278, 'BBBBBB+Times'), at('m', 80, 778, 'BBBBBB+Times')]
+    expect([...fixedFacesOf([...node, ...body])]).toEqual([])
+    // (a typewriter's narrow letter at the advance of its others: one pitch)
+    const tt = [
+      at('n', 72, 525, 'CCCCCC+Courier'),
+      at('i', 80, 525, 'CCCCCC+Courier'),
+      at('l', 88, 525, 'CCCCCC+Courier'),
+    ]
+    expect([...fixedFacesOf([...node, ...body, ...tt])]).toEqual(['Courier'])
+  })
+})
+
+describe('one family, as two fonts’ names tell it (PDF.js states no family where the engine reads)', () => {
+  it('is the name before its first hyphen, or the name without PDF.js’s own style words and hyphens', () => {
+    // (one family in two weights or two slants: 2608.06701v1 p2's bubbles, a bold word inside a row of ArialMT)
+    expect(oneFamily('MUFUZY+ArialMT', 'MUFUZY+Arial-BoldMT')).toBe(true)
+    expect(oneFamily('TimesNewRomanPSMT', 'AAAAAI+TimesNewRomanPS-ItalicMT')).toBe(true)
+    expect(oneFamily('ArialMT', 'Arial-BoldItalicMT')).toBe(true)
+    // (today's reading: the part before the first hyphen)
+    expect(oneFamily('KZNDUM+NimbusRomNo9L-Regu', 'PPHKCD+NimbusRomNo9L-Medi')).toBe(true)
+    expect(oneFamily('DejaVuSans', 'DejaVuSans-Oblique')).toBe(true)
+    // (two faces whose names differ by more than a style word: two families)
+    expect(oneFamily('ArialMT', 'ArialNarrow-Bold')).toBe(false)
+    expect(oneFamily('NimbusRomNo9L-Regu', 'NimbusSanL-Regu')).toBe(false)
+    expect(oneFamily('CMR10', 'CMMI10')).toBe(false)
+    expect(oneFamily('ArialMT', 'Arial-Black')).toBe(false)
   })
 })

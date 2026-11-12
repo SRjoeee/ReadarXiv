@@ -8,10 +8,14 @@ import { chunkStore } from '../../src/bytes/store.ts'
 import { DEFAULTS } from '../../src/prefs.ts'
 import { type Composer, createComposer, type RowsSource } from '../../src/compose/composer.ts'
 import { createFaces, type Faces } from '../../src/compose/faces.ts'
+import { createServed, type Served } from '../../src/compose/served.ts'
+import { layPage, rulesFor } from '@readarxiv/typeset'
+import { leftKinds } from '../../src/compose/classes.ts'
+import { ruleTag, typesetLay } from '../../src/compose/typeset.ts'
 import { groupsOf, type Groups } from '../../src/compose/groups.ts'
 import { createHighlight, type Highlight } from '../../src/compose/highlight.ts'
 import type { Ink, Item, Page } from '../../src/compose/page.ts'
-import { fixtureLay, membersOf, pagesOf, type ReaderDump } from './convert.ts'
+import { fixtureLay, inked, membersOf, pagesOf, type ReaderDump } from './convert.ts'
 import { createPanes, type Panes } from '../../src/panes/panes.ts'
 import { createStack, type Stack } from '../../src/stack/stack.ts'
 import { eagerPages, quietRoot } from '../../src/panes/left.ts'
@@ -75,6 +79,31 @@ function cutCrop(pages: Map<number, Page>, o: { piece: string; share: number; te
       }
   return false
 }
+/** a crop whose own ink is the left `share` of its source and whose source's rest is another piece's ink on its page (the
+ *  Page's `inks`), as the typesetter states them where two pieces' ink stand side by side (lay/clips.ts); its own ink's right
+ *  edge and its drawn box, PDF units of its page */
+function clipCrop(
+  pages: Map<number, Page>,
+  o: { piece: string; share: number },
+): { page: number; edge: number; box: [number, number, number, number] } | null {
+  for (const p of pages.values())
+    for (const m of p.members)
+      for (const [y, , , items] of m.lines) {
+        const j = items.findIndex((it) => 'src' in it && it.piece === o.piece)
+        if (j < 0) continue
+        const it = items[j] as Extract<Item, { src: Ink }>
+        const [pg, a, b, c, d, base] = it.src
+        const at = a + (c - a) * o.share
+        items[j] = { ...it, ink: [[a, b, at, d]] }
+        p.inks = [...(p.inks ?? []), [pg, a, b, at, d, base], [pg, at, b, c, d, base]]
+        return {
+          page: p.page,
+          edge: it.x + (at - a) * it.k,
+          box: [it.x, y + (b - base) * it.k, it.x + (c - a) * it.k, y + (d - base) * it.k],
+        }
+      }
+  return null
+}
 const h = {
   panes: null as Panes | null,
   kit: null as Awaited<ReturnType<typeof loadKit>> | null,
@@ -87,6 +116,8 @@ const h = {
   highlight: null as Highlight | null,
   clock: null as ReturnType<typeof ownedClock> | null,
   faces: null as Faces | null,
+  /** the served faces and the reader's Metrics over them, where a layer is laid by the reader's own typesetter (`typeset`) */
+  served: null as Served | null,
   head: null as Head | null,
   parts: new Map<number, Part>(),
   pages: new Map<number, Page>(),
@@ -167,6 +198,12 @@ const h = {
       pages?: string
       /** an element's crop cut over two lines, as the typesetter cuts a URL (cutCrop) */
       cut?: { piece: string; share: number; text: [string, string] }
+      /** an element's crop whose own ink is the left share of its source, the rest another piece's (clipCrop) */
+      clip?: { piece: string; share: number }
+      /** laid by the reader's own typesetter (compose/typeset.ts typesetLay: layPage under the target's rules, over our site's
+       *  faces and patterns, the reader's Metrics) from the fixture's parts and its `<target>.rows.json`, not from its dump; the
+       *  faces the served ones (`h.served`) */
+      typeset?: boolean
     } = {},
   ) {
     const fx = await (await fetch(`/fixtures/${name}/index.json`)).json()
@@ -191,23 +228,30 @@ const h = {
     )
     h.parts = parts
     const target = o.target ?? 'de'
-    const dump = (await (
-      await fetch(`/fixtures/${name}/${fx.dumps[target] ?? `${target}.reader.json`}`)
-    ).json()) as ReaderDump
     const all = (
       (await (await fetch(`/fixtures/${name}/${fx.rows[target] ?? `${target}.rows.json`}`)).json()) as { rows: Row[] }
     ).rows
-    const pages = o.pages
-      ? new Map(
-          Object.entries((await (await fetch(o.pages)).json()) as Record<string, Page>).map(([n, p]) => [Number(n), p]),
-        )
-      : pagesOf(
-          parts,
-          dump,
-          (m) => fx.face ?? ([...JSON.stringify(m)].some((c) => c.charCodeAt(0) > 127) ? 'cjk' : 'sans'),
-        )
+    // (the reader's own typesetter lays the pages as the composer asks: none made here)
+    const pages = o.typeset
+      ? new Map<number, Page>()
+      : o.pages
+        ? new Map(
+            Object.entries((await (await fetch(o.pages)).json()) as Record<string, Page>).map(([n, p]) => [
+              Number(n),
+              p,
+            ]),
+          )
+        : pagesOf(
+            parts,
+            (await (
+              await fetch(`/fixtures/${name}/${fx.dumps[target] ?? `${target}.reader.json`}`)
+            ).json()) as ReaderDump,
+            (m) => fx.face ?? ([...JSON.stringify(m)].some((c) => c.charCodeAt(0) > 127) ? 'cjk' : 'sans'),
+          )
     h.pages = pages
     if (o.cut && !cutCrop(pages, o.cut)) throw new Error(`no crop of ${o.cut.piece} to cut`)
+    const clipped = o.clip ? clipCrop(pages, o.clip) : null
+    if (o.clip && !clipped) throw new Error(`no crop of ${o.clip.piece} to clip`)
     const given = new Map<string, Row>()
     const listeners = new Set<() => void>()
     const rows = {
@@ -239,13 +283,18 @@ const h = {
       root,
       warn: (w, e) => console.warn(w, e),
     })
+    // (the reader's own typesetter: the served faces and the reader's Metrics over them, as the website's reader has them)
+    if (o.typeset) h.served ??= createServed({ fetch: (u, i) => fetch(u, i), root, warn: (w, e) => console.warn(w, e) })
+    const served = o.typeset ? (h.served as Served) : null
     const panes = h.panes as Panes
     h.composer?.dispose()
     const composer = createComposer({
       stack: panes.right,
       kit,
-      faces: h.faces,
-      lay: fixtureLay(pages, parts),
+      faces: served ? served.faces : h.faces,
+      lay: served
+        ? await typesetLay({ served, target: () => target, classes: () => o.classes ?? null })
+        : fixtureLay(pages, parts),
       unlaid: o.unlaid ?? 'original',
       lang: () => target,
       links: {
@@ -293,6 +342,7 @@ const h = {
     composer.setLayer({ part: async (n) => parts.get(n) ?? null, pages: head.paper.pages }, rows)
     return {
       proved,
+      clipped,
       groups: groups.size,
       tOpen: Math.round(tOpen),
       parts: parts.size,
@@ -664,6 +714,35 @@ const h = {
       rect: a.getBoundingClientRect().toJSON(),
     }))
   },
+  /** what the reader's own typesetter made of page n's links (`layer`'s `typeset`): its part's links, each with its fate
+   *  (packages/typeset lay/links.ts LinkFate: what became of it), from page n laid again by layPage as typesetLay lays it (the
+   *  rows' target's rules, the toggles' none left, the served Metrics and patterns) over the rows given; that lay's Page.links
+   *  and the committed page's, which are to be the same */
+  linkFatesOf(n: number) {
+    const part = h.parts.get(n)
+    const served = h.served
+    const rows = h.rows
+    if (!part || !served || !rows) return null
+    const tag = ruleTag(rows.target)
+    if (!tag) return null
+    const hyph: Record<string, unknown> = {}
+    for (const l of rulesFor(tag).patterns) hyph[l] = served.hyphNow(l) ?? null
+    const fates: string[] = []
+    const again = layPage(part, rows, rulesFor(tag, { leave: leftKinds(null) }, hyph), served.metrics, {
+      linkFates: fates as never,
+    })
+    return {
+      links: (part.links ?? []).map((l, i) => ({
+        box: l.box,
+        to: l.to,
+        owner: l.owner ?? null,
+        page: l.page ?? n,
+        fate: fates[i] ?? null,
+      })),
+      laid: again.links,
+      committed: h.composer?.laid(n)?.links ?? null,
+    }
+  },
   /** the laid page n's own link boxes (Page.links) on the screen, through the right's viewport of the page as it shows */
   linkBoxesOf(n: number) {
     const el = (h.panes as Panes).pageElement('right', n) as HTMLElement
@@ -683,10 +762,14 @@ const h = {
     const el = (h.panes as Panes).pageElement(side, n)
     if (!el || !boxes.length) return []
     const r = el.getBoundingClientRect()
+    // (a turned member's boxes in its run's frame: a point of one at s along its run and t across it on the page)
+    const [ux, uy] = m?.lit.dir ?? [1, 0]
     return boxes.flatMap((b) =>
       [0.25, 0.75].map((f) => {
-        const x = b[0] + f * (b[2] - b[0]),
-          y = (b[1] + b[3]) / 2
+        const s = b[0] + f * (b[2] - b[0]),
+          t = (b[1] + b[3]) / 2
+        const x = s * ux - t * uy,
+          y = s * uy + t * ux
         const q = (h.panes as Panes).boxOf(side, n, [x, y, x, y]) as { left: number; top: number }
         return {
           at: [el.clientLeft + q.left, el.clientTop + q.top],
@@ -727,18 +810,24 @@ const h = {
       m = p?.members.find((x) => x.ord === ord)
     const committed = !!h.composer?.laid(n)
     const per = side === 'right' && committed ? m?.lit.right : m?.lit.left
-    const b = per?.[0]?.[0]
+    const f = per?.[0]?.[0]
     const el = (h.panes as Panes).pageElement(side, n)
-    if (!b || !el) return null
+    if (!f || !el) return null
+    // (a turned member's box in its run's frame: its middle on the page)
+    const [ux, uy] = m?.lit.dir ?? [1, 0]
+    const [ms, mt] = [(f[0] + f[2]) / 2, (f[1] + f[3]) / 2]
+    const b: [number, number, number, number] = m?.lit.dir
+      ? [ms * ux - mt * uy, ms * uy + mt * ux, ms * ux - mt * uy, ms * uy + mt * ux]
+      : f
     const q = (h.panes as Panes).boxOf(side, n, b) as { left: number; top: number; width: number; height: number }
     const r = el.getBoundingClientRect()
-    // (one shape a sentence, and one of its kept ink: the bands each pane shows of the member lit whole)
+    // (one shape a sentence: the bands each pane shows of the member lit whole; `own` its displays, blocks of their own)
     return {
       x: r.left + el.clientLeft + q.left + q.width / 2,
       y: r.top + el.clientTop + q.top + q.height / 2,
       left: m?.lit.left.filter((b) => b.length).length ?? 0,
       right: ((committed ? m?.lit.right : m?.lit.left) ?? []).filter((b) => b.length).length,
-      own: m?.lit.own.some(([, x]) => x.length) ? 1 : 0,
+      own: m?.lit.own.filter(([, x]) => x.length).length ?? 0,
     }
   },
   readers: [] as { reader: Reader; root: HTMLElement; asked: { url: string; at: number }[] }[],
@@ -769,6 +858,8 @@ const h = {
       paper?: string
       /** no engine given: the reader's own typesetter (layPage over our site's faces and patterns, the reader's Metrics) */
       typeset?: boolean
+      /** page 1 laid with runs of three inks (convert.ts inked) */
+      inks?: boolean
     } = {},
   ) {
     const index = (await (await fetch(`/fixtures/${name}/index.json`)).json()) as { paper: string }
@@ -863,7 +954,7 @@ const h = {
             )
           ).json()) as ReaderDump
           const face = (fx as { face: string | null }).face
-          const laid = fixtureLay(
+          const fixed = fixtureLay(
             pagesOf(
               parts,
               dump,
@@ -871,8 +962,15 @@ const h = {
             ),
             parts,
           )
+          const laid = o.inks ? inked(fixed, 1) : fixed
           return (part, rows) => {
-            h.marks.push({ what: 'lay', at: performance.now() - t0, gen, page: part.page })
+            h.marks.push({
+              what: 'lay',
+              at: performance.now() - t0,
+              gen,
+              page: part.page,
+              members: part.flows.flat().length,
+            })
             return laid(part, rows)
           }
         },

@@ -1,6 +1,6 @@
 // @vitest-environment node
 // The parity check lays v2's pages as the product does (lab/typeset/parity/hook.mjs, v2.mjs): gate-l1's own call of layPage, with
-// the rules, patterns and options the gate's runner chooses (its theorem heads among them), is replaced by the reader's lay
+// the rules, patterns and options the gate's runner chooses, is replaced by the reader's lay
 // (packages/reader/src/compose/typeset.ts typesetLay), so that the parity passes layPage what the reader passes and nothing more.
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -19,7 +19,10 @@ describe("the parity's lay is the reader's", () => {
   it("puts the reader's lay in place of gate-l1's entry call, its rules and options gone with it", async () => {
     const before = entryBranch(source)
     expect(before).toMatch(/layPage\(/)
-    expect(before).toMatch(/heads:/)
+    // (the gate's own rules and patterns, which the hook takes away; its theorem heads were an option of the call until the
+    // entry read them from the rules, Rules.heads, as the reader's lay does)
+    expect(before).toMatch(/rulesFor\(/)
+    expect(before).toMatch(/patternsSeen/)
     const after = entryBranch(await hooked(source))
     expect(after).toContain('const page = (globalThis as any).__parityLay(part as Part, entryRows)')
     expect(after).not.toMatch(/layPage\(|heads:|rulesFor\(|patternsSeen/)
@@ -29,5 +32,36 @@ describe("the parity's lay is the reader's", () => {
   })
   it('touches no other module', async () => {
     expect(await hooked('const page = layPage(\n', 'file:///elsewhere.ts')).toBe('const page = layPage(\n')
+  })
+})
+
+describe("the parity's lay with the spaces beside a full-width mark's blank side put back (the coordinator's ruling of 2026-11-10)", () => {
+  const TOKENS = resolve(__dirname, '../../packages/typeset/src/breaker/tokens.ts')
+  const source = readFileSync(TOKENS, 'utf8')
+  const RULE = '    if (markBlankEdge(before, true, cjkFace) || markBlankEdge(after, false, cjkFace)) return false\n'
+  it("skips B.tokens' blank-side line while the lab's global asks it, and nowhere else in the file: the barred-start line stays", async () => {
+    expect(source.split(RULE).length).toBe(2)
+    const after = await hooked(source, `file://${TOKENS}`)
+    expect(after).toContain('if (!(globalThis as any).__parityBlankSides && (markBlankEdge(before, true, cjkFace) || markBlankEdge(after, false, cjkFace))) return false')
+    expect(after.replace(/if \(!\(globalThis as any\)\.__parityBlankSides && \(([^\n]*)\)\) return false/, 'if ($1) return false')).toBe(source)
+    expect(after).toContain('    if (!hardSpaces.has(t) && markBarredStart(after, cjkFace, barredChar)) return false\n')
+  })
+  it('throws where tokens.ts no longer holds the line once', async () => {
+    await expect(hooked(source.replace(RULE, ''), `file://${TOKENS}`)).rejects.toThrow(/no longer holds/)
+  })
+})
+
+describe("the parity's lay with no CJK line squeezed (the owner's ruling L2 of 2026-11-12, rulings.mjs)", () => {
+  const BREAK = resolve(__dirname, '../../packages/typeset/src/breaker/break.mjs')
+  const source = readFileSync(BREAK, 'utf8')
+  const RULE = '  const squeezes = !!P.cjk && !P.keepAll && !(st.track > (st.fitTrack ?? P.trackStart ?? 0) + 1e-9)\n'
+  it("turns the breaker's squeeze off while the lab's global asks it, and touches nothing else in the file", async () => {
+    expect(source.split(RULE).length).toBe(2)
+    const after = await hooked(source, `file://${BREAK}`)
+    expect(after).toContain('  const squeezes = !globalThis.__parityNoSqueeze && !!P.cjk && !P.keepAll && !(st.track > (st.fitTrack ?? P.trackStart ?? 0) + 1e-9)\n')
+    expect(after.replace('!globalThis.__parityNoSqueeze && ', '')).toBe(source)
+  })
+  it('throws where break.mjs no longer holds the line once', async () => {
+    await expect(hooked(source.replace(RULE, ''), `file://${BREAK}`)).rejects.toThrow(/no longer holds/)
   })
 })

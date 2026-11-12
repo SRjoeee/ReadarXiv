@@ -309,9 +309,10 @@ export function createReaderView(host) {
       if (s === R) tellRightPage()
       tell(listeners.scrolled, s.name)
     }, o)
-    // (a wheel with Ctrl or ⌘ is a zoom, never a scroll: the pinch's step makes its pane the driver, and binds nothing)
+    // (a wheel with Ctrl is a zoom, never a scroll: the pinch's step makes its pane the driver, and binds nothing; a wheel with
+    // ⌘ held is a scroll, as the chrome's pinch has it, §6.8)
     // (any other input ends a pinch under way: it is committed first)
-    for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) c.addEventListener(type, e => { if (type !== 'wheel' || !(e.ctrlKey || e.metaKey)) { settle(); follower.input(s, type) } }, o)
+    for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) c.addEventListener(type, e => { if (type !== 'wheel' || !e.ctrlKey) { settle(); follower.input(s, type) } }, o)
     c.addEventListener('pointermove', () => follower.hover(s), o)
     c.addEventListener('scrollend', () => follower.ended(s), o)
     c.addEventListener('mousemove', e => pointer.moved(s, e.clientX, e.clientY), { signal })

@@ -21,6 +21,8 @@ export type { Side, Zoom } from './panes/panes.ts'
 export { buildFor, legacyRuns, modernRuns } from './pdfjs/builds.ts'
 export type { PdfBuild, PdfModules } from './pdfjs/kit.ts'
 export {
+  type Band,
+  bandPaint,
   CLASSES,
   type ClassName,
   type Display,
@@ -49,6 +51,9 @@ export {
   type Unavailable,
 } from './chrome/model.ts'
 export { eventsOf, kindOf, LAYER_WHY } from './chrome/events.ts'
+// a failed prepare's word, as our server's document names it, to the layer's refusal (the website's tests hold it to its server's words)
+export { PREPARE_WHY } from './session/machine.ts'
+export { type Cause, causeOf } from './chrome/status.ts'
 export { mountChrome } from './chrome/mount.tsx'
 export { CATALOGUE_WORDS, linkNameOf, type Words } from './compose/words.ts'
 export { type LanguageItem, type Languages, PARTS, type Parts, type Slots, type StateWords } from './chrome/parts.tsx'

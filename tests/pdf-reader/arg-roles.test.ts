@@ -22,6 +22,17 @@ describe('the table: LaTeXML\'s prototypes, and the commands written out where t
     expect(roles('raisebox')).toBe('{d[d[d{c')
     expect(roles('multicolumn')).toBe('{d{n{c')
   })
+  it('etoolbox\'s and ifthen\'s conditionals: their test a control sequence, a name or code, their two branches the content TeX sets (2608.25210v2)', () => {
+    expect(roles('ifdefempty')).toBe('{r{c{c')
+    expect(roles('ifdef')).toBe('{r{c{c')
+    expect(roles('ifcsdef')).toBe('{n{c{c')
+    expect(roles('iftoggle')).toBe('{n{c{c')
+    expect(roles('ifbool')).toBe('{n{c{c')
+    expect(roles('ifstrequal')).toBe('{x{x{c{c')
+    expect(roles('ifblank')).toBe('{x{c{c')
+    expect(roles('notblank')).toBe('{x{c{c')
+    expect(roles('ifthenelse')).toBe('{x{c{c')
+  })
   it('a package\'s form only where the paper loads it: moderncv\'s \\firstname{…} is not melba\'s declaration', () => {
     expect(roles('firstname', bindingsOf(['\\documentclass{moderncv}']))).toBe('{n')
     expect(roles('firstname', bindingsOf(['\\documentclass{article}']))).toBeNull()
@@ -51,9 +62,11 @@ describe('the table: LaTeXML\'s prototypes, and the commands written out where t
     expect(roles('toks')).toBe('_d?s{x')
     expect(roles('parindent')).toBe('=r')
   })
-  it('an argument LaTeXML takes undigested or as a general text may be typeset (\\centerline, \\uppercase): never code', () => {
-    expect(roles('centerline')).toBe('{a')
+  it('an argument LaTeXML takes undigested or as a general text may be typeset (\\uppercase): never code', () => {
     expect(roles('uppercase')).toBe('{a')
+  })
+  it('plain TeX\'s line boxes set their argument, a box\'s content as \\mbox\'s (\\centerline, \\leftline, \\rightline: PDF-READER §18.46)', () => {
+    for (const name of ['centerline', 'leftline', 'rightline']) expect(roles(name), name).toBe('{c')
   })
   it('a package\'s form only for a paper that loads it: with no paper, the kernel\'s and those written out alone (a paper\'s \\degrees is no pstricks \\degrees[…])', () => {
     expect(roles('degrees')).toBeNull()

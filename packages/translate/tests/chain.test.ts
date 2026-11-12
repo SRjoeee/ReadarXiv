@@ -1,15 +1,24 @@
 // The chain's rules, each a test through the interface with fakes (design-a §5, design-b §5.3). Each describe names the
 // row of interfaces/translate/DECISION.md's table, or the contract's rule, it holds.
 import { describe, expect, it } from 'vitest'
-import { ACCEPT_DIGEST } from '../src/accept.ts'
+import { ACCEPT_DIGEST, projectionOf } from '../src/accept.ts'
 import { ATTEMPTS, BREAKER, chainOf, identityOf, keyOf } from '../src/chain.ts'
-import { Fault, type Note, type Result, type Translator, type UnitIn } from '../src/contract.ts'
+import {
+  Fault,
+  type Note,
+  type OutPiece,
+  type PaperContext,
+  type Piece,
+  type Result,
+  type Translator,
+  type UnitIn,
+} from '../src/contract.ts'
 import { sha256Hex } from '../src/sha256.ts'
 import { microsoft } from '../src/adapters/microsoft.ts'
 import { echo, fakeTranslator, mangler, scriptedFetch } from '../src/testing/fakes.ts'
 import { countingGate, fakeClock, memoryStore } from '../src/testing/ports.ts'
-import { BERT_STRATEGIES } from './adapters/fixtures.ts'
-import { el, span, t, unit } from './pieces.ts'
+import { BERT_STRATEGIES, HEAD_STOP } from './adapters/fixtures.ts'
+import { el, quiet, span, t, unit } from './pieces.ts'
 
 const all = async (it: AsyncIterable<Result>): Promise<Result[]> => {
   const out: Result[] = []
@@ -73,8 +82,8 @@ describe('the contract: one result per unit under every failure', () => {
       fakeTranslator({ identity: 'pass:0', script: () => ({ fault: new Fault('pass', 'malformed', 'bad') }) }),
     ],
     [
-      'halving',
-      fakeTranslator({ identity: 'halve:0', script: () => ({ fault: new Fault('halve', 'overload', 'too big') }) }),
+      'too large',
+      fakeTranslator({ identity: 'large:0', script: () => ({ fault: new Fault('pass', 'too-large', 'too big') }) }),
     ],
     ['hanging', fakeTranslator({ identity: 'hang:0', script: () => ({ hang: true }) })],
     ['short of units', fakeTranslator({ identity: 'short:0', script: () => ({ missing: [0, 2] }) })],
@@ -148,7 +157,7 @@ describe('the contract: fall-through is per unit', () => {
     expect(e.sent(withMath)).toBe(1)
     expect(e.sent(plain)).toBe(0)
   })
-  it('each mangling refuses only the unit it mangles; a dropped span that is not `must` is accepted unstyled (DECISION "Styled spans")', async () => {
+  it('each mangling refuses only the unit it mangles; a dropped span that is not `must` is accepted, placed back where the translation keeps its text (DECISION "Styled spans", groups.ts)', async () => {
     const styled = unit('s', [
       t('A '),
       span('b', 'bold', [t('bold')]),
@@ -176,13 +185,14 @@ describe('the contract: fall-through is per unit', () => {
     const kept = await all(
       chainOf({ clock: fakeClock() }).translate([loose], 'ja', { translators: [mangler('drop-span'), echo()] }),
     )
+    // (the echo keeps "bold" as written, once: the group's own text, so it goes back around it)
     expect(kept[0]).toEqual({
       id: 's2',
       ok: true,
       by: 'mangle-drop-span:0',
       content: [
         { t: 'text', s: 'A ' },
-        { t: 'text', s: 'bold' },
+        { t: 'span', id: 'b', content: [{ t: 'text', s: 'bold' }] },
         { t: 'text', s: ' word.' },
       ],
     })
@@ -270,6 +280,71 @@ describe('the contract: the runs floor', () => {
       s: ' ALL PRE-TRAINED PARAMETERS. THE TWO APPROACHES SHARE THE SAME OBJECTIVE FUNCTION DURING PRE-TRAINING, WHERE THEY USE UNIDIRECTIONAL LANGUAGE MODELS TO LEARN GENERAL LANGUAGE REPRESENTATIONS.',
     })
   })
+  it("a stop TeX sets at a group's end ends its stretch: inside a kept span, after a span's words on no edge", async () => {
+    const upper = fakeTranslator({
+      identity: 'upper:0',
+      reply: (out) =>
+        out.some((p) => p.t !== 'text')
+          ? []
+          : out.map((p) => (p.t === 'text' ? { t: 'text', s: p.s.toUpperCase() } : p)),
+    })
+    const rs = await all(chainOf({ clock: fakeClock() }).translate([HEAD_STOP], 'ja', { translators: [upper] }))
+    expect(rs[0]).toMatchObject({
+      ok: true,
+      by: 'runs:upper:0',
+      content: [
+        { t: 'span', id: 'h', content: [{ t: 'text', s: 'CURRENT METHODS ARE NOT RELIABLE.' }] },
+        {
+          t: 'text',
+          s: '  \nTO INFER THE SOURCE, ONE COULD RANK SENTENCES. WE CALL IT VERIFIABLE SOURCES. THEN WE GO ON.',
+        },
+      ],
+    })
+  })
+  it("an element that sets nothing (`silent`) cuts no stretch: it comes back at its group's front or end", async () => {
+    const u = unit('q', [
+      quiet('lab'),
+      t('First words exam'),
+      quiet('hy'),
+      t('ple here '),
+      el('a'),
+      t(' then '),
+      span('g', 'colour', [quiet('bf'), t(' more')]),
+      t(' words '),
+      span('l', 'link', [quiet('bm'), t('linked text')], true),
+      t(' x.'),
+    ])
+    const upper = fakeTranslator({
+      identity: 'upper:0',
+      reply: (out) =>
+        out.some((p) => p.t !== 'text')
+          ? []
+          : out.map((p) => (p.t === 'text' ? { t: 'text', s: p.s.toUpperCase() } : p)),
+    })
+    const rs = await all(chainOf({ clock: fakeClock() }).translate([u], 'ja', { translators: [upper] }))
+    expect(rs[0]).toEqual({
+      id: 'q',
+      ok: true,
+      by: 'runs:upper:0',
+      content: [
+        { t: 'el', id: 'lab' },
+        { t: 'text', s: 'FIRST WORDS EXAMPLE HERE ' },
+        { t: 'el', id: 'a' },
+        { t: 'text', s: ' THEN MORE WORDS ' },
+        {
+          t: 'span',
+          id: 'l',
+          content: [
+            { t: 'el', id: 'bm' },
+            { t: 'text', s: 'LINKED TEXT' },
+          ],
+        },
+        { t: 'text', s: ' x.' },
+        { t: 'el', id: 'hy' },
+        { t: 'span', id: 'g', content: [{ t: 'el', id: 'bf' }] },
+      ],
+    })
+  })
   it('`runs:mixed` when its stretches came from two translators; refused when none came back', async () => {
     const u = unit('r', [t('alpha words '), el('a'), t(' omega words')])
     const onlyAlpha = fakeTranslator({
@@ -285,6 +360,100 @@ describe('the contract: the runs floor', () => {
     const nothing = fakeTranslator({ identity: 'nothing:0', reply: () => [] })
     const rs2 = await all(chainOf({ clock: fakeClock() }).translate([u], 'ja', { translators: [nothing] }))
     expect(rs2[0]).toEqual({ id: 'r', ok: false, why: { kind: 'refused' } })
+  })
+  it('refused where a stretch came back from no translator: a unit half translated is no translation, its original stays', async () => {
+    // (rebuild/mono-blocks, Rule 3, the owner's line: translating or keeping is fine, garbling never. A stretch every translator
+    // refused kept its English between translated ones, `runs:<id>` drawn as a translation: 2411.13093v4 p19's boxes, English
+    // and Chinese words interleaved)
+    const u = unit('h', [t('alpha words '), el('a'), t(' omega words')])
+    const onlyAlpha = fakeTranslator({
+      identity: 'alpha:0',
+      reply: (out) => (out.length === 1 && out[0]?.t === 'text' && out[0].s.startsWith('alpha') ? out : []),
+    })
+    const rs = await all(chainOf({ clock: fakeClock() }).translate([u], 'ja', { translators: [onlyAlpha] }))
+    expect(rs[0]).toEqual({ id: 'h', ok: false, why: { kind: 'refused' } })
+  })
+})
+
+describe('the contract: an element TeX sets after the unit’s text (`after`) is given to no translator', () => {
+  // (the PDF's backref list after a bibliography entry, the pages that cite it: on a wire Microsoft's Chinese read its marker as
+  // a page number and wrote the character for "page" before it, 2610.37668v1, today's TRANSLATE_VERSION 7)
+  const GAP = ' '
+  const list: Piece = { t: 'el', id: 'l', kind: 'macro', after: GAP }
+  const body = [t('A. Author. A title of a paper. In Proc., '), el('pp', 'number'), t(' '), el('y', 'number')]
+  const entry = unit('b', [...body, list])
+  const bare = unit('b', body)
+  const echoing = () =>
+    scriptedFetch((_url, init) => ({
+      status: 200,
+      body: JSON.stringify((JSON.parse(init.body) as string[]).map((text) => ({ translations: [{ text }] }))),
+    }))
+  it('every translator is sent the unit without it, which comes back after the translation, its white space before it', async () => {
+    // (the list after the year: on the wire one marker with the year, read back glued to it; after a text: a marker of its own,
+    // the wire's last)
+    const oral = unit('o', [t('A. Author. Oral presentation.'), list])
+    const f = echoing()
+    const rs = await all(
+      chainOf({ clock: fakeClock() }).translate([entry, oral], 'zh-Hans', {
+        translators: [microsoft({ fetch: f.fetch })],
+      }),
+    )
+    expect(JSON.parse(f.requests[0]?.init.body ?? '[]')).toEqual([
+      'A. Author. A title of a paper. In Proc., @a#',
+      'A. Author. Oral presentation.',
+    ])
+    const g = echoing()
+    const without = await all(
+      chainOf({ clock: fakeClock() }).translate([bare, unit('o', [t('A. Author. Oral presentation.')])], 'zh-Hans', {
+        translators: [microsoft({ fetch: g.fetch })],
+      }),
+    )
+    expect(g.requests[0]?.init.body).toBe(f.requests[0]?.init.body)
+    for (const id of ['b', 'o']) {
+      const s = byId(without, id)
+      expect(byId(rs, id)).toEqual({
+        ...s,
+        content: [...(s.ok ? s.content : []), { t: 'text', s: GAP }, { t: 'el', id: 'l' }],
+      })
+    }
+    const e = echo()
+    await all(chainOf({ clock: fakeClock() }).translate([entry], 'ja', { translators: [e] }))
+    expect(e.sent(bare)).toBe(1)
+    expect(e.sent(entry)).toBe(0)
+  })
+  it('the runs floor puts it after the stretches; a unit with no letter is its own translation, as the source has it', async () => {
+    const upper = fakeTranslator({
+      identity: 'upper:0',
+      reply: (out) =>
+        out.some((p) => p.t !== 'text')
+          ? []
+          : out.map((p) => (p.t === 'text' ? { t: 'text', s: p.s.toUpperCase() } : p)),
+    })
+    const [r] = await all(chainOf({ clock: fakeClock() }).translate([entry], 'ja', { translators: [upper] }))
+    expect(r).toEqual({
+      id: 'b',
+      ok: true,
+      by: 'runs:upper:0',
+      content: [
+        { t: 'text', s: 'A. AUTHOR. A TITLE OF A PAPER. IN PROC., ' },
+        { t: 'el', id: 'pp' },
+        { t: 'text', s: ' ' },
+        { t: 'el', id: 'y' },
+        { t: 'text', s: GAP },
+        { t: 'el', id: 'l' },
+      ],
+    })
+    const none = unit('n', [el('y', 'number'), list])
+    const [n] = await all(chainOf({ clock: fakeClock() }).translate([none], 'ja', { translators: [upper] }))
+    expect(n).toEqual({
+      id: 'n',
+      ok: true,
+      by: 'self',
+      content: [
+        { t: 'el', id: 'y' },
+        { t: 'el', id: 'l' },
+      ],
+    })
   })
 })
 
@@ -360,14 +529,47 @@ describe('DECISION "Faults": each remedy, on a fake clock', () => {
     expect(rs2[0]).toEqual({ id: 'p', ok: false, why: { kind: 'unavailable', retryAfterMs: 2_000 } })
     expect(always.calls.length).toBe(3)
   })
-  it('halve: a request is halved down to the unit at fault, which this translator refuses', async () => {
+  it('cool: the last translator waits only within what the chain gives one request of it (ATTEMPTS × callMs); a longer pause answers unavailable with its time, unslept (#638)', async () => {
+    // an hour: never slept, one request, the endpoint's time told (two sleeps of an hour held the call two hours)
+    const clock = fakeClock()
+    const hour = fakeTranslator({
+      identity: 'hour:0',
+      script: () => ({ fault: new Fault('cool', 'rate', '429', { retryAfterMs: 3_600_000 }) }),
+    })
+    const rs = await all(chainOf({ clock }).translate([plain], 'ja', { translators: [hour] }))
+    expect(rs[0]).toEqual({ id: 'p', ok: false, why: { kind: 'unavailable', retryAfterMs: 3_600_000 } })
+    expect(hour.calls.length).toBe(1)
+    expect(clock.now()).toBe(0)
+    // 20 s within the 30 s a request of it is given (3 × 10 s): slept once; a second 20 s would pass the bound
+    const clock2 = fakeClock()
+    const slow = fakeTranslator({
+      identity: 'slow:0',
+      script: () => ({ fault: new Fault('cool', 'rate', '429', { retryAfterMs: 20_000 }) }),
+    })
+    const rs2 = await all(chainOf({ clock: clock2 }).translate([plain], 'ja', { translators: [slow] }))
+    expect(rs2[0]).toEqual({ id: 'p', ok: false, why: { kind: 'unavailable', retryAfterMs: 20_000 } })
+    expect(slow.calls.length).toBe(2)
+    expect(clock2.now()).toBe(20_000)
+    // a gate that refuses the last translator for an hour: not slept either, the unit told the hour
+    const clock3 = fakeClock()
+    const e = echo()
+    const gate = {
+      acquire: async () => ({ ok: false as const, retryInMs: 3_600_000 }),
+      release: async () => {},
+    }
+    const rs3 = await all(chainOf({ clock: clock3, gate }).translate([plain], 'ja', { translators: [e] }))
+    expect(rs3[0]).toEqual({ id: 'p', ok: false, why: { kind: 'unavailable', retryAfterMs: 3_600_000 } })
+    expect(clock3.now()).toBe(0)
+    expect(e.calls.length).toBe(0)
+  })
+  it('too large: a request its endpoint says is too large is halved down to the unit at fault, which this translator refuses', async () => {
     const units = many(8)
     const bad = units[5] as UnitIn
     const picky = fakeTranslator({
       identity: 'picky:0',
       script: ({ wires }) =>
         wires.includes(JSON.stringify(bad.content))
-          ? { fault: new Fault('halve', 'overload', 'too large') }
+          ? { fault: new Fault('pass', 'too-large', 'too large') }
           : undefined,
     })
     const rs = await all(chainOf({ clock: fakeClock() }).translate(units, 'ja', { translators: [picky, echo()] }))
@@ -375,6 +577,49 @@ describe('DECISION "Faults": each remedy, on a fake clock', () => {
     expect(byId(rs, bad.id)).toMatchObject({ ok: true, by: 'echo:0' })
     // 8 → its halves; the first half answers, the second is halved again, down to the unit at fault alone
     expect(picky.calls.map((c) => c.length)).toEqual([8, 4, 4, 2, 1, 1, 2])
+  })
+  it('pass: a request refused for no reason of its size is handed on whole, once, and told (#636: 100 units were 199 requests)', async () => {
+    const refuser = fakeTranslator({
+      identity: 'refuser:0',
+      limits: { chars: 100_000 },
+      script: () => ({ fault: new Fault('pass', 'malformed', '400') }),
+    })
+    const notes: Note[] = []
+    const units = many(100)
+    const rs = await all(
+      chainOf({ clock: fakeClock() }).translate(units, 'ja', {
+        translators: [refuser, echo()],
+        note: (n) => notes.push(n),
+      }),
+    )
+    expect(refuser.calls.map((c) => c.length)).toEqual([100])
+    expect(rs.every((r) => r.ok && r.by === 'echo:0')).toBe(true)
+    expect(
+      notes.filter((n) => n.kind === 'passed' && n.by === 'refuser:0' && n.why.kind === 'unavailable').length,
+    ).toBe(100)
+    // alone on the chain: one request, and every unit unavailable (the service's, not the unit's), no runs floor
+    const alone = fakeTranslator({
+      identity: 'alone:0',
+      script: () => ({ fault: new Fault('pass', 'malformed', '400') }),
+    })
+    const rs2 = await all(chainOf({ clock: fakeClock() }).translate(many(4), 'ja', { translators: [alone] }))
+    expect(alone.calls.length).toBe(1)
+    expect(rs2.map((r) => (r.ok ? 'ok' : r.why.kind))).toEqual([
+      'unavailable',
+      'unavailable',
+      'unavailable',
+      'unavailable',
+    ])
+  })
+  it('pass: a translator that refuses every request is counted by the breaker, and skipped once it opens', async () => {
+    const refuser = fakeTranslator({
+      identity: 'refuser:0',
+      script: () => ({ fault: new Fault('pass', 'malformed', '400') }),
+    })
+    const chain = chainOf({ clock: fakeClock() })
+    for (let k = 0; k < BREAKER.minOutcomes + 2; k++)
+      await all(chain.translate([unit(`c${k}`, [t(`Call ${k} has words.`)])], 'ja', { translators: [refuser, echo()] }))
+    expect(refuser.calls.length).toBe(BREAKER.minOutcomes)
   })
   it('pass: the next translator; off: unconfigured only when every translator is off', async () => {
     const pass = fakeTranslator({
@@ -483,6 +728,42 @@ describe('the contract: the store', () => {
       keyOf(c, 'ja', 'w', { title: 'A', glossary: [{ term: 'x', translation: 'z' }] }),
     )
     expect(keyOf(echo(), 'ja', 'w', { title: 'A', section: 'Intro' })).toBe(keyOf(echo(), 'ja', 'w'))
+  })
+  it('a translator that says which glossary entries a wire uses (`glossaryOf`) keys each wire by those alone (#637)', async () => {
+    const reads = (wire: string, g: NonNullable<PaperContext['glossary']>) => g.filter((e) => wire.includes(e.term))
+    const c: Translator = { ...fakeTranslator({ identity: 'ctx:0', context: true }), glossaryOf: reads }
+    const kernel = { term: 'kernel', translation: 'Kern' }
+    const lattice = { term: 'lattice', translation: 'Gitter' }
+    // a wire that uses no entry keys as a context with no glossary; one entry more it does not use moves nothing
+    expect(keyOf(c, 'de', 'no term here', { title: 'A', glossary: [kernel] })).toBe(
+      keyOf(c, 'de', 'no term here', { title: 'A' }),
+    )
+    expect(keyOf(c, 'de', 'the kernel', { title: 'A', glossary: [kernel, lattice] })).toBe(
+      keyOf(c, 'de', 'the kernel', { title: 'A', glossary: [kernel] }),
+    )
+    // an entry it uses: its translation changed moves the key
+    expect(
+      keyOf(c, 'de', 'the kernel', { title: 'A', glossary: [{ term: 'kernel', translation: 'Kernel' }] }),
+    ).not.toBe(keyOf(c, 'de', 'the kernel', { title: 'A', glossary: [kernel] }))
+    // through the chain and its store: an entry added that the unit does not use sends nothing; its own term changed asks again
+    const store = memoryStore()
+    const sent = fakeTranslator({ identity: 'ctx:1', context: true })
+    const t1: Translator = { ...sent, glossaryOf: reads }
+    const u = unit('k', [t('A kernel and nothing else.')])
+    const v = unit('n', [t('A sentence without any term.')])
+    const ask = (glossary: NonNullable<PaperContext['glossary']>) =>
+      all(
+        chainOf({ store, clock: fakeClock() }).translate([u, v], 'de', {
+          translators: [t1],
+          context: { title: 'T', glossary },
+        }),
+      )
+    await ask([kernel])
+    expect(sent.calls.flat().length).toBe(2)
+    await ask([kernel, lattice])
+    expect(sent.calls.flat().length).toBe(2)
+    await ask([{ term: 'kernel', translation: 'Kernel' }, lattice])
+    expect(sent.calls.flat()).toEqual([sent.write(u, 'de'), sent.write(v, 'de'), sent.write(u, 'de')])
   })
 })
 
@@ -945,5 +1226,25 @@ describe('the contract: a host withdrawing its calls one after another starts no
     expect((await pb)[0]).toMatchObject({ id: 'm', ok: true, by: 'hang:x' })
     expect((await pa)[0]).toMatchObject({ ok: false, why: { kind: 'aborted' } })
     expect(t1.calls.length).toBe(2)
+  })
+})
+
+describe('the chain: a word tied to a reference that abbreviates its item’s name goes to every translator as the name', () => {
+  const tie: Piece = { t: 'el', id: '1', kind: 'space' }
+  const fig: Piece = { t: 'el', id: '2', kind: 'ref', name: 'Figure' }
+  const u = unit('f', [t('As shown in Fig.'), tie, fig, t(', it holds. Then it ends.')], true)
+  it('sends the full name on each translator’s wire, the store key its wire’s, and gives the sentences back in the unit’s projection', async () => {
+    const sentences = (out: OutPiece[]) => {
+      const s = projectionOf(out)
+      return { src: [s.indexOf('Then')], tr: [s.indexOf('Then')] }
+    }
+    const a = echo('a:0', { sentences })
+    const rs = await all(chainOf({ clock: fakeClock() }).translate([u], 'ja', { translators: [a] }))
+    expect(a.calls.flat().join('')).toContain('As shown in Figure')
+    expect(a.calls.flat().join('')).not.toContain('Fig.')
+    const own = 'As shown in Fig.\uFFFC\uFFFC, it holds. Then it ends.'
+    expect(rs[0]).toMatchObject({ id: 'f', ok: true, sentences: { src: [own.indexOf('Then')] } })
+    // (the unit given is the unit kept: its text is the original's)
+    expect(JSON.stringify(u.content)).toContain('As shown in Fig.')
   })
 })

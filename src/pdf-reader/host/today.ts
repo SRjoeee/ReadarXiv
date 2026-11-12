@@ -2,7 +2,7 @@
 // passes its gate and the reader package lays the pages, stage 5's deletion list): its session (session/host.ts on the
 // engine's view, its run on our server's v1 layer) opened in the chrome's panes, its events told to the chrome's controller
 // with the extension's configuration as the one preference model, and the chrome's patches written as configuration changes.
-import type { SessionEvent as ChromeEvent, Session as ChromeSession, SessionHost as ChromeHost, ReaderController } from '@readarxiv/reader'
+import type { Session as ChromeSession, SessionHost as ChromeHost, ReaderController } from '@readarxiv/reader'
 import type { Config } from '@/config/schema'
 import type { ConfigReading } from '@/config/storage'
 import type { PackState } from '@/shared/pack'
@@ -55,8 +55,10 @@ export function todayOpen(o: { params: URLSearchParams; reading: ConfigReading |
           host.emit({ type: 'prefs', prefs: prefsOf(e.config) })
           return
         }
-        // every other event is the chrome's own vocabulary (the chain's error kinds the same: src/ui/strings.ts holds the two equal)
-        host.emit(e as ChromeEvent)
+        // every other event is the chrome's own vocabulary, as the types hold it (no cast: a word the chrome stops knowing fails the
+        // build; the chain's error kinds the same, src/ui/strings.ts holds the two equal; tests/pdf-reader/today-vocabulary.test.ts
+        // folds each through the chrome)
+        host.emit(e)
       },
     })
     o.store.open(session)

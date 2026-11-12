@@ -42,6 +42,33 @@ describe('\\bibliography ends the paragraph before it, with the job\'s .bbl and 
   })
 })
 
+describe('\\bibliography inside the group of a command the role table does not know: read where TeX reads it', () => {
+  // (2608.06007v1: `\\balance{ \\bibliographystyle{unsrt} \\bibliography{ref} }`, balance.sty's \\balance taking no argument,
+  // its group TeX's. Read as the command's argument, one placeholder, the walk never met the \\bibliography: no .bbl was
+  // made, the printed bibliography no unit's, kept blocks never translated, the References toggle dead on it)
+  const WRAPPED = BODY.replace('\\bibliographystyle{plain}\n\\bibliography{refs}', '\\balance{\n  \\bibliographystyle{plain}\n  % a comment\n  \\bibliography{refs}\n}')
+  const wrapped = (more: Record<string, string> = {}) => paperOf({ 'main.tex': doc(WRAPPED, PRE), 'refs.bib': BIB, ...more })
+  it('names the bibliography, so that BibTeX makes the .bbl; the entries are units, kind reference, the other units as before', async () => {
+    const without = wrapped()
+    expect(without.project.bibliography).toEqual(['refs'])
+    expect(bibliographyKept(without)).toBeNull()
+    const withBbl = wrapped({ 'main.bbl': BBL }), n = without.units.length
+    expect(kinds(withBbl).slice(n)).toEqual(['reference'])
+    expect(JSON.stringify(bundleUnitsOf(withBbl).slice(0, n))).toBe(JSON.stringify(bundleUnitsOf(without).slice(0, n)))
+    // (the entries the bibliography written bare has; the call no unit's: the paragraph before ends where it begins)
+    const entries = (p: ReturnType<typeof paperOf>) => JSON.stringify(bundleUnitsOf(p).filter(u => u[0] === 'reference'))
+    expect(entries(withBbl)).toBe(entries(source({ 'main.bbl': BBL })))
+    expect(JSON.stringify(bundleUnitsOf(withBbl))).not.toContain('balance')
+    const { compile } = host({ 'main.aux': AUX, 'main.bbl': BBL })
+    const r = await madeBibliography(without, { compile })
+    expect('made' in r && r.made.path).toBe('main.bbl')
+  })
+  it('a \\bibliography a comment holds in the group is none', () => {
+    const p = paperOf({ 'main.tex': doc(BODY.replace('\\bibliographystyle{plain}\n\\bibliography{refs}', '\\balance{%\\bibliography{refs}\n}'), PRE), 'refs.bib': BIB })
+    expect(p.project.bibliography).toEqual([])
+  })
+})
+
 describe('madeBibliography: the job\'s .bbl BibTeX makes in the prepare\'s first pass, the paper opened again with it', () => {
   it('asks one draft of the unmarked original with BibTeX, its files, and opens the paper with the .bbl it wrote: its entries last', async () => {
     const paper = source(), { asked, compile } = host({ 'main.aux': AUX, 'main.bbl': BBL })
@@ -66,6 +93,17 @@ describe('madeBibliography: the job\'s .bbl BibTeX makes in the prepare\'s first
     await markedOfPaper(again, { compile: async req => { marked.asked.push(req); return { ok: false, log: '' } }, final: false })
     expect(marked.asked.length).toBeGreaterThan(0)
     expect(marked.asked.every(q => q.bibtex === false)).toBe(true)
+  })
+  it('makes the entries where a class\'s own author command cut a unit no engine before cut: that unit before the entries, as every unit (2610.20967v1\'s spconf \\name)', async () => {
+    // (the block's unit numbered after the others but before the entries: numbered after them, it stood where the entries
+    // come, every unit before them was not as before, and the bibliography was kept as none, its entries an ink unit)
+    const sty = '\\def\\@maketitle{\\begin{tabular}[t]{c}\\@name \\\\ \\@address\\end{tabular}}\n\\def\\name#1{\\gdef\\@name{{\\em #1}\\\\}}\n\\def\\address#1{\\gdef\\@address{#1}}\n'
+    const paper = paperOf({ 'main.tex': doc(`\\maketitle\n${BODY}`, `${PRE}\n\\usepackage{spconf}\n\\name{Jane Doe$^{1}$}\n\\address{$^1$Some University}`), 'spconf.sty': sty, 'refs.bib': BIB })
+    expect(kinds(paper).at(-1)).toBe('author')
+    const r = await madeBibliography(paper, { compile: host({ 'main.aux': AUX, 'main.bbl': BBL }).compile })
+    expect('made' in r && r.made.path).toBe('main.bbl')
+    if (!('paper' in r)) throw new Error('no paper')
+    expect(kinds(r.paper).slice(-2)).toEqual(['author', 'reference'])
   })
   it('asks the host which compiler made arXiv\'s PDF first, where the package names none, and the paper opened again keeps it', async () => {
     const paper = source()

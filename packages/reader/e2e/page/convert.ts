@@ -9,6 +9,7 @@
 // to its member by its id, equal ids by their order (the baseline's comparator's rule); a crop to the element of that member on
 // that page whose ink is of its width (its piece by number first).
 import type { El, Part, Placed } from '@readarxiv/format'
+import { CJK_INK } from '@readarxiv/typeset'
 import type { Box, FaceId, Item, Lay, Laid, Page, Rows } from '../../src/compose/page.ts'
 
 export interface DumpLine {
@@ -33,9 +34,25 @@ export interface ReaderDump {
 }
 
 const r2 = (v: number) => Math.round(v * 100) / 100
-/** a member's own boxes on a page: its lines' [x0, bottom, x1, top] */
-const lineBoxes = (m: Placed, page: number): Box[] =>
-  m.lines.filter((l) => l[0] === page).map((l) => [l[2], l[6], l[3], l[5]] as Box)
+/** a member's displays on a page, each a block of its own by its piece (Laid.lit's `own`, as the typesetter's lit.ts states it) */
+const displaysOf = (m: Placed, page: number): [string, Box[]][] =>
+  (m.els ?? []).flatMap(([id, el]): [string, Box[]][] => {
+    const boxes =
+      el.kind === 'display' ? el.ink.filter((i) => i[0] === page).map((i) => [i[1], i[2], i[3], i[4]] as Box) : []
+    return boxes.length ? [[id, boxes]] : []
+  })
+/** a member's own boxes on a page: its lines' [x0, bottom, x1, top], but its displays' rows (a KEPT line on one: the display's) */
+const lineBoxes = (m: Placed, page: number): Box[] => {
+  const ds = displaysOf(m, page).flatMap(([, b]) => b)
+  const onDisplay = (l: Placed['lines'][number]) =>
+    !!(l[9] & 1) &&
+    ds.some(
+      (d) =>
+        Math.min(l[3], d[2]) > Math.max(l[2], d[0]) &&
+        Math.min(l[5], d[3]) - Math.max(l[6], d[1]) > 0.5 * (l[5] - l[6]),
+    )
+  return m.lines.filter((l) => l[0] === page && !onDisplay(l)).map((l) => [l[2], l[6], l[3], l[5]] as Box)
+}
 
 /** every member of the parts, once (a part repeats the flows of the page a member begins on), by ord */
 export function membersOf(parts: Iterable<Part>): Map<number, Placed> {
@@ -107,17 +124,18 @@ function laidOf(m: Placed, u: DumpUnit, page: number, faceOf: (m: Placed) => Fac
   const label = m.label && m.label.ink[0] === page ? m.label : null
   const relabelled = !!label && !!first && first[1] < label.ink[3] - 0.5 && first[0] >= label.ink[2]
   const right: Box[] = out.map(([y, x0, x1]) => [x0, r2(y - 0.25 * u.size), x1, r2(y + 0.8 * u.size)])
-  const own: [string, Box[]][] = els
-    .filter(([, el, ink]) => el.keep && ink)
-    .map(([id, , ink]) => [id, [[ink![1], ink![2], ink![3], ink![4]] as Box]])
+  // (its kept ink: a display a block of its own, any other piece lit with the member on both panes)
+  const keptBoxes = els
+    .filter(([, el, ink]) => el.keep && el.kind !== 'display' && ink)
+    .map(([, , ink]) => [ink![1], ink![2], ink![3], ink![4]] as Box)
   return {
     ord: m.ord,
     page,
     state: 'laid',
     off: 1 | (used.size ? 2 : 0) | (relabelled ? 4 : 0),
-    fit: { size: u.size, lead: r2(u.leading * m.lead), track: 0, borrowed: 0 },
+    fit: { size: u.size, lead: r2(u.leading * m.lead), track: 0 },
     lines: out,
-    lit: { left: [lineBoxes(m, page)], right: [right], own },
+    lit: { left: [[...lineBoxes(m, page), ...keptBoxes]], right: [[...right, ...keptBoxes]], own: displaysOf(m, page) },
   }
 }
 
@@ -140,23 +158,22 @@ export function pagesOf(parts: Map<number, Part>, dump: ReaderDump, faceOf: (m: 
           state: m.why ?? 'none',
           off: 0,
           lines: [],
-          lit: { left: [lineBoxes(m, page)], right: [lineBoxes(m, page)], own: [] },
+          lit: { left: [lineBoxes(m, page)], right: [lineBoxes(m, page)], own: displaysOf(m, page) },
         }
       )
     })
-    // the page's links: moved with the crop of the element that holds one, else where A has them
+    // the page's links: moved with the crop of the element that holds one, else where A has them; each with its own
+    // annotation's border (Link.border), as the typesetter carries it
     const at = new Map(laid.map((l) => [l.ord, l]))
-    const links: Page['links'] = (part.links ?? []).map((k) => {
+    const links: Page['links'] = (part.links ?? []).map((k): Page['links'][number] => {
       const owner = k.owner ? at.get(k.owner[0]) : undefined
       const c = owner?.lines
         .flatMap(([y, , , items]) => items.flatMap((i) => ('src' in i && i.piece === k.owner?.[1] ? [{ i, y }] : [])))
         .at(0)
-      if (c) {
-        const dx = c.i.x - c.i.src[1],
-          dy = c.y - c.i.src[5]
-        return [[r2(k.box[0] + dx), r2(k.box[1] + dy), r2(k.box[2] + dx), r2(k.box[3] + dy)], k.to]
-      }
-      return [k.box, k.to]
+      const dx = c ? c.i.x - c.i.src[1] : 0,
+        dy = c ? c.y - c.i.src[5] : 0
+      const box: Box = c ? [r2(k.box[0] + dx), r2(k.box[1] + dy), r2(k.box[2] + dx), r2(k.box[3] + dy)] : k.box
+      return k.border ? [box, k.to, undefined, k.border] : [box, k.to]
     })
     out.set(page, { page, wait: { rows: [], faces: [] }, members: laid, links })
   }
@@ -182,7 +199,13 @@ export function fixtureLay(pages: Map<number, Page>, parts: Map<number, Part>): 
           ...page0,
           members: page0.members.map((l) =>
             refused.has(l.ord)
-              ? { ...l, state: 'refused', off: 0, lines: [], lit: { left: l.lit.left, right: l.lit.left, own: [] } }
+              ? {
+                  ...l,
+                  state: 'refused',
+                  off: 0,
+                  lines: [],
+                  lit: { left: l.lit.left, right: l.lit.left, own: l.lit.own },
+                }
               : l,
           ),
         }
@@ -200,7 +223,7 @@ export function fixtureLay(pages: Map<number, Page>, parts: Map<number, Part>): 
           state: 'waiting',
           off: 0,
           lines: [],
-          lit: { left: l.lit.left, right: l.lit.left, own: [] },
+          lit: { left: l.lit.left, right: l.lit.left, own: l.lit.own },
         })),
         links: [],
       }
@@ -209,9 +232,47 @@ export function fixtureLay(pages: Map<number, Page>, parts: Map<number, Part>): 
       ...page,
       members: page.members.map((l) =>
         gone.has(l.ord)
-          ? { ...l, state: 'none', off: 0, lines: [], lit: { left: l.lit.left, right: l.lit.left, own: [] } }
+          ? { ...l, state: 'none', off: 0, lines: [], lit: { left: l.lit.left, right: l.lit.left, own: l.lit.own } }
           : l,
       ),
     }
+  }
+}
+
+/** a colour of a run's own (as a notice line's or a link's): the dimmed pages' check */
+export const COLOURED = 0xc00000
+/**
+ * Three inks on page `n` (the dimmed pages' check): its first laid member of three lines of text or more keeps its first as laid
+ * (runs that name no fill: the layer's ink), its second's runs set in CJK characters in CJK_INK (the fill the typesetter gives a
+ * CJK run, typeset display.ts), its third's in COLOURED
+ */
+export function inked(lay: Lay, n: number): Lay {
+  const texty = (l: Laid['lines'][number]) => l[3].some((it) => !('src' in it))
+  return (part, rows) => {
+    const p = lay(part, rows)
+    const at =
+      part.page === n ? p.members.findIndex((m) => m.state === 'laid' && m.lines.filter(texty).length >= 3) : -1
+    if (at < 0) return p
+    const m = p.members[at] as Laid
+    let k = 0
+    const lines = m.lines.map((l): Laid['lines'][number] => {
+      if (!texty(l)) return l
+      const which = k++
+      if (which !== 1 && which !== 2) return l
+      const items = l[3].map((it): Item => {
+        if ('src' in it) return it
+        if (which === 2) return { ...it, fill: COLOURED }
+        // (a CJK character about twice a Latin one's width: half as many, so that the line keeps within its page)
+        const n = Math.ceil([...it.s].length / 2)
+        return {
+          ...it,
+          s: '\u6c38'.repeat(n),
+          fill: CJK_INK,
+          ...(it.dx ? { dx: it.dx.filter((_, i) => i % 2 === 0).slice(0, n) } : {}),
+        }
+      })
+      return [l[0], l[1], l[2], items]
+    })
+    return { ...p, members: p.members.map((x, i) => (i === at ? { ...m, lines } : x)) }
   }
 }

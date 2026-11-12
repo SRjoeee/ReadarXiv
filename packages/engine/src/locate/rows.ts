@@ -6,7 +6,7 @@
 // their glyphs' places in the content stream interleave (a row's parts are shipped between its glyphs; two rows never are).
 // No threshold: the text line rule (lines.ts) cuts a stacked part off as a line of its own, which no TeX row is.
 import type { DocGlyph } from '../doc.ts'
-import type { CutLine } from './lines.ts'
+import { type CutLine, isInk } from './lines.ts'
 
 /** a rule or image of the display's own on a page: its box */
 export interface RowBox {
@@ -17,8 +17,8 @@ export interface RowBox {
   y1: number
 }
 
-/** the rows of a display from its glyphs `list` (each an index `at` resolves to its page and glyph, stream order) and its own
- *  boxes: each row its glyphs (as given, in stream order), their advances' extent, their baseline, their ink's top
+/** the rows of a display from its glyphs `list` (each an index `at` resolves to its page and glyph, stream order; those that are
+ *  ink, isInk) and its own boxes: each row its glyphs (as given, in stream order), their advances' extent, their baseline, their ink's top
  *  and bottom (its boxes' too), in the stream order of their first glyph; a row of boxes alone is none (its boxes stay the
  *  element's ink) */
 export function rowsOf(
@@ -35,7 +35,8 @@ export function rowsOf(
   }
   for (const i of list) {
     const { page, g } = at(i)
-    if (!/\S/.test(g.u)) continue
+    // (its ink, whatever its Unicode: a big delimiter PDF.js reads as a blank is the row's, isInk)
+    if (!isInk(g)) continue
     push(page, { lo: Math.min(g.bottom, g.top), hi: Math.max(g.bottom, g.top), i })
   }
   for (const b of boxes) push(b.page, { lo: Math.min(b.y0, b.y1), hi: Math.max(b.y0, b.y1), i: null })

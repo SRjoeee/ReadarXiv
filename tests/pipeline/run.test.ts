@@ -10,6 +10,7 @@ import { DEFAULT_PRELOAD } from '@/core/scheduler/lazy'
 import type { TranslateCall, UnitResult } from '@/providers/transport'
 import type { ProviderErrorKind } from '@/providers/types'
 import { reasonText } from '@/ui/strings'
+import { declarations, rules, sheet } from '../styles/css-rules'
 
 const PAGE =
   '<h2 class="ltx_title ltx_title_section" id="s1">Introduction</h2>'
@@ -318,6 +319,26 @@ describe('startTranslation', () => {
     expect(sibling.classList.contains(ERROR_CLASS)).toBe(true)
     expect(sibling.querySelector('math')).toBeNull()
     expect(doc.querySelectorAll(`.${T_CLASS}[${FOR_ATTR}="p3"]`)).toHaveLength(1)
+  })
+
+  it('a restart under translation only shows no original: a block whose translation from the round before is still there keeps its original hidden until it is asked again (DESIGN §8.5)', async () => {
+    // The rules of modes.css that hide a node under only, as the page's sheet has them
+    const onlyHides = rules(sheet('../../src/styles/modes.css'))
+      .filter(r => r.within.length === 0 && r.selector.includes('[data-axt-mode="only"]') && declarations(r.body).display === 'none')
+      .flatMap(r => r.selector.split(',').map(sel => sel.trim()))
+    expect(onlyHides.length).toBeGreaterThan(0)
+    const shown = (el: Element) => !onlyHides.some(sel => el.matches(sel))
+    const doc = docOf()
+    const blocks = extract(doc)
+    const first = await start(doc, blocks, makeTransport().transport, { mode: 'only' })
+    await first.translate(blocks)
+    expect(blocks.filter(b => shown(b.el))).toEqual([])
+    first.stop()
+    // The restart (another service, another language): a new run over the page as it is, nothing asked yet — the
+    // viewport hands the blocks over as the reader reaches them, and each one's old translation goes as it is asked
+    await start(doc, blocks, makeTransport().transport, { mode: 'only' })
+    expect(doc.querySelectorAll(`.${T_CLASS}`)).toHaveLength(blocks.length)
+    expect(blocks.filter(b => shown(b.el)).map(b => b.id)).toEqual([])
   })
 })
 

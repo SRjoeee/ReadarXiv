@@ -2,11 +2,31 @@
 // fields beneath its own) and the reader's choices. Ported from engine 065c1d973 rules/layout.mjs resolveRules
 // (layout.mjs:346-372) and rules/script.mjs scriptOf: the script's fields with the language's over them, field by field (an
 // object field replaced whole, never merged), `cjk` from the script, babel's hyphenation minimums; the patterns to read:
-// English's for every Latin word, the language's own where `latinPatterns` names one, a Cyrillic target's `cyrillicPatterns`.
+// English's for every Latin word, the language's own where `latinPatterns` names one, a Cyrillic target's `cyrillicPatterns`;
+// the target's head names (data/rules/heads.ts, today's rules/tex-names.json heads that tex-names.mjs headName reads) and its
+// reference names (data/rules/refs.ts: the names cleveref and hyperref generate, that tex-names.mjs refInTarget reads).
 // Each call answers fresh objects: a caller may change its own.
+import { HEADS } from './data/rules/heads.ts'
 import { HYPHENATION, LANGUAGES, SCRIPTS, VERSION } from './data/rules/index.ts'
+import { REFS } from './data/rules/refs.ts'
 import type { ScriptRules } from './data/rules/types.ts'
 import type { Choices, Lang, RuleParams, Rules, Script } from './types.ts'
+import { type RefNames, refNamesOf } from './unit/rename.ts'
+
+/** the packages' reference names for a target, as tex-names.mjs reads them: every target's heads and references, its own
+ *  words (U.rename's RefNames) */
+const refsFor = (target: Lang): RefNames =>
+  refNamesOf(
+    {
+      types: REFS.types,
+      conjunctions: REFS.conjunctions,
+      singular: REFS.singular,
+      targets: Object.fromEntries(
+        Object.entries(REFS.targets).map(([tag, t]) => [tag, { heads: HEADS[tag] ?? {}, refs: t.refs, conj: t.conj }]),
+      ),
+    },
+    target,
+  )
 
 const CJK_SCRIPTS = new Set(['Hans', 'Hant', 'Jpan', 'Kore'])
 /** the script fields in the set's order (rules/layout.mjs SCRIPT_FIELDS) */
@@ -18,7 +38,6 @@ const SCRIPT_KEYS: readonly (keyof ScriptRules)[] = [
   'compressMax',
   'centredPunct',
   'borrow',
-  'borrowGap',
   'floor',
   'step',
   'further',
@@ -87,11 +106,16 @@ export function resolveRules(target: Lang) {
  */
 export function rulesFor(target: Lang, choices: Choices = {}, hyph: Readonly<Record<string, unknown>> = {}): Rules {
   const r = resolveRules(target)
+  // (the borrow past TeX's text block bottom where the reader sets it (§18.37, the owner's switch): in the params the fit reads;
+  // absent, the fit's own rule)
+  const past = choices.pastFoot
   return {
     target,
     script: r.script as Script,
-    set: r.params,
+    set: past === undefined ? r.params : { ...r.params, pastFoot: past },
     labels: r.labels,
+    heads: Object.hasOwn(HEADS, target) ? { ...HEADS[target] } : null,
+    refs: refsFor(target),
     patterns: r.patterns,
     hyph,
     cjkFaces: r.cjkFaces,

@@ -307,8 +307,10 @@ describe('createPrep', () => {
     expect(add).toHaveBeenCalledTimes(2)
   })
 
-  it('leaving side withdraws the queued pass and takes back what the passes wrote inline: the alignment margins, the margin-note offsets', () => {
-    const { doc, prep, byId } = setup(TWO_FIGURES + NOTED)
+  it('leaving side takes back what the passes wrote inline: the alignment margins, the margin-note offsets; the pass queued under side does none of side\'s steps after it', () => {
+    // The mode in effect follows the switch, as the session's does (isSide reads the mode controller)
+    const mode = { side: true }
+    const { doc, prep, byId } = setup(TWO_FIGURES + NOTED, mode)
     prep.side(true)
     flush()
     const translation = renderText(byId('c1'), frag(doc, '图 1。')) as HTMLElement
@@ -317,11 +319,34 @@ describe('createPrep', () => {
     translation.style.marginTop = '8px'
     const outer = doc.getElementById('o1') as HTMLElement
     outer.style.transform = 'translateY(24px)'
+    mode.side = false
     prep.side(false)
     flush()
     expect(doc.querySelectorAll(`.${SPLIT_CLASS}`)).toHaveLength(0)
     expect(translation.style.marginTop).toBe('')
     expect(outer.style.transform).toBe('')
+  })
+
+  it('a footnote that arrived just before the reader left side is placed in the mode left for: the queued pass keeps its every-mode step', () => {
+    // A paragraph and its footnote translated in one batch, under side; the reader switches to stack before the pass
+    // queued for them runs. Footnote placement is every mode's (§7.2): left unplaced, stack shows the margin note twice
+    // (the original's, with its translation, and the paragraph's copy in English) and only shows it in English alone
+    const mode = { side: true }
+    const { doc, prep, blocks } = setup(NOTED, mode)
+    prep.side(true)
+    flush()
+    const para = blocks.find(b => b.el.id === 'p9') as TextBlock
+    const note = blocks.find(b => b.el.classList.contains('ltx_note_content')) as TextBlock
+    renderText(note, frag(doc, 'The note, translated.'))
+    renderText(para, frag(doc, 'Noted, translated<span class="ltx_note ltx_role_footnote"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content">Note.</span></span></span>.'))
+    prep.touch([para, note])
+    mode.side = false
+    prep.side(false)
+    flush()
+    expect(doc.getElementById('n1')!.hasAttribute('data-axt-note')).toBe(true)
+    expect(doc.querySelector('.axt-t .axt-note-t')?.textContent).toBe('The note, translated.')
+    // and nothing of side's is done by that pass: no figure split, no mirror
+    expect(doc.querySelectorAll(`.${SPLIT_CLASS}, .${MIRROR_CLASS}`)).toHaveLength(0)
   })
 
   it('the split copies\' duplicated media are silent under side, where the original shows beside them, and speak outside it (§7.4b)', () => {

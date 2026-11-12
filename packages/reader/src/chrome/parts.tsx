@@ -38,19 +38,23 @@ export interface Slots {
 /**
  * A host's words for the states the status capsule and the failure cards show, each in place of the catalogue's (the
  * website's own sentences: its words today): one override typed by state, never a second catalogue; a state the host does
- * not word keeps the catalogue's. A run under way (queued, preparing, translating, reconnecting) has no sentence of the
+ * not word keeps the catalogue's. A run under way (queued, translating, reconnecting) has no sentence of the
  * catalogue's (the progress line under the bar shows it, the extension's approved look): where a host words it, the capsule
  * says it too, with the spinner. A function is given what the state holds (a place in the queue, a count, the time a retry
  * is due, ms since the epoch) and is asked again as it changes
  */
 export interface StateWords {
-  /** the paper waiting in our server's queue, at its place */
-  queued?: (position: number) => string
-  /** the paper's layer being made */
-  preparing?: string
-  /** the paragraphs translated so far of the paper's: the count drawn as a part of its own where it stands in the sentence.
-   *  `chip`: `showTranslation` stands beside it (the website's says the bare stage there in a window too narrow for both) */
-  translating?: (got: number, total: number, chip?: boolean) => string
+  /** the paper waiting its turn: our server at capacity (a `busy` refusal of the open, status.ts `causeOf`), which the reader asks
+   *  again by itself at our server's time for as long as it answers so (the website's "waiting in line"); none: the refusal's
+   *  words (`busy`, else `limited`) with its retry, the extension's */
+  queued?: string
+  /** the translation the reader waits for: the paragraphs translated so far of the paper's, the count drawn as a part of its own
+   *  where it stands in the sentence. `chip`: `showTranslation` stands beside it (the website's says the bare stage there in a
+   *  window too narrow for both). `first`: the paper's first making (its layer being made, the first time anyone opens it, or
+   *  made this visit and its count not known yet: status.ts `firstOf`), whose words hold no count (the website's say the time
+   *  a first one takes). The making itself is never said: the reader waits for the translation (the coordinator's decision 1,
+   *  2026-11-11) */
+  translating?: (got: number, total: number, chip?: boolean, first?: boolean) => string
   /** our server's document followed, its stream lost and asked again */
   reconnecting?: string
   /** the run's chip that shows the translation (the reader's own choice of a display), where the translation is not on screen
@@ -66,12 +70,15 @@ export interface StateWords {
   htmlLink?: (href: string) => { href: string; label: string } | null
   /** the paper too large to prepare (R.status.noPdf) */
   tooLarge?: string
-  /** our server out of reach for now (R.status.notNow) */
+  /** our server out of reach for now (R.status.notNow); `retryAt`: the time to say, null for none (the chrome's to decide: while
+   *  it is to come, or while the session will ask by itself at it until that ask begins, status.ts capsuleOf) */
   notNow?: (retryAt: number | null) => string
-  /** our server busy for now (R.status.limited) */
-  busy?: (retryAt: number | null) => string
-  /** at the limit of new papers (R.status.limited) */
+  /** at the limit of new papers (R.status.limited); `retryAt` as `notNow`'s */
   limited?: (retryAt: number | null) => string
+  /** the visitor's rate of asks, the reader asking again by itself at its time (R.status.limited) */
+  rate?: string
+  /** the network itself failed, or the browser is offline, the reader asking again by itself once it is back (R.status.notNow) */
+  network?: string
   /** a target the typesetter does not set, named by its own name (R.status.unsupported) */
   unsupported?: (language: string) => string
   /** passages that failed (S.failed.text) */
@@ -82,11 +89,11 @@ export interface StateWords {
   unreadable?: string
   /** a write of the settings refused (O.saveFailed) */
   saveFailed?: string
-  /** the card of a run that translated nothing, by the chain's kind (the host's `reason`; R.status.rateLimited for a limit) */
+  /** the card of a run that translated nothing, by the chain's kind (the host's `reason`) */
   failed?: (kind: ProviderErrorKind) => string
-  /** that card's lines under its reason, each a line of its own (the website's: when a retry can work, while its time is to
-   *  come; the limit's note), given the kind and the time a retry is due (null: none named); none, or null: no line */
-  cardLines?: (kind: ProviderErrorKind, retryAt: number | null) => { sub?: string | null; note?: string | null }
+  /** that card's line under its reason (the website's: when a retry can work, while its time is to come), given the kind and
+   *  the time a retry is due (null: none named); none, or null: no line */
+  cardLines?: (kind: ProviderErrorKind, retryAt: number | null) => { sub?: string | null }
   /** the card where the original could not be read (the host's `reason` of the network) */
   originalLost?: string
   /** the way to arXiv's PDF of the paper where the original could not be read: given, the loss is the original's pane's card

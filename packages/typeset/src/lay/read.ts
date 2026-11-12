@@ -8,27 +8,31 @@
 //   drawing (`sym`), a footnote's mark (`mark`), kept where it stands (`keep`: a display, ink outside the unit's lines);
 // - drawnAs (L2:1757) over a rendering whose source knows its ink (a segment's box, `box.top` set): a crop of the box, or the
 //   page's text for a citation, a reference, a macro and a formula over lines;
-// - U.breaks' regions (finishUnit's maps) over the lines the elements keep; U.marks' facts (origAfter, heldAfter) from El.after;
+// - U.breaks over what TeX states (El.ends, El.opens, SpanAt.opens: statedBreaks, in the translation's order) and finishUnit's
+//   maps over them and the lines the elements keep; U.marks' facts (origAfter, heldAfter) from El.after;
 // - U.label over the label's parts (Label.name, num, punct) as its glyphs;
 // - the unit's base style, its size and its colour from Style (today's originalStyle and measuredOf over its characters), the
 //   faces' design from the font's name (today's classifyFont, breaker/font-names.mjs), the paper's designs and English family
 //   from Part.paper.faces (today's page-1 tally and familyOfFonts);
+// - U.rename over the resolutions drawn as the page's text: a generated reference's or a citation's note's names in the
+//   target's (the rules' reference names, babel's, the paper's own name units'), where the reader draws labels anew;
 // - the tail from Placed.tail; B.tokens and B.measure over Metrics.
 // A name leading the unit (U.lead) is handed in, set from the name the part binds to it (lay/lead.ts). What the part does not
-// state yet is passed as today does without it, each named where it is read: U.rename's names, a rendering's runs of one fill
-// and its faked small capitals, a colour piece's run.
+// state yet is passed as today does without it, each named where it is read: a rendering's runs of one fill and its faked
+// small capitals, a colour piece's run.
 import type { El, OutPiece, Placed, Piece, SpanAt } from '@readarxiv/format'
 import { type CjkFaces, faceOf, ownSmallCaps, type Roles, rolesFor } from '../breaker/faces.ts'
 import { classifyFont, familyOfFonts } from '../breaker/font-names.types.ts'
 import { measure } from '../breaker/measure.ts'
 import { noStart } from '../breaker/script.ts'
-import { type TokenRules, type TStyle, tokens as tokensOf } from '../breaker/tokens.ts'
+import { baseOf, type TokenRules, type TStyle, tokens as tokensOf } from '../breaker/tokens.ts'
 import type { Tokens } from '../fit/types.ts'
 import type { Metrics } from '../types.ts'
-import { breaks, type V0Piece } from '../unit/breaks.ts'
+import { breakMaps, type Breaks, statedBreaks, type V0Piece } from '../unit/breaks.ts'
 import { cropFields, cropOfBox, cropPartsOfSegments } from '../unit/crops.ts'
 import { type ElementReading, elements, type Gap, type Res } from '../unit/elements.ts'
-import { type Glyph, type LabelInput, label as labelRule, type UnitLabel } from '../unit/label.ts'
+import { type Glyph, type HeadParts, type LabelInput, label as labelRule, type UnitLabel } from '../unit/label.ts'
+import { type RefNames, rename } from '../unit/rename.ts'
 import { cjkAdvance } from '../unit/params.ts'
 import { type Rect, rectKey } from '../util.ts'
 
@@ -94,7 +98,10 @@ export function rowPieces(m: Placed, content: readonly OutPiece[]): V0Piece[] {
         out.push(e?.nested ? { t: 'nested', k: Number(p.id) } : { t: 'ph', src: srcOfEl(p.id, e), k: Number(p.id) })
       } else {
         const id = Number(p.id)
-        out.push({ t: 'open', src: srcOfSpan(spans.get(p.id)), id, k: id })
+        // (the face TeX set it in, where its command names no style the rules know: SpanAt.style)
+        const st = spans.get(p.id)?.style
+        const face = st ? { face: { role: st.role, bold: st.bold, slant: st.slant } } : {}
+        out.push({ t: 'open', src: srcOfSpan(spans.get(p.id)), id, k: id, ...face })
         walk(p.content)
         out.push({ t: 'close', src: '}', id })
       }
@@ -131,7 +138,8 @@ export function paperOf(fonts: readonly (readonly [string, number])[], to: strin
   return { designs, roles: rolesFor(to, family, cjkFaces), family }
 }
 
-/** a Style as today's character style (fonts.mjs classifyFont over its font's name; the part's role, weight, slant) */
+/** a Style as today's character style (fonts.mjs classifyFont over its font's name; the part's role, weight, slant; its small
+ *  capitals its face's, or today's vote over its faked ones, Style.caps) */
 export function tstyleOf(st: Placed['style'], designs: PaperReading['designs']): TStyle {
   const c = st.design ? classifyFont(st.design) : null
   const fam = st.role
@@ -139,7 +147,7 @@ export function tstyleOf(st: Placed['style'], designs: PaperReading['designs']):
     fam,
     bold: !!st.bold,
     italic: !!st.slant,
-    caps: !!c?.caps,
+    caps: !!c?.caps || !!st.caps,
     design: c && c.fam === fam ? c.design : designs[fam],
     ...(c ? { known: c.known, name: c.name } : {}),
     ...(st.upper ? { upper: true } : {}),
@@ -192,7 +200,8 @@ const boxOf = (S: readonly number[]) => {
 }
 
 /** drawnAs (L2:1757) over a rendering whose source knows its ink (its box): a formula over lines as its crops, the page's text
- *  for a citation, a reference, a macro and a formula over lines, else a crop of its box; its copy text the source's */
+ *  for a citation, a reference, a macro and a formula over lines, else a crop of its box; its copy text the source's. A mark
+ *  (`mark`: readingsOf's) on one line is a crop of its box whatever its class */
 function drawnAs(
   cls: string,
   g: Gap & { box: ReturnType<typeof boxOf> },
@@ -201,6 +210,7 @@ function drawnAs(
   page: number,
   st: TStyle | null,
   literal: boolean,
+  mark = false,
 ) {
   const box = g.box
   const broken = box.lines > 1
@@ -209,8 +219,8 @@ function drawnAs(
     const parts = cropPartsOfSegments(box.segs)
     if (parts) return { ...cropFields(parts), text: copy } as Res
   }
-  if (cls !== 'other' || broken || textMacro) return { mode: 'orig-text', text: g.text, sup, st } as Res
-  return { mode: 'crop', page, ...cropOfBox(box), text: copy } as Res
+  if ((cls !== 'other' && !mark) || broken || textMacro) return { mode: 'orig-text', text: g.text, sup, st } as Res
+  return { mode: 'crop', page, ...cropOfBox(box), text: copy, ...(mark ? { mark: true } : {}) } as Res
 }
 
 /** each element's reading (U.elements' ElementReading) from its El, by the row's piece index */
@@ -255,6 +265,11 @@ function readingsOf(
     const cls = el?.kind ?? 'zero'
     const copy = el?.copy ?? ''
     const supSrc = !!el?.mark
+    // (a mark: a glyph TeX set raised in its own font at its script size, a footnote's or a \thanks mark (El.mark), or a
+    // symbol set as a superscript (El.sym's second): drawn as its ink, its size and raise TeX's, whatever unit holds it. As
+    // the page's text it was its text in the target's face at a superscript's share of the line's size (1706.03762v7 p1's
+    // seven CMSY7 stars 1.6 pt tall where TeX's are 2.7, its first author's, his trail's crop, at full size))
+    const mark = !!el?.mark || (cls === 'symbol' && !!el?.sym?.[1])
     const ink = el?.ink ?? []
     const S = el ? segsOf(el) : []
     const onKept = ink.length > 0 && ink.every((q) => lineOfInk(L, q, true) !== null)
@@ -264,21 +279,29 @@ function readingsOf(
     // (a text macro whose glyphs are the unit's text, its text stated (El.text, the probe's): drawn as that text, as today's
     // reader draws the rendering it finds by it among the unit's characters; with none, nothing, inklessOf)
     const textOnly = MACRO_CLASSES.has(cls) && !!el && !el.ink.length && el.text !== undefined && el.text !== ''
-    // (a text macro whose span the instrument states empty, El.text '' and no ink: TeX set no glyph between its two points, or
-    // its probe said it sets none; drawn as nothing, proven, as one the part states no El of)
-    if (MACRO_CLASSES.has(cls) && (!el || (!el.ink.length && el.text === '')))
-      fixed = { mode: 'none', text: '', proof: true }
-    // (a paper's own macro the part states no ink and no text of: TeX may have set nothing for it, or its glyphs as the unit's
-    // text, which the reading cannot tell; drawn as nothing, its glyphs were erased with the text group and never drawn again
-    // (2608.06007v1 p10's \sys, "TensorCast", the checkpoint's free-17). Unproven: the unit is left the original's whole, nothing
-    // erased without a replacement, until the instrument states the glyphs TeX set for it)
-    else if (MACRO_CLASSES.has(cls) && el?.unknown && !ink.length && !textOnly) fixed = { mode: 'none', text: '' }
-    else if (VISIBLE.has(cls) && cls !== 'symbol' && !ink.length && !textOnly)
-      fixed = { mode: 'none', text: '', proof: true, empty: true }
+    // (an element of no ink, of a class drawn from its ink, read by the one of three the part states (format's El): TeX set
+    // nothing for it, El.text '' (its two points hold no glyph, its probe said it sets none: 2610.19159v1's
+    // `\trajectoryMark{}`), drawn as nothing, proven; TeX set it before the unit's start, outside the unit's text, El.keep,
+    // drawn as nothing and its ink, never erased, left where it stands (texParts' OUTSIDE); neither, its ink was not found:
+    // drawn as nothing, its glyphs may have been erased with the text group and never drawn again (2608.06007v1 p10's \sys,
+    // "TensorCast"; 2608.25210v2 p7's algorithm under one line; 2402.10294v1's reference [1] without its year), so the unit is
+    // unproven, left the original's whole (today's LOST)
+    if (VISIBLE.has(cls) && cls !== 'symbol' && !ink.length && !textOnly)
+      fixed =
+        el?.text === ''
+          ? { mode: 'none', text: '', proof: true, ...(MACRO_CLASSES.has(cls) ? {} : { empty: true as const }) }
+          : el?.keep
+            ? { mode: 'none', text: '', proof: true, inPlace: true }
+            : { mode: 'none', text: '' }
     else if (el?.keep && cls !== 'display' && cls !== 'symbol' && cls !== 'zero' && ink.length && !onKept)
       fixed = { mode: 'none', text: '', proof: true, inPlace: true }
     let gap: (Gap & { box: ReturnType<typeof boxOf> }) | null = null
-    if (cls !== 'zero' && cls !== 'symbol' && (ink.length || textOnly) && !(cls === 'space' && !ink.length)) {
+    if (
+      cls !== 'zero' &&
+      (cls !== 'symbol' || (mark && ink.length)) &&
+      (ink.length || textOnly) &&
+      !(cls === 'space' && !ink.length)
+    ) {
       let lines = ink.map((q) => lineOfInk(L, q, cls === 'display' ? true : null)).filter((x): x is string => !!x)
       // (a display the unit begins or ends with, its rows before its first text line or after its last, stays in place: today's
       // layout file holds no line of it (the maker's inPlace, a unit's first or last piece), so no region of it is referenced)
@@ -292,12 +315,20 @@ function readingsOf(
       gap = { text, lines, nu: el?.text === undefined, proof: true, box: boxOf(S), n: [...text].length }
     }
     const page = ink[0]?.[0] ?? 1
-    // (the style most of its glyphs are set in, as drawnAs reads it: only a typewriter face is the tokens')
+    // (the style most of its glyphs are set in (El.style), its own font state where it is drawn as the page's text: its
+    // typewriter face, weight, slant and small capitals, faked (El.style.sc, its text in TeX's case) or its face's own, over
+    // the run's (tokens.ts); none where the part states none, the run's then)
     const gst: TStyle | null = el?.style
-      ? { fam: el.style.role, bold: !!el.style.bold, italic: !!el.style.slant }
+      ? {
+          fam: el.style.role,
+          bold: !!el.style.bold,
+          italic: !!el.style.slant,
+          caps: el.style.sc !== undefined || (!!el.style.design && !!classifyFont(el.style.design).caps),
+          ...(el.style.sc !== undefined ? { sc: el.style.sc } : {}),
+        }
       : null
     const literal = !!el?.literal
-    const drawn0 = gap ? drawnAs(cls, gap, supSrc, copy, page, gst, literal) : null
+    const drawn0 = gap ? drawnAs(cls, gap, supSrc, copy, page, gst, literal, mark) : null
     // (a URL drawn as its one line's crop: where TeX's url package may break it, El.breaks, which the breaker reads)
     const drawn =
       drawn0?.mode === 'crop' && !drawn0.parts && el?.breaks?.length ? { ...drawn0, breaks: el.breaks } : drawn0
@@ -336,6 +367,7 @@ function readingsOf(
       ...(el?.unknown ? { unknown: true as const } : {}),
       fixed,
       inked: cls === 'space' && ink.length > 0,
+      ...(el?.tie ? { tie: true as const } : {}),
       symbol:
         cls === 'symbol'
           ? { leads: !!el?.leads, res: { mode: 'symbol', text: el?.sym?.[0] ?? '', math: true, sup: !!el?.sym?.[1] } }
@@ -355,6 +387,13 @@ function readingsOf(
   return { readings, cls2 }
 }
 
+/** whether a named label's parts hold its every glyph, the name first: from its ink's start to its end (its own 1/100 grid),
+ *  and none of its glyphs between them in no part (Label.unheld, the engine's count: a bracket before its name, a note it holds
+ *  whole, Codex on round 8's pull request). Only such a label is drawn anew from its parts */
+function partsHold(lb: NonNullable<Placed['label']>): boolean {
+  if (!lb.name || lb.unheld) return false
+  return lb.name[1][1] <= lb.ink[1] + 0.01 && (lb.punct ?? lb.num ?? lb.name)[1][3] >= lb.ink[3] - 0.01
+}
 /** the label as U.label reads it: its parts (Label.name, num, punct) each one glyph of its ink, in its style */
 function labelOf(m: Placed, designs: PaperReading['designs']): UnitLabel | undefined {
   const lb = m.label
@@ -368,7 +407,42 @@ function labelOf(m: Placed, designs: PaperReading['designs']): UnitLabel | undef
     size: lb.style.size,
     st,
   }))
-  return { x1: Math.max(...chars.map((c) => c.x1)), text: chars.map((c) => c.ch).join(' '), chars }
+  // (a caption's float type, where its part states one: its parts after its name, and whether they hold its every glyph, from
+  // its ink's start to its end, its own 1/100 grid)
+  const float =
+    lb.kind === 'float' && lb.float && lb.name
+      ? {
+          type: lb.float,
+          name: lb.name[0],
+          rest: chars.slice(1),
+          num: !!lb.num,
+          whole: partsHold(lb),
+        }
+      : undefined
+  return {
+    x1: Math.max(...chars.map((c) => c.x1)),
+    text: chars.map((c) => c.ch).join(' '),
+    chars,
+    ...(float ? { float } : {}),
+  }
+}
+
+/** a theorem-like head's parts as U.label names it from them: Label.name, num and punct, each one glyph of its ink in the
+ *  label's style, and whether they hold its every glyph; null where the part states no name (a part made before its parts
+ *  were stated, a label of no word) */
+function headOf(m: Placed, designs: PaperReading['designs']): HeadParts | null {
+  const lb = m.label
+  if (!lb?.name) return null
+  const st = { ...tstyleOf(lb.style, designs), ...(lb.style.fill ? { fill: lb.style.fill } : {}) }
+  const glyph = ([ch, ink]: [string, number[]]): Glyph => ({ ch, x0: ink[1]!, x1: ink[3]!, size: lb.style.size, st })
+  // (whether its parts hold its every glyph, the name first: from its ink's start to its end, its own 1/100 grid)
+  const whole = partsHold(lb)
+  return {
+    name: glyph(lb.name),
+    ...(lb.num ? { num: glyph(lb.num) } : {}),
+    ...(lb.punct ? { punct: glyph(lb.punct) } : {}),
+    whole,
+  }
 }
 
 /** what the tokens set before the translation (RUN:2196): a name's lead (ReadInput.lead, lay/lead.ts), else the label drawn anew,
@@ -399,6 +473,9 @@ export type ReadInput = {
   /** U.label's names: the target's float names, the reader's caption choice, translator's head names, the paper's own names;
    *  null where the reader draws no label anew */
   labels: Pick<LabelInput, 'words' | 'captions' | 'heads' | 'names'> | null
+  /** U.rename's names: the packages' reference names for the target (Rules.refs), read with `labels`' babel words and the
+   *  paper's own names; none renamed where `labels` is null (today's renameRefs ran where the reader draws labels anew) */
+  refs?: RefNames | null
   /** the reader draws the member's label anew (its label group can be turned off) */
   relabels: boolean
   /** a babel name's lead (lay/lead.ts ledBy: U.lead, the name the part binds to the member): set before the translation, its
@@ -410,9 +487,16 @@ export type ReadInput = {
 export type ReadOut = {
   tokens: Tokens
   labelDrawn: string | null
+  /** a label that stands on none of its member's lines (Label with no `line` and its own line's `align`: IEEEtran's "TABLE I"
+   *  above its caption): its relabel, which no line of the member leads with, laid as a row of its own (entry.ts labelRowOf),
+   *  its face the relabel's as a lead's (leadOf: the label's weight, slant and fill on the unit's base style); null where none */
+  labelRow: { text: string; st: TStyle } | null
   lead: boolean
   cjkSize: number | undefined
   referenced: ReadonlySet<number>
+  /** U.breaks' maps the blocks read (the kept lines in runs, a break's region or its frame's pitch on its next line, a
+   *  paragraph's first line), by the lines' rectangles' keys */
+  breaks: Pick<Breaks, 'regionOf' | 'breakAt' | 'joinAt' | 'paraAt'>
   /** T4: the first placeholder the file cannot draw (U.admit refuses the unit `unproven`), or -1 */
   unproven: number
   resolutions: Map<number, Res>
@@ -433,19 +517,15 @@ export function readMember(i: ReadInput): ReadOut {
   const held = L.filter((l) => l.kept && !displayLines.has(l.key)).map((l) => l.key)
   const el = elements({ pieces, cls2, readings, held, macros: new Map(), touched: [...displayLines], shown: i.shown })
   const res = el.resolutions
-  // U.breaks: the kept lines in runs, each kept resolution's region (no forced break nor paragraph: the adapter stops those)
+  // U.breaks: TeX's forced breaks and the paragraphs it opened, paired with the row in its order; the kept lines in runs, each
+  // kept resolution's region
   const kept = new Map<number, string[]>()
   for (const [k, r] of res) if (r.mode === 'kept' && r.gap) kept.set(k, [...r.gap.lines, ...(r.gap.held ?? [])])
-  const br = breaks({
-    lu: null,
+  const read = (m.read ?? []).includes('breaks')
+  // (a frame's pitch TeX's \baselineskip where the part states it, Placed.lead: no 'lead' read)
+  const pitch = (m.read ?? []).includes('lead') ? null : m.lead
+  const br = breakMaps(statedBreaks({ lines: m.lines, els, spans, read, pitch }, pieces, cls2), {
     pieces,
-    cls2,
-    kOf: null,
-    lineskip: null,
-    source: null,
-    pieceLines: null,
-    fileLines: { rects: [...i.rects], j: i.rects.map((_, j) => j) },
-    held,
     rects: [...i.rects],
     lineInfo: new Map(i.rects.map((r, j) => [rectKey(r), { j }])),
     keep: el.keep,
@@ -453,6 +533,10 @@ export function readMember(i: ReadInput): ReadOut {
     resolved: new Set(res.keys()),
   })
   for (const [k, x] of br.marks) Object.assign(res.get(k)!, x)
+  // U.rename: the names cleveref and \autoref generate in its references, and a citation's note's, in the target's (RUN:2026)
+  if (i.labels && i.refs)
+    for (const [k, x] of rename(res, i.refs, i.labels.words ?? null, i.labels.names ?? null))
+      (res.get(k) as Res & { rename?: typeof x }).rename = x
   // U.marks' facts: the original's first mark after a display the drawing breaks at, after a kept piece on a held line (El.after)
   for (const [k, r0] of res) {
     const r = r0 as Res & { region?: number; origAfter?: string | null }
@@ -469,7 +553,7 @@ export function readMember(i: ReadInput): ReadOut {
   // the label in the target where the reader draws it anew
   const lab = labelRule({
     label: labelOf(m, paper.designs),
-    head: (m.kind === 'theorem' || m.kind === 'heading') && m.label ? (labelOf(m, paper.designs)?.chars ?? null) : null,
+    head: m.kind === 'theorem' || m.kind === 'heading' ? headOf(m, paper.designs) : null,
     kind: m.kind,
     labels: !!i.labels,
     relabels: i.relabels,
@@ -479,6 +563,8 @@ export function readMember(i: ReadInput): ReadOut {
     heads: i.labels?.heads ?? null,
     names: i.labels?.names ?? null,
   })
+  // (a label on a line of its own: its relabel no lead of the member's first line, a row of its own)
+  const ownRow = !!m.label && m.label.line === undefined && m.label.align !== undefined && !!lab.label?.drawn
   // the unit's style: TeX's font state at its start as A's glyphs show it (Style), its size, its colour
   const st = tstyleOf(m.style, paper.designs)
   const given: TStyle = { ...st, ...(m.style.fill !== undefined ? { fill: m.style.fill } : {}) }
@@ -500,14 +586,18 @@ export function readMember(i: ReadInput): ReadOut {
   const made = tokensOf({
     unit: { kind: unit.kind, ...(unit.title ? { title: true } : {}), pieces },
     resolved,
-    // (a colour piece's run in the fill TeX set it in, El.colour or SpanAt.colour: today's tex.mjs colourOf over the log's)
+    // (a group's run in the fill TeX set it in, El.colour or SpanAt.colour: a colour piece's the log's, today's tex.mjs
+    // colourOf; any other group's, a link's that hyperref colours, its glyphs' on A, today's measuredStyle `pieces`; a figure
+    // text's group, its run in another style than the text's own, in its style's fill, as S.figures draws it (F0's line, which
+    // this path lays: 2610.19159v1's dark title before its red tag, PDF-READER §18.26))
     colourOf: (k) => {
       const p = pieces[k]
+      const span = p?.t === 'open' ? spans.get(String(p.k)) : undefined
       const c =
         p?.t === 'ph' || p?.t === 'nested'
           ? els.get(String(p.k))?.colour
           : p?.t === 'open'
-            ? spans.get(String(p.k))?.colour
+            ? (span?.colour ?? (m.kind === 'figure' ? span?.style?.fill : undefined))
             : undefined
       return c ?? null
     },
@@ -544,7 +634,9 @@ export function readMember(i: ReadInput): ReadOut {
     P: i.P,
     lead: i.lead
       ? { parts: i.lead.parts, ...(i.lead.gap !== undefined ? { gap: i.lead.gap } : {}) }
-      : leadOf(lab.label),
+      : ownRow
+        ? null
+        : leadOf(lab.label),
     faces,
     tagWords: true,
   })
@@ -557,9 +649,16 @@ export function readMember(i: ReadInput): ReadOut {
   return {
     tokens: toks,
     labelDrawn: i.lead ? i.lead.drawn : (lab.label?.drawn ?? null),
+    labelRow:
+      ownRow && !i.lead
+        ? // (its face the relabel's as a lead's is (leadOf over the unit's base, tokens.ts): the label's weight, slant and fill on
+          // the unit's base style)
+          { text: lab.label!.drawn!, st: { ...baseOf(unit, given), ...(leadOf(lab.label)?.parts[0]?.st ?? {}) } }
+        : null,
     lead: !!i.lead,
     cjkSize,
     referenced: br.referenced,
+    breaks: { regionOf: br.regionOf, breakAt: br.breakAt, joinAt: br.joinAt, paraAt: br.paraAt },
     unproven: el.unproven,
     resolutions: res,
   }

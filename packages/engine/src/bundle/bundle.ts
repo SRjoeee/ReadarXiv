@@ -5,7 +5,9 @@
 //
 // A part holds, as whole flows (§1.3): (a) every flow with a line on its page; (b) for each earlier page on which a member of
 // (a) has its first line, every flow with a line there; (c) every flow holding a member of a tie that also holds a member of
-// (a) or (b). Its rows are every `text` id of its members and the paper's names. Nothing else.
+// (a) or (b). Its rows are every `text` id of its members and the paper's names, and where a member's unit names a person of the
+// author block elsewhere (names.ts, docs/PDF-READER.md §19.15) its variant's and the block's units' that translate the names.
+// Nothing else.
 import {
   BOUNDS,
   chunkDigests,
@@ -13,6 +15,7 @@ import {
   type Head,
   ORIGINAL_CHUNK,
   type Part,
+  type Piece,
   type Placed,
   type PrepWhy,
   sha256Hex,
@@ -21,6 +24,8 @@ import {
 } from '@readarxiv/format'
 import type { Instrument, InstrumentUnit, PieceClass } from '../instrument.ts'
 import type { Located, Member } from '../locate/locate.ts'
+import { bySentence } from '../locate/words.ts'
+import { namesOf, partNames } from './names.ts'
 import type { AddOn } from '../wrap/wrap.ts'
 
 export type BundleObject =
@@ -44,6 +49,8 @@ export interface BundleInput {
   original: Uint8Array
   paper: { id: string; version: number; pages: number }
   made: string
+  /** what PDF.js recovered from while B and A were read (read.ts readPdf), stated in the head where any */
+  recovered?: Head['recovered']
 }
 
 /** each member's state in the bundle: why it stays the original's (PrepWhy), and the groups the add-on could not part */
@@ -56,10 +63,11 @@ export interface MemberState {
 
 export function stateOf(mem: Member, addOn: BundleInput['addOn']): MemberState {
   if (!mem.located) return { why: 'unlocated', drawn: false, fixed: 0 }
-  // (its ink stays whatever the translation: no group of it. A figure text so left (today's figure reading's crowded one,
-  // ink.ts) holds text a translation could be laid over, over ink that stays: unwrapped, the original's, #631's review. A kept
-  // block holds none)
-  if (mem.fixed) return mem.figure ? { why: 'unwrapped', drawn: false, fixed: 0 } : { drawn: false, fixed: 0 }
+  // (its ink stays whatever the translation: no group of it. A text so left that is no kept unit (a figure text the figure
+  // reading keeps, ink.ts; a cell held for its decorated word, §18.61) holds text a translation could be laid over, over ink
+  // that stays: unwrapped, the original's, #631's review, and no evidence for its table's group decision. A kept block holds
+  // none)
+  if (mem.fixed) return mem.kept ? { drawn: false, fixed: 0 } : { why: 'unwrapped', drawn: false, fixed: 0 }
   if ('refused' in addOn) return { why: 'page', drawn: false, fixed: 0 }
   // (an image of its own the wrap could not group: hiding its text would leave that image standing under a translation)
   for (const g of addOn.lost ?? []) if (g.startsWith(`${mem.ord}.`)) return { why: 'unwrapped', drawn: false, fixed: 0 }
@@ -76,14 +84,16 @@ export function stateOf(mem: Member, addOn: BundleInput['addOn']): MemberState {
   return { drawn: mem.pages.length > 0, fixed }
 }
 
-/** an element with what its source says of it (the instrument's PieceClass): its class as its kind, and the rest where set */
-export function classed(el: El, c: PieceClass | undefined): El {
+/** an element with what its source says of it (the instrument's PieceClass): its class as its kind, and the rest where set;
+ *  `asInk`, a symbol whose ink locate found not that symbol as its reading draws it (Member.asInk): a formula's, `other`, drawn
+ *  as its ink, no symbol's drawing (2610.10069v1 p20's `$\vs^*$`, read as "*" on the baseline, its bold s lost) */
+export function classed(el: El, c: PieceClass | undefined, asInk = false): El {
   if (!c) return el
-  const out: El = { ...el, kind: c.cls }
+  const out: El = { ...el, kind: asInk && c.cls === 'symbol' ? 'other' : c.cls }
   if (c.unknown) out.unknown = 1
   // (the source's copy text, but where locate states the page's: a URL's, its glyphs' text, which its break points count in)
   if (c.copy && out.copy === undefined) out.copy = c.copy
-  if (c.sym) out.sym = c.sym[1] ? [c.sym[0], 1] : [c.sym[0]]
+  if (c.sym && !asInk) out.sym = c.sym[1] ? [c.sym[0], 1] : [c.sym[0]]
   if (c.mark) out.mark = 1
   if (c.literal) out.literal = 1
   if (c.glue) out.glue = c.glue[2] ? [c.glue[0], c.glue[1], 1] : [c.glue[0], c.glue[1]]
@@ -94,10 +104,15 @@ export function classed(el: El, c: PieceClass | undefined): El {
   if (c.same !== undefined) out.same = c.same
   if (c.colour !== undefined) out.colour = c.colour
   if (c.nested) out.nested = 1
+  if (c.tie) out.tie = 1
   // (a text macro's text, where its own glyphs gave it none: the probe's, what TeX sets for it)
   if (c.text !== undefined && out.text === undefined && !out.ink.length) out.text = c.text
   return out
 }
+
+/** a unit's text as its source writes it: its text pieces, a group's opened, an element or a nested unit a space */
+const textOfPieces = (ps: readonly Piece[]): string =>
+  ps.map((q) => (q.t === 'text' ? q.s : q.t === 'span' ? textOfPieces(q.content) : ' ')).join('')
 
 /** a member as its parts hold it */
 function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState): Placed {
@@ -124,19 +139,58 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
     // (each element's class, copy text, a symbol's drawing and a footnote's mark as the instrument reads its source: the part
     // states them so that no rule of the typesetter reads a source)
     const cls = new Map(unit?.classes ?? [])
-    p.els = mem.elements.map(([id, el]) => [id, classed(el, cls.get(id))])
+    p.els = mem.elements.map(([id, el]) => [id, classed(el, cls.get(id), !!mem.asInk?.has(id))])
   }
-  // (each group's command and fill, as the instrument reads its source)
-  if (unit?.spans?.length) p.spans = unit.spans.map(([id, x]) => [id, { ...x }])
-  if (mem.labelAt) p.label = mem.labelAt
+  // (each group's command and fill, as the instrument reads its source; the paragraph TeX opened at it, as locate read it)
+  // (and a figure text's runs in another face, each group's style read off its glyphs on A)
+  // (and a group's fill where its source and TeX's log state none: the fill its text's glyphs hold on A, where it is not the
+  // fill around it, locate's fills.ts: a link's that hyperref colours; a colour piece's the log's)
+  // (and the face of a group whose command names none where the instrument states none: the face its own text's glyphs hold
+  // on A, where it is not the face around it; a group the instrument faced on B keeps that)
+  if (
+    unit?.spans?.length ||
+    mem.spanOpens?.size ||
+    mem.spanStyles?.length ||
+    mem.spanFills?.length ||
+    mem.spanFaces?.length
+  ) {
+    const spans = new Map(
+      (unit?.spans ?? []).map(([id, x]): [string, NonNullable<Placed['spans']>[number][1]] => [id, { ...x }]),
+    )
+    for (const [id, j] of mem.spanOpens ?? []) spans.set(id, { ...spans.get(id), opens: j })
+    for (const [id, style] of mem.spanStyles ?? []) spans.set(id, { ...spans.get(id), style })
+    for (const [id, colour] of mem.spanFills ?? [])
+      if (spans.get(id)?.colour === undefined) spans.set(id, { ...spans.get(id), colour })
+    for (const [id, style] of mem.spanFaces ?? [])
+      if (spans.get(id)?.style === undefined) spans.set(id, { ...spans.get(id), style })
+    p.spans = [...spans]
+  }
+  // (a caption's label: its float's type, by which its name is drawn in the target's word)
+  if (mem.labelAt)
+    p.label =
+      mem.labelAt.kind === 'float' && unit?.float && /^[a-z][a-z0-9]{0,31}$/.test(unit.float)
+        ? { ...mem.labelAt, float: unit.float }
+        : mem.labelAt
   if (st.fixed) p.fixed = st.fixed
   if (mem.dir) p.dir = mem.dir
   if (mem.run) p.run = mem.run
   if (mem.plain !== undefined) p.plain = mem.plain
+  // (a table cell: its place in TeX's grid and its own text as its source writes it, which a table's groups are decided by:
+  // the header, each column, the cells spanning the same columns; a column of names, its cells come back as they went)
+  if (unit?.cell) {
+    const c = unit.cell
+    p.cell = [c.row, c.col, c.span ?? 1, c.head ? 1 : 0]
+    if (mem.plain === undefined) p.plain = textOfPieces(unit.content)
+  }
   if (mem.tail?.length) p.tail = mem.tail
   if (mem.read.length) p.read = [...new Set(mem.read)]
+  if (mem.words) p.words = mem.words
   return p
 }
+
+/** whether a member has ink on page `p`: a line, an element's or its label's */
+const inkOn = (x: Placed, p: number) =>
+  x.lines.some((l) => l[0] === p) || !!x.els?.some(([, e]) => e.ink.some((k) => k[0] === p)) || x.label?.ink[0] === p
 
 /** Units windows: each distinct unit once, at its first occurrence, cut under the Units bound */
 function unitWindows(units: Unit[]): Unit[][] {
@@ -179,19 +233,42 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
       kind: u.kind,
       content: u.content,
       ...(u.depth !== undefined ? { depth: u.depth } : {}),
+      // (running text a translator cuts into sentences, the reader lighting each with its translation: words.ts bySentence)
+      ...(!u.kept && bySentence(u.kind, !!u.figure) ? { sentences: true as const } : {}),
       ...(u.kept ? { kept: true as const } : {}),
     })
   }
-  for (const [ord, b] of located.born) add({ id: members[ord]!.id, kind: b.kind, content: b.content })
+  for (const [ord, b] of located.born)
+    add({
+      id: members[ord]!.id,
+      kind: b.kind,
+      content: b.content,
+      ...(bySentence(b.kind) ? { sentences: true as const } : {}),
+    })
+  // (the block's names its units hold elsewhere, docs/PDF-READER.md §19.15: each unit's variant right after it, so that a
+  // translator is asked for both together)
+  const placed = members.map((m, i) => placedOf(m, all, states[i]!))
+  const classes = new Map(all.map((u) => [u.id, new Map(u.classes ?? [])]))
+  const names = namesOf(
+    units,
+    (u, p) => classes.get(u)?.get(p),
+    // (the members a part holds: one with no line on any page is drawn nowhere)
+    placed.flatMap((x) =>
+      typeof x.text === 'string' && x.lines.length ? [{ ord: x.ord, unit: x.text, kind: x.kind }] : [],
+    ),
+  )
+  const written = units.flatMap((u) => {
+    const v = names.variants.get(u.id)
+    return v ? [u, v] : [u]
+  })
   const unitDigests: string[] = []
-  for (const w of unitWindows(units)) {
+  for (const w of unitWindows(written)) {
     const { bytes, digest } = write('units', { format: 1, units: w })
     unitDigests.push(digest)
     yield { kind: 'units', bytes, digest, count: w.length }
   }
 
   // ---- parts
-  const placed = members.map((m, i) => placedOf(m, all, states[i]!))
   const flowOf = new Map<number, number>()
   located.flows.forEach((f, i) => {
     for (const o of f) flowOf.set(o, i)
@@ -204,7 +281,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   })
   const tieOrds = located.ties.map((t) => (t.rule === 'cells' ? t.cells.flat() : t.ords))
   const faces = facesOf(members)
-  const names: [string, string][] = ins.units
+  const babel: [string, string][] = ins.units
     .filter((u) => u.kind === 'name' && u.name === undefined)
     .map((u) => [textOf(u.content), u.id])
   const partDigests: (string | null)[] = []
@@ -251,15 +328,31 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
             for (const l of located.links.get(q) ?? []) if (l.owner?.[0] === o) across.push({ ...l, page: q })
       }
     const links = [...own, ...across]
+    const named = partNames(
+      names,
+      take.flatMap((i) =>
+        located.flows[i]!.flatMap((o) => (typeof placed[o]!.text === 'string' ? [placed[o]!.text] : [])),
+      ),
+    )
     const part: Part = {
       format: 1,
       page: p,
       paper: {
         faces,
         ...(ins.tex.lineskip ? { lineskip: ins.tex.lineskip } : {}),
-        ...(names.length ? { names } : {}),
+        ...(babel.length ? { names: babel } : {}),
+        ...(named ?? {}),
       },
-      flows: take.map((i) => located.flows[i]!.map((o) => placed[o]!)),
+      // (a member's words where it has ink on the page, a line, an element's or its label's: one carried for another page's sake,
+      // in a flow or a tie it shares, lights there, not here)
+      flows: take.map((i) =>
+        located.flows[i]!.map((o) => {
+          const x = placed[o]!
+          if (!x.words || inkOn(x, p)) return x
+          const { words: _, ...rest } = x
+          return rest
+        }),
+      ),
       ...(ties.length ? { ties } : {}),
       ...(links.length ? { links } : {}),
     }
@@ -295,6 +388,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     parts: partDigests,
     ...(refused.length ? { refused: refused.sort((x, y) => x[0] - y[0]) } : {}),
     ...(outline.length ? { outline } : {}),
+    ...(input.recovered?.length ? { recovered: input.recovered } : {}),
   }
   const { bytes, digest } = write('head', head)
   yield { kind: 'head', bytes, digest, head }

@@ -7,6 +7,8 @@ import {
   type SessionEvent,
   type SessionHost,
 } from '../../src/chrome/model.ts'
+import { R } from '@readarxiv/ui'
+import { plain } from '../../src/chrome/capsule-words.ts'
 import { PARTS } from '../../src/chrome/parts.tsx'
 import { capsuleOf, cardOf, lineOf, spokenOf } from '../../src/chrome/status.ts'
 import { DEFAULTS, type Prefs } from '../../src/prefs.ts'
@@ -77,14 +79,17 @@ describe("reduce: the layer's states (Task 12)", () => {
     ])
   })
 
-  it('laying: a translation done before a page of the layer is laid where the translation shows holds its end, the line on and the translation said, until one is; the original display waits on nothing', () => {
+  it("laying: a translation done before a page of the layer is laid where the translation shows holds its end, the line on and a load said (the page being laid, the coordinator's R2 of 2026-11-12), until one is; the original display waits on nothing", () => {
     const bilingual: SessionEvent = { type: 'display', mode: 'bilingual' }
     const start: SessionEvent = { type: 'translating', got: 0, total: 9, lost: 0 },
       end: SessionEvent = { type: 'translated', got: 9, total: 9, lost: 0, stopped: null }
     const done = fold([bilingual, opened, { type: 'coming' }, start, end])
     expect(done).toMatchObject({ phase: 'translating', progress: 1 })
     expect(lineOf(done).on).toBe(true)
-    expect(spokenOf(done)).toBe(spokenOf(fold([bilingual, opened, start])))
+    expect([spokenOf(fold([bilingual, opened, start])), spokenOf(done)]).toEqual([
+      R.status.translating,
+      R.status.loading,
+    ])
     expect(fold([laid(1)], done)).toMatchObject({ phase: 'ready', progress: 1 })
     // a page laid before the end: ready at once
     expect(fold([bilingual, opened, laid(1), start, end]).phase).toBe('ready')
@@ -136,25 +141,26 @@ describe("reduce: the layer's states (Task 12)", () => {
   })
 
   it("preparing: the original, the prepare's place and progress, then the layer as it comes", () => {
-    const p = fold([
-      opened,
-      { type: 'preparing', position: 3, progress: null },
-      { type: 'preparing', position: null, progress: 0.4 },
-    ])
-    expect(p).toMatchObject({ phase: 'preparing', preparing: { position: null, progress: 0.4 }, available: true })
+    const p = fold([opened, { type: 'preparing', progress: null }, { type: 'preparing', progress: 0.4 }])
+    expect(p).toMatchObject({ phase: 'preparing', preparing: { progress: 0.4 }, available: true })
     expect(fold([{ type: 'coming' }, { type: 'translating', got: 0, total: 9, lost: 0 }], p)).toMatchObject({
       phase: 'translating',
-      preparing: { position: null, progress: 0.4 },
+      preparing: { progress: 0.4 },
     })
     expect(fold([{ type: 'coming' }, { type: 'prepared' }], p)).toMatchObject({ phase: 'ready', preparing: null })
   })
+  it('a prepare told while the original loads is the phase once the original is on screen, the translation not begun', () => {
+    // (our server's first answer can come before the original is read: loading stays loading, then the prepare's phase)
+    const loading = fold([{ type: 'preparing', progress: 0.2 }])
+    expect(loading.phase).toBe('loading')
+    expect(fold([opened], loading)).toMatchObject({ phase: 'preparing', preparing: { progress: 0.2 } })
+    // (begun: the translation's phase is its run's, a prepare beside it)
+    const begun = fold([{ type: 'translating', got: 1, total: 9, lost: 0 }], loading)
+    expect(fold([opened], begun).phase).toBe('translating')
+  })
 
   it("the prepare is a state of its own, ended by the catalog: a poll once the translation has begun moves no phase, and nothing flips (the review's probe)", () => {
-    const prep = (position: number | null, progress: number): SessionEvent => ({
-      type: 'preparing',
-      position,
-      progress,
-    })
+    const prep = (_position: number | null, progress: number): SessionEvent => ({ type: 'preparing', progress })
     const seq: SessionEvent[] = [
       opened,
       prep(2, 0.1),
@@ -192,20 +198,20 @@ describe("reduce: the layer's states (Task 12)", () => {
     // said once each, never back: the status region does not flip between the two
     expect(spoken.filter((w, i) => w && w !== spoken[i - 1])).toHaveLength(2)
     // held beside the translation while it lasts, gone with the catalog
-    expect(fold(seq.slice(0, 5)).preparing).toEqual({ position: null, progress: 0.3 })
+    expect(fold(seq.slice(0, 5)).preparing).toEqual({ progress: 0.3 })
     expect(s.preparing).toBeNull()
     // the translation ended, a poll after it leaves the line off and the passages that failed told
     const after = fold(seq.slice(0, 8))
     expect(lineOf(after).on).toBe(false)
-    expect(capsuleOf(after, { noticeClosed: false, narrowShown: false, refusalsSeen: 0 }, PARTS.languages)?.kind).toBe(
+    expect(capsuleOf(after, { noticeClosed: 0, narrowShown: false, refusalsSeen: 0 }, PARTS.languages)?.kind).toBe(
       'notice',
     )
   })
 
   it('no source, no PDF, a prepare that cannot succeed: the translated displays greyed, the HTML version offered', () => {
-    for (const why of ['no-source', 'no-pdf', 'cannot-prepare', 'unknown-versions'] as const) {
+    for (const why of ['no-source', 'no-pdf', 'too-large', 'cannot-prepare', 'unknown-versions'] as const) {
       expect(
-        fold([opened, { type: 'preparing', position: 1, progress: 0 }, { type: 'unavailable', why, retryAt: null }]),
+        fold([opened, { type: 'preparing', progress: 0 }, { type: 'unavailable', why, retryAt: null }]),
         why,
       ).toMatchObject({
         available: false,
@@ -217,6 +223,39 @@ describe("reduce: the layer's states (Task 12)", () => {
     }
     expect(fold([{ type: 'html', url: 'https://arxiv.org/html/1706.03762#readarxiv' }])).toMatchObject({
       htmlVersion: 'https://arxiv.org/html/1706.03762#readarxiv',
+    })
+  })
+
+  it('no bilingual version, told while the original still loads: the load stays the state (its line by the share downloaded, said as loading) until the original is on screen, the word kept for then', () => {
+    // the run starts beside the original's download (session/host.ts), and our server's answer can come first
+    const early: SessionEvent[] = [
+      { type: 'unavailable', why: 'no-source', retryAt: null },
+      { type: 'unavailable', why: 'unreachable', retryAt: null },
+      { type: 'layer', state: 'refused', laid: 0, total: 4 },
+    ]
+    for (const event of early) {
+      const loading = fold([
+        { type: 'display', mode: 'bilingual' },
+        { type: 'loading', loaded: 300, total: 1000 },
+        event,
+      ])
+      expect(loading.phase, JSON.stringify(event)).toBe('loading')
+      expect(lineOf(loading).on).toBe(true)
+      expect(lineOf(loading).value).toBeCloseTo(0.3 * 0.15)
+      expect(spokenOf(loading)).toBe(spokenOf(INITIAL))
+      const shown = fold([opened], loading)
+      expect(shown.phase).toBe('ready')
+      expect(shown.unavailable).toEqual(loading.unavailable)
+    }
+  })
+
+  it("the extension's today session's `no-pdf` (the v1 layer API's word: no PDF of the paper to be had) is the paper's: the translated displays greyed, said as no bilingual PDF", () => {
+    // (the extension's default build tells this chrome its v1 session's events as they are, src/pdf-reader/host/today.ts)
+    const s = fold([opened, { type: 'unavailable', why: 'no-pdf', retryAt: null }])
+    expect(s).toMatchObject({ available: false, phase: 'ready', unavailable: { why: 'no-pdf', retryAt: null } })
+    expect(capsuleOf(s, { noticeClosed: 0, narrowShown: false, refusalsSeen: 0 }, PARTS.languages)).toEqual({
+      kind: 'unavailable',
+      words: plain(R.status.noPdf),
     })
   })
 
@@ -369,6 +408,17 @@ describe("reduce: the layer's states (Task 12)", () => {
     expect(fetchFailed).toMatchObject({ phase: 'ready', failure: null })
   })
 
+  it("a stop told `unknown` (the service's own abort, the run's toldKind) is the card and its retry over nothing laid, the notice and its retry over pages laid; `aborted`, the reader's own cancel, shows neither (UI.md §3.4)", () => {
+    const seen = { noticeClosed: 0, narrowShown: false, refusalsSeen: 0 }
+    const none = fold([opened, { type: 'translated', got: 0, total: 7, lost: 7, stopped: 'unknown' }])
+    expect(cardOf(none, PARTS.reason)).toEqual({ reason: PARTS.reason('unknown'), action: 'retry' })
+    const part = fold([opened, laid(2), { type: 'translated', got: 3, total: 7, lost: 4, stopped: 'unknown' }])
+    expect(cardOf(part, PARTS.reason)).toBeNull()
+    expect(capsuleOf(part, seen, PARTS.languages)).toMatchObject({ kind: 'notice', action: 'retry' })
+    const own = fold([opened, { type: 'translated', got: 0, total: 7, lost: 7, stopped: 'aborted' }])
+    expect(cardOf(own, PARTS.reason)).toBeNull()
+  })
+
   it("names a failure by the chain's error kinds alone, the popup's reasons (final review)", () => {
     expect(fold([{ type: 'fail', event: 'service', text: '', kind: 'auth' }]).failure).toBe('auth')
     expect(fold([{ type: 'fail', event: 'service', text: '', kind: 'unavailable' as never }]).failure).toBe('unknown')
@@ -483,7 +533,7 @@ describe('createController', () => {
   })
   it("a prepare told this visit marks the paper made (its run the making's)", () => {
     expect(INITIAL.made).toBe(false)
-    expect(reduce(INITIAL, { type: 'preparing', position: null, progress: null }).made).toBe(true)
+    expect(reduce(INITIAL, { type: 'preparing', progress: null }).made).toBe(true)
   })
   it("the original's download is arXiv's own PDF opened by the browser: no byte of it read through the reader", async () => {
     const session = fakeSession()
@@ -790,7 +840,7 @@ describe('reduce: the scale and the zoom chosen', () => {
 })
 
 describe("a host's toast (ReaderController.toast: the website's share menu's word, its word for a crash with something on screen)", () => {
-  const SEEN = { noticeClosed: false, narrowShown: false, refusalsSeen: 0 }
+  const SEEN = { noticeClosed: 0, narrowShown: false, refusalsSeen: 0 }
   const fakeSession = () => ({}) as Session
   it('stands for its time (TOAST_MS by default, or its own), in its words and sign; the same words said again start their time again', () => {
     vi.useFakeTimers()

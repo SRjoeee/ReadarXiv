@@ -5,7 +5,18 @@ import { Fault, type Result, type Signal } from '../../src/contract.ts'
 import { NEVER } from '../../src/testing/fakes.ts'
 import { fakeClock } from '../../src/testing/ports.ts'
 import { translatorSuite } from '../../src/testing/suite.ts'
-import { GOOGLE_REPLIES, UNITS } from './fixtures.ts'
+import {
+  DISPLAY_ENDS,
+  GOOGLE_REPLIES,
+  HEAD_STOP,
+  GLUED_PAST,
+  OWN_GLUED,
+  SOURCE_LINES,
+  GLUED_STOP,
+  SIDE_BY_SIDE,
+  STYLED_OBJECT,
+  UNITS,
+} from './fixtures.ts'
 
 /** a stand-in of the platform's Translator: available for the targets given, its sessions answering with `answer` */
 function api(
@@ -39,7 +50,17 @@ function api(
 translatorSuite('chrome', {
   make: () => chrome({ api: api() }),
   target: 'zh-Hans',
-  units: UNITS,
+  units: [
+    ...UNITS,
+    HEAD_STOP,
+    DISPLAY_ENDS,
+    SOURCE_LINES,
+    GLUED_PAST,
+    OWN_GLUED,
+    STYLED_OBJECT,
+    GLUED_STOP,
+    SIDE_BY_SIDE,
+  ],
   echo: () => ({ status: 200, body: '' }),
   replies: GOOGLE_REPLIES,
   faults: [],

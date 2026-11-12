@@ -9,6 +9,9 @@ import {
   groupName,
   groupOf,
   type Head,
+  kindOfWhy,
+  OpenAnswer,
+  PaperDoc,
   type Part,
   type Piece,
   read,
@@ -16,6 +19,7 @@ import {
   type Units,
   unitId,
   utf8,
+  type Why,
   write,
 } from '../src/index.ts'
 
@@ -100,6 +104,17 @@ describe('unitId', () => {
     const units: Units = { format: 1, units: [{ id: unitId('para', d), kind: 'para', content: d }] }
     expect(read('units', write('units', units).bytes).units[0]?.content[0]).toEqual(d[0])
     expect(unitId('para', d)).toBe(unitId('para', [{ t: 'el', id: '0', kind: 'display', src: '\\[ x = y. \\]' }]))
+  })
+  it('an element TeX sets after the unit’s text (`after`, the white space before it) is read by the schema and is not in the id', () => {
+    const d: Piece[] = [
+      { t: 'text', s: 'A. Author. A title. 2022.' },
+      { t: 'el', id: '1', kind: 'macro', src: '\\axtbackref', after: ' ' },
+    ]
+    const units: Units = { format: 1, units: [{ id: unitId('reference', d), kind: 'reference', content: d }] }
+    expect(read('units', write('units', units).bytes).units[0]?.content[1]).toEqual(d[1])
+    expect(unitId('reference', d)).toBe(
+      unitId('reference', [d[0] as Piece, { t: 'el', id: '1', kind: 'macro', src: '\\axtbackref' }]),
+    )
   })
   // (lane L2's tests of the walk, rebuild/source c26d4bf7a packages/engine/tests/source/id.test.ts: the flat list the id hashes,
   // hashed by FORMAT.md's rule through Node's own SHA-256)
@@ -269,5 +284,84 @@ describe('the rows object', () => {
     const { bytes } = write('rows', { format: 1, rows: [row] })
     expect(read('rows', bytes).rows).toHaveLength(1)
     expect(() => read('rows', utf8(JSON.stringify({ format: 1, rows: [row, row] })))).toThrow(/a unit id twice/)
+  })
+})
+
+describe('kindOfWhy: what a reader is told of a row that failed', () => {
+  it('reads every Why: a refusal an invalid response; out of reach the network, a rate limit where a wait is named; a translator not set up by its code; an abort as it is', () => {
+    const cases: [Why, string][] = [
+      [{ kind: 'refused' }, 'invalid-response'],
+      [{ kind: 'unavailable' }, 'network'],
+      [{ kind: 'unavailable', retryAfterMs: 0 }, 'network'],
+      [{ kind: 'unavailable', retryAfterMs: 5000 }, 'rate-limit'],
+      [{ kind: 'unconfigured', code: 'no-key' }, 'no-key'],
+      [{ kind: 'unconfigured', code: 'needs-gesture' }, 'no-key'],
+      [{ kind: 'unconfigured', code: 'key-refused' }, 'auth'],
+      [{ kind: 'unconfigured', code: 'no-model' }, 'bad-request'],
+      [{ kind: 'unconfigured', code: 'no-language' }, 'bad-request'],
+      // (a code of a later version's: the settings are where it is mended, as a missing key's)
+      [{ kind: 'unconfigured', code: 'another' }, 'no-key'],
+      [{ kind: 'aborted' }, 'aborted'],
+    ]
+    for (const [why, kind] of cases) expect([why, kindOfWhy(why)]).toEqual([why, kind])
+  })
+})
+
+describe('the documents our server gives a reader: a word that decides what the reader does is closed, one that refines what it is told is read openly (doc.ts)', () => {
+  const doc = (o: Record<string, unknown> = {}, prepare: Record<string, unknown> = {}) => ({
+    v: 1,
+    pv: '2600_00001v1',
+    epoch: 'e2e000',
+    rev: 1,
+    paper: '2600.00001',
+    version: 1,
+    prepare: {
+      attempt: 1,
+      state: 'failed',
+      why: 'internal',
+      retryAt: 9,
+      at: 0,
+      build: 'b',
+      stage: null,
+      units: [],
+      html: null,
+      ...prepare,
+    },
+    layer: null,
+    targets: {
+      xx: {
+        attempt: 1,
+        state: 'failed',
+        why: 'deadline',
+        retryAt: null,
+        at: 0,
+        translator: 't',
+        units: null,
+        rows: [],
+        done: 0,
+        total: 0,
+        view: 1,
+      },
+    },
+    ...o,
+  })
+  it('the known words read as they are', () => {
+    const d = PaperDoc.parse(doc())
+    expect([d.prepare.why, d.prepare.retryAt, d.targets.xx?.why]).toEqual(['internal', 9, 'deadline'])
+  })
+  it("an unknown why is none, the record's retry time kept: the generic failure", () => {
+    const d = PaperDoc.parse(doc({}, { why: 'a-word-of-a-later-server' }))
+    expect([d.prepare.state, d.prepare.why, d.prepare.retryAt]).toEqual(['failed', null, 9])
+  })
+  it('an unknown stage is no stage', () => {
+    expect(PaperDoc.parse(doc({}, { state: 'running', why: null, stage: 'a-later-stage' })).prepare.stage).toBeNull()
+  })
+  it("an unknown refusal's word is none", () => {
+    const refused = { why: 'a-later-refusal', retryAt: 5, retryAfterMs: 5, retryAfterS: 1 }
+    expect(OpenAnswer.parse({ doc: doc(), follow: null, refused }).refused?.why).toBeNull()
+  })
+  it('an unknown state, or another `v`, is no document: a change the reader would misread is a new `v`', () => {
+    expect(PaperDoc.safeParse(doc({}, { state: 'paused' })).success).toBe(false)
+    expect(PaperDoc.safeParse(doc({ v: 2 })).success).toBe(false)
   })
 })

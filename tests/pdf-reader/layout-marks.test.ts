@@ -3,10 +3,10 @@ import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
-import { patch } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { patch, startOf } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, colourPieceOf, DISPLAY, encodeLayoutMarks, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_SCHEMA, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, AHEAD_PROBE_MAX, FOLLOWERS, GLYPHS_PIECE, INK_ANY, INK_BUDGET, inkSamples, inkSection, leadSamples, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, colourPieceOf, DISPLAY, encodeLayoutMarks, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_SCHEMA, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, AHEAD_PROBE_MAX, FOLLOWERS, GLYPHS_PIECE, INK_ANY, INK_BUDGET, inkSamples, inkSection, leadSamples, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks, refKeysOf, refsTex } from '@/pdf-reader/engine/layout/marks.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
 import { GLYPHS_PAGE } from '@readarxiv/engine'
 import { markWords, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
@@ -70,6 +70,12 @@ describe('the classes', () => {
     for (const src of ['&', '#', '^', '_', '{', '}']) expect(classOf({ t: 'ph', src }), src).toBeNull()
     // an address kept as it is, ink of its own
     expect(classOf({ t: 'ph', src: 'jatin@us.ibm.com' })).toBe('macro')
+    // an identifier the front end keeps (latex-front.mjs keepIdentifiers): no command, TeX sets its characters as written, a code
+    // mark; an address with an underscore stays an address's
+    for (const src of ['llm\\_equal\\_human', '[sentence\\_1]', '\\{root\\_question\\}', 'CallbackBase.host\\_label(result)', 'run\\textunderscore id'])
+      expect(classOf({ t: 'ph', src }), src).toBe('code')
+    for (const src of ['first\\_last@x.org', '\\_', '\\code{a\\_b}', 'conv1'])
+      expect(classOf({ t: 'ph', src }), src).not.toBe('code')
     // a bibliography entry's number (latex-front.mjs keepNumbers): text of a digit and no letter, which reads nothing after it
     for (const src of ['1994.', '157--166,', '5(2):157--166', '(2017)', '10.1145/3786335.3813167']) expect(classOf({ t: 'ph', src }), src).toBe('number')
     for (const src of ['1994a', '\\natexlab{a}', '2$^{nd}$', '{2017}', '12~']) expect(classOf({ t: 'ph', src }), src).not.toBe('number')
@@ -251,13 +257,50 @@ describe('layoutMarking', () => {
     // aastex's deluxetable: rows the scanner does not read as cells, \\ between them, \enddata after the last
     const rows = unit('para', [text('Polarization '), ph('&'), text(' Right '), ph('\\\\'), text('\n'), ph('$\\theta$'), text(' (peak) '), ph('&'), text(' x '), ph('\\\\'), text('\n'), ph('\\cline{1-2}'), text(' Wave '), ph('\\cite{a}'), ph('\\\\'), text('\n'), ph('\\enddata')])
     const { units: marked } = layoutMarking([rows], MARK_CLASSES, { lines: false })
-    expect(srcs(marked[0])).toEqual(['text', 'ph &', 'text', 'ph \\\\', 'text', 'ph \\axtpmm{p0.5a}', 'ph $\\theta$', 'ph \\axtpm{p0.5b}', 'text', 'ph &', 'text', 'ph \\\\', 'text', 'ph \\cline{1-2}', 'text', 'ph \\axtpma{p0.13a}', 'ph \\cite{a}', 'ph \\axtpm{p0.13b}', 'ph \\\\', 'text', 'ph \\enddata'])
+    // (the piece passed over after the last row's `\\` has its opening point before the break, at the end of the row's last cell,
+    // where nothing of the row's start is: \enddata's; \cline, a kernel command of no class, none)
+    expect(srcs(marked[0])).toEqual(['text', 'ph &', 'text', 'ph \\\\', 'text', 'ph \\axtpmm{p0.5a}', 'ph $\\theta$', 'ph \\axtpm{p0.5b}', 'text', 'ph &', 'text', 'ph \\\\', 'text', 'ph \\cline{1-2}', 'text', 'ph \\axtpma{p0.13a}', 'ph \\cite{a}', 'ph \\axtpm{p0.13b}', 'ph \\axtpma{p0.16a}', 'ph \\\\', 'text', 'ph \\enddata'])
+  })
+  it('gives a placeholder after a forced break its opening point before the break, where nothing stands between the break and it', () => {
+    // (a placeholder the marking passes over after `\\` (passedOver: a table's row may begin there, read as prose) had no point
+    // at all: 2608.25210v2 u143's algorithm lines. Its opening point goes before the break, set as \axtpma sets one, so that the
+    // break's look-ahead, a row's first token, TeX's discarding at the new line's start and the vertical mode after a centred
+    // line's `\\` are the original's)
+    const after = unit('para', [text('Reference Format:'), ph('\\\\'), text('\n'), ph('\\names'), text(' and the title.')])
+    expect(srcs(layoutMarking([after], MARK_CLASSES, { lines: false }).units[0])).toEqual(['text', 'ph \\axtpma{p0.3a}', 'ph \\\\', 'text', 'ph \\names', 'text'])
+    // (a placeholder the marking gives its opening point after the break today, glued to the word after it, keeps it there)
+    const glued = unit('para', [text('Reference Format:'), ph('\\\\'), text('\n'), ph('\\vldbauthors'), text('. ')])
+    expect(srcs(layoutMarking([glued], MARK_CLASSES, { lines: false }).units[0])).toEqual(['text', 'ph \\\\', 'text', 'ph \\axtpma{p0.3a}', 'ph \\vldbauthors', 'text'])
+    // (a run of breaks: before its first)
+    const run = unit('para', [text('Line one'), ph('\\\\'), text('\n'), ph('\\\\[4pt]'), text('\n'), ph('\\foo'), text(' two')])
+    expect(srcs(layoutMarking([run], MARK_CLASSES, { lines: false }).units[0])).toEqual(['text', 'ph \\axtpma{p0.5a}', 'ph \\\\', 'text', 'ph \\\\[4pt]', 'text', 'ph \\foo', 'text'])
+    // (nothing before the break in the unit, its head: none, as today; nor after an alignment's tab, where it would stand before
+    // the tab)
+    const head = unit('para', [ph('\\\\'), text('\n'), ph('\\foo'), text(' two')])
+    // (\\axthpk's, the head's paper macro's point, as today)
+    expect(srcs(layoutMarking([head], MARK_CLASSES, { lines: false }).units[0])).toEqual(['ph \\\\', 'text', 'ph \\axthpk{p0.2a}', 'ph \\foo', 'text'])
+    const tab = unit('para', [text('a '), ph('&'), text(' '), ph('\\foo'), text(' b')])
+    expect(srcs(layoutMarking([tab], MARK_CLASSES, { lines: false }).units[0])).toEqual(['text', 'ph &', 'text', 'ph \\foo', 'text'])
   })
   it('after a cell\'s tab the same: tabularray\'s \\SetCell must open its cell', () => {
     // a tblr table read as one paragraph (2608.03994): \\SetCell[c=4]{c} after an opening mark spanned no columns
     const row = unit('para', [ph('\\textbf{Model}'), ph('&'), text(' '), ph('\\SetCell[c=4]{c}'), text(' Slopes '), ph('&'), text(' '), ph('$x$'), ph('\\\\')])
     const { units: marked } = layoutMarking([row], MARK_CLASSES, { lines: false })
     expect(srcs(marked[0])).toEqual(['ph \\textbf{Model}', 'ph &', 'text', 'ph \\SetCell[c=4]{c}', 'text', 'ph &', 'text', 'ph \\axtpmm{p0.7a}', 'ph $x$', 'ph \\axtpm{p0.7b}', 'ph \\\\'])
+  })
+  it('an identifier gets both marks, a code mark’s, whatever follows it: a forced break, another element (2608.25210v2 p3, 2610.22195v1)', () => {
+    // (as a paper's macro it had its opening mark alone, its end told by the text after it: a forced break or another element
+    // after it told none, its glyphs were read as the unit's text and the unit was left unlocated, "text past its source". It
+    // reads nothing after it; one that ends in a text symbol, `\}`, after which TeX skips no space, keeps its closing mark too)
+    const { units: marked } = layoutMarking([unit('para', [text('A\n'), ph('\\{root\\_question\\}'), ph('\\\\[4pt]'), text('\n'), ph('llm\\_equal\\_human'), text(': Are '), ph('[sentence\\_1]'), ph('$x$')])], MARK_CLASSES, { lines: false })
+    // (its opening mark \axthpk's: in vertical mode, where a box's paragraph opens with it (2608.25210v2 p3's \mypython box,
+    // \small\ttfamily then `llm\_equal\_human`), \axtpma waits for the next mark, its closing one, and the element was empty;
+    // \axthpk begins the paragraph before a character as TeX would, and sets its point there)
+    expect(srcs(marked[0])).toEqual(['text', 'ph \\axthpk{p0.1a}', 'ph \\{root\\_question\\}', 'ph \\axtpm{p0.1b}', 'ph \\\\[4pt]', 'text', 'ph \\axthpk{p0.4a}', 'ph llm\\_equal\\_human', 'ph \\axtpm{p0.4b}', 'text', 'ph \\axthpk{p0.6a}', 'ph [sentence\\_1]', 'ph \\axtpm{p0.6b}', 'ph \\axtpmm{p0.7a}', 'ph $x$', 'ph \\axtpm{p0.7b}'])
+  })
+  it('an identifier opening a unit is its first word: the unit\'s start mark before it, no head passed over past it', () => {
+    expect(startOf([ph('\\noindent'), ph('llm\\_equal\\_human'), text(': Are')] as never)).toEqual([1, -1])
+    expect(headEnd([ph('\\noindent'), ph('llm\\_equal\\_human'), text(': Are')] as never, 0)).toBe(1)
   })
   it('the closing mark is left out after a control word, whose spaces TeX skips', () => {
     const { units: marked } = layoutMarking([unit('para', [text('A '), ph('\\footnotemark'), text(' and '), ph('\\bert{}'), text(' B '), ph('\\foo{x}\\bar'), text(' C')])], MARK_CLASSES, { lines: false })
@@ -282,15 +325,41 @@ const SOURCES = {
   table: '\\documentclass{article}\n\\begin{document}\nA paragraph with a note\\footnote{The note\'s own text, with $y$.} and a citation \\cite{k} and Fig.~\\ref{t}.\n\n\\begin{table}\\centering\n\\begin{tabular}{lc}\n\\hline\nName & Value $x$ \\\\\n\\cline{1-2}\nFirst cell & \\texttt{code} \\\\\n\\end{tabular}\n\\caption{The table\'s caption.}\\label{t}\n\\end{table}\n\\end{document}\n',
   display: '\\documentclass{article}\n\\newcommand\\bert{BERT}\n\\begin{document}\n\\section{The $x$ model}\nWe set \\bert{} as\n\\[ a = b \\]\nfor every $n$, see \\eqref{e} and \\url{https://x.org}.\n\\begin{equation}\\label{e} c = d \\end{equation}\n\\end{document}\n',
 }
-/** originalFiles' main.tex at 3cb5a733 (the pin), SHA-256, recorded before the layout option was added */
+/** originalFiles' main.tex at 3cb5a733 (the pin), SHA-256, recorded before the layout option was added; with the line probes
+ *  (`lines`), LINES_TEX's as it states each paragraph's \parskip too (the borrowing ruling of 2026-11-08) */
 const PIN: Record<string, { plain: string; lines: string }> = {
-  plain: { plain: '0b6fe69122e06d17b3d9716a34dbaa1d87ac0596b0b70fee4dfbed6f5f696a2e', lines: 'aee572dd44df82135abf35dc3ca68ec21e03054cafbcd779481f3c7e0ca7a63a' },
-  table: { plain: '3d2f67c0fe4d6b2bd8adcea768bbb2b018b02d5b9650c73427612dc86ee2bdfe', lines: 'e452222e5da1e031c444ea7e740776946437ce3dc96657864cf9095d1a6ecc44' },
-  display: { plain: 'f521d7df749a560de860e34b2df4b428e48cb91d6e9e0e9d09ba9d25a2c1390d', lines: '1087c8399dd09aa4db2eb65c622b2c067e4e26803f52ebdf83a7393eef14e7df' },
+  plain: { plain: '0b6fe69122e06d17b3d9716a34dbaa1d87ac0596b0b70fee4dfbed6f5f696a2e', lines: '4e4fd26b8effb203ad1d83110e1a3b54da39bd8a346091ece3acf98ed15fa03a' },
+  table: { plain: '3d2f67c0fe4d6b2bd8adcea768bbb2b018b02d5b9650c73427612dc86ee2bdfe', lines: '9ed40c4269744cbeb22cdf89922b176f2c0412b0f11303d0f78356662bf4f686' },
+  display: { plain: 'f521d7df749a560de860e34b2df4b428e48cb91d6e9e0e9d09ba9d25a2c1390d', lines: '908d0b0776ae045c42080edb85ad94f779e9eb23e7c6f2304f99a85c877e6a68' },
 }
 const paperOf = (src: string) => openPaper(new Map([['main.tex', new TextEncoder().encode(src)]]))
 const sha = (b: Uint8Array) => createHash('sha256').update(b).digest('hex')
 const decode = (files: Map<string, Uint8Array>) => new TextDecoder().decode(files.get('main.tex'))
+
+describe("IEEEtran's proof name, \\IEEEproofname, wrapped as babel's \\proofname where the paper calls IEEEproof", () => {
+  // (2610.21504v1 p4: IEEEtran's \IEEEproof sets "Proof:" through \IEEEproofname, the class's own name for a proof, which the
+  // names' wrapper did not know (NAME_MACROS: babel's \proofname): the name was read as the paragraph's number label and stayed
+  // English on both panes, where ieeecolor's `\def\proof{… Proof: }` is a literal the wrapper knows, drawn in the target)
+  const enc = (s: string) => new TextEncoder().encode(s), dec = (b: Uint8Array | undefined) => new TextDecoder('latin1').decode(b)
+  const paper = (body: string) => openPaper(new Map([['main.tex', enc(`\\documentclass[conference]{IEEEtran}\n\\begin{document}\n${body}\n\\end{document}\n`)]]))
+  const WRAP = '\\axt@nmwrap{proof}{IEEEproofname}'
+  it('wraps it in the layout compile and the probe of a paper that calls IEEEproof, on the head\'s own line', () => {
+    const p = paper('Words before.\n\\begin{IEEEproof}\nSince the costs are positive, it holds.\n\\end{IEEEproof}')
+    const main = dec(originalFiles(p, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(main).toContain(WRAP)
+    // (no line of the paper moves: the wrap stands on LAYOUT_TEX's line, as NAMES_OFF does)
+    const plain = dec(originalFiles(p, { lines: true, layout: LAYOUT_CLASSES, names: false }).get('main.tex'))
+    expect(plain).not.toContain(WRAP)
+    expect(main.split('\n').length).toBe(plain.split('\n').length)
+    expect(dec(probeFiles(p, { marks: true }).get('main.tex'))).toContain(WRAP)
+  })
+  it("leaves a paper that does not call it as before: one that only names it in a comment, or none", () => {
+    for (const body of ['Words.', 'Words.\n% \\begin{IEEEproof} kept for later\nMore words.']) {
+      expect(dec(originalFiles(paper(body), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))).not.toContain(WRAP)
+      expect(dec(probeFiles(paper(body), { marks: true }).get('main.tex'))).not.toContain(WRAP)
+    }
+  })
+})
 
 describe('originalFiles with the layout marks', () => {
   it('originalFiles without layout is the pin\'s bytes', () => {
@@ -309,7 +378,9 @@ describe('originalFiles with the layout marks', () => {
       for (const lines of [false, true]) {
         const marked = decode(originalFiles(paperOf(src), { lines, layout: MARK_CLASSES }))
         expect(marked.indexOf(LAYOUT_TEX), name).toBeGreaterThan(0)
-        const out = marked.replace(LAYOUT_TEX, '').replace(/\\axtpm[am]\{[^}]*\}|\\axtpm\{[^}]*\}|\\axthmark\{[^}]*\}|\\leavevmode\\axtmark\{t\d+s\}|\\axtend\{t\d+e\}/g, '')
+        // (and what the layout compile asks TeX about the paper's references at its end, on the same line: refsTex)
+        const refs = refsTex(refKeysOf(paperOf(src).units))
+        const out = marked.replace(LAYOUT_TEX, '').replace(refs, '').replace(/\\axtpm[am]\{[^}]*\}|\\axtpm\{[^}]*\}|\\axthmark\{[^}]*\}|\\leavevmode\\axtmark\{t\d+s\}|\\axtend\{t\d+e\}/g, '')
         // (the layout compile's line probe past the spaces a \\begin skips, `pastBegin`, which the live path's original leaves as
         // it was: the pin)
         expect(out, name).toBe(decode(originalFiles(paperOf(src), { lines, pastBegin: true })))
@@ -317,7 +388,7 @@ describe('originalFiles with the layout marks', () => {
     }
     // not vacuously: the sources hold every kind of mark
     const all = Object.values(SOURCES).map(src => decode(originalFiles(paperOf(src), { lines: true, layout: MARK_CLASSES }))).join('\n')
-    for (const m of ['\\axtpma{p', '\\axtpmm{p', '\\axtpm{p', '\\axtpma{n', '\\axthmark{h', '\\leavevmode\\axtmark{t', '\\axtend{t']) expect(all).toContain(m)
+    for (const m of ['\\axtpma{p', '\\axtpmm{p', '\\axtpm{p', '\\axtpma{n', '\\axthmark{h', '\\leavevmode\\axtmark{t', '\\axtend{t', '\\def\\axt@rfall{']) expect(all).toContain(m)
     expect(all).not.toContain('\\axtpm{n')
   })
   it('puts LAYOUT_TEX after MARK_DEF, on the line the TeX after it begins: the paper\'s lines keep their numbers', () => {
@@ -544,6 +615,19 @@ describe('what a paper\'s macro sets: TeX asked (the ink section), and LaTeX\'s 
     const samples = ['\\CompletionTokenCap{}', '\\texttt{max\\_tokens}', '\\dprime{}', '\\cap{}', '\\texttt{m\\_t}', '\\dot', '\\checkmark', '\\figref{a}', '\\cmark', '\\open']
     expect(readInkTexts(log, samples)).toEqual([['\\CompletionTokenCap{}', '1,024'], ['\\texttt{max\\_tokens}', 'max_tokens'], ['\\dprime{}', `d${INK_ANY}`], ['\\cap{}', `1${INK_ANY}024`]])
   })
+  it("readInkTexts: XeTeX's listing, a word of a font of its own one node, is the word's characters (2611.03178v1's \\system{})", () => {
+    // TeX Live 2025's XeTeX listings: \\newcommand{\\system}{\\textsc{CoworkOS}} in XCharter's small capitals through fontspec,
+    // one native word and the kerns after it; a word of two faces, two nodes; a word with a character of no text encoding's ASCII
+    // (XeTeX prints it as it is), and one of a math face, no answer
+    const listing = (i: number, ...nodes: string[]) => [`LAYOUT-PROBE 1 ink-at ${i}`, '> \\box104=', '\\hbox(7.224+0.16798)x52.164', ...nodes, '', '! OK.', `LAYOUT-PROBE 1 ink-end ${i}`]
+    const log = [
+      ...listing(0, '.\\TU/XCharter(0)/m/sc/10.5 CoworkOS', '.\\kern 0.0', '.\\kern -0.0002', '.\\kern 0.0002'),
+      ...listing(1, '.\\TU/lmr/b/n/10 GPT', '.\\TU/lmr/m/n/10 -4o', '.\\glue 3.33 plus 1.66 minus 1.11', '.\\TU/lmr/m/n/10 mini'),
+      ...listing(2, '.\\TU/lmr/m/n/10 Ab', '.\\TU/lmr/m/n/10 café'),
+      ...listing(3, '.\\mathon', '.\\TU/latinmodern-math.otf(1)/m/n/10 ab', '.\\mathoff'),
+    ].join('\n')
+    expect(readInkTexts(log, ['\\system{}', '\\gpt', '\\cafe', '\\ab'])).toEqual([['\\system{}', 'CoworkOS'], ['\\gpt', 'GPT-4omini']])
+  })
   it('leadSamples: the placeholders at a unit\'s head the ink section does not ask about — inline code, a macro past INK_BUDGET —, asked last', () => {
     const paper = paperIn('\\begin{tabular}{ll}\nCap parameter & \\texttt{max\\_tokens} on Chat routes \\\\\nBudget & \\EpisodeTokenBudget{} tokens \\\\\n\\end{tabular}\n\nWe set \\texttt{inline} in prose.', '\\newcommand{\\EpisodeTokenBudget}{128{,}000}')
     const ink = inkSamples(paper.units), leads = leadSamples(paper.units, ink)
@@ -609,11 +693,17 @@ describe('LAYOUT_TEX', () => {
     // MARK_DEF's own mark gated too
     expect(LAYOUT_TEX).toMatch(/\\protected\\def\\axtmark#1\{[^}]*\\ifaxt@off/)
     for (const word of ['\\typeout', '\\wlog', '\\newcount', '\\newdimen', '\\newskip']) expect(LAYOUT_TEX).not.toContain(word)
-    // three messages alone, a unit's alignment once its paragraph ended or at its end mark (AXT-ALIGN, layout-align.test.ts) and a colour piece's fill
-    // (AXT-COLOUR, readColours): each a line of its own, which no reader of the log but theirs reads, and nothing typeset
-    // changes
-    expect(LAYOUT_TEX.match(/\\message/g)).toHaveLength(3)
-    expect(LAYOUT_TEX.match(/AXT-[A-Z]+/g)).toEqual(['AXT-ALIGN', 'AXT-ALIGN', 'AXT-COLOUR'])
+    // five messages alone, a unit's alignment once its paragraph ended or at its end mark (AXT-ALIGN, layout-align.test.ts), a
+    // cell's column class at its template's end (AXT-CELL, the engine's readAlign), for a cell's own unit and for each unit on the
+    // cell's line, and a colour piece's fill (AXT-COLOUR, readColours), and one write to the log at the shipout, each bracketed
+    // body's frame (AXT-BODY, readBodies): each a line of its own, which no reader of the log but theirs reads, and nothing
+    // typeset changes
+    expect(LAYOUT_TEX.match(/\\message/g)).toHaveLength(5)
+    // (and two to the aux at once, what the displays POINTS_TEX states were, read back by the next pass)
+    expect(LAYOUT_TEX.match(/\\write/g)).toHaveLength(3)
+    expect(LAYOUT_TEX.match(/\\immediate\\write\\@auxout/g)).toHaveLength(2)
+    expect(LAYOUT_TEX).toContain('\\write-1{AXT-BODY ')
+    expect(LAYOUT_TEX.match(/AXT-[A-Z]+/g)).toEqual(['AXT-ALIGN', 'AXT-ALIGN', 'AXT-CELL', 'AXT-CELL', 'AXT-COLOUR', 'AXT-BODY'])
     // one line, no comment: the paper's lines keep their numbers in the log
     expect(LAYOUT_TEX).not.toContain('\n')
     expect(LAYOUT_TEX).not.toContain('%')
@@ -674,6 +764,18 @@ describe('LAYOUT_TEX', () => {
     for (const arg of args) expect(MARK_NAME.test(arg), arg).toBe(true)
     for (const key of NAME_KEYS) expect(key, key).toMatch(/^[a-z]{1,16}$/)
   })
+  it('LAYOUT_TEX sets a point where TeX begins a front matter environment, the author block\'s end (2610.20967v1)', () => {
+    // (`fm<n>`: armed at the environment's before hook from \begin{document} on, set at the start of the next paragraph TeX
+    // begins, never a node of the main vertical list, from which TeX takes nothing back and whose \lastskip \addvspace reads
+    // (1706.03762v7: "You can't use \unpenalty in vertical mode"); disarmed where \maketitle runs first: an abstract a class keeps
+    // for its title block)
+    for (const env of ['abstract', 'keywords', 'IEEEkeywords'])
+      expect(POINTS_TEX).toContain(`\\AddToHook{env/${env}/before}{\\axt@fmarm}`)
+    expect(POINTS_TEX).toContain('\\def\\axt@fmarm{\\ifhmode\\axt@fmpt\\else\\global\\axt@fmwaittrue\\fi}')
+    expect(POINTS_TEX).toContain('\\AddToHook{cmd/maketitle/before}{\\global\\axt@fmwaitfalse}')
+    expect(POINTS_TEX).toContain('\\AddToHook{para/begin}{\\ifaxt@fmwait\\global\\axt@fmwaitfalse\\axt@fmpt\\fi}')
+    expect(POINTS_TEX).not.toContain('\\axt@point{fm\\axt@fm}\\axt@vback')
+  })
   it('LAYOUT_TEX sets a point beside each destination, around each column\'s body and around each float\'s box', () => {
     // a rendering intent named after the destination, in each engine's literal; none in DVI
     expect(POINTS_TEX).toContain('\\ifdefined\\XeTeXrevision\\def\\axt@point#1{\\special{pdf:code /axt-#1 ri}}')
@@ -685,20 +787,140 @@ describe('LAYOUT_TEX', () => {
     // and \vsplit (balance.sty's last page) then takes an empty column (2608.06007); the closing one after the body's last
     // box, its glue, kerns and penalties taken off and put back after it, each where TeX had it: LaTeX's
     // \@outputbox@removebskip reads the body's \lastskip (2608.24503), and no place to break is made or lost
-    expect(POINTS_TEX).toContain('\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\global\\axt@bodiedtrue\\fi}')
+    expect(POINTS_TEX).toContain('\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\axt@body{\\if@twocolumn\\if@firstcolumn1\\else2\\fi\\else0\\fi}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\global\\axt@bodiedtrue\\fi}')
     // a page shipped with no column's body bracketed (a class whose output routine makes its columns without \@makecol:
     // revtex4-2's ltxgrid): its text block, \@outputbox at \@outputpage, bracketed as the body is, a vertical box or a
     // horizontal one (two columns side by side); the flag cleared at each page
-    expect(POINTS_TEX).toContain('\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}')
+    expect(POINTS_TEX).toContain('\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}')
+    // and beside each body's opening point, before its \penalty10000, the body's statement (AXT-BODY: which column it is, its
+    // \columnwidth and \textwidth, where TeX shipped its box's left edge): a saved position and a \write delayed to the
+    // shipout, to the log alone, in every engine's primitives (zref-savepos's), none where an engine has none
+    expect(POINTS_TEX).toContain('\\ifdefined\\pdflastxpos\\def\\axt@savepos{\\pdfsavepos}\\def\\axt@lastx{\\the\\pdflastxpos}\\else\\ifdefined\\lastxpos\\def\\axt@savepos{\\savepos}\\def\\axt@lastx{\\the\\lastxpos}\\else\\let\\axt@savepos\\relax\\let\\axt@lastx\\@empty\\fi\\fi')
+    // (and the depth of the text block's bottom under the page's top edge, as LaTeX's \@outputpage ships it: TeX's text block
+    // bottom, the borrowing ruling's foot, 2026-11-08; a dimension, the same in every engine)
+    expect(POINTS_TEX).toContain('\\def\\axt@body#1{\\axt@savepos\\edef\\axt@bw{\\noexpand\\write-1{AXT-BODY \\axt@bn\\space#1 \\the\\columnwidth\\space\\the\\textwidth\\space\\noexpand\\axt@lastx\\space\\the\\dimexpr1in+\\voffset+\\topmargin+\\headheight+\\headsep+\\textheight\\relax}}\\axt@bw}')
+    expect(POINTS_TEX.indexOf('\\def\\axt@body#1')).toBeLessThan(POINTS_TEX.indexOf('cmd/@makecol/before'))
     expect(POINTS_TEX).toContain('\\def\\axt@vtake{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@vtg\\or\\expandafter\\axt@vtk\\or\\expandafter\\axt@vtp\\fi}')
     // a float's points around its finished box (\@endfloatbox closes it): at its start a point would give its first
     // paragraph a \parskip (2608.01890's figures)
-    expect(POINTS_TEX).toContain('\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}')
+    expect(POINTS_TEX).toContain('\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\axt@fnpt\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}')
+    // (and beside its opening point, inside its box, `fn<n>` where its type has no counter: no \caption can number it, so it is
+    // no figure, table or algorithm — NeurIPS's noticebox; \@captype is the float's own there)
+    expect(POINTS_TEX).toContain('\\def\\axt@fnpt{\\ifdefined\\@captype\\ifcsname c@\\@captype\\endcsname\\else\\axt@point{fn\\axt@bn}\\fi\\fi}')
     expect(POINTS_TEX).not.toContain('@floatboxreset')
     // after the destination's own definition, inside LAYOUT_TEX; its count a macro, no register; one line
     expect(LAYOUT_TEX.indexOf(POINTS_TEX)).toBeGreaterThan(LAYOUT_TEX.indexOf('\\def\\axt@dest#1'))
     expect(LAYOUT_TEX.endsWith(`${POINTS_TEX}\\makeatother`)).toBe(true)
     for (const word of ['\\newcount', '\\newbox', '\\newdimen', '\\typeout', '\n', '%']) expect(POINTS_TEX).not.toContain(word)
+  })
+
+  it('LAYOUT_TEX sets a point before a caption\'s label where TeX sets it: each caption maker hands its original the label with it', () => {
+    // (the label is \fnum@<type>, an argument of every caption maker: LaTeX's and every class's \@makecaption #1, longtable's
+    // \LT@makecaption #2, float.sty's styles #1, algorithm2e's \algocf@captiontext #1. Each, once the document begins, passes the
+    // original its label with `\axt@kf` before it: nothing assigned or expanded before the original runs, the label's own tokens
+    // and parameters as they were)
+    const at = POINTS_TEX.indexOf('\\AddToHook{begindocument/end}{\\ifdefined\\@makecaption')
+    expect(at).toBeGreaterThan(0)
+    const hook = POINTS_TEX.slice(at)
+    expect(POINTS_TEX).toContain('\\long\\def\\axt@kmcw#1#2{\\axt@kmc{\\axt@kf#1}{#2}}')
+    expect(hook).toContain('\\ifdefined\\@makecaption\\let\\axt@kmc\\@makecaption\\let\\@makecaption\\axt@kmcw\\fi')
+    expect(hook).toContain('\\let\\axt@klt\\LT@makecaption\\long\\def\\LT@makecaption#1#2#3{\\axt@klt#1{\\axt@kf#2}{#3}}')
+    expect(hook).toContain('\\let\\axt@kfp\\floatc@plain\\long\\def\\floatc@plain#1#2{\\axt@kfp{\\axt@kf#1}{#2}}')
+    expect(hook).toContain('\\let\\axt@kfr\\floatc@ruled\\long\\def\\floatc@ruled#1#2{\\axt@kfr{\\axt@kf#1}{#2}}')
+    expect(hook).toContain('\\let\\axt@kac\\algocf@captiontext\\long\\def\\algocf@captiontext#1#2{\\axt@kac{\\axt@kf#1}{#2}}')
+    expect(hook).toContain('\\let\\axt@kcc\\caption@@make\\long\\def\\caption@@make#1#2{\\axt@kcc{\\axt@kf#1}{#2}}')
+    // (a class that sets its caption maker inside its float's environment, after the document began: Elsevier's cas-common sets
+    // \@makecaption to its figure's or its table's own at the environment's start, 2610.21084v1's 21 captions. Each float, as
+    // it begins (\@xfloat, every float's and every class's way in, its arguments passed on untouched), hands that maker its label
+    // the same way, in the float's own group: an assignment, no node, nothing where the maker is already a wrapper)
+    expect(POINTS_TEX).toContain('\\long\\def\\axt@kmfw#1#2{\\axt@kmf{\\axt@kf#1}{#2}}')
+    expect(POINTS_TEX).toContain('\\def\\axt@kmfr{\\ifdefined\\@makecaption\\ifx\\@makecaption\\axt@kmcw\\else\\ifx\\@makecaption\\axt@kmfw\\else\\let\\axt@kmf\\@makecaption\\let\\@makecaption\\axt@kmfw\\fi\\fi\\fi}')
+    expect(hook).toContain('\\ifdefined\\@xfloat\\let\\axt@kxf\\@xfloat\\def\\@xfloat{\\axt@kmfr\\axt@kxf}\\fi')
+    expect(POINTS_TEX.slice(POINTS_TEX.indexOf('\\def\\axt@kmfr'))).not.toMatch(/^[^}]*axt@point/)
+    // (typeset only: nothing in a moving argument or a file; never while the gate is off; in vertical mode, at the paragraph
+    // the label begins, once)
+    expect(POINTS_TEX).toContain('\\def\\axt@kf{\\ifx\\protect\\@typeset@protect\\axt@ka\\fi}')
+    expect(POINTS_TEX).toContain('\\protected\\def\\axt@ka{\\ifaxt@off\\else\\ifhmode\\axt@kpt\\else\\ifvmode\\ifdefined\\AddToHookNext\\ifaxt@kwait\\else\\global\\axt@kwaittrue\\AddToHookNext{para/begin}{\\axt@klate}\\fi\\fi\\fi\\fi\\fi}')
+    expect(POINTS_TEX).toContain('\\def\\axt@kpt{\\xdef\\axt@kn{\\the\\numexpr\\axt@kn+1\\relax}\\axt@point{ka\\axt@kn}}')
+  })
+})
+
+describe('the displays (POINTS_TEX): every display TeX sets stated, wherever it stands', () => {
+  // (2608.08481v1 p7: displays (7) and (8) in REVTeX's widetext, no source unit's, were cut into ink units and their text-face parts
+  // translated. TeX enters display math for each, an equation's, an align's, \\[ \\]'s or $$'s alike: the start is set from
+  // there, by TeX's own state, never by an environment's name; the end where the source ends the display, $$ aside)
+  it('opens each display with a point at its math list’s start and closes it inside its formula, at its environment’s end or \\]', () => {
+    expect(POINTS_TEX).toContain('\\fi\\gdef\\axt@dpcl{}\\xdef\\axt@dpn{\\the\\numexpr\\axt@dpn+1}')
+    expect(POINTS_TEX).toContain('\\xdef\\axt@dpcl{\\axt@dpn}\\xdef\\axt@dpce{\\@currenvir}\\axt@dpend')
+    // (no node after its box: whatever TeX sets there is in the page's list, where a column's \lastbox reads it. REVTeX's
+    // balance takes each column's last box to leave its depth out, revtex4.cls's \setbox\z@\lastbox: a point after a display
+    // at a column's foot moved the columns above 2608.08481v1 p7's widetext by up to 2.55 pt. Its end is set in the formula's
+    // own list, the last thing before its number, by its environment's end, which TeX reads while the display is open: a hook
+    // on the environment it began in, added the first time a display begins there, and \]. A display with neither, `$$ $$`,
+    // gets no end, and no region)
+    expect(POINTS_TEX).not.toContain('\\vadjust')
+    expect(POINTS_TEX).toContain('\\def\\axt@dpend{\\ifcsname axt@dph@\\@currenvir\\endcsname\\else\\expandafter\\global\\expandafter\\let\\csname axt@dph@\\@currenvir\\endcsname\\@empty\\ifdefined\\AddToHook\\edef\\axt@dpx{\\noexpand\\AddToHook{env/\\@currenvir/end}}\\axt@dpx{\\axt@dpclose}\\fi\\fi}')
+    // (in math, inner too: amsmath's split in an equation sets the rest of the equation in a cell its end closes; and only in the
+    // environment the display began in)
+    expect(POINTS_TEX).toContain('\\def\\axt@dpclose{\\ifx\\axt@dpcl\\@empty\\else\\ifmmode\\edef\\axt@dpz{\\@currenvir}\\ifx\\axt@dpz\\axt@dpce\\axt@point{dpe\\axt@dpcl}\\gdef\\axt@dpcl{}\\fi\\fi\\fi}')
+    expect(POINTS_TEX).toContain('\\let\\axt@@rbrack\\]\\protected\\def\\]{\\axt@dpclose\\axt@@rbrack}')
+    // (appended to \everydisplay once the document began, after every package's own)
+    expect(POINTS_TEX).toContain('\\everydisplay\\expandafter{\\the\\everydisplay\\axt@dpopen}')
+    expect(POINTS_TEX).toContain('\\AddToHook{begindocument/end}{\\axt@dpgo}')
+  })
+  it('sets no node in a display TeX sets as an alignment, which must open with its \\halign: points between its rows instead', () => {
+    // (TeX refuses an \\halign in a display whose list holds anything, "Improper \\halign inside $$'s": a display's kind is known
+    // from the pass before, by its number, its environment and its line (the aux), and none is set where it is not known)
+    expect(POINTS_TEX).toContain('\\protected\\def\\halign{\\ifmmode\\ifinner\\else\\axt@dphal\\fi\\fi')
+    expect(POINTS_TEX).toContain('\\immediate\\write\\@auxout{\\string\\axt@dpaligned{\\axt@dpn}}')
+    expect(POINTS_TEX).toContain('\\immediate\\write\\@auxout{\\string\\axt@dpseen{\\axt@dpn}{\\axt@dpk}}')
+    expect(POINTS_TEX).toContain('\\ifcsname axt@dpa@\\axt@dpn\\endcsname\\else\\ifcsname axt@dps@\\axt@dpn\\endcsname')
+    // (each of its rows closed after its \\cr, by \\everycr's \\noalign, its first point after the preamble's; nothing before
+    // the \\noalign that TeX would read as a row's start)
+    expect(POINTS_TEX).toContain('\\def\\axt@dpcr{\\ifnum\\axt@dplv<\\z@\\noalign{\\xdef\\axt@dplv{\\the\\numexpr\\currentgrouplevel-1}\\axt@dpat{dps\\axt@dpm}}\\else\\ifnum\\currentgrouplevel=\\numexpr\\axt@dplv\\relax\\noalign{\\axt@dpat{dpe\\axt@dpm}}\\fi\\fi}')
+    // (a point between rows is in the page's list, and makes the glue after it a place to break: amsmath's rows end with a
+    // \\noalign of \\interdisplaylinepenalty, 10000, and the glue under it follows a penalty; a point after that penalty let TeX
+    // break 2010.11929v2's align over pages 3 and 4. So each point is set by what ends the list: after a penalty, a glue or
+    // nothing, the point and a \\penalty10000, so the glue after it still follows a penalty; after a row's box, the point and the
+    // row's depth given back under it, a kern of minus the depth and an empty box that deep, so that a column ending there ends
+    // with a box of the row's depth, as \\lastbox reads it; after a kern, none, which a glue after makes a place to break; after
+    // anything else (a whatsit, a mark), the point alone)
+    expect(POINTS_TEX).toContain('\\def\\axt@dpat#1{\\edef\\axt@dpt{\\ifcase\\numexpr\\lastnodetype+1\\relax p\\or w\\or b\\or b\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or p\\or k\\or p\\or b\\else w\\fi}\\if k\\axt@dpt\\else\\axt@point{#1}\\if p\\axt@dpt\\penalty\\@M\\fi\\if b\\axt@dpt\\axt@dpdp\\fi\\fi}')
+    expect(POINTS_TEX).toContain('\\def\\axt@dpdp{\\dimen@\\prevdepth\\ifdim\\dimen@>-\\@m\\p@\\kern-\\dimen@\\nointerlineskip\\setbox\\z@\\hbox{}\\dp\\z@\\dimen@\\box\\z@\\fi}')
+  })
+  it('states the text a display sets in text mode, bracketed inside the box each text command makes, and the math it opens again', () => {
+    // (the coordinator's ruling of 2026-11-09: words TeX sets in text mode inside a display are text, translated as before;
+    // 2610.22299v1's display (1), a sentence in \text, and 2608.25210v2 p10's labels under a brace. TeX's text mode inside math
+    // is an \hbox. \everyhbox, which every \hbox passes, was tried first and is unsafe: amsmath sets boxes in math of its own
+    // (\resetMathstrut@ after a font change, \boldsymbol's \endgroup), \setbox'd and never placed, and a point after one fell
+    // between a nucleus and its script (2608.16117v1's \boldsymbol{\mathcal{J}}^{trans} moved 0.26 pt); \leaders read the point
+    // for its glue (2610.21377v1's \xrightarrow). So the text is bracketed inside the box, `dts<n>` first and `dte<n>` last, by
+    // the commands that make a text box in math: amstext's \textdef@ (\text, and \textrm, \textbf… through \nfss@text), \mbox
+    // (core LaTeX's \nfss@text), \fbox (\boxed). Math opened again in a restricted list of a display's (such a box, an
+    // alignment's cell, a box in a \vcenter: \everymath) gets `dms<n>` first in it and `dme<n>` after it in that list, so that
+    // rows a box takes again keep their math's points; a glyph's mode is its innermost point's. Math in a \vbox's paragraph gets
+    // none (a point after it would be a paragraph's). A display not known from the pass before as no alignment states no text
+    // in its own list. Every point in a math list or a restricted list)
+    expect(POINTS_TEX).not.toContain('\\everyhbox')
+    expect(POINTS_TEX).toContain('\\newif\\ifaxt@dxm\\newif\\ifaxt@dxr\\newif\\ifaxt@dxw\\gdef\\axt@dxn{0}\\gdef\\axt@dxst{}')
+    expect(POINTS_TEX).toContain('\\protected\\def\\axt@dxa{\\ifaxt@dxm\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dts\\axt@dxn}\\edef\\axt@dxcl{\\noexpand\\axt@point{dte\\axt@dxn}}\\axt@dxmfalse\\axt@dxrtrue\\else\\let\\axt@dxcl\\relax\\fi}\\protected\\def\\axt@dxz{\\axt@dxcl}')
+    expect(POINTS_TEX).toContain('\\def\\axt@dxma{\\ifaxt@dxr\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dms\\axt@dxn}\\xdef\\axt@dxst{dme\\axt@dxn,\\axt@dxst}\\aftergroup\\axt@dxpop\\axt@dxmtrue\\axt@dxrfalse\\axt@dxwfalse\\else\\ifaxt@dxw\\axt@dxmtrue\\axt@dxwfalse\\fi\\fi}')
+    // (the math's end after its group, by a stack: a local definition is gone once the group ends)
+    expect(POINTS_TEX).toContain('\\def\\axt@dxpop{\\ifx\\axt@dxst\\@empty\\else\\expandafter\\axt@dxpop@\\axt@dxst\\@nil\\fi}\\def\\axt@dxpop@#1,#2\\@nil{\\gdef\\axt@dxst{#2}\\axt@point{#1}}')
+    expect(POINTS_TEX).toContain('\\def\\axt@dxvb{\\ifaxt@dxm\\axt@dxwtrue\\fi\\ifaxt@dxr\\axt@dxwtrue\\fi\\axt@dxmfalse\\axt@dxrfalse}')
+    // (the three text commands wrapped once the document began, each command's own definition kept; inside \\axt@dpgo's body,
+    // so their parameters doubled; as robust as each was, the points \\protected: a moving argument (a \\subsection's,
+    // 2608.04322v1) writes them as they are, and a fragile \\fbox there fails as it failed)
+    expect(POINTS_TEX).toContain('\\ifdefined\\textdef@\\let\\axt@@textdef\\textdef@\\def\\textdef@##1##2##3{\\axt@@textdef{##1}{##2}{\\axt@dxa##3\\axt@dxz}}\\fi')
+    expect(POINTS_TEX).toContain('\\let\\axt@@mbox\\mbox\\long\\def\\mbox##1{\\axt@@mbox{\\axt@dxa##1\\axt@dxz}}')
+    expect(POINTS_TEX).toContain('\\let\\axt@@fbox\\fbox\\long\\def\\fbox##1{\\axt@@fbox{\\axt@dxa##1\\axt@dxz}}')
+    // (a display's own math only where its start is set, a display alignment's cells, an alignment's in a \vbox; never under
+    // the gate)
+    expect(POINTS_TEX).toContain('\\def\\axt@dpopen{\\ifaxt@off\\else\\axt@dxmfalse\\axt@dxrfalse\\axt@dxwfalse\\fi\\gdef\\axt@dpcl{}')
+    expect(POINTS_TEX).toContain('\\axt@point{dps\\axt@dpn}\\axt@dxmtrue\\xdef\\axt@dpcl{\\axt@dpn}')
+    expect(POINTS_TEX).toContain('\\ifaxt@off\\else\\axt@dxrtrue\\xdef\\axt@dpm{\\axt@dpn}')
+    expect(POINTS_TEX).toContain('\\protected\\def\\halign{\\ifmmode\\ifinner\\else\\axt@dphal\\fi\\fi\\ifaxt@dxw\\axt@dxrtrue\\fi\\axt@@halign}')
+    expect(POINTS_TEX).toContain('\\everymath\\expandafter{\\the\\everymath\\axt@dxma}\\everyvbox\\expandafter{\\the\\everyvbox\\axt@dxvb}')
   })
 })
 

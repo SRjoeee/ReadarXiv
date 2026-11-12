@@ -11,6 +11,7 @@ import {
   type Limits,
   type OutPiece,
   type Sentences,
+  SOURCE,
   type Translator,
   type UnitIn,
 } from '../contract.ts'
@@ -27,7 +28,7 @@ export const googleTarget = (target: Lang): string => REWRITE[target] ?? target
 
 export const GOOGLE_LIMITS: Limits = { chars: 8_000, units: 100, inFlight: 2, callMs: 10_000, reask: 0 }
 /** the behaviour digest of write and read over tests/adapters/fixtures.ts */
-export const GOOGLE_DIGEST = '70c7f2442fcaa4ca917ad302050e9fd00daf4bfa33264f367f2008c6f290c2da'
+export const GOOGLE_DIGEST = '6f9a1fb37f05dd569215506b45491e209a0685f6ab51026047cff91d3ab31b06'
 
 const startOf = (text: string, at: number): number => {
   let i = at
@@ -55,12 +56,16 @@ export function readTagged(unit: UnitIn, raw: string): { content: OutPiece[]; se
   return out.src.length ? { content: r.content, sentences: out } : { content: r.content }
 }
 
-/** The tags wire as a host's own translator that keeps tags writes and reads it (the extension's LLM services): Google's
- *  and Chrome's codec, so its behaviour digest is theirs */
+/** the behaviour digest of the tags wire with its elements as voids (Chrome's codec, chrome.ts CHROME_DIGEST) */
+export const TAGS_DIGEST = 'e0444c96baab3c1855456b23c0efbaf6ddfe9ac3a534e227de4b01074ac09193'
+
+/** The tags wire as a host's own translator that keeps tags writes and reads it (the extension's LLM services): Chrome's
+ *  codec, its elements voids (what the prompt tells a model a void tag is), so its behaviour digest is Chrome's; Google
+ *  reads the same way and writes its tags as HTML's own inline elements (wire/tags.ts TagSpelling) */
 export const tagsWire = {
   write: (unit: UnitIn): string => planTags(unit).wire,
   read: readTagged,
-  digest: GOOGLE_DIGEST,
+  digest: TAGS_DIGEST,
 } as const
 
 export interface GoogleOptions {
@@ -73,9 +78,13 @@ export function google(o: GoogleOptions): Translator {
     identity: `google:${sha256Hex(JSON.stringify(['google', GOOGLE_ENDPOINT, CLIENT, 'tags/1', 'raw/1'])).slice(0, 16)}`,
     digest: GOOGLE_DIGEST,
     context: false,
+    wire: 'tags',
     limits: { ...GOOGLE_LIMITS, ...o.limits },
     supports: async () => true,
-    write: (unit) => planTags(unit).wire,
+    // (each element a word of its sentence and each styled group the words it holds, in HTML's own inline element: as an
+    // empty element or one HTML does not know Google translates the texts on either side of it apart, each closed with a
+    // full stop of its own, and a group's words apart from their sentence; wire/tags.ts TagSpelling)
+    write: (unit) => planTags(unit, 'html').wire,
     read: readTagged,
     async *send(wires, call, signal) {
       let body: string
@@ -83,7 +92,7 @@ export function google(o: GoogleOptions): Translator {
         const reply = await o.fetch(GOOGLE_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json+protobuf', 'X-Goog-API-Key': PUBLIC_KEY },
-          body: JSON.stringify([[wires, 'en', googleTarget(call.target)], CLIENT]),
+          body: JSON.stringify([[wires, SOURCE, googleTarget(call.target)], CLIENT]),
           signal,
         })
         if (!reply.ok) throw await faultOfReply('google', reply)

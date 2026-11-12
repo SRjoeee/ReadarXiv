@@ -84,6 +84,20 @@ describe("v0's displayed formulas: the engine's environments", () => {
     }
     expect(phClass('\\rule{1cm}{1pt}')).toBe('other')
   })
+  it("reads TeX's grouping, \\begingroup and \\endgroup (\\bgroup, \\egroup), as setting nothing, never a paper's macro of unknown ink", async () => {
+    // (2608.25210v2's VLDB block, `\begingroup\small … \url{…}.\endgroup`: the \endgroup after the unit's end mark, its range to
+    // the next heading's start holding that heading's number, was read as a paper's macro whose ink was not found, so the unit
+    // was unproven and stayed the original's whatever its row; 2610.20266v1's theorem 102 alike)
+    const { phClass, texToText } = await import('@/pdf-reader/engine/layer-proto/layer1.mjs')
+    const { phClass2 } = await import('@/pdf-reader/engine/layer-proto/layer2.mjs')
+    for (const src of ['\\begingroup', '\\endgroup', '\\bgroup', '\\egroup']) {
+      expect(phClass(src), src).toBe('zero')
+      expect(phClass2(src), src).toEqual({ cls: 'zero' })
+      expect(texToText(src), src).toBe('')
+    }
+    // (a word that only begins so is not one of them)
+    expect(phClass2('\\endgroupx')).toEqual({ cls: 'umacro', unknown: true })
+  })
 })
 
 

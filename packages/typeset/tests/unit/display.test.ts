@@ -3,7 +3,16 @@
 // no copy text, a page whose view does not start at 0).
 import { describe, expect, it } from 'vitest'
 import type { Face, Token } from '../../src/breaker/tokens.ts'
-import { displayLines, lineRuns, runEdge, type TextRun } from '../../src/emit/display.ts'
+import { cjkClassRe } from '../../src/breaker/script.ts'
+import {
+  CJK_INK,
+  type DisplayLine,
+  displayLines,
+  inkLines,
+  lineRuns,
+  runEdge,
+  type TextRun,
+} from '../../src/emit/display.ts'
 import type { LaidLine, Layout } from '../../src/fit/types.ts'
 import { dumpUnit, viewport } from '../replay/display.ts'
 
@@ -116,6 +125,63 @@ describe('D.display: items and the harness\u2019s reading', () => {
     const [x] = lines[2]![3]
     expect(x && !('src' in x) && [x.s, x.size, x.rise, x.skew, x.slant]).toEqual(['x ', 6.2, 10 * 0.36, 1, 12])
   })
+  it("draws a run's own fill as it is; a colour that is no fill names none (the sheet's ink)", () => {
+    const red = { color: '#c00000' },
+      named = { color: 'teal' }
+    const lines = displayLines(
+      layoutOf([
+        {
+          baseline: 700,
+          items: [
+            item({ s: 'a', cls: 'latin', face: SERIF, st: red }, 72),
+            item({ s: 'b', cls: 'latin', face: SERIF, st: named, brk: true }, 80),
+            item({ s: 'c', cls: 'latin', face: SERIF, brk: true }, 88),
+          ],
+        },
+      ]),
+      1,
+    )
+    expect(lines[0]![3].map((i) => ('src' in i ? null : [i.s.trim(), i.fill]))).toEqual([
+      ['a', 0xc00000],
+      ['b', undefined],
+      ['c', undefined],
+    ])
+  })
+  it("inks a CJK run that names no fill #141414 (the owner's exception of 2026-11-08), a Latin run none, a coloured run its own", () => {
+    // (CJK by the breaker's class of its characters, script.ts: Han, kana, Hangul and the CJK marks, the curly quotes where the
+    // rules set them as CJK's; a run of the Latin class keeps the sheet's ink, the PDF's black)
+    const red = { color: '#c00000' }
+    const line = (items: ReturnType<typeof item>[]): DisplayLine => [
+      700,
+      72,
+      300,
+      displayLines(layoutOf([{ baseline: 700, items }]), 1)[0]![3],
+    ]
+    const got = inkLines(
+      [
+        line([
+          item({ s: '\u4e2d', cls: 'cjk', face: CJK }, 72),
+          item({ s: '\u201c', cls: 'cjk', face: CJK }, 82),
+          item({ s: 'GPU', cls: 'latin', face: SERIF, brk: true }, 92),
+          item({ s: '\uff0c', cls: 'cjk', face: CJK, brk: true }, 110),
+          item({ s: '\u6587', cls: 'cjk', face: CJK, st: red, brk: true }, 120),
+          item({ s: '12', cls: 'latin', face: SERIF, st: red, brk: true }, 130),
+        ]),
+      ],
+      cjkClassRe(true),
+    )
+    expect(got[0]![3].map((i) => ('src' in i ? null : [i.s.trim(), i.fill]))).toEqual([
+      ['\u4e2d\u201c', CJK_INK],
+      ['GPU', undefined],
+      ['\uff0c', CJK_INK],
+      ['\u6587', 0xc00000],
+      ['12', 0xc00000],
+    ])
+    expect(CJK_INK).toBe(0x141414)
+    // (where the rules set the curly quotes as Latin's, a quote alone is no CJK run)
+    const quote = inkLines([line([item({ s: '\u201c', cls: 'latin', face: SERIF }, 72)])], cjkClassRe(false))
+    expect(quote[0]![3].map((i) => ('src' in i ? null : i.fill))).toEqual([undefined])
+  })
   it('reads two lines on one baseline as one, a crop with no copy text as none, a slanted superscript off its line', () => {
     const view = [10, 20, 622, 812]
     const d = dumpUnit({ layout: L } as never, () => view)
@@ -127,5 +193,32 @@ describe('D.display: items and the harness\u2019s reading', () => {
     ])
     expect(d.elements).toEqual([{ k: 4, page: 1, x0: 150, x1: 170, top: 712, bottom: 698 }])
     expect(viewport(view)(10, 812)).toEqual([0, 0])
+    // (a unit of one size states no size a line)
+    expect(d.sizes).toBeUndefined()
+  })
+  it('reads each line at the size it is drawn at where a run of the unit is drawn at another (X.runs: the dump and I6 read it)', () => {
+    // (a unit split by its display, laid a run at a time (fit/runs.ts): its first run cramped to 0.975, its second at 1.0, on
+    // the next page; the layout's own size is its first run's, the drawing reads each line's run)
+    const first = { f: 9.75, scale: 0.975, state },
+      second = { f: 10, scale: 1, state }
+    const L = {
+      ...layoutOf([
+        { baseline: 100, items: [item({ s: '\u4e2d', cls: 'cjk', face: CJK }, 72)], seg: first },
+        { page: 2, baseline: 700, items: [item({ s: '\u6587', cls: 'cjk', face: CJK }, 72)], seg: second },
+        { page: 2, baseline: 686, items: [item({ s: '\u5b57', cls: 'cjk', face: CJK }, 72)], seg: second },
+      ]),
+      f: 9.75,
+      scale: 0.975,
+    } as Layout
+    const d = dumpUnit({ layout: L } as never, () => [0, 0, 612, 792])
+    expect(displayLines(L, 2)[0]![3][0]).toMatchObject({ size: 10 })
+    expect(d.size).toBe(9.75)
+    expect(d.sizes).toEqual([9.75, 10, 10])
+    // (two pages' lays of it that differ only in the size its second run is drawn at are two dumps, not one)
+    const other = dumpUnit(
+      { layout: { ...L, lines: L.lines.map((l, j) => (j ? { ...l, seg: first } : l)) } } as never,
+      () => [0, 0, 612, 792],
+    )
+    expect(JSON.stringify(other)).not.toBe(JSON.stringify(d))
   })
 })

@@ -5,17 +5,17 @@
 // S.fill.target's port, its settling S.settle's, the layout S.fill.leads found the unit's field `fillLaid` (today's module
 // WeakMap), the shared row's ink ends measured by the unit's own measure (`p.P.measure`); an optional `trace` is told what the
 // tap read inside it, at its probes' places (baseline/tap/engine.diff): each unit's decision, the page's size, each unit filled.
-import { footFloorOf } from '../breaker/slots.types.ts'
 import { layoutAt } from '../fit/at.ts'
 import { keepsPages } from '../fit/runs.ts'
-import { closerLead, fillLeadsOf } from './fill-leads.types.ts'
+import { closerLead, fillLeadsOf, framesOf } from './fill-leads.types.ts'
 import { BODY_KINDS, fillTarget } from './fill-target.ts'
 import { keepsShare } from './share.ts'
 import { settleLayout } from './settle.ts'
 import type { Token } from '../breaker/tokens.ts'
 import type { FitBlock, FitParams, FitState, Layout } from '../fit/types.ts'
+import type { EvenKnob } from '../types.ts'
 import type { Band } from '../unit/params.ts'
-import type { FillRules } from './fill-leads.types.ts'
+import type { FillRules, FillShare } from './fill-leads.types.ts'
 import type { FillTarget, Voter } from './fill-target.ts'
 import type { Share } from './share.ts'
 
@@ -39,8 +39,18 @@ export type FillLaid = {
   fillLead?: number | null
   fillTop?: number
   fitLines?: number
+  /** a unit over a page or column break: the fill leading of each frame before its last, by block, and of its last
+   *  (S.fill.leads frameLeadsOf) */
+  fillLeads?: (number | undefined)[]
+  lastLead?: number
   /** the layout S.fill.leads found at the unit's fill leading (FillLeads.laid) */
   fillLaid?: { state: FitState; lead: number | null; l: Layout }
+  /** its frames at a state that holds the frames' share (S.fill.leads frameShareOf) */
+  fillShare?: FillShare
+  /** a unit under its page's band the page's fill evened (§18.57, evenOf): `by` the fit's knobs it took to stand in the band,
+   *  in the order taken; `lines` its line count on each of its pages at its fitted layout, before them (the Page member states
+   *  both, lay/page.ts) */
+  evened?: { by: EvenKnob[]; lines: [page: number, lines: number][] }
   [more: string]: unknown
 }
 /** the run's rules the fill reads (P.adaptiveFill, the script, the size's step, the fill leadings') */
@@ -71,26 +81,6 @@ export function fillUnitsOf(begun: FillLaid[], continuing: FillLaid[]): FillUnit
   return { units: begun.flatMap((p) => p.runs ?? [p]), voters: begun, continuing }
 }
 
-/** Where a unit first meets its floor on the closer-leading grid without laying each candidate. */
-function guessCloser(
-  p: FillLaid,
-  K: number,
-  L: (k: number) => number,
-  floorAt: (lead: number) => number | null,
-): number | null {
-  if (p.blocks.length !== 1 || p.layout.lines.length < 2) return null
-  const b = p.blocks[0]
-  // A one-block unit has a first block whenever its block count is one.
-  if (!b) return null
-  const n = p.layout.lines.length
-  const p0 = b.pitch0 ?? 1.2 * p.s
-  for (let k = 1; k <= K; k++) {
-    const floor = floorAt(L(k))
-    const firstBaseline = b.B[0]
-    if (floor === null || (firstBaseline !== undefined && firstBaseline - (n - 1) * L(k) * p0 >= floor - 0.05)) return k
-  }
-  return null
-}
 /**
  * adaptiveFill (P.adaptiveFill: { band, track, size }; D since 2026-10-07, generalised by D6's F6b on 2026-10-08, page-local
  * since 1b-C; null for B): the units that begin on a page (`units`, each laid already: tokens, blocks, s, P, layout), each
@@ -134,7 +124,7 @@ export function fillPage(
   // kept as it is drawn)
   const free = (p: FillLaid, st: FitState) => {
     const l = layoutAt(p.tokens, p.blocks, p.s, p.P, st)
-    if (l.clipped || (p.parent && !keepsPages(p.layout.lines, l.lines, p.tokens))) return null
+    if (l.clipped || (p.parent && !keepsPages(p.layout.lines, l.lines, p.tokens, !!st.share))) return null
     settleLayout(p, l)
     return l
   }
@@ -154,46 +144,20 @@ export function fillPage(
   const told = fillTarget((voters ?? units).map(voterOf), continuing.map(voterOf), band)
   if (!told || told.target === null) return told
   const { target } = told
-  // (each unit's leading as the pass lays it, its fill leading under the band over the target; and the next paragraph's: the
-  // unit begun on the page whose first line is the next line of its column, P.halfLead's `below` under its last baseline. The
-  // gap between two paragraphs is held to the leading of both and the original's skip there, the lower one's first line kept
-  // on its baseline, so the upper one ends that much over it (layer2.mjs footFloorAt, `next`). Read from the units begun on the page alone,
-  // whose leadings are fixed before any is laid: no laying order is read)
-  const leadOf = (p: FillLaid) => Math.min(p.fillLead === undefined ? Number.NaN : (p.fillLead ?? 0), r3(target + band))
-  const spanOf = (b: FitBlock): [number, number] => [
-    Math.min(...b.rects.map((r) => r[1])),
-    Math.max(...b.rects.map((r) => r[3])),
-  ]
-  const nextOf = (p: FillLaid): number | null => {
-    const e = p.P?.halfLead,
-      bl = p.blocks?.at(-1)
-    if (!e?.foot || !Number.isFinite(e.below) || !bl) return null
-    const lastBaseline = bl.B.at(-1)
-    const y = (lastBaseline ?? Number.NaN) - e.below,
-      [x0, x1] = spanOf(bl)
-    let best: FillLaid | null = null,
-      most = 0
-    for (const q of units) {
-      const b0 = q.blocks?.[0]
-      // (a unit of one line has no leading to show: a heading's or a one-line paragraph's fill leading is its fill's top)
-      if (
-        q === p ||
-        typeof q.fillLead !== 'number' ||
-        !((q.fitLines ?? 0) >= 2) ||
-        !b0 ||
-        b0.page !== bl.page ||
-        Math.abs((b0.B[0] ?? Number.NaN) - y) > 0.3 * (b0.sizes[0] ?? p.s)
-      )
-        continue
-      const [a0, a1] = spanOf(b0),
-        over = Math.min(x1, a1) - Math.max(x0, a0)
-      if (over > most && over > 0.5 * Math.min(x1 - x0, a1 - a0)) {
-        most = over
-        best = q
-      }
-    }
-    return best ? leadOf(best) : null
+  // (a body unit standing under the page's band laid again with the fit's own knobs, in the fit's order, where that brings it
+  // into the band (evenOf, §18.57): what the fill reads of it then (its layout, its fill leadings) stands in `even`; its vote,
+  // read above, is never changed, so the page's target and every other page's reading of it are as before)
+  const even = new Map<FillLaid, FillLaid>()
+  for (const p of units) {
+    const q = evenOf(p, P, r3(target - band))
+    if (q) even.set(p, q)
   }
+  // (each unit's leading as the pass lays it, its fill leading under the band over the target. The gap under a paragraph is
+  // held to its own leading alone and the original's skip there (footFloorAt), never the next paragraph's: the owner's ruling
+  // of 2026-11-08, chosen on a preview of the rules, where today's 2026-10-17 rule held it to the larger of both and pulled a
+  // paragraph whose translation nearly fills its block under the leading its own block allows, 1810.04805v2 p8 t156 at 1.08
+  // among neighbours at 1.38-1.5, its own 1.14)
+  const leadOf = (p: FillLaid) => Math.min(p.fillLead === undefined ? Number.NaN : (p.fillLead ?? 0), r3(target + band))
   const filled: {
     p: FillLaid
     st: FitState
@@ -203,57 +167,54 @@ export function fillPage(
     untracked: { st: FitState; l: Layout }
   }[] = []
   for (const p of units) {
-    if (p.fillLead === null) {
+    // (the unit as the fill reads it: an evened unit's stand-in, §18.57)
+    const q = even.get(p) ?? p
+    if (q.fillLead === null) {
       trace?.unit(p, { skip: 'no fill leading' })
       continue
     }
-    // (laid with its last line no lower than a leading over the next line of its column, its own or the next paragraph's,
-    // the larger, layer2.mjs footFloorAt; its tracking and the page's size with it, so that neither takes back the room its
-    // leading gave)
-    const lead = leadOf(p),
-      next = nextOf(p)
+    // (laid with its last line no lower than its own leading over the next line of its column, footFloorAt; its tracking and
+    // the page's size with it, so that neither takes back the room its leading gave)
+    // (a unit over a page or column break: each frame at its own fill leading, held to the band as the unit's is (S.fill.leads
+    // frameLeadsOf); its last frame's the state's `lead`, which the gap under it reads)
+    // (the frames' share (S.fill.leads frameShareOf) where every frame before the last holds its share at or above the page's
+    // band floor, target - band, today's rhythm rule: there each frame holds its share of the lines; else the fit's split, the
+    // share's cuts read by no lay. Lab option (i)'s frame share, bounded by the band (2026-11-09: a share that set two lines
+    // solid at a column's foot, 2610.37668v1-zh p17, read worse than the one line its fit left there))
+    const floor = r3(target - band),
+      sh = q.fillShare?.needs.every((v) => v !== null && v >= floor - 1e-9) ? q.fillShare : null
+    const top = r3(target + band),
+      leads = (sh ? sh.leads : q.fillLeads)?.map((v) => (v === undefined ? v : Math.min(v, top))),
+      lead = sh ? Math.min(sh.last, top) : q.lastLead !== undefined ? Math.min(q.lastLead, top) : leadOf(q)
     // footFloorOf reads box by truthiness; 1 keeps the original true state within FitState's numeric type.
-    let st: FitState = { ...p.layout.state, box: 1, lead, ...(next !== null && next > lead + 1e-9 ? { next } : {}) }
-    // (at its fill leading, its state the one fillLeadsOf laid it at: that layout, settled and held to its row as any try is)
-    const kept = p.fillLaid
-    delete p.fillLaid
-    const same = kept && !st.next && kept.state === p.layout.state && kept.lead === lead
-    let l = same ? settledAt(p, kept.l) : at(p, st),
-      closer = false
-    if (!l && st.next) {
-      // (its leading leaves the gap under it tighter than the next paragraph's lines: the loosest closer one that sets it,
-      // down to the original's pitch; the floor is the next one's leading's, the same at every closer leading)
-      const K = Math.ceil((lead - 1) / 0.01 - 1e-9),
-        L = (k: number) => (k >= K ? 1 : r3(lead - k * 0.01))
-      const floor = footFloorOf(p.blocks, st, p.P, p.s)
-      const found =
-        K > 0
-          ? closerLead(
-              K,
-              (k) => at(p, { ...st, lead: L(k) }),
-              floor === null ? null : guessCloser(p, K, L, () => floor),
-            )
-          : null
-      if (found) {
-        st = { ...st, lead: L(found.k) }
-        l = found.l
-        closer = true
-      }
+    let st: FitState = {
+      ...q.layout.state,
+      box: 1,
+      lead,
+      ...(leads ? { leads: leads as number[] } : {}),
+      ...(sh ? { share: 1 } : {}),
     }
+    // (at its fill leading, its state the one fillLeadsOf laid it at: that layout, settled and held to its row as any try is)
+    const kept = q.fillLaid
+    delete p.fillLaid
+    delete q.fillLaid
+    const same = kept && !leads && kept.state === q.layout.state && kept.lead === lead
+    let l = same ? settledAt(p, kept.l) : at(p, st)
     if (!l) {
-      trace?.unit(p, { skip: 'not set', lead, next })
+      trace?.unit(p, { skip: 'not set', lead })
       continue
     }
     // short of its fill at the band's edge or at its fill leading's top: tracking, the most that still sets it, then the
-    // page's size (not one the next paragraph's gap set closer: it is spread to its floor)
+    // page's size
     const short =
-      !closer &&
-      p.fillLead !== undefined &&
-      (p.fillLead > target + band + 1e-9 || p.fillLead >= (p.fillTop ?? Number.NaN) - 1e-9)
+      q.fillLead !== undefined &&
+      (q.fillLead! > target + band + 1e-9 || q.fillLead! >= (q.fillTop ?? Number.NaN) - 1e-9)
     let full = !short,
       tracked = 0
     const untracked = { st, l }
-    if (short && P.cjk) {
+    // (never a table cell's: TeX stretches no entry of a tabular, the owner's ruling of 2026-11-08, "in the tables today's letter
+    // spacing is more natural", 2610.20967v1-zh p4)
+    if (short && P.cjk && p.unit.kind !== 'cell') {
       // (the most tracking that still sets it: halving, as a wider tracking holds no more on a line)
       const K = Math.round(track / 0.01),
         st2 = (k: number): FitState => ({ ...st, track: r3(st.track + k * 0.01) })
@@ -276,7 +237,7 @@ export function fillPage(
       tracked = ok
     }
     filled.push({ p, st, l, full, tracked, untracked })
-    trace?.unit(p, { lead, next, same: !!same, closer, short, full, tracked })
+    trace?.unit(p, { lead, same: !!same, short, full, tracked })
   }
   // (the runs of a unit split by its displays (`parent`, run.mjs layoutRuns) keep one tracking, as their fit does
   // (layer2.mjs layoutRuns): each the least any of its unit's runs on the page takes, a run the pass does not track taking
@@ -293,7 +254,7 @@ export function fillPage(
     f.l = l ?? f.untracked.l
   }
   // the page's one size where it grows: every body unit's, where none is full yet; the largest at which every one is still
-  // set whole, by halving (a larger size sets no more), a unit that fails ending the try. A unit the fit had to shrink
+  // set whole, a step up at a time (a larger size sets no more), a unit that fails ending the try. A unit the fit had to shrink
   // keeps its own largest fitting size: setting the page's other body units at it (PR #335's reviews) left the alphabets'
   // and Japanese's units short of their frames, the alphabets unable to spread past the original's pitch (paraGap 1.255
   // -> 1.708, as before D6; full size 0.25 -> 0; Japanese 1.011 -> 1.289), the coordinator's ruling of 2026-10-09
@@ -321,16 +282,17 @@ export function fillPage(
       }
       return ls
     }
+    // (a step at a time from the original's size, the first a unit no longer holds ending it: a page that grows not at all,
+    // most pages that try, is tried once, where today's halving tried twice (the 22 parity pairs, 2026-11-08: growth's lays
+    // 223 of 89,431 halving, 153 so; every page's size the same). Changed from today's, the owner's word of 2026-11-08:
+    // today's effect, by the simplest search and the fewest lays)
     let ok = 0,
-      no = Math.round((size - 1) / P.step) + 1,
       best: (Layout | null)[] | null = null
-    while (no - ok > 1) {
-      const k = (ok + no) >> 1,
-        ls = all(k)
-      if (ls) {
-        ok = k
-        best = ls
-      } else no = k
+    for (let k = 1, top = Math.round((size - 1) / P.step); k <= top; k++) {
+      const ls = all(k)
+      if (!ls) break
+      ok = k
+      best = ls
     }
     if (ok && best)
       grown.forEach((f, i) => {
@@ -345,11 +307,47 @@ export function fillPage(
       grown.map((f) => [f.p.id, f.p.run ?? null, f.st.knob === 'grow']),
     )
   }
+  // (the gap over a unit whose paragraph over it cannot end higher: its first block lower by what the gap lacks, headOf, within
+  // its own lines (borrowing nothing under them: the room it takes is its own slack, never the gap under it); laid at its
+  // state so, else at the loosest closer leading of its first frame that sets it, else as it was)
+  const onPage = [
+    ...filled.map((f) => ({ u: f.p, l: f.l, st: f.st })),
+    ...[...units, ...continuing]
+      .filter((p) => !filled.some((f) => f.p === p))
+      .map((p) => ({ u: p, l: p.layout as Layout, st: p.layout.state })),
+  ]
+  for (const f of filled) {
+    const head = headOf(f.p, onPage)
+    if (!(head > 0)) continue
+    const of = framesOf(f.p.blocks),
+      alone = !of.some((g) => g > 0)
+    const withLead = (L: number): FitState =>
+      alone
+        ? { ...f.st, head, borrow: 0, lead: L }
+        : {
+            ...f.st,
+            head,
+            borrow: 0,
+            leads: f.p.blocks.map((_, bi) => (of[bi] === 0 ? L : (f.st.leads?.[bi] as number))),
+          }
+    const L0 = alone ? f.st.lead : (f.st.leads?.[0] ?? f.st.lead),
+      floor = Math.max(1, P.leadFloor ?? 1)
+    const K = Math.ceil((L0 - floor) / 0.01 - 1e-9),
+      L = (k: number) => (k >= K ? floor : r3(L0 - k * 0.01))
+    const l0 = at(f.p, withLead(L0))
+    const found = l0 ? { k: 0, l: l0 } : K > 0 ? closerLead(K, (k) => at(f.p, withLead(L(k))), null) : null
+    if (!found) continue
+    f.st = withLead(L(found.k))
+    f.l = found.l
+  }
   for (const { p, st, l } of filled) {
     const keep = p.layout.extents
     p.P = { ...p.P, leadBase: st.lead }
-    // (its fit's knob kept, a step past its states among them (widen, below-floor), but the page's size grown)
-    if (st.knob !== 'grow') l.knob = p.layout.knob
+    // (its fit's knob kept, a step past its states among them (widen, below-floor), but the page's size grown; an evened unit's
+    // the knob its stand-in was laid at, and the knobs it took)
+    const q = even.get(p)
+    if (st.knob !== 'grow') l.knob = (q ?? p).layout.knob
+    if (q) p.evened = q.evened
     p.layout = l
     p.layout.extents = keep
     // (laid anew, and settled as it was tried (`free`): its clearance at its new size, before it is recorded or painted; the
@@ -360,15 +358,192 @@ export function fillPage(
   return told
 }
 
-/** a unit's decision in the fill (the tap's passes[].units): skipped, or its leading, the next paragraph's, and what it took */
+/**
+ * The room the gap over a unit's first line lacks where the paragraph over it cannot end higher (the owner on staging,
+ * 2610.20967v1-zh p4): a paragraph over a column or page break whose last line stands alone on the first and only line TeX
+ * set in its last frame (TeX's widow), the unit's first line the next line TeX set in that column. The gap under a paragraph
+ * follows its own leading (the owner's ruling of 2026-11-08, (a)), and its own is the whole paragraph's: a frame of one line
+ * has none and takes its frame before's, where it holds two lines or more, as filled (`leads`). Its last line cannot rise
+ * (footFloorAt: no room to give in a frame of one line), so the unit under it starts lower by the deficit: that leading's
+ * pitch and the original's own skip there past its pitch (capped at a pitch, as footFloorAt reads it) less TeX's gap. 0
+ * where nothing is asked: a first line a unit shares a row with (`startY`, its first line pinned: P.halfLead.head false), a
+ * run but a unit's first, another line TeX set between, no such paragraph over it
+ */
+function headOf(q: FillLaid, onPage: readonly { u: FillLaid; l: Layout; st: FitState }[]): number {
+  const b = q.blocks[0]
+  if (!b || (q.P.blockBase ?? 0) !== 0 || !q.P.halfLead?.head || b.startY !== undefined || b.onLead) return 0
+  const unitOf = (x: FillLaid) => x.parent ?? x
+  const across = (x: { x0: number; x1: number }, y: { x0: number; x1: number }) =>
+    Math.min(x.x1, y.x1) > Math.max(x.x0, y.x0)
+  for (const { u, l, st } of onPage) {
+    if (unitOf(u) === unitOf(q) || !u.P.halfLead) continue
+    if (u.parent && u.run !== (u.parent.runs?.length ?? 0) - 1) continue
+    const [third, before, last] = l.lines.slice(-3)
+    if (!last || !before || !third || last.block !== u.blocks.length - 1) continue
+    const bl = u.blocks[last.block]!,
+      bp = u.blocks[before.block]!
+    // (its last line alone on the one line TeX set in its last frame, a frame of its own)
+    if (bl.B.length !== 1 || Math.abs(last.baseline - bl.B[0]!) > 0.05) continue
+    if (bp.page === bl.page && across(bp, bl)) continue
+    // (two lines at least in the frame before: the paragraph's leading there)
+    if (!(third.page === before.page && across(third, before) && third.baseline > before.baseline)) continue
+    // (the unit's first line the next line TeX set under it in its column: no line of another unit's between)
+    if (bl.page !== b.page || !across(bl, b) || !(bl.B[0]! > b.B[0]!)) continue
+    const between = onPage.some(
+      (o) =>
+        o.u !== u &&
+        unitOf(o.u) !== unitOf(q) &&
+        o.u.blocks.some(
+          (c) => c.page === b.page && across(c, b) && c.B.some((y) => y < bl.B[0]! - 0.05 && y > b.B[0]! + 0.05),
+        ),
+    )
+    if (between) continue
+    const L = st.leads?.[before.block] ?? st.lead,
+      p0 = bp.pitch0 ?? 1.2 * u.s,
+      gap = bl.B[0]! - b.B[0]!
+    const lacks = L * p0 + Math.min(Math.max(0, gap - p0), p0) - gap
+    return lacks > 0.05 ? Math.round(lacks * 100) / 100 : 0
+  }
+  return 0
+}
+
+/** the tries, in the fit's own order (fit/walk.ts statesOf), each knob kept for the next as the walk keeps them; the room past
+ *  TeX's bottom last, on the tracking and TeX's room alone, then with the size step */
+const EVEN_TRIES: readonly (readonly EvenKnob[])[] = [
+  ['track'],
+  ['track', 'room'],
+  ['track', 'room', 'size'],
+  ['track', 'room', 'foot'],
+  ['track', 'room', 'size', 'foot'],
+]
+
+/** each frame of a unit (framesOf: a page's or a column's, a paragraph TeX states inside it), its lines in `laid` (else the
+ *  layout its fill leadings were found at, else its fit's) and the fill leading S.fill.leads found for it */
+function framesAt(p: FillLaid, laid?: Layout): { lines: number; lead: number }[] {
+  const of = framesOf(p.blocks),
+    n = (of.at(-1) ?? 0) + 1
+  const lines = (laid ?? p.fillLaid?.l ?? p.layout).lines
+  return Array.from({ length: n }, (_, f) => ({
+    lines: lines.filter((l) => of[l.block] === f).length,
+    lead: (f === n - 1 ? (p.lastLead ?? p.fillLead) : (p.fillLeads?.[of.indexOf(f)] ?? p.fillLead)) ?? Number.NaN,
+  }))
+}
+/** a body unit, laid whole (not in runs, not refused), a frame of two lines or more of which its fill leadings set under the
+ *  page's band floor `floor` (the target less the band) */
+function underBand(p: FillLaid, floor: number, laid?: Layout): boolean {
+  if (p.parent || p.runs?.length || p.refused || p.fillLead === null || p.fillLead === undefined) return false
+  // (a frame of two lines or more: the band's voting frame, a line alone having no leading to read)
+  return BODY_KINDS.includes(p.unit.kind) && framesAt(p, laid).some((f) => f.lines >= 2 && f.lead < floor - 1e-9)
+}
+/** a fitted state with one knob more, as the fit's walk takes it to its bound: the tracking at the fit's bound (P.trackMin),
+ *  the room TeX left under the unit's blocks (Block.free, the borrow knob), one step of the fit's sizes under the original's
+ *  size and no lower (1 - P.step: one step, never two; a unit its fit set smaller already takes none), under its cap; the room
+ *  past TeX's text block bottom by a line of the unit's own pitch, the next ink kept at TeX's separation (FitState.over, B.slots
+ *  roomOf: the borrow's, §18.37), where its blocks state the bottom; null where the knob has nothing more to give */
+function knobOf(p: FillLaid, P: PageRules, st: FitState, knob: EvenKnob): FitState | null {
+  const r3 = (x: number) => Math.round(x * 1000) / 1000
+  if (knob === 'track') {
+    const bound = p.P.trackMin
+    if (p.P.cjk) return st.track > bound + 1e-9 ? { ...st, track: bound } : null
+    return st.trackLatin > bound + 1e-9 ? { ...st, trackLatin: bound } : null
+  }
+  if (knob === 'room')
+    // (99 lines: all of the room TeX left under its blocks, the walk's last borrow state, fit/walk.ts; slots.mjs lowOf caps it
+    // at the room)
+    return st.borrow < 99 && p.blocks.some((b) => (b.free ?? 0) > 0) ? { ...st, borrow: 99 } : null
+  if (knob === 'foot') {
+    const b = p.blocks.at(-1)!,
+      line = Math.round((b.pitch0 ?? 1.2 * p.s) * 100) / 100
+    return b.toFoot !== undefined && (st.over ?? 0) < line ? { ...st, borrow: 99, over: line } : null
+  }
+  const scale = r3(st.scale - P.step)
+  return scale < r3(1 - P.step) - 1e-9 || scale > (p.P.capScale ?? 1) + 1e-9 ? null : { ...st, scale, knob: 'shrink' }
+}
+
+/**
+ * A paragraph tighter than its page (§18.57; the owner's guidance of 2026-11-12: "one size a page" and a fixed leading are means,
+ * the aim is a page that looks naturally even, and a difference the eye does not see is allowed): a body unit a frame of which
+ * stands under its page's band floor (underBand) laid again at its fitted state with the fit's own knobs, in the fit's own order,
+ * each kept for the next as the walk keeps them (EVEN_KNOBS, knobOf): its tracking to the fit's bound, the room TeX left under
+ * it, then one size step, which the reader's eye was shown between neighbouring paragraphs and did not tell apart (today's
+ * reader set them 2.5-5 % apart by its misread size on the pages he read; a theorem a step smaller, accepted), where two steps
+ * (5 %) he saw. Each try laid at the band floor's leading, no closer, on the pages its fit set it on, no frame gaining a line
+ * (the share TeX's breaks gave each column and page kept); its fill leadings found again there (S.fill.leads) and taken at the
+ * first that leaves no frame of two lines or more under the floor. Returns the unit as the fill then reads it (its layout and
+ * fill leadings, `evened` the knobs taken and its lines before them), or null: it stays as it was. Its vote is the unit's own (fillLead, fitLines), never
+ * the stand-in's: the page's target is read before and every lay reads the page alike
+ */
+function evenOf(p: FillLaid, P: PageRules, floor: number): FillLaid | null {
+  if (!underBand(p, floor)) return null
+  const pagesOf = (l: Layout) => [...new Set(l.lines.map((x) => x.page))].join(',')
+  const pages = pagesOf(p.layout)
+  const lines = framesAt(p).map((f) => f.lines)
+  const gains = (l: Layout) => framesAt(p, l).some((f, i) => f.lines > (lines[i] ?? 0))
+  for (const knobs of EVEN_TRIES) {
+    // (a try whose last knob has nothing more to give is the try before it, tried already)
+    let st: FitState | null = { ...p.layout.state }
+    const took: EvenKnob[] = []
+    for (const [i, knob] of knobs.entries()) {
+      const next = knobOf(p, P, st!, knob)
+      if (next) {
+        st = next
+        took.push(knob)
+      } else if (i === knobs.length - 1) st = null
+      if (!st) break
+    }
+    if (!st) continue
+    const l = layoutAt(p.tokens, p.blocks, p.s, p.P, { ...st, lead: Math.max(st.lead, floor) })
+    if (l.clipped || !keepsPages(p.layout.lines, l.lines, p.tokens) || pagesOf(l) !== pages || gains(l)) continue
+    // (no line freed and no room added: its fill leadings cannot rise, nothing more is laid)
+    const adds = st.borrow !== p.layout.state.borrow || (st.over ?? 0) > (p.layout.state.over ?? 0)
+    if (!adds && framesAt(p, l).every((f, i) => f.lines === lines[i])) continue
+    const q = { ...p, layout: Object.assign(l, { extents: p.layout.extents }) } as FillLaid
+    delete q.fillLeads
+    delete q.lastLead
+    delete q.fillLaid
+    delete q.fillShare
+    fillLeadsOf(q, P)
+    if (q.fillLead === null || q.fillLead === undefined) continue
+    // (past TeX's bottom only as deep as the band's floor needs: no frame looser than the floor, the borrow's own measure of a
+    // line it takes there, §18.37: as deep as it needs, not as deep as it may)
+    if (took.includes('foot')) {
+      const cap = (v: number | undefined) => (v === undefined ? v : Math.min(v, floor))
+      // (the fields fillLeadsOf set again, read as it typed them)
+      const [last, leads] = [q.lastLead as number | undefined, q.fillLeads as FillLaid['fillLeads']]
+      q.fillLead = Math.min(q.fillLead, floor)
+      if (last !== undefined) q.lastLead = cap(last)
+      if (leads) q.fillLeads = leads.map(cap)
+      delete q.fillLaid
+      delete q.fillShare
+    }
+    // (fillLeadsOf's layout at its fill leading, where it found one for the unit as one frame; else laid at its fill leadings)
+    const found = q.fillLaid as FillLaid['fillLaid']
+    const lf =
+      found?.l && !q.fillLeads
+        ? found.l
+        : layoutAt(p.tokens, p.blocks, p.s, p.P, {
+            ...q.layout.state,
+            box: 1,
+            lead: q.lastLead ?? q.fillLead,
+            ...(q.fillLeads ? { leads: q.fillLeads as number[] } : {}),
+          })
+    if (lf.clipped || pagesOf(lf) !== pages || gains(lf) || underBand(q, floor, lf)) continue
+    const before = new Map<number, number>()
+    for (const x of p.layout.lines) before.set(x.page, (before.get(x.page) ?? 0) + 1)
+    q.evened = { by: took, lines: [...before] }
+    return q
+  }
+  return null
+}
+
+/** a unit's decision in the fill (the tap's passes[].units, less today's `next` and `closer`: the gap ruling of 2026-11-08):
+ *  skipped, or its leading and what it took */
 export type FillDecision =
   | { skip: 'no fill leading' }
-  | { skip: 'not set'; lead: number; next: number | null }
+  | { skip: 'not set'; lead: number }
   | {
       lead: number
-      next: number | null
       same: boolean
-      closer: boolean
       short: boolean
       full: boolean
       tracked: number

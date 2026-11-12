@@ -42,9 +42,12 @@ export const OWNED = 6
 export const STREAM_COLUMNS = Object.freeze(['x0', 'y', 'size', 'u'])
 const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i]))
 /** a bracket's point: a column's body (b) or a float's box (f), its start (s) or end (e), by a number */
-const BRACKET = /^([bf])([se])\d+$/
+const BRACKET = /^([bf])([se])(\d+)$/
 /** a babel name's point (marks.mjs NAMES_TEX): no piece's next mark, its text no unit's */
 const NAME_POINT = /^n\d+\.[^.]+\.[se]$/
+/** a point one reader reads alone (marks.mjs POINTS_TEX): a caption's label's `ka<k>` (own.mjs MR 5's), a float of no counter's
+ *  `fn<n>` (the ledger's); every other reading passes over it as over a bracket (PDF-READER §18.34) */
+export const READ_ALONE = /^(?:ka|fn)\d+$/
 /** where other text begins that no unit's mark opens: the start of a babel name that heads a block of its own ("References",
  *  "Abstract", "Proof", marks.mjs NAME_MACROS; not a figure's or a table's, which a caption or a formula sets inside its own text:
  *  `\[x=\text{\figurename}\,1\]`), its key in any case (a primitive \uppercase's capitals), and a biblatex entry's (marks.mjs
@@ -78,6 +81,14 @@ function framedOf(page) {
 const OPENING = /^([pn])(\d+)\.(\d+)a$/
 /** a unit's start mark: MARK_DEF's, a cell's, a heading's */
 const START = /^[th]?(\d+)s$/
+/** a mark of a unit: its start or end mark, or a point of one of its pieces; its unit's number */
+const UNIT_MARK = /^(?:[th]?(\d+)[se]|[pn](\d+)\.\d+[ab])$/
+/** whether a point's name is a mark of a unit numbered before `id`: the source sets its units in order, so after a piece of
+ *  unit `id` it is that unit's text set again (MR 3's later occurrence), never the next unit's */
+const earlierUnit = (name, id) => {
+  const m = UNIT_MARK.exec(name)
+  return !!m && Number(m[1] ?? m[2]) < id
+}
 /** a range in a region outside the column bodies (an output routine of its own: REVTeX's, multicol's) that goes from
  *  low on a page to high on it, and right by this share of the page's width and up by this share of its height, crossed
  *  into the next column: what TeX shipped between is in it, and cannot be told apart */
@@ -180,7 +191,12 @@ export function folioOf(page, regions) {
  *  selector */
 const charOf = u => u.normalize('NFKC').toLowerCase().replace(/\s|\p{Variation_Selector}/gu, '')
 
-/** each page's regions: of each glyph, of each box, at each point; every page begins outside any body */
+/** each page's regions: of each glyph, of each box, at each point; every page begins outside any body. A glyph is in a body
+ *  while a body's opening point (`bs<n>`) stands before it and that body's closing one (`be<n>`, the same n) not yet: the
+ *  brackets nest where a page's columns are balanced, both split from one box whose opening point stays at the left column's
+ *  top and whose closing one comes after the right column's end, the left column's own pair inside them (`bs58 bs57 … be57 …
+ *  be58`, 2608.25210v2 p17). Read as one flag, the left column's close put the right column outside every body: its
+ *  references' text refused across the page break and drawn as notes */
 /** a page's columns as the maker reads them (make.mjs columnOf, its column count the marks file's, columnsOf): by the page's
  *  column mark (MARK_DEF's c<n>-<k>, the last of the page's) and its view's middle, an x range's column, 0 or 1 on a page of
  *  two columns, 2 across both (4 pt past the middle either way), 0 on a page of one */
@@ -196,16 +212,22 @@ export function regionsOf(page) {
   const { glyphs, points } = page, nBoxes = page.boxes.length / 4
   const glyph = new Int32Array(glyphs.n), box = new Int32Array(nBoxes), at = new Int32Array(points.length)
   let body = false, depth = 0, bodies = false
+  const open = new Set()
   const apply = name => {
     const m = BRACKET.exec(name)
     if (!m) return
-    if (m[1] === 'b') { body = m[2] === 's'; bodies = true } else depth = m[2] === 's' ? depth + 1 : Math.max(0, depth - 1)
+    if (m[1] === 'b') {
+      if (m[2] === 's') open.add(m[3])
+      else open.delete(m[3])
+      body = open.size > 0
+      bodies = true
+    } else depth = m[2] === 's' ? depth + 1 : Math.max(0, depth - 1)
   }
   for (let q = 0, g = 0; g <= glyphs.n; g++) {
     while (q < points.length && points[q].glyph <= g) { apply(points[q].name); at[q] = code(body, depth); q++ }
     if (g < glyphs.n) glyph[g] = code(body, depth)
   }
-  body = false; depth = 0
+  body = false; depth = 0; open.clear()
   for (let q = 0, b = 0; b < nBoxes; b++) {
     while (q < points.length && points[q].box <= b) apply(points[q++].name)
     box[b] = code(body, depth)
@@ -242,7 +264,7 @@ function headInk(P, R, q, whole = false) {
   const S = P.points[q], r = R.at[q], G = P.glyphs
   // (in the start mark's region alone: a float's caption marks shipped among the display's rows are another region's)
   let A = null
-  for (let k = q - 1; k >= 0 && !A; k--) { const n = P.points[k].name; if (R.at[k] === r && !BRACKET.test(n) && !NAME_POINT.test(n) && !BIB_ITEM.test(n)) A = P.points[k] }
+  for (let k = q - 1; k >= 0 && !A; k--) { const n = P.points[k].name; if (R.at[k] === r && !BRACKET.test(n) && !NAME_POINT.test(n) && !BIB_ITEM.test(n) && !READ_ALONE.test(n)) A = P.points[k] }
   if (A && OPENING.test(A.name)) return null
   // (the paragraph the display begins: its point, the last before the start mark and at or after the mark before, in its region —
   // a paragraph point's the region of the glyph it stands before)
@@ -370,7 +392,7 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
   pages.forEach((p, i) => p.points.forEach((pt, q) => {
     const list = where.get(pt.name)
     if (list) list.push([i + 1, q]); else where.set(pt.name, [[i + 1, q]])
-    if (!BRACKET.test(pt.name) && !NAME_POINT.test(pt.name) && !BIB_ITEM.test(pt.name) && !FRAME.test(pt.name)) seq.push([i + 1, q])
+    if (!BRACKET.test(pt.name) && !NAME_POINT.test(pt.name) && !BIB_ITEM.test(pt.name) && !FRAME.test(pt.name) && !READ_ALONE.test(pt.name)) seq.push([i + 1, q])
   }))
   const rank = new Map()
   seq.forEach(([p, q], r) => rank.set(`${p}|${q}`, r))
@@ -486,6 +508,22 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
       const next = seq[(rank.get(`${pa}|${qa}`) ?? -2) + 1]
       if (!next || next[0] !== pa) return none(HOW['open, the next mark on another page'])
       const P = pages[pa - 1], N = P.points[next[1]]
+      // (an earlier unit's marks right after it, in its region, before the text after it: that unit's text TeX set again inside
+      // this piece's own ink — MR 3's later occurrence, a class keeping a title's or an author's argument, marks and all, that a
+      // paper's macro sets once more: acmart's \shorttitle and \authors where VLDB's Reference Format calls \vldbtitle and
+      // \vldbauthors, 2608.25210v2 p1, whose \vldbtitle owned nothing, its next point the title's start mark set again. No bound
+      // of the piece's: its ink runs past them to where the text after it begins; where that text is not found there, or where
+      // its own ink stands before them (nothing then tells them its ink's), as before)
+      if (f.want && !f.blocked && earlierUnit(N.name, Number(m[2])) && regions[pa - 1].at[next[1]] === rA) {
+        const lead = takeTo(next)
+        let r = rank.get(`${next[0]}|${next[1]}`) + 1
+        while (seq[r] && seq[r][0] === pa && regions[pa - 1].at[seq[r][1]] === rA && earlierUnit(P.points[seq[r][1]].name, Number(m[2]))) r++
+        if (!lead.glyphs.length && !lead.boxes.length && seq[r] && seq[r][0] === pa) {
+          const { glyphs, boxes } = takeTo(seq[r])
+          const end = textAt(pages, glyphs, f.want, erasure)
+          if (end > 0 && !jumps(glyphs.slice(0, end))) return cut(HOW['open, to the text after it'], glyphs, boxes, end)
+        }
+      }
       // nothing after it in its unit, its next mark outside the bodies (a footnote's, shipped below its column): the piece
       // ends with its column's body, where no body begins again before that mark
       if (!f.want && rA % 2 === 1 && regions[pa - 1].at[next[1]] % 2 === 0) {
@@ -674,7 +712,7 @@ export function ownedPages({ follows, dropped = [], closing = () => null, heads 
   /** pages added, in order; their pieces, each { name, q, close, needPage, stop } */
   const queue = []
   let last = 0
-  const seqPoint = name => !BRACKET.test(name) && !NAME_POINT.test(name)
+  const seqPoint = name => !BRACKET.test(name) && !NAME_POINT.test(name) && !READ_ALONE.test(name)
   /** whether page pa's pieces can be found: every page each may read is in */
   const ready = (entry, ended) => {
     if (ended) return true

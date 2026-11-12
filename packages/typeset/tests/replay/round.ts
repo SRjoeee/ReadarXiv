@@ -14,11 +14,21 @@ import type { FillLaid } from '../../src/shared/fill-page.ts'
 import type { RuleParams } from '../../src/types.ts'
 import { cellBands } from '../../src/unit/params.ts'
 import { blockOfTap, num, type WalkCase } from './fit-input.ts'
-import { firstDifference, ledger } from './tap.ts'
+import { borrowsAt, firstDifference, inWordOf, lastBeforeRegion, ledger, ruledRoom, wordGlued } from './tap.ts'
 import { paperOf, todayBundle } from './today.ts'
 
 type Raw = Record<string, unknown>
-export type Chain = { at: string; d: string | null; stopped?: string; steps: string[]; lay?: FillLaid }
+/** `own`: the port's own lay of the round, where it laid it, whatever step differed (what a ruling's unit is filled from);
+ *  `lead`: a round whose fill leadings option (i) moves (the owner's of 2026-11-10: tap.ts borrowsAt), its lay the ruling's */
+export type Chain = {
+  at: string
+  d: string | null
+  stopped?: string
+  steps: string[]
+  lay?: FillLaid
+  own?: FillLaid
+  lead?: true
+}
 
 /** the shared row the follower is laid from, as its F1 slot holds it (the follower's last round that has one) */
 const rowOf = (pair: string, follower: number) => {
@@ -81,7 +91,10 @@ export function prepare(c: WalkCase): Prepared {
             first: line?.length ? { page: line[0]!, x1: line[2]! } : null,
           },
     shareRow,
-    wide: (further?.furtherLayout as Raw | null)?.knob === 'widen' && wb ? (wb.map(blockOfTap) as FitBlock[]) : null,
+    wide:
+      (further?.furtherLayout as Raw | null)?.knob === 'widen' && wb
+        ? (ruledRoom(wb.map(blockOfTap), c.s) as FitBlock[])
+        : null,
     noOver: !!f5?.noOver,
   }
 }
@@ -97,7 +110,30 @@ export function chain(c: WalkCase): Chain {
   if (p.noOver) return { at: 'F5', d: null, stopped: 'S.relay (noOver)', steps }
   const trace = new Trace(c.round)
   const got = layMember(p, c.rules as unknown as RuleParams, trace)
+  const r = stepsAfter(c, p, got, trace, steps)
+  return got.state === 'laid' ? { ...r, own: got.lay } : r
+}
+/** the chain's steps after layMember, each against its slot: the first that differs, or where the round ends */
+function stepsAfter(
+  c: WalkCase,
+  p: ReturnType<typeof prepare>,
+  got: ReturnType<typeof layMember>,
+  trace: Trace,
+  steps: string[],
+): Chain {
   const mine = (step: string, by: string) => trace.slots.find((s) => s.step === step && s.by === by)?.value as Raw
+  // (a round whose tokens hold an item that continues its word: its lines' ends read to a millionth of a point, lane
+  // literal-fixes' rule moving a line's slack between its gaps and never its end (tap.ts wordGlued); counted where it decides)
+  const inWord = inWordOf(c.tokens as unknown[])
+  // (and today's lines before a run's boundary as the ruling of 2026-11-13 sets them, last lines: tap.ts lastBeforeRegion)
+  const glued = (a: unknown, b0: unknown, label: string): string | null => {
+    const b = lastBeforeRegion(b0, c.blocks as { after?: unknown }[])
+    const d = firstDifference(a, b, label)
+    if (!d || !inWord) return d
+    const g = firstDifference(wordGlued(a), wordGlued(b), label)
+    if (!g) steps.push(`${label} (no glue in a word)`)
+    return g
+  }
   const pick = (v: Raw | undefined, keys: string[]) => (v ? Object.fromEntries(keys.map((k) => [k, v[k]])) : v)
   /** a step's answer against its slot, by the fields the tap summarizes; whether it ran on both sides */
   const compare = (step: string, by: string, keys: string[], label: string): string | null => {
@@ -105,7 +141,7 @@ export function chain(c: WalkCase): Chain {
       b = c.slot(by)
     if (!!a !== !!b) return `${by} ${a ? 'ran' : 'did not run'}, today's slot ${b ? 'is' : 'is not'} there`
     if (!a) return null
-    const d = firstDifference(pick(a, keys), pick(b, keys), label)
+    const d = glued(pick(a, keys), pick(b, keys), label)
     if (!d) steps.push(label)
     return d
   }
@@ -121,7 +157,7 @@ export function chain(c: WalkCase): Chain {
     const over = ['overLayout', 'overLayoutLines']
     d =
       firstDifference(!!a5?.taken, !!b5?.taken, 'F5 taken') ??
-      (a5?.taken ? firstDifference(pick(a5, over), pick(b5, over), 'F5') : null)
+      (a5?.taken ? glued(pick(a5, over), pick(b5, over), 'F5') : null)
     if (d) return { at: 'F5', d, steps }
     steps.push(a5?.taken ? 'F5 taken' : 'F5')
   }
@@ -131,13 +167,19 @@ export function chain(c: WalkCase): Chain {
     if (got.state !== 'laid')
       return { at: 'out', d: null, stopped: 'left the original’s (X.further found none)', steps }
   } else if (p.kind !== 'cell') {
-    d = firstDifference(
-      mine('F6', 'X.runs')?.laidRuns ?? null,
+    // (a run's tokens hold the frames' share's cut where the fit set the share's first line in that frame or later (pageCutsOf
+    // `share`, the owner's of 2026-11-10), a token today's did not hold and no lay but the page fill's reads: its run's tokens
+    // counted without it, the run recorded as the share's)
+    const shared = got.state === 'laid' ? (got.lay.runs ?? []).map((q) => q.tokens.filter(isShare).length) : []
+    const laid = mine('F6', 'X.runs')?.laidRuns as { runs?: Raw[] } | null | undefined
+    const runs = laid?.runs?.map((r, i) => ({ ...r, tokens: (r.tokens as number) - (shared[i] ?? 0) }))
+    d = glued(
+      laid ? { ...laid, runs } : null,
       (c.slot('X.runs')?.laidRuns as Raw | null | undefined) ?? null,
       'laidRuns',
     )
     if (d) return { at: 'F6', d, steps }
-    steps.push('F6 runs')
+    steps.push(shared.some((n) => n > 0) ? 'F6 runs (share)' : 'F6 runs')
   }
   const a7 = mine('F7', 'S.settle'),
     b7 = c.slot('S.settle')
@@ -160,13 +202,21 @@ export function chain(c: WalkCase): Chain {
   }
   const out = c.slot('X.walk')
   if (!out) return { at: 'out', d: null, stopped: 'no X.walk slot (refused)', steps }
-  d = firstDifference(pick(mine('out', 'X.walk'), ['layout', 'lines']), pick(out, ['layout', 'lines']), 'out')
+  d = glued(pick(mine('out', 'X.walk'), ['layout', 'lines']), pick(out, ['layout', 'lines']), 'out')
   if (d) return { at: 'out', d, steps }
   steps.push('out')
   const l9 = c.slot('S.fill.leads')
   if (!l9) return { at: 'L9', d: 'no S.fill.leads slot', steps }
   d = firstDifference(mine('L9', 'S.fill.leads'), l9, 'fillLeads')
+  // (a round that borrowed room under its lines: its fill leadings option (i)'s, the gap under it measured from the borrow's
+  // limit (the owner's of 2026-11-10, tap.ts borrowsAt), recorded as the ruling's, not compared)
+  if (d && borrowsAt(c.pair, c.ord, c.round)) {
+    steps.push('L9 (i)')
+    return { at: 'L9', d: null, steps, lay: got.state === 'laid' ? got.lay : undefined, lead: true }
+  }
   if (d) return { at: 'L9', d, steps }
   steps.push('L9')
   return { at: 'L9', d: null, steps, lay: got.state === 'laid' ? got.lay : undefined }
 }
+/** a cut of the frames' share alone (pageCutsOf `share`), a token today's tokens do not hold */
+export const isShare = (t: unknown): boolean => !!(t as { share?: boolean }).share

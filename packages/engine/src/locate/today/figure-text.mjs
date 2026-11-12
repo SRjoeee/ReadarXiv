@@ -1,6 +1,8 @@
 // COPIED as it is from src/pdf-reader/engine/layout/figure-text.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, a turned glyph's owner read where the page states one (streamOf: today's pages own none): run by locate over arXiv's page (../ink.ts), held equal to today's by
-// tests/pdf-reader/locate-ink-today.test.ts. Today's file stays the production prepare's until stage 1c.
+// marked COPY, a turned glyph's owner read where the page states one (streamOf: today's pages own none), and, marked CHANGED, a line of a
+// justified paragraph set from its start (setsOf), a run ended where it goes into or out of a face of one pitch (`fixed`, Rule 1's
+// fact) and a run gone on across a size change inside a word (figureUnitsOf `sized`): run by locate over arXiv's page (../ink.ts),
+// held equal to today's by tests/pdf-reader/locate-ink-today.test.ts. Today's file stays the production prepare's until the cut-over.
 // The text inside a vector figure of our final pass (docs/route/orphan-text.md stage 5, the content class `figures`,
 // rules/content-classes.mjs): the labels, axis titles, legends and annotations a figure draws as glyphs, cut into ink units, one
 // a label or a line, each an ink unit of kind `inkfigures` the bundle's units hold after the paper's own and the other ink units
@@ -22,7 +24,16 @@
 // in the family's italic; no math face), size, colour, direction and figure (one form painted, one picture: pageInk's `fid` and
 // `pid`, so that two figures side by side never make one label), on one baseline (within RUN_DY of their size across it), at
 // most RUN_GAP of its size past the run's end along it and not back over it by more than RUN_BACK; any other glyph between ends
-// the run. A run is a unit when it spells a word (two letters together) in a face
+// the run. (CHANGED) A word is told by its spacing, not its sizes: a glyph on the run's baseline no word space past the glyph
+// before it (SPACE_GAP of their size) is that glyph's word's whatever its size, and every size a word of the run holds is the
+// run's then (a faked small capital's word: its capital at the line's size, its rest smaller). TeX's own text in a picture (a
+// glyph of no form, between the picture's points: a TikZ node's, a tcolorbox's that pgf draws) is TeX's line: once its run spells a word, a glyph of another face (no math face) or another colour goes on with it, so
+// that a label and the address TeX set after it in the link's colour are one unit, and a list of addresses with the commas between
+// them (2611.03178v1's abstract box: "Project Page:" and its address were two units, the address left the original's where TeX set
+// it, a hole after the label's translation); a symbol TeX set before the first word (an icon) is none of it, and the run after
+// it on its line is set from its start where no ink of a figure's tells its anchor: TeX's line runs on from there ("Demo
+// Gallery:", its icon wider than its neighbours' and its start off their column, was read centred and drawn an em in). A run is a unit when
+// it spells a word (two letters together) in a face
 // that is no math face, every glyph of it a character a reader can trust (UNREAD); its text the glyphs' Unicode (NFKC, so that
 // a ligature's glyph reads as its letters) with a space where two stand apart by SPACE_GAP of their size.
 // What it is not, a number, a tick's label, a letter alone, a formula's, stays the original's ink; so does a run a glyph of which
@@ -61,7 +72,7 @@
 // direction's band and room, ROOM_MAX at most.
 //
 // Pure arithmetic over the pages; an original module (no port statement).
-import { BAND_MAX, classifyFont, PICTURE_END, PICTURE_START, regionMask } from './deps.mjs'
+import { BAND_MAX, classifyFont, displayTextMask, familyKeysOf, PICTURE_END, PICTURE_START, regionMask, sameFamily } from './deps.mjs'
 
 /** two glyphs on one run: their baselines within this share of their size across the run's direction */
 export const RUN_DY = 0.05
@@ -79,6 +90,8 @@ export const ANCHOR_REACH = 1.5
 export const ANCHOR_RATIO = 2
 /** the band a translation is drawn in, descent and ascent in em, at the least: a unit is crowded where other ink meets it */
 export const DRAW_BAND = Object.freeze([-0.15, 0.88])
+/** CHANGED: the band's height, in sizes (figure-lines' BAND_EM) */
+const BAND = DRAW_BAND[1] - DRAW_BAND[0]
 /** a unit's band inside its box, shrunk by this share of its size at each edge before other ink is looked for in it (an
  *  antialiased edge, a glyph's side bearing) */
 const CROWD_PAD = 0.04
@@ -120,8 +133,10 @@ function streamOf(pg, owners) {
   // (the picture depth before each level glyph and each point: points stand before the glyph they name)
   const depthAtPoint = new Int32Array(P.length + 1)
   for (let i = 0, d = 0; i < P.length; i++) { depthAtPoint[i] = d; const nm = P[i].name; if (nm === PICTURE_START) d++; else if (nm === PICTURE_END) d = Math.max(0, d - 1); depthAtPoint[i + 1] = d }
-  // (each glyph TeX set in a code region, by its points (pageInk's `regions`): its run is no unit, below)
-  const code = regionMask(pg.regions, G.length, 'code')
+  // (each glyph TeX set in a code region, by its points (pageInk's `regions`): its run is no unit, below; and (CHANGED) each one
+  // TeX set in a display, the formula's, kept as the paper has it wherever it stands, but what it set there in text mode)
+  const code = regionMask(pg.regions, G.length, 'code'), display = regionMask(pg.regions, G.length, 'display'), dtext = displayTextMask(pg.regions, G.length)
+  for (let g = 0; g < G.length; g++) if (display[g] && !dtext[g]) code[g] = 1
   const out = []
   let q = 0, d = 0
   for (let g = 0; g < G.length; g++) {
@@ -168,7 +183,7 @@ function inFrame(f, b) {
  * unit's k; `before`, `after`, PDF units); `stats` { units, crowded, letters, runs, past, clipped, outsized, sets, grouped,
  * aligned }
  */
-export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, unitsDoc = FIGURE_UNITS_DOC } = {}) {
+export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, unitsDoc = FIGURE_UNITS_DOC, done = null, fixed = null } = {}) {
   const fam = new Map(), face = new Map()
   const famOf = name => { let f = fam.get(name); if (f === undefined) { f = classifyFont(name ?? '').fam; fam.set(name, f) } return f }
   // (a glyph's face: its font's name, a subset's tag aside. Matplotlib (3.11) writes the characters past its first subset of a
@@ -180,13 +195,37 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
   // hyphen (DejaVuSans and DejaVuSans-Oblique, XCharter-Roman and XCharter-Bold), neither a math face. A plotting program sets a
   // formula's letter in the family's italic inside a label ("jury, α = 1": matplotlib's mathtext α in DejaVuSans-Oblique), and a
   // label cut there was a fragment ("jury,") whose room ended at the letter: drawn at 0.66. TeX's math faces are families of
-  // their own (CMMI10 against CMR10) and stay apart)
-  const familyOf = name => faceOf(name).replace(/-.*$/u, '')
-  const oneLine = (a, b) => faceOf(a) === faceOf(b) || (familyOf(a) === familyOf(b) && famOf(a) !== 'math' && famOf(b) !== 'math')
+  // their own (CMMI10 against CMR10) and stay apart. CHANGED: or the name without PDF.js's own style words and its hyphens
+  // (facts.ts familyKeysOf): a bold word inside a row of ArialMT is set in Arial-BoldMT, whose part before the hyphen is "Arial",
+  // and the row was cut there, "Open" | "the relevant" (2608.06701v1 p2's bubbles))
+  const family = new Map()
+  const familyOf = name => { let f = family.get(name); if (f === undefined) { f = familyKeysOf(faceOf(name)); family.set(name, f) } return f }
+  const oneLine = (a, b) => faceOf(a) === faceOf(b) || (sameFamily(familyOf(a), familyOf(b)) && famOf(a) !== 'math' && famOf(b) !== 'math')
+  // (CHANGED: a run goes on over faces and colours, but never into or out of a face of one pitch: `fixed`, the faces the document
+  // sets at one pitch (facts.ts fixedFacesOf, read off the glyphs' advances, per font program), which locate gives where Rule 1
+  // keeps such text (PDF-READER §18.22). 2610.19159v1's transcript box titles, TeX's lines in pgf's pictures, set a path in
+  // typewriter between a title's words: one figure text, the path translated inside the title; its own figure text now, kept)
+  const pitchOf = name => !!fixed && fixed.has(faceOf(name))
+  // (TeX's own glyph in a picture after a run of TeX's that spells a word: its line goes on over faces and colours, math aside)
+  const texLine = (x, run) => run.word && !x.form && !run.form && x.picture > 0 && famOf(x.font) !== 'math' && famOf(run.font) !== 'math'
+  // (CHANGED: a word is told by its spacing, not its sizes, the owner's rule of 2026-11-10. A glyph is of the run's sizes where it
+  // is set at one of them, within 1 %, as a run's glyphs were of its one size; or where it stands no word space past the glyph
+  // before it (SPACE_GAP of their size, as `word` reads one below; a space glyph is a word space), its word's whatever its
+  // size, whose size is the run's then too, so that the words after it at either size go on with it. iclr2025's faked small
+  // capitals (2609.19644v1 pp. 56-71, an ICLR draft included as figures): each word's capital at the line's size, the rest of
+  // it smaller and abutting it; the run cut at each change, "S" | "YSTEM", the rests were translated alone ('ORECASTING' -> ore
+  // casting), and a word the source writes lowercase ("with") is all small. A script stands off the baseline (RUN_DY): none of it)
+  const known = (x, run) => run.sizes.some(z => Math.abs(x.size - z) <= 0.01 * z)
+  const sized = (x, run, s) => known(x, run) || (!x.blank && !!run.last && s - run.last.s1 < SPACE_GAP * Math.max(x.size, run.last.size))
   const units = [], glyphMaps = [], turnedMaps = []
+  // (CHANGED: the ink each crowded unit's band meets, by its k, and its stroke under its text: locate's relation reading judges
+  // it, figure-lines.ts, the owner's reformulation of 2026-11-10)
+  const met = new Map()
   // (the runs that spell a word the caps have counted, units or not)
   let taken = 0
-  const stats = { units: 0, crowded: 0, letters: 0, runs: 0, past: 0, clipped: 0, outsized: 0, sets: 0, grouped: 0, aligned: 0 }
+  const stats = { units: 0, crowded: 0, letters: 0, runs: 0, past: 0, clipped: 0, outsized: 0, sets: 0, grouped: 0, aligned: 0, boxed: 0, interior: 0 }
+  // (CHANGED: F3's containers, each closed path that holds two of a page's units or more and no other glyph: containersOf)
+  const holds = []
   pages.forEach((pg, pi) => {
     // (the page's text lines a unit's column is read from, made once a page and call, of this call's owners)
     let lines = null
@@ -194,24 +233,40 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
     glyphMaps.push(glyphMap); turnedMaps.push(turnedMap)
     const S = streamOf(pg, own?.glyphs?.[pi])
     const runs = []
-    let run = null
-    const close = () => { if (run?.gs.some(x => !x.blank)) runs.push(run); run = null }
+    // (`prev`: the run right before in the stream, nothing but white space between, which TeX's line may go on from)
+    let run = null, prev = null
+    const close = () => { if (run?.gs.some(x => !x.blank)) runs.push(run); if (run) prev = run; run = null }
     for (const x of S) {
       const figure = !x.owner && (x.form || x.picture > 0)
-      if (!figure) { close(); continue }
+      if (!figure) { close(); prev = null; continue }
       if (run) {
         const f = run.frame, s = along(f, x.ox, x.oy), t = across(f, x.ox, x.oy)
-        const joins = oneLine(x.font, run.font) && Math.abs(x.size - run.size) <= 0.01 * run.size && x.fill === run.fill && x.form === run.form && x.fid === run.fid && x.pid === run.pid
+        const tex = texLine(x, run)
+        const joins = (oneLine(x.font, run.font) || tex) && pitchOf(x.font) === pitchOf(run.font) && sized(x, run, s) && (x.fill === run.fill || tex) && x.form === run.form && x.fid === run.fid && x.pid === run.pid
           && Math.abs(x.ux - f.ux) < 1e-3 && Math.abs(x.uy - f.uy) < 1e-3 && Math.abs(t) <= RUN_DY * run.size
           && s >= run.s1 - RUN_BACK * run.size && s - run.s1 <= RUN_GAP * run.size
           // (a code region's edge ends a run: the prose beside the code, in its face on its baseline, is read, and the code alone kept)
           && x.code === run.inCode
         if (!joins) close()
+        else if (!known(x, run)) run.sizes.push(x.size)
       }
       if (!run) {
         if (x.blank) continue
-        run = { gs: [], font: x.font, size: x.size, fill: x.fill, form: x.form, fid: x.fid, pid: x.pid, inCode: x.code, s1: 0, frame: { ox: x.ox, oy: x.oy, ux: x.ux, uy: x.uy } }
+        // (TeX's line going on from the run before it on its line, which it did not join (a symbol before its first word, an icon;
+        // a formula): set from its start, as the line runs on from there)
+        const p = prev, pf = p?.frame
+        const led = !!p && !x.form && !p.form && x.picture > 0 && x.pid === p.pid && Math.abs(x.ux - pf.ux) < 1e-3 && Math.abs(x.uy - pf.uy) < 1e-3
+          && Math.abs(across(pf, x.ox, x.oy)) <= RUN_DY * p.size && along(pf, x.ox, x.oy) >= p.s1 - RUN_BACK * p.size && along(pf, x.ox, x.oy) - p.s1 <= RUN_GAP * p.size
+        run = { gs: [], font: x.font, size: x.size, sizes: [x.size], fill: x.fill, form: x.form, fid: x.fid, pid: x.pid, inCode: x.code, s1: 0, frame: { ox: x.ox, oy: x.oy, ux: x.ux, uy: x.uy }, word: false, last: null, led }
+        prev = null
       }
+      // (whether it spells a word yet: two letters together, no space between, as WORD reads its text)
+      if (!x.blank) {
+        const letter = /^\p{L}$/u.test((x.u ?? '').normalize('NFKC'))
+        const last = run.last
+        if (letter && last?.letter && along(run.frame, x.ox, x.oy) - last.s1 < SPACE_GAP * Math.max(x.size, last.size)) run.word = true
+        run.last = { letter, s1: along(run.frame, x.ex, x.ey), size: x.size }
+      } else run.last = null
       run.gs.push(x)
       if ((x.clipped || x.unseen) && !x.blank) run.clipped = true
       if (x.code && !x.blank) run.code = true
@@ -259,11 +314,14 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       const k = units.length
       const u = { k, page: pi + 1, group: figureGroup(k), text, font: r.font, size: r.size, fill: r.fill, angle: angleOf(f), x: first.ox, y: first.oy, ux: f.ux, uy: f.uy, length: s1 - s0, ascent, descent, anchor: 'centre', form: r.form, why: null }
       const room = roomOf(pg, f, u, r.gs)
-      // (the ink beside it within the reach tells its anchor, inside a figure (a line sample, an axis); where none does, a level
-      // line on its column's edge, or centred in it, is set from there, as TeX set it (a heading a class sets in a boxed
-      // panel); else its middle; the unit's set below may take its column's edge over either)
-      u.anchor = room.told ? room.anchor : (columnAnchorOf((lines ??= columnLinesOf(pg, own?.glyphs?.[pi])), u) ?? room.anchor)
-      if (room.crowded) { u.why = 'crowded'; stats.crowded++ }
+      // (the ink beside it within the reach tells its anchor, inside a figure (a line sample, an axis); where none does, TeX's line
+      // going on from a run before it is set from its start, and a level line on its column's edge, or centred in it, is set from
+      // there, as TeX set it (a heading a class sets in a boxed panel); else its middle; the unit's set below may take its
+      // column's edge over either)
+      u.anchor = room.told ? room.anchor : r.led ? 'start' : (columnAnchorOf((lines ??= columnLinesOf(pg, own?.glyphs?.[pi])), u) ?? room.anchor)
+      // (CHANGED: a crowded unit's met ink and its tones, an uncrowded one's tones under part of it, for the relation reading)
+      if (room.crowded) { u.why = 'crowded'; stats.crowded++; met.set(k, { items: [...room.met, ...room.grounds], under: room.under }) }
+      else if (room.grounds.length) met.set(k, { items: room.grounds, under: room.under })
       u.under = room.crowded ? null : room.under
       units.push(u)
       mine.push({ u, r, free: room })
@@ -275,8 +333,103 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
     // (the page's units in their columns and sets, then each one's room on its line)
     setsOf(mine, evidence, stats)
     roomsOf(pg, S, mine)
+    // (CHANGED: the closed paths that hold units alone, read while the page's shapes are kept: the lines of a node, F3)
+    holds.push(...containersOf(pg, mine.filter(m => Math.abs(m.u.ux - 1) < 1e-6 && Math.abs(m.u.uy) < 1e-6).map(m => ({ k: m.u.k, gs: m.r.gs.filter(x => !x.turned && !x.blank).map(x => x.i) })), pi + 1, stats))
+    // (the page read: nothing here reads its shapes again, which a reader may let go, `done`: locate's ink step, lane mem-back)
+    done?.(pi)
   })
-  return { units, glyphs: glyphMaps, turned: turnedMaps, stats }
+  return { units, glyphs: glyphMaps, turned: turnedMaps, stats, met, holds }
+}
+
+/**
+ * CHANGED (F3, the container step): the closed paths of a page that hold units alone. A path is closed where every segment's end
+ * is met by another's (to the hundredth of a unit); it holds a unit where every glyph of the unit has its ink's centre inside the
+ * path, the box tested first (a cheap rejection: the glyph's ink inside the path's box) and the interior deciding (the even-odd
+ * rule over its segments: a diamond's corners are no inside of it, 2608.06701v1 p2's "yes" beside "Any signal detected?"); it
+ * holds them alone where no other glyph of the page is inside it and no closed path inside it holds text of its own (the nodes
+ * of a box round a chart). Two units or more held so: one hold, the innermost of nested paths holding the same units. `stats.boxed` the paths the box test passed, `stats.interior` the points the interior read
+ */
+export function containersOf(pg, units, p, stats = { boxed: 0, interior: 0 }) {
+  const SH = pg.shapes ?? null, B = pg.boxes ?? [], G = pg.glyphs ?? [], U = pg.unseen ?? null
+  if (!SH || units.length < 2) return []
+  const out = []
+  const centre = g => [((g.ix0 ?? g.x0) + (g.ix1 ?? g.x1)) / 2, (g.top + g.bottom) / 2]
+  for (const [b, shape] of SH) {
+    if (!shape || U?.has(b) || !closedPath(shape.segs)) continue
+    const x0 = Math.min(B[4 * b], B[4 * b + 2]), x1 = Math.max(B[4 * b], B[4 * b + 2])
+    const y0 = Math.min(B[4 * b + 1], B[4 * b + 3]), y1 = Math.max(B[4 * b + 1], B[4 * b + 3])
+    const inBox = g => (g.ix0 ?? g.x0) >= x0 && (g.ix1 ?? g.x1) <= x1 && g.bottom >= y0 && g.top <= y1
+    const held = units.filter(u => u.gs.length && u.gs.every(i => G[i] && inBox(G[i])))
+    if (held.length < 2) continue
+    stats.boxed++
+    const inside = g => { stats.interior++; const [cx, cy] = centre(g); return interiorOf(shape.segs, cx, cy) }
+    if (!held.every(u => u.gs.every(i => inside(G[i])))) continue
+    const theirs = new Set(held.flatMap(u => u.gs))
+    let alone = true
+    for (let i = 0; i < G.length && alone; i++) {
+      const g = G[i]
+      if (theirs.has(i) || !g || g.blank || g.unseen || !/\S/u.test(g.u ?? '') || !inBox(g)) continue
+      if (inside(g)) alone = false
+    }
+    // (and no node of its own inside it: a closed path inside it that holds text of its own, its lines held by it, not by this one
+    // (the nodes of a box round a whole chart, 2608.06701v1 p2). A fill or a frame under words of one line, inside that line's
+    // band (one band's height over and under its baseline, the reach figure-lines' torn reads a line's own ink in), is a
+    // decoration that goes with its words: a code chip in a bubble (2608.06701v1 p9, 0.96 of the size), where a node's box
+    // stands past it (2608.06007v1 p8, 1.5 of the size and more). Other ink inside, a stroke, a legend's samples, is no reason:
+    // the coordinator's reading of 2026-11-11, what would end up in the wrong place, never whether ink is)
+    for (let c = 0; c + 3 < B.length && alone; c += 4) {
+      if (c / 4 === b || U?.has(c / 4)) continue
+      const inner = SH.get(c / 4)
+      if (!inner || !closedPath(inner.segs)) continue
+      const cx0 = Math.min(B[c], B[c + 2]), cx1 = Math.max(B[c], B[c + 2]), cy0 = Math.min(B[c + 1], B[c + 3]), cy1 = Math.max(B[c + 1], B[c + 3])
+      if (Math.abs(cx0 - x0) <= 0.5 && Math.abs(cx1 - x1) <= 0.5 && Math.abs(cy0 - y0) <= 0.5 && Math.abs(cy1 - y1) <= 0.5) continue
+      // (a path inside its box: one round it, a ground under it, is none)
+      if (cx0 < x0 || cx1 > x1 || cy0 < y0 || cy1 > y1) continue
+      let line = null
+      for (const i of theirs) {
+        const g = G[i]
+        const [mx, my] = centre(g)
+        if (mx <= cx0 || mx >= cx1 || my <= cy0 || my >= cy1) continue
+        stats.interior++
+        if (!interiorOf(inner.segs, mx, my)) continue
+        const reach = BAND * g.size
+        const under = line === null || Math.abs(g.y - line.y) <= 0.5 * Math.max(g.size, line.size)
+        if (under && cy0 >= g.y - reach && cy1 <= g.y + reach) { line ??= g; continue }
+        alone = false
+        break
+      }
+    }
+    if (!alone) continue
+    const ks = held.map(u => u.k).sort((a, c) => a - c)
+    const area = (x1 - x0) * (y1 - y0)
+    const same = out.findIndex(h => h.ks.length === ks.length && h.ks.every((k, j) => k === ks[j]))
+    if (same < 0) out.push({ p, b, ks, shape, area })
+    else if (area < out[same].area) out[same] = { p, b, ks, shape, area }
+  }
+  return out.map(({ area, ...h }) => h)
+}
+
+/** whether a path's segments (x0, y0, x1, y1 each) close: every end met by another's, to the hundredth of a unit */
+function closedPath(segs) {
+  if (!segs || segs.length < 12) return false
+  const deg = new Map()
+  for (let i = 0; i + 3 < segs.length; i += 4)
+    for (const [x, y] of [[segs[i], segs[i + 1]], [segs[i + 2], segs[i + 3]]]) {
+      const k = `${Math.round(x * 100)}|${Math.round(y * 100)}`
+      deg.set(k, (deg.get(k) ?? 0) + 1)
+    }
+  for (const d of deg.values()) if (d % 2) return false
+  return true
+}
+
+/** whether a point is inside a closed path by the even-odd rule over its segments (a ray to the right crossing them) */
+export function interiorOf(segs, x, y) {
+  let c = false
+  for (let i = 0; i + 3 < segs.length; i += 4) {
+    const ax = segs[i], ay = segs[i + 1], bx = segs[i + 2], by = segs[i + 3]
+    if ((ay > y) !== (by > y) && x < ax + ((y - ay) * (bx - ax)) / (by - ay)) c = !c
+  }
+  return c
 }
 
 /** the page's text lines a unit's column is read from: the level glyphs a unit owns (own.mjs's groups), by baseline, a line
@@ -344,12 +497,25 @@ function spanIn(u, b) {
  *  the page's own frame turned to it (`along`), and its point on the page (`x`, `y`) — its start (its first glyph's origin), end
  *  (its last glyph's end) and middle —, its baseline across its direction, its size and what it may share an edge with (`key`:
  *  one figure, one direction, one size), and the lines its edges may share (`axes`: across its direction always; for a run
- *  turned off the page's axes, the page's level and upright lines too, as a turned axis's labels end on one level line) */
+ *  turned off the page's axes, the page's level and upright lines too, as a turned axis's labels end on one level line), and
+ *  (CHANGED) its word space (`space`, spaceOf: setsOf's measure). Its size is setsOf's to key (CHANGED: today's keyed it to the
+ *  hundredth, see there) */
 function edgesOf(r, gs) {
   const f = r.frame, s0 = f.ox * f.ux + f.oy * f.uy, len = Math.max(0, ...gs.map(x => along(f, x.ex, x.ey)))
   const at = s => ({ along: s0 + s, x: f.ox + f.ux * s, y: f.oy + f.uy * s })
   const square = Math.abs(f.ux) < 1e-3 || Math.abs(f.uy) < 1e-3
-  return { start: at(0), end: at(len), centre: at(len / 2), t: -f.ox * f.uy + f.oy * f.ux, size: r.size, key: `${r.fid}:${r.pid}:${Math.round(f.ux * 1000)}:${Math.round(f.uy * 1000)}:${r.size.toFixed(2)}`, axes: square ? AXES.slice(0, 1) : AXES, unit: null }
+  return { start: at(0), end: at(len), centre: at(len / 2), t: -f.ox * f.uy + f.oy * f.ux, size: r.size, key: `${r.fid}:${r.pid}:${Math.round(f.ux * 1000)}:${Math.round(f.uy * 1000)}`, axes: square ? AXES.slice(0, 1) : AXES, unit: null, space: spaceOf(f, gs, r.size) }
+}
+
+/** (CHANGED) a run's word space: the mean of the gaps between its glyphs past SPACE_GAP of its size, a word's; null where it has
+ *  none (one word) */
+function spaceOf(f, gs, size) {
+  let sum = 0, n = 0
+  for (let j = 1; j < gs.length; j++) {
+    const gap = along(f, gs[j].ox, gs[j].oy) - along(f, gs[j - 1].ex, gs[j - 1].ey)
+    if (gap > SPACE_GAP * size) { sum += gap; n++ }
+  }
+  return n ? sum / n : null
 }
 
 /** the edges a column may share, in the order a tie between them is broken (a column is read from its start) */
@@ -375,6 +541,20 @@ function setsOf(mine, evidence, stats) {
   if (mine.length < 2) return
   // (each edge's columns on each line: the runs of a key in the order of that edge's place, each joined to the one before
   // within the tolerance)
+  // (one size as a run is one: within 1 % of the size before it, as glyphs join a run. CHANGED: today's keyed the size to the
+  // hundredth, and 2411.13093v4 p18's lines 515 and 527, set at 7.07 pt among their paragraph's 7.06's, made a column of their own)
+  {
+    const bySize = new Map()
+    evidence.forEach((e, i) => (bySize.get(e.key) ?? bySize.set(e.key, []).get(e.key)).push(i))
+    for (const [key, list] of bySize) {
+      const order = [...list].sort((a, b) => evidence[a].size - evidence[b].size)
+      let n = 0
+      order.forEach((i, j) => {
+        if (j && evidence[i].size - evidence[order[j - 1]].size > 0.01 * evidence[order[j - 1]].size) n++
+        evidence[i].key = `${key}:${n}`
+      })
+    }
+  }
   const byKey = new Map()
   evidence.forEach((e, i) => (byKey.get(e.key) ?? byKey.set(e.key, []).get(e.key)).push(i))
   const lines = EDGES.flatMap(edge => AXES.map(axis => ({ edge, axis, parent: new Int32Array(evidence.length).map((_, i) => i) })))
@@ -407,6 +587,39 @@ function setsOf(mine, evidence, stats) {
   // units of that column's edge, then EDGES' order. A number alone at a word's edge makes no column: an axis's title over a
   // tick's label stays centred)
   const at = new Map(evidence.map((e, i) => [e.unit, i]).filter(([u]) => u))
+  // (a paragraph's measure: an end column and a start column along the runs that hold lines in common (its full lines), their
+  // word spaces stretched apart to meet both (justified: two of them whose spaces differ past ALIGN_TOL of their size, the
+  // tolerance two edges are one by), the end column's other lines all starting inside it (an entry's first line, indented by
+  // hand) and the start column's all ending inside it (a paragraph's last line). Its lines were set each from its start, its end
+  // no edge a line was set from. Right-aligned labels that share a start too have their spaces as their face sets them, whatever
+  // their texts: one ("Population mean" twice, 2610.10492v1), none (2610.20808v1's "pt" "en" "es"), or one each, the one label
+  // more letters, the other more spaces (2610.40394v1's "Ordinary Differential Equations" and "History & General Mathematics",
+  // 2.348 pt both): no stretch, no measure. 2411.13093v4 p18's full lines' spaces run from 3.96 to 6.36 pt, its unjustified
+  // lines' 3.90. CHANGED: today's set a paragraph's indented line, which shares its end and not its start, from its end —
+  // 2411.13093v4 p18's prompt, an entry's translated first line flush against the box's right edge, its next line from the left)
+  const measured = new Map()
+  const isMeasure = (line, c) => {
+    if (line.axis !== 'along') return false
+    if (measured.has(c)) return measured.get(c)
+    const start = lines.find(l => l.edge === 'start' && l.axis === 'along')
+    const inEnd = []
+    for (let j = 0; j < evidence.length; j++) if (find(line.parent, j) === c) inEnd.push(j)
+    const byStart = new Map()
+    for (const j of inEnd) { const s = find(start.parent, j); (byStart.get(s) ?? byStart.set(s, []).get(s)).push(j) }
+    let yes = false
+    for (const [s, full] of byStart) {
+      if (full.length === inEnd.length) continue
+      const spaces = full.map(j => evidence[j].space).filter(x => x !== null)
+      if (!(spaces.length >= 2 && Math.max(...spaces) - Math.min(...spaces) > ALIGN_TOL * evidence[full[0]].size)) continue
+      const from = Math.max(...full.map(j => evidence[j].start.along)), to = Math.min(...full.map(j => evidence[j].end.along))
+      const indented = inEnd.every(j => find(start.parent, j) === s || evidence[j].start.along > from)
+      let short = true
+      for (let j = 0; j < evidence.length && short; j++) if (find(start.parent, j) === s && find(line.parent, j) !== c) short = evidence[j].end.along < to
+      if (indented && short) { yes = true; break }
+    }
+    measured.set(c, yes)
+    return yes
+  }
   const chosen = new Map()
   for (const { u } of mine) {
     const i = at.get(u)
@@ -415,8 +628,9 @@ function setsOf(mine, evidence, stats) {
       const c = find(line.parent, i), n = line.units.get(c) > 1 ? line.runs.get(c) : 0
       if (n < 2) continue
       const vote = line.votes.get(c)[line.edge]
-      if (!best || n > best.n || (n === best.n && vote > best.vote)) best = { n, vote, edge: line.edge, id: `${line.edge}:${line.axis}:${c}` }
+      if (!best || n > best.n || (n === best.n && vote > best.vote)) best = { n, vote, edge: line.edge, id: `${line.edge}:${line.axis}:${c}`, line, c }
     }
+    if (best?.edge === 'end' && isMeasure(best.line, best.c)) best.edge = 'start'
     if (best) chosen.set(u, best)
   }
   // (the sets: a column's units of one edge, and a key's units on one baseline)
@@ -559,6 +773,14 @@ function roomOf(pg, f, u, own) {
   // (the nearest ink right before its box along its baseline and right after it, within the reach: their gaps to the box; and
   // within `far` the free line either side, its room (roomsOf): the ink a translation there would meet, as far as it shows)
   let crowded = false, before = Infinity, after = Infinity, freeBefore = Infinity, freeAfter = Infinity
+  // (CHANGED: each item of ink the band meets, a glyph's index `g` or a box's `b` with its box and its lines where pageInk kept
+  // them; the scan goes on past the first, so that a unit the relation reading frees has its room and anchor read whole)
+  const met = [], metBox = new Set(), grounds = []
+  let atBox = null
+  const meet = () => {
+    crowded = true
+    if (atBox !== null && !metBox.has(atBox.b)) { metBox.add(atBox.b); met.push(atBox) }
+  }
   // (the top, across its frame, of the strokes under its text: the depth a translation drawn there must stay above, told by the
   // layer, which knows the translation's faces and size)
   let underTop = -Infinity
@@ -613,13 +835,13 @@ function roomOf(pg, f, u, own) {
   /** an extent along the baseline, of ink across the band: inside the box, or right before or after it (the crowding and the
    *  anchor are read within the reach alone, as they were before the room: the same units are drawn) */
   const along1 = (a0, a1) => {
-    if (a1 > band[0] && a0 < band[2]) crowded = true
+    if (a1 > band[0] && a0 < band[2]) meet()
     else if (a1 <= band[0] && a1 >= -reach) before = Math.min(before, -a1)
     else if (a0 >= band[2] && a0 <= u.length + reach) after = Math.min(after, a0 - u.length)
   }
   /** a stroke's part under the text: its top across the frame */
   const under1 = top => { underTop = Math.max(underTop, top) }
-  for (let g = 0; g < G.length && !crowded; g++) {
+  for (let g = 0; g < G.length; g++) {
     if (mineG.has(g)) continue
     const x = G[g], box = [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top]
     if (x.blank || x.unseen || !/\S/u.test(x.u ?? '') || apartFar(...box)) continue
@@ -628,10 +850,10 @@ function roomOf(pg, f, u, own) {
     // (painted before a cover that hides it, only the parts of it that show)
     const next = A?.[g] ?? Infinity
     for (const [a0, a1] of next <= lastCover ? seen(next, e[0], e[2]) : [[e[0], e[2]]]) {
-      if (a1 > band[0] && a0 < band[2]) { if (!apart(...box)) crowded = true } else free1(a0, a1)
+      if (a1 > band[0] && a0 < band[2]) { if (!apart(...box)) { crowded = true; if (!met.some(m => m.g === g)) met.push({ g }) } } else free1(a0, a1)
     }
   }
-  for (let b = 0; b + 3 < B.length && !crowded; b += 4) {
+  for (let b = 0; b + 3 < B.length; b += 4) {
     // (a box as far as it shows: the bounds of its transparency groups cut it, pageInk's `cut`)
     const box = C?.get(b / 4) ?? [B[b], B[b + 1], B[b + 2], B[b + 3]]
     if (apartFar(...box) || mineB.has(b / 4) || U?.has(b / 4)) continue
@@ -641,6 +863,12 @@ function roomOf(pg, f, u, own) {
     // its box shows them: a line its clip cuts off is no ink there)
     const near = !apart(...box) && !(e[2] <= -reach || e[0] >= u.length + reach)
     const shape = S?.get(b / 4), after = b / 4 >= over
+    atBox = { b: b / 4, box: [B[b], B[b + 1], B[b + 2], B[b + 3]], shape: shape ?? null, kind: pg.paths?.[b / 4] }
+    // (CHANGED: a tone painted before the text, a fill of no stroke and no pattern an edge of whose box stands inside the text's
+    // extent, across its band: a tone under part of it, a highlight under a stretch of its words, which crowds nothing (shapeRoom);
+    // recorded for the relation reading (figure-lines.ts), which carries one holding a stretch of its words whole with them)
+    if (shape?.fill && !shape.stroke && !shape.pattern && !after && e[1] < band[3] && e[3] > band[1] && e[2] > 0 && e[0] < u.length && (e[0] > 0 || e[2] < u.length))
+      grounds.push({ ...atBox, ground: true })
     // (what of it shows: a cover painted after it hides it where it holds the band)
     const next = b / 4 + 1, al = shownBy(next, near ? along1 : null), fr = shownBy(next, free1)
     const un = next <= lastCover ? (top, a0, a1) => { if (seen(next, Math.max(a0, band[0]), Math.min(a1, band[2])).length) under1(top) } : under1
@@ -660,7 +888,7 @@ function roomOf(pg, f, u, own) {
   const anchor = Math.max(before, 0) * ANCHOR_RATIO < Math.max(after, 0) ? 'start' : Math.max(after, 0) * ANCHOR_RATIO < Math.max(before, 0) ? 'end' : 'centre'
   // (`told`: whether the ink within the reach told the anchor, on either side; none on both is its middle by default; `under`, the
   // depth under its baseline of the nearest stroke under its text, PDF units, or null where none is)
-  return { crowded, anchor, told: Number.isFinite(before) || Number.isFinite(after), before: freeBefore, after: freeAfter, under: underTop > -Infinity ? -underTop : null }
+  return { crowded, met, grounds: grounds.filter(x => !metBox.has(x.b)), anchor, told: Number.isFinite(before) || Number.isFinite(after), before: freeBefore, after: freeAfter, under: underTop > -Infinity ? -underTop : null }
 }
 
 /** a path's lines against a unit's band (in its frame): each segment's part across the band (a stroke's widened by its half
@@ -681,6 +909,13 @@ function shapeRoom(shape, f, band, along1, free1, e, after = false, under1 = nul
   const { segs, hw } = shape, w = shape.stroke ? hw : 0
   const t0 = band[1] - w, t1 = band[3] + w
   const under = under1 && shape.stroke && !shape.fill && !after
+  // (a dot: every point of the path within its own line's width of every other)
+  let dot = false
+  if (under) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+    for (let i = 0; i + 1 < segs.length; i += 2) { x0 = Math.min(x0, segs[i]); x1 = Math.max(x1, segs[i]); y0 = Math.min(y0, segs[i + 1]); y1 = Math.max(y1, segs[i + 1]) }
+    dot = x1 - x0 < 2 * w && y1 - y0 < 2 * w
+  }
   const parts = []
   for (let i = 0; i + 3 < segs.length; i += 4) {
     const as = along(f, segs[i], segs[i + 1]), ts = across(f, segs[i], segs[i + 1]), ae = along(f, segs[i + 2], segs[i + 3]), te = across(f, segs[i + 2], segs[i + 3])
@@ -697,7 +932,10 @@ function shapeRoom(shape, f, band, along1, free1, e, after = false, under1 = nul
     if (under) {
       const top = Math.max(ts + (te - ts) * lo, ts + (te - ts) * hi) + w
       const a = Math.max(Math.min(p, q) - w, e[0] - SHOWN_SLACK), b = Math.min(Math.max(p, q) + w, e[2] + SHOWN_SLACK)
-      if (top < 0 && a <= b && b > band[0] && a < band[2]) { under1(top, a, b); continue }
+      // (CHANGED, F3: a path whose extent is less than its own line's width is a dot, no line under the text: 2608.06701v1 p9's
+      // member 651, a stroke 0.014 long and 0.16 wide 0.32 pt under its baseline read as a stroke 0.06 under it, every CJK
+      // translation's em box crowded by it, the line left the original's. A curve of short segments is a line as before)
+      if (top < 0 && a <= b && b > band[0] && a < band[2]) { if (!dot) under1(top, a, b); continue }
     }
     parts.push([Math.min(p, q) - w, Math.max(p, q) + w])
   }

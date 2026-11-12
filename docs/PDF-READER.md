@@ -147,8 +147,31 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
   page (the View Transitions API, 260 ms), not element by element (the maintainer: 「要学alpharxiv的方式，过渡自然」).
 - **深色时调暗页面**, a switch in the reading options, **default on** (「默认是开启这个功能的」): in the dark appearance the
   pages' canvases take `filter: invert(88.8%) hue-rotate(180deg)` and an undrawn page's background is `rgb(29 29 29)`,
-  so nothing flashes white while scrolling. Only the canvas is filtered: the highlight and the figure overlays keep their
-  colours. Off, the pages stay white in the dark chrome.
+  so nothing flashes white while scrolling. Only the page's own drawing is filtered: the canvas, and over a laid page the
+  overlay's text and its crops by the same filter (the reader's sheet), so that every run comes out as the canvas's ink does,
+  whatever fill it names — the layer's black, a CJK run's `#141414` (§11.8), a colour of a run's own — which no rule on a
+  text's fill would reach. The crops' blend is mirrored with the filter, as the highlight's is: darkened into a white page,
+  lightened into a dimmed one (styles.ts). The filter makes a crop's paper the dimmed page's own ground (29, the canvas's white
+  through the same filter) and its ink light, so darken kept the ground over the ink: on the website's v2 page on staging
+  (2026-11-12) every inline formula of a translated paragraph was a blank gap, the display equations, the canvas's own, still
+  there. Lightened, a crop's ink comes out as the canvas's own does (`#c00000`: rgb(255 163 163) both) and its paper lies on
+  its equal, no box; only a channel the filter takes under the ground's 29 is lifted to it (`#00ffff`: rgb(0 113 113) on the
+  canvas, rgb(29 113 113) in a crop, luma 89 and 95). The highlight's bands keep their colours, screened over the dark page
+  as they are multiplied over a white one. Off, the pages stay white in the dark chrome.
+- **Where the marks are read** (the website's v2 page on staging, 2026-11-12: the translation drawn black on the dimmed
+  page): the appearance is the page's, written by the chrome on `<html>` (`data-theme`, `data-axt-dim`:
+  chrome/appearance.ts); the reader's root, the element that carries `.axt-reader`, is the element a host gives `openReader`
+  (both hosts: `<body>`; the package's harness: an element of its own). The reader's sheet reads `data-axt-dim` on its root
+  or on any element above it (styles.ts `DIMMED`), as the tokens read `data-theme`, so that the look cannot depend on
+  which element a host chose and no host copies the mark; the reader's own marks are written on its root by the reader and
+  read there (`data-axt-pdf-mode`, `data-axt-narrow`, `data-axt-swapped`, `data-axt-layer-text`), and those it writes inside
+  it under it (`data-axt-scaling`, `data-axt-turn`). Before, the sheet read the mark on the root alone, and on both hosts
+  the overlay's text, the link rings, the skeleton's colours and the translating marks' light stayed light-page values; the
+  canvas's and the crops' filter and the highlight's blend were right by the chrome's own sheet (the crops' blend was never
+  right: above). Held by the package e2e's `dim:` checks, in four shapes: the class and the mark on one element (an element of the
+  host's; `<html>`), the class on `<body>` under a marked `<html>`, and both hosts' page (the chrome over the reader); each
+  reads a crop's pixels too, dimmed and not (its lightest pixel 185 on a ground of 29 dimmed, 29 before the mirror; its
+  paper's pixels the page's ground, 29 and 255).
 - The night-reading switch of the earlier rounds is gone; the two items above replace it (the maintainer's point 3,
   2026-09-24).
 
@@ -315,9 +338,9 @@ scroll area keeps it (the maintainer turned down mirroring the left one to the o
   7 px and darkens to 45 % under the pointer.
 - **Hidden through a zoom**, until the reader next scrolls (the owner's decision of 2026-11-01: 「缩放时让它直接消失行不行？因为在缩放的行为路径中，用户本来就不能上下滑动，这时候手柄消失、等滑动时再出现也是可以的…我们完全可以用这种更直接的解法」).
   A zoom moves each pane's scroll to keep its point under the pointer, but that is not the reader scrolling. Both handles go
-  at once, with no fade, from the zoom's first Ctrl or ⌘ wheel over the pages or its first change of scale, whatever asked
+  at once, with no fade, from the zoom's first Ctrl-wheel over the pages or its first change of scale, whatever asked
   it: a pinch, a key, the menu or a fit. A scroll shows its pane's handle again once the reader's own input has come since
-  the zoom's last change of scale: a wheel without Ctrl or ⌘, a key other than the zoom's, a touch, a press anywhere (a
+  the zoom's last change of scale: a wheel without Ctrl, a key other than the zoom's, a touch, a press anywhere (a
   link, the contents, the page pill). The zoom's own scrolls come with none (each step's anchoring, a commit's, and the
   panes' level once the zoom settles, a glide's end 150 ms or more on) and leave them hidden; a scroll begun at once after a
   step shows from its first frame. The handle comes back already at its length and place, on the auto-hide timing above; a
@@ -366,6 +389,16 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
     widths. Measured frame by frame in Chromium, Firefox and WebKit (`tests/e2e/probes/capsule.mjs`).
   - **Reduced motion**: opacity with the 2 px blur, at once; nothing slides; the width snaps, growing at once and
     shrinking once the old words have gone (150 ms); the spinner stands (the maintainer, 2026-10-04).
+  - **A run's capsule enters once its wait has lasted 400 ms** (`WAIT_SHOWN_MS`, `StatusCapsule.tsx`; the coordinator's
+    decision 3, 2026-11-11): a wait the reader cannot perceive is not announced. A wait that ends sooner shows nothing
+    and says nothing to a screen reader; once in, the capsule stays through every change of its stage and words (a count
+    that pauses and moves again, our server heard again) and leaves at once when no run's capsule is wanted. It is the
+    family of the page's mark, which PDF.js draws after 400 ms (`--loading-icon-delay`), and of the translating marks'
+    0.3 s. A refusal, an error, a notice and a toast are not delayed. The case it was made for: a stored translation's
+    first page and a settled paper's reopening, under a second each on staging, said a run's word every time. The grace is
+    for a wait that begins with nothing on screen: where a capsule is (another's words, or a run's capsule still leaving, its
+    160 ms), the run's capsule takes its place at once, in place, never a gap after a capsule that was showing (the
+    coordinator's R4, 2026-11-12).
   - **What a screen reader is told**: the words' cell is `aria-hidden`; the sentence is told whole (or `spoken`, other
     words, where it holds a count said once a stage) in a line of its own, once per change of that text. A language's
     own name (S-R-13) is a part drawn in its own `lang` (`withPart`; Devin on #313).
@@ -379,7 +412,60 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
   the status region. (The harness's fifth round moved the progress into a fill of the capsule, ink at 8 %, with the
   status words; the maintainer asked for the line back, 2026-09-25 — the status words were what had to leave the
   header, not the line — and then for no capsule while it runs: the line says it.)
+- **The prepare on the line** (the coordinator's decision 4, 2026-11-11): where a paper's layer is made in the process,
+  the half of the line after the download is the prepare's, and the line moves by the stage our server's record names
+  (`prepare.stage`, `events.ts` `PREPARE_PLACES`): each stage at a fixed place on that stretch, where it starts in the time
+  a prepare takes, the mean of the two staging timelines of 2026-11-11 (a new paper's, 2610.20266v1, 87.9 s; a paper
+  prepared again after a deploy, 2610.21924v1, 95.6 s). No stage names on screen and no time-based creeping; it never
+  runs back. The translation after it takes what remains, from the prepare's end to the whole line; a process without a
+  prepare keeps the download's base (the translation from 15 %). Until then the reader read a place in a queue and a
+  progress the record does not carry, so the line stood at 15 % for a new paper's whole prepare (88 s on staging), and
+  the early units' run ending while the layer was made filled it at 36 s.
+
+  | Stage | Its start in the two timelines | Its place on the prepare's stretch | On the line |
+  |---|---|---|---|
+  | (told, none yet) | 0 % | 0 | 15 % |
+  | fetching | 2.4 %, 1.4 % | 0.02 | 15.9 % |
+  | compiling | 12.9 %, 11.2 % | 0.12 | 20.1 % |
+  | units | 71.5 %, 33.2 % | 0.52 | 37.1 % |
+  | laying-out | 79.7 %, 55.9 % | 0.68 | 43.9 % |
+  | bundle | 95.1 %, 99.0 % | 0.97 | 56.2 % |
+  | the layer shown, its count not known | | the stretch's end | 57.5 % |
+  | the translation | | | 57.5 % to 100 % by the share translated |
+
 - The paragraphs that failed are told once the run has ended, not while it runs.
+- **A translation under way is what the view shown waits for**, not our server's record of its runs (`session/rows.ts`
+  `viewOf`, told as the reader state's `rows.waits`). One of the units of the layer shown that the paper does not keep
+  and the toggles show translated has no translation held, while a run that may bring it is under way: our server's
+  run of the target running or still to start, our server still working for the view, or the host's translate. Our
+  server still works for the view, without the reader's acting, while the document read for the target says so
+  (`rows.ts` `runOf`, `aheadOf`; the coordinator's R3 of 2026-11-12, from the record's fields alone, never a time): its
+  prepare running (`prepare.state`: a layer lands at its end, and the target's run over its units follows, our server's
+  own start of a run on units it has not run, or this session's open), or a need of the visit (`needsOf`) that the session
+  asks, its open under way or not yet asked with no wait named for it: the prepare of a stale `layer`, the target `done` on
+  other `units` than the layer's (an attempt covers the layer where its units are the layer's own, by digest). That work, and
+  the target's own run, are waited for only while the system still works for this reader by itself (§8.1, `goesOn`). Rows that ended meanwhile are told as arriving (`rowsTold`), and the one
+  wait goes on: on staging 2026-11-12, 2010.11929v2 (a stale layer, no translation under the chain) counted 356 of 435,
+  left the moment attempt 1 was done while the prepare still ran, and came back 6.8 s later at the new layer's attempt 2.
+  Its count is one statement over that set: those
+  units with a translation held, of those units. It never passes its total, and never falls while the layer shown and
+  the toggles stay, since rows held are only added to. Its total changes only with the layer shown or the toggles, and
+  then it is a new statement; while a new layer's units are not read yet, the count is the layer's before it (the pages on
+  screen), never 0 of 0 for a moment. Some cases are told by their end alone, so the line and the capsule say nothing of them:
+  rows read of a run done with nothing more to come (a stored translation); a run that restates rows the view holds; a run on
+  units of a layer not shown yet that leaves every unit shown held. Before this rule, on staging 2026-11-11,
+  2610.21924v1 opened after a deploy said "translating" three times over a paper already on screen. Its count went from
+  476 of 393 to 0 of 0 to 320 of 476: the rows the tab held, over each attempt's total. The view's wait is over once
+  every unit shown holds its translation, though a run that restates them may go on. The end held for the layer's
+  first page (`laying`) translates nothing, so no capsule says it, in any host's words: a stored translation's first
+  page is a load, which the progress line and the page's marks show as they show the original's, and the status region
+  says the load there (`R.status.loading`), never the translation (the coordinator's decision 2 of 2026-11-11 and R2 of
+  2026-11-12; until then the website's capsule said the paper was being prepared there, 0.7 s on every reopen of a settled
+  paper, and then its screen-reader line said `R.status.translating` for 0.6 s, which the staging recorder of 2026-11-12 read
+  as a capsule). The layer's units not read yet, the target's run under way or to start waits while nothing is laid (a first
+  open's: its count comes with the head); our server's work ahead alone does not, and the rows' end is not told meanwhile, so
+  the wait and the end (with the line's whole length) come once the count is known: a stale layer whose every passage is held
+  stays silent with staging's objects a second late, and one missing passages never shows the whole line before them.
 - **A notice** carries a chip action and a close button, whose tooltip stands above it; closing it is remembered for this paper's visit, each notice apart — the partial one's close does not close the count of failed passages it stood before (#314).
 - **Two notes that are not a notice**: settings that cannot be read stand for as long as it is so, with a link to the settings page and no close (UI.md S-R-21); a write storage refused is told with the settings page's sentence until it is closed or a later write of this page goes through (S-R-22).
 - **When the translation's pane has nothing to show**, the same anatomy is a card centred in that pane (300 px, 14 px
@@ -407,6 +493,23 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
     translation over the original's bytes, so that pane has nothing else to show (today's page drew the translation from
     its own files and left the card to the original's pane). The translation's card, the service's, is due at the
     service's time. Without the word, the translation's pane's card with its retry.
+  - **One word for the wait** (the coordinator's decision 1, 2026-11-11, after the owner found the staging prompts
+    confusing): a status says what the reader waits for, never what the system is doing. The paper's first making (its
+    layer being made, the first time anyone opens it, until the count of its translation is known: `status.ts`
+    `firstOf`) is the stage `translating`, its words the host's `translating(got, total, chip, first)` with `first`: the
+    website says the translation with the time a first one takes, and then the count as before. No stage says the
+    paper is being prepared; a screen reader is told the stage once, the first making's words, since the count that
+    follows is the same stage. The capsule has no quieter part for the hint (its cells are the count and a part in
+    another language, both in the words' ink), so the hint is one sentence with the stage's word.
+  - **Waiting in line** (`queued`; the coordinator's decision 5, 2026-11-11): our server at capacity refuses the open
+    `busy` in its answer, with a time (30 s); the reader asks again by itself at that time for as long as it is answered
+    so, never counted with the limit's 429s (`REFUSED_ASKS`). Where the host words the queue (the website), it is a run's
+    capsule, `causeOf(state) === 'busy'` the stage `queued`: the spinner, no retry, the 400 ms of every run's, and the
+    first making's words follow it in the same capsule once the open is taken. The extension gives no words for it, so its
+    capsule is the refusal's as before (S-R-26's words and retry). The visitor's rate of asks (a 429 that says so) is never
+    the queue. Before this, our server named no place in a queue and the reader read one the record does not carry, so
+    the queue's words could not show; a busy refusal said the translation was unavailable for now, and stopped asking
+    after three.
   - `showTranslation`: the run's capsule carries a chip that shows the translation where it is not on screen and some of
     it is there (the original's display, or the original held for the narrow window), pressing it the reader's own
     choice.
@@ -461,12 +564,18 @@ The states are §8's.
 
 ### 6.8 Pinch zoom
 
-A trackpad pinch (or Ctrl/⌘ with the wheel) over the pages zooms both panes together around the pointer, as EmbedPDF
+A trackpad pinch (or Ctrl with the wheel) over the pages zooms both panes together around the pointer, as EmbedPDF
 does (「直接双指捏合滑动就可以放大缩小」): a trackpad's small deltas zoom continuously, a mouse notch steps a tenth. While
 the fingers move the pinch is shown by transform; `PINCH_COMMIT_MS` (200 ms) after its last step it is committed: the scale
 written once (`updateScale({ scaleFactor, drawingDelay: 0 })`), both panes put, the pages drawn once. The browser's own zoom
 is taken only over the pages. The overlays follow the pinch exactly (§10.1).
 
+- **Only Ctrl makes a wheel a zoom.** A trackpad pinch arrives in Chrome as a wheel event with Ctrl held, and Ctrl with the
+  wheel is a mouse's zoom; ⌘ with the wheel is no zoom gesture on macOS. A wheel with ⌘ held is a scroll like any other,
+  never a zoom, in the chrome's pinch, the panes' inputs and the scroll indicator alike. **Why** (the owner's report,
+  2026-11-10): the page sometimes zoomed when he pressed ⌘⇧ — macOS's screenshot keys (⌘⇧4, ⌘⇧5), which he uses all the
+  time, hold ⌘ while a trackpad's scroll or its momentum is still running, and every wheel with ⌘ was then taken as a
+  zoom. The keys are unchanged: ⌘ or Ctrl with − and + zoom by a tenth (§7).
 - **No step lays anything out.** From the page boxes read at the gesture's first step, a step works out the layout the
   commit will make at its scale — each page box scaled, the gaps between them not, a page narrower than the view centred,
   the scroll put so that the point under the gesture stays under it, then held within the scroll's ends — and shows it by
@@ -485,7 +594,7 @@ is taken only over the pages. The overlays follow the pinch exactly (§10.1).
   other pane, the same place in its view: the same point of the same page while the pair is level), wherever it lies — on a
   page, in the gap between two, beside one: a share of the page box it is level with, or px from its edge where it is
   outside (the gaps and margins do not scale). The pair stays level through the gesture, and its rest finds nothing to level.
-- **The follower stands aside.** A wheel with Ctrl or ⌘ is no scroll input; the pinch's first step ends whatever the
+- **The follower stands aside.** A wheel with Ctrl is no scroll input; the pinch's first step ends whatever the
   follower moves, calls its rest off (and a zoom's before it still to be levelled: this one's end levels the pair) and holds
   it from binding until the commit; the commit's scrolls are the view's own puts, and the pair is levelled only once the
   zoom settles.
@@ -537,24 +646,173 @@ No state that tells the reader nothing is shown (no "done").
 | State | When | Shown |
 |---|---|---|
 | Reading | 原文; a translation ready; a stored translation shown, offline included | nothing |
-| Loading | a large PDF is loading | the progress line by the share downloaded, its first stretch; 正在加载 said to screen readers |
-| Preparing | the paper's bilingual files are being made (our server's prepare, a paper no reader opened before) | the original; the progress line's first half after the download, by the prepare's progress; 正在准备 said to screen readers (S-R-23) |
-| Translating | the paper's paragraphs being translated by the service chosen | the same line on, by the share of paragraphs done; 正在翻译 said to screen readers; each page laid on the right as its paragraphs come, the original's page until then |
-| Not to be had now | Read arXiv's website out of reach, or at its limit | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24); passing, not remembered; a paper whose files this machine keeps opens without it |
-| Some paragraphs failed | a translation with gaps | capsule: {n} 处翻译失败 · 重试 · close |
+| Loading | a large PDF is loading; the translation there, its first page being laid (a stored one read, or a run's last rows in) | the progress line by the share downloaded, its first stretch; 正在加载 said to screen readers |
+| Preparing | the paper's bilingual files are being made (our server's prepare, a paper no reader opened before) | the original; the progress line's first half after the download, by the prepare's stage (§6.6); 正在准备 said to screen readers (S-R-23); the website's capsule says the translation the reader waits for, with the time a first one takes (§6.6) |
+| Translating | the paper's paragraphs being translated by the service chosen | the same line on, by the share of paragraphs done; 正在翻译 said to screen readers; each page laid on the right as its paragraphs come, the original's page until then. The paragraphs counted are those of the layer on screen that "What to translate" shows translated; one whose translation is already held is done, and a run that only restates them is not shown |
+| Not to be had now | Read arXiv's website out of reach, at its limit, or the network itself down (§8.1: each cause its own words) | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24), the retry only where the session does not ask again by itself (§8.1); passing, not remembered; a paper whose files this machine keeps opens without it |
+| Some paragraphs failed | a translation with gaps: rows that are none, or a run that ended failed and is not asked again at once (§8.1) | capsule: {n} 处翻译失败 · 重试 (where nothing asks again by itself) · close |
 | Language not supported | the shared target language is not one of the reader's | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the reader's translates |
-| Nothing translated | a service failure with no paragraph done | card in the translation's pane: the reason (网络连接失败, API Key 无效或已过期, 尚未配置 API Key, …) · 重试, or 设置 when the reason is a key (opening the settings page at the services) |
+| Nothing translated | a service failure with no paragraph done | card in the translation's pane: the reason (网络连接失败, API Key 无效或已过期, 尚未配置 API Key, 请求过于频繁, …) · 重试, or 设置 when the reason is a key (opening the settings page at the services). The reason is the unit's `Why` read by format's one reading of it (`kindOfWhy`, which the extension's `errorOf` and so the HTML page's words read too): a reply no translator gave back whole an invalid response; a translator out of reach the network, a rate limit where it named a wait; a key refused the key's; no model or no translator for the target a bad request; any other unconfigured code a missing key's. Our server's run of the target failed is the network's |
 | Cannot be had | no bilingual version can be made of the paper (no source, no PDF, a prepare that cannot succeed, one this version of the reader cannot read) | 对照 and 译文 greyed in the switch; the reader shows 原文, with the capsule: 这篇论文暂不支持 PDF 翻译, and 改用 HTML 翻译 where arXiv has an HTML version (opened where `reading.openIn` says); no close |
 | No paper | the address names none (a hand-typed one) | the phase is ready, not loading; 对照 and 译文 greyed and 原文 selected whatever the saved display; a card in the document area: 找不到这篇论文 · 前往 arXiv (a link, opened where `reading.openIn` says) |
 | Settings cannot be read | storage did not answer in a page's first 1,500 ms, or its value cannot be used | the defaults in use and the PDF opened on them, not held for the storage; capsule: 设置读取失败，当前使用默认设置 · 设置, for as long as it is so, beside an address with no paper's card too; the controls that write the settings greyed, with the reason in their tooltips; the menus keep their places |
 | Narrow window | 对照 chosen, the document area under 840 px (§5) | the translation alone; capsule, once: 窗口较窄，暂只显示译文 |
 
-- Recovery is automatic where it can be: our server's wait (a 202's, a 429's) is waited and asked again, a 429's three
-  times in a row at most (S-R-26: a visitor's limit lasts up to a day, and a tab left open asked every ten minutes for as
-  long as it stayed open; #88 E5); 重试 opens the
+- **The website's words** (`readarxiv-web` `web/src/reader/web-words.ts`, given to the chrome as `StateWords` by its
+  v2 page; zh-TW, ja and ko in the same table). The extension gives none and keeps the catalogue's above. A run's
+  capsule enters once its wait has lasted 400 ms (§6.6); every other capsule at once.
+
+  | State | When | zh-CN | en |
+  |---|---|---|---|
+  | The first making | the paper's layer being made (no layer to show yet: the first time anyone opens it), until the count of its translation is known | 正在翻译 · 首次约需 1–2 分钟 | Translating · the first time takes 1–2 minutes |
+  | Translating, counted | the view waits for paragraphs of the layer shown (Translating above) | 正在翻译 · {n} / {N} 段 | Translating · {n} of {N} passages (under 400 px: Translating {n} of {N}) |
+  | Translating, bare | the same, the layer's count not known yet (a layer shown before this visit), or the count beside the chip in a window under 400 px where the short count does not fit | 正在翻译 | Translating |
+  | Waiting in line | our server at capacity: the open refused `busy`, asked again by itself | 排队中 | Waiting in line |
+  | Reconnecting | our server's document not heard while a run is under way | 正在重新连接 | Reconnecting |
+  | The run's chip | beside a run's words, the translation not on screen and some of it there | 查看译文 | Show translation |
+  | Cannot be had | no bilingual version can be made of the paper | 这篇论文暂时无法翻译 | This paper can't be translated yet |
+  | Too large | the paper too large to prepare | 这篇论文篇幅过大，暂时无法翻译 | This paper is too long to translate |
+  | Not now, our server | out of reach or at fault; the time while it is to come | 翻译暂时不可用，{time} 后可以重试 | Translation is unavailable for now; you can retry at {time} |
+  | Not now, the limit | the visitor's new papers spent; the time while it is to come; then the note today's card said under it, true of this limit alone (the feature list's I7) | 新论文的翻译次数已达上限，{time} 后可以重试 · 已有译文的论文仍可打开 | You've reached the limit for new papers; you can retry at {time} · Papers already translated still open |
+  | The HTML link | beside a paper that cannot be had, where arXiv has an HTML version: the extension on the page, or not (none on a phone) | 改用 HTML 翻译 · 安装扩展翻译 HTML | Translate HTML instead · Get the extension for HTML |
+  | The original lost | its pane's card, with arXiv's PDF of the version | 这里暂时无法显示原文 · 在 arXiv 打开原文 PDF | The original can't be shown here for now · Open the original PDF on arXiv |
+
+  A time once come drops from its sentence (the title alone). The visitor's rate of asks and the network itself are
+  the sibling lane's words (flow-refusals, 2026-11-11). Nothing the website says names the paper being prepared: the
+  word 正在准备 is the old page's (`reader/job-view.ts`, production's) and the extension's screen-reader line (S-R-23)
+  alone.
+- Recovery is automatic where it can be: our server's wait (a 202's, a 429's) is waited, as our server names it, and asked
+  again, a 429's three times in a row at most (S-R-26: a visitor's limit lasts up to a day, and a tab left open asked again
+  for as long as it stayed open; #88 E5), the visitor's rate of asks, our server at capacity (its queue) and the network's at every time (§8.1); 重试 opens the
   layer again and asks only for the paragraphs that are missing, the rest coming from the cache; rate limiting never shows
   (the chain retries it, and only its final giving-up counts as a failure).
 - A failure never takes focus.
+
+### 8.1 Refusals and failures: one source for a time, the causes apart, the passages that failed
+
+A status says what the reader is waiting for and what they can do; every number or time it prints has one source and is
+true (the coordinator's flow of 2026-11-11, which the owner delegated after testing staging: with the hour's new papers
+spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while our server's record said 21:00:00).
+
+- **The retry's time is our server's instant.** A refusal of new work names the instant it ends, on our server's clock: the
+  visitor's period's end exactly for a quota (the hour's, or the UTC day's, as the admission knows it), its wait from the
+  admission's now for capacity. The paper's record keeps that instant as it is (`retryAt`), and the open's answer names it
+  (`refused.retryAt`) beside its distance to the millisecond (`refused.retryAfterMs`: what the session counts on its own clock)
+  and in whole seconds, rounded up (`refused.retryAfterS`: all an older reader reads). Never a wait in seconds re-anchored on another clock: the admission's
+  `ceil((until - now) / 1000)` added to the paper's clock and the viewer's landed past the minute (staging's record 21:00:00.408)
+  and was said 21:01, "tomorrow 0:01" across midnight (flow-fixes F1, 2026-11-12). The session's own next ask waits for the later
+  of two: our server's wait measured on the viewer's clock from the answer, and the viewer's clock reading the instant said; so
+  it never asks before the time it said nor before our server would take it, whichever way the viewer's clock is off (90 s
+  ahead: it asks when our server's hour is over, at 21:01:30 on that clock; 90 s behind: at 21:00:00 on that clock, our server's
+  21:01:30); where the two clocks agree, the ask is at the instant itself (a wait counted in whole seconds asked again 0.4 s
+  past it). A wait no time is said for (capacity, the rate) is our server's wait alone. Whether a time is said is the chrome's
+  (`capsuleOf`), the host's words saying the time they are given: while it is to come, and while the session will ask by itself
+  at it, until that ask begins (never the bare sentence between the instant and the ask); one the reader is to retry at drops
+  from its sentence once it has come. A refusal's time is the one our server
+  names, as it names it (a failed run's `retryAt` in its document likewise), never capped: the time printed, the moment the retry is offered
+  (the website's `retry: 'when-due'`; a press before it asks nothing) and the session's own next ask are that one time. A
+  bound remains only where it paces polling (a stream's reconnection time, `WAIT_MAX_MS`). The fourth refusal in a row keeps
+  the time and only stops the session asking by itself. A refusal told again with another time is told again, and the
+  capsule follows it. The session's own next ask has a floor and a pace of its own, never printed (integration, round B10):
+  never sooner than a second after the answer (`WAIT_MIN_MS`), and a refusal of our server's capacity or of the visitor's
+  rate answered again and again backs off, its wait doubled each time, at most thirty seconds (`BACKOFF_MAX_MS`) or the time
+  our server names, the larger; an answer that moves the paper on ends the run. A 429 naming 0 s was otherwise asked again
+  at once, without end.
+- **Printed rounded up.** The time is printed in the viewer's zone, rounded up to its minute only where it is not on one, so
+  that at the minute printed a press works (15:19:45 is said 15:20; 21:00:00 is said 21:00). The hour is two digits where the
+  language writes it so (zh-CN, zh-TW, ja, ko: 00:00, 09:05, 21:00, each in its own hour cycle), English unpadded (9:05 AM): one
+  formatter for every such time, the website's `home/card.ts` `clockOf`. On the visitor's next day (their zone) the sentence says tomorrow (明天 {time} 后可以重试); on a
+  later day it gives the date and the time, as the website's home card writes a date.
+- **The causes apart** (`causeOf`: quota, busy, rate, network, server), each with a sentence of its own:
+  - the visitor's new papers spent (`quota`): 新论文的翻译次数已达上限，{time} 后可以重试, its time our server's (the website's adds its note, 已有译文的论文仍可打开);
+  - our server at capacity (`busy`): its own state (the wait's words, §6.6);
+  - the visitor's rate of asks (`rate`: a 429 whose body says `rate-limited`): 请求过于频繁，请稍后再试, no time; the reader
+    asks again by itself once our server's wait has passed, never counted among the three refusals in a row;
+  - the network itself (`network`: a fetch that rejected twice, or the browser offline): 网络连接失败，请检查网络, no time; the
+    reader asks again by itself at once when the browser says it is online again (the `online` event), and, while it says it
+    is online, at a growing pace (a second, doubled to thirty);
+  - our server at fault (`server`: a 5xx twice, a prepare that failed by its fault): 翻译暂时不可用, with its time where its
+    record names one; a retry asks again. A prepare's failure is our server's when its record says `internal`, `deadline`,
+    `translation-down` or `unavailable`: each named in the session's table (`session/machine.ts PREPARE_WHY`, the layer
+    refused `unreachable` with the record's `retryAt`, the time of our server's next attempt), never the paper's own. They
+    had fallen to the same by being in no table; today's page told `internal` as a failure (the feature list's R08). The
+    website's tests hold its server's words and the table equal, so a word its server adds fails them until it is named.
+  The extension's capsules keep the catalogue's sentences (PDF 对照暂时无法加载 for our server and the network, its limit's
+  sentence for a limit and the rate).
+- **An action is offered only where the system will not take it by itself; a failure is told only where the system is not
+  already trying again** (the coordinator's principle, 2026-11-12; flow-fixes F2, F4). At a refusal's time the retry chip came
+  and, the same instant, the session asked again by itself: the chip stood a quarter of a second. The session states, for each
+  thing that stopped, whether it asks again by itself (`againOf`): the original the network failed to bring (opened again a
+  second on, at once when the browser is online); the look a 429 stopped that it waits out (the rate, capacity, the limit's
+  first three) or the network stopped; a prepare or a run of the target whose record names a time and whose open this visit has
+  not asked; a translator's wait. The reader's state carries it (`self`), and no retry is drawn for it: not the capsule's chip
+  (`retryOffered`), not the notice's, not the failure card's button, not the original's card's (the extension's v2 build). A
+  retry is offered where nothing asks again but the reader: our server out of reach, the limit past its three asks (at its
+  time on the website), a key, a run this visit asked already. A session that does not say (the extension's today session)
+  keeps every retry as it was.
+- **The network down while a counted translation is waited for** (flow-fixes F3): where the view waits on our server for a
+  translation it counts, the browser offline, or an ask's fetch rejected with nothing heard since (the look stopped for the
+  network, or asked again and not heard yet) is the network's (`linkSaid`, the reader's state's `network`): its words over the
+  count, whatever is on screen, with no retry (the session asks again once it is back), the count again once a document is
+  heard. A stream that broke while the browser is online and is opened again is reconnecting (the system acting, nothing for the
+  reader to do). A reader only reading a finished translation is told neither: nothing is waited for. With no layer shown, the
+  network's stop is the layer's refusal for now, as before.
+- **One definition of the system still working for this reader** (the coordinator's R6 of 2026-11-12; integration's B11 F1,
+  F2): our server's look on, or stopped for a cause the session goes on from by itself, with no period to end and nothing of the
+  reader's (`GOES_ON`: our server at capacity, the visitor's rate of asks, the network; `goesOn`). The one table is the
+  session's (`machine.ts`): the view's wait reads it (`rows.ts` `runOf` `live`), the session's own next ask (a cause in it is
+  always asked again: `refusedFor`'s wake), what it asks again by itself (`againOf`) and the chrome's display and words
+  (`model.ts`, `status.ts` `GOES_ON`, made from it). Before it, the view's wait read a narrower test (the look on, or stopped for
+  the network), so a queue over a shown layer flipped the wait to done and back at every one of the session's re-asks, 1, 2, 4,
+  8 s apart, the progress line flashing each time; and a prepare running by the last document kept a wait whose look had stopped
+  for good (our server out of reach), its count still, nothing offered.
+- **A wait the session carries on by itself is one wait** (R7): its cause is said as round B10 words it (the website's
+  `queued`, `rate` and `network` words, §8's table), over the run it pauses (the queue a run's stage, the rate and the network over its
+  count), the run's phase kept (`model.ts`: an `unavailable` of a cause in `GOES_ON` the session asks again by itself), so its
+  line goes on, nothing reads as done, and the cause stays said from one of the session's asks to the next until an answer
+  moves the paper on (`lookSaid`: the refusal's cause kept, `pacing`; the network until a document is heard). Over a layer
+  shown it is said as where none is (the reader's `layer.stopped`, while the view lacks what the work would bring).
+- **Where the session will not go on by itself, the wait is over** (R8): the limit of new papers (with its time; its first
+  asks the session's own, at that time, asking nothing of the reader: no retry, §8.1's first bullet), our server out of reach
+  (a retry at once), past the limit's asks (a retry at its time): the notice as round B10 words it, over a layer shown too,
+  never a count that does not move with nothing offered.
+- **The display the reader chose is kept while the session goes on by itself** (flow-fixes F5 and (b), the coordinator,
+  2026-11-12): with no period to end and nothing of the reader's (our server at capacity, the visitor's rate of asks, the network:
+  `goesOnNow`), the page stands as it does in the first-time wait, the display chosen kept and the translated displays to be
+  chosen, so nothing jumps when the session goes on. The original is held alone, the translated displays greyed (the website's
+  `refusal: 'original'`), where the translation cannot come before a period ends or at all (the limit of new papers, a lasting
+  refusal) and for our server's fault with its time. A narrow window holds the original, as before, whatever the cause.
+- **A capsule showing that turns into a run changes its words in place** ((c)): the 400 ms gate (§6.6) is for a wait that
+  begins with nothing shown; after the network's words or the failed passages' notice, the count takes the capsule's place at
+  once, never a hole of 0.4 s; so does a run's capsule wanted again while it is still leaving (R4, 2026-11-12).
+- **Which refusals last** is one table, the session's (`LASTING`: no source, not found, cannot be prepared, too large, a
+  version this reader cannot read); the chrome's is made from it. A layer the reader could not use (an object not its bytes,
+  a layer refused by the side) is passing: a retry asks again.
+- **Failed passages on the website.** A failed passage is a unit of the layer shown that the toggles show translated and
+  that holds no translation once the target's run has failed: a row that is none, or no row at all (our server writes no
+  row for what a failed attempt did not translate, and an attempt our server ends itself writes none). They are counted over
+  the same set as the run's count (§6.6), told whenever the count changes (a toggle, the units read, passages a later run
+  brings), and said as the extension's are: after a page is laid, the capsule {n} 处翻译失败 with its retry at our server's
+  time; before, the card (翻译暂时不可用 · 重试, its time under it). A run that ends done tells none, whatever rows are missing
+  for kept or toggled-off units. 重试 asks only for the passages that failed: our server's next run reuses every row it holds.
+  When the session's own next ask runs, the wait's own words replace the notice, and the passages it brings leave the count.
+  Told only where the session is not already asking for them again (flow-fixes F4): a failed run whose open is under way or due
+  at once (a run the visit did not open, found failed with no time to wait) is the run the reader waits for, its count, never
+  the notice (it stood 150 ms); one asked again at our server's time is the notice for that wait, with no retry, giving way to
+  the count when the ask begins; one nothing asks again but the reader is the notice with its retry.
+  The notice closed stays closed for the visit unless more passages fail.
+- **A page laid is a lay over the rows as they stand** (2026-11-13). A page laid, committed or laid with nothing of its own
+  (every member without a translation: the original's by the rule), keeps every row its lay read and what it saw of it (a
+  translation, a refusal, none in yet); a row that lands otherwise than it saw (one come, a refusal translated after all by
+  another service or a retry, a row stated again otherwise) lays that page again, alone, its drawing kept and muted until the
+  new one commits (`packages/reader/src/compose/composer.ts` `moved`). One condition in place of three: a row stated again
+  otherwise laid every page again in a generation of its own; a row missing at the rows' end, come since, did too; a page laid
+  with nothing kept only the units it read missing once the rows had ended. A page laid with nothing BEFORE the end, every
+  unit refused while the run went on (a refusing service, the extension's `src/pdf-reader/host/translate.ts`), kept nothing,
+  and the translations another service brought later laid it again never (the V5 lane's e2e: 3 runs of 5, `laidPages: 0`).
+  A row read and waited for by no page (the paper's own names, §19.14) lays its page again when it comes, once. The law test:
+  `packages/reader/tests/composer.test.ts` "the toggles turned and turned back", each sequence of landings, the run's end and
+  each option turned, every drawing a fresh lay's.
 
 ## 9. The extension around the reader
 
@@ -578,6 +836,12 @@ its own toggle, below; until then the switch showed or hid it too.
   original's page where the new one's service fails or stops short with nothing translated. The line and the phase are an open's (Translating, §8). A hold
   for the language before (one the layer does not set) is lifted and the translated display shown again; a hold for the
   paper's own reason stays.
+- **Another service** (`provider` or `services` changed, here or elsewhere; most often the key the card sent the reader to
+  set, §8): a translation that stopped short, failed or ended with passages lost, is asked again of it at once, whatever wait
+  the service before named, and only for the passages with no translation (`settings.ts` `followOf` `retry`). The rebuilt
+  reader (`packages/reader`) reads the services as the preferences' `translator`, the chain's revision (`host/prefs.ts`): a
+  landing that names another one is the session's `cmd.translator` (`session/machine.ts` `askedAgain`). The website's
+  preferences name none (its rows are our server's), so nothing there asks again.
 
 **New**, a `pdfReader` group; `CONFIG_VERSION` 18 → 19, with a migration that adds it with its defaults:
 
@@ -708,6 +972,14 @@ midway stops the run the same way, and the run resolves (the unhandled rejection
 figures' text goes through the same service: once a run has stopped, none is sent until it runs again. The notice's
 {n} is the paragraphs left in the source language: a paragraph a stored copy had translated keeps it when its new try
 fails, and is not counted.
+
+A stop the service makes by withdrawing the reader's scope (the background retiring its chain when a service is deleted, a
+translator that gives up with an abort) is a stop like the others (the owner's ruling, 2026-11-11): its kind, `aborted`, is
+told as `unknown` (UI.md §3.4), since `aborted` is the reader's own cancel and shows nothing; the card or the notice says it
+with its retry, and the units never asked are counted with the rest (`runRows` counts them unless the run's own signal
+stopped it). The run's own abort (a retry, another target, the page's end) returns before any of this and tells nothing.
+Before, the run read the service's `aborted` as its own: the translation told done, our page laid with nothing translated
+on it, and a notice with no retry counting the last batch alone.
 
 Texts that did not come back for a reason that is not theirs (the service's own: a network down, a timeout, a rate limit
 the background's queue has already retried) are not sent again piece by piece, since they would only fail again, once for
@@ -1028,10 +1300,28 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   geometricPrecision put it (mean 0.007; the ends of long words), at zooms of 0.75 to 3 and device pixel ratios of 1 and 2;
   WebKit takes `auto`, its places the same to the pixel. Not yet seen by eye: Chrome on Windows, a Linux desktop, Safari on
   iOS (which has no smoothing to restore).
-  The reader package (`packages/reader`) decides the same, once a reader, from its first overlay's runs of one place laid
-  out again in their own classes (`compose/text-rendering.ts`), written on the reader's root (`.axt-reader`, its sheet
-  `styles.ts`), and draws a run that names no fill of its own in the layer's ink, `#141414` (today's `layer-proto/run.mjs`
-  `SVG_RULES`). Without the two (the maintainer's report of 2026-11-08, 1706.03762v7 in Chinese, page 1) it drew the
+  The reader package (`packages/reader`) decides by the same test, once a reader and before its first overlay is drawn, from
+  a fixed probe rather than a page's words (`compose/text-rendering.ts`): a pangram at 9, 10 and 12 points, laid out again
+  under each rendering in a served Latin face loaded for it (Computer Modern's serif, `axt-cmun-serif`; a host's own faces,
+  the table's first face read from a file), asked as the pages are first to be laid and awaited by every overlay; written on
+  the reader's root (`.axt-reader`, its sheet `styles.ts`); where the face cannot be had, geometricPrecision. Decided by the
+  first page that told, a page of few Latin words told nothing (2610.40645v1's page 1 in Japanese: 10 such runs, 12
+  advances), so that page was drawn at 80 % of its ink until a later page told and then every page flipped, and the weight a
+  page was shot at hung on the order the pages were laid (the owner's question of 2026-11-08).
+  It draws a run that names no fill of its own in the layer's ink, the PDF's own black (the owner's ruling of 2026-11-08:
+  today's `layer-proto/run.mjs` `SVG_RULES` draws `#141414`, the approved prototype's ink, whose darkest pixel is 92 % of
+  black's, so that the translation stood lighter than the original's text on every page; a run's own fill is kept), but a
+  CJK run, which it draws in `#141414`, today's ink (the owner's exception of the same day, on the lane's measurement that
+  this ink was the one difference between today's CJK text and v2's: the same faces, sizes, smoothing and rendering, 0.922 of
+  black's ink a glyph). A CJK run is one whose characters are of the breaker's CJK class (`script.ts` `cjkClassRe`: Han,
+  kana, Hangul, Bopomofo, the CJK marks and full-width forms, and the curly quotes, dashes, ellipsis and middle dot where the
+  rules set them as CJK's), the class it was set in the CJK face by; typeset's `emit/display.ts` `inkLines` inks every laid
+  line of a page (units, names, figure texts) with `CJK_INK`, so the Page states it as the run's fill and the painter writes
+  it; the translation's Latin, digits and formulas stay in the PDF's black. Measured against the original's body text (mean
+  darkness of glyph pixels, 42 pages of the 21 CJK pairs, macOS Chromium at a device pixel ratio of 2): beside Times-like
+  originals the CJK text in `#141414` is 0.911 of the original's darkness (0.978 in black), beside Computer Modern 0.996
+  (1.071 in black).
+  Without the smoothing and `auto` (the maintainer's report of 2026-11-08, 1706.03762v7 in Chinese, page 1) it drew the
   translation at 80 % of its own `auto` ink, in pure black: 86 % of today's ink on the abstract's first line (4,305 against
   4,982 units at a device pixel ratio of 2), 92 % on the bold title; with them 4,989 and 100 %. Held by the harness's check
   (`packages/reader/e2e/run.mjs`, "at the weight a canvas draws it"): every measured line's ink within 6 % of the same runs
@@ -1051,7 +1341,23 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   that zoom, its ten page views drawn), and a phone of 4 GB 64 MiB, some ten pages of its screen at the fit. A page let go past
   it is laid again from the door's kept markup as before. A drawing kept across a zoom comes back as it was and is drawn again
   at the new k. A later attempt, a fork or another target lets every kept drawing go (they are the door before's), as do
-  `dropOthers()`, a refusal and the dispose. A host may give its own budget (`keepPixels`; 0 keeps none).
+  `dropOthers()`, a refusal and the dispose. A host may give its own budget (`keepPixels`; 0 keeps none). The reader package's
+  page stack keeps the drawing in its own slot instead of detached, and out of the layout tree as today's is out of the
+  document: the slot marked `data-axt-kept` while its drawing is kept, its holder `display: none` (`packages/reader` stack.ts
+  `keep`, styles.ts). Kept in layout, every laid page of a paper was laid out again at each face added to the document (a face
+  added re-lays every text node laid out): over a scroll of 2610.20808v1 41 such relayouts of 10k to 41k objects, the longest
+  134 ms, most of the reader's long tasks (lane reader-perf, 2026-11-12, `verification/reader-perf.md` §1); out of it, the
+  relayouts walk the near pages and the left's (15.6k objects, as today's 16k), and Blink's heap holds 147 MiB less after that
+  scroll. `display: none` rather than `content-visibility: hidden`: the same relayouts measured, no layout objects kept, and
+  every browser the website serves has it (`content-visibility` only from Safari 18). The slot keeps its box, so the pane's
+  height and the sync's places never move; what changed while the drawing was out (a zoom, a face) is laid out as it comes
+  back, one pane height before it shows, and a zoom's page view is drawn again then. A jump straight to a kept page (a link,
+  the outline, a page number) puts it back in the jump's own frame, in the stack's frame callback on the pane's scroll, before
+  that frame is laid out and painted: the near observer tells it only in a task after the frame, which would show the bare page
+  box for a frame. A pinch's preview, a transform the near observer is held through, holds every kept drawing in layout while
+  it is held, out again at its end where still far. A kept page's words are not found by the
+  browser's find while it is far, as today's are not (the coordinator's word, 2026-11-12: equal to production is the bar).
+  Held by the harness's check "a far laid page kept out of the layout tree, back pixel for pixel, the scroll height unmoved".
 - **The faces, in one wave** (`layer-proto/warm.mjs`). v0 checks and loads the faces of a unit as it lays it, one unit after
   another (E2), so a page whose units brought new characters waited a round trip a unit: 2602.23285v2 in Chinese asked 38
   font files in 12 waves before its first page, 4.3 to 9.2 s of a cold visit (production, 2026-10-24). The side asks the
@@ -1069,7 +1375,14 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   High), so a wave of 28 slices in flight held each read of the original the composed document makes, one after another,
   to a share of the line in 29. v0's checks are unchanged: they find the slices loaded or loading, and a run the wave did
   not foresee (a bold word in a paragraph, a character only the original's text holds) asks its own as before. A slice is
-  asked once.
+  asked once. The reader package's served faces (`packages/reader` served.ts `addIn`) add the slices one ask needs to the
+  document together, in one stretch once every one of them is in, and a slice counts as loaded for the typesetter's measure
+  only from then on: Chromium re-lays every text node laid out at each change of the document's fonts ("Fonts changed"), and
+  a slice added as it came made 41 and 48 such whole-document relayouts a scroll of 2610.20808v1 and 2610.40645v1, today's
+  reader 22 and 25 (it adds a wave's faces in one task; lane reader-perf, 2026-11-12, `verification/reader-perf.md` §3f). An
+  ask is one page's (the composer asks each page's faces apart, the page in the middle first), so a page still never waits for
+  another page's slices, and none is measured or drawn with a fallback face. A slice that comes in for an ask whose page went
+  meanwhile is added all the same, ready for the next ask.
   Before any part, the first page's CJK slices are asked early (`firstPageUnits`, `warmEarly`). On a first open the rows come
   while the box runs and its head and parts at the end, so the page's wave began only with part 1 and its slices were the
   page's last wait: on staging (2e627695, 2026-10-30) the door made page 1 ready 40 to 110 ms after its last slice came in all
@@ -1376,13 +1689,22 @@ the highlight's layer, outside the dark filter (the left's links keep their colo
   runs. A click on a link, on either pane, levels nothing (the click's levelling skips a link).
 - **Looked at.** As PDF.js draws a link on the left: the PDF's border where it gives one (its width, colour and style:
   solid, dashed, underline), a yellow wash under a hovering pointer; the focus ring is the reader's (2 px, `--focus`), the
-  system's in forced colours.
+  system's in forced colours. The border is the link's own annotation's, wherever the translation draws it and whatever its
+  box there: the engine states it on the part's link (`Link.border`, as PDF.js reads /BS, /Border and /C), the typesetter
+  carries it onto each link it draws of that annotation (`Page.links`), and the reader draws it as stated, matching nothing
+  against the original's annotations (a citation set as text has another size than its box on A); one with none draws none.
 - **Gone with the drawing.** A page let go far from the view takes its links; after a reopen the drawing kept keeps its own
   until the new door's replaces it; dispose leaves none. A link holding the focus when its page is drawn again gives it to
   the link of the same rank, else to the place; its page is not let go far from the view while it holds it (above).
 
 The rows are `tests/pdf-reader/links-view.test.ts` (LV1–LV4 on links.mjs, LS1–LS7 on the side over the fake door) and the
-real door's in `layer-side-door.test.ts`.
+real door's in `layer-side-door.test.ts`. The rebuilt reader's (`packages/reader` `compose/links.ts` over the typesetter's
+`Page.links`, `packages/typeset` `lay/links.ts`) are held by its browser check, which lays the CC0 fixtures through the
+reader's own typesetter and judges every part link by its fate (each drawn, an anchor a record; an address out through the
+host, a reference jumped, one no unit owns at its box): `packages/reader/e2e/run.mjs`. The fixtures state each link as
+hyperref sets it (`lab/pdf/reader-fixtures/make.mjs`: an `\href` group, a `\ref` element, a link round a figure), never as an
+annotation over a bare word of a unit's text, which no group or element of the unit takes and the typesetter drops as above
+(`unmatched`, lane laid-links, 2026-11-13).
 
 ### 11.10 The extension's run on the layer
 
@@ -1764,7 +2086,8 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     left made 8.7 → 8.5 ms (median of 7), a page's geometry 0.070 → 0.079 ms; 2610.19159v1 44 → 58 ms and 0.047 → 0.094 ms.
     The 1 357 left: 2610.19159v1's framed transcripts, which the figures' text takes (1 016), algorithms inside floats, arXiv's
     stamp, lines our compile sets elsewhere. A page
-    moved (our lines elsewhere than arXiv's) lights as a page in place since BUNDLE 12 (below).
+    moved (our lines elsewhere than arXiv's) lights as a page in place since BUNDLE 12 (below). On the rebuilt reader a display
+    TeX set that no unit owns is one block whatever its lines' baselines, its number with it, as a unit's display is (§18.58).
   - **A block lights on both panes or on neither** (the owner, 2026-10-30: 「为什么修改后还有一边不亮的情况？我们可以从根本上解决吗？
     …如果实在分不出来，我们就两边统一亮，或者划成一整块亮」): on a page in place a block's area on each pane is its boxes. On the left
     each box lights the tokens of arXiv's page under it where they are and itself where none is (a display or a formula drawn as
@@ -2214,6 +2537,159 @@ within noise.
   floats and their inputs go; its drawing gives them again. Inputs that throw are let go with one warning, and the page
   has no floats.
 
+### 17.9 On the rebuilt reader (`packages/`): the starts stated by the prepare
+
+- **What pairs the sentences** is the row's starts (Row.sentences: the translator's own, offsets in the unit's projection and
+  its translation's) found on each pane, as on the layer path: on arXiv's page at the sentence's first word or element, its
+  second or third where the first is not found, else the unit lights whole on both (`packages/typeset` lay/lit.ts
+  `startsOnA`); as drawn, the laid token of that word or element. **Which sentence a piece is in is decided once, for both
+  panes** (lit.ts `sentenceMap`, the owner's rules of 2026-10-30: both panes always light the same thing; a sentence lights
+  all its pieces, text, elements, labels): the unit cut at the row's starts into half-open ranges, each piece in the one its
+  start falls in. A token of the translation's text by its first character's place (a sentence's start at its first word, from
+  the opening brackets and quotes set against it: "(Vier" begins its sentence at the bracket); an element, one piece in both
+  texts, by where its ink begins on A, wherever the translation sets it: its crop or its text as drawn, its ink on A and the
+  row it stands on there, widened over its ink (one TeX set past its line's text, an equation's number at the margin, stands in
+  no line's box), all in that sentence; a label in the first (a babel name's too, the number TeX set before it: 2610.20967v1
+  p5's "9." was in no box on A). A sentence's box on a line takes the line's band, whatever it holds there (an element's crop
+  alone took its ink's height, short of the line's: 2602.23285v2-ja p13 t219). A translator counts a mark at a cut with either sentence:
+  Microsoft set "…的方向。[P²-MOPD]沿该方向…" with its cut past the element, the source's at it, and the left lit
+  "P²-MOPD" with its sentence, the right with the sentence before (2611.03953v2 p2, the owner's report of 2026-11-10); the
+  translation's places alone had put 425 elements of the corpus's laid pages in another sentence than A's (today's rows over
+  stage 1a's parts at 95529b6f9). Where a translation sets an element inside another sentence than its own on A, the element
+  is an island of its own sentence there, a run of its own on its row. **I10, the sentence cover** holds it
+  (`packages/typeset/tests/replay/cover.ts`, counted by `lab/typeset/gate-l1.mjs --entry --reading=part` over a run's parts,
+  the release check's `sentence-cover`, and by the parity's lay of its pairs, its `display`; with today's reading the runner
+  lays no entry): on both panes every piece drawn of a lit member (each word of its text on A
+  at its first glyph, each character as drawn, each crop, each element's ink, its label, its held lines) is in exactly one of
+  its sentences, an element and the label in the same one on both, and every sentence drawn on one pane is drawn on the other
+  (a full-width mark's ink read in its own em: one at a line's head, its blank half cut, is drawn half an em left of the line's
+  start with its ink at it; the corpus runner gives the entry no row of a stored reply that says nothing, the chain's `empty`,
+  as the chain makes none: given it, the entry hid a cell's text and drew nothing, three cells of two pack pairs).
+  A sentence that begins with an element (a reference, a citation that is its subject, a paper's name
+  macro: "\method{} trains this model …") begins at it on both panes: moved on to the first letter past it, as both panes did
+  until 2026-11-10, the element lit with the sentence before (2611.03953v2 p5, the owner's report: "Three details of Equation
+  (6) matter." came back with the reference first, and "(6)" lit with the sentence before; on staging's rows of five papers,
+  591 of 2,148 translated starts and 556 source starts stood before an element, 350 and 320 units, the paper's `\method{}`,
+  `\citet` subjects, `\cref`s, formulas, a bibliography's `\newblock`s). A forced
+  break (TeX's `\\`, El.brk) ends the sentence it stands in on both panes, as the line TeX ended there: the text after it is
+  a block of its own on the page (1810.04805v2 p8: "… as BERT_BASE:" `\\` "No NSP: …", one TeX paragraph and one sentence of
+  Microsoft's across the break, lit as one; the owner's staging review). On a row a sentence's box runs on to the next one's
+  start, the last to the row's end, so that the space after a full stop lights the sentence before it, as today's shapes tile a
+  row (the full parity of round 3: 23 rows of 21 pages with 2.9 to 10.3 pt lit by neither). `Laid.lit` holds an entry a
+  sentence, numbered alike on every page of the unit; the reader paints and hits the entry under the pointer on both panes
+  (`{id, s}`), nothing on a page that holds none of it.
+- **The prepare states where each word stands on A** (format's `Placed.words`: each word of the projection, its line and its
+  first glyph's x0, from the opening brackets and quotes set against it, as the text layer runs them in its token;
+  `packages/engine` locate/words.ts: the projection's letters and the unit's glyphs' matched in order, Myers', each side's word
+  breaks kept; and each element where its ink's first box stands on A, its line and x0, but a display, a block of its own, and
+  an element TeX set outside the unit's text; locate.ts), and marks the units a translator is to cut (`Unit.sentences`: every kind but a heading,
+  a cell, a figure's text and a babel name, the layer path's NOT_RUNNING). Every word, not the shared cutter's starts alone:
+  of Microsoft's 40,409 stored starts over the corpus (13,149 units, 96 paper-targets, 2026-11-08), 82.4 % are among the
+  shared cutter's cuts and 82.9 % among Unicode's sentence boundaries, and what precedes the rest is no closed set ("." 73 %,
+  an element 16 %, ";" 6 %, "(" 1 %, a comma, a letter). Placed: 8,608 of 8,610 words on 1810.04805v2, 8,293 of 8,299 on
+  2010.11929v2; a part states them only for the members with ink on its page.
+- Until 2026-11-08 the rebuilt reader lit every unit whole: the prepare marked no unit for sentences (no translator was
+  asked to cut, no row carried any) and placed no start on A (the maintainer's staging review of converge-7, 225f0959f).
+- **A display is a block of its own, and no shape fills one** (the owner's reports of 2026-11-09 on staging: 2602.23285v2 p15,
+  "… processed as: [display (11)] and a sequence …" lit as one shape over the line before, the display across the column and
+  the line after, on both panes, where today lights a bar on each line and the display not at all: 「这里我们主站是分开的」;
+  2609.33403v1 §4.2, a paragraph lit as one region over both of its displays, their own shape drawn inside it). The highlight
+  shows which words correspond, and a display is the same ink on both panes: lighting it with its text adds nothing. So
+  `Laid.lit`'s `own` holds a member's displays alone, each by its piece, the same boxes on both panes, and no row of its text
+  is on one (on A a KEPT line on a display is the display's, a member lit from A too); the reader lights a display alone where
+  the pointer is over it (`{id, s: -2 - piece}`, the same on every page: today's `displayBlockId`, one hover id a display),
+  never with its member, whole or by sentence. The rest of a member's kept ink (a piece or a label kept where it stands, a
+  character) lights with it, the row it stands on widened over it, by sentence with its sentence (an element, the sentence its
+  ink begins in on A, as every element's). The painter's outline (today's `shapePath`) joins two rows where they
+  meet across and paints the room between them, from the upper row's left to the lower one's right; v2 hands it every row of a
+  sentence on a page, so it bridged whatever stood between them, a room no box holds and the hit test never found. A shape's
+  rows are one outline now only where no other block stands between two of them (a box lit on the pane, another member's or a
+  display, whose middle is between them and that stands in their column, the two a row's height apart at least: today's runs,
+  cut there, `highlight.mjs interrupted`); a gap with nothing in it stays the unit's, as today's. The column is the one the
+  member spans on the page (`columnOf`: the extent across of its every box there, its sentences' and its displays'), never the
+  two rows' own width: a sentence whose translation ends a line short before its display and goes on short after it had the
+  two short rows, both left of the display's ink, joined by a strip down the column's edge over the display's row, while the
+  rows on arXiv's page, longer, met the display and were cut (the owner's report of 2026-11-10 on staging, 2610.17024v1 p9,
+  display (43)). Judged by the parity's highlight measure as the reader paints it (`lab/typeset/parity/paint.mjs`, the
+  reader's own cut): over round 6's drawing, the shapes' fills of another block (a display; on arXiv's page another unit's
+  line) were worse than today's on 181 units of 103 pages (2602.23285v2-ja p15 t127: 2 against 0), and are on none. The
+  measure counts a bridge too (a room the outline paints between two rows room for a line apart, across a block's row in the
+  column, which holds none of its ink): over round 8 part A's drawing (5c83a7faf), with the rows' own width the cut was worse
+  than today's on 34 units of 31 pages, default and every toggle on alike (2610.17024v1 p9 t129 among them), and is on none.
+- **A figure text lights its own lines' band alone** (Laid.lit `band`, every member the part states of kind `figure`, laid or
+  not, level or turned; the typesetter's `lay/entry.ts`, the reader's `compose/highlight.ts`): no pad beside and no half
+  leading over and under, on both panes and where the pointer is hit alike. The half leading is the lower quartile of the
+  page's gaps between a member's rows, its body text's, and means nothing to a 4.67 pt label: 2610.21313v1-zh p3 t179, the
+  front card of a stack of three "SAMA" cards 2.33 pt apart, padded by 2.71 pt and 3 px beside, held the middle of the label
+  behind it (member 255) on the fresh rows' sheet (the lane fresh-fixes, 2026-11-11).
+  A level one of one line is cut to its container where the part states one (Room.over, the closed shape's edge over its
+  baseline; Room.under, the stroke's depth under it): 6 member-pages of the parity's 22 pairs, by at most 0.84 pt. Every
+  other member's Laid is unchanged, and so is each page's half leading (the parity's lay, both panes). Over the 22 pairs, the
+  translated figure texts whose shape holds another member's lit middle on the right pane went from 7 to 1; by the parity's
+  highlight measure (another unit's line on arXiv's page, a display on either pane), t179's 2 blocks went to 1. The one left
+  is member 256 of that stack: its middle stands inside t179's own band, and arXiv's page paints the front card's fill over
+  it. It stays a named case. The measure reads A's lines as the part states them; the only exact fact of what arXiv's page
+  paints over is the paint order the engine reads, and a measure built on it would judge the engine by itself. The add-on
+  makes no group for such a member, so no drawing can turn it off either. Over the 88 papers, 12 members are wholly painted
+  over in this way, every one a figure text that the wrap leaves unwrapped and the entry never lays
+  (`lab/pdf/prepare-back/hidden.mjs`).
+- **The half leading is read between a member's rows, whatever sentence each row is of** (2026-11-12, lane parity-small;
+  `compose/highlight.ts` `halfLeadingOf`, which the parity's highlight measure reads too, as `paint.mjs` reads the cut): the
+  gaps between each member's consecutive rows on the pane, two sentences' boxes on one row overlapping and making none, as
+  today's lighting read a unit's consecutive lines. It was read inside each sentence alone, so a pane whose sentences each
+  hold one row (a translation's are shorter than the original's) or whose rows a display parts held no gap and padded nothing:
+  on 2610.10069v1-zh p21 the right pane's shapes stood on their glyphs' boxes while the left's were padded by 2.98 pt, the
+  heading t171 (three CJK characters at 14.35 pt) lit from 0.12 em under its baseline to 0.88 em over it, its ink from 0.11 under to 0.83
+  over (arXiv's page set its paragraphs' rows 9.67 pt apart: now 4.84 pt a side). Over B10's drawing of the parity's 22 pairs
+  the half leading moves on 50 of the 344 right panes and 64 left ones (−1.45 to +4.84 pt), and the highlight measure changes
+  on two units, that heading and 2610.40645v1-ja p27 t228 (no longer worse), no other difference of any measure moving, by
+  default or with every toggle on. A CJK heading is lit on its em box (the tokens' band, `emit/sentences.ts`, as today's), and
+  the measure reads a drawn line as the band 0.2 em under its baseline to 0.8 over it, a Latin line's: over 12.5 pt the 0.08 em
+  between the two bottoms passes the measure's point, so on a page whose half leading is under that, a heading whose every
+  pixel of ink is lit is read uncovered (t228 now stands 0.007 pt inside the point with its page's 0.155 pt).
+- **A sentence of no word joins its neighbour on both panes** (lit.ts `worded`, `bySentence`): a translator cuts off a sentence
+  that holds no word of the source (no word of Placed.words in it: a citation after a unit's last stop, a reference's DOI, URL
+  or back-reference list, a display), or one of whose translation nothing is drawn as text (an element moved past the
+  translation's last stop). Its start had no word placed on A (`startsOnA`) or no token drawn, and the whole unit lit whole for
+  it: the lab's 8 units by default and 78 with every switch on that today pairs by sentence (the feature list's F1, D30). Such a
+  sentence now lights with the one before it (the next, where it is the first) on both panes, and every other sentence stays
+  the translator's pair. A sentence of elements drawn as text (a German reference's title kept as a group) is drawn, so it
+  stays a sentence of its own. Measured over the parity's 22 pairs with their fresh rows (r18 bundles, 2026-11-12), v2's lay
+  before and after, member by member (12,388 member-pages each): by default 6 lit whole are lit by sentence, every switch on
+  81, and nothing else moved in either (no sentence joined that was drawn, none lit whole that was not); the sentence cover
+  (I10) 0 faults before and after. Of the 8 default units the parity counted, 5 pair now. Not settled: a sentence whose first three words TeX
+  never set (1512.03385v1 t339) still lights the unit whole; three paragraphs of 2608.25210v2 (t55-t57) hold one sentence
+  and a display in v2's unit where today's unit held the display's lines as sentences, so they are one sentence by design.
+- **The band chosen paints it** (the reading options' highlight colour, §6.1 item 4): the host gives the bands its store keeps (`Prefs.bands`, each its
+  colour and its strength: the extension's highlight profiles, the website's three), and the reader writes the one chosen on
+  its root as the wash's two variables, `--axt-hl-color` and `--axt-hl-mix` (`prefs.ts bandPaint`: the first band where the
+  choice names none, as today's `activeHighlight`; the strength a whole percentage clamped to 5–60 %; a band of no colour is
+  the sheet's green at its strength), which every band reads, a sentence's and a whole unit's, on both panes, on a page light,
+  dark or dimmed. The choice was stored and never painted: every band was the sheet's green at 22 % (the feature list's E2,
+  2026-11-12; today's look sheet wrote both, `src/core/renderer/style-preset.ts appearanceRule`). Held by the package's e2e
+  `highlight: the band chosen …`.
+- **The pointer's look is arithmetic** (§17.4's rule, kept by the rebuilt reader since 2026-11-12): the page under a point and
+  the point in it come from the places the panes keep (`panes.ts` pointAt: each pane's box on the screen and its pages' boxes in
+  its scroll coordinates, read once its layout changed: a pane, its page stack or the window resized, a scale, a display, a
+  document opened; the scroll and the follower's shift as their events give them, `sync.mjs` shownAt with the panes' kept
+  scrollY), never from the document's hit test nor a scrollTop read. A scroll under a resting pointer still lights what comes
+  under it, one look a frame, as §17.4 has it. The look tested the document by `elementFromPoint` and read the page's box again
+  in every frame of a scroll: on one scroll of 2610.20808v1-zh (the perf lane's tools, `refactor-2026-11/perf/tools`, NEW's
+  website at 26c7c1a3; readarxiv-lab-data `lanes/formula-hover`) 404 ms of the profile's main-thread time came from the look's
+  `elementFromPoint`, and the reader's animation-frame callbacks took 425 ms of its long frames, 375 of them a layout they
+  forced; read without the hit test but through scrollTop, the layout was forced there instead (412 ms, 411); with the scroll
+  as kept, none of the look's frames is long (0 ms) and the hit test is gone from the profile (the driver's own probe aside).
+  The count of long tasks over the scroll does not move past its spread (37 / 32 / 41 before, 29 / 35 / 40 after: the
+  typesetting and the streams' reads make them). The package's sweep, one look a frame: 0.105 ms a look at its median, 0.040
+  after. While a pinch is shown its pages stand where its transform draws them, which no place kept holds: the page is read as
+  shown for those frames, as before.
+- **What it does not settle**: a display the part states no ink of (LOST) leaves a gap with nothing in it, filled as today's;
+  a display set on a text line beside a word (TeX's display after a word on its baseline) is on that line's row, lit with it;
+  a sentence whose only text is a display lights nothing but the display; and a sentence that runs on past a display with no
+  stop of its own is one sentence to the translator (the markers wire writes nothing after the display's marker, and Microsoft
+  cuts at neither a marker nor a colon; the tags wire's cutter reads a display as a word), lit as one in pieces around it, as
+  today's (2609.33403v1).
+
 ## 18. Rules and their versions
 
 Three kinds of rule decide what the reader shows, and they change at three different costs. Each has its own identity,
@@ -2248,7 +2724,7 @@ The edge cases, decided:
   - **Row 2, kept for later versions** (no code): the Kai matched to the body by measurement. FandolKai (zh): its ideographs' mean ink box 0.828 × 0.848 em against the body's 0.890 × 0.910, a size factor of 1.074; ink per em² 0.135 against 0.183 (−26 %), made up by an SVG stroke at drawing time. AR PL KaitiM Big5 (bkai00mp, zh-Hant): 0.821 × 0.823 against Source Han Serif TC's 0.891 × 0.913, a factor of 1.098; ink 0.155 against 0.200 (−22 %). Its limits: Chinese only (ja and ko still get no italic); the factors are per font; the stroke only emulates weight; there is no bold Kai, so bold italic stays bold upright. The comparison page as the owner saw it, rows 1 to 4 in all four languages with their measures and licences, and its README: `~/Downloads/readarxiv-test/archive/cjk-italic-2026-10-19/` (`index.html`, `README.md`), on the maintainer's machine.
 - **`textless`** is extraction, but v0 also applies it at draw time to a unit's source (only the alignment fallback reads it). A reader applying an extraction rule to a bundle's content is a defect class; it is listed for the debt pass.
 - **Cell membership** (`groupOf`, from `tableGrid`) is extraction: the bundle carries each cell's place.
-- **A unit's alignment** (whether its lines are centred, flush left or flush right) is extraction, and TeX's own: the marked original writes, for a unit's or a heading's end mark, the stretch of `\leftskip`, `\rightskip` and `\parfillskip` its paragraph was broken with, read once the paragraph ended (`AXT-ALIGN`, `layout/marks.mjs` `readAlign`: centred, flush left, flush right or justified; `{\centering text}` and a blank line is justified, its group closed before its paragraph ended), and the layout maker sets `UNIT_FLAG.CENTRED`, `FLUSH_LEFT` or `FLUSH_RIGHT` from it (the last two by TeX's word alone, LAYOUT 26, never read off arXiv's lines). A unit whose paragraphs TeX set in two alignments (its text set again elsewhere, a class's footnote or reference block) tells none, as a piece set in two colours tells no colour (PIPELINE 43, §19.6's guard). A paragraph a box's close ends (a `\vbox`, `\vtop`, `\insert` or `\vcenter` closed in horizontal mode) is read by its own skips: TeX ends it there with no `\par` where LaTeX sets no `\partokencontext` (TeX Live 2023's LaTeX; 2025's sets 2, and inserts one), so no `para/after` hook runs for it, and the probe watches the box it is set in and, where the box closes before a `\par` told its skips, writes the skips at the end mark, nothing of the unit set after it; each end mark's reading is written once, so the hook that runs later at another paragraph's `\par` writes nothing. Before it, 2608.16117v1's elsarticle abstract (`\global\setbox\absbox=\vbox\bgroup … \egroup`, TeX Live 2023) was read as its keywords' `\raggedright` (`lab/pdf/spikes/layout-align-cases.mjs`: 15 documents in pdfLaTeX, XeLaTeX and LuaLaTeX under both years read as TeX set them, each PDF byte for byte the one before). A unit TeX set in a box (a one-line caption `\@makecaption` centres, `\centerline`) or whose line the log lacks is read from arXiv's lines instead: every line's centre on its column's (the text block's for a full-width row), one line short of it by more than an em; and a one-line paragraph TeX set justified that its own glue centres (`\noindent\hfill X\hfill\null`) is centred where its line is on its column's middle and more than two ems off both edges. The layer draws by the flag. A table cell, which the probe does not read, it decides by the cell's own lines (several centred: a makecell's) or its table's column on the page (a single line: centred where the column's cells' middles are all within 2 pt of each other and their widths are not, so a column whose cells share a start or an end never is; a cell its column cannot decide, alone in it, a header's or of widths alike, as the layout file's flag says); a unit of a part with no layout by its lines and the page's column, as before the file had a flag (2026-10-19: the layer's own guess had centred 1810.04805's "C.1" and "5.3" headings and missed IEEEtran's centred ones). **The file tells a unit's alignment in four flags or none** (LAYOUT 37): `CENTRED`, `FLUSH_LEFT`, `FLUSH_RIGHT` and `JUSTIFIED` (neither centred nor flush), and the door takes a unit of none as one whose alignment nothing tells, reading its lines itself (`layout/file.mjs` gives `centred` true, false or undefined; `layer2.mjs` `blocksOf2`). A source unit always has one: TeX's word, or the maker's reading of a unit TeX does not tell (centred, else `JUSTIFIED`: a source unit's lines are never the door's to read, so a two-line reference whose hanging indent puts its lines' centres a point apart stays justified). **An ink unit's alignment is TeX's too** (2307.16209v1's title pages, 2026-11-05: its title, author, place and date and its examining board, text no source unit owns, were drawn from each English line's start): the marked original sets a point at every paragraph's end with the alignment TeX broke it by (`marks.mjs` POINTS_TEX `qe<n><code>`, at LaTeX's `para/end`), right after the paragraph's last character, rule, mark, insertion or formula, before its kerns and penalties and the one last glue TeX takes away, which are put back after it — none where the paragraph ends in a box (its end would be read as the end of the box's own last paragraph, where that one has none: 90 justified source units of the 87, under a centred paragraph's end), a whatsit (a unit's own end mark, which `AXT-ALIGN` reads), an adjustment, a glue before its last or a discretionary, none while the gate is off: a point after `\\`'s break made a last line of its own and re-broke its paragraph, one after amsart's caption kern stopped the class's `\unkern`, one in a contents list left hyperref's links unstable, one after an end mark moved a microtype line by 0.04 pt; and an ink unit whose last glyph its paragraph's end follows takes that code (`ink-units.mjs` `alignOf`), as does a unit inside a paragraph whose start stands before it with nothing ended between (the lines of a paragraph TeX broke with `\\`): either way with nothing between its last glyph and the end, no paragraph begun, no unit's end or start mark and no bracket. An ink paragraph ended at a source unit's end mark has no end of its own, and the paragraph after it may begin with no start, so the end after both is not the unit's; a table's first cell ends a paragraph right after the cell's start (2610.21084v1's captions, whose own paragraphs are justified, would have read its centred end); a unit that is not its paragraph's last line (a paragraph the ink cutter made several units of, 2610.11256v1's hypotheses) takes the code of the first end after it in its body — past a column's or a page's end to the next body, a float passed over — where that code is not centred, and nothing where it is (it may be a line TeX set between two paragraphs). A running head takes only its own paragraph's end, else is centred where it stands on its page's middle, as before. Where nothing tells, the door reads the unit's lines (several whose centres agree and widths differ, or one on its page's middle). Over the 87 papers of the release sweep's list (the gate pack's 7 among them) every glyph and box of the marked original and of our final pass stays where it was, page by page.
+- **A unit's alignment** (whether its lines are centred, flush left or flush right) is extraction, and TeX's own: the marked original writes, for a unit's or a heading's end mark, the stretch of `\leftskip`, `\rightskip` and `\parfillskip` its paragraph was broken with, read once the paragraph ended (`AXT-ALIGN`, `layout/marks.mjs` `readAlign`: centred, flush left, flush right or justified; `{\centering text}` and a blank line is justified, its group closed before its paragraph ended), and the layout maker sets `UNIT_FLAG.CENTRED`, `FLUSH_LEFT` or `FLUSH_RIGHT` from it (the last two by TeX's word alone, LAYOUT 26, never read off arXiv's lines). A unit whose paragraphs TeX set in two alignments (its text set again elsewhere, a class's footnote or reference block) tells none, as a piece set in two colours tells no colour (PIPELINE 43, §19.6's guard). A paragraph a box's close ends (a `\vbox`, `\vtop`, `\insert` or `\vcenter` closed in horizontal mode) is read by its own skips: TeX ends it there with no `\par` where LaTeX sets no `\partokencontext` (TeX Live 2023's LaTeX; 2025's sets 2, and inserts one), so no `para/after` hook runs for it, and the probe watches the box it is set in and, where the box closes before a `\par` told its skips, writes the skips at the end mark, nothing of the unit set after it; each end mark's reading is written once, so the hook that runs later at another paragraph's `\par` writes nothing. Before it, 2608.16117v1's elsarticle abstract (`\global\setbox\absbox=\vbox\bgroup … \egroup`, TeX Live 2023) was read as its keywords' `\raggedright` (`lab/pdf/spikes/layout-align-cases.mjs`: 15 documents in pdfLaTeX, XeLaTeX and LuaLaTeX under both years read as TeX set them, each PDF byte for byte the one before). A unit TeX set in a box (a one-line caption `\@makecaption` centres, `\centerline`) or whose line the log lacks is read from arXiv's lines instead: every line's centre on its column's (the text block's for a full-width row), one line short of it by more than an em; and a one-line paragraph TeX set justified that its own glue centres (`\noindent\hfill X\hfill\null`) is centred where its line is on its column's middle and more than two ems off both edges. The layer draws by the flag. A table cell, which the probe does not read for the layout file (the rebuilt engine reads its column's class: §18.12), it decides by the cell's own lines (several centred: a makecell's) or its table's column on the page (a single line: centred where the column's cells' middles are all within 2 pt of each other and their widths are not, so a column whose cells share a start or an end never is; a cell its column cannot decide, alone in it, a header's or of widths alike, as the layout file's flag says); a unit of a part with no layout by its lines and the page's column, as before the file had a flag (2026-10-19: the layer's own guess had centred 1810.04805's "C.1" and "5.3" headings and missed IEEEtran's centred ones). **The file tells a unit's alignment in four flags or none** (LAYOUT 37): `CENTRED`, `FLUSH_LEFT`, `FLUSH_RIGHT` and `JUSTIFIED` (neither centred nor flush), and the door takes a unit of none as one whose alignment nothing tells, reading its lines itself (`layout/file.mjs` gives `centred` true, false or undefined; `layer2.mjs` `blocksOf2`). A source unit always has one: TeX's word, or the maker's reading of a unit TeX does not tell (centred, else `JUSTIFIED`: a source unit's lines are never the door's to read, so a two-line reference whose hanging indent puts its lines' centres a point apart stays justified). **An ink unit's alignment is TeX's too** (2307.16209v1's title pages, 2026-11-05: its title, author, place and date and its examining board, text no source unit owns, were drawn from each English line's start): the marked original sets a point at every paragraph's end with the alignment TeX broke it by (`marks.mjs` POINTS_TEX `qe<n><code>`, at LaTeX's `para/end`), right after the paragraph's last character, rule, mark, insertion or formula, before its kerns and penalties and the one last glue TeX takes away, which are put back after it — none where the paragraph ends in a box (its end would be read as the end of the box's own last paragraph, where that one has none: 90 justified source units of the 87, under a centred paragraph's end), a whatsit (a unit's own end mark, which `AXT-ALIGN` reads), an adjustment, a glue before its last or a discretionary, none while the gate is off: a point after `\\`'s break made a last line of its own and re-broke its paragraph, one after amsart's caption kern stopped the class's `\unkern`, one in a contents list left hyperref's links unstable, one after an end mark moved a microtype line by 0.04 pt; and an ink unit whose last glyph its paragraph's end follows takes that code (`ink-units.mjs` `alignOf`), as does a unit inside a paragraph whose start stands before it with nothing ended between (the lines of a paragraph TeX broke with `\\`): either way with nothing between its last glyph and the end, no paragraph begun, no unit's end or start mark and no bracket. An ink paragraph ended at a source unit's end mark has no end of its own, and the paragraph after it may begin with no start, so the end after both is not the unit's; a table's first cell ends a paragraph right after the cell's start (2610.21084v1's captions, whose own paragraphs are justified, would have read its centred end); a unit that is not its paragraph's last line (a paragraph the ink cutter made several units of, 2610.11256v1's hypotheses) takes the code of the first end after it in its body — past a column's or a page's end to the next body, a float passed over — where that code is not centred, and nothing where it is (it may be a line TeX set between two paragraphs). A running head takes only its own paragraph's end, else is centred where it stands on its page's middle, as before. Where nothing tells, the door reads the unit's lines (several whose centres agree and widths differ, or one on its page's middle). Over the 87 papers of the release sweep's list (the gate pack's 7 among them) every glyph and box of the marked original and of our final pass stays where it was, page by page.
 - **A placeholder's colour** (its glyphs' fill: hyperref's coloured links and citations, a coloured formula) is extraction: the layout file's placeholder row ends with the colour more than half its inked glyphs are filled with, where that is not black (`0xRRGGBB`; `MIXED_FILL`, -1, where no one colour holds more than half), read from arXiv's operator list (`layout/ink.mjs`, every colour space as PDF.js turns it to RGB; a pattern's fill counts as none).
 - **A character's colour** is an attribute of the original's glyphs, as its font is (E1 of the residuals' batch R2, 2026-10-19). Each text item of a page's draw carries its characters' fills (`layout/fills.mjs` `itemFills`: the glyphs of the page's ink on the item's baseline within its extent, read in order as the item's own text; an item they do not spell exactly — turned, a glyph too many or too few, a combined accent set as two glyphs, a right-to-left run — tells none, nor does a Type 3 glyph whose procedure paints its own colours), and a page read live tells the same from the list PDF.js drew it by, its render's or its early pixel read's, with no second parse: a walk of the glyphs alone, `LIVE_FILLS_MS` at most, past which the page tells none (`run.mjs` `liveFillsOf`, with the host's `OPS`). That budget is a clock: on a loaded or slow machine a page may tell none where it tells them on another. The lab's gates walk with none (`openProto`'s and `openLayer`'s `fillsMs: Infinity`, the layer gate's run and every door gate's), so that a gate's run draws and counts alike at any load. The reader's character holds it as `st.fill`. The drawing reads it three ways. A unit's base weight, slant, small capitals, family and colour are those most of its matched glyphs hold outside every piece that may set that attribute (a style pair or switch in any spelling, `{\bf …}` too; a colour piece, a link, a paper's own macro), and of all its glyphs only where none lies outside; a tie goes to regular, upright, serif and black, else to the unit's first glyph (`layer2.mjs` `measuredStyle`). A glyph's slant is read as it would be without the `\emph` and `\em` toggles around it, so that a unit wholly inside one is drawn as the original. A piece that may set colour and that no `colours` row tells takes its own glyphs' colour; a row (TeX's, PR-C) wins. A unit read without its source pieces (a lab record, not a reader's) keeps the reading before: the majority, its groups' share taken off (`baseOf`), and a colour only where every glyph whose fill is told holds the same one. A rendering of the page's own characters (a citation, a reference, an equation's number) is drawn in runs of its characters' fills: `[16]` keeps its black brackets and blue digits. The placeholder's row fill above stays only for a character whose fill is not told. Word-level colour inside a sentence stays a limit: no majority paints a unit. On the wire, a styled pair whose two ends stand where the wire is cut anyway (a forced break, a display or an item beside it, never an inline formula, which the translator moves as a word; a kept pair's edge; the unit's end) keeps its markers (`translate/mt.mjs` `classOf`, the boundary rule). The draw's item rows carry the fills as their tenth value (`BUNDLE5` `'7'`); the boundary rule raises `TRANSLATE_VERSION` to `'4'` and `PIPELINE_VERSION` to `'22'`, whose copies carry every unit whose wire it leaves alone (`mt.mjs` `boundaryChanges`): over 137 papers' sources 126 of 36,136 units, in 29 papers, are asked again.
 - **A unit's size and its small capitals, where NFSS fakes them** (the owner's report of 2026-10-24 on staging: 2602.23285v2's appendix headings, page 15, drawn far smaller than the original in zh, es and de, and in es and de with no small capitals) are read from the original's glyphs as its other attributes are. The Times family has no small capitals of its own, nor have PSNFSS's other base-35 families: NFSS sets `\scshape` in a virtual face (`ptmrc8t` and its kind) that draws each lowercase letter as the upright face's capital at 0.8 of the size, in the same PDF font as the capitals, so that no font name says small capitals, and the `\sc` of a class's heading (ICLR's and ICML's subsections, IEEEtran's sections and table captions) is in no piece of the unit's source. The alignment pairs each page letter with the source letter it spells (case-blind): a capital paired with a lowercase source letter, set at most `SMALL_CAPS_SHARE` (0.9) of the median size of the unit's letters and digits whose case TeX kept, is a faked small capital (`layer2.mjs` `smallCapsOf`), and their median size over the capitals' is the share the unit sets them at (`capsRatio`, to the hundredth: 0.80 on 1711 of the 1747 faked capitals of the 32 papers of the corpus that set any, 0.71 on the other 36, one table's at 7 pt in 2608.27181; a unit's own, never a paper's). The unit's size is the median of its glyphs with those set aside: its capitals', the size TeX was asked for (2602.23285v2's "A.2 DYNAMIC SPECTRAL GRAPH STRUCTURE", 21 of its 25 letters at 7.97 pt, is read at 9.96 where it was read at 7.97, the median its small capitals made). It is set in small capitals where most of its glyphs that can tell say so (`capsVote`: a faked small capital says so, a lowercase source letter drawn as itself says not, and where the unit has faked ones a capital or a digit of a face that names no small capitals says nothing, since NFSS draws it alike in either shape), of the glyphs outside every piece that may set them as `measuredStyle` reads every attribute; a unit read without its source pieces (the gate's, the lab's) of all its letters, its `\textsc` groups' share taken off as `baseOf` takes off its other groups'. A capital paired with a lowercase source letter at the others' size is a capital of the text's: a class's `\MakeTextUppercase` (REVTeX's section titles, 2610.21288v1's "I. INTRODUCTION", drawn "I. INTRODUCCIÓN" in Spanish where it was "Introducción"), the unit set in them (`upper`) where most of its letters that can tell are, and its translation drawn in the target's capitals at its size. A face of real small capitals (cmcsc10, LM Roman Caps, a face with an SC name) draws its lowercase letters as themselves, and a unit with no letter of the source's own case to read the sizes against reads as before. In a CJK target, which has no case, a unit set in small capitals is laid at its nominal size × `CJK_CAPS_SIZE` (`layer2.mjs` `unitSizeOf`; 1, the owner's of 2026-10-24). **Every drawn thing is read so, whatever its kind** (the owner's report of 2026-10-29 on 2010.11929v2 p9: ICLR's `\sc` "REFERENCES" drawn in Chinese smaller than the Conclusion's and Acknowledgements' headings beside it). A babel name's size is its characters' with its faked small capitals set aside, where the class changed its case (the file's `CAPITALS`: a capital at `SMALL_CAPS_SHARE` of its largest letter or less), and it is drawn in small capitals as such a unit is, its word in its own case, never as a case change's capitals (`layer2.mjs` `nameStyleOf`; it was drawn at the file's size, the most of its glyphs', 9.6 against its capitals' 12). An ink unit's source is our page's own text, its case as drawn, so no letter of it tells a case change: where every cased glyph of it is a capital, a capital at `SMALL_CAPS_SHARE` or less of its full letters' size is a faked small capital by its size alone (`inkSmallCaps`), and a unit with a lowercase glyph reads as before (a paragraph with a drop cap is none).
@@ -2262,9 +2738,9 @@ The edge cases, decided:
 | `BUNDLE5` (`layer-proto/format.mjs`, `'16'`: a figure row carries the depth of the stroke under its text, which the layer holds a translation above, §19.12; 15 a left part's draw ships no font's map, each text item its own unmapped characters as runs of code points, and its items' places and extents and its links' numbers at a thousandth of a point, §19.6; 14 the units chunks of their format 3, an open whose command sets its argument alone saying so in its fourth value (`layer-proto/units.mjs`, from `latex-front.mjs` `identityPair`), which the wire reads (§18.2's `TRANSLATE_VERSION` 10); 13 a part's layout carries the regions TeX set on its pages, the layout file's schema 6 (`regions`: each line of a code environment's body), §19.7; 12 a left part carries its page's line map, §17.1; 11 a figure row carries its set and its room, §19.12; 10 the ink units, the parts' figure units and the head's ledger; 9 a part's cell rules in place of the add-on, our page wrapped by optional content) | reader contract | the layer route's objects: a head's, a part's, a left part's and a catalog's shape, the figure rows (the units chunks have a format of their own, `UNITS_FORMAT`, raised only by their shape: 3 since `BUNDLE5` 14, 1's chunks read too); a reader reads 7's, 9's, 10's, 11's, 12's, 13's and 14's objects too (`BUNDLES_READ`) | the request (`CTAG5`, `b<BUNDLE5>-j<PDFJS>`: §18.4) and the R2 key (`VTAG5`) | a bundle of the old format is not found under the new `CTAG5` and is prepared again; readers older than it get `unknown-versions` until they update |
 | `BUNDLE` (`layer-proto/bundle.mjs`, `'3'`: the layout file's schema 3, the paper's `\lineskip` and `\lineskiplimit`; 2 its babel names, D1a. The file's schemas 4 (`PH_FLAG.JOINED` and `PH_FLAG.OUTSIDE`) 5 (a found placeholder's fill, its row's last number where its glyphs are not black: 0xRRGGBB, or -1 where no one colour holds more than half of them) and 6 (`regions`, each region TeX set on our page: a code line) are not a contract of their own: `b3` names schemas 3 to 6, each reader's `parseLayout` refusing the others', so only this engine's reader reads a `b3` bundle holding schema 6) | reader contract | the one-file bundle `readBundle` reads (`CTAG`, `VTAG`): its shape, the units' tuple, kinds and flags, the layout file's schema, the left geometry | its request and key (§18.4) | readers older than it refuse it until they update |
 | `PDFJS` (`pipeline/versions.mjs`, `'6.3.289'`) | reader contract | the PDF.js whose reading the layout and the wrap are made against | as `BUNDLE` | as `BUNDLE` |
-| `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'77'`: a paper's macro with no mark of its own has its span stated by TeX's points where TeX can set one that moves nothing: at a unit's head before its start mark (`\axthpk`, in vertical mode only where TeX's expansion of it begins with a character), after the unit's end mark by a point after the group it stands in (`\axttg`), and a span of no glyph, or one TeX's probe said sets no ink, stated empty, so that the element owns its glyphs, §19.7: over the corpus no glyph of B moves; 76 what an opaque fill painted before a figure's text covers is no ink to it, neither crowding it nor telling its anchor nor ending its free line, so that a label on an annotation's box over a gridline is translated, §19.12: over the sweep's 87 papers 106 figure units on 18 papers drawn that were crowded, none lost, no source or ink unit; 75 a unit of a paper's macro TeX expands once is marked in its definition whatever its kind, the one place TeX sets it, so that the wrap gives it its group where the maker lays it (2610.17024v1's keyword list after its translated label and its 29 references), §19.13; 74 an ink unit's text reads a spacing accent TeX's `\accent` set over its letter as the accented letter, its label (an affiliation's number, a footnote's mark, raised and smaller) is no text of it, and one that then echoes the author block's place is of the names toggle, §19.7, with LAYOUT 39: over the sweep's 87 papers 60 ink units in 23 papers move, no source unit; 73 a web address's `%` a character where TeX reads the address from the file in the body too, a unit's start mark before its first word past a group of commands closed before it, the text after a piece run through a macro TeX said sets no ink and a text symbol right after it, and an end mark at no word reaching back, so that 65 units of 16 of the sweep's 87 papers are laid (23 of its shown classes), §19.7, with LAYOUT 36 and REMOVAL 25; 72 a TeX conditional the front end cannot decide whose branches hold no words, inline, one placeholder whose ink is what TeX set for it, so that 2610.21098v1's abstract, `\ifdefined\BottleneckPreprint\url{…}\else\url{…}\fi`, is translated, §19.6; 71 a figure's run joins across the faces of one family, its formula's letters in the family's italic and a bold lead with its text, §19.12; 70 where a unit is searched known from the marked original's head, its own marks' pages (a unit its marks do not bound on them and a page beside, first in the part of its gap there; one without marks between its neighbours with marks, a float then over the whole document), so that a page waits only for the units whose own pages or whose neighbours' meet it, §19.10; 69 a figure's run joins across the subsets of one face, and a stroke painted before a figure's text, wholly below its baseline under its box, is under it, its depth carried to the layer, §19.12; 68 a unit only the layout file holds and no line of TeX's places after the left units before it by id first framed up to its own page, and a heading with no marks searched again between its neighbours whose place is certain, §19.10; 67 raised with `TRANSLATE_VERSION` 10, a pair whose command sets its argument alone saying so on its open, which the bundle carries (`BUNDLE5` 14), every unit's cut, text and hash 66's; 66 a unit's start mark written before the marks that open its head piece, so that no run-in heading's own mark sets the point of the placeholder its paragraph opens with, §19.7, with REMOVAL `'24'` (own.mjs MR 4's range filter gone); 65 a unit only the layout file holds placed in K beside the left unit it shares one of TeX's lines with, so that a run-in head the left does not hold stands before its text and its text is laid from the head's end, §19.10; 64 what TeX sets after a bibliography no entry's, a line that ends as a list's entry a contents line, and a babel name's counter the name's, so that an appendix's own contents list after the bibliography is translated, its entries with their headings' translations, §19.10; 63 the code environments' text kept as the paper has it by every reader, wherever it stands, by the regions TeX set (the layout compile's points around each line of their bodies), so that a transcript's code in a box TikZ draws is no figure's text, §19.7 and §19.12; 62 a figure's glyph shown whole by its own ink, never cut by its advance alone, and the figures' caps counted by every run that spells a word, so that a label whose side bearing stands past its figure's box and a line past a paper's cap are translated again, §19.12; 61 every distinct call of the paper's macros asked of the ink section within one budget of code units, so that a macro that sets no ink past the 64 of before, or past 200 code units, is no LOST piece, §19.7; 60 a paper's macro glued to a word marked where LAYOUT_TEX's opening mark boxes itself before it (`\textsuperscript`, `\mbox`), so that an author's affiliations are no LOST piece, §19.7; 59 a figure's label of code kept, a markup token in angle brackets or a text the paper sets as code, so that "<pad>" stays as it is, §19.12; 58 a fill painted before a figure's text is its ground whatever its edges, so that a label on a highlighted token's box is translated, §19.12; 57 a display whose next mark is a float shipped before the text after it found to that text in its own region, `stream.mjs` `pastOther`, so that its unit is no LOST piece's, §19.9; 56 what the page does not show is no ink to a figure's label, a glyph wholly outside the clip in force and any paint at an alpha of 0, and what is painted over a label covers it, never its ground, so that a cropped plot's hidden title and a token's invisible box crowd no label, §19.12; 55 an inline placeholder both of whose marks stand on one line of its unit found on that line whole, one segment, so that a fraction or a big delimiter no line's baseline holds is no LOST piece, and a formula's row of none of its unit's words no line of the unit's, so that a vector's arrow no longer leaves a paragraph the original's, §19.6; 54 a display its unit opens with found by its unit's start mark, and one past its end mark that runs to a later unit's opening, its ink no kept block's nor orphan's, so that it is a block of its own on both panes, §17.1; 53 a comment's line end written back as TeX reads it, the next line's indent not written, so that no space is set where the paper has none, no unit changed, §19.6; 52 a paper's environment that begins a table read as that table, and a macro that ends a row after its arguments as a row of its own, so that no mark of ours stands between a row's end and the next row's rule, §19.6; 51 nothing of ours written where TeX reads it as an argument of the paper's, an argument after one that ended the walk's paragraph walked as a body, an environment that begins another taking that one's parameters, colortbl's `\rowcolor` overhangs read, a control word a comment ended written back with a space after it, so that no line probe or mark is set as a branch, a name or a cell's lead, §19.6; 50 a head of a theorem-like name the paper defines its unit's label, no figure or ink unit's, so that every head of the name is drawn in one word, §19.14; 49 a unit's label row that meets a figure unit's run goes from the parts' layout, so that a head the wrap left in no group and the figure text cut is drawn once, its translation alone, §19.12; 48 a placeholder's tokens between two of a unit's words its own on its lines over a page break, so that a line a formula fills is the unit's, §19.6; 47 a figure unit cut of glyphs set at its size alone, and none whose row a part's reader would refuse, so that one label's row never costs its part's layout, §19.12; 46 a glyph set turned is cut by the clip in force where its own ink passes it, as a level glyph is, so that a y-axis title at its figure's edge is a figure unit again, §19.12; 45 xy-pic's diagram kept as the paper has it, a drawing as a TikZ picture is, so that its cells are no units and no mark of ours goes into xy-pic's syntax, §19.6; 44 the final pass with no transparency group of the driver's on an included PDF, as arXiv's TeX Live 2025 of 2025-08-03 includes one, §19.7) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
-| `LAYOUT` (`layout/file.mjs`, `'39'`: an ink unit's row under its new kind (`inknames` where it echoes the author block's place) and count of pieces, with PIPELINE 74, §19.7; 38 a unit's lines over a page break those its pieces' points stand on too, a line's baseline the one its own mark and its words' glyphs agree on, a broken piece's part no line's baseline holds on its own point's line, a picture a piece sets (a draft image frame in the marked original) the base page's image on the frame's box, an opening point read past a float TeX set right after it, §19.6 and §19.9, and pages whose lines moved across their breaks drawn as a run, whole or not at all (`carry.mjs` `lineCheckOf`), §19.7; 37 a unit's alignment one of four flags or none, `UNIT_FLAG.JUSTIFIED` beside the three, an ink unit's TeX's as the paragraph ends of the marked original tell it (`marks.mjs` POINTS_TEX `qe<n><code>`, `ink-units.mjs` `alignOf`), none where nothing does, the door then reading its lines, §18.1; 36 an end mark at no word bounded by its unit's last word before it in its column, a carried word on either side of the mark's token on the base page its word, and the text after a piece through a macro of no ink and a text symbol right after it, §19.7; 35 the maker's anchoring where PIPELINE 70 has a unit searched, from the head's own pages of its marks' names, so that a paper's title, keywords and references numbered after its text are laid, §19.10; 34 no label where a unit's own text begins, `make.mjs` `headLabel`, §19.10; 33 a babel name's row holds the counter TeX set after it on its line where it leads no unit, its width at the row's end in slot 12, §19.10; 32 each line of a code environment's body a region the file holds (`regions`, the file's schema 6), §19.7; 31 a page whose lines moved across its breaks through compile drift drawn, `carry.mjs` `lineCheckOf`, §19.7; 30 a footnote's call after the last word found by its raised mark, a biblatex entry's unit of the new kind `inkreferences`, §19.7; 29 backref's list after an entry a row of its list piece's, §19.13; 28 a Type 3 glyph's ink its char procedure's paths, `layout/ink.mjs` `type3Box`, #122-1; 27 a command that sets the punctuation after it before its ink marked around the pair, a macro TeX said sets no ink EMPTY, a piece alone at an entry's end given the lines it runs onto, a macro that sets one punctuation mark drawn as it, §19.7; 26 a unit TeX set flush left or flush right flagged so, `UNIT_FLAG.FLUSH_LEFT` and `UNIT_FLAG.FLUSH_RIGHT`, and a paragraph a box's close ends read by its own skips, §18.1, §18.8; 25 the release sweep of 2026-10-29, a line too short to be evidence found on no other page, a word a hyphen cuts going on below, an ink unit's paragraph one unit, a math face told by its family's names, `layer-proto/fonts.mjs` `classifyFont`), `REMOVAL` (`pipeline/versions.mjs`, `'26'`: an image TeX painted inside a placeholder's ink, between its points or before the text after it in its unit, the placeholder's group, and an opening point with a float TeX set right after it read past the float to the text after it, §19.9; 25 a piece's ink read through a macro TeX said sets no ink and to a text symbol right after it, its glyphs its placeholders' group, §19.7; 24 own.mjs MR 4's filter of an opening point inside another unit's range gone, a unit's start mark written before its head piece's opening marks, so that none is set inside a run-in heading's range, §19.7; 23 the counter TeX set after a babel name on its line, no unit's, in the name's group (`own.mjs` MR 6b), §19.10; 22 a text symbol's own glyph its unit's text, marks or not, so that the original's symbol never stands under its drawing, `own.mjs` MR 4, §19.9; 21 a display whose next mark is a float shipped before the text after it its unit's groups to that text, `stream.mjs` `pastOther`, §19.9; 20 the ink of a display its unit opens with its unit's for the ledger, in no group, so that no ink unit nor kept block is made of it, `own.mjs` `leads`, §17.1; 19 a head of a theorem-like name the paper defines in its unit's label group, own.mjs labelFormOf over the wrap's `names`, §19.9; 18 the closing punctuation glued past a unit's end mark on its line its text, as the maker's line takes it, own.mjs MR 4c, §19.9; 17 a biblatex entry's ink its unit's groups, the point before each in our page; 16 backref's list after an entry its list piece's ink, §19.13; 15 a level figure unit on its column's edge or centred in it anchored there, `figure-text.mjs` `columnAnchorOf`, §19.12; 14 a unit's text owns the rules TeX painted on its own lines, an OT1 `\_`, an underline, own.mjs MR 2b, #117; 13 a punctuation mark a command set before its own ink its unit's text, not the piece's, §19.9; 12 a macro TeX said sets no ink is no placeholder of ink, an opening point alone at its unit's end owns its lines up to TeX's skip before another block; 8 no add-on, a part's or a bundle's cell rules in its place, our page wrapped by optional content, §11.8, §19.9) | extraction | the layout maker (the file's own schema is `LAYOUT_SCHEMA`, 5); how a drawn unit's ink is taken away | the R2 key | bundles made again lazily |
-| `TRANSLATE_VERSION` (`translate/version.mjs`, `'10'`: fewer markers, what the wire tells read from TeX's tables and definitions — a pair whose command sets its argument alone (revtex's and ACM's `\bibinfo`, a paper's `\newcommand\x[1]{#1}`) no pair on either wire, a stretch of placeholders side by side one marker, a space riding a kept pair's edge, `\label`, `\penalty` and a table's row rules on no wire, every display a break, a pair's lone end at its unit's edge off the wire and inside it a marker in its place, a structural name the target's heads hold not sent: over the 53 sweep papers' zh units the wire 3.9 % shorter and 36.8 % of its markers gone, §19.13; `'9'`: a caption cut into sentences on the tags wire as a paragraph is, §17.1; `'8'`: a run-in label where a sentence begins past the unit's head keeps its markers on the markers wire (`mt.mjs` `classOf`), 2010.11929v2's "Center:" and "Right:"; `'7'`: backref's list after an entry on no wire, put back after the translation with an en space before it, §19.13; `'6'`: every content class translated once whatever the language, the author block for every target and a bibliography's entries; `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `toTranslate` (the KEPT flag and the names the target's packages answer), `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
+| `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'98'`: a paragraph TeX opened inside a unit stated by the compile's own facts on both sides of its end, an end stated whatever node its list ends in, a box-ended paragraph none yet (`SpanAt.opens`), §18.66; a tie a space no line breaks at (`El.tie`, the source's `~`), §18.16; 97 a figure text or a table cell holding a decorated word held whole as the original, unwrapped, §18.61; a display no unit owns one kept block, its number with it, §18.58; what TeX set on an author's line after it past a word's gap its trail (`El.sep`), an author's ink end its boxes, §18.59-§18.60; 96 a unit's end mark its element (`El.end`), no stay, §18.52; a figure text the paragraph path lays in its labels' size tie, §18.54; a list's marker read before the free glyphs' join, §18.55; a face switch first in a bare group the group's face, §18.56; 95 a piece of no point of its own found by the text TeX set for it, its decoration with it (the probe's `decorated`), §18.51; 94 a label's number with its opening bracket, a named label leaving a glyph out never drawn anew (`Label.unheld`), §18.39; subfigure.sty's sub-captions units, a sub-float's caption its last optional argument, §19.7; a run-in label after a forced break past the elements between, §18.44; plain TeX's line boxes setting their argument, §18.46; 93 a float of no counter the page's text, a caption's label by TeX's call, the point before a forced break, §18.34; a figure's formula never sent and a line of formulas kept, its paragraph, list and node one text, ink that is no text keeping none, a text drawn twice, a text drawn as it was not set kept as the original's, §18.35-§18.36; a bibliography field's face `must`, §18.38; IEEEtran's proof name, TeX's grouping drawing as nothing, an opening point read past an earlier unit's marks, §18.39-§18.41; 92 a body group wholly in a face of one pitch an element, §18.22, §18.29; escaped characters and text symbols characters of the text, a group that carries nothing its content, `\enquote`'s marks text, a link with no address its argument, §18.30-§18.33; 91 arXiv's margin stamp no text of the paper's, the figure reading taking only glyphs a partner on B holds, §18.27; an element's own font state and its copy its characters as TeX set them, §18.28; 90 a figure's line of words and a run of one pitch one text, its run an element kept as the original's ink, and a stretch a decoration holds an element alike, §18.26; 89 an inline formula closed at the math shift that opened it, `$` or `\)`; an identifier (a token holding an underscore between two word characters) one element, the original's ink, never sent, a cell or a line of identifiers alone no unit and a figure text holding one kept whole, §18.25; 88 a face of one pitch told by a narrow letter and a wider one at its one advance; a person's name drawn with the block's translation of it wherever the paper prints it again; the number a class sets right before a babel name its label; a reference's item type and full name stated by the marked compile and written on its element, an abbreviation sent as the item's full name; a figure's word told by its spacing, not its sizes, §18.22, §18.23, §18.24, §19.15; 87 text set wholly in a face of one pitch kept the original's, never sent, a figure's line set from its own start and a figure's run into or out of no face of one pitch; a block's names in TeX's stream order, a reference format's paragraph one unit, an ink unit parted where TeX ended a paragraph and a mark glued to a word a label; a group of local parts before one domain one address, kept, and a line of addresses alone a kept block, §18.21, §18.22, §19.13; 86 every display TeX sets stated by the marked compile and the ink inside it kept the original's, its text-mode words translated; a unit whose own mark TeX set twice from a file (a class's verbatim copy of our source) unmarked, and a line of no text word the next line of its paragraph's ink unit; a name's mark the name's TeX set it after (the marked compile's call points), a note's call written and a name TeX set in a box on a centred line centred; a URL one word where TeX broke it, so that a link's annotations over its lines are one, §18.16, §18.19, §18.20, §19.6; 85 a `\bibliography` inside the group of a command the role table does not know read where TeX reads it, so that its entries are references, under the References toggle; a tie the source reader states a space and a forced line break a break, as TeX sets them; a part's words at an element too, so that a sentence that begins with an element begins at it on both panes; XeTeX's listing of a word the text the probe showed a macro sets, and TeX's line in a picture one figure text, set from where TeX's line goes on, §19.12, §19.13; 84 the author block under the title is the names toggle's, whole, and nothing else: its ink no unit is (connectors, e-mail lines, dates) the block's names, the class's author data printed elsewhere (a reference format's names, an end address) always translated, the block ending where TeX begins the abstract, keywords or index terms (the marked TeX's `fm<n>` point); a command of the paper's that ends the paragraph ends an author block's row, §19.13; 83 a page's body brackets paired by number, so that a balanced page's right column is a body and a reference that crosses a page from it is one unit, under the References toggle; an element stated a text only where its glyphs stand on its line's baseline, a footnote's mark raised whatever TeX set it as, and a symbol only where its ink is that symbol, else drawn as its ink, so that a mark TeX raised is drawn raised, §18.17; 82 an ink unit's script is read by its size and baseline whatever its face and written as TeX writes one, a unit's label its first line's leading scripts, a group's fill and a unit's own fill and face read off its own glyphs, a unit whose compile sets characters arXiv's did not located from the glyphs arXiv's set, a member's lead TeX's `\baselineskip`, a class's own author command of the author block, an author unit set as its cell's one line its column's class, the member before the one TeX set and a member's trail, so that the typesetter draws a name's marks raised, a link's words in its colour and a paragraph on TeX's pitch, §18.14, §18.15, §18.16, §19.10, §19.13; 81 a glyph is ink by its outline, never by its Unicode, so that a big delimiter PDF.js reads as a blank stands in its line, its display's row and its element's box, and a glyph stands far from its line by its ink, not its origin; a group a paper's macro sets states the face TeX set its text in and the terminal punctuation TeX set at its end where its source writes neither, a run-in head so faced `must`, so that the typesetter draws a delimiter and a macro's head in its face and the translators are asked for its stop, DESIGN §16; 80 the part states TeX's room under a paragraph and each piece's ink between TeX's points, a link's border, the ink that stays beside a paragraph's lines, a unit's size up the line, a table cell's alignment its column's class, forced breaks placed by TeX's points and ink TeX set past a unit's end point given its piece, an ink unit's leading mark as its label, its colour group's fill, each kept run's own ink, an e-mail address a kept run and a formula's specials written as TeX's tokens, and a figure text's runs in another face as groups, and a unit's elements state a display's own stop, the line end a run-in label after a forced break begins, an element that sets nothing and backref's list after the translation, so that the typesetter and the translators read them where they read the page or nothing, §18.11, §18.12, §19.12, §19.13; 79 an element's ink is one box a line of TeX's and its points open at a page's end stay open on the next, a unit whose element is not found or whose text claims letters its source does not write stays the original's, a page's text frame is the one TeX shipped and a line's measure its column there, a member's style is read off all of its glyphs, a line of the page's head or foot ending at its measure's end is read flush right, the room under each run of a member's lines is no longer stated (no translation borrows a line), a unit's run-in labels are `must`, a text macro the marking never marks (a .bbl's `\newblock`) sets no ink, a running unit is cut into sentences with each of its words placed on arXiv's page, a table cell states its grid place, its own text and the walls beside it, a caption its float's type, and an algorithm float's body is kept, so that a formula is one crop on its line, no line ends past its column and a page number keeps its size and its end, §18.10: over the sweep's 87 papers 29 units stay the original's, 26 of which today leaves the original's too; 78 the part states the room under each run of a member's lines, a cell band's open side, a label's line, a paragraph opened at a group, a link group's target and the small-capitals vote, a shared row kept where a character stays between, a line begun at a glyph off its text, a table cell's measure its table's, and a lead macro's ink by the probe's text, so that the typesetter reads them where it read the page or nothing, §18.10; 77 a paper's macro with no mark of its own has its span stated by TeX's points where TeX can set one that moves nothing: at a unit's head before its start mark (`\axthpk`, in vertical mode only where TeX's expansion of it begins with a character), after the unit's end mark by a point after the group it stands in (`\axttg`), and a span of no glyph, or one TeX's probe said sets no ink, stated empty, so that the element owns its glyphs, §19.7: over the corpus no glyph of B moves; 76 what an opaque fill painted before a figure's text covers is no ink to it, neither crowding it nor telling its anchor nor ending its free line, so that a label on an annotation's box over a gridline is translated, §19.12: over the sweep's 87 papers 106 figure units on 18 papers drawn that were crowded, none lost, no source or ink unit; 75 a unit of a paper's macro TeX expands once is marked in its definition whatever its kind, the one place TeX sets it, so that the wrap gives it its group where the maker lays it (2610.17024v1's keyword list after its translated label and its 29 references), §19.13; 74 an ink unit's text reads a spacing accent TeX's `\accent` set over its letter as the accented letter, its label (an affiliation's number, a footnote's mark, raised and smaller) is no text of it, and one that then echoes the author block's place is of the names toggle, §19.7, with LAYOUT 39: over the sweep's 87 papers 60 ink units in 23 papers move, no source unit; 73 a web address's `%` a character where TeX reads the address from the file in the body too, a unit's start mark before its first word past a group of commands closed before it, the text after a piece run through a macro TeX said sets no ink and a text symbol right after it, and an end mark at no word reaching back, so that 65 units of 16 of the sweep's 87 papers are laid (23 of its shown classes), §19.7, with LAYOUT 36 and REMOVAL 25; 72 a TeX conditional the front end cannot decide whose branches hold no words, inline, one placeholder whose ink is what TeX set for it, so that 2610.21098v1's abstract, `\ifdefined\BottleneckPreprint\url{…}\else\url{…}\fi`, is translated, §19.6; 71 a figure's run joins across the faces of one family, its formula's letters in the family's italic and a bold lead with its text, §19.12; 70 where a unit is searched known from the marked original's head, its own marks' pages (a unit its marks do not bound on them and a page beside, first in the part of its gap there; one without marks between its neighbours with marks, a float then over the whole document), so that a page waits only for the units whose own pages or whose neighbours' meet it, §19.10; 69 a figure's run joins across the subsets of one face, and a stroke painted before a figure's text, wholly below its baseline under its box, is under it, its depth carried to the layer, §19.12; 68 a unit only the layout file holds and no line of TeX's places after the left units before it by id first framed up to its own page, and a heading with no marks searched again between its neighbours whose place is certain, §19.10; 67 raised with `TRANSLATE_VERSION` 10, a pair whose command sets its argument alone saying so on its open, which the bundle carries (`BUNDLE5` 14), every unit's cut, text and hash 66's; 66 a unit's start mark written before the marks that open its head piece, so that no run-in heading's own mark sets the point of the placeholder its paragraph opens with, §19.7, with REMOVAL `'24'` (own.mjs MR 4's range filter gone); 65 a unit only the layout file holds placed in K beside the left unit it shares one of TeX's lines with, so that a run-in head the left does not hold stands before its text and its text is laid from the head's end, §19.10; 64 what TeX sets after a bibliography no entry's, a line that ends as a list's entry a contents line, and a babel name's counter the name's, so that an appendix's own contents list after the bibliography is translated, its entries with their headings' translations, §19.10; 63 the code environments' text kept as the paper has it by every reader, wherever it stands, by the regions TeX set (the layout compile's points around each line of their bodies), so that a transcript's code in a box TikZ draws is no figure's text, §19.7 and §19.12; 62 a figure's glyph shown whole by its own ink, never cut by its advance alone, and the figures' caps counted by every run that spells a word, so that a label whose side bearing stands past its figure's box and a line past a paper's cap are translated again, §19.12; 61 every distinct call of the paper's macros asked of the ink section within one budget of code units, so that a macro that sets no ink past the 64 of before, or past 200 code units, is no LOST piece, §19.7; 60 a paper's macro glued to a word marked where LAYOUT_TEX's opening mark boxes itself before it (`\textsuperscript`, `\mbox`), so that an author's affiliations are no LOST piece, §19.7; 59 a figure's label of code kept, a markup token in angle brackets or a text the paper sets as code, so that "<pad>" stays as it is, §19.12; 58 a fill painted before a figure's text is its ground whatever its edges, so that a label on a highlighted token's box is translated, §19.12; 57 a display whose next mark is a float shipped before the text after it found to that text in its own region, `stream.mjs` `pastOther`, so that its unit is no LOST piece's, §19.9; 56 what the page does not show is no ink to a figure's label, a glyph wholly outside the clip in force and any paint at an alpha of 0, and what is painted over a label covers it, never its ground, so that a cropped plot's hidden title and a token's invisible box crowd no label, §19.12; 55 an inline placeholder both of whose marks stand on one line of its unit found on that line whole, one segment, so that a fraction or a big delimiter no line's baseline holds is no LOST piece, and a formula's row of none of its unit's words no line of the unit's, so that a vector's arrow no longer leaves a paragraph the original's, §19.6; 54 a display its unit opens with found by its unit's start mark, and one past its end mark that runs to a later unit's opening, its ink no kept block's nor orphan's, so that it is a block of its own on both panes, §17.1; 53 a comment's line end written back as TeX reads it, the next line's indent not written, so that no space is set where the paper has none, no unit changed, §19.6; 52 a paper's environment that begins a table read as that table, and a macro that ends a row after its arguments as a row of its own, so that no mark of ours stands between a row's end and the next row's rule, §19.6; 51 nothing of ours written where TeX reads it as an argument of the paper's, an argument after one that ended the walk's paragraph walked as a body, an environment that begins another taking that one's parameters, colortbl's `\rowcolor` overhangs read, a control word a comment ended written back with a space after it, so that no line probe or mark is set as a branch, a name or a cell's lead, §19.6; 50 a head of a theorem-like name the paper defines its unit's label, no figure or ink unit's, so that every head of the name is drawn in one word, §19.14; 49 a unit's label row that meets a figure unit's run goes from the parts' layout, so that a head the wrap left in no group and the figure text cut is drawn once, its translation alone, §19.12; 48 a placeholder's tokens between two of a unit's words its own on its lines over a page break, so that a line a formula fills is the unit's, §19.6; 47 a figure unit cut of glyphs set at its size alone, and none whose row a part's reader would refuse, so that one label's row never costs its part's layout, §19.12; 46 a glyph set turned is cut by the clip in force where its own ink passes it, as a level glyph is, so that a y-axis title at its figure's edge is a figure unit again, §19.12; 45 xy-pic's diagram kept as the paper has it, a drawing as a TikZ picture is, so that its cells are no units and no mark of ours goes into xy-pic's syntax, §19.6; 44 the final pass with no transparency group of the driver's on an included PDF, as arXiv's TeX Live 2025 of 2025-08-03 includes one, §19.7) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
+| `LAYOUT` (`layout/file.mjs`, `'40'`: a paragraph's end point the marked original states whatever node its list ends in but an empty list, a glue or a box (marks.mjs `\axt@peat`), with PIPELINE 98, §18.66; 39 an ink unit's row under its new kind (`inknames` where it echoes the author block's place) and count of pieces, with PIPELINE 74, §19.7; 38 a unit's lines over a page break those its pieces' points stand on too, a line's baseline the one its own mark and its words' glyphs agree on, a broken piece's part no line's baseline holds on its own point's line, a picture a piece sets (a draft image frame in the marked original) the base page's image on the frame's box, an opening point read past a float TeX set right after it, §19.6 and §19.9, and pages whose lines moved across their breaks drawn as a run, whole or not at all (`carry.mjs` `lineCheckOf`), §19.7; 37 a unit's alignment one of four flags or none, `UNIT_FLAG.JUSTIFIED` beside the three, an ink unit's TeX's as the paragraph ends of the marked original tell it (`marks.mjs` POINTS_TEX `qe<n><code>`, `ink-units.mjs` `alignOf`), none where nothing does, the door then reading its lines, §18.1; 36 an end mark at no word bounded by its unit's last word before it in its column, a carried word on either side of the mark's token on the base page its word, and the text after a piece through a macro of no ink and a text symbol right after it, §19.7; 35 the maker's anchoring where PIPELINE 70 has a unit searched, from the head's own pages of its marks' names, so that a paper's title, keywords and references numbered after its text are laid, §19.10; 34 no label where a unit's own text begins, `make.mjs` `headLabel`, §19.10; 33 a babel name's row holds the counter TeX set after it on its line where it leads no unit, its width at the row's end in slot 12, §19.10; 32 each line of a code environment's body a region the file holds (`regions`, the file's schema 6), §19.7; 31 a page whose lines moved across its breaks through compile drift drawn, `carry.mjs` `lineCheckOf`, §19.7; 30 a footnote's call after the last word found by its raised mark, a biblatex entry's unit of the new kind `inkreferences`, §19.7; 29 backref's list after an entry a row of its list piece's, §19.13; 28 a Type 3 glyph's ink its char procedure's paths, `layout/ink.mjs` `type3Box`, #122-1; 27 a command that sets the punctuation after it before its ink marked around the pair, a macro TeX said sets no ink EMPTY, a piece alone at an entry's end given the lines it runs onto, a macro that sets one punctuation mark drawn as it, §19.7; 26 a unit TeX set flush left or flush right flagged so, `UNIT_FLAG.FLUSH_LEFT` and `UNIT_FLAG.FLUSH_RIGHT`, and a paragraph a box's close ends read by its own skips, §18.1, §18.8; 25 the release sweep of 2026-10-29, a line too short to be evidence found on no other page, a word a hyphen cuts going on below, an ink unit's paragraph one unit, a math face told by its family's names, `layer-proto/fonts.mjs` `classifyFont`), `REMOVAL` (`pipeline/versions.mjs`, `'26'`: an image TeX painted inside a placeholder's ink, between its points or before the text after it in its unit, the placeholder's group, and an opening point with a float TeX set right after it read past the float to the text after it, §19.9; 25 a piece's ink read through a macro TeX said sets no ink and to a text symbol right after it, its glyphs its placeholders' group, §19.7; 24 own.mjs MR 4's filter of an opening point inside another unit's range gone, a unit's start mark written before its head piece's opening marks, so that none is set inside a run-in heading's range, §19.7; 23 the counter TeX set after a babel name on its line, no unit's, in the name's group (`own.mjs` MR 6b), §19.10; 22 a text symbol's own glyph its unit's text, marks or not, so that the original's symbol never stands under its drawing, `own.mjs` MR 4, §19.9; 21 a display whose next mark is a float shipped before the text after it its unit's groups to that text, `stream.mjs` `pastOther`, §19.9; 20 the ink of a display its unit opens with its unit's for the ledger, in no group, so that no ink unit nor kept block is made of it, `own.mjs` `leads`, §17.1; 19 a head of a theorem-like name the paper defines in its unit's label group, own.mjs labelFormOf over the wrap's `names`, §19.9; 18 the closing punctuation glued past a unit's end mark on its line its text, as the maker's line takes it, own.mjs MR 4c, §19.9; 17 a biblatex entry's ink its unit's groups, the point before each in our page; 16 backref's list after an entry its list piece's ink, §19.13; 15 a level figure unit on its column's edge or centred in it anchored there, `figure-text.mjs` `columnAnchorOf`, §19.12; 14 a unit's text owns the rules TeX painted on its own lines, an OT1 `\_`, an underline, own.mjs MR 2b, #117; 13 a punctuation mark a command set before its own ink its unit's text, not the piece's, §19.9; 12 a macro TeX said sets no ink is no placeholder of ink, an opening point alone at its unit's end owns its lines up to TeX's skip before another block; 8 no add-on, a part's or a bundle's cell rules in its place, our page wrapped by optional content, §11.8, §19.9) | extraction | the layout maker (the file's own schema is `LAYOUT_SCHEMA`, 5); how a drawn unit's ink is taken away | the R2 key | bundles made again lazily |
+| `TRANSLATE_VERSION` (`translate/version.mjs`, `'11'`: TeX's `\#` a character of the text, a markers-wire reply to a wire holding a `#` of its own read marker by marker with each marker's one `#`, §18.30; 10 fewer markers, what the wire tells read from TeX's tables and definitions — a pair whose command sets its argument alone (revtex's and ACM's `\bibinfo`, a paper's `\newcommand\x[1]{#1}`) no pair on either wire, a stretch of placeholders side by side one marker, a space riding a kept pair's edge, `\label`, `\penalty` and a table's row rules on no wire, every display a break, a pair's lone end at its unit's edge off the wire and inside it a marker in its place, a structural name the target's heads hold not sent: over the 53 sweep papers' zh units the wire 3.9 % shorter and 36.8 % of its markers gone, §19.13; `'9'`: a caption cut into sentences on the tags wire as a paragraph is, §17.1; `'8'`: a run-in label where a sentence begins past the unit's head keeps its markers on the markers wire (`mt.mjs` `classOf`), 2010.11929v2's "Center:" and "Right:"; `'7'`: backref's list after an entry on no wire, put back after the translation with an en space before it, §19.13; `'6'`: every content class translated once whatever the language, the author block for every target and a bibliography's entries; `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `toTranslate` (the KEPT flag and the names the target's packages answer), `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
 | `RULES_SCHEMA` (`rules/layout.mjs`, `10`: the switches no set ever turned the other way gone, their shipped values the engine's own (the rules audit of 2026-11-04, T-D1): `leadRel` (the leading relative to the original's pitch, as the page fill set it for every unit), `trackStart` (the face's size correction given back), `even` and `fillSize` (no page-even pass, no growth by size), `leftover` (what the fill leaves stays at each paragraph's foot), `evenPitch` and `keepAlign` (B1 and B2, §18.8, on); and `further`'s `flow` step, the text run past a display (T-M5b: it set none of the release sweep's or the gate pack's units the steps around it had not); 9: the languages of a script the engine set, the owner's ruling of 2026-10-29: `latinPatterns` takes Italian's, Dutch's, Polish's, Turkish's, Indonesian's (Malay's too, as babel's malay.ldf takes them), Czech's and Swedish's, `cyrillicPatterns` added, a Cyrillic word's hyphenation, Russian's rules or Ukrainian's or Bulgarian's own patterns, and `hyphenation` their minimums as TeX applies them under babel; 8: `latinPatterns` takes French's, Spanish's and Portuguese's own, hyph-utf8's (the three were hyphenated with English's, #121-4), and `hyphenation` their minimums as babel sets them, French 2 and 3, Spanish 2 and 2, Portuguese 2 and 3; 7: `evenPitch` and `keepAlign` added, lane B's B1 and B2, the ruling of 2026-10-29, §18.8; 6: `cjkFaces` holds its group alone, a CJK script drawn at Regular and Bold beside every English family, its `light` designs and its unread `kai` gone, the ruling of 2026-10-29; 5 before it: `fillLeadRel` added, the fill's top relative to the original's pitch; 4: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
 | the set's `version` | layout | the values | its immutable URL | readers take it on their next load |
 
@@ -2399,7 +2875,7 @@ Decisions made by the maintainer by looking at crops, and what they changed. The
 
 **The fill's top is relative to the original's pitch for Chinese (`fillLeadRel`).** The fill spreads a unit's lines up to a top; the em top (`fillLead`, 2 em of the size drawn) equals the original's own pitch on a double-spaced original and is below what the frame allows, so the paragraph ended early (2610.11256 page 12, unit 75: 7 lines of 9). The top is now the looser of the em top and `fillLeadRel` = 1.3 times the original's pitch, scaled by the fit's size; 1.3 is the engine's own Chinese `leadBase`, so Chinese reads at the same density as its original. Chosen by the owner by eye on crops, 2026-10-23, over 1.5 and over replacing the em top outright (which tightened 3,035 single-spaced units). Simplified and Traditional Chinese only; Japanese and Korean stay off until measured. Measured on the 53 papers (Chinese): 168 units whose leading shows change by a median of 0.20 pitch (0.36 em), none tighter, none past its frame, no new collision, and a page of single-spaced originals is unchanged. It acts only where the em cap binds: a single-spaced original keeps its top, and the band, tracking, size and the leftover below the paragraph are unchanged. For the same two scripts the halving that finds the loosest leading now tries the top itself (it was left untried when the fraction of a step was under a half, so the unit took neither tracking nor the page's size). With that step more pages grow, and a unit of one line keeps its own size in these scripts: it has no frame to spread over, and a larger size only carries its ink past the original's line (a note under a table's rule, 2610.21924 page 18, whose formulas touched the rule at x1.1).
 
-**A unit split by its displays is laid a run at a time (2026-10-24).** The text between two displays is set on the slots between them alone, so each run of a unit is a text block of its own (the rubric below), and each takes its own state: the first of the fit's states at which its own text fits its own slots (`layer2.mjs` `runsOf`, `layoutRuns`), its size and leading its own, and the page fill fills each run as a unit of the page the unit begins on, the page's target reading the unit once, as one, at its fit as one, so that its neighbours keep the rhythm they had (`run.mjs` `fillUnitsOf`, `fillPass`; voting a run at a time moved 55 of 158 such pages' targets and 64 single-run neighbours); its runs grow with the page's size together, read by the unit's line count (`fillPage`; a run of one line had stayed at 1.0 beside its unit's others at 1.1); filling each run on its own first page was measured and declined ( on 7 Chinese papers, link colours lost 2 to 9 and paragraph ends letter-spaced 4 to 14). A run opens at a display alone: a forced break that opens another frame (tokensOf2's `brk`) keeps its frames in the run, as the unit's own walk sets them. Where a run set larger would carry a token to a later page than the unit's fit set it, the unit is laid as one. The owner's ruling of 2026-10-09 (sizes per unit where some must shrink) is carried to its natural unit: only a cramped run shrinks. Every run fits at the state the unit's fit found, so each comes out there or more naturally. One tracking a paragraph: the walk tightens a run's tracking (and its CJK punctuation's compression) before it shrinks it, so a cramped run came out tighter than a roomy one, and the page fill tracked a roomy run further still; the paragraph read at two letter spacings, its roomy part's last line looser than its own tightest lines (the sweep's (j), paragraph end letter-spaced: 967 rows over 53 papers in Chinese where `next` has 12). Each run is laid again from the tightest tracking any of them needs (`P.runTrack`, the walk's first state), and the page fill gives a unit's runs the least fill tracking any of them takes (`fillPage`); size and leading stay each run's own. The page fill keeps a unit's text on the pages its fit set it (`layer2.mjs` `keepsPages`, read for a unit's runs; read for every unit, it moves 34 more pages of 19 Chinese papers, a change of its own left for later): a looser leading holds fewer lines on a page's frame, and the page cuts (`pageCutsOf`) keep text only from the page before; 2610.21884v1's unit 10 in Chinese, a paragraph over pages 1 and 2, had its last run filled to a leading of 1.61 and a sentence of page 1 drawn at the top of page 2 (the sweep's (i), sentence drawn on another page). 2602.23285v2's unit 35 in Japanese (seven lines, then two after each of two displays) was set at 0.85 throughout because the two lines after eq. 5 held their text from 0.85 alone, its first run five tight lines over two empty ones; it is now 1.0, 1.0 and 0.85, its first run six lines at a leading of 1.1. A unit of one run (no display, or a paragraph over a page break, one run), a table's cell, a unit the fit's further steps set (widened, run past its display, below the floor) and one whose runs do not each fit alone are laid as before, byte for byte, and filled as before: measured over the Chinese sweep set (19 papers traced, 2026-10-24), every page with no line of a unit laid in runs is drawn byte for byte as `next` draws it; the 3 that differ each hold the lines of such a unit begun on the page before (2610.21201v1 page 23, 2610.21026v1 pages 18 and 33). Running the text on past the display was rejected: it moves text across the display, breaking where the paragraph meets its equation. A run's lines carry its size, scale and state (`seg`), which the drawing, the word table, the links and the checker read a line by; the even pass, which sets a page's units at one size, lays a unit as one again.
+**A unit split by its displays is laid a run at a time (2026-10-24).** The text between two displays is set on the slots between them alone, so each run of a unit is a text block of its own (the rubric below), and each takes its own state: the first of the fit's states at which its own text fits its own slots (`layer2.mjs` `runsOf`, `layoutRuns`), its size and leading its own, and the page fill fills each run as a unit of the page the unit begins on, the page's target reading the unit once, as one, at its fit as one, so that its neighbours keep the rhythm they had (`run.mjs` `fillUnitsOf`, `fillPass`; voting a run at a time moved 55 of 158 such pages' targets and 64 single-run neighbours); its runs grow with the page's size together, read by the unit's line count (`fillPage`; a run of one line had stayed at 1.0 beside its unit's others at 1.1); filling each run on its own first page was measured and declined ( on 7 Chinese papers, link colours lost 2 to 9 and paragraph ends letter-spaced 4 to 14). A run opens at a display alone: a forced break that opens another frame (tokensOf2's `brk`) keeps its frames in the run, as the unit's own walk sets them. Where a run set larger would carry a token to a later page than the unit's fit set it, the unit is laid as one. The owner's ruling of 2026-10-09 (sizes per unit where some must shrink) is carried to its natural unit: only a cramped run shrinks. Every run fits at the state the unit's fit found, so each comes out there or more naturally. One tracking a paragraph: the walk tightens a run's tracking (and its CJK punctuation's compression) before it shrinks it, so a cramped run came out tighter than a roomy one, and the page fill tracked a roomy run further still; the paragraph read at two letter spacings, its roomy part's last line looser than its own tightest lines (the sweep's (j), paragraph end letter-spaced: 967 rows over 53 papers in Chinese where `next` has 12). Each run is laid again from the tightest tracking any of them needs (`P.runTrack`, the walk's first state), and the page fill gives a unit's runs the least fill tracking any of them takes (`fillPage`); size and leading stay each run's own. The page fill keeps a unit's text on the pages its fit set it (`layer2.mjs` `keepsPages`, read for a unit's runs; read for every unit, it moves 34 more pages of 19 Chinese papers, a change of its own left for later): a looser leading holds fewer lines on a page's frame, and the page cuts (`pageCutsOf`) keep text only from the page before; 2610.21884v1's unit 10 in Chinese, a paragraph over pages 1 and 2, had its last run filled to a leading of 1.61 and a sentence of page 1 drawn at the top of page 2 (the sweep's (i), sentence drawn on another page). 2602.23285v2's unit 35 in Japanese (seven lines, then two after each of two displays) was set at 0.85 throughout because the two lines after eq. 5 held their text from 0.85 alone, its first run five tight lines over two empty ones; it is now 1.0, 1.0 and 0.85, its first run six lines at a leading of 1.1. A unit of one run (no display, or a paragraph over a page break, one run), a table's cell, a unit the fit's further steps set (widened, run past its display, below the floor) and one whose runs do not each fit alone are laid as before, byte for byte, and filled as before: measured over the Chinese sweep set (19 papers traced, 2026-10-24), every page with no line of a unit laid in runs is drawn byte for byte as `next` draws it; the 3 that differ each hold the lines of such a unit begun on the page before (2610.21201v1 page 23, 2610.21026v1 pages 18 and 33). Running the text on past the display was rejected as the way to lay a unit's runs: it moves text across the display, breaking where the paragraph meets its equation. It stays the walk's last resort, and only that (`fit/walk.ts` layoutUnit2 with the breaker's `strict` off, the unit's layout `spilled`: the approved prototype's iteration 3 of 2026-10-06, laid at its most natural state since 2026-10-17, 2608.16117's German page 10): where in order nothing fits at any state, a run whose text fits its own slots at no state, the floor and the further steps included, the text runs on past the display. The cause is capacity: the display's place on the page is TeX's, and the reply's text between two displays may be longer than the original's, most of all where the translator moves a display's placeholder or merges the words around it (2610.21106v1's Remark 1.3 in Chinese: Google and Microsoft alike dropped "where" and set the second display after "under conditions …", so that the one line TeX left for "where", ended 2 em before the display it set with its short skip, was asked to hold a clause). What it costs: the display stands inside the run's text, not where the reply put it. **The line before a run's boundary is a last line (2026-11-13, the coordinator's ruling on that remark).** Where a display begins TeX breaks the paragraph so far as a paragraph (tex.web §1145, ⟨Go into display math mode⟩: `line_break(display_widow_penalty)`, which appends `\parfillskip`, §816), so the line before a display ends where its text ends, ragged, and never in a discretionary hyphen. One rule on both paths: on the in-order walk the region's break ends that line (the breaker's `blockTo`, a run's forced break in `runsOf`); on the run past, the line before a kept region the next slot lies after (a slot's `after`: whatever TeX set between the partial paragraphs, by the run boundary, no list of kinds) ends at a legal break that is no hyphenation point and is set ragged (`break.mjs` beforeBoundary, advance). The remark with Google's text had "Hes-" (after two Chinese characters) on the line before its second display and "sian" after it; the line now ends after the two characters, and "Hessian" stands whole after the display. A CJK phrase the run past cuts between two of its characters (Microsoft's text of the same remark: its word for "Hessian quotient equation" cut after its third character) is a legal break, drawn as production draws it (LATER). Measured over the 90 pairs (round B14's bundles, the reader gate's entry, both stores): a unit runs past a boundary in 4 units on the door's rows (Microsoft) and 8 on Google's; the line before the boundary ended inside a word in 1 and 4 of them before the rule, in none after. What moves: 3 units on the door's rows and 5 on Google's, each its line before the boundary (ragged, or its word whole after the boundary), and one of them its size: 2608.16117v1-de's unit 28, a paragraph of nine displays that fitted at 0.875 of its size (Google's text: 0.85) only by cutting "Periodizitätsbeziehung" with display (33), is laid one state smaller (0.85; 0.825), where the text before that display lies on its own lines and the display stands after the colon, as the reply sets it. One state of the fit on one paragraph of the 90 pairs is the law's price (the coordinator's ruling of 2026-11-13: the cut word is the fault, and a size step a reader does not see is none, the owner's words of 2026-11-12 on the page's fill, §18.57). The tap's replay against today's restates today's line before a boundary as a last line (`packages/typeset/tests/replay/tap.ts` lastBeforeRegion, lastLineIn); over the tap's 123 ledgers the walk replays 32,396 of 32,589 rounds as today did (32,401 before): the five are the rule's, four lines' mode and that paragraph's state. A run's lines carry its size, scale and state (`seg`), which the drawing, the word table, the links and the checker read a line by; the even pass, which sets a page's units at one size, lays a unit as one again. The lab's reader dump states a unit's size as its layout's, its first run's, as the baseline's harness does; where a later run is drawn at another size it states each line's too (`DumpUnit.sizes`, `packages/typeset/tests/replay/display.ts`), and the check that each page's lay lays a unit alike (I6: `gate.ts`, `gate-l1.ts`, `selfDiffer`) compares them, so that every run is checked at the size it is drawn at (2026-11-12: a theorem of 2610.40645v1 in Japanese, its line before a display at 10.64 pt and its lines after it at 10.91 on the next page, read as 10.64 on both).
 
 **Judging a block (the rubric for samples and rulings).** The owner, 2026-10-23: judge per block, not per line. A block is better, the same or worse than its base on three questions. (i) Uniformity inside the block: no line stretched or squeezed out of step with the others. (ii) The block lands in place: each sentence at the right place in its paragraph, paragraph boundaries where the original has them. (iii) Rhythm against its neighbours: leading and density consistent with the page's other blocks. A shift under one pitch counts as the same. Line-level shifts and per-line offsets are normal and are not a verdict.
 
@@ -2493,8 +2969,8 @@ of one run on one page whose columns meet). Each run of the unit (its blocks bet
 later frame k of its n laid lines, k = n × the source's lines before that frame over all of them, at the line end nearest
 it that a token opens (a line a long token's cut opens, a URL's or a hyphenated word's tail, begins inside a token; ties the
 later, the earlier frame the fuller), one line at least on each side; the break token (`frame`: the unit's block the frame
-begins with) then stands at that line's first token, and only where the fit sets that line in an earlier frame (where it
-does not, the frame's slots are full already). A run laid in one line is cut in it at each frame's share of its tokens, the
+begins with) then stands at that line's first token; where the fit sets that line in that frame or later, the page fill alone
+reads it, and only where the share holds within the page's band (§18.11, 2026-11-10). A run laid in one line is cut in it at each frame's share of its tokens, the
 one short line. The breaker reaches a frame by its block (`blockBase` for a run laid alone), so a column break is laid,
 held and stranded as a page break is. The breaker's held break, `strand` and `keepsPages` are as above. Nothing of the
 alignment or the row's sentences is read for it any more: `pageStartsOf`, the sentence share and the row's sentences on the
@@ -2634,6 +3110,27 @@ the history of `pipeline/versions.mjs`, where they were kept until 2026-11-04 (t
 - 75: a unit of a paper's macro TeX expands once (its calls counted through the paper's macros that hold them; none TeX may skip) is marked in its definition whatever its kind (latex-front.mjs markUnits, storedBodies' `once`, as an author block's has been since PIPELINE 30 (#485): frontMarks), the one place TeX sets it, so that the wrap gives its ink its group where the maker lays it (PIPELINE 70); one called more than once stays unmarked. Over the sweep's 87 papers only 2610.17024v1 moves (86 papers' base pages and rows byte for byte the same, no source unit's text or cut): its keyword list u468 drawn after its translated label (the wrap had left its ink in the call's placeholder group `u2.p`, which the maker wrote EMPTY), its 29 references drawn with the references toggle on, the three ink units that had taken their lines gone (two ink heads renumbered), and its e-mail line u504's alignment no longer read from the keyword paragraph's end (that paragraph ends at the list's end mark now, which sets no paragraph-end point): laid centred, as TeX set it, not from its first glyph (the release sweep of staging e4be8723, 2026-11-06)
 - 76: what an opaque fill painted before a figure's text covers is no ink to it (pageInk's `opaque`: a colour at an alpha of 1 under no blend mode but Normal and no soft mask, its groups' alike, every clip in force a rectangle on the page's axes; figure-text.mjs coverOf, roomOf: where the fill holds the band whole along a stretch, the ink painted before it there neither crowds the unit, nor tells its anchor, nor ends its free line, nor is a stroke under it), so that 2609.26457v1's annotations over its plot's gridlines are translated; the figure units' cut is 74's, 106 of them on 18 of the sweep's 87 papers drawn that were crowded, none crowded that was drawn, 56 rooms longer, 7 anchors moved; source and ink units 74's (fix/figure-covered-ink)
 - 77: a paper's macro with no mark of its own has its span stated by the marked compile (layout/marks.mjs LAYOUT_TEX `\axthpk`, `\axttg`, layoutMarking): one at a unit's head, passed over before its start mark, gets an opening point there (in horizontal mode as `\axtpma`, in a box or a cell on its empty list too; in vertical mode only where TeX's own expansion of it once begins with a character, which `\leavevmode` begins the paragraph before, as that character would), its span closed by the start point, and the glyphs between are the piece's, the label what stands before its point (own.mjs MR 5); one after the unit's last text, after its end mark, gets a point after the group it stands in (`\aftergroup`), its span from the end point to that point. None in a cell or a unit that holds an alignment's tab (a mark before `\multicolumn`'s `\omit`), none after a piece that may read what follows it (the writer's look-ahead rule), and the trailing one only right after the unit's last text, the end mark between them (a mark between `\urldef` and `\tempurl` in a .bbl was the name `\urldef` defined). A span stated with no glyph of B in it, or a piece TeX's probe said sets no ink (the instrument's `empty`), is El.text `''`: TeX set none, and the reading draws it as nothing, proven (lay/read.ts), where before it left the unit the original's (unproven)
+- 78: the parity triage's batch (rebuild/converge-7), the part's facts of arXiv's page, all optional fields (FORMAT 1): the room under each run of a member's lines (Room.ends), the side of a cell's band no rule stands on (Room.bandOpen), the line of its own a label stands on (Label.line), the paragraph TeX opened at a group (SpanAt.opens; none inside an element's own glyphs), a link group's target (SpanAt.to), the small-capitals vote (Style.caps); a shared row's kept where a character of the page stays between the two (Placed.join, today's keptBetween), a line begun where a glyph's ink stands wholly off the line's text, a table cell's measure its table's on the page, and a head or a cell's lead macro its ink and text by the probe's (today's front through the adapter, case aside)
+- 79: the engine refactor's round 3 (rebuild/converge-7: rc-ink, rc-geometry, rc-glyph), the part's facts as TeX set them, all optional fields (FORMAT 1): an element's ink one box a line of TeX's on that line's baseline, its text only where its glyphs share one baseline (a formula drawn as A's crop), its points open at a page's end carried to the next page, two lines cut one after the other on one baseline across each other one line; a unit whose element's stated span holds none of its glyphs, or whose text claims more letters than its pieces, symbols and text macros write, located nowhere and left the original's (29 units of the sweep's 87 papers, 3 of which today draws: SIAM's "Funding:" twice and a threeparttable mark); each page's text frame as the marked compile ships it (`AXT-BODY`: `\textwidth`, `\columnwidth`, the body's x and column), a line's measure the column it meets alone, else the block, `Placed.read` without 'measure' there; a unit set in two alignments its first, a single line centred by its block read again over the TeX line it shares, `LINE_FLAG.RTL` on a right-to-left paragraph's lines; a member's style read off all of its glyphs (a turned figure text's own, a babel name's faked small capitals, an accent TeX set over its letter joined to it); a single line of the page's head or foot (inkheads, inknotes) that ends at its measure's end and starts more than an inset within it read 'r'; Room.ends (78's) no longer stated, no translation borrowing a line (rebuild/dec-fit, the owner's ruling of 2026-11-08); a unit's run-in labels (a style pair by today's mt.mjs classOf sentence and boundary rules) stated `must`, so that the markers wire brings their style back, and a text macro today's marking never marks (marks.mjs classOf null: `\newblock`, `\ttfamily`) an `empty` piece, El.text '' (today's tex.mjs inklessOf), so that a BibTeX entry is laid (rebuild/toggles-style); `Unit.sentences` on every unit but a heading, a cell, a figure's and a name, so that a translator cuts it into sentences, and `Placed.words` (in place of `Placed.cuts`, never written): each word of a member's projection at its first glyph on A, in the parts of the pages it has ink on, so that the highlight pairs sentence by sentence again (rebuild/hl-sentence, §17.9); `Placed.cell` (a cell's row, column, span and head) and `Placed.plain` (its own text), so that a table's cells are translated or kept by group as today's decideGroups decides, `Room.wall` (the sides of a cell a painted rule stops), so that a cell widened past its own ink keeps a quarter of its size off a wall as today's paperTo, `Label.float` (the caption's float type, from its float environment, `\captionof`'s argument or `\tablecaption`), so that every figure's and table's label is relabelled in one form, and `InstrumentUnit.kept` on an algorithm float's body, so that pseudocode stays the original's (rebuild/dec-translate, the owner's rulings of 2026-11-08)
+- 80: the engine refactor's rounds 4 and 5 (rebuild/converge-7), all optional fields (FORMAT 1). Parts: the room TeX's facts leave under a paragraph, bounded by its text block bottom and its `\baselineskip` + `\parskip` (Room.runs, Room.sep; rebuild/borrow-tex), a link's border its own annotation's on A (Link.border; rebuild/link-borders), a piece's ink the span between TeX's points and an element of no ink stated as one TeX set before the unit, as none or as text (rebuild/pieces-span), the ink no member owns beside a paragraph's lines (Room.stays) and a unit's size its glyphs' up the line, TeX's, its font expansion aside (rebuild/borrow-ink), a table cell's alignment the class LaTeX built its column's template from, read from the marked compile (`AXT-CELL`; rebuild/cell-align), a forced break with no point of its own placed by TeX's points around it (rebuild/breaks-pair), a tail piece's ink past its unit's end point the glyphs that spell what TeX sets for it, and a macro of its opening point alone parted from the unmarked piece after it by their texts (rebuild/past-end), an ink unit's leading mark its label and its colour group's fill (rebuild/ink-label), each of an ink unit's kept runs its own ink (rebuild/wire-tail). Units: a figure text's runs in another face groups of no source, their style its glyphs' (SpanAt.style; rebuild/fig-runs), an e-mail address in an ink unit a kept run (rebuild/wire-tail), an ink unit's formula writing TeX's specials as the tokens that set them, so that a brace alone is no display (rebuild/brace-math): those units' ids move; and an element's `stop` (a display's own, today's displayStop; a line end where a run-in label follows a forced break, rebuild/must-term), `silent` (it sets nothing, today's isInkless; rebuild/wire-shape) and `after` (backref's list, which no translator is asked for and which comes back after the translation; rebuild/wire-tail), none in the id
+- 81: the engine refactor's round 6 (rebuild/converge-7), all optional fields (FORMAT 1). Parts: a glyph is ink by its outline, never by its Unicode (`isInk`), so that a big delimiter PDF.js reads as a blank (TeX's math extension pieces) stands in its unit's line, its display's row and its element's box, and the room read around units holds it; a glyph stands far up or down from its line by its ink, not its origin, so that a figure's subscript joins its line (over the 88 papers one figure unit's text, and so its id, moves: 2610.20030v1) (rebuild/blank-glyph). Units and parts: a group whose command names no style (a paper's macro, `\topic{…}` setting `{\bf #1.}`) states the face TeX set its text in, read off its glyphs on B where it is not the face around it (the span's `style`, SpanAt.style), and the terminal punctuation TeX set after its last letter where its source writes none (the span's `stop`), so that the typesetter draws it in that face, a run-in head so faced is `must` and every wire writes its stop (rebuild/runin-stop), none in the id
+- 82: the engine refactor's round 7 (rebuild/converge-7), all optional fields (FORMAT 1). Units: an ink unit's script (a glyph smaller than its line's text and off its baseline) is an element whatever its face, a run of scripts written `$^{…}$` / `$_{…}$`, and a unit's label its first line's leading scripts, so that a name's or a note's marks are drawn raised and small as TeX set them (rebuild/script-face: the ink units of 21 papers, 81 ids with front-matter's over the 88 corpus papers, moved where their marks became elements, and 2610.40394v1's note its label); a class's own command of LaTeX's `\author` form set in the author block's tabular is of the block (spconf's `\name`: 2610.20967v1 gains an author unit, its bibliography's entries one number on) (rebuild/front-matter). Parts: a group's fill where it is not the fill around it (a link hyperref colours), and a unit's own fill, slant and weight, read off its own text's glyphs on A; a unit whose compile sets characters arXiv's did not, between two of its glyphs A set one after the other, is located (1810.04805v2's reference 325) (rebuild/link-refs); a member's lead is TeX's `\baselineskip` where `AXT-LINES` states it, `lead` no longer in `read` (rebuild/tex-bottom); an author unit set as its cell's one line states its column's class (`AXT-CELL`, a change to the marked compile's TeX), the member before a member is the one TeX set, and the ink TeX set glued after a member that no unit owns is its trail (El.trail) (rebuild/front-matter)
+- 83: the engine refactor's round 8, part A (rebuild/converge-7), all optional fields (FORMAT 1). Units: a page's body brackets are paired by number, a glyph in a body while a body bracket opened before it is not yet closed (stream.mjs regionsOf, today's front half, and its copy locate/today/deps.mjs): a balanced last page's right column, split from one box whose closing point comes after it, was read outside every body, so a reference starting there and ending on the next page was refused whole and its text made ink notes, always translated (2608.25210v2's [64]), and a biblatex entry's line there an ink note (2608.06007v1's six) (rebuild/refs-toggle: the units of 3 papers). Parts: an element of a text class is stated a text only where its glyphs stand on the baseline of the line they stand on, a footnote's mark drawn raised whatever TeX set it as; a symbol whose ink holds a Latin letter or digit, or stands off its line where its reading draws it on it, is drawn as its ink (rebuild/note-marks: 61 elements on 12 papers)
+- 84: the engine refactor's round 8, part B1 (rebuild/converge-7), all optional fields (FORMAT 1). Units and parts: the author block is the stream after the title from its first name or place to the first unit of another kind, a figure no unit owns, or the point where TeX begins the abstract, keywords or index terms (the marked TeX's `fm<n>`, a change to the marked compile, every key moved; author-block.ts): an ink unit all of whose glyphs are the block's is `inknames` (the names toggle's), one outside its ledger line's class; a source unit of the block's kinds set outside it is `textnames`, always translated (an ink unit's id names its kind, so a unit whose kind moves has a new id) (rebuild/author-toggle: kinds in 26 papers of the 88); a command of the paper's every definition of which ends the paragraph and sets no text ends an author block's row (latex-front.mjs: IJCAI's `\affiliations`, `\emails`; rebuild/front-rows: 2611.00342v1 alone, outside the 88)
+- 85: the engine refactor's round 8, part B2a (rebuild/converge-7), all optional fields (FORMAT 1). Units: a `\bibliography` inside the group of a command the role table does not know is read where TeX reads it (rebuild/refs-measure: 2608.06007v1's and 2610.37818v1's kept inkreferences blocks now their entries, `reference`); an element's kind, a tie `space` and a forced line break `break` where the source reader read both as `other` (rebuild/fig-cut: 6,102 units of 87 papers, ids unchanged); figure texts: TeX's line in a picture one figure text, set from where TeX's line goes on, and XeTeX's listing of a word the text the probe showed a macro sets (rebuild/run-on-kept: figure texts of 8 papers of the 88). Parts: Placed.words holds the words at an element's offset in its unit's projection too (rebuild/sent-map: 73,899 words in 14,168 members of all 88 papers). rebuild/mem-back changes how the back half holds what it reads, every object byte for byte; rebuild/small-para, style-spans, hl-strip, cmd-wheel and cjk-space change no prepare output
+- 86: the engine refactor's round 8, part B2b (rebuild/converge-7), all optional fields (FORMAT 1); the marked TeX changes (LAYOUT_TEX, POINTS_TEX: every compile key moved). Units: the ink inside a display TeX's marked compile states (`dps<n>`, `dpe<n>`) kept the original's, a display's text-mode words translated as before (rebuild/display-marks: 6 ink units now kept in 3 of the 88, 2608.08481v1's displays (7) and (8)); a unit whose own mark TeX set twice from a file unmarked, so a class's verbatim copy of our source is the paper's, and a line of no text word the next line of its paragraph's ink unit (rebuild/block-residue: 2610.21084v1's abstract, 2610.22214v1's DOI line); a name's mark the name's TeX set it after, by the marked compile's call points (`<i>c`), a note's call written, a name in a box on a centred line centred and colortbl's class read through the column template's box (rebuild/author-marks-2: 1706.03762v7's "†" Gomez's trail, the ∗ the name before's in 2610.17108v1, 2610.21376v1 and 2611.13093v1, 2610.20266v1's and 2610.21491v1's "and" translated again). Parts: a URL, or a literal mark whose copy holds no white space, one word where TeX broke it, its text and colour runs joined (rebuild/url-join: 308 elements in 42 papers, no unit moved). rebuild/mem-front changes how the front half holds B, every object byte for byte
+- 87: the engine refactor's round 8, part B3 (rebuild/converge-7), all optional fields (FORMAT 1; the head's `recovered`). Units: text set wholly in a face of one pitch kept the original's, never sent (rebuild/mono-blocks, Rule 1, the owner's ruling: 40 source units on 5 of the 88 and 173 figure texts on 8, stage 1a's count at 87), a figure's indented line set from its own start and a figure's run into or out of no face of one pitch; a block's names one paragraph in TeX's stream order, acmart's reference format one unit, an ink unit parted where TeX ended a paragraph and a mark glued to a word a label (rebuild/author-lines-3: 2611.00342v1's names, 2610.22065v1's reference format, 2604.14228v3's note dagger); a group of local parts before one domain one address, kept, never sent, and a line of addresses alone a kept block (rebuild/mail-group: 2610.17024v1 and 2610.37668v1 of the 88, the marked source of 1512.03385v1 and 2610.21085v1). rebuild/op-stream reads a page's operator list in PDF.js's pieces and rebuild/mem-errors makes a failed allocation the paper's, every object byte for byte
+- 88: the engine refactor's round 8, part B4 (rebuild/converge-7), all optional fields (FORMAT 1); the marked TeX changes (refsTex at the document's end: every compile key of a paper with a reference moved). Units: a face of one pitch needs a narrow letter and a wider one at its one advance (998d7a6ad, Codex on #634: no unit of the 88 moved); a block name printed elsewhere drawn with the block's translation of it (rebuild/name-terms, §19.15); the number TeX sets right before a babel name its label, the line laid whole (rebuild/refs-head); each reference's item type and full name stated by the marked compile and written on its element, a word tied to a reference that abbreviates its item's name sent as that name under the paper's main language (rebuild/ref-names, §18.23); a figure's word told by its spacing, not its sizes, so a heading in faked small capitals is one figure text (rebuild/fig-smallcaps, §18.24)
+- 89: the engine refactor's round 8, part B5 (rebuild/converge-7), all optional fields (FORMAT 1); the marked TeX changes (an identifier's two marks, class `code`, its opening mark `\axthpk`: the marked source of 14 papers moved). Units: an inline formula closes at the math shift that opened it, `$` or `\)`, whichever it was, at the formula's own brace depth alone (a shift inside a group of it is a text box's own formula: `\(x+\text{for $y>0$}=z\)` one formula, Codex on #634) (rebuild/math-pages: 2610.21377v1's pp. 34-43, 224 units to 288); an identifier one element, the original's ink, never sent, a table cell or a line of identifiers alone no unit, a figure text holding one kept whole (rebuild/literal-fixes, §18.25: 146 identifiers in 14 papers, 114 cells, 29 figure texts). The reader's alone, no unit moved: every piece in one sentence on both panes (rebuild/sent-cover); a label no line may open with glued to the member before it (rebuild/author-kinsoku); a figure text's runs in its own small capitals and design (4f8c7832a); no glue inside a word on a line not set as Latin text (rebuild/literal-fixes)
+- 90: the engine refactor's round 8, part B6 (rebuild/converge-7), all optional fields (FORMAT 1). Units: a figure's line of words and a run of one pitch is one text, its run an element kept as the original's ink (`keptBy` pitch), a stretch a frame, an underline or a tone holds an element alike (`keptBy` decoration), the ink about a crowded figure text read by its relation to it (rebuild/fig-text F0, §18.26); an inline formula closes at its own brace depth alone (58b5fa31e: no unit of the 88 moved). The reader's alone, no unit moved: a name's label drawn at the end of the name before stays its owner's, its original hidden (7ac567e3a), lit with its owner on both panes and cut by its ink (1ca53fd27); a sentence's box on a line takes the line's band, a babel name's label lit with it on A (rebuild/sent-cover's follow-up)
+- 91: the engine refactor's round 8, part B7 (rebuild/converge-7), all optional fields (FORMAT 1). Units: arXiv's margin stamp is no text of the paper's, the figure reading taking only glyphs a partner on B holds (rebuild/arxiv-stamp, §18.27: the 78 stamp units of the 88 gone, nothing else); an element keeps the font state TeX set its glyphs in (its own weight, slant, small capitals) and its copy is its characters as TeX set them (rebuild/el-facts, §18.28). The reader's: a page waits for an element's own face (rebuild/el-facts). The lab's: the parity's fresh rows (rebuild/parity-fresh)
+- 92: the engine refactor's round 8, part B8 (rebuild/converge-7), all optional fields (FORMAT 1); raised with TRANSLATE_VERSION 11. Units: a body group wholly in a face of one pitch is an element kept as the original's, 148 groups in 86 units of 8 papers (rebuild/b5-fixes, §18.29 with the hung label laid in its hang and an element's text over accent-joined glyphs); a character TeX writes escaped and seven text symbols are characters of the text (851 units), a group that carries nothing is its content (2,354 units), `\enquote`'s marks are text (51), REVTeX's `\href@noop {} {…}` is its argument (93 and one new); the marked compile of a few papers moves (rebuild/style-wire, §18.30-§18.33). The chain: CHAIN_RULES `|references` (a phrase group placed by its reference translation, markers-wire translators) and `|pass-whole` (#636; rebuild/chain-fixes, with #637's glossary in the key and #638's Retry-After bound). The reader's alone: a figure text's highlight on its own band (rebuild/fresh-fixes); the extension's leftovers (rebuild/leftovers)
+- 93: the engine refactor's round 8, part B9 (rebuild/converge-7), all optional fields (FORMAT 1); TRANSLATE_VERSION stays 11. Units: a float of a type with no counter is the page's text, a note, and a caption's label is read from the point TeX's call sets (§18.34, marks-2: 8 notes gained, 37 labels, 2 affiliations through the point before a forced break); a formula in a figure is never sent and a line of formulas alone is kept whole; a figure's paragraph, list and node are each one text laid from their first line, rows joined where the sentence goes on, ink that is no text keeps no figure text, a text drawn twice and its copy runs, a text the engine cannot draw as it was set kept as the original's (§18.35-§18.36, fig-text); in a bibliography entry a face that fills a field is `must` (§18.38, style-wire: 186 units, no id); IEEEtran's proof name wrapped as babel's, TeX's grouping drawn as nothing (2608.25210v2's Artifact paragraph a unit), an opening point read past an earlier unit's marks only where they stand right after it (§18.39-§18.41, b6-fixes)
+- 94: the engine refactor's round B10 (rebuild/converge-7), all optional fields (FORMAT 1); TRANSLATE_VERSION stays 11 (the chain's `groups/2` is CHAIN_RULES', every row read again from its stored reply and nothing sent, §18.42). Units: a label's number is the word as TeX printed it, its opening bracket with it, and a named label whose parts leave a glyph of it out says how many (`Label.unheld`) and is never drawn anew (§18.39, b6-fixes: no label's name, number or punctuation moves over the 88, labels gain `unheld`); subfigure.sty's `\subfigure` and `\subtable` read as subfig's `\subfloat`, a sub-float's caption its last optional argument (subcaption: 4 caption units in 2 papers); a run-in label after a forced break begins its line past the elements between (§18.44, span-putback: 2 groups gain `must`, no id moves); `\centerline`, `\leftline` and `\rightline` set their argument as content (§18.46, float-lines: 10 cells of 2608.06701v1); beside the units, never an input, the ledger states a float's lines no unit owns (§18.45)
+- 95: the engine refactor's round B12 (rebuild/converge-7), all optional fields (FORMAT 1); TRANSLATE_VERSION stays 11. Units: a piece of no point of its own (a paper's macro right after another, a decoration that sets no character) found by the text TeX set for it, its decoration with it (§18.51, soul-locate: the probe's `decorated`, marks.mjs readInkDecorated, and its `texts`, instrument.mjs unmarkedInkOf; 2111.09276v1's Figure 1 caption, 2610.21376v1 u7 and u126, 2610.40576v1's `\hlg{All good.}` cell, whose id moves by the pitch rule); the maker's options gain `decorated`, so every paper's maker inputs move with it
+- 96: the engine refactor's round B13 (rebuild/converge-7), all optional fields (FORMAT 1); TRANSLATE_VERSION stays 11. Parts: a unit's end mark (what TeX pushed to its last line's measure end after the unit's end point, amsthm's QED box) claimed as its member's element `~$` (`El.end`, `trail`), no `Room.stays` (§18.52, qed-end: 251 marks in 27 of the 88 papers, their parts and add-ons); a figure text the paragraph path lays in the set of its lines, which it joins (§18.54, fig-small: 44 of the 88 papers' parts, their size ties alone). Units: a list's marker no run holds read before the free glyphs' join (§18.55, fig-small: 2111.09276v1's), and a face switch first in a bare group (`{\em …}`) the group's style and command, no element of its text (§18.56, toggles-on: instrument.mjs switchesOf; 731 units in 29 of the 88 papers, their ids moved, the tags wire of 688 of them). The italic figure label's slant (§18.53) is the reader's lay alone
+- 97: the engine refactor's round B14 (rebuild/converge-7), all optional fields (FORMAT 1, `El.sep` optional); TRANSLATE_VERSION stays 11 (today's engine reads none of it), LAYOUT 39 (no marked TeX moves). Parts and add-ons: a figure text or a table cell that holds a word its decoration keeps as the original's ink held whole as the original, its member fixed and stated `unwrapped`, no group of its text, a held figure text in a size set of its own, a label held with its decorated word's other lines (§18.61, decorated-whole: the owner's ruling of 2026-11-12; over the 88, 8 figure texts in 2 papers and 8 cells in 1, 2111.09276v1's 23 and 12; 2610.40576v1's four held cells keep the instrument's ids); a display no unit owns one kept block, its number with it (§18.58, formula-hover: keptUnitsOf, the parts of 21 of the 88 papers and the add-ons of 13, 16 pages of 7 papers read as one column again); what TeX set on an author's line after it past a word's gap moves with it as its trail (`El.sep`), and an author's ink end its boxes (§18.59-§18.60, author-size: the parts of 13 papers, 2610.10492v1's units numbered on by one). No other unit's id or text moves
+- 98: the engine refactor's round B15 (rebuild/converge-7), all optional fields (FORMAT 1, `El.tie` optional); TRANSLATE_VERSION stays 11. Parts: a paragraph TeX opened inside a unit is stated where it opens (`SpanAt.opens`, `El.opens`), the source's and B's side of its end read by the same facts, an end stated whatever node its list ends in and a box-ended paragraph none yet (§18.66, para-start: 2111.09276v1's run-in titles on pages 5 and 6 among them); a tie, the source's `~`, stated on its element (`El.tie`, the instrument's `isTie`), which the typesetter breaks no line at (§18.16, para-start: the parts of 87 of the round's 89 papers). The marked compile's paragraph points move with it (layout/marks.mjs `\axt@peat`; LAYOUT 40), so every paper compiles again. No other unit's id or text moves
 
 **`REMOVAL`** (how a drawn unit's ink is taken away):
 
@@ -2657,6 +3154,3055 @@ the history of `pipeline/versions.mjs`, where they were kept until 2026-11-04 (t
 - 24: with PIPELINE 66, own.mjs MR 4's filter of an opening point inside another unit's range is gone; every wrapped base page the same without it
 - 25: with PIPELINE 73, a piece's ink read through a macro TeX said sets no ink and up to a text symbol right after it (marks.mjs followsOf, the wrap's reading as the maker's), its glyphs its placeholders' group, the symbol its unit's text (2608.28692v1's `\MainRel\%`: the number in `u<id>.p`, the sign in `u<id>`); the base pages of two papers wrapped otherwise, glyph for glyph the same
 - 26: an image TeX painted inside a placeholder's own ink — between its two points, or from its opening one to the text after it in its unit — is the placeholder's (own.mjs MR 7, wrap.mjs planOf: the page's images aligned with PDF.js's, remove.mjs alignOf `images`), and an opening point with nothing of its region before a float TeX set right after it reads past the float to the text after it (stream.mjs pastOther): with LAYOUT 38, the wrapped base pages of the papers with such a piece change (the lost class of 2026-11-05)
+
+### 18.11 Layout decisions of 2026-11-08
+
+**The gap under a paragraph is held to its own leading alone.** Since the half-leading round of 2026-10-17 (its second
+form, B′) a paragraph's first line stays on the original's first baseline, and the room a gap lacks is taken from the
+paragraph above it: where the next line of its column would stand nearer its last line than a leading and the original's
+skip there, the paragraph ends higher (`footFloorAt`). That leading was the larger of the paragraph's own and the next
+paragraph's (the page fill's `next`). A paragraph whose translation nearly fills its block can open its leading only a
+little while its neighbours' shorter translations spread wide, and the next paragraph's leading then pulled it under even
+that: the owner on staging, 1810.04805v2 page 8, unit 156, seven lines of eight at 1.08 among neighbours at 1.38-1.5, its
+own 1.14; 2010.11929v2 page 5, unit 46, at 1.10, its own 1.14. Today's production sets them the same. The gap now reads the
+paragraph's own leading alone; B′ stands, no first line moves, and no unit is searched for a closer leading.
+
+The owner chose it on a preview of two rules drawn side by side over staging's own translations (2026-11-08, lab-data
+`refactor-2026-11/lead-variants/`): this one, and one leading for the body text of a column as TeX's one `\baselineskip`,
+each column's paragraphs at the smallest of their own leadings with the slack under each. The second set a column at the
+leading of its tightest paragraph, often one whose translation needs all its original's lines: over the 22 parity pairs the
+median leading of body paragraphs went from 1.33 to 1.00, and paragraphs at 1.05 or closer from 26 % to 52 %.
+
+Measured on the preview (the 22 parity pairs, 344 pages, at 499cc8f9b): 229 of 3,900 units change leading, 228 looser by a
+median of 0.02 (54 by 0.05 or more); one closer, 2610.30034v1 page 11 unit 215, which the old rule could not set under the
+next paragraph's floor and so left at its fit's 1.3, over its own 1.15. Lays 91,788 to 90,424 a run (the closer-leading
+searches gone); lay time a page, the median of three interleaved runs, p50 25.6 to 24.6 ms, p95 58.5 to 55.8 ms. The replays
+of today's fill read a pass where today's decision carried the next paragraph's leading over a unit's own as the ruling's
+(`packages/typeset/tests/replay/tap.ts` `flooredIn`): over the corpus's 2,883 passes, 785 are this ruling's alone and none
+differs otherwise.
+
+**A paragraph borrows the room TeX's facts leave under it, before it shrinks.** The same day's first ruling had no
+translation borrow a line: where it did not fit its own lines the whole paragraph shrank, and a German body that today sets at
+11.96 pt fell to 9.86-10.46 pt beside paragraphs at full size (2608.16117v1), a Japanese one from 9.96 to 8.97-9.22. The owner
+then ruled that borrowing comes back, bounded by TeX's facts: a paragraph may take lines in the empty space under a run of its
+own lines (today's freeFor, which every block but a cell's reads), never past TeX's text block bottom in its column, and never
+bringing the next ink under it nearer than the page's normal paragraph separation; before its size, so that a page's body
+keeps one size; no share of a pitch and no reading of the page's pixels stand in for TeX's numbers (today's 0.35 pitch over an
+ink map at a quarter of the canvas, which read a line of room where there was just under one, 2602.23285v2 page 4, and none
+where there was one).
+
+The marked compile states both. The text block's bottom: each body's statement (`AXT-BODY`) gains the depth of `\textheight`'s
+foot under the page's top edge as LaTeX's `\@outputpage` ships it, an inch, `\voffset`, `\topmargin`, `\headheight`,
+`\headsep`, `\textheight`: a dimension, the same in every engine (pdfLaTeX, XeLaTeX, LuaLaTeX and latex with dvipdfmx state
+675.27 pt for one twocolumn article on A4, whose flush-bottom column ends at 169.14, the page's top less it). A saved position
+was the other way: XeTeX measures it from the foot of a page of its shipped box where no `\pdfpageheight` is set (67 pt off),
+and the column box's own bottom is the main text's, over a column's footnotes and bottom floats, which then could never
+borrow. The separation: each unit's line probe (`AXT-LINES`) gains `\parskip` beside the `\baselineskip` it stated, both as
+the paragraph ends (the context's own: a list's `\parsep`); their natural sum. A unit TeX sets no paragraph for (a heading,
+the front matter's, a caption measured in a box alone) states none, and borrows nothing. The engine states, under each run of
+a member's lines (to its last line on a page or in a column, over a kept row of its own, over another's ink between two of
+its lines), the depth of the next ink's baseline across the run (a glyph's; a box's top) and of the text block's bottom
+(`Room.runs`), and the member's separation (`Room.sep`); a block may borrow down to the smaller of the bottom and the next
+ink's baseline less the separation; a run of several lines is read across its own lines, as they are laid (a paragraph set
+beside a figure meets no figure under it), a single line to its column's end. Nothing of B moves: over the corpus's 87
+papers each marked original and final pass is byte for byte what it was; 690 of the parts' 2,321 pages have a paragraph's
+last line on the stated bottom within half a point, 85 of the 87 papers one such page at least, and 27 paragraph runs of
+about 14,500 stand under it (TeX's own overfull pages and revtex4's text block, which ships otherwise than `\@outputpage`):
+there the room is none, never more.
+
+Measured on the pages where the first ruling and today differed (2608.16117v1-de, 21 pages; 2602.23285v2-ja pages 4, 5, 9,
+10, 18; 2610.17024v1-zh pages 4-6; 2610.21312v1-zh page 10; 1810.04805v2-zh page 3; drawn by the parity check): of 200
+laid units, 20 come back larger and none smaller, 18 borrow, and none of v2's lines passes TeX's bottom or comes nearer
+the next ink than the separation; today's do on 9 pages, a line 1.4-12.1 pt past the bottom (above a page number, where
+today's last line stood on the folio). Where today borrowed past TeX's bottom v2 shrinks instead (2608.16117v1 units 23,
+57, 65, 86, 99, 115; 2602.23285v2 units 29 and 167; 2610.17024v1 unit 86), and a heading, which states no separation,
+shrinks to its line where today borrowed one (2608.16117v1 page 4). 2602.23285v2 page 4's paragraph over heading 4 keeps its
+four lines, as today: the heading's baseline 25.36 pt under it, its separation 16.94 (a 6 pt `\parskip`), no line's room.
+
+The bound is a baseline, as TeX's is (checked 2026-11-09, on the owner's question whether a paragraph may borrow a little past
+it, as today's reader does on 2602.23285v2-ja page 10). TeX's page builder sets a column's last baseline at `\textheight`'s
+foot at most and lets that line's depth hang under it, to `\maxdepth`: a deeper line has its baseline raised by the excess,
+and a line the `\lineskip` rule pushes under the foot goes to the next page, unless the page's glue shrinks to hold it. A
+probe on the pinned TeX Live 2025 (article, `\maxdepth` 5 pt) states each: the last line's baseline on the stated foot to
+0.001 pt, a 4 pt deep one too; an 8 pt deep one moved to the next page, or, with 3 pt more `\textheight`, its baseline 3 pt
+over the foot; a 14 pt tall line's push sending the last line over, kept only by a `\parskip` of 0 pt minus 1 pt. arXiv's
+pages show the same: 2610.21880v1's last line on page 3 stands 0.70 pt over the foot, its formula's ink 6.68 pt deep
+(IEEEtran's `\maxdepth`, 6 pt), 2610.21106v1's on page 2 0.52 pt over it, its formula's ink 4.58 pt deep (amsart's, LaTeX's
+4 pt; the ink 0.07 pt past TeX's box).
+The walk (a slot, a line the `\lineskip` rule pushed) and the parity's `block` compare a line's baseline with the foot, to
+0.05 pt, so neither is stricter than TeX; the depth's bound is neither stated nor read, and over the 22 parity pairs one
+drawn line passes it (2610.21106v1 page 2, unit 12: that formula's line pushed 0.56 pt down, its descent 0.64 pt past the
+4 pt). Today's lines past the foot are baselines where TeX sets none: 2602.23285v2 unit 29 by 2.50 pt on page 4, unit 90 by
+1.00 pt on page 9, 2608.16117v1 unit 99 by 1.04 pt on page 28. Since 2026-11-12 a last line may stand up to 1.5 pt under the
+foot where that keeps its unit from a step down the sizes (the owner's ruling, §18.37); the bound is TeX's otherwise.
+
+**Each paragraph TeX states inside a unit has its own leading.** A unit can hold more than one of TeX's paragraphs (an
+item's run-in text and the prompt TeX set in a frame under it, a theorem's two paragraphs); the part states where TeX opened
+each (`SpanAt.opens`, `El.opens`) and the row is paired with those points, each paragraph's text on its own lines. The fit
+still searches one leading for the unit: a looser leading holds no more lines, so the size it settles is the same. The page
+fill then gives each such paragraph its own fill leading, as it gives each frame of a paragraph over a page or column break
+its own (`frameLeadsOf`), and holds the gap under each to its own leading as under the unit's last (`footFloorAt`,
+`paraFloorAt`); the unit's one fill leading, which the page's target reads, is unchanged. The owner's comment on the round-3
+sheet: on 2608.25210v2 page 3 three prompt boxes held about the same text at different spacings, the first two set solid
+because their run-in text needed both of its lines and held the prompt under it to that, the third, whose run-in text took
+one line, spread to 1.45; all three prompts now spread to 1.45, their run-in lines as they were. The frames are filled
+whichever way the unit's fill leading is found: where the gap under its last line takes the unit closer than its fit's
+leading (a paragraph that borrows part of a line of TeX's room fits at a looser leading than that gap allows), its other
+frames still fill their own blocks (1810.04805v2 pages 6-7, unit 119: four lines and two, as today, where the closer leading
+had set five on page 6 and one of two characters alone on page 7). Over the 22 parity pairs (344 pages) the two move the
+lines of 18 members' frames on 15 pages; the parity check finds one page fewer worse (1810.04805v2 page 7), none newly.
+
+**A paragraph's leading is the whole paragraph's, over its frames.** A paragraph TeX broke over a column or a page can end in
+one line alone at the top of its last frame (TeX's widow). That frame has no leading of its own: it takes the paragraph's, its
+frame before's. The gap under the paragraph follows it (the ruling above), but the line cannot rise, the first of its column,
+and the next paragraph's first line stays on TeX's baseline, so the gap stayed the original's pitch: the owner on staging,
+2610.20967v1 page 4, a one-line continuation 10.41 pt over a paragraph spread to 13.43 and under one spread to 14.78, in a
+paper with no `\parskip` whose original reads evenly. Where the paragraph over it cannot end higher, the paragraph under it
+starts lower by what the gap lacks, within its own lines, at the loosest leading of its first frame that still sets it
+(`headOf`, the page fill's `head`); where its own lines leave no room, it stays as TeX set it. Today's reader and every round
+before set the gap at the pitch. Over the 22 parity pairs six paragraphs move so, default and toggles on alike (2610.20967v1
+page 4 unit 85, 4.37 pt lower, its leading 1.29 to 1.23). Those first lines leave TeX's baseline by 0.7 to 6.9 pt, which the
+parity check's anchor measure reads as farther from the original than today's on five pages: this rule and B′ (a first line
+stays on TeX's) meet there, and the paragraph above, the one B′ takes the room from, has none. A paragraph of one line has no
+leading at all, and the gap under it stays TeX's.
+
+**A paragraph that borrows room spreads into it; a paragraph over frames keeps TeX's share where the page's band allows
+(2026-11-10).** The owner, on the references' leading: 「关于参考文献行距方案，就按你推荐的推进」 ("On the references'
+leading, go ahead as you recommend"). Three things were recommended, and he took them together. First, the gap under a
+paragraph that borrows TeX's room under it is measured from the borrow's limit (the foot `Room.runs` and `Room.sep` allow, a
+separation over the next ink), not from TeX's last line: at its own leading L its last line may stand down to (L − 1)
+pitches over that limit (`floorOver`, read by `footFloorAt` and `paraFloorAt` where the state borrows). Before, a reference
+whose translation needed its every line, and borrowed the room under it, was held by the gap to the original's pitch among
+entries spread to 1.38 (1810.04805v2's references, pages 10 to 12: entries set solid beside spread ones). Second, a
+paragraph over frames keeps TeX's share of its lines in each frame (`pageCutsOf`: each frame's first line at its share,
+the nearest line, ties the later) where every frame before its last holds that share at a leading at or above its page's
+band floor, the target less the band (`frameShareOf`, `fillPage`); otherwise the fit's split stands, as without it. The cut
+at the share where the fit set that line in that frame or later is marked (`share`) and read by the page fill's lay alone
+when it keeps the share; every other lay reads the tokens as before. Unbounded, the share set the earlier frame as tight as
+it took, down to the original's pitch: of the 50 frames it tightened over the corpus's 90 pairs, 34 stood at 1.0, most a pair
+of lines at a column's foot where the fit had left one (2610.37668v1 page 17, 2610.21084v1 page 1), which read worse than the
+one line; the band floor is the page's rhythm rule (`adaptiveFill.band`, §18.5), no new number. Third, a paragraph that borrows still votes in its
+page's target, so a page whose borrowing paragraphs now spread further may take a looser target (2610.20484v1 page 8, 1.45
+where it was 1.30: a paragraph of 19 lines at 1.50, 12 lines where today's reader sets 13). A recommendation to lay a list's
+items at the list's tightest entry plus the band (option (iii)) was shown and declined: it set the references at 0.810 of
+their blocks.
+
+Measured over 1810.04805v2-zh's references (56 entries of two original lines or more; the share of each block its laid lines
+span, first to last): round 6 0.854 (13 at 0.95 or more), option (i) 0.877 (13), (i) with (iii) 0.810 (11); the bounded share
+moves none of them. Over the corpus's 90 pairs (r6's bundles), the share lays something (i) does not in 598 frames: 449 keep
+it, 4 of them set tighter than their own fill leading and still at or over the floor (2610.22065v1 page 5, unit 94, at 1.30
+over 1.23: 8 lines and 2, TeX's, where the fit left 7 and 3), and 149 fall back to the fit's split (43 that would have gone
+under the floor, 102 whose own fill leading is under it, 4 that hold it at no leading); no frame is set at 1.0 to hold it.
+The bounded lay differs from (i) alone on 9 of the 2,566 pages, 6 units. The parity check reads a line count that is TeX's
+share (the same lines in all, its split alone moved: `sharePass`), and one set at a band the borrowing paragraphs moved by
+the leadings (i) gave them (its count other than where the pair is laid without (i)), as the ruling's (`leadRuling`); the
+replays of today's fill
+read a round that borrows, its fill leadings, and a run's tokens without the share's cut, as this ruling's (`borrowsAt`,
+round.ts `L9 (i)`, `F6 runs (share)`).
+
+### 18.12 A table cell's alignment is its column's, as LaTeX built it (2026-11-09)
+
+The owner's comment #42 (2602.23285v2-ja page 7): the translation of the header "Acc" grew rightward from the cell's left
+edge where the original is centred over its column; today's reader fails the same way on the second "Acc". No cell had a
+stated alignment. A cell of an l, c or r column is set in TeX's restricted horizontal mode, an `\hbox`'s, whose skips tell
+nothing (`AXT-ALIGN` was not written for cells at all), and the engine read a single-line cell's centring off arXiv's ink by
+its column's other unit cells on the page (today's cellCentred). "Acc" is the one unit of its column (the numbers under it
+are no units): nothing to read, so justified, set from the original's start.
+
+What decides where a cell's text goes is its column template's `\hfil`, on the side or sides the slack goes. A macro cannot
+read that glue: TeX shows a macro only the last node of its list, the template's right side comes after the cell's last
+mark, and walking back through the list means taking nodes off and putting them back, which turns leaders into plain glue
+(colortbl paints a cell's colour with leaders) and stops at the zero kerns templates set as guards (colortbl's
+`\hskip\stretch{.5}\kern\z@`: its c columns would read flush left). Reading the column specification from the source would
+mean doing again what array, `\newcolumntype`, siunitx and tabularx do with it. What LaTeX itself makes of the specification
+is the class it builds each column's template from (`\@chnum`: c, l, r, m, p, b, after `\newcolumntype` and `*{n}{…}`, for
+`\multicolumn` its own specification), and the marked compile carries that class on the template itself: every `\@mkpream`
+(LaTeX's and array.sty's tabular and array, longtable, tabularx, colortbl, siunitx's S, which is array's c, nicematrix's
+NiceTabular) has each column's template end in `\axt@te{<class>}`, wrapped at `begindocument/end` over whatever `\@mkpream`
+and `\@classz` the packages left. A cell's start mark defines its unit's index in its own alignment entry's group, carried
+out through the groups around the mark (the paper's braces, a template's `\begingroup`, colortbl's box, a p column's `\vtop`)
+by `\aftergroup` up to the innermost entry and never past it; the template's end writes `AXT-CELL <i> <class>` only where
+that index is defined at its own group level, so a cell of a tabular inside a cell never writes the outer cell's. A cell's
+end mark writes `AXT-ALIGN` as any unit's does (named `t<i>`, which today's reader passes over): a p, m or b cell's lines are
+its paragraph's (`>{\centering\arraybackslash}p`, tabularx's X, tblr's cells). The engine (`marks/channels.ts` `readAlign`)
+gives a cell its paragraph's alignment where TeX set it one, else its class's: c centred, l flush left, r flush right; and
+the typesetter keeps a cell's flush as any unit's (today's never did, no fact telling it then): an r column's translation
+ends where its original ends and, clipped there, widens to its left, and an l column's wrapped lines are ragged.
+Locate's reading of the cell's column stays only where TeX states neither (a template that is not LaTeX's: `\shortstack`'s,
+a plain `\halign`). Nothing of B moves: assignments, `\aftergroup` and a `\message`
+(`lab/pdf/spikes/layout-cell-cases.mjs`: 8 documents in pdfLaTeX, XeLaTeX, LuaLaTeX and latex with dvipdfmx under both years
+read as TeX set them,
+each PDF byte for byte the one before; over the 21 papers of the parity's pairs every marked original and final pass is byte
+for byte what it was).
+
+Measured on the parity's papers (stage 1a over the 21, against round 4's s88): parts change on 64 pages of 16 papers,
+cells' `align` and `read` alone, no unit, add-on or prepare dump; 1,415 cells change alignment, 554 to centred, 812 to flush
+left, 45 to flush right, and 4 that the ink's reading had centred (2608.06701v1's "Executor", the second column of `lllcc`)
+to flush left; 416 more keep theirs and drop `align` from `read`. The flush changes the lay of 20 cells, all of r columns.
+
+The parity over those 16 pairs (210 pages, against round 4's sheet on the same pages): 28 pages worse than today's, now 31.
+No longer worse: 2602.23285v2 page 7, the comment's ("Acc" laid 182.31–218.07, its middle 200.19 the original's, at the
+original's 7.15 pt; it had been laid from the original's start at 6.97, 22.51 pt past its room, today 13.02, now 12.12),
+2608.25210v2 page 5 and 2610.22065v1 page 6 (cells no longer shrunk). Newly worse: four pages by `align` (2608.25210v2 pages
+13 and 14, 2610.17024v1 page 18, 1706.03762v7 page 8), twelve cells whose line ends with a full-width closing parenthesis
+(U+FF09): the measure reads a drawn line's box, which holds the mark's blank half, where v2's ink stands 0.00 pt off the
+original's middle or end (the breaker hangs the blank half); 1810.04805v2 page 7, a centred "Dev" that now fits, its widening
+on both sides, and is laid 3.95 pt past its original's extent, so its header row is translated as the page's two other
+tables' already are while today kept that one whole; 2608.04322v1 page 10, "Avg. HS" centred in a room whose nearer wall is
+20.3 pt from its middle and so set at 6.10 pt where today keeps 6.97 by drawing it 6.49 pt off its middle and 12.98 past its
+room. Reading the alignment by `inkOf` instead clears the first four and makes three other lines worse (a v2 line whose last
+character, before a formula's crop its text does not hold, is a comma; a closing mark the breaker already compressed), so the
+parity's reading was left as it is.
+
+A unit that is no cell's but is set as a cell's line states the same (2026-11-09, the owner's batch 3 on 1706.03762v7-zh page
+1: "the names, places and e-mails are not centred on their columns; the first two are, the later ones are not"). An author
+block's units are never cells (PIPELINE 39), yet they are set in tables: LaTeX's `\maketitle` sets `\author` in a
+`tabular[t]{c}` and `\and` opens another, as NeurIPS's `\And` does, each name, place and e-mail a row. Their `AXT-ALIGN` said
+`h` and nothing more, so locate read each from arXiv's ink: centred where the stack of the column happened to read so, the
+first author's, justified elsewhere, five of the eight names and their places laid from their originals' starts. A unit's
+start mark now carries its index out the same way, but through ordinary groups alone (a brace group, `\begingroup`, as the
+paragraph's end is followed): never past a box, a `\noalign`, math or a note, where the unit is no line of the cell's or the
+token would land where TeX reads none (longtable's caption is set in a `\noalign`). The template's end writes its class for
+each unit that reaches it; where a cell's own unit shares the line, none. Several units sharing a cell's line (2411.13093v4's
+names apart by `\quad`, cut in two by a `\thanks`) wrote none at first: the class places their line, not either, and the lay
+then had no line of several members, so each, given the class, would have been set on its own middle. The lay now has one
+(§18.16, `rowLinesOf`): a line whose members TeX states alike is laid as one run, placed as the class places it, and each of
+them states the class (2026-11-10). Where locate does not make them one line (ink kept between them, a member over two lines),
+each is centred on its own original's middle, where the ink's reading laid it from its start. And the index passes a box the
+column's template sets around the content: colortbl's (xcolor's `table`) sets each cell in an `\hbox` and `\unhbox`-es it into
+the cell, so that no unit of 2411.13093v4's author block stated a class; the content's level is noted before each column's
+content (`\axt@cl`), a box group at or above it is the template's, one below it the paper's (a name in an `\mbox`, whose line is
+the box's), and after a table set in the cell none is passed. `readAlign` reads it as a
+cell's: the class where the unit's own paragraph says nothing (a name set again
+as a paragraph, acmart's reference format, keeps its paragraph's). Nothing of B moves (the same gate, its case `authors`: 96
+documents, each PDF byte for byte the one before). A `\thanks` mark TeX set glued after a name (its `\rlap`) is the name's
+trail (§18.16) and travels with it, so the room beside the name is no longer fenced by it (1706.03762v7's first name, set at
+9.22 pt before it). Not done: a name whose own element is such a mark, or whose `\thanks` mark TeX set past an `\hspace`, is
+centred with the mark's ink, up to 1.6 pt off the column's centre, which TeX takes without the mark; and a mark past a skip
+still stays and bounds the translation beside it (1706.03762v7's sixth and eighth names, set at 9.71 and 8.47 pt).
+
+### 18.13 A table cell's room is what TeX set on its line (2026-11-09)
+
+The owner's ruling of 2026-11-08 puts each cell in its own room, sized as today's reader sizes it. The typesetter took that
+room from the part's lines, whose x0 and x1 are the glyphs' advances. Today's rectangle came from the layout file's glyph
+boxes, which also take in a glyph's ink where it overhangs its advance. The two differ where an element's ink stands past
+the line's advances. On 2610.17024v1 page 14, each "p=5 n=20 …" cell opens with an italic p whose ink starts at 149.79,
+while the line's advances start at 150.42. The translation opens with that same p. At 7.97 pt its line needs 99.84 pt: its
+two CJK characters tracked by −0.01 em and its five spaces shrunk to `spaceMin`. Today's room is 99.85 pt; the advances
+give 99.22. So v2 set ten cells at 0.975, 7.77 pt, where today and the original have 7.97. It also drew the p's crop from
+the advances' start, its ink 1.03 pt right of where TeX set it. Nothing else differed: the tokens, their widths, the
+breaker's shrink, the cell's own size (no tie) and its one line are today's.
+
+A cell's room is now what TeX set on its line: its glyphs' advances and its elements' ink on its baseline
+(`lay/adapt.ts` `rectOf`). A centred cell's room stays centred on its advances' middle, which is TeX's centre, and is as
+wide as its own ink needs (2602.23285v2 page 19's "Top-τ": the τ's ink stands 0.74 pt past its line's end). The further
+widening still goes half way to the glyph beside it, measured between advances, since `Room.side` stops at the
+neighbour's box. Over the 22 parity pairs, only cells of two pairs move. The ten cells grow to 7.97, and 2610.21880v1
+page 5's t124 grows a step toward its original (2.19 pt; original 2.57, today 2.12). No cell shrinks. The others that open
+with the p now draw it 0.63 pt nearer TeX's place. The parity over those two pairs (28 pages, against round 5's sheet)
+shows 2610.17024v1 page 14 no longer worse and nothing newly worse.
+
+Two cells stay smaller than today's, and v2 does not copy what today does there. On 2602.23285v2 page 18, "Sum pooling"
+is clipped at its floor in its own room, as today's is, and both widen half way to the "0" of the next column. v2 measures
+from that glyph's box at 167.78, which gives 160.88. Today's `paperTo` reads the page's ink map in 1.5 pt cells and found
+the "0" at 168.38, which gives 161.18. 0.9 of the size needs 161.17, so today's 6.66 rests on 0.013 pt of the map's
+quantization. v2 takes 6.48. On 2608.04322v1 page 10, "Avg. HS" is a centred header, so its room is centred on its own
+middle, and the nearer neighbour leaves it 6.10 pt. Today keeps 6.97 only by drawing the cell from its original's start,
+6.49 pt off its middle and 12.98 pt past its own room.
+
+### 18.14 A link's colour stays on its own words; a unit our compile sets more of is still located (2026-11-09)
+
+The owner, on round 6's sheet with every toggle on (1810.04805v2 page 11): 「VR 版本丢失了一些原有的蓝色文字格式。并且漏翻了一段 reference。解决这种问题，我们需要从根本问题出发，从长期正确的角度去解决问题」.
+On staging the same paper's page 10 showed both sides of one fault: four link titles drawn black ("Semeval-2017 task 1",
+"Supervised learning of universal sentence representations…", "Universal language model fine-tuning…", "Quora question
+pairs"), and two entries drawn blue whole, their authors too (Hendrycks and Gimpel, Jernite, Bowman and Sontag), where the
+original colours each title alone.
+
+**A group's fill is read off its glyphs on arXiv's page.** hyperref's `colorlinks` colours a link's text inside its own
+macros. No source piece says so, and the marked compile's log states a fill for a colour piece alone (`\textcolor`,
+`\color`: SpanAt.colour, El.colour). The translation keeps the link's group (a link span is `must`; staging's stored
+Microsoft replies hold every link group around exactly its title), and the typesetter draws a group in its stated fill,
+but no fill was stated, so the title came back in the unit's own fill. Today's reader read each piece that may set a colour
+off its own glyphs (§18.1, "A character's colour"); the rebuild's typesetter has no glyphs to read. The engine now does it
+(`locate/group-style.ts`): the unit's source letters are matched in order to its text glyphs' (the longest common
+subsequence, as `words.ts` places its words; letters and digits alone, as today's reader read them). Each group, and each
+colour switch's run, is a scope; a scope's fill is the one most of its own text's glyphs hold, else most of all its text's. A
+group whose fill is not the one around it, or not the unit's own, states it (SpanAt.colour, where the log states none: a
+colour piece's row wins). Each group set apart carries its fill itself, because a translation keeps some groups and drops
+others: Microsoft moves an `\emph`'s markers to the end, empty, and 2501.14787v1's `\emph{\href{…}{…}}` would otherwise have
+stated the fill on the `\emph` alone.
+
+**A unit's own fill is its text's outside those groups.** A member's style was read over all of its glyphs, so a link that
+holds most of a unit's letters made the whole unit the link's colour. Where a group or a colour switch's run is set apart,
+the member's `Style.fill` is now its own text's. Where every letter of a unit is a group's (RevTeX's `\bibfield` and
+`\bibinfo` fields), its own fill is its text's outside its links and colour pieces, whose fill is by definition hyperref's
+or their own, never the unit's; only a unit wholly inside its link keeps the link's. So a link's colour stays on its own
+words, or on none where the reply loses its group, and never spreads to the rest of the unit. Punctuation is no reading of a
+unit's own (a first version read it, below).
+
+**A unit our compile sets more of is located from what arXiv set.** 1810.04805v2's reference 325 stayed English: its
+`.bbl` writes "Cloze procedure" in UTF-8 quotes, arXiv's 2016 tree read their bytes as characters its OT1 font has no
+glyph for (TeX's "Missing character") and set nothing, while our tree sets the quotes. The locate refused any unit with a
+glyph of B lacking a partner on A (design-2026-11-06 §5). Every glyph A set is the unit's, in order, and A sets nothing
+between them, so its ink on A is whole. A glyph of B with no partner, between two of its unit's glyphs whose partners A
+sets one right after the other, is no ink of A: the unit is located from the glyphs A set, and its translation reads its
+source. A run at a unit's edge, or between partners that stand apart on A, is a line A may have set elsewhere that no block
+move paired (align classes its hunks before its moves), and stays a content difference.
+
+Over the 88 papers of stage 1a's corpus, round 6's parts against this change's (each member counted once), only fills,
+faces and one member move. 1,543 groups of 843 members in 20 papers now state a fill: 525 links (`\href` 507, `\hyperref`
+18), the groups inside them (RevTeX's `\bibfield` and `\bibinfo`, an `\emph` journal), a paper's colouring macros
+(2610.19159v1's), 175 bare groups (`{…}`), and 14 `\textcolor` groups the log gives no row. 131 members in 6 papers lose a
+fill their links or colour words had given them, every one now black (2610.19159v1 101, 2610.21098v1 17, 2610.20507v1 9).
+No member takes a colour it did not have, and no figure text moves. 1810.04805v2's reference 325 is the one unit gained,
+drawn from A's lines as today draws it. Of the four content differences before, three remain: 2610.21084v1's abstract (a
+stray "4" our marked compile sets before it, a run at the unit's edge), 2610.21084v1's correspondence footnote (`aonly`)
+and 1007.0072v1's `\today` (`char`).
+
+The parity over the 16 pairs whose parts move (fills and faces together, against round 6's final sheet; 261 pages each
+run): with the default toggles the pages worse go from 38 to 37 (1810.04805v2 page 14's style difference gone), with every
+toggle on from 56 to 46, and no page is newly worse. With every toggle on: 1810.04805v2 page 11 is no longer worse
+(reference 325 laid and measured as today's, its three link titles blue); 2609.20976v1 page 13 loses its links difference
+(v2's link text measure 27 before, 33 after: the original's and today's count) and its frame difference, page 14 its style
+and frame differences; 2610.22065v1 page 7 its style difference; seven reference pages their frame differences, references
+drawn italic past their frame now upright (2608.04322v1 p12, 2610.10069v1 p27, 2610.20967v1 p5, 2610.30034v1 p15, 2610.40645v1
+p39 and the two of 2609.20976v1). On v2's side 63 units' italic or bold shares move to today's and one away from it: 2608.25210v2
+page 3's `We {\em \revised{are the first} to …}`, whose `\revised` group now states italic and the reply keeps, 0.35 of its
+characters italic against the original's 0.37 (today 0). By eye: page 10's four titles blue and the Hendrycks and Jernite
+entries colouring their titles alone; page 13's authors upright and journals blue; 2610.21313v1's IEEEtran affiliations
+with their institutes italic and their places upright, as the original (round 6 drew them all italic).
+
+**A unit's own slant and weight are its own text's too (the coordinator's call, the same fault for the face).** The
+references of 2609.20976v1 page 13 were drawn italic whole, their authors too: their `\emph` titles and journals hold most
+of their letters, the member's style read over all of them was italic, and the typesetter's `baseOf`, which takes an italic
+base off where the translation's italic groups hold half its text, found none, the stored replies having moved the `\emph`
+groups' markers to the end, empty. The face is now read as the fill is, by its own scopes: each group, and each face
+declaration's run (a bare command the group table names a face for, `\em`, `\bfseries`); a glyph's face is its font's
+weight and slant, a math font's none. Where a scope is set apart, the member's `Style.bold` and `Style.slant` are its own
+text's; where it has no text of its own, its text's outside the groups that name a face, else all of it. A face is stated
+(SpanAt.style, where the instrument states none: runin-stop's faces read on B stay) only on a group whose command names no
+face, read off its own text alone and where it is not the face around it or the unit's own: the typesetter applies a named
+command's face itself (`\emph` toggles, `\textbf` sets) and a stated one only to the rest, absolutely, so no group is
+counted twice; a group whose text is all a declaration's run states none, or `{\em …}` would be set italic and toggled back.
+Figure texts are left as they are: their groups are their runs of glyphs in another face than their own, their own the face
+of most of their glyphs by definition, their text in their run's order, which a reading in the stream's order misread
+(2610.37668v1's "PSNR 33.42 dB" took its italic run's face). `baseOf` stays: its flip is right where a unit has no
+observable text of its own (a unit wholly inside `\emph`, whose majority is italic) and wrong where an italic unit's
+translation is mostly `\emph`, as it was before.
+
+A first version also matched punctuation, so that RevTeX's own fill was read off the marks between its fields. On 2602.23285v2
+page 1 it read the author line `\textbf{Yasuko Matsubara}♣, \textbf{Jimeng Sun}♡, …` regular off its commas, and the stored
+reply moves the names' `\textbf` groups to the end, empty: the names, bold on arXiv's page, by today and by round 6, would have
+been drawn regular. Read off letters alone, as today reads them, the line has no text of its own and stays bold; RevTeX's own
+fill is read outside its links.
+
+Over the 88 papers (each member once), 476 members in 47 papers change their base face, every one by losing it: italic to
+upright 305, bold to regular 171; none takes an italic or a bold it did not have. 464 groups state a face (169 bare groups,
+115 `\textcolor`, 48 `\bibinfo`, 13 `\hyperref`; 89 `\textup` and 19 `\textmd`, whose command the typesetter names, which
+ignores a stated face on them). A sample of 24 of the 476, cropped from arXiv's pages, and each of the rare kinds (a
+theorem's item, an inkreferences entry, four IEEEtran affiliations): every new base is the face of the unit's own text
+there (an affiliation's "Haining, China" upright under its `\textit` institute names; the stored reply keeps those groups).
+
+Not changed here. An italic unit whose translation is mostly `\emph` is still drawn upright by `baseOf`. A run of B-only
+glyphs at a unit's edge (2610.21084v1's abstract, a stray "4" our marked compile sets before it) stays the original's.
+
+### 18.15 A paragraph's pitch is TeX's `\baselineskip` (2026-11-09)
+
+The typesetter set a translation's lines on a grid whose pitch it read off the original's lines, the upper median of their
+gaps, and the engine stated a member's lead the same way. TeX's `\lineskip` rule widens a gap under a line too tall for the
+`\baselineskip`, so in a paragraph dense with inline formulas such a gap passed for the pitch. On 2602.23285v2-ja page 4,
+unit 29's three lines stand 10.96 and 12.24 pt apart, the second gap TeX's push for a formula on the third line, and 12.24
+was read as the pitch. The translation sets that formula on its second line, which TeX's rule pushes 1.28 pt down; on a grid
+that kept the 12.24 gap the push was added to it, the third line fell past TeX's text block bottom, and the paragraph shrank
+to 8.97 pt. TeX sets the line after a pushed one a `\baselineskip` under it, never the gap it opened for another line. The
+same reading took a gap over a display, up to 34 pt, for the pitch of a theorem or a paragraph whose other lines it split.
+
+The marked compile already stated each paragraph's `\baselineskip` (`AXT-LINES`, as the paragraph ends: the value TeX
+appended its lines at), read into `Room.sep` alone. The engine now states it as the member's lead (`Placed.lead`, to a
+thousandth, with `lead` no longer in `read`) wherever none of the member's lines on a page stands nearer than it: TeX never
+sets two lines of a paragraph nearer, and a member whose lines do was set under another (read as before). A forced break's
+room (`El.ends`) is read against it. The typesetter takes it as every block's pitch (`U.blocks`), a single line's too, where
+1.2 of the size stood in, and as a forced break's frame pitch (`U.breaks`): the even grid closes each gap the `\lineskip`
+rule opened to it, and a push of the translation's own is taken from TeX's pitch, never from a gap TeX opened for a line
+that is no longer there. The parity's `lead` measure reads the original's leading as that pitch too. A part that states no
+`\baselineskip` (a heading, the front matter, a figure text, a part made before) lays as before. To a hundredth the pitch
+drifted: 12 pt is 11.9552 PDF units, and 11.96 laid line after line moved a page fill's choice on a near tie (2610.21312v1
+page 8, unit 95, eleven lines became ten).
+
+Measured over the corpus's 88 papers (stage 1a against round 6's): the units, the heads and the dumps are as they were, and
+the differential against today's prepare is byte for byte round 6's; 2,277 parts move, by `Placed.lead` and `read` alone
+(23,051 members state their `\baselineskip`; 3,192 leads move by more than 0.05 pt, those a display's gap had set as far as
+34 pt), the next line read under 59 members' last (`Room.next`, whose reach is three quarters of the lead: a reference's next
+entry 7.85 pt under it, where 1.2 of its size had skipped it), and 27 forced breaks' rooms. Over the 22 parity pairs, 1,551 of
+12,557 laid members differ: 1,172 by their fit's numbers alone, their lines the same; 308 by under 0.05 pt; 55 by under 2 pt;
+15 by 2 to 5.7 pt; one by a line. Three units are set larger and none smaller: 2602.23285v2 unit 29 at 9.71 pt on pages 4
+and 5, where it was 8.97, and 2610.40645v1 page 12's unit 83 at its original's size and line count, 10.91 pt in six lines.
+Unit 29 stays under 9.96: its third line on page 4, a Japanese line whose ink rises 8.35 pt, stands under the formula's
+2.84 pt descent, and TeX's rule pushes it 1.22 pt past the text block bottom; TeX would carry that line to page 5, where the
+next paragraph leaves no room. The parity check over the 22 pairs (344 pages), with the default toggles and with every
+toggle on, finds no page newly worse and none no longer worse; below its line, 2610.40645v1 unit 83's size and line count become the original's, and its `lead` measure, which had
+read the original's leading as the median of gaps over displays and pushes (up to 25.7 pt where TeX's pitch is 13.55), no
+longer faults either side, on 16 pages.
+
+### 18.16 The member before is the one TeX set before it (2026-11-09)
+
+The owner's batch 3 on 2610.22065v1-zh page 1: "in the ACM reference format the names are filled out with very large spaces,
+in today's and in v2's; is the original written badly? The names should simply run on and break at the line's end." TeX
+stretched nothing there: the original's first line puts 1.98 pt between its names, Libertine's own space at its 7.97 pt (0.25
+em), its last comma 0.88 pt past the measure (microtype's protrusion); its second line 1.62 to 1.64 pt, shrunk. acmart sets
+the authors' names again in its reference format, one paragraph, each name a unit of `\author`'s; the places
+`\affiliation` holds between them in the units' order are set nowhere in it. Locate chains members into one flow where the
+second's first line is the first's last line, on its baseline after its end, in one paragraph of TeX's, and took for the
+member before a member the one before it in the units' order: a place TeX never set there, so no flow, and every name was laid
+alone at its original's start, each translation shorter than its name leaving a gap before the next; today did the same in
+part. So the gaps were no TeX artefact for a translation to copy or not: a translation never takes the glue of the original's
+lines, which belongs to the source's words and breaks, and the breaker justifies its own. A member with no place in TeX's
+stream (no glyph TeX printed, none made on A) is now never the member before (nor the body's last member an insert is passed
+over to, nor the last note), and a member made on A whose first glyph TeX set right after a member's last, on that member's
+last row, stands after it (`locate.ts` `standsAfter`; before the member whose first glyph comes next otherwise, as before):
+the reference format's ". 2027. ABNAT: …" after the last name, the title set again, no unit's, had no member after it on its
+page and stood after every member. And a member of the instrument's whose first glyph TeX set right after another's last (what
+stands between no unit's, or made on A), on that one's last row, stands after it whatever their order among the units, where
+that one is not the member before it there or moved itself (the rest of a run TeX set one after the other goes with it): the
+front end numbers the units it cuts out of what was one unit after every other unit of the source (`latex-front.mjs` `later`,
+so that no unit's number moves), and 2611.00342v1 p1's ten names after an IJCAI `\and` came after the body's units, the body
+taken for the member before the second name, the first name a flow of its own. A babel name is no member of this rule,
+nor the one before: its place in a flow is its binding's (`leads`), which declines a unit whose first glyph stands off the
+name's baseline (2610.21085v1 pp. 7-8: each "Proof" and a proof that opens with a formula). Each row's names then run on from the one before, at the original's separation from its
+translation's ink. Not done then: a row's text did not move up into the room the row before it leaves (each TeX line kept its
+members). A centred row of several members, below.
+
+**A paragraph that sets the paper's front matter again is the page's text** (`locate.ts`, the members; staging's round 8 B1 on
+2610.22065v1 p1: the reference format translated with the names toggle on, its first line ending at x 190 where TeX's ends at
+294). The names were each a member, laid on TeX's rows, so the paragraph never reflowed: one row's names could not move up
+into the room the row before left. That paper writes its block under the title out itself (its own `\@mkauthors@iii`), so its
+`\author` units are set in the reference format alone; B's stream there sets the title again (its start point after the
+title's end point under `\maketitle`) in the same paragraph. A paragraph that sets a unit again — a start point of the unit's
+after an end point of the unit's in B's stream, the paragraph from the last paragraph end TeX states before a unit's first
+glyph to the first after its last — is a template's, made of the paper's own front matter; an author's or a place's unit set
+inside it is no member there (`set in a paragraph that sets a unit again`), its glyphs left to the ink side, and the paragraph
+is read as the page's text, one ink unit, translated as a whole and reflowing. A block whose units TeX set twice has them its
+first setting's, the block's (MR 3: 2402.10294v1's acmart names). The ink units read a paragraph by TeX's points: a paragraph
+end of TeX's between two lines now parts them whether or not a start is marked after it (`ink-units.mjs` rule 3; the reference
+format's "ACM Reference Format:" line and the reference under it had been read as one paragraph by the starts alone). Not done:
+the paragraph's part in the next column stays an ink unit of its own (rule 3 cuts at a column), as any ink paragraph does.
+
+**A member's trail travels with it** (`locate.ts`, El.trail, the element `~`; the owner on 2604.14228v3-zh page 1: "the
+translation leaves a great deal of redundant blank space"). Its class sets `$^{1,*}$` and ", " after each `\author`'s text,
+none of any unit's: left where TeX set them, the ink stood between two names on their row, the join was kept (S.rowStart lays
+no follower past ink that stays), and each translated name was laid at its original's start, a hole after it. Locate now
+claims, for a located member, the ink TeX set right after its last glyph in the stream, no other unit's between, each glyph on
+the row (`ON_ROW`) and no word's gap after the one before (the ink units' word rule, today's): the member's trail, an element
+of no piece in its group `.e`, on its last line. The typesetter draws it as its crop right after the member's own tokens,
+glued; the follower runs on from its end at TeX's separation, and the room beside the member is no longer fenced by it (a
+`\thanks` mark in an `\rlap`, 1706.03762v7's first name). Ink past a skip (an `\hspace`, a proof's QED box after `\hfill`)
+is no trail; what TeX pushed to the measure's end is the unit's end mark (§18.52), and an author's ink of no letter past a
+word's gap on its last line is its trail too, the gap stated (§18.59); the rest stays. One rule with §18.12's:
+what TeX set on a line is laid as the line, with the alignment TeX gave it. The
+crop stands on the member's last line, the line TeX set it on, as every element's crop stands on its line's baseline: drawn by
+its glyphs' own baseline, which a trail of raised marks alone holds off the line, each mark came down onto the line (45 of
+the 88 papers' 94 trails, 3.6 to 5.2 pt: 2610.10069v1's daggers, 1706.03762v7's star, 2608.16117v1's last author's "a").
+
+**A line its members share whole is set as TeX set it** (`lay/flow.ts` `layLine`, `lay/adapt.ts` `rowLinesOf`; the
+coordinator's rule on the owner's 2604.14228v3: a translated author line reflows as one line, its names, marks and separators
+run together, set with the alignment TeX gave the line). A centred member was laid on its own original's middle and never
+from the one before's end (S.rowStart lays no centred follower, today's RUN:2152), so on a centred line of several members
+each translation, shorter than its original, left a hole before the next: amsart's "NI XIANG AND YUNI XIONG", its AND made on
+A and run on after the first name, 36.11 pt before the second name where TeX set 3.32 (2610.21106v1 p1; today 34.92). Centring
+the AND alone on its own middle split the hole in two (18.79 and 21.15 pt). A line of TeX's that several members of a flow share
+whole (each its one line, joined on it, nothing kept between them, no babel name, cell or figure text among them), whose
+members' own marks state it centred or flush right, all alike (`AXT-ALIGN`, a cell's class by `AXT-CELL`; a member made on A
+states none of TeX's and takes the line's), is laid as one run, as TeX sets such a line: an hbox of its content at its
+natural width, then placed. The members are laid run on from the room's start, each after the one before from its ink's end
+at TeX's separation (S.rowStart), ragged; the run's extent is read off that lay, its first member's start to its last one's
+end (a closing mark's blank half that hangs aside, as a centred line's placing has it); and the run is laid again from where
+it stands centred on the line's middle (TeX's: its first glyph's start, the first member's label's where it stands on the
+line, to its last glyph's end), or ends at the line's end. Its room is as far either side of the middle as both its ends'
+room allows (the least left its members' `Room.side` and columns give, the greatest right: the first member's and the last
+one's on one line), as U.decor widens a centred line, so the second lay is the first one moved. The page's fill holds the run's end as it holds a shared row's
+(`keepsShare`): tracked by the fill, 2610.10069v1's third name ran 5.7 pt past the run, its line 3.2 pt right of TeX's middle.
+Over the 88 papers' parts, 23 lines are so (all of page 1, authors' and places' lines); a line TeX set justified or flush left
+needs nothing, its members run on from its first one's start already. On the 22 parity pairs, every switch on, only three
+pages move, and only these lines' members: 2610.21106v1 p1 the second name 3.89 pt after the AND's ink, TeX's separation, the
+line's middle 1.19 pt off TeX's before, 0.00 now; 2610.10069v1 p1 (article's `\and`, each name a `tabular`) its names 29.56 and 29.57
+pt apart, TeX's (31.19 and 20.20 before), its middle 5.49 pt off before, 0.00 now; 2608.16117v1 p1 two lines of
+elsarticle's places, 4.38 and 4.39 pt apart (6.39 and 9.64), their middles 1.18 and 3.04 pt off before, 0.00 now. With the
+author block off nothing moves.
+
+**A paragraph its members fill over several lines is set as TeX set it** (`rowLinesOf`'s `rows`, `layLine`; staging's round 8 B1
+on 2611.00342v1 p1, IJCAI: its eleven names one centred paragraph over three lines, each `\and`'s comma the next name's stated
+label; each name stood centred on its own original's middle with its comma, a hole of 13 to 36 pt before each comma where TeX
+set 6.5 to 7.3, "Woohyeon Kwon" broken over two lines and Lee's marks alone on a third). The run is now the paragraph its
+members fill whole, one after the other: each after the first on the line the one before ends, its lines TeX's next lines of
+the paragraph (a member over two lines among them), nothing of the page between two of them but the member's own label, which
+goes with it (a join kept by the label alone, told by `Room.side`: the follower's side starts at the leader's end, or the
+leader's ends at the follower's label). Its members are laid one after the other over the paragraph's lines, each block TeX's
+lines from the one it starts on, each line its room (as wide as the run's members' lines may take, centred on the line's
+middle or ending at its end), the first line from the one before's ink end at TeX's separation and on the baseline the one before
+was laid at, at TeX's pitch (a fit's own leading, a CJK target's 1.3, put the next member on no line of the paragraph); each
+member breaks only at its own spaces, after the label it carries (the separator TeX set before it, which then closes the line
+before), so a name the line no longer holds goes on whole to the next, as TeX breaks the paragraph between words, and a CJK name,
+which holds no space, is never cut between its characters where a line holds it. A member's label that no line may open with, by the
+breaker's own rule (`noLineStart`: UAX 14's line-start marks and the target's, IJCAI's comma), is laid at the end of the member
+before, glued to it (its crop from that one's ink end on A, TeX's separation before it kept), so that the breaker keeps it with
+that name and, where the line no longer holds both, carries both to the next (staging's round 8 B3: the second line of
+2611.00342v1's names opened with a bare comma). The label stays its owner's: the crop names it (`of`, carried to the laid item), and its group is off on
+its page as where the owner draws it, so the comma is drawn once (the original's stood where it was as well, and the name before
+read the crop as its own label: Codex on #634, round 8 B5); it is lit with its owner's first sentence on the right as on A, in
+no box of the name before's, and cut by its owner's label ink (`lay/clips.ts`): one owner on both panes, the label's (the
+coordinator's ruling of 2026-11-11; the sentence cover counts it as its owner's piece). A member's first word is never cut by its characters at the end of a
+line the members before it hold. Each line's extent is read off that lay, and the
+run laid again with each line moved to stand centred on TeX's line, or ending at its end; each line keeps its width, so the second
+lay is the first one moved, line by line. A paragraph of several lines must be the run's whole: nothing of the page before its
+first member on its first line nor after its last one on its last line (their `Room.side` reaching their column's edge), since
+its lines are laid anew and its members' text moves between them (2608.16117v1 p1's places, another flow's places after them on
+their last line: laid member by member, as before). A run of one line is laid as before. Not done: a line TeX's stream holds as more than
+one flow (a paragraph's end between two of its members: 2608.16117v1's first line of places, three flows, each centred on its
+own); a line with ink kept between two members other than the member's label, or a member whose label stays where TeX set it
+(laid member by member, as before); a run whose members' lay does not keep the lines the first lay set (laid member by member,
+as before). The separations are the
+original's: where TeX stretched them (article's `\and` is `\hskip 1em plus .17fil`, so a centred line's slack stretched
+2610.10069v1's to 29.6 pt at 14.3 pt type), TeX would have stretched a shorter line's further. No line of the 88 is set flush
+right this way: that case is held by a synthetic test alone.
+
+**A mark is drawn as TeX drew it, whatever holds it** (`lay/read.ts` `readingsOf`'s `mark`; staging's round 7 with the author
+block on: 1706.03762v7 p1). Seven of its eight stars were drawn as the text "∗" at 5.25 to 6.18 pt, 1.6 pt tall where TeX's are
+2.7, and the first author's at full size. The seven are `\footnotemark[1]` in the authors' own text, elements of class `num`
+with `El.mark`; the first is his `\thanks` mark, no unit's, his trail (above), drawn as its crop. `drawnAs` (today's L2:1757)
+read every class but `other` as the page's text, its text in the target's face at a superscript's share of the line's size: the
+star's text is U+2217, which a text face draws small on the math axis, where TeX set CMSY7's star at 6.97 pt. A mark is a glyph
+TeX set raised in its own font at its script size: a footnote's or a `\thanks` mark (`El.mark`) and a symbol set as a
+superscript (`El.sym`'s second) are now drawn as their ink on one line, a crop on their line's baseline, as an `other` element;
+a symbol set on the line stays text, and a mark's link goes with its crop. Its crop is glued to what precedes it, as its text
+was a superscript's: TeX sets no glue between a word and its mark, and a crop after a CJK character, free to break as between
+two, began a line of its own (1810.04805v2 p7's footnote 12 after its sentence's full stop). Where the source sets a tie before
+it (`word.~\footnote{…}`), the tie is glue TeX sets and never breaks at: `~` is `\nobreakspace`, `\penalty10000` and its
+interword glue. The part states it (`El.tie`, the instrument's `isTie`: the source's `~`, the one spelling the front end makes a
+tie's placeholder of; the command `\nobreakspace` it reads as one that sets no ink), and the typesetter's tie is a space no line
+breaks at: break.mjs's group runs on through it, the token after it and what is glued to that, so the mark is held to its word
+by the tie itself; the space is drawn and stretched as the line's other spaces are, as TeX draws it, and where a rule of the
+target sets no space there (after a full-width closing mark, before one no line opens with) the no-break stays, what follows
+glued. A translator's U+00A0 is the translator's, no tie. A tied group longer than the line is broken where its glue alone
+ends, as a mark's joined group is. Before, a tie was an ordinary space, and a reply that set the source's stop after the mark
+began a line with it (2111.09276v1 p5, round B14: the paragraph's last line ending in its word, the mark 12 and the stop
+opening the next, §18.66). Over the 90 pairs (the reader gate's runner, 2026-11-13): with the door's rows 251 of 23,016 units lay
+otherwise (a line broken elsewhere 214, a line more or fewer 14; zh 237, ja 8, es 6, de and pl none), 2 a size step down; with
+Google's 226 of 22,996 (zh 215, ja 6, es 5), 8 a size step down, 5 of them 1810.04805v2-es (a tie holding a word to a citation
+the translation sets as text, which then breaks inside the citation); last lines that hold no letter 133 -> 130 and 143 -> 137;
+no invariant of the gate moves. Over the 88 papers' parts 180
+marks (155 of them digits, 17 in author blocks) and 92 raised symbols (10 in author blocks) move from text to their ink. Today draws them as text
+too, so the parity never told it.
+
+**The space the wire sets beside a marker is the wire's** (`packages/translate` `wire/markers.ts`; staging's round 7: 2610.20967v1
+p1). Each name stood 4.3 pt off its marks where TeX's gap is 1.35: the names are `Song-Ze Yu$^{1}$, …`, each mark glued to its
+name, and Microsoft's markers wire sets a space of its own beside a marker a word touches (DESIGN §6.2: a marker touching a word
+is read as part of it), which the reading took back only beside a stop or a digit, so beside a CJK name it stayed; the places'
+leading marks likewise. The plan now states the markers it set a space before and after, and the reading takes the reply's white
+space on that side back whatever stands beside it, as the HTML page's rehydrate does: the source set the element glued there.
+A tie is an element of its own, so a tie between two words no longer reads back with our two spaces round it.
+
+**A name TeX set in a box on a centred line is centred** (`marks/channels.ts` `readBoxAlign`, `boxedAlignOf`; the owner's
+staging case 2611.03953v2, ICML 2026, and 2610.22195v1). `\icmlauthor` sets each name in `\mbox{\bf #1}` inside its list's
+`center` environment, so the record of each name's end mark is an `\hbox`'s (`AXT-ALIGN <i> h …`), which `readAlign` takes for
+nothing: the names were read off their ink as justified, each laid from its own start, and the centred line's run (above) never
+applied. The record still carries the skips in force where the box was set (the environment's, 1fil on both sides), and the
+paragraph TeX ends right after the last name states its alignment (`qe3c`): two of TeX's statements of the line. A unit whose
+every record is an `\hbox`'s now takes the alignment its skips state (centred, flush left or flush right; none for justified, for
+two records that disagree, or for a unit TeX set in a table's cell, which its column's class tells) where the first paragraph
+end after its end mark states the same, nothing between but units' marks and glyphs (no paragraph begun, no body's or float's
+bracket, no cell's mark). `readAlign`'s own reading comes first. And the row: locate read a line's column by its x against the
+page's middle, so ICML's first line of eight names, centred over that middle, was three flows, and its second three; two members
+on one baseline now share it also where TeX's stream sets no body's or float's bracket between them (LaTeX's `\@makecol`
+brackets each column's body, a float its own: two columns are never one row).
+
+**What TeX set between two authors is told by their calls** (`latex-front.mjs` `CALLED_AT`, `layout/marks.mjs` `CALL_TEX`,
+§19.7; `locate.ts` the trail, `own.mjs` MR 5). ICML sets each name, then `\,` and each mark `\textsuperscript{1\,}`: the thin
+space before the marks, 1.66 pt at 10 pt type, is past the trail's word gap (0.12 em), so the marks were no trail, and the next
+name's walk back to the end mark before (MR 5) took them as its label: "12" stood before "Jiacheng Lu". No gap tells an author's
+marks from the next author's lead. TeX's gaps there are sums (ICML's 6.64 pt before the next name: `\,` at 7 pt,
+`\scriptspace` and two word spaces; article's `\and`, `\hskip 1em plus .17fil` stretched by a centred line's slack), and neither
+the PDF, whose fonts are the Type 1 programs and not the metrics TeX read, nor the log states a font's `\fontdimen` or a line's
+glue set ratio to sum them from (the coordinator's option of 2026-11-10, measured and dropped). The marked compile states the
+calls instead: a point `<i>c` before each author's call where TeX is in horizontal mode, unit i the first after it, and one
+right after each note's call (`\thanks`, `\footnote`) inside an author block that marks text before it in its row, kept in the
+stored `\@author` as the calls are: the mark the note set is the text before's (2411.13093v4's "Xiawu Zheng¹∗", whose "∗" was
+the next unit's label and kept the row from being laid as one line); a note that opens its row marks no text before it, and its
+mark stays the name's lead. An author's
+member owns, as its trail, every free glyph TeX set on its last line between its end mark and the next call, before any unit's
+mark or bracket, whatever the gap; a row of another line there stays where TeX set it, as before (1706.03762v7's e-mails, each
+under its place before NeurIPS' `\And`: taken as the place's trail, the place was laid on two lines at 8.97 pt where TeX set one
+at 9.96). The last author of such calls, whose own call is stated, owns what TeX set on its last line before the paragraph TeX
+ends after it (ICML's "Zuo Bai 2 †"). What TeX set after a call and before its author's start is that
+author's lead: its label, whatever its form, but a word the class sets there, no label's form (llncs' and siam's " and " before
+the last author), which is left the original's ink where it stands and so to the ink units, as before: held as the author's
+label, the connector stayed English (2610.19860v1, 2610.21491v1, 2610.20266v1). Where no call is stated, the rules before: the
+trail by the word's gap, the label walked back to the end mark before. A call TeX meets in the preamble, in vertical mode or
+between two rows of an alignment states none: a class that stores its list and sets it whole sets no item's start — REVTeX's
+`\author` and `\affiliation` in the body before `\maketitle`, whose list it sets with each name's mark after it, so that on
+2610.21770v1's line the mark after a name is still the next name's label where both stand on one line (on another line, the
+glue rule gives it to the name). 2604.14228v3's
+class appends each `\author`, `\affiliation` and `\contribution` with its separator and its mark to one macro by `\xdef` and
+sets the macro whole (`\authorlist\par`), its calls in the preamble; TeX meets no item's start, and the one place that knows it is
+the class's own `\addtolist`: no call is stated. Its notes' "†" (`$^{\dagger}$Corresponding author` after the list's ", ") was
+the next note's lead by MR 5's walk and, being no label's form, left the original's ink where it stood, 33 pt after the note's
+translation (staging's round 8 B1). TeX's spacing tells it: the dagger is a script (CMSY6 at 5.98 pt, raised 3.81 pt) glued to
+the word after it (0.50 pt, `\scriptspace`) and a word's space after the comma before it (3.32 pt). A lead of no label's form
+is the unit's label where it is a script of no letter (each glyph smaller than the unit's first glyph and off its baseline)
+glued to that glyph (no word's gap: a fifth of an em, the label rule's own word end) and a word's gap or more after what stands
+before it on its line (`own.mjs` MR 5, `gluedMark`): the note's label, laid from the one before's end with it, as a carried
+label is. † ‡ § are still not admitted to the label's form by their symbol: a `\thanks` mark glued to the name before and a
+space before the next (2610.10069v1's, 2610.29945v1's) is no lead of the next by this rule either.
+
+### 18.17 A mark is drawn as TeX set it: as text or as its symbol only where its glyphs stand so (2026-11-09)
+
+On staging (round 7, default toggles) footnote marks in running text were drawn flat: 2610.17024v1 p11 t174's "3" after "with
+the released code." at the line's 8.97 pt on its baseline, where the original's is 6.58 pt raised 3.16 (p21 t448's "7" the
+same); 2610.10069v1 p20 t167's `$\vs^*$` drawn "使*成为", the bold s lost and the star 4.59 × 5.40 pt on the baseline (the
+original's 3.24 × 3.51, raised 4.86). Traced end to end, each mark is an element through the wire (Microsoft's marker, Google's
+tag) and the reply keeps it; it stops being a mark in the part, where locate states how it is drawn. The parity's `scripts`
+measure counted all three on both sides: today's reader draws them flat too.
+
+- **A text drawing is TeX's only where its glyphs stand on the line.** A citation, a reference or a macro (`TEXT_CLASSES`) is
+  stated a text (El.text), drawn as the line's text, where its glyphs share one baseline: "plain text carries no shift and no
+  size". That was read against the element's own glyphs alone, so a box TeX raised whole passed: `\REPOFOOTNOTE{}`, a paper's
+  macro around a footnote, natbib's superscript citations, an affiliation's macro. Each glyph must now also stand on the
+  baseline of the line it stands on (its ink row's, as two baselines are told: `ON_BASE`, the line's stated to a hundredth, a
+  glyph's as the PDF wrote it; TeX's positions fall on a half-hundredth often, 2610.40394v1 p34's line at 476.125 stated 476.12,
+  so a hundredth's rounding is no test). A line's glyphs are read as the element's text reads them (`locate.ts` asRead, facts.ts
+  joinAccents): a spacing accent TeX's `\accent` set over its letter, raised over it by the letter's height less the x-height,
+  is that letter's (2026-11-11, lane b5-fixes): 2610.21312v1 p2's "(Marčenko and Pastur, 1967)", its `\v{c}` caron 0.05 pt over
+  the line, stated no text and was drawn as one crop 114 pt wide that no line could break, the line before it 8 em short; now a
+  text the breaker breaks at its spaces. Over the 88 (stage 1a against B6's r14), 16 citations of 6 papers (24 placements on
+  their pages) gain a text (Kamiński, Candès, Veličković, Klötergens, Hénaff); a raised citation and a scripted macro
+  (1810.04805v2's BERT_LARGE) stay crops. A footnote's mark (El.mark) is drawn raised whatever TeX set it as, and is asked no
+  place: newpx's superior figures stand on the baseline (2307.16209v1's 68 marks). Else the element is drawn as its ink.
+- **A symbol is drawn as its character only where TeX's ink is that symbol so drawn** (`locate.ts` Member.asInk, `bundle.ts`
+  `classed`). The source's reading (today's phClass2) makes a formula of no Latin letter or digit once its commands are dropped
+  a symbol, drawn on the baseline, raised only where the source begins with `^`; it knows no paper's macro (`\vs`, read as the
+  text "vs" by its own test, so taken for known) and no `\textsuperscript`. Where TeX's glyphs for it hold a Latin letter or
+  digit (`[A-Za-z0-9]`, the reading's own class: Greek letters and ℓ are symbols) or stand off the line's baseline where the
+  reading draws them on it (or on it where it raises them), the part states the element `other`, no `sym`: drawn as its ink.
+
+Over the 88 papers' parts 61 elements of 12 papers move, units and the prepare dumps unchanged (the differential byte for byte
+round 7's): 40 drawn as their ink for a raise their text dropped (2610.19274v1's 33 superscript citations, 7.97 pt raised 4.3 on
+the line's 9.96; 2608.06007v1's three affiliation macros; the two `\REPOFOOTNOTE`; 2610.21547v1's two footnote macros) and 21
+symbols whose ink is not their reading (t167's starred s; `\textsuperscript{*}`, `{†}` on 2610.21477v1, 2610.22214v1,
+2610.40576v1; 2610.21765v1's raised "†"; a Σ with its limits, a θ and 11 β with their scripts or accents, a √ with its
+content). The parity over the two pairs among those papers (2610.10069v1-zh, 2610.17024v1-zh), default and every switch on:
+no page newly worse, `scripts` nearer v2 on three pages (t167 15 of 15 characters drawn as scripts, today 14; t174 and t448 1 of
+1, today 0), v2's `scripts` faults there 3 pages to none. Not changed: 2610.10069v1 p1's title "…与封闭式反∗" ends as Microsoft's reply ends, "反" before the `\thanks` mark;
+the wire sends "Closed-Form Inverses" whole, its marker a space apart, and the mark is drawn raised (El.mark): no mark eats or
+splits a word there. The reading's own faults (`\vs` read as text) stay where TeX set no ink to tell them.
+
+### 18.18 No space beside a full-width mark's blank side (2026-11-10)
+
+On staging (2611.03953v2, zh, References on) the translated references set their author lists with wide gaps, each line a
+name or two short of the original's. Microsoft returns a list such as `Fu, Z., He, B.,` with each comma a full-width one
+(U+FF0C) and a space after it; the comma is an em wide, its ink in the first quarter, so each separator held 0.77 em of the comma's blank and
+the 0.25 em space, about 1 em (10.2 pt at 9.96), where the original's comma and space held 0.3 em (TeX's justified 3.8 to 4.6
+pt). Nothing else made the lines short: no break was forbidden, the fit kept its line counts, the justification stretched each
+space 0.47 to 0.95 pt (1.19 to 1.38 times); a first line missed its next name by 0.29 to 9.06 pt (the lab's `lanes/diag-refgaps.md`).
+xeCJK sets no space after a full-width closing mark, whatever follows it (`\xeCJK_FullRight_and_Boundary:` ignores the spaces
+after it), and sets the mark's blank as glue that may shrink by half an em.
+
+- **A space beside a full-width mark's blank side is none of the text's** (`breaker/tokens.ts` `markBlankEdge`): a space after a
+  full-width closing mark or before an opening mark is not set, whatever stands on the mark's other side; the marks are the
+  breaker's class table (`script.ts` `punctOf`), read off the character, so Traditional Chinese's centred marks count too.
+  Full-width by Unicode: a mark of the CJK blocks (East Asian Width F or W) wherever it stands; a curly quote (East Asian Width
+  A) only where the target sets it in its CJK face, its face not the one its style sets Latin text in: a Latin target sets
+  the quotes in its Latin face, proportional, and keeps the space. A space after a run-in head and one in a monospaced run stay,
+  as the rule for two CJK characters leaves them.
+- Over the corpus's 90 pairs with stored rows (round 8's parts, References on, every laid line; `lanes/cjk-space.md`): Chinese
+  reference lines holding a full-width mark and a space 2,941 of 9,368 before, 26 after (a run-in head's space and a monospaced
+  run's, which stay); every kind 4,267 of 70,821 lines before, 675 after; Japanese references 94 of 527, none after. The Latin
+  targets' lines are unchanged. 39 Chinese references (47 members of every kind) set a line fewer, none more. Lines whose
+  spaces stretch past twice their width: Chinese 1 before, 4 after; the three new ones each hold a URL after a full stop, whose
+  dropped space leaves the line two spaces to take its slack, one of them the URL's own line break on A, read into its text as
+  a space.
+- **Nor before a full-width mark no line opens with, whatever stands before it** (`tokens.ts` `markBarredStart`, in the same final
+  filter; the coordinator's ruling of 2026-11-12, lane stray-stop): an ordinary space (space, tab, line end; never a no-break,
+  narrow or ideographic space, which are the text's own) directly before a full-width mark of the breaker's `barred` class (UAX
+  14's no-start classes or the target's `noStart`; full-width as above) is not set, an element, a Latin word or a digit before
+  it alike. Google sets such a space after an element before the text's own full stop or comma in every such place of the lane's
+  probe (35 in Chinese, 16 in Japanese over 42 units; the source sets the mark glued to the element in each), drawn as a gap of a
+  quarter em before the mark. TeX's packages keep exactly this one case: xeCJK 3.10.4 and ctexart 2.6.4 on this machine set a
+  typed space between a Latin letter or a formula and a full-width closing mark (a word, `Q`, a space and the ideographic full
+  stop: 46.84 pt against 43.33 without the space; the comma and the closing bracket alike; `xeCJK.sty` :3886
+  `\xeCJK_Boundary_and_FullRight:N` takes a space back there only after another mark's glue) and drop it in every other case.
+  The grounds for not setting it here: the typesetter already sets none before such a mark after a CJK character (the rule for
+  two CJK characters) and none after a full-width mark, and what the mark needs on its left does not depend on what stands
+  there, since it carries its own blank half; in TeX the space is an author's keystroke after a Latin word, here an engine's
+  output that no writer of Chinese or Japanese sets; and it rewrites no word and no mark, setting no glue the script lacks, for
+  every engine and every unit. A half-width mark keeps the space before it in every target (French writes one before ; : ! ?).
+- **A mark's class is a full-width mark's alone** (`tokens.ts`, the token's `punct`): a curly quote an alphabet's target sets
+  in its Latin face is proportional and has no blank half, so no half of it hangs past a line's end, as `hangOf` hung every
+  closing mark's (1810.04805v2-es p8 t155: a closing quote half an em past the measure, the only such line of the corpus's).
+  Since §18.48 the class is the face's measure of the mark (`script.ts` `markOf`): a Latin face holds none.
+- The parity counts a unit's line count the rule moves as the rule's only where the pair laid with those spaces put back sets
+  today's count (the coordinator's ruling of 2026-11-10, `lab/typeset/parity/README.md`): 2 pages by default, 5 with every switch
+  on, each a line holding a lone fragment saved.
+- Not this rule's: xeCJK's shrinking of the mark's blank (a mark's blank half as shrink on every line, `fits` and `placeItems`)
+  would take more onto a line (2611.03953v2's first entry through the next name again); it would also replace the squeeze's two
+  thresholds. A later step.
+
+### 18.19 Every display TeX sets is the paper's (2026-11-09)
+
+On 2608.08481v1 page 7, displays (7) and (8) sit at the page's foot in REVTeX's `widetext`, and no source unit owns them. The
+marked compile stated a formula only inside a source unit, so v2 cut them into ink units made on arXiv's page: their left
+sides kept as blocks, the right part of (7) and a line of (8), set in a text face by `\mathrm`, sent to the translator as
+text with placeholders and drawn translated (the foot's notes by their place; script-face's "a formula in a text face that
+no source unit owns"). A face rule would guess; TeX knows each display it sets.
+
+**The marks** (`marks.mjs` `POINTS_TEX`, after the column brackets): two points around each display, `dps<n>` and `dpe<n>`,
+n its number in the pass, read by pageInk as the region `display` (`ink.mjs` `REGION_POINT`), apart from every other point
+as a code region's are. Every display passes `\everydisplay` (appended at `begindocument/end`, after every package's), and
+the start is set there, the first thing in the formula's list. TeX refuses an `\halign` in a display whose list holds
+anything, so what a display will be is known from the pass before: each pass writes each display's number, environment and
+line to the aux at once, and whether an `\halign` opened it; a display known as no alignment, of the same environment and
+line, gets its start; one not known (a first pass) gets none. TeX gives a display's end no hook, and what is set after the
+display's box (a `\vadjust`'s point, the first version) is in the page's list, where a column's `\lastbox` reads it: REVTeX's
+balance takes each column's last box off to leave its depth out (`revtex4.cls`, `\setbox\z@\lastbox`), and a point after
+the display at the left column's foot moved the right column over 08481's `widetext` by up to 2.55 pt and the `widetext`
+by 1.70 pt. So the end is set inside the formula, the last thing before its number, where the source ends the display while
+TeX is still in it: at its environment's end, by a hook on the environment it began in (`env/<name>/end`, added the first
+time a display begins there: equation, equation*, displaymath, a class's own; in math, inner too, since amsmath sets the
+rest of an equation holding a `split` in a cell its end closes; only in that environment, once), and at `\]`. An alignment's
+points are set by its `\halign` in display math, through `\everycr`: the start after the preamble's `\cr`, an end after each
+row's, at the alignment's own level. These are in the page's list, and a point makes the glue after it a place to break:
+amsmath ends each row with a `\noalign` of `\interdisplaylinepenalty` (10000), and a point after it let TeX break
+2010.11929v2's `align` over pages 3 and 4. Each is set by what ends the list (`\axt@dpat`, e-TeX's `\lastnodetype`): after a
+penalty, a glue or nothing, the point and a `\penalty10000`; after a row's box, the point and the row's depth given back under
+it (a kern of minus the depth, an empty box that deep, no interline glue), so that a column ending there ends with a box of
+the row's depth as `\lastbox` reads it; after a kern, none; after anything else, the point alone. An alignment's region runs
+from its start to its last end, its rows' numbers inside it; an equation's number is outside its region.
+
+**A display's text** (the coordinator's ruling of 2026-11-09, after 2610.22299v1 p1: display (1), a sentence in `\text`, kept
+in English beside display (2), translated): words TeX sets in text mode inside a display are text, translated as before. TeX's
+text mode inside math is an `\hbox` in math. `\everyhbox`, which every `\hbox` passes, was tried first and is unsafe: amsmath
+sets boxes in math of its own (`\resetMathstrut@` after a font change, at `\boldsymbol`'s `\endgroup`), `\setbox`'d and never
+placed, and a point after one fell between a nucleus and its script (2608.16117v1's `\boldsymbol{\mathcal{J}}^{trans}` moved
+0.26 pt); `\leaders` read the point for its glue (2610.21377v1's `\xrightarrow`, "Leaders not followed by proper glue"). So the
+text is bracketed inside the box, `dts<n>` first and `dte<n>` last, by the commands that make a text box in math, each
+wrapped once the document began, its own definition kept: amstext's `\textdef@` (`\text`, and `\textrm`, `\textbf` and the
+rest through `\nfss@text`), `\mbox` (core LaTeX's `\nfss@text`), `\fbox` (`\boxed`); only where the list the box stands in is
+a display's own math. Math opened again in a restricted list of a display's (such a box, an alignment's cell, a box in a
+`\vcenter`: `\everymath`) gets `dms<n>` first in it and `dme<n>` after it in that list (`\aftergroup`, a stack), so that a box
+that takes rows again (amsmath's split, `\unhcopy` in `\rendsplit@`) holds their math's points: a glyph's mode is its
+innermost region's (`ink.mjs` `displayTextMask`), and these two kinds pair alone (a box set once and placed elsewhere states
+nothing). Math in a `\vbox`'s paragraph gets none, as a point after it would be a paragraph's. A display not known from the
+pass before as no alignment states no text in its own list. Every point is in a math list or a restricted list: no node in a
+page's list or a paragraph's.
+
+**The reading** (v2, `packages/engine/src/locate/today/ledger.mjs`, CHANGED): a line at least half of whose glyphs TeX set
+in a display, not in its text mode, is the formula's (`math`), by the second rule, after code and before every rule of place
+(references, heads, notes, orphans), so that whatever its face and wherever it stands, under a footnote rule, in a box,
+beside a column, it is kept as the paper has it; a line mostly a display's text goes through the rules of place and is read
+as text, as today's; a formula line with a short `\text{if}` stays the formula's. A run in a display's math is no figure unit
+(`figure-text.mjs`). Locate gives the lab's stage the lines it reads as a display's formula (`Located.displays`), and stage 1a
+states a unit of today's that v2 makes no unit of, every line inside one, as "kept on arXiv's page as part of a display"
+(`stated.mjs`, accepted by `baseline/acceptance.json`). The regions are carried onto arXiv's page
+as the code regions are. The layout file's `REGION_KINDS` stays `code`: today's maker passes a display region by, and
+today's engine reads nothing new. The rule reads no line's place: with rebuild/refs-toggle's pairing of the body brackets,
+which reads 08481's foot as body lines, the same ink units go (a scratch merge of both: p7's three translated ink units gone
+on either reading).
+
+**Measured.** The display marks alone (before the ruling on a display's text), the 88 papers' compiles, each made at that TeX
+on its own pinned image: every glyph of every page of each paper's marked compile and final pass where round 7's compile set
+it, but 7 glyphs on 4 pages of 2 papers within one unit of the PDF writer's text adjustment (0.001 to 0.009 pt, numbers and a
+comma after a point, where dvipdfmx and xdvipdfmx set the text position again; the lines around them in place); no TeX error
+that round 7's had not. 4,544 displays started, 4,364 closed; 180 with no end: the `$$` ones (9 papers) and 4 that end a proof
+in SIAM's classes, whose theorem marks (ntheorem's `thmmarks`) end such a display themselves. With a display's text (this
+TeX), the census: one paper of each of the 88's 25 document classes and those the attribution needs, 29 papers, each paper's
+marked compile and final pass against round 7's: every glyph where it was but 2610.37668v1's 4 pages within 0.009 pt as above,
+no TeX error that round 7's had not. Stage 1a over the 29 against round 7's r7: the ink units drawn translated 1,966 -> 1,960,
+the 6 now kept on 3 papers (2608.08481v1 4: (6)'s right part with its number, (7)'s right part, (8)'s second line, and a line
+of p6; 2610.18513v1 1, a `\sup`; 2610.30854v1 1, equation (19)); 2610.22299v1's display (1) and 2608.25210v2's brace labels
+translated as round 7 translated them; none new or changed; every source unit as it was; the kept blocks' rows 1,175 -> 1,755
+(14 papers: a display's lines no unit owns, with no letter pair, were `symbols` and lit nothing; as the formula's they light
+as kept blocks); I6 the same. The differential over them: lost 111 (+48 accepted) -> 109 (+54): 2608.08481v1 t118 to t121
+kept as part of a display, accepted, and 4 kept blocks' units accepted as kept. The parity over the census's eight pairs of
+the twenty-two against round 7's final, default and every toggle on alike: 16 and 21 pages worse as before, none newly worse,
+none no longer, no difference newly worse (the two the display marks alone made, 2608.25210v2 p10's brace labels kept, gone:
+translated again); below the line v2's highlight nearer on 6 (it no longer fills a display's block: 2608.04322v1 p4 and p5,
+2608.25210v2 p9 and p10) and 2608.25210v2's figure texts renumbered (the same values).
+
+**Not done.** A display the source ends with `$$` has no place TeX reads before its end: its start alone states no region,
+and its ink is read as before (176 displays in 9 of the 88 papers); so is one a class ends itself (the 4 SIAM proofs' last
+displays, which the class's theorem marks, ntheorem's `thmmarks`, end by a route of their own). A display in a first
+pass, or under `\nofiles`, has no start. A package that sets `\everydisplay` after `begindocument/end`, or takes `\halign`
+before it, leaves its displays unmarked. An `\intertext` line falls inside its alignment's region and is kept (none in the
+88). A number set by `\leqno` stands before the formula, outside its region. Of a display's text, text set by `\hbox`
+written out, `\makebox`, `\framebox`, `\raisebox`, `\colorbox`, a package's own boxes, a `\vbox`'s (a `\parbox`, an
+`\intertext` line, a `tabular`'s cells) and a TikZ node's states none and stays kept; math in amsmath's `\text` (which sets
+its own `\everymath`) reads as the text's.
+
+### 18.20 A URL is one word where TeX broke it (2026-11-10)
+
+The engine read an element's text off its glyphs with a space at each line's end, as PDF.js reads one (`facts.ts` `lineEnd`), a
+URL's too, while its copy text (`urlCopyOf`, #633's review) already read TeX's url package as it sets a URL: it breaks after one of
+its characters and sets nothing there. The typesetter draws a URL over lines as its text (El.text), so 1706.03762v7's
+`https://github.com/tensorflow/tensor2tensor` was drawn with a space after `github.com/`; over the 88 papers' parts, 301 elements
+of 41 papers held a space their copy did not.
+
+- **A line's end inside a word TeX set as written is a join** (`LineEndOptions.oneWord`, `locate.ts`): a URL (`\url`'s piece, or
+  one the instrument states sets one), or a mark TeX sets as written (`literal`: a DOI, an ISBN, an eprint a macro sets) whose
+  copy, the source's reading, holds no white space. Its text and its runs of one fill read it so; a code mark whose copy holds a
+  space keeps the space TeX broke it at. Stage 1a over the 88 (no TeX change): 308 elements of 42 papers move, El.text and
+  El.fills alone, no unit; the restated dumps are round 8 B1's byte for byte.
+- **Its annotations are one link over the word** (`lay/links.ts`, `emit/links.ts` `Target.word`): TeX's line break split one
+  link into an annotation a line, each over its line's part; the translation draws the word whole, where the second part stood
+  deep in one run, past `DRIFT_BOUND`, and was dropped (three DOIs with every switch on: 2610.40645v1-ja p38, p39, 2608.06701v1-zh
+  p12). The annotations of one target over such a word are placed over the whole of what is drawn of it.
+- The parity against B1's final: 49 -> 50 by default, 58 -> 59 with every switch on, the one page each 1810.04805v2-zh p14 t237,
+  a paragraph of two broken URLs now drawn whole and set a line shorter than today's (5 for 6, the original's 7). The parity
+  counts a line count the joins move as the rule's only where the pair laid with those line ends read as spaces again sets
+  today's count (the coordinator's ruling of 2026-11-10, `lab/typeset/parity/README.md`): back to 49 and 58, that page alone
+  moved; of the 37 units over the 22 pairs that hold such a word, it is the one whose line count was worse.
+
+### 18.21 A figure's paragraph is set from its start; a half translation is never drawn; artefacts kept (2026-11-10)
+
+On staging (round 8, default toggles) 2411.13093v4 p18's Figure 8, a prompt in an included PDF set in Consolas, came back
+translated one line at a time, its JSON keys too ("DET" as "侦探组"), and each entry's indented first line laid against the box's
+right edge, the next line from the left. p19's Figure 9 the same: its code boxes, its OCR cards ("Frame y:" as "框架y:") and its
+speech notes translated line by line into fragments. The owner's line: 「重点都是翻译或者不翻译，其实都可以，但关键是不能乱翻」:
+translating or keeping are both fine; a garbled translation never is.
+
+- **A figure's paragraph is set from its start, its indented first line too.** Each line of a figure is a figure text, its anchor
+  its column's edge (§19.12). Two readings set p18's indented lines from their end. A justified paragraph's indented line shares
+  the paragraph's end column, not its start column, and the end column, holding more runs, won. Lines 515 and 527, set at
+  7.0736 pt among the paragraph's 7.0616, were also keyed apart (today's reading keyed a column's size to the hundredth), a
+  column of two.
+  A column's runs are now of one size as glyphs join a run, within 1 % of the size before. A paragraph's measure is an end column
+  and a start column whose full lines' word spaces were stretched to meet both (two that differ past ALIGN_TOL of their size;
+  a word space a gap past SPACE_GAP), the end column's other lines all starting inside it and the start column's all ending
+  inside it. Its lines are set from their start. p18's full lines' spaces run from 3.96 to 6.36 pt, its unjustified lines' 3.90.
+  Right-aligned labels have their spaces as their face sets them (2610.40394v1's bar-chart labels, 2.348 pt to the thousandth),
+  or none: no measure. Weaker readings were measured and dropped, over the 88 against r8: any two runs sharing both edges
+  (1,175 labels of 27 papers turned), two of different texts (175 of 5), two of different glyph widths (29 of 1).
+  Over the 88 now: 2 figure texts move (2610.22214v1 p1's "Model" and "Inference", centred over each other, 541.5 and
+  541.55, which the hundredth's key had parted), and 67 change the size set they are fitted in, on 7 pages of 4 papers.
+- **A translation half made is never drawn.** Every wire is judged by one rule (read, `accept`, `validSentences`); a reply that
+  fails is refused, the next translator asked, and a unit no translator gives stays the original's. The runs floor, the last
+  step, sends a refused unit's text stretches one by one; where a stretch came back from none, its English stood between
+  translated ones in a row stated ok (`runs:<id>`), drawn as a translation. The floor now gives every stretch or nothing
+  (`chain.ts` runsFloor; `CHAIN_RULES` names it, `runs>=2-whole`, so the chain's identity moves and every row is made again). In 4,033 rows of 26 staging captures no row came from the floor and no marker or tag is left in
+  any text; the parity's 15,079 laid lines of 22 pairs hold none either.
+- **An artefact is kept**: text set wholly in a face of one pitch, the owner's ruling, §18.22.
+- **No rule draws the original where a lay is not clean.** The lay keeps a translation inside its own region by construction
+  and leaves one that cannot fit, shrunk to its floor, the original's (`unfit`); the part holds no page-wide ink, so nothing
+  compares a laid line with ink that stays. The parity's facts over its 344 pages (part A's final, round 8): no laid line
+  across a rule or over another unit's box (`cross` 0), one text over ink that stays (`over` 1, 25 device pixels of
+  2610.21880v1 p2's header cell), 139 lines past their room or column (`frame`; of the 111 it names, 1.16 to 12.55 pt, the
+  median 2.26; today's 145). The p19 garble was neither: it was the translation of fragments, which the artefact rule keeps. A
+  rule that drew those 139 as the original would hide readable translations and the defects the parity measures.
+
+### 18.22 Text set in a face of one pitch is kept as the original's (the owner's ruling, 2026-11-10)
+
+On §18.21's prototype the owner ruled 「同意你的建议 我们选 c」: option C, the anchor fix and this rule, always, with no toggle. It
+rests on his line quoted there: a translation may be made or not, never garbled.
+
+- **The rule** (`locate.ts`, `ink.ts`). A source unit or a figure text whose every glyph of ink is set in a face of one pitch is
+  kept as the paper has it, as a code environment's lines are (§19.7): its unit `kept`, its member `fixed`, a figure text's why
+  `figure: code`. That is code, a command, a prompt, JSON, an OCR card, an identifier. A figure's word in another face is kept
+  with its line where the ink right before and after it, in its page's order, stands on its baseline in a face of one pitch
+  (2411.13093v4 p19's "attractions" and "coin", set in Georgia inside Consolas JSON). A figure's run, TeX's line in a picture
+  too (which goes on over faces and colours, §19.12), goes into or out of no face of one pitch (`figure-text.mjs`, `fixed`):
+  2610.19159v1's transcript box titles set a path in typewriter between their words, and the path was a figure text of its own,
+  kept, the words before and after it translated; since §18.26 a level line's run of one pitch is an element of the line's one
+  text, and a turned run keeps this cut. A paper whose body face is of one pitch keeps nothing for it, and its
+  figures' runs go on as before. A unit holding a word of another face stays translated, its typewriter run an element (by its
+  group, below; F0's on a figure's line): a paragraph naming a function in `\texttt`, a figure's title line with a path in it.
+  Titles, captions, questions and answers set in a proportional face are translated.
+- **By group** (`locate.ts` pitchGroupsOf; the owner's ruling of 2026-11-11 on batch 5's §1, option a). Read a unit at a time, the
+  rule kept 2608.25210v2's `\mypython{…}` prompt box, a framed `\ttfamily` box, on p2, where a blank line makes it a unit of its
+  own, and translated the same box on p3, where its source sets it in one paragraph with its lead line: one kind of box, two
+  outcomes by where its source's blank lines fall. It is read per group, as F0 reads a figure's line (§18.26): the outermost group
+  of a source unit that holds text of its own and whose every glyph is set in a face of one pitch is one element `code`, the
+  original's ink, never sent, the rest of its unit translated. Its glyphs: its letters as the unit's groups' are matched on A
+  (group-style.ts groupLettersOf, the matching a group's face is read by), the text between them, the marks at its ends its own
+  text writes (a stop inside the group; the sentence's stop after it stays the sentence's), and its elements' ink (an identifier
+  inside it, §18.25: one element, never one inside another). A group TeX set on lines no other ink of its unit shares, a vertical
+  box, keeps its rows where TeX set them, in their own measure and frame, as a display's do (Member.ownRows: its lines KEPT, its
+  class `display`); one on a line of its unit's text is drawn as its ink there, F0's class (`other`, literal, its glyphs' text its
+  copy). A group of no text of its own (a colour around an identifier element) is left as it is, and a unit placed more than once
+  (a babel name's occurrences) is read so nowhere. The lab reads the element as F0's (`keptEls` 'pitch': the dump's `keptBy`, the
+  parity's kept ink). Over the 88 (stage 1a against B6's r14), 148 groups in 86 units of 8 papers are such elements, every move
+  of the run this rule's: 2608.25210v2 p3's three boxes on rows of their own, their lead lines translated; 145 on their lines,
+  typewriter words in prose and cells (1810.04805v2's `{\tt [CLS]}` and `{\tt A}`, 2608.06007v1's `\texttt{Artifact}` and
+  `\texttt{prefetch()}`), a reference's `{\tt arXiv:…}` link text (34 in 4 papers) and 2610.40576v1's `\ctk{3.4k}` token counts.
+  The 86 units' content moves (a group a marker now), so their rows are asked anew.
+- **The facts it rests on** (`facts.ts` fixedFacesOf). A face is of one pitch where each font program of it (an embedded subset)
+  sets every character one advance at its size, within a thousandth (the PDF's widths are whole thousandths), and one of them
+  two distinct letters at least. Each program is read alone: 2411.13093v4's Consolas subsets set 549 on p4 and 550 on p9 and
+  p19. Neither the face's name, a macro's, nor the font's FixedPitch flag is read: producers state the flag wrong (p19's
+  Consolas subsets, 36 characters at 550 each, one flagged and one not; a CJK subset of one glyph and MSAM10 flagged). The body
+  face is the face most of the paper's source units' text glyphs are set in.
+- **Over the 88 and 2411.13093v4** (stage 1a, lane mono-rule). 40 source units are kept on 5 papers: 2608.06007v1's 23 cells
+  of API signatures, and prompts set with `\ttfamily` (2608.25210v2 6, 2610.11256v1 4, 2610.21098v1 1, 2610.22195v1 6), which
+  were translated while `\texttt` prompts were kept. 173 figure texts are kept on 8 papers (code, paths, identifiers such as
+  `lin2` and `Kitchen_In`, e-mail addresses, 2610.19159v1's 17 paths), and 129 on 2411.13093v4. Every face kept is a
+  typewriter's (Consolas, DejaVu Sans Mono, Nimbus Mono, Bera Sans Mono, Liberation Mono, Inconsolata, Computer Modern
+  Typewriter), but for the 3 words inside 2411.13093v4's code lines; no paper's body face is one of one pitch.
+- **The parity and stage 1a's differential** read a unit so kept as the original's text, no translation missing: the prepare
+  marks each (`pitch`; the lab's dump `keptBy: 'pitch'`), the parity's ruling reads the mark (`lab/typeset/parity/README.md`),
+  and the dump states it the differential's cause (k), accepted (`stated.mjs` keptWhyOf); no other unit left the original's is
+  read so.
+- **Not this rule's.** A figure's name label in a proportional
+  face (2411.13093v4 p19's "DET", Georgia-Bold) is translated alone: today's rule that keeps a figure label that is a name or
+  code (`mt.mjs` isName, isCode: 1,910 of 8,962 figure labels, 49 papers, in the baseline's prepare of the 88) is not ported.
+  An algorithm in a wrapfigure (2608.27728v1 p3) is half translated: its text lines ink units, its kept blocks beside.
+
+### 18.23 A reference's abbreviated name is sent as the item's full name (2026-11-10)
+
+On staging, 2610.22065v1 p5's "… sweep σinfer in Fig. 7." came back from Microsoft with the figure's word dropped and the number
+alone after a full stop of its own, and "Fig." elsewhere as the fruit: the endpoint cuts a sentence at an abbreviation's full
+stop before a reference's marker (its own sentence lengths hold a sentence of the marker alone). A no-break space and the text
+paired did not help. The owner's ruling (2026-11-10): where the word tied to a cross-reference abbreviates the referenced
+item's own name, the translator is sent the full name; the name is the paper's own TeX's; unknown, the text goes as it is; no
+word list and no language's table; the original drawn when translation is off never changes.
+
+- **The rule** (`packages/translate` `names.ts` `namedOf`): where the word a unit's text ends in right before a reference — a
+  tie, a space or a break alone between; a word of its own, white space or an opening bracket before it (never the "e." of
+  "i.e.") — is a case-insensitive proper prefix of the element's `name`, followed by a full stop
+  ("Fig." of "Figure", "Eq." of "Equation", "Sec." of "Section", "Tab." of "Table"), every translator is sent that name instead,
+  in the word's case (a lower-case word the name in lower case, one in capitals the name in capitals) — where the language TeX
+  declared for the name is the one every translator translates from (`contract.ts` `SOURCE`, `en`, which each adapter's request
+  names), its language subtag compared (RFC 4647's basic filtering: `en-US` is English), or where none is declared (no babel):
+  2307.16209v1's English text under babel's Brazilian Portuguese names ("Figura", `pt-BR`) keeps its "Fig." (the coordinator's
+  ruling of 2026-11-10). The chain applies it to
+  each unit before any translator (`chain.ts` `settle`) and gives a row's sentences back in the unit's own projection (a start
+  inside the name at the word's start). `CHAIN_RULES` gains `names`: every row is read again, the stored replies of unchanged
+  wires hit (the store key is the wire's bytes).
+- **The name is the paper's** (`layout/marks.mjs` `refsTex`, the engine's `readRefNames`, `pipeline/instrument.mjs` `piecesOf`):
+  the marked compile asks TeX, once the last page is out, about each label the paper's reference elements name (`\ref`,
+  `\ref*`, `\eqref`, `\autoref`, `\cref` of one label, `\nameref`; not `\pageref`): its type, the label's anchor's (hyperref's,
+  and LaTeX's own since 2023, `{num}{page}{title}{anchor}{}`: `figure.caption.12`'s `figure`, `appendix.A`'s `appendix`, as
+  hyperref's `\autoref` reads it), else cleveref's `[type]`; then the `\meaning` of cleveref's capitalised and own names,
+  hyperref's `\<type>autorefname` and LaTeX's `\<type>name` (a babel name macro read through the layout compile's own
+  wrapper, NAMES_TEX); and, once, the language the paper's names are set up for: babel's BCP 47 tag of its main language
+  (`\bbl@tbcp@<\bbl@main@language>`, the locale's `identification.tag.bcp47`, what `\BCPdata{tag.bcp47}` reads; hyperref
+  sets its names for it at `\begin{document}`, whatever the text switches to after; BCP 47's `und` where babel declares a main
+  language it knows no tag of, as 2023's babel for "brazil", which keeps the text as it is), the element's `nameLang`. The first that is plain words with no full stop is the element's
+  `name` (format's element piece; not in the unit's id): cleveref's default "Fig." and IEEEtran's `\figurename` "Fig." are
+  passed over for hyperref's "Figure". Nothing is set and nothing written to a file; a paper with no reference compiles the
+  bytes it did.
+- **Measured** (lane `ref-names`, 2026-11-10). Staging's stored Chinese rows of five papers (Microsoft's): "Fig." tied to
+  a reference kept the figure's word right before its number 45 times of 101 (52 a full stop before the number, 10 the fruit),
+  "App." 1 of 11, "Eq." 139 of 141, "Sec." 86 of 90. Live, keyless, 52 such abbreviations of 27 units of the corpus sent as they
+  are and as the name (27 requests): the endpoint cut its source sentence at the abbreviation 10 times, never at the name; the
+  item's word right before the number "Fig." 7 -> 15 of 15, "Tab." 0 -> 3 of 3 (read as a label), "App." 2 -> 5 of 5, "Eq." and
+  "Sec." alike both ways. 2610.22065v1 p5 as the chain sends it now: one sentence, the figure's word before its number. Over
+  the corpus's 88 papers (stage 1a): 6,298 reference elements named in 82 papers; of 1,177 words with a full stop tied to a
+  reference, 793 are sent as the name in 38 papers ("Eq." 315, "Fig." 338, "Sec." 103, "fig." 16, "App." 12, "Sect.", "Prop.",
+  "Tab." 3 each); 182 stay for want of a name and 202 are no abbreviation of it. The prepare's statements move nothing else:
+  every part and add-on the same bytes, the units' ids and the dumps unchanged.
+- **Not this rule's**: a plural ("Figs.", "Eqs.", "Secs.": no prefix of the singular name; garbled alike on staging: "Eqs." 0 of 13);
+  "Sec." to a subsection where hyperref alone names it ("subsection"); RevTeX's sections, whose anchors are `section*` (no
+  name: 2610.10492v1's 64); amsmath's `\tag`ged equations (`AMS`, whose name is `\equationautorefname`, a command); a name pdfTeX
+  writes with an accent command (`Ecuaci\'on`); a label with no anchor and no cleveref (an older TeX tree without hyperref);
+  IEEEtran without hyperref ("Fig." its only name); a paper under polyglossia (no babel tag read: the rule as for no language
+  declared).
+  Today's wire (`translate/mt.mjs`) keeps the word: `TRANSLATE_VERSION` stays.
+
+### 18.24 A figure's word is told by its spacing, not its sizes (the owner's rule, 2026-11-10)
+
+- **The fault** (2609.19644v1 pp. 56-71, an ICLR 2025 draft included as figures). iclr2025 sets its title and headings in
+  faked small capitals: each word's capital at the line's size and the rest of it smaller, abutting it on its baseline (p59's
+  "3.1 SYSTEM OVERVIEW": 7.66 and 6.13 pt, 0.04 to 0.38 pt between a capital and its rest, 2.29 pt between two words). A
+  figure's run ended at every change of size, so each word lost its capital and its rest was translated alone: "ORECASTING"
+  as ore casting, "ETHODOLOGY" as ethnology, 91 such pieces on the draft's pages.
+- **The rule** (`figure-text.mjs` figureUnitsOf `sized`, the engine's copy; today's untouched). A glyph on the run's baseline
+  standing no word space past the glyph before it (`SPACE_GAP` of their size, the test by which a run spells a word) is of that
+  glyph's word whatever its size, and the run goes on across the change; every size a word of the run holds is the run's
+  then, so the next word goes on with it at either size (the title's "FUSION WITH MULTI-SCALE SAFETY GATING FOR", whose
+  "WITH" and "FOR" are all small capitals). Every other end of a run stays: a gap past `RUN_GAP`, a face of one pitch
+  (§18.22), a math face, a colour where it ends one, and the baseline (`RUN_DY`): a script raised or lowered off it is none
+  of the word. The unit's style reads the joined text as faked small capitals (`facts.ts` fakedCaps): its size the capitals',
+  `caps`, `sc`.
+- **Over the 88, 2411.13093v4 and 2609.19644v1** (stage 1a, lane fig-smallcaps). 2609.19644v1: 65 figure texts are words
+  joined across a change of size, 28 of them the draft's title lines and headings, which held the 91 pieces, the others two
+  more included drafts' headings and prose naming a method in small capitals (pp. 3, 11); its p3, at its page's cap of 400
+  runs, reads 14 more lines past the joined ones. Five papers of the 89 move, 12 figure texts: 2610.20808v1's "NATIVE
+  direction" and "SHADOW direction" (`\textsc` in a label), 2610.22214v1's "STC: (", 2608.06701v1's sentence cut at a glyph
+  set 6 % smaller ("th" | "e file."), 1810.04805v2's "##ing" (its "##" set smaller) and 2608.25210v2's "MP1" to "MP3", an
+  index set smaller on the baseline, raised or lowered by nothing, which by these facts is no script. Every glyph of every
+  joined text stands within 0.003 of its size of the text's baseline, and every size change inside one is a word's.
+- **Not this rule's.** p56's first title line is set with word spaces of 0.74 of its size, past `RUN_GAP`: its four words are
+  four figure texts, each whole now. A line whose first word is all small capitals (a wrapped heading's "of ..." at its start)
+  is cut after that word: the run does not yet hold the capitals' size when the next word's capital comes. A figure's lines
+  are each a unit, the title's three translated apart, and the draft's prose and references are cut as before.
+
+### 18.25 An identifier is never sent; nothing inside a word stretches (2026-11-10)
+
+On staging (round 8 B2b) 2608.25210v2's prompt name `llm_equal_human` came back with its last part in Chinese, and its Table 2's
+`response_equal_human_example` the same; with the references on, p17's databricks URL was set to its column's full measure,
+1.9-2.7 pt after each "/". The owner's line (§18.21): a translation may be made or not, never garbled.
+
+- **An identifier is one element, the original's ink** (`latex-front.mjs` `identifiersIn`, `keepIdentifiers`; the engine's copy
+  in `locate/today/deps.mjs`, held equal by test). A token with no white space that holds two letters or digits joined by
+  underscores (snake_case), the whole token (`CallbackBase.host_label(result)`, `test_parser.py`, `--view_range`), its leading
+  and trailing sentence punctuation aside: a stop, a comma, a semicolon, a colon, a question or exclamation mark, a quote, and a
+  bracket at an edge that no bracket of its pair inside the token answers (`(see conv5_x)` loses the `)`; `[sentence_1]`,
+  `{root_question}`, `host_label(result)` keep theirs). Its syntax alone: no list, no camelCase, nothing dotted without an
+  underscore ("e.g." is prose; `__init__`, `_x`, `x _ y` are no identifier). The source reads a unit's pieces as TeX sets them
+  (`keepRead`, the address groups' reader made general: `\_` and `\textunderscore` an underscore, the spaces after a control word
+  none, a bare `_` TeX's subscript, which 2610.21377v1's formulas the walker read as text hold), each identifier one placeholder
+  as the paper writes it, after the addresses (an address holding an underscore stays one address); a unit left with fewer than
+  two letters is none (a table cell of an identifier alone). An ink unit keeps one in a word a kept run, as an e-mail address
+  (rule 4), and a line of identifiers alone is a kept block. A figure text holds no element (it is drawn whole, its text alone):
+  one that holds an identifier is kept whole, `figure: identifier`. The marked compile reads an identifier as text TeX sets as
+  written (`identifierSource`): class `code` (both its marks, the closing one after a text symbol too, `\}`: TeX skips no space
+  after a control symbol), its opening mark `\axthpk` (in vertical mode, where a box's paragraph opens with it, it begins the
+  paragraph before the identifier's first character as TeX would; `\axtpma` there waited for its own closing mark), and a unit's
+  or a line's first word (`headEnd`, `startOf`): as a paper's macro it had one mark, and 2608.25210v2 p3's and 2610.22195v1's
+  prompts were left unlocated, their glyphs read as text past their source.
+- **Over the 88** (stage 1a, lane literal-fixes, against round 8 B3's r11): 146 identifiers kept as elements in 14 papers'
+  source units (paragraphs 111, cells 18, captions 12, headings 2, references 2, a theorem 1), 114 table cells of identifiers
+  alone no unit now (2608.25210v2's Table 2, 2610.21924v1's feature names, 2610.22214v1's instance names, 1512.03385v1's
+  `conv2_x`), 2 lines of identifiers alone kept blocks (2610.40394v1), 29 figure texts kept on 5 papers (2608.06701v1's
+  trajectories 17, 2608.25210v2 6, 2610.21312v1, 2610.31506v1, 2610.42112v1 2 each); the marked source of 14 papers moved. No
+  formula is caught: a formula is a placeholder, a bare `_` TeX's subscript, and an ink script a glyph off its baseline (no
+  underscore). Stage 1a states today's unit held whole by its successor through the replay's reading of an identifier (`l1.ts`
+  readingOf: `\_` an underscore, an identifier placeholder its characters), and (f) reads the two dumps' placeholders alike: a
+  text symbol its character whatever ink a dump states of it, any other an unread mark only where its own ink is stated
+  (today's dumps list `\%`, `\_` and a `\code{…}` head with none). What the prepare keeps whole as identifiers is the
+  original's text, by the coordinator's ruling of 2026-11-10: the lab's dump marks a figure text so kept `keptBy: 'identifier'`,
+  and states today's unit of identifiers alone the candidate sends nothing of (a cell, a line of ink) with the same mark and
+  cause ("kept as the original: an identifier is never sent"), which the differential accepts and the parity reads as the
+  ruling's (`lab/typeset/parity/README.md`; a unit no row of a pair's serves, its text changed by the rule, is unmeasured there,
+  listed, never worse). Over the 88 the differential's lost fell from 221 to 18, r11's own.
+- **No glue inside a word** (`breaker/break.mjs` `inWord`, `gapsOf`; `place.mjs`). A line not set as Latin text spreads its
+  slack, and its squeeze, over the gaps between its items, but none before an item that continues its word (`brk`: a piece after
+  a break point inside a word, a URL's after its `/`, `.`, `-`, a compound's after its hyphen; `cont`: a run of one case of a
+  word). TeX's url package breaks a URL at a penalty with no glue (`\Urlmuskip` 0mu), and TeX sets no glue inside any word. Since
+  §18.20 a URL TeX broke over lines is drawn as its text whole, cut at its own break points, and each gap inside it had taken a
+  share of a CJK line's slack. The replays of today's lay read a line's end to a millionth of a point where a round's tokens hold
+  such an item (the rule moves a line's slack between its gaps, never its end: 7 of 164 sampled rounds differed at 1e-13). Over
+  the 22 parity pairs, laid at r11's bundles with the breaker before and after, the items of 135 members move within their lines
+  (19 pairs; 179 with every switch on), no line count; three lines' ends, 2608.25210v2 p16 t427's URL line 558.66 -> 538.51.
+- **What the lost blue was** (2608.25210v2 p2/p3). p2's `\textcolor{blue}{[Question]}` and its two siblings are groups of text
+  alone, not `must`: the markers wire carries them on no wire (Microsoft moves an inline pair to the reply's end), and the reply
+  translates their words, so no counterpart is stated and the restore rule (`packages/translate` groups.ts, DESIGN §16) has
+  nothing to place them around; the tags wire's translators bring them back. p2's box is kept since §18.22, blue and all. p3's
+  `\textcolor{blue}{[sentence\_1]}` held a `\_` element, which the restore rule does not read; as an identifier, brackets and
+  all, it is one element now, its ink the original's blue.
+
+### 18.26 A figure's line with a run of one pitch is one text; the ink about a figure text read by its relation to it (2026-11-10)
+
+The owner's line (§18.21) holds here too: a translation may be made or not, never garbled. §18.22 cut a figure's run at a face of
+one pitch, so a title and its path were two texts, the title's words translated alone and the path a text of its own; 2611.03178v1
+p1's "Project Page:" and its typewriter address the same. And today's no-touch rule kept a figure text whole as the original's
+wherever any ink met its band, a frame round a citation in a sentence as much as a curve through a label.
+
+- **F0** (`figure-lines.ts`). A figure's line is today's runs of one figure on one baseline (RUN_DY of the size), each within the
+  run gap (RUN_GAP) of the next; a chip's fill bridges the gap from its run of one pitch to the words beside it where the fill is
+  the narrowest box holding the run's end glyph, a line tall at most, and holds nothing of the words it faces (a row's band under
+  the whole line holds the badge's label too, 2610.19159v1 p53: no bridge). A line holding a run of one pitch and words of
+  another face is one figure text: each stretch of one pitch an element `code`, the original's ink, never sent, moved with the
+  translation, its fill with it; a mark alone in that face (a period, a bracket) the text's. A line every word of which stands
+  between glyphs of one pitch is code, kept whole (§18.22's inside-a-line, read on the line). Glyphs no run holds before the
+  first run are the text's where they abut it, an icon a word space before it none of it. A turned run keeps §18.22's cut.
+  Runs in no face of one pitch are never joined here: over the 91, joining runs that abut joined doubled copies, scripts and
+  formulas, and one page wrapped without its figures (stage 1a f0e); a bold label and its colon (2608.06701v1 p1's "Thought:")
+  is the paragraph reading's (F3).
+- **The relation reading** (the owner's reformulation of the no-touch rule, 2026-11-10: preserve each relation the text has with
+  the ink around it; facts only, tolerances in the text's size). `roomOf` records each item of ink a figure text's band meets, and
+  each tone painted before it under part of it (a fill of no stroke, an edge inside the text's extent: a highlight), which crowds
+  nothing as before. Each item: a glyph that doubles one of the text's (its character, its ink overlapping, within half the size)
+  is a copy, hidden with the text; a box inside an element's extent is the element's; a box holding a stretch of whole words (its
+  ink inside, a word space or a mark beside it), nothing else, is the stretch's decoration, and the stretch an element (`cite`
+  with a letter in it, `ref` without) carrying it; a tone so only where it is a line tall at most (a plot's shaded column under a
+  label's end is the plot's, 2610.21547v1 p14); pieces of fill under consecutive stretches, nothing of the text between them, are
+  one (a highlight set word by word, 2610.40576v1 p17, 2411.13093v4 p19); a closed shape holding the whole text is its container,
+  its room the inside (Room.over and Room.under, the set shrunk to stay under `over`); a flat stroke under two glyphs or more of
+  whole words an underline; anything else unrelated, and the text stays crowded, the original's. A tone that is none of these
+  stays ground; a tone under a text kept whole is nothing to it. Since F3's step 2 (§18.36) only another text's glyph is
+  unrelated ink that keeps a text: a shape or a line about it never does.
+- **Over the 91** (stage 1a f0f at a30b9c769, against round 8 B3's r11 on the 88; I6 the same, 2,855 objects): 48 figure texts
+  hold 56 runs of one pitch as elements, on 6 papers (2610.19159v1's titles and their paths, 2611.03178v1 p1's "Project Page:" and
+  its address, 2608.06701v1's actions, 2610.22197v1's labels, 2609.19644v1's `tzcnt`); 100 hold 155 decorations, on 4 papers
+  (2609.19644v1 p3's citations and references on their tones, 2608.06701v1 p1's names and phrases on theirs); 57 of today's runs
+  are taken into a text; 25 texts crowded today are freed (a copy drawn twice, 2610.22214v1's legend; a label in its box, 10
+  containers); none is newly left the original's. The differential: shown 38,116 -> 38,127; no new loss but four of 2610.22197v1's
+  eighteen units "lin2", which the differential pairs in their order (below).
+- **Stage 1a and the parity.** The dump marks each element so kept (`keptBy`: 'pitch', 'decoration'); today's unit now wholly
+  such an element is stated (k), kept as the original for its pitch (the accepted entry's words), or (n), carried with its
+  decoration (accepted, the coordinator's ruling of 2026-11-10), the holding unit named; a kept element reads as its source in a unit's glyph text, so
+  the words beside it are held whole (f); today's text a contiguous part of a stand-in's is held whole by it (f), naming it, not
+  "another reading, now arXiv's text" (g), which is characters our old compile did not set (restated over f0f: the 52 statements
+  of (g) were each such). The parity joins several of today's units to one figure text by the exact text, its row theirs in
+  order (`join.mjs` joinedPlan, gate-l1's `joined`), reading these statements by the holder they name. Over the 12 touched pairs
+  (default and every toggle on) one page is newly worse, 2608.06701v1 p1: its 7 texts with a decoration (names and phrases on
+  their tones) have no row the parity can say, today's having translated the stretch now an element (the translator is sent them
+  anew), and a figure text's bold share counts the original's command, which v2 keeps as its ink and does not count.
+- **Not this section's.** Highlighted prose is kept as the original's with its tone (2608.06701v1 p1's green "I made a mistake in
+  the path; it should be": a decoration), accepted for now (kept, never garbled; the coordinator, 2026-11-10); later, after F3: a
+  tone over prose translated, its stretch a group drawn with the tone under its translation (a style group with a fill), names
+  and identifiers on tones elements still; the backticked names there are in the figure's Helvetica, kept by their tones, not by a
+  face. Two of today's runs of one sentence in two faces stay two (F3). The differential pairs the units of one id in their
+  order: where F0 takes some of many alike (2610.22197v1's 18 "lin2"), the pairing shifts onto others (stated, not a loss).
+
+### 18.27 arXiv's ink is no text of the paper's: its margin stamp (the coordinator's ruling, 2026-11-11)
+
+arXiv's stamp ("arXiv:2608.25210v2 [cs.DB] 28 Aug 2026", turned up page 1's left margin, grey) was a figure text in the
+prepare's bundles of 78 of the 88 corpus papers (round 8 B5's stage 1a), 76 of them with no `why`: the reader would send it
+and draw its translation over it (its colon full-width, its date in Chinese), figures being on by default. Today's prepare
+reads our compile, which has no stamp, so production has no such unit, and the parity sheet, which lays v2 with
+production's stored rows, never showed it (no row, the original's).
+
+- **Why it was read.** The figure reading takes a glyph no unit owns shown inside a form XObject or set in a picture
+  (`figure-text.mjs`). `ink.ts` reads a glyph's form from its partner on B, TeX's fact; a glyph with no partner kept A's own
+  flag, and arXiv's newer pages show the stamp inside a form of arXiv's (NimbusRoman-Regular, fill 0x808080). The ten older
+  papers' stamps (1007.0072v1 to 2602.23285v2) are drawn in the page's own stream (Times-Roman), in no form and no picture:
+  never taken, then or now.
+- **The rule** (`align.ts` `setPagesOf`, `ink.ts` `ARXIV_INK`, `born.ts`). On a page of A our compile sets, one of whose
+  glyphs, level or turned, has a partner on B, a glyph our compile never printed is arXiv's ink, no text the paper's TeX set:
+  never a figure glyph (the figure reading's input gives it the owner `a`), never a unit (none is born of it), so never sent,
+  erased or lit; both panes show it where arXiv drew it. "A page our compile sets" is that binary fact of the mapping, never a
+  share of its glyphs. A page our compile sets none of tells nothing of who set its ink and is read as before: 2610.20030v1's
+  pages 9 to 12, a second top-level file of its source (`supplemental_prl.tex`, its `00README.json`) that arXiv compiles and
+  joins to the first, our compile the first's alone. Read on A glyph by glyph against B, the stamp's rule would have taken
+  that supplement's 62 figure texts with it, real axis titles ("target area", "cell motility", "mean shape index"): the
+  evidence of absence is a page our compile sets. The ledger is untouched: it reads no turned glyph, so the stamp is in none
+  of its lines before or after and invariant (o) counts none of it; a level glyph of arXiv's ink inside a unit our compile set
+  makes that unit a content difference, as before (§18.14), and a line of it alone in a form is the ledger's `figures`. Where
+  TeX states a page's text frame no line's measure took the stamp in (`locate.ts` `frameOf`); where it states none, the hull
+  of the page's members no longer does (below).
+- **Over the 88.** Of the A pages any level glyph of which has no partner on B (10 in all), the 4 supplement pages have none
+  paired and the other 6 at least 99.7 % of their glyphs (a compile difference of 1 to 11 glyphs, none in a figure text);
+  turned glyphs with no partner on a page our compile sets are page 1's stamp alone, in all 88. Stage 1a against round 8
+  B5's (r13): 78 units gone in 78 papers, each the stamp's figure text, and no other unit made, gone or changed (the made
+  units after it one place earlier); its member gone from page 1's part, every part's faces without the stamp's face, its
+  link annotation, which its member owned in 5 papers, owned by none, as in the other 73. Two title pages with no text frame
+  of TeX's stated, measured by the hull of the page's members' lines, which had taken the stamp's in (`locate.ts` `columnOf`):
+  2608.08481v1 p1 (21 to 54 pt) and 2610.37668v1 p1 (24.26 to 51.08 pt), where TeX's block begins: 45 members' lines measured
+  from there, two read centred now (a names line and a notice whose middles stand on the block's), the room beside 15 of them
+  from the block and under 10 grown where the stamp's line was the ink under them. The differential reads the 76 stamps sent
+  as gains of the candidate's, absent from the baseline (gained 1,036 to 960; shown 37,900 to 37,824): none was ever
+  today's; lost (11), accepted (918) and changed (6,608) as before.
+- **What went with it.** The comments that read a figure's text A alone draws as a figure "where B is a draft" were the
+  drafts-only compile's (DESIGN §16, deleted 2026-11-09): our final pass includes each figure as arXiv's compile does, so a
+  figure's text has its partners on B. The engine's tests that set a figure's text on A alone set it on B too.
+
+### 18.28 An element keeps the font state TeX set its glyphs in; its copy is its characters as TeX set them (2026-11-11)
+
+On B5's sheet the owner asked whether 2608.06701v1 p5's "LIVEPLAN", set by the paper's macro in faked small capitals (L and P
+at 9.96 pt, IVE and LAN at 7.97), drawn in full capitals at 9.96, was a bug or a design; "Periodic Advisor", "Monitor" and
+"Advisor", italic by their macros, were drawn upright beside it. Today's reader draws both alike (`layer2.mjs` L2:2801 took an
+element's typewriter family alone, L2:2826 its small capitals only where its unit's style sets them); v2 ported it. The owner's
+principle: a word no translation replaces keeps the original's style, as translated text inherits it. An element is such a
+word: drawn as the page's text so that it flows and breaks, its font state is TeX's for its own glyphs.
+
+- **Weight and slant** (`breaker/tokens.ts`, `lay/read.ts`). A rendering of the page's own text (`orig-text`) takes its weight,
+  its slant and its small capitals from its own style (El.style, read off its glyphs) over the run's, as it took the
+  typewriter face; an attribute its style does not state, and a rendering of no stated style, the run's. A group TeX applied
+  around it is in its glyphs (`\emph{SAGE}` italic either way); one whose glyphs TeX set upright inside an italic run is
+  upright (2608.06701v1's `\textsc` in a caption: Times has no italic small capitals).
+- **Faked small capitals** (`facts.ts` elementCase, `locate.ts`, `facts-pass.ts`). PDF.js reads a faked small capital as the
+  capital it is drawn as, so the part stated the element's text in full capitals and the typesetter had no letter to set small.
+  An ink unit's rule (§18 "A unit's size and its small capitals", `inkSmallCaps`) now reads an element whose text the typesetter
+  draws as text (a class of text, its glyphs on its line's baseline): where every cased glyph is a capital, one at most
+  `SMALL_CAPS_SHARE` of its full letters' size is a faked small capital, its source's letter lowercase. The part states its
+  text in TeX's case and their share (El.style.sc, `upper` dropped: "LivePlan", 0.8); the typesetter's own caps path
+  (`caseRuns`) draws each lowercase letter as a capital at that share. The member-level gate it replaces (triage S6: an
+  element all of whose capitals stood at the small size, in a unit set in small capitals, drawn all small) is gone: its
+  two elements over the 88 are of mixed sizes, and the heading's "LIVEPLAN" is drawn L and P full now, as the page sets it.
+  A formula's text is read for its brackets and never drawn: a capital set smaller there is a script (`\rho_{BDM}`), no small
+  capital.
+- **Copy text** (`pipeline/instrument.mjs` copyOf). An element's copy, what a reader selects on its crop, was its source as
+  texToText2 reads a formula: `\_` as "_" and then `_x` as the subscript "ₓ" ("conv3ₓ" for `conv3\_x`, "verify_boundaryₗaw").
+  A character TeX sets as written is read as itself: LaTeX's `\_`, `\textunderscore` and `\textasciicircum` set their
+  characters in text and in math (`\nfss@text`), and a verbatim argument (\url, \path, \verb, \lstinline) sets its `_`
+  and `^` as written. A bare script mark elsewhere stays TeX's. Not read off the glyphs: OT1's `\_` is a rule TeX draws
+  (1512.03385v1's Times: "conv3 1" on the page's text), and 162 of the 213 elements it reads again are drawn as their crop,
+  no text stated.
+- **Over the 88** (stage 1a e2 against B5's r13). Units, add-ons and dumps byte for byte the same; the parts move in element
+  fields alone. Copy: 213 elements in 29 papers, each a subscript read back as an underscore (code marks and identifiers, 12
+  formulas' `\_`, three displays', an `\eprint`). Small capitals: 131 elements, 2608.06701v1's `\approach` 102, `\lang` 14,
+  `\graph` 14 (two broken over lines, "GRAPHEC-TORY" read "Graphectory" now: TeX's hyphen, the lowercase after it), and
+  2010.11929v2's heading `\oursfull` "Vision Transformer". The typesetter's half, every page of the 88 laid with each unit's
+  own source as its row (lane el-facts' census, before and after, character by character): 177 renderings move, each to its
+  own glyphs' style and no other: a paper's macro its italic 85 times (2608.06701v1 58, 2608.06007v1 13, 1512.03385v1 12,
+  2608.28692v1 2), 2608.06701v1's `\approach` upright once in an italic caption, 2609.20976v1's `\mice` 11 times in a face's
+  own small capitals (cm-super's SFCC1000 on A, drawn in the run's lowercase before), and 81 references and citations their own
+  style: amsmath's `\eqref`, upright in an italic statement, 73 times in 13 papers; a list's numbers regular in a bold run
+  (2610.22214v1, 5); LaTeX's bold "??" of an undefined reference (2610.19282v1, 2); a citation upright (2610.20581v1). Where
+  the row is the source's, a group around an element is the run's style and its glyphs' alike: 1810.04805v2's bold `\bert`
+  moves only where a translator's row loses its group.
+- **The parity** (B6's sheets, 22 pairs; the 12 pairs that move laid and drawn again). Its instrument first, alone on B6's own
+  pages: a drawn line's size is the size it was set at, its largest letter's (it was the median, and a CJK line holding a
+  macro in faked small capitals read their size), its extent its characters' advances on their baseline (an oblique run's
+  skew read a slanted CJK run's lean as a line past its column), and a raised run joins a line of its own column: 47 -> 46
+  worse by default, 57 -> 56 every toggle on, nothing newly worse. Then this rule: 46 -> 50 and 56 -> 59, every page newly
+  worse a paragraph of 2608.06701v1 one line shorter than today's because its elements are as narrow as on A (p4 t63, p5
+  t132, p7 t217, p9 t244, p11 t284; and with the references on, p11's t294, whose borrow ruling read t284's borrow, which
+  t284 no longer needs): accepted, the coordinator's ruling of 2026-11-11 ("an element is drawn at its own glyphs' width, the
+  paragraph ends one line sooner"). One `style` share moves on a page worse before (2610.20484v1 p6 t62: its "(8)", upright
+  on A on p7 of the theorem, is drawn on p6), a known weakness of a per-page share on a unit over a page break.
+- **Not this rule's.** An element drawn as a crop is the original's ink already, and a symbol drawn from its source keeps the
+  math rule; the style of a translation's groups is the translator's side. An element every capital of which is small, no full
+  letter of its own to measure them by, is drawn in capitals at the run's size (none of the 88). "LIVE-|PLAN" broken over two
+  lines keeps its hyphen ("Live-Plan"), as before: a case change across a hyphen is a compound's.
+
+### 18.29 A label TeX hung beside its text hangs its text at the drawn label's width (2026-11-11)
+
+The owner on the fresh-rows sheet, 2609.36054v2-zh p3: Figure 1's label and the text after it, separate blocks, by rule or a
+bug? The original sets "Figure 1." at 47 in the margin and every line of its text at 95.61 beside it (the caption package's
+`hang`); v2, and today's reader, set the second line under the label.
+
+- **The rule** (`lay/adapt.ts` `hang` and `hangGap`, `breaker/slots.mjs` `hangGap` and `hung`, `breaker/break.mjs` `tabbed`,
+  `edge` and tabOf; the coordinator's ruling of 2026-11-11). A label drawn anew is its first line's (RUN:2039-2041): its
+  rectangle was widened to the label, so the block's edge was the label's and every line after the first started there. In TeX a
+  hung caption's indent is its label box's width, the label and its separator (`\hangindent`): the original's text edge is a
+  consequence of "Figure 1." being that wide, not a position of its own. Where every text line of a member starts at one x past
+  the label's end and the label stands at its first line's measure start (Line x0 and m0, Label.ink; two text lines at least),
+  the label drawn anew keeps its place, its separator and the space TeX set after it (the original's gap from the label's ink to
+  its text, `hangGap`, at the state's scale), and its text hangs at that width: the first text after the label starts at the
+  drawn label's end and that space, and every later line of the block starts at that edge, its measure from there to the
+  original's right edge. A narrower label (Chinese "Figure 1.") hangs its text nearer, a wider one ("Abbildung 1.") farther. The
+  label and its space neither stretch nor shrink, a box as TeX's hang is (the breaker counts no space of the label's as one that
+  shrinks: the reader gate's I5 found 9 lines past their slot where it had). A label kept as the original's ink (a reference's
+  "[12]", a heading's "A.4", a caption's label not drawn anew) keeps the original's hang: its block's edge is the text's.
+- **Over the 88** (r14's parts, every page laid with identity rows by the typesetter before and after, lane b5-fixes): 55
+  captions hang their label, in 4 papers; the 35 of them whose label is drawn anew are laid otherwise (29 figures', 6 tables':
+  2307.16209v1 24, 2610.21201v1 5, 2610.21377v1 5, 2609.36054v2 1), and no other of the 63,230 members laid moves. The strip the
+  drawn label's hang gives the text, from the label's start to the original's text edge over the caption's lines, holds no ink
+  of arXiv's page but the label's and no other member's line or element, on all 55: the region is the caption's own. Laid with
+  identity rows the line count of 6 of the 35 moves against B6 (2307.16209v1 p86 t286 4 -> 5; 2610.21201v1 t13 10 -> 11, t19 9
+  -> 10, t14 10 -> 11, t87 15 -> 16; 2610.21377v1 t268 4 -> 5), and of 3 against the hang at the original's edge (2610.21201v1
+  t13 12 -> 11, t87 17 -> 16, t48 3 -> 2): a line ends sooner where the measure is wider, as an element drawn at its own width
+  does.
+- **Not this rule's.** How a caption's label is found (its float's `\fnum@<type>`, a label on a line of its own) is the label's
+  reading's (lane marks-2), not this rule's: it lays a label found, which needs Label.ink's start at the first line's measure
+  start and its end before the text lines' shared start; a label on a line of its own is no hang.
+
+### 18.30 A character TeX writes escaped is a character of the text (2026-11-11)
+
+`\%`, `\&`, `\#`, `\$` were placeholders: each went out as a marker, the original's ink drawn for it. Microsoft read a marker as
+a boundary inside the term it stood in: "R&D" came back as its "D", a verb, then "R&" (2610.21098v1), and a percent stood apart from
+its number. Sent both ways over 110 units of the 88 papers (90 in Chinese, 20 in Japanese, lane style-wire): as text none was
+refused and no sentence map lost, 131 of 134 percents came back glued as the paper sets them (3 written as words), every "R&D" one
+term, 140 markers fewer.
+
+- **The kernel's control symbols `\%`, `\&`, `\#`, `\$`, `\{`, `\}` and textcomp's `\textasciitilde`, `\textbar`,
+  `\textless`, `\textgreater`, `\textbackslash` are the character they set, in its word** (`latex-front.mjs` textCharacter, the
+  letter commands' path): its source beside it, written back byte for byte; a control word's skipped spaces and an empty group
+  with it (`\textless 5` is "<5"), none after a control symbol (`5\% of` is "5% of"); a group around one alone spends its pair's
+  id; a paper's own definition of the command keeps it a placeholder. `\_` stays the identifier rule's (§18.25): an identifier or
+  an address read with such a character as TeX sets it is one placeholder as the paper writes it, as before (`keepRead`).
+- **A text `#` on the markers wire.** Microsoft gives back the entity `&#35;` as `#` (114 of 114 in Chinese, Japanese and German),
+  so the character goes bare, and a wire holding one is read as the HTML page reads a block that holds one (DESIGN §6.3): each
+  marker with its one `#`, no marker read without it, every other `#` the text's; a `#` right after a marker is refused (a doubled
+  closer or a moved `#`) unless the wire itself follows that marker with its text's `#` (`@b## of runs`, `@a# ## Root Goal`).
+  Today's wire (`mt.mjs`) read every reply as holding no `#` of its own and dropped each as a stray one; it now reads so too
+  (`TRANSLATE_VERSION`), as packages/translate's markers.ts does (`hashAfter`).
+- **The name rule reads "&" as mid-sentence** (`mt.mjs` isName): a capitalised word after "& " in the prose is a proper noun
+  there, a conjunction no sentence beginning after it. As a placeholder the `\&` stood in no text of the prose, and
+  2610.37818v1's "Tanks & Temples" cells were kept as the dataset's name; as its character they would have been sent.
+- **Measured** over the 88 papers' stage 1a against round 14's: 1,649 placeholders are characters now, in 851 units of 65
+  papers (`\%` 1,209, `\&` 270, `\#` 48, `\$` 26, `\{` and `\}` 20 each, `\textbar` 24, `\textasciitilde` 23, `\textless` 5,
+  `\textgreater` 3, `\textbackslash` 1), and the 65 papers are the ones whose objects moved. Otherwise: nested units' piece ids
+  and hashes, as their own units change; and three cells the name rule reads anew: 2610.21547v1's "ASR FedAvg (%)" (twice)
+  kept now, three name words, and 2610.21491v1's "MSE …%" no longer, four. Shown units 37,915 either way; against the baseline the
+  differential loses round 14's 11, 882 of today's units stated as the candidate's written as today's TeX with these characters
+  text (stage 1a's statement (o), `lab/pdf/prepare-back/stated.mjs`: the same unit, its id moved with its pieces, wherever either
+  lays it). The layout marks: such a character is text, so no mark stands
+  around it, and a paper's macro glued to it is read as before a word (its ink ends where the text begins: 2610.21098v1's
+  `\HarnessLimitShare{}\%`).
+
+### 18.31 A group that carries nothing is its content (2026-11-11)
+
+Every bare group `{…}` and every command the front end reads as setting its argument alone was a span of style `other`: in the
+bibliography RevTeX's `\bibinfo{field}{…}`, `\bibfield`, `\bibnamefont`, `\bibfnamefont`, a `.bbl`'s `\showarticletitle` and
+`\natexlab`, BibTeX's case braces; in the body a paper's `\newcommand{\techreport}[1]{#1}`. TeX sets their content as it would
+with no group: no face, no fill, no link, no paragraph of their own. Yet the tags wire (Google's, Chrome's, an LLM's) sent each as a
+tag pair, a `must` bare group was a marker pair on Microsoft's, and placement and the references counted them as groups.
+
+- **The rule** (`pipeline/instrument.mjs` passThroughOf, in piecesOf and spansOf): a group is a pair only if it changes how its
+  content is set or the reader needs its extent; decided from the front end's own facts, carried through the instrument. A pair the
+  front end read as setting its argument alone (latex-front.mjs identityPair, the open piece's `sets` 0) and a bare group holding no
+  declaration of its own (no placeholder that sets nothing directly inside it, `mt.mjs` isInkless: a switch it would scope), both of
+  its ends in the unit, are their content, their text joined with the text on either side. A group the front end says nothing of
+  stays one: a paper's macro that sets more (`\multicolumn`, `\rotatebox`, `\fbox`), a group around a declaration (`{\em …}`);
+  a command that prints its argument between marks is those marks as text and its argument (§18.32).
+- **Its gate.** The instrument decides this before TeX's paragraph ends are read; a paragraph TeX opened inside a unit is stated
+  on the group whose open the text meets there (SpanAt.opens), so one opened where a group written as its content stood would
+  have nothing to state it on. The instrument states where each such group opened (`InstrumentUnit.passed`, offsets in the
+  unit's projection; the bundle does not carry them), the facts pass counts a paragraph end the unit's text meets there as it
+  meets a group's open (`Located.stats.opensLost`), and stage 1a writes the count in the dump and fails the paper (`run.mjs`,
+  exit 4), so that such a case is a gate's and not a reader's. None over the 88.
+- **Measured** over the 88 papers, stage 1a against §18.30's: 23,454 groups written as their content in 2,354 units of 77 papers
+  (`\bibinfo` 10,428, `\bibnamefont` 4,084, `\bibfnamefont` 3,704, bare 3,282, `\bibfield` 1,729, `\showarticletitle` 170,
+  `\techreport` 44, `\natexlab` 12, `\anonymous` 1), each unit exactly the one before with those groups' ends out, every other
+  unit and part member (63,230) the same with the unit ids carried; drawn units (38,366) and pages (2,339) per paper the same.
+  Every fill stated on such a group was also its link's around it. The tags wire: 20,359 tag pairs fewer (34,579 to 14,220),
+  311,716 characters (3.9 %), in 2,257 units' wires; the markers wire: 264 units' wires change, a `must` bare group's markers
+  gone (1,991 characters).
+
+### 18.32 What a command prints as characters is characters: `\enquote`'s quotation marks (2026-11-11)
+
+`\enquote{X}` prints X between quotation marks. The front end read it as a pair around X (in a bibliography entry a span of
+style `other`), and csquotes' in the body as one placeholder: the marks were in no text piece and no element, so the translation
+was laid without them (below, as laid). The rule is §18.30's: what a command prints as
+characters is characters, and what a translator then does with quotation marks is the translator's. Not the original's ink (it
+would freeze English quotes around translated words, and ink cannot flow), not quotes of ours chosen per target (the
+translator's to choose).
+
+- **A command whose definition prints its argument between marks and nothing else** (`latex-front.mjs` wrapOf: its replacement
+  text `<marks>#n<marks>`, no letter, digit, command or group in the marks, both sides set): those marks are text of the unit,
+  TeX's ligatures read (``` `` ``` “, `''` ”, `` ` `` ‘, `'` ’, `--` –, `---` —), the call's source with them, written back byte for
+  byte; its argument walked as before, the pair's id spent. A paper's `\newcommand` and a `.bbl`'s `\providecommand` alike
+  (2610.10069v1's `\newcommand{\enquote}[1]{``#1''}`, REVTeX's `\providecommand \enquote [1]{``#1''}` in 2307.16209v1). A
+  definition that sets anything else stays the pair it was.
+- **csquotes' `\enquote`** (the paper defining none): the outer level's double marks, an `\enquote` inside one the inner level's
+  single, as csquotes alternates, `\enquote*` from the inner level (quoteMarks), where the marks can be read off the paper's
+  files: csquotes loaded with no style, `style=american`, `english` or `USenglish`, no `autostyle`, no `\setquotestyle`, no babel
+  or polyglossia language but English (`csquotesOf`). Another style, or a language's, is one placeholder as before: its marks are
+  the style's, which the compile's glyphs would tell (the element's own text, as an element's text is read); not read here. No
+  paper of the 88 loads csquotes.
+- **An argument that holds a declaration keeps the group that scopes it** (`withMarks`, `declares`): `\enquote{\bfseries bold
+  words}`, its pair written as marks alone, left the switch with no group, and the markers wire put it after the unit's text (the
+  quoted words not bold, what followed bold). Such an argument keeps a `{`…`}` group, its source the call's own braces, the marks
+  outside it as TeX prints them. A group that scopes a declaration stays a group whatever is printed around it. None of the 88's
+  53 `\enquote` calls holds one. And a piece written as characters is read at one offset per character where the front end
+  reads a unit's identifiers and grouped addresses (`keepRead`): a quotation mark is three of them, its UTF-8 bytes.
+- **Measured** over the 88 papers' stage 1a against §18.31's: 51 units of 2 papers change (2610.10069v1 43, 2307.16209v1 8, all
+  references), each exactly with its `\enquote` pair out and “…” around its content; every other unit and part member the same;
+  drawn units (38,366) and pages per paper the same. The 51 wires all change: tags 10,730 to 10,114 characters, markers 7,010 to
+  7,104 (2610.10069v1-zh is a parity pair: 43 references, laid under the references toggle). Stage 1a's statement (o) reads a
+  pair v2 does not write as its content between the marks it may print (39 of today's units more stated by it); the
+  differential loses round 14's 11. Laid by the reader's own lay, Chinese by Microsoft, the references toggle on, before and after:
+  2307.16209v1 p143 "E. Berti，黑洞扰动理论，（2016）." and "E. Berti，“黑洞扰动理论”，（2016）."; 2610.10069v1 p24 "希克斯互补性与扰动效用模型" and "《Hicksian互补性与扰动效用模型》",
+  in title marks, the translator's choice for a title in Chinese (its "Hicksian" left English this time, also the translator's).
+
+### 18.33 A link with no address is its argument: REVTeX's `\href@noop {} {…}` (2026-11-11)
+
+REVTeX's `.bbl` writes an entry's journal part that has no DOI, and a note, as `\href@noop {} {…}`, its head defining the command
+as `\@secondoftwo`: it sets its second argument as it stands and links nothing. The front end read the call whole as one
+placeholder, so its content stayed the original's ink (every journal part of 2610.20030v1: its copy text read "@noop journal
+journal Soft Matter volume 18, pages 2168 ( year 2022)"), and an entry made of it alone was no unit at all (2610.20030v1's
+supplemental note, left the original's English).
+
+- **The rule** (`latex-front.mjs` BIB_TEXT): `\href@noop` is one of the bibliography's text commands, its text the second
+  argument: a pair the head's definition reads as setting its argument alone (§18.31: written as its content), the groups it
+  holds as before (`\textbf` around a volume a group of its own, `\enquote`'s marks text, §18.32), its numbers the original's ink
+  as every entry's.
+- **The census before it**, over the 88 papers: 93 such placeholders in 6 papers (2610.20030v1 37, 2307.16209v1 26, 2610.20451v1
+  14, 2610.20595v1 14, 2610.20716v1 1, 2610.21765v1 1), every one in a reference, its address empty, no command inside it that
+  links by another route; no link of arXiv's page is owned by one or stands on its ink (one, a neighbouring paragraph's
+  `\ref`, touches a line's edge); one call more, the note, was in no unit. Every paper defines it in its head as above.
+- **Measured** over the 88 papers' stage 1a against §18.32's: 93 units of the 6 papers change, each exactly its placeholder read
+  as its argument (2307.16209v1's `Painlev\'e` a letter of its word, as everywhere); the note is a unit, drawn; an ink unit of
+  2610.20030v1 goes, the line it held now its entry's own (an entry over a page break, its second line the journal part); the
+  other 82 papers' bundles the same byte for byte; drawn units 38,366 to 38,367, pages the same. Wires of the 93: tags 14,534 to
+  21,204 characters, markers 7,990 to 11,724 (the journal names sent); no parity pair's. Stage 1a's statement (o) reads today's
+  placeholder as the front end now reads it in an entry; the differential loses round 14's 11. Laid by the reader's own lay,
+  Chinese by Microsoft, the references toggle on: 2610.20030v1 p5's journal part, a crop of the original's English, is now
+  "软物质 18，2168（2022）." with its numbers the original's ink; its note "“请参见[出版社将插入网址]的补充资料，获取图表S1-S3和电影字幕。”".
+
+### 18.34 Two facts of TeX's in the marked compile: a float of no counter, a caption's label by its call (2026-11-11)
+
+The owner's decision of 2026-11-11, venue and notice lines translated, all of them, and his ruling of one label form per paper
+(2026-11-08). Two lines TeX sets were owned by nothing by an accident of their container: NeurIPS's notice ("31st Conference on
+Neural Information Processing Systems (NIPS 2017), …", "Preprint. Under review."), which its class sets in a bottom float, and
+IEEEtran's table label ("TABLE I"), which its class sets on a line of its own above the caption's text. The marked compile now
+states, for each, what TeX knows (layout/marks.mjs POINTS_TEX); one move of the compile keys for both.
+
+- **A float of a type with no counter** (`fn<n>`, beside the float's `fs<n>` in its own box). Where `\c@\@captype` is undefined
+  when the float's box ends, no `\caption` can number the float: TeX says it is no figure, table or algorithm, but the page's
+  own text the float mechanism placed. NeurIPS's styles define `\ftype@noticebox` and `\@float{noticebox}[b]` and no counter;
+  so does ICML's `\@float{copyrightbox}`. The ledger (the engine's copy, `locate/today/ledger.mjs`, CHANGED) reads such a
+  float's lines at the depth of the counted floats around them, so a line in none is text outside the bodies, a note
+  (`inknotes`, always translated, as ACM's permission block is). Not a Headers-and-footers unit: TeX ships the float before the
+  page's last mark, so it is no foot run. ICML's copyrightbox's text is units' already (its notice and affiliations): nothing of
+  it moves. Any other float of no counter is read so: that is the point.
+- **A caption's label by TeX's call** (`ka<k>`, before the label where TeX sets it). Every caption maker is handed its label,
+  `\fnum@<type>`, as an argument: LaTeX's and every class's `\@makecaption` (#1), longtable's `\LT@makecaption` (#2), float.sty's
+  styles' `\floatc@plain`/`\floatc@ruled` (#1), algorithm2e's `\algocf@captiontext` (#1), caption.sty's `\caption@@make` (#1,
+  every path of caption.sty's: a sub-caption's, subcaption setting `\@makecaption` to caption's own inside a sub-figure, a
+  rotated one's, a long table's). Each, once the document begins, hands its original the label with the point before it: no
+  assignment and nothing expanded before the original runs (longtable's starts a `\multispan`), the label's own tokens and
+  parameters as they were (algorithm2e's `\fnum@algocf` reads one). A class or package that sets its caption maker inside its
+  float's environment, after the document began (Elsevier's cas-common sets `\@makecaption` to its figure's or table's own at
+  the environment's start; algorithm2e and floatrow do so too, over a maker already handed its point), has that maker wrapped
+  again as each float begins (`\@xfloat`, every float's way in, its arguments passed on untouched), in the float's own group:
+  an assignment, no node, nothing where the maker is a wrapper already. Two wrappers of one caption set two points side by
+  side, nothing between them. Typeset only (`\protect` `\@typeset@protect`: nothing in a
+  moving argument, a file or a bookmark), never while the gate is off, and in vertical mode at the paragraph the label begins
+  (para/begin, once). own.mjs MR 5 takes a caption's label from its last label point before its start mark, whatever line it
+  stands on; a caption TeX set no point for has no label: the baseline is no longer read for a caption.
+- **Today's reader keeps an own-line label as before.** Today's layer sets a float's relabel as its first line's start; a
+  label on a line of its own would be carried into the text's line and its own line left blank, so it relabels a label only
+  on its unit's first line (`layer2.mjs` labelOnFirstLine) and keeps any other as the original's ink, as before the label was
+  found. v2 lays it as a row of its own (below). The flag is today's layer's alone, no rule of reading: it goes with that layer
+  at the cut-over and is never carried into v2.
+- **Each point read by its own reader alone** (stream.mjs `READ_ALONE`): `ka<k>` by own.mjs MR 5, `fn<n>` by the ledger; every
+  other reading passes over them as over a bracket (the mark sequence an opening alone reads to, headInk's point before, the
+  sequence points, instrument.mjs's stop): 2406.06525v1 p6's cell superscript, an opening alone after its cell's end mark,
+  lost its ink where the caption's label point stood before the next mark.
+- **A label on a line of its own** (`Label.align`, FORMAT 1's optional field). It stands on none of the caption's lines, so the
+  part states no `line`, and states how TeX set that line against its measure, read as any line's alignment is (`alignOf`'s
+  centring; flush right where it ends at its measure's end and starts within it; else flush left): the label line's own, never
+  the unit's (a class may set its label flush left over a centred text). The typesetter reads it and never guesses
+  (`lay/entry.ts` labelRowOf): no line of the caption leads with the relabel; it is laid as a row of its own on the label's
+  baseline, at the label's size, in its runs by script, centred on the label's middle, from its start or to its end, its face
+  a lead's relabel's (leadOf: the label's weight, slant and fill on the caption's base style); the original label's group off
+  as for any relabel; the row lit with the caption's first sentence, as a carried label is (§17); nothing else of the caption
+  moves. IEEEtran's "TABLE I" is `\normalfont` capitals over a text in
+  `\scshape`: where the caption's base is small capitals the relabel is set in them as a lead is, which leaves a Chinese
+  relabel as it was (its CJK characters have no small capitals, its numeral "I" is a capital).
+- **Proofs of the TeX.** 23 synthetic documents in the pinned TeX Live 2025 image (classes article, IEEEtran conference and
+  journal, scrartcl, memoir, revtex4-2, amsart, llncs, elsarticle, acmart; packages caption, subcaption, float, algorithm,
+  algorithm2e, wrapfig, longtable, sidecap, floatrow, rotating, listings, subfigure, threeparttable, hyperref, cleveref, a list
+  of figures, of tables and of algorithms, Elsevier's cas-sc), each compiled before and after: every glyph and box the same,
+  every .aux, .lof, .lot, .loa and .out byte for byte, the new points alone.
+- **pdfTeX's glue under font expansion: B's alone.** Under pdfTeX's font expansion (microtype; 38 of the 88 load it), content
+  a whatsit writes into the page stream earlier in the run (a literal, direct or page mode, or a `pdf:` special) can change the
+  glue pdfTeX gives a later line: the same glyphs, fonts and advances in the same box width, its spaces set otherwise. Seen on
+  2610.20808v1 p20 (each space 0.43 pt wider, 3.47 pt by the line's end) and 2610.21098v1 p22 (0.01 pt) with the label point,
+  and between arXiv's A and our B before it on 2610.20808v1 p19 (two lines, up to 0.52 pt). Bisected one compile each: no point
+  set, an empty or unwritten `\special`, `\pdfsavepos`, or node-free definitions leave the line as it was; any emission that
+  writes the point moves it; TeX's own trace shows the line before with an invalid glue order ("foul"), so the run without the
+  point had no well-defined setting there either. It stays in B: B only locates, by the glyphs' keys in order with no position
+  threshold (align.ts), and A is what a reader sees; both papers' bundles are byte-identical with and without the point, the one
+  diagnostic that moves the line's unit's `place`, `same` to `respaced`. B cannot leave expansion off: its lines would no longer
+  break where A's do. The compile-pair check reports such a line under its own heading (`glueLines`), never as moved glyphs.
+- **Proofs over the 88** (stage 1a at the head on its own compiles against B8, 8ca1dcd1b, on its own): 19 papers move, and
+  only as ruled. 8 units gained, `inknotes`, one on page 1 of each paper with a NeurIPS notice (1706.03762v7, 2608.27728v1,
+  2610.17108v1, 2610.20947v1, 2610.21026v1, 2610.21176v1, 2610.21376v1, 2610.30769v1). 37 captions gain their label, every one of
+  the census's (36 on a line of their own: IEEEtran's "TABLE I" .. "TABLE X" centred, cas-sc's "Table 1" .. "Table 7" flush
+  left, SIAM's "Table 1", "Table 2" centred; one on its first line, 2610.20848v1's "Figure 1:"), none lost, none changed, in all
+  24 classes of the 88 (the lab's label check, run by class: the first version of the TeX lost cas-sc's 14 figure labels, its
+  maker set inside its environment, which is how the float's own wrap was found). The point before a forced break is set for 9
+  placeholders in 4 papers (2608.06701v1, 2608.25210v2, 2610.21313v1, 2610.21477v1): 2608.06701v1's affiliation, refused before
+  ("text past its source"), is located, its marks and addresses its elements; 2610.21313v1's email line under its affiliation,
+  an ink unit of names before (today's reader and v2 with the names on drew its "bo" as a Chinese name), is its affiliation's
+  element, the address kept. Beside them only what follows from the notes: their glyphs counted in the faces table of their papers' pages,
+  and the ords after a note one more (2610.20947v1's references' links name their owners by ord). Seven captions stay without a
+  label, none for want of a call: three `\caption*` (no label is TeX's), revtex4's three "TABLE. I:" (called; refused by the
+  label's form, MR 6, as before), weco_paper's "Figure 8 |" before a macro's ink (called, its two points there; no label stated,
+  as before: its reading not taken further here). Every compile of the 88 (307) sets the same glyphs and boxes and writes the
+  same .aux, .lof, .lot, .toc, .out and .bbl but for its new points and one line of the glue class above.
+
+### 18.35 A formula in a figure is never sent; a line of formulas alone is kept whole (2026-11-11)
+
+The owner's line (§18.21) holds here too: a translation may be made or not, never garbled. A figure's line was sent with its
+formulas inside its words, and the translator rewrote them. On staging (round 8 B1), 2609.19644v1's included pages came back
+with "(OOD)⋅" as "（值班）⋅" (on duty), "1+exp −" as "1+经验值 −" (a value of experience), "blend = Σ" as "混合 = Σ", a Φ as φ
+inside "-(Φ-μ_c)TΛ(Φ-μ_c)", and full-width brackets and commas put into formulas ("min（0， z−θ）"): 22 figure texts with a formula
+among its stored rows. And a formula's script set apart from its base ("low" under r, "train" under D, "true" over θ) was a
+figure text of its own, translated as a word.
+
+- **What a figure keeps, and by what.** A figure's text is kept as the original's by how the paper set it (a face of one pitch,
+  §18.22; a formula's faces and characters, here; a decoration, §18.26) or by the figure's structure (a list's enumerators,
+  §18.36), never by what a word looks like: a name, a term or a label is sent as any figure text is, and how a word comes back
+  is the translator's (the owner's ruling of 2026-11-11: "never garbled" is of format, not of words; lab-data
+  llm-probe/notes.md, last section). Where F1 reads letters, it is to tell text from a formula: a line with no word of two
+  letters outside its formulas is a formula's; a mark between two words is the words'.
+- **F1** (`figure-lines.ts`). A glyph is a formula's by (1) its character, a mathematical one outside ASCII (a math symbol, a
+  Greek letter, a mathematical alphanumeric, a letter of the letterlike block): a minus or plus-minus right before a digit is a
+  number's sign, and a mark in no math face set between two words, no space either side, is the words' (2610.11256v1's plot sets
+  its labels' hyphen as the minus sign: "Near−monopoly", "Over−priced"); or (2) its face, a math face by its name (`classifyFont`:
+  CMMI, CMSY, KaTeX_Math …), since a math italic letter's character is the plain letter. A formula is the line's glyphs no word
+  space apart that hold such a glyph, with the clusters beside it within the run gap that hold no letter (an operator, a number,
+  a bracket: "x = 3"), and a phrase touching it whose every letter is in a formula's own face (3): a face a letter of which stands
+  inside a formula's cluster, that no source unit sets text in and no figure line sets a phrase in apart from a formula
+  (KaTeX_Main's "log det", "Tr"). A line smaller than another (0.9 of its size at most), off its baseline by less than half that
+  size, within the run gap and beside a formula's glyph, is its script, read on its line. A line no word of which stands outside
+  its formulas is kept whole (`figure: formula`), as today's runs of a math face are; else each formula is an element `math`,
+  the original's ink, never sent, moved with the translation, and the words around it are one text.
+- **A formula is read whole before it moves.** An included page sets a display's main glyphs in math faces no run holds, and its
+  runs may be its scripts alone ("final", "base", "low"): a line now stands at the size and baseline most of its glyphs stand
+  at, the glyphs no run holds too, not its runs' alone (2609.19644v1 p59's equation (1) had been read as two lines at its
+  scripts' size, "scale" translated alone and the rest left in place). Scripts join their line inside the line reading, which
+  reads the lines and the glyphs no run holds again after each join (p60's "Σ_{i=1}^k", whose lower limit spans the gap between
+  the line's halves, had been read by neither half and left where it was as both moved). And where a formula element has ink no
+  line took over or under it (a fraction's other line, a limit past half the size), the element would move and that ink stay:
+  the text stays the original's, the relation reading's fallback. That ink is looked for one band's height over and under the
+  baseline, and no further: a formula's stacked parts (a limit, a denominator, a script) stand in the band directly over or under
+  its line. A glyph standing on another line's baseline is that line's, taken or not (2609.19644v1 p11: a table's number cells
+  under a group header's formula, a caption's last mark past its line's run gap). Reading the line nearest by baseline instead,
+  with no reach, was tried and withdrawn (2026-11-11): a display forms no line, so a display, its equation number or a folio 3
+  to 27 sizes below stood nearest a paragraph's last line (2609.19644v1: 33 of F1's 47 lines drawn against 39). Over the 91
+  (2026-11-11, every loose glyph over or under a formula element read each way): the band keeps 11 texts, the nearest line
+  132, the nearest line with the glyph's row inside the element's extent 11, and the band with that row 1, which loses
+  2610.35877v1 p3's denominator, a true one.
+- **The wrap's proof reads a show as it draws.** An element cuts a show of the figure's form where its text and its element meet,
+  and the split writes each chunk's codes and adjustments. The proof read the show otherwise in two ways, neither of which draws
+  anything: a show opening with an empty string, whose codes (none) the split does not write (2610.20967v1 p2), and an adjustment
+  halfway between two millionths, written -0.585938 by the split's six places and rounded -0.585937 by the proof (2610.21098v1 p8,
+  2610.42112v1 p29). It refused the page's wrap with its figures, and every figure text of the page stayed the original's (49,
+  45 and 114 texts; F0's voided run f0e on 2610.20967v1 p2 was this too). It now reads an empty string as nothing and a number at
+  the split's precision (`wrap.mjs` elementsOf).
+- **Over the 91** (stage 1a f1c at 51a36c654 against f1base at 67271cd39, F0 with round 8 B4; I6 the same). 135 lines are kept
+  whole for their formulas, on 13 papers, and 617 figure texts hold 774 formula elements, on 38 papers (the design's census:
+  about 150 lines and 39 papers). Of the base's 10,377 figure texts drawn translated, 9,189 are the same, 575 are joined into a
+  line across its formulas and translated, 165 are inside a line kept whole, 89 are wholly a formula element and 276 partly
+  (brackets, units and punctuation glued to a formula: "(0.1195s", "),"), 32 are scripts read on their base's line, and 51 are in
+  a line left the original's: 47 of 2609.19644v1 (below) and four formulas with ink off their line (a fraction "w_bh =
+  (1−ρ)/ρ · 1/h", 2610.35877v1 p3). Every text F1 stops translating was listed with the faces arXiv's PDF sets it in and read: the
+  lone words are scripts (r_low, α_content, θ_true, x_opt, D_train, σ_ON, ξ_gw^Theory, 2609.20976v1's legend), operators ("Pr",
+  "log10", "arg min") and units ("[kpc]", "Mpc]"); the one class of prose found, 2610.11256v1's six labels, is the mark between
+  two words above.
+- **Stage 1a and the parity.** The dump marks a line kept whole (`keptBy: 'formula'`) and each formula element; today's unit
+  inside one is stated (m), "kept as the original: inside a formula of a figure": the candidate's own kept line (49 over the 88)
+  or, the holder named, today's unit now wholly a formula element or held by a kept line (30). The parity's joined join reads
+  (m) as it reads (k) on elements and (n). Over the 8 pairs F1 moves (default toggles; base f1base, head f1c, both laid by this
+  code), every page newly worse is the `figures` count alone: 41 figure texts on 12 pages no longer drawn translated, each a
+  line kept for its formulas or a text holding a formula element now, a unit today's stored rows do not serve; no other measure
+  is worse, and 41 of today's undrawn texts' highlight differences are gone. Every toggle on, the same: the 12 pages, 41 texts.
+- **Gates.** The speed check passes (every time within its spread, every work counter equal: it measures today's engine, which
+  F1 does not touch); the reader gate's page times are within the two runs' spread (p50 28.83 and 29.19 ms against 29.04 and
+  28.33, p99 149.73 and 149.81 against 154.46 and 144.49, 3,215 pages); the prepare's locate time is within the runs' spread
+  (91.3 s against 88.0 in the quieter twin run).
+- **Not this rule's.** An operator name set in the body's own face stays a word of the text (a CM paper's `\log`, 2610.20285v1
+  p12's "log ⟦a_v0⟧"): its face is the source units' and no formula's own. A formula set in a text face with no mathematical
+  character ("x = 3" in Helvetica) is text. Greek prose would read as formulas (no paper of the corpus is Greek). A line F1 joins
+  across its formulas is crowded whole where another line's ink meets its band: 2609.19644v1's included pages, which today
+  translated as sentence fragments between formulas, one run at a time, keep 47 such lines English now, never fragments; their
+  own paragraph's lines and frames are F3's (§18.36). A word of a body's face set inside a display stays text, translated as
+  before (2609.19644v1 p61's `\text{Huber}` and, where CMR10 is the main paper's own face, its `\min`). One script stands a word
+  space from its base (2610.20507v1 p3's "GA" after τ): it is text of its line, translated with it, and stage 1a states it
+  absent.
+
+### 18.36 A figure's paragraph, its list and its node, each one text (2026-11-11)
+
+A figure that sets running text (an included page, a caption inside a figure, a node's label) was cut line by line: each
+line a figure text of its own, sent alone and laid on its own baseline. A sentence came back in fragments, its parts
+translated apart, and a line its own paragraph's other lines crowded stayed English among translated ones (2609.19644v1's
+included pages: blocks alternating English and Chinese). F3 reads what the figure prints: its paragraphs, its lists and the
+lines a node holds, each one text, by facts of the text and of the figure's structure, never by a guess from a line's shape.
+
+- **A paragraph, by TeX's own facts** (`figure-paras.ts`). Lines of one figure, one under the other with no blank line between,
+  in one face family, size, weight and fill, on one left edge (an indent or a hanging indent allowed on its first line), joined
+  where the text goes on by a fact: TeX's hyphen at a line's end, or a justified block (two full lines or more whose word spaces
+  are stretched: unlike between them, or unlike its short last line's, which TeX sets at its natural spaces, \parfillskip). The
+  lines stand by TeX's interline rule: the block's one pitch, \baselineskip, or, where a tall line would touch at that pitch,
+  further, \lineskip clear, one clearance on every such push (a \parskip keeps its clearance at the pitch and is no push; an
+  unpushed gap may be less clear than \lineskip, down to \lineskiplimit: 2609.19644v1 p59's 0.37 beside a push's 0.76). Ragged
+  lines are joined by nothing: stacked legend entries read the same. Tried and withdrawn: an inline formula's space to a word as
+  a word space (a math cluster beside a digit made a line read uneven; over the 91 it joined nothing and lost 3 joins).
+- **A paragraph's line ends.** TeX's break and a word's own hyphen are one glyph. As a body unit's are by its source, they are
+  told by the document's own text (every page's glyphs in their order), in any case: the word written with its hyphen keeps it
+  ("per-timestep", "high-frequency"; 2610.21098v1's plot labels "Success-|superior", which its body writes "success-superior"),
+  written whole drops it ("Suffix"); TeX's rules where the document writes neither. A hyphen with a digit on either side is the
+  author's, TeX hyphenating letters alone ("128-|bit", "DeepSeek-|3.2"), for body units too. A page's glyph is read with its
+  coordinates (glyphWith): a spread of one carried none, and every line end of a figure paragraph had read as a word's own hyphen
+  ("con-text", 126 of 2609.19644v1's 129).
+- **A list's marker is its item's label**, never sent: a line opens with an enumerator LaTeX's list counters print (\arabic,
+  \alph, \Alph, \roman, \Roman, a bullet or a dash; an opening bracket, a closing point or bracket), and another line of its
+  figure opens with the next one or the one before, of its form, at its left edge (a column) or on its baseline (a row): options
+  set as a grid (2411.13093v4 p19's A. B. over C. D., where "A." had come back "Answer"). One enumerated line alone is text.
+  A marker no run holds joins no line of the column before it (§18.55).
+- **A path's text** (the container step). A closed path holds the lines whose glyphs' centres all stand inside it (read by its
+  interior after its box) alone where no other glyph is inside it and no closed path inside it holds text of its own (the nodes
+  of a box round a chart); a fill or a frame under words of one line, within one band's height of its baseline, is a decoration
+  that goes with its words, and other ink inside, a stroke or a legend's samples, is no reason. The runs it holds on one
+  baseline are one line, however far apart their words stand. No legend's entries are joined: two rows or more each beside ink of
+  its own inside the path (a sample, a marker; a neighbouring node's edge outside it is none). Rows **centred** (their centres one
+  and their left edges not: rows of one length show no alignment, centred or flush) are a node's label: one text, one under the
+  other with no blank line, in one face, size, weight and fill, no line an item's. Rows **set flush** (option 3, the
+  coordinator's ruling of 2026-11-11, taken to the owner with its census): a row joins the row above where the break is a
+  wrap's (no blank line, one face, not each led by ink of its own, and forced: the next row's first word cannot stand on the row
+  above within the measure the path's inside gives it there, its inset on the flush side mirrored) and the sentence goes on (the
+  row above ends in a hyphen, or this row's first letter, after any punctuation it opens with, is lower case); a capital, a
+  digit or a symbol begins a row of its own, and a script without case never joins. No geometric fact tells a box hugging its
+  rows from one text was wrapped into: 2608.06701v1 p2's bubbles are ragged at their natural spaces, every break forced, and so
+  are 99 of 2610.37668v1's 103 value overlays; the sentence going on is the evidence, as a hyphen is for F3's paragraph. Census
+  (91 papers): 40 breaks joined in 27 boxes on 8 papers; 2610.37668v1's six "Mip-NeRF360 / <scene> / <id>" boxes join wrongly,
+  accepted knowingly. Its room is the path's inside. **A joined text is laid as a paragraph of the body is laid** (the owner's
+  ruling of 2026-11-11: a figure's text keeps the body's rules, none of its own and no optical correction): its first line on its
+  first row's baseline, its leading the ladder's and the page fill's, as a body paragraph's of the same lines and height (a
+  translation of fewer lines takes a looser leading and fills its rows' extent), no line under its last row's baseline. A CJK
+  line's ink stands higher over the baseline than a Latin face's capitals: the faces' shapes, as in the body. Measured on
+  2608.06701v1 p2's three bubbles (the drawn lines read back; the CJK ink each span's string measured in its own face, the
+  English the part's glyph boxes): the first line on the first row's baseline in each; the first line's ink top 0.56 to 0.62 pt
+  (0.12 to 0.13 em) over the first row's capitals, and that is all that stands between them at the top. The first bubble's
+  scroll leaves 0.55 pt over its capitals (the second's 3.37, the third's 2.68), so its ideographs reach the scroll's edge:
+  the faces' shapes, which stay. Laid at its rows' pitch instead (an experiment taken out, 575148896), the translation ended a
+  row early and its block's middle stood 2.88 pt higher than the original's. A word broken
+  in a node with no hyphen is joined where the document writes it whole ("test_password|_lookup.py"). Known cost of the centred rule: four node labels whose two rows are one width to
+  0.1 pt are read per row ("Utilities Matrix / Users x Foods", "Initial Idea / Generator", "Rearrange / Initial size"; "Advisor
+  / redirect" comes back through option 3), two stacked curve labels and the equal-width legends saved.
+- **Step 2: no ink keeps a figure text but its own double** (the owner's ruling: a translation in its right place is the goal,
+  not ink left untouched; ordinary text with ink about it is translated). A line or a shape about a figure text, an arrow across
+  it, a legend's sample beside it, an icon in its node keeps none; another text's glyph in its room neither: the second row of a
+  two-row label under its first ("LongBench v2" over "(thinking)", a subcaption's lines) is translated in its own place, as the
+  original's rows stand beside each other, where keeping it left the label half translated. A text drawn twice is kept the
+  original's: another unit of its page of the same string, its origin within the size of this one's (2610.21313v1's "Psum
+  Buffer" under a pale copy of itself, its "SAMA" three times, 2610.21924v1's "CONDITIONAL RESCUE" a bold by overprint), whose two
+  translations would be drawn over each other (the read of 20, 2026-11-11: both its faults were such copies). The reasons that
+  are not about ink stay: a line of formulas, F1's torn formula, code, a face of one pitch, born on arXiv's page, unlocated. The
+  text is laid in its own place, inside its container where the reading found one, within its own room otherwise. Turned texts
+  too: the line reading reads level lines, and a turned run today crowded (a y axis's title by its axis or its tick labels) is
+  laid as today's unit (2608.04322v1 20, 2610.21547v1 24, 2610.42112v1 70, 2608.27728v1 32). At 5249301f6 over the 91 the
+  reading kept 402 texts for ink in the open, 201 for ink inside their own path and 124 for another text's glyph
+  (`made.lines.kept`). Known and not fixed: a translation centred on the original's anchor can stand under an arrow's shaft whose
+  gap was cut for the Latin letters' ink, a CJK em taller (2610.21924v1 p5).
+- **What the engine cannot draw as it was set stays the original's** (`script`, the coordinator's ruling of 2026-11-11 on the
+  owner's principle that a garbled translation is never shown): a figure text holding a script among its own glyphs (smaller
+  than its row's text and off its baseline: today's one definition, ink-units.mjs scriptsOf, the row's text size its largest),
+  a note mark after a word aside (a raised ∗ † ‡ § ¶, or a number ending the row), or a spacing accent or a combining mark set
+  over another of its glyphs that TeX's \accent did not set over its letter (its elements' glyphs too), is kept as the original's
+  ink, as a formula line is. Translated, the first is drawn flat (2610.22214v1 p4's a_mn x_n = b_m drawn "amn xn = bm"), the
+  second apart from its base (2610.20947v1 p3's μ̂ drawn "^ μ"). Census over the 91 (offline, arXiv's glyphs): 14 texts in 9
+  papers drawn so before it, 5 of them freed by step 2. Its own glyphs alone: a neighbour's smaller text in its band is none.
+- **One family.** Two fonts are one family where their names, subset tag off, are equal before the first hyphen (DejaVuSans and
+  DejaVuSans-Oblique, NimbusRomNo9L-Regu and -Medi), or equal once PDF.js's own style words (its /bold/i, /italic|oblique/i,
+  /Black/) and the hyphens are taken out: ArialMT and Arial-BoldMT, TimesNewRomanPSMT and TimesNewRomanPS-ItalicMT; never ArialMT
+  and ArialNarrow-Bold. PDF.js states no family where the engine reads: the main thread gets a font's name and generic class, and
+  its weight and slant only for a font it could not load; its alias table is the worker's own; a descriptor's /FontFamily is
+  optional. A bold word in a row of ArialMT had cut the figure's run ("Open" | "the relevant") and made a row whose bold letters
+  outnumber the others read another face (2608.06701v1 p2's bubbles).
+- **An element's own box.** A rule or a frame inside an element's extent is the element's where its middle stands on the
+  element's line, inside the band its glyphs span about their baseline: a paragraph's frame round a citation on another line is
+  that citation's, however close the lines stand (2609.19644v1 p58, the same author cited on four lines, every frame taken by the
+  first citation and its crops drawn empty; p3's lines 1.6 pt apart). The test read the extent across alone since F0; no page
+  showed it before F3 put several lines in one text.
+- **Its ground.** Over the 91 papers the strong joins act on one: 2609.19644v1, whose included pages are another paper's running
+  text (18 pages of 12 lines of prose or more). The 88 hold five figure paragraphs, the same with or without the interline rule and
+  the natural spaces; on 19644 those two add 67 joins (34 need the interline rule, 44 the natural spaces), 40 of 40 read right.
+  No other paper of the corpus has included pages of running text: image grids' captions and flowcharts are the container step's
+  ground, and the fresh-paper sweep is where F3 meets new papers.
+
+### 18.37 A last line up to 1.5 pt under TeX's text block bottom, before a step down the sizes (2026-11-12)
+
+**The owner's ruling of 2026-11-12: on by default, with a switch.** Production borrows past TeX's text block bottom: on
+2602.23285v2-ja pages 4-5 and 9-10 and 2608.16117v1-de pages 23-25 and 28-29 a paragraph's last line stands 1 to 2.5 pt under it
+(12.1 pt, over the page number, on 2608.16117v1 page 23) and the paragraph keeps its size, where v2, holding TeX's bound
+(§18.11), set it a step smaller than the paragraphs around it (9.71 pt among 9.96, 10.46 among 11.96). The owner found the extra
+depth acceptable to his eye and had the borrow built as a switch of the test site's address (2026-11-11), looked at the pages
+both ways on staging (2608.16117v1-de pages 23-25 and 28-29, 2602.23285v2-ja pages 4-5 and 9-10, 2608.25210v2-zh page 2's
+footnote, 2610.21106v1-zh page 3's theorem, at 1.5 pt), and ruled it on by default. On the switch, his words:
+「「借行」可以默认开启 但是是不是留一个开关比较好。如果非常影响简洁性就不留了。」 (borrowing a line may be on by default, but a
+switch is perhaps better kept; if it costs much simplicity, not). It costs one option on the typesetter's call and one reading
+of the page's address, so it stays.
+
+- **The rule** (`fit/walk.ts` statesOf, `PAST_FOOT`, 1.5 pt): before each step down the fit's size ladder (the `shrink` knob),
+  at the size it would leave, one state more, the borrow's whole room and each block that ends a run of its lines
+  (`Room.runs`) holding the room under its last baseline down to TeX's text block bottom plus 1.5 pt, the next ink's bound as
+  it is (its baseline less `Room.sep`; `breaker/slots.mjs` roomOf). So at every size the unit is tried without that room
+  first, then with it, as production borrows and shrinks; never at the floor, the last size, where the knobs after the steps
+  (a Latin target's leading) come first, so that a unit the borrow keeps no larger never has a line under the bottom. A unit
+  that sets every token at such a state keeps on it only the depth its lines took under their blocks' bottoms, to the
+  hundredth (`layoutUnit2`), so that the page fill, laying it again at a looser leading, lays it no deeper; no other step
+  offers that room. A unit it does not set goes on down the steps as where no such room is. The adapter states the two
+  depths apart on every block that ends a run (`toFoot`, `toInk`: `Room.runs`' third, and its second less `Room.sep`), which
+  nothing but such a state reads.
+- **What the page states of it** (2026-11-12, lane gate-close): the Page member of a unit whose lines a state let past the
+  bottom carries `fit.over` (`types.ts` Laid, `lay/page.ts`): how far under TeX's text block bottom its lowest such line stands
+  as laid, to the hundredth up (`fit/walk.ts` depthUnder, the walk's own measure), absent where no line of it went past. The
+  state's own `over` is what it allows; this is where the lines went (after the page fill, which may lay them higher). Nothing
+  of the lay reads it; the display gate does (`lab/typeset/parity/fidelity.mjs` block: a line within the stated depth and the
+  bound, the next ink at TeX's separation, is the borrow, not a fault).
+- **Why 1.5 pt.** It is the bound the owner judged the pages at. The six units it keeps larger on the parity's pairs (below)
+  need 0.08 to 1.36 pt past the bottom while they are laid (2610.21106v1's theorem 0.08, 2608.25210v2's footnote 0.12,
+  2602.23285v2's unit 90 0.99 and unit 29 1.22, 2608.16117v1's unit 99 1.05 and unit 86 1.36: the last four the units
+  production keeps at their size with a line past the bottom). Every borrowed line's ink stays inside its class's
+  `\maxdepth`, the depth TeX itself lets a last line hang under the bottom (deepest 3.73 pt, 2608.16117v1 page 24, elsarticle at
+  12 pt's 6 pt; 3.27 pt on 2602.23285v2 page 4, article's 5), and 18 pt or more over a page number.
+- **The switch.** No control, no string, nothing stored. The reader takes the page's address's `axt-borrow` (`compose/typeset.ts`
+  pastFootOf), once a visit, on an http or https page alone (never on the extension's pages): `0` turns the borrow off; a number
+  above 0 and up to 6 (`PAST_FOOT_MAX`: a ceiling against a typo, the deepest `\maxdepth` of the classes measured, §18.11) is
+  its bound in points; no parameter, or anything else, leaves the rule's 1.5. `axt-borrow=0` turns off the fit's borrow; the
+  fill's foot step (§18.57) is not an option. It goes into the rules the visit lays with
+  (`Choices.pastFoot`, in `Rules.set` only where given). The lay is made in the browser at reading time and kept in memory
+  alone (the composer's maps; `typesetLay`'s rules by target and toggles, the bound fixed for the lay), so no stored layout,
+  row or key depends on it and no version names it: the bundle's tag (`b<BUNDLE>-j<PDFJS>-p<PIPELINE>-l<LAYOUT>-r<REMOVAL>`,
+  §18.4) names the format, PDF.js, the extraction, the layout maker and the removal, none of them the typesetter's lay, and a
+  drawing change that keeps every field's meaning bumps nothing (§18.3). The website keeps the parameter through its address
+  rewrite (its `canonical` deletes `paper`, `v` and `to` alone) and passes nothing of its own. The off state is held by one
+  test (`packages/reader/tests/typeset-engine.test.ts`: the address read, and a paragraph laid by it with the borrow and
+  without); the goldens, the replays, the display gate and the invariants run in the default state alone, and nothing gates
+  the off state beyond that test.
+- **Measured at B8** (8ca1dcd1b, the 22 parity pairs and their 344 pages, default toggles; the same at round 5), the borrow then
+  an option: six units are set larger and nothing else changes size: 2608.16117v1's unit 99 (pages 28-29, 10.46 to 11.06 pt,
+  ten lines on page 28 as production sets them, the tenth 1.05 pt under the bottom) and unit 86 (pages 23-25, 10.46 to 10.76
+  pt, page 24's last line 1.36 pt under it, production's line there; never production's line on page 23, 12.1 pt under the
+  bottom over the page number), 2602.23285v2's unit 90 (pages 9-10, 9.71 to 9.96, 0.99 pt) and unit 29 (pages 4-5, 0.55 pt; it
+  needs 1.22 pt while laid), 2608.25210v2's footnote 16 (page 2, 6.80 to 6.97, 0.12 pt: the two footnotes TeX set level in the
+  two columns stay level to the eye) and 2610.21106v1's theorem 16 (page 3, 11.66 to 11.96, 0.08 pt); three units on
+  2602.23285v2 page 5 take a fill leading 0.01 looser (1.05 to 1.06); no line moves between pages; the six new lines under the
+  bottom are all in units set larger, none in a unit that gains nothing. The fit tries 0.34 % more states over the parity's
+  whole lay (0.33 % with every toggle on). Staging drew 2608.16117v1-de's two units at the lab's sizes, 10.76 and 11.06 pt.
+- **Measured on by default** (round B13's inputs, r20, against B13's head 75602aecb). The reader gate over the tap's 123 pairs:
+  twelve units or runs are set larger and none smaller, by 0.17 to 0.99 pt (median 0.30): the six above, and 2610.20581v1-zh's
+  unit 140 (10.64 to 10.91), 2610.21026v1-zh's theorem 217 (8.97 to 9.96), 2610.21376v1-zh's unit 63 (9.71 to 9.96) and
+  2610.20595v1-zh's unit 63's run after its display (9.46 to 9.96; a unit split by its displays is laid a run at a time,
+  §18.7); German 2 (each also in the pack's pair), Japanese 2, Chinese 6. Its 12 lines past TeX's bottom (0.08 to 1.42 pt, none
+  before) are all in those units; 21 pages move, all theirs; the invariants as B13's (I3 the same 58 overlaps, I4 0, I5 the
+  same 2, I10 0), and the entry's comparison with the runner's lay, line for line. The display gate's 22 pairs, both toggle
+  states alike: the six units, 11 pages moved, 6 lines past the bottom. Pages worse than production: 42 to 46 by default, 49
+  to 53 with every toggle on, the same four pages in both, and none no longer worse. Two are the borrowed lines themselves,
+  which the gate's `block` measure reads as faults under its ruling of 2026-11-08 (nothing past TeX's bottom): 2608.25210v2's
+  footnote (0.12 pt) and 2610.21106v1's theorem (0.08 pt), where production borrows nothing. Two are 2608.16117v1's unit 86 on
+  pages 24 and 25, set 10.76 pt where production sets 11.06 and the original 11.96: nearer the original than at 10.46, but the
+  gate had excused the difference while production alone stood past TeX's room (its line on page 23 over the page number) and
+  now judges it as any size. The gate's rulings are its own to bring to this ruling; this section changes none of its
+  measures.
+- **Two shapes measured and not built.** Offering the borrow before the first step alone (round 5's L) buys the four units of
+  2602.23285v2, 2608.25210v2 and 2610.21106v1 (1.0 pt buys three, 0.5 pt two; 2.5 pt lays the 22 pairs as 1.5 does) and not
+  2608.16117v1's two, which need a borrow and a shrink, at 0.14 % more states. Spending the whole allowance (the fit's state
+  keeping the bound, not the depth it needed) buys the same units but lets the fill spread them to it: the 2608.25210v2
+  footnote 0.50 / 1.05 / 1.52 / 2.54 pt under the bottom at 0.5 / 1.0 / 1.5 / 2.5 pt, its two columns visibly uneven at 2.5.
+
+### 18.38 A face that fills a bibliography field travels as production sends it (2026-11-11)
+
+Today's wire (`mt.mjs` planOf) sends a `.bbl` field's pair as markers, a pair that sets more than a style, and a face group whose
+two ends stand at those markers is kept by its boundary rule, so production draws that face: `In \bibinfo{booktitle}{\emph{
+Proceedings of …}}`, and REVTeX's `\bibfield{journal}{\emph{\bibinfo{journal}{…}}\ }`. On the parity's pairs 86 of 86 such fields
+came back whole, 61 of them inside a clause. v2's markers wire sends `must` groups alone, and since §18.31 the field's pair is
+no group at all, so v2 drew those faces upright (round 8 B8's toggles-on sheet: 32 references of 2608.25210 and 2610.22065).
+
+- **The rule** (`instrument.mjs` fieldFacesOf): in a bibliography entry, a group that sets a face (italic, bold, small capitals;
+  a bare group a face switch opens), holds text of its own on the wire, and each of whose ends stands at the edge of a field
+  pair the instrument writes as its content (outside it or inside it, white space aside) is `must`; no reference is asked for
+  it. What production shows, nothing more: a face that fills no field stays upright on a markers wire, in production and in v2
+  alike; a face around a placeholder alone (REVTeX's `\textbf{\bibinfo{volume}{27}}`) goes as production sends it, one marker,
+  its number's ink its face. A reference for a bibliography's entries was weighed and not taken: on two Japanese pairs it
+  placed 41 of 94 venues and left 46 upright (a field worded otherwise inside its entry), for 1.3 % more characters.
+- **Measured** over the 88 against round 8 B8: 186 units in 8 papers gain `must` on one group each and nothing else (`\emph`
+  171, `\textit` 6, `\textbf` 9: volume labels such as "A349"); no unit's id moves (the flag enters none), every dump the same,
+  the differential's lost round 14's 11. Of the 186, today's own plan sends 115 of those it holds and 64 of 64 of 2402.10294v1's
+  (no stored rows) as pairs; 11 stand inside REVTeX's `\href@noop` (§18.33), drawn as the original's ink before: the part the
+  stored rows do not cover, read on the page after a fill, every pair back whole on the right words. The 186's markers wires
+  grow from 44,246 to 45,690 characters. Left upright, with today's other rules: five venues of 2610.10069 whose open stood at
+  `\enquote`'s kept pair (§18.32 writes it as marks): for the tags wire's list.
+
+### 18.39 A theorem head is named from its parts as TeX set them (2026-11-11)
+
+The owner's batch 6 (2610.21312v1 p5 and p6): "Corollary VI.2", "Proposition VI.3", "Proposition VII.1" stayed the original's,
+where "Proposition V.2" two pages before was drawn in the target's word. The paper is IEEEtran with amsthm's
+`\newtheorem{theorem}{Theorem}[section]`: the counter is `\Roman{section}.\arabic{theorem}`. The engine read a head's parts by
+its glyphs' classes, one capital before a number's first dot and no more, so "Corollary VI.2 (" was name "CorollaryVI." and
+number "2"; and the typesetter joined the parts and read them again with today's pattern (tex-names.mjs headInTarget), which
+takes one capital before ".n" ("V.2") and a roman numeral with nothing after it: "VI.2" was neither, and nothing was drawn.
+
+- **The parts** (`packages/engine` locate/facts.ts `labelParts`). A head's number is the word after its label's last word
+  space, where that word is a number as LaTeX prints a counter (a digit in it, a roman numeral, a letter alone), as a float's
+  number is the word after its tie (\fnum@): amsthm sets `\thmname{#1}\thmnumber{ #2}`, a space between. From its first digit
+  or letter (a bracket before it is neither part's, "Eq. (3)"); where no such word stands, the digits at its end as before
+  ("Fig.S1"). Its name is the glyphs before, read as letters (Unicode's compatibility form: a ligature's glyph its letters,
+  2610.21765v1's "Deﬁnition" given as U+FB01, which no head name holds) with a space where TeX set its glue ("Key Lemma").
+- **The relabel** (`packages/typeset` unit/label.ts `headLabelInTarget`). The target's word for `Label.name` (the rules' head
+  names, else the paper's own name unit's), then `Label.num` and `Label.punct` as TeX printed them, a space before the
+  punctuation where it stands a fifth of its size apart. Today's pattern is gone. Only where the parts hold the label's every
+  glyph, the name first (`whole`, as a float's label): a swapped head (`\swapnumbers`, "3.2 Theorem"), or one with glyphs no
+  part holds, keeps the original's rather than lose its number.
+- **Every glyph in a part** (Codex on round 8's pull request; `labelParts`, `Label.unheld`, lay/read.ts `partsHold`). A number
+  TeX printed in brackets is the number's word with its bracket ("Figure (1).": number "(1", marks ")."), where this rule first
+  read the bracket as neither part's, and a relabel drew "Abbildung 1).", "Satz 1)."; at B8, before this rule, the float
+  reading kept the bracket and the head's pattern refused the tail. And a named label whose parts leave a glyph of it out says
+  how many (`unheld`: a bracket before its name, a note it holds whole, a bar after its number), and no reader draws it anew:
+  the reading's `whole` read only the parts' outer ends, so a glyph left out between them passed ("Theorem 2 (Main result)."
+  held whole drew "Satz )."). Over the 88 no label has a bracketed number after a name, and none was drawn wrong: of the 74
+  named labels whose parts leave a glyph out (45 list items "(ii)", 29 captions "Figure N |" of 2609.26457v1 and 2610.21085v1),
+  every one was the original's already, its ends unheld.
+- **Over the 88** (r14's parts, every member of kind theorem or heading whose label begins with a name the paper declares or
+  the zh table holds; rootcause/batch6.md): 566 heads in 34 papers; relabelled before 522, after 530 (stage 1a f12 against r14: exactly these 8 heads change their relabel, every other drawn alike): the 5 of 2610.21312v1 and
+  the 3 of 2610.21765v1 (which today's production draws: its characters spell "Definition"). Not by this rule: 2610.21026v1's
+  seven "Assumption" (`\newtheorem{assumption}{\protect\assumptionname}`: a name printed through a macro is no name unit of the
+  paper's, and the table has none). The same reading moves 24 other labels'
+  parts, no relabel: ten run-in paragraph labels now read with their space ("Index Terms", SIAM's "Key words"), and fourteen
+  appendix headings' "Appendix A" now name and letter (2610.21201v1, 2610.30875v1), which no table names either way.
+- **A proof's head of the class's own** (`unit/label.ts headLabelInTarget`, 2026-11-11). SIAM's classes (siamart251216,
+  siamonline250211) set a proof's head through ntheorem, `\newtheorem{proof}{Proof}`, italic in the class's blue with its stop:
+  the part states "Proof." as the proof unit's label, as it states "Proposition 7.2." before it. The port of production's rule
+  refused a head that is a babel name whole as the names path's (L2:1274, 1d5cbe1ae: amsthm's `\proofname`, whose name group
+  a label's drawing never hid in production), and no names path holds this one, TeX never setting `\proofname` there: the 29
+  heads of 2610.20266v1 (11) and 2610.20285v1 (18) stayed English, in v2 and in production, in front of translated proofs
+  beside relabelled theorems, against §19.11 (a proof's name in the target's words) and the owner's one label form per paper.
+  In the typesetter a label's glyphs are its own (a babel name the names path draws is a member of its own: amsthm's
+  "Proof." and IEEEtran's "Proof:" are, drawn in the target's word on both panes), so the refusal guards nothing and goes: the
+  29 are named as any head (ctex's word with the stop in Chinese, "Beweis." in German), every other of the 566 drawn as before. A proof with an
+  optional argument (`\begin{proof}[Proof of Lemma 3.1]`, 2610.20266v1's 6) prints the argument in the name's place, in SIAM's
+  class and in amsthm alike: the head is the author's text, a heading unit the translator translates, with no name to relabel.
+- **IEEEtran's proof name** (`layout/marks.mjs` `CLASS_NAMES`, `classNamesTex`; `pipeline/live.mjs`, 2026-11-11). IEEEtran's
+  `\IEEEproof` sets "Proof:" through `\IEEEproofname`, the class's own name for a proof (`\@IEEEproof[\IEEEproofname]`), which
+  the names' wrapper did not know: it wraps babel's `\proofname` and a literal in a construct's definition (ieeecolor's
+  `\def\proof{… Proof: }`, 2610.30034v1, drawn in the target on both panes). 2610.21504v1 p4's "Proof:" was read as its
+  paragraph's number label, English on both panes. A class's own macro for a babel name's text is wrapped as babel's is (the
+  same key: the target's word, the probe's case answer), on the head's own line of the layout compile and the mark probe, only
+  where the paper's files call its construct outside a comment and babel's own macro is undefined (one key, one macro), so that
+  no other paper's bytes move. Over the 88 one paper calls `\begin{IEEEproof}`, once: its compiles move (3 made), every other
+  paper's are read from the caches (stage 1a f15: 88 made, 0 missing); 2610.21504v1 alone moves, its "Proof" a name of its own
+  before the paragraph, the paragraph's label the joint ":", as 2610.30034v1's; v2 draws the target's word and colon.
+
+### 18.40 etoolbox's conditionals are read as TeX's own (2026-11-11)
+
+The owner's batch 6 (2608.25210v2 p1): VLDB's "PVLDB Artifact Availability: …" paragraph stayed English. It is the false
+branch of `\ifdefempty{\vldbavailabilityurl}{}{…}`, and the role table did not know etoolbox's conditionals: the call was one
+placeholder, its branch of words no unit, and its glyphs fell to the unit before's last placeholder, an opening point read to
+the next point (own.mjs MR 4), the next unit's start, across TeX's paragraph end.
+
+- **The rule** (rules/arg-roles.mjs, source/latex-front.mjs `BRACE_CONDITIONALS`). etoolbox's `\ifdefempty`, `\ifdefvoid`,
+  `\ifdef`, `\ifundef`, `\ifdefstring`, `\ifcsdef`, `\ifcsundef`, `\ifcsempty`, `\ifcsvoid`, `\ifbool`, `\iftoggle`,
+  `\ifstrequal`, `\ifstrempty`, `\ifblank`, `\notblank` and ifthen's `\ifthenelse` take their branches as a macro's
+  arguments, no `\fi`. The role table states their test (a control sequence, a name, or code) and their two branches (the content
+  TeX sets one of). The walk reads the branches in a dry run as it reads TeX's own conditionals' (S4, `probeConditional`): the one
+  branch that holds words is walked alone, the call's source and its other branch kept with its pair's open or close (walked
+  both, an empty first branch's pair ended the unit's head between two of the command's arguments, and no start mark was
+  written); both of words, neither is the translator's, the call one placeholder (`ifUnknown`); neither, one placeholder as
+  before. Nothing is decided before the compile: a branch TeX does not set has no ink and stays as it is.
+- **Over the 88** (sources' calls in the document's text): `\ifdefempty` 1 (2608.25210v2), `\iftoggle` 1 (2610.37818v1's
+  acknowledgements, translated today as the ledger's ink units of orphan lines, now a heading and a paragraph of the source);
+  no other form with words in any paper's text; `\IfFileExists` (13 calls, 5 papers) was the role table's already. Two papers'
+  marked sources move.
+- **TeX's grouping draws as nothing** (layer-proto/layer1.mjs `ZERO`). The paragraph ends `\url{…}.\endgroup`, the
+  `\endgroup`'s opening point after the unit's end mark; its range to the next point, the INTRODUCTION heading's start, holds that
+  heading's number, so no reading stated that it set nothing, and as a paper's macro of unknown ink (`umacro`) whose ink was not
+  found it left the unit unproven: the original's whatever its row (a stand-in row, laid offline: unproven). `\begingroup`,
+  `\endgroup`, `\bgroup` and `\egroup` open or close a group and set no ink, so they are drawn as nothing, as a size switch is;
+  the marking is unchanged. With it the paragraph is laid (the stand-in row: three lines) and its address's link moves with its
+  URL element, as on arXiv's page. Over the 88: 8 such elements in 5 papers move from `umacro` to `zero`, parts alone; one other
+  unit was unproven the same way, 2610.20266v1's theorem 102 (`\begingroup`).
+
+### 18.41 An opening point reads past an earlier unit's marks set again inside its ink (2026-11-11)
+
+The owner's batch 6 (2608.25210v2 p1): VLDB's "PVLDB Reference Format: …" paragraph was no unit. Its `\vldbauthors` and
+`\vldbtitle` hold the title's and the authors' arguments, which acmart keeps with their marks (`\shorttitle`, `\authors`), so TeX
+sets those units' marks a second time inside the paragraph (MR 3's later occurrence). `\vldbtitle`'s opening point read to its
+next point, the title's start mark set again, and owned nothing; the title's glyphs fell to the paragraph's text, more letters
+than its source writes.
+
+- **The rule** (layout/stream.mjs `alone`, `earlierUnit`). An opening point alone whose next points in its region, right after
+  it with none of its ink before them, are marks of units numbered before its own (the source sets its units in order, so after
+  a piece of unit `n` such a mark is that unit's text set again, never the next unit's) reads past them, its ink running to
+  where the text after it begins; where that text is not found before the next point of another kind, or where its own ink
+  stands before those marks (nothing then tells them its ink's), as before. A piece with no text after it, or blocked by an
+  unmarked piece, is read as before.
+- **Over the 88, with marks-2's point before a forced break** (§18.34; stage 1a with the rule and with its two commits reverted,
+  and a census wrapping ownedOf to read every call both ways): one placeholder's owned ink changes, 2608.25210v2's p9.13a
+  (`\vldbtitle`, 55 glyphs where it owned none), and no output moves (0 of 88). The paragraph stays refused as production
+  refuses it ("text past its source"): `\vldbauthors` still writes no point, the mark probe asking its ink in the preamble,
+  where acmart's `\authors` is empty until `\maketitle` fills it, so that it is answered inkless and never marked (its own
+  item); the names' glyphs are then the paragraph's text.
+
+### 18.42 A group's own text placed at every occurrence, its end mark by its class (2026-11-11)
+
+The owner's report (2602.23285v2 zh, pages 2 and 9, staging and production alike): "RQ2" and "RQ3", each set bold twice in one
+paragraph ("**RQ2** concerns …", "… ready to answer **RQ2**, …"), came back regular, and so did "**RQ1.**" where the reply wrote
+"RQ1" and an ideographic full stop (U+3002). The markers wire sends neither group (not `must`: neither starts and ends a sentence, `run-ins.ts`), and the chain's
+literal put-back (`packages/translate` `groups.ts` placeGroups, DESIGN §16) placed a group only where the source held its text
+once and the reply held it once; NFKC does not make "." the ideographic full stop. Production's wire moves such pairs to the reply's end, empty, and
+has no put-back: it lost them too (lane bold-spans).
+
+- **The rule** (`groups.ts` placeGroups, placeBy). Where the source holds a group's text in the group's place (the group the
+  reply holds around it, nearest, else the unit) only as groups of the group's style, n of them, and the reply holds that text
+  in the place exactly n times, each occurrence is a group's: one inside a copy of one of them the reply brought back is that
+  one's, and the others, each a text of the place itself, go to the groups the reply did not bring back, in order (the n
+  groups are alike: one style, one text, so no order of the translator's is assumed). Today's rule is its n = 1. A group whose
+  text ends in an end mark (a run of Unicode's Terminal_Punctuation, the class a group's `stop` is read in, `marks/faces.ts`;
+  white space aside) is matched as its words followed right away by a run of that class, whatever its code points, and the
+  place takes the run inside the group as the source has it: "RQ1." is the reply's "RQ1" with an ideographic full stop or "RQ1."; a group "RQ1" before
+  the source's "." keeps the reply's stop outside, as before. Not placed: the counts differ (Microsoft's ja reply dropped
+  "We are ready to answer RQ2": one RQ2 for two), the source holds the text outside such groups too or in a group of another
+  style, an occurrence stands inside another group, or the words come back with no end mark after them.
+- **What moves.** What a stored reply becomes, never what is sent: `CHAIN_RULES` `groups` -> `groups/2` (`chain.ts`), so every
+  row is read again from the stored replies (the store key is the wire's bytes), and no translator is asked anything.
+- **Measured** (offline, the base's placeGroups against this one; scratch `span-putback/stored.mjs`, `fresh.mjs`). The 22 parity
+  pairs' stored rows as the parity reads them (r17's bundles, 4,645 rows): 136 groups placed before, 154 now; 18 gained in 6
+  units of 4 pairs, none lost, none placed otherwise (2610.17024v1-zh 11: "E1" ×2, "E5" ×3, small capitals "proxsuite" and
+  "qpsolvers" ×2 each, "betadiff" ×2; 2602.23285v2-ja 3: "RQ1" with its ideographic full stop, "RQ3" ×2; 2610.40645v1-ja "(i)" ×2; 2608.16117v1-de
+  "a priori" ×2). The chain replayed over the fresh rows' cache for every unit of the 22 pairs (5,634 rows): 1,123 -> 1,141,
+  the same 18, none lost. Staging's zh rows of 2602.23285v2: "RQ1" with its ideographic full stop, "RQ2" ×2, "RQ3" ×2 placed, the owner's cases.
+- **Not this rule's**: a group whose words were translated, "first", "Second", "Third" of the same paper (one word, no
+  reference translation is asked for one word, DESIGN §16; a marker pair around a translated word was measured harmful: the
+  word came back untranslated or in the wrong sense, lane bold-spans' probe), and a phrase whose reference the reply does not
+  state.
+
+§18.43 is not used: it was held for lane span-putback's item 2 (the word tied to a reference read past a silent element,
+`names.ts`), which the owner's ruling of 2026-11-11 cancelled before anything of it was built.
+
+### 18.44 A run-in label after a forced break begins its line past the elements between (2026-11-11)
+
+2602.23285v2's contributions list (staging, zh and production alike): "(i) *Effective spatiotemporal modeling for ODE
+initialization.*" kept its italic, `\\ $(ii)$ \textit{Accurate trajectory modeling.}` came back upright. The run-in rule
+(`packages/engine` `marks/run-ins.ts`) keeps a style group whose two ends stand where the endpoint's sentence is cut anyway; a
+group at the unit's head begins its sentence (the unit's first word, past any element), and one right after a forced break
+begins its line. The second label stood after the break and then the list's mark, a formula, so the solid character before it
+was the formula's, not the break's: no rule read it as beginning a line, and on the markers wire its group went on no wire.
+
+- **The rule** (`run-ins.ts` `lineBeforeAt`). The place before a group is read past white space and the elements that are no
+  break, as `head` reads the unit's first word past its elements: a forced break so reached stands right before the group, for
+  every rule that reads one there (the boundary rule's start, a colon label after a break, and the line end such a break
+  states for it, the run-in rule's header). A word between the break and the group still ends the line's beginning.
+- **Measured** over r17's 88 bundles (every unit's content run through the rule as it stood and as it is, the same input to
+  both; scratch `span-putback/runin/count.mts`): 2 groups gain `must`, both run-in labels after a list's mark ("Accurate
+  trajectory modeling.", 2602.23285v2; "Q2 (Empirical).", 2610.21924v1); no forced break's stop moves. Stage 1a over the two
+  papers (r17's compiles): those two spans gain `must`, nothing else of either bundle moves (no id, no part); the differential
+  against B9's acceptance list reads exactly B9's (lost 11, gained 5,342, changed 5,157). `must` enters no id: the two units
+  keep their rows' ids and are sent again, their wires each a marker pair more.
+- **Not built: a label after a colon** ("… research questions: **RQ1.** Does …", its siblings after "?" kept). Read as a
+  sentence's start, a colon would add 91 groups in 17 papers, most no label: a bibliography's venue after "In:", a DOI after
+  "doi:", a title after "Source paper:", a whole question set in italics after "a question arises:", a figure's value after
+  its label ("Students: 29,241"). The coordinator's word is asked first (lane span-putback).
+
+### 18.45 The float lines: a float's line no unit owns, stated and counted (2026-11-11)
+
+The ledger (the engine's copy, `packages/engine/src/locate/today/ledger.mjs`) reads a line of TeX's own text inside a counted
+float that no unit owns as its float's text, the class `figures`, by its depth alone (RULES' last `figures`), before it could be an
+orphan: a line the reader should have read and did not was seen nowhere. Over the lab's 88 papers (r17) that is 787 lines in 32
+papers: algorithm listings (kept as the original's on purpose, the owner's ruling of 2026-11-08), tables read with no cell (a
+tabular inside a command whose argument the front end does not walk: a paper's own wrapper, a `\centerline`, §18.46), a cell
+table's text no cell owns (a row label, a whole row, an identifier cell kept by its rule, §18.25), sub-captions of a package not
+read. The coordinator's ruling of 2026-11-11: these lines are not gated as orphans (most are kept by decision); they are stated
+and counted, so that a miss is seen.
+
+- **The statement** (ADDED to the ledger; no class moves). Each line the depth rule reads is stated (`floatLines`, listed as the
+  orphans are, at most `ORPHAN_LINES_MAX`; `floatCount`, every one): its page; its float, the bracket `fs<n>` innermost open at its
+  first glyph, read in stream order as the depth is (a float of no counter passed over, §18.34); that float's caption type
+  (InstrumentUnit's `float`), of the caption whose start mark stands inside the bracket, else of the one TeX set against it with
+  no glyph between (float.sty's styles set a float's caption around the box `\@endfloatbox` made, which the bracket wraps:
+  ruled's above it, plain's below); its text's characters, letters and words of three letters; its box (x0, x1, baseline,
+  size); and why no unit owns it, as far as the ledger knows: `code` (a glyph of it TeX set in a code region, or its float an
+  algorithm's, the front end's `algorithm` float, whose body it keeps), `cells` (its float holds a cell, none of which owns it),
+  `nocells` (its float a table's that holds no cell), `other` (the rest).
+- **Where it goes.** Beside the units, never into them: locate's `Located.floatLines`, and `InkStats.ledger`
+  (`stats.made.ledger`): `{ orphanLetters, floatLines, floatLetters, floatWhy }`, where `orphanLetters` are the letters of the
+  orphan lines no ink unit owns once the ink units own theirs (invariant (o), today's `wrapFinal` `inkLeft`). The rebuild's
+  stage 1a carried no orphan count before; the lab's (o) check, `lab/pdf/spikes/ledger.mjs`, runs today's engine over the gate
+  pack's final passes and still covers that engine alone. Nothing of either reaches the bundle, a part, a row or the wire. Stage 1a
+  (`lab/pdf/prepare-back/run.mjs`) writes the counts in its summary line and its located file (`stats.made.ledger`, new) and the
+  listed lines there (`floatLines`, new: a paper's words, the lab's data alone); `lab/pdf/prepare-back/float-lines.mjs <run>`
+  reports them per paper and in total beside the orphan letters, against a baseline of counts (`--baseline`;
+  `lab/pdf/records/float-lines.json`, r17's, remade at round B10's r18: 778 lines, the sub-captions and the `\centerline` table read: counts and kinds only, never a line's text). A report, not a gate.
+- **Over the 88** (stage 1a at this change, over r17's compiles): every bundle object and every prepare dump byte-identical to
+  r17's (2,707 of 2,707 objects, 88 of 88 dumps); the located files equal but for the two new fields and their timings. Float
+  lines 787 in 32 papers (11,820 letters): `code` 187 in 13 papers (the listings of algorithm floats), `cells` 258
+  in 21, `nocells` 326 in 2 (2610.37668v1's 317, every table inside the paper's `\fittabular`; 2608.06701v1's 9, a table inside
+  `\centerline`), `other` 16 (subfigure.sty's sub-captions, 6, which the subcaption lane reads; 9 lines of 2608.25210v2's
+  algorithm2e floats, whose captions are no unit, so nothing tells the float an algorithm's; one "Else:" in a figure of
+  2610.21765v1). Orphan letters 388 in 11 papers. The added work: one pass over a page's points and glyphs where a line is a
+  float line (`floatsOf`), and `inkLeft` over the orphan lines once.
+
+### 18.46 Plain TeX's line boxes set their argument: `\centerline`, `\leftline`, `\rightline` (2026-11-11)
+
+LaTeX keeps plain TeX's line boxes (ltplain.dtx): `\line` is `\hb@xt@\hsize`, `\centerline#1` is `\line{\hss#1\hss}`,
+`\leftline#1` `\line{#1\hss}`, `\rightline#1` `\line{\hss#1}`. Their argument is what the page shows, a box's content as
+`\mbox`'s is. The role table had LaTeXML's prototype, an untyped argument (`{a`), which the walk does not walk: outside an author
+block (where §19.13's FRONT_BOXES reads a `\centerline` row) a call was one placeholder, and a table set inside one no cell and no
+unit. 2608.06701v1 p8: Table 4 is `\centerline{\small\begin{tabular}…}` in its float, every cell English whatever the tables
+toggle, its nine lines the ledger's float lines of a table with no cell (§18.45).
+
+- **The rule** (`rules/arg-roles.mjs` CURATED, `source/latex-front.mjs` CONTENT_BOX and LINE_BOXES). The three are of `\mbox`'s
+  kind: their argument content (`{c`), walked as a box's (a pair in the paragraph it stands in; a table or a paragraph inside it
+  read as such). `\line` is no `\leavevmode`: met where no unit is open, TeX in vertical mode, the box is a line of its own and
+  the text after it begins another unit.
+- **What stays.** PIPELINE 29's walk (`olderUnits`' shadow, `boxesUnread`), by which the units an author block is cut into are
+  numbered after the others, reads the three as one placeholder still, as that walk did: else the rows' units are no longer
+  `later`, and the units after the block are numbered again (measured: 2010.11929v2's body paragraphs and footnote moved behind
+  its rows; `author-places.test.ts` and the unit cut's `authors-box` fail without it). The author block's own reading
+  (FRONT_BOXES) is unchanged.
+- **Not fixed.** The walk does not follow TeX's mode: a unit opened by placeholders alone (a `\centering`, a `\setlength`) reads a
+  box after it as inline, and text right after the box, with no blank line between, as the same unit, where TeX begins a
+  paragraph after the box. No such call in the 88. A paper's own wrapper around a tabular (2610.37668v1's
+  `\newcommand{\fittabular}[3][\maxdimen]{…}`, whose body sets its third argument into a box register twice with `\sbox` and
+  shows it once with `\usebox` inside `\resizebox` or `\makebox`) is no line box: the front end reads the paper's definitions
+  (`paperMacros`: each parameter's use by the role table, `paramUse`), but follows no parameter through a box register, so the
+  argument is no text and the call one placeholder. Reading it needs a definition reading of box registers (a parameter set into a
+  register the body then shows is content, set where the register is shown), a lane of its own.
+- **Over the 88** (the front end over every source, with the walk's every line-box call logged): 7 calls met, 6 of them
+  2010.11929v2's author block rows (read before, unchanged: 362 units, the same texts and places) and 1 2608.06701v1's table;
+  0 `\leftline` or `\rightline`; the other 39 `\centerline`s of the sources are in class and style definitions, a template no
+  file inputs or comments. 2608.06701v1: 329 units to 339, 10 cells new (Table 4's header: "Dataset", "Method", "R→U ↓", "U→R ↑"
+  and DS, GF, MM twice), none lost or changed; its body rows' method and dataset cells are the paper's macros and its numbers no
+  unit, as in its other tables. Stage 1a over r17's compiles and the two made for 2608.06701v1 (its marked compile's request
+  moves; final, not refused): 2010.11929v2's bundle and dump byte-identical to r17's; 2608.06701v1 10 units gained, all drawn,
+  none lost or changed (the twin: 42 of 42 objects, 2 of 2 dumps). Against the baseline (the 86 others r17's): lost 11 as before,
+  gained 5,342 to 5,352, changed 5,157 as before. Its float lines 63 to 60: the nine of a table with no cell gone (three now its
+  cells', six its body rows' macros and numbers, `cells`); over the 88, 787 to 784, `nocells` 326 to 317 (2610.37668v1's alone).
+  The parity (gate mode, both modes, 2608.06701v1-zh): the same worse pages as before (8 by default, 9 with every toggle on),
+  none newly worse and no worse difference come or gone; Table 4's header drawn translated, its cells' centring nearer the
+  original's than today's.
+
+### 18.47 A group that cuts a word is offered to no translator (the owner's ruling, 2026-11-12)
+
+The owner's report (2111.09276v1 p1 on staging, Google first): `called \textbf{I}nduce, \textbf{E}dit, \textbf{R}etrieve (IER)`.
+The unit carried a bold group round each initial, the tags wire offered each as a pair (`called <t id="1">I</t>nduce, …`), and
+Google translated the fragments: "I" as the pronoun 我, "dit" as 迪特, "R" as 拉, drawn with 我, E and 拉 bold. Our wire cut the
+words; the translator translated what it was given.
+
+- **The ruling** (the owner's, asked which is best: the whole translated word bold, or no style). A style group says
+  something about a stretch of meaning, and crosses a translation only where it is made of whole words. A group with an edge
+  inside a word describes the source word's spelling (an acronym's initials, a drop cap, a stressed syllable), and spelling has
+  no counterpart in the target: the group is offered to no translator, the word travels whole and plain, and the translated
+  word carries no style from it. Not widened to the whole word: that would state an emphasis the author did not make (three bold
+  words; a bold article for a drop cap). Correct words come before style.
+- **The rule** (`packages/translate` `words.ts` wholeWordsOf, applied once by the chain before anything reads the unit:
+  `chain.ts` settle, and rowContextOf, which keys a row's context by the unit as it is sent). A group that is not `must`, whose
+  start or end in the unit's projection stands strictly inside a word-like segment of it, is unwrapped: its words become its
+  parent's, its head (the elements before its first word, a declaration's place) stays in a copy of it holding the head alone,
+  as every wire already brings a head back (`{\bf B}olt-on`'s `\bf`, loose, would hold past the group), and its `stop` (TeX's
+  punctuation at its end) is written after its words, a row's sentences mapped back into the unit's own projection. Every wire
+  writes the unit so (the tags wire, the markers wire, the runs floor) and every reading reads the reply against it (the
+  acceptance rule, the literal put-back of §18.42, the references): one decision, before the wires, none per wire. The unit,
+  its id and its original do not change. A unit with no letter is sent nothing and keeps its groups.
+- **A word** is Unicode's (UAX #29) as the runtime gives it: `Intl.Segmenter` of the language every translator translates
+  from (SOURCE, `en`), granularity `word`, a segment it marks `isWordLike` (letters, digits, ideographs; ICU cuts a CJK run into
+  dictionary words in any locale); an element is U+FFFC there, a letter of no word; an edge where TeX sets a group's stop stands
+  on that punctuation. It is the platform's one definition for every script, in every place the chain runs (the Worker, the
+  extension's background, the lab), and it is what the put-back already matches words by. So `\textit{n}-gram` (a hyphen is a
+  boundary), `\textbf{RQ1}:` and `\textbf{Step 1}.` keep their groups, a group of whole words travels as before, and a group of
+  a whole Chinese word keeps its group (我们提出了**一种**新方法). A group with one edge inside a word and the other on a boundary
+  is a cut word too (`\textbf{pre}training`).
+- **What the rule leaves.** A `must` group, which its host states comes back exactly once: a link (it carries an address; the
+  corpus's 1,079 links are all `must`), a run-in label, and every pair of the HTML page, whose protector states each tag pair
+  (a `<b>`, a `<sub>`, a `<sup>`, an `<a>`) as a `must` group of no style (`src/core/protector/units.ts`), so the HTML page is
+  as before. The PDF's sub- and superscripts are elements, never groups (`$_2$`, `$^{1}$`, `\textsuperscript{th}`: 399
+  formulas that open with a script and 90 `\textsuperscript` in the 88, a formula or a macro whose ink is the original's, and
+  no `\textsubscript`), and a group carries a face and a colour into a
+  translation, no position (`locate/group-style.ts`, SpanAt): the PDF's 5 `\raisebox` groups cut no word. Two `must` groups of
+  the 88 cut a word and stay as they were: 2307.16209v1's run-in "**Keywords**:Linear perturbations" (no space after the colon,
+  and UAX #29 joins letters across a colon: "Keywords:Linear" is one word) and the italic "z" of 2610.20808v1's figure text
+  "zBF16(x)".
+- **Measured** over r18's 88 bundles (every unit that is not kept, as the chain is given it; scratch `word-spans/census.mts`,
+  `measure.mts`): 15,408 groups in 31,297 units, 2,961 `must`; 47 withheld (0.31 %), in 17 units of 13 papers; 15,361 kept.
+  By kind: an acronym spelled out by its initials 30 (1810.04805v2's "**B**idirectional **E**ncoder **R**epresentations from
+  **T**ransformers", twice; 2610.40394v1's TOME, 2610.22065v1's ABNAT, 2610.40576v1's PIVOT, "Inter**v**ention" among them;
+  2608.25210v2's `{\bf B}olt-on {\bf L}LM ver{\bf I}fiable {\bf P}rovenance`); a stressed syllable 1 (2610.17024v1's
+  `{\em sub}gradient`); a small capital inside a classification code 4 (2610.21377v1's `49\textsc{k}20`: the code goes plain,
+  its letter in lower case where the translator keeps it); a run of another face inside a figure's token 12 in 7 papers ("ξgw",
+  "McBS", "zNF4", "tt11", "Σα", "ug", "vg": a figure's text that comes back as it went keeps the original's ink). The tags
+  wire moves in those 17 units (8,114 characters to 7,438); the markers wire in none, since such a group already went on no
+  wire there, and the put-back no longer sets one round a letter the reply holds alone. The rule costs 6.5 µs a unit. The
+  parity's inputs (`lab/typeset/parity/rows.mjs` and `fresh.mjs` read and count against the unit as the chain sends it): the
+  22 pairs' stored rows as the parity reads them, 4,645 rows of r18's bundles, read the same before and after (5 of them rows
+  of units with a group withheld: 1810.04805v2 ×2, 2608.25210v2, 2610.17024v1, 2610.22065v1), and the fresh rows' cache, the
+  5 Microsoft replies of such units, read the same: the sheet's inputs do not move.
+- **What moves.** `CHAIN_RULES` gains `words` (`chain.ts`): the chain's identity moves, every row is made again, every stored
+  reply whose wire did not move answers (all of Microsoft's), and the 17 units' tags wires are new keys, asked again. No unit
+  changes (not `PIPELINE_VERSION`), and the engine's own wire is not touched (not `TRANSLATE_VERSION`).
+- **Not this rule's.** Production's wire (`translate/mt.mjs` classOf) keeps every pair with text on its tags wire, so Google
+  behind production would cut the same words; Microsoft, production's first, sends such a pair on no wire (`flat`).
+
+### 18.48 A full-width mark's blank half is its face's, and the drawing is what the layout measured (2026-11-12)
+
+The owner's report on staging (2611.03953v2 page 13, the right pane, engine cb9f49fca): in Traditional Chinese the sentence's
+full stop stood in three places in one paragraph (one low and tight after the text, one low, one in the middle of its box); in
+Japanese the colon of "粒度：144" and "粒度：4" stood on the digits after it; in Korean the colon of "세분화: 144" touched the word
+before it. Three causes, each measured in Chromium on the faces the website serves (the same files, by their SHA-256), the
+lane's record `lanes/cjk-punct.md`:
+
+- **The half box was a class by character.** A mark's blank half came from a table (`breaker/script.ts` `PUNCT_CLOSE` and
+  `PUNCT_OPEN`: "close where its ink stands in its em's first half"), switched off for one language (the rule set's
+  `centredPunct`, Traditional Chinese), with a second list for the squeeze (`breaker/break.mjs` `SQUEEZE_MARKS`, the colon,
+  semicolon and the marks of exclamation and question left out of it, not out of the compression). The faces disagree with the
+  table: Harano Aji Mincho and Source Han Serif K draw ：；！？ in the middle of the em (the colon's ink 0.434 to 0.566 em), Source
+  Han Serif TC draws 、。，．：；！ in the middle too, its brackets one-sided. A crowded paragraph compresses every mark
+  (`compressMax` 2, the fit's first step): the colon lost half its em, and its ink stood 0.07 em into the next box, under the
+  digits' (the reader's check, Japanese: 34 marks on a neighbour's ink, up to 1.83 pt).
+- **The drawing took the interface's language.** The overlay's SVG carried no `lang` (today's engine set the target's,
+  `layer-proto/reader.mjs` `fresh`), so it took the page's, the interface's (zh-CN on that visit). The served faces keep `locl`
+  (the website's subsetter keeps the feature), and Source Han Serif TC's `locl` for Simplified Chinese swaps 、。，．：；！？ for
+  Simplified's glyphs (the full stop's ink at 0.04 to 0.33 em, on the baseline) in a run whose script is Han, Latin, kana or
+  Hangul, and not in a run of digits and marks alone, which the font's default script holds no `locl` for: the full stop after
+  "一分" and after "相對…）" Simplified's, low, the one on the line "4）。" the face's own, in the middle. Neither the browser's
+  punctuation trimming (`text-spacing-trim`, already `space-all`) nor a character's own place moved it.
+- **The drawing dropped two of the layout's numbers.** The painter drew a run at its line's size (`emit/display.ts`), where the
+  layout measured it in its face string with the face's size correction (Source Han Serif K 0.959), and drew no tracking, which
+  the layout set after each character of a run of one place (a Korean word: the correction given back, then the fit's): the Item
+  carried none to the reader. "세분화" was drawn 8.92 pt a syllable where the layout set 8.64, 0.85 pt over its box onto the
+  colon (the reader's check, Korean: 214 of 398 runs off the layout's advance, by up to 5.56 pt). Today's engine drew both.
+
+**The rule** (`breaker/script.ts` `markOf`): a full-width mark's blank half is the half of its advance its face's glyph holds no
+ink in, measured in the face files themselves (`data/marks.ts`, written by `lab/typeset/marks-data.py` from the very files the
+website subsets, each pinned by its SHA-256 to `rules/font-coverage.mjs` `METRICS`; a unit test holds the two equal): a closing
+blank where the ink lies within the first half, an opening one within the second, none where the ink crosses the middle or the
+face holds no measure of the mark, which then keeps its whole box (no hang past a line's end, no lead cut, no compression, no
+squeeze). The face is the first of the run's faces measured, the target's CJK face; a curly quote in an alphabet's Latin face has
+none. One character in one face so has one place in its box wherever it stands, and no class by character or switch by language
+is left: `SQUEEZE_MARKS` is gone and `centredPunct` is read by no part of the reader's typesetter (the published rule set keeps
+the field, its schema unchanged, and today's engine, the extension's own reader, still reads it as §9.4's table says). The space rule (§18.18) still reads the marks' side by what they do in the text (`punctOf`): a centred
+mark carries white on both sides. Per face, the ink of the marks the report names (thousandths of the em, left to right):
+
+| Face | 、 | 。 | ， | ： | ； | ！ | ？ | （ | ） |
+|---|---|---|---|---|---|---|---|---|---|
+| Source Han Serif SC | 39–290 | 42–323 | 79–227 | 170–294 | 133–294 | 194–303 | 35–458 | 651–937 | 63–349 |
+| Source Han Serif TC | 355–584 | 360–641 | 401–562 | 434–566 | 418–567 | 444–553 | 260–719 | 651–937 | 63–349 |
+| Harano Aji Mincho | 39–290 | 42–323 | 79–227 | 434–566 | 418–567 | 444–553 | 260–719 | 651–937 | 63–349 |
+| Source Han Serif K | 39–290 | 42–323 | 79–227 | 434–566 | 418–567 | 444–553 | 260–719 | 651–937 | 63–349 |
+
+**The drawing is the measure** (`packages/reader` `compose/paint.ts`, `compose/served.ts`): the SVG in the target's language;
+every run's class with `locl` off (`font-feature-settings: "locl" 0`, beside `text-spacing-trim: space-all`), so that a mark is
+its face's default glyph wherever it stands, the one measured (the layout's measure of a character alone is that glyph under
+any language: a lone mark is of no script). Under its own language too a face's `locl` draws glyphs the layout did not
+measure: Source Han Serif SC's em dash 1.000 em where its default, measured, is 0.890, and K's ASCII marks and space wider (its
+space 0.310 em where 0.256). And a run at its face's size correction (`faceScale`, the face string's own size) and with its
+tracking (`letter-spacing`, the Item's `track`), both to 1e-4 of a point. Over the corpus's laid runs only Korean words carry
+tracking, and only Source Han Serif K has a size correction.
+
+**Held by** the reader's browser check (`packages/reader/e2e/run.mjs`, `punct.mjs`): s1-columns laid by the reader's own
+typesetter over the served faces in zh, zh-TW, ja and ko, from translations written for it whose lines hold 。，、：；！？（）
+beside Han, Latin, digits and the fixture's element crop, the interface zh-CN; every laid page's drawing measured from pixels
+and the SVG: no mark's ink box on a neighbour's (a device px at 6 px a point), one place in its box a character in a face (two
+device px), every run drawn on its own at the layout's advance (0.004 pt a character, the largest measured 0.0037). Before the
+fix: zh passed; zh-TW 3 marks in more than one place (、 by 0.333 em over 17); ja 34 overlaps; ko 214 of 398 runs off. After:
+none. And by `packages/typeset/tests/unit/punct-ink.test.ts` (the faces' classes, a crowded paragraph's colons: Japanese 0.47 em before, a whole
+em after).
+
+**What it moves** (the parity's lay, `lab/typeset/parity/v2.mjs`, over the 90 pairs with stored rows on round 18's parts: 82
+zh, 4 ja, 2 es, 1 pl, 1 de; cb9f49fca against the rule): Simplified Chinese 63 of 60,386 members on 57 of 2,248 pages, 50 lines
+broken elsewhere in 12 members and 52 lines set otherwise on the same text; no member a line more or fewer, at another size, or
+no longer laid. Every one is the squeeze taking Source Han Serif SC's colon's blank half (its ink 0.17 to 0.29 em), which the
+old list left out: a line holding a full-width colon takes the group it missed (one paragraph then fits a fit step earlier,
+its marks less compressed); the old engine with only its squeeze list widened by the full-width colon, semicolon and marks of
+exclamation and question lays those pages as the rule does, all 1,036 pages of the 30 pairs that moved equal, member for member
+and line for line. Japanese, Spanish, Polish and German: nothing moved (the four Japanese pairs' translations hold no
+full-width colon, semicolon or mark of exclamation or question). Traditional Chinese and Korean have no pair with stored rows:
+the fixture's check alone measures them.
+
+**Not this rule's.** A run is shaped with the runs of its line (one `<text>` a line): a mark of no script at a run's start takes
+the script of the run before it, and a kern pair across that boundary is lost: Korean's "(k" after Hangul drawn 9.162 pt where
+the layout measured it alone at 9.262 (the check reports it, before and after alike). Drawing each run in a `<text>` of its own
+would hold that too; it moves the drawing's structure, which the parity's reading and the checks read by line. And the
+extension's own reader (`AXT_READER` 'today', `layer-proto/layer2.mjs`) keeps its class by character.
+
+### 18.49 A translation a line shorter than today's: what covers its block, and why the fill stays (2026-11-12)
+
+**The rule, as the fill holds it.** A translated paragraph covers its original's block by its leading alone: the page fill
+spreads it to its own fill leading (the loosest at which it is still set whole with the gap under it no tighter than that
+leading, §18.11), held under the page's band, the page's target plus `adaptiveFill.band` (§18.5), and under its fill top
+(`fillLead`, `fillLeadRel`). Its size is the original's as TeX stated it (read up the line, PIPELINE 80 in §18.10); a body
+grows only with its page, one size, where every body paragraph of the page is still short of its block (the owner's rulings of
+2026-10-09 and 2026-11-08: growth is today's page fill's, up to 1.1). The order is today's: the leading, then a CJK paragraph's
+tracking, then the page's size. A paragraph over a page or column break is filled on the page where it begins, each frame at
+its own fill leading under that page's band (§18.11): that page's lay holds every unit with a line on it, a later page's
+paragraphs are not in it, and a unit is laid alike by every page's lay (the composition's determinism, I6:
+`packages/typeset/tests/replay/purity.test.ts`, and across the pages' lays `lab/typeset/gate-l1.mjs --entry`, §18.54). So a
+translation that takes N lines of a block of M ends at its own leading (M/N − 1) pitches over its original's last line, and
+more where the band holds it; that is today's fill as well.
+Over the 22 parity pairs (B10's drawing: 2,314 paragraphs, theorems, captions and notes, each on each page it is drawn on)
+v2's last line stands as near the original's last line as today's, within 2 pt, on 2,004; nearer by more than 2 pt on 230;
+farther on 80, 27 of them with a line fewer, 50 with as many lines at a closer page target (another paragraph's line count
+moving the median: 1512.03385v1 page 3, 1.35 where today's is 1.45).
+
+**The paragraphs that end a line higher than today's** (the parity's line-count class L2: 13 pages under the defaults, 14 every
+switch on; and of the four not read before, 2610.22065v1 page 1, unit 159). Each was laid again at today's drawn size, all else
+v2's, to tell whose line it is:
+
+| Unit | Original | Today | v2 | Held by | The line today has |
+|---|---|---|---|---|---|
+| 2610.40645v1 p4 t13 | 7, last 624.98 | 7 at 11.12, 624.98 | 6 at 10.91, 637.91 | page 3's band 1.05 (it begins full there) | its size: at 11.12 v2 sets 7, 624.98 |
+| 2610.40645v1 p13 t86 | 5, 385.75 | 4 at 11.07, 385.75 | 3, 397.13 | band 1.16 | its size: 4 lines, 385.75 |
+| 2610.40645v1 p22 t167 | 5, 543.41 | 5 at 11.13 | 4, 549.65 | band 1.18 | its size: 5 lines, 543.41 |
+| 2610.40645v1 p26 t210 | 8, 436.68 | 8 at 11.03 | 7, 446.16 | band 1.05 | its size: 8 lines, 436.68 |
+| 2610.40645v1 p38 t342 (switches on) | 3, 560.20 | 3 at 11.13 | 2, 573.07 | band 1.05 | its size: 3 lines on the original's |
+| 2610.21312v1 p11 t123 | 7, 655.83 | 6 at 10.16, 652.24 | 5 at 9.96, 661.57 | band 1.38 | its size: 6 lines, 648.06 |
+| 2610.22065v1 p1 t159 | 3, 389.29 | 3 at 8.13, 384.11 | 2 at 7.97, 394.57 | band 1.47 | its size: 3 lines on the original's |
+| 2610.40645v1 p23 t174 | 3, 681.94 | 3 at 10.98 | 2 at 10.64, 693.05 | band 1.18 | the fit's shrink (S4): at 10.98 v2 still shrinks to 10.70 |
+| 2608.06701v1 p5 t132 | 9, 75.55 | 7 at 9.96, 75.79 | 6, 88.71 | band 1.38 (its frame's own 1.60) | its breaking: 14 lines in all to 15 (v2 hangs a line-end comma's blank half) |
+| 2608.06701v1 p7 t217 | 3, 255.55 | 3, the last two characters alone | 2, 262.48 | band 1.42 | its breaking: a two-character last line |
+| 2610.20484v1 p6 t59 | 6, 78.18 | 4, the last two characters alone | 3, 124.89 | band 1.27 | its breaking: a two-character last line |
+| 2610.30034v1 p15 t257 | 9, 55.21 | 5, the last two characters alone | 4, 79.12 | its fill top 1.778, tracked | its breaking: a two-character last line |
+| 2609.20976v1 p10 t53 | 2, 429.05 | 2, the last three characters alone | 1, 441.01 | one line | its breaking: the full stop's blank half hung |
+| 2610.40645v1 p32 t271 | 6, 330.94 | 6 at 11.10, 331.93 | 5, 339.76 | band 1.23 | its breaking round its elements: at 11.10 v2 still sets 5 |
+| 1810.04805v2 p3 t32 | 6, 143.33 | 5, "BERT BASE" as text | 4, 151.33 | band 1.47 (its own 1.50) | the crop, narrower than today's flat text (RC4) |
+
+So the line is today's size on seven (TeX's justification read as their size, 1.1-2 % over TeX's, which v2 corrected), its
+breaking on six (a last line of two characters today sets, or a mark's blank half v2 hangs past the measure, its ink inside),
+a crop on one, the fit's shrink on one. None is the fill's: v2 spreads each as it spreads any paragraph of its page, and as
+today's fill does. The other three of the four not read before are the parity's L1 (v2's last line 0.84 pt lower than today's
+on 2608.06701v1 p9 t244, 2.4 higher on p11 t284, 0.55 lower on 2608.25210v2 p1 t11's second column).
+
+**The levers, measured** (the reader's lay over the 22 pairs, r18's bundles, 12,388 members on 344 pages; lab variants, never
+committed, lane cover-area):
+
+- A paragraph that its page's band leaves short of its block grows alone, before it spreads, a step at a time from the
+  original's size up to 1.1, the first step that sets one line more at its fit's leading ending it: 151 members grow on 104
+  pages (56 by one step, 44 by two, 30 by three, 21 to 1.1) and 5 lose their page's growth, where today grows 9 pages; with
+  the grown paragraph also held to cover its block within the band, 133 grow on 96. It reaches one of the paragraphs above
+  (2610.40645v1 p32 t271, at 1.05): five are theorems, which the page's growth never grows either (its body units are
+  paragraphs, abstracts, lists and items, today's); t13 as a unit is not short (its first frame is full); the Chinese ones
+  grown a step no longer set in their blocks at their fit's leading, 1.3, or set no line more (t257). It also breaks the
+  owner's ruling that growth is one size a page.
+- The band lifted, each paragraph at its own fill leading: 2,486 members change their leading, the lines of 674 of them, on
+  264 pages; the paragraphs above still end 2 to 9 pt over their originals' last lines (the gap's (M/N − 1) pitches and the fill
+  top), two on them (t132, t123). It ends the page's one rhythm (D6).
+- A frame held to the band of the page it stands on: the leading of 45 members on 45 pages, the lines of 28, both ways (t13
+  8.1 pt lower, t123 4.3 pt lower, 2610.21312v1 p6 t65, twenty lines, 11.4 pt higher); held there only where that band is
+  looser: 23 members on 23 pages, the lines of 15, every one lower (up to 8.1 pt). Either breaks I6: page 3's lay holds none
+  of page 4's paragraphs, so it lays the unit otherwise than page 4's lay does (the purity checks: 2610.21377v1-zh member 37,
+  page 4 against page 5). To read a later page's band, a page's lay would have to hold the later page's paragraphs and wait
+  for their rows. A later frame at its own fill leading, no band at all (which every page's lay can lay alike): the leading of
+  92 members on 85 pages, the lines of 28, all lower (t13 627.75, t123 on its original's last line), but ten of those frames
+  then stand 0.1 to 0.32 looser than their page's band (2602.23285v2 p5 t29 at 1.36, 2610.40645v1 p25 t196 at 1.37, where the
+  page's paragraphs stand at 1.0), and one ends 3.9 pt under its original's last line (1512.03385v1 p12 t275).
+
+Held by `packages/typeset/tests/unit/entry.test.ts` ("holds a frame on the next page to the band of the page its paragraph
+begins on"). No layout, unit or version moves.
+
+### 18.50 An address goes whole to the next line unless the line it leaves would be justified and stretched (2026-11-12)
+
+The maintainer's report of 2026-11-08 (staging, 2303.11366v4 p1): the abstract's last line before
+`https://github.com/noahshinn024/reflexion` was justified at 0.205 em a gap, the URL whole on the next. Since a8c36be1f the
+breaker cuts an address (a URL's crop with its url package's break points, El.breaks: a `\url`, a DOI, an e-mail address) that
+does not fit a justified line at the last of its break points that fits; that line now holds "https://" at 0.035 em a gap. It
+cut where that bought nothing too: 2610.21880v1 p1's footnote set "sohani@mail." at a line's end and "uni-paderborn.de" on the
+next, where the original and today's reader keep the address whole and end the line before it early. An address is one thing to
+a reader (the coordinator's ruling of 2026-11-12, lane parity-small).
+
+- **The rule** (`breaker/break.mjs` `keepsWhole`, read at the one place the breaker cuts inside an address on a line it has
+  begun): an address that fits the next line whole goes there, the break before it, unless the line it leaves would be placed
+  justified and visibly stretched. Visibly stretched is the breaker's own two bounds, nothing new: placed justified, its stretch
+  a gap within the script's `cjkJust` (0.25 em: `placeItems`, `place.mjs`; past it the line is set ragged and stretches
+  nothing), and above `STRETCH_MIN` (0.05 em: under it a CJK line's stretch does not read as letter-spaced, `squeezeTakes`). So
+  a line placement would set ragged, or one nearly full, keeps the address whole; one letter-spaced to its measure has it cut at
+  its break points, as one longer than a line is (the branch for a line holding nothing yet is unchanged). By the lay's own log
+  of the line closed before each address (every fit try): 2303.11366v4's 0.205 em a gap stays cut; 2610.21880v1 t3 at 0.27 to
+  0.32 and 2610.20967v1 t2 at 1.38 keep their addresses whole after a ragged line, as today's reader shows them.
+- **A line set as Latin text** (spaces, under half its items CJK: `latinishOf`), and a target that breaks at spaces only
+  (`keepAll`), keep the cut as before: the breaker states no visible stretch of a Latin line's spaces (`spaceMax` is
+  placement's bound alone), and `STRETCH_MIN` reads a CJK line only. 1810.04805v2-es p6's GLUE address and 2608.06701v1 p12's
+  reference after "SWE-agent documentation" (a Latin line, 22 em of slack a space) are cut as they were.
+- **Blast radius** (`lab/typeset/parity/v2.mjs`, the reader's typesetLay in Node over r18's bundles, the 90 pairs with stored
+  rows, 2,568 pages, 68,737 members; base 28eac93de against the rule): by default 6 members on 6 pages move, with every toggle on
+  54 on 32 (references under the References toggle): each an address that was cut and now opens the next line whole. No member's
+  state, size, tracking or line count moves, I10 holds (0 faults), and the cuts left are 1 by default (the Spanish line) and
+  31 with every toggle on (30 Chinese lines letter-spaced or set as Latin text, the Spanish one).
+- **The parity** of the class's six pairs (2610.21880v1, 2610.20967v1, 2608.06701v1, 2608.25210v2, 2609.36054v2, 2610.21313v1;
+  laid, drawn and measured at both heads): by default 18 worse pages to 16, 2610.21880v1 p1 and 2610.20967v1 p1 no longer worse
+  (their `elements` difference, the address's two pieces drawn apart, gone, nothing else moved); with every toggle on 23 to 17,
+  those two and 2608.25210v2 p17 and 2609.36054v2 p9, p10, p11 (the nine DOIs of its references whole). Of the units the account
+  named, three stay cut by the rule: 2608.06701v1 p12 t321 (the Latin line above), 2610.21313v1 p5 t104 (its line before would
+  stand justified between the two bounds); 2608.06701v1 p11's three addresses are whole, the page worse by its two line-count
+  differences of before (t284, t294) alone. No difference
+  of any measure became worse; the bordered links' count moved nearer the original's (one border an address, not two).
+- 2303.11366v4 has no inputs the lab can lay (no compile, bundle or rows); its line is a unit test of the breaker's
+  (`packages/typeset/tests/unit/placement.test.ts`): a line of 26 characters on a measure that leaves it 0.205 em a gap is cut,
+  and holds "https://" at 0.035 em a gap, its numbers.
+
+### 18.51 A piece of no point of its own is found by the text TeX set for it, its decoration with it (2026-11-12)
+
+soul's `\hl` (and `\ul`, `\st`), alone or through a paper's own macro (`\newcommand{\hlyellow}[1]{{\sethlcolor{LightYellow}\hl{#1}}}`),
+sets each syllable's ground in a box of no width before its characters. The marking gives no point to a paper's macro glued to
+the word before it (a mark would part the word's hyphenation and kerns), nor to one right after another paper's macro, which may
+read ahead (the probe asks TeX of no paper's macro there: such a macro "is found by the text TeX sets for it", marks.mjs
+`AHEAD_FOLLOWS`). But no reading found it: the probe's text of a macro (`readInkTexts`) refuses a listing of a rule, so a
+highlight's text was never known, and a paper's macro with an argument is drawn from its ink (`classesOf`'s `other`), whose
+text no reading of a piece takes. The ownership left its glyphs its unit's text, the unit's letters past its source's, and locate
+held the whole unit the original's (`text past its source`). 2111.09276v1 p1, Figure 1's caption, `…are
+\hlyellow{high}\hlblue{lighted}). Finally, …`: `\hlyellow{high}` had its two points, `\hlblue{lighted}` none, its seven letters
+read as the caption's text; all three sentences and the label "Figure 1." stayed English though the row was accepted.
+
+- **The rule** (`layout/marks.mjs` `readInkDecorated`, the probe's `decorated`; `pipeline/instrument.mjs` `unmarkedInkOf`). TeX
+  states what such a piece sets: the probe's listing of its box, the characters beside a decoration that sets no character of its
+  own (a box of no width holding a painted rule, leaders of a rule standing for a space, colour stacks, a discretionary's break
+  lists, which TeX sets only where it breaks the line there), read as the probe's `decorated` text; a sample with no such rule
+  stays `readInkTexts`' (whose text is all of its sample's ink: a lead's or a cell's piece is claimed by it glyph by glyph, and the
+  ground would stay behind). And TeX states where it stands: its opening point; else right after the ink of the piece of ink
+  before it (that piece's closing point, or the last glyph a reading gave it); else, the source writing text right before it, the
+  one place in its unit's text glyphs that spells that text's end, its own text and the text after it (WANT characters each). Its
+  ink is the glyphs there that spell its text, the text after it as written spelled right after them; with a decoration, the
+  boxes TeX painted in the stream from the glyph before them to their last, over them, no unit's: its ground, which own.mjs gives
+  no unit's text (MR 2b) and which a translation would leave behind. Read for a piece of no closing point and no ink the
+  ownership gave it, past its unit's head and before its last text, neither a text symbol nor a text macro (their glyphs their
+  unit's text); its text `decorated`'s or `texts`'. No macro's name is read: the colour macro `\add{…}` of 2610.21376v1, of no
+  rule, is found by its `texts` the same way.
+- **Before and after** (2111.09276v1, our compile of it in the pinned image, stage 1a): the caption unlocated `text past its
+  source` (claimed 241 letters, written 234: "lighted"), the paper's one; after, located and drawn, `\hlyellow{high}` and
+  `\hlblue{lighted}` two elements, each its glyphs and its ground (B's box 75, x 444.2–469.6, given no unit before), the crop
+  x 444.17–469.83 holding it; groups 846 to 849, proofs a 0, c 0. The fixture (`tests/fixtures/pdf/highlights/`, ours) holds
+  each case: two highlights in one word after a closed one and after one of its opening point alone, one at a word's start, its
+  middle and its end, one across a line's end, `\hl` itself; at the base three of its five units were held (`text past its
+  source`) and eight grounds no unit's.
+- **Over the 88** (r18's compiles, every one found by its key: the marked sources did not move): 86 papers' objects and dumps
+  byte-identical to r18's; two moved, no unit lost. 2610.21376v1: its unit 7 (a paragraph whose colour macro `\add{, i.e., …,}`,
+  unmarked after a citation, its text `texts`') from `text past its source` to drawn, 15 lines; its unit 126's `\new{),}`, glued to
+  "seeding", given its two glyphs (before, an element drawn from its ink with none). 2610.40576v1: the cell of `\hlg{All good.}
+  \hlp{Now, write the matrix in Python}` located and drawn (located, the pitch rule keeps its `\ctk{+2.0k}` the original's, which
+  gives it a new id; the baseline's statement of its old one says so: pitchGroup). `text past its source` 31 to 29. The probe's
+  decorated texts: every highlight call of the three papers that write one (2111.09276v1's 28, 2610.40576v1's 23,
+  2610.19159v1's 1). The work counters (27) as r18's; the float
+  lines 778 and the orphan letters 388 as r18's; the parity's 22 pairs' papers' bundles byte-identical (neither paper is a pair).
+  The reading's own time over the 88: 131.8 ms in all, 7.9 ms the most (2307.16209v1), 0.3 % of the instrument's 49 s; 4 claims.
+- **Not fixed.** A piece of no point whose text TeX's probe does not state (a sample past INK_TEXT_MAX's 64 characters, a
+  listing with a node neither reading knows, a probe compile that stopped before it) stays its unit's text, the unit held as
+  before. A piece of no point TeX broke over a line's end with a hyphen is not read: the hyphen is no character of its text. A
+  piece bounded by a text TeX does not set as written stays as before: 2610.40576v1's four other held cells, whose highlights
+  stand right before `\ctk{…}`, which sets `[#1]` (its brackets no source text writes) while the front end reads it as a group
+  of its argument alone; own.mjs read the bracket into the highlight before it, and this reading, spelling the text after it,
+  meets the bracket first and claims nothing.
+
+### 18.52 A unit's end mark belongs to the end of its translation (2026-11-12)
+
+amsthm's `\end{proof}` sets `\qed` after the proof's last words: `\unskip\penalty9999\hbox{}\nobreak\hfill\quad\hbox{\qedsymbol}`,
+its `\openbox` four rules pushed by the `\hfill` to the end of the paragraph's last line. TeX ships it after the unit's end point,
+no unit's ink: the trail (§18.16) claims only ink glued to the last glyph, so the box was stated `Room.stays` (PIPELINE 80),
+in no group, never erased, and every line a translation laid on its row kept off it. A translation a line longer, laid at TeX's
+size, borrowed a line under the run and left the box beside a line in the middle of the paragraph (2610.40645v1-ja p12 t80,
+p30 t253: the parity's class L3, which no measure reads; the pages counted worse by line count alone); one a line shorter left it
+alone under the text. **The ruling** (the coordinator's, 2026-11-12): the end-of-proof mark belongs to the end of its proof;
+wherever the translated paragraph's last line ends, the mark stands at that line's end as TeX would set it, flush to the
+measure's edge, on a line of its own only where it does not fit; decided by what TeX set, never by a symbol's name or shape.
+
+- **The prepare** (`locate.ts` `endMarks`, after the measures and before the room and the facts pass). A located source unit's
+  end mark is what TeX shipped in B's stream after its end point (`<u>e`), glyphs and boxes alike, walked in TeX's order up to
+  the next unit's ink: its mark (a unit's mark, an author's call) or its own ink in B's stream, or a glyph on A that its member
+  holds or that stands on its first line before its text, its head whatever member holds it (2610.21037v1 p6 t57: the next
+  lemma's head "Lemma 4.3." an ink unit made on A on unit 58's first line). Every piece has a partner on A within the unit's
+  last line's box across (its fonts' boxes: the `\openbox`'s top rule stands over the line's band), together on its band,
+  wholly after its last glyph (half a point, pinnedOf's), and its box's right edge at that line's measure end (`CENTRE`, the
+  maker's flush-right reading of a head or foot line and a label's own line): TeX pushed it there. Ink of no unit on another
+  line before the next unit's, or a glyph another member holds on A, is the paragraph's own going on, no mark: the walk claims
+  nothing (2610.11256v1's apacite references, each unit its authors alone, its year and title no unit's after them on its line
+  and on the next, an ink unit's: 63 runs that reached the measure's end); and so at a body's end bracket where TeX's next
+  page begins its body with ink no unit owns (2610.16663v1 p39 t322's reference going on over the page). It becomes the
+  member's element `~$` (`END`), of no piece, its glyphs and rules in the member's travelling group `.e` (erased with the
+  unit's elements, the wrap's), stated `{ kind: 'other', copy, ink: [its box on the line's baseline], trail: 1, end: 1 }`;
+  claimed ink is no stay of any member's, so a proof's head and its text sharing the row (2610.40645v1 p19 t145, t146) both
+  lose it. Not a mark TeX set after a space (2608.25210v2's `example` environment ends `{$\square$\smallskip}`: 2.24 pt
+  after the text, 59 pt short of the measure end), not one on a line of its own under the text (amsthm after a display or a
+  list), not one inside a display (`\qedhere` in `\[ \]`: the display's ink, kept where TeX set it, the mark with it), not one
+  after no source unit's end (an appendix's contents line, 2610.42112v1 p16: a babel name's occurrence and an ink unit made
+  on A, no end point before the page number), not one a heading's number no unit owns follows on the next line or the next
+  page (2610.16663v1 p47 t242, p55 t277): all stay as before.
+- **The format** (FORMAT 1). `El.end`, an optional flag: TeX pushed it to the end of its unit's last line, after its text;
+  laid at the end of the translation's last line, as far from that line's measure end as TeX set it. The claimed element also
+  carries `trail: 1`, so that a typesetter of before draws it as a trail, glued after the translation's end, rather than erasing
+  it unseen with the unit's elements; a typesetter of before reads no `end`, and a part made before states the box as
+  `Room.stays`, laid as before (the lay's test lays such a part line for line as 35cf17994 did).
+- **The lay** (`lay/adapt.ts`, `breaker/break.mjs`, `breaker/place.mjs`). The mark is the unit's last token, a crop (`END_K`,
+  no piece's) whose rectangle keeps its distance to its line's right edge as TeX set it (`pad`: the crop's right edge to the
+  slot's on the line TeX set it on); the breaker allows a break before it, and sets it on the line the text ends on where the
+  text ends the keep-off distance before its ink (B.slots' rule for ink that stays: TeX's own distance and half an em at most;
+  the line's spaces shrunk as `fits` takes them, a closing mark at its end hung), else on a line of its own (amsthm's
+  `\penalty9999`); a line it cannot open leaves the state unset, the fit's (it shrinks or borrows by its existing rules).
+  `placeItems` sets the text in the room the mark leaves and the mark at its place. Every other stay is laid as before.
+- **Before and after** (stage 1a over the 88 papers, r19's compiles, every one found by its key: the marked TeX did not move).
+  Of the 263 marks r19 stated `Room.stays` at a source unit's last line's measure end (at most 1.2 em), 251 are claimed, in 27
+  papers, and nothing else is: the 12 left are 2610.16663v1's two QED boxes before a heading number no unit owns (p47 t242, p55
+  t277), 2610.20285v1's two 0.6 pt rules (a frame's right side, no mark) and 2610.42112v1 p16's eight contents page numbers. The
+  units (the wire) are byte-identical, every paper's; 27 papers' parts, add-ons and dump statements move, each by its marks
+  alone (the differential: lost, gained and accepted as r19's, `changed` 5,157 to 5,276, theorem +118 and para +1); the twin run
+  byte-identical; the float lines 778 and the orphan letters 388 as r19's; the reader gate 29,374 laid alike and 712 not, as
+  r19's, its entries identical, I10 0 faults. Over the lay of the 90 pairs with stored rows (every switch on alike): of the
+  marks (279 pair instances) the base stands 199 on the translation's last line, 65 alone under a translation that ended a line
+  higher, 13 beside a line before its last, 2 the original's; the head 266 at the end of the last line, 7 on a line of its own
+  (the text filling its last line), the 4 left stays where they were, 2 the original's. 273 members move on 201 pages: 243 by
+  the mark's crop alone, 30 rebroken (the row the box had narrowed now full, or the mark taking room), 5 a line more (4 the mark
+  on a line of its own, 2610.18513v1 p65 t565 its last word with it at a tighter tracking, the fit's), one larger
+  (2610.30034v1 p10 t204, 9.71 to 9.96: the box no longer narrowing its row), none smaller.
+  2610.40645v1-ja's parity, both modes: 9 and 10 pages worse before and after, no difference of any measure moved (the gate reads
+  no mark's place): t80 and t253 still a line longer than the original at TeX's size, the box at the end of their last line.
+- **Left open.** The author's own mark written in the text (`\qed`, `\hfill $\square$`: an element of the unit's, 26 and 6
+  units in 6 papers) is laid where the translation sets it, glued after its last word or drawn as its character, as before: the
+  same reading of its ink (the unit's last element, after the line's other glyphs, at its measure's end) stated 34 elements on
+  the first 47 papers, none a mark (a reference's year ending a full last line, a caption's formula), and the fill in its
+  setting is no fact the part or B's stream states (a probe of its box's listing would be). The typesetter lays an element
+  stated `end` as an end mark where the translation ends with it; no prepare states one. 2610.40394v1's six `\hfill $\square$`
+  stand at the paragraph's own measure end, 9.3 pt short of the measure the part states (its column's, where the list's right
+  margin narrowed TeX's `\linewidth`): a paragraph's own measure, `\linewidth` and `\@totalleftmargin` where its paragraph
+  ends, is no fact the part states. 2608.25210v2's example mark, set after a space, is no push. The two marks before a heading
+  number no unit owns stay. PIPELINE must move (the parts, the add-ons); TRANSLATE, LAYOUT, CHAIN_RULES and FORMAT do not.
+
+### 18.53 An italic figure label is drawn slanted in a CJK target, as a name and a display are (2026-11-12)
+
+A CJK run of an italic text is its upright face sheared 13° (the owner's ruling of 2026-10-19; `breaker/faces.ts` `faceOf`
+states it as the face's `oblique`). The names path (`lay/entry.ts`) and the displays (`emit/display.ts`) write it into each
+item as its skew; S.figures (`lay/figures.ts` `figuresOf`) wrote a figure text's runs with their text, place, face, size, fill
+and direction and no skew, so an italic label translated into Chinese, Japanese or Korean stood upright (Codex's P2 at
+225f0959f, unanswered until this lane; verification R07).
+
+- **The rule.** Each item of a run whose face is oblique carries the skew and the slant, a turned label's too (the reader's
+  painter shears it about its baseline in the run's frame, `compose/paint.ts`). A Latin run of the label is set in its italic
+  face and takes none, nor does Korean's word space, a Latin run. The width is its advances' as before: the fit and the anchor
+  read advances, and the lean past the last one is the face's, as a name's is.
+- **Before and after** (`figure-slant.test.ts`, red at the base on two of its three cases): an italic label in ja, ko and zh,
+  a turned one, an upright one. On the parity's 22 pairs (v2's lay over r19's bundles, gate mode): 53 figure texts on 11 pages
+  of 6 pairs, all zh (2608.04322v1, 2608.06701v1, 2608.25210v2, 2610.21313v1, 2610.21504v1, 2610.22065v1), gain the skew;
+  nothing else of any page moves. The parity on those pairs, both modes: 19 italic labels now read as the original's italic
+  (`style`, v2 nearer; today's drawn upright), no page newly worse. No version moves: the reader's lay alone.
+
+### 18.54 One size a group: a figure text the paragraph path lays is in its labels' size tie (2026-11-12)
+
+The labels of one group are set at one size (the owner's rule of 2026-10-29, §19.12 "Its set and its room"): today's figure
+reading puts each line in a set (`setsOf`: its column, its baseline), the part states each set as a size tie, and S.figures
+fits the set by one factor (`fitFigureSet`). A figure text the paragraph path lays (an element in its line, F0's and F1's;
+lines joined, F3's; an item's marker its label) was given a set of its own (`locate/ink.ts` `figureTextOf`, `-1 - k`), so it
+took part in no tie and the paragraph path fitted it alone: 2111.09276v1 p8, Figure 5, a list's column whose plain items were
+drawn at 0.73 of their 4.99 pt and whose items holding a highlighted token, or wrapped over two lines, at 4.99, 4.86 and 4.74,
+within one bullet item.
+
+- **The rule.** A text the paragraph path lays stands in the set its lines would have joined as plain labels; where its lines
+  stood in two sets, it joins them (one member, drawn at one size). One the figure keeps as the original's (a formula, code, a
+  script, a double) is laid by no path and keeps a set of its own. In the typesetter (`lay/entry.ts`, `lay/page.ts`,
+  `lay/figures.ts`, `shared/figure-fit.ts`): the tie's paragraph members are laid at the factor S.figures set its labels at at
+  the most (the tie's `least`), from the page's first lay, and the set's floor is S.figures' (`floorMin`, to which a set shrinks
+  as one; a body paragraph's tie keeps the fit's floor); where one of them is laid smaller still, the others are capped at its
+  scale as any tie's (`layPagePrepared`) and the set's labels fitted again at it (`fitFigureSet`'s `cap`, never under the
+  floor). No number is new: the sets are today's figure reading's, the floor S.figures'.
+- **Speed.** Capped only after a first lay, each page with such a tie was laid twice: 2111.09276v1 p8 (189 figure texts) took
+  36 ms against 51, p1 26 against 38 (`layPage`, the same code over the part before and after, 40 runs interleaved). Capped
+  from the first lay, the page is laid once where no paragraph member needs less than its labels: 38 against 37 ms, 30 against
+  31, within the runs' spread.
+- **Before and after.** `ink.test.ts` ("ties a figure text laid as a paragraph to the labels of its column"): a column of two
+  labels, a line holding a run of one pitch and a hyphenated pair, red at the base (the tie held the two labels alone).
+  `figure-tie.test.ts`: a label shrunk to 0.7 with a paragraph that fits at its size, and a paragraph laid at 0.675 with a label
+  that fits, each drawn at one size (red at the base: 7 against 10, 6.75 against 10). 2111.09276v1 (stage 1a over our compile
+  of it, soul-locate's compiles; laid with staging's stored Google rows, the served metrics and the reader's `typesetLay`): units
+  byte-identical, the ties of its figures on pages 1, 3 and 8 gain 36 members; page 8's list columns drawn at 3.64 pt throughout
+  (10 members from 4.74 to 4.99; two more are §18.55's lines, whose new units staging holds no row of) and its second figure at
+  4.04 (6 members from 4.99), page 1's figure at 4.30 (5 members from 4.77); no member changes state.
+- **Over the 88** (stage 1a, r19's flags and caches, against r19): 44 papers' parts move, by their size ties alone: 307 ties
+  (201 new, 106 grown; a figure's tie is stated in each part that holds it) gain 843 members, every one a figure text the
+  paragraph path lays or a label that stood alone in its set, no tie cut and no two existing ties joined; units, members, the
+  prepare dumps and the differential are r19's byte for byte. v2's lay of the parity's 22 pairs (gate mode, both modes alike):
+  59 figure texts on 6 pages of 4 pairs set at their tie's one size, none changing state (2602.23285v2-ja p8: three at 7.11,
+  7.78 and 8.89 pt to 6.67; 2608.04322v1 p3; 2608.06701v1 p1, p4, p9, where 53 of them stand; 2610.21313v1 p2); every other page
+  as before.
+- **Versions.** PIPELINE must move (the parts' ties); the format does not (a tie's ords as before). A reader of before this
+  rule given parts of after it ties the paragraph members among themselves, at the body's floor, and its labels as before; a
+  reader of after it given parts of before it lays them as before (no paragraph member in a figure's tie).
+- **Every page's lay alike (I6, 2026-11-12).** The tie's `least` was S.figures' factor over the figure texts of the page laid
+  (`figuresOf` read the part's page alone). A later page's part holds the set's flows where the set's page is one of its pass
+  pages (the first page of a member on it: design-a §1.3 (b)), and its lay runs that page's fill; it found no factor and laid
+  the tie's paragraph members at their own size. 2610.19159v1-ja p57, unit 3883 (a figure text the paragraph path lays, in a
+  set of 14 whose labels S.figures sets at 0.66): 0.66 by page 57's lay, 1.0 by page 58's, whose part holds page 57's flows
+  (a paragraph begun there runs on to it). Nothing was drawn otherwise: the unit's one line is on page 57, drawn from page
+  57's lay; page 58's lay draws nothing of it, and its fill of page 57 had the same target and laid every other unit alike.
+  It would show where such a text tells its page's target (no body unit of two lines begun on the page:
+  `shared/fill-target.ts`) and a unit begun there runs on to the next page, whose lines there come from that page's lay:
+  drawn at a leading of another target than its lines before the break. Now every page's lay reads the factor off S.figures
+  over the figure texts of the set's own page (`lay/entry.ts`, `figuresOf`'s `page`; the least of its pages' should a set
+  stand on two), their faces waited for as any measured face. 36 of the 90 pairs' 2,568 page lays run it, over one other
+  page each (51 sets).
+  `figure-tie.test.ts` ("lays the paragraph at its set's factor from every page's lay that holds it"): a set on page 1 and a
+  paragraph from page 1 to page 2, page 2's lay laid the tied text at 1 where page 1's lays it at 0.7, red at the base.
+- **The check across the pages' lays.** The purity tests compare a member on two pages; a unit of a pass page with no line on
+  the page laid is in no page's members. `layPage` hands, where asked (`EntryOptions.lays`, `lay/page.ts` `UnitLay`), every
+  unit begun on a pass page as it laid and filled it, and `lab/typeset/gate-l1.mjs --entry` (the release check's
+  `sentence-cover`) compares each unit across every page's lay that runs its pass
+  (`packages/typeset/tests/replay/cross-lay.ts`), each line at the size it is drawn at (a unit laid a run at a time draws each
+  line at its run's, which its layout's scale, its first run's, does not tell; the reader dump's `sizes` likewise). One laid otherwise fails the run (exit 1), but where the head pass's known
+  cause tells it: §18.11's head (`fill-page.ts` headOf) reads the paragraph over the unit from that paragraph's current
+  layout, filled where its first page is a pass page of the lay and at its fit where not, so the unit under the one-line end
+  of a paragraph begun on the page before is laid lower by one lay than by the other (lane page-target's trace; a ruling waits
+  on its two remedies). Told by what it moves (the head, and else only what the head pass's lay sets: no borrow, the first
+  frame's leading, over the fill's state, and the baselines), counted and listed: over the 90 pairs (r20's parts), 26,251
+  units begun on a pass page, 9,770 laid by two pages' lays or more, 11 laid otherwise, all the head pass's, the same before
+  this change and after.
+  Over the 90 pairs with stored rows (r20's bundles; v2.mjs's lay, the lane's hook): the units begun on a pass page and laid by
+  two pages' lays or more, 10,181 under the defaults and 10,683 every switch on, laid otherwise 12 in each mode, 11 by the
+  head pass and this unit; after, the 11. The drawing the same: no member, line or link moved on the 2,568 pages, both modes.
+  The gate lays the stored rows the runner hands the entry, not v2.mjs's (a joined unit's, a fresh row): 3883 has none
+  there, so the unit test holds this case.
+
+### 18.55 A list's marker joins no line of the column before it (2026-11-12)
+
+A glyph no run of today's figure reading holds joins the nearest line on its baseline within the run gap (`locate/figure-
+lines.ts` `linesOf`), and a cluster holding a formula's glyph is a formula (F1, §18.35). A list's bullet set in a symbol face
+three quarters of an em before its item, 0.62 pt after the last word of the column before it, joined that word: 2111.09276v1
+p8, Figure 5, "Wipe down the furniture•" with "furniture•" one element kept as a formula, and three lines more holding the next
+column's bullet as an element of their own.
+
+- **The rule** (F3's list reading, read before any line takes a glyph, and so before the formula's clusters): a glyph no run
+  holds that spells a marker (`MARKER`), stands on no run's line, and stands on the baseline (RUN_DY, one row as the figure reading
+  reads one) of a line holding a word that begins a word space or more after it, another such of its character in its column
+  (PARA_ALIGN_TOL): a list's marker, as `listed` reads a list. It opens its item's line and joins no line that begins before it.
+  A formula's raised script is no marker: 2610.10492v1 p10's legend "c∗1" over "c∗2", the next column's entries after them, its
+  star in MARKER's class and in a column, keeps its formula (a first reading of "its baseline" as the join's half a size took it
+  for one, and the corpus showed it).
+- **Before and after.** `figure-lines.test.ts`: two columns of a list, the bullet 0.6 pt after the first column's word, red at
+  the base ("boards•" one formula element); the raised star kept with its formula. 2111.09276v1 (stage 1a): three units lost and
+  two gained, the four lines' (members 454, 469, 535, 553 on p8): "Wipe down the furniture" plain words, "Wipe down the [cabinets]"
+  its highlight alone, "Pour hot water into the" twice a plain label; every bullet the page's ink where it stands.
+- **Over the 88**: nothing moves (units, members and parts as with §18.54 alone; the dumps r19's). The class is this paper's.
+- **Versions.** PIPELINE must move (2111.09276v1's units).
+
+### 18.56 A face switch first in a bare group is the group's face (2026-11-12)
+
+With the References toggle on, a reference's italic venue or title was drawn upright (the toggles-on sheet's class Y2). Read
+against arXiv's page over round B12's bundles (r19, the 88 papers: each bibliography member's glyphs on A inside its lines,
+matched to its unit's letters by the engine's own reading, group-style.ts `groupLettersOf`, each italic letter by its font's
+name), 610 of its 4,847 bibliography members (22 papers) held an italic stretch of three letters or more that their unit stated as
+no italic group, 16,858 of their 118,059 italic letters; 589 of them, in 15 papers (16,680 letters), in a bare group a face switch
+opens: BibTeX's styles' `{\em Proc. IEEE Globecom}`, `{\it …}`. The instrument read the switch as an element of the group's text:
+the group was `other`, its face carried by the silent element alone. No wire carried that face as a group's (the tags wire sent an
+empty element first in the pair, `<t id="6"><x id="7"/> IEEE …</t>`, which a translator is free to set apart from the words), the
+put-back places no group holding an element (packages/translate groups.ts), and no reference was asked for one.
+
+- **The rule** (`instrument.mjs` switchesOf). A face switch that draws nothing (`\em`, `\it`, `\itshape`, `\sl`, `\slshape`
+  italic; `\bf`, `\bfseries` bold; `\sc`, `\scshape` small capitals) standing first, white space aside, in a bare group is the
+  group's style and its command (SpanAt.cmd), no element of its text: `{\em x}` is stated as `\emph{x}` is, TeX setting the two
+  alike. A size, a family, a colour, or a switch that is not first stays as it was: an element of a group of style `other`. The
+  run-in rule reads such a group as one a switch opens (`{\bf Remark:}` stays `must`, `run-ins.ts`); a face that fills a
+  bibliography field rides it as before (§18.38). The typesetter reads the group's command as it reads `\emph{`'s: `\em{` toggles
+  from the face around it as TeX's `\em` does, and counts in the base style's majority (`tokens.ts` baseOf) as the switch inside
+  the group did. Stage 1a's statement (o) reads the switch out of today's unit (`stated.mjs`; the acceptance list's `characters`
+  entry already holds the clause). A note mark glued after a name (`\textdagger`, 2610.42112v1's author block) is no face switch
+  and stays an element: the earlier attempt that wrote the kernel's whole symbol table as text lost that block's person (lane
+  style-wire B, never merged), and a test holds it.
+- **Measured** over the 88 against r19: 731 units in 29 papers change, every one this rule's (932 switches: references 569,
+  paragraphs 129, cells 9, named variants 8, captions 7, theorems 5, abstracts 3, a footnote); no unit lost or gained otherwise,
+  no `must` moved; the differential's lost r19's 11 lines, its accepted 4,936 to 5,416; the float lines 778 and the orphan letters
+  388 as recorded; the twin run identical. The italic letters on arXiv's page no group states: 610 members to 21 (7 papers),
+  16,858 letters to 178, none in such a group (the rest an element's own glyphs, a URL inside an `\emph`, and a few of no group).
+  The translator: the markers wire changes in no unit (a group not `must` goes on no wire, and the switch, silent, went on none);
+  the tags wire in 688 units, 251,674 characters to 232,943; a markers translator is asked 52 references more (2,094 characters:
+  phrase groups of running text, and venues of the named variants of entries, now groups of text alone). The parity's eleven pairs
+  that move and 2610.10069v1 (199 pages, gate mode, no translator asked: the cache lacks no reply): no page newly worse in either
+  mode; default 23 to 22 and every switch on 28 to 26 worse pages, the pages that left (2608.25210v2 p1 t11, 2610.40645v1 p38
+  t342, line counts) only because their units, their ids moved, are laid with a fresh row, whose line count the gate does not
+  judge. With every switch on, v2 draws italics in 56 references and 3 paragraphs and bold in 6 that it drew upright. Four units
+  lose the italics today's stored reply gave them on v2's side (2608.25210v2 p3 t44 and p4 t99, 2610.20484v1 p10 t119 and p11
+  t129): today's wire had kept those groups beside a pair v2 does not keep (a paper's macro, `\newblock`), and their ids moved, so
+  v2's side now reads v2's own reply, as v2's reader always did; today draws 0, 8, 21 and 27 italic characters there, and the gate
+  judges none of the four worse.
+- **What it does not reach.** On Microsoft's markers wire a group that is not `must` comes back only where the reply holds its
+  words as the source does (§18.42's put-back, now open to these groups): 729 of 841 face groups on the parity's pairs sit inside
+  a clause, upright in production and in v2 alike (§18.38). 2610.10069v1's three references on pages 25 and 26 are of that kind,
+  not of this rule's: their `\emph{venue}` is stated italic. Production kept them because its `\enquote` was a kept pair (a pair
+  that sets more than a style) whose marker edge the venue stood at (`mt.mjs` classOf's boundary rule), the quoted title cut out
+  of its sentence as a pair of its own and its quotes dropped; since §18.32 the quotes are text, the run-in rule's boundary finds
+  no edge there, and by the coordinator's rulings no phrase pair goes on the markers wire and no reference is asked for a
+  bibliography's groups. A tags wire carries the group.
+
+### 18.57 A paragraph tighter than its page takes the fit's own knobs, one size step at most; at a column's foot the room past TeX's bottom it needs (2026-11-12)
+
+**The rule.** In the page's fill, a body paragraph a frame of which (two lines or more) stands under the page's band floor, the
+target less `adaptiveFill.band`, is laid again at its fitted state with the fit's own knobs in the fit's own order, each kept for
+the next as the walk keeps them: its tracking to the fit's bound (`trackMin`), the room TeX left under its blocks (the borrow
+knob, `Block.free`: §18.11's room, never past TeX's text block bottom), then one step of the fit's sizes (`step`, 0.975 of the
+original's size and never lower; a paragraph the fit set smaller already takes none). Each try is laid at the band floor's
+leading, on the pages the fit set it on, no frame gaining a line (the share TeX's breaks gave each column and page kept), and its
+fill leadings are found again (§18.11); the first that leaves no frame of two lines or more under the floor is kept, else the
+paragraph stays as it was. Its vote is its own, never the evened one's: the page's target, its anchor and every other page's
+reading are as before, so every lay reads the page alike (I6). `packages/typeset/src/shared/fill-page.ts` `evenOf`;
+`packages/typeset/tests/unit/tight-paragraph.test.ts`.
+
+**Why, and the one bound.** The owner's guidance of 2026-11-12 on the parity's class L2: one size a page and a fixed leading
+are means, the aim is a page that looks naturally even, and a difference the eye does not see is allowed; the coordinator's
+ruling under it fixes the size bound at one step, taken only where it brings the paragraph into the band, tracking and the room
+tried before it. One step (2.5 %) rests on what the owner was shown: today's reader, reading a size along the line (pdfTeX's
+expansion, §18.10's PIPELINE 80), set neighbouring paragraphs of one TeX size 2.5 to 5 % apart on 52 places of the 22 parity
+pairs he reviewed page by page, with no remark (the tap's ledgers: drawn size against U.blocks' size); he accepted a theorem
+the fit set a step smaller than today's (class S4, 2026-11-12); and he did see 5 % (2610.10069v1 page 5, two panes side by
+side). The leading's own bound is the band, the page's one line spacing (D6); the least contrast he has reported is 11 %
+(1706.03762v7 page 2: 1.33 among 1.5 to 1.55). He took the rule on the before-and-after pages of 2026-11-12 (17:25 JST):
+「看起来调整过之后挺舒服…计算量多 4.8% 可以接受，段落字号小一级也不是问题，只要用户感受不到就行。」 (it looks comfortable
+after the adjustment; 4.8 % more computation is acceptable; a paragraph a size step smaller is no problem as long as the reader
+does not feel it).
+
+**At a column's foot: the room past TeX's text block bottom it needs (the owner's ruling of 2026-11-12).** Where none of the
+knobs above brings it into the band, a tight paragraph whose frame ends a column may take the room past TeX's text block bottom
+(the borrow's own room, §18.37: `FitState.over`, B.slots `roomOf`), on its tracking and TeX's room, then with the size step:
+never deeper than a line of its own pitch, never nearer the next ink than TeX's paragraph separation, and only as deep as the
+band's floor needs (its frames set no looser than the floor, the borrow's own measure: as deep as it needs, not as deep as it
+may). This lifts the 2026-11-09 bound on TeX's text block bottom for this one case, as §18.37 lifted it by 1.5 pt for a size
+kept, by his ruling on the same pages: 「挺好」. 2602.23285v2 page 15, unit 131 (two lines at TeX's pitch, 11.0 pt apart, among
+paragraphs spread to 16.0-16.5): its two lines at 1.41, the second 4.5 pt under the bottom, 24 pt over the page number's
+baseline. Over the 90 pairs it brings 81 frames more into the band (639 in all), 74 lines past the bottom, median 3.6 pt, the
+deepest 10.9 (a line is 11 to 13.5). The two rules stay one: the foot is the knobs' last try, and a paragraph it lifts takes
+it on the knobs before it (one at a page's foot over a page break takes it as 2602.23285's does: its first frame spread, a line
+the tracking freed on the next page; `packages/typeset/tests/unit/entry.test.ts`'s share case). `axt-borrow=0` turns off the
+fit's borrow; the fill's foot step is not an option.
+
+**What the page states of it** (2026-11-12, lane gate-close). The Page member of an evened paragraph carries `evened: { by,
+lines }` (`types.ts` Laid, `lay/page.ts`, from the fill's `FillLaid.evened`): the knobs the fill took, in the order taken (a knob
+that gave nothing is not named: a paragraph its fit set at the tracking's bound already takes the size step alone), and its
+line count on that page at its fitted layout, before them; one the foot lifted carries `fit.over` too, how deep its lines went
+under TeX's bottom (§18.37's statement, the depth and not the line its state allows). Nothing of the lay reads either; the
+display gate's rulings TRS and Fm do (`lab/typeset/parity/rulings.mjs`), so that a paragraph one step small, a line short or
+a line past the bottom is accepted only where the lay says it evened it so.
+
+**What it does** (the 90 pairs with stored rows, the borrow of §18.37 on; every body frame of two lines or more under its page's
+band floor: 1,468 on 871 pages, the same with the borrow off): 558 come into the band (the tracking alone 128, with the room 240,
+with a size step 190). 1810.04805v2 page 3 unit 30 ("we denote the number of layers"): 6 lines at 1.17 among 1.47, now 5 at
+9.75 pt and 1.41. The median range of a page's body leadings falls from 11.0 to 8.1 %; 562 members move on 474 pages, the 556
+evened and on five pages the page's one size, now that every body unit there is short of its frame (2610.21924v1 p3 among them):
+the growth rule as it is (the body 5 to 7.5 % larger, its line counts unchanged: the same behaviour as on any page that grows, no
+exception). Lays 4.8 % more layouts. No unit not evened gains a line or shrinks.
+
+**The pages where a tight paragraph stays beside one evened: left as they are (the coordinator's ruling of 2026-11-12, the owner
+having handed it to him).** On 12 pages with both rules (13 with the knobs alone) a paragraph that stays tight stands further
+from the median of its page's other paragraphs than before, 11 % or more where it stood under (1706.03762v7 page 3, unit 25: 7.2
+to 14.8 %; 2610.40645v1 page 12, unit 82: 9.5 to 18.4 %). That paragraph is exactly as it was, its leading, its size and the
+page's target unchanged; the figure rises only because its tight neighbour left the comparison set, and the page holds one tight
+paragraph fewer. Every coupling rule measured would undo 30 to 55 % of the evening and add a second pass: evening undone on a
+page that keeps a tight paragraph past the band's width, or past the 11 % reported (a number of evidence, not a rule), or a page's
+tight paragraphs all evened or none. None is built.
+
+**Out of reach.** 910 frames stay under the band: 529 a line short that no knob frees within one step (1706.03762v7 page 2's
+"Attention mechanisms", three lines of four), 303 as long as their original frame in the middle of a column, the rest split or
+at a column's foot.
+
+**Tried and dropped: the page held to its band floor.** Where a tight paragraph stays, every unit of the page set no looser
+than the target less the band (still the band, D6): it brought 2 frames into the band and narrowed the rest (the frames 11 % or
+more tighter than their page 679 to 413), but moved 8,705 members on 969 pages (cells, headings, captions with the paragraphs),
+gave 97 untouched paragraphs a letter-spaced line more through the fill's tracking, and set 186 borrowing units closer: the
+family the owner turned down on 2026-11-08 (one leading a column) and 2026-11-10 (no list item looser than the tightest). Not
+built. Two size steps: not offered (5 % is what he saw). The study, its counts and the crops: lab-data
+`refactor-2026-11/lanes/even-page.md`.
+
+### 18.58 A display no unit owns is one block, its number with it (2026-11-12)
+
+On staging (round B12), 1706.03762v7 p4's display (1), `Attention(Q, K, V) = softmax(QKᵀ/√d_k)V`, was hovered as three pieces,
+each lit alone on both panes: "Attention(Q, K, V) = softmax(", the fraction, ")V"; its number "(1)" lit with none. No source unit
+owns the display (its paragraph ends at "as:", the next begins under it), so it is kept blocks (`today/ink-units.mjs`
+keptUnitsOf, §17.1's "Text no unit owns is a kept block"), each a member lit whole (`lay/lit.ts` litOfA). The ledger makes a line
+of the glyphs TeX set on one baseline (0.6 of their size: `today/ledger.mjs` LINE_DY), so the display was five lines: the
+formula's run to "softmax(" on 311.23, the numerator on 317.97, the radical on 311.53, d_k on 303.78, ")V" on 311.23. A block took
+the next line in TeX's stream only where it stood under the block's lowest baseline (0.6 of its size) and met the block across: a
+listing's rule. The numerator, 6.74 pt over the baseline and right of "softmax(", began a second block, the radical and d_k joined
+it, ")V", right of the fraction, began a third; "(1)", no letter pair, began none and met none across. Today's ledger read no
+display (§18.19): the fraction's lines and ")V" were `symbols` and lit nothing, and today's reader lit "Attention(Q, K, V) =
+softmax(" alone on both panes, and the rest with the paragraph before on arXiv's pane alone (its left part's span).
+
+- **The rule** (`keptUnitsOf`, its one change to today's; `locate-ink-today.test.ts`). A display TeX set is one block (§18.19:
+  TeX states each display it sets, from its start point to its last end, `regions` of kind `display`): a line in it, by the
+  display holding at least half of its inked glyphs as the ledger reads a display's line, joins its display's block whatever
+  its baseline and extent across (a fraction's numerator and denominator, a radical, a big operator's limits, an alignment's
+  rows) and whatever TeX set between its lines inside it (its text a unit translates, an `\underbrace`'s label, that unit's own
+  piece), and no other block; a display's own line of no letter pair starts its block. Its number joins it: TeX sets it right
+  after the display's end (`\eqno`: on the last line, or on a line of its own under it where it does not fit; an alignment's
+  numbers are inside its region already), so the line that holds the first ink TeX set after the display's end, on its page and
+  in its column's body, is the display's (with the stop TeX set after the formula's end point on that line, 2608.04322v1 p5's
+  (9)). A unit's display is one block with its numbers (§17.1, `units.mjs` displayBlockId, Laid.lit's `own`); a display no unit
+  owns now lights as one too, an alignment of several rows one block in all, as a unit's alignment is. A line of no display
+  joins a block as before.
+- **Measured** over the 88 papers (the 90 pairs: a kept block is one for every target), the round's head (r20, B13) against the
+  rule (`lab/pdf/prepare-back/display-pieces.mjs`, each display's lines by its region as Located.displays now states them;
+  readarxiv-lab-data `lanes/formula-hover`): 78 parts on a page of displays TeX set that no unit owns, in 22 papers, 752 formula
+  lines (a unit's display is one placeholder, one piece, as before: 4,476 of them in 2,318 members, no two of one member on one
+  row). Lit as more than one piece 51 → 0: on one row 29 (ink off its baseline: a fraction, a radical, a big operator's limits,
+  a script), over rows 22 (an alignment's rows or a formula broken over lines, each row cut too: 2610.21288v1 p10's (A7)-(A9),
+  each number a piece of its own, 26 pieces → 1; 2307.16209v1 p27's metric broken over two lines, 18 → 1); one piece 24 → 74.
+  Lit by nothing in part 8 → 4, the four as before: 2610.21377v1 p41's three displays inside Algorithm 1 (a float, whose lines
+  no kept block takes) and one line of 2610.21765v1 p10's, a big delimiter whose baseline its font sets at its ink's top, which
+  the probe reads outside its row. Numbers: 45 displays in 12 papers light their number with them, 3 of those set under the
+  formula; each was lit by nothing. Nothing else moves but what the blocks carry: the ords of the units made after them; on 16
+  pages of 7 papers the page's column reading (`locate.ts` columnsAndMeasures: two columns where three lines keep to each half),
+  which the split blocks' narrow lines had made two-column (1706.03762v7 p4: the fraction and ")V" in the right half), 74
+  members' lines from "spans" to the one column, and with it 4 lines' PINNED of 3 of those pages (a line's block is read by
+  page and column); the paper's faces in 21 papers, which the typesetter reads alike (`lay/read.ts` paperOf, 63 of 63). The
+  reader gate over the 37 pairs of the 20 of those papers it holds, each laid from both runs' parts (its entry, every member's
+  `Laid.lit` written a line, `AXT_GATE_LIT`): every member's boxes on every page alike but the kept displays' (1,773 entries
+  gone, 173 come, all `inkorphan`), the members a column moved too; the entry 8,560 laid alike and 93 not on both, its boxes
+  11,157 members, 29,244 lines, 14,839 boxes on both, I10 no fault on both.
+- **The version.** PIPELINE moves: the parts of 21 of the 88 papers (the kept members and their ties, the column reading, the
+  faces) and the add-ons of 13, whose groups are named by the index of each unit made on A (`axt<unit>.<page>.t`: the figure
+  texts made after the merged blocks, numbered on from them); TRANSLATE stays (a kept block is never sent); the units objects
+  of every paper as they were (a kept block's unit is its kind's, of no content).
+- **Not done.** A display the source ends with `$$` (no region, §18.19) keeps the listing's rule; a number TeX sets before its
+  display (`\leqno`: none in the 88); a display inside a float, which no kept block takes.
+
+### 18.59 What TeX set on an author's line after it moves with it, past a word's gap (2026-11-12)
+
+With the author block switched on, a name or a row of places was drawn 10 to 25 % smaller than the original though the line had
+room beside it (the display class S5). The owner (2026-11-12): normal size, using the room that is there, without the overlap of
+today's marks after the name, and only if it can be done simply. Over the lay of the 90 pairs with stored rows, every switch on
+(round B13's bundles, r20), 63 author-block members (author, affiliation, the block's ink names) were drawn below their own
+size: 15 fenced by ink that stays beside them, 3 on a flush-left line (§18.60), 2 by an icon box before a name and 2 by an
+"and" left as ink of no unit (both open), 31 inside a run the lab could not lay (a connector's ink unit whose id moved has no
+stored row; a reader asks for it), 10 with no room on either side (a line of names filling its column, four columns of names).
+Of the 15, every one is a mark or a number TeX set right after a name or a place on its line, past a word's gap:
+
+- 1706.03762v7 p1 t187, the last NeurIPS name (`Illia Polosukhin\footnotemark[1]\hspace{1.7mm} \thanks{…}\\`): the call
+  points of §18.16 stop at the last block (no unit follows its `\thanks` in the block, so no call is written there), the glue
+  rule broke at the 3.22 pt after the star, and the ‡ stayed (`Room.stays`), the right end of the centred name's room: v2 drew
+  it at 0.875; today keeps 9.96 by drawing its star over the ‡, 2.8 pt of overlap.
+- 2608.16117v1 p1 t129-t131, "Philadelphia, 19104, Pennsylvania, United States of America": the postal code is no unit's
+  (a number), between two places on one centred line. It stayed, parted the line's flows (TeX's separation past it 35.8 pt, more
+  than a shared row's), and the places after it were laid as a run centred on its own middle with its left fenced by the
+  number: 0.8 for the German; today keeps the size by a break TeX never set, 2.74 pt off the line's middle.
+- 2608.08481v1, 2610.20266v1, 2610.21288v1 (and, drawn at their size but fenced, 2610.20030v1, 2610.21765v1, 2610.21770v1): a
+  `\thanks` mark after `\,` (1.66 to 1.83 pt) after the last name's own marks.
+
+**The rule** (`locate.ts`, the trail). An author's member (the block's names and places, `AUTHOR_KINDS`) also owns, past a
+word's gap, the ink of no letter TeX set after it on its last line, in B's stream up to the next unit's ink: what TeX set as
+part of its line moves with it, decided by TeX's order and the line, never by a mark's shape. A blank glyph a producer wrote
+decides nothing. Ink holding a letter is text: where a letter stands on the line after the run, the paragraph's own text goes
+on (acmart's reference format "Ru Huang. 2027. ABNAT", an "and" a class sets between names, an ink unit's, translated), and
+nothing past the gap is claimed, as the end mark's walk reads text no unit owns after a unit's end (§18.52); a member of no
+author block keeps the glue rule alone; a row of another line (an e-mail under a name), a mark the next unit owns (its label,
+own.mjs MR 5), stay as before. The distance TeX set from the member's ink end (its last glyph, or an element's box after it:
+§18.60) to the run's first glyph, where the run opens past the gap, is stated on the trail: `El.sep` (FORMAT 1, optional; a typesetter of before reads none and glues the trail). A run
+glued first and gapped after (2608.08481v1's "1,∗") is one crop with its gap inside it. The claimed ink is the member's: its
+line reaches it, no stay of any member's, and the member after it on the row is joined to it at TeX's separation (16117's
+five places one flow).
+
+**The lay** (`lay/adapt.ts`): the trail's crop after the member's tokens as before, `sep` laid before it as the kern an
+`\hspace` element's is (`kernW` on the token before, at the member's scale), so that no line breaks there.
+
+**Before and after** (stage 1a over the 88, r20's compiles: the marked TeX unchanged, every compile found by its key). s1 and
+its twin: 88 made, none missing a compile, none failed; 2,707 of 2,707 objects and 88 of 88 dumps the same (I6). 11 papers
+move, the units (the wire) byte-identical in each, their parts and add-ons alone: trails in 1706.03762v7 (‡, `sep` 3.23),
+2608.16117v1 pp1-3 ("19104,", 3.56), 2610.20285v1 († 4.23; its alignment, read off the page, now c: the line with its mark is
+centred, 250.25 against the column's 248.53), 2610.20451v1 (",1" 8.47, "2" 6.8), 2610.21084v1 pp1-2 (two postal codes
+"30322,", "29634,", 1.99), and the `\,` marks joined to glued trails in 2608.08481v1, 2610.20030v1, 2610.20266v1, 2610.21288v1,
+2610.21765v1, 2610.21770v1; flows joined over the codes (16117 pp1-3, 21084's two rows), joins and rooms with them. A place's
+class's tail (the comma TeX set after "Philadelphia", its source writing none) is read with its trail aside, as an end mark is
+(facts-pass.ts): read with the trail as its last element glyph, as every trail was since §18.16, the place had no tail, its comma
+erased with its text and drawn nowhere ("Philadelphia 19104," on the lay, caught by the lane's own reading). The differential against acceptance-b13: lost 11, the LOST
+lines r20's; gained 5,838 as r20's; changed 5,256 to 5,258 (1706.03762v7 t187, 2608.16117v1 t129: their trails). Float lines
+778 and orphan letters 388 as recorded.
+
+### 18.60 A line its members share whole TeX set flush left is laid from its start as one run (2026-11-12)
+
+2609.20976v1 p1 (JCAP, `\author[a]{Gautam Bhuyan,\orcidlink{…}}`, each `#2$^{#1}$\ `): three names on one flush-left line, each
+with its ORCID icon (its element), each mark after a name the next name's label (own.mjs MR 5: the class stores the list in the
+preamble, so no call is stated). A line TeX set flush left was never laid as a run (`rowLinesOf` took centred and flush-right
+lines alone: "its members run on from its first one's start already", S.rowStart). They do run on, but each member is fitted in
+its own block first, widened to its `Room.side`, and the first name's side ended at the next name's label (210.56), half its
+size before it: 118 pt for the Japanese name with its icon, drawn at 0.9, the size tie taking the others with it, though that
+label moves with the next name (laid from this one's end) and the line had 28 pt free after its last name. Nothing that moves
+with a member may fence its room or its neighbour's (the owner's S5, §18.59).
+
+- **The rule** (`lay/adapt.ts` `rowLinesOf`, `shared/row-start.ts` `lineRoom`/`lineShift`, `lay/flow.ts` `layLine`). A line of
+  several members TeX set flush left (their own marks' alignment, alike) is a run as a centred or flush-right one is: laid from
+  the line's start, its room to the run's right (its last member's side, the column's end), each member from the one before's
+  ink end at TeX's separation, then placed starting where TeX started the line. A follower's label that goes with it on the row
+  (S.rowStart's row label: a flush-left follower's, which U.decor does not carry) admits it to the run and is drawn before its
+  first token, the first word glued to it, as `layOne` draws it. Where the translation does not fit the line's room, `layLine`
+  refuses the run and the members are laid one by one, as before (the test lays a full row so and compares it with the row its
+  marks state no alignment for). The parity's verdict asks `rowLinesOf` without flush-left lines (`left`, the lay's alone): a
+  flush-left member is judged by its start and a follower by its gap, which is the line's reading already.
+- **The separation** (`locate.ts` `inkEnd`, a prepare change). The join to the next member on a row was read from the member's
+  glyphs' ink end; its element's box on that line (no glyph's: the ORCID icon) travels with it in its crop, so the next name was
+  laid the icon's width late (9.84 pt), its mark apart from the name TeX set it right after. It is read from the member's ink
+  end, its elements' boxes with it; an element's glyphs are among the line's glyphs already, read by their ink (read by the
+  element's stated box, its glyphs' advances, 173 joins in 24 papers moved by under a point: tried, not kept). An author's
+  trail starts there too (§18.59): a mark TeX set right after the icon is glued to the member (2610.20451v1's ",1"); read from
+  the last glyph across the icon it was stated 8.47 pt apart and laid that far after the icon's crop.
+- **Before and after, §18.59 and this together** (stage 1a s5 over the 88, r20's compiles; its twin 2,707 of 2,707 objects and 88
+  of 88 dumps the same). 13 papers move: §18.59's 11, and by the ink end 2609.20976v1 (two joins, 22.54 to 11.25 and 21.55 to
+  10.26: from the icons' ends), 2610.20451v1 (",2" after an icon now its name's trail, glued; its "and" ink unit the word alone)
+  and 2610.10492v1 (the mark after the first name's icon its trail, so the "and" after it is an ink unit of the block, joined:
+  units 49,689 to 49,690, the paper's later ink units numbered one on). The differential: lost 11, the LOST lines r20's; gained
+  5,838 to 5,839 (that "and"); changed 5,256 to 5,258; float lines 778 and orphan letters 388 as recorded. The lay of the 90 pairs
+  with stored rows, every switch on, against 75602aecb over r20: 40 members move on 17 pages (10492's renumbered ink units
+  aside, the same lay), 19 drawn larger, none smaller: 1706.03762v7 t187 (es, pl, zh) 0.875-0.9 to 1, 2608.08481v1's five 0.8 to
+  1 (a run fenced by the last name's `\,` mark), 2608.16117v1-de's places 0.8 to 1, 2609.20976v1's names 0.9 to 1,
+  2610.21288v1's three 0.9 to 1, 2610.20266v1's three 0.9 to 0.93 (its run still refused for an "and" with no stored row); a
+  flush-left run's last member no longer tracked by the page's fill (2609.26457v1, 2610.19274v1, 2610.21084v1: its share of its
+  line, as a centred run's), 2610.21084v1 t496 laid where it was unfit. Author-block members drawn below their size: 63 to 47; the
+  47 are runs the lab cannot lay (34: a connector's ink unit with no stored row, a reader asks for it), no room on either side
+  (10), an icon box that leads a name (2610.21547v1, 2) and an "and" no unit owns between two names (2610.20716v1 t3): open.
+  The three named units, with every switch on (base, after; today):
+  1706.03762v7-zh t187 0.875 and 1 (today 1); its line with its marks centred on the original's middle 307.83, -3.44 and 0.00
+  (the base centred the name without its ‡); its ∗ 4.03 pt before its ‡ (TeX 3.22, the crops' margins), no overlap (today's ∗,
+  drawn as text, 2.82 pt over the ‡). 2608.16117v1-de t127-t131 two rows at 1 (the base 0.8 for t130/t131; today 1 by a third
+  line TeX never set), each row centred on TeX's middle 306.14 (the base's lower row 3.36 off), "Philadelphia, 19104,". 2609.20976v1
+  t1-t3 0.9 and 1 (today 0.975, 1, 1), from TeX's start 84.95. The parity of the three pairs, every switch on: 5 pages worse to
+  3, none newly worse; 2608.16117v1-de p1 (t128's align, the tie t130/t131) and 2609.20976v1-ja p1 (the tie t1-t3) no longer
+  worse, 1706.03762v7-zh p1's t187 size gone (the page worse by its abstract's line count alone, t8). By default (the author block
+  the original's) the lay of the 90 pairs is the base's member for member (10492's ink units read one number on), and the parity
+  of the three pairs the same: 3 pages worse, the same differences.
+
+### 18.61 A figure's label or a table's cell that holds a decorated word stays whole as the original (the owner's ruling, 2026-11-12)
+
+A figure's label and a table's cell can hold a decorated token: a word on a ground (a highlight), struck or underlined. The
+engine withholds such a token from the translator and keeps it as the original's ink with its decoration, an element carried in
+the translation (a figure text's `cite`, §18.26; a cell's placeholder, its ink a crop), and translated the rest of the line: the
+reader saw a line half in each language. 2608.06701v1 p1, the figure's box numbered 10: "I'm still not finding `CallbackBase`."
+stayed English, on its blue ground, inside a translated box; 2111.09276v1: 23 figure lines ("Sprinkle the [ginger] on the
+[fish]") and 12 cells of Table 1 ("Put the [ham] in the oven."). The research on figure and table text put the choice to the
+owner until a decoration can follow its words (the ground, the strike or the underline drawn anew under the translated stretch):
+keep the mixed line, or hold the whole label or cell as the original. On 2026-11-12 he agreed to hold the whole label or cell (the
+readiness sheet's question on figure and table text after the research, part (a)); his earlier word on a caption a highlight holds
+was that it may stay the original's where the highlight forces it.
+
+- **The rule.** A figure text or a table cell that holds a word its decoration keeps as the original's ink is held whole as the
+  original, never translated around it. It is stated on the unit (`InstrumentUnit.decorated`, with `fixed`), at the two places
+  where each kind of unit's other keeps are decided, because the decoration is known from two readings: a figure text in
+  `figure-lines.ts` `figureLinesOf`, where an element `cite` (judge's decoration: a tone, a frame or a flat stroke holding whole
+  words) makes its `why` `decoration`, after the double and the script reasons and before `ink.ts` ties the labels' sizes, so that
+  it keeps a set of its own as every text kept whole does; a cell in `instrument.mjs` `decoratedCellsOf`, a table's cell the
+  paper does not keep already holding a placeholder whose source the probe states TeX set beside a decoration of its own
+  (`decorated`, `marks.mjs` readInkDecorated, §18.51: soul's ground, underline or strike, alone or in a paper's macro). Nothing is
+  detected anew, no third place reads it: the reader and the typesetter learn it from the stated unit, whose member is fixed (no
+  group of its text) and stated `unwrapped` in the part (`bundle.ts` stateOf: a fixed member that is no kept unit, which before
+  this rule was a figure member alone), so that nothing is laid over it.
+- **The whole label, by the paragraph reading's pairing** (the coordinator's ruling of 2026-11-12, option (b)). A figure's label is
+  often printed over several lines that the engine cuts as several texts (the unit is the printed line: ragged lines are joined
+  on no guess, §18.36), or on one printed line cut where the face changes (an italic lead and its roman text, §18.26); held by the
+  line with the decorated word alone, the label read as a sentence in two languages, which the owner's ruling (the WHOLE label)
+  does not allow. So the hold spreads, in `figureLinesOf` right after the text with the word is held, to every text and run of its
+  label as the paragraph reading pairs it: the lines `figure-paras.ts` parasOf reads as one block by geometry (geomJoin: one face
+  family, weight, size and fill, its pitch by TeX's interline rule, its left edge), whether or not its text goes on, cut where a
+  line opens an item (the same marker that ends a paragraph there), and the fragments it bridges on one printed line
+  (`figureParas`). Nothing else is read: the reading hands over the pairs it computes (parasOf's `pairs`), no test or number is
+  new. Such a text is held for the same reason, `decorated`, `label` where `token` names one holding the word itself (the dump's
+  `decorated`, beside `keptBy: 'decorated'`), fixed, no kept unit, in a size set of its own as the text holding the word; one
+  kept for another reason keeps it. The ground: the reading refuses to JOIN ragged lines on a guess because a wrong join damages a
+  translation; a HOLD risks only that a line stays in the original, so the pairing test that is too weak to join is enough to
+  hold. The author's phrase as a unit (the figure-text research's P1, the PDF's paragraph marks and a list's items, after the
+  cut-over) replaces this pairing when it comes: the pairing is not to be grown for this purpose.
+- **A word: a letter in it.** The hold exists to prevent a half-original line. A decorated token with no letter (a number, a
+  symbol) makes none and stays an element in the translated line as before. The condition is the engine's one predicate,
+  `holdsLetter` (`figure-lines.ts`, Unicode's letter), which already tells a figure's decorated word (`cite`) from a decorated
+  number (`ref`) and now reads a cell's decorated text too. A figure text whose decorated word is all its text but its marks
+  (2608.06701v1's "`CallbackBase.host_label(result)`" between backticks) is held like the others: no special case.
+- **A cell is held, not kept.** The table-group rule (`lay/entry.ts` decideTables: a body column whose cells mostly came back from
+  the translator as they went is a column of names, kept whole; a kept cell counts as one that came back as it went) judges what
+  kind of content a column holds from the translator's replies. A cell held for its decoration is ordinary translatable text held
+  for a reason of drawing: no evidence about its column. Stated `unwrapped`, it tells the decision nothing, and its column is
+  decided by its other cells' replies. Stated `kept` (as Rule 1 keeps a cell, §18.22) the decorated cells alone would have passed
+  NAMES_SHARE in every column that holds them and kept 17 more cells whole (2111.09276v1 Table 1's columns 0 and 2, 3 each;
+  2610.40576v1's tables 9, 10 and 12, 4, 3 and 4); the owner's ruling names the label or the cell, and his ruling on header rows
+  goes the same way (a kept cell does not hold its row, "as now"). A held cell is still sent to the translator and its reply still
+  comes back (the bundle marks it no `kept`), as a held figure text's is; accepted for the same reason.
+- **Not this section's.** Captions and body text: their decorated tokens stay elements in the translated line (§18.51: Figure 1's
+  caption of 2111.09276v1 translated with its two highlights as crops). A table's header row's other cells (the owner's "as now").
+  A style group whose edge is inside a word (§18.47). A colour alone withholds no word today (a figure's run is one fill, a
+  source's colour group is a group of its text), so nothing is held for one.
+- **What it does not reach.** A cell whose decorated piece the probe's reading refuses: its characters past the reading's set
+  (an apostrophe, a question mark: `marks.mjs` CHAR_NODE's punctuation), a text past INK_TEXT_MAX. 2610.40576v1's cell of
+  `\hlp{Let's use different notation.}` (ord 237) stays a mixed line; the decoration's definition did not change with this rule.
+  And a token the figure reading reads as the ground under its whole run (no element) is translated as before, its ground left
+  where it stood (2111.09276v1 Figure 5(a)'s seven such tokens). The pairing knows a label only as far as its geometry and an
+  item's marker tell it, known and accepted: where a list's bullet is no marker to the paragraph reading (a glyph of its own
+  before the line, 2111.09276v1 Figure 1), the next item one pitch under a held label's last line, on its edge and in its face, is
+  its block (Figure 1's "Wash the [fish]" under "yourself", held for its own word there); and two labels one under the other in
+  one face, the first line standing in or out, are one block (Figure 2's "Source Step: Wash the chicken thoroughly", held with
+  the "Target Step: Wash the [fish] thoroughly" under it: a line left in the original that could have been translated).
+- **Before and after.** `figure-lines.test.ts`: a figure text whose word a tone holds is held (`why` `decoration`), one whose
+  toned stretch is a number keeps it an element `ref` (red at the base: `null`); the eight texts the relation reading's tests free
+  with a framed or toned word are now held for it. `highlights.test.ts`: of a table's six cells, the two whose decorated piece sets
+  a letter are held, not the one of a decorated number, nor a paragraph or a caption holding one, nor a cell the paper keeps (red at
+  the base: no such reading). `locate.test.ts`: a held cell's member stated `unwrapped`, a cell Rule 1 keeps as before (red at the
+  base: no why).
+- **Measured** (stage 1a, the lane's dw1 against round B13's r20 over the 88, the same flags and compiles; 2111.09276v1 against
+  its base at 75602aecb over soul-locate's compiles). The counts the research read, exactly: figure texts held 8 in 2 papers
+  (2608.06701v1's six on page 1: box 10's "Thought: I'm still not finding `CallbackBase`. …", "`host_label` static method in
+  `CallbackBase`" and four lines of the plan's chips, `CallbackBase.host_label(result)` and a path; 2610.40576v1's two), cells
+  held 8 in 1 paper (2610.40576v1's tables 9, 10 and 12: four
+  drawn before, four unlocated before and after; its two cells the paper keeps as names unchanged); 2111.09276v1's 23 figure texts
+  and 12 cells (Table 1's every cell with a highlight). Two figure texts no ink locates (2610.19274v1, 2610.40576v1) are marked held
+  too and stay unlaid. Shown 38,204 to 38,192. No other unit's state, id or text moves, but four of 2610.40576v1's held cells:
+  Rule 1 by group (§18.22) had made each one's `\ctk{…}` an element `code` and given it a new id; held before locate, the cell is
+  passed over by that reading as every fixed unit is, its id the instrument's again (today's), and through those glyphs the paper's
+  face counts every part of it states move (+5 and +20 glyphs of two faces), nothing else on its pages but the held members' why.
+  2608.06701v1's figure on pages 1 and 2: the six members' why, and their sets: the two size ties they stood in lose them (6 to 4
+  ords, 21 to 17). The twin run identical (I6: 2,722 objects, 89 dumps); the float lines 778 and the orphan letters 388 as
+  recorded; the differential's lost lines r20's 11, its accepted the same 5,416 units (three of 2610.40576v1's cells now accepted
+  by (s), before as written by Rule 1 by group), gained 5,838 to 5,826 (the twelve held units, v2's own, no longer shown).
+  2111.09276v1 laid with staging's stored Google rows (the served metrics, the reader's `typesetLay`, pages 1, 3, 4 and 8): its
+  35 held members unwrapped, every other member of those pages in the state and at the size it had; Table 1's other 19 cells laid
+  as before, its columns decided as before. With the whole label (the lane's dw2 against dw1): the 88, 9 texts more, every one
+  2608.06701v1's (box 1's first row, the plan's items 2 and 3's four other lines each); 2111.09276v1, 17 more (Figure 1's
+  "yourself"; Figure 2's four leads and the two texts of "Source Step: Wash the chicken thoroughly"; Figure 5's ten continuation
+  lines); nothing else moves (the dump states `decorated` on the units held before); shown 38,192 to 38,183; the differential's
+  lost lines as before, accepted 5,416 to 5,422 (six of 2608.06701v1's lines, today's units too, by (s)), gained 5,826 to 5,823;
+  the float lines as before; 2111.09276v1 laid with staging's rows: the 17 unwrapped, no other member's state or size moved, and
+  no label of its Figures 1, 2, 5(a) or 5(b) reads in two languages by lines. v2's lay of the two pairs of the lab's that move (`v2.mjs`, the lab's store, no
+  translator asked): 2608.06701v1-zh p1, the six held texts unwrapped, and four labels of the figure's "New Plan" box, whose size
+  tie no longer holds them, drawn at 4.35 pt where they were at 4.24; 2610.40576v1-zh, its four drawn cells and two figure texts
+  unwrapped (none had a stored reply: the store lacks 43 of its units' replies, 37 now), tables 9 and 12 decided as before for
+  every other cell, and table 10's column 0 (its three segment rows, "Student prefix · tokens 0--512" …) translated where the base
+  held it as names: the base read its two decorated cells, with no reply in the store, as cells that came back as they went (a
+  cell no translator was sent counts so), two of five, the share; held, they tell nothing, and its three other cells came back
+  changed. That column moved by the store's gap, which the base read as evidence; with every reply in, the replies alone decide
+  it in both.
+- **Stage 1a, the differential and the parity.** The dump marks each held unit `keptBy: 'decorated'`; its cause is the
+  candidate's own (`stated.mjs` CAUSE.decorated, keptWhyOf), "kept as the original whole: a decorated word inside it", which the
+  acceptance list accepts on the owner's ruling ((s), the coordinator, 2026-11-12). The reader gate over the 88 (ENTRY 29,164
+  alike, 692 not; I3 58, I4 0, I5 2; I10 no fault) and the sentence cover as round B13's. The parity's gate (`lab/typeset/parity`,
+  as round B13 left it) reads no `keptBy: 'decorated'`: of its 22 pairs one moves, 2608.06701v1-zh, and its page 1 is newly worse
+  in both modes (default 6 to 7 worse pages, every switch on 7 to 8), by `figures` alone (class T4, "figure texts counted fewer"):
+  today draws 45 of its figure texts translated, v2 24 with the whole label (42 before, 34 with the decorated lines alone), the
+  labels held whole now the original's. No other difference moved, with the decorated lines alone or with their labels; the
+  reader gate with the labels as without them (I10's pieces 4,377,696: the nine members held with their labels draw none). That reading is the gate's to rule on (its keeps are listed by mark, `join.mjs`
+  candidateKept), not this section's.
+- **Versions.** PIPELINE must move (members held and stated unwrapped, their groups gone from the add-on, a held figure text's
+  size set its own, 2610.40576v1's four cells' ids); no other unit's id or text moves, nor the format (`unwrapped` is the part's
+  existing PrepWhy). TRANSLATE stays: today's engine reads none of it.
+
+### 18.62 Every kept unit states the rule that keeps it, in the lab's dump (2026-11-12)
+
+The display gate could not apply the owner's ruling of 2026-11-08 that an algorithm's pseudocode stays the original
+(2608.25210v2 page 8, "Return P", which today translates): the bundle states a kept unit `kept` and nothing more, the reader's
+page states it 'none' as it states a unit whose row has not come, and the lab's dump marked the rule (`keptBy`) for some keeps
+alone (Rule 1's pitch, an address block, the figure reading's identifier, formula, double and script, a decorated word). Each
+keep now carries its reason from the line that decides it, as the family before it does: a flag of the instrument's unit
+(`InstrumentUnit`) that the lab's dump reads and the bundle does not carry, so no bundle byte moves.
+
+- `pseudocode`: a unit of an algorithm float's body (the front end's `pseudocode`, read by `pipeline/instrument.mjs`
+  `unitFactsOf`, which now states each kept unit's reason beside the set: 'pseudocode' first, then 'name'). The dump's
+  `keptBy: 'pseudocode'`.
+- `nameCell`: a cell or a figure text of names or markup tokens alone (`translate/mt.mjs` nameCells). `keptBy: 'name'`.
+- `crowded`: a figure text the figure reading keeps whole as crowded (a translation with no room beside other ink, a formula it
+  would tear) and for no reason of its own besides (`double`, `script` stay first). `keptBy: 'crowded'`.
+- `block`: a kept block of rule 10 (`locate/today/ink-units.mjs` keptUnitsOf: a listing, a page number, a URL alone, a
+  bibliography not cut into entries), beside `address` for a block of e-mail addresses alone. `keptBy: 'block'`.
+- A figure text the lone-text path keeps as a line of code states `pitch`, as the paragraph path's already does
+  (`locate/ink.ts`); no unit of the corpus moved by it.
+
+Each mark is a cause of the candidate's own unit (`lab/pdf/prepare-back/stated.mjs` CAUSE: `address`, `crowded`,
+`pseudocode`, `nameCell`, `block`; keptWhyOf), which the acceptance list does not accept by this: its entries are the
+coordinator's. The order of `keptBy` is the rules': a unit two marks state is kept by the first.
+
+Left out, each with its reason: the reader's toggles (a kind they leave is the page's 'left', no keep of the prepare; the dump
+states a unit of today's that such a member holds as `names`, "a line of the author block, kept by the names toggle"); a babel
+name (its own group, in no dump); an element kept as ink inside a translated unit (`El.keep`: a display row, a held line; no
+unit kept); a unit not located (its `why`, `unlocated: …`, already says so: 2610.21313v1's "Peak Performance [GOPS]" cell, text
+past its source).
+
+- **Stage 1a** over the 88 papers and 2111.09276v1 at this change (lane gate-finds, run kr1) against lane decorated-whole's last
+  run of the same code without it (dw2): every bundle object the same (`same.mjs`, 2,722 of 2,722), so no PIPELINE, no FORMAT;
+  the dumps differ in `keptBy` and `why` alone (0 other fields over 50,595 units). New marks: `block` 3,840 (running heads
+  2,141, orphan lines 1,530, references 92, contents 64, notes 13), `name` 2,712 (2,140 cells drawn, 541 figure texts and 31
+  cells not located), `crowded` 9, `pseudocode` 6 (2608.25210v2 ords 144 and 152, 2608.06007v1 224 and 225, 2610.21924v1 563
+  and 564); `address` now with its cause on 69. Every unit the dump states kept names its rule; a figure text neither drawn nor
+  marked is the wrap's (`unwrapped` 128, `page` 7: no keep). The differential: lost 11 (+5,422 accepted), gained 5,823, changed
+  5,256, the same lists as dw2's; 65 of the gained units and 23 of the changed now say their cause.
+
+### 18.63 The reader gate judges what the reader draws: I3 by ink, the runner set up as the entry, a kept unit never laid (2026-11-12)
+
+Round B14 ran the reader gate (`lab/typeset/gate-l1.mjs --entry --reading=part`) over Google's rows beside the door's
+(production's Microsoft replies), the launch's first translator never measured before; the faults it found on one store
+alone were traced (lane google-lay) to the gate, not the reader, but for one (§18.64).
+
+- **I3 reads a line from its first item to its last glyph's ink** (`packages/typeset/tests/replay/gate-l1.ts` invariantsOf). It
+  read a line from its measure's start, which a flush-right or centred line's text does not begin at: a single line's measure is
+  widened into the paper beside it (U.decor `widen`, to the next glyph on its baseline less half its size), so a right-hand
+  running head's measure ran to the left head's ink, and Google's longer left head, ending inside it 55 pt clear of the right
+  head's first glyph, was an overlap (2610.22065v1 p3, p5, p7; 2610.21377v1, 51 pages, the same shape on both stores). Never
+  from before the measure's start: what the breaker sets there is an opening mark it hangs (B.break leadOf: each of the 1,591
+  lines whose first item stands before it, over the door's and Google's runs and typeset-today's, begins with one), whose ink
+  the measure does not place within its box: read from its box, typeset-today's I3 rose 36 -> 39 by three such brackets, none overlapping by
+  its ink. Its end is now the product's reading of a line's ink, S.share's `inkEndOf` (the run's own ink right at the size
+  drawn, its tracking, its slant), the run's ink right taken from the served faces where the tap's table holds none: read by its
+  advance, a CJK closing mark's blank half was ink (2610.37818v1 p19 and p21, header cells ending in an ideographic full stop).
+  Over the 90 pairs: 58 overlaps on each store before, 3 after, the same 3 on both, none entered: 2610.40576v1 p7 ords 69 and
+  71, a paragraph beside a wrapped figure laid at its column's full measure over the figure's caption (its lines beside the
+  figure are one block of the widest line's measure: a real overlap, the entry draws it alike on the door's rows), and
+  2610.21176v1 p13 ords 98, 99 and 101 (the runner lays cell 101 307 pt left of its original). Both open, both before this
+  change on both stores. Typeset-today's I3 (the release check's, today's members) 36 before and after, paper by paper.
+- **The runner sets a member up as the entry does** (`gateL1Pair`'s `adapt` call): the free paper it shares on its baseline with
+  a member beside it (`sharedPaper`, its half) and the line of TeX's it shares whole (`rowLinesOf`, flush-left lines too), from
+  the part of the page its first line stands on. Without them the runner gave a right-hand running head its measure from the
+  left one's ink, the reader from the middle of the paper between them: the entry's members laid otherwise than the runner's,
+  door 544 -> 244, of them "laid against laid" 337 -> 47.
+- **A unit the paper keeps (Unit.kept) is never laid by the runner**, as the entry leaves it (entry.ts `contentOf`): the door
+  holds rows of 40 kept units stored before they were kept, and the lab's Google fill asked for kept units the product never
+  asks (1,286 of the 33,419 units it read again, 1,133 of them answered by a translator, 18,471 source characters; 45 code cells
+  of 2608.06007v1): "none against laid" 10 and 35 -> 0.
+- **Like for like.** With every unit's Google row, the entry lays members the runner, bounded by today's laid members, never
+  lays, and a page's fill meets them: over the 90 pairs the entry's lines differ from the runner's for 1,164 members (door 544);
+  given the rows of the runner's members alone (the lane's hook, `AXT_LIKE`), 625 before these fixes and 281 after (door 244),
+  "laid against laid" 328 and 34 (door 337 and 47). The rest is the table's names rule (`decideTables`, which the runner has
+  not): a body column whose cells came back as they went kept whole as the original's, more often with Google's replies ("cells
+  against laid", 107 against the door's 19).
+
+### 18.64 A size tie caps a member from the passes up to its own first page (the coordinator's ruling, 2026-11-12)
+
+**The rule.** A size tie (one paragraph of TeX's the front end cut, a figure's set: `layPagePrepared`) caps each member at the
+least scale of its tie-mates as the fill passes up to that member's own first page leave them:
+
+- a tie-mate begun on that page or before counts as laid and filled, in this round;
+- **a tie-mate begun on a later page counts at its own fit from that page's FIRST lay, before any fill and any cap**
+  (`PreparedPage.unfilled` of the first `layPageTied`, read in every round);
+- never as a later page's fill set it, nor through a cap that fill set in an earlier round.
+
+A later page's fill (its shrink, the evening of §18.57, the foot step) may cap, through a tie, the members that begin on that
+page or after it; it never reaches back over the page break. `packages/typeset/src/lay/page.ts` `tieCaps`;
+`packages/typeset/tests/unit/tie-cap.test.ts`.
+
+**Why.** I6 (each unit laid alike by every page's lay that lays it, §18.54's check) holds because a page's lay runs the fill
+of its own page and of the first page of every member on it: every lay that draws a unit runs the pass of the page it begins
+on, and a later page's pass runs in some of them alone. A tie capped from the scales after every pass the lay ran, so a
+member begun on page 1 was capped by its tie-mate's page-2 fill in page 2's lay and not in page 1's: drawn at two sizes across
+the break (2610.21098v1 in Chinese, ord 12: one paragraph of TeX's cut at its inline list's items, its first member on pages
+1 and 2, its items on page 2; with Google's text the reader gate's runner evened the last item a size step, 0.975, page 2's
+lay then capped ord 12 there, page 1's laid it at 1; the entry given the same members' rows named it, "p1 ord 12 by p1/p2:
+scale 1 / 0.975"). Accepted with it: a tie may stand one fill step apart across a page break, the member begun earlier keeping
+its size; I6 outranks the tie's evenness, and one step is the grain the owner's eye passes (§18.57). Not capping before the
+fill (it would break ties inside one page), nor freezing every tied member (it would take a page's fill knob for a
+neighbour's sake). One definition for every fill step, whatever knob set the scale.
+
+**Two simpler cuts failed; do not go back to either.**
+
+- *Later tie-mates not read at all* (each member capped by those begun on its first page or before only). A later tie-mate's
+  own fit is the same in every lay (its flow is whole in every part that lays it), so it may cap; leaving it out let page 38's
+  fill grow 2608.16117v1's ord 115 (Chinese, the door's rows) a step to 1.05 past its tie-mate ord 119's own 1.0, and split
+  115's runs, its first ones at 1.05 and its last, the one running on to page 39, at 1.0: one paragraph at two sizes on one
+  page, where the tie had held it at 1.
+- *Later tie-mates read at their scale before the fill, round by round* (each round's lay, not the first). From the second
+  round on, a later member's own lay is set under the cap the first round gave it from its page's fill: on 2610.21098v1 the
+  items begun on page 2, capped at 0.975 in round 1 by page 2's evening, were laid at 0.975 in round 2 "before the fill", and
+  capped ord 12, begun on page 1, through them: the reach-back came back by the tie's own rounds, and the like-for-like run's
+  I6 failed again. Hence the first lay's.
+
+**Measured** (the reader gate, `lab/typeset/gate-l1.mjs --entry --reading=part`, over the 90 pairs with r21's bundles, the
+lane google-lay's gate; before = this tree with `lay/page.ts` of a681cf7ab): the door's rows, Google's rows (the store of
+round B14, `refactor-2026-11/google-rows`), and Google's rows given to the entry for the runner's members alone. I6 across
+the lays: 11 laid otherwise, all the head pass's, on each, before and after; but the like-for-like run, 12 before (this unit)
+and 11 after. The runner's own I6 ("laid otherwise from another page's part"): this unit with Google's rows before, none
+after. Nothing else moves: the runner's dumps differ in this unit alone, and the entry's lines against the runner's (ENTRY)
+in it alone (Google 836 -> 835, door 244 and like for like 281 unchanged). The 7 size ties over the 88 papers whose members
+begin on two pages or more (28 members: 2608.16117v1 57/59 and 115/119, 2610.10492v1 19/21, 2610.20716v1 95/97, 2610.21098v1
+12-16, 2610.21827v1 47-59, 2610.22197v1 72/74): what the entry draws of each, page by page, is the same before and after on
+the door's rows and on Google's; given the runner's members' rows alone, ord 12 on page 2 at 10.91 pt, its page-1 size, where it
+was 10.64. No PIPELINE, TRANSLATE or CHAIN_RULES: the lay is the reader's, and no stored byte moves.
+
+### 18.66 A paragraph TeX opened inside a unit is read by the same facts on both sides of its end (2026-11-13)
+
+The owner's report on staging (round B14, 2111.09276v1, pages 5 and 6): a paragraph that opens with a bold run-in title and
+follows another was drawn from the last line of the paragraph before it, right after its last character (the paragraph's
+footnote mark 12, then "Howto-GEN" on one line), one line above the original's first line of it, and "COIN" early too. The
+source writes no blank line between them, `…editing.~\footnote{…} \medbreak \noindent \textbf{Howto-GEN} To evaluate …`, so the
+front end ends no unit there: one unit holds four of TeX's paragraphs (§19.10's "A group TeX set as a paragraph of its own").
+TeX ends a paragraph at each `\medbreak` (`\par`, then `\medskip`), and the marked compile states each end; the facts pass found
+no group to state it on, so the part held no `SpanAt.opens` and the reader laid the unit as one paragraph, its fill spreading
+it. Not this round's: staging drew the same at round B10's engine; the lay follows §18.11 on what the part states.
+
+- **The rule** (`locate/facts-pass.ts`): the source side and B's side of a paragraph end are read by the same facts. What bounds
+  a text window is a piece TeX set ink for in this compile: its glyphs on B, the unit's, of an element's role (an element's own,
+  or a nested unit's mark, which `pipeline/instrument.mjs` owns as its piece's), whatever its class; B's run of the unit's text
+  stops at such a glyph, so the source's window stops at such a piece. `\medbreak`, `\noindent`, any command that set no ink
+  here bounds nothing (the class list `VISIBLE` had made `\medbreak`, an unknown macro, a bound: its window held only the white
+  space after it, and no group was met). Each side of the end is met by what stands there, one rule both ways (`sideB` and
+  `sideOf`): where the unit's glyph next to the end is a piece's and no letter or digit stands between, by that piece itself (a
+  footnote's mark ending the paragraph before: no text to compare stood there); else by its text, spelled, `WANT` characters,
+  as before. TeX opened the paragraph at the group so met on both sides (one group alone, the outermost of those opened
+  together), else at the element B's next glyph opens where its side before is met too (`El.opens`).
+- **The gate.** A paragraph end of B inside a unit (the unit's glyphs on both sides of it) that states no point is counted, by
+  what stands where the next paragraph begins in the source (`Located.stats.opensUnstated`, the dump's `counts`): an open or
+  an element (`anchored`, this report's class, which must count none) or plain text (`plain`: no anchor exists for it today).
+- **Measured** (stage 1a over the 88 papers and 2111.09276v1, cb10a1f7d against this rule): points stated 7 more, in 2 papers
+  (2111.09276v1 ords 60 (two), 63, 87 at "Youcook2", 99 at "Step Aggregation Model", 127 at "IER"; 2610.21924v1 ord 17), none
+  lost; bundle objects move in those 2 papers alone. `opensUnstated` anchored 7 -> 3, plain 57 -> 57 (30 papers). The 3 left are
+  2608.25210v2 page 3's prompt frames (ords 55 to 57): an end before `\mypython{…}` whose glyphs the instrument owns by an inner
+  piece the unit's content holds inside its element 14, stated a display, a block of its own; before the rule those ends found
+  no piece either and went uncounted. The reader gate over the 90 pairs: no invariant moves on either store.
+- **The end itself, in the marked compile.** A paragraph end the marked compile does not state is no fact of this pass:
+  2111.09276v1's "Howto-GEN" and "COIN" follow paragraphs that end in a footnote, and B's paragraph ends held none at either.
+  LaTeX's para/end point (`layout/marks.mjs` `\axt@peat`) was set only where the list ended in a character, a rule, an
+  insertion, a mark, a ligature or a formula; these lists end in whatsits (the element's own end point after the footnote, and
+  under hyperref's colour links the link's end and the colour stack's pop after its mark: `\showlists` at para/end), as every
+  paragraph that ends in an element or in a unit's own end mark does. A paragraph's end is a fact of TeX's mode, not of its
+  last node: the point is now set whatever node ends the list, but on an empty list (TeX builds no line for it, the point would
+  build one) and on one that still ends in a glue after its last space, kerns and penalties are taken off (`\\`'s
+  `\hfil\break`, after which the point would be a line of its own; a leaders' glue, which `\hskip` cannot put back). A list
+  that ends in a box states none yet, a debt with a stated end and no rule: with points after boxes as well as after whatsits,
+  pdfTeX 1.40.28 segfaults on 2610.30769v1 (a link of the paper's own ending in another nesting level than it starts; the crash
+  follows the node list's memory, no single point causes it; its reproduction in the lab's lane note para-start), and a paper
+  production serves is not refused. Its cost: five members of two papers keep B14's "justified" where the page centres them
+  (2610.21313v1's affiliation 7, 2610.42112v1's author 1 and affiliations 486 to 488: an end after the box they are set in is
+  what tells their alignment, `marks/channels.ts` boxedAlignOf, right wherever it was read), and one paragraph TeX opens inside
+  2307.16209v1's centred two-line title (its second line a `\resizebox`) is not stated. It goes when the marked compile is
+  robust to such a paper. Three opens the ends after boxes gave went with them, all false: each at a member's first line after
+  a column or a page break, mid-sentence (2610.20716v1 84, 2610.20848v1 80, 2610.19159v1 513), read from another paragraph's end
+  set between the member's lines on B (a float's image, the outer paragraph of a box split across the page). That the pass can
+  read such an end as the unit's own is a debt of its own; at the final rule no point of the 89 stands at a break but a run-in
+  title's, its paragraph opening on the next page (2111.09276v1 ord 60, "Object Replacement").
+- **Measured at the final rule** (stage 1a over the 89 at the marked compile's final rule, its compiles made anew): B states
+  26,124 paragraph ends (10,412 before), none lost; points 3 more than the facts pass alone gave (2111.09276v1 ord 87 at
+  "Howto-GEN" and "COIN", 2610.21765v1 ord 42), none lost; the alignment of 4 members moves against B14, each now as the page
+  sets it (2307.16209v1 424 and 2608.25210v2 270 centred; 2609.20976v1 112 and 2610.37668v1 434 flush left); no join of the
+  flows lost or new; `opensUnstated` anchored 3 (the frames above), plain 63. 2610.30769v1 compiles, its bundle as before the rule.
+- **A running head reads no body paragraph's end as its own.** With more ends stated, a paragraph's end at the foot of B's page
+  was read as the next page's running head's (2610.30854v1 p8, p9: flush right read as justified). An end is carried onto A before
+  the partner of B's next glyph, so where A breaks the page later than B, it lands right after the next A page's head. The end
+  right after a unit's last glyph is the unit's own only where, on B, it stood right after that glyph's partner, on its page
+  (`locate/ink.ts` carry keeps each end's place on B and each A glyph's place after its partner; `today/ink-units.mjs`
+  alignOf); and the points between are read by their glyphs, A's list of points not being in glyph order (the points carried
+  from B's page before come first).
+- **The end's gate**, `lab/pdf/spikes/para-end-cases.mjs`: a paragraph after a hyperref'd footnote, after a plain `\href`,
+  after a citation and after a full stop, with microtype, each end stated before the next paragraph's first glyph and no glyph
+  moved by the points (four ends missing before). The facts pass reads two ends at one glyph position as one.
 
 ## 19. The engine's contract
 
@@ -2746,6 +6292,15 @@ extension's compile client (`parked/extension-compile/`).
   every Node: from Node 24 on, `Buffer.allocUnsafe` and what is made of it (`Buffer.concat`, zlib's output) throw a RangeError of
   Node's own words, `Failed to allocate memory`, with the code ERR_MEMORY_ALLOCATION_FAILED, where Node 22 threw V8's `Array buffer
   allocation failed`; `pipeline/memory.mjs` `isMemoryError` reads the code first.
+  PDF.js's worker recovers from a failure inside it in some twenty places and answers the read as whole (a page's list ended
+  where its parse failed, a font read as none): no call of its API fails for it, `stopAtErrors` included (its API settles a
+  page's list with what it read). Its warnings are where it says so, each with its reason as text: the engine's `readPdf`
+  (the back half's reading of A, the instrument's of B) hears them for the document it reads (`warnings.ts`: PDF.js's level
+  raised to its warnings for that document and set back after it, console.warn PDF.js's channel to the watch while it is open
+  and put back). A reason that is a failed allocation (`isMemoryText`, V8's words, the same definition as `isMemoryError`'s)
+  throws one, so the prepare refuses the paper for its memory (2609.19644v1's page 70, read empty at 880 MiB, committed 77
+  objects without it). Any other recovery is stated in the head, optional, as `recovered`: [A or B, its site, its count, its
+  first reason]; none fires on the corpus (the census of 2026-11-10: 88 papers and 2609.19644v1, arXiv's PDF and B).
 
 ### 19.4 The layer API, as the web defines it
 
@@ -2862,13 +6417,35 @@ own), each part carrying its pages' cell rules (`rules`).
     destination set twice, XeTeX's driver and the DVI driver latexmk runs tell no log the host returns), each such mark was set
     once where the paper's TeX sets its unit's text — enotez prints each endnote from its `\enotez@note{…}{text}` line at
     `\printendnotes` (2609.36054v2: 16 notes, unmarked and English before, one compile of 34 s more) —, or never — jmlr's
-    `\jmlr@author{…}{…}` discards both arguments (2610.21201v1) —, and its unit is located there; or twice — elsarticle's
-    `\emailauthor{…}{name}` sets an author's name again in the e-mail footnote (2610.21084v1, 2610.20848v1) — and the reading
-    drops every destination the log names (`marks.mjs` `readMarked` `dropped`), the unit then laid as an unmarked one is, never
-    at the copy's place; nor does it take its alignment from the copy: a unit whose paragraphs TeX set in two alignments tells
-    none (`marks.mjs` `readAlign`), as a piece set in two colours tells no colour (`readColours`). 2610.20848v1's name, set again
-    flush left in its footnote, has the file it had before; 2610.21084v1's, flush left in its block and in each footnote, keeps
-    TeX's word. The same rule mends two papers whose class sets the title and the authors again (acmart's "ACM Reference Format"),
+    `\jmlr@author{…}{…}` discards both arguments (2610.21201v1) —, and its unit is located there. One TeX set twice — a unit's own
+    start or end mark the log names: elsarticle's and cas-common's `\emailauthor{…}{name}` set an author's name again in the
+    e-mail footnote (2610.21084v1, 2610.20848v1) — is out of place still, its unit unmarked and the marked original compiled
+    again (round 8 B2, rebuild/block-residue): the reading would drop every destination the log names (`marks.mjs` `readMarked`
+    `dropped`) and lay the unit as an unmarked one anyway, and a class may take the argument it stored apart as data, our marks
+    among its words. cas-common's `\parsename` splits the name at its spaces and makes each given name's initial of its head,
+    `\tl_head:n`: the first word's head was our `\leavevmode`, so that 2610.21084v1's footnotes read "(. Chung)", "(.M. Solomon)",
+    "(. Verma)" where arXiv's read "(M. Chung)", "(J.M. Solomon)", "(D. Verma)", and the ink unit made of them, holding the
+    initials arXiv's page sets and ours did not, was refused (a content difference). Unmarked, the three names are the paper's
+    to the class: our final pass's text is arXiv's but for arXiv's stamp, at one compile more. In the same compile the guard
+    reads a class's verbatim copy of our source (`guard.mjs` `cutCopyUnits`): a line of a file the compile wrote that holds a
+    mark as our source writes it (no space after its control word: `\write` writes one) is a copy of our line, and where its
+    head is our line cut inside our TeX the copy lost the start of it, the unit out of place, unmarked. cas-common's abstract
+    is one: `\RenewDocumentEnvironment{abstract}{o}{…\verbatimwrite{\jobname.abs}}{\endverbatimwrite}`, read back by
+    `\file_input:n`; the look-ahead for its optional argument reads the body's first token before moreverb's `\verbatimwrite`
+    makes every character other, and the copy loses it where it is a control word (TeX Live 2025, tried: a letter is kept,
+    `\relax` lost). Ours was the line probe's name, so that the copy read "{4}\leavevmode\axtmark{4s}…", our page set a "4"
+    before the abstract and the unit was refused for that content of ours, left English. Unmarked, the paragraph is the
+    paper's own to the class (its first character a letter, kept), and its lines an ink unit's. A copy of whole lines stands:
+    comment.sty's, acmart's acks (2608.25210v2, 2610.22065v1), whose marks TeX reads back where it sets the text; so does one
+    that begins inside the paper's own text, which arXiv's copy cuts alike. Over the 88 papers' marked compiles, marks stand
+    in a copy of ours in these three papers alone; of the classes and packages they load, cas-common writes body text
+    verbatim to a file after a look-ahead, acmart (through comment.sty) and memoir (its own `\verbatim@out`, which no paper
+    of the 88 uses) without one, and elsarticle keeps its abstract in a box. 2610.20848v1, elsarticle's, copies the name whole: its text arXiv's before and after, its one
+    author unmarked. Over the 88 papers' marked compiles, the log names a unit's own mark set twice in five: these two, through the aux; acmart's (2402.10294v1,
+    2608.25210v2: the authors set again in the ACM Reference Format at `\maketitle`, their text arXiv's; 2610.22065v1's title, a
+    heading's mark) hold none in a file and are as before. A unit set twice is never at the copy's place, nor does it take its
+    alignment from the copy: a unit whose paragraphs TeX set in two alignments tells none (`marks.mjs` `readAlign`), as a piece
+    set in two colours tells no colour (`readColours`). The same rule mends two papers whose class sets the title and the authors again (acmart's "ACM Reference Format"),
     whose flags were the second setting's: 2608.25210v2's centred title and authors, read flush left (the title now no flag, the
     middle author centred), and 2610.22065v1's centred title, read justified (now centred); no line of either moves. A mark read
     back where no text is set (a `\csname`, a number, a key) raises an error, and every unit stays out of place as before
@@ -3453,6 +7030,13 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   whole: the pairs after it numbered one on, their texts the same). Where nothing defines a command or an environment
   (`commandArgs`, `envArgs`), and for a citation (`\citefield{key}{field}` takes two groups, a field name the translator
   must not see), every adjacent group is still taken: words left English break nothing, an argument translated breaks TeX
+- **A sub-float's caption is its last optional argument** (`source/latex-front.mjs`, the sub-float case). subfig's `\subfloat`
+  and subfigure.sty's `\subfigure` and `\subtable` (where the paper loads that package and does not define them itself;
+  subcaption's `subfigure` is an environment and read as one) take `[list entry][caption]{body}`: one optional argument alone is
+  both the entry and the caption, as both packages define them (subfig's `\sf@@subfloat`, subfigure.sty's `\@subfigure`). The
+  caption is a `caption` unit of its float's `sub` type, the body is walked, a list's entry of its own goes to the list of
+  figures alone. subfigure.sty's calls were read as one placeholder, in no unit: 2602.23285v2's and 2608.25210v2's four
+  sub-captions stayed in English, and nothing flagged them (the ledger classes a float's unowned lines with its graphic's text)
 - **An author block's options after its text are its own** (PIPELINE 29, `source/latex-front.mjs` `frontArgs`). The front
   matter's commands (`\author`, `\affil`, `\affiliation`, `\institute`, `\address`) take, after the form above, every optional
   argument that follows their text, as their classes read it by looking past it (`\@ifnextchar[`): the Elsevier classes' and
@@ -3606,6 +7190,7 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   glyphs' ink), and every reader keeps its text as the paper has it: the figures' reading makes no unit of it, its runs counted
   under the caps as any (§19.12), and the ledger classes its line `code` whatever its face (`ledger.mjs` RULES' first), so that
   the ink units keep it (kept blocks), wherever it stands — a box TikZ draws (mdframed's `framemethod=tikz`), a float, a column.
+  Text set wholly in a face of one pitch outside such an environment is kept too, by its glyphs' advances (§18.22).
   It is a fact TeX decided, written once where every reader reads it: the one command model the layout file grows into (the
   architecture audit's §2), not a side channel of the prepare's. Measured against `next` 74d7f6a2: of 244 local sources 14 use a code environment, and the layout
   compile's files of the other 229 are byte for byte as before (their final passes too, 63 of the 77 papers run); over the 14,
@@ -3667,6 +7252,24 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     never the marking's (`inkless`, `apart`); each glyph is read against the text by one step (`leadStep`), and a formula's
     glyph only where nothing of ink stands between the lead and the mark (a footnote's call's). `?` is no character spelled: the
     probe has no aux, and a `\ref` sets "??" there.
+  - *XeTeX lists a word as one node* (2611.03178v1 p19 in Chinese, the owner's report on staging of round 8's part A: the gap
+    after the translation of "Models." wider than after every other run-in head). XeLaTeX sets a word of a font of its own (fontspec's, TU) as one
+    node, and `\showbox` lists it so, `\TU/XCharter(0)/m/sc/10.5 CoworkOS`, where pdfTeX and LuaTeX list a character a node: the
+    probe's reading took a node of one character alone, so that no macro of a XeLaTeX paper had a text. The paper opens five
+    paragraphs with `\system{}` (`\textsc{CoworkOS}`) right after their run-in heads. In vertical mode `\axthpk` sets no point
+    for it (its expansion begins with `\textsc`), so its ink, set before the start mark, is the unit's placeholders' (the wrap's
+    MR 5) and goes to its piece by the text the probe showed it sets (`glyphPiecesOf`'s lead); with none, the element had no ink
+    (stated `outside`, kept where TeX set it), the paragraph's first glyph on A was "organizes", 61.1 pt past "Models.", past
+    `SHARED_SEP`, and locate made no flow of the head and its paragraph: the paragraph was laid from TeX's start of
+    "organizes", "CoworkOS" English where TeX set it between the head's shorter translation and the paragraph's. The probe now
+    reads XeTeX's word (`marks.mjs` `WORD_NODE`), outside a formula, each of its characters as a character node's would be: the
+    element owns its glyphs, the paragraph's first line begins at it, 7.48 pt after the head's ink as TeX set them (the stop's ink end
+    to "C"), the two one flow, and S.rowStart lays the paragraph from the head's translation at that separation, "CoworkOS" its
+    first element.
+    On 2611.03178v1 five paragraphs open with the element's ink now (pp. 15, 16, 18, 19, 22): the two after a run-in head (p15,
+    p19) one flow with it, the three a paragraph's own start laid from TeX's start of the line, the element in it. Over the 88
+    papers (stage 1a against round 8 part A's) nothing moves: their three XeLaTeX papers open no unit with a macro whose ink
+    TeX set before the start mark.
   - *A footnote's call after the last word is found by its raised mark* (2610.35877v1's abstract, the owner's report on staging:
     the whole abstract English). The abstract ends `step.\footnotemark`; TeX answered that a mark around `\footnotemark` moves the
     word after it (`switches` `00000020`: the space factor the call reads), so the call has none, and the patch's end mark stands
@@ -4010,6 +7613,32 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     kernel's table does not hold), an image in a macro (2610.21924v1's `\COMPASSicon`, 7 captions), a display macro's
     (`\al{…}`) and a footnote alias's (`\def\foot{\footnote}`) units of 2608.23517v1, a call past the probed one (`\code{…}`) or
     past `INK_SRC_MAX` (`\delete{…}`), an author block's `\orcidID` glued to `\inst{…}`.
+  - *An author's call stated* (rebuild/author-marks-2; the owner's staging case 2611.03953v2, ICML 2026). What TeX sets between
+    an author's end mark and the next author's start (marks, separators, a `\thanks` mark) is told by no gap (§18.16), so the
+    marked original states where each author's call begins: `\axtcall{<i>}` (`CALL_TEX`, latex-front.mjs `CALLED_AT`) before an
+    author block's command right after another author call in the document (ICML's `\icmlauthor`) and before each `\and`, `\And`
+    or `\AND` inside an author block, unit i the first after it; never in the preamble, where TeX sets nothing and a class stores
+    what it sets later. It sets the point `<i>c` in horizontal mode alone, as a closing mark is set (`\axt@set`: every glue, kern
+    and penalty that ends the list taken off, the point set, each put back), and expands to nothing elsewhere — between two rows
+    of an alignment, where a `\protected` command would begin a row of its own. Its definition is in the head only where a call
+    is written, so every other paper's bytes and compiles stay as they were. Measured on the 31 papers of the 90 (the 88, ICML's
+    2611.03953v2, 2604.14228v3) whose source states a call, of every class among them (article under nips, neurips, wacv, icml
+    and authblk, revtex4, 4-1 and 4-2, acmart, elsarticle, llncs, amsart, cas-sc, dcogpaper, IEEEtran, siamonline, alta): each
+    marked compile and final pass glyph for glyph round 7's on every page (to 0.001 pt), each one's TeX errors as before; the
+    points TeX sets: ICML's 10 and 8, llncs's 12 and 4, article's `\and` 1 to 8 a paper, none for a class's `\author` in the
+    body before `\maketitle` (vertical mode) nor for a block that ends in `\\` before NeurIPS' `\And`. Two first versions were
+    measured wrong by the same comparison and are not these: one that took off a single glue left the point between a macro's
+    space and the line end's after ICML's marks, and TeX broke the centred line at the second, its first line a space wider
+    (1.245 pt to the left); one `\protected` began an empty row of 1706.03762v7's author tabular after a `\\` (10.9 pt).
+  - *A note's call and a shared cell line, stated* (rebuild/author-marks-2, the owner's NeurIPS case 2411.13093v4). The same
+    point after each note's call (`\thanks`, `\footnote`) inside an author block that marks text before it in its row, written
+    before the next unit's bytes where that unit begins right at the call's end (2610.17108v1's `\thanks{…}\,$^{1,2}$`); and
+    `AXT-CELL` for each unit on a cell's line, past the box the column's template sets around the content (colortbl's, §18.12).
+    The TeX gate (`layout-cell-cases.mjs`, its new case `authorsColortbl`): 104 of 104 under 2023 and 2025 and four engines, every
+    PDF byte for byte the head's before. Over the 50 papers compiled (the 22 parity papers, every paper with a note in or beside
+    its author block, one paper of each of the 26 document classes of the 91, ICML's two, 2604.14228v3, 2411.13093v4): each marked
+    compile and final pass glyph for glyph round 7's on every page, each one's TeX errors as before; new class statements on
+    three papers (2411.13093v4 6, 2610.17108v1 2, 2610.21376v1 2), none taken away; points after a note on 8.
 - **A unit the layer leaves the original's says why** (read time, no stored artefact, no version token): each `skipped` record
   of the run (`layer-proto/run.mjs`) carries a `code` of `SKIP_CODES` beside its `why`: `unlocated` (the file holds no row of
   it, and the file's own reason beside it, `unlaid`), `pieces`, `noRow`, `lost` (a visible piece the file has no position
@@ -4512,7 +8141,42 @@ section number's `\quad`, a page number after leaders) or is a running head's fo
 page with another number there: amsart's `\llap{\thepage}` after a title as wide as the line sets two digits nearer its last
 word than its words are to each other, 2610.21884v1), a number in the text's own words the unit's, translated in its flow
 (LAYOUT 25: 2010.11929v2's running head "Published as a conference paper at ICLR 2021", the same on every page, had its year
-left the original's and drawn apart from its line), its math and typewriter runs (and a web address in any face) kept placeholders, and
+left the original's and drawn apart from its line), its math and typewriter runs (and a web address in any face) kept placeholders (the
+rebuilt reader's copy of the maker, `packages/engine` `locate/today/ink-units.mjs`, keeps an e-mail address in a word one too, the
+address alone and the word's other characters text, by the front end's own pattern, `latex-front.mjs` `EMAIL_ADDRESS`: in colour
+groups no translation kept, 2609.36054v2 p1's grey addresses were drawn black, #28; and a group of local parts before their one
+domain, `ADDRESS_GROUP`, one kept run over its words and over the break of lines TeX set one right after the other, every glyph
+of it whatever its face: 2611.00342v1 p1's two rows, braces in the symbol font's math face, the first broken after a comma, had
+their local parts sent under the names toggle and drawn back capitalised with full-width commas; now lines of addresses alone
+are no ink unit's but a kept block, and a group inside a note one element of it; and it gives each kept run its own ink, which
+today's file draws by its own segments and the copy had given the unit's first placeholder: 149 of the 88 corpus papers' 185 ink
+members of two elements or more drew every run at the first one's place; and it writes a kept formula's TeX specials by the tokens
+that set them in a formula, `\{`, `\}`, `\$` and `\backslash`, where today's file strips them: a run of a brace alone, the closing
+brace of `\{0,\dots,J-1\}` between upright digits, 2610.21377v1 p42, or a bibliography title's `$\{$Intra-Operator$\}$`,
+2608.06007v1 p17, was `$$`, which every reader takes as a display, and once drawn in its own ink each was a kept display row in
+the middle of its line: 15 runs in 3 members; over the 88 corpus papers 10 ink units of 3 papers change their id, the copy text
+of 25 other runs gains the braces it had lost; and it reads a script by its glyph, whatever its face (`scriptsOf`): a glyph TeX
+set smaller than its line's text and off its baseline (the size most of the line's glyphs have, the baseline most of those stand
+on, each on the hundredth of a point, as locate reads one box's baseline: no threshold) is a kept run's, where the face alone made
+a script in a text face the unit's text, drawn flat at the line's size — Times sets `$^{1,2}$`'s digits in its text face and
+Computer Modern a formula's digit or a footnote's mark in CMR7, so 2610.30854v1 p1's names read "Jiang1,2"; a run of scripts of one
+sign is written as TeX writes one, `$^{…}$` or `$_{…}$`, so that every reader of the source reads it as a source unit's mark (a
+mark of one symbol drawn raised, `sym`, where `$*$` drew it on the baseline at the line's size); a unit's label is its first
+line's leading run of raised scripts, in any face (`labelLength` without today's 0.85 and a fifth: 2610.40394v1 p1's "*", 7.77
+pt on its note's 7.97 and raised 0.20 pt, was a placeholder, its note no longer echoing its source footnote), its glyphs the
+text's as before; and no run is joined over a line's break where a script stands at the break, as TeX sets a script on its line
+after its atom and breaks a formula only after a binary operation or a relation (2610.20030v1 p1's "Krajnc¹" and "¹Jožef Stefan
+Institute" one element on two lines, drawn as text): over the 88 corpus papers 79 ink units of 21 papers move and one more
+states its label, 69 runs written as scripts (50 raised, 19 lowered), 4 display lines in a text face of 2608.08481v1 no longer
+translated, no source unit; and a line of no text word — an address, a URL TeX broke onto a line of its own — is the next line of
+the unit its line before belongs to in one of TeX's paragraphs as the compile marked them, never by the lines' places alone, and
+starts no unit (round 8 B2, rebuild/block-residue): left out of every unit since an address became a kept run, JCAP's
+`E-mail: \the\email@toks`, broken before its last address, was the block's names unit on its first line and a kept block on its
+second (2609.20976v1 p1, lost in the differential, the block's rule taking the one and not the other). Over the 88 papers 59 such
+lines stand in a class made units; 3 join, the e-mail line and ACM's permission note's DOI after "ACM ISBN …" (2402.10294v1,
+2610.22214v1), each a kept block before; the other 56 stay apart, each beginning its paragraph or another than the line before's
+(addresses under their affiliations, footnotes' URLs after their marks, 3 typewriter words, a table's figures): no line of code
+joins a unit of prose, and 2610.19159v1's transcripts, code its regions keep, hold none), and
 each run of its words in another weight, slant or colour than most of its glyphs hold a group of the commands that set it
 (`\textbf{`, `\textmd{`, `\textit{`, `\textup{`, `\textcolor[HTML]{…}{`, rule 9, LAYOUT `'23'`), as a source unit's groups are,
 so that its translation keeps each run's style (the release sweep of 2026-10-25, (d): a theorem's bold head before its regular
@@ -4686,9 +8350,15 @@ than the English fitted only below its floor, or not at all: 2610.19159v1 p7's "
 needs 34 em of Japanese on a row of 170.6 pt, past what `floorMin` 0.6 reaches, and stayed English beside its Japanese paragraph
 (`unfit`). Where a head's fit in its row is clipped at its floor, its last block now runs on to the end of the paragraph's first
 line (`run.mjs` `overFollower`), taken where it fits there at the floor or above; the paragraph is laid from where the head's
-translation ends, its first line shorter, or given way to its next row. A head its row holds at the floor or above keeps its
-row: taken wherever a head fitted smaller, its paragraph paid for a head already within its floor (1810.04805v2's Russian p4, a
-head from 0.85 to 1 and its paragraph, below its floor, from 0.73 to 0.70).
+translation ends, its first line shorter, or given way to its next row. A head its row holds only by shrinking takes the rest
+of its line too, where it is set larger there (the owner's report of 2026-11-10 on round 8's staging, 2611.03178v1 page 16 in
+Chinese: "ML Coding." in seven characters shrunk to 0.85 of the body in its own 62 pt, and the size tie of the 2026-11-08 ruling,
+one paragraph's text at one scale, set its whole paragraph at 0.85 among paragraphs at full size, a hole under it; laid over its
+row the head is at full size, 73 pt, and so is its paragraph, its first line from the head's end). Before the tie a head that
+fitted its row at the floor or above kept it, since its paragraph paid for the room (1810.04805v2's Russian p4, a paragraph from
+0.73 to 0.70 for a head from 0.85 to 1); under the tie the head's shrink is its paragraph's, and over the corpus's 90 pairs with
+stored rows (part A's bundles) 29 heads in 14 pairs take their row (34 in 18 with every toggle on), from 0.80-0.975 to 1 (two to
+0.9 and 0.975), 68 units on 24 of 2,564 pages move (77 on 27), and no paragraph comes out smaller: 27 larger, 2 the same.
 The two are decided together (`settleLeadOf`, `relay`): where the paragraph is left the original's, is not laid from the head's
 end (`ledBy`), or fits from there only below its own floor, the head is laid again in its row alone, as before, and the
 paragraph again from where the head then ends; no unit goes under its floor to lift another. This runs as the paragraph's lay
@@ -4822,6 +8492,22 @@ no name's row moves, before the review's fixes and after them (the margin's numb
 19 sub-entries are units (25 drawn with their headings' translations, 3 translated), their numbering, leaders and page numbers the
 original's ink, and the headings "APPENDIX A" to "H" centred whole.
 
+**The number a class sets right before a babel name (the owner's report of 2026-11-10 on 2610.20967v1 p5; the decision
+of the same day: the number is the name's label).** A class that sets a heading itself and numbers it sets the number before the name: ICASSP's `spconf.sty`
+defines thebibliography as `\section{References}`, and its `\@sect` sets `\@svsec` ("9." and `\hskip 0.6em`) and the word,
+centred whole. The number was no unit's: a stay beside the name, the name's alignment read off its word alone (its middle 6 pt off
+the column's: justified), and the target's word set from the word's start after the number, the line left of the column's middle
+where the original's two sections before it were laid centred. The number is now the name's label, as a section's number is its
+heading's (`own.mjs` MR 6c, `names.mjs` `counterBefore`, the mirror of `counterAfter` and narrower: every glyph before the name on
+its line in its column, one word, a counter's form with a digit in it, ending within 1.1 of the name's size before it, no unit's,
+TeX's stream setting nothing between it and the name's first glyph): its group `n<occ>.l` in the wrap, ROLE.label of the name's
+unit in the instrument (`instrument.mjs` `nameGroupOf`), the part's Label of the name (kind `head`, its number and stop), so that
+the alignment is read from the label on, as a section's is; S.names draws its crop before the target's word, the original's
+distance between their starts kept, the whole centred where the name is centred, at its own place where the name keeps its left
+edge, its label group off with the text's (on a page whose labels the add-on folded into the text's group, hidden with the word,
+its crop drawn all the same). Over the 88 corpus papers one name gains a label, this one: its line 152.33-200.30, its middle the
+column's 176.31 (before, 140.12-188.10); every other object of the 88 the same, the prepare dumps the same.
+
 ### 19.11 Structural names: a head's, a reference's, in the target's words
 
 A theorem's head, a proof's name and the names cleveref and `\autoref` generate are TeX's text, not the author's sentences:
@@ -4891,7 +8577,7 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   any run (`FIGURE_UNITS_DOC`), so that where the cap falls does not move: past it, as before, the transcripts' heads are the ink
   units' lines.
 - **Cut** into runs, one a label or a line: in stream order, one family (its font's name past a subset's tag, PIPELINE 69, and
-  past its style, neither a math face, PIPELINE 71, below),
+  past its style, neither a math face, PIPELINE 71, below; TeX's own line in a picture over its faces and colours, below),
   size, colour, direction and figure (one form painted, one picture: pageInk's `fid` and `pid`, so that two figures side by side never make one label), in a code region or out of every
   one (a run kept whole for a code glyph would leave the prose beside it English: none of the 14 code papers has such a run, a
   rule of the cut, not a case), one baseline (`RUN_DY`
@@ -4974,9 +8660,16 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   italic inside a label (matplotlib's mathtext "α" of "jury, α = 8" in DejaVuSans-Oblique), and a theorem box or a prompt card
   its bold lead before its text ("Proposition 1.2.1.", "Data Extraction Task:"); cut there, a label was a fragment ("jury,", its
   room ending at the letter: drawn at 0.66 in 2610.21085v1's Figure 4), and the translator got the fragment. The joined label is
-  drawn in its first glyph's style (a bold lead's label all bold, the "α" upright in the label's face). What stays apart: TeX's
+  drawn in its first glyph's style (a bold lead's label all bold, the "α" upright in the label's face). The rebuilt engine
+  keeps the join and the weight of each run (`packages/engine` `locate/ink.ts` figureRuns, the owner's comment of 2026-11-09 on
+  2608.25210v2 p2, where today drew "Data Extraction Task: Extract all …" all bold and the first v2 all regular): each run of
+  the label's glyphs in another face than its own (the face of most of them, locate's style) is a group of its own in its unit,
+  of no source, named for what its face changes (`bold`, `medium`, `italic`, `upright`), `must` where the run-in rule makes it
+  a label (`marks/run-ins.ts`, so that the markers wire brings it back), its face read off its glyphs into the part
+  (`SpanAt.style`); S.figures draws the group's translation in it, the rest in the label's own. A reply that drops the group
+  draws the whole in the label's own face. What stays apart: TeX's
   math faces (CMMI, CMSY, MSBM: families of their own, and math), so "rate p" in TeX keeps "rate"; a subscript or superscript
-  (another size); a coloured word (another fill); two columns of a legend (past `RUN_GAP`); two panels. No list of style
+  (another size); a coloured word in a plotting program's figure (another fill; TeX's line in a picture goes on, below); two columns of a legend (past `RUN_GAP`); two panels. No list of style
   words: the diagnosis's what-if, which had one, missed TeX's Times (NimbusRomNo9L-Regu and -Medi). Measured over the sweep's
   87 papers (our base pages, every page; next's cut and this one's, each engine's own): 468 labels joined from 799 units on 26
   papers (by their first glyph's family NimbusRomNo9L 240, 2610.19159v1's TikZ prose boxes most of them, DejaVuSans 102,
@@ -4990,6 +8683,30 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   crowded as their pieces were, 2 rooms moving. In 2610.21085v1's Figure 4, "jury, α = 8" and "jury, α = 1" are one unit each,
   at full size by the zh model; the gridline under the first (its top 0.81 pt under the baseline) is cleared by a CJK
   translation's em box at that size (0.77 pt).
+- **TeX's line in a picture is one run** (2611.03178v1 p1 in Chinese, the owner's report on staging of round 8's part A:
+  the translation of "Project Page:", a hole, then "coworkos-ai.github.io", and that of "Demo Gallery:" set in from the
+  others). The class's abstract is a tcolorbox,
+  which pgf draws, and `\printprojectmetadata` sets in it four lines no source unit holds (each `\metadata`'s text, kept in a
+  macro by `\gappto`): an icon, a label in `\sffamily\bfseries`, then the address in `\texttt` in the link's colour, a word's
+  space after the label. Its glyphs are a picture's, so figure texts, and the cut ended a run at a change of family and of
+  colour: the label and the address two units, each laid by S.figures in its own box, the address's translation its own text,
+  so left the original's where TeX set it, 19.4 pt after the label's shorter translation where TeX set 3.4. TeX's own text in a
+  picture (no form's) is TeX's line: once its run spells a word, a glyph of another face (no math face) or of another colour
+  goes on with it (`figure-text.mjs` `texLine`), so that each line is one unit, its address a group of its own (a list of
+  addresses with the commas between them too); a symbol TeX set before the first word (the icon) is none of it, and the run
+  TeX's line goes on with after such a run is set from its start where no ink of a figure's tells its anchor (`led`):
+  "Demo Gallery:", whose icon is 1.4 pt wider than its neighbours', stood off their column's start, was read centred and drawn
+  9.4 pt in. A plotting program's text (an included PDF's) is cut as before. A figure text's groups are its runs of one face
+  and one fill (`packages/engine` `locate/ink.ts` figureRuns), a group's style stating its fill where it is not the unit's,
+  black included, and S.figures draws each run in its group's fill: the unit's own style is the address's, most of its glyphs,
+  in the link's colour, the label's group black.
+  Over the 88 papers (stage 1a against round 8 part A's; figure texts alone move, no source or ink unit, no flow): 38 lines of
+  TeX's in pictures are one figure text each where they were 61 (2610.19159v1's transcript titles, 34 from 55: "Agent Action:
+  Write", the path in typewriter type and "(Self-directed scope reduction)" one line; 2610.37818v1's "Full 200" and "(a) Rays
+  past 90", 3 from 3, their numbers in another face; 2610.40576v1 p18's "All good. </think> ```python", 1 from 3, its markup token
+  a group of the line's translation where it was a figure text of its own), and 15 figure texts in 5 papers are set from their
+  start, each after a run of its line it did not join, a formula's or a capital's set larger (2610.21880v1 p4's "th pct.",
+  2610.35877v1 p3's "; two laws of use"). On 2611.03178v1, its four lines from ten units, each set from its start.
 - **What an opaque fill covers is no ink to a label on it** (PIPELINE 76, the release sweep of staging e4be8723 on 2026-11-06:
   2609.26457v1 p6's annotation "6: demands a root-cause / diagnosis before any fix" English in Chinese, its second line
   translated in production). A fill of a colour painted at an alpha of 1, under no blend mode but Normal and no soft mask, its
@@ -5124,7 +8841,8 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   than the other entries, "Patch size" starting further right than its column, "Head 3" smaller than "Head 1", each label
   fitted to its own box and anchored by what it read alone; `figure-text.mjs` `setsOf`, `roomsOf`): the labels of one group are set at one size, the original's by default; each keeps the original's alignment
   and anchor; a translation may take free space, never touching other ink nor leaving its figure; only a group that cannot
-  fit shrinks, all of it by one factor, never a label alone. A **column** is the runs of one figure, size and direction whose
+  fit shrinks, all of it by one factor, never a label alone; a figure text the paragraph path lays stands in its lines' set and
+  is drawn at its factor (§18.54). A **column** is the runs of one figure, size and direction whose
   starts, ends or middles agree within `ALIGN_TOL` 0.08 of their size, two units or more among them; its other runs, a
   number or a "…", count for its edge (2010.11929v2's "Head 1/2/3", one length, read their end alone, the frame being
   nearer after them than their markers before; the column's "…" shares their start alone). A unit in a column takes the
@@ -5143,6 +8861,21 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   whose band its own meets, the other half that unit's; short of the band and room of a unit of another direction (each
   against the other's room as first found: a level label and a turned one never take one place); `ROOM_MAX` 6 em at most. Crowding and the anchor read alone are
   read within the reach as before, so the same units are drawn and the base is the same bytes.
+- **Its line by its ink** (v2's typesetter, `packages/typeset` S.figures): a translation is fitted to its line and set on its
+  anchor by its ink, as every line the breaker sets is. The blank half of a mark at the line's edge, the half of its em its
+  face draws no ink in, is none of the line (`breaker/break.mjs` `leadOf`, `hangOf`, the one rule the breaker's lines are
+  placed by: an opening mark that starts the line loses its leading half where the target's rules compress its marks, a closing
+  mark that ends it hangs its trailing half past the edge; a mark's blank half is its run's face's measure, `script.ts` `markOf`,
+  §18.48, none where its ink crosses the middle): it needs no room and stands past the anchor's edge, a turned
+  text's along its run. Today's paintFigures set a translation by its advance, so a right-aligned label ending with a closing
+  mark ended its ink half an em short of its original's end (1810.04805v2 p16's "Masked LM" in Chinese, in full-width
+  parentheses: 3.49 pt at 6.97) and a centred one
+  with a mark at one end stood a quarter em off the original's middle, where a cell's line of the same text stood on it: 32
+  figure texts of the parity's pages once its `align` read a drawn line by its ink (9744efab3), none of them judged, today's
+  figure texts joining no unit. Over the 123 reader dumps 609 of 14,351 figure texts move (452 level, 154 turned along their run,
+  3 left unfit by their advance now drawn), every other outcome today's; replayed with no mark's em holding a blank half
+  (`lab/typeset/replay-figures.mjs --marks=today`), all 14,351 are today's. A figure text is still set as today's within its
+  line: no CJK–Latin autospace and no blank half taken between two marks, which the breaker's lines set.
 - **Its ink** is its own group `f<k>` (`layout/wrap.mjs`): its runs wrapped where they are shown, in the page's stream, or in the
   stream of the form an included PDF is, that form written again once in the wrap section under its own number, its dict ours but
   its stream's keys and `/Resources`, its resources its own with `/Properties` naming its groups (beside a form's own entries:
@@ -5263,7 +8996,11 @@ affiliations, institutions, addresses and e-mail line, translated together or th
 affiliations"; the key `names` and its default, off, kept, so that by default the whole block is the original's). The toggle
 moves no version: a unit's class is the reader's, read from the kind the bundle carries (`UNIT_CLASS`), so a paper prepared
 before it is read so as it is; every class was already translated whatever the toggles say. What moves PIPELINE 39 is the
-block's units, below: whatever TeX sets an author block in, its units are the block's.
+block's units, below: whatever TeX sets an author block in, its units are the block's. And of 2026-11-09: the toggle governs the
+author block under the title, the whole of it, and affects nothing else: what a class prints from the author data elsewhere
+(acmart's reference format, a running head, amsart's addresses at the paper's end, an author's biography) is ordinary text of
+no toggle, and everything under the title that is the block's (its connectors, its notes, its correspondence and e-mail
+lines) follows it, the original's with it off, translated with it on (the author block under the title, below).
 
 - **Entries are units, each whole** (`source/latex-front.mjs` `bibliography`; PIPELINE 29, and PIPELINE 30 one unit an entry). The
   ground truth is the bibliography's TeX the compile reads: the paper's `thebibliography`, or the job's `.bbl` where
@@ -5297,7 +9034,13 @@ block's units, below: whatever TeX sets an author block in, its units are the bl
   `mt.mjs` `listOf`): it is no word of the entry's sentence, and on the wire Microsoft's Chinese read it as a page number and
   wrote the character for "page" (U+9875) before it, between the year and the list (2610.37668v1). It comes back after the translation, an en space before it: the `\enspace`
   backref sets is a kern, no ink of the list's, and without it the list stood against the year in a CJK translation
-  ("2025.3, 5, 26"). In the marked original the entry names
+  ("2025.3, 5, 26"); what TeX sets there is `\newblock`'s glue, which `\BR@backref` begins with. The rebuilt reader states
+  it on its element (`el.after`, the en space its gap: the front half's adapter, `pipeline/instrument.mjs`), and
+  `packages/translate`'s chain asks every translator for the entry without it and puts it back after the translation, on
+  every wire and the runs floor. Until 2026-11-09 it went as a marker: over the 88 corpus papers 314 entries of 5 papers, 147
+  a marker alone at the wire's end, 167 in one marker with the year before it, read back against the year with no gap;
+  stated, 147 markers wires and every one of the 314 tags wires change, and 300 of the markers wires are today's byte for
+  byte (the rest differ before the list, by the package's own rules). In the marked original the entry names
   its marks after its end mark (`\axtbrname{p<i>.<k>}`, an assignment), and LAYOUT_TEX wraps both printers where the document
   begins (begindocument/end, after the class's own `\backrefalt`), so that the list has that piece's opening mark before it
   and its closing mark after it; `\backrefalt` only where a package or the paper defined one (backref calls `\backref` while
@@ -5340,6 +9083,19 @@ block's units, below: whatever TeX sets an author block in, its units are the bl
   the source's, the entries, the paper's names; nothing is announced twice, and no contract between the host's children changes
   but the `.bbl` handed to the one that opens the paper again (the web's prepare: the hand-off's `bbl`). The host decides the
   paper's TeX Live tree before the pass, so that the entries are the `.bbl` of the tree that compiles it. Measured: below.
+- **A `\bibliography` inside a group is read where TeX reads it** (`source/latex-front.mjs` `bibliographiesIn`). The walk reads
+  every group next to a command the role table does not know as that command's arguments, kept whole as one placeholder (some
+  prose stays untranslated, nothing breaks), and never met a `\bibliography` inside one: 2608.06007v1's
+  `\balance{ \bibliographystyle{unsrt} \bibliography{ref} }` (balance.sty's `\balance` takes no argument, the group is TeX's)
+  named no bibliography, so BibTeX made no `.bbl`, and 2610.37818v1's `{ \small … \bibliography{main} }`, read as a fourth
+  argument of the `\iftoggle{…}{…}{}` before it, never visited its shipped one. Their printed entries, text no unit owns in the
+  references' zone with no entry number, were kept blocks (§17.1, the owner's ruling of 2026-10-30: a bibliography the front end
+  did not cut into entries), never translated: the References toggle reached nothing there (round 8: 7 blocks over 06007's pp. 15-18, 4 in
+  37818). Such a call's `\bibliography`, outside comments, is now read as a bare one is: its names recorded, the job's `.bbl`
+  visited there, the paragraph before ended; the call is then no unit's, as `\bibliography`'s own source is none, and nothing
+  of ours is written in its groups (the entries are the `.bbl`'s units). Not the whole group walked: our marks would go into an
+  argument whose use the walk cannot know. Over the 88 papers the front end changes these two alone: 06007's 88 entries and
+  37818's 40, units of kind `reference` under the toggle; the 4 biblatex papers' 223 entries were units already.
 - **A biblatex bibliography: one unit an entry, of kind `inkreferences`** (`marks.mjs` POINTS_TEX, `ledger.mjs`, `ink-units.mjs`,
   2610.35877v1 on staging: its entries translated with the references off, its heading drawn into the first entry). biblatex
   prints its entries from biber's fields (`\printbibliography`), no TeX of the source the front end could mark, and they were
@@ -5377,7 +9133,13 @@ block's units, below: whatever TeX sets an author block in, its units are the bl
   translated and set in the names' bold; outside an author block `\centerline` is one placeholder as before). A later row with
   none of these is a place, as the classes set it: a name alone there cannot be told from a place by its
   TeX. An e-mail, a web address and an ORCID written out stay placeholders, the original's ink; so does an e-mail whose
-  local part TeX escapes (`goh\_siong\_thye@…`, one placeholder with its `\_`, 2608.11884, 2608.29778). Every author block's
+  local part TeX escapes (`goh\_siong\_thye@…`, one placeholder with its `\_`, 2608.11884, 2608.29778); and so does a group of
+  local parts written once before their one domain, in braces, parentheses or brackets, separated by commas and/or white space,
+  whatever space TeX writes between them (`\{kahe,~v-xiangz\}@…`, `\{mph,\,lmb\}@…`, `[first name]@…`: `ADDRESS_GROUP`,
+  `keepGroups`, one placeholder as the paper writes it; read from one text between `\{` and `\}` alone, a tie parted the list
+  into words sent one by one, 1512.03385v1, and a bracket's was text, 2610.21085v1). A row of addresses alone is then no unit,
+  and the ink side keeps it whole too (below, the ink units' rule 4): its lines a kept block, the original's whatever the names
+  toggle (2611.00342v1, the owner's 2026-11-10: 「翻译或者不翻译都可以，关键是不能乱翻」). Every author block's
   unit keeps its number: what PIPELINE 29 cut the text between two notes into (one unit of kind author, a unit the walk flushed
   inside it one more: `olderUnits`, a walk of the old cut in a shadow of the walk's context) keeps it in the first unit cut inside
   its range, of either kind, and every other unit cut there is numbered after every other unit of the source, before the entries
@@ -5388,7 +9150,41 @@ block's units, below: whatever TeX sets an author block in, its units are the bl
   of revtex's, set once: 2610.21770v1's third, broken over two lines, had been marked and set again), never two rows of one block (article sets
   1706.03762v7's three "Google Brain" rows each where it stands: all 15 of its block's units laid); a row that opens with its
   first letter as a command in a group (`{\L}ukasz`) has its start mark before the group (`patch`), so that the letter is its
-  own ink.
+  own ink. A row ends too at a command of the paper's that ends the paragraph and sets no text of its own (`frontRowEndsOf`: a macro of
+  no argument every definition of which, in any of the package's files, has a body that ends the paragraph at its top level,
+  `\par` or a row's end, with no letter past its commands, its braces and the glue a skip reads): IJCAI's style, shipped with the
+  paper, defines inside its `\@maketitle` `\def\affiliations{\egroup\vskip 0.05in minus 0.05in\par\bgroup\Large\rm}` and
+  `\emails` alike, written inside `\author` between its names, its places and its e-mails (2611.00342v1, 2026-11-10). Read as
+  text, the last name's row took the first place (a name) and the last place ran on through `\emails` into the e-mail rows, a
+  unit TeX set as two paragraphs that no reading located: English whatever the toggle. A body that sets prose with its row end
+  (2608.16190's `\def\authorblock{Anik Jha\\ Independent Researcher}`, `\author`'s whole argument) is the paper's prose, read
+  where it is defined. Over the 92 papers' sources only 2611.00342v1's units move.
+- **A class's own author command** (`source/latex-front.mjs` `ownAuthorsOf`, 2026-11-09, the owner's priority report on
+  2610.20967v1-zh: "the author block is off, yet the authors' names are translated, and their small 1s are drawn as big 1s").
+  The role table knows the author block by its commands' names, LaTeXML's; a class a paper ships may have its own. ICASSP's
+  spconf.sty stores `\name{…}` as LaTeX's `\author` stores its text (`\def\name#1{\gdef\@name{{\em #1}\\}}`) and its
+  `\@maketitle` sets `\@name` and `\address`'s `\@address` as the rows of one tabular. `\name` was no command of the block: its
+  names no unit, an ink unit of the notes (always translated), its affiliations' marks read as text (under Times a superscript's
+  digit is in the text face, which the ink units' rule 4 takes for words). Read from the paper's own definitions instead: a
+  command whose one argument of text its definition keeps in a macro (`keeps`: a definition in its body, as LaTeX's `\author`,
+  or through a call of another of the paper's macros that keeps what it is handed in the macro another argument names: the
+  Meta FAIR preprint class's `\addtolist`, `\xdef#3{…#2…}`) whose macro the class's title command (`\maketitle`,
+  `\@maketitle`, and the commands of the paper's files they call) sets in the group, a brace group or a tabular, it sets a
+  known block's macro in (LaTeX's `\@author`, or the macro of a command the role table knows of the block) is of the block, its
+  names where its macro opens that group, as `\author`'s first rows are, else its places; frontBlock cuts it as `\author`'s,
+  its marks its elements. 2604.14228v3 (that class): its `\contribution` notes, the paragraph after the places in the group the
+  title sets the names and places in, are places; their glyphs on the title box's fill had been figure texts, translated with the
+  block off, each run laid at its own anchor. What the title sets in another group is none: taking all it sets made a venue's
+  line, a licence and a teaser's caption places (2610.22214v1, 2402.10294v1, egpubl's 2610.30875v1), and so the class's
+  `\correspondence`, which its title sets after the abstract in the metadata's group with `\date`, is no unit: the author block
+  under the title (below) takes its line, the title being drawn in the tcolorbox it is drawn in. Its units are numbered after every other
+  unit but before the entries (`last`): numbered after the entries, the unit stood where a bibliography BibTeX makes in the
+  first pass is appended, and `madeBibliography`, which holds every unit before the entries as it was, kept the bibliography as
+  none. Over the 88 papers 2610.20967v1 alone moves (one unit, kind author, no other unit's number); over the 190 sources on disk
+  2604.13605v1 too (the same class; its shipped .bbl's entries one number on). Not covered: a command that takes the block's text
+  in more than one argument (spconf's `\twoauthors`), a block a paper's macro of no argument holds (2610.30854v1's
+  `\PaperAuthors`, set by its own `\MakeJointTitle`), a class the paper does not ship, and a title block written out with no
+  author command at all (2610.19282v1, 2610.21924v1, 2610.21827v1: their names are paragraphs).
 - **A paper's macro of its text in an author block** (`storedBodies`): `\affiliation[a]{\CU}`, `\CU` a `\newcommand` of the
   affiliation's text (2609.20976v1), is cut where it is defined, of the kind of the place it is called from; where the macro is
   called once in running text (`once`), its unit is marked in its definition (`frontMarks`), the one place TeX sets it, and is laid
@@ -5407,6 +9203,54 @@ block's units, below: whatever TeX sets an author block in, its units are the bl
   taken their lines gone. A body a `.sty` or a `.cls` defines is no unit (jcappub's `\maketitle` and `\@fpheader`: the class's own code,
   "! ! ! ! Abstract. ! ! Keywords:", translated for nothing): its text is the class's, the ledger's, an ink unit where it is
   one.
+- **The author block under the title, whole, and nothing else** (`packages/engine/src/locate/author-block.ts`, `ink.ts`
+  `nameBlock`, `locate.ts` `TEXT_NAMES`; the owner's ruling of 2026-11-09 on staging's round 7: 2604.14228v3 p1's correspondence
+  line and 2610.22065v1 p1's second affiliation and its notes translated with the block off, the "AND" between 2610.21106v1's
+  names drawn in the target's word, and acmart's reference format, which the class prints from the same `\author` data, following the names
+  toggle). Read off TeX's stream on arXiv's page (A's glyphs in their content stream's order) by the source units that own its
+  glyphs: after the title, the block opens at its first name or place (a unit of kind author or affiliation, or an ink unit rule 8
+  made of the names) and runs through what TeX sets between and after them until TeX sets a unit of another kind (the abstract,
+  its babel name, a date of the source, a keyword list, the body), less that unit's run-in label (the glyphs before it on its first
+  line, MR 5's baseline test: JCAP's "Abstract."); where a graphic no unit owns (an image, a rule, a form's or a picture's text)
+  stands between the block's last name or place and that unit, the block ends there (egpubl's teaser and its caption, elsarticle's
+  `\hrule` over its abstract's heading), a graphic followed by more of the block being the block's (2610.19159v1's GitHub icon
+  before its places' links); and where TeX begins a front matter environment that is no author's (the abstract, the keywords,
+  IEEEtran's index terms: the marked compile's point `fm<n>` at the environment's before hook, `layout/marks.mjs` POINTS_TEX),
+  the block ends there, so that a heading a class sets for that element from a literal of its own on a line of its own, no babel
+  name (spconf's "ABSTRACT", 2610.20967v1; jmlr's "Abstract", 2610.21201v1), is the element's: the stream alone cannot tell it
+  from the block's own last lines (22065's notes, JCAP's e-mail line), TeX can. The point is armed at the environment's
+  before hook from `\begin{document}` on and set at the start of the next paragraph TeX begins (para/begin: the element's
+  heading or its text), as a babel name's start in vertical mode waits: never a node of the main vertical list, whose
+  `\lastskip` `\addvspace` reads and from which TeX takes nothing back (1706.03762v7's `\begin{abstract}` after a penalty
+  already on the page: "You can't use `\unpenalty` in vertical mode", tried first), so that every position is as before
+  (stage 1a's glyph proofs over the 92 papers below); one an environment sets in a box it keeps (elsarticle's `\absbox`) is set
+  in that box, before its heading; one whose environment keeps its text for the title block (acmart's, REVTeX's abstract) is
+  disarmed where `\maketitle` runs first. A subtitle before the names is the title's. Where the title is drawn inside a pgf picture (a framed
+  title box: 2604.14228v3's and alta's tcolorbox), the block is the rest of that picture, the frame TeX states its end, every unit
+  inside keeping its kind and its run-in label (alta's "Abstract.", "Keywords:"). Its ink (the glyphs no unit owns in it, no
+  figure's) is cut into ink units as before and each all of whose glyphs are the block's is of the names (`inknames`), a note's,
+  an orphan's or a figure text's (the framed box's glyphs are kept from the figure texts) as much as one rule 8 named; an ink unit
+  rule 8 named outside it is its ledger line's class again (orphan or notes: acmart's reference format, the names of IEEE's
+  biographies); a source unit of the block's kinds placed outside it is a member of kind `textnames`, of no toggle (the reader's
+  and the content classes' tables name it nowhere: always translated), its unit's kind and id unchanged. Where no title is
+  located, nothing moves. Why the stream and not the box `\maketitle` sets: acmart's `\maketitle` sets the title box (title,
+  names, teaser), then the author notes, the authors' addresses and the permission block as footnote inserts, then the abstract,
+  CCS Concepts, the keywords and the ACM Reference Format; REVTeX's sets the abstract and the PACS line; elsarticle's and cas's the
+  abstract and the keywords: what a class puts in its title macro is its own choice, and the block is the one run of it after the
+  title that TeX sets from the author data, in every class of the 88 (LaTeX's `\@author` in a tabular, IEEEtran's blocks, amsart's
+  `\andify`, REVTeX's lists, llncs's institutes, acmart's `\@mkauthors` and a paper's literal override of it, a class's own lists).
+  Over the 88 papers (stage 1a against round 7's), 26 move, no unit's text and no
+  source unit's number: 35 ink units made the names' in the block (the "and" or "AND" between names in 17 papers; the places and
+  notes no unit is of 2402.10294v1, 2610.22065v1 and 2610.21201v1, 11; JCAP's e-mail line; 6 date lines; the 2 class headings
+  the stream took first given back by the front matter environment's point, which over the 92 papers moves those two alone,
+  every glyph proof as before, the TeX gate's 96 documents compiling to the same PDFs); 18
+  units of the block's kinds set elsewhere `textnames` (2610.22065v1's 8 names in its reference format, amsart's addresses at the
+  paper's end in 2610.20581v1, 2610.21037v1 and 2610.21884v1); 5 ink units of the names set elsewhere the text they are
+  (2610.21106v1's addresses at its end, 2610.30034v1's three biographies' names); alta's e-mail line, inside its title box, no
+  figure text (a kept block: an address alone). 2604.14228v3's correspondence line is one ink unit of the names, its three figure
+  texts gone. A date line TeX sets under the names (REVTeX's "(Dated: …)", `\today`) is the block's, by the owner's
+  positional rule (the coordinator's call of 2026-11-10). A title block with no author command and no name rule 8 reads
+  (2610.30854v1's `\MakeJointTitle`) has none.
 - **Names are translated for every target** (`layer-proto/rows.mjs` `toTranslate`, TRANSLATE_VERSION 6): the author block's units
   are sent whatever the language, as every unit is but a table's kept names; they are laid as any unit, and stay the original's
   where the wrap cannot hide their ink (`unhidden`).
@@ -5420,11 +9264,11 @@ block's units, below: whatever TeX sets an author block in, its units are the bl
   who had left it off sees them the original's). The ledger (layout/ledger.mjs) counts a place's glyphs under `names` in a base
   made since (they were `body`'s): diagnostic counts, which no reader, gate or sweep holds to a class. The face waves ask no slice
   of a unit the toggles hide (view/layer-side.mjs `shownNow`, warm.mjs `firstPageUnits` `shown`): the first page's wave asked the
-  places outside its budget as always drawn. An affiliation no source unit owns, made an orphan's or a note's ink unit
-  (layout/ink-units.mjs rule 8 reads an author unit's words alone), stays always translated: classing it as names is the maker's
-  change, with a PIPELINE of its own, not yet made. A paper whose own style sets its title block from macros of its own, no
-  `\author` at all (2610.30854v1's `\MakeJointTitle` in its `.sty`, from `\PaperAuthors` and `\PaperAffiliations`), has no
-  author unit: its lines are ink notes, always translated, which no rule over the block's words can reach. Next.
+  places outside its budget as always drawn. An affiliation no source unit owns, made an orphan's or a note's ink unit, is the
+  names' where it stands in the author block under the title (above, 2026-11-09). A paper whose own style sets its title block
+  from macros of its own, no `\author` at all (2610.30854v1's `\MakeJointTitle` in its `.sty`, from `\PaperAuthors` and
+  `\PaperAffiliations`), has no author unit: its lines are ink notes, always translated, which no rule over the block's words can
+  reach. Next.
 - **Measured** (`lab/pdf/spikes/classes-gate.mjs`, record `lab/pdf/records/classes-gate.md`; `lab/pdf/spikes/unit-hash-diff.mjs`
   over the local sources), against `next` 2346530d:
   - **The units** of the 170 local sources (cut before any compile, so without the `.bbl`s the pass makes):
@@ -5526,3 +9370,88 @@ layer wherever such a name is drawn (the owner's other ground truth of 2026-10-2
   those units), and no source unit's text group moves; 216 of 216 local sources keep every unit's hash.
 - **Limits.** The translator sees a name alone, with no sentence around it: a word of two senses may come back in the other
   ("Note", "Line"). A name only a macro of the paper's prints (`\newcommand{\thmname}{Satz}`) is not read.
+
+### 19.15 One person, one translation (the block's names elsewhere)
+
+The owner's ruling of 2026-11-10: one person, one translation per paper. With the names toggle on, a name of the author block
+that the paper prints elsewhere is drawn with the block's translation of that name. "Elsewhere" covers an ACM reference format,
+a correspondence line, an acknowledgement, an author's biography and a self-citation. With the toggle off, that other text is
+ordinary text, translated and drawn as before: the same unit, the same wire and the same row, with nothing keyed by the toggle.
+The toggle still governs the block under the title alone (§19.13, the ruling of 2026-11-09).
+
+- **Why.** A name is translated again wherever it stands. Today's stored rows (the sweep cache, Microsoft) compare a name
+  translated alone with the same name in other units: outside references 12 differ, 5 agree and 4 stay English; in references
+  11 differ and 22 agree.
+  - 2610.22065v1's block line has 周文勇, its reference format 文永周 and its footnote 周文勇.
+  - 2604.14228v3's block has 申志强; its correspondence line came back 沈志强（ in one run and 申志强（ in another.
+- **A stretch.** A stretch is a unit's text between two of its pieces that set something, or its edges.
+  - A piece that sets something is an element that is not a tie, states no glue, is no forced break and is not silent, or a
+    nested unit's mark.
+  - A tie reads as a space, and an element that sets nothing reads as nothing.
+  - A group's edges are no cut: Microsoft returns a group that travelled on no wire hollow, with its words outside it. Of
+    today's stored replies, names cut at the group edges failed 73 of 293 times; cut at the elements alone, 0 of 242.
+- **A name.** A name is a stretch of the source's author declaration (a unit of kind `author`). It is trimmed of Unicode
+  punctuation, white space, symbols and controls at both ends, and holds two words or more: a given name and a surname as the
+  block writes them.
+  - A single word is not a person's name. 2609.36054v2 writes its places inside `\author` through its own `\formataffil`, and
+    its "Institute for Law \& AI" gives "AI", which stands in 99 of its paragraphs.
+- **The anchor.** A name's anchor is the first member of the block, by ord, one of whose stretches is the name. The block is
+  the names toggle's member kinds: author, affiliation and inknames.
+  - The anchor's row, cut at the same elements, gives the name's translation.
+  - A block that lists names with nothing between them has no anchor and changes nothing (IEEEtran's
+    `\IEEEauthorblockN{A, B and C}`).
+- **An occurrence.** An occurrence is the name's text inside one text piece of any other unit that a member lays and that is not kept. A unit no member lays is never drawn, and no variant is made for it.
+  - Any white space may stand between its words; no letter or digit may stand beside it.
+  - The longest name is taken first, and the anchor's own stretch is not an occurrence.
+  - A unit whose every occurrence is a whole stretch is resolved in its own row: its stretch's letters become the block's and
+    its own punctuation stays. These are 2610.22065v1's reference format names, each its own unit, and 2604.14228v3's
+    "Zhiqiang Shen (", which becomes 申志强（.
+  - Any other unit has a **variant**, a unit of kind `named` written right after it in Units. The variant is the unit with each
+    occurrence an element of kind `person`, whose `src` is the name as the unit writes it.
+  - The variant has its own id and wire, and so its own row and store key. The server translates it as any unit.
+- **The part** (Part.paper):
+  - `named`: each unit of the page's members that names a person elsewhere, its variant or '', and each name. A name is
+    stated as its element and its length and offset, for the sentences, or as its stretch.
+  - `persons`: each person's anchor, the anchor's member kind and its stretch.
+  - `splits`: how the anchors' rows, and the rows resolved in place, are cut.
+- **The lay** (`packages/typeset/src/lay/named.ts`, one view of the rows at layPage's top; every caller lays the page alike). With
+  the names shown (the anchor's kind not left):
+  - **The variant's row:** each `person` element becomes the block's translation. Its `src` sentences map back onto the unit's
+    projection and its `tr` sentences onto the text as drawn, so that both panes light by sentence (§17).
+  - **A whole-stretch unit's own row:** its stretch's letters become the block's translation.
+  - **Cutting the block's row:** each cut must come back once and in order, and the row's stretches must hold a letter exactly
+    where the source's do. A row cut otherwise gives no name. The tags wire's element moved across a name would give the
+    neighbour's name between the same two elements, and the letters' places tell it.
+  - **Fallbacks:**
+    - where a name has no translation, a variant's member takes its own row as it came (its names cannot be told apart in
+      it);
+    - a whole-stretch unit keeps its own translation of that name.
+  - **Waiting:** a page waits for the variant's row and the anchors' rows besides the unit's own, while rows may come. Nothing
+    committed is laid again; a toggle lays every page again.
+  - **What a page reads is what it waits for** (2026-11-13). One test, the persons of the unit the toggles show (`shownOf`),
+    decides both. Where none is shown (the names off) the unit is its own row as it came, and neither the variant's row nor an
+    anchor's is read. Before, the variant's row was read first: with the names off and that row not in yet, the unit read as
+    still to come, though its page waited for nothing more, so the page committed with it the original's, and a toggle turned
+    and turned back drew it from its own row (staging round B14, 2611.03953v2-zh p1: the ICML correspondence footnote, the
+    original's at the first lay, its own row's translation after the names on then off). Over the round's bundles with the Google store (each variant's
+    row made from its unit's), a page laid over only the rows it waits for against over every row: 6 of 90 first pages and 11
+    of the 60 pages that hold a variant differed by default, all 60 with the references on; none after.
+- **Measured** (stage 1a over the 88 at this change, against the base's run):
+  - 29 papers state 117 units naming 192 persons elsewhere, every other object the same:
+    - 96 references (self-citations);
+    - 8 reference format units (2610.22065v1's), resolved in their own rows;
+    - 5 paragraphs (acknowledgements, biographies);
+    - 4 footnotes and 4 ink units (correspondence lines, a reference format paragraph).
+  - 13 units are resolved in their own rows and 104 have a variant: 23.6K characters, 0.40 % of the corpus's.
+  - On page 1: 15 units in 8 papers, 5 of them variants (487 characters).
+  - 2604.14228v3's correspondence line, at this engine one ink unit of its block (the tcolorbox's rest), has a variant: it is
+    drawn 申志强 with the names on and the original's with them off, as the block is.
+- **The block's translation wins.** The block's translation is the person's, whatever it is. 2610.22195v1's block translates
+  each ICML name alone (延辰邓) where its acknowledgement, in a sentence, had 邓彦晨: the acknowledgement now reads the block's.
+  The block's own quality (names translated one by one rather than in a list) is a separate matter.
+- **Not covered.**
+  - Forms the block does not write: initials (152 references in 27 papers), surname first (42 in 12), running heads in
+    initials or in capitals (18 units in 7 papers), and a name across a tie outside the block (4 in references).
+  - A shorter name inside another person's longer one ("Jun Yang" in "Jun Yang Li") where the longer is no block name.
+  - The anchors' cuts are measured on Microsoft's replies alone. The tags wire's readings (Google, Chrome's built-in
+    translator) are tested on shaped replies (`packages/translate/tests/names-wire.test.ts`).

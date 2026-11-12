@@ -11,6 +11,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
+import { judgePunct, measurePunct, PUNCT_TARGETS, punctRows } from './punct.mjs'
 import { answerBytes, startServer } from './server.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -51,7 +52,9 @@ for (const id of (process.env.AXT_LAB_FIXTURES ?? '').split(',').filter(Boolean)
 }
 const indexOf = {}
 /** the stand-in of our server's v2 routes: each paper's document; a scenario a check sets (`modes[seg]`): 'not-opened' (a 404
- *  until the open, then preparing for `prepareMs`, then the document), else the document at once; and every ask, logged */
+ *  until the open, then preparing for `prepareMs`, then the document), 'stale' (a layer of another build and no run of the
+ *  target until the open, then that layer while the paper is prepared again for `prepareMs`, then a newer catalog with the
+ *  target's rows), else the document at once; and every ask, logged */
 const docs = {},
   rowsObjects = new Map(),
   modes = {},
@@ -60,8 +63,10 @@ const docs = {},
 const DELTAS = 10
 const deltasOf = {}
 /** each paper's twin head: its head's bytes and a newline, another catalog digest over the same layer (a scenario's newer
- *  catalog, `recatalog`), its object by path */
+ *  catalog, `recatalog`), its object by path; and its layer made again (`stale`'s new build): a head whose parts are its own,
+ *  each part without its last flow (a page laid from it lays one member fewer than one laid from the part before) */
 const twins = {},
+  rebuilt = {},
   twinObjects = new Map()
 for (const [name, f] of Object.entries(fixtures)) {
   const head = JSON.parse(readFileSync(join(f.bundle, 'head.json'), 'utf8'))
@@ -77,6 +82,27 @@ for (const [name, f] of Object.entries(fixtures)) {
     const sha256 = createHash('sha256').update(bytes).digest('hex')
     twins[seg] = { path: `p/${seg}/fx/${sha256}`, sha256, bytes: bytes.length }
     twinObjects.set(`/api/v2/o/p/${seg}/fx/${sha256}`, bytes)
+  }
+  {
+    const object = (b) => {
+      const sha256 = createHash('sha256').update(b).digest('hex')
+      twinObjects.set(`/api/v2/o/p/${seg}/fx/${sha256}`, b)
+      return { path: `p/${seg}/fx/${sha256}`, sha256, bytes: b.length }
+    }
+    const h = JSON.parse(readFileSync(join(f.bundle, `${headDigest}.head`), 'utf8'))
+    const members = {}
+    const parts = h.parts.map((d) => {
+      if (!d) return d
+      const part = JSON.parse(readFileSync(join(f.bundle, `${d}.part`), 'utf8'))
+      const flows = part.flows.length > 1 ? part.flows.slice(0, -1) : part.flows
+      members[part.page] = flows.flat().length
+      return object(Buffer.from(JSON.stringify({ ...part, flows }))).sha256
+    })
+    rebuilt[seg] = {
+      catalog: object(Buffer.from(JSON.stringify({ ...h, parts }))),
+      parts: parts.filter(Boolean),
+      members,
+    }
   }
   indexOf[name] = {
     paper: `${head.paper.id}v${head.paper.version}`,
@@ -209,12 +235,30 @@ const fixtureRoute = {
         }),
       )
     }
+    // (the full-width punctuation's check's rows, punct.mjs: written for it, given the fixture's own units' ids)
+    const punct = /^([a-zA-Z-]+)\.rows\.json$/.exec(file ?? '')?.[1]
+    if (punct && PUNCT_TARGETS.includes(punct) && existsSync(join(f.files, 'de.rows.json'))) {
+      const rows = punctRows(punct, JSON.parse(readFileSync(join(f.files, 'de.rows.json'), 'utf8')).rows)
+      if (rows) {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        return res.end(JSON.stringify(rows))
+      }
+    }
     const at = join(f.files, file)
     if (!existsSync(at)) return false
     res.writeHead(200, { 'content-type': 'application/json' })
     return res.end(readFileSync(at))
   },
 }
+/** a paper of a stale layer once opened (worker v2 machine.ts): prepared again, the old layer served meanwhile, the target's
+ *  work made by the open and not started (none of the wanted units told yet) */
+const staleOpened = (d, target) => ({
+  ...d,
+  rev: 3,
+  prepare: { ...d.prepare, attempt: 2, state: 'running', stage: 'compiling' },
+  layer: { ...d.layer, stale: true },
+  targets: target ? { [target]: { ...d.targets[target], attempt: 0, state: 'none', rows: [], done: 0, total: 0 } } : {},
+})
 const v2Route = {
   prefix: '/api/v2/',
   handle(req, res, url) {
@@ -230,14 +274,15 @@ const v2Route = {
       const d = docs[seg] ?? Object.values(docs).find((x) => x.pv.replace(/v\d+$/, '') === seg)
       if (!d) return json(404, { error: 'not-found' })
       const m = modes[d.pv]
-      // (busy for now, an hour on; a prepare that cannot be made, with our server's word on arXiv's HTML version)
-      if (m?.kind === 'refused') return json(429, { error: 'busy' }, { 'retry-after': '3600' })
+      // (a paper not opened, whose open is refused for now: the visitor's new papers spent, an hour on, in the open's answer as our
+      // server words it; a prepare that cannot be made, with our server's word on arXiv's HTML version)
+      if (m?.kind === 'refused') return json(404, { error: 'not-opened' })
       if (m?.kind === 'cannot')
         return json(200, {
           ...d,
           rev: 2,
           layer: null,
-          prepare: { ...d.prepare, state: 'failed', why: 'cannot', html: m.html },
+          prepare: { ...d.prepare, state: 'failed', why: 'cannot-typeset', html: m.html },
           targets: {},
         })
       if (m?.kind === 'not-opened' && !m.opened) return json(404, { error: 'not-opened' })
@@ -249,13 +294,27 @@ const v2Route = {
           prepare: { ...d.prepare, state: 'running', stage: 'compiling' },
           targets: {},
         })
-      // (the target still running for `runningMs` after the prepare, its rows in: the run under way, some of it there)
+      // (the target still running for `runningMs` after the prepare, the first half of its rows in: the run under way, some of
+      // it there and the rest to come, as the reader waits for a run, chrome/events.ts)
       if (m?.kind === 'not-opened' && m.runningMs && performance.now() - m.opened < (m.prepareMs ?? 800) + m.runningMs)
         return json(200, {
           ...d,
           rev: 2,
-          targets: Object.fromEntries(Object.entries(d.targets).map(([t, x]) => [t, { ...x, state: 'running' }])),
+          targets: Object.fromEntries(
+            Object.entries(d.targets).map(([t, x]) => {
+              const all = JSON.parse(rowsObjects.get(`/api/v2/o/${x.rows[0].path}`).toString('utf8'))
+              const bytes = Buffer.from(
+                JSON.stringify({ ...all, rows: all.rows.slice(0, Math.ceil(all.rows.length / 2)) }),
+              )
+              const sha256 = createHash('sha256').update(bytes).digest('hex')
+              const path = x.rows[0].path.replace(x.rows[0].sha256, sha256)
+              rowsObjects.set(`/api/v2/o/${path}`, bytes)
+              return [t, { ...x, state: 'running', rows: [{ path, sha256, bytes: bytes.length }] }]
+            }),
+          ),
         })
+      // (then the run done, its rows whole: a document newer than the running one)
+      if (m?.kind === 'not-opened' && m.runningMs) return json(200, { ...d, rev: 3 })
       // (the target's rows arriving: one delta more each `every` ms from the first follow, the run done with the last)
       if (m?.kind === 'deltas') {
         const ds = deltasOf[d.pv]
@@ -273,6 +332,59 @@ const v2Route = {
               done: Math.round((k * ds.total) / ds.list.length),
               total: ds.total,
             },
+          },
+        })
+      }
+      // (a layer of another build than the one our server runs and no run of the target (staging, 2026-11-08: PIPELINE 77 to 78,
+      // 1706.03762v7): served as it is, nothing started, until an open; then the old layer while the paper is prepared again,
+      // the target's run made and not started; then the new build's catalog, a head of parts of its own, and the target's rows)
+      if (m?.kind === 'stale') {
+        if (!m.opened)
+          return json(200, {
+            ...d,
+            rev: 2,
+            prepare: { ...d.prepare, attempt: 1 },
+            layer: { ...d.layer, stale: true },
+            targets: {},
+          })
+        if (performance.now() - m.opened < m.prepareMs) return json(200, staleOpened(d, url.searchParams.get('t')))
+        return json(200, {
+          ...d,
+          rev: 4,
+          prepare: { ...d.prepare, attempt: 2 },
+          layer: { ...d.layer, catalog: rebuilt[d.pv].catalog },
+        })
+      }
+      // (the target's run started again on the rows held (staging, 2026-11-11: 2610.21924v1's attempts 3 and 4 after a deploy):
+      // done, the paper being prepared again so that the follow keeps a run's pace; then a new attempt running whose rows are the
+      // same, restated in an object of their own; then that attempt done)
+      if (m?.kind === 'again') {
+        m.start ??= performance.now()
+        const k = Math.floor((performance.now() - m.start) / m.after)
+        const t = Object.keys(d.targets)[0]
+        const was = d.targets[t].rows[0]
+        const bytes = Buffer.concat([rowsObjects.get(`/api/v2/o/${was.path}`), Buffer.from('\n')])
+        const sha256 = createHash('sha256').update(bytes).digest('hex')
+        const path = was.path.replace(was.sha256, sha256)
+        rowsObjects.set(`/api/v2/o/${path}`, bytes)
+        const again = { path, sha256, bytes: bytes.length }
+        m.again = sha256
+        m.phase = Math.min(2, k)
+        return json(200, {
+          ...d,
+          rev: 2 + m.phase,
+          prepare: m.phase < 2 ? { ...d.prepare, attempt: 2, state: 'running', stage: 'compiling' } : d.prepare,
+          targets: {
+            [t]:
+              m.phase === 0
+                ? d.targets[t]
+                : {
+                    ...d.targets[t],
+                    attempt: 2,
+                    state: m.phase === 1 ? 'running' : 'done',
+                    rows: [again],
+                    done: m.phase === 1 ? 0 : d.targets[t].done,
+                  },
           },
         })
       }
@@ -294,7 +406,27 @@ const v2Route = {
         const d = Object.values(docs).find((x) => x.paper === ask.paper)
         if (!d) return json(404, { error: 'not-found' })
         const m = modes[d.pv]
+        // (a refusal of the open's new work, as format's OpenAnswer has it: the paper's document, nothing started, and the
+        // refusal's instant, its wait to the millisecond and in seconds)
+        const refusedFor = (why, s) => ({
+          doc: {
+            ...d,
+            rev: 0,
+            layer: null,
+            prepare: { ...d.prepare, state: 'none', stage: null, units: [] },
+            targets: {},
+          },
+          follow: null,
+          refused: { why, retryAt: Date.now() + s * 1000, retryAfterMs: s * 1000, retryAfterS: s },
+        })
+        if (m?.kind === 'refused') return json(200, refusedFor('quota', 3600))
+        // (our server at capacity for the first `busy` opens: refused in the open's answer, asked again a second on)
+        if (m?.busy > 0) {
+          m.busy--
+          return json(200, refusedFor('busy', 1))
+        }
         if (m) m.opened ??= performance.now()
+        if (m?.kind === 'stale') return json(200, { doc: staleOpened(d, ask.target), follow: null })
         json(200, {
           doc: {
             ...d,
@@ -740,43 +872,238 @@ for (const name of Object.keys(fixtures)) {
   })
 }
 
+// A laid page gone far is kept off the view within the budget (stack.ts goFar, docs/PDF-READER.md §11.8 "No flash coming back"):
+// its drawing held out of the layout tree while it is kept (`data-axt-kept`), so that no relayout of the document walks it (a
+// face added to the document re-lays every text node laid out: verification/reader-perf.md §1), its slot keeping its box; and
+// put back as it was as the page comes near: no new drawing, the same pixels on the page's grid, the pane's scroll height never
+// moved. A pane a third of a page high: page 1 is far (past one pane's height) once the pane is at its end.
 await check(
-  "compose: a laid page's links, out of the paper through the host, inside it on the right (s1-columns)",
+  'stack: a far laid page kept out of the layout tree, back pixel for pixel, the scroll height unmoved (s1-columns)',
   async () => {
-    const { page, context, errors } = await newPage()
+    const { page, context, errors } = await newPage({ dpr: 2, viewport: { width: 1400, height: 300 } })
     await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
+    await waitFor(page, () => window.__h.marks.some((m) => m.what === 'drawn' && m.side === 'right' && m.page === 1))
     await page.evaluate(() => window.__h.layer('s1-columns'))
     await laidShown(page, 1)
-    const links = await page.evaluate(() => window.__h.linksOf(1))
-    const ext = links.find((l) => l.href?.startsWith('https:')),
-      inner = links.find((l) => l.href?.startsWith('#'))
-    assert(ext && inner, `links ${JSON.stringify(links)}`)
-    await page.mouse.click(ext.rect.x + ext.rect.width / 2, ext.rect.y + ext.rect.height / 2)
-    await page.mouse.click(inner.rect.x + inner.rect.width / 2, inner.rect.y + inner.rect.height / 2)
-    const hit = await page.evaluate(
-      ([x, y]) => {
-        const e = document.elementFromPoint(x, y)
-        return `${e?.tagName}.${e?.className} in ${e?.closest('a')?.getAttribute('href')}`
-      },
-      [inner.rect.x + inner.rect.width / 2, inner.rect.y + inner.rect.height / 2],
+    await waitFor(page, () => window.__h.probe()['right.sized'] === window.__h.probe().pages)
+    const slot = '.axt-pane.right .axt-slot[data-page-number="1"]'
+    const state = () =>
+      page.evaluate((sel) => {
+        const s = document.querySelector(sel)
+        const pane = document.querySelector('.axt-pane.right')
+        const holder = s?.querySelector(':scope > .axt-slot-view')
+        const p = window.__h.panes.probe()
+        return {
+          kept: !!s?.hasAttribute('data-axt-kept'),
+          boxes: holder ? holder.getClientRects().length : -1,
+          height: pane.scrollHeight,
+          made: p['right.made'],
+          restored: p['right.restored'],
+          keptN: p['right.kept'],
+        }
+      }, slot)
+    const toTop = () => page.evaluate(() => (document.querySelector('.axt-pane.right').scrollTop = 0))
+    // (no pointer moved in this check: nothing lit on either pane)
+    await toTop()
+    await page.waitForTimeout(300)
+    const before = await page.locator(`${slot} > .axt-slot-view`).screenshot({ animations: 'disabled' })
+    const s0 = await state()
+    await page.evaluate(() => {
+      const p = document.querySelector('.axt-pane.right')
+      p.scrollTop = p.scrollHeight
+    })
+    await waitFor(page, () => !window.__h.panes.right.near(1))
+    await page.waitForTimeout(300)
+    const s1 = await state()
+    // (the jump back: in the frame that draws it, page 1's drawing already in the layout tree. A callback asked from the jump's
+    // scroll event runs in that frame before its layout and paint, after the stack's own, asked from the same event earlier)
+    const inJumpFrame = await page.evaluate(
+      (sel) =>
+        new Promise((done) => {
+          const p = document.querySelector('.axt-pane.right')
+          p.addEventListener(
+            'scroll',
+            () => requestAnimationFrame(() => done(document.querySelector(sel).hasAttribute('data-axt-kept'))),
+            { once: true },
+          )
+          p.scrollTop = 0
+        }),
+      slot,
     )
-    // (a document this short ends before page 2 can stand at the top: the jump brings it into view)
+    await waitFor(page, () => window.__h.panes.right.near(1))
+    await page.waitForTimeout(300)
+    const s2 = await state()
+    const after = await page.locator(`${slot} > .axt-slot-view`).screenshot({ animations: 'disabled' })
+    // (a zoom while it is far: what changed while it was out is laid out as it comes back, its overlay in its slot's box at the
+    // new scale, its page view drawn again at it)
+    await page.evaluate(() => {
+      const p = document.querySelector('.axt-pane.right')
+      p.scrollTop = p.scrollHeight
+    })
+    await waitFor(page, () => !window.__h.panes.right.near(1))
+    await page.evaluate(() => window.__h.panes.zoomBy(1.25))
+    await page.waitForTimeout(800)
+    const zoomed = await page.evaluate(() => window.__h.panes.scale)
+    await toTop()
     await waitFor(
       page,
-      () => window.__h.panes.right.inView(2) && document.querySelector('.axt-pane.right').scrollTop > 0,
-    ).catch(async (e) => {
-      throw new Error(
-        `${e.message}: hit ${hit}, right page ${await page.evaluate(() => window.__h.panes.pageOf('right'))}, scroll ${await page.evaluate(() => document.querySelector('.axt-pane.right').scrollTop)}, inner ${JSON.stringify(inner)}`,
-      )
-    })
+      (z) =>
+        window.__h.marks.some(
+          (m) => m.what === 'drawn' && m.side === 'right' && m.page === 1 && Math.abs(m.scale - z) < 1e-6,
+        ),
+      zoomed,
+    )
+    await page.waitForTimeout(300)
+    const z = await page.evaluate((sel) => {
+      const s = document.querySelector(sel)
+      const r = (e) => {
+        const b = e?.getBoundingClientRect()
+        return b ? [b.width, b.height].map((v) => Math.round(v * 100) / 100) : null
+      }
+      return {
+        kept: s.hasAttribute('data-axt-kept'),
+        slot: r(s),
+        holder: r(s.querySelector(':scope > .axt-slot-view')),
+        svg: r(s.querySelector('.axt-over > svg')),
+      }
+    }, slot)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(!s0.kept && s0.boxes > 0, `page 1 in view: ${JSON.stringify(s0)}`)
+    assert(s1.kept && s1.keptN >= 1, `page 1 far but not kept: ${JSON.stringify(s1)}`)
+    assert(s1.boxes === 0, `page 1 far and kept, its drawing still laid out (${s1.boxes} boxes)`)
+    assert(
+      s0.height === s1.height && s1.height === s2.height,
+      `the pane's scroll height moved: ${s0.height}, ${s1.height}, ${s2.height}`,
+    )
+    assert(
+      !s2.kept && s2.boxes > 0 && s2.made === s1.made && s2.restored > s1.restored,
+      `page 1 back: ${JSON.stringify({ far: s1, back: s2 })}`,
+    )
+    assert(inJumpFrame === false, 'page 1 still out of the layout tree in the frame that draws the jump back to it')
+    assert(before.equals(after), 'page 1 back is not the same pixels as before it went far')
+    const near = (a, b) => a && b && a.every((v, i) => Math.abs(v - b[i]) <= 1)
+    assert(
+      !z.kept && near(z.holder, z.slot) && near(z.svg, z.slot) && z.slot[0] > 0,
+      `page 1 back after a zoom while far: ${JSON.stringify(z)}`,
+    )
+    return {
+      height: s0.height,
+      made: s2.made,
+      restored: s2.restored,
+      bytes: after.length,
+      zoomed: { scale: zoomed, ...z },
+    }
+  },
+)
+
+// ---------------------------------------------------------------- the links of a page laid by the reader's own typesetter
+/** the fates of a part's link that draw it (packages/typeset lay/links.ts LinkFate: at its box, or moved with what it is over);
+ *  `unmatched`, `unplaced`, `targets`, `off` drop it, `away` is another page's */
+const DRAWN_FATES = ['free', 'unlaid', 'kept', 'crop', 'text', 'pair', 'whole']
+/** page n's links as the reader's own typesetter made them: each part link of the page with its fate, the fates' lay against
+ *  the committed page (one lay), an anchor each record; what is wrong, a sentence each */
+async function typesetLinks(page, n) {
+  const f = await page.evaluate((n) => window.__h.linkFatesOf(n), n)
+  const anchors = await page.evaluate((n) => window.__h.linksOf(n), n)
+  const wrong = []
+  if (!f) return { f, anchors, here: [], wrong: [`page ${n}: no lay of its part`] }
+  const here = f.links.filter((l) => l.page === n)
+  for (const l of here)
+    if (!DRAWN_FATES.includes(l.fate))
+      wrong.push(`page ${n}: the link to ${JSON.stringify(l.to)} owned by ${JSON.stringify(l.owner)} ${l.fate}`)
+  if (JSON.stringify(f.laid) !== JSON.stringify(f.committed))
+    wrong.push(
+      `page ${n}: the fates' lay ${JSON.stringify(f.laid)} is not the committed ${JSON.stringify(f.committed)}`,
+    )
+  if (anchors.length !== (f.committed?.length ?? -1) || (f.committed?.length ?? 0) < here.length)
+    wrong.push(`page ${n}: ${here.length} links, ${f.committed?.length} records, ${anchors.length} anchors`)
+  return { f, anchors, here, wrong }
+}
+await check(
+  "compose: a laid page's links through the reader's own typesetter, every part link drawn by its fate and an anchor each: out of the paper through the host, inside it on the right, one no member owns at its own box (s1-columns)",
+  async () => {
+    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
+    await page.evaluate(() => window.__h.layer('s1-columns', { typeset: true }))
+    await laidShown(page, 1)
+    const p1 = await typesetLinks(page, 1)
+    const ext = p1.anchors.find((l) => l.href === 'https://example.invalid/reader'),
+      inner = p1.anchors.find((l) => l.href?.startsWith('#'))
+    if (ext) await page.mouse.click(ext.rect.x + ext.rect.width / 2, ext.rect.y + ext.rect.height / 2)
+    if (inner) await page.mouse.click(inner.rect.x + inner.rect.width / 2, inner.rect.y + inner.rect.height / 2)
+    // (a document this short ends before page 2 can stand at the top: the jump brings it into view)
+    const jumped = inner
+      ? await waitFor(
+          page,
+          () => window.__h.panes.right.inView(2) && document.querySelector('.axt-pane.right').scrollTop > 0,
+        ).then(
+          () => true,
+          () => false,
+        )
+      : false
+    // (page 2: the figure's link, which no member owns, at its own box on A)
+    const shown2 = await laidShown(page, 2).then(
+      () => true,
+      () => false,
+    )
+    const p2 = shown2 ? await typesetLinks(page, 2) : { f: null, anchors: [], here: [], wrong: ['page 2 not laid'] }
+    const free = p2.here.find((l) => l.owner === null)
+    const rec = free && (p2.f.committed ?? []).findIndex(([, to]) => JSON.stringify(to) === JSON.stringify(free.to))
+    const boxes2 = shown2 ? await page.evaluate(() => window.__h.linkBoxesOf(2)) : []
+    const freeA = free && p2.anchors.find((l) => l.href === free.to.url)
+    const near = (a, b) => !!a && !!b && ['x', 'y', 'width', 'height'].every((k) => Math.abs(a[k] - b[k]) <= 1)
+    if (freeA) await page.mouse.click(freeA.rect.x + freeA.rect.width / 2, freeA.rect.y + freeA.rect.height / 2)
     const external = await page.evaluate(() => window.__h.external)
     await context.close()
     assert(!errors.length, errors.join('; '))
+    const wrong = [...p1.wrong, ...p2.wrong]
+    assert(!wrong.length, wrong.join('; '))
+    assert(ext && inner, `page 1's anchors ${JSON.stringify(p1.anchors)}`)
+    assert(jumped, `the link inside the paper ${JSON.stringify(inner)} did not bring page 2 into view`)
     assert(
-      external.length === 1 && external[0] === 'https://example.invalid/reader',
+      free?.fate === 'free' && rec >= 0 && JSON.stringify(p2.f.committed[rec][0]) === JSON.stringify(free.box),
+      `the link no member owns ${JSON.stringify(free)} not at its box: ${JSON.stringify(p2.f?.committed)}`,
+    )
+    assert(
+      near(freeA?.rect, boxes2[rec]),
+      `its anchor ${JSON.stringify(freeA?.rect)} against its box ${JSON.stringify(boxes2[rec])}`,
+    )
+    assert(
+      JSON.stringify(external) === JSON.stringify(['https://example.invalid/reader', 'https://example.invalid/figure']),
       `opened ${JSON.stringify(external)}`,
     )
-    return { links: links.length, external }
+    return {
+      fates: [...p1.here, ...p2.here].map((l) => l.fate),
+      anchors: [p1.anchors.length, p2.anchors.length],
+      external,
+    }
+  },
+)
+await check(
+  "compose: a turned page's link through the reader's own typesetter, drawn by its fate, an anchor over its box, out of the paper through the host (s3-turned)",
+  async () => {
+    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), indexOf['s3-turned'].original)
+    await page.evaluate(() => window.__h.layer('s3-turned', { typeset: true }))
+    await laidShown(page, 1)
+    const p1 = await typesetLinks(page, 1)
+    const boxes = await page.evaluate(() => window.__h.linkBoxesOf(1))
+    const a = p1.anchors.find((l) => l.href === 'https://example.invalid/turned')
+    if (a) await page.mouse.click(a.rect.x + a.rect.width / 2, a.rect.y + a.rect.height / 2)
+    const external = await page.evaluate(() => window.__h.external)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(!p1.wrong.length, p1.wrong.join('; '))
+    const near = (x, y) => !!x && !!y && ['x', 'y', 'width', 'height'].every((k) => Math.abs(x[k] - y[k]) <= 1)
+    assert(
+      a && boxes.length === 1 && near(a.rect, boxes[0]),
+      `the turned page's link ${JSON.stringify(a?.rect)} against its box ${JSON.stringify(boxes)}`,
+    )
+    assert(external.includes('https://example.invalid/turned'), `a click on it opened ${JSON.stringify(external)}`)
+    return { fates: p1.here.map((l) => l.fate), anchors: p1.anchors.length }
   },
 )
 await check(
@@ -816,6 +1143,49 @@ await check(
       `the copy reads ${JSON.stringify(around(text.copied))}`,
     )
     return { layer: around(text.text), copied: around(text.copied) }
+  },
+)
+await check(
+  'compose: a crop carries its own ink and leaves another piece’s in its source behind, in the crops canvas of its page view (s1-columns)',
+  async () => {
+    // (the typesetter states a crop's own ink and its page's every piece's, typeset's lay/clips.ts, and the reader cuts it by
+    // its own and a device pixel round it, clear of the others' (paint.ts cropsOf): 2610.21312v1-zh p5 t58, line 2's glyph
+    // tops cut with line 1's formula and left behind as dots; here the formula's crop given the left half of its source as its
+    // own ink and the right half as another piece's, and the crops canvas read: ink left of the edge, none right of it)
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
+    const r = await page.evaluate(() => window.__h.layer('s1-columns', { clip: { piece: '1', share: 1 / 2 } }))
+    const n = r.clipped.page
+    await laidShown(page, n)
+    await waitFor(page, (n) => !!window.__h.panes.right.page(n)?.querySelector('.axt-over > canvas.axt-crops'), n)
+    const ink = await page.evaluate(
+      async ({ n, edge, box }) => {
+        const c = window.__h.panes.right.page(n).querySelector('.axt-over > canvas.axt-crops')
+        const [vx0, vy0, vx1, vy1] = (await window.__h.composed.getPage(n)).view
+        const X = (x) => ((x - vx0) * c.width) / (vx1 - vx0),
+          Y = (y) => ((vy1 - y) * c.height) / (vy1 - vy0)
+        const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+        let left = 0,
+          right = 0
+        const cut = X(edge)
+        for (let y = Math.floor(Y(box[3])); y < Math.ceil(Y(box[1])); y++)
+          for (let x = Math.floor(X(box[0])); x < Math.ceil(X(box[2])); x++) {
+            const i = (y * c.width + x) * 4
+            if (d[i + 3] < 128 || 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2] > 128) continue
+            if (x + 1 <= cut) left++
+            else if (x >= cut + 1) right++
+          }
+        return { left, right, px: [c.width, c.height] }
+      },
+      { n, edge: r.clipped.edge, box: r.clipped.box },
+    )
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(
+      ink.left > 0 && ink.right === 0,
+      `the crop's ink: ${ink.left} px left of its own ink's edge, ${ink.right} right of it`,
+    )
+    return ink
   },
 )
 await check(
@@ -952,7 +1322,8 @@ await check(
           side,
           lit: r.lit?.id ?? null,
           bands: r.bands,
-          want: { left: pt.left + pt.own, right: pt.right + pt.own },
+          // (its sentences' shapes; its displays, blocks of their own, never with it)
+          want: { left: pt.left, right: pt.right },
         })
       }
     }
@@ -971,6 +1342,118 @@ await check(
       `a miss kept ${JSON.stringify(after)}`,
     )
     return { hovers: out.length }
+  },
+)
+
+await check(
+  'compose: a sentence across a display lit as a bar on each of its rows, the display never with it, on both panes; the display alone where hovered (s1-columns, a member’s lit restated)',
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
+    await page.evaluate(() => window.__h.layer('s1-columns'))
+    await laidShown(page, 1)
+    // (a laid member's first four lines on A in one column, restated as the typesetter states a sentence going on past a display
+    // (the owner's report of 2026-11-09, 2602.23285v2 p15): its first line one sentence, its second and fourth the next, its
+    // third a display of its own (piece 901) between them; the same boxes on both panes)
+    const got = await page.evaluate(() => {
+      for (const m of window.__h.composer.laid(1).members) {
+        if (m.state !== 'laid' || m.lit.dir || m.lit.left.length !== 1) continue
+        const rows = [...m.lit.left[0]].sort((a, b) => b[3] - a[3]).slice(0, 4)
+        if (
+          rows.length < 4 ||
+          rows.some((b, i) => i && Math.min(b[2], rows[i - 1][2]) - Math.max(b[0], rows[i - 1][0]) < 20)
+        )
+          continue
+        const per = [[rows[0]], [rows[1], rows[3]]]
+        m.lit = { left: per, right: per, own: [['901', [rows[2]]]] }
+        return { ord: m.ord, row: rows[1], display: rows[2] }
+      }
+      return null
+    })
+    assert(got, 'no laid member of four lines in one column on page 1')
+    const pointAt = (side, b) =>
+      page.evaluate(
+        ([s, b]) => {
+          const el = window.__h.panes.pageElement(s, 1),
+            q = window.__h.panes.boxOf(s, 1, b),
+            r = el.getBoundingClientRect()
+          return { x: r.left + el.clientLeft + q.left + q.width / 2, y: r.top + el.clientTop + q.top + q.height / 2 }
+        },
+        [side, b],
+      )
+    /** each pane's outlines painted and whether one of them holds the display's middle (the path's own fill) */
+    const painted = () =>
+      page.evaluate((d) => {
+        const out = {}
+        for (const side of ['left', 'right']) {
+          const layer = window.__h.panes.pageElement(side, 1).querySelector(':scope > .axt-hl-layer')
+          const q = window.__h.panes.boxOf(side, 1, d),
+            mx = q.left + q.width / 2,
+            my = q.top + q.height / 2
+          let outlines = 0,
+            filled = false
+          for (const el of layer?.children ?? []) {
+            const [L, T, W, H] = ['left', 'top', 'width', 'height'].map((k) => parseFloat(el.style[k]))
+            const path = el.querySelector('path')
+            if (path) {
+              outlines += (path.getAttribute('d').match(/M/g) ?? []).length
+              if (path.isPointInFill(new DOMPoint(mx - L, my - T))) filled = true
+            } else {
+              outlines++
+              if (mx >= L && mx <= L + W && my >= T && my <= T + H) filled = true
+            }
+          }
+          out[side] = { outlines, filled }
+        }
+        return out
+      }, got.display)
+    const steps = {}
+    for (const side of ['right', 'left']) {
+      const pt = await pointAt(side, got.row)
+      await page.mouse.move(pt.x, pt.y)
+      await page.waitForTimeout(80)
+      steps[`sentence from ${side}`] = {
+        lit: await page.evaluate(() => window.__h.highlight.lit),
+        ...(await painted()),
+      }
+    }
+    const pd = await pointAt('left', got.display)
+    await page.mouse.move(pd.x, pd.y)
+    await page.waitForTimeout(80)
+    steps.display = {
+      lit: await page.evaluate(() => window.__h.highlight.lit),
+      bands: await page.evaluate(() => window.__h.highlight.bands()),
+      ...(await painted()),
+    }
+    await page.mouse.move(3, 3)
+    await page.waitForTimeout(300)
+    await page.evaluate((o) => window.__h.highlight.light({ id: o, s: -1 }), got.ord)
+    steps.whole = { bands: await page.evaluate(() => window.__h.highlight.bands()), ...(await painted()) }
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    for (const side of ['right', 'left']) {
+      const x = steps[`sentence from ${side}`]
+      assert(
+        x.lit?.id === got.ord && x.lit.s === 1 && ['left', 'right'].every((p) => x[p].outlines === 2 && !x[p].filled),
+        `the sentence hovered from the ${side}: ${JSON.stringify(x)}`,
+      )
+    }
+    const d = steps.display
+    assert(
+      d.lit?.id === got.ord &&
+        d.lit.s === -2 - 901 &&
+        d.bands.left === 1 &&
+        d.bands.right === 1 &&
+        d.left.filled &&
+        d.right.filled,
+      `the display hovered: ${JSON.stringify(d)}`,
+    )
+    const w = steps.whole
+    assert(
+      w.bands.left === 2 && w.bands.right === 2 && ['left', 'right'].every((p) => w[p].outlines === 3 && !w[p].filled),
+      `the member lit whole: ${JSON.stringify(w)}`,
+    )
+    return { ord: got.ord }
   },
 )
 
@@ -1103,6 +1586,111 @@ await check('reader: a paper being prepared, opened and followed to its layer (w
   assert(seen.has('preparing') && seen.has('ready'), `layer states ${[...seen]}`)
   return { layer: [...seen] }
 })
+await check(
+  'reader: a stale layer (another build than our server runs) with no run of the target: opened once, after the first follow; the old layer drawn and followed meanwhile; the new catalog, its own parts and its rows taken when they land (staging, 2026-11-08)',
+  async () => {
+    const seg = indexOf['s2-splits'].seg
+    modes[seg] = { kind: 'stale', prepareMs: 1500 }
+    const from = v2log.length
+    try {
+      const { page, context, errors } = await newPage()
+      await page.evaluate(() => window.__h.reader('s2-splits', { host: 'web' }))
+      const seen = []
+      const t0 = Date.now()
+      for (;;) {
+        const s = await page.evaluate(() => {
+          const r = window.__h.readers[0].reader
+          return { layer: r.state().layer.s, rows: r.state().rows.s, laid: r.probe().laidPages }
+        })
+        if (seen.at(-1) !== s.layer) seen.push(s.layer)
+        if (s.rows === 'complete' && s.laid > 0) break
+        if (Date.now() - t0 > 25_000)
+          throw new Error(`not laid in 25 s: ${JSON.stringify({ s, seen, v2: v2log.slice(from).map((x) => x.what) })}`)
+        await page.waitForTimeout(50)
+      }
+      const asked = await page.evaluate(() => window.__h.readers[0].asked.map((a) => a.url))
+      // (what the composer laid the new catalog's pages from: the parts it was given, as the engine's lay is handed them)
+      const lays = await page.evaluate(() => {
+        const marks = window.__h.marks
+        const gen = Math.max(...marks.filter((m) => m.what === 'lay-asked').map((m) => m.gen))
+        return marks.filter((m) => m.what === 'lay' && m.gen === gen).map((m) => [m.page, m.members])
+      })
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      const mine = v2log.slice(from).filter((x) => x.what === 'open' || x.seg === seg)
+      const opens = mine.filter((x) => x.what === 'open')
+      assert(opens.length === 1 && opens[0].ask.target === 'de', `opens ${JSON.stringify(opens)}`)
+      assert(mine[0]?.what === 'follow', `the follow first: ${JSON.stringify(mine.slice(0, 2))}`)
+      // (the old layer kept while the paper is prepared again: ready from its first document on, never let go)
+      assert(seen.join() === 'none,ready', `layer states ${seen}`)
+      // (the new catalog's pages laid from its own parts, never from the parts of the head before: staging, 1706.03762v7)
+      const fresh = [rebuilt[seg].catalog.sha256, ...rebuilt[seg].parts]
+      const unread = fresh.filter((d) => !asked.some((u) => u.endsWith(d)))
+      assert(!unread.length, `the new layer's objects not read: ${unread}`)
+      assert(
+        lays.length && lays.every(([n, k]) => k === rebuilt[seg].members[n]),
+        `the new catalog's pages laid from the parts before: ${JSON.stringify({ lays, members: rebuilt[seg].members })}`,
+      )
+      return { layer: seen, follows: mine.length - opens.length, parts: rebuilt[seg].parts.length }
+    } finally {
+      delete modes[seg]
+    }
+  },
+)
+await check(
+  "reader: a stale layer under the extension's host (rows made here): opened once naming no target, after the first follow; followed while the paper is prepared again, the old layer drawn meanwhile; the new catalog taken when it lands and laid from its own parts (#634 review)",
+  async () => {
+    const seg = indexOf['s2-splits'].seg
+    modes[seg] = { kind: 'stale', prepareMs: 1500 }
+    const from = v2log.length
+    const fresh = [rebuilt[seg].catalog.sha256, ...rebuilt[seg].parts]
+    try {
+      const { page, context, errors } = await newPage()
+      await page.evaluate(() => window.__h.reader('s2-splits', { host: 'ext' }))
+      const seen = []
+      const t0 = Date.now()
+      for (;;) {
+        const s = await page.evaluate(() => {
+          const x = window.__h.readers[0]
+          const marks = window.__h.marks
+          const gen = Math.max(0, ...marks.filter((m) => m.what === 'lay-asked').map((m) => m.gen))
+          return {
+            layer: x.reader.state().layer.s,
+            rows: x.reader.state().rows.s,
+            laid: x.reader.probe().laidPages,
+            asked: x.asked.map((a) => a.url),
+            lays: marks.filter((m) => m.what === 'lay' && m.gen === gen).map((m) => [m.page, m.members]),
+          }
+        })
+        if (seen.at(-1) !== s.layer) seen.push(s.layer)
+        const unread = fresh.filter((d) => !s.asked.some((u) => u.endsWith(d)))
+        // (rows made here end over the old layer before the new one lands: done once the new catalog's pages are laid)
+        const laidNew = s.lays.length && s.lays.every(([n, k]) => k === rebuilt[seg].members[n])
+        if (!unread.length && laidNew && s.rows === 'complete' && s.laid > 0) break
+        if (Date.now() - t0 > 25_000)
+          throw new Error(
+            `the new catalog not laid in 25 s: ${JSON.stringify({ layer: s.layer, rows: s.rows, laid: s.laid, unread: unread.length, seen, v2: v2log.slice(from).map((x) => x.what) })}`,
+          )
+        await page.waitForTimeout(50)
+      }
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      const mine = v2log.slice(from).filter((x) => x.what === 'open' || x.seg === seg)
+      const opens = mine.filter((x) => x.what === 'open')
+      assert(opens.length === 1 && opens[0].ask.target === null, `opens ${JSON.stringify(opens)}`)
+      assert(mine[0]?.what === 'follow', `the follow first: ${JSON.stringify(mine.slice(0, 2))}`)
+      assert(
+        mine.every((x) => x.what === 'open' || !/[?&]t=/.test(x.query)),
+        `a target named: ${JSON.stringify(mine)}`,
+      )
+      // (the old layer kept while the paper is prepared again: ready from its first document on, never let go)
+      assert(seen.join() === 'none,ready', `layer states ${seen}`)
+      return { layer: seen, follows: mine.length - opens.length, parts: rebuilt[seg].parts.length }
+    } finally {
+      delete modes[seg]
+    }
+  },
+)
 await check(
   'reader: the page put away into the back-forward cache: our server not followed while away, followed anew once shown from it, the panes kept; a page that navigates away and back restored from the cache where the browser keeps it (L11 third round, item 8)',
   async () => {
@@ -1370,11 +1958,32 @@ async function linesInk(page, lines = null) {
         let ink = 0
         for (let i = 0; i < px.length; i += 4)
           ink += 1 - (0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]) / 255
-        return { ink, text: t.textContent.trim().slice(0, 24), fill: getComputedStyle(t.querySelector('tspan')).fill }
+        // (each run's script and ink: a run of Han, kana or Hangul, one of Latin letters or digits and none of those, its own
+        // fill attribute where it names one)
+        const runs = [...t.querySelectorAll('tspan')].map((s) => ({
+          cjk: /[\p{sc=Han}\p{sc=Hira}\p{sc=Kana}\p{sc=Hang}]/u.test(s.textContent),
+          latin:
+            /[\p{sc=Latn}\p{Nd}]/u.test(s.textContent) &&
+            !/[\p{sc=Han}\p{sc=Hira}\p{sc=Kana}\p{sc=Hang}]/u.test(s.textContent),
+          own: s.getAttribute('fill'),
+          fill: getComputedStyle(s).fill,
+        }))
+        return {
+          ink,
+          text: t.textContent.trim().slice(0, 24),
+          fill: getComputedStyle(t.querySelector('tspan')).fill,
+          runs,
+        }
       },
       [k, clip],
     )
-    out.push({ text: canvas.text, fill: canvas.fill, svg: Math.round(svg - none), canvas: Math.round(canvas.ink) })
+    out.push({
+      text: canvas.text,
+      fill: canvas.fill,
+      runs: canvas.runs,
+      svg: Math.round(svg - none),
+      canvas: Math.round(canvas.ink),
+    })
   }
   const state = await page.evaluate(() => ({
     decided: document.querySelector('.axt-reader').getAttribute('data-axt-layer-text'),
@@ -1384,7 +1993,7 @@ async function linesInk(page, lines = null) {
   return { ...state, ratio: +(sum('svg') / Math.max(1, sum('canvas'))).toFixed(3), lines: out }
 }
 await check(
-  "compose: the overlay's text drawn at the weight a canvas draws it (PDF.js's page's own), in the layer's ink: geometricPrecision, or auto where the first laid page's words lay out alike under both (docs/PDF-READER.md §11.8; the maintainer's report of 2026-11-08: lighter than today's)",
+  "compose: the overlay's text drawn at the weight a canvas draws it (PDF.js's page's own), in the layer's ink, the PDF's black, a CJK run today's #141414: geometricPrecision, or auto where the reader's fixed probe in a served face lays out alike under both, decided once a reader (docs/PDF-READER.md §11.8; the maintainer's report of 2026-11-08: lighter than today's)",
   async () => {
     if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
     const out = {}
@@ -1412,7 +2021,7 @@ await check(
       }
       await context.close()
       assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
-      out[name] = got
+      out[name] = { ...got, target }
     }
     if (process.env.AXT_INK_OUT)
       (await import('node:fs')).writeFileSync(process.env.AXT_INK_OUT, `${JSON.stringify(out, null, 1)}\n`)
@@ -1428,9 +2037,16 @@ await check(
         Math.abs(got.ratio - 1) <= 0.06,
         `${name}: the overlay's ink ${got.ratio} of the canvas's ${JSON.stringify(got.lines)}`,
       )
+      // (a run of no fill of its own in the layer's ink: a Latin run the PDF's own black (the owner's ruling of 2026-11-08,
+      // #141414 before), a CJK run #141414, today's (his exception of 2026-11-08, typeset's display.ts CJK_INK))
+      const runs = got.lines.flatMap((l) => l.runs).filter((r) => r.own === null || r.own === '#141414')
       assert(
-        got.lines.every((l) => l.fill !== 'rgb(0, 0, 0)'),
-        `${name}: a run of no fill of its own drawn in ${got.lines.map((l) => l.fill)}`,
+        runs.every((r) => (r.cjk ? r.fill === 'rgb(20, 20, 20)' : !r.latin || r.fill === 'rgb(0, 0, 0)')),
+        `${name}: runs of no fill of their own drawn in ${JSON.stringify(runs.filter((r) => r.cjk || r.latin).map((r) => [r.cjk ? 'cjk' : 'latin', r.fill]))}`,
+      )
+      assert(
+        runs.some((r) => (got.target === 'de' ? r.latin : r.cjk)),
+        `${name}: no run of its target's script measured`,
       )
     }
     return Object.fromEntries(
@@ -1534,6 +2150,435 @@ async function chromeLaid(name, o = {}, page0 = {}) {
   await waitFor(opened.page, () => (window.__c.reader?.probe().laidPages ?? 0) > 0, null, 25_000)
   return opened
 }
+
+// ---------------------------------------------------------------- the pages dimmed in the dark (docs/PDF-READER.md §4.3)
+/** the luma (Rec. 709, 0..255) of a region of the page as shown, its screenshot decoded in the page: its darkest pixel, its
+ *  lightest and its median */
+async function lumaIn(page, clip, path = null) {
+  const buf = await page.screenshot({ clip, ...(path ? { path } : {}) })
+  return page.evaluate(async (b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/png' }))
+    const c = new OffscreenCanvas(bmp.width, bmp.height)
+    const x = c.getContext('2d')
+    x.drawImage(bmp, 0, 0)
+    const d = x.getImageData(0, 0, bmp.width, bmp.height).data
+    const all = []
+    for (let i = 0; i < d.length; i += 4) all.push(0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2])
+    all.sort((a, b) => a - b)
+    return { min: Math.round(all[0]), max: Math.round(all.at(-1)), median: Math.round(all[all.length >> 1]) }
+  }, buf.toString('base64'))
+}
+/** s1-columns laid with its page 1 in runs of three inks (convert.ts inked: a run that names no fill, a CJK run in its own
+ *  CJK_INK, a run of a colour of its own), the pages dimmed, the host's shape `shape`: the reader's class and the dim mark on
+ *  one element (`root`: an element of the host's; `html`), the class on <body> and the mark on <html> under the harness's
+ *  sheet alone (`body`), or both hosts' page (`chrome`: the package's chrome over openReader on <body>, the dim by its
+ *  preferences, its appearance on <html>, its sheet). A crop (a formula of the original drawn in a translated line) read from
+ *  the pixels too, dimmed and not: under the dim its ink was lost (staging, 2026-11-12: every inline formula of a translated
+ *  paragraph a blank gap), the filter turning its ink light while its blend kept the darker of it and the dimmed page */
+/** a crop's own ground (the median of its paper's pixels as shown) against the page's (the slot's median), the difference allowed
+ *  in luma levels. A crop's paper is the page's white through the page canvas's own filter, so the two are equal: 29/29 dimmed
+ *  and 255/255 undimmed in all four shapes (2026-11-12); 2 lets a paper pixel of 250..254 beside the ink through (dimmed, 29..32)
+ *  and no box: a crop screened into the dimmed page read its paper 55. (Not the box's median: the page's crops are small
+ *  formulas, 39x10 px, more than half their pixels ink or its edge, undimmed median 248 on 255) */
+const CROP_GROUND = 2
+for (const shape of ['root', 'html', 'body', 'chrome']) {
+  await check(
+    `dim: the overlay's text in every ink, its crops and the highlight dimmed as the page's canvas is, whatever element carries the reader's class (${shape}; staging, 2026-11-12)`,
+    async () => {
+      const { page, context, errors } =
+        shape === 'chrome' ? await chromeLaid('s1-columns', { inks: true }) : await newPage()
+      if (shape !== 'chrome') {
+        await page.evaluate((shape) => {
+          const o = { host: 'web', inks: true }
+          if (shape !== 'root') {
+            // (the host's scrollers as both hosts' chrome gives them, the reader's root the element the shape names)
+            const panes = { root: shape === 'html' ? document.documentElement : document.body }
+            for (const side of ['left', 'right']) {
+              const el = document.createElement('div')
+              el.className = `viewerContainer axt-pane ${side}`
+              el.append(Object.assign(document.createElement('div'), { className: 'pdfViewer' }))
+              document.body.append(el)
+              panes[side] = el
+            }
+            o.panes = panes
+          }
+          return window.__h.reader('s1-columns', o)
+        }, shape)
+        await readerLaid(page)
+      }
+      const dim = (on) =>
+        shape === 'chrome'
+          ? page.evaluate((on) => window.__c.controller.setPrefs({ theme: 'dark', dim: on }), on)
+          : page.evaluate(
+              ([shape, on]) =>
+                (shape === 'root' ? window.__h.readers[0].root : document.documentElement).toggleAttribute(
+                  'data-axt-dim',
+                  on,
+                ),
+              [shape, on],
+            )
+      await dim(true)
+      const P1 = '.axt-slot[data-page-number="1"]'
+      await waitFor(
+        page,
+        (P1) =>
+          !!document.querySelector(`${P1} .axt-over > svg tspan[fill="#c00000"]`) &&
+          !!document.querySelector(`${P1} .axt-over > canvas.axt-crops`) &&
+          !!document.querySelector('[data-axt-dim]'),
+        P1,
+      )
+      // (the member of three inks in the right's view, the left following; a unit lit under the pointer, so that the highlight's
+      // layers are there, then the pointer away)
+      await page.evaluate((P1) => {
+        document.querySelector(`${P1} .axt-over > svg tspan[fill="#141414"]`).scrollIntoView({ block: 'center' })
+      }, P1)
+      await page.waitForTimeout(400)
+      const at = await page.evaluate((P1) => {
+        const r = document.querySelector(`${P1} .axt-over > svg tspan[fill="#141414"]`).getBoundingClientRect()
+        return [r.left + Math.min(r.width / 2, 20), r.top + r.height / 2]
+      }, P1)
+      await page.mouse.move(at[0], at[1])
+      await page.waitForTimeout(200)
+      const seen = await page.evaluate((P1) => {
+        const slot = document.querySelector(P1)
+        const f = (el) => (el ? getComputedStyle(el).filter : null)
+        const canvas = [...document.querySelectorAll('.pdfViewer .page .canvasWrapper > canvas')].find(
+          (c) => !c.closest('.axt-slot'),
+        )
+        // (the rules of the page's sheets that set `prop` on `el`: whose rule dims what)
+        const rulesOf = (el, prop) => {
+          const out = []
+          const walk = (rules) => {
+            for (const r of rules) {
+              if (r.cssRules && !r.selectorText) walk(r.cssRules)
+              else if (r.selectorText && r.style?.getPropertyValue(prop) && el?.matches(r.selectorText))
+                out.push(r.selectorText)
+            }
+          }
+          for (const sh of document.styleSheets) {
+            try {
+              walk(sh.cssRules)
+            } catch {}
+          }
+          return out.filter((x) => /dim/.test(x))
+        }
+        const crops = slot.querySelector('.axt-over > canvas.axt-crops')
+        return {
+          by: {
+            canvas: rulesOf(canvas, 'filter'),
+            svg: rulesOf(slot.querySelector('.axt-over > svg'), 'filter'),
+            crops: rulesOf(crops, 'filter'),
+            blend: rulesOf(document.querySelector('.axt-hl-layer'), 'mix-blend-mode'),
+          },
+          reader: document.querySelector('.axt-reader')?.tagName.toLowerCase() ?? null,
+          marked: document.querySelector('[data-axt-dim]')?.tagName.toLowerCase() ?? null,
+          canvas: f(canvas),
+          svg: f(slot.querySelector('.axt-over > svg')),
+          crops: f(slot.querySelector('.axt-over > canvas.axt-crops')),
+          blends: [...document.querySelectorAll('.axt-hl-layer')].map((l) => getComputedStyle(l).mixBlendMode),
+          // (what the dim gives the link rings, the skeleton and the translating marks: custom properties, read where they apply)
+          vars: Object.fromEntries(
+            [
+              ['ring', slot.querySelector('.axt-link'), '--axt-ring'],
+              ['halo', slot.querySelector('.axt-link'), '--axt-ring-halo'],
+              ['sk', slot, '--axt-sk'],
+              ['skPaper', slot, '--axt-sk-paper'],
+              ['trLight', slot, '--axt-tr-light'],
+              ['trStill', slot, '--axt-tr-still'],
+            ].map(([k, el, n]) => [k, el ? getComputedStyle(el).getPropertyValue(n).trim() : null]),
+          ),
+        }
+      }, P1)
+      // (the chrome's capsule, a toast in it: the chrome's tokens under the dark theme, the page's ground beside it)
+      if (shape === 'chrome') {
+        await page.evaluate(() => window.__c.controller.toast({ words: 'The translation did not load', ms: 8000 }))
+        await page.waitForTimeout(400)
+        seen.capsule = await page.evaluate(() => {
+          const c = document.querySelector('.capsule')
+          return c ? [getComputedStyle(c).backgroundColor, getComputedStyle(c).color] : null
+        })
+      }
+      await page.mouse.move(3, 3)
+      await page.waitForTimeout(300)
+      // (the pixels: each ink's run against the page's ground, the slot's median; the crops out of sight, so that a run's box
+      // holds its own ink alone)
+      const boxes = await page.evaluate((P1) => {
+        for (const c of document.querySelectorAll(`${P1} .axt-over > canvas.axt-crops`)) c.style.visibility = 'hidden'
+        const svg = document.querySelector(`${P1} .axt-over > svg`)
+        const g = svg.querySelector('tspan[fill="#141414"]').closest('g')
+        // (a run's box within its page's)
+        const page = document.querySelector(P1).getBoundingClientRect()
+        const box = (spans) => {
+          const rs = [...spans].map((x) => x.getBoundingClientRect()).filter((r) => r.width > 0)
+          const x0 = Math.max(page.left, Math.min(...rs.map((r) => r.left))),
+            y0 = Math.max(page.top, Math.min(...rs.map((r) => r.top))),
+            x1 = Math.min(page.right, Math.max(...rs.map((r) => r.right))),
+            y1 = Math.min(page.bottom, Math.max(...rs.map((r) => r.bottom)))
+          return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
+        }
+        const first = [...g.querySelectorAll('text')].find((t) => t.querySelector('tspan:not([fill])'))
+        const s = document.querySelector(P1).getBoundingClientRect()
+        const y0 = Math.max(s.top, 0),
+          y1 = Math.min(s.bottom, innerHeight)
+        return {
+          latin: box(first.querySelectorAll('tspan:not([fill])')),
+          cjk: box(g.querySelectorAll('tspan[fill="#141414"]')),
+          coloured: box(g.querySelectorAll('tspan[fill="#c00000"]')),
+          ground: { x: s.left, y: y0, width: s.width, height: y1 - y0 },
+        }
+      }, P1)
+      const luma = {}
+      for (const [k, clip] of Object.entries(boxes))
+        luma[k] = await lumaIn(page, clip, process.env.AXT_SHOTS ? join(HERE, '.shots', `dim-${shape}-${k}.png`) : null)
+      const ground = luma.ground.median
+      // (a crop's pixels, dimmed and not: the crops shown and the overlay's text out of sight, so that a crop's box holds its own
+      // ink over the page view alone; the crop the opaque region of the crops' canvas with the most ink (a crop, or crops that
+      // touch), read from the canvas itself and brought to the middle of its pane)
+      const crop = await page.evaluate((P1) => {
+        const slot = document.querySelector(P1)
+        for (const c of slot.querySelectorAll('.axt-over > canvas.axt-crops')) c.style.visibility = ''
+        slot.querySelector('.axt-over > svg').style.visibility = 'hidden'
+        const c = slot.querySelector('.axt-over > canvas.axt-crops')
+        const w = c.width,
+          h = c.height
+        const d = c.getContext('2d').getImageData(0, 0, w, h).data
+        const luma = (p) => 0.2126 * d[p * 4] + 0.7152 * d[p * 4 + 1] + 0.0722 * d[p * 4 + 2]
+        const seen = new Uint8Array(w * h)
+        let best = null
+        for (let s = 0; s < w * h; s++) {
+          if (seen[s] || d[s * 4 + 3] === 0) continue
+          let x0 = w,
+            y0 = h,
+            x1 = 0,
+            y1 = 0,
+            ink = 0
+          const todo = [s]
+          seen[s] = 1
+          while (todo.length) {
+            const p = todo.pop(),
+              x = p % w,
+              y = (p - x) / w
+            x0 = Math.min(x0, x)
+            y0 = Math.min(y0, y)
+            x1 = Math.max(x1, x + 1)
+            y1 = Math.max(y1, y + 1)
+            if (d[p * 4 + 3] >= 128 && luma(p) < 128) ink++
+            for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1])
+              if (q >= 0 && !seen[q] && d[q * 4 + 3] > 0) {
+                seen[q] = 1
+                todo.push(q)
+              }
+          }
+          if (!best || ink > best.ink) best = { px: [x0, y0, x1, y1], ink }
+        }
+        if (!best) return null
+        // (the crop's own ground: its pixels of paper whose every neighbour is paper too, or outside the crop, so that a pixel of
+        // the shot a device pixel off still reads the crop's ground or the page's, never its ink)
+        const paperAt = (x, y) => {
+          if (x < 0 || y < 0 || x >= w || y >= h) return true
+          const p = y * w + x
+          return d[p * 4 + 3] === 0 || luma(p) >= 250
+        }
+        const paper = []
+        for (let y = best.px[1]; y < best.px[3]; y++)
+          for (let x = best.px[0]; x < best.px[2]; x++) {
+            if (d[(y * w + x) * 4 + 3] < 255) continue
+            let all = true
+            for (let dy = -1; dy <= 1 && all; dy++)
+              for (let dx = -1; dx <= 1 && all; dx++) all = paperAt(x + dx, y + dy)
+            if (all) paper.push(y * w + x)
+          }
+        const r = c.getBoundingClientRect()
+        let el = slot.parentElement
+        while (el && !(el.scrollHeight > el.clientHeight && /auto|scroll/.test(getComputedStyle(el).overflowY)))
+          el = el.parentElement
+        const s0 = el.getBoundingClientRect()
+        el.scrollTop += r.top + ((best.px[1] + best.px[3]) / 2) * (r.height / h) - (s0.top + s0.height / 2)
+        return { ...best, paper }
+      }, P1)
+      assert(crop && crop.ink > 0 && crop.paper.length > 0, `no crop of ink on page 1: ${JSON.stringify(crop)}`)
+      await page.waitForTimeout(400)
+      /** the crop as shown (its darkest and lightest pixels, and the median of its own ground's: the pixels `crop.paper`) and the
+       *  page's ground (the median of the slot's part in view) */
+      const cropShown = async (tag) => {
+        const b = await page.evaluate(
+          ([P1, px]) => {
+            const slot = document.querySelector(P1)
+            const c = slot.querySelector('.axt-over > canvas.axt-crops')
+            const r = c.getBoundingClientRect(),
+              s = slot.getBoundingClientRect()
+            const k = r.width / c.width
+            const x0 = Math.round(Math.max(s.left, r.left + px[0] * k)),
+              y0 = Math.round(Math.max(s.top, 0, r.top + px[1] * k)),
+              x1 = Math.round(Math.min(s.right, r.left + px[2] * k)),
+              y1 = Math.round(Math.min(s.bottom, innerHeight, r.top + px[3] * k))
+            const g0 = Math.max(s.top, 0),
+              g1 = Math.min(s.bottom, innerHeight)
+            return {
+              crop: { x: x0, y: y0, width: x1 - x0, height: y1 - y0 },
+              // (the canvas's pixel at the shot's top-left corner, and its pixels a CSS px)
+              at: [(x0 - r.left) / k, (y0 - r.top) / k, k, c.width],
+              ground: { x: s.left, y: g0, width: s.width, height: g1 - g0 },
+              blend: getComputedStyle(c).mixBlendMode,
+            }
+          },
+          [P1, crop.px],
+        )
+        const path = (k) => (process.env.AXT_SHOTS ? join(HERE, '.shots', `dim-${shape}-${tag}-${k}.png`) : null)
+        const buf = await page.screenshot({ clip: b.crop, ...(path('crop') ? { path: path('crop') } : {}) })
+        const shown = await page.evaluate(
+          async ([b64, at, paper]) => {
+            const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+            const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/png' }))
+            const c = new OffscreenCanvas(bmp.width, bmp.height)
+            const x = c.getContext('2d')
+            x.drawImage(bmp, 0, 0)
+            const d = x.getImageData(0, 0, bmp.width, bmp.height).data
+            const [ox, oy, k, cw] = at
+            const ground = new Set(paper)
+            const all = [],
+              own = []
+            for (let j = 0; j < bmp.height; j++)
+              for (let i = 0; i < bmp.width; i++) {
+                const p = (j * bmp.width + i) * 4
+                const l = 0.2126 * d[p] + 0.7152 * d[p + 1] + 0.0722 * d[p + 2]
+                all.push(l)
+                if (ground.has(Math.floor(oy + (j + 0.5) / k) * cw + Math.floor(ox + (i + 0.5) / k))) own.push(l)
+              }
+            const med = (v) => Math.round([...v].sort((a, b) => a - b)[v.length >> 1])
+            return {
+              min: Math.round(Math.min(...all)),
+              max: Math.round(Math.max(...all)),
+              paper: own.length ? med(own) : null,
+              paperN: own.length,
+            }
+          },
+          [buf.toString('base64'), b.at, crop.paper],
+        )
+        return { ...shown, ground: (await lumaIn(page, b.ground, path('ground'))).median, blend: b.blend, box: b.crop }
+      }
+      const crops = { dimmed: await cropShown('crop-dimmed') }
+      // (and undimmed: the overlay drawn as it is; the crop as it is, the appearance's change let settle)
+      await dim(false)
+      await waitFor(page, () => !document.querySelector('[data-axt-dim]'))
+      await page.waitForTimeout(600)
+      crops.light = await cropShown('crop-light')
+      const undimmed = await page.evaluate(
+        (P1) => getComputedStyle(document.querySelector(`${P1} .axt-over > svg`)).filter,
+        P1,
+      )
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      const runs = Object.fromEntries(['latin', 'cjk', 'coloured'].map((k) => [k, luma[k].max]))
+      const detail = { ...seen, ground, runs, crop: { ink: crop.ink, px: crop.px, ...crops }, undimmed }
+      assert(seen.canvas && seen.canvas !== 'none', `the host's canvas undimmed: ${JSON.stringify(detail)}`)
+      assert(
+        seen.svg === seen.canvas && seen.crops === seen.canvas,
+        `the overlay's filters against the canvas's: ${JSON.stringify(detail)}`,
+      )
+      assert(
+        seen.blends.length > 0 && seen.blends.every((b) => b === 'screen'),
+        `the highlight's blend: ${JSON.stringify(detail)}`,
+      )
+      assert(
+        seen.vars.ring === 'oklch(0.935 0.005 255)' &&
+          seen.vars.skPaper === 'rgb(29 29 29)' &&
+          seen.vars.trLight.includes('80%'),
+        `the rings', the skeleton's and the translating marks' dim values: ${JSON.stringify(detail)}`,
+      )
+      for (const [k, v] of Object.entries(runs))
+        assert(
+          v >= ground + 60,
+          `the ${k} run's lightest pixel ${v} against the ground's ${ground}: ${JSON.stringify(detail)}`,
+        )
+      // (a crop's ink shown on the page, dimmed as the runs' ink is and undimmed, and its own ground no box on it)
+      const { dimmed: cd, light: cl } = crops
+      assert(
+        cd.max >= cd.ground + 60,
+        `dimmed, the crop's lightest pixel ${cd.max} against the ground's ${cd.ground}: ${JSON.stringify(detail)}`,
+      )
+      assert(
+        cl.min <= cl.ground - 60,
+        `undimmed, the crop's darkest pixel ${cl.min} against the ground's ${cl.ground}: ${JSON.stringify(detail)}`,
+      )
+      for (const [k, x] of Object.entries(crops))
+        assert(
+          x.paperN > 0 && Math.abs(x.paper - x.ground) <= CROP_GROUND,
+          `${k}, the crop's own ground ${x.paper} (${x.paperN} px) against the page's ${x.ground}: ${JSON.stringify(detail)}`,
+        )
+      assert(undimmed === 'none', `undimmed, the overlay's filter: ${undimmed}`)
+      return detail
+    },
+  )
+}
+await check(
+  "highlight: the band chosen in the reading options paints the highlight, its colour at its strength, on both panes, on a page light, dark and dimmed (the feature list's E2: the choice was stored and the band stayed green)",
+  async () => {
+    const { page, context, errors } = await chromeLaid('s1-columns')
+    const P1 = '.pane[data-side="right"] .axt-slot[data-page-number="1"]'
+    await waitFor(page, (P1) => !!document.querySelector(`${P1} .axt-over > svg tspan`), P1)
+    /** a unit lit under the pointer (away first, so that it lights anew), each lit band's paint on both panes, and what the band
+     *  `want` paints as the sheet mixes it (a probe of the same colour-mix, read the same way) */
+    const lit = async (want) => {
+      await page.mouse.move(3, 3)
+      await page.waitForTimeout(250)
+      const at = await page.evaluate((P1) => {
+        const t = [...document.querySelectorAll(`${P1} .axt-over > svg tspan`)].find(
+          (x) => (x.textContent ?? '').trim().length > 3,
+        )
+        t.scrollIntoView({ block: 'center' })
+        const r = t.getBoundingClientRect()
+        return [r.left + r.width / 2, r.top + r.height / 2]
+      }, P1)
+      await page.waitForTimeout(300)
+      await page.mouse.move(at[0], at[1])
+      await waitFor(
+        page,
+        () => document.querySelectorAll('.pane[data-side="left"] .axt-hl, .pane[data-side="right"] .axt-hl').length > 1,
+        null,
+        5000,
+      )
+      return page.evaluate((want) => {
+        const paintOf = (el) =>
+          el.classList.contains('axt-hl-shape')
+            ? getComputedStyle(el.querySelector('path')).fill
+            : getComputedStyle(el).backgroundColor
+        const probe = document.createElement('div')
+        probe.style.background = `color-mix(in oklab, ${want.colour} ${want.mix}, transparent)`
+        document.body.append(probe)
+        const wanted = getComputedStyle(probe).backgroundColor
+        probe.remove()
+        const sides = Object.fromEntries(
+          ['left', 'right'].map((s) => [
+            s,
+            [...document.querySelectorAll(`.pane[data-side="${s}"] .axt-hl`)].map(paintOf),
+          ]),
+        )
+        return { wanted, sides, dim: document.documentElement.hasAttribute('data-axt-dim') }
+      }, want)
+    }
+    const GREEN = { colour: '#cdeccd', mix: '22%' },
+      SAND = { colour: 'oklch(0.85 0.12 85)', mix: '30%' }
+    const steps = { light: await lit(GREEN) }
+    await page.evaluate(() => window.__c.controller.setPrefs({ highlight: { band: 'sand' } }))
+    steps.chosen = await lit(SAND)
+    await page.evaluate(() => window.__c.controller.setPrefs({ theme: 'dark', dim: false }))
+    steps.dark = await lit(SAND)
+    await page.evaluate(() => window.__c.controller.setPrefs({ theme: 'dark', dim: true }))
+    steps.dimmed = await lit(SAND)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    for (const [k, s] of Object.entries(steps))
+      for (const side of ['left', 'right'])
+        assert(
+          s.sides[side].length > 0 && s.sides[side].every((p) => p === s.wanted),
+          `${k}, the ${side} pane's bands: ${JSON.stringify(s)}`,
+        )
+    assert(steps.light.wanted !== steps.chosen.wanted && !steps.dark.dim && steps.dimmed.dim, JSON.stringify(steps))
+    return Object.fromEntries(Object.entries(steps).map(([k, s]) => [k, s.wanted]))
+  },
+)
 await check(
   "chrome: a host's own controls in their places, each working: its way home first in the lead, its short link right after the title, its interface language the reading options' last row (L11 gap 2)",
   async () => {
@@ -1624,7 +2669,7 @@ await check(
   },
 )
 await check(
-  "chrome: a host's words for the capsule's states: a paper being prepared said in them, with the spinner; the catalogue's look (the progress line alone) where it gives none (L11 differences 1, 2)",
+  "chrome: a host's words for the capsule's states: a paper being made said as the translation it waits for, the first time, with the spinner; the catalogue's look (the progress line alone) where it gives none (L11 differences 1, 2; the coordinator's decision 1, 2026-11-11)",
   async () => {
     const seg = indexOf['s2-splits'].seg
     const seen = async (words) => {
@@ -1633,7 +2678,8 @@ await check(
         const { page, context, errors } = await newPage({ path: 'chrome.html' })
         await page.evaluate((w) => window.__c.open('s2-splits', { words: w }), words)
         await waitFor(page, () => window.__c.reader?.state().layer.s === 'preparing', null, 20_000)
-        await page.waitForTimeout(300)
+        // (past the 400 ms a run's wait lasts before its capsule enters)
+        await page.waitForTimeout(700)
         const during = await page.evaluate(() => {
           const el = document.querySelector('.capsule:not([data-out])')
           return el
@@ -1662,8 +2708,8 @@ await check(
     const none = await seen(false)
     assert(!host.errors.length && !none.errors.length, [...host.errors, ...none.errors].join('; '))
     assert(
-      host.during?.kind === 'progress' && host.during.said === 'Preparing the paper' && host.during.spinner,
-      `the host's words while preparing: ${JSON.stringify(host.during)}`,
+      host.during?.kind === 'progress' && host.during.said === 'Translating, the first time' && host.during.spinner,
+      `the host's words while the paper is made: ${JSON.stringify(host.during)}`,
     )
     assert(host.after !== 'progress', `a capsule of the run after it: ${host.after}`)
     assert(none.during === null && none.line === true, `no words given: ${JSON.stringify(none)}`)
@@ -1811,7 +2857,7 @@ await check(
   },
 )
 await check(
-  "chrome: a refusal for now by the website's rules: the original alone, the translated displays greyed with swap and sync, the capsule's clock and no retry until its time, its words with the time; the extension's keeps side by side, the switch whole, its retry at once (L11 second round, gaps 1, 2, 8)",
+  "chrome: a refusal for now by the website's rules: the original alone, the translated displays greyed with swap and sync, the capsule's clock, its words with the time; the extension's keeps side by side, the switch whole; neither offers a retry, the session asking again by itself at our server's time (L11 second round, gaps 1, 2, 8; PDF-READER §8.1, flow-fixes F2)",
   async () => {
     const seg = indexOf['s1-columns'].seg
     modes[seg] = { kind: 'refused' }
@@ -1839,7 +2885,7 @@ await check(
         }
       })
       await context.close()
-      return { seen, errors: errors.filter((e) => !/status of 429/.test(e)) }
+      return { seen, errors: errors.filter((e) => !/status of (404|429)/.test(e)) }
     }
     try {
       const site = await look(true)
@@ -1853,7 +2899,7 @@ await check(
           JSON.stringify(site.seen.sideBySide) === '["true","true"]' &&
           site.seen.sign === 'clock' &&
           !site.seen.retry &&
-          site.seen.said === 'Busy until later',
+          site.seen.said === 'Limit until later',
         `the website's: ${JSON.stringify(site.seen)}`,
       )
       assert(
@@ -1861,7 +2907,7 @@ await check(
           JSON.stringify(own.seen.translated) === '[null,null]' &&
           JSON.stringify(own.seen.sideBySide) === '[null,null]' &&
           own.seen.sign === 'info' &&
-          own.seen.retry,
+          !own.seen.retry,
         `the extension's: ${JSON.stringify(own.seen)}`,
       )
       return { site: site.seen, own: own.seen }
@@ -1921,7 +2967,7 @@ await check(
   },
 )
 await check(
-  "chrome: the original lost, where the host words its way to arXiv's PDF: the original's pane's card, the file sign, arXiv's PDF of the version its link, the translation's pane uncovered; the extension's the translation's pane's card with its retry (L11 second round, gap 3)",
+  "chrome: the original lost, where the host words its way to arXiv's PDF: the original's pane's card, the file sign, arXiv's PDF of the version its link, the translation's pane uncovered; the extension's the translation's pane's card, with no retry while the session opens the original again by itself (L11 second round, gap 3; PDF-READER §8.1, flow-fixes F2)",
   async () => {
     const paper = indexOf['s1-columns'].paper
     const look = async (x) => {
@@ -1967,14 +3013,14 @@ await check(
       `the website's: ${JSON.stringify(site.seen)}`,
     )
     assert(
-      own.seen.left === null && own.seen.right?.words === 'The original could not be read' && own.seen.right.retry,
+      own.seen.left === null && own.seen.right?.words === 'The original could not be read' && !own.seen.right.retry,
       `the extension's: ${JSON.stringify(own.seen)}`,
     )
     return { site: site.seen, own: own.seen }
   },
 )
 await check(
-  "chrome: the original lost and the translation not to be had now, by the website's rules: its page's bare bar (its way home and the reading options alone), the capsule telling the refusal beside the original's own card; the extension's whole bar, its card, no capsule (L11 third round, gaps 4 and 5)",
+  "chrome: the original lost and the translation not to be had now, by the website's rules: its page's bare bar (its way home and the reading options alone), the capsule telling the refusal beside the original's own card; the extension's whole bar, its card with no retry (the session opens the original again by itself), no capsule (L11 third round, gaps 4 and 5; flow-fixes F2)",
   async () => {
     const seg = indexOf['s1-columns'].seg
     modes[seg] = { kind: 'refused' }
@@ -2009,11 +3055,14 @@ await check(
             said: capsule.querySelector('.sr-only')?.textContent ?? capsule.textContent,
           },
           left: !!document.querySelector('.pane[data-side="left"] .card a'),
-          right: !!document.querySelector('.pane[data-side="right"] .card button'),
+          right: document.querySelector('.pane[data-side="right"] .card') && {
+            words: document.querySelector('.pane[data-side="right"] .card p')?.textContent ?? null,
+            retry: !!document.querySelector('.pane[data-side="right"] .card button'),
+          },
         }
       })
       await context.close()
-      return { seen, errors: errors.filter((e) => !/status of (503|429)/.test(e)) }
+      return { seen, errors: errors.filter((e) => !/status of (503|404|429)/.test(e)) }
     }
     try {
       const site = await look({ site: true, slots: true, original: 'broken' })
@@ -2025,20 +3074,95 @@ await check(
           !site.seen.line &&
           site.seen.left &&
           site.seen.capsule?.kind === 'notNow' &&
-          /^Busy/.test(site.seen.capsule.said),
+          /^Limit/.test(site.seen.capsule.said),
         `the website's: ${JSON.stringify(site.seen)}`,
       )
       assert(
         own.seen.zones.lead?.includes('home') &&
           own.seen.zones.trail?.includes(en.zoom) &&
           own.seen.line &&
-          own.seen.right &&
+          // (its card, with no retry while the session opens the original again by itself: PDF-READER §8.1, flow-fixes F2)
+          own.seen.right?.words === 'The original could not be read' &&
+          !own.seen.right.retry &&
           own.seen.capsule === null,
         `the extension's: ${JSON.stringify(own.seen)}`,
       )
       return { site: site.seen, own: { capsule: own.seen.capsule, trail: own.seen.zones.trail?.length } }
     } finally {
       delete modes[seg]
+    }
+  },
+)
+await check(
+  "chrome: our server at capacity, the open refused busy twice: the website's capsule waits in line (its words, the spinner, no retry), the display chosen standing, and goes on by itself into the first making's words; the extension's says the refusal, with no retry, and goes on by itself too (the coordinator's decision 5, 2026-11-11; PDF-READER §8.1, flow-fixes F2)",
+  async () => {
+    const seg = indexOf['s2-splits'].seg
+    const look = async (x) => {
+      modes[seg] = { kind: 'not-opened', prepareMs: 2500, busy: 2 }
+      try {
+        const { page, context, errors } = await newPage({ path: 'chrome.html' })
+        await page.evaluate((o) => window.__c.open('s2-splits', o), x)
+        const seen = []
+        let layer = null
+        const t0 = Date.now()
+        while (Date.now() - t0 < 15_000) {
+          const now = await page.evaluate(() => {
+            const el = document.querySelector('.capsule:not([data-out])')
+            return {
+              layer: window.__c.reader?.state().layer.s ?? null,
+              display: window.__c.reader?.state().view.display ?? null,
+              capsule: el && {
+                kind: el.getAttribute('data-kind'),
+                said: el.querySelector('.sr-only')?.textContent ?? '',
+                spinner: !!el.querySelector('svg.spin'),
+                retry: !!el.querySelector('button[data-action]'),
+              },
+            }
+          })
+          const key = JSON.stringify([now.capsule, now.display])
+          if (seen.at(-1)?.key !== key) seen.push({ key, ...now })
+          layer = now.layer
+          if (layer === 'ready') break
+          await page.waitForTimeout(100)
+        }
+        const opens = v2log.filter((e) => e.what === 'open').length
+        await context.close()
+        return {
+          seen: seen.map(({ key: _, ...s }) => s),
+          layer,
+          opens,
+          errors: errors.filter((e) => !/status of 404/.test(e)),
+        }
+      } finally {
+        delete modes[seg]
+      }
+    }
+    const before = v2log.length
+    const site = await look({ site: true })
+    const own = await look({})
+    assert(!site.errors.length && !own.errors.length, [...site.errors, ...own.errors].join('; '))
+    const capsules = (x) => x.seen.map((s) => s.capsule).filter(Boolean)
+    const queue = capsules(site).find((c) => c.said === 'Waiting in line')
+    assert(
+      queue?.kind === 'progress' &&
+        queue.spinner &&
+        !queue.retry &&
+        capsules(site).some((c) => c.said === 'Translating, the first time') &&
+        !capsules(site).some((c) => c.kind === 'notNow') &&
+        // (waiting in line is a wait, not a refusal: the display chosen stands throughout, nothing jumps when the open is taken;
+        // flow-fixes F5)
+        site.seen.every((x) => x.display !== 'original') &&
+        site.layer === 'ready',
+      `the website's: ${JSON.stringify(site.seen)}`,
+    )
+    assert(
+      capsules(own).some((c) => c.kind === 'notNow') && !capsules(own).some((c) => c.retry) && own.layer === 'ready',
+      `the extension's: ${JSON.stringify(own.seen)}`,
+    )
+    return {
+      site: capsules(site).map((c) => `${c.kind}:${c.said}`),
+      own: capsules(own).map((c) => c.kind),
+      asks: v2log.length - before,
     }
   },
 )
@@ -2070,7 +3194,16 @@ await check(
         const chip = '.capsule[data-kind="progress"] button[data-action]'
         let pressed = null
         if (x.site) {
-          await waitFor(page, (sel) => !!document.querySelector(sel), chip, 20_000)
+          await waitFor(page, (sel) => !!document.querySelector(sel), chip, 20_000).catch(async (e) => {
+            const at = await page.evaluate(() => ({
+              state: window.__c.reader?.state(),
+              chrome: window.__c.controller.getState(),
+              capsule: document.querySelector('.capsule')?.outerHTML ?? null,
+            }))
+            throw new Error(
+              `${e.message}: ${JSON.stringify({ rows: at.state?.rows, layer: at.state?.layer, phase: at.chrome.phase, translated: at.chrome.translated, display: at.chrome.display, capsule: at.capsule?.slice(0, 300) })}`,
+            )
+          })
           const before = await page.evaluate(() => window.__c.reader.state().view.display)
           await page.locator(chip).click()
           await waitFor(page, () => window.__c.controller.getState().display === 'translation', null, 10_000)
@@ -2322,6 +3455,64 @@ await check(
   },
 )
 
+await check(
+  'reader: a run our server started again on the rows held (2610.21924v1 after a deploy, staging 2026-11-11) lays no page again: the rows taken again, their end told, the pages as they were',
+  async () => {
+    const seg = indexOf['s2-splits'].seg
+    modes[seg] = { kind: 'again', after: 4000 }
+    try {
+      const { page, context, errors } = await newPage()
+      await page.evaluate(() => window.__h.reader('s2-splits', { host: 'web' }))
+      const at = () =>
+        page.evaluate(() => {
+          const r = window.__h.readers[0].reader
+          const marks = window.__h.marks
+          return {
+            rows: r.state().rows.s,
+            laid: r.probe().laidPages,
+            lays: r.probe().lays,
+            gen: Math.max(0, ...marks.filter((x) => x.what === 'lay').map((x) => x.gen)),
+          }
+        })
+      await waitFor(
+        page,
+        () => {
+          const r = window.__h.readers[0].reader
+          return r.state().rows.s === 'complete' && r.probe().laidPages > 0
+        },
+        null,
+        25_000,
+      )
+      await page.waitForTimeout(500)
+      const settled = await at()
+      assert(modes[seg].phase === 0, `the run started again before the pages settled: ${JSON.stringify(settled)}`)
+      // (the run started again, then done: its rows taken and ended again)
+      const t0 = Date.now()
+      for (;;) {
+        const s = await at()
+        if (modes[seg].phase === 2 && s.rows === 'complete') break
+        if (Date.now() - t0 > 25_000) throw new Error(`the run started again never ended: ${JSON.stringify(s)}`)
+        await page.waitForTimeout(100)
+      }
+      await page.waitForTimeout(500)
+      const after = await at()
+      const asked = await page.evaluate(() => window.__h.readers[0].asked.map((a) => a.url))
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      assert(
+        asked.some((u) => u.endsWith(modes[seg].again)),
+        `the restated rows not read: ${JSON.stringify(asked)}`,
+      )
+      assert(
+        after.lays === settled.lays && after.gen === settled.gen && after.laid === settled.laid,
+        `pages laid again: ${JSON.stringify({ settled, after })}`,
+      )
+      return { settled, after }
+    } finally {
+      delete modes[seg]
+    }
+  },
+)
 await check(
   "reader: each composed document keeps its own layout: a newer catalog's pages laid by its layout, the older one's late layout dropped",
   async () => {
@@ -3301,6 +4492,40 @@ await check(
 )
 
 await check(
+  "the pinch's wheel is Ctrl's alone: a wheel with Ctrl, ⌘ held beside it or not, is the pinch's own; a wheel with ⌘ held, or ⌘⇧, is the reader's input and commits a pinch under way, as one without (§6.8; macOS's screenshot keys hold ⌘ while a scroll runs, the owner's report of 2026-11-10)",
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), SAMPLE)
+    await drawnOn(page, 'right', 1, null)
+    const rows = await page.evaluate(() => {
+      const p = window.__h.panes,
+        c = document.querySelector('.axt-pane.right'),
+        cr = c.getBoundingClientRect()
+      const out = []
+      for (const keys of [
+        { ctrlKey: true },
+        { ctrlKey: true, metaKey: true },
+        { metaKey: true },
+        { metaKey: true, shiftKey: true },
+      ]) {
+        p.pinch('right', 1.05, [cr.left + 200, cr.top + 200])
+        c.dispatchEvent(new WheelEvent('wheel', { deltaY: 40, bubbles: true, ...keys }))
+        out.push([Object.keys(keys).join('+'), p.probe().pinching !== null])
+      }
+      return out
+    })
+    await page.waitForTimeout(600)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(
+      JSON.stringify(rows.map((r) => r[1])) === JSON.stringify([true, true, false, false]),
+      `a pinch under way after each wheel ${JSON.stringify(rows)}`,
+    )
+    return rows
+  },
+)
+
+await check(
   "port: the left's internals pinned, its root write quiet, the pages ahead held until the layer's first page or let go (B-149, B-019, B-047, B-050, B-231, B-017)",
   async () => {
     const { page, context, errors } = await newPage({ viewport: { width: 1400, height: 600 } })
@@ -3672,6 +4897,54 @@ for (const name of Object.keys(fixtures)) {
 }
 if (process.env.AXT_RESIDUE_OUT)
   (await import('node:fs')).writeFileSync(process.env.AXT_RESIDUE_OUT, `${JSON.stringify(residues, null, 1)}\n`)
+
+// ---------------------------------------------------------------- the full-width punctuation (lane cjk-punct, punct.mjs)
+// s1-columns laid by the reader's own typesetter in each CJK target, the interface the owner's (the document zh-CN), every laid
+// page's drawing measured as the browser drew it (AXT_PUNCT_OUT=<file> writes the measures)
+const punctOut = {}
+for (const target of PUNCT_TARGETS)
+  await check(
+    `compose: full-width punctuation as its face draws it (s1-columns, ${target}): no mark's ink on a neighbour's, one place in its box a character in a face, every run drawn at the layout's advance (docs/PDF-READER.md §18.48)`,
+    async () => {
+      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      const { page, context, errors } = await newPage({ viewport: { width: 5000, height: 900 } })
+      try {
+        await page.evaluate(() => {
+          document.documentElement.lang = 'zh-CN'
+        })
+        await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
+        await page.evaluate((t) => window.__h.layer('s1-columns', { typeset: true, target: t }), target)
+        const laid = []
+        for (const n of [1, 2]) {
+          await page.evaluate((n) => window.__h.panes.goToPage('right', n), n)
+          await waitFor(page, (n) => !!window.__h.composer.laid(n), n, 60_000)
+          if (await page.evaluate((n) => window.__h.composer.laid(n).members.some((m) => m.state === 'laid'), n))
+            laid.push(n)
+        }
+        const m = await measurePunct(page, laid)
+        const v = judgePunct(m)
+        punctOut[target] = { verdict: v, measures: m }
+        assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+        assert(laid.length && !v.missing.length, `pages laid ${laid}; marks never drawn: ${v.missing.join('')}`)
+        assert(
+          !v.overlaps.length && !v.wandering.length && !v.advancesOff,
+          JSON.stringify({ overlaps: v.overlaps, wandering: v.wandering, advances: v.advances, off: v.advancesOff }),
+        )
+        return {
+          pages: laid,
+          marks: v.marks,
+          runs: v.runs,
+          worstAdvance: v.worstAdvance,
+          context: v.context,
+          beside: v.beside,
+        }
+      } finally {
+        await context.close()
+      }
+    },
+  )
+if (process.env.AXT_PUNCT_OUT)
+  (await import('node:fs')).writeFileSync(process.env.AXT_PUNCT_OUT, `${JSON.stringify(punctOut, null, 1)}\n`)
 
 await browser.close()
 await server.close()

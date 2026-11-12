@@ -15,6 +15,9 @@ export * from './xref.types.ts'
 // ---- the back half of the prepare
 // (the unit's id, which the front half's adapter computes for the seam: format's)
 export { unitId } from '@readarxiv/format'
+// (a unit's run-in labels stated `must`, which the front half's adapter states for the seam)
+export { type GroupFact, groupFacts } from './marks/faces.ts'
+export { runIns } from './marks/run-ins.ts'
 export { align, HOW, HUNK, type HunkClass, hunkName, type Mapping } from './align/align.ts'
 export { lcs } from './align/myers.ts'
 export { type BundleObject, bundle, type MemberState, stateOf } from './bundle/bundle.ts'
@@ -28,9 +31,25 @@ export {
   type SpanClass,
   ROLE,
   type Role,
+  type TexFrame,
 } from './instrument.ts'
+export { linkTargetOf } from './locate/ink.ts'
+export {
+  boxedAlignOf,
+  framesOf,
+  type RefName,
+  readAlign,
+  readBoxAlign,
+  readRefNames,
+  readSkips,
+} from './marks/channels.ts'
 export { cutLines } from './locate/lines.ts'
+// (whether a text holds a letter: a figure's decorated stretch a word (`cite`), and a cell's decorated piece one that holds its
+// cell whole, the front half's adapter's decoratedCellsOf (PDF-READER §18.61))
+export { holdsLetter } from './locate/figure-lines.ts'
 export { type Located, locate, type Member, type Place } from './locate/locate.ts'
-export { type PrepareDeps, prepareBack, type Tally } from './prepare.ts'
-export { type PdfJs, type ReadPage, readPdf } from './read.ts'
-export { type AddOn, textGroupOf, wrap } from './wrap/wrap.ts'
+export { type PrepareDeps, prepareBack, readArxiv, type Tally } from './prepare.ts'
+export { OPS_PDFJS, type OpsPage, type OpsReader, readOps } from './opstream.ts'
+export { type PdfJs, type ReadPage, type Recovered, readPdf } from './read.ts'
+export { RECOVER_SITES, reasonOf, siteOf } from './warnings.ts'
+export { type AddOn, textGroupOf, type WrapPageA, wrap, wrapPageOf } from './wrap/wrap.ts'

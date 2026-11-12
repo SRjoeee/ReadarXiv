@@ -47,6 +47,22 @@ export interface TypesetOptions {
   target(): string
   /** the reader's toggles now */
   classes(): Readonly<Partial<Record<ClassName, boolean>>> | null
+  /** how far a last line may stand under TeX's text block bottom, in points, for the visit (Choices.pastFoot, pastFootOf:
+   *  docs/PDF-READER.md §18.37); none, the typesetter's rule */
+  pastFoot?: number
+}
+
+/** the most a page's address may set the borrow past TeX's bottom to, in points: the deepest `\maxdepth` of the classes
+ *  measured (article at 12 pt and IEEEtran, 6 pt; docs/PDF-READER.md §18.11); a larger value sets nothing */
+export const PAST_FOOT_MAX = 6
+/** the borrow past TeX's text block bottom a page's address sets (§18.37, the owner's switch of 2026-11-12): its `axt-borrow`
+ *  parameter, in points, read on a website's page (http or https) alone, never on an extension's: 0 turns the borrow off, a
+ *  number to PAST_FOOT_MAX is its bound; undefined where the address sets nothing so (the typesetter's rule then) */
+export function pastFootOf(at: { protocol: string; search: string } | null): number | undefined {
+  if (!at || (at.protocol !== 'https:' && at.protocol !== 'http:')) return undefined
+  const v = new URLSearchParams(at.search).get('axt-borrow')
+  const n = v === null || v.trim() === '' ? Number.NaN : Number(v)
+  return Number.isFinite(n) && n >= 0 && n <= PAST_FOOT_MAX ? n : undefined
 }
 
 /** the lay of the default engine: once the visit's target's patterns are read (or found not to be had), each page laid by
@@ -59,6 +75,7 @@ export async function typesetLay(o: TypesetOptions): Promise<Lay> {
     const tag = ruleTag(o.target())
     if (!tag) return null
     const leave = leftKinds(o.classes())
+    // (o.pastFoot is the visit's, the same for every rule set this lay makes: no part of the key)
     const key = `${tag}|${leave.join(',')}`
     const hit = made.get(key)
     if (hit) return hit
@@ -69,7 +86,7 @@ export async function typesetLay(o: TypesetOptions): Promise<Lay> {
       if (p === undefined) return { wait: l }
       hyph[l] = p
     }
-    const r = rulesFor(tag, { leave }, hyph)
+    const r = rulesFor(tag, o.pastFoot === undefined ? { leave } : { leave, pastFoot: o.pastFoot }, hyph)
     made.set(key, r)
     return r
   }

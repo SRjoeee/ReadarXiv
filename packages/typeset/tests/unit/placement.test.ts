@@ -162,6 +162,197 @@ describe('a URL TeX set whole on one line, its crop the original’s ink', () =>
     const texts = laid.lines.map((l) => l[3].filter((it) => 'src' in it).map((it) => it.s))
     expect(texts).toEqual([['https://𠮷.io/profile/'], ['ij']])
   })
+  it('keeps the URL whole on the next line where TeX set its unit flush left or centred, no line of it stretched', () => {
+    // (2608.25210v2 p1's VLDB footnote, \raggedright: TeX's \rightskip stretch costs a short line nothing, and TeX breaks before
+    // the URL, not inside it at its url package's penalty. The cut is for a justified line, which the URL whole on the next
+    // would leave letter-spaced to its measure)
+    for (const align of ['l', 'c'] as const) {
+      const laid = laidOf(layPage(partOf([[{ ...url, align }]]), rows, rules, metrics), 2)
+      expect(laid.state).toBe('laid')
+      const crops = laid.lines.map((l) => l[3].filter((it) => 'src' in it).map((it) => (it as { src: number[] }).src))
+      expect(crops[0]!.length).toBe(0)
+      expect(crops[1]!.length).toBe(1)
+      // (the whole crop, uncut: its antialiased margin on both edges)
+      expect(crops[1]![0]![1]).toBeCloseTo(71.6, 5)
+      expect(crops[1]![0]![3]).toBeCloseTo(292.4, 5)
+    }
+  })
+})
+
+describe('an address that fits a line whole goes to the next whole, unless the line it leaves would be justified and stretched', () => {
+  // (the coordinator's ruling of 2026-11-12, PDF-READER §18.50: an address is one thing to a reader. A CJK line closed before it
+  // is set ragged by placement where its stretch would pass cjkJust (0.25 em a gap), and reads as not stretched up to
+  // STRETCH_MIN (0.05 em a gap): in both the address goes whole to the next line; only between the two, a justified line
+  // letter-spaced to its measure, is it cut at its own break points, as is one longer than a line. The test's metrics set a
+  // character at half an em, and the fit sets these paragraphs at its tracking floor, -0.03 em: 4.7 pt a character at 10 pt)
+  const zh = rulesFor('zh')
+  const body =
+    '本文提出的方法在多个公开数据集上均取得了稳定提升并且训练开销更低所有代码模型权重以及评测脚本和使用说明均已整理完毕并公开发布于以下地址'
+  const addressOf = (width: number, breaks: number[]): Placed['els'] => [
+    [
+      '1',
+      {
+        kind: 'other',
+        cmd: 'url',
+        literal: 1,
+        copy: 'https://example.org/lab/models/release',
+        text: 'https://example.org/lab/models/release',
+        style: { role: 'mono', size: 10, design: 'SFTT1000' },
+        ink: [[1, 72, 686, 72 + width, 695, 688]],
+        // (each break's x past the address's start, and the copy text's code units before it: "https://", ".org/", "/lab/",
+        // "/models/")
+        breaks: breaks.map((b, k): [number, number] => [72 + b, [8, 20, 24, 31][k]!]),
+      },
+    ],
+  ]
+  /** a paragraph of `n` characters of the body, the address and a full stop, justified on two lines of the measure 72 to `x1` */
+  const caseOf = (n: number, x1: number, width: number, breaks: number[]) => {
+    const para: Placed = {
+      ord: 6,
+      kind: 'para',
+      text: idOf(7),
+      lead: 12,
+      style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+      align: 'j',
+      lines: [
+        [1, 0, 72, x1, 700, 707, 698, 72, x1, 0, 10],
+        [1, 0, 72, x1, 688, 695, 686, 72, x1, 0, 10],
+      ],
+      els: addressOf(width, breaks),
+      room: { below: 20, next: 24, side: [72, x1] },
+    }
+    const rows: Rows = {
+      get: (k) =>
+        k === idOf(7)
+          ? {
+              id: idOf(7),
+              ok: true,
+              by: 'test',
+              content: [
+                { t: 'text', s: body.slice(0, n) },
+                { t: 'el', id: '1' },
+                { t: 'text', s: '。' },
+              ],
+            }
+          : undefined,
+      done: true,
+    }
+    const laid = laidOf(layPage(partOf([[para]]), rows, zh, metrics), 6)
+    expect(laid.state).toBe('laid')
+    expect(laid.fit?.track).toBeCloseTo(-0.03, 6)
+    const crops = laid.lines.map(
+      (l) => l[3].filter((it) => 'src' in it) as { s: string; src: number[]; cut?: number }[],
+    )
+    return { laid, crops }
+  }
+  it('keeps it whole where the line before would be set ragged (30 characters on a measure of 325: 0.63 em a gap)', () => {
+    // (the line closed before it: 141 pt of text, 184 of slack over 29 gaps, past cjkJust: placement sets it ragged, unstretched;
+    // the address's first three pieces would fit beside it)
+    const { crops } = caseOf(30, 397, 250, [20, 50, 150, 220])
+    expect(crops[0]!.length).toBe(0)
+    expect(crops[1]!.map((c) => [c.s, c.cut ?? 0])).toEqual([['https://example.org/lab/models/release', 0]])
+  })
+  it('keeps it whole where the line before is nearly full (60 characters on 307: 0.042 em a gap)', () => {
+    // (282 pt of text, 25 of slack over 59 gaps, under STRETCH_MIN: justified, it reads as unstretched; "https://" would fit)
+    const { crops } = caseOf(60, 379, 250, [20, 50, 150, 220])
+    expect(crops[0]!.length).toBe(0)
+    expect(crops[1]!.map((c) => [c.s, c.cut ?? 0])).toEqual([['https://example.org/lab/models/release', 0]])
+  })
+  it('cuts it at its last break point that fits where the line before would be justified and stretched (50 on 325: 0.18 em)', () => {
+    // (235 pt of text, 90 of slack over 49 gaps: between STRETCH_MIN and cjkJust, a line letter-spaced to its measure)
+    const { crops } = caseOf(50, 397, 250, [20, 50, 150, 220])
+    expect(crops[0]!.map((c) => [c.s, c.cut])).toEqual([['https://example.org/', 2]])
+    expect(crops[1]!.map((c) => [c.s, c.cut])).toEqual([['lab/models/release', 1]])
+  })
+  it('cuts one longer than a line at its last break point that fits, whatever the line before (400 pt on 325)', () => {
+    const { crops } = caseOf(30, 397, 400, [20, 50, 150, 330])
+    expect(crops[0]!.map((c) => [c.s, c.cut])).toEqual([['https://example.org/lab/', 2]])
+    expect(crops[1]!.map((c) => c.cut)).toEqual([1])
+  })
+  it('still cuts 2303.11366v4 p1’s: its line before at 0.205 em a gap, after the cut 0.035 (a8c36be1f)', () => {
+    // (the maintainer's case of 2026-11-08: the abstract's last line before "https://github.com/noahshinn024/reflexion" was
+    // justified at 0.205 em a gap, under cjkJust, the URL whole on the next; with "https://" cut onto it, 0.035 em a gap. Here
+    // 26 characters, 122.2 pt, on a measure of 173.45: 51.25 pt of slack over 25 gaps, 0.205 em, between the two bounds; with
+    // "https://" (41.75 pt) on the line, 9.1 pt over 26 gaps)
+    const { laid, crops } = caseOf(26, 245.45, 160, [41.75, 70, 110, 140])
+    const advance = 5 + laid.fit!.track * 10
+    expect((245.45 - 72 - 26 * advance) / 25 / 10).toBeCloseTo(0.205, 6)
+    expect(crops[0]!.map((c) => [c.s, c.cut])).toEqual([['https://', 2]])
+    const first = laid.lines[0]![3][0] as { dx?: number[] }
+    expect((first.dx![1]! - first.dx![0]! - advance) / 10).toBeCloseTo(0.035, 4)
+  })
+})
+
+describe('a URL TeX broke over lines, drawn as its text in a CJK line: no stretch at its break points', () => {
+  // (2608.25210v2 p17 with the references on: the line ending "https://www.databricks.com/blog/2023/04/18/introducing-ai-" set to the
+  // column's full measure, 1.9-2.7 pt after each "/": a CJK line spreads its slack over the gaps between its items, and a URL
+  // whose line ends are joins (lane url-join) is cut at its break points into items of one word. TeX's url package breaks a
+  // URL at a penalty, no glue (\Urlmuskip 0mu): nothing inside a word stretches)
+  const zh = rulesFor('zh')
+  const long = 'https://www.example.com/blog/2023/04/18/introducing-ai-functions-integrating-large-language-models.html'
+  const ref: Placed = {
+    ord: 4,
+    kind: 'reference',
+    text: idOf(5),
+    lead: 12,
+    style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+    align: 'j',
+    lines: [
+      [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+      [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
+      [1, 0, 72, 200, 676, 683, 674, 72, 300, 0, 10],
+    ],
+    els: [
+      [
+        '1',
+        {
+          kind: 'other',
+          cmd: 'url',
+          literal: 1,
+          copy: long,
+          text: long,
+          style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+          ink: [
+            [1, 150, 686, 300, 695, 688],
+            [1, 72, 674, 200, 683, 676],
+          ],
+        },
+      ],
+    ],
+    room: { below: 20, next: 24, side: [72, 300] },
+  }
+  const rows: Rows = {
+    get: (k) =>
+      k === idOf(5)
+        ? {
+            id: idOf(5),
+            ok: true,
+            by: 'test',
+            content: [
+              { t: 'text', s: '介绍人工智能函数集成。' },
+              { t: 'el', id: '1' },
+              { t: 'text', s: '。访问于二零二五年六月。' },
+            ],
+          }
+        : undefined,
+    done: true,
+  }
+  it('sets the URL’s pieces on a line at their natural advances, the line’s slack in the gaps TeX has glue in', () => {
+    const laid = laidOf(layPage(partOf([[ref]]), rows, zh, metrics), 4)
+    expect(laid.state).toBe('laid')
+    const line = laid.lines.find((l) => l[3].some((it) => it.s?.startsWith('https://')))!
+    const items = line[3].filter((it) => typeof it.s === 'string' && 'x' in it) as {
+      s: string
+      x: number
+      size: number
+    }[]
+    const first = items.findIndex((it) => it.s.startsWith('https://'))
+    const url = items.slice(first)
+    expect(url.length).toBeGreaterThan(2)
+    // (each piece where the one before it ends: its advance, the metrics' half an em a character, and nothing more)
+    for (let n = 1; n < url.length; n++)
+      expect(url[n]!.x - url[n - 1]!.x).toBeCloseTo((url[n - 1]!.size * [...url[n - 1]!.s].length) / 2, 5)
+  })
 })
 
 describe('a head or a name and its follower on one line: each the original’s separation after the one before it', () => {

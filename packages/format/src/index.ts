@@ -1,9 +1,23 @@
-/** What `@readarxiv/format` is for: the schema of the bundle, read and write */
-export const FORMAT_PURPOSE = 'the schema of the bundle, read and write' as const
+/** What `@readarxiv/format` is for: the schema of the bundle and of the documents our server gives a reader, read and write */
+export const FORMAT_PURPOSE =
+  'the schema of the bundle and of the documents our server gives a reader, read and write' as const
 
 export { fromUtf8, sha256, sha256Hex, toBase64Url, toHex, utf8 } from './bytes.ts'
 export { chunkDigests, chunkMatches, type GroupBit, groupName, groupOf, unitId } from './ids.ts'
 export { BOUNDS, canonical, FormatError, type Obj, type ObjKind, read, SCHEMAS, shapeOf, write } from './io.ts'
+export {
+  FAILURE_REASONS,
+  FORMATS,
+  type FailureReason,
+  fold,
+  OpenAnswer,
+  OpenAsk,
+  OpenRefused,
+  PaperDoc,
+  PREPARE_STAGES,
+  type PrepareStage,
+  Ref,
+} from './doc.ts'
 export {
   Box,
   Digest,
@@ -19,10 +33,14 @@ export {
   Label,
   Line,
   Link,
+  LinkBorder,
+  LinkTo,
+  Named,
   ORIGINAL_CHUNK,
   Original,
   OutPiece,
   Part,
+  Person,
   Piece,
   Placed,
   PrepWhy,
@@ -31,10 +49,13 @@ export {
   Rows,
   SpanAt,
   SpanKind,
+  Split,
   Style,
   Tie,
   Unit,
   Units,
   Why,
+  type WhyKind,
+  kindOfWhy,
   Word,
 } from './schema.ts'

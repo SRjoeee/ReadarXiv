@@ -9,9 +9,11 @@ export declare function inMemory(map: Map<string, Uint8Array>): { list(): string
 /** a paper's source read from its main file: its units, the paper's prose in reading order */
 /** `inFloat`: the indices in `units` (rising) of the units written inside a float — figure, table (starred or not), wrapfigure,
  *  sidewaystable, algorithm, listing, and whatever they hold; a longtable is none. Beside the units, in no unit's hash, text,
- *  bundle row or patched source. `texOrder`: the indices in `units` in the order the walk met them, TeX's, where it is not
+ *  bundle row or patched source. `floatTypes`: each caption's float type, [index, type], LaTeX's \@captype there (its float
+ *  environment's, \captionof's, a sub-caption's `sub` type). `pseudocode`: the indices of the units of an algorithm float's
+ *  body (not its captions). `texOrder`: the indices in `units` in the order the walk met them, TeX's, where it is not
  *  theirs (an author block's later units and the bibliography's entries are numbered after the rest), else null */
-export declare function loadProject(fsys: ReturnType<typeof inMemory>, main: string, options?: { tables?: boolean }): { units: SourceUnit[]; inFloat: number[]; texOrder: number[] | null; inputenc: string | null; complete: [string, number][]; bibliography: string[] }
+export declare function loadProject(fsys: ReturnType<typeof inMemory>, main: string, options?: { tables?: boolean }): { units: SourceUnit[]; inFloat: number[]; floatTypes: [number, string][]; pseudocode: number[]; texOrder: number[] | null; inputenc: string | null; complete: [string, number][]; bibliography: string[] }
 /** the paper's macros that read nothing past their own arguments, as [name, arity], from their definitions in the package's files */
 export declare function completeMacros(files: readonly { file?: string; text: string }[]): [string, number][]
 /** which definitions stand inside another's body (o.k < d.at < o.e), each { at, k, e }: its match's start, its body's first
@@ -25,9 +27,19 @@ export declare function inputencOf(text: string, options?: { lineEnvs?: Set<stri
 export declare function urlPercents(text: string, file: string, scan?: { ifs?: ReadonlySet<string>; lineEnvs?: ReadonlySet<string> | null; defined?: { has(name: string): boolean } | null; skipEnvs?: ReadonlySet<string> | null }): string
 /** the placeholder of the list backref sets after a bibliography entry (the pages citing it): an entry's last piece where the package turns the lists on; patch writes nothing for it */
 export declare const BACKREF_LIST: string
+/** an e-mail address as a text writes it: the source's (keepAddresses) and an ink unit's word (the engine package's copy of ink-units.mjs, rule 4) */
+export declare const EMAIL_ADDRESS: RegExp
+/** several addresses at one domain written once, a group of their local parts in braces, parentheses or brackets before it, separated by commas and/or white space (`{jyeoj251, bmw5779}@gmail.com`): the source's (keepGroups) and an ink unit's lines' (the engine package's copy of ink-units.mjs) */
+export declare const ADDRESS_GROUP: RegExp
+/** each identifier of a text, [start, end) code units: a token with no white space that holds two letters or digits joined by underscores (`llm_equal_human`, `CallbackBase.host_label(result)`), the whole token but its leading and trailing sentence punctuation: the source's (keepIdentifiers), an ink unit's word's and a figure text's (the engine package's copies) */
+export declare function identifiersIn(s: string): [number, number][]
+/** whether a placeholder's source is an identifier keepIdentifiers keeps (no command, no address, one identifier whole as TeX sets it) */
+export declare function identifierSource(src: string | undefined): boolean
+/** where a unit's start mark goes among its pieces, as patch writes it: [the piece, its cut], or [-1, 0] for none */
+export declare function startOf(pieces: readonly unknown[]): [number, number]
 /** the patched files (path → bytes): each unit's range replaced by its translated pieces, the rest untouched */
 /** what goes around a unit when it is written out (markUnits): `whole` puts it around all of the unit, inside the groups that open and close it */
-export type UnitMark = { start: string; end: string; before?: string; whole?: boolean } | null
+export type UnitMark = { start: string; end: string; before?: string; whole?: boolean; call?: string; callAt?: number } | null
 /** `spans`, where given, gets each top-level unit's byte range in the file as written, and each nested unit's inside it
  *  with the top-level unit it is written in (`outer`) and the length of what closes it there (`post`) */
 export declare function patch(project: { units: SourceUnit[] }, translated: Map<SourceUnit, unknown[]>, options?: { guardControlWords?: boolean; mark?: (unit: SourceUnit) => UnitMark; spans?: { file: string; unit: SourceUnit; from: number; to: number; post?: number; outer?: SourceUnit }[] | null; pastBegin?: boolean }): Map<string, Uint8Array>
@@ -36,6 +48,9 @@ export declare function markUnits(units: SourceUnit[], translated?: Map<SourceUn
 /** whether a unit is of an author block: its names (kind author) or its places (kind affiliation) */
 export declare function inAuthorBlock(unit: { kind?: string } | null | undefined): boolean
 export declare function frontMarks(units: readonly SourceUnit[]): (unit: SourceUnit) => UnitMark
+/** where the marked compile states an author's call before a unit (its source offset in the unit's file): the command of an
+ *  author block right after another's in the document, an \\and inside one; undefined where none */
+export declare function calledAt(unit: SourceUnit): number | undefined
 /** a style's abstract heading written out, made to go by \\abstractname */
 export declare function localizeNames(text: string): string
 /** a translation's pieces with its own line breaks: room to break in long code and formulas, a heading's forced break

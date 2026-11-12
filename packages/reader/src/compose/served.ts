@@ -14,8 +14,9 @@
 // for now. A table (the index, a group's, a language's patterns) is asked once a visit: one not there, or failing for now, is
 // none for the visit (the faces it would give lost, told once each; the language hyphenates nothing). A slice is fetched as
 // data and made a FontFace of its face's family, weight and style, its code points as its unicode-range (never imported:
-// compose/faces.ts says why), added to the document while the reader lives and taken out with it; one not there is lost at
-// once, one failing for now asked again by the next wave that wants it, and lost if it fails again.
+// compose/faces.ts says why), added to the document with the other slices of the ask that needs it, in one stretch once they
+// are all in (`addIn`: one change of the document's fonts an ask), while the reader lives, and taken out with it; one not there
+// is lost at once, one failing for now asked again by the next wave that wants it, and lost if it fails again.
 // A face is the typesetter's font string (typeset types.ts FaceId: `400 100px "axt-nimbus-roman", "axt-lm-math"`), each family
 // the catalogue's (typeset data/faces.ts FACES), never a system face nor a generic family.
 //
@@ -48,6 +49,9 @@ export const BUSY_MAX_MS = 60_000
 
 /** a pseudo-face the default engine's lay waits on while a language's patterns come (compose/typeset.ts): `ready` loads them */
 export const HYPH_WAIT = 'axt-hyph'
+/** the face the overlay's text rendering is probed in (Faces.probeFace, text-rendering.ts): Computer Modern's serif, the
+ *  served Latin face of the most papers' text (TeX's default, the role table's `cm` design) */
+export const PROBE_FACE = '400 100px "axt-cmun-serif"'
 
 interface Slice {
   key: string
@@ -377,9 +381,37 @@ export function createServed(o: {
     lost = new Set<string>(),
     told = new Set<string>()
   const added: FontFaceLike[] = []
-  /** a face lost: its texts left the original's, told once */
-  const tellLost = (id: string) => {
+  /** the slices loaded and not in the document yet: each added with the others of the ask that needs it (`addIn`) */
+  const inn = new Map<string, FontFaceLike>()
+  /**
+   * The slices of `keys` loaded and not in the document yet, added in one stretch, and only then ready to be measured: one
+   * change of the document's fonts an ask instead of one a slice. Chromium re-lays every text node laid out at each change
+   * ("Fonts changed"), so a slice added as it comes makes up to two whole-document relayouts a page (measured over a scroll of
+   * two papers: 41-48 such relayouts, against 22-25 in the released reader, which adds a wave's faces in one task:
+   * verification/reader-perf.md §3f). An ask is one page's (the composer asks a page's faces apart, so that no page waits for
+   * another's), so no page is held by another's slices; and none is measured or drawn with a fallback face, since a slice is
+   * ready (`loaded`) only once it is in the document
+   */
+  const addIn = (keys: Iterable<string>) => {
+    if (gone) return
+    for (const k of keys) {
+      const f = inn.get(k)
+      if (!f) continue
+      inn.delete(k)
+      f.add()
+      added.push(f)
+      loaded.add(k)
+    }
+  }
+  /** a face lost: its texts left the original's, told once; one lost while only the text rendering's probe asked it
+   *  (`quiet`), told once a page's text asks it (a face no page draws is no loss of the page's) */
+  const unseen = new Set<string>()
+  const tellLost = (id: string, quiet = false) => {
     if (told.has(id)) return
+    if (quiet) {
+      unseen.add(id)
+      return
+    }
     told.add(id)
     o.lost?.(id)
   }
@@ -403,8 +435,8 @@ export function createServed(o: {
   }
   /** the demands of each slice waiting for its slot: let go there, never asked, where none of them wants it any more */
   const demands = new Map<string, (() => boolean)[]>()
-  const loadSlice = (face: ServedFace, slice: Slice, wanted: () => boolean): Promise<void> => {
-    if (loaded.has(slice.key) || lost.has(slice.key)) return Promise.resolve()
+  const loadSlice = (face: ServedFace, slice: Slice, wanted: () => boolean, quiet = false): Promise<void> => {
+    if (loaded.has(slice.key) || inn.has(slice.key) || lost.has(slice.key)) return Promise.resolve()
     let p = loading.get(slice.key)
     if (p) {
       demands.get(slice.key)?.push(wanted)
@@ -429,9 +461,8 @@ export function createServed(o: {
           unicodeRange: unicodeRangeOf(slice.ranges),
         })
         if (gone) return
-        f.add()
-        added.push(f)
-        loaded.add(slice.key)
+        // (in the document with the others of its ask, once they are all in: addIn)
+        inn.set(slice.key, f)
       } finally {
         free()
       }
@@ -442,7 +473,7 @@ export function createServed(o: {
       // (not there, or a failure for now met twice: lost, its texts left the original's; else asked again next time)
       if (lasting(e) || failed.has(slice.key)) {
         lost.add(slice.key)
-        tellLost(face.id)
+        tellLost(face.id, quiet)
       }
       failed.add(slice.key)
     })
@@ -453,7 +484,7 @@ export function createServed(o: {
     return p
   }
   /** the tables a font string's faces need read: the index, then the group of each face not read yet */
-  const tablesOf = async (font: string) => {
+  const tablesOf = async (font: string, quiet = false) => {
     // (nothing asked once the reader is closed: not before the index, nor after an index or a table that came in since)
     if (gone) return
     const fs = facesOf(font)
@@ -474,19 +505,25 @@ export function createServed(o: {
         if (had[k]) f.slices ??= []
         else {
           f.slices = []
-          tellLost(f.id)
+          tellLost(f.id, quiet)
         }
       })
       runsCache.clear()
     }
   }
-  /** the tables a font string needs read, then the slices its text needs loaded, while `wanted` */
-  const load = async (font: string, text: string, wanted: () => boolean) => {
-    await tablesOf(font)
-    if (gone || !wanted()) return
+  /** the tables a font string needs read, then the slices its text needs loaded, while `wanted`: the slices' keys (added to
+   *  the document by the ask, addIn) */
+  const load = async (font: string, text: string, wanted: () => boolean, quiet = false): Promise<string[]> => {
+    await tablesOf(font, quiet)
+    // (a face whose table only the probe found not to be had, now asked by a page: told)
+    if (!quiet) for (const f of facesOf(font)?.faces ?? []) if (unseen.has(f.id) && !f.slices?.length) tellLost(f.id)
+    if (gone || !wanted()) return []
     const runs = runsOf(font, text)
-    if (!runs || runs === 'never') return
-    await Promise.all(runs.map((r) => loadSlice(r.face, r.slice, wanted)))
+    if (!runs || runs === 'never') return []
+    await Promise.all(runs.map((r) => loadSlice(r.face, r.slice, wanted, quiet)))
+    // (a slice only the probe found lost, now needed by a page: its face told)
+    if (!quiet) for (const r of runs) if (unseen.has(r.face.id) && lost.has(r.slice.key)) tellLost(r.face.id)
+    return runs.map((r) => r.slice.key)
   }
   // ---- the patterns
   const hyphs = new Map<string, Promise<Patterns | null>>()
@@ -570,22 +607,46 @@ export function createServed(o: {
       c = `axt-sf-${++rid}`
       classes.set(id, c)
       const f = parseFont(id)
-      // (no synthesis of what the face lacks, no trim of CJK punctuation: as measured)
+      // (no synthesis of what the face lacks, no trim of CJK punctuation, no glyph of another language's (`locl`): as measured.
+      // A face's `locl` swaps a mark for another region's where the run's script names one, and not in a run of no script
+      // (digits and marks alone): Source Han Serif TC under a zh-CN page drew its full stop as Simplified's, low at its em's
+      // start, after a Han character, and as its own, in the middle, on a line of a digit, a bracket and the stop
+      // (2611.03953v2-zh-TW p13). Off, every mark is its face's default glyph wherever it stands, the one the typesetter's
+      // measure of it is (docs/PDF-READER.md §18.48))
       sheet.sheet?.insertRule(
-        `.${c}{font-family:${familyOf(id)};font-weight:${f?.weight ?? 400};font-style:${f?.style ?? 'normal'};font-variant-caps:${f?.caps ? 'small-caps' : 'normal'};font-synthesis:none;text-spacing-trim:space-all}`,
+        `.${c}{font-family:${familyOf(id)};font-weight:${f?.weight ?? 400};font-style:${f?.style ?? 'normal'};font-variant-caps:${f?.caps ? 'small-caps' : 'normal'};font-synthesis:none;text-spacing-trim:space-all;font-feature-settings:"locl" 0}`,
       )
       return c
     },
     familyOf,
+    async probeFace(text) {
+      addIn(
+        await load(PROBE_FACE, text, () => true, true).catch((e) => {
+          o.warn?.(`the faces of ${PROBE_FACE}`, e)
+          return []
+        }),
+      )
+      return metrics.ready(PROBE_FACE, text) === true ? PROBE_FACE : null
+    },
     async ready(items, wanted = () => true) {
       const waits: Promise<unknown>[] = []
+      const keys: string[] = []
       for (const it of items) {
         if (typeof it === 'string') continue
         const [id, text] = it
         if (id === HYPH_WAIT) waits.push(hyphOf(text))
-        else waits.push(load(id, text, wanted).catch((e) => o.warn?.(`the faces of ${id}`, e)))
+        else
+          waits.push(
+            load(id, text, wanted).then(
+              (k) => void keys.push(...k),
+              (e) => o.warn?.(`the faces of ${id}`, e),
+            ),
+          )
       }
       await Promise.all(waits)
+      // (the ask's slices in the document together, once every one is in, or let go: those of a page gone that did come in
+      // are added all the same, ready for the page that asks them next)
+      addIn(keys)
     },
     get asked() {
       return asked
@@ -599,6 +660,7 @@ export function createServed(o: {
       for (const go of waiting.splice(0)) go(false)
       for (const f of added) f.remove()
       added.length = 0
+      inn.clear()
       sheet.remove()
     },
   }

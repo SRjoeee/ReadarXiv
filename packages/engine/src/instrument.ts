@@ -1,10 +1,10 @@
 // The seam between the prepare's front half and its back half (design §4.3, stage 1a): what a marked compile yields, the
 // INSTRUMENT. B (our marked compile) is never shown: it is read for who owns each glyph and box, and its ownership is carried
-// onto arXiv's page by align and locate. Whatever makes it (today's front end through its adapter, the rebuilt source reader
-// later) gives exactly this; the back half reads nothing else of the source, the marks or the compile.
-import type { Piece } from '@readarxiv/format'
+// onto arXiv's page by align and locate. Today's front end makes it through its adapter (src/pdf-reader/engine/pipeline/
+// instrument.mjs); the back half reads nothing else of the source, the marks or the compile.
+import type { Piece, Style } from '@readarxiv/format'
 import type { Doc } from './doc.ts'
-import type { TexState } from './marks/statements.ts'
+import type { Recovered } from './read.ts'
 
 /** what a unit's ink is, of the unit's: its text (what a translation replaces), an element's (a piece that travels with the
  *  text, or stays: a display), its label (the class's mark before it), a babel name's own word */
@@ -29,14 +29,61 @@ export interface InstrumentUnit {
   kept?: true
   /** its ink stays whatever the translation (a kept block): in no group */
   fixed?: true
+  /** kept for its text set wholly in a face of one pitch, or a figure's word inside such a line (Rule 1, PDF-READER §18.22):
+   *  the lab's dump and parity tell the units this rule keeps by it; the bundle does not carry it */
+  pitch?: true
+  /** a figure text's elements kept as the original's ink (figure-lines.ts, PDF-READER §18.26): a run of one pitch (`pitch`, F0),
+   *  a formula (`formula`, F1) or a stretch its decoration holds (`decoration`), by piece id: the lab's dump and parity tell them
+   *  by it; the bundle does not carry it */
+  keptEls?: [string, 'pitch' | 'formula' | 'decoration'][]
+  /** a figure's line no word of which stands outside its formulas, kept whole (F1, figure-lines.ts): the lab's dump and parity tell
+   *  it by it; the bundle does not carry it */
+  formula?: true
+  /** a figure text drawn twice over itself, kept as the original (F3's double rule, figure-lines.ts doubledOf): the lab's dump and
+   *  parity tell it by it (the differential's (q)); the bundle does not carry it */
+  double?: true
+  /** a figure text the engine cannot draw as it was set, a script or an accent set apart from its base, kept as the original
+   *  (F3's `script`, figure-lines.ts setApart): the lab's dump and parity tell it by it; the bundle does not carry it */
+  script?: true
+  /** a figure text or a table cell held whole as the original for a decorated word (PDF-READER §18.61, the owner's ruling of
+   *  2026-11-12): `token`, one that holds the word, a figure text a word of which a decoration holds (figure-lines.ts, its element
+   *  `cite`) or a cell holding a piece TeX set beside a decoration of its own with a letter in its text (the probe's `decorated`,
+   *  pipeline/instrument.mjs decoratedCellsOf); `label`, a figure text of the same label or printed line as such a text, by the
+   *  paragraph reading's pairing (figure-lines.ts figureLinesOf). `fixed`, never `kept`: its text could be translated and is
+   *  held for its drawing alone. The lab's dump and parity tell it by it; the bundle does not carry it */
+  decorated?: 'token' | 'label'
+  /** a kept block of e-mail addresses and their separators alone (today/ink-units.mjs addressesAlone): the lab's dump and parity
+   *  tell such a block by it (the coordinator's ruling of 2026-11-10); the bundle does not carry it */
+  address?: true
+  /** a kept block of any other text no unit owns (today/ink-units.mjs keptUnitsOf, rule 10: a code listing, a URL alone, a page
+   *  number, a bibliography not cut into entries): the lab's dump tells it by it; the bundle does not carry it */
+  block?: true
+  /** a line of an algorithm float's body, kept as the original as code is (the front end's `pseudocode`, pipeline/instrument.mjs
+   *  unitFactsOf; the owner's ruling of 2026-11-08): the lab's dump tells it by it; the bundle does not carry it (`kept` alone) */
+  pseudocode?: true
+  /** a table's cell or a figure text of names or markup tokens alone, kept as the original (translate/mt.mjs nameCells): the lab's
+   *  dump tells it by it; the bundle does not carry it (`kept` alone) */
+  nameCell?: true
+  /** a figure text the figure reading keeps whole as crowded (a formula it would tear, a translation with no room beside other
+   *  ink: figure-lines.ts, today/figure-text.mjs) and for no reason of its own besides (`double`, `script`): the lab's dump tells
+   *  it by it; the bundle does not carry it (`unwrapped`, as a wrap failure is) */
+  crowded?: true
+  /** where each group the instrument wrote as its content opened (pipeline/instrument.mjs passThroughOf: a group that carries
+   *  nothing), as offsets in the unit's projection (text pieces' characters, each element or nested unit one): the facts pass
+   *  counts a paragraph TeX opened at one (`opensLost`), which must be none; the bundle does not carry it */
+  passed?: number[]
   /** an ink unit drawn with another unit's row: that unit's index */
   echo?: number
   /** a table's cell: its table, row and column, and the columns and rows it spans, whether it is a header's */
   cell?: { table: number; row: number; col: number; span?: number; rows?: number; head?: true }
-  /** the paper's title, a unit of its front matter (the source reader's) */
+  /** a caption's float type, LaTeX's \@captype where its \caption runs (its float environment's, \captionof's): the part's
+   *  Label.float */
+  float?: string
+  /** the paper's title, a unit of its front matter (the front end's) */
   title?: true
   front?: true
-  /** TeX's alignment of it where TeX stated it (its end mark's \leftskip, \rightskip, \parfillskip) */
+  /** TeX's alignment of it where TeX stated it (its end mark's \leftskip, \rightskip, \parfillskip); a cell's, its own
+   *  paragraph's, else the class LaTeX built its column's template from (marks/channels.ts readAlign) */
   align?: 'j' | 'l' | 'c' | 'r'
   /** a babel name's key (a unit of kind `name`: its occurrences are owned with ROLE.name) */
   name?: string
@@ -54,6 +101,12 @@ export interface InstrumentUnit {
     before?: number
     after?: number
     under?: number
+    /** a container's edge over its baseline (figure-lines.ts: a closed shape round all of it), PDF units up from it */
+    over?: number
+    /** a paragraph of two lines or more (F3, figure-lines.ts): laid as a body paragraph is, no line's free line its room; the
+     *  evidence its lines are joined by, `strong` (TeX's hyphen, a justified line) or `container` (a closed path holds them alone):
+     *  the lab's dump reads it (`para`); the bundle does not carry it */
+    para?: 'strong' | 'container'
   }
   /** why the instrument gives it no ink of its own, where it gives none (the marks could not delimit it on B) */
   why?: string
@@ -62,13 +115,17 @@ export interface InstrumentUnit {
    *  reads a source */
   classes?: [piece: string, PieceClass][]
   /** what its source says of each group (by its open piece's id), which the part states as the span's facts (format's
-   *  SpanAt: `cmd`, `colour`) */
+   *  SpanAt: `cmd`, `colour`, `to`, `style`) */
   spans?: [piece: string, SpanClass][]
 }
-/** what a group's source says: the command its open begins with (its name and star), the fill TeX set its run in */
+/** what a group's source says: the command its open begins with (its name and star), the fill TeX set its run in, a link
+ *  group's target where the source names it (linkTargetOf); and, where its command names no style the tables know, the face
+ *  TeX set its text in, read off its glyphs on B where it is not the face around it (marks/faces.ts) */
 export interface SpanClass {
   cmd?: string
   colour?: number
+  to?: { url: string } | { dest: string }
+  style?: Style
 }
 /** an element's class as its source reads it (today's layer2.mjs phClass2, texToText2 and the symbol's drawing) */
 export interface PieceClass {
@@ -79,6 +136,10 @@ export interface PieceClass {
   mark?: true
   /** a text piece: TeX sets its characters as written (a code or URL mark, a plain-text source: today's textPieceOf) */
   literal?: true
+  /** it sets a URL as url.sty's \url does, whatever its own command: a control sequence \urldef defined as one earlier in the
+   *  unit, which the piece sets (ACM's `\urldef\tempurl\url{…}` then `\showDOI{\tempurl}`); its copy text and break points
+   *  are its glyphs', as a \url's are */
+  url?: true
   // what the other rules read of its source (the reading's own reads of `src`: tokensOf2's glue, style commands and links,
   // U.breaks' forced breaks, U.rename's notes, U.elements' macros):
   /** its glue as TeX sets it (today's glueOf): a length in the font's em or in PDF units, and whether a line may break at it */
@@ -96,6 +157,8 @@ export interface PieceClass {
   colour?: number
   /** a nested unit's mark (a footnote set inside the unit), not a placeholder */
   nested?: true
+  /** a tie (the source's `~`, pipeline/instrument.mjs isTie): TeX's interword glue no line breaks at */
+  tie?: true
   /** a text macro's text as TeX sets it (the marking's probe), where its glyphs are the unit's text, no ink of its own */
   text?: string
 }
@@ -115,25 +178,44 @@ export interface Instrument {
    *  last text begins at the unit's end point and ends at the point after the group it stands in, which bounds what TeX set
    *  there. Both places of a piece stated, no glyph of B between them: TeX set none for it */
   places?: { unit: number; piece: string; page: number; glyph: number; end: boolean }[]
-  /** the pieces TeX said set no ink (the probe's answers, where the marking gives them no point): their span stated empty, by
+  /** the pieces TeX said set no ink (the probe's answers, where the marking gives them no point), those the marking never marks,
+   *  their rendering never ink by its own reading (a text macro of today's marks.mjs classOf null: a .bbl's \newblock; the
+   *  adapter's inklessPieces), and those TeX's points prove set nothing of their own: a piece with no point of its own whose two
+   *  nearest points around it in its unit's source order (a piece's, the unit's start and end, else the stream's) hold no glyph
+   *  and no painted box between them, nor text of the unit's (the adapter's boundedEmpty): their span stated empty, by
    *  unit index and piece id */
   empty?: { unit: number; piece: string }[]
+  /** the pieces TeX set before their unit's start point, the ownership giving the unit's text nothing before it (the marking
+   *  passes over a unit's head): whatever they set is no text of the unit's and is never erased with it, by unit index and
+   *  piece id (the adapter's outsidePieces) */
+  outside?: { unit: number; piece: string }[]
   /** TeX's statements of the paper: \lineskip and \lineskiplimit; and, per B page, the glyph counts at which TeX ended a
    *  paragraph (its `qe<n>` points: a paragraph ends before that glyph), where the marked compile has them */
   tex: {
     lineskip?: [number, number]
     paragraphEnds?: number[][]
-    /** TeX's state where a unit (piece null) or a placeholder (its content id) opens: its font, \baselineskip and measure
-     *  (marks/statements.ts STATE_TEX) */
-    states?: { unit: number; piece: string | null; state: TexState }[]
-    /** where TeX ended a sentence inside a unit (SENTENCE_TEX): the glyphs before the point on its page; the next sentence
-     *  begins at the next glyph */
-    sentences?: { unit: number; page: number; glyph: number }[]
-    /** the colour TeX was in after a colour piece (\textcolor's, \color's), as the driver names it (\current@color) */
-    colours?: { unit: number; piece: string | null; colour: string }[]
+    /** per B page, its text frame as TeX shipped it (marks/channels.ts framesOf, LAYOUT_TEX's AXT-BODY at each body's
+     *  bracket): the text block's left and right edge (\textwidth from where TeX shipped the page's body) and its columns',
+     *  each \columnwidth at both edges of the block on a page TeX set in two columns, else the block; null where TeX stated
+     *  none (no body bracketed and stated there, a two-column page whose columns TeX did not give the width of) */
+    frames?: (TexFrame | null)[]
+    /** each unit's \baselineskip and \parskip, natural, in PDF units, where its paragraph ends (marks/channels.ts readSkips,
+     *  LINES_TEX's AXT-LINES): TeX's normal paragraph separation there; a unit TeX set no paragraph for states none */
+    skips?: { unit: number; baselineskip: number; parskip: number }[]
   }
+  /** what PDF.js recovered from inside its worker while B was read (read.ts readPdf), where it did */
+  recovered?: Recovered
   /** what made it: the compiler, the TeX tree, the engine of the front half (part of the prepare's identity) */
   made: { compiler: string; tree: string; front: string }
+}
+
+/** a page's text frame as TeX set it, in PDF units on its page: the text block and its columns (one: the block itself); and
+ *  its bottom where TeX states it (\textheight's foot as LaTeX's \@outputpage ships it: no line of a column's text stands
+ *  under it) */
+export interface TexFrame {
+  block: [number, number]
+  columns: [number, number][]
+  foot?: number
 }
 
 /** the empty owners of a page of n glyphs */

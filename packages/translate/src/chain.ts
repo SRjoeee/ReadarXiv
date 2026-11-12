@@ -8,6 +8,7 @@ import {
   type Chain,
   type Clock,
   Fault,
+  type Glossary,
   type Lang,
   type Note,
   type OutPiece,
@@ -24,8 +25,11 @@ import {
   type UnitIn,
   type Why,
 } from './contract.ts'
+import { placeGroups, placeReferences, referencesOf, referenceText } from './groups.ts'
+import { namedOf } from './names.ts'
 import { runsOf } from './runs.ts'
 import { sha256Hex } from './sha256.ts'
+import { wholeWordsOf } from './words.ts'
 
 // ---------------------------------------------------------------- the fixed policy (design-a §1.5; chain.ts, global-gate.ts)
 
@@ -38,6 +42,13 @@ export const MIN_COOL_MS = 1_000
 export const DEFAULT_COOL_MS = 5_000
 /** how many times the chain's last translator waits a cooldown out before its unit is unavailable (chain.ts `waits < 2`) */
 export const LAST_WAITS = 2
+/** the longest the chain's last translator waits pauses out for one unit, in all (a 429's cooldown, a gate's refusal): what
+ *  the chain already gives one request of it, ATTEMPTS tries of its `callMs` (the LLM's 105 s, a web translator's 30 s). A
+ *  pause past it is no slower answer but the translator out for now: it is never slept, the translator is passed over as a
+ *  failed one is and the unit told the time named, which a host offers its retry by (#638: a Retry-After of an hour, slept
+ *  twice, held a call two hours, in an extension's background that is a service worker). The cooldown itself stays the
+ *  endpoint's: the translator is asked nothing until it ends */
+export const patienceOf = (t: Translator): number => ATTEMPTS * t.limits.callMs
 /** the breaker (global-gate.ts GATE_DEFAULTS): opens when OPEN_AT of at least MIN_OUTCOMES of the last WINDOW outcomes
  *  failed; skips its translator for BREAKER_MS, then lets one probe through; never skips the chain's last */
 export const BREAKER = { window: 50, minOutcomes: 20, openAt: 0.5, coolMs: 5 * 60_000 } as const
@@ -55,9 +66,19 @@ export const GATE_MS = 1_000
 /** the store key's grammar; it rises only if the grammar changes */
 export const KEY_VERSION = 't1'
 /** the chain's own outcome rules (fall-through per unit, one re-ask where a translator asks it, the runs floor of stretches
- *  of two letters or more, a span that is no edge keeping its head in a copy of itself: runs.ts): a change to them is a
- *  change of every row */
-export const CHAIN_RULES = 'chain/1|fall-through|reask|runs>=2|runs-heads'
+ *  of two letters or more, every stretch given or none, `-whole` (d76d6b200: a stretch no translator gives leaves the unit the
+ *  original's, never its English between translated stretches), a span that is no edge keeping its head in a copy of itself:
+ *  runs.ts; an element set after the unit's text given to no translator, put back after the translation: tailOf; a group a
+ *  reply did not bring back placed around its own text where the translation states it, as often as the source holds that
+ *  text in groups of its style alone, its end mark matched by its class, `groups/2`: groups.ts; a word tied to a reference
+ *  that abbreviates the item's name sent to every translator as that name: names.ts; a phrase group a markers-wire translator's
+ *  reply did not bring back placed where it states the group's reference translation, asked of it in the unit's batch:
+ *  groups.ts placeReferences; a request a translator refuses handed on whole, halved only where its endpoint said it is too
+ *  large, `pass-whole`, #636: a 400 read as every unit's refusal kept the next translator's answers as rows; a group that is
+ *  not `must` with an edge inside a word offered to no translator, its words whole and plain, `words`: words.ts): a change to
+ *  them is a change of every row */
+export const CHAIN_RULES =
+  'chain/1|fall-through|reask|runs>=2-whole|runs-heads|after|groups/2|names|references|pass-whole|words'
 
 // ---------------------------------------------------------------- the platform's timers and controllers, by structure
 
@@ -113,9 +134,58 @@ const contextDigest = (context: PaperContext | undefined): string => {
     parts.push(context.section ?? null, context.glossary?.map((g) => [g.term, g.translation]) ?? null)
   return sha256Hex(JSON.stringify(parts))
 }
-/** the store key (design-a §1.6): `t1|<translator identity>|<target>|<sha256 of the wire>|<context digest, or ->` */
+/** the context with its glossary these entries, or none where there are none (a unit that uses no entry keys as a call with
+ *  no glossary does) */
+const withGlossary = (context: PaperContext, glossary: Glossary): PaperContext => {
+  if (glossary.length) return { ...context, glossary }
+  const { glossary: _whole, ...rest } = context
+  return rest
+}
+/** the call's context as a reply of `t` to `wire` depends on it (#637): its glossary narrowed to the entries the translator
+ *  says the wire uses (`glossaryOf`); whole where it says nothing, or its answer throws */
+const contextOfWire = (t: Translator, wire: string, context: PaperContext | undefined): PaperContext | undefined => {
+  if (!context?.glossary || !t.glossaryOf) return context
+  try {
+    return withGlossary(context, t.glossaryOf(wire, context.glossary))
+  } catch {
+    return context
+  }
+}
+/** the store key (design-a §1.6): `t1|<translator identity>|<target>|<sha256 of the wire>|<context digest, or ->`, the context
+ *  as a reply to the wire depends on it */
 export const keyOf = (t: Translator, target: Lang, wire: string, context?: PaperContext): string =>
-  `${KEY_VERSION}|${t.identity}|${target}|${sha256Hex(wire)}|${t.context ? contextDigest(context) : '-'}`
+  `${KEY_VERSION}|${t.identity}|${target}|${sha256Hex(wire)}|${t.context ? contextDigest(contextOfWire(t, wire, context)) : '-'}`
+
+/** The context a host's row of `unit` is keyed by (#637): the call's, its glossary narrowed to the entries some translator
+ *  that reads the context uses for the unit as the chain sends it (words.ts, names.ts, tailOf), in the table's order. A
+ *  stretch of the runs floor is a part of that text, so it uses no entry the unit does not. The call's context itself where it
+ *  holds no glossary (a row's key as before) or a translator says nothing of the entries it uses */
+export function rowContextOf(
+  translators: readonly Translator[],
+  unit: UnitIn,
+  target: Lang,
+  context: PaperContext | undefined,
+): PaperContext | undefined {
+  if (!context?.glossary?.length) return context
+  const whole = wholeWordsOf(unit)?.unit ?? unit
+  const named = namedOf(whole)?.unit ?? whole
+  const sent = tailOf(named)?.unit ?? named
+  const used = new Set<string>()
+  const entry = (g: Glossary[number]) => JSON.stringify([g.term, g.translation])
+  for (const t of translators) {
+    if (!t.context) continue
+    if (!t.glossaryOf) return context
+    try {
+      for (const g of t.glossaryOf(t.write(sent, target), context.glossary)) used.add(entry(g))
+    } catch {
+      return context
+    }
+  }
+  return withGlossary(
+    context,
+    context.glossary.filter((g) => used.has(entry(g))),
+  )
+}
 
 /** What a row is keyed by besides unit id and target (DECISION: translators' identities and their behaviour digests plus
  *  the acceptance rule's digest, and the chain's own rules): it moves only when an outcome could */
@@ -132,7 +202,7 @@ export async function identityOf(translators: readonly Translator[]): Promise<st
 /** what a request brings back for one waiter */
 type Answer =
   | { raw: string }
-  /** a lone unit the translator said its request could not take (`halve` down to one) */
+  /** a lone unit its translator's endpoint said is too large (a `too-large` request halved down to one) */
   | { refused: true }
   | { unavailable: true; retryAfterMs?: number; cooling?: boolean }
   | { off: UnconfiguredCode }
@@ -189,6 +259,9 @@ const UNCONFIGURED: Partial<Record<Fault['code'], UnconfiguredCode>> = {
 }
 /** the failures that are the endpoint's health, which the breaker counts (chain.ts ENGINE_FAILURES) */
 const HEALTH = new Set<Fault['code']>(['network', 'timeout', 'overload'])
+/** a request its translator refused whole for no reason of its size or the language (`pass`): the same at any size, so it is
+ *  this translator's, counted by the breaker as a failure of its endpoint is (a 400 to every request stops being asked) */
+const refusedWhole = (f: Fault): boolean => f.remedy === 'pass' && f.code !== 'too-large' && f.code !== 'unsupported'
 
 export function chainOf(ports: Ports = {}): Chain {
   const clock = ports.clock ?? realClock()
@@ -398,6 +471,7 @@ export function chainOf(ports: Ports = {}): Chain {
     let attempt = 1
     let todo = entries
     let gateWaits = 0
+    let gateWaited = 0
     const drop = (e: Entry) => {
       if (lane.byKey.get(e.key) === e) lane.byKey.delete(e.key)
     }
@@ -421,9 +495,11 @@ export function chainOf(ports: Ports = {}): Chain {
           void asked.then((late) => (late.ok ? gate.release(late.lease, 'none') : undefined)).catch(() => {})
         if (g && !g.ok) {
           gone.signal.removeEventListener('abort', cut)
-          if (last && gateWaits < LAST_WAITS) {
+          const wait = Math.max(50, g.retryInMs ?? 250)
+          if (last && gateWaits < LAST_WAITS && gateWaited + wait <= patienceOf(t)) {
             gateWaits++
-            await clock.sleep(Math.max(50, g.retryInMs ?? 250), gone.signal)
+            gateWaited += wait
+            await clock.sleep(wait, gone.signal)
             continue
           }
           for (const e of todo)
@@ -507,7 +583,11 @@ export function chainOf(ports: Ports = {}): Chain {
           tries: 2,
         })
       const health =
-        !fault || delivered.size > 0 ? true : fault.remedy === 'again' && HEALTH.has(fault.code) ? false : null
+        !fault || delivered.size > 0
+          ? true
+          : (fault.remedy === 'again' && HEALTH.has(fault.code)) || refusedWhole(fault)
+            ? false
+            : null
       record(lane, health)
       const coolMs = fault?.remedy === 'cool' ? Math.max(fault.retryAfterMs ?? DEFAULT_COOL_MS, MIN_COOL_MS) : undefined
       if (lease !== null && ports.gate) {
@@ -535,16 +615,6 @@ export function chainOf(ports: Ports = {}): Chain {
           for (const e of todo) answer(lane, e, { unavailable: true, retryAfterMs: coolMs as number, cooling: true })
           return
         }
-        case 'halve': {
-          if (todo.length === 1) {
-            answer(lane, todo[0] as Entry, { refused: true })
-            return
-          }
-          const h = todo.length >> 1
-          await run(lane, todo.slice(0, h))
-          await run(lane, todo.slice(h))
-          return
-        }
         case 'off': {
           const code = UNCONFIGURED[fault.code] ?? 'key-refused'
           offs.set(t, code)
@@ -553,6 +623,19 @@ export function chainOf(ports: Ports = {}): Chain {
           return
         }
         case 'pass': {
+          // (the one rule over a refused request, #636: only a size the endpoint stated is mended by a smaller request, so
+          // only then is it halved, down to the lone unit this translator refuses; any other refusal goes whole to the next
+          // translator: a 400 to every request was halved into 7 requests for 4 units, 199 for 100)
+          if (fault.code === 'too-large') {
+            if (todo.length === 1) {
+              answer(lane, todo[0] as Entry, { refused: true })
+              return
+            }
+            const h = todo.length >> 1
+            await run(lane, todo.slice(0, h))
+            await run(lane, todo.slice(h))
+            return
+          }
           const code = UNCONFIGURED[fault.code]
           for (const e of todo)
             answer(lane, e, fault.code === 'unsupported' && code ? { off: code } : { unavailable: true })
@@ -575,8 +658,9 @@ export function chainOf(ports: Ports = {}): Chain {
   async function* translateCall(units: readonly UnitIn[], target: Lang, o: TranslateOptions): AsyncGenerator<Result> {
     checkCall(units, o.translators)
     const seq = ++calls
-    // the call's own signal: the caller's, and the iterator's end before every unit settled (a host that stops reading lets
-    // its work go as an abort does: no request is kept for it, no timer outlives it)
+    // the call's own signal: the caller's, and the call's end, every unit settled or not (a host that stops reading lets its
+    // work go as an abort does, and a request the call started that no unit waits for goes with the call: no request is kept
+    // for it, no timer outlives it)
     const given = o.signal ?? NEVER
     const own = controller()
     const forward = () => own.abort()
@@ -601,6 +685,21 @@ export function chainOf(ports: Ports = {}): Chain {
       writes.push([key, raw])
       if (writes.length >= WRITE_EVERY) flushes.push(flush(ports.store, writes.splice(0), clock))
     }
+    // everything the call starts that is still to settle: each of its requests, and what an answer no unit waits for is
+    // written by (a phrase group's reference, asked in the unit's batch before its reply is known, which the reply may make
+    // needless). The call owns them: when it ends, its signal cancels every request still asked for it, and they are all
+    // settled before its last store write, so that no request outlives the call and every answer it got is stored (the review
+    // of round B11: a reference outlived its call, out of the host's abort, and its answer was never stored)
+    const started = new Set<Promise<unknown>>()
+    const owned = <T>(p: Promise<T>): Promise<T> => {
+      started.add(p)
+      const done = () => {
+        started.delete(p)
+      }
+      p.then(done, done)
+      return p
+    }
+    const askOf: Call['ask'] = (t, key, wire, alone, w) => owned(ask(t, target, o.context, key, wire, alone, w, signal))
     const onAbort = () => {
       for (const [i, u] of units.entries()) emit(i, { id: u.id, ok: false, why: { kind: 'aborted' } })
     }
@@ -633,6 +732,8 @@ export function chainOf(ports: Ports = {}): Chain {
           reader,
           write,
           emit,
+          ask: askOf,
+          owned,
           runs: true,
         }),
       )
@@ -649,8 +750,12 @@ export function chainOf(ports: Ports = {}): Chain {
       }
     } finally {
       given.removeEventListener('abort', forward)
-      if (settled.size < units.length) own.abort()
       signal.removeEventListener('abort', onAbort)
+      // (the call ends, every unit settled or the host gone: what it still asks is cancelled (a request another call waits for
+      // goes on for that one), then what it started settles, an answer that came in time written, before the last write)
+      own.abort()
+      // (none left, the last write goes out in this turn, as before: a host's own write beside it starts after it)
+      if (started.size) await Promise.all(started)
       if (ports.store && writes.length) flushes.push(flush(ports.store, writes.splice(0), clock))
       await Promise.all(flushes)
     }
@@ -669,14 +774,24 @@ export function chainOf(ports: Ports = {}): Chain {
     reader: (keys: readonly string[]) => Promise<(string | null)[]>
     write: (key: string, raw: string) => void
     emit: (i: number, r: Result) => void
+    /** the one way a unit reaches a translator's lane: asked under the call's signal, owned by the call (translateCall) */
+    ask: (t: Translator, key: string, wire: string, alone: boolean, w: Omit<Waiter, 'resolve'>) => Promise<Answer>
+    /** what an answer no unit waits for is written by, owned by the call so that it settles before the call's last write */
+    owned: <T>(p: Promise<T>) => Promise<T>
     runs: boolean
   }
 
-  /** one unit through the chain: exactly one emit */
+  /** one unit through the chain: exactly one emit. Every translator is sent it with each word tied to a reference that
+   *  abbreviates the item's name written as that name (names.ts), its row's sentences given back in the unit's projection */
   async function settle(u: UnitIn, i: number, c: Call): Promise<void> {
     let r: Result
     try {
-      r = await outcomeOf(u, i, c)
+      // (a group that cuts a word offered to none, words.ts: the one place it is decided, before any wire or reading)
+      const whole = wholeWordsOf(u)
+      const w = whole?.unit ?? u
+      const named = namedOf(w)
+      r = named ? named.back(await outcomeOf(named.unit, i, c)) : await outcomeOf(w, i, c)
+      if (whole) r = whole.back(r)
     } catch {
       // (a fault of the chain's own: the unit is told unavailable, never a throw to the host, hard rule 3)
       r = { id: u.id, ok: false, why: { kind: 'unavailable' } }
@@ -686,11 +801,18 @@ export function chainOf(ports: Ports = {}): Chain {
 
   async function outcomeOf(u: UnitIn, i: number, c: Call): Promise<Result> {
     if (!hasLetter(u)) return { id: u.id, ok: true, content: asOut(u.content), by: 'self' }
+    // (what TeX sets after the unit's text: every translator asked for the unit without it, put back after the translation)
+    const tail = tailOf(u)
+    if (tail) {
+      const r = await outcomeOf(tail.unit, i, c)
+      return r.ok ? { ...r, content: [...r.content, ...tail.after] } : r
+    }
     for (const s of c.skipped)
       c.note({ kind: 'passed', by: s.by, id: u.id, why: { kind: 'unconfigured', code: s.code } })
     if (!c.served.length)
       return { id: u.id, ok: false, why: { kind: 'unconfigured', code: c.offCodes[0] ?? 'no-language' } }
-    // every translator's wire and key, read from the store at once
+    // every translator's wire and key, and a markers-wire translator's references' (groups.ts referencesOf), read from the
+    // store at once
     const wires = c.served.map((t) => {
       try {
         const wire = t.write(u, c.target)
@@ -699,14 +821,26 @@ export function chainOf(ports: Ports = {}): Chain {
         return null
       }
     })
-    const stored = await c.reader(wires.flatMap((w) => (w ? [w.key] : [])))
+    const groups = c.served.some((t) => t.wire === 'markers') ? referencesOf(u) : []
+    const refWires = c.served.map((t) =>
+      t.wire !== 'markers'
+        ? []
+        : groups.flatMap((g) => {
+            try {
+              const wire = t.write(g.unit, c.target)
+              return [{ g, wire, key: keyOf(t, c.target, wire, c.context) }]
+            } catch {
+              return []
+            }
+          }),
+    )
+    const keys = [...wires.flatMap((w) => (w ? [w.key] : [])), ...refWires.flat().map((r) => r.key)]
+    const stored = await c.reader(keys)
     const hit = new Map<string, string>()
-    wires
-      .flatMap((w) => (w ? [w.key] : []))
-      .forEach((k, j) => {
-        const v = stored[j]
-        if (typeof v === 'string') hit.set(k, v)
-      })
+    keys.forEach((k, j) => {
+      const v = stored[j]
+      if (typeof v === 'string') hit.set(k, v)
+    })
     let refused = false
     let unavailable: number | null = null
     let off: UnconfiguredCode | null = null
@@ -727,6 +861,57 @@ export function chainOf(ports: Ports = {}): Chain {
         passed({ kind: 'unconfigured', code: offNow })
         continue
       }
+      const w = { seq: c.seq, index: i, last, note: c.note }
+      // the references of its phrase groups (a markers-wire translator's alone): each stored, else asked in the unit's batch
+      // (started right before the unit is asked, in the same turn), read as any reply is; one that fails places nothing. The
+      // unit's reply is stored as it came, whatever they give. One its reply makes needless is owned by the call (c.owned),
+      // which cancels it at its end, or stores its answer if it came in time
+      const refs = refWires[k] ?? []
+      let asked: Map<string, Promise<string | null>> | null = null
+      const refText = (r: (typeof refs)[number], raw: string): string | null => {
+        try {
+          return referenceText(r.g.unit, t.read(r.g.unit, raw))
+        } catch {
+          return null
+        }
+      }
+      const startRefs = () => {
+        if (asked) return asked
+        asked = new Map()
+        for (const r of refs) {
+          const got = hit.get(r.key)
+          asked.set(
+            r.g.id,
+            got !== undefined
+              ? Promise.resolve(refText(r, got))
+              : c.owned(
+                  c.ask(t, r.key, r.wire, false, w).then((a) => {
+                    const s = 'raw' in a ? refText(r, a.raw) : null
+                    if (s !== null && 'raw' in a) c.write(r.key, a.raw)
+                    return s
+                  }),
+                ),
+          )
+        }
+        return asked
+      }
+      /** the reply's content with each phrase group it did not bring back placed by its reference (groups.ts) */
+      const placed = async (content: OutPiece[]): Promise<OutPiece[]> => {
+        const ids = new Set(spanIdsOf(content))
+        const missing = refs.filter((r) => !ids.has(r.g.id))
+        if (!missing.length) return content
+        try {
+          const all = startRefs()
+          const texts = new Map<string, string>()
+          for (const r of missing) {
+            const s = await all.get(r.g.id)
+            if (s) texts.set(r.g.id, s)
+          }
+          return placeReferences(u, content, texts, c.target)
+        } catch {
+          return content
+        }
+      }
       // a stored reply, judged again as a fresh one is
       const raw = hit.get(wk.key)
       if (raw !== undefined) {
@@ -735,7 +920,7 @@ export function chainOf(ports: Ports = {}): Chain {
           return {
             id: u.id,
             ok: true,
-            content: r.content,
+            content: await placed(r.content),
             by: t.identity,
             ...(r.sentences ? { sentences: r.sentences } : {}),
           }
@@ -752,21 +937,25 @@ export function chainOf(ports: Ports = {}): Chain {
         passed({ kind: 'unavailable', retryAfterMs: ms })
         continue
       }
-      const w = { seq: c.seq, index: i, last, note: c.note }
       let a: Answer = { unavailable: true }
-      // (the chain's last translator waits a cooldown out, LAST_WAITS times at most; any other has been passed over above)
-      for (let waits = 0; ; ) {
+      // (the chain's last translator waits a cooldown out, LAST_WAITS times at most and within patienceOf in all; any other
+      // has been passed over above)
+      for (let waits = 0, waited = 0; ; ) {
         const ms = coolingMs(lane)
         if (last && ms > 0) {
-          if (waits >= LAST_WAITS) {
+          if (waits >= LAST_WAITS || waited + ms > patienceOf(t)) {
             a = { unavailable: true, retryAfterMs: ms, cooling: true }
             break
           }
           waits++
+          waited += ms
           await clock.sleep(ms, c.signal)
           if (c.signal.aborted) return aborted(u)
         }
-        a = await ask(t, c.target, c.context, wk.key, wk.wire, false, w, c.signal)
+        const pending = c.ask(t, wk.key, wk.wire, false, w)
+        // (the references go out in the unit's request: asked in this turn, after it)
+        if (refs.length) startRefs()
+        a = await pending
         if (!(last && 'cooling' in a && a.cooling) || waits >= LAST_WAITS) break
       }
       if ('aborted' in a) return aborted(u)
@@ -777,14 +966,14 @@ export function chainOf(ports: Ports = {}): Chain {
           return {
             id: u.id,
             ok: true,
-            content: r.content,
+            content: await placed(r.content),
             by: t.identity,
             ...(r.sentences ? { sentences: r.sentences } : {}),
           }
         }
         // the re-ask: once, alone, by the same translator
         if (t.limits.reask === 1) {
-          const again = await ask(t, c.target, c.context, wk.key, wk.wire, true, w, c.signal)
+          const again = await c.ask(t, wk.key, wk.wire, true, w)
           if ('aborted' in again) return aborted(u)
           if ('raw' in again) {
             const r2 = judge(u, t, again.raw)
@@ -793,7 +982,7 @@ export function chainOf(ports: Ports = {}): Chain {
               return {
                 id: u.id,
                 ok: true,
-                content: r2.content,
+                content: await placed(r2.content),
                 by: t.identity,
                 ...(r2.sentences ? { sentences: r2.sentences } : {}),
               }
@@ -831,7 +1020,8 @@ export function chainOf(ports: Ports = {}): Chain {
     return { id: u.id, ok: false, why: { kind: 'unconfigured', code: off ?? c.offCodes[0] ?? 'no-language' } }
   }
 
-  /** the runs floor: each stretch through the whole chain as a unit of its own; null when it gives nothing to show */
+  /** the runs floor: each stretch through the whole chain as a unit of its own; null when it gives nothing to show, or not
+   *  every stretch */
   async function runsFloor(u: UnitIn, i: number, c: Call): Promise<Result | null> {
     const { parts, join } = runsOf(u)
     const asked = parts.map((p, k) => (p.send ? k : -1)).filter((k) => k >= 0)
@@ -851,6 +1041,10 @@ export function chainOf(ports: Ports = {}): Chain {
       )
       return { id: u.id, ok: false, why: ms > 0 ? { kind: 'unavailable', retryAfterMs: ms } : { kind: 'unavailable' } }
     }
+    // (every stretch asked or none: a stretch every translator refused would keep its English between translated ones, a unit
+    // half translated, drawn as a translation (PDF-READER §18.21: translating or keeping is fine, garbling never);
+    // refused, the unit stays the original's)
+    if (outs.some((r) => !r.ok)) return null
     const tr: (string | null)[] = parts.map(() => null)
     const by = new Set<string>()
     outs.forEach((r, j) => {
@@ -859,8 +1053,9 @@ export function chainOf(ports: Ports = {}): Chain {
       by.add(r.by)
     })
     if (!by.size) return null
-    const content = join(tr)
-    if (!accept(u, content).ok) return null
+    const joined = join(tr)
+    if (!accept(u, joined).ok) return null
+    const content = placeGroups(u, joined)
     return { id: u.id, ok: true, content, by: by.size === 1 ? `runs:${[...by][0]}` : 'runs:mixed' }
   }
 
@@ -873,10 +1068,43 @@ export function chainOf(ports: Ports = {}): Chain {
       return null
     }
     if (!r || !Array.isArray(r.content) || !accept(u, r.content).ok) return null
-    return r.sentences && u.sentences && validSentences(u, r.content, r.sentences)
-      ? { content: r.content, sentences: r.sentences }
-      : { content: r.content }
+    // (a group the reply did not bring back, around its own text where the translation states it; its projection the same)
+    const content = placeGroups(u, r.content)
+    return r.sentences && u.sentences && validSentences(u, content, r.sentences)
+      ? { content, sentences: r.sentences }
+      : { content }
   }
+}
+
+/** the ids of a content's spans, at any depth, that hold text */
+function spanIdsOf(ps: readonly OutPiece[], out: string[] = []): string[] {
+  for (const p of ps)
+    if (p.t === 'span') {
+      if (p.content.some((q) => q.t === 'text' && /\S/.test(q.s)) || p.content.some((q) => q.t === 'span'))
+        out.push(p.id)
+      spanIdsOf(p.content, out)
+    }
+  return out
+}
+
+/** a unit's elements TeX sets after its text (`after`: the PDF's backref list after a bibliography entry), wherever its
+ *  groups hold them: the unit without them, which is what every translator is asked for, and what goes after its translation,
+ *  each with the white space it states before it. Null for a unit with none. A translator never sees them: on the markers
+ *  wire such a list was a marker Microsoft's Chinese read as a page number, writing the character for "page" before it
+ *  (2610.37668v1, 5 of 41 entries; today's wire, mt.mjs listOf, TRANSLATE_VERSION 7) */
+function tailOf(u: UnitIn): { unit: UnitIn; after: OutPiece[] } | null {
+  const after: OutPiece[] = []
+  const keep = (ps: readonly Piece[]): Piece[] =>
+    ps.flatMap((p): Piece[] => {
+      if (p.t === 'el' && p.after !== undefined) {
+        if (p.after) after.push({ t: 'text', s: p.after })
+        after.push({ t: 'el', id: p.id })
+        return []
+      }
+      return p.t === 'span' ? [{ ...p, content: keep(p.content) }] : [p]
+    })
+  const content = keep(u.content)
+  return after.length ? { unit: { ...u, content }, after } : null
 }
 
 const aborted = (u: UnitIn): Result => ({ id: u.id, ok: false, why: { kind: 'aborted' } })

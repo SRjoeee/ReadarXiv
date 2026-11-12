@@ -26,8 +26,12 @@
 //      group, each TAIL_PUNCT abutting the one before it — the unit's text, as the maker's line takes them (make.mjs lineOf);
 //   5. a label: the glyphs on the start's first glyph's baseline between the previous unit's end mark and the start, the
 //      placeholders' and names' ranges passed over — but the closing punctuation a head sets abutting the unit before it, that
-//      unit's text (amsthm's "(Note).") —; none for a table cell;
-//   6. a babel name `n<occ>`: between `n<occ>.<key>.s` and `.e`;
+//      unit's text (amsthm's "(Note).") —; none for a table cell; a caption's by TeX's call alone: what TeX set from the label
+//      point before its \fnum@<type> (`ka<k>`, layout/marks.mjs) to its start, whatever line it stands on (IEEEtran's "TABLE I"
+//      centred above its text), none where TeX set no such point;
+//   6. a babel name `n<occ>`: between `n<occ>.<key>.s` and `.e`; 6b. the counter TeX set after it on its line, no unit's, its own;
+//      6c. the number TeX set right before it at its line's start, no unit's, TeX's stream setting nothing between, its label
+//      `n<occ>.l` (names.mjs counterBefore: a heading its class numbers itself);
 //   7. images and forms are no unit's text here (a form whose ink is all one group's is wrapped whole by wrap.mjs); an image TeX
 //      painted inside a placeholder's ink (an inline \includegraphics, 2610.21924v1's `\COMPASSicon`) is the placeholder's.
 // A glyph is one group's: a placeholder's or a name's over the text's, the text's over a label's, the first text's over a later.
@@ -48,9 +52,9 @@ import { utf8 } from '../translate/mt.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { UNHIDDEN } from '@readarxiv/engine'
 import { classOf, headsOf, INK_ANY, leadStep } from './marks.mjs'
-import { columnsAt, OWNED, OWNED_HOW, ownedOf, regionsOf, spellOf } from './stream.mjs'
+import { columnsAt, OWNED, OWNED_HOW, ownedOf, READ_ALONE, regionsOf, spellOf } from './stream.mjs'
 import { isLabelForm, labelFormOf, labelText } from './label-form.mjs'
-import { counterAfter } from './names.mjs'
+import { counterAfter, counterBefore } from './names.mjs'
 
 export { UNHIDDEN }
 /** a label's form, the paper's theorem names beside the standard ones: layout/label-form.mjs */
@@ -66,6 +70,8 @@ export const OWN_WORK = 20_000_000
 export const SPELL_LIST_MAX = 64
 
 const START = /^([th]?)(\d+)s$/
+/** the point the marked compile sets before a caption's label, \\fnum@<type>, where TeX sets it (layout/marks.mjs) */
+const LABEL_POINT = /^ka\d+$/
 const END = /^([th]?)(\d+)e$/
 /** a rule TeX paints on a line of a unit's text (MR 2b) is no thicker than this share of the line's size: its rules are a
  *  default rule's 0.4 pt (a twentieth of an 8 pt line, a sixtieth of a 24 pt one); a letter's ink, an icon's, a logo's parts
@@ -295,6 +301,11 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     return 0
   }
   // ---- the labels (MR 5): before the placeholders, so that a placeholder's ink is never a label's
+  // (a unit whose call the marked compile states, an author's (latex-front.mjs \axtcall: the point `<i>c` before the command or
+  // the \and that opens its block): its lead is what TeX set between that point and its start, its label whatever its form but a
+  // word, and what stands before the point is the author's before, its trail (locate). Walked back to the end mark before, ICML's
+  // marks after a name were the next name's label, 2611.03953v2's "12" before "Jiacheng Lu")
+  const stated = new Set()
   for (const [id, { s }] of textOf) {
     // (a table cell, its start mark `t<id>s`, carries no label: what stands before it on its line is another cell's, a number an
     // unmarked cell's)
@@ -306,7 +317,10 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     const lead = { glyphs: [] }
     let g = S.glyph - 1
     work += S.glyph + q
-    const glyphAt = i => { if (R.glyph[i] !== r || gOwn[p - 1][i] !== null) return; const G = pg.glyphs[i]; if (Math.abs(G.y - F.y) < 0.5 * Math.max(G.size, F.size)) lead.glyphs.push([p, i]) }
+    // (a caption's label is TeX's call's, from its label point on, on any line; no baseline is read for it)
+    const caption = units?.[id]?.kind === 'caption'
+    let called = false
+    const glyphAt = i => { if (R.glyph[i] !== r || gOwn[p - 1][i] !== null) return; const G = pg.glyphs[i]; if (caption || Math.abs(G.y - F.y) < 0.5 * Math.max(G.size, F.size)) lead.glyphs.push([p, i]) }
     let qq = q - 1
     // (the placeholders the walk passed over, each its unit and the glyphs between its points: not yet claimed, this pass
     // running before the placeholders')
@@ -315,6 +329,8 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       const X = pg.points[qq]
       for (; g >= X.glyph; g--) glyphAt(g)
       if (END.test(X.name)) break
+      if (caption && LABEL_POINT.test(X.name)) { called = true; break }
+      if (X.name === `${id}c`) { stated.add(id); break }
       // (a paper's macro at the unit's head, its point \\axthpk's (marks.mjs layoutMarking): the glyphs between it and the start,
       // or the next such point, are that piece's ink, and the label is what stands before it)
       if (headOpen(X.name, id)) { if (lead.glyphs.length) claim({ glyphs: lead.glyphs.reverse() }, `u${id}.p`, 'p'); lead.glyphs = []; continue }
@@ -326,7 +342,8 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       // (a babel name passed over: what stands between it and the start is the head's joint, amsthm's "." after "Proof")
       if (o && nm) afterName.add(id)
     }
-    if (qq < 0) for (; g >= 0; g--) glyphAt(g)
+    if (qq < 0 && !caption) for (; g >= 0; g--) glyphAt(g)
+    if (caption && !called) continue
     if (!lead.glyphs.length) continue
     // a unit that opens with a placeholder of no mark of its own (a paper's macro first in it: \\bert, \\aidehuman): TeX set
     // that placeholder's ink before the start mark, after the label if the unit has one. On a unit's first line nothing but its
@@ -472,11 +489,12 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       const A = list[0], r = at(A)
       if (close.length === 1 && !before(close[0], A) && at(close[0]) === r && (close[0][0] === A[0] || r % 2 === 1)) e = { ...take(A, close[0], r), how: OWNED_HOW.indexOf('closed') }
       else if (close.length === 0) {
-        // an opening alone: to the next point in its region (a bracket's and a name's passed over)
+        // an opening alone: to the next point in its region (a bracket's, a name's and a point another reader reads alone passed
+        // over: stream.mjs READ_ALONE)
         let B = null
         for (let p = A[0]; p <= P && !B; p++) {
           const pts = pages[p - 1].points
-          for (let q = p === A[0] ? A[1] + 1 : 0; q < pts.length; q++) if (!BRACKET.test(pts[q].name) && regions[p - 1].at[q] === r) { B = [p, q]; break }
+          for (let q = p === A[0] ? A[1] + 1 : 0; q < pts.length; q++) if (!BRACKET.test(pts[q].name) && !READ_ALONE.test(pts[q].name) && regions[p - 1].at[q] === r) { B = [p, q]; break }
           if (r % 2 === 0) break
         }
         if (B) e = take(A, B, r)
@@ -603,6 +621,24 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     }
     return false
   }
+  /** whether a unit's lead is a mark TeX set right before its first word: a script (each glyph smaller than the word's first and
+   *  off its baseline) of no letter, glued to that glyph (no word's gap between: a fifth of an em, the label's word end above)
+   *  and a word's gap or more after what stands before it on its line. TeX set it as the word's, whatever its symbol: Meta FAIR's
+   *  \\contributionformat sets `$^{\\dagger}$Corresponding author` after the list's ", " (2604.14228v3 p1), the "†" no label's
+   *  form, left the original's ink 33 pt after the note's translation. A mark glued to the word before, a space before this one
+   *  (a \\thanks mark after a name), is none of this one's */
+  function gluedMark(lead, id) {
+    const t = textOf.get(id)
+    if (!t?.s) return false
+    const [p] = t.s, pg = pages[p - 1], F = pg.glyphs[pt(t.s).glyph]
+    if (!F || lead.some(([q]) => q !== p)) return false
+    const G = lead.map(([, i]) => pg.glyphs[i])
+    if (/\p{L}/u.test(labelText(G.map(g => g.u ?? '').join(''))) || !G.every(g => g.size < F.size && Math.abs(g.y - F.y) > 0.01)) return false
+    const gap = (a, b) => b.x0 - a.x1 >= 0.2 * Math.max(a.size, b.size)
+    if (gap(G.at(-1), F)) return false
+    const before = lead[0][1] > 0 ? pg.glyphs[lead[0][1] - 1] : null
+    return !before || !/\S/.test(before.u ?? '') || Math.abs(before.y - F.y) >= 0.5 * Math.max(before.size, F.size) || gap(before, G[0])
+  }
   for (const [id, u] of unitOf) {
     if (u.unhidden) continue
     // (a unit the marks name and the units do not: no source to spell it against, so the original's)
@@ -615,7 +651,10 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       // the label is no label: its ink left the original's where it stands apart from the text's, else the unit the original
       // (a head's joint after the babel name that leads the unit, its punctuation alone, is a label: the name's lead draws it,
       // run.mjs jointOf; IEEEtran's "—" after "Abstract", amsthm's "." after "Proof")
-      if (!isLabelForm(chars, units?.[id]?.bracketed === true, form) && !(afterName.has(id) && JOINT.test(labelText(chars)))) {
+      // (a lead a call states, set after the author's call, is the author's label whatever its form — a "†" before the name —, but
+      // a word the class sets there, no label's form, llncs' and IJCAI's " and " before the last author: left the original's ink
+      // where it stands and so to the ink units, translated as before, never the author's label, which kept it English)
+      if (!isLabelForm(chars, units?.[id]?.bracketed === true, form) && !(afterName.has(id) && JOINT.test(labelText(chars))) && !(stated.has(id) && !/\p{L}/u.test(labelText(chars))) && !gluedMark(lead, id)) {
         if (!apart(lead, id)) { u.unhidden = 'spell'; spell.push(id); continue }
         for (const [p, i] of lead) gOwn[p - 1][i] = null
         u.groups.delete(`u${id}.l`)
@@ -759,6 +798,25 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     next.sort((a, b) => G[a].x0 - G[b].x0 || a - b)
     const k = counterAfter(G[last].x1, size, next.map(g => G[g]))
     if (k && next.slice(0, k).every(g => O[g] === null && colOf(G[g].x0, G[g].x1) === col)) for (const g of next.slice(0, k)) O[g] = group
+  }
+  // ---- each name's number (MR 6c): the number TeX set right before it at its line's start (a heading its class numbers itself:
+  // spconf.sty's thebibliography sets \section{References}, "9." and \hskip 0.6em before the word, 2610.20967v1), no unit's, in
+  // the name's column, TeX's stream setting nothing between it and the name's first glyph: the name's label, `n<occ>.l`, so that
+  // it moves with the name's word and the line TeX centred is laid whole (names.mjs counterBefore). Left the page's, the line
+  // was read off the word alone, justified, and its translation set from the word's start after the number that stayed
+  for (const [group, p] of named) {
+    const G = pages[p - 1].glyphs, O = gOwn[p - 1], colOf = columnsAt(pages[p - 1])
+    let first = -1, x1 = -Infinity
+    for (let g = 0; g < G.length; g++) if (O[g] === group) { if (first < 0) first = g; x1 = Math.max(x1, G[g].x1) }
+    if (first < 0) continue
+    const col = colOf(G[first].x0, x1)
+    const y = G[first].y, size = G[first].size, before = []
+    for (let g = 0; g < G.length; g++) if (O[g] !== group && /\S/.test(G[g].u ?? '') && Math.abs(G[g].y - y) < 0.25 * Math.max(G[g].size, size, 5) && (G[g].x0 + G[g].x1) / 2 < G[first].x0 && colOf(G[g].x0, G[g].x1) === col) before.push(g)
+    before.sort((a, b) => G[a].x0 - G[b].x0 || a - b)
+    const k = counterBefore(G[first].x0, size, before.map(g => G[g]))
+    // (TeX set the number right before the name: its glyphs the stream's last before the name's first)
+    const stream = [...before].sort((a, b) => a - b)
+    if (k && stream.every((g, q) => O[g] === null && g === first - stream.length + q)) for (const g of before) O[g] = `${group}.l`
   }
   return { glyphs: gOwn, boxes: bOwn, units: unitOf, leads, stats: { units: unitOf.size, unhidden, spell: spell.slice(0, SPELL_LIST_MAX), labelKept, leaks: { count: leaks.length, units: leaks.slice(0, SPELL_LIST_MAX) } } }
 }

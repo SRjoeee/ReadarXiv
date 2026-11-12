@@ -13,8 +13,8 @@ import { join } from 'node:path'
 import type { Layout } from '../../src/fit/types.ts'
 import { displayLines } from '../../src/emit/display.ts'
 import type { PassUnit } from '../../src/shared/fill-pass.ts'
-import { laysOf, passesOf } from './pass.ts'
-import { firstDifference, LAB, ledger } from './tap.ts'
+import { framed, laysOf, passesOf, trackedCells } from './pass.ts'
+import { firstDifference, flooredIn, LAB, lastLineIn, ledger, roomUnderIn } from './tap.ts'
 import { CACHE, paperOf } from './today.ts'
 
 /** the harness's CSS pixels a PDF unit (reader-entry.mjs SCALE; dpr 1: its audit's device pixels too) */
@@ -43,13 +43,24 @@ export function viewport(view: readonly number[], scale = SCALE): (x: number, y:
   return (x, y) => [x * m[0]! + y * m[2]! + m[4]!, x * m[1]! + y * m[3]! + m[5]!]
 }
 
-/** the baseline's reader-dump unit (FORMAT.md §4), as far as the typesetter decides it */
+/** the baseline's reader-dump unit (FORMAT.md §4), as far as the typesetter decides it; and `sizes`, the size each of its lines
+ *  is drawn at, where one is drawn at another than `size` (a unit laid a run at a time, fit/runs.ts: `size` is its layout's
+ *  own, its first run's, and each line is drawn at its run's, D.display's segOf). Not the baseline's: its harness states one
+ *  size a unit, so a comparison with it reads the four fields alone (`baselineOf`); a unit's two lays (I6) read it whole */
 export type DumpUnit = {
   size: number | null
   leading: number | null
   lines: { page: number; x0: number; x1: number; baseline: number; text: string | null }[]
   elements?: { k: number | null; page: number; x0: number; x1: number; top: number; bottom: number }[]
+  sizes?: number[]
 }
+/** a dumped unit as the baseline's reader dump states one (FORMAT.md §4): its size, leading, lines and elements */
+export const baselineOf = (d: DumpUnit): DumpUnit => ({
+  size: d.size,
+  leading: d.leading,
+  lines: d.lines,
+  ...(d.elements ? { elements: d.elements } : {}),
+})
 
 /**
  * A laid unit as the baseline's harness reads today's drawing of it: its record's size, leading and lines, each line's text
@@ -124,11 +135,15 @@ export function dumpUnit(p: Pick<PassUnit, 'layout'>, view: (page: number) => re
     if (j >= 0) used.add(j)
     return { page, x0: r2(l.x0), x1: r2(l.x0 + (l.used ?? 0)), baseline, text: j >= 0 ? svg[j]!.text : null }
   })
+  // (each line at the size its run is drawn at: displayLines' segOf, the line's own fit where the unit was laid in runs)
+  const size = L.f ? r2(L.f) : null
+  const sizes = L.lines.map((l) => r2(l.seg?.f ?? L.f))
   return {
-    size: L.f ? r2(L.f) : null,
+    size,
     leading: L.state?.lead ?? null,
     lines,
     ...(elements.length ? { elements } : {}),
+    ...(size !== null && sizes.some((s) => s !== size) ? { sizes } : {}),
   }
 }
 
@@ -196,14 +211,24 @@ export type DisplayResult = {
   /** the dump's laid units the chain did not lay */
   unlaid: number[]
   chains: string[]
+  /** the dump's units whose frames the port fills each at its own leading (pass.ts framed) that it lays otherwise; the cells
+   *  today's fill letter-spaced, laid untracked by the ruling of 2026-11-08 (pass.ts trackedCells), whose size and lines' text
+   *  are today's; and those on a page where today's held a paragraph's gap to the next one's leading that it lays otherwise
+   *  (tap.ts flooredIn: the gap ruling of 2026-11-08); and those on a page of a unit a run of which the room ruling lays
+   *  otherwise that it lays otherwise (tap.ts roomUnderIn); and those on a page of a unit whose fill leadings option (i) moves
+   *  (pass.ts laysOf `lead`: the owner's of 2026-11-10) that it lays otherwise; and those whose line before a run's boundary
+   *  today's run past set as any full line, which the ruling of 2026-11-13 sets as a last line (tap.ts lastLineIn) */
+  ruled: { frames: number; cells: number; gap: number; room: number; lead: number; last: number }
 }
 
 /** D.display replayed on every laid unit of a pair's reader dump */
 export function displayReplay(pair: string): DisplayResult {
-  const { lays, differ: chains } = laysOf(pair)
-  passesOf(pair, lays)
+  const { lays, differ: chains, lead } = laysOf(pair)
+  passesOf(pair, lays, lead.moved)
   const off = pieceCrops(pair, lays)
   const v = viewsOf(paperOf(pair))
+  // (a cell today's fill letter-spaced, untracked by the ruling of 2026-11-08: its lines' text today's, their extents not)
+  const untracked = trackedCells(pair)
   const out: DisplayResult = {
     units: 0,
     equal: 0,
@@ -212,7 +237,11 @@ export function displayReplay(pair: string): DisplayResult {
     differ: [],
     unlaid: [],
     chains: [...chains, ...off],
+    ruled: { frames: 0, cells: 0, gap: 0, room: 0, lead: 0, last: 0 },
   }
+  const gap = flooredIn(pair)
+  const room = roomUnderIn(pair)
+  const last = lastLineIn(pair)
   for (const u of readerDump(pair).units) {
     out.units++
     const p = lays.get(u.ord)
@@ -222,8 +251,27 @@ export function displayReplay(pair: string): DisplayResult {
     }
     const mine = dumpUnit(p, (pg) => v.get(pg))
     const want = { size: u.size, leading: u.leading, lines: u.lines, ...(u.elements ? { elements: u.elements } : {}) }
-    const d = firstDifference(mine, want, '')
-    if (d) out.differ.push({ ord: u.ord, d })
+    if (untracked.has(u.ord)) {
+      const d = firstDifference(
+        { size: mine.size, texts: mine.lines.map((l) => l.text) },
+        { size: u.size, texts: u.lines.map((l) => l.text) },
+        '',
+      )
+      if (d && gap.units.has(u.ord)) out.ruled.gap++
+      else if (d && room.units.has(u.ord)) out.ruled.room++
+      else if (d && lead.units.has(u.ord)) out.ruled.lead++
+      else if (d && last.has(u.ord)) out.ruled.last++
+      else if (d) out.differ.push({ ord: u.ord, d })
+      else out.ruled.cells++
+      continue
+    }
+    const d = firstDifference(baselineOf(mine), want, '')
+    if (d && framed(p)) out.ruled.frames++
+    else if (d && gap.units.has(u.ord)) out.ruled.gap++
+    else if (d && room.units.has(u.ord)) out.ruled.room++
+    else if (d && lead.units.has(u.ord)) out.ruled.lead++
+    else if (d && last.has(u.ord)) out.ruled.last++
+    else if (d) out.differ.push({ ord: u.ord, d })
     else {
       out.equal++
       out.lines += u.lines.length

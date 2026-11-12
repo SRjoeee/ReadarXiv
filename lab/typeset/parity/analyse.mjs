@@ -9,16 +9,20 @@
 //             original's fill is a colour, so the mean tells the weight and the antialiasing a face is drawn with. The
 //             original's own (`originalText`): arXiv's page over the original lines of the units either side lays
 //             (`textBoxes`), the ink the translation stands for.
-//   diff      today's pane against v2's: the pixels whose luminance differs by DIFF_MIN or more; and each pane against arXiv's
-//             page outside every unit's box, where each should be arXiv's page ink for ink (`outside`: v2's, `outsideToday`:
-//             today's, whose composed page may be our compile's on a delta's replaced page): a pixel counted where no pixel
-//             within one device pixel of it, in either image, matches it (ink, not its sub-pixel phase).
+//   diff      today's pane against v2's: the pixels whose luminance differs by DIFF_MIN or more. Each pane against arXiv's page
+//             outside every unit's box (`outside`, `outsideToday`) is read by `strays` below, once every page of the pair is
+//             drawn.
 //   rules     the vertical rules of arXiv's page, read off its pixels (the bundle's rules list the horizontal ones alone): a
 //             straight run of dark pixels RULE_LONG points long or more, at most RULE_THICK points wide, light on both sides
 //             (a glyph's stem is shorter than a line's height; a table's column rule spans a row at least).
+//   fidelity  each side's drawing against arXiv's page itself (pixels.mjs, on globalThis.parityPixels: the lab's page holds it):
+//             its text drawn over other ink (Tt/Vt against Tc/Vc, its drawing without its text, per drawn group), each drawn
+//             group's darkness and each original unit's (and whether its ink is black), the original's glyphs it shows in
+//             part inside its translated units' regions (`regions`, its moved crops' places `moved` aside), and how much of
+//             each of its elements' ink (`elements`) it shows in place.
 // Returns the numbers and the sheet's images (WebP, half the device resolution): the original, today's, v2's, and the
 // difference (the original faint, v2's ink alone red, today's alone blue).
-export async function analyse({ A, T, Tt, V, Vt, view, boxes, textBoxes, scale }) {
+export async function analyse({ A, T, Tt, Tc, V, Vt, Vc, view, boxes, textBoxes, figBoxes = [], groups = null, origs = [], regions = null, moved = null, elements = null, scale }) {
   const DARK_MIN = 0.1
   const DIFF_MIN = 0.25
   const RULE_LONG = 12
@@ -51,6 +55,7 @@ export async function analyse({ A, T, Tt, V, Vt, view, boxes, textBoxes, scale }
     return { mean: n ? Math.round((sum / n) * 10000) / 10000 : null, pixels: n }
   }
   const [pa, pt, ptt, pv, pvt] = [await pixels(A), await pixels(T), await pixels(Tt), await pixels(V), await pixels(Vt)]
+  const [ptc, pvc] = [Tc ? await pixels(Tc) : null, Vc ? await pixels(Vc) : null]
   // (the units' boxes as a mask of device pixels)
   const maskOf = (list) => {
     const m = new Uint8Array(W * H)
@@ -64,41 +69,20 @@ export async function analyse({ A, T, Tt, V, Vt, view, boxes, textBoxes, scale }
     return m
   }
   const inside = maskOf(boxes)
-  // (a pixel off arXiv's page only where no pixel of either within one device pixel matches it: the same ink drawn a
-  // fraction of a pixel elsewhere, as PDF.js's page view does in a box it floors to whole pixels, is no difference of ink)
-  const near = (d, p) => {
-    const x = p % W,
-      y = (p / W) | 0
-    const own = lum(d, p * 4),
-      orig = lum(pa.data, p * 4)
-    for (let dy = -1; dy <= 1; dy++)
-      for (let dx = -1; dx <= 1; dx++) {
-        const X = x + dx,
-          Y = y + dy
-        if (X < 0 || Y < 0 || X >= W || Y >= H) continue
-        const q = (Y * W + X) * 4
-        if (Math.abs(own - lum(pa.data, q)) < DIFF_MIN || Math.abs(orig - lum(d, q)) < DIFF_MIN) return true
-      }
-    return false
-  }
-  let diff = 0,
-    outside = 0,
-    outsideToday = 0
+  const fig = maskOf(figBoxes)
+  const notFig = fig.map((v) => (v ? 0 : 1))
+  let diff = 0
   const dc = new OffscreenCanvas(W, H)
   const dx = dc.getContext('2d')
   const img = dx.createImageData(W, H)
   const o = img.data
-  for (let i = 0, p = 0; i < pa.data.length; i += 4, p++) {
+  for (let i = 0; i < pa.data.length; i += 4) {
     const a = lum(pa.data, i),
       t = lum(pt.data, i),
       v = lum(pv.data, i)
     const faint = 255 - Math.round((1 - a) * 60)
     o[i] = o[i + 1] = o[i + 2] = faint
     o[i + 3] = 255
-    if (!inside[p]) {
-      if (Math.abs(v - a) >= DIFF_MIN && !near(pv.data, p)) outside++
-      if (Math.abs(t - a) >= DIFF_MIN && !near(pt.data, p)) outsideToday++
-    }
     if (Math.abs(t - v) >= DIFF_MIN) {
       diff++
       if (v < t) {
@@ -153,6 +137,42 @@ export async function analyse({ A, T, Tt, V, Vt, view, boxes, textBoxes, scale }
     } else rules.push([...s])
   }
   const r2 = (v) => Math.round(v * 100) / 100
+  // (the drawing against arXiv's page itself, each side's: pixels.mjs)
+  const P = globalThis.parityPixels
+  let fidelity = null
+  if (P && ptc && pvc && groups) {
+    const sides = { today: { t: ptt.data, c: ptc.data }, v2: { t: pvt.data, c: pvc.data } }
+    fidelity = { over: {}, dark: {}, orig: {}, parts: {}, shown: {} }
+    for (const [side, { t, c }] of Object.entries(sides)) {
+      const over = {},
+        dk = {}
+      for (const g of groups[side] ?? []) {
+        const px = P.pixelsOf(g.boxes, view, scale, W, H)
+        const n = P.overOf(t, c, px)
+        if (n) over[g.id] = n
+        dk[g.id] = P.darkOf(t, px)
+      }
+      fidelity.over[side] = over
+      fidelity.dark[side] = dk
+      // (the original's glyphs shown in part inside the side's translated units' original lines: its moved crops' places aside)
+      const region = P.maskOf(regions?.[side] ?? [], view, scale, W, H)
+      const skip = P.maskOf(moved?.[side] ?? [], view, scale, W, H)
+      fidelity.parts[side] = P.partsOf(pa.data, c, region, skip, W, H).map((x) => ({
+        box: [r2(view[0] + x.box[0] / scale), r2(view[3] - x.box[3] / scale), r2(view[0] + x.box[2] / scale), r2(view[3] - x.box[1] / scale)],
+        size: x.size,
+        shown: x.shown,
+      }))
+      const sh = {}
+      for (const e of elements?.[side] ?? []) sh[e.id] = P.shownOf(pa.data, c, P.pixelsOf(e.boxes, view, scale, W, H), W, H)
+      fidelity.shown[side] = sh
+    }
+    for (const o of origs) {
+      const px = P.pixelsOf(o.boxes, view, scale, W, H)
+      let lo = 1
+      for (const p of px) lo = Math.min(lo, lum(pa.data, p * 4))
+      fidelity.orig[o.id] = { ...P.darkOf(pa.data, px), least: r2(lo) }
+    }
+  }
   const vrules = rules.map(([a, r0, b, r1]) => [r2(view[0] + a / scale), r2(view[3] - (r1 + 1) / scale), r2(view[0] + (b + 1) / scale), r2(view[3] - r0 / scale)])
   const half = async (canvas) => {
     const c = new OffscreenCanvas(Math.round(W / 2), Math.round(H / 2))
@@ -168,9 +188,60 @@ export async function analyse({ A, T, Tt, V, Vt, view, boxes, textBoxes, scale }
   return {
     size: [W, H],
     sizes: { today: pt.size, v2: pv.size },
-    darkness: { original: darkness(pa.data), originalText: darkness(pa.data, maskOf(textBoxes)), today: darkness(ptt.data), v2: darkness(pvt.data) },
+    // (each side's translated text outside the figure texts, which its text-alone shot draws: the page's body text)
+    darkness: { original: darkness(pa.data), originalText: darkness(pa.data, maskOf(textBoxes)), today: darkness(ptt.data, notFig), v2: darkness(pvt.data, notFig) },
+    fidelity,
     rules: vrules,
-    diff: { pixels: diff, share: Math.round((diff / (W * H)) * 1e6) / 1e6, outside, outsideToday, insideShare: Math.round((inside.reduce((n, v) => n + v, 0) / (W * H)) * 1e4) / 1e4 },
+    diff: { pixels: diff, share: Math.round((diff / (W * H)) * 1e6) / 1e6, insideShare: Math.round((inside.reduce((n, v) => n + v, 0) / (W * H)) * 1e4) / 1e4 },
     images: { a: await half(pa.canvas), t: await half(pt.canvas), v: await half(pv.canvas), d: await half(dc) },
   }
+}
+
+/**
+ * Each pane against arXiv's page outside every unit's box, where each should be arXiv's page ink for ink: `outside` v2's,
+ * `outsideToday` today's (whose composed page may be our compile's on a delta's replaced page), the `pixels` measure (pixels.mjs
+ * strayOf: a pixel counted where no pixel within one device pixel of it, in either image, matches it: ink, not its sub-pixel
+ * phase). Where a side moved an element's ink from (`vacated`, by side: its crops' sources on this page, whichever page each is
+ * drawn on, fidelity.mjs vacatedOf; an end mark set at the end of its translation), its place shown blank is the move, and the
+ * element's ink still shown there counts. render.mjs hands it to the lab's page as analyse, once every page of the pair is
+ * drawn: A, T and V the page's shots (PNG, base64), each pane drawn at its own size from the corner of a canvas of A's size
+ */
+export async function strays({ A, T, V, view, boxes, vacated, scale }) {
+  const decode = async (b64) => createImageBitmap(await (await fetch(`data:image/png;base64,${b64}`)).blob())
+  const bmA = await decode(A)
+  const W = bmA.width,
+    H = bmA.height
+  const pixels = async (bm) => {
+    const c = new OffscreenCanvas(W, H)
+    const x = c.getContext('2d', { willReadFrequently: true })
+    x.fillStyle = '#fff'
+    x.fillRect(0, 0, W, H)
+    x.drawImage(bm, 0, 0)
+    return x.getImageData(0, 0, W, H).data
+  }
+  const P = globalThis.parityPixels
+  const [a, t, v] = [await pixels(bmA), await pixels(await decode(T)), await pixels(await decode(V))]
+  const inside = P.maskOf(boxes, view, scale, W, H)
+  return {
+    outside: P.strayOf(a, v, inside, P.maskOf(vacated.v2, view, scale, W, H), W, H),
+    outsideToday: P.strayOf(a, t, inside, P.maskOf(vacated.today, view, scale, W, H), W, H),
+  }
+}
+
+/** the boxes of the page's units (analyse's `boxes`), PDF units [x0, y0, x1, y1]: each unit's lines on A (its original ink) and
+ *  its label's ink there (a label drawn anew stands at the label's place, the unit's own: TeX set it before the unit's first
+ *  line, which begins after it), and each line either side drew; a pixel that differs outside all of them differs where both
+ *  should show arXiv's page. Read in Node (render.mjs) from the page's record and v2.mjs's file of the pair */
+export function boxesOf(rec, v2, n) {
+  const out = []
+  for (const m of v2.facts[n]?.members ?? []) {
+    for (const l of m.lines) if (l[0] === n) out.push([l[2] - 1, l[6] - 1, l[3] + 1, l[5] + 1])
+    const lb = m.label?.ink
+    if (lb?.[0] === n) out.push([lb[1] - 1, lb[2] - 1, lb[3] + 1, lb[4] + 1])
+  }
+  for (const u of [...(rec.today?.units ?? []), ...(rec.today?.figures ?? []), ...(rec.today?.names ?? []), ...(rec.v2?.units ?? [])])
+    for (const l of u.lines)
+      if (l.x0 !== null) out.push(l.rot ? [l.x0 - 1, l.y0 - 1, l.x1 + 1, l.y1 + 1] : [l.x0 - 1, l.y - 0.3 * l.size, l.x1 + 1, l.y + 1.0 * l.size])
+  for (const c of [...(rec.today?.crops ?? []), ...(rec.v2?.crops ?? [])]) out.push([c[1] - 1, c[2] - 1, c[3] + 1, c[4] + 1])
+  return out
 }

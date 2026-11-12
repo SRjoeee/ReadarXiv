@@ -10,7 +10,7 @@ import { isPermanentErrorKind, type TranslateContext } from '@/providers/types'
 import { PlaceholderIntegrityError, rehydrate, staleSlot, type WireFormat, type WireSpan } from '@/core/protector'
 import { alignmentOf, wholeAlignment, wireOfContent } from '@/core/protector/units'
 import {
-  clearAllPending, enable, markPartial, markStructure, registerSentences, renderFailed, renderPending, renderTable, renderText, setState, type Look, type Mode,
+  clearAllPending, enable, markPartial, markStructure, registerSentences, renderFailed, renderPending, renderTable, renderText, setState, stateOf, type Look, type Mode,
 } from '@/core/renderer'
 import { type CallBase, translateCall } from '@/core/run/call'
 import { createRunLedger } from '@/core/run/ledger'
@@ -169,8 +169,13 @@ export function startTranslation(options: RunOptions): TranslationRun {
   markStructure(doc)
   // The states too, in the same go: a thousand attribute writes cost a millisecond or two. They used to be written in
   // slices with the scheduler started after the last, which is what put its geometry read behind `enable`. Nothing
-  // yields between here and the scheduler's start at the end of this function, so a restore cannot come in between
-  for (const block of blocks) setState(block, 'pending')
+  // yields between here and the scheduler's start at the end of this function, so a restore cannot come in between.
+  // **Only a block no round has marked**: on a restart (another service, language or prompt, DESIGN §8.5) a block still
+  // showing the round before's translation, or its failure, keeps the state that says so until it is asked again —
+  // `renderPending` sets it then, as it takes the old node away. Written over, a translated original lost the mark
+  // translation-only mode hides it by (modes.css), and every block the reader had not reached yet showed its original
+  // beside the old translation
+  for (const block of blocks) if (stateOf(block) === null) setState(block, 'pending')
 
   // The envelope is the session's, the same for the image labels and the title (run/call.ts)
   const base: CallBase = { target: options.target, ...(options.scope ? { scope: options.scope } : {}), ...(options.context ? { context: options.context } : {}) }

@@ -25,6 +25,7 @@ export const stateOf = (st: FitState | Raw | null | undefined): Json => {
     ...(s.box ? { box: true } : {}),
     ...(s.next !== undefined ? { next: fin(s.next) } : {}),
     ...(s.fitTrack !== undefined ? { fitTrack: fin(s.fitTrack) } : {}),
+    ...(Array.isArray(s.leads) ? { leads: (s.leads as unknown[]).map(fin) } : {}),
   }
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { bundleUnitsOf } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
-import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
+import { CALL_TEX, LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { classesOn, unitClass, unitShown } from '@/pdf-reader/engine/rules/content-classes.mjs'
 
@@ -57,6 +57,22 @@ describe('an author block\'s names and its places, by the TeX that sets them', (
     // place by its TeX)
     expect(places(open('\\maketitle\nWords.', '\\author{Alice Smith \\\\ Department of Physics}'))).toEqual(['Department of Physics'])
   })
+  it('a command of the paper\'s that ends the paragraph inside an author block ends its row (IJCAI\'s \\affiliations and \\emails, 2611.00342v1)', () => {
+    // (ijcai26.sty, shipped with the paper, defines inside its \@maketitle `\def\affiliations{\egroup\vskip .05in\par\bgroup\rm}`
+    // and \emails alike: no argument, the names' paragraph ended and the places' begun. Read as text inside a row, the second
+    // place ran on through \emails into the e-mail rows, a unit TeX sets as two paragraphs, never located: English whatever the
+    // toggle)
+    const sty = `\\def\\@maketitle{{\\centering{\\LARGE\\@title\\par}{\\def\\affiliations{\\egroup\\vskip 0.05in\\par\\bgroup\\rm}%
+\\def\\emails{\\egroup\\vskip 0.05in\\par\\bgroup\\rm}\\bgroup\\bf\\@author\\egroup}\\par}}`
+    const main = `\\documentclass{article}\n\\usepackage{ijcaitest}\n\\title{A Title}\n\\author{\n  Ann Lee$^1$\n  \\and\n  Bo Wu$^{2}$\\thanks{Corresponding author.}\n  \\affiliations\n  $^1$Hanbat University, Korea\\\\\n  $^2$Korea Institute of Science, Korea\n  \\emails\n  \\{ann, bo\\}@example.com,\\\\\n  bo@example.org\n}\n\\begin{document}\n\\maketitle\nWords of the body.\n\\end{document}\n`
+    const p = openPaper(new Map([['main.tex', enc(main)], ['ijcaitest.sty', enc(sty)]]))
+    expect(names(p)).toEqual(['Ann Lee', 'Bo Wu'])
+    expect(places(p)).toEqual(['Hanbat University, Korea', 'Korea Institute of Science, Korea'])
+    expect(units(p).map(textOf).join('|')).not.toMatch(/example\.(com|org)/)
+    // (one the paper defines otherwise too, with an argument, is no row's end: its every definition must end the paragraph)
+    const other = openPaper(new Map([['main.tex', enc(main)], ['ijcaitest.sty', enc(`${sty}\n\\renewcommand{\\emails}[1]{#1}`)]]))
+    expect(places(other).join('|')).not.toBe('Hanbat University, Korea|Korea Institute of Science, Korea')
+  })
   it('an e-mail whose local part TeX escapes is one placeholder: `\\_` and the words it joins, never text (2608.11884, 2608.29778)', () => {
     const p = open('\\maketitle\nWords.', '\\author{Alice\\thanks{Equal contribution.} \\\\ School of X \\\\ Write to rgzhou@shmtu.edu.cn, goh\\_siong\\_thye@a-star.edu.sg or a\\_b@c.org.}')
     const all = units(p).flatMap(u => u.pieces)
@@ -66,8 +82,11 @@ describe('an author block\'s names and its places, by the TeX that sets them', (
     // (a note that is an escaped address alone is no unit: no word of it is prose)
     const q = open('\\maketitle\nWords.', '\\author{Chao Tang\\thanks{\\href{mailto:tang\\_chao@xtu.edu.cn}{tang\\_chao@xtu.edu.cn}.}}')
     expect(units(q).map(textOf).join('|')).not.toMatch(/tang/)
-    // (a `\_` in a word that is no address stays as it is: its words are text)
-    expect(units(open('Words of snake\\_case here.')).map(textOf).join('|')).toMatch(/snake/)
+    // (a `\_` in a word that is no address joins an identifier, one placeholder of its own, never sent: keepIdentifiers, lane
+    // literal-fixes)
+    const r = units(open('Words of snake\\_case here.'))
+    expect(r.map(textOf).join('|')).not.toMatch(/snake|case/)
+    expect(r.flatMap(u => u.pieces).filter(x => x.t === 'ph').map(x => x.src)).toEqual(['snake\\_case'])
   })
   it('authblk: \\author[n] names, a row of them begun by \\authorcr, \\affil[n] places, a row each', () => {
     const p = open('\\maketitle\nWords.', '\\usepackage{authblk}\n\\author[1]{Alice Smith}\n\\author[2]{Bob Jones \\authorcr Carol White}\n\\affil[1]{University of Somewhere}\n\\affil[2]{Institute of Elsewhere \\\\ A City}')
@@ -115,11 +134,85 @@ describe('an author block\'s names and its places, by the TeX that sets them', (
     expect(names(p)).toEqual(['Alexey Dosovitskiy, Lucas Beyer,', 'Xiaohua Zhai, Thomas Unterthiner,'])
     expect(places(p)).toEqual(['equal technical contribution, equal advising', 'Google Research, Brain Team'])
     expect(units(p).map(textOf).join('|')).not.toMatch(/google\.com/)
-    // (every unit cut there numbered after the others: the body's paragraph keeps its number; a \\centerline outside an author
-    // block one placeholder, as before)
+    // (every unit cut there numbered after the others: the body's paragraph keeps its number, PIPELINE 29's walk reading each row's
+    // box as one placeholder still (latex-front.mjs LINE_BOXES); a \\centerline outside an author block a line of its own,
+    // PDF-READER §18.46)
     expect(units(p).map(u => u.kind)).toEqual(['heading', 'para', 'author', 'author', 'affiliation', 'affiliation'])
     const body = open('Before it.\n\n\\centerline{A centred line of words.}\n\nAfter it.')
-    expect(units(body).map(textOf)).toEqual(['Before it.', 'After it.'])
+    expect(units(body).map(textOf)).toEqual(['Before it.', 'A centred line of words.', 'After it.'])
+  })
+  it('a class\'s own command of LaTeX\'s \\author form whose text its \\maketitle sets in the author block\'s tabular: of the block, names where it opens the tabular (ICASSP\'s spconf.sty \\name, 2610.20967v1)', () => {
+    // (spconf.sty's own definitions: \\name and \\address store their text as LaTeX's \\author does, and \\@maketitle sets both in
+    // one tabular, the names its first row. \\name is no command the role table knows: its names were no unit, an ink unit of the
+    // notes, translated with the author block off, its affiliations' marks set flat in the translation)
+    const sty = [
+      '\\def\\maketitle{\\par\\begingroup\\@maketitle\\endgroup\\@thanks}',
+      '\\def\\@maketitle{\\newpage\\null\\begin{center}{\\large \\bf \\@title\\par}\\vskip 1.5em {\\large \\begin{tabular}[t]{c}\\@name \\\\ \\@address\\end{tabular}\\par}\\end{center}\\par\\vskip 1.5em}',
+      '\\def\\name#1{\\gdef\\@name{{\\em #1}\\\\}}',
+      '\\def\\address#1{\\gdef\\@address{#1}}',
+      '\\def\\toappear#1{\\gdef\\@toappear{#1}}',
+      '\\def\\ps@titlepagestyle{\\def\\@oddfoot{\\@toappear}}',
+    ].join('\n')
+    const paper = (pre: string) => openPaper(new Map([
+      ['main.tex', enc(`\\documentclass{article}\n\\usepackage{spconf}\n\\title{A Title}\n${pre}\n\\begin{document}\n\\maketitle\nWords of the body.\n\\end{document}\n`)],
+      ['spconf.sty', enc(sty)],
+    ]))
+    const p = paper('\\name{Song-Ze Yu$^{1}$, Fang-Duo Tsai$^{1,2}$, Yi-Hsuan Yang$^{1}$}\n\\address{$^1$National Taiwan University $^2$University of California, San Diego}\n\\toappear{To appear in a conference}')
+    expect(names(p)).toEqual(['Song-Ze Yu, Fang-Duo Tsai, Yi-Hsuan Yang'])
+    expect(places(p)).toEqual(['National Taiwan University University of California, San Diego'])
+    // (a unit no engine before cut: numbered after every other, so that no other unit's number moves)
+    expect(units(p).map(u => u.kind)).toEqual(['heading', 'affiliation', 'para', 'author'])
+    // (its affiliations' marks are the unit's elements, set where TeX set them, raised, never its text)
+    const name = units(p).find(u => u.kind === 'author')!
+    expect(name.pieces.filter(x => x.t === 'ph').map(x => x.src)).toEqual(['$^{1}$', '$^{1,2}$', '$^{1}$'])
+    // (marked where the class sets the stored text, as an \\author's are)
+    const tex = new TextDecoder().decode(originalFiles(p, { layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(tex).toMatch(/\\name\{\\leavevmode\\axtmark\{\d+s\}Song-Ze Yu/)
+    // (a stored text the class sets elsewhere, \\toappear's in the foot, is none of the block)
+    expect(units(p).map(textOf).join('|')).not.toMatch(/To appear/)
+    // (a command of the paper's own named the same that stores nothing, a model's name, is no author block)
+    const model = open('\\maketitle\nThe \\name{} model.', '\\newcommand{\\name}{MIDI-REPA}\n\\author{Alice Smith}')
+    expect(names(model)).toEqual(['Alice Smith'])
+    expect(places(model)).toEqual([])
+  })
+  it('a class\'s own command whose text a list keeps and its title sets in the author block\'s group: of the block, after its places (Meta FAIR\'s \\contribution, 2604.14228v3)', () => {
+    // (the class (adapted from Meta FAIR's preprints) keeps each command's text in a list by one helper, \\addtolist, and its
+    // title command sets the names', the places' and the contributions' lists as the paragraphs of one group, the metadata's
+    // (\\correspondence, \\date) in another after the abstract. Neither \\contribution nor \\correspondence is a command the role
+    // table knows: no unit's, their glyphs on the title box's fill were figure texts, translated with the author block off,
+    // each run laid at its own anchor)
+    const cls = [
+      '\\LoadClass{article}',
+      '\\renewcommand\\addtolist[5][]{\\begingroup\\if\\relax#3\\relax\\def\\sep{}\\else\\def\\sep{#5}\\fi\\let\\protect\\@unexpandable@protect\\xdef#3{\\expandafter{#3}\\sep #4[#1]{#2}}\\endgroup}',
+      '\\newcommand\\authorlist{}',
+      '\\newcommand\\authorformat[2][]{{\\sffamily #2$^{#1}$}}',
+      '\\renewcommand\\author[2][]{\\addtolist[#1]{#2}{\\authorlist}{\\authorformat}{, }}',
+      '\\newcommand\\affiliationlist{}',
+      '\\newcommand\\affiliationformat[2][]{{\\normalsize $^{#1}$#2}}',
+      '\\newcommand\\affiliation[2][]{\\addtolist[#1]{#2}{\\affiliationlist}{\\affiliationformat}{, }}',
+      '\\newcommand\\contributionlist{}',
+      '\\newcommand\\contributionformat[2][]{{\\small $^{#1}$#2}}',
+      '\\newcommand\\contribution[2][]{\\addtolist[#1]{#2}{\\contributionlist}{\\contributionformat}{, }}',
+      '\\newcommand\\metadatalist{}',
+      '\\newcommand\\metadataformat[2][]{{\\small {\\sffamily \\bfseries #1:} #2}}',
+      '\\newcommand\\metadata[2][]{\\addtolist[#1]{#2}{\\metadatalist}{\\metadataformat}{\\par}}',
+      '\\newcommand\\correspondence[1]{\\metadata[Correspondence]{#1}}',
+      '\\renewcommand{\\title}[1]{\\newcommand{\\titlelist}{{\\huge\\sffamily #1}}}',
+      '\\newcommand{\\mymaketitle}{\\begin{tcolorbox}{\\raggedright{\\titlelist\\par}\\vskip 0.2cm \\authorlist\\par\\vskip 0.2cm \\affiliationlist\\par \\contributionlist\\par}\\abstractlist\\par{\\metadatalist\\par}\\end{tcolorbox}}',
+      '\\renewcommand{\\maketitle}{\\mymaketitle}',
+    ].join('\n')
+    const p = openPaper(new Map([
+      ['main.tex', enc('\\documentclass{style}\n\\title{A Title}\n\\author[1,*]{{Jiacheng Liu}}\n\\author[1,\\dagger]{{Zhiqiang Shen}}\n\\affiliation[1]{VILA Lab, Some University}\n\\contribution[*]{These authors contributed equally to this work}\n\\contribution[\\dagger]{Corresponding author}\n\\correspondence{Zhiqiang Shen (\\email{z@some.edu})}\n\\begin{document}\n\\maketitle\nWords of the body.\n\\end{document}\n')],
+      ['style.cls', enc(cls)],
+    ]))
+    expect(names(p)).toEqual(['Jiacheng Liu', 'Zhiqiang Shen'])
+    // (its notes the paragraph after its places in their group: the block's places)
+    expect(places(p)).toEqual(['VILA Lab, Some University', 'These authors contributed equally to this work', 'Corresponding author'])
+    // (the metadata's list the title sets in a group of its own after the abstract, with the date's: none of the block's by TeX's
+    // grouping; the rule that took everything the title sets made a venue's line, a licence and a teaser's caption places)
+    expect(units(p).map(textOf).join('|')).not.toMatch(/Zhiqiang Shen \(/)
+    // (a stored text the title sets that the role table knows keeps its kind: the title a heading; the date none of the block)
+    expect(units(p)[0]).toMatchObject({ kind: 'heading' })
   })
   it('an e-mail, a web address and an ORCID written out stay the original\'s ink: placeholders of the place they stand in', () => {
     const p = open('\\maketitle\nWords.', '\\author{Alice Smith \\\\ University of Somewhere, alice@some.edu, ORCID 0000-0002-1825-0097, see https://some.edu/alice}')
@@ -224,5 +317,52 @@ describe('the places\' units: their number, their class, their marks', () => {
   it('marked as the author block\'s names are, in the layout compile: its own start and end marks', () => {
     const tex = new TextDecoder().decode(originalFiles(p, { layout: LAYOUT_CLASSES }).get('main.tex'))
     expect(tex).toMatch(/\\author\{\\leavevmode\\axtmark\{1s\}Alice Smith\\axtend\{1e\} \\\\ \\leavevmode\\axtmark\{4s\}University of Somewhere\\axtend\{4e\}\}/)
+  })
+})
+
+describe('the author calls the marked original states (\\axtcall, CALL_TEX: the point `<i>c` before an author\'s call)', () => {
+  // (what TeX sets between an author's end mark and the next author's call is the author's, what after it the next author's: no
+  // gap tells them apart, ICML's marks after a name a thin space after it, 2611.03953v2; a \thanks mark before an \and)
+  const marked = (p: ReturnType<typeof open>) => new TextDecoder().decode(originalFiles(p, { layout: LAYOUT_CLASSES }).get('main.tex'))
+  const idOf = (p: ReturnType<typeof open>, name: string) => units(p).findIndex(u => u.kind === 'author' && textOf(u) === name)
+  it('before each \\and that opens an author\'s block inside one, its first unit\'s', () => {
+    const p = open('\\maketitle\nWords.', '\\author{Ashish Vaswani\\thanks{Equal contribution.} \\\\ Google Brain \\And Noam Shazeer \\\\ Google Research}')
+    const tex = marked(p)
+    expect(tex).toContain(`\\axtcall{${idOf(p, 'Noam Shazeer')}}\\And `)
+    // (and the note's call after the first name, before the place on the next row: two calls stated)
+    expect(tex.match(/\\axtcall\{\d+\}/g)).toHaveLength(2)
+    expect(tex).toContain(CALL_TEX)
+  })
+  it('before an author block\'s command right after another\'s, never before the first (ICML\'s \\icmlauthor)', () => {
+    const p = open('\\twocolumn[\\icmltitle{A Title}\n\\begin{icmlauthorlist}\n\\icmlauthor{Jane Doe}{x}\n% a comment\n\\icmlauthor{John Roe}{y}\n\\end{icmlauthorlist}\n]\nWords.', '\\usepackage{icml2025}')
+    const tex = marked(p)
+    expect(tex).toContain(`\\axtcall{${idOf(p, 'John Roe')}}\\icmlauthor{`)
+    expect(tex.match(/\\axtcall\{\d+\}/g)).toHaveLength(1)
+  })
+  it('after a note\'s call inside an author block, before the unit after it: the mark the note set is the text before\'s', () => {
+    // (2411.13093v4, NeurIPS: one \\author in the preamble, its names apart by \\quad, Xiawu Zheng's \\thanks between two names
+    // of a row: its "∗" was the next unit's label, which kept the row from being laid as one line)
+    const p = open('\\maketitle\nWords.', '\\author{Yongdong Luo$^{1}$ \\quad Xiawu Zheng$^{1}$\\thanks{Corresponding author.} \\quad Guilin Li$^{1}$ \\quad Haojia Lin$^{1}$ \\\\ Chaoyou Fu$^{2}$}')
+    const id = units(p).findIndex(u => u.kind === 'author' && textOf(u).startsWith('Guilin Li'))
+    const tex = marked(p)
+    // (the note's own text between its marks in the layout compile)
+    expect(tex).toMatch(new RegExp(`Corresponding author\\.\\\\axtend\\{\\d+e\\}\\}\\\\axtcall\\{${id}\\}`))
+    expect(tex.match(/\\axtcall\{\d+\}/g)).toHaveLength(1)
+    // (the unit after the note begun right where the note's call ends, `\\thanks{…}\\,$^{1,2}$`: the call written there all the
+    // same, before the unit's bytes; 2610.17108v1's had none, its "∗" the next unit's label)
+    const glued = open('\\maketitle\nWords.', '\\author{\\textbf{Sam Smith}\\,$^{1}$\\quad Vic Vance\\thanks{Corresponding.}\\,\\,$^{1,2}$\\quad \\textbf{Ann Eve}\\,$^{1}$}')
+    const gid = units(glued).findIndex((u, k) => u.kind === 'author' && k > 0 && textOf(u).includes('Ann Eve'))
+    expect(marked(glued)).toMatch(new RegExp(`Corresponding\\.\\\\axtend\\{\\d+e\\}\\}\\\\axtcall\\{${gid}\\}`))
+    // (a note that opens its block marks no text before it: its mark, set before the name, is the name's lead, none stated; a
+    // note before an \\and: the \\and's call alone)
+    expect(marked(open('\\maketitle\nWords.', '\\author{\\thanks{Equal contribution.}Jane Doe \\\\ The University}'))).not.toContain('\\axtcall{')
+    const and = marked(open('\\maketitle\nWords.', '\\author{Jane Doe\\thanks{Equal contribution.} \\and John Roe}'))
+    expect(and.match(/\\axtcall\{\d+\}/g)).toHaveLength(1)
+    expect(and).toMatch(/\\axtcall\{\d+\}\\and /)
+  })
+  it('none for one author\'s block, and no definition in the head: the paper\'s bytes as before', () => {
+    const p = open('\\maketitle\nWords.', '\\author{Jane Doe \\\\ The University}')
+    const tex = marked(p)
+    expect(tex).not.toContain('\\axtcall')
   })
 })

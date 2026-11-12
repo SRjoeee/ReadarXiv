@@ -115,10 +115,13 @@ function codeGroups(row, count) {
  * page), shows, paths } (planOf's), a page with none left unwrapped; `PL` @cantoo/pdf-lib's exports; `deflate` (bytes -> bytes, deterministic) and
  * `inflate` (bytes, limit -> bytes) as the remover takes them. Returns { bytes (finalBytes and the section), xref, sha256,
  * pages: Map p -> { ok, why?, groups, sequences, split, merged } (a page not ok or merged makes each unit on it `page` or, with a
- * placeholder, `bounds`: wrapFinal's), groups (in the document), stats } or { refused (a WRAP_WHYS code), why }.
+ * placeholder, `bounds`: wrapFinal's), groups (in the document), stats } or { refused (a WRAP_WHYS code), why }. With
+ * `compose` false (the prepare's back half, wrap.ts, which keeps the add-on alone), the section is given as it is, `section` in
+ * place of `bytes` and no `sha256`: finalBytes and the section are never composed, nor the whole hashed, which held two more
+ * copies of finalBytes at the wrap's end (lane mem-back: 33.5 MiB on 2609.19644v1, the digest's job holding the composed one).
  * Never throws but a failed allocation
  */
-export async function wrapOf(finalBytes, plans, { PL, deflate, inflate, groupsPage = GROUPS_PAGE, sequencesPage = SEQUENCES_PAGE, groupsDoc = GROUPS_DOC }) {
+export async function wrapOf(finalBytes, plans, { PL, deflate, inflate, groupsPage = GROUPS_PAGE, sequencesPage = SEQUENCES_PAGE, groupsDoc = GROUPS_DOC, compose = true }) {
   // (the written bytes are read back by `inflate`: without one no page could be proved, so none is asked for)
   if (typeof deflate !== 'function' || typeof inflate !== 'function') throw new TypeError('deflate, inflate: functions of bytes (inflate(bytes, limit))')
   let R
@@ -243,14 +246,18 @@ export async function wrapOf(finalBytes, plans, { PL, deflate, inflate, groupsPa
     }
     const wrapped = [...out.values()].filter(x => x.ok)
     const stats = { wrapped: wrapped.length, refusedPages: [...out.values()].filter(x => !x.ok).length, split: wrapped.reduce((n, x) => n + x.split, 0), groups: docGroups.size }
-    if (!wrapped.length) return { bytes: finalBytes, xref: startxrefOf(finalBytes), sha256: await sha256Of(finalBytes), pages: out, groups: docGroups, stats, unwrapped: true }
+    if (!wrapped.length) {
+      if (!compose) return { section: new Uint8Array(0), xref: startxrefOf(finalBytes), pages: out, groups: docGroups, stats, unwrapped: true }
+      return { bytes: finalBytes, xref: startxrefOf(finalBytes), sha256: await sha256Of(finalBytes), pages: out, groups: docGroups, stats, unwrapped: true }
+    }
     const prev = startxrefOf(finalBytes)
     if (prev === null) return { refused: 'wrap-parse', why: 'our final pass names no startxref' }
     const kind = /^\s*xref/.test(td.decode(finalBytes.subarray(prev, prev + 16))) ? 'table' : 'stream'
     const section = appendSection({ end: finalBytes.length, objects, kind, prev, size: next, trailer: { root: T.Root.toString(), info: T.Info?.toString(), id: T.ID?.toString() } })
-    const bytes = concat([finalBytes, section.bytes])
     const proof = proveWrap(finalBytes, section.bytes, { out, PL, groups: docGroups, forms: formsWritten })
     if (proof) return { refused: 'wrap-proof', why: proof }
+    if (!compose) return { section: section.bytes, xref: section.xref, pages: out, groups: docGroups, stats, forms: formsWritten.length }
+    const bytes = concat([finalBytes, section.bytes])
     return { bytes, xref: section.xref, sha256: await sha256Of(bytes), pages: out, groups: docGroups, stats, forms: formsWritten.length }
   } catch (e) {
     if (isMemoryError(e)) throw e
@@ -638,16 +645,20 @@ function graphWhy(finalBytes, bytes, { PL, out, groups, forms = [] }) {
 
 /** an operand's text for comparison (a string by its bytes, hex or not) */
 const operand = v => (v?.t === 'str' ? `s${hex(v.b)}` : v?.t === 'name' ? `/${v.v}` : v?.t === 'dict' ? `<<${v.v.map(operand).join(' ')}>>` : Array.isArray(v) ? `[${v.map(operand).join(' ')}]` : v?.t === 'kw' ? v.v : String(v))
-/** a show's elements: its codes as one byte run between numbers, adjacent numbers summed, zeros dropped */
+/** a show's elements: its codes as one byte run between numbers, adjacent numbers summed, zeros dropped. What it draws: an empty
+ *  string is none (it shows no glyph and moves nothing, and a split, which writes codes, writes none of it: 2610.20967v1 p2's
+ *  figure shows open with one), and a number is read as a split writes it (`fmt`, six places: an adjustment halfway between two
+ *  millionths, as 2610.21098v1's -0.5859375, is written -0.585938, which rounding it here to the nearest millionth up read as
+ *  -0.585937) */
 function elementsOf(o) {
   const arr = o.op === 'TJ' ? o.args[0] : [o.args[o.op === '"' ? 2 : 0]]
   const out = []
   for (const el of Array.isArray(arr) ? arr : []) {
     const l = out.at(-1)
     if (typeof el === 'number') { if (typeof l === 'number') out[out.length - 1] = l + el; else out.push(el) }
-    else if (el?.t === 'str') { if (l instanceof Uint8Array) out[out.length - 1] = concat([l, el.b]); else out.push(el.b) }
+    else if (el?.t === 'str' && el.b.length) { if (l instanceof Uint8Array) out[out.length - 1] = concat([l, el.b]); else out.push(el.b) }
   }
-  return out.filter(v => v !== 0).map(v => (typeof v === 'number' ? `n${Math.round(v * 1e6) / 1e6}` : `s${hex(v)}`)).join(',')
+  return out.map(v => (typeof v === 'number' ? `n${fmt(v)}` : `s${hex(v)}`)).filter(v => v !== 'n0').join(',')
 }
 function sameOps(a, b) {
   let j = 0

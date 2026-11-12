@@ -24,6 +24,8 @@ export function layoutCut(
   if (plain.clipped || plain.spilled || blocks.length < 2) return { layout: plain, tokens }
   const cuts = pageCutsOf(plain.lines, blocks, plain.tokens ?? tokens, P)
   if (!cuts.length) return { layout: plain, tokens }
+  // (the share's cuts (pageCutsOf `share`) go with the tokens, and a lay keeps them only at a state that holds the share: the
+  // fit's own lay, and every lay at another state, as without them)
   const broken = withPageBreaks(tokens, cuts)
   const cut = layoutAt(broken, blocks, s, P, plain.state)
   if (cut.clipped) return { layout: plain, tokens }

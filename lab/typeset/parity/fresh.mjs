@@ -1,0 +1,305 @@
+// lab/typeset/parity/fresh.mjs: the parity's fresh rows (lane parity-fresh). The sheet lays v2 with today's stored replies (the
+// door's rows), which serve v2's unit only where v2 cuts it as today did: a unit v2 holds otherwise (an identifier now an
+// element, a bold run stated as a group, a figure line joined, a unit today never had) has no stored row that says it, and
+// v2 was drawn there as the original's, which a reader of the site never sees. So each such member is laid with the row a
+// reader gets: the translate package's own chain (packages/translate chainOf: the wire, the read, `accept`, the groups placed,
+// the runs floor) over the keyless Microsoft adapter, production's default lane, through a cache in lab-data keyed by the
+// chain's own key (`keyOf`: translator identity, target, the wire's digest), so that each wire is asked of the endpoint once
+// ever and every later sheet is drawn offline. Today's side keeps its stored rows. Filling the cache is its own step
+// (v2.mjs --fresh=fill): a run that is not told to fill never asks the network, and names the rows its cache lacks.
+// Lab-data only: the cache holds the papers' text.
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { chainOf, Fault, keyOf, microsoft, unitInOf } from '../../../packages/translate/src/index.ts'
+import { namedOf } from '../../../packages/translate/src/names.ts'
+import { runsOf } from '../../../packages/translate/src/runs.ts'
+import { wholeWordsOf } from '../../../packages/translate/src/words.ts'
+import { LAB } from '../../../packages/typeset/tests/replay/tap.ts'
+
+/** the cache: AXT_PARITY_FRESH_ROWS, else lab-data's parity/fresh-rows */
+export const FRESH_ROWS = process.env.AXT_PARITY_FRESH_ROWS || join(LAB, 'refactor-2026-11', 'parity', 'fresh-rows')
+/** the project's User-Agent, as every lab probe of a translator sends it */
+export const UA = 'ReadarXiv/0.1 (+https://readarxiv.org; research)'
+/** the fill's pace: one request at a time, this long apart (the free endpoint is the product's real bottleneck) */
+export const FILL_PACE_MS = 1500
+
+const sha = (s) => createHash('sha256').update(s).digest('hex')
+const fileOf = (dir, key) => {
+  const h = sha(key)
+  return join(dir, h.slice(0, 2), `${h}.json`)
+}
+/** the cache's entry of a chain key: `{ key, wire, raw }`, the raw reply the endpoint gave that wire; null where none */
+export function cachedOf(dir, key) {
+  const f = fileOf(dir, key)
+  if (!existsSync(f)) return null
+  const e = JSON.parse(readFileSync(f, 'utf8'))
+  return e?.key === key && typeof e.raw === 'string' ? e : null
+}
+function record(dir, key, wire, raw) {
+  const f = fileOf(dir, key)
+  mkdirSync(join(f, '..'), { recursive: true })
+  const tmp = `${f}.${process.pid}.tmp`
+  writeFileSync(tmp, `${JSON.stringify({ key, wire, raw, at: new Date().toISOString() })}\n`)
+  renameSync(tmp, f)
+}
+
+/** the cache as the chain's Store (packages/translate contract.ts): a key's raw reply, whatever its judgement; a write keeps
+ *  what is already there (the translator below records every reply as it comes) */
+export function folderStore(dir) {
+  return {
+    read: async (keys) => keys.map((k) => cachedOf(dir, k)?.raw ?? null),
+    write: async (entries) => {
+      for (const [k, v] of entries) if (!cachedOf(dir, k)) record(dir, k, null, v)
+    },
+  }
+}
+
+/**
+ * `base` (a translator of the package) with its requests answered from the cache `dir` first: a wire the cache holds is given
+ * its recorded reply, accepted or not, so that a refusal is replayed as one; one it lacks is sent to the endpoint only where
+ * `fill`, its reply recorded under the chain's key before the chain reads it, else the request fails over to the caller as
+ * unavailable (Fault 'pass': no backoff, no cooldown) and its key is named in `missed`. The identity, digest, limits and the
+ * read are the base's, so the keys are the chain's own.
+ */
+export function cachedTranslator(base, { dir, fill = false }) {
+  const missed = new Set()
+  const asked = []
+  return {
+    ...base,
+    missed,
+    asked,
+    async *send(wires, call, signal) {
+      const keys = wires.map((w) => keyOf(base, call.target, w, call.context))
+      const left = []
+      for (const [i, k] of keys.entries()) {
+        const e = cachedOf(dir, k)
+        if (e) yield [i, e.raw]
+        else left.push(i)
+      }
+      if (!left.length) return
+      if (!fill) {
+        for (const i of left) missed.add(keys[i])
+        throw new Fault('pass', 'network', `parity fresh rows: ${left.length} wires not in the cache (no fill asked)`)
+      }
+      asked.push(left.length)
+      for await (const [j, raw] of base.send(
+        left.map((i) => wires[i]),
+        call,
+        signal,
+      )) {
+        const i = left[j]
+        record(dir, keys[i], wires[i], raw)
+        yield [i, raw]
+      }
+    },
+  }
+}
+
+/** the platform's fetch with the project's User-Agent, one request at a time `pace` ms apart (the fill's alone); after the
+ *  endpoint's first 429 it asks nothing more (`throttled()`), every later call refused at once: the fill stops there and says
+ *  so, and a later fill resumes from the cache */
+export function pacedFetch(pace = FILL_PACE_MS) {
+  let last = 0
+  let queue = Promise.resolve()
+  let throttled = false
+  let requests = 0,
+    rated = 0
+  const f = (url, init) => {
+    const go = queue.then(async () => {
+      if (throttled) throw new Error('parity fresh rows: the endpoint answered 429; no request after it')
+      const wait = last + pace - Date.now()
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+      try {
+        requests++
+        const r = await fetch(url, { method: init.method, headers: { ...init.headers, 'User-Agent': UA }, body: init.body, signal: init.signal })
+        if (r.status === 429) {
+          throttled = true
+          rated++
+        }
+        const text = await r.text()
+        return { ok: r.ok, status: r.status, headers: { get: (k) => r.headers.get(k) }, text: async () => text }
+      } finally {
+        last = Date.now()
+      }
+    })
+    queue = go.catch(() => {})
+    return go
+  }
+  f.throttled = () => throttled
+  /** the requests sent so far, and how many the endpoint answered 429 */
+  f.requests = () => requests
+  f.rated = () => rated
+  return f
+}
+
+/** the fills' log beside the cache (`fills.jsonl`): one entry a fill run, what it did */
+export const FILLS_LOG = 'fills.jsonl'
+/** a fill run's entry appended to the log in `dir` (written synchronously: also from a run that exits) */
+export function logFill(entry, dir = FRESH_ROWS) {
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, FILLS_LOG), `${JSON.stringify(entry)}\n`, { flag: 'a' })
+}
+
+/** the lock every lane honours before it sends to the keyless endpoint from this machine (the coordinator's of 2026-11-11):
+ *  a directory made atomically, its `owner` the lane, the sending process's PID and the start time */
+export const KEYLESS_LOCK = join(LAB, 'refactor-2026-11', 'locks', 'ms-keyless.lock')
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    return e?.code === 'EPERM'
+  }
+}
+/**
+ * The keyless lock taken for `lane` (mkdir, atomic): `{ ok: true, release, tookFrom? }`; where another's lock stands and its
+ * PID is alive, tried again every `retryMs` (a minute) `tries` times, then `{ ok: false, owner }`; where its PID is dead,
+ * removed and taken, `tookFrom` its owner line (the caller says so)
+ */
+export async function keylessLock(dir = KEYLESS_LOCK, { lane, retryMs = 60_000, tries = Number.POSITIVE_INFINITY } = {}) {
+  mkdirSync(join(dir, '..'), { recursive: true })
+  let tookFrom
+  for (let k = 0; k < tries; k++) {
+    try {
+      mkdirSync(dir)
+      writeFileSync(join(dir, 'owner'), `${lane} ${process.pid} ${new Date().toISOString()}\n`)
+      const release = () => {
+        const o = existsSync(join(dir, 'owner')) ? readFileSync(join(dir, 'owner'), 'utf8') : ''
+        if (o.startsWith(`${lane} ${process.pid} `)) rmSync(dir, { recursive: true, force: true })
+      }
+      return { ok: true, release, ...(tookFrom ? { tookFrom } : {}) }
+    } catch (e) {
+      if (e?.code !== 'EEXIST') throw e
+      const owner = existsSync(join(dir, 'owner')) ? readFileSync(join(dir, 'owner'), 'utf8').trim() : ''
+      const pid = Number(owner.split(' ')[1])
+      if (Number.isInteger(pid) && pid > 0 && !alive(pid)) {
+        tookFrom = owner
+        rmSync(dir, { recursive: true, force: true })
+        k--
+        continue
+      }
+      if (k + 1 < tries) await new Promise((r) => setTimeout(r, retryMs))
+      else return { ok: false, owner }
+    }
+  }
+  return { ok: false, owner: '' }
+}
+
+/** the translator the fresh rows come from: Microsoft's keyless adapter (production's default lane), one request in flight,
+ *  over the cache; it fetches only where `fill` */
+export function freshTranslator(dir = FRESH_ROWS, { fill = false, fetch: f } = {}) {
+  const none = async () => {
+    throw new Error('parity fresh rows: no network outside the fill')
+  }
+  const fetch = fill ? (f ?? pacedFetch()) : none
+  const t = cachedTranslator(microsoft({ fetch, limits: { inFlight: 1 } }), { dir, fill })
+  return { ...t, throttled: () => !!fetch.throttled?.(), requests: () => fetch.requests?.() ?? 0, rated: () => fetch.rated?.() ?? 0 }
+}
+
+/**
+ * The fresh rows of `units` (the bundle's units, format's shape) into `target`, through the chain over `translator`
+ * (freshTranslator's, or any made by cachedTranslator) with the cache as its store: `rows` id -> the chain's Result (ok or
+ * not), `missing` the ids whose wire the cache lacks (a run not told to fill), `asked` how many wires went to the endpoint
+ */
+export async function freshRowsOf(units, target, { dir = FRESH_ROWS, translator } = {}) {
+  const t = translator ?? freshTranslator(dir)
+  // (the wires this call asks: a translator shared over a run counts its whole run's)
+  const before = (t.asked ?? []).reduce((a, b) => a + b, 0)
+  const rows = new Map()
+  const ins = [...new Map(units.map((u) => [u.id, u])).values()].map(unitInOf)
+  for await (const r of chainOf({ store: folderStore(dir) }).translate(ins, target, { translators: [t] })) rows.set(r.id, r)
+  // (unavailable: the cache holds no reply of its wire, a run not told to fill, or the endpoint did not answer the fill)
+  const missing = [...rows.values()].filter((r) => !r.ok && r.why.kind === 'unavailable').map((r) => r.id)
+  const need = missing.length ? needOf(missing.map((id) => ins.find((u) => u.id === id)), target, t, dir) : null
+  return { rows, missing, asked: (t.asked ?? []).reduce((a, b) => a + b, 0) - before, ...(need ? { need } : {}) }
+}
+
+/**
+ * What a fill would ask for the units `ins` the cache lacks, counted offline to the end of each unit (the count of the chain's
+ * own asks stops at a unit's first uncached wire, under-reporting, integration's B8 fill: 347 wires for 295 counted): `wires`,
+ * each unit's first wire the cache lacks (the unit as the chain sends it, a group that cuts a word unwrapped and its names
+ * written out: words.ts wholeWordsOf, names.ts namedOf), which the
+ * fill asks whatever comes back; `wiresUpTo`, with each one's runs floor (runs.ts runsOf: the stretches of two letters or more the
+ * chain asks where the reply is refused) that the cache lacks too, which it asks only where the reply is refused, so that the
+ * fill asks between the two; `requests` and `requestsUpTo`, those wires cut as the chain cuts a translator's requests (its limits'
+ * characters and units), the floor's in requests of their own (asked after the replies). Equal wires are one
+ */
+export function needOf(ins, target, t, dir = FRESH_ROWS) {
+  const lenOf = new Map()
+  const first = new Set(),
+    floor = new Set()
+  const add = (into, u) => {
+    const w = t.write(u, target)
+    const k = keyOf(t, target, w)
+    if (cachedOf(dir, k) || first.has(k) || floor.has(k)) return
+    into.add(k)
+    lenOf.set(k, w.length)
+  }
+  for (const u0 of ins) {
+    const w = wholeWordsOf(u0)?.unit ?? u0
+    const u = namedOf(w)?.unit ?? w
+    add(first, u)
+    for (const [i, part] of runsOf(u).parts.entries()) if (part.send) add(floor, { id: `${u.id}~${i}`, content: [{ t: 'text', s: part.text }] })
+  }
+  const cut = (keys) => {
+    let n = 0,
+      chars = 0,
+      units = 0
+    for (const k of keys) {
+      const c = lenOf.get(k)
+      if (c > t.limits.chars) {
+        n++
+        continue
+      }
+      if (units && (chars + c > t.limits.chars || units >= t.limits.units)) {
+        n++
+        chars = 0
+        units = 0
+      }
+      chars += c
+      units++
+    }
+    return n + (units ? 1 : 0)
+  }
+  return { units: ins.length, wires: first.size, requests: cut(first), wiresUpTo: first.size + floor.size, requestsUpTo: cut(first) + cut(floor) }
+}
+
+/**
+ * The members laid with a fresh row, over `members` (every member of the paper's parts, once): ord -> `{ id, cause }`.
+ * `rows` the entry's rows (gate-l1.ts: get by unit id; kept; `said`, the ids whose row is today's row of other units said in
+ * v2's: today's flat text of a figure text v2 holds a group in, a unit whose kept runs v2 holds as elements, a member holding
+ * several of today's units joined); `units` the
+ * bundle's units by id; `decided(m)` whether today's own group decision kept the member's unit (its door row `kept`, the reply
+ * not stored: a table's cell today left the original's by its group); `todayKept(m)` whether today's prepare kept its unit,
+ * never sending it (a figure text of names or code: today's figureUnits, isName/isCode). Causes: 'no-row', a text no stored row
+ * serves (v2.mjs's `noRow` before this lane); 'today-kept', one today never sent by its name/code rule, which v2 sends;
+ * 'group', a cell today's group decision kept, so that v2's own decision runs on what the site would get (the coordinator's
+ * ruling of 2026-11-11: the stored rows hold no reply of it, so like-for-like is not to be had); 'unit', a text whose stored row
+ * answered another unit than v2's; with `all` (the review mode, --fresh=all), 'served', a text a stored row serves, so that
+ * every unit v2 sends is laid as a reader gets it. A member the prepare states a reason for (`why`), or the paper keeps, is
+ * sent nothing.
+ */
+export function freshNeeds(members, rows, units, { decided = () => false, todayKept = () => false, all = false } = {}) {
+  const out = new Map()
+  for (const m of members) {
+    if (typeof m.text !== 'string' || m.why || rows.kept?.(m.text) || !units.has(m.text)) continue
+    if (!rows.get(m.text)) out.set(m.ord, { id: m.text, cause: decided(m) ? 'group' : todayKept(m) ? 'today-kept' : 'no-row' })
+    else if (rows.said?.(m.text)) out.set(m.ord, { id: m.text, cause: 'unit' })
+    else if (all) out.set(m.ord, { id: m.text, cause: 'served' })
+  }
+  return out
+}
+
+/** `rows` with each id of `fresh` (id -> the chain's Result) answered by its fresh row where that is a translation; every
+ *  other id, and `rows` itself where `fresh` is null, as they are */
+export function withFresh(rows, fresh) {
+  if (!fresh || !rows) return rows
+  return {
+    ...rows,
+    get(k) {
+      const r = fresh.get(k)
+      return r?.ok ? r : rows.get(k)
+    },
+  }
+}

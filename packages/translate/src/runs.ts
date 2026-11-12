@@ -2,9 +2,16 @@
 // through the whole chain as a unit with no element, and put back between the elements, which stay where the source has
 // them. A span that is not `must` is no edge (its words are its sentence's: cut there, a styled word came back alone,
 // word salad, mt.mjs runsOf), its head kept in a copy of it as on the markers wire (accept.ts headLength: `{\em all}`'s
-// `\em`, which loose holds to the unit's end); a `must` span is rebuilt around its own stretches.
+// `\em`, which loose holds to the unit's end); a `must` span is rebuilt around its own stretches. An element that sets nothing
+// (`silent`), and a head of such elements alone, is no edge either (cut there, `exam\-ple` went as two stretches): as on the
+// markers wire, it stands at the front of its innermost kept group (the unit, a `must` span) where nothing of the group came
+// before it, else at its end. The stop TeX set at a group's end (`stop`) ends the stretch its words end, as on the wires.
 import { headLength } from './accept.ts'
 import type { OutPiece, Piece, UnitIn } from './contract.ts'
+
+type El = Extract<Piece, { t: 'el' }>
+const elsOf = (content: readonly Piece[]): El[] =>
+  content.flatMap((p): El[] => (p.t === 'el' ? [p] : p.t === 'span' ? elsOf(p.content) : []))
 
 type Tpl =
   | { t: 'run'; k: number }
@@ -23,10 +30,21 @@ const LETTERS = /\p{L}/gu
 
 export function runsOf(unit: UnitIn): Runs {
   const parts: Runs['parts'] = []
-  const build = (content: readonly Piece[]): Tpl[] => {
+  // (`stop`: the stop TeX set at the group's end, its source writing none: its last stretch ends with it)
+  const build = (content: readonly Piece[], stop?: string): Tpl[] => {
     const out: Tpl[] = []
+    // (what sets nothing: before the group's first word or element, or after)
+    const front: Tpl[] = []
+    const back: Tpl[] = []
     let text: string | null = null
+    // (one space where what went off stood between two texts that each had one, as the markers wire writes it)
+    let joint = false
+    const off = (x: Tpl) => {
+      ;(out.length || (text !== null && /\S/.test(text)) ? back : front).push(x)
+      joint = text !== null
+    }
     const close = () => {
+      joint = false
       if (text === null) return
       const lead = /^\s*/.exec(text)?.[0] ?? ''
       const body = text.trim()
@@ -37,27 +55,34 @@ export function runsOf(unit: UnitIn): Runs {
     }
     const walk = (ps: readonly Piece[]) => {
       for (const p of ps) {
-        if (p.t === 'text') text = (text ?? '') + p.s
+        if (p.t === 'text') {
+          text = (text ?? '') + (joint && /\s$/.test(text ?? '') ? p.s.replace(/^\s+/, '') : p.s)
+          joint = false
+        } else if (p.t === 'el' && p.silent) off({ t: 'el', id: p.id })
         else if (p.t === 'el') {
           close()
           out.push({ t: 'el', id: p.id })
         } else if (p.must) {
           close()
-          out.push({ t: 'span', id: p.id, content: build(p.content) })
+          out.push({ t: 'span', id: p.id, content: build(p.content, p.stop) })
         } else {
           // (its head, a declaration's place, stays in a copy of it: never loose, held to the unit's end)
           const k = headLength(p.content)
-          if (k) {
+          const head = p.content.slice(0, k)
+          if (k && elsOf(head).every((q) => q.silent)) off({ t: 'span', id: p.id, content: build(head) })
+          else if (k) {
             close()
-            out.push({ t: 'span', id: p.id, content: build(p.content.slice(0, k)) })
+            out.push({ t: 'span', id: p.id, content: build(head) })
           }
           walk(p.content.slice(k))
+          if (p.stop) text = (text ?? '') + p.stop
         }
       }
     }
     walk(content)
+    if (stop) text = (text ?? '') + stop
     close()
-    return out
+    return [...front, ...out, ...back]
   }
   const tpl = build(unit.content)
   const join = (tr: readonly (string | null)[]): OutPiece[] => {

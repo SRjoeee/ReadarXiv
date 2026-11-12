@@ -43,6 +43,7 @@ function fillLeadsOf(p, P) {
   // is laid again only where that one does not set it)
   const lo = st.lead, bx = { ...st, box: true }
   delete p.fillLaid
+  delete p.fillShare
   let laid = at(p, bx)
   if (laid) {
     const hi = p.fillTop, L = k => Math.min(hi, r3(lo + k * 0.01))
@@ -56,6 +57,14 @@ function fillLeadsOf(p, P) {
     // (the layout found there kept for the page's fill, which lays the unit at that very state wherever the band leaves it its
     // fill leading: fillPage `at`)
     p.fillLaid = { state: st, lead: p.fillLead, l: laid }
+    // (and each frame of a unit over a page or column break its own: framesLeadsOf)
+    const own = frameLeadsOf(p, bx, p.fillLead, hi, laid)
+    if (own) {
+      p.fillLeads = own.leads
+      p.lastLead = own.last
+    }
+    const sh = shareOver(p, own, frameShareOf(p, bx, p.fillLead, hi, laid))
+    if (sh) p.fillShare = sh
     return
   }
   if (!at(p, st)) { p.fillLead = null; return }
@@ -65,6 +74,159 @@ function fillLeadsOf(p, P) {
   const floor = Math.max(1, P.leadFloor ?? 1), K = Math.ceil((lo - floor) / 0.01 - 1e-9), L = k => (k >= K ? floor : r3(lo - k * 0.01))
   const found = K > 0 ? closerLead(K, k => at(p, { ...bx, lead: L(k) }), guessCloser(p, K, L, lead => footFloorOf(p.blocks, { ...bx, lead }, p.P, p.s))) : null
   p.fillLead = found ? L(found.k) : lo
+  // (and each frame of a unit over a page or column break its own there too (frameLeadsOf): the gap under its last frame taking
+  // the unit's leading closer is no reason to hold its other frames to it. 1810.04805v2 p6/p7 t119, its fit four lines over p6's
+  // five and two on p7, the second in p7's room: the gap under it at the fit's leading kept the original's skip, the closer
+  // leading the original's pitch held five lines on p6 and left one of two characters on p7)
+  const own = found ? frameLeadsOf(p, bx, p.fillLead, p.fillTop, found.l) : null
+  if (own) {
+    p.fillLeads = own.leads
+    p.lastLead = own.last
+  }
+  const sh = found ? shareOver(p, own, frameShareOf(p, bx, p.fillLead, p.fillTop, found.l)) : null
+  if (sh) p.fillShare = sh
+}
+/** the frames' share (frameShareOf's) where it lays anything frameLeadsOf's frames (`own`, null: each at the unit's fill
+ *  leading) do not: a frame it holds at another leading, or, its frames' leadings (i)'s, a line its cuts marked `share` set
+ *  elsewhere than the layout found at the fill leading (`fillLaid`); else null, the page fill then laying the unit as (i) does */
+function shareOver(p, own, sh) {
+  if (!sh) return null
+  const lo = sh.lo, of = own ?? { leads: p.blocks.map(() => undefined), last: lo }, eq = (a, b) => Math.abs((a ?? lo) - (b ?? lo)) <= 1e-9
+  if (!(eq(sh.last, of.last) && sh.leads.every((v, bi) => eq(v, of.leads[bi])))) return sh
+  if (!p.tokens.some(t => t.share)) return null
+  const was = p.fillLaid?.l
+  if (own || !was) return sh
+  const l = layoutAt(p.tokens, p.blocks, p.s, p.P, { ...p.layout.state, box: true, share: 1, lead: sh.last, leads: sh.leads })
+  const same = l.lines.length === was.lines.length && l.lines.every((x, i) => { const y = was.lines[i]; return x.from === y.from && x.page === y.page && x.block === y.block && Math.abs(x.baseline - y.baseline) < 1e-6 })
+  return same ? null : sh
+}
+/** each block's frame, a page's or a column's: consecutive blocks on one page that overlap across (pageCutsOf's frames); and
+ *  each paragraph TeX states inside the unit (a block that opens one, `opens`: SpanAt.opens, El.opens), whose leading is its
+ *  own (the owner's ruling of 2026-11-08, (a)) */
+function framesOf(blocks) {
+  const of = []
+  blocks.forEach((b, bi) => {
+    const a = blocks[bi - 1]
+    of.push(!a ? 0 : !b.opens && a.page === b.page && Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0) ? of[bi - 1] : of[bi - 1] + 1)
+  })
+  return of
+}
+/**
+ * Each frame of a unit over a page or column break filled over its own block (the owner on staging, 2026-11-08: 1810.04805v2
+ * p6's last paragraph of a column, going on to the next page, held to the original's pitch with its frame's last line empty:
+ * its two lines on the next page filled their two, and one leading a unit held the four here, in five, to theirs), and each
+ * paragraph TeX states inside it (framesOf; the owner's comment #9 on 2608.25210v2 p3: a prompt held to the pitch its item's
+ * run-in line needed), whichever way the unit's fill leading was found (fillLeadsOf, its closer search's too). From the
+ * unit's fill leading `lo` (its every frame's), each frame in turn, the earlier ones first, the loosest leading up to `hi` at
+ * which the unit is still set whole and keeps its pages (no line on a later page than its fit set it: keepsPages), the others
+ * at theirs. A frame of one block first tried where its lines at `lo` (`laid`) would end on its last baseline, arithmetic, and
+ * one step looser (no layout more where a frame has no room: most are full), any other first one step looser; then by
+ * halving, as the unit's own. The leadings
+ * of the frames before the last by block (`leads`, the state's), the last frame's (`last`, the state's `lead`); null where the
+ * unit lies in one frame or no frame of it is set looser
+ */
+function frameLeadsOf(p, bx, lo, hi, laid) {
+  const of = framesOf(p.blocks), n = (of.at(-1) ?? 0) + 1, steps = Math.ceil((hi - lo) / 0.01 - 1e-9)
+  if (n < 2 || !(steps > 0)) return null
+  const r3 = x => Math.round(x * 1000) / 1000, L = k => Math.min(hi, r3(lo + k * 0.01))
+  const sets = st => { const l = layoutAt(p.tokens, p.blocks, p.s, p.P, st); return !l.clipped && keepsPages(p.layout.lines, l.lines, p.tokens) }
+  const leads = p.blocks.map(() => undefined)
+  let last = lo
+  const stateAt = () => ({ ...bx, lead: last, leads: leads.slice() })
+  for (let f = 0; f < n; f++) {
+    const put = v => { if (f === n - 1) last = v; else of.forEach((g, bi) => { if (g === f) leads[bi] = v }) }
+    // (the guess: a frame of one block before the last, its m lines from its first baseline to its last, (m - 1) pitches)
+    const bis = of.flatMap((g, bi) => (g === f ? [bi] : [])), b = p.blocks[bis[0]]
+    const m = laid.lines.filter(l => of[l.block] === f).length, p0 = b.pitch0 ?? 1.2 * p.s
+    const guess = bis.length !== 1 || f === n - 1 ? null : m < 2 ? steps : Math.max(0, Math.min(steps, Math.floor(((b.B[0] - b.B.at(-1)) / ((m - 1) * p0) - lo) / 0.01 + 1e-6)))
+    let ok = 0, no = steps + 1
+    if (guess !== null) {
+      put(L(guess))
+      if (guess === 0 || sets(stateAt())) {
+        ok = guess
+        if (guess === steps) no = ok + 1
+        else { put(L(guess + 1)); if (!sets(stateAt())) no = guess + 1; else ok = guess + 1 }
+      } else no = guess
+    } else {
+      // (a frame of more blocks, or the last, whose gap under it the floor reads: first one step looser, which a full frame,
+      // or the one that held the unit's leading, does not take)
+      put(L(1))
+      if (sets(stateAt())) ok = 1
+      else no = 1
+    }
+    while (no - ok > 1) { const k = (ok + no) >> 1; put(L(k)); if (sets(stateAt())) ok = k; else no = k }
+    put(L(ok))
+  }
+  if (!(last > lo + 1e-9) && !leads.some(v => v !== undefined && v > lo + 1e-9)) return null
+  return { leads, last }
+}
+/**
+ * The frames' share (pageCutsOf's cuts, those marked `share` too: where the fit set the line a frame's share begins with in that
+ * frame or later, its frame before not full at its state): each frame as frameLeadsOf fills it, at a state that holds the share,
+ * a frame before the last holding the text before the cut of the frame after it; where it does not at `lo`, the loosest leading
+ * closer, down to the original's pitch, at which it does, and no looser; where none does, `lo`. Returns its leadings as
+ * frameLeadsOf's, `needs` (by frame before the last that a cut follows: the leading it is filled to holding its share, null
+ * where it does not hold it) and `lo`; null where the unit's tokens hold no frame's cut. The page fill keeps it where every such
+ * frame holds its share at or above its page's band floor (fillPage); every other lay is (i)'s, frameLeadsOf's, the cuts marked
+ * `share` read by none (lab option (i)'s frame share, bounded by the band, 2026-11-09)
+ */
+function frameShareOf(p, bx, lo, hi, laid) {
+  const of = framesOf(p.blocks), n = (of.at(-1) ?? 0) + 1, steps = Math.max(0, Math.ceil((hi - lo) / 0.01 - 1e-9))
+  if (n < 2 || !p.tokens.some(t => t.pageBreak !== undefined && t.frame !== undefined && t.frame !== null)) return null
+  const r3 = x => Math.round(x * 1000) / 1000, L = k => (k === 0 ? lo : Math.min(hi, r3(lo + k * 0.01)))
+  // (the cuts the tokens hold (pageCutsOf, the frames' share): before the first block of each frame but the first, the text
+  // before it set in the frames before it)
+  const base = p.P.blockBase ?? 0, cuts = []
+  p.tokens.forEach((t, i) => { if (t.pageBreak !== undefined && t.frame !== undefined && t.frame !== null) cuts.push([i, t.frame]) })
+  const holds = (l, fr) => cuts.every(([i, c]) => c !== fr || l.lines.every(x => !(x.from < i) || x.block + base < fr))
+  let at = null
+  const sets = st => { const l = layoutAt(p.tokens, p.blocks, p.s, p.P, st); return !l.clipped && keepsPages(p.layout.lines, l.lines, p.tokens, true) && (at === null || holds(l, at)) }
+  const leads = p.blocks.map(() => undefined), shared = [], missed = new Set()
+  let last = lo
+  const stateAt = () => ({ ...bx, share: 1, lead: last, leads: leads.slice() })
+  for (let f = 0; f < n; f++) {
+    const put = v => { if (f === n - 1) last = v; else of.forEach((g, bi) => { if (g === f) leads[bi] = v }) }
+    // (a frame before the last holds the text before the cut of the frame after it, the share: where it does not at `lo`, the
+    // loosest leading closer, down to the original's pitch, at which it does, and no looser; where none does (the text before
+    // the cut does not fit even at the original's pitch), `lo`, the text running on past the cut as the fit set it)
+    const next = of.indexOf(f + 1)
+    at = f < n - 1 && cuts.some(([, c]) => c === next + base) ? next + base : null
+    if (at !== null) {
+      shared.push(f)
+      put(lo)
+      if (!sets(stateAt())) {
+        const K = Math.ceil((lo - 1) / 0.01 - 1e-9), C = k => (k >= K ? 1 : r3(lo - k * 0.01))
+        const found = K > 0 ? closerLead(K, k => { put(C(k)); return sets(stateAt()) ? true : null }, null) : null
+        put(found ? C(found.k) : lo)
+        if (!found) missed.add(f)
+        continue
+      }
+    }
+    // (the guess: a frame of one block before the last, its m lines from its first baseline to its last, (m - 1) pitches)
+    const bis = of.flatMap((g, bi) => (g === f ? [bi] : [])), b = p.blocks[bis[0]]
+    const m = laid.lines.filter(l => of[l.block] === f).length, p0 = b.pitch0 ?? 1.2 * p.s
+    const guess = bis.length !== 1 || f === n - 1 ? null : m < 2 ? steps : Math.max(0, Math.min(steps, Math.floor(((b.B[0] - b.B.at(-1)) / ((m - 1) * p0) - lo) / 0.01 + 1e-6)))
+    let ok = 0, no = steps + 1
+    if (guess !== null) {
+      put(L(guess))
+      if (guess === 0 || sets(stateAt())) {
+        ok = guess
+        if (guess === steps) no = ok + 1
+        else { put(L(guess + 1)); if (!sets(stateAt())) no = guess + 1; else ok = guess + 1 }
+      } else no = guess
+    } else {
+      // (a frame of more blocks, or the last, whose gap under it the floor reads: first one step looser, which a full frame,
+      // or the one that held the unit's leading, does not take)
+      put(L(1))
+      if (sets(stateAt())) ok = 1
+      else no = 1
+    }
+    while (no - ok > 1) { const k = (ok + no) >> 1; put(L(k)); if (sets(stateAt())) ok = k; else no = k }
+    put(L(ok))
+  }
+  // (each frame a cut follows: the leading it holds its share at, as filled; null where it does not hold it)
+  const needs = shared.map(f => (missed.has(f) ? null : leads[of.indexOf(f)]))
+  return { leads, last, needs, lo }
 }
 /**
  * The loosest leading of a closer search's grid at which a unit sets (fillLeadsOf, fillPage): L(k) for k from 1 to K, closer
@@ -102,4 +264,4 @@ function guessCloser(p, K, L, floorAt) {
   return null
 }
 
-export { fillLeadsOf, closerLead, guessCloser }
+export { fillLeadsOf, closerLead, guessCloser, framesOf }

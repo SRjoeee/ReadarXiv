@@ -6,7 +6,7 @@
 // over our base page, and the web's rows hold it.
 import { analyze } from '../source/paper-meta.mjs'
 import { paperNames, theoremNames } from '../source/paper-names.mjs'
-import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, probeSamples, regionsTex } from '../layout/marks.mjs'
+import { CALL_TEX, classNamesTex, DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, probeSamples, refKeysOf, refsTex, regionsTex } from '../layout/marks.mjs'
 import { documentBounds, DVI_MARK_DEF, dviEngine, FONT_PROBE, inAuthorBlock, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, texFilesOf, texText } from '../source/latex-front.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
 import { nameCells } from '../translate/mt.mjs'
@@ -111,7 +111,8 @@ export const listsMissing = (r, main) => { const log = unwrapped(lastTexLog(r.lo
 export const notFound = log => new Set([...unwrapped(lastTexLog(log)).matchAll(/No file (\S+?)\.(?=\s|$)/g)].map(m => m[1]))
 
 /** a paper's files (Map path → bytes) → what the pipeline works on: its units, and beside them which of them are written inside a
- *  float (`inFloat`, their indices, latex-front.mjs loadProject's) and the order TeX sets them in where it is not theirs
+ *  float (`inFloat`, their indices, latex-front.mjs loadProject's), each caption's float type (`floatTypes`, [index, type]), the
+ *  units of an algorithm float's body (`pseudocode`, their indices) and the order TeX sets them in where it is not theirs
  *  (`texOrder`, their indices in that order, or null: an author block's later units and the bibliography's entries are numbered
  *  after the rest, latex-front.mjs entriesLast) */
 export function openPaper(files) {
@@ -124,7 +125,7 @@ export function openPaper(files) {
   const texts = texFilesOf(fsys, meta.main), names = paperNames(texts)
   // (the printed names of its theorem-like environments among them, the label forms of its heads: the wrap's `names`,
   // layout/own.mjs)
-  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, texOrder: project.texOrder ?? null, kept: nameCells(project.units), names, theoremNames: theoremNames(texts) }
+  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, floatTypes: project.floatTypes ?? [], pseudocode: project.pseudocode ?? [], texOrder: project.texOrder ?? null, kept: nameCells(project.units), names, theoremNames: theoremNames(texts) }
 }
 
 /**
@@ -227,9 +228,11 @@ export function probeFiles({ fsys, project, meta }, { marks = false, preamble = 
   const dvi = dviEngine(meta?.compiler)
   // (with the marked preamble, its line probes inert: \axtlines is LINES_TEX's, which the probe does not load, and the preamble
   // only stores the text it marks)
-  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (preamble === null ? '' : PREAMBLE_LINES) : '', probe = marks ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units))}` : ''
+  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + classNamesTex(texsOf(fsys)) + (preamble === null ? '' : PREAMBLE_LINES) : '', probe = marks ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units))}` : ''
   return new Map([[project.main, latin1Bytes(`${head}${END_TEX}${marks && preamble !== null ? preamble : text.slice(0, at)}${FONT_PROBE}\\begin{document}${probe}\\end{document}\n`)]])
 }
+/** the text of each of the paper's TeX files (a class's own name it calls: marks.mjs classNamesTex) */
+const texsOf = fsys => fsys.list().filter(p => /\.(?:tex|ltx)$/i.test(p)).map(p => latin1(fsys.read(p) ?? new Uint8Array()))
 /** \axtlines in the mark probe over the marked preamble: a protected macro, as LINES_TEX's is, that sets nothing. One line */
 const PREAMBLE_LINES = '\\protected\\def\\axtlines#1{}'
 /**
@@ -289,9 +292,11 @@ export function originalFiles({ fsys, project: read, meta }, { lines = false, sp
   const project = !transcode && read.transcode?.size ? { ...read, transcode: new Set() } : read
   const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
   const raw = spans ? [] : null
-  let out, patched = null
+  let out, patched = null, called = false
   if (layout) {
     const marked = layoutMarking(project.units, layout, { lines, switches, inkless, complete, apart }), paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
+    // (an author's call the source states, \axtcall: its definition in the head, CALL_TEX)
+    called = marked.units.some(u => !!marked.mark(u)?.call)
     const asSource = unmarked ? new Set([...unmarked].map(i => marked.units[i]).filter(Boolean)) : null
     out = patch({ ...project, units: marked.units }, new Map(), { mark: marked.mark, spans: raw, asSource, pastBegin })
     for (const x of raw ?? []) { x.unit = paperOf.get(x.unit) ?? x.unit; if (x.outer) x.outer = paperOf.get(x.outer) ?? x.outer }
@@ -313,7 +318,9 @@ export function originalFiles({ fsys, project: read, meta }, { lines = false, sp
     patched = spans ? new Map(out) : null
   }
   const dvi = dviEngine(meta?.compiler)
-  const head = DRAFT + MARK_DEF + (dvi ? DVI_MARK_DEF : '') + (layout ? LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (names ? '' : NAMES_OFF) + regionsTex(project.codeEnvs, project.codeBodies) : '') + END_TEX + (lines ? LINES_TEX : '')
+  // (with `layout`, each reference's item and its name asked of TeX at the document's end: marks.mjs refsTex, none for a paper with
+  // no reference, whose bytes stay as they were)
+  const head = DRAFT + MARK_DEF + (dvi ? DVI_MARK_DEF : '') + (layout ? LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (called ? CALL_TEX : '') + (names ? classNamesTex(texsOf(fsys)) : NAMES_OFF) + regionsTex(project.codeEnvs, project.codeBodies) + refsTex(refKeysOf(project.units)) : '') + END_TEX + (lines ? LINES_TEX : '')
   out.set(project.main, latin1Bytes(head + latin1(out.get(project.main))))
   // (`skip`: the main file's head of ours, before the paper's first byte)
   if (spans) { let found = null; spans.skip = head.length; spans.lines = () => (found ??= unitLines(raw, patched, out, project.main, head.length)) }

@@ -55,6 +55,19 @@ describe('the text of a unit (MR 2, 3)', () => {
     expect(r.units.get(0)?.unhidden).toBe('across')
     expect(groupsOf(r, three)).toEqual({})
   })
+  it('crosses a page from a balanced page\'s right column: its body brackets nest, the right column inside the outer one (2608.25210v2 p17)', () => {
+    // (a page whose columns are balanced is split from one box: that box's opening point stays at the left column's top and its
+    // closing one after the right column's end, the left column's own pair inside them, `bs58 bs57 … be57 … be58`. The right
+    // column is inside a body; read as a flag, the left column's close put it outside, and a reference set from its foot onto
+    // the next page's top was refused whole, `across`: its text no unit's, drawn as notes)
+    const pages = [
+      page([{ pt: 'bs2' }, { pt: 'bs1' }, { pt: '0s' }, 'Left', { pt: '0e' }, { pt: 'be1' }, { pt: '1s' }, 'Bin Zh', { pt: 'be2' }]),
+      page([{ pt: 'bs4' }, { pt: 'bs3' }, 'ang', { pt: '1e' }, { pt: '2s' }, 'Next', { pt: '2e' }, { pt: 'be3' }, { pt: 'be4' }]),
+    ]
+    const r = ownOf(pages, { units: units('Left', 'Bin Zhang', 'Next') })
+    expect(r.units.get(1)?.unhidden).toBeNull()
+    expect(groupsOf(r, pages)).toEqual({ u0: 'Left', u1: 'Bin Zhang', u2: 'Next' })
+  })
   it('of a unit with an end mark alone is from the point before it (a title)', () => {
     const pages = [page([{ pt: '5e' }, { pt: 'bs1' }, 'Title', { pt: '0e' }])]
     expect(groupsOf(ownOf(pages, { units: units('Title') }), pages)).toEqual({ u0: 'Title' })
@@ -78,6 +91,75 @@ describe('placeholders, labels and names (MR 4–6)', () => {
     const pages = [page([{ pt: '3e' }, 'zz\n', '2.1', { pt: 'p9.1a' }, '*', { pt: 'p9.1b' }, { pt: '0s' }, 'Intro', { pt: '0e' }])]
     const r = ownOf(pages, { units: units('Intro') })
     expect(groupsOf(r, pages)).toEqual({ u0: 'Intro', 'u0.l': '2.1', 'u9.p': '*' })
+  })
+  it('takes a caption\'s label by TeX\'s call, from its point `ka<k>` to the start, on a line of its own (IEEEtran\'s "TABLE I")', () => {
+    // (IEEEtran sets a table's \\fnum@table centred on a line of its own above the caption's text; the marked compile puts `ka<k>`
+    // before the label's expansion (layout/marks.mjs). The label is what TeX set from that point to the caption's start mark,
+    // whatever line it stands on: on the start's baseline alone, "TABLE I" was no one's)
+    const caption = [{ kind: 'caption', src: 'Accuracy by probe' }]
+    const pages = [page([{ pt: 'fs1' }, { pt: 'ka1' }, 'TABLE I\n', { pt: '0s' }, 'Accuracy by probe', { pt: '0e' }, { pt: 'fe1' }])]
+    const r = ownOf(pages, { units: caption })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'Accuracy by probe', 'u0.l': 'TABLE I' })
+    expect(r.units.get(0)?.labelKept).toBe(false)
+    // (on the caption's first line, as most classes set it: the same label, from the point)
+    const inline = [page([{ pt: 'fs1' }, { pt: 'ka1' }, 'Figure 2: ', { pt: '0s' }, 'Accuracy by probe', { pt: '0e' }, { pt: 'fe1' }])]
+    expect(groupsOf(ownOf(inline, { units: caption }), inline)['u0.l']).toBe('Figure 2: ')
+  })
+  it('takes no label for a caption TeX set no label point for, whatever stands on its line (the call is the evidence, not the baseline)', () => {
+    const caption = [{ kind: 'caption', src: 'Accuracy by probe' }]
+    const pages = [page([{ pt: 'fs1' }, 'Figure 2: ', { pt: '0s' }, 'Accuracy by probe', { pt: '0e' }, { pt: 'fe1' }])]
+    expect(groupsOf(ownOf(pages, { units: caption }), pages)['u0.l']).toBeUndefined()
+  })
+  it('takes as an author\'s lead only what TeX set after its call, the marks before it no lead of its (2611.03953v2)', () => {
+    // (ICML: \icmlauthor sets each name, then its marks; the next author's call (latex-front.mjs \axtcall, the point `<i>c` before
+    // the call's command or the \and that opens its block) comes after them. Walked back to the end mark before, the marks "12"
+    // were the next name's label; what stands before the call is the author before's, its trail (locate))
+    const authors = [{ kind: 'author', src: 'Ada' }, { kind: 'author', src: 'Bob' }]
+    const pages = [page([{ pt: '0s' }, 'Ada', { pt: '0e' }, { dx: 2 }, '12', { dx: 6 }, { pt: '1c' }, { pt: '1s' }, 'Bob', { pt: '1e' }])]
+    const r = ownOf(pages, { units: authors })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'Ada', u1: 'Bob' })
+    // (what TeX set after the call, before the start, is the author's lead, its label whatever its form: a † no label's form
+    // holds, glued to the name, left its unit the original's)
+    const led = [page([{ pt: '0s' }, 'Ada', { pt: '0e' }, '1', { dx: 6 }, { pt: '1c' }, '†', { pt: '1s' }, 'Bob', { pt: '1e' }])]
+    const l = ownOf(led, { units: authors })
+    expect(groupsOf(l, led)).toEqual({ u0: 'Ada', u1: 'Bob', 'u1.l': '†' })
+    expect([l.units.get(1)?.unhidden, l.units.get(1)?.labelKept]).toEqual([null, false])
+    // (a word a class sets after the call — llncs' and IJCAI's \\and set " and " before the last author:
+    // 2610.19860v1, 2610.21491v1 —: no label's form, its ink the original's where it stands, left to the ink units as before, so
+    // that the connector is translated; never the author's label, which kept it English)
+    const word = [page([{ pt: '0s' }, 'Ada', { pt: '0e' }, '1', { pt: '1c' }, { dx: 3 }, 'and', { dx: 3 }, { pt: '1s' }, 'Bob', { pt: '1e' }])]
+    const w = ownOf(word, { units: authors })
+    expect(groupsOf(w, word)).toEqual({ u0: 'Ada', u1: 'Bob' })
+    expect([w.units.get(1)?.unhidden, w.units.get(1)?.labelKept]).toEqual([null, true])
+    // (no call stated: walked back to the end mark before, as before)
+    const none = [page([{ pt: '0s' }, 'Ada', { pt: '0e' }, { dx: 2 }, '12', { dx: 6 }, { pt: '1s' }, 'Bob', { pt: '1e' }])]
+    expect(groupsOf(ownOf(none, { units: authors }), none)).toEqual({ u0: 'Ada', u1: 'Bob', 'u1.l': '12' })
+  })
+  it('takes a mark TeX set as a script glued to a unit\'s first word, apart from what stands before it, as its label (2604.14228v3)', () => {
+    // (Meta FAIR's \contributionformat sets `$^{\dagger}$Corresponding author` after ", ": no call stated (the class's
+    // \addtolist builds the list whole in the preamble), the walk back from the start reached the "†", no label's form, and left
+    // it the original's ink where it stood: the note's translation laid on from the one before, the † stood 33 pt after it. TeX
+    // set the mark as a script glued to the word (\scriptspace, no word's gap) and a word's space after the comma: the word's
+    // lead. A mark glued to the word before, a space before the next (a \thanks mark after a name), is none of the next's)
+    const notes = [{ kind: 'affiliation', src: 'These' }, { kind: 'affiliation', src: 'Corr' }]
+    const mark = (u: string, x: number, small = true) => ({ n: 0, k: 0, u, x0: x, x1: x + 3, y: small ? 704 : 700, size: small ? 6 : 10, top: 709, bottom: 702 })
+    const pageOf = (dagger: number) => {
+      const pg = page([{ pt: '0s' }, 'These', { pt: '0e' }, ',', { dx: 4 }, '#', { pt: '1s' }, 'Corr', { pt: '1e' }])
+      // (the "#" made the † a script: raised, smaller, at `dagger`)
+      const i = pg.glyphs.findIndex((g) => g.u === '#')
+      pg.glyphs[i] = { ...mark('†', dagger), n: i }
+      return pg
+    }
+    // (glued: the word's first glyph at x 49, the † ends 0.5 before it, 5.5 after the comma)
+    const glued = [pageOf(45.5)]
+    const g = ownOf(glued, { units: notes })
+    expect(groupsOf(g, glued)).toEqual({ u0: 'These,', u1: 'Corr', 'u1.l': '†' })
+    expect(g.units.get(1)?.labelKept).toBe(false)
+    // (glued to the comma before it, a word's space between it and the word: left the original's, as before)
+    const apart = [pageOf(41)]
+    const a = ownOf(apart, { units: notes })
+    expect(groupsOf(a, apart)).toEqual({ u0: 'These,', u1: 'Corr' })
+    expect(a.units.get(1)?.labelKept).toBe(true)
   })
   it('leaves a label that is no label\'s form the original\'s ink where it stands apart (labelKept)', () => {
     const pages = [page([{ pt: '3e' }, '211', { pt: '0s' }, 'cell', { pt: '0e' }])]
@@ -106,6 +188,29 @@ describe('placeholders, labels and names (MR 4–6)', () => {
     // (on a page of two columns, a letter past the middle is the other column's, however near: the name's word alone)
     const two = [page([{ pt: 'c2-1' }, { dx: 245 }, { pt: 'n7.appendix.s' }, 'Appendix', { pt: 'n7.appendix.e' }, { dx: 9 }, 'A'])]
     expect(groupsOf(ownOf(two, { units: [] }), two)).toEqual({ n7: 'Appendix' })
+  })
+  it('gives a babel name the number TeX set right before it at its line\'s start, no unit\'s, as its label (spconf\'s "9. REFERENCES", 2610.20967v1)', () => {
+    // (ICASSP's spconf.sty: thebibliography sets \section{References}, its number \@svsec "9." and \hskip 0.6em before the word;
+    // the number is the name's label, `n<k>.l`, which moves with its word: the line TeX centred is laid whole)
+    const pages = [page([
+      '9.', { dx: 5.4 }, { pt: 'n1.ref.s' }, 'REFERENCES', { pt: 'n1.ref.e' }, '\n',
+      { pt: '0s' }, 'Body', { pt: '0e' }, '\n',
+      'A.1', { dx: 10 }, { pt: 'n2.appendix.s' }, 'Appendix', { pt: 'n2.appendix.e' }, '\n',
+    ])]
+    expect(groupsOf(ownOf(pages, { units: units('Body') }), pages)).toEqual({ 'n1.l': '9.', n1: 'REFERENCES', u0: 'Body', 'n2.l': 'A.1', n2: 'Appendix' })
+    // (none past TeX's own spacing before the word, no number (a word, a letter alone), a number after another word on its line,
+    // a number a unit owns: the name's word alone)
+    const not = [page([
+      '9.', { dx: 30 }, { pt: 'n3.ref.s' }, 'References', { pt: 'n3.ref.e' }, '\n',
+      'See', { dx: 3 }, { pt: 'n4.ref.s' }, 'References', { pt: 'n4.ref.e' }, '\n',
+      'A', { dx: 5 }, { pt: 'n5.ref.s' }, 'References', { pt: 'n5.ref.e' }, '\n',
+      'Table', { dx: 3 }, '9', { dx: 5 }, { pt: 'n6.ref.s' }, 'References', { pt: 'n6.ref.e' }, '\n',
+      { pt: '0s' }, '3', { pt: '0e' }, { dx: 5 }, { pt: 'n7.ref.s' }, 'References', { pt: 'n7.ref.e' }, '\n',
+    ])]
+    expect(groupsOf(ownOf(not, { units: units('3') }), not)).toEqual({ n3: 'References', n4: 'References', n5: 'References', n6: 'References', n7: 'References', u0: '3' })
+    // (on a page of two columns, a number in the other column, however near: the name's word alone)
+    const two = [page([{ pt: 'c2-1' }, { dx: 286 }, '7', { dx: 6 }, { pt: 'n8.appendix.s' }, 'Appendix', { pt: 'n8.appendix.e' }])]
+    expect(groupsOf(ownOf(two, { units: [] }), two)).toEqual({ n8: 'Appendix' })
   })
   it('gives a footnote\'s call after the last word that TeX gave no mark its raised mark right after the end mark (2610.35877v1\'s abstract)', () => {
     const pages = [page([{ pt: '0s' }, 'Hello.', { pt: '0e' }, '1', '\n', { pt: '1s' }, 'Next', { pt: '1e' }])]
@@ -163,6 +268,25 @@ describe('a paper\'s macro at a unit\'s head, its point \\axthpk\'s (marks.mjs l
     const follows = followsOf(us as never, new Set(pages[0]!.points.map(x => x.name)))
     const r = ownOf(pages, { units: us, follows })
     expect(groupsOf(r, pages)).toMatchObject({ u3: 'is simple', 'u3.p': 'BERT', u4: 'wins', 'u4.p': 'BERT', 'u4.l': '1.' })
+  })
+})
+
+describe('the points a reader of its own reads alone: a caption\'s label point, a float of no counter\'s (marks.mjs POINTS_TEX)', () => {
+  // (2406.06525v1 p6: a cell's superscript, its opening point alone after the cell's end mark, read to the next point; the
+  // caption's label point `ka<k>` now stood there first, and the reading lost its ink. `ka<k>` is read by the label's walk
+  // (MR 5) alone and `fn<n>` by the ledger alone: every other reading passes over them as over a bracket)
+  const us = [{ kind: 'para', pieces: [{ t: 'text', s: 'OAI' }, { t: 'ph', src: '\\textsuperscript{ukn.}' }] }, { kind: 'caption', src: 'Comparison' }]
+  const at = (extra: { pt: string }[]) => page([{ pt: '0s' }, 'OAI', { pt: '0e' }, { pt: 'p0.1a' }, 'ukn.', { dx: 3 }, '4-0', ...extra, '\n', 'Table 4: ', { pt: '1s' }, 'Comparison', { pt: '1e' }])
+  it('gives an opening alone the same reading with the points as without them, the label aside', () => {
+    const without = [at([])]
+    const r0 = ownOf(without, { units: us, follows: followsOf(us as never, new Set(without[0]!.points.map(x => x.name))) })
+    for (const extra of [[{ pt: 'ka1' }, { pt: 'ka2' }], [{ pt: 'fn3' }]]) {
+      const pages = [at(extra)]
+      const r = ownOf(pages, { units: us, follows: followsOf(us as never, new Set(pages[0]!.points.map(x => x.name))) })
+      const g = groupsOf(r, pages), g0 = groupsOf(r0, without)
+      expect({ ...g, 'u1.l': undefined }).toEqual({ ...g0, 'u1.l': undefined })
+      expect(g['u0.p']).toBe(g0['u0.p'])
+    }
   })
 })
 

@@ -2,6 +2,7 @@
 // TypeScript module of the package (the packages hold no declaration files), each value of ink.mjs re-exported with its type.
 // @ts-ignore: JavaScript moved as it is, typed by this file alone (a package holds no declaration file)
 import * as ink from './ink.mjs'
+import type { OpsReader } from './opstream.ts'
 
 /** a glyph as PDF.js's canvas places it: its character, its advance across (x0, x1) and baseline, size and the font's
  *  PostScript name (its subset tag kept: the font table strips it); `top` and `bottom` its own ink up and down, `ix0` and
@@ -78,6 +79,10 @@ export const regionsOfPoints = ink.regionsOfPoints as (
   points: readonly { name: string; glyph: number }[],
   glyphCount: number,
 ) => InkRegion[]
+export const displayTextMask = ink.displayTextMask as (
+  regions: readonly InkRegion[] | null | undefined,
+  n: number,
+) => Uint8Array
 export const regionMask = ink.regionMask as (
   regions: readonly InkRegion[] | null | undefined,
   n: number,
@@ -91,6 +96,8 @@ export type PageInk = {
   boxAt: number[]
   paras: InkPoint[]
   paraEnds?: (InkPoint & { point: number; para: number })[]
+  /** where TeX begins a front matter environment no author's (`fm<n>`, ink.mjs FRONT_POINT): the author block's end */
+  fronts?: InkPoint[]
   regions: InkRegion[]
   paths?: number[]
   shows?: number
@@ -106,25 +113,38 @@ export type PageInk = {
   mergedAt: number | null
   rotated: boolean
 }
+/** pageInk's options */
+export interface PageInkOptions {
+  rotate: number
+  indices?: boolean
+  outlines?: ReadonlyMap<string, number[]> | null
+  collect?: Map<string, number[]> | null
+  glyphsMax?: number
+  boxesMax?: number
+  stepsMax?: number
+  msMax?: number
+  glyphsOnly?: boolean
+  turned?: boolean
+  /** with `turned`: every painted path's lines (`shapes`), not a figure's alone */
+  shapesAll?: boolean
+  /** the reader's own table across its pages, each font's name by its object: read once a document (none: once a page) */
+  names?: Map<unknown, string> | null
+  /** false: no figure path's lines (`shapes` empty), every other reading as it is */
+  shapes?: boolean
+}
 export const pageInk = ink.pageInk as (
   OPS: Record<string, number>,
   ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> },
   commonObjs: { get(id: string): unknown },
-  o: {
-    rotate: number
-    indices?: boolean
-    outlines?: ReadonlyMap<string, number[]> | null
-    collect?: Map<string, number[]> | null
-    glyphsMax?: number
-    boxesMax?: number
-    stepsMax?: number
-    msMax?: number
-    glyphsOnly?: boolean
-    turned?: boolean
-    /** with `turned`: every painted path's lines (`shapes`), not a figure's alone */
-    shapesAll?: boolean
-  },
+  o: PageInkOptions,
 ) => PageInk
+/** pageInk's walk as a reader of the list in pieces, each after the one before, then pageInk's answer (`end`): the same whatever the
+ *  pieces, and no reader holds the whole list (opstream.ts readOps) */
+export const inkReader = ink.inkReader as (
+  OPS: Record<string, number>,
+  commonObjs: { get(id: string): unknown },
+  o: PageInkOptions,
+) => OpsReader<PageInk>
 /** a glyph set turned (pageInk's `turned`): its baseline from its origin to its advance's end, its direction, its size, its
  *  font's band in em, its own ink up and down from its baseline in em (`up`, `down`: its outline's, else its font's band), its
  *  box's index (-1 for none), the level glyphs and the pictures' points before it; `clipped` where its own ink (its outline,

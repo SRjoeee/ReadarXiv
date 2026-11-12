@@ -17,7 +17,15 @@ export type FillUnit = {
   fillLead?: number | null
   fillTop?: number
   fitLines?: number
+  /** a unit over a page or column break: the fill leading of each frame before its last, by block, and of its last */
+  fillLeads?: (number | undefined)[]
+  lastLead?: number
+  /** its frames at a state that holds the frames' share, and the leading each frame before the last holds it at */
+  fillShare?: FillShare
 }
+/** a unit's frames at a state that holds the frames' share (frameShareOf): their leadings as fillLeads and lastLead, the
+ *  leading each frame a cut follows is filled to holding it (null: it does not hold it), and the unit's fill leading `lo` */
+export type FillShare = { leads: (number | undefined)[]; last: number; needs: (number | null)[]; lo: number }
 /** the target's rules the fill leadings read */
 export type FillRules = { fillLead: number | null; fillLeadRel: number | null; leadFloor?: number }
 /** a unit's fill leadings set on it (RUN:512 fillLeadsOf) */
@@ -28,3 +36,5 @@ export const closerLead: (
   sets: (k: number) => Layout | null,
   guess: number | null,
 ) => { k: number; l: Layout } | null = m.closerLead
+/** each block's frame (a page's, a column's, a paragraph's TeX states inside the unit), by block (S.fill.leads framesOf) */
+export const framesOf: (blocks: readonly FitBlock[]) => number[] = m.framesOf

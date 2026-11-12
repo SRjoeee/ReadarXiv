@@ -52,7 +52,10 @@ const DELIMITED = {
   etocdepthtag: 'bsgn',
 }
 const CURATED = {
-  // boxes and colours: the last argument the text they set
+  // boxes and colours: the last argument the text they set. Plain TeX's line boxes, LaTeX's own (ltplain.dtx: \\line is
+  // \\hb@xt@\\hsize, \\centerline#1 \\line{\\hss#1\\hss}, \\leftline#1 \\line{#1\\hss}, \\rightline#1 \\line{\\hss#1}), whose
+  // argument LaTeXML leaves untyped: what the page shows, a box's content (PDF-READER §18.46)
+  centerline: '{c', leftline: '{c', rightline: '{c',
   mbox: '{c', makebox: '[d[n{c', framebox: '[d[n{c', fbox: '{c', parbox: '[n[d[n{d{c', raisebox: '{d[d[d{c',
   resizebox: '*s{d{d{c', scalebox: '{d[d{c', rotatebox: '[k{d{c', reflectbox: '{c', colorbox: '[n{n{c', fcolorbox: '[n{n{n{c',
   textcolor: '[n{n{c', color: '[n{n', adjustbox: '{k{c', smash: '[n{c', phantom: '{x', hphantom: '{x', vphantom: '{x',
@@ -76,6 +79,13 @@ const CURATED = {
   label: '[n{n', ref: '*s{n', eqref: '{n', pageref: '*s{n', autoref: '*s{n', cref: '*s{n', Cref: '*s{n', nameref: '*s{n',
   hyperref: '[n{t', hyperlink: '{n{t', hypertarget: '{n{t', href: '[k{n{t', url: '{v', nolinkurl: '{v', includegraphics: '*s[k[k{n',
   IfFileExists: '{n{c{c', InputIfFileExists: '{n{c{c', email: '[n{v', orcid: '[n{v', orcidlink: '{n', thanksref: '{n', inst: '{v',
+  // etoolbox's conditionals and ifthen's \ifthenelse, which TeX reads as a macro's arguments, no \fi: the test a control
+  // sequence, a name or code, the two branches the content TeX sets one of (the front end reads them as TeX's own conditionals'
+  // branches, latex-front.mjs BRACE_CONDITIONALS). Unknown, the call was one placeholder, and a branch of words no unit
+  // (2608.25210v2's "PVLDB Artifact Availability", in `\ifdefempty{\vldbavailabilityurl}{}{…}`)
+  ifdefempty: '{r{c{c', ifdefvoid: '{r{c{c', ifdef: '{r{c{c', ifundef: '{r{c{c', ifdefstring: '{r{x{c{c', ifcsdef: '{n{c{c',
+  ifcsundef: '{n{c{c', ifcsempty: '{n{c{c', ifcsvoid: '{n{c{c', ifbool: '{n{c{c', iftoggle: '{n{c{c', ifstrequal: '{x{x{c{c',
+  ifstrempty: '{x{c{c', ifblank: '{x{c{c', notblank: '{x{c{c', ifthenelse: '{x{c{c',
   // definitions: a name, an arity, a default and a body, none of them typeset where they stand
   newcommand: '*s{r[d[x{x', renewcommand: '*s{r[d[x{x', providecommand: '*s{r[d[x{x', DeclareRobustCommand: '*s{r[d[x{x',
   newenvironment: '*s{n[d[x{x{x', renewenvironment: '*s{n[d[x{x{x', newtheorem: '*s{n[n{n[n', newcolumntype: '{n[d[x{x',
@@ -144,6 +154,8 @@ function bindingsOfText(texts) {
   while (queue.length) for (const r of REQUIRES[queue.pop()] ?? []) add(r)
   return out
 }
+/** whether a paper (paperOf) loads a binding (`subfigure.sty`): its files name it, or a binding they name requires it (bindingsOf) */
+export const loads = (paper, binding) => !!paper?.bindings.has(BINDING_INDEX.get(binding))
 /** a name's parameters by the forms LaTeXML gives it: where a paper's bindings (`bindings`) define it, theirs, and none
  *  where they differ; else the engine pools'. A package's form only where the paper loads it: with no paper to tell
  *  (null), none — a paper's own \degrees is no pstricks \degrees[…] */

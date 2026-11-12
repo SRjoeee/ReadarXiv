@@ -13,8 +13,11 @@
 //   at an equal distance); from a page's commit until it is in place no other page is laid, HOLD_MS at most, so that the page
 //   the reader waits on is shown first (layer-side.mjs `hold`). A page commits when nothing it waits for is missing: its rows,
 //   or its faces (asked in one wave for the near pages, the middle page first, each page laid again once its own are in; a page
-//   still waiting for rows asks meanwhile those of the rows it has). Committed is final: a late row changes nothing on screen
-//   until the language, the toggles or the paper change.
+//   still waiting for rows asks meanwhile those of the rows it has). A page laid remembers every row its lay read and what it
+//   saw of it (a translation, a refusal, none in yet), and is laid again, alone, when a row lands that stands otherwise than
+//   it saw (one come, one failed, one stated again otherwise), its drawing kept until the new one commits: so every page laid
+//   is a lay over the rows as they stand and the toggles as they are (a translation a refusing service failed, brought
+//   later by another or by a retry; the paper's own names, read and waited for by no page; a run's restated sentences).
 // - **What stays the original's.** A page with no part (no layout), a page laid with nothing hidden, a page whose part or lay
 //   or drawing failed (asked again on a zoom, coming near or the next scroll), a page whose drawing is not in place PAGE_MS after
 //   its commit (one warning; asked again on the next scroll), and a member whose groups the composed document does not hold.
@@ -22,7 +25,12 @@
 // - **Another target, the toggles, again** (a generation): every page laid again from the same parts and the same composed
 //   document; a near laid page keeps its drawing (the target before's) until the new one's commits, muted meanwhile (nothing of
 //   it lit or hit); one the new generation lays with nothing, or fails, the original's; the drawings kept off the view, the
-//   generation before's, let go. The left pane is not touched.
+//   generation before's, let go. The left pane is not touched. A row stated again otherwise (our server's run on the source's
+//   units, begun before the bundle states which units are cut into sentences, replaced mid-way by one on the layer's, which
+//   states the same ids again with their sentences: readarxiv-web worker v2 machine.ts wanted, startRecent; format.ts fits)
+//   lays again the pages that read it, as any landing that changes what a page read: laid once for good, a page lit its units
+//   whole in the tab that watched its rows arrive, and by sentence after a reload (staging, 2026-11-11: 1706.03762v7 p2,
+//   2610.21312v1 p1).
 // - **Translating marks** on near pages not laid (marks.ts).
 // - **The pages ahead**: once the rows have ended, the AHEAD_PAGES pages past the near ones the way the reader moves, laid and
 //   drawn into drawings kept off the view at background priority while the view's own pages hold nothing, so that the reader
@@ -36,12 +44,12 @@ import type { PageContent, SlotAt, Stack } from '../stack/stack.ts'
 import { kindShown, sameClasses } from './classes.ts'
 import type { Faces } from './faces.ts'
 import type { Groups } from './groups.ts'
-import { bordersOf, type LinkHooks, linkLayer } from './links.ts'
+import { type LinkHooks, linkLayer } from './links.ts'
 import { createMarks, type MarkBox } from './marks.ts'
 import { committed, type Lay, type Laid, type Page, type Rows } from './page.ts'
 import { cropGrid, cropsFor, type Rounding, svgOf, turned, uprightOf } from './paint.ts'
 import { canvasMeasure, laidText, releaseText, type TextContent, textContentOf, textLayerOf } from './text.ts'
-import { ATTRIBUTE, decideOn } from './text-rendering.ts'
+import { ATTRIBUTE, decideOnce } from './text-rendering.ts'
 
 /** a page view's box rounding as PDF.js set it on the page box it drew (--scale-round-x, -y; where it set none, its sheet's
  *  1 px): the crops' canvas is floored to it, as that box is (paint.ts cropGrid) */
@@ -115,7 +123,7 @@ export interface ComposerOptions {
   faces: Faces
   lay: Lay
   unlaid: 'original' | 'composed'
-  /** the target's language tag for the text layer */
+  /** the target's language tag: the drawing's (its SVG's `lang`, which the browser picks glyphs by) and the text layer's */
   lang(): string
   links: LinkHooks
   /** the reader's clock (default the browser's timers) */
@@ -137,18 +145,24 @@ export interface ComposerOptions {
   warn?(what: string, e: unknown): void
 }
 
+/** what a page's lay read: each row id and the row it saw (undefined: none was in) */
+type Read = Map<string, Row | undefined>
 interface Commit {
   page: Page
   tick: number
   gen: number
   /** shown in its slot (its drawing put in place) */
   shown: boolean
+  /** every row its lay read, as it saw it: a landing that changes one lays the page again (moved) */
+  read: Read
 }
 interface PageRec {
   failed: boolean
   stalled: boolean
   /** laid with nothing of its own, or no part: the original's by the rule */
   nothing: boolean
+  /** laid with nothing of its own: every row its lay read, as a commit's `read` */
+  read: Read
   /** the stall clock, from the commit to the drawing in place */
   clock: number
 }
@@ -161,6 +175,7 @@ const browserTimers: Clock = {
   cancel: (id) => cancelAnimationFrame(id),
 }
 const keyOf = (c: Commit) => `laid:${c.tick}`
+const none = (): Read => new Map()
 
 export function createComposer(o: ComposerOptions): Composer {
   const { stack, faces } = o
@@ -187,7 +202,7 @@ export function createComposer(o: ComposerOptions): Composer {
   const rec = (n: number): PageRec => {
     let P = recs.get(n)
     if (!P) {
-      P = { failed: false, stalled: false, nothing: false, clock: 0 }
+      P = { failed: false, stalled: false, nothing: false, read: none(), clock: 0 }
       recs.set(n, P)
     }
     return P
@@ -216,8 +231,12 @@ export function createComposer(o: ComposerOptions): Composer {
     o.warn?.(what, e)
   }
   const marks = createMarks({ root: o.root ?? document.documentElement, clock })
-  /** whether the overlay's text rendering is decided (text-rendering.ts, at the first overlay whose page tells) */
-  let textDecided = false
+  /** the overlay's text rendering, decided once a reader by the fixed probe (text-rendering.ts decideOnce): asked as the pages
+   *  are first to be laid, so that it is in before the first page commits, and awaited by every overlay before its drawing is
+   *  made (so that no page is laid out under one rendering and then restyled, and every page is drawn under the same one) */
+  let rendering: Promise<unknown> | null = null
+  const renderingOnce = () =>
+    (rendering ??= o.root ? decideOnce(o.root, faces, () => !disposed).catch(() => null) : Promise.resolve(null))
 
   // ---------------------------------------------------------------- the rows a lay reads: a unit of a kind the toggles hide
   // reads as no translation (it stays the original's), whatever was translated
@@ -234,6 +253,33 @@ export function createComposer(o: ComposerOptions): Composer {
   }
   /** the rows as if they had ended: what a page waiting for rows reads to ask the faces of the rows in (never committed) */
   const endedView: Rows = { get: (id) => rowsView.get(id), done: true, kept: rowsView.kept }
+  /** a page laid over the rows now, with every row its lay read as it saw it (Commit.read) */
+  const layRead = (part: Part): { page: Page; read: Read } => {
+    const read: Read = new Map()
+    const view: Rows = {
+      get(id) {
+        const r = rowsView.get(id)
+        read.set(id, r)
+        return r
+      },
+      get done() {
+        return rowsView.done
+      },
+      kept: rowsView.kept,
+    }
+    return { page: held(o.lay(part, view), part), read }
+  }
+  /** whether a row a lay read stands otherwise now: come, failed, stated again otherwise (the same row read anew, as its run's
+   *  whole states it again, is none: kept as the one read, so that it is compared once) */
+  const moved = (read: Read): boolean => {
+    for (const [id, was] of read) {
+      const now = rowsView.get(id)
+      if (now === was) continue
+      if (!now || !was || JSON.stringify(now) !== JSON.stringify(was)) return true
+      read.set(id, now)
+    }
+    return false
+  }
 
   // ---------------------------------------------------------------- what a slot shows
   const originalOf = (n: number, isSettled: boolean): PageContent | null => {
@@ -287,11 +333,9 @@ export function createComposer(o: ComposerOptions): Composer {
     for (const m of page.members)
       for (const [, , , items] of m.lines)
         for (const it of items) if ('face' in it) drawn.set(it.face, (drawn.get(it.face) ?? '') + it.s)
-    await faces.ready([...drawn])
-    // (the overlay's text rendering, decided once a reader by the first laid page whose words tell, in its faces just loaded,
-    // before its drawing is made: `auto` where the browser lays them out alike under geometricPrecision and under it, else the
-    // sheet's geometricPrecision; text-rendering.ts. Written before the page is put in place, so that it is laid out once)
-    if (!textDecided && !disposed && o.root) textDecided = decideOn(o.root, page, faces) !== null
+    // (and the overlay's text rendering, decided once a reader before any drawing is made: written before the page is put in
+    // place, so that it is laid out once)
+    await Promise.all([faces.ready([...drawn]), renderingOnce()])
     const el = document.createElement('div')
     el.className = 'axt-over'
     // (the frame is the page's own, unturned: rawDims; a turned page's drawing is made in it and turned with the page, the text
@@ -300,18 +344,19 @@ export function createComposer(o: ComposerOptions): Composer {
     el.style.setProperty('--axt-frame-w', `calc(var(--total-scale-factor) * ${raw.pageWidth}px)`)
     el.style.setProperty('--axt-frame-h', `calc(var(--total-scale-factor) * ${raw.pageHeight}px)`)
     const up = uprightOf(at.viewport)
-    el.append(turned(svgOf(page, at.viewport, faces), at.viewport))
+    el.append(turned(svgOf(page, at.viewport, faces, o.lang()), at.viewport))
     const tSvg = performance.now()
     const pdfPage = await doc.getPage(n)
     const out = (at.view as unknown as { outputScale?: { sx: number; sy: number } }).outputScale ?? { sx: 1, sy: 1 }
-    const crops = await cropsFor(page, pdfPage, at.viewport, g.crops, out, at.signal, roundingOf(at))
+    // (each crop cut from its own page: this one, or another of a member laid across a page break)
+    const crops = await cropsFor(page, (k) => doc.getPage(k), at.viewport, g.crops, out, at.signal, roundingOf(at))
     if (crops) el.append(crops)
     const tCrops = performance.now()
     const text = texts.get(n) ?? textContentOf(pdfPage)
     texts.set(n, text)
     const laid = laidText(await text, page, members, faces, measure)
     el.append(await textLayerOf(o.kit, laid.content, at.viewport, o.lang(), laid.translated))
-    const links = linkLayer(page, up, o.links, laid.content, page.links.length ? await bordersOf(pdfPage) : [])
+    const links = linkLayer(page, up, o.links, laid.content)
     if (links) el.append(turned(links, at.viewport))
     const tEnd = performance.now()
     timings.push({ n, svgMs: tSvg - t0, cropsMs: tCrops - tSvg, textMs: tEnd - tCrops, overlayMs: tEnd - t0 })
@@ -326,7 +371,7 @@ export function createComposer(o: ComposerOptions): Composer {
     const out = (at.view as unknown as { outputScale?: { sx: number; sy: number } }).outputScale ?? { sx: 1, sy: 1 }
     const round = roundingOf(at)
     if (was.width === cropGrid(at.viewport, out, round).px[0]) return
-    const next = await cropsFor(page, await doc.getPage(at.n), at.viewport, g.crops, out, at.signal, round)
+    const next = await cropsFor(page, (k) => doc.getPage(k), at.viewport, g.crops, out, at.signal, round)
     if (!next || at.signal.aborted || was.parentNode !== el) return
     was.replaceWith(next)
     was.width = 0
@@ -435,8 +480,9 @@ export function createComposer(o: ComposerOptions): Composer {
     }
     counts.lays++
     let page: Page
+    let read: Read
     try {
-      page = held(o.lay(part, rowsView))
+      ;({ page, read } = layRead(part))
     } catch (e) {
       warnOnce('a page laid', e)
       failed(n)
@@ -455,24 +501,31 @@ export function createComposer(o: ComposerOptions): Composer {
     // (a page that hides nothing is never put in place: arXiv's page stays, never the composed page in its place)
     if (!page.members.some((m) => m.state === 'laid' && m.off)) {
       P.nothing = true
+      P.read = read
       if (commits.has(n)) uncommit(n)
       settledNow(n)
       return
     }
-    commit(n, page)
+    commit(n, page, read)
   }
   /** the page with every member whose groups the composed document does not hold made the original's (its ink would stay
-   *  under its translation) */
-  function held(page: Page): Page {
+   *  under its translation), its links back at A's boxes as the typesetter places a member not laid (Page.links' owner: the
+   *  part's links it owns on this page; one moved with its translation would open over the original's text, Codex on #626) */
+  function held(page: Page, part: Part): Page {
     const g = groups
     if (!g?.size) return page
-    let changed = false
+    const unwrapped = new Set<number>()
     const out = page.members.map((m): Laid => {
       if (m.state !== 'laid' || !m.off || g.holds(m.ord, page.page, m.off)) return m
-      changed = true
-      return { ...m, state: 'unwrapped', off: 0, lines: [], lit: { left: m.lit.left, right: m.lit.left, own: [] } }
+      unwrapped.add(m.ord)
+      return { ...m, state: 'unwrapped', off: 0, lines: [], lit: { ...m.lit, right: m.lit.left, own: [] } }
     })
-    return changed ? { ...page, members: out } : page
+    if (!unwrapped.size) return page
+    const links: Page['links'] = page.links.filter(([, , owner]) => owner === undefined || !unwrapped.has(owner))
+    for (const l of part.links ?? [])
+      if (l.owner && unwrapped.has(l.owner[0]) && (l.page ?? page.page) === page.page)
+        links.push(l.border ? [l.box, l.to, l.owner[0], l.border] : [l.box, l.to, l.owner[0]])
+    return { ...page, members: out, links }
   }
   /** the rows page n still waited for when the faces of its rows in were last asked (`early`) */
   const earlyLeft = new Map<number, number>()
@@ -517,10 +570,10 @@ export function createComposer(o: ComposerOptions): Composer {
     if (commits.has(n)) uncommit(n)
     settledNow(n)
   }
-  function commit(n: number, page: Page) {
+  function commit(n: number, page: Page, read: Read) {
     if (!groups) return
     groups.set(page)
-    const c: Commit = { page, tick: ++tick, gen, shown: false }
+    const c: Commit = { page, tick: ++tick, gen, shown: false, read }
     commits.set(n, c)
     counts.commits++
     // (the pages kept: the oldest committed far from the view let go past the bound, its groups back on)
@@ -532,6 +585,9 @@ export function createComposer(o: ComposerOptions): Composer {
     const P = rec(n)
     clock.clear(P.clock)
     P.clock = 0
+    // (a page committed holds something of its own: the original's by the rule no more)
+    P.nothing = false
+    P.read = none()
     if (stack.near(n)) {
       // (the stall clock runs from the commit to the drawing in place: a page still waiting for its part or rows is never one)
       P.clock = clock.later(() => stalled(n, c), PAGE_MS)
@@ -606,6 +662,7 @@ export function createComposer(o: ComposerOptions): Composer {
       P.failed = false
       P.stalled = false
       P.nothing = false
+      P.read = none()
     }
     // (the drawings kept off the view are the generation before's; a laid page not in place yet is let go with its drawing:
     // nothing the run before lays or draws is put in place)
@@ -784,15 +841,16 @@ export function createComposer(o: ComposerOptions): Composer {
             askLay(m)
             return
           }
-          const page = part ? held(o.lay(part, rowsView)) : null
-          if (!page || !committed(page) || !page.members.some((x) => x.state === 'laid' && x.off)) {
+          const got = part ? layRead(part) : null
+          const page = got?.page
+          if (!got || !page || !committed(page) || !page.members.some((x) => x.state === 'laid' && x.off)) {
             aheadNothing.add(m)
             continue
           }
           pages.set(m, page)
           await backgroundTurn(ac.signal)
           if (!live() || viewBusy()) return
-          commit(m, page)
+          commit(m, page, got.read)
           const kept = await stack.ahead(m, ac.signal)
           if (!live()) return
           if (kept) counts.aheadKept++
@@ -900,8 +958,26 @@ export function createComposer(o: ComposerOptions): Composer {
       layer = next
       unrows?.()
       rows = nextRows
+      if (layer && rows) void renderingOnce()
       unrows =
         rows?.on(() => {
+          // (a page laid this generation whose lay read a row that stands otherwise now: laid again, alone, its drawing kept and
+          // muted until the new one commits (a page far from the view let go, laid again as it comes near); one laid with
+          // nothing of its own, the original's by the rule no more, laid again here or once it comes near)
+          for (const [n, c] of [...commits])
+            if (c.gen === gen && moved(c.read)) {
+              c.gen = -1
+              pages.delete(n)
+              if (stack.near(n)) askLay(n)
+              else uncommit(n)
+            }
+          for (const [n, P] of recs)
+            if (P.nothing && moved(P.read)) {
+              P.nothing = false
+              P.read = none()
+              stack.refresh(n)
+              if (stack.near(n)) askLay(n)
+            }
           // (a row in: the pages waiting laid again, and the pages another generation still shows where these rows have
           // ended; a committed page is final)
           for (const [n, p] of pages) {

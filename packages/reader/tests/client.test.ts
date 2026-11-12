@@ -20,6 +20,7 @@ import {
 import { type Doc, type Input, init, type Ref, type Ticket } from '../src/session/machine.ts'
 import { createRuntime, type Handlers } from '../src/session/runtime.ts'
 import { flush, manualTimers } from './helpers/ranged-server.ts'
+import { layerOf, paperDoc, prepareOf, runOf } from './helpers/doc.ts'
 
 const enc = (s: string) => new TextEncoder().encode(s)
 const sha = async (b: Uint8Array) =>
@@ -42,7 +43,11 @@ const stalled = (first: Uint8Array, init?: RequestInit) =>
 const settle = async (n = 6) => {
   for (let i = 0; i < n; i++) await flush()
 }
-const DOC = { epoch: 'e', rev: 3, prepare: { state: 'running', why: null, retryAt: null, stage: 'units', units: [] } }
+const DOC = paperDoc({
+  epoch: 'e',
+  rev: 3,
+  prepare: prepareOf({ state: 'running', why: null, retryAt: null, stage: 'units', units: [] }),
+})
 const CATALOG: Ref = { path: 'p/1706_03762v7/x/catalog', sha256: 'c'.repeat(64), bytes: 1 }
 
 describe('the client: every ask bounded and asked once more', () => {
@@ -67,6 +72,14 @@ describe('the client: every ask bounded and asked once more', () => {
     timers.advance(RETRY_MS)
     await expect(p).rejects.toMatchObject({ why: 'network' })
     expect(asks).toBe(2)
+  })
+  it('a 5xx twice is our server at fault, not the network: its own word', async () => {
+    const timers = manualTimers()
+    const p = request({ fetch: async () => new Response('', { status: 503 }), timers }, '/x', {}, async () => 1)
+    p.catch(() => {})
+    await settle()
+    timers.advance(RETRY_MS)
+    await expect(p).rejects.toMatchObject({ why: 'server' })
   })
   it('a 5xx is asked once more, and the second answer taken', async () => {
     const timers = manualTimers()
@@ -114,11 +127,11 @@ describe('the client: every ask bounded and asked once more', () => {
     const gone = run([404])
     expect(await gone.p).toBe(404)
     expect(gone.asked.n).toBe(1)
-    // (a 429, then a 5xx: the 5xx was the one more ask, so out of reach; a 5xx, then a 429: the 429 read)
+    // (a 429, then a 5xx: the 5xx was the one more ask, so our server at fault; a 5xx, then a 429: the 429 read)
     const both = run([429, 503])
     await settle()
     timers.advance(5000)
-    await expect(both.p).rejects.toMatchObject({ why: 'network' })
+    await expect(both.p).rejects.toMatchObject({ why: 'server' })
     expect(both.asked.n).toBe(2)
     const after = run([503, 429])
     await settle()
@@ -339,10 +352,14 @@ describe('the client: the follow and the open', () => {
       follow({ fetch: async () => r, paper: { id: '2401.01234', version: 1 }, target: null, onDoc: () => {} }).catch(
         (e) => e as Refused,
       )
-    const limit = await at(
-      new Response(JSON.stringify(DOC), { status: 429, headers: { 'retry-after': '30', 'x-axt-refused': 'quota' } }),
+    // (the visitor's rate of asks, as our server answers it: its body's word, worker v2 routes.ts `rate-limited`)
+    const rate = await at(
+      new Response(JSON.stringify({ error: 'rate-limited', retryAfterS: 60 }), {
+        status: 429,
+        headers: { 'retry-after': '60' },
+      }),
     )
-    expect(limit).toMatchObject({ why: 'limit', afterMs: 30_000, doc: { rev: 3 } })
+    expect(rate).toMatchObject({ why: 'rate', afterMs: 60_000 })
     const busy = await at(new Response('', { status: 429 }))
     expect(busy).toMatchObject({ why: 'busy', afterMs: null, doc: null })
     expect(await at(new Response(JSON.stringify({ error: 'not-found' }), { status: 404 }))).toMatchObject({
@@ -355,12 +372,53 @@ describe('the client: the follow and the open', () => {
   })
   it('the open: its document, a refusal for capacity with its wait, and its other words', async () => {
     const at = (r: Response) => open({ fetch: async () => r, paper: { id: '2401.01234', version: 1 }, target: 'ja' })
-    expect(await at(new Response(JSON.stringify({ doc: DOC })))).toMatchObject({ doc: { rev: 3 } })
+    expect(await at(new Response(JSON.stringify({ doc: DOC, follow: null })))).toMatchObject({ doc: { rev: 3 } })
+    // (a refusal of the open's new work: in the answer, format's OpenAnswer, its document beside it)
+    const refused = { why: 'busy', retryAt: 60_000, retryAfterMs: 60_000, retryAfterS: 60 }
+    expect(await at(new Response(JSON.stringify({ refused, doc: DOC, follow: null })))).toMatchObject({
+      refused: { why: 'busy', afterMs: 60_000 },
+      doc: { rev: 3 },
+    })
+    // (a refusal in a word this reader does not know: `other`, the generic failure, format's doc.ts)
     expect(
-      await at(new Response(JSON.stringify({ refused: { why: 'quota', retryAfterS: 60 }, doc: DOC }), { status: 429 })),
-    ).toMatchObject({ refused: { why: 'quota', afterMs: 60_000 }, doc: { rev: 3 } })
+      await at(
+        new Response(JSON.stringify({ refused: { ...refused, why: 'a-later-refusal' }, doc: DOC, follow: null })),
+      ),
+    ).toMatchObject({ refused: { why: 'other', afterMs: 60_000 } })
+    // (an answer that is not the contract's, a bare document of an early fixture: no document)
+    expect(await at(new Response(JSON.stringify(DOC)))).toEqual({ doc: null })
+    expect(
+      await at(
+        new Response(JSON.stringify({ error: 'rate-limited', retryAfterS: 60 }), {
+          status: 429,
+          headers: { 'retry-after': '60' },
+        }),
+      ),
+    ).toMatchObject({ refused: { why: 'rate', afterMs: 60_000 }, doc: null })
     await expect(at(new Response('', { status: 426 }))).rejects.toMatchObject({ why: 'update' })
     await expect(at(new Response('', { status: 404 }))).rejects.toMatchObject({ why: 'not-found' })
+  })
+  it("a refusal's time as our server names it: the instant its period ends (`retryAt`, its clock's), read as it is, and the wait beside it", async () => {
+    const at = (r: Response) => open({ fetch: async () => r, paper: { id: '2401.01234', version: 1 }, target: 'ja' })
+    // (21:00:00 at Shanghai, 2026-11-11: the hour's end, exactly)
+    const end = Date.UTC(2026, 10, 11, 13, 0, 0)
+    // (its wait to the millisecond: the session's own ask at the instant, not a rounded second on)
+    expect(
+      await at(
+        new Response(
+          JSON.stringify({
+            refused: { why: 'quota', retryAt: end, retryAfterS: 2570, retryAfterMs: 2_569_592 },
+            doc: DOC,
+            follow: null,
+          }),
+        ),
+      ),
+    ).toMatchObject({ refused: { why: 'quota', afterMs: 2_569_592, at: end } })
+    // (one that names no instant nor its wait to the millisecond is not the contract's answer: no document, no refusal)
+    const old = await at(
+      new Response(JSON.stringify({ refused: { why: 'busy', retryAfterS: 30 }, doc: DOC, follow: null })),
+    )
+    expect(old).toEqual({ doc: null })
   })
 })
 
@@ -380,14 +438,14 @@ function paperObject(
     ...DOC,
     rev: 1,
     prepare: { ...DOC.prepare, units },
-    targets: { [o.target]: { state: 'running', rows: [], done: 0, total: 9 } },
+    targets: { [o.target]: runOf({ state: 'running', rows: [], done: 0, total: 9 }) },
   }
   const done = {
     ...DOC,
     rev: 2,
     prepare: { ...DOC.prepare, state: 'done', stage: null, units },
-    layer: { catalog: CATALOG, units, format: 1 },
-    targets: { [o.target]: { state: 'done', rows: [], done: 9, total: 9 } },
+    layer: layerOf({ catalog: CATALOG, units, format: 1 }),
+    targets: { [o.target]: runOf({ state: 'done', rows: [], done: 9, total: 9 }) },
   }
   const frame = (d: unknown, retry: number | null) =>
     enc(`${retry === null ? '' : `retry: ${retry}\n`}id: ${(d as Doc).rev}\ndata: ${JSON.stringify(d)}\n\n`)
@@ -602,7 +660,7 @@ describe("the client: the follow's pace (staging, 2026-11-07: a done paper follo
       tell('code', (t) => ({ i: 'code.loaded', t }))
       rt.input({ i: 'head', digest: CATALOG.sha256, head })
       tell('composed', (t) => ({ i: 'composed.opened', t }))
-      tell('rows', (t) => ({ i: 'rows.end', t, got: 9, total: 9, lost: 0 }))
+      tell('rows', (t) => ({ i: 'rows.end', t }))
       rt.input({ i: 'cmd.hold', on: true })
       rt.input({ i: 'cmd.hold', on: false })
       rt.input({ i: 'panes.laid', laid: 4, total: 4 })

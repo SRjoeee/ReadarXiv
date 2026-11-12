@@ -91,18 +91,45 @@ const SQUEEZE = 0.02
  * spacing), and the line is set as before; the squeeze is for the lines a group left letter-spaced
  */
 const STRETCH_MIN = 0.05
-/** the full-width marks whose blank half a squeeze may take: those whose ink stands in one half of the em in every CJK face
- *  the layer draws (the comma, the full stop, the enumeration comma, brackets and quotes); not the colon, the semicolon and
- *  the exclamation and question marks, which a Japanese face sets in the em's middle (Harano Aji's question mark reaches
- *  0.72 em: cut by half, it ran into the next character) */
-const SQUEEZE_MARKS = /^[\u3001\u3002\uFF0C\uFF0E\uFF08\uFF09\u300C\u300D\u300E\u300F\u3010\u3011\u3014\u3015\u3008\u3009\u300A\u300B\u3018\u3019\u3016\u3017\u201C\u201D\u2018\u2019]$/
-/** whether a line is set as Latin text, its slack in its word spaces (placeItems): it has spaces, and its script breaks only
- *  at spaces or fewer than half its items are CJK */
-const latinishOf = (items, P) => items.some(it => it.t.space) && (P.keepAll || items.filter(it => it.t.cls === 'cjk').length < items.length / 2)
-/** the marks of a line whose blank half a squeeze may take (placeItems): its full-width marks that have not lost one (`cut`),
- *  but the closing mark at its end where it hangs in the margin; none where the state compresses as far as the rules let it
- *  (compress 2: every mark has lost its half) or the rules compress none (compressMax 0) */
-const squeezable = (items, hangs, compress, P) => (compress < P.compressMax ? items.filter((it, n) => it.t.punct && !it.cut && SQUEEZE_MARKS.test(it.t.s) && !(hangs && n === items.length - 1)) : [])
+/** whether an item continues the word of the item before it (tokensOf2's pushText: a piece after a break point inside a word,
+ *  `brk` — a URL's after its `/`, `.`, `-`, a compound's after its hyphen —, or a run of one case of a word, `cont`): the gap
+ *  before it is a break point with no glue, as TeX's url package sets one (\Urlmuskip 0mu: a penalty) and as TeX sets every
+ *  word, so no CJK line's slack or squeeze goes into it (placeItems, squeezeTakes). 2608.25210v2 p17: a URL whose line ends
+ *  are joins (lane url-join), cut at its break points, was letter-spaced to the measure, 1.9-2.7 pt after each "/" */
+const inWord = it => !!(it.t.brk || it.t.cont)
+/** the index of a line's first text item set at a label's hang (`tabbed`, breakLines), -1 for none: TeX's hang is a box, so the
+ *  label before it and the room up to it take no slack (placeItems) */
+const tabOf = items => items.findIndex(it => it.tabbed)
+/** a line's gaps that take a CJK line's slack or squeeze: those between two of its items `items` (from the n-th on, n > 0),
+ *  but the ones inside a word (inWord) and those of a hung label (tabOf) */
+const gapsOf = items => { const kt = tabOf(items); let n = 0; for (let k = 1; k < items.length; k++) if (!inWord(items[k]) && k > kt) n++; return n }
+/** whether a line is set as Latin text, its slack in its word spaces (placeItems): it has spaces (a hung label's aside), and its
+ *  script breaks only at spaces or fewer than half its items are CJK */
+const latinishOf = (items, P) => { const kt = tabOf(items); return items.some((it, k) => it.t.space && k > kt) && (P.keepAll || items.filter(it => it.t.cls === 'cjk').length < items.length / 2) }
+/** the marks of a line whose blank half a squeeze may take (placeItems): its marks with one as their face draws them (the
+ *  tokens' `punct`, script.ts markOf: a mark whose ink crosses its em's middle has none, Harano Aji's colon and question mark,
+ *  Source Han Serif TC's full stop) that have not lost it (`cut`), but the closing mark at its end where it hangs in the margin;
+ *  none where the state compresses as far as the rules let it (compress 2: every mark has lost its half) or the rules compress
+ *  none (compressMax 0) */
+const squeezable = (items, hangs, compress, P) => (compress < P.compressMax ? items.filter((it, n) => it.t.punct && !it.cut && !(hangs && n === items.length - 1)) : [])
+/**
+ * A full-width mark's blank half at a line's edge, which is none of the line's ink, in em of the line's size: the half of its
+ * em its face draws no ink in (a closing mark's ink in the first, an opening mark's in the second: the tokens' `punct`, the
+ * face's own measure, script.ts markOf; a mark whose ink crosses the middle has none, and keeps its whole box). An
+ * opening mark that opens a line loses its leading half wherever the state compresses the marks at all (compress 1 or 2: a
+ * target whose rules compress none keeps it, leadOf); a closing mark that ends a line hangs its trailing half past the line's
+ * edge, unless the mark has lost that half already (`cut`; at compress 2 every mark has, hangOf). So a line stands on its
+ * room by its ink: every line the breaker sets, justified, centred or flush (groupOf, stretchOf, placeItems), and a figure
+ * text on its anchor (S.figures)
+ */
+/** whether a character is a mark no line opens with: UAX 14's (no-start.mjs, the one table the layer gate's lineStartPunct reads
+ *  too) or the target's rules' (P.noStart: CJK's small kana and prolonged sound mark, its closing quotes, the per cent sign) */
+const noLineStart = P => {
+  const kinsoku = kinsokuOf(P.noStart ?? '', P.noEnd ?? '')
+  return ch => noStart(ch) || kinsoku.starts(ch)
+}
+const leadOf = (it, compress) => (it?.t.punct === 'open' && compress >= 1 ? 0.5 : 0)
+const hangOf = (it, compress) => (it?.t.punct === 'close' && !it.cut && compress < 2 ? 0.5 : 0)
 /**
  * Tokens into slots, greedily, at font size f: each line { ...slot, items: [{ t, w, shift }] } with the items' natural
  * widths (punctuation compressed as the state allows), the space a line may shrink, and `rest`, the first token left.
@@ -126,8 +153,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
   // (the marks no line opens with: a character UAX 14 keeps from a line's start, no-start.mjs, the one table the layer
   // gate's lineStartPunct reads too, or one the target's rules do, P.noStart: CJK's small kana and prolonged sound mark,
   // its closing quotes, the per cent sign; `barred`, a token that opens with one)
-  const kinsoku = kinsokuOf(P.noStart ?? '', P.noEnd ?? '')
-  const barredChar = ch => noStart(ch) || kinsoku.starts(ch)
+  const barredChar = noLineStart(P)
   const barred = t => !t.space && typeof t.s === 'string' && t.s !== '' && barredChar(t.s)
   // (a word wider than its line cut by its characters, each a grapheme, what a reader sees as one character: a letter and the
   // marks over it, a flag's two regional indicators; never before a mark no line opens with, nor inside a pair UAX 14 keeps)
@@ -233,6 +259,24 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     const prev = lines[k]
     return !!prev && prev.page === sl.page && sl.baseline > prev.baseline + 0.05 && Math.min(prev.x1, sl.x1) > Math.max(prev.x0, sl.x0)
   }
+  // (the line before a run's boundary is the run's last line, TeX's own law: where a display begins, TeX breaks the paragraph
+  // so far as a paragraph, \parfillskip appended (The TeXbook ch. 19; tex.web §1145, init_math's line_break), so that line
+  // ends where its text ends, ragged, and never in a discretionary hyphen. A boundary is a kept region TeX set between two
+  // partial paragraphs of the unit, whatever it holds: the next slot the walk opens lies after more of them (a slot's
+  // `after`) than the line's own. On the in-order walk the region's break ends that line (below, the blockTo token); where a
+  // run's text fits its own slots at no state and the walk's last resort runs it on past the region (layoutUnit2's
+  // `strict` false: `spilled`), the line before the region is still its run's last: it ends at a legal break that is no
+  // hyphenation point, and is set ragged (advance). 2610.21106v1-zh p3's remark with Google's text: "Hes-" before the display
+  // and "sian" after it)
+  const nextSlotOf = from => {
+    let q = from + 1
+    while (q < slots.length && overLast(slots[q])) q++
+    return q
+  }
+  const beforeBoundary = () => {
+    const q = nextSlotOf(li)
+    return q < slots.length && (slots[q].after ?? 0) > (slots[li].after ?? 0)
+  }
   // (the frame breaks the lines hold (the pageBreak token, below: a page's or a column's), in the text's order: { pg, fr, at,
   // line, sent }, `fr` the frame it sends the text to (the unit's block it begins with, `blockBase` the run's first block's
   // place in the unit: a run laid alone), `pg` its page, `at` the token's index and `line` the line that holds it, `sent` once
@@ -304,13 +348,14 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       carry(was)
       return
     }
-    li++
-    while (li < slots.length && overLast(slots[li])) li++
+    li = nextSlotOf(li)
     if (li >= slots.length) return
     if ((slots[li].after ?? 0) > consumed) {
       if (strict === true) { stop = true; return }
       spilled = true
     }
+    // (the line left before a run's boundary is the run's last: ragged, as a region's break ends it, beforeBoundary)
+    if ((slots[li].after ?? 0) > (line.after ?? 0)) { trim(line); line.ends = true }
     open()
   }
   // a group's widths, tokens `from` to `end` on the line in hand, with its punctuation compressed: at the line's start an
@@ -319,13 +364,18 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
   // shrinking as they do)
   const groupOf = (from, end) => {
     const items = []
-    let w = 0, sp = 0
+    let w = 0, sp = 0, rig = 0, edge
     let prev = line.items.at(-1)?.t ?? null
     for (let q = from; q < end; q++) {
       const t = tokens[q]
       if (t.space) { const tw = tokW(t, f, st, scale); items.push({ t, w: tw }); w += tw; sp += tw; prev = t; continue }
       let tw = tokW(t, f, st, scale), shift = 0
-      if (t.punct && st.compress >= 2) {
+      const lead = prev ? 0 : leadOf({ t }, st.compress) * f
+      if (lead) {
+        // the line's opening mark: its leading blank half (leadOf)
+        tw -= lead
+        shift = -lead
+      } else if (t.punct && st.compress >= 2) {
         tw -= half
         if (t.punct === 'open') shift = -half
       } else if (t.punct && st.compress === 1) {
@@ -338,8 +388,8 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
             if (items.length) w -= half
             else line.x -= half
           }
-        } else if (t.punct === 'open' && (!prev || prev.punct)) {
-          // an opening mark at the line's start, or after another mark: its leading blank half
+        } else if (t.punct === 'open' && prev?.punct) {
+          // an opening mark after another mark: its leading blank half
           tw -= half
           shift = -half
         }
@@ -348,17 +398,45 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       // (`kern`: the explicit glue after it, an advance of its own beside its width, which trim drops at a line's end: no part of
       // what it draws, a crop's image, a word's box)
       const kern = kernOf(t, f)
+      // (the line's first text after a label TeX hung beside its text block (the slot's `hangGap`, B.slots): it starts at the hang,
+      // the drawn label's end and the space TeX set after the label, the label's own spaces after it aside (TeX's hang: the
+      // label box's width); `tabbed`, the hang's edge the group's `edge`)
+      const hung = line.hangGap !== undefined && !t.label ? line.items.concat(items) : null
+      let tab = 0, atTab = false
+      if (edge === undefined && hung?.some(it => it.t.label) && hung.every(it => it.t.label || it.t.space)) {
+        atTab = true
+        let x = 0, end = 0
+        for (const it of hung) {
+          x += (it.asp ?? 0) + it.w + (it.kern ?? 0)
+          if (it.t.label) end = x
+        }
+        tab = end + line.hangGap - (line.x + w + asp)
+        edge = line.x0 + end + line.hangGap
+      }
+      // (the label's spaces then a box's, TeX's hang: none shrinks, `rig` the line's own already counted, the group's taken out)
+      if (atTab) {
+        rig = line.items.reduce((a, it) => a + (it.t.space && !it.rigid ? it.w : 0), 0)
+        for (const it of items) if (it.t.space && !it.rigid) { it.rigid = true; sp -= it.w }
+      }
       // (`cut`: the mark has lost its blank half, which a squeezed line does not take from it again, placeItems)
-      items.push({ t, w: tw, shift, asp, ...(kern ? { kern } : {}), ...(shift ? { cut: true } : {}) })
-      w += tw + asp + kern
+      items.push({ t, w: tw, shift, asp: asp + tab, ...(atTab ? { tabbed: true } : {}), ...(kern ? { kern } : {}), ...(shift ? { cut: true } : {}) })
+      w += tw + asp + tab + kern
       prev = t
     }
-    // a closing mark at the line's end hangs its blank half
-    const hang = items.at(-1).t.punct === 'close' && st.compress < 2 ? half : 0
-    return { items, w, sp, hang }
+    // a closing mark at the line's end hangs its blank half (hangOf)
+    const hang = hangOf(items.at(-1), st.compress) * f
+    return { items, w, sp, hang, rig, edge }
   }
   /** whether a group fits the line in hand: its spaces and the line's shrunk to spaceMin, a closing mark at its end hung */
-  const fits = (g, cap) => line.x - line.spaces * (1 - P.spaceMin) - g.sp * (1 - P.spaceMin) + g.w - g.hang <= cap + 0.01
+  const fits = (g, cap) => line.x - (line.spaces - g.rig) * (1 - P.spaceMin) - g.sp * (1 - P.spaceMin) + g.w - g.hang <= cap + 0.01
+  // (a group set at a hung label's end makes the label's spaces on the line a box's, TeX's hang: they shrink no more, `rig`)
+  // (and its hang's edge every later line of the hung block starts at, `hung` (B.slots): TeX's \hangindent, the label box's width)
+  const take = g => {
+    if (g.edge !== undefined) for (let q = li + 1; q < slots.length; q++) if (slots[q].hung && slots[q].block === line.block) slots[q] = { ...slots[q], x0: g.edge }
+    if (g.rig) { for (const it of line.items) if (it.t.space) it.rigid = true; line.spaces -= g.rig }
+    for (const it of g.items) { line.items.push(it); if (it.t.space && !it.rigid) line.spaces += it.w }
+    line.x += g.w
+  }
   // (a line's trailing spaces dropped, and the kern of its last token: glue TeX drops at a break, a kern the line no longer
   // needs)
   const trim = l => {
@@ -385,18 +463,39 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     while (n > 0 && line.items[n - 1].t.space) x -= line.items[--n].w
     if (n < 2) return Infinity
     const end = line.items[n - 1]
-    const hang = end.t.punct === 'close' && !end.cut && st.compress < 2 ? half : 0
-    return (cap - (x - (end.kern ?? 0)) + hang) / (n - 1)
+    const hang = hangOf(end, st.compress) * f
+    const gaps = gapsOf(line.items.slice(0, n))
+    return gaps > 0 ? (cap - (x - (end.kern ?? 0)) + hang) / gaps : Infinity
   }
   /** whether the line in hand squeezes to take group g, which does not fit it */
   const squeezeTakes = (g, cap) => {
     if (!squeezes || line.centred || !line.items.length) return false
     const all = line.items.concat(g.items)
     if (latinishOf(all, P)) return false
-    const need = line.x - (line.spaces + g.sp) * (1 - P.spaceMin) + g.w - g.hang - cap
-    const gaps = all.length - 1
+    const need = line.x - (line.spaces - g.rig + g.sp) * (1 - P.spaceMin) + g.w - g.hang - cap
+    const gaps = gapsOf(all)
     const stretch = stretchOf(cap)
     return gaps > 0 && stretch > STRETCH_MIN * f && need <= squeezable(all, g.hang > 0, st.compress, P).length * half + gapSqueeze * gaps + 1e-9 && need / gaps < stretch
+  }
+  /**
+   * Whether an address that does not fit the line in hand (`t`, a URL's crop with its url package's break points) goes whole to
+   * the next line, the break before it (the coordinator's ruling of 2026-11-12, PDF-READER §18.50: an address is one thing to
+   * a reader): it fits the next line whole, and the line in hand closed here would not be placed justified and visibly
+   * stretched. Visibly stretched is the breaker's own two bounds: placed justified, its stretch a gap within the script's
+   * cjkJust (placeItems: past it the line is set ragged, unstretched), and above STRETCH_MIN (under it the stretch does not
+   * read as letter-spaced). So a line that would be set ragged, or is nearly full, keeps the address whole; one letter-spaced to
+   * its measure (2303.11366v4 p1's abstract, 0.205 em a gap) has it cut at its break points, as one longer than a line is.
+   * STRETCH_MIN reads a CJK line alone (squeezeTakes's: a target that breaks between CJK characters, a line not set as Latin
+   * text), and the breaker states no visible stretch of a Latin line's spaces: a Latin-ish line's address is cut as before
+   */
+  const keepsWhole = (t, cap) => {
+    let n = line.items.length
+    while (n > 0 && line.items[n - 1].t.space) n--
+    if (!P.cjk || P.keepAll || latinishOf(line.items.slice(0, n), P)) return false
+    const next = slots[li + 1]
+    if (!next || tokW(t, f, st, scale) > next.x1 - next.x0 + 0.01) return false
+    const stretch = stretchOf(cap)
+    return !(stretch > STRETCH_MIN * f && stretch <= P.cjkJust * f)
   }
   if (slots.length) open()
   // (the walk ends where the text does; a page break held on its last lines whose page got none of it is laid then, strand,
@@ -439,6 +538,11 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     // the line that holds it, so that its frame would get none, strand lays that line there whole. Reached in that frame or
     // later (the earlier one already full), or where that frame's first slot lies after a display the text has not passed
     // (the source sets the text before the display: the display's own break places it), nothing
+    // (a cut of the frames' share (pageCutsOf `share`): a break only at a state that holds the share, else nothing)
+    if (tokens[i].pageBreak !== undefined && tokens[i].share && !st.share) {
+      i++
+      continue
+    }
     if (tokens[i].pageBreak !== undefined) {
       const h = { pg: tokens[i].pageBreak, fr: tokens[i].frame ?? null, at: i, sent: false }
       i++
@@ -481,6 +585,25 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       i++
       continue
     }
+    // the unit's end mark (Token.endMark, lay/adapt.ts; docs/PDF-READER.md §18.52): at the end of the line the text ends on, its
+    // rectangle as far from the line's right edge as TeX set it (`pad`), where the text ends the keep-off distance before its ink
+    // (TeX's own distance and half an em at most, B.slots' rule for ink that stays: `gap`), the line's spaces shrunk as `fits`
+    // takes them and a closing mark at its end hung; else on a line of its own (amsthm's \penalty9999 before it: a break only
+    // where it does not fit). placeItems sets it there. A line it cannot open (no slot left) leaves the state unset, the fit's
+    if (tokens[i].endMark) {
+      const t = tokens[i]
+      trim(line)
+      const w = tokW(t, f, st, scale)
+      const room = line.x1 - line.x0 - t.endMark.pad - w - Math.min(half, t.endMark.gap)
+      const hang = hangOf(line.items.at(-1), st.compress) * f
+      if (!line.items.length || line.x - line.spaces * (1 - P.spaceMin) - hang <= room + 0.01) {
+        line.items.push({ t, w, shift: 0, asp: 0 })
+        i++
+        continue
+      }
+      advance()
+      continue
+    }
     const cap = line.x1 - line.x0
     // a token and those glued to it; a space is a group of its own (what is glued after it is the next group's: the
     // footnote marks iteration 1 lost were skipped here with the space before them)
@@ -491,9 +614,17 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     // that no rule glues. The line breaks before the group, never before the mark: kinsoku's push-out, the word or the
     // character before the mark going down with it. `own`: the group as its glue alone makes it, which a line it opens
     // takes where the joined group is longer than the line: the break the breaker always made there, nothing else fitting)
+    // (and a tie, the source's `~`: TeX's \penalty10000 and its interword glue, a space no line breaks at: the group runs on
+    // through its space, the token after it and what is glued to that; the space stays in the group, drawn and stretched as
+    // the line's spaces are (groupOf's `sp`). A tied group longer than the line is broken at `own`, as a joined one is)
     const own = j
     if (!tokens[i].space) for (;;) {
       let q = j
+      if (q + 1 < tokens.length && tokens[q].tie && !tokens[q + 1].space) {
+        j = q + 2
+        while (j < tokens.length && tokens[j].glue && !tokens[j].space) j++
+        continue
+      }
       while (q < tokens.length && tokens[q].space) q++
       if (q >= tokens.length || !barred(tokens[q])) break
       j = q + 1
@@ -513,10 +644,9 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     const shrink = line.spaces * (1 - P.spaceMin)
     let g = groupOf(i, j)
     if (j > own && !line.items.length && !fits(g, cap)) { j = own; g = groupOf(i, j) }
-    const { items, w } = g
+    const { items } = g
     if (fits(g, cap)) {
-      for (const it of items) { line.items.push(it); if (it.t.space) line.spaces += it.w }
-      line.x += w
+      take(g)
       i = j
       continue
     }
@@ -586,14 +716,14 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     }
     // a CJK line squeezed to take the group (squeezeTakes)
     if (squeezeTakes(g, cap)) {
-      for (const it of items) { line.items.push(it); if (it.t.space) line.spaces += it.w }
-      line.x += w
+      take(g)
       line.squeezed = true
       i = j
       continue
     }
-    // a word hyphenated: the most of it that fits, with its hyphen
-    if (P.hyphen && t0.hyph && t0.s) {
+    // a word hyphenated: the most of it that fits, with its hyphen; never on the line before a run's boundary, its run's last
+    // line (beforeBoundary)
+    if (P.hyphen && t0.hyph && t0.s && !beforeBoundary()) {
       const word = t0.s
       const pts = breakPoints(word.replace(/[^A-Za-zÀ-ɏЀ-ӿ]+$/, ''), t0.hyph, P.patterns?.[t0.hyph] ?? null, P.hyphenation[t0.hyph])
       const asp = items[0].asp
@@ -613,8 +743,15 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     }
     // a URL TeX set whole, broken where its url package lets TeX break it (El.breaks): the most of it that fits, its crop cut
     // between two of its glyphs there, as a word is hyphenated; the rest opens the next line (2303.11366v4 p1's abstract: the
-    // URL whole on the next line left the line before it letter-spaced to its measure, the maintainer's of 2026-11-08)
-    if (t0.crop?.breaks?.length) {
+    // URL whole on the next line left the line before it letter-spaced to its measure, the maintainer's of 2026-11-08). Only on
+    // a line set justified: where TeX set the unit flush left or right or centred (placeItems: at its natural spacing), no line
+    // is stretched, and TeX, whose \rightskip stretch there costs a short line nothing, breaks before the URL rather than inside
+    // it at its url package's penalty: whole on the next line, as the original sets it (2608.25210v2 p1's VLDB footnote,
+    // \raggedright, its URL cut after "https://"). And on a justified line only where the line, the address whole on the next,
+    // would be placed justified and visibly stretched (keepsWhole): one placement would set ragged, or nearly full, keeps it
+    // whole, as the original and today's do (2610.21880v1 p1's footnote: "sohani@mail." cut where its line before would be set
+    // ragged at 0.27-0.32 em a gap)
+    if (t0.crop?.breaks?.length && !line.centred && !line.flush && !keepsWhole(t0, cap)) {
       const asp = items[0].asp ?? 0
       const cut = urlCut(t0, cap + shrink - line.x - asp, scale, false)
       if (cut) {
@@ -639,4 +776,4 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
   return { lines: lines.filter(l => l.items.length), rest: over ?? i, total: tokens.length, tokens, spilled }
 }
 
-export { breakLines, latinishOf, squeezable }
+export { breakLines, gapsOf, hangOf, inWord, latinishOf, leadOf, noLineStart, squeezable, tabOf }

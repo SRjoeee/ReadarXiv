@@ -8,8 +8,9 @@
 // What today's engine wrote into each record, the reader reads here: the name is the text the page's text layer holds under the
 // link (what is drawn there: the translation over a moved link, the original's text over one at its place, a crop's text), and
 // a link with none is named by the host's words by where it goes (UI.md S-R-25); the order is the text's (the first item of
-// the page's text content under it); the border is the original's annotation of the same target and size (A's own record of it).
-import type { PageViewport, PDFPageProxy } from 'pdfjs-dist'
+// the page's text content under it); the border is the one Page.links states, its own annotation's on A (Link.border, which the
+// typesetter carries onto each link it draws of it, moved or not), drawn as stated: a link with none on A draws none.
+import type { PageViewport } from 'pdfjs-dist'
 import type { Box, Page } from './page.ts'
 import type { TextContent } from './text.ts'
 
@@ -35,13 +36,6 @@ export interface LinkHooks {
   unnamed(to: { url: string } | { internal: true }): string
   /** not read: a link's text is the page's text layer's under it (kept for a caller written before) */
   textUnder?(box: Box): string
-}
-
-/** a link's border as the PDF gives it: its width (CSS px, as PDF.js draws it), its colour, its style */
-export interface Border {
-  width: number
-  rgb: [number, number, number]
-  style: 'solid' | 'dashed' | 'underline'
 }
 
 /** a destination as the page carries it: a name, or an explicit one written as JSON */
@@ -116,74 +110,16 @@ function placeOf(content: TextContent | null, box: Box): number {
   return Number.POSITIVE_INFINITY
 }
 
-/** the borders of a page's link annotations (A's: the composed page holds the original's annotations), by target */
-export async function bordersOf(
-  page: PDFPageProxy,
-): Promise<{ to: string; w: number; h: number; box: Box; border: Border }[]> {
-  const out: { to: string; w: number; h: number; box: Box; border: Border }[] = []
-  let list: unknown[]
-  try {
-    list = await page.getAnnotations({ intent: 'display' })
-  } catch {
-    return out
-  }
-  for (const x of list as {
-    subtype?: string
-    rect?: number[]
-    url?: string
-    unsafeUrl?: string
-    dest?: unknown
-    color?: ArrayLike<number> | null
-    borderStyle?: { width?: number; style?: number }
-  }[]) {
-    if (x?.subtype !== 'Link' || !Array.isArray(x.rect) || x.rect.length !== 4) continue
-    const width = x.borderStyle?.width ?? 0
-    const c = x.color
-    if (!(width > 0) || !c || c.length !== 3) continue
-    const to = x.url ?? x.unsafeUrl ?? (x.dest !== undefined ? JSON.stringify(x.dest) : '')
-    const [x0, y0, x1, y1] = x.rect as [number, number, number, number]
-    out.push({
-      to,
-      w: Math.abs(x1 - x0),
-      h: Math.abs(y1 - y0),
-      box: [Math.min(x0, x1), Math.min(y0, y1), Math.max(x0, x1), Math.max(y0, y1)],
-      border: {
-        width: Math.min(BORDER_MAX, width),
-        rgb: [c[0] as number, c[1] as number, c[2] as number],
-        style: x.borderStyle?.style === 2 ? 'dashed' : x.borderStyle?.style === 5 ? 'underline' : 'solid',
-      },
-    })
-  }
-  return out
-}
-/** a link's border: the original's annotation of the same target over the same box, else of the same target and size (the
- *  link moved with its piece keeps its size), else none */
-function borderFor(
-  borders: Awaited<ReturnType<typeof bordersOf>>,
-  box: Box,
-  to: { url: string } | { dest: string },
-): Border | null {
-  const key = 'url' in to ? to.url : null
-  const same = borders.filter((b) => (key !== null ? b.to === key : b.to !== '' && !urlAllowed(b.to)))
-  const near = (a: number, b: number) => Math.abs(a - b) < 0.5
-  const at = same.find((b) => b.box.every((v, i) => near(v, box[i] as number)))
-  if (at) return at.border
-  const sized = same.find((b) => near(b.w, box[2] - box[0]) && near(b.h, box[3] - box[1]))
-  return sized?.border ?? null
-}
-
-/** the page's links in one element, or null where it has none. `content`: the page's text layer content (the names, the order);
- *  `borders`: its original's link annotations (bordersOf) */
+/** the page's links in one element, or null where it has none. `content`: the page's text layer content (the names, the order) */
 export function linkLayer(
   page: Page,
   vp: PageViewport,
   hooks: LinkHooks,
   content: TextContent | null = null,
-  borders: Awaited<ReturnType<typeof bordersOf>> = [],
 ): HTMLElement | null {
   const list = page.links
     .filter(([b, to]) => b[2] > b[0] && b[3] > b[1] && ('url' in to ? urlAllowed(to.url) : !!to.dest))
-    .map(([box, to], i) => ({ box, to, i, ...textUnder(content, box) }))
+    .map(([box, to, , border], i) => ({ box, to, border, i, ...textUnder(content, box) }))
   if (!list.length) return null
   const layer = document.createElement('div')
   layer.className = 'axt-links'
@@ -191,7 +127,7 @@ export function linkLayer(
   for (const x of list) if (x.at < 0) x.at = placeOf(content, x.box)
   list.sort((a, b) => a.at - b.at || b.box[3] - a.box[3] || a.box[0] - b.box[0] || a.i - b.i)
 
-  list.forEach(({ box, to, name }, i) => {
+  list.forEach(({ box, to, border, name }, i) => {
     const [ax, ay] = vp.convertToViewportPoint(box[0], box[3]) as [number, number],
       [bx, by] = vp.convertToViewportPoint(box[2], box[1]) as [number, number]
     const left = Math.min(ax, bx),
@@ -215,11 +151,12 @@ export function linkLayer(
       width: pct((w / vp.width) * 100),
       height: pct((h / vp.height) * 100),
     })
-    const border = borderFor(borders, box, to)
+    // (its width as PDF.js draws it, CSS px whatever the zoom, at most BORDER_MAX; its colour 0xRRGGBB)
     if (border) {
-      a.dataset.axtBorder = border.style
-      a.style.setProperty('--axt-link-border', `${border.width}px`)
-      a.style.setProperty('--axt-link-colour', `rgb(${border.rgb.join(' ')})`)
+      const [width, c, style] = border
+      a.dataset.axtBorder = style ?? 'solid'
+      a.style.setProperty('--axt-link-border', `${Math.min(BORDER_MAX, width)}px`)
+      a.style.setProperty('--axt-link-colour', `rgb(${(c >> 16) & 255} ${(c >> 8) & 255} ${c & 255})`)
     }
     const s = document.createElement('span')
     s.className = 'axt-link-box'

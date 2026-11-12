@@ -69,18 +69,17 @@ export function FailureCard({ controller, of = 'pane' }: { controller: ReaderCon
   return (
     <div className="chrome card" data-card data-tone={look.tone}>
       {sign}
-      {lines?.sub || lines?.note ? (
+      {lines?.sub ? (
         <div className="lines">
           <p>{card.reason}</p>
-          {lines.sub && <p className="sub">{lines.sub}</p>}
-          {lines.note && <p className="sub">{lines.note}</p>}
+          <p className="sub">{lines.sub}</p>
         </div>
       ) : (
         <p>{card.reason}</p>
       )}
       {card.action === 'settings' ? (
         parts.slots.card?.('settings')
-      ) : (
+      ) : card.action === null ? null : (
         <button
           type="button"
           aria-disabled={waiting || undefined}

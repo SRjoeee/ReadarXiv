@@ -7,9 +7,10 @@
 // are Uint8Arrays.
 
 // ---------------------------------------------------------------- files and bytes
-import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from '../rules/arg-roles.mjs'
-import { TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
-import { selectsArgument } from '../rules/tex-kernel.mjs'
+import { isMemoryError } from '@readarxiv/engine'
+import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, loads, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from '../rules/arg-roles.mjs'
+import { symbolText, TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
+import { DECLARATION_WORDS, selectsArgument } from '../rules/tex-kernel.mjs'
 /** unpacked files (a Map of relative path → bytes) as a project's file system */
 export function inMemory(map) { return { list: () => [...map.keys()], read: p => map.get(p) ?? null } }
 /** a/./b/../c → a/c: a file as the package holds it (tar.mjs untar names each so) and as TeX's file system has it,
@@ -37,8 +38,9 @@ export const latin1Bytes = s => { const b = new Uint8Array(s.length); for (let i
 const utf8Bytes = s => new TextEncoder().encode(s)
 const bytesOf = (s, enc) => (enc === 'utf8' ? utf8Bytes(s) : latin1Bytes(s))
 const UTF8 = new TextDecoder('utf-8', { fatal: true }), UTF8_LAX = new TextDecoder()
-/** whether a source's text (its bytes read latin1) is UTF-8: a file that is never decodes as UTF-8 */
-const isUtf8Text = t => { try { UTF8.decode(latin1Bytes(t)); return true } catch { return false } }
+/** whether a source's text (its bytes read latin1) is UTF-8: a file that is never decodes as UTF-8 (a failed allocation of its
+ *  bytes is the paper's, never a file in another encoding) */
+const isUtf8Text = t => { try { UTF8.decode(latin1Bytes(t)); return true } catch (e) { if (isMemoryError(e)) throw e; return false } }
 /**
  * A file's input encoding as its characters (S2 of 2026-10-24): a unit's text is UTF-8 bytes read latin1 (mt.mjs utf8
  * decodes it), so a file that is not UTF-8 has each of its text pieces turned into UTF-8 by the encoding the main file's
@@ -64,6 +66,8 @@ const OWN_UNIT_ARG = new Set(['caption', 'subcaption', 'subcaptionbox', 'caption
 /** a figure's or a table's caption: caption's \\captionof{figure}{…} outside a float, a deluxetable's \\tablecaption{…}
  *  (their text found by the role table, 2608.24961, 2608.12606) */
 const CAPTIONS = new Set(['caption', 'subcaption', 'subcaptionbox', 'captionof', 'tablecaption'])
+/** subfigure.sty's sub-floats, commands of \subfloat's form (\let\subtable\subfigure) */
+const SUBFIGURE_STY = new Set(['subfigure', 'subtable'])
 /** the front matter's blocks of names and places: their notes (\\thanks, \\footnote) each a footnote of its own
  *  (1706.03762's author block: its footnotes stayed in English, the whole block one opaque command), and the names and
  *  places between them units of their own (frontBlock): the authors' names of kind 'author', the affiliations,
@@ -96,6 +100,12 @@ const FRONT_PROSE = new Set(['IEEEauthorblockN', 'IEEEauthorblockA', 'institutio
  *  translated and set in the names' bold). Walked as FRONT_PROSE is, inside an author block alone; elsewhere one placeholder, as
  *  before. Its row is read through it (rowText), so that a row it opens with a mark is a place */
 const FRONT_BOXES = new Set(['centerline'])
+/** plain TeX's line boxes (ltplain.dtx: \\line is \\hb@xt@\\hsize, \\centerline#1 \\line{\\hss#1\\hss}, \\leftline and \\rightline
+ *  alike): their argument the box's content, walked as CONTENT_BOX's (PDF-READER §18.46). \\line is no \\leavevmode: met where no
+ *  unit is open, TeX in vertical mode, the box is a line of its own and the text after it begins a paragraph. PIPELINE 29's
+ *  walk (olderUnits' shadow, `boxesUnread`) read each as one placeholder, and reads them so still: else the units an author
+ *  block's rows are cut into are no longer `later`, and every unit after the block is numbered again (2010.11929v2) */
+const LINE_BOXES = new Set(['centerline', 'leftline', 'rightline'])
 /** IEEEtran's blocks, each a group of lines the class sets on its own in a cell of a table: a unit each, so that a
  *  line of names is fitted to its box alone (AUTHOR_WIDE), apart from the places' block and its line breaks; the block of
  *  names (\\IEEEauthorblockN) every line of it names, the block of places (\\IEEEauthorblockA) every line places */
@@ -106,7 +116,7 @@ const INLINE_TEXT = new Set(['textbf', 'textit', 'emph', 'textsl', 'textsc', 'un
 // commands whose last required argument is typeset as it stands — a scaled table, a boxed or coloured phrase, a TikZ
 // picture fitted to the column — by how many required arguments they take, that one included. The others (a width,
 // an angle, a colour) stay as they are
-const CONTENT_BOX = new Map([['resizebox', 3], ['scalebox', 2], ['adjustbox', 2], ['rotatebox', 2], ['raisebox', 2], ['fbox', 1], ['mbox', 1], ['framebox', 1], ['makebox', 1], ['parbox', 2], ['colorbox', 2], ['fcolorbox', 3], ['textcolor', 2]])
+const CONTENT_BOX = new Map([['resizebox', 3], ['scalebox', 2], ['adjustbox', 2], ['rotatebox', 2], ['raisebox', 2], ['fbox', 1], ['mbox', 1], ['framebox', 1], ['makebox', 1], ['parbox', 2], ['colorbox', 2], ['fcolorbox', 3], ['textcolor', 2], ['centerline', 1], ['leftline', 1], ['rightline', 1]])
 /** declarations that take no argument: a brace group after one is a group of its own, never its argument. Taken for
  *  \\centering's argument, the {\\small …} a table sat in stayed untranslated whole (five of 2608.05876's eight
  *  tables). The rules take an optional width alone (\\toprule[1pt]) */
@@ -307,8 +317,7 @@ const LETTER_COMMANDS = new Map(['o', 'O', 'ss', 'ae', 'AE', 'oe', 'OE', 'aa', '
  * A placeholder, it went out as a marker, and the marker a word touches gets a space of ours (mt.mjs serialize): 2010.11929v2's
  * `{\\L}ukasz Kaiser` came back as "Ł ukasz Kaiser"
  */
-function letterCommand(s, i, end, name, to, own) {
-  const letter = LETTER_COMMANDS.get(name)
+function letterCommand(s, i, end, name, to, own, letter = LETTER_COMMANDS.get(name)) {
   if (!letter || own?.has(name) || !s.startsWith(name, i + 1)) return null
   // (from the control word's own end: commandAt's takes a star after it, which none of these has, `Gro\\ss*` a star of the text)
   const word = i + 1 + name.length
@@ -318,11 +327,33 @@ function letterCommand(s, i, end, name, to, own) {
   if (s.startsWith('{}', e)) e += 2
   return e <= to ? { letter, end: e } : null
 }
-/** the letter commands a paper's own files define anew (\\renewcommand{\\o}{\\omega}, \\def\\L{\\mathcal{L}}, a \\let): there the
- *  command is the paper's, and no letter is made of it */
+/** the text symbols TeX sets as one character of the text (TEXT_SYMBOLS): the kernel's control symbols `\\%`, `\\&`, `\\#`, `\\$`, `\\{`,
+ *  `\\}` and textcomp's \\textasciitilde, \\textbar, \\textless, \\textgreater, \\textbackslash. Not `\\_`, which the identifier rule
+ *  reads (keepIdentifiers) */
+const TEXT_CHARACTERS = new Map(['%', '&', '#', '$', '{', '}', 'textasciitilde', 'textbar', 'textless', 'textgreater', 'textbackslash'].map(n => [n, TEXT_SYMBOLS[`\\${n}`]]))
+/**
+ * The character a text symbol at s[i] sets (`end` past its name), as TeX sets it: a control word's skipped spaces and an empty
+ * group ending it with it (`\\textless 5` is "<5"), a control symbol alone (`5\\% of` is "5% of": TeX skips no space after one),
+ * an empty group right after it with it; where the paper does not define the command itself (ownLetters); with where its source
+ * ends, or null. A placeholder, it went out as a marker, and Microsoft split the term there ("R&D" came back as "D", a verb, then "R&"); as
+ * text the translator reads the term, and a percent comes back glued as the paper sets it (2026-11-11, Microsoft's Chinese and
+ * Japanese on 110 units of the 88 papers, each sent both ways: none refused, 131 of 134 percents glued, every "R&D" one word;
+ * over the 88, 1,520 such placeholders in 776 units of 65 papers, and 96 of the textcomp symbols)
+ */
+function textCharacter(s, i, end, name, to, own) {
+  const char = TEXT_CHARACTERS.get(name)
+  if (!char || own?.has(name) || !s.startsWith(name, i + 1)) return null
+  if (!/^[A-Za-z]/.test(name)) {
+    const e = s.startsWith('{}', i + 2) ? i + 4 : i + 2
+    return e <= to ? { letter: char, end: e } : null
+  }
+  return letterCommand(s, i, end, name, to, own, char)
+}
+/** the letter commands and the text characters (textCharacter) a paper's own files define anew (\\renewcommand{\\o}{\\omega},
+ *  \\def\\L{\\mathcal{L}}, \\renewcommand{\\textbar}{…}, a \\let): there the command is the paper's, and no letter is made of it */
 const ownLetters = texts => {
   const out = new Set()
-  for (const m of texts.map(uncommented).join('\n').matchAll(/\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)DocumentCommand|[gex]?def|let)\s*\{?\s*\\([A-Za-z]+)(?![A-Za-z@])/g)) if (LETTER_COMMANDS.has(m[1])) out.add(m[1])
+  for (const m of texts.map(uncommented).join('\n').matchAll(/\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)DocumentCommand|[gex]?def|let)\s*\{?\s*\\([A-Za-z]+(?![A-Za-z@])|[%&#${}])/g)) if (LETTER_COMMANDS.has(m[1]) || TEXT_CHARACTERS.has(m[1])) out.add(m[1])
   return out
 }
 /** the accents a paper's own files define anew (\\def\\v{\\varphi}, \\renewcommand{\\H}{\\mathcal{H}}, a package's
@@ -344,6 +375,14 @@ const TABLE_ENVS = /^(tabular|tabularx|tabular\*|longtable|tabu|tabulary|superta
  *  it there: a minipage, a subfigure) is no neighbour in the text of the units around it. A longtable breaks across pages where
  *  it stands, and is none */
 const FLOAT_ENVS = /^(?:figure\*?|table\*?|wrapfigure|sidewaystable|algorithm|listing)$/
+/** a float's type, LaTeX's \@captype in it (the counter its \caption steps, the name its label prints): a starred float's its
+ *  own, wrapfig's wrapfigure and rotating's sidewaystable a figure's and a table's. The walk's `inFloat` is it */
+const floatTypeOf = env => env.replace(/\*$/, '').replace(/^(?:wrap|sideways)(?=figure$|table$)/, '')
+/** subcaption's environments of a part of a float: their \caption's type is `sub` and their float's (\@captype sub\@captype) */
+const SUB_FLOAT_ENVS = /^sub(?:figure|table)$/
+/** each caption unit's float type (`floatTypes`, by index), and the units of an algorithm float's body (`pseudocode`): told
+ *  beside the units, never on them (a field of a unit is its parent's hash's, as `floats`) */
+const CAPTYPES = new WeakMap(), PSEUDOCODE = new WeakSet()
 /** tabularray's tables, \\begin{tblr}[outer]{inner}, and the paper's own (\\NewTblrEnviron): their cells are math where
  *  the table says so — mode = math, imath or dmath, for the cells, a column, a row or one cell, in the table's own
  *  specifications or in \\SetTblrInner for every table. Such a table is math throughout, as an array is: nothing in it
@@ -792,11 +831,25 @@ function endOfEnv(s, i, name) { // i just after \begin{name}; returns [bodyEnd, 
   }
   return [s.length, s.length]
 }
+// (an inline formula ends at TeX's math shift, whichever of the two opened it: LaTeX's \( is `$` outside math and its \) is `$`
+// inside inline math (latex.ltx), so `$…\)` and `\(…$` are formulas TeX sets whole. Pairing a `$` with the next `$` alone read
+// every formula after a `$…\)` as text and the text between as formulas, to the document's end: 2610.21377v1 p. 35, its
+// appendix one unit TeX's marks never closed. A shift closes the formula at its own level alone: inside a group of it, as a
+// text box's `\text{for $y>0$}`, a `$` or \( \) is the box's own formula, and a closing shift in a group of math proper is an
+// error TeX reports; an escaped brace, `\{` or `\}`, opens or closes no group)
 function mathEnd(s, i) { // s[i] is '$' or starts \( \[ ; returns index after the closing delimiter
   if (s.startsWith('$$', i)) { const e = s.indexOf('$$', i + 2); return e < 0 ? -1 : e + 2 }
-  if (s[i] === '$') { for (let j = i + 1; j < s.length; j++) { if (s[j] === '\\') { j++; continue } if (s[j] === '$') return j + 1 } return -1 }
-  const close = s[i + 1] === '(' ? '\\)' : '\\]'
-  const e = s.indexOf(close, i + 2)
+  if (s[i] === '$' || s[i + 1] === '(') {
+    let depth = 0
+    for (let j = s[i] === '$' ? i + 1 : i + 2; j < s.length; j++) {
+      if (s[j] === '\\') { if (s[j + 1] === ')' && depth <= 0) return j + 2; j++; continue }
+      if (s[j] === '{') depth++
+      else if (s[j] === '}') depth--
+      else if (s[j] === '$' && depth <= 0) return j + 1
+    }
+    return -1
+  }
+  const e = s.indexOf('\\]', i + 2)
   return e < 0 ? -1 : e + 2
 }
 
@@ -875,6 +928,175 @@ function paperMacros(files) {
     const p0 = prose.length === 1 ? prose[0] : undefined
     const then = params ? tailOf(t.slice(k + 1, e - 1)) : null
     out.set(name, { params, opt, prose: p0, def: t.slice(k + 1, e - 1), defFile: file, ...(p0 && use.stored.has(p0) && !use.typeset.has(p0) ? { stores: true } : {}), ...(params ? {} : { body: { file, start: k + 1, end: e - 1 } }), ...(then ? { then } : {}) })
+  }
+  resolveKeeps(out)
+  return out
+}
+/** the arguments a call of the paper's macro `h` at s[i] hands it, by parameter number (its optional first where it takes one and
+ *  the call writes it), each the text inside its brackets or braces, or its single token; null where the call is not whole */
+function callArgsOf(s, i, h) {
+  const out = []
+  let k = i, p = 1
+  if (h.opt) {
+    const k0 = skipSpaces(s, k)
+    if (s[k0] === '[') { const e0 = matchGroup(s, k0, '[', ']'); if (e0 < 0) return null; out[1] = s.slice(k0 + 1, e0 - 1); k = e0 }
+    p = 2
+  }
+  for (; p <= h.params; p++) {
+    const k0 = skipSpaces(s, k)
+    if (k0 >= s.length || s[k0] === '}') return null
+    const e0 = s[k0] === '{' ? matchGroup(s, k0) : s[k0] === '\\' ? commandAt(s, k0).end : k0 + 1
+    if (e0 < 0) return null
+    out[p] = s[k0] === '{' ? s.slice(k0 + 1, e0 - 1) : s.slice(k0, e0)
+    k = e0
+  }
+  return out
+}
+/**
+ * Each of the paper's macros' kept parameters (`keeps`: parameter -> the macro it is kept in), as their definitions state them:
+ * a definition inside the body of a macro whose body holds the parameter, as LaTeX's \\author keeps its text
+ * (\\def\\author#1{\\gdef\\@author{#1}}, spconf's \\def\\name#1{\\gdef\\@name{{\\em #1}\\\\}}), and through a call of another of the
+ * paper's macros that keeps the argument it is handed in the macro another argument names (Meta FAIR's preprint class:
+ * \\addtolist's \\xdef#3{…#2…}, so \\contribution[2][]{\\addtolist[#1]{#2}{\\contributionlist}…} keeps its #2 in
+ * \\contributionlist, and \\correspondence[1]{\\metadata[Correspondence]{#1}} its #1 in \\metadatalist, two calls down)
+ */
+function resolveKeeps(macros) {
+  const DEF = /\\(?:[gex]?def\s*(?:\\([A-Za-z@]+)|#(\d))\s*(?:#\d\s*)*|(?:re)?newcommand\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[\d\]\s*)?)(?=\{)/g
+  const keeps = new Map()
+  for (const [name, m] of macros) {
+    const k = new Map()
+    for (const d of m.def.matchAll(DEF)) {
+      const at = d.index + d[0].length, e = matchGroup(m.def, at)
+      if (e < 0) continue
+      const lit = d[1] ?? d[3] ?? d[4], target = lit ? { lit } : { param: Number(d[2]) }
+      for (const q of m.def.slice(at, e).matchAll(/#(\d)/g)) if (!k.has(Number(q[1]))) k.set(Number(q[1]), target)
+    }
+    keeps.set(name, k)
+  }
+  for (let pass = 0; pass < 4; pass++) {
+    let changed = false
+    for (const [name, m] of macros) {
+      const k = keeps.get(name)
+      for (const c of m.def.matchAll(/\\([A-Za-z@]+)/g)) {
+        const h = macros.get(c[1]), hk = keeps.get(c[1])
+        if (!h || c[1] === name || !hk?.size) continue
+        const args = callArgsOf(m.def, c.index + c[0].length, h)
+        if (!args) continue
+        for (const [q, t] of hk) {
+          const pm = /^\s*#(\d)\s*$/.exec(args[q] ?? '')
+          if (!pm || k.has(Number(pm[1]))) continue
+          const b = t.lit ? null : args[t.param] ?? '', lit = t.lit ?? /^\s*\\([A-Za-z@]+)\s*$/.exec(b)?.[1], par = lit ? null : /^\s*#(\d)\s*$/.exec(b)
+          const target = lit ? { lit } : par ? { param: Number(par[1]) } : null
+          if (target) { k.set(Number(pm[1]), target); changed = true }
+        }
+      }
+    }
+    if (!changed) break
+  }
+  for (const [name, m] of macros) {
+    const lits = [...keeps.get(name)].filter(([p, t]) => t.lit && p <= m.params)
+    if (lits.length) m.keeps = new Map(lits.map(([p, t]) => [p, t.lit]))
+  }
+}
+/** the bodies the paper's own files give a command (\\def, \\newcommand, \\renewcommand), its definitions in order */
+function bodiesOf(own, name) {
+  const out = []
+  const n = name
+  const re = new RegExp(String.raw`\\(?:[gex]?def\s*\\${n}(?![A-Za-z@])\s*(?:#\d\s*)*|(?:re)?newcommand\*?\s*(?:\{\s*\\${n}\s*\}|\\${n}(?![A-Za-z@]))\s*(?:\[\d\]\s*)?(?:\[[^\]]*\]\s*)?)(?=\{)`, 'g')
+  for (const { text } of own) {
+    const t = uncommented(text)
+    for (const m of t.matchAll(re)) { const k = m.index + m[0].length, e = matchGroup(t, k); if (e > 0) out.push(t.slice(k + 1, e - 1)) }
+  }
+  return out
+}
+/** what the class's title command sets: the bodies of \\maketitle and \\@maketitle and of each command of the paper's own files
+ *  they call, as deep as three calls (Meta FAIR's \\maketitle sets \\mymaketitle) */
+function titleBodies(own, macros) {
+  const out = [], seen = new Set()
+  const visit = (name, depth) => {
+    if (seen.has(name) || depth > 3) return
+    seen.add(name)
+    for (const body of bodiesOf(own, name)) {
+      out.push(body)
+      for (const c of body.matchAll(/\\([A-Za-z@]+)/g)) if (!macros.get(c[1])?.keeps) visit(c[1], depth + 1)
+    }
+  }
+  visit('maketitle', 0)
+  visit('@maketitle', 0)
+  return out
+}
+/** each group a body opens (a brace group, a tabular), its start and end (a nested one within it, and on its own too) */
+function groupsIn(body) {
+  const out = []
+  for (let i = 0; i < body.length; i++) {
+    if (body[i] === '\\') { i++; continue }
+    if (body[i] === '{') { const e = matchGroup(body, i); if (e > 0) out.push([i, e]) }
+  }
+  const open = []
+  for (const m of body.matchAll(/\\(begin|end)\s*\{(tabular\*?)\}/g)) {
+    if (m[1] === 'begin') open.push(m.index)
+    else if (open.length) out.push([open.pop(), m.index])
+  }
+  return out
+}
+/** a block of such a command's (ownAuthorsOf), which no engine before cut a unit of: each of its units numbered after every
+ *  other unit of the source but the bibliography's entries (`last`, entriesLast), so that no unit's number moves but theirs,
+ *  which nothing reads by its number */
+function ownLater(name, b, before, ctx) {
+  if (FRONT_MATTER.has(name) || !ctx.ownAuthors?.has(name)) return
+  for (const u of topUnits(b.units.slice(before))) u.last = true
+}
+/** a call of such a command: its argument of text the block's (frontBlock, its role ownAuthorsOf's), its other arguments as they
+ *  are (a mark's key, a label); the call's end, or -1 where the argument is not there */
+function ownAuthorCall(s, at, end, name, to, b, ctx) {
+  const { role, param } = ctx.ownAuthors.get(name), macro = ctx.macros.get(name)
+  const { args, end: e } = frontArgs(s, end, name, ctx, to)
+  const reqs = args.filter(a => a.kind === 'req'), opt = args.find(a => a.kind === 'opt')
+  const arg = macro?.opt && param === 1 ? opt : reqs[param - 1 - (macro?.opt ? 1 : 0)]
+  if (!arg) return -1
+  const before = b.units.length
+  frontBlock(s, arg.start + 1, arg.end - 1, b, ctx, role, at === null ? null : { at, end: e })
+  ownLater(name, b, before, ctx)
+  return e
+}
+/**
+ * The author block's commands of a class the paper ships that the role table does not know, as TeX's definitions state them:
+ * a command whose one argument of text its definition keeps in a macro (`keeps`, LaTeX's \\author's form) that the class's title
+ * command sets (\\maketitle, \\@maketitle and what they call) in the group, a brace group or a tabular, it sets an author block's
+ * macro in (LaTeX's \\@author, or that of a command the role table knows of the block: \\address's \\@address), and none the role
+ * table knows (a title, an abstract, a date, a note). Its role the block's rows' as TeX sets them: the macro that opens the
+ * group names, as \\author's first rows are (FRONT_NAMES), one after it places. ICASSP's spconf.sty: \\name{…}, the first row of
+ * `\\begin{tabular}[t]{c}\\@name \\\\ \\@address` (2610.20967v1: its names an ink unit of the notes, translated with the author block
+ * off, its affiliations' marks set flat). Meta FAIR's preprint class (2604.14228v3): its \\contribution notes, the paragraph after
+ * the places in the names' and places' group (no unit's, their glyphs on the title box's fill were figure texts, translated
+ * with the author block off, each run laid at its own anchor). None: what the title sets in another group, a venue's line, a
+ * licence, a teaser figure (acmart's \\acmConference, egpubl's \\teaser: read as places, a figure's caption was a place), and so
+ * Meta FAIR's \\correspondence, which it sets after the abstract with \\date; a command the class sets elsewhere (spconf's
+ * \\toappear, in the foot); one of a class the paper does not ship; and one that keeps more than one argument of text (spconf's
+ * \\twoauthors)
+ */
+function ownAuthorsOf(own, macros) {
+  const known = new Set(['@author']), unknown = new Map()
+  for (const [name, m] of macros) {
+    if (!m.keeps) continue
+    if (FRONT_MATTER.has(name) || FRONT_ROLES[name]?.[0] === 'author') for (const t of m.keeps.values()) known.add(t)
+    else if (!FRONT_ROLES[name] && !HEADINGS.has(name) && !OWN_UNIT_ARG.has(name)) {
+      // (its one argument of text: a required one it keeps, its optional first (a mark's key) aside)
+      const texts = [...m.keeps].filter(([p]) => !(m.opt && p === 1))
+      if (texts.length === 1) unknown.set(texts[0][1], { name, param: texts[0][0] })
+    }
+  }
+  const out = new Map()
+  if (!unknown.size) return out
+  for (const body of titleBodies(own, macros)) {
+    const groups = groupsIn(body)
+    for (const occ of body.matchAll(/\\([A-Za-z@]+)/g)) {
+      const u = unknown.get(occ[1])
+      if (!u || out.has(u.name)) continue
+      const g = groups.filter(([a, e]) => a < occ.index && e > occ.index).sort((x, y) => x[1] - x[0] - (y[1] - y[0]))[0]
+      const set = g ? [...body.slice(g[0], g[1]).matchAll(/\\([A-Za-z@]+)/g)].map(m => m[1]).filter(n => known.has(n) || unknown.has(n)) : []
+      if (set.some(n => known.has(n))) out.set(u.name, { role: set[0] === occ[1] ? 'names' : 'places', param: u.param })
+    }
   }
   return out
 }
@@ -1158,6 +1380,9 @@ function displayOutside(pieces, displays, macros) {
  * a letter's (joinLetters), cut around an address or a number (keepAddresses, escapedLocals, keepNumbers), transcoded
  */
 const SKIPPED = new WeakMap()
+/** the text pieces a text symbol made (textCharacter): one character, its source beside it, which the identifier and address
+ *  readings read as that character, as they read its placeholder before (keepRead) */
+const CHARACTERS = new WeakSet()
 /** whether a paper makes the space character active anywhere (\\obeyspaces, a \\catcode of the space set to 13): there TeX reads
  *  a line's indent after a comment as active spaces, not as nothing, and the walk keeps every indent (SKIPPED stays empty).
  *  `\\catcode32=13` or `=\\active`, in any of the paper's own files */
@@ -1197,7 +1422,7 @@ class Builder {
   close(id, src, end) { if (this.cur) { this.cur.pieces.push({ t: 'close', id, src }); this.cur.end = end } }
   /** a letter an accent made (accentLetter): text, its UTF-8 bytes read as the source's are, and `src` the accent as
    *  the source writes it — what is set wherever the unit is set untranslated (patch). Joined with its word at flush */
-  letter(letter, src, start, end) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }; this.cur.pieces.push({ t: 'text', s: latin1(utf8Bytes(letter)), src }); this.cur.end = end }
+  letter(letter, src, start, end, character = false) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }; const p = { t: 'text', s: latin1(utf8Bytes(letter)), src }; if (character) CHARACTERS.add(p); this.cur.pieces.push(p); this.cur.end = end }
   flush() {
     const u = this.cur; this.cur = null
     if (!u) return
@@ -1225,6 +1450,9 @@ class Builder {
     // (written inside a float: told beside the units, by index — no field of the unit, whose objects a nested piece holds
     // and its parent's hash reads)
     if (this.inFloat) this.floats?.add(u)
+    // (a caption's float type: a command's own (\captionof, a sub-caption's), else its float's; an algorithm float's other
+    // units, its lines as algorithm2e writes them in the float, are its pseudocode)
+    if (u.kind === 'caption') { const t = this.captype ?? (typeof this.inFloat === 'string' ? this.inFloat : null); if (t) CAPTYPES.set(u, t) } else if (this.inFloat === 'algorithm') PSEUDOCODE.add(u)
     this.units.push(u)
   }
 }
@@ -1242,9 +1470,18 @@ const joinLetters = pieces => {
   return out
 }
 // an e-mail address or a web address — the latter's last stop, comma or parenthesis the sentence's —, an ORCID written out
-// (0000-0002-1825-0097), and the domain after a list of names in braces
-const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\b(?:https?|ftp):\/\/[^\s{}\\]*[^\s{}\\.,;:!?)\]]|\bwww\.[\w-]+(?:\.[\w-]+)+(?:\/[^\s{}\\]*[^\s{}\\.,;:!?)\]])?|\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b/g, HAS_EMAIL = new RegExp(EMAIL.source)
-const AT_DOMAIN = /^@[\w-]+(?:\.[\w-]+)+/
+// (0000-0002-1825-0097), and a group of local parts before their one domain
+/** an e-mail address as a text writes it: the source's (keepAddresses) and an ink unit's word (packages/engine's copy of
+ *  ink-units.mjs, rule 4: held equal to this by tests/pdf-reader/locate-ink-today.test.ts) */
+export const EMAIL_ADDRESS = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/
+/** several addresses at one domain written once, a group of their local parts before it (`{jyeoj251, bmw5779}@gmail.com`,
+ *  2611.00342v1; `[first name]@distributed.inc`, 2610.21085v1): an opening brace, parenthesis or bracket with no local part's
+ *  character right before it, EMAIL_ADDRESS's local parts separated by commas and/or white space, the matching closing one,
+ *  and directly after it `@` and EMAIL_ADDRESS's domain. Its syntax alone, every character of it, as the paper sets it: the
+ *  source's (keepGroups, its spaces and braces read as TeX sets them) and an ink unit's lines' (packages/engine's copy of
+ *  ink-units.mjs, groupedAddresses: held equal to this by tests/pdf-reader/locate-ink-today.test.ts) */
+export const ADDRESS_GROUP = /(?<![\w.+-])(?:\{[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\}|\([\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\)|\[[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\])@[\w-]+(?:\.[\w-]+)+/
+const EMAIL = new RegExp(String.raw`${ADDRESS_GROUP.source}|${EMAIL_ADDRESS.source}|\b(?:https?|ftp):\/\/[^\s{}\\]*[^\s{}\\.,;:!?)\]]|\bwww\.[\w-]+(?:\.[\w-]+)+(?:\/[^\s{}\\]*[^\s{}\\.,;:!?)\]])?|\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b`, 'g'), HAS_EMAIL = new RegExp(EMAIL.source)
 /** an e-mail whose local part TeX escapes (`goh\_siong\_thye@a-star.edu.sg`, 2608.11884; `tang\_chao@xtu.edu.cn`, 2608.29778):
  *  each `\_` a placeholder of its own, which parted the address, its first words left text ("goh siong", "tang", sent to the
  *  translator). The words before the address that its `\_` join, the `\_` and the address are one placeholder, as the paper
@@ -1272,24 +1509,134 @@ function escapedLocals(pieces) {
   }
   return out
 }
-/** An address is not prose: an e-mail in a unit's text (jatin@us.ibm.com), an ORCID, a web address a link shows as its text
- *  (\\href{https://osf.io/gjvbs}{https://osf.io/gjvbs}, now that a link's text is text: 2608.14893), and a list of names
- *  in escaped braces with its domain ({sl225, samand2, reyhaneh}@illinois.edu), each become a placeholder, kept as the
- *  paper has it. Sent as text, a machine translation spelled one of 2608.06701's names in katakana and joined the list
- *  with the ideographic comma */
-function keepAddresses(pieces) {
-  pieces = escapedLocals(pieces)
-  const lists = []
+/** TeX's spaces as a source writes them between two words: a tie, a control space, the kernel's `\,`, `\:`, `\;`, and
+ *  `\thinspace`, `\enspace`, `\quad`, `\qquad`, `\space` */
+const TEX_SPACE = /^(?:~|\\[ ,:;]|\\(?:thinspace|enspace|quad|qquad|space)(?![A-Za-z@]))$/
+const GROUPS = new RegExp(ADDRESS_GROUP.source, 'g')
+/** a control word: its name letters, after which TeX skips the spaces the source writes */
+const CONTROL_WORD = /\\[A-Za-z@]+$/
+/** each range `find` gives of the reading ([start, end), in order, apart) one placeholder, written as the paper writes it, read over a unit's pieces as TeX sets
+ *  them: a text piece its characters (the spaces that open it after a control word none: TeX skips them), a space of TeX's
+ *  (TEX_SPACE) white space, a text symbol its one character (a placeholder's, `\_`, `\textunderscore`: symbolText; a text piece's,
+ *  `\{`, `\}`, `\$`: textCharacter's, its source written in a match), anything else
+ *  (a command, a group, an accent's letter, a bare `_`: TeX's subscript, a formula's the walker left in text) no character of a
+ *  match. A match starts and ends on a character of its own; what TeX skipped inside it is written with it */
+function keepRead(pieces, find) {
+  let flat = ''
+  // (each character read: its piece, and its offset in the piece's text, 0 for a placeholder's one)
+  const at = []
   for (let k = 0; k < pieces.length; k++) {
-    const p = pieces[k], names = pieces[k + 1], shut = pieces[k + 2], after = pieces[k + 3]
-    const domain = after?.t === 'text' && AT_DOMAIN.exec(after.s)?.[0]
-    if (p.t === 'ph' && p.src === '\\{' && names?.t === 'text' && shut?.t === 'ph' && shut.src === '\\}' && domain) {
-      lists.push({ t: 'ph', src: p.src + names.s + shut.src + domain })
-      if (after.s.length > domain.length) lists.push(sliceSkips(after, { ...after, s: after.s.slice(domain.length) }, domain.length))
-      k += 3
-    } else lists.push(p)
+    const p = pieces[k]
+    if (p.t === 'text' && p.src === undefined) {
+      const skip = k > 0 && pieces[k - 1].t === 'ph' && CONTROL_WORD.test(pieces[k - 1].src ?? '') ? /^[ \t]*(?:\r?\n)?[ \t]*/.exec(p.s)[0].length : 0
+      for (let o = skip; o < p.s.length; o++) { flat += p.s[o]; at.push([k, o]) }
+    } else if (CHARACTERS.has(p)) {
+      // (a piece written as characters: each of them read, an offset each, its piece's own; a quotation mark is three of them,
+      // its UTF-8 bytes in the Latin-1 view, and one offset for all of them put a match after it on the wrong pieces, or past
+      // the end. A match never starts or ends inside one: no byte of such a character is a word's)
+      for (let o = 0; o < p.s.length; o++) { flat += p.s[o]; at.push([k, o]) }
+    } else {
+      flat += p.t === 'ph' ? (TEX_SPACE.test(p.src ?? '') ? ' ' : symbolText(p.src) ?? '\u0000') : '\u0000'
+      at.push([k, 0])
+    }
   }
-  return lists.flatMap(p => {
+  const out = []
+  // (a text piece's part from s to e, as sliceSkips cuts one; the whole piece where that is all of it)
+  const part = (k, s, e) => { const p = pieces[k]; if (p.t !== 'text' || (s === 0 && e === p.s.length)) out.push(p); else if (e > s) out.push(sliceSkips(p, { ...p, s: p.s.slice(s, e) }, s, e)) }
+  // (k the first piece not yet written, `off` how much of it a match took)
+  let k = 0, off = 0
+  for (const [x, y] of find(flat)) {
+    const [ka, oa] = at[x], [kb, ob] = at[y - 1], b = ob + 1
+    for (; k < ka; k++, off = 0) part(k, off, pieces[k].s?.length ?? 0)
+    if (pieces[ka].t === 'text') part(ka, off, oa)
+    let src = ''
+    for (let j = ka; j <= kb; j++) src += pieces[j].t === 'text' && !CHARACTERS.has(pieces[j]) ? pieces[j].s.slice(j === ka ? oa : 0, j === kb ? b : undefined) : pieces[j].src
+    out.push({ t: 'ph', src })
+    if (pieces[kb].t === 'text' && b < pieces[kb].s.length) { k = kb; off = b } else { k = kb + 1; off = 0 }
+  }
+  for (; k < pieces.length; k++, off = 0) part(k, off, pieces[k].s?.length ?? 0)
+  return out
+}
+/** each group of local parts before their one domain (ADDRESS_GROUP) one placeholder, read over a unit's pieces as TeX sets
+ *  them (keepRead). Read from one text between `\{` and `\}` alone, a tie or a thin space between the local parts
+ *  (`\{kahe,~v-xiangz\}@…`, 1512.03385v1; `\{mph,\,lmb\}@…`, 2610.17024v1) parted the group into words sent one by one, and a
+ *  group in brackets (`[first name]@…`, 2610.21085v1) was text */
+const keepGroups = pieces => (pieces.some(p => p.t === 'text' && p.src === undefined && p.s.includes('@')) ? keepRead(pieces, flat => [...flat.matchAll(GROUPS)].map(m => [m.index, m.index + m[0].length])) : pieces)
+/** an identifier's mark: two letters or digits (`\w`'s, EMAIL_ADDRESS's, but the underscore) joined by underscores (snake_case:
+ *  `llm_equal_human`, `conv5_x`, `x86_64`, `foo__bar`; not `__init__` nor `_x`, no part of letters or digits before an underscore) */
+const SNAKE = /[^\W_]_+[^\W_]/
+/** an opening and a closing bracket of a pair a token may hold (`host_label(result)`, `[sentence_1]`, `{root_question}`) */
+const PAIRS = { '(': ')', '[': ']', '{': '}' }
+/** Each identifier of a text (a reading of a unit's pieces, or an ink word's characters), its [start, end) code units: a token, a
+ *  run of characters with no white space (nor U+0000, which stands for what no character of a text is: a command, a group's
+ *  edge), that holds an identifier's mark (SNAKE), the whole token: `CallbackBase.host_label(result)`, `test_parser.py`,
+ *  `--view_range`, `response_equal_human_example`. Its leading and trailing sentence punctuation is none of it: from its end a
+ *  stop, a comma, a semicolon, a colon, an exclamation or a question mark and a quote (`'` `"` `` ` `` and every closing one,
+ *  Pf), from its start a quote (every opening one, Pi); and a bracket at either edge that no bracket of its pair inside the token
+ *  answers (`(see conv5_x)` the `)` of a parenthesis the sentence opened; `[sentence_1]` and `host_label(result)` keep theirs),
+ *  another opening or closing bracket at its edge too (Ps, Pe). Its syntax alone: no word list, no camelCase, nothing dotted
+ *  without an underscore ("e.g." is prose). The source's (keepIdentifiers), an ink unit's word's (packages/engine's copy of
+ *  ink-units.mjs, addressed) and a figure text's (locate's ink.ts): the copy held equal to this by
+ *  tests/pdf-reader/locate-ink-today.test.ts */
+export function identifiersIn(s) {
+  const out = []
+  const answered = (t, at, step) => {
+    // (whether the bracket at `at` of `t` has its pair inside t, walking `step` from it: depth by its own pair alone)
+    const c = t[at], open = step > 0 ? c : Object.keys(PAIRS).find(k => PAIRS[k] === c), close = PAIRS[open]
+    if (!close) return false
+    let depth = 0
+    for (let i = at; i >= 0 && i < t.length; i += step) {
+      if (t[i] === (step > 0 ? open : close)) depth++
+      else if (t[i] === (step > 0 ? close : open) && --depth === 0) return true
+    }
+    return false
+  }
+  // (the tokens: runs of characters that are no white space and no U+0000)
+  const tokens = []
+  for (let i = 0; i < s.length; ) {
+    while (i < s.length && (s[i] === '\u0000' || /\s/u.test(s[i]))) i++
+    const at = i
+    while (i < s.length && s[i] !== '\u0000' && !/\s/u.test(s[i])) i++
+    if (i > at) tokens.push([at, i])
+  }
+  for (const [a0, b0] of tokens) {
+    if (!SNAKE.test(s.slice(a0, b0))) continue
+    let a = a0, b = b0
+    for (;;) {
+      const t = s.slice(a, b), last = t.at(-1), first = t[0]
+      if (/[.,;:!?'"`\p{Pf}]/u.test(last) || (/\p{Pe}/u.test(last) && !answered(t, t.length - 1, -1))) b--
+      else if (/['"`\p{Pi}]/u.test(first) || (/\p{Ps}/u.test(first) && !answered(t, 0, 1))) a++
+      else break
+    }
+    if (SNAKE.test(s.slice(a, b))) out.push([a, b])
+  }
+  return out
+}
+/** whether a placeholder's source is an identifier keepIdentifiers keeps: no command, no address, read as TeX sets it (a text
+ *  symbol its character, symbolText) one identifier whole. Text TeX sets as written: a unit's first word where it opens one
+ *  (startOf, marks.mjs headEnd), a code mark with both its marks (marks.mjs classOf) */
+export const identifierSource = src => {
+  if (typeof src !== 'string' || /^\\[A-Za-z@]/.test(src) || /@|:\/\//.test(src)) return false
+  // (TeX's math shift, a `$` no backslash escapes: a formula's subscript, `$s_i$`, is no identifier)
+  if (src.replace(/\\(?:[A-Za-z@]+|[^A-Za-z@])/g, '').includes('$')) return false
+  const t = src.replace(/\\(?:[A-Za-z@]+(?:\{\})?[ \t]*|[^A-Za-z@])/g, cs => symbolText(cs.trim()) ?? '\u0000')
+  const at = identifiersIn(t)
+  return at.length === 1 && at[0][0] === 0 && at[0][1] === t.length
+}
+/** each identifier (identifiersIn) one placeholder, written as the paper writes it, read over a unit's pieces as TeX sets them
+ *  (keepRead: `llm\_equal\_human`, `run\textunderscore id`, `\{root\_question\}`). It is no prose: sent, its words came back
+ *  translated inside it (2608.25210v2's `llm\_equal\_human`, its last part drawn as the Chinese word for "human"); kept, it is an
+ *  element every reply brings back, its ink the original's. After the addresses, so that an address holding an underscore stays
+ *  one address. A bare `_` is TeX's subscript (2610.21377v1's formulas the walker read as text, `H_0`, `e_k`), no underscore:
+ *  none of the 88 makes `_` print as one (the underscore package, a catcode of the paper's) */
+const keepIdentifiers = pieces => (pieces.some(p => (p.t === 'ph' && symbolText(p.src) === '_') || (p.t === 'text' && p.src === undefined && p.s.includes('_'))) ? keepRead(pieces, identifiersIn) : pieces)
+/** An address is not prose: an e-mail in a unit's text (jatin@us.ibm.com), an ORCID, a web address a link shows as its text
+ *  (\\href{https://osf.io/gjvbs}{https://osf.io/gjvbs}, now that a link's text is text: 2608.14893), and a group of local
+ *  parts before their domain ({sl225, samand2, reyhaneh}@illinois.edu, keepGroups), each become a placeholder, kept as the
+ *  paper has it. Sent as text, a machine translation spelled one of 2608.06701's names in katakana and joined the list
+ *  with the ideographic comma. So does an identifier, after them (keepIdentifiers) */
+function keepAddresses(pieces) {
+  return keepIdentifiers(keepGroups(escapedLocals(pieces)).flatMap(p => {
     if (p.t !== 'text' || !HAS_EMAIL.test(p.s)) return [p]
     const out = []
     let at = 0
@@ -1300,7 +1647,7 @@ function keepAddresses(pieces) {
     }
     if (at < p.s.length) out.push(sliceSkips(p, { ...p, s: p.s.slice(at) }, at))
     return out
-  })
+  }))
 }
 
 /**
@@ -1531,6 +1878,17 @@ function commentAt(s, at) {
   }
   return -1
 }
+/** the names of each \\bibliography{…} in s[from, to) outside comments, in order (its required argument, split at commas) */
+function bibliographiesIn(s, from, to) {
+  const out = []
+  for (const m of s.slice(from, to).matchAll(/\\bibliography(?![A-Za-z@])/g)) {
+    const at = from + m.index
+    if (inComment(s, at)) continue
+    const { args } = argsAfter(s, at + m[0].length, 1)
+    if (args[0]?.kind === 'req' && args[0].end <= to) out.push(s.slice(args[0].start + 1, args[0].end - 1).split(',').map(x => x.trim()).filter(Boolean))
+  }
+  return out
+}
 /** each \\thanks or \\footnote in s[from, to), walked alone: a footnote unit of its own, with no paragraph around it */
 function frontNotes(s, from, to, b, ctx) {
   let past = from
@@ -1586,7 +1944,7 @@ function markFirst(src) { return MARK_FIRST.test(rowText(src)) }
  *  looked into (a row TeX ends inside a tabular of the block's own is that tabular's), nor a conditional (`ifs`, the paper's
  *  \\newif names; TeX's own): a row's end in one of its branches (`\\ifanonymous … \\\\ … \\else … \\fi`) is that branch's, and a
  *  cut there would part the \\if from its \\fi over two units, each written back with its own marks */
-function frontEnds(s, from, to, ifs = new Set()) {
+function frontEnds(s, from, to, ifs = new Set(), rowEnds = null) {
   const out = []
   for (let k = from; k < to;) {
     const c = s[k]
@@ -1605,6 +1963,8 @@ function frontEnds(s, from, to, ifs = new Set()) {
       out.push({ at: k, end: e, and: false }); k = e; continue
     }
     if (FRONT_AND.test(name)) { out.push({ at: k, end, and: true }); k = end; continue }
+    // (a command of the paper's that ends the paragraph, as its every definition does: IJCAI's \\affiliations, frontRowEndsOf)
+    if (rowEnds?.has(name)) { out.push({ at: k, end, and: false }); k = end; continue }
     k = end
   }
   return out
@@ -1623,7 +1983,8 @@ function frontEnds(s, from, to, ifs = new Set()) {
  * its own (frontValues). An e-mail or a web address in any of them, an ORCID, a mark, stays as it is (keepAddresses, the
  * placeholders)
  */
-function frontBlock(s, from, to, b, ctx, role = 'names') {
+function frontBlock(s, from, to, b, ctx, role = 'names', call = null) {
+  const callAt = call ? calledAfter(s, call, ctx) : undefined
   if (/(^|[,{\s])[A-Za-z]+\s*=\s*\{/.test(s.slice(from, to))) { if (role === 'places') frontValues(s, from, to, b, ctx); else frontNotes(s, from, to, b, ctx); return }
   // the notes, wherever they are in the argument (as frontNotes finds them), and the rows' and blocks' ends at its top level
   const notes = []
@@ -1633,7 +1994,7 @@ function frontBlock(s, from, to, b, ctx, role = 'names') {
     const { args, end } = argsOfForm(s, at + m[0].length, unitForm(m[0].slice(1), ctx))
     if (args.some(a => a.kind === 'req')) notes.push({ at, end })
   }
-  const ends = frontEnds(s, from, to, ctx.ifs).filter(e => !notes.some(n => e.at >= n.at && e.at < n.end))
+  const ends = frontEnds(s, from, to, ctx.ifs, ctx.frontRowEnds).filter(e => !notes.some(n => e.at >= n.at && e.at < n.end))
   // each block's rows and each row's kind
   const blocks = [[]]
   let start = from
@@ -1682,6 +2043,40 @@ function frontBlock(s, from, to, b, ctx, role = 'names') {
   // that no unit's pieces, nor a unit that nests it, carry it: sourceHash)
   const block = { text: s.slice(from, to) }
   for (const u of made) BLOCK_OF.set(u, block)
+  // (the calls the marked compile states, each on the first unit after it: the call's own command where another author's call
+  // ended right before it, and each author's \\and inside the block — layoutMarking's \\axtcall, CALLED_AT)
+  const top = topUnits(made)
+  const states = (at, after) => { const u = top.find(v => v.start >= after); if (u && !CALLED_AT.has(u)) CALLED_AT.set(u, at) }
+  if (callAt !== undefined) states(callAt, from)
+  for (const e of ends) if (e.and) states(e.at, e.end)
+  // (and the end of each note's call that marks text before it in its row, a \\thanks between two names: the mark the note set
+  // is that text's, the unit after it the next one's. Not a note that opens its row: its mark, set before the name, is the
+  // name's lead)
+  const rows = blocks.flat()
+  for (const n of notes) {
+    const row = rows.find(([x, y]) => n.at >= x && n.at < y)
+    if (row && top.some(v => v.start >= row[0] && v.start < n.at)) states(n.end, n.end)
+  }
+}
+/**
+ * Where the marked compile states an author's call (layout/marks.mjs CALL_TEX's \\axtcall, the point `<i>c` TeX sets there in
+ * horizontal mode alone), by the first unit after it: an author block's command in the document (\\icmlauthor, an \\author of a
+ * class that sets it where it stands) right after another's, white space and comments alone between — ICML's names, each a call
+ * of its own in one paragraph, its marks set after its name —, and each \\and that opens an author's block inside one (LaTeX's
+ * \\author, NeurIPS' \\And). Each a source offset, in the unit's file. What TeX sets between an author's end mark and the next
+ * author's call is the author's (its trail: the engine's locate), what after it the next author's (its lead: own.mjs MR 5): no
+ * gap tells them apart, a thin space or a word space (2611.03953v2's names, 2610.10069v1's \\thanks mark before its \\and). A call
+ * in the preamble states none (frontMatter: TeX sets nothing there, and a class stores what it sets later and whole, its
+ * separators its own — 2604.14228v3's \\addtolist), the \\and inside its argument still
+ */
+const CALLED_AT = new WeakMap()
+export const calledAt = u => CALLED_AT.get(u)
+/** the offset of an author block's call (`call`: its command's start and its arguments' end) where another author call ended
+ *  right before it in the same text, white space and comments alone between; this call noted for the next */
+function calledAfter(s, call, ctx) {
+  const last = ctx.frontCall
+  ctx.frontCall = { s, end: call.end }
+  return last?.s === s && last.end <= call.at && /^(?:\s|%[^\n]*(?:\n|$))*$/.test(s.slice(last.end, call.at)) ? call.at : undefined
 }
 /** an author block's unit's block (frontBlock): its command's whole argument, by unit */
 const BLOCK_OF = new WeakMap()
@@ -1696,7 +2091,7 @@ function pairsOf(s, from, to, b, ctx) {
   if (to <= from || ctx.dry?.b === b) return 0
   const shadow = { ...ctx, letters: false, called: null, fits: [], bibliography: [], floats: new Set(), visit: () => {}, visitFront: () => {}, ends: new Map(ctx.ends), skipped: { ...ctx.skipped }, dirs: [...ctx.dirs] }
   const sb = new Builder(b.file, [], s, ctx.bodies, shadow.floats)
-  if (b.inFloat) sb.inFloat = true
+  if (b.inFloat) sb.inFloat = b.inFloat
   sb.kind = b.kind; walk(s, from, to, sb, shadow); sb.flush()
   return sb.pairId
 }
@@ -1709,7 +2104,7 @@ function olderUnits(s, from, to, b, ctx) {
   // all `later`, every other unit keeping its number: 2010.11929v2's footnote stays u1)
   const shadow = { ...ctx, called: null, fits: [], bibliography: [], floats: new Set(), visit: () => {}, visitFront: () => {}, ends: new Map(ctx.ends), skipped: { ...ctx.skipped }, dirs: [...ctx.dirs], boxesUnread: true }
   const out = [], sb = new Builder(b.file, out, s, ctx.bodies, shadow.floats)
-  if (b.inFloat) sb.inFloat = true
+  if (b.inFloat) sb.inFloat = b.inFloat
   sb.kind = 'author'; walk(s, from, to, sb, shadow); sb.flush()
   return topUnits(out).map(u => [u.start, u.end])
 }
@@ -1768,6 +2163,12 @@ const RUNNING_HEADS = new Set(['markboth', 'markright', 'titlerunning', 'authorr
  *  command as it is. The role table leaves both untyped (LaTeXML's prototype), so the call was one placeholder, and a heading
  *  wholly one no unit: 13 of 2307.16209's 14 */
 const PDF_STRING = new Set(['texorpdfstring'])
+/** the conditionals TeX reads as a macro's arguments, no \\fi (etoolbox's, ifthen's \\ifthenelse; the role table's branches
+ *  of content, arg-roles.mjs): read as TeX's own conditionals are (S4): undecided before the compile, a branch that alone
+ *  holds words walked as content, which the compile says TeX set or not (its marks set or never met); where both hold words,
+ *  neither is the translator's — the call one placeholder, as a command the table does not know is, counted (`ifUnknown`);
+ *  where neither does, one placeholder as before */
+const BRACE_CONDITIONALS = new Set(['ifdefempty', 'ifdefvoid', 'ifdef', 'ifundef', 'ifdefstring', 'ifcsdef', 'ifcsundef', 'ifcsempty', 'ifcsvoid', 'ifbool', 'iftoggle', 'ifstrequal', 'ifstrempty', 'ifblank', 'notblank', 'ifthenelse'])
 /** the parameters of a theorem-like environment: its title, optional */
 const THEOREM_PARAMS = paramsOf('[t')
 /**
@@ -1793,7 +2194,7 @@ function envArgs(s, at, to, env, ctx) {
  * arguments as they are. Where the table knows its parameters the hook's is found by its index, else it is its n-th
  * required argument or its last. Its end, or -1 where it has no such argument
  */
-function frontCommand(s, end, name, to, b, ctx, { front = false } = {}) {
+function frontCommand(s, at, end, name, to, b, ctx, { front = false } = {}) {
   const [role, n] = FRONT_ROLES[name]
   const call = commandArgs(s, end, name, to)
   const reqs = call.args.filter(a => a.kind === 'req' && s[a.start] === '{')
@@ -1801,7 +2202,7 @@ function frontCommand(s, end, name, to, b, ctx, { front = false } = {}) {
   if (!arg) return -1
   b.flush()
   const from = arg.start + 1, upTo = arg.end - 1, saved = b.kind, before = b.units.length
-  if (role === 'author') frontBlock(s, from, upTo, b, ctx, roleOf(name))
+  if (role === 'author') frontBlock(s, from, upTo, b, ctx, roleOf(name), at === null ? null : { at, end: call.end })
   else if (role === 'note' || role === 'prose') { b.kind = role === 'note' ? 'footnote' : 'para'; walk(s, from, upTo, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.front = true }
   else { b.kind = role === 'abstract' ? 'abstract' : 'heading'; b.title = role === 'title'; walk(s, from, upTo, b, ctx); b.flush(); b.title = false; b.kind = saved }
   if (front) for (const u of b.units.slice(before)) u.front = true
@@ -1872,6 +2273,9 @@ function walk(s, from, to, b, ctx) {
       // (the group the letter alone, no space inside it: `{ \\L}` and `{\\ss{} }` set a space too, left to the walk)
       const kernelLetter = !letter && accent && k === i + 1 && ctx.letters !== false && (letterCommand(s, k, accent.end, accent.name, e - 1, ctx.ownLetters) || (accent.name === 'ifmmode' ? ifmmodeLetter(s, accent.end, e - 1, ctx) : null))
       if (kernelLetter && kernelLetter.end === e - 1) { endText(); b.pairId += pairsOf(s, i, e, b, ctx); b.letter(kernelLetter.letter, s.slice(i, e), i, e); i = e; continue }
+      // (and around a text symbol alone, {\\%}: its character, textCharacter)
+      const character = !letter && !kernelLetter && accent && k === i + 1 && ctx.letters !== false && textCharacter(s, k, accent.end, accent.name, e - 1, ctx.ownLetters)
+      if (character && character.end === e - 1) { endText(); b.pairId += pairsOf(s, i, e, b, ctx); b.letter(character.letter, s.slice(i, e), i, e, true); i = e; continue }
       endText(); const id = b.open('{', i); walk(s, i + 1, e - 1, b, ctx); b.close(id, '}', e); i = e; continue
     }
     if (c === '&' && b.cellMode) { endText(); b.flush(); i++; continue }
@@ -2008,14 +2412,15 @@ function walk(s, from, to, b, ctx) {
       // eleven proofs in English) —, but a theorem's title, a heading of its own (\\begin{theorem}[Convergence of X]:
       // the reader sees it as the body's words)
       const { end: argsEnd, title } = envArgs(s, afterBegin, bodyEnd, env, ctx)
-      // (a float's units, and those of whatever it holds, `inFloat`)
-      const outside = b.inFloat
-      if (FLOAT_ENVS.test(env)) b.inFloat = true
+      // (a float's units, and those of whatever it holds, `inFloat`: its type; a part of a float's captions their own type)
+      const outside = b.inFloat, outsideType = b.captype
+      if (FLOAT_ENVS.test(env)) { b.inFloat = floatTypeOf(env); b.captype = undefined }
+      if (SUB_FLOAT_ENVS.test(env) && typeof b.inFloat === 'string') b.captype = env
       // (its units `bracketed`: written back in its brackets, a translation's own ] would end them, patch)
       if (title) { const saved = b.kind, before = b.units.length; b.kind = 'heading'; walk(s, title.start + 1, title.end - 1, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.bracketed = true }
       const saved = b.kind; b.kind = blockKind(b, env === 'abstract' ? 'abstract' : ctx.theorems.has(env) ? 'theorem' : saved)
       walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved
-      b.inFloat = outside
+      b.inFloat = outside; b.captype = outsideType
       i = afterEnd; continue
     }
     if (name === 'end') {
@@ -2039,6 +2444,11 @@ function walk(s, from, to, b, ctx) {
         i = e; continue
       }
     }
+    // csquotes' \\enquote{…} (the paper defining none): its quotation marks text around its argument, by its level (quoteMarks)
+    if (name === 'enquote' && !ctx.macros.has('enquote') && !ctx.bibDefs?.has('enquote') && !BIB_KINDS.has(b.kind)) {
+      const marks = quoteMarks(s, end, ctx), k = skipSpaces(s, end), e = s[k] === '{' ? matchGroup(s, k) : -1
+      if (marks && e > 0 && e <= to) { endText(); i = withMarks(s, i, k + 1, e - 1, e, marks, b, ctx); continue }
+    }
     // in a bibliography entry, a command that sets its text argument as it stands (BIB_TEXT): a pair around it, its other
     // arguments kept with the opening; a \\bibinfo of a field that is no prose (BIB_KEPT_FIELD) one placeholder
     if (BIB_KINDS.has(b.kind) && BIB_TEXT.has(name)) {
@@ -2047,7 +2457,11 @@ function walk(s, from, to, b, ctx) {
         const text = reqs[before], field = before ? s.slice(reqs[0].start + 1, reqs[0].end - 1).trim() : ''
         endText()
         if (name === 'bibinfo' && BIB_KEPT_FIELD.test(field)) { b.ph(s.slice(i, e), i, e); i = e; continue }
-        const id = b.open(s.slice(i, text.start + 1), i, identityPair(ctx.macros.get(name) ?? ctx.bibDefs?.get(name), before + 1)); walk(s, text.start + 1, text.end - 1, b, ctx); b.close(id, '}', e); i = e; continue
+        // (a command that prints its argument between marks: the marks text, wrapOf; csquotes' \\enquote by its level)
+        const def = ctx.macros.get(name) ?? ctx.bibDefs?.get(name)
+        const marks = wrapOf(def, before + 1) ?? (name === 'enquote' && !def ? quoteMarks(s, end, ctx) : null)
+        if (marks) { i = withMarks(s, i, text.start + 1, text.end - 1, e, marks, b, ctx); continue }
+        const id = b.open(s.slice(i, text.start + 1), i, identityPair(def, before + 1)); walk(s, text.start + 1, text.end - 1, b, ctx); b.close(id, '}', e); i = e; continue
       }
     }
     if (name === 'item') { endText(); b.flush(); const { args, end: e } = argsAfter(s, end, 1); i = args.length && args[0].kind === 'opt' ? e : end; continue }
@@ -2090,8 +2504,14 @@ function walk(s, from, to, b, ctx) {
         i = e; continue
       }
       endText(); b.flush()
+      // (a caption's float type where the command says it: \\captionof's first argument, a \\tablecaption's a table's, a
+      // sub-caption's its float's `sub` type; else its float's, `inFloat`)
+      const savedType = b.captype
+      if (name === 'captionof') { const t = args.find(a => a.kind === 'req'); const ty = t && t !== req ? s.slice(t.start + 1, t.end - 1).trim() : ''; if (/^[a-z][a-z0-9]*$/.test(ty)) b.captype = ty }
+      else if (name === 'tablecaption') b.captype = 'table'
+      else if ((name === 'subcaption' || name === 'subcaptionbox') && typeof b.inFloat === 'string') b.captype = `sub${b.inFloat}`
       // an abstract given as an argument (sn-jnl's \\abstract{…}) is the paper's abstract, as its environment is
-      b.kind = CAPTIONS.has(name) ? 'caption' : name === 'abstract' ? 'abstract' : 'heading'; b.title = name === 'title'; b.depth = DEPTH[name]; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.depth = undefined; b.kind = saved
+      b.kind = CAPTIONS.has(name) ? 'caption' : name === 'abstract' ? 'abstract' : 'heading'; b.title = name === 'title'; b.depth = DEPTH[name]; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.depth = undefined; b.kind = saved; b.captype = savedType
       i = e; continue
     }
     // \multicolumn{n}{spec}{text}, \multirow[v]{n}{width}[shift]{text}, \makecell[pos]{text}: only the content is prose,
@@ -2101,21 +2521,28 @@ function walk(s, from, to, b, ctx) {
       const read = commandArgs(s, end, name, to), last = read.known ? read.args.findLast(a => a.kind === 'req' && a.role === 'c') : null
       if (last && s[last.start] === '{' && last.end === read.end) { endText(); const id = b.open(s.slice(i, last.start + 1), i); walk(s, last.start + 1, last.end - 1, b, ctx); b.close(id, '}', read.end); i = read.end; continue }
     }
-    // subfig's \subfloat[caption]{content}: the caption in the optional argument, the content walked
-    if (name === 'subfloat') {
+    // subfig's \subfloat[list entry][caption]{content}, and subfigure.sty's \subfigure and \subtable of the same form where the
+    // paper loads that package and does not define them itself (subcaption's subfigure is an environment, read as one): the
+    // caption the last optional argument — one alone is both the list's entry and the caption, as both packages define them
+    // (subfig's \sf@@subfloat, subfigure.sty's \@subfigure) —, walked as a `caption` unit of its float's `sub` type (their
+    // sub\@captype: a \subfigure in a table is a sub-table), then the content walked; a list's entry of its own goes to the
+    // list of figures alone, no unit. Read as one placeholder, subfigure.sty's left 2602.23285v2's sub-captions in English
+    if (name === 'subfloat' || (SUBFIGURE_STY.has(name) && !paper?.own.has(name) && loads(paper, 'subfigure.sty'))) {
       const { args } = argsAfter(s, end, 3)
-      const opt = args[0]?.kind === 'opt' ? args[0] : null, content = args.find(a => a.kind === 'req')
+      const at = args.findIndex(a => a.kind === 'req'), content = args[at], opt = args.slice(0, Math.max(at, 0)).findLast(a => a.kind === 'opt') ?? null
       if (content) {
         endText(); b.flush()
-        if (opt) { const saved = b.kind; b.kind = 'caption'; walk(s, opt.start + 1, opt.end - 1, b, ctx); b.flush(); b.kind = saved }
+        if (opt) { const saved = b.kind, savedType = b.captype; b.kind = 'caption'; if (typeof b.inFloat === 'string') b.captype = `sub${b.inFloat}`; walk(s, opt.start + 1, opt.end - 1, b, ctx); b.flush(); b.kind = saved; b.captype = savedType }
         walk(s, content.start + 1, content.end - 1, b, ctx); b.flush()
         i = content.end; continue
       }
     }
+    if (ctx.ownAuthors?.has(name)) { endText(); b.flush(); const e = ownAuthorCall(s, i, end, name, to, b, ctx); if (e > 0) { i = e; continue } }
     if (FRONT_MATTER.has(name)) {
       const { args, end: e } = frontArgs(s, end, name, ctx, to)
       endText(); b.flush()
-      for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) }
+      const first = args.find(a => a.kind === 'req')
+      for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(name), a === first ? { at: i, end: e } : null); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) }
       i = e; continue
     }
     if ((FRONT_PROSE.has(name) || (FRONT_BOXES.has(name) && !ctx.boxesUnread)) && AUTHOR_KINDS.has(b.kind)) {
@@ -2130,10 +2557,17 @@ function walk(s, from, to, b, ctx) {
         i = e; continue
       }
     }
-    if (CONTENT_BOX.has(name)) {
+    if (CONTENT_BOX.has(name) && !(LINE_BOXES.has(name) && ctx.boxesUnread)) {
       const { args } = argsAfter(s, end, 8)
       const content = args.filter(a => a.kind === 'req')[CONTENT_BOX.get(name) - 1]
-      if (content) { endText(); const id = b.open(s.slice(i, content.start + 1), i); walk(s, content.start + 1, content.end - 1, b, ctx); b.close(id, '}', content.end); i = content.end; continue }
+      if (content) {
+        endText()
+        // (a line box where no unit is open: a line of its own, LINE_BOXES)
+        const alone = LINE_BOXES.has(name) && !b.cur
+        const id = b.open(s.slice(i, content.start + 1), i); walk(s, content.start + 1, content.end - 1, b, ctx); b.close(id, '}', content.end)
+        if (alone) b.flush()
+        i = content.end; continue
+      }
     }
     if (INLINE_TEXT.has(name)) {
       const { args, end: e } = argsAfter(s, end, 1)
@@ -2161,7 +2595,7 @@ function walk(s, from, to, b, ctx) {
     // sets it (2608.07584 had no title). The text before it ends where the command begins (endText first): the
     // paragraph's unit must not run over the call, whose source no piece of it holds — written back, the call was gone
     // (the re-review's N1, \note{…} mid-paragraph)
-    if (call && !macro.prose && FRONT_ROLES[name]?.[1]) { endText(); const e = frontCommand(s, end, name, to, b, ctx, { front: true }); if (e > 0) { i = e; continue } }
+    if (call && !macro.prose && FRONT_ROLES[name]?.[1]) { endText(); const e = frontCommand(s, i, end, name, to, b, ctx, { front: true }); if (e > 0) { i = e; continue } }
     if (call && macro.prose) {
       const arg = call.reqs[macro.prose - 1 - (macro.opt ? 1 : 0)]
       if (arg?.group && macro.stores) {
@@ -2177,11 +2611,12 @@ function walk(s, from, to, b, ctx) {
       // 6)" (2610.21547's eleven units, S1 of 2026-10-24)
       if (arg && !macro.then && setsWords(macro)) {
         // (a macro inside its own expansion, or expansions nested past a few levels — a recursive call in a branch TeX never
-        // takes, \\a calling \\b calling \\a —, and any failure of the expansion leave the call one placeholder)
+        // takes, \\a calling \\b calling \\a —, and any failure of the expansion leave the call one placeholder; a failed
+        // allocation is the paper's)
         const expanding = ctx.expanding ?? new Set()
         let text = null
         if (!macro.opt && !expanding.has(name) && expanding.size < EXPANSION_DEPTH) {
-          try { text = expandedText(macro, call.reqs.map(r => s.slice(r.group ? r.start + 1 : r.start, r.group ? r.end - 1 : r.end)), b.file, { ...ctx, expanding: new Set([...expanding, name]) }) } catch { text = null }
+          try { text = expandedText(macro, call.reqs.map(r => s.slice(r.group ? r.start + 1 : r.start, r.group ? r.end - 1 : r.end)), b.file, { ...ctx, expanding: new Set([...expanding, name]) }) } catch (e) { if (isMemoryError(e)) throw e; text = null }
         }
         // (the pair's id spent as the pair's was: the pairs after it keep theirs, and their units their hashes)
         endText(); b.pairId++
@@ -2193,7 +2628,11 @@ function walk(s, from, to, b, ctx) {
         // an argument that holds paragraphs, a figure or a proof (\\techreport{…}, \\revised{…} around whole passages)
         // is walked as an environment's body is; one within a paragraph is part of it, the call around it a pair
         if (holdsBlock(s.slice(arg.start + 1, arg.end - 1))) { endText(); b.flush(); walk(s, arg.start + 1, arg.end - 1, b, ctx); b.flush(); i = call.end; goOn(macro, call, i); continue }
-        endText(); const id = b.open(s.slice(i, arg.start + 1), i, identityPair(macro, macro.prose)); walk(s, arg.start + 1, arg.end - 1, b, ctx); b.close(id, s.slice(arg.end - 1, call.end), call.end); i = call.end; goOn(macro, call, i); continue
+        endText()
+        // (a macro that prints its argument between marks: the marks text, wrapOf)
+        const marks = wrapOf(macro, macro.prose)
+        if (marks) { i = withMarks(s, i, arg.start + 1, arg.end - 1, call.end, marks, b, ctx); goOn(macro, call, i); continue }
+        const id = b.open(s.slice(i, arg.start + 1), i, identityPair(macro, macro.prose)); walk(s, arg.start + 1, arg.end - 1, b, ctx); b.close(id, s.slice(arg.end - 1, call.end), call.end); i = call.end; goOn(macro, call, i); continue
       }
     }
     if (call) {
@@ -2224,6 +2663,8 @@ function walk(s, from, to, b, ctx) {
     // a letter command, \\L ukasz, \\L{}ukasz, Bj\\o rn: the letter in its word (letterCommand), TeX's skipped spaces with it
     const kernelLetter = ctx.letters !== false && letterCommand(s, i, end, name, to, ctx.ownLetters)
     if (kernelLetter) { endText(); b.pairId += pairsOf(s, i, kernelLetter.end, b, ctx); b.letter(kernelLetter.letter, s.slice(i, kernelLetter.end), i, kernelLetter.end); i = kernelLetter.end; continue }
+    const character = ctx.letters !== false && textCharacter(s, i, end, name, to, ctx.ownLetters)
+    if (character) { endText(); b.pairId += pairsOf(s, i, character.end, b, ctx); b.letter(character.letter, s.slice(i, character.end), i, character.end, true); i = character.end; continue }
     if (ACCENTS.has(name)) {
       let k = /^[A-Za-z]$/.test(name) ? skipSpaces(s, end) : end
       if (s[k] === '{') k = matchGroup(s, k)
@@ -2234,7 +2675,7 @@ function walk(s, from, to, b, ctx) {
     if (name === '\\') { const { args, end: e } = argsAfter(s, end, 1); const stop = args[0]?.kind === 'opt' ? e : end; endText(); if (b.cellMode) { b.flush(); i = stop; continue } b.ph(s.slice(i, stop), i, stop); i = stop; continue }
     // the front matter's commands the role table knows by their hook (FRONT_ROLES: AAAI's \affiliations, amsart's
     // \dedicatory, a \date): their text a unit of what it is, the text before them ended first (above)
-    if (FRONT_ROLES[name]?.[1]) { endText(); const e = frontCommand(s, end, name, to, b, ctx); if (e > 0) { i = e; continue } }
+    if (FRONT_ROLES[name]?.[1]) { endText(); const e = frontCommand(s, i, end, name, to, b, ctx); if (e > 0) { i = e; continue } }
     // a running head, kept as it is with its arguments (2608.04322's \markboth{…}%\n{…}, whose second argument was walked
     // as text only while a comment kept it from the command)
     if (RUNNING_HEADS.has(name)) { const call = commandArgs(s, end, name, to); endText(); b.ph(s.slice(i, call.end), i, call.end); i = call.end; continue }
@@ -2244,13 +2685,43 @@ function walk(s, from, to, b, ctx) {
     // argument in parentheses
     let from = end
     if (name === 'cmidrule') { const k0 = skipSpaces(s, argsAfter(s, end, 1).end); if (s[k0] === '(') { const c0 = s.indexOf(')', k0); if (c0 > 0 && c0 < to) from = c0 + 1 } }
-    const args = !/^[A-Za-z@]+$/.test(name) || NO_ARGS.has(name) ? null : commandArgs(s, from, name, to)
+    let args = !/^[A-Za-z@]+$/.test(name) || NO_ARGS.has(name) ? null : commandArgs(s, from, name, to)
+    // (a conditional TeX reads as a macro's arguments: its branches as the walk reads them in a dry run (probeConditional). The
+    // one branch that holds words is walked alone, the call's source and its other branch kept with its pair's open or close —
+    // so no unit's start mark falls between two of its arguments, where an empty branch's pair would end the unit's head; where
+    // both hold words neither is text, and where neither does none: the call read as one the table does not know, one
+    // placeholder, as before the table knew it)
+    let branch = null
+    if (args?.known && BRACE_CONDITIONALS.has(name)) {
+      const br = args.args.filter(a => a.role === 'c' && s[a.start] === '{')
+      const probe = br.length === 2 ? probeConditional(s, i, { thenFrom: br[0].start + 1, thenTo: br[0].end - 1, elseFrom: br[1].start + 1, elseTo: br[1].end - 1 }, b, ctx) : null
+      const worded = probe ? br.filter((_, k) => probe[k].words) : []
+      if (worded.length === 1) branch = worded
+      else {
+        if (worded.length === 2) ctx.skipped.ifUnknown = (ctx.skipped.ifUnknown ?? 0) + 1
+        args = argsAfter(s, from)
+      }
+    }
     // (\\texorpdfstring's first argument whether or not the paper's packages tell the role table of it: a class may define it)
     const pdfString = PDF_STRING.has(name) && args?.args.length >= 2 && s[args.args[0].start] === '{' && s[args.args[1].start] === '{'
-    const walked = pdfString ? args.args.slice(0, 1) : args?.known ? args.args.filter(a => (a.role === 't' || a.role === 'c') && (s[a.start] === '{' || a.shape === '[')) : []
+    // (a line box in PIPELINE 29's walk: one placeholder, as that walk read it, LINE_BOXES)
+    const walked = pdfString ? args.args.slice(0, 1) : branch ?? (args?.known && !(LINE_BOXES.has(name) && ctx.boxesUnread) ? args.args.filter(a => (a.role === 't' || a.role === 'c') && (s[a.start] === '{' || a.shape === '[')) : [])
     // (its call ends with its second argument: where the table does not know it, every adjacent group was read as one of its)
     const callEnd = pdfString ? args.args[1].end : args?.end
     if (walked.length) { endText(); walkArgs(s, i, callEnd, walked, b, ctx); i = callEnd; continue }
+    // (a \\bibliography in the groups of a command the table does not know, every one read as its argument, is read where it
+    // stands all the same, as above: TeX reads the job's .bbl there, inside whatever group (balance.sty's \\balance takes no
+    // argument: 2608.06007v1's `\\balance{\\bibliographystyle{unsrt}\\bibliography{ref}}`, read as one placeholder, named no
+    // bibliography, no .bbl was made, and its entries, no unit's, were kept blocks, never translated). The call is then no
+    // unit's, as \\bibliography's own source is none; nothing of ours is written in its groups, the entries units of the .bbl)
+    if (args && !args.known && /^[A-Za-z@]+$/.test(name)) {
+      const named = bibliographiesIn(s, end, args.end)
+      if (named.length) {
+        endText(); b.flush()
+        for (const names of named) { ctx.bibliography.push(...names); if (ctx.bbl) ctx.visit(ctx.bbl, [], b.inFloat) }
+        i = args.end; continue
+      }
+    }
     let { end: e } = !/^[A-Za-z@]+$/.test(name) ? { end } : NO_ARGS.has(name) ? optsAfter(s, from, OPT_ONLY.has(name)) : args
     // an empty group after a command the table knows ends its name, and goes with it (\\LaTeX{} is), as before the table
     if (args?.known) { const k = skipSpaces(s, e); if (s.startsWith('{}', k) && k + 2 <= to) e = k + 2 }
@@ -2267,6 +2738,47 @@ function walk(s, from, to, b, ctx) {
   endText()
 }
 
+/**
+ * The paper's macros of no argument that end the paragraph TeX is setting, by name: a name every definition of which, in any of
+ * the package's files and in any form (DEFINITION), takes no parameter and has a body that ends it at its top level — `\\par`, or
+ * a row's end, `\\\\`, \\newline, \\cr (FRONT_ROW) — and sets no text of its own (setsText). Inside an author block it ends a row, as `\\\\` does
+ * (frontEnds): IJCAI's style, which a paper ships, defines inside its \\@maketitle `\\def\\affiliations{\\egroup\\vskip
+ * 0.05in minus 0.05in\\par\\bgroup\\Large\\rm}` and \\emails alike, written inside \\author between its names, its places and
+ * its e-mails: read as text, the last name and the first place were one row, and the last place ran on through \\emails into the
+ * e-mail rows, a unit TeX set as two paragraphs that no reading located (2611.00342v1: English whatever the toggle). A name
+ * also defined otherwise (with parameters, by \\let, with a body that ends no paragraph) is none
+ */
+function frontRowEndsOf(texts) {
+  const out = new Set(), other = new Set()
+  for (const t of texts.map(uncommented)) {
+    for (const m of t.matchAll(DEFINITION)) {
+      if (m.index > 0 && t[m.index - 1] === '\\') continue
+      const [, nc, nb, nd, nl, nx, ny] = m, name = nc ?? nb ?? nd ?? nl ?? nx ?? ny, k = skipSpaces(t, m.index + m[0].length)
+      const e = (nc ?? nb ?? nd) && t[k] === '{' ? matchGroup(t, k) : -1
+      if (e > 0 && endsParagraph(t, k + 1, e - 1) && !setsText(t.slice(k + 1, e - 1))) out.add(name); else other.add(name)
+    }
+  }
+  for (const n of other) out.delete(n)
+  return out
+}
+/** whether a body sets text of its own: a letter past its commands, its groups' braces and the glue or dimensions a skip reads
+ *  (TeX's units and its plus and minus: `\\vskip 0.05in minus 0.05in`). One that does is the paper's prose, its row ends its own
+ *  (2608.16190's `\\def\\authorblock{Anik Jha\\\\ Independent Researcher}`, written as \\author's whole argument: storedBodies) */
+const setsText = body => /\p{L}/u.test(body.replace(/\\(?:[A-Za-z@]+|.)/g, ' ').replace(/[{}]/g, ' ').replace(GLUE_SPEC, ' '))
+/** a dimension or a glue as TeX reads one after a skip: a number, its unit (TeX's, `true` before it), each `plus` and `minus` */
+const GLUE_SPEC = /(?:[-+]?\s*(?:\d+(?:\.\d*)?|\.\d+)\s*(?:true\s*)?(?:pt|pc|in|bp|cm|mm|dd|cc|sp|em|ex|mu|fil{1,3})(?![A-Za-z])\s*(?:(?:plus|minus)(?![A-Za-z])\s*)?)+/g
+/** whether s[from, to) ends the paragraph at its top level: a `\\par` or a row's end (FRONT_ROW) outside every group */
+function endsParagraph(s, from, to) {
+  for (let k = from; k < to; ) {
+    const c = s[k]
+    if (c === '{') { const e = matchGroup(s, k); if (e < 0 || e > to) return false; k = e; continue }
+    if (c !== '\\') { k++; continue }
+    const { name, end } = commandAt(s, k)
+    if (name === 'par' || FRONT_ROW.test(name)) return true
+    k = end
+  }
+  return false
+}
 /** the paper's macros of no argument whose body ends a table's row (ROW_END), by name: a name every definition of which, in any of
  *  the package's files and in any form, takes no parameter and has such a body — `\\newcommand{\\x}{…}`, \\renewcommand,
  *  \\providecommand, \\DeclareRobustCommand (starred or not, no `[n]` after the name), `\\def\\x{…}`, \\gdef, \\edef, \\xdef (no
@@ -2518,20 +3030,26 @@ const BIB_KINDS = new Set(['reference'])
  * appendix's last paragraphs' next neighbour, on page 10, and those of its page 16 the marks did not bound were found nowhere
  */
 function entriesLast(units) {
-  const later = units.filter(u => u.later && !BIB_KINDS.has(u.kind)), entries = units.filter(u => BIB_KINDS.has(u.kind))
-  if (!later.length && !entries.length) return null
+  // (`last`: a block of the author block's no engine before cut a unit of (ownLater), after every other unit but the entries,
+  // which stay last: a bibliography BibTeX makes in the prepare's first pass is appended after the units (layout/paper.mjs
+  // madeBibliography, which holds those before it as they were))
+  const last = units.filter(u => u.last)
+  const later = units.filter(u => u.later && !u.last && !BIB_KINDS.has(u.kind)), entries = units.filter(u => BIB_KINDS.has(u.kind) && !u.last)
+  if (!later.length && !entries.length && !last.length) return null
   const walked = units.slice()
-  const rest = units.filter(u => !u.later && !BIB_KINDS.has(u.kind))
+  const rest = units.filter(u => !u.later && !u.last && !BIB_KINDS.has(u.kind))
   units.length = 0
-  units.push(...rest, ...later, ...entries)
+  units.push(...rest, ...later, ...last, ...entries)
   const index = new Map(units.map((u, i) => [u, i]))
   return walked.map(u => index.get(u))
 }
 /** the commands of a bibliography that set their last argument as text, by how many arguments come before it: REVTeX's and
  *  acmart's fields (\\bibinfo{title}{…}, \\bibfield{author}{…}), REVTeX's name fonts, a quoted or shown title, IEEEtran's
- *  language. Any other command of a .bbl is what the walk makes of it elsewhere: \\newblock a placeholder, \\url and \\href
+ *  language, and REVTeX's link with no address (\\href@noop {} {…}, its head's `\\@secondoftwo`: a journal part with no DOI,
+ *  a note; its content the text, with the groups it holds, nothing to link: the coordinator's step D of 2026-11-11, PDF-READER
+ *  §18.33). Any other command of a .bbl is what the walk makes of it elsewhere: \\newblock a placeholder, \\url and \\href
  *  theirs, \\emph a pair */
-const BIB_TEXT = new Map([['bibinfo', 1], ['bibfield', 1], ['bibnamefont', 0], ['bibfnamefont', 0], ['citenamefont', 0], ['enquote', 0], ['showarticletitle', 0], ['BIBforeignlanguage', 1]])
+const BIB_TEXT = new Map([['bibinfo', 1], ['bibfield', 1], ['bibnamefont', 0], ['bibfnamefont', 0], ['citenamefont', 0], ['enquote', 0], ['showarticletitle', 0], ['BIBforeignlanguage', 1], ['href@noop', 1]])
 /** a \\bibinfo field that is no prose: kept as the paper has it, one placeholder */
 const BIB_KEPT_FIELD = /^(?:doi|url|eprint|isbn|issn|archive|archiveprefix|primaryclass|eid|lccn|mrnumber|zbl)$/i
 /**
@@ -2595,6 +3113,91 @@ function bibDefinitions(head) {
     out.set(name, { params: m[4] !== undefined ? (m[5].match(/#\d/g) ?? []).length : Number(m[3] ?? 0), def: t.slice(k + 1, e - 1) })
   }
   return out
+}
+/** TeX's text ligatures of quotation marks and dashes as the characters they set (`` “, '' ”, ` ‘, ' ’, --- —, -- –) */
+const texMarks = t => t.replace(/``/g, '\u201c').replace(/''/g, '\u201d').replace(/`/g, '\u2018').replace(/'/g, '\u2019').replace(/---/g, '\u2014').replace(/--/g, '\u2013')
+/**
+ * The characters a pair's command prints around its argument `arg`, by its definition (`macro`: paperMacros' or bibDefinitions'),
+ * where its replacement text is that argument between marks and nothing else — no letter, no digit, no command, no group:
+ * `{``#1''}`, 2610.10069v1's \\enquote and REVTeX's .bbl's — as { before, after }, TeX's ligatures read; null else. What a command
+ * prints as characters is characters (the coordinator's ruling of 2026-11-11): the marks are text of the unit, its source with
+ * them, and what a translator does with quotation marks is the translator's
+ */
+function wrapOf(macro, arg) {
+  const body = macro && typeof macro.def === 'string' ? texUncommented(macro.def) : null
+  const m = body && /^([^#\\{}%$&~^_\p{L}\p{N}]*)#([1-9])([^#\\{}%$&~^_\p{L}\p{N}]*)$/u.exec(body)
+  if (!m || Number(m[2]) !== arg || Number(m[2]) > (macro.params ?? 0) || !/\S/.test(m[1]) || !/\S/.test(m[3])) return null
+  return { before: texMarks(m[1]), after: texMarks(m[3]) }
+}
+/**
+ * csquotes' quotation marks where the paper loads it and they can be read off its own files: the outer level's double marks
+ * and the inner level's single (`levels`), as its English style sets them, where it is loaded with no style, `style=american`,
+ * `english` or `USenglish`, and no `autostyle`, no \\setquotestyle, no babel or polyglossia language but English; `{ known:
+ * false }` where the style is another the source alone cannot tell (the compile's glyphs would be the fact: not read here); null
+ * where csquotes is not loaded
+ */
+function csquotesOf(texts) {
+  const t = texts.map(uncommented).join('\n')
+  const m = /\\usepackage\s*(?:\[([^\]]*)\])?\s*\{[^}]*\bcsquotes\b[^}]*\}/.exec(t)
+  if (!m) return null
+  const opts = (m[1] ?? '').split(',').map(x => x.trim()).filter(Boolean)
+  const style = opts.find(o => /^style\s*=/.test(o))?.replace(/^style\s*=\s*/, '')
+  const english = l => /^(?:american|english|USenglish|UKenglish|british|canadian|australian|newzealand)$/.test(l)
+  const babel = [...t.matchAll(/\\usepackage\s*\[([^\]]*)\]\s*\{babel\}/g)].flatMap(b => b[1].split(',').map(x => x.trim()).filter(x => x && !x.includes('=')))
+  const main = /\\setmainlanguage\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/.exec(t)?.[1]?.trim()
+  const known = !opts.some(o => /^autostyle\b/.test(o) && !/=\s*false$/.test(o)) && !/\\setquotestyle\b/.test(t) &&
+    (!style || /^(?:american|english|USenglish)$/.test(style)) && (!babel.length || english(babel.at(-1))) && (!main || english(main))
+  return known ? { known, levels: [['\u201c', '\u201d'], ['\u2018', '\u2019']] } : { known }
+}
+/** csquotes' marks for an \\enquote at the walk's quotation level (`ctx.quoteLevel`, 0 outside one; `\\enquote*` one level in,
+ *  `end` past its name and star), alternating by level; null where the paper does not load csquotes or its marks are unknown */
+function quoteMarks(s, end, ctx) {
+  if (!ctx.quotes?.known) return null
+  const level = (ctx.quoteLevel ?? 0) + (s[end - 1] === '*' ? 1 : 0)
+  const [before, after] = ctx.quotes.levels[level % 2]
+  return { before, after, level: level + 1 }
+}
+/** the declarations a group scopes (tex-kernel.mjs DECLARATION_WORDS) */
+const DECLARATIONS = new Set(DECLARATION_WORDS)
+/** a call that prints its argument (s[from, to)) between marks: the opening mark text with the call's source up to its argument's
+ *  open, the argument walked (at the next quotation level, for csquotes), the closing mark text with the rest of the call's source
+ *  to `e`; the pair's id spent as the pair's was, so that every pair after it keeps its id. Returns `e` */
+function withMarks(s, i, from, to, e, marks, b, ctx) {
+  const inner = marks.level === undefined ? ctx : { ...ctx, quoteLevel: marks.level }
+  // (an argument that holds a declaration of its own keeps the group that scopes it, `{`…`}`, the marks outside it as TeX prints
+  // them: written as text alone, `\\enquote{\\bfseries bold words}` let the switch run past the quote, the markers wire putting
+  // it after the unit's text. Whether such a group sets a face is the group's own reading)
+  if (declares(s, from, to)) {
+    b.letter(marks.before, s.slice(i, from - 1), i, from - 1, true)
+    const id = b.open('{', from - 1)
+    walk(s, from, to, b, inner)
+    b.close(id, s.slice(to, e), e)
+    b.letter(marks.after, '', e, e, true)
+    return e
+  }
+  b.pairId++
+  b.letter(marks.before, s.slice(i, from), i, from, true)
+  walk(s, from, to, b, inner)
+  b.letter(marks.after, s.slice(to, e), to, e, true)
+  return e
+}
+/** a declaration a group scopes (rules/tex-kernel.mjs DECLARATION_WORDS: a face, a size, a family, an alignment; and \\color)
+ *  at the top level of s[from, to) */
+function declares(s, from, to) {
+  let depth = 0
+  for (let k = from; k < to; k++) {
+    const c = s[k]
+    if (c === '%') { while (k < to && s[k] !== '\n') k++; continue }
+    if (c === '{') depth++
+    else if (c === '}') depth--
+    else if (c === '\\') {
+      const m = /^\\([A-Za-z@]+)/.exec(s.slice(k, k + 40))
+      if (!m) { k++; continue }
+      if (!depth && (DECLARATIONS.has(m[1]) || m[1] === 'color')) return true
+      k += m[0].length - 1
+    }
+  }
+  return false
 }
 /** whether a pair's command, by its definition (`def`: paperMacros' or bibDefinitions'), sets its argument `arg` (the one the
  *  walk makes the pair's content, from 1, the last it takes) and nothing else: such a pair sets nothing over what it holds, and
@@ -2720,6 +3323,7 @@ function frontMatter(s, from, to, b, ctx) {
       continue
     }
     if (FRONT_MATTER.has(c.name)) { const { args, end } = frontArgs(s, c.end, c.name, ctx, to); for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(c.name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) } past = end; continue }
+    if (ctx.ownAuthors?.has(c.name)) { const e = ownAuthorCall(s, null, c.end, c.name, to, b, ctx); if (e > 0) past = e; continue }
     // a \thanks of its own (revtex's, after \author{…}): a front note, as in the body
     if (c.name === 'thanks') { const { args, end } = argsOfForm(s, c.end, unitForm('thanks', ctx)); if (args.some(a => a.kind === 'req')) { b.flush(); frontNote(s, c.at, end, b, ctx); past = end } continue }
     if (c.name === 'begin' && FRONT_ROLES[`env:${c.env}`]) {
@@ -2738,7 +3342,7 @@ function frontMatter(s, from, to, b, ctx) {
       if (m) { ctx.visitFront?.((m[1] ?? m[2]).trim(), ctx.dirs); past = c.end + m[0].length }
       continue
     }
-    if (FRONT_ROLES[c.name]?.[1]) { const e = frontCommand(s, c.end, c.name, to, b, ctx); if (e > 0) past = e }
+    if (FRONT_ROLES[c.name]?.[1]) { const e = frontCommand(s, null, c.end, c.name, to, b, ctx); if (e > 0) past = e }
   }
   b.flush()
 }
@@ -2914,13 +3518,28 @@ export function texFilesOf(fsys, main) {
   const dec = decodersOf(own, null, main)
   return own.map(x => { const d = dec.get(x.file); return d ? d(x.text) : UTF8_LAX.decode(latin1Bytes(x.text)) })
 }
+/** a file's name as kpathsea's case fold compares it: its directory as it is, its last component's ASCII letters in lower case
+ *  (strcasecmp) */
+const foldOf = f => { const i = f.lastIndexOf('/'); return f.slice(0, i + 1) + f.slice(i + 1).replace(/[A-Z]/g, c => c.toLowerCase()) }
 function readProject(fsys, main, tables, sourceText, own) {
   const ownTexts = own.map(x => x.text)
   // a file as TeX finds it — in the directories import.sty puts on its path (`dirs`, the last imported first), then from
   // the package's root, where TeX runs — and by the name the package holds it under, whatever spelling named it
   // (\input{./sections/a.tex}): the units' file and the translation's key, which must replace that file rather than
-  // sit beside it — under ./sections/a.tex the compile set the English over every unit of 2608.08350 past its abstract
-  const read = (rel, dirs = []) => { for (const dir of [...dirs, '']) for (const cand of [rel, `${rel}.tex`]) { const key = normalizePath(`${dir}/${cand}`), bytes = fsys.read(key); if (bytes) return { rel: key, text: texText(bytes) } } return null }
+  // sit beside it — under ./sections/a.tex the compile set the English over every unit of 2608.08350 past its abstract.
+  // Where no file is of a name as given, in any of those directories, kpathsea's case fold (texmf_casefold_search, on in every
+  // TeX Live the box serves: kpsewhich chapters/prompts.tex gives ./chapters/Prompts.tex) opens the one whose last component
+  // is the name's, case aside, in the same directory: 2402.10294v1's \input{chapters/prompts}, its appendix read by TeX and
+  // by no unit, Figure 10's caption English. Where two files fold alike, kpathsea takes the first its directory lists, an
+  // order of the disk's the package does not tell: none
+  const folded = new Map()
+  for (const f of fsys.list()) { const k = foldOf(f); folded.set(k, [...(folded.get(k) ?? []), f]) }
+  const read = (rel, dirs = []) => {
+    const keys = [...dirs, ''].flatMap(dir => [rel, `${rel}.tex`].map(cand => normalizePath(`${dir}/${cand}`)))
+    for (const key of keys) { const bytes = fsys.read(key); if (bytes) return { rel: key, text: texText(bytes) } }
+    for (const key of keys) { const one = folded.get(foldOf(key)); const bytes = one?.length === 1 ? fsys.read(one[0]) : null; if (bytes) return { rel: one[0], text: texText(bytes) } }
+    return null
+  }
   const units = [], files = new Map(), seen = new Set()
   const mainFile = read(main)
   if (!mainFile) throw new Error(`main file ${main} not found`)
@@ -2950,11 +3569,13 @@ function readProject(fsys, main, tables, sourceText, own) {
   // which is biblatex's data — \\entry, \\field — and no text, which \\bibliography, biblatex's alias of \\addbibresource, never reads)
   const bblName = `${jobName(mainFile.rel)}.bbl`, bblBytes = fsys.read(bblName)
   const bbl = bblBytes && /\\begin\s*\{thebibliography\}/.test(texText(bblBytes)) ? bblName : null
-  const ctx = { rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), activeSpaces: activeSpacesIn([...sources.map(sourceText), ...ownTexts]), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
+  const ctx = { frontRowEnds: frontRowEndsOf(ownTexts), rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), activeSpaces: activeSpacesIn([...sources.map(sourceText), ...ownTexts]), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), quotes: csquotesOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
+  // (the author block's commands of a class the paper ships that the role table does not know: ownAuthorsOf)
+  ctx.ownAuthors = ownAuthorsOf(own, ctx.macros)
   const scan = { lineEnvs, ifs, ifValues }, percents = { lineEnvs, ifs, defined: paper.own, skipEnvs }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
-   *  `inFloat`: whether the file is read inside a float (the walk's builder there) */
+   *  `inFloat`: the float the file is read inside, its type (the walk's builder there), or false */
   function visit(rel, dirs = [], inFloat = false) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
     seen.add(f.rel); files.set(f.rel, f.text)
@@ -2962,7 +3583,7 @@ function readProject(fsys, main, tables, sourceText, own) {
     // what patch writes around the units)
     const text = urlPercents(f.text, f.rel, percents)
     const b = new Builder(f.rel, units, text, ctx.bodies, ctx.floats), outer = ctx.dirs
-    if (inFloat) b.inFloat = true
+    if (inFloat) b.inFloat = inFloat
     ctx.dirs = dirs
     // the file as TeX reads it: up to the line of an \endinput it acts on; its \end{document}s, where the walk stops,
     // those it surely reaches (documentEnds)
@@ -3005,10 +3626,13 @@ function readProject(fsys, main, tables, sourceText, own) {
   const texOrder = entriesLast(units)
   // a source declared in a Latin-1 family encoding: its bytes read as latin1 are already the right characters
   const enc = inputencFrom(mainCmds ?? texCommands(all, scan), all)?.options.split(',').map(x => x.trim()).find(x => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
-  const isUtf8 = t => { try { new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t)); return true } catch { return false } }
+  const isUtf8 = t => { try { new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t)); return true } catch (e) { if (isMemoryError(e)) throw e; return false } }
   const transcode = enc ? new Set([...files].filter(([, t]) => !isUtf8(t)).map(([f]) => f)) : new Set()
   // the units written inside a float, by their index in `units`, rising: a number survives a copy of the units, a clone and JSON
   const inFloat = units.flatMap((u, i) => (ctx.floats.has(u) ? [i] : []))
+  // (each caption's float type, [index, type]; the units of an algorithm float's body, rising)
+  const floatTypes = units.flatMap((u, i) => (CAPTYPES.has(u) ? [[i, CAPTYPES.get(u)]] : []))
+  const pseudocode = units.flatMap((u, i) => (PSEUDOCODE.has(u) ? [i] : []))
   // (the paper's macros that read nothing past their arguments: the layout marking's, layout/marks.mjs layoutMarking `complete`)
   // (the bibliographies \\bibliography reads, by the names it gives, where the walk met it: what BibTeX writes the job's .bbl of)
   // (the code environments the paper uses, a listing package's or its own (codeEnvsOf), by name: the layout compile marks each line
@@ -3017,7 +3641,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   const codeEnvNames = [...new Set([...LISTINGS, ...codeEnvs.code])].filter(n => begun.has(n)).sort()
   // (and those whose own body the compile marks, the environment's hook: the others' lines a listing package sets, by its hooks)
   const codeBodies = codeEnvNames.filter(n => !PACKAGE_LINES.has(n) && !codeEnvs.typeset.has(n))
-  return { main: mainFile.rel, files, units, inFloat, texOrder, skipped, fits: ctx.fits, lineEnvs, codeEnvs: codeEnvNames, codeBodies, inputenc: enc ?? null, transcode, complete: completeMacros(own), bibliography: ctx.bibliography }
+  return { main: mainFile.rel, files, units, inFloat, floatTypes, pseudocode, texOrder, skipped, fits: ctx.fits, lineEnvs, codeEnvs: codeEnvNames, codeBodies, inputenc: enc ?? null, transcode, complete: completeMacros(own), bibliography: ctx.bibliography }
 }
 
 /** whether bytes of TeX hold a ] outside every group and not escaped: one that would close an optional argument */
@@ -3090,6 +3714,53 @@ export function pseudoTranslate(u, lang) {
   })
 }
 
+/**
+ * Where a unit's start mark goes among its pieces, as patch writes it: [the piece, its cut] (a text piece's cut after its
+ * leading white space; -1, before the piece), or [-1, 0], none (the unit's head passed over, below). The adapter reads it
+ * too: a piece before it TeX set before the unit's start point (pipeline/instrument.mjs).
+ * Before the first word, inside any font command's group (nothing precedes it there to kern with); before an inline
+ * formula or citation that comes first; before the macro when the word is glued to one (\\name's: between the two the
+ * mark would cost the kern, and a macro that looks ahead, as \\xspace does, would see the mark). Any other command at
+ * the head of the paragraph is passed over — \\noindent, \\vspace, a run-in heading macro — since \\leavevmode ahead of
+ * it would start the paragraph early and indent or move it. A text piece is cut after its leading space, which is
+ * ASCII, so the cut never falls inside a UTF-8 sequence of source text read as latin1. A group that closes before the
+ * first word holding the unit's first letter as a command alone (LETTER_GROUP: `{\\L}ukasz Kaiser`, a row of
+ * 1706.03762v7's \\author, which had no start mark): the mark goes before the group, so that the letter is the unit's
+ * own ink. Any other group before the first word is as before (REVTeX's empty `\\bibfield {number} {  }`, before which
+ * a mark set the entry's text 7 pt right: 2610.20716v1)
+ */
+export function startOf(pieces) {
+  let startAt = -1, startCut = 0, opened = -1
+  for (let k = 0; k < pieces.length; k++) {
+    const p = pieces[k]
+    if (p.t === 'text') {
+      const w = /^[ \t\r\n]*(?=[^ \t\r\n])/.exec(p.s)
+      if (!w) continue
+      const prev = pieces[k - 1]
+      if (w[0].length === 0 && prev?.t === 'ph' && /\\[A-Za-z@]+\*?$/.test(prev.src)) { startAt = k - 1; startCut = -1 } else { startAt = k; startCut = w[0].length }
+      break
+    }
+    if (p.t === 'open') { if (opened < 0) opened = k; continue }
+    if (p.t === 'close' && opened >= 0 && LETTER_GROUP(pieces.slice(opened + 1, k))) { startAt = opened; startCut = -1; break }
+    // (a group of commands alone closed right before the first word — `\underline{\code{x}}: the…`, a cell's
+    // `\textcolor{red}{\texttt{…}}; …` —: the mark goes before that word, as after a command passed over, where marks.mjs
+    // headEnd has the unit's head end; its ink is set by then, in the paragraph the command began, and the head's pieces are
+    // found beside the mark by their text, make.mjs besideMarks. With none, the unit's head pieces were LOST, the unit English:
+    // 2608.25210v2's seven prompts' paragraphs, 2610.21477v1's cell. A group followed by anything else before the word stays
+    // as before: no start mark)
+    if (p.t === 'close') {
+      let q = k + 1
+      while (q < pieces.length && (pieces[q].t === 'close' || (pieces[q].t === 'text' && !/[^ \t\r\n]/.test(pieces[q].s)))) q++
+      if (pieces[q]?.t === 'text') { k = q - 1; continue }
+      break
+    }
+    // (an inline formula or citation, and an identifier, text TeX sets as written (identifierSource): the first word)
+    if (p.t === 'ph' && (INLINE.test(p.src) || identifierSource(p.src))) { startAt = k; startCut = -1; break }
+    if (p.t !== 'ph') break
+  }
+  return [startAt, startCut]
+}
+
 /** the patched files as bytes (Map path → Uint8Array): each top-level unit's range replaced by its translated pieces, the rest untouched.
  *  Source text keeps its bytes (read as latin1); translated text is written as UTF-8.
  *  `mark(u)` → { start, end } or null: TeX inserted before the unit's first word and after the last character of
@@ -3128,43 +3799,7 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       bare = false
     }
     const m = mark?.(u)
-    // before the first word, inside any font command's group (nothing precedes it there to kern with); before an
-    // inline formula or citation that comes first; before the macro when the word is glued to one (\\name's: between
-    // the two the mark would cost the kern, and a macro that looks ahead, as \\xspace does, would see the mark). Any
-    // other command at the head of the paragraph is passed over — \\noindent, \\vspace, a run-in heading macro — since
-    // \\leavevmode ahead of it would start the paragraph early and indent or move it. A text piece is cut after its
-    // leading space, which is ASCII, so the cut never falls inside a UTF-8 sequence of source text read as latin1. A group that
-    // closes before the first word holding the unit's first letter as a command alone (LETTER_GROUP: `{\\L}ukasz Kaiser`, a row
-    // of 1706.03762v7's \\author, which had no start mark): the mark goes before the group, so that the letter is the unit's own
-    // ink. Any other group before the first word is as before (REVTeX's empty `\\bibfield {number} {  }`, before which a mark
-    // set the entry's text 7 pt right: 2610.20716v1)
-    let startAt = -1, startCut = 0, opened = -1
-    if (m) for (let k = 0; k < pieces.length; k++) {
-      const p = pieces[k]
-      if (p.t === 'text') {
-        const w = /^[ \t\r\n]*(?=[^ \t\r\n])/.exec(p.s)
-        if (!w) continue
-        const prev = pieces[k - 1]
-        if (w[0].length === 0 && prev?.t === 'ph' && /\\[A-Za-z@]+\*?$/.test(prev.src)) { startAt = k - 1; startCut = -1 } else { startAt = k; startCut = w[0].length }
-        break
-      }
-      if (p.t === 'open') { if (opened < 0) opened = k; continue }
-      if (p.t === 'close' && opened >= 0 && LETTER_GROUP(pieces.slice(opened + 1, k))) { startAt = opened; startCut = -1; break }
-      // (a group of commands alone closed right before the first word — `\underline{\code{x}}: the…`, a cell's
-      // `\textcolor{red}{\texttt{…}}; …` —: the mark goes before that word, as after a command passed over, where marks.mjs
-      // headEnd has the unit's head end; its ink is set by then, in the paragraph the command began, and the head's pieces are
-      // found beside the mark by their text, make.mjs besideMarks. With none, the unit's head pieces were LOST, the unit English:
-      // 2608.25210v2's seven prompts' paragraphs, 2610.21477v1's cell. A group followed by anything else before the word stays
-      // as before: no start mark)
-      if (p.t === 'close') {
-        let q = k + 1
-        while (q < pieces.length && (pieces[q].t === 'close' || (pieces[q].t === 'text' && !/[^ \t\r\n]/.test(pieces[q].s)))) q++
-        if (pieces[q]?.t === 'text') { k = q - 1; continue }
-        break
-      }
-      if (p.t === 'ph' && INLINE.test(p.src)) { startAt = k; startCut = -1; break }
-      if (p.t !== 'ph') break
-    }
+    let [startAt, startCut] = m ? startOf(pieces) : [-1, 0]
     // the marks that open the piece the start mark goes before (a layout opening mark, layout/marks.mjs layoutMarking's
     // `opens`) come after the start mark, which sets its point where the unit begins, in horizontal mode, after everything
     // \leavevmode lets \everypar set first. Before it, in vertical mode, an opening mark waits for the next mark TeX sets,
@@ -3267,7 +3902,9 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     // the line and the original (FIT_DEF)
     const fits = (project.fits ?? []).filter(f => f.file === file && us.some(u => u.start >= f.start && u.end <= f.end && translated.has(u)))
     // (a tabular* between \\axtstar and \\axtstarbody, which measure its body at its columns' width)
-    const inserts = fits.flatMap(f => [[f.start, [utf8Bytes(f.star ? '\\axtfit{\\axtstar' : '\\axtfit{')]], ...(f.star ? [[f.star, [utf8Bytes('\\axtstarbody')]]] : []), [f.end, [utf8Bytes('}{'), bytesOf(text.slice(f.start, f.end), enc), utf8Bytes('}')]]]).sort((a, b) => a[0] - b[0])
+    // (and an author's call the marked compile states, its unit's mark's `call` at `callAt`, in the text between two units: CALLED_AT)
+    const called = mark ? us.flatMap(u => { const m = mark(u); return m?.call && Number.isInteger(m.callAt) ? [[m.callAt, [utf8Bytes(m.call)]]] : [] }) : []
+    const inserts = [...fits.flatMap(f => [[f.start, [utf8Bytes(f.star ? '\\axtfit{\\axtstar' : '\\axtfit{')]], ...(f.star ? [[f.star, [utf8Bytes('\\axtstarbody')]]] : []), [f.end, [utf8Bytes('}{'), bytesOf(text.slice(f.start, f.end), enc), utf8Bytes('}')]]]), ...called].sort((a, b) => a[0] - b[0])
     // the bytes written so far, where `spans` is asked for: each top-level unit's range in the file as written, and each
     // unit nested in one, inside its range, with the top-level unit it is written in (`outer`), which a compile's error
     // is located by (tex-errors.mjs)
@@ -3281,6 +3918,9 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     for (const u of us) {
       if (u.start < at) continue
       copy(at, u.start)
+      // (a call stated right where the unit begins — a note's call ended against it, `\\thanks{…}\\,$^{1}$`, 2610.17108v1 —, which
+      // the copy before it, up to the unit's start alone, does not reach: written before the unit's bytes)
+      for (const [pos, bytes] of called) if (pos === u.start) add(...bytes)
       const inner = spans && [], b = render(u, inner)
       // a unit written back inside an optional argument's brackets (a theorem's title): a ] its translation holds outside
       // any group would end them early (a translated "Convergence [see the appendix]"), so the unit goes in a group of its own

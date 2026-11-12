@@ -8,24 +8,30 @@
 // own `auto` gives on 1706.03762v7's abstract). There `auto` keeps every glyph where geometricPrecision puts it and draws at
 // the canvas's weight.
 //
-// So the overlay takes `auto` where the browser lays its words out alike under both, and geometricPrecision elsewhere: a feature
-// test, not a platform's, on the overlay's own words in its own faces (a face the system holds is laid out with fractional
-// advances under both on Linux too, where the served web fonts are not, so no probe in a system face can tell). The first laid
-// page that tells decides, once a reader: its runs drawn from one place each (a Latin word: one x, its glyphs advancing as the
-// browser lays them; a CJK run has an x a character, which no rendering moves) laid out again twice off the view, in their
-// classes and sizes, under each rendering; their glyphs' advances compared. The answer is an attribute of the reader's root
-// (`data-axt-layer-text="auto"`) that the sheet reads; until a page tells, and wherever it says no, geometricPrecision.
+// So the overlay takes `auto` where the browser lays a served face's words out alike under both, and geometricPrecision
+// elsewhere: a feature test, not a platform's, in a face the overlay draws from web font bytes (a face the system holds is laid
+// out with fractional advances under both on Linux too, where the served web fonts are not, so no probe in a system face can
+// tell). Decided once a reader, before its first overlay is drawn, by a fixed probe: PROBE_TEXT at PROBE_SIZES, laid out twice
+// off the view in the faces' probe face (Faces.probeFace: the served Computer Modern serif, loaded for it), under each
+// rendering; their glyphs' advances compared. Never by a page's own words: a page of few Latin words told nothing, so the first
+// page was drawn at 80 % of its ink on macOS until a later page told, and every page flipped then (2610.40645v1's page 1 in
+// Japanese, 10 runs of one place and 12 advances; the owner's question of 2026-11-08); and the weight a page was drawn at hung
+// on the order its pages were laid. The answer is an attribute of the reader's root (`data-axt-layer-text="auto"`) that the
+// sheet reads; where the probe says no, or tells nothing (no probe face to be had, a document that lays no SVG text out),
+// geometricPrecision.
 import type { Faces } from './faces.ts'
-import type { Page } from './page.ts'
 
 /** CSS px: the most one glyph's advance may differ between the two renderings for the overlay to take `auto`. macOS's differ
  *  by a 64th of a pixel at two sizes (0.01 at most); a whole-pixel advance by up to half a pixel */
 export const ADVANCE_TOLERANCE = 0.05
 /** the fewest advances a decision for `auto` rests on, each fractional under geometricPrecision (more than a tenth of a pixel
- *  from a whole one: an advance a whole-pixel layout would move); fewer, as on a page of monospaced words, tells nothing */
+ *  from a whole one: an advance a whole-pixel layout would move); fewer, as of a monospaced face, tells nothing */
 export const MIN_EVIDENCE = 16
-/** the most runs a page's probe lays out again */
-export const PROBE_RUNS = 24
+/** the probe's text: a pangram, each Latin letter in it */
+export const PROBE_TEXT = 'The quick brown fox jumps over the lazy dog'
+/** the probe's sizes, PDF units: a paper's footnotes', body's and heads' (12, 13.3 and 16 CSS px at the reader's 100 %); 126
+ *  advances, far past MIN_EVIDENCE */
+export const PROBE_SIZES = [9, 10, 12] as const
 /** the attribute of the reader's root the sheet reads, and its value where the overlay takes `auto` */
 export const ATTRIBUTE = 'data-axt-layer-text'
 /** the probe's scale: CSS px a PDF unit at the reader's 100 % (PDF.js's CSS units, 96 / 72) */
@@ -68,22 +74,6 @@ export function decideLayerText(
     }
   }
   return evidence >= MIN_EVIDENCE ? 'auto' : null
-}
-
-/** a laid page's runs drawn from one place each (no `dx`: a CJK run's characters each have theirs) of two characters or more,
- *  PROBE_RUNS at most, in the classes the overlay draws them in */
-export function wordsOf(page: Page, faces: Pick<Faces, 'classOf'>): ProbeWord[] {
-  const out: ProbeWord[] = []
-  for (const m of page.members) {
-    if (m.state !== 'laid') continue
-    for (const [, , , items] of m.lines)
-      for (const it of items) {
-        if ('src' in it || it.dx?.length || [...it.s.trim()].length < 2) continue
-        out.push({ text: it.s, cls: faces.classOf(it.face), size: it.size })
-        if (out.length >= PROBE_RUNS) return out
-      }
-  }
-  return out
 }
 
 /** each character's start x of a laid <text>, or null where the browser lays no SVG text out (a DOM without layout) */
@@ -136,17 +126,32 @@ export function probeWords(host: Element, words: readonly ProbeWord[]): LayerTex
   }
 }
 
-/** the overlay's text rendering told by a laid page's own words (null: the page tells nothing, the next one may), written on
- *  the reader's root: the attribute for `auto`, none for `precise` (the sheet's geometricPrecision). It never throws: a commit
- *  calls it */
-export function decideOn(root: HTMLElement, page: Page, faces: Pick<Faces, 'classOf'>): LayerText | null {
+/**
+ * The overlay's text rendering, decided once a reader: the fixed probe (PROBE_TEXT at PROBE_SIZES) laid out under both renderings
+ * in the faces' probe face, loaded first (probeWords), and written on the reader's root: the attribute for `auto`, none for
+ * `precise` or where the probe tells nothing (no probe face to be had: a system face would tell nothing). Nothing is written
+ * once `alive` says the reader is gone. It never throws: the composer awaits it before its first overlay
+ */
+export async function decideOnce(
+  root: HTMLElement,
+  faces: Pick<Faces, 'classOf' | 'probeFace'>,
+  alive: () => boolean = () => true,
+): Promise<LayerText | null> {
   let answer: LayerText | null = null
   try {
-    answer = probeWords(root, wordsOf(page, faces))
+    const face = await faces.probeFace(PROBE_TEXT)
+    if (face !== null && alive()) {
+      const cls = faces.classOf(face)
+      answer = probeWords(
+        root,
+        PROBE_SIZES.map((size) => ({ text: PROBE_TEXT, cls, size })),
+      )
+    }
   } catch {
     answer = null
   }
+  if (!alive()) return answer
   if (answer === 'auto') root.setAttribute(ATTRIBUTE, 'auto')
-  else if (answer === 'precise') root.removeAttribute(ATTRIBUTE)
+  else root.removeAttribute(ATTRIBUTE)
   return answer
 }

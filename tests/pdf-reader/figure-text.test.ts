@@ -372,6 +372,42 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     expect(figureUnitsOf([tex] as never, null).units.map(u => u.text)).toEqual(['rate'])
   })
 
+  it('TeX\'s line in a picture is one run over its faces and colours once it spells a word: a label and the address after it one unit, a symbol before them none of it, a formula apart (2611.03178v1\'s abstract box)', () => {
+    // (the class's tcolorbox, drawn by pgf: "<icon> Project Page: coworkos-ai.github.io", the icon FontAwesome's, the label
+    // \sffamily\bfseries, the address \texttt in the link's colour, a word's space between each)
+    const fonts = (pg: ReturnType<typeof word>, f: (i: number) => [string, number]) => {
+      for (const [i, g] of pg.glyphs.entries()) { const [font, fill] = f(i); Object.assign(g, { font, fill }) }
+      return pg
+    }
+    const line = () => fonts(word('x Page: site.io'), i => (i < 2 ? ['KONLXK+FontAwesome5Free-Solid', 0] : i < 8 ? ['IRQUGZ+LMSans10-Bold', 0] : ['VJKBIL+LMMono10-Regular', 3235740]))
+    expect(figureUnitsOf([line()] as never, null).units.map(u => u.text)).toEqual(['Page: site.io'])
+    // (a list of addresses after its label, a comma of the text's face between them: one line)
+    const list = fonts(word('Mail: a@b.cn, c@d.cn'), i => (i < 6 ? ['IRQUGZ+LMSans10-Bold', 0] : i === 12 ? ['XCharter-Roman', 0] : ['VJKBIL+LMMono10-Regular', 3235740]))
+    expect(figureUnitsOf([list] as never, null).units.map(u => u.text)).toEqual(['Mail: a@b.cn, c@d.cn'])
+    // (a plotting program's faces in an included PDF stay apart, as its colours do)
+    const form = line()
+    for (const g of form.glyphs) Object.assign(g, { form: true, fid: 1 })
+    expect(figureUnitsOf([{ ...form, pictures: [] }] as never, null).units.map(u => u.text)).toEqual(['Page:', 'site.io'])
+    // (TeX's math face stays apart in a picture too)
+    const tex = fonts(word('rate pp'), i => [i > 4 ? 'CMMI10' : 'CMBX10', 0])
+    expect(figureUnitsOf([tex] as never, null).units.map(u => u.text)).toEqual(['rate'])
+  })
+
+  it('a run TeX set right after a run of its line that spells no word (an icon, a formula) is set from its start, as TeX\'s line runs on from there (2611.03178v1\'s "Demo Gallery:")', () => {
+    // (the icon of "Demo Gallery" wider than its neighbours' by 1.4 pt: its label's start off their column, and no ink of a
+    // figure's beside it, it was read centred and drawn in its shorter translation an em in from where TeX set it)
+    const line = word('x Gallery: site.io')
+    for (const [i, g] of line.glyphs.entries()) Object.assign(g, i < 2 ? { font: 'KONLXK+FontAwesome5Free-Solid' } : i < 11 ? { font: 'IRQUGZ+LMSans10-Bold' } : { font: 'VJKBIL+LMMono10-Regular', fill: 3235740 })
+    const [u] = figureUnitsOf([line] as never, null).units
+    expect([u!.text, u!.anchor]).toEqual(['Gallery: site.io', 'start'])
+    // (a word alone on its line, nothing before it: its middle, as before)
+    expect(one(word('Gallery')).anchor).toBe('centre')
+    // (an included PDF's: none of TeX's line, as before)
+    const form = word('x Gallery')
+    for (const [i, g] of form.glyphs.entries()) Object.assign(g, { form: true, fid: 1, font: i < 2 ? 'KONLXK+FontAwesome5Free-Solid' : 'IRQUGZ+LMSans10-Bold' })
+    expect(figureUnitsOf([{ ...form, pictures: [] }] as never, null).units.map(u => [u.text, u.anchor])).toEqual([['Gallery', 'centre']])
+  })
+
   it('two figures side by side never make one label: a run is one form\'s or one picture\'s', () => {
     const pg = word('In Out')
     // (the first two letters painted by one form, the last three by another, half an em apart on one baseline)

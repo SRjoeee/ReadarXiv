@@ -5,13 +5,14 @@
 // baseline's reader-dump format, the members the adapter did not set by what stops them, and, per adapted member, the first
 // field of its setting that differs from today's (round.ts prepare over the same round: the blocks' pages, baselines and
 // measures, their alignment and indent, the size, the leading, the edges): the rule whose stated facts changed it.
-import type { OutPiece, Part, Row } from '@readarxiv/format'
+import type { OutPiece, Part, Row, Unit } from '@readarxiv/format'
 import { layPage, nameOf } from '../../src/lay/entry.ts'
+import { ownNamesOf } from '../../src/unit/rename.ts'
 import type { LinkFate } from '../../src/lay/links.ts'
 import { keptBefore, ledBy } from '../../src/lay/lead.ts'
 import type { FlowMember } from '../../src/lay/flow.ts'
-import { readFileSync } from 'node:fs'
-import { adapt, rectOf } from '../../src/lay/adapt.ts'
+import { appendFileSync } from 'node:fs'
+import { adapt, type Reading, rectOf, rowLinesOf, sharedPaper } from '../../src/lay/adapt.ts'
 import {
   paperOf as paperReading,
   type PaperReading,
@@ -25,16 +26,19 @@ import { fontString } from '../../src/breaker/measure.ts'
 import { MissingMeasure } from '../../src/metrics/table.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { V0Piece } from '../../src/unit/breaks.ts'
-import { doorRows } from './rows.ts'
-import { todayFile } from './tap.ts'
-import { layPagePrepared, type PageMember } from '../../src/lay/page.ts'
+import { type DoorRow, doorRows, doorSentences } from './rows.ts'
+import { layPagePrepared, type PageMember, type UnitLay } from '../../src/lay/page.ts'
+import { type CrossLay, crossLayOf } from './cross-lay.ts'
 import { type FitMeasure, fitMeasure } from '../../src/breaker/measure.ts'
 import type { Face } from '../../src/breaker/tokens.ts'
+import type { LaidLine, Layout } from '../../src/fit/types.ts'
+import { inkEndOf } from '../../src/shared/share.ts'
 import type { Metrics, RuleParams, Rows } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
+import { type Cover, coverDone, coverOf, newCover } from './cover.ts'
 import { walkCase } from './fit-input.ts'
 import type { GateUnit } from './gate.ts'
-import { type L1Placed, l1Paper } from './l1.ts'
+import { keptJoin, keptRow, type L1Placed, l1Paper, type TodayPrepared, todayPrepared, todayUnitOf } from './l1.ts'
 import { prepare } from './round.ts'
 import { derived, ledger } from './tap.ts'
 import { paperOf, todayBundle } from './today.ts'
@@ -93,11 +97,45 @@ export type GateL1 = {
     figures: Map<string, number>
     /** Laid.lit over the laid members: those lit, a laid line with no box on the right, the panes' entries apart */
     lit: { laid: number; lines: number; boxes: number; apart: number; empty: number }
+    /** I10, the sentence cover over every member lit (cover.ts): each piece drawn in exactly one sentence on each pane, the
+     *  panes' sentences the same */
+    cover: Cover
+    /** I6 across the pages' lays (cross-lay.ts): each unit begun on a pass page as every page's lay that runs that pass lays it */
+    crossLay?: CrossLay
   }
 }
 
 /** I3-I5 over a page's laid members (their lines on the page, as their lay and the page's fill left them) */
-export function invariantsOf(page: number, members: readonly PageMember[], R: RuleParams, inv: GateL1['inv']) {
+/**
+ * How far a line's last item, a crop, stands past the ink it is cut from (`inks`: the ink boxes the part states for the member,
+ * its elements' El.ink and its label's, [page, x0, y0, x1, y1, baseline]), in the line's drawn units: its antialiased margin
+ * (crops.ts cropOfBox, 0.4 pt a side) at the scale it is drawn at; 0 for a text item, a crop cut at its right edge between two
+ * glyphs (no margin there), or one whose ink the part does not state (read by its box, as before)
+ */
+export function pastInk(end: unknown, inks: readonly (readonly number[])[] | undefined): number {
+  const it = end as { t?: { crop?: { page?: number; crop?: number[]; cut?: number } }; w?: number } | undefined
+  const c = it?.t?.crop
+  if (!c?.crop || !inks?.length || ((c.cut ?? 0) & 2) !== 0) return 0
+  const [x0, y0, x1, y1] = c.crop as [number, number, number, number]
+  // (the ink box it is cut from: on its page and within it, across and up and down; of a crop of several, the one ending last)
+  let ink: number | null = null
+  for (const k of inks)
+    if (k[0] === c.page && k[1]! >= x0 - 0.01 && k[3]! <= x1 + 0.01 && k[2]! >= y0 - 0.01 && k[4]! <= y1 + 0.01)
+      ink = ink === null ? k[3]! : Math.max(ink, k[3]!)
+  if (ink === null || x1 <= x0) return 0
+  return ((x1 - ink) * (it?.w ?? x1 - x0)) / (x1 - x0)
+}
+
+export function invariantsOf(
+  page: number,
+  members: readonly PageMember[],
+  R: RuleParams,
+  inv: GateL1['inv'],
+  inksOf?: (ord: number) => readonly (readonly number[])[] | undefined,
+  /** the measure I3 reads a run's ink right from where the lay's own has none: the served faces' (the reader's canvas always
+   *  gives one; the tap's table lacks the right of a run today never asked it of) */
+  served?: FitMeasure | null,
+) {
   const floor = Math.min(Number((R as Raw).floor ?? 1), Number((R as Raw).floorMin ?? 1))
   const boxes: { ord: number; x0: number; x1: number; y0: number; y1: number }[] = []
   for (const pm of members) {
@@ -109,11 +147,14 @@ export function invariantsOf(page: number, members: readonly PageMember[], R: Ru
       if (l.page !== page) continue
       inv.lines++
       const used = (l.used as number | undefined) ?? l.x1 - l.x0
-      const over = used - (l.x1 - l.x0)
       // (I5 restated, the placement's own guarantee (B.place placeItems L2:3976-4038): a line ends within its slot but for the
       // blank half of a closing mark it ends with (`hang`, half the size, at a compression under 2), and for a line whose
       // items cannot be set narrower: no word space to shrink and no gap a squeeze took (an overfull box, TeX's); each line
-      // past its slot classed by which, its largest excess beside its count)
+      // past its slot classed by which, its largest excess beside its count. What is drawn past the slot: a crop that ends the
+      // line is read by its ink, the box the part states for it (pastInk), not by the box it is cut with, whose antialiased
+      // margin stands past its ink (round B13, the coordinator's ruling (b): an end mark TeX set flush to the measure's end is
+      // drawn there, PDF-READER §18.52; its crop's margin, 0.4 pt, is no ink past the slot)
+      const over = used - (l.x1 - l.x0) - pastInk(l.items.at(-1), inksOf?.(pm.ord))
       if (over > 1e-6) {
         const end = l.items.at(-1) as { t?: { punct?: string }; cut?: boolean } | undefined
         const hang =
@@ -140,12 +181,25 @@ export function invariantsOf(page: number, members: readonly PageMember[], R: Ru
         if (cls.startsWith('past') || cls.startsWith('squeezed'))
           inv.I5.push(`ord ${pm.ord}: a line ${over.toFixed(2)} pt past its slot (${cls})`)
       }
-      // (I3 reads ink, design §4.9: the line to its last glyph's ink, not its advance, so that a CJK mark's blank half (a run-in
-      // head's ideographic full stop, its follower set after its ink and the original's separation, today's shareOf `ink`) overlaps nothing)
+      // (I3 reads ink, design §4.9: the line from its first item to its last glyph's ink, not its measure nor its advance, so that
+      // a CJK mark's blank half (a run-in head's ideographic full stop, its follower set after its ink and the original's
+      // separation, today's shareOf `ink`) overlaps nothing, and a line set flush right or centred starts where its text does,
+      // not at its measure's start, which widened into the paper beside it (U.decor widen: a right-hand running head's measure
+      // to the left one's ink; the google-lay lane: 4 of the round's I3 were Google's longer left head ending inside the right
+      // head's measure, 55 pt clear of its first glyph). Never from before the measure's start: what the breaker sets there is
+      // an opening mark it hangs (B.break leadOf), whose ink the measure does not place within its box; read from the
+      // measure's start, as before (read from its box, 3 of typeset-today's lines did overlap the line before by a hung
+      // bracket's box, none by its ink). Its end the product's, S.share's inkEndOf: the run's own ink right, its tracking, its
+      // slant)
+      const first = l.items.find((it) => !(it.t as { space?: boolean }).space)
+      if (process.env.AXT_GATE_HUNG && first?.x !== undefined && first.x < l.x0 - 0.01)
+        console.log(
+          `HUNG p${page} ord ${pm.ord} ${(l.x0 - first.x).toFixed(2)} ${JSON.stringify((first.t as { s?: string }).s ?? ((first.t as { crop?: unknown }).crop ? 'crop' : '?'))} ${(first.t as { punct?: string }).punct ?? ''}`,
+        )
       boxes.push({
         ord: pm.ord,
-        x0: l.x0,
-        x1: inkEnd(l, size, (pm.lay!.P as { measure?: FitMeasure }).measure) ?? l.x0 + used,
+        x0: Math.max(l.x0, first?.x ?? l.x0),
+        x1: inkEnd(l, L, (pm.lay!.P as { measure?: FitMeasure }).measure, served) ?? l.x0 + used,
         y0: l.baseline - 0.215 * size,
         y1: l.baseline + 0.683 * size,
       })
@@ -183,27 +237,34 @@ export function invariantsOf(page: number, members: readonly PageMember[], R: Ru
       const a = boxes[i]!,
         b = boxes[j]!
       if (a.ord === b.ord) continue
-      if (Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 0.5 && Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > 0.5)
+      if (Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 0.5 && Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > 0.5) {
         inv.I3.push(`ords ${a.ord} and ${b.ord}: their lines overlap on p${page}`)
+        // (AXT_GATE_I3=1: each overlap's two boxes, as I3 reads them)
+        if (process.env.AXT_GATE_I3) console.log(`I3BOX p${page} ${JSON.stringify(a)} ${JSON.stringify(b)}`)
+      }
     }
 }
 const l0Page = (L: { lines: readonly { page: number }[] }) => L.lines[0]?.page
-/** where a laid line's ink ends: its last item's (a crop's box; a text's ink, the blank right side of its last glyph off),
- *  null where the measure has no ink for it (a table of today's measures lacks it: MissingMeasure) */
-function inkEnd(
-  l: { items: readonly { t: unknown; x?: number; w: number }[] },
-  size: number,
-  m: FitMeasure | undefined,
-): number | null {
-  const last = [...l.items].reverse().find((it) => !(it.t as { space?: boolean }).space)
-  if (!last || last.x === undefined || !m) return null
-  const t = last.t as { crop?: unknown; s?: string; face?: Face; sup?: boolean; sc?: number }
-  if (t.crop) return last.x + last.w
-  if (!t.s || !t.face) return null
+/** where a laid line's ink ends: the product's reading of it (S.share's inkEndOf: its last item's, a crop's box, a text's own
+ *  ink right at the size it is drawn, never past its advance), its run's ink right `served`'s where the lay's measure has none
+ *  (the tap's table holds no right of a run today never asked it of: read by its advance, a CJK closing mark's blank half was
+ *  ink, the google-lay lane's four I3 of 2610.37818v1's header cells ending in an ideographic full stop); null where the
+ *  measure lacks the run (MissingMeasure) */
+export function inkEnd(l: LaidLine, L: Layout, m: FitMeasure | undefined, served?: FitMeasure | null): number | null {
+  if (!m) return null
+  const right = (s: string, face: Face): number | null => {
+    const r = m.inkRight100(s, face)
+    if (r !== null || !served) return r
+    try {
+      return served.inkRight100(s, face)
+    } catch (e) {
+      // (a run no served face holds: the reader draws it in a face of the system's, no measure of ours)
+      if (e instanceof MissingMeasure || (e as Error)?.name === 'Unserved') return null
+      throw e
+    }
+  }
   try {
-    const right = m.inkRight100(t.s, t.face)
-    if (right === null) return null
-    return last.x + last.w - ((m.w100(t.s, t.face) - right) * (t.sup ? 0.62 : 1) * (t.sc ?? 1) * size) / 100
+    return inkEndOf(l, L, { ...m, inkRight100: right })
   } catch (e) {
     if (e instanceof MissingMeasure) return null
     throw e
@@ -270,6 +331,24 @@ export function outOfDoor(row: readonly (string | number)[], source: readonly V0
     }
   }
   return top
+}
+
+/**
+ * The entry's members of a page by the ord of today's unit each is joined to (`unitOf`: part ord -> today's unit), the runner's
+ * members' key. A member no unit of today's joins (its unit's text moved, no door row: lane style-wire) is one the runner
+ * never lays, so it is left out: keyed by its own part ord, it stood in for the member of today's unit of that ord (round 8 B8:
+ * 97 of the entry's 747 members "not alike")
+ */
+export function entryByToday<M extends { ord: number }>(
+  members: readonly M[],
+  unitOf: ReadonlyMap<number, { ord: number }>,
+): Map<number, M> {
+  const out = new Map<number, M>()
+  for (const m of members) {
+    const u = unitOf.get(m.ord)
+    if (u) out.set(u.ord, m)
+  }
+  return out
 }
 
 /** the first field of a member's setting that differs from today's prepared one, or 'equal' */
@@ -394,13 +473,11 @@ export function tokensDiff(mine: readonly Tok[], today: readonly Tok[]): string 
   }
   return null
 }
-let heads: Record<string, { heads: Record<string, string> }> | null = null
-
-/** the inputs a named correction's effect substitutes, today's value for the part's: `free` the borrow room under each block
- *  (Room.below's freeFor), `measure` each block's measure x0..x1 (the column's), `next` the room under the last line
+/** the inputs a named correction's effect substitutes, today's value for the part's: `measure` each block's measure x0..x1
+ *  (the column's), `next` the room under the last line
  *  (Room.next: U.params' halfLead.below), `side` the widened blocks (X.further's), `all` the whole prepared member (the
  *  tokens too); a block's only where the two cut as many blocks */
-export type Substitute = 'free' | 'measure' | 'next' | 'side' | 'all' | `.${string}`
+export type Substitute = 'measure' | 'next' | 'side' | 'all' | `.${string}`
 export function substitute(mem: FlowMember, td: FlowMember, what: readonly Substitute[]) {
   const same = mem.blocks.length === td.blocks.length
   for (const w of what) {
@@ -429,10 +506,6 @@ export function substitute(mem: FlowMember, td: FlowMember, what: readonly Subst
     if (!same) continue
     mem.blocks.forEach((b, k) => {
       const t = td.blocks[k]!
-      if (w === 'free') {
-        b.free = t.free
-        b.freeOf = t.freeOf
-      }
       if (w === 'measure') {
         b.x0 = t.x0
         b.x1 = t.x1
@@ -447,13 +520,34 @@ export function gateL1Pair(
   pair: string,
   o: {
     metricsOf?: (pair: string) => Metrics
+    /** the measurer I3 reads an ink right from where `metricsOf`'s has none (the lab's served faces, served-metrics.mjs) */
+    served?: Metrics | null
     reading?: 'today' | 'part'
     substitute?: readonly Substitute[]
     /** each page laid again by design-a's entry (layPage over the part and the rows), compared with the runner's lay */
     entry?: boolean
+    /** the members no id or glyphs joined (`members`), each joined to one of today's units (`today`, the ords no member is
+     *  joined to): ord -> today's ord, its row then laid in the member's unit (the parity's: stage 1a's statement of the unit
+     *  the member's holds whole, the two of one content, lab/typeset/parity/join.mjs heldJoin) */
+    held?: (members: readonly L1Placed[], today: readonly number[]) => ReadonlyMap<number, number>
+    /** the members each of which holds two or more of today's units whole, its text theirs in order (lab/typeset/parity/join.mjs
+     *  joinedJoin: F0's lines, a figure paragraph, a word joined across a size change): ord -> today's ords and the plan its row is
+     *  said by, each piece today's unit's row (its text) or one of the member's elements */
+    joined?: (
+      members: readonly L1Placed[],
+      today: readonly number[],
+    ) => ReadonlyMap<
+      number,
+      { todays: readonly number[]; plan: readonly ({ t: 'today'; i: number } | { t: 'el'; id: string })[] }
+    >
+    /** whether the entry is given a member's door row (its runner's judgement by the translate package's rule, which this
+     *  package may not import): one refused is no row, the unit left the original's, as the chain makes no row of a reading
+     *  that says nothing */
+    accept?: (unit: Unit, content: readonly OutPiece[]) => boolean
   } = {},
 ): GateL1 {
   const measure = o.metricsOf ? fitMeasure(o.metricsOf(pair)) : null
+  const servedMeasure = o.served ? fitMeasure(o.served) : null
   const metrics = o.metricsOf?.(pair) ?? null
   const out: GateL1 = {
     units: [],
@@ -483,6 +577,7 @@ export function gateL1Pair(
             linkEx: new Map(),
             figures: new Map(),
             lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 },
+            cover: newCover(),
           },
         }
       : {}),
@@ -510,22 +605,8 @@ export function gateL1Pair(
   if (doors)
     for (const u of L.units) if (u.id && doors.has(u.ord) && !doorById.has(u.id)) doorById.set(u.id, doors.get(u.ord)!)
   let paperR: PaperReading | null = null
-  if (o.reading === 'part' && part0) {
+  if (o.reading === 'part' && part0)
     paperR = paperReading(part0.paper.faces.fonts, L.target, rulesFor(L.target as never).cjkFaces as never)
-    heads ??= (JSON.parse(readFileSync(todayFile('rules/tex-names.json'), 'utf8')) as { targets: typeof heads }).targets
-  }
-  // (each page's lowest unit line, as today's pageBottom: RUN:911 over every unit's rectangles but a figure's)
-  const bottoms = new Map<number, number>()
-  for (const part of bundle.parts.values())
-    for (const flow of part.flows)
-      for (const m of flow) {
-        if (m.kind === 'figure' || m.kind === 'inkfigures' || m.kind === 'name') continue
-        for (const l of m.lines) {
-          const r = rectOf(l, m)
-          const y = r[2] + 0.24 * (r[4] - r[2])
-          bottoms.set(r[0], Math.min(bottoms.get(r[0]) ?? Number.POSITIVE_INFINITY, y))
-        }
-      }
   // (every member once, from the part of its first page; its flow's neighbours, a name none (it is no row of theirs): the name
   // the part binds to a member its lead (lay/lead.ts, as the entry sets it))
   const byOrd = new Map<
@@ -545,6 +626,23 @@ export function gateL1Pair(
             leader: b?.kind === 'name' && b.bound ? b : null,
           })
       })
+  // (the free paper a member shares on its baseline with a member beside it, and the line of TeX's it shares whole with the
+  // members beside it, as the entry reads them over a page's part (entry.ts: sharedPaper, rowLinesOf with flush-left lines),
+  // from the part of the page its first line stands on: the gate judges what the reader draws (the google-lay lane: without
+  // them the runner gave a right-hand running head its measure from the left one's ink, the reader from the middle of the
+  // paper between them)
+  const sharedOf = new Map<number, readonly [number, number]>()
+  const lineOf = new Map<number, NonNullable<Parameters<typeof adapt>[0]['line']>>()
+  for (const [pg, part] of bundle.parts) {
+    const sh = sharedPaper(part.flows, pg)
+    const rl = rowLinesOf(part.flows, { left: true })
+    for (const flow of part.flows)
+      for (const m of flow) {
+        if (m.lines[0]?.[0] !== pg) continue
+        if (sh.has(m.ord) && !sharedOf.has(m.ord)) sharedOf.set(m.ord, sh.get(m.ord)!)
+        if (rl.has(m.ord) && !lineOf.has(m.ord)) lineOf.set(m.ord, rl.get(m.ord)!)
+      }
+  }
   const rules0 = rulesFor(L.target as never)
   // (L1's members joined to today's units by content id, equal ids by order among equals: the baseline's join rule)
   const todayById = new Map<string, (typeof L.units)[number][]>()
@@ -556,13 +654,112 @@ export function gateL1Pair(
   }
   const unitOf = new Map<number, (typeof L.units)[number]>()
   const seenId = new Map<string, number>()
+  // (by today's id of its unit: a figure text whose glyphs set a run in another face is today's text alone, todayUnitOf)
+  const todayIdOf = (id: string) => {
+    const u = bundle.units.get(id)
+    return u ? todayUnitOf(u).id : id
+  }
   for (const [ord, x] of [...byOrd].sort((a, b) => a[0] - b[0])) {
     if (typeof x.m.text !== 'string') continue
-    const k = seenId.get(x.m.text) ?? 0
-    seenId.set(x.m.text, k + 1)
-    const u = todayById.get(x.m.text)?.[k]
+    const tid = todayIdOf(x.m.text)
+    const k = seenId.get(tid) ?? 0
+    seenId.set(tid, k + 1)
+    const u = todayById.get(tid)?.[k]
     if (u) unitOf.set(ord, u)
   }
+  // (then the members no id joined, by their glyphs: a unit whose kept runs v2 holds as elements, its addresses and its scripts,
+  // where today's held them otherwise, l1.ts keptJoin; its row today's said in v2's unit, keptRow)
+  const keptOf = new Map<number, TodayPrepared>()
+  const prepared = todayPrepared(paper)
+  if (prepared) {
+    const joined = new Set([...unitOf.values()].map((u) => u.ord))
+    const free = [...byOrd].filter(([o]) => !unitOf.has(o)).map(([, x]) => x.m)
+    const left = L.units.filter((u) => !joined.has(u.ord) && prepared.has(u.ord)).map((u) => prepared.get(u.ord)!)
+    for (const [o, t] of keptJoin(free, bundle.units, left)) {
+      const u = L.units.find((x) => x.ord === t)
+      if (!u) continue
+      unitOf.set(o, u)
+      keptOf.set(o, prepared.get(t)!)
+    }
+  }
+  // (then, where the caller joins them (the parity's `held`), the members neither joined to today's unit theirs holds whole)
+  if (o.held) {
+    const joined = new Set([...unitOf.values()].map((u) => u.ord))
+    const free = [...byOrd].filter(([ord]) => !unitOf.has(ord)).map(([, x]) => x.m)
+    const left = L.units.filter((u) => !joined.has(u.ord)).map((u) => u.ord)
+    for (const [ord, t] of o.held(free, left)) {
+      const u = L.units.find((x) => x.ord === t)
+      if (u) unitOf.set(ord, u)
+    }
+  }
+  // (and the members holding several of today's units, each its row said by theirs in its order, joinedRow)
+  const joinedOf = new Map<
+    number,
+    { todays: readonly number[]; plan: readonly ({ t: 'today'; i: number } | { t: 'el'; id: string })[] }
+  >()
+  if (o.joined) {
+    const joined = new Set([...unitOf.values()].map((u) => u.ord))
+    const free = [...byOrd].filter(([ord]) => !unitOf.has(ord)).map(([, x]) => x.m)
+    const left = L.units.filter((u) => !joined.has(u.ord)).map((u) => u.ord)
+    for (const [ord, j] of o.joined(free, left)) {
+      const u = L.units.find((x) => x.ord === j.todays[0])
+      if (!u) continue
+      unitOf.set(ord, u)
+      joinedOf.set(ord, j)
+    }
+  }
+  /** a joined member's row: each of today's units in its plan its door row's text, each element the member's own, today's texts
+   *  apart by a space where the target writes one between words; null where one of them has no row whole or in part */
+  const joinedRow = (ord: number): { content: OutPiece[]; by: string } | null => {
+    const j = joinedOf.get(ord)
+    if (!j || !doors) return null
+    const gap = /^(zh|ja|ko)/.test(L.target) ? '' : ' '
+    const content: OutPiece[] = []
+    let by = ''
+    for (const p of j.plan) {
+      if (p.t === 'el') {
+        content.push({ t: 'el', id: p.id })
+        continue
+      }
+      const r = doors.get(j.todays[p.i]!)
+      if (!r || !(r[2] === 'whole' || r[2] === 'partial')) return null
+      by ||= String(r[3])
+      const s = r[1].filter((q): q is string => typeof q === 'string').join('')
+      const last = content.at(-1)
+      if (last?.t === 'text') last.s += gap + s
+      else content.push({ t: 'text', s })
+    }
+    return { content, by }
+  }
+  /** a member's door row as the translation package's Result holds it, in the unit's own pieces: the door's, or today's row
+   *  said in v2's unit where the two hold its kept runs otherwise; null where a piece is no source piece */
+  const rowOf = (
+    ord: number,
+    row: DoorRow,
+    src: Unit,
+  ): { content: OutPiece[]; sentences?: { src: number[]; tr: number[] } } | null => {
+    const t = keptOf.get(ord)
+    if (t) return keptRow(row, t, src)
+    const source = sourcePieces(todayUnitOf(src).content)
+    const content = outOfDoor(row[1], source)
+    if (!content || (o.accept && !o.accept(src, content))) return null
+    // (the sentences today laid, where the prepare marks the unit lit by sentence: as a translator is asked for them)
+    const sentences = src.sentences ? doorSentences(row, source) : undefined
+    return { content, ...(sentences ? { sentences } : {}) }
+  }
+  // (the paper's own name units' door rows, by the ids the part states them by (Part.paper.names): what a head reads where the
+  // target's packages name it not, as the entry reads them from its rows, ownNamesOf)
+  const nameRows = new Map<string, Row>()
+  if (doors)
+    for (const [, id] of part0?.paper.names ?? []) {
+      const u = todayById.get(id)?.[0]
+      const row = u ? doors.get(u.ord) : undefined
+      const src = bundle.units.get(id)
+      if (!row || !src || !(row[2] === 'whole' || row[2] === 'partial')) continue
+      const content = outOfDoor(row[1], sourcePieces(src.content))
+      if (content) nameRows.set(id, { id, ok: true, by: String(row[3]), content })
+    }
+  const ownNames = ownNamesOf(part0?.paper.names, nameRows)
   const adapted = new Map<number, FlowMember>()
   let patternsSeen: Record<string, unknown> | undefined
   for (const [ord, x] of byOrd) {
@@ -585,12 +782,19 @@ export function gateL1Pair(
       stop(`today's round: ${c}`)
       continue
     }
+    // (a unit the paper keeps as it is (Unit.kept: its names, code, an algorithm's body) is never translated, whatever row is
+    // given of it, as the entry leaves it (entry.ts contentOf): a row of it laid here was laid by the runner alone (the
+    // google-lay lane: the lab's Google fill asked for 45 kept code cells of 2608.06007v1, which the product never asks)
+    if (bundle.units.get(x.m.text)?.kept) {
+      stop('a unit the paper keeps (Unit.kept): never translated')
+      continue
+    }
     patternsSeen ??= (c.P as Raw).patterns as Record<string, unknown> | undefined
     const label = c.slot('U.label', 'label')?.label as { drawn?: string } | null | undefined
     const up = c.slot('U.params')
     const nextUnit = x.after ? unitOf.get(x.after.ord) : undefined
     // (the reading and the tokens from the part (lay/read.ts) where asked, with today's as the oracle: E1's input level)
-    let reading = {
+    let reading: Reading = {
       tokens: c.tokens as never,
       labelDrawn: label?.drawn ?? null,
       lead: !!(c.slot('U.lead', 'lead')?.lead ?? null),
@@ -618,7 +822,12 @@ export function gateL1Pair(
       // every page) has one row, which today's door holds under its first ord)
       const row = doors?.get(u.ord) ?? (u.id ? doorById.get(u.id) : undefined)
       const src = bundle.units.get(x.m.text)
-      if (!row || !src || !(row[2] === 'whole' || row[2] === 'partial') || !metrics || !paperR) {
+      const jr = joinedOf.has(ord) ? joinedRow(ord) : undefined
+      if (jr === null) {
+        stop('the reading: a joined unit with a piece of today’s with no row')
+        continue
+      }
+      if (!src || !metrics || !paperR || (!jr && (!row || !(row[2] === 'whole' || row[2] === 'partial')))) {
         stop(`the reading: ${!row ? 'no door row' : !src ? 'no unit of the part' : `a row ${row[2]}`}`)
         if (!row && process.env.AXT_GATE_NOROW)
           console.log(`NOROW ${pair} ord ${u.ord} ${u.kind} ${x.m.kind} ${String(x.m.text).slice(0, 12)}`)
@@ -631,23 +840,33 @@ export function gateL1Pair(
       const source = sourcePieces(src.content)
       // (the door's row as the translation package's Result would hold it (its text, the source's elements and groups by id):
       // the reading takes the pieces from it and the member's facts alone, rowPieces; AXT_GATE_SOURCE=1 the unit's own pieces
-      // as before, to hold the two equal)
-      const content = outOfDoor(row[1], source)
+      // as before, to hold the two equal); a unit whose kept runs v2 holds as elements, today's row said in v2's unit
+      const content = jr
+        ? jr.content
+        : keptOf.has(ord)
+          ? (rowOf(ord, row!, src)?.content ?? null)
+          : outOfDoor(row![1], source)
       if (!content) {
         stop('the reading: a row piece no source piece is')
         continue
       }
-      const pieces = process.env.AXT_GATE_SOURCE
-        ? (row[1].map((q) =>
-            typeof q === 'string' ? ({ t: 'text', tr: true, s: q } as V0Piece) : source[q],
-          ) as V0Piece[])
-        : rowPieces(mm, content)
+      const pieces =
+        process.env.AXT_GATE_SOURCE && row && !jr
+          ? (row[1].map((q) =>
+              typeof q === 'string' ? ({ t: 'text', tr: true, s: q } as V0Piece) : source[q],
+            ) as V0Piece[])
+          : rowPieces(mm, content)
       const tr = performance.now()
       let rd: ReturnType<typeof readMember>
       try {
         rd = readMember({
           m: mm,
-          unit: { kind: u.kind, ...(x.m.title ? { title: true } : {}), state: row[2], pieces } as RowUnit,
+          unit: {
+            kind: u.kind,
+            ...(x.m.title ? { title: true } : {}),
+            state: jr ? 'whole' : row![2],
+            pieces,
+          } as RowUnit,
           rects: mm.lines.map((l) => rectOf(l, mm)),
           to: L.target,
           P: R as never,
@@ -655,9 +874,10 @@ export function gateL1Pair(
           labels: {
             words: (rules!.targets[L.target] as { labels?: Record<string, string> }).labels ?? null,
             captions: { figure: 'target', table: 'target' },
-            heads: heads?.[L.target]?.heads ?? null,
-            names: null,
+            heads: rules0.heads,
+            names: ownNames,
           },
+          refs: rules0.refs,
           relabels: !!mm.label && !((mm.fixed ?? 0) & 4),
           lead: nameLead?.lead ?? null,
           shown: Number.POSITIVE_INFINITY,
@@ -698,6 +918,7 @@ export function gateL1Pair(
         lead: rd.lead,
         cjkSize: rd.cjkSize,
         referenced: rd.referenced,
+        breaks: rd.breaks,
         own: true,
       }
     }
@@ -714,7 +935,8 @@ export function gateL1Pair(
       rulesOf: (pg) => today?.rules(pg),
       lineskip: (bundle.parts.values().next().value?.paper.lineskip as [number, number] | undefined) ?? null,
       reading,
-      bottomOf: (pg) => bottoms.get(pg),
+      ...(sharedOf.has(x.m.ord) ? { shared: sharedOf.get(x.m.ord)! } : {}),
+      ...(lineOf.has(x.m.ord) ? { line: lineOf.get(x.m.ord)! } : {}),
     })
     out.adaptMs += performance.now() - ta
     if ('stop' in got) {
@@ -737,18 +959,17 @@ export function gateL1Pair(
     // block's h and pitch the walk sets on today's, and noOver unset against false, are no input)
     if (setting === 'equal') {
       // (nor the fields of a shared row no rule reads: the follower's row is read by its page and baseline, S.share's by its
-      // page, baseline and size; today's rows carry the lead's id and extent beside them)
+      // page, baseline and size; today's rows carry the lead's id and extent beside them. Nor a block's borrow room, `free`:
+      // today's its page's pixel map's and a share of a pitch, the port's TeX's (Room.runs, Room.sep: the owner's ruling of
+      // 2026-11-08), nor the two depths it is read from, which the borrow past TeX's bottom reads apart (`toFoot`, `toInk`:
+      // the ruling of 2026-11-12, PDF-READER §18.37), which today's has not)
       const rest = differences(mem, td).filter(
         (d) =>
-          !/\.(h|pitch): .* against undefined$|^\.noOver: undefined against false$|^\.(follower\.row|shareRow)\.(id|x0|x1|size): undefined against/.test(
+          !/\.(h|pitch): .* against undefined$|^\.noOver: undefined against false$|^\.(follower\.row|shareRow)\.(id|x0|x1|size): undefined against|\.(free|toFoot|toInk): /.test(
             d,
           ),
       )
       if (rest.length) setting = `prepared: ${rest[0]!.replace(/\[\d+\]/g, '[]').replace(/: .*$/, '')}`
-      if (process.env.AXT_GATE_FREE && rest[0]?.includes('.free'))
-        console.log(
-          `FREE ${pair} ${u.ord} ${rest[0]} blocks ${mem.blocks.length} last ${mem.blocks.at(-1)!.B.at(-1)} below ${x.m.room.below} bottom ${bottoms.get(mem.blocks.at(-1)!.page)}`,
-        )
     }
     out.setting.set(u.ord, setting)
     if (o.reading === 'part') out.inputs.set(u.ord, setting !== 'equal' ? setting : (tokensVerdict ?? 'equal'))
@@ -765,7 +986,13 @@ export function gateL1Pair(
   pieceCrops(pair, new Map([...adapted].map(([o, m]) => [o, { tokens: m.tokens } as never])))
   const dumped = new Map<
     number,
-    { first: number; d: DumpUnit; lines: DumpUnit['lines']; elements: NonNullable<DumpUnit['elements']> }
+    {
+      first: number
+      d: DumpUnit
+      lines: DumpUnit['lines']
+      elements: NonNullable<DumpUnit['elements']>
+      sizes: number[]
+    }
   >()
   // (a table group is laid whole or not at all, design-a §1.4: a group one of whose cells the adapter did not set stays the
   // original's whole, as today's withhold leaves a group a cell of which is not drawn)
@@ -779,21 +1006,45 @@ export function gateL1Pair(
         for (const o of cells) tieHeld.add(o)
     }
   for (const o of tieHeld) if (adapted.has(o)) out.tieHeld.add(adapted.get(o)!.ord)
-  // (the entry's rows: each member's door row as the translation package's Result, by its unit's id)
-  let entryRows: Rows | null = null
+  // (the entry's rows: each member's door row as the translation package's Result, by its unit's id; `said`, the ids whose row
+  // is today's row of other units said in v2's (several of today's joined, kept runs held as elements, a figure text flattened),
+  // which no translator gave v2's unit: lab/typeset/parity/fresh.mjs freshNeeds)
+  let entryRows: (Rows & { said(id: string): boolean }) | null = null
   if (out.entry && doors) {
-    const byId = new Map<string, Row>()
+    const byId = new Map<string, Row>(nameRows)
+    const said = new Set<string>()
     for (const [ord, x] of byOrd) {
+      // (a member holding several of today's: theirs in its order, joinedRow)
+      if (joinedOf.has(ord) && typeof x.m.text === 'string' && !byId.has(x.m.text)) {
+        const jr = joinedRow(ord)
+        if (jr) {
+          byId.set(x.m.text, { id: x.m.text, ok: true, by: jr.by, content: jr.content })
+          said.add(x.m.text)
+        }
+        continue
+      }
       const u = unitOf.get(ord)
       const row = u ? (doors.get(u.ord) ?? (u.id ? doorById.get(u.id) : undefined)) : undefined
       const src = typeof x.m.text === 'string' ? bundle.units.get(x.m.text) : undefined
       if (!row || !src || typeof x.m.text !== 'string' || byId.has(x.m.text)) continue
       if (!(row[2] === 'whole' || row[2] === 'partial')) continue
-      const content = outOfDoor(row[1], sourcePieces(src.content))
-      if (content) byId.set(x.m.text, { id: x.m.text, ok: true, by: String(row[3]), content })
+      // (today's row names today's pieces: of a figure text whose runs L1's holds as groups, its one text; of a unit whose
+      // kept runs v2 holds as elements, said in v2's unit; with the sentences today laid, where the unit is lit by sentence)
+      const r = rowOf(ord, row, src)
+      if (!r) continue
+      byId.set(x.m.text, { id: x.m.text, ok: true, by: String(row[3]), ...r })
+      if (keptOf.has(ord) || todayUnitOf(src) !== src) said.add(x.m.text)
     }
-    entryRows = { get: (k) => byId.get(k), done: true }
+    // (and the units the paper keeps as they are, as the reader's rows say them (reader.ts, Unit.kept): never translated)
+    entryRows = {
+      get: (k) => byId.get(k),
+      done: true,
+      kept: (k) => bundle.units.get(k)?.kept === true,
+      said: (k) => said.has(k),
+    }
   }
+  // (the entry's lays of each unit begun on a pass page, by the page whose lay laid it: I6 across the lays, cross-lay.ts)
+  const laysOf = new Map<number, Map<number, UnitLay>>()
   for (const [pg, part] of [...bundle.parts].sort((a, b) => a[0] - b[0])) {
     out.pages++
     // (its flows, cut where a member is not set: the one after it starts where TeX set it, as after a member left)
@@ -810,6 +1061,17 @@ export function gateL1Pair(
         cur.push(cur.length ? a : { ...a, rowStart: undefined })
       }
       if (cur.length) flows.push(cur)
+    }
+    // (the ink boxes the part states for each member laid, by its laid ord: its elements' and its label's, which I5 reads a crop
+    // ending a line by)
+    const inksBy = new Map<number, number[][]>()
+    for (const m of part.flows.flat()) {
+      const a = adapted.get(m.ord)
+      if (a)
+        inksBy.set(a.ord, [
+          ...(m.els ?? []).flatMap(([, e]) => e.ink as number[][]),
+          ...(m.label?.ink ? [m.label.ink as number[]] : []),
+        ])
     }
     // (a table's cells, and the members laid at one size: one paragraph of TeX's the front end cut at a float, a figure's set;
     // a table decided over the cells handed in, as today's settleGroup over the cells whose rows are translated: a cell left
@@ -838,26 +1100,35 @@ export function gateL1Pair(
     } catch (e) {
       out.threw.push(`p${pg}: ${String((e as Error)?.message ?? e).slice(0, 120)}`)
     }
-    if (got) invariantsOf(pg, got.members, R, out.inv)
+    if (got) invariantsOf(pg, got.members, R, out.inv, (ord) => inksBy.get(ord), servedMeasure)
     if (got && out.entry && entryRows && metrics) {
       const t1 = performance.now()
       const linkFates: LinkFate[] = []
+      const lays: UnitLay[] = []
       const page = layPage(
         part as Part,
         entryRows,
         { ...rulesFor(L.target as never), set: R, hyph: patternsSeen ?? {} },
         metrics,
-        {
-          heads: heads?.[L.target]?.heads ?? null,
-          linkFates,
-        },
+        { linkFates, lays },
       )
       out.entry.ms.push(performance.now() - t1)
+      for (const x of lays) {
+        const by = laysOf.get(x.ord) ?? new Map<number, UnitLay>()
+        laysOf.set(x.ord, by.set(pg, x))
+      }
+      coverOf(out.entry.cover, page, part as Part, metrics, pair)
       // (the links' fates, the dropped with an example each; the laid members' boxes on both panes)
       ;((part as Part).links ?? []).forEach((l, i) => {
         // (an annotation of a member's other page, which the part holds with its page: counted apart)
         const f = `${l.page && l.page !== pg ? 'across ' : ''}${linkFates[i] ?? 'none'}`
         out.entry!.links.set(f, (out.entry!.links.get(f) ?? 0) + 1)
+        // (AXT_GATE_LINKS=<file>: each link's fate a line, its pair, page, index in the part's and owner, to compare two runs)
+        if (process.env.AXT_GATE_LINKS)
+          appendFileSync(
+            process.env.AXT_GATE_LINKS,
+            `${pair}\tp${pg}\t${i}\t${f}\t${l.owner?.[0] ?? ''} ${l.owner?.[1] || 'text'}\n`,
+          )
         const ex = out.entry!.linkEx.get(f) ?? []
         if (ex.length < 3 && ['off', 'targets', 'unmatched', 'unplaced', 'none'].includes(f))
           out.entry!.linkEx.set(f, [...ex, `${pair} p${pg} ord ${l.owner?.[0]} ${l.owner?.[1] || 'text'}`])
@@ -868,6 +1139,23 @@ export function gateL1Pair(
           const k = `${m.dir ? 'turned' : 'level'}: ${st}`
           out.entry.figures.set(k, (out.entry.figures.get(k) ?? 0) + 1)
         }
+      // (AXT_GATE_LIT=<file>: each member's boxes on both panes a line, its pair, page, unit, kind and state, never its ord (a
+      // kept block merged moves the ords of the units made after it), to compare two runs' highlights piece by piece)
+      if (process.env.AXT_GATE_LIT) {
+        const byOrd = new Map((part as Part).flows.flat().map((m) => [m.ord, m]))
+        const r2 = (v: unknown): unknown =>
+          typeof v === 'number' ? Math.round(v * 100) / 100 : Array.isArray(v) ? v.map(r2) : v
+        appendFileSync(
+          process.env.AXT_GATE_LIT,
+          page.members
+            .map((x) => {
+              const m = byOrd.get(x.ord)
+              const unit = typeof m?.text === 'string' ? m.text : JSON.stringify(m?.text ?? null)
+              return `${pair}\tp${pg}\t${unit}\t${m?.kind ?? ''}\t${x.state}\t${JSON.stringify(r2(x.lit))}\n`
+            })
+            .join(''),
+        )
+      }
       for (const x of page.members) {
         if (x.state !== 'laid' || !x.lines.length) continue
         const lit = out.entry.lit
@@ -884,7 +1172,7 @@ export function gateL1Pair(
           const k = `${m.text.name}: ${st}`
           out.entry.names.set(k, (out.entry.names.get(k) ?? 0) + 1)
         }
-      const mine = new Map(page.members.map((m) => [unitOf.get(m.ord)?.ord ?? m.ord, m]))
+      const mine = entryByToday(page.members, unitOf)
       for (const pm of got.members) {
         const e = mine.get(pm.ord)
         const same =
@@ -940,14 +1228,28 @@ export function gateL1Pair(
             L.lines.map((l) => [l.page, l.block, l.baseline, l.x0, l.x1, l.used, (l.items as unknown[]).length]),
           ),
         )
+        // (and AXT_GATE_ITEMS=1: each line's items, where each starts, its width and its text)
+        if (process.env.AXT_GATE_ITEMS)
+          for (const l of L.lines as { page: number; items: { x?: number; w: number; t: Raw }[] }[])
+            console.log(
+              `ITEMS p${l.page}`,
+              l.items
+                .map(
+                  (it) =>
+                    `${(it.x ?? Number.NaN).toFixed(2)}+${it.w.toFixed(2)}:${String(it.t.s ?? (it.t.crop ? 'crop' : it.t.space ? '_' : '?'))}`,
+                )
+                .join(' '),
+            )
       }
       if (pm.state !== 'laid' || !pm.lay) continue
       const d = dumpUnit(pm.lay, (p) => views.get(p))
       const lines = d.lines.filter((l) => l.page === pg),
-        elements = (d.elements ?? []).filter((e) => e.page === pg)
+        elements = (d.elements ?? []).filter((e) => e.page === pg),
+        // (the size each line on the page is drawn at by the page's own lay: a unit laid in runs, each its run's)
+        sizes = d.lines.flatMap((l, j) => (l.page === pg ? [d.sizes?.[j] ?? (d.size as number)] : []))
       const prev = dumped.get(pm.ord)
       if (!prev) {
-        dumped.set(pm.ord, { first: pg, d, lines, elements })
+        dumped.set(pm.ord, { first: pg, d, lines, elements, sizes })
         continue
       }
       out.twoPages++
@@ -955,8 +1257,11 @@ export function gateL1Pair(
         out.selfDiffer.push(`ord ${pm.ord}: p${prev.first} against p${pg}`)
       prev.lines.push(...lines)
       prev.elements.push(...elements)
+      prev.sizes.push(...sizes)
     }
   }
+  if (out.entry) coverDone(out.entry.cover, pair)
+  if (out.entry && laysOf.size) out.entry.crossLay = crossLayOf(laysOf)
   for (const u of L.units) {
     const x = dumped.get(u.ord)
     if (x)
@@ -968,6 +1273,7 @@ export function gateL1Pair(
         leading: x.d.leading,
         lines: x.lines,
         ...(x.elements.length ? { elements: x.elements } : {}),
+        ...(x.sizes.some((s) => s !== x.d.size) ? { sizes: x.sizes } : {}),
       })
   }
   return out

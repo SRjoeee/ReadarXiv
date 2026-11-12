@@ -48,7 +48,7 @@ export {
 export {
   type Glyph,
   type HeadLabel,
-  headInTarget,
+  type HeadParts,
   headLabelInTarget,
   type LabelInput,
   type LabelPart,
@@ -208,11 +208,13 @@ export {
 } from './shared/figures.ts'
 export { CJK_FOOT, type FigureFit, type FitFigure, fitFigureSet, sameAsSource } from './shared/figure-fit.ts'
 export {
+  CJK_INK,
   COPY_SPACE_EM,
   type CropItem,
   type DisplayItem,
   type DisplayLine,
   displayLines,
+  inkLines,
   type LineRun,
   lineRuns,
   runEdge,
@@ -257,9 +259,9 @@ export {
 } from './emit/links.ts'
 export { layMember, type MemberLay, type Prepared } from './lay/member.ts'
 export { type FlowLay, type FlowMember, layFlowPrepared } from './lay/flow.ts'
-export { layPagePrepared, type PageMember, type PreparedPage } from './lay/page.ts'
+export { layPagePrepared, type PageMember, type PreparedPage, type UnitLay } from './lay/page.ts'
 export { type EntryOptions, layPage } from './lay/entry.ts'
-export { type Adapted, type AdaptInput, adapt, rectOf } from './lay/adapt.ts'
+export { type Adapted, type AdaptInput, adapt, rectOf, rowLinesOf } from './lay/adapt.ts'
 export { measured, paperOf, readMember, rowPieces, srcOfEl, srcOfSpan } from './lay/read.ts'
 export { waitOf } from './lay/wait.ts'
 export { fin, layoutOf, linesOf, stateOf, Trace as LedgerTrace } from './lay/trace.ts'

@@ -2,7 +2,17 @@
 // hosts' pages go through, the website's (our server's rows, an address's target) and the extension's (rows made here, a key),
 // each as the chrome shows it.
 import { describe, expect, it } from 'vitest'
-import { DEFAULTS, eventsOf, INITIAL, kindOf, LAYER_WHY, type ReaderState, reduce } from '../../src/index.ts'
+import {
+  LASTING as CHROME_LASTING,
+  DEFAULTS,
+  eventsOf,
+  INITIAL,
+  kindOf,
+  LAYER_WHY,
+  type ReaderState,
+  reduce,
+} from '../../src/index.ts'
+import { LASTING as SESSION_LASTING } from '../../src/session/machine.ts'
 
 const base: ReaderState = {
   paper: { id: '2601.00002', version: 1, title: '', html: null, pdf: 'https://arxiv.org/pdf/2601.00002v1' },
@@ -22,6 +32,7 @@ const base: ReaderState = {
     heading: null,
   },
   reconnecting: false,
+  network: false,
   faces: null,
   crashed: false,
 }
@@ -43,11 +54,11 @@ const open = {
 
 describe("the reader's state as the chrome's", () => {
   it("a paper being prepared, then laid, its rows arriving, then complete: the chrome's phases in turn", () => {
-    const preparing = { ...open, layer: { s: 'preparing' as const, position: 3, progress: null } }
+    const preparing = { ...open, layer: { s: 'preparing' as const, stage: 'compiling' } }
     const ready = {
       ...open,
       layer: { s: 'ready' as const, laid: 0, total: 2, asOriginal: 0 },
-      rows: { target: 'de', from: 'server' as const, s: 'arriving' as const, got: 4, total: 15, lost: 0 },
+      rows: { target: 'de', from: 'server' as const, s: 'arriving' as const, got: 4, total: 15, lost: 0, waits: true },
     }
     const complete = {
       ...ready,
@@ -65,12 +76,60 @@ describe("the reader's state as the chrome's", () => {
     expect(fold([base]).phase).toBe('loading')
     expect(fold([base, open, preparing])).toMatchObject({
       phase: 'preparing',
-      preparing: { position: 3, progress: null },
+      preparing: { progress: 0.12 },
     })
     expect(fold([base, open, preparing, ready])).toMatchObject({ phase: 'translating', progress: 4 / 15 })
     const done = fold([base, open, preparing, ready, complete])
     expect(done.phase).toBe('ready')
     expect(done.layer).toMatchObject({ laid: 2, total: 2 })
+  })
+  it("the prepare's stage, our server's record's own, told as the share of the prepare it stands at, each stage once and in turn (the coordinator's decision 4, 2026-11-11)", () => {
+    const at = (stage: string | null) => ({ ...open, layer: { s: 'preparing' as const, stage } })
+    const told: (number | null)[] = []
+    let prev: ReaderState = open
+    for (const s of [null, 'fetching', 'fetching', 'compiling', 'units', 'laying-out', 'bundle', 'bundle']) {
+      const next = at(s)
+      for (const e of eventsOf(prev, next)) if (e.type === 'preparing') told.push(e.progress)
+      prev = next
+    }
+    expect(told).toEqual([0, 0.02, 0.12, 0.52, 0.68, 0.97])
+    // (a stage this reader does not know stands at the prepare's start; no place in a queue is told: the record names none)
+    expect(eventsOf(open, at('later')).find((e) => e.type === 'preparing')).toEqual({ type: 'preparing', progress: 0 })
+  })
+  it('rows read of a run done, or a run that restates rows the view holds, tell no translation under way: their end alone', () => {
+    const laid = { ...open, layer: { s: 'ready' as const, laid: 2, total: 2, asOriginal: 0 } }
+    const reading = {
+      ...laid,
+      rows: { target: 'de', from: 'server' as const, s: 'arriving' as const, got: 0, total: 15, lost: 0, waits: false },
+    }
+    const held = { ...reading, rows: { ...reading.rows, got: 15 } }
+    const complete = {
+      ...laid,
+      rows: {
+        target: 'de',
+        from: 'server' as const,
+        s: 'complete' as const,
+        got: 15,
+        total: 15,
+        lost: 0,
+        stopped: null,
+      },
+    }
+    expect(eventsOf(laid, reading)).toEqual([])
+    expect(eventsOf(reading, held)).toEqual([])
+    expect(eventsOf(held, complete)).toEqual([{ type: 'translated', got: 15, total: 15, lost: 0, stopped: null }])
+    for (const s of [reading, held]) expect(fold([base, laid, s]).phase).toBe('ready')
+  })
+  it("the view's wait over while the rows still come (every unit shown holds its translation) is told as the run's end", () => {
+    const laid = { ...open, layer: { s: 'ready' as const, laid: 2, total: 2, asOriginal: 0 } }
+    const waits = {
+      ...laid,
+      rows: { target: 'de', from: 'server' as const, s: 'arriving' as const, got: 10, total: 15, lost: 0, waits: true },
+    }
+    const held = { ...waits, rows: { ...waits.rows, got: 15, waits: false } }
+    expect(eventsOf(waits, held)).toEqual([{ type: 'translated', got: 15, total: 15, lost: 0, stopped: null }])
+    expect(fold([base, laid, waits])).toMatchObject({ phase: 'translating', translated: { got: 10, total: 15 } })
+    expect(fold([base, laid, waits, held])).toMatchObject({ phase: 'ready', translated: { got: 15, total: 15 } })
   })
   it("the chrome's preferences carry the target shown (the visit's), never the stored one over it", () => {
     expect(fold([base]).prefs?.target).toBe('de')
@@ -96,11 +155,35 @@ describe("the reader's state as the chrome's", () => {
       unavailable: { why: 'busy', retryAt: 5 },
     })
   })
-  it("rows failing: a key missing is the settings' card; out of reach the network; a refusal a bad request; a target the reader does not set its own notice", () => {
+  it("one table says which refusals last (session/machine.ts LASTING): the chrome holds the paper's exactly where the session does", () => {
+    for (const [why, unavailable] of Object.entries(LAYER_WHY)) {
+      expect(CHROME_LASTING.has(unavailable), why).toBe(SESSION_LASTING.has(why as never))
+      const s = { ...open, layer: { s: 'refused' as const, why: why as never, retryAt: null } }
+      // (a passing refusal leaves the translated displays to be had: a retry asks again, machine.ts cmd.retry)
+      expect(fold([base, open, s]).available, why).toBe(!SESSION_LASTING.has(why as never))
+    }
+  })
+  it('a refusal told again with a new time: the chrome follows it (one source for the time said, status inventory 4.2.8)', () => {
+    const first = { ...open, layer: { s: 'refused' as const, why: 'limit' as const, retryAt: 60_000 } }
+    const again = { ...open, layer: { s: 'refused' as const, why: 'limit' as const, retryAt: 3_600_000 } }
+    expect(fold([base, open, first, again]).unavailable).toEqual({ why: 'refused', retryAt: 3_600_000 })
+    expect(eventsOf(again, again)).toEqual([])
+  })
+  it("the rows' counts after their end are the view's too, told whenever they change (Codex 4538550054)", () => {
+    // (a stored translation read whole before its layer's units are read: its end told at 0 of 0, then the units read)
+    const rows = (got: number, total: number) =>
+      ({ target: 'zh', from: 'server', s: 'complete', got, total, lost: 0, stopped: null }) as const
+    const ended = { ...open, rows: rows(0, 0) }
+    const read = { ...open, rows: rows(12, 12) }
+    expect(fold([base, open, ended, read]).translated).toEqual({ got: 12, total: 12 })
+    expect(eventsOf(read, read)).toEqual([])
+  })
+  it("rows failing: a key missing is the settings' card; out of reach the network, a rate limit where the translator named a wait; a refusal an invalid response; a key refused the key's; a target the reader does not set its own notice (format kindOfWhy, the extension's own reading)", () => {
     expect(kindOf({ kind: 'server' })).toBe('network')
     expect(kindOf({ kind: 'unavailable' })).toBe('network')
-    expect(kindOf({ kind: 'refused' })).toBe('bad-request')
-    expect(kindOf({ kind: 'unconfigured', code: 'auth' })).toBe('auth')
+    expect(kindOf({ kind: 'unavailable', retryAfterMs: 5000 })).toBe('rate-limit')
+    expect(kindOf({ kind: 'refused' })).toBe('invalid-response')
+    expect(kindOf({ kind: 'unconfigured', code: 'key-refused' })).toBe('auth')
     const ready = { ...open, layer: { s: 'ready' as const, laid: 0, total: 2, asOriginal: 0 } }
     const noKey = {
       ...ready,
@@ -120,7 +203,7 @@ describe("the reader's state as the chrome's", () => {
     expect(fold([base, ready, waiting])).toMatchObject({ phase: 'failed', failure: 'network', failureAt: 9_000 })
     const again = {
       ...ready,
-      rows: { target: 'de', from: 'here' as const, s: 'arriving' as const, got: 1, total: 10, lost: 0 },
+      rows: { target: 'de', from: 'here' as const, s: 'arriving' as const, got: 1, total: 10, lost: 0, waits: true },
     }
     expect(fold([base, ready, waiting, again]).failureAt).toBeNull()
     const target = {

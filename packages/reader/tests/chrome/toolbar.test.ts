@@ -123,7 +123,7 @@ describe("the toolbar (the reader's design, §6.1)", () => {
       [R.display.bilingual, R.display.translation].map((n) =>
         c.querySelector(`[role="radio"][aria-label="${n}"]`)!.getAttribute('aria-disabled'),
       )
-    const refused = { display: 'original' as const, unavailable: { why: 'busy' as const, retryAt: null } }
+    const refused = { display: 'original' as const, unavailable: { why: 'refused' as const, retryAt: null } }
     const own = await mount(refused)
     expect(translated(own.container)).toEqual([null, null])
     document.body.innerHTML = ''
@@ -135,6 +135,9 @@ describe("the toolbar (the reader's design, §6.1)", () => {
     )
     expect(translated(container)).toEqual(['true', 'true'])
     await act(async () => fake.set({ unavailable: null }))
+    expect(translated(container)).toEqual([null, null])
+    // (waiting in line is no refusal: the translated displays stay to be chosen, as in the first-time wait)
+    await act(async () => fake.set({ unavailable: { why: 'busy', retryAt: null } }))
     expect(translated(container)).toEqual([null, null])
   })
 

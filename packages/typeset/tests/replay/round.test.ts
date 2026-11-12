@@ -55,12 +55,21 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)(
           F4: 2,
           F5: 8,
           'F6 further': 6,
-          'F6 runs': 142,
+          'F6 runs': 139,
+          // (runs whose tokens hold the frames' share's cut, counted without it: round.ts, the owner's of 2026-11-10)
+          'F6 runs (share)': 3,
           F7: 5,
           'F7 moved': 4,
           F8: 8,
           out: 163,
-          L9: 163,
+          L9: 162,
+          // (a round that borrowed room, its fill leadings option (i)'s: round.ts, the owner's of 2026-11-10)
+          'L9 (i)': 1,
+          // (rounds whose lines' ends differ from today's at 1e-13 alone, lane literal-fixes' rule moving a line's slack between its
+          // gaps: round.ts glued, tap.ts wordGlued)
+          'F2 (no glue in a word)': 7,
+          'laidRuns (no glue in a word)': 3,
+          'out (no glue in a word)': 7,
         },
         stopped: { 'left the original\u2019s (X.further found none)': 1 },
       })

@@ -4,10 +4,15 @@
 
 /** A target language, BCP-47 (`zh-Hans`, `ja`, `sr-Cyrl`). Each adapter maps it to its endpoint's own code */
 export type Lang = string
+/** the language every translator is asked to translate from (each adapter's request names it: Microsoft's `from`, Google's
+ *  source, Chrome's `sourceLanguage`), BCP 47 */
+export const SOURCE: Lang = 'en'
 
 /** An element's kind, as the source reader typed it: an open string (`math`, `display`, `cite`, `ref`, `url`, `code`,
- *  `note-mark`, `other`, …). A wire reads it for two things only: what the element reads as to a sentence cutter where the
- *  host says nothing (`reads`), and, for `display`, that it keeps a marker of its own (`alone`) */
+ *  `note-mark`, `other`, …). A wire reads it for three things only: what the element reads as to a sentence cutter where the
+ *  host says nothing (`reads`); for `display`, that it keeps a marker of its own (`alone`); and whether it can stand inside a
+ *  word, its characters the word's (one that reads as a word: a formula, a macro, an escaped character; never `other`, the
+ *  kind of an element its reader states nothing of, nor a display, a space, a break, a reference or an annotation) */
 export type ElKind = string
 /** A span's style: an open string (`bold`, `italic`, `mono`, `link`, `label`, …). The wire reads `must`, never the style */
 export type SpanStyle = string
@@ -15,6 +20,7 @@ export type SpanStyle = string
 /**
  * A unit's content, as the source reader types it. A piece's id is local to its unit. An `el` travels whole and is never
  * translated; `stop` is the punctuation the element itself sets at its end that is its sentence's (a display's `x = y.`),
+ * or a line end (white space) where it ends its sentence and sets no punctuation (a forced break a run-in label follows),
  * stated by the source reader, which a wire may write after the element so that the sentence ends there. A `span` holds
  * pieces; `must` marks one that comes back exactly once or the reply is refused (a link, a run-in label); a span without it
  * may come back unstyled, its words outside it. Where a wire sends it on no wire (the markers wire, the runs floor), its
@@ -32,10 +38,44 @@ export type Piece =
        *  `display` is, whatever this says */
       alone?: boolean | undefined
       /** what the element reads as to a sentence cutter, where the host knows it (the HTML page: its visible text); else
-       *  its kind decides (a formula a word, a reference a number, a citation's or a note's mark an annotation) */
+       *  its kind decides (a formula a word, a reference a number, a note's mark an annotation, a citation one too but
+       *  where it opens a sentence after a stop: `… expensive. \citet{x} proposes`) */
       reads?: string | undefined
+      /** it sets nothing where it stands, no character and no space (the PDF's source reader, from TeX's tables: a
+       *  declaration, a key written to a file, a penalty, `\noindent`, `\-`, a table's row rule; never a space, a break, a
+       *  fill or a skip): no translator needs it. The markers wire and the runs floor send it on no wire (each marker a hard
+       *  boundary to Microsoft, each runs' edge a cut), beside an element that sets something in that one's marker; read
+       *  back, it stands at the front of its innermost kept group (the unit, a `must` span) where nothing of the group went
+       *  out before it, else at the group's end. The tags wire sends it as any element */
+      silent?: boolean | 1 | undefined
+      /** TeX sets it after the unit's text, no word of its sentences (the PDF's source reader: backref's list of the pages that
+       *  cite a bibliography entry, set after the entry), and the white space that stands for the gap before it. No translator
+       *  is given it: the chain asks for the unit without it (each marker a word to Microsoft, which read this one as a page
+       *  number and wrote the character for "page" before it) and puts it back after the translation, its white space before
+       *  it, on every wire and the runs floor */
+      after?: string | undefined
+      /** the full name the paper gives the type of the item a reference refers to (the PDF's source reader, read in its
+       *  marked compile: "Figure", "Equation", "section"), where TeX states one. A word tied to the reference that
+       *  abbreviates it ("Fig.") is sent to every translator as this name (names.ts namedOf); the unit itself keeps the word */
+      name?: string | undefined
+      /** the BCP 47 tag of the language the paper's names are set up for (babel's main language); absent where none is
+       *  declared. The name
+       *  is sent only where this is SOURCE's language, or none is declared */
+      nameLang?: string | undefined
     }
-  | { t: 'span'; id: string; style: SpanStyle; must?: boolean | 1 | undefined; content: readonly Piece[] }
+  | {
+      t: 'span'
+      id: string
+      style: SpanStyle
+      must?: boolean | 1 | undefined
+      /** the punctuation TeX sets at the group's end that its source does not write (the PDF's source reader, read off TeX's
+       *  glyphs: a paper's macro's own `{\bf #1.}`, 2608.25210v2's run-in heads). Every wire and the runs floor write it at
+       *  the group's end, inside a kept span before its close, after the words of one on no wire, so that the sentence ends
+       *  there (kept with no stop between its markers, Microsoft ran the head into the next sentence and wrote none); a
+       *  reply's stop there is the translation's own, read as text */
+      stop?: string | undefined
+      content: readonly Piece[]
+    }
 
 /** What a translator is given: the unit's id (a label, never a key), its content, and whether it lights by sentence */
 export interface UnitIn {
@@ -72,8 +112,10 @@ export interface PaperContext {
   abstract?: string
   terms?: readonly string[]
   section?: string
-  glossary?: readonly { readonly term: string; readonly translation: string }[]
+  glossary?: Glossary
 }
+/** The reader's term table: each term and the translation the reader wants for it */
+export type Glossary = readonly { readonly term: string; readonly translation: string }[]
 
 /** What the caller does next, never an HTTP cause */
 export type Why =
@@ -147,6 +189,13 @@ export interface Translator {
   readonly digest: string
   /** whether its replies depend on the paper's context: then the context's digest enters the store key */
   readonly context: boolean
+  /** the wire it writes, as it declares it: `markers` (a group that is not `must` goes on no wire, chain.ts asks the reference
+   *  translation of a phrase group alone of such a translator, groups.ts) or `tags`; none declared, none asked */
+  readonly wire?: 'markers' | 'tags'
+  /** where `context` is true: the entries of the call's glossary its reply to this wire depends on (the terms the wire's text
+   *  uses, which its request is sent), in the table's order. A wire's store key and a host's row hold these alone, so an
+   *  entry the unit does not use moves neither (#637); absent, the reply depends on the whole table */
+  glossaryOf?(wire: string, glossary: Glossary): Glossary
   readonly limits: Limits
   /** whether it serves the target; bounded by the adapter, and by the chain besides */
   supports(target: Lang): Promise<boolean>
@@ -169,9 +218,10 @@ export type Remedy =
   | 'again'
   /** the endpoint asks for a pause (429): it cools for every call for `retryAfterMs`; the request moves on now */
   | 'cool'
-  /** a unit of the request caused it (over a cap the endpoint states): the request is halved; a lone unit is refused */
-  | 'halve'
-  /** this translator cannot serve this request: the next one */
+  /** this translator cannot serve this request. The chain's one rule over it (#636): where the endpoint said the request is
+   *  larger than it takes (`too-large`), a smaller one can be served, so this translator is asked for each half, a lone unit
+   *  refused by it; any other refusal is the same at any size (a request shape, a parameter, a key the endpoint refuses), so
+   *  the request is handed on whole to the next translator, and counted against this one as a failure of its endpoint is */
   | 'pass'
   /** it cannot serve this configuration (no key, key refused, model not found, a gesture needed): off for its object */
   | 'off'
@@ -182,6 +232,9 @@ export type FaultCode =
   | 'timeout'
   | 'rate'
   | 'overload'
+  /** the endpoint said the request is larger than it takes: HTTP 413 (RFC 9110 §15.5.14), or the words of its own stated
+   *  cap. An adapter reports it only from such a reply, never from a bare 400 */
+  | 'too-large'
   | 'unsupported'
   | 'malformed'
   | 'no-key'

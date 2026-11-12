@@ -65,7 +65,7 @@ async function run(name, bytes, split) {
   let ins
   try { ins = await instrumentOf(bytes, split) } catch (e) { console.log(JSON.stringify({ case: name, read: `refused: ${e.message}` })); return }
   let tally = null
-  for await (const x of prepareBack(ins, bytes, { pdfjs, PL, deflate, inflate, paper: { id: '0000.00000', version: 1 }, made: 'absent' })) if (x.kind === 'tally') tally = x
+  for await (const x of prepareBack(ins, bytes, { pdfjs, PL, deflate, inflate, paper: { id: '0000.00000', version: 1 }, made: 'absent', keep: true })) if (x.kind === 'tally') tally = x
   const L = tally.locatedAll, A = tally.addOn
   const wrapped = 'refused' in A ? { refused: A.refused, why: A.why } : { pages: [...A.pages].map(([p, x]) => [p, x.ok, x.why ?? null]), groups: A.groups.size }
   let proofs = null

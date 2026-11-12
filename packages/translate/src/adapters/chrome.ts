@@ -5,7 +5,7 @@
 // takes no request's signal (one request's timeout would reject the session every other request waits on); the model
 // joins sentences with a space after CJK punctuation, which is taken off. It keeps tags (the tags path).
 import { realClock } from '../chain.ts'
-import { type Clock, Fault, type Lang, type Limits, type Signal, type Translator } from '../contract.ts'
+import { type Clock, Fault, type Lang, type Limits, type Signal, SOURCE, type Translator } from '../contract.ts'
 import { sha256Hex } from '../sha256.ts'
 import { planTags } from '../wire/tags.ts'
 import { readTagged } from './google.ts'
@@ -23,7 +23,7 @@ export const CHROME_LIMITS: Limits = { chars: 4_000, units: 20, inFlight: 1, cal
 /** availability's bound, and a session's making's (60 s: 8.6 s measured with the model ready) */
 export const CHROME_PROBE_MS = 2_000
 export const CHROME_CREATE_MS = 60_000
-export const CHROME_DIGEST = '70c7f2442fcaa4ca917ad302050e9fd00daf4bfa33264f367f2008c6f290c2da'
+export const CHROME_DIGEST = 'e0444c96baab3c1855456b23c0efbaf6ddfe9ac3a534e227de4b01074ac09193'
 
 /** a target as the API names it: its Chinese by script, bare for the simplified */
 const REWRITE: Record<string, string> = { 'zh-Hans': 'zh', 'zh-CN': 'zh', 'zh-TW': 'zh-Hant' }
@@ -59,7 +59,7 @@ export interface ChromeOptions {
 export function chrome(o: ChromeOptions): Translator {
   const clock = o.clock ?? realClock()
   const sessions = new Map<string, Promise<ChromeSession>>()
-  const pair = (target: Lang) => ({ sourceLanguage: 'en', targetLanguage: chromeTarget(target) })
+  const pair = (target: Lang) => ({ sourceLanguage: SOURCE, targetLanguage: chromeTarget(target) })
   /** one session per target, shared, made under its own controller and bound, dropped where it fails */
   const sessionOf = (target: Lang): Promise<ChromeSession> => {
     const key = chromeTarget(target)
@@ -89,6 +89,7 @@ export function chrome(o: ChromeOptions): Translator {
     identity: `chrome:${sha256Hex(JSON.stringify(['chrome', 'Translator', 'tags/1', 'raw/1'])).slice(0, 16)}`,
     digest: CHROME_DIGEST,
     context: false,
+    wire: 'tags',
     limits: { ...CHROME_LIMITS, ...o.limits },
     async supports(target) {
       const api = o.api

@@ -6,6 +6,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { gunzipSync } from 'node:zlib'
+import { CJK, punctOf } from '../../src/breaker/script.ts'
 
 export const LAB = process.env.AXT_LAB_DATA ?? '/Users/cheongzhiyan/Developer/readarxiv-lab-data'
 export const TAP = join(LAB, 'refactor-2026-11', 'baseline', 'tap')
@@ -19,6 +20,280 @@ export const hasToday = existsSync(todayFile('rules/tex-names.json'))
 export const hasDerived = (name: string) => existsSync(join(DERIVED, `${name}.json.gz`))
 
 export const readGz = (file: string): unknown => JSON.parse(gunzipSync(readFileSync(file)).toString('utf8'))
+
+/** today's rule params (resolveRules') less the fields an owner's ruling removed from the port's rule set (lab/typeset/
+ *  rules-data.mjs RULED_OUT: `borrowGap`, the clearance a borrowed line kept over the next ink, which TeX's paragraph separation
+ *  replaces, 2026-11-08) */
+export function ruledParams<T>(params: T): T {
+  const o = { ...(params as Record<string, unknown>) }
+  delete o.borrowGap
+  return o as T
+}
+/** today's blocks (the tap's walked blocks) as today's walk offered their room: its borrow knob offered a block's room only
+ *  where a block of the unit held a whole line of it at the original's pitch (statesOf's `most`), so a room under a line borrowed
+ *  nothing. The owner's ruling of 2026-11-08 (borrowing bounded by TeX's facts, before shrinking) offers that room too (fit/
+ *  walk.ts: a line TeX's \lineskip rule sets lower takes a fraction of a line): a unit whose every block's room is under a line
+ *  is replayed with none, today's walk's states */
+export function ruledRoom<B extends { free?: unknown; pitch0?: unknown }>(blocks: B[], s: number): B[] {
+  return underALine(blocks, s)
+    ? blocks.map((b) => (typeof b.free === 'number' && b.free > 0 ? { ...b, free: 0 } : b))
+    : blocks
+}
+/** a walk's blocks have room and none of it holds a whole line at its pitch (statesOf's `most` 0): today's walk offered none */
+function underALine(blocks: readonly { free?: unknown; pitch0?: unknown }[], s: number): boolean {
+  const room = (b: { free?: unknown }) => (typeof b.free === 'number' ? b.free : 0)
+  const pitch = (b: { pitch0?: unknown }) => (typeof b.pitch0 === 'number' ? b.pitch0 : 1.2 * s)
+  return blocks.some((b) => room(b) > 0) && !blocks.some((b) => Math.floor(room(b) / pitch(b) + 1e-6) > 0)
+}
+/**
+ * Whether a unit's round borrowed room under its lines, as today's walk laid it: its fit's state, or a state of one of its runs,
+ * took the borrow knob (`borrow` above 0). Option (i), the owner's of 2026-11-10 (the gap under a paragraph that borrows room
+ * measured from the borrow's limit, slots.mjs floorOver), moves such a unit's fill leadings (S.fill.leads) and none other's: a
+ * replay that differs there in them alone is the ruling's (round.ts `L9 (i)`)
+ */
+export function borrowsAt(pair: string, ord: number, round: number): boolean {
+  const u = ledger(pair).units.find((x) => x.ord === ord)
+  const at = (by: string) =>
+    u?.slots.find((s) => s.by === by && s.round === round)?.value as Record<string, unknown> | undefined
+  const borrows = (l: unknown) => Number((l as { state?: { borrow?: unknown } } | undefined)?.state?.borrow ?? 0) > 0
+  const runs = ((at('X.runs')?.laidRuns as { runs?: { layout?: unknown }[] } | null | undefined)?.runs ?? []) as {
+    layout?: unknown
+  }[]
+  return borrows(at('X.walk')?.layout) || runs.some((r) => borrows(r.layout))
+}
+/** the pages of a pair's units, by U.admit, and every unit with a line on one of them: a page's fill reads its every unit */
+export function onPagesOf(pair: string, ords: ReadonlySet<number>): { pages: Set<number>; units: Set<number> } {
+  const L = ledger(pair)
+  const pagesOf = (u: Ledger['units'][number]) =>
+    ((u.slots.find((s) => s.by === 'U.admit' && s.round === 0)?.value as { pages?: number[] } | undefined)?.pages ??
+      []) as number[]
+  const pages = new Set(L.units.filter((u) => ords.has(u.ord)).flatMap(pagesOf))
+  return { pages, units: new Set(L.units.filter((u) => pagesOf(u).some((p) => pages.has(p))).map((u) => u.ord)) }
+}
+/** whether a round's tokens hold an item that continues its word (B.tokens' pushText: `brk`, a piece after a break point inside a
+ *  word, a URL's after its `/`; `cont`, a run of one case of a word), where lane literal-fixes' rule (no glue inside a word:
+ *  breaker/break.mjs gapsOf, read by placeItems and the breaker's squeeze) spreads a line's slack or squeeze over fewer gaps
+ *  than today's did */
+export const inWordOf = (tokens: readonly unknown[]): boolean =>
+  tokens.some((t) => !!(t as { brk?: unknown }).brk || !!(t as { cont?: unknown }).cont)
+/** a step's summary as that rule reads it: each line summary's end (x0 + used, the trace's linesOf [3]) to a millionth of a
+ *  point, in every field named `lines` or `…layoutLines`/`…LayoutLines` and in a lines array itself; every other field as it is. The rule
+ *  moves a line's slack between its gaps, never the line's end: the same slack summed in another order differs from today's
+ *  at 1e-13 (7 of the 164 sampled rounds, every one of them so) */
+export function wordGlued(v: unknown, key = ''): unknown {
+  const line = (l: unknown) =>
+    Array.isArray(l) && typeof l[3] === 'number' ? [...l.slice(0, 3), Math.round(l[3] * 1e6) / 1e6, ...l.slice(4)] : l
+  if (Array.isArray(v)) return /ayoutLines$|^lines$/.test(key) || key === '' ? v.map(line) : v
+  if (v && typeof v === 'object' && !(v instanceof Map) && !(v instanceof Set))
+    return Object.fromEntries(
+      Object.entries(v as Record<string, unknown>).map(([k, x]) => [
+        k,
+        /ayoutLines$|^lines$/.test(k) && Array.isArray(x) ? x.map(line) : x,
+      ]),
+    )
+  return v
+}
+/** a token of today's as the mark-space ruling reads it */
+type SpacedToken = {
+  space?: boolean
+  keep?: boolean
+  s?: unknown
+  cls?: unknown
+  st?: { fam?: unknown } | null
+  face?: { id?: unknown }
+}
+/**
+ * Today's tokens as the ruling of 2026-11-10 makes them (lane cjk-space, B.tokens: no space beside a full-width mark's blank
+ * side, xeCJK's rule, whatever stands on the mark's other side; tests/unit/mark-space.test.ts): each space today set after a
+ * closing mark or before an opening mark (script.ts punctOf) that is full-width, a mark of the CJK blocks or one set in the
+ * target's CJK face (`cjk`, its faces' ids: rolesOf's), removed; a space after a head (`keep`) or in a monospaced run stays.
+ * With how many it removed: a replay counts the ruling where it applies, and compares nothing of it against today
+ */
+export function markSpaced<T extends SpacedToken>(
+  tokens: readonly T[],
+  cjk: ReadonlySet<string>,
+): { tokens: T[]; removed: number } {
+  const edge = (t: T | undefined, end: boolean) => {
+    if (!t || t.space || t.cls !== 'cjk' || typeof t.s !== 'string' || !t.s) return false
+    const cps = [...t.s],
+      ch = end ? cps.at(-1)! : cps[0]!
+    return punctOf(ch) === (end ? 'close' : 'open') && (CJK.test(ch) || cjk.has(String(t.face?.id)))
+  }
+  const near = (q: number, step: number) => {
+    for (; q >= 0 && q < tokens.length; q += step) if (!tokens[q]!.space) return tokens[q]
+    return undefined
+  }
+  const out = tokens.filter(
+    (t, q) =>
+      !t.space || !!t.keep || t.st?.fam === 'mono' || !(edge(near(q - 1, -1), true) || edge(near(q + 1, 1), false)),
+  )
+  return { tokens: out, removed: tokens.length - out.length }
+}
+/**
+ * Today's tokens as the second ruling of 2026-11-10 makes them (lane cjk-space, B.tokens: a mark's class, `punct`, only where it
+ * is full-width): a curly quote's today gave a class where the target sets it in its Latin face (not one of `cjk`'s faces) none.
+ * With how many it changed
+ */
+export function quotesUnmarked<T extends { s?: unknown; cls?: unknown; punct?: unknown; face?: { id?: unknown } }>(
+  tokens: readonly T[],
+  cjk: ReadonlySet<string>,
+): { tokens: T[]; changed: number } {
+  let changed = 0
+  const out = tokens.map((t) => {
+    if (t.cls !== 'cjk' || typeof t.s !== 'string' || !t.punct || CJK.test(t.s) || cjk.has(String(t.face?.id))) return t
+    changed++
+    return { ...t, punct: null }
+  })
+  return { tokens: out, changed }
+}
+/**
+ * Today's reading of a rendering's own style, as the element ruling of 2026-11-11 replaced it (lane el-facts, B.tokens: a
+ * rendering of the page's own text drawn as text takes its weight, slant and small capitals from its own glyphs, its
+ * resolution's `st`, over the run's; today took the typewriter family alone): each such resolution with its style's family
+ * alone, every other attribute the run's, so that the tokens made of it are today's. A replay counts the rounds whose tokens the
+ * ruling moves and compares nothing of it against today
+ */
+export function ownStyleUnread<R extends { get(k: number): unknown }>(prep: R): R {
+  const get = (k: number) => {
+    const r = prep.get(k) as { mode?: unknown; st?: { fam?: unknown } | null } | undefined
+    return r?.mode === 'orig-text' && r.st ? { ...r, st: { fam: r.st.fam } } : r
+  }
+  return Object.assign({}, prep, { get }) as R
+}
+const flooredOf = new Map<string, { floored: Set<number>; pages: Set<number>; units: Set<number> }>()
+/**
+ * What the gap ruling of 2026-11-08 (the gap under a paragraph held to its own leading alone, never the next paragraph's:
+ * fill-page.ts, slots.mjs footFloorAt) changes of a pair's record: the units a pass of today's decided with the next
+ * paragraph's leading over its own (`floored`: the decision's `next` above its `lead`, which today's state carried), the pages
+ * of those passes (`pages`), and every unit with a line on one of them (`units`: the pass's size reads every body unit it
+ * fills, and one no longer set closer may be short of its fill). A replay of a page or of a fill that differs there is the
+ * ruling's
+ */
+export function flooredIn(pair: string): { floored: Set<number>; pages: Set<number>; units: Set<number> } {
+  const got = flooredOf.get(pair)
+  if (got) return got
+  const L = ledger(pair)
+  const pagesOf = (u: Ledger['units'][number]) =>
+    ((u.slots.find((s) => s.by === 'U.admit' && s.round === 0)?.value as { pages?: number[] } | undefined)?.pages ??
+      []) as number[]
+  const floored = new Set<number>(),
+    pages = new Set<number>()
+  for (const pass of L.passes as { page: number; units: { id: number; lead?: number; next?: number | null }[] }[])
+    for (const u of pass.units)
+      if (typeof u.next === 'number' && typeof u.lead === 'number' && u.next > u.lead + 1e-9) {
+        floored.add(u.id)
+        pages.add(pass.page)
+      }
+  const units = new Set(L.units.filter((u) => pagesOf(u).some((p) => pages.has(p))).map((u) => u.ord))
+  const out = { floored, pages, units }
+  flooredOf.set(pair, out)
+  return out
+}
+
+/** the modes a line of today's is set in as any full line (placeItems: justified, or ragged where TeX set the unit flush left) */
+const FULL = new Set(['just', 'ragged'])
+/** whether line `k` of a summary's lines ([page, baseline, x0, x1, mode, block, items], trace.ts linesOf) stands before a run's
+ *  boundary: the next line on a block after more kept regions (`after`) than its own */
+const beforeRegion = (ls: unknown[], k: number, blocks: readonly { after?: unknown }[]): boolean => {
+  const l = ls[k],
+    n = ls[k + 1]
+  if (!Array.isArray(l) || !Array.isArray(n)) return false
+  const after = (b: unknown) => Number(blocks[b as number]?.after ?? 0)
+  return after(n[5]) > after(l[5])
+}
+/**
+ * Today's lines as the ruling of 2026-11-13 sets them (lane run-split, B.break; docs/PDF-READER.md §18.7: no word is cut by a
+ * boundary between runs; the line before a run's boundary is a last line, TeX's own law for the paragraph so far before a
+ * display, tex.web §1145 `line_break(display_widow_penalty)` with its \parfillskip, §816): a line before a boundary that today's
+ * run past a display (layoutUnit2's last resort) set as any full line, `just` or `ragged`, is set as a last line, `last`, its
+ * text and its extent as they were. `blocks` the walk's blocks, read for their `after`; every summary's lines (`layoutLines`,
+ * `lines`, as wordGlued reads them). A line today's run past ended inside a word (its hyphen) is not restated: such a unit's lay
+ * is the ruling's (lastLineIn)
+ */
+export function lastBeforeRegion(v: unknown, blocks: readonly { after?: unknown }[], key = ''): unknown {
+  const lines = (ls: unknown[]) =>
+    ls.map((l, k) =>
+      Array.isArray(l) && FULL.has(l[4] as string) && beforeRegion(ls, k, blocks)
+        ? [...l.slice(0, 4), 'last', ...l.slice(5)]
+        : l,
+    )
+  if (Array.isArray(v)) return /ayoutLines$|^lines$/.test(key) || key === '' ? lines(v) : v
+  if (v && typeof v === 'object' && !(v instanceof Map) && !(v instanceof Set))
+    return Object.fromEntries(
+      Object.entries(v as Record<string, unknown>).map(([k, x]) => [
+        k,
+        /ayoutLines$|^lines$/.test(k) && Array.isArray(x) ? lines(x) : x,
+      ]),
+    )
+  return v
+}
+const lastLineOf = new Map<string, Set<number>>()
+/**
+ * The units of a pair whose lay the ruling of 2026-11-13 changes (lastBeforeRegion): those today's walk laid with a line before
+ * a run's boundary set as any full line (its run past a display), at any round. A replay of their drawing, or of a page's fill
+ * that holds them, that differs is the ruling's: a last line is set ragged, and a word today's run past cut there now stands
+ * whole after the boundary, which may cost its unit a state of the fit (2608.16117v1-de's unit 28, one size step)
+ */
+export function lastLineIn(pair: string): Set<number> {
+  const got = lastLineOf.get(pair)
+  if (got) return got
+  const out = new Set<number>()
+  for (const u of ledger(pair).units)
+    for (const s of u.slots.filter((x) => x.by === 'X.cut')) {
+      const v = s.value as { layoutLines?: unknown[]; walkedBlocks?: { after?: unknown }[] } | null
+      const ls = v?.layoutLines ?? []
+      if (ls.some((l, k) => Array.isArray(l) && FULL.has(l[4] as string) && beforeRegion(ls, k, v?.walkedBlocks ?? [])))
+        out.add(u.ord)
+    }
+  lastLineOf.set(pair, out)
+  return out
+}
+
+const roomUnderOf = new Map<string, { runs: Set<number>; pages: Set<number>; units: Set<number> }>()
+/**
+ * What the room ruling (fit/walk.ts: a room under a whole line offered too) changes of a pair's record that ruledRoom cannot
+ * restate: a unit laid in runs (X.runs, its walked blocks cut at its displays) walks each run alone, so a run whose blocks' room
+ * is above 0 and under a line at their pitch, where another run's holds a whole line (ruledRoom leaves the unit's room as it
+ * is), was offered none of it by today's walk and is now; where that run went on past the borrow knob (its state's knob 'lead'
+ * or 'shrink': it did not fit before it), its lay is the ruling's (`runs`: those units). The pages those stand on (`pages`), and
+ * every unit with a line on one of them (`units`: a pass's size reads every body unit it fills). A replay of a page or of a fill
+ * that differs there is the ruling's
+ */
+export function roomUnderIn(pair: string): { runs: Set<number>; pages: Set<number>; units: Set<number> } {
+  const got = roomUnderOf.get(pair)
+  if (got) return got
+  const L = ledger(pair)
+  type Block = { free?: number; pitch0?: number }
+  const pagesOf = (u: Ledger['units'][number]) =>
+    ((u.slots.find((s) => s.by === 'U.admit' && s.round === 0)?.value as { pages?: number[] } | undefined)?.pages ??
+      []) as number[]
+  const runs = new Set<number>(),
+    pages = new Set<number>()
+  for (const u of L.units)
+    for (const r of u.slots.filter((s) => s.by === 'X.runs')) {
+      const at = (by: string) =>
+        u.slots.find((s) => s.by === by && s.round === r.round)?.value as Record<string, unknown>
+      const s = (at('U.params')?.s as number | undefined) ?? 10
+      const walked = ruledRoom((at('X.cut')?.walkedBlocks ?? []) as Block[], s)
+      const laid = (r.value as { laidRuns?: { runs?: unknown[] } | null }).laidRuns
+      for (const run of (laid?.runs ?? []) as {
+        bi0: number
+        blocks: number
+        layout?: { state?: { knob?: string } }
+      }[]) {
+        const own = walked.slice(run.bi0, run.bi0 + run.blocks)
+        const knob = run.layout?.state?.knob
+        if (underALine(own, s) && (knob === 'lead' || knob === 'shrink')) {
+          runs.add(u.ord)
+          for (const p of pagesOf(u)) pages.add(p)
+        }
+      }
+    }
+  const units = new Set(L.units.filter((u) => pagesOf(u).some((p) => pages.has(p))).map((u) => u.ord))
+  const out = { runs, pages, units }
+  roomUnderOf.set(pair, out)
+  return out
+}
 
 /** a capture of the tap, as its sample file holds it */
 export type Capture = { rule: string; round: number; value: unknown }

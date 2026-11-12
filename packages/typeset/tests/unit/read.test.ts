@@ -4,7 +4,7 @@
 import type { Placed } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { rectOf } from '../../src/lay/adapt.ts'
-import { measured, paperOf, readMember, type RowUnit, sourcePieces } from '../../src/lay/read.ts'
+import { measured, paperOf, readMember, type RowUnit, rowPieces, sourcePieces } from '../../src/lay/read.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { Metrics } from '../../src/types.ts'
 import type { V0Piece } from '../../src/unit/breaks.ts'
@@ -76,10 +76,33 @@ describe('the reading from the part', () => {
     // (2608.06007v1 p10's \\sys, "TensorCast", the checkpoint's free-17): the unit is unproven, left the original's whole)
     const none = read(member({ els: [['0', { kind: 'umacro', unknown: 1, cmd: 'bert', bare: 1, ink: [] }]] }), pieces)
     expect(none.unproven).toBe(0)
-    // (a macro a table renders, no ink stated: TeX set none for it, drawn as nothing, the unit read)
+    // (a macro a table renders, no ink found and none stated set: not found, its unit unproven as a paper's own is)
     const known = read(member({ els: [['0', { kind: 'macro', ink: [] }]] }), pieces)
-    expect(known.resolutions.get(0)!.mode).toBe('none')
-    expect(known.unproven).toBe(-1)
+    expect(known.unproven).toBe(0)
+  })
+  it('reads an element of no ink by the one of three the part states: set nothing, outside the unit, or not found', () => {
+    // (math.md §4, lave.md §2: an empty ink meant "TeX set none", "not found" and "outside the unit" alike, and the reading took
+    // a visible one for TeX's nothing: 2608.25210v2 p7's algorithm erased under one line, 2402.10294v1's reference [1] drawn
+    // without its year, both drawn as nothing while their glyphs went with the text group. Now El.text '' states TeX set
+    // nothing (drawn as nothing), El.keep that TeX set it outside the unit's text (drawn as nothing, its ink never erased),
+    // neither that its ink was not found: the unit is left the original's)
+    const pieces = [
+      { t: 'ph', src: '{=0}', k: 0 } as V0Piece,
+      { t: 'text', tr: true, s: ' Adobe Premiere Pro.' } as V0Piece,
+    ]
+    for (const kind of ['other', 'cite', 'num', 'display', 'macro', 'umacro'] as const) {
+      const lost = read(member({ els: [['0', { kind, ink: [] }]] }), pieces)
+      expect(lost.unproven, kind).toBe(0)
+      const none = read(member({ els: [['0', { kind, ink: [], text: '' }]] }), pieces)
+      expect(none.unproven, kind).toBe(-1)
+      expect(none.resolutions.get(0), kind).toMatchObject({ mode: 'none', text: '', proof: true })
+      const outside = read(member({ els: [['0', { kind, ink: [], keep: 1 }]] }), pieces)
+      expect(outside.unproven, kind).toBe(-1)
+      expect(outside.resolutions.get(0), kind).toMatchObject({ mode: 'none', text: '', proof: true, inPlace: true })
+    }
+    // (a symbol, drawn by its own text, and TeX's nothing, as before)
+    expect(read(member({ els: [['0', { kind: 'symbol', ink: [], sym: ['%'] }]] }), pieces).unproven).toBe(-1)
+    expect(read(member({ els: [['0', { kind: 'zero', ink: [] }]] }), pieces).unproven).toBe(-1)
   })
   it('draws a paper’s own macro whose span the instrument states empty as nothing, its unit read', () => {
     // (2610.19159v1's `\\trajectoryMark{}`, which sets nothing for an empty argument: the marked compile's two points around it hold
@@ -168,6 +191,103 @@ describe('the reading from the part', () => {
     expect(toks[0]).toMatchObject({ s: 'Abbildung', label: true })
     expect(toks.some((t) => t.crop)).toBe(true)
   })
+  it('draws an abbreviated float label in the target, its name stated with its own stop', () => {
+    // (2610.21880v1 p2's IEEE caption "Fig. 4.", as the engine states its parts: the name "Fig.", the number "4"; drawn as
+    // today's labelInTarget draws it, the target's name, the original's number and punctuation)
+    const m = member({
+      kind: 'caption',
+      label: {
+        kind: 'float',
+        ink: [1, 72, 698, 95, 708, 700],
+        style: { role: 'serif', size: 10 },
+        name: ['Fig.', [1, 72, 698, 87, 708, 700]],
+        num: ['4', [1, 89.5, 698, 94.5, 708, 700]],
+        punct: ['.', [1, 94.5, 698, 97, 708, 700]],
+      },
+    })
+    expect(read(m, [{ t: 'text', tr: true, s: 'Ein Bild' } as V0Piece], 'caption').labelDrawn).toBe('Abbildung 4.')
+    const caps = member({
+      kind: 'caption',
+      label: {
+        kind: 'float',
+        ink: [1, 72, 698, 100, 708, 700],
+        style: { role: 'serif', size: 10 },
+        name: ['FIG.', [1, 72, 698, 92, 708, 700]],
+        num: ['4', [1, 94.5, 698, 99.5, 708, 700]],
+        punct: [':', [1, 99.5, 698, 102, 708, 700]],
+      },
+    })
+    expect(read(caps, [{ t: 'text', tr: true, s: 'Ein Bild' } as V0Piece], 'caption').labelDrawn).toBe('ABBILDUNG 4:')
+  })
+  it('draws a label anew only from parts that hold its every glyph: a number in brackets with its bracket, never a label the part says its parts leave a glyph of out', () => {
+    // (Codex on round 8's pull request: "Figure (1)." and "Theorem (1)." read with the opening bracket in no part drew "Abbildung
+    // 1)." and "Satz 1)."; the engine now states the bracket the number's, and `unheld` where a named label's parts leave a glyph
+    // out, which the reading refuses whatever the shape: a head that holds its note whole drew "Satz ).")
+    const readWith = (m: Placed, kind: string) =>
+      readMember({
+        m,
+        unit: { kind, state: 'whole', pieces: [{ t: 'text', tr: true, s: 'Ein Satz' } as V0Piece] } as RowUnit,
+        rects: m.lines.map((l) => rectOf(l, m)),
+        to: 'de',
+        P,
+        paper,
+        labels: {
+          words: { figure: 'Abbildung', table: 'Tabelle' },
+          captions: { figure: 'target', table: 'target' },
+          heads: { Theorem: 'Satz' },
+          names: null,
+        },
+        relabels: true,
+        shown: Number.POSITIVE_INFINITY,
+      }).labelDrawn
+    const st = { role: 'serif' as const, size: 10 }
+    // ("Figure (1).": name 72-98, the number "(1" 101.33-109, its marks ")." 109-114)
+    const figure = (o: object = {}) =>
+      member({
+        kind: 'caption',
+        label: {
+          kind: 'float',
+          float: 'figure',
+          ink: [1, 72, 698, 114, 708, 700],
+          style: st,
+          name: ['Figure', [1, 72, 698, 98, 708, 700]],
+          num: ['(1', [1, 101.33, 698, 109, 708, 700]],
+          punct: [').', [1, 109, 698, 114, 708, 700]],
+          ...o,
+        },
+      })
+    expect(readWith(figure(), 'caption')).toBe('Abbildung (1).')
+    // (as the part stated it before: the number without its bracket, which the part now says its parts leave out)
+    expect(readWith(figure({ num: ['1', [1, 104, 698, 109, 708, 700]], unheld: 1 }), 'caption') ?? null).toBeNull()
+    const theorem = (o: object = {}) =>
+      member({
+        kind: 'theorem',
+        label: {
+          kind: 'head',
+          ink: [1, 72, 698, 122, 708, 700],
+          style: st,
+          name: ['Theorem', [1, 72, 698, 105, 708, 700]],
+          num: ['(1', [1, 108.33, 698, 117, 708, 700]],
+          punct: [').', [1, 117, 698, 122, 708, 700]],
+          ...o,
+        },
+      })
+    expect(readWith(theorem(), 'theorem')).toBe('Satz (1).')
+    expect(readWith(theorem({ num: ['1', [1, 111, 698, 117, 708, 700]], unheld: 1 }), 'theorem') ?? null).toBeNull()
+    // (a head that holds its note whole: its parts the name and the closing marks, "2 (Main result" in none)
+    const note = member({
+      kind: 'theorem',
+      label: {
+        kind: 'head',
+        ink: [1, 72, 698, 190, 708, 700],
+        style: st,
+        name: ['Theorem', [1, 72, 698, 105, 708, 700]],
+        punct: [').', [1, 184, 698, 190, 708, 700]],
+        unheld: 12,
+      },
+    })
+    expect(readWith(note, 'theorem') ?? null).toBeNull()
+  })
   it('takes the base style from the original’s through today’s baseOf: a majority its own groups set is theirs', () => {
     const src = sourcePieces([
       { t: 'span', id: '0', style: 'bold', open: '\\textbf{', close: '}', content: [{ t: 'text', s: 'Bold words' }] },
@@ -183,5 +303,37 @@ describe('the reading from the part', () => {
     const toks = got.tokens as unknown as { s?: string; st?: { bold?: boolean } }[]
     expect(toks.find((t) => t.s === 'Fett')!.st!.bold).toBe(true)
     expect(toks.find((t) => t.s === 'Rest')!.st!.bold).toBe(false)
+  })
+  it('draws a bare group a face switch opens (`{\\em …}`, its switch the command the part states) in that face, a majority of it the base’s as `\\emph`’s is', () => {
+    // (the original's glyphs mostly the group's, italic: the base read off them is italic; the group's \em toggles from the
+    // base its own majority gives back, upright, as TeX's \em toggles from the face around it)
+    const m = member({
+      style: { role: 'serif', size: 10, slant: 1, design: 'NimbusRomNo9L-ReguItal' },
+      spans: [['1', { cmd: 'em' }]],
+    })
+    const got = read(
+      m,
+      rowPieces(m, [
+        { t: 'span', id: '1', content: [{ t: 'text', s: 'Annalen der Physik' }] },
+        { t: 'text', s: ', Band 4.' },
+      ]),
+    )
+    const toks = got.tokens as unknown as { s?: string; st?: { italic?: boolean } }[]
+    expect(toks.find((t) => t.s === 'Annalen')!.st!.italic).toBe(true)
+    expect(toks.find((t) => t.s === 'Band')!.st!.italic).toBe(false)
+    const bold = member({
+      style: { role: 'serif', size: 10, bold: 1, design: 'NimbusRomNo9L-Medi' },
+      spans: [['1', { cmd: 'bf' }]],
+    })
+    const b = read(
+      bold,
+      rowPieces(bold, [
+        { t: 'span', id: '1', content: [{ t: 'text', s: 'Satz eins' }] },
+        { t: 'text', s: ' gilt.' },
+      ]),
+    )
+    const bt = b.tokens as unknown as { s?: string; st?: { bold?: boolean } }[]
+    expect(bt.find((t) => t.s === 'Satz')!.st!.bold).toBe(true)
+    expect(bt.find((t) => t.s === 'gilt.')!.st!.bold).toBe(false)
   })
 })

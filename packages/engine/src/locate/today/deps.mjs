@@ -2,16 +2,17 @@
 // abe884b5e, run by locate over arXiv's page) import from today's other modules: each copied as it is from the file and line
 // named (abe884b5e), so that the makers read exactly what today's read; held equal to today's by
 // tests/pdf-reader/locate-ink-today.test.ts. One change, named where it is: classOf reads the kind the instrument states of a
-// piece (today's classOf, which the front half's adapter ran) instead of a source.
-export { classifyFont } from '../facts.ts'
-export { PICTURE_END, PICTURE_START, regionMask } from '../../ink.mjs'
+// piece (today's classOf, which the front half's adapter ran) instead of a source. And regionsOf reads a page's body brackets
+// paired by number, nesting where a page's columns are balanced, as today's stream.mjs now reads them (CHANGED with it).
+export { classifyFont, familyKeysOf, sameFamily } from '../facts.ts'
+export { displayTextMask, PICTURE_END, PICTURE_START, regionMask } from '../../ink.mjs'
 
 // ---- layout/stream.mjs:141-149 (spellOf)
 const BASE_LETTERS = { ß: 'ss', ı: 'i', ȷ: 'j', ø: 'o', æ: 'ae', œ: 'oe', ł: 'l', đ: 'd', ð: 'd', ħ: 'h', þ: 'th', ŋ: 'n', ς: 'σ' }
 export const spellOf = s => s.normalize('NFKD').replace(/[\p{M}ˆˇ˘-˝]/gu, '').toLowerCase().replace(/[ßıȷøæœłđðħþŋς]/g, c => BASE_LETTERS[c]).replace(/[^\p{L}\p{N}]/gu, '')
 
-// ---- layout/stream.mjs:45, 152, 187-214 (columnsAt, regionsOf)
-const BRACKET = /^([bf])([se])\d+$/
+// ---- layout/stream.mjs:45, 152, 187-214 (columnsAt, regionsOf; CHANGED with today's: the body brackets paired by number)
+const BRACKET = /^([bf])([se])(\d+)$/
 const code = (body, depth) => depth * 2 + (body ? 1 : 0)
 export function columnsAt(page) {
   let two = false
@@ -24,16 +25,22 @@ export function regionsOf(page) {
   const { glyphs, points } = page, nBoxes = page.boxes.length / 4
   const glyph = new Int32Array(glyphs.n), box = new Int32Array(nBoxes), at = new Int32Array(points.length)
   let body = false, depth = 0, bodies = false
+  const open = new Set()
   const apply = name => {
     const m = BRACKET.exec(name)
     if (!m) return
-    if (m[1] === 'b') { body = m[2] === 's'; bodies = true } else depth = m[2] === 's' ? depth + 1 : Math.max(0, depth - 1)
+    if (m[1] === 'b') {
+      if (m[2] === 's') open.add(m[3])
+      else open.delete(m[3])
+      body = open.size > 0
+      bodies = true
+    } else depth = m[2] === 's' ? depth + 1 : Math.max(0, depth - 1)
   }
   for (let q = 0, g = 0; g <= glyphs.n; g++) {
     while (q < points.length && points[q].glyph <= g) { apply(points[q].name); at[q] = code(body, depth); q++ }
     if (g < glyphs.n) glyph[g] = code(body, depth)
   }
-  body = false; depth = 0
+  body = false; depth = 0; open.clear()
   for (let q = 0, b = 0; b < nBoxes; b++) {
     while (q < points.length && points[q].box <= b) apply(points[q++].name)
     box[b] = code(body, depth)
@@ -97,6 +104,65 @@ export function lineRulesOf(pages, glyphs, boxes, max = Infinity) {
   return { rules, work, over: false }
 }
 
+// ---- source/latex-front.mjs EMAIL_ADDRESS (an e-mail address as a text writes it, keepAddresses'), held equal to it by
+// tests/pdf-reader/locate-ink-today.test.ts
+export const EMAIL_ADDRESS = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/
+// ---- source/latex-front.mjs ADDRESS_GROUP (several addresses at one domain written once, a group of their local parts before
+// it, keepGroups'), held equal to it by tests/pdf-reader/locate-ink-today.test.ts
+export const ADDRESS_GROUP = /(?<![\w.+-])(?:\{[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\}|\([\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\)|\[[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\])@[\w-]+(?:\.[\w-]+)+/
+
+// ---- source/latex-front.mjs identifiersIn (each identifier of a text: a token with no white space holding two letters or digits
+// joined by underscores, whole, its leading and trailing sentence punctuation aside; keepIdentifiers'), with SNAKE and PAIRS, held
+// equal to it by tests/pdf-reader/locate-ink-today.test.ts
+const SNAKE = /[^\W_]_+[^\W_]/
+/** an opening and a closing bracket of a pair a token may hold (`host_label(result)`, `[sentence_1]`, `{root_question}`) */
+const PAIRS = { '(': ')', '[': ']', '{': '}' }
+/** Each identifier of a text (a reading of a unit's pieces, or an ink word's characters), its [start, end) code units: a token, a
+ *  run of characters with no white space (nor U+0000, which stands for what no character of a text is: a command, a group's
+ *  edge), that holds an identifier's mark (SNAKE), the whole token: `CallbackBase.host_label(result)`, `test_parser.py`,
+ *  `--view_range`, `response_equal_human_example`. Its leading and trailing sentence punctuation is none of it: from its end a
+ *  stop, a comma, a semicolon, a colon, an exclamation or a question mark and a quote (`'` `"` `` ` `` and every closing one,
+ *  Pf), from its start a quote (every opening one, Pi); and a bracket at either edge that no bracket of its pair inside the token
+ *  answers (`(see conv5_x)` the `)` of a parenthesis the sentence opened; `[sentence_1]` and `host_label(result)` keep theirs),
+ *  another opening or closing bracket at its edge too (Ps, Pe). Its syntax alone: no word list, no camelCase, nothing dotted
+ *  without an underscore ("e.g." is prose). The source's (keepIdentifiers), an ink unit's word's (packages/engine's copy of
+ *  ink-units.mjs, addressed) and a figure text's (locate's ink.ts): the copy held equal to this by
+ *  tests/pdf-reader/locate-ink-today.test.ts */
+export function identifiersIn(s) {
+  const out = []
+  const answered = (t, at, step) => {
+    // (whether the bracket at `at` of `t` has its pair inside t, walking `step` from it: depth by its own pair alone)
+    const c = t[at], open = step > 0 ? c : Object.keys(PAIRS).find(k => PAIRS[k] === c), close = PAIRS[open]
+    if (!close) return false
+    let depth = 0
+    for (let i = at; i >= 0 && i < t.length; i += step) {
+      if (t[i] === (step > 0 ? open : close)) depth++
+      else if (t[i] === (step > 0 ? close : open) && --depth === 0) return true
+    }
+    return false
+  }
+  // (the tokens: runs of characters that are no white space and no U+0000)
+  const tokens = []
+  for (let i = 0; i < s.length; ) {
+    while (i < s.length && (s[i] === '\u0000' || /\s/u.test(s[i]))) i++
+    const at = i
+    while (i < s.length && s[i] !== '\u0000' && !/\s/u.test(s[i])) i++
+    if (i > at) tokens.push([at, i])
+  }
+  for (const [a0, b0] of tokens) {
+    if (!SNAKE.test(s.slice(a0, b0))) continue
+    let a = a0, b = b0
+    for (;;) {
+      const t = s.slice(a, b), last = t.at(-1), first = t[0]
+      if (/[.,;:!?'"`\p{Pf}]/u.test(last) || (/\p{Pe}/u.test(last) && !answered(t, t.length - 1, -1))) b--
+      else if (/['"`\p{Pi}]/u.test(first) || (/\p{Ps}/u.test(first) && !answered(t, 0, 1))) a++
+      else break
+    }
+    if (SNAKE.test(s.slice(a, b))) out.push([a, b])
+  }
+  return out
+}
+
 // ---- layout/file.mjs:255 (UNIT_FLAG)
 export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4, FLUSH_LEFT: 8, FLUSH_RIGHT: 16, JUSTIFIED: 32 })
 
@@ -112,11 +178,15 @@ export const utf8 = s => (ASCII.test(s) ? s : DECODER.decode(latin1Bytes(s)))
 // ---- layout/marks.mjs:72-94 (classOf), the one change: a piece's class is the instrument's (the front half's adapter ran today's
 // classOf over its source: an element's kind, `other` where classOf said none), and of an ink unit's own placeholder (its kept
 // run's characters, ink-units.mjs phSource: `$…$` or `\url{…}`) today's classOf's answer for those two forms: a formula of no
-// character `$$`, DISPLAY (translate/mt.mjs:89); any other `$…$`, MATH; `\url{…}`, URL. Nothing else reads it
+// character `$$`, DISPLAY (translate/mt.mjs:89), which the copy's phSource never writes (a run has a character, and a `$` of it
+// is written `\$`); any other `$…$`, MATH; `\url{…}`, URL. Nothing else reads it
+/** the kinds the adapter states where today's classOf names none: `other`, and a tie's `space` and a forced break's `break` (both
+ *  INVISIBLE to today's classOf; stated since lane fig-cut, 2026-11-10) */
+const NONE = new Set(['other', 'space', 'break'])
 export function classOf(piece) {
   if (piece?.t === 'nested') return 'footnote'
   if (piece?.t !== 'ph') return null
-  if (typeof piece.kind === 'string') return piece.kind === 'other' ? null : piece.kind
+  if (typeof piece.kind === 'string') return NONE.has(piece.kind) ? null : piece.kind
   const src = piece.src ?? ''
   return src.startsWith('$$') ? 'display' : src.startsWith('$') ? 'math' : /^\\url(?![A-Za-z@])/.test(src) ? 'url' : 'macro'
 }

@@ -457,3 +457,33 @@ describe('readsBack, and the send told it', () => {
     expect(asked[1]?.ok.every(Boolean)).toBe(true)
   })
 })
+
+// A character TeX writes escaped (`\#`, `\%`, `\&`, `\textless`, `\textgreater`) is a character of the text since the source
+// reader sends it as one, its source beside it (latex-front.mjs textSymbol): on either wire it travels escaped and comes back
+// as the character; on the markers wire a text "@" or "#" beside a marker is the text's, never part of the marker
+describe('a character TeX writes escaped, sent as text', () => {
+  const sym = (s: string, src: string) => ({ t: 'text', s, src })
+  it('the markers wire: a text "#" before a marker and after one, and elsewhere, comes back', () => {
+    const u = unit(sym('Task #', 'Task \\#'), { t: 'ph', src: '$n$' }, { t: 'text', s: ' sets ' }, { t: 'ph', src: '$k$' }, sym('# of runs, the # of seeds.', '\\# of runs, the \\# of seeds.'))
+    const wire = serialize(u).wire
+    expect(back(u, wire)).toBe('Task \\#$n$ sets $k$\\# of runs, the \\# of seeds.')
+    expect(back(u, wire, true)).toBe('Task \\#$n$ sets $k$\\# of runs, the \\# of seeds.')
+    // (white space between: a prompt's headings after a list's mark, "## Root Goal", as 2610.21098v1 sets them)
+    const heads = unit(sym('## Root Goal ', '\\#\\# Root Goal '), { t: 'ph', src: '\\item' }, sym(' ## Prior Context', ' \\#\\# Prior Context'))
+    expect(serialize(heads).wire).toBe('## Root Goal @a# ## Prior Context')
+    expect(back(heads, '## Root Goal @a# ## Prior Context')).toBe('\\#\\# Root Goal \\item \\#\\# Prior Context')
+    // (a `#` after a marker the text does not follow with one is Microsoft's doubled closer or a `#` moved: refused)
+    expect(back(u, 'Task #@a## sets @b## of runs, the # of seeds.')).toBe('doubled closer')
+  })
+  it('the markers wire: a text "@" before a marker and after one comes back', () => {
+    const u = unit({ t: 'text', s: 'write to x@' }, { t: 'ph', src: '$y$' }, { t: 'text', s: '@z today.' })
+    expect(back(u, serialize(u).wire)).toBe('write to x@$y$@z today.')
+  })
+  it('the tags wire: "&", "<" and ">" travel as entities and come back as the characters, beside a tag on either side', () => {
+    const u = unit(sym('R&D <', 'R\\&D \\textless{}'), { t: 'ph', src: '$x$' }, sym('> 5% of A&B', '\\textgreater{} 5\\% of A\\&B'), { t: 'ph', src: '$y$' }, sym('&.', '\\&.'))
+    const tags = serializeTags(u)
+    expect(tags.wire).toBe('R&amp;D &lt;<x id="1"/>&gt; 5% of A&amp;B<x id="2"/>&amp;.')
+    const r = rehydrateTags(tags.wire, tags)
+    expect('pieces' in r ? r.pieces.map(p => (p.t === 'text' ? p.s : p.src)).join('') : r.error).toBe('R\\&D <$x$> 5\\% of A\\&B$y$\\&.')
+  })
+})

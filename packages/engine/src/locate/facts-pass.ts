@@ -2,7 +2,7 @@
 // state, fill, the original's mark after a display or on a held line, a forced break's line and room, a paragraph TeX opened
 // at an element; its label's parts; the class's tail; its lines' PINNED and SHORTSKIP flags; the room beside its lines and a
 // cell's band; its alignment where TeX did not state it. Each fact read rather than stated by TeX is named in `read`.
-import type { El, Line, Piece } from '@readarxiv/format'
+import { type El, LINE_FLAG, type Line, type Piece } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
@@ -12,24 +12,54 @@ import {
   bandOf,
   bracketsOf,
   breakEnd,
+  CENTRE,
   cellCentred,
   centredByBlock,
+  END,
   FORCED_BREAK,
   fillOfGlyphs,
+  INSET,
   type InkBox,
   labelParts,
   pinnedOf,
+  rightToLeft,
   shortSkipLines,
   sideOf,
   sourceEndMarks,
+  staysOf,
   styleOf,
+  TRAIL,
   tailOf,
 } from './facts.ts'
-import { r2 } from './lines.ts'
+import { isInk, r2 } from './lines.ts'
+import { spellOf } from './today/today.types.ts'
 
 /** a line that ends short of its column's right edge by this share of its size ends at a forced break (today's SHORT TEX:87),
  *  read only where the marked compile set no point for the break */
 const SHORT = 0.5
+/** the element classes that set ink of their own (today's VISIBLE, tex.mjs:18): a piece of another class sets none */
+const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
+/** the characters of a text an opening point is found by (today's stream.mjs WANT) */
+const WANT = 8
+/** the ink units of the page's head and foot (made on A, today's ink-units.mjs INK_KIND heads and notes): their lines TeX sets
+ *  as boxes of the text's width (\@oddhead, \@oddfoot), and states no alignment of */
+const HEAD_FOOT = new Set(['inkheads', 'inknotes'])
+
+/** a unit's pieces in the source's order, a group as its open and its close */
+type Flat = { t: 'text'; s: string } | { t: 'el' | 'unit'; id: string } | { t: 'open' | 'close'; id: string }
+function flatOf(content: readonly Piece[], out: Flat[] = []): Flat[] {
+  for (const p of content) {
+    if (p.t === 'text') out.push({ t: 'text', s: p.s })
+    else if (p.t === 'el') out.push({ t: 'el', id: p.id })
+    else if (p.t === 'unit') out.push({ t: 'unit', id: p.id })
+    else {
+      out.push({ t: 'open', id: p.id })
+      flatOf(p.content, out)
+      out.push({ t: 'close', id: p.id })
+    }
+  }
+  return out
+}
 import type { Member } from './locate.ts'
 
 export interface FactsInput {
@@ -44,6 +74,9 @@ export interface FactsInput {
   pieceB: Int32Array
   /** the units the members are of: the instrument's, then those locate made on A (its ink units, kept blocks and figure texts) */
   units?: readonly InstrumentUnit[]
+  /** the A pages whose lines' measures are TeX's frame (locate's framesOnA): a measure there is the block's or its column's
+   *  even where a line fills it */
+  framed?: ReadonlySet<number>
 }
 
 const mostOf = <T>(xs: Iterable<T>): T | undefined => {
@@ -80,20 +113,19 @@ export function factsOf({
   roleB,
   pieceB,
   units = ins.units,
+  framed = new Set<number>(),
 }: FactsInput): void {
   const gA = (a: number): DocGlyph => {
     const p = (pageA[a] as number) - 1
     return inkA.pages[p]!.glyphs[a - (m.offA[p] as number)]!
   }
-  // (a page's glyphs by baseline, the blank aside, each with its global index; those whose baseline is within [lo, hi])
+  // (a page's glyphs that are ink (isInk) by baseline, each with its global index; those whose baseline is within [lo, hi])
   const inkByPage = new Map<number, { x0: number; x1: number; y: number; a: number }[]>()
   const bandOn = (p: number, lo: number, hi: number) => {
     let l = inkByPage.get(p)
     if (!l) {
       const o = m.offA[p - 1] as number
-      l = inkA.pages[p - 1]!.glyphs.flatMap((g, k) =>
-        /\S/.test(g.u) ? [{ x0: g.x0, x1: g.x1, y: g.y, a: o + k }] : [],
-      )
+      l = inkA.pages[p - 1]!.glyphs.flatMap((g, k) => (isInk(g) ? [{ x0: g.x0, x1: g.x1, y: g.y, a: o + k }] : []))
       l.sort((x, y) => x.y - y.y)
       inkByPage.set(p, l)
     }
@@ -125,10 +157,27 @@ export function factsOf({
   }
   const boxCache = new Map<number, ReturnType<typeof boxesOn>>()
   const boxes = (p: number) => boxCache.get(p) ?? boxCache.set(p, boxesOn(p)).get(p)!
+  // (a page's ink no member owns: a glyph no unit claims (free, or held as A's ink of a unit that stays), shown; a painted box
+  // no member's text or element holds: what stays whatever a translation lays, Room.stays)
+  const staysCache = new Map<number, InkBox[]>()
+  const staysOn = (p: number): InkBox[] => {
+    const got = staysCache.get(p)
+    if (got) return got
+    const o = m.offA[p - 1] as number
+    const out: InkBox[] = []
+    inkA.pages[p - 1]!.glyphs.forEach((g, j) => {
+      if (isInk(g) && !g.unseen && (claimedA[o + j] as number) < 0)
+        out.push({ x0: g.x0, x1: g.x1, y0: g.bottom, y1: g.top, y: g.y })
+    })
+    for (const b of boxes(p)) if (!ownedBox.has(`${p}|${b.j}`)) out.push(b)
+    staysCache.set(p, out)
+    return out
+  }
   // (each page's lines, every member's: a single line's stack, centredByBlock)
   const linesOn = new Map<number, Line[]>()
   for (const mem of members) for (const l of mem.lines) (linesOn.get(l[0]) ?? linesOn.set(l[0], []).get(l[0])!).push(l)
-  // (each page's and column's block: its justified lines' measure where it has one, else all its lines' hull)
+  // (each page's and column's block: TeX's frame where it shipped the page's (framed); else its justified lines' measure where
+  // it has one, else all its lines' hull)
   const hull = new Map<string, [number, number]>()
   for (const mem of members)
     for (const l of mem.lines) {
@@ -139,19 +188,20 @@ export function factsOf({
       }
     }
   const blockOf = (l: Line): [number, number] => {
-    if (l[7] < l[2] - 0.01 || l[8] > l[3] + 0.01) return [l[7], l[8]]
+    if (framed.has(l[0]) || l[7] < l[2] - 0.01 || l[8] > l[3] + 0.01) return [l[7], l[8]]
     return hull.get(l[1] === 2 ? `${l[0]}|*` : `${l[0]}|${l[1]}`) ?? [l[2], l[3]]
   }
-  // (B's paragraph ends, globally)
-  const ends: number[] = []
-  ;(ins.tex.paragraphEnds ?? []).forEach((l, p) => {
-    for (const g of l) ends.push((m.offB[p] as number) + g)
-  })
-  ends.sort((x, y) => x - y)
-  // (each element's opening point on B, by unit and piece: the glyph before which it begins, global)
+  // (B's paragraph ends, globally, each glyph position once: two paragraphs TeX ended with nothing set between them, a box's last
+  // and the one around it, end at one position, one end there)
+  const ends = [
+    ...new Set((ins.tex.paragraphEnds ?? []).flatMap((l, p) => l.map((g) => (m.offB[p] as number) + g))),
+  ].sort((x, y) => x - y)
+  // (each element's opening point on B, by unit and piece: the glyph before which it begins, global; and its end point, the
+  // glyph before which what follows it begins)
   const placeAt = new Map<string, number>()
+  const placeEnd = new Map<string, number>()
   for (const pl of ins.places ?? [])
-    if (!pl.end) placeAt.set(`${pl.unit}|${pl.piece}`, (m.offB[pl.page - 1] as number) + pl.glyph)
+    (pl.end ? placeEnd : placeAt).set(`${pl.unit}|${pl.piece}`, (m.offB[pl.page - 1] as number) + pl.glyph)
   // (a table column's cells, for a single-line cell's centring)
   const column = new Map<string, Member[]>()
   for (const mem of members) {
@@ -177,7 +227,14 @@ export function factsOf({
     })
     const sizeOf = (j: number) => mostOf((mem.lineGlyphs[j] ?? []).map((a) => r2(gA(a).size))) ?? mem.style.size
     const own = mem.lines.map((l, j) => [l, j] as const).filter(([l]) => !(l[9] & 1))
-    mem.read.push('measure')
+    // (the line TeX ended at a point of B's stream: that of the unit's last glyph before it, carried to A)
+    const lineBefore = (point: number) => {
+      let b = point - 1
+      while (b >= 0 && b >= mem.bFirst && ((unitB[b] as number) !== mem.unit || (m.bToA[b] as number) < 0)) b--
+      return b >= mem.bFirst && b >= 0 ? lineOf.get(m.bToA[b] as number) : undefined
+    }
+    // (its measure read off A, where TeX did not ship its pages' frame: a hull of the page's lines)
+    if (!mem.lines.every((l) => framed.has(l[0]))) mem.read.push('measure')
 
     // -- its elements
     const pieces = unit ? elsOf(unit.content) : new Map()
@@ -186,9 +243,18 @@ export function factsOf({
     for (const [id, el] of mem.elements) {
       const gs = (mem.els.get(id) ?? []).map(gA)
       const fill = fillOfGlyphs(gs)
-      // (its style where it is filled otherwise than black, or where the typesetter may draw it as text: its text stated)
-      if (fill !== undefined || el.text !== undefined)
-        el.style = { ...styleOf(gs), ...(fill !== undefined ? { fill } : {}) }
+      // (its style where it is filled otherwise than black, or where the typesetter may draw it as text: its text stated; where
+      // that text is in TeX's case for its faked small capitals (locate's mem.smallCaps, facts.ts elementCase), their share, and no
+      // case change)
+      if (fill !== undefined || el.text !== undefined) {
+        const sc = mem.smallCaps?.get(id)
+        const { upper, ...read } = styleOf(gs)
+        el.style = {
+          ...read,
+          ...(sc !== undefined ? { sc } : upper ? { upper } : {}),
+          ...(fill !== undefined ? { fill } : {}),
+        }
+      }
       // (its own brackets: its first and last glyphs where they are a pair of them, "[" "]" around a citation's numbers:
       // the stated half of T12, which a translation that brackets it takes)
       const pair = bracketsOf(gs)
@@ -237,86 +303,310 @@ export function factsOf({
       const p = pieces.get(id)
       if (p && FORCED_BREAK.test(p.src.trim())) {
         // (the line TeX ended at it: the last glyph of the unit's before its point on B, carried to A)
-        let b = (placeAt.get(`${mem.unit}|${id}`) ?? 0) - 1
-        while (b >= 0 && b >= mem.bFirst && ((unitB[b] as number) !== mem.unit || (m.bToA[b] as number) < 0)) b--
-        const j = b >= mem.bFirst && b >= 0 ? lineOf.get(m.bToA[b] as number) : undefined
+        const j = lineBefore(placeAt.get(`${mem.unit}|${id}`) ?? 0)
         if (j !== undefined) breaks.push([el, j])
         else unplaced.push([id, el])
       }
     }
-    // (a break the marked compile set no point for, an invisible piece's: today's reading of the line it ended (forcedBreaks
-    // TEX:120), its own lines that end short of their column's right edge by SHORT of a size, not its last and none over a
-    // display, taken in order where they are as many as such breaks; the line read, not stated. Breaks the source sets one after
-    // the other, nothing but white space between them, end one line: TeX ends it at the first, each next one sets an empty line)
-    if (unplaced.length) {
-      const order = new Map<string, number>()
-      const blankAfter: boolean[] = []
-      const walk = (ps: readonly Piece[]) => {
-        for (const p of ps) {
-          if (p.t === 'span') walk(p.content)
-          else if (p.t === 'el') {
-            order.set(p.id, blankAfter.length)
-            blankAfter.push(true)
-          } else if (p.t === 'text' && /\S/.test(p.s) && blankAfter.length) blankAfter[blankAfter.length - 1] = false
-          else if (p.t === 'unit' && blankAfter.length) blankAfter[blankAfter.length - 1] = false
+    // (a break the marked compile set no point for: the marking gives an invisible piece none, which would move a line. Breaks
+    // the source sets one after the other, nothing that sets ink between them, end one line: TeX ends it at the first, each next
+    // one sets an empty line. TeX's points around such a group in the unit's source, the nearest before it (an element's end,
+    // the unit's start) and after it (an element's opening, the unit's end), bound where it stands in B's stream:
+    // - where nothing that sets ink stands between the group and one of them, that point is the group's (no glyph of B between
+    //   them), and its line the one TeX ended there, as a placed break's: at the unit's end its last line, which has no line
+    //   after it to state;
+    // - else it lies in the window of B's stream between the two, with each group of the window. Every forced break ends a line
+    //   and a group one of its own, so where the window's lines end there as often as it holds groups, TeX ended each at one of
+    //   them, in order (a paragraph's end TeX states there among them: in a centred or ragged block LaTeX's `\\` is
+    //   \@centercr, which ends a paragraph, 2610.30034v1's title, 2608.25210v2 t8); else, in a unit TeX states it set centred
+    //   or ragged (InstrumentUnit.align), where its paragraph ends there are as many as its groups, each is one's point, past
+    //   the lines TeX wrapped itself (2610.21504v1's title); else where as many of its line ends end short of their column's
+    //   right edge by SHORT of a size (today's reading, forcedBreaks TEX:120: the break's \hfil), none over a held line, they
+    //   are the groups', in order, the lines read; else no break of the window is stated. A window's count is its own:
+    //   another's, or a break at the unit's end, leaves it as it is)
+    if (unplaced.length && unit && mem.bFirst >= 0) {
+      const seq = flatOf(unit.content)
+      const classes = new Map(unit.classes ?? [])
+      const unplacedEl = new Map(unplaced)
+      const isBreak = (x: Flat) => x.t === 'el' && FORCED_BREAK.test(pieces.get(x.id)?.src.trim() ?? '')
+      // (a piece that sets ink: a text's characters, a visible element, a nested unit; a forced break none)
+      const sets = (x: Flat) =>
+        x.t === 'text'
+          ? /\S/.test(x.s)
+          : x.t === 'unit' || (x.t === 'el' && !isBreak(x) && VISIBLE.has(classes.get(x.id)?.cls ?? 'other'))
+      // (TeX's points at the boundaries of the unit's pieces, in the source's order: before piece q, the glyph of B's stream
+      // TeX was at, where it states it)
+      const at: (number | undefined)[] = new Array(seq.length + 1).fill(undefined)
+      at[0] = mem.bFirst
+      at[seq.length] = mem.bLast + 1
+      seq.forEach((x, q) => {
+        if (x.t !== 'el') return
+        at[q] ??= placeAt.get(`${mem.unit}|${x.id}`)
+        at[q + 1] ??= placeEnd.get(`${mem.unit}|${x.id}`)
+      })
+      const groups: { from: number; to: number; els: El[] }[] = []
+      seq.forEach((x, q) => {
+        const el = x.t === 'el' ? unplacedEl.get(x.id) : undefined
+        if (!el) return
+        const g = groups.at(-1)
+        if (g && !seq.slice(g.to + 1, q).some(sets)) {
+          g.to = q
+          g.els.push(el)
+        } else groups.push({ from: q, to: q, els: [el] })
+      })
+      const windows = new Map<string, { lo: number; hi: number; groups: El[][] }>()
+      for (const g of groups) {
+        let l = g.from
+        let inkBefore = false
+        while (at[l] === undefined) {
+          if (sets(seq[l - 1]!)) inkBefore = true
+          l--
         }
-      }
-      walk(unit?.content ?? [])
-      const groups: El[][] = []
-      let prev = -2
-      for (const [id, el] of unplaced) {
-        const k = order.get(id) ?? -2
-        // (consecutive: the piece right after the one before, with nothing but white space between them)
-        if (groups.length && k === prev + 1 && blankAfter[prev]) groups.at(-1)!.push(el)
-        else groups.push([el])
-        prev = k
+        let r = g.to + 1
+        let inkAfter = false
+        while (at[r] === undefined) {
+          if (sets(seq[r]!)) inkAfter = true
+          r++
+        }
+        const lo = at[l] as number
+        const hi = at[r] as number
+        if (!inkBefore || !inkAfter) {
+          const j = lineBefore(!inkBefore ? lo : hi)
+          if (j !== undefined && !((mem.lines[j] as Line)[9] & 1)) for (const el of g.els) breaks.push([el, j])
+          continue
+        }
+        const w = windows.get(`${lo}|${hi}`) ?? windows.set(`${lo}|${hi}`, { lo, hi, groups: [] }).get(`${lo}|${hi}`)!
+        w.groups.push(g.els)
       }
       const right = new Map<string, number>()
       for (const [l] of own) right.set(`${l[0]}|${l[1]}`, Math.max(right.get(`${l[0]}|${l[1]}`) ?? -1e9, l[3]))
-      const short: number[] = []
-      own.forEach(([l, j], q) => {
-        const next = mem.lines[j + 1]
-        if (q === own.length - 1 || !next || next[9] & 1) return
-        if (l[3] < (right.get(`${l[0]}|${l[1]}`) as number) - SHORT * sizeOf(j)) short.push(j)
-      })
-      if (short.length === groups.length) {
-        groups.forEach((g, q) => {
-          for (const el of g) breaks.push([el, short[q] as number])
-        })
-        mem.read.push('breaks')
+      let read = false
+      for (const w of windows.values()) {
+        // (the lines its glyphs stand on, in B's order: each but the last ends inside it)
+        const seen: number[] = []
+        for (let b = w.lo; b < w.hi; b++) {
+          if ((unitB[b] as number) !== mem.unit || (m.bToA[b] as number) < 0) continue
+          const j = lineOf.get(m.bToA[b] as number)
+          if (j !== undefined && j !== seen.at(-1)) seen.push(j)
+        }
+        if (seen.some((j, q) => q > 0 && j < (seen[q - 1] as number))) continue
+        const lineEnds = seen.slice(0, -1)
+        // (a line of its own text, the next one too: no held line's)
+        const textual = (j: number) => !((mem.lines[j] as Line)[9] & 1) && !((mem.lines[j + 1] as Line)[9] & 1)
+        // (the lines TeX's paragraph ends inside it close)
+        const closed: number[] = []
+        for (const e of ends) {
+          if (e >= w.hi) break
+          if (e > w.lo && (unitB[e - 1] as number) === mem.unit) {
+            const j = lineBefore(e)
+            if (j !== undefined && j !== closed.at(-1)) closed.push(j)
+          }
+        }
+        let lines: number[] | null = null
+        if (lineEnds.length === w.groups.length && lineEnds.every(textual)) lines = lineEnds
+        else if (
+          unit.align !== undefined &&
+          unit.align !== 'j' &&
+          closed.length === w.groups.length &&
+          closed.every((j) => lineEnds.includes(j) && textual(j))
+        )
+          lines = closed
+        else {
+          const short = lineEnds.filter((j) => {
+            const l = mem.lines[j] as Line
+            return textual(j) && l[3] < (right.get(`${l[0]}|${l[1]}`) as number) - SHORT * sizeOf(j)
+          })
+          if (short.length === w.groups.length) {
+            lines = short
+            read = true
+          }
+        }
+        if (lines)
+          w.groups.forEach((els, q) => {
+            for (const el of els) breaks.push([el, lines[q] as number])
+          })
       }
+      if (read) mem.read.push('breaks')
     }
     const breakLines = new Set(breaks.map(([, j]) => j))
     for (const [el, j] of breaks) {
-      const e = breakEnd(mem.lines, j, breakLines, ins.tex.lineskip)
+      const e = breakEnd(mem.lines, j, breakLines, ins.tex.lineskip, mem.read.includes('lead') ? undefined : mem.lead)
       if (e) el.ends = e
     }
-    // (a paragraph TeX opened inside the unit at an element (C13, C15): a paragraph end of B's between its glyphs whose next
-    // glyph of the unit's is an element's; its line on A)
-    if (mem.bFirst >= 0)
+    // (a paragraph TeX opened inside the unit (C13, C15): a paragraph end of B's between its glyphs, its first line on A the line
+    // of the unit's next glyph. The source side and B's side of the end are read by the same facts. What bounds a window is a
+    // piece TeX set ink for in this compile: its glyphs on B, the unit's, an element's (an element's own, or a nested unit's mark,
+    // which the instrument owns as its piece's: pipeline/instrument.mjs), whatever its class; a piece TeX set none for here
+    // (`\medbreak`, `\noindent`, a footnote whose mark it set elsewhere) bounds nothing, as B's run holds no glyph of it. Each side
+    // of the end is met by what stands there (sideB, sideOf: one rule, both directions): where the unit's glyph next to the end
+    // is a piece's and no letter or digit stands between, by that piece itself (a footnote's mark ending the paragraph before, an
+    // element opening the next); else by its text, spelled, WANT characters (today's stream.mjs WANT): the source's text before a
+    // group's open ends B's before the end, and the text the group's content begins with (inside it, as today's paragraphBreaks
+    // asks: the group closed after it) begins B's after it. TeX opened the paragraph at the group so met on both sides, one group
+    // alone (SpanAt.opens: the outermost of those opened together), else at the element B's next glyph opens, where its side
+    // before is met too (El.opens). An end inside a piece's own glyphs opened none at it; one at no group's open and no element,
+    // none either: counted (`opensUnstated`), apart as an open or an element stands where the next paragraph begins in the source
+    // (the class of 2111.09276v1 p5's run-in titles, which must be none) or plain text does (no anchor exists for it))
+    if (mem.bFirst >= 0 && unit) {
+      const seq = flatOf(unit.content)
+      // (each piece's first and last glyph on B, the unit's, of an element's role)
+      const firstOf = new Map<number, number>()
+      const lastOf = new Map<number, number>()
+      for (let b = mem.bFirst; b <= mem.bLast; b++) {
+        if ((unitB[b] as number) !== mem.unit || roleB[b] !== ROLE.element || (pieceB[b] as number) < 0) continue
+        if (!firstOf.has(pieceB[b] as number)) firstOf.set(pieceB[b] as number, b)
+        lastOf.set(pieceB[b] as number, b)
+      }
+      // (a piece TeX set ink for in this compile; a text's characters are read by their spelling)
+      const inked = (x: Flat) => (x.t === 'el' || x.t === 'unit') && firstOf.has(Number(x.id))
+      const groupBefore = (q: number): string | null => {
+        let g: string | null = null
+        for (let r = q - 1; r >= 0; r--) {
+          const x = seq[r]!
+          if (x.t === 'open') g = x.id
+          else if (x.t === 'text' ? /\S/.test(x.s) : x.t === 'close' || inked(x)) break
+        }
+        return g
+      }
+      type Side = { piece: string } | { text: string } | null
+      /** the source at a point of `seq`, on one side: from piece q back (step -1) or on (step 1, up to the close of the group
+       *  `close` where given): the nearest piece TeX set ink for, where no letter or digit stands before it; else the text up to
+       *  that piece, spelled, the WANT characters next to the point */
+      const sideOf = (q: number, step: 1 | -1, close?: string): Side => {
+        let s = ''
+        for (let r = q; r >= 0 && r < seq.length; r += step) {
+          const x = seq[r]!
+          if (close !== undefined && x.t === 'close' && x.id === close) break
+          if (inked(x)) {
+            if (!spellOf(s)) return { piece: (x as { id: string }).id }
+            break
+          }
+          if (x.t === 'text') s = step > 0 ? s + x.s : x.s + s
+        }
+        const t = step > 0 ? spellOf(s).slice(0, WANT) : spellOf(s).slice(-WANT)
+        return t ? { text: t } : null
+      }
+      // (B's glyphs of the unit at a glyph, on one side, read as sideOf reads the source: an element's glyph where no letter or
+      // digit of its text stands before it, its piece; else its text's glyphs, spelled, up to a glyph of the unit that is no
+      // text's, WANT characters)
+      const pB = (b: number) => {
+        let p = 0
+        while (p + 1 < m.offB.length && (m.offB[p + 1] as number) <= b) p++
+        return p
+      }
+      const charB = (b: number) => {
+        const p = pB(b)
+        return spellOf(ins.ink.pages[p]?.glyphs[b - (m.offB[p] as number)]?.u ?? '')
+      }
+      const sideB = (from: number, step: 1 | -1): Side => {
+        let s = ''
+        for (let b = from; b >= mem.bFirst && b <= mem.bLast && s.length < WANT; b += step) {
+          if ((unitB[b] as number) !== mem.unit) continue
+          if (roleB[b] !== ROLE.text) {
+            if (!s && roleB[b] === ROLE.element && (pieceB[b] as number) >= 0) return { piece: String(pieceB[b]) }
+            break
+          }
+          s = step > 0 ? s + charB(b) : charB(b) + s
+        }
+        const t = step > 0 ? s.slice(0, WANT) : s.slice(-WANT)
+        return t ? { text: t } : null
+      }
+      const meets = (src: Side, at: Side, step: 1 | -1) =>
+        !!src &&
+        !!at &&
+        ('piece' in src
+          ? 'piece' in at && src.piece === at.piece
+          : 'text' in at && (step < 0 ? at.text.endsWith(src.text) : at.text.startsWith(src.text)))
+      // (the text before a projection offset, up to the piece before it that sets ink, and from it, spelled: as sideOf reads a
+      // group's open)
+      const textAt = (o: number, step: 1 | -1) => {
+        const at: { s: string; inked: boolean }[] = []
+        for (const x of seq)
+          if (x.t === 'text') for (let c = 0; c < x.s.length; c++) at.push({ s: x.s[c]!, inked: false })
+          else if (x.t === 'el' || x.t === 'unit') at.push({ s: '', inked: inked(x) })
+        let s = ''
+        for (let k = step > 0 ? o : o - 1; k >= 0 && k < at.length && !at[k]!.inked; k += step)
+          s = step > 0 ? s + at[k]!.s : at[k]!.s + s
+        return step > 0 ? spellOf(s).slice(0, WANT) : spellOf(s).slice(-WANT)
+      }
       for (const e of ends) {
         // (the paragraph that ended is its own: its glyph before the end is the unit's, not a float's or a footnote's that TeX's
         // output routine put between two of its lines)
         if (e <= mem.bFirst || e > mem.bLast || (unitB[e - 1] as number) !== mem.unit) continue
         let b = e
         while (b <= mem.bLast && ((unitB[b] as number) !== mem.unit || (m.bToA[b] as number) < 0)) b++
-        if (b > mem.bLast || roleB[b] !== ROLE.element) continue
+        if (b > mem.bLast) continue
         const j = lineOf.get(m.bToA[b] as number)
-        const el = mem.elements.find(([id]) => id === String(pieceB[b]))?.[1]
-        if (el && j !== undefined && j > 0 && el.opens === undefined) el.opens = j
+        if (j === undefined || j <= 0) continue
+        const before = sideB(e - 1, -1)
+        const after = sideB(b, 1)
+        // (an end inside a piece's own glyphs: the piece began before it, or goes on after it)
+        if (after && 'piece' in after && (firstOf.get(Number(after.piece)) as number) < e) continue
+        if (before && 'piece' in before && (lastOf.get(Number(before.piece)) as number) >= e) continue
+        let at: { el: string } | { group: string } | null = null
+        const met = seq.flatMap((x, q) =>
+          x.t === 'open' && meets(sideOf(q - 1, -1), before, -1) && meets(sideOf(q + 1, 1, x.id), after, 1)
+            ? [groupBefore(q + 1)!]
+            : [],
+        )
+        if (new Set(met).size === 1) at = { group: met[0]! }
+        else if (!met.length && after && 'piece' in after) {
+          const q = seq.findIndex((x) => (x.t === 'el' || x.t === 'unit') && x.id === after.piece)
+          if (q >= 0 && groupBefore(q) === null && meets(sideOf(q - 1, -1), before, -1)) at = { el: after.piece }
+        }
+        if (!at) {
+          // (where no group's open meets the end, a group the instrument wrote as its content that stood there, read as a
+          // group's open is: a paragraph TeX opened at it, which nothing states now, counted (a gate))
+          if (
+            !met.length &&
+            before &&
+            after &&
+            'text' in before &&
+            'text' in after &&
+            unit.passed?.some((o) => {
+              const tb = textAt(o, -1),
+                ta = textAt(o, 1)
+              return tb && ta && before.text.endsWith(tb) && after.text.startsWith(ta)
+            })
+          ) {
+            mem.opensLost = (mem.opensLost ?? 0) + 1
+            continue
+          }
+          // (no point stated: an open or an element stands where the next paragraph begins in the source (its side after met by
+          // a group's open, or B's next glyph an element's), or plain text does)
+          const anchored =
+            (!!after && 'piece' in after) ||
+            seq.some((x, q) => x.t === 'open' && meets(sideOf(q + 1, 1, x.id), after, 1))
+          mem.opensUnstated ??= [0, 0]
+          mem.opensUnstated[anchored ? 0 : 1]++
+          continue
+        }
+        if ('el' in at) {
+          const el = mem.elements.find(([id]) => id === at.el)?.[1]
+          if (el && el.opens === undefined) el.opens = j
+        } else {
+          mem.spanOpens ??= new Map()
+          if (!mem.spanOpens.has(at.group)) mem.spanOpens.set(at.group, j)
+        }
       }
+    }
 
     // -- its label's parts and style
     if (mem.labelAt && mem.label.length) {
       const lg = mem.label.map(gA)
-      Object.assign(mem.labelAt, labelParts(lg, mem.labelAt.ink[0]), { style: styleOf(lg, mem.labelAt.style.size) })
+      Object.assign(mem.labelAt, labelParts(lg, mem.labelAt.ink[0]), {
+        style: styleOf(lg, mem.labelAt.style.size),
+      })
     }
 
     // -- the class's tail: its own text after its last letter, digit or element glyph, all on its last line
     if (unit) {
       // (a display's glyphs among them: a unit that ends with a display has no tail after its text before it)
-      const seq = [...mem.text, ...[...mem.els.values()].flat()].sort((x, y) => x - y)
-      const isEl = new Set([...mem.els.values()].flat())
+      // (its end mark aside, END: ink TeX pushed past the text, no part of it, as before it was claimed; and its trail, TRAIL: ink
+      // TeX set after its text, no part of it, the comma before 2608.16117v1's "19104," its class's tail, §18.59)
+      const elGlyphs = [...mem.els].flatMap(([id, l]) => (id === END || id === TRAIL ? [] : l))
+      const seq = [...mem.text, ...elGlyphs].sort((x, y) => x - y)
+      const isEl = new Set(elGlyphs)
       let last = -1
       seq.forEach((a, q) => {
         if (isEl.has(a) || /[\p{L}\p{N}]/u.test(gA(a).u)) last = q
@@ -378,7 +668,7 @@ export function factsOf({
       // heading, whose side stopped at a figure's title clipped out of its form, the checkpoint's measure-9)
       inkA.pages[p - 1]!.glyphs.forEach((g, j) => {
         const c = claimedA[o + j] as number
-        if (/\S/.test(g.u) && !g.unseen && c !== mem.ord && c !== mem.leader)
+        if (isInk(g) && !g.unseen && c !== mem.ord && c !== mem.leader)
           f!.push({ x0: g.x0, x1: g.x1, y0: g.bottom, y1: g.top, y: g.y })
       })
       for (const b of boxes(p)) if (!mine.has(`${p}|${b.j}`)) f.push(b)
@@ -391,7 +681,17 @@ export function factsOf({
       blockOf,
       unit?.cell ? (p) => boxes(p).filter((b) => !mine.has(`${p}|${b.j}`)) : undefined,
     )
-    if (side) mem.room.side = side
+    if (side) {
+      mem.room.side = side.side
+      // (a cell's sides that stop at its walls: X.further widens it a quarter of its size off a rule, half way to a glyph)
+      if (unit?.cell && side.wall) mem.room.wall = side.wall
+    }
+    // (the ink that stays beside its text lines, no member's, facts.ts staysOf: a cell's room is its walls', a figure text's
+    // its figure reading's)
+    if (!unit?.cell && !unit?.figure) {
+      const stays = staysOf(mem.lines, staysOn, blockOf)
+      if (stays) mem.room.stays = stays
+    }
     // (a figure text's room as today's figure reading tells it (layout/figure-text.mjs roomOf, its set's cut): along a level run,
     // the free line from its room before its box to its room after; and the stroke under its text, which a translation reaching
     // it is crowded by. A turned one's is stated with its run (Placed.run: its first glyph's origin, its box's length along its
@@ -403,15 +703,22 @@ export function factsOf({
       else if (fig.y !== undefined) mem.run = [r2(fig.x), r2(fig.y), r2(fig.length), r2(fig.before), r2(fig.after)]
     }
     if (fig?.under !== undefined) mem.room.under = r2(fig.under)
+    if (fig?.over !== undefined) mem.room.over = r2(fig.over)
     if (unit?.cell) {
       // (the table's rules over and under it: no unit's ink. An underscore TeX draws as a rule on a baseline is its unit's, a
       // fraction's bar its element's: 1512.03385v1 p5's "conv2_x" read its own as the rule over it, 2610.21924v1 p21's cells
       // the row's above and below)
       const band = bandOf(mem.lines, (p) => boxes(p).filter((b) => b.rule && !ownedBox.has(`${p}|${b.j}`)))
-      if (band) mem.room.band = band
+      if (band) mem.room.band = band.band
+      if (band?.open) mem.room.bandOpen = band.open
     }
 
-    // -- its alignment, where TeX did not state it: the maker's reading (MAKE:2121-2135); a single-line cell by its column
+    // -- its writing direction: its lines' characters set right to left where its text's paragraph direction is (UAX #9 P2-P3:
+    // Line.flags' RTL), which the order of its links along a line follows
+    if (unit && rightToLeft(unit.content)) for (const l of mem.lines) l[9] |= LINE_FLAG.RTL
+
+    // -- its alignment, where TeX did not state it (a cell's: its column's class or its own paragraph's, marks/channels.ts
+    // readAlign): the maker's reading (MAKE:2121-2135); a single-line cell by its column
     if (unit && unit.align !== 'c' && unit.align !== 'l' && unit.align !== 'r') {
       const labelX0 = mem.labelAt && mem.labelAt.ink[0] === mem.lines[0]?.[0] ? mem.labelAt.ink[1] : undefined
       // (a cell is read by its column's cells alone, never by the page's column: today's centredFlag RUN:2102)
@@ -424,6 +731,15 @@ export function factsOf({
         )
         if (cellCentred(spans) === true) a = 'c'
       }
+      // (a line of the page's head or foot, alone: flush right where it ends at its measure's end and starts within it, TeX's
+      // \hfil before it in the text width's box (2609.36054v2's "page 13 of 14", read justified, its translation laid from the
+      // original's start and shrunk); left and centred as read above. A paragraph's single line, full and indented, is no box
+      // of the text width: its alignment is its paragraph's)
+      if (a === 'j' && unit.align === undefined && HEAD_FOOT.has(mem.kind) && own.length === 1) {
+        const [l, j] = own[0]!
+        const e = blockOf(l)
+        if (Math.abs(l[3] - e[1]) <= CENTRE && l[2] - e[0] > INSET * sizeOf(j)) a = 'r'
+      }
       // (nothing tells it and its column does not centre it: centred by its own block's lines, a single line's stack)
       if (a === 'j' && unit.align === undefined && !unit.cell)
         if (
@@ -432,10 +748,34 @@ export function factsOf({
             linesOn.get(mem.lines[0]?.[0] ?? 0) ?? [],
             mem.lead,
           )
-        )
+        ) {
           a = 'c'
+          // (a single line's: read again over the TeX line it shares, once the flows are known, locate.ts rowAligns)
+          if (own.length === 1) mem.byBlock = true
+        }
       if (unit.align === undefined || a !== unit.align) mem.read.push('align')
       mem.align = a
+    }
+
+    // -- its label's own line, where the label stands on none of its lines (IEEEtran's "TABLE I" above its caption): that line's
+    // alignment against its measure, read as a line's above (centred by alignOf; flush right where it ends at its measure's end
+    // and starts within it; else flush left), never the unit's (a class may set the label flush left over a centred text)
+    if (mem.labelAt && mem.labelAt.line === undefined && mem.labelMeasure) {
+      const lb = mem.labelAt
+      const [m0, m1] = mem.labelMeasure
+      const l = [lb.ink[0], 0, lb.ink[1], lb.ink[3], lb.ink[5], lb.ink[4], lb.ink[2], m0, m1, 0] as Line
+      const size = lb.style.size > 0 ? lb.style.size : 10
+      const e: [number, number] = [m0, m1]
+      lb.align =
+        alignOf(
+          [l],
+          () => size,
+          () => e,
+        ) === 'c'
+          ? 'c'
+          : Math.abs(l[3] - m1) <= CENTRE && l[2] - m0 > INSET * size
+            ? 'r'
+            : 'l'
     }
   }
 }

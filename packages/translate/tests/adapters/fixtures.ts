@@ -2,7 +2,7 @@
 // repository's own tests (tests/pdf-reader/mt-wire.test.ts, the comparison of 2026-10-05 over 2610.02069 and of
 // 2026-10-07 over 1706.03762; readarxiv-web worker/tests/mt.test.ts's reading table); none is fetched here.
 import type { UnitIn } from '../../src/contract.ts'
-import { el, span, t, unit } from '../pieces.ts'
+import { el, quiet, span, t, unit } from '../pieces.ts'
 
 export const UNITS: UnitIn[] = [
   /* 0 */ unit('plain', [t('We study the problem. It is hard.')], true),
@@ -146,11 +146,180 @@ export const NESTED_DISPLAY: UnitIn[] = [
     span('s', 'other', [el('d', 'display', '.'), t(' '), el('r', 'ref'), t(' Then we go on.')]),
   ]),
 ]
+/** a run-in label after a forced break that ends no sentence (1810.04805v2 p8's shape, words of our own): the break states the
+ *  line it ends (`stop` a line end, the source reader's run-in rule), inside a stretch of side-by-side elements; the second
+ *  label begins after a full stop, and its break states nothing */
+export const LABEL_AFTER_BREAK: UnitIn = unit(
+  'label-after-break',
+  [
+    t('We compare two settings as follows:\n'),
+    el('v', 'other'),
+    t('\n'),
+    el('b', 'other', '\n'),
+    t('\n'),
+    el('n', 'other'),
+    span('h', 'bold', [t('No XYZ')], true),
+    t(': A model trained without the XYZ task. '),
+    el('b2', 'other'),
+    t('\n'),
+    el('n2', 'other'),
+    span('h2', 'bold', [t('Only XYZ')], true),
+    t(': A model trained with it alone.'),
+  ],
+  true,
+)
+/** elements inside words (2608.25210v2 p5's `str\_s`): an escaped character and a formula between two letters, which the
+ *  word holds; a tie between two names, TeX's space, which it does not (the source reader types it `other`) */
+export const INSIDE_WORDS: UnitIn = unit('inside-words', [
+  t('The column str'),
+  el('u', 'macro'),
+  t('s holds Ni'),
+  el('f', 'math'),
+  t('B, by Jane'),
+  el('tie', 'other'),
+  t('Doe.'),
+])
+/** elements that set nothing (`silent`, the source reader's from TeX's tables: a key written to a file, a discretionary hyphen,
+ *  `\noindent`, a declaration at a group's head), words of our own: on no wire, each back at the front of its innermost kept
+ *  group where nothing of it went out before, else at its end; one beside an element that sets something rides in its marker */
+export const SILENT: UnitIn = unit(
+  'silent',
+  [
+    quiet('lab'),
+    t('\nWe train an exam'),
+    quiet('hy'),
+    t('ple model'),
+    el('c', 'cite'),
+    quiet('k'),
+    t(' on '),
+    span('g', 'colour', [quiet('bf'), t(' every')]),
+    t(' word, '),
+    quiet('n'),
+    t('then stop.'),
+  ],
+  true,
+)
+/** a kept span whose head sets nothing (`\textbf{\boldmath Setup:}`): back after its open */
+export const SILENT_LABEL: UnitIn = unit('silent-label', [
+  span('h', 'bold', [quiet('bm'), t('Setup:')], true),
+  t(' we train it.'),
+])
+/** a span around all the rest but an element that sets nothing beside it (a cell's `\hline` before its `\multicolumn`): the
+ *  span goes around the translation, the element outside it where it stands */
+export const SILENT_AROUND: UnitIn = unit('silent-around', [
+  quiet('hl'),
+  t('\n'),
+  span('m', 'other', [t('Method')]),
+  t(' '),
+])
+/** run-in heads a paper's macro sets (2608.25210v2's `\topic{…}`, `{\bf #1.}`, words of our own): a kept span TeX ends with a
+ *  stop of its own, which its source does not write (`stop`, the source reader's), written at the span's end on the wire; a
+ *  span on no wire with one, written after its words */
+export const HEAD_STOP: UnitIn = unit(
+  'head-stop',
+  [
+    { t: 'span', id: 'h', style: 'bold', must: true, stop: '.', content: [t('Current methods are not reliable')] },
+    t('  \nTo infer the source, one could rank sentences. We call it '),
+    { t: 'span', id: 'f', style: 'bold', stop: '.', content: [t('verifiable sources')] },
+    t(' Then we go on.'),
+  ],
+  true,
+)
+/** displays that state no stop of their own (the owner's report of 2026-11-09 on 2609.33403v1 §4.2, words of our own): TeX set
+ *  the first at its sentence's end, the next sentence beginning after it ("… as: [display] The next …"), the second inside its
+ *  sentence, which goes on after it ("… tuple: [display] where …") */
+export const DISPLAY_ENDS: UnitIn = unit(
+  'display-ends',
+  [
+    t('Each part is formalized as: '),
+    el('d1', 'display'),
+    t(' The next field is a list of effects, formalized as a tuple: '),
+    el('d2', 'display'),
+    t(' where kind is its kind.'),
+  ],
+  true,
+)
+/** a unit as the PDF's source reader states it, words of our own: its TeX source's own line ends, which TeX reads as spaces,
+ *  and a citation that opens a sentence after a stop, its verb after it (the tags wire's cutter, lane fig-cut 2026-11-10: a
+ *  line end cut a sentence, and the citation was read as the sentence before's) */
+export const SOURCE_LINES: UnitIn = unit(
+  'source-lines',
+  [
+    t('Sampling remains\ncomputationally expensive. '),
+    el('c', 'cite'),
+    t(' proposes a one-step\nsampler. Then we go on.'),
+  ],
+  true,
+)
+/** an element glued to the words of a style pair after it, and one glued to a style pair's words before it (the tags reading
+ *  takes the reply's white space back past the wire's own pair tags: text.ts glueOf) */
+export const GLUED_PAST: UnitIn = unit('glued-past', [
+  t('Set to ('),
+  el('a', 'math'),
+  span('s', 'italic', [t('A34')]),
+  t(') and '),
+  span('w', 'italic', [t('word')]),
+  el('b', 'math'),
+  t(' rest.'),
+])
+/** an element glued after another element's own stop (the reply's space before that stop is the glued element's to take back
+ *  once the stop is out: text.ts glueOf) */
+export const OWN_GLUED: UnitIn = unit('own-glued', [t('Values '), el('a', 'math', '.'), el('b', 'math'), t(' hold.')])
+/** an abstract's shape, words of our own (lane reply-dots, 2026-11-13: an abstract on staging): a styled group as the object of
+ *  its sentence's verb, and a paper's conditional (`\ifx…` … `\fi`, of no ink) glued after a sentence's stop, then a link */
+export const STYLED_OBJECT: UnitIn = unit(
+  'styled-object',
+  [
+    t('The method keeps the weights trainable, so the experts serve as '),
+    span('p', 'italic', [t('learned priors')]),
+    t(' without tying it to this range. It reaches 81% against 70% for the baseline.'),
+    el('i', 'macro'),
+    t(' Code is available at '),
+    el('u', 'url'),
+    t('.'),
+    el('f', 'macro'),
+  ],
+  true,
+)
+/** a note's mark glued after its sentence's stop, inside the unit and at its end, words of our own (lane reply-dots,
+ *  2026-11-13: Google kept no stop before such an element written as a word; the boundary marker right after the stop) */
+/** two elements the source sets side by side, nothing between, then two with a tie between (text.ts glueOf: the white space a
+ *  reply puts between the first two taken back, beside the tie kept) */
+export const SIDE_BY_SIDE: UnitIn = unit('side-by-side', [
+  t('The tokens '),
+  el('a', 'macro'),
+  el('b', 'macro'),
+  t(' and Fig.'),
+  el('s', 'space'),
+  el('r', 'ref'),
+  t(' here.'),
+])
+/** a display the source sets right before an element, nothing between: on the markers wire the display's marker is its own and
+ *  the element's follows it with no space of ours, the white space a reply puts between them taken back */
+export const DISPLAY_SIDE: UnitIn = unit('display-side', [
+  t('We have'),
+  el('d', 'display'),
+  el('m', 'math'),
+  t(' that holds.'),
+])
+export const GLUED_STOP: UnitIn = unit(
+  'glued-stop',
+  [t('Every token attends to its left.'), el('f', 'note-mark'), t(' We report two sizes.'), el('g', 'note-mark')],
+  true,
+)
 export const MICROSOFT_UNITS: UnitIn[] = [
   ...UNITS,
   /* 17 */ BERT_ABSTRACT,
   /* 18 */ BERT_STRATEGIES,
   /* 19, 20, 21, 22 */ ...NESTED_DISPLAY,
+  /* 23 */ LABEL_AFTER_BREAK,
+  /* 24 */ INSIDE_WORDS,
+  /* 25, 26, 27 */ SILENT,
+  SILENT_LABEL,
+  SILENT_AROUND,
+  /* 28 */ HEAD_STOP,
+  /* 29 */ DISPLAY_ENDS,
+  /* 30 */ DISPLAY_SIDE,
 ]
 
 /** Microsoft's raw replies (as the adapter keeps them: the item's text, with its sentence lengths where given) */
@@ -220,6 +389,29 @@ export const MICROSOFT_REPLIES: { unit: number; raw: string; taken: boolean; why
     taken: true,
     why: '`{\\em all}`: a declaration at a group’s head, as it came',
   },
+  {
+    unit: 23,
+    raw: ms(
+      '我们比较以下两种设置：@a#\n@b# 无 XYZ @c#：一个未经 XYZ 任务训练的模型。@d#@e# 仅 XYZ @f#：一个仅用它训练的模型。',
+      [49, 47, 49],
+      [21, 28, 23],
+    ),
+    taken: true,
+    why: "the line end after the break's marker kept and taken back, as Microsoft gave it on 2026-11-09 (words ours)",
+  },
+  { unit: 24, raw: ms('列 str@a#s 包含 Ni@a#B，作者 Jane @c# Doe。'), taken: false, why: 'a marker doubled' },
+  {
+    unit: 24,
+    raw: ms('列 str@a#s 包含 Ni@b#B，作者 Jane @c# Doe。'),
+    taken: true,
+    why: 'the words holding an element back as they went, as Microsoft gave `str@a#s` on 2026-11-09',
+  },
+  {
+    unit: 30,
+    raw: ms('我们有 @a# @b# 成立。'),
+    taken: true,
+    why: 'the space between a display and the element the source sets right after it taken back (text.ts glueOf)',
+  },
 ]
 
 /** Google's raw replies (the translated item as it came back) */
@@ -268,4 +460,76 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     why: 'a bare `<`, an entity past U+10FFFF kept, a zero width space dropped',
   },
   { unit: 8, raw: '围绕公式的链接：<x id="1"/>完成。', taken: true },
+  {
+    unit: 10,
+    raw: '它在季节性时间尺度 <x id="1"/>上很重要，改变了急流 <x id="2"/>和地表 <x id="3"/>，正如准两年振荡和厄尔尼<x id="4"/>奥南方涛动那样。',
+    taken: true,
+    why: 'a space the reply sets before an element the source glued to its word: taken back (text.ts glueOf)',
+  },
+  {
+    unit: 1,
+    raw: '设<span id="1" translate="no">x1</span>如<span id="2" translate="no"></span>所述。x2<x id="4"/>更多内容见第<span id="3" translate="no">x3</span>节。',
+    taken: false,
+    why: 'an element emptied, its token left behind as text: the wire’s contract broken (tags.ts tokenOf)',
+  },
+  {
+    unit: 4,
+    raw: '数值<x id="1"/> <x id="2"/>，以及<x id="3"/><x id="4"/>成立（x7）。',
+    taken: false,
+    why: 'a string of the tokens’ form the text does not hold: the wire’s contract broken (tags.ts TOKEN_FORM)',
+  },
+  {
+    unit: 20,
+    raw: '设为（<x id="1"/><t id="2"> A34</t>）和<t id="3">单词 </t><x id="4"/> 其余。',
+    taken: true,
+    why: 'the white space beside a glued element taken back past the wire’s own pair tags (text.ts glueOf)',
+  },
+  {
+    unit: 21,
+    raw: '数值<x id="1"/> 。<x id="2"/> 成立。',
+    taken: true,
+    why: 'an element glued after another’s own stop: the stop out, then the space before it taken back (text.ts glueOf)',
+  },
+  {
+    unit: 7,
+    raw: 'a &lt; b &amp; c &gt; d @ &#x5bb6; # 95<x id="1"/>准确率。',
+    taken: true,
+    why: 'a hex character reference is its character, no string of the tokens’ form (tags.ts tokensIn)',
+  },
+  {
+    unit: 7,
+    raw: 'a &lt; b &amp; c &gt; d @ 家 # 95<x id="1"/>准确率（&#120;1）。',
+    taken: false,
+    why: 'a reference spelling a string of the tokens’ form the text does not hold: the wire’s contract broken (tags.ts tokensIn)',
+  },
+  {
+    unit: 22,
+    raw: '该方法使权重保持可训练，因此专家充当<span id="1">学习到的先验</span>，而不将其限制在这个范围内。<x id="5"/>它达到 81%，而基线为 70% <span id="2" translate="no">x2</span>代码可在<span id="3" translate="no">x3</span>处获取<span id="4" translate="no">x4</span>',
+    taken: true,
+    why: 'a styled group as HTML’s own span, read as the group by its id; the stops Google dropped before the elements stay dropped (tags.ts TagSpelling)',
+  },
+  {
+    unit: 22,
+    raw: '该方法使权重保持可训练，因此专家可以作为……<t id="1">学习到的先验</t>而不将其限制在这个范围内。<x id="5"/>它达到 81%，而基线为 70% <span id="2" translate="no">x2</span>代码可在<span id="3" translate="no">x3</span>处获取<span id="4" translate="no">x4</span>',
+    taken: true,
+    why: 'the wire before it, its group a `<t>`: Google’s "……" where the group’s words belonged, read as it came',
+  },
+  {
+    unit: 22,
+    raw: '该方法使权重保持可训练，因此专家充当<span id="1">学习到的先验</span>，而不将其限制在这个范围内。<x id="5"/>其中 x2 它达到 81%，而基线为 70% <span id="2" translate="no">x2</span>代码可在<span id="3" translate="no">x3</span>处获取<span id="4" translate="no">x4</span>',
+    taken: false,
+    why: 'an element’s token left as text besides its span: the wire’s contract broken (tags.ts tokensIn)',
+  },
+  {
+    unit: 23,
+    raw: '每个标记都关注其左侧。<x id="3"/><span id="1" translate="no">x1</span>我们报告两种规模。<x id="4"/><span id="2" translate="no">x2</span>',
+    taken: true,
+    why: 'the stops back where the boundary markers stand right after them; the sentence starts after the marks (tags.ts leads)',
+  },
+  {
+    unit: 24,
+    raw: '标记 <span id="1" translate="no">x1</span> <span id="2" translate="no">x2</span> 和图 <span id="3" translate="no">x3</span> <span id="4" translate="no">x4</span> 这里。',
+    taken: true,
+    why: 'the space between two elements the source sets side by side taken back, beside a tie kept (text.ts glueOf)',
+  },
 ]

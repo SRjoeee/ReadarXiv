@@ -3,7 +3,7 @@
 // at a time (the hold), what stays the original's, the stall clock, failures asked again, another target and the toggles in
 // place, the translating marks, the pages ahead, the faces' wave; and the faces' own rules (four at a time, asked once, a lasting
 // answer never asked again); the served faces' tables that cannot be had under it (no lay, no table asked again and again).
-import type { Part, Placed, Row } from '@readarxiv/format'
+import type { OutPiece, Part, Placed, Row } from '@readarxiv/format'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AHEAD_SETTLE_MS,
@@ -17,7 +17,10 @@ import { createFaces, type Faces, WAVE_SLOTS } from '../src/compose/faces.ts'
 import type { Groups } from '../src/compose/groups.ts'
 import type { Lay, Laid, Page, Rows } from '../src/compose/page.ts'
 import { createServed, type Served } from '../src/compose/served.ts'
+import { PROBE_TEXT } from '../src/compose/text-rendering.ts'
 import type { Clock } from '../src/stack/clock.ts'
+import { layPage, rulesFor } from '@readarxiv/typeset'
+import { leftKinds } from '../src/compose/classes.ts'
 import type { PageContent, Stack, StackEvents } from '../src/stack/stack.ts'
 
 // ---------------------------------------------------------------- the stand-ins
@@ -205,7 +208,19 @@ function standInLay(ready: Set<string> = new Set(['sans'])): Lay & { calls: numb
               lit: { left: [[box(y)]], right: [[box(y)]], own: [] },
             }
       }),
-      links: [],
+      // (each of the part's links with its owner: one of a member laid moved over its drawing, 20 points left of A's box, as a
+      // translation moves it; any other at A's box)
+      links: (part.links ?? []).map((l) => {
+        const ord = l.owner?.[0]
+        const laid = ord !== undefined && !!rows.get(`u${ord}`)?.ok
+        const [x0, y0, x1, y1] = l.box
+        return [
+          laid ? [x0 - 20, y0, x1 - 20, y1] : l.box,
+          l.to,
+          ...(ord !== undefined || l.border ? [ord] : []),
+          ...(l.border ? [l.border] : []),
+        ] as Page['links'][number]
+      }),
     }
   }) as unknown as Lay & { calls: number }
   lay.calls = 0
@@ -245,12 +260,19 @@ const groupsStub = (holds: (ord: number) => boolean = () => true): Groups =>
     set: vi.fn(() => []),
     clear: vi.fn(),
   }) as unknown as Groups
-const facesStub = (loaded?: Set<string>): Faces & { waves: string[][] } => {
+const facesStub = (loaded?: Set<string>): Faces & { waves: string[][]; probes: string[] } => {
   const waves: string[][] = []
+  const probes: string[] = []
   return {
     waves,
+    probes,
     classOf: () => 'f',
     familyOf: () => 'sans-serif',
+    // (the text rendering's probe face, asked with the probe's text: none here, so the sheet's geometricPrecision)
+    probeFace: async (text: string) => {
+      probes.push(text)
+      return null
+    },
     // (a face asked with the texts the pages wait on it for: told here by the face, once a wave)
     ready: async (ids: Iterable<string | readonly [string, string]>) => {
       const list = [...new Set([...ids].map((x) => (typeof x === 'string' ? x : x[0])))]
@@ -288,6 +310,7 @@ function world(
     ready?: Set<string>
     lay?: ReturnType<typeof standInLay>
     faces?: ReturnType<typeof facesStub>
+    root?: HTMLElement
   } = {},
 ): World {
   const parts =
@@ -317,6 +340,7 @@ function world(
     aheadGo,
     ...(o.classes ? { classes: o.classes } : {}),
     ...(o.ahead !== undefined ? { ahead: o.ahead } : {}),
+    ...(o.root ? { root: o.root } : {}),
     warn: (w) => warns.push(w),
   })
   composer.setDocuments({ original: {} as never, composed: {} as never, groups: groupsStub(o.holds) })
@@ -380,6 +404,25 @@ describe('laying, one page at a time (layer-side.mjs hold)', () => {
   })
 })
 
+describe("the overlay's text rendering, decided once a reader (text-rendering.ts)", () => {
+  it('is asked of the fixed probe when the pages are first to be laid, once, whatever the pages, targets and toggles', async () => {
+    const root = document.createElement('div')
+    document.body.append(root)
+    const w = world({ root })
+    w.stack.setNear([1, 2])
+    expect(w.faces.probes).toEqual([])
+    open(w, rowsOf('de', allIds(w)))
+    await settle()
+    expect(w.faces.probes).toEqual([PROBE_TEXT])
+    // (another target, a toggle: the same decision)
+    open(w, rowsOf('fr', allIds(w)))
+    w.composer.setClasses({ figures: false, tables: true, heads: true, references: true, names: true })
+    await settle()
+    expect(w.faces.probes).toEqual([PROBE_TEXT])
+    w.composer.dispose()
+  })
+})
+
 describe("what stays the original's", () => {
   it('a page with no part, one that hides nothing, and a member whose groups the document lacks', async () => {
     const pages = new Map([
@@ -402,6 +445,29 @@ describe("what stays the original's", () => {
     const p3 = w.composer.laid(3) as Page
     expect(p3.members.map((m) => m.state)).toEqual(['laid', 'unwrapped'])
     expect(w.settled()(3)).toBe(false)
+  })
+  it('a member left unwrapped keeps its links at A’s boxes, over the original’s text (Codex on #626)', async () => {
+    // (Page.links held the unwrapped member's links where its translation, now not drawn, had moved them: over the original's
+    // text, opening from words they are not on; the laid member's stay moved, a link of no member's at its box; each with its
+    // own annotation's border)
+    const links: NonNullable<Part['links']> = [
+      { box: [100, 698, 140, 708], to: { url: 'https://example.org/a' }, owner: [30, ''] },
+      { box: [100, 658, 140, 668], to: { url: 'https://example.org/b' }, owner: [31, ''], border: [1, 0x00ffff] },
+      { box: [400, 600, 440, 610], to: { dest: 'sec.1' } },
+    ]
+    const part = { ...partOf(3, [member(30, 3, 0), member(31, 3, 1)]), links } as Part
+    const w = world({ pages: new Map([[3, part]]), holds: (ord) => ord !== 31 })
+    w.stack.setNear([3])
+    open(w, rowsOf('de', ['u30', 'u31'], true))
+    await settle()
+    const p3 = w.composer.laid(3) as Page
+    expect(p3.members.map((m) => m.state)).toEqual(['laid', 'unwrapped'])
+    expect(p3.links.map(([b, to]) => [b, to])).toEqual([
+      [[80, 698, 120, 708], { url: 'https://example.org/a' }],
+      [[400, 600, 440, 610], { dest: 'sec.1' }],
+      [[100, 658, 140, 668], { url: 'https://example.org/b' }],
+    ])
+    expect(p3.links[2]).toEqual([[100, 658, 140, 668], { url: 'https://example.org/b' }, 31, [1, 0x00ffff]])
   })
 })
 
@@ -549,6 +615,238 @@ describe('a generation let go', () => {
     expect(w.stack.contentOf(2)?.key).not.toBe(before)
     // (page 1, in place, kept until its new commit)
     expect(w.composer.muted(1)).toBe(true)
+  })
+})
+
+describe('a row stated again otherwise (a run our server replaced mid-way)', () => {
+  /** a rows source whose rows the test states, each once more where it says so: our server's attempt on the source's units
+   *  (no sentences) replaced by one on the layer's units, the same ids stated again with their sentences (worker v2
+   *  machine.ts wanted, startRecent; format.ts fits) */
+  function statedRows(target: string) {
+    const got = new Map<string, Row>()
+    const ls = new Set<() => void>()
+    const r = {
+      target,
+      done: false,
+      get: (id: string) => got.get(id),
+      on(f: () => void) {
+        ls.add(f)
+        return () => ls.delete(f)
+      },
+      state(rows: Row[]) {
+        for (const x of rows) got.set(x.id, x)
+        for (const f of [...ls]) f()
+      },
+      end() {
+        r.done = true
+        for (const f of [...ls]) f()
+      },
+    }
+    return r
+  }
+  const row = (id: string, sentences?: { src: number[]; tr: number[] }): Row =>
+    ({ id, ok: true, content: [{ t: 'text', s: 'x. y.' }], by: 't', ...(sentences ? { sentences } : {}) }) as Row
+  /** the stand-in lay, a member lit by sentence (two entries) where its row states its sentences, else whole (one) */
+  function sentenceLay() {
+    const inner = standInLay()
+    const lay = ((part: Part, rows: Rows) => {
+      lay.calls++
+      const p = inner(part, rows)
+      return {
+        ...p,
+        members: p.members.map((m) => {
+          const r = rows.get(`u${m.ord}`)
+          if (m.state !== 'laid' || !r?.ok || !r.sentences) return m
+          const [b] = m.lit.left[0] as [[number, number, number, number]]
+          return { ...m, lit: { left: [[b], [b]], right: [[b], [b]], own: [] } }
+        }),
+      }
+    }) as unknown as Lay & { calls: number }
+    lay.calls = 0
+    return lay
+  }
+  const entries = (w: World, n: number) => (w.composer.page(n) as Page).members.map((m) => m.lit.left.length)
+  /** the composer's generation and its lays and commits so far */
+  const counted = (w: World) => {
+    const p = w.composer.probe()
+    return { gen: p.gen as number, lays: p.lays as number, commits: p.commits as number }
+  }
+
+  it('a page laid with the row before is laid again, alone, its drawing kept until its new commit', async () => {
+    const pages = new Map([[1, partOf(1, [member(10, 1, 0), member(11, 1, 1)])]])
+    const w = world({ pages, lay: sentenceLay() })
+    w.stack.setNear([1])
+    const rows = statedRows('zh')
+    open(w, rows)
+    // (the first attempt's rows: no sentences; the page commits, lit whole)
+    rows.state([row('u10'), row('u11')])
+    await settle()
+    w.stack.put(1)
+    await settle()
+    expect(w.composer.laid(1)).not.toBeNull()
+    expect(entries(w, 1)).toEqual([1, 1])
+    const was = w.stack.contentOf(1)?.key
+    // (the attempt that replaced it states u10 again, with its sentences, the rows going on)
+    rows.state([row('u10', { src: [3], tr: [3] })])
+    await settle()
+    expect(w.stack.contentOf(1)?.key).not.toBe(was)
+    expect(w.composer.muted(1)).toBe(false)
+    expect(entries(w, 1)).toEqual([2, 1])
+  })
+  it("the same rows stated again (the run's whole, read anew) lay nothing again", async () => {
+    const pages = new Map([[1, partOf(1, [member(10, 1, 0), member(11, 1, 1)])]])
+    const lay = sentenceLay()
+    const w = world({ pages, lay })
+    w.stack.setNear([1])
+    const rows = statedRows('zh')
+    open(w, rows)
+    rows.state([row('u10', { src: [3], tr: [3] }), row('u11')])
+    await settle()
+    w.stack.put(1)
+    await settle()
+    const calls = lay.calls
+    const was = w.stack.contentOf(1)?.key
+    rows.state([row('u10', { src: [3], tr: [3] }), row('u11')])
+    rows.end()
+    await settle()
+    expect(lay.calls).toBe(calls)
+    expect(w.stack.contentOf(1)?.key).toBe(was)
+    expect(entries(w, 1)).toEqual([2, 1])
+  })
+  it("a row missing when the page was laid at the rows' end, come with a run started again (a retry), lays it again once, alone", async () => {
+    // (the page laid at the end with u11 the original's, none to come; the reader takes the rows again for a run our server
+    // started again, the rows going on (reader.ts: no generation of its own), and that run brings u11)
+    const pages = new Map([[1, partOf(1, [member(10, 1, 0), member(11, 1, 1)])]])
+    const lay = sentenceLay()
+    const w = world({ pages, lay })
+    w.stack.setNear([1])
+    const rows = statedRows('zh')
+    open(w, rows)
+    rows.state([row('u10')])
+    rows.end()
+    await settle()
+    w.stack.put(1)
+    await settle()
+    expect((w.composer.laid(1) as Page).members.map((m) => m.state)).toEqual(['laid', 'none'])
+    const before = counted(w)
+    rows.done = false
+    rows.state([row('u11')])
+    await settle()
+    const after = counted(w)
+    expect([after.gen - before.gen, after.lays - before.lays, after.commits - before.commits]).toEqual([0, 1, 1])
+    expect((w.composer.page(1) as Page).members.map((m) => m.state)).toEqual(['laid', 'laid'])
+    // (the rows ended again, the same: nothing more)
+    rows.end()
+    await settle()
+    expect(counted(w)).toMatchObject({ gen: after.gen, lays: after.lays, commits: after.commits })
+  })
+  it("a page laid at the rows' end with nothing of its own, its rows brought by a run started again (a retry), is laid again; one whose rows never come is laid no more (Codex 4538550044)", async () => {
+    // (a translation that failed whole for the page near: the rows end with none, the page the original's by the rule; the
+    // reader takes the rows again for the retry, the rows going on, reader.ts: no generation of its own)
+    const pages = new Map([[1, partOf(1, [member(10, 1, 0), member(11, 1, 1)])]])
+    const lay = sentenceLay()
+    const w = world({ pages, lay })
+    w.stack.setNear([1])
+    const rows = statedRows('zh')
+    open(w, rows)
+    rows.end()
+    await settle()
+    w.stack.put(1)
+    await settle()
+    expect(w.composer.laid(1)).toBeNull()
+    expect(w.settled()(1)).toBe(true)
+    const before = counted(w)
+    // (the retry's run brings no row either, and ends: nothing laid again)
+    rows.done = false
+    rows.end()
+    await settle()
+    expect(counted(w)).toEqual(before)
+    // (then a run that brings both: the page laid again, as its own, committed and put in place)
+    rows.done = false
+    rows.state([row('u10'), row('u11')])
+    await settle()
+    w.stack.put(1)
+    await settle()
+    rows.end()
+    await settle()
+    const after = counted(w)
+    expect([after.lays - before.lays, after.commits - before.commits]).toEqual([1, 1])
+    expect((w.composer.laid(1) as Page).members.map((m) => m.state)).toEqual(['laid', 'laid'])
+    expect(w.settled()(1)).toBe(false)
+  })
+  it('the re-prepared paper (2610.21924v1, staging 2026-11-11): runs that restate the rows held lay nothing; the new layer is laid once, as its own', async () => {
+    const pages = new Map([
+      [1, partOf(1, [member(10, 1, 0), member(11, 1, 1)])],
+      [2, partOf(2, [member(20, 2, 0), member(21, 2, 1)])],
+    ])
+    const lay = sentenceLay()
+    const w = world({ pages, lay })
+    w.stack.setNear([1, 2])
+    const rows = statedRows('zh')
+    open(w, rows)
+    // (attempt 2's stored rows of the stale layer, read whole: the pages committed)
+    rows.state([row('u10'), row('u11'), row('u20'), row('u21')])
+    rows.end()
+    await settle()
+    w.stack.put(1)
+    w.stack.put(2)
+    await settle()
+    const settled = counted(w)
+    // (attempt 3 on the prepare's early units, the rows taken again: its rows the same, read anew from its own objects)
+    rows.done = false
+    rows.state([row('u10'), row('u11'), row('u20')])
+    rows.end()
+    await settle()
+    expect(counted(w)).toMatchObject({ gen: settled.gen, lays: settled.lays, commits: settled.commits })
+    // (the new layer lands: laid once, a generation of its own; attempt 4 then restates every row: nothing more)
+    w.composer.setLayer({ pages: 2, part: async (n: number) => pages.get(n) ?? null }, rows)
+    await settle()
+    const landed = counted(w)
+    // (each near page laid at most once for it, every lay committed)
+    expect(landed.gen - settled.gen).toBe(1)
+    expect(landed.lays - settled.lays).toBe(landed.commits - settled.commits)
+    expect(landed.lays - settled.lays).toBeGreaterThan(0)
+    expect(landed.lays - settled.lays).toBeLessThanOrEqual(2)
+    rows.done = false
+    rows.state([row('u10'), row('u11'), row('u20'), row('u21')])
+    rows.end()
+    await settle()
+    expect(counted(w)).toMatchObject({ gen: landed.gen, lays: landed.lays, commits: landed.commits })
+  })
+  it('a row the lay read where it was missing, waited for by no page, lays the page again, once, when it comes', async () => {
+    // (as layPage reads the paper's own names: typeset lay/entry.ts ownNamesOf reads their rows, wait.ts waits for none, and
+    // the page commits before one is in; once it comes the page is a lay over the rows as they stand, the law over time)
+    const pages = new Map([[1, partOf(1, [member(10, 1, 0), member(11, 1, 1)])]])
+    const inner = sentenceLay()
+    const lay = ((part: Part, rows: Rows) => {
+      rows.get('name')
+      return inner(part, rows)
+    }) as unknown as Lay & { calls: number }
+    const w = world({ pages, lay })
+    w.stack.setNear([1])
+    const rows = statedRows('zh')
+    open(w, rows)
+    rows.state([row('u10'), row('u11')])
+    await settle()
+    w.stack.put(1)
+    await settle()
+    expect(w.composer.laid(1)).not.toBeNull()
+    const before = w.composer.probe()
+    rows.state([row('name')])
+    await settle()
+    w.stack.put(1)
+    await settle()
+    const after = w.composer.probe()
+    expect([
+      after.gen,
+      Number(after.lays) - Number(before.lays),
+      Number(after.commits) - Number(before.commits),
+    ]).toEqual([before.gen, 1, 1])
+    expect(w.composer.muted(1)).toBe(false)
+    // (the same row stated again: nothing more)
+    rows.state([row('name')])
+    await settle()
+    expect(w.composer.probe().lays).toBe(after.lays)
   })
 })
 
@@ -869,6 +1167,34 @@ describe('the faces, in one wave', () => {
       Object.defineProperty(document, 'fonts', { value: fonts, configurable: true })
     }
   })
+  it("names the text rendering's probe face: the table's first face read from a file, once loaded; none of a system's", async () => {
+    const answers: Record<string, number> = { sans: 200, gone: 404 }
+    const fetch = vi.fn(async (u: string) => new Response(new Uint8Array(4), { status: answers[u] ?? 200 }))
+    const was = globalThis.FontFace
+    ;(globalThis as { FontFace?: unknown }).FontFace = class {
+      load = async () => this
+    }
+    const fonts = (document as { fonts?: unknown }).fonts
+    Object.defineProperty(document, 'fonts', { value: { add() {}, delete() {} }, configurable: true })
+    try {
+      const table = { cjk: { local: 'Songti SC' }, sans: { src: 'sans' }, serif: { src: 'serif' } }
+      const faces = createFaces({ table, fetch: fetch as never, root: document.body })
+      expect(await faces.probeFace('Sphinx')).toBe('sans')
+      expect(fetch.mock.calls.map(([u]) => u)).toEqual(['sans'])
+      // (a face of the system's alone: none, as one that cannot be read)
+      expect(
+        await createFaces({ table: { cjk: table.cjk }, fetch: fetch as never, root: document.body }).probeFace('x'),
+      ).toBeNull()
+      expect(
+        await createFaces({ table: { gone: { src: 'gone' } }, fetch: fetch as never, root: document.body }).probeFace(
+          'x',
+        ),
+      ).toBeNull()
+    } finally {
+      ;(globalThis as { FontFace?: unknown }).FontFace = was
+      Object.defineProperty(document, 'fonts', { value: fonts, configurable: true })
+    }
+  })
   it('takes its faces out of the document when let go, and adds none whose read ends after', async () => {
     const gates: (() => void)[] = []
     const fetch = vi.fn(async () => {
@@ -1092,4 +1418,201 @@ describe("the served faces' tables that cannot be had, under the composer", () =
       served.faces.dispose()
     },
   )
+})
+
+describe('the toggles turned and turned back: the drawing a function of the part, the rows and the toggles', () => {
+  // (the law, docs/PDF-READER.md §15: every reading option turned on and off again returns the first drawing, member by member,
+  // and on again the second. Laid by the reader's own typesetter (layPage under the rules the toggles leave, as typeset.ts
+  // makes them), over a part of our own: a paragraph, a block name, and a footnote that names the block's person elsewhere
+  // (§19.15: its variant, the name an element). Its rows come as a run brings them: the paragraph's, the block's and the
+  // footnote's own first, the footnote's variant after the page is laid: staging, round B14, 2611.03953v2-zh p1)
+  const E = 'e'.repeat(64) // the footnote
+  const V = 'f'.repeat(64) // its variant
+  const B = 'b'.repeat(64) // the block's name
+  const P = 'a'.repeat(64) // a paragraph
+  const metrics = {
+    ready: () => true,
+    advance: (_f: string, size: number, t: string) => (size * [...t].length) / 2,
+    ink: () => [0.7, 0.2, 0] as [number, number, number],
+  }
+  const at = (ord: number, kind: string, text: string, y: number): Placed =>
+    ({
+      ord,
+      kind,
+      text,
+      lead: 12,
+      style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+      align: 'l',
+      lines: [[1, 0, 72, 400, y, y + 7, y - 2, 72, 400, 0, 10]],
+      room: { below: 20, next: 24 },
+    }) as unknown as Placed
+  const part = {
+    format: 1,
+    page: 1,
+    paper: {
+      faces: { fonts: [['NimbusRomNo9L-Regu', 100]] },
+      named: [[E, V, [['n0', 0, 12, 22]]]],
+      persons: [[B, 'author', 0]],
+      splits: [[B, [], [], [0]]],
+    },
+    flows: [[at(1, 'author', B, 740)], [at(2, 'para', P, 600)], [at(3, 'inknotes', E, 120)]],
+  } as unknown as Part
+  const T = (s: string) => ({ t: 'text' as const, s })
+  const row = (id: string, content: OutPiece[]): Row => ({ id, ok: true, by: 'microsoft:test', content }) as Row
+  const ROWS: Record<string, Row> = {
+    [P]: row(P, [T('Ein Absatz.')]),
+    [B]: row(B, [T('Wenyong Zhou')]),
+    [E]: row(E, [T('Korrespondenz: W. Zhou.')]),
+    [V]: row(V, [T('Korrespondenz: '), { t: 'el', id: 'n0' }, T('.')]),
+  }
+  const OPTIONS = ['figures', 'tables', 'heads', 'references', 'names'] as const
+  const DEFAULTS = { figures: true, tables: true, heads: true, references: false, names: false }
+  /** what page 1 draws: each member's state and its lines' text */
+  const drawn = (w: World) =>
+    (w.composer.laid(1) as Page | null)?.members.map((m) => [
+      m.ord,
+      m.state,
+      m.lines.map((l) => l[3].map((i) => i.s).join('')).join('|'),
+    ])
+  it.each(OPTIONS)('%s: off, on, off, on again draw the first and the second drawings', async (option) => {
+    let classes: Record<(typeof OPTIONS)[number], boolean> = { ...DEFAULTS }
+    const lay = ((p: Part, rows: Rows) => {
+      lay.calls++
+      return layPage(p, rows as never, rulesFor('de', { leave: leftKinds(classes) }), metrics) as unknown as Page
+    }) as unknown as ReturnType<typeof standInLay>
+    lay.calls = 0
+    const w = world({ pages: new Map([[1, part]]), classes, lay })
+    w.stack.setNear([1])
+    const rows = statedOnce('de')
+    open(w, rows)
+    rows.state([ROWS[P]!, ROWS[B]!, ROWS[E]!])
+    await settle()
+    w.stack.put(1)
+    const first = drawn(w)
+    expect(first).toBeTruthy()
+    // (the variant's row comes once the page is laid; the run goes on)
+    rows.state([ROWS[V]!])
+    await settle()
+    const turn = async (on: boolean) => {
+      classes = { ...classes, [option]: on }
+      w.composer.setClasses(classes)
+      await settle()
+      w.clock.advance(HOLD_MS)
+      await settle()
+      w.stack.put(1)
+      await settle()
+      return drawn(w)
+    }
+    const flip = !DEFAULTS[option]
+    const second = await turn(flip)
+    expect(await turn(!flip)).toEqual(first)
+    expect(await turn(flip)).toEqual(second)
+  })
+  // (the law over time: after any sequence of row landings, the run's end and toggle changes, page 1 as drawn equals a fresh lay
+  // over the rows and toggles as they now stand; a fresh lay that still waits is not judged, the composer keeps the drawing
+  // before it then. Each sequence run once with each option turned after every landing)
+  const Q = 'd'.repeat(64) // a paragraph whose translator refuses it first
+  const refused = (id: string): Row => ({ id, ok: false, why: { kind: 'refused' } }) as Row
+  const ROWS_Q = row(Q, [T('Ein zweiter Absatz.')])
+  const withQ = {
+    ...part,
+    flows: [...(part.flows as Placed[][]), [at(4, 'para', Q, 500)]],
+  } as unknown as Part
+  const onlyQ = { ...part, paper: { faces: part.paper.faces }, flows: [[at(4, 'para', Q, 500)]] } as unknown as Part
+  type Step = Row[] | 'end'
+  const SEQUENCES: [string, Part, Step[]][] = [
+    ["a variant's row after the page is laid", part, [[ROWS[P]!, ROWS[B]!, ROWS[E]!], [ROWS[V]!]]],
+    [
+      'a refusal before the run ends, the same unit translated later',
+      withQ,
+      [[ROWS[P]!, ROWS[B]!, ROWS[E]!, ROWS[V]!, refused(Q)], [ROWS_Q]],
+    ],
+    ['every unit of the page refused, then translated', onlyQ, [[refused(Q)], [ROWS_Q]]],
+    ['every unit of the page refused, the run ended, then translated', onlyQ, [[refused(Q)], 'end', [ROWS_Q]]],
+    [
+      'a refusal, the run ended, then the unit translated',
+      withQ,
+      [[ROWS[P]!, ROWS[B]!, ROWS[E]!, ROWS[V]!, refused(Q)], 'end', [ROWS_Q]],
+    ],
+    [
+      'a row stated again with its sentences',
+      part,
+      [[ROWS[P]!, ROWS[B]!, ROWS[E]!, ROWS[V]!], [{ ...ROWS[P]!, sentences: { src: [0], tr: [0] } } as Row]],
+    ],
+  ]
+  /** page 1 as a fresh lay over `rows` and `classes` draws it: undefined where it still waits, null where it lays nothing */
+  const freshOf = (p: Part, rows: Rows, classes: Record<(typeof OPTIONS)[number], boolean>) => {
+    const page = layPage(p, rows as never, rulesFor('de', { leave: leftKinds(classes) }), metrics) as unknown as Page
+    if (page.wait.rows.length || page.wait.faces.length) return undefined
+    if (!page.members.some((m) => m.state === 'laid' && m.off)) return null
+    return page.members.map((m) => [m.ord, m.state, m.lines.map((l) => l[3].map((i) => i.s).join('')).join('|')])
+  }
+  const TURNED: readonly ((typeof OPTIONS)[number] | 'none')[] = [...OPTIONS, 'none']
+  const cases = SEQUENCES.flatMap(([name, p, steps]) => TURNED.map((o) => [name, o, p, steps] as const))
+  it.each(cases)(
+    '%s; the option turned after each landing: %s; each drawing a fresh lay',
+    async (_name, option, p, steps) => {
+      let classes: Record<(typeof OPTIONS)[number], boolean> = { ...DEFAULTS }
+      const lay = ((q: Part, rows: Rows) => {
+        lay.calls++
+        return layPage(q, rows as never, rulesFor('de', { leave: leftKinds(classes) }), metrics) as unknown as Page
+      }) as unknown as ReturnType<typeof standInLay>
+      lay.calls = 0
+      const w = world({ pages: new Map([[1, p]]), classes, lay })
+      w.stack.setNear([1])
+      const rows = statedOnce('de')
+      open(w, rows)
+      const settled = async () => {
+        await settle()
+        w.clock.advance(HOLD_MS)
+        await settle()
+        w.stack.put(1)
+        await settle()
+      }
+      const judge = (when: string) => {
+        const want = freshOf(p, { get: rows.get, done: rows.done }, classes)
+        if (want === undefined) return
+        const c = w.composer.laid(1)
+        const got = !c ? null : w.composer.muted(1) ? 'muted' : drawn(w)
+        expect([when, got]).toEqual([when, want])
+      }
+      let flip = option === 'none' || !DEFAULTS[option]
+      for (const [k, step] of steps.entries()) {
+        if (step === 'end') rows.end()
+        else rows.state(step)
+        await settled()
+        judge(`step ${k + 1}`)
+        if (option === 'none') continue
+        classes = { ...classes, [option]: flip }
+        flip = !flip
+        w.composer.setClasses(classes)
+        await settled()
+        judge(`step ${k + 1}, ${option} turned`)
+      }
+    },
+  )
+  /** a rows source whose rows the test states as a run brings them, a row stated again replacing the one before (a refusal
+   *  by a translation another service or a retry brings), and its end */
+  function statedOnce(target: string) {
+    const got = new Map<string, Row>()
+    const ls = new Set<() => void>()
+    const r = {
+      target,
+      done: false,
+      get: (id: string) => got.get(id),
+      on(f: () => void) {
+        ls.add(f)
+        return () => ls.delete(f)
+      },
+      state(list: Row[]) {
+        for (const x of list) got.set(x.id, x)
+        for (const f of [...ls]) f()
+      },
+      end() {
+        r.done = true
+        for (const f of [...ls]) f()
+      },
+    }
+    return r
+  }
 })

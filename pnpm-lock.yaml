@@ -158,6 +158,9 @@ importers:
 
   packages/translate:
     dependencies:
+      '@readarxiv/format':
+        specifier: workspace:*
+        version: link:../format
       '@readarxiv/text':
         specifier: workspace:*
         version: link:../text

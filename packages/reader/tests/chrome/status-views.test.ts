@@ -4,12 +4,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { O, R, S, setLocale } from '@readarxiv/ui'
 import { FailureCard } from '../../src/chrome/FailureCard.tsx'
 import type { Parts } from '../../src/chrome/parts.tsx'
-import { StatusCapsule } from '../../src/chrome/StatusCapsule.tsx'
+import { StatusCapsule, WAIT_SHOWN_MS } from '../../src/chrome/StatusCapsule.tsx'
 import type { ReaderController } from '../../src/chrome/model.ts'
 import { stubPopovers } from '../popover-stub.ts'
 import { mountElement } from '../render-hook.ts'
 import { fakeController, PREFS } from './fake-controller.ts'
-import { NAMES, withParts } from './parts.ts'
+import { NAMES, TEST_PARTS, withParts } from './parts.ts'
 
 let restore = () => {}
 // the interface's words as the maintainer reads them: the controls are found by them
@@ -51,18 +51,22 @@ describe("the capsule and the card (the reader's design, §6.6)", () => {
     expect(region.textContent).toContain('网络连接失败')
   })
 
-  it("a notice's 重试 retries, and its close is remembered for the visit", async () => {
+  it("a notice's 重试 retries, and its close is remembered for the visit unless more passages fail", async () => {
     const fake = fakeController({ phase: 'ready', failedUnits: 2, failure: 'network' })
     const { container } = await mountElement(capsuleOf(fake.controller))
     container.querySelector<HTMLElement>('button[data-action]')!.click()
     expect(fake.controller.retry).toHaveBeenCalledOnce()
     await act(async () => container.querySelector<HTMLElement>('button[aria-label="关闭"]')!.click())
-    await act(async () => fake.set({ failedUnits: 3 }))
+    // (the count falls as a retry brings passages: closed it stays)
+    await act(async () => fake.set({ failedUnits: 1 }))
     // past the closed notice's 160 ms way out
     await act(async () => {
       await new Promise((r) => setTimeout(r, 220))
     })
     expect(container.querySelector('[role="status"]')!.textContent).not.toContain('翻译失败')
+    // (more fail than were closed: told again)
+    await act(async () => fake.set({ failedUnits: 3 }))
+    expect(container.querySelector('[role="status"]')!.textContent).toContain('3 处翻译失败')
   })
 
   it("a notice's close is named in a tooltip, above it: the capsule stands near the foot of the page (P3-M11)", async () => {
@@ -430,16 +434,182 @@ describe("a host's toast in the capsule's place", () => {
 })
 
 describe("a run under way in a host's words (the website's stage and count)", () => {
-  it('the capsule with the spinner, alone; its stage said once with the count it starts at, the count that moves not said again; none without them', async () => {
-    const translating = (got: number) => ({
-      phase: 'translating' as const,
-      progress: got / 10,
-      translated: { got, total: 10 },
-    })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+  const translating = (got: number) => ({
+    phase: 'translating' as const,
+    progress: got / 10,
+    translated: { got, total: 10 },
+  })
+  const words = { translating: (got: number, total: number) => `${got} / ${total}`, reconnecting: 'reconnecting' }
+  /** the capsule mounted reading with a host's words for a run, the clock faked */
+  async function mounted(over: Partial<Parts> = {}) {
     const fake = fakeController({ phase: 'ready' })
-    const words = { translating: (got: number, total: number) => `${got} / ${total}`, reconnecting: 'reconnecting' }
-    const { container } = await mountElement(capsuleOf(fake.controller, { words }))
+    const { container } = await mountElement(capsuleOf(fake.controller, { words, ...over }))
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    const wait = (ms: number) =>
+      act(async () => {
+        vi.advanceTimersByTime(ms)
+      })
+    const set = (next: Parameters<typeof fake.set>[0]) => act(async () => fake.set(next))
+    const kind = () => container.querySelector('.capsule:not([data-out])')?.getAttribute('data-kind') ?? null
+    return { fake, container, wait, set, kind }
+  }
+
+  it("a capsule already shown that turns into a run changes its words in place: no frame without a capsule; a wait begun with nothing shown still waits 400 ms (the flow-demo, 2026-11-12: a 0.4 s hole after the network's words and after the failed passages' notice)", async () => {
+    const { wait, set, kind, container } = await mounted({ words: { ...words, network: 'network down' } })
+    const words_ = () =>
+      container.querySelector('.capsule:not([data-out]) [data-words]')?.textContent ??
+      container.querySelector('.capsule:not([data-out])')?.textContent ??
+      null
+    // (the network's words over the count, then the network back: the count at once)
+    await set({ ...translating(7), network: true })
+    expect(kind()).toBe('notNow')
+    await set({ ...translating(7), network: false })
+    expect(kind()).toBe('progress')
+    expect(words_()).toContain('7 / 10')
+    // (failed passages told, then the session's own ask begins: the count at once)
+    await set({ phase: 'ready', failedUnits: 3, failure: 'network', network: false })
+    expect(kind()).toBe('notice')
+    await set(translating(7))
+    expect(kind()).toBe('progress')
+    // (nothing shown, then a wait: none before 400 ms)
+    await set({ phase: 'ready', failedUnits: 0, failure: null })
+    await wait(1000)
+    expect(kind()).toBeNull()
+    await set(translating(8))
+    expect(kind()).toBeNull()
+    await wait(399)
+    expect(kind()).toBeNull()
+    await wait(2)
+    expect(kind()).toBe('progress')
+  })
+
+  it("a run's capsule wanted again while it leaves comes back in place at once: the 400 ms grace never makes a gap after a capsule that was showing; one that has left is a new wait's, gated (the coordinator's R4, 2026-11-12)", async () => {
+    const { wait, set, kind, container } = await mounted()
+    await set(translating(3))
+    await wait(400)
+    expect(kind()).toBe('progress')
+    // (its wait over for a moment: it leaves, 160 ms; wanted again 100 ms in)
+    await set({ phase: 'ready' })
+    expect(container.querySelector('.capsule[data-out]')?.getAttribute('data-kind')).toBe('progress')
+    await wait(100)
+    await set(translating(4))
+    expect(kind()).toBe('progress')
+    expect(container.querySelectorAll('.capsule').length).toBe(1)
+    // (one that has left, 160 ms on: a wait begun with nothing shown waits its 400 ms)
+    await set({ phase: 'ready' })
+    await wait(200)
+    expect(container.querySelector('.capsule')).toBeNull()
+    await set(translating(5))
+    expect(kind()).toBeNull()
+    await wait(400)
+    expect(kind()).toBe('progress')
+  })
+
+  it("a run paused by a cause the session goes on from: the pause's capsule says the wait, the region adds no run's word beside it (the first making's pause never says the paper is being prepared: the coordinator's R7, decision 1)", async () => {
+    const { set, kind, container } = await mounted({ words: { ...words, network: 'network down', rate: 'too many' } })
+    const region = () =>
+      [...container.querySelectorAll('[role="status"] > .sr-only')].map((e) => e.textContent).join(' | ')
+    // (the first making, paused by the network: its phase kept, the network's words alone)
+    await set({ phase: 'preparing', made: true, preparing: { progress: 0.12 }, network: true })
+    expect([kind(), region()]).toEqual(['notNow', ''])
+    // (a counted run paused by the visitor's rate, as the session tells it: the rate's words alone)
+    await set({
+      network: false,
+      preparing: null,
+      ...translating(7),
+      unavailable: { why: 'rate', retryAt: null, self: true },
+    })
+    expect([kind(), region()]).toEqual(['notNow', ''])
+  })
+
+  it("enters once its wait has lasted 400 ms: a wait of 300 ms shows nothing, and says nothing (the coordinator's decision 3, 2026-11-11)", async () => {
+    const { container, wait, set, kind } = await mounted()
+    await set(translating(3))
+    await wait(300)
+    expect([kind(), container.querySelector('[role="status"]')!.textContent]).toEqual([null, ''])
+    await set({ phase: 'ready' })
+    await wait(2000)
+    expect([
+      kind(),
+      container.querySelector('.capsule'),
+      container.querySelector('[role="status"]')!.textContent,
+    ]).toEqual([null, null, ''])
+  })
+
+  it('a wait of 2 s shows from 400 ms to its end, and leaves at once; one that changes its words and its stage inside one appearance never blinks', async () => {
+    const { container, wait, set, kind } = await mounted()
+    const seen: (string | null)[] = []
+    const look = () => seen.push(kind())
+    await set(translating(3))
+    await wait(399)
+    look()
+    await wait(1)
+    look()
+    // (the count pauses, then moves; our server not heard, then heard again: the same appearance)
+    await wait(600)
+    look()
+    await set(translating(4))
+    look()
+    await set({ reconnecting: true })
+    look()
+    await wait(500)
+    await set({ reconnecting: false, ...translating(9) })
+    look()
+    await wait(499)
+    look()
+    expect(seen).toEqual([null, 'progress', 'progress', 'progress', 'progress', 'progress', 'progress'])
+    // (one capsule all along: its words changed in place, never a second entrance)
+    expect(container.querySelectorAll('.capsule').length).toBe(1)
+    await set({ phase: 'ready' })
+    expect([kind(), container.querySelector('.capsule[data-out]')?.getAttribute('data-kind')]).toEqual([
+      null,
+      'progress',
+    ])
+  })
+
+  it('a refusal, a notice and a toast are not delayed; a run that follows a capsule showing takes its place at once (the gate is for a wait begun with nothing shown: the coordinator, 2026-11-12)', async () => {
+    const { set, kind } = await mounted({ words: { ...words, notNow: () => 'unavailable for now' } })
+    await set({ unavailable: { why: 'unreachable', retryAt: null } })
+    expect(kind()).toBe('notNow')
+    await set({ unavailable: null, failedUnits: 2 })
+    expect(kind()).toBe('notice')
+    await set({ failedUnits: 0, toast: { words: 'Link copied', icon: 'check' } })
+    expect(kind()).toBe('toast')
+    await set({ toast: null, ...translating(3) })
+    expect(kind()).toBe('progress')
+  })
+
+  it("our server at capacity: the queue's capsule with the spinner and no retry, after its 400 ms like every run's; the extension's (no words for it) the refusal's capsule with its retry at once (the coordinator's decision 5, 2026-11-11)", async () => {
+    const queue = { ...words, queued: 'Waiting in line', busy: () => 'busy for now' }
+    const { container, wait, set, kind } = await mounted({ words: queue })
+    await set({ unavailable: { why: 'busy', retryAt: Date.now() + 30_000 } })
+    expect(kind()).toBeNull()
+    await wait(400)
+    const capsule = container.querySelector('.capsule:not([data-out])')
+    expect([
+      kind(),
+      capsule?.querySelector('.sr-only')?.textContent,
+      !!capsule?.querySelector('svg.spin'),
+      capsule?.querySelector('button'),
+    ]).toEqual(['progress', 'Waiting in line', true, null])
+    // (asked again and admitted: the first making's wait follows in the same capsule)
+    await set({ unavailable: null, phase: 'preparing', made: true, preparing: { progress: 0 } })
+    expect(kind()).toBe('progress')
+    vi.useRealTimers()
+    const ext = fakeController({ phase: 'ready', unavailable: { why: 'busy', retryAt: Date.now() + 30_000 } })
+    const own = await mountElement(capsuleOf(ext.controller))
+    expect([
+      own.container.querySelector('.capsule')?.getAttribute('data-kind'),
+      !!own.container.querySelector('.capsule button[data-action]'),
+    ]).toEqual(['notNow', true])
+  })
+  it('the capsule with the spinner, alone; its stage said once with the count it starts at, the count that moves not said again; none without them', async () => {
+    const { fake, container, wait } = await mounted()
     await act(async () => fake.set(translating(3)))
+    await wait(400)
     const capsule = () => container.querySelector('.capsule:not([data-out])')
     const line = () => capsule()?.querySelector('.sr-only')?.textContent
     const sign = JSON.stringify(Loader.map(([, a]) => a))
@@ -461,7 +631,8 @@ describe("a run under way in a host's words (the website's stage and count)", ()
     expect(line()).toBe('3 / 10')
     await act(async () => fake.set({ reconnecting: true }))
     expect(line()).toBe('reconnecting')
-    // (none: the progress line alone, its words said in the region)
+    // (none: the progress line alone, its words said in the region at once)
+    vi.useRealTimers()
     const bare = fakeController({ phase: 'ready' })
     const none = await mountElement(capsuleOf(bare.controller))
     await act(async () => bare.set(translating(3)))
@@ -543,9 +714,9 @@ describe("the signs by the host's rule (parts.tsx `signs`; L11's second round, g
     const b = await mountElement(capsuleOf(wait.controller, { signs: 'by-state' }))
     expect(drawn(b.container.querySelector('.capsule')!)).toBe(signOf(Info))
   })
-  it("the website's cards: a wait (out of reach, a limit) a clock in quiet ink; a fault the alert in the danger's", async () => {
+  it("the website's cards: a wait (out of reach) a clock in quiet ink; a fault the alert in the danger's", async () => {
     const tones = []
-    for (const failure of ['network', 'rate-limit', 'unknown'] as const) {
+    for (const failure of ['network', 'unknown'] as const) {
       const { container } = await mountElement(
         cardOf(fakeController({ phase: 'failed', failure }).controller, 'pane', { signs: 'by-state' }),
       )
@@ -554,7 +725,6 @@ describe("the signs by the host's rule (parts.tsx `signs`; L11's second round, g
       document.body.innerHTML = ''
     }
     expect(tones).toEqual([
-      [signOf(Clock), 'wait'],
       [signOf(Clock), 'wait'],
       [signOf(CircleAlert), 'alert'],
     ])
@@ -570,51 +740,50 @@ describe("a retry offered at its time by the host's rule (parts.tsx `retry`; L11
   })
   it("the website's: no chip until the time has come, the words alone; then the chip, the host's words asked again without the time", async () => {
     const fake = fakeController({ phase: 'ready' })
-    const words = { busy: (at: number | null) => (at !== null && Date.now() < at ? 'busy until later' : 'busy') }
+    const words = { limited: (at: number | null) => (at !== null && Date.now() < at ? 'limit until later' : 'limit') }
     const { container } = await mountElement(capsuleOf(fake.controller, { retry: 'when-due', words }))
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
     try {
-      await act(async () => fake.set({ unavailable: { why: 'busy', retryAt: Date.now() + 90_000 } }))
+      await act(async () => fake.set({ unavailable: { why: 'refused', retryAt: Date.now() + 90_000 } }))
       const capsule = container.querySelector('.capsule')!
       expect([
         chip(container),
         capsule.hasAttribute('data-alone'),
         capsule.querySelector('.sr-only')?.textContent,
-      ]).toEqual([null, true, 'busy until later'])
+      ]).toEqual([null, true, 'limit until later'])
       await act(async () => vi.advanceTimersByTime(90_000))
       expect(chip(container)?.textContent).toBe(S.failed.retry)
-      expect(container.querySelector('.capsule .sr-only')?.textContent).toBe('busy')
+      expect(container.querySelector('.capsule .sr-only')?.textContent).toBe('limit')
     } finally {
       vi.useRealTimers()
     }
   })
   it("the website's card: its retry greyed until the time, still a stop, pressing it doing nothing; the host's lines under the reason; then offered", async () => {
     const fake = fakeController({ phase: 'loading' })
-    const cardLines = (kind: string, at: number | null) => ({
+    const cardLines = (_kind: string, at: number | null) => ({
       sub: at !== null && Date.now() < at ? 'retry later' : null,
-      note: kind === 'rate-limit' ? 'papers translated before still open' : null,
     })
     const { container } = await mountElement(
       cardOf(fake.controller, 'pane', { retry: 'when-due', words: { cardLines } }),
     )
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
     try {
-      await act(async () => fake.set({ phase: 'failed', failure: 'rate-limit', failureAt: Date.now() + 30_000 }))
+      await act(async () => fake.set({ phase: 'failed', failure: 'network', failureAt: Date.now() + 30_000 }))
       const button = () => container.querySelector<HTMLButtonElement>('.card button')!
       const lines = () => [...container.querySelectorAll('.card .lines p')].map((p) => [p.className, p.textContent])
       expect([button().getAttribute('aria-disabled'), button().disabled, lines()]).toEqual([
         'true',
         false,
         [
-          ['', R.status.rateLimited],
+          ['', TEST_PARTS.reason('network')],
           ['sub', 'retry later'],
-          ['sub', 'papers translated before still open'],
         ],
       ])
       button().click()
       expect(fake.controller.retry).not.toHaveBeenCalled()
       await act(async () => vi.advanceTimersByTime(30_000))
-      expect([button().getAttribute('aria-disabled'), lines().length]).toEqual([null, 2])
+      // (its time come: the line gone, the reason alone)
+      expect([button().getAttribute('aria-disabled'), lines().length]).toEqual([null, 0])
       button().click()
       expect(fake.controller.retry).toHaveBeenCalledOnce()
     } finally {
@@ -642,9 +811,15 @@ describe("the run's chip that shows the translation, where the host words it (St
     showTranslation: 'Show translation',
   }
   const run = { phase: 'translating' as const, translated: { got: 4, total: 15 }, layer: { laid: 0, total: 0 } }
+  /** the run's wait past the time its capsule enters after (WAIT_SHOWN_MS) */
+  const entered = () =>
+    act(async () => {
+      await new Promise((r) => setTimeout(r, WAIT_SHOWN_MS + 50))
+    })
   it('none while nothing of the translation is there, nor where it is on screen; offered on the original once some is', async () => {
     const fake = fakeController({ ...run, display: 'original' })
     const { container } = await mountElement(capsuleOf(fake.controller, { words }))
+    await entered()
     expect(chip(container)).toBeNull()
     // (the layer's pages known and rows of them in, or a page laid)
     await act(async () => fake.set({ layer: { laid: 0, total: 6 } }))
@@ -660,6 +835,7 @@ describe("the run's chip that shows the translation, where the host words it (St
   it('none where the host words no chip (the extension gives no words of a run at all)', async () => {
     const fake = fakeController({ ...run, display: 'original', layer: { laid: 2, total: 6 } })
     const { container } = await mountElement(capsuleOf(fake.controller, { words: { translating: words.translating } }))
+    await entered()
     expect([!!container.querySelector('.capsule[data-kind="progress"]'), chip(container)]).toEqual([true, null])
   })
 })

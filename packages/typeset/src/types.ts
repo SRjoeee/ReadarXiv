@@ -3,6 +3,7 @@
 // (layPage, layFlow) is built from the rules once each rule is proven against today's recorded outputs (the tap).
 import type { Box, Id, Ink, Link, Part, Placed, PrepWhy, Row, Why as RowWhy } from '@readarxiv/format'
 import type { ScriptRules } from './data/rules/types.ts'
+import type { RefNames } from './unit/rename.ts'
 
 /** a target language's tag (BCP 47, as the rule set's `languages` names it) */
 export type Lang = string
@@ -43,6 +44,9 @@ export type Choices = {
   /** the unit kinds the reader shows untranslated (design-a's `Kind[]`: a toggle's kinds, e.g. the references' `reference`,
    *  `refnames`, `inkreferences`); layPage leaves a member of one the original's (`left`) */
   leave?: string[]
+  /** how far a unit's last line may stand under TeX's text block bottom, in points, where that keeps it from a step down its
+   *  fit's sizes (docs/PDF-READER.md §18.37): none, the rule's (fit/walk.ts PAST_FOOT); 0, never (the owner's switch) */
+  pastFoot?: number
 }
 
 /** a language's hyphenation: its patterns as data (never fetched by the typesetter) and babel's minimums */
@@ -68,6 +72,12 @@ export type Rules = Readonly<{
   set: RuleParams
   /** the float labels and babel's names in the target (A5) */
   labels: Readonly<Record<string, string>>
+  /** a theorem-like head's names in the target (translator's dictionaries, ctex's: the rule set's heads.ts, from
+   *  rules/tex-names.json), English → the target's; empty where its packages name none, null for a target the file names not */
+  heads: Readonly<Record<string, string>> | null
+  /** the names TeX's cross-referencing packages generate (cleveref's, hyperref's: "Figure 3", a citation's note), prepared for
+   *  the target (U.rename's RefNames: the rule set's refs.ts, from rules/tex-names.json; `target` null where it names none) */
+  refs: RefNames
   /** the languages whose hyphenation patterns it reads: English's for every Latin word, the target's own Latin and Cyrillic */
   patterns: readonly string[]
   /** each of those languages' patterns, as the host loaded them (hyph.ts hyphenationOf); a language absent has none */
@@ -82,7 +92,12 @@ export type Rules = Readonly<{
 /** the rule set's fields as resolved for a target (rules/layout.mjs resolveRules' params): the script's, the language's over
  *  them, `cjk` from the script, babel's hyphenation minimums */
 export type RuleParams = Readonly<
-  Omit<ScriptRules, 'cjkFaces'> & { cjk: boolean; hyphenation: Readonly<Record<string, unknown>> }
+  Omit<ScriptRules, 'cjkFaces'> & {
+    cjk: boolean
+    hyphenation: Readonly<Record<string, unknown>>
+    /** the reader's Choices.pastFoot where it gives one, else absent (the fit's PAST_FOOT) */
+    pastFoot?: number
+  }
 >
 
 /** the faces the typesetter sets text in: by role, weight, slant and script class; with each face's size correction */
@@ -135,11 +150,21 @@ export type Item =
        *  line's baseline runs from (x0, y) along it, and `x` (and `dx`) is its place along it from x0 (x − x0 its distance from
        *  the line's start); drawn turned, its characters along it, a raise across it */
       dir?: [ux: number, uy: number]
+      /** the tracking after each of its characters, PDF units (a run of one x laid with tracking, the fit's state's: its
+       *  characters' advances the face's and this; display.ts lineRuns), drawn by the page's painter */
+      track?: number
     }
   /** a crop; `cut` its edges cut from its element's ink between two glyphs (1 its left, 2 its right: a URL broken where TeX's
-   *  url package breaks it), which the reader draws with no antialiased margin */
-  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3 }
+   *  url package breaks it), which the reader draws with no antialiased margin; `ink` its own ink, its piece's boxes on its
+   *  line as the part states them (its page's PDF units; none where the part states none of its piece: lay/clips.ts), the
+   *  reader's to cut it by; `of` the member whose label it is where another member's line draws it (a label no line opens with,
+   *  carried to the end of the name before, lay/flow.ts): lit, cut and counted as that member's */
+  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3; ink?: Box[]; of?: number }
 
+/** the fit's knobs a unit under its page's band may take in the fill (shared/fill-page.ts evenOf, docs/PDF-READER.md §18.57): its
+ *  tracking, the room TeX left under its blocks, one step of its sizes; and at a column's foot the room past TeX's text block bottom
+ *  (the borrow's own, §18.37). Here, where Laid states it, so that the page's fill imports it and no type cycle runs through it */
+export type EvenKnob = 'track' | 'room' | 'size' | 'foot'
 /** one member on one page, as laid (design-a §1.2) */
 export type Laid = {
   ord: number
@@ -147,12 +172,29 @@ export type Laid = {
   state: 'laid' | Unlaid
   /** this member's groups turned off on this page: 1 text, 2 elements, 4 label */
   off: number
-  fit?: { size: number; lead: number; track: number; borrowed: number }
+  /** its fit's size, leading and tracking, and the lines its borrow knob let it lay under a block (99: all its room holds);
+   *  `over` where a state of it let its lines past TeX's text block bottom (the fit's borrow, docs/PDF-READER.md §18.37; the
+   *  page fill's foot step, §18.57): how far under that bottom its lowest line stands, points, to the hundredth up; none where
+   *  no line of it stands there */
+  fit?: { size: number; lead: number; track: number; borrowed: number; over?: number }
+  /** a tight paragraph the page's fill evened (§18.57): `by` the fit's knobs it took, in the order taken; `lines` its line count
+   *  on this page at its fitted layout, before them */
+  evened?: { by: EvenKnob[]; lines: number }
   /** its laid lines on this page, baseline first (a turned line, its items' `dir`: from its origin (x0, y), x1 − x0 its length
    *  along it) */
   lines: [y: number, x0: number, x1: number, items: Item[]][]
-  /** per sentence, on A (left) and as drawn (right); `own`: its kept ink, the same boxes on both panes */
-  lit: { left: Box[][]; right: Box[][]; own: [piece: string, boxes: Box[]][] }
+  /** per sentence, on A (left) and as drawn (right); `own`: its kept ink, the same boxes on both panes; `dir` where the member is
+   *  set along a direction (a figure text the original sets turned, Placed.dir): every box of it is in its run's frame, [s0, t0,
+   *  s1, t1] along `dir` and across it (the page's point s·(ux, uy) + t·(−uy, ux)), lit turned with its text; `band` a figure
+   *  text's (Placed kind 'figure'): lit on its own lines' band alone, no pad beside nor half the page's leading over and under
+   *  (that leading is the page's body text's: a 4.67 pt label padded by it reached the label behind, docs/PDF-READER.md §17.9) */
+  lit: {
+    left: Box[][]
+    right: Box[][]
+    own: [piece: string, boxes: Box[]][]
+    dir?: [ux: number, uy: number]
+    band?: true
+  }
 }
 
 /** a page, laid or waiting (design-a §1.2); `ledger` where the call asked for a trace (design-b §1.7) */
@@ -161,7 +203,13 @@ export type Page = {
   /** non-empty: not committed; every member is 'waiting', nothing off */
   wait: { rows: Id[]; faces: [FaceId, string][] }
   members: Laid[]
-  links: [box: Box, to: Link['to']][]
+  /** the page's links as drawn: moved with their pieces, else at A's boxes; `owner` the ord of the member that holds one (Link's
+   *  owner), so that a reader leaving that member the original's puts its links back at A's boxes; `border` its own
+   *  annotation's on A (Link.border, moved or not), none where it has none */
+  links: [box: Box, to: Link['to'], owner?: number, border?: Link['border']][]
+  /** every piece's ink the part states (each element's, label's and counter's box) on the pages the page's crops are cut from:
+   *  what a crop's antialiased edge must leave behind; none where it draws no crop (lay/clips.ts) */
+  inks?: Ink[]
   ledger?: PageLedger
 }
 

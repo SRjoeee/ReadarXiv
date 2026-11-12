@@ -1,16 +1,19 @@
 // S.figures (design-b §1.6 L4, T10, G16, A26): a page's figure texts (the content class `figures`, docs/route/orphan-text.md
 // stage 5), each drawn in its translation where it says something its source does not, in the faces of its font's family and
-// weight (its CJK characters in the target's CJK face, the rest in the Latin one), each set fitted at one size (figure-fit.ts);
+// weight (its CJK characters in the target's CJK face, the rest in the Latin one), each set fitted at one size (figure-fit.ts),
+// each translation's line by its ink as the breaker sets every line (the blank halves of the marks at its edges, blanksOf);
 // else left the original's, why told: `no row`, `kept`, `untranslated`, `same` as its source, `unhidden` where the document
 // holds no group of it, a face's refusal (`served`), `unfit`, `crowded`. Ported from engine 065c1d973 run.mjs paintFigures
 // RUN:1441-1496 without its paint (the hidden box, the SVG, the text layer: the reader's and D.*'s), layer2.mjs figureRuns,
 // figureRunsWidth, figureRunsDepth L2:4824-4839 and fonts.mjs classifyFont's family, weight and slant (fonts.mjs:42-52). A face
 // not loaded yet is waited for (B.cover: `waiting`, its faces in `wait`), where today's run awaited it.
+import { hangOf, leadOf } from '../breaker/break.types.ts'
 import { cover } from '../breaker/cover.ts'
 import { type FitMeasure, fitMeasure } from '../breaker/measure.ts'
-import { cjkClassRe } from '../breaker/script.ts'
+import { cjkClassRe, markOf } from '../breaker/script.ts'
 import { shown, type TextPiece } from '../breaker/text.ts'
 import type { Face, Token, TStyle } from '../breaker/tokens.ts'
+import { firstCompress } from '../fit/walk.ts'
 import type { FaceId, Metrics } from '../types.ts'
 import { CJK_FOOT, type FitFigure, fitFigureSet, sameAsSource } from './figure-fit.ts'
 
@@ -28,14 +31,31 @@ export type FigureRow = FitFigure & {
   descent: number
   fill: number
   font: string
-  /** its family, weight and slant where they are stated (a part's Style), else read off its font's name (`font`) */
-  cls?: { fam: 'serif' | 'sans' | 'mono' | 'math'; bold: boolean; italic: boolean }
+  /** its family, weight and slant where they are stated (a part's Style), else read off its font's name (`font`); its small
+   *  capitals and its design where its style reads them (lay/read.ts tstyleOf: a face of small capitals, the design of its
+   *  family), so that its runs are drawn in its face as a body unit's are (Codex on #634, ec222ba69) */
+  cls?: {
+    fam: 'serif' | 'sans' | 'mono' | 'math'
+    bold: boolean
+    italic: boolean
+    caps?: true
+    design?: string
+    /** a group's fill where its style states one (0xRRGGBB, 0 black): TeX's line in a picture over two colours (2611.03178v1's
+     *  label and the address after it in the link's colour); none: the figure text's own */
+    fill?: number
+  }
   set: string
 }
-/** a figure unit's row as the door gives it (rows.mjs unitOf): its state and its pieces */
-export type FigureUnit = { state: string; pieces?: readonly ({ t: string; s?: string; tr?: boolean } | TextPiece)[] }
-/** a run of a figure's translation in one face (figureRuns) */
-export type FigureRun = { s: string; face: Face; cls: 'cjk' | 'latin' }
+/** a figure text's family, weight and slant (FigureRow.cls) */
+export type FigureClass = NonNullable<FigureRow['cls']>
+/** a figure unit's row as the door gives it (rows.mjs unitOf): its state and its pieces, each in the style of its group's run on
+ *  A where it stands in one (`cls`: a figure text's run of glyphs in another face, the part's SpanAt.style), else the unit's */
+export type FigureUnit = {
+  state: string
+  pieces?: readonly (({ t: string; s?: string; tr?: boolean } | TextPiece) & { cls?: FigureClass })[]
+}
+/** a run of a figure's translation in one face (figureRuns), and its fill where its group states one (FigureClass.fill) */
+export type FigureRun = { s: string; face: Face; cls: 'cjk' | 'latin'; fill?: number }
 /** a figure text's outcome: drawn (its text, runs, size, where its anchor keeps it, its width, its turn in degrees
  *  anticlockwise, its fill) or why not */
 export type Figure = {
@@ -68,9 +88,12 @@ export type FiguresInput = {
   designs: Readonly<Record<string, string>>
   /** a style's face in a script class (B.faces) */
   faceOf: (st: TStyle, cls: 'cjk' | 'latin') => Face
-  /** the rules' cjkQuotes and the last floor (P.floorMin) */
-  rules: { cjkQuotes?: boolean; floorMin: number }
+  /** the rules' cjkQuotes, the last floor (P.floorMin), and how far the marks are compressed (compressMax: blanksOf) */
+  rules: { cjkQuotes?: boolean; floorMin: number; compressMax: number }
   metrics: Metrics
+  /** the most of their sizes a set's units are drawn at (fitFigureSet's `cap`): a figure text of its size tie another path laid
+   *  smaller; none, their own fit's */
+  caps?: (set: string) => number | undefined
 }
 
 // ---- fonts.mjs classifyFont: the family, weight and slant a font's name tells (what figures read of it)
@@ -92,21 +115,54 @@ export function fontClassOf(name: string): { fam: 'serif' | 'sans' | 'mono' | 'm
   return { fam, bold: BOLD.test(n), italic: ITALIC.test(n) }
 }
 
-/** a figure's translation in its runs by script, each in its face (L2:4825 figureRuns) */
-export function figureRuns(text: string, faceOf: (cls: 'cjk' | 'latin') => Face, quotes: boolean): FigureRun[] {
+/** a figure's translation in its runs by script, each in its face (L2:4825 figureRuns); and by style, where its characters
+ *  (`at`, by code point) hold their own (a group's run on A), each run in its style's face */
+export function figureRuns(
+  text: string,
+  faceOf: (cls: 'cjk' | 'latin', st?: TStyle) => Face,
+  quotes: boolean,
+  at: readonly (TStyle | undefined)[] = [],
+): FigureRun[] {
   const cjkRe = cjkClassRe(quotes),
-    runs: { cls: 'cjk' | 'latin'; s: string }[] = []
+    runs: { cls: 'cjk' | 'latin'; s: string; st: TStyle | undefined }[] = []
+  let k = 0
   for (const ch of text) {
     const cls = cjkRe.test(ch) ? 'cjk' : 'latin',
+      st = at[k++],
       last = runs.at(-1)
-    if (last?.cls === cls) last.s += ch
-    else runs.push({ cls, s: ch })
+    if (last?.cls === cls && last.st === st) last.s += ch
+    else runs.push({ cls, s: ch, st })
   }
-  return runs.map((r) => ({ s: r.s, face: faceOf(r.cls), cls: r.cls }))
+  return runs.map((r) => {
+    const face = r.st ? faceOf(r.cls, r.st) : faceOf(r.cls)
+    return { s: r.s, face, cls: r.cls, ...(typeof r.st?.fill === 'number' ? { fill: r.st.fill } : {}) }
+  })
+}
+/** a translation's pieces as one text, as the figure is drawn (a piece that is no text a space, white space one space, trimmed),
+ *  and each of its characters' own style (by code point: its piece's, where it holds one; a space its white space's first) */
+function textOfPieces(pieces: NonNullable<FigureUnit['pieces']>): { text: string; at: (FigureClass | undefined)[] } {
+  const out: { c: string; cls: FigureClass | undefined }[] = []
+  let space = false
+  for (const p of pieces)
+    for (const c of p.t === 'text' ? shown(p as TextPiece) : ' ') {
+      if (/\s/.test(c)) {
+        if (!space) out.push({ c: ' ', cls: p.cls })
+        space = true
+        continue
+      }
+      out.push({ c, cls: p.cls })
+      space = false
+    }
+  while (out[0]?.c === ' ') out.shift()
+  while (out.at(-1)?.c === ' ') out.pop()
+  return { text: out.map((x) => x.c).join(''), at: out.map((x) => x.cls) }
 }
 /** figureRuns' width at size 1, each run's in its face (L2:4836 figureRunsWidth, widthOf L2:1322) */
 export const figureRunsWidth = (runs: readonly FigureRun[], m: FitMeasure): number =>
   runs.reduce((a, r) => a + m.w100(r.s, r.face) / 100, 0)
+/** how far over its baseline figureRuns reach at size 1, their ink (a container's edge keeps it under it, figure-fit.ts) */
+export const figureRunsHeight = (runs: readonly FigureRun[], m: FitMeasure): number =>
+  runs.reduce((h, r) => Math.max(h, m.ink100(r.s, r.face).a / 100), 0)
 /** how far under its baseline figureRuns reach at size 1, a CJK run's held to its face's em box (L2:4839 figureRunsDepth) */
 export const figureRunsDepth = (runs: readonly FigureRun[], m: FitMeasure): number =>
   runs.reduce(
@@ -120,6 +176,20 @@ export const figureRunsDepth = (runs: readonly FigureRun[], m: FitMeasure): numb
     0,
   )
 
+/** the blank halves at the edges of a figure text's line, before its ink and after it, em of its size: its line set as the
+ *  breaker sets every line (B.break leadOf, hangOf) at its target's first state (firstCompress), its first and last characters
+ *  marks as the tokens class them (script.ts markOf: a mark's blank half as its run's face draws it; none where its ink crosses
+ *  its em's middle, nor for a curly quote in an alphabet's Latin face, Codex on #634) */
+function blanksOf(runs: readonly FigureRun[], rules: FiguresInput['rules']): [number, number] {
+  const compress = firstCompress(rules)
+  const edge = (r: FigureRun | undefined, ch: string | undefined) => ({
+    t: { punct: r?.cls === 'cjk' && ch ? markOf(ch, r.face.ids) : null },
+  })
+  const a = runs[0],
+    z = runs.at(-1)
+  return [leadOf(edge(a, a && [...a.s][0]), compress), hangOf(edge(z, z && [...z.s].at(-1)), compress)]
+}
+
 /** a row a translation (rows.mjs: whole or partial, with its pieces) */
 const translated = (u: FigureUnit | undefined): u is FigureUnit & { pieces: NonNullable<FigureUnit['pieces']> } =>
   !!u?.pieces && (u.state === 'whole' || u.state === 'partial')
@@ -129,7 +199,16 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
   const m = fitMeasure(i.metrics)
   const out: Figure[] = [],
     wait: [FaceId, string][] = []
-  const ready: { f: FigureRow; rec: Figure; text: string; runs: FigureRun[]; width1: number; depth1: number }[] = []
+  const ready: {
+    f: FigureRow
+    rec: Figure
+    text: string
+    runs: FigureRun[]
+    width1: number
+    depth1: number
+    height1: number
+    blank1: [number, number]
+  }[] = []
   for (const f of i.figures) {
     const rec: Figure = { id: f.id, group: f.group, page: f.page, drawn: false, why: null }
     out.push(rec)
@@ -138,11 +217,7 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
       rec.why = !u ? 'no row' : u.state === 'kept' ? 'kept' : 'untranslated'
       continue
     }
-    const text = u.pieces
-      .map((p) => (p.t === 'text' ? shown(p as TextPiece) : ' '))
-      .join('')
-      .replace(/\s+/g, ' ')
-      .trim()
+    const { text, at } = textOfPieces(u.pieces)
     if (!text || sameAsSource(text, i.src(f.id))) {
       Object.assign(rec, { why: 'same', text })
       continue
@@ -151,10 +226,34 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
       Object.assign(rec, { why: 'unhidden', text })
       continue
     }
-    const cf = f.cls ?? fontClassOf(f.font)
-    const fam = cf.fam === 'math' ? 'serif' : cf.fam
-    const st: TStyle = { fam, bold: cf.bold, italic: cf.italic, caps: false, design: i.designs[fam] ?? i.designs.serif }
-    const runs = figureRuns(text, (cls) => i.faceOf(st, cls), !!i.rules.cjkQuotes)
+    // (its style, and each of its groups' runs' where its translation holds them: a style a class, its faces the paper's design)
+    const styleOf = (cf: FigureClass): TStyle => {
+      const fam = cf.fam === 'math' ? 'serif' : cf.fam
+      return {
+        fam,
+        bold: cf.bold,
+        italic: cf.italic,
+        caps: !!cf.caps,
+        design: cf.design ?? i.designs[fam] ?? i.designs.serif,
+        ...(cf.fill !== undefined ? { fill: cf.fill } : {}),
+      }
+    }
+    const st = styleOf(f.cls ?? fontClassOf(f.font))
+    const own = new Map<FigureClass, TStyle>()
+    const stAt = at.map((c) => (c ? (own.get(c) ?? own.set(c, styleOf(c)).get(c)!) : undefined))
+    // (a CJK run in the face the fitter gave it before a label's small capitals and design were carried: the paper's design, no
+    // small capitals, which are no CJK face's; its fallbacks as they were)
+    const cjkOf = (c: TStyle): TStyle => ({
+      ...c,
+      caps: false,
+      design: i.designs[!c.fam || c.fam === 'math' ? 'serif' : c.fam] ?? i.designs.serif,
+    })
+    const runs = figureRuns(
+      text,
+      (cls, s) => i.faceOf(cls === 'cjk' ? cjkOf(s ?? st) : (s ?? st), cls),
+      !!i.rules.cjkQuotes,
+      stAt,
+    )
     const covered = cover(
       runs.map((r) => ({ s: r.s, face: r.face }) as Token),
       i.metrics,
@@ -168,7 +267,16 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
       Object.assign(rec, { why: covered.why, text })
       continue
     }
-    ready.push({ f, rec, text, runs, width1: figureRunsWidth(runs, m), depth1: figureRunsDepth(runs, m) })
+    ready.push({
+      f,
+      rec,
+      text,
+      runs,
+      width1: figureRunsWidth(runs, m),
+      depth1: figureRunsDepth(runs, m),
+      height1: figureRunsHeight(runs, m),
+      blank1: blanksOf(runs, i.rules),
+    })
   }
   // (each set fitted at one size, its units in their rows' order)
   const bySet = new Map<string, typeof ready>()
@@ -179,8 +287,8 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
     list.push(c)
   }
   const fits = new Map<(typeof ready)[number], ReturnType<typeof fitFigureSet>[number]>()
-  for (const list of bySet.values())
-    fitFigureSet(list, i.rules.floorMin).forEach((fit, k) => {
+  for (const [key, list] of bySet)
+    fitFigureSet(list, i.rules.floorMin, i.caps?.(key) ?? 1).forEach((fit, k) => {
       fits.set(list[k]!, fit)
     })
   for (const c of ready) {

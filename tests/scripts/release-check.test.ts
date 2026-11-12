@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, GATES, type Gate, INVARIANTS, type Stage, type StepRun, sameSum, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
+import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, INVARIANTS, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
 import { cutoverOf, gatesOf, invariantLine, markdownOf, privateResultOf, targetLines, verdictOf } from '../../lab/release-check/verdict.mjs'
 
 const dirs: string[] = []
@@ -55,7 +55,7 @@ describe('the gate table', () => {
   })
 
   it('holds every invariant of design §4.9 and the differential, and every target of §7 says where its number comes from', () => {
-    expect(INVARIANTS.map(i => i.id)).toEqual(['I1', 'I2', 'I3', 'I4', 'I5', 'I6', 'I7', 'I8', 'I9', 'D'])
+    expect(INVARIANTS.map(i => i.id)).toEqual(['I1', 'I2', 'I3', 'I4', 'I5', 'I6', 'I7', 'I8', 'I9', 'I10', 'D'])
     for (const t of TARGETS) expect([t.id, Boolean(t.from || t.why)]).toEqual([t.id, true])
     for (const t of TARGETS) if (t.from) expect(GATES.map(g => g.id)).toContain(t.from)
   })
@@ -114,8 +114,19 @@ describe("a gate's output, read as the gate states it", () => {
       '{"pairs":123,"prepared":32589,"laid":32035,"pages":3014,"twoPages":1336,"twoPagesDiffer":0,"ms":27100,"msPerPage":8.99}',
       "a page's lay (layPagePrepared, L8-E1), ms: p50 7.77, p90 20.6, p99 32.8, max 90 over 3213 pages; the adapter (L6) 10 ms in all",
       'invariants over the laid members (page by page): {"laid":33371,"lines":9,"I3":78,"I4":0,"I5":0}; I3: x',
+      'I10, the sentence cover (cover.ts): 64062 member-pages lit, 4783401 pieces; 491 faults:',
     ].join('\n')
-    expect(typesetOf(text)).toMatchObject({ pairs: 123, msPerPage: 8.99, layP50: 7.77, layP90: 20.6, layP99: 32.8, layPages: 3213, I3: 78, I4: 0, I5: 0 })
+    expect(typesetOf(text)).toMatchObject({ pairs: 123, msPerPage: 8.99, layP50: 7.77, layP90: 20.6, layP99: 32.8, layPages: 3213, I3: 78, I4: 0, I5: 0, I10: 491, I10pieces: 4783401 })
+    // (the parity's v2 lay states it so too)
+    expect(typesetOf('I10, the sentence cover (cover.ts): 100 pieces; 0 faults').I10).toBe(0)
+    // (an entry that laid nothing counted nothing: "0 faults" over 0 pieces is no count)
+    expect(typesetOf('I10, the sentence cover (cover.ts): 0 member-pages lit, 0 pieces; 0 faults').I10).toBeUndefined()
+    // (I6 across the pages' lays: the head pass's known cause apart from any other)
+    expect(
+      typesetOf(
+        "I6 across the pages' lays (cross-lay.ts): 2272 units begun on a pass page, 272 laid by two pages' lays or more; 3 laid otherwise: 2 by the head pass (known: headOf reads the paragraph over the unit as one lay filled it and the other did not), 1 by another cause",
+      ),
+    ).toEqual({ I6twice: 272, I6head: 2, I6other: 1 })
   })
 
   it("reads the corpus runner's log: a refused paper, a missing compile, a failure and the proofs' counts apart", () => {
@@ -124,6 +135,17 @@ describe("a gate's output, read as the gate states it", () => {
     const ok = (id: string, proofs: object) => `${id}\t0\t${JSON.stringify({ id, proofs })}`
     writeFileSync(join(d, 'log.tsv'), [ok('a', { a: 0, c: 0 }), ok('b', { a: 2, c: 0, on: 0, offOutside: { t: 1, f: 0 } }), 'c\t3\tNEEDS_COMPILE', 'd\trefused\t11 GiB free', 'e\t1\tError: x', 'f\t0\tf {"pages":{}}', 'g\t0\tdone'].join('\n'))
     expect(corpusLogOf(join(d, 'log.tsv'))).toEqual({ papers: 7, made: 4, failed: ['e: exit 1: Error: x', 'g: no summary'], refused: ['d (11 GiB free)'], missingCompile: ['c'], proofs: { a: 2, c: 0, on: 0, offOutside: 1 } })
+  })
+
+  it("reads a paper's summary whole from its own log where the runner's table cuts it, and its proofs from there", () => {
+    const d = mkdtempSync(join(tmpdir(), 'release-check-'))
+    dirs.push(d)
+    mkdirSync(join(d, 'logs'))
+    // (corpus.sh keeps 400 characters of a summary in log.tsv; run.mjs's summary is longer since it states what locate made)
+    const whole = JSON.stringify({ id: 'p', refused: null, made: { glyphs: 262, ledger: 'x'.repeat(400) }, proofs: { a: 2, c: 0 } })
+    writeFileSync(join(d, 'logs', 'p.log'), `a warning\n${whole}\n`)
+    writeFileSync(join(d, 'log.tsv'), [`p\t0\t${whole.slice(0, 400)}`, `q\t0\t${JSON.stringify({ id: 'q', proofs: { a: 0, c: 1 } })}`].join('\n'))
+    expect(corpusLogOf(join(d, 'log.tsv'))).toMatchObject({ papers: 2, made: 2, failed: [], proofs: { a: 2, c: 1 } })
   })
 
   it('reads a proof the prover refused as a failure of that paper, named, never as a count', () => {
@@ -142,12 +164,73 @@ describe("a gate's output, read as the gate states it", () => {
     expect(c.over).toEqual(['q: no add-on', 'r: no line (the canvas did not report it)'])
   })
 
-  it("holds the canvas's papers to the bound its header names, and the marks' sum to the owner's record but for its compiles", () => {
+  it("holds the canvas's papers to the bound its header names", () => {
     const line = (o: object) => JSON.stringify({ id: 'p', canvas: 'gpu', pages: 4, splitShows: 1, outsidePages: [], shareMax: 0, maxDelta: 0, ...o })
     expect(canvasOf([line({}), line({ id: 'q', shareMax: 0.0037, maxDelta: 81 }), line({ id: 'r', outsidePages: [[97, 53]] })].join('\n')).over).toEqual(['q: outside [], share 0.0037, Δ 81', 'r: outside [[97,53]], share 0, Δ 0'])
-    const sum = (ms: number, same: number) => `${JSON.stringify({ papers: 87, glyphs: { compared: 9, same }, compiles: { made: 8, read: 80, ms } })}\n   12  1 p  glyph: a class`
-    expect(sameSum(sum(1, 7), sum(177262, 7))).toBe(true)
-    expect(sameSum(sum(1, 6), sum(177262, 7))).toBe(false)
+  })
+})
+
+describe("the prepare's corpus, as the round's stage 1a runs it", () => {
+  const corpus = (ids: string[]) => GATES.filter(g => ids.includes(g.id))
+
+  it('reads a compile cache chain from a corpus run\'s flags.txt or from a list, one line or one a line', () => {
+    expect(cachesOf('--caches=/a/compiles:/b/cache\n--prove\n--baseline=/lab/baseline/prepare\n')).toBe('/a/compiles:/b/cache')
+    expect(cachesOf('/a/compiles:/b/cache\n')).toBe('/a/compiles:/b/cache')
+    expect(cachesOf('# the round chain\n/a/compiles\n\n/b/cache # the second\n')).toBe('/a/compiles:/b/cache')
+  })
+
+  it('runs the 88 papers on the caches RELEASE_CHECK_CACHES names, a run and its twin with the same flags, the baseline\'s dumps read', () => {
+    const refactor = mkdtempSync(join(tmpdir(), 'release-check-lab-'))
+    dirs.push(refactor)
+    writeFileSync(join(refactor, 'flags.txt'), '--caches=/round/r21/compiles:/round/r20/compiles\n--prove\n')
+    const ctx: Ctx = { root: '/repo', labData: refactor, refactor, work: '/work', online: false, minFree: 0 }
+    process.env.RELEASE_CHECK_CACHES = join(refactor, 'flags.txt')
+    try {
+      const [prepare, same] = corpus(['prepare', 'prepare-same']).map(g => g.steps!(ctx)[0]!.cmd)
+      expect(prepare).toEqual(['bash', 'lab/pdf/prepare-back/corpus.sh', join(refactor, 'lanes/L1-papers88.tsv'), '/work/prepare', '/round/r21/compiles:/round/r20/compiles', '2', '--prove', `--baseline=${join(refactor, 'baseline/prepare')}`])
+      expect(same?.slice(4)).toEqual(prepare?.slice(4))
+      for (const g of corpus(['prepare', 'prepare-same', 'pixels'])) expect(g.needs!(ctx).map(n => n.path)).toContain(join(refactor, 'flags.txt'))
+      // (the baseline's dumps where the run reads them, the round's flags; the pixel proofs' run takes its own)
+      expect(corpus(['prepare', 'prepare-same', 'pixels']).map(g => g.needs!(ctx).some(n => n.path === join(refactor, 'baseline/prepare')))).toEqual([true, true, false])
+    } finally {
+      delete process.env.RELEASE_CHECK_CACHES
+    }
+    // (without it, the lab's list for these papers)
+    expect(corpus(['prepare'])[0]!.needs!(ctx).map(n => n.path)).toContain(join(refactor, 'lanes/L1-caches88.txt'))
+  })
+
+  it('counts the units drawn only on the papers the baseline holds, beside its own count', () => {
+    const d = mkdtempSync(join(tmpdir(), 'release-check-'))
+    dirs.push(d)
+    for (const sub of ['run', 'baseline']) mkdirSync(join(d, sub))
+    const dump = (n: number) => JSON.stringify({ units: Array.from({ length: n }, () => ({ kind: 'para', state: 'drawn' })) })
+    writeFileSync(join(d, 'run', 'a.prepare.json'), dump(2))
+    writeFileSync(join(d, 'run', 'gained.prepare.json'), dump(5))
+    writeFileSync(join(d, 'baseline', 'a.prepare.json'), dump(1))
+    expect(drawnOf(join(d, 'run'))).toMatchObject({ papers: 2, source: 7 })
+    expect(drawnOf(join(d, 'run'), join(d, 'baseline'))).toMatchObject({ papers: 1, source: 2 })
+  })
+})
+
+describe("the typesetter's replays", () => {
+  it("replays the figures under today's mark rule, which PDF-READER §19.12 reads the port's figures by, every other replay as it is", () => {
+    const ctx: Ctx = { root: '/repo', labData: null, refactor: '/lab', work: '/work', online: false, minFree: 12 }
+    expect(GATES.find(g => g.id === 'typeset-replays')!.steps!(ctx).map(s => s.cmd.slice(1))).toEqual([
+      ['lab/typeset/replay-fit.mjs'],
+      ['lab/typeset/replay-fill.mjs'],
+      ['lab/typeset/replay-emit.mjs'],
+      ['lab/typeset/replay-names.mjs'],
+      ['lab/typeset/replay-figures.mjs', '--marks=today'],
+      ['lab/typeset/replay-display.mjs'],
+    ])
+  })
+})
+
+describe("the typesetter's data", () => {
+  it("checks the generated data and today's readings, never the breaker's moved files against today's code, which the rulings edit", () => {
+    const ctx: Ctx = { root: '/repo', labData: null, refactor: '/lab', work: '/work', online: false, minFree: 12 }
+    const scripts = GATES.find(g => g.id === 'typeset-data')!.steps!(ctx).map(s => s.cmd.findLast(a => /\.(?:m?js|ts)$/.test(a)) ?? s.cmd.join(' '))
+    expect(scripts).toEqual(['lab/typeset/faces-data.mjs', 'lab/typeset/rules-data.mjs', 'lab/typeset/derive.mjs', 'lab/typeset/vitest.config.ts'])
   })
 })
 
@@ -162,8 +245,20 @@ describe('the speed check', () => {
       const steps = speed.steps!(ctx)
       expect(steps.map(s => s.cmd.slice(0, 2))).toEqual([['zsh', 'lab/pdf/spikes/layer-gate/run-speed.sh'], ['node', 'lab/pdf/spikes/layer-gate/speed.mjs']])
       expect(steps[0]?.env?.SPEED_LOGS).toBe(steps[1]?.cmd[2])
+      expect(steps[0]?.cmd.slice(2, 4)).toEqual(['/repo', '/base'])
     } finally {
       delete process.env.RELEASE_CHECK_BASE
+    }
+  })
+
+  it('measures against the released tree, today\'s engine at 065c1d973, where no base is given', () => {
+    const today = process.env.AXT_TODAY
+    delete process.env.AXT_TODAY
+    try {
+      expect(speed.steps!(ctx)[0]?.cmd.slice(2, 4)).toEqual(['/repo', '/refactor-read'])
+      expect(speed.needs!(ctx)[0]?.path).toBe('/refactor-read/src/pdf-reader/engine')
+    } finally {
+      if (today !== undefined) process.env.AXT_TODAY = today
     }
   })
 
@@ -193,6 +288,29 @@ describe('the equivalence gates, in either shape of their tools', () => {
     expect(gate('translate-equivalence').judge!(ctxAt('/repo', work), [run(0)])).toMatchObject({ pass: false, numbers: { compared: 2, disagree: 1 } })
   })
 
+  it('holds I10 by a gate of its own, the runner with the reading from the part, counted only where the entry laid pieces', () => {
+    const cover = gate('sentence-cover')
+    const ctx = ctxAt('/repo', '/work')
+    expect(cover.holds).toEqual(['I10', 'I6'])
+    expect(cover.steps!(ctx)[0]?.cmd).toEqual(['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', '--out=/work/sentence-cover'])
+    // (typeset-parts, today's reading, lays no entry: it holds no I10 and asks for none)
+    expect(gate('typeset-parts').holds).not.toContain('I10')
+    expect(gate('typeset-parts').steps!(ctx)[0]?.cmd).not.toContain('--entry')
+    const said = (pieces: number, faults: number, other = 0) =>
+      `{"pairs":123,"laid":1,"pages":2}\nI10, the sentence cover (cover.ts): 9 member-pages lit, ${pieces} pieces; ${faults} faults\nI6 across the pages' lays (cross-lay.ts): 90 units begun on a pass page, 9 laid by two pages' lays or more; ${2 + other} laid otherwise: 2 by the head pass (known: headOf reads the paragraph over the unit as one lay filled it and the other did not), ${other} by another cause`
+    expect(cover.judge!(ctx, [run(0, said(4767634, 0))])).toMatchObject({ pass: true, numbers: { I10: 0, pieces: 4767634, I6head: 2, I6other: 0 }, findings: { I10: { held: true, count: 0 }, I6: { held: true, count: 0 } } })
+    // (a unit laid otherwise by two pages' lays, another cause than the head pass's: the run exits 1 and ends whole, I10 still
+    // counted, I6 counted against)
+    expect(cover.judge!(ctx, [run(1, said(4767634, 0, 1))])).toMatchObject({ pass: false, findings: { I10: { held: true, count: 0 }, I6: { held: false, count: 1 } } })
+    expect(cover.judge!(ctx, [run(0, said(4767634, 5))])).toMatchObject({ pass: false, findings: { I10: { held: false, count: 5 } } })
+    // (nothing laid: no finding, no pass; a run that did not end whole: its count is not read)
+    const none = cover.judge!(ctx, [run(1, said(0, 0))])
+    expect(none.pass).toBe(false)
+    expect(none.findings).toBeUndefined()
+    expect(cover.judge!(ctx, [run(1, said(100, 0))]).findings).toBeUndefined()
+    // (the display gate reads the parity's lay of its pairs the same way)
+    expect(gate('display').judge!(ctx, [run(0, 'I10, the sentence cover (cover.ts): 599484 pieces; 2 faults: x'), run(0), run(0, 'parity: 9 pages of 1 pairs; 0 worse than today; missing none')]).findings).toEqual({ I10: { held: false, count: 2 } })
+  })
   it("reads the display gate's verdict as measure.mjs states it: its pages, the pages worse than today's and each measure's, passing on its exit", () => {
     const text = [
       'parity: 365 pages of 22 pairs; 2 worse than today; missing 2303.11366v4-zh',
@@ -214,26 +332,14 @@ describe('the equivalence gates, in either shape of their tools', () => {
     const blocker = gate('display')
     expect(blocker.cutover).toBe(true)
     const other = gate('typecheck')
-    expect(cutoverOf(GATES, [other], { typecheck: { status: 'pass' } })).toMatchObject({ verdict: 'NO-GO', why: ['display: not in this run (tier full)'] })
+    expect(cutoverOf(GATES, [other], { typecheck: { status: 'pass' } })).toMatchObject({ verdict: 'NO-GO', why: ['display: not in this run (tier full)', 'perf-release: not in this run (tier release)'] })
     expect(cutoverOf(GATES, [other, blocker], { typecheck: { status: 'pass' }, display: { status: 'fail' } }).verdict).toBe('NO-GO')
-    expect(cutoverOf(GATES, [other, blocker], { typecheck: { status: 'fail' }, display: { status: 'pass' } })).toMatchObject({ verdict: 'GO', why: [] })
+    // (performance ≥ today is a blocker too, the release tier's: GO only with both passed)
+    const perf = gate('perf-release')
+    expect(perf.cutover).toBe(true)
+    expect(cutoverOf(GATES, [other, blocker], { typecheck: { status: 'fail' }, display: { status: 'pass' } })).toMatchObject({ verdict: 'NO-GO', why: ['perf-release: not in this run (tier release)'] })
+    expect(cutoverOf(GATES, [other, blocker, perf], { typecheck: { status: 'fail' }, display: { status: 'pass' }, 'perf-release': { status: 'pass' } })).toMatchObject({ verdict: 'GO', why: [] })
     expect(markdownOf({ tier: 'full', verdict: 'NO-GO', why: [], cutover: { verdict: 'NO-GO', why: ['display: fail'], blockers: ['display'] }, invariants: [], gates: [], targets: [] })).toContain('**Cut-over: NO-GO.**')
-  })
-
-  it("judges the marks' replay by the census in the tree where it is (lab/marks/census.mjs), else by run 6's census r13", () => {
-    const withCensus = mkdtempSync(join(tmpdir(), 'release-check-root-'))
-    dirs.push(withCensus)
-    mkdirSync(join(withCensus, 'lab/marks'), { recursive: true })
-    writeFileSync(join(withCensus, 'lab/marks/census.mjs'), '')
-    const now = gate('marks-replay').steps!(ctxAt(withCensus, '/work'))
-    expect(now[1]?.cmd).toEqual(['node', 'lab/marks/census.mjs', '/work/marks-replay'])
-    expect(gate('marks-replay').needs!(ctxAt(withCensus, '/work')).map(n => n.what)).not.toContain("run 6's census (r13)")
-    expect(gate('marks-replay').judge!(ctxAt(withCensus, '/work'), [run(0), run(0, 'PASS')]).pass).toBe(true)
-    expect(gate('marks-replay').judge!(ctxAt(withCensus, '/work'), [run(0), run(1, 'FAIL: a class moved')])).toMatchObject({ pass: false })
-    const before = gate('marks-replay').steps!(ctxAt('/no-census', '/work'))
-    expect(before[1]?.cmd).toEqual(['node', 'lab/marks/gate-sum.mjs', '/work/marks-replay'])
-    expect(gate('marks-replay').needs!(ctxAt('/no-census', '/work')).map(n => n.what)).toContain("run 6's census (r13)")
-    expect(gate('marks-gate').steps!(ctxAt(withCensus, '/work'))[1]?.cmd).toEqual(['node', 'lab/marks/census.mjs', '/work/marks-gate'])
   })
 })
 
@@ -250,7 +356,7 @@ describe("the private repository's results", () => {
 
 describe('the report', () => {
   it('gives each target of §7 its value where a gate of the run measured it, met or missed, else why not', () => {
-    const lines = targetLines({ 'prepare-diff': { status: 'pass', numbers: { source: 27271, ink: 2700, figures: 8000, lost: 0, accepted: 3, gained: 356 } }, harness: { status: 'pass', numbers: { commitP50: 25, commitPages: 8 } } })
+    const lines = targetLines({ 'prepare-diff': { status: 'pass', numbers: { source: 27271, ink: 2700, figures: 8000, lost: 0, accepted: 3, gained: 356 } }, 'perf-batch': { status: 'pass', numbers: { m: { commitP50: [25, 24, 'equal'] } } } })
     expect(lines.find(t => t.id === 'units')).toMatchObject({ status: 'met' })
     expect(lines.find(t => t.id === 'commit')).toMatchObject({ status: 'missed' })
     expect(lines.find(t => t.id === 'reuse')).toMatchObject({ status: 'not measured', why: expect.stringMatching(/no gate/) })

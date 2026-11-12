@@ -15,6 +15,7 @@ import { deltaOf } from '@/pdf-reader/engine/layout/delta.mjs'
 import { startxrefOf } from '@readarxiv/engine'
 import { cutSample } from '../e2e/lib/layer-cut.mjs'
 import { made, type Made, N, PAPER } from './helpers/format-paper'
+import { INITIAL, reduce, type SessionEvent as ChromeEvent } from '@readarxiv/reader'
 
 const API = 'https://readarxiv.com'
 const SEG = `${PAPER.id}v${PAPER.version}`
@@ -988,6 +989,105 @@ describe('B6, R2-R4: the translation into rows', () => {
     expect(last).toMatchObject({ got: 0, stopped: 'network' })
     expect(a.side.ended()).toBe(0)
     expect(a.side.side.dropOthers).toHaveBeenCalledTimes(1)
+  })
+
+  /** what openEngine throws for the background's answer of kind `aborted` (the scope withdrawn, the chain retired, a
+   *  translator that gave up): the texts answered before it, and every other one lost to the service */
+  const serviceAbort = (texts: string[], answered: (i: number) => boolean = () => false) => Object.assign(new Error('cancelled (chain retired)'), {
+    name: 'EngineError', kind: 'aborted',
+    partial: texts.map((t, i) => (answered(i) ? { text: t, by: 'test' } : null)),
+    lost: new Set(texts.flatMap((_, i) => (answered(i) ? [] : [i]))),
+  })
+  /** what the chrome makes of the run's events (host.ts passes them on; a layer told is `coming`), over an original on screen */
+  const chromeOf = (events: RunEvent[], laid = 0) => [
+    { type: 'opened' }, { type: 'coming' }, ...(laid ? [{ type: 'layer', state: 'open', laid, total: N }] : []),
+    ...events.filter(e => e.type === 'translating' || e.type === 'translated'),
+  ].reduce((state, e) => reduce(state, e as ChromeEvent), INITIAL)
+
+  it('an abort the service made, not the reader, is a stop told as `unknown`: the card and its retry with nothing laid, the notice and its retry over pages laid; never a translation done', async () => {
+    const total = toTranslate(m.index, 'zh').length
+    // nothing came back: told as a stop, every unit counted, nothing laid (the pages stay the original's: no end), and a retry or
+    // the settings' landing opens the service again
+    const none = echo()
+    none.translate.mockImplementation(async (texts: string[]) => { throw serviceAbort(texts) })
+    const a = run({ looks: [() => new Response(catalog)], engine: none })
+    await settle(60)
+    expect(a.events.filter(e => e.type === 'translated').at(-1)).toEqual({ type: 'translated', got: 0, total, lost: total, stopped: 'unknown' })
+    expect(a.side.ended()).toBe(0)
+    expect(a.side.side.dropOthers).toHaveBeenCalledTimes(1)
+    expect(a.r.probe().rowsState).toBe('failed')
+    // the reader: the failure's card with its reason, `unknown`'s, and its retry (`aborted` would show no card at all, UI.md §3.4)
+    expect(chromeOf(a.events)).toMatchObject({ phase: 'failed', failure: 'unknown', failedUnits: total })
+    // part came back before it: those laid, the end told, the rest counted
+    const part = echo()
+    part.translate.mockImplementation(async (texts: string[]) => { throw serviceAbort(texts, i => i < 3) })
+    const b = run({ looks: [() => new Response(catalog)], engine: part })
+    await settle(60)
+    const last = b.events.filter(e => e.type === 'translated').at(-1) as Extract<RunEvent, { type: 'translated' }>
+    expect(last).toMatchObject({ lost: total - 3, stopped: 'unknown' })
+    expect(last.got).toBeGreaterThan(0)
+    expect(b.side.ended()).toBe(1)
+    expect(b.r.probe().rowsState).toBe('failed')
+    // the reader: the pages readable, the notice of the paragraphs left with its retry (the failure kept)
+    expect(chromeOf(b.events, 2)).toMatchObject({ phase: 'ready', failure: 'unknown', failedUnits: total - 3 })
+  })
+
+  it('the reader\'s own abort ends silent: an attempt let go by a retry, or by the page\'s end, tells nothing, whatever its ask answers after', async () => {
+    let release: (e: unknown) => void = () => {}
+    const engine = echo()
+    engine.translate.mockImplementationOnce(async (texts: string[]) => new Promise((_, reject) => { release = () => reject(serviceAbort(texts)) }))
+    const a = run({ looks: [() => new Response(catalog)], engine })
+    await settle(60)
+    expect(engine.translate).toHaveBeenCalledTimes(1)
+    // a retry while the ask is out lets the attempt go: its late answer, `aborted` included, tells nothing
+    a.r.retry()
+    await settle(60)
+    release(null)
+    await settle(60)
+    expect(a.events.filter(e => e.type === 'translated')).toEqual([{ type: 'translated', got: toTranslate(m.index, 'zh').length, total: toTranslate(m.index, 'zh').length, lost: 0, stopped: null }])
+    expect(a.events.some(e => e.type === 'fail')).toBe(false)
+    expect(a.r.probe().rowsState).toBe('translated')
+    // the page's end while an ask is out: nothing told after it
+    const held = echo()
+    held.translate.mockImplementationOnce(async (texts: string[]) => new Promise((_, reject) => { release = () => reject(serviceAbort(texts)) }))
+    const b = run({ looks: [() => new Response(catalog)], engine: held })
+    await settle(60)
+    const told = b.events.length
+    b.r.dispose()
+    release(null)
+    await settle(60)
+    expect(b.events.slice(told)).toEqual([])
+  })
+
+  it('a retry after a stop told `unknown` asks again exactly the units never answered: the ones laid stay laid, and the row store answers them', async () => {
+    // The background answers a unit it holds a row for from its row store and asks the chain only for the rest
+    // (providers/transport.ts): modelled by `stored`, which the two services share. What the run must do is send again every
+    // unit it holds no translation for, and keep the ones laid on the pages
+    const stored = new Map<string, string>(), asked: string[] = [], lostTexts: string[] = []
+    let opens = 0
+    const first = echo(), second = echo()
+    first.translate.mockImplementation(async (texts: string[]) => {
+      texts.forEach((t, i) => { if (i < 3) stored.set(t, t); else lostTexts.push(t) })
+      throw serviceAbort(texts, i => i < 3)
+    })
+    second.translate.mockImplementation(async (texts: string[]) => texts.map(t => {
+      if (!stored.has(t)) { asked.push(t); stored.set(t, t) }
+      return { text: stored.get(t) as string, by: 'test' }
+    }))
+    const a = run({ looks: [() => new Response(catalog)], engine: async () => (opens++ ? second : first) })
+    await settle(60)
+    expect(a.r.probe().rowsState).toBe('failed')
+    const laid = [...a.side.taken]
+    expect(laid.length).toBeGreaterThan(0)
+    // the notice's retry: the service opened again, the rows held taken again at once, then the run again
+    a.r.retry()
+    await settle(60)
+    expect(first.close).toHaveBeenCalled()
+    expect(a.side.taken.slice(laid.length, laid.length * 2)).toEqual(laid)
+    expect(lostTexts.length).toBe(toTranslate(m.index, 'zh').length - 3)
+    expect([...asked].sort()).toEqual([...lostTexts].sort())
+    expect(a.events.filter(e => e.type === 'translated').at(-1)).toMatchObject({ lost: 0, stopped: null })
+    expect(a.r.probe().rowsState).toBe('translated')
   })
 
   it('a stop with rows of the target held tells the end: the pages complete with what they hold (a retry that fails over a translation done)', async () => {

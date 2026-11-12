@@ -9,7 +9,18 @@ import { cover } from '../../src/breaker/cover.ts'
 import { measure } from '../../src/breaker/measure.ts'
 import { type TStyle, tokens } from '../../src/breaker/tokens.ts'
 import { type MeasureTable, tableMetrics } from '../../src/metrics/table.ts'
-import { firstDifference, hasDerived, hasTap, readGz, roundsOf, sample, TAP } from './tap.ts'
+import {
+  firstDifference,
+  hasDerived,
+  hasTap,
+  markSpaced,
+  ownStyleUnread,
+  quotesUnmarked,
+  readGz,
+  roundsOf,
+  sample,
+  TAP,
+} from './tap.ts'
 import { type In, type Reading, rolesOf, tokenFacts, tokensInput } from './tokens-input.ts'
 
 describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('B.tokens: replayed on the tap', () => {
@@ -20,6 +31,9 @@ describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('
     let rounds = 0,
       count = 0,
       covers = 0
+    // (the rounds and spaces the mark-space ruling of 2026-11-10 takes from today's tokens, tap.ts markSpaced)
+    // (and the rounds the element ruling of 2026-11-11 moves, tap.ts ownStyleUnread)
+    const ruled = { rounds: 0, spaces: 0, quoteRounds: 0, quotes: 0, ownRounds: 0 }
     const kinds = new Set<string>()
     for (const e of sample('B.tokens').entries)
       for (const [round, c] of roundsOf(e)) {
@@ -37,7 +51,9 @@ describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('
         rounds++
         if (!metrics.has(e.pair))
           metrics.set(e.pair, tableMetrics(readGz(join(TAP, 'metrics', `${e.pair}.metrics.json.gz`)) as MeasureTable))
-        const got = tokens(tokensInput(a, e0, f, cls.cls2, rolesOf(e.pair)))
+        const input = tokensInput(a, e0, f, cls.cls2, rolesOf(e.pair))
+        const got = tokens({ ...input, resolved: ownStyleUnread(input.resolved) })
+        if (firstDifference(tokens(input).tokens, got.tokens)) ruled.ownRounds++
         // (B.cover: every face of the round's runs measured in its pair's table, as its slot says: { ok: true })
         const covered = cover(got.tokens, metrics.get(e.pair)!)
         const slot = e.slots.find((s) => s.by === 'B.cover')?.value
@@ -62,13 +78,26 @@ describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('
             'leadEnd',
           ] as const)
             if (t[kind] !== undefined && t[kind] !== null) kinds.add(kind)
-        const d = firstDifference(measured, [...want], 'tokens') ?? firstDifference(got.base, want.base, 'base')
+        const roles = rolesOf(e.pair)
+        const cjkIds = new Set(roles.cjk ? [roles.cjk.body, roles.cjk.bold] : [])
+        const spaced = markSpaced([...want], cjkIds)
+        const today = { ...spaced, ...quotesUnmarked(spaced.tokens, cjkIds) }
+        if (today.removed) {
+          ruled.rounds++
+          ruled.spaces += today.removed
+        }
+        if (today.changed) {
+          ruled.quoteRounds++
+          ruled.quotes += today.changed
+        }
+        const d = firstDifference(measured, today.tokens, 'tokens') ?? firstDifference(got.base, want.base, 'base')
         if (d) differ.push(`${key}: ${d}`)
         // (the comparison tells a width off by a billionth)
         const off = measured.map((t, j) => (j ? t : { ...t, w100: t.w100 + 1e-9 }))
-        if (measured.length && !firstDifference(off, [...want])) differ.push(`${key}: a changed width went unseen`)
+        if (measured.length && !firstDifference(off, today.tokens)) differ.push(`${key}: a changed width went unseen`)
       }
     expect(differ).toEqual([])
+    expect(ruled).toEqual({ rounds: 1, spaces: 3, quoteRounds: 3, quotes: 10, ownRounds: 6 })
     expect(rounds).toBe(42)
     expect(covers).toBe(42)
     expect(count).toBeGreaterThan(1000)

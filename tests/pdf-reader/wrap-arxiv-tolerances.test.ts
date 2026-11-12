@@ -6,7 +6,7 @@
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { alignOf, type Located, pageInk, planOf, type ReadPage, wrap, wrapOf } from '@readarxiv/engine'
+import { alignOf, type Located, pageInk, planOf, type ReadPage, wrap, wrapOf, wrapPageOf } from '@readarxiv/engine'
 import { deflate, DOCUMENT_OPTIONS, inflate } from './helpers/ocg-pdfs'
 
 /** a one-page PDF: Helvetica as /F1, the page's content `content`, and a form /Fx1 of `form` (raw stream bytes and dict) */
@@ -65,10 +65,72 @@ describe('wrapOf over arXiv’s producers', () => {
     await task.destroy()
     const paths = ink.paths ?? []
     const located = { groups: [{ glyphs: ink.glyphs.map(() => '0.1.t'), boxes: paths.map(k => (k === -3 ? '0.1.e' : null)), turned: [] }], figureGroups: new Set<string>() } as unknown as Located
-    const pagesA = [{ raw: ink, extra: { ...facts, images: facts.images + 1 } }] as unknown as ReadPage<typeof facts>[]
+    const pagesA = [wrapPageOf({ raw: ink, page: { glyphs: ink.glyphs }, extra: { ...facts, images: facts.images + 1 } } as unknown as ReadPage<typeof facts>)]
     const addOn = await wrap(bytes, located, pagesA, { PL, deflate, inflate })
     if ('refused' in addOn) throw new Error(addOn.why)
     expect([...addOn.lost]).toEqual(['0.1.e'])
     expect(addOn.groups.has('0.1.e')).toBe(false)
+  })
+})
+
+describe('wrapOf: a show two groups share, as its producer wrote it', () => {
+  // (a figure text's element cuts a show of the figure's form where its text and its element meet (F0, F1); the split writes
+  // each chunk's codes and adjustments, and its proof reads the chunks joined against the show. Two shows of arXiv's producers
+  // the proof refused, the page's figures then left the original's: 2610.20967v1 p2 (a show opening with an empty string) and
+  // 2610.21098v1 p8, 2610.42112v1 p29 (an adjustment halfway between two millionths))
+  /** the page wrapped, each glyph in the group `groupOf` gives it by its place on the page */
+  async function splitOf(bytes: Uint8Array, groupOf: (i: number) => string) {
+    const task = getDocument({ ...DOCUMENT_OPTIONS, data: bytes.slice() })
+    const page = await (await task.promise).getPage(1)
+    const ops = await page.getOperatorList()
+    const facts = alignOf(OPS as unknown as Record<string, number>, ops)
+    const ink = pageInk(OPS as unknown as Record<string, number>, ops, page.commonObjs, { rotate: 0, indices: true, turned: true })
+    await task.destroy()
+    const paths = ink.paths ?? []
+    const plan = planOf(ink.glyphs, ink.glyphs.map((_, i) => groupOf(i)), paths, paths.map(() => null), facts)
+    const made = await wrapOf(bytes, new Map([[1, { facts, ...plan }]]), { PL, deflate, inflate })
+    if ('refused' in made) throw new Error(`${made.refused}: ${made.why}`)
+    return made
+  }
+  it('splits a show that opens with an empty string: it draws nothing, and the proof reads it as nothing (2610.20967v1 p2)', async () => {
+    const made = await splitOf(await pdfOf('BT /F1 10 Tf 72 700 Td [() -334 (ab) 10 (cd)] TJ ET\n'), (i) => (i < 2 ? '0.1.t' : '1.1.t'))
+    expect(made.pages.get(1)).toMatchObject({ ok: true })
+    expect([...made.groups.keys()].sort()).toEqual(['0.1.t', '1.1.t'])
+  })
+  it('splits a show whose adjustment stands halfway between two millionths: read at the precision the split writes it', async () => {
+    const made = await splitOf(await pdfOf('BT /F1 10 Tf 72 700 Td [(ab) -0.5859375 (cd)] TJ ET\n'), (i) => (i < 2 ? '0.1.t' : '1.1.t'))
+    expect(made.pages.get(1)).toMatchObject({ ok: true })
+    expect([...made.groups.keys()].sort()).toEqual(['0.1.t', '1.1.t'])
+  })
+})
+
+describe('wrapOf for the prepare: the section alone', () => {
+  // (the back half's wrap keeps the add-on alone: the section appended to A, never A and it composed, nor a digest of the whole,
+  // which nothing of the prepare reads. Composing them held a copy of A as long as A, and the digest's job another, at the
+  // wrap's end: 33.5 MiB on 2609.19644v1, lane mem-back)
+  it('gives the composed document\'s own tail, its xref and pages, and no whole', async () => {
+    const bytes = await pdfOf('BT /F1 10 Tf 72 700 Td (a rule under) Tj ET\nq 90 0 0 0.4 72 690 cm BI /W 1 /H 1 /IM true /D [1 0] ID \u0000 EI Q\n')
+    const { made } = await wrappedOf(bytes)
+    const task = getDocument({ ...DOCUMENT_OPTIONS, data: bytes.slice() })
+    const page = await (await task.promise).getPage(1)
+    const ops = await page.getOperatorList()
+    const facts = alignOf(OPS as unknown as Record<string, number>, ops)
+    const ink = pageInk(OPS as unknown as Record<string, number>, ops, page.commonObjs, { rotate: 0, indices: true, turned: true })
+    await task.destroy()
+    const paths = ink.paths ?? []
+    const plan = planOf(ink.glyphs, ink.glyphs.map(() => '0.1.t'), paths, paths.map(k => (k === -3 ? '0.1.t' : null)), facts)
+    const alone = await wrapOf(bytes, new Map([[1, { facts, ...plan }]]), { PL, deflate, inflate, compose: false })
+    if ('refused' in alone || !('section' in alone)) throw new Error('refused')
+    expect(Buffer.from(alone.section).equals(Buffer.from(made.bytes.subarray(bytes.length)))).toBe(true)
+    expect(alone.xref).toBe(made.xref)
+    expect([...alone.groups]).toEqual([...made.groups])
+    expect('bytes' in alone || 'sha256' in alone).toBe(false)
+  })
+  it('gives an empty section where no page is wrapped', async () => {
+    const bytes = await pdfOf('BT /F1 10 Tf 72 700 Td (no group) Tj ET\n')
+    const alone = await wrapOf(bytes, new Map(), { PL, deflate, inflate, compose: false })
+    if ('refused' in alone || !('section' in alone)) throw new Error('refused')
+    expect(alone.section.length).toBe(0)
+    expect(alone.unwrapped).toBe(true)
   })
 })

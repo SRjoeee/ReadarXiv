@@ -25,7 +25,7 @@ import {
   type UiLanguage,
   useReader,
 } from '../../src/index.ts'
-import { fixtureLay, pagesOf, type ReaderDump } from './convert.ts'
+import { fixtureLay, inked, pagesOf, type ReaderDump } from './convert.ts'
 
 interface Options {
   target?: string
@@ -45,31 +45,32 @@ interface Options {
   original?: 'ours' | 'broken'
   /** the fixtures' faces (the default), or a face whose file is not there (a face lost) */
   faces?: 'fixtures' | 'missing'
+  /** page 1 laid with runs of three inks (convert.ts inked) */
+  inks?: boolean
 }
 
 /** the website's words beside HOST_WORDS: its chip that shows the translation, its way to arXiv's PDF, its link where the
  *  extension is not on the page, its card's lines */
 const SITE_WORDS: StateWords = {
-  translating: (got, total, chip) => (chip ? 'Translating' : `Translating ${got} / ${total}`),
+  translating: (got, total, chip, first) =>
+    first ? 'Translating, the first time' : chip ? 'Translating' : `Translating ${got} / ${total}`,
   showTranslation: 'Show translation',
   originalLost: 'The original cannot be shown here',
   openOriginal: 'Open the PDF on arXiv',
   htmlLink: () => ({ href: 'https://example.org/store', label: 'Install the extension' }),
   notNow: (at) => (at !== null && Date.now() < at ? 'Unavailable until later' : 'Unavailable for now'),
-  busy: (at) => (at !== null && Date.now() < at ? 'Busy until later' : 'Busy for now'),
+  limited: (at) => (at !== null && Date.now() < at ? 'Limit until later' : 'Limit for now'),
   cardLines: (_kind, at) => ({ sub: at !== null && Date.now() < at ? 'Retry later' : null }),
 }
 
 /** a host's words, each naming its state, as the website's table says its own */
 const HOST_WORDS: StateWords = {
-  queued: (n) => `Queued, number ${n}`,
-  preparing: 'Preparing the paper',
-  translating: (got, total) => `Translating ${got} / ${total}`,
+  queued: 'Waiting in line',
+  translating: (got, total, _chip, first) => (first ? 'Translating, the first time' : `Translating ${got} / ${total}`),
   reconnecting: 'Reconnecting',
   noPdf: 'No bilingual PDF of this paper',
   tooLarge: 'The paper is too large',
   notNow: () => 'Unavailable for now',
-  busy: () => 'Busy for now',
   limited: () => 'Your share of new papers is spent',
   failed: () => 'The translation is unavailable',
   originalLost: 'The original could not be read',
@@ -125,7 +126,15 @@ const c = {
     const ui = o.ui ?? 'en'
     setLocale(ui)
     document.documentElement.lang = ui
-    const prefs: Prefs = { ...DEFAULTS, target, ui, bands: [{ id: 'soft-green', colour: '#cdeccd', name: null }] }
+    const prefs: Prefs = {
+      ...DEFAULTS,
+      target,
+      ui,
+      bands: [
+        { id: 'soft-green', colour: '#cdeccd', opacity: 0.22, name: null },
+        { id: 'sand', colour: 'oklch(0.85 0.12 85)', opacity: 0.3, name: null },
+      ],
+    }
     const host = {
       fetch: (u: string, i?: RequestInit) => fetch(u, i),
       original: (ref: string) =>
@@ -152,7 +161,7 @@ const c = {
         const dump = (await (
           await fetch(`/fixtures/${name}/${fx.dumps[target] ?? `${target}.reader.json`}`)
         ).json()) as ReaderDump
-        return fixtureLay(
+        const laid = fixtureLay(
           pagesOf(
             parts,
             dump,
@@ -160,6 +169,7 @@ const c = {
           ),
           parts,
         )
+        return o.inks ? inked(laid, 1) : laid
       },
     }
     const controller = createController({

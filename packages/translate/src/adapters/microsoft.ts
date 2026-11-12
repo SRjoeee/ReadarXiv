@@ -12,6 +12,7 @@ import {
   type Limits,
   type OutPiece,
   type Sentences,
+  SOURCE,
   type Translator,
   type UnitIn,
 } from '../contract.ts'
@@ -60,9 +61,12 @@ export const microsoftTarget = (target: Lang): string => REWRITE[target] ?? targ
 export const microsoftServesTarget = (target: Lang): boolean => SUPPORTED.has(microsoftTarget(target))
 
 export const MICROSOFT_LIMITS: Limits = { chars: 2_000, units: 100, inFlight: 8, callMs: 10_000, reask: 0 }
+/** the plain-text words of its 400 for a request over its cap of 50,000 characters in all (measured 2026-09-08, DESIGN §8.3):
+ *  the one 400 of it a smaller request mends */
+const OVER_CAP = /exceeds the maximum allowed translation size/i
 
 /** the behaviour digest of write and read over tests/adapters/fixtures.ts (the suite prints a new one when they move) */
-export const MICROSOFT_DIGEST = '8daf917e8738efb3c3248426ce8252904cb8181726c40d9436aeca003eb58b1d'
+export const MICROSOFT_DIGEST = '6fec7ab7dd7c0407c0972f3b1220033e30a3379a85746afd4a2461a85b931990'
 
 export interface MicrosoftOptions {
   fetch: Fetch
@@ -100,11 +104,11 @@ function sentencesOf(
     last = c
   }
   const back = readMarkers(marked + text.slice(last), plan, tolerant)
-  const content = back && contentOf(refill(back, plan.refill), plan.around)
+  const content = back && contentOf(refill(back, plan.refill), plan.around, plan.beside)
   if (!content) return undefined
   const withSentinels = projectionOf(content)
   const bare = (s: string) => s.split(SENTINEL).join('').replace(/\s+/g, '')
-  const plain = projectionOf(contentOf(toks as Tok[], plan.around) ?? [])
+  const plain = projectionOf(contentOf(toks as Tok[], plan.around, plan.beside) ?? [])
   if (bare(withSentinels) !== bare(plain)) return undefined
   const at: number[] = []
   for (let i = 0, n = 0; i < withSentinels.length; i++) {
@@ -133,7 +137,7 @@ export function readMicrosoft(unit: UnitIn, raw: string): { content: OutPiece[];
     const toks = readMarkers(r.text, plan, tolerant)
     if (!toks) continue
     const filled = refill(toks, plan.refill)
-    const content = contentOf(filled, plan.around)
+    const content = contentOf(filled, plan.around, plan.beside)
     if (!content) continue
     const sentences = unit.sentences ? sentencesOf(unit, plan, r.text, r.src, r.tr, filled, tolerant) : undefined
     return sentences ? { content, sentences } : { content }
@@ -147,12 +151,13 @@ export function microsoft(o: MicrosoftOptions): Translator {
     identity: `microsoft:${sha256Hex(JSON.stringify(['microsoft', MICROSOFT_ENDPOINT, 'markers/1', RAW])).slice(0, 16)}`,
     digest: MICROSOFT_DIGEST,
     context: false,
+    wire: 'markers',
     limits,
     supports: async (target) => microsoftServesTarget(target),
     write: (unit) => planMarkers(unit).wire,
     read: readMicrosoft,
     async *send(wires, call, signal) {
-      const query = `from=en&to=${encodeURIComponent(microsoftTarget(call.target))}&isEnterpriseClient=false`
+      const query = `from=${SOURCE}&to=${encodeURIComponent(microsoftTarget(call.target))}&isEnterpriseClient=false`
       let body: string
       try {
         const reply = await o.fetch(`${MICROSOFT_ENDPOINT}?${query}`, {
@@ -161,7 +166,7 @@ export function microsoft(o: MicrosoftOptions): Translator {
           body: JSON.stringify(wires),
           signal,
         })
-        if (!reply.ok) throw await faultOfReply('microsoft', reply)
+        if (!reply.ok) throw await faultOfReply('microsoft', reply, { cap: OVER_CAP })
         body = await reply.text()
       } catch (e) {
         throw faultOfThrow('microsoft', e, signal)

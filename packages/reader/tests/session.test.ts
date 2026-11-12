@@ -11,6 +11,7 @@ import {
   holdOf,
   init,
   type Input,
+  linkSaid,
   PREPARE_DEADLINE_MS,
   type Prefs,
   REFUSED_ASKS,
@@ -23,6 +24,7 @@ import {
   WAIT_MAX_MS,
 } from '../src/session/machine.ts'
 import { createRuntime, type Handlers } from '../src/session/runtime.ts'
+import { layerOf, paperDoc, prepareOf, runOf } from './helpers/doc.ts'
 
 const PREFS: Prefs = { ...DEFAULTS, display: 'bilingual', target: 'zh-Hans', sync: true }
 const ref = (c: string): Ref => ({ path: `p/2600_00001v1/x/${c.repeat(64)}`, sha256: c.repeat(64), bytes: 10 })
@@ -40,20 +42,31 @@ const headOf = (o = 'o', addOn: boolean = true) =>
     parts: [],
   }) as unknown as Head
 const HEAD = headOf()
-const doc = (rev: number, o: Partial<Doc> = {}): Doc => ({
-  epoch: 'e1',
-  rev,
-  prepare: { state: 'none', why: null, retryAt: null, stage: null, units: [] },
-  layer: null,
-  targets: {},
-  ...o,
-})
+const ZH = 'zh-Hans'
+const doc = (rev: number, o: Partial<Doc> = {}): Doc =>
+  paperDoc({
+    epoch: 'e1',
+    rev,
+    prepare: prepareOf({ state: 'none', why: null, retryAt: null, stage: null, units: [] }),
+    layer: null,
+    targets: {},
+    ...o,
+  })
+/** a target's run as our server's document names it (worker v2 machine.ts docOf): `none`, made by an open and not started */
+const run = (state: 'none' | 'running' | 'done' | 'failed', o: Partial<NonNullable<Doc['targets'][string]>> = {}) =>
+  runOf({ state, why: state === 'failed' ? 'unavailable' : null, attempt: state === 'none' ? 0 : 1, ...o })
+/** a paper being prepared for the target an open made (its run started once the prepare tells its units) */
 const preparing = (rev: number, units: Ref[] = []) =>
-  doc(rev, { prepare: { state: 'running', why: null, retryAt: null, stage: 'compiling', units } })
+  doc(rev, {
+    prepare: prepareOf({ state: 'running', why: null, retryAt: null, stage: 'compiling', units }),
+    targets: { [ZH]: run('none') },
+  })
+/** a paper whose layer is of the deployed build, translated into the target */
 const ready = (rev: number, catalog = CATALOG) =>
   doc(rev, {
-    prepare: { state: 'done', why: null, retryAt: null, stage: null, units: UNITS },
-    layer: { catalog, units: UNITS, format: 1 },
+    prepare: prepareOf({ state: 'done', why: null, retryAt: null, stage: null, units: UNITS }),
+    layer: layerOf({ catalog, units: UNITS, format: 1, stale: false }),
+    targets: { [ZH]: run('done', { units: UNITS }) },
   })
 
 /** step over inputs (each at the machine's time, `at` moving it); the tickets of a slot live now */
@@ -261,7 +274,7 @@ describe('the session: engaged, the link, the layer', () => {
     m.feed({
       i: 'paper',
       t: m.live('link'),
-      doc: doc(1, { prepare: { state: 'failed', why: 'too-large', retryAt: null, stage: null, units: [] } }),
+      doc: doc(1, { prepare: prepareOf({ state: 'failed', why: 'too-large', retryAt: null, stage: null, units: [] }) }),
     })
     expect(m.s.layer).toMatchObject({ s: 'refused', why: 'too-large' })
     expect(m.has('link')).toBe(false)
@@ -269,12 +282,27 @@ describe('the session: engaged, the link, the layer', () => {
     m.feed({ i: 'cmd.retry' })
     expect(m.s.layer.s).toBe('refused')
   })
+  it("a word of our server's this reader does not know (format's doc.ts, read openly): a failed prepare's why is the generic failure at the record's time; a refusal's, the generic failure at its time, no re-ask of capacity and no limit", () => {
+    const failed = machine()
+    failed.feed({
+      i: 'paper',
+      t: failed.live('link'),
+      doc: doc(1, { prepare: prepareOf({ state: 'failed', why: null, retryAt: 7000, stage: null, units: [] }) }),
+    })
+    expect(failed.s.layer).toMatchObject({ s: 'refused', why: 'unreachable', retryAt: 7000 })
+    const refused = machine({ display: 'bilingual' })
+    refused.feed({ i: 'paper', t: refused.live('link'), doc: doc(1) })
+    const open = refused.live('open')
+    refused.feed({ i: 'open.answered', t: open, doc: null, refused: { why: 'other', afterMs: 5000, at: 5000 } })
+    expect(refused.s.layer).toMatchObject({ s: 'refused', why: 'unreachable', retryAt: 5000 })
+    expect([refused.s.pacing, refused.s.refusals]).toEqual([null, 0])
+  })
   it('a deployment newer than the tab: outdated, told once, whether the follow, the open or the layer says it', () => {
     const byLayer = machine()
     byLayer.feed({
       i: 'paper',
       t: byLayer.live('link'),
-      doc: doc(1, { layer: { catalog: CATALOG, units: UNITS, format: 9 } }),
+      doc: doc(1, { layer: layerOf({ catalog: CATALOG, units: UNITS, format: 9 }) }),
     })
     expect(byLayer.s.layer).toMatchObject({ s: 'refused', why: 'outdated' })
     expect(byLayer.effects).toEqual([{ e: 'outdated' }])
@@ -299,6 +327,282 @@ describe('the session: engaged, the link, the layer', () => {
   })
 })
 
+describe('the session: the open, wherever the document lacks what the visit needs and nothing in flight brings it (our server: a follow never starts work, the open starts what is missing)', () => {
+  const NEW = [ref('n')],
+    CATALOG2 = ref('c')
+  /** a layer of another build than the one our server runs (`stale`): served while the paper is prepared again */
+  const stale = (rev: number, o: Partial<Doc> = {}): Doc =>
+    doc(rev, {
+      prepare: prepareOf({ state: 'done', why: null, retryAt: null, stage: null, units: UNITS, attempt: 1 }),
+      layer: layerOf({ catalog: CATALOG, units: UNITS, format: 1, stale: true }),
+      ...o,
+    })
+  const prep = (state: Doc['prepare']['state'], o: Partial<Doc['prepare']> = {}): Doc['prepare'] =>
+    prepareOf({
+      state,
+      why: state === 'failed' ? 'unavailable' : null,
+      stage: state === 'running' ? 'compiling' : null,
+      ...o,
+    })
+  const opens = (m: ReturnType<typeof machine>) => [...resources(m.s).values()].filter((x) => x.slot === 'open')
+  it('a stale layer with no prepare running and no run of the target (staging, 1706.03762v7 after PIPELINE 77 to 78): opened at once, once; the old layer shown and followed meanwhile; the new catalog taken when it lands', () => {
+    const m = machine()
+    const link = m.live('link')
+    m.feed({ i: 'paper', t: link, doc: stale(1) })
+    expect(opens(m)).toEqual([{ slot: 'open', target: ZH }])
+    // (followed meanwhile, the old layer ready and drawn: the design's "a stale layer keeps serving")
+    expect(m.live('link')).toBe(link)
+    expect(m.s.layer).toMatchObject({ s: 'ready', catalog: CATALOG })
+    // (our server prepares again and makes the target's work, its run started once the prepare tells its units; the follow
+    // asked again at once, at the pace of what now runs)
+    m.feed({
+      i: 'open.answered',
+      t: m.live('open'),
+      doc: stale(2, { prepare: prep('running', { attempt: 2 }), targets: { [ZH]: run('none') } }),
+    })
+    expect(opens(m)).toEqual([])
+    expect(m.s.layer).toMatchObject({ s: 'ready', catalog: CATALOG })
+    expect(m.live('link')).not.toBe(link)
+    m.feed({
+      i: 'paper',
+      t: m.live('link'),
+      doc: stale(3, { prepare: prep('running', { attempt: 2, units: NEW }), targets: { [ZH]: run('running') } }),
+    })
+    expect(opens(m)).toEqual([])
+    m.feed({
+      i: 'paper',
+      t: m.live('link'),
+      doc: doc(4, {
+        prepare: prep('done', { attempt: 2, units: NEW }),
+        layer: layerOf({ catalog: CATALOG2, units: NEW, format: 1, stale: false }),
+        targets: { [ZH]: run('running', { units: NEW }) },
+      }),
+    })
+    expect(m.s.layer).toMatchObject({ s: 'ready', catalog: CATALOG2, head: null })
+    expect(opens(m)).toEqual([])
+    expect(m.has('rows')).toBe(true)
+  })
+  /** a visit whose rows are made here (the extension's), the original open and the gate open */
+  const hereNow = () => {
+    const m = machine({ here: true })
+    m.feed({ i: 'original.opened', t: m.live('original'), pages: 4, bytes: 9 }, { i: 'panes.drawn' })
+    return m
+  }
+  /** the new build's layer, of other units than the stale one's */
+  const rebuilt = (rev: number) =>
+    doc(rev, {
+      prepare: prep('done', { attempt: 2, units: NEW }),
+      layer: layerOf({ catalog: CATALOG2, units: NEW, format: 1, stale: false }),
+    })
+  it('rows made here over a stale layer: opened once, naming no target; followed while the paper is prepared again, the old layer drawn and its rows made meanwhile; the new catalog taken when it lands, then nothing more asked of our server (#634 review)', () => {
+    const m = hereNow()
+    m.feed({ i: 'paper', t: m.live('link'), doc: stale(1) })
+    expect(opens(m)).toEqual([{ slot: 'open', target: null }])
+    // (a stale layer is served while the paper is prepared again: its replacement is still to come, so the follow stays)
+    expect(m.has('link')).toBe(true)
+    m.feed({ i: 'code.loaded', t: m.live('code') }, { i: 'head', digest: CATALOG.sha256, head: HEAD })
+    expect(m.has('composed')).toBe(true)
+    expect([...resources(m.s).values()]).toContainEqual({ slot: 'rows', target: ZH, from: 'here', units: UNITS })
+    m.feed({ i: 'open.answered', t: m.live('open'), doc: stale(2, { prepare: prep('running', { attempt: 2 }) }) })
+    expect(opens(m)).toEqual([])
+    expect(m.has('link')).toBe(true)
+    m.feed({ i: 'paper', t: m.live('link'), doc: stale(3, { prepare: prep('running', { attempt: 2, units: NEW }) }) })
+    expect(m.has('link')).toBe(true)
+    m.feed({ i: 'paper', t: m.live('link'), doc: rebuilt(4) })
+    expect(m.s.layer).toMatchObject({ s: 'ready', catalog: CATALOG2, head: null })
+    // (the layer our server runs: nothing more can come for rows made here)
+    expect(m.has('link') || m.has('open')).toBe(false)
+    // (a prepare running over the layer our server runs (the harness's `recatalog`): its end writes a layer, so followed too)
+    const p = hereNow()
+    p.feed({
+      i: 'paper',
+      t: p.live('link'),
+      doc: { ...ready(1), prepare: prep('running', { attempt: 2 }), targets: {} },
+    })
+    expect(p.has('link')).toBe(true)
+    expect(opens(p)).toEqual([])
+  })
+  it("rows made here that ended over one layer are made again for a newer catalog's units once its head is read; a newer catalog of the same units keeps them", () => {
+    const m = hereNow()
+    m.feed({ i: 'paper', t: m.live('link'), doc: stale(1) })
+    m.feed({ i: 'code.loaded', t: m.live('code') }, { i: 'head', digest: CATALOG.sha256, head: HEAD })
+    m.feed({ i: 'rows.end', t: m.live('rows') })
+    expect(m.has('rows')).toBe(false)
+    // (the open's answer carries the new build's layer: a prepare another visit asked ended meanwhile)
+    m.feed({ i: 'open.answered', t: m.live('open'), doc: rebuilt(2) })
+    expect(m.has('rows')).toBe(false)
+    m.feed({ i: 'head', digest: CATALOG2.sha256, head: HEAD })
+    expect([...resources(m.s).values()]).toContainEqual({ slot: 'rows', target: ZH, from: 'here', units: NEW })
+    const same = hereNow()
+    same.feed({ i: 'paper', t: same.live('link'), doc: stale(1) })
+    same.feed({ i: 'code.loaded', t: same.live('code') }, { i: 'head', digest: CATALOG.sha256, head: HEAD })
+    same.feed({ i: 'rows.end', t: same.live('rows') })
+    same.feed({
+      i: 'open.answered',
+      t: same.live('open'),
+      doc: doc(2, {
+        prepare: prep('done', { attempt: 2 }),
+        layer: layerOf({ catalog: CATALOG2, units: UNITS, format: 1 }),
+      }),
+    })
+    same.feed({ i: 'head', digest: CATALOG2.sha256, head: HEAD })
+    expect(same.s.rows.s).toBe('complete')
+    expect(same.has('rows')).toBe(false)
+  })
+  it('nothing asked where what the visit needs is there or in flight: the target running or done on the layer, a prepare running over a stale layer or none; rows made here name no target', () => {
+    const cases: Doc[] = [
+      ready(1),
+      doc(1, { ...ready(1), targets: { [ZH]: run('running') } }),
+      stale(1, { prepare: prep('running', { attempt: 2 }), targets: { [ZH]: run('none') } }),
+      stale(1, { prepare: prep('running', { attempt: 2 }), targets: { [ZH]: run('failed', { retryAt: 5 }) } }),
+      preparing(1, UNITS),
+    ]
+    for (const d of cases) {
+      const m = machine()
+      m.feed({ i: 'paper', t: m.live('link'), doc: d })
+      expect([d, opens(m)]).toEqual([d, []])
+    }
+    const here = machine({ here: true })
+    here.feed({ i: 'paper', t: here.live('link'), doc: { ...ready(1), targets: {} } })
+    expect(opens(here)).toEqual([])
+  })
+  it('a target the paper has never been translated into (a second language): opened at once, the layer kept; switched to mid-visit, the new target’s document taken though its revision is the one held', () => {
+    const m = machine()
+    m.feed({ i: 'paper', t: m.live('link'), doc: { ...ready(1), targets: {} } })
+    expect(opens(m)).toEqual([{ slot: 'open', target: ZH }])
+    expect(m.s.layer.s).toBe('ready')
+    m.feed({ i: 'open.answered', t: m.live('open'), doc: { ...ready(2), targets: { [ZH]: run('running') } } })
+    expect(opens(m)).toEqual([])
+    // (a language switched to: its follow's first document is of the paper's revision held, and names that target alone)
+    const s = composedNow()
+    s.feed({ i: 'cmd.set', prefs: { target: 'ja' } })
+    expect(opens(s)).toEqual([])
+    s.feed({ i: 'paper', t: s.live('link'), doc: { ...ready(1), targets: {} } })
+    expect(opens(s)).toEqual([{ slot: 'open', target: 'ja' }])
+    s.feed({ i: 'open.answered', t: s.live('open'), doc: { ...ready(2), targets: { ja: run('running') } } })
+    expect(s.s.doc?.targets.ja?.state).toBe('running')
+    expect(s.s.rows).toMatchObject({ s: 'arriving', target: 'ja' })
+    expect(opens(s)).toEqual([])
+  })
+  it('once for each need a visit: an open answered whose document still shows it asks nothing more, a later failure of the run it started is another; a retry asks again', () => {
+    const m = machine()
+    m.feed({ i: 'paper', t: m.live('link'), doc: stale(1) })
+    m.feed({ i: 'open.answered', t: m.live('open'), doc: stale(1) })
+    m.feed({ i: 'paper', t: m.live('link'), doc: stale(2) })
+    expect(opens(m)).toEqual([])
+    m.feed({ i: 'cmd.retry' })
+    expect(opens(m)).toEqual([{ slot: 'open', target: ZH }])
+    // (the prepare it started failed for now: asked again once our server's wait is over, never before)
+    m.feed({ i: 'open.answered', t: m.live('open'), doc: stale(3, { prepare: prep('running', { attempt: 2 }) }) })
+    m.at(1000).feed({
+      i: 'paper',
+      t: m.live('link'),
+      doc: stale(4, { prepare: prep('failed', { attempt: 2, retryAt: 31_000 }), targets: { [ZH]: run('none') } }),
+    })
+    expect(opens(m)).toEqual([])
+    m.feed({ i: 'time', t: m.timerAt(31_000), now: 31_000 })
+    expect(opens(m)).toEqual([{ slot: 'open', target: ZH }])
+  })
+  it('a need our server holds back by a wait (its retryAt) is asked once it is over: a prepare refused or failed for now with no layer, a target failed; the rows of a run started again taken again', () => {
+    // (an open refused by Admission leaves the paper stored, the prepare not started: a follow answers it, never not-opened)
+    const none = machine()
+    none.feed({
+      i: 'paper',
+      t: none.live('link'),
+      doc: doc(1, { prepare: prep('none', { attempt: 0, retryAt: 10_000 }), targets: { [ZH]: run('none') } }),
+    })
+    expect(opens(none)).toEqual([])
+    none.feed({ i: 'time', t: none.timerAt(10_000), now: 10_000 })
+    expect(opens(none)).toEqual([{ slot: 'open', target: ZH }])
+    // (failed for now, no layer: refused until its time, the layer's timer, then opened)
+    const failed = machine()
+    failed.feed({ i: 'paper', t: failed.live('link'), doc: doc(1, { prepare: prep('failed', { retryAt: 20_000 }) }) })
+    expect(failed.s.layer).toMatchObject({ s: 'refused', why: 'unreachable', retryAt: 20_000 })
+    expect(opens(failed)).toEqual([])
+    failed.feed({ i: 'time', t: failed.timerAt(20_000), now: 20_000 })
+    expect(opens(failed)).toEqual([{ slot: 'open', target: ZH }])
+    // (a target failed: opened at its time; the rows it failed with taken again once its run is under way)
+    const t = composedNow()
+    t.feed({
+      i: 'paper',
+      t: t.live('link'),
+      doc: { ...ready(2), targets: { [ZH]: run('failed', { retryAt: 5000, units: UNITS }) } },
+    })
+    t.feed({ i: 'rows.failed', t: t.live('rows'), why: { kind: 'server' } })
+    expect(opens(t)).toEqual([])
+    t.feed({ i: 'time', t: t.timerAt(5000), now: 5000 })
+    expect(opens(t)).toEqual([{ slot: 'open', target: ZH }])
+    t.feed({
+      i: 'open.answered',
+      t: t.live('open'),
+      doc: { ...ready(3), targets: { [ZH]: run('running', { attempt: 2 }) } },
+    })
+    expect(t.s.rows).toMatchObject({ s: 'arriving', target: ZH })
+    // (rows complete, then a run our server starts again, a re-prepare's new units: taken again)
+    const c = composedNow()
+    c.feed({ i: 'rows.end', t: c.live('rows') })
+    expect(c.s.rows.s).toBe('complete')
+    c.feed({ i: 'paper', t: c.live('link'), doc: { ...ready(2), targets: { [ZH]: run('running', { attempt: 2 }) } } })
+    expect(c.s.rows).toMatchObject({ s: 'arriving', target: ZH })
+    // (a run started and ended between two documents heard, a newer catalog's (staging, 1706.03762v7: the reader's rows of
+    // the old units complete, the new run's never read): taken again; the same run heard again, not)
+    const w = composedNow()
+    w.feed({ i: 'rows.end', t: w.live('rows') })
+    w.feed({ i: 'paper', t: w.live('link'), doc: { ...ready(2), targets: { [ZH]: run('done', { units: UNITS }) } } })
+    expect(w.s.rows.s).toBe('complete')
+    const NEWER = {
+      ...ready(3, ref('c')),
+      targets: { [ZH]: run('done', { attempt: 2, units: UNITS, rows: [ref('r')] }) },
+    }
+    w.feed({ i: 'paper', t: w.live('link'), doc: NEWER })
+    expect(w.s.rows).toMatchObject({ s: 'arriving', target: ZH })
+    w.feed({ i: 'rows.end', t: w.live('rows') })
+    w.feed({ i: 'paper', t: w.live('link'), doc: { ...NEWER, rev: 4 } })
+    expect(w.s.rows.s).toBe('complete')
+  })
+  it('a refused open backs off as now: given back, asked again once the 429’s wait is over, three in a row at most whatever the follow hears meanwhile (no answer of a paper still lacking moves it on); a retry asks at once', () => {
+    const m = machine()
+    m.feed({ i: 'paper', t: m.live('link'), doc: stale(1) })
+    /** the open refused for capacity, our server's document beside it (its wait stored as the prepare's retryAt) */
+    const refuse = (why: 'busy' | 'quota', afterMs: number) =>
+      m.feed({
+        i: 'open.answered',
+        t: m.live('open'),
+        doc: stale((m.s.doc?.rev ?? 0) + 1, { prepare: prep('done', { retryAt: m.s.now + afterMs }) }),
+        refused: { why, afterMs },
+      })
+    refuse('quota', 30_000)
+    expect(m.s.open).toMatchObject({ t: null, asked: [] })
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'limit', retryAt: 30_000 })
+    expect(opens(m)).toEqual([])
+    m.feed({ i: 'cmd.retry' })
+    expect(opens(m)).toEqual([])
+    m.feed({ i: 'time', t: m.timerAt(30_000), now: 30_000 })
+    expect(opens(m)).toEqual([{ slot: 'open', target: ZH }])
+    expect(m.has('link')).toBe(true)
+    for (let n = 2; n <= REFUSED_ASKS; n++) {
+      refuse('quota', 1000)
+      // (the follow meanwhile: the paper still lacks what was asked, so the run of 429s goes on)
+      m.feed({ i: 'time', t: (m.s.link as { timer: Ticket }).timer, now: m.s.now + 1000 })
+      m.feed({
+        i: 'paper',
+        t: m.live('link'),
+        doc: stale(m.s.doc?.rev ?? 0, { prepare: prep('done', { retryAt: m.s.now }) }),
+      })
+      expect(opens(m)).toEqual([{ slot: 'open', target: ZH }])
+    }
+    refuse('quota', 1000)
+    const due = m.s.now + 1000
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'limit', retryAt: due, wake: null })
+    expect(opens(m)).toEqual([])
+    // (a retry before our server's time asks nothing; at it, at once)
+    m.feed({ i: 'cmd.retry' })
+    expect(opens(m)).toEqual([])
+    m.at(due).feed({ i: 'cmd.retry' })
+    expect(opens(m)).toEqual([{ slot: 'open', target: ZH }])
+  })
+})
+
 describe("the session: our server's pacing (today's run)", () => {
   it('a 429 waits its time and asks again, three times in a row at most; the next stops the look until a retry', () => {
     const m = machine()
@@ -313,26 +617,82 @@ describe("the session: our server's pacing (today's run)", () => {
       expect(m.has('link')).toBe(true)
     }
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 60_000 })
-    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'limit', retryAt: null })
-    expect((m.s.link as { timer: Ticket | null }).timer).toBeNull()
-    // a retry at the limit asks at once, for three more
+    // (the fourth: our server's time kept, said and the retry's, but not asked again by the session itself)
+    const due = m.s.now + 60_000
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'limit', retryAt: due, wake: null, timer: null })
     m.feed({ i: 'cmd.retry' })
+    expect(m.has('link')).toBe(false)
+    // a retry at our server's time asks at once, for three more
+    m.at(due).feed({ i: 'cmd.retry' })
     expect(m.has('link')).toBe(true)
     expect(m.s.refusals).toBe(0)
     for (let n = 1; n <= REFUSED_ASKS; n++) {
-      m.feed({ i: 'follow.lost', t: m.live('link'), why: 'busy', afterMs: 1000 })
+      m.feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 1000 })
       m.feed({ i: 'time', t: (m.s.link as { timer: Ticket }).timer, now: m.s.now + 1000 })
     }
-    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'busy', afterMs: 1000 })
-    expect(m.s.link).toMatchObject({ s: 'stopped', retryAt: null })
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 1000 })
+    expect(m.s.link).toMatchObject({ s: 'stopped', retryAt: m.s.now + 1000, wake: null })
   })
-  it("a 429's wait is at least a second and at most ten minutes; one with no time named waits a second", () => {
+  it("our server at capacity (busy) is a line the paper waits in: asked again by itself at our server's time however many times, never counted with the limit's 429s (the coordinator's decision 5, 2026-11-11)", () => {
     const m = machine()
-    m.at(5).feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 86_400_000 })
-    expect(m.s.link).toMatchObject({ retryAt: 5 + WAIT_MAX_MS })
-    m.feed({ i: 'time', t: m.timerAt(5 + WAIT_MAX_MS), now: 5 + WAIT_MAX_MS })
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+    for (let n = 1; n <= REFUSED_ASKS + 3; n++) {
+      m.feed({ i: 'open.answered', t: m.live('open'), doc: null, refused: { why: 'busy', afterMs: 30_000 } })
+      const due = m.s.now + 30_000
+      expect(m.s.link, `refusal ${n}`).toMatchObject({ s: 'stopped', why: 'busy', retryAt: due, wake: due })
+      expect(m.s.refusals).toBe(0)
+      m.feed({ i: 'time', t: m.timerAt(due), now: due })
+      m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+      expect(m.has('open'), `asked again after refusal ${n}`).toBe(true)
+    }
+    // (the visitor's new papers spent beside it still stop the look past their three)
+    for (let n = 1; n <= REFUSED_ASKS + 1; n++) {
+      m.feed({ i: 'open.answered', t: m.live('open'), doc: null, refused: { why: 'quota', afterMs: 1000 } })
+      if (n <= REFUSED_ASKS) {
+        m.feed({ i: 'time', t: m.timerAt(m.s.now + 1000), now: m.s.now + 1000 })
+        m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+      }
+    }
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'limit', wake: null })
+  })
+  it("a 429's wait is our server's as it names it, however long: the time said, the retry's and the session's own next ask; one with no time named waits a second", () => {
+    const m = machine()
+    // (a visitor's day of new papers spent: the window ends 20 hours on)
+    m.at(5).feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 72_000_000 })
+    expect(m.s.link).toMatchObject({ retryAt: 5 + 72_000_000, wake: 5 + 72_000_000 })
+    expect([...resources(m.s).values()]).toContainEqual({ slot: 'timer', at: 5 + 72_000_000 })
+    // (nothing asked of our server before it: not at ten minutes, the old cap)
+    expect(() => m.timerAt(5 + WAIT_MAX_MS)).toThrow()
+    m.feed({ i: 'time', t: m.timerAt(5 + 72_000_000), now: 5 + 72_000_000 })
+    expect(m.has('link')).toBe(true)
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'busy', afterMs: null })
-    expect(m.s.link).toMatchObject({ retryAt: 5 + WAIT_MAX_MS + 1000 })
+    expect(m.s.link).toMatchObject({ retryAt: 5 + 72_000_000 + 1000 })
+  })
+  it("the visitor's new papers spent: the time said is the instant our server names (its period's end), never its wait added to the viewer's clock; the session asks again once both that wait has passed and the viewer's clock reads the time said (a viewer's clock 90 s ahead, 90 s behind, on time)", () => {
+    // (our server's clock at the answer: 20:17:10 at Shanghai; its hour ends at 21:00:00; its wait, as admission.ts rounds it)
+    const server = Date.UTC(2026, 10, 11, 12, 17, 10)
+    const end = Date.UTC(2026, 10, 11, 13, 0, 0)
+    const wait = Math.ceil((end - server) / 1000) * 1000
+    for (const skew of [90_000, -90_000, 0]) {
+      const m = machine()
+      m.at(server + skew).feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+      m.feed({ i: 'open.answered', t: m.live('open'), doc: null, refused: { why: 'quota', afterMs: wait, at: end } })
+      // (said: 21:00:00 exactly, whatever the viewer's clock)
+      expect(m.s.link, `skew ${skew}`).toMatchObject({ s: 'stopped', why: 'limit', retryAt: end })
+      // (asked again at the later of the two: our server's hour over, and the viewer's clock past the time said)
+      const wake = Math.max(server + skew + wait, end)
+      expect((m.s.link as { wake: number }).wake, `skew ${skew}`).toBe(wake)
+      expect([...resources(m.s).values()]).toContainEqual({ slot: 'timer', at: wake })
+    }
+  })
+  it("the network down is said where the view waits on our server's rows (linkSaid); rows made here wait on the host's translator, which tells its own failures", () => {
+    const m = composedNow()
+    m.feed({ i: 'env.online', on: false })
+    expect(linkSaid(m.s, true)).toEqual({ reconnecting: false, network: true })
+    expect(linkSaid(m.s, false)).toEqual({ reconnecting: false, network: false })
+    const here = composedNow({ here: true })
+    here.feed({ i: 'env.online', on: false })
+    expect(linkSaid(here.s, true)).toEqual({ reconnecting: false, network: false })
   })
   it('an answer that moves the paper on ends a run of 429s', () => {
     const m = machine()
@@ -345,13 +705,14 @@ describe("the session: our server's pacing (today's run)", () => {
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 1000 })
     expect(m.s.link).toMatchObject({ s: 'stopped', retryAt: m.s.now + 1000 })
   })
-  it('an open refused for capacity is given back and asked again after its wait; its 429s count with the follow’s', () => {
+  it('an open refused for capacity is given back and asked again after its wait; not counted with the limit’s 429s', () => {
     const m = machine()
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
     m.feed({ i: 'open.answered', t: m.live('open'), doc: null, refused: { why: 'busy', afterMs: 30_000 } })
-    expect(m.s.layer).toEqual({ s: 'none', asked: null })
+    expect(m.s.layer).toEqual({ s: 'none' })
+    expect(m.s.open).toMatchObject({ t: null, asked: [], missing: false })
     expect(m.s.link).toMatchObject({ s: 'stopped', why: 'busy', retryAt: 30_000 })
-    expect(m.s.refusals).toBe(1)
+    expect(m.s.refusals).toBe(0)
     m.feed({ i: 'cmd.retry' })
     expect(m.s.link.s).toBe('stopped')
     m.feed({ i: 'time', t: m.timerAt(30_000), now: 30_000 })
@@ -386,10 +747,80 @@ describe("the session: our server's pacing (today's run)", () => {
     expect(here.has('link')).toBe(false)
     expect(here.s.rows.target).toBe('ja')
   })
-  it('our server out of reach (an ask failed twice, the client’s): the look stopped, said, and asked again by a retry alone', () => {
+  it("the visitor's rate of asks (a 429 our server words `rate-limited`): its own cause, waited out and asked again by itself, never counted as a limit", () => {
+    const m = machine()
+    for (let n = 1; n <= REFUSED_ASKS + 2; n++) {
+      m.feed({ i: 'follow.lost', t: m.live('link'), why: 'rate', afterMs: 60_000 })
+      expect(m.s.link).toMatchObject({ s: 'stopped', why: 'rate', retryAt: m.s.now + 60_000, wake: m.s.now + 60_000 })
+      m.feed({ i: 'time', t: m.timerAt(m.s.now + 60_000), now: m.s.now + 60_000 })
+      expect(m.has('link')).toBe(true)
+    }
+    expect(m.s.refusals).toBe(0)
+    // (the open refused for the rate: the same)
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+    m.feed({ i: 'open.answered', t: m.live('open'), doc: null, refused: { why: 'rate', afterMs: 60_000 } })
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'rate', wake: m.s.now + 60_000 })
+  })
+  it("a 429 that names no wait (0 s) is asked again no sooner than a second on, and the same refusal again backs off, doubled to thirty seconds or our server's time at most; the time said stays our server's", () => {
+    // (the visitor's rate, and our server at capacity, the queue's, which neither counts toward REFUSED_ASKS)
+    for (const why of ['rate', 'busy'] as const) {
+      const q = machine()
+      const asks: number[] = []
+      for (let n = 1; n <= 10; n++) {
+        q.feed({ i: 'follow.lost', t: q.live('link'), why: 'not-opened' })
+        asks.push(q.s.now)
+        q.feed({ i: 'open.answered', t: q.live('open'), doc: null, refused: { why, afterMs: 0 } })
+        // (said as our server named it: due now; the session's own next ask its own)
+        expect(q.s.link).toMatchObject({ s: 'stopped', why, retryAt: q.s.now })
+        const wake = (q.s.link as { wake: number }).wake
+        expect(wake - q.s.now, `${why} ask ${n}`).toBe(Math.min(30_000, 1000 * 2 ** (n - 1)))
+        q.feed({ i: 'time', t: q.timerAt(wake), now: wake })
+      }
+      const gaps = asks.slice(1).map((t, k) => t - (asks[k] as number))
+      expect(gaps, why).toEqual([1000, 2000, 4000, 8000, 16_000, 30_000, 30_000, 30_000, 30_000])
+    }
+    const m = machine()
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+    m.feed({ i: 'open.answered', t: m.live('open'), doc: null, refused: { why: 'rate', afterMs: 0 } })
+    m.feed({ i: 'time', t: m.timerAt(m.s.now + 1000), now: m.s.now + 1000 })
+    // (another answer ends the run: the next refusal waits a second again)
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
+    m.feed({ i: 'open.answered', t: m.live('open'), doc: preparing(1, UNITS) })
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'rate', afterMs: 0 })
+    expect((m.s.link as { wake: number }).wake - m.s.now).toBe(1000)
+    // (a time our server names past thirty seconds is the cap: never asked sooner than it)
+    m.feed({ i: 'time', t: m.timerAt(m.s.now + 1000), now: m.s.now + 1000 })
+    for (let n = 1; n <= 3; n++) {
+      m.feed({ i: 'follow.lost', t: m.live('link'), why: 'rate', afterMs: 60_000 })
+      expect((m.s.link as { wake: number }).wake - m.s.now).toBe(60_000)
+      m.feed({ i: 'time', t: m.timerAt(m.s.now + 60_000), now: m.s.now + 60_000 })
+    }
+  })
+  it('the network itself failed (the fetch rejected twice): its own cause, asked again by itself once the connection is back, or at a growing pace while the browser says it is online', () => {
     const m = machine()
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'network' })
-    expect(m.s.link).toEqual({ s: 'stopped', why: 'unreachable', retryAt: null, timer: null })
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'network', retryAt: null, wake: 1000 })
+    m.feed({ i: 'time', t: m.timerAt(1000), now: 1000 })
+    expect(m.has('link')).toBe(true)
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'network' })
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'network', wake: 3000 })
+    // (the browser offline: nothing asked until it is back, then at once)
+    m.feed({ i: 'env.online', on: false })
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'network', wake: null, timer: null })
+    m.at(50_000).feed({ i: 'env.online', on: true })
+    expect(m.has('link')).toBe(true)
+    // (a document heard: the pace begins again)
+    m.feed({ i: 'paper', t: m.live('link'), doc: preparing(1, UNITS) })
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'network' })
+    expect(m.s.link).toMatchObject({ wake: 51_000 })
+    // (a retry asks at once)
+    m.feed({ i: 'cmd.retry' })
+    expect(m.has('link')).toBe(true)
+  })
+  it('our server at fault (a 5xx twice, the client’s): the look stopped, said, and asked again by a retry alone', () => {
+    const m = machine()
+    m.feed({ i: 'follow.lost', t: m.live('link'), why: 'server' })
+    expect(m.s.link).toEqual({ s: 'stopped', why: 'unreachable', retryAt: null, wake: null, timer: null })
     expect(m.has('link')).toBe(false)
     m.feed({ i: 'env.online', on: true })
     expect(m.has('link')).toBe(false)
@@ -397,19 +828,22 @@ describe("the session: our server's pacing (today's run)", () => {
     expect(m.has('link')).toBe(true)
     // (an open that never reached our server: given back, so that a retry asks it again)
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
-    m.feed({ i: 'open.failed', t: m.live('open'), why: 'network' })
-    expect(m.s.layer).toEqual({ s: 'none', asked: null })
+    m.feed({ i: 'open.failed', t: m.live('open'), why: 'server' })
+    expect(m.s.layer).toEqual({ s: 'none' })
+    expect(m.s.open).toMatchObject({ t: null, asked: [], missing: false })
     expect(m.s.link).toMatchObject({ s: 'stopped', why: 'unreachable' })
     m.feed({ i: 'cmd.retry' })
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })
     expect(m.has('open')).toBe(true)
   })
-  it('offline with no layer is out of reach at once, as every ask would fail', () => {
+  it('offline with no layer is the network at once, as every ask would fail; back online, asked at once', () => {
     const m = machine({ online: false })
-    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'unreachable' })
+    expect(m.s.link).toMatchObject({ s: 'stopped', why: 'network', wake: null })
     const later = machine()
     later.feed({ i: 'env.online', on: false })
-    expect(later.s.link).toMatchObject({ s: 'stopped', why: 'unreachable' })
+    expect(later.s.link).toMatchObject({ s: 'stopped', why: 'network' })
+    later.feed({ i: 'env.online', on: true })
+    expect(later.has('link')).toBe(true)
   })
   it('nothing is asked of our server while the tab is hidden, and it is followed again once shown', () => {
     const m = machine()
@@ -446,7 +880,7 @@ describe("the session: our server's pacing (today's run)", () => {
     expect(m.s.prepare.spent).toBe(0)
     expect(m.has('link')).toBe(true)
   })
-  it('rows made here need nothing more of our server once the layer is ready', () => {
+  it('rows made here need nothing more of our server once the layer is final: ready, of the build our server runs, no prepare running', () => {
     const m = composedNow({ here: true })
     expect(m.has('link')).toBe(false)
     expect(m.has('rows')).toBe(true)
@@ -490,18 +924,9 @@ describe('the session: the rows', () => {
   it('arriving → complete', () => {
     const m = engagedReady()
     const r = m.live('rows')
-    m.feed(
-      { i: 'rows.batch', t: r, got: 10, total: 80, lost: 0 },
-      { i: 'rows.end', t: r, got: 80, total: 80, lost: 1, stopped: { kind: 'unavailable' } },
-    )
-    expect(m.s.rows).toEqual({
-      s: 'complete',
-      target: 'zh-Hans',
-      got: 80,
-      total: 80,
-      lost: 1,
-      stopped: { kind: 'unavailable' },
-    })
+    m.feed({ i: 'rows.end', t: r, stopped: { kind: 'unavailable' } })
+    // (no count of its own: the reader counts the rows it holds over the layer shown, session/rows.ts viewOf)
+    expect(m.s.rows).toEqual({ s: 'complete', target: 'zh-Hans', stopped: { kind: 'unavailable' } })
     expect(m.has('rows')).toBe(false)
   })
   it('failed, then arriving again at its retryAfter, by a retry not before it, and on a translator changed', () => {
@@ -518,7 +943,7 @@ describe('the session: the rows', () => {
   })
   it('a same-target retry is the rows again for the same target, nothing else let go', () => {
     const m = engagedReady({ here: true })
-    m.feed({ i: 'rows.end', t: m.live('rows'), got: 5, total: 8, lost: 3 })
+    m.feed({ i: 'rows.end', t: m.live('rows') })
     const keep = ['original', 'code', 'composed'].map(m.live)
     m.feed({ i: 'cmd.retry' })
     // (complete with gaps: the rows' handler holds its rows; a failed run is asked again at once)
@@ -528,6 +953,35 @@ describe('the session: the rows', () => {
     f.feed({ i: 'rows.failed', t: f.live('rows'), why: { kind: 'unavailable' } })
     f.feed({ i: 'cmd.retry' })
     expect([...resources(f.s).values()]).toContainEqual(expect.objectContaining({ slot: 'rows', target: 'zh-Hans' }))
+  })
+  it("another translator asks again what stopped short (the extension's settings.ts followOf `retry`): a failed run before its wait, a run complete with units lost; told by cmd.translator or by a landing that names another translator", () => {
+    const failed = () => {
+      const m = engagedReady({ here: true })
+      m.feed({ i: 'rows.failed', t: m.live('rows'), why: { kind: 'unavailable', retryAfterMs: 60_000 } })
+      return m
+    }
+    const lost = () => {
+      const m = engagedReady({ here: true })
+      m.feed({ i: 'rows.end', t: m.live('rows'), stopped: { kind: 'unavailable' } })
+      return m
+    }
+    // (the translator changed: the old one's wait does not hold the new one)
+    for (const m of [failed(), lost()]) {
+      m.feed({ i: 'prefs.landed', value: { ...PREFS, translator: 'another' } })
+      expect(m.s.rows.s).toBe('arriving')
+    }
+    const told = lost()
+    told.feed({ i: 'cmd.translator' })
+    expect(told.s.rows.s).toBe('arriving')
+    // the same translator landing again, or a run with nothing lost: nothing asked
+    for (const m of [failed(), lost()]) {
+      m.feed({ i: 'prefs.landed', value: { ...PREFS } })
+      expect(m.s.rows.s).not.toBe('arriving')
+    }
+    const whole = engagedReady({ here: true })
+    whole.feed({ i: 'rows.end', t: whole.live('rows') })
+    whole.feed({ i: 'prefs.landed', value: { ...PREFS, translator: 'another' } }, { i: 'cmd.translator' })
+    expect(whole.s.rows).toMatchObject({ s: 'complete', stopped: null })
   })
   it('a language switch lets the old rows and the link go, keeps the original, the code and the composed document', () => {
     const m = engagedReady()
@@ -601,7 +1055,7 @@ describe("the session: the original held for the visit (today's holds)", () => {
     m.feed({
       i: 'paper',
       t: m.live('link'),
-      doc: doc(1, { prepare: { state: 'failed', why: 'no-source', retryAt: null, stage: null, units: [] } }),
+      doc: doc(1, { prepare: prepareOf({ state: 'failed', why: 'no-source', retryAt: null, stage: null, units: [] }) }),
     })
     expect(holdOf(m.s)).toBe('paper')
     m.feed({ i: 'cmd.set', prefs: { target: 'ja' } })
@@ -658,14 +1112,14 @@ describe('the session: the paper', () => {
   it("arXiv's HTML version taken again where our server's word on it changes: a refusal for now, then a lasting one saying it has one (L11 third round, gap 7)", () => {
     const said = (rev: number, state: 'none' | 'failed', html?: boolean) =>
       doc(rev, {
-        prepare: {
+        prepare: prepareOf({
           state,
-          why: state === 'failed' ? 'cannot' : null,
+          why: state === 'failed' ? 'cannot-typeset' : null,
           retryAt: null,
           stage: null,
           units: [],
           ...(html === undefined ? {} : { html }),
-        },
+        }),
       })
     /** a 429 that names its wait, with the document our server answered beside it, then followed again at its time */
     const refused = (m: ReturnType<typeof machine>, d: Doc, at: number) => {
@@ -758,8 +1212,7 @@ describe('the session: tickets', () => {
       { i: 'original.mismatch', t: t.original },
       { i: 'paper', t: t.link, doc: preparing(9) },
       { i: 'follow.lost', t: t.link, why: 'network' },
-      { i: 'rows.batch', t: t.rows, got: 1, total: 1, lost: 0 },
-      { i: 'rows.end', t: t.rows, got: 1, total: 1, lost: 0 },
+      { i: 'rows.end', t: t.rows },
       { i: 'rows.failed', t: t.rows, why: { kind: 'server' } },
       { i: 'code.failed', t: 'code#999' },
       { i: 'composed.opened', t: 'composed#999' },

@@ -5,11 +5,12 @@
 //
 // Every ask is today's (R session/server.ts `fetched`, `bodyWithin`): bounded at REQUEST_MS, its answer and its body together (a
 // connection taken and never answered, or a body that stops, would otherwise hold the reader for good); a network that fails, a
-// 5xx or nothing in time asked once more after RETRY_MS, and a second failure is the server out of reach (`Refused('network')`);
+// 5xx or nothing in time asked once more after RETRY_MS, and a second failure is told by its cause: the network itself (the
+// fetch rejected, nothing in time, a body that broke: `Refused('network')`) or our server at fault (a 5xx: `Refused('server')`);
 // the caller's abort is the caller's, never asked again. An object is read within its bound and held to its digest before
 // anything parses it; past a content-encoding a response's content-length is the body's as sent, not the bytes read here, so
 // only the read counts them (W open.ts bodyWithin, layer/files.ts).
-import { BOUNDS } from '@readarxiv/format'
+import { BOUNDS, OpenAnswer, PaperDoc } from '@readarxiv/format'
 import { type Fetch, realTimers, type Timers } from '../bytes/source.ts'
 import { type Doc, FORMATS, type PaperRef, type Ref, WAIT_MAX_MS } from './machine.ts'
 
@@ -31,9 +32,9 @@ export const segOf = (p: PaperRef, version: number): string => `${p.id.replace(/
 export const followSegOf = (p: PaperRef): string => (p.version ? segOf(p, p.version) : p.id.replace(/[./]/g, '_'))
 
 /** why the server's answer is not what was asked: `not-opened` (a follow of a paper the server has not opened), `not-found`
- *  (no such paper), `update` (a deployment that reads no format of this reader's), `busy` / `limit` (a 429: at capacity, a
- *  visitor's limit; `afterMs` its Retry-After, `doc` the document it carried), `network` (out of reach: twice), `gone` / `bad`
- *  (an object deleted, or not its bytes) */
+ *  (no such paper), `update` (a deployment that reads no format of this reader's), `busy` / `rate` (a 429: at capacity, the
+ *  visitor's rate of asks, as its body says; `afterMs` its Retry-After, `doc` the document it carried), `network` (the network
+ *  itself failed: twice), `server` (our server at fault: a 5xx twice), `gone` / `bad` (an object deleted, or not its bytes) */
 export class Refused extends Error {
   readonly why: string
   readonly afterMs: number | null
@@ -109,7 +110,7 @@ export async function request<T>(
     if (r.status >= 500) {
       done()
       void r.body?.cancel().catch(() => {})
-      if (!again) throw new Refused('network')
+      if (!again) throw new Refused('server')
       await sleep(RETRY_MS, a)
       continue
     }
@@ -222,28 +223,15 @@ export function objectStore(a: Ask) {
 /** the directory an object of a layer lies in, by its catalog: objects the catalog names by digest are at `<dir>/<sha256>` */
 export const dirOf = (catalog: Ref): string => catalog.path.slice(0, catalog.path.lastIndexOf('/'))
 
-/** a document as the server writes it, read for what the machine reads (unknown fields stripped) */
+/** a document as the server writes it (format's PaperDoc, unknown fields stripped), or null where it is none */
 export function docOf(x: unknown): Doc | null {
-  const d = x as Partial<Doc> & { prepare?: Doc['prepare']; targets?: Doc['targets'] }
-  if (!d || typeof d !== 'object' || typeof d.rev !== 'number' || !d.prepare) return null
-  const prepare = d.prepare as Doc['prepare'] & { units: unknown }
-  return {
-    epoch: String(d.epoch ?? ''),
-    rev: d.rev,
-    ...(typeof d.version === 'number' ? { version: d.version } : {}),
-    // (L5's prepare names its units one Ref; stage 2's fixtures a list of them)
-    prepare: {
-      ...prepare,
-      units: Array.isArray(prepare.units) ? prepare.units : prepare.units ? [prepare.units as Ref] : [],
-    },
-    layer: d.layer
-      ? { ...d.layer, units: Array.isArray(d.layer.units) ? d.layer.units : [d.layer.units as unknown as Ref] }
-      : null,
-    targets: d.targets ?? {},
-    position: d.position ?? null,
-    progress: d.progress ?? null,
-  }
+  const d = PaperDoc.safeParse(x)
+  return d.success ? d.data : null
 }
+/** a 429's word, as our server's body says it: the visitor's rate of asks (worker v2 routes.ts `rate-limited`), else its
+ *  capacity */
+const rateOf = (v: unknown): 'rate' | 'busy' =>
+  (v as { error?: unknown } | null)?.error === 'rate-limited' ? 'rate' : 'busy'
 /** a 429's wait, as its Retry-After names it (seconds), or null where it names none */
 const afterOf = (r: Response): number | null => {
   const s = Number(r.headers.get('retry-after'))
@@ -265,8 +253,8 @@ const runs = (d: Doc, target: string | null): boolean =>
  * our server names a second), at least RETRY_MS, and a poll every `pollMs`; once nothing runs, both after IDLE_MS at least (the
  * stream then ended as our server ends it, after its last frame: nothing lost). One that is silent for REQUEST_MS, or breaks, is
  * followed again as any ask is (once more, then out of reach); two in a row that told nothing are the server out of reach. The
- * end of a follow that is not the signal's is a Refused (`not-opened`, `not-found`, `update`, `busy`, `limit`, `network`),
- * which the session turns into its input
+ * end of a follow that is not the signal's is a Refused (`not-opened`, `not-found`, `update`, `busy`, `rate`, `network`,
+ * `server`), which the session turns into its input
  */
 export async function follow(
   a: Ask & {
@@ -298,12 +286,10 @@ export async function follow(
     const outcome = await request(a, url, { headers: { accept: 'text/event-stream' } }, async (r) => {
       if (r.status === 404) throw new Refused(await missOf(r))
       if (r.status === 426) throw new Refused('update')
-      if (r.status === 429)
-        throw new Refused(
-          r.headers.get('x-axt-refused') === 'quota' ? 'limit' : 'busy',
-          afterOf(r),
-          docOf(await jsonOf(r)),
-        )
+      if (r.status === 429) {
+        const v = await jsonOf(r)
+        throw new Refused(rateOf(v), afterOf(r), docOf(v))
+      }
       if (!r.ok || !r.body) throw new Refused('network')
       if (!(r.headers.get('content-type') ?? '').startsWith('text/event-stream')) {
         const d = docOf(await jsonOf(r))
@@ -381,11 +367,17 @@ export async function follow(
   }
 }
 
-/** the open: what the paper lacks started; its document, or a refusal for capacity with its wait (a Refused for the rest:
- *  `update` a 426, `not-found` a 404, `network` out of reach) */
-export function open(
-  a: Ask & { paper: PaperRef; target: string | null; view?: number },
-): Promise<{ doc: Doc | null; refused?: { why: 'quota' | 'busy'; afterMs: number | null } }> {
+/** the open: what the paper lacks started; its document (format's OpenAnswer; none where the answer is not one), or a refusal
+ *  with its wait: of the work, for the visitor's new papers (`quota`) or our server's capacity (`busy`), in its answer; of the
+ *  ask, for the visitor's rate of asks (`rate`, a 429 whose body says so; or its capacity), after its Retry-After. A refusal of
+ *  the work names the instant it ends (`at`: the visitor's period's end, as our server's admission knows it exactly, on its
+ *  clock: the time said) beside its wait (`afterMs`: that instant measured from the answer, to the millisecond, which the
+ *  session counts on its own clock, whatever the viewer's clock reads). A Refused for the rest: `update` a 426, `not-found` a
+ *  404, `network` / `server` out of reach */
+export function open(a: Ask & { paper: PaperRef; target: string | null; view?: number }): Promise<{
+  doc: Doc | null
+  refused?: { why: 'quota' | 'busy' | 'rate' | 'other'; afterMs: number | null; at: number | null }
+}> {
   const body = JSON.stringify({
     paper: a.paper.id,
     ...(a.paper.version ? { version: a.paper.version } : {}),
@@ -400,22 +392,19 @@ export function open(
     async (r) => {
       if (r.status === 426) throw new Refused('update')
       if (r.status === 404) throw new Refused('not-found')
-      const v = (await jsonOf(r)) as {
-        doc?: unknown
-        refused?: { why?: 'quota' | 'busy'; retryAfterS?: number }
-      } | null
-      if (r.status === 429 || v?.refused) {
-        const s = v?.refused?.retryAfterS
-        return {
-          doc: docOf(v?.doc),
-          refused: {
-            why: v?.refused?.why ?? (r.headers.get('x-axt-refused') === 'quota' ? 'quota' : 'busy'),
-            afterMs: typeof s === 'number' && Number.isFinite(s) ? s * 1000 : afterOf(r),
-          },
-        }
-      }
+      const v = await jsonOf(r)
+      // (the ask refused: the visitor's rate of asks, or our server's capacity, as its body says, after its Retry-After)
+      if (r.status === 429) return { doc: null, refused: { why: rateOf(v), afterMs: afterOf(r), at: null } }
       if (!r.ok) throw new Refused('network')
-      return { doc: docOf(v?.doc ?? v) }
+      // the answer (format's OpenAnswer): its document, and the refusal of its new work where there is one, to the
+      // millisecond (a second rounded up asked again 0.4 s past the instant)
+      const answer = OpenAnswer.safeParse(v)
+      if (!answer.success) return { doc: null }
+      const { doc, refused } = answer.data
+      // (a refusal's word this reader does not know: `other`, the generic failure; format's doc.ts)
+      return refused
+        ? { doc, refused: { why: refused.why ?? 'other', afterMs: refused.retryAfterMs, at: refused.retryAt } }
+        : { doc }
     },
   )
 }

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
+import { piecesOf } from '@/pdf-reader/engine/pipeline/instrument.mjs'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { inMemory, lineBreaks, loadProject, localizeNames, markUnits, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { identifierSource, inMemory, lineBreaks, loadProject, localizeNames, markUnits, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { serialize } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The PDF reader's LaTeX front end: what of a paper's source is prose to translate
@@ -27,6 +28,32 @@ describe('loadProject: a file \\input under another spelling is the file the sou
   it('walks a file once, however many spellings name it', () => {
     const p = loadProject(files(), 'main.tex')
     expect((p.units as (Unit & { file: string })[]).filter(u => u.file === 'sections/a.tex')).toHaveLength(1)
+  })
+})
+
+describe('loadProject: a file named in another case is the one kpathsea opens (texmf_casefold_search)', () => {
+  // (2402.10294v1's main.tex reads \input{chapters/prompts}, the package holds chapters/Prompts.tex: TeX's kpathsea, its case
+  // fold on in every TeX Live the box serves (texmf_casefold_search = 1; `kpsewhich chapters/prompts.tex` gives
+  // ./chapters/Prompts.tex in both pinned images, 2026-11-09), opens it after no file of the name as given; the front end read
+  // the name as given only, and the whole appendix, Figure 10's caption among it, had no unit)
+  const enc = (s: string) => new TextEncoder().encode(s)
+  const filesOf = (input: string, rest: string[]) => {
+    const fs = inMemory(new Map([['main.tex', enc(`\\documentclass{article}\n\\begin{document}\n${input}\n\\end{document}\n`)], ...rest.map((f) => [f, enc(`Prose of ${f}.\n`)] as [string, Uint8Array])]))
+    return [...new Set((loadProject(fs, 'main.tex').units as (Unit & { file: string })[]).map((u) => u.file))]
+  }
+  it('reads the file whose last component is the name’s, case aside, where none is of the name as given', () => {
+    expect(filesOf('\\input{chapters/prompts}', ['chapters/Prompts.tex'])).toEqual(['chapters/Prompts.tex'])
+    expect(filesOf('\\input{c/x}', ['c/x.TEX'])).toEqual(['c/x.TEX'])
+    // (written back under the package's name, which TeX opens)
+    const p = loadProject(inMemory(new Map([['main.tex', enc('\\documentclass{article}\n\\begin{document}\n\\input{chapters/prompts}\n\\end{document}\n')], ['chapters/Prompts.tex', enc('Prose.\n')]])), 'main.tex')
+    const translated = new Map((p.units as Unit[]).map((u) => [u, u.pieces.map((x) => (x.t === 'text' ? { ...x, tr: true, s: '<T>' } : x))]))
+    expect([...patch(p, translated as Map<(typeof p.units)[number], unknown[]>).keys()].sort()).toEqual(['chapters/Prompts.tex', 'main.tex'])
+  })
+  it('takes the name as given first, folds no directory, and reads none where two names fold alike', () => {
+    expect(filesOf('\\input{c/prompts}', ['c/Prompts.tex', 'c/prompts.tex'])).toEqual(['c/prompts.tex'])
+    expect(filesOf('\\input{Chapters/prompts}', ['chapters/Prompts.tex'])).toEqual([])
+    // (kpathsea takes the first its directory lists, an order of the disk's the package does not tell)
+    expect(filesOf('\\input{d/two}', ['d/Two.tex', 'd/TWO.tex'])).toEqual([])
   })
 })
 
@@ -78,6 +105,17 @@ describe('the front matter: its notes (1706.03762) and its names and places (the
     const p = project(`\\documentclass{article}\\begin{document}\\title{The Paper}${AUTHORS}\\maketitle\nWords here.\\end{document}`)
     expect((p.units as Unit[]).filter(u => u.kind === 'footnote').map(textOf)).toEqual(['Equal contribution. Listing order is random.', 'Work performed while at X.'])
     expect(authors(p)).toEqual(['Alice', 'Bob'])
+  })
+
+  it('a note mark glued after an author\'s name stays an element of its unit, never a letter of the name (2610.42112v1\'s `Millidge\\textdagger`: as text the dagger joined the name, its person and its named variants were lost)', () => {
+    const p = project('\\documentclass{article}\\title{The Paper}\\author{Ada Lovelace\\textdagger, Alan Turing\\textdagger\\\\ Somewhere}\\begin{document}\\maketitle\nWords here.\\end{document}')
+    const names = (p.units as Unit[]).filter(u => u.kind === 'author')
+    expect(names.map(textOf).join('|')).not.toMatch(/†/)
+    const marks = names.flatMap(u => u.pieces.filter(q => q.t === 'ph').map(q => (q as { src?: string }).src))
+    expect(marks.filter(s => s === '\\textdagger')).toHaveLength(2)
+    // (and the instrument keeps each an element of the unit's content: no face switch, no text symbol read as text)
+    const content = names.flatMap(u => piecesOf(u.pieces) as { t: string; src?: string }[])
+    expect(content.filter(q => q.t === 'el' && q.src === '\\textdagger')).toHaveLength(2)
   })
 
   it('an affiliation and its note; the title\'s note stays the title\'s, and the title is still the title', () => {
@@ -206,6 +244,31 @@ describe('a translated line of names that may not fit its box (2608.06701: Japan
     expect(marked(IEEE.replace('Somewhere\\\\ Elsewhere', 'Somewhere, \\{sl225, reyhaneh\\}@illinois.edu, or write to jatin@us.ibm.com today'))).toContain('\\{sl225, reyhaneh\\}@illinois.edu')
   })
 
+  it('a group of local parts before one domain is one address, whatever spaces TeX writes between them and whichever brackets hold them: no word of it sent', () => {
+    // (a tie or a thin space between the local parts, `\{kahe,~v-xiangz\}@…` and `\{mph,\,lmb\}@…`, parted the list into text
+    // pieces sent one by one; a group in parentheses or brackets, `[first name]@…`, was text)
+    const row = 'Somewhere, \\{alpha,~beta-x,\\,gamma\\}@example.org, (delta, eps)@example.net, or [first name]@example.com.'
+    const units = project(IEEE.replace('Somewhere\\\\ Elsewhere', row)).units as Unit[]
+    const text = units.map(textOf).join(' | ')
+    expect(text).not.toMatch(/alpha|beta|gamma|delta|eps|first|name|example/)
+    expect(text).toMatch(/Somewhere, .*, or .*\./)
+    const kept = units.flatMap(u => u.pieces.filter(p => p.t === 'ph').map(p => (p as { src?: string }).src))
+    expect(kept).toEqual(expect.arrayContaining(['\\{alpha,~beta-x,\\,gamma\\}@example.org', '(delta, eps)@example.net', '[first name]@example.com']))
+    expect(marked(IEEE.replace('Somewhere\\\\ Elsewhere', row))).toContain('\\{alpha,~beta-x,\\,gamma\\}@example.org')
+  })
+
+  it('a paragraph of grouped addresses alone is no unit: nothing of it is prose', () => {
+    const units = project('\\documentclass{article}\\begin{document}\nWords here.\n\n\\{alpha,~beta\\}@example.org, gamma@example.net\n\\end{document}').units as Unit[]
+    expect(units.filter(u => u.pieces.some(p => /alpha|beta|gamma/.test((p as { s?: string }).s ?? (p as { src?: string }).src ?? '')))).toEqual([])
+    expect(units.map(u => textOf(u).trim())).toEqual(['Words here.'])
+  })
+
+  it('nothing broader than the group: a bracket after a word, a space before the @, a bracket that is no list of local parts stay text', () => {
+    const row = 'Somewhere: mAP@[.5, .95] at f(a, b)@example.org and (a, b) @example.org and [see 2]@'
+    const text = (project(IEEE.replace('Somewhere\\\\ Elsewhere', row)).units as Unit[]).map(textOf).join(' | ')
+    expect(text).toContain('mAP@[.5, .95] at f(a, b)@example.org and (a, b) @example.org and [see 2]@')
+  })
+
   it('\\and is no unit\'s: article ends a table there, which cannot be set inside a box (2608.21180), so each author\'s block is its own', () => {
     const tex = marked('\\documentclass{article}\\author{Alice Example \\and Bob Example}\\begin{document}\\maketitle\nWords.\\end{document}')
     expect(tex).toMatch(/\\author\{\\axtwide\{<T\d+>\}\s*\\and\s*\\axtwide\{<T\d+>\}\}/)
@@ -215,6 +278,63 @@ describe('a translated line of names that may not fit its box (2608.06701: Japan
   it('nothing is wrapped where nothing is translated: the original compiles as the paper does', () => {
     const p = project(IEEE)
     expect(new TextDecoder().decode(patch(p, new Map(), { mark: markUnits(p.units) }).get('main.tex'))).not.toContain('\\axtwide')
+  })
+})
+
+describe('an identifier is not prose: a token of word characters joined by underscores is one placeholder, as the paper writes it', () => {
+  const doc = (body: string, defs = '') => project(`\\documentclass{article}${defs}\\begin{document}\n${body}\n\\end{document}`)
+  const kept = (units: Unit[]) => units.flatMap(u => u.pieces.filter(p => p.t === 'ph').map(p => (p as { src?: string }).src))
+
+  it('its parts joined by \\_ (or \\textunderscore) are one element, never sent (2608.25210v2: llm_equal_human came back with its last part in Chinese)', () => {
+    const units = doc('The prompt llm\\_equal\\_human asks whether [sentence\\_1] and the run\\textunderscore id agree.') as unknown as { units: Unit[] }
+    const text = units.units.map(textOf).join(' | ')
+    expect(text).not.toMatch(/llm|equal|human|sentence|run|\bid\b/)
+    expect(text).toContain('The prompt ')
+    expect(text).toContain(' asks whether  and the  agree.')
+    expect(kept(units.units)).toEqual(['llm\\_equal\\_human', '[sentence\\_1]', 'run\\textunderscore id'])
+  })
+
+  it('a table cell or a paragraph of identifiers alone is no unit: nothing of it is prose', () => {
+    const units = doc('Words here.\n\n{\\em response\\_equal\\_human}\n\n{\\em response\\_equal\\_llm\\_example}\n') as unknown as { units: Unit[] }
+    expect(units.units.map(u => textOf(u).trim())).toEqual(['Words here.'])
+  })
+
+  it('the whole token is the identifier, its leading and trailing sentence punctuation aside (the coordinator’s, 2026-11-10)', () => {
+    // (2608.06701v1's `CallbackBase.host_label(result)` one identifier; 2608.25210v2 Table 2's response_equal_human_example drawn
+    // today with its last part translated; a stop, a comma, a quote or a parenthesis the sentence opened is no part of it, a
+    // bracket the token answers is)
+    const units = doc('Call CallbackBase.host\\_label(result), then llm\\_equal\\_human. See it (as conv5\\_x) for ``x86\\_64\'\' and [sentence\\_1], e.g.\\ here.') as unknown as { units: Unit[] }
+    expect(kept(units.units)).toEqual(['CallbackBase.host\\_label(result)', 'llm\\_equal\\_human', 'conv5\\_x', 'x86\\_64', '[sentence\\_1]', '\\ '])
+    expect(units.units.map(textOf).join('|').trim()).toBe('Call , then . See it (as ) for ``\'\' and , e.g.here.')
+  })
+
+  it('nothing broader: a camelCase word, an underscore with no word character on one side, a formula’s subscript, a hyphen or a dot stay as they were', () => {
+    // (a bare _ is TeX's subscript: 2610.21377v1's formulas the walker read as text, `H_0`, are no identifier)
+    const units = doc('Keep camelCase and x \\_ y and \\_\\_init\\_\\_ and $x_1$ and a-b and a.b in the text.') as unknown as { units: Unit[] }
+    const text = units.units.map(textOf).join(' | ')
+    expect(text).toContain('Keep camelCase and x ')
+    expect(text).toContain(' y and ')
+    expect(text).toContain('init')
+    expect(text).toContain(' and a-b and a.b in the text.')
+    expect(kept(units.units)).toEqual(expect.arrayContaining(['\\_', '$x_1$']))
+    expect(kept(units.units).some(s => /init|camel/.test(s ?? ''))).toBe(false)
+  })
+
+  it('a placeholder is an identifier only as text TeX sets as written: a formula never, its math shift TeX’s', () => {
+    // (the layout marks read a placeholder's class by it: `$s_i$`, a formula's subscript, is no identifier, nor `\(s_i\)`)
+    for (const src of ['$s_i$', '$E_h$', '\\(s_i\\)', 'a $x_1$']) expect(identifierSource(src)).toBe(false)
+    for (const src of ['llm\\_equal\\_human', '[sentence\\_1]', '\\$HOME\\_DIR']) expect(identifierSource(src)).toBe(true)
+  })
+
+  it('an e-mail address with an underscore stays one address, not an identifier and a rest', () => {
+    const units = doc('Write to first\\_last@example.org or to my\\_box at example.net today.') as unknown as { units: Unit[] }
+    expect(kept(units.units)).toEqual(['first\\_last@example.org', 'my\\_box'])
+  })
+
+  it('a bare _ the walker leaves in a unit’s text is TeX’s subscript, no identifier (2610.21377v1)', () => {
+    // (2610.21377v1's formulas the walker read as text: `H_0`, `e_k` were caught as identifiers when a bare _ read as one)
+    const units = doc('Then the space H_0 of functions e_k holds here.') as unknown as { units: Unit[] }
+    expect(kept(units.units)).toEqual(['_', '_'])
   })
 })
 
@@ -507,6 +627,149 @@ describe('a letter command is the letter itself in its word: TeX\'s skipped spac
     // entry's fields after it)
     const other = marked('\\noindent\\underline{\\code{x}}\\foo{y} then words follow.', `${pre}\n\\newcommand{\\foo}[1]{#1}`)
     expect(other).not.toContain('axtmark{0s}')
+  })
+})
+
+describe('a character TeX writes escaped is a character of the text, its source beside it (\\%, \\&, \\#, \\$, \\{, \\}, \\textasciitilde, \\textbar, \\textless, \\textgreater, \\textbackslash)', () => {
+  // (a placeholder, it went out as a marker and came back where Microsoft split the term, "R&D" as "D … R&"; as text the
+  // translator reads the term, and a reply sets "96%" glued as the paper does: Microsoft's Chinese and Japanese, 2026-11-11)
+  const doc = (body: string, defs = '') => project(`\\documentclass{article}${defs}\\begin{document}\n${body}\n\\end{document}`)
+  const source = (p: ReturnType<typeof project>) => new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))
+  const kept = (p: ReturnType<typeof project>) => (p.units as Unit[]).flatMap(u => u.pieces.filter(x => x.t === 'ph').map(x => (x as { src?: string }).src))
+
+  it('each is its character in its word, no placeholder, and written back byte for byte: TeX skips the spaces after a control word, not after a control symbol', () => {
+    const forms: [string, string][] = [
+      ['5\\% of', '5% of'], ['R\\&D', 'R&D'], ['Task \\#1', 'Task #1'], ['\\$100', '$100'], ['the set \\{a, b\\}', 'the set {a, b}'],
+      ['\\textasciitilde 5', '~5'], ['a\\textbar b', 'a|b'], ['\\textless 5', '<5'], ['\\textgreater{} 5', '> 5'], ['C:\\textbackslash{}x', 'C:\\x'],
+      ['5\\%{} of', '5% of'], ['{\\%}', '%'],
+    ]
+    for (const [tex, word] of forms) {
+      const p = doc(`We see ${tex} here.`)
+      const u = (p.units as Unit[])[0] as Unit
+      expect(u.pieces.map(x => x.t), tex).toEqual(['text'])
+      expect(textOf(u).trim(), tex).toBe(`We see ${word} here.`)
+      expect(source(p), tex).toContain(`We see ${tex} here.`)
+    }
+  })
+
+  it('a placeholder still where the paper defines the command itself', () => {
+    expect(kept(doc('We see a\\textbar b here.', '\\renewcommand{\\textbar}{\\ensuremath{\\vert}}'))).toEqual(['\\textbar'])
+    expect(kept(doc('We see 5\\% here.', '\\renewcommand{\\%}{ percent}'))).toEqual(['\\%'])
+  })
+
+  it('\\_ stays with the identifier rule, and an identifier that holds one of them is one placeholder as the paper writes it, as before', () => {
+    expect(kept(doc('Set \\$HOME\\_DIR and \\{root\\_question\\} and run\\_id here, at 5\\% of it.'))).toEqual(['\\$HOME\\_DIR', '\\{root\\_question\\}', 'run\\_id'])
+  })
+
+  it('a group around one alone spends its pair\'s id, as a group around a letter does: the pairs after it keep theirs', () => {
+    const ids = (body: string) => ((doc(body).units as Unit[])[0]?.pieces ?? []).filter(x => x.t === 'open').map(x => (x as unknown as { id: number }).id)
+    expect(ids('We see {\\%} and \\emph{others} here.')).toEqual(ids('We see {x} and \\emph{others} here.').slice(1))
+  })
+})
+
+describe('what a command prints as characters is characters: \\enquote\'s quotation marks (the coordinator\'s ruling of 2026-11-11)', () => {
+  const doc = (body: string, pre = '') => project(`\\documentclass{article}${pre}\\begin{document}\n${body}\n\\end{document}`)
+  const source = (p: ReturnType<typeof project>) => new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))
+  const unitsOf = (p: ReturnType<typeof project>) => p.units as Unit[]
+  const bib = (entry: string) => `Text.\n\\begin{thebibliography}{1}\n\\bibitem{a} ${entry}\n\\end{thebibliography}`
+  /** a unit's text as UTF-8 (the front end holds a source's text as its UTF-8 bytes in a Latin-1 view) */
+  const said = (u: Unit) => new TextDecoder().decode(Uint8Array.from([...textOf(u)].map(c => c.charCodeAt(0))))
+
+  it("a paper's own \\enquote{…} that sets its argument between TeX's quotation marks: the marks text, written back byte for byte (2610.10069v1)", () => {
+    const entry = 'A. Allen (2019): \\enquote{Hicksian complementarity,} Econometrica.'
+    const p = doc(bib(entry), '\\newcommand{\\enquote}[1]{``#1\'\'}')
+    const u = unitsOf(p).find(x => x.kind === 'reference') as Unit
+    expect(u.pieces.some(x => x.t === 'open')).toBe(false)
+    expect(said(u)).toContain('\u201cHicksian complementarity,\u201d Econometrica.')
+    expect(source(p)).toContain(entry)
+  })
+  it("a .bbl's \\providecommand of it, REVTeX's (2307.16209v1), alike; a definition that sets anything else stays as it was", () => {
+    const p = project('\\documentclass{article}\\begin{document}\nText.\n\\begin{thebibliography}{1}\n\\providecommand \\enquote  [1]{``#1\'\'}\n\\bibitem{a} B. Berti, \\enquote {Black holes,} 2020.\n\\end{thebibliography}\n\\end{document}')
+    const u = unitsOf(p).find(x => x.kind === 'reference') as Unit
+    expect(said(u)).toContain('\u201cBlack holes,\u201d')
+    expect(u.pieces.some(x => x.t === 'open')).toBe(false)
+    const boxed = doc(bib('C. Chu, \\enquote{A title,} 1989.'), '\\newcommand{\\enquote}[1]{\\textit{#1}}')
+    expect((unitsOf(boxed).find(x => x.kind === 'reference') as Unit).pieces.some(x => x.t === 'open')).toBe(true)
+  })
+  it("csquotes' \\enquote: the outer level's double marks, an \\enquote inside one the inner level's single, \\enquote* from the inner level", () => {
+    const p = doc('He said \\enquote{yes \\enquote{no} maybe} and \\enquote*{so} here.', '\\usepackage{csquotes}')
+    const u = unitsOf(p)[0] as Unit
+    expect(u.pieces.some(x => x.t === 'open')).toBe(false)
+    expect(said(u).trim()).toBe('He said \u201cyes \u2018no\u2019 maybe\u201d and \u2018so\u2019 here.')
+    expect(source(p)).toContain('He said \\enquote{yes \\enquote{no} maybe} and \\enquote*{so} here.')
+  })
+  it('csquotes with a style the source alone cannot tell (another style, autostyle): \\enquote stays one placeholder, as before', () => {
+    // (its marks are the style's, which the compile's glyphs would tell: not read here)
+    for (const pre of ['\\usepackage[style=german]{csquotes}', '\\usepackage[autostyle]{csquotes}']) {
+      const u = unitsOf(doc('He said \\enquote{yes} here.', pre))[0] as Unit
+      expect(u.pieces.map(x => [x.t, (x as { src?: string }).src]), pre).toContainEqual(['ph', '\\enquote{yes}'])
+    }
+  })
+})
+
+describe("a link with no address is its argument: REVTeX's \\href@noop {} {…} (the coordinator's step D, 2026-11-11)", () => {
+  // (the .bbl's head as REVTeX's apsrev4-2 writes it, \\href@noop setting its second argument as it stands; 2610.20030v1's entries)
+  const HEAD = '\\makeatletter\n\\providecommand \\enquote  [1]{``#1\'\'}%\n\\providecommand \\href@noop [0]{\\@secondoftwo}%\n\\providecommand \\bibinfo  [0]{\\@secondoftwo}%\n\\providecommand \\bibfield  [0]{\\@secondoftwo}%\n\\makeatother\n'
+  const bbl = (entry: string) => `\\documentclass{revtex4-2}\\begin{document}\nText.\n\\begin{thebibliography}{2}%\n${HEAD}\\bibitem [{A}]{a}\\BibitemOpen\n  ${entry}\\BibitemShut {NoStop}%\n\\end{thebibliography}\n\\end{document}`
+  const said = (u: Unit) => new TextDecoder().decode(Uint8Array.from([...textOf(u)].map(c => c.charCodeAt(0))))
+  const source = (p: ReturnType<typeof project>) => new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))
+  it('an entry\'s journal part is its text, its groups as they set it, and nothing to link: a pair that sets its argument alone', () => {
+    const entry = '\\bibfield  {author} {\\bibinfo {author} {\\bibfnamefont {D.~M.}\\ \\bibnamefont {Sussman}},\\ }\\href@noop {} {\\bibfield  {journal} {\\bibinfo  {journal} {SoftwareX}\\ }\\textbf {\\bibinfo {volume} {6}},\\ \\bibinfo {pages} {16} (\\bibinfo {year} {2017})}'
+    const p = project(bbl(entry))
+    const u = (p.units as Unit[]).find(x => x.kind === 'reference') as Unit
+    const pieces = u.pieces as { t: string; s?: string; src?: string; sets?: number }[]
+    expect(pieces.some(x => x.t === 'ph' && (x.src ?? '').startsWith('\\href@noop'))).toBe(false)
+    expect(textOf(u)).toContain('SoftwareX')
+    const open = pieces.find(x => x.t === 'open' && (x.src ?? '').startsWith('\\href@noop'))
+    expect(open?.src).toBe('\\href@noop {} {')
+    expect(open?.sets).toBe(0)
+    // (\\textbf around its volume a group of its own still)
+    expect(pieces.some(x => x.t === 'open' && x.src === '\\textbf {')).toBe(true)
+    expect(source(p)).toContain(entry)
+  })
+  it('an entry that is a link with no address alone is a unit: 2610.20030v1\'s supplemental note, its quotation marks text', () => {
+    const p = project(bbl('\\href@noop {} {\\enquote {\\bibinfo {title} {See {S}upplemental {M}aterial at [url will be inserted by publisher] for {F}igures.}}\\ }'))
+    const u = (p.units as Unit[]).find(x => x.kind === 'reference')
+    expect(u && said(u).replace(/\s+/g, ' ').trim()).toBe('\u201cSee Supplemental Material at [url will be inserted by publisher] for Figures.\u201d')
+  })
+})
+
+describe("a quoted argument holding a declaration keeps the group that scopes it (Codex's review of B8, 2026-11-11)", () => {
+  const doc = (body: string, pre = '') => project(`\\documentclass{article}${pre}\\begin{document}\n${body}\n\\end{document}`)
+  const shape = (p: ReturnType<typeof project>) => ((p.units as Unit[])[0]!.pieces as { t: string; s?: string; src?: string }[]).map(x => [x.t, x.t === 'text' ? new TextDecoder().decode(Uint8Array.from([...(x.s ?? '')].map(c => c.charCodeAt(0)))).trim() : x.src])
+  const source = (p: ReturnType<typeof project>) => new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))
+  it("csquotes' `\\enquote{\\bfseries bold words}` (Codex's own input): the marks text, the switch inside its group", () => {
+    const p = doc('Say \\enquote{\\bfseries bold words} normally.', '\\usepackage{csquotes}')
+    expect(shape(p)).toEqual([['text', 'Say \u201c'], ['open', '{'], ['ph', '\\bfseries'], ['text', 'bold words'], ['close', '}'], ['text', '\u201d normally.']])
+    expect(source(p)).toContain('Say \\enquote{\\bfseries bold words} normally.')
+    // (today's markers wire puts the switch after the unit's text only inside its group: it scopes nothing past it)
+    const back = (serialize((p.units as Unit[])[0] as never) as { back?: { t: string; src?: string }[] }).back ?? []
+    expect(back.map(x => x.t)).toEqual(['open', 'ph', 'close'])
+  })
+  it("a paper's \\enquote (wrapOf) alike; an argument with no declaration of its own stays text alone", () => {
+    const p = doc('Say \\enquote{\\em these words} now.', '\\newcommand{\\enquote}[1]{``#1\'\'}')
+    expect(shape(p).map(x => x[0])).toEqual(['text', 'open', 'ph', 'text', 'close', 'text'])
+    expect(source(p)).toContain('Say \\enquote{\\em these words} now.')
+    expect(shape(doc('Say \\enquote{\\textbf{these} words} now.', '\\usepackage{csquotes}')).map(x => x[0])).toEqual(['text', 'open', 'text', 'close', 'text'])
+  })
+})
+
+describe("an identifier or a grouped address read after a piece the front end writes as characters (Codex's review of B8, 2026-11-11)", () => {
+  // (keepRead's offsets: one per character it reads; a generated piece's characters are its UTF-8 bytes in a Latin-1 view, three
+  // for a quotation mark, and one offset for all of them put every match after it on the wrong pieces, or past the end)
+  const doc = (body: string, pre = '') => project(`\\documentclass{article}${pre}\\begin{document}\n${body}\n\\end{document}`)
+  const phs = (p: ReturnType<typeof project>) => (p.units as Unit[]).flatMap(u => (u.pieces as { t: string; src?: string }[]).filter(x => x.t === 'ph').map(x => x.src))
+  it("csquotes' marks, then an identifier (Codex's own input) and a grouped address", () => {
+    expect(phs(doc('Use \\enquote{a phrase} and x\\_y.', '\\usepackage{csquotes}'))).toContain('x\\_y')
+    expect(phs(doc('Use \\enquote{a phrase} and write to \\{ab,cd\\}@x.org now.', '\\usepackage{csquotes}'))).toContain('\\{ab,cd\\}@x.org')
+  })
+  it("a paper's \\enquote's marks (wrapOf), an escaped character, then the same", () => {
+    expect(phs(doc('Use \\enquote{a phrase} and x\\_y.', '\\newcommand{\\enquote}[1]{``#1\'\'}'))).toContain('x\\_y')
+    expect(phs(doc('At 5\\% of R\\&D, x\\_y and \\{ab,cd\\}@x.org.'))).toEqual(expect.arrayContaining(['x\\_y', '\\{ab,cd\\}@x.org']))
+  })
+  it("a link with no address's argument (\\href@noop), then the same", () => {
+    const p = project('\\documentclass{revtex4-2}\\begin{document}\nText.\n\\begin{thebibliography}{1}%\n\\makeatletter\n\\providecommand \\href@noop [0]{\\@secondoftwo}%\n\\makeatother\n\\bibitem{a} \\href@noop {} {Notes on x\\_y}, write to \\{ab,cd\\}@x.org.\n\\end{thebibliography}\n\\end{document}')
+    expect(phs(p)).toEqual(expect.arrayContaining(['x\\_y', '\\{ab,cd\\}@x.org']))
   })
 })
 

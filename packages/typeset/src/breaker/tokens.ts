@@ -3,7 +3,7 @@
 // CJK–Latin autospace, punctuation's compression, hyphenation's language, the layer's own small capitals, TeX's explicit glue
 // as kerns, crops, the control tokens (a forced break's newline, a kept region's blockTo), the marks dropped after a display or
 // a held line's mark and the class's tail marks (U.marks' decisions, T16, T17: unit/marks.ts, called where today decides them,
-// its trace in the answer), the spaces a spaceless script does not set, and
+// its trace in the answer), the spaces a spaceless script does not set and those beside a full-width mark's blank side, and
 // each token's place in the unit's plain text (the word table's). Ported from engine 065c1d973 layer2.mjs: tokensOf2
 // L2:2524-2890, baseOf L2:2253-2297, STYLE_CMDS and applyCmd L2:2106-2122, glueOf L2:2394-2416, spacelessEdge L2:2417-2430, selfCaps / plainOf / upperOf / caseRuns L2:2448-2483, renameRuns
 // L2:1309-1320, cropPartsOf L2:1875-1878, LINK_OPEN L2:2245, hexOf L2:4569.
@@ -13,12 +13,15 @@
 // - `resolved`: the unit's reading: the elements' resolutions (U.elements, U.breaks' marks, U.rename's names, U.marks' facts),
 //   `measured` (the base style and pieces' colours its glyphs hold ← TeX's font state, Placed.style / spans), `capsRatio`
 //   (Style.sc), `orig.size` (Style.size), `openBreaks` / `referenced` (U.breaks), `tail` / `tailOwn` (Placed.tail)
-// - `colourOf`, `fillOf`: a colour piece's run's fill and an element's (TeX's log, A's glyphs) ← SpanAt.style.fill, El.style.fill
-// - `fills`, `smallCaps`: each rendering's runs of one fill and its faked small capitals (its page characters today) ← El.style
+// - `colourOf`, `fillOf`: a group's run's fill (a colour piece's, TeX's log; any other's, a link's, its glyphs' on A where it is
+//   not the fill around it) and an element's (A's glyphs) ← SpanAt.colour, El.colour, El.style.fill
+// - `fills`, `smallCaps`: each rendering's runs of one fill and its faked small capitals (its page characters today, the tap's);
+//   a rendering's own weight, slant and small capitals, faked in TeX's case at their share or its face's, ride on its
+//   resolution (`st` ← El.style, lay/read.ts)
 // - `cls2`: each piece's class ← El.kind; `spacedSource`: the source writes CJK with spaces between ← a unit fact
 // - `faces`: B.faces' answers (faceOf over the role table and the paper's family) and whether a face has small capitals
 // - `P`: the rule set's fields resolved for the target (Rules.breaking, Rules.fit); `designs`: the paper's (A3)
-import { cjkClassRe, kinsokuOf, keptPair, noStart, PUNCT_CLOSE, PUNCT_OPEN, SPACELESS } from './script.ts'
+import { cjkClassRe, fullWidthPunctOf, kinsokuOf, keptPair, markOf, noStart, SPACELESS } from './script.ts'
 import { drawnText, plainTracker, shown, type TextPiece, transformMap } from './text.ts'
 import { dropMarks, type MarksAfter, type MarksTrace, mergeTail } from '../unit/marks.ts'
 import type { V0Piece } from '../unit/breaks.ts'
@@ -66,6 +69,9 @@ export type Token = {
   at?: number
   end?: number
   space?: true
+  /** a space no line breaks at: a tie's, the source's `~` (TeX's \penalty10000 and its interword glue): break.mjs's group runs
+   *  on through it; the space is drawn and stretched with the line's other spaces */
+  tie?: true
   keep?: true
   crop?: Record<string, unknown>
   cw?: number
@@ -83,6 +89,10 @@ export type Token = {
   newline?: number
   room?: number
   blockTo?: number
+  /** its unit's end mark (El.end, lay/adapt.ts; docs/PDF-READER.md §18.52): a crop the breaker sets at the end of the unit's last
+   *  line, `pad` the distance TeX set from its rectangle's right edge to its line's right edge (the slot's, PDF units), a break
+   *  before it, kept off the line's text by `gap` (the original line's own distance to its ink) and half an em at most */
+  endMark?: { pad: number; gap: number }
 }
 /** a resolution as the tokens read it (U.elements' with the later rules' fields) */
 export type TRes = {
@@ -97,6 +107,10 @@ export type TRes = {
   crop?: number[]
   gap?: Record<string, unknown> | null
   rename?: [number, number, string][]
+  /** a mark's crop: glued to what precedes it (unit/elements.ts Res.mark) */
+  mark?: true
+  /** a tie's space (unit/elements.ts Res.tie) */
+  tie?: true
   brk?: true
   room?: number
   brkAt?: number
@@ -121,7 +135,6 @@ export type Reading = {
 export type TokenRules = {
   keepAll: boolean
   cjkQuotes: boolean
-  centredPunct: boolean
   latinPatterns: string
   cyrillicPatterns: string
   hyphenation: { minWord: number }
@@ -181,6 +194,20 @@ const applyCmd = (src: string | undefined, s: TStyle, d: Designs): TStyle | null
   for (const [re, f] of STYLE_CMDS) if (re.test(src as string)) return f(s, d)
   return null
 }
+/** what a group's open sets: its command's style (applyCmd), else the face TeX set it in where its part states one (a paper's
+ *  macro, `\topic{…}` setting `{\bf #1.}`: SpanAt.style, read off its glyphs), else nothing */
+const openStyle = (p: Extract<V0Piece, { t: 'open' }>, s: TStyle, d: Designs): TStyle | null => {
+  const named = applyCmd(p.src, s, d)
+  if (named || !p.face) return named
+  const f = p.face
+  const fam = s.fam ?? 'serif'
+  return {
+    ...s,
+    bold: !!f.bold,
+    italic: !!f.slant,
+    ...(f.role !== fam ? { fam: f.role, design: d[f.role] } : {}),
+  }
+}
 
 const GROUP_ITALIC = 1,
   GROUP_BOLD = 2,
@@ -208,10 +235,18 @@ function nonSpace(s: string): number {
   }
   return n
 }
-/** the unit's base style without what its own groups set (L2:2253 baseOf) */
+/** what a declaration sets, as a group's bits: an italic, bold or small capitals switch (\em, \itshape, \bfseries, \sc, …) */
+const declared = (src: string | undefined): number =>
+  (/^\\(?:em|it|itshape|sl|slshape)$/.test(src ?? '') ? GROUP_ITALIC : 0) |
+  (/^\\(?:bf|bfseries)$/.test(src ?? '') ? GROUP_BOLD : 0) |
+  (/^\\(?:sc|scshape)$/.test(src ?? '') ? GROUP_CAPS : 0)
+/** the unit's base style without what its own groups set (L2:2253 baseOf), and its declarations: a declaration sets its group
+ *  from where it stands, at the unit's top level the rest of it (today's \sc rule, for every switch: the part's style is the
+ *  state of the unit's glyphs, its declarations' already, so that "{\em …}" read over an italic base toggled it upright where
+ *  today's base, its glyphs' outside its styled pieces (measuredOf), was upright) */
 export function baseOf(unit: TokensInput['unit'], base: TStyle): TStyle {
   let total = 0,
-    capsAfter = false,
+    after = 0,
     inItalic = 0,
     inBold = 0,
     inCaps = 0,
@@ -222,10 +257,13 @@ export function baseOf(unit: TokensInput['unit'], base: TStyle): TStyle {
   for (const p of unit.pieces) {
     if (p.t === 'open') {
       const src = p.src as string
+      // (a bare group a face switch opens is stated with that switch as its command, `\em{` (SpanAt.cmd: the instrument's
+      // switchesOf), and sets its group's face as the switch inside it did, declared's)
       const bits =
         (/^\\(?:textit|emph|itshape|textsl)\b/.test(src) ? GROUP_ITALIC : 0) |
         (/^\\(?:textbf|bfseries)\b/.test(src) ? GROUP_BOLD : 0) |
-        (/^\\(?:textsc|scshape)\b/.test(src) ? GROUP_CAPS : 0)
+        (/^\\(?:textsc|scshape)\b/.test(src) ? GROUP_CAPS : 0) |
+        declared(/^(\\[A-Za-z]+)\{$/.exec(src)?.[1])
       open.push(bits)
       if (bits & GROUP_ITALIC) nItalic++
       if (bits & GROUP_BOLD) nBold++
@@ -235,18 +273,22 @@ export function baseOf(unit: TokensInput['unit'], base: TStyle): TStyle {
       if (bits & GROUP_ITALIC) nItalic--
       if (bits & GROUP_BOLD) nBold--
       if (bits & GROUP_CAPS) nCaps--
-    } else if (p.t === 'ph' && /^\\(?:sc|scshape)$/.test(p.src ?? '')) {
-      if (!open.length) capsAfter = true
-      else if (!(open[open.length - 1]! & GROUP_CAPS)) {
-        open[open.length - 1]! |= GROUP_CAPS
-        nCaps++
+    } else if (p.t === 'ph' && declared(p.src)) {
+      const bits = declared(p.src)
+      if (!open.length) after |= bits
+      else {
+        const fresh = bits & ~open[open.length - 1]!
+        open[open.length - 1]! |= fresh
+        if (fresh & GROUP_ITALIC) nItalic++
+        if (fresh & GROUP_BOLD) nBold++
+        if (fresh & GROUP_CAPS) nCaps++
       }
     } else if (p.t === 'text') {
       const n = nonSpace(p.s)
       total += n
-      if (nItalic) inItalic += n
-      if (nBold) inBold += n
-      if (capsAfter || nCaps) inCaps += n
+      if (nItalic || after & GROUP_ITALIC) inItalic += n
+      if (nBold || after & GROUP_BOLD) inBold += n
+      if (nCaps || after & GROUP_CAPS) inCaps += n
     }
   }
   const out = { ...base }
@@ -298,6 +340,39 @@ const spacelessEdge = (t: Token | null, end: boolean) => {
   const cps = [...t.s],
     ch = end ? cps.at(-1)! : cps[0]!
   return SPACELESS.test(ch) || SPACELESS_QUOTES.test(ch)
+}
+/**
+ * A token whose edge is a full-width mark's outer side: its last character a closing mark (the white after it), or its first an
+ * opening mark (the white before it), by what the mark does in the text (script.ts punctOf), wherever its face draws its ink (a
+ * mark set in the middle of its em has white on both sides). Full-width by Unicode: a mark of the CJK blocks (script.ts CJK: the
+ * full-width and wide forms, East Asian Width F or W) wherever it stands; a curly quote (East Asian Width A, ambiguous) only where the target
+ * sets it in its CJK face (`cjkFace`), an em wide; an alphabet's target sets it in its Latin face, proportional. A space there is
+ * no space of the text's: the mark carries the white, and a translator's space beside it doubled it (2611.03953v2-zh's
+ * references, each name followed by U+FF0C and a space: about 1 em of white a name where the original's comma and space held
+ * 0.3 em). xeCJK sets none after a closing mark whatever follows it (\xeCJK_FullRight_and_Boundary: ignores the spaces after it)
+ */
+const markBlankEdge = (t: Token | null, end: boolean, cjkFace: (t: Token) => boolean) => {
+  if (t?.cls !== 'cjk' || typeof t.s !== 'string' || !t.s) return false
+  const cps = [...t.s],
+    ch = end ? cps.at(-1)! : cps[0]!
+  return fullWidthPunctOf(ch, cjkFace(t)) === (end ? 'close' : 'open')
+}
+
+/**
+ * A token that opens with a full-width mark no line opens with (the breaker's `barred`: UAX 14's no-start classes or the target's
+ * rules' P.noStart; full-width by markBlankEdge's definition: a mark of the class table, of the CJK blocks wherever it stands or a
+ * curly quote in the target's CJK face): an ordinary space before it is not set, whatever stands before it, as none is after a
+ * closing mark (markBlankEdge) or between two characters of a spaceless script (a CJK character, a space, a full stop). The
+ * mark carries its own blank half; the space before it is an engine's (Google sets one after an element before the text's own
+ * full stop or comma in every such place of lane stray-stop's probe), never a CJK writer's. xeCJK and ctex keep this one case, a typed space between a
+ * Latin letter or a formula and a full-width closing mark (xeCJK.sty 3.10.4 :3886 `\xeCJK_Boundary_and_FullRight:N`; measured
+ * with ctexart 2.6.4: a CJK word, Q, a space and the ideographic full stop 46.84 pt against 43.33 without the space), where it is an author's keystroke; here it is not set, the
+ * coordinator's ruling of 2026-11-12 (docs/PDF-READER.md §18.18). A half-width mark keeps the space before it in every target
+ */
+const markBarredStart = (t: Token | null, cjkFace: (t: Token) => boolean, barred: (ch: string) => boolean) => {
+  if (t?.cls !== 'cjk' || typeof t.s !== 'string' || !t.s) return false
+  const ch = [...t.s][0]!
+  return fullWidthPunctOf(ch, cjkFace(t)) !== null && barred(ch)
 }
 
 /** a target's capitals: its language's case mapping, the root's where it names none a locale reads (L2:2454 upperOf) */
@@ -388,11 +463,17 @@ export function tokens(i: TokensInput): Tokens {
     if (Number.isInteger(own)) return { color: own! > 0 ? hexOf(own!) : undefined, colourRun: true }
     return {}
   }
-  const { keepAll, cjkQuotes, centredPunct: centred, latinPatterns: latinLang, cyrillicPatterns: cyrLang } = P
+  const { keepAll, cjkQuotes, latinPatterns: latinLang, cyrillicPatterns: cyrLang } = P
   const minWord = P.hyphenation.minWord
   const cjkRe = cjkClassRe(cjkQuotes)
   const kinsoku = kinsokuOf(P.noStart, P.noEnd)
+  /** a character no line opens with: UAX 14's (no-start.mjs) or the target's rules' (P.noStart): break.mjs `barred`'s */
+  const barredChar = (ch: string) => noStart(ch) || kinsoku.starts(ch)
   const lastIsSpace = () => tokens.length > 0 && !!tokens.at(-1)!.space
+  /** the space tokens a chunk of white space made that holds more than ordinary collapsible white space (space, tab, line
+   *  ends): a no-break space U+00A0, a narrow one U+202F, the ideographic space U+3000; a text's own, which no rule of the
+   *  marks takes (the rule before a full-width mark no line opens with, below) */
+  const hardSpaces = new WeakSet<Token>()
   let noBreakNext = false,
     afterHead = false
   const push = (t: Token) => {
@@ -435,6 +516,7 @@ export function tokens(i: TokensInput): Tokens {
     extra: { label?: true; ph?: string; k?: number; math?: true } = {},
     track: Track | null = null,
     smallAt: ((at: number) => boolean) | null = null,
+    ratio = capsK,
   ) => {
     for (const m of s.matchAll(/\s+|\S+/g)) {
       const chunk = m[0]
@@ -442,6 +524,7 @@ export function tokens(i: TokensInput): Tokens {
         if (tokens.length && !lastIsSpace() && !tokens.at(-1)!.leadEnd && !tokens.at(-1)!.kernEnd) {
           const face = plainOf(faceOf(st, 'latin'))
           tokens.push({ space: true, st, face, w100: 0, ...(afterHead ? { keep: true as const } : {}) })
+          if (/[^ \t\n\f\r]/.test(chunk)) hardSpaces.add(tokens.at(-1)!)
         }
         afterHead = false
         continue
@@ -480,7 +563,7 @@ export function tokens(i: TokensInput): Tokens {
           const all = p.cls === 'latin' && !!st.upper
           const runs =
             !all && p.cls === 'latin' && selfCaps(face0)
-              ? caseRuns(s, capsK, upper, smallAt && ((x) => smallAt(from + x)))
+              ? caseRuns(s, ratio, upper, smallAt && ((x) => smallAt(from + x)))
               : null
           const face = runs || all ? plainOf(face0) : face0
           for (let r = 0, count = runs ? runs.length : 1; r < count; r++) {
@@ -515,8 +598,9 @@ export function tokens(i: TokensInput): Tokens {
               t.cont = true
             } else if (q === 0 && n > 0 && !(!keepAll && (p.cls === 'cjk' || parts[n - 1]!.cls === 'cjk')))
               t.glue = true
-            if (p.cls === 'cjk' && s.length === 1 && !centred && P.compressMax >= 0)
-              t.punct = PUNCT_CLOSE.test(s) ? 'close' : PUNCT_OPEN.test(s) ? 'open' : null
+            // (a mark's blank half as its face draws it, measured in the face's own file (script.ts markOf): none where its ink
+            // crosses its em's middle, nor where an alphabet's target sets a curly quote in its Latin face, which holds no measure)
+            if (p.cls === 'cjk' && s.length === 1) t.punct = markOf(s, face.ids)
             if (
               !runs &&
               !all &&
@@ -573,7 +657,7 @@ export function tokens(i: TokensInput): Tokens {
       continue
     }
     if (p.t === 'ph' && (glueOf(p.src) || ['zero', 'space'].includes(i.cls2[k] ?? ''))) continue
-    if (p.t === 'open' && applyCmd(p.src, base, designs)) headId = p.id
+    if (p.t === 'open' && openStyle(p, base, designs)) headId = p.id
     break
   }
   const kernOn = (g: { em?: number; bp?: number; brk: boolean }) => {
@@ -620,13 +704,15 @@ export function tokens(i: TokensInput): Tokens {
       return
     }
     plain?.gap()
+    // (a piece TeX opened a paragraph at, U.breaks' openBreaks: a group's open (paragraphBreaks), or an element (El.opens, drawn
+    // after it): the text before it ends its block, the piece starts the paragraph's)
+    const opened = resolved.openBreaks?.get(k)
+    if (opened !== undefined && resolved.referenced?.has(opened)) {
+      while (tokens.at(-1)?.space) tokens.pop()
+      if (tokens.at(-1)?.blockTo !== opened) tokens.push({ blockTo: opened, w100: 0, brk: true })
+    }
     if (p.t === 'open') {
-      const g = resolved.openBreaks?.get(k)
-      if (g !== undefined && resolved.referenced?.has(g)) {
-        while (tokens.at(-1)?.space) tokens.pop()
-        if (tokens.at(-1)?.blockTo !== g) tokens.push({ blockTo: g, w100: 0, brk: true })
-      }
-      const next = applyCmd(p.src, style(), designs)
+      const next = openStyle(p, style(), designs)
       const link = LINK_OPEN.test(p.src as string) && p.id !== undefined ? { link: p.id } : {}
       stack.push({ ...(next ?? style()), ...colourRun(k, p), ...link })
       return
@@ -680,7 +766,14 @@ export function tokens(i: TokensInput): Tokens {
       const ecglue = !keepAll && pv?.cls === 'cjk' && !pv.leadEnd && !pv.kernW && !(pv.s && kinsoku.ends(pv.s))
       for (const [n, q] of cropPartsOf(r).entries()) {
         if (n) pushText(' ', style())
-        const glue = tokens.length > 0 && !lastIsSpace() && !(n === 0 && ecglue)
+        // (a mark's crop glued to what precedes it, as its text was a superscript's: TeX sets no glue between a word and its
+        // mark, so no line begins with it; after a CJK character, free to break as between two, a footnote's mark after a
+        // sentence's full stop began a line of its own, 1810.04805v2 p7's 12)
+        // (and after a tie that set no space token of its own, held to what precedes it: noBreakNext, as push reads it)
+        const glue =
+          (n === 0 && noBreakNext && tokens.length > 0) ||
+          (tokens.length > 0 && !lastIsSpace() && (!!r.mark || !(n === 0 && ecglue)))
+        if (n === 0) noBreakNext = false
         const c = q.crop as number[]
         tokens.push({ crop: q, cw: c[2]! - c[0]!, glue, w100: 0 })
       }
@@ -689,8 +782,21 @@ export function tokens(i: TokensInput): Tokens {
     if (!r.text) return
     if (r.text === ' ') {
       pushText(' ', style())
+      // (a tie: TeX's `~`, \penalty10000 and its interword glue, a space no line breaks at; the space stays a space, drawn and
+      // stretched as TeX draws it, and holds what follows it to what precedes it, a footnote's mark to its word. Where no space
+      // token stands for it (one before it already, or none set after a head's or a kern's end), what follows is glued)
+      if (r.tie) {
+        const t = tokens.at(-1)
+        if (t?.space) t.tie = true
+        else noBreakNext = true
+      }
       return
     }
+    // (a rendering of the page's own text in the font state TeX set its glyphs in, where the part states it (El.style, read.ts):
+    // its typewriter face, its weight, its slant and its small capitals over the run's. It is text no translation replaces, and
+    // the original's style is its own: 2608.06701v1 p5's "Periodic Advisor", italic by the paper's macro, was drawn upright in
+    // the run's style, and "LIVEPLAN", in faked small capitals, in full capitals; a group around it that TeX applied is in its
+    // glyphs (\emph's italic), and a rendering of no stated style, or an attribute its style does not state, takes the run's)
     const own: TStyle = r.math
       ? { ...style(), italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3, caps: false }
       : r.mode === 'orig-text' && r.st && r.st.fam !== 'math'
@@ -698,9 +804,15 @@ export function tokens(i: TokensInput): Tokens {
             ...style(),
             fam: r.st.fam === 'mono' ? 'mono' : style().fam,
             design: r.st.fam === 'mono' ? designs.mono : style().design,
+            bold: r.st.bold ?? style().bold,
+            italic: r.st.italic ?? style().italic,
+            caps: r.st.caps ?? style().caps,
           }
         : style()
     if (r.math && own.upper) own.upper = false
+    // (the share its faked small capitals are set at: its own (El.style.sc, its text in TeX's case, each small one a lowercase
+    // letter caseRuns draws so), else the unit's)
+    const ratio = r.mode === 'orig-text' && typeof r.st?.sc === 'number' ? r.st.sc : capsK
     const fill = i.fillOf(k)
     const st = !own.colourRun && Number.isInteger(fill) && fill! >= 0 ? { ...own, color: hexOf(fill!) } : own
     const fills = r.mode === 'orig-text' && !r.math && !own.colourRun ? (i.fills.get(k) ?? null) : null
@@ -728,10 +840,10 @@ export function tokens(i: TokensInput): Tokens {
       let at = 0
       for (const run of runs) {
         const from = at
-        pushText(run.text, run.st, { ph: r.mode, k }, null, capsAt && ((x) => capsAt(from + x)))
+        pushText(run.text, run.st, { ph: r.mode, k }, null, capsAt && ((x) => capsAt(from + x)), ratio)
         at += run.text.length
       }
-    } else pushText(r.text, st, { ph: r.mode, k, ...(r.math ? { math: true as const } : {}) }, null, capsAt)
+    } else pushText(r.text, st, { ph: r.mode, k, ...(r.math ? { math: true as const } : {}) }, null, capsAt, ratio)
   })
   // (U.marks, T17: the class's own marks after the unit's text, in place of the translation's of their kinds at its end)
   if (resolved.tail?.length) {
@@ -751,23 +863,33 @@ export function tokens(i: TokensInput): Tokens {
     }
   }
   while (tokens.at(-1)?.space) tokens.pop()
-  if (!keepAll && !i.spacedSource) {
-    const drawnAt = (q: number, step: number) => {
-      for (; q >= 0 && q < tokens.length; q += step) if (!tokens[q]!.space) return tokens[q]!
-      return null
-    }
-    const kept = tokens.filter(
-      (t, q) =>
-        !t.space ||
-        t.keep ||
-        t.st?.fam === 'mono' ||
-        !spacelessEdge(drawnAt(q - 1, -1), true) ||
-        !spacelessEdge(drawnAt(q + 1, 1), false),
-    )
-    if (kept.length < tokens.length) {
-      tokens.length = 0
-      for (const t of kept) tokens.push(t)
-    }
+  // (a space is not set between two characters of a spaceless script, nor beside a full-width mark's blank side whatever
+  // stands on its other side (markBlankEdge), nor before a full-width mark no line opens with whatever stands before it
+  // (markBarredStart; an ordinary space alone): a space after its head (`keep`) and one in a monospaced run are the text's)
+  const spaceless = !keepAll && !i.spacedSource
+  const drawnAt = (q: number, step: number) => {
+    for (; q >= 0 && q < tokens.length; q += step) if (!tokens[q]!.space) return tokens[q]!
+    return null
+  }
+  // (a token set in the target's CJK face: not the face its style sets Latin text in)
+  const cjkFace = (t: Token) => !!t.face && !!t.st && t.face.id !== faceOf(t.st, 'latin').id
+  const kept = tokens.filter((t, q) => {
+    if (!t.space || t.keep || t.st?.fam === 'mono') return true
+    const before = drawnAt(q - 1, -1),
+      after = drawnAt(q + 1, 1)
+    if (markBlankEdge(before, true, cjkFace) || markBlankEdge(after, false, cjkFace)) return false
+    if (!hardSpaces.has(t) && markBarredStart(after, cjkFace, barredChar)) return false
+    return !(spaceless && spacelessEdge(before, true) && spacelessEdge(after, false))
+  })
+  if (kept.length < tokens.length) {
+    // (a tie's space not set keeps its no-break: what follows it is glued to what precedes it)
+    const set = new Set(kept)
+    tokens.forEach((t, q) => {
+      const after = t.tie && !set.has(t) ? drawnAt(q + 1, 1) : null
+      if (after) after.glue = true
+    })
+    tokens.length = 0
+    for (const t of kept) tokens.push(t)
   }
   return { tokens, base, marks }
 }

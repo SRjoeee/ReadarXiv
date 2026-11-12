@@ -1,5 +1,5 @@
 // The facts the typesetter consumes, stated by today's definitions (lane L7, the converge lane): a line's size and baseline as
-// today's maker reads them, a unit's size as today's reader reads it (its text glyphs' sizes along the line), a line pinned as
+// today's maker reads them, a unit's size as today's reader reads it (its text glyphs' sizes, up the line), a line pinned as
 // today's edgesOf reads it alone, and its measure as today's columnOf reads its column. Each on ink made by hand.
 import { type Piece, unitId } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
@@ -11,6 +11,7 @@ import { cutLines, lineSize } from '../src/locate/lines.ts'
 import { locate } from '../src/locate/locate.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
 
+/** a glyph; a space the font's, whose outline is empty: no extent across or up from its origin (ink.mjs's reading) */
 const g = (u: string, x: number, y: number, size = 10, o: Partial<DocGlyph> = {}): DocGlyph => ({
   u,
   code: u.codePointAt(0) ?? 0,
@@ -19,11 +20,11 @@ const g = (u: string, x: number, y: number, size = 10, o: Partial<DocGlyph> = {}
   x0: x,
   x1: x + 0.5 * size,
   y,
-  top: y + 0.7 * size,
-  bottom: y - 0.2 * size,
+  top: u === ' ' ? y : y + 0.7 * size,
+  bottom: u === ' ' ? y : y - 0.2 * size,
   size,
   ix0: x,
-  ix1: x + 0.5 * size,
+  ix1: u === ' ' ? x : x + 0.5 * size,
   n: 0,
   k: 0,
   form: false,
@@ -133,15 +134,42 @@ describe('a line’s size and baseline, today’s maker’s (MAKE:382-410)', () 
       [654.89, 72, 5],
     ])
   })
+  it('starts a line back at its start where a glyph’s ink stands wholly off the line’s text, whatever its origin', () => {
+    // (2610.21504v1 p4: a formula broken after its "=" at a row's end (baseline 109.26), the next row opening with a summation
+    // sign whose origin TeX's math extension sets at its top, 104.78, within half a size of the row above, its ink 94.82 to
+    // 104.78, all under that row's text; then the row's text on 97.31, 12 pt under: two lines, the unit's and its formula's
+    // alike, not one across both rows, which one crop then took a whole line for)
+    const sum = g('∑', 72, 104.78, 10, { bottom: 94.82, top: 104.78 })
+    const row = [...'text r='].map((u, i) => g(u, 72 + 5 * i, 109.26, 10))
+    const next = [...'rj(s,a). Each'].map((u, i) => g(u, 82 + 5 * i, 97.31, 10))
+    const cut = (gs: DocGlyph[]) =>
+      cutLines(
+        gs.map((_, i) => i),
+        (i) => ({ page: 1, g: gs[i]! }),
+      ).map((l) => [l.base, l.x0, l.gs.length])
+    expect(cut([...row, sum, ...next])).toEqual([
+      [109.26, 72, 6],
+      [97.31, 72, 13],
+    ])
+    // (the formula's own glyphs: its end on the row, its start back at the column's start)
+    expect(cut([...row.slice(5), sum, ...next.slice(0, 2)])).toEqual([
+      [109.26, 97, 2],
+      [97.31, 72, 3],
+    ])
+  })
 })
 
 describe('a unit’s size, today’s reader’s (L2:765 originalStyle, L2:188 pageChars2)', () => {
-  it('is the median of its text glyphs’ sizes along the line, its math fonts aside', () => {
-    // (a line pdfTeX expanded 1.7 %: its glyphs 9.96 pt up the line, 10.13 along it, as PDF.js's text items give them)
+  it('is the median of its text glyphs’ sizes up the line, the size TeX was asked for, its math fonts aside', () => {
+    // (pdfTeX's font expansion scales a justified line's glyphs along it alone, to justify it: 2610.40645v1 p12 t80, three
+    // lines 2 % wide, 11.127 along and 10.909 up (\normalsize, 10.95 pt), read 11.13 along, where TeX set every glyph at 10.91.
+    // A paragraph of lines expanded 1.7 % and shrunk 2 %, set at 9.96)
     const wide = [...'expanded'].map((u, i) => g(u, 72 + 5 * i, 700, 9.96, { along: 10.13 }))
+    const narrow = [...'shrunk'].map((u, i) => g(u, 72 + 5 * i, 676, 9.96, { along: 9.76 }))
     const plain = [...'line'].map((u, i) => g(u, 72 + 5 * i, 688, 9.96))
     const math = [...'xyzw'].map((u, i) => g(u, 120 + 5 * i, 688, 7, { base: 'CMMI7' }))
-    expect(unitSize([...wide, ...plain, ...math])).toBe(10.13)
+    expect(unitSize([...wide, ...plain, ...math])).toBe(9.96)
+    expect(unitSize([...wide, ...narrow])).toBe(9.96)
     expect(unitSize(math)).toBeUndefined()
     // (faked small capitals aside: IEEEtran's "Experiments" as "E" at 9.96 and "XPERIMENTS" at 7.97 is set at 9.96, its share
     // 0.8; an ink unit's, whose source is its own text, by its capitals' sizes alone)
@@ -220,9 +248,11 @@ describe('a line pinned and its measure, as today’s reader reads them (RUN:155
     },
   ]
   const B = docOf(pages)
-  const a = para('a b c')
-  const d = para('d')
-  const e = para('e')
+  // (each unit's text its glyphs': a member claims no more letters than its source writes)
+  const text0 = (n: number) => (pages[0]!.lines[n] as { text: string }).text
+  const a = para(`${text0(0)} ${text0(1)} ${text0(2)}`)
+  const d = para(text0(3))
+  const e = para(`${text0(4)} ${text0(5)}`)
   // (glyph j of the page: the first three lines unit 0's, the fourth's twelve unit 1's, the rest unit 2's)
   const own = (_: number, j: number): [number, number, number] =>
     j < 44 + 44 + 45 ? [0, ROLE.text, -1] : j < 44 + 44 + 45 + 12 ? [1, ROLE.text, -1] : [2, ROLE.text, -1]
@@ -258,14 +288,44 @@ describe('a line pinned and its measure, as today’s reader reads them (RUN:155
       },
     ])
     const cap: InstrumentUnit = {
-      id: unitId('caption', [text('T9. c')]),
+      id: unitId('caption', [text(`T9. ${'c'.repeat(37)}`)]),
       kind: 'caption',
-      content: [text('T9. c')],
+      content: [text(`T9. ${'c'.repeat(37)}`)],
     }
     // (glyph j: each column's lines a paragraph of its own, then the caption's label and words)
     const own = (_: number, j: number): [number, number, number] =>
       j < 120 ? [Math.floor(j / 20) % 2, ROLE.text, -1] : j < 123 ? [2, ROLE.label, -1] : [2, ROLE.text, -1]
-    const L = locate(instrument(B2, [para(left), para(right), cap], own), B2, align(B2, B2))
+    const L = locate(
+      instrument(B2, [para(`${left} ${left} ${left}`), para(`${right} ${right} ${right}`), cap], own),
+      B2,
+      align(B2, B2),
+    )
     expect(L.members[2]!.lines[0]!.slice(7, 9)).toEqual([72, 472])
+  })
+})
+
+describe('a unit set in small capitals, today’s vote (L2:933 capsVote, L2:1094)', () => {
+  // (today drew a unit's Latin translation in small capitals where most of its letters that can tell are: a faked small
+  // capital votes for, a letter its source writes lowercase set as itself against, the rest (digits, the source's own
+  // capitals) nothing, a tie against; Style.sc alone, the share, is stated wherever one faked small capital stands)
+  const word = (s: string, x: number, size: number) => [...s].map((u, i) => g(u, x + 5 * i, 700, size))
+  it('states it of a heading whose lowercase letters are faked small capitals', () => {
+    const head = [g('E', 72, 700, 9.96), ...word('XPERIMENTS', 80, 7.97)]
+    expect(fakedCaps(head, 'Experiments')).toMatchObject({ ratio: 0.8, caps: true })
+  })
+  it('states none of a paragraph with one word in them, its share stated', () => {
+    const mixed = [
+      ...word('We use the', 72, 9.96),
+      g('A', 130, 700, 9.96),
+      ...word('CME', 136, 7.97),
+      ...word('tool', 160, 9.96),
+    ]
+    const caps = fakedCaps(mixed, 'We use the \\textsc{Acme} tool')
+    expect(caps.ratio).toBe(0.8)
+    expect(caps.caps).toBeUndefined()
+  })
+  it('states it of an ink unit whose capitals are faked small ones (its source its own text)', () => {
+    const refs = [g('R', 72, 700, 12), ...word('EFERENCES', 80, 9.6)]
+    expect(fakedCaps(refs, 'REFERENCES', true)).toMatchObject({ ratio: 0.8, caps: true })
   })
 })

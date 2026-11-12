@@ -194,6 +194,10 @@ export type NameInput = {
   metrics: Metrics
   /** the name's group: its ink can be hidden (a name whose group the document does not hold stays the original's) */
   shown: boolean
+  /** what TeX set before the word on its line that is the name's own and moves with it, from its start to the word's: its label,
+   *  the number a class set right before a heading it sets itself, and the space after it (Placed.label, own.mjs MR 6c). A
+   *  centred name is centred whole, that width before its word; one kept at its left edge keeps the number where it stands */
+  before?: number
 }
 /** what S.names decides of a name (today's record, RUN:1358): drawn or why not, its word, size, place and width */
 export type NameRecord = {
@@ -287,13 +291,14 @@ export function setNameOf(i: Omit<NameInput, 'mine'> & { own: NameRead | null })
   if ('wait' in covered) return { rec, wait: covered.wait }
   if (!covered.ok) return { rec: { ...rec, why: covered.why } }
   const { left, right } = i.room()
+  const before = nm.centred ? (i.before ?? 0) : 0
   const w = runsWidth(drawn, i.metrics) * at,
-    mid = (nm.x0 + nm.x1) / 2
-  const room = nm.centred ? 2 * Math.min(mid - left, right - mid) : right - nm.x0
+    mid = (nm.x0 - before + nm.x1) / 2
+  const room = nm.centred ? 2 * Math.min(mid - left, right - mid) - before : right - nm.x0
   const k = w > room ? room / w : 1
   if (k < i.P.floorMin - 1e-9) return { rec: { ...rec, why: 'unfit', text, w: r1(w), room: r1(room) } }
   const size = at * k,
-    x = nm.centred ? mid - (w * k) / 2 : nm.x0
+    x = nm.centred ? mid - (w * k + before) / 2 + before : nm.x0
   if (!i.shown) return { rec: { ...rec, why: 'unhidden', text } }
   return {
     rec: { ...rec, drawn: true, text, size: r1(size), x: r1(x), w: r1(w * k) },

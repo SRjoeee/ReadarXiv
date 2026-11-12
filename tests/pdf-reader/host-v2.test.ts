@@ -81,6 +81,7 @@ describe('the reader state told to the chrome', () => {
     rows: { target: 'de', from: 'here', s: 'none' },
     view: { display: 'bilingual', sync: { on: true, available: false }, scale: 1, zoom: 'page-width', narrow: false, sides: { left: { page: 1, pages: 0 }, right: { page: 1, pages: 0 } }, outline: [], heading: null },
     reconnecting: false,
+    network: false,
     crashed: false,
     ...o,
   }) as ReaderState
@@ -92,9 +93,10 @@ describe('the reader state told to the chrome', () => {
   it('the original opened, the layer preparing, the rows arriving, then complete: the chrome\'s phases as today\'s session gives them', () => {
     const a = state(), b = state({ original: { s: 'open', pages: 4, ours: false } })
     expect(fold([a, b]).phase).toBe('ready')
-    const c = state({ original: { s: 'open', pages: 4, ours: false }, layer: { s: 'preparing', position: 2, progress: 0.4 } })
-    expect(fold([a, b, c])).toMatchObject({ phase: 'preparing', preparing: { position: 2, progress: 0.4 } })
-    const d = { ...c, layer: { s: 'ready', laid: 0, total: 4, asOriginal: 0 }, rows: { target: 'de', from: 'here', s: 'arriving', got: 3, total: 10, lost: 0 } } as ReaderState
+    const c = state({ original: { s: 'open', pages: 4, ours: false }, layer: { s: 'preparing', stage: 'units' } })
+    // (the prepare's stage, our server's record's, as the share of its stretch the progress line stands at)
+    expect(fold([a, b, c])).toMatchObject({ phase: 'preparing', preparing: { progress: 0.52 } })
+    const d = { ...c, layer: { s: 'ready', laid: 0, total: 4, asOriginal: 0 }, rows: { target: 'de', from: 'here', s: 'arriving', got: 3, total: 10, lost: 0, waits: true } } as ReaderState
     expect(fold([a, b, c, d])).toMatchObject({ phase: 'translating', progress: 0.3 })
     const e = { ...d, layer: { s: 'ready', laid: 2, total: 4, asOriginal: 0 }, rows: { target: 'de', from: 'here', s: 'complete', got: 10, total: 10, lost: 0, stopped: null } } as ReaderState
     expect(fold([a, b, c, d, e])).toMatchObject({ phase: 'ready', layer: { laid: 2, total: 4 } })

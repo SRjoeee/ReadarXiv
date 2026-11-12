@@ -1,11 +1,15 @@
-// The rows made here, as today's run makes them (R session/run.ts §6, `rank`, `contextOf`; docs/PDF-READER.md §11.10): the units
-// nearest the page in view first (the units that page and the next wait on), then ahead before behind, a unit behind the reading
-// place counted twice as far; the paper's title and abstract as an LLM's context; a retry asking for the units with no row alone
-// (those translated are held). Pure: the reader gives it the units, the rows held and the reading place.
+// The rows made here, as today's run makes them (R session/run.ts §6, `rank`, `contextOf`; docs/PDF-READER.md §11.10): the paper's
+// own names first (§19.14), then the units nearest the page in view (the units that page and the next wait on), then ahead before
+// behind, a unit behind the reading place counted twice as far; the paper's title and abstract as an LLM's context; a retry
+// asking for the units with no row alone (those translated are held). Pure: the reader gives it the units, the rows held and the
+// reading place.
 import type { Row, Unit } from '@readarxiv/format'
+import { kindShown } from '../compose/classes.ts'
 import { committed, type Page } from '../compose/page.ts'
+import type { Prefs } from '../prefs.ts'
 import { plainOf } from './contents.ts'
-import type { RowsStop } from './machine.ts'
+import type { ReaderState } from '../reader.ts'
+import { againOf, goesOn, type Look, linkSaid, lookSaid, needsOf, type RowsStop, type State } from './machine.ts'
 
 /** the paper's context, as a translator whose replies depend on it reads it (packages/translate's PaperContext) */
 export interface PaperContext {
@@ -28,12 +32,19 @@ export function contextOf(units: readonly Unit[], title: string): PaperContext {
 }
 
 /**
- * The units in the order they are asked for (R run.ts `rank`): those `near` names (the units the page in view and the next wait
- * on) first, in their own order; then by their distance from the reading place (`anchor`, an index into `units`: the first near
- * unit's, else the page's share of the paper), ahead before behind, a unit behind counted twice as far
+ * The units in the order they are asked for (R run.ts `rank`): the paper's own names (units of kind `name`, which no page waits
+ * on and every theorem head of their name reads: today's namesFirst, rows.mjs, PDF-READER §19.14) first, so that the first
+ * batch carries them; then those `near` names (the units the page in view and the next wait on), in their own order; then by
+ * their distance from the reading place (`anchor`, an index into `units`: the first near unit's, else the page's share of the
+ * paper), ahead before behind, a unit behind counted twice as far
  */
-export function ranked<U extends { id: string }>(units: readonly U[], near: ReadonlySet<string>, anchor: number): U[] {
+export function ranked<U extends { id: string; kind?: string }>(
+  units: readonly U[],
+  near: ReadonlySet<string>,
+  anchor: number,
+): U[] {
   const rank = (i: number, u: U) => {
+    if (u.kind === 'name') return -1
     if (near.has(u.id)) return 0
     const d = i - anchor
     return d >= 0 ? 1 + d : 1 - 2 * d
@@ -84,18 +95,151 @@ export function shownAsOriginal(part: string | null | undefined, page: Page | nu
   if (part === null) return true
   return !!page && committed(page) && !page.members.some((m) => m.state === 'laid')
 }
-/** the counts the state tells of the rows held for `units`: those with a row, and those whose row is not a translation */
-export function countsOf(
-  units: readonly { id: string }[],
-  held: ReadonlyMap<string, Row>,
-): { got: number; lost: number } {
+/** the run the view's rows come from, as the session states it: `own`, one that may bring rows is under way (the host's translate;
+ *  our server's run of the target running or to start, as the document read for it says; one that failed and is asked again now,
+ *  its open under way or due at once: `asking`); `ahead`, none of these, rows that arrive or ended while our server still has work
+ *  for the view; `live`, the system still works for this reader by itself (goesOn: our server's look on, or stopped for a cause
+ *  the session goes on from; rows made here, the host's); `run`, work (own or ahead) that goes on (live). `failed`, it ended
+ *  failed and nothing asks it again now (a unit shown with no translation then is a passage that failed, whether a row says so
+ *  or none came). A failure the session asks again at once is no failure to tell: the reader waits for the run it asks
+ *  (PDF-READER §8.1) */
+export function runOf(s: State): {
+  run: boolean
+  own: boolean
+  ahead: boolean
+  live: boolean
+  failed: boolean
+  asking: boolean
+} {
+  const r = s.rows
+  const tg = s.docFor === r.target ? s.doc?.targets[r.target] : null
+  const asking = r.s === 'failed' && againOf(s).rows === 'now'
+  const own =
+    asking ||
+    (r.s === 'arriving' && (s.here || (tg !== null && (!tg || tg.state === 'running' || tg.state === 'none'))))
+  const ahead = !own && (r.s === 'arriving' || r.s === 'complete') && aheadOf(s)
+  const live = s.here || goesOn(s)
+  return { run: (own || ahead) && live, own, ahead, live, failed: r.s === 'failed' && !asking, asking }
+}
+/**
+ * Our server's work for the view without the reader's acting, as the document read for the target states it (PDF-READER §8, the
+ * coordinator's R3 of 2026-11-12; never a time): its prepare running (`prepare.state`: a layer lands at its end, and the target's
+ * run over its units follows, started by our server on units it has not run, worker v2 machine.ts startRecent, or asked by this
+ * session's open, needsOf); or a need of the visit (needsOf: the prepare of a stale `layer`, the target `done` on other `units`
+ * than the layer's) that the session asks: its open under way, or not yet asked with no wait named for it. The target's attempt
+ * covers the layer where its `units` are the layer's own (needsOf's comparison by digest). Whether that work goes on is the
+ * look's alone (runOf `live`, goesOn), one test for every clause. Rows made here: the host's run alone
+ */
+function aheadOf(s: State): boolean {
+  const d = s.doc
+  if (s.here || !d || s.docFor !== s.rows.target) return false
+  if (d.prepare.state === 'running') return true
+  return needsOf(s).some(
+    (n) => (s.open.t !== null && s.open.for.includes(n.id)) || (n.at === null && !s.open.asked.includes(n.id)),
+  )
+}
+/** what the view shown has of the translation, and whether it waits for more (PDF-READER §6.6, §8) */
+export interface ViewRows {
+  /** some unit of the layer shown has no translation held while a run that may bring it is under way */
+  waits: boolean
+  /** the units of the layer shown translated under the toggles (`total`), those of them with a translation held (`got`) and those
+   *  that failed (`lost`: a row that is none, or, the run ended failed, no translation at all): one statement over one set, so
+   *  got + lost <= total, and got never falls while the layer shown and the toggles stay (rows held are only added to, a
+   *  translation never replaced by a failure: `keep`) */
+  got: number
+  total: number
+  lost: number
+}
+/**
+ * The translation as the view shown waits for it: the units of the layer it shows that the paper does not keep and the toggles
+ * show translated (`kindShown`: a toggle shows or hides what was made, so its units count where it shows them), counted by the
+ * rows held for them. It waits while one of them has no translation and a run that may bring it is under way (`run`: our
+ * server's target running or to start, or more to come while its prepare runs or a need is asked, the host's translate); no
+ * units read yet, it waits while nothing of the translation is laid (a first open's run: the units come with the head). Rows
+ * read of a run done (a stored translation), and a run that restates rows the view holds or works on units of a layer it does
+ * not show yet, leave it waiting for none
+ */
+export function viewOf(o: {
+  /** the units of the layer shown, once read; while a new layer's are not, the units last read (the layer before it, whose
+   *  pages the panes show until the new one lays: its count holds, never 0 of 0 for a moment); null before any, or no layer */
+  units: readonly { id: string; kind: string; kept?: boolean }[] | null
+  classes: Prefs['classes'] | null
+  held: ReadonlyMap<string, Row>
+  /** a layer is shown (the session's ready) */
+  shown: boolean
+  /** a page of the layer laid */
+  laid: boolean
+  /** a run that may bring rows is under way */
+  run: boolean
+  /** that run is our server's work ahead alone (runOf `ahead`): with no units read, nothing says the view lacks anything yet */
+  ahead?: boolean
+  /** the run ended failed (runOf) */
+  failed?: boolean
+}): ViewRows {
+  if (!o.shown) return { waits: false, got: 0, total: 0, lost: 0 }
+  if (!o.units) return { waits: o.run && !o.ahead && !o.laid, got: 0, total: 0, lost: 0 }
   let got = 0,
-    lost = 0
-  for (const u of units) {
-    const r = held.get(u.id)
-    if (!r) continue
-    got++
-    if (!r.ok) lost++
+    lost = 0,
+    total = 0
+  for (const u of o.units) {
+    if (u.kept || !kindShown(u.kind, o.classes)) continue
+    total++
+    const r = o.held.get(u.id)
+    if (r?.ok) got++
+    else if (r || o.failed) lost++
   }
-  return { got, lost }
+  return { waits: o.run && got < total, got, total, lost }
+}
+
+/** the rows as the reader tells them (ReaderState `rows`, reader.ts): none; failed, where nothing asks the run again now; complete,
+ *  where the view waits for nothing more; else arriving, with the view's count and whether it waits: a run under way, a failed one
+ *  asked again at once, or rows that ended while more comes for the view (runOf), the one wait the chrome tells (events.ts). Rows
+ *  that ended with our server's work ahead and nothing counted yet (the units not read) are not told ended: their end (and the
+ *  line's whole length that comes with it) is told once the count says the view lacks nothing */
+export function rowsTold(s: State, view: ViewRows, run: ReturnType<typeof runOf> = runOf(s)): ReaderState['rows'] {
+  const r = s.rows
+  const told = { target: r.target, from: s.here ? ('here' as const) : ('server' as const) }
+  const count = { got: view.got, total: view.total, lost: view.lost }
+  if (r.s === 'none') return { ...told, s: 'none' }
+  if (r.s === 'failed' && !run.asking)
+    return {
+      ...told,
+      s: 'failed',
+      why: r.why,
+      ...count,
+      retryAt: r.retryAt,
+      ...(againOf(s).rows !== null ? { self: true as const } : {}),
+    }
+  if (r.s === 'complete' && !view.waits && !(run.ahead && run.live && view.total === 0))
+    return { ...told, s: 'complete', ...count, stopped: r.stopped }
+  return { ...told, s: 'arriving', ...count, waits: view.waits }
+}
+
+/**
+ * The view's wait as the reader tells it (reader.ts stateOf; the whole-visit tests read the same): what the view shown lacks of
+ * what our server's work would bring (viewOf over the run's work), waited for while the system still works for this reader by
+ * itself (runOf `live`: R6), the rows as told (rowsTold), our server's link as the count's word for it (linkSaid), and, over a
+ * layer shown, our server's look stopped or paused while the view lacks what that work would bring (`stopped`: its cause, its
+ * time, whether the session asks again by itself), so that its cause is said there as where no layer is shown: over the count
+ * while the session goes on by itself (the queue, the rate; the network is `network`'s, linkSaid), the wait over where it will not
+ * (the limit, our server out of reach: the coordinator's R7, R8 of 2026-11-12)
+ */
+export function toldWait(
+  s: State,
+  o: Omit<Parameters<typeof viewOf>[0], 'run' | 'ahead' | 'failed'>,
+): {
+  rows: ReaderState['rows']
+  stopped: Look | null
+  reconnecting: boolean
+  network: boolean
+} {
+  const run = runOf(s)
+  const lacks = viewOf({ ...o, run: run.own || run.ahead, ahead: run.ahead, failed: run.failed })
+  const view = { ...lacks, waits: lacks.waits && run.live }
+  const look = lacks.waits && !s.here ? lookSaid(s) : null
+  return {
+    rows: rowsTold(s, view, run),
+    stopped: look && look.why !== 'network' ? look : null,
+    ...linkSaid(s, view.waits),
+  }
 }

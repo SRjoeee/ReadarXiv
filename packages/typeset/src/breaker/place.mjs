@@ -1,24 +1,30 @@
 // B.place (design-b §1.5, G1): each line's items placed (justified within the caps, ragged, centred, flush), and a fit's
 // breaking made a layout (laidOut). Today's code (layer2.mjs L2:3976-4038, L2:4136-4157), moved by
 // lab/typeset/move-fit.mjs; typed by place.types.ts.
-import { latinishOf, lineExtent, squeezable } from './break.mjs'
+import { gapsOf, hangOf, inWord, latinishOf, lineExtent, squeezable, tabOf } from './break.mjs'
 import { inFlow, slotsAt } from './slots.mjs'
 import { toLastLines } from '../fit/last-lines.ts'
 
-/** each line's items placed: justified where the slack is within the caps (CJK per gap, spaces per space), else left
- *  aligned; the unit's last line left aligned, and so a line TeX's own break ends (breakLines' `ends`: the part of a
+/** each line's items placed: justified where the slack is within the caps (CJK per gap, but none inside a word: gapsOf,
+ *  spaces per space), else left aligned; the unit's last line left aligned, and so a line TeX's own break ends (breakLines' `ends`: the part of a
  *  paragraph before a display, which TeX ends with \parfillskip, and a forced break, \\'s \hfil\break), its spacing the
  *  fit's state (its tracking), never spread to the edge; a centred block centred */
 function placeItems(lines, f, P) {
   const last = lines.at(-1)
   for (const line of lines) {
-    const cap = line.x1 - line.x0
+    // (the unit's end mark at the end of its line, Token.endMark (breakLines): set at its place, as far from the line's right edge as
+    // TeX set it; the text before it in the room it leaves, the keep-off distance before its ink)
+    const mark = line.items.at(-1)?.t.endMark ? line.items.pop() : null
+    const full = line.x1 - line.x0
+    const cap = mark && line.items.length ? full - mark.t.endMark.pad - mark.w - Math.min(0.5 * f, mark.t.endMark.gap) : full
     const natural = line.items.reduce((s, it) => s + it.w + (it.asp ?? 0) + (it.kern ?? 0), 0)
-    // a closing mark at the line's end may stand in the margin by its blank half
+    // a closing mark at the line's end may stand in the margin by its blank half (hangOf)
     const end = line.items.at(-1)
-    const hang = end?.t.punct === 'close' && !end.cut && P._compress < 2 ? 0.5 * f : 0
+    const hang = hangOf(end, P._compress) * f
     let slack = cap - natural + hang
-    const spaces = line.items.filter(it => it.t.space)
+    // (a label TeX hung beside the text, its room up to the hang's end: a box, no slack before the text's first item, tabOf)
+    const kt = tabOf(line.items)
+    const spaces = line.items.filter((it, n) => it.t.space && n > kt)
     const spW = spaces.reduce((s, it) => s + it.w, 0)
     const latinish = latinishOf(line.items, P)
     let perSpace = 0, perGap = 0
@@ -41,7 +47,8 @@ function placeItems(lines, f, P) {
       if (slack < 0) {
         const by = Math.max(slack, -spW * (1 - P.spaceMin))
         if (spaces.length) perSpace = by / spaces.length
-        perGap = (slack - (spaces.length ? by : 0)) / (line.items.length - 1)
+        const gaps = gapsOf(line.items)
+        if (gaps > 0) perGap = (slack - (spaces.length ? by : 0)) / gaps
         slack = 0
       }
     }
@@ -52,7 +59,7 @@ function placeItems(lines, f, P) {
         if (per <= P.spaceMax * (spW / spaces.length)) perSpace = per
         else line.mode = 'ragged'
       } else {
-        const gaps = line.items.length - 1
+        const gaps = gapsOf(line.items)
         if (gaps > 0 && slack / gaps <= P.cjkJust * f) perGap = slack / gaps
         else if (gaps > 0) line.mode = 'ragged'
       }
@@ -62,10 +69,16 @@ function placeItems(lines, f, P) {
     line.items.forEach((it, n) => {
       x += it.asp ?? 0
       it.x = x + (it.shift ?? 0)
-      x += it.w + (it.kern ?? 0) + (it.t.space ? perSpace : 0) + (n < line.items.length - 1 ? perGap : 0)
+      x += it.w + (it.kern ?? 0) + (it.t.space && n > kt ? perSpace : 0) + (n < line.items.length - 1 && !inWord(line.items[n + 1]) && n + 1 > kt ? perGap : 0)
     })
     line.used = x - line.x0
     line.cap = cap
+    if (mark) {
+      mark.x = line.x1 - mark.t.endMark.pad - mark.w
+      line.items.push(mark)
+      line.used = mark.x + mark.w - line.x0
+      line.cap = full
+    }
   }
 }
 /** a fit's breaking at its state made a layout: its lines placed, and what it set and lost counted; the lines TeX's rule

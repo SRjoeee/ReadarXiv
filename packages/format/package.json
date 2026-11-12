@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "license": "GPL-3.0-only",
-  "description": "the schema of the bundle, read and write",
+  "description": "the schema of the bundle and of the documents our server gives a reader, read and write",
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts"

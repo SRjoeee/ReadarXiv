@@ -40,6 +40,10 @@ export type Res = {
   parts?: readonly unknown[]
   /** a URL's crop: where TeX's url package may break it (El.breaks: x on the page, the copy text's UTF-16 code units before) */
   breaks?: readonly (readonly [number, number])[]
+  /** a mark's crop (lay/read.ts readingsOf's `mark`): glued to what precedes it, as TeX sets a mark, no glue between */
+  mark?: true
+  /** a tie's space (ElementReading.tie): no line breaks at it (breaker/tokens.ts, break.mjs) */
+  tie?: true
   proof?: true
   empty?: true
   inPlace?: true
@@ -58,6 +62,8 @@ export type ElementReading = {
   fixed: Res | null
   /** a space TeX set ink for */
   inked: boolean
+  /** a tie (El.tie, the source's `~`): TeX's \penalty10000 and interword glue, a space no line breaks at */
+  tie?: true
   /** a symbol's drawing, and whether the page shows its mark just before the unit's first line */
   symbol: { leads: boolean; res: Res } | null
   /** a footnote's mark, drawn raised whatever its rendering */
@@ -148,12 +154,18 @@ export function elements(i: ElementsInput): Elements {
     const e = el(k)
     if (e.fixed) out.set(k, { ...e.fixed })
     else if (e.cls === 'zero') out.set(k, { mode: 'none', text: '' })
-    else if (e.cls === 'space' && !e.inked) out.set(k, { mode: 'none', text: ' ' })
+    else if (e.cls === 'space' && !e.inked)
+      out.set(k, { mode: 'none', text: ' ', ...(e.tie ? { tie: true as const } : {}) })
     else if (e.cls === 'symbol') {
       // U.leadMark: the row's first placeholder, nothing visible before it, whose mark the page shows before line 1
       const first =
         k === phs[0] && pieces.slice(0, k).every((q) => q.t === 'ph' || !/\S/.test((q as { s?: string }).s ?? ''))
-      out.set(k, first && e.symbol!.leads ? { mode: 'kept', text: '' } : { ...e.symbol!.res })
+      // (a symbol set as a superscript, a mark, is drawn as its ink where it has one (lay/read.ts readingsOf's `mark`): its crop)
+      if (first && e.symbol!.leads) out.set(k, { mode: 'kept', text: '' })
+      else if (e.drawn?.mode === 'crop' && e.gap) {
+        gapOf.set(k, e.gap)
+        out.set(k, { ...e.drawn })
+      } else out.set(k, { ...e.symbol!.res })
     } else {
       const cls = renderingClass(e.cls)
       let g = e.gap,

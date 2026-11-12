@@ -152,8 +152,6 @@ export function runEdge(
 export type TextItem = Extract<Item, { face: FaceId }> & {
   /** a superscript's raise over the baseline (svgOfUnit: 0.36 of the line's size) */
   rise?: number
-  /** the tracking after each character, PDF units (a word laid out with tracking) */
-  track?: number
   /** an oblique face's slant, degrees (its points skewed about the baseline) */
   slant?: number
 }
@@ -162,9 +160,48 @@ export type CropItem = Extract<Item, { src: unknown }> & { w: number }
 export type DisplayItem = TextItem | CropItem
 export type DisplayLine = [y: number, x0: number, x1: number, items: DisplayItem[]]
 
-/** a fill as the drawing writes it (svgOfUnit fillAttr: a fill as it is, any other colour the drawing's ink, #141414) */
+/** a run's own fill as the drawing writes it (svgOfUnit fillAttr: a fill as it is); a colour that is no fill names none, so the run
+ *  takes the layer's ink: the reader's sheet's, the PDF's own black (the owner's ruling of 2026-11-08), or CJK_INK for a CJK run */
 const fillOf = (c: string | undefined) =>
-  c === undefined ? undefined : /^#[0-9a-f]{6}$/.test(c) ? Number.parseInt(c.slice(1), 16) : 0x141414
+  c !== undefined && /^#[0-9a-f]{6}$/.test(c) ? Number.parseInt(c.slice(1), 16) : undefined
+
+/** the ink of a CJK run that names no fill of its own: today's layer ink (layer-proto/run.mjs SVG_RULES), 92 % of black at full
+ *  coverage. The owner's exception of 2026-11-08 to the PDF's black: the translation's CJK text at today's weight, its Latin,
+ *  digits and formulas in the PDF's black (lanes/cjk-weight.md: the one difference between today's CJK and v2's was this ink) */
+export const CJK_INK = 0x141414
+
+/**
+ * A page's laid lines inked: a run of the CJK class (`cjk`, the breaker's class of a character, script.ts cjkClassRe under the
+ * rules' cjkQuotes: every character of the run but white space is Han, kana, Hangul, Bopomofo, a CJK mark or a full-width form,
+ * or a curly quote, dash, ellipsis or middle dot where the rules set those as CJK's: the characters the breaker sets in the
+ * target's CJK face) that names no fill of its own takes CJK_INK; every other run and every crop as it is. Each line's runs are
+ * of one class already (lineRuns, a name's and a figure text's runs by script), so the class of its characters is the class it
+ * was set in
+ */
+export function inkLines<L extends readonly [number, number, number, readonly Item[]]>(
+  lines: readonly L[],
+  cjk: RegExp,
+): L[] {
+  const isCjk = (s: string) => {
+    let any = false
+    for (const ch of s) {
+      if (/\s/u.test(ch)) continue
+      if (!cjk.test(ch)) return false
+      any = true
+    }
+    return any
+  }
+  return lines.map((l) => {
+    const items = l[3]
+    if (!items.some((it) => !('src' in it) && it.fill === undefined && isCjk(it.s))) return l
+    return [
+      l[0],
+      l[1],
+      l[2],
+      items.map((it) => (!('src' in it) && it.fill === undefined && isCjk(it.s) ? { ...it, fill: CJK_INK } : it)),
+    ] as unknown as L
+  })
+}
 
 /**
  * D.display: the unit's laid lines on page `page`, in its layout's order: each line's baseline, its extent (x0 to x0 + used, as
@@ -188,8 +225,13 @@ export function displayLines(L: Layout, page: number): DisplayLine[] {
           baseline: number
           text?: string
           k?: number
+          of?: number
           cut?: 1 | 2 | 3
+          gap?: { box?: { x0: number; x1: number; top: number; bottom: number } } | null
         }
+        // (its own ink, the box its rectangle was cut from: its element's ink on its line, or the part of it it draws, inside
+        // its own brackets where the translation sets its own round it; a label's crop states none, lay/clips.ts)
+        const own = c.gap?.box
         items.push({
           s: c.text ?? '',
           x: it.x!,
@@ -197,6 +239,9 @@ export function displayLines(L: Layout, page: number): DisplayLine[] {
           k: seg.scale,
           piece: c.k !== undefined ? String(c.k) : 'label',
           ...(c.cut ? { cut: c.cut } : {}),
+          ...(own ? { ink: [[own.x0, own.bottom, own.x1, own.top]] } : {}),
+          // (a label carried to the end of the name before: its owner's, lay/flow.ts)
+          ...(typeof c.of === 'number' ? { of: c.of } : {}),
           w: it.w,
         })
         continue

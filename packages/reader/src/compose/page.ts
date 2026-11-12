@@ -2,16 +2,18 @@
 // consumes Page only"). The typesetter (packages/typeset, lane L3) makes it; until its `layPage` is exported, the reader states
 // the shape here, word for word, and takes the call that makes one as a dependency (`Lay`), so that lane L3's `layPage`
 // replaces the fixtures' stand-in behind the same call. When typeset exports these types, this file imports them.
-import type { Part, Row } from '@readarxiv/format'
+import type { LinkBorder, Part, Row } from '@readarxiv/format'
 
 export type Box = [x0: number, y0: number, x1: number, y1: number]
 export type Ink = [page: number, x0: number, y0: number, x1: number, y1: number, base: number]
 export type FaceId = string
 
 export type Item =
-  /** a run of one face: from x, its characters at `dx` (per character) where given, `rise` over the baseline where raised; one
-   *  set along `dir` (a figure text the original sets turned: a unit vector, the page's y up) stands on its line's baseline from
-   *  (x0, y) along it, `x` (and `dx`) its place along it from x0, a raise across it */
+  /** a run of one face, drawn at `size` in `face` (the face at 100 px with its size correction, as Metrics measures it: a face
+   *  of correction 0.959 at size 10 is drawn at 9.59): from x, its characters at `dx` (per character) where given, else each
+   *  advance the face's and `track`, `rise` over the baseline where raised; one set along `dir` (a figure text the original sets
+   *  turned: a unit vector, the page's y up) stands on its line's baseline from (x0, y) along it, `x` (and `dx`) its place along
+   *  it from x0, a raise across it */
   | {
       s: string
       x: number
@@ -22,10 +24,14 @@ export type Item =
       dx?: number[]
       rise?: number
       dir?: [ux: number, uy: number]
+      /** the tracking after each of its characters, PDF units (a run of one x laid with tracking: its characters' advances
+       *  the face's and this) */
+      track?: number
     }
   /** a crop: src's ink, its base on the line's, scaled k; `s` its copy text, `piece` its element (or 'label', 'counter'); `cut`
-   *  its edges cut from its element's ink between two glyphs (1 its left, 2 its right: a URL broken), drawn with no margin */
-  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3 }
+   *  its edges cut from its element's ink between two glyphs (1 its left, 2 its right: a URL broken), drawn with no margin;
+   *  `ink` its own ink, its piece's boxes on its line as the part states them (src's page's PDF units), which it is cut by */
+  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3; ink?: Box[] }
 
 export type Why =
   | 'unlocated'
@@ -54,12 +60,21 @@ export interface Laid {
   state: 'laid' | Why
   /** this member's groups turned off on this page: 1 text, 2 elements, 4 label */
   off: number
-  fit?: { size: number; lead: number; track: number; borrowed: number }
+  fit?: { size: number; lead: number; track: number; borrowed?: number }
   /** laid lines on this page, baseline first (a turned line, its items' `dir`: from its origin (x0, y), x1 − x0 its length
    *  along it) */
   lines: [y: number, x0: number, x1: number, items: Item[]][]
-  /** per sentence (one entry: the member lights whole), on A (left) and as drawn (right); `own`: its kept ink */
-  lit: { left: Box[][]; right: Box[][]; own: [piece: string, boxes: Box[]][] }
+  /** per sentence (one entry: the member lights whole), on A (left) and as drawn (right); `own`: its kept ink; `dir` a member
+   *  set along a direction (a turned figure text): its boxes in its run's frame, [s0, t0, s1, t1] along `dir` and across it
+   *  (the page's point s·(ux, uy) + t·(−uy, ux)), lit turned with its text; `band` a figure text: lit on its lines' band alone
+   *  (no pad beside, no half leading over and under) */
+  lit: {
+    left: Box[][]
+    right: Box[][]
+    own: [piece: string, boxes: Box[]][]
+    dir?: [ux: number, uy: number]
+    band?: true
+  }
 }
 
 export interface Page {
@@ -68,8 +83,12 @@ export interface Page {
   wait: { rows: string[]; faces: [FaceId, string][] }
   /** every member with ink on `page`, in ord order */
   members: Laid[]
-  /** the page's links as drawn: moved with their pieces, else at A's boxes */
-  links: [box: Box, to: { url: string } | { dest: string }][]
+  /** the page's links as drawn: moved with their pieces, else at A's boxes; `owner` the ord of the member that holds one;
+   *  `border` its own annotation's on A (Link.border), none where it has none */
+  links: [box: Box, to: { url: string } | { dest: string }, owner?: number, border?: LinkBorder][]
+  /** every piece's ink the part states on the pages the page's crops are cut from (each element's, label's and counter's box):
+   *  what a crop's antialiased edge leaves behind */
+  inks?: Ink[]
 }
 
 /** the rows a lay reads: a row by unit id, and whether no other row will come; `kept`, a unit the paper keeps as it is, whose

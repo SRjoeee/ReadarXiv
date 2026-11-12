@@ -134,6 +134,20 @@ describe('ledgerOf', () => {
     expect(l.orphanLetters).toBe(0)
   })
 
+  it('reads a balanced page\'s right column as a body: its brackets nest, a line of it no unit owns is no note (2608.25210v2 p17)', () => {
+    // (the page's columns split from one box: its pair around both, the left column's inside it; a flag read the right column
+    // as outside every body after the left column's close)
+    const pg = page(
+      { point: 'c2-1' }, { point: 'bs2' }, { point: 'bs1' },
+      { glyphs: run('Left column text', 100, 600), owner: 'u0' },
+      { point: 'be1' },
+      { glyphs: run('Right column text', 320, 600), owner: 'u1' },
+      { glyphs: run('Words no unit owns', 320, 588) },
+      { point: 'be2' },
+    )
+    const l = ledger([pg], [{ kind: 'para' }, { kind: 'para' }])
+    expect(classAt(l, 1, at(pg, 'W'))).toBe('orphan')
+  })
   it('does not read a last line as the foot where it is no lower than the rest by the foot\'s gap', () => {
     const pg = page({ point: 'bs1' }, { glyphs: run('Body', 100, 600), owner: 'u0' }, { point: 'be1' }, { glyphs: run('Note one', 100, 130, { size: 8 }) }, { glyphs: run('Note two', 100, 122, { size: 8 }) })
     const l = ledger([pg], [{ kind: 'para' }])

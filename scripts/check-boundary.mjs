@@ -288,7 +288,7 @@ export const PACKAGES = {
   text: [],
   engine: ['format', 'text'],
   typeset: ['format', 'text'],
-  translate: ['text'],
+  translate: ['format', 'text'],
   reader: ['format', 'typeset', 'text', 'ui'],
   ui: [],
 }
