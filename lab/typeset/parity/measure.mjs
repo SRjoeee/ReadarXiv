@@ -560,8 +560,9 @@ function sheet(r) {
         ? `<p class="h">Drawn with a fresh translation (tinted; size and lines against the original's, not judged against today's):</p><ul class="freshlist">${p.fresh.said.filter((x) => x.cause !== 'today-kept').map(freshLi).join('')}${(p.fresh.ties ?? []).map(tieLi).join('')}</ul>${ruleKept.length ? `<p class="h">Kept by today's name/code rule, sent by v2: ${ruleKept.length}</p><ul class="freshlist">${ruleKept.map(freshLi).join('')}</ul>` : ''}`
         : ''
       const rulingIds = [...new Set(p.diffs.filter((d) => d.covered).map((d) => d.covered))]
-      const covers = rulingIds.length ? `; worse by a measure and covered by the owner's ruling${rulingIds.length > 1 ? 's' : ''} ${rulingIds.join(', ')}: ${p.covered}` : ''
-      const verdict = p.error ? '' : p.worse ? `<span class="v bad">worse than today: ${p.worse}${covers}</span>` : p.covered ? `<span class="v cov">covered by the owner's ruling${rulingIds.length > 1 ? 's' : ''} ${rulingIds.join(', ')}: ${p.covered} worse by a measure</span>` : '<span class="v good">not worse than today</span>'
+      const by = `the owner's ruling${rulingIds.length > 1 ? 's' : ''} ${rulingIds.join(', ')}`
+      const covers = rulingIds.length ? `; ${p.covered} more worse by a measure, covered by ${by}` : ''
+      const verdict = p.error ? '' : p.worse ? `<span class="v bad">worse than today: ${p.worse}${covers}</span>` : p.covered ? `<span class="v cov">worse by a measure (${p.covered}), covered by ${by}</span>` : '<span class="v good">not worse than today</span>'
       return `<article class="card${p.worse ? ' flagged' : ''}" id="${esc(id)}"><h2>${esc(p.pair)} · page ${p.page} ${verdict}</h2>${nums}${freshList}${diffs}${shared}${fl ? `<div class="faults"><p class="h">Faults against the bounds (each side's, shared ones no verdict):</p>${fl}</div>` : ''}<div class="panes">${img('a', 'original')}${img('t', 'today')}${img('v', 'v2')}<figure class="diff"><figcaption>v2 against today (red v2's ink alone, blue today's)</figcaption><img loading="lazy" src="img/${id}-d.webp" alt="${esc(`difference, ${p.pair} page ${p.page}`)}"></figure></div></article>`
     })
     .join('\n')
