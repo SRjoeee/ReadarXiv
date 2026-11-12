@@ -5,8 +5,9 @@
 // back half begins. The marked compile and instrumentOf are spies here: no TeX runs. Every paper and PDF is made here.
 import { setFlagsFromString } from 'node:v8'
 import { runInNewContext } from 'node:vm'
+import { deflateSync, inflateSync } from 'node:zlib'
 import * as PL from '@cantoo/pdf-lib'
-import { BOUNDS, read, type Unit } from '@readarxiv/format'
+import { BOUNDS, read, type Unit, unitId } from '@readarxiv/format'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, test, vi } from 'vitest'
 import {
@@ -21,9 +22,10 @@ import {
   treeOf,
   unitsObjects,
 } from '../src/front.ts'
-import { instrumentOf, markedOfPaper, openPaper } from '../src/front.types.ts'
-import type { Instrument } from '../src/instrument.ts'
+import { classesOf, instrumentOf, markedOfPaper, openPaper } from '../src/front.types.ts'
+import { type Instrument, ownersOf, ROLE } from '../src/instrument.ts'
 import { type PrepareHost, prepare } from '../src/prepare.ts'
+import { readPdf } from '../src/read.ts'
 
 const OPTIONS = vi.hoisted(() => ({
   engine: 'pdflatex',
@@ -50,6 +52,19 @@ vi.mock('../src/front.types.ts', async (real) => {
       base: { pdf: new Uint8Array([37, 80, 68, 70]), log: '' },
     })),
     instrumentOf: vi.fn(async () => ({ instrument: {}, today: null })),
+  }
+})
+
+/** what locate is given by the back half (its options), each call's, read as it passes */
+const located = vi.hoisted(() => ({ options: [] as Record<string, unknown>[] }))
+vi.mock('../src/locate/locate.ts', async (real) => {
+  const m = await real<typeof import('../src/locate/locate.ts')>()
+  return {
+    ...m,
+    locate: (...args: Parameters<typeof m.locate>) => {
+      located.options.push(args[3] as unknown as Record<string, unknown>)
+      return m.locate(...args)
+    },
   }
 })
 
@@ -343,5 +358,59 @@ describe('the prepare: the tree before any compile, refusals as reasons, and the
   }, 60_000)
   test('the reading tells what is held from what is let go: held on purpose, both are reached', async () => {
     expect(await reachedAtBack(new Set(['files', 'made']))).toEqual(['files', 'made'])
+  }, 60_000)
+  test("the back half is given the front half's own reading of an element's class (instrument.mjs classesOf), the host never names it", async () => {
+    // (a page of three Helvetica lines, B and A alike: its first two lines one paragraph's, its third another's)
+    const doc = await PL.PDFDocument.create()
+    const page = doc.addPage([612, 792])
+    const font = await doc.embedFont(PL.StandardFonts.Helvetica)
+    page.node.setFontDictionary(PL.PDFName.of('F1'), font.ref)
+    const lines = ['The first line of a unit', 'and its second line', 'Another unit stands here']
+    const content = lines.map((l, i) => `BT /F1 10 Tf 72 ${700 - 14 * i} Td (${l}) Tj ET`).join('\n')
+    page.node.set(PL.PDFName.of('Contents'), doc.context.register(doc.context.stream(content)))
+    const A = await doc.save({ useObjectStreams: false })
+    const B = (await readPdf(pdfjs, A, { options: {}, turned: true })).doc
+    const text = (s: string) => [{ t: 'text' as const, s }]
+    const units = [text(`${lines[0]} ${lines[1]}`), text(lines[2] ?? '')].map((c) => ({
+      id: unitId('para', c),
+      kind: 'para',
+      content: c,
+    }))
+    const instrument: Instrument = {
+      ink: B,
+      units,
+      glyphs: B.pages.map((pg) => {
+        const O = ownersOf(pg.glyphs.length)
+        pg.glyphs.forEach((g, j) => {
+          O.unit[j] = g.n < 2 ? 0 : 1
+          O.role[j] = ROLE.text
+        })
+        return O
+      }),
+      boxes: B.pages.map((pg) => ownersOf(pg.kinds.length)),
+      tex: {},
+      made: { compiler: 'pdflatex', tree: '2025', front: 'test' },
+    }
+    const front: FrontHalf = async (input) => {
+      await input.units([])
+      return { ok: true, instrument, made: null }
+    }
+    const objects: string[] = []
+    located.options.length = 0
+    const end = await prepare(
+      () => ({ files: files({ 'main.tex': PAPER }), original: A, stored: null }),
+      host({
+        deflate: (b) => new Uint8Array(deflateSync(b)),
+        inflate: (b, limit) => new Uint8Array(inflateSync(b, { maxOutputLength: limit + 1 })),
+        object: async (x) => {
+          objects.push(x.kind)
+        },
+      }),
+      front,
+    )
+    expect('ok' in end && end.ok).toBe(true)
+    expect(objects).toContain('head')
+    expect(located.options).toHaveLength(1)
+    expect(located.options[0]?.classesOf).toBe(classesOf)
   }, 60_000)
 })
