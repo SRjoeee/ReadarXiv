@@ -122,3 +122,82 @@ describe('I5 reads what is drawn past a slot: a crop by its ink (round B13, the 
     expect([...inv.I5by.values()][0]!.max).toBeCloseTo(0.4, 6)
   })
 })
+
+describe('I3 reads each line from its first item to its last glyph’s ink (lane google-lay)', () => {
+  // (two members on one baseline of page 1, as a running head's two halves: each a line of one text item at size 7)
+  const R = { floor: 0.8, floorMin: 0.6 } as never
+  const fresh = () => ({ laid: 0, lines: 0, I3: [], I4: [], I5: [], I5by: new Map(), below: [] })
+  const face = { family: 'serif', weight: 400, style: 'normal' }
+  const member = (
+    ord: number,
+    x0: number,
+    x1: number,
+    items: { s: string; x: number; w: number }[],
+    measure?: unknown,
+  ) =>
+    ({
+      ord,
+      state: 'laid',
+      lines: [],
+      slots: [],
+      lay: {
+        P: measure ? { measure } : {},
+        tokens: [],
+        layout: {
+          f: 7,
+          scale: 1,
+          state: { track: 0, trackLatin: 0 },
+          lines: [
+            {
+              page: 1,
+              x0,
+              x1,
+              baseline: 700,
+              used: items.at(-1)!.x + items.at(-1)!.w - x0,
+              items: items.map((it) => ({ t: { s: it.s, face, cls: 'cjk' }, x: it.x, w: it.w })),
+            },
+          ],
+        },
+      },
+    }) as unknown as PageMember
+  it('reads a line set flush right from its text, not from its measure widened into the paper beside it', () => {
+    // (2610.22065v1 p3: the left head's text ends at 336.6; the right head's measure, widened to the left head's ink, starts at
+    // 334.8, its text at 391.9)
+    const left = member(1, 53.58, 416.22, [{ s: 'left', x: 53.58, w: 283 }])
+    const right = member(2, 334.815, 558.2, [{ s: 'right', x: 391.92, w: 166.28 }])
+    const inv = fresh()
+    invariantsOf(1, [left, right], R, inv)
+    expect(inv.I3).toEqual([])
+    // (and a real overlap is still one)
+    const over = member(3, 334.815, 558.2, [{ s: 'right', x: 330, w: 228.2 }])
+    const two = fresh()
+    invariantsOf(1, [left, over], R, two)
+    expect(two.I3).toEqual(['ords 1 and 3: their lines overlap on p1'])
+  })
+  it('reads a line from its measure’s start where the breaker hangs an opening mark before it', () => {
+    // (2610.21884v1 p28: a line ends at 159.9; the next member's line, its measure from 164.86, begins with an opening bracket
+    // hung half an em before it, its box from 158.88: its ink is not where its box begins)
+    const before = member(1, 85.04, 207.38, [{ s: 'end', x: 85.04, w: 74.83 }])
+    const hung = member(2, 164.86, 526.96, [
+      { s: String.fromCodePoint(0xff08), x: 158.88, w: 5.98 },
+      { s: 'text', x: 171.06, w: 300 },
+    ])
+    const inv = fresh()
+    invariantsOf(1, [before, hung], R, inv)
+    expect(inv.I3).toEqual([])
+  })
+  it('reads a closing mark’s ink right from the served faces where the lay’s measure has none, not its advance', () => {
+    // (2610.37818v1 p19: a cell ending in an ideographic full stop, its ink 0.35 em into its em, the next cell 2 pt after its
+    // advance's end: the tap's table holds no ink right of it)
+    const none = { w100: () => 100, ink100: () => ({ a: 70, d: 20 }), inkRight100: () => null }
+    const served = { w100: () => 100, ink100: () => ({ a: 70, d: 20 }), inkRight100: () => 35 }
+    const cell = member(1, 156.32, 173.08, [{ s: String.fromCodePoint(0x3002), x: 169.6, w: 6.53 }], none)
+    const next = member(2, 174.03, 189.97, [{ s: 'next', x: 174.03, w: 15.94 }], none)
+    const by = fresh()
+    invariantsOf(1, [cell, next], R, by)
+    expect(by.I3).toEqual(['ords 1 and 2: their lines overlap on p1'])
+    const inv = fresh()
+    invariantsOf(1, [cell, next], R, inv, undefined, served as never)
+    expect(inv.I3).toEqual([])
+  })
+})

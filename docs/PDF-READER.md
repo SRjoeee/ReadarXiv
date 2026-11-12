@@ -6005,6 +6005,95 @@ past its source).
   marked is the wrap's (`unwrapped` 128, `page` 7: no keep). The differential: lost 11 (+5,422 accepted), gained 5,823, changed
   5,256, the same lists as dw2's; 65 of the gained units and 23 of the changed now say their cause.
 
+### 18.63 The reader gate judges what the reader draws: I3 by ink, the runner set up as the entry, a kept unit never laid (2026-11-12)
+
+Round B14 ran the reader gate (`lab/typeset/gate-l1.mjs --entry --reading=part`) over Google's rows beside the door's
+(production's Microsoft replies), the launch's first translator never measured before; the faults it found on one store
+alone were traced (lane google-lay) to the gate, not the reader, but for one (§18.64).
+
+- **I3 reads a line from its first item to its last glyph's ink** (`packages/typeset/tests/replay/gate-l1.ts` invariantsOf). It
+  read a line from its measure's start, which a flush-right or centred line's text does not begin at: a single line's measure is
+  widened into the paper beside it (U.decor `widen`, to the next glyph on its baseline less half its size), so a right-hand
+  running head's measure ran to the left head's ink, and Google's longer left head, ending inside it 55 pt clear of the right
+  head's first glyph, was an overlap (2610.22065v1 p3, p5, p7; 2610.21377v1, 51 pages, the same shape on both stores). Never
+  from before the measure's start: what the breaker sets there is an opening mark it hangs (B.break leadOf: each of the 1,591
+  lines whose first item stands before it, over the door's and Google's runs and typeset-today's, begins with one), whose ink
+  the measure does not place within its box: read from its box, typeset-today's I3 rose 36 -> 39 by three such brackets, none overlapping by
+  its ink. Its end is now the product's reading of a line's ink, S.share's `inkEndOf` (the run's own ink right at the size
+  drawn, its tracking, its slant), the run's ink right taken from the served faces where the tap's table holds none: read by its
+  advance, a CJK closing mark's blank half was ink (2610.37818v1 p19 and p21, header cells ending in an ideographic full stop).
+  Over the 90 pairs: 58 overlaps on each store before, 3 after, the same 3 on both, none entered: 2610.40576v1 p7 ords 69 and
+  71, a paragraph beside a wrapped figure laid at its column's full measure over the figure's caption (its lines beside the
+  figure are one block of the widest line's measure: a real overlap, the entry draws it alike on the door's rows), and
+  2610.21176v1 p13 ords 98, 99 and 101 (the runner lays cell 101 307 pt left of its original). Both open, both before this
+  change on both stores. Typeset-today's I3 (the release check's, today's members) 36 before and after, paper by paper.
+- **The runner sets a member up as the entry does** (`gateL1Pair`'s `adapt` call): the free paper it shares on its baseline with
+  a member beside it (`sharedPaper`, its half) and the line of TeX's it shares whole (`rowLinesOf`, flush-left lines too), from
+  the part of the page its first line stands on. Without them the runner gave a right-hand running head its measure from the
+  left one's ink, the reader from the middle of the paper between them: the entry's members laid otherwise than the runner's,
+  door 544 -> 244, of them "laid against laid" 337 -> 47.
+- **A unit the paper keeps (Unit.kept) is never laid by the runner**, as the entry leaves it (entry.ts `contentOf`): the door
+  holds rows of 40 kept units stored before they were kept, and the lab's Google fill asked for kept units the product never
+  asks (1,286 of the 33,419 units it read again, 1,133 of them answered by a translator, 18,471 source characters; 45 code cells
+  of 2608.06007v1): "none against laid" 10 and 35 -> 0.
+- **Like for like.** With every unit's Google row, the entry lays members the runner, bounded by today's laid members, never
+  lays, and a page's fill meets them: over the 90 pairs the entry's lines differ from the runner's for 1,164 members (door 544);
+  given the rows of the runner's members alone (the lane's hook, `AXT_LIKE`), 625 before these fixes and 281 after (door 244),
+  "laid against laid" 328 and 34 (door 337 and 47). The rest is the table's names rule (`decideTables`, which the runner has
+  not): a body column whose cells came back as they went kept whole as the original's, more often with Google's replies ("cells
+  against laid", 107 against the door's 19).
+
+### 18.64 A size tie caps a member from the passes up to its own first page (the coordinator's ruling, 2026-11-12)
+
+**The rule.** A size tie (one paragraph of TeX's the front end cut, a figure's set: `layPagePrepared`) caps each member at the
+least scale of its tie-mates as the fill passes up to that member's own first page leave them:
+
+- a tie-mate begun on that page or before counts as laid and filled, in this round;
+- **a tie-mate begun on a later page counts at its own fit from that page's FIRST lay, before any fill and any cap**
+  (`PreparedPage.unfilled` of the first `layPageTied`, read in every round);
+- never as a later page's fill set it, nor through a cap that fill set in an earlier round.
+
+A later page's fill (its shrink, the evening of §18.57, the foot step) may cap, through a tie, the members that begin on that
+page or after it; it never reaches back over the page break. `packages/typeset/src/lay/page.ts` `tieCaps`;
+`packages/typeset/tests/unit/tie-cap.test.ts`.
+
+**Why.** I6 (each unit laid alike by every page's lay that lays it, §18.54's check) holds because a page's lay runs the fill
+of its own page and of the first page of every member on it: every lay that draws a unit runs the pass of the page it begins
+on, and a later page's pass runs in some of them alone. A tie capped from the scales after every pass the lay ran, so a
+member begun on page 1 was capped by its tie-mate's page-2 fill in page 2's lay and not in page 1's: drawn at two sizes across
+the break (2610.21098v1 in Chinese, ord 12: one paragraph of TeX's cut at its inline list's items, its first member on pages
+1 and 2, its items on page 2; with Google's text the reader gate's runner evened the last item a size step, 0.975, page 2's
+lay then capped ord 12 there, page 1's laid it at 1; the entry given the same members' rows named it, "p1 ord 12 by p1/p2:
+scale 1 / 0.975"). Accepted with it: a tie may stand one fill step apart across a page break, the member begun earlier keeping
+its size; I6 outranks the tie's evenness, and one step is the grain the owner's eye passes (§18.57). Not capping before the
+fill (it would break ties inside one page), nor freezing every tied member (it would take a page's fill knob for a
+neighbour's sake). One definition for every fill step, whatever knob set the scale.
+
+**Two simpler cuts failed; do not go back to either.**
+
+- *Later tie-mates not read at all* (each member capped by those begun on its first page or before only). A later tie-mate's
+  own fit is the same in every lay (its flow is whole in every part that lays it), so it may cap; leaving it out let page 38's
+  fill grow 2608.16117v1's ord 115 (Chinese, the door's rows) a step to 1.05 past its tie-mate ord 119's own 1.0, and split
+  115's runs, its first ones at 1.05 and its last, the one running on to page 39, at 1.0: one paragraph at two sizes on one
+  page, where the tie had held it at 1.
+- *Later tie-mates read at their scale before the fill, round by round* (each round's lay, not the first). From the second
+  round on, a later member's own lay is set under the cap the first round gave it from its page's fill: on 2610.21098v1 the
+  items begun on page 2, capped at 0.975 in round 1 by page 2's evening, were laid at 0.975 in round 2 "before the fill", and
+  capped ord 12, begun on page 1, through them: the reach-back came back by the tie's own rounds, and the like-for-like run's
+  I6 failed again. Hence the first lay's.
+
+**Measured** (the reader gate, `lab/typeset/gate-l1.mjs --entry --reading=part`, over the 90 pairs with r21's bundles, the
+lane google-lay's gate; before = this tree with `lay/page.ts` of a681cf7ab): the door's rows, Google's rows (the store of
+round B14, `refactor-2026-11/google-rows`), and Google's rows given to the entry for the runner's members alone. I6 across
+the lays: 11 laid otherwise, all the head pass's, on each, before and after; but the like-for-like run, 12 before (this unit)
+and 11 after. The runner's own I6 ("laid otherwise from another page's part"): this unit with Google's rows before, none
+after. Nothing else moves: the runner's dumps differ in this unit alone, and the entry's lines against the runner's (ENTRY)
+in it alone (Google 836 -> 835, door 244 and like for like 281 unchanged). The 7 size ties over the 88 papers whose members
+begin on two pages or more (28 members: 2608.16117v1 57/59 and 115/119, 2610.10492v1 19/21, 2610.20716v1 95/97, 2610.21098v1
+12-16, 2610.21827v1 47-59, 2610.22197v1 72/74): what the entry draws of each, page by page, is the same before and after on
+the door's rows and on Google's; given the runner's members' rows alone, ord 12 on page 2 at 10.91 pt, its page-1 size, where it
+was 10.64. No PIPELINE, TRANSLATE or CHAIN_RULES: the lay is the reader's, and no stored byte moves.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
