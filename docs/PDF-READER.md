@@ -5554,8 +5554,17 @@ band floor: 1,468 on 871 pages, the same with the borrow off): 558 come into the
 with a size step 190). 1810.04805v2 page 3 unit 30 ("we denote the number of layers"): 6 lines at 1.17 among 1.47, now 5 at
 9.75 pt and 1.41. The median range of a page's body leadings falls from 11.0 to 8.1 %; 562 members move on 474 pages, the 556
 evened and on five pages the page's one size, now that every body unit there is short of its frame (2610.21924v1 p3 among them):
-the growth rule as it is. Lays 4.8 % more layouts. No unit not evened gains a line or shrinks; on 13 pages a tight paragraph that
-stays stands further from its page's median, its neighbour that was tight too now even.
+the growth rule as it is (the body 5 to 7.5 % larger, its line counts unchanged: the same behaviour as on any page that grows, no
+exception). Lays 4.8 % more layouts. No unit not evened gains a line or shrinks.
+
+**The pages where a tight paragraph stays beside one evened: left as they are (the coordinator's ruling of 2026-11-12, the owner
+having handed it to him).** On 12 pages with both rules (13 with the knobs alone) a paragraph that stays tight stands further
+from the median of its page's other paragraphs than before, 11 % or more where it stood under (1706.03762v7 page 3, unit 25: 7.2
+to 14.8 %; 2610.40645v1 page 12, unit 82: 9.5 to 18.4 %). That paragraph is exactly as it was, its leading, its size and the
+page's target unchanged; the figure rises only because its tight neighbour left the comparison set, and the page holds one tight
+paragraph fewer. Every coupling rule measured would undo 30 to 55 % of the evening and add a second pass: evening undone on a
+page that keeps a tight paragraph past the band's width, or past the 11 % reported (a number of evidence, not a rule), or a page's
+tight paragraphs all evened or none. None is built.
 
 **Out of reach.** 910 frames stay under the band: 529 a line short that no knob frees within one step (1706.03762v7 page 2's
 "Attention mechanisms", three lines of four), 303 as long as their original frame in the middle of a column, the rest split or
