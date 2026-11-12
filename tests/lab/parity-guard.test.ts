@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { bundleCheck, bundleOf } from '../../lab/typeset/parity/inputs.mjs'
+import { bundleCheck, bundleOf, putsInPlace } from '../../lab/typeset/parity/inputs.mjs'
 
 describe('a v2 file against the bundles a drawing or a verdict serves', () => {
   const dirs: string[] = []
@@ -50,3 +50,15 @@ describe('a v2 file against the bundles a drawing or a verdict serves', () => {
     expect(got.warning).toMatch(/names no bundles/)
   })
 })
+
+describe("a page the reader puts nothing in place on is drawn as arXiv's (the reader's rule, compose/composer.ts)", () => {
+  // (2608.06701v1 p12 under the default toggles: a page of references, the switch off; 40 members left the original's, 8 none,
+  // one laid with no line on the page, hiding nothing: the reader shows arXiv's page, and the drawing waited 30 s for an overlay)
+  it('a member laid that hides nothing, or none laid: no overlay; one laid that hides its ink: an overlay', () => {
+    expect(putsInPlace([{ state: 'left' }, { state: 'none' }, { state: 'laid', off: 0 }])).toBe(false)
+    expect(putsInPlace([{ state: 'left' }])).toBe(false)
+    expect(putsInPlace(undefined)).toBe(false)
+    expect(putsInPlace([{ state: 'left' }, { state: 'laid', off: 3 }])).toBe(true)
+  })
+})
+

@@ -62,3 +62,13 @@ export function whyNot(pair, work) {
   if (work && !existsSync(join(work, 'v2', `${pair}.json`))) return 'v2.mjs has not laid it'
   return null
 }
+
+/**
+ * Whether the reader puts page `members` (v2.mjs's Page of a page: each with its state and `off`, whether it hides the original's
+ * ink) in place over arXiv's page: a member laid that hides something. The reader's own rule (packages/reader compose/composer.ts:
+ * "a page that hides nothing is never put in place: arXiv's page stays"): a page of none, its members left the original's or laid
+ * with nothing to hide (2608.06701v1 p12 under the default toggles: a page of references, the switch off, one member laid with no
+ * line there), is drawn as arXiv's, no overlay to wait for
+ */
+export const putsInPlace = (members) => (members ?? []).some((m) => m.state === 'laid' && m.off)
+

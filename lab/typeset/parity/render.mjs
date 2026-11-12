@@ -30,7 +30,7 @@ import { LAB, TODAY } from '../../../packages/typeset/tests/replay/tap.ts'
 import { SLICES, TABLES } from '../served-metrics.mjs'
 import { analyse, boxesOf } from './analyse.mjs'
 import { DEVICE_PT, inPlace } from './fidelity.mjs'
-import { bundleCheck, bundleOf, hyphFileOf, pdfOf, whyNot } from './inputs.mjs'
+import { bundleCheck, bundleOf, hyphFileOf, pdfOf, putsInPlace, whyNot } from './inputs.mjs'
 import { PAIRS } from './pairs.mjs'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
@@ -444,7 +444,8 @@ for (const pair of pairs) {
       await vp.evaluate((k) => globalThis.__p.textOnly(false) && globalThis.__p.go(k), n)
       await wait(300)
       await vp.evaluate((k) => globalThis.__p.reveal(k), n)
-      const laidHere = (v2.pages[n]?.members ?? []).some((m) => m.state === 'laid')
+      // (a page the reader puts nothing in place on is drawn as arXiv's: no overlay comes, none is waited for, inputs.mjs putsInPlace)
+      const laidHere = putsInPlace(v2.pages[n]?.members)
       try {
         await vp.waitForFunction(
           ([k, want]) => {
@@ -542,7 +543,7 @@ for (const pair of pairs) {
         await rp.evaluate((k) => globalThis.__p.textOnly(false) && globalThis.__p.go(k), n)
         await wait(300)
         await rp.evaluate((k) => globalThis.__p.reveal(k), n)
-        const laidHere = (v2.relay.pages[n]?.members ?? []).some((m) => m.state === 'laid')
+        const laidHere = putsInPlace(v2.relay.pages[n]?.members)
         await rp.waitForFunction(
           ([k, want]) => {
             const s = globalThis.__p.slot(k)

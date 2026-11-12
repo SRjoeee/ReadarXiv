@@ -100,6 +100,10 @@ first pair the maintainer reads, 2303.11366v4, is not asked (`FIRST` beside `PAI
   give (the theorem heads' and the paper's own names, `EntryOptions`, are passed only once the reader passes them).
   The page's left margin in the pane is fixed (`v2page/index.html`): centred, an A4 page stands at a fraction of a pixel
   and the compositor resamples it, which is the screenshot's, not the drawing's.
+  A page the reader puts nothing in place on (no member laid that hides the original's ink: the reader's own rule,
+  `compose/composer.ts`, `inputs.mjs` putsInPlace) is drawn as arXiv's page, no overlay waited for: 2608.06701v1 p12 under the
+  default toggles, a page of references with the switch off and one member laid with no line there, was waited 30 s for an
+  overlay that never comes and named a page error of the pair's (judged all the same as arXiv's on both sides).
 - **The page boxes**: every side's page stands in a box of whole CSS px, its canvas that box at the device ratio, drawn at the
   page's exact scale from its top-left corner (PDF.js's page view: the box floored, the canvas cut): arXiv's page and
   today's copy as `today/entry.mjs` draws them (today's place is PDF.js's page box, its copy `round(box × ratio)`), v2's page
