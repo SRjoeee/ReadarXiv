@@ -8,7 +8,7 @@
 //   <out>/located/<id>.json what the gate reads beside the dump: each unit's place, cause, member ords; the wrap's pages; parts;
 //   the float lines (`floatLines`: Located.floatLines, a paper's words: lab data alone; float-lines.mjs reports them);
 //   <out>/ownership/<id>.json what the ownership's check finds (Located.disagreements, packages/engine/src/locate/ownership.ts),
-//   in a file of its own so that every object and dump the chain compares stays as it was: the carried (today's figure text
+//   in a file of its own so that every object and dump the chain compares stays as it was: the carried (the figure text
 //   made of a printed line, its element's glyphs listed and owned by none: `takeAsStated`) and the found counted apart and by
 //   kind, each with its page, glyph, member, unit and role, and the table's owner (`rows`);
 //   stdout one summary line (the ownership's two counts in it). Exit 3: a compile no cache holds (the paper missing). Exit 4: a

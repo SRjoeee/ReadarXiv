@@ -56,9 +56,10 @@ export interface Claims extends Owned {
   /** ink the member already has changes role: its text glyphs `text` and its elements `nested` become its one element `id`
    *  (artefacts.ts), its elements' boxes with them. Returns that element's glyphs, ascending. No owner changes */
   asElement(mem: Member, id: string, text: readonly number[], nested: readonly string[]): readonly number[]
-  /** TODAY'S, carried so that no byte moves, and goes with its fix: as `take`, but the glyphs the member owns are `claimed`,
-   *  which the maker states apart from the lists (ink.ts: a figure text made of a printed line lists its elements' glyphs in
-   *  `els` and claims none of them, its `ph` empty). Every glyph on one side alone is counted by `check`, carried */
+  /** A FAULT CARRIED as it is, so that no byte moves; it goes with the fault's fix. As `take`, but the glyphs the member owns
+   *  are `claimed`, which the maker states apart from the lists (ink.ts: a figure text made of a printed line lists its
+   *  elements' glyphs in `els` and claims none of them, its `ph` empty). Every glyph on one side alone is counted by `check`,
+   *  carried */
   takeAsStated(mem: Member, ink: Partial<Ink>, claimed: readonly number[]): void
 }
 
