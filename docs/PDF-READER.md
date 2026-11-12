@@ -3532,7 +3532,8 @@ the row (`ON_ROW`) and no word's gap after the one before (the ink units' word r
 of no piece in its group `.e`, on its last line. The typesetter draws it as its crop right after the member's own tokens,
 glued; the follower runs on from its end at TeX's separation, and the room beside the member is no longer fenced by it (a
 `\thanks` mark in an `\rlap`, 1706.03762v7's first name). Ink past a skip (an `\hspace`, a proof's QED box after `\hfill`)
-is no trail and stays. One rule with §18.12's: what TeX set on a line is laid as the line, with the alignment TeX gave it. The
+is no trail; what TeX pushed to the measure's end is the unit's end mark (§18.54), the rest stays. One rule with §18.12's:
+what TeX set on a line is laid as the line, with the alignment TeX gave it. The
 crop stands on the member's last line, the line TeX set it on, as every element's crop stands on its line's baseline: drawn by
 its glyphs' own baseline, which a trail of raised marks alone holds off the line, each mark came down onto the line (45 of
 the 88 papers' 94 trails, 3.6 to 5.2 pt: 2610.10069v1's daggers, 1706.03762v7's star, 2608.16117v1's last author's "a").
@@ -5298,6 +5299,78 @@ read as the caption's text; all three sentences and the label "Figure 1." stayed
   stand right before `\ctk{…}`, which sets `[#1]` (its brackets no source text writes) while the front end reads it as a group
   of its argument alone; own.mjs read the bracket into the highlight before it, and this reading, spelling the text after it,
   meets the bracket first and claims nothing.
+
+### 18.54 A unit's end mark belongs to the end of its translation (2026-11-12)
+
+amsthm's `\end{proof}` sets `\qed` after the proof's last words: `\unskip\penalty9999\hbox{}\nobreak\hfill\quad\hbox{\qedsymbol}`,
+its `\openbox` four rules pushed by the `\hfill` to the end of the paragraph's last line. TeX ships it after the unit's end point,
+no unit's ink: the trail (§18.16) claims only ink glued to the last glyph, so the box was stated `Room.stays` (PIPELINE 80),
+in no group, never erased, and every line a translation laid on its row kept off it. A translation a line longer, laid at TeX's
+size, borrowed a line under the run and left the box beside a line in the middle of the paragraph (2610.40645v1-ja p12 t80,
+p30 t253: the parity's class L3, which no measure reads; the pages counted worse by line count alone); one a line shorter left it
+alone under the text. **The ruling** (the coordinator's, 2026-11-12): the end-of-proof mark belongs to the end of its proof;
+wherever the translated paragraph's last line ends, the mark stands at that line's end as TeX would set it, flush to the
+measure's edge, on a line of its own only where it does not fit; decided by what TeX set, never by a symbol's name or shape.
+
+- **The prepare** (`locate.ts` `endMarks`, after the measures and before the room and the facts pass). A located source unit's
+  end mark is what TeX shipped in B's stream after its end point (`<u>e`), glyphs and boxes alike, walked in TeX's order up to
+  the next unit's ink: its mark (a unit's mark, an author's call) or its own ink in B's stream, or a glyph on A that its member
+  holds or that stands on its first line before its text, its head whatever member holds it (2610.21037v1 p6 t57: the next
+  lemma's head "Lemma 4.3." an ink unit made on A on unit 58's first line). Every piece has a partner on A within the unit's
+  last line's box across (its fonts' boxes: the `\openbox`'s top rule stands over the line's band), together on its band,
+  wholly after its last glyph (half a point, pinnedOf's), and its box's right edge at that line's measure end (`CENTRE`, the
+  maker's flush-right reading of a head or foot line and a label's own line): TeX pushed it there. Ink of no unit on another
+  line before the next unit's, or a glyph another member holds on A, is the paragraph's own going on, no mark: the walk claims
+  nothing (2610.11256v1's apacite references, each unit its authors alone, its year and title no unit's after them on its line
+  and on the next, an ink unit's: 63 runs that reached the measure's end); and so at a body's end bracket where TeX's next
+  page begins its body with ink no unit owns (2610.16663v1 p39 t322's reference going on over the page). It becomes the
+  member's element `~$` (`END`), of no piece, its glyphs and rules in the member's travelling group `.e` (erased with the
+  unit's elements, the wrap's), stated `{ kind: 'other', copy, ink: [its box on the line's baseline], trail: 1, end: 1 }`;
+  claimed ink is no stay of any member's, so a proof's head and its text sharing the row (2610.40645v1 p19 t145, t146) both
+  lose it. Not a mark TeX set after a space (2608.25210v2's `example` environment ends `{$\square$\smallskip}`: 2.24 pt
+  after the text, 59 pt short of the measure end), not one on a line of its own under the text (amsthm after a display or a
+  list), not one inside a display (`\qedhere` in `\[ \]`: the display's ink, kept where TeX set it, the mark with it), not one
+  after no source unit's end (an appendix's contents line, 2610.42112v1 p16: a babel name's occurrence and an ink unit made
+  on A, no end point before the page number), not one a heading's number no unit owns follows on the next line or the next
+  page (2610.16663v1 p47 t242, p55 t277): all stay as before.
+- **The format** (FORMAT 1). `El.end`, an optional flag: TeX pushed it to the end of its unit's last line, after its text;
+  laid at the end of the translation's last line, as far from that line's measure end as TeX set it. The claimed element also
+  carries `trail: 1`, so that a typesetter of before draws it as a trail, glued after the translation's end, rather than erasing
+  it unseen with the unit's elements; a typesetter of before reads no `end`, and a part made before states the box as
+  `Room.stays`, laid as before (the lay's test lays such a part line for line as 35cf17994 did).
+- **The lay** (`lay/adapt.ts`, `breaker/break.mjs`, `breaker/place.mjs`). The mark is the unit's last token, a crop (`END_K`,
+  no piece's) whose rectangle keeps its distance to its line's right edge as TeX set it (`pad`: the crop's right edge to the
+  slot's on the line TeX set it on); the breaker allows a break before it, and sets it on the line the text ends on where the
+  text ends the keep-off distance before its ink (B.slots' rule for ink that stays: TeX's own distance and half an em at most;
+  the line's spaces shrunk as `fits` takes them, a closing mark at its end hung), else on a line of its own (amsthm's
+  `\penalty9999`); a line it cannot open leaves the state unset, the fit's (it shrinks or borrows by its existing rules).
+  `placeItems` sets the text in the room the mark leaves and the mark at its place. Every other stay is laid as before.
+- **Before and after** (stage 1a over the 88 papers, r19's compiles, every one found by its key: the marked TeX did not move).
+  Of the 263 marks r19 stated `Room.stays` at a source unit's last line's measure end (at most 1.2 em), 251 are claimed, in 27
+  papers, and nothing else is: the 12 left are 2610.16663v1's two QED boxes before a heading number no unit owns (p47 t242, p55
+  t277), 2610.20285v1's two 0.6 pt rules (a frame's right side, no mark) and 2610.42112v1 p16's eight contents page numbers. The
+  units (the wire) are byte-identical, every paper's; 27 papers' parts, add-ons and dump statements move, each by its marks
+  alone (the differential: lost, gained and accepted as r19's, `changed` 5,157 to 5,276, theorem +118 and para +1); the twin run
+  byte-identical; the float lines 778 and the orphan letters 388 as r19's; the reader gate 29,374 laid alike and 712 not, as
+  r19's, its entries identical, I10 0 faults. Over the lay of the 90 pairs with stored rows (every switch on alike): of the
+  marks (279 pair instances) the base stands 199 on the translation's last line, 65 alone under a translation that ended a line
+  higher, 13 beside a line before its last, 2 the original's; the head 266 at the end of the last line, 7 on a line of its own
+  (the text filling its last line), the 4 left stays where they were, 2 the original's. 273 members move on 201 pages: 243 by
+  the mark's crop alone, 30 rebroken (the row the box had narrowed now full, or the mark taking room), 5 a line more (4 the mark
+  on a line of its own, 2610.18513v1 p65 t565 its last word with it at a tighter tracking, the fit's), one larger
+  (2610.30034v1 p10 t204, 9.71 to 9.96: the box no longer narrowing its row), none smaller.
+  2610.40645v1-ja's parity, both modes: 9 and 10 pages worse before and after, no difference of any measure moved (the gate reads
+  no mark's place): t80 and t253 still a line longer than the original at TeX's size, the box at the end of their last line.
+- **Left open.** The author's own mark written in the text (`\qed`, `\hfill $\square$`: an element of the unit's, 26 and 6
+  units in 6 papers) is laid where the translation sets it, glued after its last word or drawn as its character, as before: the
+  same reading of its ink (the unit's last element, after the line's other glyphs, at its measure's end) stated 34 elements on
+  the first 47 papers, none a mark (a reference's year ending a full last line, a caption's formula), and the fill in its
+  setting is no fact the part or B's stream states (a probe of its box's listing would be). The typesetter lays an element
+  stated `end` as an end mark where the translation ends with it; no prepare states one. 2610.40394v1's six `\hfill $\square$`
+  stand at the paragraph's own measure end, 9.3 pt short of the measure the part states (its column's, where the list's right
+  margin narrowed TeX's `\linewidth`): a paragraph's own measure, `\linewidth` and `\@totalleftmargin` where its paragraph
+  ends, is no fact the part states. 2608.25210v2's example mark, set after a space, is no push. The two marks before a heading
+  number no unit owns stay. PIPELINE must move (the parts, the add-ons); TRANSLATE, LAYOUT, CHAIN_RULES and FORMAT do not.
 
 ## 19. The engine's contract
 

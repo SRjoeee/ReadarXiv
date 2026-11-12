@@ -21,7 +21,7 @@ export type FitBlock = DecorBlock & {
    *  block from that edge (B.slots, breakLines) */
   hang?: number
   hangGap?: number
-  /** the ink that stays beside its lines (lay/adapt.ts, from Room.stays: a QED box after a proof's last words), each piece's box
+  /** the ink that stays beside its lines (lay/adapt.ts, from Room.stays: a mark set after a space, a frame's rule), each piece's box
    *  and the side of the original's line it stood on: every slot whose line reaches it keeps off it (B.slots) */
   stays?: Stay[]
   /** where the borrow past TeX's text block bottom is asked (§18.37, FitParams.pastFoot): the depth of that bottom under its last

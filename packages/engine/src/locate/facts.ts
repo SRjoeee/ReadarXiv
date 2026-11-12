@@ -974,8 +974,10 @@ export function sideOf(
  * 0.4 of the line's size, as sideOf and pinnedOf read the band; a painted box by its height meeting that band, as sideOf reads
  * a cell's walls) within its text block (`block`, as sideOf), wholly before the line's start or after its end (by half a
  * point, pinnedOf's): on each side, the box of those pieces, [the line's index, x0, y0, x1, y1]. TeX set that ink on the line
- * (amsthm's QED box after a proof's last words, \hfill'd to the measure's end: four rules, no glyph; a mark no unit holds), and
- * no translation replaces it: whatever line a translation lays there, borrowed or not, keeps off it. Undefined where none
+ * (a mark set after a space, a frame's rule beside a framed paragraph, a contents line's page number after an entry no source
+ * unit is), and no translation replaces it: whatever line a translation lays there, borrowed or not, keeps off it. A unit's
+ * end mark (amsthm's QED box TeX pushed to the measure's end after the unit's end point) is the unit's, claimed before this
+ * reads the page (locate.ts endMarks, El.end): no stay. Undefined where none
  */
 export function staysOf(
   lines: readonly Line[],
@@ -1054,6 +1056,10 @@ export function pinnedOf(
       Math.abs(c.y - l[4]) < 0.4 * size && c.x1 > col[0] && c.x0 < col[1] && (c.x1 < l[2] - 0.5 || c.x0 > l[3] + 0.5),
   )
 }
+
+/** the element id of a member's end mark claimed after its end point (no piece's: a piece's id is its index; El.end,
+ *  docs/PDF-READER.md §18.54) */
+export const END = '~$'
 
 // ---------------------------------------------------------------- alignment read off the page (B3, E8)
 /** a line's centre off its column's centre by at most CENTRE points (the maker's CENTRE MAKE:96) and the inset off both edges

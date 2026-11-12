@@ -303,10 +303,11 @@ export const identifiersOnly = (s) => {
 }
 
 /** the trails among a candidate's elements (`[k, el]`, as locate's members and a part's members carry them: El.trail, its ink
- *  one box `[page, x0, bottom, x1, top, baseline]`, its characters `copy`), each as statedOf reads one */
+ *  one box `[page, x0, bottom, x1, top, baseline]`, its characters `copy`), each as statedOf reads one; a unit's end mark (El.end,
+ *  `trail` too for a typesetter of before) is no name's trail */
 export const trailsOf = (els) =>
   els
-    .filter(([, e]) => e?.trail && e.ink?.length === 1)
+    .filter(([, e]) => e?.trail && !e.end && e.ink?.length === 1)
     .map(([, e]) => {
       const [page, x0, bottom, x1, top, baseline] = e.ink[0]
       return { page, x0, x1, bottom, top, baseline, text: e.copy ?? '' }
