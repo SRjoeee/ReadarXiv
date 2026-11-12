@@ -67,6 +67,14 @@ export const INVARIANTS = [
   },
 ]
 
+/** a performance row met: every measure named has NEW's value and reads equal or better (perf.mjs compare); null where none
+ *  of them was measured; a measure missing or worse misses it */
+const okOf = (n, ...ids) => {
+  const rows = ids.map((k) => n.m?.[k]).filter(Boolean)
+  if (!rows.length) return null
+  return rows.length === ids.length && rows.every((x) => Number.isFinite(x[0]) && (x[2] === 'equal' || x[2] === 'better'))
+}
+
 /** design §7's rows; `from`: the gate whose numbers give the value, read by `value(numbers)`; none: not measured, `why` */
 export const TARGETS = [
   { id: 'prepare', measure: 'Prepare, median on staging (n ≥ 90)', baseline: '33.6 s', target: 'under 20 s', from: 'private-soak', why: "staging's prepare records (the private repository's; the lab's perf/tools/staging.mjs measures it after a staging deploy)" },
@@ -80,7 +88,7 @@ export const TARGETS = [
     target: 'not slower than TODAY past the spread',
     from: 'perf-release',
     value: (n) => n.m?.prepareWall && `${n.m.prepareWall[0]} s against TODAY's ${n.m.prepareWall[1]} s (${n.m.prepareWall[2]}); CPU ${n.m.prepareCpu?.[0]} against ${n.m.prepareCpu?.[1]} s; memory peak ${n.m.prepareMem?.[0]} against ${n.m.prepareMem?.[1]} MiB`,
-    met: (n) => (n.m?.prepareWall ? n.m.prepareWall[2] !== 'worse' : null),
+    met: (n) => okOf(n, 'prepareWall'),
   },
   {
     id: 'tex-runs',
@@ -89,7 +97,7 @@ export const TARGETS = [
     target: "the paper's own passes; no final pass",
     from: 'perf-release',
     value: (n) => n.m?.passes && `${n.m.compiles?.[0]} compiles, ${n.m.passes[0]} passes over the papers against TODAY's ${n.m.compiles?.[1]}, ${n.m.passes[1]} (counted in the box: each jail run, each TeX engine process)`,
-    met: (n) => (n.m?.passes ? n.m.passes[0] < n.m.passes[1] : null),
+    met: (n) => (n.m?.passes && Number.isFinite(n.m.passes[0]) && Number.isFinite(n.m.passes[1]) ? n.m.passes[0] < n.m.passes[1] : null),
   },
   {
     id: 'reprepare',
@@ -98,7 +106,7 @@ export const TARGETS = [
     target: 'under 6 s, no TeX',
     from: 'perf-release',
     value: (n) => n.reprepared > 0 && `${n.reprepareS} s median, ${n.reprepareTex} TeX passes, ${n.reprepared} papers: NEW's box given its stored instrument (emulated amd64, one CPU); TODAY prepares whole again`,
-    met: (n) => (n.reprepared > 0 ? n.reprepareS < 6 && n.reprepareTex === 0 : null),
+    met: (n) => (n.reprepared > 0 && Number.isFinite(n.reprepareS) ? n.reprepareS < 6 && n.reprepareTex === 0 : null),
   },
   { id: 'reuse', measure: 'Translation after an engine change', baseline: 'every language of every paper again', target: 'changed units only', from: null, why: 'no gate measures the rows\' reuse rate after an engine change' },
   {
@@ -128,7 +136,7 @@ export const TARGETS = [
     target: 'under 20 ms',
     from: 'perf-batch',
     value: (n) => n.m?.commitP50 && `${n.m.commitP50[0]} ms, p90 ${n.m.commitP90?.[0]} ms: the main-thread task that put a page's translated drawing in and the rendering task that painted it, read off a Chrome trace, every page of three papers scrolled (the last round ${n.m.commitP50[1]} ms: ${n.m.commitP50[2]})`,
-    met: (n) => (n.m?.commitP50 ? n.m.commitP50[0] < 20 : null),
+    met: (n) => (n.m?.commitP50 && Number.isFinite(n.m.commitP50[0]) ? n.m.commitP50[0] < 20 : null),
   },
   {
     id: 'switch',
@@ -137,7 +145,7 @@ export const TARGETS = [
     target: 'rows and layout only',
     from: 'perf-release',
     value: (n) => n.m?.switchAgain && `${n.m.switchAgain[0]} layer objects asked again (TODAY ${n.m.switchAgain[1]}); the first page in the new language ${n.m.switchMs?.[0]} ms after the switch (TODAY ${n.m.switchMs?.[1]} ms)`,
-    met: (n) => (n.m?.switchAgain ? n.m.switchAgain[0] === 0 : null),
+    met: (n) => (n.m?.switchAgain && Number.isFinite(n.m.switchAgain[0]) ? n.m.switchAgain[0] === 0 : null),
   },
   {
     id: 'first-page',
@@ -146,7 +154,7 @@ export const TARGETS = [
     target: 'not slower than TODAY past the spread',
     from: 'perf-release',
     value: (n) => n.m?.first && `${n.m.first[0]} ms against TODAY's ${n.m.first[1]} ms (${n.m.first[2]})`,
-    met: (n) => (n.m?.first ? n.m.first[2] !== 'worse' : null),
+    met: (n) => okOf(n, 'first'),
   },
   {
     id: 'reader-bytes',
@@ -155,7 +163,7 @@ export const TARGETS = [
     target: 'not more than TODAY past the spread',
     from: 'perf-release',
     value: (n) => n.m?.page1Data && `page 1 ${n.m.page1Data[0]} against ${n.m.page1Data[1]} bytes (${n.m.page1Data[2]}); the whole paper ${n.m.wholeData?.[0]} against ${n.m.wholeData?.[1]} (${n.m.wholeData?.[2]}); code ${n.m.codeBytes?.[0]} against ${n.m.codeBytes?.[1]} (${n.m.codeBytes?.[2]})`,
-    met: (n) => (n.m?.page1Data ? ['page1Data', 'wholeData', 'codeBytes'].every((k) => n.m[k]?.[2] !== 'worse') : null),
+    met: (n) => okOf(n, 'page1Data', 'wholeData', 'codeBytes'),
   },
   {
     id: 'reader-smooth',
@@ -164,7 +172,7 @@ export const TARGETS = [
     target: 'not worse than TODAY past the spread',
     from: 'perf-release',
     value: (n) => n.m?.longTasks && `long tasks ${n.m.longTasks[0]} against ${n.m.longTasks[1]} (${n.m.longTasks[2]}), the longest ${n.m.longestTask?.[0]} against ${n.m.longestTask?.[1]} ms; frames over budget ${n.m.framesOver?.[0]} against ${n.m.framesOver?.[1]} per 1,000; JS heap ${n.m.heap?.[0]} against ${n.m.heap?.[1]} MiB; canvases ${n.m.canvas?.[0]} against ${n.m.canvas?.[1]} MiB`,
-    met: (n) => (n.m?.longTasks ? ['longTasks', 'longestTask', 'framesOver', 'heap', 'canvas', 'renderer'].every((k) => n.m[k]?.[2] !== 'worse') : null),
+    met: (n) => okOf(n, 'longTasks', 'longestTask', 'framesOver', 'heap', 'renderer', 'gpu'),
   },
   { id: 'thresholds', measure: 'Geometric thresholds and name tables in the prepare', baseline: 'about 150 and about 100', target: 'each one left listed with its reason', from: null, why: 'no census script exists' },
   { id: 'versions', measure: 'Version numbers raised by hand', baseline: 'about 12', target: '1', from: null, why: 'no gate counts them' },
@@ -608,17 +616,20 @@ export const GATES = [
   },
   // ---------------------------------------------------------------- performance (the owner's base threshold: better than
   // production, measured; lab/release-check/perf.mjs judges, the lab's perf/tools measure: each reader built as its website
-  // builds it and served offline from stored data, each prepare in its own compile image under one CPU and 3 GiB as the box,
-  // every timing taken with every heavy slot held so that no other heavy job runs beside it: perf/tools/quiet.sh)
+  // builds it and served offline from stored data, each prepare in its own compile image under one CPU and 3 GiB as the box.
+  // The per-batch check holds only the slots of its own kinds under the machine's ordinary load (no integration round can give
+  // it the whole machine): its spreads are that load's, its judged measures lean on counts, bytes and CPU time. The release's
+  // comparison holds every heavy slot (perf/tools/quiet.sh), in a window the coordinator gives)
   {
     id: 'perf-batch',
-    title: "the per-batch performance check: NEW's prepare in the round's box (one paper, three times) and its reader on the round's website build (three papers, three visits each after a warm-up), each measure against the last round recorded, worse only past the two rounds' run-to-run spreads added (lab perf/tools/run.mjs --mode=batch, lab/release-check/perf.mjs)",
+    title: "the per-batch performance check: NEW's prepare in the round's box (one paper, three times, a warm box, the docker slot) and its reader on the round's website build (three papers, three visits each after a warm-up, one e2e slot), each measure against the last round recorded, worse or missing only past the two rounds' run-to-run spreads added under ordinary load (lab perf/tools/run.mjs --mode=batch, lab/release-check/perf.mjs)",
     tier: 'full',
     stage: 'corpus',
     holds: [],
-    needs: (ctx) => [exists('the performance tools', lab(ctx, 'perf/tools/run.mjs')), exists('the quiet window', lab(ctx, 'perf/tools/quiet.sh')), exists("the readers' builds (PERF_BUILD: each website's build and tree)", perfBuild())],
-    // (the reader is given this run's own bundles where the prepare gate made them, else the lab's last round's)
-    steps: (ctx) => [{ cmd: ['bash', lab(ctx, 'perf/tools/quiet.sh'), '--', 'node', lab(ctx, 'perf/tools/run.mjs'), '--mode=batch', `--work=${join(ctx.work, 'perf-batch')}`], env: { ENGINE: ctx.root, PERF_BUILD: perfBuild(), ...bundlesOf(ctx) }, fresh: join(ctx.work, 'perf-batch') }],
+    needs: (ctx) => [exists('the performance tools', lab(ctx, 'perf/tools/run.mjs')), exists("the readers' builds (PERF_BUILD: each website's build and tree)", perfBuild())],
+    // (the reader is given this run's own bundles where the prepare gate made them, else the lab's last round's; run.mjs takes
+    // each part's slot itself)
+    steps: (ctx) => [{ cmd: ['node', lab(ctx, 'perf/tools/run.mjs'), '--mode=batch', `--work=${join(ctx.work, 'perf-batch')}`], env: { ENGINE: ctx.root, PERF_BUILD: perfBuild(), ...bundlesOf(ctx) }, fresh: join(ctx.work, 'perf-batch') }],
     judge: (ctx, steps) => perfJudge(steps),
   },
   {

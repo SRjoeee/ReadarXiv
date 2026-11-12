@@ -116,16 +116,21 @@ measures). NEW's prepare in the round's compile image (one paper, three times, e
 one CPU, 3 GiB, no network, the amd64 image under this Mac's emulation, a warm box) and its reader on the round's website build
 (three papers, three visits each after a warm-up, in Chromium, offline, every request served from stored data); every measure
 against the last round recorded (`perf/rounds/`, the newest that passed or was accepted), worse only past the two rounds'
-run-to-run spreads added (the speed check's rule; an exact measure such as bytes or TeX's passes past its 0.5 % tolerance). The
-whole run holds every heavy slot (`perf/tools/quiet.sh`): no other heavy job runs beside a timing. About 9 minutes and the
-waits for the slots; it uses Docker (the round's box image, PERF_NEW_IMAGE) where the rest of this tier does not. A regression
-understood is recorded with `--accept` so that the next round is compared with it.
+run-to-run spreads added (the speed check's rule; an exact measure such as bytes or TeX's passes past its 0.5 % tolerance); a
+measure the round could not take fails it. It holds only the slots of its own kinds, each while its part runs (the docker slot
+for each prepare, the only one of its kind; one e2e slot for the reader; one test slot to remake the rows), under the machine's
+ordinary load: no integration round can give it the whole machine, so its spreads are that load's and its judged measures lean
+on what load moves least (TeX's passes and compiles, bytes, CPU seconds, the main thread's task time) beside the wall times,
+which the same rule judges only by large moves. About 9 minutes and the waits for its slots; it uses Docker (the round's box
+image, PERF_NEW_IMAGE) where the rest of this tier does not. A regression understood is recorded with `--accept` so that the next
+round is compared with it.
 
 **Cut-over blocker: `perf-release`** (the release tier): TODAY (production's release) against NEW on every measure, on papers
 chosen by a stated rule from the 90 pairs, the same stored translation on both sides, each side measured by one instrument
 (lab data `perf/README.md`): the reader (six papers, three visits a side, interleaved), the language switch (three papers), the
 prepare (the same six papers, three times a side, interleaved paper by paper), a re-prepare with the stored instrument; it fails
-where NEW is worse than TODAY on any measure past the spreads. About 100 to 130 minutes holding every slot.
+where NEW is worse than TODAY on any judged measure past the spreads, or a measure is missing. About 100 to 130 minutes holding
+every heavy slot of the machine (`perf/tools/quiet.sh`): run only in a window the coordinator gives.
 
 ## release: before a release (by hand, the same machine)
 

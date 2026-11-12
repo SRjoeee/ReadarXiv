@@ -32,10 +32,17 @@ describe('a repetition, summarised', () => {
     expect(r.codeBytes).toBe(600_000 + 1_265_413)
   })
 
-  it('counts a paper that drew no translated page as missing, never as fast', () => {
-    const r = repOf([visit({ first: 700 }), { ...visit(), firstOk: false, firstTranslatedMs: null }])
+  it('counts a paper that drew no translated page, or a visit that took no scroll, as missing, never as fast or small', () => {
+    const r = repOf([visit({ first: 700 }), { ...visit(), firstOk: false, firstTranslatedMs: null, page1: null }])
     expect(r.drawn).toBe(1)
-    expect(Number.isNaN(r.firstMs)).toBe(true)
+    expect([r.firstMs, r.page1Data].every(Number.isNaN)).toBe(true)
+    const { scroll: _, ...unscrolled } = visit()
+    expect(Number.isNaN(repOf([visit(), unscrolled]).longTasks)).toBe(true)
+  })
+
+  it('reads the data on the wire where the visit counted it so', () => {
+    const v = visit({ page1: { all: 9e6, layer: 4e5, rows: 5e4, arxiv: 3e5, wire: { all: 1e6, layer: 1e5, rows: 1e4, arxiv: 3e5 } } })
+    expect(repOf([v]).page1Data).toBe(1e5 + 1e4 + 3e5)
   })
 
   it("reads a prepare's stored bytes as each side tells them, and a paper not made as missing", () => {
@@ -45,6 +52,8 @@ describe('a repetition, summarised', () => {
     const neu = { side: 'new' as const, ok: true, measured, objects: [{ bytes: 10 }, { bytes: 5 }], instrument: [{ bytes: 100 }] }
     expect(prepareRepOf([today, neu])).toMatchObject({ made: 2, wallS: 40, passes: 10, storedBytes: 187 + 115 })
     expect(Number.isNaN(prepareRepOf([today, { ...neu, ok: false }]).wallS)).toBe(true)
+    // (asked of a warm box whose warming prepare was not made: missing too)
+    expect(Number.isNaN(prepareRepOf([today, { ...neu, warm: true, warmOk: false }]).wallS)).toBe(true)
   })
 })
 
@@ -64,8 +73,14 @@ describe('two sides compared', () => {
     expect(compare(passes(4), passes(5)).passes!.reading).toBe('better')
   })
 
-  it('says a measure one side lacks is not measured, never equal', () => {
-    expect(compare(reps([1, 2]), [{ reader: {} }]).first!.reading).toBe('not measured')
+  it('says a measure one side lacks, or lacks in a repetition, is missing, and fails the batch on it; one neither side took is not measured', () => {
+    expect(compare(reps([1, 2]), [{ reader: {} }]).first!.reading).toBe('missing')
+    expect(compare(reps([1, 2]), [{ reader: { firstMs: 1 } }, { reader: { firstMs: Number.NaN } }]).first!.reading).toBe('missing')
+    expect(compare([{ reader: {} }], [{ reader: {} }]).first!.reading).toBe('not measured')
+    expect(batchVerdict(reps([20, 21], 'commitP50'), [{ reader: {} }, { reader: {} }])).toMatchObject({ pass: false, worse: ['commitP50'] })
+    // (a measure reported and never judged: the canvases, counted otherwise on the two sides)
+    const canvas = (x: number): Rep[] => [{ reader: { canvasMiB: x } }, { reader: { canvasMiB: x } }]
+    expect(batchVerdict(canvas(90), canvas(10))).toMatchObject({ pass: true, worse: [] })
   })
 
   it('fails a batch on any measure worse than the last round, and names it', () => {

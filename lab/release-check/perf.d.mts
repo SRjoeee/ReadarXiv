@@ -16,6 +16,8 @@ export interface ReaderRep {
   heapMiB: number
   canvasMiB: number
   rendererMiB: number
+  gpuMiB: number
+  mainToFirstMs: number
   page1Bytes: number
   page1Data: number
   wholeData: number
@@ -25,18 +27,21 @@ export interface ReaderRep {
 }
 export interface PrepareRep { papers: number; made: number; wallS: number; cpuS: number; memPeakMiB: number; compiles: number; passes: number; storedBytes: number }
 export interface Rep { reader?: Partial<ReaderRep>; prepare?: Partial<PrepareRep> }
-export interface Measure { id: string; label: string; of: (r: Rep) => number | undefined; exact: boolean }
+export interface Measure { id: string; label: string; of: (r: Rep) => number | undefined; exact: boolean; judged?: boolean }
 export declare const MEASURES: Measure[]
+/** a visit's bytes by class as served, and `wire` as they cross the network */
+export type Bytes = { [k: string]: number | Record<string, number> | undefined; wire?: Record<string, number> }
 /** one visit of reader.mjs (the fields the summary reads) */
 export interface Visit {
   rep?: number
   warmup?: boolean
   firstOk?: boolean
   firstTranslatedMs?: number | null
-  page1?: Record<string, number>
-  whole?: Record<string, number>
+  mainToFirstMs?: number | null
+  page1?: Bytes | null
+  whole?: Bytes | null
   scroll?: { commitList?: [number, number][]; frames?: number; framesOverBudget?: number; longTasks?: number; longestTask?: number }
-  memory?: { jsHeapMiB?: number | null; canvasMiB?: number; rendererMiB?: number }
+  memory?: { jsHeapMiB?: number | null; canvasMiB?: number; rendererMiB?: number; gpuMiB?: number }
   switch?: { ms: number | null; askedAgain?: [string, string, number][] }
   code?: [string, number][]
 }
@@ -45,15 +50,18 @@ export declare function repOf(visits: Visit[]): ReaderRep
 export interface PrepareRun {
   side: 'today' | 'new'
   ok: boolean
-  measured: { wallS: number; cpuS: number; memPeakMiB: number; compiles: number; passes: number }
+  warm?: boolean
+  warmOk?: boolean | null
+  measured: { wallS: number; cpuS: number; memPeakMiB: number; anonShmemPeakMiB?: number; compiles: number; passes: number }
   objects?: { bytes: number }[]
   instrument?: { bytes: number }[]
   told?: { role: string; bytes?: number; chunks?: [string, string, number][]; left?: [number, string, number][] }[]
 }
 export declare function prepareRepOf(runs: PrepareRun[]): PrepareRep
 export declare function storedToday(r: Pick<PrepareRun, 'told'>): number
-export interface Compared { label: string; reading: 'better' | 'worse' | 'equal' | 'not measured'; a: number | null; b: number | null; n?: [number, number]; spreadA?: number | null; spreadB?: number | null; p90A?: number | null; p90B?: number | null; diff?: number | null; bound?: number | null }
+export interface Compared { label: string; reading: 'better' | 'worse' | 'equal' | 'not measured' | 'missing'; judged?: boolean; a: number | null; b: number | null; n?: [number, number]; spreadA?: number | null; spreadB?: number | null; p90A?: number | null; p90B?: number | null; diff?: number | null; bound?: number | null }
 export declare function compare(a: Rep[], b: Rep[], measures?: Measure[]): Record<string, Compared>
+export declare function failingOf(c: Record<string, Compared>): string[]
 export declare function batchVerdict(head: Rep[], base: Rep[]): { pass: boolean; worse: string[]; measures: Record<string, Compared> }
 export declare function lastRound<R extends { at: string; pass?: boolean; accepted?: boolean }>(records: R[]): R | null
 export declare function perfOf(text: string): Record<string, unknown> | null
