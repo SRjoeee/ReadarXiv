@@ -2698,6 +2698,19 @@ within noise.
   typesetting and the streams' reads make them). The package's sweep, one look a frame: 0.105 ms a look at its median, 0.040
   after. While a pinch is shown its pages stand where its transform draws them, which no place kept holds: the page is read as
   shown for those frames, as before.
+- **The right's page told reads no layout either** (design-performance-2026-11-13 Q8): the page number the chrome shows for
+  the right pane (`panes.ts` tellRightPage) is the page at its shown top, told in every scroll and each time the stack puts a
+  page in place (its `shown`). It read the pane's width (`shown()`), its scrollTop and each page's offsetTop / offsetHeight,
+  and a page put in place leaves the layout dirty: over a scroll of 2610.20808v1 (zh) 56 layouts were forced there, 344 ms
+  (a trace with the scripts' stacks: readarxiv-lab-data `lanes/reader-q7`). Keeping the width alone moved them to the next
+  read (`shownAt`'s scrollTop: 56, 337 ms). Now it reads the width kept (read as the panes are made and where the reader
+  changes a pane's display, kept by a ResizeObserver of each pane), the scroll position the pane's scroll events keep, and the
+  page from the pointer's kept places (each page's end as the layout read gave it): 0 such forced layouts over the same
+  scroll. Where the pane moved before its scroll event came (the reader's own placing after an open or a relayout, or a scale,
+  a display or a resize that read the places again) it reads fresh until that event: told from kept values there, the page
+  differed on 2 of 248 tells over the lab paper's display change and narrow view (the kept position the old scale's, the
+  places the new one's); with the fresh reads, the page told equals the layout's on every tell, 58 on sample-1 and 252 on
+  2610.20808v1, over a scroll, jumps, zooms, display changes, the narrow view and resizes.
 - **What it does not settle**: a display the part states no ink of (LOST) leaves a gap with nothing in it, filled as today's;
   a display set on a text line beside a word (TeX's display after a word on its baseline) is on that line's row, lit with it;
   a sentence whose only text is a display lights nothing but the display; and a sentence that runs on past a display with no

@@ -193,9 +193,20 @@ export function createPanes(o: PanesOptions): Panes {
   const warn = (what: string, e: unknown) => o.warn?.(what, e)
   const listeners = new Map<keyof PaneEvents, Set<(e: unknown) => void>>()
   // (the pointer's places, kept and read again where the layout changed: below, `placesOf`)
-  type Places = { left: number; top: number; pages: ({ top: number; left: number; w: number; h: number } | null)[] }
+  type Places = {
+    left: number
+    top: number
+    pages: ({ top: number; left: number; w: number; h: number; end: number } | null)[]
+  }
   const places = new Map<PaneSide, Places>()
-  const replace = () => places.clear()
+  /** whether the right's kept scroll position (its scroll events') stands for its layout: lost where the places are read again
+   *  (`replace`: a scale, a display, a resize, a document opened move the pane before its scroll event comes), found again at
+   *  its next scroll event (tellRightPage reads it fresh meanwhile) */
+  let rightKnown = false
+  const replace = () => {
+    places.clear()
+    rightKnown = false
+  }
   const tell = <K extends keyof PaneEvents>(type: K, e: PaneEvents[K]) => {
     if (disposed) return
     // (a scale, a display or a document opened moves the pages: their places read again at the next look)
@@ -396,7 +407,33 @@ export function createPanes(o: PanesOptions): Panes {
     }
     return lo
   }
-  const shown = (s: PaneSide) => s.container.clientWidth > 0
+  /**
+   * Whether a pane is shown (has a width), kept: read where a page is put in place and in a scroll, reading the pane's width
+   * there paid the pending whole-document relayout in that task (design-performance-2026-11-13 Q8). Read as the panes are made
+   * and where the reader changes a pane's display (`showMode`, the narrow view), and kept by a ResizeObserver of each pane's
+   * container, whose callback runs once layout is done
+   */
+  const shownNow = new Map<PaneSide, boolean>()
+  const readShown = () => {
+    for (const s of sides) shownNow.set(s, s.container.clientWidth > 0)
+  }
+  const shown = (s: PaneSide) => shownNow.get(s) ?? false
+  readShown()
+  const widths = observe(new ResizeObserver(readShown))
+  for (const s of sides) widths.observe(s.container)
+  /** the page at `y` (the pane's scroll coordinates), read off its kept places as pageAt reads the layout */
+  function keptPageAt(s: PaneSide, y: number): number {
+    const ps = placesOf(s).pages
+    let lo = 1,
+      hi = ps.length
+    if (!hi) return 0
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if ((ps[mid - 1]?.end ?? 0) > y) hi = mid
+      else lo = mid + 1
+    }
+    return lo
+  }
 
   // ---------------------------------------------------------------- the pointer's places (PDF-READER §17.4)
   /** each pane's content box on the screen and its pages' content boxes in its scroll coordinates, read once its layout changed
@@ -435,6 +472,8 @@ export function createPanes(o: PanesOptions): Panes {
               left: div.offsetLeft + div.clientLeft + (inStack ? s.stack.offsetLeft + s.stack.clientLeft : 0),
               w: div.clientWidth,
               h: div.clientHeight,
+              // (where the page ends as pageAt reads it: its border box's bottom)
+              end: top + div.offsetHeight,
             }
           : null,
       )
@@ -529,7 +568,10 @@ export function createPanes(o: PanesOptions): Panes {
         s.scrollX = c.scrollLeft
         s.scrollY = c.scrollTop
         follower.scrolled(s)
-        if (s === R) tellRightPage()
+        if (s === R) {
+          rightKnown = true
+          tellRightPage()
+        }
         tell('scrolled', { side: s.name })
       },
       opts,
@@ -652,7 +694,7 @@ export function createPanes(o: PanesOptions): Panes {
       follower.invalidate()
       reportSync()
       tellLeftPage()
-      tellRightPage()
+      tellRightPage(true)
       opening = null
       const run = held
       held = []
@@ -742,9 +784,22 @@ export function createPanes(o: PanesOptions): Panes {
     leftTold = key
     tell('page', { side: 'left', page: viewer.currentPageNumber, pages: viewer.pagesCount })
   }
-  function tellRightPage() {
+  /**
+   * The right's page told (the chrome's page number): the page at the right's shown top. It reads no layout
+   * (design-performance-2026-11-13 Q8): it runs where a page is put in place (the stack's `shown`) and in every scroll, and a
+   * read there paid the pending whole-document relayout (56 forced layouts, 344 ms, over a scroll of 2610.20808v1): the scroll
+   * position the pane's scroll events keep, the page from the pointer's kept places (read again only once a layout changed:
+   * `replace`). Fresh (`fresh`, or the kept position not standing: `rightKnown`) where the pane has moved before its scroll event
+   * came: the reader moved it itself (its places put, a relayout), or a scale, a display or a resize moved its pages; told from
+   * kept values there, 2 of 248 tells differed over the lab paper's display change and narrow view, the kept position the old
+   * scale's while the places were the new one's (lanes/reader-q7.md, Q8)
+   */
+  function tellRightPage(fresh = false) {
     if (!right.pages || !shown(R)) return
-    const n = pageAt(R, follower.shownAt(R) + 1) || 1,
+    const n =
+        (fresh || !rightKnown
+          ? pageAt(R, follower.shownAt(R) + 1)
+          : keptPageAt(R, follower.shownAt(R, (q) => q.scrollY) + 1)) || 1,
       pages = right.pages,
       key = `${n}/${pages}`
     rightPage = n
@@ -776,6 +831,7 @@ export function createPanes(o: PanesOptions): Panes {
   }
   function showMode() {
     root.setAttribute('data-axt-pdf-mode', mode)
+    readShown()
     tell('display', { display: mode })
   }
 
@@ -1246,7 +1302,7 @@ export function createPanes(o: PanesOptions): Panes {
       clock.frame(() => {
         relaying = false
         putAll(at)
-        tellRightPage()
+        tellRightPage(true)
         reborrow()
       })
     })
@@ -1381,6 +1437,7 @@ export function createPanes(o: PanesOptions): Panes {
       const place = placeNow()
       narrow = onNow
       root.toggleAttribute('data-axt-narrow', onNow)
+      readShown()
       if (next !== mode) {
         mode = next
         showMode()
