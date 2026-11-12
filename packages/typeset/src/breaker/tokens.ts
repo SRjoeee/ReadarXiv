@@ -873,20 +873,21 @@ export function tokens(i: TokensInput): Tokens {
   }
   // (a token set in the target's CJK face: not the face its style sets Latin text in)
   const cjkFace = (t: Token) => !!t.face && !!t.st && t.face.id !== faceOf(t.st, 'latin').id
-  // (a tie's space not set keeps its no-break: what follows it is glued to what precedes it)
-  const drop = (t: Token, after: Token | null) => {
-    if (t.tie && after) after.glue = true
-    return false
-  }
   const kept = tokens.filter((t, q) => {
     if (!t.space || t.keep || t.st?.fam === 'mono') return true
     const before = drawnAt(q - 1, -1),
       after = drawnAt(q + 1, 1)
-    if (markBlankEdge(before, true, cjkFace) || markBlankEdge(after, false, cjkFace)) return drop(t, after)
-    if (!hardSpaces.has(t) && markBarredStart(after, cjkFace, barredChar)) return drop(t, after)
-    return !(spaceless && spacelessEdge(before, true) && spacelessEdge(after, false)) || drop(t, after)
+    if (markBlankEdge(before, true, cjkFace) || markBlankEdge(after, false, cjkFace)) return false
+    if (!hardSpaces.has(t) && markBarredStart(after, cjkFace, barredChar)) return false
+    return !(spaceless && spacelessEdge(before, true) && spacelessEdge(after, false))
   })
   if (kept.length < tokens.length) {
+    // (a tie's space not set keeps its no-break: what follows it is glued to what precedes it)
+    const set = new Set(kept)
+    tokens.forEach((t, q) => {
+      const after = t.tie && !set.has(t) ? drawnAt(q + 1, 1) : null
+      if (after) after.glue = true
+    })
     tokens.length = 0
     for (const t of kept) tokens.push(t)
   }
