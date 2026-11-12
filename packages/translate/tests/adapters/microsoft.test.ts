@@ -124,6 +124,8 @@ describe('microsoft: the wire, byte for byte (golden)', () => {
       // words of one on no wire)
       '@a# Current methods are not reliable. @b# To infer the source, one could rank sentences. We call it verifiable sources. Then we go on.',
       'Each part is formalized as: @a#. The next field is a list of effects, formalized as a tuple: @b# where kind is its kind.',
+      // (an element right after a display, nothing between: glued to it, no space of ours between two markers, which touch no word)
+      'We have @a#@b# that holds.',
     ])
   })
   it('asks the endpoint as it is measured to answer: zh-Hans, a bare array, JSON', async () => {

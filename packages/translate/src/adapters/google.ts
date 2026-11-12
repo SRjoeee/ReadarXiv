@@ -28,7 +28,7 @@ export const googleTarget = (target: Lang): string => REWRITE[target] ?? target
 
 export const GOOGLE_LIMITS: Limits = { chars: 8_000, units: 100, inFlight: 2, callMs: 10_000, reask: 0 }
 /** the behaviour digest of write and read over tests/adapters/fixtures.ts */
-export const GOOGLE_DIGEST = '4497af34e6c36a1580af2c3f5aa258178099d8e85ec331d50dccd6970e732785'
+export const GOOGLE_DIGEST = '6f9a1fb37f05dd569215506b45491e209a0685f6ab51026047cff91d3ab31b06'
 
 const startOf = (text: string, at: number): number => {
   let i = at
@@ -57,7 +57,7 @@ export function readTagged(unit: UnitIn, raw: string): { content: OutPiece[]; se
 }
 
 /** the behaviour digest of the tags wire with its elements as voids (Chrome's codec, chrome.ts CHROME_DIGEST) */
-export const TAGS_DIGEST = 'f792bbc3bfd5c1186e7cb2351667f05e7d65a722494aee2dc7c782affd17b46d'
+export const TAGS_DIGEST = 'e0444c96baab3c1855456b23c0efbaf6ddfe9ac3a534e227de4b01074ac09193'
 
 /** The tags wire as a host's own translator that keeps tags writes and reads it (the extension's LLM services): Chrome's
  *  codec, its elements voids (what the prompt tells a model a void tag is), so its behaviour digest is Chrome's; Google

@@ -3,7 +3,7 @@ import { CHROME_DIGEST, chrome } from '../../src/adapters/chrome.ts'
 import { google, readTagged, tagsWire } from '../../src/adapters/google.ts'
 import { GLUED_LEAD, GLUED_SPACE, SENTINEL } from '../../src/wire/text.ts'
 import { chainOf } from '../../src/chain.ts'
-import type { FetchInit, Piece, Result } from '../../src/contract.ts'
+import type { FetchInit, OutPiece, Piece, Result } from '../../src/contract.ts'
 import { echo, NEVER, scriptedFetch } from '../../src/testing/fakes.ts'
 import { fakeClock } from '../../src/testing/ports.ts'
 import { translatorSuite } from '../../src/testing/suite.ts'
@@ -17,6 +17,7 @@ import {
   OWN_GLUED,
   SOURCE_LINES,
   GLUED_STOP,
+  SIDE_BY_SIDE,
   STYLED_OBJECT,
   UNITS,
 } from './fixtures.ts'
@@ -30,7 +31,17 @@ export const googleEcho = (_url: string, init: FetchInit) => {
 translatorSuite('google', {
   make: (fetch) => google({ fetch }),
   target: 'zh-Hans',
-  units: [...UNITS, HEAD_STOP, DISPLAY_ENDS, SOURCE_LINES, GLUED_PAST, OWN_GLUED, STYLED_OBJECT, GLUED_STOP],
+  units: [
+    ...UNITS,
+    HEAD_STOP,
+    DISPLAY_ENDS,
+    SOURCE_LINES,
+    GLUED_PAST,
+    OWN_GLUED,
+    STYLED_OBJECT,
+    GLUED_STOP,
+    SIDE_BY_SIDE,
+  ],
   echo: googleEcho,
   replies: GOOGLE_REPLIES,
   faults: [
@@ -305,6 +316,68 @@ describe('google: an element the source glued to its word comes back glued', () 
       { t: 'el', id: 'm' },
       { t: 'text', s: ' 。' },
     ])
+  })
+})
+
+// (two elements the source sets one right after the other, nothing between, are glued as an element and its word are: TeX
+// sets no space between them, so the white space a reply puts there is taken back; a tie or a forced break between them is
+// the source's own space, and what the reply sets beside it stays. Google spaced 3,384 of 3,493 such pairs over the lab's 90
+// pairs (B14's store), 2111.09276v1's `\hlyellow{high}\hlblue{lighted}` drawn "high lighted")
+describe('google: two elements the source sets side by side come back side by side', () => {
+  const w = (n: number) => `<span id="${n}" translate="no">x${n}</span>`
+  it('the white space a reply puts between them taken back; the source’s own spaces beside them kept', () => {
+    const u = unit('h', [t('The edited tokens are '), el('a', 'macro'), el('b', 'macro'), t(').')])
+    expect(readTagged(u, `编辑过的标记是 ${w(1)} ${w(2)} ）。`)?.content).toEqual([
+      { t: 'text', s: '编辑过的标记是 ' },
+      { t: 'el', id: 'a' },
+      { t: 'el', id: 'b' },
+      { t: 'text', s: ' ）。' },
+    ])
+    // (three in a row, and the void the wire before it wrote)
+    const three = unit('r', [t('See '), el('a', 'cite'), el('b', 'note-mark'), el('c', 'math'), t(' here.')])
+    expect(readTagged(three, `见 <x id="1"/> <x id="2"/>  <x id="3"/> 这里。`)?.content).toEqual([
+      { t: 'text', s: '见 ' },
+      { t: 'el', id: 'a' },
+      { t: 'el', id: 'b' },
+      { t: 'el', id: 'c' },
+      { t: 'text', s: ' 这里。' },
+    ])
+  })
+  it('a tie or a forced break between them in the source: the reply’s white space beside it stays', () => {
+    const show = (c: OutPiece[] | undefined) => c?.map((p) => (p.t === 'text' ? p.s : `#${p.id}`)).join('')
+    const tie = unit('t', [t('Values '), el('a', 'math'), el('s', 'space'), el('b', 'math'), t(' hold.')])
+    expect(show(readTagged(tie, `数值 ${w(1)} ${w(2)} ${w(3)} 成立。`)?.content)).toBe('数值 #a #s #b 成立。')
+    const brk = unit('k', [t('Values '), el('a', 'math'), el('n', 'break'), el('b', 'math'), t(' hold.')])
+    expect(show(readTagged(brk, `数值 ${w(1)} ${w(2)} ${w(3)} 成立。`)?.content)).toBe('数值 #a #n #b 成立。')
+  })
+  it('inside a word: the pair glued to each other and to the word’s letters, every space a reply set there taken back', () => {
+    // (a word the source spells with two elements in it, `Ni\~{n}{\o}s` written here as two escaped characters: 98 such
+    // places in the lab's 90 pairs, 96 of them spaced by Google)
+    const u = unit('w', [t('The Ni'), el('a', 'macro'), el('b', 'macro'), t('os are here.')])
+    expect(readTagged(u, `Ni ${w(1)} ${w(2)} os 在这里。`)?.content).toEqual([
+      { t: 'text', s: 'Ni' },
+      { t: 'el', id: 'a' },
+      { t: 'el', id: 'b' },
+      { t: 'text', s: 'os 在这里。' },
+    ])
+  })
+  it('the boundary marker right after the stop before them keeps its place: the sentences read as from a reply with no space', () => {
+    // (two notes' marks glued after a sentence's stop: the wire's marker stands after the stop, before them, lane reply-dots)
+    const u = unit('m', [t('It ends.'), el('a', 'note-mark'), el('b', 'note-mark'), t(' Then more.')], true)
+    expect(google({ fetch: scriptedFetch(googleEcho).fetch }).write(u, 'zh-Hans')).toBe(
+      `It ends.<x id="3"/>${w(1)}${w(2)} Then more.`,
+    )
+    const tight = readTagged(u, `它结束了。<x id="3"/>${w(1)}${w(2)} 然后更多。`)
+    expect(tight).toEqual({
+      content: [
+        { t: 'text', s: '它结束了。' },
+        { t: 'el', id: 'a' },
+        { t: 'el', id: 'b' },
+        { t: 'text', s: ' 然后更多。' },
+      ],
+      sentences: { src: [11], tr: [8] },
+    })
+    expect(readTagged(u, `它结束了。<x id="3"/> ${w(1)} ${w(2)} 然后更多。`)).toEqual(tight)
   })
 })
 

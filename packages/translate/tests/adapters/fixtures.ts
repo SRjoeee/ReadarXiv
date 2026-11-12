@@ -283,6 +283,25 @@ export const STYLED_OBJECT: UnitIn = unit(
 )
 /** a note's mark glued after its sentence's stop, inside the unit and at its end, words of our own (lane reply-dots,
  *  2026-11-13: Google kept no stop before such an element written as a word; the boundary marker right after the stop) */
+/** two elements the source sets side by side, nothing between, then two with a tie between (text.ts glueOf: the white space a
+ *  reply puts between the first two taken back, beside the tie kept) */
+export const SIDE_BY_SIDE: UnitIn = unit('side-by-side', [
+  t('The tokens '),
+  el('a', 'macro'),
+  el('b', 'macro'),
+  t(' and Fig.'),
+  el('s', 'space'),
+  el('r', 'ref'),
+  t(' here.'),
+])
+/** a display the source sets right before an element, nothing between: on the markers wire the display's marker is its own and
+ *  the element's follows it with no space of ours, the white space a reply puts between them taken back */
+export const DISPLAY_SIDE: UnitIn = unit('display-side', [
+  t('We have'),
+  el('d', 'display'),
+  el('m', 'math'),
+  t(' that holds.'),
+])
 export const GLUED_STOP: UnitIn = unit(
   'glued-stop',
   [t('Every token attends to its left.'), el('f', 'note-mark'), t(' We report two sizes.'), el('g', 'note-mark')],
@@ -300,6 +319,7 @@ export const MICROSOFT_UNITS: UnitIn[] = [
   SILENT_AROUND,
   /* 28 */ HEAD_STOP,
   /* 29 */ DISPLAY_ENDS,
+  /* 30 */ DISPLAY_SIDE,
 ]
 
 /** Microsoft's raw replies (as the adapter keeps them: the item's text, with its sentence lengths where given) */
@@ -385,6 +405,12 @@ export const MICROSOFT_REPLIES: { unit: number; raw: string; taken: boolean; why
     raw: ms('列 str@a#s 包含 Ni@b#B，作者 Jane @c# Doe。'),
     taken: true,
     why: 'the words holding an element back as they went, as Microsoft gave `str@a#s` on 2026-11-09',
+  },
+  {
+    unit: 30,
+    raw: ms('我们有 @a# @b# 成立。'),
+    taken: true,
+    why: 'the space between a display and the element the source sets right after it taken back (text.ts glueOf)',
   },
 ]
 
@@ -499,5 +525,11 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     raw: '每个标记都关注其左侧。<x id="3"/><span id="1" translate="no">x1</span>我们报告两种规模。<x id="4"/><span id="2" translate="no">x2</span>',
     taken: true,
     why: 'the stops back where the boundary markers stand right after them; the sentence starts after the marks (tags.ts leads)',
+  },
+  {
+    unit: 24,
+    raw: '标记 <span id="1" translate="no">x1</span> <span id="2" translate="no">x2</span> 和图 <span id="3" translate="no">x3</span> <span id="4" translate="no">x4</span> 这里。',
+    taken: true,
+    why: 'the space between two elements the source sets side by side taken back, beside a tie kept (text.ts glueOf)',
   },
 ]
