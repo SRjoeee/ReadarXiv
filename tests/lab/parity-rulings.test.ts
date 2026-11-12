@@ -119,6 +119,16 @@ describe('L1: a paragraph a line shorter than today, in the height today takes',
   it('two lines fewer than today: worse', () => {
     expect(page({ vLines: 8, vPitch: 19.36 })).toEqual([['t7 para', true, null]])
   })
+  it("a count read over the pages a unit spans (verdict.mjs linesPass) is no count on the page: L1's condition is stated on the page", () => {
+    const { out } = judged(
+      {
+        diffs: [{ ...worse('line-count', 't7 para', 13, 10, 9, [3, 4]), pages: [N, N + 1] } as Diff],
+        units: [{ key: 't7', kind: 'para', part: 7, align: 'j', sides: { today: side(10, 10.16, 9.96, 13), v2: side(9, 9.96, 9.96, 13) } }],
+      },
+      { v2, rec: rec({ units: [{ id: 7, lines: paragraph(10, 404.77, 15.3, 10.16) }] }, { units: [{ id: 7, lines: paragraph(9, 404.77, 17.21, 9.96) }] }) },
+    )
+    expect(out).toEqual([['t7 para', true, null]])
+  })
 })
 
 describe('L2: a paragraph a line shorter than today, ending higher: the look he judged, its cause reported, never asked', () => {

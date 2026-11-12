@@ -4,7 +4,7 @@
 // geometry of one of his cases.
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { measurePage, pastRoomPass, recount, sharePass, stylePass } from '../../lab/typeset/parity/verdict.mjs'
+import { linesPass, measurePage, pastRoomPass, recount, sharePass, stylePass } from '../../lab/typeset/parity/verdict.mjs'
 // @ts-expect-error — a plain node module of the lab
 import { frameOf, labelsPass, originalOf } from '../../lab/typeset/parity/fidelity.mjs'
 // @ts-expect-error — a plain node module of the lab
@@ -681,6 +681,63 @@ describe("style: a unit's share read over the pages it spans (the paper's pass)"
     ]
     stylePass(pages, recount)
     expect(pages[0]!.diffs).toMatchObject([{ flag: 'style', worse: true, nearer: 'today', v2: { value: 0.3 } }])
+  })
+})
+
+describe("line-count: a unit's lines read over the pages it spans (the paper's pass)", () => {
+  // (2111.09276v1 p5 and p6 t87: a paragraph of 33 lines on A, 25 on p5 and 8 on p6. TeX's paragraph points keep v2's text on
+  // the page TeX set it, so v2 sets 19 on p5 and 7 on p6, today 21 and 6: read a page at a time, v2 two lines farther on p5 and one
+  // nearer on p6; over both, today 27, v2 26)
+  type D = { flag: string; unit: string; what?: string; worse: boolean; nearer: string; original: unknown; today: { value: unknown; off: unknown }; v2: { value: unknown; off: unknown }; pages?: number[] }
+  type Page = { page: number; worse: number; diffs: D[]; units: object[] }
+  const recount = (p: Page) => {
+    p.worse = p.diffs.filter((d) => d.worse).length
+  }
+  const count = (unit: string, o: number, t: number, v: number, nearer?: string): D => {
+    const n = nearer ?? (Math.abs(v - o) < Math.abs(t - o) ? 'v2' : 'today')
+    return { flag: 'line-count', unit, worse: n === 'today', nearer: n, original: o, today: { value: t, off: Math.abs(t - o) }, v2: { value: v, off: Math.abs(v - o) } }
+  }
+  const unit = (key: string, o: number, t: number | null, v: number | null) => ({ key, kind: 'para', sides: { ...(t === null ? {} : { today: { lines: t, olines: o } }), ...(v === null ? {} : { v2: { lines: v, olines: o } }) } })
+  const pagesOf = (a: [number, number, number], b: [number, number, number], d = (x: [number, number, number]) => count('t87 para', ...x)) => [
+    { page: 5, worse: 0, diffs: [d(a)], units: [unit('t87', ...a)] },
+    { page: 6, worse: 0, diffs: [d(b)], units: [unit('t87', ...b)] },
+  ]
+  it('one difference over both pages, on the first: v2 one line farther from the original than today, worse, its pages named', () => {
+    const pages: Page[] = pagesOf([25, 21, 19], [8, 6, 7])
+    for (const p of pages) recount(p)
+    linesPass(pages, recount)
+    expect(pages[0]!.diffs).toMatchObject([{ flag: 'line-count', unit: 't87 para', original: 33, today: { value: 27, off: 6 }, v2: { value: 26, off: 7 }, worse: true, nearer: 'today', pages: [5, 6] }])
+    expect(pages[0]!.diffs[0]!.what).toContain('over the pages it spans (p5, p6)')
+    expect(pages[1]!.diffs).toEqual([])
+    expect(pages.map((p) => p.worse)).toEqual([1, 0])
+  })
+  it('none where the two stand as far over both pages, whatever each page reads', () => {
+    const pages: Page[] = pagesOf([25, 22, 21], [8, 5, 6])
+    linesPass(pages, recount)
+    expect(pages.map((p) => p.diffs)).toEqual([[], []])
+  })
+  it('a page one side draws none of the unit on counts it there as none; a unit on one page stays as measured', () => {
+    // (v2 sets all 33 on p5 where today needs p6 too: over both, today 27 and v2 30)
+    const pages: Page[] = [
+      { page: 5, worse: 0, diffs: [count('t87 para', 25, 21, 30)], units: [unit('t87', 25, 21, 30), unit('t90', 4, 4, 3)] },
+      { page: 6, worse: 0, diffs: [], units: [unit('t87', 8, 6, null)] },
+    ]
+    pages[0]!.diffs.push(count('t90 para', 4, 4, 3))
+    linesPass(pages, recount)
+    expect(pages[0]!.diffs).toMatchObject([{ unit: 't87 para', original: 33, today: { value: 27 }, v2: { value: 30 }, nearer: 'v2', worse: false }, { unit: 't90 para', worse: true, original: 4 }])
+  })
+  it('a unit v2 sets in fewer lines than today on one page and in as many on the other stays as measured on each page', () => {
+    // (its line fewer stands on the page it arises on, where the owner's rulings on a line count read it: 2611.03953v2 t21)
+    const pages: Page[] = pagesOf([4, 3, 2], [24, 18, 18])
+    pages[1]!.diffs = []
+    linesPass(pages, recount)
+    expect(pages[0]!.diffs).toMatchObject([{ unit: 't87 para', original: 4, today: { value: 3 }, v2: { value: 2 }, worse: true }])
+    expect(pages[0]!.diffs[0]!.pages).toBeUndefined()
+  })
+  it('a page judged fresh keeps the unit fresh over its pages: listed, never worse', () => {
+    const pages: Page[] = pagesOf([25, 21, 19], [8, 6, 7], (x) => count('t87 para', ...x, 'fresh'))
+    linesPass(pages, recount)
+    expect(pages[0]!.diffs).toMatchObject([{ unit: 't87 para', nearer: 'fresh', worse: false, pages: [5, 6] }])
   })
 })
 

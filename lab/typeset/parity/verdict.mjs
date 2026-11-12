@@ -263,7 +263,7 @@ export const SAYS = {
   links: "the links a reader can follow on the page (the anchors each side drew, counted per target per drawn line: one target's on one line or on lines one under the other one link) against the original's link annotations (one target's one right after the other one link: TeX's annotation a line of a link it broke): how many are missing",
   borders: "the links drawn with a border (the anchors each side drew with one) against the original's link annotations PDF.js draws a border round: how many are missing",
   highlight: "the units today highlights: the lines each side's sentence boxes leave uncovered (its drawn lines, its original's), v2's against today's; elsewhere v2's boxes that miss its drawn lines or its original's (none is no fault; covering boxes where today draws none are better)",
-  'line-count': "a unit's line count on the page against the original's",
+  'line-count': "a unit's line count on the page against the original's; a unit on two pages or more, over them (linesPass)",
   over: "a side's text drawn over ink that stays (the copy's, a crop's, the original's it keeps): device pixels of its text over other ink (the original: none)",
   frame: "a laid line past its column or the original's text block (a cell: past its own room, the owner's ruling 3), points (the original: none)",
   block: "lines borrowed past TeX's room: under its text block bottom, or the next ink nearer than its paragraph separation (the owner's ruling 1)",
@@ -1653,6 +1653,78 @@ export function stylePass(pages, recount) {
         worse: dv > dt,
       })
     }
+    p.diffs = keep
+    recount(p)
+  }
+}
+/**
+ * The paper's pass of the line count: a unit whose text the two readers break over a page apart is judged once over the pages it
+ * spans. Such a unit is one v2 sets in more lines than today on one page and in fewer on another (each side's lines on a page,
+ * none where it draws none of the unit: `units[].sides`, `lines`): its text moved over the break, which a page at a time reads as
+ * differences that cancel. Each side's lines are summed over those pages, the original's over the pages either side reads its
+ * count on (`olines`), the unit's line-count differences on each page replaced by that one, on the first page one stands on, its
+ * pages named (`pages`); none where the two stand as far from the original over them (the measure's floor, half a line). Where a
+ * page's difference was judged fresh (judgeFresh: the line count follows from the fresh text's length) the unit's is too:
+ * listed, never worse. 2111.09276v1 t87, 33 lines on A, 25 on p5 and 8 on p6: TeX's paragraph points keep v2's text on the page
+ * TeX set it, so v2 sets 19 and 7 where today sets 21 and 6, read a page at a time two lines farther on p5 and one nearer on p6,
+ * over both 26 against today's 27. The owner's rulings on a line count are stated on the page: none reads a count over pages
+ * (rulings.mjs). A unit on one page, or one v2 sets in fewer lines than today on some of its pages and in more on none (or the
+ * reverse), stays as measured on each page: its difference stands on the page it arises on, where the rulings read it
+ */
+export function linesPass(pages, recount) {
+  const ps = pages.filter((p) => !p.error)
+  const at = new Map()
+  for (const p of ps)
+    for (const u of p.units ?? []) {
+      const t = u.sides?.today,
+        v = u.sides?.v2
+      const o = t?.olines ?? v?.olines
+      if (!Number.isFinite(o)) continue
+      if (!at.has(u.key)) at.set(u.key, [])
+      at.get(u.key).push({ page: p.page, t: t?.lines ?? 0, v: v?.lines ?? 0, o })
+    }
+  const keyOf = (d) => (d.flag === 'line-count' && d.unit ? String(d.unit).split(' ')[0] : null)
+  const across = new Map([...at].filter(([, xs]) => xs.some((x) => x.v > x.t) && xs.some((x) => x.v < x.t)))
+  if (!across.size) return
+  const fresh = new Set()
+  for (const p of ps) for (const d of p.diffs ?? []) if (across.has(keyOf(d)) && d.nearer === 'fresh') fresh.add(keyOf(d))
+  const done = new Set()
+  for (const p of [...ps].sort((a, b) => a.page - b.page)) {
+    const keep = []
+    let moved = false
+    for (const d of p.diffs ?? []) {
+      const key = keyOf(d)
+      const xs = across.get(key)
+      if (!xs) {
+        keep.push(d)
+        continue
+      }
+      moved = true
+      if (done.has(key)) continue
+      done.add(key)
+      const sum = (k) => xs.reduce((n, x) => n + x[k], 0)
+      const o = sum('o'),
+        t = sum('t'),
+        v = sum('v')
+      const dt = Math.abs(t - o),
+        dv = Math.abs(v - o)
+      if (Math.abs(dv - dt) <= 0.5) continue
+      const on = xs.map((x) => x.page).sort((a, b) => a - b)
+      const what = `lines off the original's count, over the pages it spans (${on.map((x) => `p${x}`).join(', ')})`
+      const { chars: _c, ...rest } = d
+      keep.push({
+        ...rest,
+        what,
+        ...(d.base ? { base: what } : {}),
+        original: o,
+        today: { value: t, off: dt },
+        v2: { value: v, off: dv },
+        nearer: fresh.has(key) ? 'fresh' : dv < dt ? 'v2' : 'today',
+        worse: !fresh.has(key) && dv > dt,
+        pages: on,
+      })
+    }
+    if (!moved) continue
     p.diffs = keep
     recount(p)
   }

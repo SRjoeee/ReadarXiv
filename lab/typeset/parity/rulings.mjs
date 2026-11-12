@@ -67,9 +67,10 @@ export function pitchOf(rows) {
 }
 
 /** a `line-count` difference of a unit v2 sets in exactly one line fewer than today's on the page, both at most the original's
- *  count, v2 at the original's size; with each side's rows and the paragraph's leading, or null */
+ *  count, v2 at the original's size; with each side's rows and the paragraph's leading, or null. A count read over the pages a
+ *  unit spans (verdict.mjs linesPass, `pages`) is no count on the page: every ruling on a line count is stated on the page */
 function lineFewer(d, x) {
-  if (d.flag !== 'line-count' || !d.unit) return null
+  if (d.flag !== 'line-count' || !d.unit || d.pages) return null
   const t = d.today?.value,
     v = d.v2?.value,
     o = d.original
@@ -156,7 +157,7 @@ export const RULINGS = [
       const knobs = ev.by
       const oneStep = !!v.osize && Math.abs(v.size - (1 - SIZE_STEP) * v.osize) <= 0.01 + 1e-9
       if (d.flag === 'size') return knobs.includes('size') && oneStep
-      if (d.flag !== 'line-count') return false
+      if (d.flag !== 'line-count' || d.pages) return false
       const t = d.today?.value,
         n = d.v2?.value
       if (![t, n, ev.lines].every(Number.isFinite) || n === t) return false
@@ -250,7 +251,7 @@ export const RULINGS = [
     condition:
       "line-count, a theorem (a proof): v2 sets it in exactly one line more than today, today on the original's count, v2 at the original's size (the size floor), v2's lines inside the room the borrow keeps (the block measure: none of the unit's past TeX's text block bottom beyond the depth the lay states it borrowed within the fit's bound, or nearer the next ink than TeX's paragraph separation, on any of its pages), the unit whole (WHOLE). Today's size is not asked (the coordinator's ruling of 2026-11-12: 2610.40645 p30, today 0.55 % under the original, is the look of p12). Reported beside, what today does there instead: its size against the original's, a line of its past TeX's measure, where its last line ends against TeX's end box",
     holds(d, x) {
-      if (d.flag !== 'line-count' || !d.unit) return false
+      if (d.flag !== 'line-count' || !d.unit || d.pages) return false
       const t = d.today?.value,
         v = d.v2?.value
       if (![t, v, d.original].every(Number.isFinite) || v - t !== 1 || t !== d.original) return false
