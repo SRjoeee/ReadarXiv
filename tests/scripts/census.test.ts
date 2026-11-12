@@ -173,6 +173,16 @@ describe('rule debt', () => {
     expect(g.lists?.[0]).toMatchObject({ class: 'defined' })
   })
 
+  it("cuts a rule's comment where its kind changes: a block comment directly before a declaration is its own, a run of line comments one block", () => {
+    // (a header of line comments runs into the first declaration's own JSDoc with no blank line: the header is the file's,
+    // the JSDoc the declaration's)
+    const f = factsOf('src/engine/tail.mjs', "// the module: TeX's and the PDF's bounds\n// read from its bytes\n/** the bytes at the end looked at, after the PDF reference */\nconst WINDOW = 0.5\n")
+    expect(f.thresholds?.find(x => x.name === 'WINDOW')).toMatchObject({ class: 'borderline', reason: true, cites: 'PDF reference' })
+    // (a block comment above a run of line comments with no blank line: the run alone is the declaration's)
+    const g = factsOf('src/engine/rules.ts', "const A = 1\n/* Unicode's section */\n// a pad\n// of our own\nconst PAD = 2.5\n")
+    expect(g.thresholds?.find(x => x.name === 'PAD')).toMatchObject({ class: 'tuned', reason: true, cites: null })
+  })
+
   it('counts the engine\'s thresholds, lists, special cases and version constants', () => {
     const d = c.trees.NOW.debt
     // GAP 0.35 (evidence), 0.8 (no reason), 3 (Math.min): tuned; LIMIT borderline; PT_PER_IN a conversion; FLAGS an enumeration

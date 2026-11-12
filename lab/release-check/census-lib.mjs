@@ -260,18 +260,23 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
       .map(c => c.value)
       .join('\n')
   const sameLine = node => (commentsOnLine.get(lineAt[node.start]) ?? []).join('\n')
-  // (the comment right before a statement, its line comments joined, nothing but white space and no blank line between it and
-  // the statement; not the file's opening comment, which is the file's: `leading` holds every comment before a statement)
+  // (the comment right before a statement (census.mjs DEFINITIONS `comments`): nothing but white space and no blank line between
+  // it and the statement, cut where its kind changes: a block comment there is the statement's alone, else the run of line
+  // comments with no blank line inside; a block that opens the file is the file's: `leading` holds every comment before)
   const adjacent = node => {
-    const block = []
-    let end = node?.start ?? 0
-    for (const c of [...(node?.leadingComments ?? [])].reverse()) {
-      const between = text.slice(c.end, end)
-      if (!/^[ \t]*\n?[ \t]*$/.test(between) || !/^\s*$/.test(text.slice(text.lastIndexOf('\n', c.start - 1) + 1, c.start))) break
-      block.unshift(c)
-      end = c.start
-    }
-    if (!block.length || /^\s*$/.test(text.slice(0, block[0].start))) return ''
+    const comments = node?.leadingComments ?? []
+    const opensLine = c => /^\s*$/.test(text.slice(text.lastIndexOf('\n', c.start - 1) + 1, c.start))
+    const tight = (c, end) => /^[ \t]*\n?[ \t]*$/.test(text.slice(c.end, end))
+    const last = comments.at(-1)
+    if (!last || !tight(last, node.start) || !opensLine(last)) return ''
+    const block = [last]
+    if (last.type !== 'CommentBlock')
+      for (let i = comments.length - 2; i >= 0; i--) {
+        const c = comments[i]
+        if (c.type === 'CommentBlock' || !tight(c, block[0].start) || !opensLine(c)) break
+        block.unshift(c)
+      }
+    if (/^\s*$/.test(text.slice(0, block[0].start))) return ''
     return block.map(c => c.value).join('\n')
   }
 
