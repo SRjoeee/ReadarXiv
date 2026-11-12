@@ -871,7 +871,13 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const formula = new Set(v2.formula ?? [])
   const double = new Set(v2.double ?? [])
   const script = new Set(v2.script ?? [])
-  const keptToday = new Map(v2.keptToday ?? [])
+  // (and the figure texts and cells it holds whole as the original for a decorated word (the dump's `keptBy: 'decorated'`, v2.mjs
+  // `decorated`, PDF-READER's hold of a decorated word, lane decorated-whole): the owner's ruling T4 reads the figure texts today
+  // translated in them, rulings.mjs; counted apart from the texts no row serves)
+  const decorated = new Set(v2.decorated ?? [])
+  // (a mark the gate holds a ruling for alone: every kept unit of the dump states its reason since lane keep-reasons, and a reason
+  // with no ruling is no set-aside)
+  const keptToday = new Map((v2.keptToday ?? []).filter(([, mark]) => Object.hasOwn(RULING_OF, mark)))
   for (const key of T.keys()) {
     if (V.has(key)) continue
     const o = orig.get(key)
@@ -975,17 +981,24 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // extended to F0's figure texts whose stretch is now an element, today's row having translated it (the coordinator's ruling
   // 1 on F0, 2026-11-10). Each of today's drawn groups whose middle stands in such a member's lines on the page, however today
   // cut it: the box join pairs one piece of a text today drew in two at most (2608.06701v1 p1's names on tones)
-  const unmeasuredSpans = [...figOrds]
-    .filter((o) => !pitch.has(o) && !identifier.has(o) && !formula.has(o) && !double.has(o) && !script.has(o) && unmeasured(o))
-    .map((o) => spanOf((facts.get(o)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))))
-    .filter(Boolean)
-  const figUnmeasured = (rec.today.figures ?? []).filter((g) => {
-    const b = spanOf(g.lines.filter((l) => l.n > 0).map(band))
-    if (!b) return false
-    const x = (b.x0 + b.x1) / 2,
-      y = (b.y0 + b.y1) / 2
-    return unmeasuredSpans.some((s) => x >= s.x0 - 0.5 && x <= s.x1 + 0.5 && y >= s.y0 - 0.5 && y <= s.y1 + 0.5)
-  }).length
+  const spansOf = (ords) =>
+    ords.map((o) => spanOf((facts.get(o)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) })))).filter(Boolean)
+  const unmeasuredSpans = spansOf(
+    [...figOrds].filter((o) => !pitch.has(o) && !identifier.has(o) && !formula.has(o) && !double.has(o) && !script.has(o) && !decorated.has(o) && unmeasured(o)),
+  )
+  // (today's drawn groups whose middle stands in spans, however today cut its texts)
+  const groupsIn = (spans) =>
+    (rec.today.figures ?? []).filter((g) => {
+      const b = spanOf(g.lines.filter((l) => l.n > 0).map(band))
+      if (!b) return false
+      const x = (b.x0 + b.x1) / 2,
+        y = (b.y0 + b.y1) / 2
+      return spans.some((s) => x >= s.x0 - 0.5 && x <= s.x1 + 0.5 && y >= s.y0 - 0.5 && y <= s.y1 + 0.5)
+    }).length
+  const figUnmeasured = groupsIn(unmeasuredSpans)
+  // (and in a figure member held for a decorated word: the owner's ruling T4 reads them, rulings.mjs)
+  const figDecoratedOrds = [...figOrds].filter((o) => decorated.has(o) && (facts.get(o)?.lines ?? []).some((l) => l[0] === n))
+  const figDecorated = groupsIn(spansOf(figDecoratedOrds))
   if (figVJ < figT) {
     const ruled = figVJ >= figT - figKept.length
     const unm = !ruled && figVJ >= figT - figKept.length - figUnmeasured
@@ -1299,7 +1312,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     laid: { today: T.size, v2: V.size, gained },
     echoed,
     within,
-    figures: { today: figT, v2: figV, v2Laid: figLaid, ...(figPitch ? { pitch: figPitch } : {}), ...(figKept.length > figPitch ? { identifier: figKept.length - figPitch } : {}), ...(figJoined ? { joined: figJoined } : {}), ...(figUnmeasured ? { unmeasured: figUnmeasured } : {}) },
+    figures: { today: figT, v2: figV, v2Laid: figLaid, ...(figPitch ? { pitch: figPitch } : {}), ...(figKept.length > figPitch ? { identifier: figKept.length - figPitch } : {}), ...(figJoined ? { joined: figJoined } : {}), ...(figUnmeasured ? { unmeasured: figUnmeasured } : {}), ...(figDecoratedOrds.length ? { decorated: figDecorated, decoratedOrds: figDecoratedOrds } : {}) },
   }
   for (const f of FLAGS) {
     const a = faults.today[f] ?? [],
@@ -1663,7 +1676,9 @@ function bandMoved(ord, v2, n) {
  * coordinator's ruling of 2026-11-10 on lane cjk-space's parity: xeCJK's rule; where it saves a line, the line held a lone
  * fragment, and the line-count measure is an instrument): the difference is the ruling's, not worse, only where the pair laid
  * with those spaces put back (v2.mjs's first lay, hook.mjs: `spaced`, each member's line count on each page) sets today's count
- * on the page. A count those spaces do not explain, or a pair laid without that lay, is judged as any
+ * on the page. Those spaces alone: the space the typesetter sets before a full-width mark no line opens with (markBarredStart,
+ * the coordinator's ruling of 2026-11-12, against xeCJK's) is no part of this ruling and stays out of that lay. A count those
+ * spaces do not explain, or a pair laid without that lay, is judged as any
  */
 function markSpaceRuling(p, { v2, n, orig }) {
   for (const d of p.diffs) {

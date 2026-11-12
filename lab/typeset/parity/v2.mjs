@@ -281,18 +281,19 @@ for (const pair of pairs) {
   } finally {
     globalThis.__parityNoOptionI = undefined
   }
-  // (then with the spaces beside a full-width mark put back, hook.mjs: each member's line count on each page of that lay, its pages
-  // not kept, nor its passes' targets; the verdict's markSpaceRuling reads it, the coordinator's ruling of 2026-11-10)
+  // (then with the spaces beside a full-width mark's blank side put back (markBlankEdge's alone: hook.mjs), each member's line count
+  // on each page of that lay, its pages not kept, nor its passes' targets; the verdict's markSpaceRuling reads it, the coordinator's
+  // ruling of 2026-11-10)
   globalThis.__parityFill = undefined
   const spaced = {}
   globalThis.__ckPage = (p, pg, page) => {
     if (p === pair) spaced[pg] = Object.fromEntries(page.members.filter((m) => m.page === pg).map((m) => [m.ord, m.lines?.length ?? 0]))
   }
-  globalThis.__parityMarkSpaces = true
+  globalThis.__parityBlankSides = true
   try {
     gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held, joined })
   } finally {
-    globalThis.__parityMarkSpaces = undefined
+    globalThis.__parityBlankSides = undefined
   }
   // (then with no CJK line squeezed to take the group it misses, hook.mjs: each member's line count on each page of that lay, its
   // pages not kept, nor its passes' targets; the owner's ruling L2 reads it, rulings.mjs, 2026-11-12: a paragraph a line shorter
@@ -453,6 +454,12 @@ for (const pair of pairs) {
   const formula = candidateKept(paperOf(pair), 'formula')
   const double = candidateKept(paperOf(pair), 'double')
   const script = candidateKept(paperOf(pair), 'script')
+  // (a figure text or a cell held whole as the original for a decorated word, lane decorated-whole: the owner's ruling T4 reads it,
+  // rulings.mjs)
+  const decorated = candidateKept(paperOf(pair), 'decorated')
+  // (a line of an algorithm's pseudocode, kept as the original (the owner's ruling 5 of 2026-11-08; stated by the prepare since lane
+  // keep-reasons): the ruling T1 reads it, rulings.mjs. None where the run's dump predates that statement)
+  const pseudocode = candidateKept(paperOf(pair), 'pseudocode')
   const keptToday = candidateKeptToday(paperOf(pair))
   // (the ink of the elements its prepare keeps as the original's, by member: F0's run of one pitch, a stretch a decoration holds;
   // the verdict reads the original's style without it, the coordinator's ruling 1 on F0)
@@ -487,6 +494,8 @@ for (const pair of pairs) {
     ...(formula.length ? { formula } : {}),
     ...(double.length ? { double } : {}),
     ...(script.length ? { script } : {}),
+    ...(decorated.length ? { decorated } : {}),
+    ...(pseudocode.length ? { pseudocode } : {}),
     ...(keptToday.length ? { keptToday } : {}),
     ...(keptEls.length ? { keptEls } : {}),
     ...(noRow.size ? { noRow: [...noRow].sort((a, b) => a - b) } : {}),

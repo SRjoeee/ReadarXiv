@@ -4,20 +4,24 @@
 // pass); the table groups settled (L11, S.table.settle: a group on two pages or with a cell unfit is withheld whole); the
 // page's members as drawn (E1, D.display). Pure: the flows are laid anew on each call, nothing is kept between calls.
 import { type DisplayLine, displayLines } from '../emit/display.ts'
-import type { PageRules } from '../shared/fill-page.ts'
+import type { EvenKnob, PageRules } from '../shared/fill-page.ts'
 import { fillPass, type PassUnit } from '../shared/fill-pass.ts'
 import type { FillTarget } from '../shared/fill-target.ts'
 import { tableSettle } from '../shared/table-settle.ts'
-import type { FitState } from '../fit/types.ts'
+import { depthUnder } from '../fit/walk.ts'
+import type { FitBlock, FitState, Layout } from '../fit/types.ts'
 import type { LedgerSlot, RuleParams, Unlaid } from '../types.ts'
 import { type FlowMember, layFlowPrepared } from './flow.ts'
 import { fin, layoutOf, linesOf } from './trace.ts'
 
-/** a member on the page as laid: its state, its fit, its lines as drawn (D.display), its trace */
+/** a member on the page as laid: its state, its fit, its lines as drawn (D.display), its trace; where its fit or its page's fill
+ *  let its lines past TeX's text block bottom, how far they went (`fit.over`), and where the fill evened it, what it took
+ *  (`evened`): types.ts Laid */
 export type PageMember = {
   ord: number
   state: 'laid' | Unlaid
-  fit?: { size: number; lead: number; track: number; borrowed: number }
+  fit?: { size: number; lead: number; track: number; borrowed: number; over?: number }
+  evened?: { by: EvenKnob[]; lines: number }
   lines: DisplayLine[]
   /** the unit as its lay and its fill left it (the gate's dump reads it) */
   lay?: PassUnit
@@ -54,6 +58,14 @@ export type PreparedPage = {
 export const SAME = 0.0005
 /** the pages a member has lines on (its pages) begin with its first */
 const firstPage = (m: FlowMember) => m.pages[0] ?? 0
+/** how far under TeX's text block bottom a layout's lines stand where the state that laid them let them past it (FitState.over:
+ *  the fit's borrow, §18.37; the page fill's foot step, §18.57; a line of a unit laid in runs by its run's state), to the
+ *  hundredth up; 0 where none does. The state's own `over` is what it allows (the foot's a line of the unit's pitch), not this */
+const pastBottom = (L: Layout, blocks: readonly FitBlock[]) =>
+  depthUnder(
+    L.lines.filter((l) => ((l.seg?.state ?? L.state).over ?? 0) > 0),
+    blocks,
+  )
 
 /** a part's tie as the page lays it: a table group's members' ords (`cells`), or members laid at one size (`size`: one paragraph
  *  of TeX's the front end cut at a float, a figure's set). A figure's set states the scale its members S.figures sets are drawn
@@ -276,6 +288,8 @@ function layPageOnce(
             leadBase: fin(x.unit.P?.leadBase),
           },
         })
+      const over = L ? pastBottom(L, x.unit!.blocks) : 0
+      const ev = x.unit?.evened
       return {
         ord: x.m.ord,
         state: x.unit ? 'laid' : x.state === 'laid' ? 'cells' : x.state,
@@ -286,9 +300,11 @@ function layPageOnce(
                 lead: L.state.lead,
                 track: L.state.track,
                 borrowed: L.state.borrow,
+                ...(over > 0 ? { over } : {}),
               },
             }
           : {}),
+        ...(ev ? { evened: { by: [...ev.by], lines: ev.lines.find(([q]) => q === page)?.[1] ?? 0 } } : {}),
         lines: L ? displayLines(L, page) : [],
         ...(x.unit ? { lay: x.unit } : {}),
         ...(x.error ? { error: x.error } : {}),

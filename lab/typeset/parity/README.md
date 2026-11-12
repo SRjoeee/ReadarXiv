@@ -247,9 +247,10 @@ The gate judges by them where they and today's output differ.
    room (`frame`: a cell's frame is its own original's extent).
 4. **Labels**: the target word everywhere, one form within a paper; a paper mixing translated and kept labels is a fault on
    either side (`labels`).
-5. **Pseudocode** kept as the original by default. Not judged yet: neither the part nor today's prepare dump states that a
-   unit is pseudocode (2608.25210 p7's algorithm is a `para` in both); `elements` catches what v2 drew of it as nothing.
-   Judged once a stated fact names it.
+5. **Pseudocode** kept as the original by default. Judged since lane keep-reasons (e8a63d6af), where the prepare's dump states
+   it (`keptBy: 'pseudocode'`, v2.mjs `pseudocode`): the ruling T1 below; a run whose dump predates that statement states nothing,
+   and its unit stays worse (2608.25210 p7's algorithm is a `para` in the part and in today's dump); `elements` catches what v2
+   drew of it as nothing.
 6. **Page numbers** keep their size, right-aligned (`folio`).
 7. **Ink**: the PDF's own black (`ink`).
 8. **A paragraph's leading spans its frames** (2026-11-09, the owner: "as you recommend", on 2610.20967v1-zh p4). Where a
@@ -274,9 +275,12 @@ The coordinator's ruling of 2026-11-10 (lane cjk-space): B.tokens sets no space 
 rule, PDF-READER §18.18); where that saves a unit a line, the line it saves held a lone fragment (one character on
 2610.30034v1-zh p3 t36 and on 2610.10069v1-zh p27 t227, a lone year in 2608.04322v1-zh p12's references), and the line count is
 an instrument. A `line-count` difference is the ruling's (`nearer` "ruling", never worse) only where the pair laid with those
-spaces put back sets today's count on the page: `v2.mjs` lays each pair first with B.tokens' mark-space line skipped (`hook.mjs`,
-a lab global, its pages not kept) and records each member's line count on each page of that lay (`spaced`); `verdict.mjs`
-markSpaceRuling. A count those spaces do not explain is judged as any.
+spaces put back sets today's count on the page: `v2.mjs` lays each pair first with B.tokens' blank-side line skipped (`hook.mjs`,
+`markBlankEdge`, a lab global `__parityBlankSides`, its pages not kept) and records each member's line count on each page of that
+lay (`spaced`); `verdict.mjs` markSpaceRuling. That line alone: the next one, no ordinary space before a full-width mark no line
+opens with (`markBarredStart`, the coordinator's ruling of 2026-11-12, PDF-READER §18.18, against xeCJK's, which keeps that
+space), is a ruling of its own this one does not cover, and stays in that lay. A count those spaces do not explain is judged as
+any.
 
 One more lay of each pair, for the owner's ruling L2 of 2026-11-12 (below, "The owner's rulings of 2026-11-12"): with no CJK line
 squeezed to take the group it misses (the breaker's `squeezes`, its marks' blank halves and SQUEEZE em a gap, light compression
@@ -354,26 +358,30 @@ measure, covered whole), `rulings` (each with the pages it covers, a page with a
 
 | Ruling | Class | The condition the gate reads |
 |---|---|---|
-| TRS | a tight paragraph the page's fill evened with the fit's own knobs (his rule of 2026-11-12, 17:25, PDF-READER §18.57) | what the lay states, never the geometry: v2's Page member's `evened` (`by`: the knobs taken, `track`, `room`, `size`, `foot`; `lines`: its line count on the page before them). `size`: evened by `size`, exactly one fit step under the original's size, the unit whole; `line-count`: evened, its count against today's other by no more than the knobs changed it, the same way, at the original's size or (by `size`) one step under, whole |
-| Fm | a column's last tight paragraph past TeX's text block bottom (his rule of 2026-11-12) | `block`: evened by `foot`, the depth its lines took stated (`fit.over`), every line `block` reads past TeX's room under the bottom by no more than that depth (NEAR.room) and over the next ink by TeX's separation at least, the unit whole |
+| TRS | a tight paragraph the page's fill evened with the fit's own knobs (his rule of 2026-11-12, 17:25, PDF-READER §18.57) | what the lay states, never the geometry: v2's Page member's `evened` (`by`: the knobs taken, in the order taken, of `track`, `room`, `size`, `foot`; `lines`: its line count on the page at its fitted layout, before them). `size`: evened by `size`, exactly one fit step under the original's size, the unit whole; `line-count`: evened, its count against today's other by no more than the knobs changed it, the same way, at the original's size or (by `size`) one step under, whole |
+| Fm | a column's last tight paragraph past TeX's text block bottom (his rule of 2026-11-12) | `block`: evened by `foot` (among `evened.by`), the depth its lines took stated (`fit.over`), every line `block` reads past TeX's room under the bottom by no more than that depth (NEAR.room) and over the next ink by TeX's separation at least, the unit whole |
 | L1 | a paragraph a line shorter than today's, in the height today's takes | `line-count`: exactly one line fewer than today on the page (both at most the original's), v2 at the original's size (the size floor), its last row within half a line of today's last row: line-count's own floor (half a line) read on the drawn extent, a line the smaller of the two leadings there |
 | L2 | a paragraph a line shorter than today's, ending higher | the look he judged, no cause asked: the same, its last row higher than today's by no more than one of its own lines (and the position floor), the unit whole (`WHOLE`: none of `shown`, `elements`, `scripts`, `labels` finds v2 farther on it on any of its pages). Its cause is reported beside (`coveredSays`): today larger than the original by more than the size floor (its misread); the translation's punctuation rule (the pair laid with no CJK line squeezed, `unsqueezed`, sets the unit in more lines than v2 and no fewer than today); or not read |
-| L3 | a proof one line longer than today's, in the room under it (from his ruling 1, the borrow, and A1) | `line-count` of a theorem v2 sets in one line more than today, today on the original's count, v2 at the original's size where today is smaller by more than the size floor, v2's lines inside TeX's room (`block`: none past the text block bottom or nearer the next ink than TeX's separation), the unit whole; today's size and its last line against TeX's end box reported beside |
+| L3 | a proof one line longer than today's, in the room under it (from his ruling 1, the borrow, and A1) | `line-count` of a theorem v2 sets in one line more than today, today on the original's count, v2 at the original's size, v2's lines inside the room the borrow keeps (`block`: none past the text block bottom beyond a stated borrow, or nearer the next ink than TeX's separation), the unit whole; today's size not asked (the coordinator's ruling of 2026-11-12); what today does there reported beside: its size, a line of its past TeX's measure, its last line against TeX's end box |
 | S1 | a figure's labels at their group's size | `size` of a figure text in a size tie of the part, every text of which v2 draws translated at one size, where today translates some of the tie's texts and not all |
 | S2 | a table cell's text smaller than today's, kept to its cell | `size` of a cell v2 draws inside the cell's room (`frame`'s, §18.13) where today runs further past it, at the largest of the fit's steps whose text stands inside it (one step larger, its line would stand past the room) |
 | S3 | a heading on its one line at a smaller size; a small-capitals heading at TeX's size | `size` of a heading v2 sets on the original's line count, smaller than today's, today on more lines; or of one the part states set in small capitals (letters at `sc` of TeX's size, as the measure reads the original) that v2 draws at TeX's size |
-| S4 | a theorem shrunk a little more than today's | `size` of a theorem v2 draws at exactly one step of the fit's own grain under the original's size (`SIZE_STEP`, 2.5 %; to the hundredth the drawing reads), the unit whole; today's own size reported beside (it may stand above the original by its misread). A unit's size on a page is the median of its drawn lines there, each at its own run's size (a unit a display splits is laid a run at a time), never its first run's alone |
+| S4 | a theorem shrunk a little more than today's | `size` of a theorem v2 draws under the original's size, the unit whole, and either (a) at exactly one step of the fit's own grain under the original's size (`SIZE_STEP`, 2.5 % of it), or (b) at most one such step under today's size, each to the hundredth the drawing reads (the coordinator's ruling of 2026-11-12: one step against the original beside it, or against production); today's size and the steps reported beside (today may stand above the original by its misread). A unit's size on a page is the median of its drawn lines there, each at its own run's size (a unit a display splits is laid a run at a time), never its first run's alone |
 | E1 | an address cut over two lines at its own break point | `elements`, pieces drawn apart: the element they are cut from is one TeX sets as written (El.literal), its pieces in order, each two placed as on arXiv's page or cut at a line's end (the first ends its row, the next opens the row under it) |
 | A1 | a last line of one character | `align`: v2 at the original's size and line count, every line where TeX's alignment puts it but the last, which holds one character at the unit's own margin |
 | O | a translated figure text touching the figure where today keeps it English | `over` of a figure text v2 draws translated at the original's place (anchor, alignment) and size where today draws no translation of it; the page's figure texts where, less those texts, v2 is within the floor of today |
 | A2 | a reference's next line set flush as today's | `align`: each line of v2's off the original's starts has a line of today's on its row that is a row of crops alone (which `align` reads no start of) starting where v2's starts |
 | T2 | a table's header row with a cell kept as the original, the others translated (his answer on the readiness page, 15:22: option 1, as v2 draws it now) | `groups` of a header group (`:h`) v2 draws mixed where today draws the whole row one way; a translated cell past its own room is judged by `frame` as before |
+| T1 | a line of an algorithm's pseudocode kept as the original where today translates it (his ruling 5 of 2026-11-08, above, as the record states it) | `shown`: today translates the unit, v2 draws it as the original (not laid, nothing turned off, no line drawn), its member stated kept as pseudocode by the dump of the run v2 is laid from (`keptBy: 'pseudocode'`, v2.mjs `pseudocode`); a unit kept for no stated reason, or a run whose dump predates the statement, stays worse |
+| T4 | figure texts held whole as the original for a decorated word in their label, counted fewer than today (his answer to the readiness page's W11 (a), "agreed with your recommendation": hold the whole label or cell until a ground can follow its word; lane decorated-whole) | `figures`, the page's count: v2 fewer than today by no more than today's texts standing in v2's figure members the prepare states held for a decorated word (the dump's `keptBy: 'decorated'`, v2.mjs `decorated`; `measures.figures.decorated`, each of today's groups whose middle stands in such a member's lines), beyond the measure's own set-asides (marks, no row); every such member drawn as the original (not laid, nothing turned off, no line of v2's text). A text left the original's with no such statement counts against the page |
 
-TRS, Fm and ruling 1's borrow read two fields the Page does not carry yet (packages/typeset lay/page.ts, the member it builds; types.ts
-Laid): `fit.over`, the depth under TeX's text block bottom its lines took (the fit state's FitState.over: the borrow's and the
-foot's), and `evened: { by, lines }`, the knobs the page's fill took (FillLaid.evened) and the member's line count on the page at
-its fitted layout before them. Until they are there, none covers a difference: a unit one step small, or a line past the bottom,
-stays worse.
+TRS, Fm and ruling 1's borrow read two fields of the Page member the typesetter states (packages/typeset lay/page.ts, types.ts
+Laid; lane gate-close): `fit.over`, how far under TeX's text block bottom the unit's lowest line stands where a state of it let its
+lines past it (FitState.over: the fit's borrow, §18.37, and the page fill's foot step, §18.57), to the hundredth up, absent where
+no line went past; and `evened: { by, lines }`, the knobs the page's fill took, in the order taken (FillLaid.evened), and the
+member's line count on the page at its fitted layout before them. A unit one step small or a line count other that the lay did
+not even, and a line past the bottom that is neither a stated borrow within the fit's bound nor a stated foot step within its
+depth, stay worse.
 
 He accepted W too (figure text drawn lighter): no page of it is left since the gate's correction 10, so it has no entry
 (`NO_PAGE_LEFT`). Not ruled, and worse as before: S5 (the author block's names smaller, to discuss), T1's two units of

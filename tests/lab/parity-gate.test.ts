@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest'
 import { measurePage, pastRoomPass, recount, sharePass, stylePass } from '../../lab/typeset/parity/verdict.mjs'
 // @ts-expect-error — a plain node module of the lab
 import { frameOf, labelsPass, originalOf } from '../../lab/typeset/parity/fidelity.mjs'
+// @ts-expect-error — a plain node module of the lab
+import { rulingsPass } from '../../lab/typeset/parity/rulings.mjs'
 
 type Line = { y: number; x0: number; x1: number; size: number; n: number; bold: number; italic: number; word: number; letter: number; text: string }
 const N = 3
@@ -480,6 +482,36 @@ describe("page numbers keep their size, set right-aligned (the owner's ruling 6;
       v = [drawnLine(494.57, 550.02, 34.64, 'x'.repeat(14), 7.4)]
     // (its size 7.4 of 8.97, and its end, laid from its start, 1.74 pt past the original's)
     expect(of('folio')(measure(f, sides(228, t, v), { folios: new Set([228]) }))).toMatchObject([{ worse: true }, { worse: true }])
+  })
+})
+
+describe("figures: today's texts standing in a figure member held whole for a decorated word (the owner's ruling T4, W11 (a))", () => {
+  // (four figure members on A; v2's prepare holds 62 and 63 whole for a decorated word (the dump's `keptBy: 'decorated'`, v2.mjs
+  // `decorated`), so v2 draws 60 and 61 translated and leaves 62 and 63 the original's; today drew all four, 63 in two groups)
+  const at = (i: number) => 100 + 60 * i
+  const facts = [60, 61, 62, 63].map((ord, i) => ({ ord, kind: 'figure', align: 'l', style: { size: 8 }, lines: [factLine(at(i), at(i) + 40, 300, 8)] }))
+  const prep = [90, 91, 92, 93].map((ord, i) => ({ ord, kind: 'figure', lines: [{ page: N, x0: at(i), x1: at(i) + 40, baseline: 300, top: 306.4, bottom: 298.4, size: 8 }] }))
+  const fig = (x0: number, x1: number) => [drawnLine(x0, x1, 300, '\u03b1\u03b2', 8)]
+  const today = [...[0, 1, 2].map((i) => ({ id: `f${i}`, lines: fig(at(i), at(i) + 40) })), { id: 'f3', lines: fig(at(3), at(3) + 18) }, { id: 'f4', lines: fig(at(3) + 22, at(3) + 40) }]
+  const page = (held: number[] | null) => {
+    const v2 = {
+      ...v2Of({ members: [60, 61].map((o) => laid(o)).concat([62, 63].map((ord) => ({ ord, state: 'unwrapped', off: 0, lines: [], lit: { left: [], right: [], own: [] } }))), facts }),
+      ...(held ? { decorated: held } : {}),
+    }
+    const r = rec({ today: { figures: today }, v2: { units: [60, 61].map((id, i) => ({ id, lines: fig(at(i), at(i) + 40) })) } })
+    const p = { pair: 'p-zh', ...measure(v2, r, { prep }) }
+    rulingsPass([p], { recOf: () => r, v2, laid: {}, unsqueezed: null }, recount)
+    return { figures: p.measures.figures, d: of('figures')(p)[0] as unknown as { worse: boolean; covered?: string } }
+  }
+  it('counts the texts of today standing in the held members, however today cut them, and the page is covered by T4', () => {
+    const { figures, d } = page([62, 63])
+    expect([figures.today, figures.v2, figures.decorated, figures.decoratedOrds]).toEqual([5, 2, 3, [62, 63]])
+    expect([d.worse, d.covered]).toEqual([false, 'T4'])
+  })
+  it('the same texts left the original with no statement count against the page: worse', () => {
+    const { figures, d } = page(null)
+    expect(figures.decorated).toBeUndefined()
+    expect([d.worse, d.covered ?? null]).toEqual([true, null])
   })
 })
 

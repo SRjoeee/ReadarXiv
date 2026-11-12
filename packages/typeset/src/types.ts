@@ -3,6 +3,7 @@
 // (layPage, layFlow) is built from the rules once each rule is proven against today's recorded outputs (the tap).
 import type { Box, Id, Ink, Link, Part, Placed, PrepWhy, Row, Why as RowWhy } from '@readarxiv/format'
 import type { ScriptRules } from './data/rules/types.ts'
+import type { EvenKnob } from './shared/fill-page.ts'
 import type { RefNames } from './unit/rename.ts'
 
 /** a target language's tag (BCP 47, as the rule set's `languages` names it) */
@@ -168,8 +169,14 @@ export type Laid = {
   state: 'laid' | Unlaid
   /** this member's groups turned off on this page: 1 text, 2 elements, 4 label */
   off: number
-  /** its fit's size, leading and tracking, and the lines its borrow knob let it lay under a block (99: all its room holds) */
-  fit?: { size: number; lead: number; track: number; borrowed: number }
+  /** its fit's size, leading and tracking, and the lines its borrow knob let it lay under a block (99: all its room holds);
+   *  `over` where a state of it let its lines past TeX's text block bottom (the fit's borrow, docs/PDF-READER.md §18.37; the
+   *  page fill's foot step, §18.57): how far under that bottom its lowest line stands, points, to the hundredth up; none where
+   *  no line of it stands there */
+  fit?: { size: number; lead: number; track: number; borrowed: number; over?: number }
+  /** a tight paragraph the page's fill evened (§18.57): `by` the fit's knobs it took, in the order taken; `lines` its line count
+   *  on this page at its fitted layout, before them */
+  evened?: { by: EvenKnob[]; lines: number }
   /** its laid lines on this page, baseline first (a turned line, its items' `dir`: from its origin (x0, y), x1 − x0 its length
    *  along it) */
   lines: [y: number, x0: number, x1: number, items: Item[]][]
