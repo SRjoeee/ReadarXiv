@@ -199,6 +199,14 @@ describe("the prepare's corpus, as the round's stage 1a runs it", () => {
   })
 })
 
+describe("the typesetter's data", () => {
+  it("checks the generated data and today's readings, never the breaker's moved files against today's code, which the rulings edit", () => {
+    const ctx: Ctx = { root: '/repo', labData: null, refactor: '/lab', work: '/work', online: false, minFree: 12 }
+    const scripts = GATES.find(g => g.id === 'typeset-data')!.steps!(ctx).map(s => s.cmd.findLast(a => /\.(?:m?js|ts)$/.test(a)) ?? s.cmd.join(' '))
+    expect(scripts).toEqual(['lab/typeset/faces-data.mjs', 'lab/typeset/rules-data.mjs', 'lab/typeset/derive.mjs', 'lab/typeset/vitest.config.ts'])
+  })
+})
+
 describe('the speed check', () => {
   const speed = GATES.find(g => g.id === 'speed')!
   const ctx: Ctx = { root: '/repo', labData: null, refactor: '/lab', work: '/work', online: false, minFree: 12 }

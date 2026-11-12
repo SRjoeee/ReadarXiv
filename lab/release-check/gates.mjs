@@ -657,10 +657,13 @@ export const GATES = [
     holds: [],
     // (today's engine at 065c1d973, read only: AXT_TODAY, else the worktree beside this one that packages/typeset/tests/replay/tap.ts names)
     needs: ctx => [exists("today's engine at 065c1d973 (AXT_TODAY)", join(process.env.AXT_TODAY ?? join(ctx.root, '..', 'refactor-read'), 'src/pdf-reader/engine/rules/tex-names.json'))],
+    // (not move-fit.mjs --check, which held the breaker's five moved files to today's code and the changes it lists: the
+    // typesetter's rulings edit those files in place since a8c36be1f (2026-11-08, a URL broken where its url package lets TeX
+    // break it), about forty commits of PDF-READER §18 and §19, so the file it would write is no longer the package's and the
+    // check failed on every one; the moved code is held as the ported files are, by the replays and the reader's gates)
     steps: () => [
       { cmd: ['node', 'lab/typeset/faces-data.mjs', '--check'], all: true },
       { cmd: ['node', 'lab/typeset/rules-data.mjs', '--check'], all: true },
-      { cmd: ['node', 'lab/typeset/move-fit.mjs', '--check'], all: true },
       { cmd: ['node', '--import', './lab/typeset/register.mjs', 'lab/typeset/derive.mjs'], all: true },
       { cmd: ['pnpm', 'exec', 'vitest', 'run', '--config', 'lab/typeset/vitest.config.ts'], all: true },
     ],
