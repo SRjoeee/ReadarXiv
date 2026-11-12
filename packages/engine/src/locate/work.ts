@@ -227,16 +227,16 @@ export interface Pitch {
  * The record locate's phases work over. Each shared field has one writer, named here with its readers (phases by their number
  * in PHASES, locate.ts); those `open` makes are the record from the start, those of `Assigned` are assigned once by their
  * writer and read through `field`, which throws where the writer has not run:
- * - `jointPiece`: written by 4 madeOnA; read by 6 lineGeometry.
- * - `displays`, `floatLines`: written by 4 madeOnA; read by close.
- * - `released`: written by 1 placeUnits; read by 4 madeOnA.
+ * - `jointPiece`: written by 4 unitsMadeOnA; read by 6 lineGeometry.
+ * - `displays`, `floatLines`: written by 4 unitsMadeOnA; read by close.
+ * - `released`: written by 1 placeUnits; read by 4 unitsMadeOnA.
  * - `trailSep`: written by 2 claimTrails; read by 6 lineGeometry.
- * - `pitch`: written by 3 keepArtefacts; read by 4 madeOnA.
- * - `born`: written by 5 bornOnA; read by 7 sentenceStarts and close.
+ * - `pitch`: written by 3 keepArtefacts; read by 4 unitsMadeOnA.
+ * - `born`: written by 5 unitsBornOnA; read by 7 sentenceStarts and close.
  * - `flows`, `ties`: written by 13 flowsAndTies; read by 14 rowAligns and close (`flows`), close (`ties`).
  * - `links`: written by 15 linksOnA; read by close.
  * Four fields have several writers, and are named so: `claimedA` (an owner per glyph of A: written by 1 placeUnits in place.ts,
- * 2 claimTrails, 4 madeOnA, 5 bornOnA, 9 endMarks), `members` (pushed by 1, 4, 5; their glyph and box lists written by 1, 2,
+ * 2 claimTrails, 4 unitsMadeOnA, 5 unitsBornOnA, 9 endMarks), `members` (pushed by 1, 4, 5; their glyph and box lists written by 1, 2,
  * 3 keepArtefacts, 4, 5, 9; their other facts by the phases after), `units` (written by 3 and 4), `stats` (by 3, 4, 5, 9 and
  * close).
  */
