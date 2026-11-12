@@ -11,8 +11,9 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { factsOf } from '../../lab/release-check/census-lib.mjs'
+import { areaOf } from '../../lab/rules/areas.mjs'
 import { mergeRecords } from '../../lab/rules/merge.mjs'
-import { countsOf, siteMapOfCheckout } from '../../lab/rules/record.mjs'
+import { agreementOf, countsOf, siteMapOfCheckout } from '../../lab/rules/record.mjs'
 import { recorderOf } from '../../lab/rules/recorder.mjs'
 import { applyEdits, instrument } from '../../lab/rules/transform.mjs'
 import { rulesPlugin } from '../../lab/rules/vitest.mjs'
@@ -160,6 +161,19 @@ describe('the site map', () => {
     expect(sitesOfRule('::MARKS#1').map((s: { kind: string }) => s.kind)).toEqual(['list'])
     expect(sitesOfRule('::NAMED#1').map((s: { kind: string }) => s.kind)).toEqual(['re'])
     expect(countsOf(map).noSite).toEqual(['packages/engine/src/rules::(top)::LIMITS.tall'])
+  })
+  it("agrees with the census's items one by one, and says which it lacks", () => {
+    const f = factsOf('packages/engine/src/rules.ts', RULES)
+    const place = (x: object) => ({ ...x, file: 'packages/engine/src/rules.ts', headline: true })
+    const census = { trees: { AFTER: { debt: { thresholds: { list: f.thresholds.map(place) }, lists: { list: f.lists.map(place) } } } } }
+    const a = agreementOf(census, map)
+    expect([a.onlyCensus, a.onlyMap]).toEqual([[], []])
+    expect(a.noSite.map((r: { key: string; why: string }) => `${r.key}: ${r.why}`)).toEqual(['packages/engine/src/rules::(top)::LIMITS.tall: read nowhere'])
+    census.trees.AFTER.debt.lists.list.pop()
+    expect(agreementOf(census, map).onlyMap).toEqual(['packages/engine/src/rules.ts:11:regex:3'])
+  })
+  it("tells the reduction's areas by path, before and after the front half moves", () => {
+    expect(['packages/engine/src/locate/locate.ts', 'src/pdf-reader/engine/layout/marks.mjs', 'packages/engine/src/source/latex-front.mjs', 'packages/engine/src/marks/colour.mjs', 'packages/typeset/src/fit/walk.ts', 'packages/engine/src/ink.mjs', 'packages/engine/src/wrap/x.ts', 'packages/translate/src/chain.ts', 'packages/engine/src/marks/channels.ts', 'packages/engine/src/inkling.ts'].map(areaOf)).toEqual(['a', 'b', 'b', 'b', 'c', 'd', 'd', 'd', 'other', 'other'])
   })
   it('refuses a text the map was not made from, and nests wraps inside out', () => {
     expect(() => instrument(map, 'packages/engine/src/rules.ts', `${RULES}\n`)).toThrow(/not the text the site map was made from/)
