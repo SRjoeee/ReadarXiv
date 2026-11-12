@@ -11,8 +11,6 @@
     ".": "./src/index.ts",
     "./today/source/latex-front.mjs": "./src/source/latex-front.mjs",
     "./today/source/paper-meta.mjs": "./src/source/paper-meta.mjs",
-    "./today/source/paper-names.mjs": "./src/source/paper-names.mjs",
-    "./today/source/arg-roles.mjs": "./src/source/arg-roles.mjs",
     "./today/source/tex-kernel.mjs": "./src/source/tex-kernel.mjs",
     "./today/source/tex-names.mjs": "./src/source/tex-names.mjs",
     "./today/source/text-symbols.mjs": "./src/source/text-symbols.mjs",
@@ -21,7 +19,18 @@
     "./today/marks/marks.mjs": "./src/marks/marks.mjs",
     "./today/own/stream.mjs": "./src/own/stream.mjs",
     "./today/own/own.mjs": "./src/own/own.mjs",
-    "./today/instrument/mt.mjs": "./src/instrument/mt.mjs"
+    "./today/instrument/mt.mjs": "./src/instrument/mt.mjs",
+    "./today/compile/tex.mjs": "./src/compile/tex.mjs",
+    "./today/compile/tex-errors.mjs": "./src/compile/tex-errors.mjs",
+    "./today/compile/base.mjs": "./src/compile/base.mjs",
+    "./today/compile/pdf-lite.mjs": "./src/compile/pdf-lite.mjs",
+    "./today/compile/guard.mjs": "./src/compile/guard.mjs",
+    "./today/compile/live.mjs": "./src/compile/live.mjs",
+    "./today/compile/paper.mjs": "./src/compile/paper.mjs",
+    "./today/instrument/format.mjs": "./src/instrument/format.mjs",
+    "./today/instrument/units.mjs": "./src/instrument/units.mjs",
+    "./today/instrument/layer1.mjs": "./src/instrument/layer1.mjs",
+    "./today/instrument/instrument.mjs": "./src/instrument/instrument.mjs"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

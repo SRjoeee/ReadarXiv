@@ -16,8 +16,8 @@ const ROOT = resolve(__dirname, '../..')
 const ENGINE = 'src/pdf-reader/engine/'
 /** the engine's modules a reader takes that moved into packages/engine with the front half, read through their transition
  *  paths: the engine's own code at its new place (the source reader beside them stays the server's) */
-const MOVED = /^packages\/engine\/src\/(?:source\/(?:arg-roles|latexml-args|tex-kernel|tex-names|text-piece|text-symbols)|instrument\/mt|marks\/names)\.(?:mjs|json)$/
-const SERVER = [/^packages\/engine\/src\/(?!(?:ink|memory|delta-wire|tail)\.)(?!(?:source\/(?:arg-roles|latexml-args|tex-kernel|tex-names|text-piece|text-symbols)|instrument\/mt|marks\/names)\.(?:mjs|json)$)/, /^src\/pdf-reader\/engine\/pipeline\/(?!(?:anchors|versions|memory)\.mjs$)/, /^src\/pdf-reader\/engine\/source\//, /^src\/pdf-reader\/engine\/layout\/(?:make|remove|own|wrap|wrap-final)\.mjs$/]
+const MOVED = /^packages\/engine\/src\/(?:source\/(?:arg-roles|latexml-args|tex-kernel|tex-names|text-piece|text-symbols)|instrument\/(?:mt|format|layer1|units)|marks\/names)\.(?:mjs|json)$/
+const SERVER = [/^packages\/engine\/src\/(?!(?:ink|memory|delta-wire|tail)\.)(?!(?:source\/(?:arg-roles|latexml-args|tex-kernel|tex-names|text-piece|text-symbols)|instrument\/(?:mt|format|layer1|units)|marks\/names)\.(?:mjs|json)$)/, /^src\/pdf-reader\/engine\/pipeline\/(?!(?:anchors|versions|memory)\.mjs$)/, /^src\/pdf-reader\/engine\/source\//, /^src\/pdf-reader\/engine\/layout\/(?:make|remove|own|wrap|wrap-final)\.mjs$/]
 
 /** the files a browser build of `entries` reads, repository-relative: of the engine package (packages/engine, today's
  *  modules the rebuild moved into it, read through its one entry) and of the packages it names (format), those whose code the

@@ -21,14 +21,14 @@
 //      anchored by (their words read from the same pages)
 // The compile and the opening are the caller's (a native TeX Live and PDF.js in Node, the TeX page and a worker in a
 // browser), so that this imports neither PDF.js nor a `node:*` module.
-import { jobName, lastTexLog, latin1, latin1Bytes, normalizePath, texText } from '../../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { jobName, lastTexLog, latin1, latin1Bytes, normalizePath, texText } from '../source/latex-front.mjs'
 import { DRAFT_OPTION, listsMissing, markedPreamble, NO_DRIVER_GROUP, notFound, openPaper, originalFiles, probeFiles, ranThrough, stoppedShort } from './live.mjs'
 import { completeLog } from './tex.mjs'
 import { bundleUnitsOf } from '../instrument/units.mjs'
-import { isMemoryError } from '@readarxiv/engine'
+import { isMemoryError } from '../memory.mjs'
 import { auxUnits, contextUnits, copiesOutOfPlace, cutCopyUnits, engineUnknown, preambleUnits, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
-import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, markTextOf } from './base.mjs'
-import { completeCalled, LAYOUT_CLASSES, probeSamples, readInkAnswers, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from '../../../../src/pdf-reader/engine/layout/marks.mjs'
+import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, markTextOf } from './base.mjs'
+import { completeCalled, LAYOUT_CLASSES, probeSamples, readInkAnswers, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from '../marks/marks.mjs'
 
 /** the layout guard's compiles past the marked original's, at most, the unmarked original's among them */
 const GUARD_EXTRA = 2
@@ -573,52 +573,6 @@ export function handoverOf(own, { declared = null, served = [], last = false } =
   const others = treesOf(served, null).filter(y => y !== here), want = yearOf(declared)
   if (!others.length) return null
   return want !== null && others.includes(want) ? want : others[0]
-}
-
-/**
- * A paper's layout marks (paper.d.mts): markedOfPaper's marked original, then read once (stage 3), with each stage's time, or
- * the stage that failed with the times of those that ran. With `final` (default on), the base page too (`base`: the final pass,
- * { pdf, log, check: { marks } } once its marks are the draft's, base.mjs finalCheck, else { refused: 'final', why }), its
- * PDF opened by `open` beside the draft's. Never throws: a compiler that throws, a PDF that does not open and
- * a reading that refuses are each their stage's refusal, but a failed allocation, which goes on as itself. `converge`: the marked original made by convergeThenMark, its passes
- * in `cm`, within `compileBudgetMs` and `filesBound` where the host gives them; `pages` and `engines` the guard's, and `tried`
- * TeX's why's, as markedOfPaper's
- */
-export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge = false, compileBudgetMs = null, filesBound = null, pages = null, engines = null, tried = null, final = true, sourceDate = null, textOf = null, compilerOf = null }) {
-  const made = await markedOfPaper(paper, { compile, converge, compileBudgetMs, filesBound, pages, engines, tried, final, sourceDate, textOf, compilerOf })
-  if (made.refused) return made
-  const ms = { ...made.ms }
-  /** the result, with CM's record and the guard's where they ran, and the base page where it was asked */
-  let base = made.base
-  const result = r => ({ ...r, ...(made.cm ? { cm: made.cm } : {}), ...(made.guard ? { guard: made.guard } : {}), ...(base ? { base } : {}) })
-  const t0 = performance.now()
-  let read = null
-  try {
-    const opened = await open(made.pdf)
-    let failed = null
-    // (read once, a page at a time: the marks in memory, handed to the maker as they are, and the unit marks the left is
-    // anchored by, from the same pages)
-    try { read = await readMarked(opened.doc, made.log, { ...made.options, units: paper.units, OPS }) } catch (e) { failed = e }
-    // (the final pass's marks against the draft's, both open: base.mjs finalCheck; its failure, or a final pass that does not
-    // open, no base page. Opened from a copy: the base page's bytes are the result's, and PDF.js takes the buffer it is given)
-    if (!failed && base?.pdf) {
-      try {
-        const fin = await open(base.pdf.slice())
-        try {
-          const check = await finalCheck(opened.doc, fin.doc)
-          base = check.ok ? { ...base, check: { marks: check.marks } } : { refused: 'final', why: whyText(`the final pass is not the draft's page: ${check.why}`) }
-        } finally { await fin.close() }
-      } catch (e) {
-        if (isMemoryError(e)) failed = e
-        else base = { refused: 'final', why: whyText(`the final pass could not be read: ${e?.message ?? e}`) }
-      }
-    }
-    // (closed whatever the reading did; a failing close loses nothing, the marks are read, but a failed allocation)
-    try { await opened.close() } catch (e) { if (isMemoryError(e)) failed = e }
-    if (failed) throw failed
-  } catch (e) { if (isMemoryError(e)) throw e; read = null } finally { ms.marks = Math.round(performance.now() - t0) }
-  if (!read) return result({ refused: 'marks', ms })
-  return result({ marks: read.marks, unitMarks: read.unitMarks, ms })
 }
 
 /** CM's bound: the TeX passes it runs at most, its drafts and marked passes together (latexmk's max_repeat) */

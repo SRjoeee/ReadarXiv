@@ -2,7 +2,7 @@
 // mark every compile ends with (END_TEX, completeLog). The TeX of the typesetting rule that grew here (a unit set at a smaller
 // size or face, a float held to its original's page, a typeset plan) went with the compiled translation (2026-11-04, the
 // rules audit's F4).
-import { lastTexLog, PARA_END_TEX } from '../../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { lastTexLog, PARA_END_TEX } from '../source/latex-front.mjs'
 
 /** Once the last page is out, AXT-END in the log: the pass reached the document's end (completeLog). Every compile
  *  carries it (live.mjs: the probe and the marked original), and the line probes too (LINES_TEX), set

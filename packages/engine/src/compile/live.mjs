@@ -4,14 +4,14 @@
 // target keeps (keptFor). The compiled translation that grew here (the translation set by TeX, its strategies, its typesetting
 // rule and its copies' cache) was parked, then taken out (2026-11-04, the rules audit's F4): the layer draws the translation
 // over our base page, and the web's rows hold it.
-import { analyze } from '../../../../src/pdf-reader/engine/source/paper-meta.mjs'
-import { paperNames, theoremNames } from '../../../../src/pdf-reader/engine/source/paper-names.mjs'
-import { CALL_TEX, classNamesTex, DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, probeSamples, refKeysOf, refsTex, regionsTex } from '../../../../src/pdf-reader/engine/layout/marks.mjs'
-import { documentBounds, DVI_MARK_DEF, dviEngine, FONT_PROBE, inAuthorBlock, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, texFilesOf, texText } from '../../../../src/pdf-reader/engine/source/latex-front.mjs'
-import { authorsTranslated } from '../../../../src/pdf-reader/engine/translate/kept.mjs'
-import { nameCells } from '../../../../src/pdf-reader/engine/translate/mt.mjs'
+import { analyze } from '../source/paper-meta.mjs'
+import { paperNames, theoremNames } from '../source/paper-names.mjs'
+import { CALL_TEX, classNamesTex, DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, probeSamples, refKeysOf, refsTex, regionsTex } from '../marks/marks.mjs'
+import { documentBounds, DVI_MARK_DEF, dviEngine, FONT_PROBE, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, texFilesOf, texText } from '../source/latex-front.mjs'
+import { nameCells } from '../instrument/mt.mjs'
 import { completeLog, END_TEX, LINES_TEX } from './tex.mjs'
 import { unbalancedUnits } from './guard.mjs'
+
 /** Whether a compile's last TeX pass stopped short of the document's end: TeX's fatal errors — an emergency stop (a
  *  file that ended inside an argument, a line asked of no terminal, the job ended with no \\end), its capacity
  *  exceeded, a hundred errors, its own confusion. Whatever PDF it left is part of the paper: XeTeX ships the pages it set
@@ -60,37 +60,10 @@ const DRAFT = [
 /** where the main file's \\begin{document} stands as TeX finds it (latex-front.mjs documentBounds: none in a comment, a
  *  definition or a filecontents), -1 where it has none: what goes before the document goes there */
 const beginDocument = text => documentBounds(text).begin
-/** the lines of a compile's last TeX pass that the readings keep: each unit's lines and the document's end (typeset/tex.mjs
- *  readLines, completeLog), the letters it could not set */
-const READ_LINE = /^(?:AXT-|Missing character: |! LaTeX Error: Unicode character )/
-/**
- * The marked original's readings: those lines of its log, its marks with every page's columns (`marks`, typeset/places.mjs
- * marksOf's), its references — the aux's \bibcite and \newlabel lines — and the bibliography its BibTeX or biber made
- * (`bbl`, null where the paper ships its own or has none). What the layout marks gate compares, byte for byte, between the
- * marked original and the layout-marked one (lab/pdf/spikes/layout-marks-gate.mjs)
- */
-export const readingsOf = (o, marks) => ({ log: lastTexLog(o.log).split('\n').filter(l => READ_LINE.test(l)).join('\n'), marks, ...referencesOf(o) })
 /** an aux's lines of one command, those whose braces close on the line: a line cut short would stop TeX reading the
  *  aux it is given */
 const auxLines = (aux, command) => (aux ?? '').split('\n').filter(l => l.startsWith(`\\${command}{`) && closed(l)).join('\n')
 const closed = line => { let depth = 0; for (const c of line.replace(/\\./g, '')) if (c === '{') depth++; else if (c === '}' && --depth < 0) return false; return depth === 0 }
-/**
- * An aux's citation lines: every closed line whose first argument is a key the aux cites — a \citation's or a
- * \bibcite's (\nocite{*} cites keys no \citation names) —, in the aux's order, so that a later line overrides an earlier
- * one as in the paper's own passes; not \citation's own, which a draft writes, nor \newlabel's, which are the labels.
- * Not \bibcite's alone: apacite writes each entry twice, \bibcite then \APACbibcite, and with babel loaded after it
- * babel's \bibcite keeps the entry wrapped, which only the second line makes whole again — given the first alone, every
- * citation broke TeX (2610.02069: "Illegal parameter number in definition of \B@my@dummy"). harvard's \harvardcite,
- * backref's \backcite and any other package's line of the kind go with them; biblatex's name a refsection first, and
- * its drafts read the bibliography
- */
-export const citationLines = aux => {
-  const all = (aux ?? '').split('\n').filter(closed), keys = new Set()
-  for (const l of all) { const m = /^\\(?:citation|bibcite)\{([^}]*)\}/.exec(l); if (m) for (const k of m[1].split(',')) keys.add(k.trim()) }
-  return all.filter(l => { const m = /^\\([A-Za-z@]+)\{([^{}]*)\}/.exec(l); return !!m && m[1] !== 'citation' && m[1] !== 'newlabel' && keys.has(m[2].trim()) }).join('\n')
-}
-/** a compile's references as a draft is given them: its citation lines, its labels (\newlabel), its bibliography */
-const referencesOf = o => ({ cites: citationLines(o.aux), labels: auxLines(o.aux, 'newlabel'), bbl: o.bbl ?? null })
 /** the lists a pass writes at its end from an aux's \@writefile{<ext>}{<entry>} lines (LaTeX's \enddocument), by
  *  extension: \tableofcontents's toc, \listoffigures' lof, \listoftables' lot, any list a package keeps so (backref's
  *  brf) — each line's entry, in order */
@@ -365,11 +338,4 @@ function unitLines(raw, patched, out, main, skip) {
   }
   return found
 }
-
-/** the units a translation into `lang` leaves as they are: the names a table holds (nameCells), and the author block's
- *  names and places where the target writes them as the paper does (translate/kept.mjs authorsTranslated) */
-export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : new Set([...paper.kept, ...paper.units.filter(inAuthorBlock)]))
-
-/** PIPELINE_VERSION, what the units are (docs/PDF-READER.md §18): defined in versions.mjs, which the readers load without this
- *  module, and re-exported here for the server's callers */
-export { PIPELINE_VERSION } from '../../../../src/pdf-reader/engine/pipeline/versions.mjs'
+export { auxLines, closed }

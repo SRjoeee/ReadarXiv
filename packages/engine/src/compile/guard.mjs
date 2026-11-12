@@ -11,11 +11,11 @@
 // An original module (no port statement). It imports the engine's own modules alone, by relative path, and no node:
 // specifier: the TeX page's host runs it in a browser.
 import { whyText } from '../instrument/format.mjs'
-import { isMemoryError } from '@readarxiv/engine'
-import { lastTexLog, latin1, latin1Bytes, texText } from '../../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { isMemoryError } from '../memory.mjs'
+import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { END_TEX } from './tex.mjs'
-import { duplicatesIn } from '../../../../src/pdf-reader/engine/layout/marks.mjs'
+import { duplicatesIn } from '../marks/marks.mjs'
 
 const isLetter = c => (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 64
 /** the environments TeX reads verbatim, whose braces are no group: their text is the paper's either way, skipped alike */

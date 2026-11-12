@@ -1,7 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { commandParams } from '@/pdf-reader/engine/rules/arg-roles.mjs'
+// @ts-expect-error: the moved JavaScript (packages/engine/src/source/arg-roles.mjs) has no declaration in the package; its old path, which nothing
+// else imported, is gone
+import { commandParams } from '../../packages/engine/src/source/arg-roles.mjs'
 
 // Plain TeX's line boxes, LaTeX's own (ltplain.dtx): \line is \hb@xt@\hsize, \centerline#1 \line{\hss#1\hss}, \leftline#1
 // \line{#1\hss}, \rightline#1 \line{\hss#1}. Their argument is what the page shows, a box's content as \mbox's is

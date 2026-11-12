@@ -15,6 +15,7 @@ export const PACKAGES_IMPORTS = Object.freeze({
   '@readarxiv/engine/today/marks/': '/packages/engine/src/marks/',
   '@readarxiv/engine/today/own/': '/packages/engine/src/own/',
   '@readarxiv/engine/today/instrument/': '/packages/engine/src/instrument/',
+  '@readarxiv/engine/today/compile/': '/packages/engine/src/compile/',
   '@readarxiv/format': '/packages/format/src/index.ts',
   '@readarxiv/text': '/packages/text/src/index.ts',
   zod: '/zod/index.js',

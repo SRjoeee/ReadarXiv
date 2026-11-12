@@ -712,7 +712,7 @@ describe("the original's canvas with no copy kept (openProto copy: false): read 
 describe('the door reaches no server-only module', () => {
   const READER_NAMES = new Set(['isMemoryError', 'ALLOCATION_FAILED', 'BASE_KINDS', 'countOf', 'pagesOf', 'rangesOf', 'DELTA_MAX_BYTES', 'DELTA_MAX_SHARE', 'DELTA_OBJECTS_MAX', 'DELTA_WHYS', 'REPLACED_MAX', 'deltaSection', 'replacedWhy', 'UNHIDDEN', 'UNHIDDEN_MAX', 'WRAP_STATS', 'wrapWhy', 'OBJECT_MAX', 'startxrefOf', 'pageInk', 'GLYPHS_PAGE', 'BOXES_PAGE', 'OPS_CAP', 'NO_FILL', 'unreadOf', 'regionMask', 'packGlyphs', 'PICTURE_START', 'PICTURE_END', 'Glyph', 'InkPoint', 'PackedGlyphs', 'outlineBox', 'outlineKey', 'outlineTable', 'readOutlines'])
   it('walks every module reader.mjs imports and re-exports: none of the server\'s, no node: specifier, no package but zod, in rules/ alone', () => {
-    const SERVER = ['pipeline/live.mjs', 'layout/wrap-final.mjs', 'layout/addon.mjs', 'layout/make.mjs', 'layout/marks.mjs', 'layout/carry.mjs', 'layer/check.mjs'].map(f => resolve('src/pdf-reader/engine', f)).concat(['marks/marks.mjs', 'own/own.mjs'].map(f => resolve('packages/engine/src', f)))
+    const SERVER = ['pipeline/live.mjs', 'layout/wrap-final.mjs', 'layout/addon.mjs', 'layout/make.mjs', 'layout/marks.mjs', 'layout/carry.mjs', 'layer/check.mjs'].map(f => resolve('src/pdf-reader/engine', f)).concat(['marks/marks.mjs', 'own/own.mjs', 'compile/live.mjs'].map(f => resolve('packages/engine/src', f)))
     // (static import and export … from, relative and the repository's @/ alias; a module of the alias is TypeScript; and a
     // transition path of the front half moved into the engine package, followed to the module, which is the engine's own code)
     const TRANSITION = '@readarxiv/engine/today/'

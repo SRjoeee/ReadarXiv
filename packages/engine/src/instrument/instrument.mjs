@@ -14,16 +14,23 @@
 // drawn in the target's word, never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
-import { boxedAlignOf, framesOf, groupFacts, holdsLetter, linkTargetOf, ownersOf, readAlign, readBoxAlign, readPdf, readRefNames, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
-import { classOf, followsOf, headEnd, INK_ANY, leadStep, readColours, readSkipProbe, refKeyOf, refKeysOf } from '../../../../src/pdf-reader/engine/layout/marks.mjs'
-import { ownOf } from '../../../../src/pdf-reader/engine/layout/own.mjs'
-import { READ_ALONE, regionsOf, WANT } from '../../../../src/pdf-reader/engine/layout/stream.mjs'
-import { BACKREF_LIST, lastTexLog, startOf } from '../../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { boxedAlignOf, framesOf, readAlign, readBoxAlign, readRefNames, readSkips } from '../marks/channels.ts'
+import { groupFacts } from '../marks/faces.ts'
+import { holdsLetter } from '../locate/figure-lines.ts'
+import { linkTargetOf } from '../locate/ink.ts'
+import { ownersOf, ROLE } from '../instrument.ts'
+import { readPdf } from '../read.ts'
+import { runIns } from '../marks/run-ins.ts'
+import { unitId } from '@readarxiv/format'
+import { classOf, followsOf, headEnd, INK_ANY, leadStep, readColours, readSkipProbe, refKeyOf, refKeysOf } from '../marks/marks.mjs'
+import { ownOf } from '../own/own.mjs'
+import { READ_ALONE, regionsOf, WANT } from '../own/stream.mjs'
+import { BACKREF_LIST, lastTexLog, startOf } from '../source/latex-front.mjs'
 import { bundleUnitsOf } from './units.mjs'
 import { phClass, texToText } from './layer1.mjs'
-import { textPieceOf } from '../../../../src/pdf-reader/engine/rules/text-piece.mjs'
-import { symbolText } from '../../../../src/pdf-reader/engine/rules/text-symbols.mjs'
-import { displayStop, isInkless } from '../../../../src/pdf-reader/engine/translate/mt.mjs'
+import { textPieceOf } from '../source/text-piece.mjs'
+import { symbolText } from '../source/text-symbols.mjs'
+import { displayStop, isInkless } from './mt.mjs'
 
 const UTF8 = new TextDecoder('utf-8')
 /** a unit's start point and end point (MARK_DEF's `<i>s`/`<i>e`, a heading's `h<i>…`, a cell's `t<i>…`), by unit index */

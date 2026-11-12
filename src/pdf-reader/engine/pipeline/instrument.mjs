@@ -1,0 +1,3 @@
+// Moved whole into the engine package (packages/engine/src/instrument/instrument.mjs); this path re-exports it through its transition
+// path for what still imports it here. The cut-over deletes the path and the package's transition exports.
+export { unicodeOf, contentOf, passThroughOf, switchesOf, fieldFacesOf, passedOf, piecesOf, textGlyphsOf, marksOf, glueOf, FORCED_BREAK, elementKindOf, isTie, noteOf, commandOf, spansOf, classesOf, glyphPiecesOf, placesOf, inklessPieces, boundedEmpty, tailInkOf, splitInkOf, unmarkedInkOf, outsidePieces, textsOf, nameGroupOf, unitFactsOf, decoratedCellsOf, instrumentOf } from '@readarxiv/engine/today/instrument/instrument.mjs'

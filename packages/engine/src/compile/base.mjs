@@ -14,7 +14,7 @@
 //    date, their XMP the time of the rewrite).
 // An original module (no port statement). It imports the memory-class test alone: a host's PDF.js documents are read through
 // their own methods.
-import { isMemoryError } from '@readarxiv/engine'
+import { isMemoryError } from '../memory.mjs'
 
 /** a mark's place in two compiles of one page is the same within this, PDF units (the design's 0.01 pt) */
 export const MARK_TOL = 0.01

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { LAYOUT_CLASSES, NAMES_TEX } from '@/pdf-reader/engine/layout/marks.mjs'
-import { paperParams, readArgs, textless } from '@/pdf-reader/engine/rules/arg-roles.mjs'
+// @ts-expect-error: the moved JavaScript (packages/engine/src/source/arg-roles.mjs) has no declaration in the package; its old path, which nothing
+// else imported, is gone
+import { paperParams, readArgs, textless } from '../../packages/engine/src/source/arg-roles.mjs'
 
 // A unit, and a mark, are made only of text TeX typesets where it stands: an argument TeX reads as syntax — a length or
 // a number, a key, a label or a file name, a loop's variables and list — is never walked as text and never takes a mark.
@@ -28,7 +30,7 @@ describe('a value in TeX\'s own syntax is never a command that reads arguments o
     const params = paperParams(name, null)
     if (!params) throw new Error(`no parameters for ${name}`)
     const r = readArgs(src, 0, params)
-    return r.complete ? r.args.map(a => src.slice(a.start, a.end).trim()) : null
+    return r.complete ? r.args.map((a: { start: number; end: number }) => src.slice(a.start, a.end).trim()) : null
   }
   it('\\hrule\\n\\vspace{0.5mm}: the rule takes no dimension, the space is its own call (2610.21765)', () => {
     expect(read('\n\\vspace{0.5mm}', 'hrule')).toEqual([])
