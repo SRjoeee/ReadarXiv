@@ -32,7 +32,6 @@ import { HUNK, hunkName } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
 import { type Instrument, type InstrumentUnit, ROLE, type TexFrame } from '../instrument.ts'
-import { TEXT_SYMBOLS } from '../source/tables.ts'
 import {
   bracketsOf,
   CENTRE,
@@ -53,6 +52,8 @@ import {
 } from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
+import { placeUnits } from './members.ts'
+import { empty } from './place.ts'
 import { groupLettersOf, groupStyleOf, hasScopes, namesFace } from './group-style.ts'
 import { groupStyleOf as commandStyleOf, inkOf } from './ink.ts'
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
@@ -64,6 +65,7 @@ import {
   CALL,
   eachBetweenPaired,
   FREE,
+  field,
   HELD,
   INKED_CLASSES,
   type Located,
@@ -83,8 +85,6 @@ export { eachBetweenPaired, FREE, HELD, type Located, type LocateOptions, type M
 export type { Place } from './work.ts'
 
 /** an element kind whose glyphs are a reading of it: its text is stated */
-/** a babel name's end point on B (marks.mjs NAMES_TEX: `n<occurrence>.<key>.e`) */
-const NAME_END = /^n\d+\.[a-z]{1,16}\.e$/
 const TEXT_KINDS = new Set(['cite', 'ref', 'eqref', 'url', 'number', 'footnote', 'macro'])
 /** the kind of a member of the author block's units set away from the block under the title (author-block.ts): the text it is
  *  there, of no toggle (the reader's and the content classes' tables name it nowhere: always translated) */
@@ -111,13 +111,6 @@ function texOf(list: readonly Piece[]): string {
     else if (p.t === 'span') out += (p.open ?? '') + texOf(p.content) + (p.close ?? '')
     else out += p.pre + p.post
   return out
-}
-
-/** a LaTeX text symbol's character (\S, \%, alone or before `{}`), by the kernel's table (source/tables.ts TEXT_SYMBOLS, today's
- *  rules/text-symbols.mjs), read here so that the back half needs nothing of the front half but the table */
-const symbolText = (src: string): string | null => {
-  const m = /^(\\(?:[A-Za-z]+|[%&#$_{}]))(?:\{\})?$/.exec(src)
-  return m && Object.hasOwn(TEXT_SYMBOLS, m[1] as string) ? (TEXT_SYMBOLS[m[1] as string] as string) : null
 }
 
 const mostOf = <T>(xs: Iterable<T>): T | undefined => {
@@ -151,10 +144,6 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     gA,
     gB,
     atA,
-    atB,
-    glyphsOf,
-    boxesOf,
-    turnedOf,
     setA,
     fixedFaces,
     framesA,
@@ -183,417 +172,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   const noteUnlocated = (c: string) => {
     stats.unlocated[c] = (stats.unlocated[c] ?? 0) + 1
   }
-  const empty = (u: number, kind: string, id: string): Member => ({
-    ord: members.length,
-    unit: u,
-    id,
-    kind,
-    located: false,
-    fixed: false,
-    kept: false,
-    figure: false,
-    text: [],
-    label: [],
-    els: new Map(),
-    textBoxes: [],
-    elBoxes: new Map(),
-    elBoxesB: new Map(),
-    turned: [],
-    lines: [],
-    elements: [],
-    style: { role: 'serif', size: 10 },
-    align: 'j',
-    lead: 12,
-    room: { below: 0 },
-    pages: [],
-    bFirst: -1,
-    bLast: -1,
-    read: [],
-    lineGlyphs: [],
-  })
-
-  /** the first element of unit u whose ink TeX's points show it set and its unit's ownership gives none of: of a class drawn
-   *  from its ink (INKED_CLASSES; a paper's own macro aside, which the typesetter leaves unproven where it has neither ink nor
-   *  text), both its points stated with a glyph of B between them, none of its own; a text macro whose glyphs there are its
-   *  unit's text is found as that text (its El.text, the reading between its points). `element not found`, null where none is */
-  const notFound = (u: number, list: readonly number[], boxes: readonly [number, number][]): string | null => {
-    const unit = ins.units[u]!
-    if (!unit.classes?.length) return null
-    const found = new Set<number>()
-    for (const b of list) if (roleB[b] === ROLE.element && (pieceB[b] as number) >= 0) found.add(pieceB[b] as number)
-    for (const [p, x] of boxes)
-      if (ins.boxes[p]!.role[x] === ROLE.element && (ins.boxes[p]!.piece[x] as number) >= 0)
-        found.add(ins.boxes[p]!.piece[x] as number)
-    const classes = new Map(unit.classes)
-    for (const [id, piece] of piecesOf(unit.content)) {
-      const c = classes.get(id)
-      if (piece.t !== 'el' || !c || !INKED_CLASSES.has(c.cls) || c.unknown || found.has(Number(id))) continue
-      const span = placeSpan.get(`${u}|${id}`)
-      if (!span || !(span[0] < span[1]) || emptyPiece.has(`${u}|${id}`)) continue
-      let set = false
-      let text = false
-      for (let b = span[0]; b < span[1]; b++) {
-        if (!isInk(gB(b))) continue
-        set = true
-        if (unitB[b] === u && roleB[b] === ROLE.text) text = true
-      }
-      if (!set || ((c.cls === 'macro' || c.cls === 'umacro') && text)) continue
-      return 'element not found'
-    }
-    return null
-  }
-  /** the letters unit u's text may hold: those its text pieces write, and those of the pieces whose glyphs its ownership gives
-   *  its text, as TeX's facts state them: a text symbol's character; a text macro's, its unit's text glyphs between its two
-   *  points on B (the reading El.text takes), else the text the probe showed it sets */
-  const writtenOf = (u: number): number => {
-    const unit = ins.units[u]!
-    const classes = new Map(unit.classes ?? [])
-    let n = 0
-    const walk = (ps: readonly Piece[]) => {
-      for (const p of ps) {
-        if (p.t === 'text') n += lettersIn(p.s)
-        else if (p.t === 'span') walk(p.content)
-        else if (p.t === 'el') {
-          const c = classes.get(p.id)
-          n += lettersIn(symbolText(p.src) ?? c?.sym?.[0] ?? '')
-          if (c?.cls !== 'macro' && c?.cls !== 'umacro') continue
-          const span = placeSpan.get(`${u}|${p.id}`)
-          let between = 0
-          if (span)
-            for (let b = span[0]; b < span[1]; b++)
-              if (unitB[b] === u && roleB[b] === ROLE.text) between += lettersIn(gB(b).u)
-          n += between || lettersIn(c.text ?? '')
-        }
-      }
-    }
-    walk(unit.content)
-    return n
-  }
-
-  /** one placement of unit u from its B glyphs `list` and boxes `boxes` */
-  const place = (
-    u: number,
-    list: number[],
-    boxes: [number, number][],
-    name?: string,
-    turnedB: [number, number][] = [],
-  ): Member => {
-    const unit = ins.units[u]!
-    const mem = empty(u, name !== undefined ? 'name' : unit.kind, unit.id)
-    if (name !== undefined) mem.name = name
-    mem.fixed = !!unit.fixed
-    mem.kept = !!unit.kept
-    mem.figure = !!unit.figure
-    if (unit.figure?.dir) mem.dir = unit.figure.dir
-    if (list.length) {
-      mem.bFirst = list[0] as number
-      mem.bLast = list.at(-1) as number
-    }
-    mem.align = unit.align ?? 'j'
-    // (no glyph of its own: nothing a translation replaces and no line to lay it on. Where it owns rules or images alone, they
-    // stay A's ink, in no group, as a kept element's: `no text`)
-    if (!list.length && !turnedB.length) {
-      mem.cause = unit.why ?? (boxes.length ? 'no text' : 'no ink')
-      return mem
-    }
-    let bad: string | null = null
-    const aIdx: number[] = []
-    // (B's glyphs with no partner inside the unit, between two of its own whose partners A sets one right after the other:
-    // glyphs our compile set where arXiv's set nothing (1810.04805v2 u325: our tree sets the .bbl's UTF-8 quotes round "Cloze
-    // procedure", arXiv's 2016 tree read their bytes as characters its OT1 font has no glyph for, TeX's "Missing character",
-    // and set none). They are no ink of A: its ink of the unit is the glyphs A set, whole, nothing between them another's or
-    // none's, and the unit is located from them; its translation reads its source, those characters with it. A run at the
-    // unit's start or end, or one whose neighbours' partners stand apart on A, is no such statement (a line A set elsewhere
-    // that no block move paired): a content difference, the unit the original's, as before)
-    const prevPaired = new Int32Array(list.length).fill(-1)
-    for (let i = 0, last = -1; i < list.length; i++) {
-      prevPaired[i] = last
-      if ((m.bToA[list[i] as number] as number) >= 0) last = i
-    }
-    let nextPaired = -1
-    for (let i = list.length - 1; i >= 0; i--) {
-      const b = list[i] as number
-      const a = m.bToA[b] as number
-      if (a >= 0) {
-        aIdx.push(a)
-        nextPaired = i
-        continue
-      }
-      if (m.hunkB[b] === HUNK.hyphen || m.offpageB[b]) continue
-      const pv = prevPaired[i] as number
-      if (pv >= 0 && nextPaired >= 0) {
-        const ap = m.bToA[list[pv] as number] as number
-        const an = m.bToA[list[nextPaired] as number] as number
-        if (an === ap + 1) continue
-      }
-      bad = `content difference: ${hunkName(m.hunkB[b] as number) === 'none' ? 'bonly' : hunkName(m.hunkB[b] as number)}`
-    }
-    aIdx.reverse()
-    const boxPartners: [ap: number, ai: number, p: number, x: number][] = []
-    for (const [p, x] of boxes) {
-      const kind = B.pages[p]!.kinds[x] as number
-      const ap = m.boxPage[p]?.[x] ?? 0
-      if (!(isPath(kind) || isImage(kind)) || ap === 0) {
-        bad ??= 'content difference: a rule or image with no partner'
-        continue
-      }
-      boxPartners.push([ap, m.boxIndex[p]![x] as number, p, x])
-    }
-    const turnedA: [number, number][] = []
-    let turnedSame = true
-    for (const [p, j] of turnedB) {
-      const ap = m.turnedPage[p]?.[j] ?? 0
-      if (ap === 0) {
-        bad ??= 'content difference: a turned glyph with no partner'
-        continue
-      }
-      const aj = m.turnedIndex[p]![j] as number
-      turnedA.push([ap, aj])
-      const tb = B.pages[p]!.turned![j]!
-      const ta = inkA.pages[ap - 1]!.turned![aj]!
-      if (ap !== p + 1 || Math.abs(ta.ox - tb.ox) > 0.01 || Math.abs(ta.oy - tb.oy) > 0.01) turnedSame = false
-    }
-    // its A ink by role
-    const roleOfB = (b: number): [number, number] => [roleB[b] as number, pieceB[b] as number]
-    const roleAt = new Map<number, [number, number]>()
-    for (const b of list) {
-      const a = m.bToA[b] as number
-      if (a >= 0) roleAt.set(a, roleOfB(b))
-    }
-    // (A's glyphs with no partner inside its span, between two matched glyphs of its own: its ink only where the alignment
-    // shows they are its text. That is a hunk align classes `hyphen` (A's glyphs there spell B's once line-end hyphens are out:
-    // a word arXiv's page broke at a line end where our compile did not) whose B side holds the unit's glyphs alone, or none.
-    // A glyph drawn inside a form XObject between glyphs that are not is an included figure's own text, no glyph of the unit's
-    // text: it stays unclaimed (born.ts gives it to a figure text). Any other is text A sets inside the unit that our compile
-    // does not: a content difference, and the unit stays the original's (as for B's glyphs with no partner; no fuzzy rescue).
-    // A unit that stays the original's holds those glyphs as A's ink (HELD): they are no unit born on A)
-    const claims: [number, [number, number]][] = []
-    if (aIdx.length) {
-      const sorted = [...aIdx].sort((x, y) => x - y)
-      const lo = sorted[0] as number
-      const hi = sorted.at(-1) as number
-      // (one walk, eachBetweenPaired's; the B range between the two partners read once for a run of unpaired glyphs)
-      let run = -1
-      let between: boolean | undefined
-      eachBetweenPaired(
-        lo,
-        hi,
-        (a) => (m.aToB[a] as number) >= 0,
-        (a, pv, nx) => {
-          if (nx !== run) {
-            run = nx
-            between = undefined
-          }
-          if (m.offpageA[a] || (claimedA[a] as number) !== FREE) return
-          const bp = m.aToB[pv] as number
-          const bn = m.aToB[nx] as number
-          if (unitB[bp] !== u || unitB[bn] !== u) return
-          // (B's glyphs between the two partners: none with no partner of another unit's)
-          if (m.hunkA[a] === HUNK.hyphen && between === undefined) {
-            between = true
-            for (let b = Math.min(bp, bn) + 1; between && b < Math.max(bp, bn); b++)
-              if ((m.bToA[b] as number) < 0 && unitB[b] !== u) between = false
-          }
-          const own = m.hunkA[a] === HUNK.hyphen && between === true
-          if (own) {
-            const rp = roleOfB(bp)
-            const rn = roleOfB(bn)
-            claims.push([a, rp[0] === rn[0] && rp[1] === rn[1] ? rp : [ROLE.text, -1]])
-            return
-          }
-          if (gA(a).form && !gA(pv).form && !gA(nx).form) return
-          claims.push([a, [ROLE.none, -1]])
-          const h = hunkName(m.hunkA[a] as number)
-          bad ??= `content difference: ${h === 'none' || h === 'hyphen' ? 'aonly' : h}`
-        },
-      )
-    }
-    // (an element TeX set ink for between its two points that its unit's ownership gives none of, glyph or box: its ink is not
-    // found, which is no statement that TeX set none (today's LOST, make.mjs, against its EMPTY: both its points stated and
-    // nothing between them, or TeX's probe said it sets none). Read as none, it is drawn as nothing while its ink is erased with
-    // the unit's text or stays under the translation. A text macro whose glyphs there are the unit's text is found as that text.
-    // The unit stays the original's)
-    if (!bad) bad = notFound(u, list, boxes)
-    if (bad || (!aIdx.length && !turnedA.length)) {
-      for (const [a] of claims) claimedA[a] = HELD
-      mem.cause = bad ?? 'no ink'
-      return mem
-    }
-    for (const [a, r] of claims) roleAt.set(a, r)
-    mem.located = true
-    mem.turned = turnedA
-    if (!aIdx.length) {
-      mem.place = turnedSame ? 'same' : 'shifted'
-      return mem
-    }
-    // (an element's glyph of no piece is no glyph of the unit's text: the instrument's u<id>.p glyphs no placeholder's points stand
-    // round, which no El states. They stay A's ink where they stand (HELD), and so does a label they cut from the unit's text,
-    // the glyphs of no unit TeX set between them: 2610.37818v1 p14, sub-caption (a), which has no unit, given to (b)'s, "(a)" its
-    // label and "Dark rim band" an element of no piece; read as (b)'s text its line ran over (a), (a)'s English was erased with
-    // nothing drawn there, and "(a)" drawn before "(b)" (the checkpoint's measure-4))
-    const sortedRoles = [...roleAt].sort((x, y) => x[0] - y[0])
-    const loose = sortedRoles.filter(([, [role, k]]) => role === ROLE.element && k < 0).map(([a]) => a)
-    if (loose.length) {
-      const firstText = sortedRoles.find(([, [role]]) => role === ROLE.text)?.[0] ?? Number.POSITIVE_INFINITY
-      const cut = (a: number) => loose.some((x) => x > a && x < firstText)
-      for (const [a, [role, k]] of sortedRoles)
-        if ((role === ROLE.element && k < 0) || (role === ROLE.label && cut(a))) {
-          claimedA[a] = HELD
-          roleAt.delete(a)
-        }
-    }
-    // (its text no more letters than its source writes: TeX sets a text's letters as written, and the ownership gives a unit's
-    // text the glyphs of its text pieces, its text symbols and its text macros alone. Glyphs past them are another piece's
-    // ink read as the text, which its text group would erase and no translation draws again: 2608.25210v2 p7's Algorithm 1,
-    // its formulas' and keywords' glyphs claimed as its text (200 letters where its text pieces write 6), erased with its 21
-    // lines and one drawn. The unit stays the original's. A count, no threshold: fewer is TeX's (a ligature's one glyph
-    // for its letters, a word the class does not print), more is never)
-    if (name === undefined) {
-      let claimed = 0
-      for (const [a, [role, k]] of roleAt)
-        if (role !== ROLE.label && !(role === ROLE.element && k >= 0)) claimed += lettersIn(gA(a).u)
-      const written = writtenOf(u)
-      if (claimed > written) {
-        for (const [a] of claims) claimedA[a] = HELD
-        mem.located = false
-        mem.turned = []
-        mem.cause = 'text past its source'
-        return mem
-      }
-    }
-    for (const [a, [role, k]] of [...roleAt].sort((x, y) => x[0] - y[0])) {
-      claimedA[a] = mem.ord
-      if (role === ROLE.label) mem.label.push(a)
-      else if (role === ROLE.element && k >= 0) {
-        const id = String(k)
-        const l = mem.els.get(id)
-        if (l) l.push(a)
-        else mem.els.set(id, [a])
-      } else mem.text.push(a)
-    }
-    for (const [ap, ai, p, x] of boxPartners) {
-      const role = ins.boxes[p]!.role[x] as number
-      const k = ins.boxes[p]!.piece[x] as number
-      if (role === ROLE.element && k >= 0) {
-        const id = String(k)
-        const l = mem.elBoxes.get(id)
-        if (l) l.push([ap, ai])
-        else mem.elBoxes.set(id, [[ap, ai]])
-        const lb = mem.elBoxesB.get(id)
-        if (lb) lb.push([p, x])
-        else mem.elBoxesB.set(id, [[p, x]])
-      } else mem.textBoxes.push([ap, ai])
-    }
-    // where it stands on A against B
-    {
-      const own = list.filter((b) => (m.bToA[b] as number) >= 0)
-      const linesB = cutLines(own, atB)
-      const lineOf = new Map<number, number>()
-      linesB.forEach((l, q) => {
-        for (const b of l.gs) lineOf.set(b, q)
-      })
-      let same = true
-      let rigid = true
-      const off = new Map<number, [number, number, number]>()
-      for (const b of own) {
-        const a = m.bToA[b] as number
-        const g = gB(b)
-        const h = gA(a)
-        const dx = h.x0 - g.x0
-        const dy = h.y - g.y
-        const pg = (pageA[a] as number) - (pageB[b] as number)
-        if (pg !== 0 || Math.max(Math.abs(dx), Math.abs(dy)) > 0.01) same = false
-        const q = lineOf.get(b)
-        if (q === undefined) continue
-        const o0 = off.get(q)
-        if (!o0) off.set(q, [dx, dy, pg])
-        else if (o0[2] !== pg || Math.abs(o0[0] - dx) > 0.01 || Math.abs(o0[1] - dy) > 0.01) rigid = false
-      }
-      const linesA = cutLines(
-        own.map((b) => m.bToA[b] as number),
-        atA,
-      )
-      const rebroken = linesA.length !== linesB.length || linesA.some((l, q) => l.gs.length !== linesB[q]?.gs.length)
-      mem.place = rebroken ? 'rebroken' : same ? 'same' : rigid ? 'shifted' : 'respaced'
-    }
-    return mem
-  }
-
-  // ---- an author block's unit TeX set inside a paragraph that sets another unit again: a template's paragraph, made of the
-  // paper's own front matter (ACM's reference format: the authors, the year, the title a second time), whose text is the page's,
-  // read and translated as one unit (ink.ts), never cut by the unit. 2610.22065v1 p1: its block under the title written out by
-  // the paper, its \author units set in the reference format alone, each name a member: the paragraph laid on the original's
-  // rows, never reflowing (its first line ended at x 190, TeX's at 294). A paragraph sets a unit again where a start point of
-  // the unit's stands in it after an end point of the unit's in B's stream (its setting begun again: the copy, own.mjs MR 3's
-  // first occurrence the unit's own); the paragraph from the last end TeX states before the unit's first glyph to the first
-  // after its last (Instrument.tex.paragraphEnds). Where TeX states no paragraph ends, nothing is read. Not a name's own setting:
-  // a block whose units TeX set twice has them its first setting's, the block's (2402.10294v1's ACM names)
-  const released = new Set<number>()
-  {
-    const paraEnds: number[] = []
-    ;(ins.tex.paragraphEnds ?? []).forEach((l, p) => {
-      for (const g of l) paraEnds.push((m.offB[p] as number) + g)
-    })
-    paraEnds.sort((x, y) => x - y)
-    const ended = new Set<string>()
-    const again: number[] = []
-    B.pages.forEach((pg, p) => {
-      for (const x of pg.points ?? []) {
-        const k = MARK_KEY.exec(x.name)
-        if (!k) continue
-        if (k[2] === 'e') ended.add(k[1]!)
-        else if (ended.has(k[1]!)) again.push((m.offB[p] as number) + x.glyph)
-      }
-    })
-    if (again.length && paraEnds.length)
-      for (let u = 0; u < ins.units.length; u++) {
-        const list = glyphsOf.get(u)
-        if (!AUTHOR_KINDS.has(ins.units[u]!.kind) || ins.units[u]!.name !== undefined || !list?.length) continue
-        let from = Number.NEGATIVE_INFINITY
-        for (const e of paraEnds) if (e <= (list[0] as number)) from = e
-        const to = paraEnds.find((e) => e > (list.at(-1) as number)) ?? Number.POSITIVE_INFINITY
-        if (again.some((g) => g >= from && g < to)) released.add(u)
-      }
-  }
-
-  // ---- the instrument's units, a name's every occurrence its own member
-  for (let u = 0; u < ins.units.length; u++) {
-    const unit = ins.units[u]!
-    const list = glyphsOf.get(u) ?? []
-    const boxes = boxesOf.get(u) ?? []
-    if (released.has(u)) {
-      const mem = empty(u, unit.kind, unit.id)
-      mem.cause = 'set in a paragraph that sets a unit again'
-      members.push(mem)
-      continue
-    }
-    if (unit.name === undefined) {
-      members.push(place(u, list, boxes, undefined, turnedOf.get(u) ?? []))
-      continue
-    }
-    // (a name's occurrences: each maximal run of its glyphs in B's stream on one page)
-    const runs: number[][] = []
-    for (const b of list) {
-      const last = runs.at(-1)
-      if (last && last.at(-1) === b - 1 && pageB[b] === pageB[b - 1]) last.push(b)
-      else runs.push([b])
-    }
-    if (!runs.length) members.push(place(u, [], []))
-    for (const r of runs) {
-      const mem = place(u, r, [], unit.name)
-      // (its counter: its glyphs after its end point, which stands inside the run)
-      const p = (pageB[r[0] as number] as number) - 1
-      const o = m.offB[p] as number
-      const end = (B.pages[p]?.points ?? []).find(
-        (x) => NAME_END.test(x.name) && o + x.glyph > (r[0] as number) && o + x.glyph <= (r.at(-1) as number),
-      )
-      if (end) {
-        const after = r.filter((b) => b >= o + end.glyph && isInk(gB(b))).map((b) => m.bToA[b] as number)
-        if (after.length && after.every((a) => a >= 0)) mem.counterA = after
-      }
-      members.push(mem)
-    }
-  }
+  placeUnits(w)
+  const released = field(w, 'released')
 
   // ---- a member's trail: the ink TeX set right after its last glyph, glued to it on its row, that no unit owns (a class's marks
   // after a name and its separator: Meta FAIR's \authorformat sets `#2$^{#1}$` and \addtolist ", " after each \author's text; the
@@ -1018,7 +598,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const u = units.length
       units.push(x.unit)
       if (x.els) for (const id of piecesOf(x.unit.content).keys()) if (!x.els.has(id)) jointPiece.add(`${u}|${id}`)
-      const mem = empty(u, x.unit.kind, x.unit.id)
+      const mem = empty(w, u, x.unit.kind, x.unit.id)
       mem.fixed = !!x.unit.fixed
       mem.kept = !!x.unit.kept
       mem.figure = !!x.unit.figure
@@ -1089,7 +669,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // ---- the units born on A, from the glyphs B never printed
   const born = new Map<number, { kind: string; content: Piece[] }>()
   for (const b of bornOf(inkA, m, claimedA, pageA, setA)) {
-    const mem = empty(-1, b.kind, unitId(b.kind, b.content))
+    const mem = empty(w, -1, b.kind, unitId(b.kind, b.content))
     mem.located = true
     // (text inside an included figure, a form XObject: a figure's text, which the wrap writes in its form, as today's figure units)
     mem.figure = b.kind === 'inkfigures'
@@ -2519,9 +2099,6 @@ export function urlBreaks(gs: readonly DocGlyph[], copy: string): [number, numbe
   }
   return out
 }
-
-/** the same, its unit's key and whether it starts or ends a setting */
-const MARK_KEY = /^([ht]?\d+)([se])$/
 
 /** how far apart two baselines are told (PDF units): a line's is stated to a hundredth, its glyphs' on A as the PDF wrote them */
 const ON_BASE = 0.05
