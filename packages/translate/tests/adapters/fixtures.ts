@@ -251,6 +251,17 @@ export const SOURCE_LINES: UnitIn = unit(
   ],
   true,
 )
+/** an element glued to the words of a style pair after it, and one glued to a style pair's words before it (the tags reading
+ *  takes the reply's white space back past the wire's own pair tags: text.ts glueOf) */
+export const GLUED_PAST: UnitIn = unit('glued-past', [
+  t('Set to ('),
+  el('a', 'math'),
+  span('s', 'italic', [t('A34')]),
+  t(') and '),
+  span('w', 'italic', [t('word')]),
+  el('b', 'math'),
+  t(' rest.'),
+])
 export const MICROSOFT_UNITS: UnitIn[] = [
   ...UNITS,
   /* 17 */ BERT_ABSTRACT,
@@ -414,5 +425,11 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     raw: '数值<x id="1"/> <x id="2"/>，以及<x id="3"/><x id="4"/>成立（x7）。',
     taken: false,
     why: 'a string of the tokens’ form the text does not hold: the wire’s contract broken (tags.ts TOKEN_FORM)',
+  },
+  {
+    unit: 20,
+    raw: '设为（<x id="1"/><t id="2"> A34</t>）和<t id="3">单词 </t><x id="4"/> 其余。',
+    taken: true,
+    why: 'the white space beside a glued element taken back past the wire’s own pair tags (text.ts glueOf)',
   },
 ]

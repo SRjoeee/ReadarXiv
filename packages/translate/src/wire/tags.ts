@@ -325,15 +325,31 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
     afterOwn = false
     s = decode(s)
     if (afterGlued) s = s.replace(GLUED_LEAD, '')
-    afterGlued = false
+    // (past the wire's own pair tags: a glued element's next text may stand inside a pair it opens or after one it closes)
+    if (s0) afterGlued = false
     s = s.replace(INVISIBLE, '')
     if (s) toks.push({ t: 'text', s })
+  }
+  /** the white space a text ending right before an element takes back, where only the wire's own pair tags stand between */
+  const takeBackBefore = () => {
+    for (let j = toks.length - 1; j >= 0; j--) {
+      const t = toks[j] as Tok
+      if (t.t === 'open' || t.t === 'close') continue
+      if (t.t === 'text') {
+        t.s = t.s.replace(GLUED_SPACE, '')
+        if (!t.s) toks.splice(j, 1)
+      }
+      return
+    }
   }
   let last = 0
   for (const m of text.matchAll(new RegExp(TAG_RE.source, 'g'))) {
     const v = m[1] ?? m[2] ?? m[3] ?? m[7] ?? m[8] ?? m[9]
     const o = m[4] ?? m[5] ?? m[6]
-    push(text.slice(last, m.index), v !== undefined && plan.gluedBefore.has(Number(v)) ? GLUED_SPACE : null)
+    const between = text.slice(last, m.index)
+    const glued = v !== undefined && plan.gluedBefore.has(Number(v))
+    push(between, glued ? GLUED_SPACE : null)
+    if (glued && !between) takeBackBefore()
     last = (m.index ?? 0) + m[0].length
     if (v !== undefined) {
       const n = Number(v)
