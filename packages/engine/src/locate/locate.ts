@@ -22,11 +22,12 @@ import type { Mapping } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
 import type { Instrument, TexFrame } from '../instrument.ts'
-import { CENTRE, centredByBlock, END, sourceText, TRAIL } from './facts.ts'
+import { CENTRE, centredByBlock, END, TRAIL } from './facts.ts'
 import { factsOf } from './facts-pass.ts'
 import { keepArtefacts } from './artefacts.ts'
 import { lineGeometry } from './geometry.ts'
 import { placeUnits } from './members.ts'
+import { sentenceStarts } from './sentences.ts'
 import { unitsBornOnA, unitsMadeOnA } from './page-units.ts'
 import { claimTrails } from './trails.ts'
 import { isInk, r2 } from './lines.ts'
@@ -44,10 +45,8 @@ import {
   open,
   piecesOf,
   sameColumn,
-  standsOn,
   UNIT_MARK,
 } from './work.ts'
-import { bySentence, elementsOf, wordsOn } from './words.ts'
 
 export { eachBetweenPaired, FREE, HELD, type Located, type LocateOptions, type Member }
 export { urlBreaks } from './geometry.ts'
@@ -74,35 +73,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
 
   lineGeometry(w)
 
-  // ---- where a sentence may begin: each word of a running unit's projection at its first glyph on A (words.ts), a unit drawn
-  // with its own row (no echo of another's, no kept block, no babel name's occurrence, no figure text)
-  for (const mem of members) {
-    const unit = mem.unit >= 0 ? units[mem.unit] : undefined
-    const content = unit ? unit.content : born.get(mem.ord)?.content
-    if (!content || !mem.located || !mem.lines.length || mem.fixed || mem.figure || mem.dir || mem.name !== undefined)
-      continue
-    if (unit?.echo !== undefined || unit?.kept || !bySentence(mem.kind, !!unit?.figure)) continue
-    const lineOf = new Map<number, number>()
-    mem.lineGlyphs.forEach((gs, j) => {
-      for (const a of gs) lineOf.set(a, j)
-    })
-    const text = [...mem.text].sort((x, y) => x - y)
-    const words = wordsOn(content, text.map(gA), (i) => lineOf.get(text[i] as number) ?? -1, sourceText(content))
-    // (an element a sentence may begin with, where a row's start falls on it (its translator set it first in its sentence:
-    // "\method{} trains …", "\citet{x} proposes …"), placed at its ink's first box on A, its line and x0, as a word is; never a
-    // display (a block of its own) nor an element TeX set outside the unit's text (kept where it stands). Words alone, the left
-    // pane lit it with the sentence before, the start moved on past it: 556 of 2,148 starts of staging's rows, 2026-11-10)
-    const els = new Map(mem.elements)
-    for (const [o, id] of elementsOf(content)) {
-      const el = els.get(id)
-      const k = el?.ink[0]
-      if (!el || !k || el.kind === 'display' || el.keep) continue
-      const j = standsOn(mem.lines, k[0], k[2], k[4], k[5])
-      if (j >= 0) words.push([o, j, k[1]])
-    }
-    words.sort((a, b) => a[0] - b[0])
-    if (words.length) mem.words = words
-  }
+  sentenceStarts(w)
+
   // ---- a unit's end mark (docs/PDF-READER.md §18.52; the coordinator's ruling of 2026-11-12): what TeX pushed to the end of the
   // unit's last line after its text, amsthm's `\qed` (`\unskip\penalty9999\hbox{}\nobreak\hfill\quad\hbox{\qedsymbol}`, its
   // `\openbox` four rules, set by `\end{proof}` after the unit's end point), a class's or an author's mark after `\hfill`. It
