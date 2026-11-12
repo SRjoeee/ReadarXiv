@@ -32,7 +32,7 @@
 // is a delta over arXiv's PDF (lib/layer-cut.mjs `base: 'delta'`: one byte source, the original's, then the delta object and the tails;
 // no /api/v1/base), else as a layer over our whole base page (`full`, /api/v1/base by ranges): the states section asserts either.
 import { createHash } from 'node:crypto'
-import { mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import AxeBuilder from '@axe-core/playwright'
 import { FACES } from '../../src/pdf-reader/engine/rules/font-roles.mjs'
@@ -48,6 +48,9 @@ import { seedService } from './options-page.mjs'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const BUILD = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
+// a build of the rebuilt reader (AXT_READER=v2: the reader package's PDF.js files at its root) runs the rebuilt reader's checks,
+// which end the run
+if (existsSync(`${BUILD}/pdfjs`)) await import('./reader-v2.mjs')
 const EXT = `${HERE}.ext-reader`
 const SHOTS = `${HERE}.shots`
 

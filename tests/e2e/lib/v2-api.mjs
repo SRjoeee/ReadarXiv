@@ -34,7 +34,7 @@
 // `prepareMs` from its first open; and a fault on our server's every route, the static files included: a server error (5xx), the
 // connection reset, or no answer at all. It records every request (method, path and query, the headers, the body's text).
 import { createHash } from 'node:crypto'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { FORMATS, OpenAnswer, PaperDoc } from '../../../packages/format/src/index.ts'
@@ -103,19 +103,21 @@ export function v2Api({ fixtures = [loadFixture()], base = 'https://readarxiv.co
   let options = { prepared: new Set(fixtures.map(f => f.paper)), fault: null, prepareMs, failed: {}, refuse: null }
   const requests = []
 
-  /** the paper version's document as our server writes it (L5's PaperDoc, version 1) */
+  /** the paper version's document as our server writes it (format's PaperDoc, version 1). Its rev rises with every change a
+   *  reader can see: each open (s.rev) and the prepare's end */
   function docOf(f, version, s) {
     const pv = segOf(f.paper, version)
     // (nothing started: a refusal's document; else running until its time, then done)
     const state = s.preparedAt === null ? 'none' : now() >= s.preparedAt ? 'done' : 'running'
     const done = state === 'done'
     const failed = options.failed[f.paper] ?? null
-    if (failed) return { v: 1, pv, epoch: EPOCH, rev: s.rev, paper: f.paper, version, prepare: { attempt: 1, state: 'failed', why: failed, retryAt: null, at: s.openedAt, build: 'e2e', stage: null, units: [], html: false }, layer: null, targets: {} }
+    const rev = 2 * s.rev + (done || failed ? 1 : 0)
+    if (failed) return { v: 1, pv, epoch: EPOCH, rev, paper: f.paper, version, prepare: { attempt: 1, state: 'failed', why: failed, retryAt: null, at: s.openedAt, build: 'e2e', stage: null, units: [], html: false }, layer: null, targets: {} }
     return {
       v: 1,
       pv,
       epoch: EPOCH,
-      rev: s.rev,
+      rev,
       paper: f.paper,
       version,
       prepare: { attempt: state === 'none' ? 0 : 1, state, why: null, retryAt: null, at: s.openedAt, build: state === 'none' ? null : 'e2e', stage: state === 'running' ? 'compiling' : null, units: done ? f.units.map(u => refOf(f, u)) : [], html: null },

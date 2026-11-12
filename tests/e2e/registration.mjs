@@ -22,7 +22,7 @@
 // AXT_BASE=delta cuts the sample as a layer held as a delta over arXiv's PDF.
 // AXT_MEASURE=1 checks nothing and measures the copy instead, at the fit and at 100 %: each laid copy's render (ms, the median
 // of five) and the long tasks of the browser's own recopy after the zoom, a line a page (PDF-READER.md §11.8).
-import { readFileSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { FACES } from '../../src/pdf-reader/engine/rules/font-roles.mjs'
 import { copyWithGrants } from './ext-copy.mjs'
@@ -35,6 +35,9 @@ import { seedService } from './options-page.mjs'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const BUILD = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
+// a build of the rebuilt reader (AXT_READER=v2: the reader package's PDF.js files at its root) runs the rebuilt reader's
+// registration, which ends the run
+if (existsSync(`${BUILD}/pdfjs`)) await import('./registration-v2.mjs')
 const EXT = `${HERE}.ext-registration`
 /** the window: a laptop's (the owner's fit, 87 %, at a pixel ratio of 2) */
 const WINDOW = { width: 1512, height: 848 }
