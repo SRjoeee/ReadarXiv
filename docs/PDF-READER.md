@@ -6233,6 +6233,34 @@ its slot 3,537 -> 3,536 on the door's rows (2610.21098v1's re-broken lines, the 
 of 344 moves, 2608.25210v2-zh p9, a formula and the element right after it on one line, the line's other items 0.01 pt at most. A first build glued the control token after such an element (2608.06701v1
 p1: a page's fill threw, I6 caught it) and was corrected before it was committed: both sides must draw.
 
+### 18.68 The lab's differential reads a unit as arXiv prints it; the dump keys an element by its piece (2026-11-13)
+
+The migration's differential (the lab's `baseline/tools/diff.mjs`) counts units by their id, the hash of a unit's kind and
+pieces: a unit the rebuilt engine reads otherwise is another id, and today's counts as lost unless stage 1a's statement
+(`lab/pdf/prepare-back/stated.mjs`) finds what stands for it. Eleven lines stayed lost round after round; traced one by one
+(the lab's lane lost-11), eight are drawn by the rebuilt engine on every line, and three are real, kept as the original where
+today's erased ink it never drew again (a class's "Funding:", a table note's mark): those are the facts round's.
+
+- The dump's element keys. Stage 1a's dump (`lab/pdf/prepare-back/run.mjs`) numbered a unit's pieces by place and wrote each
+  element's `k` as the instrument's content id, which numbers a piece by the front end's own index and skips the groups it
+  drops or joins (`pipeline/instrument.mjs` piecesOf): after any such piece the two differ, and a statement reading an element
+  by its piece's k read another piece, or none. Round B15's r22: 8,225 of 73,121 elements keyed otherwise than by their piece,
+  7,261 of them naming no piece of their unit. `lab/pdf/prepare-back/pieces.mjs` flattens a unit's content once and keys each
+  element and nested unit by its piece (the name before's trail, of no piece, stays null); run.mjs writes the dump so, and
+  `restate.mjs --keys-from-bundles` keys a run made before from its bundles' units. On r22 and on B14's r21k no statement moved
+  by it alone, nor any other count of the differential; no bundle byte moves.
+- (t) "held whole by the drawn units on its lines, read as arXiv prints them": today's unit whose every line one or more drawn
+  units of the candidate's meet, consecutive in the dump's order, every unit on its lines drawn, today's reading a contiguous
+  part of theirs joined in that order; each side read as arXiv prints it (its label and every element with ink by arXiv's
+  glyphs in its boxes, a formula too; its text as written through TeX's ligatures; white space aside; letters case apart only
+  where today's glyphs are all in a face of small capitals). A hyphen arXiv prints at the end of one of today's lines that
+  today's reading dropped as TeX's break is arXiv's (the coordinator's ruling of 2026-11-13: arXiv's own text is the reference).
+  One unit holding it is its holder, which the display gate joins by; several name none. On r22 and r21k it states 28 units:
+  seven of the eleven (2608.06007v1's five bibliography notes, now its references under the References toggle;
+  2608.08481v1 t125; 2307.16209v1 t737) and 21 of 2610.21377v1 that the acceptance list held one by one as absent. With its
+  entry the differential reads 4 lost on both runs: 2610.19159v1 t1990 (a macro's prose argument, the display design's N10) and
+  the three real ones.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
