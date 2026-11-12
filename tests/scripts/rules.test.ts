@@ -194,22 +194,22 @@ describe('a recording', () => {
     expect(recorded(out)).toBe(plain())
     expect(readdirSync(out)).toHaveLength(1)
     const rec = mergeRecords(map, [out])
-    const site = (suffix: string, file = 'rules.ts') => rec.sites.corpus[sitesOfRule(suffix).find((s: { file: string }) => s.file.endsWith(file)).id]
+    const site = (suffix: string, file = 'rules.ts') => rec.sites.corpus[String(sitesOfRule(suffix).find((s: { file: string }) => s.file.endsWith(file))?.id)]
     // apart: d > GAP * em over (2, 10), (4, 10), (3.5, 10), (1, 1): GAP decides at d / em (0.2, 0.4, 0.35, 1), the
     // nearest each side 0.35 and 0.2
     const apart = site('::GAP')
     expect([apart.n, apart.t, apart.f]).toEqual([4, 3, 1])
-    expect(apart.near[1].eff).toBeCloseTo(0.35)
-    expect(apart.near[0].eff).toBeCloseTo(0.2)
-    expect(apart.near[1].paper).toBe('2401.00001v1')
+    expect(apart.near[1]?.eff).toBeCloseTo(0.35)
+    expect(apart.near[0]?.eff).toBeCloseTo(0.2)
+    expect(apart.near[1]?.paper).toBe('2401.00001v1')
     // near (imported, direct): d <= GAP over 0.1, 0.3, 0.5
     const near = site('::GAP', 'use.mjs')
     expect([near.t, near.f]).toEqual([2, 1])
     // clamp: Math.min(x, 10) decided where x is past 10
     const clamp = site('::clamp::min10#1')
     expect([clamp.n, clamp.t, clamp.f]).toEqual([3, 1, 2])
-    expect(clamp.near[1].eff).toBe(12)
-    expect(clamp.near[0].eff).toBe(9.5)
+    expect(clamp.near[1]?.eff).toBe(12)
+    expect(clamp.near[0]?.eff).toBe(9.5)
     expect(site('::short::<4#1').t).toBe(1)
     // the lists: each entry's hits
     expect(site('::HEADS#1').hits).toEqual({ section: 2, paragraph: 1, subsection: 1 })

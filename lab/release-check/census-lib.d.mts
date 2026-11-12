@@ -32,8 +32,9 @@ export interface Profile {
   builds?: { name: string; entries?: unknown; today?: string[]; v2?: string[]; cut?: { switch: string | string[]; seeds: string[]; why: string }; why?: string }[]
 }
 export interface Scan { repo: string; root: string; profile: Profile; files: Map<string, Facts & { area: string; role: string }> }
-export declare function factsOf(path: string, text: string, options?: { tokens?: boolean }): Facts
+/** `nodes`: the syntax tree and each item's nodes kept, not enumerable (the rule ledger's, lab/rules/sites.mjs) */
+export declare function factsOf(path: string, text: string, options?: { tokens?: boolean; nodes?: boolean }): Facts
 export declare function lineKinds(text: string, comments: [number, number][]): ('code' | 'comment' | 'blank')[]
 export declare function thresholdOf(t: { value: number; raw: string; name: string | null; comment: string; line: number; context: string }): Threshold
 export declare function alternativesOf(pattern: string): string[]
-export declare function scanTree(repo: string, root: string, profile: Profile, options?: { tokens?: boolean }): Scan
+export declare function scanTree(repo: string, root: string, profile: Profile, options?: { tokens?: boolean; nodes?: ((path: string) => boolean) | null }): Scan
