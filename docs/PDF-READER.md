@@ -3533,7 +3533,8 @@ the row (`ON_ROW`) and no word's gap after the one before (the ink units' word r
 of no piece in its group `.e`, on its last line. The typesetter draws it as its crop right after the member's own tokens,
 glued; the follower runs on from its end at TeX's separation, and the room beside the member is no longer fenced by it (a
 `\thanks` mark in an `\rlap`, 1706.03762v7's first name). Ink past a skip (an `\hspace`, a proof's QED box after `\hfill`)
-is no trail; what TeX pushed to the measure's end is the unit's end mark (§18.52), the rest stays. One rule with §18.12's:
+is no trail; what TeX pushed to the measure's end is the unit's end mark (§18.52), and an author's ink of no letter past a
+word's gap on its last line is its trail too, the gap stated (§18.58); the rest stays. One rule with §18.12's:
 what TeX set on a line is laid as the line, with the alignment TeX gave it. The
 crop stands on the member's last line, the line TeX set it on, as every element's crop stands on its line's baseline: drawn by
 its glyphs' own baseline, which a trail of raised marks alone holds off the line, each mark came down onto the line (45 of
@@ -5502,6 +5503,57 @@ put-back places no group holding an element (packages/translate groups.ts), and 
   of its sentence as a pair of its own and its quotes dropped; since §18.32 the quotes are text, the run-in rule's boundary finds
   no edge there, and by the coordinator's rulings no phrase pair goes on the markers wire and no reference is asked for a
   bibliography's groups. A tags wire carries the group.
+
+### 18.58 What TeX set on an author's line after it moves with it, past a word's gap (2026-11-12)
+
+With the author block switched on, a name or a row of places was drawn 10 to 25 % smaller than the original though the line had
+room beside it (the display class S5). The owner (2026-11-12): normal size, using the room that is there, without the overlap of
+today's marks after the name, and only if it can be done simply. Over the lay of the 90 pairs with stored rows, every switch on
+(round B13's bundles, r20), 63 author-block members (author, affiliation, the block's ink names) were drawn below their own
+size: 15 fenced by ink that stays beside them, 3 on a flush-left line (§18.59), 2 by an icon box before a name and 2 by an
+"and" left as ink of no unit (both open), 31 inside a run the lab could not lay (a connector's ink unit whose id moved has no
+stored row; a reader asks for it), 10 with no room on either side (a line of names filling its column, four columns of names).
+Of the 15, every one is a mark or a number TeX set right after a name or a place on its line, past a word's gap:
+
+- 1706.03762v7 p1 t187, the last NeurIPS name (`Illia Polosukhin\footnotemark[1]\hspace{1.7mm} \thanks{…}\\`): the call
+  points of §18.16 stop at the last block (no unit follows its `\thanks` in the block, so no call is written there), the glue
+  rule broke at the 3.22 pt after the star, and the ‡ stayed (`Room.stays`), the right end of the centred name's room: v2 drew
+  it at 0.875; today keeps 9.96 by drawing its star over the ‡, 2.8 pt of overlap.
+- 2608.16117v1 p1 t129-t131, "Philadelphia, 19104, Pennsylvania, United States of America": the postal code is no unit's
+  (a number), between two places on one centred line. It stayed, parted the line's flows (TeX's separation past it 35.8 pt, more
+  than a shared row's), and the places after it were laid as a run centred on its own middle with its left fenced by the
+  number: 0.8 for the German; today keeps the size by a break TeX never set, 2.74 pt off the line's middle.
+- 2608.08481v1, 2610.20266v1, 2610.21288v1 (and, drawn at their size but fenced, 2610.20030v1, 2610.21765v1, 2610.21770v1): a
+  `\thanks` mark after `\,` (1.66 to 1.83 pt) after the last name's own marks.
+
+**The rule** (`locate.ts`, the trail). An author's member (the block's names and places, `AUTHOR_KINDS`) also owns, past a
+word's gap, the ink of no letter TeX set after it on its last line, in B's stream up to the next unit's ink: what TeX set as
+part of its line moves with it, decided by TeX's order and the line, never by a mark's shape. A blank glyph a producer wrote
+decides nothing. Ink holding a letter is text: where a letter stands on the line after the run, the paragraph's own text goes
+on (acmart's reference format "Ru Huang. 2027. ABNAT", an "and" a class sets between names, an ink unit's, translated), and
+nothing past the gap is claimed, as the end mark's walk reads text no unit owns after a unit's end (§18.52); a member of no
+author block keeps the glue rule alone; a row of another line (an e-mail under a name), a mark the next unit owns (its label,
+own.mjs MR 5), stay as before. The distance TeX set from the member's last glyph to the run's first
+glyph, where the run opens past the gap, is stated on the trail: `El.sep` (FORMAT 1, optional; a typesetter of before reads none and glues the trail). A run
+glued first and gapped after (2608.08481v1's "1,∗") is one crop with its gap inside it. The claimed ink is the member's: its
+line reaches it, no stay of any member's, and the member after it on the row is joined to it at TeX's separation (16117's
+five places one flow).
+
+**The lay** (`lay/adapt.ts`): the trail's crop after the member's tokens as before, `sep` laid before it as the kern an
+`\hspace` element's is (`kernW` on the token before, at the member's scale), so that no line breaks there.
+
+**Before and after** (stage 1a over the 88, r20's compiles: the marked TeX unchanged, every compile found by its key). s1 and
+its twin: 88 made, none missing a compile, none failed; 2,707 of 2,707 objects and 88 of 88 dumps the same (I6). 11 papers
+move, the units (the wire) byte-identical in each, their parts and add-ons alone: trails in 1706.03762v7 (‡, `sep` 3.23),
+2608.16117v1 pp1-3 ("19104,", 3.56), 2610.20285v1 († 4.23; its alignment, read off the page, now c: the line with its mark is
+centred, 250.25 against the column's 248.53), 2610.20451v1 (",1" 8.47, "2" 6.8), 2610.21084v1 pp1-2 (two postal codes
+"30322,", "29634,", 1.99), and the `\,` marks joined to glued trails in 2608.08481v1, 2610.20030v1, 2610.20266v1, 2610.21288v1,
+2610.21765v1, 2610.21770v1; flows joined over the codes (16117 pp1-3, 21084's two rows), joins and rooms with them. A place's
+class's tail (the comma TeX set after "Philadelphia", its source writing none) is read with its trail aside, as an end mark is
+(facts-pass.ts): read with the trail as its last element glyph, as every trail was since §18.16, the place had no tail, its comma
+erased with its text and drawn nowhere ("Philadelphia 19104," on the lay, caught by the lane's own reading). The differential against acceptance-b13: lost 11, the LOST
+lines r20's; gained 5,838 as r20's; changed 5,256 to 5,258 (1706.03762v7 t187, 2608.16117v1 t129: their trails). Float lines
+778 and orphan letters 388 as recorded.
 
 ## 19. The engine's contract
 

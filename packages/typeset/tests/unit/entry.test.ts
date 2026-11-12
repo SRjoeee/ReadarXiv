@@ -1264,6 +1264,39 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const three = layPage({ ...part(liu), flows: [[liu, zhao, shang]] }, rows3, rules, inked).members
     expect(three[2]!.lines[0]![1]).toBeCloseTo(three[1]!.lines[0]![2] + 3, 5)
   })
+  it('lays a trail TeX set past a word’s gap that far after the translation’s end (El.sep, 1706.03762v7’s last name)', () => {
+    // (NeurIPS' `Illia Polosukhin\footnotemark[1]\hspace{1.7mm} \thanks{…}`: the ‡, 7.3 pt after the name, its trail (§18.58);
+    // glued, it stood against the translation's last character where TeX set a skip)
+    const illia = member({
+      ord: 0,
+      kind: 'author',
+      align: 'c',
+      lines: [[1, 0, 200, 279.5, 700, 707, 698, 72, 540, 0, 10]],
+      els: [['~', { kind: 'other', copy: '‡', ink: [[1, 275.3, 699, 279.5, 706, 703.6]], trail: 1, sep: 7.3 }]],
+      room: { below: 20, next: 24, side: [72, 540] },
+    })
+    const laid = layPage(part(illia), rowsOf([row([{ t: 'text', s: 'Illia' }])], true), rules, metrics()).members
+    expect(laid[0]!.state).toBe('laid')
+    const items = laid[0]!.lines[0]![3]
+    const crop = items.find((it) => 'src' in it) as Item & { x: number }
+    const text = items.find((it) => 'face' in it) as Item & { x: number }
+    // (the text 25 pt, TeX's gap, then the crop: its rectangle opens 0.4 before its ink, as a glued trail's does)
+    expect(laid[0]!.fit?.size).toBe(10)
+    expect(crop.x).toBeCloseTo(text.x + 25 + 7.3, 5)
+    // (the unit's own skip at its end, `\hspace{1.7mm}` an element, lies inside the gap TeX set: the gap is laid, not the skip
+    // and the gap. Added, 1706.03762v7's ‡ stood 8.85 pt after the star where TeX set it 3.22 pt)
+    const skip: El = { kind: 'zero', ink: [], glue: [4.82, 'bp', 1] }
+    const ended = { ...illia, els: [['2', skip], ...(illia.els ?? [])] as Placed['els'] }
+    const rowSkip = row([
+      { t: 'text', s: 'Illia' },
+      { t: 'el', id: '2' },
+    ])
+    const laid2 = layPage(part(ended), rowsOf([rowSkip], true), rules, metrics()).members
+    const items2 = laid2[0]!.lines[0]![3]
+    const crop2 = items2.find((it) => 'src' in it) as Item & { x: number }
+    const text2 = items2.find((it) => 'face' in it) as Item & { x: number }
+    expect(crop2.x).toBeCloseTo(text2.x + 25 + 7.3, 5)
+  })
   it('lays a line of several members TeX centred as one run, centred where TeX centred the line (2610.21106v1’s “A AND B”)', () => {
     // (amsart's authors: one centred paragraph, its names two units and the "AND" between them text no unit owns, made on A;
     // each member's translation shorter than its original. Laid each by itself, the first name stood centred on its own

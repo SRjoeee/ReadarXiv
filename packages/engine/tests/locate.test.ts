@@ -305,7 +305,8 @@ describe('locate', () => {
         ]),
       ),
     ).toEqual([['~', '123', 1]])
-    // (no call stated: the word's gap rule, as before; and a call point past the next unit's start is none of this run)
+    // (no call stated: the marks of no letter past the thin space up to the next unit's ink, an author's (§18.58: what TeX set
+    // after a name on its line moves with it); and a call point past the next unit's start is none of this run, the same)
     expect(
       trail(
         at([
@@ -313,7 +314,7 @@ describe('locate', () => {
           ['1s', 14],
         ]),
       ),
-    ).toEqual([])
+    ).toEqual([['~', '123', 1]])
     expect(
       trail(
         at([
@@ -322,7 +323,7 @@ describe('locate', () => {
           ['2c', 25],
         ]),
       ),
-    ).toEqual([])
+    ).toEqual([['~', '123', 1]])
   })
   it('leaves a row of another line before the next call no trail of the member before it (1706.03762v7’s e-mails)', () => {
     // (NeurIPS' block: a name, its place, its e-mail on a row of its own, then \And; the e-mail, no unit's, stood between the
@@ -377,7 +378,8 @@ describe('locate', () => {
         ),
       ),
     ).toEqual([['~', '2', 1]])
-    // (no call of its own stated, or the paragraph's end past the next unit's start: the word's gap rule, as before)
+    // (no call of its own stated, or the paragraph's end past the next unit's start: the mark of no letter on its line past the
+    // thin space still its (§18.58), up to the next unit's ink)
     expect(
       trail(
         at(
@@ -389,7 +391,7 @@ describe('locate', () => {
           [8],
         ),
       ),
-    ).toEqual([])
+    ).toEqual([['~', '2', 1]])
     expect(
       trail(
         at(
@@ -402,7 +404,7 @@ describe('locate', () => {
           [12],
         ),
       ),
-    ).toEqual([])
+    ).toEqual([['~', '2', 1]])
     // (what stands on another line before the paragraph's end, an e-mail row a class sets under the last name in its tabular, is
     // no trail of its: none, the word's gap rule)
     const below = [lines[0]!, { text: 'a@b.org', x: 72, y: 688 }, lines[2]!]
@@ -420,6 +422,110 @@ describe('locate', () => {
         ),
       ),
     ).toEqual([])
+  })
+  it('gives an author’s member the marks of no letter TeX set after it on its last line past a word’s gap, with that gap', () => {
+    // (1706.03762v7 p1, NeurIPS: `Illia Polosukhin\footnotemark[1]\hspace{1.7mm} \thanks{…}\\` then the e-mail row: no call
+    // after the last block, and the ‡ past the skip stayed where TeX set it, fencing the centred name's room (drawn at 0.875).
+    // 2608.16117v1 p1: "Philadelphia, 19104, Pennsylvania," the postal code no unit's, between two places on one centred
+    // line: it stayed, parted the line's flows, and the run after it was centred on its own middle)
+    const trailOf = (L: ReturnType<typeof locate>, k = 0) =>
+      L.members[k]!.elements.filter(([key]) => key === '~').map(([, e]) => [e.copy, e.trail, e.sep])
+    const name = { text: 'Illia Polosukhin', x: 72, y: 700 }
+    const illia = docOf([
+      {
+        lines: [
+          name,
+          { text: '‡', x: 72 + 16 * 6 + 7.3, y: 703.6, size: 7 },
+          { text: 'i@g.com', x: 72, y: 688 },
+          { text: 'Abstract', x: 72, y: 660 },
+        ],
+        points: [
+          ['0s', 0],
+          ['0e', 16],
+          ['1s', 24],
+        ],
+      },
+    ])
+    const units1 = [unitOf('author', 'Illia Polosukhin'), unitOf('heading', 'Abstract')]
+    const L1 = locate(instrumentOf(illia, units1, [[0, -1, -1, 1]]), illia, align(illia, illia))
+    expect(trailOf(L1)).toEqual([['‡', 1, 7.3]])
+    // (its line reaches the mark's end, and no ink of no member's stays beside it)
+    expect(L1.members[0]!.lines[0]![3]).toBe(r2(72 + 16 * 6 + 7.3 + 4.2))
+    expect(L1.members[0]!.room?.stays).toBeUndefined()
+    // (the postal code between two places: the place before's, the place after it on the row joined at TeX's separation)
+    const places = docOf([
+      {
+        lines: [
+          { text: 'Philadelphia,', x: 72, y: 700 },
+          { text: '19104,', x: 72 + 13 * 6 + 3.6, y: 700 },
+          { text: 'Pennsylvania', x: 72 + 19 * 6 + 2 * 3.6, y: 700 },
+        ],
+        points: [
+          ['0s', 0],
+          ['0e', 13],
+          ['1s', 19],
+        ],
+      },
+    ])
+    const units2 = [unitOf('affiliation', 'Philadelphia,'), unitOf('affiliation', 'Pennsylvania')]
+    const L2 = locate(instrumentOf(places, units2, [[0, -1, 1]]), places, align(places, places))
+    expect(trailOf(L2)).toEqual([['19104,', 1, 3.6]])
+    expect(L2.flows[0]).toEqual([0, 1])
+    expect(L2.members[1]!.join).toEqual([3.6])
+    // (the comma TeX set after the place's text, its source writing none: the class's tail still, the trail after it no part
+    // of the text, as an end mark is none (§18.52). Read with the trail as its last element, the place had no tail and its
+    // translation was drawn without the comma, the original's erased with its text: "Philadelphia 19104,")
+    const units2b = [unitOf('affiliation', 'Philadelphia'), unitOf('affiliation', 'Pennsylvania')]
+    const L2b = locate(instrumentOf(places, units2b, [[0, -1, 1]]), places, align(places, places))
+    expect(trailOf(L2b)).toEqual([['19104,', 1, 3.6]])
+    expect(L2b.members[0]!.tail?.map(([t]) => t)).toEqual([','])
+    // (what stays as before: a word after the gap on the line (amsart's "AND", an "and" a class sets: text, an ink unit's,
+    // translated; acmart's reference format, "Ru Huang. 2027. ABNAT": the paragraph's text going on), and the marks of no letter
+    // before it with it; the next unit's own label; a member of no author block; a mark on another line)
+    const andDoc = docOf([
+      {
+        lines: [
+          { text: 'Ni Xiang', x: 72, y: 700 },
+          { text: '1', x: 72 + 8 * 6 + 3.6, y: 703.6, size: 7 },
+          { text: 'and', x: 72 + 8 * 6 + 3.6 + 4.2 + 3.6, y: 700 },
+          { text: 'Yuni Xiong', x: 72 + 8 * 6 + 3.6 + 4.2 + 3.6 + 18 + 3.6, y: 700 },
+        ],
+        points: [
+          ['0s', 0],
+          ['0e', 8],
+          ['1s', 12],
+        ],
+      },
+    ])
+    const units3 = [unitOf('author', 'Ni Xiang'), unitOf('author', 'Yuni Xiong')]
+    const L3 = locate(instrumentOf(andDoc, units3, [[0, -1, -1, 1]]), andDoc, align(andDoc, andDoc))
+    expect(trailOf(L3)).toEqual([])
+    // (a separator glued to the name, then the word: the glued one its trail, glued, as before)
+    const glued = docOf([
+      {
+        lines: [
+          { text: 'Ni Xiang', x: 72, y: 700 },
+          { text: ',', x: 72 + 8 * 6, y: 700 },
+          { text: 'and', x: 72 + 9 * 6 + 3.6, y: 700 },
+          { text: 'Yuni Xiong', x: 72 + 12 * 6 + 2 * 3.6, y: 700 },
+        ],
+        points: [
+          ['0s', 0],
+          ['0e', 8],
+          ['1s', 12],
+        ],
+      },
+    ])
+    const Lg = locate(instrumentOf(glued, units3, [[0, -1, -1, 1]]), glued, align(glued, glued))
+    expect(trailOf(Lg)).toEqual([[',', 1, undefined]])
+    const L4 = locate(instrumentOf(andDoc, units3, [[0, 1, -1, 1]], [[0, ROLE.label]]), andDoc, align(andDoc, andDoc))
+    expect(trailOf(L4)).toEqual([])
+    const units5 = [unitOf('para', 'Illia Polosukhin'), unitOf('heading', 'Abstract')]
+    const L5 = locate(instrumentOf(illia, units5, [[0, -1, -1, 1]]), illia, align(illia, illia))
+    expect(trailOf(L5)).toEqual([])
+    const below = docOf([{ lines: [name, { text: '‡', x: 72, y: 688, size: 7 }], points: [['0e', 16]] }])
+    const L6 = locate(instrumentOf(below, [units1[0]!], [[0, -1]]), below, align(below, below))
+    expect(trailOf(L6)).toEqual([])
   })
   it('runs on a row the members TeX set in one paragraph across the page middle, no body’s or float’s bracket between', () => {
     // (2611.03953v2 p1, ICML: the names of a line of \icmlauthor in one centred paragraph over the two columns' middle, read

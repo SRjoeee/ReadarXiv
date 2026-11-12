@@ -48,6 +48,7 @@ import {
   type StyleGlyph,
   sourceText,
   styleOf,
+  TRAIL,
   textOf,
   turnedStyleGlyph,
   unitSize,
@@ -880,7 +881,14 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // stands on its last line before the paragraph TeX ends after it (Instrument.tex.paragraphEnds), no unit's mark between: the
   // end of the list its calls make (ICML's last name, "Zuo Bai 2 †"); a row of another line before that end (an e-mail a class
   // sets under the last name in its tabular) is none of it, and the glue rule below reads the run. Where no call is stated (a
-  // class that stores its list and sets it whole, 2604.14228v3's \addtolist), the glue rule below, as before
+  // class that stores its list and sets it whole, 2604.14228v3's \addtolist), the glue rule below, as before.
+  // An author's member (the author block's names and places, docs/PDF-READER.md §18.58) also owns, past a word's gap, the ink of
+  // no letter TeX set after it on its last line, up to the next unit's ink in B's stream: what TeX set as part of its line (a
+  // \thanks mark after `\hspace{1.7mm} `, a footnote mark after `\,`, a postal code between two places) moves with it, the gap
+  // TeX set before it stated (El.sep) and laid before its crop. Left where TeX set it, it fenced the member's room and its
+  // neighbour's: 1706.03762v7's last name (no call after NeurIPS' last block) drawn at 0.875 beside its ‡, 2608.16117v1's
+  // "19104," parting its line's runs, two places at 0.8. Ink holding a letter is text, never a trail: a class's "and" between two
+  // names is an ink unit's, translated (the walk ends at it); a member of no author block keeps the glue rule alone
   const paraEndsB: number[] = []
   ;(ins.tex.paragraphEnds ?? []).forEach((l, p) => {
     for (const g of l) paraEndsB.push((m.offB[p] as number) + g)
@@ -909,6 +917,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const end = paraEndsB.find((e) => e >= from)
     return end === undefined || end > next || pageB[end - 1] !== pageB[mem.bLast] ? null : { at: end, line: true }
   }
+  // (an author's trail past a word's gap: the gap TeX set before it, by member ord)
+  const trailSep = new Map<number, number>()
   for (const mem of members) {
     if (!mem.located || mem.fixed || mem.figure || mem.kind === 'cell' || mem.name !== undefined || mem.bLast < 0)
       continue
@@ -917,6 +927,9 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const last = gA(end)
     let prev = last
     const trail: number[] = []
+    let apart = false
+    let glued = 0
+    let sep: number | undefined
     const run = runEndOf(mem)
     let call = run ? run.at : -1
     // (the list's end: every free ink glyph before it on the member's last line, else the glue rule)
@@ -943,14 +956,32 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const a = m.bToA[b] as number
       if (a < 0 || (claimedA[a] as number) !== FREE || pageA[a] !== pageA[end]) break
       const g = gA(a)
+      // (a glyph that paints nothing, a word space a producer wrote as one, decides nothing for an author's member: the ink after
+      // it does, past the gap it stands in)
+      if (!isInk(g) && AUTHOR_KINDS.has(mem.kind)) continue
       if (!isInk(g) || g.top <= last.bottom || g.bottom >= last.top || g.x0 < prev.x0) break
-      if (g.x0 - prev.x1 > WORD_GAP * Math.max(g.size, prev.size)) break
+      // (past a word's gap, and on after it: an author's member alone, and ink of no letter alone. A letter on the line after it
+      // is the paragraph's own text going on (acmart's reference format: "Ru Huang. 2027. ABNAT", the year the sentence's): none of
+      // what stands past the gap is the member's then, as the end mark's walk reads text no unit owns after a unit's end)
+      const wide = g.x0 - prev.x1 > WORD_GAP * Math.max(g.size, prev.size)
+      if (wide || apart) {
+        if (!AUTHOR_KINDS.has(mem.kind)) break
+        if (!apart) glued = trail.length
+        if (lettersIn(g.u) > 0) {
+          trail.length = glued
+          sep = undefined
+          break
+        }
+        if (wide && !trail.length) sep = r2(g.x0 - prev.x1)
+        apart = true
+      }
       trail.push(a)
       prev = g
     }
     if (!trail.length) continue
     for (const a of trail) claimedA[a] = mem.ord
     mem.els.set(TRAIL, trail)
+    if (sep !== undefined) trailSep.set(mem.ord, sep)
   }
 
   // ---- artefacts (Rule 1, the owner's ruling of 2026-11-10, PDF-READER §18.22): a unit whose text is set wholly in a face of one
@@ -1871,6 +1902,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
             copy: tr.map((a) => gA(a).u).join(''),
             ink: [[L.page, r2(L.x0), r2(L.bottom), r2(L.x1), r2(L.top), L.base]],
             trail: 1,
+            ...(trailSep.has(mem.ord) ? { sep: trailSep.get(mem.ord) } : {}),
           },
         ])
     }
@@ -2753,9 +2785,7 @@ const ON_BASE = 0.05
 /** a word ends where two glyphs stand this share of their size apart, and a trail with it (the ink units' word rule, today's
  *  wordsOf: ink-units.mjs WORD_GAP) */
 const WORD_GAP = 0.12
-/** the element id of a member's trail (no piece's: a piece's id is its index) */
-export const TRAIL = '~'
-export { END }
+export { END, TRAIL }
 /** a shared line's separation at most, in em of the follower's size, read from the leader's ink end (sepOf, the separation
  *  Placed.join states): a run-in head's \quad, a float split's word space (today's need.mjs SHARED_SEP, rowLeadOf, over the
  *  layout file's ink rows; rules.ts F.chains). Further apart, two pieces on one baseline are TeX's boxes set side by side (a

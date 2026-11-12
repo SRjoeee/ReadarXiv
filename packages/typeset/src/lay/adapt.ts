@@ -639,8 +639,20 @@ export function adapt(i: AdaptInput): Adapted {
       k: TRAIL_K,
       gap: { box: { x0, x1, bottom: y0, top: y1 } },
     }
+    // (one TeX set past a word's gap (El.sep, §18.58: an author's mark after `\hspace` or `\,`, a postal code after a space)
+    // that far after the translation's end, at its scale: the kern after the last token, as an `\hspace` element's (tokens.ts
+    // kernOn), so that no line breaks there and the crop is glued after it; after a space the translation ends with, none. The
+    // gap holds whatever TeX set in it, the unit's own skip at its end too (1706.03762v7's `\hspace{1.7mm}`, an element whose kern
+    // the last token carries): the gap is laid in its place, not after it, or the ‡ stood 8.85 pt after the star for TeX's 3.22)
+    const sep = trail[1].sep ?? 0
+    const t = tokens.at(-1)!
+    const before = sep > 0 && !t.space ? { ...t, kernW: (100 * sep) / s, kernEnd: true as const } : t
     tokens = Object.assign(
-      [...tokens, { crop, cw: box.crop[2] - box.crop[0], glue: true, w100: 0 } as unknown as (typeof tokens)[number]],
+      [
+        ...tokens.slice(0, -1),
+        before,
+        { crop, cw: box.crop[2] - box.crop[0], glue: true, w100: 0 } as unknown as (typeof tokens)[number],
+      ],
       {
         base: (tokens as { base?: unknown }).base,
       },

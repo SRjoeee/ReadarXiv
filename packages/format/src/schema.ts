@@ -210,6 +210,10 @@ export const El = z.object({
   // the translation's end. A typesetter of before reads it as an element no piece names, never drawn: its unit's group, and
   // nothing moves where the unit is the original's
   trail: flag.optional(),
+  // a trail's distance from its member's last glyph, PDF units, where TeX set it past a word's gap (an author's mark of no letter
+  // after `\hspace` or `\,`, a postal code after a space between two places: docs/PDF-READER.md §18.58), laid before its crop at
+  // the member's scale; absent, glued to it. A typesetter of before reads none, and glues it
+  sep: num.optional(),
   // its unit's end mark: ink TeX pushed to the end of the unit's last line, after its text (amsthm's `\qed`: `\hfill\quad`
   // and the box; a class's or an author's mark after `\hfill`), its box's right edge at that line's measure end. It belongs to
   // the end of the unit's text, wherever a translation ends: laid at the end of the translation's last line, keeping its
