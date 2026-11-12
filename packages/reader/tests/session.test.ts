@@ -24,6 +24,7 @@ import {
   WAIT_MAX_MS,
 } from '../src/session/machine.ts'
 import { createRuntime, type Handlers } from '../src/session/runtime.ts'
+import { layerOf, paperDoc, prepareOf, runOf } from './helpers/doc.ts'
 
 const PREFS: Prefs = { ...DEFAULTS, display: 'bilingual', target: 'zh-Hans', sync: true }
 const ref = (c: string): Ref => ({ path: `p/2600_00001v1/x/${c.repeat(64)}`, sha256: c.repeat(64), bytes: 10 })
@@ -42,36 +43,29 @@ const headOf = (o = 'o', addOn: boolean = true) =>
   }) as unknown as Head
 const HEAD = headOf()
 const ZH = 'zh-Hans'
-const doc = (rev: number, o: Partial<Doc> = {}): Doc => ({
-  epoch: 'e1',
-  rev,
-  prepare: { state: 'none', why: null, retryAt: null, stage: null, units: [] },
-  layer: null,
-  targets: {},
-  ...o,
-})
+const doc = (rev: number, o: Partial<Doc> = {}): Doc =>
+  paperDoc({
+    epoch: 'e1',
+    rev,
+    prepare: prepareOf({ state: 'none', why: null, retryAt: null, stage: null, units: [] }),
+    layer: null,
+    targets: {},
+    ...o,
+  })
 /** a target's run as our server's document names it (worker v2 machine.ts docOf): `none`, made by an open and not started */
-const run = (state: 'none' | 'running' | 'done' | 'failed', o: Partial<NonNullable<Doc['targets'][string]>> = {}) => ({
-  state,
-  why: state === 'failed' ? 'unavailable' : null,
-  retryAt: null,
-  rows: [],
-  done: 0,
-  total: 0,
-  attempt: state === 'none' ? 0 : 1,
-  ...o,
-})
+const run = (state: 'none' | 'running' | 'done' | 'failed', o: Partial<NonNullable<Doc['targets'][string]>> = {}) =>
+  runOf({ state, why: state === 'failed' ? 'unavailable' : null, attempt: state === 'none' ? 0 : 1, ...o })
 /** a paper being prepared for the target an open made (its run started once the prepare tells its units) */
 const preparing = (rev: number, units: Ref[] = []) =>
   doc(rev, {
-    prepare: { state: 'running', why: null, retryAt: null, stage: 'compiling', units },
+    prepare: prepareOf({ state: 'running', why: null, retryAt: null, stage: 'compiling', units }),
     targets: { [ZH]: run('none') },
   })
 /** a paper whose layer is of the deployed build, translated into the target */
 const ready = (rev: number, catalog = CATALOG) =>
   doc(rev, {
-    prepare: { state: 'done', why: null, retryAt: null, stage: null, units: UNITS },
-    layer: { catalog, units: UNITS, format: 1, stale: false },
+    prepare: prepareOf({ state: 'done', why: null, retryAt: null, stage: null, units: UNITS }),
+    layer: layerOf({ catalog, units: UNITS, format: 1, stale: false }),
     targets: { [ZH]: run('done', { units: UNITS }) },
   })
 
@@ -280,7 +274,7 @@ describe('the session: engaged, the link, the layer', () => {
     m.feed({
       i: 'paper',
       t: m.live('link'),
-      doc: doc(1, { prepare: { state: 'failed', why: 'too-large', retryAt: null, stage: null, units: [] } }),
+      doc: doc(1, { prepare: prepareOf({ state: 'failed', why: 'too-large', retryAt: null, stage: null, units: [] }) }),
     })
     expect(m.s.layer).toMatchObject({ s: 'refused', why: 'too-large' })
     expect(m.has('link')).toBe(false)
@@ -293,7 +287,7 @@ describe('the session: engaged, the link, the layer', () => {
     byLayer.feed({
       i: 'paper',
       t: byLayer.live('link'),
-      doc: doc(1, { layer: { catalog: CATALOG, units: UNITS, format: 9 } }),
+      doc: doc(1, { layer: layerOf({ catalog: CATALOG, units: UNITS, format: 9 }) }),
     })
     expect(byLayer.s.layer).toMatchObject({ s: 'refused', why: 'outdated' })
     expect(byLayer.effects).toEqual([{ e: 'outdated' }])
@@ -324,19 +318,17 @@ describe('the session: the open, wherever the document lacks what the visit need
   /** a layer of another build than the one our server runs (`stale`): served while the paper is prepared again */
   const stale = (rev: number, o: Partial<Doc> = {}): Doc =>
     doc(rev, {
-      prepare: { state: 'done', why: null, retryAt: null, stage: null, units: UNITS, attempt: 1 },
-      layer: { catalog: CATALOG, units: UNITS, format: 1, stale: true },
+      prepare: prepareOf({ state: 'done', why: null, retryAt: null, stage: null, units: UNITS, attempt: 1 }),
+      layer: layerOf({ catalog: CATALOG, units: UNITS, format: 1, stale: true }),
       ...o,
     })
-  const prep = (state: Doc['prepare']['state'], o: Partial<Doc['prepare']> = {}): Doc['prepare'] => ({
-    state,
-    why: state === 'failed' ? 'unavailable' : null,
-    retryAt: null,
-    stage: state === 'running' ? 'compiling' : null,
-    units: [],
-    attempt: 1,
-    ...o,
-  })
+  const prep = (state: Doc['prepare']['state'], o: Partial<Doc['prepare']> = {}): Doc['prepare'] =>
+    prepareOf({
+      state,
+      why: state === 'failed' ? 'unavailable' : null,
+      stage: state === 'running' ? 'compiling' : null,
+      ...o,
+    })
   const opens = (m: ReturnType<typeof machine>) => [...resources(m.s).values()].filter((x) => x.slot === 'open')
   it('a stale layer with no prepare running and no run of the target (staging, 1706.03762v7 after PIPELINE 77 to 78): opened at once, once; the old layer shown and followed meanwhile; the new catalog taken when it lands', () => {
     const m = machine()
@@ -367,7 +359,7 @@ describe('the session: the open, wherever the document lacks what the visit need
       t: m.live('link'),
       doc: doc(4, {
         prepare: prep('done', { attempt: 2, units: NEW }),
-        layer: { catalog: CATALOG2, units: NEW, format: 1, stale: false },
+        layer: layerOf({ catalog: CATALOG2, units: NEW, format: 1, stale: false }),
         targets: { [ZH]: run('running', { units: NEW }) },
       }),
     })
@@ -385,7 +377,7 @@ describe('the session: the open, wherever the document lacks what the visit need
   const rebuilt = (rev: number) =>
     doc(rev, {
       prepare: prep('done', { attempt: 2, units: NEW }),
-      layer: { catalog: CATALOG2, units: NEW, format: 1, stale: false },
+      layer: layerOf({ catalog: CATALOG2, units: NEW, format: 1, stale: false }),
     })
   it('rows made here over a stale layer: opened once, naming no target; followed while the paper is prepared again, the old layer drawn and its rows made meanwhile; the new catalog taken when it lands, then nothing more asked of our server (#634 review)', () => {
     const m = hereNow()
@@ -433,7 +425,10 @@ describe('the session: the open, wherever the document lacks what the visit need
     same.feed({
       i: 'open.answered',
       t: same.live('open'),
-      doc: doc(2, { prepare: prep('done', { attempt: 2 }), layer: { catalog: CATALOG2, units: UNITS, format: 1 } }),
+      doc: doc(2, {
+        prepare: prep('done', { attempt: 2 }),
+        layer: layerOf({ catalog: CATALOG2, units: UNITS, format: 1 }),
+      }),
     })
     same.feed({ i: 'head', digest: CATALOG2.sha256, head: HEAD })
     expect(same.s.rows.s).toBe('complete')
@@ -1045,7 +1040,7 @@ describe("the session: the original held for the visit (today's holds)", () => {
     m.feed({
       i: 'paper',
       t: m.live('link'),
-      doc: doc(1, { prepare: { state: 'failed', why: 'no-source', retryAt: null, stage: null, units: [] } }),
+      doc: doc(1, { prepare: prepareOf({ state: 'failed', why: 'no-source', retryAt: null, stage: null, units: [] }) }),
     })
     expect(holdOf(m.s)).toBe('paper')
     m.feed({ i: 'cmd.set', prefs: { target: 'ja' } })
@@ -1102,14 +1097,14 @@ describe('the session: the paper', () => {
   it("arXiv's HTML version taken again where our server's word on it changes: a refusal for now, then a lasting one saying it has one (L11 third round, gap 7)", () => {
     const said = (rev: number, state: 'none' | 'failed', html?: boolean) =>
       doc(rev, {
-        prepare: {
+        prepare: prepareOf({
           state,
-          why: state === 'failed' ? 'cannot' : null,
+          why: state === 'failed' ? 'cannot-typeset' : null,
           retryAt: null,
           stage: null,
           units: [],
           ...(html === undefined ? {} : { html }),
-        },
+        }),
       })
     /** a 429 that names its wait, with the document our server answered beside it, then followed again at its time */
     const refused = (m: ReturnType<typeof machine>, d: Doc, at: number) => {

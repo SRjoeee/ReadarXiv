@@ -406,11 +406,24 @@ const v2Route = {
         const d = Object.values(docs).find((x) => x.paper === ask.paper)
         if (!d) return json(404, { error: 'not-found' })
         const m = modes[d.pv]
-        if (m?.kind === 'refused') return json(200, { doc: null, refused: { why: 'quota', retryAfterS: 3600 } })
+        // (a refusal of the open's new work, as format's OpenAnswer has it: the paper's document, nothing started, and the
+        // refusal's instant, its wait to the millisecond and in seconds)
+        const refusedFor = (why, s) => ({
+          doc: {
+            ...d,
+            rev: 0,
+            layer: null,
+            prepare: { ...d.prepare, state: 'none', stage: null, units: [] },
+            targets: {},
+          },
+          follow: null,
+          refused: { why, retryAt: Date.now() + s * 1000, retryAfterMs: s * 1000, retryAfterS: s },
+        })
+        if (m?.kind === 'refused') return json(200, refusedFor('quota', 3600))
         // (our server at capacity for the first `busy` opens: refused in the open's answer, asked again a second on)
         if (m?.busy > 0) {
           m.busy--
-          return json(200, { doc: null, refused: { why: 'busy', retryAfterS: 1 } })
+          return json(200, refusedFor('busy', 1))
         }
         if (m) m.opened ??= performance.now()
         if (m?.kind === 'stale') return json(200, { doc: staleOpened(d, ask.target), follow: null })

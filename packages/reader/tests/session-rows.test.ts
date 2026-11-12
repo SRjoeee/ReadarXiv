@@ -19,6 +19,7 @@ import {
 import { type Doc, init, type Ref, type State, step } from '../src/session/machine.ts'
 import { DEFAULTS } from '../src/prefs.ts'
 import type { Page } from '../src/compose/page.ts'
+import { layerOf, paperDoc, prepareOf, runOf as targetRun } from './helpers/doc.ts'
 
 const u = (n: number, kind = 'para', s = `unit ${n}`): Unit => ({
   id: String(n).padStart(64, '0'),
@@ -136,28 +137,17 @@ describe("the run the view waits on (runOf, rowsTold): our server's work for the
   const ref = (c: string): Ref => ({ path: `p/${c}`, sha256: c.repeat(64).slice(0, 64), bytes: 1 })
   const OLD = [ref('a')],
     NEW = [ref('b')]
-  const stale = { catalog: ref('c'), units: OLD, format: 1, stale: true }
-  const fresh = { catalog: ref('d'), units: NEW, format: 1 }
-  const prepare = (state: Doc['prepare']['state'], attempt = 1): Doc['prepare'] => ({
-    state,
-    why: null,
-    retryAt: null,
-    stage: state === 'running' ? 'compiling' : null,
-    units: [],
-    attempt,
-  })
-  const done = (units: Ref[]) => ({
-    state: 'done' as const,
-    why: null,
-    retryAt: null,
-    rows: [ref('r')],
-    done: 70,
-    total: 70,
-    attempt: 1,
-    units,
-  })
+  const stale = layerOf({ catalog: ref('c'), units: OLD, format: 1, stale: true })
+  const fresh = layerOf({ catalog: ref('d'), units: NEW, format: 1 })
+  const prepare = (state: Doc['prepare']['state'], attempt = 1): Doc['prepare'] =>
+    prepareOf({ state, stage: state === 'running' ? 'compiling' : null, attempt })
+  const done = (units: Ref[]) => targetRun({ state: 'done', rows: [ref('r')], done: 70, total: 70, units })
   /** the session with a document heard for its target, its rows `rows` (ended, or still read), and what the test sets over it */
-  function heard(doc: Omit<Doc, 'epoch' | 'rev'>, rows: 'complete' | 'arriving', over: Partial<State> = {}): State {
+  function heard(
+    doc: Pick<Doc, 'prepare' | 'layer' | 'targets'>,
+    rows: 'complete' | 'arriving',
+    over: Partial<State> = {},
+  ): State {
     let s = init({
       paper: { id: '2601.00001', version: 1 },
       here: false,
@@ -167,7 +157,7 @@ describe("the run the view waits on (runOf, rowsTold): our server's work for the
       online: true,
     })
     const link = s.link.s === 'on' ? s.link.t : ''
-    s = step(s, { i: 'paper', t: link, doc: { epoch: 'e', rev: 1, ...doc } }).state
+    s = step(s, { i: 'paper', t: link, doc: paperDoc({ epoch: 'e', rev: 1, ...doc }) }).state
     const r = rows === 'complete' ? { s: 'complete' as const, target: 'zh-Hans', stopped: null } : s.rows
     return { ...s, rows: r, ...over }
   }
@@ -245,7 +235,7 @@ describe("the run the view waits on (runOf, rowsTold): our server's work for the
     let s = heard(
       {
         prepare: prepare('done'),
-        layer: { catalog: ref('d'), units: NEW, format: 1 },
+        layer: layerOf({ catalog: ref('d'), units: NEW, format: 1 }),
         targets: { 'zh-Hans': done(OLD) },
       },
       'complete',
