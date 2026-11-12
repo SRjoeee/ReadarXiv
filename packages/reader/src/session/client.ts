@@ -376,7 +376,7 @@ export async function follow(
  *  404, `network` / `server` out of reach */
 export function open(a: Ask & { paper: PaperRef; target: string | null; view?: number }): Promise<{
   doc: Doc | null
-  refused?: { why: 'quota' | 'busy' | 'rate'; afterMs: number | null; at: number | null }
+  refused?: { why: 'quota' | 'busy' | 'rate' | 'other'; afterMs: number | null; at: number | null }
 }> {
   const body = JSON.stringify({
     paper: a.paper.id,
@@ -401,8 +401,9 @@ export function open(a: Ask & { paper: PaperRef; target: string | null; view?: n
       const answer = OpenAnswer.safeParse(v)
       if (!answer.success) return { doc: null }
       const { doc, refused } = answer.data
+      // (a refusal's word this reader does not know: `other`, the generic failure; format's doc.ts)
       return refused
-        ? { doc, refused: { why: refused.why, afterMs: refused.retryAfterMs, at: refused.retryAt } }
+        ? { doc, refused: { why: refused.why ?? 'other', afterMs: refused.retryAfterMs, at: refused.retryAt } }
         : { doc }
     },
   )

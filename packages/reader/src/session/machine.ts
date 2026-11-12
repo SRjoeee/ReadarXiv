@@ -250,8 +250,9 @@ export type Input =
       t: Ticket
       doc: Doc | null
       /** `at`: the instant the refusal ends as our server names it (its clock's; the time said), where it names one; `afterMs`
-       *  that instant's distance from the answer (the session's own measure of it) */
-      refused?: { why: 'quota' | 'busy' | 'rate'; afterMs: number | null; at?: number | null }
+       *  that instant's distance from the answer (the session's own measure of it). `other`: a refusal in a word this reader does
+       *  not know (format's doc.ts, read openly): the generic failure */
+      refused?: { why: 'quota' | 'busy' | 'rate' | 'other'; afterMs: number | null; at?: number | null }
     }
   | { i: 'open.failed'; t: Ticket; why: string }
   | { i: 'head'; digest: string; head: Head }
@@ -770,7 +771,11 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
         // (refused for capacity, nothing was started: its needs given back, so that the look after the wait asks them again)
         s.open = { ...o, t: null, for: [], missing: false, asked: x.refused ? o.asked : [...o.asked, ...o.for] }
         if (x.doc) heard(s, x.doc, o.target)
-        if (x.refused)
+        // (a refusal in a word this reader does not know: the generic failure, our server's for now, at the time it names,
+        // with no action a known word would take: no re-ask of capacity, no limit's time; format's doc.ts)
+        if (x.refused?.why === 'other')
+          s.layer = { s: 'refused', why: 'unreachable', retryAt: x.refused.at ?? null, timer: null }
+        else if (x.refused)
           refusedFor(
             s,
             x.refused.why === 'quota' ? 'limit' : x.refused.why === 'rate' ? 'rate' : 'busy',
