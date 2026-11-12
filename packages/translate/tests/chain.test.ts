@@ -199,6 +199,74 @@ describe('the contract: fall-through is per unit', () => {
   })
 })
 
+// (the fill of the lab's store, lane stray-stop, 2026-11-12: 290 of Microsoft's 318 requests carried one unit, each sent as the
+// Google reply that refused it was read; design-performance-2026-11-13 Q6)
+describe("the contract: a call's units that fall from a translator leave together", () => {
+  /** units each holding an element (the mangler drops it: refused) and, between them, plain ones it takes */
+  const fallers = (n: number) =>
+    Array.from({ length: n }, (_, i) => unit(`f${i}`, [t(`Words of unit ${i} `), el(`x${i}`, 'math'), t(' here.')]))
+  /** each request's start and end, in order, across the translators given */
+  const traced = (log: string[], ...ts: Translator[]) => {
+    for (const tr of ts) {
+      const send = tr.send.bind(tr)
+      tr.send = async function* (wires, call, signal) {
+        log.push(`${tr.identity} ${wires.length}`)
+        try {
+          yield* send(wires, call, signal)
+        } finally {
+          log.push(`${tr.identity} end`)
+        }
+      }
+    }
+  }
+  it('handed to the next translator once every unit of the call has its outcome from the earlier one, cut by its limits alone', async () => {
+    const clock = fakeClock()
+    const a = mangler('drop-el', 'a:0', { clock, limits: { units: 2, inFlight: 1 }, script: () => ({ delayMs: 10 }) })
+    const b = echo('b:0', { limits: { units: 4 } })
+    const log: string[] = []
+    traced(log, a, b)
+    const units = [...fallers(6), plain]
+    const rs = await all(chainOf({ clock }).translate(units, 'zh-Hans', { translators: [a, b] }))
+    expect(byId(rs, 'p')).toMatchObject({ ok: true, by: 'a:0' })
+    expect(rs.filter((r) => r.id !== 'p').every((r) => r.ok && r.by === 'b:0')).toBe(true)
+    expect(a.calls.map((c) => c.length)).toEqual([2, 2, 2, 1])
+    // (⌈6 ÷ 4⌉ requests of the next translator, in one stretch after the earlier one's last reply)
+    expect(b.calls.map((c) => c.length)).toEqual([4, 2])
+    expect(log.indexOf('b:0 4')).toBeGreaterThan(log.lastIndexOf('a:0 end'))
+    // (each unit's wire, and so its stored reply's key, as it is)
+    expect(b.calls.flat().sort()).toEqual(
+      fallers(6)
+        .map((u) => JSON.stringify(u.content))
+        .sort(),
+    )
+  })
+  it('one with a stored reply from the next translator is not held; an abort lets every held unit go, nothing asked after', async () => {
+    const clock = fakeClock()
+    const store = memoryStore()
+    const b0 = echo('b:0')
+    const [first, ...rest] = fallers(3)
+    await all(chainOf({ clock, store }).translate([first as UnitIn], 'zh-Hans', { translators: [b0] }))
+    const a = mangler('drop-el', 'a:0', { clock, limits: { units: 1, inFlight: 1 }, script: () => ({ delayMs: 10 }) })
+    const b = echo('b:0')
+    const rs = await all(chainOf({ clock, store }).translate(fallers(3), 'zh-Hans', { translators: [a, b] }))
+    expect(rs.every((r) => r.ok && r.by === 'b:0')).toBe(true)
+    expect(b.calls).toEqual([rest.map((u) => JSON.stringify(u.content))])
+    const h = mangler('drop-el', 'a:0', {
+      limits: { units: 1, inFlight: 1 },
+      script: ({ n }) => (n === 1 ? undefined : { hang: true }),
+    })
+    const c = echo('c:0')
+    const ac = controller()
+    const out = all(
+      chainOf({ clock: fakeClock() }).translate(fallers(2), 'zh-Hans', { translators: [h, c], signal: ac.signal }),
+    )
+    while (h.calls.length < 2) await tick()
+    ac.abort()
+    expect((await out).every((r) => !r.ok && r.why.kind === 'aborted')).toBe(true)
+    expect(c.calls).toEqual([])
+  })
+})
+
 describe('the contract: the re-ask (limits.reask)', () => {
   it('reask 1 asks a refused unit alone once more, then falls through; reask 0 never does', async () => {
     let n = 0

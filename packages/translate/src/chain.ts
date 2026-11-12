@@ -263,6 +263,44 @@ const HEALTH = new Set<Fault['code']>(['network', 'timeout', 'overload'])
  *  this translator's, counted by the breaker as a failure of its endpoint is (a 400 to every request stops being asked) */
 const refusedWhole = (f: Fault): boolean => f.remedy === 'pass' && f.code !== 'too-large' && f.code !== 'unsupported'
 
+/**
+ * A call's stages, one a translator of its chain: how many of the call's `n` units have no outcome yet from each, and the units
+ * that fall from it held until none is left, so that they leave for the next translator together and its lane cuts them by its
+ * own limits (design-performance-2026-11-13 Q6: the lab's fill sent 290 of Microsoft's 318 requests with one unit each, as the
+ * Google reply that refused it was read). No timer: a unit is held for its call's own earlier replies alone. A unit leaves a
+ * stage once (`passed`), or every stage still before it when it has its result (`done`); an aborted call lets every held
+ * unit go
+ */
+export function stagesOf(
+  n: number,
+  stages: number,
+  signal: Signal,
+): { passed(i: number, k: number): void; done(i: number): void; ready(k: number): Promise<void> } {
+  const left = Array.from({ length: stages }, () => n)
+  /** the stage each unit is at (it has left every stage before it) */
+  const at = new Array<number>(n).fill(0)
+  const held: (() => void)[][] = Array.from({ length: stages }, () => [])
+  const leave = (s: number) => {
+    left[s] = (left[s] as number) - 1
+    if (left[s] === 0) for (const go of (held[s] as (() => void)[]).splice(0)) go()
+  }
+  signal.addEventListener('abort', () => {
+    for (const h of held) for (const go of h.splice(0)) go()
+  })
+  return {
+    passed(i, k) {
+      for (; (at[i] as number) <= k && (at[i] as number) < stages; at[i] = (at[i] as number) + 1) leave(at[i] as number)
+    },
+    done(i) {
+      for (; (at[i] as number) < stages; at[i] = (at[i] as number) + 1) leave(at[i] as number)
+    },
+    ready: (k) =>
+      left[k] === 0 || signal.aborted
+        ? Promise.resolve()
+        : new Promise<void>((go) => (held[k] as (() => void)[]).push(go)),
+  }
+}
+
 export function chainOf(ports: Ports = {}): Chain {
   const clock = ports.clock ?? realClock()
   const lanes = new Map<string, Lane>()
@@ -719,6 +757,7 @@ export function chainOf(ports: Ports = {}): Chain {
           skipped.push({ by: t.identity, code })
         }
       }
+      const stages = stagesOf(units.length, served.length, signal)
       const work = units.map((u, i) =>
         settle(u, i, {
           target,
@@ -735,6 +774,9 @@ export function chainOf(ports: Ports = {}): Chain {
           ask: askOf,
           owned,
           runs: true,
+          passed: stages.passed,
+          done: stages.done,
+          ready: stages.ready,
         }),
       )
       const all = Promise.all(work).then(() => {
@@ -779,6 +821,12 @@ export function chainOf(ports: Ports = {}): Chain {
     /** what an answer no unit waits for is written by, owned by the call so that it settles before the call's last write */
     owned: <T>(p: Promise<T>) => Promise<T>
     runs: boolean
+    /** unit `i` has its outcome from translator `k` and falls from it (stagesOf) */
+    passed: (i: number, k: number) => void
+    /** unit `i` has its result */
+    done: (i: number) => void
+    /** settled once every unit of the call has its outcome from translator `k`, or the call is aborted */
+    ready: (k: number) => Promise<void>
   }
 
   /** one unit through the chain: exactly one emit. Every translator is sent it with each word tied to a reference that
@@ -797,6 +845,7 @@ export function chainOf(ports: Ports = {}): Chain {
       r = { id: u.id, ok: false, why: { kind: 'unavailable' } }
     }
     c.emit(i, r)
+    c.done(i)
   }
 
   async function outcomeOf(u: UnitIn, i: number, c: Call): Promise<Result> {
@@ -846,6 +895,8 @@ export function chainOf(ports: Ports = {}): Chain {
     let off: UnconfiguredCode | null = null
     for (let k = 0; k < c.served.length; k++) {
       if (c.signal.aborted) return aborted(u)
+      // (it has its outcome from the translator before: it falls from it)
+      if (k > 0) c.passed(i, k - 1)
       const t = c.served[k] as Translator
       const last = k === c.served.length - 1
       const wk = wires[k]
@@ -924,6 +975,12 @@ export function chainOf(ports: Ports = {}): Chain {
             by: t.identity,
             ...(r.sentences ? { sentences: r.sentences } : {}),
           }
+      }
+      // (a unit that falls is asked of this translator with the call's others that fall: once every unit of the call has
+      // its outcome from the translator before, so that its lane cuts them by its own limits alone; no timer)
+      if (k > 0) {
+        await c.ready(k - 1)
+        if (c.signal.aborted) return aborted(u)
       }
       const lane = laneOf(t)
       if (!last && shut(lane)) {
