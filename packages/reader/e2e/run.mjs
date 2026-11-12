@@ -859,6 +859,131 @@ for (const name of Object.keys(fixtures)) {
   })
 }
 
+// A laid page gone far is kept off the view within the budget (stack.ts goFar, docs/PDF-READER.md §11.8 "No flash coming back"):
+// its drawing held out of the layout tree while it is kept (`data-axt-kept`), so that no relayout of the document walks it (a
+// face added to the document re-lays every text node laid out: verification/reader-perf.md §1), its slot keeping its box; and
+// put back as it was as the page comes near: no new drawing, the same pixels on the page's grid, the pane's scroll height never
+// moved. A pane a third of a page high: page 1 is far (past one pane's height) once the pane is at its end.
+await check(
+  'stack: a far laid page kept out of the layout tree, back pixel for pixel, the scroll height unmoved (s1-columns)',
+  async () => {
+    const { page, context, errors } = await newPage({ dpr: 2, viewport: { width: 1400, height: 300 } })
+    await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
+    await waitFor(page, () => window.__h.marks.some((m) => m.what === 'drawn' && m.side === 'right' && m.page === 1))
+    await page.evaluate(() => window.__h.layer('s1-columns'))
+    await laidShown(page, 1)
+    await waitFor(page, () => window.__h.probe()['right.sized'] === window.__h.probe().pages)
+    const slot = '.axt-pane.right .axt-slot[data-page-number="1"]'
+    const state = () =>
+      page.evaluate((sel) => {
+        const s = document.querySelector(sel)
+        const pane = document.querySelector('.axt-pane.right')
+        const holder = s?.querySelector(':scope > .axt-slot-view')
+        const p = window.__h.panes.probe()
+        return {
+          kept: !!s?.hasAttribute('data-axt-kept'),
+          boxes: holder ? holder.getClientRects().length : -1,
+          height: pane.scrollHeight,
+          made: p['right.made'],
+          restored: p['right.restored'],
+          keptN: p['right.kept'],
+        }
+      }, slot)
+    const toTop = () => page.evaluate(() => (document.querySelector('.axt-pane.right').scrollTop = 0))
+    // (no pointer moved in this check: nothing lit on either pane)
+    await toTop()
+    await page.waitForTimeout(300)
+    const before = await page.locator(`${slot} > .axt-slot-view`).screenshot({ animations: 'disabled' })
+    const s0 = await state()
+    await page.evaluate(() => {
+      const p = document.querySelector('.axt-pane.right')
+      p.scrollTop = p.scrollHeight
+    })
+    await waitFor(page, () => !window.__h.panes.right.near(1))
+    await page.waitForTimeout(300)
+    const s1 = await state()
+    // (the jump back: in the frame that draws it, page 1's drawing already in the layout tree. A callback asked from the jump's
+    // scroll event runs in that frame before its layout and paint, after the stack's own, asked from the same event earlier)
+    const inJumpFrame = await page.evaluate(
+      (sel) =>
+        new Promise((done) => {
+          const p = document.querySelector('.axt-pane.right')
+          p.addEventListener(
+            'scroll',
+            () => requestAnimationFrame(() => done(document.querySelector(sel).hasAttribute('data-axt-kept'))),
+            { once: true },
+          )
+          p.scrollTop = 0
+        }),
+      slot,
+    )
+    await waitFor(page, () => window.__h.panes.right.near(1))
+    await page.waitForTimeout(300)
+    const s2 = await state()
+    const after = await page.locator(`${slot} > .axt-slot-view`).screenshot({ animations: 'disabled' })
+    // (a zoom while it is far: what changed while it was out is laid out as it comes back, its overlay in its slot's box at the
+    // new scale, its page view drawn again at it)
+    await page.evaluate(() => {
+      const p = document.querySelector('.axt-pane.right')
+      p.scrollTop = p.scrollHeight
+    })
+    await waitFor(page, () => !window.__h.panes.right.near(1))
+    await page.evaluate(() => window.__h.panes.zoomBy(1.25))
+    await page.waitForTimeout(800)
+    const zoomed = await page.evaluate(() => window.__h.panes.scale)
+    await toTop()
+    await waitFor(
+      page,
+      (z) =>
+        window.__h.marks.some(
+          (m) => m.what === 'drawn' && m.side === 'right' && m.page === 1 && Math.abs(m.scale - z) < 1e-6,
+        ),
+      zoomed,
+    )
+    await page.waitForTimeout(300)
+    const z = await page.evaluate((sel) => {
+      const s = document.querySelector(sel)
+      const r = (e) => {
+        const b = e?.getBoundingClientRect()
+        return b ? [b.width, b.height].map((v) => Math.round(v * 100) / 100) : null
+      }
+      return {
+        kept: s.hasAttribute('data-axt-kept'),
+        slot: r(s),
+        holder: r(s.querySelector(':scope > .axt-slot-view')),
+        svg: r(s.querySelector('.axt-over > svg')),
+      }
+    }, slot)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(!s0.kept && s0.boxes > 0, `page 1 in view: ${JSON.stringify(s0)}`)
+    assert(s1.kept && s1.keptN >= 1, `page 1 far but not kept: ${JSON.stringify(s1)}`)
+    assert(s1.boxes === 0, `page 1 far and kept, its drawing still laid out (${s1.boxes} boxes)`)
+    assert(
+      s0.height === s1.height && s1.height === s2.height,
+      `the pane's scroll height moved: ${s0.height}, ${s1.height}, ${s2.height}`,
+    )
+    assert(
+      !s2.kept && s2.boxes > 0 && s2.made === s1.made && s2.restored > s1.restored,
+      `page 1 back: ${JSON.stringify({ far: s1, back: s2 })}`,
+    )
+    assert(inJumpFrame === false, 'page 1 still out of the layout tree in the frame that draws the jump back to it')
+    assert(before.equals(after), 'page 1 back is not the same pixels as before it went far')
+    const near = (a, b) => a && b && a.every((v, i) => Math.abs(v - b[i]) <= 1)
+    assert(
+      !z.kept && near(z.holder, z.slot) && near(z.svg, z.slot) && z.slot[0] > 0,
+      `page 1 back after a zoom while far: ${JSON.stringify(z)}`,
+    )
+    return {
+      height: s0.height,
+      made: s2.made,
+      restored: s2.restored,
+      bytes: after.length,
+      zoomed: { scale: zoomed, ...z },
+    }
+  },
+)
+
 await check(
   "compose: a laid page's links, out of the paper through the host, inside it on the right (s1-columns)",
   async () => {
