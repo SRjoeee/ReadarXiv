@@ -382,7 +382,8 @@ Laid; lane gate-close): `fit.over`, how far under TeX's text block bottom the un
 lines past it (FitState.over: the fit's borrow, §18.37, and the page fill's foot step, §18.57), to the hundredth up, absent where
 no line went past; and `evened: { by, lines }`, the knobs the page's fill took, in the order taken (FillLaid.evened), and the
 member's line count on the page at its fitted layout before them; a knob is named only where the state its final lines are
-laid at carries it (PDF-READER §18.57, round B16: the fill's head pass lays an evened paragraph again with no room borrowed). L1R
+laid at still carries it as the evening took it (PDF-READER §18.57, round B16: the fill's head pass lays an evened paragraph
+again with no room borrowed, the page's growth replaces a size step's scale). L1R
 reads the same field. A unit one step small or a line count other that the lay did not even, and a line past the bottom that is
 neither a stated borrow within the fit's bound nor a stated foot step within its depth, stay worse.
 

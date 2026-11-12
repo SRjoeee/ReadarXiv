@@ -250,4 +250,12 @@ describe('an evened paragraph states only the knobs its final lines carry (§18.
     expect(m.lines.at(-1)![0]).toBeGreaterThanOrEqual(683 - 84 - 0.05)
     expect(m.evened).toEqual({ by: ['size'], lines: 7 })
   })
+  it("still names the tracking it took where the fill's own tracking spreads its lines on from there", () => {
+    // (250 characters: evened by the tracking's bound and TeX's room, 6 lines; the head pass laid it again with no room, and the
+    // fill, the paragraph still short of its frame, tracked it 5 steps on from the knob's -0.03 em, to 0.02: the room is no longer
+    // in its lines, the tracking's step is: without it the fill's 5 steps would stand at 0.05)
+    const m = widow(250)
+    expect([m.fit!.track, m.fit!.borrowed, m.lines.length]).toEqual([0.02, 0, 6])
+    expect(m.evened).toEqual({ by: ['track'], lines: 6 })
+  })
 })

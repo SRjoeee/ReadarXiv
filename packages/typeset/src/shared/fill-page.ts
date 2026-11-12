@@ -347,7 +347,7 @@ export function fillPage(
     // the knob its stand-in was laid at, and the knobs it took that its final lines still carry, carried)
     const q = even.get(p)
     if (st.knob !== 'grow') l.knob = (q ?? p).layout.knob
-    const by = q?.evened?.by.filter((k) => carried(k, st, p.layout.state, !!p.P.cjk)) ?? []
+    const by = q?.evened?.by.filter((k) => carried(k, st, q.layout.state)) ?? []
     if (q?.evened && by.length) p.evened = { by, lines: q.evened.lines }
     p.layout = l
     p.layout.extents = keep
@@ -538,18 +538,18 @@ function evenOf(p: FillLaid, P: PageRules, floor: number): FillLaid | null {
 }
 
 /**
- * Whether the state a unit's final lines are laid at (`st`) still carries evening knob `knob` against its fitted state (`fit`):
- * its tracking tighter than its fit's (the CJK tracking, else the Latin), more of TeX's room under it borrowed, a smaller size, a
- * deeper line past TeX's bottom with the borrow on (B.slots lowOf reads no room at `borrow` 0). The pass lays an evened unit again
- * after evenOf: the head pass with no room borrowed (headOf), the page's size grown, the fill's own tracking (which a CJK unit
- * short of its frame takes past the knob's), so that a knob the stand-in took may move none of its final lines (§18.57: the page
- * states only what its final lines took)
+ * Whether the state a unit's final lines are laid at (`st`) still carries evening knob `knob` as its stand-in took it (`even`,
+ * evenOf's state): the room TeX left under it borrowed and the room past TeX's bottom as the knob set them, and its size; the
+ * pass lays an evened unit again after evenOf and may put one back: the head pass with no room borrowed (headOf, `borrow: 0`:
+ * B.slots lowOf reads no room and no depth past the bottom then), the page's size grown (its scale replaced). Its tracking stays:
+ * the fill's own tracking of a CJK unit short of its frame adds its steps to the knob's (the most that sets it, from there), so
+ * that the knob moves its final lines still (§18.57: the page states what its final lines took)
  */
-function carried(knob: EvenKnob, st: FitState, fit: FitState, cjk: boolean): boolean {
-  if (knob === 'track') return cjk ? st.track < fit.track - 1e-9 : st.trackLatin < fit.trackLatin - 1e-9
-  if (knob === 'room') return st.borrow > fit.borrow
-  if (knob === 'foot') return st.borrow > 0 && (st.over ?? 0) > (fit.over ?? 0) + 1e-9
-  return st.scale < fit.scale - 1e-9
+function carried(knob: EvenKnob, st: FitState, even: FitState): boolean {
+  if (knob === 'track') return true
+  if (knob === 'room') return st.borrow === even.borrow
+  if (knob === 'foot') return st.borrow === even.borrow && (st.over ?? 0) === (even.over ?? 0)
+  return st.scale === even.scale
 }
 
 /** a unit's decision in the fill (the tap's passes[].units, less today's `next` and `closer`: the gap ruling of 2026-11-08):

@@ -5688,12 +5688,14 @@ lines }` (`types.ts` Laid, `lay/page.ts`, from the fill's `FillLaid.evened`): th
 that gave nothing is not named: a paragraph its fit set at the tracking's bound already takes the size step alone), and its
 line count on that page at its fitted layout, before them; one the foot lifted carries `fit.over` too, how deep its lines went
 under TeX's bottom (§18.37's statement, the depth and not the line its state allows). A knob is named only where the state its
-final lines are laid at still carries it against its fitted state (`fill-page.ts` carried, 2026-11-13, round B16): its tracking
-tighter than its fit's, more of TeX's room borrowed, a smaller size, a line deeper past the bottom with the borrow on. The pass
-lays an evened paragraph again after the evening in three places, and each may take a knob back: the head pass, which lays the
-paragraph under a widow line lower with no room borrowed (`headOf`, `borrow: 0`), so that one evened by TeX's room stated a
-room its lines no longer stood in; the page's one size grown; the fill's own tracking of a CJK paragraph still short of its
-frame, past the knob's. One with no knob carried states no evening. Nothing of the lay reads either; the
+final lines are laid at still carries it as the evening took it (`fill-page.ts` carried, 2026-11-13, round B16): the pass lays an
+evened paragraph again after the evening, and two of its steps put a knob back. The head pass lays a paragraph under a widow line
+lower with no room borrowed (`headOf`, `borrow: 0`), so that one evened by TeX's room stated a room its lines no longer stood in
+(2610.20967v1-zh page 4, unit 85, the head pass's own page: `track` and `room` stated, `track` alone carried); the page's one size
+grown replaces the size step's scale. The tracking stays named: the fill's own tracking of a CJK paragraph still short of its
+frame adds its steps to the knob's, so the knob still moves the final lines. One with no knob carried states no evening. Over
+the 90 pairs on the door's rows (default toggles), that unit is the one statement the rule moves; nothing drawn moves. Nothing
+of the lay reads either; the
 display gate's rulings TRS and Fm do (`lab/typeset/parity/rulings.mjs`), so that a paragraph one step small, a line short or
 a line past the bottom is accepted only where the lay says it evened it so.
 
