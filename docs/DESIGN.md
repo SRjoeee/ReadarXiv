@@ -1042,8 +1042,9 @@ only how it meets the rest of the extension.
   release-check` (§11).
   **One entry, typed** (`packages/engine/src/prepare.ts`, the front half `packages/engine/src/front.ts`). `prepare(take,
   host)` runs the two in order and is what both callers run: the box, and the lab's runner
-  (`lab/pdf/prepare-back/run.mjs`), so that the lab makes a paper through the product's door. It takes the inputs once (`take`: the source's files, arXiv's PDF and, where a compile of the same original made them,
-  the instrument's four stored objects), reads what arXiv's PDF says (`originalFactsOf`: its page count, its day, its
+  (`lab/pdf/prepare-back/run.mjs`), so that the lab makes a paper through the product's door. It takes the inputs once
+  (`take`: the source's files, arXiv's PDF and, where a compile of the same original made them, the instrument's four
+  stored objects), reads what arXiv's PDF says (`originalFactsOf`: its page count, its day, its
   banner's TeX Live year), decides the tree (`treeOf`: the paper's declaration, else the banner's year, else the default)
   and answers a paper of another tree before anything is compiled, runs the front half (`prepareFront`: the
   bibliography, the source's units handed out before any compile of the marks, the marked compile and its final pass,
