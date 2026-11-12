@@ -646,7 +646,7 @@ export function adapt(i: AdaptInput): Adapted {
       },
     ) as typeof tokens
   }
-  // (its end mark (El.end, docs/PDF-READER.md §18.54; the coordinator's ruling of 2026-11-12): ink TeX pushed to the end of the
+  // (its end mark (El.end, docs/PDF-READER.md §18.52; the coordinator's ruling of 2026-11-12): ink TeX pushed to the end of the
   // unit's last line after its text, amsthm's QED box. It belongs to the end of the translation, wherever that ends: its crop the
   // last token, set at the end of the line the text ends on, as far from that line's right edge as TeX set it from its own
   // (`pad`, its rectangle's right edge to the slot's on the line TeX set it on), on that line where the text ends the keep-off

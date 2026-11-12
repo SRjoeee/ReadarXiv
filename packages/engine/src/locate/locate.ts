@@ -1921,7 +1921,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     words.sort((a, b) => a[0] - b[0])
     if (words.length) mem.words = words
   }
-  // ---- a unit's end mark (docs/PDF-READER.md §18.54; the coordinator's ruling of 2026-11-12): what TeX pushed to the end of the
+  // ---- a unit's end mark (docs/PDF-READER.md §18.52; the coordinator's ruling of 2026-11-12): what TeX pushed to the end of the
   // unit's last line after its text, amsthm's `\qed` (`\unskip\penalty9999\hbox{}\nobreak\hfill\quad\hbox{\qedsymbol}`, its
   // `\openbox` four rules, set by `\end{proof}` after the unit's end point), a class's or an author's mark after `\hfill`. It
   // belongs to the end of the unit's text: left where TeX set it (Room.stays, in no group), a translation a line longer stood it

@@ -214,7 +214,7 @@ export const El = z.object({
   // and the box; a class's or an author's mark after `\hfill`), its box's right edge at that line's measure end. It belongs to
   // the end of the unit's text, wherever a translation ends: laid at the end of the translation's last line, keeping its
   // distance to the measure's end as TeX set it, on a line of its own where that line's text does not end the keep-off
-  // distance before it (docs/PDF-READER.md §18.54). Left where TeX set it, a translation a line longer stood it beside a line
+  // distance before it (docs/PDF-READER.md §18.52). Left where TeX set it, a translation a line longer stood it beside a line
   // in the middle of the paragraph, one a line shorter left it alone under the text. Stated on the element of no piece the
   // prepare claims after the unit's end point (its id `~$`, `trail` too: a typesetter of before draws it glued after the
   // translation's end rather than erasing it unseen with the unit's elements). On a piece's element (the author's `\qed`

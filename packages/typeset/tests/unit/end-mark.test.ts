@@ -1,4 +1,4 @@
-// A unit's end mark laid at the end of its translation (El.end; docs/PDF-READER.md §18.54; the coordinator's ruling of
+// A unit's end mark laid at the end of its translation (El.end; docs/PDF-READER.md §18.52; the coordinator's ruling of
 // 2026-11-12): the last token, a crop as far from its line's right edge as TeX set it, on the line the text ends on where the
 // text ends the keep-off distance before it (B.slots' rule for ink that stays: TeX's own distance, half an em at most), else on
 // a line of its own. Parts made by hand: a paragraph of two lines at 10 pt on a 228 pt measure (72-300), half a size a

@@ -1058,7 +1058,7 @@ export function pinnedOf(
 }
 
 /** the element id of a member's end mark claimed after its end point (no piece's: a piece's id is its index; El.end,
- *  docs/PDF-READER.md §18.54) */
+ *  docs/PDF-READER.md §18.52) */
 export const END = '~$'
 
 // ---------------------------------------------------------------- alignment read off the page (B3, E8)

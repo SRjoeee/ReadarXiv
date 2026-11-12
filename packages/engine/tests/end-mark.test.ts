@@ -1,4 +1,4 @@
-// A unit's end mark (docs/PDF-READER.md §18.54; the coordinator's ruling of 2026-11-12): what TeX pushed to the end of the unit's
+// A unit's end mark (docs/PDF-READER.md §18.52; the coordinator's ruling of 2026-11-12): what TeX pushed to the end of the unit's
 // last line after its text belongs to the end of the unit, claimed as its element of no piece (El.end, El.trail) in its
 // travelling group, no stay of any member's. Decided by what TeX set: the ink after the unit's end point in B's stream, up to
 // the next unit's ink or mark, on its last line, after its last glyph, its box's right edge at the line's measure end. Pages

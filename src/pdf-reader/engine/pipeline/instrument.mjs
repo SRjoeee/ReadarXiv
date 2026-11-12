@@ -121,7 +121,7 @@ const SWITCH_FACE = { em: 'italic', it: 'italic', itshape: 'italic', sl: 'italic
  * `other`: the typesetter drew its face off the element alone, so a translation that lost the element lost the face; a group
  * holding an element is placed nowhere (packages/translate groups.ts); the tags wire sent an empty element first in its pair.
  * Over r19's bundles (2026-11-12) 610 bibliography units in 22 papers held an italic stretch on arXiv's page their unit stated as
- * no italic group, 589 of them in such a group (16,680 letters; PDF-READER §18.60). A size, a family, a colour, a switch that is
+ * no italic group, 589 of them in such a group (16,680 letters; PDF-READER §18.56). A size, a family, a colour, a switch that is
  * not first: as before
  */
 export function switchesOf(pieces) {

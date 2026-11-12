@@ -107,7 +107,7 @@ describe("a face that fills a bibliography's field: `must` (production's markers
 // (TeX sets `{\em x}` as it sets `\emph{x}`: a face switch that draws nothing, first in a bare group, is the group's face. Read as
 // an element of the group's text, the group was stated `other`: no wire carried its face as a group's, a group holding an element
 // was never placed (packages/translate groups.ts), and over r19's bundles 589 bibliography units in 15 papers (16,680 letters)
-// held an italic stretch on arXiv's page, in such a group, that their unit stated as no italic group: PDF-READER §18.60)
+// held an italic stretch on arXiv's page, in such a group, that their unit stated as no italic group: PDF-READER §18.56)
 describe("a face switch first in a bare group is the group's face, stated as `\\emph{…}`'s is", () => {
   type S = { t: string; id?: string; open?: string; style?: string; must?: number; content?: S[] }
   const groups = (ps: unknown[], out: [string | undefined, string | undefined, number][] = []) => {

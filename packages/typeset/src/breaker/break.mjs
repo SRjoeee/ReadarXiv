@@ -566,7 +566,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       i++
       continue
     }
-    // the unit's end mark (Token.endMark, lay/adapt.ts; docs/PDF-READER.md §18.54): at the end of the line the text ends on, its
+    // the unit's end mark (Token.endMark, lay/adapt.ts; docs/PDF-READER.md §18.52): at the end of the line the text ends on, its
     // rectangle as far from the line's right edge as TeX set it (`pad`), where the text ends the keep-off distance before its ink
     // (TeX's own distance and half an em at most, B.slots' rule for ink that stays: `gap`), the line's spaces shrunk as `fits`
     // takes them and a closing mark at its end hung; else on a line of its own (amsthm's \penalty9999 before it: a break only

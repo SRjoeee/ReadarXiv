@@ -86,7 +86,7 @@ export type Token = {
   newline?: number
   room?: number
   blockTo?: number
-  /** its unit's end mark (El.end, lay/adapt.ts; docs/PDF-READER.md §18.54): a crop the breaker sets at the end of the unit's last
+  /** its unit's end mark (El.end, lay/adapt.ts; docs/PDF-READER.md §18.52): a crop the breaker sets at the end of the unit's last
    *  line, `pad` the distance TeX set from its rectangle's right edge to its line's right edge (the slot's, PDF units), a break
    *  before it, kept off the line's text by `gap` (the original line's own distance to its ink) and half an em at most */
   endMark?: { pad: number; gap: number }

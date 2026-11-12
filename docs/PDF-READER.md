@@ -3532,7 +3532,7 @@ the row (`ON_ROW`) and no word's gap after the one before (the ink units' word r
 of no piece in its group `.e`, on its last line. The typesetter draws it as its crop right after the member's own tokens,
 glued; the follower runs on from its end at TeX's separation, and the room beside the member is no longer fenced by it (a
 `\thanks` mark in an `\rlap`, 1706.03762v7's first name). Ink past a skip (an `\hspace`, a proof's QED box after `\hfill`)
-is no trail; what TeX pushed to the measure's end is the unit's end mark (§18.54), the rest stays. One rule with §18.12's:
+is no trail; what TeX pushed to the measure's end is the unit's end mark (§18.52), the rest stays. One rule with §18.12's:
 what TeX set on a line is laid as the line, with the alignment TeX gave it. The
 crop stands on the member's last line, the line TeX set it on, as every element's crop stands on its line's baseline: drawn by
 its glyphs' own baseline, which a trail of raised marks alone holds off the line, each mark came down onto the line (45 of
@@ -4599,7 +4599,7 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
   \alph, \Alph, \roman, \Roman, a bullet or a dash; an opening bracket, a closing point or bracket), and another line of its
   figure opens with the next one or the one before, of its form, at its left edge (a column) or on its baseline (a row): options
   set as a grid (2411.13093v4 p19's A. B. over C. D., where "A." had come back "Answer"). One enumerated line alone is text.
-  A marker no run holds joins no line of the column before it (§18.58).
+  A marker no run holds joins no line of the column before it (§18.55).
 - **A path's text** (the container step). A closed path holds the lines whose glyphs' centres all stand inside it (read by its
   interior after its box) alone where no other glyph is inside it and no closed path inside it holds text of its own (the nodes
   of a box round a chart); a fill or a frame under words of one line, within one band's height of its baseline, is a decoration
@@ -5301,7 +5301,7 @@ read as the caption's text; all three sentences and the label "Figure 1." stayed
   of its argument alone; own.mjs read the bracket into the highlight before it, and this reading, spelling the text after it,
   meets the bracket first and claims nothing.
 
-### 18.54 A unit's end mark belongs to the end of its translation (2026-11-12)
+### 18.52 A unit's end mark belongs to the end of its translation (2026-11-12)
 
 amsthm's `\end{proof}` sets `\qed` after the proof's last words: `\unskip\penalty9999\hbox{}\nobreak\hfill\quad\hbox{\qedsymbol}`,
 its `\openbox` four rules pushed by the `\hfill` to the end of the paragraph's last line. TeX ships it after the unit's end point,
@@ -5373,7 +5373,7 @@ measure's edge, on a line of its own only where it does not fit; decided by what
   ends, is no fact the part states. 2608.25210v2's example mark, set after a space, is no push. The two marks before a heading
   number no unit owns stay. PIPELINE must move (the parts, the add-ons); TRANSLATE, LAYOUT, CHAIN_RULES and FORMAT do not.
 
-### 18.56 An italic figure label is drawn slanted in a CJK target, as a name and a display are (2026-11-12)
+### 18.53 An italic figure label is drawn slanted in a CJK target, as a name and a display are (2026-11-12)
 
 A CJK run of an italic text is its upright face sheared 13° (the owner's ruling of 2026-10-19; `breaker/faces.ts` `faceOf`
 states it as the face's `oblique`). The names path (`lay/entry.ts`) and the displays (`emit/display.ts`) write it into each
@@ -5391,7 +5391,7 @@ and direction and no skew, so an italic label translated into Chinese, Japanese 
   nothing else of any page moves. The parity on those pairs, both modes: 19 italic labels now read as the original's italic
   (`style`, v2 nearer; today's drawn upright), no page newly worse. No version moves: the reader's lay alone.
 
-### 18.57 One size a group: a figure text the paragraph path lays is in its labels' size tie (2026-11-12)
+### 18.54 One size a group: a figure text the paragraph path lays is in its labels' size tie (2026-11-12)
 
 The labels of one group are set at one size (the owner's rule of 2026-10-29, §19.12 "Its set and its room"): today's figure
 reading puts each line in a set (`setsOf`: its column, its baseline), the part states each set as a size tie, and S.figures
@@ -5419,7 +5419,7 @@ within one bullet item.
   that fits, each drawn at one size (red at the base: 7 against 10, 6.75 against 10). 2111.09276v1 (stage 1a over our compile
   of it, soul-locate's compiles; laid with staging's stored Google rows, the served metrics and the reader's `typesetLay`): units
   byte-identical, the ties of its figures on pages 1, 3 and 8 gain 36 members; page 8's list columns drawn at 3.64 pt throughout
-  (10 members from 4.74 to 4.99; two more are §18.58's lines, whose new units staging holds no row of) and its second figure at
+  (10 members from 4.74 to 4.99; two more are §18.55's lines, whose new units staging holds no row of) and its second figure at
   4.04 (6 members from 4.99), page 1's figure at 4.30 (5 members from 4.77); no member changes state.
 - **Over the 88** (stage 1a, r19's flags and caches, against r19): 44 papers' parts move, by their size ties alone: 307 ties
   (201 new, 106 grown; a figure's tie is stated in each part that holds it) gain 843 members, every one a figure text the
@@ -5432,7 +5432,7 @@ within one bullet item.
   rule given parts of after it ties the paragraph members among themselves, at the body's floor, and its labels as before; a
   reader of after it given parts of before it lays them as before (no paragraph member in a figure's tie).
 
-### 18.58 A list's marker joins no line of the column before it (2026-11-12)
+### 18.55 A list's marker joins no line of the column before it (2026-11-12)
 
 A glyph no run of today's figure reading holds joins the nearest line on its baseline within the run gap (`locate/figure-
 lines.ts` `linesOf`), and a cluster holding a formula's glyph is a formula (F1, §18.35). A list's bullet set in a symbol face
@@ -5451,10 +5451,10 @@ column's bullet as an element of their own.
   the base ("boards•" one formula element); the raised star kept with its formula. 2111.09276v1 (stage 1a): three units lost and
   two gained, the four lines' (members 454, 469, 535, 553 on p8): "Wipe down the furniture" plain words, "Wipe down the [cabinets]"
   its highlight alone, "Pour hot water into the" twice a plain label; every bullet the page's ink where it stands.
-- **Over the 88**: nothing moves (units, members and parts as with §18.57 alone; the dumps r19's). The class is this paper's.
+- **Over the 88**: nothing moves (units, members and parts as with §18.54 alone; the dumps r19's). The class is this paper's.
 - **Versions.** PIPELINE must move (2111.09276v1's units).
 
-### 18.60 A face switch first in a bare group is the group's face (2026-11-12)
+### 18.56 A face switch first in a bare group is the group's face (2026-11-12)
 
 With the References toggle on, a reference's italic venue or title was drawn upright (the toggles-on sheet's class Y2). Read
 against arXiv's page over round B12's bundles (r19, the 88 papers: each bibliography member's glyphs on A inside its lines,
@@ -8140,7 +8140,7 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   fitted to its own box and anchored by what it read alone; `figure-text.mjs` `setsOf`, `roomsOf`): the labels of one group are set at one size, the original's by default; each keeps the original's alignment
   and anchor; a translation may take free space, never touching other ink nor leaving its figure; only a group that cannot
   fit shrinks, all of it by one factor, never a label alone; a figure text the paragraph path lays stands in its lines' set and
-  is drawn at its factor (§18.57). A **column** is the runs of one figure, size and direction whose
+  is drawn at its factor (§18.54). A **column** is the runs of one figure, size and direction whose
   starts, ends or middles agree within `ALIGN_TOL` 0.08 of their size, two units or more among them; its other runs, a
   number or a "…", count for its edge (2010.11929v2's "Head 1/2/3", one length, read their end alone, the frame being
   nearer after them than their markers before; the column's "…" shares their start alone). A unit in a column takes the
