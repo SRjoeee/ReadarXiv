@@ -12,7 +12,9 @@
 //   diff      today's pane against v2's: the pixels whose luminance differs by DIFF_MIN or more; and each pane against arXiv's
 //             page outside every unit's box, where each should be arXiv's page ink for ink (`outside`: v2's, `outsideToday`:
 //             today's, whose composed page may be our compile's on a delta's replaced page): a pixel counted where no pixel
-//             within one device pixel of it, in either image, matches it (ink, not its sub-pixel phase).
+//             within one device pixel of it, in either image, matches it (ink, not its sub-pixel phase); where a side moved an
+//             element's ink from (`vacated`: its crops' sources, an end mark set at the translation's end), its place shown blank
+//             is the move, and the element's ink still shown there counts (pixels.mjs strayOf).
 //   rules     the vertical rules of arXiv's page, read off its pixels (the bundle's rules list the horizontal ones alone): a
 //             straight run of dark pixels RULE_LONG points long or more, at most RULE_THICK points wide, light on both sides
 //             (a glyph's stem is shorter than a line's height; a table's column rule spans a row at least).
@@ -23,7 +25,7 @@
 //             each of its elements' ink (`elements`) it shows in place.
 // Returns the numbers and the sheet's images (WebP, half the device resolution): the original, today's, v2's, and the
 // difference (the original faint, v2's ink alone red, today's alone blue).
-export async function analyse({ A, T, Tt, Tc, V, Vt, Vc, view, boxes, textBoxes, figBoxes = [], groups = null, origs = [], regions = null, moved = null, elements = null, scale }) {
+export async function analyse({ A, T, Tt, Tc, V, Vt, Vc, view, boxes, textBoxes, figBoxes = [], groups = null, origs = [], regions = null, moved = null, vacated = null, elements = null, scale }) {
   const DARK_MIN = 0.1
   const DIFF_MIN = 0.25
   const RULE_LONG = 12
@@ -72,41 +74,23 @@ export async function analyse({ A, T, Tt, Tc, V, Vt, Vc, view, boxes, textBoxes,
   const inside = maskOf(boxes)
   const fig = maskOf(figBoxes)
   const notFig = fig.map((v) => (v ? 0 : 1))
-  // (a pixel off arXiv's page only where no pixel of either within one device pixel matches it: the same ink drawn a
-  // fraction of a pixel elsewhere, as PDF.js's page view does in a box it floors to whole pixels, is no difference of ink)
-  const near = (d, p) => {
-    const x = p % W,
-      y = (p / W) | 0
-    const own = lum(d, p * 4),
-      orig = lum(pa.data, p * 4)
-    for (let dy = -1; dy <= 1; dy++)
-      for (let dx = -1; dx <= 1; dx++) {
-        const X = x + dx,
-          Y = y + dy
-        if (X < 0 || Y < 0 || X >= W || Y >= H) continue
-        const q = (Y * W + X) * 4
-        if (Math.abs(own - lum(pa.data, q)) < DIFF_MIN || Math.abs(orig - lum(d, q)) < DIFF_MIN) return true
-      }
-    return false
-  }
-  let diff = 0,
-    outside = 0,
-    outsideToday = 0
+  // (each side against arXiv's page outside the units' boxes, pixels.mjs strayOf: a pixel off it where no pixel of either within
+  // one device pixel matches it; where the side moved an element's ink from (`vacated`, render.mjs), its place shown blank is the
+  // move and the element's ink still shown there is stray)
+  const outside = globalThis.parityPixels.strayOf(pa.data, pv.data, inside, maskOf(vacated?.v2 ?? []), W, H, DIFF_MIN)
+  const outsideToday = globalThis.parityPixels.strayOf(pa.data, pt.data, inside, maskOf(vacated?.today ?? []), W, H, DIFF_MIN)
+  let diff = 0
   const dc = new OffscreenCanvas(W, H)
   const dx = dc.getContext('2d')
   const img = dx.createImageData(W, H)
   const o = img.data
-  for (let i = 0, p = 0; i < pa.data.length; i += 4, p++) {
+  for (let i = 0; i < pa.data.length; i += 4) {
     const a = lum(pa.data, i),
       t = lum(pt.data, i),
       v = lum(pv.data, i)
     const faint = 255 - Math.round((1 - a) * 60)
     o[i] = o[i + 1] = o[i + 2] = faint
     o[i + 3] = 255
-    if (!inside[p]) {
-      if (Math.abs(v - a) >= DIFF_MIN && !near(pv.data, p)) outside++
-      if (Math.abs(t - a) >= DIFF_MIN && !near(pt.data, p)) outsideToday++
-    }
     if (Math.abs(t - v) >= DIFF_MIN) {
       diff++
       if (v < t) {

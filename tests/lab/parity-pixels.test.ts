@@ -2,7 +2,7 @@
 // The parity's pixel readings against arXiv's page (lab/typeset/parity/pixels.mjs): synthetic shots of a few device pixels.
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { darkOf, overOf, partsOf, pixelsOf, shownOf } from '../../lab/typeset/parity/pixels.mjs'
+import { darkOf, overOf, partsOf, pixelsOf, shownOf, strayOf } from '../../lab/typeset/parity/pixels.mjs'
 // @ts-expect-error — a plain node module of the lab
 import { boxesOf } from '../../lab/typeset/parity/analyse.mjs'
 
@@ -71,6 +71,36 @@ describe('pixels: the drawing read against arXiv\'s page', () => {
     const ink = rect(2, 2, 4, 4)
     expect(shownOf(shot(ink), shot(ink), all, W, H)).toEqual({ ink: 4, shown: 4 })
     expect(shownOf(shot(ink), shot(), all, W, H)).toEqual({ ink: 4, shown: 0 })
+  })
+})
+
+describe("the pixels off arXiv's page outside the units' boxes (pixels.mjs strayOf, the `pixels` measure)", () => {
+  // (an end mark, a 4 × 4 device-pixel box at (6, 1) on A, outside its unit's lines; the lay sets it at the translation's end,
+  // (1, 4), inside the drawn line's box. `vacated`: the place a side moved an element's ink from, the source of its crop drawn
+  // away from it, render.mjs. A pixel counts where no pixel of either shot within one device pixel matches it, so of a box
+  // shown blank its 2 × 2 middle counts, its edge (a white neighbour on A matching the side's white) not: the rule before)
+  const mark = rect(6, 1, 10, 5)
+  const drawn = rect(1, 4, 5, 8)
+  const inside = mask(rect(0, 4, 6, 8))
+  const none = new Uint8Array(W * H)
+  const vacated = mask(mark)
+  const A = shot(mark)
+  it("a mark moved to the translation's end, its place left blank, is no stray pixel", () => {
+    expect(strayOf(A, shot(drawn), inside, vacated, W, H)).toBe(0)
+  })
+  it('the same blank place read with no move known is stray, as before (the newly worse page of B13)', () => {
+    expect(strayOf(A, shot(drawn), inside, none, W, H)).toBe(4)
+  })
+  it("a mark drawn twice, left where it stood and drawn at the translation's end, is stray where it was left: every pixel of its ink", () => {
+    expect(strayOf(A, shot([...mark, ...drawn]), inside, vacated, W, H)).toBe(16)
+  })
+  it('a mark lost, erased and drawn nowhere (no crop moved, no place vacated), is stray', () => {
+    expect(strayOf(A, shot(), inside, none, W, H)).toBe(4)
+  })
+  it("ink a side draws outside the boxes where arXiv's page has none is stray; the same ink a device pixel off is not", () => {
+    expect(strayOf(shot(), shot(rect(1, 1, 4, 4)), none, none, W, H)).toBe(1)
+    expect(strayOf(shot(rect(1, 1, 5, 5)), shot(rect(2, 1, 6, 5)), none, none, W, H)).toBe(0)
+    expect(strayOf(A, shot(mark), inside, none, W, H)).toBe(0)
   })
 })
 

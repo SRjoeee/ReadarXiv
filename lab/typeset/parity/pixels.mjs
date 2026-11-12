@@ -49,6 +49,48 @@ export function maskOf(boxes, view, scale, W, H) {
   return m
 }
 
+/**
+ * How many device pixels a side's shot `s` shows off arXiv's page `a` outside the units' boxes (`inside`, a mask): the `pixels`
+ * measure (analyse.mjs `outside`, `outsideToday`). A pixel counts where the two differ in luminance by `diff` or more and no pixel
+ * of either within one device pixel matches it (ink, not its sub-pixel phase: the same ink drawn a fraction of a pixel elsewhere,
+ * as PDF.js's page view does in a box it floors to whole pixels, is no difference). `vacated` (a mask): the places a side moved an
+ * element's ink from, each the source of a crop it draws away from it (render.mjs; an end mark TeX pushed to its unit's last
+ * line's end, set at the translation's end, PDF-READER §18.52). arXiv's ink there is that element's, which the side shows where
+ * its crop stands (inside: each drawn crop is a box): its place shown blank is the move, no difference; arXiv's ink still shown
+ * there is the element left behind, drawn twice, and counts. An element erased and drawn nowhere moves no crop, so its place is
+ * not vacated: blank against arXiv's ink, it counts as before
+ */
+export function strayOf(a, s, inside, vacated, W, H, diff = 0.25) {
+  const lum = (d, p) => 1 - darkAt(d, p)
+  const near = (p) => {
+    const x = p % W,
+      y = (p / W) | 0
+    const own = lum(s, p),
+      orig = lum(a, p)
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        const X = x + dx,
+          Y = y + dy
+        if (X < 0 || Y < 0 || X >= W || Y >= H) continue
+        const q = Y * W + X
+        if (Math.abs(own - lum(a, q)) < diff || Math.abs(orig - lum(s, q)) < diff) return true
+      }
+    return false
+  }
+  let n = 0
+  for (let p = 0; p < W * H; p++) {
+    if (inside[p]) continue
+    const A = lum(a, p),
+      S = lum(s, p)
+    if (vacated?.[p]) {
+      if (1 - A >= diff && Math.abs(S - A) < diff) n++
+      continue
+    }
+    if (Math.abs(S - A) >= diff && !near(p)) n++
+  }
+  return n
+}
+
 /** INK: a pixel is ink where its darkness is at least this (half the way to black: an antialiased edge's lighter half is not) */
 export const INK = 0.5
 
