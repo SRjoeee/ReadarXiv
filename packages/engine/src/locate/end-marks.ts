@@ -1,13 +1,14 @@
 // Phase 9 of locate (locate.ts): a unit's end mark, what TeX pushed to the end of its last line after its text, claimed
 // by the member as its element END.
-// Reads: the index; the record's `members` (their last lines and their measures, phases 6 and 8), `units`, `claimedA` (what
+// Reads: the index; the record's `members` (their last lines and their measures, phases 6 and 8), `units`; the ownership (what
 // another member holds on A ends the walk).
-// Writes: `claimedA` (the mark's glyphs its member's), the members' END element and its glyphs and boxes, `stats.ends`.
+// Writes: the ownership (each mark taken by its member, its element END: its glyphs and boxes), the members' END element,
+// `stats.ends`. The last claim of locate's: the ownership is frozen after it.
 import type { Line } from '@readarxiv/format'
 import { isImage, isPath } from '../doc.ts'
 import { CENTRE, END } from './facts.ts'
 import { isInk, r2 } from './lines.ts'
-import { BRACKET, CALL, FREE, type Member, ON_ROW, UNIT_MARK, type Work } from './work.ts'
+import { BRACKET, CALL, type Member, ON_ROW, UNIT_MARK, type Work } from './work.ts'
 
 // ---- a unit's end mark (docs/PDF-READER.md §18.52; the coordinator's ruling of 2026-11-12): what TeX pushed to the end of the
 // unit's last line after its text, amsthm's `\qed` (`\unskip\penalty9999\hbox{}\nobreak\hfill\quad\hbox{\qedsymbol}`, its
@@ -33,7 +34,7 @@ import { BRACKET, CALL, FREE, type Member, ON_ROW, UNIT_MARK, type Work } from '
 // or B's stream states. The typesetter lays such an element as an end mark where a part states it (El.end), none does
 export function endMarks(w: Work): void {
   const { ins, B, m, inkA, pageA, pageB, unitB, gA, gB } = w.ix
-  const { members, units, claimedA, stats } = w
+  const { members, units, stats, claims } = w
   const memberOf = new Map<number, Member>()
   for (const x of members) if (x.unit >= 0 && x.name === undefined && !memberOf.has(x.unit)) memberOf.set(x.unit, x)
   // (whether ink at `a` on A stands on unit u's first line, before its text: its head, whatever member holds it)
@@ -144,8 +145,8 @@ export function endMarks(w: Work): void {
         const q = { x0: g.x0, x1: g.x1, y0: g.bottom, y1: g.top }
         // (a glyph a member holds on A ends it where that member is the next unit's, whose head it is; another's (an ink unit
         // made on A of the paragraph's own text going on) is no end of the paragraph)
-        const c = claimedA[a] as number
-        if (c !== FREE) {
+        if (!claims.free(a)) {
+          const c = claims.member(a)
           if (c >= 0 && next >= 0 && (members[c]?.unit === next || onHead(next, a))) ended = true
           else ok = false
         } else if (pageA[a] !== l[0] || !onLine(q)) ok = false
@@ -163,18 +164,21 @@ export function endMarks(w: Work): void {
         const y0 = Math.min(...at.map((x) => x.y0))
         const y1 = Math.max(...at.map((x) => x.y1))
         if (x0 >= l[3] + 0.5 && flush(x1) && y0 < l[4] + band && y1 > l[4] - band) {
-          for (const a of glyphs) claimedA[a] = mem.ord
-          if (glyphs.length) mem.els.set(END, glyphs)
+          const els = new Map<string, number[]>()
+          const elBoxes = new Map<string, [number, number][]>()
+          const elBoxesB = new Map<string, [number, number][]>()
+          if (glyphs.length) els.set(END, glyphs)
           if (boxes.length) {
-            mem.elBoxes.set(
+            elBoxes.set(
               END,
               boxes.map(([ap, ai]) => [ap, ai]),
             )
-            mem.elBoxesB.set(
+            elBoxesB.set(
               END,
               boxes.map(([, , bp, bx]) => [bp, bx]),
             )
           }
+          claims.take(mem, { els, elBoxes, elBoxesB })
           stats.ends = (stats.ends ?? 0) + 1
           mem.elements.push([
             END,

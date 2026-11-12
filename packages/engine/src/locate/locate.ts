@@ -71,6 +71,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   sentenceStarts(w) // 7
   frameMeasures(w) // 8
   endMarks(w) // 9
+  // (the last claim made: a write after it throws)
+  w.claims.freeze()
   rooms(w) // 10
   leadNames(w) // 11
   facts(w) // 12
