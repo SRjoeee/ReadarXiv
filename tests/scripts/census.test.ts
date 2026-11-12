@@ -282,3 +282,169 @@ describe('the ratchet', () => {
     expect(by).toMatchObject({ 'NOW thresholds': 'hold', 'NOW deadModules': 'skipped', 'NOW gplReached': 'skipped', 'AFTER thresholds': 'skipped' })
   })
 })
+
+// The reduction round's measures (design-reduction §1, §3c, §3d) on a second pair of trees: an engine with a workspace package
+// `@x/p` (two translator clients and the chain behind its entry, the store's version constants, budgets, vocabularies, casts,
+// a function of 1,003 code lines, comments that tell history), an order of its own in the engine's source, and a website
+// whose order takes the package's clients through its entry.
+describe("the reduction round's measures", () => {
+  const PKG = {
+    name: 'engine',
+    areas: [
+      { prefix: 'packages/p/src/', area: 'pkg:p', role: 'product' },
+      { prefix: 'packages/', area: 'packages', role: 'config' },
+      { prefix: 'src/', area: 'ext', role: 'product' },
+      { prefix: '', area: 'root', role: 'config' },
+    ],
+    workspaces: ['packages'],
+    publicEntries: { packageExports: 'packages' },
+    engineAreas: ['pkg:p'],
+    debtAreas: ['pkg:p'],
+    builds: [{ name: 'app', entries: ['src/main.ts', 'src/own.ts'] }, { name: 'packages', entries: { packageExports: 'packages' } }],
+  }
+  const SITE = { ...WEB, workspaces: ['vendor/e/packages'] }
+  let root = ''
+  let r: Census
+  const put = (path: string, text: string) => {
+    mkdirSync(dirname(join(root, path)), { recursive: true })
+    writeFileSync(join(root, path), text)
+  }
+  beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'census-r0-'))
+    put('engine/package.json', JSON.stringify({ name: 'e2' }))
+    put('engine/packages/p/package.json', JSON.stringify({ name: '@x/p', exports: { '.': './src/index.ts' } }))
+    put('engine/packages/p/src/index.ts', "export { deepl, google } from './adapters.ts'\nexport { chainOf } from './chain.ts'\n")
+    put('engine/packages/p/src/adapters.ts', "export const deepl = () => fetch('https://api.deepl.com/v2/translate')\nexport const google = () => fetch('https://translate.googleapis.com/t')\n")
+    put(
+      'engine/packages/p/src/chain.ts',
+      [
+        "// Today's chain, moved here (round B14).",
+        '// The order fixed on 2026-11-01.',
+        '// Measured on 2026-11-02: 40 ms a call.',
+        "import { z } from 'zod'",
+        '',
+        "/** a call's time at most */",
+        'export const CALL_MS = 1500',
+        '/** the pages kept at most (measured on the corpus) */',
+        'export const KEEP_PAGES = 4',
+        "/** a stored value's bytes at most: the platform's quota allows that */",
+        'export const VALUE_BYTES = 65536',
+        "/** a gap's width at most, em */",
+        'export const GAP_MAX = 3',
+        "export const KINDS = ['para', 'heading', 'caption'] as const",
+        "export const STATE = z.enum(['open', 'shut', 'gone'])",
+        "const NAMES = ['Figure', 'Table', 'Algorithm']",
+        '',
+        "/** the first translator's answer that is not empty */",
+        'export async function chainOf(translators: (() => Promise<Response>)[]): Promise<string> {',
+        '  for (const t of translators) {',
+        '    const text = await (await t()).text()',
+        '    if (text && !NAMES.includes(text)) return text',
+        '  }',
+        "  return ''",
+        '}',
+        '',
+      ].join('\n'),
+    )
+    put('engine/packages/p/src/p.css', "/* the bar's height (the owner's ruling of 2026-11-08) */\n.bar { height: 2rem }\n")
+    put(
+      'engine/packages/p/src/store.ts',
+      [
+        '// The store\'s records. A change of shape bumps STORE_VERSION and gets a migration.',
+        'export const STORE_VERSION = 3',
+        "/** the key's grammar: rises only if the grammar changes */",
+        "export const KEY_VERSION = 'k1'",
+        "/** raised with any change to what the maker writes under this schema */",
+        "export const MAKER_VERSION = '9'",
+        'export const PAGE_FORMAT = 2',
+        "/** the model's, raised with its files */",
+        "export const MODEL_VERSION = 'm-2'",
+        '',
+      ].join('\n'),
+    )
+    put(
+      'engine/packages/p/src/casts.ts',
+      [
+        'export const n = (x: unknown) => x as number',
+        'export const s = (x: unknown) => <string>x',
+        'export const twice = (x: unknown) => x as unknown as string[]',
+        'export const no = (x: unknown) => x as never',
+        'export const anyway = (x: unknown) => x as any',
+        'export const first = (xs: number[]) => xs[0]!',
+        "export const KEYS = ['a', 'b', 'c'] as const",
+        "// @ts-ignore: a test's",
+        "export const bad: number = 'x'",
+        '',
+      ].join('\n'),
+    )
+    put('engine/packages/p/src/long.ts', `export function huge(x: number): number {\n${'  x += 1\n'.repeat(1001)}  return x\n}\n`)
+    put('engine/src/clients.ts', "export const ms = () => fetch('https://edge.microsoft.com/translate/t')\nexport const gg = () => fetch('https://translate-pa.googleapis.com/t')\n")
+    put('engine/src/own.ts', "import { gg, ms } from './clients'\nexport const order = () => [ms(), gg()]\n")
+    put('engine/src/main.ts', "import { chainOf, deepl, google } from '@x/p'\nexport const run = () => chainOf([deepl(), google()].map(p => () => p))\n")
+    put('web/package.json', JSON.stringify({ name: 'w2' }))
+    put('web/app/main.ts', "import { deepl, google } from '@x/p'\nexport const order = () => [google(), deepl()]\n")
+    r = await census({ today: null, now: [scanTree('engine', join(root, 'engine'), PKG), scanTree('web', join(root, 'web'), SITE)] })
+  })
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  it('measures functions by their code lines: the longest, those over 1,000, the ten longest', () => {
+    const f = r.trees.NOW.functions
+    // huge: its first line, 1,001 additions, its return and its brace; chainOf 7; every other function one line
+    expect(f.longest).toMatchObject({ name: 'huge', code: 1004, file: 'packages/p/src/long.ts' })
+    expect([f.over1000, f.over500]).toEqual([1, 1])
+    expect(f.ten.slice(0, 2).map(x => [x.name, x.code])).toEqual([['huge', 1004], ['chainOf', 7]])
+    expect(f.tenLongest).toBe(1004 + 7 + 8)
+    expect(f.byRepo.web?.longest).toMatchObject({ code: 1 })
+  })
+
+  it("tells a store's schema numbers from content versions", () => {
+    const v = r.trees.NOW.debt.versions
+    const by = Object.fromEntries(v.list.map(x => [x.name, x.schema]))
+    // STORE_VERSION by its file's opening comment (shape), KEY_VERSION by its own (grammar), PAGE_FORMAT by its name;
+    // MAKER_VERSION says what is computed changed though it names a schema; MODEL_VERSION says nothing of a form
+    expect(by).toEqual({ STORE_VERSION: true, KEY_VERSION: true, MAKER_VERSION: false, PAGE_FORMAT: true, MODEL_VERSION: false })
+    expect([v.count, v.schema, v.content]).toEqual([5, 3, 2])
+  })
+
+  it('counts budgets apart from tuned thresholds, each with its unit and source', () => {
+    const d = r.trees.NOW.debt
+    const budgets = Object.fromEntries(d.thresholds.list.filter(t => t.class === 'budget').map(t => [t.name, [t.unit, t.source]]))
+    expect(budgets).toEqual({ CALL_MS: ['time', null], KEEP_PAGES: ['count', 'measured'], VALUE_BYTES: ['bytes', 'platform'] })
+    // (GAP_MAX is measured in em: a reading's rule; the two numeric version constants are thresholds by that definition too)
+    expect(d.thresholds.list.filter(t => t.class === 'tuned').map(t => t.name)).toEqual(['GAP_MAX', 'STORE_VERSION', 'PAGE_FORMAT'])
+    expect(d.budgets).toMatchObject({ count: 3, unmeasured: 1, headline: 3 })
+  })
+
+  it('counts vocabularies apart from name lists', () => {
+    const d = r.trees.NOW.debt
+    expect(d.vocabularies.list.map(x => x.name)).toEqual(['KEYS', 'KINDS', 'STATE'])
+    expect(d.lists.list.map(x => x.name)).toEqual(['NAMES'])
+  })
+
+  it('counts translate chains by implementation: hosts of a package take its chain', () => {
+    const c = r.trees.NOW.chains
+    expect(c.orders).toBe(3)
+    expect(c.implementations.map(i => [i.file, i.hosts])).toEqual([
+      ['packages/p/src/index.ts', ['src/main.ts', 'web:app/main.ts']],
+      ['src/own.ts', []],
+    ])
+    expect(c.count).toBe(2)
+  })
+
+  it("counts the packages' comment lines that tell history, a measurement's date kept", () => {
+    // chain.ts line 1 (today's, a round), line 2 (a date); p.css line 1 (a date); line 3 a measurement's date
+    expect(r.trees.NOW.history).toMatchObject({ lines: 3, todays: 1, dated: 2, measuredDates: 1, named: 1 })
+  })
+
+  it('counts casts, `as const` apart, the unsafe ones, non-null assertions and @ts-ignore', () => {
+    expect(r.trees.NOW.types).toMatchObject({ casts: 5, unsafeCasts: 3, nonNull: 1, suppressions: 1, packages: { casts: 5, unsafeCasts: 3, suppressions: 1 } })
+  })
+
+  it('records the new measures in the ledger, per repository', () => {
+    const j = ratchetOf(r, { engine: null, web: null })
+    const engine = record(null, j.engine.current, j.engine.lines, { commit: null, at: 't0', about: 'a fixture' })
+    expect(engine.trees.NOW?.values).toMatchObject({ longestFunction: 1004, functionsOver1000: 1, tenLongest: 1004 + 7 + 8, contentVersions: 2, budgetsUnmeasured: 1, historyComments: 3, unsafeCasts: 3, suppressions: 1, chains: 2 })
+    const web = record(null, j.web!.current, j.web!.lines, { commit: null, at: 't0', about: 'a fixture' })
+    expect(web.trees.NOW?.values).toMatchObject({ chains: 0, longestFunction: 1, tenLongest: 1 })
+  })
+})

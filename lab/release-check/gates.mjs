@@ -191,7 +191,7 @@ export const TARGETS = [
     baseline: 'about 12',
     target: '1',
     from: 'census',
-    value: n => n.versionsNow != null && `${n.versionsToday ?? '?'} → ${n.versionsNow} → ${n.versionsAfter}, and ${n.mirrorsAfter} mirrors after the cut-over${n.partial ? " (this repository's alone: the website's tree not given)" : ''}`,
+    value: n => n.versionsNow != null && `${n.versionsToday ?? '?'} → ${n.versionsNow} → ${n.versionsAfter}, and ${n.mirrorsAfter} mirrors after the cut-over${n.contentVersionsAfter != null ? `; of them ${n.schemaNumbersAfter} a store's schema number, ${n.contentVersionsAfter} a content version` : ''}${n.partial ? " (this repository's alone: the website's tree not given)" : ''}`,
     met: n => (n.versionsAfter > 1 ? false : n.partial ? null : true),
   },
   {
@@ -223,11 +223,11 @@ export const TARGETS = [
   },
   {
     id: 'chains',
-    measure: 'Translate chains (the census: product modules that put translators of two or more kinds in an order)',
+    measure: "Translate chains (the census: implementations; a module that puts translators of two or more kinds in an order and takes them through a workspace package's entry is a host of that package's chain)",
     baseline: "two: the website's and the extension's",
     target: '1',
     from: 'census',
-    value: n => n.chainsNow != null && `${n.chainsToday ?? '?'} → ${n.chainsNow} → ${n.chainsAfter}`,
+    value: n => n.chainsNow != null && `${n.chainsToday ?? '?'} → ${n.chainsNow} → ${n.chainsAfter}${n.ordersAfter != null ? ` (orders after the cut-over: ${n.ordersAfter})` : ''}`,
     met: n => (n.partial ? null : n.chainsAfter <= 1),
   },
   {

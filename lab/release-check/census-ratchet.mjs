@@ -30,6 +30,14 @@ export const MEASURES = [
   { id: 'gplReached', says: 'ported GPL files a build reaches', crossRepo: true },
   { id: 'productCode', says: 'product code lines (generated files apart; by area)' },
   { id: 'productModules', says: 'product modules (by area)' },
+  { id: 'contentVersions', says: "version constants raised by hand that are not a store's schema number" },
+  { id: 'budgetsUnmeasured', says: 'budgets with no measurement or platform limit on record (every product file)' },
+  { id: 'longestFunction', says: "the longest function's code lines" },
+  { id: 'functionsOver1000', says: 'functions over 1,000 code lines' },
+  { id: 'tenLongest', says: 'code lines in the ten longest functions' },
+  { id: 'historyComments', says: 'comment lines in the packages telling history' },
+  { id: 'unsafeCasts', says: '`as never`, `as any` and casts of a cast in product TypeScript' },
+  { id: 'suppressions', says: '@ts-ignore and @ts-expect-error in product code' },
 ]
 const IDS = MEASURES.map(m => m.id)
 
@@ -50,7 +58,21 @@ export function itemsOf(t, view, profiles) {
     items.lists.push(one(x.repo, x.file, x.line))
     if (x.class === 'listed') items.listsUndefined.push(one(x.repo, x.file, x.line))
   }
-  for (const v of t.debt.versions.list) (v.mirror ? items.mirrors : items.versions).push(one(v.repo, v.file, v.line))
+  for (const v of t.debt.versions.list) {
+    const into = v.mirror ? items.mirrors : items.versions
+    into.push(one(v.repo, v.file, v.line))
+    if (!v.mirror && !v.schema) items.contentVersions.push(one(v.repo, v.file, v.line))
+  }
+  for (const x of t.debt.thresholds.list) if (x.class === 'budget' && !x.source) items.budgetsUnmeasured.push(one(x.repo, x.file, x.line))
+  // (a function's measures are each repository's own: its longest, its ten longest, by their code lines)
+  for (const [repo, s] of Object.entries(t.functions.byRepo)) {
+    if (s.longest) items.longestFunction.push(one(repo, s.longest.file, s.longest.line, s.longest.code))
+    for (const f of s.over1000) items.functionsOver1000.push(one(repo, f.file, f.line))
+    for (const f of s.ten) items.tenLongest.push(one(repo, f.file, f.line, f.code))
+  }
+  for (const h of t.history.byFile) for (const line of h.at) items.historyComments.push(one(h.repo, h.file, line))
+  for (const c of t.types.unsafeCastItems) items.unsafeCasts.push(one(c.repo, c.file, c.line))
+  for (const c of t.types.suppressionItems) items.suppressions.push(one(c.repo, c.file, c.line))
   for (const f of t.types.files) if (f.repo !== 'engine' || f.engine) items.unchecked.push(one(f.repo, f.file, null, f.code))
   for (const i of t.webImports?.items ?? []) (i.cls === 'engine' ? items.webImports : items.webExtensionImports).push(one(i.repo, i.file, i.line))
   for (const g of t.duplicates.all) items.duplicates.push(one(g.repo, g.file, g.line))
@@ -61,7 +83,7 @@ export function itemsOf(t, view, profiles) {
     const first = web ?? c[0]
     items.cycles.push(one(web ? 'web' : 'engine', first.slice(first.indexOf(':') + 1)))
   }
-  for (const c of t.chains.chains) items.chains.push(one(c.repo, c.path))
+  for (const c of t.chains.implementations) items.chains.push(one(c.repo, c.path))
   for (const g of t.gpl) if (g.reachedBy.length) items.gplReached.push(one(g.repo, g.path))
   for (const x of view.files)
     if (x.f.role === 'product' && x.f.kind === 'code' && !x.f.generated) {

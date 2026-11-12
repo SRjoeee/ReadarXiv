@@ -34,13 +34,17 @@ export const DEFINITIONS = {
   cycles: 'A cycle is a strongly connected set of two or more product modules on the edges.',
   webImports: "The website's imports of engine internals: its import statements that resolve into the engine's tree (the pin) at a file that is not one of the engine's public entries (a package manifest's `exports`, or today's engine's five entry modules), split into the engine's own modules and the extension's source; every file of the website counted, tests apart.",
   boundary: "The boundary gate's facts: scripts/check-boundary.mjs's own rules (the core's platform imports, the engine's reach outside itself, the packages' directions), at this checkout, applied to each tree's files.",
-  chains: 'A translator client is a module holding a translator\'s address (a literal with edge.microsoft.com/translate, microsofttranslator.com, translate-pa.googleapis.com, translate.googleapis.com or api.deepl.com), calling the browser\'s Translator.create, or importing generateText or streamText from the AI SDK; a translate chain is a product module that calls functions it imports from clients of two or more of those kinds (each name followed through re-exports to the module that defines it), the module that puts translators in an order.',
+  chains: 'A translator client is a module holding a translator\'s address (a literal with edge.microsoft.com/translate, microsofttranslator.com, translate-pa.googleapis.com, translate.googleapis.com or api.deepl.com), calling the browser\'s Translator.create, or importing generateText or streamText from the AI SDK; an order is a product module that calls functions it imports from clients of two or more of those kinds (each name followed through re-exports to the module that defines it), the module that puts translators in an order. Translate chains are counted by implementation: an order that takes any of its clients through a workspace package\'s entry (a manifest\'s `exports`) is a host of that package\'s chain, one implementation however many hosts take it; any other order is an implementation of its own.',
   gpl: 'A ported file is one whose first 30 lines say "Ported from reference/…" (CLAUDE.md hard rule 6); it is reached by a build when an import path leads to it from that build\'s entry points.',
-  thresholds: 'A threshold is a numeric literal that is an operand of <, <=, > or >=, an argument of Math.min or Math.max, or the value of a module-level UPPER_CASE constant (or of a numeric property of one); 0, 1 and -1 are structural; a literal written in hex, octal or binary, and an object of three or more distinct integers, is a code point, mask or enumeration; a value that is a unit\'s factor (72, 72.27, 65536, 25.4, 1000, 1024, 100, 60, …) is a conversion where its name or comment names a unit and borderline where it does not; one whose comment (the statement\'s leading comment or a comment on its line) cites a definition (TeX, LaTeX, the PDF, Unicode, a font, a standard) and no paper or measurement is borderline; every other is tuned (with evidence where its comment cites a paper, the corpus or a measurement; with no reason where it has no comment).',
-  lists: 'A name list is an array literal of three or more strings of 40 characters at most (a Set or Map built from one included), or a regular expression with three or more alternatives that are words or TeX names; defined where its comment cites a definition, listed otherwise.',
+  thresholds: 'A threshold is a numeric literal that is an operand of <, <=, > or >=, an argument of Math.min or Math.max, or the value of a module-level UPPER_CASE constant (or of a numeric property of one); 0, 1 and -1 are structural; a literal written in hex, octal or binary, and an object of three or more distinct integers, is a code point, mask or enumeration; a value that is a unit\'s factor (72, 72.27, 65536, 25.4, 1000, 1024, 100, 60, …) is a conversion where its name or comment names a unit and borderline where it does not; one whose comment (the statement\'s leading comment or a comment on its line) cites a definition (TeX, LaTeX, the PDF, Unicode, a font, a standard) and no paper or measurement is borderline; every other is tuned (with evidence where its comment cites a paper, the corpus or a measurement; with no reason where it has no comment); a budget (budgets) is counted apart, neither tuned nor borderline.',
+  budgets: 'A budget is a threshold whose constant\'s name (or a table\'s property\'s) names what the code may spend or hold: its last word MS, SECONDS, TIMEOUT, BYTES, KIB, MIB, PX, PIXELS, MAX, CAP, LIMIT or BUDGET, or its first KEEP or MAX (camelCase alike), whose value is a whole number and whose comment measures it in no unit of a document (em, pt, bp, sp); its unit is time, bytes or pixels where its name or comment says so, a count otherwise; it is unmeasured unless its comment cites a measurement (a paper, the corpus, "measured") or a platform\'s limit (a definition the thresholds read, or a platform named beside a limit).',
+  lists: 'A name list is an array literal of three or more strings of 40 characters at most (a Set or Map built from one included), or a regular expression with three or more alternatives that are words or TeX names; defined where its comment cites a definition, listed otherwise. A vocabulary is not a name list: such an array declared `as const` (its type the literal\'s), or handed to a schema\'s `enum`; vocabularies are counted apart.',
   specialCases: 'A per-paper case is an arXiv identifier (dddd.ddddd) in a regular-expression literal of product code, or in a string or template literal that decides (in a branch\'s test, an operand of ===, !==, == or !=, or matched by includes, has, startsWith, endsWith, test, match, indexOf, get, exec or search); a per-package or per-class case is such a deciding literal naming a .sty or .cls file.',
-  versions: 'A version constant raised by hand is a module-level UPPER_CASE constant of product code whose value is a string or number literal and whose name ends in VERSION, SCHEMA or FORMAT or whose comment says it is raised, rises or is bumped; a mirror is a second definition, in another file or repository, of the same name (less _VERSION) with the same value.',
-  unchecked: 'A line no type checker reads is a code line of a product JavaScript file (no project of the repository\'s `typecheck` script sets checkJs), or of a TypeScript file that no such project includes or reaches by its imports; a `.mjs` read through a hand-written `.d.mts` is unchecked; `any` counts the any keywords of product TypeScript, `nocheck` the files that say @ts-nocheck.',
+  versions: 'A version constant raised by hand is a module-level UPPER_CASE constant of product code whose value is a string or number literal and whose name ends in VERSION, SCHEMA or FORMAT or whose comment says it is raised, rises or is bumped; a mirror is a second definition, in another file or repository, of the same name (less _VERSION) with the same value. A version constant is a store\'s schema number where its name ends in SCHEMA or FORMAT, or the first sentence of its own comment (the one right before it, not the file\'s opening comment, or on its line), or a sentence of its file\'s opening comment that names it, says schema, shape or grammar (the form of what is stored) and its own first sentence does not say it changes with what is computed ("a change to what", "changes what"); every other is a content version (it says what is computed changed); a constant and its mirrors are one or the other together.',
+  unchecked: 'A line no type checker reads is a code line of a product JavaScript file (no project of the repository\'s `typecheck` script sets checkJs), or of a TypeScript file that no such project includes or reaches by its imports; a `.mjs` read through a hand-written `.d.mts` is unchecked; `any` counts the any keywords of product TypeScript, `nocheck` the files that say @ts-nocheck, `suppressions` the comments @ts-ignore and @ts-expect-error.',
+  casts: 'A cast is an `x as T` or `<T>x` of product TypeScript that is not `as const`, a cast of a cast counted once; it is unsafe where T is never or any, or where it casts a cast (`as unknown as T`); a non-null assertion `x!` is counted apart.',
+  functions: "A function's length is the code lines (lines) from its first line to its last, its nested functions' among them; every function of product code is measured, at any depth (a nested function also on its own), generated files apart: the longest, the count over 500 and over 1,000 code lines, and the code lines of the ten longest.",
+  history: "A history comment line, in the packages (product code and style sheets under a profile's workspace directories), is a line whose comment text says today's, holds a date (yyyy-mm-dd) that names no measurement (a date beside 'measured' or 'measurement' is kept), or names a reviewer (Codex, Devin, Copilot, CodeRabbit), a round (`round B14`) or a plan or task (`Plan 8b`, `Task 5`); each line counted once.",
   duplicates: 'A duplicated rule is a function of 60 tokens or more (comments and white space aside, names and literals as written) whose tokens equal a function\'s in another file of product, lab or tooling code, counted at the outermost such function; a copy note is a file whose first 12 lines say COPIED or "copied from".',
   dead: "A dead module is a product module no build's entry point reaches, a type-only import counted (the website's builds counted where its tree is given); a dead export is an exported name of a product module (not an entry) that no module of either tree imports, through re-exports followed; `tests only` where only tests, the lab or tooling import it.",
   cutover: "What the cut-over deletes: the product files the builds' entry points (each build's shared and old-arm entries, and its new-arm ones) reach now and no longer reach from its shared and new-arm entries once each build's old-arm modules (the profile's `cut.seeds`, from the design's \"what goes\") are taken out of the graph; with them, every test, lab or tooling file that imports one of them.",
@@ -135,6 +139,11 @@ export function cutoverOf(scans, graph) {
 const sum = (xs, k) => xs.reduce((n, x) => n + (k ? x[k] : x), 0)
 const at = (x, line) => `${x.repo === 'engine' ? '' : `${x.repo}:`}${x.path}:${line}`
 const areaKey = x => `${x.repo}/${x.f.area}`
+/** a file of the packages: under one of its profile's workspace directories (not the pinned repository's) */
+const inPackages = x => {
+  const p = x.scan.profile
+  return (p.workspaces ?? []).some(d => !(p.pin && d.startsWith(p.pin.prefix)) && x.path.startsWith(`${d}/`))
+}
 
 export function sizeOf(view) {
   const areas = {}
@@ -290,31 +299,47 @@ export function chainsOf(view, roots) {
     }
     return [id]
   }
-  // (a client: a module holding a translator's address; a chain: one that calls functions it imports from clients of two kinds)
+  // (a client: a module holding a translator's address; an order: one that calls functions it imports from clients of two
+  // kinds; a host: an order that takes a client through a workspace package's entry, whose chain is then the package's)
   const kindOf = id => new Set((view.byId.get(id)?.f.endpoints ?? []).map(e => e.kind))
-  const calledKinds = x => {
+  const packageEntries = new Set(view.scans.flatMap(s => (s.profile.workspaces ?? []).filter(d => !(s.profile.pin && d.startsWith(s.profile.pin.prefix))).flatMap(d => exportsOfPackages(s, d).map(p => `${s.repo}:${p}`))))
+  const calledOf = x => {
     const calls = new Set(x.f.calls ?? [])
-    const k = new Set()
+    const kinds = new Set()
+    const hosts = new Set()
     for (const e of graph.out.get(x.id) ?? []) {
       if (e.type || !view.byId.has(e.to)) continue
       const im = (x.f.imports ?? []).find(i => i.spec === e.spec && i.line === e.line)
-      for (const [local, imported] of im?.locals ?? []) if (calls.has(local)) for (const d of definers(e.to, imported)) for (const kk of kindOf(d)) k.add(kk)
+      for (const [local, imported] of im?.locals ?? [])
+        if (calls.has(local))
+          for (const d of definers(e.to, imported)) {
+            const k = kindOf(d)
+            for (const kk of k) kinds.add(kk)
+            if (k.size && packageEntries.has(e.to)) hosts.add(e.to)
+          }
     }
-    return k
+    return { kinds, hosts }
   }
   const clients = {}
   for (const x of view.files) if (x.f.role === 'product') for (const e of new Set((x.f.endpoints ?? []).map(e => e.kind))) (clients[e] ??= []).push(at(x, x.f.endpoints.find(p => p.kind === e)?.line ?? 1))
   const chains = view.files
-    .filter(x => x.f.role === 'product' && x.f.kind === 'code' && calledKinds(x).size >= 2)
-    .map(x => ({
+    .filter(x => x.f.role === 'product' && x.f.kind === 'code')
+    .map(x => ({ x, called: calledOf(x) }))
+    .filter(({ called }) => called.kinds.size >= 2)
+    .map(({ x, called }) => ({
       id: x.id,
       repo: x.repo,
       path: x.path,
       file: at(x, 1).replace(/:1$/, ''),
-      kinds: [...calledKinds(x)].sort(),
-      builds: roots.builds.filter(b => b.repo === x.repo || true).filter(b => reach(graph, view.label === 'AFTER' ? b.after : b.now, new Set(), view.alive).has(x.id)).map(b => `${b.repo}/${b.name}`),
+      kinds: [...called.kinds].sort(),
+      implementation: called.hosts.size ? [...called.hosts].sort() : [x.id],
+      builds: roots.builds.filter(b => reach(graph, view.label === 'AFTER' ? b.after : b.now, new Set(), view.alive).has(x.id)).map(b => `${b.repo}/${b.name}`),
     }))
-  return { clients, chains, count: chains.length }
+  const implementations = [...new Set(chains.flatMap(c => c.implementation))].sort().map(id => {
+    const x = view.byId.get(id)
+    return { id, repo: x.repo, path: x.path, file: at(x, 1).replace(/:1$/, ''), hosts: chains.filter(c => c.implementation.includes(id) && c.id !== id).map(c => c.file) }
+  })
+  return { clients, chains, orders: chains.length, implementations, count: implementations.length }
 }
 
 export function gplOf(view, roots) {
@@ -337,6 +362,8 @@ export function debtOf(view) {
   const place = x => ({ repo: x.repo, file: x.path, area: areaKey(x), sub: sub(x), headline: x.repo === 'engine' && headline.has(x.f.area) })
   const thresholds = product.flatMap(x => (x.f.thresholds ?? []).map(t => ({ ...t, at: at(x, t.line), ...place(x) })))
   const lists = product.flatMap(x => (x.f.lists ?? []).map(l => ({ ...l, at: at(x, l.line), ...place(x) })))
+  const vocabularies = product.flatMap(x => (x.f.vocabularies ?? []).map(l => ({ ...l, at: at(x, l.line), ...place(x) })))
+  const budgets = thresholds.filter(t => t.class === 'budget')
   const count = (xs, by) => xs.reduce((o, x) => ((o[by(x)] = (o[by(x)] ?? 0) + 1), o), {})
   // (a version constant's mirror: a literal constant of another file with its name, less _VERSION, and its value)
   const own = product.flatMap(x => (x.f.versions ?? []).map(v => ({ ...v, at: at(x, v.line), repo: x.repo, file: x.path, id: x.id })))
@@ -350,6 +377,8 @@ export function debtOf(view) {
   // (in a group of one name and value in several files, the first (this repository's before the website's, then by path) is
   // the constant, every other its mirror)
   for (const g of mirrors) g.sort((a, b) => (a.repo === b.repo ? a.at.localeCompare(b.at) : a.repo === 'engine' ? -1 : 1)).slice(1).forEach(v => (v.mirror = true))
+  // (a group's constant and its mirrors number one thing: a schema number where any of them says so)
+  for (const g of mirrors) if (g.some(v => v.schema)) for (const v of g) v.schema = true
   return {
     thresholds: {
       all: count(thresholds, t => t.class),
@@ -358,8 +387,18 @@ export function debtOf(view) {
       headlineTunedEvidence: thresholds.filter(t => t.headline && t.class === 'tuned' && t.evidence).length,
       byArea: Object.fromEntries(Object.entries(count(thresholds.filter(t => t.class === 'tuned'), t => t.area)).sort((a, b) => b[1] - a[1])),
       bySub: Object.fromEntries(Object.entries(count(thresholds.filter(t => t.class === 'tuned' && t.headline), t => t.sub)).sort((a, b) => b[1] - a[1])),
-      list: thresholds.filter(t => t.class === 'tuned' || t.class === 'borderline' || t.class === 'conversion'),
+      list: thresholds.filter(t => t.class === 'tuned' || t.class === 'borderline' || t.class === 'conversion' || t.class === 'budget'),
     },
+    budgets: {
+      count: budgets.length,
+      unmeasured: budgets.filter(t => !t.source).length,
+      headline: budgets.filter(t => t.headline).length,
+      headlineUnmeasured: budgets.filter(t => t.headline && !t.source).length,
+      byUnit: count(budgets, t => t.unit),
+      bySource: count(budgets, t => t.source ?? 'unmeasured'),
+      byArea: Object.fromEntries(Object.entries(count(budgets, t => t.area)).sort((a, b) => b[1] - a[1])),
+    },
+    vocabularies: { count: vocabularies.length, headline: vocabularies.filter(l => l.headline).length, list: vocabularies },
     lists: {
       all: count(lists, l => l.class),
       headline: count(lists.filter(l => l.headline), l => l.class),
@@ -371,7 +410,15 @@ export function debtOf(view) {
     },
     papers: product.flatMap(x => (x.f.papers ?? []).map(p => ({ id: p.id, at: at(x, p.line) }))),
     texFiles: product.flatMap(x => (x.f.texFiles ?? []).map(p => ({ name: p.name, at: at(x, p.line) }))),
-    versions: { count: versions.length - sum(mirrors.map(g => g.length - 1)), mirrors: sum(mirrors.map(g => g.length - 1)), list: versions.map(v => ({ name: v.name, value: v.value, at: v.at, repo: v.repo, file: v.file, line: v.line, mirror: Boolean(v.mirror) })), mirrorGroups: mirrors.map(g => g.map(v => `${v.at} ${v.name}=${v.value}`)) },
+    versions: {
+      count: versions.length - sum(mirrors.map(g => g.length - 1)),
+      mirrors: sum(mirrors.map(g => g.length - 1)),
+      // (a mirror's own declaration is read as its constant's: a schema number's mirror is one)
+      schema: versions.filter(v => !v.mirror && v.schema).length,
+      content: versions.filter(v => !v.mirror && !v.schema).length,
+      list: versions.map(v => ({ name: v.name, value: v.value, at: v.at, repo: v.repo, file: v.file, line: v.line, mirror: Boolean(v.mirror), schema: Boolean(v.schema) })),
+      mirrorGroups: mirrors.map(g => g.map(v => `${v.at} ${v.name}=${v.value}`)),
+    },
   }
 }
 
@@ -390,9 +437,50 @@ export function typesOf(view, checked) {
     nocheck: product.filter(x => x.f.nocheck).map(x => at(x, 1).replace(/:1$/, '')),
     any: sum(product.map(x => x.f.any ?? 0)),
     suppressions: sum(product.map(x => x.f.suppressions ?? 0)),
+    casts: sum(product.map(x => x.f.casts?.cast.length ?? 0)),
+    unsafeCasts: sum(product.map(x => x.f.casts?.unsafe.length ?? 0)),
+    nonNull: sum(product.map(x => x.f.casts?.nonNull ?? 0)),
+    packages: {
+      suppressions: sum(product.filter(inPackages).map(x => x.f.suppressions ?? 0)),
+      casts: sum(product.filter(inPackages).map(x => x.f.casts?.cast.length ?? 0)),
+      unsafeCasts: sum(product.filter(inPackages).map(x => x.f.casts?.unsafe.length ?? 0)),
+      nonNull: sum(product.filter(inPackages).map(x => x.f.casts?.nonNull ?? 0)),
+    },
+    unsafeCastItems: product.flatMap(x => (x.f.casts?.unsafe ?? []).map(line => ({ repo: x.repo, file: x.path, line }))),
+    suppressionItems: product.flatMap(x => (x.f.suppressionLines ?? []).map(line => ({ repo: x.repo, file: x.path, line }))),
     checkJs: [...checked.values()].some(c => c.checkJs),
     files: unchecked.map(x => ({ repo: x.repo, file: x.path, code: x.f.lines.code, engine: x.repo === 'engine' && engineAreas.has(x.f.area) })),
   }
+}
+
+/** the functions' lengths (DEFINITIONS.functions): the longest, the counts over 500 and 1,000 code lines, the ten longest;
+ *  each repository's own beside the whole */
+export function functionsOf(view) {
+  const product = view.files.filter(x => x.f.role === 'product' && x.f.kind === 'code' && !x.f.generated)
+  const all = product
+    .flatMap(x => (x.f.functions ?? []).map(fn => ({ repo: x.repo, file: x.path, line: fn.line, name: fn.name ?? '(anonymous)', code: fn.code ?? 0, at: at(x, fn.line) })))
+    .sort((a, b) => b.code - a.code || a.at.localeCompare(b.at))
+  const summary = fns => ({ longest: fns[0] ?? null, over500: fns.filter(f => f.code > 500).length, over1000: fns.filter(f => f.code > 1000), ten: fns.slice(0, 10), tenLongest: sum(fns.slice(0, 10), 'code') })
+  const whole = summary(all)
+  return { count: all.length, ...whole, over1000: whole.over1000.length, over1000List: whole.over1000, list: all.slice(0, 30), byRepo: Object.fromEntries(view.scans.map(s => [s.repo, summary(all.filter(f => f.repo === s.repo))])) }
+}
+
+/** history told in the packages' comments (DEFINITIONS.history), line by line */
+export function historyOf(view) {
+  const files = view.files.filter(x => x.f.role === 'product' && (x.f.kind === 'code' || x.f.kind === 'style') && inPackages(x) && x.f.history)
+  const out = { files: files.length, todays: 0, dated: 0, measuredDates: 0, named: 0, lines: 0, byFile: [] }
+  for (const x of files) {
+    const h = x.f.history
+    const lines = new Set([...h.todays, ...h.dated, ...h.named])
+    out.todays += h.todays.length
+    out.dated += h.dated.length
+    out.measuredDates += h.measuredDates.length
+    out.named += h.named.length
+    out.lines += lines.size
+    if (lines.size) out.byFile.push({ repo: x.repo, file: x.path, lines: lines.size, at: [...lines].sort((a, b) => a - b), todays: h.todays.length, dated: h.dated.length, named: h.named.length })
+  }
+  out.byFile.sort((a, b) => b.lines - a.lines || a.file.localeCompare(b.file))
+  return out
 }
 
 export function duplicatesOf(view, min = 60) {
@@ -502,6 +590,8 @@ export async function census({ today, now }) {
       types: typesOf(view, checked),
       duplicates: duplicatesOf(view),
       dead: deadOf(view, roots),
+      functions: functionsOf(view),
+      history: historyOf(view),
     }
     // (the ratchet's items: kept out of census.json, the ledger holds what it needs of them)
     Object.defineProperty(t, 'items', { value: itemsOf(t, view, Object.fromEntries(scans.map(s => [s.repo, s.profile]))), enumerable: false })
@@ -659,16 +749,23 @@ export function headlineOf(c) {
     { id: 'edges', measure: 'Import statements between product areas (distinct area pairs)', values: v(t => `${n(t.graph.betweenStatements)} (${t.graph.areaPairs})`), target: null },
     { id: 'cycles', measure: 'Import cycles among product modules (modules in them)', values: v(t => `${t.graph.cycles.count} (${t.graph.cycles.modules})`), target: null },
     { id: 'imports', measure: "The website's imports of engine internals, and of the extension's source", values: v(t => (web(t) ? `${n(web(t).internals)}; ${n(web(t).extensionSource)}` : null)), target: '0: package entries only (baseline 262, and 142)' },
-    { id: 'chains', measure: 'Translate chains (modules choosing among two or more translators)', values: v(t => t.chains.count), target: '1 (design §2: one translate chain)' },
+    { id: 'chains', measure: 'Translate chains, by implementation (orders: modules putting translators of two or more kinds in an order)', values: v(t => `${t.chains.count} (${t.chains.orders})`), target: '1 (design §2: one translate chain)' },
     { id: 'gpl', measure: 'Ported GPL files, and those a build reaches', values: v(t => `${t.gpl.length}; ${t.gpl.filter(g => g.reachedBy.length).length}`), target: '0 reached (design stage 4: no ported request code remains)' },
-    { id: 'thresholds', measure: 'Tuned thresholds in the engine and typesetter (borderline; with no reason)', values: v(t => `${n(t.debt.thresholds.headline.tuned ?? 0)} (${n(t.debt.thresholds.headline.borderline ?? 0)}; ${n(t.debt.thresholds.headlineTunedNoReason)})`), target: 'each one left listed with its reason (baseline about 150 in the maker)' },
-    { id: 'lists', measure: 'Name lists in the engine and typesetter (entries)', values: v(t => `${n(sum(Object.values(t.debt.lists.headline)))} (${n(t.debt.lists.headlineEntries)})`), target: 'each one left listed with its reason (baseline about 100 name tables)' },
+    { id: 'thresholds', measure: 'Tuned thresholds in the engine and typesetter, budgets apart (borderline; with no reason)', values: v(t => `${n(t.debt.thresholds.headline.tuned ?? 0)} (${n(t.debt.thresholds.headline.borderline ?? 0)}; ${n(t.debt.thresholds.headlineTunedNoReason)})`), target: 'each one left listed with its reason (baseline about 150 in the maker)' },
+    { id: 'budgets', measure: 'Budgets, product code (unmeasured; in the engine and typesetter)', values: v(t => `${n(t.debt.budgets.count)} (${n(t.debt.budgets.unmeasured)}; ${n(t.debt.budgets.headline)})`), target: 'each with its unit and a measurement or a platform limit on record' },
+    { id: 'lists', measure: 'Name lists in the engine and typesetter, vocabularies apart (entries)', values: v(t => `${n(sum(Object.values(t.debt.lists.headline)))} (${n(t.debt.lists.headlineEntries)})`), target: 'each one left listed with its reason (baseline about 100 name tables)' },
+    { id: 'vocabularies', measure: 'Vocabularies, product code (in the engine and typesetter)', values: v(t => `${t.debt.vocabularies.count} (${t.debt.vocabularies.headline})`), target: null },
     { id: 'special', measure: 'Per-paper literals; per-package (.sty/.cls) literals, product code', values: v(t => `${t.debt.papers.length}; ${t.debt.texFiles.length}`), target: null },
-    { id: 'versions', measure: 'Version constants raised by hand (mirrors)', values: v(t => `${t.debt.versions.count} (${t.debt.versions.mirrors})`), target: '1 (baseline about 12)' },
+    { id: 'versions', measure: "Version constants raised by hand (mirrors): a store's schema number; a content version", values: v(t => `${t.debt.versions.count} (${t.debt.versions.mirrors}): ${t.debt.versions.schema}; ${t.debt.versions.content}`), target: '1 (baseline about 12)' },
     { id: 'unchecked', measure: "Engine code lines no type checker reads (every line of those files; all product code's)", values: v(t => `${n(t.types.engine)} (${n(t.types.engineAll)}; ${n(t.types.unchecked)})`), target: '0 (baseline about 55,000 lines)' },
-    { id: 'any', measure: '`any` in product TypeScript; @ts-nocheck files', values: v(t => `${t.types.any}; ${t.types.nocheck.length}`), target: null },
+    { id: 'any', measure: '`any` in product TypeScript; @ts-nocheck files; @ts-ignore and @ts-expect-error (in the packages)', values: v(t => `${t.types.any}; ${t.types.nocheck.length}; ${t.types.suppressions} (${t.types.packages.suppressions})`), target: null },
+    { id: 'casts', measure: 'Casts in product TypeScript (unsafe; non-null assertions); in the packages', values: v(t => `${n(t.types.casts)} (${t.types.unsafeCasts}; ${n(t.types.nonNull)}); ${n(t.types.packages.casts)} (${t.types.packages.unsafeCasts}; ${n(t.types.packages.nonNull)})`), target: null },
     { id: 'duplicates', measure: 'Duplicated functions (lines in the copies); copy notes', values: v(t => `${t.duplicates.groups} (${n(t.duplicates.lines)}); ${t.duplicates.copied.length}`), target: null },
     { id: 'dead', measure: 'Dead modules (lines); dead exports (exports only tests or the lab import)', values: v(t => `${t.dead.modules} (${n(t.dead.lines)}); ${n(t.dead.deadExports)} (${n(t.dead.testOnlyExports)})`), target: null },
+    { id: 'longest', measure: 'The longest function, code lines', values: v(t => (t.functions.longest ? `${n(t.functions.longest.code)} \`${t.functions.longest.name}\`` : '—')), target: null },
+    { id: 'over-1000', measure: 'Functions over 1,000 code lines (over 500)', values: v(t => `${t.functions.over1000} (${t.functions.over500})`), target: null },
+    { id: 'ten-longest', measure: 'Code lines in the ten longest functions', values: v(t => t.functions.tenLongest), target: null },
+    { id: 'history', measure: "Comment lines in the packages telling history (saying today's; holding a date, a measurement's apart; naming a reviewer, a round or a plan)", values: v(t => `${n(t.history.lines)} (${n(t.history.todays)}; ${n(t.history.dated)}, ${n(t.history.measuredDates)}; ${n(t.history.named)})`), target: '0 (only a date that names a measurement)' },
   ]
 }
 
@@ -728,7 +825,10 @@ export function markdownOf(c) {
     L.push(`Edges between areas: ${Object.entries(t.graph.between).slice(0, 15).map(([p, x]) => `${p} ${x}`).join('; ')}. Area cycles: ${t.graph.areaCycles.join('; ') || 'none'}. Largest module cycles: ${t.graph.cycles.largest.map(x => `${x.size} (${x.sample.join(', ')}…)`).join('; ') || 'none'}.`)
     if (t.webImports) L.push(`The website's imports into the engine's tree: product ${JSON.stringify(t.webImports.product)}, tests ${JSON.stringify(t.webImports.test)}; distinct internal modules ${t.webImports.distinct.engine} of the engine, ${t.webImports.distinct.extension} of the extension; most imported: ${t.webImports.top.join(', ')}.`)
     L.push(`Boundary gate: core ${t.boundary.core.files} files, ${t.boundary.core.violations} violations; engine ${t.boundary.engine.files} files, ${t.boundary.engine.violations} violations; packages ${t.boundary.packages.files} files, ${t.boundary.packages.violations} violations.`)
-    L.push(`Translator clients: ${Object.entries(t.chains.clients).map(([k2, v]) => `${k2} ${v.length} (${v.join(', ')})`).join('; ')}. Chains: ${t.chains.chains.map(x => `${x.file} [${x.kinds.join(', ')}] reached by ${x.builds.join(', ') || 'no build'}`).join('; ') || 'none'}.`)
+    L.push(`Translator clients: ${Object.entries(t.chains.clients).map(([k2, v]) => `${k2} ${v.length} (${v.join(', ')})`).join('; ')}. Orders: ${t.chains.chains.map(x => `${x.file} [${x.kinds.join(', ')}] reached by ${x.builds.join(', ') || 'no build'}`).join('; ') || 'none'}. Chains by implementation: ${t.chains.implementations.map(i => `${i.file}${i.hosts.length ? ` (hosts: ${i.hosts.join(', ')})` : ''}`).join('; ') || 'none'}.`)
+    L.push(`Functions: ${n(t.functions.count)}; the ten longest: ${t.functions.ten.map(f => `${f.name} ${n(f.code)} (${f.at})`).join(', ')}; over 1,000 code lines: ${t.functions.over1000List.map(f => `${f.name} ${n(f.code)}`).join(', ') || 'none'}.`)
+    L.push(`Version constants: ${t.debt.versions.list.filter(x => !x.mirror).map(x => `${x.name} ${x.schema ? 'schema' : 'content'}`).join(', ') || 'none'}. Budgets by unit ${JSON.stringify(t.debt.budgets.byUnit)}, by source ${JSON.stringify(t.debt.budgets.bySource)}, by area ${JSON.stringify(t.debt.budgets.byArea)}. Vocabularies: ${t.debt.vocabularies.list.map(x => `${x.at}${x.name ? ` ${x.name}` : ''}`).join(', ') || 'none'}.`)
+    L.push(`History in the packages' comments: ${t.history.byFile.slice(0, 12).map(x => `${x.file} ${x.lines}`).join(', ') || 'none'}${t.history.byFile.length > 12 ? ', …' : ''}.`)
     L.push(`Ported GPL: ${t.gpl.map(g => `${g.file} (${g.code}; ${g.reachedBy.map(r => `${r.build} via ${r.path.join(' > ')}`).join('; ') || 'no build'})`).join('; ') || 'none'}.`)
     L.push(`Type coverage: unchecked by area ${Object.entries(t.types.byArea).slice(0, 10).map(([a, x]) => `${a} ${n(x)}`).join(', ')}; of which .mjs/.js ${n(t.types.mjs)}; ts-ignore/expect-error ${t.types.suppressions}.`)
     L.push(`Rule debt: thresholds ${JSON.stringify(t.debt.thresholds.all)} (tuned by area: ${Object.entries(t.debt.thresholds.byArea).map(([a, x]) => `${a} ${x}`).join(', ')}); lists ${JSON.stringify(t.debt.lists.all)}; versions ${t.debt.versions.list.map(x => `${x.name}=${x.value}`).join(', ')}; mirrors ${t.debt.versions.mirrorGroups.map(g => g.join(' = ')).join('; ') || 'none'}.`)
@@ -745,11 +845,12 @@ export function debtListOf(c, label = 'AFTER') {
   const t = c.trees[label]
   const L = [`# The rule debt left (${label})`, '', `Thresholds (${DEFINITIONS.thresholds}) and name lists (${DEFINITIONS.lists}) of product code, tuned and borderline ones listed; ${label === 'AFTER' ? 'what the cut-over leaves' : label}. A threshold with no reason is marked "—".`, '']
   const byFile = {}
-  for (const x of t.debt.thresholds.list) (byFile[x.at.replace(/:\d+$/, '')] ??= []).push(`- ${x.at.replace(/^.*:(\d+)$/, 'line $1')}: ${x.class}${x.evidence ? ' (evidence)' : ''} ${x.raw}${x.name ? ` ${x.name}` : x.other ? ` against ${x.other}` : ''} (${x.context}): ${x.why || '—'}`)
+  for (const x of t.debt.thresholds.list) (byFile[x.at.replace(/:\d+$/, '')] ??= []).push(`- ${x.at.replace(/^.*:(\d+)$/, 'line $1')}: ${x.class}${x.class === 'budget' ? ` (${x.unit}, ${x.source ?? 'unmeasured'})` : ''}${x.evidence ? ' (evidence)' : ''} ${x.raw}${x.name ? ` ${x.name}` : x.other ? ` against ${x.other}` : ''} (${x.context}): ${x.why || '—'}`)
   for (const x of t.debt.lists.list) (byFile[x.at.replace(/:\d+$/, '')] ??= []).push(`- ${x.at.replace(/^.*:(\d+)$/, 'line $1')}: name ${x.form} of ${x.size}${x.name ? ` ${x.name}` : ''} (${x.class}): ${x.sample.join(', ')}${x.size > x.sample.length ? ', …' : ''}`)
   for (const [f, xs] of Object.entries(byFile).sort()) L.push(`## ${f}`, '', ...xs.sort((a, b) => Number(/line (\d+)/.exec(a)[1]) - Number(/line (\d+)/.exec(b)[1])), '')
   L.push('## Special cases', '', ...t.debt.papers.map(p => `- per paper: ${p.id} at ${p.at}`), ...t.debt.texFiles.map(p => `- per package or class: ${p.name} at ${p.at}`), '')
-  L.push('## Version constants', '', ...t.debt.versions.list.map(v => `- ${v.name} = ${JSON.stringify(v.value)} at ${v.at}`), '', 'Mirrors:', '', ...t.debt.versions.mirrorGroups.map(g => `- ${g.join(' = ')}`), '')
+  L.push('## Version constants', '', `(${DEFINITIONS.versions})`, '', ...t.debt.versions.list.map(v => `- ${v.name} = ${JSON.stringify(v.value)} at ${v.at}: ${v.schema ? "a store's schema number" : 'a content version'}${v.mirror ? ', a mirror' : ''}`), '', 'Mirrors:', '', ...t.debt.versions.mirrorGroups.map(g => `- ${g.join(' = ')}`), '')
+  L.push('## Vocabularies', '', `(${DEFINITIONS.lists})`, '', ...t.debt.vocabularies.list.map(x => `- ${x.at}: ${x.form} of ${x.size}${x.name ? ` ${x.name}` : ''}: ${x.sample.join(', ')}${x.size > x.sample.length ? ', …' : ''}`), '')
   return `${L.join('\n')}\n`
 }
 
@@ -793,6 +894,24 @@ export function numbersOf(c) {
     gplReachedNow: T.NOW.gpl.filter(g => g.reachedBy.length).length,
     gplReachedAfter: T.AFTER.gpl.filter(g => g.reachedBy.length).length,
     gplFilesAfter: T.AFTER.gpl.length,
+    ordersAfter: T.AFTER.chains.orders,
+    contentVersionsToday: T.TODAY?.debt.versions.content,
+    contentVersionsAfter: T.AFTER.debt.versions.content,
+    schemaNumbersAfter: T.AFTER.debt.versions.schema,
+    budgetsAfter: T.AFTER.debt.budgets.count,
+    budgetsUnmeasuredAfter: T.AFTER.debt.budgets.unmeasured,
+    vocabulariesAfter: T.AFTER.debt.vocabularies.count,
+    longestToday: T.TODAY?.functions.longest?.code,
+    longestNow: T.NOW.functions.longest?.code,
+    longestAfter: T.AFTER.functions.longest?.code,
+    over1000Today: T.TODAY?.functions.over1000,
+    over1000After: T.AFTER.functions.over1000,
+    tenLongestToday: T.TODAY?.functions.tenLongest,
+    tenLongestAfter: T.AFTER.functions.tenLongest,
+    historyAfter: T.AFTER.history.lines,
+    castsAfter: T.AFTER.types.casts,
+    unsafeCastsAfter: T.AFTER.types.unsafeCasts,
+    suppressionsPackagesAfter: T.AFTER.types.packages.suppressions,
     ...(c.ratchet ? { ratchetRises: c.ratchet.rises, ratchetLowerable: c.ratchet.lowerable, ratchetSkipped: c.ratchet.skipped, ratchetUnrecorded: c.ratchet.unrecorded } : {}),
   }
 }
