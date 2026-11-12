@@ -104,6 +104,50 @@ export function scriptedOf(runs, boxes) {
   return Math.max(...bases) - Math.min(...bases) > SCRIPT_RISE * big || Math.min(...rs.map((r) => r[5])) < SCRIPT_SIZE * big
 }
 
+/**
+ * How many times a side's drawn lines of a unit (`lines`, as measure-dom read them: a line a baseline, its text, `sz` its
+ * characters' sizes where they take two or more) carry an element's glyphs as A sets them (`rs`, A's runs of the element, its
+ * accents aside): its text as A's glyphs spell it, white space aside, found in a drawn line, at two sizes where A's glyphs on its
+ * baseline take two (its smaller under SCRIPT_SIZE of its larger: faked small capitals), and its glyphs off that baseline (a
+ * script) in a line of their own raised or lowered over that line on the side A sets them, smaller (`raisedOver`, blind.mjs: how
+ * measure-dom shows a script). A drawn text that does not spell it carries nothing
+ */
+export function carriedOf(rs, lines, raisedOver) {
+  const glyphs = [...rs].sort((a, b) => a[0] - b[0])
+  if (!glyphs.length) return 0
+  const big = Math.max(...glyphs.map((r) => r[5]))
+  const base = glyphs.find((r) => r[5] === big)[4]
+  const main = glyphs.filter((r) => Math.abs(r[4] - base) <= SCRIPT_RISE * big)
+  const off = glyphs.filter((r) => !main.includes(r))
+  const compact = (s) => String(s ?? '').replace(/[\s￼]+/gu, '')
+  const mainText = compact(main.map((r) => r[7]).join(''))
+  const offText = compact(off.map((r) => r[7]).join(''))
+  const sized = main.some((r) => r[5] < SCRIPT_SIZE * big)
+  const up = off.length ? Math.sign(off[0][4] - base) : 0
+  if (!mainText) return 0
+  const drawn = (lines ?? []).filter((l) => !l.rot && l.n > 0)
+  let got = 0
+  for (const l of drawn) {
+    // (its characters as drawn, white space and a crop's stand-in aside, each at its size: `sz`'s runs, by the text's characters)
+    const sizes = l.sz ? l.sz.flatMap(([n, s]) => Array(n).fill(s)) : null
+    const chars = [],
+      at = []
+    l.text.split('').forEach((ch, i) => {
+      if (/\s/u.test(ch) || ch === '￼') return
+      chars.push(ch)
+      at.push(sizes?.[i] ?? l.size)
+    })
+    const hay = chars.join('')
+    for (let i = hay.indexOf(mainText); i >= 0; i = hay.indexOf(mainText, i + mainText.length)) {
+      const ss = at.slice(i, i + mainText.length)
+      const two = !sized || Math.min(...ss) < SCRIPT_SIZE * Math.max(...ss)
+      const lifted = !offText || drawn.some((o) => o !== l && raisedOver(o, [l]) === l && Math.sign(o.y - l.y) === up && compact(o.text).includes(offText))
+      if (two && lifted) got++
+    }
+  }
+  return got
+}
+
 // ---------------------------------------------------------------- the paper's frame: its columns and text block
 /**
  * A paper's text frame, read off the original's own lines (until the engine states TeX's \textwidth and \columnwidth): the
@@ -396,6 +440,17 @@ export function measureFidelity(c) {
     return !!s && s.ink > 0 && s.shown >= KEPT_SHARE * s.ink
   }
   const VISIBLE = (kind) => kind !== 'space' && kind !== 'zero'
+  // (an element drawn as text whose glyphs on A take two sizes or stand on two baselines: read against what the side drew of it,
+  // its drawn lines of the unit (carriedOf), the elements of a unit A spells alike counted together, as many carried as the drawn
+  // lines carry; the rest set flat. Read without the drawing, every such element was set flat whatever the side drew: 2608.06701v1
+  // p2 t14's \approach, faked small capitals v2 draws at the original's two sizes, today flat)
+  const scripted = { today: new Map(), v2: new Map() }
+  const pend = (side, key, unit, k, boxes) => {
+    const rs = runsIn(runs, boxes).filter((r) => !r[8] && !ACCENT.test(r[7]))
+    const id = `${key}\u0000${rs.map((r) => r[7]).join('')}`
+    if (!scripted[side].has(id)) scripted[side].set(id, { key, unit, rs, ks: [] })
+    scripted[side].get(id).ks.push(k)
+  }
   // (today's element kinds that set their characters as written, as the engine's El.literal: a URL, a code mark)
   const LITERAL_KINDS = new Set(['url', 'code'])
   for (const ord of laidV2.keys()) {
@@ -416,7 +471,8 @@ export function measureFidelity(c) {
       // element (a URL, a code mark: TeX sets its characters as written, so it has no scripts) TeX broke over lines is drawn as
       // its text by design, its glyphs on two baselines its lines', no scripts)
       if (boxes.length) {
-        if (text === 1 && !raised && !literal && runs && scriptedOf(runs, boxes.map((b) => [b[0], b[1], b[2], b[3]]))) note('v2', key, `element ${k}: its scripts or sizes set flat as text`)
+        if (text === 1 && !raised && !literal && runs && scriptedOf(runs, boxes.map((b) => [b[0], b[1], b[2], b[3]])))
+          pend('v2', key, ord, k, boxes.map((b) => [b[0], b[1], b[2], b[3]]))
         continue
       }
       // (with no ink here, drawn as nothing (typeset lay/read.ts: a visible class with no ink is none), but a symbol, drawn from
@@ -441,9 +497,14 @@ export function measureFidelity(c) {
       const id = `${key.slice(1)}:${e.k}`
       // (today's `url` and `code` elements are literal as v2's: no scripts to set flat)
       if (!boxes.length || LITERAL_KINDS.has(e.kind) || cropped('today', Number(key.slice(1)), boxes) || keptHere('today', id) || e.flags?.includes('RAISED') || e.flags?.includes('EMPTY')) continue
-      if (runs && scriptedOf(runs, boxes)) note('today', key, `element ${e.k}: its scripts or sizes set flat as text`)
+      if (runs && scriptedOf(runs, boxes)) pend('today', key, Number(key.slice(1)), e.k, boxes)
     }
   }
+  for (const side of ['today', 'v2'])
+    for (const { key, unit, rs, ks } of scripted[side].values()) {
+      const lines = (rec[side].units ?? []).filter((u) => u.id === unit).flatMap((u) => u.lines)
+      for (const k of ks.slice(carriedOf(rs, lines, c.raisedOver))) note(side, key, `element ${k}: its scripts or sizes set flat as text`)
+    }
   for (const side of ['today', 'v2']) for (const [key, ws] of wrong[side]) for (const w of ws) fault(side, 'elements', `${name(key)}: ${w}`)
   for (const key of new Set([...wrong.today.keys(), ...wrong.v2.keys()])) {
     if (!T.has(key) && !V.has(key)) continue
@@ -527,17 +588,45 @@ export function measureFidelity(c) {
     if (ink.today !== ink.v2) diff('ink', null, "units whose original ink is black drawn in another fill (the owner's ruling: the PDF's own black)", 0, { value: ink.today, off: ink.today }, { value: ink.v2, off: ink.v2 }, ink.v2 > ink.today, ink.v2 < ink.today ? 'v2' : 'today')
   }
 
-  // ---------------- weight of figure texts, captions and cells, against the original's darkness of the same texts
+  // ---------------- weight of figure texts, captions and cells: the share of their ink each side draws at another weight than the
+  // original sets it, both ways. Read against A's darkness, a class's darkness compared scripts: a translation's script is lighter
+  // than the original's at a size whatever its weight (2608.25210v2 p2's Figure 1: the texts the original sets regular, drawn
+  // regular by both, read 0.59 on A and 0.44 drawn), and its bold's contrast is another (0.55 against 0.44 drawn, 0.67 against 0.59
+  // on A), so a darker drawing read nearer whatever its weight: today's, its regular texts drawn bold, against v2's, each text at
+  // the original's. Each text's weight on A is its share of glyphs set in a bold face (originalOf); a side's, its share of
+  // characters drawn bold (the faces it drew them in, measure-dom's). A side's distance: its texts' |drawn share - A's| weighted by
+  // its ink (their glyph pixels, CLASS_PIXELS a class at least), so a drawing bolder than the original is as far as one lighter by
+  // the same share; judged as a share of characters is (NEAR.style, the style measure's floor). Where every text of the class is
+  // written in Latin letters on A and in each drawing (a Latin target: Unicode's script of their letters), the darkness is one
+  // script's and read against A's as before as well (2608.16117v1's captions)
   if (fid) {
     const cls = { figure: [], caption: [], cell: [] }
+    const shareOf = (ls) => {
+      const xs = (ls ?? []).filter((l) => l.n > 0)
+      const k = xs.reduce((m, l) => m + l.n, 0)
+      return k ? xs.reduce((m, l) => m + l.bold, 0) / k : null
+    }
+    // (a text written in Latin letters: every letter of it of Unicode's Latin script, one at least)
+    const latin = (s) => {
+      const ls = String(s ?? '').match(/\p{L}/gu) ?? []
+      return ls.length > 0 && ls.every((ch) => /\p{Script=Latin}/u.test(ch))
+    }
+    const latinOf = (ls) => latin((ls ?? []).filter((l) => l.n > 0).map((l) => l.text).join(''))
+    const latinOnA = (lines) => latin(runsIn(runs, lines.map((l) => [l.x0, l.bottom ?? l.y - 0.2 * l.size, l.x1, l.top ?? l.y + 0.8 * l.size])).map((r) => r[7]).join(''))
+    const onA = (lines) => (runs ? originalOf(runs, fonts, lines.map((l) => [l.x0, l.bottom ?? l.y - 0.2 * l.size, l.x1, l.top ?? l.y + 0.8 * l.size]))?.bold ?? null : null)
     for (const key of both) {
       const k = kindOf(key)
-      const id = orig.get(key)?.part !== null && orig.get(key)?.part !== undefined ? `p:${orig.get(key).part}` : `q:${key.slice(1)}`
-      const entry = { t: fid.dark.today[`t:${key.slice(1)}`], v: fid.dark.v2[`p:${ordOfV.get(key)}`], o: fid.orig[id] }
-      if (k === 'caption') cls.caption.push(entry)
-      else if (k === 'cell') cls.cell.push(entry)
+      if (k !== 'caption' && k !== 'cell') continue
+      const o = orig.get(key)
+      const id = o?.part !== null && o?.part !== undefined ? `p:${o.part}` : `q:${key.slice(1)}`
+      cls[k].push({ t: fid.dark.today[`t:${key.slice(1)}`], v: fid.dark.v2[`p:${ordOfV.get(key)}`], o: fid.orig[id], a: onA(o?.lines ?? []), ts: shareOf(T.get(key)), vs: shareOf(V.get(key)), latin: latinOf(T.get(key)) && latinOf(V.get(key)) && latinOnA(o?.lines ?? []) })
     }
-    for (const [ord, fgId] of c.figurePairs ?? new Map()) cls.figure.push({ t: fid.dark.today[`f:${fgId}`], v: fid.dark.v2[`p:${ord}`], o: fid.orig[`p:${ord}`] })
+    const todayGroups = new Map((rec.today.figures ?? []).map((g) => [g.id, g]))
+    for (const [ord, fgId] of c.figurePairs ?? new Map()) {
+      const m = facts.get(ord)
+      const lines = (m?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], x1: l[3], y: l[4], top: Math.max(l[5], l[6]), bottom: Math.min(l[5], l[6]), size: l[10] ?? m.style?.size ?? 0 }))
+      cls.figure.push({ t: fid.dark.today[`f:${fgId}`], v: fid.dark.v2[`p:${ord}`], o: fid.orig[`p:${ord}`], a: onA(lines), ts: shareOf(todayGroups.get(fgId)?.lines), vs: shareOf(V.get(keyOfPart(ord))), latin: latinOf(todayGroups.get(fgId)?.lines) && latinOf(V.get(keyOfPart(ord))) && latinOnA(lines) })
+    }
     const pool = (xs) => {
       let s = 0,
         k = 0
@@ -545,12 +634,27 @@ export function measureFidelity(c) {
       return k ? { mean: s / k, pixels: k } : null
     }
     for (const [k, xs] of Object.entries(cls)) {
-      const full = xs.filter((x) => x.t && x.v && x.o)
+      const full = xs.filter((x) => x.t && x.v && x.o && x.a !== null && x.ts !== null && x.vs !== null)
       const t = pool(full.map((x) => x.t)),
-        v = pool(full.map((x) => x.v)),
-        o = pool(full.map((x) => x.o))
-      if (!t || !v || !o || t.pixels < CLASS_PIXELS || v.pixels < CLASS_PIXELS) continue
-      judge('weight', `${k}s`, `the ${k === 'figure' ? 'figure texts' : `${k}s`}' darkness off the original's (the same texts on arXiv's page)`, r2(o.mean), { value: r2(t.mean), d: Math.abs(t.mean - o.mean) }, { value: r2(v.mean), d: Math.abs(v.mean - o.mean) }, NEAR.weight * o.mean, (x) => (x === null ? x : Math.round(x * 10000) / 10000))
+        v = pool(full.map((x) => x.v))
+      if (!t || !v || t.pixels < CLASS_PIXELS || v.pixels < CLASS_PIXELS) continue
+      const sideOf = (dk, sh) => {
+        let off = 0,
+          px = 0
+        for (const x of full) {
+          off += Math.abs(x[sh] - x.a) * x[dk].pixels
+          px += x[dk].pixels
+        }
+        return { off: px ? off / px : 0 }
+      }
+      const ts = sideOf('t', 'ts'),
+        vs = sideOf('v', 'vs')
+      const said = (x) => `${r2(x.off)} of its ink at another weight`
+      judge('weight', `${k}s`, `the ${k === 'figure' ? 'figure texts' : `${k}s`}' weight: the share of their ink drawn at another weight than the original sets it (its bold share on A)`, 0, { value: said(ts), d: ts.off }, { value: said(vs), d: vs.off }, NEAR.style)
+      // (and, written in one script on A and in both drawings, their darkness against A's, the same texts)
+      const o = pool(full.map((x) => x.o))
+      if (o && full.every((x) => x.latin))
+        judge('weight', `${k}s`, `the ${k === 'figure' ? 'figure texts' : `${k}s`}' darkness off the original's (the same texts on arXiv's page, all in Latin letters)`, r2(o.mean), { value: r2(t.mean), d: Math.abs(t.mean - o.mean) }, { value: r2(v.mean), d: Math.abs(v.mean - o.mean) }, NEAR.weight * o.mean, (x) => (x === null ? x : Math.round(x * 10000) / 10000))
     }
   }
 
@@ -640,7 +744,8 @@ export function judgeJoined(c, pairs, todays, what) {
     // (the size the fit gives a text: `fresh` where v2 is laid with a fresh row of the member or of one its size tie holds (a
     // figure's set), verdict.mjs judgeText)
     const jt = c.textJudge?.(ord) ?? judge
-    if (os) jt('size', nm, `${what}: size off the original's (share of it)`, r2(os), { value: r2(med(tl)), d: Math.abs(1 - med(tl) / os) }, { value: r2(med(vl)), d: Math.abs(1 - med(vl) / os) }, SIZE_STEP / 2)
+    const chars = (ls) => ls.reduce((n, l) => n + l.n, 0)
+    if (os) jt('size', nm, `${what}: size off the original's (share of it)`, r2(os), { value: r2(med(tl)), d: Math.abs(1 - med(tl) / os), chars: chars(tl) }, { value: r2(med(vl)), d: Math.abs(1 - med(vl) / os), chars: chars(vl) }, SIZE_STEP / 2)
     if (!a) continue
     for (const st of ['bold', 'italic']) {
       const share = (ls) => ls.reduce((s, l) => s + l[st], 0) / Math.max(1, ls.reduce((s, l) => s + l.n, 0))

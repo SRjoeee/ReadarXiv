@@ -6,7 +6,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Placed } from '@readarxiv/format'
 // @ts-expect-error — a plain node module of the lab
-import { coverageOf, measurePage, staleOf, unmeasuredOf, verdictOf } from '../../lab/typeset/parity/verdict.mjs'
+import { coverageOf, linksPass, measurePage, recount as recountOf, staleOf, unmeasuredOf, verdictOf } from '../../lab/typeset/parity/verdict.mjs'
+// @ts-expect-error — a plain node module of the lab
+import { labelsPass } from '../../lab/typeset/parity/fidelity.mjs'
 import { rowLinesOf } from '../../packages/typeset/src/index.ts'
 
 type Line = { y: number; x0: number; x1: number; size: number; n: number; bold: number; italic: number; word: number; letter: number; text: string }
@@ -135,6 +137,50 @@ describe('a page measured from what each side drew', () => {
     // (a page today shows as arXiv's has the original's; a page v2 shows as arXiv's draws A's annotations, counted as A's)
     const asOriginal = measure(v2Of(), boxed({ today: { shownOriginal: true }, v2: { linkBoxes: A.map((b) => [...b.slice(0, 5), 1]) } }, A))
     expect(asOriginal.measures.links).toMatchObject({ original: 2, today: 2, v2: 2 })
+  })
+  it("a unit over two pages counts its links over them: a translation that moves a linked word to the page before loses none", () => {
+    // (2610.20484v1 t62, a theorem over pages 6 and 7: its link to equation (8) stands on A on page 7's first line; v2's shorter
+    // translation draws that word, and its anchor, on page 6, today on page 7. Counted page by page, v2 missed one on page 7 and
+    // drew one more on page 6, a side's surplus never a link missing. Each side's anchors in CSS px of its page: today's from the
+    // viewport's origin, v2's from its slot's rect; 96/72 px a point)
+    const k = 96 / 72
+    const px = (x0: number, y0: number, x1: number, y1: number, o = [0, 0]) => [o[0]! + x0 * k, o[1]! + (792 - y1) * k, o[0]! + x1 * k, o[1]! + (792 - y0) * k]
+    const v2Rect = [25, 17, 816, 1056]
+    const f = {
+      pages: { 6: { members: [{ ord: 62, state: 'laid', lines: [] }], links: [] }, 7: { members: [{ ord: 62, state: 'laid', lines: [] }], links: [] } },
+      facts: {
+        6: { members: [{ ord: 62, kind: 'theorem', align: 'j', style: { size: 10 }, lines: [[6, 0, 72, 300, 100, 108, 98, 72, 300, 0, 10]] }], links: 0 },
+        7: { members: [{ ord: 62, kind: 'theorem', align: 'j', style: { size: 10 }, lines: [[7, 0, 72, 300, 700, 708, 698, 72, 300, 0, 10]] }], links: 0 },
+      },
+      today: { 62: { today: 62 } },
+    }
+    const pageOf = (n: number, o: { a: unknown[][]; t: { line?: number[]; boxes: unknown[][] }; v: { line?: number[]; boxes: unknown[][] } }) => {
+      const drawn = (ys: number[] | undefined) => (ys ?? []).map((y) => ({ ...line(y, 10), x0: 72, x1: 300 }))
+      const r = {
+        page: n,
+        view: [0, 0, 612, 792],
+        original: { links: o.a.length, linkBoxes: o.a },
+        today: { units: [{ id: 62, lines: drawn(o.t.line) }], figures: [], names: [], crops: [], links: 0, linksDrawn: o.t.boxes.length, linkBoxes: o.t.boxes, lit: [], litBoxes: {} },
+        v2: { committed: true, units: [{ id: 62, lines: drawn(o.v.line) }], crops: [], links: 0, linksDrawn: o.v.boxes.length, linkBoxes: o.v.boxes, lit: [], rect: v2Rect },
+        px: {},
+      }
+      return measurePage('p-zh', f, r, { prepByOrd: new Map(), todayOf: new Map([[62, 62]]), turned: new Set(), led: new Map(), top: new Set() })
+    }
+    const eq8 = (side: string, x0: number, y: number, o?: number[]) => [side === 'a' ? '#"equation.8"' : '#equation.8', ...(side === 'a' ? [x0, y - 1, x0 + 7, y + 8, 1] : px(x0, y - 1, x0 + 7, y + 8, o))]
+    const pages = (v2Moves: boolean, v2Draws = true) => [
+      pageOf(6, { a: [], t: { line: [100], boxes: [] }, v: { line: [100, 88], boxes: v2Moves && v2Draws ? [eq8('v', 120, 88, v2Rect)] : [] } }),
+      pageOf(7, { a: [eq8('a', 120, 700)], t: { line: [700], boxes: [eq8('t', 120, 700)] }, v: { line: [700], boxes: !v2Moves && v2Draws ? [eq8('v', 120, 700, v2Rect)] : [] } }),
+    ]
+    const linksOn = (ps: { diffs: { flag: string; worse: boolean }[] }[]) => ps.map((p) => p.diffs.filter((d) => d.flag === 'links').map((d) => d.worse))
+    // (page by page, as measured: v2 one fewer on page 7)
+    expect(linksOn(pages(true))).toEqual([[], [true]])
+    const moved = pages(true)
+    linksPass(moved, recountOf)
+    expect(linksOn(moved)).toEqual([[], []])
+    // (v2 drawing it nowhere: one missing, on the unit's first page)
+    const lost = pages(true, false)
+    linksPass(lost, recountOf)
+    expect(linksOn(lost)).toEqual([[true], []])
   })
   it("link borders are the anchors each side drew with one, against the original's annotations PDF.js draws one round", () => {
     // (hyperref's boxes: three bordered annotations; v2 drawing its anchors with none is worse, whatever its links; a drawing of
@@ -388,6 +434,47 @@ describe("a label in a translated unit: today's relabelled against v2's kept as 
   })
   it('v2 relabels a label today keeps: never judged worse', () => {
     expect(labels(page(kept, relabelled))).toEqual([])
+  })
+})
+
+describe("labels: a counter printed alone names no word, so it is no label kept or translated (2608.25210v2 p9)", () => {
+  // (a figure text "a) …" whose part states a label of kind 'number', its name part the sub-figure's letter (the engine reads a
+  // letter with no digit after it as the label's name, locate/facts.ts labelParts): LaTeX prints \thesubfigure by \alph, a
+  // counter's value, no name a target has a word for; v2 keeps its ink, the line starting past it. Beside it, a caption "Figure
+  // 1" both translate, and one "Figure 2" or an unnumbered "Remark" v2 keeps where today translates it)
+  const fig = (o: { ord: number; name: [string, number[]]; num?: [string, number[]]; kind: string; at: number; label: string }) => ({
+    ord: o.ord,
+    kind: o.kind,
+    align: 'j',
+    style: { size: 10 },
+    label: { ink: [N, o.name[1][1]!, o.at - 2, (o.num ?? o.name)[1][3]!, o.at + 7, o.at], kind: o.label, name: o.name, ...(o.num ? { num: o.num } : {}), style: { size: 10 } },
+    lines: [factLine((o.num ?? o.name)[1][3]! + 3, 300, o.at)],
+  })
+  const box = (x0: number, x1: number, y: number) => [N, x0, y - 2, x1, y + 7, y]
+  const cap1 = fig({ ord: 10, kind: 'caption', label: 'float', name: ['Figure', box(72, 100, 600)], num: ['1', box(102, 106, 600)], at: 600 })
+  const sub = fig({ ord: 20, kind: 'figure', label: 'number', name: ['a', box(352.32, 354.94, 500)], at: 500 })
+  const cap2 = fig({ ord: 30, kind: 'caption', label: 'float', name: ['Figure', box(72, 100, 400)], num: ['2', box(102, 106, 400)], at: 400 })
+  const remark = fig({ ord: 40, kind: 'theorem', label: 'head', name: ['Remark', box(72, 104, 300)], at: 300 })
+  const labelled = (facts: ReturnType<typeof fig>[], today: object[], v2: object[]) => {
+    const p = measure(
+      v2Of({ members: facts.map((f) => ({ ord: f.ord, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } })), facts, today: Object.fromEntries(facts.map((f) => [f.ord, { today: f.ord }])) }),
+      rec({ today: { units: today }, v2: { units: v2 } }),
+    )
+    labelsPass([p], (q: { diffs: { worse: boolean }[]; worse: number }) => {
+      q.worse = q.diffs.filter((d) => d.worse).length
+    })
+    return (p.diffs as { flag: string; unit: string; worse: boolean }[]).filter((d) => d.flag === 'labels').map((d) => [d.unit, d.worse])
+  }
+  const translated = (id: number, y: number) => ({ id, lines: [drawnLine(72, 290, y, `Abbildung ${id === 30 ? 2 : 1}: Text`)] })
+  it("a sub-figure's letter v2 keeps, in a paper whose captions it translates: no label kept, not worse", () => {
+    // (today's figure texts are its own groups, read for no label; v2's "a)" kept as the original's ink, its line past the letter)
+    expect(labelled([cap1, sub], [translated(10, 600)], [translated(10, 600), { id: 20, lines: [drawnLine(358.4, 398.7, 500, 'Daten')] }])).toEqual([])
+  })
+  it('a numbered caption or an unnumbered theorem head v2 keeps where it translates the others: worse, as before', () => {
+    const kept2 = { id: 30, lines: [drawnLine(109, 290, 400, 'Text')] }
+    expect(labelled([cap1, cap2], [translated(10, 600), translated(30, 400)], [translated(10, 600), kept2])).toEqual([['t30 caption', true]])
+    const keptRemark = { id: 40, lines: [drawnLine(107, 290, 300, 'Text')] }
+    expect(labelled([cap1, remark], [translated(10, 600), { id: 40, lines: [drawnLine(72, 290, 300, 'Bemerkung Text')] }], [translated(10, 600), keptRemark])).toEqual([['t40 theorem', true]])
   })
 })
 
@@ -710,6 +797,57 @@ describe("align: a drawn line's alignment is where its ink stands, a CJK mark's 
     const f = cell('l', 72, 300)
     const p = page(f, [drawnLine(72, 300, 700, '（甲乙丙）', S)], [drawnLine(67, 300, 700, '（甲乙丙）', S)])
     expect(aligns(p)).toEqual([])
+  })
+})
+
+describe("align: a centred member set on two rows is read line by line, each against the original line it stands on", () => {
+  // (2608.16117v1 p1 t128, every toggle on: "University of Pennsylvania," an affiliation TeX set in a centred block over two
+  // rows it shares with its neighbours, its first line ending one row (420.16–476.57 on 670.9), its second opening the next
+  // (141.38–201.86 on 658.94). Read against one middle, its lines' median (448.4), every second line stood 277 pt off on
+  // both sides, and the side whose line strayed toward that middle read nearer)
+  const f = v2Of({
+    members: [{ ord: 128, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }],
+    facts: [{ ord: 128, kind: 'affiliation', align: 'c', style: { size: 9.96 }, lines: [factLine(420.16, 476.57, 670.9, 9.96), factLine(141.38, 201.86, 658.94, 9.96)] }],
+    today: { 128: { today: 128 } },
+  })
+  const page = (t: Line[], v: Line[]) => measure(f, rec({ today: { units: [{ id: 128, lines: t }] }, v2: { units: [{ id: 128, lines: v }] } }))
+  const aligns = (p: { diffs: { flag: string; worse: boolean; nearer: string }[] }) => p.diffs.filter((d) => d.flag === 'align').map((d) => [d.worse, d.nearer])
+  const first = drawnLine(414.83, 481.9, 670.9, 'Universität von', 9.96)
+  it("v2's second line on its own original line's middle, today's 1.9 pt toward the first's: v2 nearer, not worse", () => {
+    const t = [first, drawnLine(143.25, 203.75, 658.94, 'Pennsylvania,', 9.96)]
+    const v = [first, drawnLine(141.38, 201.86, 658.94, 'Pennsylvania,', 9.96)]
+    expect(aligns(page(t, v))).toEqual([[false, 'v2']])
+  })
+  it("v2's second line 5 pt off its own original line's middle where today's stands on it: worse", () => {
+    const t = [first, drawnLine(141.38, 201.86, 658.94, 'Pennsylvania,', 9.96)]
+    const v = [first, drawnLine(136.38, 196.86, 658.94, 'Pennsylvania,', 9.96)]
+    expect(aligns(page(t, v))).toEqual([[true, 'today']])
+  })
+})
+
+describe('line-count: a row of crops alone is a drawn line of its unit', () => {
+  // (2609.20976v1 p1 t110 with every toggle on: "E-mail: a, b, c", three addresses on two lines of A; v2 draws the label and the
+  // first two as crops after its text on the first line, the third a crop alone on the second; a crop is drawn by the canvas,
+  // no character of the SVG, so the drawing read one line where v2 draws two, as the original and today do)
+  const f = v2Of({
+    members: [{ ord: 112, state: 'laid', lines: [] }],
+    facts: [{ ord: 112, kind: 'inknames', align: 'j', style: { size: 10.91 }, lines: [factLine(92.89, 407.93, 363.29, 10.91), factLine(92.89, 170.39, 349.74, 10.91)] }],
+    today: { 112: { today: 110 } },
+  })
+  const crop = (x0: number, y0: number, x1: number, y1: number, piece: string) => [112, x0, y0, x1, y1, piece, x0, y0, x1, y1, N]
+  const first = drawnLine(92.89, 413.39, 363.29, 'Mail: , ,', 10.91)
+  const today = [drawnLine(92.89, 407.92, 363.29, 'E-mail: a, b,', 10.91), drawnLine(92.89, 170.76, 349.74, 'c', 10.91)]
+  const counts = (p: { diffs: { flag: string; worse: boolean }[]; units: { key: string; sides: { v2?: { lines: number } } }[] }) => [
+    p.diffs.filter((d) => d.flag === 'line-count').map((d) => d.worse),
+    p.units.find((u) => u.key === 't110')?.sides.v2?.lines,
+  ]
+  it('the third address a crop alone on the second row: two lines, as today draws, no difference', () => {
+    const crops = [crop(129, 361, 281, 371, '1'), crop(287, 361, 402, 371, '3'), crop(93, 349, 171, 358, '5')]
+    expect(counts(measure(f, rec({ today: { units: [{ id: 110, lines: today }] }, v2: { units: [{ id: 112, lines: [first] }], crops } })))).toEqual([[], 2])
+  })
+  it('the third address lost, no crop on the second row: one line, worse as before', () => {
+    const crops = [crop(129, 361, 281, 371, '1'), crop(287, 361, 402, 371, '3')]
+    expect(counts(measure(f, rec({ today: { units: [{ id: 110, lines: today }] }, v2: { units: [{ id: 112, lines: [first] }], crops } })))).toEqual([[true], 1])
   })
 })
 
@@ -1148,8 +1286,32 @@ describe('figures: a figure text of v2’s that holds several of today’s, its 
     expect(of(run({ 60: [90, 91] }))).toEqual([])
     expect(run({ 60: [90, 91] }).measures.figures).toMatchObject({ today: 2, v2: 1, joined: 1 })
   })
-  it('without the join, one fewer: worse', () => {
-    expect(of(run())).toEqual([[true, 'today']])
+  // (by their place as well as by their text: a text of today's every line of which on A stands on one of the lines of a figure
+  // text v2 draws is held by it, whatever the two texts say. 2608.06701v1 p1: v2 lays a figure's wrapped rows as one text, today
+  // drew a group a row, 35 against 45 counted one by one though every row is translated)
+  it('without the text join, the two of today’s on the line v2 draws one text on are held by it: not worse', () => {
+    expect(of(run())).toEqual([])
+    expect(run().measures.figures).toMatchObject({ today: 2, v2: 1, joined: 1 })
+  })
+  const prepRows = [
+    { ord: 90, kind: 'figure', lines: [{ page: N, x0: 100, x1: 185, baseline: 300, top: 306.4, bottom: 298.4, size: 8 }] },
+    { ord: 91, kind: 'figure', lines: [{ page: N, x0: 100, x1: 150, baseline: 290, top: 296.4, bottom: 288.4, size: 8 }] },
+  ]
+  const rows = (o: { drawn?: boolean; lines?: number[] } = {}) =>
+    measure(
+      v2Of({ members: [{ ord: 60, state: o.drawn === false ? 'unwrapped' : 'laid', lines: [] }], facts: [{ ord: 60, kind: 'figure', align: 'l', style: { size: 8 }, lines: (o.lines ?? [300, 290]).map((y) => factLine(100, 185, y, 8)) }] }),
+      rec({
+        today: { figures: [{ id: 'f0', lines: [drawnLine(100, 160, 300, 'wxyz', 8)] }, { id: 'f1', lines: [drawnLine(100, 150, 290, 'wxyz', 8)] }] },
+        v2: { units: o.drawn === false ? [] : [{ id: 60, lines: [drawnLine(100, 185, 300, 'abcdefgh', 8), drawnLine(100, 140, 290, 'abcd', 8)] }] },
+      }),
+      prepRows,
+    )
+  it('two wrapped rows today drew apart, v2 one text over both: not worse', () => {
+    expect(of(rows())).toEqual([])
+  })
+  it('a text of today’s on a line no text of v2’s stands on, or on a text v2 does not draw: one fewer, worse', () => {
+    expect(of(rows({ lines: [300] }))).toEqual([[true, 'today']])
+    expect(of(rows({ drawn: false }))).toEqual([[true, 'today']])
   })
 })
 

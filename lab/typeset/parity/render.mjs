@@ -30,7 +30,7 @@ import { LAB, TODAY } from '../../../packages/typeset/tests/replay/tap.ts'
 import { SLICES, TABLES } from '../served-metrics.mjs'
 import { analyse, boxesOf } from './analyse.mjs'
 import { DEVICE_PT, inPlace } from './fidelity.mjs'
-import { bundleCheck, bundleOf, hyphFileOf, pdfOf, whyNot } from './inputs.mjs'
+import { bundleCheck, bundleOf, hyphFileOf, pdfOf, putsInPlace, whyNot } from './inputs.mjs'
 import { PAIRS } from './pairs.mjs'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
@@ -444,7 +444,8 @@ for (const pair of pairs) {
       await vp.evaluate((k) => globalThis.__p.textOnly(false) && globalThis.__p.go(k), n)
       await wait(300)
       await vp.evaluate((k) => globalThis.__p.reveal(k), n)
-      const laidHere = (v2.pages[n]?.members ?? []).some((m) => m.state === 'laid')
+      // (a page the reader puts nothing in place on is drawn as arXiv's: no overlay comes, none is waited for, inputs.mjs putsInPlace)
+      const laidHere = putsInPlace(v2.pages[n]?.members)
       try {
         await vp.waitForFunction(
           ([k, want]) => {
@@ -510,9 +511,64 @@ for (const pair of pairs) {
       rec.error = `today's sentence boxes: ${String(e?.message ?? e).slice(0, 280)}`
     }
   }
+  // (the fresh rule's second look: the pages v2.mjs's re-lay changed (v2 laid with today's own text in v2's unit, relay.mjs),
+  // drawn by the reader in a context of their own, every other page as v2's, and read back as v2's are (`relay` on the page's
+  // record: no pixels, no images); its errors and the time it took, `relayMs`. The verdict judges each difference the fresh rule
+  // set aside on this drawing again, verdict.mjs freshResolve)
+  const relayAt = Object.keys(v2.relay?.pages ?? {})
+    .map(Number)
+    .filter((n) => out.pages.some((r) => r.page === n && !r.error))
+    .sort((a, b) => a - b)
+  if (relayAt.length) {
+    const r0 = Date.now()
+    errors.relay = []
+    const rc = await browser.newContext({ viewport: { width: 1100, height: 1300 }, deviceScaleFactor: DPR })
+    await guard(rc)
+    const rp = await rc.newPage()
+    rp.on('pageerror', (x) => errors.relay.push(String(x).slice(0, 200)))
+    rp.on('console', (m) => {
+      if (m.type() === 'error') errors.relay.push(m.text().slice(0, 200))
+    })
+    await rp.goto(`${server.origin}/index.html`)
+    await rp.waitForFunction(() => !!globalThis.__p)
+    await rp.evaluate((o) => globalThis.__p.open(o), { paper, target, pages: { ...v2.pages, ...v2.relay.pages }, classes: TOGGLES === 'on' ? CLASSES_ON : null })
+    try {
+      await rp.waitForFunction(() => globalThis.__p.state()?.layer.s === 'ready', null, { timeout: 60_000, polling: 100 })
+    } catch {
+      errors.relay.push(`not ready: ${JSON.stringify(await rp.evaluate(() => globalThis.__p.state()))}`)
+    }
+    for (const n of relayAt) {
+      const rec = out.pages.find((r) => r.page === n)
+      try {
+        await rp.evaluate((k) => globalThis.__p.textOnly(false) && globalThis.__p.go(k), n)
+        await wait(300)
+        await rp.evaluate((k) => globalThis.__p.reveal(k), n)
+        const laidHere = putsInPlace(v2.relay.pages[n]?.members)
+        await rp.waitForFunction(
+          ([k, want]) => {
+            const s = globalThis.__p.slot(k)
+            return !!s && s.canvas && s.marks === 0 && (!want || s.over)
+          },
+          [n, laidHere],
+          { timeout: 30_000, polling: 100 },
+        )
+        await wait(laidHere ? 400 : 1200)
+        await rp.evaluate(() => globalThis.__p.fonts())
+        await rp.evaluate((k) => globalThis.__p.reveal(k), n)
+        await frames(rp)
+        const s = await rp.evaluate((k) => globalThis.__p.slot(k), n)
+        rec.relay = { ...(await rp.evaluate(([k, view]) => globalThis.__p.measure(k, view), [n, rec.view])), rect: s.rect, canvases: s.canvases }
+      } catch (e) {
+        rec.relay = { error: String(e?.message ?? e).slice(0, 300) }
+      }
+    }
+    await rp.evaluate(() => globalThis.__p.close())
+    await rc.close()
+    out.relayMs = Date.now() - r0
+  }
   out.errors = errors
   writeFileSync(join(WORK, 'raw', `${pair}.json`), `${JSON.stringify(out)}\n`)
-  console.log(`${pair}: ${out.pages.length} pages in ${((Date.now() - t0) / 1000).toFixed(0)} s; page errors today ${errors.today.length}, v2 ${errors.v2.length}${errors.v2.length ? ` (${errors.v2.slice(0, 2).join(' | ')})` : ''}`)
+  console.log(`${pair}: ${out.pages.length} pages in ${((Date.now() - t0) / 1000).toFixed(0)} s; page errors today ${errors.today.length}, v2 ${errors.v2.length}${errors.v2.length ? ` (${errors.v2.slice(0, 2).join(' | ')})` : ''}${relayAt.length ? `; re-lay ${relayAt.length} pages in ${(out.relayMs / 1000).toFixed(0)} s, errors ${errors.relay.length}` : ''}`)
   await tp.evaluate(() => globalThis.today.dispose())
   await tc.close()
   await vp.evaluate(() => globalThis.__p.close())

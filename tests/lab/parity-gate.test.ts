@@ -4,7 +4,7 @@
 // geometry of one of his cases.
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { measurePage, pastRoomPass, recount, sharePass } from '../../lab/typeset/parity/verdict.mjs'
+import { measurePage, pastRoomPass, recount, sharePass, stylePass } from '../../lab/typeset/parity/verdict.mjs'
 // @ts-expect-error — a plain node module of the lab
 import { frameOf, labelsPass, originalOf } from '../../lab/typeset/parity/fidelity.mjs'
 
@@ -266,6 +266,46 @@ describe('elements: drawn otherwise than the original sets them', () => {
     const p = measure(fe, sides(6, ll, ll, { today: { crops: [crop(6, '19', [300, 597, 356, 610], [300, 597, 356, 610])] }, original: { runs, fonts: ['CMR10'] } }))
     expect(of('elements')(p)).toMatchObject([{ unit: 't6 para', worse: true, v2: { value: 'element 19: its scripts or sizes set flat as text' } }])
   })
+  // (what a side drew of an element drawn as text, read off its drawn lines (measure-dom: a line a baseline, `sz` its characters'
+  // sizes where they take two or more): 2608.06701v1 p2 t14's \approach, "LIVEPLAN" in faked small capitals on A, "L" and "P" at
+  // 9.96, "IVE" and "LAN" at 7.97; v2 draws it as text at those two sizes, today cuts it as a crop. Read without the drawing,
+  // every element drawn as text whose glyphs on A take two sizes was set flat, v2's among them)
+  const caps = [
+    [300, 598, 306, 608, 600, 9.96, 0, 'L', 0],
+    [306, 598, 318, 606, 600, 7.97, 0, 'IVE', 0],
+    [318, 598, 324, 608, 600, 9.96, 0, 'P', 0],
+    [324, 598, 337, 606, 600, 7.97, 0, 'LAN', 0],
+  ]
+  const capsEls = [['1', 'macro', [[300, 597, 337, 609, 600]], 1, 1, 0, 0]]
+  const capsCrop = [crop(14, '1', [300, 597, 337, 609], [300, 597, 337, 609])]
+  const drawnCaps = (sz?: number[][]) => [{ ...drawnLine(72, 400, 600, 'mit LIVEPLAN gelöst'), ...(sz ? { sz } : {}) }]
+  it('an element in small capitals drawn as text at its two sizes, as A sets them: not set flat', () => {
+    const fe = one(14, 'para', [factLine(72, 540, 600)], { els: capsEls })
+    const v = drawnCaps([[5, 9.96], [3, 7.97], [1, 9.96], [3, 7.97], [7, 9.96]])
+    const p = measure(fe, sides(14, l, v, { today: { crops: capsCrop }, original: { runs: caps, fonts: ['NimbusRomNo9L-Regu'] } }))
+    expect(of('elements')(p)).toEqual([])
+    expect(p.faults.elements).toBeUndefined()
+  })
+  it('the same element drawn as text at one size, or not found in the drawn text: set flat, worse as before', () => {
+    const fe = one(14, 'para', [factLine(72, 540, 600)], { els: capsEls })
+    const flat = measure(fe, sides(14, l, drawnCaps(), { today: { crops: capsCrop }, original: { runs: caps, fonts: ['NimbusRomNo9L-Regu'] } }))
+    expect(of('elements')(flat)).toMatchObject([{ unit: 't14 para', worse: true, v2: { value: 'element 1: its scripts or sizes set flat as text' } }])
+    const lost = measure(fe, sides(14, l, l, { today: { crops: capsCrop }, original: { runs: caps, fonts: ['NimbusRomNo9L-Regu'] } }))
+    expect(of('elements')(lost)).toMatchObject([{ unit: 't14 para', worse: true }])
+  })
+  it("an element whose glyphs on A stand on two baselines, drawn with its raised glyphs a line of their own over the rest: not set flat", () => {
+    // (\kmsMpc's "km s" and "Mpc" on 600, each "−1" raised 3.6 pt at 7.97 pt: drawn as "km s Mpc" with "−1 −1" a run raised over it)
+    const runs = [
+      [300, 598, 318, 608, 600, 10.91, 0, 'km s', 0],
+      [318, 601.6, 326, 609.6, 603.6, 7.97, 0, '−1', 0],
+      [328, 598, 348, 608, 600, 10.91, 0, 'Mpc', 0],
+      [348, 601.6, 356, 609.6, 603.6, 7.97, 0, '−1', 0],
+    ]
+    const fe = one(6, 'para', [factLine(72, 540, 600)], { els: [['19', 'umacro', [[300, 597, 356, 610, 600]], 1, 1, 0, 0]] })
+    const raised = [drawnLine(72, 400, 600, 'Wert 70 kms Mpc', 10.91), drawnLine(330, 380, 603.6, '−1 −1', 7.97)]
+    const p = measure(fe, sides(6, l, raised, { today: { crops: [crop(6, '19', [300, 597, 356, 610], [300, 597, 356, 610])] }, original: { runs, fonts: ['CMR10'] } }))
+    expect(of('elements')(p)).toEqual([])
+  })
   it('a URL TeX broke over two lines, drawn as text by design, has no scripts to set flat (2608.16117 p34 t202, 2610.22065 p7 t126)', () => {
     // (\url{https://link.aps.org/doi/10.1103/PhysRevE.110.014502}: its glyphs on A at the end of one line and the start of the
     // next, two baselines 14.45 apart at one size; the typesetter draws a literal element over lines as its text, every \url's
@@ -406,6 +446,41 @@ describe("page numbers keep their size, set right-aligned (the owner's ruling 6;
   })
 })
 
+describe("weight of a figure's texts: their darkness over each drawing's own regular weight, against the original's (2608.25210v2 p2)", () => {
+  // (three figure texts on A: 50 set bold, a lead-in; 51 and 52 regular. A translation's script is lighter than A's at a size,
+  // whatever its weight: the texts A sets regular and both draw regular read 0.59 on A and 0.44 drawn. Today draws 51 bold as well,
+  // v2 draws 50 bold and the others regular: read against A's darkness, today's darker drawing was the nearer)
+  const box = (x: number) => [x, 298, x + 40, 306]
+  const facts = [50, 51, 52].map((ord, i) => ({ ord, kind: 'figure', align: 'l', style: { size: 8 }, lines: [factLine(100 + 60 * i, 140 + 60 * i, 300, 8)] }))
+  const prep = [90, 91, 92].map((ord, i) => ({ ord, kind: 'figure', lines: [{ page: N, x0: 100 + 60 * i, x1: 140 + 60 * i, baseline: 300, top: 306.4, bottom: 298.4, size: 8 }] }))
+  const v2 = v2Of({ members: [50, 51, 52].map((o) => ({ ord: o, state: 'laid', lines: [] })), facts })
+  const runs = [0, 1, 2].map((i) => [...box(100 + 60 * i), 300, 8, i === 0 ? 0 : 1, 'xxxx', 0])
+  // (the drawings in another script than A's, as a Chinese target's: Greek letters here)
+  const drawnFig = (i: number, bold: boolean) => [{ ...drawnLine(100 + 60 * i, 140 + 60 * i, 300, '\u03b1\u03b2\u03b3\u03b4', 8), bold: bold ? 4 : 0 }]
+  const dark = (mean: number) => ({ mean, pixels: 600 })
+  const page = (t: [number, boolean][], v: [number, boolean][]) =>
+    measure(
+      v2,
+      rec({
+        today: { figures: t.map(([, b], i) => ({ id: `f${i}`, lines: drawnFig(i, b) })) },
+        v2: { units: v.map(([, b], i) => ({ id: 50 + i, lines: drawnFig(i, b) })) },
+        original: { runs, fonts: ['ABCDEF+LMSans10-Bold', 'ABCDEF+LMSans10-Regular'] },
+        px: fid({
+          dark: { today: Object.fromEntries(t.map(([m], i) => [`f:f${i}`, dark(m)])), v2: Object.fromEntries(v.map(([m], i) => [`p:${50 + i}`, dark(m)])) },
+          orig: { 'p:50': dark(0.67), 'p:51': dark(0.6), 'p:52': dark(0.59) },
+        }),
+      }),
+      { prep },
+    )
+  const weights = (p: { diffs: { flag: string; unit: string; worse: boolean; nearer: string }[] }) => p.diffs.filter((d) => d.flag === 'weight' && d.unit === 'figures').map((d) => [d.worse, d.nearer])
+  it("today drawing a regular text bold is farther in weight than v2 drawing each at the original's: v2 nearer, not worse", () => {
+    expect(weights(page([[0.55, true], [0.55, true], [0.44, false]], [[0.55, true], [0.44, false], [0.44, false]]))).toEqual([[false, 'v2']])
+  })
+  it('a text the original sets bold drawn regular by v2, bold by today: worse, as before', () => {
+    expect(weights(page([[0.55, true], [0.44, false], [0.44, false]], [[0.44, false], [0.44, false], [0.44, false]]))).toEqual([[true, 'today']])
+  })
+})
+
 describe("ink: the PDF's own black (the owner's ruling 7)", () => {
   const f = one(5, 'para', [factLine(72, 540, 600)])
   const at = (fill: string) => [{ ...drawnLine(72, 540, 600, 'x'.repeat(30)), fill }]
@@ -428,6 +503,38 @@ describe("labels: the target word everywhere, consistent within a paper (the own
     labelsPass(pages, recount)
     expect(pages[0]!.worse).toBe(0)
     expect(pages[1]!.diffs).toMatchObject([{ flag: 'labels', unit: 't9 caption', worse: true }])
+  })
+})
+
+describe("style: a unit's share read over the pages it spans (the paper's pass)", () => {
+  // (2610.20484v1 t62, a theorem in italics over pages 6 and 7: its equation number "(8)" is upright on A, on page 7; v2's
+  // shorter translation draws it, upright, on page 6, where the original's one line is all italic: page 6 alone read v2's
+  // share 0.81 against the original's 1, a style lost; over both pages each side and the original stand at about 0.99)
+  type D = { flag: string; unit: string; st?: string; worse: boolean; nearer: string; original: unknown; today: { value: unknown; off: number }; v2: { value: unknown; off: number } }
+  type Page = { page: number; worse: number; diffs: D[]; units: object[] }
+  const recount = (p: Page) => {
+    p.worse = p.diffs.filter((d) => d.worse).length
+  }
+  const side = (chars: number, italic: number, bold = 0) => ({ chars, italic, bold })
+  const unit = (today: object, v2: object, orig: object) => ({ key: 't62', kind: 'theorem', sides: { today, v2 }, orig })
+  const italicDiff = (t: number, v: number, o: number): D => ({ flag: 'style', unit: 't62 theorem', st: 'italic', worse: v > t, nearer: v > t ? 'today' : 'v2', original: 1, today: { value: o - t, off: t }, v2: { value: o - v, off: v } })
+  it("v2 drawing on one page a word the original sets on the next: judged over both, no difference", () => {
+    const pages: Page[] = [
+      { page: 6, worse: 1, diffs: [italicDiff(0, 0.19, 1)], units: [unit(side(5, 5), side(16, 13), { chars: 16, bold: 0, italic: 1 })] },
+      { page: 7, worse: 0, diffs: [], units: [unit(side(219, 219), side(208, 208), { chars: 420, bold: 0, italic: 417 / 420 })] },
+    ]
+    stylePass(pages, recount)
+    expect(pages.map((p) => p.diffs.filter((d) => d.flag === 'style'))).toEqual([[], []])
+    expect(pages[0]!.worse).toBe(0)
+  })
+  it('v2 setting a third of a unit bold over its two pages where the original and today set none: worse, as before', () => {
+    const boldDiff: D = { flag: 'style', unit: 't62 theorem', st: 'bold', worse: true, nearer: 'today', original: 0, today: { value: 0, off: 0 }, v2: { value: 0.33, off: 0.33 } }
+    const pages: Page[] = [
+      { page: 6, worse: 1, diffs: [boldDiff], units: [unit(side(30, 0), side(30, 0, 10), { chars: 30, bold: 0, italic: 0 })] },
+      { page: 7, worse: 0, diffs: [], units: [unit(side(200, 0), side(200, 0, 60), { chars: 200, bold: 0, italic: 0 })] },
+    ]
+    stylePass(pages, recount)
+    expect(pages[0]!.diffs).toMatchObject([{ flag: 'style', worse: true, nearer: 'today', v2: { value: 0.3 } }])
   })
 })
 

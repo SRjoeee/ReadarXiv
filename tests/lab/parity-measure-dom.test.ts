@@ -134,6 +134,20 @@ describe("a drawn line's size read as the original's is: the size it was set at,
     ])
     expect(l.size).toBe(9.96)
   })
+  it('states its characters\' sizes beside its text where they take two or more (`sz`: runs of one size, [characters, size])', () => {
+    // (2608.06701v1 p2 t14's \approach, "LIVEPLAN" in faked small capitals: what an element drawn as text carries of the
+    // original's two sizes, `elements`)
+    const l = sizedLine([
+      { s: 'mit', x: 72, size: 9.96 },
+      { s: 'L', x: 90, size: 9.96 },
+      { s: 'IVE', x: 96, size: 7.97 },
+      { s: 'P', x: 112, size: 9.96 },
+      { s: 'LAN', x: 118, size: 7.97 },
+    ])
+    expect(l.text).toBe('mitLIVEPLAN')
+    expect(l.sz).toEqual([[4, 9.96], [3, 7.97], [1, 9.96], [3, 7.97]])
+    expect(sizedLine([{ s: 'LIVEPLAN', x: 90, size: 9.96 }]).sz).toBeUndefined()
+  })
 })
 
 describe("a drawn line's extent read on its characters' advances, a slanted run's lean aside", () => {

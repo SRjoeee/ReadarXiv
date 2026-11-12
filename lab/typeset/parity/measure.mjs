@@ -21,7 +21,7 @@ import { keptFacts, originalFacts, scriptsPass } from './blind.mjs'
 import { frameOf, labelsPass } from './fidelity.mjs'
 import { bundleCheck, bundleOf, pdfOf, whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
-import { carriedOf, coverageOf, FLAGS, freshOf, judgedChanged, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
+import { coverageOf, FLAGS, freshOf, freshResolve, judgedChanged, linksPass, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, stylePass, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
 
 /** why a unit is laid with a fresh row (fresh.mjs freshNeeds' causes), as the sheet says it (lane parity-fresh) */
 const FRESH_CAUSE = {
@@ -93,6 +93,8 @@ const missing = [...notMeasured].map(([pair, why]) => ({ pair, why, asked: true 
 for (const p of FIRST) if (!run?.pairs.includes(p)) missing.push({ pair: p, why: whyNot(p, WORK) ?? 'not asked of this run', asked: false })
 
 const pages = []
+// (the fresh rule's second look, each pair's: the re-lay's time in v2.mjs and in render.mjs, and how many pages it changed)
+const relayTimes = []
 // (each paper's facts of the classes the toggles keep, read off the original (blind.mjs): what arXiv's metadata and hyperref's
 // anchors name, and the units of each reader they fall in)
 const facts = {}
@@ -189,7 +191,8 @@ for (const [pair, raw] of drawn) {
       }
     : null
   const mine = []
-  for (const rec of raw.pages) mine.push(measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [], kept, rows }))
+  const ctxOf = (rec) => ({ prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [], kept, rows })
+  for (const rec of raw.pages) mine.push(measurePage(pair, v2, rec, ctxOf(rec)))
   // (a unit's size and line count today bought with a line past TeX's room on one of its pages: today's fault on each)
   pastRoomPass(
     mine.filter((p) => !p.error),
@@ -197,6 +200,18 @@ for (const [pair, raw] of drawn) {
   )
   // (a line count v2 splits as TeX's share, the same lines in all: the ruling of 2026-11-10's, verdict.mjs sharePass)
   sharePass(
+    mine.filter((p) => !p.error),
+    recount,
+  )
+  // (a unit's links counted over the pages it spans, its text and its links moved over a page break by a translation: verdict.mjs
+  // linksPass; the pages' owners of links dropped once counted)
+  linksPass(
+    mine.filter((p) => !p.error),
+    recount,
+  )
+  // (a unit's bold and slanted shares read over the pages it spans: a translation moves words across a page break, verdict.mjs
+  // stylePass)
+  stylePass(
     mine.filter((p) => !p.error),
     recount,
   )
@@ -212,6 +227,38 @@ for (const [pair, raw] of drawn) {
     recount,
   )
   for (const p of mine) delete p.blind
+  // (the fresh rule's second look, the coordinator's ruling of 2026-11-12: every page measured again on the drawing of v2 laid with
+  // today's own text in v2's unit (v2.mjs's `relay`, relay.mjs; render.mjs's `relay` on the pages it changed, every other page as
+  // drawn), the members whose text of today's was laid no longer fresh, the paper's passes run on it; each difference the fresh
+  // rule set aside judged again there, verdict.mjs freshResolve: following from the different text, judged (worse where v2 is
+  // farther), or not comparable with its reason, each counted apart. Not in the review mode, every unit fresh there)
+  if (v2.relay && v2.freshMode !== 'all') {
+    const still = new Set(Object.keys(v2.relay.incomparable ?? {}).map(Number))
+    const relayV2 = {
+      ...v2,
+      pages: { ...v2.pages, ...v2.relay.pages },
+      fresh: (v2.fresh ?? []).filter((o) => still.has(o)),
+      freshCause: Object.fromEntries(Object.entries(v2.freshCause ?? {}).filter(([o]) => still.has(Number(o)))),
+    }
+    const keyOf = (o) => (todayOf.has(o) ? `t${todayOf.get(o)}` : `p${o}`)
+    const incomparable = new Map(Object.entries(v2.relay.incomparable ?? {}).map(([o, why]) => [keyOf(Number(o)), why]))
+    const unsentenced = new Set((v2.relay.unsentenced ?? []).map(keyOf))
+    const again = raw.pages.map((rec) => {
+      if (rec.error) return null
+      if (!v2.relay.pages[rec.page]) return measurePage(pair, relayV2, rec, ctxOf(rec))
+      if (!rec.relay || rec.relay.error) return null
+      return measurePage(pair, relayV2, { ...rec, v2: { ...rec.v2, ...rec.relay } }, ctxOf(rec))
+    })
+    const drawnAgain = again.filter((q) => q && !q.error)
+    pastRoomPass(drawnAgain, recount)
+    sharePass(drawnAgain, recount)
+    linksPass(drawnAgain, recount)
+    stylePass(drawnAgain, recount)
+    labelsPass(drawnAgain, recount)
+    scriptsPass(drawnAgain, recount)
+    for (const p of mine) freshResolve(p, again.find((q) => q?.page === p.page) ?? null, { incomparable, unsentenced })
+    relayTimes.push({ pair, lay: v2.relay.ms ?? null, drawing: raw.relayMs ?? null, pages: Object.keys(v2.relay.pages).length })
+  }
   // (lane parity-fresh: each page's fresh units, tinted on v2's pane, with v2's size and line count against the original's (the
   // coordinator's ruling of 2026-11-11: stated though not judged against today's); every difference that touches one tagged)
   if (v2.fresh?.length) {
@@ -282,13 +329,27 @@ const order = [...pages].sort(
   (a, b) => Number(isFirst(b)) - Number(isFirst(a)) || Number(b.worse > 0) - Number(a.worse > 0) || b.score - a.score || a.pair.localeCompare(b.pair) || a.page - b.page,
 )
 const { summary, worst } = summaryOf(pages)
-// (the differences carried from an earlier round, unjudged now on a fresh row (verdict.mjs carriedOf): lab-data's
-// parity/carried.json, AXT_PARITY_CARRIED, in the run's mode, every toggle on where its v2 files say so; each said in the notes)
-const CARRIED = process.env.AXT_PARITY_CARRIED ?? join(LAB, 'refactor-2026-11', 'parity', 'carried.json')
-const mode = [...drawn.keys()].some((pair) => json(join(WORK, 'v2', `${pair}.json`)).toggles === 'on') ? 'toggles-on' : 'default'
-const carried = existsSync(CARRIED) ? carriedOf(JSON.parse(readFileSync(CARRIED, 'utf8')).entries, pages, mode) : []
-for (const c of carried)
-  notes.push(`carried from ${c.since}: ${c.pair} p${c.page} ${c.unit} ${c.flag} (then today ${c.was?.today}, v2 ${c.was?.v2}, the original ${c.was?.original}): ${c.state}${c.now ? `; now today ${c.now.today}, v2 ${c.now.v2}, the original ${c.now.original}` : ''}`)
+// (the fresh rule's second look over the run: the differences it set aside, by what each came to (verdict.mjs freshResolve), the
+// reasons of those not comparable, the pages a judged one makes worse, the time the re-lay took. No list of acceptances and no
+// list carried from a round before is read)
+const setAside = pages.flatMap((p) => p.diffs.filter((d) => d.nearer === 'text' || d.nearer === 'incomparable' || d.relaid).map((d) => ({ p, d })))
+const relaySummary = relayTimes.length
+  ? {
+      text: setAside.filter((x) => x.d.nearer === 'text').length,
+      judged: setAside.filter((x) => x.d.relaid).length,
+      worse: setAside.filter((x) => x.d.relaid && x.d.worse).length,
+      worsePages: [...new Set(setAside.filter((x) => x.d.relaid && x.d.worse).map((x) => `${x.p.pair} p${x.p.page}`))],
+      incomparable: setAside.filter((x) => x.d.nearer === 'incomparable').length,
+      why: setAside
+        .filter((x) => x.d.nearer === 'incomparable')
+        .reduce((o, x) => {
+          o[x.d.why] = (o[x.d.why] ?? 0) + 1
+          return o
+        }, {}),
+      ms: { lay: relayTimes.reduce((n, x) => n + (x.lay ?? 0), 0), drawing: relayTimes.reduce((n, x) => n + (x.drawing ?? 0), 0) },
+      pages: relayTimes.reduce((n, x) => n + x.pages, 0),
+    }
+  : null
 const result = {
   format: 'readarxiv-parity 3',
   verdict: 'display ≥ today: no page worse than today\'s, a difference only where nearer the original, over every page the run asked',
@@ -323,6 +384,7 @@ const result = {
           pages: freshes.flatMap((f) => f.pages),
           never: freshes.flatMap((f) => f.never),
           unjudged: pages.reduce((n, p) => n + p.diffs.filter((d) => d.nearer === 'fresh').length, 0),
+          ...(relaySummary ? { relay: relaySummary } : {}),
           // (the review mode: every unit v2 sends laid fresh; against the gate sheet, the units whose fresh text changed a judged
           // measure; the units off the original's size or line count)
           ...(pages.some((p) => p.review) || GATE
@@ -341,7 +403,6 @@ const result = {
   notes,
   // (the v2 files read unchecked: laid before the bundles guard, inputs.mjs bundleCheck)
   ...(warnings.length ? { warnings } : {}),
-  carried,
   summary,
   worst,
   pages: order,
@@ -353,6 +414,10 @@ for (const x of notes) console.log(x)
 if (result.fresh) {
   const f = result.fresh
   console.log(`fresh: ${f.units} units drawn with a fresh translation on ${f.pages.length} pages (${Object.entries(f.kinds).map(([k, n]) => `${k} ${n}`).join(', ')}); ${f.unjudged} differences read as fresh, unjudged`)
+  if (f.relay)
+    console.log(
+      `the fresh rule's second look (v2 laid again with today's own text in v2's unit, ${f.relay.pages} pages changed; the lay ${(f.relay.ms.lay / 1000).toFixed(1)} s, its drawing ${(f.relay.ms.drawing / 1000).toFixed(0)} s): ${f.relay.text} follow from the different text, ${f.relay.judged} judged (${f.relay.worse} worse, on ${f.relay.worsePages.length} pages: ${f.relay.worsePages.join(', ') || 'none'}), ${f.relay.incomparable} not comparable (${Object.entries(f.relay.why).map(([w, n]) => `${w} ${n}`).join('; ')})`,
+    )
   console.log(`sent by v2, never by today: ${f.never.length} (${f.never.map((x) => `${x.pair} p${x.page} ${x.unit}${x.drawn ? '' : ' (not drawn)'}`).join('; ')})`)
 }
 console.log(`unmeasured: ${result.unmeasured.units} units on ${result.unmeasured.pages.length} pages (${result.fresh ? 'neither a stored row nor a fresh one serves them: the translator refused them or the cache lacks them' : "no row of the pair's serves them"})`)
@@ -387,7 +452,7 @@ function sheet(r) {
   const freshCard = fr?.mode === 'all'
     ? `<article class="card flagged"><h2>Review mode: v2's side drawn entirely with fresh translations (${fr.units} units)</h2><p>Every unit v2 sends is laid with its own reply from the translate package's chain (Microsoft's keyless adapter, from lab-data's cache): v2 as a reader gets it, against the original. Today's side keeps its stored rows, so its measures against today compare two translations: line count, size, spacing and sentence pairing are not judged (listed "fresh"); the rest are. The worse count of this sheet is information, not the gate's (the gate sheet lays stored rows where they serve). Units off the original's size (either way) or taking more lines are listed on their page, the farthest first (${fr.off}: smaller ${fr.offBy?.smaller ?? 0}, larger ${fr.offBy?.larger ?? 0}, more lines ${fr.offBy?.['more lines'] ?? 0})${fr.gate ? `; units whose fresh text changed a judged measure against the gate sheet (${esc(fr.gate)}): ${fr.changed} on ${fr.changedPages} pages, listed on each` : ''}.</p></article>`
     : fr
-    ? `<article class="card"><h2>Drawn with a fresh translation: ${fr.units} units on ${fr.pages.length} pages</h2><p>Units no stored row of the pair's serves, or whose stored row answered another unit than v2's, laid with the row a reader gets (the translate package's chain, Microsoft's keyless adapter, from lab-data's cache), tinted on v2's pane. Their line count, size, bold and slanted share, spacing and sentence pairing follow from the text drawn: listed as "fresh", never worse nor nearer (${fr.unjudged} differences); every other measure judges them. By kind: ${esc(Object.entries(fr.kinds).map(([k, n]) => `${k} ${n}`).join(', '))}. By cause: ${esc(Object.entries(fr.causes).map(([k, n]) => `${FRESH_CAUSE[k] ?? k} ${n}`).join(', '))}.</p><ul>${fr.pages.map((u) => `<li><a href="#${esc(`${u.pair}-p${u.page}`)}">${esc(u.pair)} p${u.page}</a>: ${u.units.length} (${esc(u.units.join(', '))})${u.causes.unit ? `; ${u.causes.unit} whose stored row answered another unit` : ''}</li>`).join('')}</ul></article><article class="card${fr.never.length ? ' flagged' : ''}"><h2>Sent by v2, never by today: ${fr.never.length} units</h2><p>Units v2 sends a translator that today had no unit of (nothing of today's to compare): each is v2's own decision to translate.</p><ul>${fr.never.map((x) => `<li><a href="#${esc(`${x.pair}-p${x.page}`)}">${esc(x.pair)} p${x.page}</a>: ${esc(x.unit)}${x.drawn ? '' : ' (not drawn: refused or not in the cache)'}</li>`).join('')}</ul></article>`
+    ? `<article class="card"><h2>Drawn with a fresh translation: ${fr.units} units on ${fr.pages.length} pages</h2><p>Units no stored row of the pair's serves, or whose stored row answered another unit than v2's, laid with the row a reader gets (the translate package's chain, Microsoft's keyless adapter, from lab-data's cache), tinted on v2's pane. Their line count, size, spacing and sentence pairing follow from the length of the text drawn: each such difference is judged again on v2 laid with today's own text in v2's unit${fr.relay ? ` (${fr.relay.pages} pages laid and drawn again)` : ''}: gone there, it follows from the different text (${fr.relay?.text ?? 0}, listed with the two texts' lengths); still there, it is judged as any (${fr.relay?.judged ?? 0}, ${fr.relay?.worse ?? 0} worse); where today's text cannot be laid in v2's unit, not comparable (${fr.relay?.incomparable ?? 0}, each with its reason)${fr.unjudged ? `; ${fr.unjudged} still unjudged` : ''}. Every other measure judges them. By kind: ${esc(Object.entries(fr.kinds).map(([k, n]) => `${k} ${n}`).join(', '))}. By cause: ${esc(Object.entries(fr.causes).map(([k, n]) => `${FRESH_CAUSE[k] ?? k} ${n}`).join(', '))}.</p><ul>${fr.pages.map((u) => `<li><a href="#${esc(`${u.pair}-p${u.page}`)}">${esc(u.pair)} p${u.page}</a>: ${u.units.length} (${esc(u.units.join(', '))})${u.causes.unit ? `; ${u.causes.unit} whose stored row answered another unit` : ''}</li>`).join('')}</ul></article><article class="card${fr.never.length ? ' flagged' : ''}"><h2>Sent by v2, never by today: ${fr.never.length} units</h2><p>Units v2 sends a translator that today had no unit of (nothing of today's to compare): each is v2's own decision to translate.</p><ul>${fr.never.map((x) => `<li><a href="#${esc(`${x.pair}-p${x.page}`)}">${esc(x.pair)} p${x.page}</a>: ${esc(x.unit)}${x.drawn ? '' : ' (not drawn: refused or not in the cache)'}</li>`).join('')}</ul></article>`
     : ''
   const said = r.notes?.length ? `<article class="card flagged"><h2>Not applied</h2><ul>${r.notes.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></article>` : ''
   const side = (x) => `${x.value === null || x.value === undefined ? '' : `${esc(x.value)} `}${x.off === null || x.off === undefined ? '' : `<span class="off">off ${esc(x.off)}</span>`}`
@@ -396,7 +461,7 @@ function sheet(r) {
       const id = `${p.pair}-p${p.page}`
       const diffs = p.diffs.length
         ? `<table class="diffs"><thead><tr><th>measure</th><th>unit</th><th>what</th><th>original</th><th>today</th><th>v2</th><th>nearer</th></tr></thead><tbody>${p.diffs
-            .map((d) => `<tr class="${d.worse ? 'worse' : d.nearer === 'fresh' ? 'fresh' : 'better'}"><td><b>${d.flag}</b></td><td>${esc(d.unit ?? 'page')}</td><td>${esc(d.what)}</td><td>${esc(d.original)}</td><td>${side(d.today)}</td><td>${side(d.v2)}</td><td class="n">${d.nearer === 'v2' ? 'v2' : d.nearer === 'unexercised' ? 'not exercised' : d.nearer === 'unmeasured' ? 'unmeasured' : d.nearer === 'fresh' ? 'fresh (unjudged)' : d.nearer === 'ruling' ? `<span title="${esc(d.ruling ?? '')}">the ruling's</span>` : 'today'}</td></tr>`)
+            .map((d) => `<tr class="${d.worse ? 'worse' : d.nearer === 'fresh' || d.nearer === 'text' || d.nearer === 'incomparable' ? 'fresh' : 'better'}"><td><b>${d.flag}</b></td><td>${esc(d.unit ?? 'page')}</td><td>${esc(d.what)}</td><td>${esc(d.original)}</td><td>${side(d.today)}</td><td>${side(d.v2)}</td><td class="n">${d.nearer === 'v2' ? 'v2' : d.nearer === 'unexercised' ? 'not exercised' : d.nearer === 'unmeasured' ? 'unmeasured' : d.nearer === 'fresh' ? 'fresh (unjudged)' : d.nearer === 'text' ? `follows from the different text${d.chars ? ` (today ${d.chars.today} characters, v2 ${d.chars.v2})` : ''}` : d.nearer === 'incomparable' ? `not comparable: ${esc(d.why ?? '')}` : d.nearer === 'ruling' ? `<span title="${esc(d.ruling ?? '')}">the ruling's</span>` : 'today'}</td></tr>`)
             .join('')}</tbody></table>`
         : '<p class="ok">no difference past a noise floor</p>'
       const shared = p.both?.length

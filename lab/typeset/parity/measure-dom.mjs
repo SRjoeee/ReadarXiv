@@ -20,6 +20,19 @@ const OBJ = '￼'
 const LETTER = /^\p{L}$/u
 const r2 = (v) => Math.round(v * 100) / 100
 
+/** a line's characters (in its text's order) as runs of one size, [characters, size]: a white space or a stand-in at the size
+ *  its run was set at */
+function sizeRuns(cs) {
+  const out = []
+  for (const c of cs) {
+    const s = r2(c.size)
+    const last = out.at(-1)
+    if (last && last[1] === s) last[0]++
+    else out.push([1, s])
+  }
+  return out
+}
+
 /** whether a <text> is slanted by its own transform (a skewX, the readers' oblique run) */
 const skewed = (t) => /skewX\(\s*-?[1-9]/.test(t.getAttribute('transform') ?? '')
 
@@ -173,6 +186,10 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
         ...(ink.some((c) => c.weight >= 600 || c.italic)
           ? { st: cs.map((c) => (c.hidden || SPACE.test(c.ch) || !c.ch ? 0 : (c.weight >= 600 ? 1 : 0) + (c.italic ? 2 : 0))).join('') }
           : {}),
+        // (each character's size beside `text`, as runs of one size [characters, size], stated where its drawn characters take
+        // two sizes or more: what an element drawn as text carries of the original's two sizes, faked small capitals; the
+        // verdict's `elements`)
+        ...(new Set(ink.map((c) => r2(c.size))).size > 1 ? { sz: sizeRuns(cs) } : {}),
       }
     })
     out.push({ id, lines })
