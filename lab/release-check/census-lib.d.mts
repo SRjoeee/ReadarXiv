@@ -9,7 +9,7 @@ export interface Facts {
   copied: boolean
   parsed: boolean
   thresholds?: Threshold[]
-  lists?: { line: number; name: string | null; size: number; form: 'list' | 'regex'; sample: string[]; class: 'defined' | 'listed' }[]
+  lists?: { line: number; name: string | null; size: number; form: 'list' | 'regex'; sample: string[]; class: 'defined' | 'listed'; cites: string | null }[]
   vocabularies?: { line: number; name: string | null; size: number; form: 'list'; sample: string[]; class: 'vocabulary' }[]
   papers?: { id: string; line: number }[]
   texFiles?: { name: string; line: number }[]
