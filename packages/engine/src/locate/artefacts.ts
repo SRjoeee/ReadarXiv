@@ -1,4 +1,4 @@
-// Phase 3 of locate (PHASES, locate.ts): the artefacts (Rule 1, PDF-READER §18.22): a unit, or a group of one, whose text is set
+// Phase 3 of locate (locate.ts): the artefacts (Rule 1, PDF-READER §18.22): a unit, or a group of one, whose text is set
 // wholly in a face of one pitch is kept as the original.
 // Reads: the index (A's faces of one pitch among it); the record's `members` and `units`.
 // Writes: `units` (a kept unit's flags; a unit whose groups of one pitch become elements, its content), `members` (a kept

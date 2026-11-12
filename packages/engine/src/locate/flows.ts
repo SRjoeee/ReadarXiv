@@ -1,4 +1,4 @@
-// Phases 13 and 14 of locate (PHASES, locate.ts).
+// Phases 13 and 14 of locate (locate.ts).
 // Phase 13, flowsAndTies: the flows (members TeX set in one paragraph, one after the other on a shared line), the ties (a
 // table's cells, a figure's set, a flow's members, laid together), a name that leads a unit placed in its flow. Reads the index
 // and the record's `members` (their lines, measures, leads: phases 6, 8, 11) and `units`; writes the members' joins, `flows`

@@ -1,4 +1,4 @@
-// A's geometry of each member, phases 6, 8 and 10 of locate (PHASES, locate.ts).
+// A's geometry of each member, phases 6, 8 and 10 of locate (locate.ts).
 // Phase 6, lineGeometry: each member's lines on A (its text's, a display's rows, its held lines), its style, its lead, its
 // elements' ink, text and copy, its trail's element, its label. Reads the index, the record's `members`, `units`, `claimedA` (a
 // held line's glyphs are no member's), `jointPiece` (phase 4's) and `trailSep` (phase 2's); writes the members' lines, line

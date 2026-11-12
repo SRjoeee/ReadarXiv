@@ -1,4 +1,4 @@
-// Phase 2 of locate (PHASES, locate.ts): each member's trail, the ink TeX set right after its last glyph that no unit owns,
+// Phase 2 of locate (locate.ts): each member's trail, the ink TeX set right after its last glyph that no unit owns,
 // claimed as its element TRAIL.
 // Reads: the index; the record's `members` and `claimedA` (a glyph another member holds is no trail).
 // Writes: `claimedA` (each trail's glyphs its member's), `members` (a trail's glyphs, its element TRAIL's), `trailSep`

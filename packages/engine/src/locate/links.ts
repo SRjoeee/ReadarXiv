@@ -1,4 +1,4 @@
-// Phase 15 of locate (PHASES, locate.ts): the links, A's annotations, each owned by the member (and within it the element) that
+// Phase 15 of locate (locate.ts): the links, A's annotations, each owned by the member (and within it the element) that
 // owns most of the glyphs under it.
 // Reads: the index, the options' annotations; the record's `members` (their lines and elements) and `claimedA` (a glyph's owner).
 // Writes: `links` (assigned: read by close).

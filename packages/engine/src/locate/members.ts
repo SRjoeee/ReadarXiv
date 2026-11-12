@@ -1,4 +1,4 @@
-// Phase 1 of locate (PHASES, locate.ts): the instrument's units placed on A (place.ts), a babel name's every occurrence a member
+// Phase 1 of locate (locate.ts): the instrument's units placed on A (place.ts), a babel name's every occurrence a member
 // of its own, an author block's unit TeX set inside a paragraph that sets a unit again left unplaced.
 // Reads: the index; the record's `members` (an ord is their count) and `claimedA` (in place.ts).
 // Writes: `members` (each placement pushed; its glyph and box lists and `claimedA`'s four writes, in place.ts); `released`

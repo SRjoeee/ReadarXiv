@@ -1,4 +1,4 @@
-// Phases 4 and 5 of locate (PHASES, locate.ts): the units no source unit is, made on A by ink.ts; then the units born on A
+// Phases 4 and 5 of locate (locate.ts): the units no source unit is, made on A by ink.ts; then the units born on A
 // (born.ts), of the glyphs B never printed that nothing else made a unit of.
 // Phase 4, unitsMadeOnA: reads the index, the options' pages, the record's `claimedA` and `members` (a glyph's owner), `released`
 // (phase 1's) and `pitch` (phase 3's); writes `units` and `members` (each unit made pushed, its member's glyph and box lists),

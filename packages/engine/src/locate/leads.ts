@@ -1,4 +1,4 @@
-// Phase 11 of locate (PHASES, locate.ts): a babel name that leads a unit, bound to it.
+// Phase 11 of locate (locate.ts): a babel name that leads a unit, bound to it.
 // Reads: the index; the record's `members` (their lines' columns, phase 8's).
 // Writes: the members' `leads` and `leader`.
 import { type Member, sameColumn, type Work } from './work.ts'

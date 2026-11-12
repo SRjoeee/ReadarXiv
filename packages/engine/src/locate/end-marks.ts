@@ -1,4 +1,4 @@
-// Phase 9 of locate (PHASES, locate.ts): a unit's end mark, what TeX pushed to the end of its last line after its text, claimed
+// Phase 9 of locate (locate.ts): a unit's end mark, what TeX pushed to the end of its last line after its text, claimed
 // by the member as its element END.
 // Reads: the index; the record's `members` (their last lines and their measures, phases 6 and 8), `units`, `claimedA` (what
 // another member holds on A ends the walk).

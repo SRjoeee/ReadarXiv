@@ -1,6 +1,6 @@
 // The record locate's phases work over: the index, built once from the instrument, A's ink and the
-// mapping and never written after; the record each phase reads and writes (PHASES' order in locate.ts is the contract); the
-// types of what locate states (Member, Located, Place); and the names two or more phase files read.
+// mapping and never written after; the record each phase reads and writes (the order locate.ts calls them in is the contract);
+// the types of what locate states (Member, Located, Place); and the names two or more phase files read.
 import type { El, Ink, Label, Line, LinkBorder, Piece, Room, Style } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
 import { setPagesOf } from '../align/align.ts'
@@ -10,6 +10,7 @@ import type { Instrument, InstrumentUnit, TexFrame } from '../instrument.ts'
 import { fixedFacesOf } from './facts.ts'
 import type { DisplayLine, InkInput, InkStats } from './ink.ts'
 import { r2 } from './lines.ts'
+import { type Ownership, ownershipOf } from './ownership.ts'
 import type { FloatLine } from './today/today.types.ts'
 import type { Word } from './words.ts'
 
@@ -178,6 +179,22 @@ export interface Located {
 export const FREE = -1
 export const HELD = -2
 
+/** what the ownership's check finds (ownership.ts): a glyph a member's lists and the table state otherwise, or a fixed member's
+ *  glyph in a group */
+export interface Disagreement {
+  kind: 'owned, not listed' | 'listed, not owned' | 'listed twice' | 'fixed, in a group'
+  /** the glyph: its page (1-based) and its index there */
+  page: number
+  glyph: number
+  /** the member whose list or claim it is, and its role there: 'text', 'label', an element id, '' where it lists none */
+  member: number
+  role: string
+  /** the table's answer: a member's ord, -1 free, -2 held */
+  owner: number
+  /** a glyph a `takeAsStated` left on one side alone: a fault known before the check and carried as it is, not found by it */
+  carried?: true
+}
+
 /** locate's index: built once by `open` from the instrument, A's ink and the mapping, never written after; every phase reads it */
 export interface Index {
   readonly ins: Instrument
@@ -225,8 +242,8 @@ export interface Pitch {
 
 /**
  * The record locate's phases work over. Each shared field has one writer, named here with its readers (phases by their number
- * in PHASES, locate.ts); those `open` makes are the record from the start, those of `Assigned` are assigned once by their
- * writer and read through `field`, which throws where the writer has not run:
+ * in the order locate.ts calls them); those `open` makes are the record from the start, those of `Assigned` are assigned once
+ * by their writer and read through `field`, which throws where the writer has not run:
  * - `jointPiece`: written by 4 unitsMadeOnA; read by 6 lineGeometry.
  * - `displays`, `floatLines`: written by 4 unitsMadeOnA; read by close.
  * - `released`: written by 1 placeUnits; read by 4 unitsMadeOnA.
@@ -243,6 +260,9 @@ export interface Pitch {
 export interface Work {
   readonly ix: Index
   readonly claimedA: Int32Array
+  /** the ownership of A's glyphs (ownership.ts), writing `claimedA`: what the phases take their ink through and ask who owns a
+   *  glyph, until locate hands it to them */
+  readonly claims: Ownership
   readonly members: Member[]
   readonly units: InstrumentUnit[]
   readonly stats: Located['stats']
@@ -264,10 +284,7 @@ export interface Assigned {
   links: Located['links']
 }
 
-/** a phase of locate: reads the record and writes it (each phase's header says what) */
-export type Phase = (w: Work, o: LocateOptions) => void
-
-/** a field one phase assigns, read: it throws where the phase that writes it has not run (PHASES' order is the contract) */
+/** a field one phase assigns, read: it throws where the phase that writes it has not run (locate's order is the contract) */
 export function field<K extends keyof Assigned>(w: Work, k: K): Assigned[K] {
   const v = w.assigned[k]
   if (v === undefined) throw new Error(`locate: ${k} read before the phase that writes it ran`)
@@ -425,6 +442,7 @@ export function open(ins: Instrument, inkA: Doc, m: Mapping): Work {
       framesA,
     },
     claimedA,
+    claims: ownershipOf({ size: NA, aToB: m.aToB, unitB }, claimedA),
     members,
     units,
     stats,

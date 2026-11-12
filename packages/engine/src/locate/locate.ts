@@ -42,7 +42,6 @@ import {
   type LocateOptions,
   type Member,
   open,
-  type Phase,
   piecesOf,
   type Work,
 } from './work.ts'
@@ -53,35 +52,31 @@ export { TEXT_NAMES } from './page-units.ts'
 export type { Place } from './work.ts'
 
 // ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
-const facts: Phase = (w) => {
+function facts(w: Work): void {
   const { ins, inkA, m, unitB, roleB, pieceB, pageA, framesA } = w.ix
   const { members, claimedA, units } = w
   factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB, units, framed: new Set(framesA.keys()) })
 }
 
-/** locate's phases in the order they run, which is the contract: each phase's file says what it reads of the record and what
- *  it writes, and a field one phase assigns is read only after it (work.ts `field`) */
-const PHASES: readonly Phase[] = [
-  placeUnits,
-  claimTrails,
-  keepArtefacts,
-  unitsMadeOnA,
-  unitsBornOnA,
-  lineGeometry,
-  sentenceStarts,
-  frameMeasures,
-  endMarks,
-  rooms,
-  leadNames,
-  facts,
-  flowsAndTies,
-  rowAligns,
-  linksOnA,
-]
-
+/** locate's phases, called in the order they run, which is the contract: each phase's file says what it reads of the record
+ *  and what it writes, and a field one phase assigns is read only after it (work.ts `field`) */
 export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions = {}): Located {
   const w = open(ins, inkA, m)
-  for (const p of PHASES) p(w, o)
+  placeUnits(w) // 1
+  claimTrails(w) // 2
+  keepArtefacts(w) // 3
+  unitsMadeOnA(w, o) // 4
+  unitsBornOnA(w) // 5
+  lineGeometry(w) // 6
+  sentenceStarts(w) // 7
+  frameMeasures(w) // 8
+  endMarks(w) // 9
+  rooms(w) // 10
+  leadNames(w) // 11
+  facts(w) // 12
+  flowsAndTies(w) // 13
+  rowAligns(w) // 14
+  linksOnA(w, o) // 15
   return close(w)
 }
 

@@ -1,4 +1,4 @@
-// Phase 7 of locate (PHASES, locate.ts): where a sentence may begin on A, for a unit lit by sentence (words.ts).
+// Phase 7 of locate (locate.ts): where a sentence may begin on A, for a unit lit by sentence (words.ts).
 // Reads: the index; the record's `members` (their lines and elements, phase 6's), `units`, `born` (phase 5's).
 // Writes: the members' words.
 import { sourceText } from './facts.ts'
