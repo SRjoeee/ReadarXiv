@@ -26,6 +26,7 @@ import { factsOf } from './facts-pass.ts'
 import { keepArtefacts } from './artefacts.ts'
 import { endMarks } from './end-marks.ts'
 import { frameMeasures, lineGeometry, rooms } from './geometry.ts'
+import { leadNames } from './leads.ts'
 import { placeUnits } from './members.ts'
 import { sentenceStarts } from './sentences.ts'
 import { unitsBornOnA, unitsMadeOnA } from './page-units.ts'
@@ -53,7 +54,7 @@ export type { Place } from './work.ts'
 
 export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions = {}): Located {
   const w = open(ins, inkA, m)
-  const { B, NB, unitB, roleB, pieceB, pageB, pageA, gA, gB, framesA } = w.ix
+  const { B, NB, unitB, roleB, pieceB, pageB, pageA, gA, framesA } = w.ix
   const { claimedA, units, members, stats, displays, floatLines } = w
   const noteUnlocated = (c: string) => {
     stats.unlocated[c] = (stats.unlocated[c] ?? 0) + 1
@@ -76,32 +77,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   frameMeasures(w)
   endMarks(w)
   rooms(w)
-  // ---- a babel name that leads a unit (today's RUN_IN, make.mjs leadAt: the first unit start after the name's end on its line,
-  // in its column, in our compile): the unit whose glyph TeX set next after the name's in B's stream (glyphs of no unit between
-  // aside), that glyph its first, on the name's baseline on B (0.5 pt, leadAt's) from the name's end on (0.05 pt, leadAt's).
-  // TeX's stream tells the column: after a column's last line it goes on at the next column's top, never at a line beside it
-  {
-    const memberOfUnit = new Map<number, Member>()
-    for (const mem of members) if (mem.name === undefined && mem.unit >= 0) memberOfUnit.set(mem.unit, mem)
-    for (const n of members) {
-      if (n.name === undefined || !n.located || n.bLast < 0) continue
-      let b = n.bLast + 1
-      while (b < NB && pageB[b] === pageB[n.bLast] && (unitB[b] as number) < 0) b++
-      if (b >= NB || pageB[b] !== pageB[n.bLast]) continue
-      const led = memberOfUnit.get(unitB[b] as number)
-      if (!led || led.bFirst !== b) continue
-      const g = gB(b),
-        e = gB(n.bLast)
-      if (Math.abs(g.y - e.y) > 0.5 || g.x0 < e.x1 - 0.05) continue
-      // (in its column: a left column's last line and the right column's first can share a baseline, the stream going on from
-      // the one to the other; the columns as columnsAndMeasures read them on A, a line over both (2) of either)
-      const nc = n.lines.at(-1)?.[1],
-        lc = led.lines[0]?.[1]
-      if (nc !== undefined && lc !== undefined && !sameColumn(nc, lc)) continue
-      n.leads = led.ord
-      led.leader = n.ord
-    }
-  }
+  leadNames(w)
   // ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
   factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB, units, framed: new Set(framesA.keys()) })
 
