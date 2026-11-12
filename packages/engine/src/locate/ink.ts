@@ -908,7 +908,12 @@ function figureRuns(
 interface Carried {
   points: DocPoint[]
   paras: DocPoint[]
-  paraEnds: (DocPoint & { point: number; para: number })[]
+  /** a paragraph end, with where it stood on B (`b`: its page there and the first glyph from it on that has a partner on A,
+   *  the place its point was put before) */
+  paraEnds: (DocPoint & { point: number; para: number; b: [page: number, glyph: number] })[]
+  /** each A glyph's place right after its partner on B, by twos: B's page and the first glyph after the partner that has a
+   *  partner on A (-1 where the glyph has none): what tells, on B, whether an end stood right after a glyph (ink-units alignOf) */
+  afterB: Int32Array
   regions: { kind: string; from: number; to: number }[]
   pictures: DocPoint[]
   /** where TeX begins a front matter environment no author's (DocMarks `fronts`) */
@@ -919,10 +924,11 @@ interface Carried {
  *  of its page from n on that has one), else after the partner of the last one before n that has one; none where its page has
  *  no glyph with a partner. A paragraph end keeps the counts of its page's points and paragraph points before it */
 export function carry(B: Doc, inkA: Doc, m: Mapping, pageA: Int32Array): Carried[] {
-  const out: Carried[] = inkA.pages.map(() => ({
+  const out: Carried[] = inkA.pages.map((_, i) => ({
     points: [],
     paras: [],
     paraEnds: [],
+    afterB: new Int32Array(2 * inkA.pages[i]!.glyphs.length).fill(-1),
     regions: [],
     pictures: [],
     fronts: [],
@@ -933,6 +939,17 @@ export function carry(B: Doc, inkA: Doc, m: Mapping, pageA: Int32Array): Carried
     const next = new Int32Array(n + 1).fill(-1)
     for (let j = n - 1; j >= 0; j--)
       next[j] = (m.bToA[o + j] as number) >= 0 ? (m.bToA[o + j] as number) : (next[j + 1] as number)
+    // (the first glyph from j on with a partner on A, n where none: an end's place on B, and the place after each glyph)
+    const nextB = new Int32Array(n + 1).fill(n)
+    for (let j = n - 1; j >= 0; j--) nextB[j] = (m.bToA[o + j] as number) >= 0 ? j : (nextB[j + 1] as number)
+    for (let j = 0; j < n; j++) {
+      const a = m.bToA[o + j] as number
+      if (a < 0) continue
+      const P = pageA[a] as number
+      const g = a - (m.offA[P - 1] as number)
+      out[P - 1]!.afterB[2 * g] = p + 1
+      out[P - 1]!.afterB[2 * g + 1] = nextB[j + 1] as number
+    }
     const prev = new Int32Array(n + 1).fill(-1)
     for (let j = 1; j <= n; j++)
       prev[j] = (m.bToA[o + j - 1] as number) >= 0 ? (m.bToA[o + j - 1] as number) : (prev[j - 1] as number)
@@ -1010,7 +1027,12 @@ export function carry(B: Doc, inkA: Doc, m: Mapping, pageA: Int32Array): Carried
       for (let q = 0; q < x.point; q++) if (ptPage[q] === P) point++
       let para = parasBefore[P - 1] as number
       for (let q = 0; q < x.para; q++) if (paraPage[q] === P) para++
-      out[P - 1]!.paraEnds.push({ ...w[1], point, para })
+      out[P - 1]!.paraEnds.push({
+        ...w[1],
+        point,
+        para,
+        b: [p + 1, nextB[Math.max(0, Math.min(n, x.glyph))] as number],
+      })
     }
     for (const r of marks.regions) {
       const f = at(r.from)
@@ -1051,6 +1073,7 @@ function pageOf(
     points: c.points,
     paras: c.paras,
     paraEnds: c.paraEnds,
+    afterB: c.afterB,
     regions: c.regions,
     pictures: c.pictures,
     turnedOwners,

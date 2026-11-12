@@ -6057,7 +6057,21 @@ it. Not this round's: staging drew the same at round B10's engine; the lay follo
   paragraph that ends in an element or in a unit's own end mark does. A paragraph's end is a fact of TeX's mode, not of its
   last node: the point is now set whatever node ends the list, but on an empty list (TeX builds no line for it, the point would
   build one) and on one that still ends in a glue after its last space, kerns and penalties are taken off (`\\`'s
-  `\hfil\break`, after which the point would be a line of its own; a leaders' glue, which `\hskip` cannot put back).
+  `\hfil\break`, after which the point would be a line of its own; a leaders' glue, which `\hskip` cannot put back). A list
+  that ends in a box states none yet, a debt with a stated end and no rule: with points after boxes as well as after whatsits,
+  pdfTeX 1.40.28 segfaults on 2610.30769v1 (a link of the paper's own ending in another nesting level than it starts; the crash
+  follows the node list's memory, no single point causes it; its reproduction in the lab's lane note para-start), and a paper
+  production serves is not refused. Its cost: five members of two papers keep B14's "justified" where the page centres them
+  (2610.21313v1's affiliation 7, 2610.42112v1's author 1 and affiliations 486 to 488: an end after the box they are set in is
+  what tells their alignment, `marks/channels.ts` boxedAlignOf, right wherever it was read). It goes when the marked compile is
+  robust to such a paper.
+- **A running head reads no body paragraph's end as its own.** With more ends stated, a paragraph's end at the foot of B's page
+  was read as the next page's running head's (2610.30854v1 p8, p9: flush right read as justified). An end is carried onto A before
+  the partner of B's next glyph, so where A breaks the page later than B, it lands right after the next A page's head. The end
+  right after a unit's last glyph is the unit's own only where, on B, it stood right after that glyph's partner, on its page
+  (`locate/ink.ts` carry keeps each end's place on B and each A glyph's place after its partner; `today/ink-units.mjs`
+  alignOf); and the points between are read by their glyphs, A's list of points not being in glyph order (the points carried
+  from B's page before come first).
   `lab/pdf/spikes/para-end-cases.mjs`: a paragraph after a hyperref'd footnote, after a
   plain `\href`, after a citation and after a full stop, with microtype, each end stated before the next paragraph's first
   glyph and no glyph moved by the points (four ends missing before). The facts pass reads two ends at one glyph position as one.
