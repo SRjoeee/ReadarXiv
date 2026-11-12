@@ -21,14 +21,14 @@
 //      anchored by (their words read from the same pages)
 // The compile and the opening are the caller's (a native TeX Live and PDF.js in Node, the TeX page and a worker in a
 // browser), so that this imports neither PDF.js nor a `node:*` module.
-import { jobName, lastTexLog, latin1, latin1Bytes, normalizePath, texText } from '../source/latex-front.mjs'
-import { DRAFT_OPTION, listsMissing, markedPreamble, NO_DRIVER_GROUP, notFound, openPaper, originalFiles, probeFiles, ranThrough, stoppedShort } from '../pipeline/live.mjs'
-import { completeLog } from '../pipeline/typeset/tex.mjs'
-import { bundleUnitsOf } from '../layer-proto/units.mjs'
+import { jobName, lastTexLog, latin1, latin1Bytes, normalizePath, texText } from '../../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { DRAFT_OPTION, listsMissing, markedPreamble, NO_DRIVER_GROUP, notFound, openPaper, originalFiles, probeFiles, ranThrough, stoppedShort } from './live.mjs'
+import { completeLog } from './tex.mjs'
+import { bundleUnitsOf } from '../instrument/units.mjs'
 import { isMemoryError } from '@readarxiv/engine'
 import { auxUnits, contextUnits, copiesOutOfPlace, cutCopyUnits, engineUnknown, preambleUnits, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
 import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, markTextOf } from './base.mjs'
-import { completeCalled, LAYOUT_CLASSES, probeSamples, readInkAnswers, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
+import { completeCalled, LAYOUT_CLASSES, probeSamples, readInkAnswers, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from '../../../../src/pdf-reader/engine/layout/marks.mjs'
 
 /** the layout guard's compiles past the marked original's, at most, the unmarked original's among them */
 const GUARD_EXTRA = 2

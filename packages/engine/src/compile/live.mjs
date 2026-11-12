@@ -4,14 +4,14 @@
 // target keeps (keptFor). The compiled translation that grew here (the translation set by TeX, its strategies, its typesetting
 // rule and its copies' cache) was parked, then taken out (2026-11-04, the rules audit's F4): the layer draws the translation
 // over our base page, and the web's rows hold it.
-import { analyze } from '../source/paper-meta.mjs'
-import { paperNames, theoremNames } from '../source/paper-names.mjs'
-import { CALL_TEX, classNamesTex, DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, probeSamples, refKeysOf, refsTex, regionsTex } from '../layout/marks.mjs'
-import { documentBounds, DVI_MARK_DEF, dviEngine, FONT_PROBE, inAuthorBlock, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, texFilesOf, texText } from '../source/latex-front.mjs'
-import { authorsTranslated } from '../translate/kept.mjs'
-import { nameCells } from '../translate/mt.mjs'
-import { completeLog, END_TEX, LINES_TEX } from './typeset/tex.mjs'
-import { unbalancedUnits } from '../layout/guard.mjs'
+import { analyze } from '../../../../src/pdf-reader/engine/source/paper-meta.mjs'
+import { paperNames, theoremNames } from '../../../../src/pdf-reader/engine/source/paper-names.mjs'
+import { CALL_TEX, classNamesTex, DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, probeSamples, refKeysOf, refsTex, regionsTex } from '../../../../src/pdf-reader/engine/layout/marks.mjs'
+import { documentBounds, DVI_MARK_DEF, dviEngine, FONT_PROBE, inAuthorBlock, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, texFilesOf, texText } from '../../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { authorsTranslated } from '../../../../src/pdf-reader/engine/translate/kept.mjs'
+import { nameCells } from '../../../../src/pdf-reader/engine/translate/mt.mjs'
+import { completeLog, END_TEX, LINES_TEX } from './tex.mjs'
+import { unbalancedUnits } from './guard.mjs'
 /** Whether a compile's last TeX pass stopped short of the document's end: TeX's fatal errors — an emergency stop (a
  *  file that ended inside an argument, a line asked of no terminal, the job ended with no \\end), its capacity
  *  exceeded, a hundred errors, its own confusion. Whatever PDF it left is part of the paper: XeTeX ships the pages it set
@@ -372,4 +372,4 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 
 /** PIPELINE_VERSION, what the units are (docs/PDF-READER.md §18): defined in versions.mjs, which the readers load without this
  *  module, and re-exported here for the server's callers */
-export { PIPELINE_VERSION } from './versions.mjs'
+export { PIPELINE_VERSION } from '../../../../src/pdf-reader/engine/pipeline/versions.mjs'

@@ -2,7 +2,7 @@
 // (format.mjs) share. A unit is openPaper's, language-independent, its position dropped and a nested piece naming its inner
 // unit by id (bundleUnitsOf, the writer's); a reader checks one unit at a time (unitStands) and drops one that does not stand.
 // Imports the layout's parsers alone, never the run, the remover nor the front end: a reader loads it.
-import { isInteger, isObject, LayoutRefusal, STRING_MAX } from '../layout/json.mjs'
+import { isInteger, isObject, LayoutRefusal, STRING_MAX } from '../../../../src/pdf-reader/engine/layout/json.mjs'
 
 /** a unit's flags: the paper's title, the front matter, written back in the source's brackets, kept as it is (a name,
  *  live.mjs openPaper's `kept`) */

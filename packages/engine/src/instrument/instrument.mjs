@@ -15,15 +15,15 @@
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
 import { boxedAlignOf, framesOf, groupFacts, holdsLetter, linkTargetOf, ownersOf, readAlign, readBoxAlign, readPdf, readRefNames, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
-import { classOf, followsOf, headEnd, INK_ANY, leadStep, readColours, readSkipProbe, refKeyOf, refKeysOf } from '../layout/marks.mjs'
-import { ownOf } from '../layout/own.mjs'
-import { READ_ALONE, regionsOf, WANT } from '../layout/stream.mjs'
-import { BACKREF_LIST, lastTexLog, startOf } from '../source/latex-front.mjs'
-import { bundleUnitsOf } from '../layer-proto/units.mjs'
-import { phClass, texToText } from '../layer-proto/layer1.mjs'
-import { textPieceOf } from '../rules/text-piece.mjs'
-import { symbolText } from '../rules/text-symbols.mjs'
-import { displayStop, isInkless } from '../translate/mt.mjs'
+import { classOf, followsOf, headEnd, INK_ANY, leadStep, readColours, readSkipProbe, refKeyOf, refKeysOf } from '../../../../src/pdf-reader/engine/layout/marks.mjs'
+import { ownOf } from '../../../../src/pdf-reader/engine/layout/own.mjs'
+import { READ_ALONE, regionsOf, WANT } from '../../../../src/pdf-reader/engine/layout/stream.mjs'
+import { BACKREF_LIST, lastTexLog, startOf } from '../../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { bundleUnitsOf } from './units.mjs'
+import { phClass, texToText } from './layer1.mjs'
+import { textPieceOf } from '../../../../src/pdf-reader/engine/rules/text-piece.mjs'
+import { symbolText } from '../../../../src/pdf-reader/engine/rules/text-symbols.mjs'
+import { displayStop, isInkless } from '../../../../src/pdf-reader/engine/translate/mt.mjs'
 
 const UTF8 = new TextDecoder('utf-8')
 /** a unit's start point and end point (MARK_DEF's `<i>s`/`<i>e`, a heading's `h<i>…`, a cell's `t<i>…`), by unit index */

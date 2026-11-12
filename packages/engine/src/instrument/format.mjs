@@ -18,21 +18,21 @@
 //
 // Imports the layout's parsers, the engine's versions, the units, and the rows' and the translation's readings of a unit
 // (for `records`, below) alone: never the run, the remover, the layout's maker nor the front end, which a reader does not load.
-import { checkBoxes } from '../layout/cell-rules.mjs'
-import { checkLayoutPart, checkLineskip, isPaperId, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, mergeLayout, UNIT_KINDS, VERSION_MAX } from '../layout/file.mjs'
-import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, PAGES_MAX, told } from '../layout/json.mjs'
+import { checkBoxes } from '../../../../src/pdf-reader/engine/layout/cell-rules.mjs'
+import { checkLayoutPart, checkLineskip, isPaperId, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, mergeLayout, UNIT_KINDS, VERSION_MAX } from '../../../../src/pdf-reader/engine/layout/file.mjs'
+import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, PAGES_MAX, told } from '../../../../src/pdf-reader/engine/layout/json.mjs'
 import { BASE_KINDS, countOf, DELTA_MAX_BYTES, deltaSection, replacedWhy, WRAP_STATS, wrapWhy } from '@readarxiv/engine'
 import { isMemoryError } from '@readarxiv/engine'
-import { PDFJS, PIPELINE_VERSION, REMOVAL } from '../pipeline/versions.mjs'
-import { groupOf } from '../translate/groups.mjs'
-import { plainSource } from '../translate/mt.mjs'
-import { BundleRefusal, originalUrl, segmentOf } from './bundle.mjs'
-import { FIGURE_KIND } from '../rules/content-classes.mjs'
-import { checkDraw, DrawRefusal, wireOf } from './draw.mjs'
-import { checkFigures } from './figure-rows.mjs'
-import { sourceUnitsOf } from './rows.mjs'
+import { PDFJS, PIPELINE_VERSION, REMOVAL } from '../../../../src/pdf-reader/engine/pipeline/versions.mjs'
+import { groupOf } from '../../../../src/pdf-reader/engine/translate/groups.mjs'
+import { plainSource } from '../../../../src/pdf-reader/engine/translate/mt.mjs'
+import { BundleRefusal, originalUrl, segmentOf } from '../../../../src/pdf-reader/engine/layer-proto/bundle.mjs'
+import { FIGURE_KIND } from '../../../../src/pdf-reader/engine/rules/content-classes.mjs'
+import { checkDraw, DrawRefusal, wireOf } from '../../../../src/pdf-reader/engine/layer-proto/draw.mjs'
+import { checkFigures } from '../../../../src/pdf-reader/engine/layer-proto/figure-rows.mjs'
+import { sourceUnitsOf } from '../../../../src/pdf-reader/engine/layer-proto/rows.mjs'
 import { CELL, EDGES, unitStands } from './units.mjs'
-import { CLASS_IDS } from '../rules/content-classes.mjs'
+import { CLASS_IDS } from '../../../../src/pdf-reader/engine/rules/content-classes.mjs'
 
 // ---------------------------------------------------------------- the versions and the bounds
 /** the format: raised with any change to the shape of a head, part, left part or catalog, and with it the CTAG. 6: a part
