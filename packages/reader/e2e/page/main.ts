@@ -830,7 +830,13 @@ const h = {
       own: m?.lit.own.filter(([, x]) => x.length).length ?? 0,
     }
   },
-  readers: [] as { reader: Reader; root: HTMLElement; asked: { url: string; at: number }[] }[],
+  readers: [] as {
+    reader: Reader
+    root: HTMLElement
+    asked: { url: string; at: number }[]
+    /** every layer state the reader told, from its first (a check reads the whole run of them, not what a poll happened to see) */
+    layers: string[]
+  }[],
   /** the held first layout let go (a reader opened with `holdFirstLay`) */
   releaseLay: null as (() => void) | null,
   /**
@@ -929,7 +935,12 @@ const h = {
     })
     if (o.closeAtOnce) reader.close()
     const returnedAt = performance.now() - t0
-    h.readers.push({ reader, root, asked })
+    const layers = [reader.state().layer.s as string]
+    reader.subscribe(() => {
+      const s = reader.state().layer.s
+      if (layers.at(-1) !== s) layers.push(s)
+    })
+    h.readers.push({ reader, root, asked, layers })
     return { returnedAt, askedBeforeReturn: asked.map((a) => a.url) }
     function fixtureEngine(): Engine {
       return {

@@ -1568,14 +1568,12 @@ await check('reader: a paper being prepared, opened and followed to its layer (w
   modes[seg] = { kind: 'not-opened', prepareMs: 600 }
   const { page, context, errors } = await newPage()
   await page.evaluate(() => window.__h.reader('s2-splits', { host: 'web' }))
-  const seen = new Set()
-  const t0 = Date.now()
-  while (Date.now() - t0 < 20_000) {
-    const s = await page.evaluate(() => window.__h.readers[0].reader.state().layer.s)
-    seen.add(s)
-    if (s === 'ready') break
-    await page.waitForTimeout(50)
-  }
+  // (the layer's states as the reader told them, every one from its first: a poll's samples missed the preparing of a loaded
+  // machine, its first one already past it, 2026-11-13)
+  await waitFor(page, () => window.__h.readers[0].reader.state().layer.s === 'ready', null, 20_000).catch(
+    () => undefined,
+  )
+  const seen = new Set(await page.evaluate(() => window.__h.readers[0].layers))
   await readerLaid(page)
   await context.close()
   delete modes[seg]
@@ -1609,6 +1607,9 @@ await check(
         await page.waitForTimeout(50)
       }
       const asked = await page.evaluate(() => window.__h.readers[0].asked.map((a) => a.url))
+      // (the layer's states as the reader told them, every one from its first: the loop's polls began, on a loaded machine, with
+      // the old layer already in, 2026-11-13)
+      const told = await page.evaluate(() => window.__h.readers[0].layers)
       // (what the composer laid the new catalog's pages from: the parts it was given, as the engine's lay is handed them)
       const lays = await page.evaluate(() => {
         const marks = window.__h.marks
@@ -1622,7 +1623,7 @@ await check(
       assert(opens.length === 1 && opens[0].ask.target === 'de', `opens ${JSON.stringify(opens)}`)
       assert(mine[0]?.what === 'follow', `the follow first: ${JSON.stringify(mine.slice(0, 2))}`)
       // (the old layer kept while the paper is prepared again: ready from its first document on, never let go)
-      assert(seen.join() === 'none,ready', `layer states ${seen}`)
+      assert(told.join() === 'none,ready', `layer states ${told}`)
       // (the new catalog's pages laid from its own parts, never from the parts of the head before: staging, 1706.03762v7)
       const fresh = [rebuilt[seg].catalog.sha256, ...rebuilt[seg].parts]
       const unread = fresh.filter((d) => !asked.some((u) => u.endsWith(d)))
@@ -1631,7 +1632,7 @@ await check(
         lays.length && lays.every(([n, k]) => k === rebuilt[seg].members[n]),
         `the new catalog's pages laid from the parts before: ${JSON.stringify({ lays, members: rebuilt[seg].members })}`,
       )
-      return { layer: seen, follows: mine.length - opens.length, parts: rebuilt[seg].parts.length }
+      return { layer: told, follows: mine.length - opens.length, parts: rebuilt[seg].parts.length }
     } finally {
       delete modes[seg]
     }
@@ -1673,6 +1674,8 @@ await check(
           )
         await page.waitForTimeout(50)
       }
+      // (the layer's states as the reader told them, every one from its first, as in the check above)
+      const told = await page.evaluate(() => window.__h.readers[0].layers)
       await context.close()
       assert(!errors.length, errors.join('; '))
       const mine = v2log.slice(from).filter((x) => x.what === 'open' || x.seg === seg)
@@ -1684,8 +1687,8 @@ await check(
         `a target named: ${JSON.stringify(mine)}`,
       )
       // (the old layer kept while the paper is prepared again: ready from its first document on, never let go)
-      assert(seen.join() === 'none,ready', `layer states ${seen}`)
-      return { layer: seen, follows: mine.length - opens.length, parts: rebuilt[seg].parts.length }
+      assert(told.join() === 'none,ready', `layer states ${told}`)
+      return { layer: told, follows: mine.length - opens.length, parts: rebuilt[seg].parts.length }
     } finally {
       delete modes[seg]
     }
