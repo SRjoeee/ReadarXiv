@@ -3,9 +3,14 @@
 // elements' ink, text and copy, its trail's element, its label. Reads the index, the record's `members`, `units`, `claimedA` (a
 // held line's glyphs are no member's), `jointPiece` (phase 4's) and `trailSep` (phase 2's); writes the members' lines, line
 // glyphs, pages, style, lead, read facts, elements, asInk, smallCaps, label, span fills and faces, plain text and counter.
-import type { El, Ink, Label, Line, Piece } from '@readarxiv/format'
-import type { DocGlyph } from '../doc.ts'
-import { ROLE } from '../instrument.ts'
+// Phase 8, frameMeasures: each line's column and measure (TeX's frame where it shipped the page's), a label's own line's
+// measure. Reads the index and the record's `members` and `units`; writes the members' lines' columns and measures and their
+// labels' measures.
+// Phase 10, rooms: each member's room under and after its lines. Reads the index and the record's `members` (their
+// travelling ink, phase 9's end marks among it) and `units`; writes the members' rooms.
+import type { El, Ink, Label, Line, Piece, Room } from '@readarxiv/format'
+import type { Doc, DocGlyph } from '../doc.ts'
+import { ROLE, type TexFrame } from '../instrument.ts'
 import {
   bracketsOf,
   elementCase,
@@ -26,7 +31,7 @@ import { groupStyleOf as commandStyleOf } from './ink.ts'
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from './today/today.types.ts'
-import { field, INKED_CLASSES, piecesOf, standsOn, type Work } from './work.ts'
+import { field, INKED_CLASSES, type Member, ON_ROW, piecesOf, standsOn, type Work } from './work.ts'
 
 /** an element kind whose glyphs are a reading of it: its text is stated */
 const TEXT_KINDS = new Set(['cite', 'ref', 'eqref', 'url', 'number', 'footnote', 'macro'])
@@ -715,4 +720,348 @@ function standsAsDrawn(
       return raised ? g.y > base + ON_BASE : Math.abs(g.y - base) <= ON_BASE
     }),
   )
+}
+
+export function frameMeasures(w: Work): void {
+  const { inkA, gA, framesA } = w.ix
+  const { members, units } = w
+  columnsAndMeasures(members, inkA, gA, (mem) => (mem.unit >= 0 ? units[mem.unit]?.cell?.table : undefined), framesA)
+}
+
+export function rooms(w: Work): void {
+  const { ins, inkA, m, framesA } = w.ix
+  const { members, units } = w
+  const ink = inkIndex(inkA)
+  // (TeX's paragraph separation where each unit's paragraph ends: its \baselineskip and \parskip, LINES_TEX's AXT-LINES)
+  const texSep = new Map((ins.tex.skips ?? []).map((k) => [k.unit, r2(k.baselineskip + k.parskip)]))
+  for (const mem of members)
+    if (mem.lines.length)
+      mem.room = roomOf(mem, inkA, m.offA, ink, {
+        frames: framesA,
+        // (a table's cell keeps its own room, a figure text, an ink figure and a name theirs: no run's room is theirs to borrow)
+        runs: !(
+          mem.figure ||
+          mem.kind === 'inkfigures' ||
+          mem.kind === 'name' ||
+          (mem.unit >= 0 && units[mem.unit]?.cell)
+        ),
+        sep: mem.unit >= 0 && mem.name === undefined ? texSep.get(mem.unit) : undefined,
+      })
+}
+
+/** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
+ *  keeps to the left half (0), the right (1), or spans (2); its measure TeX's frame of it where TeX shipped the page's frame
+ *  (`frames`: the column its extent meets alone, else the text block), else today's column of it (below; TeX's \parshape
+ *  and \hangindent measures: stage 1b) */
+function columnsAndMeasures(
+  members: Member[],
+  inkA: Doc,
+  gA: (a: number) => DocGlyph,
+  tableOf: (mem: Member) => number | undefined,
+  frames: ReadonlyMap<number, TexFrame>,
+): void {
+  const byPage = new Map<number, Line[]>()
+  for (const mem of members) for (const l of mem.lines) (byPage.get(l[0]) ?? byPage.set(l[0], []).get(l[0])!).push(l)
+  for (const [p, lines] of byPage) {
+    const v = inkA.pages[p - 1]!.view
+    const mid = (v[0] + v[2]) / 2
+    const left = lines.filter((l) => l[3] <= mid + 2).length
+    const right = lines.filter((l) => l[2] >= mid - 2).length
+    const two = left >= 3 && right >= 3
+    for (const l of lines) l[1] = !two ? 0 : l[3] <= mid + 2 ? 0 : l[2] >= mid - 2 ? 1 : 2
+  }
+  // (each line's measure, today's column of it (run.mjs columnOf RUN:1557-1569, which U.decor widens a line of its own to): the
+  // page's paragraphs' lines over its middle, three at least, else those of the nearest page before it that has three, else
+  // the page's text area (its members' lines' hull); from their leftmost start to their furthest end, but a line TeX set
+  // overfull: an end past the furthest end two lines share (within 0.2 pt) by less than the line's size is no edge)
+  const paras = new Map<number, Line[]>()
+  const area = new Map<number, [number, number]>()
+  // (text lines: a display's rows and a held line, which today's rectangles leave out, are none; each by the extent of its
+  // own text glyphs, which today's rectangles are (its words', an inline formula that overruns the line's end aside))
+  for (const mem of members) {
+    const text = new Set(mem.text)
+    mem.lines.forEach((l, j) => {
+      if (l[9] & 1) return
+      const own = (mem.lineGlyphs[j] ?? []).filter((a) => text.has(a)).map(gA)
+      const t: Line = own.length
+        ? ([
+            ...l.slice(0, 2),
+            Math.min(...own.map((g) => g.x0)),
+            Math.max(...own.map((g) => g.x1)),
+            ...l.slice(4),
+          ] as Line)
+        : l
+      const a = area.get(l[0])
+      area.set(l[0], a ? [Math.min(a[0], t[2]), Math.max(a[1], t[3])] : [t[2], t[3]])
+      if (mem.kind === 'para' && mem.located) (paras.get(l[0]) ?? paras.set(l[0], []).get(l[0])!).push(t)
+    })
+  }
+  const columnOf = (l: Line, x0 = l[2]): [number, number] => {
+    const mid = (x0 + l[3]) / 2
+    const over = (q: number) => (paras.get(q) ?? []).filter((c) => c[2] <= mid && c[3] >= mid)
+    let own = over(l[0])
+    for (let q = l[0] - 1; own.length < 3 && q >= 1; q--) {
+      const o = over(q)
+      if (o.length >= 3) own = o
+    }
+    if (own.length < 3) return area.get(l[0]) ?? [l[2], l[3]]
+    const ends = own.map((c) => c[3]).sort((x, y) => y - x)
+    let right = ends[0] as number
+    for (let i = 0; i + 1 < ends.length; i++)
+      if ((ends[i] as number) - (ends[i + 1] as number) <= 0.2) {
+        if ((ends[0] as number) - (ends[i] as number) < (l[10] ?? 10)) right = ends[i] as number
+        break
+      }
+    return [Math.min(...own.map((c) => c[2])), right]
+  }
+  // (TeX's frame of a line: of its page's columns the one its extent meets alone, a line in the left column that hangs into the
+  // gutter (a protruded stop, an overfull box) its column's; a line over both columns, in none (the gutter) or outside the text
+  // block (a margin's, arXiv's turned stamp, ink no compile of the source sets), the text block. The gutter is no line's paper:
+  // a line ends inside its column's measure (the maintainer, 2026-11-08: 2610.22065v1 p1's ACM reference line, today's run 16 pt
+  // past its column into the gutter, called wrong); a name centred on the page is centred on the block's middle, never on a
+  // hull of the page's ink that takes in the stamp at x 24 (2610.40645v1 p1's and 2610.10069v1 p1's "Abstract")
+  const frameOf = (f: TexFrame, x0: number, x1: number): [number, number] => {
+    const meets = f.columns.filter((c) => x1 > c[0] && x0 < c[1])
+    return meets.length === 1 ? meets[0]! : f.block
+  }
+  const measures = new Map<Line, [number, number]>()
+  // (a line's middle as today's widened block has it: from its label's start where its label stands on it, the label drawn
+  // anew beginning the block (U.decor's first rectangle, RUN:2039); 1512.03385v1 p11's "Table 9." caption across both columns,
+  // whose words' middle stands in the right column and whose block's in neither: the page's text area)
+  for (const mem of members)
+    for (const l of mem.lines) {
+      const lb = mem.labelAt?.ink
+      const on = lb && lb[0] === l[0] && Math.abs(lb[5] - l[4]) < ON_ROW * (l[10] ?? mem.style.size) && lb[1] < l[2]
+      const f = frames.get(l[0])
+      measures.set(l, f ? frameOf(f, on ? lb[1] : l[2], l[3]) : columnOf(l, on ? lb[1] : l[2]))
+    }
+  // (a table's cell: its line's room is its table's extent on the page where the table reaches past its text column, a float set
+  // across both columns of a two-column page (2610.17024v1 p15's cell, whose room ended at the left column's edge, short of the
+  // next cell's ink; today's widen ran on to it, its block's middle over the gutter giving it the page's text area): the hull of
+  // the table's cells' lines there, the column's measure widened to it. A table inside one column keeps its column's measure)
+  const tables = new Map<string, [number, number]>()
+  for (const mem of members) {
+    const t = tableOf(mem)
+    if (t === undefined) continue
+    for (const l of mem.lines) {
+      if (l[9] & 1) continue
+      const k = `${t}|${l[0]}`
+      const h = tables.get(k)
+      tables.set(k, h ? [Math.min(h[0], l[2]), Math.max(h[1], l[3])] : [l[2], l[3]])
+    }
+  }
+  for (const mem of members) {
+    const t = tableOf(mem)
+    if (t === undefined) continue
+    for (const l of mem.lines) {
+      const h = tables.get(`${t}|${l[0]}`)
+      const own = measures.get(l)
+      if (h && own) measures.set(l, [Math.min(own[0], h[0]), Math.max(own[1], h[1])])
+    }
+  }
+  for (const [l, [m0, m1]] of measures) {
+    l[7] = r2(m0)
+    l[8] = r2(m1)
+  }
+  // (a label that stands on none of its member's lines, IEEEtran's "TABLE I" on a line of its own: its own line's measure, as a
+  // line's is read, the frame's column its extent meets alone, else its column)
+  for (const mem of members) {
+    const lb = mem.labelAt
+    if (!lb || lb.line !== undefined) continue
+    const f = frames.get(lb.ink[0])
+    const l = [lb.ink[0], 0, lb.ink[1], lb.ink[3], lb.ink[5], lb.ink[4], lb.ink[2], 0, 0, 0] as Line
+    const [m0, m1] = f ? frameOf(f, lb.ink[1], lb.ink[3]) : columnOf(l)
+    mem.labelMeasure = [r2(m0), r2(m1)]
+  }
+}
+
+/** the first ink under a height on a page across x0..x1: the highest top under `foot` of a glyph that is ink (isInk, whatever its
+ *  Unicode; something of it shown) or of a box (a page-sized one aside: a background), -Infinity for none; each page's ink sorted by its
+ *  tops once, read by halving from the top down (roomOf asks it under each member's last line and each run's) */
+type InkUnder = (page: number, foot: number, x0: number, x1: number) => number
+/** the next ink's line under a height across x0..x1: of the ink whose top stands under `foot`, the highest baseline, a glyph's
+ *  own (TeX's \baselineskip runs between baselines), a box's top (a rule, a picture: no baseline over it); -Infinity for none */
+type InkNext = InkUnder
+function inkIndex(inkA: Doc): { under: InkUnder; next: InkNext } {
+  const byPage = new Map<number, { top: Float64Array; base: Float64Array; x0: Float64Array; x1: Float64Array }>()
+  const indexOf = (page: number) => {
+    const got = byPage.get(page)
+    if (got) return got
+    const pg = inkA.pages[page - 1]!
+    const W = pg.view[2] - pg.view[0]
+    const H = pg.view[3] - pg.view[1]
+    const all: [number, number, number, number][] = []
+    for (const g of pg.glyphs) if (isInk(g) && !g.unseen) all.push([g.top, Math.min(g.y, g.top), g.x0, g.x1])
+    for (let b = 0; b < pg.kinds.length; b++) {
+      const qx0 = pg.boxes[4 * b]!
+      const qy0 = pg.boxes[4 * b + 1]!
+      const qx1 = pg.boxes[4 * b + 2]!
+      const qy1 = pg.boxes[4 * b + 3]!
+      if (!(qx1 - qx0 >= 0.9 * W && qy1 - qy0 >= 0.75 * H)) all.push([qy1, qy1, qx0, qx1])
+    }
+    all.sort((a, b) => b[0] - a[0])
+    const ix = {
+      top: Float64Array.from(all, (a) => a[0]),
+      base: Float64Array.from(all, (a) => a[1]),
+      x0: Float64Array.from(all, (a) => a[2]),
+      x1: Float64Array.from(all, (a) => a[3]),
+    }
+    byPage.set(page, ix)
+    return ix
+  }
+  const firstUnder = (ix: ReturnType<typeof indexOf>, foot: number) => {
+    let lo = 0
+    let hi = ix.top.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if ((ix.top[mid] as number) >= foot) lo = mid + 1
+      else hi = mid
+    }
+    return lo
+  }
+  return {
+    under: (page, foot, x0, x1) => {
+      const ix = indexOf(page)
+      for (let k = firstUnder(ix, foot); k < ix.top.length; k++)
+        if ((ix.x1[k] as number) > x0 && (ix.x0[k] as number) < x1) return ix.top[k] as number
+      return Number.NEGATIVE_INFINITY
+    },
+    // (by tops downward: a baseline is never over its own top, so none further down is higher than the best once tops fall
+    // under it)
+    next: (page, foot, x0, x1) => {
+      const ix = indexOf(page)
+      let best = Number.NEGATIVE_INFINITY
+      for (let k = firstUnder(ix, foot); k < ix.top.length && (ix.top[k] as number) > best; k++)
+        if ((ix.x1[k] as number) > x0 && (ix.x0[k] as number) < x1) best = Math.max(best, ix.base[k] as number)
+      return best
+    },
+  }
+}
+
+/** the free depth under a member's last line in its column, to the first ink not its own (a page's glyph or box), the page's
+ *  bottom edge where there is none; the distance to the next text line of its column, baseline to baseline; and, with TeX's
+ *  facts, the room under each run of its text lines and its paragraph's separation (Room.runs, Room.sep: what a translation
+ *  may borrow, the owner's ruling of 2026-11-08) */
+function roomOf(
+  mem: Member,
+  inkA: Doc,
+  offA: Int32Array,
+  ink: { under: InkUnder; next: InkNext },
+  tex: { frames: ReadonlyMap<number, TexFrame>; runs: boolean; sep: number | undefined },
+): Room {
+  const inkBelow = ink.under
+  const last = mem.lines.at(-1)!
+  // (its last block, as Room.below and Room.next read it, from its line `at` up: its lines on the page each standing above the one
+  // under it and across its column, to a kept row (a display, a held line: today's blocks split there); across: the block's
+  // column, its lines' measures, as design-a's "the next text line of its column" reads it, which a translation's last line may
+  // fill whatever the original's extent; never a column of its before a column break (a caption whose short last line keeps to
+  // one column of a block across both stands in the block over it))
+  const lastBlockOf = (at: number) => {
+    const end = mem.lines[at] as Line
+    let x0 = Math.min(end[7], end[2])
+    let x1 = Math.max(end[8], end[3])
+    let over = end[4]
+    let from = at
+    for (let q = at - 1; q >= 0; q--) {
+      const l = mem.lines[q] as Line
+      if (l[9] & 1 || l[0] !== end[0] || l[4] <= over || Math.max(l[8], l[3]) <= x0 || Math.min(l[7], l[2]) >= x1) break
+      x0 = Math.min(x0, l[7], l[2])
+      x1 = Math.max(x1, l[8], l[3])
+      over = l[4]
+      from = q
+    }
+    return { from, x0, x1 }
+  }
+  // (the free depth under a line across x0..x1: from its bottom to the first ink under it, whoever's it is (its own kept rows and
+  // elements under it too), the page's bottom edge where there is none)
+  const depthUnder = (l: Line, x0: number, x1: number): number => {
+    const pg = inkA.pages[l[0] - 1]!
+    const next = inkBelow(l[0], l[6] - 0.5, x0, x1)
+    return r2(Math.min(pg.view[3] - pg.view[1], Math.max(0, l[6] - (Number.isFinite(next) ? next : pg.view[1]))))
+  }
+  // (its last text line: the last line not kept, the first where every line is; its block)
+  let at = mem.lines.length - 1
+  while (at > 0 && (mem.lines[at] as Line)[9] & 1) at--
+  const lastText = mem.lines[at] as Line
+  const tp = lastText[0]
+  const { x0: bx0, x1: bx1 } = lastBlockOf(at)
+  // (the room below: from its last line's bottom to the first ink under it across its last block (its lines' measures, as for the
+  // next line: a translation's lines span the block, so what stands under the block's full lines is under its last, a display,
+  // the checkpoint's free-11))
+  const [p, , lx0, lx1] = last
+  const below = depthUnder(last, p === tp ? Math.min(lx0, bx0) : lx0, p === tp ? Math.max(lx1, bx1) : lx1)
+  // (the next line under its last text line (today's edgesOf `below` RUN:1655): from that line's baseline, across its last
+  // block, the page's glyphs under that baseline by more than three quarters of its pitch, its own travelling ink aside (its text,
+  // label and elements set anew: a script of its last line) and its kept rows counted (a display that stays under it is the next
+  // ink the fill meets); of the highest, those within half a size, their median baseline)
+  const travels = new Set<number>([...mem.text, ...mem.label])
+  for (const [id, l] of mem.els) if (!mem.elements.find(([k]) => k === id)?.[1].keep) for (const a of l) travels.add(a)
+  const T = lastText[4] - 0.75 * (mem.lead > 0 ? mem.lead : 1.2 * mem.style.size)
+  const off = offA[tp - 1] as number
+  const under: DocGlyph[] = []
+  inkA.pages[tp - 1]!.glyphs.forEach((g, j) => {
+    if (isInk(g) && !g.unseen && g.y < T && g.x1 > bx0 && g.x0 < bx1 && !travels.has(off + j)) under.push(g)
+  })
+  let nextBase: number | null = null
+  if (under.length) {
+    const top = Math.max(...under.map((g) => g.y))
+    const ys = under
+      .filter((g) => g.y > top - 0.5 * g.size)
+      .map((g) => g.y)
+      .sort((a, b) => a - b)
+    nextBase = ys[(ys.length - 1) >> 1] as number
+  }
+  // (the room under each run of its text lines, from its last up (today's freeFor, RUN:1677, which RUN:2193 gives every block but
+  // a cell's): a member running on to the next page or column may borrow at the foot of the one it leaves, a run over a kept row
+  // of its own only down to that row. A run: its lines on one page each standing above the one under it and across its column
+  // (its lines' measures), with no other ink between the two (the first ink under the upper the lower's own: a float TeX set
+  // between two lines of a paragraph ends a run, as today's blocks end at its gap), to a kept row. Its room is read across it as
+  // its lines are laid (today's block's extent, the typesetter's measure): its lines' own hull, from their start (a member's
+  // first line on a row it shares starts there) to their furthest end, a line borrowed under it laid at its last line's (a
+  // paragraph set beside a figure, 2602.23285v2 p5 t32: read to the column's end, the figure beside it was the ink under every
+  // line); a run of one line to its column's end (a single line widened to it, U.decor, RUN:1576). Stated where TeX states its
+  // page's text block bottom
+  // (TeX's frame, Instrument.tex.frames' foot): the depth under the run's last baseline of the next ink's baseline (a glyph's;
+  // a box's top), the page's bottom edge where none, and of that bottom)
+  const runs: [number, number, number][] = []
+  for (let e = mem.lines.length - 1; tex.runs && e >= 0; ) {
+    const end = mem.lines[e] as Line
+    if (end[9] & 1) {
+      e--
+      continue
+    }
+    let mx0 = Math.min(end[7], end[2])
+    let mx1 = Math.max(end[8], end[3])
+    let ox0 = end[2]
+    let ox1 = end[3]
+    let from = e
+    for (let q = e - 1; q >= 0; q--) {
+      const l = mem.lines[q] as Line
+      const lower = mem.lines[q + 1] as Line
+      if (l[9] & 1 || l[0] !== end[0] || l[4] <= lower[4] || Math.max(l[8], l[3]) <= mx0 || Math.min(l[7], l[2]) >= mx1)
+        break
+      // (another's ink between, across the two lines' hull: the first under the upper higher than the lower's own top, its
+      // hundredth aside)
+      if (inkBelow(l[0], l[6] - 0.5, Math.min(ox0, l[2]), Math.max(ox1, l[3])) > lower[5] + 0.005) break
+      mx0 = Math.min(mx0, l[7], l[2])
+      mx1 = Math.max(mx1, l[8], l[3])
+      ox0 = Math.min(ox0, l[2])
+      ox1 = Math.max(ox1, l[3])
+      from = q
+    }
+    const foot = tex.frames.get(end[0])?.foot
+    if (foot !== undefined) {
+      const next = ink.next(end[0], end[6] - 0.5, ox0, from === e ? mx1 : ox1)
+      const pg = inkA.pages[end[0] - 1]!
+      runs.push([e, r2(end[4] - (Number.isFinite(next) ? next : pg.view[1])), r2(end[4] - foot)])
+    }
+    e = from - 1
+  }
+  runs.reverse()
+  return {
+    below,
+    ...(nextBase !== null ? { next: r2(lastText[4] - nextBase) } : {}),
+    ...(runs.length ? { runs } : {}),
+    ...(tex.sep !== undefined ? { sep: tex.sep } : {}),
+  }
 }
