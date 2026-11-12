@@ -5770,7 +5770,15 @@ fit's borrow; the fill's foot step is not an option.
 lines }` (`types.ts` Laid, `lay/page.ts`, from the fill's `FillLaid.evened`): the knobs the fill took, in the order taken (a knob
 that gave nothing is not named: a paragraph its fit set at the tracking's bound already takes the size step alone), and its
 line count on that page at its fitted layout, before them; one the foot lifted carries `fit.over` too, how deep its lines went
-under TeX's bottom (§18.37's statement, the depth and not the line its state allows). Nothing of the lay reads either; the
+under TeX's bottom (§18.37's statement, the depth and not the line its state allows). A knob is named only where the state its
+final lines are laid at still carries it as the evening took it (`fill-page.ts` carried, 2026-11-13, round B16): the pass lays an
+evened paragraph again after the evening, and two of its steps put a knob back. The head pass lays a paragraph under a widow line
+lower with no room borrowed (`headOf`, `borrow: 0`), so that one evened by TeX's room stated a room its lines no longer stood in
+(2610.20967v1-zh page 4, unit 85, the head pass's own page: `track` and `room` stated, `track` alone carried); the page's one size
+grown replaces the size step's scale. The tracking stays named: the fill's own tracking of a CJK paragraph still short of its
+frame adds its steps to the knob's, so the knob still moves the final lines. One with no knob carried states no evening. Over
+the 90 pairs on the door's rows (default toggles), that unit is the one statement the rule moves; nothing drawn moves. Nothing
+of the lay reads either; the
 display gate's rulings TRS and Fm do (`lab/typeset/parity/rulings.mjs`), so that a paragraph one step small, a line short or
 a line past the bottom is accepted only where the lay says it evened it so.
 
@@ -6101,6 +6109,13 @@ Each mark is a cause of the candidate's own unit (`lab/pdf/prepare-back/stated.m
 `pseudocode`, `nameCell`, `block`; keptWhyOf), which the acceptance list does not accept by this: its entries are the
 coordinator's. The order of `keptBy` is the rules': a unit two marks state is kept by the first.
 
+**The page states it `kept`** (2026-11-13, round B16). A Page member whose unit the paper keeps (`Rows.kept`, the bundle's
+`Unit.kept`) is stated `kept` (`types.ts` Unlaid; `lay/entry.ts` contentOf, `lay/figures.ts` for a figure text), and `none`
+means one thing again: a row that had not come when the rows ended. Nothing the page draws moves: both are the original's, both
+hold no table group (a kept cell counts as one that came back as it went, as before) and neither is waited for; the reader
+reads `state === 'laid'` alone. The lab's display gate read both as "left the original's", a kept unit and a missing row
+alike (lab-data `refactor-2026-11/LATER.md`, 2026-11-12).
+
 Left out, each with its reason: the reader's toggles (a kind they leave is the page's 'left', no keep of the prepare; the dump
 states a unit of today's that such a member holds as `names`, "a line of the author block, kept by the names toggle"); a babel
 name (its own group, in no dump); an element kept as ink inside a translated unit (`El.keep`: a display row, a held line; no
@@ -6153,6 +6168,15 @@ alone were traced (lane google-lay) to the gate, not the reader, but for one (§
   "laid against laid" 328 and 34 (door 337 and 47). The rest is the table's names rule (`decideTables`, which the runner has
   not): a body column whose cells came back as they went kept whole as the original's, more often with Google's replies ("cells
   against laid", 107 against the door's 19).
+- **The reads gate** (2026-11-13, round B16, design-display row F6). The runner lays each page again under the reader's default
+  reading options and with every option on (`gateL1Pair`'s `leave`: the kinds their toggles leave, the reader's
+  `compose/classes.ts` leftKinds), its rows recording every id the lay reads (`reads`), and counts each id its page's wait set
+  (waitOf over no row in, the rows going on) does not hold: no exemption, 0 to pass (`gate-l1.mjs` exits 1 otherwise). It is the
+  law of §19.15 ("what a page reads is what it waits for") as a gate: a lay that reads a row its page does not wait for draws
+  what that row's coming later changes, and the composer lays such a page again once (§8.1). Over the 90 pairs before this
+  round: 469 reads on 110 pages of members the prepare, the toggles or the paper leave as the original (their sentences read for
+  the highlight, a figure text's row read before its reason), and the paper's own names, 29,522 on 1,890 pages; now none
+  (§19.14's names, wait.ts `ownRowOf`).
 
 ### 18.64 A size tie caps a member from the passes up to its own first page (the coordinator's ruling, 2026-11-12)
 
@@ -6204,6 +6228,23 @@ begin on two pages or more (28 members: 2608.16117v1 57/59 and 115/119, 2610.104
 12-16, 2610.21827v1 47-59, 2610.22197v1 72/74): what the entry draws of each, page by page, is the same before and after on
 the door's rows and on Google's; given the runner's members' rows alone, ord 12 on page 2 at 10.91 pt, its page-1 size, where it
 was 10.64. No PIPELINE, TRANSLATE or CHAIN_RULES: the lay is the reader's, and no stored byte moves.
+
+**What the page states of it** (2026-11-13, round B16, the coordinator's ruling). A member laid at its tie's cap states `tie:
+{ scale, by }` (`types.ts` Laid, `lay/page.ts` tieStated): the cap, a scale of its own size, and the member whose own need set
+it, in the round that set it (`tieCaps`' TieOrigin, followed back through a cap that member was itself laid at). That member
+states the tie too, by itself; where its own page's fill set it there (the evening's size step, §18.57) and its final lines
+stand that step under its own size, its `evened` names the size step among the knobs its final lines carry, with its line
+count on the page at its fitted layout of the final round. The statement is of the final lay, never a merged history: a knob of
+an earlier round's is named only where the final lines carry it. 2608.25210v2-zh page 11, traced over the rounds: in the first,
+unit 200 (today's t212) was evened by its tracking and a size step, 0.975, and unit 199 (t211), one paragraph of TeX's with
+it, capped there; in the second, 200 laid again at its own size took its tracking alone; in the third it was capped in turn
+through 199, whose cap is 200's own step, and the final page stated `{ track }` on 200 and nothing on 199, so that the display
+gate read the tie one step small with no reason. Both at 0.975 is no fault of the drawing: one paragraph has one size, and the
+step is the only size both fit at (200 at its own size needs it while 199 stands at its own). Now 199 states `tie { 0.975, by
+200 }` and 200 `tie { 0.975, by 200 }`, `evened { track, size }`. The display gate's TRS reads a tie's members' statements
+(the measure's `tie t211, t212`, which it could not read before): a member stating `tie` is covered where the member that set
+it is (`lab/typeset/parity/rulings.mjs`). Nothing drawn moves. `packages/typeset/tests/unit/tie-cap.test.ts`,
+`tight-paragraph.test.ts`.
 
 ### 18.66 A paragraph TeX opened inside a unit is read by the same facts on both sides of its end (2026-11-13)
 
@@ -9493,6 +9534,22 @@ layer wherever such a name is drawn (the owner's other ground truth of 2026-10-2
   2610.21312v1's "Setting", 2610.21884v1's "Notation", 2610.35877v1's "Result"), 3 figure units and 6 ink units that had taken
   them go (the ink units after them numbered one on), their 9 label rows stay in the layout (#541's rule had dropped them under
   those units), and no source unit's text group moves; 216 of 216 local sources keep every unit's hash.
+- **Waited for where drawn** (2026-11-13, round B16, the coordinator's ruling on design-display row F6). The reader's typesetter
+  read every name's row on every page of a paper with names (`ownNamesOf`, 29,522 reads on 1,890 pages of the 90 pairs) and
+  waited for none, so a page committed before a name's row came drew the original's head or reference and was laid again once
+  it came. Now a name's row is read only when a member's head or reference asks it (`unit/rename.ts` ownNamesOf: a lookup that
+  reads a row when asked), and one predicate (`lay/wait.ts` drawsName) says which members can: a theorem's or a heading's head
+  name (Label.name), or an element whose source a cross-referencing package generates or a citation's note (U.rename's
+  sources). Such a member waits, beside its own row, for every name of its paper; no other member is given them. What it costs a
+  reader: the server asks for the names first (the website's windows: the name units lead the first window whether or not the
+  layer's catalog is known), and over the 90 pairs' 83 papers every name stands in that first window (47 papers name their own,
+  610 names, at most 330 characters against the first window's 2,500); the reader orders them first too
+  (`session/rows.ts` ranked). A refused row ends the wait, as any row does. Where a page's own rows come from before and a name's
+  does not (asked again), the page waits for the first window, which holds the names and the page in view. A name's row that
+  comes after a page's own now lays that page once, where it laid it twice, the head first drawn as printed
+  (`packages/reader/tests/composer.test.ts`); the reads gate counts no name read outside a page's wait set (§18.63). Nothing a
+  page draws moves: over the 90 pairs, on the door's rows and Google's, the lay draws every page as before but the highlight
+  boxes of members a toggle leaves (no longer read by sentence from rows the reader answers refused: what the reader draws).
 - **Limits.** The translator sees a name alone, with no sentence around it: a word of two senses may come back in the other
   ("Note", "Line"). A name only a macro of the paper's prints (`\newcommand{\thmname}{Satz}`) is not read.
 

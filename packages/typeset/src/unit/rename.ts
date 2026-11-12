@@ -102,7 +102,12 @@ export function refNamesOf(data: TexNamesData, to: string): RefNames {
 }
 
 const conjunctionWord = (c: string) => c.replace(/[\s,]+/g, ' ').trim()
-const ownName = (own: ReadonlyMap<string, string> | null, english: string) => {
+/** the paper's own names as the rules read them: a name's word by its English, the Englishes (a reference's tokens), how many */
+export type OwnNames = Pick<ReadonlyMap<string, string>, 'get' | 'keys' | 'size'>
+/** whether a piece's source is one whose text a cross-referencing package generates, or a citation's note (GENERATED_REF,
+ *  CITE_NOTE): the sources U.rename reads a name for, the paper's own among them */
+export const renamedBy = (src: string): boolean => GENERATED_REF.test(src) || CITE_NOTE.test(src)
+const ownName = (own: OwnNames | null, english: string) => {
   const w = own?.get?.(english)
   return typeof w === 'string' && w.trim() ? w.trim() : null
 }
@@ -118,7 +123,7 @@ export function refName(
   english: string,
   n: RefNames,
   labels: Readonly<Record<string, string>> | null,
-  own: ReadonlyMap<string, string> | null,
+  own: OwnNames | null,
 ): string | null {
   const t = n.target
   if (!t) return null
@@ -134,7 +139,7 @@ export function refName(
 }
 
 /** a conjunction in the target (tex-names.mjs:86 conjunctionOf) */
-function conjunctionOf(t: NonNullable<RefNames['target']>, c: string, own: ReadonlyMap<string, string> | null) {
+function conjunctionOf(t: NonNullable<RefNames['target']>, c: string, own: OwnNames | null) {
   if (Object.hasOwn(t.conj, c)) return t.conj[c]!
   if (!/\p{L}/u.test(c)) return c
   const word = conjunctionWord(c),
@@ -148,7 +153,7 @@ export function refInTarget(
   text: string,
   n: RefNames,
   labels: Readonly<Record<string, string>> | null,
-  own: ReadonlyMap<string, string> | null,
+  own: OwnNames | null,
 ): Rename[] | null {
   if (typeof text !== 'string' || !text.trim() || !n.target) return null
   const t = n.target
@@ -198,7 +203,7 @@ export function rename<K>(
   elements: Iterable<[K, Renamable | null | undefined]>,
   n: RefNames,
   labels: Readonly<Record<string, string>> | null,
-  own: ReadonlyMap<string, string> | null,
+  own: OwnNames | null,
 ): Map<K, Rename[]> {
   const out = new Map<K, Rename[]>()
   for (const [k, r] of elements) {
@@ -264,20 +269,33 @@ function textsOf(content: readonly OutPiece[], out: string[] = []): string[] {
 }
 /**
  * The paper's own names in the target, English → its word (today's ownNames, RUN:813-819, each row nameOfRow's): the name
- * units the part states (Part.paper.names, [English, unit id]), each by its row where it is in and a translation. Never
- * waited for (lay/wait.ts): one not in yet is no word, and its heads and references keep the original's
+ * units the part states (Part.paper.names, [English, unit id]), each by its row where it is in and a translation; none where
+ * it is not in, or no translation, and its heads and references keep the original's. Read when asked, each row once a call:
+ * a name's row is read only by a member whose head or reference names it, and such a member's page waits for its paper's names
+ * (lay/wait.ts drawsName, docs/PDF-READER.md §19.14). Its Englishes, which a reference's tokens read, need no row
  */
 export function ownNamesOf(
   names: readonly (readonly [string, string])[] | undefined,
   rows: { get(id: string): Row | undefined },
-): Map<string, string> {
-  const out = new Map<string, string>()
+): OwnNames {
+  const ids = new Map<string, string>()
   for (const [en, id] of names ?? []) {
-    const row = rows.get(id)
-    if (!row?.ok) continue
-    const english = en.replace(/\s+/g, ' ').trim(),
-      word = wordOf(textsOf(row.content))
-    if (english && word) out.set(english, word)
+    const english = en.replace(/\s+/g, ' ').trim()
+    if (english) ids.set(english, id)
   }
-  return out
+  const read = new Map<string, string | undefined>()
+  return {
+    get(english: string) {
+      if (!read.has(english)) {
+        const id = ids.get(english)
+        const row = id === undefined ? undefined : rows.get(id)
+        read.set(english, (row?.ok && wordOf(textsOf(row.content))) || undefined)
+      }
+      return read.get(english)
+    },
+    keys: () => ids.keys(),
+    get size() {
+      return ids.size
+    },
+  }
 }

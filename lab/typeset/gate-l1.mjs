@@ -14,6 +14,9 @@
 // runs that pass lays it; one laid otherwise by another cause than the head pass's known one fails the run (exit 1).
 // I3 (no unit's ink over another's, gate-l1.ts invariantsOf) reads a line from its first item to its last glyph's ink (the
 // product's inkEndOf), a run's ink right the table lacks the served faces' (the google-lay lane, 2026-11-12).
+// With --entry, the reads gate (docs/PDF-READER.md §19.15, round B16): each page laid again under the reader's default reading
+// options and with every option on (the kinds their toggles leave, the reader's compose/classes.ts), every row id its lay reads
+// held against the page's wait set; an id outside it fails the run (exit 1), no exemption.
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { readerDump } from '../../packages/typeset/tests/replay/display.ts'
@@ -24,6 +27,7 @@ import { L1_BUNDLES_DIR } from '../../packages/typeset/tests/replay/l1.ts'
 import { tableMetrics } from '../../packages/typeset/src/metrics/table.ts'
 import { layered, servedMetrics } from './served-metrics.mjs'
 import { accept as acceptReading } from '../../packages/translate/src/accept.ts'
+import { CLASS_DEFAULTS, leftKinds } from '../../packages/reader/src/compose/classes.ts'
 import { unitInOf } from '../../packages/translate/src/bundle.ts'
 
 const args = process.argv.slice(2)
@@ -58,6 +62,12 @@ if (ENTRY && READING !== 'part') {
   console.error("gate-l1.mjs: --entry needs --reading=part (the entry is laid over the door's rows, read for that reading alone)")
   process.exit(2)
 }
+/** the reading options the reads gate lays each page under: the reader's defaults and every option on */
+const LEAVE = new Map([
+  ['default', leftKinds(CLASS_DEFAULTS)],
+  ['every option on', leftKinds({ figures: true, tables: true, heads: true, references: true, names: true })],
+])
+const reads = new Map([...LEAVE.keys()].map((k) => [k, { pages: 0, reads: 0, outside: 0, outsidePages: 0, ex: [] }]))
 const entry = { crossLay: { units: 0, twice: 0, head: [], other: [] }, alike: 0, differ: 0, ex: [], ms: [], names: new Map(), links: new Map(), linkEx: new Map(), figures: new Map(), lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 }, cover: { members: 0, pieces: 0, faults: new Map(), ex: new Map(), byPair: new Map() } }
 /** Whether the entry is given a door row. The rows are today's stored replies in today's reading; one that says nothing (the
  *  chain's rule, accept.ts: no letter or digit where the unit has a letter, 'empty') is no translation of its unit under any
@@ -131,12 +141,12 @@ for (const pair of pairs) {
   if (process.env.AXT_GATE_OVER || process.env.AXT_GATE_PAIRS) console.log(`PAIR ${pair}`)
   let g
   judging = pair
-  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf, served }), reading: READING, substitute: SUBST, entry: ENTRY, accept }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
+  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf, served }), reading: READING, substitute: SUBST, entry: ENTRY, accept, ...(ENTRY ? { leave: LEAVE } : {}) }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
   count.laid += g.units.length
   count.adapted += g.setting.size
   count.pages += g.pages
   pageMs.push(...g.ms)
-  if (g.entry) { entry.alike += g.entry.alike; entry.differ += g.entry.differ; entry.ms.push(...g.entry.ms); for (const x of g.entry.ex) if (entry.ex.length < 8) entry.ex.push(`${pair} ${x}`); for (const [k, n] of g.entry.names) entry.names.set(k, (entry.names.get(k) ?? 0) + n); for (const [k, n] of g.entry.links) entry.links.set(k, (entry.links.get(k) ?? 0) + n); for (const [k, n] of g.entry.figures) entry.figures.set(k, (entry.figures.get(k) ?? 0) + n); for (const [k, xs] of g.entry.linkEx) entry.linkEx.set(k, [...(entry.linkEx.get(k) ?? []), ...xs].slice(0, 4)); for (const k of Object.keys(entry.lit)) entry.lit[k] += g.entry.lit[k]; addCover(pair, g.entry.cover); addCrossLay(pair, g.entry.crossLay) }
+  if (g.entry) { entry.alike += g.entry.alike; entry.differ += g.entry.differ; entry.ms.push(...g.entry.ms); for (const x of g.entry.ex) if (entry.ex.length < 8) entry.ex.push(`${pair} ${x}`); for (const [k, n] of g.entry.names) entry.names.set(k, (entry.names.get(k) ?? 0) + n); for (const [k, n] of g.entry.links) entry.links.set(k, (entry.links.get(k) ?? 0) + n); for (const [k, n] of g.entry.figures) entry.figures.set(k, (entry.figures.get(k) ?? 0) + n); for (const [k, xs] of g.entry.linkEx) entry.linkEx.set(k, [...(entry.linkEx.get(k) ?? []), ...xs].slice(0, 4)); for (const k of Object.keys(entry.lit)) entry.lit[k] += g.entry.lit[k]; addCover(pair, g.entry.cover); addCrossLay(pair, g.entry.crossLay); for (const [k, r] of g.entry.reads ?? []) { const t = reads.get(k); t.pages += r.pages; t.reads += r.reads; t.outside += r.outside; t.outsidePages += r.outsidePages; for (const x of r.ex) if (t.ex.length < 6) t.ex.push(`${pair} ${x}`) } }
   adaptMs += g.adaptMs
   readMs += g.readMs ?? 0
   inv.laid += g.inv.laid
@@ -272,6 +282,11 @@ if (ENTRY) {
   for (const x of X.head) console.log(`  head: ${x}`)
   for (const x of X.other) console.log(`  other: ${x}`)
   if (X.other.length) process.exitCode = 1
+  // (the reads gate: an id a page's lay reads that the page does not wait for, under either option, fails the run)
+  for (const [k, r] of reads) {
+    console.log(`the reads gate, ${k} (${LEAVE.get(k).join(', ') || 'none left'}): ${r.pages} pages laid, ${r.reads} row ids read; ${r.outside} read outside the page's wait set, on ${r.outsidePages} pages${r.ex.length ? `: ${r.ex.join(' | ')}` : ''}`)
+    if (r.outside) process.exitCode = 1
+  }
 }
 // (an entry that laid nothing counted I10 over no piece: no count, the run fails)
 if (ENTRY && !entry.cover.pieces) {

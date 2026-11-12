@@ -38,6 +38,7 @@ export type Why =
   | 'unwrapped'
   | 'page'
   | 'none'
+  | 'kept'
   | 'left'
   | 'refused'
   | 'unavailable'
