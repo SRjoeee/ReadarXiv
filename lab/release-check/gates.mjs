@@ -710,15 +710,16 @@ export const GATES = [
   },
   {
     id: 'speed',
-    title: "today's engine's speed check, head against a base worktree (lab/pdf/spikes/layer-gate/run-speed.sh; CLAUDE.md's rule before a release)",
+    title: "today's engine's speed check, head against the released tree (lab/pdf/spikes/layer-gate/run-speed.sh; CLAUDE.md's rule before a release): src/pdf-reader/engine, which the extension's reader still runs (AXT_READER 'today', stage 5a) and which perf-batch and perf-release, measuring the website's readers, do not",
     tier: 'release',
     stage: 'corpus',
     holds: [],
     // (the driver is a zsh script and only measures: its runs' logs go to the work directory, and the verdict is speed.mjs's
-    // over them, exit 0 PASS, 1 FAIL, 2 INCOMPARABLE; a measurement with no verdict is no pass)
-    needs: ctx => [exists('a base worktree (RELEASE_CHECK_BASE)', process.env.RELEASE_CHECK_BASE ?? ''), exists('the layer gate\'s fixture pack (PACK)', packOf(ctx)), exists('zsh', which('zsh'))],
+    // over them, exit 0 PASS, 1 FAIL, 2 INCOMPARABLE; a measurement with no verdict is no pass. It goes with today's engine,
+    // deleted at the cut-over: design §6.2 stage 6, "nothing of the old paths in either tree")
+    needs: ctx => [exists("the base: today's released engine at 065c1d973 (RELEASE_CHECK_BASE, else AXT_TODAY, else the worktree beside this one)", join(speedBase(ctx), 'src/pdf-reader/engine')), exists('the layer gate\'s fixture pack (PACK)', packOf(ctx)), exists('zsh', which('zsh'))],
     steps: ctx => [
-      { cmd: ['zsh', 'lab/pdf/spikes/layer-gate/run-speed.sh', ctx.root, process.env.RELEASE_CHECK_BASE ?? '', '3'], slot: 'e2e', env: { PACK: packOf(ctx), SPEED_LOGS: join(ctx.work, 'speed') }, fresh: join(ctx.work, 'speed') },
+      { cmd: ['zsh', 'lab/pdf/spikes/layer-gate/run-speed.sh', ctx.root, speedBase(ctx), '3'], slot: 'e2e', env: { PACK: packOf(ctx), SPEED_LOGS: join(ctx.work, 'speed') }, fresh: join(ctx.work, 'speed') },
       { cmd: ['node', 'lab/pdf/spikes/layer-gate/speed.mjs', join(ctx.work, 'speed')] },
     ],
     judge: (ctx, steps) => {
@@ -791,6 +792,9 @@ function perfJudge(steps) {
 const canvasIds = ctx => readFileSync(lab(ctx, 'lanes/L1-canvas.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l).id)
 /** the layer gate's fixture pack: PACK, else where the rules gate restores it */
 const packOf = ctx => process.env.PACK ?? join(ctx.root, 'lab/pdf/out/gate-pack')
+/** the speed check's base: RELEASE_CHECK_BASE, else the last release's tree, today's engine at 065c1d973, as the gates that
+ *  read today's engine take it (AXT_TODAY, else the worktree beside this one) */
+const speedBase = ctx => process.env.RELEASE_CHECK_BASE ?? process.env.AXT_TODAY ?? join(ctx.root, '..', 'refactor-read')
 
 const lastLine = t => t.trim().split('\n').filter(l => !/^\s*at /.test(l)).at(-1)?.slice(0, 200) ?? ''
 

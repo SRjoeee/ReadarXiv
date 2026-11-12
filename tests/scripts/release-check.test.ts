@@ -210,8 +210,20 @@ describe('the speed check', () => {
       const steps = speed.steps!(ctx)
       expect(steps.map(s => s.cmd.slice(0, 2))).toEqual([['zsh', 'lab/pdf/spikes/layer-gate/run-speed.sh'], ['node', 'lab/pdf/spikes/layer-gate/speed.mjs']])
       expect(steps[0]?.env?.SPEED_LOGS).toBe(steps[1]?.cmd[2])
+      expect(steps[0]?.cmd.slice(2, 4)).toEqual(['/repo', '/base'])
     } finally {
       delete process.env.RELEASE_CHECK_BASE
+    }
+  })
+
+  it('measures against the released tree, today\'s engine at 065c1d973, where no base is given', () => {
+    const today = process.env.AXT_TODAY
+    delete process.env.AXT_TODAY
+    try {
+      expect(speed.steps!(ctx)[0]?.cmd.slice(2, 4)).toEqual(['/repo', '/refactor-read'])
+      expect(speed.needs!(ctx)[0]?.path).toBe('/refactor-read/src/pdf-reader/engine')
+    } finally {
+      if (today !== undefined) process.env.AXT_TODAY = today
     }
   })
 
