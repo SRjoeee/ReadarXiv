@@ -23,8 +23,8 @@ const lay = (o: Partial<UnitLay> = {}): UnitLay => ({
   scale: 1,
   at: at(),
   lines: [
-    [4, 700],
-    [4, 686],
+    [4, 700, 10],
+    [4, 686, 10],
   ],
   ...o,
 })
@@ -48,15 +48,15 @@ describe('I6 across the pages’ lays', () => {
     const a = lay({
       at: at({ head: 5.99 }),
       lines: [
-        [4, 690],
-        [4, 676],
+        [4, 690, 10],
+        [4, 676, 10],
       ],
     })
     const b = lay({
       at: at({ head: 1.51 }),
       lines: [
-        [4, 694.48],
-        [4, 680.48],
+        [4, 694.48, 10],
+        [4, 680.48, 10],
       ],
     })
     expect(layDiffer(a, b)).toEqual({ what: 'at.head 5.99 / 1.51; lines: baselines', head: true })
@@ -79,15 +79,29 @@ describe('I6 across the pages’ lays', () => {
         lay(),
         lay({
           lines: [
-            [4, 700],
-            [4, 686],
-            [4, 672],
+            [4, 700, 10],
+            [4, 686, 10],
+            [4, 672, 10],
           ],
         }),
       ).what,
     ).toBe('lines 2 / 3')
     // (a head with a tracking moved too: not the head pass's alone)
     expect(layDiffer(lay({ at: at({ head: 2 }) }), lay({ at: at({ track: 0.05 }) })).head).toBe(false)
+    // (a unit laid a run at a time, fit/runs.ts: its layout's scale and state its first run's, each line drawn at its run's
+    // size; two lays that differ in a later run's drawn size alone differ, whatever the head says (lane gate-finds: 2610.40645v1
+    // t174, its line before a display at 10.64 pt, its two after it at 10.91 on the next page))
+    const runs = (second: number) =>
+      lay({
+        lines: [
+          [4, 108.16, 10.64],
+          [5, 709.04, second],
+          [5, 693.05, second],
+        ],
+      })
+    expect(layDiffer(runs(10.91), runs(10.91)).what).toBe('')
+    expect(layDiffer(runs(10.91), runs(10.64))).toEqual({ what: 'lines: sizes', head: false })
+    expect(layDiffer(runs(10.91), { ...runs(10.64), at: at({ head: 2 }) }).head).toBe(false)
     const by = new Map([
       [
         7,

@@ -32,10 +32,11 @@ export type UnitLay = {
   /** its first page, whose pass filled it */
   page: number
   state: PageMember['state']
-  /** where laid: its scale of its own size, the state it was laid at, each line's page and baseline */
+  /** where laid: its scale of its own size, the state it was laid at, each line's page, baseline and the size it is drawn at
+   *  (its run's, `seg`, where the unit is laid a run at a time: fit/runs.ts; else the layout's own) */
   scale?: number
   at?: FitState
-  lines?: [page: number, baseline: number][]
+  lines?: [page: number, baseline: number, size: number][]
 }
 export type PreparedPage = {
   page: number
@@ -304,7 +305,11 @@ function layPageOnce(
         page: firstPage(x.m),
         state: x.unit ? 'laid' : x.state === 'laid' ? 'cells' : x.state,
         ...(L
-          ? { scale: L.scale, at: L.state, lines: L.lines.map((l): [number, number] => [l.page, l.baseline]) }
+          ? {
+              scale: L.scale,
+              at: L.state,
+              lines: L.lines.map((l): [number, number, number] => [l.page, l.baseline, l.seg?.f ?? L.f]),
+            }
           : {}),
       }
     })

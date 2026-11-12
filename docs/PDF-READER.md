@@ -5452,7 +5452,8 @@ within one bullet item.
   the page laid is in no page's members. `layPage` hands, where asked (`EntryOptions.lays`, `lay/page.ts` `UnitLay`), every
   unit begun on a pass page as it laid and filled it, and `lab/typeset/gate-l1.mjs --entry` (the release check's
   `sentence-cover`) compares each unit across every page's lay that runs its pass
-  (`packages/typeset/tests/replay/cross-lay.ts`). One laid otherwise fails the run (exit 1), but where the head pass's known
+  (`packages/typeset/tests/replay/cross-lay.ts`), each line at the size it is drawn at (a unit laid a run at a time draws each
+  line at its run's, which its layout's scale, its first run's, does not tell; the reader dump's `sizes` likewise). One laid otherwise fails the run (exit 1), but where the head pass's known
   cause tells it: §18.11's head (`fill-page.ts` headOf) reads the paragraph over the unit from that paragraph's current
   layout, filled where its first page is a pass page of the lay and at its fit where not, so the unit under the one-line end
   of a paragraph begun on the page before is laid lower by one lay than by the other (lane page-target's trace; a ruling waits

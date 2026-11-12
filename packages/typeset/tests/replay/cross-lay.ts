@@ -11,8 +11,9 @@
 // its fit by f + 1's (it is not); so the unit under it is laid lower by one lay than by the other. Told by what it moves: the
 // lays differ in the head, and else only in what the head pass's lay of the unit sets (fill-page.ts withLead: the head, no
 // borrow, its first frame's leading, over the fill's state, whose mark `box` the layout a lay kept from S.fill.leads does not
-// carry) and its lines' baselines; same state, scale, line count and pages, and every other field of the fit's state. Any
-// other difference is new.
+// carry) and its lines' baselines; same state, scale, line count and pages, each line's drawn size (a unit laid a run at a
+// time, fit/runs.ts, draws each line at its run's size, which the layout's own scale and state, its first run's, do not
+// tell: lane gate-finds), and every other field of the fit's state. Any other difference is new.
 import type { UnitLay } from '../../src/lay/page.ts'
 
 export type CrossLayDiffer = {
@@ -34,14 +35,17 @@ const HEAD_SETS: readonly string[] = ['head', 'borrow', 'lead', 'leads', 'box']
 export function layDiffer(a: UnitLay, b: UnitLay): { what: string; head: boolean } {
   const num = (k: string, x: unknown, y: unknown) =>
     typeof x === 'number' && typeof y === 'number' ? `${k} ${x} / ${y}` : k
-  // (its shape: state, scale, its lines' count and pages)
+  // (its shape: state, scale, its lines' count, pages and drawn sizes)
   const shape: string[] = []
   if (a.state !== b.state) shape.push(`state ${a.state} / ${b.state}`)
   if (a.scale !== b.scale) shape.push(num('scale', a.scale, b.scale))
   const la = a.lines ?? [],
     lb = b.lines ?? []
   if (la.length !== lb.length) shape.push(`lines ${la.length} / ${lb.length}`)
-  else if (la.some((l, i) => l[0] !== lb[i]![0])) shape.push('lines: pages')
+  else {
+    if (la.some((l, i) => l[0] !== lb[i]![0])) shape.push('lines: pages')
+    if (la.some((l, i) => l[2] !== lb[i]![2])) shape.push('lines: sizes')
+  }
   // (its fit's state, field by field)
   const at = (x: UnitLay) => (x.at ?? {}) as Record<string, unknown>
   const fit = [...new Set([...Object.keys(at(a)), ...Object.keys(at(b))])]
