@@ -424,7 +424,9 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS, keysOnl
 
   const out = { rules, sites, files: {} }
   Object.defineProperty(out, 'keyOfItem', { value: keyOfItem })
-  for (const [path, f] of files) out.files[path] = { sha256: createHash('sha256').update(f.text).digest('hex'), edits: edits.get(path), sites: sites.filter(s => s.file === path).map(s => s.id) }
+  // (each module's importers among the product files: what would exercise a module no input loads)
+  const importersOf = path => [...new Set((graph.into?.get(id(path)) ?? []).map(e => e.from).filter(f => f.startsWith(`${scan.repo}:`) && scan.files.get(f.slice(scan.repo.length + 1))?.role === 'product').map(f => f.slice(scan.repo.length + 1)))].sort()
+  for (const [path, f] of files) out.files[path] = { sha256: createHash('sha256').update(f.text).digest('hex'), edits: edits.get(path), sites: sites.filter(s => s.file === path).map(s => s.id), importers: importersOf(path) }
   return out
 }
 
@@ -441,6 +443,7 @@ export function sitesOfTree(root, profile, { alive = null, areas = RULE_AREAS } 
  *  each module's edits): a rule's description may change and the records made over the map still read */
 export function siteMapOf(s, { commit = null } = {}) {
   const map = { format: SITES_FORMAT, commit, rules: s.rules, sites: s.sites, files: s.files }
-  map.digest = createHash('sha256').update(JSON.stringify([map.sites, map.files])).digest('hex').slice(0, 16)
+  const indexed = Object.fromEntries(Object.entries(map.files).map(([p, f]) => [p, { sha256: f.sha256, edits: f.edits, sites: f.sites }]))
+  map.digest = createHash('sha256').update(JSON.stringify([map.sites, indexed])).digest('hex').slice(0, 16)
   return map
 }

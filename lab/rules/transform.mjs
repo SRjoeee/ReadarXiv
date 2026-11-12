@@ -3,13 +3,15 @@
 // from: a site map is of one tree. Pure. Not shipped.
 import { createHash } from 'node:crypto'
 
-/** the instrumented text of `path`, or null where the map holds no edit of it; throws where the text is not the map's */
+/** the instrumented text of `path`, or null where the map does not name it; throws where the text is not the map's. Every
+ *  module the map names first tells the recorder it was loaded (its line numbers kept: the call stands on line 1), so that
+ *  a module no input loads is told from one whose rules never ran */
 export function instrument(map, path, text) {
   const entry = map.files[path]
-  if (!entry?.edits.length) return null
+  if (!entry) return null
   const sha = createHash('sha256').update(text).digest('hex')
   if (sha !== entry.sha256) throw new Error(`lab/rules: ${path} is not the text the site map was made from (sites.json at ${map.commit ?? 'an unknown commit'}, digest ${map.digest}); make the map again`)
-  return applyEdits(text, entry.edits)
+  return `__axtRules.loaded(${JSON.stringify(path)});${entry.edits.length ? applyEdits(text, entry.edits) : text}`
 }
 
 /** edits applied: at each offset the closings of the wraps that end there (the innermost first), then the openings of

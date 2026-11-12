@@ -22,6 +22,8 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
   let ctx = Object.freeze({ paper, test: null, file: null, page: null })
   // (every paper a process records cases of: a lay's runner lays several in one process)
   const papers = new Set(paper ? [paper] : [])
+  // (every module of the site map the process loaded)
+  const loaded = new Set()
   let flushes = 0
   const t0 = performance.now()
 
@@ -264,6 +266,10 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
       const ids = [...new Set(sources.flatMap(s => marksOf(s) ?? []))].filter(id => S[id].kind !== 're').sort((a, b) => a - b)
       return ids.length ? Object.setPrototypeOf(set, protoFor(`s${ids.join(',')}`, () => setProto(ids))) : set
     },
+    /** a module of the site map loaded (transform.mjs puts the call first in each): the modules an input exercised */
+    loaded: path => {
+      loaded.add(path)
+    },
     /** the context the next cases are recorded with: a paper, a test */
     context: next => {
       ctx = Object.freeze({ ...ctx, ...next })
@@ -289,18 +295,19 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
           ...(r.reads ? { reads: r.reads } : {}),
         }
       }
-      return { format: RAW_FORMAT, map: map.digest, input, file: ctx.file, pid: process.pid, paper: ctx.paper, papers: [...papers], argv: process.argv.slice(1), ms: Math.round(performance.now() - t0), ...extra, sites }
+      return { format: RAW_FORMAT, map: map.digest, input, file: ctx.file, pid: process.pid, paper: ctx.paper, papers: [...papers], argv: process.argv.slice(1), ms: Math.round(performance.now() - t0), ...extra, loaded: [...loaded].sort(), sites }
     },
     /** the record written under AXT_RULES_OUT (or `out`), with `extra` fields (vitest-setup.mjs: `labRead`), and the
      *  recorder emptied */
     flush: (label = null, extra = {}) => {
       if (!out) return null
       const snap = api.snapshot(extra)
-      if (!Object.keys(snap.sites).length) return null
+      if (!Object.keys(snap.sites).length && !snap.loaded.length) return null
       mkdirSync(out, { recursive: true })
       const name = `${(label ?? ctx.paper ?? 'run').replace(/[^\w.-]+/g, '_')}-${process.pid}-${flushes++}.json`
       writeFileSync(join(out, name), JSON.stringify(snap))
       R.fill(undefined)
+      loaded.clear()
       return join(out, name)
     },
   }

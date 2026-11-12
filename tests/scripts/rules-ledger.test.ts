@@ -50,6 +50,8 @@ const SPECS: Record<string, Spec> = {
   DECIDES: { sites: [{ kind: 'cmp', per: { corpus: n(3, 2) } }, { kind: 'cmp', per: { corpus: n(4, 0) } }] },
   BY_TEST: { sites: [{ kind: 'cmp', per: { corpus: n(5, 0), tests: n(0, 1, { tests: [{ kept: ['a.test.ts > the other side'], more: 0 }, null] }) } }] },
   LAB_TEST: { sites: [{ kind: 'cmp', per: { corpus: n(5, 0), 'tests-lab': n(0, 2) } }] },
+  // (a third paper set, a fresh sweep's, recorded under its own input's name: the corpus again)
+  SWEPT: { sites: [{ kind: 'cmp', per: { corpus: n(5, 0), sweep: n(0, 1) } }] },
   NEVER: { sites: [{ kind: 'cmp', per: {} }] },
   ONE: { comment: 'two lines at most', sites: [{ kind: 'cmp', per: { corpus: n(0, 7) } }] },
   MAGNITUDE: { comment: 'a pad', sites: [{ kind: 'val', per: { corpus: { n: 3 } } }] },
@@ -86,6 +88,8 @@ describe('the classifier', () => {
     expect(rowOf(l, 'BY_TEST').sites[0]?.tests?.false).toEqual(['a.test.ts > the other side'])
     // (a test that reads the lab's data is the corpus: its outcome makes the site decide, not a test of our own)
     expect(rowOf(l, 'LAB_TEST').verdict).toBe('decides')
+    // (a rule whose other outcome appears only in the third set is not removed)
+    expect(rowOf(l, 'SWEPT').verdict).toBe('decides')
     expect(rowOf(l, 'NEVER')).toMatchObject({ verdict: 'remove', folds: [rowOf(l, 'NEVER').sites[0]?.id] })
     expect(rowOf(l, 'ONE').verdict).toBe('remove')
   })
@@ -132,12 +136,12 @@ describe('the report', () => {
   it("states the yield by area and prints, by name, the rules an area's ledger marks as deciding nothing", () => {
     expect(r.byArea).toContain('**A PROFILE, NOT THE YIELD.** five papers')
     // (DECIDES's one-outcome site, FOLDED_READ's comparison; an iterated list's literal is read, not folded)
-    expect(r.counts.a).toMatchObject({ rules: 22, folds: 2, entries: 2 })
+    expect(r.counts.a).toMatchObject({ rules: 23, folds: 2, entries: 2 })
     expect(r.counts.a?.verdicts.remove).toBe(6)
     // (six removed and PAPER, its cited paper silent on the corpus: a candidate the coordinator confirms)
     expect(r.byArea).toContain('## Area a, removal scheduled: the rules that decide nothing, by name (7)')
     expect(r.byArea).toContain('`PAPER` (packages/engine/src/locate/rules::(top)::PAPER) [cited paper silent: confirm]')
-    expect(r.byArea).toContain(`- ${FILE}:10 \`ONE\` (packages/engine/src/locate/rules::(top)::ONE): corpus: 7 runs, 0 true, 7 false`)
+    expect(r.byArea).toContain(`- ${FILE}:12 \`ONE\` (packages/engine/src/locate/rules::(top)::ONE): corpus: 7 runs, 0 true, 7 false`)
   })
   it('prints each flagged citation whole, the magnitudes beside the unmeasured budgets, the lists not judged', () => {
     expect(r.byArea).toContain('Comment: on the 88 papers no line is shorter')

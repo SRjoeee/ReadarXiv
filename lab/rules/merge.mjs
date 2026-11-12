@@ -52,8 +52,13 @@ export function mergeRecords(map, dirs) {
     records++
     const input = raw.input === 'tests' && raw.labRead ? 'tests-lab' : (raw.input ?? 'corpus')
     const into = (byInput[input] ??= {})
-    const meta = (inputs[input] ??= { records: 0, papers: new Set(), ms: 0 })
+    const meta = (inputs[input] ??= { records: 0, papers: new Set(), ms: 0, loaded: new Set(), told: false })
     meta.records++
+    // (the modules the record's process loaded: a record made before the recorder told them says nothing of them)
+    if (raw.loaded) {
+      meta.told = true
+      for (const m of raw.loaded) meta.loaded.add(m)
+    }
     for (const p of raw.papers ?? (raw.paper ? [raw.paper] : [])) meta.papers.add(p)
     meta.ms += raw.ms ?? 0
     for (const [id, r] of Object.entries(raw.sites)) addInto((into[id] ??= emptySite()), r)
@@ -95,7 +100,7 @@ export function mergeRecords(map, dirs) {
     map: map.digest,
     commit: map.commit,
     records,
-    inputs: Object.fromEntries(Object.entries(inputs).map(([k, v]) => [k, { records: v.records, papers: [...v.papers].sort(), ms: v.ms }])),
+    inputs: Object.fromEntries(Object.entries(inputs).map(([k, v]) => [k, { records: v.records, papers: [...v.papers].sort(), ms: v.ms, loaded: v.told ? [...v.loaded].sort() : null }])),
     agreement,
     sites: byInput,
     rules,

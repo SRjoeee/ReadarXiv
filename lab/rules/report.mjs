@@ -36,7 +36,7 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
   if (profile) L.push(`> **A PROFILE, NOT THE YIELD.** ${profile}`, '')
   L.push(`Recorded at ${ledger.recorded.commit ?? 'an unknown commit'} over the site map ${ledger.recorded.sites}; inputs: ${inputs || 'none'}. Rows: the census's rules of the rule areas the cut-over keeps (${rows.length}; ${cut} more in modules the cut-over deletes, not reported). A margin never decides a removal: removal follows from one outcome or never run alone (lab/rules/ledger.mjs).`, '')
   L.push('## The yield', '', 'Per area: the rules, then each verdict\'s count; to remove: the rules that go whole; sites to fold: the comparisons of rules that stay that saw one outcome or never ran; entries: list entries with no hit.', '')
-  const V = ['decides', 'test', 'definition', 'cited paper', 'measurement', 'value', 'magnitude', 'not judged', 'cited paper silent', 'remove']
+  const V = ['decides', 'test', 'definition', 'cited paper', 'measurement', 'value', 'magnitude', 'not judged', 'not exercised', 'cited paper silent', 'remove']
   L.push(`| Area | Rules (thresholds, lists) | ${V.join(' | ')} | Sites to fold | Entries to remove |`, `|---|---|${V.map(() => '---').join('|')}|---|---|`)
   for (const id of AREA_IDS) {
     const c = counts[id]
@@ -57,7 +57,10 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
     L.push('')
   }
 
-  // by name: what decides nothing
+  // by name: what decides nothing; first the order the removal lanes keep for lists (the coordinator's, 2026-11-13)
+  const listsGone = rows.filter(r => r.kind === 'list' && (r.verdict === 'remove' || r.verdict === 'cited paper silent'))
+  const listFiles = Object.entries(listsGone.reduce((o, r) => ((o[r.file] = (o[r.file] ?? 0) + 1), o), {})).sort((a, b) => b[1] - a[1])
+  L.push('## The rules that decide nothing', '', `**Lists: no removal lane acts on a list in a file before R6 has finished that file, and the ledger is recorded again after R6** (a list that mirrors an external definition is exempt from the hit rule once its header cites the definition; until then it reads as its comment reads). ${listsGone.length} lists read so here, by file: ${listFiles.map(([f, n]) => `${f} ${n}`).join(', ') || 'none'}.`, '')
   for (const id of AREA_IDS) {
     const gone = rows.filter(r => r.area === id && (r.verdict === 'remove' || r.verdict === 'cited paper silent')).sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)
     if (!gone.length) continue
@@ -93,6 +96,20 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
     for (const b of u) L.push(`- budget ${b.file}:${b.line} \`${b.name}\` = ${b.value} (${b.unit}), unmeasured`)
     L.push('')
   }
+  // the modules no input exercised: what would exercise each
+  const quiet = rows.filter(r => r.verdict === 'not exercised')
+  const quietBy = {}
+  for (const r of quiet) (quietBy[r.file] ??= []).push(r)
+  L.push('## Rules in modules no input exercised (not exercised: never a removal)', '', 'A module where no site ran on any input: the inputs neither import nor call it. Each with whether a record says it was loaded and the product modules that import it (what would exercise it).', '')
+  for (const [f, rs] of Object.entries(quietBy).sort((a, b) => b[1].length - a[1].length)) {
+    const m = rs[0].module ?? {}
+    L.push(`- ${f} (area ${areaOf(f)}): ${rs.length} rule${rs.length === 1 ? '' : 's'} (${rs.map(nameOf).map(cell).join(', ')}); loaded: ${m.loaded == null ? 'not told by these records' : m.loaded ? 'yes, no site ran' : 'no'}; imported by: ${m.importers?.length ? m.importers.join(', ') : 'no product module'}`)
+  }
+  L.push('')
+  // the tests that a rule's reason rests on: where a removal lane reads the test before believing the rule decides
+  const tested = rows.filter(r => r.kind === 'threshold' && r.verdict === 'test')
+  const testedBy = Object.entries(tested.reduce((o, r) => ((o[r.file] = (o[r.file] ?? 0) + 1), o), {})).sort((a, b) => b[1] - a[1]).slice(0, 10)
+  L.push('## The ten files with the most thresholds a test alone decides (verdict test)', '', 'One outcome on the corpus; a test of our own takes the other side, and is the rule\'s reason (3c). A removal lane reads the test before believing the rule decides.', '', ...testedBy.map(([f, n]) => `- ${f}: ${n}`), '')
   L.push("## Lists whose entries are not judged (R6's)", '')
   for (const id of AREA_IDS) {
     const n = rows.filter(r => r.area === id && r.verdict === 'not judged')

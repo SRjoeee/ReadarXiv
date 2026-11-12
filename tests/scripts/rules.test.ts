@@ -12,9 +12,11 @@ import { dirname, join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { factsOf } from '../../lab/release-check/census-lib.mjs'
 import { areaOf } from '../../lab/rules/areas.mjs'
+import { ledgerOf } from '../../lab/rules/ledger.mjs'
 import { mergeRecords } from '../../lab/rules/merge.mjs'
 import { agreementOf, countsOf, siteMapOfCheckout } from '../../lab/rules/record.mjs'
 import { recorderOf } from '../../lab/rules/recorder.mjs'
+import { reportOf } from '../../lab/rules/report.mjs'
 import { applyEdits, instrument } from '../../lab/rules/transform.mjs'
 import { rulesPlugin } from '../../lab/rules/vitest.mjs'
 
@@ -267,5 +269,39 @@ describe('a recording', () => {
     expect(code?.code).toContain('__axtRules.gt(')
     expect(plugin.transform('x', join(dir, 'run.mjs'))).toBeNull()
     expect(readFileSync(join(dir, 'packages/engine/src/rules.ts'), 'utf8')).toBe(RULES)
+  })
+})
+
+describe('a module no input exercises', () => {
+  // (a tree of its own: `used.ts` the runner imports and calls once, one way; `spare.ts` only `reader.ts` imports, which
+  // no input loads)
+  let tree = ''
+  const put = (path: string, text: string) => {
+    mkdirSync(dirname(join(tree, path)), { recursive: true })
+    writeFileSync(join(tree, path), text)
+  }
+  beforeAll(() => {
+    tree = mkdtempSync(join(tmpdir(), 'axt-rules-quiet-'))
+    put('package.json', JSON.stringify({ name: 'quiet', type: 'module' }))
+    put('packages/engine/package.json', JSON.stringify({ name: '@x/engine', type: 'module', exports: { '.': './src/used.ts' } }))
+    put('packages/engine/src/used.ts', '// a bound\nexport const EDGE = 0.4\nexport const far = (d: number): boolean => d > EDGE\n')
+    put('packages/engine/src/spare.ts', '// a bound no input reaches\nexport const SPARE = 0.7\nexport const wide = (w: number): boolean => w > SPARE\n')
+    put('packages/engine/src/reader.ts', "import { wide } from './spare.ts'\nexport const view = (w: number): boolean => wide(w)\n")
+    put('run.mjs', "import { far } from './packages/engine/src/used.ts'\nconsole.log(far(0.1))\n")
+    writeFileSync(join(tree, 'sites.json'), JSON.stringify(siteMapOfCheckout(tree)))
+  })
+  afterAll(() => rmSync(tree, { recursive: true, force: true }))
+  it('records the modules each process loaded, and reads a rule in a module where no site ran as not exercised', () => {
+    const out = join(tree, 'records')
+    execFileSync(process.execPath, ['--import', join(ROOT, 'lab/rules/register.mjs'), 'run.mjs'], { cwd: tree, encoding: 'utf8', env: { ...process.env, AXT_RULES_SITES: join(tree, 'sites.json'), AXT_RULES_OUT: out, AXT_RULES_ROOT: tree, AXT_RULES_INPUT: 'corpus' } })
+    const map = JSON.parse(readFileSync(join(tree, 'sites.json'), 'utf8'))
+    const rec = mergeRecords(map, [out])
+    expect(rec.inputs.corpus?.loaded).toEqual(['packages/engine/src/used.ts'])
+    const l = ledgerOf(map, rec)
+    const row = (k: string) => l.rules[Object.keys(l.rules).find(x => x.endsWith(k)) ?? '']
+    // (EDGE ran one way: a removal; SPARE's module ran nothing: not exercised, its importer named)
+    expect(row('::EDGE')?.verdict).toBe('remove')
+    expect(row('::SPARE')).toMatchObject({ verdict: 'not exercised', folds: [], module: { loaded: false, importers: ['packages/engine/src/reader.ts'] } })
+    expect(reportOf(l).byArea).toContain('- packages/engine/src/spare.ts (area d): 1 rule (SPARE); loaded: no; imported by: packages/engine/src/reader.ts')
   })
 })

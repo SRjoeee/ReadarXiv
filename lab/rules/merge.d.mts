@@ -9,7 +9,7 @@ export interface Recording {
   map: string
   commit: string | null
   records: number
-  inputs: Record<string, { records: number; papers: string[]; ms: number }>
+  inputs: Record<string, { records: number; papers: string[]; ms: number; loaded?: string[] | null }>
   agreement: { rules: number; ran: number; sites: number; sitesRun: number; line: string }
   sites: Record<string, Record<string, SiteSums>>
   rules: Record<string, Record<string, RuleSums>>

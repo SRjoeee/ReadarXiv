@@ -29,6 +29,11 @@
 //    joined, mapped, spread) is `not judged` by entry (R6's), its sites still judged; a list the census reads as citing a
 //    definition is exempt from the entry rule; otherwise each entry with no hit on any input is removed, and a list with
 //    no hit goes with its rule.
+// 7. A rule whose module ran no site on any input (no input imports or calls it), and none of its own elsewhere, is `not
+//    exercised`: never a removal ("never ran" keeps meaning that the module ran and this rule did not). The records say
+//    which modules each process loaded (transform.mjs); the row names the module's importers.
+// Any input other than the tests of our own counts as the corpus: a third paper set (a fresh sweep's papers) is recorded
+// with AXT_RULES_INPUT=<its name>, a list and a cache directory, no code changed.
 import { CITES_DEFINITION } from '../release-check/census-lib.mjs'
 import { areaOf } from './areas.mjs'
 
@@ -46,6 +51,7 @@ export const VERDICTS = {
   magnitude: { reason: null, says: 'a magnitude with no stated source: reported beside the unmeasured budgets, not counted as a decision' },
   'not judged': { reason: null, says: "a list used otherwise than by membership: entries not judged (R6's)" },
   'cited paper silent': { reason: false, says: 'its cited paper was recorded in the holdout and it decided nothing there: a removal candidate' },
+  'not exercised': { reason: false, says: 'its module ran no site on any input (no input imports or calls it): the recording cannot judge it; the report names what would exercise it' },
   remove: { reason: false, says: 'decides nothing on any input, and cites nothing that exempts it: removed' },
 }
 
@@ -127,6 +133,12 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
     }
   }
 
+  // (a module an input exercised: one where some site ran, on any input; the modules the records say were loaded, where
+  // they say it)
+  const exercised = new Set()
+  for (const per of Object.values(recording.sites)) for (const [sid, r] of Object.entries(per)) if (r.n) exercised.add(map.sites[Number(sid)]?.file)
+  const told = Object.values(recording.inputs).filter(v => v.loaded)
+  const loaded = told.length ? new Set(told.flatMap(v => v.loaded)) : null
   const rows = {}
   for (const [key, rule] of Object.entries(map.rules)) {
     const sites = rule.sites.map(siteOf)
@@ -193,6 +205,12 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
     if (row.verdict === 'cited paper silent') row.folds = deciding.filter(foldable).map(s => s.id)
     // (a rule that stays because it is still read as a value, its deciding sites all folded)
     if ((row.verdict === 'value' || row.verdict === 'magnitude') && deciding.length && row.folds.length === deciding.length) row.foldedToValue = true
+    // (a rule whose module ran no site on any input, and no site of its own elsewhere: not exercised, never a removal)
+    if ((row.verdict === 'remove' || row.verdict === 'cited paper silent') && !exercised.has(row.file) && sites.every(s => !Object.values(s.outcomes).some(o => o.n))) {
+      row.verdict = 'not exercised'
+      row.folds = []
+      row.module = { loaded: loaded ? loaded.has(row.file) : null, importers: map.files[row.file]?.importers ?? null }
+    }
     rows[key] = row
   }
   // (each cited paper once, by its number, its version where a comment gives one: the papers of the rows the recording
