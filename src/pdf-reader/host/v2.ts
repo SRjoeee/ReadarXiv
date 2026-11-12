@@ -31,16 +31,20 @@ export function hostFetch(o: { api: string; loopback: boolean; fetch?: typeof fe
 }
 
 /** the preferences over the extension's configuration surface (shared/surface-config.ts): a read is its first landing, a write
- *  its patch on the latest stored (host/prefs.ts withPrefs), a landing from elsewhere told. Asked to translate (`#readarxiv` on
- *  the PDF's address, the PDF page's `ask=translate`: PDF-READER §2), the first read lets a stored original display go, so that the reader
- *  opens in the translated display the settings name and the next PDF opens as this one does (the old reader's session/host.ts
- *  displayFrom and its write of `pdfReader.original`) */
+ *  its patch on the latest stored (host/prefs.ts withPrefs), a landing from elsewhere told; a configuration stored and
+ *  unreadable (the surface fell back to the defaults: `fallbackReason`) is told as `null`, the reader's unreadable settings
+ *  (S-R-21; the reader package's PrefStore). Asked to translate (`#readarxiv` on the PDF's address, the PDF page's
+ *  `ask=translate`: PDF-READER §2), the first read lets a stored original display go, so that the reader opens in the
+ *  translated display the settings name and the next PDF opens as this one does (the old reader's session/host.ts displayFrom
+ *  and its write of `pdfReader.original`) */
 export function hostPrefs(surface: Pick<SurfaceConfig, 'state' | 'subscribe' | 'start' | 'patch'>, o: { askedToTranslate?: boolean } = {}): PrefStore {
   // (asked: the original let go at the first landing; written: read as let go until the write lands, or is refused)
   let letGo: 'asked' | 'written' | 'done' = o.askedToTranslate ? 'asked' : 'done'
-  const now = () => {
+  /** the preferences as stored now: undefined before the first landing, null where the stored ones cannot be read */
+  const now = (): Prefs | null | undefined => {
     const s = surface.state()
-    if (!s.config) return null
+    if (!s.config) return undefined
+    if (s.fallbackReason) return null
     let config = s.config
     if (letGo !== 'done' && config.pdfReader.original) {
       if (letGo === 'asked') {
@@ -53,12 +57,12 @@ export function hostPrefs(surface: Pick<SurfaceConfig, 'state' | 'subscribe' | '
   }
   return {
     read: () =>
-      new Promise<Prefs>(resolve => {
+      new Promise<Prefs | null>(resolve => {
         const p = now()
-        if (p) return resolve(p)
+        if (p !== undefined) return resolve(p)
         const off = surface.subscribe(() => {
           const q = now()
-          if (q) {
+          if (q !== undefined) {
             off()
             resolve(q)
           }
@@ -69,7 +73,7 @@ export function hostPrefs(surface: Pick<SurfaceConfig, 'state' | 'subscribe' | '
     watch(listener) {
       return surface.subscribe(() => {
         const p = now()
-        if (p) listener(p)
+        if (p !== undefined) listener(p)
       })
     },
   }

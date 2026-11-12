@@ -68,10 +68,15 @@ export type { OutlineEntry, PaperContext }
 /** a translation result as the host's translate yields it (packages/translate's Result: format's Row) */
 export type Result = Row
 
+/**
+ * The host's store of the preferences. A read, and each landing a watch tells, is one of three: the values stored; nothing
+ * stored (the host's defaults, given as values); or `null`, stored and unreadable (the values in use stay, the settings said
+ * unreadable until a readable landing: S-R-21)
+ */
 export interface PrefStore {
-  read(): Promise<Prefs>
+  read(): Promise<Prefs | null>
   write(patch: Partial<Prefs>): Promise<void>
-  watch(listener: (p: Prefs) => void): () => void
+  watch(listener: (p: Prefs | null) => void): () => void
 }
 export interface Host {
   fetch: Fetch

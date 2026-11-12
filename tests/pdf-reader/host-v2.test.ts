@@ -40,7 +40,7 @@ describe('the extension host prefs over the configuration surface', () => {
       subscribe: (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } },
       start: vi.fn(),
       patch: vi.fn(async (change: (c: typeof DEFAULT_CONFIG) => typeof DEFAULT_CONFIG) => { const next = change(state.config ?? DEFAULT_CONFIG); patches.push(next); state = { ...state, config: next }; for (const l of listeners) l(); return next }),
-      land(c: typeof DEFAULT_CONFIG) { state = { ...state, config: c }; for (const l of listeners) l() },
+      land(c: typeof DEFAULT_CONFIG, fallbackReason: unknown = null) { state = { ...state, config: c, fallbackReason: fallbackReason as null }; for (const l of listeners) l() },
       patches,
     }
   }
@@ -50,6 +50,18 @@ describe('the extension host prefs over the configuration surface', () => {
     expect(s.start).toHaveBeenCalled()
     s.land({ ...DEFAULT_CONFIG, theme: 'dark' })
     await expect(p).resolves.toMatchObject({ theme: 'dark', translator: 'r1' })
+  })
+  it('stored and unreadable (the surface fell back to the defaults): told as null, the read too; a readable landing after it told as values', async () => {
+    const s = surface(null)
+    const store = hostPrefs(s as never)
+    const told = vi.fn()
+    store.watch(told)
+    const read = store.read()
+    s.land(DEFAULT_CONFIG, { kind: 'invalid', where: 'mode', message: 'nonsense' })
+    await expect(read).resolves.toBeNull()
+    expect(told).toHaveBeenLastCalledWith(null)
+    s.land({ ...DEFAULT_CONFIG, theme: 'dark' })
+    expect(told).toHaveBeenLastCalledWith(expect.objectContaining({ theme: 'dark' }))
   })
   it('the slots\' store: the same snapshot until the surface changes (useSyncExternalStore loops on a new one each read)', () => {
     const s = surface(DEFAULT_CONFIG)

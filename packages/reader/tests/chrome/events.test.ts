@@ -178,6 +178,15 @@ describe("the reader's state as the chrome's", () => {
     expect(fold([base, open, ended, read]).translated).toEqual({ got: 12, total: 12 })
     expect(eventsOf(read, read)).toEqual([])
   })
+  it("the settings: no notice while the first read is out (the host's own first read stands); unreadable told, a readable landing clears it", () => {
+    const reading = { ...base, settings: { s: 'reading' as const, refused: 0 } }
+    expect(eventsOf(null, reading).filter((e) => e.type === 'notice')).toEqual([])
+    const unreadable = { ...base, settings: { s: 'unreadable' as const, refused: 0 } }
+    expect(eventsOf(reading, unreadable).filter((e) => e.type === 'notice')).toEqual([
+      { type: 'notice', why: 'unreadable' },
+    ])
+    expect(eventsOf(unreadable, base).filter((e) => e.type === 'notice')).toEqual([{ type: 'notice', why: null }])
+  })
   it("rows failing: a key missing is the settings' card; out of reach the network, a rate limit where the translator named a wait; a refusal an invalid response; a key refused the key's; a target the reader does not set its own notice (format kindOfWhy, the extension's own reading)", () => {
     expect(kindOf({ kind: 'server' })).toBe('network')
     expect(kindOf({ kind: 'unavailable' })).toBe('network')

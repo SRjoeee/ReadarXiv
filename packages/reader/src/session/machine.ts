@@ -232,7 +232,7 @@ export type Input =
   | { i: 'env.away'; on: boolean }
   | { i: 'time'; t: Ticket; now: number }
   | { i: 'prefs.read'; value: Prefs | null }
-  | { i: 'prefs.landed'; value: Prefs }
+  | { i: 'prefs.landed'; value: Prefs | null }
   | { i: 'prefs.refused' }
   | { i: 'original.progress'; t: Ticket; loaded: number; total?: number }
   | { i: 'original.opened'; t: Ticket; pages: number; bytes: number }
@@ -675,11 +675,18 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
     case 'prefs.read':
     case 'prefs.landed': {
       const v = x.value
-      if (!v) break
-      // (a field chosen here, or named by the address, is not undone by a landing)
+      // (stored and unreadable: the values in use stay, said unreadable until a readable landing)
+      if (!v) {
+        s.prefs = { ...s.prefs, s: 'unreadable', timer: null }
+        break
+      }
+      // the store is the one truth: every landing is followed, but the first readable one after a choice made meanwhile, which
+      // was read before that choice, does not undo it (the old reader's settings.ts followOf `late && chosen`); the address's
+      // word is the visit's, apart (s.visit)
       const value: Record<string, unknown> = { ...v }
-      for (const k of s.prefs.chosen) value[k] = (s.prefs.value as unknown as Record<string, unknown>)[k]
-      s.prefs = { ...s.prefs, s: 'landed', value: value as unknown as Prefs, timer: null }
+      if (s0.prefs.s !== 'landed')
+        for (const k of s.prefs.chosen) value[k] = (s.prefs.value as unknown as Record<string, unknown>)[k]
+      s.prefs = { ...s.prefs, s: 'landed', value: value as unknown as Prefs, chosen: [], timer: null }
       if (s.rows.s === 'none') s.rows = { s: 'none', target: targetOf(s) }
       // (another translator named: what stopped short is asked of it, as cmd.translator)
       if (v.translator !== s0.prefs.value.translator) s.rows = askedAgain(s.rows)

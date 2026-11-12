@@ -1165,6 +1165,46 @@ describe('the session: preferences', () => {
   })
 })
 
+describe('the session: preferences that land after the first (the store the one truth)', () => {
+  const landedMachine = () => {
+    let s = init({ paper: { id: 'x', version: 1 }, here: true, defaults: PREFS, now: 0, visible: true, online: true })
+    const go = (...xs: Input[]) => {
+      for (const x of xs) s = step(s, x).state
+    }
+    go({ i: 'prefs.read', value: PREFS })
+    return {
+      go,
+      get s() {
+        return s
+      },
+    }
+  }
+  it('a landing after the first is followed, over a choice made here (the popup, the settings page: O1, O2, E3)', () => {
+    const m = landedMachine()
+    m.go({ i: 'cmd.set', prefs: { display: 'translation', classes: { ...PREFS.classes, tables: false } } })
+    m.go({ i: 'prefs.landed', value: { ...PREFS, display: 'original', classes: { ...PREFS.classes, tables: true } } })
+    expect([m.s.prefs.value.display, m.s.prefs.value.classes.tables]).toEqual(['original', true])
+  })
+  it('two quick sets of one field, then their two echoes in order: the reader ends on the second', () => {
+    const m = landedMachine()
+    m.go({ i: 'cmd.set', prefs: { sync: false } }, { i: 'cmd.set', prefs: { sync: true } })
+    m.go(
+      { i: 'prefs.landed', value: { ...PREFS, sync: false } },
+      { i: 'prefs.landed', value: { ...PREFS, sync: true } },
+    )
+    expect(m.s.prefs.value.sync).toBe(true)
+  })
+  it('stored and unreadable (null): the values in use stay, said unreadable until a readable landing', () => {
+    let s = init({ paper: { id: 'x', version: 1 }, here: true, defaults: PREFS, now: 0, visible: true, online: true })
+    s = step(s, { i: 'prefs.read', value: null }).state
+    expect(s.prefs).toMatchObject({ s: 'unreadable', value: PREFS })
+    s = step(s, { i: 'prefs.landed', value: { ...PREFS, sync: false } }).state
+    expect(s.prefs).toMatchObject({ s: 'landed', value: { sync: false } })
+    s = step(s, { i: 'prefs.landed', value: null }).state
+    expect(s.prefs).toMatchObject({ s: 'unreadable', value: { sync: false } })
+  })
+})
+
 describe('the session: tickets', () => {
   it('drops a stale result of every kind by its ticket', () => {
     const m = composedNow()
