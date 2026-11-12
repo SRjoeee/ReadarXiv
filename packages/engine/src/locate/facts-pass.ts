@@ -74,7 +74,7 @@ export interface FactsInput {
   pieceB: Int32Array
   /** the units the members are of: the instrument's, then those locate made on A (its ink units, kept blocks and figure texts) */
   units?: readonly InstrumentUnit[]
-  /** the A pages whose lines' measures are TeX's frame (locate's framesOnA): a measure there is the block's or its column's
+  /** the A pages whose lines' measures are TeX's frame (work.ts framesOnA): a measure there is the block's or its column's
    *  even where a line fills it */
   framed?: ReadonlySet<number>
 }
@@ -878,7 +878,7 @@ function readAlign(fx: FactsIndex, r: MemberReading): void {
         )
       ) {
         a = 'c'
-        // (a single line's: read again over the TeX line it shares, once the flows are known, locate.ts rowAligns)
+        // (a single line's: read again over the TeX line it shares, once the flows are known, flows.ts rowAligns)
         if (own.length === 1) mem.byBlock = true
       }
     if (unit.align === undefined || a !== unit.align) mem.read.push('align')

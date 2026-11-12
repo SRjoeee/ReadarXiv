@@ -91,7 +91,7 @@ export function flowsAndTies(w: Work): void {
   }
   // (the stream: the instrument's members in its order, and each member made on A (ink.ts, born.ts) where TeX set its text in
   // it, where B printed that: right before the member whose first glyph on B is the next glyph of its page some member owns
-  // after its last, as a name leads the unit after it (above). amsthm's head no source unit owns, made on A, and its theorem's
+  // after its last, as a name leads the unit after it (leads.ts). amsthm's head no source unit owns, made on A, and its theorem's
   // text after it on the row (2608.25210v2 p4 "Definition 2. Minimal Provenance."): one flow, as a run-in head's and its
   // paragraph's, today's shared line over every unit of the page (need.mjs rowLeadOf). One B never printed, or after which no
   // member begins on its page, stands after the instrument's, as made. Which box TeX set a member made on A in the instrument

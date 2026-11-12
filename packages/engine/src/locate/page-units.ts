@@ -129,7 +129,7 @@ export function unitsMadeOnA(w: Work, o: LocateOptions): void {
       mem.place = 'same'
       mem.text = x.text
       // (its label, the mark its text does not say (an affiliation's raised number, a note's mark): a label as a source unit's,
-      // its group `.l`, stated with its ink and the line it stands on below)
+      // its group `.l`, stated with its ink and the line it stands on by phase 6, geometry.ts)
       mem.label = x.label ?? []
       for (const [id, e] of x.els ?? []) {
         if (e.glyphs.length)

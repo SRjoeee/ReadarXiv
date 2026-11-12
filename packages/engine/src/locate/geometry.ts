@@ -621,7 +621,7 @@ export function lineGeometry(w: Work): void {
       }
       mem.elements.push([id, el])
     }
-    // its trail (above): an element of no piece, its ink a crop's, its text its glyphs'
+    // its trail (phase 2, trails.ts): an element of no piece, its ink a crop's, its text its glyphs'
     const tr = mem.els.get(TRAIL)
     if (tr?.length) {
       const L = cutLines(tr, atA)[0]
