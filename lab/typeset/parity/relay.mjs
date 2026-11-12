@@ -40,15 +40,23 @@ export function flatOf(content) {
  *  door row cites it by, with its source); its groups' opens and closes none (l1.ts atomsOf's) */
 const atomsOf = (today) =>
   today.pieces.flatMap((p, k) => (p.kind === 'text' ? (p.s ?? '').split('').map((c) => ({ c })) : p.kind === 'ph' ? [{ k, src: p.src ?? '' }] : []))
-/** today's placeholders that are a face switch first in a bare group (`{\\em …}`), by piece index: the face each sets. v2 states
- *  such a switch as its group's face, no element (instrument.mjs switchesOf, PDF-READER §18.56); today's unit kept it a
- *  placeholder that sets nothing where it stands. The one reading of both: the engine's own switchesOf over today's pieces. An
- *  engine without it (round B12's and before) states no switch as a group's face: its unit holds the switch as an element, which
- *  reads against today's placeholder by its source, and none is needed */
-export const switchFacesOf = (today) =>
-  instrument.switchesOf
-    ? new Map([...instrument.switchesOf(today.pieces.map((p) => ({ t: p.kind, src: p.src, s: p.s }))).values()].map((x) => [x.at, x.face]))
-    : new Map()
+/** today's placeholders that are a face switch first in a bare group (`{\\em …}`, `{ \\em …}`: white space aside), by piece index:
+ *  the face each sets and where its group opens among today's atoms (`from`: the atoms of the pieces before the group's open). v2
+ *  states such a switch as its group's face, no element (instrument.mjs switchesOf, PDF-READER §18.56); today's unit kept it a
+ *  placeholder that sets nothing where it stands. The one reading of both: the engine's own switchesOf over today's pieces, which
+ *  names the group (its open) and the switch in it. An engine without it (round B12's and before) states no switch as a group's
+ *  face: its unit holds the switch as an element, which reads against today's placeholder by its source, and none is needed */
+export function switchFacesOf(today) {
+  if (!instrument.switchesOf) return new Map()
+  const atomsBefore = []
+  let n = 0
+  for (const p of today.pieces) {
+    atomsBefore.push(n)
+    n += p.kind === 'text' ? (p.s ?? '').length : p.kind === 'ph' ? 1 : 0
+  }
+  const sw = instrument.switchesOf(today.pieces.map((p) => ({ t: p.kind, src: p.src, s: p.s })))
+  return new Map([...sw].map(([open, x]) => [x.at, { face: x.face, from: atomsBefore[open] }]))
+}
 
 /**
  * v2's unit (its flat pieces) read against today's unit of the same text (its atoms), in order, all of both read; groups read
@@ -65,21 +73,28 @@ export function readAlike(flat, atoms, faces = new Map()) {
   const at = []
   let j = 0,
     o = 0
+  // (a bare group a face switch opens: v2 states the switch as the group's face, today as a placeholder in the group, white space
+  // aside first (switchesOf's), which prints nothing; both state the same letters in the same face, so today's switch reads as
+  // nothing, where v2's group opens where today's does and has the face it sets (`faces`: switchFacesOf, by its group's open
+  // among today's atoms). The switch is read where it stands, after the group's white space, which both hold as text (`face`:
+  // the switches so read, met in turn). A switch of another face, or a group v2 states with no face, reads as before)
+  const face = new Set()
+  const switched = () => {
+    while (atoms[j] && 'k' in atoms[j] && face.has(atoms[j].k)) {
+      map.set(atoms[j].k, { text: '' })
+      at[j++] = o
+    }
+  }
   for (const p of flat) {
     if (p.t === 'close') continue
     if (p.t === 'open') {
-      // (a bare group a face switch opens: v2 states the switch as the group's face, today as a placeholder first in the group,
-      // which prints nothing; both state the same letters in the same face, so today's switch reads as nothing, where its face
-      // is the group's (`faces`: switchFacesOf). A switch of another face, or a group v2 states with no face, reads as before)
-      const a = atoms[j]
-      if (p.style && a && 'k' in a && faces.get(a.k) === p.style) {
-        map.set(a.k, { text: '' })
-        at[j++] = o
-      }
+      if (p.style) for (const [k, x] of faces) if (x.from === j && x.face === p.style && !map.has(k)) face.add(k)
+      switched()
       continue
     }
     if (p.t === 'text') {
       for (let i = 0; i < p.s.length; ) {
+        switched()
         const a = atoms[j]
         if (!a) return null
         if ('c' in a) {
@@ -98,6 +113,7 @@ export function readAlike(flat, atoms, faces = new Map()) {
       continue
     }
     if (p.t !== 'ph') return null
+    switched()
     const a = atoms[j]
     if (a && 'k' in a && a.src === p.src) {
       map.set(a.k, { el: p.id })
@@ -120,6 +136,7 @@ export function readAlike(flat, atoms, faces = new Map()) {
     runs.push({ id: p.id, from, to: j })
     o++
   }
+  switched()
   return j === atoms.length ? { map, runs, at, len: o } : null
 }
 
