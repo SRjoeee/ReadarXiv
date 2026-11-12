@@ -9,7 +9,9 @@ import { DEFAULTS } from '../../src/prefs.ts'
 import { type Composer, createComposer, type RowsSource } from '../../src/compose/composer.ts'
 import { createFaces, type Faces } from '../../src/compose/faces.ts'
 import { createServed, type Served } from '../../src/compose/served.ts'
-import { typesetLay } from '../../src/compose/typeset.ts'
+import { layPage, rulesFor } from '@readarxiv/typeset'
+import { leftKinds } from '../../src/compose/classes.ts'
+import { ruleTag, typesetLay } from '../../src/compose/typeset.ts'
 import { groupsOf, type Groups } from '../../src/compose/groups.ts'
 import { createHighlight, type Highlight } from '../../src/compose/highlight.ts'
 import type { Ink, Item, Page } from '../../src/compose/page.ts'
@@ -711,6 +713,35 @@ const h = {
       name: a.getAttribute('aria-label'),
       rect: a.getBoundingClientRect().toJSON(),
     }))
+  },
+  /** what the reader's own typesetter made of page n's links (`layer`'s `typeset`): its part's links, each with its fate
+   *  (packages/typeset lay/links.ts LinkFate: what became of it), from page n laid again by layPage as typesetLay lays it (the
+   *  rows' target's rules, the toggles' none left, the served Metrics and patterns) over the rows given; that lay's Page.links
+   *  and the committed page's, which are to be the same */
+  linkFatesOf(n: number) {
+    const part = h.parts.get(n)
+    const served = h.served
+    const rows = h.rows
+    if (!part || !served || !rows) return null
+    const tag = ruleTag(rows.target)
+    if (!tag) return null
+    const hyph: Record<string, unknown> = {}
+    for (const l of rulesFor(tag).patterns) hyph[l] = served.hyphNow(l) ?? null
+    const fates: string[] = []
+    const again = layPage(part, rows, rulesFor(tag, { leave: leftKinds(null) }, hyph), served.metrics, {
+      linkFates: fates as never,
+    })
+    return {
+      links: (part.links ?? []).map((l, i) => ({
+        box: l.box,
+        to: l.to,
+        owner: l.owner ?? null,
+        page: l.page ?? n,
+        fate: fates[i] ?? null,
+      })),
+      laid: again.links,
+      committed: h.composer?.laid(n)?.links ?? null,
+    }
   },
   /** the laid page n's own link boxes (Page.links) on the screen, through the right's viewport of the page as it shows */
   linkBoxesOf(n: number) {
