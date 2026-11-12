@@ -5317,6 +5317,47 @@ and direction and no skew, so an italic label translated into Chinese, Japanese 
   nothing else of any page moves. The parity on those pairs, both modes: 19 italic labels now read as the original's italic
   (`style`, v2 nearer; today's drawn upright), no page newly worse. No version moves: the reader's lay alone.
 
+### 18.57 One size a group: a figure text the paragraph path lays is in its labels' size tie (2026-11-12)
+
+The labels of one group are set at one size (the owner's rule of 2026-10-29, §19.12 "Its set and its room"): today's figure
+reading puts each line in a set (`setsOf`: its column, its baseline), the part states each set as a size tie, and S.figures
+fits the set by one factor (`fitFigureSet`). A figure text the paragraph path lays (an element in its line, F0's and F1's;
+lines joined, F3's; an item's marker its label) was given a set of its own (`locate/ink.ts` `figureTextOf`, `-1 - k`), so it
+took part in no tie and the paragraph path fitted it alone: 2111.09276v1 p8, Figure 5, a list's column whose plain items were
+drawn at 0.73 of their 4.99 pt and whose items holding a highlighted token, or wrapped over two lines, at 4.99, 4.86 and 4.74,
+within one bullet item.
+
+- **The rule.** A text the paragraph path lays stands in the set its lines would have joined as plain labels; where its lines
+  stood in two sets, it joins them (one member, drawn at one size). One the figure keeps as the original's (a formula, code, a
+  script, a double) is laid by no path and keeps a set of its own. In the typesetter (`lay/entry.ts`, `lay/page.ts`,
+  `lay/figures.ts`, `shared/figure-fit.ts`): the tie's paragraph members are laid at the factor S.figures set its labels at at
+  the most (the tie's `least`), from the page's first lay, and the set's floor is S.figures' (`floorMin`, to which a set shrinks
+  as one; a body paragraph's tie keeps the fit's floor); where one of them is laid smaller still, the others are capped at its
+  scale as any tie's (`layPagePrepared`) and the set's labels fitted again at it (`fitFigureSet`'s `cap`, never under the
+  floor). No number is new: the sets are today's figure reading's, the floor S.figures'.
+- **Speed.** Capped only after a first lay, each page with such a tie was laid twice: 2111.09276v1 p8 (189 figure texts) took
+  36 ms against 51, p1 26 against 38 (`layPage`, the same code over the part before and after, 40 runs interleaved). Capped
+  from the first lay, the page is laid once where no paragraph member needs less than its labels: 38 against 37 ms, 30 against
+  31, within the runs' spread.
+- **Before and after.** `ink.test.ts` ("ties a figure text laid as a paragraph to the labels of its column"): a column of two
+  labels, a line holding a run of one pitch and a hyphenated pair, red at the base (the tie held the two labels alone).
+  `figure-tie.test.ts`: a label shrunk to 0.7 with a paragraph that fits at its size, and a paragraph laid at 0.675 with a label
+  that fits, each drawn at one size (red at the base: 7 against 10, 6.75 against 10). 2111.09276v1 (stage 1a over our compile
+  of it, soul-locate's compiles; laid with staging's stored Google rows, the served metrics and the reader's `typesetLay`): units
+  byte-identical, the ties of its figures on pages 1, 3 and 8 gain 36 members; page 8's list columns drawn at 3.64 pt throughout
+  (10 members from 4.74 to 4.99; two more are §18.58's lines, whose new units staging holds no row of) and its second figure at
+  4.04 (6 members from 4.99), page 1's figure at 4.30 (5 members from 4.77); no member changes state.
+- **Over the 88** (stage 1a, r19's flags and caches, against r19): 44 papers' parts move, by their size ties alone: 307 ties
+  (201 new, 106 grown; a figure's tie is stated in each part that holds it) gain 843 members, every one a figure text the
+  paragraph path lays or a label that stood alone in its set, no tie cut and no two existing ties joined; units, members, the
+  prepare dumps and the differential are r19's byte for byte. v2's lay of the parity's 22 pairs (gate mode, both modes alike):
+  59 figure texts on 6 pages of 4 pairs set at their tie's one size, none changing state (2602.23285v2-ja p8: three at 7.11,
+  7.78 and 8.89 pt to 6.67; 2608.04322v1 p3; 2608.06701v1 p1, p4, p9, where 53 of them stand; 2610.21313v1 p2); every other page
+  as before.
+- **Versions.** PIPELINE must move (the parts' ties); the format does not (a tie's ords as before). A reader of before this
+  rule given parts of after it ties the paragraph members among themselves, at the body's floor, and its labels as before; a
+  reader of after it given parts of before it lays them as before (no paragraph member in a figure's tie).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
@@ -7954,7 +7995,8 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   than the other entries, "Patch size" starting further right than its column, "Head 3" smaller than "Head 1", each label
   fitted to its own box and anchored by what it read alone; `figure-text.mjs` `setsOf`, `roomsOf`): the labels of one group are set at one size, the original's by default; each keeps the original's alignment
   and anchor; a translation may take free space, never touching other ink nor leaving its figure; only a group that cannot
-  fit shrinks, all of it by one factor, never a label alone. A **column** is the runs of one figure, size and direction whose
+  fit shrinks, all of it by one factor, never a label alone; a figure text the paragraph path lays stands in its lines' set and
+  is drawn at its factor (§18.57). A **column** is the runs of one figure, size and direction whose
   starts, ends or middles agree within `ALIGN_TOL` 0.08 of their size, two units or more among them; its other runs, a
   number or a "…", count for its edge (2010.11929v2's "Head 1/2/3", one length, read their end alone, the frame being
   nearer after them than their markers before; the column's "…" shares their start alone). A unit in a column takes the

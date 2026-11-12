@@ -40,7 +40,9 @@ export const CJK_FOOT = 0.12
  * at `floor` of its size (or has no width, size or box), false where at the size it is given it reaches the stroke under its
  * text. One factor for every item drawn: the least any of them needs, at least `floor`, those that reach their stroke aside.
  * An item's `width1` is its advance at size 1, `blank1` the blank halves at its edges, before its ink and after it (none
- * where not given): its ink, its advance less them, is what it needs of its line and what its anchor places
+ * where not given): its ink, its advance less them, is what it needs of its line and what its anchor places. `cap`: the most
+ * of their sizes the set is drawn at, where a figure text of its size tie that another path lays (the paragraph path: an
+ * element, lines joined, a label) was laid smaller (one size a group); never under `floor`
  */
 export function fitFigureSet(
   items: readonly {
@@ -51,6 +53,7 @@ export function fitFigureSet(
     blank1?: readonly [number, number]
   }[],
   floor: number,
+  cap = 1,
 ): (FigureFit | null | false)[] {
   const ink1 = items.map(({ width1, blank1 }) => width1 - (blank1 ? blank1[0] + blank1[1] : 0))
   const need = items.map(({ f, height1 }, i) => {
@@ -70,6 +73,7 @@ export function fitFigureSet(
   for (let more = true; more; ) {
     const drawn = need.filter((n, i) => n >= floor - 1e-9 && !met[i])
     k = drawn.length ? Math.min(...drawn) : 1
+    if (cap < k) k = Math.max(floor, cap)
     more = false
     items.forEach(({ f, depth1 }, i) => {
       // (today's `Number.isFinite(f.under)`: a row of no stroke under its text holds null)

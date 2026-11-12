@@ -35,7 +35,7 @@ import { figuresOf } from './figures.ts'
 import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
 import { type LinkFate, type LinkOwner, linksOf } from './links.ts'
 import { inFrame, inkOfLine, litLaid, litOfA, pageBoxOf, runBoxOfA, widened } from './lit.ts'
-import { layPagePrepared } from './page.ts'
+import { layPagePrepared, SAME } from './page.ts'
 import { type CellAnswer, namesGroup, type TableGroup, tableGroups, unchanged } from '../shared/table-groups.ts'
 import { carriedOf, tokenBand, tokenBox } from '../emit/sentences.ts'
 import { CJK, cjkClassRe } from '../breaker/script.ts'
@@ -495,7 +495,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       read.set(m.ord, { rd, pieces, tokens })
     }
   // (the figure texts, S.figures over the part: a face not loaded waited for as any)
-  const fig = figuresOf(part, figs, rows, { paper, R, metrics })
+  let fig = figuresOf(part, figs, rows, { paper, R, metrics })
   faces.push(...fig.wait)
   for (const [ord, w] of fig.why) state.set(ord, w)
   // (one state per call: a face not loaded leaves the whole page waiting, as a row not in does)
@@ -612,11 +612,57 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
     }
     if (cur.length) flows.push(cur)
   }
+  // (a figure's set, one size a group (the owner's rule of 2026-10-29): its figure texts the paragraph path lays (an element, lines
+  // joined, a label) capped at the factor S.figures set its labels at, the set's floor S.figures' (floorMin, which a set shrinks
+  // to as one); then its labels set again at the least scale one of those was laid at, where it is smaller)
+  const figureOrds = new Set(members.filter((m) => m.kind === 'figure').map((m) => m.ord))
   const ties = [
     ...cellTies,
-    ...(part.ties ?? []).flatMap((t) => (t.rule === 'size' ? [{ rule: 'size' as const, ords: t.ords }] : [])),
+    ...(part.ties ?? []).flatMap((t) =>
+      t.rule !== 'size'
+        ? []
+        : [
+            {
+              rule: 'size' as const,
+              ords: t.ords,
+              ...(t.ords.some((o) => figureOrds.has(o))
+                ? { floor: R.floorMin, ...(fig.scales.has(t.ords[0]!) ? { least: fig.scales.get(t.ords[0]!)! } : {}) }
+                : {}),
+            },
+          ],
+    ),
   ]
-  const laid = layPagePrepared(page, flows, ties, R)
+  // (a figure's paragraph members laid at its labels' factor at the most from the page's first lay, the factor being known before
+  // it: the page laid once where none of them needs less, not laid and laid again at the cap by layPagePrepared)
+  const capOf = new Map<number, number>()
+  for (const t of ties)
+    if (t.rule === 'size' && t.least !== undefined && t.least < 1)
+      for (const o of t.ords) capOf.set(o, Math.max(t.least, t.floor ?? 0))
+  const laid = layPagePrepared(
+    page,
+    capOf.size
+      ? flows.map((f) =>
+          f.map((m) => {
+            const c = capOf.get(m.ord)
+            return c === undefined ? m : { ...m, P: { ...m.P, capScale: Math.min(m.P.capScale ?? 1, c) } }
+          }),
+        )
+      : flows,
+    ties,
+    R,
+  )
+  const fitOf = new Map(laid.fits)
+  const caps = new Map<number, number>()
+  for (const [first, k] of fig.scales) {
+    const tie = part.ties?.find((t) => t.rule === 'size' && t.ords[0] === first)
+    const least = Math.min(...(tie?.rule === 'size' ? tie.ords : []).flatMap((o) => fitOf.get(o) ?? []))
+    if (least < k - SAME) caps.set(first, least)
+  }
+  if (caps.size) {
+    for (const ord of fig.why.keys()) state.delete(ord)
+    fig = figuresOf(part, figs, rows, { paper, R, metrics, caps })
+    for (const [ord, w] of fig.why) state.set(ord, w)
+  }
   const byOrd = new Map(laid.members.map((x) => [x.ord, x]))
   // (each label drawn in another member's layout, by its owner: the pages its crop is cut from)
   const carriedLabels = new Map<number, Set<number>>()
