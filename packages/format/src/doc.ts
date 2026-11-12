@@ -3,10 +3,17 @@
 // contract between the reader (both hosts) and our server, stated once: the reader parses what it receives with these, and the
 // server writes them. Only what is on the wire: how the server stores a paper, keys its objects or bounds its work is its own.
 //
-// A reader ignores a field it does not know (zod strips it), so adding a field is free; a change an old reader would misread
-// (a field renamed, a word or a stage added to a closed set, a shape changed) is a new version (`v`). The server refines these
-// where it writes them (its grammar of segments, epochs, chains and preparations, its targets); a reader reads no more than
-// this states.
+// A reader ignores a field it does not know (zod strips it), so adding a field is free. A released reader meets a server that
+// has moved on (the extension updates days after our server), so its compatibility rule is built into the reading, by one
+// distinction:
+//   - a word that decides what the reader DOES is closed: `v`, a prepare's `state` and a target's `state`. An unknown one makes
+//     the document unreadable: such a change is a new `v`;
+//   - a word that only refines what the reader is TOLD is read openly: a prepare's and a target's `why`, a prepare's `stage`,
+//     the refusal's `why`. An unknown one is read as none: an unknown `why` is the generic failure (the sentence `internal` has),
+//     with the record's retry time where it has one, and takes no action a known word would (no re-ask of `busy`, no time of
+//     `quota`); an unknown `stage` is no stage (the progress line holds where it is). The targets' keys are read openly too.
+// The server's side stays closed: it writes only its words (the sets below), and refines these where it writes them (its
+// grammar of segments, epochs, chains and preparations, its targets); a reader reads no more than this states.
 import { z } from 'zod'
 import { Digest, FORMAT } from './schema.ts'
 
@@ -35,6 +42,15 @@ export type FailureReason = (typeof FAILURE_REASONS)[number]
 export const PREPARE_STAGES = ['fetching', 'compiling', 'units', 'laying-out', 'bundle'] as const
 export type PrepareStage = (typeof PREPARE_STAGES)[number]
 
+/** a word read openly: one of `words`, or none (null) for a word this reader does not know */
+const openWord = <const W extends readonly [string, ...string[]]>(words: W) =>
+  z
+    .string()
+    .nullable()
+    .transform((w): W[number] | null =>
+      w !== null && (words as readonly string[]).includes(w) ? (w as W[number]) : null,
+    )
+
 /** an immutable object: `GET /api/v2/o/<path>`, its bytes `bytes` long and their SHA-256 `sha256` */
 export const Ref = z.object({ path: z.string().max(160), sha256: Digest, bytes: int })
 const refs = z.array(Ref).max(64)
@@ -44,7 +60,7 @@ const refs = z.array(Ref).max(64)
 const run = {
   attempt: int,
   state: z.enum(['none', 'running', 'done', 'failed']),
-  why: z.enum(FAILURE_REASONS).nullable(),
+  why: openWord(FAILURE_REASONS),
   retryAt: time.nullable(),
   at: time,
 }
@@ -68,7 +84,7 @@ export const PaperDoc = z.object({
   prepare: z.object({
     ...run,
     build: z.string().nullable(),
-    stage: z.enum(PREPARE_STAGES).nullable(),
+    stage: openWord(PREPARE_STAGES),
     units: refs,
     html: z.boolean().nullable(),
   }),
@@ -104,7 +120,7 @@ export const OpenAsk = z.object({
  *  server's clock: a quota's period's end exactly, the time a reader says), that instant's distance from the answer to the
  *  millisecond (`retryAfterMs`, what a reader counts on its own clock) and in whole seconds rounded up (`retryAfterS`) */
 export const OpenRefused = z.object({
-  why: z.enum(['quota', 'busy']),
+  why: openWord(['quota', 'busy']),
   retryAt: time,
   retryAfterMs: int,
   retryAfterS: int,
