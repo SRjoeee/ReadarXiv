@@ -340,7 +340,8 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
     for (const v of d.declarations) {
       const name = v.id?.type === 'Identifier' ? v.id.name : null
       if (!name || !v.init) continue
-      const comment = `${leading(s)}\n${sameLine(v)}`
+      // (a rule's comment: the block directly before its declaration, and its own line's; DEFINITIONS.comments)
+      const comment = `${adjacent(s)}\n${sameLine(v)}`
       const lit = stringOf(v.init) ?? (v.init.type === 'NumericLiteral' ? v.init.value : v.init.type === 'TSAsExpression' ? (stringOf(v.init.expression) ?? (v.init.expression.type === 'NumericLiteral' ? v.init.expression.value : null)) : null)
       if (lit != null && UPPER.test(name)) f.constants.push({ name, value: lit, line: lineAt[v.start] })
       if (lit != null && UPPER.test(name) && !NOT_VERSION.test(name) && (VERSION_NAME.test(name) || VERSION_FILE.test(path) || RAISED.test(leading(s).replace(/\n\s*\*?\s*/g, ' ')))) {
@@ -364,8 +365,8 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
           const values = props.map(p => numberOf(p.value))
           const enumeration = props.length >= 3 && values.every(Number.isInteger) && new Set(values).size === values.length
           for (const p of props) {
-            const t = thresholdOf({ value: numberOf(p.value), raw: textOf(text, p.value), name: `${name}.${nameOf(p.key) ?? '?'}`, comment: `${comment}\n${leading(p)}\n${sameLine(p)}`, line: lineAt[p.start], context: 'table' })
-            f.thresholds.push(keep(enumeration ? { ...t, class: 'code' } : t, { literal: p.value, declarator: v, property: p, comment: `${comment}\n${leading(p)}\n${sameLine(p)}` }))
+            const t = thresholdOf({ value: numberOf(p.value), raw: textOf(text, p.value), name: `${name}.${nameOf(p.key) ?? '?'}`, comment: `${comment}\n${adjacent(p)}\n${sameLine(p)}`, line: lineAt[p.start], context: 'table' })
+            f.thresholds.push(keep(enumeration ? { ...t, class: 'code' } : t, { literal: p.value, declarator: v, property: p, comment: `${comment}\n${adjacent(p)}\n${sameLine(p)}` }))
             constNodes.add(p.value)
           }
         }
@@ -392,7 +393,7 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
     const inner = stmtStack.at(-1)
     const outer = stmtStack.at(-2)
     const stmt = (outer?.type === 'ExportNamedDeclaration' || outer?.type === 'ExportDefaultDeclaration') && outer.declaration === inner ? outer : inner
-    const near = n => `${leading(stmt)}\n${sameLine(n)}`
+    const near = n => `${adjacent(stmt)}\n${sameLine(n)}`
     switch (node.type) {
       case 'BinaryExpression':
         if (RELATIONAL.has(node.operator))

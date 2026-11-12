@@ -11,7 +11,9 @@
 //    no read of it as a value left.
 // 3. A margin is information for whoever reads the row: it never decides a removal. Removal follows from `one` or `never`
 //    alone.
-// 4. A citation, flagged from the whole comment (the coordinator confirms or strikes each flag before a removal lane acts):
+// 4. A citation, flagged from the whole comment (the coordinator confirms or strikes each flag before a removal lane acts;
+//    a comment that cites a definition and a paper is flagged a definition, its paper still sent to the holdout, the row
+//    holding both):
 //    (a) an arXiv id: the paper joins the holdout and the row is judged again: recorded there (or among the corpus's
 //    papers) and silent, the rule is a removal candidate marked `cited paper silent`; not yet recorded, `cited paper`
 //    (kept, waiting); (b) a definition (TeX,
@@ -61,7 +63,7 @@ export function citationsOf(comment) {
   const section = OUR_SECTION.exec(c)?.[0] ?? null
   const measurement = !papers.length && MEASUREMENT.test(c)
   const tuned = TUNED.test(c)
-  const flag = papers.length ? 'paper' : definition || section ? 'definition' : measurement ? 'measurement' : tuned ? 'tuned' : null
+  const flag = definition || section ? 'definition' : papers.length ? 'paper' : measurement ? 'measurement' : tuned ? 'tuned' : null
   return { flag, papers, definition, section, measurement, tuned }
 }
 
@@ -193,9 +195,11 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
     if ((row.verdict === 'value' || row.verdict === 'magnitude') && deciding.length && row.folds.length === deciding.length) row.foldedToValue = true
     rows[key] = row
   }
-  // (each cited paper once, by its number; its version where a comment gives one)
+  // (each cited paper once, by its number, its version where a comment gives one: the papers of the rows the recording
+  // does not show deciding, a definition's among them, which may show the rule deciding there)
   const cited = new Map()
-  for (const p of Object.values(rows).filter(r => r.verdict === 'cited paper' || r.verdict === 'cited paper silent').flatMap(r => r.citation.papers)) if (!cited.has(base(p)) || p.length > cited.get(base(p)).length) cited.set(base(p), p)
+  const waiting = r => r.verdict === 'cited paper' || r.verdict === 'cited paper silent' || r.verdict === 'definition'
+  for (const p of Object.values(rows).filter(waiting).flatMap(r => r.citation.papers)) if (!cited.has(base(p)) || p.length > cited.get(base(p)).length) cited.set(base(p), p)
   const papersCited = [...cited.values()].sort()
   return {
     format: LEDGER_FORMAT,

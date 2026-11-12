@@ -152,12 +152,25 @@ describe('rule debt', () => {
   it("reads an exported declaration's comment off its export statement, where the parser hangs it", () => {
     // (a list and a comparison in an exported declaration, each under a comment that cites a definition; the same two
     // declared without `export` read alike)
-    const text = "// Unicode's hyphens: U+002D, U+2010, U+2011\nexport const HYPHENS = ['-', '\u2010', '\u2011']\n// TeX's \\hbadness default\nexport const loose = (b: number) => b > 7\n"
+    const text = "// a module of rules\n\n// Unicode's hyphens: U+002D, U+2010, U+2011\nexport const HYPHENS = ['-', '\u2010', '\u2011']\n// TeX's \\hbadness default\nexport const loose = (b: number) => b > 7\n"
     for (const t of [text, text.replace(/export /g, '')]) {
       const f = factsOf('src/engine/marks.ts', t)
       expect(f.lists?.[0]).toMatchObject({ name: 'HYPHENS', class: 'defined' })
       expect(f.thresholds?.find(x => x.raw === '7')).toMatchObject({ class: 'borderline', reason: true, cites: 'TeX' })
     }
+  })
+
+  it("reads a rule's comment as the block directly before its declaration: not the file's opening comment, not a block a blank line apart", () => {
+    // (the file's opening comment cites TeX and a paper; the first list follows it after a blank line; a block that cites
+    // Unicode stands a blank line above the constant; the comparison's own comment is directly before it)
+    const text = "// src/engine/rules.ts: the module's rules, after TeX and 2401.00001v1\n\nexport const KINDS = ['a', 'b', 'c']\n// Unicode's dashes\n\nconst GAP = 0.3\n// the TeXbook's \\hbadness\nexport const loose = (b: number) => b > 7\n"
+    const f = factsOf('src/engine/rules.ts', text)
+    expect(f.lists?.[0]).toMatchObject({ name: 'KINDS', class: 'listed' })
+    expect(f.thresholds?.find(x => x.name === 'GAP')).toMatchObject({ class: 'tuned', reason: false })
+    expect(f.thresholds?.find(x => x.raw === '7')).toMatchObject({ class: 'borderline', reason: true })
+    // (the module's first statement with its own block directly before it, the file's opening comment above it apart)
+    const g = factsOf('src/engine/first.ts', "// the module\n\n// Unicode's hyphens\nconst HYPHENS = ['-', '\u2010', '\u2011']\n")
+    expect(g.lists?.[0]).toMatchObject({ class: 'defined' })
   })
 
   it('counts the engine\'s thresholds, lists, special cases and version constants', () => {

@@ -60,6 +60,7 @@ const SPECS: Record<string, Spec> = {
   PAPER: { comment: 'the column gap of 2401.00001v1', sites: [{ kind: 'cmp', per: { corpus: n(2, 0) } }] },
   PAPER_AWAY: { comment: 'as 2509.12345v2 sets it (2509.12345, p3)', sites: [{ kind: 'cmp', per: { corpus: n(2, 0) } }] },
   DEFINITION: { comment: "the TeXbook's \\parskip, 0pt plus 1pt", sites: [{ kind: 'cmp', per: { corpus: n(2, 0) } }] },
+  BOTH: { comment: "TeX's \\topskip, as 2602.11111v1 sets it", sites: [{ kind: 'cmp', per: { corpus: n(0, 3) } }] },
   SECTION: { comment: 'PDF-READER §18.61 states it', sites: [{ kind: 'cmp', per: {} }] },
   MEASURED: { comment: 'on the 88 papers no line is shorter', sites: [{ kind: 'cmp', per: { corpus: n(0, 2) } }] },
   TUNED: { comment: 'tuned by eye', sites: [{ kind: 'cmp', per: { corpus: n(0, 2) } }] },
@@ -102,7 +103,9 @@ describe('the classifier', () => {
     expect(rowOf(l, 'SECTION').verdict).toBe('definition')
     expect(rowOf(l, 'MEASURED').verdict).toBe('measurement')
     expect(rowOf(l, 'TUNED')).toMatchObject({ verdict: 'remove', citation: { flag: 'tuned' } })
-    expect(l.holdoutAdds).toEqual(['2509.12345v2'])
+    // (a definition and a paper cited: the definition makes the verdict, the paper still joins the holdout, the row holds both)
+    expect(rowOf(l, 'BOTH')).toMatchObject({ verdict: 'definition', folds: [], citation: { flag: 'definition', definition: 'TeX', papers: ['2602.11111v1'] } })
+    expect(l.holdoutAdds).toEqual(['2509.12345v2', '2602.11111v1'])
     // (recorded in the holdout, by its number (2509.12345v3-zh is the cited 2509.12345v2's pair) and still silent: a
     // removal candidate)
     const again = ledgerOf(map, recording, { holdout: ['2509.12345v3-zh'] })
@@ -129,7 +132,7 @@ describe('the report', () => {
   it("states the yield by area and prints, by name, the rules an area's ledger marks as deciding nothing", () => {
     expect(r.byArea).toContain('**A PROFILE, NOT THE YIELD.** five papers')
     // (DECIDES's one-outcome site, FOLDED_READ's comparison; an iterated list's literal is read, not folded)
-    expect(r.counts.a).toMatchObject({ rules: 21, folds: 2, entries: 2 })
+    expect(r.counts.a).toMatchObject({ rules: 22, folds: 2, entries: 2 })
     expect(r.counts.a?.verdicts.remove).toBe(6)
     // (six removed and PAPER, its cited paper silent on the corpus: a candidate the coordinator confirms)
     expect(r.byArea).toContain('## Area a, removal scheduled: the rules that decide nothing, by name (7)')
