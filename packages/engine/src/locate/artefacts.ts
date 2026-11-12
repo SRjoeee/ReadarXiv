@@ -2,8 +2,9 @@
 // wholly in a face of one pitch is kept as the original.
 // Reads: the index (A's faces of one pitch among it); the record's `members` and `units`.
 // Writes: `units` (a kept unit's flags; a unit whose groups of one pitch become elements, its content), `members` (a kept
-// member's flags; a group's glyphs and boxes moved from its text and elements to the element it becomes, its rows), `stats`
-// (its artefacts' counts), `pitch` (assigned: the reading the units made on A take, phase 4).
+// member's flags; its rows), the ownership (a group's glyphs and boxes moved from its member's text and elements to the
+// element it becomes, `asElement`: no owner changes), `stats` (its artefacts' counts), `pitch` (assigned: the reading the
+// units made on A take, phase 4).
 import { type Piece, unitId } from '@readarxiv/format'
 import type { InstrumentUnit } from '../instrument.ts'
 import { textOf } from './facts.ts'
@@ -25,7 +26,7 @@ function texOf(list: readonly Piece[]): string {
 
 export function keepArtefacts(w: Work): void {
   const { inkA, gA, atA, fixedFaces } = w.ix
-  const { members, units, stats } = w
+  const { members, units, stats, claims } = w
   // ---- artefacts (Rule 1, the owner's ruling of 2026-11-10, PDF-READER §18.22): a unit whose text is set wholly in a face of one
   // pitch, a typewriter's, is an artefact the paper presents exactly (code, a command, a prompt, JSON, an identifier, an OCR or
   // a model's sample): kept as the original, never translated, as a code environment's lines are (its unit kept, its member
@@ -220,25 +221,15 @@ export function keepArtefacts(w: Work): void {
       const content = swap(unit.content)
       const gone = new Set(made.flatMap((x) => x.nested))
       const taken = new Set(made.flatMap((x) => x.text))
-      mem.text = mem.text.filter((a) => !taken.has(a))
       // (TeX's vertical box: no other ink of the unit's, its text or its other elements' (a display's aside, a block of its own),
       // shares a line with it)
-      const others = [...mem.text, ...[...mem.els].flatMap(([id, l]) => (gone.has(id) ? [] : l))]
+      const others = [
+        ...mem.text.filter((a) => !taken.has(a)),
+        ...[...mem.els].flatMap(([id, l]) => (gone.has(id) ? [] : l)),
+      ]
       const classes = (unit.classes ?? []).filter(([id]) => !gone.has(id))
       for (const x of made) {
-        const own = [...x.text, ...x.nested.flatMap((id) => mem.els.get(id) ?? [])].sort((a, b) => a - b)
-        const boxes = x.nested.flatMap((id) => mem.elBoxes.get(id) ?? [])
-        const boxesB = x.nested.flatMap((id) => mem.elBoxesB.get(id) ?? [])
-        for (const id of x.nested) {
-          mem.els.delete(id)
-          mem.elBoxes.delete(id)
-          mem.elBoxesB.delete(id)
-        }
-        mem.els.set(x.span.id, own)
-        if (boxes.length) {
-          mem.elBoxes.set(x.span.id, boxes)
-          mem.elBoxesB.set(x.span.id, boxesB)
-        }
+        const own = claims.asElement(mem, x.span.id, x.text, x.nested)
         const mine = new Set(own)
         const shares = cutLines(
           [...others.filter((a) => !mine.has(a)), ...own].sort((a, b) => a - b),
