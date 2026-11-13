@@ -47,26 +47,37 @@ export type OptionalContentConfig = Awaited<ReturnType<PDFDocumentProxy['getOpti
 export const PDF_TO_CSS = 96 / 72
 /** how far past the view a slot is near: one pane's height above and below */
 export const NEAR = '100% 0px 100% 0px'
-/** how long after a keyboard's jump the slot jumped to may still take the focus when it comes to show its page */
+/** how long after a keyboard's jump the slot jumped to may still take the focus when it comes to show its page, ms: the
+ *  jump's scroll brings it near within a frame or two, and a slot that comes near later is the reader's own scroll.
+ *  Unmeasured */
 export const FOCUS_WAIT_MS = 2000
 /** how long after a zoom's or a pinch's steps are drawn again the laid pages' text layers stay out of style and layout (ms),
- *  places.mjs TEXT_BACK_MS: steps a little further apart than their drawing delay find them still out */
+ *  places.mjs TEXT_BACK_MS: steps a little further apart than their drawing delay find them still out (PDF-READER
+ *  §11.11); unmeasured */
 export const TEXT_BACK_MS = 500
-/** how long after a zoom's last step a laid page's own drawings (its crops) are drawn again: PDF.js draws its page 400 ms after
- *  it (layer-side.mjs RECOPY_MS) */
+/** how long after a zoom's last step a laid page's own drawings (its crops) are drawn again, ms: PDF.js draws its page
+ *  STEP_DELAY (400 ms) after it (layer-side.mjs RECOPY_MS), and the 200 ms past that are unmeasured */
 export const RECOPY_MS = 600
-/** the longest a laid page's drawing waits for the left's page being drawn before it is put in place (layer-side.mjs
- *  LEFT_WAIT_MS): the two panes paint within one frame of each other, the left first, unless the left is slower than this */
+/** the longest a laid page's drawing waits for the left's page being drawn before it is put in place, ms (layer-side.mjs
+ *  LEFT_WAIT_MS): the two panes paint within one frame of each other, the left first, unless the left is slower than this.
+ *  It is past the 1.21 to 1.24 s the left's page took alone on 2602.23285v2's page 8 at k 2, measured in PDF-READER §11.8 */
 export const LEFT_WAIT_MS = 1500
 /** the pages of a laid page's document kept parsed (operator lists, decoded images) after their drawings go (visibility.mjs) */
 export const WARM_PAGES = 4
 /** the mark of a slot whose drawing is kept off the view: the reader's sheet holds the drawing out of the layout tree */
 export const KEPT = 'data-axt-kept'
-/** the most device pixels of laid pages' drawings kept off the view on any device, on iOS and iPadOS, and the share of a device's
- *  memory they may take (layer-side.mjs KEEP_PIXELS, IOS_KEEP_PIXELS, KEEP_SHARE, KEEP_MEMORY_GB: docs/PDF-READER.md §11.8) */
+/** the most device pixels of laid pages' drawings kept off the view on any device (layer-side.mjs KEEP_PIXELS,
+ *  docs/PDF-READER.md §11.8): 128 MiB at the 4 bytes a pixel a copy costs, some six and a half A4 pages at 120 % on a 2x
+ *  screen, each measured at 19.6 MiB of the GPU process's memory in Chromium 153 on Metal */
 export const KEEP_PIXELS = 2 ** 25
+/** the most device pixels of those drawings kept on iOS and iPadOS (IOS_KEEP_PIXELS, §11.8): 32 MiB, under a third of
+ *  the browser's lowest canvas cap reported there (about 200 MB on an iPhone SE before Safari 17, WebKit bug 195325), as
+ *  its WebKit tells no memory and kills a tab past its process's limit */
 export const IOS_KEEP_PIXELS = 2 ** 23
+/** the share of a device's memory the kept drawings may take (KEEP_SHARE, §11.8) */
 export const KEEP_SHARE = 1 / 64
+/** the memory a device is taken to have where the browser tells none, GiB as `navigator.deviceMemory` states it
+ *  (KEEP_MEMORY_GB, §11.8); a ruling, unmeasured */
 export const KEEP_MEMORY_GB = 4
 /** PDF.js's page view states (pdf_viewer.mjs RenderingStates) */
 const INITIAL = 0,

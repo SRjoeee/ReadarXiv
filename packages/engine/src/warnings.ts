@@ -51,7 +51,7 @@ export const RECOVER_SITES: readonly (readonly [site: string, words: string])[] 
 /** a warning that is an error's text whole (PDF.js's `warn(e)`): a font's program it could not read (the system font then), a
  *  shading made a dummy, a standard font's data not read */
 const ERROR_TEXT = /^[A-Z][A-Za-z]*(?:Error|Exception): /
-/** a recovery's first reason, at most these characters (the head is bounded) */
+/** a recovery's first reason, at most these characters (the head is bounded, PDF-READER §19.3); unmeasured */
 const REASON_MAX = 200
 
 /** the site a warning tells, or null for one that tells no recovery of these (the lite worker's undecoded images, the lexer's

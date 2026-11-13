@@ -31,8 +31,10 @@ import { CHUNK, type ChunkStore } from './store.ts'
 export const STALL_MS = 10_000
 /** how many times a range is asked, at most, where the network fails it, but by an owner that keeps reading */
 export const RANGE_TRIES = 2
-/** the pause before a read the network failed at once is asked again, doubled at each failure, to RETRY_MAX_MS */
+/** the pause before a read the network failed at once is asked again, ms, doubled at each failure, to RETRY_MAX_MS;
+ *  unmeasured */
 export const RETRY_MS = 1_000
+/** the longest that pause, ms; unmeasured */
 export const RETRY_MAX_MS = 30_000
 
 /** why a source is refused: no such object at its address (`missing`: a 404 or a 410 before any byte of it was read, the

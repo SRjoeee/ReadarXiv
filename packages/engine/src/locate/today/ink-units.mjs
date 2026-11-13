@@ -111,7 +111,8 @@ const LEADER = /^[.·•…]+$/u
 /** a number set apart from the word beside it, the page's own ink: more than this share of its size between them (a section
  *  number's \quad, an entry's number box, a folio's \hfil); a word space is a quarter to a third, after a full stop under a half */
 const APART = 0.5
-/** a line's erase rectangles at most, merged where they meet (layout/make.mjs MERGE, ERASE_MAX) */
+/** a line's erase rectangles at most, merged where they meet (layout/make.mjs MERGE, ERASE_MAX): a count of rectangles;
+ *  unmeasured */
 const MERGE = 0.5, ERASE_MAX = 16
 /** a placeholder's segments at most, an inline one's (layout/file.mjs SEGS_INLINE) */
 const SEGS_INLINE = 4

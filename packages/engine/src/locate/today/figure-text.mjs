@@ -110,7 +110,8 @@ const SHOWN_SLACK = 0.05
 /** the runs that spell a word a page may read as figures' text, at most, and a paper, shown whole or not (past them the rest are
  *  no figure unit, counted) */
 export const FIGURE_UNITS_PAGE = 400, FIGURE_UNITS_DOC = 4000
-/** a unit's text at most, in code units (a long run is a paragraph some figure holds: cut there, its rest the original's) */
+/** a unit's text at most, in code units (a long run is a paragraph some figure holds: cut there, its rest the original's);
+ *  unmeasured */
 export const FIGURE_TEXT_MAX = 400
 /** the group of figure unit `k` (layout/wrap.mjs names it `axt:f<k>`) */
 export const figureGroup = k => `f${k}`

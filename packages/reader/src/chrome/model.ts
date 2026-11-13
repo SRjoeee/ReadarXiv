@@ -58,7 +58,7 @@ export interface Toast {
   icon?: 'check' | 'info'
   ms?: number
 }
-/** how long a toast stands when its host names no time (the website's TOAST_MS) */
+/** how long a toast stands when its host names no time, ms (the website's TOAST_MS); unmeasured */
 export const TOAST_MS = 3000
 export type SessionEvent =
   /** a write of the settings by this page that went through: a refusal before it is mended */

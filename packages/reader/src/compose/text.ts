@@ -45,7 +45,8 @@ type Marked = { type: string; tag?: string | null }
 type Entry = TextItem | Marked
 const isText = (e: Entry): e is TextItem => typeof (e as TextItem).str === 'string'
 const EPS = 0.5
-/** the items a page's layer takes at most (layer-proto/textlayer.mjs TEXT_ITEMS_MAX) */
+/** the items a page's layer takes at most, a count of text items (layer-proto/textlayer.mjs TEXT_ITEMS_MAX): past it a
+ *  line's neighbours are merged (PDF-READER §11.11); a ruling, unmeasured */
 export const TEXT_ITEMS_MAX = 2000
 /** the paper's language, on the text layer (docs/PDF-READER.md §13) */
 export const SOURCE_LANG = 'en'
