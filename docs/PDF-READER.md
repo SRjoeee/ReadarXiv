@@ -6671,27 +6671,31 @@ both stores: every invariant as before; the entry and the runner (which keeps to
 spanning) not alike 224 -> 294 on the door's rows and 809 -> 961 on Google's, the cells the entry now lays alone; the runner's
 dumps 0 units moved. No version: the lay alone moves, no unit, part or bundle.
 
-Measured with R1 to R4 (lane table-judge, the build 983f9afbf over round RB2b's 89 papers and 2611.03953v2, against RB2b's run
-r24 at e73d1d5db): `kept` on 2,890 distinct units and nothing else, each a table's cell (1,245), a TikZ picture's text (397) or a
-figure's text read off its ink (1,248); and one paper read by the source's facts as before (C) (2610.40576v1: a cell of `\ctk{}`
-token counts kept by R1, so its groups are no `code` elements again and its id is the one before (C); its two cells holding a
-highlight kept by R1, no longer held whole for the word). Ownership identical. The rows: 31,446 units asked over the lab's 92
-pairs (33,958 before): 2,512 kept units no longer asked, no other row changed, none unavailable, no request. Over the 92 pairs'
-7,878 table cells, against one reading of the 379 cells the rules disagree on (lane table-judge: a name, a person's name, words,
-or either): words kept 67, names sent 72, person names sent 0 (production 219 / 68 / 1). R2's price: 26 header cells of words
-the paper always writes capitalised (Test, Test F1, Oscillation, Violation, Remark, Flicker, Common, Gaussians, Avg.). The reader
-gate on both stores: every invariant as before or fewer (I3 3 -> 1 on both: two overlaps of 2610.21176v1 p13 no longer read,
-not traced to a cell; I4 0, I5 2, I10 0 faults, I6 11 known), 0 rows read outside a page's wait set; the entry and the runner
-not alike 294 -> 132 (door) and 961 -> 848 (Google): the column rule's cells the runner never had. The display gate, by default
-and with every switch on, against RB2b's sheets page by page under CT restated for R1 to R4 (lane table-judge's proposal: a cell
-the two readers decide otherwise by their table rules alone, either way; a figure count fewer by the texts kept as written; a
-column today withheld for an unfit cell, which v2 lays but for the cells it keeps as written): one page newly worse in each
-mode, 2610.20967v1 p2's count of figure texts (today 49, v2 46, RB2b 48: the two texts R1 keeps there today keeps too, and had
-evened a text today draws in pieces), every other page's status RB2b's; the added pairs as RB2b's. With the two-page hold lifted
-(1e4c434ee): the reader gate on both stores 82 more cells laid (the groups today withheld for their pages), every invariant as
-before, not alike 132 -> 126 and 848 -> 842; the display gate over the three tables so held (2610.19159v1 zh and ja p48-49,
-2610.35877v1-zh p17-18), 0 pages worse, 6 differing, every one covered by the restated CT. PIPELINE moves (the units' `kept`):
-the integration's. No TRANSLATE, no LAYOUT (R4 and the lift are the lay's alone, no mark moves).
+Measured with R1, R2 and R4 the engine's and the two-page hold lifted (lane table-judge, 56e0146c0 over round RB2b's 89 papers
+and 2611.03953v2, against RB2b's run r24 at e73d1d5db): `kept` on 2,954 distinct units and nothing else, each a table's cell, a
+TikZ picture's text or a figure's text read off its ink (64 of them cells R4 keeps, beside R1's and R2's of the build before); and
+one paper read by the source's facts as before (C) (2610.40576v1: a cell of `\ctk{}` token counts kept by R1, so its groups are
+no `code` elements again and its id is the one before (C); its two cells holding a highlight kept by R1, no longer held whole for
+the word). Ownership identical. The rows: 31,378 units asked over the lab's 92 pairs (33,958 before): every row that differs a
+kept unit no longer asked, none unavailable, no request. Over the 92 pairs' 7,878 table cells, against one reading of the cells
+the rules disagree on (lane table-judge: a name, a person's name, words, or either), words kept / names sent / person names
+sent: 82 / 68 / 0 with Vanilla read as a word, 67 / 68 / 0 read as the owner reads it, a name (production 219 / 68 / 1 and
+213 / 77 / 1). R4 keeps 119 pair cells (56 texts): names 46 (Claude Opus 5, GPT-2 medium, Google DeepMind, Anthropic, Maxout, ...),
+either 25, a person 1, and ordinary words 47 in 13 texts, 15 of them Vanilla's (the others: "1:1:1:1
+All four" 9, "RL only" 4, "none" 4 and "none (version deferred)" 1 in a column of exception names set in code, "evaluator" 3,
+"Majority" 3, "ensemble" 2, "Fine-tuning approach" 2, "Average", "Original+Noise", "BC ablation subset", "GPT-5.5 tool generation
++ Qwen3-8B-SFT extraction" 1 each). R2's price: 26 header cells of words the paper always writes capitalised (Test, Test F1,
+Oscillation, Violation, Remark, Flicker, Common, Gaussians, Avg.). The reader gate on both stores: every invariant as before or
+fewer (I3 3 -> 1 on both: RB2b's two overlaps were the gate's runner laying 2610.21176v1 p13's cell 101 at its row's first
+column; R1 keeps cell 82 of the same table, and the runner, which holds a tie whole for any cell it does not adapt, lays none of
+it now, while the entry lays 101 in its own column: unseen, not mended; I4 0, I5 2, I10 0 faults, I6 11 known), 0 rows read
+outside a page's wait set; the entry and the runner not alike 294 -> 125 (door) and 961 -> 832 (Google). The display gate, by
+default and with every switch on, under CT restated (a cell the two readers decide otherwise by their table rules alone, either
+way; a group today withheld for its two pages; a figure count fewer by the texts kept as written; a column today withheld for an
+unfit cell, which v2 lays but for the cells it keeps as written) and the figures count set apart by today's texts rather than
+v2's members: nothing newly worse against RB2b's sheets, page by page, in either mode or set; worse 2 and 5 as RB2b's, the added
+pairs 1 as RB2b's. PIPELINE moves (the units' `kept`): the integration's. No TRANSLATE, no LAYOUT (the lift is the lay's alone;
+R4 a unit's `kept`, no mark moves).
 
 ## 19. The engine's contract
 
