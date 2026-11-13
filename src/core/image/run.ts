@@ -175,7 +175,7 @@ export function toBase64(bytes: ArrayBuffer): string {
 }
 
 /** Are the translation and the original the same thing: whitespace collapsed, case and surrounding punctuation ignored */
-export function sameText(a: string, b: string): boolean {
+function sameText(a: string, b: string): boolean {
   const norm = (t: string) => squash(t.normalize('NFC')).toLowerCase().replace(/^[\p{P}\s]+|[\p{P}\s]+$/gu, '')
   return norm(a) === norm(b)
 }

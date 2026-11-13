@@ -66,7 +66,7 @@ export function injectBilingualLink(doc: Document, label: string, options: { new
  * Where the translation opens (config `reading.openIn`, v16): a new tab by default, so the page the reader is on
  * stays where it is. `rel` goes with `target`, or the new tab could reach back through `window.opener`.
  */
-export function setTarget(link: HTMLAnchorElement, newTab: boolean): void {
+function setTarget(link: HTMLAnchorElement, newTab: boolean): void {
   if (newTab) {
     link.target = '_blank'
     link.rel = 'noopener'
