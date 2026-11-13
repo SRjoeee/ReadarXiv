@@ -380,6 +380,25 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
       }
     }
   }
+  // a rules registry's citations (DEFINITIONS.lists): a registry is an array literal declared as an array of rule entries
+  // (`RuleSpec[]`, `readonly RuleSpec[]`, `Array<RuleSpec>`: the entry type packages/typeset's registry declares), and an
+  // entry's `ports` is the code it carries, cited by file and line ('RUN:1441-1496 paintFigures'): never names that decide
+  // anything, so no name list whatever its strings' lengths
+  const citationNodes = new Set()
+  const entriesType = t => {
+    const a = t?.type === 'TSTypeOperator' && t.operator === 'readonly' ? t.typeAnnotation : t
+    const elem = a?.type === 'TSArrayType' ? a.elementType : a?.type === 'TSTypeReference' && /^(?:Readonly)?Array$/.test(nameOf(a.typeName) ?? '') ? a.typeParameters?.params?.[0] : null
+    return elem?.type === 'TSTypeReference' && nameOf(elem.typeName) === 'RuleSpec'
+  }
+  for (const { d } of tops) {
+    if (d.type !== 'VariableDeclaration') continue
+    for (const v of d.declarations) {
+      if (!entriesType(v.id?.typeAnnotation?.typeAnnotation) || v.init?.type !== 'ArrayExpression') continue
+      for (const e of v.init.elements)
+        if (e?.type === 'ObjectExpression')
+          for (const p of e.properties) if (p.type === 'ObjectProperty' && !p.computed && nameOf(p.key) === 'ports' && p.value?.type === 'ArrayExpression') citationNodes.add(p.value)
+    }
+  }
 
   // the walk: comparisons, lists, literals, functions
   const fnStack = []
@@ -448,8 +467,9 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
         break
       case 'ArrayExpression': {
         const strings = node.elements.map(stringOf)
-        // (names: strings of 40 characters at most; a list of longer ones is text, TeX code, a message)
-        if (strings.length >= 3 && strings.every(s => s != null && s.length <= 40)) {
+        // (names: strings of 40 characters at most; a list of longer ones is text, TeX code, a message; a registry entry's
+        // citations are none, citationNodes)
+        if (strings.length >= 3 && strings.every(s => s != null && s.length <= 40) && !citationNodes.has(node)) {
           const owner = parent?.type === 'VariableDeclarator' ? nameOf(parent.id) : parent?.type === 'NewExpression' ? nameOf(stmtDeclName(stmt)) : nameOf(stmtDeclName(stmt))
           const l = listOf({ entries: strings, line: lineAt[node.start], name: owner, comment: near(node), form: 'list' })
           // (our own vocabulary: declared `as const`, its type the literal's, or a schema's enum: not a name list)
