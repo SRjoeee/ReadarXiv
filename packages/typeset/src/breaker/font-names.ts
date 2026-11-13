@@ -26,7 +26,7 @@ const bare = (name: string): string => String(name ?? '').replace(/^[A-Z]{6}\+/,
  *  face by its family's names: Euler's EUEX, EURM and EURB with their size, MathTime's MTMI, MTSY, MTEX and their bold, and
  *  XITS's math face, XITSMath, not its text face XITS-Regular (the ledger's math lines, the ink units' kept runs and the
  *  figure runs' words read it: LAYOUT 25 and PIPELINE 31, unreleased) */
-export function classifyFont(name: string, fallbackFamily?: string): FontStyle {
+export function classifyFont(name: string): FontStyle {
   const n = bare(name)
   const low = n.toLowerCase()
   let fam: FontStyle['fam'] = 'serif'
@@ -49,12 +49,6 @@ export function classifyFont(name: string, fallbackFamily?: string): FontStyle {
     )
   )
     fam = 'sans'
-  // PDF.js's own guess only for a face no name above tells (it says monospace for CMBX10 and CMR7 in 1512.03385)
-  else if (
-    fallbackFamily === 'monospace' &&
-    !/^(cm|lm|ec|tc|sf)|roman|serif|times|nimbus|termes|palatino|pagella|charter|libertin/i.test(n)
-  )
-    fam = 'mono'
   const bold =
     /bold|black|heavy|semibold|demibold|demi\b|-medi(?:ital)?$|-medi\b|^(cm|lm|ec)bx|^cmb\d|^sfbx|^sfsx|^cmssbx|^cmbxti|^cmmib|^cmbsy|-bd\b|^ptmb|^phvb|^linlibertinet?b|linlibertinetbi?$|libertinetb|-bol$|extrabold|ultrabold|-sb$/i.test(
       n,
