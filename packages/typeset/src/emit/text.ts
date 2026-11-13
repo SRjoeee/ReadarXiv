@@ -12,7 +12,8 @@ import { COPY_SPACE_EM } from './display.ts'
 import { tokenBand } from './sentences.ts'
 import type { LaidLine, Layout } from '../fit/types.ts'
 
-/** the most items a page's layer holds (textlayer.mjs TEXT_ITEMS_MAX) */
+/** the most items a page's layer holds, a count of text items (textlayer.mjs TEXT_ITEMS_MAX): past it a line's neighbours
+ *  are merged (PDF-READER §11.11); a ruling, unmeasured */
 export const TEXT_ITEMS_MAX = 2000
 /** a compact item's fields: x, baseline, width, size, ascent, flags (textlayer.mjs F) */
 const F = 6
