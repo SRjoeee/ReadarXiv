@@ -2707,7 +2707,10 @@ within noise.
   front card of a stack of three "SAMA" cards 2.33 pt apart, padded by 2.71 pt and 3 px beside, held the middle of the label
   behind it (member 255) on the fresh rows' sheet (the lane fresh-fixes, 2026-11-11).
   A level one of one line is cut to its container where the part states one (Room.over, the closed shape's edge over its
-  baseline; Room.under, the stroke's depth under it): 6 member-pages of the parity's 22 pairs, by at most 0.84 pt. Every
+  baseline; Room.under, the stroke's depth under it): 6 member-pages of the parity's 22 pairs, by at most 0.84 pt. An edge the
+  part states at or under the baseline is no container round the text's glyphs, and its band is not cut there: 2501.14787v1
+  p41's "minimum" (Room.over -0.57, the one figure text of the corpus's parts to state one), whose band was cut to a sliver under
+  its line once the width-only fit drew it (§19.12), lit none of its text (the reader gate's I10, 5 faults). Every
   other member's Laid is unchanged, and so is each page's half leading (the parity's lay, both panes). Over the 22 pairs, the
   translated figure texts whose shape holds another member's lit middle on the right pane went from 7 to 1; by the parity's
   highlight measure (another unit's line on arXiv's page, a display on either pane), t179's 2 blocks went to 1. The one left
@@ -4312,7 +4315,8 @@ wherever any ink met its band, a frame round a citation in a sentence as much as
   with a letter in it, `ref` without) carrying it; a tone so only where it is a line tall at most (a plot's shaded column under a
   label's end is the plot's, 2610.21547v1 p14); pieces of fill under consecutive stretches, nothing of the text between them, are
   one (a highlight set word by word, 2610.40576v1 p17, 2411.13093v4 p19); a closed shape holding the whole text is its container,
-  its room the inside (Room.over and Room.under, the set shrunk to stay under `over`); a flat stroke under two glyphs or more of
+  its room the inside (Room.over and Room.under; the set shrunk to stay under `over` until the owner's rule of 2026-11-13, since
+  which width is the fit's only test, §19.12); a flat stroke under two glyphs or more of
   whole words an underline; anything else unrelated, and the text stays crowded, the original's. A tone that is none of these
   stays ground; a tone under a text kept whole is nothing to it. Since F3's step 2 (§18.36) only another text's glyph is
   unrelated ink that keeps a text: a shape or a line about it never does.

@@ -867,12 +867,14 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   })
   // (a figure text lit on its own lines' band alone, laid or not: Laid.lit's `band`; a level one of one line inside its
   // container where the part states one, its band cut to the closed shape's edge over its baseline (Room.over) and the stroke's
-  // depth under it (Room.under): docs/PDF-READER.md §17.9)
+  // depth under it (Room.under): docs/PDF-READER.md §17.9. An edge the part states at or under the baseline is no container
+  // round the text's glyphs: its band is not cut there (2501.14787v1 p41's "minimum", Room.over -0.57, lit none of its text once
+  // the width-only fit drew it, F41))
   members.forEach((m, i) => {
     if (m.kind !== 'figure') return
     const o = out[i] as Laid
     const one = m.lines.length === 1 && !o.lit.dir ? m.lines[0]! : null
-    const top = one && m.room.over !== undefined ? one[4] + m.room.over : Number.POSITIVE_INFINITY
+    const top = one && m.room.over !== undefined && m.room.over > 0 ? one[4] + m.room.over : Number.POSITIVE_INFINITY
     const bottom = one && m.room.under !== undefined ? one[4] - m.room.under : Number.NEGATIVE_INFINITY
     const inside = (b: Box): Box => {
       const y0 = Math.max(b[1], bottom),
