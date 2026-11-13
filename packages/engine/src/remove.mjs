@@ -126,7 +126,9 @@ export function lex(b, limit = Infinity, keep = null) {
           i += 2
           if (e === 110) out[o++] = 10; else if (e === 114) out[o++] = 13; else if (e === 116) out[o++] = 9; else if (e === 98) out[o++] = 8; else if (e === 102) out[o++] = 12
           else if (e === 40 || e === 41 || e === 92) out[o++] = e
-          else if (e >= 48 && e <= 55) { let v = e - 48; for (let k = 0; k < 2 && b[i] >= 48 && b[i] <= 55; k++, i++) v = v * 8 + b[i] - 48; out[o++] = v & 255 }
+          // (an escape at the stream's last byte has no digit after it, nor an octal escape's digits past the end: the bounds
+          // stated, where reading past them gave undefined, which compared false)
+          else if (e !== undefined && e >= 48 && e <= 55) { let v = e - 48; for (let k = 0; k < 2 && i < n && b[i] >= 48 && b[i] <= 55; k++, i++) v = v * 8 + b[i] - 48; out[o++] = v & 255 }
           else if (e === 13) { if (b[i] === 10) i++ } else if (e === 10) { /* a line continued */ } else if (e !== undefined) out[o++] = e
           continue
         }
@@ -192,7 +194,8 @@ export function lex(b, limit = Infinity, keep = null) {
       while (i < n) {
         while (i < n && WS[b[i]]) i++
         if (i >= n) break
-        if (b[i] === 73 && b[i + 1] === 68 && (WS[b[i + 2]] || i + 2 >= n)) { i += 3; break }
+        // (ID at the stream's end, else ID followed by white space: the end tested first, where a byte past it read undefined)
+        if (b[i] === 73 && b[i + 1] === 68 && (i + 2 >= n || WS[b[i + 2]])) { i += 3; break }
         if (b[i] === 37) { while (i < n && b[i] !== 10 && b[i] !== 13) i++; continue }
         if (b[i] === 47) { i++; while (i < n && !WS[b[i]] && !DL[b[i]]) i++; continue }
         if (b[i] === 40) { let d = 0; do { if (b[i] === 92) i++; else if (b[i] === 40) d++; else if (b[i] === 41) d--; i++ } while (i < n && d > 0); continue }
@@ -239,6 +242,9 @@ export function readAtMost(stream, limit) {
 }
 
 const PAINT = new Set(['S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n'])
+/** an operand's `v`, told by its kind before it is read: a name's text, a dictionary's items, a keyword's word; undefined for a
+ *  number, a boolean, null, a string, an array, or no operand (what `?.v` read of each) */
+const vOf = x => (typeof x === 'object' && x !== null && !Array.isArray(x) && x.t !== 'str' ? x.v : undefined)
 /** a form nested deeper than this is not walked: the page is refused */
 const FORM_DEPTH = 12
 /** a glyph name that names a code, not a character (a generator's own numbering): its Unicode is not read from it */
@@ -303,10 +309,12 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
         out = inflate(st.contents, limit)
         if (out.length > limit) throw new DecodeLimit(limit)
       }
-    } else {
+    } else if (st instanceof PDFStream) {
       out = st.getContents()
       if (out.length > limit) throw new DecodeLimit(limit)
-    }
+      // (anything else is no stream, refused with the error reading its contents gave: a page's walk takes it as a content
+      // stream that does not decode)
+    } else throw new TypeError('st.getContents is not a function')
     // (counted by what it holds: the buffer its view keeps, not the view's length)
     if ((decodedBytes += out.buffer.byteLength) <= 4 * bytesMax) decoded.set(st, out)
     return out
@@ -391,7 +399,7 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
       if (info.type3) { const m = get(dict, 'FontMatrix'); if (m instanceof PDFArray) { const v = m.asArray().map(x => num(look(x))); fm = v.length === 6 && v.every(Number.isFinite) ? v : null } }
       if (W instanceof PDFArray && first !== undefined && fm) {
         const ws = W.asArray().map(v => num(look(v)))
-        info.width = code => { const w = code >= first && code < first + ws.length ? ws[code - first] : missing; return info.type3 ? w * fm[0] + fm[4] : w / 1000 }
+        info.width = code => { const w = code >= first && code < first + ws.length ? ws[code - first] ?? Number.NaN : missing; return info.type3 ? w * fm[0] + fm[4] : w / 1000 }
       }
     }
     info.unicode = unicodeOf(sub, dict)
@@ -499,7 +507,7 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
             case 'q': stack.push({ ...s }); break
             case 'Q': if (stack.length) s = stack.pop(); break
             case 'Tf': {
-              const fr = get(res, 'Font')?.get?.(PDFName.of(a[0]?.v))
+              const fr = get(res, 'Font')?.get?.(PDFName.of(vOf(a[0])))
               const fd = look(fr)
               s.font = fd ? fontInfo(fr instanceof PDFRef ? fr.toString() : fd, fd) : null
               s.size = typeof a[1] === 'number' ? a[1] : 0
@@ -509,13 +517,13 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
             case 'Tw': s.Tw = typeof a[0] === 'number' ? a[0] : 0; break
             case 'Tr': s.Tr = typeof a[0] === 'number' ? a[0] : 0; break
             case 'gs': {
-              const g = look(get(res, 'ExtGState')?.get?.(PDFName.of(a[0]?.v)))
+              const g = look(get(res, 'ExtGState')?.get?.(PDFName.of(vOf(a[0]))))
               const f = get(g, 'Font')
               if (f instanceof PDFArray) { const fr = f.get(0); s.font = fontInfo(fr instanceof PDFRef ? fr.toString() : look(fr), look(fr)); s.size = num(look(f.get(1))) ?? 0 }
               break
             }
             case 'Do': {
-              const xr = get(res, 'XObject')?.get?.(PDFName.of(a[0]?.v))
+              const xr = get(res, 'XObject')?.get?.(PDFName.of(vOf(a[0])))
               const x = look(xr)
               if (x instanceof PDFStream && nameOf(get(x, 'Subtype')) === 'Form') {
                 let within = false
@@ -528,7 +536,7 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
                 if (got.refused) return
                 if (got.failed) problems.push('a form that does not decode')
                 const ops = got.ops ?? []
-                const fc = { kind: 'form', key: xr instanceof PDFRef ? xr.toString() : `direct${containers.length}`, ref: xr instanceof PDFRef ? xr : null, st: x, pieces: [{ ref: xr instanceof PDFRef ? xr : null, st: x }], ops: [ops], parent: cont, name: a[0]?.v, res: own ?? res, ownRes: !!own, depth: depth + 1 }
+                const fc = { kind: 'form', key: xr instanceof PDFRef ? xr.toString() : `direct${containers.length}`, ref: xr instanceof PDFRef ? xr : null, st: x, pieces: [{ ref: xr instanceof PDFRef ? xr : null, st: x }], ops: [ops], parent: cont, name: vOf(a[0]), res: own ?? res, ownRes: !!own, depth: depth + 1 }
                 if (!record(COST.event + COST.op)) return
                 containers.push(fc)
                 events.push({ kind: 'form', cont, pi, oi, child: fc })
@@ -547,7 +555,7 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
               // (a show with no font set is PDF.js's to drop, and the walk's: no event, nothing to align or edit)
               if (!s.font) break
               const codes = []
-              ;(Array.isArray(arr) ? arr : []).forEach((el, ei) => { if (el?.t === 'str') for (const [cs, ce, v] of codesOf(s.font, el.b)) codes.push({ ei, cs, ce, v }) })
+              ;(Array.isArray(arr) ? arr : []).forEach((el, ei) => { if (typeof el === 'object' && el !== null && !Array.isArray(el) && el.t === 'str') for (const [cs, ce, v] of codesOf(s.font, el.b)) codes.push({ ei, cs, ce, v }) })
               if (!record(COST.event + COST.code * codes.length)) return
               events.push({ kind: 'show', cont, pi, oi, codes, state: { ...s } })
               break
