@@ -1,6 +1,6 @@
-// A table's cells (the owner, 2026-11-13: a table's cell is text like any other; the translator decides a name). Each cell is
-// judged alone, by its own row, as a paragraph is: its translation laid, or the original's where it has no row, a row that
-// failed, or a reason of the part's. A reply equal to its source is a translation like any other. A cell that cannot be drawn
+// A table's cells: each cell is laid alone, by its own row, as a paragraph is: its translation laid, or the original's where its
+// unit is kept (Unit.kept, the engine's: PDF-READER §18.72), it has no row, a row that failed, or a reason of the part's. A reply
+// equal to its source is a translation like any other. A cell that cannot be drawn
 // in its translation (unfit, a row that failed, the wrap cannot hide it) stays the original's by itself, as a paragraph does
 // (the coordinator's ruling (c) of 2026-11-13); what still binds a cell to the others of its group (the header's cells, a
 // column's, the cells spanning the same columns: TeX's grid, Placed.cell) is geometry alone: a cell that spans holds its group
@@ -182,25 +182,12 @@ describe('a cell that cannot be drawn stays the original’s alone; its group is
   })
 })
 
-// R4 (docs/PDF-READER.md §18.72): a body column's cells between the same two rules (Room.band, the rules the part states over and
-// under each cell) are one group; where more than half of its text cells are kept as written (Unit.kept: R1, a text with no
-// ordinary word; R2, the paper's own names), its other text cells are kept too; exactly half is not more than half, and each
-// cell is laid by itself. A header cell is judged alone (R3): no header is voted.
-describe('R4: a body column’s cells between the same two rules are one group', () => {
-  /** a cell standing between two rules: `band` [under, over] */
+// Which of a table's cells are language is the engine's (Unit.kept: R1, R2 and the paper's names blocks, R4, PDF-READER §18.72):
+// the typesetter lays a kept unit as kept and every other cell by its row, whatever its column holds. No vote is left here.
+describe('no table rule in the typesetter: a cell is kept where its unit is, laid by its row otherwise', () => {
   const banded = (ord: number, at: [number, number, number, 0 | 1], plain: string, band: [number, number]) =>
     cell(ord, at, plain, { room: { below: 0, next: 300, side: [52 + 100 * at[1], 152 + 100 * at[1]], band } })
-  it('Table 2’s stub (2611.03953v2 p7): the dataset names kept, "Avg. Recovery" under its own rule laid by its row', () => {
-    const t = tableOf([
-      cell(0, [0, 0, 1, 1], 'Domain'),
-      cell(1, [0, 1, 1, 1], 'Final'),
-      ...['MedQA', 'CaseHOLD', 'FinQA', 'IFBench'].map((s, k) => banded(2 + k, [1 + k, 0, 1, 0], s, [277, 322])),
-      banded(6, [5, 0, 1, 0], 'Avg. Recovery', [263, 277]),
-    ])
-    const rows = rowsOf({ 0: 'Domäne', 1: 'Endwert', 6: 'Mittlere Erholung' }, [2, 3, 4, 5])
-    expect(states(t, rows)).toEqual(['laid', 'laid', 'kept', 'kept', 'kept', 'kept', 'laid'])
-  })
-  it('the same column with no rule between them is one group: four of five kept, the fifth kept with them', () => {
+  it('a column of four kept names between the same two rules lays its fifth cell, not kept, by its row', () => {
     const t = tableOf([
       cell(0, [0, 0, 1, 1], 'Domain'),
       ...['MedQA', 'CaseHOLD', 'FinQA', 'IFBench', 'Avg. Recovery'].map((s, k) =>
@@ -208,55 +195,6 @@ describe('R4: a body column’s cells between the same two rules are one group',
       ),
     ])
     const rows = rowsOf({ 0: 'Domäne', 5: 'Mittlere Erholung' }, [1, 2, 3, 4])
-    expect(states(t, rows)).toEqual(['laid', 'kept', 'kept', 'kept', 'kept', 'kept'])
-  })
-  it('"Gemini" kept in its block of model names (2608.06701v1 p5: three of four kept as identifiers)', () => {
-    const t = tableOf([
-      cell(0, [0, 0, 1, 1], 'Executor'),
-      ...['DeepSeek', 'Gemini', '(2.5-flash)', 'MiniMax'].map((s, k) => banded(1 + k, [1 + k, 0, 1, 0], s, [600, 700])),
-    ])
-    const rows = rowsOf({ 0: 'Ausführer', 2: 'Zwillinge' }, [1, 3, 4])
-    expect(states(t, rows)).toEqual(['laid', 'kept', 'kept', 'kept', 'kept'])
-  })
-  it('a block at exactly one half is no names block: "Vanilla" laid by its row beside "SAGE" (the reply is not ours)', () => {
-    const t = tableOf([
-      cell(0, [0, 0, 1, 1], 'Method'),
-      ...['Vanilla', 'SAGE', 'Vanilla', 'SAGE'].map((s, k) => banded(1 + k, [1 + k, 0, 1, 0], s, [600, 700])),
-    ])
-    const rows = rowsOf({ 0: 'Methode', 1: 'Vanille', 3: 'Vanille' }, [2, 4])
-    expect(states(t, rows)).toEqual(['laid', 'laid', 'kept', 'laid', 'kept'])
-  })
-  it('"Method", a first row over a rule in a table whose header the source reader does not find (2602.23285v2-ja p19): laid', () => {
-    const t = tableOf([
-      banded(0, [0, 0, 1, 0], 'Method', [460, 470]),
-      banded(1, [1, 0, 1, 0], 'latent-ODE', [400, 459]),
-      banded(2, [2, 0, 1, 0], 'latent-ODE', [400, 459]),
-    ])
-    const rows = rowsOf({ 0: 'Methode' }, [1, 2])
-    expect(states(t, rows)).toEqual(['laid', 'kept', 'kept'])
-  })
-  it('a header cell is judged alone: a header row of three kept names lays its word by its row', () => {
-    const t = tableOf([
-      cell(0, [0, 0, 1, 1], 'Model'),
-      cell(1, [0, 1, 1, 1], 'Claude'),
-      cell(2, [0, 2, 1, 1], 'Mistral'),
-      cell(3, [0, 3, 1, 1], 'GPT'),
-    ])
-    const rows = rowsOf({ 0: 'Modell' }, [1, 2, 3])
-    expect(states(t, rows)).toEqual(['laid', 'kept', 'kept', 'kept'])
-  })
-  it('a cell the part leaves the original’s (a why) is no text cell of the count: two of three kept is more than half', () => {
-    const t = tableOf([
-      cell(0, [0, 0, 1, 1], 'Model'),
-      banded(1, [1, 0, 1, 0], 'DeepSeek', [600, 700]),
-      banded(2, [2, 0, 1, 0], 'MiniMax', [600, 700]),
-      cell(3, [3, 0, 1, 0], 'Gemini Pro', {
-        why: 'unwrapped',
-        room: { below: 0, next: 300, side: [52, 152], band: [600, 700] },
-      }),
-      banded(4, [4, 0, 1, 0], 'Claude', [600, 700]),
-    ])
-    const rows = rowsOf({ 0: 'Modell', 4: 'Claude' }, [1, 2])
-    expect(states(t, rows)).toEqual(['laid', 'kept', 'kept', 'unwrapped', 'kept'])
+    expect(states(t, rows)).toEqual(['laid', 'kept', 'kept', 'kept', 'kept', 'laid'])
   })
 })

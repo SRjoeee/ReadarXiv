@@ -149,3 +149,72 @@ describe('R2: a word the paper’s running text writes as a name is a name of th
     ])
   })
 })
+
+describe('R4: a text a names block keeps is a name of the paper, kept wherever its tables print it', () => {
+  // (2608.06701v1 p5: Table II's column holds Vanilla, SAGE and three of the paper's text macros, each the call alone (no unit);
+  // Table III's holds Vanilla and one such macro. The block is a body column's cells between the same two rules; its text cells
+  // every cell that prints text: a unit, a call of the paper's macro that sets text, a cell wholly in a code face; not a number,
+  // a formula or an empty cell. More than half of them names (R1, R2, or such a no-unit cell): its other units are kept, and so
+  // is the same text wherever the paper's tables print it)
+  const macros =
+    '\\newcommand{\\predef}{\\textit{Predefined Advice}}\n\\newcommand{\\periodic}{\\textit{Periodic Advisor}}\n' +
+    '\\newcommand{\\approach}{\\textsc{LivePlan}}\n\\newcommand{\\cmark}{\\ding{51}}\n\\newcommand{\\R}{\\mathbb{R}}\n'
+  const tableII = table(['Method & Rate', '\\midrule\nVanilla & 21.76', 'SAGE & 18.79', '\\predef & 25.00', '\\periodic & 28.79', '\\approach & 34.09'])
+  const tableIII = table(['Method & Rate', '\\midrule\nVanilla & 38.20', '\\approach & 49.40'])
+  it("Table II: four names of five text cells, Vanilla kept by its block; and in Table III, the same text kept, though its own block is one of two", () => {
+    expect(judged(macros + tableII + tableIII)).toEqual([
+      ['Method', null],
+      ['Rate', null],
+      ['Vanilla', 'namesBlock'],
+      ['SAGE', 'words'],
+      ['Method', null],
+      ['Rate', null],
+      ['Vanilla', 'namesBlock'],
+    ])
+  })
+  it('a block of exactly half names keeps nothing: Table III alone sends Vanilla', () => {
+    expect(judged(macros + tableIII)).toEqual([
+      ['Method', null],
+      ['Rate', null],
+      ['Vanilla', null],
+    ])
+  })
+  it('a cell wholly in a code face is a name; a number, a formula, an empty cell and a macro that sets no text are no text cell', () => {
+    expect(judged(table(['Error & Count', '\\midrule\n\\texttt{MCPError} & 1', '\\texttt{JSONDecodeError} & 2', 'none & 3']))).toEqual([
+      ['Error', null],
+      ['Count', null],
+      ['none', 'namesBlock'],
+    ])
+    expect(judged(macros + table(['Model & Score', '\\midrule\nGPT-4o & 1', '$x$ & 2', '1.5 & 3', ' & 4', '\\cmark & 5', '\\R & 6', 'baseline & 7']))).toEqual([
+      ['Model', null],
+      ['Score', null],
+      ['GPT-4o', 'words'],
+      ['baseline', null],
+    ])
+  })
+  it('a rule over the column ends its block: a \\cmidrule over it, and REVTeX’s \\colrule', () => {
+    expect(judged(table(['Model & Score', '\\midrule\nGPT-4o & 1', 'Claude-3 & 2', '\\cmidrule{1-1}\nAverage & 3']))).toEqual([
+      ['Model', null],
+      ['Score', null],
+      ['GPT-4o', 'words'],
+      ['Claude-3', 'words'],
+      ['Average', null],
+    ])
+    // (a \cmidrule over another column leaves this one's block whole)
+    expect(judged(table(['Model & Score', '\\midrule\nGPT-4o & 1', 'Claude-3 & 2', '\\cmidrule{2-2}\nAverage & 3'])).at(-1)).toEqual(['Average', 'namesBlock'])
+    expect(judged(table(['Dataset & Model', '\\colrule\nMNIST & CNN', 'CIFAR & ResNet']))).toEqual([
+      ['Dataset', null],
+      ['Model', null],
+      ['MNIST', 'words'],
+      ['CNN', 'words'],
+      ['CIFAR', 'words'],
+      ['ResNet', 'words'],
+    ])
+  })
+  it('a header cell is in no block (R3): names under a header word leave it sent', () => {
+    expect(judged(table(['Method & Rate', '\\midrule\nGPT-4o & 1', 'Claude-3 & 2'])).slice(0, 2)).toEqual([
+      ['Method', null],
+      ['Rate', null],
+    ])
+  })
+})
