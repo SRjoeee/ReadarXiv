@@ -606,12 +606,7 @@ function linesOf(
       // the lines it holds (a row's last mark in another face, cut from its word: 2608.06701v1 p1's "behavior."), else another
       // glyph inside it: the path holds its lines with it, and none of them is its text. One reading of the glyph, this one's)
       if (h.others && !h.others.every((g) => idx.some((i) => lines[i]!.gs.includes(g)))) continue
-      if (
-        idx.some(
-          (i) => taken.has(i) || !(reads[i]!.kind === 'plain' || reads[i]!.kind === 'mixed') || reads[i]!.marker.length,
-        )
-      )
-        continue
+      if (idx.some((i) => taken.has(i) || !(reads[i]!.kind === 'plain' || reads[i]!.kind === 'mixed'))) continue
       idx.sort((a, b) => lines[b]!.y - lines[a]!.y || lines[a]!.x0 - lines[b]!.x0)
       // (the runs it holds on one baseline are one line, however far apart their words stand: the path is the fact that holds
       // them together, no wider run gap (the coordinator's (c), 2026-11-11))
@@ -626,6 +621,18 @@ function linesOf(
         }
       }
       if (rows.length < 2 || rows.some((r) => !(r.read.kind === 'plain' || r.read.kind === 'mixed'))) continue
+      // (a row that opens an item: it begins with the marker of a line a list holds (`listed`, as outside a path), which is its
+      // text's label and never sent)
+      const listedMarker = new Set(idx.flatMap((i) => reads[i]!.marker))
+      const markerOf = (r: { read: Read }) => {
+        const out: number[] = []
+        for (const g of r.read.gs) {
+          if (!listedMarker.has(g)) break
+          out.push(g)
+        }
+        return out
+      }
+      const opens = rows.map((r) => markerOf(r))
       const L = rows.map((r) => r.l)
       const F = rows.map((r) => proseFacts(r, glyphs, boxes))
       const tol = PARA_ALIGN_TOL * Math.max(...L.map((l) => l.size))
@@ -641,15 +648,17 @@ function linesOf(
         (f, n) => !n || (F[n - 1]!.y - f.y > 0.5 * f.size && F[n - 1]!.y - f.y - F[n - 1]!.band < F[n - 1]!.band),
       )
       const legend = legendOf(h.shape, F, boxes)
-      // (one text of the rows `sub` of the hold, set as `align`, its room the path's inside; the lines they hold taken)
+      // (one text of the rows `sub` of the hold, set as `align`, its room the path's inside; the lines they hold taken; where its
+      // first row opens an item, its marker its label)
       const textOfRows = (sub: number[], align: 'l' | 'c' | 'r') => {
         const rs = sub.map((n) => rows[n]!)
+        const label = opens[sub[0]!]!
         const ft: FigureText = {
           ks: rs.flatMap((r) => r.l.ks),
           page: p,
           order: [],
           els: [],
-          label: [],
+          label,
           para: { justified: false, by: 'container', align },
           claimed: rs.flatMap((r) => r.read.gs.filter((g) => r.l.free.has(g))),
           copies: [],
@@ -660,7 +669,8 @@ function linesOf(
         }
         rs.forEach((r, n) => {
           if (n) ft.order.push({ t: 'br', end: endOf(glyphs, rs[n - 1]!.read.gs, r.read.gs, sourceOf, true) })
-          piecesInto(ft, r.read, false)
+          if (n === 0 && label.length) piecesInto(ft, { ...r.read, marker: label }, true)
+          else piecesInto(ft, r.read, false)
         })
         const items = itemsOf(ft.ks)
         if (items.length) judge(ft, items, glyphs)
@@ -679,7 +689,7 @@ function linesOf(
       }
       // (centred: the rows' centres one and their left edges not: rows of one length show no alignment, centred or flush)
       const centred = spread((l) => (l.x0 + l.x1) / 2) <= tol && spread((l) => l.x0) > tol
-      if (stacked && F.every((f) => sameFace(F[0]!, f)) && !legend && centred) {
+      if (stacked && F.every((f) => sameFace(F[0]!, f)) && !legend && centred && opens.every((m) => !m.length)) {
         textOfRows(
           rows.map((_, n) => n),
           'c',
@@ -694,7 +704,9 @@ function linesOf(
       // into, 99 of 2610.37668v1's 103 value overlays read forced too). The sentence goes on: the row above ends in TeX's or a
       // word's hyphen (lineEnd), or this row's first letter, after any punctuation it opens with, is lower case ("… to inspect
       // the"); a capital, a digit or a symbol begins a row of its own, a value under a value, a list's next statement, as today,
-      // and a script without case never joins. A box may so hold several paragraphs; a row alone stays its own text)
+      // and a script without case never joins. A box may so hold several paragraphs; a row alone stays its own text. A row that
+      // opens an item begins a text of its own, its marker its label, as a list's item does outside a path (2608.06701v1 p1's plan
+      // box, items 1 to 4 each wrapped over its rows); whether a row opens one or not, the wrap rule joins the rows under it)
       const side = spread((l) => l.x0) <= tol ? 'l' : spread((l) => l.x1) <= tol ? 'r' : null
       if (!side || legend) continue
       const segs = h.shape.segs as ArrayLike<number>
@@ -712,6 +724,7 @@ function linesOf(
         const a = F[k]!,
           b = F[k + 1]!,
           al = rows[k]!.l
+        if (opens[k + 1]!.length) return false
         if (!(a.y - b.y > 0.5 * b.size && a.y - b.y - a.band < a.band) || !sameFace(a, b) || ledApart(a, b))
           return false
         const y = al.y + 0.35 * al.size

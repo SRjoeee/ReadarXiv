@@ -4823,7 +4823,12 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
   wrap's (no blank line, one face, not each led by ink of its own, and forced: the next row's first word cannot stand on the row
   above within the measure the path's inside gives it there, its inset on the flush side mirrored) and the sentence goes on (the
   row above ends in a hyphen, or this row's first letter, after any punctuation it opens with, is lower case); a capital, a
-  digit or a symbol begins a row of its own, and a script without case never joins. No geometric fact tells a box hugging its
+  digit or a symbol begins a row of its own, and a script without case never joins. **Flush rows join so whether or not a row
+  opens an item** (lane fig-rows, 2026-11-14): "no line an item's" limits the centred rows alone; a row that opens one (its
+  first glyphs the marker of a line a list holds, `listed`, as outside a path) begins a text of its own, its marker its label and
+  never sent, and the rows under it join it by the wrap rule (2608.06701v1 p1's plan box: its items 1 and 4, ragged at their
+  natural spaces in a dashed frame, each one text of five and four rows, where every row had been sent alone). No geometric
+  fact tells a box hugging its
   rows from one text was wrapped into: 2608.06701v1 p2's bubbles are ragged at their natural spaces, every break forced, and so
   are 99 of 2610.37668v1's 103 value overlays; the sentence going on is the evidence, as a hyphen is for F3's paragraph. Census
   (91 papers): 40 breaks joined in 27 boxes on 8 papers; 2610.37668v1's six "Mip-NeRF360 / <scene> / <id>" boxes join wrongly,
