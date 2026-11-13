@@ -9197,7 +9197,14 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   without it lay a figure's texts alike. Measured before the build on lane fig-ink's lay of the 92 pairs with Google's rows: under
   one size a set, 657 figure texts no wider than their original stood under its size in 118 sets because a mate's width stepped
   the set (391 at a factor under 0.9, 126 under 0.8, 8 under 0.7); each at its own size, 169 sets hold two sizes or more, the
-  largest ratio inside one 1.606 (2602.23285v2-ja p8). A **column** is the runs of one figure, size and direction whose
+  largest ratio inside one 1.606 (2602.23285v2-ja p8). Built, read off the entry's own drawing of the same pairs and rows (each
+  page's lay): of the 6,868 texts S.figures draws, 1,191 more stand at the original's size (5,139 to 6,330): the 657 no wider
+  than their original, 82 a paragraph-path text of their set had capped (a later page's lay fitted such a set again without the
+  cap, so the first count read 35) and 452 of the 671 wider ones whose own room holds them; the other 219 step by their own width,
+  less than their set did, and the 319 their own width stepped are as they were, so that each of the 538 under the original's
+  size is there by its own width. 63 paragraph-path figure texts more stand at the original's size (563 to 626 of 816). 194 sets
+  hold two sizes or more counting both paths. No figure text changes state, and no other member moves: the reader gate's
+  invariants, its sentence cover and the units' dumps are as before on both stores. A **column** is the runs of one figure, size and direction whose
   starts, ends or middles agree within `ALIGN_TOL` 0.08 of their size, two units or more among them; its other runs, a
   number or a "…", count for its edge (2010.11929v2's "Head 1/2/3", one length, read their end alone, the frame being
   nearer after them than their markers before; the column's "…" shares their start alone). A unit in a column takes the
