@@ -1,13 +1,33 @@
-// prepareBack(instrument, originalPdf): the back half of the prepare (design §4.3), the one entry the box and the lab call:
-// arXiv's PDF read once (read.ts), B's ownership carried onto it (align, locate), arXiv's runs wrapped (wrap), and the bundle's
-// objects made (bundle), yielded as each is made: the units first, then each page's part, the add-on, the head last; then a
-// tally of what was done and how long each step took.
+// The prepare (DESIGN §16, "The prepare's two halves"). `prepare(take, host)` is the package's one entry, which the box and
+// the lab call alike, so that what the lab makes of a paper is what the box makes, through this door: a paper's source files
+// and arXiv's PDF (A) in, the bundle's objects out, the front half (front.ts prepareFront) then the back half, each object
+// handed to the host as it is made. What the host gives it is its own: the source unpacked, the compile, PDF.js, zlib and
+// pdf-lib, the TeX engines and trees it runs, where each object goes.
+// prepareBack(instrument, originalPdf), the back half: arXiv's PDF read once (read.ts), B's ownership carried onto it (align,
+// locate), arXiv's runs wrapped (wrap), and the bundle's objects made (bundle), yielded as each is made: the units first, then
+// each page's part, the add-on, the head last; then a tally of what was done and how long each step took.
 import type { Head } from '@readarxiv/format'
 import { align, type Mapping } from './align/align.ts'
 import { type BundleObject, bundle } from './bundle/bundle.ts'
 import type { Doc } from './doc.ts'
+import {
+  type FrontHalf,
+  FrontRefusal,
+  INSTRUMENT_OBJECTS,
+  type OriginalFacts,
+  originalFactsOf,
+  type PreparePdfJs,
+  type PrepareStage,
+  prepareFront,
+  type Refusal,
+  type StoredInstrument,
+  short,
+  treeOf,
+} from './front.ts'
+import { type Compiled, type CompileRequest, classesOf } from './front.types.ts'
 import type { Instrument } from './instrument.ts'
 import { type Located, type LocateOptions, locate } from './locate/locate.ts'
+import { isMemoryError } from './memory.types.ts'
 import { type PdfJs, type ReadPage, type Recovered, readPdf } from './read.ts'
 import { type AlignFacts, alignReader, type PdfLib } from './remove.types.ts'
 import { type AddOn, type WrapPageA, wrap, wrapPageOf } from './wrap/wrap.ts'
@@ -185,4 +205,186 @@ async function placedOf(
     recovered: read.recovered,
     times: { t1, t2, t3 },
   }
+}
+
+/** what a prepare is handed, once: the source's files, A and, where a compile of the same original made them, the instrument's
+ *  four objects (TeX does not run then) */
+export interface PrepareInputs {
+  files: Map<string, Uint8Array>
+  original: Uint8Array
+  stored: StoredInstrument | null
+}
+
+/** what the host gives a prepare: the paper, the TeX tree it runs and the ones it serves, the prepare's identity, the TeX
+ *  engines it runs, PDF.js with the options every document is opened with, zlib and pdf-lib; and where what is made goes */
+export interface PrepareHost extends Pick<PrepareDeps, 'PL' | 'deflate' | 'inflate' | 'paper' | 'made' | 'keep'> {
+  /** the TeX tree this host compiles on (its year), the ones a host serves, and the one a paper that names none is compiled on */
+  tree: { year: string; served: readonly string[]; fallback: string }
+  /** the TeX engines the host runs, as a paper names them (openPaper's meta.compiler) */
+  engines: readonly string[]
+  pdfjs: PreparePdfJs
+  /** PDF.js's document options, every document read with them */
+  documentOptions: Record<string, unknown>
+  /** the source's files, handed once before the first compile, where the host compiles them elsewhere */
+  handFiles?(files: ReadonlyMap<string, Uint8Array>): Promise<void>
+  compile(q: CompileRequest): Promise<Compiled>
+  stage(s: PrepareStage): void
+  /** a Units object of the source's units, before any compile of the marks */
+  units(bytes: Uint8Array): Promise<void>
+  /** one of the instrument's four objects, where TeX made them */
+  instrument(name: keyof StoredInstrument, bytes: Uint8Array): Promise<void>
+  /** a bundle object, as the back half makes it */
+  object(x: BundleObject): Promise<void>
+  /** a record of what was decided or measured (the tree, the bibliography, the stored instrument, the timings): read for the
+   *  log alone */
+  note(name: string, data: unknown): void
+  now(): number
+}
+
+/** a prepare's end: the instrument and the back half's tally where the bundle was made; else why not; else the tree the paper
+ *  is compiled on where it is not the host's (nothing compiled) */
+export type PrepareEnd =
+  | { ok: true; instrument: Instrument; tally: Tally }
+  | ({ ok: false } & Refusal)
+  | { wrongTree: string }
+
+/** what the front half hands the back half: the instrument and A, the only two things the back half reads */
+type Fronted = { instrument: Instrument; original: Uint8Array }
+
+/**
+ * The prepare: the inputs taken once (`take`), A read for what the front half asks of it, the tree decided (a paper of
+ * another tree is answered with it, before any compile), the front half, then the back half, every object handed to the host
+ * as it is made. A paper refused is its reason; nothing here throws past it but the host's own faults. `take` hands the
+ * inputs to the front half alone (frontOf): the source's files and what the front half makes beside the instrument (B among
+ * its four objects) are reachable from its frame, which has ended when the back half runs, so that the back half's peak holds
+ * A and the instrument alone (DESIGN §16, "What the back half holds"). Nulling a local of a running function would not do: a
+ * frame's registers keep what it read. `front` is the package's own (a test hands another to watch the frames)
+ */
+export async function prepare(
+  take: () => PrepareInputs | Refusal,
+  host: PrepareHost,
+  front: FrontHalf = prepareFront,
+): Promise<PrepareEnd> {
+  const t0 = host.now()
+  const ms: Record<string, number> = {}
+  const lap = (k: string) => {
+    ms[k] = host.now() - t0
+  }
+  try {
+    const fronted = await frontOf(take, host, front, lap)
+    if (!('instrument' in fronted)) return fronted
+    const tally = await backOf(fronted.instrument, fronted.original, host, lap)
+    host.note('timings', {
+      ms,
+      back: Object.fromEntries(Object.entries(tally.ms).map(([k, v]) => [k, Math.round(v)])),
+      pages: tally.pages,
+      located: tally.located,
+      wrap: tally.wrap,
+    })
+    return { ok: true, instrument: fronted.instrument, tally }
+  } catch (e) {
+    if (e instanceof FrontRefusal) return { ok: false, why: e.why, detail: short(e) }
+    if (isMemoryError(e)) return { ok: false, why: 'too-large', detail: `an allocation failed: ${short(e)}` }
+    throw e
+  }
+}
+
+/** the inputs taken, A read, the tree decided, the front half run and the instrument's objects handed out: the paper's end
+ *  where it ends here, else the instrument and A */
+async function frontOf(
+  take: () => PrepareInputs | Refusal,
+  host: PrepareHost,
+  front: FrontHalf,
+  lap: (k: string) => void,
+): Promise<Exclude<PrepareEnd, { ok: true }> | Fronted> {
+  const input = take()
+  if (!('files' in input)) return { ok: false, why: input.why, detail: input.detail }
+  const files = input.files
+  lap('unpack')
+  let facts: OriginalFacts
+  try {
+    facts = await originalFactsOf(input.original, host)
+  } catch (e) {
+    if (isMemoryError(e)) throw e
+    return { ok: false, why: 'corrupt', detail: `arXiv's PDF cannot be read: ${short(e)}` }
+  }
+  lap('original')
+  // ---- the tree, once: the paper's own declaration, else arXiv's banner, else the default
+  const tree = treeOf({ files, banner: facts.banner, served: host.tree.served, fallback: host.tree.fallback })
+  host.note('tree', tree)
+  if (tree.tree !== host.tree.year) return { wrongTree: tree.tree }
+
+  // ---- the front half: the units first, the instrument when TeX ran (the files handed to the host at the first compile)
+  let handed = false
+  const compile = async (q: CompileRequest): Promise<Compiled> => {
+    if (!handed) {
+      handed = true
+      await host.handFiles?.(files)
+      lap('tree')
+    }
+    return host.compile(q)
+  }
+  let sentUnits = false
+  const r = await front({
+    files,
+    tree: host.tree.year,
+    original: facts,
+    compile,
+    stored: input.stored,
+    units: async (objects) => {
+      for (const b of objects) await host.units(b)
+      sentUnits = true
+      lap('units')
+    },
+    stage: (s) => host.stage(s),
+    note: (n, d) => host.note(n, d),
+    engines: host.engines,
+    pdfjs: host.pdfjs,
+    documentOptions: host.documentOptions,
+  })
+  if (!r.ok) return r
+  if (!sentUnits) throw new Error('the front half sent no units')
+  lap('front')
+  // (the instrument's four objects where TeX ran; not where the stored ones were taken)
+  if (r.made && !input.stored) for (const name of INSTRUMENT_OBJECTS) await host.instrument(name, r.made[name])
+  return { instrument: r.instrument, original: input.original }
+}
+
+/** the back half as it is, every object handed out as it is made; given the front half's own reading of an ink unit's pieces
+ *  (instrument.mjs classesOf: each element's class) */
+async function backOf(
+  ins: Instrument,
+  original: Uint8Array,
+  host: PrepareHost,
+  lap: (k: string) => void,
+): Promise<Tally> {
+  host.stage('laying-out')
+  let first = true
+  let tally: Tally | null = null
+  for await (const x of prepareBack(ins, original, {
+    pdfjs: host.pdfjs,
+    pdfOptions: host.documentOptions,
+    PL: host.PL,
+    deflate: host.deflate,
+    inflate: host.inflate,
+    paper: host.paper,
+    made: host.made,
+    now: () => host.now(),
+    classesOf,
+    ...(host.keep ? { keep: true } : {}),
+  })) {
+    if (x.kind === 'tally') {
+      tally = x
+      continue
+    }
+    if (first) {
+      first = false
+      lap('laid')
+      host.stage('bundle')
+    }
+    await host.object(x)
+  }
+  lap('bundle')
+  if (!tally) throw new Error('the back half ended with no tally')
+  return tally
 }

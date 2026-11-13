@@ -1,7 +1,11 @@
 // The one transition facade of the front half moved into this package (JavaScript as it was): the names the website's
 // rebuilt server imports of it, each value re-exported with the type its hand declaration file states beside its old path
 // (src/pdf-reader/engine/…/*.d.mts, read when it moved), and the types those name, copied: the package holds no declaration
-// file and imports none outside it. Exit: the typing of the moved modules replaces this file.
+// file and imports none outside it. But where front.ts reads one more closely than its declaration says: contentOf's content
+// is format's pieces (a unit's id is made of them), its kindOf given a piece and its idOfNested a nested piece's unit;
+// classesOf takes the pieces locate hands it (an index signature of the declaration's refused them). Exit: the typing of
+// the moved modules replaces this file.
+import type { Piece } from '@readarxiv/format'
 import type { Instrument, PieceClass } from './instrument.ts'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
 import * as instrument_js from './instrument/instrument.mjs'
@@ -241,15 +245,15 @@ export const float32Outlines = pdfLite_js.float32Outlines as (
   worker: { FeatureTest?: unknown },
 ) => void
 export const contentOf = instrument_js.contentOf as (
-  pieces: unknown[],
+  pieces: readonly unknown[],
   o?: {
-    kindOf?: (p: unknown) => string
-    idOfNested?: (u: unknown) => string | null
+    kindOf?: (p: { t: string; src?: string }) => string
+    idOfNested?: (u: SourceUnit) => string | null
     nameOf?: (p: unknown) => { name?: string; lang?: string } | undefined
   },
-) => unknown[]
+) => Piece[]
 export const classesOf = instrument_js.classesOf as (
-  pieces: readonly { t: string; src?: string; [more: string]: unknown }[],
+  pieces: readonly { t: string; src?: string }[],
   colours?: ReadonlyMap<number, number> | null,
   texts?: ReadonlyMap<string, string> | null,
 ) => [string, PieceClass][]
