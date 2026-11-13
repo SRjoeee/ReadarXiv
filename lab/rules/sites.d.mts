@@ -30,10 +30,10 @@ export interface Rule {
   unseen?: string[]
   wholeReads?: number
 }
-export interface Bound { rule: string; at?: 'left' | 'right' | number; shape: string; value?: number }
+export interface Bound { rule: string; at?: 'left' | 'right' | number; shape: string; value?: number; key?: string }
 export interface Site {
   id: number
-  kind: 'cmp' | 'eq' | 'mm' | 'val' | 'list' | 'set' | 're'
+  kind: 'cmp' | 'eq' | 'mm' | 'val' | 'list' | 'set' | 're' | 'key'
   file: string
   line: number | null
   fn: string

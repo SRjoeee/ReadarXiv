@@ -307,6 +307,32 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS, keysOnl
     }
     return { kind: 'val' }
   }
+  // (a table read by a key known at run time: one `key` site for every entry of the table, recording each key read (the
+  // entry it read is that entry's hit), or each key tested (`Object.hasOwn`: found, the entry's hit). A member written,
+  // deleted or called is no read the instrument may wrap)
+  const keySite = (path, rs, node, ps) => {
+    const site = { kind: 'key', line: lineOf(node), fn: fnPathOf(ps), rules: [], bounds: [] }
+    add(path, site)
+    for (const r of rs) bind(site, r, { shape: 'key', key: r.name.slice(r.name.indexOf('.') + 1) })
+    return site
+  }
+  const keyRead = (path, f, rs, member, ps) => {
+    const up = ps.at(-2)
+    if ((up?.type === 'AssignmentExpression' && up.left === member) || up?.type === 'UpdateExpression' || (up?.type === 'UnaryExpression' && up.operator === 'delete') || ((up?.type === 'CallExpression' || up?.type === 'OptionalCallExpression' || up?.type === 'NewExpression') && up.callee === member)) {
+      for (const r of rs) r.unwrapped = (r.unwrapped ?? 0) + 1
+      return false
+    }
+    const site = keySite(path, rs, member, ps.slice(0, -1))
+    edits.get(path).push({ at: member.start, end: member.end, pre: `__axtRules.tk(${site.id}, `, post: '' }, { replace: [member.object.end, member.property.start], text: ', ' }, { replace: [member.property.end, member.end], text: ')' })
+    return false
+  }
+  const keyTest = (path, f, rs, call, ps) => {
+    const open = tokenAt(f, call.callee.end, call.arguments[0].start, ['('])
+    if (!open) return false
+    const site = keySite(path, rs, call, ps.slice(0, -1))
+    edits.get(path).push({ replace: [call.callee.start, open.end], text: `__axtRules.th(${site.id}, ` })
+    return false
+  }
   for (const [path, f] of files) {
     const { named, spaces } = importsOf(path, f)
     // (the constants this file may name: its own, and those its imports bind, by local name)
@@ -348,10 +374,14 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS, keysOnl
         seen.add(n)
         if (isShadowed(n.name, ps)) return
         rs = local.get(n.name)
-        // (a table's entry: its member read; the table read whole is a read of every entry)
+        // (a table's entry: its member read; read by a key known at run time (`T[x]`, `Object.hasOwn(T, x)`), a `key`
+        // site of every entry, which records the key; the table read whole is a read of every entry)
         if (rs.length > 1 || rs[0].name.includes('.')) {
-          if ((par?.type === 'MemberExpression' || par?.type === 'OptionalMemberExpression') && par.object === n) {
-            const prop = par.computed ? (par.property.type === 'StringLiteral' ? par.property.value : null) : par.property.name
+          const member = (par?.type === 'MemberExpression' || par?.type === 'OptionalMemberExpression') && par.object === n
+          if (member && par.computed && par.property.type !== 'StringLiteral') return keyRead(path, f, rs, par, ps)
+          if (par?.type === 'CallExpression' && !par.optional && par.arguments[0] === n && par.arguments.length === 2 && par.callee?.type === 'MemberExpression' && !par.callee.computed && par.callee.object?.name === 'Object' && par.callee.property?.name === 'hasOwn') return keyTest(path, f, rs, par, ps)
+          if (member) {
+            const prop = par.computed ? par.property.value : par.property.name
             entry = rs.find(r => r.name.endsWith(`.${prop}`))
             if (!entry) return
             ref = par

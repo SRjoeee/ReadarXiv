@@ -48,6 +48,7 @@ export interface Row {
   neverTested?: boolean
   handedWhole?: number
   foldedToValue?: boolean
+  keyReads?: Record<string, number>
   module?: { loaded: boolean | null; importers: string[] | null }
 }
 export interface Ledger { format: string; about: string; recorded: { commit: string | null; sites: string; inputs: Recording['inputs'] }; holdoutAdds: string[]; rules: Record<string, Row> }
@@ -65,6 +66,7 @@ export interface TrackedRow {
   cites?: { flag: string; papers?: string[] }
   runs?: Record<string, [number, number, number]>
   reads?: Record<string, number>
+  keyReads?: Record<string, number>
   margin?: { units: 'rule' | 'slack'; false: Case | null; true: Case | null }
   hits?: number[]
   judged?: number

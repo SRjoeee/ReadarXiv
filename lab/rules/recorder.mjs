@@ -381,6 +381,20 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
     ls: (id, arr) => (Array.isArray(arr) ? Object.setPrototypeOf(arr, protoFor(`l${id}`, () => listProto(id))) : arr),
     st: (id, set) => (set instanceof Set ? Object.setPrototypeOf(set, protoFor(`s${id}`, () => setProto([id]))) : set),
     re: (id, rx) => (rx instanceof RegExp ? Object.setPrototypeOf(rx, protoFor(`r${id}`, () => reProto(id))) : rx),
+    /** a table read by a key known at run time (`T[x]`): the entry read, the key's hit */
+    tk: (id, table, key) => {
+      const found = table != null && Object.hasOwn(table, key)
+      outcome(id, found)
+      if (found) hit(id, key)
+      return table[key]
+    },
+    /** a table's keys tested (`Object.hasOwn(T, x)`): found, the key's hit */
+    th: (id, table, key) => {
+      const found = Object.hasOwn(table, key)
+      outcome(id, found)
+      if (found) hit(id, key)
+      return found
+    },
     /** before a Set is made of other things (sites.mjs's `new Set(x)` edit): each list among them is iterated once by the
      *  making, which is no read of it */
     hush: (...sources) => {

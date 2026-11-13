@@ -13,7 +13,7 @@ import { dirname, join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { factsOf } from '../../lab/release-check/census-lib.mjs'
 import { areaOf } from '../../lab/rules/areas.mjs'
-import { type Ledger, ledgerOf, marginOf, resolveTracked, TRACKED_FORMAT, type Tracked } from '../../lab/rules/ledger.mjs'
+import { type Ledger, ledgerOf, marginOf, recordedOf, resolveTracked, TRACKED_FORMAT, type Tracked, trackedOf } from '../../lab/rules/ledger.mjs'
 import { mergeRecords } from '../../lab/rules/merge.mjs'
 import { entriesOf } from '../../lab/rules/pattern.mjs'
 import { agreementOf, countsOf, remapOf, siteMapOfCheckout } from '../../lab/rules/record.mjs'
@@ -405,6 +405,9 @@ export const FORMS = {
   const TABLE = `// the operands each colour operator takes
 const ARITY = { rg: 3, k: 4, rgb: 3, cmyk: 4 }
 export const fits = (op, nums) => nums.length === ARITY[op]
+// the kerns, in em
+const KERNS = { '\\\\enspace': 0.5, '\\\\thinspace': 0.25, '\\\\,': 0.2 }
+export const kern = src => (Object.hasOwn(KERNS, src) ? KERNS[src] : null)
 `
   const CITED = `/** a placeholder whose macro may look at what follows it: \\\\protect\\\\eqref, as 2608.23586 writes it */
 const LOOKS_AHEAD = p => {
@@ -438,13 +441,13 @@ const MANY = /(?:one|two|three)+/g
 export const many = s => (s.match(MANY) ?? []).join(',')
 `
   const RUN = `import { FORMS } from './packages/engine/src/forms.mjs'
-import { fits } from './packages/engine/src/table.mjs'
+import { fits, kern } from './packages/engine/src/table.mjs'
 import { looks } from './packages/engine/src/cited.mjs'
 import { kindAt, words, named, allIn } from './packages/engine/src/past.mjs'
 import { known, part, plain, many } from './packages/engine/src/entries.mjs'
 const out = {}
 for (const [k, f] of Object.entries(FORMS)) out[k] = [f('nothing here'), f('an alpha and a gamma')]
-out.fits = [fits('rg', [1, 2, 3]), fits('cmyk', [1, 2])]
+out.fits = [fits('rg', [1, 2, 3]), fits('cmyk', [1, 2]), kern('\\\\enspace'), kern('\\\\quad')]
 out.looks = [looks('a \\\\protect'), looks('plain')]
 out.past = [kindAt(1), words('one two'), named('beta'), named('zeta'), allIn('red green'), allIn('red green blue')]
 out.entries = [known('WinAnsiEncoding'), known('StandardEncoding'), known('Other'), part('section 2'), plain('quux'), plain('foo'), many('onetwo x')]
@@ -543,6 +546,14 @@ console.log(JSON.stringify(out))
   it('defect 3: a table read by a computed key records the entry it read; an entry no run read is never hit', () => {
     const verdict = (entry: string) => ledger.rules[keyOf(`::(top)::ARITY.${entry}`)]?.verdict
     expect(['rg', 'cmyk', 'k', 'rgb'].map(verdict)).toEqual(['decides', 'decides', 'remove', 'remove'])
+  })
+
+  it("reads a table's keys tested by Object.hasOwn as the entries' hits, per input, in the tracked form as well", () => {
+    // (kern('\enspace') tests the key and reads it: two reads of its key; kern('\quad') finds no entry)
+    expect(ledger.rules[keyOf('table::(top)::KERNS.\\enspace')]).toMatchObject({ verdict: 'decides', keyReads: { corpus: 2 } })
+    expect(ledger.rules[keyOf('table::(top)::KERNS.\\thinspace')]?.verdict).toBe('remove')
+    expect(recordedOf(must(ledger.rules[keyOf('table::(top)::KERNS.\\enspace')], 'the row'))).toBe('corpus: read by its key 2')
+    expect(trackedOf(ledger, { digest: 'f00d' }).rules[keyOf('table::(top)::KERNS.\\enspace')]).toMatchObject({ verdict: 'decides', keyReads: { corpus: 2 } })
   })
 
   // defect 4: a pattern's citation was read off the statement it stands in (here a `return`, which has no comment), not off

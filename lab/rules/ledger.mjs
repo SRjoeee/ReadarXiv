@@ -176,7 +176,9 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
   const rows = {}
   for (const [key, rule] of Object.entries(map.rules)) {
     const sites = rule.sites.map(siteOf)
-    const deciding = sites.filter(s => s.kind !== 'val')
+    // (a `key` site, a table read by a key known at run time, is every entry's: judged by the entry's own key's hits)
+    const keySites = sites.filter(s => s.kind === 'key')
+    const deciding = sites.filter(s => s.kind !== 'val' && s.kind !== 'key')
     const vals = sites.filter(s => s.kind === 'val')
     const reads = sum(vals.map(s => ({ n: sum(Object.values(s.outcomes), 'n') })), 'n')
     const cite = citationsOf(rule.comment)
@@ -250,16 +252,35 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
       // (a table entry handed whole is read where it is handed; one read nowhere is never read)
       row.verdict = rule.wholeReads ? (exempt && cite.flag !== 'paper' ? 'value' : 'magnitude') : exempt ? cited() : 'remove'
       if (rule.wholeReads) row.handedWhole = rule.wholeReads
-    } else if (!deciding.length) {
+    } else if (!deciding.length && !keySites.length) {
       row.reads = reads
       row.verdict = !reads ? (exempt ? cited() : 'remove') : cite.flag === 'definition' || cite.flag === 'measurement' ? 'value' : 'magnitude'
     } else {
-      if (deciding.some(s => s.state === 'decides')) row.verdict = 'decides'
-      else if (deciding.some(s => s.state === 'test')) row.verdict = 'test'
+      // (a table's entry read by a key known at run time: the reads of its own key are its hits, judged as a list's entry's
+      // are: read on the corpus, it decides; by a test of our own alone, the test is its reason)
+      const own = keySites.map(s => map.sites[s.id].bounds.find(b => b.rule === key)?.key)
+      const keyHit = which =>
+        keySites.some((s, k) =>
+          Object.entries(recording.sites)
+            .filter(([input]) => (which === OWN_INPUT) === (input === OWN_INPUT))
+            .some(([, per]) => per[s.id]?.hits?.[own[k]]),
+        )
+      const handed = reads || rule.wholeReads
+      if (deciding.some(s => s.state === 'decides') || keyHit('corpus')) row.verdict = 'decides'
+      else if (deciding.some(s => s.state === 'test') || keyHit(OWN_INPUT)) row.verdict = 'test'
       else if (exempt) row.verdict = cited()
-      else row.verdict = reads ? (cite.flag === 'definition' || cite.flag === 'measurement' ? 'value' : 'magnitude') : 'remove'
+      else row.verdict = handed ? (cite.flag === 'definition' || cite.flag === 'measurement' ? 'value' : 'magnitude') : 'remove'
       if (!exempt) row.folds = deciding.filter(foldable).map(s => s.id)
       if (reads) row.reads = reads
+      if (rule.wholeReads) row.handedWhole = rule.wholeReads
+      if (keySites.length) {
+        // (its own key's reads, per input)
+        row.keyReads = {}
+        for (const [input, per] of Object.entries(recording.sites)) {
+          const n = keySites.reduce((x, s, k) => x + (per[s.id]?.hits?.[own[k]] ?? 0), 0)
+          if (n) row.keyReads[input] = n
+        }
+      }
     }
     // (a cited paper silent in the holdout is a removal candidate: its sites fold like any other's)
     if (row.verdict === 'cited paper silent') row.folds = deciding.filter(foldable).map(s => s.id)
@@ -351,6 +372,8 @@ export function trackedOf(full, { digest, map = null }) {
           if (o.n) reads[k] = (reads[k] ?? 0) + o.n
           continue
         }
+        // (a key site is the table's: the entry's own key's reads are `keyReads`)
+        if (s.kind === 'key') continue
         const x = (runs[k] ??= [0, 0, 0])
         x[0] += o.n
         x[1] += o.t
@@ -379,6 +402,7 @@ export function trackedOf(full, { digest, map = null }) {
       ...(r.citation.flag ? { cites: { flag: r.citation.flag, ...(r.citation.papers.length ? { papers: r.citation.papers } : {}) } } : {}),
       ...(Object.keys(runs).length ? { runs } : {}),
       ...(Object.keys(reads).length ? { reads } : {}),
+      ...(r.keyReads && Object.keys(r.keyReads).length ? { keyReads: r.keyReads } : {}),
       ...(m ? { margin: { units: m.units, false: caseOf(m.false), true: caseOf(m.true) } } : {}),
       ...(r.removeEntries ? { hits: (r.judged ?? r.entries).map(e => r.hits?.[e] ?? 0), ...(r.judged ? { judged: r.judged.length } : {}) } : {}),
       ...(Object.keys(tests).length ? { tests } : {}),
@@ -433,16 +457,19 @@ export function recordedOf(row) {
   const per = {}
   for (const s of row.sites)
     for (const [k, o] of Object.entries(s.outcomes)) {
-      const p = (per[k] ??= { n: 0, t: 0, f: 0, reads: 0 })
+      const p = (per[k] ??= { n: 0, t: 0, f: 0, reads: 0, keys: 0 })
       if (s.kind === 'val') p.reads += o.n
-      else {
+      else if (s.kind !== 'key') {
         p.n += o.n
         p.t += o.t
         p.f += o.f
       }
     }
+  // (a table's entry read by a key known at run time: its own key's reads)
+  for (const [k, n] of Object.entries(row.keyReads ?? {})) (per[k] ??= { n: 0, t: 0, f: 0, reads: 0, keys: 0 }).keys += n
   const runs = Object.entries(per)
-    .map(([k, o]) => `${k}: ${[o.n ? `${o.n} run${o.n === 1 ? '' : 's'}, ${o.t} true, ${o.f} false` : '', o.reads ? `read ${o.reads}` : ''].filter(Boolean).join(', ')}`)
+    .filter(([, o]) => o.n || o.reads || o.keys)
+    .map(([k, o]) => `${k}: ${[o.n ? `${o.n} run${o.n === 1 ? '' : 's'}, ${o.t} true, ${o.f} false` : '', o.reads ? `read ${o.reads}` : '', o.keys ? `read by its key ${o.keys}` : ''].filter(Boolean).join(', ')}`)
     .join('; ')
   return runs || 'never ran on any input'
 }

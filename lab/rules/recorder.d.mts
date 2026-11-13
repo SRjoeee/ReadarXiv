@@ -19,6 +19,8 @@ export interface Recorder {
   ls<T>(id: number, arr: T): T
   st<T>(id: number, set: T): T
   re<T>(id: number, rx: T): T
+  tk(id: number, table: unknown, key: unknown): unknown
+  th(id: number, table: object, key: PropertyKey): boolean
   hush(...sources: unknown[]): void
   ns<T>(set: T, ...sources: unknown[]): T
   loaded(path: string): void
