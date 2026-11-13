@@ -1,7 +1,6 @@
-// The LLM prompt (DESIGN §8.2). What a request's prompts are made of besides the request is hashed at load
-// (PROMPT_DIGEST), and the hash enters the LLM translator's identity (llm.ts), so its store keys and its rows: a change to
-// the protocol block, a built-in prompt's wording, a target's English name or the way they are put together is another
-// identity by itself. No number is raised by hand.
+// The LLM prompt (DESIGN §8.2). Its identity enters the LLM translator's (llm.ts), so its store keys and its rows, and is
+// derived, never raised by hand (PROMPT_DIGEST, below): the data a prompt is made of hashed at load, and buildPrompts' rules
+// by a behaviour digest held by a test.
 //
 // Two layers: the prompt library (prompt-library.ts: swappable, customisable) answers “how to
 // translate”; the protocol block here answers “how to send and receive” — JSON segments + placeholder rules, appended
@@ -12,8 +11,8 @@ import {
   BUILT_IN_PROMPTS, DEFAULT_PROMPTS_CONFIG, getTokenCellText, renderTemplate, resolvePromptReplacementValue, selectPrompt,
   type PromptsConfig, type PromptTemplate, type PromptToken,
 } from './prompt-library'
-import { DEFAULT_LANG_CODE, englishName, LANG_CODES } from '@/config/languages'
-import type { TranslateContext, TranslateRequest } from './types'
+import { LANG_CODE_TO_EN_NAME } from '@/config/languages'
+import type { TranslateRequest } from './types'
 
 /** The send / receive protocol: independent of the prompt library */
 export const PROTOCOL_BLOCK = [
@@ -36,20 +35,36 @@ export interface BuiltPrompts {
   prompt: string
 }
 
+/** What a prompt is made of besides the request and the reader's own prompts: data, hashed at load (PROMPT_TEXT_DIGEST) */
+export interface PromptData {
+  protocol: string
+  builtIns: Readonly<Record<string, PromptTemplate>>
+  /** each target's name in the prompt, by its code (the language table's English names, config/languages.ts) */
+  names: Readonly<Record<string, string>>
+}
+export const PROMPT_DATA: PromptData = { protocol: PROTOCOL_BLOCK, builtIns: BUILT_IN_PROMPTS, names: LANG_CODE_TO_EN_NAME }
+
 /** Choose the prompt by configuration, fill the template variables, append the protocol block */
 export function buildPrompts(request: TranslateRequest, prompts: PromptsConfig = DEFAULT_PROMPTS_CONFIG): BuiltPrompts {
-  const template = selectPrompt(prompts)
+  return buildPromptsWith(PROMPT_DATA, request, prompts)
+}
+
+/** buildPrompts' rules over the data given: the product's (buildPrompts), or the case table's (BUILD_PROMPTS_DIGEST) */
+export function buildPromptsWith(data: PromptData, request: TranslateRequest, prompts: PromptsConfig = DEFAULT_PROMPTS_CONFIG): BuiltPrompts {
+  const template = selectPrompt(prompts, data.builtIns)
   const context = request.context
+  // The English language name rather than the code (Read Frog's way): "zh-CN native translator" is worse than "Simplified
+  // Chinese"; a code the table does not hold (a tag no code of the table maps to, providers/translators.ts codeOfLang) as it is
+  const name = Object.hasOwn(data.names, request.target) ? data.names[request.target] : undefined
   const values: Record<PromptToken, string> = {
-    // The English language name rather than the code (Read Frog's way): "zh-CN native translator" is worse than "Simplified Chinese"
-    targetLanguage: englishName(request.target),
+    targetLanguage: name ?? request.target,
     input: JSON.stringify(request.segments),
     paperTitle: resolvePromptReplacementValue(context?.paperTitle, NOT_AVAILABLE),
     abstract: resolvePromptReplacementValue(context?.abstract, NOT_AVAILABLE),
     sectionTitle: resolvePromptReplacementValue(context?.sectionTitle, NOT_AVAILABLE),
     glossary: formatGlossary(context?.glossary),
   }
-  const system = `${renderTemplate(template.systemPrompt, values)}\n\n${PROTOCOL_BLOCK}`
+  const system = `${renderTemplate(template.systemPrompt, values)}\n\n${data.protocol}`
   let prompt = renderTemplate(template.prompt, values)
   // A custom prompt missing {{input}} still has to send the source
   if (!template.prompt.includes(getTokenCellText('input'))) prompt = `${prompt}\n\n${values.input}`
@@ -63,46 +78,30 @@ export function buildPrompts(request: TranslateRequest, prompts: PromptsConfig =
   return { system, prompt }
 }
 
-/** The prompts the digest reads buildPrompts' behaviour by: each built-in prompt, a prompt of the reader's lacking every
- *  variable buildPrompts adds for it, one writing every variable, and an id naming no prompt (the default stands in); each
- *  with the paper's context and its glossary, and with none */
-const PROBE_CONTEXT: TranslateContext = { paperTitle: 'A title', abstract: 'An abstract.', sectionTitle: 'A section', glossary: [{ term: 'graph', translation: 'Graph' }] }
-const own = (systemPrompt: string, prompt: string): PromptsConfig => ({ promptId: 'own', patterns: [{ id: 'own', name: 'own', systemPrompt, prompt }] })
-const PROBES: readonly PromptsConfig[] = [
-  ...Object.keys(BUILT_IN_PROMPTS).map(promptId => ({ ...DEFAULT_PROMPTS_CONFIG, promptId })),
-  own('Be terse.', 'Translate.'),
-  own('Into {{targetLanguage}}.', '{{input}} {{glossary}} {{paperTitle}} {{abstract}} {{sectionTitle}}'),
-  { ...DEFAULT_PROMPTS_CONFIG, promptId: 'no-such-prompt' },
-]
+// ---------------------------------------------------------------- the prompt's identity: its data's bytes, its rules' behaviour
 
-/** What the digest is taken over, each part this module's own unless given (a test gives one changed) */
-export interface PromptParts {
-  protocol?: string
-  builtIns?: Readonly<Record<string, PromptTemplate>>
-  nameOf?: (code: string) => string
-  build?: typeof buildPrompts
+/** (a) The data's digest, of its bytes, taken at load: the protocol block, each built-in prompt's two texts by its id (its
+ *  display name is never sent), every target's name as the prompt writes it (the language table's English names), each in
+ *  the order of its keys */
+export function promptTextDigestOf(data: PromptData = PROMPT_DATA): string {
+  const byKey = <T>(o: Readonly<Record<string, T>>) => Object.entries(o).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  const builtIns = byKey(data.builtIns).map(([id, p]) => [id, p.systemPrompt, p.prompt])
+  return sha256Hex(JSON.stringify([data.protocol, builtIns, byKey(data.names)]))
 }
-/** the SHA-256 of the protocol block, the built-in prompts, every target's English name and buildPrompts' prompts over
- *  PROBES for one target (a target enters a prompt as its English name alone) */
-export function promptDigestOf(o: PromptParts = {}): string {
-  const build = o.build ?? buildPrompts
-  const nameOf = o.nameOf ?? englishName
-  const request = (context?: TranslateContext): TranslateRequest => ({
-    segments: [{ id: '0', text: 'Let <x id="1"/> be a <t id="2">graph</t>.' }],
-    source: 'en',
-    target: DEFAULT_LANG_CODE,
-    ...(context ? { context } : {}),
-  })
-  const built = PROBES.flatMap(p => [build(request(PROBE_CONTEXT), p), build(request(), p)])
-  const names = LANG_CODES.map(code => [code, nameOf(code)])
-  return sha256Hex(JSON.stringify([o.protocol ?? PROTOCOL_BLOCK, o.builtIns ?? BUILT_IN_PROMPTS, names, built]))
-}
+export const PROMPT_TEXT_DIGEST: string = promptTextDigestOf()
+
+/** (b) buildPrompts' behaviour digest: the SHA-256 of buildPromptsWith's outputs over the case table of
+ *  tests/providers/prompt-cases.ts (data of its own, so that it reads the rules alone), each rule with a case it alone
+ *  decides; held by tests/providers/prompt.test.ts and written by `pnpm digests --write` */
+export const BUILD_PROMPTS_DIGEST = 'ed38ae8f1b6032175b72e8cba155870d505fa1de9b8f0f200fcb8e767b3a21e1'
+
+/** the prompt's identity from its two digests */
+export const promptDigestOf = (text: string, build: string): string => sha256Hex(JSON.stringify([text, build]))
 
 /**
- * The prompt's identity (CLAUDE.md hard rule 4, DESIGN §9): everything a request's prompts are made of besides the request
- * itself and a prompt of the reader's own (which the translator's identity holds whole, prompt-library.ts promptKey), hashed
- * once at load. It stands in the LLM translator's identity where a version raised by hand stood (`PROMPT_VERSION`, 5 last):
- * a change to what the model is sent moves it, and the answers and rows stored under the identity before are not reached
- * again, as after a raise.
+ * The prompt's identity (CLAUDE.md hard rule 4, DESIGN §8.2, §9): the data's digest and the rules' together. It stands in
+ * the LLM translator's identity where a version raised by hand stood (`PROMPT_VERSION`, 5 last): a change of the data moves
+ * it at load, a change of a rule fails BUILD_PROMPTS_DIGEST's test until its literal is written, whose diff announces it;
+ * either way the answers and rows stored under the identity before are not reached again, as after a raise.
  */
-export const PROMPT_DIGEST: string = promptDigestOf()
+export const PROMPT_DIGEST: string = promptDigestOf(PROMPT_TEXT_DIGEST, BUILD_PROMPTS_DIGEST)

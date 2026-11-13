@@ -121,10 +121,15 @@ export function promptExists(config: PromptsConfig, id: string): boolean {
 
 /**
  * The prompt in use: a built-in by its id first (one's own with a built-in's id does not replace it), else the
- * reader's own with that id, else the default
+ * reader's own with that id, else the default. `builtIns` the product's own unless given (prompt.ts's case table gives
+ * its own, so that the rule is read apart from the built-ins' wording)
  */
-export function selectPrompt(config: PromptsConfig = DEFAULT_PROMPTS_CONFIG): PromptTemplate {
-  return builtIn(config.promptId) ?? config.patterns.find(p => p.id === config.promptId) ?? BUILT_IN_PROMPTS[DEFAULT_PROMPT_ID]!
+export function selectPrompt(
+  config: PromptsConfig = DEFAULT_PROMPTS_CONFIG,
+  builtIns: Readonly<Record<string, PromptTemplate>> = BUILT_IN_PROMPTS,
+): PromptTemplate {
+  const builtInOf = (id: string) => (Object.hasOwn(builtIns, id) ? builtIns[id] : undefined)
+  return builtInOf(config.promptId) ?? config.patterns.find(p => p.id === config.promptId) ?? builtIns[DEFAULT_PROMPT_ID]!
 }
 
 const VARIABLE = new RegExp(`\\{\\{(${PROMPT_TOKENS.join('|')})\\}\\}`, 'g')
