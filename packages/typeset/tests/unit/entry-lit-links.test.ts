@@ -1160,7 +1160,8 @@ describe('S.figures over the part: a figure text drawn in its translation where 
         expect(box[1]).toBeCloseTo(399, 6)
         expect(box[3]).toBeCloseTo(404, 6)
       }
-    }    // (a container's edge the part states under the baseline is no container round the text: 2501.14787v1 p41's "minimum", over
+    }
+    // (a container's edge the part states under the baseline is no container round the text: 2501.14787v1 p41's "minimum", over
     // -0.57 and a stroke 0.98 under, cut its band to a sliver under its line and lit none of its text once the text was drawn
     // (the reader gate's I10, F41); its band is cut at the stroke under it alone)
     const below = label({ room: { below: 1, next: 9, side: [120, 180], over: -0.57, under: 0.98 } })
