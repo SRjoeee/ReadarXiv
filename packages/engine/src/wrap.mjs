@@ -92,16 +92,18 @@ const IMAGE_BOX = -3
 export function planOf(glyphs, groupOfGlyph, paths, groupOfBox, facts = null) {
   const shows = new Map(), rules = new Map(), images = new Map(), lost = new Set()
   glyphs.forEach((g, i) => {
-    if (!(g.n >= 0)) return
+    // (a glyph of no show, its n absent or -1, is in no run; one of no place k in its show has none to take: the row's places alone
+    // are read, which a key `undefined` never was)
+    if (!(g.n !== undefined && g.n >= 0)) return
     let row = shows.get(g.n)
     if (!row) shows.set(g.n, (row = []))
-    row[g.k] = groupOfGlyph[i]
+    if (g.k !== undefined) row[g.k] = groupOfGlyph[i]
   })
   let j = 0
   groupOfBox.forEach((g, b) => {
     const m = paths[b]
     if (m === IMAGE_BOX) { if (g !== null) images.set(j, g); j++ }
-    else if (g !== null && m >= 0) rules.set(m, g)
+    else if (g !== null && m !== undefined && m >= 0) rules.set(m, g)
   })
   if (images.size && j !== facts?.images) { for (const g of images.values()) lost.add(g); images.clear() }
   return { shows, paths: rules, images, lost }
@@ -352,8 +354,10 @@ function wrapPage(R, p, plan, { merge, figures = true, rewritten = new Map() }) 
   const raw = new Map()
   for (const e of walk.events) {
     if (e.kind === 'show') raw.set(e, codeGroups(plan.shows.get(showN.get(e)), e.codes.length))
-    else if (e.kind === 'paint') raw.set(e, [plan.paths.get(paintM.get(e)) ?? null])
-    else if (e.kind === 'image') raw.set(e, [(e.sh ? null : plan.images?.get(imageJ.get(e))) ?? null])
+    // (a paint or an image the reading does not number (its paths or images not aligned, where the plan names none of them) has
+    // no group, as a lookup of no number gave none)
+    else if (e.kind === 'paint') { const m = paintM.get(e); raw.set(e, [(m === undefined ? undefined : plan.paths.get(m)) ?? null]) }
+    else if (e.kind === 'image') { const j = imageJ.get(e); raw.set(e, [(e.sh ? null : j === undefined ? undefined : plan.images?.get(j)) ?? null]) }
   }
   // a figure's groups: kept where its show and its form can carry them, else dropped (its unit the original's)
   if (figures) {

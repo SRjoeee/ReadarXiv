@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { alignOf, pageInk, planOf, wrapOf } from '@readarxiv/engine'
 import { lexedDiff } from './helpers/lex-compare'
 import { deflate, DOCUMENT_OPTIONS, inflate, markedSample } from './helpers/ocg-pdfs'
-import { wrapOf as wrapOfBefore } from './helpers/wrap-before.mjs'
+import { planOf as planOfBefore, wrapOf as wrapOfBefore } from './helpers/wrap-before.mjs'
 
 // The wrap (packages/engine/src/wrap.mjs) tells an operand by its kind before it reads a field of it (flatOf's BDC of ours,
 // operand, splitText, elementsOf, sameOps), reads an error's message by `at`, states the catalog's number where its catalog is
@@ -14,7 +14,8 @@ import { wrapOf as wrapOfBefore } from './helpers/wrap-before.mjs'
 // plans of every naming (each show a group, shows split between two, figures, placeholders and labels folded, the back half's
 // names), on hand pages (malformed operands of ours and the page's, a catalog written in the trailer, thrown values no Error),
 // and on 300 seeded pages of shows and marked content. Its five readers of operands are internal to the module: they are read
-// through wrapOf, every page's proof running each of them.
+// through wrapOf, every page's proof running each of them. And planOf, which tells a glyph of no show or no place and a box of no
+// path's number before reading them, held to the one before on every page read here and on glyphs and boxes of every shape.
 
 type Rec = Record<string, unknown>
 const O = OPS as unknown as Record<string, number>
@@ -89,6 +90,34 @@ describe('the wrap reads every page as it did before it told an operand by its k
       expect(await wrapDifference(s.bytes, plansOf(read, NAMINGS['figures, placeholders and labels']!), { groupsPage: 2, sequencesPage: 3, groupsDoc: 4 }), 'bounds').toBeNull()
     }
     expect(pages).toBeGreaterThan(5)
+  }, 120_000)
+
+  it('planOf: on the pages read here and on glyphs of no show or no place, boxes past the paths, and facts of every count', async () => {
+    const read = await readOf((await markedSample({})).bytes)
+    for (const pg of read) for (const naming of Object.values(NAMINGS)) {
+      const glyph = pg.glyphs.map(g => (g.n !== undefined && g.n >= 0 ? naming.glyph(g.n, g.k ?? 0) : null))
+      const box = pg.paths.map(naming.box)
+      expect(lexedDiff(plain(planOf(pg.glyphs, glyph, pg.paths, box, pg.facts)), plain(planOfBefore(pg.glyphs, glyph, pg.paths, box, pg.facts)))).toBeNull()
+    }
+    const glyphs = [{ n: 0, k: 0 }, { n: 0 }, { k: 2 }, {}, { n: -1, k: 0 }, { n: 1, k: 3 }, { n: Number.NaN, k: 1 }, { n: 2, k: 1 }, { n: 2, k: 1 }]
+    const groups = ['a', 'b', 'c', null, 'd', 'e', 'f', 'g', null]
+    for (const [paths, boxes] of [[[-3, 0, 1, -1], ['i', 'p', null, 'x']], [[-3], ['i', 'p', 'q', 'r']], [[], ['i']], [[0, -3, -3, 2], ['p', null, 'i', 'q']]] as [number[], (string | null)[]][]) {
+      for (const facts of [null, { images: 0 }, { images: 1 }, { images: 2 }, {}]) expect(lexedDiff(plain(planOf(glyphs, groups, paths, boxes, facts)), plain(planOfBefore(glyphs, groups, paths, boxes, facts)))).toBeNull()
+    }
+  })
+  it('on plans whose paths or images do not align with the reading, where the plan names none of them', async () => {
+    // (sample-1's pages, and a page of text, a rule painted and two images, one inline and one a shading's neighbour)
+    const docs = [(await markedSample({ pages: [1, 2], every: 1 })).bytes, await pagePdf('BT /F1 10 Tf 72 700 Td (text and its images) Tj ET q 0 0 50 2 re f Q q 90 0 0 0.4 72 690 cm BI /W 1 /H 1 /IM true /D [1 0] ID \u0000 EI Q q 90 0 0 0.4 72 680 cm BI /W 1 /H 1 /IM true /D [1 0] ID \u0000 EI Q')]
+    for (const bytes of docs) {
+      const read = await readOf(bytes)
+      for (const naming of [...Object.values(NAMINGS), { glyph: (n: number) => `u${n}`, box: (k: number) => (k === -3 || k >= 0 ? 'u0' : null) }]) {
+        const plans = plansOf(read, naming)
+        const off = (k: 'paths' | 'images') => () => new Map([...plans()].map(([p, plan]) => [p, { ...plan, facts: { ...plan.facts, [k]: plan.facts[k] + 1 }, [k]: new Map() } as Plan]))
+        expect(await wrapDifference(bytes, plans), 'as read').toBeNull()
+        expect(await wrapDifference(bytes, off('paths')), 'paths').toBeNull()
+        expect(await wrapDifference(bytes, off('images')), 'images').toBeNull()
+      }
+    }
   }, 120_000)
 
   /** a one-page PDF of Helvetica as /F1 and the page's content `content`; `trailerRoot` writes the catalog in the trailer itself */
