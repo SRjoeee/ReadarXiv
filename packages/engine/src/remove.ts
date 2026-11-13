@@ -684,11 +684,11 @@ export function readAtMost(stream: PdfDecodeStream, limit: number): Uint8Array {
 const PAINT = new Set(['S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n'])
 /** an operand's `v`, told by its kind before it is read: a name's text, a dictionary's items, a keyword's word; undefined for a
  *  number, a boolean, null, a string, an array, or no operand (what `?.v` read of each) */
-const vOf = (x: Operand | undefined) =>
+export const vOf = (x: Operand | undefined) =>
   typeof x === 'object' && x !== null && !Array.isArray(x) && x.t !== 'str' ? x.v : undefined
 /** `x?.[k]`, the value told by its kind before the read: undefined for null or none, else the property of the value or of its
  *  wrapper, read with the value as its receiver, as a read of it is (an argument of PDF.js's operator list, alignReader) */
-const at = (x: unknown, k: PropertyKey): unknown =>
+export const at = (x: unknown, k: PropertyKey): unknown =>
   x === null || x === undefined ? undefined : Reflect.get(Object(x), k, x)
 /** a form nested deeper than this is not walked: the page is refused */
 const FORM_DEPTH = 12

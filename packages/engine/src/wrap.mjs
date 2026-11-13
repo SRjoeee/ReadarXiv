@@ -36,7 +36,7 @@
 // (src/pdf-reader/engine/layout/wrap-final.mjs) and calls these through the package's entry.
 import { isMemoryError } from './memory.ts'
 import { DELTA_OBJECTS_MAX, deltaSection, UNHIDDEN_MAX } from './delta-wire.ts'
-import { alignOf, DecodeLimit, lex, LexLimit, openRemover } from './remove.ts'
+import { alignOf, at, DecodeLimit, lex, LexLimit, openRemover, vOf } from './remove.ts'
 import { appendSection } from './section.ts'
 import { startxrefOf } from './tail.ts'
 import { openObjects } from './xref.ts'
@@ -62,6 +62,13 @@ const equalBytes = (a, b) => { if (a.length !== b.length) return false; for (let
 const concat = parts => { let n = 0; for (const p of parts) n += p.length; const out = new Uint8Array(n); let o = 0; for (const p of parts) { out.set(p, o); o += p.length } return out }
 const HEX = Array.from({ length: 256 }, (_, v) => v.toString(16).padStart(2, '0'))
 const hex = b => { let s = '<'; for (let i = 0; i < b.length; i++) s += HEX[b[i]]; return `${s}>` }
+/** fmt of an operand, as fmt read one: a number's text; else '0' where its magnitude as a number is below 5e-7 (null, false, '0'),
+ *  and otherwise the TypeError reading its toFixed gave */
+const fmtOf = v => {
+  if (typeof v === 'number') return fmt(v)
+  if (Math.abs(Number(v)) < 5e-7) return '0'
+  throw new TypeError(v === undefined ? "Cannot read properties of undefined (reading 'toFixed')" : 'x.toFixed is not a function')
+}
 const fmt = x => { if (Math.abs(x) < 5e-7) return '0'; let s = x.toFixed(6); s = s.replace(/0+$/, '').replace(/\.$/, ''); return s === '-0' ? '0' : s }
 const td = new TextDecoder('latin1')
 
@@ -125,7 +132,7 @@ export async function wrapOf(finalBytes, plans, { PL, deflate, inflate, groupsPa
   // (the written bytes are read back by `inflate`: without one no page could be proved, so none is asked for)
   if (typeof deflate !== 'function' || typeof inflate !== 'function') throw new TypeError('deflate, inflate: functions of bytes (inflate(bytes, limit))')
   let R
-  try { R = await openRemover(finalBytes, { PL, inflate }) } catch (e) { if (isMemoryError(e)) throw e; return { refused: 'wrap-parse', why: String(e?.message ?? e).slice(0, 300) } }
+  try { R = await openRemover(finalBytes, { PL, inflate }) } catch (e) { if (isMemoryError(e)) throw e; return { refused: 'wrap-parse', why: String(at(e, 'message') ?? e).slice(0, 300) } }
   try {
     const { ctx, PDFName, PDFDict, PDFRef } = { ctx: R.ctx, ...PL }
     const out = new Map()
@@ -151,7 +158,7 @@ export async function wrapOf(finalBytes, plans, { PL, deflate, inflate, groupsPa
         let first
         try { first = attempt(true) } catch (e) {
           if (isMemoryError(e)) throw e
-          first = { made: { ok: false, why: `its wrap with its figures failed: ${String(e?.message ?? e).slice(0, 160)}` } }
+          first = { made: { ok: false, why: `its wrap with its figures failed: ${String(at(e, 'message') ?? e).slice(0, 160)}` } }
         }
         // (the page as it is wrapped without its figures, whatever came of it: a figure never costs the page)
         return first.made.ok ? first : attempt(false)
@@ -191,7 +198,7 @@ export async function wrapOf(finalBytes, plans, { PL, deflate, inflate, groupsPa
       let made, data = null, node = null, res = null, own
       try { ({ made, data, node, res, own } = page()) } catch (e) {
         if (isMemoryError(e)) throw e
-        made = { ok: false, why: `its wrap failed: ${String(e?.message ?? e).slice(0, 200)}` }
+        made = { ok: false, why: `its wrap failed: ${String(at(e, 'message') ?? e).slice(0, 200)}` }
       }
       R.release()
       if (made.docFull) docFull = true
@@ -242,7 +249,10 @@ export async function wrapOf(finalBytes, plans, { PL, deflate, inflate, groupsPa
         oc = `<< /OCGs [${[...arr(old.get(PDFName.of('OCGs'))), ...refs].join(' ')}] /D <<${dEnts.join('')} /ON [${[...on, ...refs].join(' ')}] >>${oEnts.join('')} >>`
       } else oc = `<< /OCGs [${refs.join(' ')}] /D << /BaseState /ON /ON [${refs.join(' ')}] /Order [] >> >>`
       const cEnts = cat.entries().filter(([k]) => k.toString() !== '/OCProperties').map(([k, v]) => ` ${k.toString()} ${lit(v)}`)
-      objects.push([rootRef.objectNumber, rootRef.generationNumber, enc(`${rootRef.objectNumber} ${rootRef.generationNumber} obj\n<<${cEnts.join('')} /OCProperties ${oc} >>\nendobj\n`)])
+      // (the catalog's number and generation, a ref's; a catalog written in the trailer itself has none: its section then names
+      // none, and the proof refuses it, as when they were read off it as undefined)
+      const rootN = rootRef instanceof PDFRef ? rootRef.objectNumber : Number.NaN, rootG = rootRef instanceof PDFRef ? rootRef.generationNumber : Number.NaN
+      objects.push([rootN, rootG, enc(`${rootN} ${rootG} obj\n<<${cEnts.join('')} /OCProperties ${oc} >>\nendobj\n`)])
     }
     const wrapped = [...out.values()].filter(x => x.ok)
     const stats = { wrapped: wrapped.length, refusedPages: [...out.values()].filter(x => !x.ok).length, split: wrapped.reduce((n, x) => n + x.split, 0), groups: docGroups.size }
@@ -261,12 +271,15 @@ export async function wrapOf(finalBytes, plans, { PL, deflate, inflate, groupsPa
     return { bytes, xref: section.xref, sha256: await sha256Of(bytes), pages: out, groups: docGroups, stats, forms: formsWritten.length }
   } catch (e) {
     if (isMemoryError(e)) throw e
-    return { refused: 'wrap-parse', why: String(e?.message ?? e).slice(0, 300) }
+    return { refused: 'wrap-parse', why: String(at(e, 'message') ?? e).slice(0, 300) }
   }
 }
 
 async function sha256Of(bytes) {
-  const d = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes))
+  // (Web Crypto read off the global object: the engine's lib declares none, and a global declaration of it would clash with the
+  // DOM lib in a host's program)
+  const crypto = Reflect.get(globalThis, 'crypto')
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
   let s = ''
   for (let i = 0; i < d.length; i++) s += HEX[d[i]]
   return s
@@ -450,12 +463,12 @@ function wrapPage(R, p, plan, { merge, figures = true, rewritten = new Map() }) 
 /** a show two groups share, as its chunks: each chunk its own TJ (a number with the chunk before it), an owned chunk wrapped */
 function splitText(o, e, gs) {
   const arr = o.op === 'TJ' ? o.args[0] : [o.args[o.op === '"' ? 2 : 0]]
-  const prefix = o.op === "'" ? 'T* ' : o.op === '"' ? `${fmt(o.args[0])} Tw ${fmt(o.args[1])} Tc T* ` : ''
+  const prefix = o.op === "'" ? 'T* ' : o.op === '"' ? `${fmtOf(o.args[0])} Tw ${fmtOf(o.args[1])} Tc T* ` : ''
   const items = []
   let ci = 0
   ;(Array.isArray(arr) ? arr : []).forEach((el, ei) => {
     if (typeof el === 'number') { items.push({ num: el }); return }
-    if (el?.t !== 'str') return
+    if (!(typeof el === 'object' && el !== null && !Array.isArray(el) && el.t === 'str')) return
     while (ci < e.codes.length && e.codes[ci].ei === ei) { const c = e.codes[ci]; items.push({ g: gs[ci], b: el.b.subarray(c.cs, c.ce) }); ci++ }
   })
   const chunks = []
@@ -551,8 +564,10 @@ function flatOf(mine, groups) {
     else if (o.op === 'Q') q--
     else if (o.op === 'BT') bt = true
     else if (o.op === 'ET') bt = false
-    if (o.op === 'BDC' && o.args[0]?.v === 'OC' && /^axt/.test(o.args[1]?.v ?? '')) {
-      const g = o.args[1].v.slice(3)
+    // (a BDC of ours: /OC and a name of ours, read by kind (an operand of any other kind names none))
+    const name = o.op === 'BDC' && vOf(o.args[0]) === 'OC' ? vOf(o.args[1]) : undefined
+    if (typeof name === 'string' && /^axt/.test(name)) {
+      const g = name.slice(3)
       if (!groups.has(g)) return { why: `a group not in its /Properties (${g})` }
       if (stack.at(-1)?.ours) return { why: 'a group of ours inside another' }
       stack.push({ ours: true, q, bt })
@@ -644,7 +659,17 @@ function graphWhy(finalBytes, bytes, { PL, out, groups, forms = [] }) {
 }
 
 /** an operand's text for comparison (a string by its bytes, hex or not) */
-const operand = v => (v?.t === 'str' ? `s${hex(v.b)}` : v?.t === 'name' ? `/${v.v}` : v?.t === 'dict' ? `<<${v.v.map(operand).join(' ')}>>` : Array.isArray(v) ? `[${v.map(operand).join(' ')}]` : v?.t === 'kw' ? v.v : String(v))
+const operand = v => {
+  // (a string, a name, a dictionary or a keyword told by its kind before its fields are read; an array by its items; anything
+  // else as String gives it)
+  if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+    if (v.t === 'str') return `s${hex(v.b)}`
+    if (v.t === 'name') return `/${v.v}`
+    if (v.t === 'dict') return `<<${v.v.map(operand).join(' ')}>>`
+    if (v.t === 'kw') return v.v
+  }
+  return Array.isArray(v) ? `[${v.map(operand).join(' ')}]` : String(v)
+}
 /** a show's elements: its codes as one byte run between numbers, adjacent numbers summed, zeros dropped. What it draws: an empty
  *  string is none (it shows no glyph and moves nothing, and a split, which writes codes, writes none of it: 2610.20967v1 p2's
  *  figure shows open with one), and a number is read as a split writes it (`fmt`, six places: an adjustment halfway between two
@@ -656,7 +681,7 @@ function elementsOf(o) {
   for (const el of Array.isArray(arr) ? arr : []) {
     const l = out.at(-1)
     if (typeof el === 'number') { if (typeof l === 'number') out[out.length - 1] = l + el; else out.push(el) }
-    else if (el?.t === 'str' && el.b.length) { if (l instanceof Uint8Array) out[out.length - 1] = concat([l, el.b]); else out.push(el.b) }
+    else if (typeof el === 'object' && el !== null && !Array.isArray(el) && el.t === 'str' && el.b.length) { if (l instanceof Uint8Array) out[out.length - 1] = concat([l, el.b]); else out.push(el.b) }
   }
   return out.map(v => (typeof v === 'number' ? `n${fmt(v)}` : `s${hex(v)}`)).filter(v => v !== 'n0').join(',')
 }
@@ -672,14 +697,18 @@ function sameOps(a, b) {
         const want = o.op === "'" ? [['T*', null]] : [['Tw', o.args[0]], ['Tc', o.args[1]], ['T*', null]]
         for (const [w, v] of want) {
           if (b[j]?.op !== w) return `operator ${i}: a split show's ${w} missing`
-          if (v !== null && !(typeof v === 'number' && typeof b[j].args[0] === 'number' && Math.abs(b[j].args[0] - v) < 5e-7)) return `operator ${i}: a split show's ${w} not its own`
+          const a0 = b[j].args[0]
+          if (v !== null && !(typeof v === 'number' && typeof a0 === 'number' && Math.abs(a0 - v) < 5e-7)) return `operator ${i}: a split show's ${w} not its own`
           j++
         }
       } else if (b[j]?.op === o.op && operand(b[j].args) === operand(o.args)) { j++; continue }
       const target = elementsOf(o)
       const got = []
       while (j < b.length && b[j].op === 'TJ') {
-        for (const el of b[j].args[0]) got.push(el)
+        // (a TJ's array: an operand of any other kind is no array, refused with the error iterating it gave)
+        const els = b[j].args[0]
+        if (!Array.isArray(els)) throw new TypeError('b[j].args[0] is not iterable')
+        for (const el of els) got.push(el)
         j++
         if (elementsOf({ op: 'TJ', args: [got] }) === target) break
       }
