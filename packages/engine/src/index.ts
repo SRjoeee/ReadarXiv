@@ -5,7 +5,7 @@ export const ENGINE_PURPOSE =
 // ---- today's modules, moved as they are (JavaScript, typed by their *.types.ts)
 export * from './ink.types.ts'
 export * from './delta-wire.types.ts'
-export * from './memory.types.ts'
+export * from './memory.ts'
 export * from './remove.types.ts'
 export * from './section.types.ts'
 export * from './tail.types.ts'

@@ -21,7 +21,7 @@ import type { Doc, DocGlyph, DocMarks, DocPage, DocTurned } from './doc.ts'
 import { PageGlyph } from './glyph.ts'
 import { BOXES_PAGE, GLYPHS_PAGE, inkReader, type PageInk } from './ink.types.ts'
 import { type OpsPage, type OpsReader, readOps } from './opstream.ts'
-import { isMemoryError } from './memory.types.ts'
+import { isMemoryError } from './memory.ts'
 import { memoryFailure, WARNINGS, watchWarnings } from './warnings.ts'
 
 /** what the back half needs of PDF.js: its getDocument and its operator codes */

@@ -8,7 +8,7 @@ import * as deltaWire from '../src/delta-wire.types.ts'
 import * as compiled from '../src/compiled.ts'
 import * as entry from '../src/index.ts'
 import * as ink from '../src/ink.types.ts'
-import * as memory from '../src/memory.types.ts'
+import * as memory from '../src/memory.ts'
 import * as plan from '../src/plan.ts'
 import * as remove from '../src/remove.types.ts'
 import * as section from '../src/section.types.ts'
@@ -20,7 +20,7 @@ import * as xref from '../src/xref.types.ts'
 const WHOLE: Record<string, Record<string, unknown>> = {
   './ink.types.ts': ink,
   './delta-wire.types.ts': deltaWire,
-  './memory.types.ts': memory,
+  './memory.ts': memory,
   './remove.types.ts': remove,
   './section.types.ts': section,
   './tail.types.ts': tail,

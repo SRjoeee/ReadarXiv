@@ -11,7 +11,7 @@
 // An original module (no port statement). It imports the engine's own modules alone, by relative path, and no node:
 // specifier: the TeX page's host runs it in a browser.
 import { whyText } from '../instrument/format.mjs'
-import { isMemoryError } from '../memory.mjs'
+import { isMemoryError } from '../memory.ts'
 import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { END_TEX } from './tex.mjs'
