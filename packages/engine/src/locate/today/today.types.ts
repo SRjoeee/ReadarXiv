@@ -94,8 +94,9 @@ export interface TodayFigures {
    *  an uncrowded one's tones under part of it alone */
   met: Map<number, { items: TodayMet[]; under: number | null }>
   /** (CHANGED, F3) each closed path that holds two units or more alone, the innermost of nested ones: its page, its box index, the
-   *  units it holds, its shape (figure-text.mjs containersOf) */
-  holds?: { p: number; b: number; ks: number[]; shape: TodayShape }[]
+   *  units it holds, its shape, and the glyphs inside it that no unit holds, the line reading's to place (figure-text.mjs
+   *  containersOf; figure-lines.ts takes the path where it sets each on one of the path's lines) */
+  holds?: { p: number; b: number; ks: number[]; shape: TodayShape; others?: number[] }[]
   /** the reading's counts (figure-text.mjs `stats`): of them, F3's container step's, the closed paths whose box holds two units
    *  or more and the points read against a path's inside */
   stats?: { boxed?: number; interior?: number }

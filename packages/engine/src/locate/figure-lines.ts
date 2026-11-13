@@ -602,6 +602,10 @@ function linesOf(
       const ks = new Set(h.ks)
       const idx = lines.flatMap((l, i) => (l.ks.length && l.ks.every((k) => ks.has(k)) ? [i] : []))
       if (idx.length < 2 || new Set(idx.flatMap((i) => lines[i]!.ks)).size !== ks.size) continue
+      // (a glyph inside the path that no run holds (containersOf's `others`) is the path's where this reading set it on one of
+      // the lines it holds (a row's last mark in another face, cut from its word: 2608.06701v1 p1's "behavior."), else another
+      // glyph inside it: the path holds its lines with it, and none of them is its text. One reading of the glyph, this one's)
+      if (h.others && !h.others.every((g) => idx.some((i) => lines[i]!.gs.includes(g)))) continue
       if (
         idx.some(
           (i) => taken.has(i) || !(reads[i]!.kind === 'plain' || reads[i]!.kind === 'mixed') || reads[i]!.marker.length,

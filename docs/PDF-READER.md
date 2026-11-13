@@ -4808,7 +4808,13 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
 - **A path's text** (the container step). A closed path holds the lines whose glyphs' centres all stand inside it (read by its
   interior after its box) alone where no other glyph is inside it and no closed path inside it holds text of its own (the nodes
   of a box round a chart); a fill or a frame under words of one line, within one band's height of its baseline, is a decoration
-  that goes with its words, and other ink inside, a stroke or a legend's samples, is no reason. The runs it holds on one
+  that goes with its words, and other ink inside, a stroke or a legend's samples, is no reason. **Whose a glyph is, is the line
+  reading's alone** (lane fig-rows, 2026-11-14): a glyph inside the path that no run holds (no figure text's: a mark the figure
+  reading cut from its word where the face changes, a run that spells no word and so no unit) is no other glyph where the line
+  reading sets it on one of the path's lines; the container step hands it over (`containersOf`'s `others`) and takes the path
+  only where that reading did, no second opinion of its own. A glyph another text holds is another glyph as before.
+  2608.06701v1 p1's plan box had been dropped for one glyph, item 4's full stop, set in a face of one pitch on a chip of its own
+  and set by the line reading on that item's last line. The runs it holds on one
   baseline are one line, however far apart their words stand. No legend's entries are joined: two rows or more each beside ink of
   its own inside the path (a sample, a marker; a neighbouring node's edge outside it is none). Rows **centred** (their centres one
   and their left edges not: rows of one length show no alignment, centred or flush) are a node's label: one text, one under the

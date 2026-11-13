@@ -335,7 +335,7 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
     setsOf(mine, evidence, stats)
     roomsOf(pg, S, mine)
     // (CHANGED: the closed paths that hold units alone, read while the page's shapes are kept: the lines of a node, F3)
-    holds.push(...containersOf(pg, mine.filter(m => Math.abs(m.u.ux - 1) < 1e-6 && Math.abs(m.u.uy) < 1e-6).map(m => ({ k: m.u.k, gs: m.r.gs.filter(x => !x.turned && !x.blank).map(x => x.i) })), pi + 1, stats))
+    holds.push(...containersOf(pg, mine.filter(m => Math.abs(m.u.ux - 1) < 1e-6 && Math.abs(m.u.uy) < 1e-6).map(m => ({ k: m.u.k, gs: m.r.gs.filter(x => !x.turned && !x.blank).map(x => x.i) })), pi + 1, stats, i => glyphMap.has(i)))
     // (the page read: nothing here reads its shapes again, which a reader may let go, `done`: locate's ink step, lane mem-back)
     done?.(pi)
   })
@@ -347,12 +347,21 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
  * is met by another's (to the hundredth of a unit); it holds a unit where every glyph of the unit has its ink's centre inside the
  * path, the box tested first (a cheap rejection: the glyph's ink inside the path's box) and the interior deciding (the even-odd
  * rule over its segments: a diamond's corners are no inside of it, 2608.06701v1 p2's "yes" beside "Any signal detected?"); it
- * holds them alone where no other glyph of the page is inside it and no closed path inside it holds text of its own (the nodes
- * of a box round a chart). Two units or more held so: one hold, the innermost of nested paths holding the same units. `stats.boxed` the paths the box test passed, `stats.interior` the points the interior read
+ * holds them alone where no glyph of another unit is inside it and no closed path inside it holds text of its own (the nodes
+ * of a box round a chart). A glyph inside it that no unit holds (`ran`: the page's units', level and turned) is handed over,
+ * the hold's `others`: whose it is, is the line reading's to tell (figure-lines.ts sets it on a line or on none), and the path
+ * holds its units alone where that reading sets it on one of their lines, one reading of it and no second (2608.06701v1 p1's
+ * plan box, its item 4's full stop set in a face of one pitch on a chip of its own: cut from its word at the face change, a run
+ * that spells no word and so no unit, and that row's glyph by the line reading). Two units or more held so: one hold, the
+ * innermost of nested paths holding the same units. `stats.boxed` the paths the box test passed, `stats.interior` the points the
+ * interior read
  */
-export function containersOf(pg, units, p, stats = { boxed: 0, interior: 0 }) {
+export function containersOf(pg, units, p, stats = { boxed: 0, interior: 0 }, ran = null) {
   const SH = pg.shapes ?? null, B = pg.boxes ?? [], G = pg.glyphs ?? [], U = pg.unseen ?? null
   if (!SH || units.length < 2) return []
+  // (whether a unit holds a glyph: the page's, given, else those given here)
+  let given = null
+  const unitHolds = ran ?? (i => (given ??= new Set(units.flatMap(u => u.gs))).has(i))
   const out = []
   const centre = g => [((g.ix0 ?? g.x0) + (g.ix1 ?? g.x1)) / 2, (g.top + g.bottom) / 2]
   for (const [b, shape] of SH) {
@@ -367,10 +376,13 @@ export function containersOf(pg, units, p, stats = { boxed: 0, interior: 0 }) {
     if (!held.every(u => u.gs.every(i => inside(G[i])))) continue
     const theirs = new Set(held.flatMap(u => u.gs))
     let alone = true
+    const others = []
     for (let i = 0; i < G.length && alone; i++) {
       const g = G[i]
       if (theirs.has(i) || !g || g.blank || g.unseen || !/\S/u.test(g.u ?? '') || !inBox(g)) continue
-      if (inside(g)) alone = false
+      if (!inside(g)) continue
+      if (unitHolds(i)) alone = false
+      else others.push(i)
     }
     // (and no node of its own inside it: a closed path inside it that holds text of its own, its lines held by it, not by this one
     // (the nodes of a box round a whole chart, 2608.06701v1 p2). A fill or a frame under words of one line, inside that line's
@@ -403,9 +415,10 @@ export function containersOf(pg, units, p, stats = { boxed: 0, interior: 0 }) {
     if (!alone) continue
     const ks = held.map(u => u.k).sort((a, c) => a - c)
     const area = (x1 - x0) * (y1 - y0)
-    const same = out.findIndex(h => h.ks.length === ks.length && h.ks.every((k, j) => k === ks[j]))
-    if (same < 0) out.push({ p, b, ks, shape, area })
-    else if (area < out[same].area) out[same] = { p, b, ks, shape, area }
+    const h = { p, b, ks, shape, ...(others.length ? { others } : {}), area }
+    const same = out.findIndex(q => q.ks.length === ks.length && q.ks.every((k, j) => k === ks[j]))
+    if (same < 0) out.push(h)
+    else if (area < out[same].area) out[same] = h
   }
   return out.map(({ area, ...h }) => h)
 }
