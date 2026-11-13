@@ -444,4 +444,4 @@ function guessCloser(
   return null
 }
 
-export { fillLeadsOf, closerLead, guessCloser, framesOf }
+export { fillLeadsOf, closerLead, framesOf }

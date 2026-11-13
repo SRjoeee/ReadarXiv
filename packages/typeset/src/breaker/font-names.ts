@@ -297,7 +297,7 @@ const libertine = (name: string): FontClass | null => {
 }
 
 /** a PDF font's class, weight, slant, small capitals and design, from its PostScript name (subset tag stripped) */
-export function classifyRole(postScript: string | null | undefined): FontClass {
+function classifyRole(postScript: string | null | undefined): FontClass {
   const name = String(postScript ?? '').replace(SUBSET, '')
   if (!name || name.length > NAME_MAX) return fontClass('serif', 'other', false, false, false, false)
   const special = computerModern(name) ?? latinModern(name) ?? libertine(name)
