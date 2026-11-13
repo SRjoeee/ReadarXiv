@@ -20,7 +20,7 @@ type Side = 'term' | 'translation'
 /** the empty row's cells, in the map of cells */
 const EMPTY = -1
 
-/** The whole rows, trimmed; a later row of a term wins, in the first one's place (providers/glossary.ts's rule) */
+/** The whole rows, trimmed; a later row of a term wins, in the first one's place, so that changing one translation does not move it */
 export function entriesOf(lines: readonly { term: string; translation: string }[]): GlossaryEntry[] {
   const out: GlossaryEntry[] = []
   const at = new Map<string, number>()

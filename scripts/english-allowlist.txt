@@ -37,7 +37,7 @@ src/core/renderer/highlight.ts 1
 src/core/renderer/image.ts 1
 src/core/rules/latexml.ts 8
 src/entrypoints/options/index.html 1
-src/providers/glossary.ts 3
+src/providers/glossary.ts 1
 src/providers/compat/alignment.ts 4  # 2026-11-07: the old alignment kept for the website's Microsoft adapter: the sentence terminators it recognises, an example of a quote, and a Microsoft reply quoted as evidence, as they were in src/providers/alignment.ts
 src/providers/compat/microsoft.ts 1  # 2026-11-07: the old Microsoft adapter kept for the website, its header quoting what the endpoint returned for a bare `<` (observed engine output, as it was in src/providers/microsoft.ts)
 src/ui/strings.ts 3
@@ -101,7 +101,6 @@ tests/protector/serialize.test.ts 3
 tests/protector/validate.test.ts 9
 tests/protector/whole-ranges.test.ts 1  # 2026-09-17: one translated note as the injected node to cut at
 tests/providers/glossary-matcher.test.ts 11
-tests/providers/glossary.test.ts 23
 tests/providers/prompt.test.ts 7
 tests/providers/transport.test.ts 1
 tests/renderer/highlight.test.ts 5  # 2026-09-17: the whole-block fallback tests place translations, the same inputs the sibling renderer tests use
