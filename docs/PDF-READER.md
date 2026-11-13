@@ -6581,7 +6581,7 @@ figure's texts); how a table's cells go together is its structure's, the typeset
   - A table's cell, a TikZ picture's text and a figure's text read off its ink are judged; other kinds are not (their count is
     the lane's, for a decision of its own).
 - **R2: a word the paper's own running text writes as a name is a name of that paper; a text made only of such names and R1's
-  tokens is kept as written** (language.ts paperNamesOf, onlyNames; the lab's dump `keptBy: 'names'`). From the source, no list:
+  tokens is kept as written** (language.ts paperNamesOf, onlyNames; the lab's dump `keptBy: 'paperNames'`). From the source, no list:
   - RUNNING TEXT: the units of kind `para`, `abstract`, `theorem`, `caption` and `footnote` (the paper's sentences); not a
     heading or the title (title case), a table's cell or a figure's text (the texts judged), the bibliography (titles and names),
     the author block;
