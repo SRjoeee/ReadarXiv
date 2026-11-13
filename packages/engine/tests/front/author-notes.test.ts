@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
+import { sourceUnitsOf } from '../../src/front.ts'
 import { openPaper } from '../../src/front.types.ts'
 
 // The author block decided by the source (the owner's ruling of 2026-11-13: text the paper's code ties to the author block
@@ -43,6 +44,11 @@ describe('a note written inside an author command’s argument is the author blo
     ])
     // (the block's own units are not notes: their kind is their toggle's)
     expect(us.filter((u) => u.kind === 'author' || u.kind === 'affiliation').every((u) => u.of === undefined)).toBe(true)
+  })
+  it('states the tie on the units a translator reads first, as the bundle’s do (front.ts sourceUnitsOf)', () => {
+    const paper = openPaper(new Map([['main.tex', enc(doc('article', '\\title{A Paper}\n\\author{Ann Lee\\thanks{Supported by a grant of ours.}}'))]]))
+    const first = sourceUnitsOf(paper).filter((u) => u.kind === 'footnote')
+    expect(first.map((u) => u.of ?? '-')).toEqual(['author'])
   })
   it('a \\footnote of the body is the body’s', () => {
     expect(notes(units(doc('article', '\\author{Ann Lee}', '\\maketitle\nWords\\footnote{A note of the body.} here.')))).toEqual([['A note of the body.', '-']])

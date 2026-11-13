@@ -321,6 +321,8 @@ export interface SourceUnit {
   front?: boolean
   held?: boolean
   stored?: boolean
+  /** the block its source ties a note to (latex-front.mjs tieNotes): `author` */
+  of?: 'author'
   bracketed?: boolean
   pieces: unknown[]
   cell?: CellPlace
