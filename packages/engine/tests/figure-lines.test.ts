@@ -727,11 +727,11 @@ describe('figure-lines: a path’s flush rows joined where the sentence goes on 
 describe('figure-lines: a path’s flush rows that make a list, whose a glyph inside it is, and the hold over a held item (§18.36, §18.61)', () => {
   const T = 'ArialMT'
   /** a box round rows set flush left at 80, 5 to the right of its widest row and 5 to the left of them all; `free`, glyphs no run
-   *  holds, each [row, text, x (none: right after the row), dy] */
-  const listBox = (rows: string[], free: [number, string, number | undefined, number][] = []) => {
+   *  holds, each [row, text, x (none: right after the row), dy, its face (the rows' where none)] */
+  const listBox = (rows: string[], free: [number, string, number | undefined, number, string?][] = []) => {
     const parts = rows.map((text, li) => [
       { text, font: T, x: 80 },
-      ...free.filter((f) => f[0] === li).map(([, text, x, dy]) => ({ text, font: T, x, dy, run: false })),
+      ...free.filter((f) => f[0] === li).map(([, text, x, dy, font]) => ({ text, font: font ?? T, x, dy, run: false })),
     ])
     const { page, fig } = pageOf(parts)
     const g = page.glyphs as Glyph[]
@@ -754,6 +754,46 @@ describe('figure-lines: a path’s flush rows that make a list, whose a glyph in
     // another glyph and its rows are no text of the path's, as before)
     const between = listBox(rows, [[0, '*', 160, -7]])
     expect(figureLinesOf([between.page], between.fig, () => false, null).filter((x) => x.ks.length > 1)).toEqual([])
+  })
+  it('carries a pictograph no run holds that ends a joined row as an element of its text, never its text (2608.06701v1 p10)', () => {
+    // (a warning sign a word space after the last row, in a face of its own: the line reading sets it on that row; the text is
+    // translated, the sign carried as the original's ink, sent as no character a face must draw)
+    const rows = ['Run the checks to make', 'sure the outputs are', 'kept as they were.']
+    const { page, fig, g, others } = listBox(rows, [[2, ' \u{1F6A8}', undefined, 0, 'AppleColorEmoji']])
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+    expect([t!.ks, t!.para?.by, t!.why, rest]).toEqual([[0, 1, 2], 'container', null, []])
+    expect(t!.els).toEqual([{ kind: 'symbol', glyphs: others, boxes: [] }])
+    expect(t!.order.flatMap((o) => (o.t === 'text' ? o.glyphs : [])).map((i) => g[i]!.u)).not.toContain('\u{1F6A8}')
+    expect(t!.order.at(-1)).toEqual({ t: 'el', i: 0 })
+  })
+  it('carries a stop in another face on a chip of its own that ends an item as an element, its chip with it (2608.06701v1 p1)', () => {
+    // (item 2's last row "as they were before" and its full stop in a face of one pitch on a tone of its own, as the plan box's
+    // item 4 ends: the stop the text's element, the chip its box; the item translated, nothing held, §18.61 being for words)
+    const { page, fig, g, others } = listBox(
+      [
+        '1. Find every place in the',
+        'default output where the',
+        'labels are made for tasks',
+        '2. Run the checks to make',
+        'sure the outputs are kept',
+        'as they were before',
+      ],
+      [[5, '.', undefined, 0, 'LMMono10-Regular']],
+    )
+    const stop = g[others[0]!]!
+    fig.met.set(5, {
+      items: [
+        {
+          ...boxMet(4, rect(stop.x0, stop.y - 2.4, stop.x1, stop.y + 9.6, { stroke: false, fill: true, hw: 0 })),
+          ground: true,
+        },
+      ],
+      under: null,
+    })
+    const texts = figureLinesOf([page], fig, () => false, MONO)
+    const item = texts.find((t) => t.ks.includes(5))!
+    expect([item.ks, labelOf(item, g), item.why]).toEqual([[3, 4, 5], '2.', null])
+    expect(item.els).toEqual([{ kind: 'symbol', glyphs: others, boxes: [4] }])
   })
   it('joins each item’s rows of a list set flush in a path, its marker its label; a capital or a digit begins a row of its own', () => {
     const { page, fig, g } = listBox([
