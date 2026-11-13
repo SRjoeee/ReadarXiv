@@ -437,7 +437,7 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['L2:3980-4037 placeItems', 'L2:4139-4160 laidOut'],
     how: 'ported',
     reads: [],
-    file: 'breaker/place.mjs',
+    file: 'breaker/place.ts',
     state: {
       is: 'changed',
       why: "a line not set as Latin text spreads its slack, and its squeeze, over the gaps between its items but those inside a word (break.mjs gapsOf: an item that continues its word, `brk` or `cont`, or an element set right after the one before it with nothing between in the source or the row, `tight`, tokens.ts sideBySide): TeX sets no glue inside a word, and its url package none at a URL's break points; today's spread it over every gap, so a URL whose line ends are joins (lane url-join), cut at its break points, was letter-spaced to the measure (lane literal-fixes, 2608.25210v2 p17: 1.9-2.7 pt after each `/`). Nor before a hung label's text and inside the label (tabOf: TeX's hang is a box), so the text's first line starts on the edge its other lines stand on",

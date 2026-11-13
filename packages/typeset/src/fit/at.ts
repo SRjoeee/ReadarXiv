@@ -2,7 +2,7 @@
 // layer2.mjs layoutAt L2:4259-4267 (moved first as JavaScript by lab/typeset/move-fit.mjs, now TypeScript), held by the
 // walk's, the chain's and the fill's replays on the corpus.
 import { breakLines } from '../breaker/break.ts'
-import { laidOut } from '../breaker/place.types.ts'
+import { laidOut } from '../breaker/place.ts'
 import { slotsAt } from '../breaker/slots.ts'
 import type { Token } from '../breaker/tokens.ts'
 import type { FitBlock, FitParams, FitState, Layout } from './types.ts'

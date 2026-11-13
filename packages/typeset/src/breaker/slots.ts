@@ -25,11 +25,13 @@ export type Slot = {
 }
 /** a block's stop on a shared row (U.decor's `stop`) */
 type Stop = NonNullable<FitBlock['stop']>
+/** a slot or a laid line as inFlow reads it: its flow (a LaidLine states it through its open index signature alone) */
+type Flowing = { flow?: unknown; readonly [k: string]: unknown }
 
 /** whether two laid lines or slots are one flow of TeX's lines (blocks2: blocks of one unit that follow each other in the
  *  layout file with only the unit's own lines between, in one frame, and no kept region the text passes; every other block
  *  a flow of its own) */
-const inFlow = (a: { flow?: number }, b: { flow?: number }): boolean => a.flow === b.flow
+const inFlow = (a: Flowing, b: Flowing): boolean => a.flow === b.flow
 /** a block's foot at a state: the lowest baseline a line of it is laid at, its last less what it borrows (its room TeX's facts
  *  leave, Block.free: the owner's ruling of 2026-11-08) */
 const lowOf = (b: FitBlock, st: FitState, s: number): number =>

@@ -150,7 +150,7 @@ export { breakPoints, hyphenationOf, type Mins, type Patterns } from './breaker/
 export { footFloorOf, inFlow, PREDISPLAY, SHORT_SKIP, type Slot, slotsAt, texRoomOf } from './breaker/slots.ts'
 export { type Broken, breakLines, lineExtent } from './breaker/break.ts'
 export { type Cut, pageCutsOf, textless, withPageBreaks } from './breaker/cuts.ts'
-export { laidOut } from './breaker/place.types.ts'
+export { laidOut } from './breaker/place.ts'
 export { layoutUnit2, statesOf } from './fit/walk.ts'
 export { layoutCut } from './fit/cut.ts'
 export { layoutAt } from './fit/at.ts'
