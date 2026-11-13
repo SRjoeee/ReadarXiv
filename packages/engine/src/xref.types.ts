@@ -5,7 +5,7 @@
 import * as xref_js from './xref.mjs'
 /** the refusal of a document this reader will not read: `code` the delta's why */
 export interface XrefRefusal extends Error {
-  code: import('./delta-wire.types.ts').DeltaWhy
+  code: import('./delta-wire.ts').DeltaWhy
 }
 export const XrefRefusal = xref_js.XrefRefusal as { new (...args: unknown[]): XrefRefusal }
 /** a page of the page tree: its ref, its dict and the attributes it inherits (its own over its ancestors') */

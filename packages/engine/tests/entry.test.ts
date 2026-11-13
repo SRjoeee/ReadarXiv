@@ -4,7 +4,7 @@
 // (src/pdf-reader/engine/layout/wrap-final.mjs among them). Each value a module re-exported whole holds must be that module's.
 import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
-import * as deltaWire from '../src/delta-wire.types.ts'
+import * as deltaWire from '../src/delta-wire.ts'
 import * as compiled from '../src/compiled.ts'
 import * as entry from '../src/index.ts'
 import * as ink from '../src/ink.types.ts'
@@ -19,7 +19,7 @@ import * as xref from '../src/xref.types.ts'
 /** the modules the entry re-exports whole, by the path its `export *` names (a package names its imports literally) */
 const WHOLE: Record<string, Record<string, unknown>> = {
   './ink.types.ts': ink,
-  './delta-wire.types.ts': deltaWire,
+  './delta-wire.ts': deltaWire,
   './memory.ts': memory,
   './remove.types.ts': remove,
   './section.ts': section,
