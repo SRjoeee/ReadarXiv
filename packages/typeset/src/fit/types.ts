@@ -43,10 +43,13 @@ export type FitState = {
   scale: number
   knob: string
   fitTrack?: number
-  box?: number
+  /** a state of the page fill's, whose last frame's slots stop at the gap's floor (B.slots footFloorAt): read as a flag; its
+   *  writers set `1` (S.fill.page) and `true` (S.fill.leads) */
+  box?: number | boolean
   /** by block, the leading of a frame before the unit's last (a page's, a column's), where the page fill set it looser than
-   *  `lead`, which is the last frame's (S.fill.leads): each frame of a paragraph filled over its own block */
-  leads?: number[]
+   *  `lead`, which is the last frame's (S.fill.leads): each frame of a paragraph filled over its own block; none (a hole) for
+   *  a block of the last frame, which takes `lead` */
+  leads?: (number | undefined)[]
   /** how much lower the unit's first block stands than TeX set it, the room the gap over it lacks where the paragraph over it
    *  cannot end higher (S.fill.page headOf), in the page fill's states alone */
   head?: number

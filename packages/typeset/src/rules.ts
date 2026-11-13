@@ -806,7 +806,7 @@ const SPECS: readonly RuleSpec[] = [
     ],
     how: 'ported',
     reads: ['fill.lead', 'fill.leadRel', 'fit.leadFloor'],
-    file: 'shared/fill-leads.mjs',
+    file: 'shared/fill-leads.ts',
     state: {
       is: 'changed',
       why: "the owner on staging, 2026-11-08 (each paragraph fills the original's block, as its neighbours): a unit over a page or column break has each frame's own fill leading beside its own (frameLeadsOf), where today's held every frame to the one its fullest frame allowed (1810.04805v2 p6: four lines at the original's pitch in a frame of five); and each paragraph TeX states inside a unit (a block that opens one: SpanAt.opens, El.opens) a frame of its own, its leading its own (the owner's comment #9 on 2608.25210v2 p3: a prompt box's text held to the original's pitch by its unit's run-in line, which needed both its lines, beside a box whose run-in line took one and whose text spread; the ruling of 2026-11-08, (a)); the frames filled where the gap under the unit takes its fill leading closer than its fit's too (1810.04805v2 p6/p7 t119: five lines on p6 at the original's pitch and one of two characters alone on p7, its fit's four and two). And the frames' share (frameShareOf, the owner's of 2026-11-10): each frame filled while it holds TeX's share of the unit's lines, lowered towards the original's pitch only where it must, with the leading each frame before the last holds it at, which the page fill keeps where every one is at or above its page's band floor; recorded where it lays something the frames' own leadings do not. The unit's fill leading, top and line count, its L9 slot, as today's, but a round that borrows room (B.slots' option (i), tests/replay/round.ts `L9 (i)`)",
