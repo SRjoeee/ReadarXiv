@@ -572,12 +572,17 @@ describe("today's rows, the way back and the head's own builds", () => {
     expect(h.needs!(ctx).some(n => n.path === '/work/reader-parts/google-rows')).toBe(true)
   })
 
-  it("judges harness-lab by its checks, names a paper laid from lane L1's, and fails on rows that do not belong with their own words", () => {
+  it("judges harness-lab by its checks, fails a paper laid from lane L1's and one the run's rows do not hold, and rows that do not belong, each with its own words", () => {
     const run = (exit: number, text: string) => ({ exit, text, cmd: [], ms: 0, waited: 0, log: '' })
     const ours = "fixture 1512.03385v1: this run's bundle and its rows (/b, /r/1512.03385v1-zh.json: chain x, 10 units asked, 10 rows)\n"
-    const l1 = "fixture 2609.26457v1: lane L1's bundle and today's dump (not in this run's rows, /r)\n"
+    const l1 = "fixture 2609.26457v1: lane L1's bundle and today's dump (no run given)\n"
     expect(harnessLabJudge(run(0, `${ours}121 of 121 checks passed\n`))).toEqual({ pass: true, numbers: { passed: 121, checks: 121, run: ['1512.03385v1'], l1: [] } })
-    expect(harnessLabJudge(run(0, `${ours}${l1}121 of 121 checks passed\n`))).toMatchObject({ pass: true, numbers: { l1: ['2609.26457v1'] }, note: expect.stringMatching(/lane L1's bundle .*2609\.26457v1/) })
+    // (the gate gives the harness this run's rows: a paper on another run's data in their place fails it, named; it passed with a
+    // note before, the coordinator's ruling withdrawn on 2026-11-14)
+    expect(harnessLabJudge(run(0, `${ours}${l1}121 of 121 checks passed\n`))).toMatchObject({ pass: false, numbers: { l1: ['2609.26457v1'] }, note: expect.stringMatching(/lane L1's bundle .*not from this run's rows: 2609\.26457v1/) })
+    // (one paper missing from the rows: the harness refuses before any check, naming the paper and the file it expected)
+    const missing = 'FAIL fixtures: no rows of this run for 2609.26457v1: expected /r/2609.26457v1-zh.json\n'
+    expect(harnessLabJudge(run(1, `${ours}${missing}`))).toMatchObject({ pass: false, note: 'no rows of this run for 2609.26457v1: expected /r/2609.26457v1-zh.json' })
     const refused = 'FAIL fixtures: 2609.26457v1: rows do not belong to these bundles: 25 of 321 units without a row (rows /r, bundles /b)\n'
     expect(harnessLabJudge(run(1, refused))).toMatchObject({ pass: false, note: expect.stringMatching(/^2609\.26457v1: rows do not belong to these bundles: 25 of 321 units without a row/) })
   })

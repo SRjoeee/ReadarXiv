@@ -18,6 +18,7 @@ a translation (`de.rows.json`, the translate package's Result shape, by unit id)
 Licensed corpus papers are never copied here: the harness reads them in place from lab-data (`AXT_LAB_FIXTURES=<id>,…`), each
 laid with a bundle and the rows that belong to it: a corpus run's bundles and that run's rows of them (`AXT_L1_BUNDLES` and
 `AXT_LAB_ROWS`, never one without the other: the release check's `harness-lab` gives its prepare's bundles and its reader
-gate's rows), else lane L1's bundles and the baseline's dumps of today's reader over them. A run's rows that leave a unit of
-its bundle without a row, or name units it does not hold, stop the harness before any check ("rows do not belong to these
-bundles").
+gate's rows), else, the harness run by hand with neither, lane L1's bundles and the baseline's dumps of today's reader over
+them. A run's rows that hold no file of a paper ("no rows of this run for <id>: expected <file>"), or that leave a unit of its
+bundle without a row or name units it does not hold ("rows do not belong to these bundles"), stop the harness before any
+check: a paper is never laid from another run's data in their place.

@@ -261,8 +261,9 @@ export function checksOf(text) {
 /**
  * harness-lab's verdict over the harness's run: its checks, each corpus paper's bundle and rows as the harness names them
  * ("fixture <id>: this run's bundle and its rows …" or "… lane L1's bundle and today's dump …"), and the harness's refusal of
- * bundles and rows that do not belong together ("FAIL fixtures: …"), which fails the gate with its own words. A paper laid from
- * lane L1's is named in the note
+ * bundles and rows that do not belong together or a paper the run's rows do not hold ("FAIL fixtures: …"), which fails the gate
+ * with its own words. The gate gives the harness this run's rows: a paper laid from lane L1's bundle and today's dump is another
+ * run's data in their place, and fails the gate, named
  */
 export function harnessLabJudge(step) {
   const text = step.text
@@ -273,8 +274,8 @@ export function harnessLabJudge(step) {
     l1: of.filter(m => m[2] === "lane L1's").map(m => m[1]),
   }
   const refused = /^FAIL fixtures: (.*)$/m.exec(text)?.[1] ?? null
-  const note = refused ?? (numbers.l1.length ? `laid from lane L1's bundle and today's dump, not in this run's rows: ${numbers.l1.join(', ')}` : null)
-  return { pass: step.exit === 0 && !refused && !/route table violated/.test(text), numbers, ...(note ? { note } : {}) }
+  const note = refused ?? (numbers.l1.length ? `laid from lane L1's bundle and today's dump, not from this run's rows: ${numbers.l1.join(', ')}` : null)
+  return { pass: step.exit === 0 && !refused && !numbers.l1.length && !/route table violated/.test(text), numbers, ...(note ? { note } : {}) }
 }
 
 /** a terminal's colours (vitest colours its summary where it is asked to) */
@@ -915,10 +916,10 @@ export const GATES = [
     // (bundles and rows of the same run, never one without the other: the prepare's bundles (AXT_L1_BUNDLES) and the rows
     // reader-parts' rows step made over them (AXT_LAB_ROWS). The harness refuses bundles without rows, and stops before any
     // check where a paper's rows leave a unit its bundle asks without a row, or name units it does not hold ("rows do not belong
-    // to these bundles": rows of another run); a paper the rows do not hold is laid from lane L1's bundle and the baseline's dump
-    // of today's reader over it, named in the gate's numbers. Laid with rows of no run of its own, today's dumps keyed by L1's
-    // units, the run's bundles left the units its prepare cut otherwise without a row: 2609.26457v1's abstract and introduction
-    // the original's, lane harness-weight, 2026-11-13)
+    // to these bundles": rows of another run), and where the rows hold no file of a paper ("no rows of this run for <id>"): no
+    // paper is laid from lane L1's bundle and the baseline's dump in their place, and one that is fails the gate, named. Laid
+    // with rows of no run of its own, today's dumps keyed by L1's units, the run's bundles left the units its prepare cut
+    // otherwise without a row: 2609.26457v1's abstract and introduction the original's, lane harness-weight, 2026-11-13)
     after: ['prepare', 'reader-parts'],
     // (the papers' arXiv PDFs, the baseline's dumps the lab's; the rows this run's reader-parts made)
     needs: ctx => [

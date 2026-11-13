@@ -33,11 +33,12 @@ const objects = new Map(Object.entries(papers).map(([id, f]) => [`/api/v2/o/arxi
 // the fixtures (packages/reader/e2e/fixtures: ours; AXT_LAB_FIXTURES=<id>,… : corpus papers read in place from lab-data, each
 // laid with a bundle and the rows that belong to it): with AXT_L1_BUNDLES and AXT_LAB_ROWS, a corpus run's bundles and that
 // run's rows of them (the release check's prepare and its reader gate's rows step: `<id>-zh.json`, the chain's results over the
-// bundle's units, no translator asked); a paper the rows do not hold, and every paper without the two, lane L1's bundle and the
-// baseline's dump of today's reader over it (the dump was made over that bundle: its units are the bundle's). Bundles are never
-// given without their rows: AXT_L1_BUNDLES alone is refused, and a run's rows that leave a unit of its bundle without a row,
-// or name units it does not hold, stop the harness before any check (rows of another run). Each one's A, its bundle's objects
-// under our server's paths, its dumps and rows
+// bundle's units, no translator asked); without the two (the harness run by hand), lane L1's bundle and the baseline's dump of
+// today's reader over it (the dump was made over that bundle: its units are the bundle's). Bundles are never given without their
+// rows: AXT_L1_BUNDLES alone is refused, and a paper the run's rows do not hold, or whose rows leave a unit of its bundle without
+// a row or name units it does not hold, stops the harness before any check (no rows of this run for it; rows of another run):
+// never laid from another run's data in their place. Each one's A, its bundle's objects under our server's paths, its dumps
+// and rows
 const FIX = join(HERE, 'fixtures')
 const LAB = '/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11'
 const L1_BUNDLES = join(LAB, 'lanes/L1-out4/bundles')
@@ -89,7 +90,12 @@ for (const id of (process.env.AXT_LAB_FIXTURES ?? '').split(',').filter(Boolean)
   const p = papersJson.papers.find((x) => x.id === id)
   if (!p) throw new Error(`no corpus paper ${id}`)
   const runFile = RUN_ROWS ? join(RUN_ROWS, `${id}-zh.json`) : null
-  const run = runFile && existsSync(runFile) ? runRowsOf(join(RUN_BUNDLES, id), runFile) : null
+  // (a run's rows given and this paper's not among them: refused, never laid from another run's data in their place)
+  if (runFile && !existsSync(runFile)) {
+    notBelonging.push(`no rows of this run for ${id}: expected ${runFile}`)
+    continue
+  }
+  const run = runFile ? runRowsOf(join(RUN_BUNDLES, id), runFile) : null
   fixtures[id] = {
     pdf: join(p.dir, 'arxiv.pdf'),
     bundle: run ? join(RUN_BUNDLES, id) : join(L1_BUNDLES, id),
@@ -114,7 +120,7 @@ for (const id of (process.env.AXT_LAB_FIXTURES ?? '').split(',').filter(Boolean)
   console.log(
     run
       ? `fixture ${id}: this run's bundle and its rows (${RUN_BUNDLES}, ${runFile}: chain ${run.identity}, ${run.asked} units asked, ${run.rows.rows.length} rows); today's dump joins ${[...dumpIds].filter((u) => run.byId.has(u)).length} of its ${dumpIds.size} units`
-      : `fixture ${id}: lane L1's bundle and today's dump (${RUN_ROWS ? `not in this run's rows, ${RUN_ROWS}` : 'no run given'})`,
+      : `fixture ${id}: lane L1's bundle and today's dump (no run given)`,
   )
 }
 if (notBelonging.length) {
