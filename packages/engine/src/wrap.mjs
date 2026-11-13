@@ -37,7 +37,7 @@
 import { isMemoryError } from './memory.ts'
 import { DELTA_OBJECTS_MAX, deltaSection, UNHIDDEN_MAX } from './delta-wire.mjs'
 import { alignOf, DecodeLimit, lex, LexLimit, openRemover } from './remove.mjs'
-import { appendSection } from './section.mjs'
+import { appendSection } from './section.ts'
 import { startxrefOf } from './tail.ts'
 import { openObjects } from './xref.mjs'
 
