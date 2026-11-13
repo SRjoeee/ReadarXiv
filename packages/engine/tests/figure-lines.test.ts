@@ -724,6 +724,129 @@ describe('figure-lines: a path’s flush rows joined where the sentence goes on 
   })
 })
 
+describe('figure-lines: a path’s flush rows that make a list, whose a glyph inside it is, and the hold over a held item (§18.36, §18.61)', () => {
+  const T = 'ArialMT'
+  /** a box round rows set flush left at 80, 5 to the right of its widest row and 5 to the left of them all; `free`, glyphs no run
+   *  holds, each [row, text, x (none: right after the row), dy] */
+  const listBox = (rows: string[], free: [number, string, number | undefined, number][] = []) => {
+    const parts = rows.map((text, li) => [
+      { text, font: T, x: 80 },
+      ...free.filter((f) => f[0] === li).map(([, text, x, dy]) => ({ text, font: T, x, dy, run: false })),
+    ])
+    const { page, fig } = pageOf(parts)
+    const g = page.glyphs as Glyph[]
+    const x1 = Math.max(...g.map((x) => x.x1)) + 5
+    const ks = fig.units.map((u) => u.k)
+    const others = g.flatMap((x, i) => (free.length && ![...fig.glyphs[0]!.keys()].includes(i) && !x.blank ? [i] : []))
+    fig.holds = [
+      { p: 1, b: 9, ks, shape: rect(75, 700 - 14 * rows.length, x1, 712), ...(others.length ? { others } : {}) },
+    ]
+    return { page, fig, g, others }
+  }
+  const labelOf = (t: { label: number[] }, g: Glyph[]) => t.label.map((i) => g[i]!.u).join('')
+  it('takes a path whose glyph no run holds the line reading sets on its rows; not one whose such glyph stands on none', () => {
+    const rows = ['Run the checks to make', 'sure the outputs are', 'kept as they were']
+    // (the full stop after the last row, no run's: that row's, by the line reading)
+    const end = listBox(rows, [[2, '.', undefined, 0]])
+    const [t, ...rest] = figureLinesOf([end.page], end.fig, () => false, null)
+    expect([t!.ks, t!.para?.by, t!.claimed, rest]).toEqual([[0, 1, 2], 'container', end.others, []])
+    // (a mark between two rows, half a pitch off either baseline: no line of the path holds it, so the path holds its rows with
+    // another glyph and its rows are no text of the path's, as before)
+    const between = listBox(rows, [[0, '*', 160, -7]])
+    expect(figureLinesOf([between.page], between.fig, () => false, null).filter((x) => x.ks.length > 1)).toEqual([])
+  })
+  it('joins each item’s rows of a list set flush in a path, its marker its label; a capital or a digit begins a row of its own', () => {
+    const { page, fig, g } = listBox([
+      '1. Find every place in the',
+      'default output where the',
+      'labels are made for tasks.',
+      '2. Add a helper method in',
+      'the module that formats',
+      'every label it is given.',
+      '3. Keep the old output too.',
+      'Then run the checks again',
+      '2024 runs were kept as is',
+    ])
+    const texts = figureLinesOf([page], fig, () => false, null)
+    expect(texts.filter((t) => t.ks.length > 1).map((t) => [t.ks, t.para?.align, labelOf(t, g)])).toEqual([
+      [[0, 1, 2], 'l', '1.'],
+      [[3, 4, 5], 'l', '2.'],
+    ])
+    // (an item of one row its own text, its marker its label, as a list's outside a path; the rows a capital and a digit begin
+    // are no item's and join nothing)
+    expect(texts.filter((t) => t.ks.length === 1).map((t) => [t.ks, labelOf(t, g)])).toEqual([[[6], '3.']])
+    // (a marker is never sent: no text's text holds its glyphs)
+    for (const t of texts)
+      expect(t.order.some((o) => o.t === 'text' && o.glyphs.some((i) => t.label.includes(i)))).toBe(false)
+  })
+  it('holds a held item’s rows whole however the path joined them: a word on a tone broken over two rows, a word in its other text', () => {
+    const rows = [
+      '1. Find every place in the',
+      'default output where the',
+      'labels are made for tasks.',
+      '2. Add a helper method in',
+      'the module plugins/name_',
+      '_util.py which formats each',
+      'label it is given safely.',
+      '3. Replace each copy of the',
+      'label code with calls to',
+      '`Base.label(result)` while',
+      'keeping the old format.',
+    ]
+    const { page, fig, g } = listBox(rows)
+    /** the glyphs of `s` on row `li` */
+    const on = (li: number, s: string) => {
+      const row = g.flatMap((x, i) => (x.y === 700 - 14 * li && !x.blank ? [i] : []))
+      const at = row.findIndex(
+        (_, j) =>
+          row
+            .slice(j, j + s.length)
+            .map((i) => g[i]!.u)
+            .join('') === s,
+      )
+      return row.slice(at, at + s.length)
+    }
+    // (a chip's tone under a stretch of a row: a line tall, a point round it)
+    const tone = (b: number, gs: number[]): TodayMet => ({
+      ...boxMet(
+        b,
+        rect(g[gs[0]!]!.x0 - 0.5, g[gs[0]!]!.y - 3, g[gs.at(-1)!]!.x1 + 0.5, g[gs[0]!]!.y + 9, {
+          stroke: false,
+          fill: true,
+          hw: 0,
+        }),
+      ),
+      ground: true,
+    })
+    // (item 2's one word on a chip broken over its rows 4 and 5, "plugins/name_|_util.py"; item 3's "Base.label(result)" on row 9,
+    // its backticks outside its tone)
+    fig.met.set(4, { items: [tone(0, on(4, 'plugins/name_'))], under: null })
+    fig.met.set(5, { items: [tone(1, on(5, '_util.py'))], under: null })
+    fig.met.set(9, { items: [tone(2, on(9, 'Base.label(result)'))], under: null })
+    const texts = figureLinesOf([page], fig, () => false, null)
+    const of = (k: number) => texts.find((t) => t.ks.includes(k))!
+    // (item 2: its four rows one text, its marker its label, held whole as the original for its word on the chip, never sent; the
+    // word an element on each row, as each row read alone makes it: an element is ink of one line)
+    expect([of(3).ks, labelOf(of(3), g), of(3).why]).toEqual([[3, 4, 5, 6], '2.', 'decoration'])
+    expect(of(3).els.map((e) => [e.kind, e.glyphs.map((i) => g[i]!.u).join(''), e.boxes])).toEqual([
+      ['cite', 'plugins/name_', [0]],
+      ['cite', '_util.py', [1]],
+    ])
+    // (item 3: the text its decorated word stands in, and the text its label pairs with it, both held)
+    expect([of(7).ks, of(7).why, of(7).withLabel, of(9).ks, of(9).why]).toEqual([
+      [7, 8],
+      'decoration',
+      true,
+      [9, 10],
+      'decoration',
+    ])
+    // (every run of items 2 and 3 in a held text; item 1 translated)
+    expect(texts.filter((t) => t.ks.some((k) => k >= 3)).every((t) => t.why === 'decoration')).toBe(true)
+    expect(new Set(texts.filter((t) => t.ks.some((k) => k >= 3)).flatMap((t) => t.ks)).size).toBe(8)
+    expect([of(0).ks, of(0).why]).toEqual([[0, 1, 2], null])
+  })
+})
+
 describe('figure-lines: step 2, ink that is no text never keeps a figure text (the owner’s ruling; G2, 2026-11-11)', () => {
   const crowd = (fig: TodayFigures, k: number, items: TodayMet[]) => {
     fig.units[k]!.why = 'crowded'

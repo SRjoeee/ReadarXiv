@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest'
 // @ts-ignore: today's JavaScript, typed where the package takes it (ink.ts)
 import { containersOf, figureUnitsOf } from '../src/locate/today/figure-text.mjs'
+import { figureLinesOf } from '../src/locate/figure-lines.ts'
 
 /** a page of one word at (100, 100), 10 pt, in a figure, a stroke `at` across from it (its room on the line reads it) */
 const page = (text: string, at: number) => {
@@ -145,10 +146,14 @@ describe('figure-text: the closed paths that hold units alone (F3’s container 
     expect(stats.boxed).toBe(1)
   })
   it('holds no lines another glyph shares the path with; of two paths round the same lines, the inner one: the outer holds a node', () => {
-    // ("yes" a unit of its own inside the diamond: not alone)
-    const inside = [...units, { k: 3, gs: [] as number[] }]
-    const g2 = [...glyphs, glyph('x', 98, 690)]
+    // ("x" a unit's of its own inside the diamond, its other glyph outside it: not alone)
+    const g2 = [...glyphs, glyph('x', 98, 690), glyph('y', 300, 690)]
+    const inside = [...units, { k: 3, gs: [glyphs.length, glyphs.length + 1] }]
     expect(containersOf({ ...pg(), glyphs: g2 }, inside, 1).length).toBe(0)
+    // (a glyph no unit holds inside it: handed over, the line reading tells whose it is (figure-lines.ts))
+    expect(
+      containersOf({ ...pg(), glyphs: g2 }, units, 1).map((h: { ks: number[]; others?: number[] }) => [h.ks, h.others]),
+    ).toEqual([[[0, 1, 2], [glyphs.length]]])
     // (a frame round the diamond holding nothing else: the diamond, the inner path)
     const frame = {
       b: 1,
@@ -311,5 +316,92 @@ describe('figureUnitsOf reads no line under a text in a dot (F3, 2608.06701v1 p9
       ]).under
     expect(dotAnd(97.6)).toBeNull()
     expect(dotAnd(98.3)).toBeCloseTo(1.45, 4)
+  })
+})
+
+describe('figure-text: a glyph no run holds inside a closed path is the line reading’s to place (F3’s container step, §18.36)', () => {
+  // (a frame round three rows set flush left in ArialMT at 80, 10 pt, 14 apart, the last row's full stop set in a face of one
+  // pitch: the figure reading cuts it from its word at the face change, and a run that spells no word is no unit; 2608.06701v1
+  // p1's plan box, its item 4's "behavior." whose stop is set on a chip of its own)
+  const MONO = 'Consolas'
+  const rowsOf = (rows: string[], stop: boolean) => {
+    const glyphs: Record<string, unknown>[] = []
+    rows.forEach((text, li) => {
+      let x = 80
+      const y = 700 - 14 * li
+      const set = (u: string, font: string) => {
+        const w = u === ' ' ? 3 : font === MONO ? 6 : 5 + (u.codePointAt(0)! % 3)
+        glyphs.push({
+          u,
+          n: glyphs.length,
+          k: glyphs.length,
+          x0: x,
+          x1: x + w,
+          ix0: x,
+          ix1: x + w,
+          y,
+          top: y + 7,
+          bottom: y - 2,
+          size: 10,
+          font,
+          fill: 0,
+          form: true,
+          fid: 1,
+          blank: u === ' ',
+        })
+        x += w
+      }
+      for (const u of text) set(u, 'ArialMT')
+      if (stop && li === rows.length - 1) set('.', MONO)
+    })
+    return glyphs as { u: string; x1: number }[]
+  }
+  const ROWS = ['Run the checks to make', 'sure the outputs are', 'kept as they were']
+  const framed = (glyphs: { x1: number }[]) => {
+    const x1 = Math.max(...glyphs.map((g) => g.x1)) + 5
+    const segs = [75, 662, x1, 662, x1, 662, x1, 712, x1, 712, 75, 712, 75, 712, 75, 662]
+    return {
+      glyphs,
+      turned: [],
+      boxes: [75, 662, x1, 712],
+      shapes: new Map([[0, { segs: Float32Array.from(segs), stroke: true, fill: false, hw: 0.2 }]]),
+      paths: [0],
+      boxAt: glyphs.map(() => 1),
+      view: [0, 0, 600, 800],
+      figures: new Map([['1:0', [0, 0, 600, 800]]]),
+      pictures: [],
+      points: [],
+    }
+  }
+  it('hands the path a glyph no unit holds inside it, for the line reading to place, and refuses one a unit outside it holds', () => {
+    const glyphs = rowsOf(ROWS, true)
+    const stop = glyphs.length - 1
+    // (the rows' units, their glyphs but the spaces; the stop no unit's)
+    let at = 0
+    const units = ROWS.map((text, k) => {
+      const gs = [...text].flatMap((u) => (u === ' ' ? (at++, []) : [at++]))
+      return { k, gs }
+    })
+    const pg = framed(glyphs)
+    expect(
+      containersOf(pg, units, 1).map((h: { b: number; ks: number[]; others?: number[] }) => [h.b, h.ks, h.others]),
+    ).toEqual([[0, [0, 1, 2], [stop]]])
+    // (a path every glyph inside of which is its units': nothing handed over, the hold as before)
+    const plain = framed(rowsOf(ROWS, false))
+    expect(containersOf(plain, units, 1).map((h: { others?: number[] }) => 'others' in h)).toEqual([false])
+    // (the stop a unit's of its own, which the path does not hold whole (its other glyph past the frame): another text inside it,
+    // no hold, as before)
+    const across = { ...pg, glyphs: [...glyphs, { ...glyphs[stop]!, x0: 900, x1: 906, ix0: 900, ix1: 906 }] }
+    expect(containersOf(across, [...units, { k: 3, gs: [stop, glyphs.length] }], 1)).toEqual([])
+  })
+  it('makes the rows one text where the line reading sets the stop on the path’s last row', () => {
+    const pg = framed(rowsOf(ROWS, true))
+    const fixed = new Set([MONO])
+    const fig = figureUnitsOf([pg] as never, null, { fixed })
+    // (the stop no unit: its run spells no word)
+    expect(fig.units.map((u: { text: string }) => u.text)).toEqual(ROWS)
+    const texts = figureLinesOf([pg] as never, fig, () => false, fixed)
+    expect(texts.map((t) => [t.ks, t.para?.by])).toEqual([[[0, 1, 2], 'container']])
+    expect(texts[0]!.claimed).toEqual([pg.glyphs.length - 1])
   })
 })
