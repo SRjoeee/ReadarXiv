@@ -27,10 +27,12 @@ const sample = join(REPO, 'tests/fixtures/pdf/sample-1/sample-1.pdf')
 const papers = { '2600.00001v1': sample }
 if (process.env.AXT_PAPER) papers.lab = join(process.env.AXT_PAPER, 'arxiv.pdf')
 const objects = new Map(Object.entries(papers).map(([id, f]) => [`/api/v2/o/arxiv/${id.replace('.', '_')}.pdf`, f]))
-// the fixtures (packages/reader/e2e/fixtures: ours; AXT_LAB_FIXTURES=<id>,… : lane L1's bundles of corpus papers and the
-// baseline's dumps, read in place from lab-data): each one's A, its bundle's objects under our server's paths, its dumps and rows
+// the fixtures (packages/reader/e2e/fixtures: ours; AXT_LAB_FIXTURES=<id>,… : corpus papers' bundles and the baseline's dumps,
+// read in place from lab-data, the bundles from AXT_L1_BUNDLES (a corpus run's, as the release check gives its own prepare's),
+// else lane L1's): each one's A, its bundle's objects under our server's paths, its dumps and rows
 const FIX = join(HERE, 'fixtures')
 const LAB = '/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11'
+const LAB_BUNDLES = process.env.AXT_L1_BUNDLES ?? join(LAB, 'lanes/L1-out4/bundles')
 const fixtures = {}
 for (const name of readdirSync(FIX)) {
   const d = join(FIX, name)
@@ -43,7 +45,7 @@ for (const id of (process.env.AXT_LAB_FIXTURES ?? '').split(',').filter(Boolean)
   if (!p) throw new Error(`no corpus paper ${id}`)
   fixtures[id] = {
     pdf: join(p.dir, 'arxiv.pdf'),
-    bundle: join(LAB, 'lanes/L1-out4/bundles', id),
+    bundle: join(LAB_BUNDLES, id),
     files: join(LAB, 'baseline/reader'),
     dumps: { zh: `${id}-zh.reader.json` },
     rows: { zh: null },
