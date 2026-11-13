@@ -4847,10 +4847,12 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
   accent). One join reads wrong: 2610.20507v1 p8's "giant + AGB / (∼ 12% of τMS, not followed)" and the region's own label
   "black hole" 12.8 pt under it, centred on one axis, are one text. Held to TeX's interline rule as a paragraph's lines are
   (`oneLead`), the step would undo it and ten joins that read right (2406.06525v1's centred caption paragraphs, rows a tool set
-  4.21 to 4.85 pt apart; 2610.31506v1's two node labels): not taken. One joined text keeps a glyph no served face draws:
-  2608.06701v1 p10's "CLI-context / initialization. 🚨", whose warning sign the line reading sets on its row and the text
-  sends, so its lay throws (`Unserved`) and it stands as the original by itself, where its rows had been translated apart.
-  Its room is the path's inside. **A joined text is laid as a paragraph of the body is laid** (the owner's
+  4.21 to 4.85 pt apart; 2610.31506v1's two node labels): not taken. No joined text stands as the original for a glyph: the
+  signs no run holds are elements (above), and Google sets each at its text's end (item 4's stop after the translation's last
+  character, with no full stop of its own; 2608.06701v1 p10's warning sign after "CLI-context initialization" translated, the
+  original's full stop dropped). A sign whose ink the page does not state carries none: p10's colour emoji, its glyph box on
+  its baseline with no height (PDF.js states no ink for it), is cropped as a hairline after the text and never erased, the sign
+  staying where it stood. Its room is the path's inside. **A joined text is laid as a paragraph of the body is laid** (the owner's
   ruling of 2026-11-11: a figure's text keeps the body's rules, none of its own and no optical correction): its first line on its
   first row's baseline, its leading the ladder's and the page fill's, as a body paragraph's of the same lines and height (a
   translation of fewer lines takes a looser leading and fills its rows' extent), no line under its last row's baseline. A CJK
