@@ -128,8 +128,8 @@ describe('R2: a word the paper’s running text writes as a name is a name of th
   it('a header row of names (Claude, Mistral) kept: written capitalised mid-sentence and never in lower case', () => {
     expect(judged(table(['Model & Claude & Mistral', '\\midrule\nOurs & 1.0 & 2.0'], 'lrr'), prose)).toEqual([
       ['Model', null],
-      ['Claude', 'names'],
-      ['Mistral', 'names'],
+      ['Claude', 'paperNames'],
+      ['Mistral', 'paperNames'],
       ['Ours', null],
     ])
   })
@@ -137,7 +137,7 @@ describe('R2: a word the paper’s running text writes as a name is a name of th
     expect(judged(table(['Filter & Test', '\\midrule\nTukey & 1.0', 'Mean & 2.0']), prose)).toEqual([
       ['Filter', null],
       ['Test', null],
-      ['Tukey', 'names'],
+      ['Tukey', 'paperNames'],
       ['Mean', null],
     ])
   })
@@ -145,7 +145,7 @@ describe('R2: a word the paper’s running text writes as a name is a name of th
     expect(judged(table(['Method & Score', '\\midrule\nOracle & 1.0', 'Results & 2.0', 'Claude GPT-4o & 3.0']), prose).slice(2)).toEqual([
       ['Oracle', null],
       ['Results', null],
-      ['Claude GPT-4o', 'names'],
+      ['Claude GPT-4o', 'paperNames'],
     ])
   })
 })

@@ -208,9 +208,9 @@ export function inkOf(o: InkInput): {
   // (a figure's text kept as written, as a table's cell is (R1: no ordinary word; R2: the paper's own names, read off its running
   // text, the source's units: PDF-READER §18.72); its mark for the lab's dump)
   const names = paperNamesOf(ins.units)
-  const keptMarks = (content: readonly Piece[]): { kept?: true; words?: true; names?: true } => {
+  const keptMarks = (content: readonly Piece[]): { kept?: true; words?: true; paperNames?: true } => {
     const k = keptAsWritten(content, names)
-    return k === 'words' ? { kept: true, words: true } : k === 'names' ? { kept: true, names: true } : {}
+    return k === 'words' ? { kept: true, words: true } : k === 'paperNames' ? { kept: true, paperNames: true } : {}
   }
   const units: TodayUnit[] = ins.units.map((u) =>
     u.kind === 'name' ? null : { kind: u.kind, pieces: flatOf(u.content) },
@@ -652,7 +652,7 @@ function figureTextOf(
   m: Mapping,
   pageA: Int32Array,
   global: (p: number, g: number) => number,
-  keptMarks: (content: readonly Piece[]) => { kept?: true; words?: true; names?: true },
+  keptMarks: (content: readonly Piece[]) => { kept?: true; words?: true; paperNames?: true },
 ): Made {
   const p = t.page
   const G = inkA.pages[p - 1]!.glyphs

@@ -101,7 +101,7 @@ describe('R2: the paper’s own names, from its running text', () => {
   it('a text of such names and R1’s tokens is kept; one with any other word is sent', () => {
     const names = new Set(['Claude', 'Opus', 'Gemini'])
     expect(onlyNames(text('Claude Opus 4.8'), names)).toBe(true)
-    expect(keptAsWritten(text('Gemini'), names)).toBe('names')
+    expect(keptAsWritten(text('Gemini'), names)).toBe('paperNames')
     expect(keptAsWritten(text('Gemini (ours)'), names)).toBe(null)
     expect(keptAsWritten(text('GPT-4o'), names)).toBe('words')
   })

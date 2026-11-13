@@ -134,7 +134,7 @@ export const CAUSE = Object.freeze({
   crowded: 'kept as the original: a figure text crowded by the ink about it, or a formula it would tear',
   pseudocode: "kept as the original: a line of an algorithm's pseudocode",
   words: 'kept as written: a cell or a figure text that holds no ordinary word',
-  names: "kept as written: a cell or a figure text of the paper's own names",
+  paperNames: "kept as written: a cell or a figure text of the paper's own names",
   block: 'kept as the original: a block of text no unit owns',
   // ((f): a unit the candidate does not make, every line of it inside a line the engine reads as a display's formula (a display
   // TeX's marked compile states, its text-mode glyphs read as text: locate's `displays`): the display's ink, kept with it — the
@@ -215,8 +215,8 @@ export const keptWhyOf = (u) =>
                     ? CAUSE.pseudocode
                     : u?.keptBy === 'words'
                       ? CAUSE.words
-                      : u?.keptBy === 'names'
-                        ? CAUSE.names
+                      : u?.keptBy === 'paperNames'
+                        ? CAUSE.paperNames
                         : u?.keptBy === 'block'
                           ? CAUSE.block
                           : null

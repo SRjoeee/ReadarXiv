@@ -1252,9 +1252,9 @@ export function nameGroupOf(g) {
  * (`pseudocode`: kept as the original as code is, the owner's ruling of 2026-11-08; its caption is the float's, translated), and a
  * table's cell or a figure's text that holds no ordinary word (`words`, R1 of PDF-READER §18.72: language.ts keptAsWritten over
  * its content, its elements by kind; the owner's direction of 2026-11-13: decide what is content from the source's facts), or whose
- * words are the paper's own names (`names`, R2: a title-case word its running text writes capitalised mid-sentence and never in
+ * words are the paper's own names (`paperNames`, R2: a title-case word its running text writes capitalised mid-sentence and never in
  * lower case, language.ts paperNamesOf); `why`, each kept unit's reason, the rule that keeps it ('pseudocode' first, then 'words',
- * 'names'), which the lab's dump states (`keptBy`) and the bundle does not carry
+ * 'paperNames'), which the lab's dump states (`keptBy`) and the bundle does not carry
  */
 export function unitFactsOf(paper) {
   const float = new Map(paper.floatTypes ?? [])

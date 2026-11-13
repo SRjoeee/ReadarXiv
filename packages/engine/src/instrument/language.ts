@@ -163,9 +163,9 @@ export function onlyNames(content: readonly Piece[], names: ReadonlySet<string>)
   )
 }
 
-/** why a short text is kept as written: 'words' (R1: it holds no ordinary word), 'names' (R2: its words are the paper's own
- *  names), or null (language: sent) */
-export function keptAsWritten(content: readonly Piece[], names: ReadonlySet<string>): 'words' | 'names' | null {
+/** why a short text is kept as written: 'words' (R1: it holds no ordinary word), 'paperNames' (R2: its words are the paper's
+ *  own names), or null (language: sent). Each the mark the lab's dump states it by (`keptBy`) */
+export function keptAsWritten(content: readonly Piece[], names: ReadonlySet<string>): 'words' | 'paperNames' | null {
   if (holdsNoWord(content)) return 'words'
-  return onlyNames(content, names) ? 'names' : null
+  return onlyNames(content, names) ? 'paperNames' : null
 }

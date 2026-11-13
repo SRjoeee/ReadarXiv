@@ -236,7 +236,7 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   // `crowded`: 'crowded'; a line of an algorithm float's body, `pseudocode`: 'pseudocode'; any other kept block of rule 10,
   // `block`: 'block'. The order is the rules' own: a unit two marks state is kept by the first. No unit is kept for its words: a
   // table's cell is text like any other, the owner's word of 2026-11-13)
-  const keptBy = u.pitch ? 'pitch' : u.address ? 'address' : u.formula ? 'formula' : u.double ? 'double' : u.script ? 'script' : u.decorated ? 'decorated' : u.why === 'figure: identifier' ? 'identifier' : u.crowded ? 'crowded' : u.pseudocode ? 'pseudocode' : u.words ? 'words' : u.names ? 'names' : u.block ? 'block' : null
+  const keptBy = u.pitch ? 'pitch' : u.address ? 'address' : u.formula ? 'formula' : u.double ? 'double' : u.script ? 'script' : u.decorated ? 'decorated' : u.why === 'figure: identifier' ? 'identifier' : u.crowded ? 'crowded' : u.pseudocode ? 'pseudocode' : u.words ? 'words' : u.paperNames ? 'paperNames' : u.block ? 'block' : null
   // (and a unit held for a decorated word, whether it holds the word (`token`) or stands in its label (`label`): `decorated`)
   const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), ...(keptBy ? { keptBy } : {}), ...(u.decorated ? { decorated: u.decorated } : {}), text: textOfPieces(pieces), pieces }
   if (u.kind === 'name') { units.push({ ...base, state: 'unlaid', why: 'name: drawn by its own group, never laid as a unit' }); states.unlaid++; return }
