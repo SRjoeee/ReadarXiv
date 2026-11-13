@@ -381,6 +381,31 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
       return part
     })
   }
+  it('gives a path’s label its inside across as its room beside its lines, its stroke’s half width in (§18.36)', () => {
+    // (a centred label of three rows in a frame 60..200 drawn 0.4 wide: its room across is the frame's inside, 60.2..199.8,
+    // whatever ink stands past the frame; the room over and under it, the frame's edges about its baseline, as before)
+    const T = 'TimesNewRomanPSMT'
+    const { page, fig } = pageOf([
+      centred(130, T, ['Locate the actual']),
+      centred(130, T, ['validate the record']),
+      centred(130, T, ['checks']),
+    ])
+    fig.holds = [{ p: 1, b: 0, ks: [0, 1, 2], shape: rect(60, 660, 200, 712) }]
+    const [t] = figureLinesOf([page], fig, () => false, null).filter((x) => x.ks.length > 1)
+    expect(t!.container!.side![0]).toBeCloseTo(60.2, 6)
+    expect(t!.container!.side![1]).toBeCloseTo(199.8, 6)
+    // (a diamond's inside across is where its slanted sides cross each row a third of its size over its baseline, the narrowest
+    // of the rows', its stroke's half width in: the top row's, 71..129 at 703.5, less 0.5 a side)
+    const node = pageOf([
+      [{ text: 'Any', font: 'TimesNewRomanPSMT', x: 90 }],
+      [{ text: 'signal', font: 'TimesNewRomanPSMT', x: 82.5 }],
+      [{ text: 'detected?', font: 'TimesNewRomanPSMT', x: 71.5 }],
+    ])
+    node.fig.holds = [{ p: 1, b: 0, ks: [0, 1, 2], shape: diamond(100, 688, 60, 30) }]
+    const [u] = figureLinesOf([node.page], node.fig, () => false, null).filter((x) => x.ks.length > 1)
+    expect(u!.container!.side![0]).toBeCloseTo(71.5, 6)
+    expect(u!.container!.side![1]).toBeCloseTo(128.5, 6)
+  })
   it('reads the runs a path holds on one baseline one line: a row its words stand wide apart in, a node’s label still', () => {
     const T = 'TimesNewRomanPSMT'
     const { page, fig } = pageOf([
@@ -765,6 +790,25 @@ describe('figure-lines: a path’s flush rows that make a list, whose a glyph in
     expect(t!.els).toEqual([{ kind: 'symbol', glyphs: others, boxes: [] }])
     expect(t!.order.flatMap((o) => (o.t === 'text' ? o.glyphs : [])).map((i) => g[i]!.u)).not.toContain('\u{1F6A8}')
     expect(t!.order.at(-1)).toEqual({ t: 'el', i: 0 })
+  })
+  it('leaves a sign whose ink the page does not state out of its row’s text: page ink where it stands, nothing sent (p10)', () => {
+    // (a colour sign PDF.js states with no ink, its box on its baseline: no element can carry it; it stays where it stands, out of
+    // the text and of its glyphs, and the text, its own full stop with it, is translated)
+    const rows = ['Run the checks to make', 'sure the outputs are', 'kept as they were.']
+    const { page, fig, g, others } = listBox(rows, [[2, ' \u{1F6A8}', undefined, 0, 'AppleColorEmoji']])
+    const sign = g[others[0]!]!
+    sign.top = sign.y
+    sign.bottom = sign.y
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+    expect([t!.ks, t!.para?.by, t!.why, t!.els, rest]).toEqual([[0, 1, 2], 'container', null, [], []])
+    expect(t!.order.flatMap((o) => (o.t === 'text' ? o.glyphs : []))).not.toContain(others[0])
+    expect(t!.claimed).not.toContain(others[0])
+    expect(
+      t!.order
+        .flatMap((o) => (o.t === 'text' ? o.glyphs : []))
+        .map((i) => g[i]!.u)
+        .at(-1),
+    ).toBe('.')
   })
   it('carries a stop in another face on a chip of its own that ends an item as an element, its chip with it (2608.06701v1 p1)', () => {
     // (item 2's last row "as they were before" and its full stop in a face of one pitch on a tone of its own, as the plan box's
