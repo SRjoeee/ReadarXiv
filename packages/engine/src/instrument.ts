@@ -58,6 +58,10 @@ export interface InstrumentUnit {
   /** a kept block of any other text no unit owns (today/ink-units.mjs keptUnitsOf, rule 10: a code listing, a URL alone, a page
    *  number, a bibliography not cut into entries): the lab's dump tells it by it; the bundle does not carry it */
   block?: true
+  /** a kept block of a display TeX set (today/ink-units.mjs keptUnitsOf: its lines a display's region holds, its number with them,
+   *  PDF-READER §18.58): its lines on A are its rows by the display rule (locate/rows.ts), as a unit's display's are, never the
+   *  text line rule's, which cut display (4) of 2111.09276v1 p5 after its number's "(" (§17.9); the bundle does not carry it */
+  display?: true
   /** a line of an algorithm float's body, kept as the original as code is (the front end's `pseudocode`, pipeline/instrument.mjs
    *  unitFactsOf; the owner's ruling of 2026-11-08): the lab's dump tells it by it; the bundle does not carry it (`kept` alone) */
   pseudocode?: true
