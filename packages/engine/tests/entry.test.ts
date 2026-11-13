@@ -10,7 +10,7 @@ import * as entry from '../src/index.ts'
 import * as ink from '../src/ink.types.ts'
 import * as memory from '../src/memory.ts'
 import * as plan from '../src/plan.ts'
-import * as remove from '../src/remove.types.ts'
+import * as remove from '../src/remove.ts'
 import * as section from '../src/section.ts'
 import * as tail from '../src/tail.ts'
 import * as wrap from '../src/wrap.types.ts'
@@ -21,7 +21,7 @@ const WHOLE: Record<string, Record<string, unknown>> = {
   './ink.types.ts': ink,
   './delta-wire.ts': deltaWire,
   './memory.ts': memory,
-  './remove.types.ts': remove,
+  './remove.ts': remove,
   './section.ts': section,
   './tail.ts': tail,
   './wrap.types.ts': wrap,

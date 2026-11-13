@@ -27,7 +27,7 @@
 // An original module (no port statement); @cantoo/pdf-lib (MIT) is given, as to the wrap and the delta.
 import { DELTA_OBJECTS_MAX } from './delta-wire.ts'
 import { isMemoryError } from './memory.ts'
-import type { PdfLib } from './remove.types.ts'
+import type { PdfLib } from './remove.ts'
 import { openObjects, XrefRefusal } from './xref.ts'
 
 /** the byte range of one image's data in B: [start, length] */

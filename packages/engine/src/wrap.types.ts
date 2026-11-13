@@ -2,7 +2,7 @@
 // what their declarations stated, now a TypeScript module of the package (which holds no declaration file), each value of the
 // JavaScript re-exported with its type.
 import type { WrapStats } from './delta-wire.ts'
-import type { PdfLib } from './remove.types.ts'
+import type { PdfLib } from './remove.ts'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
 import * as wrap_js from './wrap.mjs'
 

@@ -36,7 +36,7 @@
 // (src/pdf-reader/engine/layout/wrap-final.mjs) and calls these through the package's entry.
 import { isMemoryError } from './memory.ts'
 import { DELTA_OBJECTS_MAX, deltaSection, UNHIDDEN_MAX } from './delta-wire.ts'
-import { alignOf, DecodeLimit, lex, LexLimit, openRemover } from './remove.mjs'
+import { alignOf, DecodeLimit, lex, LexLimit, openRemover } from './remove.ts'
 import { appendSection } from './section.ts'
 import { startxrefOf } from './tail.ts'
 import { openObjects } from './xref.ts'

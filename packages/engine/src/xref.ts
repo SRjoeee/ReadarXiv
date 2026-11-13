@@ -18,7 +18,7 @@ import type {
   PdfObjectParser,
   PdfRawStream,
   PdfRef,
-} from './remove.types.ts'
+} from './remove.ts'
 import { latin1, startxrefOf } from './tail.ts'
 
 /** an entry of a cross-reference section: free (0), an object at its offset (1), an object in an object stream (2) */

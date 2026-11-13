@@ -6,7 +6,7 @@ export const ENGINE_PURPOSE =
 export * from './ink.types.ts'
 export * from './delta-wire.ts'
 export * from './memory.ts'
-export * from './remove.types.ts'
+export * from './remove.ts'
 export * from './section.ts'
 export * from './tail.ts'
 export * from './wrap.types.ts'
