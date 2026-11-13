@@ -9,11 +9,11 @@
 import Dexie, { type DexieOptions, type Table } from 'dexie'
 
 /** the store's bytes at most (the plan's 200 MB: about 400 papers' layers at 0.5 MB, or fewer with copies of originals) */
-const LAYER_STORE_BYTES = 200 * 2 ** 20
+export const LAYER_STORE_BYTES = 200 * 2 ** 20
 /** how long a read may take before it is a miss: three times the store's slowest read measured on the heaviest object
  *  (lab/pdf/records/layer-extension.md) */
-const READ_BUDGET_MS = 1500
-const LAYER_DB = 'axt-layer'
+export const READ_BUDGET_MS = 1500
+export const LAYER_DB = 'axt-layer'
 
 /** an object of a paper's layer, or our copy of its original, by digest (`paper`: the first paper that kept it, a hint
  *  alone: who holds an object is `refs`) */

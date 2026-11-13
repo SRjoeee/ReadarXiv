@@ -10,7 +10,7 @@
 import { type RefObject, useEffect } from 'react'
 import type { ReaderController, Side } from '../controller'
 
-const wheelStep = (deltaY: number) => (Math.abs(deltaY) >= 40 ? Math.sign(deltaY) * 0.1 : deltaY * 0.01)
+export const wheelStep = (deltaY: number) => (Math.abs(deltaY) >= 40 ? Math.sign(deltaY) * 0.1 : deltaY * 0.01)
 
 export function usePinch(controller: ReaderController, doc: RefObject<HTMLElement | null>) {
   useEffect(() => {

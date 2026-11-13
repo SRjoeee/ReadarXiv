@@ -60,7 +60,7 @@ export const PH_FLAG = Object.freeze({ EMPTY: 16, LOST: 32, TEXT: 64, JOINED: 12
 /** v0's placeholder classes that draw ink of their own (TEX:18) */
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
 /** LaTeX's forced line breaks (TEX:84) */
-const FORCED_BREAK = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
+export const FORCED_BREAK = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
 /** a line ends short of its frame's measure by more than this share of its size (TEX:87) */
 const SHORT = 0.5
 

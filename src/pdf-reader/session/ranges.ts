@@ -22,10 +22,10 @@ export const RANGE_CHUNK = 65_536
  *  silences are a round trip, a lossy link's TCP backoff a few seconds) */
 export const STALL_MS = 10_000
 /** how many times a range is asked, at most */
-const RANGE_TRIES = 2
+export const RANGE_TRIES = 2
 /** the pause before a failed read is asked again, doubled at each ask after, to RETRY_MAX_MS (a source kept reading) */
 export const RETRY_MS = 1000
-const RETRY_MAX_MS = 30_000
+export const RETRY_MAX_MS = 30_000
 
 /** what every answer of the source is held to: the object's length and its entity-tag. A tag not known beforehand (`etag` null:
  *  a base page of ours, named by the digest of its bytes, whose bound is its length alone) is the first answer's, and held from it */

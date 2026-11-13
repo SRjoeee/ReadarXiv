@@ -9,7 +9,7 @@ export interface Clock {
   cancel(id: number): void
 }
 
-const browserClock: Clock = {
+export const browserClock: Clock = {
   now: () => performance.now(),
   later: (f, ms) => setTimeout(f, ms) as unknown as number,
   clear: (id) => clearTimeout(id),

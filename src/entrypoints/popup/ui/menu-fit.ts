@@ -5,9 +5,9 @@
 // foot, is held to the room above its button. The rects are read first and written after: nothing reads what it wrote
 
 /** Under its row, and above the style button (round 4) */
-const MENU_GAP = { down: 4, up: 6 }
+export const MENU_GAP = { down: 4, up: 6 }
 /** From the popup's edges */
-const MENU_EDGE = 8
+export const MENU_EDGE = 8
 
 /** Fit an open menu; returns what gives the room back */
 export function fitMenu(root: HTMLElement, trigger: HTMLElement, menu: HTMLElement, up: boolean): () => void {

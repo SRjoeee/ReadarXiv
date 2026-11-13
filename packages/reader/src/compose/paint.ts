@@ -32,7 +32,7 @@ function frameOf(vp: PageViewport): [number, number, number, number] {
 }
 
 /** how far the page is turned (its /Rotate, as its viewport shows it): 0, 90, 180 or 270 */
-const turnOf = (vp: PageViewport): number => (((vp.rotation ?? 0) % 360) + 360) % 360
+export const turnOf = (vp: PageViewport): number => (((vp.rotation ?? 0) % 360) + 360) % 360
 /** the page's viewport as it would be unturned, at the same scale: what the overlay's drawing (its SVG, its crops, its links) is
  *  made in, turned then with the page as PDF.js turns its layers (the sheet's `[data-axt-turn]`; the maintainer's B-408: a
  *  page turned a quarter has its translation drawn turned with it, as the original's content is) */

@@ -24,12 +24,12 @@ export const RETRY_MS = 1_000
  *  prepare, the target's run): our server's own reconnection time for such a stream, whose last frame that document is
  *  (`retry: 60000`, server design-a "Followers"; worker v2 paper.ts `#tell`). Staging, 2026-11-07: a done paper asked again
  *  at once each time its one-frame stream ended, 18 to 50 times a second */
-const IDLE_MS = 60_000
+export const IDLE_MS = 60_000
 
 /** a paper version's segment (L5's Seg: `.` and `/` as `_`, its version) */
 export const segOf = (p: PaperRef, version: number): string => `${p.id.replace(/[./]/g, '_')}v${version}`
 /** a paper's segment for the follow: with its version where known, else the id alone (the server resolves the latest) */
-const followSegOf = (p: PaperRef): string => (p.version ? segOf(p, p.version) : p.id.replace(/[./]/g, '_'))
+export const followSegOf = (p: PaperRef): string => (p.version ? segOf(p, p.version) : p.id.replace(/[./]/g, '_'))
 
 /** why the server's answer is not what was asked: `not-opened` (a follow of a paper the server has not opened), `not-found`
  *  (no such paper), `update` (a deployment that reads no format of this reader's), `busy` / `rate` (a 429: at capacity, the

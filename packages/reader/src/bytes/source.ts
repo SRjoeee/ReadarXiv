@@ -30,12 +30,12 @@ import { CHUNK, type ChunkStore } from './store.ts'
  *  are its round trip, a lossy one's TCP's backoff, 6.2 to 7 s; the one stall measured that came back lasted 9.5 s) */
 export const STALL_MS = 10_000
 /** how many times a range is asked, at most, where the network fails it, but by an owner that keeps reading */
-const RANGE_TRIES = 2
+export const RANGE_TRIES = 2
 /** the pause before a read the network failed at once is asked again, ms, doubled at each failure, to RETRY_MAX_MS;
  *  unmeasured */
-const RETRY_MS = 1_000
+export const RETRY_MS = 1_000
 /** the longest that pause, ms; unmeasured */
-const RETRY_MAX_MS = 30_000
+export const RETRY_MAX_MS = 30_000
 
 /** why a source is refused: no such object at its address (`missing`: a 404 or a 410 before any byte of it was read, the
  *  paper not there; one after is the network's), its answers not the object (`bytes`), a chunk not the one the head names,
@@ -74,7 +74,7 @@ export const realTimers: Timers = {
   later: (f, ms) => setTimeout(f, ms),
   clear: (id) => clearTimeout(id as ReturnType<typeof setTimeout>),
 }
-const browserOnline: Online = {
+export const browserOnline: Online = {
   now: () => (globalThis as { navigator?: { onLine?: boolean } }).navigator?.onLine !== false,
   wait: (signal) =>
     new Promise<void>((resolve) => {

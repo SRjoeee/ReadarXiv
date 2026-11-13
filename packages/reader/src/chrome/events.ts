@@ -43,7 +43,7 @@ const PREPARE_PLACES: Readonly<Record<string, number>> = {
 }
 /** a prepare's stage as the share of the prepare's stretch the line stands at: 0 before its first stage, or for a stage this reader
  *  does not know */
-const prepareShare = (stage: string | null): number => (stage !== null && PREPARE_PLACES[stage]) || 0
+export const prepareShare = (stage: string | null): number => (stage !== null && PREPARE_PLACES[stage]) || 0
 /** a rows' failure as the chrome's error kind, which the chrome words as the popup does: a unit's (the translator's `Why`) read
  *  by format's one reading of it (kindOfWhy, the extension's own errorOf too); our server's run of the target failed, the
  *  network (a wait, not a fault: status.ts WAITS); a target the reader does not set is told apart (eventsOf) */

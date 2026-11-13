@@ -103,7 +103,7 @@ export interface TranslationProvider {
   cacheId?: string
 }
 
-const PROVIDER_ERROR_KINDS = ['no-key', 'network', 'rate-limit', 'auth', 'bad-request', 'invalid-response', 'timeout', 'aborted', 'unknown'] as const
+export const PROVIDER_ERROR_KINDS = ['no-key', 'network', 'rate-limit', 'auth', 'bad-request', 'invalid-response', 'timeout', 'aborted', 'unknown'] as const
 export type ProviderErrorKind = (typeof PROVIDER_ERROR_KINDS)[number]
 
 /**
@@ -161,7 +161,7 @@ const ISOLATABLE_BY_KIND: Record<ProviderErrorKind, boolean> = {
 }
 
 /** How many times a malformed reply is sent again before the chain takes over (DESIGN §8.2) */
-const MALFORMED_RETRIES = 1
+export const MALFORMED_RETRIES = 1
 
 /**
  * A reply with no usable shape at all (DESIGN §8.2): no object could be parsed from it (prose, fenced JSON, a schema

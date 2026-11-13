@@ -11,7 +11,7 @@
 export const CHUNK = 65_536
 /** the most the store holds (bytes): 64 MiB is past a heavy paper's reads for a jump with both documents (2608.16117v1: the
  *  layer's 15 MB and the left's 4.5 to 5.6 MB, W ranges.ts) */
-const STORE_BYTES = 64 * 2 ** 20
+export const STORE_BYTES = 64 * 2 ** 20
 /** the chunks asked of the network at once, at most: 1 MiB in flight fills a 10 Mbit/s line and a 100 Mbit/s one at 80 ms */
 export const CHUNKS_IN_FLIGHT = 16
 

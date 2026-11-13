@@ -50,7 +50,7 @@ export type Rename = [start: number, end: number, word: string]
 export type Renamable = { mode: string; sup?: boolean; src?: string; text?: string }
 
 /** the commands whose text TeX's cross-referencing packages generate (tex-names.mjs:14 GENERATED_COMMANDS) */
-const GENERATED_COMMANDS: readonly string[] = Object.freeze([
+export const GENERATED_COMMANDS: readonly string[] = Object.freeze([
   'cref',
   'Cref',
   'crefrange',

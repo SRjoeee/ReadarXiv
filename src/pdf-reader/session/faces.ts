@@ -16,9 +16,9 @@ import { bodyWithin } from './server'
 
 /** the index's bytes at most (the FONTS 4 table is 13 KB), a group's (the largest, a CJK group's, is 183 KB) */
 export const INDEX_CAP = 256 * 1024
-const GROUP_CAP = 2 * 1024 * 1024
+export const GROUP_CAP = 2 * 1024 * 1024
 /** how long a table may take before it is given up: the engine waits for a face's sources before it lays the units set in it */
-const TABLE_MS = 20_000
+export const TABLE_MS = 20_000
 const GROUP = /^[a-z0-9-]{1,40}$/
 /** the tables' FONTS as the index names it (a version: `4`) */
 const FONTS = /^[A-Za-z0-9._-]{1,32}$/
