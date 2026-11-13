@@ -4828,11 +4828,21 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
   first glyphs the marker of a line a list holds, `listed`, as outside a path) begins a text of its own, its marker its label and
   never sent, and the rows under it join it by the wrap rule (2608.06701v1 p1's plan box: its items 1 and 4, ragged at their
   natural spaces in a dashed frame, each one text of five and four rows, where every row had been sent alone). No geometric
-  fact tells a box hugging its
-  rows from one text was wrapped into: 2608.06701v1 p2's bubbles are ragged at their natural spaces, every break forced, and so
-  are 99 of 2610.37668v1's 103 value overlays; the sentence going on is the evidence, as a hyphen is for F3's paragraph. Census
-  (91 papers): 40 breaks joined in 27 boxes on 8 papers; 2610.37668v1's six "Mip-NeRF360 / <scene> / <id>" boxes join wrongly,
-  accepted knowingly. Its room is the path's inside. **A joined text is laid as a paragraph of the body is laid** (the owner's
+  fact tells a box hugging its rows from one text was wrapped into: 2608.06701v1 p2's bubbles are ragged at their natural
+  spaces, every break forced, and so are 99 of 2610.37668v1's 103 value overlays; the sentence going on is the evidence, as a
+  hyphen is for F3's paragraph. Census (91 papers): 40 breaks joined in 27 boxes on 8 papers; 2610.37668v1's six
+  "Mip-NeRF360 / <scene> / <id>" boxes join wrongly, accepted knowingly. With whose a glyph is and items (lane fig-rows, stage
+  1a over para-start's 89 and 2611.03953v2 against converge-10's r24): five papers' prepare dumps move, their figure units
+  alone; 30 breaks joined anew in 18 texts, 12 paths, 7 figures, 5 papers, none lost: the plan box 13 (items 1 and 4 laid at
+  the original's 4.35 pt, three lines each, inside the frame; items 2 and 3 held, §18.61), 2608.06701v1 p9 and p10 9, the
+  other four papers 8, each path dropped before for a mark no run holds inside it (a cross, a warning sign, τ, ∼, ∈, ŵ's
+  accent). One join reads wrong: 2610.20507v1 p8's "giant + AGB / (∼ 12% of τMS, not followed)" and the region's own label
+  "black hole" 12.8 pt under it, centred on one axis, are one text. Held to TeX's interline rule as a paragraph's lines are
+  (`oneLead`), the step would undo it and ten joins that read right (2406.06525v1's centred caption paragraphs, rows a tool set
+  4.21 to 4.85 pt apart; 2610.31506v1's two node labels): not taken. One joined text keeps a glyph no served face draws:
+  2608.06701v1 p10's "CLI-context / initialization. 🚨", whose warning sign the line reading sets on its row and the text
+  sends, so its lay throws (`Unserved`) and it stands as the original by itself, where its rows had been translated apart.
+  Its room is the path's inside. **A joined text is laid as a paragraph of the body is laid** (the owner's
   ruling of 2026-11-11: a figure's text keeps the body's rules, none of its own and no optical correction): its first line on its
   first row's baseline, its leading the ladder's and the page fill's, as a body paragraph's of the same lines and height (a
   translation of fewer lines takes a looser leading and fills its rows' extent), no line under its last row's baseline. A CJK
@@ -6072,6 +6082,11 @@ was that it may stay the original's where the highlight forces it.
   piece is (`fillsJoined`'s `tall`, the tallest piece), not by its pieces' joined box two rows tall, and it makes an element on
   each row it holds, of that row's stretch and its own pieces (`parts`): an element is ink of one line, as each row read alone
   makes it. Read by the joined box, the join had taken the word's `cite` and sent the text with the word broken in two.
+  Measured at the lane's head: every text of the plan box's items 2 and 3 held (item 2's first two rows alone and two joined
+  texts, item 3's two joined texts), none sent; and the figure's box 2 beside it, "Thought: I made a mistake in the path; it
+  should be absolute. I will correct it and retry viewing the file.", whose first sentence a green highlight marks over its two
+  rows, is held whole now, where read as its ground it had been translated over the highlight. No other text of the corpus
+  moves by it.
 - **A word: a letter in it.** The hold exists to prevent a half-original line. A decorated token with no letter (a number, a
   symbol) makes none and stays an element in the translated line as before. The condition is the engine's one predicate,
   `holdsLetter` (`figure-lines.ts`, Unicode's letter), which already tells a figure's decorated word (`cite`) from a decorated
