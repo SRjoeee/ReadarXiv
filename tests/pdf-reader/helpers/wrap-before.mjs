@@ -1,3 +1,8 @@
+// The wrap (packages/engine/src/wrap.mjs) as it was at d453c14ee, before it told an operand by its kind, read an error by `at`, stated
+// the catalog's number and read Web Crypto off the global object: kept here alone, verbatim but its imports (the engine's entry for
+// what it imported by path) and two lint notes, as the reference that change is held to, value for value and error for error
+// (tests/pdf-reader/wrap-bounds.test.ts). Imported by no module of the engine.
+//
 // Our final pass's pages wrapped by optional content, once, in the maker child (per-unit optional-content erasure, design
 // `docs/route/ocg-erasure.md` §2–§3): each run a unit owns (layout/own.mjs) put in `/OC /axt<group> BDC … EMC`, the page's
 // resources naming each group (`/Properties`), one optional-content group per name in the catalog's `/OCProperties`, all ON —
@@ -34,12 +39,12 @@
 // and its reader; @cantoo/pdf-lib (MIT), deflate and inflate are given. Moved into the engine package with wrapOf and planOf
 // alone (the rebuild's stage 1a): wrapFinal, which owns our final pass's ink before it wraps it, stays today's
 // (src/pdf-reader/engine/layout/wrap-final.mjs) and calls these through the package's entry.
-import { isMemoryError } from './memory.mjs'
-import { DELTA_OBJECTS_MAX, deltaSection, UNHIDDEN_MAX } from './delta-wire.mjs'
-import { alignOf, DecodeLimit, lex, LexLimit, openRemover } from './remove.mjs'
-import { appendSection } from './section.mjs'
-import { startxrefOf } from './tail.mjs'
-import { openObjects } from './xref.mjs'
+import { isMemoryError } from '@readarxiv/engine'
+import { DELTA_OBJECTS_MAX, deltaSection, UNHIDDEN_MAX } from '@readarxiv/engine'
+import { alignOf, DecodeLimit, lex, LexLimit, openRemover } from '@readarxiv/engine'
+import { appendSection } from '@readarxiv/engine'
+import { startxrefOf } from '@readarxiv/engine'
+import { openObjects } from '@readarxiv/engine'
 
 /** the groups and the marked-content sequences of ours a page may hold, and the groups a document may (E1, E3) */
 export const GROUPS_PAGE = 512, SEQUENCES_PAGE = 2000, GROUPS_DOC = 8000
@@ -87,6 +92,7 @@ export function planOf(glyphs, groupOfGlyph, paths, groupOfBox, facts = null) {
   glyphs.forEach((g, i) => {
     if (!(g.n >= 0)) return
     let row = shows.get(g.n)
+    // biome-ignore lint/suspicious/noAssignInExpressions: verbatim
     if (!row) shows.set(g.n, (row = []))
     row[g.k] = groupOfGlyph[i]
   })
@@ -290,6 +296,7 @@ function readPiece(R, piece, budget) {
 }
 /** our stream lexed within the budget, or null past it */
 function lexWithin(bytes, budget) {
+  // biome-ignore lint/suspicious/noAssignInExpressions: verbatim
   if ((budget.bytes += bytes.length) > WRAP_DECODED_PAGE) return null
   try { const ops = lex(bytes, WRAP_HELD_PAGE - budget.held); budget.held += ops.bytes; return ops } catch (e) { if (e instanceof LexLimit) return null; throw e }
 }

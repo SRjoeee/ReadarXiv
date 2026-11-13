@@ -1,3 +1,8 @@
+// The remover (packages/engine/src/remove.mjs) as it was at d42fb8bca, before its lexer and its page walk stated their bounds and
+// told an operand by its kind before reading it: kept here alone, verbatim but its two imports (the engine's entry for what it
+// imported by path) and three lint notes, as the reference the change is held to, value for value and error for error
+// (tests/pdf-reader/remove-bounds.test.ts). Imported by no module of the engine.
+//
 // Our pages' content streams read as the wrap reads them (layout/wrap.mjs; docs/route/ocg-erasure.md §2): the streams lexed (lex),
 // each page walked with its text state followed, each string split into its character codes by its font, and the walk aligned
 // with PDF.js's own reading (alignOf: the n-th text-showing operation of the list is the n-th of the walk, its k-th glyph the k-th
@@ -13,7 +18,8 @@
 // HELD_MAX, BYTES_MAX, FORM_DEPTH) refuse a page early and softly, the rest of the paper going on; PDF.js and the object layer may
 // still exceed any of them: run it in the maker child, under a hard memory limit and a wall clock, one paper at a time. A failed
 // allocation under that limit refuses no page: it is the paper's, thrown as it came (memory.mjs).
-import { isMemoryError } from './memory.mjs'
+import { isMemoryError } from '@readarxiv/engine'
+import { latin1 } from '@readarxiv/engine'
 
 const WS = new Uint8Array(256)
 for (const c of [0, 9, 10, 12, 13, 32]) WS[c] = 1
@@ -62,8 +68,6 @@ const DIGIT = new Int8Array(256).fill(-1)
 for (let c = 0; c < 10; c++) DIGIT[48 + c] = c
 for (let c = 0; c < 6; c++) { DIGIT[65 + c] = 10 + c; DIGIT[97 + c] = 10 + c }
 const td = new TextDecoder('latin1')
-/** bytes as the characters of their codes (ISO 8859-1, which TextDecoder's 'latin1', windows-1252, is not) */
-const latin1 = u8 => { let out = ''; for (let k = 0; k < u8.length; k += 8192) out += String.fromCharCode.apply(null, u8.subarray(k, k + 8192)); return out }
 
 /**
  * The heap a lexed token, and an event the walk records, is held in, in bytes, by its kind: each at least what 1 million
@@ -309,6 +313,7 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
       if (out.length > limit) throw new DecodeLimit(limit)
     }
     // (counted by what it holds: the buffer its view keeps, not the view's length)
+    // biome-ignore lint/suspicious/noAssignInExpressions: verbatim
     if ((decodedBytes += out.buffer.byteLength) <= 4 * bytesMax) decoded.set(st, out)
     return out
   }
@@ -483,6 +488,7 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
     // (each event the walk records counts in what it holds: an event per visit of a painting operator, a show or a
     // form, which the re-review's round 2 fanned out to 20 million fontless shows of a 980 B page)
     const record = cost => {
+      // biome-ignore lint/suspicious/noAssignInExpressions: verbatim
       if ((held += cost) <= heldMax) return true
       if (!problems.includes(HELD)) problems.push(HELD)
       return false
@@ -493,6 +499,7 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
       let s = { ...state }
       for (let pi = 0; pi < cont.pieces.length; pi++) {
         const ops = cont.ops[pi]
+        // biome-ignore lint/suspicious/noAssignInExpressions: verbatim
         if ((walked += ops.length) > walkMax) { if (!problems.includes(WALKED)) problems.push(WALKED); return }
         for (let oi = 0; oi < ops.length; oi++) {
           const o = ops[oi], a = o.args

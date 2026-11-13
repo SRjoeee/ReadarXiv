@@ -13,7 +13,7 @@
 // channel to it: each watch open hears every warning PDF.js prints (PDF.js names no document in one), a warning is passed on
 // to console.warn as it was only where an open watch's reader asked PDF.js for its warnings, and anything else written to
 // console.warn passes as it is. The last watch closed puts console.warn back: nothing of it is left behind.
-import { ALLOCATION_FAILED, isMemoryText } from './memory.types.ts'
+import { ALLOCATION_FAILED, isMemoryText } from './memory.ts'
 
 /** PDF.js's level at which it prints its warnings (its VerbosityLevel.WARNINGS) */
 export const WARNINGS = 1

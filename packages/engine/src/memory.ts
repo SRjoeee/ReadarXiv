@@ -23,16 +23,23 @@ const NODE_ALLOCATION_FAILED = 'Failed to allocate memory'
  * may have (`Invalid typed array length`, `Invalid array buffer length`, `Invalid string length`), Node's ERR_STRING_TOO_LONG and
  * ERR_BUFFER_TOO_LARGE (a bounded inflate's refusal), a stack overflow, or the words in any other error are none
  */
-export function isMemoryError(e) {
+export function isMemoryError(e: unknown): boolean {
   if (typeof e !== 'object' || e === null) return false
-  if (e.code === 'ERR_MEMORY_ALLOCATION_FAILED') return true
+  if ((e as ErrorFields).code === 'ERR_MEMORY_ALLOCATION_FAILED') return true
   if (e instanceof RangeError) return e.message === ALLOCATION_FAILED
-  if (e.name !== 'UnknownErrorException') return false
+  if ((e as ErrorFields).name !== 'UnknownErrorException') return false
   // (the wrapping keeps an error's words and its toString(), not its code: V8's is a RangeError, Node's own an Error on Node 22
   // and a RangeError from Node 24 on)
-  if (e.message === ALLOCATION_FAILED) return isMemoryText(e.details)
-  return e.message === NODE_ALLOCATION_FAILED && (e.details === `RangeError: ${NODE_ALLOCATION_FAILED}` || e.details === `Error: ${NODE_ALLOCATION_FAILED}`)
+  if ((e as ErrorFields).message === ALLOCATION_FAILED) return isMemoryText((e as ErrorFields).details)
+  return (
+    (e as ErrorFields).message === NODE_ALLOCATION_FAILED &&
+    ((e as ErrorFields).details === `RangeError: ${NODE_ALLOCATION_FAILED}` ||
+      (e as ErrorFields).details === `Error: ${NODE_ALLOCATION_FAILED}`)
+  )
 }
+/** the fields isMemoryError reads of any object: each what the object holds, or undefined (an object's property read is
+ *  unknown, which TypeScript's `object` does not let be read) */
+type ErrorFields = { code?: unknown; name?: unknown; message?: unknown; details?: unknown }
 
 /**
  * Whether `reason`, a failure's reason as text, is a failed allocation: exactly V8's (its RangeError's toString(), the words
@@ -40,6 +47,6 @@ export function isMemoryError(e) {
  * its words is one here; nor V8's words in any other error's text (`FormatError: Array buffer allocation failed`), nor any text
  * around them
  */
-export function isMemoryText(reason) {
+export function isMemoryText(reason: unknown): boolean {
   return reason === ALLOCATION_FAILED_TEXT
 }

@@ -25,10 +25,10 @@
 // for bit. A reading that one day wants B's pixels takes A's: B is the page as TeX set it, never what a reader is shown.
 //
 // An original module (no port statement); @cantoo/pdf-lib (MIT) is given, as to the wrap and the delta.
-import { DELTA_OBJECTS_MAX } from './delta-wire.types.ts'
-import { isMemoryError } from './memory.types.ts'
-import type { PdfLib } from './remove.types.ts'
-import { openObjects, XrefRefusal } from './xref.types.ts'
+import { DELTA_OBJECTS_MAX } from './delta-wire.ts'
+import { isMemoryError } from './memory.ts'
+import type { PdfLib } from './remove.ts'
+import { openObjects, XrefRefusal } from './xref.ts'
 
 /** the byte range of one image's data in B: [start, length] */
 export type Hole = readonly [start: number, length: number]
