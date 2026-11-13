@@ -6575,9 +6575,13 @@ the layout's rules.
   threw is the original's alone, the other cells of its header or column laid; its group is held only where the geometry needs
   it: a cell that spans columns or rows (`\multicolumn`, `\multirow`: its box is the others' too, so its ink would stand under
   their translations), and a group on two pages (its first page would be painted before its last is laid). `lay/entry.ts`
-  holdsTable (before the lay: a spanning cell alone holds), `lay/page.ts` settleTies (after it: `tableSettle`'s verdict is
-  today's, what it withholds is the cell, or the group where that cell spans or the group lies on two pages). The reasons, in
-  order: (1) with cells judged like body text, a group drawn whole or not at all would let one unfit reply take back up to a
+  holdsTable (before the lay: a spanning cell holds, and any cell of a group on two pages), `lay/page.ts` settleTies (after it:
+  `tableSettle`'s verdict is today's, what it withholds is the cell, or the group where that cell spans or the group lies on two
+  pages). Whether a group lies on two pages is read off every cell of it to be translated, set or not, before a cell not set is
+  left out of those its lay settles: a cell on page 2 whose row failed, or that the wrap cannot hide, keeps its column's cell on
+  page 1 the original's with it, as a group on two pages always was, where the page-1 cell had been drawn translated; a cell
+  never to be translated (no row, kept by its source, a kind the reader leaves) holds nothing and puts its group on no page.
+  The reasons, in order: (1) with cells judged like body text, a group drawn whole or not at all would let one unfit reply take back up to a
   whole table — at the head before this rule, 26 groups, 144 cells on 19 pages of the display gate's 24 pairs (holds-v2, lane
   cells-like-body), 22 of the groups only since the name rule went (QNLI -> 昆士兰国家图书馆 holding BERT's Table 1 header
   English, System and Average with it); (2) the 25 cells newly left English that way are, under this rule, every one drawn as

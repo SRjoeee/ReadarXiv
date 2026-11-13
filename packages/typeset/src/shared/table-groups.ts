@@ -3,7 +3,8 @@
 // translate/groups.mjs (groupOf), over TeX's grid as the part states it (Placed.cell) in place of today's rows: the groups are the
 // entry's, before anything is set. A cell that cannot be drawn is the original's by itself, as a paragraph is (the coordinator's
 // ruling (c) of 2026-11-13); its group is held where that cell spans (its box the others' too: lay/entry.ts holdsTable before the
-// lay, lay/page.ts settleTies after it) and withheld whole where it lies on two pages (settleTies).
+// lay, lay/page.ts settleTies after it) and withheld whole where it lies on two pages, its pages read off every cell of it to be
+// translated, set or not (holdsTable, settleTies).
 //
 // The groups follow the table's own structure, TeX's tabular: the header's cells are one group, and below it each column's
 // cells another, a cell spanning several columns (\multicolumn) one with the cells spanning the same columns, a cell spanning

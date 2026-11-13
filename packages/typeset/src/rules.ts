@@ -626,10 +626,10 @@ const SPECS: readonly RuleSpec[] = [
     file: 'shared/table-groups.ts',
     state: {
       is: 'changed',
-      why: "the groups over TeX's grid places (Placed.cell), for the hold and the settle alone: each cell laid by its own row, no group decided by what its cells say (today's decideGroups keeps a column whole as names where NAMES_SHARE of its cells came back as they went; not ported, the owner's word of 2026-11-13); and a cell not set before its lay holds its group only where it spans (lay/entry.ts holdsTable), where today's held it for any reason but the wrap's (the coordinator's ruling (c) of 2026-11-13)",
+      why: "the groups over TeX's grid places (Placed.cell), for the hold and the settle alone: each cell laid by its own row, no group decided by what its cells say (today's decideGroups keeps a column whole as names where NAMES_SHARE of its cells came back as they went; not ported, the owner's word of 2026-11-13); and a cell not set before its lay holds its group only where it spans or the group lies on two pages, its pages read off every cell of it to be translated, set or not (lay/entry.ts holdsTable), where today's held it for any reason but the wrap's (the coordinator's ruling (c) of 2026-11-13)",
       replay:
         'tests/unit/table-groups.test.ts over hand-made parts (the corpus rows the parity reads are decided already)',
-      cases: 13,
+      cases: 18,
     },
   },
   {
