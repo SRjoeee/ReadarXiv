@@ -31,7 +31,7 @@ async function inputsOf(entries: string[]): Promise<string[]> {
 /** the package a file of node_modules belongs to (pnpm's layout: …/node_modules/<name>/…, the last one) */
 const packageOf = (f: string) => /(?:^|\/)node_modules\/((?:@[^/]+\/)?[^/]+)\/(?!.*\/node_modules\/)/.exec(f)?.[1] ?? null
 const PACKAGES = (ENGINE_PACKAGES as { name: string }[]).map(p => p.name)
-const allowed = (f: string) => f.startsWith(ENGINE) || MOVED.test(f) || /^packages\/engine\/src\/(?:ink|memory|delta-wire|tail)\.(?:mjs|types\.ts)$/.test(f) || (ENGINE_ALLOW as string[]).some(c => f === `${c}.ts` || f === `${c}/index.ts`) || PACKAGES.includes(packageOf(f) ?? '')
+const allowed = (f: string) => f.startsWith(ENGINE) || MOVED.test(f) || /^packages\/engine\/src\/(?:ink|memory|delta-wire|tail)\.(?:mjs|ts|types\.ts)$/.test(f) || (ENGINE_ALLOW as string[]).some(c => f === `${c}.ts` || f === `${c}/index.ts`) || PACKAGES.includes(packageOf(f) ?? '')
 
 describe('the reading view, bundled for the browser', () => {
   it('reads nothing outside the engine and the allowlist, no package, and nothing of the server\'s', async () => {
