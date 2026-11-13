@@ -3,10 +3,11 @@
 // weight (its CJK characters in the target's CJK face, the rest in the Latin one), each set fitted at one size (figure-fit.ts),
 // each translation's line by its ink as the breaker sets every line (the blank halves of the marks at its edges, blanksOf);
 // else left the original's, why told: `no row`, `kept`, `untranslated`, `same` as its source, `unhidden` where the document
-// holds no group of it, a face's refusal (`served`), `unfit`, `crowded`. Ported from engine 065c1d973 run.mjs paintFigures
-// RUN:1441-1496 without its paint (the hidden box, the SVG, the text layer: the reader's and D.*'s), layer2.mjs figureRuns,
-// figureRunsWidth, figureRunsDepth L2:4824-4839 and fonts.mjs classifyFont's family, weight and slant (fonts.mjs:42-52). A face
-// not loaded yet is waited for (B.cover: `waiting`, its faces in `wait`), where today's run awaited it.
+// holds no group of it, a face's refusal (`served`), `unfit` (its width needs more than the floor). Width is the fit's only test
+// (figure-fit.ts, the owner's rule of 2026-11-13): a translation's height is not measured. Ported from engine 065c1d973 run.mjs
+// paintFigures RUN:1441-1496 without its paint (the hidden box, the SVG, the text layer: the reader's and D.*'s), layer2.mjs
+// figureRuns, figureRunsWidth L2:4824-4836 and fonts.mjs classifyFont's family, weight and slant (fonts.mjs:42-52). A face not
+// loaded yet is waited for (B.cover: `waiting`, its faces in `wait`), where today's run awaited it.
 import { hangOf, leadOf } from '../breaker/break.ts'
 import { cover } from '../breaker/cover.ts'
 import { type FitMeasure, fitMeasure } from '../breaker/measure.ts'
@@ -15,10 +16,10 @@ import { shown, type TextPiece } from '../breaker/text.ts'
 import type { Face, Token, TStyle } from '../breaker/tokens.ts'
 import { firstCompress } from '../fit/walk.ts'
 import type { FaceId, Metrics } from '../types.ts'
-import { CJK_FOOT, type FitFigure, fitFigureSet, sameAsSource } from './figure-fit.ts'
+import { type FitFigure, fitFigureSet, sameAsSource } from './figure-fit.ts'
 
 /** a figure unit on its page (figure-rows.mjs checkFigures): its run's first glyph's origin, its direction, its box's length
- *  along it, its size and band, its anchor, its fill (-1 none), its font's name, its set, its room, the stroke under its text */
+ *  along it, its size and band, its anchor, its fill (-1 none), its font's name, its set, its room */
 export type FigureRow = FitFigure & {
   id: number
   group: string
@@ -160,21 +161,6 @@ function textOfPieces(pieces: NonNullable<FigureUnit['pieces']>): { text: string
 /** figureRuns' width at size 1, each run's in its face (L2:4836 figureRunsWidth, widthOf L2:1322) */
 export const figureRunsWidth = (runs: readonly FigureRun[], m: FitMeasure): number =>
   runs.reduce((a, r) => a + m.w100(r.s, r.face) / 100, 0)
-/** how far over its baseline figureRuns reach at size 1, their ink (a container's edge keeps it under it, figure-fit.ts) */
-export const figureRunsHeight = (runs: readonly FigureRun[], m: FitMeasure): number =>
-  runs.reduce((h, r) => Math.max(h, m.ink100(r.s, r.face).a / 100), 0)
-/** how far under its baseline figureRuns reach at size 1, a CJK run's held to its face's em box (L2:4839 figureRunsDepth) */
-export const figureRunsDepth = (runs: readonly FigureRun[], m: FitMeasure): number =>
-  runs.reduce(
-    (d, r) =>
-      Math.max(
-        d,
-        r.cls === 'cjk'
-          ? Math.min(m.ink100(r.s, r.face).d / 100, CJK_FOOT * (r.face.size ?? 1))
-          : m.ink100(r.s, r.face).d / 100,
-      ),
-    0,
-  )
 
 /** the blank halves at the edges of a figure text's line, before its ink and after it, em of its size: its line set as the
  *  breaker sets every line (B.break leadOf, hangOf) at its target's first state (firstCompress), its first and last characters
@@ -205,8 +191,6 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
     text: string
     runs: FigureRun[]
     width1: number
-    depth1: number
-    height1: number
     blank1: [number, number]
   }[] = []
   for (const f of i.figures) {
@@ -273,8 +257,6 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
       text,
       runs,
       width1: figureRunsWidth(runs, m),
-      depth1: figureRunsDepth(runs, m),
-      height1: figureRunsHeight(runs, m),
       blank1: blanksOf(runs, i.rules),
     })
   }
@@ -295,7 +277,7 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
     const { f, rec, text, runs } = c,
       fit = fits.get(c)
     if (!fit) {
-      Object.assign(rec, { why: fit === false ? 'crowded' : 'unfit', text })
+      Object.assign(rec, { why: 'unfit', text })
       continue
     }
     const x = f.x + f.ux * fit.offset,

@@ -19,6 +19,9 @@ export type TodayFigures = {
   view(page: number): number[] | undefined
   /** a unit's plain source (mt.mjs plainSource) */
   src(id: number): string
+  /** the depth under its baseline of the stroke under a figure unit's text as today's row states it, null where none: S.figures
+   *  reads it no more (its width the fit's only test, the owner's rule of 2026-11-13); the replay names its departures by it */
+  under(id: number, page: number): number | null
   /** the pages that hold a figure unit */
   pages: number[]
 }
@@ -44,7 +47,8 @@ function load(paper: string) {
     units: { from: number; sha256: string }[]
   }
   const byPage = new Map<number, FigureRow[]>(),
-    views = new Map<number, number[]>()
+    views = new Map<number, number[]>(),
+    unders = new Map<string, number>()
   for (const ref of c.parts) {
     const p = JSON.parse(readFileSync(join(CACHE, 'objects', ref.sha256), 'utf8')) as {
       pages: [number, number]
@@ -95,8 +99,8 @@ function load(paper: string) {
         set: figureGroupOf(set as number),
         before: before as number,
         after: after as number,
-        under: under === -1 || under === undefined ? null : (under as number),
       }
+      if (under !== -1 && under !== undefined) unders.set(`${id}|${page}`, under as number)
       const list = byPage.get(page) ?? []
       byPage.set(page, list)
       list.push(row)
@@ -132,6 +136,7 @@ function load(paper: string) {
     figures: (pg) => byPage.get(pg) ?? [],
     view: (pg) => views.get(pg),
     src: (id) => plain(units[id] ?? null),
+    under: (id, pg) => unders.get(`${id}|${pg}`) ?? null,
     pages: [...byPage.keys()].sort((a, b) => a - b),
   }
   const out = { t, units }

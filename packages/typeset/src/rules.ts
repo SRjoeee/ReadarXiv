@@ -660,8 +660,8 @@ const SPECS: readonly RuleSpec[] = [
     ports: [
       'RUN:1441-1496 paintFigures',
       'figure-fit.mjs:42 fitFigureSet',
-      'figure-fit.mjs:1-76 lineOf, CJK_FOOT, sameAsSource',
-      'L2:4824-4839 figureRuns',
+      'figure-fit.mjs:1-76 lineOf, sameAsSource',
+      'L2:4824-4836 figureRuns',
     ],
     how: 'ported',
     reads: ['fit.floorMin'],

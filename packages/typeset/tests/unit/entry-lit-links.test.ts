@@ -1161,6 +1161,17 @@ describe('S.figures over the part: a figure text drawn in its translation where 
         expect(box[3]).toBeCloseTo(404, 6)
       }
     }
+    // (a container's edge the part states under the baseline is no container round the text: 2501.14787v1 p41's "minimum", over
+    // -0.57 and a stroke 0.98 under, cut its band to a sliver under its line and lit none of its text once the text was drawn
+    // (the reader gate's I10, F41); its band is cut at the stroke under it alone)
+    const below = label({ room: { below: 1, next: 9, side: [120, 180], over: -0.57, under: 0.98 } })
+    const m = layPage(part(below), rowsOf([rowF('Verlust')]), rules, metrics()).members[0]!
+    expect(m.state).toBe('laid')
+    expect(m.lit.left).toEqual([[[140, 399.02, 160, 406]]])
+    for (const box of m.lit.right.flat()) {
+      expect(box[1]).toBeCloseTo(399.02, 6)
+      expect(box[3]).toBeGreaterThan(400)
+    }
   })
   it('lays a link round a figure text drawn in its translation over its drawing, never at A’s box over its hidden ink (Codex on #634)', () => {
     // ("Loss" 140-160 drawn "Verlust" 136-164 about its centre, its text group off. Its link round it on A stayed at A's box,

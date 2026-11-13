@@ -2,10 +2,10 @@
 // translation where it says something its source does not, in the faces of its style, each set (a size tie) at one size, on its
 // original's baseline from its anchor's edge into the free line beside its box, by its ink as the breaker sets every line (a
 // full-width mark's blank half at its edge past the anchor's edge, as its face draws it, and its target's compressMax), the original's
-// where it does not fit. Its facts are the part's, as the prepare states them from today's figure reading
+// where its width does not fit (width the fit's only test: no fact over or under its text is read, the owner's rule of
+// 2026-11-13, figure-fit.ts). Its facts are the part's, as the prepare states them from today's figure reading
 // (layout/figure-text.mjs): its line (its box along its run and its baseline), its anchor (Placed.align: l start, c centre, r
-// end), its room before and after its box (Room.side), the stroke under its text (Room.under), its style (size, fill, family,
-// weight, slant) and its groups' (a run of its glyphs in another face: SpanAt.style, its translation inside the group drawn in
+// end), its room before and after its box (Room.side), its style (size, fill, family, weight, slant) and its groups' (a run of its glyphs in another face: SpanAt.style, its translation inside the group drawn in
 // it), its own text (Placed.plain), its set (Tie size). One set turned (Placed.dir) is set along its run as a level one along
 // x, from its run's origin, length and room before and after along it (Placed.run: its line is its box on the page), and drawn
 // at its angle (its items' `dir`), as today's svgOfFigure turns it. A figure text drawn is one laid line of its runs, its text
@@ -13,7 +13,7 @@
 // reading leaves where it stands), a turned one a part made before the prepare stated its run (`kind`), one whose anchor the
 // part does not state (`kind`, align 'j'), its unit one the paper keeps (`kept`), its row none (`none`) or failed (the row's why,
 // as the entry's contentOf), the same
-// as its source (`none`), unfit or crowded (`unfit`), a face no served face holds (`served`). A part made before the prepare
+// as its source (`none`), unfit by its width (`unfit`), a face no served face holds (`served`). A part made before the prepare
 // stated a figure text's own text (Placed.plain) is not read here: the entry reads its figure texts as it did before
 // (entry.ts).
 import type { Part, Placed, Row } from '@readarxiv/format'
@@ -134,8 +134,6 @@ export function figuresOf(
         set: setOf.get(m.ord) ?? `f${m.ord}`,
         before: run ? run[3] : side ? l[2] - side[0] : 0,
         after: run ? run[4] : side ? side[1] - l[3] : 0,
-        under: m.room.under ?? null,
-        ...(m.room.over !== undefined ? { over: m.room.over } : {}),
       })
     }
   }
@@ -168,7 +166,7 @@ export function figuresOf(
     if (!f.drawn) {
       why.set(
         f.id,
-        f.why === 'unfit' || f.why === 'crowded'
+        f.why === 'unfit'
           ? 'unfit'
           : f.why === 'served'
             ? ('served' as Unlaid)

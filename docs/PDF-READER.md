@@ -2707,7 +2707,10 @@ within noise.
   front card of a stack of three "SAMA" cards 2.33 pt apart, padded by 2.71 pt and 3 px beside, held the middle of the label
   behind it (member 255) on the fresh rows' sheet (the lane fresh-fixes, 2026-11-11).
   A level one of one line is cut to its container where the part states one (Room.over, the closed shape's edge over its
-  baseline; Room.under, the stroke's depth under it): 6 member-pages of the parity's 22 pairs, by at most 0.84 pt. Every
+  baseline; Room.under, the stroke's depth under it): 6 member-pages of the parity's 22 pairs, by at most 0.84 pt. An edge the
+  part states at or under the baseline is no container round the text's glyphs, and its band is not cut there: 2501.14787v1
+  p41's "minimum" (Room.over -0.57, the one figure text of the corpus's parts to state one), whose band was cut to a sliver under
+  its line once the width-only fit drew it (§19.12), lit none of its text (the reader gate's I10, 5 faults). Every
   other member's Laid is unchanged, and so is each page's half leading (the parity's lay, both panes). Over the 22 pairs, the
   translated figure texts whose shape holds another member's lit middle on the right pane went from 7 to 1; by the parity's
   highlight measure (another unit's line on arXiv's page, a display on either pane), t179's 2 blocks went to 1. The one left
@@ -4312,7 +4315,8 @@ wherever any ink met its band, a frame round a citation in a sentence as much as
   with a letter in it, `ref` without) carrying it; a tone so only where it is a line tall at most (a plot's shaded column under a
   label's end is the plot's, 2610.21547v1 p14); pieces of fill under consecutive stretches, nothing of the text between them, are
   one (a highlight set word by word, 2610.40576v1 p17, 2411.13093v4 p19); a closed shape holding the whole text is its container,
-  its room the inside (Room.over and Room.under, the set shrunk to stay under `over`); a flat stroke under two glyphs or more of
+  its room the inside (Room.over and Room.under; the set shrunk to stay under `over` until the owner's rule of 2026-11-13, since
+  which width is the fit's only test, §19.12); a flat stroke under two glyphs or more of
   whole words an underline; anything else unrelated, and the text stays crowded, the original's. A tone that is none of these
   stays ground; a tone under a text kept whole is nothing to it. Since F3's step 2 (§18.36) only another text's glyph is
   unrelated ink that keeps a text: a shape or a line about it never does.
@@ -9150,58 +9154,37 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   paper as it was; on 24 of the 25-paper set 1,219 to 1,256 on 9 papers; G1, G3f, D, O and R 0 throughout (`Oflat` 4, 1 and
   2: the labels on tone edges). Over arXiv's PDFs of the 222 papers on disk: 331 labels on 51 papers drawn that were crowded,
   none the other way, no anchor, set or room moved.
-- **A stroke under the text crowds nothing; the layer draws a translation over it where the translation stays above it**
-  (PIPELINE 69 and BUNDLE5 16, the same report: of the legend's two entries "jury, α = 8" stood English, crowded by the panel's
-  gridline at −60, while "jury, α = 1" was translated; and the review of #588: a constant foot for every script let a Latin
-  translation's descenders cross the gridline). A stroke of no fill painted before the text whose part across the band, its
-  half width out, lies wholly below the baseline and, as far as its box shows it, under the text's box is under the text: the
-  original's own descenders were set over it, as its j and y are over that gridline. It neither crowds the text nor ends its
-  free line nor tells its anchor (shapeRoom); the unit carries the depth of the nearest such stroke (`under`, PDF units, the top
-  of the stroke's ink under the baseline; its row's eighteenth value, rounded down, -1 where none is). Such a part only beside
-  the box is a line beside it, ending the free line as any. Whether a translation meets it is the
-  target's, so the layer tells it where the translation's faces and size are known (`figure-fit.mjs` fitFigureSet): the
-  translation's depth (`layer2.mjs` figureRunsDepth: each run's ink as the canvas measures it in its face, a CJK run's held to
-  its face's em box, 0.12 of its size, `CJK_FOOT`, the frame its characters are designed in and the one `cellBands` holds a CJK
-  cell's lines to) at the size its set gives it is held above that depth, else the label stays the original's (`crowded`) and
-  its set is fitted again without it. On 2610.21085v1 p31 the gridline's top is 0.81 pt (0.125 em) under "jury,": staging's
-  zh row (three ideographs and a full-width comma), 0.51 pt deep at 0.66 (0.77 at its whole size), is drawn over it; an es "jurado,", whose j reaches
-  0.22 em in Nimbus Sans, stays the original's. Source Han Serif's ideographs reach some 0.09 em and its full-width comma
-  0.21 em, past its em box: held to the box, a CJK translation's comma may cross such a stroke, as the original's own descenders
-  do. A stroke painted after the
-  text, one that reaches the baseline, and a path filled and stroked crowd as before. The figure gate's O and R excuse such a
-  stroke's pixels within EDGE_PX of its ink, as they excuse a ground's tone edge (`under`, the drawn units over one), and its
-  fit counts read the stroke against the zh model's em box (`under` there, the labels left the original's). Measured over the sweep's 87
-  papers (our base pages, every page): 12 units over such a stroke are rows that were crowded, its top 0.004 to 0.19 em under
-  the baseline: the 4 a foot of -0.11 em had freed (2610.21085v1 p31's "jury,", 1512.03385v1 p8's "110-layer" and "56-layer",
-  a curve under their descenders, 2610.40394v1 p4's "Quality") and 8 over a stroke nearer the baseline (2608.06701v1's
-  "validation checks", 0.06 em; 2610.20507v1's "Fornax-like dSph", 0.004 em). Of the 4 with staging's zh rows, their depth read
-  as the layer reads it in Source Han Serif SC and Nimbus, "jury," is drawn (at 0.656) and the other 3 stay the original's,
-  their ideographs' ink, some 0.09 em, reaching the stroke. No room and no anchor of a unit that does not merge moves: a stroke
-  only beside a box ends its free line as any line does. On the pack, 1512.03385v1's two ("56-layer" drawn whole in zh, its
-  ink 0.09 em over a curve 0.127 em under). The figure gate's O and R stay 0: `under` 2 on the pack (1512.03385v1) and 1 on
-  the 25-paper set's bases (2610.21085v1's "jury,"); its zh model, held to the em box, leaves 1512.03385v1's "110-layer"
-  (its curve 0.115 em under) the original's at its whole size, where the layer reads the ink of its ideographs.
-- **The stroke under the text is an edge, as a container's** (the coordinator's ruling of 2026-11-13 on the readiness list's
-  D02, the owner's mechanism of 2026-11-10 for a container's edge, `Room.over`): the typesetter (`packages/typeset`
-  `shared/figure-fit.ts` fitFigureSet) shrinks a set until each translation's ink under its baseline (its depth as above, the
-  served face's, a CJK run's held to its em box) clears the stroke's top (`Room.under`), to the set's floor at the least, and
-  the set's other labels step with it (one size a set); one that would need less than the floor stays the original's
-  (`crowded`), as before. Before, a translation that reached the stroke at the size its set gave it stayed the original's
-  whatever a smaller size would have cleared. A stroke through the letters, at or above the baseline, is no `Room.under` (the
-  figure reading states one only wholly below the baseline): that case waits for the figure reading to state it. Measured at
-  round B15's head over the 46 figure texts whose stroke stands nearer than a CJK em box's depth (19 pairs, the reader gate's
-  lay): with Google's rows 9 drawn that were the original's, each set at the factor its stroke asks (0.684 to 0.968), 7 of
-  their sets' labels stepping with them, 20 still the original's (19 asking a factor under the floor, the subscript "out" of
-  2610.22065v1's W_out at its baseline); with the door's rows 3 drawn, 2 labels stepping; every drawn one's ink above its
-  stroke; no other figure text and no other unit moved. Drawn by the reader package itself over the same Google rows, in the
-  browser's faces, one more is drawn: 2610.35877v1 p15's "; distance", whose stroke asks 0.576 by the gate's measure of its
-  semicolon, with its set's "Moved mass".
+- **A figure text keeps the original's size wherever its translation is no wider than the original** (the owner's rule of
+  2026-11-13, on round RB1's figure texts over a stroke: 「缩不缩的判断方式我觉得应该是比较简单的。其实本质上，缩不缩是指我们翻译的文字有没有
+  超出英文原文的原有空间。如果没有超出的话，我们就不用缩。」). Width is the fit's only test (`packages/typeset` `shared/figure-fit.ts`
+  fitFigureSet). Height is none: drawn at the original's size a translation stands in the band the original's line stands in,
+  so no stroke under its text, no ink over it and no container's edge over or under it is measured. A translation no wider
+  than its original (its advance, the blank halves of the marks at its edges aside, against the original's box from its first
+  glyph's origin to its last glyph's advance end: each with its end glyphs' side bearings) keeps the original's size with
+  nothing else asked. A wider one takes the free room beside it (its room, below), and where that is not enough its set steps
+  by what its width needs and no more, to the floor at most. What this retired: the stroke-under rule of PIPELINE 69 and round
+  RB1 (a translation's ink held above `Room.under`, its depth the canvas's measure of its runs, a CJK run's held to its em box,
+  `CJK_FOOT`; a set shrunk until its ink cleared the stroke, a label left the original's, `crowded`, where it would need less
+  than the floor) and the container's edge over a figure text (`Room.over` in the fit, the owner's reformulation of 2026-11-10).
+  Measured on round RB1's lay of the 92 pairs with Google's rows before he ruled (the translation drawn at the original's size
+  in the served faces against the page's other ink): of the 9 texts round RB1 drew smaller over a stroke, 7 fitted at the
+  original's size and none was needed at the size drawn, the shrink coming from what the fit measured (a stroke the original's
+  own descenders cross; a stroke's half width read at 0.25 pt at least, `ink.mjs`; a CJK run's depth from measureText's box,
+  up to 0.05 em deeper than its ink; one stroke depth for the whole box; a gridline behind a legend's translucent box). The
+  figure reading still states `Room.under` and `Room.over`; S.figures reads neither (they leave the parts at a later PIPELINE
+  move). At the original's size a CJK glyph stands a little taller than Latin lower case (it fills the height capitals and
+  ascenders take), so in a rare tight place it grazes a line by a fraction of a point (1512.03385v1 p8's "20-layer": 0.12 pt
+  into a dash over it); by the owner's look at the crops that is right as it is. Not yet his rule (the engine's, PIPELINE): the
+  room still ends `ROOM_CLEAR` short of the next ink and at a fill's edge, so a wider translation whose room ends at a filled
+  table cell (2610.37818v1 p8's legend, "vs. 3DGUT + PPISP") still steps by width.
 - **Its set and its room** (the owner's rule of 2026-10-29, after 2010.11929v2's legends in Chinese: "All" drawn smaller
   than the other entries, "Patch size" starting further right than its column, "Head 3" smaller than "Head 1", each label
   fitted to its own box and anchored by what it read alone; `figure-text.mjs` `setsOf`, `roomsOf`): the labels of one group are set at one size, the original's by default; each keeps the original's alignment
   and anchor; a translation may take free space, never touching other ink nor leaving its figure; only a group that cannot
-  fit shrinks, all of it by one factor, never a label alone; a figure text the paragraph path lays stands in its lines' set and
-  is drawn at its factor (§18.54). A **column** is the runs of one figure, size and direction whose
+  fit shrinks, all of it by one factor (the factor of the label whose width needs most), never a label alone; a figure text the
+  paragraph path lays stands in its lines' set and is drawn at its factor (§18.54). Whether a label no wider than its original
+  keeps its size where a mate's width steps its set is the owner's to rule (his two rules meet there: each text at the
+  original's size where it fits, and one size a set); until then the set steps as one. A **column** is the runs of one figure, size and direction whose
   starts, ends or middles agree within `ALIGN_TOL` 0.08 of their size, two units or more among them; its other runs, a
   number or a "…", count for its edge (2010.11929v2's "Head 1/2/3", one length, read their end alone, the frame being
   nearer after them than their markers before; the column's "…" shares their start alone). A unit in a column takes the
