@@ -695,6 +695,43 @@ export const RULINGS = [
     },
     says: (d, x) => `the part states it ${x.member(x.unit(d).part)?.of === 'author' ? "a note of the author block (Placed.of)" : 'an ink unit of the names'}; the names option off`,
   },
+  {
+    id: 'CT',
+    title: "a table's cell is text like any other; the translator decides a name (the owner, 2026-11-13)",
+    verdict: "the owner's ruling",
+    date: '2026-11-13',
+    seen: "the owner's choice of 2026-11-13 (card 6 of the RB1 check list, staging/check-list-rb1.zh.html: 2611.03953v2 p7's column of dataset names and its row \"Avg. Recovery\"; shown three ways and their price on real replies, he chose the third: a table's cell judged as text like any other, the column rule and the name rule deleted, a name the translator's); the rule as built: lane cells-like-body, PDF-READER §18.72",
+    words: null,
+    example:
+      '2611.03953v2-zh p7, Table 2: today keeps the column of MedQA, CaseHOLD, FinQA, IFBench and "Avg. Recovery" the original\'s (the names by today\'s name rule, the label by its group\'s decision), v2 lays each cell by its own row: the label translated, the names as the translator gave them back',
+    condition:
+      "a table's cell today's reader leaves the original's by today's table rules alone: its unit kept by today's name rule (today's reader dump: notLaid `kept`, mt.mjs nameCells) or its row kept by today's group decision (`row: kept`, groups.mjs decideGroups: a column of names, or a group a cell of which no translator took whole); and v2 lays it (its Page member `laid`, a member of kind `cell`): every difference of that unit, and a grid group (`groups`) every cell of which the two sides draw otherwise is such a cell, the original's in today's and translated in v2's. A cell today leaves the original's for another reason, one v2 leaves the original's, and any other unit are judged as before",
+    holds(d, x) {
+      const kept = (key) => {
+        if (!/^t\d+$/.test(key ?? '')) return false
+        const why = x.todayWhy(key)
+        return why === 'kept' || why === 'row: kept'
+      }
+      const laid = (key) => {
+        const ord = x.unit({ unit: key })?.part
+        return ord !== null && ord !== undefined && x.member(ord)?.kind === 'cell' && x.laid(ord)?.state === 'laid'
+      }
+      if (d.flag === 'groups') {
+        const t = new Set(d.asOriginal?.today ?? []),
+          v = new Set(d.asOriginal?.v2 ?? [])
+        const moved = (d.cells ?? []).filter((k) => t.has(k) !== v.has(k))
+        return moved.length > 0 && moved.every((k) => t.has(k) && !v.has(k) && kept(k) && laid(k))
+      }
+      if (!d.unit) return false
+      const key = d.unit.split(' ')[0]
+      return kept(key) && laid(key)
+    },
+    says(d, x) {
+      const keys = d.flag === 'groups' ? (d.cells ?? []).filter((k) => (d.asOriginal?.today ?? []).includes(k) && !(d.asOriginal?.v2 ?? []).includes(k)) : [d.unit.split(' ')[0]]
+      const by = [...new Set(keys.map((k) => (x.todayWhy(k) === 'kept' ? "today's name rule" : "today's group decision")))]
+      return `${d.flag === 'groups' ? `its cells ${keys.join(', ')}` : 'the cell'} kept by ${by.join(' and ')}, laid by v2 from its own row`
+    },
+  },
 ]
 /** the measures that read a unit's content lost or changed against the original: a unit none of them finds v2 farther on (worse,
  *  or covered) on any of its pages is whole (the rulings L2 and S4) */
@@ -719,9 +756,10 @@ function inPlaceKept(ord, x) {
  * re-lay: `relaid`, which the re-lay's own pass covered, verdict.mjs freshResolve) that a ruling's condition holds for is
  * covered (`worse` false, `covered` the ruling's id, its measure's `nearer` kept); each page counted again. `recOf(n)` the
  * drawing's record of page n as measured (the re-lay's merged in for its pages), `v2` the pair's v2 file, `laid` the v2 Pages
- * laid (n -> Page), `unsqueezed` the lay with no CJK line squeezed (n -> ord -> lines)
+ * laid (n -> Page), `unsqueezed` the lay with no CJK line squeezed (n -> ord -> lines), `todayCut` and `todayWhy` today's dumps'
+ *  facts by a unit's key (WB, CT)
  */
-export function rulingsPass(pages, { recOf, v2, laid, unsqueezed, todayCut = null }, recount) {
+export function rulingsPass(pages, { recOf, v2, laid, unsqueezed, todayCut = null, todayWhy = null }, recount) {
   // (each unit's line count over the paper's pages: today's drawn, v2's laid, and with no CJK line squeezed)
   const todayLines = new Map()
   for (const p of pages) for (const u of p.units ?? []) if (typeof u.sides?.today?.lines === 'number') todayLines.set(u.key, (todayLines.get(u.key) ?? 0) + u.sides.today.lines)
@@ -753,6 +791,9 @@ export function rulingsPass(pages, { recOf, v2, laid, unsqueezed, todayCut = nul
       // (WB: where today's drawing of a unit (its key, today's ord) ends a line before a boundary between runs inside a word, read from
       // today's dumps by the caller, cutBeforeBoundary; none where the caller states nothing)
       todayCut: (key) => todayCut?.(key) ?? null,
+      // (CT: why today's reader leaves a unit (its key, today's ord) the original's, its reader dump's notLaid or left `why`; none
+      // where the caller states nothing)
+      todayWhy: (key) => todayWhy?.(key) ?? null,
       member: (ord) => facts.get(ord) ?? Object.values(v2.facts ?? {}).flatMap((f) => f.members ?? []).find((m) => m.ord === ord),
       squeezeSaved: (u) => {
         if (!unsqueezed) return false
