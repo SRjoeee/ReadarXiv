@@ -1,8 +1,9 @@
-// Today's readings of a PDF font's name, moved as they are (engine 065c1d973; held to today's by
-// lab/typeset/tests/font-names.test.ts): a glyph's style as today's reader reads it, its `design` the Latin family whose face
-// the reader draws in (layer-proto/fonts.mjs classifyFont), and the paper's English family from its fonts weighted by their
-// glyphs (rules/font-roles.mjs classifyFont, here classifyRole, and familyOfFonts: B.faces' roles are set for it). What the
-// typesetter reads of the part's fonts (Style.design, Part.paper.faces) by them: no rule reads a page's characters.
+// Today's readings of a PDF font's name, moved from engine 065c1d973 less what no reader of the package takes (what stays is
+// held to today's by lab/typeset/tests/unit/font-names.test.ts): a glyph's style as today's reader reads it, its `design` the
+// Latin family whose face the reader draws in (layer-proto/fonts.mjs classifyFont), and the paper's English family from its
+// fonts weighted by their glyphs (rules/font-roles.mjs classifyFont, here classifyRole, and familyOfFonts: B.faces' roles are
+// set for it). What the typesetter reads of the part's fonts (Style.design, Part.paper.faces) by them: no rule reads a page's
+// characters.
 
 /** a glyph's style by its font's name, as today's reader reads it (fonts.mjs classifyFont) */
 export type FontStyle = {
@@ -14,9 +15,8 @@ export type FontStyle = {
   known: boolean
   name: string
 }
-/** a font's class, weight, slant, small capitals and design by its PostScript name (classifyRole); `known` where a table or a
- *  family's names hold it */
-export type FontClass = { cls: string; bold: boolean; italic: boolean; caps: boolean; design: string; known: boolean }
+/** a font's class and design by its PostScript name (classifyRole) */
+export type FontClass = { cls: string; design: string }
 
 /** the PostScript name without its subset tag */
 const bare = (name: string): string => String(name ?? '').replace(/^[A-Z]{6}\+/, '')
@@ -97,7 +97,7 @@ export function classifyFont(name: string, fallbackFamily?: string): FontStyle {
 // - Faces outside TeX Live, each by name: Arial, Liberation Sans, Liberation Mono, Cambria Math, Symbol MT, Dingbats,
 //   Bitstream Vera Sans Mono, Bitstream Charter, Palatino, Palladio, Book Antiqua, Adobe Garamond (AGaramond), Garamond.
 // Which of these names TeX Live 2025's map files hold is not checked against the compile image's tree here.
-const DESIGNS: readonly { design: string; cls: string; ps: RegExp; bold?: RegExp }[] = [
+const DESIGNS: readonly { design: string; cls: string; ps: RegExp }[] = [
   // math: drawn as the layer's math face, set as the paper's math in TeX
   {
     design: 'cm',
@@ -120,7 +120,7 @@ const DESIGNS: readonly { design: string; cls: string; ps: RegExp; bold?: RegExp
     cls: 'mono',
     ps: /^(?:BeraSansMono|DejaVuSansMono|BitstreamVeraSansMono|VeraSansMono)/,
   },
-  { design: 'inconsolata', cls: 'mono', ps: /^Inconsolata/, bold: /zi4b|Bold/ },
+  { design: 'inconsolata', cls: 'mono', ps: /^Inconsolata/ },
   { design: 'cmtt', cls: 'mono', ps: /^CMUTypewriter/ },
   // sans
   {
@@ -177,10 +177,6 @@ const ENGLISH_FAMILIES = Object.freeze([
 ])
 const SERIF_DESIGN = new Set(ENGLISH_FAMILIES)
 
-// style words: URW's Medi(um) is its bold, and its Regu, Ital and Obli abbreviations; Medium spelled out is not bold
-const BOLD = /(?:Bold|Bol(?![a-z])|Black|Heavy|Demi|Semibold|SemiBold|ExtraBold|Medi(?![a-z]))/
-const ITALIC = /(?:Italic|Ital(?![a-z])|Ita(?![a-z])|Oblique|Obli(?![a-z])|Slant|Inclined|Kursiv|It$)/
-const CAPS = /(?:SmallCaps|Caps|Capitals|[a-z]SC$|-SC$|-Sc$)/
 // a name no table holds: its class guessed from its words
 const MONO_WORD = /(?:Mono|Courier|Typewriter|Consol|Code|Menlo|Monaco|Fixed)/i
 const SANS_WORD = /(?:Sans|Gothic|Grotesk|Arial|Helvet|Verdana|Calibri|Segoe|Tahoma|Futura|Avenir|Univers|Frutiger)/i
@@ -189,79 +185,69 @@ const MATH_WORD = /(?:Math|Symbol|Dingbat)/i
 const SUBSET = /^[A-Z]{6}\+/
 // longer than any font's name: refused as unknown, so that no pattern runs over a hostile string
 const NAME_MAX = 128
-const fontClass = (
-  cls: string,
-  design: string,
-  bold: boolean,
-  italic: boolean,
-  caps: boolean,
-  known: boolean,
-): FontClass => ({ cls, bold, italic, caps, design, known })
+const fontClass = (cls: string, design: string): FontClass => ({ cls, design })
 
-// Computer Modern (CMR10, CMBXTI10, CMSSBX10) and cm-super (SFRM1000, SFBX1200): a code of the series and shape
+// Computer Modern (CMR10, CMBXTI10, CMSSBX10) and cm-super (SFRM1000, SFBX1200): the class a code of the series and shape
+// names
 const CM_CODES: Readonly<Record<string, string>> = {
   R: 'serif',
-  B: 'serif b',
-  BX: 'serif b',
-  TI: 'serif i',
-  SL: 'serif i',
-  BXTI: 'serif b i',
-  BXSL: 'serif b i',
-  CSC: 'serif c',
-  U: 'serif i',
+  B: 'serif',
+  BX: 'serif',
+  TI: 'serif',
+  SL: 'serif',
+  BXTI: 'serif',
+  BXSL: 'serif',
+  CSC: 'serif',
+  U: 'serif',
   DUNH: 'serif',
   FIB: 'serif',
   FF: 'serif',
-  FI: 'serif i',
+  FI: 'serif',
   SS: 'sans',
-  SSBX: 'sans b',
-  SSI: 'sans i',
-  SSDC: 'sans b',
+  SSBX: 'sans',
+  SSI: 'sans',
+  SSDC: 'sans',
   SSQ: 'sans',
-  SSQI: 'sans i',
+  SSQI: 'sans',
   TT: 'mono',
-  ITT: 'mono i',
-  SLTT: 'mono i',
-  TCSC: 'mono c',
+  ITT: 'mono',
+  SLTT: 'mono',
+  TCSC: 'mono',
   TEX: 'mono',
   VTT: 'mono',
   MI: 'math',
-  MIB: 'math b',
+  MIB: 'math',
   SY: 'math',
-  BSY: 'math b',
+  BSY: 'math',
   EX: 'math',
 }
 const SF_CODES: Readonly<Record<string, string>> = {
   RM: 'serif',
-  RB: 'serif b',
-  BX: 'serif b',
-  TI: 'serif i',
-  BI: 'serif b i',
-  SL: 'serif i',
-  BL: 'serif b i',
-  CC: 'serif c',
-  XC: 'serif b c',
-  SC: 'serif i c',
-  UI: 'serif i',
+  RB: 'serif',
+  BX: 'serif',
+  TI: 'serif',
+  BI: 'serif',
+  SL: 'serif',
+  BL: 'serif',
+  CC: 'serif',
+  XC: 'serif',
+  SC: 'serif',
+  UI: 'serif',
   DH: 'serif',
   SS: 'sans',
-  SX: 'sans b',
-  SI: 'sans i',
-  SO: 'sans b i',
-  QI: 'sans i',
+  SX: 'sans',
+  SI: 'sans',
+  SO: 'sans',
+  QI: 'sans',
   TT: 'mono',
-  IT: 'mono i',
-  ST: 'mono i',
-  TC: 'mono c',
+  IT: 'mono',
+  ST: 'mono',
+  TC: 'mono',
   VT: 'mono',
-  VI: 'mono i',
+  VI: 'mono',
 }
 const CM_DESIGN: Readonly<Record<string, string>> = { serif: 'cm', sans: 'cmss', mono: 'cmtt', math: 'cm' }
-const coded = (code: string | undefined): FontClass | null => {
-  if (!code) return null
-  const [cls, ...marks] = code.split(' ') as [string, ...string[]]
-  return fontClass(cls, CM_DESIGN[cls] as string, marks.includes('b'), marks.includes('i'), marks.includes('c'), true)
-}
+const coded = (cls: string | undefined): FontClass | null => (cls ? fontClass(cls, CM_DESIGN[cls] as string) : null)
 const computerModern = (name: string): FontClass | null => {
   const cm = /^CM([A-Z]+)\d{1,2}$/.exec(name)
   if (cm) return coded(CM_CODES[cm[1]!])
@@ -273,47 +259,27 @@ const LM_CLASS: Readonly<Record<string, string>> = { Roman: 'serif', Sans: 'sans
 const latinModern = (name: string): FontClass | null => {
   const m = /^LM(Roman|Sans|Mono|Math)([A-Za-z]*)\d+-([A-Za-z]+)$/.exec(name)
   if (!m) return null
-  const cls = LM_CLASS[m[1]!] as string,
-    variant = m[2]!,
-    style = m[3]!
-  return fontClass(
-    cls,
-    CM_DESIGN[cls] as string,
-    /Demi/.test(variant) || /Bold/.test(style),
-    /Slant|Unsl/.test(variant) || /Oblique|Italic/.test(style),
-    /Caps/.test(variant),
-    true,
-  )
+  const cls = LM_CLASS[m[1]!] as string
+  return fontClass(cls, CM_DESIGN[cls] as string)
 }
-// Linux Libertine and Biolinum, Type 1 and OpenType: LinLibertineT, LinLibertineTB, LinLibertineOBI, LinBiolinumOBO; B
-// and Z (semibold) are bold, I italic and O (Biolinum's) oblique
+// Linux Libertine and Biolinum, Type 1 and OpenType: LinLibertineT, LinLibertineTB, LinLibertineOBI, LinBiolinumOBO
 const libertine = (name: string): FontClass | null => {
   const m = /^Lin(Libertine|Biolinum)[TO]?([A-Z]{0,4})(?:-|$)/.exec(name)
   if (!m) return null
   const serif = m[1] === 'Libertine'
-  return fontClass(
-    serif ? 'serif' : 'sans',
-    serif ? 'libertine' : 'biolinum',
-    /[BZ]/.test(m[2]!),
-    /[IO]/.test(m[2]!),
-    false,
-    true,
-  )
+  return fontClass(serif ? 'serif' : 'sans', serif ? 'libertine' : 'biolinum')
 }
 
-/** a PDF font's class, weight, slant, small capitals and design, from its PostScript name (subset tag stripped) */
+/** a PDF font's class and design, from its PostScript name (subset tag stripped) */
 function classifyRole(postScript: string | null | undefined): FontClass {
   const name = String(postScript ?? '').replace(SUBSET, '')
-  if (!name || name.length > NAME_MAX) return fontClass('serif', 'other', false, false, false, false)
+  if (!name || name.length > NAME_MAX) return fontClass('serif', 'other')
   const special = computerModern(name) ?? latinModern(name) ?? libertine(name)
   if (special) return special
-  const bold = BOLD.test(name),
-    italic = ITALIC.test(name),
-    caps = CAPS.test(name)
   const row = DESIGNS.find((d) => d.ps.test(name))
-  if (row) return fontClass(row.cls, row.design, row.bold ? row.bold.test(name) : bold, italic, caps, true)
+  if (row) return fontClass(row.cls, row.design)
   const cls = MONO_WORD.test(name) ? 'mono' : SANS_WORD.test(name) ? 'sans' : MATH_WORD.test(name) ? 'math' : 'serif'
-  return fontClass(cls, 'other', bold, italic, caps, false)
+  return fontClass(cls, 'other')
 }
 
 /** the paper's body family, from the layout file's fonts weighted by the lines each sets: the text family that sets the
