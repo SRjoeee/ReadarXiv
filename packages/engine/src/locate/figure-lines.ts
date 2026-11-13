@@ -55,8 +55,9 @@ export interface FigureText {
    *  a paragraph (F3): a space, a word's own hyphen kept and nothing more (`join`), or TeX's hyphen dropped (`drop`) */
   order: ({ t: 'text'; glyphs: number[] } | { t: 'el'; i: number } | { t: 'br'; end: 'space' | 'join' | 'drop' })[]
   /** its elements: `code` (a run of one pitch), `math` (a formula, F1), `cite` (a stretch a decoration holds, a letter in it),
-   *  `ref` (one with none); each its glyphs and its boxes (a decoration's, a ground's) on its page */
-  els: { kind: 'code' | 'math' | 'cite' | 'ref'; glyphs: number[]; boxes: number[] }[]
+   *  `ref` (one with none), `symbol` (a sign no run holds on a path's line, spelling no word: the container step's); each its
+   *  glyphs and its boxes (a decoration's, a ground's) on its page */
+  els: { kind: 'code' | 'math' | 'cite' | 'ref' | 'symbol'; glyphs: number[]; boxes: number[] }[]
   /** an item's marker at its start (a dash, a bullet, "(b)", "1.", "A."): its label, the original's ink where it stands, no
    *  text of it (F3) */
   label: number[]
@@ -670,8 +671,9 @@ function linesOf(
         }
         rs.forEach((r, n) => {
           if (n) ft.order.push({ t: 'br', end: endOf(glyphs, rs[n - 1]!.read.gs, r.read.gs, sourceOf, true) })
-          if (n === 0 && label.length) piecesInto(ft, { ...r.read, marker: label }, true)
-          else piecesInto(ft, r.read, false)
+          const read = signsApart(r.read, r.l.free, glyphs)
+          if (n === 0 && label.length) piecesInto(ft, { ...read, marker: label }, true)
+          else piecesInto(ft, read, false)
         })
         const items = itemsOf(ft.ks)
         if (items.length) judge(ft, items, glyphs)
@@ -1072,7 +1074,7 @@ function lineOf(ks: number[], gs0: number[], free: Set<number>, glyphs: readonly
  *  (words alone) or `none` (no word, no formula); `marker`, the glyphs of the marker it opens with where it is an item's */
 interface Read {
   gs: number[]
-  pieces: { r: 'T' | 'F' | 'M'; gs: number[] }[]
+  pieces: { r: 'T' | 'F' | 'M' | 'S'; gs: number[] }[]
   kind: 'code' | 'formula' | 'mixed' | 'plain' | 'none'
   marker: number[]
 }
@@ -1199,7 +1201,8 @@ function listed(lines: readonly Line[], reads: Read[], glyphs: readonly G[]): vo
 }
 
 /** a read line's pieces into a text's order and elements: its text stretches, each run of one pitch an element `code`, each
- *  formula an element `math`; its marker (`label`) left out where the text takes it as its label */
+ *  formula an element `math`, each sign no run holds an element `symbol` (signsApart); its marker (`label`) left out where the
+ *  text takes it as its label */
 function piecesInto(ft: FigureText, read: Read, label: boolean): void {
   const skip = new Set(label ? read.marker : [])
   for (const s of read.pieces) {
@@ -1207,10 +1210,41 @@ function piecesInto(ft: FigureText, read: Read, label: boolean): void {
     if (!gs.length) continue
     if (s.r === 'T') ft.order.push({ t: 'text', glyphs: gs })
     else {
-      ft.els.push({ kind: s.r === 'M' ? 'math' : 'code', glyphs: gs, boxes: [] })
+      ft.els.push({ kind: s.r === 'M' ? 'math' : s.r === 'S' ? 'symbol' : 'code', glyphs: gs, boxes: [] })
       ft.order.push({ t: 'el', i: ft.els.length - 1 })
     }
   }
+}
+
+/**
+ * A path's line as the container step's text carries it (the coordinator's ruling of 2026-11-14 on A, PDF-READER §18.36): a
+ * glyph the line reading set on the line that no run holds and that spells no word (no letter or digit in it: a pictograph, an
+ * icon face's glyph, a mark set alone in another face) is the line's element `symbol`, never its text: its ink the original's,
+ * set where the reply sets the element, as a formula's glyph is carried; sent as text it came back as a character no served face
+ * draws (2608.06701v1 p10's warning sign: the lay threw, the text stood as the original). Signs abutting one another are one
+ * element; a word space between them, two. A sign is no decorated word: §18.61's hold is not read from it
+ */
+function signsApart(read: Read, free: ReadonlySet<number>, glyphs: readonly G[]): Read {
+  const pieces: Read['pieces'] = []
+  for (const st of read.pieces) {
+    if (st.r !== 'T') {
+      pieces.push(st)
+      continue
+    }
+    let cur: Read['pieces'][number] | null = null
+    for (const g of st.gs) {
+      const x = glyphs[g]!
+      const sign = free.has(g) && !/[\p{L}\p{N}]/u.test(x.u)
+      const prev = cur?.gs.at(-1)
+      const apart = prev !== undefined && x.x0 - glyphs[prev]!.x1 >= SPACE_GAP * Math.min(x.size, glyphs[prev]!.size)
+      if (cur && (cur.r === 'S') === sign && !(sign && apart)) cur.gs.push(g)
+      else {
+        cur = { r: sign ? 'S' : 'T', gs: [g] }
+        pieces.push(cur)
+      }
+    }
+  }
+  return { ...read, pieces }
 }
 
 /**

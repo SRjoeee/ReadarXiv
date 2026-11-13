@@ -33,9 +33,9 @@ export interface InstrumentUnit {
    *  the lab's dump and parity tell the units this rule keeps by it; the bundle does not carry it */
   pitch?: true
   /** a figure text's elements kept as the original's ink (figure-lines.ts, PDF-READER §18.26): a run of one pitch (`pitch`, F0),
-   *  a formula (`formula`, F1) or a stretch its decoration holds (`decoration`), by piece id: the lab's dump and parity tell them
-   *  by it; the bundle does not carry it */
-  keptEls?: [string, 'pitch' | 'formula' | 'decoration'][]
+   *  a formula (`formula`, F1), a stretch its decoration holds (`decoration`) or a sign no run holds on a path's line (`symbol`,
+   *  §18.36), by piece id: the lab's dump and parity tell them by it; the bundle does not carry it */
+  keptEls?: [string, 'pitch' | 'formula' | 'decoration' | 'symbol'][]
   /** a figure's line no word of which stands outside its formulas, kept whole (F1, figure-lines.ts): the lab's dump and parity tell
    *  it by it; the bundle does not carry it */
   formula?: true

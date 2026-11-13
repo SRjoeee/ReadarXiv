@@ -618,7 +618,8 @@ function roomOfText(t: FigureText): { under?: number; over?: number } {
 /**
  * A figure text its printed line makes (figure-lines.ts): its content in its line's order, its text pieces as figureRuns states a
  * figure text's (each run of another face a group), each element a piece of its own (`code`: a run of one pitch; `cite`, `ref`:
- * a stretch a decoration holds), a space between two where their glyphs stand SPACE_GAP of their size apart; each element drawn
+ * a stretch a decoration holds; `symbol`: a sign no run holds on a path's line), a space between two where their glyphs stand
+ * SPACE_GAP of their size apart; each element drawn
  * from its ink (its class `other`, a code one `literal`, its glyphs' text its copy), its glyphs and its boxes (a ground's, a
  * decoration's) its own. Laid by the paragraph path (it states no own text, locate): its room the line's, from its first run's
  * room before to its last run's after; in `set`, the set of the labels its lines stand among, whose size tie holds it with the
@@ -735,13 +736,15 @@ function figureTextOf(
       ...(classes.length ? { classes } : {}),
       ...(classes.length
         ? {
-            keptEls: classes.map(([id]): [string, 'pitch' | 'formula' | 'decoration'] => [
+            keptEls: classes.map(([id]): [string, 'pitch' | 'formula' | 'decoration' | 'symbol'] => [
               id,
               (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind === 'code'
                 ? 'pitch'
                 : (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind === 'math'
                   ? 'formula'
-                  : 'decoration',
+                  : (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind === 'symbol'
+                    ? 'symbol'
+                    : 'decoration',
             ]),
           }
         : {}),
