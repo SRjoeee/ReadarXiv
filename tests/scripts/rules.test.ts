@@ -417,6 +417,23 @@ const LOOKS_AHEAD = p => {
   return n > 0 && /\\\\(?:xspace|protect|noexpand|expandafter)$/.test(p)
 }
 export const looks = p => LOOKS_AHEAD(p)
+
+/** whether a mark is glued to its word, as TeX sets it */
+const glued = gap => {
+  const g = gap * 2
+  return g > 0.03
+}
+/** a PDF date's minute: at most 59 */
+const minuteOk = m => {
+  const n = Number(m)
+  return n <= 59
+}
+/** a PDF date's second (PDF 32000-1 §7.9.4) */
+const secondOk = s => {
+  const n = Number(s)
+  return n <= 61
+}
+export const marks = x => [glued(x), minuteOk(x), secondOk(x)]
 `
   // (lists read past their objects, and two the recorder sees: one copied into a Set, one tested by \`every\`)
   const PAST = `// lists read past their objects
@@ -444,13 +461,14 @@ export const many = s => (s.match(MANY) ?? []).join(',')
 `
   const RUN = `import { FORMS } from './packages/engine/src/forms.mjs'
 import { fits, kern } from './packages/engine/src/table.mjs'
-import { looks } from './packages/engine/src/cited.mjs'
+import { looks, marks } from './packages/engine/src/cited.mjs'
 import { kindAt, words, named, allIn } from './packages/engine/src/past.mjs'
 import { known, part, plain, many } from './packages/engine/src/entries.mjs'
 const out = {}
 for (const [k, f] of Object.entries(FORMS)) out[k] = [f('nothing here'), f('an alpha and a gamma')]
 out.fits = [fits('rg', [1, 2, 3]), fits('cmyk', [1, 2]), kern('\\\\enspace'), kern('\\\\quad')]
 out.looks = [looks('a \\\\protect'), looks('plain')]
+out.marks = marks(0.001)
 out.past = [kindAt(1), words('one two'), named('beta'), named('zeta'), allIn('red green'), allIn('red green blue')]
 out.entries = [known('WinAnsiEncoding'), known('StandardEncoding'), known('Other'), part('section 2'), plain('quux'), plain('foo'), many('onetwo x')]
 console.log(JSON.stringify(out))
@@ -570,7 +588,17 @@ console.log(JSON.stringify(out))
     const key = must(Object.keys(map.rules).find(k => k.startsWith('packages/engine/src/cited::') && map.rules[k]?.kind === 'list'), 'the pattern of cited.mjs')
     expect(ledger.rules[key]?.citation).toMatchObject({ flag: 'paper', papers: ['2608.23586'] })
     // (the report names the declaration the comment was read from, and its length)
-    expect(ledger.rules[key]?.holder).toEqual({ name: 'LOOKS_AHEAD', lines: 4 })
+    // (its comment names entries of the pattern, \protect and \xspace: it states the rule's value)
+    expect(ledger.rules[key]?.holder).toEqual({ name: 'LOOKS_AHEAD', lines: 4, read: 'states its value' })
+  })
+  // (the coordinator's ruling of 2026-11-14: a holder's comment exempts a rule only where it states the rule's value or names
+  // the definition the value comes from; a header that merely mentions TeX exempts nothing)
+  it("reads a holder's comment only where it states the rule's value or names the definition it comes from", () => {
+    const row = (fn: string) => must(Object.values(ledger.rules).find(r => r.file.endsWith('cited.mjs') && r.kind === 'threshold' && r.key.includes(`::${fn}::`)), fn)
+    expect([row('glued').citation.flag, row('glued').holder]).toEqual([null, { name: 'glued', lines: 4, read: null }])
+    expect(row('glued').verdict).toBe('remove')
+    expect([row('minuteOk').citation.flag, row('minuteOk').holder?.read]).toEqual([null, 'states its value'])
+    expect([row('secondOk').citation.flag, row('secondOk').holder?.read]).toEqual(['definition', 'names the definition'])
   })
 })
 

@@ -43,7 +43,7 @@ export interface Row {
   reads?: number
   listReads?: Record<string, number>
   unseen?: string[]
-  holder?: { name: string; lines: number }
+  holder?: { name: string; lines: number; read: 'states its value' | 'names the definition' | null }
   judged?: string[]
   entriesNotJudged?: { entry: string; why: string }[]
   neverTested?: boolean

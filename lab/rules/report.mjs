@@ -54,7 +54,7 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
     const flagged = rows.filter(r => r.area === id && r.citation.flag && byFlag(r) === first).sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)
     if (!flagged.length) continue
     L.push(`### Area ${id}: ${flagged.length} ${first ? 'whose verdict the flag makes' : 'whose verdict the recording makes'}`, '')
-    for (const r of flagged) L.push(`- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}): flag **${r.citation.flag}**${r.citation.papers.length ? ` (${r.citation.papers.join(', ')})` : r.citation.definition ? ` (${r.citation.definition})` : r.citation.section ? ` (${r.citation.section})` : ''}; verdict ${r.verdict}${r.citation.flag === 'tuned' ? ' (no exemption)' : ''}; recorded: ${recordedOf(r)}.`, `  Comment: ${r.comment || '(none)'}${r.holder ? ` (with the comment on ${r.holder.name}, the declaration that holds it, ${r.holder.lines} line${r.holder.lines === 1 ? '' : 's'})` : ''}`)
+    for (const r of flagged) L.push(`- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}): flag **${r.citation.flag}**${r.citation.papers.length ? ` (${r.citation.papers.join(', ')})` : r.citation.definition ? ` (${r.citation.definition})` : r.citation.section ? ` (${r.citation.section})` : ''}; verdict ${r.verdict}${r.citation.flag === 'tuned' ? ' (no exemption)' : ''}; recorded: ${recordedOf(r)}.`, `  Comment: ${r.comment || '(none)'}${r.holder?.read ? ` (with the comment on ${r.holder.name}, the declaration that holds it, ${r.holder.lines} line${r.holder.lines === 1 ? '' : 's'}, which ${r.holder.read})` : ''}`)
     L.push('')
   }
 

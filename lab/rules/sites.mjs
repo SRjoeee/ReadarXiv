@@ -132,6 +132,27 @@ const holderCommentOf = (text, ps) => {
   }
   return null
 }
+/** a definition a comment names, more than the words TeX or LaTeX: a file of a TeX distribution, the TeXbook, a standard or
+ *  a format (PDF's, ISO's, Unicode's, a font format's), a section (`§7.9.4`); census-lib.mjs CITES_DEFINITION less its bare
+ *  `TeX` and `LaTeX` */
+const NAMES_DEFINITION = /\bTeXbook\b|[\w@-]+\.(?:sty|cls|clo|def|ltx|bst|bbx|cbx|lbx|fd|cfg|dtx|map|enc|tfm)\b|\bplain\.tex\b|\bPDF(?:'s| spec| reference| \d{5})|\bISO[ -]?\d+|\bUnicode\b|\bUAX ?#?\d+|\bUTS ?#?\d+|\bCLDR\b|\bOpenType\b|\bTrueType\b|\bPostScript\b|\bType ?1\b|\bthe font's\b|\bfont's own\b|\bJIS ?X ?4051\b|\bW3C\b|\b[ckj]lreq\b|\bCSS'?s?\b|\bECMA\b|\bRFC ?\d+|\bIEEE ?754\b|\bPDF\.js's|\bChromium's\b|§\s?\d/
+const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+/** whether a holder's comment speaks for the rule (the coordinator's ruling of 2026-11-14, the design's 8.9 condition): it
+ *  states the rule's value (a threshold's literal as written, a list's entry as a word) or names the definition the value
+ *  comes from; a header that merely mentions TeX or LaTeX speaks for nothing in its body. 'states its value', 'names the
+ *  definition', or null */
+const holderSpeaks = (comment, { raw = null, entries = null }) => {
+  const text = commentText(comment)
+  if (raw != null && new RegExp(`(?<![\\w.])${escapeRe(String(raw))}(?![\\w])`).test(text)) return 'states its value'
+  if (entries?.some(e => new RegExp(`(?<![A-Za-z@])${escapeRe(e.replace(/^\\/, ''))}(?![A-Za-z@])`).test(text))) return 'states its value'
+  return NAMES_DEFINITION.test(text) ? 'names the definition' : null
+}
+/** a rule's holder as its row shows it, and the comment it adds: none where the holder does not speak for the rule */
+const heldBy = (held, value) => {
+  if (!held) return { holder: null, adds: '' }
+  const read = holderSpeaks(held.comment, value)
+  return { holder: { name: held.name, lines: held.lines, read }, adds: read ? held.comment : '' }
+}
 
 /** the sites of a tree: `scan` a census scan read with `nodes` for these files (census-lib scanTree), `graph` its import
  *  graph (graphOf), `alive` the ids AFTER keeps (or null: unknown). Returns `{ rules, sites, files, keyOfItem }`: rules
@@ -187,8 +208,8 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS, keysOnl
         const op = t.context === 'comparison' ? t.nodes.site.operator : t.context.slice(5)
         const key = keyed(fk, fnPathOf(ps), `${op}${t.raw}`)
         // (its citation read from its statement's comment and the comment on the declaration that holds it)
-        const held = holderCommentOf(f.text, ps)
-        rules[key] = { key, ...base, comment: commentText(`${t.nodes.comment ?? ''}\n${held?.comment ?? ''}`), ...(held ? { holder: { name: held.name, lines: held.lines } } : {}), fn: fnPathOf(ps) }
+        const held = heldBy(holderCommentOf(f.text, ps), { raw: t.raw })
+        rules[key] = { key, ...base, comment: commentText(`${t.nodes.comment ?? ''}\n${held.adds}`), ...(held.holder ? { holder: held.holder } : {}), fn: fnPathOf(ps) }
         literalRules.set(t.nodes.literal, rules[key])
         keyOfItem.set(t, key)
       }
@@ -197,10 +218,10 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS, keysOnl
       if (!l.nodes) continue
       const ps = parentsOf.get(l.nodes.literal) ?? []
       const fnPath = fnPathOf(ps)
-      const held = holderCommentOf(f.text, ps)
+      const held = heldBy(holderCommentOf(f.text, ps), { entries: l.nodes.entries })
       // (a list by the name of the declaration it stands in, else by its first two entries)
       const key = keyed(fk, fnPath, l.name ?? `${l.form}[${l.nodes.entries.slice(0, 2).join(',')}]`)
-      rules[key] = { key, kind: 'list', file: path, line: l.line, form: l.form, name: l.name ?? null, size: l.size, entries: l.nodes.entries, class: l.class, comment: commentText(`${l.nodes.comment ?? ''}\n${held?.comment ?? ''}`), ...(held ? { holder: { name: held.name, lines: held.lines } } : {}), area: f.area, after: alive ? alive.has(id(path)) : null, fn: fnPath, sites: [] }
+      rules[key] = { key, kind: 'list', file: path, line: l.line, form: l.form, name: l.name ?? null, size: l.size, entries: l.nodes.entries, class: l.class, comment: commentText(`${l.nodes.comment ?? ''}\n${held.adds}`), ...(held.holder ? { holder: held.holder } : {}), area: f.area, after: alive ? alive.has(id(path)) : null, fn: fnPath, sites: [] }
       keyOfItem.set(l, key)
       listRules.push({ path, rule: rules[key], node: l.nodes.literal, parent: l.nodes.parent })
     }
