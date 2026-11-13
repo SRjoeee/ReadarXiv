@@ -17,7 +17,7 @@
 // A register (\tabcolsep) is '=': TeX's assignment may follow it, `\tabcolsep=2pt`; a token register (llncs'
 // \titlerunning) `?s{x`, its value a group. A command LaTeXML reads in code past its prototype (\cmidrule[]'s
 // (trim){a-b}, acronym's \ac*{key}) is not known: its arguments are no reader's text
-import { BINDINGS, COMMANDS, ENVIRONMENTS, FRONT, LATEXML_COMMIT, PACKAGE_COMMANDS, PACKAGE_ENVIRONMENTS, REQUIRES } from './latexml-args.mjs'
+import { BINDINGS, COMMANDS, ENVIRONMENTS, FRONT, LATEXML_COMMIT, NOTE_PACKAGES, NOTE_POOLS, PACKAGE_COMMANDS, PACKAGE_ENVIRONMENTS, REQUEST_PACKAGES, REQUEST_POOLS, REQUIRES } from './latexml-args.mjs'
 import { BREAK_HINTS, inkFree } from './tex-kernel.mjs'
 
 export { LATEXML_COMMIT }
@@ -292,6 +292,38 @@ const NOT_FRONT_TEXT = new Set(['setcopyright', 'doi', 'acmDOI', 'acmISBN', 'ISS
  *  be \title (an alias, whose hook the generator does not follow) */
 const MORE_FRONT = { affiliations: ['author', 1], alsoaffiliation: ['author', 2], icmltitle: ['title', 2], 'env:keywords': ['keywords', 0], 'env:IEEEkeywords': ['keywords', 0], 'env:abstract': ['abstract', 0] }
 export const FRONT_ROLES = Object.freeze({ ...Object.fromEntries(Object.entries(FRONT).filter(([k]) => !NOT_FRONT_TEXT.has(k.replace(/^env:/, '')))), ...MORE_FRONT })
+/** a value by LaTeXML's bindings as byForms reads a form: the paper's bindings' where any defines the name (null where they
+ *  differ, or where theirs is `none`: the binding defines it otherwise), else the engine pools', else null */
+const byValues = (pools, packages, name, bindings) => {
+  const pkg = packages[name]
+  if (bindings && pkg) {
+    const mine = pkg.filter(([, ...bs]) => bs.some(b => bindings.has(b))).map(([v]) => v)
+    if (mine.length) return mine.length === 1 && mine[0] !== 'none' ? mine[0] : null
+  }
+  return pools[name] ?? null
+}
+/**
+ * Where a note command written on its own puts its text, by the paper's bindings (LaTeXML's hooks, the generator's NOTE_*):
+ * `creator`, the author before it (REVTeX's \thanks after \author{…}, acmart's \authornote); `label:<prefix>`, the authors whose
+ * text requests the label `<prefix>:<key>` (elsarticle's \cortext[key]{…}, asked by \corref{key} in an \author; `fuzzy`, the
+ * author the text names); null where it is the document's (the kernel's \thanks, amsart's) or no note: body text. Not a note
+ * written inside an author command's argument, which is that author's whatever its command (a creator's text, LaTeXML's
+ * Base_Utility.pool.ltxml:331-332)
+ */
+export function noteAttachOf(name, bindings = null) {
+  const v = byValues(NOTE_POOLS, NOTE_PACKAGES, name, bindings)
+  return v === 'creator' || v?.startsWith('label:') ? v : null
+}
+/** the commands that request an annotation by its label, for the paper's bindings: name → its label's prefix (elsarticle's
+ *  \corref → `cor`) */
+export function labelRequestsOf(bindings = null) {
+  const out = new Map()
+  for (const name of new Set([...Object.keys(REQUEST_POOLS), ...Object.keys(REQUEST_PACKAGES)])) {
+    const v = byValues(REQUEST_POOLS, REQUEST_PACKAGES, name, bindings)
+    if (v) out.set(name, v)
+  }
+  return out
+}
 
 // ---------------------------------------------------------------- reading arguments as TeX takes them
 const isLetter = c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c === '@'

@@ -8,6 +8,9 @@ import type { Claims } from './ownership.ts'
 import { empty, place } from './place.ts'
 import { AUTHOR_KINDS, type Work } from './work.ts'
 
+/** the cause of an author block's unit left unplaced because TeX set it in a paragraph that sets a unit again: it has no place
+ *  of its own on A (ink.ts reads the block's own text where its units stand nowhere else) */
+export const SET_AGAIN = 'set in a paragraph that sets a unit again'
 /** a babel name's end point on B (marks.mjs NAMES_TEX: `n<occurrence>.<key>.e`) */
 const NAME_END = /^n\d+\.[a-z]{1,16}\.e$/
 /** the same, its unit's key and whether it starts or ends a setting */
@@ -63,7 +66,7 @@ export function placeUnits(w: Work, claims: Claims): void {
     const boxes = boxesOf.get(u) ?? []
     if (released.has(u)) {
       const mem = empty(w, u, unit.kind, unit.id)
-      mem.cause = 'set in a paragraph that sets a unit again'
+      mem.cause = SET_AGAIN
       members.push(mem)
       continue
     }

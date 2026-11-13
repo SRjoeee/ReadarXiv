@@ -212,6 +212,30 @@ function hookOf(replacement) {
   return null
 }
 
+/** where a note's text goes, by the hook a definition hands it to (Base_Utility.pool.ltxml): `creator`, an annotation of a
+ *  creator (\lx@add@thanks and \lx@add@note, :661-664; \lx@add@contact, :642, with a note's role, which annotates the creator
+ *  before it, \lx@annotate@frontmatter's default, :457-466); `label:<prefix>`, an annotation \lx@add@contact attaches by its
+ *  label (`label={cor:#1}`: the creators whose text requests that label, :476-530; `fuzzy:` a creator's own name, :869-876);
+ *  `document`, an element of the document's own (\lx@add@pubnote, \lx@add@pubnote@thanks, :634-637). The note roles of a
+ *  contact are those the front end reads as a note (CONTACT's `note`) */
+const NOTE_HOOKS = { 'lx@add@thanks': 'creator', 'lx@add@note': 'creator', 'lx@add@pubnote': 'document', 'lx@add@pubnote@thanks': 'document' }
+const NOTE_ROLES = new Set(Object.keys(CONTACT).filter(r => CONTACT[r] === 'note'))
+/** a replacement's note: where the text it hands a note hook goes (NOTE_HOOKS), or null where it hands none */
+function noteOf(replacement) {
+  for (const m of replacement.matchAll(/\\(lx@add@[A-Za-z@]+)(?![A-Za-z@])((?:\s*(?:\[[^\]]*\]|\{(?:[^{}]|\{[^{}]*\})*\}))*)/g)) {
+    if (NOTE_HOOKS[m[1]]) return NOTE_HOOKS[m[1]]
+    if (m[1] !== 'lx@add@contact') continue
+    const opts = /^\s*\[([^\]]*)\]/.exec(m[2])?.[1] ?? ''
+    if (!NOTE_ROLES.has(/role\s*=\s*([a-z_]+)/.exec(opts)?.[1])) continue
+    const label = /label\s*=\s*\{?\s*(?:\\ifx\.#\d\.\\else\s*)?([a-z]+):#\d/.exec(opts)
+    return label ? `label:${label[1]}` : 'creator'
+  }
+  return null
+}
+/** a replacement that requests an annotation by its label (\lx@request@frontmatter@annotation[cor]{#1}: elsarticle's \corref),
+ *  its prefix; null else */
+const requestOf = replacement => /^\s*\\lx@request@frontmatter@annotation\s*\[([a-z]+)\]\s*\{\s*#1\s*\}\s*$/.exec(replacement)?.[1] ?? null
+
 // ---------------------------------------------------------------- the bindings
 /** the engine pools a LaTeX document has, by rank: LaTeX's over plain's over TeX's (LaTeX.pool loads them so). AmSTeX's
  *  and BibTeX's are other formats', and LaTeXML's own Base pools hold its internals */
@@ -223,6 +247,9 @@ const files = [
 ]
 /** every definition read: name (with its @s, which a delegation may name) → { spec, binding, rank, order, replacement } */
 const defs = { cs: new Map(), env: new Map() }, front = new Map()
+/** each note command's attachment by its binding (noteOf), and each label request's prefix (requestOf): name → [{ value,
+ *  binding, rank }] in the order read */
+const notes = new Map(), requests = new Map()
 const READS = /\$(?:gullet|_\[0\])\s*->\s*(?:read|skip|unread)|\bRead(?:Arg|Optional|Until|Token|XToken|KeyVals|Number|Dimension|Glue|Balanced)|\breadArg\b/
 /** a replacement that looks at what follows it: its arguments go on past its prototype (\cmidrule[]'s (trim){a-b},
  *  read through \@ifnextchar() */
@@ -286,6 +313,11 @@ for (const [dir, f] of files) {
     all.push({ spec, binding, rank, order: order++ })
     const hook = replacement && hookOf(replacement)
     if (hook && !/@/.test(name)) front.set(`${kind === 'env' ? 'env:' : ''}${name}`, hook)
+    // (every definition of a name a paper may write, a note's or not: a binding's last one is the one it leaves, notesOf)
+    if (kind === 'cs' && /^[A-Za-z]+$/.test(name)) {
+      ;(notes.get(name) ?? notes.set(name, []).get(name)).push({ value: replacement ? noteOf(replacement) : null, binding, rank })
+      ;(requests.get(name) ?? requests.set(name, []).get(name)).push({ value: replacement ? requestOf(replacement) : null, binding, rank })
+    }
   }
 }
 
@@ -422,6 +454,26 @@ const reduce = kind => {
   return { pools, packages, known, unknown, packaged }
 }
 const cs = reduce('cs'), env = reduce('env')
+/** a table of values by name as the forms are (reduce): the engine pools' value (the highest rank's last definition), and each
+ *  package's or class's by the bindings whose last definition gives it (`none` where it gives none: the binding defines the name
+ *  otherwise); only names some definition gives a value `kept` takes (a note's: one attached to a creator, a document's alone
+ *  being what a name the table does not hold is) */
+const valuesOf = (all, kept = () => true) => {
+  const pools = {}, packages = {}
+  for (const name of [...all.keys()].sort()) {
+    const ds = all.get(name)
+    if (!ds.some(d => d.value && kept(d.value))) continue
+    const top = Math.max(...ds.map(d => d.rank))
+    if (top > 0) { const v = ds.filter(d => d.rank === top).at(-1).value; if (v) pools[name] = v }
+    const last = new Map()
+    for (const d of ds) if (d.rank === 0) last.set(d.binding, d.value ?? 'none')
+    const by = new Map()
+    for (const [b, v] of last) (by.get(v) ?? by.set(v, []).get(v)).push(bindingIndex.get(b))
+    if (by.size && [...by.keys()].some(v => v !== 'none')) packages[name] = [...by].sort((x, y) => (x[0] < y[0] ? -1 : 1)).map(([v, bs]) => [v, ...bs.sort((x, y) => x - y)])
+  }
+  return { pools, packages }
+}
+const noteTable = valuesOf(notes, v => v !== 'document'), requestTable = valuesOf(requests)
 const frontOut = Object.fromEntries([...front].sort((a, b) => (a[0] < b[0] ? -1 : 1)))
 const lines = [
   '// Generated by scripts/latexml-args.mjs from LaTeXML (brucemiller/LaTeXML, public domain; docs/THIRD_PARTY.md) at',
@@ -430,7 +482,9 @@ const lines = [
   "// and ENVIRONMENTS the engine pools' (every LaTeX document has them, '?' where LaTeXML reads them in code),",
   "// PACKAGE_COMMANDS and PACKAGE_ENVIRONMENTS each package's or class's ([form, binding…] by BINDINGS' index, a binding",
   "// loading those REQUIRES names); FRONT the front matter's commands by the hook their text goes to and the parameter it",
-  '// is. Read through arg-roles.mjs',
+  "// is; NOTE_POOLS and NOTE_PACKAGES where a note command's text attaches, the engine pools' and each binding's (`creator`,",
+  "// `label:<prefix>`, `document`, `none`), and REQUEST_POOLS and REQUEST_PACKAGES the label each request command asks a",
+  '// creator for, by its prefix. Read through arg-roles.mjs',
   `export const LATEXML_COMMIT = '${commit}'`,
   `export const BINDINGS = ${JSON.stringify(bindingNames)}`,
   `export const REQUIRES = ${JSON.stringify(requires)}`,
@@ -439,6 +493,10 @@ const lines = [
   `export const ENVIRONMENTS = ${JSON.stringify(env.pools)}`,
   `export const PACKAGE_ENVIRONMENTS = ${JSON.stringify(env.packages)}`,
   `export const FRONT = ${JSON.stringify(frontOut)}`,
+  `export const NOTE_POOLS = ${JSON.stringify(noteTable.pools)}`,
+  `export const NOTE_PACKAGES = ${JSON.stringify(noteTable.packages)}`,
+  `export const REQUEST_POOLS = ${JSON.stringify(requestTable.pools)}`,
+  `export const REQUEST_PACKAGES = ${JSON.stringify(requestTable.packages)}`,
   '',
 ]
 writeFileSync(resolvePath(out), lines.join('\n'))
