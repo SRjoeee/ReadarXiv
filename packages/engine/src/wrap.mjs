@@ -38,7 +38,7 @@ import { isMemoryError } from './memory.ts'
 import { DELTA_OBJECTS_MAX, deltaSection, UNHIDDEN_MAX } from './delta-wire.mjs'
 import { alignOf, DecodeLimit, lex, LexLimit, openRemover } from './remove.mjs'
 import { appendSection } from './section.mjs'
-import { startxrefOf } from './tail.mjs'
+import { startxrefOf } from './tail.ts'
 import { openObjects } from './xref.mjs'
 
 /** the groups and the marked-content sequences of ours a page may hold, and the groups a document may (E1, E3) */

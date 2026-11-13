@@ -4,7 +4,7 @@
 // reading calls String.fromCharCode by Reflect.apply over each slice (the same operation by the specification, which
 // TypeScript lets take a typed array where it does not let apply). Both old copies are kept here as the reference it equals.
 import { describe, expect, test } from 'vitest'
-import { latin1 } from '../src/tail.types.ts'
+import { latin1 } from '../src/tail.ts'
 
 // (each copy as it was, the cast its only addition: TypeScript types apply's arguments as an array, where apply takes any
 // array-like, a typed array among them)

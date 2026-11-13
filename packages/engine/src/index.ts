@@ -8,7 +8,7 @@ export * from './delta-wire.types.ts'
 export * from './memory.ts'
 export * from './remove.types.ts'
 export * from './section.types.ts'
-export * from './tail.types.ts'
+export * from './tail.ts'
 export * from './wrap.types.ts'
 export * from './xref.types.ts'
 

@@ -9,7 +9,7 @@
 // that does not point at its object, a section that does not parse, a stream whose /Length does not end at `endstream`, a
 // predictor other than PNG's, more objects or decoded bytes than the bounds. An original module (no port statement); imports
 // the tail's startxref and its latin-1 reading alone.
-import { latin1, startxrefOf } from './tail.mjs'
+import { latin1, startxrefOf } from './tail.ts'
 
 /** the refusal of a document this reader will not read: `code` the delta's why (delta.mjs DELTA_WHYS) */
 export class XrefRefusal extends Error {

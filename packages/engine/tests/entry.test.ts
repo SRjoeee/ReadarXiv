@@ -12,7 +12,7 @@ import * as memory from '../src/memory.ts'
 import * as plan from '../src/plan.ts'
 import * as remove from '../src/remove.types.ts'
 import * as section from '../src/section.types.ts'
-import * as tail from '../src/tail.types.ts'
+import * as tail from '../src/tail.ts'
 import * as wrap from '../src/wrap.types.ts'
 import * as xref from '../src/xref.types.ts'
 
@@ -23,7 +23,7 @@ const WHOLE: Record<string, Record<string, unknown>> = {
   './memory.ts': memory,
   './remove.types.ts': remove,
   './section.types.ts': section,
-  './tail.types.ts': tail,
+  './tail.ts': tail,
   './wrap.types.ts': wrap,
   './xref.types.ts': xref,
 }

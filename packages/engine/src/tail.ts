@@ -9,10 +9,10 @@ const STARTXREF_WINDOW = 1024
  *  fit an argument list. (A slice's end past the bytes needs no Math.min: subarray clamps its end to the length.) (Reflect.apply,
  *  which TypeScript lets take a typed array, not a spread, which it also does: the spread read 10 MB 6 times slower, 160 ms
  *  against 27 on Node 22) */
-export function latin1(b) {
+export function latin1(b: Uint8Array): string {
   let s = ''
   for (let i = 0; i < b.length; i += 8192) {
-    const part = Reflect.apply(String.fromCharCode, null, b.subarray(i, i + 8192))
+    const part: string = Reflect.apply(String.fromCharCode, null, b.subarray(i, i + 8192))
     s += part
   }
   return s
@@ -22,12 +22,14 @@ export function latin1(b) {
  * The `startxref` of a PDF: in the last 1024 bytes, the number before the final `%%EOF`, else the number after the last
  * `startxref`. null where there is none
  */
-export function startxrefOf(pdf) {
+export function startxrefOf(pdf: Uint8Array): number | null {
   const text = latin1(pdf.subarray(Math.max(0, pdf.length - STARTXREF_WINDOW)))
-  const last = /startxref\s+(\d+)\s+%%EOF\s*$/.exec(text)?.[1] ?? /startxref\s+(\d+)/.exec(text.slice(text.lastIndexOf('startxref')))?.[1]
+  const last =
+    /startxref\s+(\d+)\s+%%EOF\s*$/.exec(text)?.[1] ??
+    /startxref\s+(\d+)/.exec(text.slice(text.lastIndexOf('startxref')))?.[1]
   const n = Number(last)
   return last !== undefined && Number.isSafeInteger(n) ? n : null
 }
 
 /** an object number at most (ISO 32000-1, annex C: 8,388,607) */
-export const OBJECT_MAX = 8_388_607
+export const OBJECT_MAX: number = 8_388_607
