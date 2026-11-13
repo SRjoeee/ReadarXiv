@@ -131,7 +131,9 @@ export function storedFetch(o: { fetch: Host['fetch']; store: PaperStore | null;
     } catch {
       return null
     }
-    return jsonResponse(u.pathname === '/api/v2/open' ? `{"doc":${text}}` : text)
+    // (the open's: an answer as format's OpenAnswer has it, which the reader's client reads closed: its document, and nowhere of
+    // our server's to follow it, none being in reach; the reader follows by its own address)
+    return jsonResponse(u.pathname === '/api/v2/open' ? `{"doc":${text},"follow":null}` : text)
   }
   async function keptDocText(u: URL, init: RequestInit | undefined): Promise<string | undefined> {
     if (!store) return undefined

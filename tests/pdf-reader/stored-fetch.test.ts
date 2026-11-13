@@ -2,10 +2,12 @@
 // here first, what may change asked first and kept, the paper's document kept and answered where our server is out of reach
 // (the owner's rule of 2026-10-08: offline, nothing new drawn, a kept paper still opens), arXiv's bytes never kept, a store that
 // fails never a reason a paper does not open
+import { OpenAnswer } from '@readarxiv/format'
 import { IDBKeyRange, indexedDB } from 'fake-indexeddb'
 import { describe, expect, it, vi } from 'vitest'
 import { createPaperDb, createPaperStore, type PaperStore } from '@/cache/paper-store'
 import { storedFetch } from '@/pdf-reader/host/stored-fetch'
+import { open as openOf } from '../../packages/reader/src/session/client.ts'
 
 const API = 'https://readarxiv.com'
 let n = 0
@@ -101,6 +103,18 @@ describe('the paper\'s document', () => {
       expect(((await (await open(f)).json()) as { doc: { pv: string } }).doc.pv).toBe('2600_00002v1')
       const followed = await f('/api/v2/papers/2600_00002v1?f=1', { headers: { accept: 'text/event-stream' } })
       expect([followed.headers.get('content-type'), ((await followed.json()) as { pv: string }).pv]).toEqual(['application/json', '2600_00002v1'])
+    }
+  })
+  it('out of reach, the open answered from here is an answer the reader reads (format\'s OpenAnswer, through the reader\'s own client): the document kept, not none', async () => {
+    const net = network({ '/api/v2/papers/2600_00002v1': () => new Response(JSON.stringify(doc(true)), { headers: { 'content-type': 'application/json' } }) })
+    const f = storedFetch({ fetch: net.fetch, store: store(), api: API })
+    await (await f('/api/v2/papers/2600_00002v1?f=1')).text()
+    await settled()
+    for (const down of ['reject', 503] as const) {
+      net.down(down)
+      const read = await openOf({ fetch: f, paper: { id: '2600.00002', version: 1 }, target: null })
+      expect([read.doc?.pv, read.doc?.layer?.catalog.path]).toEqual(['2600_00002v1', doc(true).layer?.catalog.path])
+      expect(OpenAnswer.safeParse(await (await open(f, 1)).json()).success).toBe(true)
     }
   })
   it('none kept: the failure as it was; the reader\'s own abort is the reader\'s, nothing answered in its place', async () => {
