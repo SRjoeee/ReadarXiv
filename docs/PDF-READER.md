@@ -6592,28 +6592,93 @@ notes in 20 papers are now the original's on their first page: 28 `\thanks` insi
 stays 1. The display gate's ruling AN (`lab/typeset/parity/rulings.mjs`) covers the `shown` readings these notes make with the
 names off.
 
-### 18.72 A table's cell is text like any other; the translator decides a name (the owner's ruling, 2026-11-13)
+### 18.72 What of a table's cells and a figure's texts is language: translated; the rest kept as written (the owner's direction, 2026-11-13)
 
 The owner's words on a card of 2611.03953v2 p7 (a column of dataset names, MedQA, CaseHOLD …, under them the row "Avg.
 Recovery", kept English with them): judge naturally what a thing is and whether to translate it, by a rule general and long-lived,
-no dead rule and no opening made for one translator's weakness; an LLM with the paper as its context will translate better. Shown
-the three ways and their price on real replies, he chose the third: 「c。好，按你建议的来。」. So the rebuilt engine decides only
-what is not language, what the source states: the translator decides the rest, and a reply equal to its source is a lawful
-translation. What an LLM should leave as written belongs in the translation instruction, one place for every provider, never in
-the layout's rules.
+no dead rule and no opening made for one translator's weakness. He chose first to let the translator decide every cell
+(「c。好，按你建议的来。」, built as (C)); seeing it drawn with Microsoft's replies, he wrote (2026-11-13, 21:44):
+「我们本质上做的，就是不要再去修微软或者谷歌翻译器所导致翻译不准的 bug。我们更多应该确定，怎么去判断这一行、这一列或者这一格是该翻译还是不该翻译。而且这些内容应该是有一定关联性或组别的，最好能智能一些，能让我们知道它到底是内容还是标题。」
+(what we do is not to fix the translators' errors, but to decide whether a row, a column or a cell is to be translated, by its
+relations and its group: whether it is content or a title), and of the model-names table (2608.06701v1 p5) that production's
+drawing read more naturally. The rule below was put to him and approved: 「我觉得你说对，这个方向是对的。就这样去干」. A translator's
+reply to what is sent is the translator's: a cell sent is laid as its reply says, a reply equal to its source a lawful one.
+What of a text is language is a fact of the text and of the paper's tables, decided where Unit.kept is decided (the engine, for
+a table's cells and a figure's texts); the typesetter lays a kept unit as kept and holds no table rule of its own.
 
-- **No unit is kept for what its words look like.** The front half kept a table's cell and a TikZ picture's text when its words
-  looked like names (`mt.mjs` nameCells: at most three words each with a digit, all capitals or an inner capital, or a capitalised
-  word the paper's prose writes so mid-sentence and never in lower case; or markup tokens). It no longer reads that rule
-  (`compile/live.mjs` openPaper states no `kept`; `instrument.mjs` unitFactsOf keeps an algorithm's body alone, §18.22's pitch
-  and the identifiers' placeholders stay where they were): a header row is a row of texts like the others, translated whole, the
-  names in it as the translator writes them.
-- **No column is kept for what its cells say.** The typesetter kept a body column whole as the original's where at least 0.4 of
-  its cells came back from the translator as they went or were kept before asking (`NAMES_SHARE`, measured once on 29 fixtures
-  and six papers): a tuned share that stood in for a fact about each cell, and kept a label under names English ("Avg.
-  Recovery", "IER (Ours)", "+schema"). Deleted with its answer (`shared/table-groups.ts` NAMES_SHARE, namesGroup, CellAnswer,
-  unchanged; `lay/entry.ts` decideTables' names): each cell is laid by its own row, a reply equal to its source as any other row
-  (drawn; the acceptance rule refuses no echo, `translate/accept.ts`).
+- **R1: a text that holds no ordinary word is not language, and is kept as written.** Read from the facts the source states
+  first, then the text itself (`packages/engine/src/instrument/language.ts`, keptAsWritten; the instrument's unitFactsOf for the
+  source's cells and TikZ texts, `locate/ink.ts` for a figure's texts read off its ink; the lab's dump `keptBy: 'words'`):
+  - the text is its text pieces in order; text set in a code face (an element of kind `code`, a span of style `mono`) is one
+    stand-in character no word holds; every other element (a formula, a citation, a reference, a paper's macro, a space, a rule)
+    a space: an element is the source's fact, never a word. A text glued to code is one token with it (`\texttt{run}-all`);
+  - its tokens are its runs of non-white characters, each with its edges off (what is neither a letter, a digit nor code:
+    "(ours)" is "ours", "Avg." is "Avg");
+  - a token is a SYMBOL where no letter or digit is left, or one letter alone ("B", "N+"); a NUMBER where it holds a digit
+    (79.86, Qwen3-4B, GPT-4o, ViT-B/16, 18-layer, test1); an IDENTIFIER where it holds code, an underscore or a dot between two
+    letters (torch.nn, Aes.Qual, s.e.), or where, cut at its joiners (a hyphen, an en dash, a slash, a plus, a bracket), a part of
+    it is one letter, two letters or more all capitals, or holds a capital after a letter and is not title case (Howto-GEN,
+    Lean-GAP, MNLI-(m/mm), T(s), w/o), or, with no joiner, it is all capitals of two letters or more (AULC, BLEU) or holds a
+    capital after a letter (MedQA, CaseHOLD, DeepSeek, iPhone, CNNs); else a WORD: lower case or title case letters of any
+    script, alone or joined to words (Avg., Recovery, Gemini, Self-Attention, Precision/Recall, Unsafe/labeled);
+  - the text is kept where no token is a word. No word list and no tuned number: the classes are the definition.
+  - The coordinator's words ("an identifier being a token with a digit, an inner capital, all capitals of two letters or more,
+    or a joiner inside it (hyphen with a digit or capital, underscore, slash, dot between letters)") read as written differ from
+    this reading on 49 of the 92 pairs' cells (lane table-judge): as written, any slash and a hyphen beside a capital make an
+    identifier, keeping 35 cells of words (Self-Attention, Self-Distil, Default/Stem, Workload/Task, Unsafe/labeled (%) and its
+    BF16 and NF4 forms, Seconds/case, bits/atom, Book/section/exercise IDs, Prefix-Fwd, Lo-Phy, and the names Deep-Att + PosUnk,
+    Smoothie-Global, Smoothie-Local, Clark--West); and one letter alone is a word, sending 14 cells this reading keeps (R U,
+    U R, SSIM B, P(match), c-lasso, IQR (s), P95 (s), COMPASS (s), Time(s), 15 LLMs, N = 2--4).
+  - A table's cell, a TikZ picture's text and a figure's text read off its ink are judged; other kinds are not (their count is
+    the lane's, for a decision of its own).
+- **R2: a word the paper's own running text writes as a name is a name of that paper; a text made only of such names and R1's
+  tokens is kept as written** (language.ts paperNamesOf, onlyNames; the lab's dump `keptBy: 'paperNames'`). From the source, no list:
+  - RUNNING TEXT: the units of kind `para`, `abstract`, `theorem`, `caption` and `footnote` (the paper's sentences); not a
+    heading or the title (title case), a table's cell or a figure's text (the texts judged), the bibliography (titles and names),
+    the author block;
+  - a WORD of it is a run of letters (`\p{L}+`: "Gemini-2.5" holds "Gemini"); TITLE CASE is a capital, then lower-case letters
+    ("MiniMax" and "GPT" are none: R1 reads them);
+  - MID-SENTENCE: not its sentence's first word, the sentences being the shared cutter's (`@readarxiv/text` sentenceCuts over the
+    unit's plain projection, each element one U+FFFC read as the translators' wires read it: a citation where it stands, a
+    note's mark the sentence before it's, a formula a word, a reference a number); a sentence's first word is the first run of
+    letters at or after its start, so "Results are …" opening a sentence is no evidence and an abbreviation ("Fig. 2, Tukey …")
+    ends no sentence;
+  - NEVER IN LOWER CASE: no run of letters of the running text, wherever it stands, is the word in lower case ("Test" where the
+    paper also writes "test set" is a word);
+  - a name of the paper: a title-case word written mid-sentence at least once and never in lower case. A text's word tokens (R1's,
+    cut at their joiners) all such names: kept ("Claude", "Mistral" in a header, "Tukey" in a body cell, "Claude GPT-4o").
+- **R3: a header cell is judged by R1 and R2 alone, by itself.** "Avg. Recovery" in Table 1's header is translated beside
+  "MedQA", which is kept; no header row is voted.
+- **R4: a text that a names block of the paper's tables keeps is a name of the paper, kept wherever its tables print it.** A
+  block is a body column's cells (a cell's first column and the columns it spans) between the same two rules; its text cells
+  are every cell that prints text: a unit, a cell of no unit that is the call of the paper's macro whose body sets text, a cell
+  wholly in a code face; not a number, a formula, a symbol or an empty cell. A text cell is a name where R1 or R2 keeps it, or
+  where it is no unit because it is such a call or such code. Where more than half of a block's text cells are names, the text
+  of each of its other units is a name of the paper, and every cell of the paper's tables that prints that text is kept: a
+  `Unit.kept`, decided once in the engine (`instrument/language.ts` namesOfBlocks over the front end's `tableBlocks`, the
+  instrument's unitFactsOf; the lab's dump `keptBy: 'namesBlock'`), read once off R1's and R2's names, so that a text a block
+  keeps tips no other block. The typesetter keeps no table rule: it lays a kept unit as it lays any kept unit. Exactly half is
+  not more than half. "More than half" (`BLOCK_SHARE`, one half, exceeded) is the rule's one threshold: a majority is the least
+  that makes a block one kind of thing, names or words; over the corpus's body columns the kept share stands at 0 or 1 in 72 %
+  of them, and keeping the blocks at exactly one half too would keep 72 of the 92 pairs' cells read as words for 1 read as a
+  name (lane table-judge). The reasons, in order: (i) the owner's own reading asks for one answer per text: 「假如这一列都属于专有名词，那我们可能就不应该翻了…翻了一个反倒奇怪破坏意思」
+  (if the whole column is proper names, we should probably not translate it; translating one of them would be odd and break
+  the meaning), and the block taken member by member gave two answers for one unit on one page (2608.06701v1 p5: Vanilla kept
+  in Table II, whose block is four names of five, and sent in Table III, whose block is Vanilla and LivePlan, one half); (ii)
+  it is the same kind of fact as R2, the paper's own use making a name, decided where every cell of the grid is seen; (iii) it
+  scored best on both readings of the 92 pairs' disputed cells in the lab's emulation before it was built (words kept / names
+  sent: 70 / 68 with Vanilla a name, names sent equal to production's 68 with words kept 70 against its 219; 85 / 68 with
+  Vanilla a word). What the source reader reads
+  for it (`latex-front.mjs`): the whole grid's cells, each a text cell or not (noteBlocks, cellPrintsText), each paper macro's
+  body read by the walk's own dry run (macroSetsText over probeBranch: two letters together where the walk sets text, the
+  arguments the role table knows not to print left out), a code face, and the rules: each row's rule across the table, the
+  column ranges of `\cline`, `\cmidrule` and `\cdashline` (tableGrid's `band`), and REVTeX's `\colrule`, a class's rule across
+  the table read for the block alone (the header, which today's reader reads off the same grid, as before). Why the block and
+  not the column: the column's majority, measured over the corpus before the build, decided its 188 cells like a coin (71 names
+  kept, 72 labels kept with them, at every threshold from 0.4 to 0.7) and kept the owner's own "Avg. Recovery" under the
+  dataset names of 2611.03953v2's Table 2, which its paper sets under a rule of its own; between two rules, 61 names to 21
+  labels. Today's column rule (`NAMES_SHARE`: a body column at least 0.4 of whose cells came back from the translator as they
+  went, kept whole) is not ported: no translator's reply decides what a cell is.
 - **What stays the original's, each a fact of the source or of the drawing.** A cell of fewer than two letters is no unit: the front
   end makes none of a text with under two letters on its text pieces (`latex-front.mjs` flush; a formula alone is a placeholder,
   no letter of text), so its ink stays; a unit with no letter that reaches the chain (an ink unit) is answered by the chain with
@@ -6625,14 +6690,13 @@ the layout's rules.
   2026-11-13, under the owner's). A cell whose reply does not fit it, whose row failed, whose wrap cannot hide it, or whose flow
   threw is the original's alone, the other cells of its header or column laid; its group is held only where the geometry needs
   it: a cell that spans columns or rows (`\multicolumn`, `\multirow`: its box is the others' too, so its ink would stand under
-  their translations), and a group on two pages (its first page would be painted before its last is laid). `lay/entry.ts`
-  holdsTable (before the lay: a spanning cell holds, and any cell of a group on two pages), `lay/page.ts` settleTies (after it:
-  `tableSettle`'s verdict is today's, what it withholds is the cell, or the group where that cell spans or the group lies on two
-  pages). Whether a group lies on two pages is read off every cell of it to be translated, set or not, before a cell not set is
-  left out of those its lay settles: a cell on page 2 whose row failed, or that the wrap cannot hide, keeps its column's cell on
-  page 1 the original's with it, as a group on two pages always was, where the page-1 cell had been drawn translated; a cell
-  never to be translated (no row, kept by its source, a kind the reader leaves) holds nothing and puts its group on no page.
-  The reasons, in order: (1) with cells judged like body text, a group drawn whole or not at all would let one unfit reply take back up to a
+  their translations). A group on two pages is laid like any other, each cell by itself (the coordinator's ruling of
+  2026-11-13): today's withheld it whole because its first page was painted before its last was laid; here a page's part holds
+  every member of a tie it touches (the bundle's part), so every page lays the group whole and decides it alike, and nothing
+  of one page waits on another's. Over the tap, today's 15 groups so withheld are every one painted (each cell laid by its last
+  round). `lay/entry.ts` holdsTable (before the lay: a spanning cell alone holds), `lay/page.ts` settleTies (after it:
+  `tableSettle`'s verdict is today's but its pages, what it withholds is the cell, or the group where that cell spans). The reasons, in
+  order: (1) with cells judged like body text, a group drawn whole or not at all would let one unfit reply take back up to a
   whole table — at the head before this rule, 26 groups, 144 cells on 19 pages of the display gate's 24 pairs (holds-v2, lane
   cells-like-body), 22 of the groups only since the name rule went (QNLI -> 昆士兰国家图书馆 holding BERT's Table 1 header
   English, System and Average with it); (2) the 25 cells newly left English that way are, under this rule, every one drawn as
@@ -6646,17 +6710,6 @@ the layout's rules.
   `layout/paper.mjs` madeBibliography's paper opened again. Its bundles are byte for byte what they were (the engine's golden
   tests). Today's `translate/groups.mjs` (decideGroups, NAMES_SHARE) is the website's and stays with it.
 
-Measured over round RB1's 89 papers and 2611.03953v2 (stage 1a against F2's run, lane cells-like-body): the units' `kept` gone
-from 1,482 distinct units (1,087 cells and 395 TikZ texts: the dumps' 2,211 cell entries in 59 papers and 541 TikZ entries), no
-id, no member, no ownership moved; and one paper further by the two facts of the source that skipped a kept unit and now read it
-as every unit (2610.40576v1: one cell's `\ctk{}` groups `code` elements, two cells holding a highlight held whole, §18.22,
-§18.61). The rows asked anew: 1,125 cell units over the lab's 92 pairs (33,958 units, Google's store 0 unavailable after 42 keyless
-requests, Microsoft's after 66). The reader gate over the 92 on both stores: every invariant as before (I3, I4, I5, I10, I6), the
-entry's lines nearer the runner's (the runner never had the column rule: 244 -> 224 members not alike on the door's rows,
-827 -> 809 on Google's), 0 rows read outside a page's wait set. PIPELINE moves (the units' `kept`); the integration's to make.
-No TRANSLATE (no wire moves), no LAYOUT (no mark moves), FORMAT stays 1. The display gate's ruling CT
-(`lab/typeset/parity/rulings.mjs`) covers the differences of a cell today keeps by these two rules and the rebuilt reader lays.
-
 Measured with the cell that cannot be drawn left the original's by itself (lane cells-like-body, the build b1b649645): the display
 gate over its 22 pairs, by default, worse 6 -> 2 against the head before it, the 2 F2's own (2610.21313v1 p1, p4): 1810.04805v2
 p6 and p8 and 2608.04322v1 p7 and p10 no longer worse, their 25 cells drawn as today draws them; with every switch on, 9 -> 5, the
@@ -6668,6 +6721,32 @@ uncovered in both modes (2111.09276v1 p5's line count, as at F2). Unmeasured 0, 
 both stores: every invariant as before; the entry and the runner (which keeps today's settle: every cell of its ties stated
 spanning) not alike 224 -> 294 on the door's rows and 809 -> 961 on Google's, the cells the entry now lays alone; the runner's
 dumps 0 units moved. No version: the lay alone moves, no unit, part or bundle.
+
+Measured with R1, R2 and R4 the engine's and the two-page hold lifted (lane table-judge, 56e0146c0 over round RB2b's 89 papers
+and 2611.03953v2, against RB2b's run r24 at e73d1d5db): `kept` on 2,954 distinct units and nothing else, each a table's cell, a
+TikZ picture's text or a figure's text read off its ink (64 of them cells R4 keeps, beside R1's and R2's of the build before); and
+one paper read by the source's facts as before (C) (2610.40576v1: a cell of `\ctk{}` token counts kept by R1, so its groups are
+no `code` elements again and its id is the one before (C); its two cells holding a highlight kept by R1, no longer held whole for
+the word). Ownership identical. The rows: 31,378 units asked over the lab's 92 pairs (33,958 before): every row that differs a
+kept unit no longer asked, none unavailable, no request. Over the 92 pairs' 7,878 table cells, against one reading of the cells
+the rules disagree on (lane table-judge: a name, a person's name, words, or either), words kept / names sent / person names
+sent: 82 / 68 / 0 with Vanilla read as a word, 67 / 68 / 0 read as the owner reads it, a name (production 219 / 68 / 1 and
+213 / 77 / 1). R4 keeps 119 pair cells (56 texts): names 46 (Claude Opus 5, GPT-2 medium, Google DeepMind, Anthropic, Maxout, ...),
+either 25, a person 1, and ordinary words 47 in 13 texts, 15 of them Vanilla's (the others: "1:1:1:1
+All four" 9, "RL only" 4, "none" 4 and "none (version deferred)" 1 in a column of exception names set in code, "evaluator" 3,
+"Majority" 3, "ensemble" 2, "Fine-tuning approach" 2, "Average", "Original+Noise", "BC ablation subset", "GPT-5.5 tool generation
++ Qwen3-8B-SFT extraction" 1 each). R2's price: 26 header cells of words the paper always writes capitalised (Test, Test F1,
+Oscillation, Violation, Remark, Flicker, Common, Gaussians, Avg.). The reader gate on both stores: every invariant as before or
+fewer (I3 3 -> 1 on both: RB2b's two overlaps were the gate's runner laying 2610.21176v1 p13's cell 101 at its row's first
+column; R1 keeps cell 82 of the same table, and the runner, which holds a tie whole for any cell it does not adapt, lays none of
+it now, while the entry lays 101 in its own column: unseen, not mended; I4 0, I5 2, I10 0 faults, I6 11 known), 0 rows read
+outside a page's wait set; the entry and the runner not alike 294 -> 125 (door) and 961 -> 832 (Google). The display gate, by
+default and with every switch on, under CT restated (a cell the two readers decide otherwise by their table rules alone, either
+way; a group today withheld for its two pages; a figure count fewer by the texts kept as written; a column today withheld for an
+unfit cell, which v2 lays but for the cells it keeps as written) and the figures count set apart by today's texts rather than
+v2's members: nothing newly worse against RB2b's sheets, page by page, in either mode or set; worse 2 and 5 as RB2b's, the added
+pairs 1 as RB2b's. PIPELINE moves (the units' `kept`): the integration's. No TRANSLATE, no LAYOUT (the lift is the lay's alone;
+R4 a unit's `kept`, no mark moves).
 
 ## 19. The engine's contract
 

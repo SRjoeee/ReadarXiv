@@ -2,8 +2,8 @@
 /** a table cell's place in its table's grid (tableGrid): its table, row, first column, the columns it spans, and whether its row is the header's */
 export interface CellPlace { table: number; row: number; col: number; span: number; head: boolean }
 export interface SourceUnit { kind: string; title?: boolean; depth?: number; lead?: string; trail?: string; inner?: string; front?: boolean; held?: boolean; stored?: boolean; bracketed?: boolean; pieces: unknown[]; cell?: CellPlace }
-/** a table's body as its cells lay it out: each cell's stretch of the source, its row, first column and span, and whether its row is the header's */
-export declare function tableGrid(s: string, from: number, to: number, rowEnds?: ReadonlySet<string> | null): (Omit<CellPlace, 'table'> & { start: number; end: number })[]
+/** a table's body as its cells lay it out: each cell's stretch of the source, its row, first column and span, whether its row is the header's, and the row its block begins at (`band`: the last row at or above its own with a rule over one of its columns, R4) */
+export declare function tableGrid(s: string, from: number, to: number, rowEnds?: ReadonlySet<string> | null): (Omit<CellPlace, 'table'> & { start: number; end: number; band: number })[]
 /** a source tree held in memory: path → bytes */
 export declare function inMemory(map: Map<string, Uint8Array>): { list(): string[]; read(path: string): Uint8Array | null }
 /** a paper's source read from its main file: its units, the paper's prose in reading order */

@@ -15,6 +15,7 @@ import type { Doc, DocGlyph, DocPoint } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
 import { displayTextMask, type PageInk, regionMask } from '../ink.ts'
 import type { Instrument, InstrumentUnit, PieceClass, SpanClass } from '../instrument.ts'
+import { keptAsWritten, paperNamesOf } from '../instrument/language.ts'
 import { runIns } from '../marks/run-ins.ts'
 import { type AuthorBlock, authorBlockOf } from './author-block.ts'
 import { copyRunsOf, type FigureText, figureLinesOf, type LinesWork, textOf as lineTextOf } from './figure-lines.ts'
@@ -204,6 +205,13 @@ export function inkOf(o: InkInput): {
       if ((ow.unit[x] as number) >= 0 && ap > 0) own.boxes[ap - 1]![m.boxIndex[p]![x] as number] = 'u'
     }
   })
+  // (a figure's text kept as written, as a table's cell is (R1: no ordinary word; R2: the paper's own names, read off its running
+  // text, the source's units: PDF-READER §18.72); its mark for the lab's dump)
+  const names = paperNamesOf(ins.units)
+  const keptMarks = (content: readonly Piece[]): { kept?: true; words?: true; paperNames?: true } => {
+    const k = keptAsWritten(content, names)
+    return k === 'words' ? { kept: true, words: true } : k === 'paperNames' ? { kept: true, paperNames: true } : {}
+  }
   const units: TodayUnit[] = ins.units.map((u) =>
     u.kind === 'name' ? null : { kind: u.kind, pieces: flatOf(u.content) },
   )
@@ -488,7 +496,17 @@ export function inkOf(o: InkInput): {
     const t = textAt.get(k)
     if (t && (t.ks.length > 1 || t.els.length || t.label.length)) {
       made.push(
-        figureTextOf(t, laidAsParagraph(t) ? setOf(t.ks[0]!) : -1 - t.ks[0]!, fig, pages, inkA, m, o.pageA, global),
+        figureTextOf(
+          t,
+          laidAsParagraph(t) ? setOf(t.ks[0]!) : -1 - t.ks[0]!,
+          fig,
+          pages,
+          inkA,
+          m,
+          o.pageA,
+          global,
+          keptMarks,
+        ),
       )
       continue
     }
@@ -546,7 +564,8 @@ export function inkOf(o: InkInput): {
               ? { why: 'figure: code', fixed: true as const, pitch: true as const }
               : identifiersIn((f.text ?? '').normalize('NFKC')).length
                 ? { why: 'figure: identifier', fixed: true as const }
-                : {}),
+                : // (a text kept as written, as a table's cell is: R1, R2, PDF-READER §18.72)
+                  keptMarks(content)),
       },
       text,
       ph: [],
@@ -633,6 +652,7 @@ function figureTextOf(
   m: Mapping,
   pageA: Int32Array,
   global: (p: number, g: number) => number,
+  keptMarks: (content: readonly Piece[]) => { kept?: true; words?: true; paperNames?: true },
 ): Made {
   const p = t.page
   const G = inkA.pages[p - 1]!.glyphs
@@ -762,7 +782,8 @@ function figureTextOf(
             ...(t.why === 'script' ? { script: true as const } : {}),
             ...(t.why === 'decoration' ? { decorated: t.withLabel ? ('label' as const) : ('token' as const) } : {}),
           }
-        : {}),
+        : // (a text kept as written, as a table's cell is: R1, R2, PDF-READER §18.72)
+          keptMarks(content)),
     },
     text: [...textGs, ...t.copies].map(glob).sort((a, b) => a - b),
     ...(t.label.length ? { label: t.label.map(glob).sort((a, b) => a - b) } : {}),

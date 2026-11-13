@@ -1,10 +1,10 @@
-// A table's cells (the owner, 2026-11-13: a table's cell is text like any other; the translator decides a name). Each cell is
-// judged alone, by its own row, as a paragraph is: its translation laid, or the original's where it has no row, a row that
-// failed, or a reason of the part's. A reply equal to its source is a translation like any other. A cell that cannot be drawn
+// A table's cells: each cell is laid alone, by its own row, as a paragraph is: its translation laid, or the original's where its
+// unit is kept (Unit.kept, the engine's: PDF-READER §18.72), it has no row, a row that failed, or a reason of the part's. A reply
+// equal to its source is a translation like any other. A cell that cannot be drawn
 // in its translation (unfit, a row that failed, the wrap cannot hide it) stays the original's by itself, as a paragraph does
 // (the coordinator's ruling (c) of 2026-11-13); what still binds a cell to the others of its group (the header's cells, a
 // column's, the cells spanning the same columns: TeX's grid, Placed.cell) is geometry alone: a cell that spans holds its group
-// where it cannot be drawn (its box is the others' too), and a group on two pages is withheld whole (page-wait.test.ts).
+// where it cannot be drawn (its box is the others' too); a group on two pages is laid like any other (page-wait.test.ts).
 import type { OutPiece, Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
@@ -182,7 +182,24 @@ describe('a cell that cannot be drawn stays the original’s alone; its group is
   })
 })
 
-describe('a group on two pages is withheld whole, whatever its cells’ states (its pages read off every cell of it)', () => {
+// Which of a table's cells are language is the engine's (Unit.kept: R1, R2 and the paper's names blocks, R4, PDF-READER §18.72):
+// the typesetter lays a kept unit as kept and every other cell by its row, whatever its column holds. No vote is left here.
+describe('no table rule in the typesetter: a cell is kept where its unit is, laid by its row otherwise', () => {
+  const banded = (ord: number, at: [number, number, number, 0 | 1], plain: string, band: [number, number]) =>
+    cell(ord, at, plain, { room: { below: 0, next: 300, side: [52 + 100 * at[1], 152 + 100 * at[1]], band } })
+  it('a column of four kept names between the same two rules lays its fifth cell, not kept, by its row', () => {
+    const t = tableOf([
+      cell(0, [0, 0, 1, 1], 'Domain'),
+      ...['MedQA', 'CaseHOLD', 'FinQA', 'IFBench', 'Avg. Recovery'].map((s, k) =>
+        banded(1 + k, [1 + k, 0, 1, 0], s, [263, 322]),
+      ),
+    ])
+    const rows = rowsOf({ 0: 'Domäne', 5: 'Mittlere Erholung' }, [1, 2, 3, 4])
+    expect(states(t, rows)).toEqual(['laid', 'kept', 'kept', 'kept', 'kept', 'laid'])
+  })
+})
+
+describe('a group on two pages is laid like any other, each cell by itself (PDF-READER §18.72: the hold lifted)', () => {
   // (a column of two cells, a table TeX broke over a page: its first cell on page 1, its second on page 2; each page's part holds
   // both, the bundle's closure over its ties, and lays the one on the page)
   const onPage = (c: Placed, page: number): Placed => ({
@@ -202,24 +219,24 @@ describe('a group on two pages is withheld whole, whatever its cells’ states (
     laidOf({ ...column, page: 1 }, rows)[0]!.state,
     laidOf({ ...column, page: 2 }, rows)[1]!.state,
   ]
-  it('both cells set: the group withheld whole on either page', () => {
-    expect(drawn(rowsOf(both))).toEqual(['cells', 'cells'])
+  it('both cells set: each laid on its page', () => {
+    expect(drawn(rowsOf(both))).toEqual(['laid', 'laid'])
   })
-  it('the cell on page 2 not set before its lay (its row failed): the cell on page 1 withheld with it', () => {
-    expect(drawn(refusedOf(1))).toEqual(['cells', 'refused'])
+  it('the cell on page 2 not set before its lay (its row failed): the original’s by itself, the cell on page 1 laid', () => {
+    expect(drawn(refusedOf(1))).toEqual(['laid', 'refused'])
   })
-  it('the cell on page 1 not set before its lay (its row failed): the cell on page 2 withheld with it', () => {
-    expect(drawn(refusedOf(0))).toEqual(['refused', 'cells'])
+  it('the cell on page 1 not set before its lay (its row failed): the original’s by itself, the cell on page 2 laid', () => {
+    expect(drawn(refusedOf(0))).toEqual(['refused', 'laid'])
   })
-  it('the cell on page 2 not set for a reason of the part’s (the wrap cannot hide it): the cell on page 1 withheld with it', () => {
+  it('the cell on page 2 not set for a reason of the part’s (the wrap cannot hide it): the cell on page 1 laid', () => {
     const t = tableOf([top, { ...foot, why: 'unwrapped' }])
     const rows = rowsOf(both)
     expect([laidOf({ ...t, page: 1 }, rows)[0]!.state, laidOf({ ...t, page: 2 }, rows)[1]!.state]).toEqual([
-      'cells',
+      'laid',
       'unwrapped',
     ])
   })
-  it('a cell never to be translated holds nothing: the group’s cells on one page are laid', () => {
+  it('a cell never to be translated holds nothing: the other cell laid', () => {
     // (no row with every row in: a cell no translator was sent; it is the original's in a group drawn, wherever it stands)
     expect(drawn({ ...rowsOf({ 0: 'schnell' }), done: true })).toEqual(['laid', 'none'])
   })

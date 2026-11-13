@@ -485,14 +485,16 @@ describe("AN: a note of the author block follows the block's option (the owner, 
   })
 })
 
-describe("CT: a table's cell is text like any other; the translator decides a name (the owner, 2026-11-13)", () => {
+describe("CT: which of a table's cells is language is decided from the source and the table's structure (the owner, 2026-11-13)", () => {
   // (2611.03953v2-zh p7, Table 2's first column: today keeps MedQA (t107) by its name rule and "Avg. Recovery" (t111) by its
-  // group's decision; v2 lays both from their own rows. t110 a cell both sides translate)
-  type O = { why?: Record<string, string>; member?: (ord: number) => object; kind?: string }
+  // group's decision; v2 lays "Avg. Recovery" (its block under its own rule) and, here, MedQA. t110 a cell today draws and v2
+  // keeps: R1 (its prepare `keptBy: 'words'`), R2 (`paperNames`) or R4 (`namesBlock`))
+  type O = { why?: Record<string, string>; member?: (ord: number) => object; kind?: string; v2?: object }
   const ctx = (o: O) => ({
     v2: {
       facts: { [N]: { members: [107, 110, 111].map((ord) => ({ ord, kind: o.kind ?? 'cell' })), ties: [] } },
-      pages: { [N]: { members: [107, 110, 111].map((ord) => ({ ord, state: 'laid', off: 0, lines: [[600 - ord, 72, 120, []]], ...(o.member?.(ord) ?? {}) })) } },
+      pages: { [N]: { members: [107, 110, 111].map((ord) => ({ ord, state: ord === 110 ? 'kept' : 'laid', off: 0, lines: ord === 110 ? [] : [[600 - ord, 72, 120, []]], ...(o.member?.(ord) ?? {}) })) } },
+      ...(o.v2 ?? { words: [110] }),
     },
     rec: rec(),
     todayWhy: (key: string) => (o.why ?? { t107: 'kept', t111: 'row: kept' })[key] ?? null,
@@ -504,33 +506,56 @@ describe("CT: a table's cell is text like any other; the translator decides a na
     return [x.worse, x.covered ?? null, x.coveredSays ?? null]
   }
   const size = (unit: string, o: O = {}) => one(worse('size', `${unit} cell`, 8, 8, 7.2, [0, 0.1]), o)
-  const column = (o: O & { v2Original?: string[] } = {}) =>
-    one({ ...worse('groups', 'group 2:c0', 'whole', 'original', 'mixed'), cells: ['t107', 't110', 't111'], asOriginal: { today: ['t107', 't110', 't111'], v2: o.v2Original ?? ['t107', 't110'] } } as Diff, o)
-  it("a cell today keeps by its name rule or its group's decision and v2 lays: every difference of it covered by CT", () => {
-    expect(size('t107')).toEqual([false, 'CT', "the cell kept by today's name rule, laid by v2 from its own row"])
-    expect(size('t111')).toEqual([false, 'CT', "the cell kept by today's group decision, laid by v2 from its own row"])
-    expect(one(worse('shown', 't111 cell', null, 'none', 'translated', [null, null]))).toEqual([false, 'CT', "the cell kept by today's group decision, laid by v2 from its own row"])
+  const shown = (o: O = {}) => one(worse('shown', 't110 cell', null, 'translated', 'none', [null, null]), o)
+  const column = (o: O & { today?: string[]; v2Original?: string[] } = {}) =>
+    one({ ...worse('groups', 'group 2:c0', 'whole', 'original', 'mixed'), cells: ['t107', 't110', 't111'], asOriginal: { today: o.today ?? ['t107', 't110', 't111'], v2: o.v2Original ?? ['t107', 't110'] } } as Diff, o)
+  it("(a) a cell today keeps by its name rule or its group's decision and v2 lays: every difference of it covered", () => {
+    expect(size('t107')).toEqual([false, 'CT', "the cell kept by today's name rule, laid by v2"])
+    expect(size('t111')).toEqual([false, 'CT', "the cell kept by today's group decision, laid by v2"])
+    expect(one(worse('shown', 't111 cell', null, 'none', 'translated', [null, null]))).toEqual([false, 'CT', "the cell kept by today's group decision, laid by v2"])
   })
-  it('a column today keeps whole that v2 draws mixed only by such cells laid: covered by CT', () => {
-    expect(column()).toEqual([false, 'CT', "its cells t111 kept by today's group decision, laid by v2 from its own row"])
-    expect(column({ v2Original: ['t110'] })).toEqual([false, 'CT', "its cells t107, t111 kept by today's name rule and today's group decision, laid by v2 from its own row"])
+  it('(b) a cell today draws and v2 keeps as written by R1, R2 or its block (R4): covered', () => {
+    expect(shown()).toEqual([false, 'CT', 'the cell laid by today, kept by v2 (R1: no ordinary word)'])
+    expect(shown({ v2: { paperNames: [110] } })).toEqual([false, 'CT', "the cell laid by today, kept by v2 (R2: the paper's own names)"])
+    expect(shown({ v2: { namesBlock: [110] } })).toEqual([false, 'CT', "the cell laid by today, kept by v2 (R4: a names block of the paper's tables)"])
   })
-  it('today leaving it for another reason, v2 not laying it, a unit no cell, or a moved cell no such: worse', () => {
-    expect(size('t110')).toEqual([true, null, null])
+  it('(c) a cell today withholds with its group on two pages and v2 lays: covered', () => {
+    expect(size('t107', { why: { t107: 'group: on two pages' } })).toEqual([false, 'CT', 'the cell withheld by today with its group on two pages, laid by v2'])
+    expect(column({ why: { t111: 'group: on two pages' } })).toEqual([false, 'CT', 'its cells t111 withheld by today with its group on two pages, laid by v2'])
+    expect(size('t107', { why: { t107: 'group: on two pages' }, member: (ord) => (ord === 107 ? { state: 'unfit', lines: [] } : {}) })).toEqual([true, null, null])
+  })
+  it('a column the two draw otherwise only by such cells, either way: covered', () => {
+    expect(column()).toEqual([false, 'CT', "its cells t111 kept by today's group decision, laid by v2"])
+    expect(column({ today: ['t107', 't111'], v2Original: ['t107', 't110'] })).toEqual([false, 'CT', "its cells t110, t111 laid by today, kept by v2 (R1: no ordinary word); kept by today's group decision, laid by v2"])
+  })
+  it('today leaving it for another reason, v2 keeping it for another (one pitch, a pseudocode, a decorated word) or not at all, a unit no cell, a moved cell no such: worse', () => {
     expect(size('t107', { why: { t107: 'unfit' } })).toEqual([true, null, null])
     expect(size('t107', { member: (ord) => (ord === 107 ? { state: 'unfit', lines: [] } : {}) })).toEqual([true, null, null])
+    expect(shown({ why: { t110: 'unfit' } })).toEqual([true, null, null])
+    expect(shown({ v2: { pitch: [110] } })).toEqual([true, null, null])
+    // (kept with no rule of the prepare's stated)
+    expect(shown({ v2: {} })).toEqual([true, null, null])
+    // (a line of an algorithm's pseudocode is T1's, never CT's)
+    expect(shown({ v2: { pseudocode: [110] } })[1]).toBe('T1')
+    // (a cell held whole for a decorated word is T5's, never CT's)
+    expect(shown({ v2: { decorated: [110] } })[1]).toBe('T5')
+    expect(shown({ member: (ord) => (ord === 110 ? { state: 'unfit' } : {}) })).toEqual([true, null, null])
     expect(size('t107', { kind: 'para' })).toEqual([true, null, null])
-    expect(column({ v2Original: ['t107'] })).toEqual([true, null, null])
+    expect(shown({ kind: 'para' })).toEqual([true, null, null])
+    expect(column({ v2Original: ['t107', 't111'] })).toEqual([true, null, null])
   })
 })
 
 describe('CU: a cell that cannot be drawn stays the original by itself; today kept the whole group for it (the coordinator, 2026-11-13)', () => {
   // (2602.23285v2-ja p19, Table 7's column: Method (t170) and two cells of latent-ODE (t173, t174) whose reply does not fit them;
   // today's settle withheld the column whole, v2 lays Method and leaves the two the original's, each `unfit`)
-  type O = { why?: Record<string, string>; member?: (ord: number) => object; today?: string[]; v2?: string[]; units?: number[] }
+  type O = { why?: Record<string, string>; member?: (ord: number) => object; today?: string[]; v2?: string[]; units?: number[]; words?: number[]; namesBlock?: number[]; pitch?: number[] }
   const ords = [170, 173, 174]
   const ctx = (o: O) => ({
     v2: {
+      ...(o.words ? { words: o.words } : {}),
+      ...(o.namesBlock ? { namesBlock: o.namesBlock } : {}),
+      ...(o.pitch ? { pitch: o.pitch } : {}),
       today: Object.fromEntries(ords.map((ord) => [ord, { today: ord }])),
       facts: { [N]: { members: ords.map((ord) => ({ ord, kind: 'cell' })), ties: [] } },
       pages: {
@@ -559,12 +584,22 @@ describe('CU: a cell that cannot be drawn stays the original by itself; today ke
     // (a cell neither side draws has no unit on the page: v2's ord read from its join to today's)
     expect(column({ units: [170] })[1]).toBe('CU')
   })
+  it("a cell v2 leaves the original's kept as written (R1, R2 or its block), the others laid: covered by CU (2602.23285v2-ja p19's latent-ODE)", () => {
+    const kept = (ord: number) => (ord === 170 ? {} : { state: 'kept' })
+    expect(column({ member: kept, words: [173, 174] })).toEqual([false, 'CU', "its cells t173, t174 the original's by themselves (kept), t170 laid; today withheld the group for them"])
+    expect(column({ member: kept, namesBlock: [173, 174] })[1]).toBe('CU')
+    // (kept with no rule stated: not this rule's)
+    expect(column({ member: kept })).toEqual([true, null, null])
+    // (kept for another reason of the prepare's, one pitch: not this rule's)
+    expect(column({ member: kept, pitch: [173] })).toEqual([true, null, null])
+  })
   it("not a cell v2 leaves the original's that today draws translated: worse", () => {
     expect(column({ today: ['t173', 't174'], v2: ['t170', 't173', 't174'] })).toEqual([true, null, null])
     expect(column({ today: ['t173', 't174'] })).toEqual([true, null, null])
   })
-  it('not a group today held for another reason (on two pages; a spanning cell, for which v2 holds the group too): worse', () => {
-    expect(column({ why: { t170: 'group: on two pages', t173: 'group: on two pages', t174: 'group: on two pages' } })).toEqual([true, null, null])
+  it('not a group today held for another reason (on two pages, CT\'s; a spanning cell, for which v2 holds the group too)', () => {
+    // (a group today withheld for its two pages, which v2 lays like any other: CT's (c), never CU's)
+    expect(column({ why: { t170: 'group: on two pages', t173: 'group: on two pages', t174: 'group: on two pages' } })[1]).toBe('CT')
     expect(column({ member: (ord) => (ord === 170 ? { state: 'cells', off: 0, lines: [] } : {}) })).toEqual([true, null, null])
     expect(column({ member: (ord) => (ord === 173 ? { state: 'cells' } : {}) })).toEqual([true, null, null])
   })
@@ -608,6 +643,33 @@ describe('T4: figure texts held whole as the original for a decorated word, coun
     expect(page({ laid: (ord) => (ord === 305 ? { state: 'laid', lines: [[500, 100, 140, []]] } : {}) })).toEqual([true, null, null])
     expect(page({ laid: (ord) => (ord === 305 ? { off: 1 } : {}) })).toEqual([true, null, null])
     expect(page({ ords: [] })).toEqual([true, null, null])
+  })
+})
+
+describe("CT (d): figure texts kept as written (R1, R2), counted fewer than today (the owner's direction, 2026-11-13)", () => {
+  // (2608.06701v1-zh p1: today 45 figure texts drawn translated, v2 23; 21 of today's texts stand in the 15 members held for a
+  // decorated word (T4's), 1 more in a member R1 keeps; here 3 members kept as written, 2 of today's texts in them)
+  const written = [400, 401, 402]
+  const page = (o: { asWritten?: number; ords?: number[]; v2?: number; laid?: (ord: number) => object; decorated?: number } = {}) => {
+    const ords = o.ords ?? written
+    const members = ords.map((ord) => ({ ord, state: 'kept', off: 0, lines: [], ...(o.laid?.(ord) ?? {}) }))
+    const figures = { today: 45, v2: o.v2 ?? 23, v2Laid: 30, ...(o.decorated ? { decorated: o.decorated, decoratedOrds: [] } : {}), ...(ords.length ? { asWritten: o.asWritten ?? 2, asWrittenOrds: ords } : {}) }
+    const { page: p } = judged({ diffs: [{ ...worse('figures', null as unknown as string, null, 45, o.v2 ?? 23), off: null } as Diff], measures: { figures } } as never, {
+      v2: { facts: { [N]: { members: [], ties: [] } }, pages: { [N]: { members } } },
+      rec: rec(),
+    })
+    const d = (p.diffs as (Diff & { coveredSays?: string })[])[0]!
+    return [d.worse, d.covered ?? null, d.coveredSays ?? null]
+  }
+  it('fewer by no more than the texts in the members kept as written and those held for a decorated word: covered by CT', () => {
+    expect(page({ decorated: 20 })).toEqual([false, 'CT', "today 45, v2 23: 2 of today's texts stand in the 3 figure members kept as written (R1, R2), 20 in those held for a decorated word, drawn as the original"])
+    expect(page({ v2: 43 })[1]).toBe('CT')
+  })
+  it('fewer than they explain, one of them laid or a group of it off, or none kept as written: worse', () => {
+    expect(page({ v2: 42 })).toEqual([true, null, null])
+    expect(page({ v2: 42, laid: (ord) => (ord === 401 ? { state: 'laid', lines: [[500, 100, 140, []]] } : {}) })).toEqual([true, null, null])
+    expect(page({ v2: 43, laid: (ord) => (ord === 401 ? { off: 1 } : {}) })).toEqual([true, null, null])
+    expect(page({ ords: [], v2: 44 })).toEqual([true, null, null])
   })
 })
 

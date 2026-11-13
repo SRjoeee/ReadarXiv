@@ -14,10 +14,19 @@ const plainSource = (u: SourceUnit) => plainOf(u as unknown as Parameters<typeof
 const doc = (body: string, prose = 'The prose names AlphaNet and BetaNet in running text.') => `\\documentclass{article}\n\\begin{document}\n${prose}\n\n${body}\n\\end{document}\n`
 const unitsOf_ = (tex: string) => loadProject(inMemory(new Map([['main.tex', enc(tex)]])), 'main.tex', { tables: true }).units as (SourceUnit & { file: string; start: number })[]
 const cells = (tex: string) => unitsOf_(tex).filter(u => u.kind === 'cell').map(u => ({ text: plainSource(u), ...u.cell }))
-/** a grid's cells of a body, without their offsets */
-const grid = (body: string) => tableGrid(body, 0, body.length).map(({ start: _s, end: _e, ...c }) => c)
+/** a grid's cells of a body, without their offsets and their blocks' bands (R4's: `bands` below) */
+const grid = (body: string) => tableGrid(body, 0, body.length).map(({ start: _s, end: _e, band: _b, ...c }) => c)
+/** each cell's [row, col, band]: the row its block begins at (R4, PDF-READER §18.72) */
+const bands = (body: string) => tableGrid(body, 0, body.length).map(c => [c.row, c.col, c.band])
 
 describe('tableGrid: a table body as its cells lay it out', () => {
+  it("states each cell's block band: a rule across the table, a partial rule over its columns, REVTeX's \\colrule", () => {
+    expect(bands('A & 1 \\\\ B & 2 \\\\ \\cmidrule{2-2} C & 3 \\\\ \\midrule D & 4 \\\\ \\colrule E & 5')).toEqual([
+      [0, 0, 0], [0, 1, 0], [1, 0, 0], [1, 1, 0], [2, 0, 0], [2, 1, 2], [3, 0, 3], [3, 1, 3], [4, 0, 4], [4, 1, 4],
+    ])
+    // (a \\cline over both columns, a \\cmidrule(lr) with its trim, a \\multicolumn's span crossing a partial rule's range)
+    expect(bands('A & 1 \\\\ \\cline{1-2} B & 2 \\\\ \\cmidrule(lr){1-1} \\multicolumn{2}{c}{C}')).toEqual([[0, 0, 0], [0, 1, 0], [1, 0, 1], [1, 1, 1], [2, 0, 2]])
+  })
   it('reads rows and columns by & and \\\\, a \\multicolumn spanning its columns, outside braces, math and comments', () => {
     expect(grid('a & {b & c} & $x & y$ \\\\ \\multicolumn{2}{c}{d} & e % f & g\n \\\\[2pt] h')).toEqual([
       { row: 0, col: 0, span: 1, head: false }, { row: 0, col: 1, span: 1, head: false }, { row: 0, col: 2, span: 1, head: false },

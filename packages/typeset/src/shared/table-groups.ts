@@ -2,17 +2,17 @@
 // cells a reader compares with one another, held together where the geometry needs it. Ported from engine 065c1d973
 // translate/groups.mjs (groupOf), over TeX's grid as the part states it (Placed.cell) in place of today's rows: the groups are the
 // entry's, before anything is set. A cell that cannot be drawn is the original's by itself, as a paragraph is (the coordinator's
-// ruling (c) of 2026-11-13); its group is held where that cell spans (its box the others' too: lay/entry.ts holdsTable before the
-// lay, lay/page.ts settleTies after it) and withheld whole where it lies on two pages, its pages read off every cell of it to be
-// translated, set or not (holdsTable, settleTies).
+// ruling (c)); its group is held where that cell spans (its box the others' too: lay/entry.ts holdsTable before the lay,
+// lay/page.ts settleTies after it). A group on two pages is laid like any other, each cell by itself (PDF-READER §18.72).
 //
 // The groups follow the table's own structure, TeX's tabular: the header's cells are one group, and below it each column's
 // cells another, a cell spanning several columns (\multicolumn) one with the cells spanning the same columns, a cell spanning
 // rows (\multirow) its column's. A table whose cells state no grid place (a part made before) is one group, as before.
 //
-// No group is decided by what its cells say: a table's cell is text like any other, and the translator decides a name (the owner,
-// 2026-11-13). The column rule today's groups.mjs holds (a column at least NAMES_SHARE of whose cells came back as they went kept
-// whole as names) is not ported: each cell is laid by its own row, a reply equal to its source as any other.
+// No group is decided here by what its cells say: which of a table's cells are language is the engine's, a fact of each text
+// (Unit.kept: R1, R2 and the paper's names blocks, R4, PDF-READER §18.72), and a kept unit is laid as any kept unit is. The column
+// rule of engine 065c1d973's groups.mjs (a column at least NAMES_SHARE of whose cells came back from the translator as they went
+// kept whole) is not ported: a translator's reply decides nothing here.
 
 /** a cell's grid place: its row, its first column, the columns it spans, 1 a header's (Placed.cell) */
 export type CellPlace = readonly [row: number, col: number, span: number, head: 0 | 1]
