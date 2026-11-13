@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { toggleKind } from '@readarxiv/format'
 import { build } from 'vite'
 import { kindShown } from '../src/compose/classes.ts'
 import { createContents, plainOf } from '../src/session/contents.ts'
@@ -1745,7 +1746,7 @@ await check(
   },
 )
 /** a fixture's layer as its head names it: its units, the contents' entries the reader's own rule makes of them, and how many
- *  the view counts (those not kept, of a kind the toggles show by default) */
+ *  the view counts (those not kept, whose toggle kind the toggles show by default: rows.ts viewOf's rule) */
 function headLayerOf(name) {
   const f = fixtures[name]
   const head = JSON.parse(readFileSync(join(f.bundle, 'head.json'), 'utf8'))
@@ -1753,7 +1754,7 @@ function headLayerOf(name) {
   return {
     units,
     entries: createContents(units, head).entries(),
-    counted: units.filter((u) => !u.kept && kindShown(u.kind)).length,
+    counted: units.filter((u) => !u.kept && kindShown(toggleKind(u))).length,
   }
 }
 await check(
