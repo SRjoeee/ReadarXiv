@@ -60,17 +60,29 @@ describe('columnBoxes: a column’s box from its entries, where they line up as 
   })
   it('takes in the entries no unit is where the column’s class sets them: an r column’s numbers by their ends', () => {
     // (a header "Wall (h)" over numbers wider than it, each ending at the column's right edge; a number of the next column, which
-    // meets this column's cells nowhere, and one that does not end there, left out)
+    // meets this column's cells nowhere, that one's)
     const b = columnBoxes(
       [at(1, 2, 'r', 281.63, 311.04), at(2, 3, 'r', 330, 350)],
-      [word(272.1, 311.04), word(290, 311.2), word(318, 350), word(300, 309)],
+      [word(272.1, 311.04), word(290, 311.2), word(318, 350)],
     )
     expect(b.get(1)).toEqual([272.1, 311.2])
     expect(b.get(2)).toEqual([318, 350])
   })
-  it('takes in a c column’s numbers by their middles; one off its middle is no entry of it', () => {
-    const b = columnBoxes([at(1, 2, 'c', 250.25, 279.63)], [word(255.3, 274.58), word(248, 281.88), word(260, 285)])
+  it('takes in a c column’s numbers by their middles', () => {
+    const b = columnBoxes([at(1, 2, 'c', 250.25, 279.63)], [word(255.3, 274.58), word(248, 281.88)])
     expect(b.get(1)).toEqual([248, 281.88])
+  })
+  it('states no box for a column holding a word its class does not set where it stands: an entry not read whole', () => {
+    // (an r column's number ending short of its edge: "5.26 ± 0.3" read as three words, the first two short of it; a c column's
+    // word off its middle)
+    expect(columnBoxes([at(1, 2, 'r', 281.63, 311.04)], [word(272.1, 311.04), word(300, 309)]).size).toBe(0)
+    expect(columnBoxes([at(1, 2, 'c', 250.25, 279.63)], [word(255.3, 274.58), word(260, 285)]).size).toBe(0)
+    // (2602.23285v2 p7's "Acc" over a siunitx S column: TeX sets the numbers on their decimal marker, padded to the column's
+    // format, so no word of "0.856 ± 0.012" but its ± stands on the column's middle; the ± alone, centred, is no column of TeX's
+    // read whole, and a box of the header's own width was stated, the header's translation then too wide for it at any size)
+    const acc = [at(1, 1, 'c', 194.43, 205.95)]
+    const rows = [0, 1, 2].flatMap((): FreeWord[] => [word(178.95, 195.7), word(197.33, 203.05), word(204.69, 221.43)])
+    expect(columnBoxes(acc, rows).size).toBe(0)
   })
   it('leaves out a word that meets two columns’ cells, and a column of one entry', () => {
     const b = columnBoxes([at(1, 0, 'l', 100, 130), at(2, 1, 'l', 150, 170)], [word(100, 160)])
@@ -86,10 +98,12 @@ describe('columnBoxes: a column’s box from its entries, where they line up as 
   it('states no box for a column holding a cell of no class: a paragraph of its own (p, m, b, X) or no template of LaTeX’s', () => {
     expect(columnBoxes([at(1, 0, 'l', 100, 130), at(2, 0, undefined, 100, 150)], []).size).toBe(0)
   })
-  it('centres a \\multicolumn{1}{c} cell of an l column in the column’s box, and joins no word to a column of two classes', () => {
-    const b = columnBoxes([at(1, 0, 'c', 110, 140), at(2, 0, 'l', 100, 150), at(3, 0, 'l', 100, 120)], [word(100, 160)])
+  it('centres a \\multicolumn{1}{c} cell of an l column in the column’s box; a word in a column of two classes is set by neither', () => {
+    const cells = [at(1, 0, 'c', 110, 140), at(2, 0, 'l', 100, 150), at(3, 0, 'l', 100, 120)]
+    const b = columnBoxes(cells, [])
     expect(b.get(1)).toEqual([100, 150])
     expect(b.get(3)).toEqual([100, 150])
+    expect(columnBoxes(cells, [word(100, 160)]).size).toBe(0)
   })
   it('gives a spanning cell the union of the columns it spans, each with a box, its class setting it there', () => {
     // (Table 12's \multicolumn{3}{c}{Step 25} over Merged, Pre and Post)
