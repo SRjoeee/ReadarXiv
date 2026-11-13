@@ -1,0 +1,16 @@
+{
+  "format": "readarxiv/reader-parts 1",
+  "says": "reader-parts' counts of I3, I4 and I5 at the last integrated round, by rows store and by the set or the added pairs (lab/release-check/gates.mjs readerPartsJudge): the gate fails where a count rises above its value here, and says where one fell; the round that moves a count writes its value and its cause here",
+  "commit": "cee3bd8f9",
+  "round": "RB1 with its fix round (pull request #640): the reader gate over the 90 pairs of the stored rows and the added pairs, on the door's rows and on Google's",
+  "counts": {
+    "door": { "I3": 3, "I4": 0, "I5": 2 },
+    "door, added": { "I3": 0, "I4": 0, "I5": 0 },
+    "google": { "I3": 3, "I4": 0, "I5": 2 },
+    "google, added": { "I3": 0, "I4": 0, "I5": 0 }
+  },
+  "why": {
+    "I3": "on both stores: 2610.21176v1-zh p13, ords 98 and 99 against 101 (a cell given an ink box hundreds of points wide for one glyph: design 3h's E1, before the cut-over); 2610.40576v1-zh p7, ords 69 and 71 (a paragraph beside a wrapped figure laid over its caption: TeX's line measures, after the cut-over, production's too)",
+    "I5": "2610.20285v1-zh ord 258, a line 0.30 pt past its slot with spaces to shrink, on both stores; 2610.21106v1-zh ord 42, 0.04 pt (the door's rows); 2610.21085v1-zh ord 64, 0.01 pt (Google's)"
+  }
+}
