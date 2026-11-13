@@ -981,7 +981,7 @@ await check(
     await page.evaluate((sel) => {
       const s = document.querySelector(sel)
       window.__backAt = null
-      new MutationObserver((ms, o) => {
+      new MutationObserver((_, o) => {
         if (s.hasAttribute('data-axt-kept')) return
         const c = s.querySelector('.axt-over > canvas.axt-crops')
         window.__backAt = c ? [c.width, c.height] : null
