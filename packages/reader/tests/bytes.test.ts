@@ -4,7 +4,7 @@ import { composedSource } from '../src/bytes/composed.ts'
 import { type RangedLib, openRanged } from '../src/bytes/ranged.ts'
 import { RangeRefusal, rangeSource, STALL_MS } from '../src/bytes/source.ts'
 import { CHUNK, CHUNKS_IN_FLIGHT, chunkStore } from '../src/bytes/store.ts'
-import { bytesOf, flush, manualTimers, rangedServer, type ServedObject } from './helpers/ranged-server.ts'
+import { bytesOf, expectBytes, flush, manualTimers, rangedServer, type ServedObject } from './helpers/ranged-server.ts'
 
 const A = bytesOf(5 * CHUNK + 1234, 7)
 const ADD = bytesOf(2 * CHUNK + 99, 9)
@@ -57,8 +57,8 @@ describe('the byte store and the ranged source', () => {
     const src = own(s.fetch)
     await src.read(0, CHUNK)
     const [a, b] = await Promise.all([src.read(CHUNK, 3 * CHUNK), src.read(2 * CHUNK, 4 * CHUNK)])
-    expect(a).toEqual(A.slice(CHUNK, 3 * CHUNK))
-    expect(b).toEqual(A.slice(2 * CHUNK, 4 * CHUNK))
+    expectBytes(a, A.slice(CHUNK, 3 * CHUNK))
+    expectBytes(b, A.slice(2 * CHUNK, 4 * CHUNK))
     // chunks 1, 2, 3 asked once each, after chunk 0
     expect(s.asks.map((x) => x.range[0] / CHUNK)).toEqual([0, 1, 2, 3])
     const big = bytesOf(40 * CHUNK, 3)
@@ -72,10 +72,9 @@ describe('the byte store and the ranged source', () => {
     }
     const g = rangeSource({ fetch: watched, url: '/big', own: true, store })
     await g.read(0, CHUNK)
-    expect(await g.read(CHUNK, 40 * CHUNK)).toEqual(big.slice(CHUNK))
+    expectBytes(await g.read(CHUNK, 40 * CHUNK), big.slice(CHUNK))
     expect(most).toBeLessThanOrEqual(CHUNKS_IN_FLIGHT)
-    // (40 chunks digested and a task's turn an ask: about a second alone, past vitest's 5 s in a whole run on a loaded machine)
-  }, 30_000)
+  })
   it("joins the reads made before the object's length is known on the first one's ask: a file shorter than a chunk, a paper longer (L11 third round, gap 6)", async () => {
     // (the reader's own first read and PDF.js's, both out before the first answer: the website's gateway grants 16 file requests a
     // 33.6 s window, and a file shorter than one chunk was refused as other bytes than asked)
@@ -87,7 +86,8 @@ describe('the byte store and the ranged source', () => {
         const src = own(s.fetch, { store, refused: (e: RangeRefusal) => refused.push(e.kind) })
         const [a, b] = await Promise.all([src.read(0, CHUNK), src.read(0, CHUNK)])
         const head = bytes.slice(0, Math.min(CHUNK, bytes.length))
-        expect([a, b]).toEqual([head, head])
+        expectBytes(a, head)
+        expectBytes(b, head)
         expect([s.asks.length, refused, src.refusal]).toEqual([1, [], null])
       }
     }
@@ -115,12 +115,15 @@ describe('the byte store and the ranged source', () => {
     expect(mid.bound?.total).toBe(A.length)
     const two = mid.read(0, CHUNK)
     send()
-    expect([await one, await two, base.asks.length]).toEqual([A.slice(0, CHUNK), A.slice(0, CHUNK), 1])
+    expectBytes(await one, A.slice(0, CHUNK))
+    expectBytes(await two, A.slice(0, CHUNK))
+    expect(base.asks.length).toBe(1)
     // (another range read before the length is known: asked once it is, as any other)
     const s = rangedServer(objects())
     const src = own(s.fetch)
     const [a, b] = await Promise.all([src.read(0, CHUNK), src.read(CHUNK, 2 * CHUNK)])
-    expect([a, b]).toEqual([A.slice(0, CHUNK), A.slice(CHUNK, 2 * CHUNK)])
+    expectBytes(a, A.slice(0, CHUNK))
+    expectBytes(b, A.slice(CHUNK, 2 * CHUNK))
     expect(s.asks.map((x) => x.range[0] / CHUNK)).toEqual([0, 1])
   })
   it("holds every answer of a read made before the object's length was known to that length: its first answer stalled after its head, asked again", async () => {
