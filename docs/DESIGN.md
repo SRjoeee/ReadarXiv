@@ -1060,9 +1060,13 @@ only how it meets the rest of the extension.
   owns enters as `host`: the compile, PDF.js and its options, zlib, pdf-lib, the TeX engines and trees it runs, where each
   object goes. The front half's own reading of an element's class (`classesOf`) is the package's, never the host's.
   The front half runs in a frame of its own, so that the source's files and what it makes beside the instrument are let
-  go before the back half begins (`packages/engine/tests/front.test.ts`). Every input of the marked compile is decided in
-  `front.ts` and what it imports, the two halves' orchestration in `prepare.ts`: a host that keys the instrument by the
-  code its front half runs reads `front.ts`'s closure, and a change of the orchestration keys nothing anew.
+  go before the back half begins (`packages/engine/tests/front.test.ts`). The stored plan's codec (what a prepare stores
+  beside B and how it is read back, the paper as opened) is `plan.ts`'s, a module of its own: a host that keys the stored
+  instrument by the code its compile side runs names it there, never `prepareFront`, whose readers of what is stored
+  (`instrumentOf`, the units first) stay out of the key. What decides the stored objects is `compiled.ts`'s `compiledOf`:
+  the paper opened, a stored instrument taken or not, the bibliography, the marked compile with every argument it is given,
+  and what is stored of it (`plan.ts` `storedInstrumentOf`); `prepareFront` hands it the units as a function and states the
+  instrument after it. The two halves' orchestration is `prepare.ts`'s, so a change of it keys nothing anew.
   **One front half, today's** (2026-11-09). A rebuilt front half (a typed source reader under TeX's definitions, a marks
   writer and a drafts-only compile plan, in `packages/engine/src/{source,marks,compile}/`) was run beside today's over
   the 87 corpus papers and deleted (its last state is the tag `f2-final-2026-11-09`): it stated none of the element

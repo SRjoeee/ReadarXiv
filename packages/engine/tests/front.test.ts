@@ -11,20 +11,19 @@ import * as PL from '@cantoo/pdf-lib'
 import { BOUNDS, read, type Unit, unitId } from '@readarxiv/format'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, test, vi } from 'vitest'
+import type { PreparePdfJs } from '../src/compiled.ts'
 import {
   type FrontHalf,
   type FrontInput,
-  type OriginalFacts,
   originalFactsOf,
-  type PreparePdfJs,
   prepareFront,
   sourceUnitsOf,
-  type StoredInstrument,
   treeOf,
   unitsObjects,
 } from '../src/front.ts'
 import { classesOf, instrumentOf, markedOfPaper, openPaper } from '../src/front.types.ts'
 import { type Instrument, ownersOf, ROLE } from '../src/instrument.ts'
+import type { OriginalFacts, StoredInstrument } from '../src/plan.ts'
 import { type PrepareHost, prepare } from '../src/prepare.ts'
 import { readPdf } from '../src/read.ts'
 
@@ -286,6 +285,39 @@ describe('the prepare: the tree before any compile, refusals as reasons, and the
   const never: FrontHalf = async () => {
     throw new Error('the front half ran')
   }
+  test("the compile the front half is given is the host's, passed through: each request as it was, each answer as it came, the files handed once before the first", async () => {
+    const A = await pdfOf(1, null)
+    const seen: unknown[] = []
+    const asks = [
+      { main: 'main.tex', engine: 'pdflatex', rerun: false, bibtex: null, overrides: new Map() },
+      { main: 'main.tex', engine: 'pdflatex', rerun: true, bibtex: true, overrides: new Map() },
+    ]
+    const answers = asks.map((_, i) => ({ ok: i === 1, log: `answer ${i}` }))
+    const front: FrontHalf = async (input) => {
+      for (const q of asks) seen.push(['answer', await input.compile(q)])
+      return { ok: false, why: 'cannot-typeset', detail: 'measured' }
+    }
+    const end = await prepare(
+      () => ({ files: files({ 'main.tex': PAPER }), original: A, stored: null }),
+      host({
+        handFiles: async () => {
+          seen.push('files')
+        },
+        compile: async (q) => {
+          seen.push(['ask', q])
+          return answers[asks.indexOf(q)] ?? { ok: false }
+        },
+      }),
+      front,
+    )
+    expect(end).toEqual({ ok: false, why: 'cannot-typeset', detail: 'measured' })
+    expect(seen).toHaveLength(5)
+    expect(seen[0]).toBe('files')
+    for (const [i, q] of asks.entries()) {
+      expect((seen[1 + 2 * i] as unknown[])[1]).toBe(q)
+      expect((seen[2 + 2 * i] as unknown[])[1]).toBe(answers[i])
+    }
+  })
   test("a paper of another tree is answered with it before the front half runs; the source's own refusal and an unreadable A are reasons", async () => {
     const A = await pdfOf(1, null)
     const notes: [string, unknown][] = []
@@ -359,6 +391,38 @@ describe('the prepare: the tree before any compile, refusals as reasons, and the
   }, 60_000)
   test('the reading tells what is held from what is let go: held on purpose, both are reached', async () => {
     expect(await reachedAtBack(new Set(['files', 'made']))).toEqual(['files', 'made'])
+  }, 60_000)
+  test('the instrument made anew is handed out in a run given none; a run given stored ones hands out none, even where it did not take them and TeX ran again', async () => {
+    /** the instrument's objects a prepare hands the host, and its notes; the back half then refuses the spies' empty instrument */
+    const run = async (original: Uint8Array, stored: StoredInstrument | null) => {
+      const handed = new Map<string, Uint8Array>()
+      const notes: [string, unknown][] = []
+      await prepare(
+        () => ({ files: files({ 'main.tex': PAPER }), original, stored }),
+        host({
+          instrument: async (name, bytes) => {
+            handed.set(name, bytes)
+          },
+          note: (n, d) => notes.push([n, d]),
+        }),
+      ).catch(() => null)
+      return { handed, notes }
+    }
+    const A = await pdfOf(1, null)
+    const fresh = await run(A, null)
+    expect([...fresh.handed.keys()]).toEqual(['b.pdf', 'log', 'plan', 'definitions'])
+    const made = Object.fromEntries(fresh.handed) as StoredInstrument
+    // (the stored objects taken: no TeX, nothing handed out)
+    const reused = await run(A, made)
+    expect(reused.handed.size).toBe(0)
+    expect(reused.notes.filter(([n]) => n === 'front')).toEqual([])
+    // (not taken: made for another page count, or a plan that cannot be read; TeX runs again, and nothing is handed out)
+    const other = await run(await pdfOf(2, null), made)
+    expect(other.notes).toContainEqual(['front', { stored: 'made with another original: compiled anew' }])
+    expect(other.handed.size).toBe(0)
+    const unreadable = await run(A, { ...made, plan: enc.encode('{"front":"today","v":1}') })
+    expect(unreadable.notes).toContainEqual(['front', { stored: 'unreadable: compiled anew' }])
+    expect(unreadable.handed.size).toBe(0)
   }, 60_000)
   test("the back half is given the front half's own reading of an element's class (instrument.mjs classesOf), the host never names it", async () => {
     // (a page of three Helvetica lines, B and A alike: its first two lines one paragraph's, its third another's)

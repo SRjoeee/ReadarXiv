@@ -63,17 +63,32 @@ export {
   type FrontHalf,
   type FrontInput,
   type FrontResult,
-  type OriginalFacts,
   originalFactsOf,
-  type PreparePdfJs,
   type PrepareStage,
-  type PrepareWhy,
   prepareFront,
   type Refusal,
-  type StoredInstrument,
   type TreeDecision,
   treeOf,
 } from './front.ts'
+// (the stored half of the front half, a module of its own: what decides the instrument's stored objects, which a host keys them by)
+export { type CompiledInput, type CompiledResult, compiledOf, type PreparePdfJs } from './compiled.ts'
+// (the stored plan's codec, a module of its own: what a host keys the stored instrument by names it without the front half's
+// readers of what is stored. Its reader is storedPlanOf here: `planOf` is the wrap's, wrap.types.ts's, which an explicit
+// export of the same name would shadow)
+export {
+  type Kept,
+  keeps,
+  type OriginalFacts,
+  opened,
+  type PrepareWhy,
+  planOf as storedPlanOf,
+  type Plan as StoredPlan,
+  type ReadPlan as ReadStoredPlan,
+  type StoredInstrument,
+  storedInstrumentOf,
+  unkeep,
+  withBbl,
+} from './plan.ts'
 export { OPS_PDFJS, type OpsPage, type OpsReader, readOps } from './opstream.ts'
 export { type PdfJs, type ReadPage, type Recovered, readPdf } from './read.ts'
 export { type Hole, type Holes, holesOf, PACKED_MAGIC, pack, unpack } from './sparse.ts'
