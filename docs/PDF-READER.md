@@ -4888,7 +4888,23 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
 - **A path's text** (the container step). A closed path holds the lines whose glyphs' centres all stand inside it (read by its
   interior after its box) alone where no other glyph is inside it and no closed path inside it holds text of its own (the nodes
   of a box round a chart); a fill or a frame under words of one line, within one band's height of its baseline, is a decoration
-  that goes with its words, and other ink inside, a stroke or a legend's samples, is no reason. The runs it holds on one
+  that goes with its words, and other ink inside, a stroke or a legend's samples, is no reason. **Whose a glyph is, is the line
+  reading's alone** (lane fig-rows, 2026-11-14): a glyph inside the path that no run holds (no figure text's: a mark the figure
+  reading cut from its word where the face changes, a run that spells no word and so no unit) is no other glyph where the line
+  reading sets it on one of the path's lines; the container step hands it over (`containersOf`'s `others`) and takes the path
+  only where that reading did, no second opinion of its own. A glyph another text holds is another glyph as before.
+  2608.06701v1 p1's plan box had been dropped for one glyph, item 4's full stop, set in a face of one pitch on a chip of its own
+  and set by the line reading on that item's last line. **Such a glyph is the line's element, never its text** (the
+  coordinator's ruling of 2026-11-14): one the line reading sets on a path's line, no run holding it, that spells no word (no
+  letter or digit: a pictograph, an icon face's glyph, a mark set alone in another face) is carried in the text the container
+  step makes as an element `symbol` (`signsApart`), its ink the original's, set where the reply sets the element, as a formula's
+  glyph is; signs abutting one another are one element. Sent as text, 2608.06701v1 p10's warning sign came back as a
+  character no served face draws, the lay threw (`Unserved`) and the text stood as the original. A sign is no decorated word:
+  §18.61's hold is not read from it. A sign whose ink the page does not state (its box of no height: PDF.js states p10's colour
+  sign so) cannot be an element, which is ink carried: it stays page ink where it stands, out of the text and of its glyphs,
+  as at the base (the coordinator's ruling of 2026-11-14). A ground the relation reading reads under the sign alone goes with
+  its element (its box the element's); one no run's room meets is never read, and stays where it stood (the plan box's item 4:
+  its stop's chip, a tone under no run's glyph). The runs it holds on one
   baseline are one line, however far apart their words stand. No legend's entries are joined: two rows or more each beside ink of
   its own inside the path (a sample, a marker; a neighbouring node's edge outside it is none). Rows **centred** (their centres one
   and their left edges not: rows of one length show no alignment, centred or flush) are a node's label: one text, one under the
@@ -4897,11 +4913,39 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
   wrap's (no blank line, one face, not each led by ink of its own, and forced: the next row's first word cannot stand on the row
   above within the measure the path's inside gives it there, its inset on the flush side mirrored) and the sentence goes on (the
   row above ends in a hyphen, or this row's first letter, after any punctuation it opens with, is lower case); a capital, a
-  digit or a symbol begins a row of its own, and a script without case never joins. No geometric fact tells a box hugging its
-  rows from one text was wrapped into: 2608.06701v1 p2's bubbles are ragged at their natural spaces, every break forced, and so
-  are 99 of 2610.37668v1's 103 value overlays; the sentence going on is the evidence, as a hyphen is for F3's paragraph. Census
-  (91 papers): 40 breaks joined in 27 boxes on 8 papers; 2610.37668v1's six "Mip-NeRF360 / <scene> / <id>" boxes join wrongly,
-  accepted knowingly. Its room is the path's inside. **A joined text is laid as a paragraph of the body is laid** (the owner's
+  digit or a symbol begins a row of its own, and a script without case never joins. **Flush rows join so whether or not a row
+  opens an item** (lane fig-rows, 2026-11-14): "no line an item's" limits the centred rows alone; a row that opens one (its
+  first glyphs the marker of a line a list holds, `listed`, as outside a path) begins a text of its own, its marker its label and
+  never sent, and the rows under it join it by the wrap rule (2608.06701v1 p1's plan box: its items 1 and 4, ragged at their
+  natural spaces in a dashed frame, each one text of five and four rows, where every row had been sent alone). No geometric
+  fact tells a box hugging its rows from one text was wrapped into: 2608.06701v1 p2's bubbles are ragged at their natural
+  spaces, every break forced, and so are 99 of 2610.37668v1's 103 value overlays; the sentence going on is the evidence, as a
+  hyphen is for F3's paragraph. Census (91 papers): 40 breaks joined in 27 boxes on 8 papers; 2610.37668v1's six
+  "Mip-NeRF360 / <scene> / <id>" boxes join wrongly, accepted knowingly. With whose a glyph is and items (lane fig-rows, stage
+  1a over para-start's 89 and 2611.03953v2 against converge-10's r24): five papers' prepare dumps move, their figure units
+  alone; 30 breaks joined anew in 18 texts, 12 paths, 7 figures, 5 papers, none lost: the plan box 13 (items 1 and 4 laid at
+  the original's 4.35 pt, three lines each, inside the frame; items 2 and 3 held, §18.61), 2608.06701v1 p9 and p10 9, the
+  other four papers 8, each path dropped before for a mark no run holds inside it (a cross, a warning sign, τ, ∼, ∈, ŵ's
+  accent). One join reads wrong: 2610.20507v1 p8's "giant + AGB / (∼ 12% of τMS, not followed)" and the region's own label
+  "black hole" 12.8 pt under it, centred on one axis, are one text. Held to TeX's interline rule as a paragraph's lines are
+  (`oneLead`), the step would undo it and ten joins that read right (2406.06525v1's centred caption paragraphs, rows a tool set
+  4.21 to 4.85 pt apart; 2610.31506v1's two node labels): not taken. Held to the order the content stream sets a text's rows
+  in (one text object, one node, set line after line: rows one text only where each comes after the row above it in the
+  stream), it would undo that join and one that reads right (2610.19274v1 p17's white "CTJA / module", its lower row shown
+  first): not taken either; of the 186 texts the step makes over the 89, two stand out of the stream's order, those two. No
+  joined text stands as the original for a glyph: Google
+  sets a sign at its text's end (item 4's stop after the translation's last character, with no full stop of its own); p10's
+  colour sign, inkless, stays page ink where it stands and its text is sent with its own full stop. A ground under a glyph no
+  run holds is read by no relation: item 4's chip stays where it stood, empty of its stop (a known residue). **Its room is the
+  path's inside**, over, under and across (lane fig-rows, the coordinator's ruling of 2026-11-14): `roomIn` its edges about its
+  baseline, `acrossIn` its edges at each row a third of its size over its baseline, the narrowest, its stroke's half width in,
+  which the prepare states with its unit as a line's free line (ink.ts) and the facts pass as Room.side; a joined text had
+  been given its lines' sides to the nearest glyph or rule within its column (`sideOf`), so a centred label wider than its
+  path ran past the path's edge (2610.20507v1 p8: one line from 155.7 to 297.5 in a region ending at 296.21). And its lines are
+  read top to bottom, as its rows were joined (geometry.ts): its first line, from which it is laid, its top row's, whatever
+  order its runs stand in the stream (the same label's lowest row stands first in the stream, and its translation was laid on
+  it). Measured over the 89: the room across of 178 figure members on 22 papers moves, every joined text's, to its path's
+  inside; one member's lines are read in another order (that label's). **A joined text is laid as a paragraph of the body is laid** (the owner's
   ruling of 2026-11-11: a figure's text keeps the body's rules, none of its own and no optical correction): its first line on its
   first row's baseline, its leading the ladder's and the page fill's, as a body paragraph's of the same lines and height (a
   translation of fewer lines takes a looser leading and fills its rows' extent), no line under its last row's baseline. A CJK
@@ -6156,6 +6200,22 @@ was that it may stay the original's where the highlight forces it.
   translation; a HOLD risks only that a line stays in the original, so the pairing test that is too weak to join is enough to
   hold. The author's phrase as a unit (the figure-text research's P1, the PDF's paragraph marks and a list's items, after the
   cut-over) replaces this pairing when it comes: the pairing is not to be grown for this purpose.
+- **However a path's rows were joined** (lane fig-rows, 2026-11-14). The pairing is read over every line of the page, the lines
+  §18.36's container step made texts of too (read apart from them: `figureParas` with `labelsOnly`, no paragraph made), so
+  that a label is the same lines whatever texts its rows became, and the hold reaches every text holding one of them. The
+  pairing is not grown: it reads the lines it read before the container step took any (a page where that step takes no line
+  is read once, as before). 2608.06701v1 p1's plan box, its items each one text of their rows since §18.36's flush rows take
+  items: item 2's rows a path joins into three texts and item 3's into two, the code word on its chip in one of each, every
+  text of both items held whole as before. A tone made of pieces over a line break (a chip broken with its word over two rows,
+  item 2's "`lib/…/__init_|_.py`"; a highlight over the end of one row and the start of the next) is a line tall where each
+  piece is (`fillsJoined`'s `tall`, the tallest piece), not by its pieces' joined box two rows tall, and it makes an element on
+  each row it holds, of that row's stretch and its own pieces (`parts`): an element is ink of one line, as each row read alone
+  makes it. Read by the joined box, the join had taken the word's `cite` and sent the text with the word broken in two.
+  Measured at the lane's head: every text of the plan box's items 2 and 3 held (item 2's first two rows alone and two joined
+  texts, item 3's two joined texts), none sent; and the figure's box 2 beside it, "Thought: I made a mistake in the path; it
+  should be absolute. I will correct it and retry viewing the file.", whose first sentence a green highlight marks over its two
+  rows, is held whole now, where read as its ground it had been translated over the highlight. No other text of the corpus
+  moves by it.
 - **A word: a letter in it.** The hold exists to prevent a half-original line. A decorated token with no letter (a number, a
   symbol) makes none and stays an element in the translated line as before. The condition is the engine's one predicate,
   `holdsLetter` (`figure-lines.ts`, Unicode's letter), which already tells a figure's decorated word (`cite`) from a decorated

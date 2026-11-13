@@ -639,7 +639,8 @@ function roomOfText(t: FigureText): { under?: number; over?: number } {
 /**
  * A figure text its printed line makes (figure-lines.ts): its content in its line's order, its text pieces as figureRuns states a
  * figure text's (each run of another face a group), each element a piece of its own (`code`: a run of one pitch; `cite`, `ref`:
- * a stretch a decoration holds), a space between two where their glyphs stand SPACE_GAP of their size apart; each element drawn
+ * a stretch a decoration holds; `symbol`: a sign no run holds on a path's line), a space between two where their glyphs stand
+ * SPACE_GAP of their size apart; each element drawn
  * from its ink (its class `other`, a code one `literal`, its glyphs' text its copy), its glyphs and its boxes (a ground's, a
  * decoration's) its own. Laid by the paragraph path (it states no own text, locate): its room the line's, from its first run's
  * room before to its last run's after; in `set`, the set of the labels its lines stand among, whose size tie holds it with the
@@ -736,9 +737,16 @@ function figureTextOf(
   const x1 = Math.max(...all.map((g) => G[g]!.x1))
   const x0 = G[all[0]!]!.x0
   // (a paragraph, F3: laid in its lines as a body paragraph is, its room the facts pass's (its lines' sides, below it): none of
-  // a line's free line along its run; a line alone, as before)
+  // a line's free line along its run; a line alone, as before. One the container step made of a path's rows has the path's
+  // inside across as its room beside its lines (§18.36), stated as a line's free line is, from its rows' extent: the facts pass
+  // takes it as Room.side, never the column's)
+  const across = t.para && t.container?.side
+  const left = Math.min(...all.map((g) => G[g]!.x0))
   const room = t.para
-    ? { ...roomOfText(t) }
+    ? {
+        ...roomOfText(t),
+        ...(across ? { x: left, length: x1 - left, before: left - across[0], after: across[1] - x1 } : {}),
+      }
     : {
         x: x0,
         ...(Number.isFinite(f0.y) ? { y: f0.y } : {}),
@@ -757,14 +765,13 @@ function figureTextOf(
       ...(classes.length ? { classes } : {}),
       ...(classes.length
         ? {
-            keptEls: classes.map(([id]): [string, 'pitch' | 'formula' | 'decoration'] => [
-              id,
-              (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind === 'code'
-                ? 'pitch'
-                : (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind === 'math'
-                  ? 'formula'
-                  : 'decoration',
-            ]),
+            keptEls: classes.map(([id]): [string, 'pitch' | 'formula' | 'decoration' | 'symbol'] => {
+              const kind = (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind
+              return [
+                id,
+                kind === 'code' ? 'pitch' : kind === 'math' ? 'formula' : kind === 'symbol' ? 'symbol' : 'decoration',
+              ]
+            }),
           }
         : {}),
       figure: { set, ...(t.para ? { para: t.para.by } : {}), ...room },
