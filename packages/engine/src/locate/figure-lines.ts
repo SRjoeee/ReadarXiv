@@ -176,10 +176,11 @@ export function figureLinesOf(
     // for another reason keeps that one; a decorated stretch with no letter (`ref`) holds nothing, an element in the translation)
     for (const t of out) if (t.why === null && t.els.some((e) => e.kind === 'cite')) t.why = 'decoration'
     // (and its whole label with it: every text and run of a label the paragraph reading pairs it in (its lines one under the other
-    // in one face, its pitch and its left edge, down to a line that opens an item; and what stands on its printed line), held
-    // `decoration` with its label, none kept for another reason touched. The reading refuses to join such lines on a guess, since
-    // a wrong join damages a translation; a hold risks only a line left the original's, so the pairing too weak to join is enough
-    // to hold. The author's phrase as a unit (the figure-text research's P1) replaces this pairing when it comes, §18.61)
+    // in one face, its pitch and its left edge, down to a line that opens an item; and what stands on its printed line), the
+    // page's lines read whole whatever texts a path's rows made of them, held `decoration` with its label, none kept for another
+    // reason touched. The reading refuses to join such lines on a guess, since a wrong join damages a translation; a hold risks
+    // only a line left the original's, so the pairing too weak to join is enough to hold. The author's phrase as a unit (the
+    // figure-text research's P1) replaces this pairing when it comes, §18.61)
     const own = new Set(out.flatMap((t) => (t.why === 'decoration' ? t.ks : [])))
     if (own.size) {
       const textAtK = new Map(out.flatMap((t) => t.ks.map((k) => [k, t] as const)))
@@ -751,8 +752,11 @@ function linesOf(
       for (const g of groups) if (g.length > 1) textOfRows(g, side)
     }
     // ---- F3: the lines of prose that are a paragraph's, one text; a line across a justified line's stretched space read whole
-    // where the paragraph takes it
-    for (const para of figureParas(lines, reads, glyphs, boxes, pitch, math, sourceOf, taken, labels)) {
+    // where the paragraph takes it. The labels §18.61's hold spreads over are that reading's pairing of every line of the page,
+    // those the container step made texts of too: a held item's rows are its label however a path's rows joined them
+    const paras = figureParas(lines, reads, glyphs, boxes, pitch, math, sourceOf, taken, taken.size ? [] : labels)
+    if (taken.size) figureParas(lines, reads, glyphs, boxes, pitch, math, sourceOf, new Set(), labels, true)
+    for (const para of paras) {
       const ks = para.lines.flatMap((x) => x.l.ks)
       const ft: FigureText = {
         ks,
@@ -1348,7 +1352,8 @@ function documentText(pages: readonly TodayPage[]): string {
  * F3: the page's paragraphs (figure-paras.ts) over its lines of prose (`mixed` and `plain`), each with its lines top to bottom,
  * their ends, and the lines of the page it is made of (`of`). Two fragments of one baseline farther apart than the run gap (a
  * justified line's stretched space after a sentence) are read as one line where a line of prose right over or under them has ink
- * across the gap, and stand so only where a paragraph takes that line; else they stay the fragments they were
+ * across the gap, and stand so only where a paragraph takes that line; else they stay the fragments they were. `labelsOnly`: the
+ * pairing alone, into `labels`, no paragraph (no line end read)
  */
 function figureParas(
   lines: readonly Line[],
@@ -1360,6 +1365,7 @@ function figureParas(
   source: () => string,
   skip: ReadonlySet<number> = new Set(),
   labels: number[][] = [],
+  labelsOnly = false,
 ): {
   lines: ProseLine[]
   ends: ('space' | 'join' | 'drop')[]
@@ -1424,7 +1430,9 @@ function figureParas(
   }
   const live = entries.filter((e) => prose(e.x.read))
   const facts = live.map((e) => proseFacts(e.x, glyphs, boxes))
-  const end = (a: number, b: number) => endOf(glyphs, live[a]!.x.read.gs, live[b]!.x.read.gs, source)
+  const end = labelsOnly
+    ? () => 'space' as const
+    : (a: number, b: number) => endOf(glyphs, live[a]!.x.read.gs, live[b]!.x.read.gs, source)
   // (the labels the reading pairs, as `labels` takes them, the runs of each: its lines the blocks pair, one under the other, cut
   // where a line opens an item, and the fragments it bridged on one printed line; only those of two lines or runs or more)
   const pairs: [number, number][] = []
@@ -1443,6 +1451,7 @@ function figureParas(
     else groups.set(root(i), ks)
   })
   for (const ks of groups.values()) if (ks.length > 1) labels.push(ks)
+  if (labelsOnly) return []
   return paras.map((para) => ({
     lines: para.lines.map((k) => live[k]!.x),
     ends: para.ev.map((e) => (e === 'hyphen-drop' ? 'drop' : e === 'hyphen-join' ? 'join' : 'space')),
@@ -1586,6 +1595,13 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
   const label = new Set(ft.label)
   const own = new Set([...textGs, ...ft.label])
   const at = new Map(textGs.map((g, i) => [g, i]))
+  // (each of its glyphs' row: its lines, by the order's line ends)
+  const rowAt = new Map<number, number>()
+  let row = 0
+  for (const o of ft.order) {
+    if (o.t === 'br') row++
+    else for (const g of o.t === 'text' ? o.glyphs : ft.els[o.i]!.glyphs) rowAt.set(g, row)
+  }
   let unrelated = false,
     inked = false
   for (const it of fillsJoined(items, textGs, glyphs)) {
@@ -1657,23 +1673,33 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
     // (a decoration holds whole words: its stretch's letters' and digits' ink inside it (a bracket or a comma at its edge may
     // cross it by its side bearing: Preview's link frames are tight on the words, 2609.19644v1 p58), and the stretch from a word's
     // start to a word's end, a word space or a mark that is no letter or digit beside it, its line's end; never a letter of a
-    // word, a plot's marker over it. A tone under the stretch is a line tall at most (as a chip's fill, BAND_EM twice), a
-    // highlight's: a plot's shaded column under a label's end is the plot's (2610.21547v1 p14's "bound m = 1"))
+    // word, a plot's marker over it. A tone under the stretch is a line tall at most (as a chip's fill, BAND_EM twice), each piece
+    // of it (`tall`: a chip broken with its word over two rows is two pieces a line tall each), a highlight's: a plot's shaded
+    // column under a label's end is the plot's (2610.21547v1 p14's "bound m = 1"))
     if (
       held.length &&
       !others &&
       contiguous &&
       held.length < textGs.length &&
-      (!it.ground || y1 - y0 <= 2 * BAND_EM * glyphs[held[0]!]!.size) &&
+      (!it.ground || (it.tall ?? y1 - y0) <= 2 * BAND_EM * glyphs[held[0]!]!.size) &&
       held.every((j) => !/[\p{L}\p{N}]/u.test(glyphs[j]!.u) || inside(glyphs[j]!, x0, y0, x1, y1)) &&
       wordBounded(textGs, idx, glyphs)
     ) {
-      decorate(
-        ft,
-        idx.map((i) => textGs[i]!),
-        it.bs,
-        glyphs,
-      )
+      // (a stretch over a line break of the text, a chip broken with its word over two rows: an element a row, each with the
+      // pieces of the tone under it, as each row read alone makes it; an element is ink of one line)
+      const segs: number[][] = []
+      for (const i of idx) {
+        const last = segs.at(-1)
+        if (last && rowAt.get(textGs[last.at(-1)!]!) === rowAt.get(textGs[i]!)) last.push(i)
+        else segs.push([i])
+      }
+      for (const s of segs)
+        decorate(
+          ft,
+          s.map((i) => textGs[i]!),
+          it.parts ? it.parts.filter((q) => q.hi >= s[0]! && q.lo <= s.at(-1)!).flatMap((q) => q.bs) : it.bs,
+          glyphs,
+        )
       continue
     }
     // (a tone under part of the text that holds no stretch of its words whole: its ground, crowding nothing, as before)
@@ -1723,12 +1749,23 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
 
 type Met =
   | { g: number }
-  | { bs: number[]; box: number[]; shape: TodayShape | null; kind: number | undefined; ground: boolean }
+  | {
+      bs: number[]
+      box: number[]
+      shape: TodayShape | null
+      kind: number | undefined
+      ground: boolean
+      tall?: number
+      parts?: { bs: number[]; lo: number; hi: number }[]
+    }
 /** a text's met ink with the pieces of one fill as one: boxes of fill alone (no stroke) each holding a stretch of the text's
  *  glyphs, the stretches consecutive in its order, no glyph of it between them, are one tone under the stretches joined, judged
  *  whole: a highlight a package sets word by word, the pieces touching (2610.40576v1 p17) or a word space apart and each as
  *  tall as its word (2411.13093v4 p19's option D), is the text's ground, not each word's decoration. Pieces joined are of one
- *  kind, a tone under the text (`ground`) or ink over it */
+ *  kind, a tone under the text (`ground`) or ink over it; `tall`, the tallest piece's height: the tone is a line tall where each
+ *  piece is, its pieces on two rows of a text or one (a chip broken with its word over a path's rows, 2608.06701v1 p1's
+ *  "`lib/…/__init_|_.py`", read as one tone two rows tall); `parts`, each piece's boxes and the places of its stretch in the
+ *  text's order (an element a row, judge) */
 function fillsJoined(items: readonly TodayMet[], textGs: readonly number[], glyphs: readonly G[]): Met[] {
   const at = new Map(textGs.map((g, i) => [g, i]))
   const out: Met[] = []
@@ -1768,15 +1805,24 @@ function fillsJoined(items: readonly TodayMet[], textGs: readonly number[], glyp
     else out.push({ bs: [it.b], box, shape: it.shape, kind: it.kind, ground })
   }
   pieces.sort((x, y) => x.lo - y.lo || x.hi - y.hi)
-  const joined: typeof pieces = []
+  const joined: ((typeof pieces)[number] & { tall: number; parts: { bs: number[]; lo: number; hi: number }[] })[] = []
   for (const p of pieces) {
     const q = joined.find((j) => j.ground === p.ground && j.hi + 1 === p.lo)
+    const part = { bs: [...p.bs], lo: p.lo, hi: p.hi }
     if (!q) {
-      joined.push({ ...p, shape: { ...p.shape, segs: Array.from(p.shape.segs) } })
+      joined.push({
+        ...p,
+        bs: [...p.bs],
+        shape: { ...p.shape, segs: Array.from(p.shape.segs) },
+        tall: p.box[3]! - p.box[1]!,
+        parts: [part],
+      })
       continue
     }
     q.bs.push(...p.bs)
     q.hi = p.hi
+    q.tall = Math.max(q.tall, p.box[3]! - p.box[1]!)
+    q.parts.push(part)
     q.box = [
       Math.min(q.box[0]!, p.box[0]!),
       Math.min(q.box[1]!, p.box[1]!),

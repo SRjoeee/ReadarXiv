@@ -6061,6 +6061,17 @@ was that it may stay the original's where the highlight forces it.
   translation; a HOLD risks only that a line stays in the original, so the pairing test that is too weak to join is enough to
   hold. The author's phrase as a unit (the figure-text research's P1, the PDF's paragraph marks and a list's items, after the
   cut-over) replaces this pairing when it comes: the pairing is not to be grown for this purpose.
+- **However a path's rows were joined** (lane fig-rows, 2026-11-14). The pairing is read over every line of the page, the lines
+  §18.36's container step made texts of too (read apart from them: `figureParas` with `labelsOnly`, no paragraph made), so
+  that a label is the same lines whatever texts its rows became, and the hold reaches every text holding one of them. The
+  pairing is not grown: it reads the lines it read before the container step took any (a page where that step takes no line
+  is read once, as before). 2608.06701v1 p1's plan box, its items each one text of their rows since §18.36's flush rows take
+  items: item 2's rows a path joins into three texts and item 3's into two, the code word on its chip in one of each, every
+  text of both items held whole as before. A tone made of pieces over a line break (a chip broken with its word over two rows,
+  item 2's "`lib/…/__init_|_.py`"; a highlight over the end of one row and the start of the next) is a line tall where each
+  piece is (`fillsJoined`'s `tall`, the tallest piece), not by its pieces' joined box two rows tall, and it makes an element on
+  each row it holds, of that row's stretch and its own pieces (`parts`): an element is ink of one line, as each row read alone
+  makes it. Read by the joined box, the join had taken the word's `cite` and sent the text with the word broken in two.
 - **A word: a letter in it.** The hold exists to prevent a half-original line. A decorated token with no letter (a number, a
   symbol) makes none and stays an element in the translated line as before. The condition is the engine's one predicate,
   `holdsLetter` (`figure-lines.ts`, Unicode's letter), which already tells a figure's decorated word (`cite`) from a decorated
