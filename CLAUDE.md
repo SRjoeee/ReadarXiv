@@ -1,6 +1,6 @@
 # CLAUDE.md — Read arXiv
 
-Read arXiv is a bilingual arXiv reader. This repository holds the Chrome extension (MV3): the in-place translator of `https://arxiv.org/html/*` (structure-preserving, reversible, made for long reading sessions) and the bilingual PDF reader; and the PDF reader's engine (`src/pdf-reader/engine/`), which the website (readarxiv.com, the private repository `readarxiv-web`) pins as a submodule, with the engine's gates in `lab/pdf/`. Display name **Read arXiv**; repository `ReadarXiv`; everything the extension injects is prefixed `axt-` / `data-axt-` / `--axt-`.
+Read arXiv is a bilingual arXiv reader. This repository holds the Chrome extension (MV3): the in-place translator of `https://arxiv.org/html/*` (structure-preserving, reversible, made for long reading sessions) and the bilingual PDF reader. The PDF reader's engine is the rebuilt one in the workspace packages (`packages/engine`, the prepare, beside `packages/format`, `packages/typeset`, `packages/translate` and `packages/reader`), with today's engine in `src/pdf-reader/engine/` until the cut-over and the gates of both in `lab/`; the website (readarxiv.com, the private repository `readarxiv-web`) pins this repository as a submodule. Display name **Read arXiv**; repository `ReadarXiv`; everything the extension injects is prefixed `axt-` / `data-axt-` / `--axt-`.
 
 ## Where the truth lives
 

@@ -92,7 +92,7 @@ pages: popup · options · gallery (dev)     abstract-page script     │   cont
 | `src/core/run`, `src/core/session` | The ledger both runs share; the page session (§4.3, §4.4) |
 | `src/core/abstract` | The bilingual link on the abstract page (§4.0b) |
 | `src/pdf-reader` | The bilingual PDF reader in the extension: its two hosts (`host/`: today's session on the engine's reading view, and the reader package's `Host`), its controller, today's engine (`engine/`), the recogniser's bridge and its interface (`ui/`); how it meets the extension is §16, its interface design is `docs/PDF-READER.md` |
-| `packages/format`, `packages/engine`, `packages/typeset`, `packages/translate`, `packages/reader`, `packages/text` | The rebuild's workspace packages, each entered as `@readarxiv/<name>` (`packages/README.md`): the bundle's schema; the prepare (`prepareBack`); the typesetter's two pure functions; the translator contract, its adapters and the chain (§8); the reader (`openReader`, §16); the sentence cuts |
+| `packages/format`, `packages/engine`, `packages/typeset`, `packages/translate`, `packages/reader`, `packages/text` | The rebuild's workspace packages, each entered as `@readarxiv/<name>` (`packages/README.md`): the bundle's schema; the prepare (`prepareBack`); the typesetter (`layPage`); the translator contract, its adapters and the chain (§8); the reader (`openReader`, §16); the sentence cuts |
 | `lab/pdf` | The gates and measurements of the reader's engine and their records, never built or shipped (`lab/pdf/README.md`) |
 | `lab/release-check` | `pnpm release-check`: every gate of a tier run as it exists, one report with a GO or NO-GO per invariant (§11); the CI tiers' plan (`lab/release-check/CI.md`) |
 | `parked` | Code and records the product no longer uses, kept for their history (`parked/README.md`) |
@@ -1027,11 +1027,13 @@ only how it meets the rest of the extension.
   `today` (`AXT_READER=today pnpm build`) is the session the bullets below describe (`session/`, the engine's reading view,
   our server's v1 layer): the reader the released extension (0.5.2) reads with, built and tested until the cut-over removes
   it; going back is that one build setting.
-- **The typesetter** (`@readarxiv/typeset`) is two pure functions of data and the translated text: `layFlowPrepared(members,
-  rules)` lays a flow's members in order, each that continues the one before it on a shared line starting where that one
-  ends; `layPagePrepared(page, flows, ties, rules)` lays one page from its own part alone — its flows, its table groups
-  (drawn whole or not at all), the page's fill — and gives what is drawn, line by line. No DOM, no clock and no pixel is
-  read: widths come from a metrics table (`tableMetrics`), so the same inputs give the same display list
+- **The typesetter** (`@readarxiv/typeset`) is pure functions of data and the translated text. Its entry, the one the reader
+  calls, is `layPage(part, rows, rules, metrics)` (`packages/typeset/src/lay/entry.ts`): one page laid from its own part
+  alone and the rows by unit id, giving what is drawn, line by line. Under it, `layFlowPrepared(members, rules)` lays a
+  flow's members in order, each that continues the one before it on a shared line starting where that one ends, and
+  `layPagePrepared(page, flows, ties, rules)` lays the page's flows, its table groups (drawn whole or not at all) and the
+  page's fill. No DOM, no clock and no pixel is read: widths come from the metrics it is given (a table in the tests,
+  `tableMetrics`), so the same inputs give the same display list
   (`packages/typeset/tests/replay/purity.test.ts`), and a unit is laid alike by every page's lay that holds it (the lay of a
   page runs the fill of the first page of each member on it too: `lab/typeset/gate-l1.mjs --entry` compares them,
   PDF-READER §18.54); the gates measure what the product runs (`lab/typeset/gate.mjs` over today's members,
