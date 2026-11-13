@@ -95,13 +95,16 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       # The merge base first: its worktree is there before any pack is restored, because each side of the measurement runs on the
-      # pack its own commit names (below). The merge base is a commit of the base branch, reviewed history, not the pull request's code
+      # pack its own commit names (below). The merge base is a commit of the base branch, reviewed history, not the pull request's code.
+      # It gets an install of its own, from the store the install above filled: a workspace's links are relative
+      # (node_modules/@readarxiv/engine -> ../../packages/engine), so a node_modules borrowed from the pull request would load the pull
+      # request's packages into the base's run
       - name: Merge base
         run: |
           base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
           echo "BASE_COMMIT=$base" >> "$GITHUB_ENV"
           git worktree add --detach "$RUNNER_TEMP/base" "$base"
-          ln -s "$PWD/node_modules" "$RUNNER_TEMP/base/node_modules"
+          pnpm -C "$RUNNER_TEMP/base" install --frozen-lockfile --prefer-offline
       # The packs, one for each side: a pack is made by an engine (its layout files are that engine's), and a pull request that moves
       # the layout file re-makes it, so the merge base's engine cannot read the pull request's pack. Each commit's own
       # lab/pdf/gate-pack.json names the pack its own engine reads: the pull request's, and the merge base's, which is restored by

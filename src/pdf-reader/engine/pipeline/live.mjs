@@ -3,8 +3,17 @@
 // deletes this file.
 import { inAuthorBlock, lastTexLog } from '../source/latex-front.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
-import { auxLines, closed } from '@readarxiv/engine/today/compile/live.mjs'
-export { stoppedShort, ranThrough, DRAFT_OPTION, NO_DRIVER_GROUP, listsMissing, notFound, openPaper, bblProvides, probeFiles, markedPreamble, originalFiles } from '@readarxiv/engine/today/compile/live.mjs'
+import { nameCells } from '../translate/mt.mjs'
+import { auxLines, closed, openPaper as openSource } from '@readarxiv/engine/today/compile/live.mjs'
+export { stoppedShort, ranThrough, DRAFT_OPTION, NO_DRIVER_GROUP, listsMissing, notFound, bblProvides, probeFiles, markedPreamble, originalFiles } from '@readarxiv/engine/today/compile/live.mjs'
+
+/** a paper as today's reader keeps it: the engine package's (compile/live.mjs openPaper), and `kept`, the units today's name rule
+ *  keeps as the original (translate/mt.mjs nameCells: a table's cell or a figure text of names or markup tokens alone). The rebuilt
+ *  engine keeps no unit by its words (the owner, 2026-11-13: a table's cell is text like any other; the translator decides a
+ *  name); this path keeps its rule until the cut-over deletes it */
+export const withNames = paper => ({ ...paper, kept: nameCells(paper.units) })
+/** a paper's files (Map path → bytes) → today's paper (withNames over the package's openPaper) */
+export const openPaper = files => withNames(openSource(files))
 
 /** the lines of a compile's last TeX pass that the readings keep: each unit's lines and the document's end (typeset/tex.mjs
  *  readLines, completeLog), the letters it could not set */

@@ -49,9 +49,12 @@ export function gatePair(pair: string, o: { metricsOf?: (pair: string) => Metric
   }
   // (each crop given its piece, which the tokens file does not record: today's crop.k, the round's U.elements slot)
   pieceCrops(pair, new Map([...members].map(([o, m]) => [o, { tokens: m.tokens } as never])))
+  // (today's groups as its ledger settled them, and today's settleGroup: a group withheld whole for any cell it cannot draw,
+  // every cell of it stated spanning, which settleTies so withholds; the entry holds a group for a spanning cell alone)
   const ties = ((L as unknown as { settles?: { ids: number[] }[] }).settles ?? []).map((s) => ({
     rule: 'cells' as const,
     cells: s.ids,
+    spanning: s.ids,
   }))
   const onPage = new Map<number, FlowMember[]>()
   for (const m of members.values())

@@ -1,7 +1,8 @@
 // layPage's composition over prepared flows (design-b §1.6 L8-L11, E1): every flow of the part laid (L8, layFlow), each laid
 // member's fill leadings with it (L9); then each pass page the page reads, ascending (its own and the first page of every
 // member with a line on it: design-a §1.3), filled over the members with a line there in stream order (L10, S.fill.page's
-// pass); the table groups settled (L11, S.table.settle: a group on two pages or with a cell unfit is withheld whole); the
+// pass); the table groups settled (L11, S.table.settle: a cell unfit withheld alone, its group whole where it spans; a group on
+// two pages withheld whole); the
 // page's members as drawn (E1, D.display). Pure: the flows are laid anew on each call, nothing is kept between calls.
 import { type DisplayLine, displayLines } from '../emit/display.ts'
 import type { PageRules } from '../shared/fill-page.ts'
@@ -76,9 +77,10 @@ const pastBottom = (L: Layout, blocks: readonly FitBlock[]) =>
  *  of TeX's the front end cut at a float, a figure's set). A figure's set states the scale its members S.figures sets are drawn
  *  at (`least`: one size a group, the figure texts the paragraph path lays capped at it too) and its floor (`floor`: the set's,
  *  S.figures' floorMin, which a set shrinks to as one) */
-export type PageTie =
-  | { rule: 'cells'; cells: readonly number[] }
-  | { rule: 'size'; ords: readonly number[]; least?: number; floor?: number }
+export type PageTie = CellTie | { rule: 'size'; ords: readonly number[]; least?: number; floor?: number }
+/** a table group as the page settles it: its members' ords, and those of them whose box is the others' too (`spanning`: one
+ *  the part's tie states spanning, or whose grid place spans columns), which hold the group where they cannot be drawn */
+export type CellTie = { rule: 'cells'; cells: readonly number[]; spanning?: readonly number[] }
 
 /**
  * Page `page` laid from its part's flows (each member prepared), its ties, the rules: design-b's L8-L11 and E1. The members of a
@@ -97,7 +99,7 @@ export function layPagePrepared(
   R: RuleParams,
   trace = false,
 ): PreparedPage {
-  const cells = ties.filter((t): t is Extract<PageTie, { rule: 'cells' }> => t.rule === 'cells')
+  const cells = ties.filter((t): t is CellTie => t.rule === 'cells')
   const first = layPageTied(page, flows, cells, R, trace)
   const sizes = ties.filter((t): t is Extract<PageTie, { rule: 'size' }> => t.rule === 'size')
   if (!sizes.length) return first
@@ -255,7 +257,7 @@ function tieStated(
 function layPageTied(
   page: number,
   flows: readonly (readonly FlowMember[])[],
-  ties: readonly { rule: 'cells'; cells: readonly number[] }[],
+  ties: readonly CellTie[],
   R: RuleParams,
   trace: boolean,
 ): PreparedPage {
@@ -312,13 +314,13 @@ function layPageTied(
 }
 
 type Lay = { m: FlowMember; unit?: PassUnit; state: 'laid' | Unlaid; slots: LedgerSlot[]; error?: string }
-/** L11, S.table.settle: each table group decided by one verdict for its members (RUN:2401-2425); a group a member of which is
- *  not laid by its own lay (its flow threw: 'error'; refused) is left the original's whole, every cell with it; a group the
- *  call holds no member of is not this page's. Its members' states set in `lays` */
-export function settleTies(
-  ties: readonly { rule: 'cells'; cells: readonly number[] }[],
-  lays: ReadonlyMap<number, Lay>,
-): PreparedPage['tables'] {
+/** L11, S.table.settle: each table group's verdict over its members (RUN:2401-2425, tableSettle). A cell its own lay could not
+ *  draw whole (its flow threw: 'error'; refused; clipped, then 'unfit') is the original's by itself, the group's other cells laid,
+ *  as a paragraph's would be (the coordinator's ruling (c) of 2026-11-13); the group is withheld whole, every cell with it,
+ *  where the geometry needs it: such a cell spans (its box the others' too), or the group lies on two pages (its first page
+ *  would be painted before its last is laid). A group the call holds no member of is not this page's. Its members' states set
+ *  in `lays` */
+export function settleTies(ties: readonly CellTie[], lays: ReadonlyMap<number, Lay>): PreparedPage['tables'] {
   const tables: PreparedPage['tables'] = []
   for (const t of ties) {
     const cells = t.cells.map((o) => lays.get(o)).filter((x) => x !== undefined)
@@ -328,11 +330,15 @@ export function settleTies(
       cells.map((x) => ({ pages: x.m.pages, refused: x.state !== 'laid', clipped: !!x.unit?.layout.clipped })),
     )
     tables.push({ cells: [...t.cells], why })
-    if (why)
-      for (const x of cells) {
-        if (x.state === 'laid') x.state = 'cells'
-        x.unit = undefined
-      }
+    if (!why) continue
+    const unfit = (x: Lay) => x.state !== 'laid' || !!x.unit?.layout.clipped
+    const spans = new Set(t.spanning ?? [])
+    const whole = why === 'on two pages' || cells.some((x) => unfit(x) && spans.has(x.m.ord))
+    for (const x of cells) {
+      if (!whole && !unfit(x)) continue
+      if (x.state === 'laid') x.state = whole ? 'cells' : 'unfit'
+      x.unit = undefined
+    }
   }
   return tables
 }
@@ -341,7 +347,7 @@ export function settleTies(
 function layPageOnce(
   page: number,
   flows: readonly (readonly FlowMember[])[],
-  ties: readonly { rule: 'cells'; cells: readonly number[] }[],
+  ties: readonly CellTie[],
   R: RuleParams,
   trace: boolean,
   failed: ReadonlyMap<number, { m: FlowMember; why: string }> = new Map(),

@@ -69,11 +69,11 @@ export type Token = {
   at?: number
   end?: number
   space?: true
-  /** a space no line breaks at: a tie's, the source's `~` (TeX's \penalty10000 and its interword glue): break.mjs's group runs
+  /** a space no line breaks at: a tie's, the source's `~` (TeX's \penalty10000 and its interword glue): break.ts's group runs
    *  on through it; the space is drawn and stretched with the line's other spaces */
   tie?: true
   /** set right after the token before it with nothing between, two elements the source sets side by side (consecutive pieces of
-   *  its unit) and the row too: one word, glued, and the gap before it inside the word (break.mjs inWord: no slack, no squeeze) */
+   *  its unit) and the row too: one word, glued, and the gap before it inside the word (break.ts inWord: no slack, no squeeze) */
   tight?: true
   keep?: true
   crop?: Record<string, unknown>
@@ -96,6 +96,16 @@ export type Token = {
    *  line, `pad` the distance TeX set from its rectangle's right edge to its line's right edge (the slot's, PDF units), a break
    *  before it, kept off the line's text by `gap` (the original line's own distance to its ink) and half an em at most */
   endMark?: { pad: number; gap: number }
+  /** a frame break (B.cuts withPageBreaks: its page, the unit's block its frame begins with, a cut of the frames' share only) */
+  pageBreak?: number
+  frame?: number
+  share?: true
+  /** a unit's own label carried to its first line's start (lay/adapt.ts, the row's label crop) */
+  ownLabel?: true
+  /** a part of a URL cut at its break points: the token cut (B.break urlCut) */
+  of?: Token
+  /** a word's head cut at a hyphenation point, its hyphen set (B.break) */
+  hyphenated?: true
 }
 /** a resolution as the tokens read it (U.elements' with the later rules' fields) */
 export type TRes = {
@@ -470,7 +480,7 @@ export function tokens(i: TokensInput): Tokens {
   const minWord = P.hyphenation.minWord
   const cjkRe = cjkClassRe(cjkQuotes)
   const kinsoku = kinsokuOf(P.noStart, P.noEnd)
-  /** a character no line opens with: UAX 14's (no-start.mjs) or the target's rules' (P.noStart): break.mjs `barred`'s */
+  /** a character no line opens with: UAX 14's (no-start.mjs) or the target's rules' (P.noStart): break.ts `barred`'s */
   const barredChar = (ch: string) => noStart(ch) || kinsoku.starts(ch)
   const lastIsSpace = () => tokens.length > 0 && !!tokens.at(-1)!.space
   /** the space tokens a chunk of white space made that holds more than ordinary collapsible white space (space, tab, line

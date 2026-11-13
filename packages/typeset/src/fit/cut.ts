@@ -1,7 +1,7 @@
 // X.cut (design-b §1.5, T23): a unit laid over its frame breaks, kept where it fits at its plain layout's state. Ported from
 // engine 065c1d973 layer2.mjs layoutCut L2:3944-3962 (moved first as JavaScript by lab/typeset/move-fit.mjs, now
 // TypeScript), held by the walk's, the chain's and the fill's replays on the corpus.
-import { pageCutsOf, withPageBreaks } from '../breaker/cuts.types.ts'
+import { pageCutsOf, withPageBreaks } from '../breaker/cuts.ts'
 import { layoutAt } from './at.ts'
 import type { FitBlock, FitParams, Layout, Tokens } from './types.ts'
 import { layoutUnit2 } from './walk.ts'

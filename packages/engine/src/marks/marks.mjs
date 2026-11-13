@@ -104,10 +104,14 @@ const MOVED = PUNCT
  *  opening mark alone (LOOKS_AHEAD), but one that reads nothing past its arguments, which the probe asks about too) */
 const ASKED = new Set(['cite', 'ref', 'eqref', 'url', 'footnote'])
 /** the commands asked about at most, a paper; and of the paper's macros that read nothing past their arguments, apart (a
- *  paper may set its every number by one: 2610.21098 calls 316), each source at most COMPLETE_SRC_MAX long */
+ *  paper may set its every number by one: 2610.21098 calls 316), each source at most COMPLETE_SRC_MAX long. Counts of
+ *  commands: COMPLETE_PROBE_MAX is past that paper's 316, PROBE_MAX is unmeasured */
 export const PROBE_MAX = 16, COMPLETE_PROBE_MAX = 512
+/** a probed macro's source, and the placeholder's after it, at most, UTF-16 code units (the look-ahead pair's key holds
+ *  each within it); unmeasured */
 const COMPLETE_SRC_MAX = 200
-/** the pairs of a paper's macro and the placeholder right after it the probe asks about at most, a paper (aheadSamples) */
+/** the pairs of a paper's macro and the placeholder right after it the probe asks about at most, a paper (aheadSamples): a
+ *  count of pairs (PDF-READER §19.7); unmeasured */
 export const AHEAD_PROBE_MAX = 128
 /** the classes of a placeholder after a paper's macro the probe asks about (aheadSamples): those the maker cannot find
  *  with no mark of their own (a paper's macro is found by the text TeX sets for it, a display is set in no box of a line) */
@@ -433,7 +437,8 @@ export function readInkProbe(log, samples) {
   return out
 }
 
-/** a macro's text as the ink section shows it set, at most */
+/** a macro's text as the ink section shows it set, at most, UTF-16 code units: a sample past it is not stated (PDF-READER
+ *  §18.51); unmeasured */
 export const INK_TEXT_MAX = 64
 /** what a lead's text holds for a glyph of a formula's whose character it does not spell (readInkTexts): one glyph, whatever its
  *  text — U+FFFC, the object replacement character, which no glyph of TeX's text is */
@@ -1841,7 +1846,7 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
   const at = new Map([...index, ...copies.map((c, i) => [c, i])])
   return { units: copies, mark: u => (at.has(u) ? own(units[at.get(u)]) : null) }
 }
-/** the paper's macros a marking takes for reading nothing past their arguments, at most */
+/** the paper's macros a marking takes for reading nothing past their arguments, at most: a count of macros; unmeasured */
 export const COMPLETE_MAX = 4096
 /** of the paper's complete macros (latex-front.mjs completeMacros, [name, arity]), those its units call as placeholders,
  *  as the marking records them: an object by name, at most COMPLETE_MAX, the first by name; null for none given */

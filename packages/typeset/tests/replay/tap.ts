@@ -48,7 +48,7 @@ function underALine(blocks: readonly { free?: unknown; pitch0?: unknown }[], s: 
 /**
  * Whether a unit's round borrowed room under its lines, as today's walk laid it: its fit's state, or a state of one of its runs,
  * took the borrow knob (`borrow` above 0). Option (i), the owner's of 2026-11-10 (the gap under a paragraph that borrows room
- * measured from the borrow's limit, slots.mjs floorOver), moves such a unit's fill leadings (S.fill.leads) and none other's: a
+ * measured from the borrow's limit, slots.ts floorOver), moves such a unit's fill leadings (S.fill.leads) and none other's: a
  * replay that differs there in them alone is the ruling's (round.ts `L9 (i)`)
  */
 export function borrowsAt(pair: string, ord: number, round: number): boolean {
@@ -72,7 +72,7 @@ export function onPagesOf(pair: string, ords: ReadonlySet<number>): { pages: Set
 }
 /** whether a round's tokens hold an item that continues its word (B.tokens' pushText: `brk`, a piece after a break point inside a
  *  word, a URL's after its `/`; `cont`, a run of one case of a word), where lane literal-fixes' rule (no glue inside a word:
- *  breaker/break.mjs gapsOf, read by placeItems and the breaker's squeeze) spreads a line's slack or squeeze over fewer gaps
+ *  breaker/break.ts gapsOf, read by placeItems and the breaker's squeeze) spreads a line's slack or squeeze over fewer gaps
  *  than today's did */
 export const inWordOf = (tokens: readonly unknown[]): boolean =>
   tokens.some((t) => !!(t as { brk?: unknown }).brk || !!(t as { cont?: unknown }).cont)
@@ -163,7 +163,7 @@ export function ownStyleUnread<R extends { get(k: number): unknown }>(prep: R): 
 const flooredOf = new Map<string, { floored: Set<number>; pages: Set<number>; units: Set<number> }>()
 /**
  * What the gap ruling of 2026-11-08 (the gap under a paragraph held to its own leading alone, never the next paragraph's:
- * fill-page.ts, slots.mjs footFloorAt) changes of a pair's record: the units a pass of today's decided with the next
+ * fill-page.ts, slots.ts footFloorAt) changes of a pair's record: the units a pass of today's decided with the next
  * paragraph's leading over its own (`floored`: the decision's `next` above its `lead`, which today's state carried), the pages
  * of those passes (`pages`), and every unit with a line on one of them (`units`: the pass's size reads every body unit it
  * fills, and one no longer set closer may be short of its fill). A replay of a page or of a fill that differs there is the

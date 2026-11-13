@@ -917,7 +917,7 @@ async function drawsOf(name) {
   if (!DRAWS.has(pdf)) {
     DRAWS.set(pdf, (async () => {
       const script = join(GATE, 'draws.mjs')
-      const reading = ['pipeline/draw-data.mjs', 'pipeline/memory.mjs', 'layer-proto/draw.mjs', 'layout/json.mjs', 'layout/pdf-lite.mjs', 'layout/fills.mjs', 'layout/ink.mjs'].map(f => join(ENGINE, 'src/pdf-reader/engine', f)).map(f => (existsSync(f) ? f : join(ENGINE, 'packages/engine/src', f.split('/').pop()))).filter(f => existsSync(f))
+      const reading = ['pipeline/draw-data.mjs', 'pipeline/memory.mjs', 'layer-proto/draw.mjs', 'layout/json.mjs', 'layout/pdf-lite.mjs', 'layout/fills.mjs', 'layout/ink.mjs'].map(f => join(ENGINE, 'src/pdf-reader/engine', f)).map(f => (existsSync(f) ? f : join(ENGINE, 'packages/engine/src', f.split('/').pop()))).map(f => (existsSync(f) ? f : f.replace(/\.mjs$/, '.ts'))).filter(f => existsSync(f))
       const key = sha256([fileSha(pdf), ...reading.map(fileSha), fileSha(script), readJson(join(PDFJS, 'package.json')).version].join('|')).slice(0, 24)
       const dir = join(ROOT, 'out/layer-gate/draws'), file = join(dir, `${key}.json`)
       if (!existsSync(file)) {

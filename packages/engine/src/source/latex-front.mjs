@@ -7,7 +7,7 @@
 // are Uint8Arrays.
 
 // ---------------------------------------------------------------- files and bytes
-import { isMemoryError } from '../memory.mjs'
+import { isMemoryError } from '../memory.ts'
 import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, labelRequestsOf, loads, noteAttachOf, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from './arg-roles.mjs'
 import { symbolText, TEXT_SYMBOLS } from './text-symbols.mjs'
 import { DECLARATION_WORDS, selectsArgument } from './tex-kernel.mjs'
@@ -107,14 +107,19 @@ function tieNotes(made, name, key, b, outer) {
   } else if (attach) for (const u of made) u.ofLabel = `${attach.slice(6)}:${key ?? ''}`
 }
 /** an author command's argument (frontBlock's, of names): the labels it requests (labelRequestsOf: \\corref{a,b} asks for
- *  `cor:a` and `cor:b`), outside comments, into `requested` */
-function requestsIn(s, from, to, requested) {
+ *  `cor:a` and `cor:b`), into `requested`. Read as TeX reads it (texCommands, as the preamble's front matter is): a request in a
+ *  comment, in a branch TeX skips (\\iffalse … \\fi, \\iftrue's \\else, a \\newif set false) or in a definition's body is none;
+ *  nor is one in a conditional whose branch the source cannot tell (\\ifdefined: `sure`), so that a note is the block's only
+ *  where an author surely asks for it (an orphan is body, as LaTeXML drops it). Read in the raw text, \\author{A\\iffalse
+ *  \\corref{x}\\fi} asked for `cor:x` (the review of #641) */
+function requestsIn(s, from, to, requested, ctx) {
   const reqs = labelRequestsOf(paper?.bindings ?? null)
   if (!reqs.size) return
-  for (const m of s.slice(from, to).matchAll(/\\([A-Za-z]+)\s*\{([^{}]*)\}/g)) {
-    const prefix = reqs.get(m[1])
-    if (!prefix || inComment(s, from + m.index)) continue
-    for (const k of m[2].split(',')) requested.add(`${prefix}:${k.trim()}`)
+  for (const c of texCommands(s, { from, to, lineEnvs: ctx.lineEnvs, ifs: ctx.ifs, ifValues: ctx.ifValues })) {
+    const prefix = reqs.get(c.name)
+    if (!prefix || c.inDef || !c.sure) continue
+    const arg = /^\s*\{([^{}]*)\}/.exec(s.slice(c.end, to))
+    if (arg) for (const k of arg[1].split(',')) requested.add(`${prefix}:${k.trim()}`)
   }
 }
 /** the letters of a text as two labels of a name are compared (LaTeXML's CleanLabel: a creator's `fuzzy` label its name) */
@@ -2051,7 +2056,7 @@ function frontEnds(s, from, to, ifs = new Set(), rowEnds = null) {
 function frontBlock(s, from, to, b, ctx, role = 'names', call = null) {
   // (an author command's argument, whoever calls it: a note in it is the block's, tieNotes; the labels a creator's text requests)
   if (b.within !== 'author') return inFront(b, 'author', () => frontBlock(s, from, to, b, ctx, role, call))
-  if (role === 'names' && ctx.requested) requestsIn(s, from, to, ctx.requested)
+  if (role === 'names' && ctx.requested) requestsIn(s, from, to, ctx.requested, ctx)
   const callAt = call ? calledAfter(s, call, ctx) : undefined
   if (/(^|[,{\s])[A-Za-z]+\s*=\s*\{/.test(s.slice(from, to))) { if (role === 'places') frontValues(s, from, to, b, ctx); else frontNotes(s, from, to, b, ctx); return }
   // the notes, wherever they are in the argument (as frontNotes finds them), and the rows' and blocks' ends at its top level

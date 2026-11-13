@@ -41,20 +41,21 @@ is the maintainer's machine's alone; where it is absent the gates run directly. 
 | `test` (vitest, 566 files, 9,075 tests) | 146 s | in `check` |
 | `contract` (tests/contract: 2 files, 98 tests) | 1 s | in `check` (inside `pnpm test`) |
 | `census` (lab/release-check/census.mjs: the complexity and debt census, design §7's census rows; measured 2026-11-12 at `75602aecb`) | 6 s this tree alone; 20 s with today's engine and the website's two trees (its profile in the lab's notes) | in `check`, this tree alone: `node lab/release-check/census.mjs --no-today`; judged by its ratchet (census-ledger.json): a measure above the last integrated round's value fails, naming the entries that added to it; the measures that need the website's tree (AFTER, dead modules and exports, ported files reached) are skipped there with their reason |
-| `harness` (packages/reader/e2e/run.mjs: 49 checks) | 109 s | about 4 min |
+| `harness` (packages/reader/e2e/run.mjs: 49 checks at `13216ac44`, 82 at `cee3bd8f9`) | 109 s | about 4 min |
 | `e2e:small-caps` (three browsers) | 46 s | about 1.5 min |
-| `e2e:reader` (158 checks) | 177 s | about 6 min |
+| `e2e:reader` (158 checks at `13216ac44`, today's reader's; since the extension reads through the rebuilt reader by default, 81 on the default build: `tests/e2e/reader-v2.mjs` and `reader-v2-layer.mjs`; today's 159 run in the full tier, `e2e:reader-today`) | 177 s | about 6 min |
 | `e2e:framing` (22) | 65 s | about 2 min |
 | `e2e:a11y` (15) | 44 s | about 1.5 min |
 | `e2e:viewer` (20) | 6 s | under 1 min |
-| `e2e:registration` (84) | 55 s | about 2 min |
+| `e2e:registration` (84 at `13216ac44`, today's reader's; on the default build `tests/e2e/registration-v2.mjs`, the rebuilt reader's; today's in the full tier, `e2e:registration-today`) | 55 s | about 2 min |
 | the three jobs | 11 min in all, serial | `check` 5–8 min (measured), `reader` about 7 min, `extension` about 14 min with install and browsers: 14 min a pull request's wall clock, about 28 min of runner time |
 
 **Not green at `13216ac44`: `e2e:small-caps`.** Its page loads today's layer modules from the tree as they are, in the
 browser, and since stage 1a (29df59fff, b94bca203: `pageInk`, `wrapOf` and `planOf` moved into `packages/engine`) today's
 layer imports `@readarxiv/engine` by its bare name, which a page without a bundler cannot resolve ("Failed to resolve module
 specifier"): the page never reports ready and the script times out. Every other gate of the tier passes. The fix is the
-script's (a bundle of what its page loads), and the `reader` job is turned on after it.
+script's (a bundle of what its page loads), and the `reader` job is turned on after it. Fixed since `38c9062b8` (the page's import
+map resolves the packages the engine imports by name, `lab/pdf/packages-route.mjs`).
 
 **Rules gate** (exists: `.github/workflows/rules-gate.yml`, path-filtered on today's engine): unchanged until today's
 engine is deleted at the cut-over.
@@ -72,15 +73,24 @@ maintainer's machine, registered to this repository alone, with labels `self-hos
   (a corpus run writes about 400 MB; the corpus runners refuse a paper under 12 GiB free, and release-check reports such a
   gate as skipped, never passed). The report is the run's artifact; the run fails on NO-GO.
 - **Inputs**: `$AXT_LAB_DATA/refactor-2026-11/` (`baseline/`: the frozen dumps, `acceptance.json`, the tap;
-  `lanes/L1-papers88.tsv` and the compile caches, partly on the external disk: the corpus the integration round's stage 1a
-  runs, with its flags (`--prove`, `--baseline` = the baseline's prepare dumps), a run and its twin alike. The caches are
-  `RELEASE_CHECK_CACHES` (a list of directories, or a corpus run's `flags.txt`, whose `--caches=` line is the chain that run
-  read), else `lanes/L1-caches88.txt`: a round whose marks move fills new compiles into a directory of its own, and the list
-  must name it, or every paper is "missing a compile" (exit 3; at `75602aecb` all 87, the list predating the rounds' chain);
-  `lanes/L3/replay/`: the typesetter's derived inputs; `lanes/L6/capture.jsonl`: today's readers' replies; `lanes/L1-out4/`: the harness's corpus
-  bundles); today's engine at `065c1d973` checked out beside the worktree (`AXT_TODAY`); the release sweep's cache and the
-  reader's served faces, which the typeset runners read (`AXT_SWEEP_CACHE`, `AXT_FACE_TABLES`, `AXT_FACE_SLICES`);
-  Playwright's Chromium. No Docker (a compile no cache holds is a failed paper: exit 3).
+  `lanes/L1-papers88.tsv` and the added pairs' papers (`baseline/added/papers.tsv`, `lab/typeset/added.mjs`), written as
+  one list into the work directory (`papers.mjs`), and the compile caches, partly on the external disk: the corpus the
+  integration round's stage 1a runs, with its flags (`--prove`, `--baseline` = the baseline's prepare dumps), a run and its
+  twin alike. The caches are `RELEASE_CHECK_CACHES` (a list of directories, or a corpus run's `flags.txt`, whose `--caches=`
+  line is the chain that run read: at a round's head, the round's own run, whose chain names the added papers' compiles
+  too, e.g. `lanes/converge-8/r23d-two/flags.txt` at `cee3bd8f9`), else `lanes/L1-caches88.txt`: a round whose marks move
+  fills new compiles into a directory of its own, and the list must name it, or every paper is "missing a compile" (exit 3;
+  at `75602aecb` all 87, the list predating the rounds' chain; at `cee3bd8f9` the list is round B14's, so the full tier is
+  run with the round's `flags.txt`); `lanes/L3/replay/`: the typesetter's derived inputs; `lanes/L6/capture.jsonl`: today's
+  readers' replies; `lanes/cjk-punct/blast/pairs.txt`: the 90 pairs of the stored rows the rounds' reader gate walks;
+  `google-rows/ef6989debed1` and `lanes/converge-7/tools-b15/{google-rows.mts,rows-register.mjs}`: the lab's Google store
+  and the rounds' tools that read it through the tree's chain and lay the reader gate over it; `baseline/corpora/papers.json`:
+  the harness's corpus papers, opened from this run's bundles with this run's rows of them, `reader-parts`' Google rows);
+  today's engine at `065c1d973` checked out beside the
+  worktree (`AXT_TODAY`); the release sweep's cache and the reader's served faces, which the typeset runners read
+  (`AXT_SWEEP_CACHE`, `AXT_FACE_TABLES`, `AXT_FACE_SLICES`); Playwright's Chromium; for `perf-batch`, the website's tree its
+  reader is built in (`PERF_WEB`, a website worktree: its HEAD with this commit as `vendor/readarxiv`) and the round's box
+  image (`PERF_NEW_IMAGE`). Docker for `perf-batch` alone (a compile no cache holds is a failed paper: exit 3).
 - **Minutes**: 26 of the gates' own on this machine at `13216ac44` (below; the heavy slot's waits for other lanes' jobs left
   out), and 16 for `display` (measured at `a7a6e4097`); no hosted minute.
 - **Secret**: none. The job reads no network.
@@ -97,12 +107,27 @@ The translation equivalence counts a difference of a class the package's owners 
 `accepted`), and passes on the tool's own exit with no other disagreement: with those rows merged, its failure above is the
 class they name (the `#` of its own, 3 replies) and the gate passes.
 | `typeset-today` (today's members, the reader's differential) | 39 s: pass, 32,035 laid as the baseline, changed 12; I3 160, I4 0, I5 0 |
-| `typeset-parts` (this run's parts) | 40 s: fail at `13216ac44`, lost 1,416 ("not laid from L1's part", the converge lane's open work); I3 79, I4 0, I5 0; a page's lay p50 7.58, p90 20.66, p99 33.51 ms over 3,213 pages |
 | `sentence-cover` (this run's parts laid by the entry over the stored rows, the reading from the part: invariant I10; and I6 across the pages' lays, each unit begun on a pass page laid alike by every page's lay that holds it, the head pass's known cause counted apart) | 229 s: pass at `2d33bf467` over round 8 B5's parts, I10 0 in 4,767,634 pieces of 63,614 member-pages (123 pairs); `gate-l1.mjs --entry` under today's reading lays no entry and is refused |
-| `typeset-replays` (six replays) | 134 s: fail at `13216ac44`, fit and display on one pair (2610.21026v1-zh, a crop box the tap does not record); fill, emit, names, figures equal |
 | `typeset-data` (generated data, today's readings derived again, the lab's tests) | 7 s: pass |
-| `harness-lab` (the harness with five corpus papers) | 340 s: fail at `13216ac44`, 75 of 79: the text layer reads out of order on one page of each of four papers |
-| `display` (display ≥ today: no page worse than today's, a difference only where nearer the original; **a cut-over blocker**) | 16 min (v2's lay 15 s, the drawing 954 s for 344 pages with the machine shared, the verdict 10 s): fail at `a7a6e4097`, 326 of 344 pages worse than today's: the links (246 pages) and the highlight's sentence boxes (324) the entry does not state yet, and on 115 pages another measure (turned figure texts drawn upright 18 pages, lines across a rule or over a neighbour 16, sizes 36, anchoring 15, run-in gaps 11, translations missing 7 and figure texts 20) |
+| `reader-parts` (this run's parts laid by the entry over each rows store, the door's and Google's, the 90 pairs of the stored rows and the added pairs apart, as the round's reader gate: I3 read by ink, I4, I5; the page's layout, design §7) | about 12 min (two runs of about 5.5 min and the rows in 10 s, round RB1's fix round): see the lane note for the run at the head |
+| `harness-lab` (the harness with five corpus papers, laid from this run's bundles with this run's rows of them, `reader-parts`' Google rows; after `prepare` and `reader-parts`) | 559 s: pass over `46dd8fcdf` on round RB2b's bundles and Google rows, 130 of 130; given another run's rows (RB2a's), it stops in 3 s, "rows do not belong to these bundles: 54 of 358 units without a row" and the others'; given rows that lack a paper's file, it stops in 1 s, "no rows of this run for 2609.26457v1: expected …" (no paper laid from lane L1's data in their place, 2026-11-14) |
+| `build-today`, `e2e:reader-today`, `e2e:registration-today` (today's reader, the way back until the cut-over: a build of its own from this commit, `AXT_READER=today`, apart from the checkout; its own checks on it, refused where the build carries the rebuilt reader) | about 1 min of build and 4 min of browser checks: 159 of 159 at round RB1's head |
+| `display` (display ≥ today: no page worse than today's, a difference only where nearer the original; under the default options and with every switch on, as the round judges it; today's rows checked production's first, `lab/typeset/parity/production-rows.mjs`; **a cut-over blocker**) | 16 min (v2's lay 15 s, the drawing 954 s for 344 pages with the machine shared, the verdict 10 s): fail at `a7a6e4097`, 326 of 344 pages worse than today's: the links (246 pages) and the highlight's sentence boxes (324) the entry does not state yet, and on 115 pages another measure (turned figure texts drawn upright 18 pages, lines across a rule or over a neighbour 16, sizes 36, anchoring 15, run-in gaps 11, translations missing 7 and figure texts 20) |
+
+**Retired (2026-11-13, design 3i).** `typeset-parts`: its runner, under today's reading, lays only units whose id is
+today's, and the owner's rulings cut units otherwise on purpose: its losses counted the runner; `reader-parts` holds I3, I4
+and I5 as the reader draws, and "nothing lost" is held by `prepare-diff`, `display` and `sentence-cover`. `typeset-replays`:
+the replays compare internal passes with today's recorded ones, so every ruling would have to be taught to four readers the
+cut-over deletes, and a pass that differs is not a difference a reader sees; `display-wide` (release tier) asks the owner's
+question over every pair. Their reasons stand in `gates.mjs` (`RETIRED`), the report lists them, and naming one to `--only`
+says why. Their tools stay runnable in the lab until the cut-over deletes them with today's engine.
+
+**Today's rows are production's.** Today's side of the display gates lays the release's stored rows. Rows made by a lab
+replica of production's path stood in for production's on the two added pairs until 2026-11-13 (each unit's row, no
+`layerRows`: 11 rows production keeps were translated). So each display gate first checks, pair by pair, that production's
+own row path (today's engine's `layerRows` over the release's units and the stored rows) gives every stored row back, a
+kept row by its state (`production-rows.mjs`, about a second for 92 pairs); a pair whose rows it does not give back fails
+the gate, named, and the parity is still measured beside it.
 
 **Cut-over blockers.** The maintainer's base threshold for the refactor: v2's display equal to or better than the
 production site's, and performance, complexity and debt improved. `display` (`lab/typeset/parity/`, its README) is the
@@ -117,8 +142,11 @@ workerd, the routes' contract suite) runs on every pull request there, on its ow
 tier's report and does not run it.
 
 **Performance, every batch: `perf-batch`** (lab/release-check/perf.mjs judges; the lab's `perf/tools/run.mjs --mode=batch`
-measures). NEW's prepare in the round's compile image (one paper, three times, each in a container of its own sized as the box:
-one CPU, 3 GiB, no network, the amd64 image under this Mac's emulation, a warm box) and its reader on the round's website build
+measures). NEW's reader is built from the commit judged, first (`perf/tools/build-new.sh`: the website's tree `PERF_WEB` at its
+HEAD, this commit as its `vendor/readarxiv`, built as staging builds it, into the work directory): no build made before stands
+in for the head's, and without `PERF_WEB` the gate is skipped and says so. NEW's prepare in the round's compile image
+(`PERF_NEW_IMAGE`; one paper, three times, each in a container of its own sized as the box:
+one CPU, 3 GiB, no network, the amd64 image under this Mac's emulation, a warm box) and its reader on that build
 (three papers, three visits each after a warm-up, in Chromium, offline, every request served from stored data); every measure
 against the last round recorded (`perf/rounds/`, the newest that passed or was accepted), worse only past the two rounds'
 run-to-run spreads added (the speed check's rule; an exact measure such as bytes or TeX's passes past its 0.5 % tolerance); a
@@ -150,7 +178,10 @@ every heavy slot of the machine (`perf/tools/quiet.sh`): run only in a window th
   verdict is `speed.mjs`'s over the driver's logs, PASS alone a pass). The speed check measures `src/pdf-reader/engine`,
   which the extension's reader runs until stage 5 moves it to the reader package; the performance gates measure the
   website's readers. It goes with today's engine at the cut-over.
-- **Adds to full**: the prepare's pixel proofs on every page of the 87 papers (poppler's `pdftoppm` and `pdftocairo`); the
+- **Adds to full**: `display-wide`, the display gate over every pair of the stored rows (the 90, about 2,300 pages, the
+  default options; today's rows checked production's first; about 2.5 hours of browser slots, an estimate from 954 s for 344
+  pages, so overnight, once per candidate; **a cut-over blocker**: a page it leaves uncovered is fixed, shown to be a
+  measure's artefact, or brought to the owner); the prepare's pixel proofs on every page of the 88 papers and the added pairs' (poppler's `pdftoppm` and `pdftocairo`); the
   reader's canvas on spike S1c's papers (Chromium); today's engine's speed check against the last release; the online scripts (`pnpm build:staging`, then `e2e`, `e2e:pdf`, `e2e:floating`, `e2e:popup`, `e2e:layout`,
   `e2e:local-endpoint`, `e2e:image`) and the live placeholder run (`e2e:placeholders`), each under the project's
   User-Agent and never against our production server (`tests/e2e/lib/online.mjs`); performance ≥ today (`perf-release`,

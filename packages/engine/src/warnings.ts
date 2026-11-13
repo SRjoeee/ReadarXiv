@@ -3,7 +3,7 @@
 // whole: a page's list ended where its parse failed, a font read as none (an ErrorFont), a pattern, a shading or a colour space
 // left out. No call of its API fails for any of these, and `stopAtErrors` does not change that for a page's list: its API settles
 // the list with what it read (lane mem-errors, 2026-11-10). Each such warning names its site and prints its reason as text
-// (`${reason}`). A warning whose reason is a failed allocation (memory.mjs isMemoryText) is the paper's: the read that heard it
+// (`${reason}`). A warning whose reason is a failed allocation (memory.ts isMemoryText) is the paper's: the read that heard it
 // throws one (memoryFailure). Every other recovery is counted by its site, with its first reason (`recovered`, which the bundle's
 // head states): at normal memory none fires on the corpus (the census of 2026-11-10: the 88 papers and 2609.19644v1, arXiv's PDF
 // and B), so one seen in the wild is told.
@@ -13,7 +13,7 @@
 // channel to it: each watch open hears every warning PDF.js prints (PDF.js names no document in one), a warning is passed on
 // to console.warn as it was only where an open watch's reader asked PDF.js for its warnings, and anything else written to
 // console.warn passes as it is. The last watch closed puts console.warn back: nothing of it is left behind.
-import { ALLOCATION_FAILED, isMemoryText } from './memory.types.ts'
+import { ALLOCATION_FAILED, isMemoryText } from './memory.ts'
 
 /** PDF.js's level at which it prints its warnings (its VerbosityLevel.WARNINGS) */
 export const WARNINGS = 1
@@ -51,7 +51,7 @@ export const RECOVER_SITES: readonly (readonly [site: string, words: string])[] 
 /** a warning that is an error's text whole (PDF.js's `warn(e)`): a font's program it could not read (the system font then), a
  *  shading made a dummy, a standard font's data not read */
 const ERROR_TEXT = /^[A-Z][A-Za-z]*(?:Error|Exception): /
-/** a recovery's first reason, at most these characters (the head is bounded) */
+/** a recovery's first reason, at most these characters (the head is bounded, PDF-READER §19.3); unmeasured */
 const REASON_MAX = 200
 
 /** the site a warning tells, or null for one that tells no recovery of these (the lite worker's undecoded images, the lexer's

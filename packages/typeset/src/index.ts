@@ -147,10 +147,10 @@ export { type FitMeasure, fitMeasure, fontString, measure } from './breaker/meas
 export { type Cover, cover, runsOfTokens } from './breaker/cover.ts'
 export { type RelayFollower, type RelayLead, relay } from './shared/relay.ts'
 export { breakPoints, hyphenationOf, type Mins, type Patterns } from './breaker/hyph.ts'
-export { footFloorOf, inFlow, PREDISPLAY, SHORT_SKIP, type Slot, slotsAt, texRoomOf } from './breaker/slots.types.ts'
-export { type Broken, breakLines, lineExtent } from './breaker/break.types.ts'
-export { type Cut, pageCutsOf, textless, withPageBreaks } from './breaker/cuts.types.ts'
-export { laidOut } from './breaker/place.types.ts'
+export { footFloorOf, inFlow, PREDISPLAY, SHORT_SKIP, type Slot, slotsAt, texRoomOf } from './breaker/slots.ts'
+export { type Broken, breakLines, lineExtent } from './breaker/break.ts'
+export { type Cut, pageCutsOf, textless, withPageBreaks } from './breaker/cuts.ts'
+export { laidOut } from './breaker/place.ts'
 export { layoutUnit2, statesOf } from './fit/walk.ts'
 export { layoutCut } from './fit/cut.ts'
 export { layoutAt } from './fit/at.ts'
@@ -158,7 +158,7 @@ export { toLastLines } from './fit/last-lines.ts'
 export { joinRuns, keepsPages, layoutRuns, type Run as FitRun, runParams, runsOf } from './fit/runs.ts'
 export type { FitBlock, FitParams, FitState, LaidItem, LaidLine, Layout, Tokens as FitTokens } from './fit/types.ts'
 export { keepsShare, type Share, shareOf } from './shared/share.ts'
-export { closerLead, type FillRules, type FillUnit, fillLeadsOf } from './shared/fill-leads.types.ts'
+export { closerLead, type FillRules, type FillUnit, fillLeadsOf } from './shared/fill-leads.ts'
 export { type Row, type RowStart, type RowStartInput, rowStart } from './shared/row-start.ts'
 export { clearLines, settleLayout } from './shared/settle.ts'
 export { type OverFollower, type OverFollowerInput, overFollower } from './shared/over-follower.ts'
@@ -201,12 +201,11 @@ export {
   type FigureUnit,
   type FiguresInput,
   figureRuns,
-  figureRunsDepth,
   figureRunsWidth,
   figures,
   fontClassOf,
 } from './shared/figures.ts'
-export { CJK_FOOT, type FigureFit, type FitFigure, fitFigureSet, sameAsSource } from './shared/figure-fit.ts'
+export { type FigureFit, type FitFigure, fitFigureSet, sameAsSource } from './shared/figure-fit.ts'
 export {
   CJK_INK,
   COPY_SPACE_EM,

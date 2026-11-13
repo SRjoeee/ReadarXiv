@@ -35,10 +35,13 @@ import { wholeWordsOf } from './words.ts'
 
 /** tries of a request a transient failure is worth, the first included (chain.ts `attempts`) */
 export const ATTEMPTS = 3
-/** the n-th wait: BACKOFF_MS × 3^(n−1) × (0.5 + random) (chain.ts backoffDelay) */
+/** the n-th wait, ms: BACKOFF_MS × 3^(n−1) × (0.5 + random) (chain.ts backoffDelay). The policy carried over (DESIGN §8:
+ *  three attempts with backoff), unmeasured */
 export const BACKOFF_MS = 500
-/** a 429's cooldown at least (chain.ts MIN_COOL_MS), and when it names none (retry-policy's base pause) */
+/** a 429's cooldown at least, ms (chain.ts MIN_COOL_MS): the policy carried over (DESIGN §8), unmeasured */
 export const MIN_COOL_MS = 1_000
+/** a 429's cooldown where it names none, ms: the request layer's base pause (`RATE_LIMIT_BASE_PAUSE_MS`,
+ *  src/providers/request/retry-policy.ts; DESIGN §8.3), unmeasured */
 export const DEFAULT_COOL_MS = 5_000
 /** how many times the chain's last translator waits a cooldown out before its unit is unavailable (chain.ts `waits < 2`) */
 export const LAST_WAITS = 2
@@ -52,16 +55,21 @@ export const patienceOf = (t: Translator): number => ATTEMPTS * t.limits.callMs
 /** the breaker (global-gate.ts GATE_DEFAULTS): opens when OPEN_AT of at least MIN_OUTCOMES of the last WINDOW outcomes
  *  failed; skips its translator for BREAKER_MS, then lets one probe through; never skips the chain's last */
 export const BREAKER = { window: 50, minOutcomes: 20, openAt: 0.5, coolMs: 5 * 60_000 } as const
-/** a store read answers within this or is all misses; a write is given this long (answers.ts GET 2 s, PUT 5 s) */
+/** a store read answers within this, ms, or is all misses (answers.ts GET 2 s): a hanging store is a miss, never waited on
+ *  to translate (DESIGN §9, the translation cache); a ruling, unmeasured */
 export const STORE_READ_MS = 2_000
+/** a store write is given this long, ms (answers.ts PUT 5 s): DESIGN §9's ruling, unmeasured */
 export const STORE_WRITE_MS = 5_000
 /** buffered store writes go out at this many entries, and at the end of a call */
 export const WRITE_EVERY = 200
-/** a stored value at most (design-a §1.6) */
+/** a stored value at most, in UTF-16 code units of the translator's raw reply (design-a §1.6). DESIGN §9 states the bound
+ *  as 64 KiB; a ruling, unmeasured */
 export const VALUE_MAX = 64 * 1024
-/** `supports` answers within this or the translator is passed over (providers/index.ts PROBE_MS) */
+/** `supports` answers within this, ms, or the translator is passed over: the probes' deadline (DESIGN §8.5, `PROBE_MS`
+ *  2 s); a ruling, unmeasured */
 export const SUPPORTS_MS = 2_000
-/** a gate's answer within this, or the request goes through without it (global-gate.ts GLOBAL_CALL_MS: fails open) */
+/** a gate's answer within this, ms, or the request goes through without it (global-gate.ts GLOBAL_CALL_MS: fails open);
+ *  unmeasured */
 export const GATE_MS = 1_000
 /** the store key's grammar; it rises only if the grammar changes */
 export const KEY_VERSION = 't1'

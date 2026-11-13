@@ -38,20 +38,22 @@ function pieceOf(p, idOf) {
 /**
  * The bundle's units from openPaper's paper: each unit [kind, flags, depth or null, its table cell or null, its display
  * edges or null, its pieces], by its index. Its flags TITLE, FRONT and BRACKETED as the front end set them, KEPT where
- * the paper keeps it (`kept`, nameCells); its edges displayEdges' (mt.mjs), restated here so that the reader's parse
+ * `kept` (a caller's set of the paper's units) holds it: none in the rebuilt engine, which keeps no unit by its words (the
+ * old reader's openPaper passes its name rule's, src/pdf-reader/engine/layer-proto/units.mjs); its edges displayEdges'
+ * (mt.mjs), restated here so that the reader's parse
  * loads no front end (a test holds the two equal). Language-independent and deterministic: every object written in one
  * order. Throws on a piece the front end does not make.
  * After the source's units, the paper's structural names (openPaper's `names`: source/paper-names.mjs), each a unit of kind
  * `name` of one text piece, its name: translated with the paper's units and cached by its text as any unit, never laid (it is
  * no page's ink), read by the layer as the target's word for that name (PDF-READER §19.14). The source's units keep their ids
  */
-export function bundleUnitsOf(paper) {
+export function bundleUnitsOf(paper, kept = null) {
   const idOf = new Map()
   paper.units.forEach((u, i) => idOf.set(u, i))
   // (each name as the engine's text, as a source unit's text piece holds it: a UTF-8 file's accented name as its bytes)
   const names = (paper.names ?? []).map(s => [NAME_KIND, 0, null, null, null, [[TEXT, engineText(s)]]])
   return [...paper.units.map(u => {
-    const flags = (u.title ? UNIT_FLAG_BITS.TITLE : 0) | (u.front ? UNIT_FLAG_BITS.FRONT : 0) | (u.bracketed ? UNIT_FLAG_BITS.BRACKETED : 0) | (paper.kept.has(u) ? UNIT_FLAG_BITS.KEPT : 0)
+    const flags = (u.title ? UNIT_FLAG_BITS.TITLE : 0) | (u.front ? UNIT_FLAG_BITS.FRONT : 0) | (u.bracketed ? UNIT_FLAG_BITS.BRACKETED : 0) | (kept?.has(u) ? UNIT_FLAG_BITS.KEPT : 0)
     const c = u.cell
     const edges = {}
     for (const k of EDGES) if (typeof u[k] === 'string') edges[k] = u[k]

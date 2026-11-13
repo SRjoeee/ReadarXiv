@@ -8,7 +8,7 @@
 // a label or a line, each an ink unit of kind `inkfigures` the bundle's units hold after the paper's own and the other ink units
 // (pipeline/page-pass.mjs figureUnits), translated with them whatever the reader's toggles, and drawn in its own run's box by the
 // layer where they show the class (run.mjs
-// paintFigures, layer-proto/figure-fit.mjs), its ink hidden by its own optional-content group (`f<k>`, layout/wrap.mjs). Read in
+// paintFigures, layer-proto/figure-fit.mjs), its ink hidden by its own optional-content group (`f<k>`, wrap.ts). Read in
 // the maker child from what it already has: the pages pageInk read (`indices` and `turned`) and own.mjs's ownership. Nothing of
 // arXiv's PDF, no layout file, no position estimated: every place is our glyphs'.
 //
@@ -42,7 +42,7 @@
 // turned): its size is not its glyphs' (OriginLab's Type 3 faces, glyphs of 2048 units an em under a font matrix of 10/2048,
 // shown at a size of about 1, stand 7 of it tall), so that a translation drawn at its size would be a tenth of the original,
 // and its row's band is one no part's reader takes (layer-proto/figure-rows.mjs checkFigures). A font that gives no Unicode a
-// reader can trust leaves its unit the original's too, which the wrap tells from the font's own dict (remove.mjs unicodeOf).
+// reader can trust leaves its unit the original's too, which the wrap tells from the font's own dict (remove.ts unicodeOf).
 //
 // Each unit's place, in its own frame (its first glyph's origin, along its direction, up across it): its box from its first
 // glyph's start to its last glyph's end, its band from its descent to its ascent, at least DRAW_BAND (the line a translation is
@@ -110,9 +110,10 @@ const SHOWN_SLACK = 0.05
 /** the runs that spell a word a page may read as figures' text, at most, and a paper, shown whole or not (past them the rest are
  *  no figure unit, counted) */
 export const FIGURE_UNITS_PAGE = 400, FIGURE_UNITS_DOC = 4000
-/** a unit's text at most, in code units (a long run is a paragraph some figure holds: cut there, its rest the original's) */
+/** a unit's text at most, in code units (a long run is a paragraph some figure holds: cut there, its rest the original's);
+ *  unmeasured */
 export const FIGURE_TEXT_MAX = 400
-/** the group of figure unit `k` (layout/wrap.mjs names it `axt:f<k>`) */
+/** the group of figure unit `k` (wrap.ts ocgName names it `axt:f<k>`) */
 export const figureGroup = k => `f${k}`
 /** why a figure's text is not a unit drawn (wrapFinal's counts, and each unit's `why`) */
 export const FIGURE_WHYS = Object.freeze(['crowded', 'unicode', 'shared', 'page', 'bounds'])

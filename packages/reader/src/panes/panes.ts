@@ -20,7 +20,7 @@ import {
   type Stack,
   type ViewContent,
 } from '../stack/stack.ts'
-import { createFollower, type Follower, type FollowPane } from '../stack/sync.types.ts'
+import { createFollower, type Follower, type FollowPane } from '../stack/sync.ts'
 import { type AheadHold, aheadHeld, eagerPages, letAheadGo, quietRoot } from './left.ts'
 
 /** how far a page is turned on screen (its /Rotate, as its viewport shows it): 0, 90, 180 or 270 */
@@ -34,16 +34,17 @@ export const DISPLAYS: readonly Display[] = ['original', 'bilingual', 'translati
 const READING_WIDTH = 1060
 /** a zoom's or a pinch's step: scaled by CSS at once, drawn this long after the last step (one redraw a burst) */
 export const STEP_DELAY = 400
-/** a pinch is shown by transform while the fingers move, and committed this long after its last step */
+/** a pinch is shown by transform while the fingers move, and committed this long after its last step, ms (PDF-READER
+ *  §6.8); a ruling, unmeasured */
 export const PINCH_COMMIT_MS = 200
 /** the reading line, as a share of the view's height, until a click moves it */
 const READING_LINE = 0.25
-/** within this a pane's layout is waited for after a zoom */
+/** within this a pane's layout is waited for after a zoom, ms (a pane of no size is never told); unmeasured */
 const LAID_MS = 100
 /** room left above a heading gone to (CSS px) */
 const HEADING_ROOM = 28
 /** the most the pages ahead of the view wait to be drawn (ms), from the panes' laying out: a layer's first page lets them go
- *  sooner (places.mjs AHEAD_HOLD_MS, the web's holdAhead alike) */
+ *  sooner (places.mjs AHEAD_HOLD_MS, the web's holdAhead alike; PDF-READER §11.7); a ruling, unmeasured */
 export const AHEAD_HOLD_MS = 15_000
 /** the paper's language, on the text layers of the original's words (docs/PDF-READER.md §13, text-layer.mjs SOURCE_LANG): the
  *  reader asks every translation from English */

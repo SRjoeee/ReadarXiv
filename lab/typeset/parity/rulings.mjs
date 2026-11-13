@@ -695,7 +695,100 @@ export const RULINGS = [
     },
     says: (d, x) => `the part states it ${x.member(x.unit(d).part)?.of === 'author' ? "a note of the author block (Placed.of)" : 'an ink unit of the names'}; the names option off`,
   },
+  {
+    id: 'CT',
+    title: "a table's cell is text like any other; the translator decides a name (the owner, 2026-11-13)",
+    verdict: "the owner's ruling",
+    date: '2026-11-13',
+    seen: "the owner's choice of 2026-11-13 (card 6 of the RB1 check list, staging/check-list-rb1.zh.html: 2611.03953v2 p7's column of dataset names and its row \"Avg. Recovery\"; shown three ways and their price on real replies, he chose the third: a table's cell judged as text like any other, the column rule and the name rule deleted, a name the translator's); the rule as built: lane cells-like-body, PDF-READER §18.72",
+    words: null,
+    example:
+      '2611.03953v2-zh p7, Table 2: today keeps the column of MedQA, CaseHOLD, FinQA, IFBench and "Avg. Recovery" the original\'s (the names by today\'s name rule, the label by its group\'s decision), v2 lays each cell by its own row: the label translated, the names as the translator gave them back',
+    condition:
+      "a table's cell today's reader leaves the original's by today's table rules alone: its unit kept by today's name rule (today's reader dump: notLaid `kept`, mt.mjs nameCells) or its row kept by today's group decision (`row: kept`, groups.mjs decideGroups: a column of names, or a group a cell of which no translator took whole); and v2 lays it (its Page member `laid`, a member of kind `cell`): every difference of that unit, and a grid group (`groups`) every cell of which the two sides draw otherwise is such a cell, the original's in today's and translated in v2's. A cell today leaves the original's for another reason, one v2 leaves the original's, and any other unit are judged as before",
+    holds(d, x) {
+      const kept = (key) => {
+        if (!/^t\d+$/.test(key ?? '')) return false
+        const why = x.todayWhy(key)
+        return why === 'kept' || why === 'row: kept'
+      }
+      const laid = (key) => {
+        const ord = x.unit({ unit: key })?.part
+        return ord !== null && ord !== undefined && x.member(ord)?.kind === 'cell' && x.laid(ord)?.state === 'laid'
+      }
+      if (d.flag === 'groups') {
+        const t = new Set(d.asOriginal?.today ?? []),
+          v = new Set(d.asOriginal?.v2 ?? [])
+        const moved = (d.cells ?? []).filter((k) => t.has(k) !== v.has(k))
+        return moved.length > 0 && moved.every((k) => t.has(k) && !v.has(k) && kept(k) && laid(k))
+      }
+      if (!d.unit) return false
+      const key = d.unit.split(' ')[0]
+      return kept(key) && laid(key)
+    },
+    says(d, x) {
+      const keys = d.flag === 'groups' ? (d.cells ?? []).filter((k) => (d.asOriginal?.today ?? []).includes(k) && !(d.asOriginal?.v2 ?? []).includes(k)) : [d.unit.split(' ')[0]]
+      const by = [...new Set(keys.map((k) => (x.todayWhy(k) === 'kept' ? "today's name rule" : "today's group decision")))]
+      return `${d.flag === 'groups' ? `its cells ${keys.join(', ')}` : 'the cell'} kept by ${by.join(' and ')}, laid by v2 from its own row`
+    },
+  },
+  {
+    id: 'CU',
+    title: 'a cell that cannot be drawn stays the original by itself (PDF-READER §18.72); today kept the whole group for it',
+    verdict: "the coordinator's ruling",
+    date: '2026-11-13',
+    seen: "the coordinator's ruling (c) of 2026-11-13 under the owner's choice of the same day (a table's cell is text like any other): a cell whose reply cannot be drawn in its cell stays the original by itself, as a body paragraph does, its group held only where the geometry needs it (a spanning cell, a group on two pages); his ruling the same day on 2602.23285v2-ja p19, covered by a ruling of its own; the rule as built: lane cells-like-body, lay/entry.ts holdsTable and lay/page.ts settleTies, PDF-READER §18.72",
+    words: null,
+    example:
+      '2602.23285v2-ja p19, Table 7\'s column "Method / latent-ODE / latent-ODE": today withholds the column whole, the reply for latent-ODE not fitting its cell; v2 lays Method in its translation and leaves the two latent-ODE cells the original\'s',
+    condition:
+      "groups: a table's grid group today's settle withheld for a cell it could not draw (today's reader dump: each cell v2 lays `group: a cell unfit` or `group: a cell not drawn`, the group the original's whole in today's), drawn mixed by v2 because v2 leaves that cell (or those cells) the original's by itself: each cell v2 leaves the original's one today leaves so too, its v2 member stating a failure of its own (unfit, refused, unavailable, unwrapped, unproven, unlocated, a face, an error), not its group's (`cells`) nor no row (`none`); and v2 lays each of the group's other cells (its Page member `laid`, a `cell`, no line past TeX's text block bottom). Not covered: a group where v2 leaves the original's a cell today draws translated; a group today held for another reason (on two pages; a spanning cell, for which v2 holds the group too); a cell v2 lays past the bottom. Every other measure of those cells is judged as before (I3, I5 and the overflow measures stay hard)",
+    holds(d, x) {
+      if (d.flag !== 'groups') return false
+      const today = new Set(d.asOriginal?.today ?? []),
+        v2 = new Set(d.asOriginal?.v2 ?? [])
+      const cells = d.cells ?? []
+      const memberOf = (key) => {
+        const ord = cellOrd(key, x)
+        return ord === null ? null : { kind: x.member(ord)?.kind, m: x.laid(ord) }
+      }
+      const left = cells.filter((k) => v2.has(k)),
+        laid = cells.filter((k) => !v2.has(k))
+      if (!left.length || !laid.length || !cells.every((k) => today.has(k))) return false
+      return (
+        left.every((k) => {
+          const u = memberOf(k)
+          return u?.kind === 'cell' && CELL_OWN.has(u.m?.state)
+        }) &&
+        laid.every((k) => {
+          const u = memberOf(k)
+          return CELL_HELD.has(x.todayWhy(k)) && u?.kind === 'cell' && u.m?.state === 'laid' && !((u.m?.fit?.over ?? 0) > 0)
+        })
+      )
+    },
+    says(d, x) {
+      const v2 = new Set(d.asOriginal?.v2 ?? [])
+      const left = (d.cells ?? []).filter((k) => v2.has(k)),
+        laid = (d.cells ?? []).filter((k) => !v2.has(k))
+      const states = [...new Set(left.map((k) => x.laid(cellOrd(k, x))?.state))]
+      return `its cells ${left.join(', ')} the original's by themselves (${states.join(', ')}), ${laid.join(', ')} laid; today withheld the group for them`
+    },
+  },
 ]
+/** CU: today's reasons for a cell its settle withheld with its group for a cell it could not draw (today's reader dump), and the
+ *  states of a v2 member left the original's by a failure of its own drawing or row, not its group's nor for no row */
+const CELL_HELD = new Set(['group: a cell unfit', 'group: a cell not drawn'])
+const CELL_OWN = new Set(['unfit', 'refused', 'unavailable', 'unwrapped', 'unproven', 'unlocated', 'face', 'error'])
+/** CU: v2's ord of today's unit `key`: the page's unit of it, else v2's join (the v2 file's `today`, ord -> today's ord), a cell
+ *  that neither side draws having no unit on the page */
+function cellOrd(key, x) {
+  if (!/^t\d+$/.test(key ?? '')) return null
+  const u = x.unit({ unit: key })
+  if (u?.part !== null && u?.part !== undefined) return u.part
+  const t = Number(key.slice(1))
+  const hit = Object.entries(x.v2?.today ?? {}).find(([, j]) => j?.today === t)
+  return hit ? Number(hit[0]) : null
+}
 /** the measures that read a unit's content lost or changed against the original: a unit none of them finds v2 farther on (worse,
  *  or covered) on any of its pages is whole (the rulings L2 and S4) */
 export const WHOLE = ['shown', 'elements', 'scripts', 'labels']
@@ -719,9 +812,10 @@ function inPlaceKept(ord, x) {
  * re-lay: `relaid`, which the re-lay's own pass covered, verdict.mjs freshResolve) that a ruling's condition holds for is
  * covered (`worse` false, `covered` the ruling's id, its measure's `nearer` kept); each page counted again. `recOf(n)` the
  * drawing's record of page n as measured (the re-lay's merged in for its pages), `v2` the pair's v2 file, `laid` the v2 Pages
- * laid (n -> Page), `unsqueezed` the lay with no CJK line squeezed (n -> ord -> lines)
+ * laid (n -> Page), `unsqueezed` the lay with no CJK line squeezed (n -> ord -> lines), `todayCut` and `todayWhy` today's dumps'
+ *  facts by a unit's key (WB, CT)
  */
-export function rulingsPass(pages, { recOf, v2, laid, unsqueezed, todayCut = null }, recount) {
+export function rulingsPass(pages, { recOf, v2, laid, unsqueezed, todayCut = null, todayWhy = null }, recount) {
   // (each unit's line count over the paper's pages: today's drawn, v2's laid, and with no CJK line squeezed)
   const todayLines = new Map()
   for (const p of pages) for (const u of p.units ?? []) if (typeof u.sides?.today?.lines === 'number') todayLines.set(u.key, (todayLines.get(u.key) ?? 0) + u.sides.today.lines)
@@ -753,6 +847,9 @@ export function rulingsPass(pages, { recOf, v2, laid, unsqueezed, todayCut = nul
       // (WB: where today's drawing of a unit (its key, today's ord) ends a line before a boundary between runs inside a word, read from
       // today's dumps by the caller, cutBeforeBoundary; none where the caller states nothing)
       todayCut: (key) => todayCut?.(key) ?? null,
+      // (CT: why today's reader leaves a unit (its key, today's ord) the original's, its reader dump's notLaid or left `why`; none
+      // where the caller states nothing)
+      todayWhy: (key) => todayWhy?.(key) ?? null,
       member: (ord) => facts.get(ord) ?? Object.values(v2.facts ?? {}).flatMap((f) => f.members ?? []).find((m) => m.ord === ord),
       squeezeSaved: (u) => {
         if (!unsqueezed) return false

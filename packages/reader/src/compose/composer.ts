@@ -76,14 +76,18 @@ const cropGridOf = (at: SlotAt) => cropGrid(at.viewport, outputScaleOf(at), roun
 
 /** the laid pages a reader keeps, at most (a page's Page is some kilobytes; past it the least recently shown is let go) */
 export const PAGES_KEPT = 600
-/** how long a page's drawing, once committed, may take to be put in place before its slot shows the original's page
- *  (layer-side.mjs PAGE_MS) */
+/** how long a page's drawing, once committed, may take to be put in place before its slot shows the original's page, ms
+ *  (layer-side.mjs PAGE_MS; PDF-READER §11.8); a ruling, unmeasured */
 export const PAGE_MS = 30_000
-/** the longest a page's commit holds the laying of the next (reader.mjs HOLD_MS) */
+/** the longest a page's commit holds the laying of the next, ms (reader.mjs HOLD_MS; PDF-READER §11.8): the commit's wait for
+ *  the left's page, LEFT_WAIT_MS, and its copy's drawing in tenths of a second; past it the hold is a promise gone astray.
+ *  Unmeasured */
 export const HOLD_MS = 2000
 /** how many pages past the near ones are laid ahead, the way the reader moves (layer-side.mjs AHEAD_PAGES) */
 export const AHEAD_PAGES = 2
-/** how long the near pages stay where they are before a window ahead is begun (layer-side.mjs AHEAD_SETTLE_MS) */
+/** how long the near pages stay where they are before a window ahead is begun, ms (layer-side.mjs AHEAD_SETTLE_MS): a page
+ *  of a steady scroll comes near every half second or so, a fling's every tenth, as the scroll probe of PDF-READER §11.8
+ *  measured them (1,500 px/s, a fling of 2,600 px, on 1706.03762v7) */
 export const AHEAD_SETTLE_MS = 150
 
 export interface Layer {

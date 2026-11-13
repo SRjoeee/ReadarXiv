@@ -1097,19 +1097,18 @@ export function gateL1Pair(
     }
     // (a table's cells, and the members laid at one size: one paragraph of TeX's the front end cut at a float, a figure's set;
     // a table decided over the cells handed in, as today's settleGroup over the cells whose rows are translated: a cell left
-    // out that holds its table is tieHeld's, and one handed whole with a cell left out, settleTies skips: the entry's rule)
+    // out that holds its table is tieHeld's, and one handed whole with a cell left out, settleTies skips: the entry's rule.
+    // Today's settleGroup withholds the group whole for any cell it cannot draw: the runner states every cell of it spanning,
+    // which settleTies so withholds, where the entry holds a group for a spanning cell alone, ruling (c) of 2026-11-13)
     const handed = new Set(flows.flat().map((m) => m.ord))
-    const ties = ((part.ties ?? []) as { rule: string; cells?: number[][]; ords?: number[] }[]).map((t) =>
-      t.rule === 'cells'
-        ? {
-            rule: 'cells' as const,
-            cells: (t.cells ?? [])
-              .flat()
-              .map((o) => unitOf.get(o)?.ord ?? o)
-              .filter((o) => handed.has(o)),
-          }
-        : { rule: 'size' as const, ords: (t.ords ?? []).map((o) => unitOf.get(o)?.ord ?? o) },
-    )
+    const ties = ((part.ties ?? []) as { rule: string; cells?: number[][]; ords?: number[] }[]).map((t) => {
+      if (t.rule !== 'cells') return { rule: 'size' as const, ords: (t.ords ?? []).map((o) => unitOf.get(o)?.ord ?? o) }
+      const cells = (t.cells ?? [])
+        .flat()
+        .map((o) => unitOf.get(o)?.ord ?? o)
+        .filter((o) => handed.has(o))
+      return { rule: 'cells' as const, cells, spanning: cells }
+    })
     // (a flow whose lay throws is left the original's alone by the composition, design-a §1.4: its members 'error', the reason
     // with them)
     let got: ReturnType<typeof layPagePrepared> | null = null

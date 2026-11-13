@@ -9,7 +9,7 @@
 import type { LaidLine } from '../fit/types.ts'
 import type { LineRun, TextRun } from './display.ts'
 
-/** the most work a member's links may spend (links.mjs WORK_MAX) */
+/** the most work a member's links may spend, a count of point-against-box tests (links.mjs WORK_MAX); unmeasured */
 export const WORK_MAX = 2e7
 /** how far a browser's advances may part from the layout's measure, a share of the distance from a run's start (DRIFT_BOUND) */
 export const DRIFT_BOUND = 0.06

@@ -32,7 +32,7 @@
 //   6. a babel name `n<occ>`: between `n<occ>.<key>.s` and `.e`; 6b. the counter TeX set after it on its line, no unit's, its own;
 //      6c. the number TeX set right before it at its line's start, no unit's, TeX's stream setting nothing between, its label
 //      `n<occ>.l` (names.mjs counterBefore: a heading its class numbers itself);
-//   7. images and forms are no unit's text here (a form whose ink is all one group's is wrapped whole by wrap.mjs); an image TeX
+//   7. images and forms are no unit's text here (a form whose ink is all one group's is wrapped whole by wrap.ts); an image TeX
 //      painted inside a placeholder's ink (an inline \includegraphics, 2610.21924v1's `\COMPASSicon`) is the placeholder's.
 // A glyph is one group's: a placeholder's or a name's over the text's, the text's over a label's, the first text's over a later.
 // A placeholder whose ink cannot be told apart (its range lost) makes its unit the original's (`marks`), as do marks that the
@@ -50,7 +50,7 @@
 // An original module (no port statement).
 import { utf8 } from '../instrument/mt.mjs'
 import { symbolText } from '../source/text-symbols.mjs'
-import { UNHIDDEN } from '../delta-wire.mjs'
+import { UNHIDDEN } from '../delta-wire.ts'
 import { classOf, headsOf, INK_ANY, leadStep } from '../marks/marks.mjs'
 import { columnsAt, OWNED, OWNED_HOW, ownedOf, READ_ALONE, regionsOf, spellOf } from './stream.mjs'
 import { isLabelForm, labelFormOf, labelText } from '../marks/label-form.mjs'
@@ -66,7 +66,7 @@ const IMAGE_BOX = -3
 const BOUNDED = new Set([OWNED_HOW.indexOf('closed'), OWNED_HOW.indexOf('open, to the text after it')])
 /** the glyphs and boxes the ownership of a paper may visit (real ranges never overlap: they cost its ink once) */
 export const OWN_WORK = 20_000_000
-/** the unit ids a record lists the spell check's refusals of, at most */
+/** the unit ids a record lists the spell check's refusals of, and of its leaks, at most: a count of ids; unmeasured */
 export const SPELL_LIST_MAX = 64
 
 const START = /^([th]?)(\d+)s$/

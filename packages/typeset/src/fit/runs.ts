@@ -2,7 +2,7 @@
 // laid as its own text block, joined as one layout; and whether a layout keeps the pages its fit set its lines on. Ported
 // from engine 065c1d973 layer2.mjs L2:4163-4257, L2:4379-4400 (moved first as JavaScript by lab/typeset/move-fit.mjs, now
 // TypeScript), held by the chain's and the fill's replays on the corpus.
-import { textless } from '../breaker/cuts.types.ts'
+import { textless } from '../breaker/cuts.ts'
 import type { Token } from '../breaker/tokens.ts'
 import type { FitBlock, FitParams, FitState, LaidLine, Layout } from './types.ts'
 import { layoutUnit2 } from './walk.ts'
@@ -187,9 +187,9 @@ export function keepsPages(
 ): boolean {
   const breaks: [number, number][] = []
   tokens?.forEach((t, i) => {
-    const b = (t as { pageBreak?: number }).pageBreak
+    const b = t.pageBreak
     // (a cut of the frames' share, read only by a lay that holds the share: pageCutsOf `share`)
-    if (b !== undefined && (share || !(t as { share?: boolean }).share)) breaks.push([i, b])
+    if (b !== undefined && (share || !t.share)) breaks.push([i, b])
   })
   const sent = (from: number) => breaks.reduce((pg, [i, b]) => (i < from ? Math.max(pg, b) : pg), -Infinity)
   let j = 0

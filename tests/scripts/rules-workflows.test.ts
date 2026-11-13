@@ -66,7 +66,7 @@ describe('the gate runs when what it loads changes', () => {
     // the page (layer-gate/proto.mjs) imports these from /engine/; layer-gate.mjs imports the others in Node
     // (and the wrap's, layer-gate/wrap.mjs: the base page wrapped by optional content and its cell rules, beside the source
     // units' reading, which is the pipeline's and not the drawing's)
-    const loaded = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', '../../../packages/engine/src/ink.mjs', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layout/wrap-final.mjs', '../../../packages/engine/src/wrap.mjs', 'layout/cell-rules.mjs', '../../../packages/engine/src/remove.mjs', 'layer-proto/hyph.mjs', 'layer-proto/rows.mjs'].map(E))
+    const loaded = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', '../../../packages/engine/src/ink.ts', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layout/wrap-final.mjs', '../../../packages/engine/src/wrap.ts', 'layout/cell-rules.mjs', '../../../packages/engine/src/remove.ts', 'layer-proto/hyph.mjs', 'layer-proto/rows.mjs'].map(E))
     // (and the rows' reading, rows.mjs, whose units openProto takes: their table groups, translate/groups.mjs, and a cell's
     // span, layer-proto/cells.mjs — Devin on #456)
     expect(loaded.length).toBeGreaterThan(20)
@@ -74,10 +74,13 @@ describe('the gate runs when what it loads changes', () => {
   })
   it('loads in the page no module the page cannot import: none of the repository\'s TypeScript (src/core), which only --door transpiles', () => {
     // (3310dfa7 on #456: run.mjs imported translate/groups.mjs, whose mt.mjs imports src/core's .ts: every output of the head run
-    // failed to load the engine, "did not run")
+    // failed to load the engine, "did not run". The workspace packages' TypeScript is served stripped, lab/pdf/packages-route.mjs:
+    // the ink walk's readers, packages/engine/src/ink-args.ts, load in the page as its other modules do)
     const E = (f: string) => join(ROOT, 'src/pdf-reader/engine', f)
-    const page = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', '../../../packages/engine/src/ink.mjs', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layer-proto/hyph.mjs'].map(E))
-    expect(page.filter(f => f.endsWith('.ts'))).toEqual([])
+    const page = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', '../../../packages/engine/src/ink.ts', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layer-proto/hyph.mjs'].map(E))
+    expect(page.filter(f => f.endsWith('.ts') && !f.startsWith('packages/'))).toEqual([])
+    // (and the check holds something: the page's closure reaches the packages' TypeScript)
+    expect(page.filter(f => f.startsWith('packages/') && f.endsWith('.ts')).length).toBeGreaterThan(0)
   })
   it('covers the gate, its scorer and measures, the rules gate, the pack and its manifest, and itself', () => {
     const gate = ['lab/pdf/spikes/layer-gate.mjs', ...readdirSync(join(ROOT, 'lab/pdf/spikes/layer-gate')).map(f => `lab/pdf/spikes/layer-gate/${f}`), 'lab/pdf/spikes/rules-gate.mjs', 'lab/pdf/spikes/gate-pack.mjs', 'scripts/r2-read.mjs', 'lab/pdf/gate-pack.json', '.github/workflows/rules-gate.yml']
@@ -180,6 +183,12 @@ describe('each side of the gate runs on the pack its own commit names', () => {
     expect(at('Pack digests')).toBeLessThan(at('Merge base pack from the bucket'))
     expect(at('Check the merge base pack')).toBeLessThan(at('Gate on the merge base'))
     expect(at('Check the pack')).toBeLessThan(at('Gate on the merge base'))
+  })
+
+  it('installs the merge base\'s own modules and borrows none of the pull request\'s: a workspace\'s links are relative, so borrowed they load the pull request\'s packages into the base\'s run (PR #642: every output of the base failed)', () => {
+    const base = step('Merge base')
+    expect(base).toContain('pnpm -C "$RUNNER_TEMP/base" install --frozen-lockfile --prefer-offline')
+    for (const body of runBodies(yml)) expect(body).not.toMatch(/ln -s[^\n]*node_modules/)
   })
 
   it('reads the merge base\'s digest from its own manifest with its own script, and runs the base on the pull request\'s directory only where the layout file\'s version is the same (not where the digests are)', () => {

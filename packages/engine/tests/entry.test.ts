@@ -4,28 +4,28 @@
 // (src/pdf-reader/engine/layout/wrap-final.mjs among them). Each value a module re-exported whole holds must be that module's.
 import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
-import * as deltaWire from '../src/delta-wire.types.ts'
+import * as deltaWire from '../src/delta-wire.ts'
 import * as compiled from '../src/compiled.ts'
 import * as entry from '../src/index.ts'
-import * as ink from '../src/ink.types.ts'
-import * as memory from '../src/memory.types.ts'
+import * as ink from '../src/ink.ts'
+import * as memory from '../src/memory.ts'
 import * as plan from '../src/plan.ts'
-import * as remove from '../src/remove.types.ts'
-import * as section from '../src/section.types.ts'
-import * as tail from '../src/tail.types.ts'
-import * as wrap from '../src/wrap.types.ts'
-import * as xref from '../src/xref.types.ts'
+import * as remove from '../src/remove.ts'
+import * as section from '../src/section.ts'
+import * as tail from '../src/tail.ts'
+import * as wrap from '../src/wrap.ts'
+import * as xref from '../src/xref.ts'
 
 /** the modules the entry re-exports whole, by the path its `export *` names (a package names its imports literally) */
 const WHOLE: Record<string, Record<string, unknown>> = {
-  './ink.types.ts': ink,
-  './delta-wire.types.ts': deltaWire,
-  './memory.types.ts': memory,
-  './remove.types.ts': remove,
-  './section.types.ts': section,
-  './tail.types.ts': tail,
-  './wrap.types.ts': wrap,
-  './xref.types.ts': xref,
+  './ink.ts': ink,
+  './delta-wire.ts': deltaWire,
+  './memory.ts': memory,
+  './remove.ts': remove,
+  './section.ts': section,
+  './tail.ts': tail,
+  './wrap.ts': wrap,
+  './xref.ts': xref,
 }
 
 describe("the package's entry", () => {

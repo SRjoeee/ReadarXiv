@@ -129,12 +129,10 @@ export const CAUSE = Object.freeze({
   // the coordinator's ruling of 2026-11-12: every kept unit states its reason, the lab's alone; none accepted by this, the
   // acceptance list's entries are the coordinator's): a block of e-mail addresses alone (`address`); a figure text the figure
   // reading keeps as crowded (`crowded`); a line of an algorithm float's body, kept as code is by the owner's ruling of 2026-11-08
-  // (`pseudocode`); a cell or a figure text of names or markup tokens alone (`name`, nameCells); a block of text no unit owns,
-  // rule 10 (`block`))
+  // (`pseudocode`); a block of text no unit owns, rule 10 (`block`))
   address: 'kept as the original: e-mail addresses alone',
   crowded: 'kept as the original: a figure text crowded by the ink about it, or a formula it would tear',
   pseudocode: "kept as the original: a line of an algorithm's pseudocode",
-  nameCell: 'kept as the original: names or markup tokens alone',
   block: 'kept as the original: a block of text no unit owns',
   // ((f): a unit the candidate does not make, every line of it inside a line the engine reads as a display's formula (a display
   // TeX's marked compile states, its text-mode glyphs read as text: locate's `displays`): the display's ink, kept with it — the
@@ -193,7 +191,7 @@ const RESET = 'unlocated: set in a paragraph that sets a unit again'
  *  (m) where it keeps a figure's line of formulas alone (`keptBy: 'formula'`, F1), (q) a figure text drawn twice (`keptBy:
  *  'double'`, F3), (r) one it cannot draw as it was set (`keptBy: 'script'`), (s) a figure text or a cell held whole for a
  *  decorated word (`keptBy: 'decorated'`, §18.61); and each other keep by its rule's mark (`address`, `crowded`, `pseudocode`,
- *  `name`, `block`: every kept unit states its reason); else null: a unit no rule keeps */
+ *  `block`: every kept unit states its reason); else null: a unit no rule keeps */
 export const keptWhyOf = (u) =>
   u?.keptBy === 'pitch'
     ? CAUSE.pitch
@@ -213,11 +211,9 @@ export const keptWhyOf = (u) =>
                   ? CAUSE.crowded
                   : u?.keptBy === 'pseudocode'
                     ? CAUSE.pseudocode
-                    : u?.keptBy === 'name'
-                      ? CAUSE.nameCell
-                      : u?.keptBy === 'block'
-                        ? CAUSE.block
-                        : null
+                    : u?.keptBy === 'block'
+                      ? CAUSE.block
+                      : null
 
 /** (l'): TeX's ligatures of a text face's input, its font's ligature table (Knuth's cmr, and every text font after it): an em dash,
  *  an en dash, the curly double and single quotes */

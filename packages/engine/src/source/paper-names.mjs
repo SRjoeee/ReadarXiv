@@ -16,7 +16,8 @@
 // Pure: no DOM, no clock. An original module (no port statement).
 import { CONJUNCTION_GAPS, GENERATED_COMMANDS, NAME_GAPS } from './tex-names.mjs'
 
-/** the names a paper's units may hold at most (a paper defines a few dozen at most; the gaps are 21) */
+/** the names a paper's units may hold at most (a paper defines a few dozen at most; the gaps are 21): a count of names, a
+ *  part's bound (PDF-READER §19.6); unmeasured */
 export const NAMES_MAX = 96
 /** a name as a unit holds it: plain words, at most 40 characters */
 const PLAIN = /^[\p{L}][\p{L}\p{M} .'’-]{0,39}$/u

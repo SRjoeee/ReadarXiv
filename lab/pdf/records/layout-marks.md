@@ -1,5 +1,8 @@
 # The layout marks on the corpus: the lines they carry and lose (Plan 8b, Task 2)
 
+**Historical since 2026-11-13.** The gate this records is retired, not re-recorded: `lab/pdf/README.md`, "The layout marks
+and the unit marks", says why. What follows is its record as of 2026-10-08.
+
 The record of `spikes/layout-marks-gate.mjs` on the corpus, for whoever changes the layout marks
 (`src/pdf-reader/engine/layout/marks.mjs`) next. The rows, paper by paper, are in `layout-marks.json` (ids, counts, page
 numbers and class names; no paper's content); the details of each run are in `data/runs/layout-marks-gate/` (outside

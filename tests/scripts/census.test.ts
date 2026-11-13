@@ -192,6 +192,20 @@ describe('rule debt', () => {
     ])
   })
 
+  it("counts no rules registry's citations as a name list, whatever their strings' lengths; a registry's other lists are lists", () => {
+    // (a registry declared as rule entries: each entry's `ports` cites the code it carries; its `owns` and `reads` are lists as
+    // any are; the same `ports` array outside a registry, or in an array of another type, is a list too)
+    const entry = "{ id: 'S.a', owns: ['T1', 'T2', 'T3'], ports: ['RUN:1-2 a', 'L2:3-4 b', 'x.mjs:5 c'], reads: ['p.q', 'p.r', 'p.s'] }"
+    for (const decl of ['const SPECS: readonly RuleSpec[] = ', 'const SPECS: RuleSpec[] = ', 'export const SPECS: ReadonlyArray<RuleSpec> = ']) {
+      const f = factsOf('src/engine/rules.ts', `type RuleSpec = { id: string }\n${decl}[\n  ${entry},\n  ${entry.replace("'S.a'", "'S.b'")},\n]\n`)
+      expect(f.lists?.map(l => l.sample), decl).toEqual([['T1', 'T2', 'T3'], ['p.q', 'p.r', 'p.s'], ['T1', 'T2', 'T3'], ['p.q', 'p.r', 'p.s']])
+    }
+    for (const decl of ['const SPECS = ', 'const SPECS: readonly Other[] = ']) {
+      const f = factsOf('src/engine/rules.ts', `${decl}[\n  ${entry},\n]\n`)
+      expect(f.lists?.length, decl).toBe(3)
+    }
+  })
+
   it('counts the engine\'s thresholds, lists, special cases and version constants', () => {
     const d = c.trees.NOW.debt
     // GAP 0.35 (evidence), 0.8 (no reason), 3 (Math.min): tuned; LIMIT borderline; PT_PER_IN a conversion; FLAGS an enumeration

@@ -125,8 +125,8 @@ export const TARGETS = [
     measure: "A page's layout, p50 / p95",
     baseline: '21.8 / 52.7 ms',
     target: 'under 10 / 30 ms',
-    from: 'typeset-parts',
-    value: n => n.layP50 != null && `p50 ${n.layP50}, p90 ${n.layP90}, p99 ${n.layP99} ms over ${n.layPages} pages (the runner prints no p95)`,
+    from: 'reader-parts',
+    value: n => n.layP50 != null && `p50 ${n.layP50}, p90 ${n.layP90}, p99 ${n.layP99} ms over ${n.layPages} pages: the entry's layPage over each part and the door's rows (the runner prints no p95)`,
     // (no p95 printed: under 30 where the p99 is; over it where the p90 is; else the numbers cannot tell)
     met: n => (n.layP50 >= 10 || n.layP90 >= 30 ? false : n.layP99 < 30 ? true : null),
   },
@@ -258,6 +258,26 @@ export function checksOf(text) {
   return m ? { passed: num(m[1]), checks: num(m[2]) } : {}
 }
 
+/**
+ * harness-lab's verdict over the harness's run: its checks, each corpus paper's bundle and rows as the harness names them
+ * ("fixture <id>: this run's bundle and its rows …" or "… lane L1's bundle and today's dump …"), and the harness's refusal of
+ * bundles and rows that do not belong together or a paper the run's rows do not hold ("FAIL fixtures: …"), which fails the gate
+ * with its own words. The gate gives the harness this run's rows: a paper laid from lane L1's bundle and today's dump is another
+ * run's data in their place, and fails the gate, named
+ */
+export function harnessLabJudge(step) {
+  const text = step.text
+  const of = [...text.matchAll(/^fixture (\S+): (this run's|lane L1's) /gm)]
+  const numbers = {
+    ...checksOf(text),
+    run: of.filter(m => m[2] === "this run's").map(m => m[1]),
+    l1: of.filter(m => m[2] === "lane L1's").map(m => m[1]),
+  }
+  const refused = /^FAIL fixtures: (.*)$/m.exec(text)?.[1] ?? null
+  const note = refused ?? (numbers.l1.length ? `laid from lane L1's bundle and today's dump, not from this run's rows: ${numbers.l1.join(', ')}` : null)
+  return { pass: step.exit === 0 && !refused && !numbers.l1.length && !/route table violated/.test(text), numbers, ...(note ? { note } : {}) }
+}
+
 /** a terminal's colours (vitest colours its summary where it is asked to) */
 const COLOUR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
 
@@ -301,6 +321,13 @@ export function typesetOf(text) {
   // the run)
   const paras = /^the paragraph points \(paras-gate\.ts\): (\d+) stated .*?; (\d+) with an anchor in their row .*?: (\d+) opened .*?, (\d+) of them on TeX's line, (\d+) NOT/m.exec(text)
   if (paras) Object.assign(out, { parasStated: num(paras[1]), parasAnchored: num(paras[2]), parasOpened: num(paras[3]), parasOnTexLine: num(paras[4]), parasOff: num(paras[5]) })
+  // (the reads gate, the runner with --entry: each page laid again under the reader's default options and with every option on,
+  // the row ids read outside the page's wait set, which fail the run: summed over the two)
+  const reads = [...text.matchAll(/^the reads gate, .*?: (\d+) pages laid, (\d+) row ids read; (\d+) read outside the page's wait set/gm)]
+  if (reads.length) Object.assign(out, { readsPages: num(reads[0][1]), readsOutside: reads.reduce((n, m) => n + num(m[3]), 0) })
+  // (the entry, the runner with --entry: the runner's members it lays alike and not, and the time of a page's layPage)
+  const entry = /^the entry \(layPage over each part and its rows\): (\d+) of the runner's members laid alike, (\d+) not.*; a page, ms: p50 ([\d.]+), p90 ([\d.]+), p99 ([\d.]+), max ([\d.]+) over (\d+) pages$/m.exec(text)
+  if (entry) Object.assign(out, { entryAlike: num(entry[1]), entryNot: num(entry[2]), entryP50: num(entry[3]), entryP90: num(entry[4]), entryP99: num(entry[5]), entryMax: num(entry[6]), entryPages: num(entry[7]) })
   const lay = /a page's lay \(layPagePrepared[^)]*\), ms: p50 ([\d.]+), p90 ([\d.]+), p99 ([\d.]+), max ([\d.]+) over (\d+) pages/.exec(text)
   if (lay) Object.assign(out, { layP50: num(lay[1]), layP90: num(lay[2]), layP99: num(lay[3]), layMax: num(lay[4]), layPages: num(lay[5]) })
   const first = /^\{"pairs":.*\}$/m.exec(text)
@@ -317,25 +344,98 @@ export function typesetOf(text) {
  *  fall back to, and its count is reported, not held */
 export const PARAS_HELD = false
 
-/** sentence-cover's verdict over its run (`steps`, the reader gate's): I10 and I6 counted where the run ended whole (exit 0, or
- *  1 for a unit laid otherwise by another cause than the head pass's or a paragraph point run on), the paragraph points held
- *  where `parasHeld`. The added pairs walked apart (`added`, lab/typeset/added.mjs) are held as the set's in each of these: their
- *  I10, their I6 and their paragraph points */
-export function sentenceCoverJudge(steps, parasHeld = PARAS_HELD) {
-  const t = typesetOf(steps[0]?.text ?? '')
-  // (the added pairs walked apart, `t.added`: their I10 and I6 held as the set's, their numbers beside)
+/**
+ * One run of the reader gate's runner with --entry (lab/typeset/gate-l1.mjs): its numbers, the added pairs' apart (`a`), and
+ * whether it ended whole. The runner exits 1 for its own verdicts, each of which it states and counts: a paragraph point run on,
+ * a unit laid otherwise by two pages' lays by another cause than the head pass's, a row id read outside a page's wait set. A run
+ * that exits 1 with one of them stated, over pieces the entry drew (and, where the added pairs were walked, over theirs too),
+ * ended whole and is read by its counts; any other exit is no count. `held`: the runner's own verdicts on the set and the added
+ * pairs alike, the paragraph points held only where `parasHeld`
+ */
+export function entryRunOf(step, parasHeld = PARAS_HELD) {
+  const t = typesetOf(step?.text ?? '')
   const a = t.added
-  const whole = steps[0]?.exit === 0 || (steps[0]?.exit === 1 && (t.I6other > 0 || a?.I6other > 0 || t.parasOff > 0 || a?.parasOff > 0) && t.I10pieces > 0)
+  const both = [t, a].filter(Boolean)
+  const stated = both.some(x => x.parasOff > 0 || x.I6other > 0 || x.readsOutside > 0)
+  const whole = (step?.exit === 0 || (step?.exit === 1 && stated)) && t.I10pieces > 0 && (!a || a.I10pieces > 0)
+  const held = whole && both.every(x => x.I6other === 0 && !(x.readsOutside > 0) && (!parasHeld || x.parasOff === 0))
+  return { t, a, whole, held }
+}
+
+const parasOf = (x) => (x.parasOff != null ? { parasAnchored: x.parasAnchored, parasOpened: x.parasOpened, parasOnTexLine: x.parasOnTexLine, parasOff: x.parasOff } : {})
+
+/** sentence-cover's verdict over its run (`steps`, the reader gate's): I10 and I6 counted where the run ended whole (entryRunOf),
+ *  the runner's own verdicts held (a unit laid otherwise by another cause, a read outside a page's wait set; the paragraph
+ *  points where `parasHeld`). The added pairs walked apart (`added`, lab/typeset/added.mjs) are held as the set's in each of
+ *  these: their I10, their I6, their reads and their paragraph points */
+export function sentenceCoverJudge(steps, parasHeld = PARAS_HELD) {
+  const { t, a, whole, held } = entryRunOf(steps[0], parasHeld)
   const counted = whole && t.I10 != null
   const across = whole && t.I6other != null
   const findings = { ...(counted ? { I10: { held: t.I10 === 0, count: t.I10 } } : {}), ...(across ? { I6: { held: t.I6other === 0, count: t.I6other } } : {}) }
-  const parasOf = (x) => (x.parasOff != null ? { parasAnchored: x.parasAnchored, parasOpened: x.parasOpened, parasOnTexLine: x.parasOnTexLine, parasOff: x.parasOff } : {})
   return {
-    pass: counted && t.I10 === 0 && across && t.I6other === 0 && (!a || (a.I10 === 0 && a.I6other === 0)) && (!parasHeld || (t.parasOff === 0 && (!a || a.parasOff === 0))),
-    numbers: { ...(t.I10 != null ? { I10: t.I10 } : {}), pieces: t.I10pieces ?? 0, pairs: t.pairs, ...(t.I6other != null ? { I6twice: t.I6twice, I6head: t.I6head, I6other: t.I6other } : {}), ...parasOf(t), ...(a ? { added: { pairs: a.pairs, I10: a.I10, pieces: a.I10pieces ?? 0, I6other: a.I6other, ...parasOf(a) } } : {}) },
+    pass: held && counted && t.I10 === 0 && across && (!a || a.I10 === 0),
+    numbers: { ...(t.I10 != null ? { I10: t.I10 } : {}), pieces: t.I10pieces ?? 0, pairs: t.pairs, ...(t.I6other != null ? { I6twice: t.I6twice, I6head: t.I6head, I6other: t.I6other } : {}), ...(t.readsOutside != null ? { readsOutside: t.readsOutside } : {}), ...parasOf(t), ...(a ? { added: { pairs: a.pairs, I10: a.I10, pieces: a.I10pieces ?? 0, I6other: a.I6other, ...(a.readsOutside != null ? { readsOutside: a.readsOutside } : {}), ...parasOf(a) } } : {}) },
     ...(Object.keys(findings).length ? { findings } : {}),
   }
 }
+
+/** the Google rows tool's totals (the rounds' google-rows.mts): "total over N pairs: units U, google G, microsoft M, …", each
+ *  count by its words in camel case (`refused unavailable` 3: `refusedUnavailable`, a unit whose wire the store holds no reply to;
+ *  `no bundle`: `noBundle`) */
+export function rowsOf(text) {
+  const m = /^total over (\d+) pairs: (.*)$/m.exec(text)
+  if (!m) return {}
+  const out = { pairs: num(m[1]) }
+  for (const [, k, n] of m[2].matchAll(/([a-z][a-z ]*?) (\d+)(?:, |$)/g)) out[k.replace(/ (\w)/g, (_, c) => c.toUpperCase())] = num(n)
+  return out
+}
+
+/**
+ * reader-parts' verdict over its three steps (`as`: 'door', the runner over the door's rows; 'rows', Google's rows made through
+ * this tree's chain; 'google', the runner over them): each store's run whole and its runner's own verdicts held (entryRunOf), the
+ * rows made with no unit unavailable (a unit whose wire the lab's store holds no reply to: the rows would not be the round's); I3,
+ * I4 and I5 counted over both stores, the set and the added pairs, as findings, and held to the last integrated round's counts
+ * (`record`, lab/release-check/reader-parts.json: the round judges the reader gate so, against the round before): a count above
+ * its record fails the gate, one below it is said. The door's entry times give the page's layout (design §7)
+ */
+export function readerPartsJudge(steps, parasHeld = PARAS_HELD, record = null) {
+  const at = as => steps.find(s => s.as === as)
+  const rows = at('rows')
+  const made = rowsOf(rows?.text ?? '')
+  const runs = Object.fromEntries(['door', 'google'].map(k => [k, entryRunOf(at(k), parasHeld)]))
+  const storeOf = ({ t, a }) => ({ alike: t.entryAlike, not: t.entryNot, I3: t.I3, I4: t.I4, I5: t.I5, I10: t.I10, pieces: t.I10pieces, I6other: t.I6other, readsOutside: t.readsOutside, ...parasOf(t), ...(a ? { added: { pairs: a.pairs, alike: a.entryAlike, not: a.entryNot, I3: a.I3, I4: a.I4, I5: a.I5, I10: a.I10, I6other: a.I6other, readsOutside: a.readsOutside, ...parasOf(a) } } : {}) })
+  const findings = {}
+  const rose = [],
+    fell = []
+  for (const k of ['I3', 'I4', 'I5']) {
+    const parts = Object.entries(runs).filter(([, r]) => r.whole && r.t[k] != null).flatMap(([s, r]) => [[s, r.t[k]], ...(r.a?.[k] != null ? [[`${s}, added`, r.a[k]]] : [])])
+    if (parts.length) findings[k] = { held: parts.every(([, n]) => n === 0), count: parts.every(([, n]) => n === 0) ? 0 : parts.filter(([, n]) => n > 0).map(([s, n]) => `${n} (${s})`).join(', ') }
+    // (against the last integrated round's counts: a part the record names, its count above the record's or below it)
+    for (const [s, n] of parts) {
+      const was = record?.counts?.[s]?.[k]
+      if (was == null) continue
+      if (n > was) rose.push(`${k} ${was} -> ${n} (${s})`)
+      else if (n < was) fell.push(`${k} ${was} -> ${n} (${s})`)
+    }
+  }
+  const door = runs.door.t
+  const notes = [
+    made.refusedUnavailable > 0 && `the lab's Google store holds no reply to ${made.refusedUnavailable} units the chain asks: the rows are not the round's`,
+    made.noBundle > 0 && `${made.noBundle} pairs have no bundle in this run`,
+    rose.length && `above the last round's (${record.commit}): ${rose.join(', ')}`,
+    fell.length && `below the last round's (${record.commit}), the record to lower: ${fell.join(', ')}`,
+  ].filter(Boolean)
+  return {
+    pass: runs.door.held && runs.google.held && rows?.exit === 0 && made.units > 0 && !(made.refusedUnavailable > 0) && !(made.noBundle > 0) && !rose.length,
+    numbers: { door: storeOf(runs.door), google: storeOf(runs.google), rows: made, ...(door.entryP50 != null ? { layP50: door.entryP50, layP90: door.entryP90, layP99: door.entryP99, layPages: door.entryPages } : {}) },
+    ...(Object.keys(findings).length ? { findings } : {}),
+    ...(notes.length ? { note: notes.join('; ') } : {}),
+  }
+}
+
+/** reader-parts' record: the counts of the last integrated round (lab/release-check/reader-parts.json) */
+export const readerPartsRecord = root => JSON.parse(readFileSync(join(root, 'lab/release-check/reader-parts.json'), 'utf8'))
 
 /** a corpus runner's log.tsv (lab/pdf/prepare-back/corpus.sh): one line a paper, `id <tab> exit <tab> summary`. The table
  *  keeps 400 characters of a summary, and run.mjs's is longer since it states what locate made (60c263fd1): a paper's summary
@@ -411,7 +511,10 @@ export function canvasOf(text, ids = []) {
 
 // ---------------------------------------------------------------- the gates
 // A gate: `id`, `title`, `tier` (the first it runs in), `stage` (design §4.9), `holds` (invariant ids), `steps(ctx)` (each
-// `{ cmd, slot?, env?, out? }`, run in order, the first that fails ends the gate), `needs(ctx)` (inputs outside the
+// `{ cmd, slot?, env?, fresh?, all?, as? }`, run in order, the first that fails ends the gate but one marked `all`; `slot` the
+// heavy slot's kind, the lab's rule: `test` for a job that spawns a worker a core (vitest, a build), `run` for one long process
+// with no pool of workers (a corpus run, a runner over the pairs, the parity's lay), `e2e` for a browser; `as` names a step
+// for its gate's judge), `needs(ctx)` (inputs outside the
 // repository: `{ what, path }`, a gate whose input is missing is skipped and says which), `after` (gates whose output it
 // reads), `disk` (writes corpus outputs: refused under the free disk the lab's runners require), `network` ('live': runs
 // only with --online), `judge(ctx, steps)` (its pass and numbers; by default every step's exit code 0), and for a gate of
@@ -429,16 +532,39 @@ const e2e = (script, title, holds = [], extra = {}) => ({
   judge: (ctx, steps) => ({ pass: steps.every(s => s.exit === 0), numbers: checksOf(steps.at(-1).text) }),
   ...extra,
 })
+/** the build of today's reader the full tier makes (build-today) */
+const todayBuild = ctx => join(ctx.work, 'today-reader', '.output', 'chrome-mv3')
+/** an e2e script on today's reader's build: passed where it ran on that build (no rebuilt reader's pdfjs/ in it) and passed */
+const todayE2e = (script, title) => ({
+  ...e2e(script, title),
+  id: `${script}-today`,
+  tier: 'full',
+  after: ['build-today'],
+  steps: ctx => [{ cmd: ['pnpm', script], slot: 'e2e', env: { AXT_EXT_DIR: todayBuild(ctx) } }],
+  judge: (ctx, steps) => {
+    const rebuilt = existsSync(join(todayBuild(ctx), 'pdfjs'))
+    return { pass: !rebuilt && steps.every(s => s.exit === 0), numbers: checksOf(steps.at(-1).text), ...(rebuilt ? { note: `${todayBuild(ctx)} carries the rebuilt reader (pdfjs/): its checks ran in place of today's` } : {}) }
+  },
+})
 const lab = (ctx, ...p) => join(ctx.refactor, ...p)
+/** the five corpus papers the reader package's harness opens (its I8 on the corpus) */
+const HARNESS_PAPERS = ['1512.03385v1', '1706.03762v7', '2609.26457v1', '2307.16209v1', '2610.20030v1']
 const exists = (what, path) => ({ what, path })
 
-// The corpus the prepare's gates run, as the integration round's stage 1a runs it (lanes/converge-7/round*-chain.sh): its 88
-// papers; the compile caches its chain reads, whose newest directories hold the compiles of the marks the round moved
-// (RELEASE_CHECK_CACHES, else the lab's list for these papers); and its flags, the baseline's dumps read for the units of
-// today's the candidate makes otherwise (run.mjs --baseline: the stated causes the acceptance list reads). A run and its twin
-// take the same flags: same.mjs compares two runs only where their flags agree.
+// The corpus the prepare's gates run, as the integration round's stage 1a runs it (lanes/converge-8/rf-chain.sh): the set's 88
+// papers and the added pairs' papers (lab/typeset/added.mjs: their bundles are what the reader gate and the display gate walk
+// them over), written as one list into the work directory (papers.mjs); the compile caches its chain reads, whose newest
+// directories hold the compiles of the marks the round moved and the added papers' (RELEASE_CHECK_CACHES: the round's run's
+// flags.txt, whose chain names them; else the lab's list, which goes stale when a round fills a compile directory of its own);
+// and its flags, the baseline's dumps read for the units of today's the candidate makes otherwise (run.mjs --baseline: the
+// stated causes the acceptance list reads). A run and its twin take the same flags: same.mjs compares two runs only where their
+// flags agree.
 const PAPERS = 'lanes/L1-papers88.tsv'
+const ADDED_PAPERS = 'baseline/added/papers.tsv'
 const cachesFile = ctx => process.env.RELEASE_CHECK_CACHES ?? lab(ctx, 'lanes/L1-caches88.txt')
+/** the corpus list a run prepares: the set's papers, then the added papers' */
+const corpusList = ctx => join(ctx.work, 'papers.tsv')
+const listStep = ctx => ({ cmd: ['node', 'lab/release-check/papers.mjs', corpusList(ctx), lab(ctx, PAPERS), lab(ctx, ADDED_PAPERS)], as: 'papers' })
 /** a compile cache chain, colon-joined, from its file: a list of directories (joined by `:` or one a line, `#` a comment), or
  *  a corpus run's flags.txt (corpus.sh writes the chain it read as its `--caches=` line) */
 export function cachesOf(text) {
@@ -451,12 +577,92 @@ export function cachesOf(text) {
     .filter(Boolean)
     .join(':')
 }
-const corpusNeeds = ctx => [exists('the 88 papers', lab(ctx, PAPERS)), exists("the compile caches' list (RELEASE_CHECK_CACHES)", cachesFile(ctx))]
+const corpusNeeds = ctx => [exists('the 88 papers', lab(ctx, PAPERS)), exists("the added pairs' papers (lab/typeset/added.mjs)", lab(ctx, ADDED_PAPERS)), exists("the compile caches' list (RELEASE_CHECK_CACHES)", cachesFile(ctx))]
 /** a run with the round's flags reads the baseline's dumps besides */
 const stage1aNeeds = ctx => [...corpusNeeds(ctx), exists("the baseline's prepare dumps", lab(ctx, 'baseline/prepare'))]
-/** corpus.sh's arguments: the papers, the output, the caches and two papers at once, then run.mjs's flags */
-const corpusArgs = (ctx, out, ...flags) => ['bash', 'lab/pdf/prepare-back/corpus.sh', lab(ctx, PAPERS), out, cachesOf(readFileSync(cachesFile(ctx), 'utf8')), '2', ...flags]
+/** corpus.sh's arguments: the papers (the run's list), the output, the caches and two papers at once, then run.mjs's flags */
+const corpusArgs = (ctx, out, ...flags) => ['bash', 'lab/pdf/prepare-back/corpus.sh', corpusList(ctx), out, cachesOf(readFileSync(cachesFile(ctx), 'utf8')), '2', ...flags]
 const stage1a = ctx => ['--prove', `--baseline=${lab(ctx, 'baseline/prepare')}`]
+
+// The pairs the integration round's reader gate and Google's rows walk (lanes/converge-8/rf-rows-reader.sh): the 90 of the stored
+// rows (the tap's pairs of the release's rows whose paper the corpus holds), as lab-data lists them for the rounds, then the added
+// pairs (lab/typeset/added.mjs), which the runner walks apart
+const STORED = 'lanes/cjk-punct/blast/pairs.txt'
+const storedOf = ctx => readFileSync(lab(ctx, STORED), 'utf8').split(/\s+/).filter(Boolean)
+// Google's rows as the rounds make them (the integration's tools, lab-data only): the lab's Google store read through this tree's
+// chain, no translator asked (google-rows.mts), and the reader gate laid over them in place of the door's (rows-register.mjs, a
+// module hook on gate-l1.ts that fails to load where one of its anchors no longer stands once in the file)
+const GOOGLE_STORE = 'google-rows/ef6989debed1'
+const ROWS_TOOL = 'lanes/converge-7/tools-b15/google-rows.mts'
+const ROWS_REGISTER = 'lanes/converge-7/tools-b15/rows-register.mjs'
+/** the inputs the typesetter's runners read besides the bundles */
+const runnerNeeds = ctx => [
+  exists('the tap', lab(ctx, 'baseline/tap/ledgers')),
+  exists("the release sweep's cache (AXT_SWEEP_CACHE)", join(SWEEP_CACHE, 'papers')),
+  exists("the reader's served faces' tables (AXT_FACE_TABLES)", join(TABLES, 'index.json')),
+  exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
+]
+/** this run's bundles (the prepare gate's), which every gate after it reads */
+const bundlesDir = ctx => join(ctx.work, 'prepare', 'bundles')
+/** this run's rows of its bundles: Google's, made by reader-parts' rows step over them (`<pair>.json`), which harness-lab lays */
+const runRowsDir = ctx => join(ctx.work, 'reader-parts', 'google-rows')
+
+// The parity's steps over some pairs (lab/typeset/parity/: v2's lay, the drawing, the measures and the verdict), into `dir`;
+// `toggles` the reading options (`--toggles=on`: every switch of "What to translate" on), `wrap` the command's environment (the
+// added pairs' through added.mjs). The verdict's step runs whatever it finds (`all`), so that the steps after it run too
+const parity = (ctx, dir, pairs, { toggles = [], wrap = x => x, as = '' } = {}) => [
+  { cmd: wrap(['node', 'lab/typeset/parity/v2.mjs', `--out=${join(dir, 'v2')}`, ...toggles, ...pairs]), slot: 'run', env: { AXT_L1_BUNDLES: bundlesDir(ctx) }, fresh: dir, as: `v2${as}` },
+  { cmd: wrap(['node', 'lab/typeset/parity/render.mjs', `--work=${dir}`, `--out=${join(dir, 'sheet')}`, ...toggles, ...pairs]), slot: 'e2e', env: { AXT_L1_BUNDLES: bundlesDir(ctx) }, as: `render${as}` },
+  { cmd: wrap(['node', 'lab/typeset/parity/measure.mjs', `--work=${dir}`, `--out=${join(dir, 'sheet')}`, ...pairs]), env: { AXT_L1_BUNDLES: bundlesDir(ctx) }, all: true, as: `measure${as}` },
+]
+const withAdded = cmd => ['node', 'lab/typeset/added.mjs', '--', ...cmd]
+/** the parity's inputs besides the runners' (lab/typeset/parity/README.md "Today's side") */
+const parityNeeds = ctx => [
+  ...runnerNeeds(ctx),
+  exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv')),
+  exists("today's prepare dumps (the original's lines of today's units)", lab(ctx, 'baseline/prepare')),
+  exists("today's engine at 065c1d973 (AXT_TODAY)", join(process.env.AXT_TODAY ?? join(ctx.root, '..', 'refactor-read'), 'src/pdf-reader/engine/view/engine.css')),
+]
+/** today's side is production's (lab/typeset/parity/production-rows.mjs): production's own row path over the stored rows gives
+ *  them back, or the side drawn as production's is not; its count per pair in the gate's numbers, a pair not production's
+ *  failing it. Run whatever it finds, so that the parity is measured and reported beside it */
+const productionRows = (pairs, wrap = x => x, as = 'rows') => ({ cmd: wrap(['node', 'lab/typeset/parity/production-rows.mjs', ...pairs]), all: true, as })
+/** production-rows.mjs's totals: "production's rows: P of N pairs; R of S stored rows given back …", and the pairs that are not */
+export function productionRowsOf(text) {
+  const m = /^production's rows: (\d+) of (\d+) pairs; (\d+) of (\d+) stored rows/m.exec(text)
+  const not = [...text.matchAll(/^(\S+): (?:NOT production's|not read): (.*)$/gm)].map(x => `${x[1]}: ${x[2].slice(0, 160)}`)
+  return m ? { pairs: num(m[1]), of: num(m[2]), rows: num(m[3]), stored: num(m[4]), ...(not.length ? { not } : {}) } : { ...(not.length ? { not } : {}) }
+}
+/** a display gate's verdict over its parity runs (`modes`: each run's `as` suffix and where its numbers go: [] the gate's own,
+ *  ['added'], ['on'], ['on', 'added']) and its checks of today's rows (`rows`: their `as`): every planned step ran (`planned`)
+ *  and exited 0; I10 over the pairs as v2's lay states it, every run's summed */
+export function displayJudge(steps, planned, modes, rows) {
+  const at = as => steps.find(s => s.as === as)
+  const numbers = {}
+  let I10 = null
+  for (const [suffix, path] of modes) {
+    const n = parityOf(at(`measure${suffix}`)?.text ?? '')
+    const i = typesetOf(at(`v2${suffix}`)?.text ?? '').I10
+    if (i != null) {
+      n.I10 = i
+      I10 = (I10 ?? 0) + i
+    }
+    let into = numbers
+    for (const k of path) {
+      into[k] ??= {}
+      into = into[k]
+    }
+    Object.assign(into, n)
+  }
+  numbers.today = Object.fromEntries(rows.map(as => [as, productionRowsOf(at(as)?.text ?? '')]))
+  const notProduction = rows.flatMap(as => productionRowsOf(at(as)?.text ?? '').not ?? [])
+  return {
+    pass: steps.length === planned && steps.every(s => s.exit === 0),
+    numbers,
+    ...(I10 != null ? { findings: { I10: { held: I10 === 0, count: I10 } } } : {}),
+    ...(notProduction.length ? { note: `today's side is not production's: ${notProduction.join('; ')}` } : {}),
+  }
+}
 
 export const GATES = [
   // ---------------------------------------------------------------- unit (hosted CI, every pull request)
@@ -512,22 +718,24 @@ export const GATES = [
       return { pass: steps[0].exit === 0 && !/route table violated/.test(text), numbers }
     },
   },
-  e2e('e2e:reader', "today's reader (the shipped build's) on the stand-in of the v1 layer API"),
+  // (a default build carries the rebuilt reader (AXT_READER v2, pdfjs/ at its root), on which tests/e2e/reader.mjs and
+  // registration.mjs run the rebuilt reader's checks: today's reader's are the full tier's, on a build of its own, below)
+  e2e('e2e:reader', "the rebuilt reader in the extension (the shipped build's) on the stand-in of our server's /api/v2 (tests/e2e/reader-v2.mjs, reader-v2-layer.mjs)"),
   e2e('e2e:framing', 'the reader and the popup framed: every way the extension opens them works, a framing page gets nothing'),
   e2e('e2e:a11y', 'the A/B axe audit: no finding the extension adds'),
   e2e('e2e:viewer', "the figure viewer's control under a pinned header"),
-  e2e('e2e:registration', "today's reader: a laid page's copy, SVG and links registered at every zoom"),
+  e2e('e2e:registration', "the rebuilt reader in the extension: a laid page's drawing, overlay and links registered at every zoom (tests/e2e/registration-v2.mjs)"),
   e2e('e2e:small-caps', "today's layer's small capitals in Chromium, Firefox and WebKit", [], { after: [] }),
   // ---------------------------------------------------------------- pipeline (the self-hosted runner, with lab data)
   {
     id: 'prepare',
-    title: "the prepare's back half on the 88 papers from cached compiles, with PDF.js's proofs (I1 (a), I2 (c′)), as the round's stage 1a runs it",
+    title: "the prepare's back half on the 88 papers and the added pairs' from cached compiles, with PDF.js's proofs (I1 (a), I2 (c′)), as the round's stage 1a runs it",
     tier: 'full',
     stage: 'pipeline',
     holds: ['I1', 'I2'],
     disk: true,
     needs: stage1aNeeds,
-    steps: ctx => [{ cmd: corpusArgs(ctx, join(ctx.work, 'prepare'), ...stage1a(ctx)), slot: 'test', fresh: join(ctx.work, 'prepare') }],
+    steps: ctx => [listStep(ctx), { cmd: corpusArgs(ctx, join(ctx.work, 'prepare'), ...stage1a(ctx)), slot: 'run', fresh: join(ctx.work, 'prepare') }],
     judge: ctx => corpusJudge(ctx, join(ctx.work, 'prepare'), ['a', 'c']),
   },
   {
@@ -551,13 +759,14 @@ export const GATES = [
     after: ['prepare'],
     needs: stage1aNeeds,
     steps: ctx => [
-      { cmd: corpusArgs(ctx, join(ctx.work, 'prepare-2'), ...stage1a(ctx)), slot: 'test', fresh: join(ctx.work, 'prepare-2') },
-      { cmd: ['node', 'lab/pdf/prepare-back/same.mjs', join(ctx.work, 'prepare'), join(ctx.work, 'prepare-2')] },
+      listStep(ctx),
+      { cmd: corpusArgs(ctx, join(ctx.work, 'prepare-2'), ...stage1a(ctx)), slot: 'run', fresh: join(ctx.work, 'prepare-2') },
+      { cmd: ['node', 'lab/pdf/prepare-back/same.mjs', join(ctx.work, 'prepare'), join(ctx.work, 'prepare-2')], as: 'same' },
     ],
     judge: (ctx, steps) => {
       const log = corpusLogOf(join(ctx.work, 'prepare-2', 'log.tsv'))
       if (log.refused.length) return { skip: `the corpus runner refused ${log.refused.length} papers: ${log.refused[0]}` }
-      return { pass: steps.every(s => s.exit === 0), numbers: { papers: log.papers, same: steps[1]?.text.trim().split('\n').at(-1) } }
+      return { pass: steps.length === 3 && steps.every(s => s.exit === 0), numbers: { papers: log.papers, same: steps.find(s => s.as === 'same')?.text.trim().split('\n').at(-1) } }
     },
   },
   {
@@ -593,27 +802,8 @@ export const GATES = [
       exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
     ],
     steps: ctx => [
-      { cmd: ['node', 'lab/typeset/gate.mjs', `--out=${join(ctx.work, 'typeset-today')}`], slot: 'test', fresh: join(ctx.work, 'typeset-today') },
+      { cmd: ['node', 'lab/typeset/gate.mjs', `--out=${join(ctx.work, 'typeset-today')}`], slot: 'run', fresh: join(ctx.work, 'typeset-today') },
       { cmd: ['node', lab(ctx, 'baseline/tools/diff.mjs'), lab(ctx, 'baseline'), join(ctx.work, 'typeset-today'), '--scope=reader', `--json=${join(ctx.work, 'typeset-today-diff.json')}`] },
-    ],
-    judge: (ctx, steps) => typesetJudge(steps),
-  },
-  {
-    id: 'typeset-parts',
-    title: "the typesetter over this run's prepared parts (lab/typeset/gate-l1.mjs) and the reader's differential",
-    tier: 'full',
-    stage: 'reader',
-    holds: ['D', 'I3', 'I4', 'I5'],
-    after: ['prepare'],
-    needs: ctx => [
-      exists('the tap', lab(ctx, 'baseline/tap/ledgers')),
-      exists("the release sweep's cache (AXT_SWEEP_CACHE)", join(SWEEP_CACHE, 'papers')),
-      exists("the reader's served faces' tables (AXT_FACE_TABLES), the measurer of a width the tap lacks", join(TABLES, 'index.json')),
-      exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
-    ],
-    steps: ctx => [
-      { cmd: ['node', 'lab/typeset/gate-l1.mjs', `--out=${join(ctx.work, 'typeset-parts')}`], slot: 'test', env: { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }, fresh: join(ctx.work, 'typeset-parts') },
-      { cmd: ['node', lab(ctx, 'baseline/tools/diff.mjs'), lab(ctx, 'baseline'), join(ctx.work, 'typeset-parts'), '--scope=reader', `--json=${join(ctx.work, 'typeset-parts-diff.json')}`] },
     ],
     judge: (ctx, steps) => typesetJudge(steps),
   },
@@ -624,26 +814,52 @@ export const GATES = [
     stage: 'reader',
     holds: ['I10', 'I6'],
     after: ['prepare'],
-    needs: ctx => [
-      exists('the tap', lab(ctx, 'baseline/tap/ledgers')),
-      exists("the release sweep's cache (AXT_SWEEP_CACHE)", join(SWEEP_CACHE, 'papers')),
-      exists("the reader's served faces' tables (AXT_FACE_TABLES)", join(TABLES, 'index.json')),
-      exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
-    ],
-    // (the runner's own lay there is the reading from the part's, not typeset-parts' (today's reading): its dumps are not
-    // compared; the entry alone is read)
+    needs: runnerNeeds,
+    // (every pair the tap holds, the gate pack's pairs among them, then the added pairs apart; the entry alone is read: its
+    // dumps are not compared)
     steps: ctx => [
-      { cmd: ['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', `--out=${join(ctx.work, 'sentence-cover')}`], slot: 'test', env: { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }, fresh: join(ctx.work, 'sentence-cover') },
+      { cmd: ['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', `--out=${join(ctx.work, 'sentence-cover')}`], slot: 'run', env: { AXT_L1_BUNDLES: bundlesDir(ctx) }, fresh: join(ctx.work, 'sentence-cover') },
     ],
     // (counted over the pieces the entry drew: a run that laid nothing, or did not end whole, has no count and fails; a run whose
-    // exit is a unit laid otherwise by two pages' lays alone (I6 across the lays, another cause than the head pass's) ended whole,
-    // and one whose exit is a paragraph point run on (paras-gate.ts, design-display 2a's gate): its count is reported, and
-    // fails the gate where PARAS_HELD says so; the added pairs walked apart held as the set's: sentenceCoverJudge)
+    // exit is one of the runner's own verdicts, stated (a unit laid otherwise by two pages' lays by another cause than the head
+    // pass's, a row read outside a page's wait set, a paragraph point run on), ended whole: its counts are read, the first two
+    // fail the gate and the third where PARAS_HELD says so; the added pairs walked apart held as the set's: sentenceCoverJudge)
     judge: (ctx, steps) => sentenceCoverJudge(steps),
   },
   {
+    id: 'reader-parts',
+    title: "the reader gate over this run's prepared parts, once with each rows store, as the integration round runs it (lab/typeset/gate-l1.mjs --entry --reading=part, the runner set up as the entry is): each page of the 90 pairs of the stored rows and the added pairs (apart) laid over the door's rows, the release's stored replies, and over Google's, the lab's Google store read through this tree's chain (no translator asked); I3 read by ink, I4 and I5 counted on both",
+    tier: 'full',
+    stage: 'reader',
+    holds: ['I3', 'I4', 'I5'],
+    after: ['prepare'],
+    needs: ctx => [
+      ...runnerNeeds(ctx),
+      exists('the 90 pairs of the stored rows', lab(ctx, STORED)),
+      exists("the lab's Google store", lab(ctx, GOOGLE_STORE)),
+      exists("the rounds' tool making Google's rows from the store", lab(ctx, ROWS_TOOL)),
+      exists('its hook laying them in place of the door\'s', lab(ctx, ROWS_REGISTER)),
+    ],
+    // (one long process each, no pool of workers: the heavy slot's `run`; the door's run whatever it finds, so that Google's runs
+    // too; AXT_GATE_ENTRY=1, as the round sets it, lists each member the entry lays otherwise in the log)
+    steps: ctx => {
+      const dir = join(ctx.work, 'reader-parts')
+      const pairs = [...storedOf(ctx), ...ADDED]
+      const env = { AXT_L1_BUNDLES: bundlesDir(ctx), AXT_GATE_ENTRY: '1' }
+      const gate = (store, ...pre) => ['node', ...pre, 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', `--out=${join(dir, store)}`, ...pairs]
+      return [
+        { cmd: gate('door'), slot: 'run', env, fresh: dir, all: true, as: 'door' },
+        { cmd: ['node', '--experimental-strip-types', lab(ctx, ROWS_TOOL), ctx.root, runRowsDir(ctx), lab(ctx, GOOGLE_STORE), ...pairs], slot: 'run', env, as: 'rows' },
+        { cmd: gate('google', '--import', lab(ctx, ROWS_REGISTER)), slot: 'run', env: { ...env, AXT_B14_ROWS: runRowsDir(ctx) }, as: 'google' },
+      ]
+    },
+    // (each store's run read whole as the runner states it, its own verdicts held; I3, I4, I5 counted as findings and held to the
+    // last integrated round's counts, reader-parts.json: readerPartsJudge)
+    judge: (ctx, steps) => readerPartsJudge(steps, PARAS_HELD, readerPartsRecord(ctx.root)),
+  },
+  {
     id: 'display',
-    title: "display ≥ today: no page worse than today's, a difference only where nearer the original (lab/typeset/parity/: today's output and v2's drawn beside arXiv's page on 22 papers with the same rows, every difference judged against the original; the added pairs, lab/typeset/added.mjs, judged apart)",
+    title: "display ≥ today: no page worse than today's, a difference only where nearer the original (lab/typeset/parity/: today's output and v2's drawn beside arXiv's page on 22 papers with the same rows, every difference judged against the original; under the reader's default options and with every switch on, as the round judges it; the added pairs, lab/typeset/added.mjs, judged apart; today's rows checked production's first)",
     tier: 'full',
     stage: 'reader',
     holds: ['I3', 'I10'],
@@ -651,57 +867,26 @@ export const GATES = [
     cutover: true,
     after: ['prepare'],
     disk: true,
-    needs: ctx => [
-      exists('the tap', lab(ctx, 'baseline/tap/ledgers')),
-      exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv')),
-      exists("today's prepare dumps (the original's lines of today's units)", lab(ctx, 'baseline/prepare')),
-      exists("the release sweep's cache (AXT_SWEEP_CACHE)", join(SWEEP_CACHE, 'papers')),
-      exists("the reader's served faces' tables (AXT_FACE_TABLES)", join(TABLES, 'index.json')),
-      exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
-      exists("today's engine at 065c1d973 (AXT_TODAY)", join(process.env.AXT_TODAY ?? join(ctx.root, '..', 'refactor-read'), 'src/pdf-reader/engine/view/engine.css')),
-      exists("the added pairs' today's side (lab/typeset/added.mjs)", lab(ctx, 'baseline/added/pairs.txt')),
-    ],
-    // (the 22 pairs, then the added pairs in steps of their own, their today's side read through added.mjs's root of links (made
-    // as the step runs), their sheet beside, so that the 22's numbers stay comparable with the rounds before)
+    needs: ctx => [...parityNeeds(ctx), exists("the added pairs' today's side (lab/typeset/added.mjs)", lab(ctx, 'baseline/added/pairs.txt'))],
+    // (today's rows of the 22 and of the added pairs checked production's (production-rows.mjs); then the 22 pairs, the added
+    // pairs in steps of their own, their today's side read through added.mjs's root of links (made as the step runs), their sheet
+    // beside, so that the 22's numbers stay comparable with the rounds before; then both again with every switch on)
     steps: ctx => {
-      const work = join(ctx.work, 'display')
-      const added = join(ctx.work, 'display-added')
-      const withAdded = cmd => ['node', 'lab/typeset/added.mjs', '--', ...cmd]
-      const env = { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }
+      const dir = name => join(ctx.work, name)
       return [
-        { cmd: ['node', 'lab/typeset/parity/v2.mjs', `--out=${join(work, 'v2')}`, ...PARITY_PAIRS], slot: 'test', env, fresh: work },
-        { cmd: ['node', 'lab/typeset/parity/render.mjs', `--work=${work}`, `--out=${join(work, 'sheet')}`, ...PARITY_PAIRS], slot: 'e2e', env },
-        { cmd: ['node', 'lab/typeset/parity/measure.mjs', `--work=${work}`, `--out=${join(work, 'sheet')}`, ...PARITY_PAIRS], env },
-        { cmd: withAdded(['node', 'lab/typeset/parity/v2.mjs', `--out=${join(added, 'v2')}`, ...ADDED]), slot: 'test', env, fresh: added },
-        { cmd: withAdded(['node', 'lab/typeset/parity/render.mjs', `--work=${added}`, `--out=${join(added, 'sheet')}`, ...ADDED]), slot: 'e2e', env },
-        { cmd: withAdded(['node', 'lab/typeset/parity/measure.mjs', `--work=${added}`, `--out=${join(added, 'sheet')}`, ...ADDED]), env },
+        productionRows(PARITY_PAIRS),
+        productionRows(ADDED, withAdded, 'rows-added'),
+        ...parity(ctx, dir('display'), PARITY_PAIRS),
+        ...parity(ctx, dir('display-added'), ADDED, { wrap: withAdded, as: '-added' }),
+        ...parity(ctx, dir('display-on'), PARITY_PAIRS, { toggles: ['--toggles=on'], as: '-on' }),
+        ...parity(ctx, dir('display-added-on'), ADDED, { toggles: ['--toggles=on'], wrap: withAdded, as: '-added-on' }),
       ]
     },
     judge: (ctx, steps) => {
-      const numbers = parityOf(steps[2]?.text ?? '')
-      // (I10 over the pairs' Pages as the reader lays them: v2.mjs's count)
-      const I10 = typesetOf(steps[0]?.text ?? '').I10
-      if (I10 != null) numbers.I10 = I10
-      // (the added pairs' verdict and I10, apart)
-      const added = parityOf(steps[5]?.text ?? '')
-      const addedI10 = typesetOf(steps[3]?.text ?? '').I10
-      if (addedI10 != null) added.I10 = addedI10
-      numbers.added = added
-      const findings = { ...(I10 != null || addedI10 != null ? { I10: { held: (I10 ?? 0) === 0 && (addedI10 ?? 0) === 0, count: (I10 ?? 0) + (addedI10 ?? 0) } } : {}) }
-      return { pass: steps.length === 6 && steps.every(s => s.exit === 0), numbers, ...(Object.keys(findings).length ? { findings } : {}), note: `the sheets: ${join(ctx.work, 'display', 'sheet', 'index.html')}, ${join(ctx.work, 'display-added', 'sheet', 'index.html')}` }
+      const j = displayJudge(steps, 14, [['', []], ['-added', ['added']], ['-on', ['on']], ['-added-on', ['on', 'added']]], ['rows', 'rows-added'])
+      const sheets = ['display', 'display-added', 'display-on', 'display-added-on'].map(d => join(ctx.work, d, 'sheet', 'index.html')).join(', ')
+      return { ...j, note: [j.note, `the sheets: ${sheets}`].filter(Boolean).join('; ') }
     },
-  },
-  {
-    id: 'typeset-replays',
-    title: "the typesetter's port against today's recorded rounds (lab/typeset/replay-*.mjs)",
-    tier: 'full',
-    stage: 'reader',
-    holds: [],
-    needs: ctx => [exists('the tap', lab(ctx, 'baseline/tap/samples'))],
-    // (the figures under today's mark rule, `--marks=today`: v2 sets a figure text by its ink where today's set it by its
-    // advance (PDF-READER §19.12, 9abd1c9e1), which alone moves 609 of the 14,351, and §19.12 reads the port's figures so)
-    steps: () => ['fit', 'fill', 'emit', 'names', 'figures', 'display'].map(r => ({ cmd: ['node', `lab/typeset/replay-${r}.mjs`, ...(r === 'figures' ? ['--marks=today'] : [])], slot: 'test', all: true })),
-    judge: (ctx, steps) => ({ pass: steps.every(s => s.exit === 0), numbers: Object.fromEntries(steps.map(s => [s.cmd[1].replace(/^.*replay-|\.mjs$/g, ''), s.exit === 0 ? 'equal' : `exit ${s.exit}: ${lastLine(s.text)}`])) }),
   },
   {
     id: 'typeset-data',
@@ -714,7 +899,7 @@ export const GATES = [
     // (not move-fit.mjs --check, which held the breaker's five moved files to today's code and the changes it lists: the
     // typesetter's rulings edit those files in place since a8c36be1f (2026-11-08, a URL broken where its url package lets TeX
     // break it), about forty commits of PDF-READER §18 and §19, so the file it would write is no longer the package's and the
-    // check failed on every one; the moved code is held as the ported files are, by the replays and the reader's gates)
+    // check failed on every one; the moved code is held as the ported files are, by the reader's gates and the display gates)
     steps: () => [
       { cmd: ['node', 'lab/typeset/faces-data.mjs', '--check'], all: true },
       { cmd: ['node', 'lab/typeset/rules-data.mjs', '--check'], all: true },
@@ -724,14 +909,40 @@ export const GATES = [
   },
   {
     id: 'harness-lab',
-    title: "the reader package's browser checks with five corpus papers (the text layer's order asserted; their I1 residue and I3 reported, not asserted)",
+    title: "the reader package's browser checks with five corpus papers, laid from this run's bundles and this run's rows of them (the prepare's bundles; reader-parts' rows step, Google's rows over them read from the lab's store, no translator asked); the text layer's order asserted; their I1 residue and I3 reported, not asserted",
     tier: 'full',
     stage: 'reader',
     holds: ['I8'],
-    needs: ctx => [exists("lane L1's bundles of the corpus papers", lab(ctx, 'lanes/L1-out4/bundles/1512.03385v1'))],
-    steps: ctx => [{ cmd: ['node', 'packages/reader/e2e/run.mjs'], slot: 'e2e', env: { AXT_LAB_FIXTURES: '1512.03385v1,1706.03762v7,2609.26457v1,2307.16209v1,2610.20030v1', AXT_TIMINGS_OUT: join(ctx.work, 'harness-lab-timings.json') } }],
-    judge: (ctx, steps) => ({ pass: steps[0].exit === 0 && !/route table violated/.test(steps[0].text), numbers: checksOf(steps[0].text) }),
+    // (bundles and rows of the same run, never one without the other: the prepare's bundles (AXT_L1_BUNDLES) and the rows
+    // reader-parts' rows step made over them (AXT_LAB_ROWS). The harness refuses bundles without rows, and stops before any
+    // check where a paper's rows leave a unit its bundle asks without a row, or name units it does not hold ("rows do not belong
+    // to these bundles": rows of another run), and where the rows hold no file of a paper ("no rows of this run for <id>"): no
+    // paper is laid from lane L1's bundle and the baseline's dump in their place, and one that is fails the gate, named. Laid
+    // with rows of no run of its own, today's dumps keyed by L1's units, the run's bundles left the units its prepare cut
+    // otherwise without a row: 2609.26457v1's abstract and introduction the original's, lane harness-weight, 2026-11-13)
+    after: ['prepare', 'reader-parts'],
+    // (the papers' arXiv PDFs, the baseline's dumps the lab's; the rows this run's reader-parts made)
+    needs: ctx => [
+      exists("the corpus papers' list", lab(ctx, 'baseline/corpora/papers.json')),
+      exists("today's reader dumps", lab(ctx, 'baseline/reader')),
+      exists("this run's rows of its bundles (reader-parts' rows step)", runRowsDir(ctx)),
+    ],
+    steps: ctx => [{ cmd: ['node', 'packages/reader/e2e/run.mjs'], slot: 'e2e', env: { AXT_LAB_FIXTURES: HARNESS_PAPERS.join(','), AXT_L1_BUNDLES: bundlesDir(ctx), AXT_LAB_ROWS: runRowsDir(ctx), AXT_TIMINGS_OUT: join(ctx.work, 'harness-lab-timings.json') } }],
+    judge: (ctx, steps) => harnessLabJudge(steps[0]),
   },
+  // today's reader, the way back until the cut-over deletes it: a build of its own (a default build carries the rebuilt reader,
+  // on which reader.mjs and registration.mjs run the rebuilt reader's checks), today's checks run on it; a build that carries the
+  // rebuilt reader's PDF.js files is refused, so that the rebuilt reader's checks never stand in for today's
+  {
+    id: 'build-today',
+    title: "the extension built with today's reader (AXT_READER=today) from this commit, apart from the checkout (lab/release-check/today-build.sh): the way back, until the cut-over deletes it",
+    tier: 'full',
+    stage: 'reader',
+    holds: [],
+    steps: ctx => [{ cmd: ['bash', 'lab/release-check/today-build.sh', ctx.root, join(ctx.work, 'today-reader')], slot: 'test' }],
+  },
+  todayE2e('e2e:reader', "today's reader (AXT_READER=today, the way back) on the stand-in of the v1 layer API: tests/e2e/reader.mjs's own checks"),
+  todayE2e('e2e:registration', "today's reader (AXT_READER=today): a laid page's copy, SVG and links registered at every zoom"),
   // ---------------------------------------------------------------- the private repository's (named, never run here)
   { id: 'private-platform', title: "the private repository's platform tier: the Worker, the paper's object and the Workflows under workerd, the routes' contract suite, the persisted contracts", tier: 'full', stage: 'platform', holds: [], private: true },
   { id: 'private-box', title: "the private repository's box tier: the security suite on native amd64", tier: 'release', stage: 'box', holds: ['I9'], private: true },
@@ -741,14 +952,37 @@ export const GATES = [
   { id: 'private-sweep', title: "the private repository's release sweep against staging", tier: 'release', stage: 'corpus', holds: ['D'], private: true },
   // ---------------------------------------------------------------- corpus (before a release, the owner's machine)
   {
+    id: 'display-wide',
+    title: "display ≥ today on every pair of the stored rows (lab/typeset/parity/ over the 90 pairs, about 2,300 pages, under the reader's default options): the display gate's question, the owner's rulings encoded in its verdict, on every pair the lab holds today's rows of; today's rows checked production's first",
+    tier: 'release',
+    stage: 'corpus',
+    holds: ['I3', 'I10'],
+    // (the maintainer's base threshold, as `display` asks it, over every pair: in typeset-replays' place, design 3i; about 2.5
+    // hours of browser slots (954 s for 344 pages, measured on a shared machine), once per candidate, overnight. A page it leaves
+    // uncovered is fixed, shown to be a measure's artefact, or brought to the owner, never listed as accepted. After the cut-over
+    // today's side of every measure is read from what C1 froze)
+    cutover: true,
+    after: ['prepare'],
+    disk: true,
+    needs: ctx => [...parityNeeds(ctx), exists('the 90 pairs of the stored rows', lab(ctx, STORED))],
+    steps: ctx => {
+      const pairs = storedOf(ctx)
+      return [productionRows(pairs), ...parity(ctx, join(ctx.work, 'display-wide'), pairs)]
+    },
+    judge: (ctx, steps) => {
+      const j = displayJudge(steps, 4, [['', []]], ['rows'])
+      return { ...j, note: [j.note, `the sheet: ${join(ctx.work, 'display-wide', 'sheet', 'index.html')}`].filter(Boolean).join('; ') }
+    },
+  },
+  {
     id: 'pixels',
-    title: "the prepare's pixel proofs on every page of the 88 papers: all groups on is arXiv's page under Splash (I1 (b)), each kind off changes only its ink under Cairo (I2 (c))",
+    title: "the prepare's pixel proofs on every page of the 88 papers and the added pairs': all groups on is arXiv's page under Splash (I1 (b)), each kind off changes only its ink under Cairo (I2 (c))",
     tier: 'release',
     stage: 'corpus',
     holds: ['I1', 'I2'],
     disk: true,
     needs: ctx => [...corpusNeeds(ctx), exists('poppler (pdftoppm, pdftocairo)', which('pdftocairo'))],
-    steps: ctx => [{ cmd: corpusArgs(ctx, join(ctx.work, 'pixels'), '--prove', '--pixels', '--cairo'), slot: 'test', fresh: join(ctx.work, 'pixels') }],
+    steps: ctx => [listStep(ctx), { cmd: corpusArgs(ctx, join(ctx.work, 'pixels'), '--prove', '--pixels', '--cairo'), slot: 'run', fresh: join(ctx.work, 'pixels') }],
     judge: ctx => corpusJudge(ctx, join(ctx.work, 'pixels'), ['a', 'c', 'on', 'offOutside']),
   },
   {
@@ -794,14 +1028,15 @@ export const GATES = [
   // comparison holds every heavy slot (perf/tools/quiet.sh), in a window the coordinator gives)
   {
     id: 'perf-batch',
-    title: "the per-batch performance check: NEW's prepare in the round's box (one paper, three times, a warm box, the docker slot) and its reader on the round's website build (three papers, three visits each after a warm-up, one e2e slot), each measure against the last round recorded, worse or missing only past the two rounds' run-to-run spreads added under ordinary load (lab perf/tools/run.mjs --mode=batch, lab/release-check/perf.mjs)",
+    title: "the per-batch performance check: NEW's prepare in the round's box (one paper, three times, a warm box, the docker slot) and its reader built from this commit in the website's tree (three papers, three visits each after a warm-up, one e2e slot), each measure against the last round recorded, worse or missing only past the two rounds' run-to-run spreads added under ordinary load (lab perf/tools/run.mjs --mode=batch, lab/release-check/perf.mjs)",
     tier: 'full',
     stage: 'corpus',
     holds: [],
-    needs: (ctx) => [exists('the performance tools', lab(ctx, 'perf/tools/run.mjs')), exists("the readers' builds (PERF_BUILD: each website's build and tree)", perfBuild())],
-    // (the reader is given this run's own bundles where the prepare gate made them, else the lab's last round's; run.mjs takes
-    // each part's slot itself)
-    steps: (ctx) => [{ cmd: ['node', lab(ctx, 'perf/tools/run.mjs'), '--mode=batch', `--work=${join(ctx.work, 'perf-batch')}`], env: { ENGINE: ctx.root, PERF_BUILD: perfBuild(), ...bundlesOf(ctx) }, fresh: join(ctx.work, 'perf-batch') }],
+    needs: (ctx) => [exists('the performance tools', lab(ctx, 'perf/tools/run.mjs')), exists("the website's tree NEW's reader is built in (PERF_WEB: a website worktree, its HEAD the website's side)", perfWeb())],
+    // (NEW's reader built from this commit (build-new.sh: the website's HEAD with this commit as vendor/readarxiv, built as staging
+    // builds it), never a build made before: a build of another head would measure that head. The reader is given this run's own
+    // bundles where the prepare gate made them, else the lab's last round's; run.mjs takes each part's slot itself)
+    steps: (ctx) => [buildNew(ctx, join(ctx.work, 'perf-batch-build')), { cmd: ['node', lab(ctx, 'perf/tools/run.mjs'), '--mode=batch', `--work=${join(ctx.work, 'perf-batch')}`], env: { ENGINE: ctx.root, PERF_BUILD: join(ctx.work, 'perf-batch-build'), ...bundlesOf(ctx) }, fresh: join(ctx.work, 'perf-batch') }],
     judge: (ctx, steps) => perfJudge(steps),
   },
   {
@@ -812,8 +1047,21 @@ export const GATES = [
     holds: [],
     // (the maintainer's base threshold for the refactor: performance better than the production site's)
     cutover: true,
-    needs: (ctx) => [exists('the performance tools', lab(ctx, 'perf/tools/run.mjs')), exists('the quiet window', lab(ctx, 'perf/tools/quiet.sh')), exists("the readers' builds (PERF_BUILD: each website's build and tree)", perfBuild())],
-    steps: (ctx) => [{ cmd: ['bash', lab(ctx, 'perf/tools/quiet.sh'), '--', 'node', lab(ctx, 'perf/tools/run.mjs'), '--mode=release', `--work=${join(ctx.work, 'perf-release')}`], env: { ENGINE: ctx.root, PERF_BUILD: perfBuild(), ...bundlesOf(ctx) }, fresh: join(ctx.work, 'perf-release') }],
+    needs: (ctx) => [
+      exists('the performance tools', lab(ctx, 'perf/tools/run.mjs')),
+      exists('the quiet window', lab(ctx, 'perf/tools/quiet.sh')),
+      exists("TODAY's reader's build and tree (PERF_TODAY_BUILD: today-dist-web, today-web)", join(todayPerfBuild(), 'today-dist-web')),
+      exists("the website's tree NEW's reader is built in (PERF_WEB: a website worktree, its HEAD the website's side)", perfWeb()),
+    ],
+    // (NEW's reader built from this commit as perf-batch builds it, TODAY's linked from production's build beside it)
+    steps: (ctx) => {
+      const build = join(ctx.work, 'perf-release-build')
+      return [
+        buildNew(ctx, build),
+        ...['today-dist-web', 'today-web'].map(d => ({ cmd: ['ln', '-sfn', join(todayPerfBuild(), d), join(build, d)] })),
+        { cmd: ['bash', lab(ctx, 'perf/tools/quiet.sh'), '--', 'node', lab(ctx, 'perf/tools/run.mjs'), '--mode=release', `--work=${join(ctx.work, 'perf-release')}`], env: { ENGINE: ctx.root, PERF_BUILD: build, ...bundlesOf(ctx) }, fresh: join(ctx.work, 'perf-release') },
+      ]
+    },
     judge: (ctx, steps) => perfJudge(steps),
   },
   // the online scripts: arXiv, the free engines and staging, under the project's User-Agent (tests/e2e/lib/online.mjs)
@@ -830,12 +1078,41 @@ export const GATES = [
   ].map(([script, title]) => ({ ...e2e(script, title), tier: 'release', stage: 'corpus', network: 'live', after: ['build-staging'], steps: () => [{ cmd: ['pnpm', script], slot: 'e2e', env: { AXT_E2E_ONLINE: '1' } }] })),
 ]
 
-/** the readers' builds the performance gates measure: PERF_BUILD, else where the lab's performance lane builds them */
-const perfBuild = () => process.env.PERF_BUILD ?? '/Volumes/SanDisk_Dev/readarxiv-lab-archive/perf-check/build'
+/**
+ * The gates retired, each with its reason and what holds its question now. A retired gate is not run and not judged: naming it
+ * to --only says why, and the report lists them. Its tools stay runnable in the lab until the cut-over deletes them with today's
+ * engine (design 3i, C1).
+ */
+export const RETIRED = [
+  {
+    id: 'typeset-parts',
+    retired: '2026-11-13',
+    by: ['reader-parts'],
+    why: "its runner (lab/typeset/gate-l1.mjs, today's reading: no --entry) lays only units whose id is today's, and the owner's rulings since 2026-11-08 cut units otherwise on purpose: its losses (1,416 at 13216ac44, 4,043 at round B14, all 'not laid from L1's part') counted the runner, not what the reader draws. The reader gate as the entry lays each page, over both rows stores (reader-parts), holds I3 read by ink, I4 and I5; that nothing is lost is held by prepare-diff, display and sentence-cover",
+  },
+  {
+    id: 'typeset-replays',
+    retired: '2026-11-13',
+    by: ['display-wide'],
+    why: "the six replays (lab/typeset/replay-*.mjs) compare the typesetter's internal passes with today's recorded ones: every ruling since 2026-11-08 would have to be taught to four replay readers that the cut-over deletes, and a pass that differs is not a difference a reader sees (at 13216ac44 fit and display failed on one pair, a crop box the tap does not record; at round B14's head emit read 13 differing and 9 thrown). Their point, a comparison with today's lay wider than 22 pairs, is the display gate over every pair of the stored rows (display-wide), which asks the owner's own question with his rulings encoded and survives the cut-over",
+  },
+]
+
+/** the website's tree NEW's reader is built in: PERF_WEB, a website worktree whose HEAD is the website's side (its pin of
+ *  vendor/readarxiv replaced by this commit); none by default, so that no build stands in for the head's */
+const perfWeb = () => process.env.PERF_WEB ?? ''
+/** TODAY's reader's build and tree (production's: the website at 0bf496b5 with the engine 065c1d973), which perf-release
+ *  measures against: PERF_TODAY_BUILD, else where the lab's performance lane built it */
+const todayPerfBuild = () => process.env.PERF_TODAY_BUILD ?? '/Volumes/SanDisk_Dev/readarxiv-lab-archive/perf-check/build'
+/** NEW's reader built from this commit into `build` (the lab's perf/tools/build-new.sh: the website's HEAD exported with this
+ *  commit as vendor/readarxiv, installed from the store, built as staging builds it, into new-web and new-dist-web) */
+const buildNew = (ctx, build) => ({ cmd: ['bash', lab(ctx, 'perf/tools/build-new.sh'), 'HEAD', 'HEAD'], slot: 'test', env: { PERF_BUILD: build, PERF_WEB_REPO: perfWeb(), PERF_ENGINE_REPO: ctx.root }, fresh: build, as: 'build' })
 /** NEW's bundles the reader is served: the prepare gate's of this run where it made them (PERF_V2_BUNDLES), else none set */
 const bundlesOf = (ctx) => (existsSync(join(ctx.work, 'prepare', 'bundles')) ? { PERF_V2_BUNDLES: join(ctx.work, 'prepare', 'bundles') } : {})
 /** a performance gate's reading: the lab's run's last line (perf.mjs perfOf), its pass the run's own exit and verdict */
 function perfJudge(steps) {
+  const built = steps.find(x => x.as === 'build')
+  if (built && built.exit !== 0) return { pass: false, note: `NEW's reader could not be built from this commit: ${lastLine(built.text)}` }
   const s = steps.at(-1)
   const p = perfOf(s?.text ?? '')
   if (!p) return { pass: false, note: 'no verdict: the run printed no {"perf": …} line' }

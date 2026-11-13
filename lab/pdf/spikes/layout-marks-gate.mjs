@@ -1,4 +1,6 @@
 // lab/pdf/spikes/layout-marks-gate.mjs
+// Retired as a gate on 2026-11-13, its record not made again (lab/pdf/README.md, "The layout marks and the unit marks", says
+// why); runnable as a measurement until the cut-over deletes it with today's engine.
 // The layout marks' quality on the corpus (Plan 8b, Task 2; spec §5). The layout marks have a compile of their own (the
 // layout compile, v1), which feeds only the layout file; the readings and the final come from a compile with none. A
 // line the marks move costs that paper's layout lines alone: their marks are where the layout compile set them, not
@@ -83,7 +85,7 @@ const FORMAT = 4
 /** the code that reads a compile (its text items, readings, marks and marks file), hashed into every compile's key: a
  *  change to it reads every compile again, not a stale result (the review, M4) */
 const READERS = createHash('sha256')
-for (const f of ['pipeline/live.mjs', '../../../packages/engine/src/compile/live.mjs', 'pipeline/typeset/places.mjs', '../../../packages/engine/src/compile/tex.mjs', 'layout/marks.mjs', '../../../packages/engine/src/marks/marks.mjs', 'layout/json.mjs', '../../../packages/engine/src/ink.mjs', '../../../packages/engine/src/own/stream.mjs', 'pipeline/anchors.mjs', '../../../packages/engine/src/source/latex-front.mjs']) READERS.update(readFileSync(new URL(`../../../src/pdf-reader/engine/${f}`, import.meta.url)))
+for (const f of ['pipeline/live.mjs', '../../../packages/engine/src/compile/live.mjs', 'pipeline/typeset/places.mjs', '../../../packages/engine/src/compile/tex.mjs', 'layout/marks.mjs', '../../../packages/engine/src/marks/marks.mjs', 'layout/json.mjs', '../../../packages/engine/src/ink.ts', '../../../packages/engine/src/own/stream.mjs', 'pipeline/anchors.mjs', '../../../packages/engine/src/source/latex-front.mjs']) READERS.update(readFileSync(new URL(`../../../src/pdf-reader/engine/${f}`, import.meta.url)))
 const READ_HASH = READERS.digest('hex').slice(0, 16)
 /** every compile's date, pinned (pdfTeX's SOURCE_DATE_EPOCH with FORCE_SOURCE_DATE): a paper's \today is the same in v0
  *  and v1 whenever each was compiled (2608.20159's title page moved a day across midnight UTC) */

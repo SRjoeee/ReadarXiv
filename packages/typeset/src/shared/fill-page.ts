@@ -7,7 +7,7 @@
 // tap read inside it, at its probes' places (baseline/tap/engine.diff): each unit's decision, the page's size, each unit filled.
 import { layoutAt } from '../fit/at.ts'
 import { keepsPages } from '../fit/runs.ts'
-import { closerLead, fillLeadsOf, framesOf } from './fill-leads.types.ts'
+import { closerLead, fillLeadsOf, framesOf } from './fill-leads.ts'
 import { BODY_KINDS, fillTarget } from './fill-target.ts'
 import { keepsShare } from './share.ts'
 import { settleLayout } from './settle.ts'
@@ -15,7 +15,7 @@ import type { Token } from '../breaker/tokens.ts'
 import type { FitBlock, FitParams, FitState, Layout } from '../fit/types.ts'
 import type { EvenKnob } from '../types.ts'
 import type { Band } from '../unit/params.ts'
-import type { FillRules, FillShare } from './fill-leads.types.ts'
+import type { FillRules, FillShare } from './fill-leads.ts'
 import type { FillTarget, Voter } from './fill-target.ts'
 import type { Share } from './share.ts'
 
@@ -449,7 +449,7 @@ function knobOf(p: FillLaid, P: PageRules, st: FitState, knob: EvenKnob): FitSta
     return st.trackLatin > bound + 1e-9 ? { ...st, trackLatin: bound } : null
   }
   if (knob === 'room')
-    // (99 lines: all of the room TeX left under its blocks, the walk's last borrow state, fit/walk.ts; slots.mjs lowOf caps it
+    // (99 lines: all of the room TeX left under its blocks, the walk's last borrow state, fit/walk.ts; slots.ts lowOf caps it
     // at the room)
     return st.borrow < 99 && p.blocks.some((b) => (b.free ?? 0) > 0) ? { ...st, borrow: 99 } : null
   if (knob === 'foot') {
