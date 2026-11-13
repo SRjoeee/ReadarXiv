@@ -44,6 +44,7 @@ export interface Row {
   listReads?: Record<string, number>
   handedWhole?: number
   foldedToValue?: boolean
+  module?: { loaded: boolean | null; importers: string[] | null }
 }
 export interface Ledger { format: string; about: string; recorded: { commit: string | null; sites: string; inputs: Recording['inputs'] }; holdoutAdds: string[]; rules: Record<string, Row> }
 export declare const LEDGER_FORMAT: string

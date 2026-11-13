@@ -44,6 +44,7 @@ function addInto(m, r) {
 export function mergeRecords(map, dirs) {
   const byInput = {}
   const inputs = {}
+  const paperModules = {}
   let records = 0
   for (const file of dirs.flatMap(recordsIn)) {
     const raw = JSON.parse(readFileSync(file, 'utf8'))
@@ -52,11 +53,24 @@ export function mergeRecords(map, dirs) {
     records++
     const input = raw.input === 'tests' && raw.labRead ? 'tests-lab' : (raw.input ?? 'corpus')
     const into = (byInput[input] ??= {})
-    const meta = (inputs[input] ??= { records: 0, papers: new Set(), ms: 0 })
+    const meta = (inputs[input] ??= { records: 0, papers: new Set(), ms: 0, loaded: new Set(), told: false })
     meta.records++
+    // (the modules the record's process loaded: a record made before the recorder told them says nothing of them)
+    if (raw.loaded) {
+      meta.told = true
+      for (const m of raw.loaded) meta.loaded.add(m)
+    }
     for (const p of raw.papers ?? (raw.paper ? [raw.paper] : [])) meta.papers.add(p)
     meta.ms += raw.ms ?? 0
     for (const [id, r] of Object.entries(raw.sites)) addInto((into[id] ??= emptySite()), r)
+    // (the modules each paper's runs reached: a site's own papers where the record names them (the lay's runner lays
+    // several in one process), else a record of one paper's (stage 1a) gives all its sites that paper)
+    const only = raw.papers?.length === 1 ? raw.papers[0] : (raw.papers?.length ?? 0) === 0 ? raw.paper : null
+    for (const [id, r] of Object.entries(raw.sites)) {
+      if (!r.n) continue
+      const file = map.sites[Number(id)]?.file
+      for (const p of r.ps ?? (only ? [only] : [])) (paperModules[paperOf(p)] ??= new Set()).add(file)
+    }
   }
   // (a rule: its sites' sums, per input; it ran where any of its sites did)
   const rules = {}
@@ -95,9 +109,13 @@ export function mergeRecords(map, dirs) {
     map: map.digest,
     commit: map.commit,
     records,
-    inputs: Object.fromEntries(Object.entries(inputs).map(([k, v]) => [k, { records: v.records, papers: [...v.papers].sort(), ms: v.ms }])),
+    inputs: Object.fromEntries(Object.entries(inputs).map(([k, v]) => [k, { records: v.records, papers: [...v.papers].sort(), ms: v.ms, loaded: v.told ? [...v.loaded].sort() : null }])),
     agreement,
     sites: byInput,
     rules,
+    paperModules: Object.fromEntries(Object.entries(paperModules).map(([p, s]) => [p, [...s].sort()])),
   }
 }
+
+/** a paper by its number: a pair names it with its language, a citation with or without its version */
+export const paperOf = p => p.replace(/-[a-z]{2,3}$/, '').replace(/v\d+$/, '')

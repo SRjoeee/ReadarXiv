@@ -14,9 +14,10 @@
 // 4. A citation, flagged from the whole comment (the coordinator confirms or strikes each flag before a removal lane acts;
 //    a comment that cites a definition and a paper is flagged a definition, its paper still sent to the holdout, the row
 //    holding both):
-//    (a) an arXiv id: the paper joins the holdout and the row is judged again: recorded there (or among the corpus's
-//    papers) and silent, the rule is a removal candidate marked `cited paper silent`; not yet recorded, `cited paper`
-//    (kept, waiting); (b) a definition (TeX,
+//    (a) an arXiv id: the paper joins the holdout and the row is judged again: its own record reached the rule's
+//    module and the rule did not take its other side there: a removal candidate marked `cited paper silent` (before it
+//    is folded, the removal lane says which rule now takes the case the comment describes); not recorded, or recorded
+//    without reaching the module (silence says nothing), `cited paper` (kept, waiting); (b) a definition (TeX,
 //    the PDF, Unicode, a font's table, a standard: the census's CITES_DEFINITION) or a section of our own documents:
 //    `definition`, kept, listed as cited and silent where it never decided; (c) "measured", "corpus", "on the N papers"
 //    with no id: `measurement`, kept, listed as "cites a measurement, not reproduced"; (d) "tuned" or "empiric" alone:
@@ -29,6 +30,11 @@
 //    joined, mapped, spread) is `not judged` by entry (R6's), its sites still judged; a list the census reads as citing a
 //    definition is exempt from the entry rule; otherwise each entry with no hit on any input is removed, and a list with
 //    no hit goes with its rule.
+// 7. A rule whose module ran no site on any input (no input imports or calls it), and none of its own elsewhere, is `not
+//    exercised`: never a removal ("never ran" keeps meaning that the module ran and this rule did not). The records say
+//    which modules each process loaded (transform.mjs); the row names the module's importers.
+// Any input other than the tests of our own counts as the corpus: a third paper set (a fresh sweep's papers) is recorded
+// with AXT_RULES_INPUT=<its name>, a list and a cache directory, no code changed.
 import { CITES_DEFINITION } from '../release-check/census-lib.mjs'
 import { areaOf } from './areas.mjs'
 
@@ -46,6 +52,7 @@ export const VERDICTS = {
   magnitude: { reason: null, says: 'a magnitude with no stated source: reported beside the unmeasured budgets, not counted as a decision' },
   'not judged': { reason: null, says: "a list used otherwise than by membership: entries not judged (R6's)" },
   'cited paper silent': { reason: false, says: 'its cited paper was recorded in the holdout and it decided nothing there: a removal candidate' },
+  'not exercised': { reason: false, says: 'its module ran no site on any input (no input imports or calls it): the recording cannot judge it; the report names what would exercise it' },
   remove: { reason: false, says: 'decides nothing on any input, and cites nothing that exempts it: removed' },
 }
 
@@ -127,6 +134,12 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
     }
   }
 
+  // (a module an input exercised: one where some site ran, on any input; the modules the records say were loaded, where
+  // they say it)
+  const exercised = new Set()
+  for (const per of Object.values(recording.sites)) for (const [sid, r] of Object.entries(per)) if (r.n) exercised.add(map.sites[Number(sid)]?.file)
+  const told = Object.values(recording.inputs).filter(v => v.loaded)
+  const loaded = told.length ? new Set(told.flatMap(v => v.loaded)) : null
   const rows = {}
   for (const [key, rule] of Object.entries(map.rules)) {
     const sites = rule.sites.map(siteOf)
@@ -152,8 +165,11 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
       folds: [],
     }
     // (a citation's verdict, where nothing decides)
+    // (a cited paper is silent where its own record reached the rule's module (some site of the file ran on it) and the
+    // rule did not take its other side there; a record that never reached the module says nothing: the row waits)
+    const reached = p => (recording.paperModules?.[base(p)] ?? []).includes(rule.file)
     const cited = () => {
-      if (cite.flag === 'paper') return cite.papers.every(p => held.has(base(p))) ? 'cited paper silent' : 'cited paper'
+      if (cite.flag === 'paper') return cite.papers.every(p => held.has(base(p)) && reached(p)) ? 'cited paper silent' : 'cited paper'
       return cite.flag === 'definition' ? 'definition' : 'measurement'
     }
     const foldable = s => s.state === 'one' || s.state === 'never'
@@ -193,6 +209,12 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
     if (row.verdict === 'cited paper silent') row.folds = deciding.filter(foldable).map(s => s.id)
     // (a rule that stays because it is still read as a value, its deciding sites all folded)
     if ((row.verdict === 'value' || row.verdict === 'magnitude') && deciding.length && row.folds.length === deciding.length) row.foldedToValue = true
+    // (a rule whose module ran no site on any input, and no site of its own elsewhere: not exercised, never a removal)
+    if ((row.verdict === 'remove' || row.verdict === 'cited paper silent') && !exercised.has(row.file) && sites.every(s => !Object.values(s.outcomes).some(o => o.n))) {
+      row.verdict = 'not exercised'
+      row.folds = []
+      row.module = { loaded: loaded ? loaded.has(row.file) : null, importers: map.files[row.file]?.importers ?? null }
+    }
     rows[key] = row
   }
   // (each cited paper once, by its number, its version where a comment gives one: the papers of the rows the recording

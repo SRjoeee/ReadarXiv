@@ -12,9 +12,11 @@ import { dirname, join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { factsOf } from '../../lab/release-check/census-lib.mjs'
 import { areaOf } from '../../lab/rules/areas.mjs'
+import { ledgerOf } from '../../lab/rules/ledger.mjs'
 import { mergeRecords } from '../../lab/rules/merge.mjs'
 import { agreementOf, countsOf, siteMapOfCheckout } from '../../lab/rules/record.mjs'
 import { recorderOf } from '../../lab/rules/recorder.mjs'
+import { reportOf } from '../../lab/rules/report.mjs'
 import { applyEdits, instrument } from '../../lab/rules/transform.mjs'
 import { rulesPlugin } from '../../lab/rules/vitest.mjs'
 
@@ -267,5 +269,58 @@ describe('a recording', () => {
     expect(code?.code).toContain('__axtRules.gt(')
     expect(plugin.transform('x', join(dir, 'run.mjs'))).toBeNull()
     expect(readFileSync(join(dir, 'packages/engine/src/rules.ts'), 'utf8')).toBe(RULES)
+  })
+})
+
+describe('a module no input exercises', () => {
+  // (a tree of its own: `used.ts` the runner imports and calls once, one way; `spare.ts` only `reader.ts` imports, which
+  // no input loads)
+  let tree = ''
+  const put = (path: string, text: string) => {
+    mkdirSync(dirname(join(tree, path)), { recursive: true })
+    writeFileSync(join(tree, path), text)
+  }
+  beforeAll(() => {
+    tree = mkdtempSync(join(tmpdir(), 'axt-rules-quiet-'))
+    put('package.json', JSON.stringify({ name: 'quiet', type: 'module' }))
+    put('packages/engine/package.json', JSON.stringify({ name: '@x/engine', type: 'module', exports: { '.': './src/used.ts' } }))
+    put('packages/engine/src/used.ts', '// a bound\nexport const EDGE = 0.4\nexport const far = (d: number): boolean => d > EDGE\n')
+    put('packages/engine/src/spare.ts', '// a bound no input reaches\nexport const SPARE = 0.7\nexport const wide = (w: number): boolean => w > SPARE\n')
+    put('packages/engine/src/reader.ts', "import { wide } from './spare.ts'\nexport const view = (w: number): boolean => wide(w)\n")
+    put('run.mjs', "import { far } from './packages/engine/src/used.ts'\nconsole.log(far(0.1))\n")
+    // (two rules whose comments cite a paper each: the first paper's run reaches their module, one way; the second's
+    // never loads it)
+    put('packages/engine/src/cited.ts', '// a module of two bounds\n\n// a gap, as 2401.11111v1 sets it\nexport const GAP_A = 0.5\n// a pad, as 2401.22222v1 sets it\nexport const PAD_B = 0.6\nexport const a = (x: number): boolean => x > GAP_A\nexport const b = (x: number): boolean => x > PAD_B\n')
+    put('run-a.mjs', "import { a } from './packages/engine/src/cited.ts'\nconsole.log(a(0.1))\n")
+    writeFileSync(join(tree, 'sites.json'), JSON.stringify(siteMapOfCheckout(tree)))
+  })
+  afterAll(() => rmSync(tree, { recursive: true, force: true }))
+  it('records the modules each process loaded, and reads a rule in a module where no site ran as not exercised', () => {
+    const out = join(tree, 'records')
+    execFileSync(process.execPath, ['--import', join(ROOT, 'lab/rules/register.mjs'), 'run.mjs'], { cwd: tree, encoding: 'utf8', env: { ...process.env, AXT_RULES_SITES: join(tree, 'sites.json'), AXT_RULES_OUT: out, AXT_RULES_ROOT: tree, AXT_RULES_INPUT: 'corpus' } })
+    const map = JSON.parse(readFileSync(join(tree, 'sites.json'), 'utf8'))
+    const rec = mergeRecords(map, [out])
+    expect(rec.inputs.corpus?.loaded).toEqual(['packages/engine/src/used.ts'])
+    const l = ledgerOf(map, rec)
+    const row = (k: string) => l.rules[Object.keys(l.rules).find(x => x.endsWith(k)) ?? '']
+    // (EDGE ran one way: a removal; SPARE's module ran nothing: not exercised, its importer named)
+    expect(row('::EDGE')?.verdict).toBe('remove')
+    expect(row('::SPARE')).toMatchObject({ verdict: 'not exercised', folds: [], module: { loaded: false, importers: ['packages/engine/src/reader.ts'] } })
+    expect(reportOf(l).byArea).toContain('- packages/engine/src/spare.ts (area d): 1 rule (SPARE); loaded: no; imported by: packages/engine/src/reader.ts')
+  })
+  it("reads a cited paper silent only where that paper's record reached the rule's module", () => {
+    const out = join(tree, 'records-cited')
+    const run = (script: string, paper: string) =>
+      execFileSync(process.execPath, ['--import', join(ROOT, 'lab/rules/register.mjs'), script], { cwd: tree, encoding: 'utf8', env: { ...process.env, AXT_RULES_SITES: join(tree, 'sites.json'), AXT_RULES_OUT: out, AXT_RULES_ROOT: tree, AXT_RULES_INPUT: 'corpus', AXT_RULES_PAPER: paper } })
+    run('run-a.mjs', '2401.11111v1')
+    run('run.mjs', '2401.22222v1')
+    const map = JSON.parse(readFileSync(join(tree, 'sites.json'), 'utf8'))
+    const l = ledgerOf(map, mergeRecords(map, [out]))
+    const row = (k: string) => l.rules[Object.keys(l.rules).find(x => x.endsWith(k)) ?? '']
+    // (GAP_A: its paper's record ran its module and the site one way: silent; PAD_B: its paper's record never reached the
+    // module: silence says nothing, the row waits)
+    expect(row('::GAP_A')?.verdict).toBe('cited paper silent')
+    expect(row('::PAD_B')?.verdict).toBe('cited paper')
+    expect(reportOf(l).byArea).toContain('before it is folded, the removal lane says which rule now takes the case its comment describes on 2401.11111v1')
   })
 })

@@ -9,10 +9,13 @@ export interface Recording {
   map: string
   commit: string | null
   records: number
-  inputs: Record<string, { records: number; papers: string[]; ms: number }>
+  inputs: Record<string, { records: number; papers: string[]; ms: number; loaded?: string[] | null }>
   agreement: { rules: number; ran: number; sites: number; sitesRun: number; line: string }
   sites: Record<string, Record<string, SiteSums>>
   rules: Record<string, Record<string, RuleSums>>
+  /** each paper's (by its number) modules whose sites ran on it */
+  paperModules?: Record<string, string[]>
 }
 export declare const RECORDING_FORMAT: string
 export declare function mergeRecords(map: SiteMap, dirs: string[]): Recording
+export declare function paperOf(p: string): string

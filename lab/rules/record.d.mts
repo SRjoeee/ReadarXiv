@@ -19,4 +19,4 @@ export declare function siteMapOfCheckout(root: string, options?: { webProfile?:
 export declare function countsOf(map: SiteMap): { rules: number; thresholdsTuned: number; lists: number; byArea: Record<string, number>; sites: number; sitesByKind: Record<string, number>; noSite: string[]; onlyReads: number; files: number }
 export declare function agreementOf(census: CensusItems, map: SiteMap, recording?: Recording | null): Agreement
 type RemapRules = { rules: Record<string, { kind: string; value?: number; entries?: string[]; other?: string | null }> }
-export declare function remapOf(from: RemapRules, to: RemapRules): { kept: number; moved: Record<string, string>; how: Record<string, 'function' | 'ordinal' | 'operand'>; unmatched: { old: string[]; new: string[] } }
+export declare function remapOf(from: RemapRules, to: RemapRules): { kept: number; moved: Record<string, string>; how: Record<string, 'file' | 'function' | 'ordinal' | 'operand'>; unmatched: { old: string[]; new: string[] } }

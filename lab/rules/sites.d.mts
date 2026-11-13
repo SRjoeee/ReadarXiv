@@ -50,7 +50,7 @@ export interface SiteMap {
   digest: string
   rules: Record<string, Rule>
   sites: Site[]
-  files: Record<string, { sha256: string; edits: Edit[]; sites: number[] }>
+  files: Record<string, { sha256: string; edits: Edit[]; sites: number[]; importers?: string[] }>
 }
 export declare const SITES_FORMAT: string
 export declare const RULE_AREAS: string[]
