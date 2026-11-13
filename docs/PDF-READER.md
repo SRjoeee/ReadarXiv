@@ -6545,9 +6545,22 @@ the layout's rules.
   its own content and never sent (`chain.ts`, `by: 'self'`), and a figure text whose row is its source keeps its ink
   (`shared/figures.ts` sameAsSource). Code set in one pitch (§18.22), an identifier or an address (§18.25, every unit's), a
   formula, a citation and a reference (elements), an algorithm's body (the owner's ruling of 2026-11-08), a cell holding a
-  decorated word (§18.61, until a ground can follow its words). And a table's group is still drawn whole or not at all where a
-  cell of it cannot be drawn (a row failed, unfit, clipped, on two pages: `holdsTable`, `settleTies`; the owner's ruling of
-  2026-11-08 and the cell the wrap cannot hide, of 2026-10-24): a failure of drawing, never a judgement of what a cell says.
+  decorated word (§18.61, until a ground can follow its words).
+- **A cell that cannot be drawn stays the original's by itself, as a body paragraph does** (the coordinator's ruling (c) of
+  2026-11-13, under the owner's). A cell whose reply does not fit it, whose row failed, whose wrap cannot hide it, or whose flow
+  threw is the original's alone, the other cells of its header or column laid; its group is held only where the geometry needs
+  it: a cell that spans columns or rows (`\multicolumn`, `\multirow`: its box is the others' too, so its ink would stand under
+  their translations), and a group on two pages (its first page would be painted before its last is laid). `lay/entry.ts`
+  holdsTable (before the lay: a spanning cell alone holds), `lay/page.ts` settleTies (after it: `tableSettle`'s verdict is
+  today's, what it withholds is the cell, or the group where that cell spans or the group lies on two pages). The reasons, in
+  order: (1) with cells judged like body text, a group drawn whole or not at all would let one unfit reply take back up to a
+  whole table — at the head before this rule, 26 groups, 144 cells on 19 pages of the display gate's 24 pairs (holds-v2, lane
+  cells-like-body), 22 of the groups only since the name rule went (QNLI -> 昆士兰国家图书馆 holding BERT's Table 1 header
+  English, System and Average with it); (2) the 25 cells newly left English that way are, under this rule, every one drawn as
+  today draws them, none translated otherwise; (3) the 111 cells it draws that today keeps are the owner's choice itself (cells
+  translated like body text; 90 kept by today's name rule, 12 by its column rule, 9 by its own group hold), not a new decision.
+  No threshold, no list. It extends the coordinator's ruling of 2026-10-24 (a cell the wrap cannot hide is the original's alone,
+  "a table with one English cell beats an English table") to every reason a cell cannot be drawn.
 - **Today's reader keeps its rule until the cut-over.** The rebuilt engine shares openPaper and the bundle's units with it; the name
   rule moved back to today's `translate/mt.mjs` (isName, isCode, proseOf, nameCells), and today's path states it on its own:
   `pipeline/live.mjs` openPaper (`withNames`), `layer-proto/units.mjs` bundleUnitsOf (its KEPT flag from the paper's `kept`),

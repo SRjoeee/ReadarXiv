@@ -1,8 +1,9 @@
 // S.table.groups (the owner's ruling of 2026-11-08: a table's cells drawn by group, the way the production site draws them): the
-// cells a reader compares with one another are drawn whole or left the original's whole where one of them cannot be drawn.
-// Ported from engine 065c1d973 translate/groups.mjs (groupOf), over TeX's grid as the part states it (Placed.cell) in place of
-// today's rows: the groups are the entry's, before anything is set (a group a cell of which is not set holds the others the
-// original's, lay/entry.ts holdsTable; one a cell of which its lay refuses is withheld, lay/page.ts settleTies).
+// cells a reader compares with one another, held together where the geometry needs it. Ported from engine 065c1d973
+// translate/groups.mjs (groupOf), over TeX's grid as the part states it (Placed.cell) in place of today's rows: the groups are the
+// entry's, before anything is set. A cell that cannot be drawn is the original's by itself, as a paragraph is (the coordinator's
+// ruling (c) of 2026-11-13); its group is held where that cell spans (its box the others' too: lay/entry.ts holdsTable before the
+// lay, lay/page.ts settleTies after it) and withheld whole where it lies on two pages (settleTies).
 //
 // The groups follow the table's own structure, TeX's tabular: the header's cells are one group, and below it each column's
 // cells another, a cell spanning several columns (\multicolumn) one with the cells spanning the same columns, a cell spanning

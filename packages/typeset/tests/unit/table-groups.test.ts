@@ -1,9 +1,10 @@
 // A table's cells (the owner, 2026-11-13: a table's cell is text like any other; the translator decides a name). Each cell is
 // judged alone, by its own row, as a paragraph is: its translation laid, or the original's where it has no row, a row that
-// failed, or a reason of the part's. A reply equal to its source is a translation like any other. What still binds a cell to
-// the others of its group (the header's cells, a column's, the cells spanning the same columns: TeX's grid, Placed.cell) is
-// drawing alone (the owner's ruling of 2026-11-08, today's settleGroup): a group one cell of which cannot be drawn stays the
-// original's whole, as a cell the wrap cannot hide stays alone (the ruling of 2026-10-24).
+// failed, or a reason of the part's. A reply equal to its source is a translation like any other. A cell that cannot be drawn
+// in its translation (unfit, a row that failed, the wrap cannot hide it) stays the original's by itself, as a paragraph does
+// (the coordinator's ruling (c) of 2026-11-13); what still binds a cell to the others of its group (the header's cells, a
+// column's, the cells spanning the same columns: TeX's grid, Placed.cell) is geometry alone: a cell that spans holds its group
+// where it cannot be drawn (its box is the others' too), and a group on two pages is withheld whole (page-wait.test.ts).
 import type { OutPiece, Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
@@ -129,23 +130,26 @@ describe('a table’s cell is text like any other: each laid by its own row', ()
   })
 })
 
-describe('a table’s group is still drawn whole or not at all where a cell of it cannot be drawn (drawing, not words)', () => {
-  it('withholds the group of a cell that cannot be set, and that group alone: the other groups are laid', () => {
-    // (1706.03762v7-zh p9: today's header group left English, "(dev)" clipped past its floor, the body's base/big and row E
-    // translated; v2 withheld the whole table)
+describe('a cell that cannot be drawn stays the original’s alone; its group is held where the geometry needs it', () => {
+  it('a cell whose reply does not fit it is the original’s alone, as a paragraph’s would be: its header’s other cells laid', () => {
+    // (the coordinator's ruling (c) of 2026-11-13: 1810.04805v2-zh p6, QNLI's reply, a library's name, unfit in its cell, held
+    // Table 1's header English whole, System and Average with it, which today translates)
     const rows = rowsOf({ ...translated, 1: 'Ein sehr langes Wort über die ganze Tabelle hinweg gesetzt' })
-    const s = states(table, rows)
-    expect(s[0]).toBe('cells')
-    expect(s[1]).not.toBe('laid')
-    expect(s.slice(2)).toEqual(Array(10).fill('laid'))
+    expect(states(table, rows)).toEqual(['laid', 'unfit', ...Array(10).fill('laid')])
   })
-  it('withholds a group one of whose rows failed (a Row not ok): the original rather than half a column', () => {
+  it('a cell whose row failed (a Row not ok) is the original’s alone: its column’s other cells laid', () => {
     const base = rowsOf(translated)
     const rows: Rows = {
       ...base,
       get: (id) => (id === idOf(10) ? { id, ok: false, why: { kind: 'refused' } } : base.get(id)),
     }
-    expect(states(table, rows).slice(7)).toEqual(['cells', 'cells', 'refused', 'cells', 'cells'])
+    expect(states(table, rows).slice(7)).toEqual(['laid', 'laid', 'refused', 'laid', 'laid'])
+  })
+  it('a spanning cell whose reply does not fit it still holds its group: its box is the others’ too', () => {
+    // (a header cell set over two rows, \multirow: the tie states it spanning)
+    const t: Part = { ...table, ties: [{ ...table.ties![0]!, spanning: [1] } as NonNullable<Part['ties']>[number]] }
+    const rows = rowsOf({ ...translated, 1: 'Ein sehr langes Wort über die ganze Tabelle hinweg gesetzt' })
+    expect(states(t, rows)).toEqual(['cells', 'unfit', ...Array(10).fill('laid')])
   })
   it('holds a group whose cell spanning columns the wrap cannot hide, as one stated spanning (its box the others’ too)', () => {
     const span = cell(7, [1, 0, 2, 0], 'all', { why: 'unwrapped' })

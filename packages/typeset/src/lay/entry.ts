@@ -35,7 +35,7 @@ import { figuresOf } from './figures.ts'
 import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
 import { type LinkFate, type LinkOwner, linksOf } from './links.ts'
 import { inFrame, inkOfLine, litLaid, litOfA, pageBoxOf, runBoxOfA, widened } from './lit.ts'
-import { layPagePrepared, SAME, type UnitLay } from './page.ts'
+import { type CellTie, layPagePrepared, SAME, type UnitLay } from './page.ts'
 import { type TableGroup, tableGroups } from '../shared/table-groups.ts'
 import { carriedOf, tokenBand, tokenBox } from '../emit/sentences.ts'
 import { CJK, cjkClassRe } from '../breaker/script.ts'
@@ -114,16 +114,15 @@ function bandRulesOf(m: Placed): (page: number) => number[] | undefined {
 }
 
 /**
- * Whether a member of a table's group, not set for `why`, holds its group the original's (today's contract, RUN:1223 and
- * settleGroup RUN:2411: a translated cell that cannot be drawn keeps every cell of its group the original's): a cell to be
- * translated that cannot be set does — unlocated, its row failed (a Row not ok: refused, unavailable, …), unproven, a face it
- * lacks, unfit, an error, its group held by another ('cells') — and one the wrap cannot hide is the original's alone, the rest
- * of its group laid (the coordinator's ruling of 2026-10-24), unless it spans columns or rows (its box is the others' too). One never to be translated holds
- * nothing (today's "one not expected never has a row, and is the original's in a group drawn"): no text of its own, a kind the
- * reader leaves, or no row with every row in (`none`: a unit no translator was sent, a cell of digits; a translation that
- * failed is a Row, not ok)
+ * Whether a member of a table's group, not set before its lay, holds its group the original's: only one that spans columns or
+ * rows (its box is the others' too). A cell that cannot be set — unlocated, the wrap cannot hide it, its row failed (a Row not
+ * ok: refused, unavailable, …), unproven, a face it lacks, an error — is the original's by itself, as a paragraph is, the rest
+ * of its group laid (the coordinator's ruling (c) of 2026-11-13, under the owner's of the same day, a table's cell is text like
+ * any other; the ruling of 2026-10-24 had so left a cell the wrap cannot hide; today's contract, RUN:1223 and settleGroup
+ * RUN:2411, kept the whole group). One never to be translated holds nothing either: no text of its own, a kind the reader
+ * leaves, or no row with every row in (`none`)
  */
-const holdsTable = (why: Unlaid, spanning: boolean) => why !== 'unwrapped' || spanning
+const holdsTable = (spanning: boolean) => spanning
 
 /** a member's row content, or why it has none to be set from: a unit the paper keeps as it is (Unit.kept: an algorithm's body,
  *  code set in one pitch) has none whatever row is given of it (one stored before the unit was kept), never translated: `kept`,
@@ -561,25 +560,22 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       const next = flow[k + 1]
       adaptAt(flow, k, !!next && prepared.has(next.ord))
     }
-  // (a table's group laid whole or not at all, each group alone (today's readGroup and settleGroup, per group): a cell not set
-  // before its lay that holds its group (holdsTable) leaves every cell of it the original's, the set ones 'cells', as
-  // settleTies withholds a group whose cell its lay refused; the others are decided by their lays, over the cells set (a cell
-  // left out of the flows and its tie handed whole, settleTies skips the group). A table whose cells state no grid place is
-  // one group)
+  // (each table group alone: a cell not set before its lay is the original's by itself, but one that spans (holdsTable), which
+  // leaves every cell of its group the original's, the set ones 'cells'; the others are decided by their lays, over the cells
+  // set, settleTies withholding a cell its lay refused alone, its group where that cell spans or the group lies on two pages (a
+  // cell left out of the flows and its tie handed whole, settleTies skips the group). A table whose cells state no grid place
+  // is one group)
   const inPart = new Set(members.map((m) => m.ord))
   const cellOf = new Map(members.map((m) => [m.ord, m.cell]))
   const held = new Set<number>()
-  const cellTies: { rule: 'cells'; cells: number[] }[] = []
+  const cellTies: CellTie[] = []
   for (const t of part.ties ?? []) {
     if (t.rule !== 'cells') continue
     // (a cell whose box is the others' too: one the tie states spanning, or one its grid place spans columns)
     const spanning = new Set([...(t.spanning ?? []), ...t.cells.flat().filter((o) => (cellOf.get(o)?.[2] ?? 1) > 1)])
     for (const g of tableGroupsOfPart.get(t) ?? [{ cells: t.cells }]) {
       const cells = g.cells.flat()
-      const holds = cells.some((o) => {
-        const why = state.get(o)
-        return why !== undefined && !unmeant.has(o) && holdsTable(why, spanning.has(o))
-      })
+      const holds = cells.some((o) => state.has(o) && !unmeant.has(o) && holdsTable(spanning.has(o)))
       if (holds) {
         for (const o of cells) {
           held.add(o)
@@ -588,9 +584,11 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
         continue
       }
       // (a tie naming a member its part does not hold is no tie of this page's: handed whole, settleTies decides nothing of it)
+      const spans = cells.filter((o) => spanning.has(o))
       cellTies.push({
         rule: 'cells',
         cells: cells.every((o) => inPart.has(o)) ? cells.filter((o) => prepared.has(o)) : cells,
+        ...(spans.length ? { spanning: spans } : {}),
       })
     }
   }
