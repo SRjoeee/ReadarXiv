@@ -475,291 +475,270 @@ function paperObject(
   }
   return { fetch, at }
 }
-/** the time moved on by `ms` a second at a time, what each second settles settled (one task's turn drains every microtask the
- *  follow chains: two are room enough) */
+/** the time moved on by `ms` from one due timer to the next, what each settles settled before the clock moves again (one task's
+ *  turn drains every microtask the follow chains: two are room enough); a span in which nothing is due is one advance. (Moved a
+ *  second at a time, the three hours of the wake's test were 10,800 steps of two task turns: 27 s alone, and over its 30 s
+ *  bound in whole runs on a loaded machine) */
 const run = async (timers: ReturnType<typeof manualTimers>, ms: number) => {
-  for (let t = 0; t < ms; t += 1000) {
-    timers.advance(1000)
+  const end = timers.now + ms
+  for (let at = timers.next; at !== null && at <= end; at = timers.next) {
+    timers.advance(Math.max(0, at - timers.now))
     await settle(2)
   }
+  timers.advance(end - timers.now)
+  await settle(2)
 }
-/** a bound for the tests that run minutes a second at a time, on a machine other runs share */
-const MINUTES_MS = 30_000
 
 describe("the client: the follow's pace (staging, 2026-11-07: a done paper followed 30-50 times a second)", () => {
-  it(
-    'once nothing runs, a follow given a wake asks nothing until it wakes: no ask in an hour, then one ask a wake',
-    async () => {
-      // (design-performance-2026-11-13 Q9: a settled tab asked once a minute, 60 asks an hour a tab)
-      const timers = manualTimers()
-      const server = paperObject(timers, { doneAt: 90_000, target: 'zh' })
-      const ac = new AbortController()
-      let woken: (() => void) | null = null
-      let waits = 0
-      const p = follow({
-        fetch: server.fetch,
-        timers,
-        signal: ac.signal,
-        paper: { id: '1706.03762', version: 7 },
-        target: 'zh',
-        onDoc: () => {},
-        wake: () => {
-          waits++
-          return new Promise<void>((go) => {
-            woken = go
-          })
-        },
-      })
-      p.catch(() => {})
-      await settle()
-      // an hour: the run's one stream for its 90 s, ended by the done document, and nothing after it
-      await run(timers, 3_600_000)
-      expect([server.at, waits]).toEqual([[0], 1])
-      // each wake: one ask, the done document again, and nothing after it for another hour
-      for (const k of [1, 2]) {
-        ;(woken as (() => void) | null)?.()
-        await settle()
-        await run(timers, 3_600_000)
-        expect([server.at.length, waits]).toEqual([1 + k, 1 + k])
-      }
-      ac.abort()
-      await expect(p).rejects.toBeDefined()
-    },
-    MINUTES_MS,
-  )
-  it(
-    'a JSON answer in which nothing runs is polled again on a wake alone, where the follow is given one',
-    async () => {
-      const timers = manualTimers()
-      const at: number[] = []
-      const ac = new AbortController()
-      const json = (d: unknown) => new Response(JSON.stringify(d), { headers: { 'content-type': 'application/json' } })
-      let woken: (() => void) | null = null
-      const p = follow({
-        fetch: async (_u, init) => {
-          if (at.length >= 50) return never(init)
-          at.push(timers.now)
-          return json(timers.now < 4000 ? DOC : { ...DOC, rev: 4, prepare: { ...DOC.prepare, state: 'done' } })
-        },
-        timers,
-        signal: ac.signal,
-        paper: { id: '2401.01234', version: 2 },
-        target: null,
-        onDoc: () => {},
-        pollMs: 2000,
-        wake: () =>
-          new Promise<void>((go) => {
-            woken = go
-          }),
-      })
-      p.catch(() => {})
-      await settle()
-      await run(timers, 3_600_000)
-      expect(at).toEqual([0, 2000, 4000])
+  it('once nothing runs, a follow given a wake asks nothing until it wakes: no ask in an hour, then one ask a wake', async () => {
+    // (design-performance-2026-11-13 Q9: a settled tab asked once a minute, 60 asks an hour a tab)
+    const timers = manualTimers()
+    const server = paperObject(timers, { doneAt: 90_000, target: 'zh' })
+    const ac = new AbortController()
+    let woken: (() => void) | null = null
+    let waits = 0
+    const p = follow({
+      fetch: server.fetch,
+      timers,
+      signal: ac.signal,
+      paper: { id: '1706.03762', version: 7 },
+      target: 'zh',
+      onDoc: () => {},
+      wake: () => {
+        waits++
+        return new Promise<void>((go) => {
+          woken = go
+        })
+      },
+    })
+    p.catch(() => {})
+    await settle()
+    // an hour: the run's one stream for its 90 s, ended by the done document, and nothing after it
+    await run(timers, 3_600_000)
+    expect([server.at, waits]).toEqual([[0], 1])
+    // each wake: one ask, the done document again, and nothing after it for another hour
+    for (const k of [1, 2]) {
       ;(woken as (() => void) | null)?.()
       await settle()
-      await run(timers, 600_000)
-      // (asked at once on its wake, at the hour's end)
-      expect(at).toEqual([0, 2000, 4000, 3_600_000])
-      ac.abort()
-    },
-    MINUTES_MS,
-  )
-  it(
-    "a document in which nothing runs is its stream's last frame: asked again after the server's retry, a minute, never at once",
-    async () => {
-      const timers = manualTimers()
-      const server = paperObject(timers, { doneAt: 90_000, target: 'zh' })
-      const ac = new AbortController()
-      const told: number[] = []
-      let quiet = 0
-      const p = follow({
-        fetch: server.fetch,
-        timers,
-        signal: ac.signal,
-        paper: { id: '1706.03762', version: 7 },
-        target: 'zh',
-        onDoc: (d: Doc) => told.push(d.rev),
-        onQuiet: () => quiet++,
-      })
-      p.catch(() => {})
-      await settle()
-      // ten minutes: the run's one stream for its 90 s, then the done document once a minute
-      await run(timers, 600_000)
-      ac.abort()
-      expect(server.at.length).toBeLessThanOrEqual(11)
-      expect(server.at.slice(0, 3)).toEqual([0, 90_000 + 60_000, 90_000 + 120_000])
-      // (a stream that ends as the server ends it, after a document in which nothing runs, is not lost: nothing "reconnecting")
-      expect(quiet).toBe(0)
-      expect(told.slice(0, 2)).toEqual([1, 2])
-    },
-    MINUTES_MS,
-  )
-  it(
-    'a JSON answer in which nothing runs is polled once a minute, one in which something runs every pollMs',
-    async () => {
-      const timers = manualTimers()
-      const at: number[] = []
-      const ac = new AbortController()
-      const json = (d: unknown) => new Response(JSON.stringify(d), { headers: { 'content-type': 'application/json' } })
-      const p = follow({
-        fetch: async (_u, init) => {
-          if (at.length >= 50) return never(init)
-          at.push(timers.now)
-          return json(timers.now < 4000 ? DOC : { ...DOC, rev: 4, prepare: { ...DOC.prepare, state: 'done' } })
-        },
-        timers,
-        signal: ac.signal,
-        paper: { id: '2401.01234', version: 2 },
-        target: null,
-        onDoc: () => {},
-        pollMs: 2000,
-      })
-      p.catch(() => {})
-      await settle()
-      await run(timers, 180_000)
-      ac.abort()
-      expect(at).toEqual([0, 2000, 4000, 64_000, 124_000])
-    },
-    MINUTES_MS,
-  )
-  it(
-    'a reconnection time our server names past a second is kept, from stream to stream, while something runs',
-    async () => {
-      const timers = manualTimers()
-      const at: number[] = []
-      const ac = new AbortController()
-      const p = follow({
-        fetch: async (_u, init) => {
-          // (past fifty asks, nothing more: a follow that never waits is counted, not run for ever)
-          if (at.length >= 50) return never(init)
-          at.push(timers.now)
-          const frame =
-            at.length === 1 ? `retry: 5000\ndata: ${JSON.stringify(DOC)}\n\n` : `data: ${JSON.stringify(DOC)}\n\n`
-          return new Response(
-            new ReadableStream<Uint8Array>({
-              start(c) {
-                c.enqueue(enc(frame))
-                c.close()
-              },
-            }),
-            { headers: { 'content-type': 'text/event-stream' } },
-          )
-        },
-        timers,
-        signal: ac.signal,
-        paper: { id: '2401.01234', version: 2 },
-        target: null,
-        onDoc: () => {},
-      })
-      p.catch(() => {})
-      await settle()
-      await run(timers, 12_000)
-      ac.abort()
-      expect(at).toEqual([0, 5000, 10_000])
-    },
-    MINUTES_MS,
-  )
-  it(
-    'through the session: one follow for the visit whatever the state does, at its pace; a new one for a new target alone',
-    async () => {
-      const timers = manualTimers()
-      const paper = { id: '1706.03762', version: 7 }
-      const server = paperObject(timers, {
-        doneAt: 90_000,
-        target: 'zh',
-        units: [{ ...CATALOG, sha256: 'b'.repeat(64) }],
-      })
-      const acquired: string[] = []
-      const emits = new Map<Ticket, (x: Input) => void>()
-      const inert = (slot: string) => (_spec: unknown, t: Ticket, emit: (x: Input) => void) => {
-        acquired.push(slot)
-        emits.set(t, emit)
-        return undefined
-      }
-      const handlers = {
-        ...Object.fromEntries(['original', 'open', 'code', 'composed', 'rows', 'html'].map((s) => [s, inert(s)])),
-        timer: (spec: { at: number }, t: Ticket, emit: (x: Input) => void) => {
-          const id = timers.later(() => emit({ i: 'time', t, now: timers.now }), Math.max(0, spec.at - timers.now))
-          return () => timers.clear(id)
-        },
-        // (the reader's own link: reader.ts handlers.link, over the stand-in of our server's paper object)
-        link: (spec: { target: string | null }, t: Ticket, emit: (x: Input) => void, signal: AbortSignal) => {
-          acquired.push('link')
-          follow({
-            fetch: server.fetch,
-            timers,
-            signal,
-            paper,
-            target: spec.target,
-            onDoc: (doc) => emit({ i: 'paper', t, doc }),
-            onQuiet: () => emit({ i: 'link.quiet', t }),
-          }).catch((e) => {
-            if (!signal.aborted) emit({ i: 'follow.lost', t, why: e instanceof Refused ? e.why : 'network' })
-          })
-          return undefined
-        },
-      } as unknown as Handlers
-      const crashes: unknown[] = []
-      const rt = createRuntime({
-        state: init({
-          paper,
-          here: false,
-          defaults: { ...DEFAULTS, target: 'zh' },
-          visit: { target: 'zh' },
-          now: 0,
-          visible: true,
-          online: true,
+      await run(timers, 3_600_000)
+      expect([server.at.length, waits]).toEqual([1 + k, 1 + k])
+    }
+    ac.abort()
+    await expect(p).rejects.toBeDefined()
+  })
+  it('a JSON answer in which nothing runs is polled again on a wake alone, where the follow is given one', async () => {
+    const timers = manualTimers()
+    const at: number[] = []
+    const ac = new AbortController()
+    const json = (d: unknown) => new Response(JSON.stringify(d), { headers: { 'content-type': 'application/json' } })
+    let woken: (() => void) | null = null
+    const p = follow({
+      fetch: async (_u, init) => {
+        if (at.length >= 50) return never(init)
+        at.push(timers.now)
+        return json(timers.now < 4000 ? DOC : { ...DOC, rev: 4, prepare: { ...DOC.prepare, state: 'done' } })
+      },
+      timers,
+      signal: ac.signal,
+      paper: { id: '2401.01234', version: 2 },
+      target: null,
+      onDoc: () => {},
+      pollMs: 2000,
+      wake: () =>
+        new Promise<void>((go) => {
+          woken = go
         }),
-        handlers,
-        effect() {},
-        crash: (e) => crashes.push(e),
-        check: true,
-        now: () => timers.now,
-      })
-      const tell = (slot: string, x: (t: Ticket) => Input) => {
-        const t = [...rt.live].find(([, s]) => s === slot)?.[0] as Ticket
-        emits.get(t)?.(x(t))
-      }
-      await settle()
-      tell('original', (t) => ({ i: 'original.opened', t, pages: 4, bytes: 9 }))
-      rt.input({ i: 'panes.drawn' })
-      await run(timers, 100_000)
-      expect(rt.state.layer.s).toBe('ready')
-      // the website's session meanwhile (staging's: the layer ready, the rows complete, the host's hold, a preference)
-      const head = {
-        format: 1,
-        paper: { id: paper.id, version: 7, pages: 4 },
-        original: { bytes: 9, sha256: 'o'.repeat(64), chunk: 65536, chunks: '' },
-        addOn: { digest: 'd'.repeat(64), bytes: 10 },
-        units: [],
-        parts: [],
-      } as unknown as Head
-      tell('code', (t) => ({ i: 'code.loaded', t }))
-      rt.input({ i: 'head', digest: CATALOG.sha256, head })
-      tell('composed', (t) => ({ i: 'composed.opened', t }))
-      tell('rows', (t) => ({ i: 'rows.end', t }))
-      rt.input({ i: 'cmd.hold', on: true })
-      rt.input({ i: 'cmd.hold', on: false })
-      rt.input({ i: 'panes.laid', laid: 4, total: 4 })
-      rt.input({ i: 'prefs.landed', value: { ...DEFAULTS, target: 'zh' } })
-      rt.input({ i: 'cmd.set', prefs: { dim: false } })
-      rt.input({ i: 'env.visible', on: true })
-      rt.input({ i: 'env.online', on: true })
-      rt.input({ i: 'paper.title', title: 'Attention Is All You Need' })
-      await run(timers, 500_000)
-      expect(rt.state).toMatchObject({ layer: { s: 'ready', open: true }, rows: { s: 'complete' }, link: { s: 'on' } })
-      expect(rt.state.link).toMatchObject({ lost: false })
-      // ten minutes: one follow, asked once for the run and once a minute after it
-      expect(acquired.filter((s) => s === 'link')).toHaveLength(1)
-      expect(server.at.length).toBeLessThanOrEqual(11)
-      // (a new target is what is followed changed: the one new follow)
-      rt.input({ i: 'cmd.set', prefs: { target: 'ja' } })
-      await settle()
-      expect(acquired.filter((s) => s === 'link')).toHaveLength(2)
-      expect(crashes).toEqual([])
-      await rt.dispose()
-    },
-    MINUTES_MS,
-  )
+    })
+    p.catch(() => {})
+    await settle()
+    await run(timers, 3_600_000)
+    expect(at).toEqual([0, 2000, 4000])
+    ;(woken as (() => void) | null)?.()
+    await settle()
+    await run(timers, 600_000)
+    // (asked at once on its wake, at the hour's end)
+    expect(at).toEqual([0, 2000, 4000, 3_600_000])
+    ac.abort()
+  })
+  it("a document in which nothing runs is its stream's last frame: asked again after the server's retry, a minute, never at once", async () => {
+    const timers = manualTimers()
+    const server = paperObject(timers, { doneAt: 90_000, target: 'zh' })
+    const ac = new AbortController()
+    const told: number[] = []
+    let quiet = 0
+    const p = follow({
+      fetch: server.fetch,
+      timers,
+      signal: ac.signal,
+      paper: { id: '1706.03762', version: 7 },
+      target: 'zh',
+      onDoc: (d: Doc) => told.push(d.rev),
+      onQuiet: () => quiet++,
+    })
+    p.catch(() => {})
+    await settle()
+    // ten minutes: the run's one stream for its 90 s, then the done document once a minute
+    await run(timers, 600_000)
+    ac.abort()
+    expect(server.at.length).toBeLessThanOrEqual(11)
+    expect(server.at.slice(0, 3)).toEqual([0, 90_000 + 60_000, 90_000 + 120_000])
+    // (a stream that ends as the server ends it, after a document in which nothing runs, is not lost: nothing "reconnecting")
+    expect(quiet).toBe(0)
+    expect(told.slice(0, 2)).toEqual([1, 2])
+  })
+  it('a JSON answer in which nothing runs is polled once a minute, one in which something runs every pollMs', async () => {
+    const timers = manualTimers()
+    const at: number[] = []
+    const ac = new AbortController()
+    const json = (d: unknown) => new Response(JSON.stringify(d), { headers: { 'content-type': 'application/json' } })
+    const p = follow({
+      fetch: async (_u, init) => {
+        if (at.length >= 50) return never(init)
+        at.push(timers.now)
+        return json(timers.now < 4000 ? DOC : { ...DOC, rev: 4, prepare: { ...DOC.prepare, state: 'done' } })
+      },
+      timers,
+      signal: ac.signal,
+      paper: { id: '2401.01234', version: 2 },
+      target: null,
+      onDoc: () => {},
+      pollMs: 2000,
+    })
+    p.catch(() => {})
+    await settle()
+    await run(timers, 180_000)
+    ac.abort()
+    expect(at).toEqual([0, 2000, 4000, 64_000, 124_000])
+  })
+  it('a reconnection time our server names past a second is kept, from stream to stream, while something runs', async () => {
+    const timers = manualTimers()
+    const at: number[] = []
+    const ac = new AbortController()
+    const p = follow({
+      fetch: async (_u, init) => {
+        // (past fifty asks, nothing more: a follow that never waits is counted, not run for ever)
+        if (at.length >= 50) return never(init)
+        at.push(timers.now)
+        const frame =
+          at.length === 1 ? `retry: 5000\ndata: ${JSON.stringify(DOC)}\n\n` : `data: ${JSON.stringify(DOC)}\n\n`
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            start(c) {
+              c.enqueue(enc(frame))
+              c.close()
+            },
+          }),
+          { headers: { 'content-type': 'text/event-stream' } },
+        )
+      },
+      timers,
+      signal: ac.signal,
+      paper: { id: '2401.01234', version: 2 },
+      target: null,
+      onDoc: () => {},
+    })
+    p.catch(() => {})
+    await settle()
+    await run(timers, 12_000)
+    ac.abort()
+    expect(at).toEqual([0, 5000, 10_000])
+  })
+  it('through the session: one follow for the visit whatever the state does, at its pace; a new one for a new target alone', async () => {
+    const timers = manualTimers()
+    const paper = { id: '1706.03762', version: 7 }
+    const server = paperObject(timers, {
+      doneAt: 90_000,
+      target: 'zh',
+      units: [{ ...CATALOG, sha256: 'b'.repeat(64) }],
+    })
+    const acquired: string[] = []
+    const emits = new Map<Ticket, (x: Input) => void>()
+    const inert = (slot: string) => (_spec: unknown, t: Ticket, emit: (x: Input) => void) => {
+      acquired.push(slot)
+      emits.set(t, emit)
+      return undefined
+    }
+    const handlers = {
+      ...Object.fromEntries(['original', 'open', 'code', 'composed', 'rows', 'html'].map((s) => [s, inert(s)])),
+      timer: (spec: { at: number }, t: Ticket, emit: (x: Input) => void) => {
+        const id = timers.later(() => emit({ i: 'time', t, now: timers.now }), Math.max(0, spec.at - timers.now))
+        return () => timers.clear(id)
+      },
+      // (the reader's own link: reader.ts handlers.link, over the stand-in of our server's paper object)
+      link: (spec: { target: string | null }, t: Ticket, emit: (x: Input) => void, signal: AbortSignal) => {
+        acquired.push('link')
+        follow({
+          fetch: server.fetch,
+          timers,
+          signal,
+          paper,
+          target: spec.target,
+          onDoc: (doc) => emit({ i: 'paper', t, doc }),
+          onQuiet: () => emit({ i: 'link.quiet', t }),
+        }).catch((e) => {
+          if (!signal.aborted) emit({ i: 'follow.lost', t, why: e instanceof Refused ? e.why : 'network' })
+        })
+        return undefined
+      },
+    } as unknown as Handlers
+    const crashes: unknown[] = []
+    const rt = createRuntime({
+      state: init({
+        paper,
+        here: false,
+        defaults: { ...DEFAULTS, target: 'zh' },
+        visit: { target: 'zh' },
+        now: 0,
+        visible: true,
+        online: true,
+      }),
+      handlers,
+      effect() {},
+      crash: (e) => crashes.push(e),
+      check: true,
+      now: () => timers.now,
+    })
+    const tell = (slot: string, x: (t: Ticket) => Input) => {
+      const t = [...rt.live].find(([, s]) => s === slot)?.[0] as Ticket
+      emits.get(t)?.(x(t))
+    }
+    await settle()
+    tell('original', (t) => ({ i: 'original.opened', t, pages: 4, bytes: 9 }))
+    rt.input({ i: 'panes.drawn' })
+    await run(timers, 100_000)
+    expect(rt.state.layer.s).toBe('ready')
+    // the website's session meanwhile (staging's: the layer ready, the rows complete, the host's hold, a preference)
+    const head = {
+      format: 1,
+      paper: { id: paper.id, version: 7, pages: 4 },
+      original: { bytes: 9, sha256: 'o'.repeat(64), chunk: 65536, chunks: '' },
+      addOn: { digest: 'd'.repeat(64), bytes: 10 },
+      units: [],
+      parts: [],
+    } as unknown as Head
+    tell('code', (t) => ({ i: 'code.loaded', t }))
+    rt.input({ i: 'head', digest: CATALOG.sha256, head })
+    tell('composed', (t) => ({ i: 'composed.opened', t }))
+    tell('rows', (t) => ({ i: 'rows.end', t }))
+    rt.input({ i: 'cmd.hold', on: true })
+    rt.input({ i: 'cmd.hold', on: false })
+    rt.input({ i: 'panes.laid', laid: 4, total: 4 })
+    rt.input({ i: 'prefs.landed', value: { ...DEFAULTS, target: 'zh' } })
+    rt.input({ i: 'cmd.set', prefs: { dim: false } })
+    rt.input({ i: 'env.visible', on: true })
+    rt.input({ i: 'env.online', on: true })
+    rt.input({ i: 'paper.title', title: 'Attention Is All You Need' })
+    await run(timers, 500_000)
+    expect(rt.state).toMatchObject({ layer: { s: 'ready', open: true }, rows: { s: 'complete' }, link: { s: 'on' } })
+    expect(rt.state.link).toMatchObject({ lost: false })
+    // ten minutes: one follow, asked once for the run and once a minute after it
+    expect(acquired.filter((s) => s === 'link')).toHaveLength(1)
+    expect(server.at.length).toBeLessThanOrEqual(11)
+    // (a new target is what is followed changed: the one new follow)
+    rt.input({ i: 'cmd.set', prefs: { target: 'ja' } })
+    await settle()
+    expect(acquired.filter((s) => s === 'link')).toHaveLength(2)
+    expect(crashes).toEqual([])
+    await rt.dispose()
+  })
 })

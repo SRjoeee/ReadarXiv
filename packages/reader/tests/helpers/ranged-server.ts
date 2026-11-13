@@ -108,6 +108,12 @@ export function manualTimers() {
     get pending() {
       return due.size
     },
+    /** when the earliest timer is due (ms on this clock), or null where none is */
+    get next() {
+      let at: number | null = null
+      for (const e of due.values()) if (at === null || e.at < at) at = e.at
+      return at
+    },
     /** the time on this clock (ms from its start) */
     get now() {
       return now
