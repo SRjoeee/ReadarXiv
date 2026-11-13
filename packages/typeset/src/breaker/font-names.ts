@@ -97,7 +97,7 @@ export function classifyFont(name: string, fallbackFamily?: string): FontStyle {
 // - Faces outside TeX Live, each by name: Arial, Liberation Sans, Liberation Mono, Cambria Math, Symbol MT, Dingbats,
 //   Bitstream Vera Sans Mono, Bitstream Charter, Palatino, Palladio, Book Antiqua, Adobe Garamond (AGaramond), Garamond.
 // Which of these names TeX Live 2025's map files hold is not checked against the compile image's tree here.
-const DESIGNS: readonly { design: string; cls: string; ps: RegExp; nfss?: RegExp; bold?: RegExp }[] = [
+const DESIGNS: readonly { design: string; cls: string; ps: RegExp; bold?: RegExp }[] = [
   // math: drawn as the layer's math face, set as the paper's math in TeX
   {
     design: 'cm',
@@ -113,65 +113,56 @@ const DESIGNS: readonly { design: string; cls: string; ps: RegExp; nfss?: RegExp
   {
     design: 'courier',
     cls: 'mono',
-    nfss: /^(?:pcr|qcr|txtt|ucr|zco|NimbusMono|TeXGyreCursor)/,
     ps: /^(?:NimbusMonL|NimbusMono|Courier|TeXGyreCursor|zco-|LiberationMono|FreeMono)/,
   },
   {
     design: 'beramono',
     cls: 'mono',
-    nfss: /^(?:fvm|BeraSansMono|DejaVuSansMono)/,
     ps: /^(?:BeraSansMono|DejaVuSansMono|BitstreamVeraSansMono|VeraSansMono)/,
   },
-  { design: 'inconsolata', cls: 'mono', nfss: /^(?:zi4|Inconsolata)/, ps: /^Inconsolata/, bold: /zi4b|Bold/ },
-  { design: 'cmtt', cls: 'mono', nfss: /^(?:cmtt|lmtt|cmvtt)$/, ps: /^CMUTypewriter/ },
+  { design: 'inconsolata', cls: 'mono', ps: /^Inconsolata/, bold: /zi4b|Bold/ },
+  { design: 'cmtt', cls: 'mono', ps: /^CMUTypewriter/ },
   // sans
   {
     design: 'helvetica',
     cls: 'sans',
-    nfss: /^(?:phv|qhv|txss|uhv|zhv|NimbusSans|TeXGyreHeros)/,
     ps: /^(?:NimbusSanL|NimbusSans|Helvetica|Arial|TeXGyreHeros|zhv-|LiberationSans|FreeSans)/,
   },
-  { design: 'cmss', cls: 'sans', nfss: /^(?:cmss|lmss)$/, ps: /^CMUSansSerif/ },
+  { design: 'cmss', cls: 'sans', ps: /^CMUSansSerif/ },
   // Biolinum, Libertine's sans (Libertinus Sans, its fork, drawn in it)
   {
     design: 'biolinum',
     cls: 'sans',
-    nfss: /^(?:LinuxBiolinum|fxb|LibertinusSans)/,
     ps: /^(?:LibertinusSans|LinBiolinum|LinuxBiolinum)/,
   },
   // text: the English families
-  { design: 'cm', cls: 'serif', nfss: /^(?:cmr|lmr|cmdh|lmdh|cmfib|cmfr)$/, ps: /^CMU(?:Serif|ClassicalSerif)/ },
+  { design: 'cm', cls: 'serif', ps: /^CMU(?:Serif|ClassicalSerif)/ },
   {
     design: 'times',
     cls: 'serif',
-    nfss: /^(?:ptm|qtm|ntx|txr|utm|ztm|Tempora|TeXGyreTermes|NimbusSerif)/,
     ps: /^(?:NimbusRomNo9L|NimbusRom|NimbusRoman|Times|TeXGyreTermes|Tempora|ztm-)/,
   },
   {
     design: 'libertine',
     cls: 'serif',
-    nfss: /^(?:LinuxLibertine|fxl|LibertinusSerif|Libertinus(?!Sans|Mono|Math))/,
     ps: /^(?:LibertinusSerif|LinLibertine|LinuxLibertine)/,
   },
   {
     design: 'palatino',
     cls: 'serif',
-    nfss: /^(?:ppl|qpl|npx|zpl|Domitian|TeXGyrePagella)/,
     ps: /^(?:URWPalladioL|Palatino|TeXGyrePagella|P052|Domitian|Palladio|BookAntiqua|Pazo(?!Math))/,
   },
   {
     design: 'charter',
     cls: 'serif',
-    nfss: /^(?:bch|mdbch|XCharter|Charter)/,
     ps: /^(?:XCharter|CharterBT|BitstreamCharter|Charter|CharisSIL)/,
   },
   {
     design: 'garamond',
     cls: 'serif',
-    nfss: /^(?:ebg|EBGaramond|ugm|mdugm|zgm|GaramondLibre|garamondx)/,
     ps: /^(?:EBGaramond|AGaramond|AdobeGaramond|Garamond|URWGaramond)/,
   },
-  { design: 'utopia', cls: 'serif', nfss: /^(?:put|mdput|fut|Erewhon|Utopia)/, ps: /^(?:Utopia|Erewhon)/ },
+  { design: 'utopia', cls: 'serif', ps: /^(?:Utopia|Erewhon)/ },
 ]
 /** the English families a paper's body is set in */
 const ENGLISH_FAMILIES = Object.freeze([
