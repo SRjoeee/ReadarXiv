@@ -50,7 +50,7 @@ describe('the reading view, bundled for the browser', () => {
     expect(SERVER.some(r => r.test(`${ENGINE}pipeline/anchors.mjs`))).toBe(false)
     expect(SERVER.some(r => r.test(`${ENGINE}layout/cell-rules.mjs`))).toBe(false)
     expect(SERVER.some(r => r.test(`${ENGINE}layout/wrap-final.mjs`))).toBe(true)
-    expect(SERVER.some(r => r.test('packages/engine/src/wrap.mjs'))).toBe(true)
+    expect(SERVER.some(r => r.test('packages/engine/src/wrap.ts'))).toBe(true)
     expect(allowed('node_modules/.pnpm/pdfjs-dist@6.3.289/node_modules/pdfjs-dist/build/pdf.mjs')).toBe(false)
     expect(allowed('src/pdf-reader/session/session.mjs')).toBe(false)
   }, 60_000)

@@ -6,7 +6,7 @@
 // new stream lexed again and its operators, ours taken out, A's; the section read back over A's bytes; the document's object
 // graph A's but for the catalog's optional content, the pages' contents and properties). The add-on is the section alone.
 import type { AlignFacts, PdfLib } from '../remove.ts'
-import { planOf, type Wrap, type WrapPage, type WrapPlan, wrapOf } from '../wrap.types.ts'
+import { planOf, type Wrap, type WrapPage, type WrapPlan, wrapOf } from '../wrap.ts'
 import type { Located } from '../locate/locate.ts'
 import type { ReadPage } from '../read.ts'
 

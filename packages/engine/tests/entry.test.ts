@@ -13,7 +13,7 @@ import * as plan from '../src/plan.ts'
 import * as remove from '../src/remove.ts'
 import * as section from '../src/section.ts'
 import * as tail from '../src/tail.ts'
-import * as wrap from '../src/wrap.types.ts'
+import * as wrap from '../src/wrap.ts'
 import * as xref from '../src/xref.ts'
 
 /** the modules the entry re-exports whole, by the path its `export *` names (a package names its imports literally) */
@@ -24,7 +24,7 @@ const WHOLE: Record<string, Record<string, unknown>> = {
   './remove.ts': remove,
   './section.ts': section,
   './tail.ts': tail,
-  './wrap.types.ts': wrap,
+  './wrap.ts': wrap,
   './xref.ts': xref,
 }
 

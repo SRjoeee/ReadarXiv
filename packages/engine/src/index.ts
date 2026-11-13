@@ -9,7 +9,7 @@ export * from './memory.ts'
 export * from './remove.ts'
 export * from './section.ts'
 export * from './tail.ts'
-export * from './wrap.types.ts'
+export * from './wrap.ts'
 export * from './xref.ts'
 
 // ---- the back half of the prepare

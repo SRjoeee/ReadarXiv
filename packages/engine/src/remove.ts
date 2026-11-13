@@ -22,6 +22,9 @@ import type { OpsReader } from './opstream.ts'
 export interface PdfObject {
   toString(): string
   get?(key: PdfName | number): PdfObject | undefined
+  /** a name's text with its slash, and its characters decoded, where the object is a name */
+  asString?(): string
+  decodeText?(): string
 }
 /** a name (`/Name`): its text with the slash (`asString`), its characters decoded (`decodeText`, where the layer has it) */
 export interface PdfName extends PdfObject {
@@ -135,6 +138,9 @@ export interface AlignFacts {
   /** the images the page paints (PDF.js's image operations, their repeats and groups counted one an image) */
   images: number
 }
+/** alignment facts as a page's plan may give them: their image count absent where the plan was made without one (alignPage
+ *  then aligns no image, as Number.isInteger of none holds none) */
+export type GivenFacts = Omit<AlignFacts, 'images'> & { images?: number }
 /** a string operand of a content stream: its bytes and where it stands in the stream (`hex`: written in hexadecimal) */
 export interface LexString {
   t: 'str'
@@ -827,7 +833,7 @@ export interface Remover {
   /** a page walked: what could not be walked (`problems`, any one refuses the page) and the operators visited */
   walkPage(pageIndex: number): Walk
   /** a page against PDF.js's reading of it: its alignment facts, or (OPS, opList) the list itself; any difference refuses the page */
-  alignPage(pageIndex: number, facts: AlignFacts): Aligned
+  alignPage(pageIndex: number, facts: GivenFacts): Aligned
   alignPage(pageIndex: number, OPS: Record<string, number>, opList: OpList): Aligned
   decode(st: PdfObject, limit?: number): Uint8Array
   look(v: PdfObject | undefined): PdfObject | undefined
@@ -1336,9 +1342,9 @@ export async function openRemover(
    * with no code compared with none); an annotation's own appearance is not the page's. Any difference refuses the page
    * (`why`): nothing on it is removed
    */
-  function alignPage(pageIndex: number, facts: AlignFacts): Aligned
+  function alignPage(pageIndex: number, facts: GivenFacts): Aligned
   function alignPage(pageIndex: number, OPS: Record<string, number>, opList: OpList): Aligned
-  function alignPage(pageIndex: number, facts: AlignFacts | Record<string, number>, opList?: OpList): Aligned {
+  function alignPage(pageIndex: number, facts: GivenFacts | Record<string, number>, opList?: OpList): Aligned {
     // (with an operator list, its second argument is PDF.js's OPS, as the signatures state)
     if (opList !== undefined) facts = alignOf(facts as Record<string, number>, opList)
     const walk = walkPage(pageIndex)
@@ -1347,7 +1353,7 @@ export async function openRemover(
     const shows = walk.events.filter((e) => e.kind === 'show'),
       paints = walk.events.filter((e) => e.kind === 'paint')
     // (alignment facts, given or read just above, as the signatures state)
-    const listed = (facts as AlignFacts).codes
+    const listed = (facts as GivenFacts).codes
     if (listed.length !== shows.length) why.push(`${shows.length} showing operators walked, ${listed.length} listed`)
     for (let n = 0; n < Math.min(listed.length, shows.length) && why.length < 4; n++) {
       const e = shows[n]!
@@ -1372,9 +1378,9 @@ export async function openRemover(
       why,
       walk,
       shows,
-      paints: (facts as AlignFacts).paths === paints.length ? paints : null,
+      paints: (facts as GivenFacts).paths === paints.length ? paints : null,
       images:
-        Number.isInteger((facts as AlignFacts).images) && (facts as AlignFacts).images === images.length
+        Number.isInteger((facts as GivenFacts).images) && (facts as GivenFacts).images === images.length
           ? images
           : null,
     }
