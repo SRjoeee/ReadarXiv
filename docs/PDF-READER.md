@@ -4109,7 +4109,10 @@ rests on his line quoted there: a translation may be made or not, never garbled.
   box, keeps its rows where TeX set them, in their own measure and frame, as a display's do (Member.ownRows: its lines KEPT, its
   class `display`); one on a line of its unit's text is drawn as its ink there, F0's class (`other`, literal, its glyphs' text its
   copy). A group of no text of its own (a colour around an identifier element) is left as it is, and a unit placed more than once
-  (a babel name's occurrences) is read so nowhere. The lab reads the element as F0's (`keptEls` 'pitch': the dump's `keptBy`, the
+  (a babel name's occurrences) is read so nowhere. A unit the paper keeps as it is (Unit.kept) is not read by groups
+  (`artefacts.ts` pitchGroupsOf); since no cell is kept for its words (§18.72), a cell the name rule kept is read as every unit
+  is: 2610.40576v1's cell of `\ctk{+2.0k}` token counts, kept by name until then, now holds its groups as `code` elements. The
+  lab reads the element as F0's (`keptEls` 'pitch': the dump's `keptBy`, the
   parity's kept ink). Over the 88 (stage 1a against B6's r14), 148 groups in 86 units of 8 papers are such elements, every move
   of the run this rule's: 2608.25210v2 p3's three boxes on rows of their own, their lead lines translated; 145 on their lines,
   typewriter words in prose and cells (1810.04805v2's `{\tt [CLS]}` and `{\tt A}`, 2608.06007v1's `\texttt{Artifact}` and
@@ -6005,7 +6008,9 @@ was that it may stay the original's where the highlight forces it.
   (`decorated`, `marks.mjs` readInkDecorated, §18.51: soul's ground, underline or strike, alone or in a paper's macro). Nothing is
   detected anew, no third place reads it: the reader and the typesetter learn it from the stated unit, whose member is fixed (no
   group of its text) and stated `unwrapped` in the part (`bundle.ts` stateOf: a fixed member that is no kept unit, which before
-  this rule was a figure member alone), so that nothing is laid over it.
+  this rule was a figure member alone), so that nothing is laid over it. A cell the paper keeps already is not read by it; since
+  no cell is kept for its words (§18.72), a cell the name rule kept is read as every cell is: 2610.40576v1's two cells holding
+  an `\hlp` highlight, kept by name until then, are held whole for their decorated word.
 - **The whole label, by the paragraph reading's pairing** (the coordinator's ruling of 2026-11-12, option (b)). A figure's label is
   often printed over several lines that the engine cuts as several texts (the unit is the printed line: ragged lines are joined
   on no guess, §18.36), or on one printed line cut where the face changes (an italic lead and its roman text, §18.26); held by the
@@ -6548,6 +6553,17 @@ the layout's rules.
   `pipeline/live.mjs` openPaper (`withNames`), `layer-proto/units.mjs` bundleUnitsOf (its KEPT flag from the paper's `kept`),
   `layout/paper.mjs` madeBibliography's paper opened again. Its bundles are byte for byte what they were (the engine's golden
   tests). Today's `translate/groups.mjs` (decideGroups, NAMES_SHARE) is the website's and stays with it.
+
+Measured over round RB1's 89 papers and 2611.03953v2 (stage 1a against F2's run, lane cells-like-body): the units' `kept` gone
+from 1,482 distinct units (1,087 cells and 395 TikZ texts: the dumps' 2,211 cell entries in 59 papers and 541 TikZ entries), no
+id, no member, no ownership moved; and one paper further by the two facts of the source that skipped a kept unit and now read it
+as every unit (2610.40576v1: one cell's `\ctk{}` groups `code` elements, two cells holding a highlight held whole, §18.22,
+§18.61). The rows asked anew: 1,125 cell units over the lab's 92 pairs (33,958 units, Google's store 0 unavailable after 42 keyless
+requests, Microsoft's after 66). The reader gate over the 92 on both stores: every invariant as before (I3, I4, I5, I10, I6), the
+entry's lines nearer the runner's (the runner never had the column rule: 244 -> 224 members not alike on the door's rows,
+827 -> 809 on Google's), 0 rows read outside a page's wait set. PIPELINE moves (the units' `kept`); the integration's to make.
+No TRANSLATE (no wire moves), no LAYOUT (no mark moves), FORMAT stays 1. The display gate's ruling CT
+(`lab/typeset/parity/rulings.mjs`) covers the differences of a cell today keeps by these two rules and the rebuilt reader lays.
 
 ## 19. The engine's contract
 
