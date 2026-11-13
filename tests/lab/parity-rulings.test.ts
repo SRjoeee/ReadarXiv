@@ -822,10 +822,10 @@ describe("CB: a table cell laid in its column's box at the largest size it holds
   // (2611.03953v2-zh p13 t206, "MOPD (TA init)" in its Method column 208.15-274.66: v2 at 0.9 of 8.97, its translation ending in a
   // full-width closing parenthesis whose blank half hangs past the column, its ink inside; today at 0.8 in its own width. And
   // 1512.03385v1-zh p12 t309, "val" centred in its column 455.33-471.02: v2 at 0.9, today at 1.0 run on past the column)
-  type O = { column?: number[] | null; side?: number[]; held?: boolean; state?: string; v2?: Line; today?: Line; box?: number[]; ord?: number }
+  type O = { column?: [number, number] | null; side?: [number, number]; held?: boolean; state?: string; v2?: Line; today?: Line; box?: [number, number]; ord?: number }
   const ctx = (o: O) => {
     const ord = o.ord ?? 206
-    const box = o.box ?? [208.15, 274.66]
+    const box: [number, number] = o.box ?? [208.15, 274.66]
     return {
       v2: {
         today: { [ord]: { today: ord } },
