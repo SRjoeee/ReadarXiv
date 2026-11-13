@@ -73,12 +73,9 @@ const pastBottom = (L: Layout, blocks: readonly FitBlock[]) =>
   )
 
 /** a part's tie as the page lays it: a table group's members' ords (`cells`), or members laid at one size (`size`: one paragraph
- *  of TeX's the front end cut at a float, a figure's set). A figure's set states the scale its members S.figures sets are drawn
- *  at (`least`: one size a group, the figure texts the paragraph path lays capped at it too) and its floor (`floor`: the set's,
- *  S.figures' floorMin, which a set shrinks to as one) */
-export type PageTie =
-  | { rule: 'cells'; cells: readonly number[] }
-  | { rule: 'size'; ords: readonly number[]; least?: number; floor?: number }
+ *  of TeX's the front end cut at a float, a run-in head and its paragraph; a figure's set is no tie the page lays, each of its
+ *  texts at its own size: lay/entry.ts) */
+export type PageTie = { rule: 'cells'; cells: readonly number[] } | { rule: 'size'; ords: readonly number[] }
 
 /**
  * Page `page` laid from its part's flows (each member prepared), its ties, the rules: design-b's L8-L11 and E1. The members of a
@@ -142,7 +139,7 @@ export function layPagePrepared(
 
 /**
  * One round of a page's size ties (layPagePrepared): each tied member laid larger than the least of its tie capped there, in
- * `cap`, never under its floor (the tie's, else the member's own) and never above a cap set before; `fitOf` the scale each
+ * `cap`, never under its floor and never above a cap set before; `fitOf` the scale each
  * member is laid at, its page's fill passes run, `ownOf` the scale its own lay set it at before any page's fill and any tie's
  * cap, `firstOf` the page each begins on. Whether a cap was lowered. A tie caps a member from the scales the passes up to its own first page leave its
  * tie-mates at (docs/PDF-READER.md §18.64): a tie-mate begun on that page or before as
@@ -168,17 +165,17 @@ export function tieCaps(
   const wasOf = new Map(origin?.of ?? [])
   for (const t of sizes) {
     const on = t.ords.filter((o) => fitOf.has(o))
-    if (on.length < (t.least === undefined ? 2 : 1)) continue
+    if (on.length < 2) continue
     for (const o of on) {
       const from = firstOf.get(o) ?? 0
       const before = (q: number) => (firstOf.get(q) ?? 0) <= from
       const at = (q: number) => (before(q) ? fitOf.get(q) : (ownOf.get(q) ?? fitOf.get(q))) as number
-      const least = Math.min(...on.map(at), t.least ?? Number.POSITIVE_INFINITY)
-      const c = Math.max(least, t.floor ?? floorOf(o))
+      const least = Math.min(...on.map(at))
+      const c = Math.max(least, floorOf(o))
       if ((fitOf.get(o) as number) > c + SAME && c < (cap.get(o) ?? Number.POSITIVE_INFINITY) - SAME) {
         cap.set(o, c)
         lowered = true
-        if (origin) origin.of.set(o, originOf(t, on, at, before, least, fitOf, was, wasOf, origin.filledOf))
+        if (origin) origin.of.set(o, originOf(on, at, before, least, fitOf, was, wasOf, origin.filledOf))
       }
     }
   }
@@ -186,12 +183,11 @@ export function tieCaps(
 }
 
 /** the origin of a cap a tie sets: the member laid at the tie's least (`least`), one laid at its own need first where two
- *  stand there: one laid at a cap of its own in the round hands on that cap's origin; a figure's set laid at its labels' factor
- *  (`least` the set's own, PageTie's) is the set's, its first member's. `fill` where its page's fill set it there in the round,
- *  under its scale before the fill (`filledOf`: the evening's size step, §18.57), never one read at its own lay (`before` false) */
+ *  stand there: one laid at a cap of its own in the round hands on that cap's origin. `fill` where its page's fill set it there
+ *  in the round, under its scale before the fill (`filledOf`: the evening's size step, §18.57), never one read at its own lay
+ *  (`before` false) */
 export type TieOrigin = { by: number; fill: boolean }
 function originOf(
-  t: Extract<PageTie, { rule: 'size' }>,
   on: readonly number[],
   at: (q: number) => number,
   before: (q: number) => boolean,
@@ -203,8 +199,8 @@ function originOf(
 ): TieOrigin {
   const capped = (q: number) => before(q) && was.has(q) && Math.abs((fitOf.get(q) as number) - was.get(q)!) <= SAME
   const there = on.filter((q) => at(q) <= least + SAME)
-  const q = there.find((x) => !capped(x)) ?? there[0]
-  if (q === undefined) return { by: t.ords[0]!, fill: false }
+  // (the least is one of `on`'s own scales: some member stands there)
+  const q = (there.find((x) => !capped(x)) ?? there[0])!
   if (capped(q) && wasOf.has(q)) return wasOf.get(q)!
   const fit = fitOf.get(q) as number
   return { by: q, fill: before(q) && (filledOf.get(q) ?? fit) - fit > SAME }

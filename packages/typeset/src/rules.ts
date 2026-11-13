@@ -659,7 +659,7 @@ const SPECS: readonly RuleSpec[] = [
     owns: ['T10', 'G16', 'A26'],
     ports: [
       'RUN:1441-1496 paintFigures',
-      'figure-fit.mjs:42 fitFigureSet',
+      'figure-fit.mjs:42-69 fitFigure (fitFigureSet over one item)',
       'figure-fit.mjs:1-76 lineOf, sameAsSource',
       'L2:4824-4836 figureRuns',
     ],
@@ -668,9 +668,9 @@ const SPECS: readonly RuleSpec[] = [
     file: 'shared/figures.ts',
     state: {
       is: 'changed',
-      why: "a translation fitted and anchored by its ink, as every line the breaker sets: the blank half of a full-width mark at its line's edge (B.break leadOf and hangOf at its target's first state: an opening mark's leading half, a closing mark's trailing half) is no part of the line it needs and stands past its anchor's edge, where today's set it by its advance (the parity's ink reading, 9744efab3: 32 figure texts of its pages a quarter em off their original's middle or half an em short of its end, 1810.04805v2 p16's masked-LM label 3.49 pt at 6.97). A mark's blank half is its run's face's measure (script.ts markOf, §18.48), no longer the target's `centredPunct`; the replay's today's marks are runs whose faces state no measure",
+      why: "a translation fitted and anchored by its ink, as every line the breaker sets: the blank half of a full-width mark at its line's edge (B.break leadOf and hangOf at its target's first state: an opening mark's leading half, a closing mark's trailing half) is no part of the line it needs and stands past its anchor's edge, where today's set it by its advance (the parity's ink reading, 9744efab3: 32 figure texts of its pages a quarter em off their original's middle or half an em short of its end, 1810.04805v2 p16's masked-LM label 3.49 pt at 6.97). A mark's blank half is its run's face's measure (script.ts markOf, §18.48), no longer the target's `centredPunct`; the replay's today's marks are runs whose faces state no measure. And each figure text is fitted by its own width alone (the owner's ruling of 2026-11-13 on a figure's sets, (B): each at its own size), where today's fitted a set (one column or one baseline of a figure) by one factor, the least any member's width needed: a label no wider than its original keeps the original's size beside a mate its width steps, and a text drawn that was not moves none of its mates",
       replay:
-        "every figure text of the 123 reader dumps (tests/replay/figures.ts, lab/typeset/replay-figures.mjs --marks=today): with today's marks (no mark's em holding a blank half, as a target whose faces centre them) drawn, why and line (x0, baseline, rot, text) all today's; by ink 609 move, 452 level ones' x0, 154 turned ones' place along their run, 3 left unfit by their advance drawn; the figure rows, views and units read off today's bundle; kept, untranslated, unhidden, served, waiting: synthetic",
+        "every figure text of the 123 reader dumps (tests/replay/figures.ts, lab/typeset/replay-figures.mjs --marks=today): with today's marks (no mark's em holding a blank half, as a target whose faces centre them) drawn, why and line (x0, baseline, rot, text) all today's but the rulings' departures, named: 7 today left crowded over a stroke drawn (`cleared`, F41) and 388 drawn larger than their today's set's least that start elsewhere for it (`untied`: a centred or right-aligned one, a turned one along its run); by ink 571 more move, 415 level ones' x0, 153 turned ones' place along their run, 3 left unfit by their advance drawn (364 untied, 7 cleared); the figure rows, views, sets and units read off today's bundle; kept, untranslated, unhidden, served, waiting: synthetic",
       cases: 14351,
     },
   },

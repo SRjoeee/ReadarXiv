@@ -12,12 +12,18 @@ import type { PaperReading } from '../../src/lay/read.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { Item, Metrics, RuleParams, Rows } from '../../src/types.ts'
 
-// (an ideograph a whole em, any other character half of one; every run's ink 0.7 of its size over its baseline and 0.2 under)
-const CJK = /[　-〿一-鿿＀-￯]/u
-const widthOf = (size: number, t: string) => [...t].reduce((a, c) => a + (CJK.test(c) ? size : size / 2), 0)
+// (an ideograph a whole em, any other character half of one: the CJK symbols, the unified ideographs and the full-width forms
+// by their code points; every run's ink 0.7 of its size over its baseline and 0.2 under)
+const CJK_RANGES = [
+  [0x3000, 0x303f],
+  [0x4e00, 0x9fff],
+  [0xff00, 0xffef],
+] as const
+const wide = (c: string) => CJK_RANGES.some(([a, b]) => c.codePointAt(0)! >= a && c.codePointAt(0)! <= b)
+const widthOf = (size: number, t: string) => [...t].reduce((a, c) => a + (wide(c) ? size : size / 2), 0)
 const metrics: Metrics = { ready: () => true, advance: (_f, size, t) => widthOf(size, t), ink: () => [70, 20, 0] }
-/** a translation of `n` ideographs, `n` em long */
-const zi = (n: number) => '字'.repeat(n)
+/** a translation of `n` ideographs (U+5B57), `n` em long */
+const zi = (n: number) => String.fromCodePoint(0x5b57).repeat(n)
 
 describe('S.figures over the part: each text of a set at what its own width needs', () => {
   const R = { cjkQuotes: true, floorMin: 0.6, centredPunct: false, compressMax: 2 } as RuleParams

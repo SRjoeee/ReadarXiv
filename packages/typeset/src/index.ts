@@ -205,7 +205,7 @@ export {
   figures,
   fontClassOf,
 } from './shared/figures.ts'
-export { type FigureFit, type FitFigure, fitFigureSet, sameAsSource } from './shared/figure-fit.ts'
+export { type FigureFit, type FitFigure, fitFigure, sameAsSource } from './shared/figure-fit.ts'
 export {
   CJK_INK,
   COPY_SPACE_EM,

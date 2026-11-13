@@ -5616,7 +5616,15 @@ and direction and no skew, so an italic label translated into Chinese, Japanese 
   nothing else of any page moves. The parity on those pairs, both modes: 19 italic labels now read as the original's italic
   (`style`, v2 nearer; today's drawn upright), no page newly worse. No version moves: the reader's lay alone.
 
-### 18.54 One size a group: a figure text the paragraph path lays is in its labels' size tie (2026-11-12)
+### 18.54 One size a group: a figure text the paragraph path lays is in its labels' size tie (2026-11-12; its size retired 2026-11-13)
+
+**Retired in the typesetter, 2026-11-13** (the owner's ruling on a figure's sets, §19.12 "Its set and its room": each figure
+text is sized by its own width alone). The part's tie below stands (the engine's, PIPELINE 96), and the lay reads it for no
+size: a figure text the paragraph path lays is laid at its own fit, its set's labels at theirs, neither capping the other; the
+`least` and `floor` a figure's set stated to `layPagePrepared`, the second pass over the labels (`fitFigureSet`'s `cap`) and the
+set's factor read over its other pages (the I6 rule below) are deleted. `figure-tie.test.ts` keeps its three cases, rewritten:
+each text at its own size with the tie as without it, and every page's lay laying the paragraph alike at its own. What follows
+is the rule as it was built.
 
 The labels of one group are set at one size (the owner's rule of 2026-10-29, §19.12 "Its set and its room"): today's figure
 reading puts each line in a set (`setsOf`: its column, its baseline), the part states each set as a size tie, and S.figures
@@ -9152,12 +9160,12 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
 - **A figure text keeps the original's size wherever its translation is no wider than the original** (the owner's rule of
   2026-11-13, on round RB1's figure texts over a stroke: 「缩不缩的判断方式我觉得应该是比较简单的。其实本质上，缩不缩是指我们翻译的文字有没有
   超出英文原文的原有空间。如果没有超出的话，我们就不用缩。」). Width is the fit's only test (`packages/typeset` `shared/figure-fit.ts`
-  fitFigureSet). Height is none: drawn at the original's size a translation stands in the band the original's line stands in,
-  so no stroke under its text, no ink over it and no container's edge over or under it is measured. A translation no wider
-  than its original (its advance, the blank halves of the marks at its edges aside, against the original's box from its first
-  glyph's origin to its last glyph's advance end: each with its end glyphs' side bearings) keeps the original's size with
-  nothing else asked. A wider one takes the free room beside it (its room, below), and where that is not enough its set steps
-  by what its width needs and no more, to the floor at most. What this retired: the stroke-under rule of PIPELINE 69 and round
+  fitFigure), and the text's own (below, "Its set and its room"). Height is none: drawn at the original's size a translation
+  stands in the band the original's line stands in, so no stroke under its text, no ink over it and no container's edge over or
+  under it is measured. A translation no wider than its original (its advance, the blank halves of the marks at its edges aside,
+  against the original's box from its first glyph's origin to its last glyph's advance end: each with its end glyphs' side
+  bearings) keeps the original's size with nothing else asked. A wider one takes the free room beside it (its room, below), and
+  where that is not enough it steps by what its width needs and no more, to the floor at most. What this retired: the stroke-under rule of PIPELINE 69 and round
   RB1 (a translation's ink held above `Room.under`, its depth the canvas's measure of its runs, a CJK run's held to its em box,
   `CJK_FOOT`; a set shrunk until its ink cleared the stroke, a label left the original's, `crowded`, where it would need less
   than the floor) and the container's edge over a figure text (`Room.over` in the fit, the owner's reformulation of 2026-11-10).
@@ -9174,12 +9182,22 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   table cell (2610.37818v1 p8's legend, "vs. 3DGUT + PPISP") still steps by width.
 - **Its set and its room** (the owner's rule of 2026-10-29, after 2010.11929v2's legends in Chinese: "All" drawn smaller
   than the other entries, "Patch size" starting further right than its column, "Head 3" smaller than "Head 1", each label
-  fitted to its own box and anchored by what it read alone; `figure-text.mjs` `setsOf`, `roomsOf`): the labels of one group are set at one size, the original's by default; each keeps the original's alignment
-  and anchor; a translation may take free space, never touching other ink nor leaving its figure; only a group that cannot
-  fit shrinks, all of it by one factor (the factor of the label whose width needs most), never a label alone; a figure text the
-  paragraph path lays stands in its lines' set and is drawn at its factor (§18.54). Whether a label no wider than its original
-  keeps its size where a mate's width steps its set is the owner's to rule (his two rules meet there: each text at the
-  original's size where it fits, and one size a set); until then the set steps as one. A **column** is the runs of one figure, size and direction whose
+  fitted to its own box and anchored by what it read alone; `figure-text.mjs` `setsOf`, `roomsOf`; and his ruling of 2026-11-13
+  on a figure's sets): each label keeps the original's alignment and anchor, its column's; a translation may take free space,
+  never touching other ink nor leaving its figure; and each figure text is sized by its own width alone, whatever the other
+  texts of its set need, a label S.figures sets and a figure text the paragraph path lays (§18.54) alike (`packages/typeset`
+  `shared/figure-fit.ts` fitFigure, `lay/figures.ts`, `lay/entry.ts`). Shown each set drawn as the original, (A) at one size
+  and (B) each at its own, he chose (B), 「方案二：各用各的字号」; on a legend 「如果更还原的话，确实是方案 2 更还原。整体视觉上来说无所谓，
+  我觉得就还是按还原这种更简洁的方式去做吧，按长期更正确的方式去做」; on the others 「按长期、正确、适应性更强的方案去做」, 「哪种判断方式更简单判断方式更聪明智能，我们就用哪种」:
+  his rule of the same day carried through (a text shrinks only where its translation goes past its original's own room, the
+  bullet above). This retired one size a set (a set fitted by one factor, the least its members' widths needed, so that a label
+  no wider than its original stood under its size beside a mate its width stepped), and with it §18.54's tie of a paragraph-path
+  figure text to its labels, its second pass and the set's cap. The part still states each set as a size tie (the engine's
+  `locate/flows.ts`, from today's figure reading's sets), which the typesetter reads for no size: a part with the tie and one
+  without it lay a figure's texts alike. Measured before the build on lane fig-ink's lay of the 92 pairs with Google's rows: under
+  one size a set, 657 figure texts no wider than their original stood under its size in 118 sets because a mate's width stepped
+  the set (391 at a factor under 0.9, 126 under 0.8, 8 under 0.7); each at its own size, 169 sets hold two sizes or more, the
+  largest ratio inside one 1.606 (2602.23285v2-ja p8). A **column** is the runs of one figure, size and direction whose
   starts, ends or middles agree within `ALIGN_TOL` 0.08 of their size, two units or more among them; its other runs, a
   number or a "…", count for its edge (2010.11929v2's "Head 1/2/3", one length, read their end alone, the frame being
   nearer after them than their markers before; the column's "…" shares their start alone). A unit in a column takes the
@@ -9188,7 +9206,7 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   0.4 em before the frame and 0.8 em after its sample) read as centred. A number alone at a word's edge makes no column,
   so an axis's title over a tick's label stays centred. A **set** (`set`, its first unit's k) is the units of one column of
   one edge and those of one figure, size and direction on one baseline (an axis's words, a legend laid in a row, the two
-  panels' x titles of one figure), joined. A unit's **room** (`before`, `after`, PDF units along its direction) is the free
+  panels' x titles of one figure), joined: the part's size tie, which no size reads. A unit's **room** (`before`, `after`, PDF units along its direction) is the free
   line beside its box: to the nearest ink its band meets (a glyph, a stroke, a fill's edge, an image, the edge of a ground
   it stands on, its clip's edge where a clip cuts it short; a path's lines only as far as its box, its clip's, shows them),
   `ROOM_CLEAR` 0.15 em short of it; on a ground whose lines are not known (a path past the page's shapes, a rounded node, a frame's stroke) a band's height inside

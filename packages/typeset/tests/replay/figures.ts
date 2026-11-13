@@ -8,10 +8,12 @@
 // held (no dump says `unhidden`). Today's S.figures set a translation by its advance, as a line whose marks' ems hold no blank
 // half: replayed with `marks: 'today'`, its faces state no measure of their marks (Face.ids none: script.ts markOf finds no
 // blank half, which S.figures' blanksOf alone reads of them), the rest the target's own; else by its ink, as v2 sets every
-// line. One rule departs from today's on purpose (the owner's rule of 2026-11-13, F41: width is the fit's only test, no stroke
-// under a text measured): a text today left `crowded` over a stroke under it (its row stating the stroke) that S.figures draws
-// now is `cleared`, and each other text of its set that moves only where its line starts, its size stepping with the set's,
-// `stepped`: neither is a difference.
+// line. Two rules depart from today's on purpose, the owner's of 2026-11-13: width is the fit's only test, no stroke under a
+// text measured (F41), so a text today left `crowded` over a stroke under it (its row stating the stroke) that S.figures draws
+// now is `cleared`; and each text is sized by its own width alone, where today's fitted a set by one factor (the least its
+// members needed: today's row states each text's set), so a text drawn now at a factor larger than the least of its today's set
+// (that least, its set's smallest drawn now, is today's factor of the set) that moves only where its line starts (its x0, and a
+// turned one's baseline along its run) is `untied`. Neither is a difference.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { faceOf } from '../../src/breaker/faces.ts'
@@ -79,7 +81,7 @@ const idsOf = (paper: string) => {
 export function replayFigures(
   pair: string,
   o: { marks?: 'today' } = {},
-): { equal: number; total: number; differ: string[]; extra: string[]; cleared: string[]; stepped: string[] } {
+): { equal: number; total: number; differ: string[]; extra: string[]; cleared: string[]; untied: string[] } {
   const L = ledger(pair)
   const paper = paperOf(pair)
   const tf = todayFigures(paper)
@@ -94,7 +96,7 @@ export function replayFigures(
       differ: ['no bundle in the cache'],
       extra: [],
       cleared: [],
-      stepped: [],
+      untied: [],
     }
   rules ??= derived('rules')
   const R = rules!.targets[L.target]!.params as { cjkQuotes?: boolean; floorMin: number; compressMax: number }
@@ -105,7 +107,7 @@ export function replayFigures(
   const differ: string[] = [],
     extra: string[] = [],
     cleared: string[] = [],
-    stepped: string[] = []
+    untied: string[] = []
   let equal = 0
   const seen = new Set<string>()
   for (const { page } of dump.pages) {
@@ -121,7 +123,7 @@ export function replayFigures(
       rules: R,
       metrics,
     })
-    // (the texts today left crowded over a stroke under them that S.figures draws now, and their sets)
+    // (the texts today left crowded over a stroke under them that S.figures draws now)
     const rowOf = new Map(rows.map((r) => [r.id, r]))
     const clears = (f: Figure) => {
       const r = rowOf.get(f.id),
@@ -129,7 +131,19 @@ export function replayFigures(
         under = tf.under(f.id, f.page)
       return !!r && !!w && !w.drawn && w.why === 'crowded' && f.drawn && under !== null && Number.isFinite(under)
     }
-    const clearedSets = new Set(got.figures.filter(clears).map((f) => rowOf.get(f.id)!.set ?? rowOf.get(f.id)!.group))
+    // (each drawn text's factor of its size, and the least of each of today's sets: today's factor of the set; a text today
+    // left crowded is none of it, as today's set was fitted without it)
+    const kOf = (f: Figure) => (f.drawn && !clears(f) ? f.size! / rowOf.get(f.id)!.size : null)
+    const least = new Map<string, number>()
+    for (const f of got.figures) {
+      const k = kOf(f),
+        s = tf.set(f.id, f.page)
+      if (k !== null) least.set(s, Math.min(k, least.get(s) ?? k))
+    }
+    const unties = (f: Figure) => {
+      const k = kOf(f)
+      return k !== null && k > least.get(tf.set(f.id, f.page))! + 1e-9
+    }
     for (const f of got.figures) {
       const key = `${f.id}|${f.page}`
       seen.add(key)
@@ -142,14 +156,16 @@ export function replayFigures(
         cleared.push(`ord ${f.id} p${f.page}`)
         continue
       }
-      const d = firstDifference(dumpOf(f, idsOf(paper)[f.id] ?? null, tf.view(page)!), w, `ord ${f.id} p${f.page}`)
-      const r = rowOf.get(f.id)
-      if (d && r && clearedSets.has(r.set ?? r.group) && /^ord \d+ p\d+\.line\.x0: /.test(d))
-        stepped.push(`ord ${f.id} p${f.page}`)
+      const got1 = dumpOf(f, idsOf(paper)[f.id] ?? null, tf.view(page)!)
+      const d = firstDifference(got1, w, `ord ${f.id} p${f.page}`)
+      // (one larger than its today's set's least that moves only where its line starts: its x0 and baseline aside, all
+      // today's; a turned one's start moves along its run, its baseline with it)
+      const start = (x: DumpFigure) => (x.line ? { ...x, line: { ...x.line, x0: 0, baseline: 0 } } : x)
+      if (d && unties(f) && !firstDifference(start(got1), start(w), '')) untied.push(`ord ${f.id} p${f.page}`)
       else if (d) differ.push(d)
       else equal++
     }
   }
   for (const [key] of want) if (!seen.has(key)) differ.push(`${key}: in the dump, not replayed`)
-  return { equal, total: dump.figures.length, differ, extra, cleared, stepped }
+  return { equal, total: dump.figures.length, differ, extra, cleared, untied }
 }
