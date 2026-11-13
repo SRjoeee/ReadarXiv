@@ -1,7 +1,10 @@
 // Reading and writing the bundle's objects. Every object is canonical JSON in UTF-8 (keys sorted, no spacing, -0 written 0),
 // named by the SHA-256 of its bytes. A reader checks, in this order and before anything is parsed: the digest (where it is
 // given), the size bound of its kind, then the count of values and the depth of nesting; then JSON.parse, then the schema.
-// Where trust changes (the box's service reading its child's objects, the browser reading the server's) this is the one check.
+// Where trust changes this is the check: the box's service reading its child's objects, and the browser reading the bundle's
+// head, parts and units (packages/reader/src/reader.ts, each `read` with its digest). A target's Rows objects our server serves
+// are not read here: the browser holds each to its length and digest (packages/reader/src/session/client.ts `object`) and
+// parses it with JSON.parse (packages/reader/src/reader.ts, where it reads the server's rows).
 import type { z } from 'zod'
 import { fromUtf8, sha256Hex, utf8 } from './bytes.ts'
 import { Head, Part, Row, Rows, Units } from './schema.ts'
