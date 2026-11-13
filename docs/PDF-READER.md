@@ -3503,8 +3503,12 @@ grid place, the ownership's glyphs: their lines' advances and their elements' in
 a number or a formula alone, which nothing but its place ties to a column: a word of ink no member owns on the table's band (the
 ink units' word rule, `WORD_GAP`) joins the column whose unit cells it meets, and no other's, where the column's class sets it
 there (its start, end or middle within `ALIGNED`, half a point, of the cells' own). The box is stated where the column holds two
-entries at least and each stands where its own class sets it in their hull (a `\multicolumn{1}{c}` header centred in an `l`
-column is one); a cell spanning columns is no entry of any, its box the union of the boxes of the columns it spans where each is
+entries at least, each stands where its own class sets it in their hull (a `\multicolumn{1}{c}` header centred in an `l`
+column is one), and every word of free ink meeting its cells is such an entry: one that stands otherwise is an entry not read
+whole (a number with a space in it beside the column's edge; siunitx's `S` column, whose numbers TeX sets on their decimal
+marker, padded to the column's format, so that of "0.856 ± 0.012" only the ± stands on the column's middle, where it had made a
+box of the header's own width, narrower than TeX's: 2602.23285v2 p7's "Acc"; a word over two columns), and the column has
+none. A cell spanning columns is no entry of any, its box the union of the boxes of the columns it spans where each is
 stated, its class setting it there. Not stated: a column holding a cell whose text TeX set as a paragraph of its own (a `p`, `m`,
 `b` or `X` column, a `\parbox`: its box is that paragraph's `\hsize`, which no glyph shows; `marks/channels.ts` readCellBoxes
 reads the class only where no paragraph's `AXT-ALIGN` holds the cell's text, `InstrumentUnit.cell.boxed`), a cell no LaTeX
@@ -3512,8 +3516,8 @@ template set, a column whose entries do not line up (a cell the walk placed in a
 and a column a `\multicolumn` widened (a spanning cell wider than the union of its columns: TeX gives the excess to the last
 column it spans, whose entries then no longer tell its width). A table over several pages takes its columns from all of them
 where every column stated on two pages stands at its class's edge or middle on each, else each page's from its own. What the
-reading misses (a number with a space beside its column's edge, of which only the word at the edge joins; a dash spanning two
-columns) leaves a box narrower than TeX's, never wider.
+reading misses (an entry of free ink spanning two columns of which one holds no unit cell; free ink off the table's band) leaves a
+box narrower than TeX's, never wider.
 
 **The typesetter lays a single-line cell in it** (`lay/adapt.ts` `columnRoomOf`): its room is the box, in its column's
 alignment (its class: flush left, flush right or centred on the box's middle), and it is laid at the largest size not over the

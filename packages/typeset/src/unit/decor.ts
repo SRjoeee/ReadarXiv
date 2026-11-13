@@ -157,7 +157,7 @@ export function decorAfter(blocks: DecorBlock[], i: DecorAfterInput): DecorAfter
   const carried = i.labelHides && !!b0 && b0.page === i.firstPage && (b0.centred || b0.flush === 'right')
   const sideOf = (b: DecorBlock, k: number) => (typeof i.side === 'function' ? i.side(b, k) : i.side.get(b))
   // (but a cell's, as today's widened none (RUN:2116): a single-line cell whose column's box the part states is set in that box
-  // (the adapter's columnRoomOf; the owner's decision of 2026-11-13); any other in its own ink's width at its own size, shrunk
+  // (the adapter's columnRoomOf; the owner's decision, PDF-READER §18.13); any other in its own ink's width at its own size, shrunk
   // there to its fit's floor, and run on over the paper beside it only where it is clipped there, X.further's 'widen' (the
   // adapter's `wide`), as today. Widened at once to its rules, a column's every cell was set at the original's size, the column
   // crowded (2608.25210v2-zh p14), and a cell left room for the page's fill to spread (2610.20967v1-zh p4))

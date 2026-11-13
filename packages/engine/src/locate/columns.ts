@@ -1,4 +1,4 @@
-// A table column's box on arXiv's page (Room.column; the owner's decision of 2026-11-13, docs/PDF-READER.md §18.13): the left
+// A table column's box on arXiv's page (Room.column; the owner's decision, docs/PDF-READER.md §18.13): the left
 // and right edge of what TeX set in one column of one tabular, every entry's. Its unit cells are the members the source walk
 // placed in that grid column (InstrumentUnit.cell: its table, row, first column and span), their glyphs the ownership's; an
 // entry no unit is (a number, a formula alone, a cell of fewer than two letters) has no mark, no owner and no grid place, and
@@ -9,7 +9,9 @@
 // - its unit cells (span 1) each by its own class (a \multicolumn{1}{c} in an l column is centred in it), the cells of one class
 //   ALIGNED of one another; a word of free ink on the table's band joins the column where it meets that column's unit cells'
 //   hull and no other's, and its class sets it there (its start on the hull's left, its end on its right, its middle on its
-//   middle), the column's unit cells all of one class; at least two entries;
+//   middle), the column's unit cells all of one class; at least two entries. A word that meets the hull and stands otherwise (a
+//   word of a number with a space in it beside the column's edge, siunitx's S column's numbers set on their decimal marker, a
+//   word over two columns, a word in a column of two classes) is an entry not read whole: the column has none;
 // - a column that holds a cell whose text TeX set as a paragraph of its own (a p, m, b or X column, a \parbox: its box is that
 //   paragraph's \hsize, which no glyph shows) or whose template is not LaTeX's (no class) has none;
 // - a cell spanning columns (\multicolumn) is no entry of a single column's box; its box is the union of those it spans where
@@ -17,9 +19,9 @@
 //   last column it spans): that column's entries no longer tell its width, and neither it nor the spanning cell has a box;
 // - a table set over several pages (a longtable's) takes its columns from all of them where every column with a box on two of
 //   them stands at its class's edge or middle on each, else each page's from its own.
-// What is not read: a free word a column's class does not set where it stands (a number with a space in it beside its column's
-// edge: a word of it alone stands there), a column of no unit cell, an entry of free ink spanning columns (a dash over two). Each
-// leaves a box narrower than TeX's, never wider; TeX's own statement of the box (the template's edges as points) is the TeX gate's.
+// What is not read: a column of no unit cell, an entry of free ink spanning columns of which one has no unit cell (a dash over
+// two), free ink not on the table's band. Each leaves a box narrower than TeX's, never wider; TeX's own statement of the box (the
+// template's edges as points) is the TeX gate's.
 
 /** a column's class: TeX's \hfil on the side or sides the slack goes */
 export type ColumnClass = 'l' | 'c' | 'r'
@@ -52,7 +54,7 @@ export interface FreeWord {
  * of TeX's equal positions (the lane cell-room's reading of 767 columns of the corpus with two single-line unit cells: 723 within
  * it, the rest 0.5 to 43.7 pt apart, cells of another column the source walk placed there: lanes/cell-col.md for the spread)
  */
-export const ALIGNED = 0.5
+const ALIGNED = 0.5
 
 type Box = [number, number]
 type Entry = [x0: number, x1: number, cls: ColumnClass]
@@ -102,15 +104,18 @@ export function columnBoxes(cells: readonly ColumnCell[], words: readonly FreeWo
       const es: Entry[] = cs.map((c) => [c.x0, c.x1, c.cls as ColumnClass])
       const one = new Set(cs.map((c) => c.cls)).size === 1 ? (cs[0]!.cls as ColumnClass) : null
       cls.set(k, one)
-      if (one) {
-        const h = hulls.find(([q]) => q === k)![1]
-        for (const w of words) {
-          if (w.page !== p) continue
-          const meets = hulls.filter(([, g]) => Math.min(w.x1, g[1]) - Math.max(w.x0, g[0]) > 0)
-          if (meets.length === 1 && meets[0]![0] === k && setIn(one, [w.x0, w.x1], h)) es.push([w.x0, w.x1, one])
-        }
+      // (each word of free ink meeting its cells: an entry where it meets them alone and its class sets it there; else an entry
+      // not read whole, and the column none)
+      const h = hulls.find(([q]) => q === k)![1]
+      let whole = true
+      for (const w of words) {
+        if (w.page !== p) continue
+        const meets = hulls.filter(([, g]) => Math.min(w.x1, g[1]) - Math.max(w.x0, g[0]) > 0)
+        if (!meets.some(([q]) => q === k)) continue
+        if (one && meets.length === 1 && setIn(one, [w.x0, w.x1], h)) es.push([w.x0, w.x1, one])
+        else whole = false
       }
-      on.set(k, es)
+      on.set(k, whole ? es : null)
     }
     entries.set(p, on)
     classOf.set(p, cls)

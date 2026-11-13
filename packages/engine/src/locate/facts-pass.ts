@@ -304,7 +304,7 @@ export function factsOf(input: FactsInput): void {
 }
 
 /**
- * Each table cell's column's box (Room.column; the owner's decision of 2026-11-13, docs/PDF-READER.md §18.13), once every
+ * Each table cell's column's box (Room.column; the owner's decision, docs/PDF-READER.md §18.13), once every
  * member's facts are read (its band): locate/columns.ts over each table's located cells, each its first column and span, its
  * class (InstrumentUnit.cell.boxed) and what TeX set of it on its page (its lines' advances and its elements' ink on their
  * baselines, as the typesetter's own room of a cell reads it), and the words of ink no member owns on the table's band on each

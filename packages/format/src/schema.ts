@@ -309,7 +309,7 @@ export const Room = z.object({
   // cell's the union of the columns it spans, each stated. Absent where that is not established: a p, m, b or X column, a cell
   // of a \parbox or of no LaTeX template, a column a \multicolumn widened, one whose entries do not line up, one of one entry. A
   // single-line cell is laid in it, in its column's alignment, at the largest size not over the original's that fits it (the
-  // owner's decision of 2026-11-13, docs/PDF-READER.md §18.13); a typesetter of before reads none and lays it in its own room)
+  // owner's decision, docs/PDF-READER.md §18.13); a typesetter of before reads none and lays it in its own room)
   column: z.tuple([num, num]).optional(),
   under: num.optional(),
   // (a figure text's container's edge over its baseline, PDF units up from it: a closed shape round all of its glyphs, inside

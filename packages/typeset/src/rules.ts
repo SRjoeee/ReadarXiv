@@ -987,7 +987,7 @@ const SPECS: readonly RuleSpec[] = [
     // the ink that stays beside its lines, no member's, which today never read (Room.stays: a rule or a glyph no unit owns, a QED
     // box), on the block of the line it stood beside. And a table cell's column's box, which today never read (Room.column,
     // locate/columns.ts: what TeX set in its column, every entry's, where the entries line up as the column's class sets them;
-    // the owner's decision of 2026-11-13), the room a single-line cell is laid in)
+    // the owner's decision, docs/PDF-READER.md §18.13), the room a single-line cell is laid in)
     ports: ['RUN:1557-1573 columnOf', 'RUN:1677-1687 freeFor', 'RUN:1699-1729 paperTo'],
     how: 'moved',
     reads: [],

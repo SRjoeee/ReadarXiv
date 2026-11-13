@@ -124,14 +124,14 @@ function cellExtent(l: Line, m: Placed): [number, number] {
   return [mid - half, mid + half]
 }
 /**
- * A single-line table cell's column's box (Room.column; the owner's decision of 2026-11-13, docs/PDF-READER.md §18.13): the room
+ * A single-line table cell's column's box (Room.column; the owner's decision, docs/PDF-READER.md §18.13): the room
  * it is laid in, in its column's alignment (its class: Placed.align), at the largest size not over the original's that fits
  * it, the same room at every size (no step down in its own ink's width first, no room opening only where it is clipped at its
  * floor: X.further's 'widen'). Undefined where the part states none (a part made before, a column whose box is not
  * established), for a cell of several lines or a held one, and where ink not its own stands inside the box on its line (its
  * Room.side short of an edge of the box: a mark TeX set in its entry past a space): each laid in its own room as before
  */
-export function columnRoomOf(m: Placed): readonly [number, number] | undefined {
+function columnRoomOf(m: Placed): readonly [number, number] | undefined {
   const c = m.room.column
   const l = m.lines[0]
   if (m.kind !== 'cell' || !c || !l || m.lines.length !== 1 || l[9] & KEPT) return undefined
