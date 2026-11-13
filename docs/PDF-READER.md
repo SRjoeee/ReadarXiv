@@ -6433,6 +6433,28 @@ states it, in a later round; until then no part holds it and nothing drawn moves
   (179.84, 585.36) on the door rows; one stating every such point's first word, and its words in every part that holds the
   member, opens all six (the gate 0) and moves no other unit across the pages' lays (I6 0 other).
 
+### 18.70 A stop the source ties to a word or a number ends no sentence on the tags wire (the coordinator's ruling, 2026-11-13)
+
+A tie after a stop is TeX's own statement that the space there is a word space and not a sentence's end: `~` is
+`\penalty10000\ `, and no end-of-sentence space is ever set at it. So where the source ties a word or a number to a stop, the tags
+wire (Google's, Chrome's built-in translator's, the LLM services') marks no sentence end there: no boundary marker, no cut of the
+row's sentences (`wire/tags.ts` planTags `tied`). A word or a number is text that begins with a letter or a digit, or an element
+the sentence cutter reads as one (a number, a reference, a formula, a paper's macro); a tie and then a mark, which annotates the
+sentence before it (a note's mark, a footnote's call, a citation), keeps the end, the mark glued to the sentence that ended
+(2111.09276v1's `search.~\footnote{…}`). No word list and no language's case decide it: the tie is the source's.
+
+Why: on round B15's wire the boundary marker stands right after a sentence's stop, before the elements the source glues after it
+(DESIGN §6.2), and the cutter ended sentences at abbreviations' dots a tie follows. After "vol." Google then completed the
+"sentence" with a volume, an issue and pages the paper does not print ("…Systems, vol.~36, pp.~…" read as "vol. 10, no. 1, pp.
+1-10" in Chinese) in 42 bibliography units of 7 papers over the lab's Google store at round RB1, 39 of their rows read; on round
+B14's wire (the marker after the elements) none. Every such marker over the store's 92 pairs (lane glued-mark, 2026-11-13): 533,
+532 in bibliographies (after a one-letter initial 366, "M.~Casals"; "vol." 99, "no." 51, "p." 6 before a number; a lower-case
+initial 3, "J. a.~P. Cavalcante"; journal abbreviations 7, "Amer.~Math.~Soc.", "Math.~Ann.", "Ch.~Pommerenke") and 1 in prose
+("…an ingredient in Definition.~\ref{…}.", a stop the author typed inside the sentence): every one read, none a sentence's end.
+The wires of 479 bibliography units and 1 prose unit change; they are asked again. Reading a `number` element as a digit
+instead was measured and withdrawn: the cutter's own merge of a short capitalised word before a number (`Exer. 5`) then joins
+262 author blocks to their year ("…Llion Jones. 2018. Character-level…"), true ends lost.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

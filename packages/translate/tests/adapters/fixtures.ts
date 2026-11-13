@@ -307,6 +307,20 @@ export const GLUED_STOP: UnitIn = unit(
   [t('Every token attends to its left.'), el('f', 'note-mark'), t(' We report two sizes.'), el('g', 'note-mark')],
   true,
 )
+/** a reference's volume tied to "vol.", then its pages and the next sentence, words of our own: the tie after the stop states no
+ *  sentence's end there, so the wire sets no boundary marker after "vol." (lane glued-mark, 2026-11-13) */
+export const VOLUME_TIE: UnitIn = unit(
+  'volume-tie',
+  [
+    t('A. Author, A title, in Advances in Systems, vol.'),
+    el('s', 'space'),
+    el('n', 'number'),
+    t(' pp. '),
+    el('p', 'number'),
+    t('. Then more words.'),
+  ],
+  true,
+)
 /** the tags wire's fixture units: Google's and the built-in translator's (their behaviour digests are taken over these with
  *  GOOGLE_REPLIES, tests/digests.ts) */
 export const TAGS_UNITS: UnitIn[] = [
@@ -319,6 +333,7 @@ export const TAGS_UNITS: UnitIn[] = [
   STYLED_OBJECT,
   GLUED_STOP,
   SIDE_BY_SIDE,
+  VOLUME_TIE,
 ]
 export const MICROSOFT_UNITS: UnitIn[] = [
   ...UNITS,
@@ -544,6 +559,12 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     raw: '每个标记都关注其左侧。<x id="3"/>我们<span id="1" translate="no">x1</span> 报告两种规模。<x id="4"/><span id="2" translate="no">x2</span>',
     taken: true,
     why: 'a mark glued after a stop that the reply carried into the next sentence: back right after the stop’s marker (tags.ts leadsBack)',
+  },
+  {
+    unit: 25,
+    raw: 'A. 作者，标题，载于《系统进展》，卷<span id="1" translate="no">x1</span><span id="2" translate="no">x2</span>，第 <span id="3" translate="no">x3</span> 页。<x id="4"/>然后是更多内容。',
+    taken: true,
+    why: 'a volume tied to "vol.": no sentence ends there, one boundary marker, before the next sentence (tags.ts tied)',
   },
   {
     unit: 24,

@@ -352,6 +352,18 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
       for (let i = first; i < q; i++) if (projection[i] === OBJ) ids.push(idAt.get(orig[i] as number) as string)
       return { first, ids }
     }
+    /** whether the elements glued after a stop begin with a tie (the source reader's `space`: TeX's `~`, `\penalty10000\ `, a
+     *  word space at which TeX sets no end-of-sentence space) right after it and then a word or a number: text beginning with a
+     *  letter or a digit, or an element the cutter reads as such, not a mark that annotates the sentence before (a note's mark,
+     *  a footnote's call, a citation) nor white space (a space, a break). The source itself states that stop no sentence's end */
+    const tied = (g: { first: number }): boolean => {
+      if (kinds.get(orig[g.first] as number)?.kind !== 'space') return false
+      const next = g.first + 1
+      if (next >= projection.length) return false
+      if (projection[next] !== OBJ) return /[\p{L}\p{N}]/u.test(projection[next] as string)
+      const s = standInOf(kinds.get(orig[next] as number)?.kind ?? 'other')
+      return s !== 'annotation' && s !== 'citation' && !(s !== undefined && !s.trim())
+    }
     const mark = (w: number) => {
       marks.push(slots.length + marks.length + 1)
       sent += `${wire.slice(at, w)}<x id="${marks[marks.length - 1]}"/>`
@@ -361,10 +373,15 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
     // a forced break, the boundary marker stands right after the stop, before it; the cutter's sentence ends alone, an
     // abbreviation's dot none. Google kept no stop before an element written as a word at a sentence's end, 0 of 80 such
     // places, and 77 with the marker so, measured over the lab's Google store. The sentence stays the source's, the stop and
-    // the element with it: a reading sets the boundary after the element, `leads`)
+    // the element with it: a reading sets the boundary after the element, `leads`. Where the source ties a word or a number to
+    // the stop, `tied`, the cutter's end there is none: no marker, no cut. No word list, no language's case: the tie is TeX's
+    // own statement; over the lab's Google store at RB1, 533 such ends, every one after an initial or an abbreviation ("M.~Casals",
+    // "vol.~36", "Amer.~Math.~Soc."), none a sentence's, and with the marker right after "vol." Google wrote a volume, an issue
+    // and pages the paper lacks, 42 bibliography units)
     for (const q of sentenceCuts(projection, standIn)) {
       const c = orig[q] as number
       const g = glued(q)
+      if (g && tied(g)) continue
       const moved = g ? wireAt(orig[g.first] as number) : null
       const w = moved !== null && moved > at ? moved : wireAt(c)
       if (w <= at || w >= wire.length) continue
@@ -375,7 +392,7 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
     // (the unit's last stop with elements glued after it, where the cutter would end a sentence were one to follow: a marker
     // of the wire's alone there, no sentence's start)
     const g = glued(projection.length)
-    if (g && sentenceCuts(`${projection} ${NEXT}`, standIn).includes(projection.length + 1)) {
+    if (g && !tied(g) && sentenceCuts(`${projection} ${NEXT}`, standIn).includes(projection.length + 1)) {
       const w = wireAt(orig[g.first] as number)
       if (w > at && w < wire.length) {
         endMark = slots.length + marks.length + 1

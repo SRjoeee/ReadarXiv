@@ -348,6 +348,77 @@ describe('google: an element glued after a stop goes back to its sentence when t
   })
 })
 
+// (a tie after a stop is TeX's own statement that the space there is a word space, not a sentence's end: `~` is
+// `\penalty10000\ `, no end-of-sentence space is set at it. Where a word or a number follows the tie, the wire marks no sentence
+// end; a tie and then a mark, which annotates the sentence before (a note's mark, a footnote's call, a citation), keeps it. No
+// word list, no language's case. Over the lab's Google store at RB1, 533 such markers stood after an initial or an abbreviation,
+// none a sentence's end; after "vol." on round B15's wire Google wrote a volume, an issue and pages the paper lacks in 42
+// bibliography units, none on B14's. Lane glued-mark, 2026-11-13, DESIGN §6.2)
+describe('google: a stop followed by a tie and a word or a number ends no sentence', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  const w = (n: number) => `<span id="${n}" translate="no">x${n}</span>`
+  it('a one-letter initial, its surname after the tie (`and~M.~Casals`)', () => {
+    const u = unit(
+      'ini',
+      [t('E. Berti and'), el('o', 'other'), t('M.'), el('s', 'space'), t('Casals, Phys. Rev. D.')],
+      true,
+    )
+    expect(g.write(u, 'zh-Hans')).toBe(`E. Berti and${w(1)}M.${w(2)}Casals, Phys. Rev. D.`)
+  })
+  it('"vol." and its number (an element): no marker after "vol.", inside the unit or at its end', () => {
+    const u = unit(
+      'vol',
+      [
+        t('In Advances in Systems, vol.'),
+        el('s', 'space'),
+        el('n', 'number'),
+        t(' pp. '),
+        el('p', 'number'),
+        t('. Then more.'),
+      ],
+      true,
+    )
+    expect(g.write(u, 'zh-Hans')).toBe(`In Advances in Systems, vol.${w(1)}${w(2)} pp. ${w(3)}. <x id="4"/>Then more.`)
+    const end = unit('vol-end', [t('In Advances in Systems, vol.'), el('s', 'space'), el('n', 'number')], true)
+    expect(g.write(end, 'zh-Hans')).toBe(`In Advances in Systems, vol.${w(1)}${w(2)}`)
+  })
+  it('a lower-case initial (`J. a.~P. Cavalcante`)', () => {
+    const u = unit('low', [t('B. da Cunha and J. a.'), el('s', 'space'), t('P. Cavalcante, submitted.')], true)
+    expect(g.write(u, 'zh-Hans')).toBe(`B. da Cunha and J. a.${w(1)}P. Cavalcante, submitted.`)
+  })
+  it('a journal’s abbreviations tied in a chain (`Amer.~Math.~Soc.`)', () => {
+    const u = unit(
+      'soc',
+      [
+        t('Isoparametric hypersurfaces, Amer.'),
+        el('s', 'space'),
+        t('Math.'),
+        el('t', 'space'),
+        t('Soc., Providence, 1990.'),
+      ],
+      true,
+    )
+    expect(g.write(u, 'zh-Hans')).toBe(`Isoparametric hypersurfaces, Amer.${w(1)}Math.${w(2)}Soc., Providence, 1990.`)
+  })
+  it('a reference tied after a stop the author typed in the sentence (`Definition.~\\ref{…}.`)', () => {
+    const u = unit(
+      'def',
+      [t('It is an ingredient in Definition.'), el('s', 'space'), el('r', 'ref'), t('. It holds.')],
+      true,
+    )
+    expect(g.write(u, 'zh-Hans')).toBe(`It is an ingredient in Definition.${w(1)}${w(2)}. <x id="3"/>It holds.`)
+  })
+  it('a tie and then a mark keeps the end: the marker right after the stop (`search.~\\footnote{…}`)', () => {
+    const u = unit('fn', [t('We search the web.'), el('s', 'space'), el('a', 'note-mark'), t(' Then we encode.')], true)
+    expect(g.write(u, 'zh-Hans')).toBe(`We search the web.<x id="3"/>${w(1)}${w(2)} Then we encode.`)
+  })
+  it('a stop and a space, then a word: the end stays', () => {
+    expect(g.write(unit('sp', [t('We search the web. Then we encode.')], true), 'zh-Hans')).toBe(
+      'We search the web. <x id="1"/>Then we encode.',
+    )
+  })
+})
+
 // (TeX set no space between a word and the mark, the script or the accent it carries: where the source glued an element to
 // the text beside it, the white space a reply sets there is taken back, as the markers reading takes it; text.ts glueOf, one
 // definition for both wires. A space the source has stays; a stop of the text after an element is no glue)

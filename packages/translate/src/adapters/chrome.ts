@@ -23,7 +23,7 @@ export const CHROME_LIMITS: Limits = { chars: 4_000, units: 20, inFlight: 1, cal
 /** availability's bound, and a session's making's (60 s: 8.6 s measured with the model ready) */
 export const CHROME_PROBE_MS = 2_000
 export const CHROME_CREATE_MS = 60_000
-export const CHROME_DIGEST = 'c02921cd5804be7c04a53b0972f4f7cab9d1f5ad13245dd8e0997d6527c0e4bf'
+export const CHROME_DIGEST = '79e54de8712c9e7c7a7972821341b7b0c5b5b2de235e422451633971290ec527'
 
 /** a target as the API names it: its Chinese by script, bare for the simplified */
 const REWRITE: Record<string, string> = { 'zh-Hans': 'zh', 'zh-CN': 'zh', 'zh-TW': 'zh-Hant' }
