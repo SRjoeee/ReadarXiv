@@ -1032,12 +1032,16 @@ await check(
     const ext = p1.anchors.find((l) => l.href === 'https://example.invalid/reader'),
       inner = p1.anchors.find((l) => l.href?.startsWith('#'))
     if (ext) await page.mouse.click(ext.rect.x + ext.rect.width / 2, ext.rect.y + ext.rect.height / 2)
+    const before = await page.evaluate(() => document.querySelector('.axt-pane.right').scrollTop)
     if (inner) await page.mouse.click(inner.rect.x + inner.rect.width / 2, inner.rect.y + inner.rect.height / 2)
-    // (a document this short ends before page 2 can stand at the top: the jump brings it into view)
+    // (a document this short ends before page 2 can stand at the top: the jump brings it into view. The jump is the pane's move
+    // from where it stood: page 2 in view and the pane scrolled were both so before the click, and the reads of page 2 that
+    // followed a late jump read it before the move, 642 px and 78 px from where it was then, 2026-11-13)
     const jumped = inner
       ? await waitFor(
           page,
-          () => window.__h.panes.right.inView(2) && document.querySelector('.axt-pane.right').scrollTop > 0,
+          (y) => window.__h.panes.right.inView(2) && document.querySelector('.axt-pane.right').scrollTop !== y,
+          before,
         ).then(
           () => true,
           () => false,
