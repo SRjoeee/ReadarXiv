@@ -33,10 +33,21 @@ export interface Glyph {
   clipped?: true
   unseen?: true
 }
+/** a page's common objects as PDF.js declares them (display/pdf_objects.js PDFObjects: `get(objId: string): any`, its any read
+ *  as unknown, and `has(objId: string): boolean`): `has` optional, as the walk asks whether a reader gave it before it calls it
+ *  (outlineBox; a reader may give `get` alone) */
+export interface InkObjects {
+  get(objId: string): unknown
+  has?(objId: string): boolean
+}
 /** a glyph's fill of no colour (a pattern's, PDF.js's transparent) */
 export const NO_FILL = ink.NO_FILL as -1
 /** a glyph's outline box in em from its origin ([x0, y0, x1, y1], y up), [] for none drawn, null where PDF.js gives none */
-export const outlineBox = ink.outlineBox as (commonObjs: unknown, font: unknown, fontChar: unknown) => number[] | null
+export const outlineBox = ink.outlineBox as (
+  commonObjs: InkObjects | null | undefined,
+  font: unknown,
+  fontChar: unknown,
+) => number[] | null
 /** the operations read on a page at most: past it the page is capped */
 export const OPS_CAP = ink.OPS_CAP as number
 /** the glyphs a page's ink holds at most where its reader asks (`glyphsMax`): past it the page is capped */
@@ -132,17 +143,19 @@ export interface PageInkOptions {
   /** false: no figure path's lines (`shapes` empty), every other reading as it is */
   shapes?: boolean
 }
+/** pageInk's list as PDF.js declares a page's (api.js PDFOperatorList: `fnArray: number[]`, `argsArray: any[]`, its any read as
+ *  unknown), or a piece of it */
 export const pageInk = ink.pageInk as (
   OPS: Record<string, number>,
   ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> },
-  commonObjs: { get(id: string): unknown },
+  commonObjs: InkObjects,
   o: PageInkOptions,
 ) => PageInk
 /** pageInk's walk as a reader of the list in pieces, each after the one before, then pageInk's answer (`end`): the same whatever the
  *  pieces, and no reader holds the whole list (opstream.ts readOps) */
 export const inkReader = ink.inkReader as (
   OPS: Record<string, number>,
-  commonObjs: { get(id: string): unknown },
+  commonObjs: InkObjects,
   o: PageInkOptions,
 ) => OpsReader<PageInk>
 /** a glyph set turned (pageInk's `turned`): its baseline from its origin to its advance's end, its direction, its size, its
