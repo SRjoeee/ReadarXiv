@@ -868,7 +868,7 @@ export const GATES = [
   },
   {
     id: 'typeset-data',
-    title: "today's readings derived again and the lab's typeset tests (derive.mjs, lab/typeset/tests)",
+    title: "the package's head and reference names equal to the engine's tex-names.json, today's readings derived again and the lab's typeset tests (tests/typeset/tex-names.test.ts, derive.mjs, lab/typeset/tests)",
     tier: 'full',
     stage: 'reader',
     holds: [],
@@ -879,8 +879,10 @@ export const GATES = [
     // break it), about forty commits of PDF-READER §18 and §19, so the file it would write is no longer the package's and the
     // check failed on every one; the moved code is held as the ported files are, by the reader's gates and the display gates;
     // nor faces-data.mjs and rules-data.mjs --check: the package's data files are the source since the step that deleted
-    // those generators, packages/typeset/tests/unit/data.test.ts holding their shape)
+    // those generators, packages/typeset/tests/unit/data.test.ts holding their shape and tests/typeset/tex-names.test.ts the
+    // head and reference names to the tex-names.json they mirror)
     steps: () => [
+      { cmd: ['pnpm', 'exec', 'vitest', 'run', '--project', 'extension', 'tests/typeset/tex-names.test.ts'], all: true },
       { cmd: ['node', '--import', './lab/typeset/register.mjs', 'lab/typeset/derive.mjs'], all: true },
       { cmd: ['pnpm', 'exec', 'vitest', 'run', '--config', 'lab/typeset/vitest.config.ts'], all: true },
     ],

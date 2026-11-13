@@ -1,8 +1,7 @@
 // The package's data (src/data/faces.ts, src/data/rules/): every export loads, in the shape its type states and the readers
 // take for granted (a face's coverage and small capitals name faces of the catalogue; each language's script has its fields;
-// the heads and references name the same targets as the rule set), and each export's value is the one it held at 46dd8fcdf,
-// where the files were still written from today's tree (lab/typeset/faces-data.mjs, rules-data.mjs): the sha256 of its JSON.
-import { createHash } from 'node:crypto'
+// the heads and references name the same targets as the rule set). The heads and references are held to the engine's
+// tex-names.json, which they mirror, by tests/typeset/tex-names.test.ts.
 import { describe, expect, it } from 'vitest'
 import { FACES, HOLDS, SMCP } from '../../src/data/faces.ts'
 import { HYPHENATION, LANGUAGES, SCRIPTS } from '../../src/data/rules/index.ts'
@@ -57,30 +56,5 @@ describe("the package's data loads in its shape", () => {
     expect(words(REFS.types) && words(REFS.singular)).toBe(true)
     expect(REFS.conjunctions.every((c) => typeof c === 'string' && c.length > 0)).toBe(true)
     for (const t of Object.values(REFS.targets)) expect(words(t.refs) && words(t.conj)).toBe(true)
-  })
-})
-
-describe("the package's data holds the values it held at 46dd8fcdf", () => {
-  const digest = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex')
-  it('each export, by the sha256 of its JSON', () => {
-    expect({
-      FACES: digest(FACES),
-      HOLDS: digest(HOLDS),
-      SMCP: digest(SMCP),
-      SCRIPTS: digest(SCRIPTS),
-      HYPHENATION: digest(HYPHENATION),
-      LANGUAGES: digest(LANGUAGES),
-      HEADS: digest(HEADS),
-      REFS: digest(REFS),
-    }).toEqual({
-      FACES: 'cfeac43d844e102e2ce07c1541ad8f14d6d1878e44b2c57d3e92d812c0178189',
-      HOLDS: '81306dcee2ebcf89ca1bd51ebf3fbbbc8318af77aab4451887761996bf23004f',
-      SMCP: '466523129b1d28e7761185a3f3d4414106872743a8d555d710eab63a4452e9e4',
-      SCRIPTS: 'eae077b71323825d238b5fe18c47981a7cdfef4f80ab10884a451911290ae1a6',
-      HYPHENATION: '67c131282f53501f3228f571cc3a15d1f932e60cec6365e6a5128735167a11e1',
-      LANGUAGES: 'f5807f3a2e597cb84f8961676f8228a37e90770a95dc7de8b3b2b9f9a618b9b4',
-      HEADS: '5f0000fdc80442207d44decb1b0fcacf1d8e0f6c9d285e7dc37de296b03b1735',
-      REFS: 'd0aa146767b471c48b78aca12b3afae910f4c3992f00fa7065d0b15cbf1c0af8',
-    })
   })
 })

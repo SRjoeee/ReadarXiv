@@ -1,7 +1,8 @@
 // The rule set's head names: each target's word for a theorem-like head's name (\newtheorem's printed name, "Definition"),
 // translator's dictionaries' and ctex's for Chinese: LPPL 1.3c data of TeX Live 2025 (docs/THIRD_PARTY.md). The source,
 // edited here; taken at engine 065c1d973 from tex-names.json's targets' heads (today's rules/tex-names.json, which is the
-// engine's packages/engine/src/source/tex-names.json byte for byte).
+// engine's packages/engine/src/source/tex-names.json byte for byte), held equal to that file by
+// tests/typeset/tex-names.test.ts.
 
 /** each target's head names, English → the target's: an empty table for a target whose packages name no head
  *  (zh-TW, ja, ko, id, ms, uk), where a head's word is the paper's own name unit's alone */

@@ -258,10 +258,10 @@ describe('the gates retired', () => {
 })
 
 describe("the typesetter's data", () => {
-  it("checks today's readings and the lab's tests, never the data against generators (the package's files are the source) nor the breaker's moved files against today's code, which the rulings edit", () => {
+  it("checks the head and reference names against the tex-names.json they mirror, today's readings and the lab's tests, never the data against generators (the package's files are the source) nor the breaker's moved files against today's code, which the rulings edit", () => {
     const ctx: Ctx = { root: '/repo', labData: null, refactor: '/lab', work: '/work', online: false, minFree: 12 }
     const scripts = GATES.find(g => g.id === 'typeset-data')!.steps!(ctx).map(s => s.cmd.findLast(a => /\.(?:m?js|ts)$/.test(a)) ?? s.cmd.join(' '))
-    expect(scripts).toEqual(['lab/typeset/derive.mjs', 'lab/typeset/vitest.config.ts'])
+    expect(scripts).toEqual(['tests/typeset/tex-names.test.ts', 'lab/typeset/derive.mjs', 'lab/typeset/vitest.config.ts'])
   })
 })
 
