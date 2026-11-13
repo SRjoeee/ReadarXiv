@@ -84,7 +84,8 @@ export const notFound = log => new Set([...unwrapped(lastTexLog(log)).matchAll(/
 
 /** a paper's files (Map path → bytes) → what the pipeline works on: its units, and beside them which of them are written inside a
  *  float (`inFloat`, their indices, latex-front.mjs loadProject's), each caption's float type (`floatTypes`, [index, type]), the
- *  units of an algorithm float's body (`pseudocode`, their indices) and the order TeX sets them in where it is not theirs
+ *  units of an algorithm float's body (`pseudocode`, their indices), each table block's text cells (`tableBlocks`, R4: a cell's
+ *  units by their indices, or `name`) and the order TeX sets them in where it is not theirs
  *  (`texOrder`, their indices in that order, or null: an author block's later units and the bibliography's entries are numbered
  *  after the rest, latex-front.mjs entriesLast). No unit is kept for what its words look like: a table's cell is text like any
  *  other and the translator decides a name (the owner, 2026-11-13); the old reader's name rule is its own (src/pdf-reader/engine/
@@ -99,7 +100,7 @@ export function openPaper(files) {
   const texts = texFilesOf(fsys, meta.main), names = paperNames(texts)
   // (the printed names of its theorem-like environments among them, the label forms of its heads: the wrap's `names`,
   // layout/own.mjs)
-  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, floatTypes: project.floatTypes ?? [], pseudocode: project.pseudocode ?? [], texOrder: project.texOrder ?? null, names, theoremNames: theoremNames(texts) }
+  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, floatTypes: project.floatTypes ?? [], pseudocode: project.pseudocode ?? [], tableBlocks: project.tableBlocks ?? [], texOrder: project.texOrder ?? null, names, theoremNames: theoremNames(texts) }
 }
 
 /**

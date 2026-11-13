@@ -31,7 +31,7 @@ import { phClass, texToText } from './layer1.mjs'
 import { textPieceOf } from '../source/text-piece.mjs'
 import { symbolText } from '../source/text-symbols.mjs'
 import { displayStop, isInkless } from './mt.mjs'
-import { keptAsWritten, paperNamesOf, RUNNING } from './language.ts'
+import { keptAsWritten, namesOfBlocks, paperNamesOf, RUNNING } from './language.ts'
 
 const UTF8 = new TextDecoder('utf-8')
 /** a unit's start point and end point (MARK_DEF's `<i>s`/`<i>e`, a heading's `h<i>…`, a cell's `t<i>…`), by unit index */
@@ -1267,6 +1267,10 @@ export function unitFactsOf(paper) {
     const k = keptAsWritten(contents[i], names)
     if (k) why.set(i, k)
   })
+  // (R4: the texts the paper's names blocks keep, over R1's and R2's, each kept in every cell of the paper's tables that prints it)
+  const keyOf = i => JSON.stringify(contents[i])
+  const blockNames = namesOfBlocks(paper.tableBlocks ?? [], i => why.has(i), keyOf)
+  if (blockNames.size) paper.units.forEach((u, i) => { if (u.kind === 'cell' && !why.has(i) && blockNames.has(keyOf(i))) why.set(i, 'namesBlock') })
   return { float, kept: new Set(why.keys()), why }
 }
 /** the kinds whose texts are judged as language or not (R1, PDF-READER §18.72): a table's cell, a TikZ picture's text (a figure's

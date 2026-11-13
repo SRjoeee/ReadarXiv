@@ -908,6 +908,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // `decorated`, PDF-READER's hold of a decorated word, lane decorated-whole): the owner's ruling T4 reads the figure texts today
   // translated in them, rulings.mjs; counted apart from the texts no row serves)
   const decorated = new Set(v2.decorated ?? [])
+  // (the members v2's prepare keeps as written, R1, R2 and R4 of PDF-READER §18.72, v2.mjs's `words`, `paperNames` and `namesBlock`: the ruling CT
+  // reads the figure texts among them, rulings.mjs)
+  const asWritten = new Set([...(v2.words ?? []), ...(v2.paperNames ?? []), ...(v2.namesBlock ?? [])])
   // (a mark the gate holds a ruling for alone: every kept unit of the dump states its reason since lane keep-reasons, and a reason
   // with no ruling is no set-aside)
   const keptToday = new Map((v2.keptToday ?? []).filter(([, mark]) => Object.hasOwn(RULING_OF, mark)))
@@ -1032,6 +1035,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // (and in a figure member held for a decorated word: the owner's ruling T4 reads them, rulings.mjs)
   const figDecoratedOrds = [...figOrds].filter((o) => decorated.has(o) && (facts.get(o)?.lines ?? []).some((l) => l[0] === n))
   const figDecorated = groupsIn(spansOf(figDecoratedOrds))
+  // (and in a figure member kept as written, R1 and R2: the ruling CT reads them)
+  const figWrittenOrds = [...figOrds].filter((o) => asWritten.has(o) && !decorated.has(o) && (facts.get(o)?.lines ?? []).some((l) => l[0] === n))
+  const figWritten = groupsIn(spansOf(figWrittenOrds))
   if (figVJ < figT) {
     const ruled = figVJ >= figT - figKept.length
     const unm = !ruled && figVJ >= figT - figKept.length - figUnmeasured
@@ -1345,7 +1351,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     laid: { today: T.size, v2: V.size, gained },
     echoed,
     within,
-    figures: { today: figT, v2: figV, v2Laid: figLaid, ...(figPitch ? { pitch: figPitch } : {}), ...(figKept.length > figPitch ? { identifier: figKept.length - figPitch } : {}), ...(figJoined ? { joined: figJoined } : {}), ...(figUnmeasured ? { unmeasured: figUnmeasured } : {}), ...(figDecoratedOrds.length ? { decorated: figDecorated, decoratedOrds: figDecoratedOrds } : {}) },
+    figures: { today: figT, v2: figV, v2Laid: figLaid, ...(figPitch ? { pitch: figPitch } : {}), ...(figKept.length > figPitch ? { identifier: figKept.length - figPitch } : {}), ...(figJoined ? { joined: figJoined } : {}), ...(figUnmeasured ? { unmeasured: figUnmeasured } : {}), ...(figDecoratedOrds.length ? { decorated: figDecorated, decoratedOrds: figDecoratedOrds } : {}), ...(figWrittenOrds.length ? { asWritten: figWritten, asWrittenOrds: figWrittenOrds } : {}) },
   }
   for (const f of FLAGS) {
     const a = faults.today[f] ?? [],

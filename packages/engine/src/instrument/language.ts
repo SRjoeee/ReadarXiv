@@ -170,3 +170,35 @@ export function keptAsWritten(content: readonly Piece[], names: ReadonlySet<stri
   if (holdsNoWord(content)) return 'words'
   return onlyNames(content, names) ? 'paperNames' : null
 }
+
+/** R4's one threshold: a block is the paper's names where MORE than this share of its text cells are names, exactly half not.
+ *  A majority is the least that makes a block one kind of thing (names) rather than the other (words): in the owner's words,
+ *  translated, "if the whole column is proper names, we should not translate it" (PDF-READER §18.72). Measured over the 92
+ *  pairs' tables against one reading of their cells (lane table-judge): a body column's kept share stands at 0 or 1 in 72 % of
+ *  them, and keeping the 72 blocks at exactly one half too would keep 72 cells read as words for 1 read as a name */
+const BLOCK_SHARE = 0.5
+
+/** a block's text cell (the front end's tableBlocks): a cell's units, by index, or a cell of none that prints text */
+export type BlockCell = { units: readonly number[] } | { name: true }
+
+/**
+ * R4 (PDF-READER §18.72): the texts the paper's names blocks keep. A block is a body column's cells between the same two rules;
+ * its text cells every cell that prints text (a unit; a call of the paper's macro that sets text; a cell in a code face). A
+ * text cell is a name where it is no unit (such a call, such a code) or where each of its units is kept by R1 or R2 (`kept`).
+ * Where more than half of a block's text cells are names, each of its other units' texts is a name of the paper (`keyOf`, the
+ * text the unit is), kept wherever the paper's tables print it: one answer for one text. Read once, off R1's and R2's names
+ * alone: a text a block keeps tips no other block
+ */
+export function namesOfBlocks(
+  blocks: readonly (readonly BlockCell[])[],
+  kept: (i: number) => boolean,
+  keyOf: (i: number) => string,
+): Set<string> {
+  const out = new Set<string>()
+  for (const block of blocks) {
+    const names = block.filter((c) => 'name' in c || c.units.every(kept)).length
+    if (names <= block.length * BLOCK_SHARE) continue
+    for (const c of block) if ('units' in c) for (const i of c.units) if (!kept(i)) out.add(keyOf(i))
+  }
+  return out
+}

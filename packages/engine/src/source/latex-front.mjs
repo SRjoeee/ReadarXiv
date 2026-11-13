@@ -450,6 +450,13 @@ const TBLR_ENVS = ['tblr', 'longtblr', 'talltblr']
 /** a rule across the whole table (booktabs', array's, arydshln's, hhline's, makecell's) and a longtable's head ending,
  *  either of which ends the header; \\cline and \\cmidrule rule part of it, and do not */
 const FULL_RULE = /^(?:hline|hdashline|firsthline|lasthline|Hline|toprule|midrule|bottomrule|specialrule|Xhline|thickhline|hhline|tabucline|endhead|endfirsthead)$/
+/** a rule across the table that a class defines, read as a rule for a block's bounds (R4, tableGrid's `band`) and as before
+ *  otherwise (a cell's content: the header, which today's reader reads too, is read off FULL_RULE alone): REVTeX's \\colrule
+ *  (revtex4-2.cls), the one such rule of the corpus's tables (2610.20716v1) */
+const CLASS_RULE = /^colrule$/
+/** a rule under some columns of the table, its columns its argument's range {a-b} (TeX's \\cline, booktabs' \\cmidrule,
+ *  arydshln's \\cdashline) */
+const PART_RULE = /^(?:cline|cmidrule|cdashline)$/
 /** the commands that stand in a cell without being its content — rules, spacing, colour, a strut — each with the
  *  arguments it takes: `o` an optional [..], `p` an optional (..), a digit that many required {..}. Read by their own
  *  arity, so that a cell's first group after them (\\hline {\\bf Parser}) stays the cell's; colortbl's \\rowcolor with its
@@ -478,10 +485,14 @@ function argsBySpec(s, i, spec) {
  * above that rule than below it: a table with no such rule, or with its only one before the last rows, has no header,
  * and every cell of it belongs to its column (a rule-based reading, the same for every table: the bold of a heading
  * row is not read). `rowEnds`, the paper's macros that end a row as `\\\\` does (rowEndsOf): each one ends it here too, an
- * empty group after it with it, so that the cells after it are placed where the walk cuts them (2610.21924v1's \\tightrow)
+ * empty group after it with it, so that the cells after it are placed where the walk cuts them (2610.21924v1's \\tightrow).
+ * Each cell's `band`: the row its block begins at (R4, PDF-READER §18.72), the last row at or above its own with a rule over it
+ * that crosses one of its columns: across the table (FULL_RULE, CLASS_RULE) or under those columns (PART_RULE's range), set
+ * at the row's start; 0 where none
  */
 export function tableGrid(s, from, to, rowEnds = null, rowEndsAfter = null) {
-  const cells = [], rows = [{ rule: false, filled: false }]
+  const newRow = () => ({ rule: false, filled: false, band: false, cols: new Set() })
+  const cells = [], rows = [newRow()]
   let row = 0, col = 0, span = 1, start = from, content = false
   const fill = () => { content = true; rows[row].filled = true }
   const cut = end => { cells.push({ start, end, row, col, span }); col += span; span = 1 }
@@ -501,7 +512,7 @@ export function tableGrid(s, from, to, rowEnds = null, rowEndsAfter = null) {
       if (call) {
         const e = call.end
         fill(); cut(e)
-        row++; col = 0; content = false; rows[row] = { rule: false, filled: false }
+        row++; col = 0; content = false; rows[row] = newRow()
         i = e; start = e; continue
       }
     }
@@ -515,7 +526,7 @@ export function tableGrid(s, from, to, rowEnds = null, rowEndsAfter = null) {
         const opt = argsAfter(s, e, 1)
         if (opt.args[0]?.kind === 'opt') e = opt.end
       }
-      row++; col = 0; content = false; rows[row] = { rule: false, filled: false }
+      row++; col = 0; content = false; rows[row] = newRow()
       i = e; start = e; continue
     }
     if (name === '(' || name === '[') { const e = mathEnd(s, i); if (e > 0 && e <= to) { fill(); i = e; continue } }
@@ -528,7 +539,18 @@ export function tableGrid(s, from, to, rowEnds = null, rowEndsAfter = null) {
       const { args, end: e } = argsAfter(s, end, 3)
       if (args.length === 3) { span = Math.max(1, Number.parseInt(s.slice(args[0].start + 1, args[0].end - 1), 10) || 1); if (/\S/.test(s.slice(args[2].start + 1, args[2].end - 1))) fill(); i = e; continue }
     }
-    if (NOT_CONTENT.has(name)) { if (FULL_RULE.test(name) && !content) rows[row].rule = true; i = argsBySpec(s, end, NOT_CONTENT.get(name)); continue }
+    // (a class's rule is read as before, the cell's content, and states its block's bound)
+    if (CLASS_RULE.test(name)) { if (!content) rows[row].band = true; fill(); i = end; continue }
+    if (NOT_CONTENT.has(name)) {
+      const e = argsBySpec(s, end, NOT_CONTENT.get(name))
+      if (!content) {
+        if (FULL_RULE.test(name)) rows[row].rule = true
+        // (a partial rule's columns: its last group's range, 1-based in the source)
+        const range = PART_RULE.test(name) ? /\{\s*(\d+)\s*-\s*(\d+)\s*\}\s*$/.exec(s.slice(end, e)) : null
+        if (range) for (let k = Number(range[1]) - 1; k < Number(range[2]); k++) rows[row].cols.add(k)
+      }
+      i = e; continue
+    }
     fill(); i = end
   }
   cut(to)
@@ -540,16 +562,70 @@ export function tableGrid(s, from, to, rowEnds = null, rowEndsAfter = null) {
     if (n + 1 < filled.length - (n + 1)) head = new Set(filled.slice(0, n + 1))
     break
   }
-  return cells.map(cell => ({ ...cell, head: head.has(cell.row) }))
+  const bandOf = cell => {
+    for (let r = cell.row; r > 0; r--) {
+      const x = rows[r]
+      if (x.rule || x.band) return r
+      for (let k = cell.col; k < cell.col + cell.span; k++) if (x.cols.has(k)) return r
+    }
+    return 0
+  }
+  return cells.map(cell => ({ ...cell, head: head.has(cell.row), band: bandOf(cell) }))
 }
 /** each cell unit of a table walked from `file` given its cell's place in the grid (tableGrid): the cell whose stretch
  *  holds the unit's start. `table` numbers the paper's tables in the order they are walked */
 function placeCells(units, file, grid, table) {
+  const at = new Map()
   for (const u of units) {
     if (u.kind !== 'cell' || u.file !== file) continue
     const g = grid.find(c => c.start <= u.start && u.start < c.end) ?? grid.find(c => c.start <= u.start && u.start <= c.end)
-    if (g) u.cell = { table, row: g.row, col: g.col, span: g.span, head: g.head }
+    if (!g) continue
+    u.cell = { table, row: g.row, col: g.col, span: g.span, head: g.head }
+    // (a unit of a table nested in a cell is its own table's text cell, placed there first)
+    if (PLACED.has(u)) continue
+    PLACED.add(u)
+    ;(at.get(g) ?? at.set(g, []).get(g)).push(u)
   }
+  return at
+}
+const PLACED = new WeakSet()
+/**
+ * R4's facts (PDF-READER §18.72): each body cell of a table that prints text, as a text cell of its block — the cells of one
+ * column (its first column and the columns it spans) between the same two rules (tableGrid's `band`) — in `ctx.blocks` by the
+ * block. A cell the walk made a unit of is its units (`units`); a cell of none that prints text (`name`): wholly in a code face
+ * (\\texttt, \\verb, \\lstinline), or a call of the paper's macro whose body sets text, outside math (macroSetsText); any other is
+ * no text cell (a number, a formula, a symbol, an empty cell, a macro that sets none). A header cell is in no block (R3). Not
+ * in a dry run (probeBranch's shadow): what it reads is the walk's alone
+ */
+function noteBlocks(at, grid, s, table, b, ctx) {
+  if (ctx.dry || !ctx.blocks) return
+  for (const g of grid) {
+    if (g.head) continue
+    const units = at.get(g)
+    const cls = units?.length ? { units } : cellPrintsText(s.slice(g.start, g.end), b, ctx) ? { name: true } : null
+    if (!cls) continue
+    const key = `${table}|${g.col}+${g.span}|${g.band}`
+    ;(ctx.blocks.get(key) ?? ctx.blocks.set(key, []).get(key)).push(cls)
+  }
+}
+/** a cell of no unit that prints text: wholly in a code face, or a call of the paper's macro whose body sets text (outside math) */
+function cellPrintsText(src, b, ctx) {
+  const x = uncommented(src).replace(/\$\$?[^$]*\$\$?|\\\([\s\S]*?\\\)|\\ensuremath\s*\{[^{}]*\}/g, ' ')
+  if (/\\texttt\s*\{\s*[^}\s]|\\verb\*?([^A-Za-z\s])(?!\1)|\\(?:lstinline|mintinline)\b/.test(x)) return true
+  for (const m of x.matchAll(/\\([A-Za-z@]+)/g)) if (ctx.bodies?.has(m[1]) && macroSetsText(m[1], b, ctx)) return true
+  return false
+}
+/** whether the paper's macro `name`'s body sets text: two letters together where the walk reads it (probeBranch's `words`), or a
+ *  call of another of the paper's macros that does (three deep), by the paper, once */
+function macroSetsText(name, b, ctx, depth = 0) {
+  const memo = ctx.textMacros ?? (ctx.textMacros = new Map())
+  if (memo.has(name)) return memo.get(name)
+  memo.set(name, false)
+  const body = ctx.bodies.get(name) ?? ''
+  const r = probeBranch(body, 0, body.length, b, ctx)
+  const sets = r.words || (depth < 3 && [...body.matchAll(/\\([A-Za-z@]+)/g)].some(m => m[1] !== name && ctx.bodies.has(m[1]) && macroSetsText(m[1], b, ctx, depth + 1)))
+  memo.set(name, sets)
+  return sets
 }
 const TBLR_MATH = /\bmode\s*=\s*[id]?math\b/
 const uncommented = text => text.replace(/(^|[^\\])%.*$/gm, '$1')
@@ -2466,7 +2542,8 @@ function walk(s, from, to, b, ctx) {
         walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved; b.cellMode = savedCell
         // each cell unit's place in the table's grid (tableGrid), by which its consistency group is found (groups.mjs):
         // a table nested in a cell gives its units the outer cell's place, set after its own
-        placeCells(b.units.slice(first), b.file, tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter), table)
+        const grid = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter)
+        noteBlocks(placeCells(b.units.slice(first), b.file, grid, table), grid, s, table, b, ctx)
         // fitted to the line once translated (patch, FIT_DEF): a plain tabular, whose width is its columns'; a tabular*,
         // set to a width it cannot shrink below, measured at its columns' width first (\\axtstar) — not one with a
         // position argument, which \\axtstar does not read. tabularx and tabulary keep their width and read their own
@@ -2487,7 +2564,8 @@ function walk(s, from, to, b, ctx) {
         const { end: argsEnd } = envArgs(s, afterBegin, bodyEnd, env, ctx)
         const saved = b.kind, savedCell = b.cellMode, first = b.units.length, table = (ctx.tableCount = (ctx.tableCount ?? 0) + 1); b.kind = blockKind(b, 'cell'); b.cellMode = true
         walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved; b.cellMode = savedCell
-        placeCells(b.units.slice(first), b.file, tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter), table)
+        const grid = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter)
+        noteBlocks(placeCells(b.units.slice(first), b.file, grid, table), grid, s, table, b, ctx)
         i = afterEnd; continue
       }
       // everything else is a container: its body is walked, its own arguments stay ({width} of a minipage, a list's
@@ -3663,7 +3741,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   // which is biblatex's data — \\entry, \\field — and no text, which \\bibliography, biblatex's alias of \\addbibresource, never reads)
   const bblName = `${jobName(mainFile.rel)}.bbl`, bblBytes = fsys.read(bblName)
   const bbl = bblBytes && /\\begin\s*\{thebibliography\}/.test(texText(bblBytes)) ? bblName : null
-  const ctx = { frontRowEnds: frontRowEndsOf(ownTexts), rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), activeSpaces: activeSpacesIn([...sources.map(sourceText), ...ownTexts]), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), quotes: csquotesOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
+  const ctx = { frontRowEnds: frontRowEndsOf(ownTexts), rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), activeSpaces: activeSpacesIn([...sources.map(sourceText), ...ownTexts]), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), blocks: new Map(), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), quotes: csquotesOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
   // (the author block's commands of a class the paper ships that the role table does not know: ownAuthorsOf)
   ctx.ownAuthors = ownAuthorsOf(own, ctx.macros)
   // (the labels the authors' texts request, which a note attached by its label waits for: tieLabels)
@@ -3730,6 +3808,9 @@ function readProject(fsys, main, tables, sourceText, own) {
   // (each caption's float type, [index, type]; the units of an algorithm float's body, rising)
   const floatTypes = units.flatMap((u, i) => (CAPTYPES.has(u) ? [[i, CAPTYPES.get(u)]] : []))
   const pseudocode = units.flatMap((u, i) => (PSEUDOCODE.has(u) ? [i] : []))
+  // (R4's blocks, noteBlocks: each block's text cells, a cell's units by their index, or `name`: a number survives a copy)
+  const indexOf = new Map(units.map((u, i) => [u, i]))
+  const tableBlocks = [...ctx.blocks.values()].map(cells => cells.map(c => (c.units ? { units: c.units.map(u => indexOf.get(u)).filter(i => i !== undefined) } : { name: true })).filter(c => c.name || c.units.length)).filter(cells => cells.length)
   // (the paper's macros that read nothing past their arguments: the layout marking's, layout/marks.mjs layoutMarking `complete`)
   // (the bibliographies \\bibliography reads, by the names it gives, where the walk met it: what BibTeX writes the job's .bbl of)
   // (the code environments the paper uses, a listing package's or its own (codeEnvsOf), by name: the layout compile marks each line
@@ -3738,7 +3819,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   const codeEnvNames = [...new Set([...LISTINGS, ...codeEnvs.code])].filter(n => begun.has(n)).sort()
   // (and those whose own body the compile marks, the environment's hook: the others' lines a listing package sets, by its hooks)
   const codeBodies = codeEnvNames.filter(n => !PACKAGE_LINES.has(n) && !codeEnvs.typeset.has(n))
-  return { main: mainFile.rel, files, units, inFloat, floatTypes, pseudocode, texOrder, skipped, fits: ctx.fits, lineEnvs, codeEnvs: codeEnvNames, codeBodies, inputenc: enc ?? null, transcode, complete: completeMacros(own), bibliography: ctx.bibliography }
+  return { main: mainFile.rel, files, units, inFloat, floatTypes, pseudocode, tableBlocks, texOrder, skipped, fits: ctx.fits, lineEnvs, codeEnvs: codeEnvNames, codeBodies, inputenc: enc ?? null, transcode, complete: completeMacros(own), bibliography: ctx.bibliography }
 }
 
 /** whether bytes of TeX hold a ] outside every group and not escaped: one that would close an optional argument */

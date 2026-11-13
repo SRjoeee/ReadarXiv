@@ -9,14 +9,10 @@
 // cells another, a cell spanning several columns (\multicolumn) one with the cells spanning the same columns, a cell spanning
 // rows (\multirow) its column's. A table whose cells state no grid place (a part made before) is one group, as before.
 //
-// Which cells are language is decided by the cells' own texts and the table's structure (PDF-READER §18.72, the owner's
-// direction), never by what came back from a translator: a text that holds no ordinary word, or only the paper's own names, is
-// kept as written (Unit.kept, the engine's R1 and R2); a header cell is judged by itself (R3); and the cells of one body column
-// between the same two rules are one group, kept together where more than half of them are kept (R4, keptByBlocks below). The
-// column rule of engine 065c1d973's groups.mjs (a column at least NAMES_SHARE of whose cells came back from the translator as
-// they went kept whole) is not ported: a translator's reply decides nothing here.
-
-import type { Placed } from '@readarxiv/format'
+// No group is decided here by what its cells say: which of a table's cells are language is the engine's, a fact of each text
+// (Unit.kept: R1, R2 and the paper's names blocks, R4, PDF-READER §18.72), and a kept unit is laid as any kept unit is. The column
+// rule of engine 065c1d973's groups.mjs (a column at least NAMES_SHARE of whose cells came back from the translator as they went
+// kept whole) is not ported: a translator's reply decides nothing here.
 
 /** a cell's grid place: its row, its first column, the columns it spans, 1 a header's (Placed.cell) */
 export type CellPlace = readonly [row: number, col: number, span: number, head: 0 | 1]
@@ -43,32 +39,4 @@ export function tableGroups(
     g.cells.push(c)
   }
   return [...out.values()]
-}
-
-/** R4's one threshold: a block is the paper's names where MORE than this share of its text cells are kept as written, exactly
- *  half not. A majority is the least that makes a block one kind of thing (names) rather than the other (words): in the owner's
- *  words, translated, "if the whole column is proper names, we should not translate it" (PDF-READER §18.72). Measured over the 92 pairs' tables against
- *  one reading of their cells (lane table-judge): a body column's kept share stands at 0 or 1 in 72 % of them, and keeping the
- *  70 blocks at exactly one half too would keep 69 cells read as words for 1 read as a name */
-const BLOCK_SHARE = 0.5
-
-/**
- * R4 (PDF-READER §18.72): the members of a table's body that their block keeps as written. A block is the cells of one body
- * column (a cell's first column and the columns it spans, Placed.cell) between the same two rules (the band the part states over
- * and under each cell, Room.band and bandOpen: a summary row under its own rule is a block of its own, "Avg. Recovery" under the
- * dataset names of 2611.03953v2's Table 2); a header cell is in none (R3: judged by itself). Its text cells are its members with
- * a text of their own and no reason of the part's (Placed.why); where more than half of them are kept (`kept`: Unit.kept, R1 and
- * R2, or a fact of the source), the others are kept too. A table whose cells state no grid place votes nothing
- */
-export function keptByBlocks(members: readonly Placed[], kept: (m: Placed) => boolean): Set<number> {
-  const blocks = new Map<string, Placed[]>()
-  for (const m of members) {
-    if (!m.cell || m.cell[3] || typeof m.text !== 'string' || m.why) continue
-    const key = `${m.cell[1]}+${m.cell[2]}|${m.room.band?.join(',') ?? ''}|${m.room.bandOpen ?? ''}`
-    ;(blocks.get(key) ?? blocks.set(key, []).get(key)!).push(m)
-  }
-  const out = new Set<number>()
-  for (const block of blocks.values())
-    if (block.filter(kept).length > block.length * BLOCK_SHARE) for (const m of block) if (!kept(m)) out.add(m.ord)
-  return out
 }

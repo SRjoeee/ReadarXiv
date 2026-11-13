@@ -6552,8 +6552,8 @@ no dead rule and no opening made for one translator's weakness. He chose first t
 relations and its group: whether it is content or a title), and of the model-names table (2608.06701v1 p5) that production's
 drawing read more naturally. The rule below was put to him and approved: 「我觉得你说对，这个方向是对的。就这样去干」. A translator's
 reply to what is sent is the translator's: a cell sent is laid as its reply says, a reply equal to its source a lawful one.
-What of a text is language is a fact of the text, decided where Unit.kept is decided (the engine, for a table's cells and a
-figure's texts); how a table's cells go together is its structure's, the typesetter's.
+What of a text is language is a fact of the text and of the paper's tables, decided where Unit.kept is decided (the engine, for
+a table's cells and a figure's texts); the typesetter lays a kept unit as kept and holds no table rule of its own.
 
 - **R1: a text that holds no ordinary word is not language, and is kept as written.** Read from the facts the source states
   first, then the text itself (`packages/engine/src/instrument/language.ts`, keptAsWritten; the instrument's unitFactsOf for the
@@ -6598,22 +6598,36 @@ figure's texts); how a table's cells go together is its structure's, the typeset
     cut at their joiners) all such names: kept ("Claude", "Mistral" in a header, "Tukey" in a body cell, "Claude GPT-4o").
 - **R3: a header cell is judged by R1 and R2 alone, by itself.** "Avg. Recovery" in Table 1's header is translated beside
   "MedQA", which is kept; no header row is voted.
-- **R4: a body column's cells between the same two rules are one group; where more than half of its text cells are kept by R1
-  or R2, its other text cells are kept too.** The typesetter's, per member, at lay time (`lay/entry.ts` decideTables,
-  `shared/table-groups.ts` keptByBlocks): a block is the cells of one body column (a cell's first column and the columns it
-  spans, Placed.cell) standing between the same two rules (Room.band and bandOpen, the rules the part states over and under each
-  cell); its text cells are its members with a text of their own and no reason of the part's (Placed.why); a cell kept by a
-  fact of the source (one pitch) counts as kept. Exactly half is not more than half: each cell of such a block is laid by
-  itself. "More than half" (`BLOCK_SHARE`, one half, exceeded) is the rule's one threshold: a majority is the least that makes
-  a block one kind of thing, names or words; over the corpus's body columns the kept share stands at 0 or 1 in 72 % of them, and
-  keeping its 70 blocks at exactly one half too would keep 69 of the 92 pairs' cells read as words for 1 read as a name (lane
-  table-judge). Why the block and not the column: the column's majority,
-  measured over the corpus before the build, decided its 188 cells like a coin (71 names kept, 72 labels kept with them, at
-  every threshold from 0.4 to 0.7) and kept the owner's own "Avg. Recovery" under the dataset names of 2611.03953v2's Table 2,
-  which its paper sets under a rule of its own; between two rules, 61 names to 21 labels. A cell its block keeps waits for its
-  row as before (its unit is not kept: a unit is one text wherever it stands) and is laid as a kept unit's is. Today's column
-  rule (`NAMES_SHARE`: a body column at least 0.4 of whose cells came back from the translator as they went, kept whole) is
-  not ported: no translator's reply decides what a cell is.
+- **R4: a text that a names block of the paper's tables keeps is a name of the paper, kept wherever its tables print it.** A
+  block is a body column's cells (a cell's first column and the columns it spans) between the same two rules; its text cells
+  are every cell that prints text: a unit, a cell of no unit that is the call of the paper's macro whose body sets text, a cell
+  wholly in a code face; not a number, a formula, a symbol or an empty cell. A text cell is a name where R1 or R2 keeps it, or
+  where it is no unit because it is such a call or such code. Where more than half of a block's text cells are names, the text
+  of each of its other units is a name of the paper, and every cell of the paper's tables that prints that text is kept: a
+  `Unit.kept`, decided once in the engine (`instrument/language.ts` namesOfBlocks over the front end's `tableBlocks`, the
+  instrument's unitFactsOf; the lab's dump `keptBy: 'namesBlock'`), read once off R1's and R2's names, so that a text a block
+  keeps tips no other block. The typesetter keeps no table rule: it lays a kept unit as it lays any kept unit. Exactly half is
+  not more than half. "More than half" (`BLOCK_SHARE`, one half, exceeded) is the rule's one threshold: a majority is the least
+  that makes a block one kind of thing, names or words; over the corpus's body columns the kept share stands at 0 or 1 in 72 %
+  of them, and keeping the blocks at exactly one half too would keep 72 of the 92 pairs' cells read as words for 1 read as a
+  name (lane table-judge). The reasons, in order: (i) the owner's own reading asks for one answer per text: 「假如这一列都属于专有名词，那我们可能就不应该翻了…翻了一个反倒奇怪破坏意思」
+  (if the whole column is proper names, we should probably not translate it; translating one of them would be odd and break
+  the meaning), and the block taken member by member gave two answers for one unit on one page (2608.06701v1 p5: Vanilla kept
+  in Table II, whose block is four names of five, and sent in Table III, whose block is Vanilla and LivePlan, one half); (ii)
+  it is the same kind of fact as R2, the paper's own use making a name, decided where every cell of the grid is seen; (iii) it
+  scored best on both readings of the 92 pairs' disputed cells in the lab's emulation before it was built (words kept / names
+  sent: 70 / 68 with Vanilla a name, names sent equal to production's 68 with words kept 70 against its 219; 85 / 68 with
+  Vanilla a word). What the source reader reads
+  for it (`latex-front.mjs`): the whole grid's cells, each a text cell or not (noteBlocks, cellPrintsText), each paper macro's
+  body read by the walk's own dry run (macroSetsText over probeBranch: two letters together where the walk sets text, the
+  arguments the role table knows not to print left out), a code face, and the rules: each row's rule across the table, the
+  column ranges of `\cline`, `\cmidrule` and `\cdashline` (tableGrid's `band`), and REVTeX's `\colrule`, a class's rule across
+  the table read for the block alone (the header, which today's reader reads off the same grid, as before). Why the block and
+  not the column: the column's majority, measured over the corpus before the build, decided its 188 cells like a coin (71 names
+  kept, 72 labels kept with them, at every threshold from 0.4 to 0.7) and kept the owner's own "Avg. Recovery" under the
+  dataset names of 2611.03953v2's Table 2, which its paper sets under a rule of its own; between two rules, 61 names to 21
+  labels. Today's column rule (`NAMES_SHARE`: a body column at least 0.4 of whose cells came back from the translator as they
+  went, kept whole) is not ported: no translator's reply decides what a cell is.
 - **What stays the original's, each a fact of the source or of the drawing.** A cell of fewer than two letters is no unit: the front
   end makes none of a text with under two letters on its text pieces (`latex-front.mjs` flush; a formula alone is a placeholder,
   no letter of text), so its ink stays; a unit with no letter that reaches the chain (an ink unit) is answered by the chain with
