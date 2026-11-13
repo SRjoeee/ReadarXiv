@@ -460,7 +460,7 @@ function echoKey(u) {
 const ECHO_ORDER = { heading: 0, caption: 1 }
 
 /**
- * The ink units of a document. `pages` as the wrap reads them (layout/wrap.mjs: each glyph { u, x0, x1, ix0, ix1, y, size, top,
+ * The ink units of a document. `pages` as the wrap reads them (wrap.ts: each glyph { u, x0, x1, ix0, ix1, y, size, top,
  * bottom, font, blank? }, its points, its view); `ledger` ledgerOf's over them (its `lines`); `units` the paper's source units,
  * their ids their indices, or null (no echo). Ids from `from` on: the bundle's units before them, the source units' and the
  * paper's structural names' (layer-proto/units.mjs bundleUnitsOf), units.length where it is not given. Returns [{ id, kind, cls, echo, pieces, glyphs: { text:

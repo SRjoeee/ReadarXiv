@@ -2,7 +2,7 @@
 // `docs/route/ocg-erasure.md` §2–§3): each run a unit owns (layout/own.mjs) put in `/OC /axt<group> BDC … EMC`, the page's
 // resources naming each group (`/Properties`), one optional-content group per name in the catalog's `/OCProperties`, all ON —
 // so that with every group ON the page is our page, and the reader hides a drawn unit's ink, and nothing else, by setting its
-// groups OFF. The result is our bytes followed by ONE incremental section (layout/section.mjs, the final's cross-reference kind):
+// groups OFF. The result is our bytes followed by ONE incremental section (section.ts, the final's cross-reference kind):
 // each wrapped page's dict written again under its own number with a new content stream, the groups, and the catalog again with
 // `/OCProperties`. Both forms of the base are made of it: the full base is these bytes, the delta (layout/delta.mjs) copies their
 // streams.

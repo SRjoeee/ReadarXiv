@@ -773,7 +773,7 @@ export const FRONT_POINT = /^fm\d+$/
  * cell. A merged box is no box of any one rule, and its reader must take it as none (the layout maker marks them taken,
  * make.mjs glyphsOf): so a placeholder whose rule lies past the budget is LOST, a line's rule there is not the line's, a
  * cell's rule there is not among its rules
- * `indices` (the text remover's, layout/remove.mjs): each glyph also carries where the content stream shows it: `n`, its
+ * `indices` (the text remover's, remove.ts): each glyph also carries where the content stream shows it: `n`, its
  * text-showing operation's place among the page's own (an annotation's appearance not counted: -1 there), and `k`, its
  * place among that operation's glyphs, `blank: true` where its Unicode is blank, and `form: true` where it is shown inside a
  * form XObject (an included PDF's, the ledger's figures: layout/ledger.mjs); and `paths` gives, for each box,

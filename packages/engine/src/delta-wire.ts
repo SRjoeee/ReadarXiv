@@ -1,6 +1,6 @@
 // Our base as an incremental update over arXiv's PDF (the delta; layout/delta.mjs builds and proves it): what the head says of
 // it and what any holder of its bytes checks without a PDF object layer. The composed document is arXiv's bytes (O of them),
-// the delta (D) and the remover's tails; the delta is ONE incremental-update section of the original's kind (layout/section.mjs)
+// the delta (D) and the remover's tails; the delta is ONE incremental-update section of the original's kind (section.ts)
 // whose /Prev is the original's startxref and whose offsets are the composed document's. Its head (layer-proto/format.mjs:
 // `base.kind` 'delta') names the pages it replaces as page ranges and counts what it reused and wrote. Imports the tail's
 // largest object number and its latin-1 reading alone: the head's reader (a browser's), the page pass and the box read it alike.
@@ -40,7 +40,7 @@ export const DELTA_WHYS = Object.freeze([
 ] as const)
 export type DeltaWhy = (typeof DELTA_WHYS)[number]
 
-/** why a unit's ink stays the original's on our wrapped pages (layout/own.mjs, layout/wrap.mjs; design ocg-erasure §1.4, §2.4,
+/** why a unit's ink stays the original's on our wrapped pages (own/own.mjs, wrap.ts; design ocg-erasure §1.4, §2.4,
  *  §3.2): its marks absent, twice or out of order; a range over more pages than a continued footnote's; its glyphs that do not
  *  spell it; a page not wrapped; a page past its group bounds */
 export const UNHIDDEN = Object.freeze(['marks', 'across', 'spell', 'page', 'bounds'] as const)
@@ -85,7 +85,7 @@ export interface DeltaSection {
  * Why a wrap's head fields (`stats` WRAP_STATS', `unhidden` [[unit id, UNHIDDEN code], …] by rising id, `labelKept` rising ids,
  * no id in both) do not read, null where they do: the lists within UNHIDDEN_MAX, `stats.unhidden` counting every unit (the
  * lists hold those with a group in the document alone, so at least as many by each code: that every unit with a group and no
- * entry is hideable is the producer's word, layout/wrap.mjs wrapFinal's, which no reader of a head can check), `stats.labelKept`
+ * entry is hideable is the producer's word, layout/wrap-final.mjs wrapFinal's, which no reader of a head can check), `stats.labelKept`
  * the list's count
  */
 export function wrapWhy(stats: unknown, unhidden: unknown, labelKept: unknown): string | null {

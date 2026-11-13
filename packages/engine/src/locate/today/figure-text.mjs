@@ -8,7 +8,7 @@
 // a label or a line, each an ink unit of kind `inkfigures` the bundle's units hold after the paper's own and the other ink units
 // (pipeline/page-pass.mjs figureUnits), translated with them whatever the reader's toggles, and drawn in its own run's box by the
 // layer where they show the class (run.mjs
-// paintFigures, layer-proto/figure-fit.mjs), its ink hidden by its own optional-content group (`f<k>`, layout/wrap.mjs). Read in
+// paintFigures, layer-proto/figure-fit.mjs), its ink hidden by its own optional-content group (`f<k>`, wrap.ts). Read in
 // the maker child from what it already has: the pages pageInk read (`indices` and `turned`) and own.mjs's ownership. Nothing of
 // arXiv's PDF, no layout file, no position estimated: every place is our glyphs'.
 //
@@ -113,7 +113,7 @@ export const FIGURE_UNITS_PAGE = 400, FIGURE_UNITS_DOC = 4000
 /** a unit's text at most, in code units (a long run is a paragraph some figure holds: cut there, its rest the original's);
  *  unmeasured */
 export const FIGURE_TEXT_MAX = 400
-/** the group of figure unit `k` (layout/wrap.mjs names it `axt:f<k>`) */
+/** the group of figure unit `k` (wrap.ts ocgName names it `axt:f<k>`) */
 export const figureGroup = k => `f${k}`
 /** why a figure's text is not a unit drawn (wrapFinal's counts, and each unit's `why`) */
 export const FIGURE_WHYS = Object.freeze(['crowded', 'unicode', 'shared', 'page', 'bounds'])

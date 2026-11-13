@@ -1,5 +1,5 @@
 // The `startxref` of a PDF read from its bytes (where an incremental update over it names its `/Prev`: the delta's section over
-// arXiv's PDF, layout/delta.mjs; the wrap's over our final pass, layout/wrap.mjs), and PDF's bound on an object number. The
+// arXiv's PDF, layout/delta.mjs; the wrap's over our final pass, wrap.ts), and PDF's bound on an object number. The
 // text-removed PDF's add-on tails this module first read are gone (docs/route/ocg-erasure.md §4.2). Imports only the engine's one
 // reading of bytes as latin-1 (bounded-reads.ts, a leaf).
 import { latin1 } from './bounded-reads.ts'

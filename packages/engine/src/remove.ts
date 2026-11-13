@@ -1,4 +1,4 @@
-// Our pages' content streams read as the wrap reads them (layout/wrap.mjs; docs/route/ocg-erasure.md §2): the streams lexed (lex),
+// Our pages' content streams read as the wrap reads them (wrap.ts; docs/route/ocg-erasure.md §2): the streams lexed (lex),
 // each page walked with its text state followed, each string split into its character codes by its font, and the walk aligned
 // with PDF.js's own reading (alignOf: the n-th text-showing operation of the list is the n-th of the walk, its k-th glyph the k-th
 // code, the character codes compared; the m-th painted path the m-th painting operator). A page that does not align is refused
