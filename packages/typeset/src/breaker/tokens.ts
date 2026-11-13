@@ -225,7 +225,10 @@ const openStyle = (p: Extract<V0Piece, { t: 'open' }>, s: TStyle, d: Designs): T
 const GROUP_ITALIC = 1,
   GROUP_BOLD = 2,
   GROUP_CAPS = 4
-/** a string's UTF-16 code units that are no white space (L2:2289 nonSpace) */
+/** a string's UTF-16 code units that are no white space (L2:2289 nonSpace). The comparisons below are ECMAScript's `\s`, its
+ *  WhiteSpace and LineTerminator code points (ECMA-262's White Space and Line Terminators: U+0009-U+000D, U+0020, U+00A0,
+ *  U+FEFF and the Space_Separator code points U+1680, U+2000-U+200A, U+202F, U+205F, U+3000; U+2028, U+2029): the same 25
+ *  of the 65,536 code units as `/\s/` under Unicode 17 */
 function nonSpace(s: string): number {
   let n = 0
   for (let i = 0; i < s.length; i++) {

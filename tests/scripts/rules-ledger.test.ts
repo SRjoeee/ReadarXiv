@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { scanTree } from '../../lab/release-check/census-lib.mjs'
 import { ENGINE_PROFILE } from '../../lab/release-check/census-profile.mjs'
 import { census } from '../../lab/release-check/census.mjs'
-import { citationsOf, type Ledger, ledgerOf, recordedOf, trackedOf, trackedText } from '../../lab/rules/ledger.mjs'
+import { citationsOf, exercisedBy, type Ledger, ledgerOf, recordedOf, trackedOf, trackedText } from '../../lab/rules/ledger.mjs'
 import type { Recording, SiteSums } from '../../lab/rules/merge.mjs'
 import { remapOf } from '../../lab/rules/record.mjs'
 import { reportOf } from '../../lab/rules/report.mjs'
@@ -123,6 +123,30 @@ describe('the classifier', () => {
     expect(rowOf(l, 'DEFINED')).toMatchObject({ verdict: 'decides', entriesExempt: true })
     expect(rowOf(l, 'DEFINED').removeEntries).toBeUndefined()
   })
+  // defect 2 (lane r5b-front, 2026-11-13): a list was judged by its outcomes like a comparison, so a list that always
+  // matched read "one outcome" and was marked `remove`; folded to true it would match everything. Section 3c judges a list
+  // by its entries' hits: hit on the corpus, it stays and its unhit entries go; hit only by a test of our own, the test is
+  // its reason; no hit anywhere, it goes with its rule
+  it('defect 2: judges a list by its entries\' hits, never by its outcomes alone', () => {
+    const lists = made({
+      ALWAYS: { kind: 'list', entries: ['a', 'b', 'c'], sites: [{ kind: 're', per: { corpus: n(4, 0, { hits: { a: 3, b: 1 } }) } }] },
+      ONCE: { kind: 'list', entries: ['a', 'b', 'c'], sites: [{ kind: 're', per: { tests: n(1, 0, { hits: { b: 1 } }) } }] },
+      NEVER_HIT: { kind: 'list', entries: ['a', 'b', 'c'], sites: [{ kind: 'set', per: { corpus: n(0, 4) } }] },
+    })
+    const ll = ledgerOf(lists.map, lists.recording)
+    expect(rowOf(ll, 'ALWAYS')).toMatchObject({ verdict: 'decides', removeEntries: ['c'] })
+    expect(rowOf(ll, 'ONCE')).toMatchObject({ verdict: 'test', removeEntries: ['a', 'c'] })
+    expect(rowOf(ll, 'NEVER_HIT').verdict).toBe('remove')
+  })
+  it('says which inputs reached a row: papers, tests, both or none', () => {
+    expect([rowOf(l, 'DECIDES'), rowOf(l, 'BY_TEST'), rowOf(l, 'NEVER')].map(exercisedBy)).toEqual(['papers', 'papers and tests', 'none'])
+    const t = made({ ONLY: { sites: [{ kind: 'cmp', per: { tests: n(0, 3) } }] } })
+    expect(exercisedBy(rowOf(ledgerOf(t.map, t.recording), 'ONLY'))).toBe('tests')
+    // (a third paper set, recorded as its own input, is named apart; for the verdict it is the corpus again)
+    const u = made({ FRESH: { sites: [{ kind: 'cmp', per: { corpus: n(4, 0), third: n(0, 1), tests: n(1, 0) } }] } })
+    const fresh = rowOf(ledgerOf(u.map, u.recording), 'FRESH')
+    expect([exercisedBy(fresh), fresh.verdict]).toEqual(['papers, tests and the third set', 'decides'])
+  })
   it('says what was recorded, in words', () => {
     expect(recordedOf(rowOf(l, 'FOLDED_READ'))).toBe('corpus: 2 runs, 2 true, 0 false, read 1')
     expect(recordedOf(rowOf(l, 'NEVER'))).toBe('never ran on any input')
@@ -140,8 +164,8 @@ describe('the report', () => {
     expect(r.counts.a?.verdicts.remove).toBe(6)
     // (six removed and PAPER, its cited paper silent on the corpus: a candidate the coordinator confirms)
     expect(r.byArea).toContain('## Area a, removal scheduled: the rules that decide nothing, by name (7)')
-    expect(r.byArea).toContain('`PAPER` (packages/engine/src/locate/rules::(top)::PAPER) [cited paper silent: confirm; before it is folded, the removal lane says which rule now takes the case its comment describes on 2401.00001v1, from that paper\'s record: a case merely not reached is not a case handled]')
-    expect(r.byArea).toContain(`- ${FILE}:12 \`ONE\` (packages/engine/src/locate/rules::(top)::ONE): corpus: 7 runs, 0 true, 7 false`)
+    expect(r.byArea).toContain('`PAPER` (packages/engine/src/locate/rules::(top)::PAPER) (inputs: papers) [cited paper silent: confirm; before it is folded, the removal lane says which rule now takes the case its comment describes on 2401.00001v1, from that paper\'s record: a case merely not reached is not a case handled]')
+    expect(r.byArea).toContain(`- ${FILE}:12 \`ONE\` (packages/engine/src/locate/rules::(top)::ONE) (inputs: papers): corpus: 7 runs, 0 true, 7 false`)
   })
   it('prints each flagged citation whole, the magnitudes beside the unmeasured budgets, the lists not judged', () => {
     expect(r.byArea).toContain('Comment: on the 88 papers no line is shorter')

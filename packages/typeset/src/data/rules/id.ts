@@ -1,6 +1,6 @@
-// The rule set's id: its own fields over its script's.
-// Today's rules/layout-rules.json (schema 10, version 10, engine 065c1d973), written by lab/typeset/rules-data.mjs; not
-// edited by hand.
+// The rule set's id: its own fields over its script's; its labels babel's captions for it (what each field mirrors:
+// types.ts). The source, edited here; taken at engine 065c1d973 from today's rules/layout-rules.json (schema 10, version
+// 10).
 
 import type { LanguageRules } from './types.ts'
 

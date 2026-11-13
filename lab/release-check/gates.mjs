@@ -258,6 +258,26 @@ export function checksOf(text) {
   return m ? { passed: num(m[1]), checks: num(m[2]) } : {}
 }
 
+/**
+ * harness-lab's verdict over the harness's run: its checks, each corpus paper's bundle and rows as the harness names them
+ * ("fixture <id>: this run's bundle and its rows …" or "… lane L1's bundle and today's dump …"), and the harness's refusal of
+ * bundles and rows that do not belong together or a paper the run's rows do not hold ("FAIL fixtures: …"), which fails the gate
+ * with its own words. The gate gives the harness this run's rows: a paper laid from lane L1's bundle and today's dump is another
+ * run's data in their place, and fails the gate, named
+ */
+export function harnessLabJudge(step) {
+  const text = step.text
+  const of = [...text.matchAll(/^fixture (\S+): (this run's|lane L1's) /gm)]
+  const numbers = {
+    ...checksOf(text),
+    run: of.filter(m => m[2] === "this run's").map(m => m[1]),
+    l1: of.filter(m => m[2] === "lane L1's").map(m => m[1]),
+  }
+  const refused = /^FAIL fixtures: (.*)$/m.exec(text)?.[1] ?? null
+  const note = refused ?? (numbers.l1.length ? `laid from lane L1's bundle and today's dump, not from this run's rows: ${numbers.l1.join(', ')}` : null)
+  return { pass: step.exit === 0 && !refused && !numbers.l1.length && !/route table violated/.test(text), numbers, ...(note ? { note } : {}) }
+}
+
 /** a terminal's colours (vitest colours its summary where it is asked to) */
 const COLOUR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
 
@@ -584,6 +604,8 @@ const runnerNeeds = ctx => [
 ]
 /** this run's bundles (the prepare gate's), which every gate after it reads */
 const bundlesDir = ctx => join(ctx.work, 'prepare', 'bundles')
+/** this run's rows of its bundles: Google's, made by reader-parts' rows step over them (`<pair>.json`), which harness-lab lays */
+const runRowsDir = ctx => join(ctx.work, 'reader-parts', 'google-rows')
 
 // The parity's steps over some pairs (lab/typeset/parity/: v2's lay, the drawing, the measures and the verdict), into `dir`;
 // `toggles` the reading options (`--toggles=on`: every switch of "What to translate" on), `wrap` the command's environment (the
@@ -827,8 +849,8 @@ export const GATES = [
       const gate = (store, ...pre) => ['node', ...pre, 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', `--out=${join(dir, store)}`, ...pairs]
       return [
         { cmd: gate('door'), slot: 'run', env, fresh: dir, all: true, as: 'door' },
-        { cmd: ['node', '--experimental-strip-types', lab(ctx, ROWS_TOOL), ctx.root, join(dir, 'google-rows'), lab(ctx, GOOGLE_STORE), ...pairs], slot: 'run', env, as: 'rows' },
-        { cmd: gate('google', '--import', lab(ctx, ROWS_REGISTER)), slot: 'run', env: { ...env, AXT_B14_ROWS: join(dir, 'google-rows') }, as: 'google' },
+        { cmd: ['node', '--experimental-strip-types', lab(ctx, ROWS_TOOL), ctx.root, runRowsDir(ctx), lab(ctx, GOOGLE_STORE), ...pairs], slot: 'run', env, as: 'rows' },
+        { cmd: gate('google', '--import', lab(ctx, ROWS_REGISTER)), slot: 'run', env: { ...env, AXT_B14_ROWS: runRowsDir(ctx) }, as: 'google' },
       ]
     },
     // (each store's run read whole as the runner states it, its own verdicts held; I3, I4, I5 counted as findings and held to the
@@ -868,7 +890,7 @@ export const GATES = [
   },
   {
     id: 'typeset-data',
-    title: "the typesetter's generated data equal to their sources, and today's readings derived again (lab/typeset/*-data.mjs --check, derive.mjs)",
+    title: "the package's head and reference names equal to the engine's tex-names.json, today's readings derived again and the lab's typeset tests (tests/typeset/tex-names.test.ts, derive.mjs, lab/typeset/tests)",
     tier: 'full',
     stage: 'reader',
     holds: [],
@@ -877,25 +899,38 @@ export const GATES = [
     // (not move-fit.mjs --check, which held the breaker's five moved files to today's code and the changes it lists: the
     // typesetter's rulings edit those files in place since a8c36be1f (2026-11-08, a URL broken where its url package lets TeX
     // break it), about forty commits of PDF-READER §18 and §19, so the file it would write is no longer the package's and the
-    // check failed on every one; the moved code is held as the ported files are, by the reader's gates and the display gates)
+    // check failed on every one; the moved code is held as the ported files are, by the reader's gates and the display gates;
+    // nor faces-data.mjs and rules-data.mjs --check: the package's data files are the source since the step that deleted
+    // those generators, packages/typeset/tests/unit/data.test.ts holding their shape and tests/typeset/tex-names.test.ts the
+    // head and reference names to the tex-names.json they mirror)
     steps: () => [
-      { cmd: ['node', 'lab/typeset/faces-data.mjs', '--check'], all: true },
-      { cmd: ['node', 'lab/typeset/rules-data.mjs', '--check'], all: true },
+      { cmd: ['pnpm', 'exec', 'vitest', 'run', '--project', 'extension', 'tests/typeset/tex-names.test.ts'], all: true },
       { cmd: ['node', '--import', './lab/typeset/register.mjs', 'lab/typeset/derive.mjs'], all: true },
       { cmd: ['pnpm', 'exec', 'vitest', 'run', '--config', 'lab/typeset/vitest.config.ts'], all: true },
     ],
   },
   {
     id: 'harness-lab',
-    title: "the reader package's browser checks with five corpus papers, their bundles this run's (the text layer's order asserted; their I1 residue and I3 reported, not asserted)",
+    title: "the reader package's browser checks with five corpus papers, laid from this run's bundles and this run's rows of them (the prepare's bundles; reader-parts' rows step, Google's rows over them read from the lab's store, no translator asked); the text layer's order asserted; their I1 residue and I3 reported, not asserted",
     tier: 'full',
     stage: 'reader',
     holds: ['I8'],
-    after: ['prepare'],
-    // (the papers' bundles this run's own (the prepare gate's, AXT_L1_BUNDLES), their arXiv PDFs and today's dumps the lab's)
-    needs: ctx => [exists("the corpus papers' list", lab(ctx, 'baseline/corpora/papers.json')), exists("today's reader dumps", lab(ctx, 'baseline/reader'))],
-    steps: ctx => [{ cmd: ['node', 'packages/reader/e2e/run.mjs'], slot: 'e2e', env: { AXT_LAB_FIXTURES: HARNESS_PAPERS.join(','), AXT_L1_BUNDLES: bundlesDir(ctx), AXT_TIMINGS_OUT: join(ctx.work, 'harness-lab-timings.json') } }],
-    judge: (ctx, steps) => ({ pass: steps[0].exit === 0 && !/route table violated/.test(steps[0].text), numbers: checksOf(steps[0].text) }),
+    // (bundles and rows of the same run, never one without the other: the prepare's bundles (AXT_L1_BUNDLES) and the rows
+    // reader-parts' rows step made over them (AXT_LAB_ROWS). The harness refuses bundles without rows, and stops before any
+    // check where a paper's rows leave a unit its bundle asks without a row, or name units it does not hold ("rows do not belong
+    // to these bundles": rows of another run), and where the rows hold no file of a paper ("no rows of this run for <id>"): no
+    // paper is laid from lane L1's bundle and the baseline's dump in their place, and one that is fails the gate, named. Laid
+    // with rows of no run of its own, today's dumps keyed by L1's units, the run's bundles left the units its prepare cut
+    // otherwise without a row: 2609.26457v1's abstract and introduction the original's, lane harness-weight, 2026-11-13)
+    after: ['prepare', 'reader-parts'],
+    // (the papers' arXiv PDFs, the baseline's dumps the lab's; the rows this run's reader-parts made)
+    needs: ctx => [
+      exists("the corpus papers' list", lab(ctx, 'baseline/corpora/papers.json')),
+      exists("today's reader dumps", lab(ctx, 'baseline/reader')),
+      exists("this run's rows of its bundles (reader-parts' rows step)", runRowsDir(ctx)),
+    ],
+    steps: ctx => [{ cmd: ['node', 'packages/reader/e2e/run.mjs'], slot: 'e2e', env: { AXT_LAB_FIXTURES: HARNESS_PAPERS.join(','), AXT_L1_BUNDLES: bundlesDir(ctx), AXT_LAB_ROWS: runRowsDir(ctx), AXT_TIMINGS_OUT: join(ctx.work, 'harness-lab-timings.json') } }],
+    judge: (ctx, steps) => harnessLabJudge(steps[0]),
   },
   // today's reader, the way back until the cut-over deletes it: a build of its own (a default build carries the rebuilt reader,
   // on which reader.mjs and registration.mjs run the rebuilt reader's checks), today's checks run on it; a build that carries the

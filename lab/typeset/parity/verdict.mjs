@@ -1892,7 +1892,7 @@ export function recount(out) {
  * extends it apart (withCrops, raised), its edge never a mark's. Every box a full em of its face, a mark the breaker compressed
  * too: compression moves the next character, not the mark's box (breaker/break.mjs). A line of marks alone is its boxes
  */
-function inkedLine(l) {
+export function inkedLine(l) {
   if (l.rot || l.x0 === null) return { ...l, ix0: l.x0, ix1: l.x1 }
   const chars = [...l.text].filter((c) => !/\s/u.test(c) && c !== OBJ)
   const ix0 = l.x0 + (OPENING.test(chars[0] ?? '') ? 0.5 * l.size : 0),

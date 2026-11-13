@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, type Look } from '@/config/appearance'
 import { STYLE_ATTR } from '@/core/renderer'
 import { failureWidget } from '@/core/renderer/failed'
-import { appearanceSheet } from '@/core/renderer/page'
+import { lookSheet } from '@/core/renderer/page'
 import { installFigureViewer, SPOT_CLASS, VIEWER_CLASS } from '@/core/viewer'
 import { enableDebug } from '@/entrypoints/content/debug'
 
@@ -54,7 +54,7 @@ describe('the style sheets built in TypeScript', () => {
     })
     expect(looks.length).toBe(BUILT_IN_STYLES.length * BUILT_IN_HIGHLIGHTS.length + 1)
     for (const look of looks) {
-      const sheet = withoutComments(appearanceSheet(look))
+      const sheet = withoutComments(lookSheet(look))
       // Not an empty string passing for a clean sheet. Under vitest the `?inline` imports of the four files are empty
       // strings, so the static part is the case above's, from the files themselves; what is held here is the part
       // `lookSheet` generates, and it has to be there: the band's variables always, the reader's block when given

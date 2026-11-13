@@ -110,6 +110,6 @@ export interface Doc {
 }
 
 /** a box's kind in `kinds`: a path, an image */
-export const IMAGE_BOX = -3
+const IMAGE_BOX = -3
 export const isPath = (kind: number): boolean => kind >= 0
 export const isImage = (kind: number): boolean => kind === IMAGE_BOX

@@ -1393,8 +1393,13 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   Without the smoothing and `auto` (the maintainer's report of 2026-11-08, 1706.03762v7 in Chinese, page 1) it drew the
   translation at 80 % of its own `auto` ink, in pure black: 86 % of today's ink on the abstract's first line (4,305 against
   4,982 units at a device pixel ratio of 2), 92 % on the bold title; with them 4,989 and 100 %. Held by the harness's check
-  (`packages/reader/e2e/run.mjs`, "at the weight a canvas draws it"): every measured line's ink within 6 % of the same runs
-  drawn by a canvas's `fillText`, 0.80 before, 1.00 after.
+  (`packages/reader/e2e/run.mjs`, "at the weight a canvas draws it"): the measured lines' ink, summed, within 6 % of the same
+  runs drawn by a canvas's `fillText`, 0.80 before, 1.00 after. The lines are page 1's own overlay's (its slot's, waited for
+  and held as one element through every step: the first overlay in the document is whichever page was drawn first, and on
+  2609.26457v1 page 2's running head was, which the check chose and then measured page 1's title in its place), the six
+  longest upright lines of eight characters or more that carry a run of the target's script naming no fill of its own, the
+  runs this ink rule governs; a page that offers fewer than three fails the check, naming what it offered, so that a title in
+  the PDF's own colour never stands in for them (lane harness-weight, 2026-11-13).
 - **No flash coming back** (the owner's goal of 2026-10-24: a page already seen never shows the original, or an empty place,
   before its translation, coming back to it). A retired page's drawing — its copy, its SVG and its links, detached — is kept off the view,
   and put back in its place in the same task as the page comes near again (`bringBack`), one pane height before it can be
@@ -3483,34 +3488,80 @@ trail (§18.16) and travels with it, so the room beside the name is no longer fe
 centred with the mark's ink, up to 1.6 pt off the column's centre, which TeX takes without the mark; and a mark past a skip
 still stays and bounds the translation beside it (1706.03762v7's sixth and eighth names, set at 9.71 and 8.47 pt).
 
-### 18.13 A table cell's room is what TeX set on its line (2026-11-09)
+### 18.13 A table cell's room is its column's box (the owner's decision of 2026-11-13)
 
-The owner's ruling of 2026-11-08 puts each cell in its own room, sized as today's reader sizes it. The typesetter took that
-room from the part's lines, whose x0 and x1 are the glyphs' advances. Today's rectangle came from the layout file's glyph
-boxes, which also take in a glyph's ink where it overhangs its advance. The two differ where an element's ink stands past
-the line's advances. On 2610.17024v1 page 14, each "p=5 n=20 …" cell opens with an italic p whose ink starts at 149.79,
-while the line's advances start at 150.42. The translation opens with that same p. At 7.97 pt its line needs 99.84 pt: its
-two CJK characters tracked by −0.01 em and its five spaces shrunk to `spaceMin`. Today's room is 99.85 pt; the advances
-give 99.22. So v2 set ten cells at 0.975, 7.77 pt, where today and the original have 7.97. It also drew the p's crop from
-the advances' start, its ink 1.03 pt right of where TeX set it. Nothing else differed: the tokens, their widths, the
-breaker's shrink, the cell's own size (no tie) and its one line are today's.
+On staging the owner marked two tables of 2611.03953v2-zh: page 13's Table 7, whose "MOPD (TA init)" stood smaller than its
+neighbours with room beside it, and page 16's Table 11, whose "base", "teacher" and "span" stood under the original's size in a
+column wide enough for them. He wrote: 「之前在图片中，我们简化了显示策略，让文字没有超过原文的范围就没有问题。但是这个规则并不适用于表格，因为表格中每一行
+或每一列的边界按理来说我们是知道的对吧？所以正常情况下，如果使用原文或者目标字体，能把文字放在边界内，理论上我们不用缩小，不是吗？」 Shown each table four ways (arXiv's page,
+today's lay, the column's box, the row's free paper up to the next column's ink less TeX's gap), he chose the column's box on
+every card and as a whole (「方案一：按列的范围」): the card where it draws a cell smaller than today's lay does (1512.03385v1 p12,
+"val" and "test" at 0.9 where they had run on past their column at 1.0) and the card where the row's free paper would have given
+"MOPD (TA init)" the original's size (it gets 0.9 in its column) included. A cell stays inside its column.
 
-A cell's room is now what TeX set on its line: its glyphs' advances and its elements' ink on its baseline
-(`lay/adapt.ts` `rectOf`). A centred cell's room stays centred on its advances' middle, which is TeX's centre, and is as
-wide as its own ink needs (2602.23285v2 page 19's "Top-τ": the τ's ink stands 0.74 pt past its line's end). The further
-widening still goes half way to the glyph beside it, measured between advances, since `Room.side` stops at the
-neighbour's box. Over the 22 parity pairs, only cells of two pairs move. The ten cells grow to 7.97, and 2610.21880v1
-page 5's t124 grows a step toward its original (2.19 pt; original 2.57, today 2.12). No cell shrinks. The others that open
-with the p now draw it 0.63 pt nearer TeX's place. The parity over those two pairs (28 pages, against round 5's sheet)
-shows 2610.17024v1 page 14 no longer worse and nothing newly worse.
+**The engine states the box** (`Room.column`, an optional field: FORMAT stays 1, a reader of before reads none): the left and
+right edge of what TeX set in the cell's column of its tabular, every entry's (`locate/columns.ts`, read by the facts pass once
+every member's facts are read). TeX sets each entry of a column in the template its class built (`\@chnum`, which the marked
+compile states per cell, `AXT-CELL`): an `l` column's entries from its left edge, an `r` column's to its right edge, a `c`
+column's on its middle, and the column is as wide as its widest entry. The entries are the column's unit cells (the source walk's
+grid place, the ownership's glyphs: their lines' advances and their elements' ink on their baselines) and the entries no unit is,
+a number or a formula alone, which nothing but its place ties to a column: a word of ink no member owns on the table's band (the
+ink units' word rule, `WORD_GAP`) joins the column whose unit cells it meets, and no other's, where the column's class sets it
+there (its start, end or middle within `ALIGNED`, half a point, of the cells' own). The box is stated where the column holds two
+entries at least, each stands where its own class sets it in their hull (a `\multicolumn{1}{c}` header centred in an `l`
+column is one), and every word of free ink meeting its cells is such an entry: one that stands otherwise is an entry not read
+whole (a number with a space in it beside the column's edge; siunitx's `S` column, whose numbers TeX sets on their decimal
+marker, padded to the column's format, so that of "0.856 ± 0.012" only the ± stands on the column's middle, where it had made a
+box of the header's own width, narrower than TeX's: 2602.23285v2 p7's "Acc"; a word over two columns), and the column has
+none. A cell spanning columns is no entry of any, its box the union of the boxes of the columns it spans where each is
+stated, its class setting it there. Not stated: a column holding a cell whose text TeX set as a paragraph of its own (a `p`, `m`,
+`b` or `X` column, a `\parbox`: its box is that paragraph's `\hsize`, which no glyph shows; `marks/channels.ts` readCellBoxes
+reads the class only where no paragraph's `AXT-ALIGN` holds the cell's text, `InstrumentUnit.cell.boxed`), a cell no LaTeX
+template set, a column whose entries do not line up (a cell the walk placed in another column than TeX's), a column of one entry,
+and a column a `\multicolumn` widened (a spanning cell wider than the union of its columns: TeX gives the excess to the last
+column it spans, whose entries then no longer tell its width). A table over several pages takes its columns from all of them
+where every column stated on two pages stands at its class's edge or middle on each, else each page's from its own. What the
+reading misses (an entry of free ink spanning two columns of which one holds no unit cell; free ink off the table's band) leaves a
+box narrower than TeX's, never wider.
 
-Two cells stay smaller than today's, and v2 does not copy what today does there. On 2602.23285v2 page 18, "Sum pooling"
-is clipped at its floor in its own room, as today's is, and both widen half way to the "0" of the next column. v2 measures
-from that glyph's box at 167.78, which gives 160.88. Today's `paperTo` reads the page's ink map in 1.5 pt cells and found
-the "0" at 168.38, which gives 161.18. 0.9 of the size needs 161.17, so today's 6.66 rests on 0.013 pt of the map's
-quantization. v2 takes 6.48. On 2608.04322v1 page 10, "Avg. HS" is a centred header, so its room is centred on its own
-middle, and the nearer neighbour leaves it 6.10 pt. Today keeps 6.97 only by drawing the cell from its original's start,
-6.49 pt off its middle and 12.98 pt past its own room.
+**The typesetter lays a single-line cell in it** (`lay/adapt.ts` `columnRoomOf`): its room is the box, in its column's
+alignment (its class: flush left, flush right or centred on the box's middle), and it is laid at the largest size not over the
+original's that fits the box, the fit's own states from the original's size down, its tracking first in a CJK target. Nothing
+else: no step down in its own ink's width first, no room that opens only where it is clipped at its floor (X.further's `widen`
+is none for it, so its `shrink` goes on below the floor in the same box, to `floorMin`), no half way to a neighbour. One that
+fits there at no size is a cell that cannot be drawn, the original's by itself (§18.72). The band between the rules over and
+under it (a CJK cell's `cellBands` cap) and the breaker's sliver rule (a slot under 1.5 em dropped) read the box as they read any
+room.
+
+**Laid in its own room as before**: a cell whose column the part does not state (above, and every part made before the field), a
+cell of several lines, a held line, and a cell whose own line holds ink not its own inside the box (its `Room.side` short of an
+edge of the box: a mark TeX set in its entry past a space, which stays where TeX set it). That room is what TeX set on its line:
+its glyphs' advances and its elements' ink on its baseline, a centred cell's centred on its advances' middle (2610.17024v1 p14's
+"p=5 n=20 …", whose italic p's ink starts 0.63 pt before its advances); it steps down there to the fit's floor and, only where
+it is clipped there, runs on half way to the glyph beside it, a quarter of its size off a wall (today's `paperTo`).
+
+**Measured** (lane cell-col, over round RB2b's 89 papers and 2611.03953v2, against the round's head): the bundles differ by
+`Room.column` on 7,869 cell members alone (3,744 state none), every other object, the prepare dumps, the ownership and the
+differential byte for byte. On the owner's two tables the box is the trace's reading of TeX's column (Table 7's Method column
+208.15–274.66, Table 11's 212.41–238.29); "MOPD (TA init)" goes from 0.8 to 0.9 of the size, "base", "teacher" and "span" to the
+original's. The reader gate's entry over the 92 pairs on Google's rows: 1,771 laid cells under the original's size before, 1,326
+after (747 of them in their box, the translation wider than the column); 513 single-line cells reach the original's size; 180 are
+drawn smaller, every one where today's reader had run it on past its column (97 of them at the original's size); 21 whose
+translation is wider than its column even at 0.6 of the size are left the original's by themselves (§18.72), 17 of them
+2610.22214v1's "TLE" and "tn" in a column 12 pt wide; columns holding two sizes or more 383 of 780 → 273 of 777; I3, I4 and I5
+as before. 4,887 laid cells are in their column's box; on the old path 2,047 single-line cells (881 in a column of a cell of no
+class, 710 in a column holding a word not read whole, 271 of one entry, 138 the walk placed otherwise than TeX, 34 of two
+classes, 13 of no grid place), 278 spanning, 291 of several lines. The display gate reads 21 pages of its 22 pairs and 5 of the
+added two newly worse in both modes, every difference a cell laid inside its column's box (`frame`, past the gate's own room of
+before) or at another size than today's (`size`), smaller only where today's line stood past the box.
+
+**Not this rule's**: TeX's own statement of the box. The template that ends in `\axt@te{<class>}` could set a point first and
+last in it, outside every `\unskip` of LaTeX's and colortbl's guard, so that TeX states each cell box's edges and the content box
+is that less `\tabcolsep` a side: no reading of A then, and a `p` column's box and a widened column's stated too. They would be
+the first nodes the marks put in an alignment template, to be proven inert on the TeX gate first (`lab/pdf/spikes/
+layout-cell-cases.mjs`). The box read here and TeX's can differ where an entry no unit is escapes the reading (narrower), where
+an italic correction TeX counts in an entry's width shows on no advance (within `ALIGNED`), and where `@{}`, `\extracolsep` or a
+rule's width sets a spanning cell's union otherwise than its own template.
 
 ### 18.14 A link's colour stays on its own words; a unit our compile sets more of is still located (2026-11-09)
 

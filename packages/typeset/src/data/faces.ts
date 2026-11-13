@@ -1,6 +1,25 @@
-// The face catalogue B.faces reads (rules/font-roles.mjs FACES, rules/font-letters.mjs HOLDS and SMCP at engine 065c1d973),
-// written by lab/typeset/faces-data.mjs from today's own tables; not edited by hand. Each face's CSS family (ours, `axt-`),
-// weight, style and size correction; the alphabets whose every letter it holds; the faces with small capitals of their own.
+// The face catalogue B.faces reads: each face's CSS family (ours, `axt-`), weight, style and size correction; the alphabets
+// whose every letter its file holds; the faces whose file sets small capitals of its own. The source, edited here; taken at
+// engine 065c1d973 from today's rules/font-roles.mjs FACES and rules/font-letters.mjs HOLDS and SMCP.
+//
+// HOLDS and SMCP mirror the face files: an alphabet is held where the file's cmap table (its best Unicode subtable) maps every
+// letter of it, the letters as src/pdf-reader/engine/rules/font-roles.mjs LETTER_SETS states them (`Latn` A-Z a-z, `Cyrl`
+// U+0410-U+044F, a language's its script's and its own, breaker/faces.ts LETTERS' keys); a face sets small capitals where its
+// file's GSUB table has the `smcp` feature. Made at 065c1d973 by tests/pdf-reader/font-letters.test.ts from the coverage
+// table that scripts/font-roles.py reads out of the files. The files, the catalogue's (Source Han Serif's OTFs from Adobe's
+// release 2.003R, Nimbus's from URW's base35 release 20200910, every other TeX Live 2025's, the compile image
+// texlive/texlive@sha256:7056390e…), each group's in the order regular, bold, italic, bold italic, those it has (Source Han
+// Serif's and Harano Aji's: regular, medium, bold):
+//   shs-sc, shs-tc, shs-k: SourceHanSerif{SC,TC,K}-{Regular,Medium,Bold}.otf; haranoaji: HaranoAjiMincho-{Regular,Medium,
+//   Bold}.otf; fandolkai: FandolKai-Regular.otf; bkai00mp: bkai00mp.ttf; lm-roman: lmroman10-{regular,bold,italic,
+//   bolditalic}.otf; lm-roman-caps: lmromancaps10-{regular,oblique}.otf; lm-sans: lmsans10-{regular,bold,oblique,
+//   boldoblique}.otf; lm-mono: lmmono10-{regular,italic}.otf; lm-math: latinmodern-math.otf; nimbus-roman, nimbus-sans:
+//   Nimbus{Roman,Sans}-{Regular,Bold,Italic,BoldItalic}.otf; freemono: FreeMono{,Bold,Oblique,BoldOblique}.otf; libertine:
+//   LinLibertine_{R,RB,RI,RBI}.otf; biolinum: LinBiolinum_{R,RB,RI,RBO}.otf; xcharter: XCharter-{Roman,Bold,Italic,
+//   BoldItalic}.otf; ebgaramond, erewhon: {EBGaramond,Erewhon}-{Regular,Bold,Italic,BoldItalic}.otf; cmun-serif:
+//   cmun{rm,bx,ti,bi}.otf; cmun-sans: cmun{ss,sx,si,so}.otf; cmun-mono: cmun{tt,tb,it,tx}.otf; domitian: Domitian-{Roman,
+//   Bold,Italic,BoldItalic}.otf; dejavu-mono: DejaVuSansMono{,-Bold,-Oblique,-BoldOblique}.ttf; inconsolata:
+//   Inconsolatazi4-{Regular,Bold}.otf; pt-mono: PTM{55,75}F.ttf.
 
 /** a face of the catalogue as the typesetter reads it */
 export type CatalogueFace = { family: string; weight: number; style: 'normal' | 'italic'; size: number }
@@ -91,7 +110,7 @@ export const FACES: Readonly<Record<string, CatalogueFace>> = {
   'pt-mono-bold': { family: 'axt-slab-mono', weight: 700, style: 'normal', size: 1 },
 }
 
-/** each face's alphabets whose every letter it holds (a language's own, and a script's bare letters) */
+/** each face's alphabets whose every letter it holds (a language's own, and a script's bare letters): its file's cmap */
 export const HOLDS: Readonly<Record<string, readonly string[]>> = {
   'biolinum-bold': ['Latn', 'Cyrl', 'de', 'fr', 'es', 'pt', 'ru', 'it', 'nl', 'pl', 'tr', 'cs', 'sv', 'uk'],
   'biolinum-bolditalic': ['Latn', 'Cyrl', 'de', 'fr', 'es', 'pt', 'ru', 'it', 'nl', 'pl', 'tr', 'cs', 'sv', 'uk'],
@@ -178,7 +197,7 @@ export const HOLDS: Readonly<Record<string, readonly string[]>> = {
   'xcharter-regular': ['Latn', 'Cyrl', 'de', 'fr', 'es', 'pt', 'ru', 'it', 'nl', 'pl', 'tr', 'cs', 'sv', 'uk'],
 }
 
-/** the faces that draw small capitals by their smcp feature */
+/** the faces that draw small capitals by their smcp feature: their file's GSUB */
 export const SMCP: readonly string[] = [
   'biolinum-bold',
   'biolinum-bolditalic',

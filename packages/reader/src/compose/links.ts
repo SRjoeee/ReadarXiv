@@ -40,7 +40,7 @@ export interface LinkHooks {
 }
 
 /** a destination as the page carries it: a name, or an explicit one written as JSON */
-export function destOf(dest: string): string | unknown[] {
+function destOf(dest: string): string | unknown[] {
   if (dest.startsWith('[')) {
     try {
       const d = JSON.parse(dest)

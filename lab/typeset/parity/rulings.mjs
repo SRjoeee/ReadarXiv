@@ -9,7 +9,7 @@
 // T2 is his answer of the same day on the readiness page (`seen`). No floor is widened: a bound a condition needs is a measure's
 // own noise floor (verdict.mjs NEAR), the engine's own grain (SIZE_STEP), a fact the page states, or a number in his own words. What
 // the page states beside a covered difference (L2's cause, S4's steps) is reported (`coveredSays`), never a condition.
-import { NEAR } from './verdict.mjs'
+import { inkedLine, NEAR } from './verdict.mjs'
 import { OVER_MIN, SIZE_STEP } from './fidelity.mjs'
 
 /** the date of the owner's verdicts, and the page he gave them on */
@@ -813,6 +813,42 @@ export const RULINGS = [
         laid = (d.cells ?? []).filter((k) => !v2.has(k))
       const states = [...new Set(left.map((k) => x.laid(cellOrd(k, x))?.state))]
       return `its cells ${left.join(', ')} the original's by themselves (${states.join(', ')}), ${laid.join(', ')} laid; today withheld the group for them`
+    },
+  },
+  {
+    id: 'CB',
+    title: "a table cell laid in its column's box at the largest size it holds (PDF-READER §18.13); today laid it in its own room, run on past its column where clipped at its floor",
+    verdict: "the owner's decision",
+    date: '2026-11-13',
+    seen: "the owner's marks on staging (2611.03953v2-zh p13 Table 7, \"MOPD (TA init)\" smaller with room beside it; p16 Table 11, \"base\", \"teacher\", \"span\" under the original's size in a column wide enough) and his choice on the four ways the lane cell-room drew each table (arXiv, today, the column's box, the row's free paper): the column's box on every card and as a whole, the card where it draws a cell smaller than today included (1512.03385v1-zh p12); the coordinator's approval of this entry, its reading on ink, 2026-11-14; the rule as built: lane cell-col, lay/adapt.ts columnRoomOf, PDF-READER §18.13",
+    words: '方案一：按列的范围',
+    example:
+      '2611.03953v2-zh p13 t206: "MOPD (TA init)" at 0.9 of the size inside its Method column, where today sets it at 0.8 in its own width (frame: past its own room); 1512.03385v1-zh p12 t309: "val" at 0.9 inside its column, where today runs it on past the column at 1.0 (size)',
+    condition:
+      "size or frame, a table cell v2 lays (its Page member `laid`) in its column's box: the part states Room.column for it, its one line is no held line, and its Room.side stands at or past both edges of the box (the typesetter's columnRoomOf); v2's every drawn line of it inside the box BY ITS INK (the line's drawn characters, a CJK opening mark's blank first half and a closing mark's blank second half aside, as the measures read ink: verdict.mjs inkedLine), within the position floor; `frame` (a line past the cell's own room of before, the frame measure's): that alone; `size`: v2 larger than today, or smaller only where today's drawn line of it stands past the box by its ink, beyond the position floor (today ran it on past its column). Not covered: a cell whose ink v2 draws past its column's box; a cell v2 draws smaller than today where today's line stands inside the box (under the size its column allows); a cell whose column the part does not state; every other measure of the cell (its I3- and I5-like overlaps, over, shown, groups …) judged as before",
+    holds(d, x) {
+      if ((d.flag !== 'size' && d.flag !== 'frame') || !d.unit) return false
+      const u = x.unit(d)
+      if (u?.kind !== 'cell' || u.part === null || u.part === undefined) return false
+      const f = x.member(u.part)
+      const box = f?.column,
+        l0 = f?.lines?.[0]
+      if (f?.kind !== 'cell' || !box || f.lines.length !== 1 || !l0 || l0[9] & 1) return false
+      if (f.side && (f.side[0] > box[0] + 0.01 || f.side[1] < box[1] - 0.01)) return false
+      if (x.laid(u.part)?.state !== 'laid') return false
+      const floor = posFloor(u.sides?.v2?.osize ?? f.style?.size)
+      const linesOf = (side, id) =>
+        (x.rec[side]?.units ?? []).filter((w) => w.id === id).flatMap((w) => w.lines.filter((l) => !l.rot && l.n > 0 && l.x0 !== null))
+      const pastBy = (ls) => Math.max(...ls.map(inkedLine).map((l) => Math.max(box[0] - l.ix0, l.ix1 - box[1])))
+      const v = linesOf('v2', u.part)
+      if (!v.length || pastBy(v) > floor) return false
+      if (d.flag === 'frame' || !(d.v2?.value < d.today?.value)) return true
+      const t = linesOf('today', Number(u.key.slice(1)))
+      return t.length > 0 && pastBy(t) > floor
+    },
+    says(d, x) {
+      const f = x.member(x.unit(d).part)
+      return `laid in its column's box ${f.column[0]}-${f.column[1]}${d.flag === 'size' && d.v2.value < d.today.value ? ", where today's line runs past it" : ''}`
     },
   },
 ]

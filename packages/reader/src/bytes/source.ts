@@ -151,7 +151,7 @@ export const chunkUrl = (url: string, begin: number, end: number): string =>
   `${url}${url.includes('?') ? '&' : '?'}r=${begin}-${end - 1}`
 
 /** a chunk's digest as the head writes it: the first 16 bytes of its SHA-256, base64url (22 characters) */
-export async function chunkDigest(bytes: Uint8Array): Promise<string> {
+async function chunkDigest(bytes: Uint8Array): Promise<string> {
   const subtle = (globalThis as { crypto?: Crypto }).crypto?.subtle
   if (subtle) {
     const d = new Uint8Array(await subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>))

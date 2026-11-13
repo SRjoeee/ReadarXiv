@@ -185,6 +185,12 @@ describe('each side of the gate runs on the pack its own commit names', () => {
     expect(at('Check the pack')).toBeLessThan(at('Gate on the merge base'))
   })
 
+  it('installs the merge base\'s own modules and borrows none of the pull request\'s: a workspace\'s links are relative, so borrowed they load the pull request\'s packages into the base\'s run (PR #642: every output of the base failed)', () => {
+    const base = step('Merge base')
+    expect(base).toContain('pnpm -C "$RUNNER_TEMP/base" install --frozen-lockfile --prefer-offline')
+    for (const body of runBodies(yml)) expect(body).not.toMatch(/ln -s[^\n]*node_modules/)
+  })
+
   it('reads the merge base\'s digest from its own manifest with its own script, and runs the base on the pull request\'s directory only where the layout file\'s version is the same (not where the digests are)', () => {
     const digests = step('Pack digests')
     expect(digests).toContain('head=$(node lab/pdf/spikes/gate-pack.mjs digest)')

@@ -9,8 +9,6 @@ import { HL_OPACITY_MAX, HL_OPACITY_MIN } from '@/config/appearance'
 import { ON_ATTR, REAL_TRANSLATION } from './attrs'
 import { OPACITY_MAX, OPACITY_MIN, sanitizeColor, sanitizeCustomCss } from './style-values'
 
-export { COLOR_MAX, OPACITY_MAX, OPACITY_MIN, sanitizeColor, sanitizeCustomCss } from './style-values'
-
 /** The line “a real translation” is REAL_TRANSLATION of attrs.ts; every copy of it in presets.css is guarded by tests/renderer/translation-boundary.test.ts */
 export const TRANSLATION_SELECTOR = `html[${ON_ATTR}] ${REAL_TRANSLATION}`
 

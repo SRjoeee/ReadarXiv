@@ -63,10 +63,7 @@ export interface RunOptions {
   context?: TranslateContext
   /** The cancellation scope = the session id: carried by every call, and on stop the caller withdraws the queued and in-flight requests (§10) */
   scope?: string
-  /**
-   * Where a record of the run goes: the session's trace, which reaches the diagnostics log (issue #237). The halving of
-   * a batch is the one thing recorded here (`shared/diagnostics.ts` `splitLine`)
-   */
+  /** Where a record of the run goes: the session's trace, which reaches the diagnostics log (issue #237) */
   trace?: (line: string) => void
   /** The viewport trigger distance and threshold (§10) */
   preload: PreloadOptions

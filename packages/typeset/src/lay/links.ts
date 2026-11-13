@@ -87,7 +87,7 @@ const kindOf = (to: Link['to']): 'cite' | 'note' | 'internal' | 'url' => {
   return 'internal'
 }
 /** an element's command that sets a citation, by the command the part states (El.cmd): natbib's and biblatex's citation
- *  commands are named so, \nocite sets nothing (emit/links.ts CITE_SRC, today's links.mjs, by the source) */
+ *  commands are named so, \nocite sets nothing (today's links.mjs CITE_SRC, by the source) */
 const CITE_CMD = /^(?![Nn]ocite)[A-Za-z]*[Cc]ite[A-Za-z]*\*?$/
 /** the kind an element's link is of by its source (links.mjs linkKindOf, by the command and the nested mark the part states): a
  *  footnote's mark, a reference, a citation (hyperref names its destination cite.<key>; the part states no key, so a citation is

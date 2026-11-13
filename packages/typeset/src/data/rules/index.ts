@@ -1,6 +1,5 @@
-// The rule set: its languages by tag.
-// Today's rules/layout-rules.json (schema 10, version 10, engine 065c1d973), written by lab/typeset/rules-data.mjs; not
-// edited by hand.
+// The rule set: its languages by tag (what each field mirrors: types.ts). The source, edited here; taken at engine 065c1d973
+// from today's rules/layout-rules.json (schema 10, version 10).
 
 import { BG } from './bg.ts'
 import { CS } from './cs.ts'

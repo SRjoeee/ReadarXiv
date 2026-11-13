@@ -1212,7 +1212,7 @@ export function unicodeOf(s: unknown): string {
   return UTF8.decode(b)
 }
 /** a unit's content as today's flat pieces (the makers read a source unit so): an element with the kind the instrument states */
-export function flatOf(content: readonly Piece[], out: TodayPiece[] = []): TodayPiece[] {
+function flatOf(content: readonly Piece[], out: TodayPiece[] = []): TodayPiece[] {
   for (const p of content) {
     if (p.t === 'text') out.push({ t: 'text', s: latin1View(p.s) })
     else if (p.t === 'el') out.push({ t: 'ph', src: latin1View(p.src ?? ''), kind: p.kind })

@@ -8,8 +8,6 @@ export declare const NAME_ENGLISH: Readonly<Record<NameKey, string>>
  *  labels), or the paper's own (as a compile of the translation once read them; the reader's are layer-proto/reader.mjs
  *  CAPTIONS); a key no compile answered for is left out */
 export type Captions = Partial<Record<NameKey, 'target' | 'source'>>
-/** how far after a name its counter may begin, of the name's size */
-export declare const COUNTER_GAP: number
 /** the counter TeX set after a babel name on its line where it leads no unit: how many of `next` (the glyphs after the name on
  *  its line, in reading order) it is, 0 for none */
 export declare function counterAfter(x1: number, size: number, next: readonly { u?: string; x0: number; x1: number; size?: number }[]): number

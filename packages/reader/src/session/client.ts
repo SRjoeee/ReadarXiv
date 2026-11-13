@@ -188,7 +188,7 @@ export function object(a: Ask, ref: Ref): Promise<Uint8Array> {
   })
 }
 /** an object a catalog names by its digest alone (a part: its length is not in the head): read within `cap`, held to its digest */
-export function objectOfDigest(a: Ask, path: string, sha256: string, cap: number): Promise<Uint8Array> {
+function objectOfDigest(a: Ask, path: string, sha256: string, cap: number): Promise<Uint8Array> {
   return request(a, `/api/v2/o/${path}`, {}, async (r) => {
     if (r.status === 404) throw new Refused('gone')
     if (!r.ok) throw new Refused('bad')

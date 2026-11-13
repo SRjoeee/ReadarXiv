@@ -2,6 +2,24 @@
 // x 72 at 6 pt a glyph, 12 pt apart from the top, one font unless a glyph says otherwise; boxes placed between glyphs.
 // A space is a glyph of the font's space, whose outline is empty: no extent across or up from its origin (ink.mjs's reading).
 import type { Doc, DocGlyph, DocPage } from '../../src/doc.ts'
+import { PageGlyph } from '../../src/glyph.ts'
+
+/** a page's glyphs as readPdf makes them (read.ts docPageOf), from plain glyphs: their coordinates in one array of the page's */
+export function pageGlyphsOf(list: readonly DocGlyph[]): PageGlyph[] {
+  const c = new Float64Array(8 * list.length)
+  return list.map((g, j) => {
+    const o = 8 * j
+    c[o] = g.x0
+    c[o + 1] = g.x1
+    c[o + 2] = g.y
+    c[o + 3] = g.top
+    c[o + 4] = g.bottom
+    c[o + 5] = g.size
+    c[o + 6] = g.ix0
+    c[o + 7] = g.ix1
+    return new PageGlyph(c, o, g)
+  })
+}
 
 export interface LineSpec {
   text: string

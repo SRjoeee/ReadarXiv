@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, INVARIANTS, PARAS_HELD, productionRowsOf, RETIRED, readerPartsJudge, readerPartsRecord, rowsOf, sentenceCoverJudge, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
+import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, harnessLabJudge, INVARIANTS, PARAS_HELD, productionRowsOf, RETIRED, readerPartsJudge, readerPartsRecord, rowsOf, sentenceCoverJudge, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
 import { papersOf } from '../../lab/release-check/papers.mjs'
 import { ADDED, ADDED_HEADING } from '../../lab/typeset/added.mjs'
 import { isProduction, type Row, rowsAgainst } from '../../lab/typeset/parity/production-rows.mjs'
@@ -258,10 +258,10 @@ describe('the gates retired', () => {
 })
 
 describe("the typesetter's data", () => {
-  it("checks the generated data and today's readings, never the breaker's moved files against today's code, which the rulings edit", () => {
+  it("checks the head and reference names against the tex-names.json they mirror, today's readings and the lab's tests, never the data against generators (the package's files are the source) nor the breaker's moved files against today's code, which the rulings edit", () => {
     const ctx: Ctx = { root: '/repo', labData: null, refactor: '/lab', work: '/work', online: false, minFree: 12 }
     const scripts = GATES.find(g => g.id === 'typeset-data')!.steps!(ctx).map(s => s.cmd.findLast(a => /\.(?:m?js|ts)$/.test(a)) ?? s.cmd.join(' '))
-    expect(scripts).toEqual(['lab/typeset/faces-data.mjs', 'lab/typeset/rules-data.mjs', 'lab/typeset/derive.mjs', 'lab/typeset/vitest.config.ts'])
+    expect(scripts).toEqual(['tests/typeset/tex-names.test.ts', 'lab/typeset/derive.mjs', 'lab/typeset/vitest.config.ts'])
   })
 })
 
@@ -563,10 +563,28 @@ describe("today's rows, the way back and the head's own builds", () => {
     expect(gate('perf-batch').judge!(ctx, [run(1, 'ERR_PNPM_OUTDATED_LOCKFILE', 'build')])).toMatchObject({ pass: false, note: expect.stringMatching(/could not be built/) })
   })
 
-  it("opens the harness's corpus papers from this run's bundles", () => {
+  it("opens the harness's corpus papers from this run's bundles and this run's rows of them, never one without the other", () => {
     const h = gate('harness-lab')
-    expect(h.after).toEqual(['prepare'])
-    expect(h.steps!(ctx)[0]?.env).toMatchObject({ AXT_L1_BUNDLES: '/work/prepare/bundles', AXT_LAB_FIXTURES: '1512.03385v1,1706.03762v7,2609.26457v1,2307.16209v1,2610.20030v1' })
+    expect(h.after).toEqual(['prepare', 'reader-parts'])
+    expect(h.steps!(ctx)[0]?.env).toMatchObject({ AXT_L1_BUNDLES: '/work/prepare/bundles', AXT_LAB_ROWS: '/work/reader-parts/google-rows', AXT_LAB_FIXTURES: '1512.03385v1,1706.03762v7,2609.26457v1,2307.16209v1,2610.20030v1' })
+    // (the rows harness-lab lays are the ones reader-parts' rows step writes, /work/reader-parts/google-rows: the reader gate's
+    // case above; without them it does not run)
+    expect(h.needs!(ctx).some(n => n.path === '/work/reader-parts/google-rows')).toBe(true)
+  })
+
+  it("judges harness-lab by its checks, fails a paper laid from lane L1's and one the run's rows do not hold, and rows that do not belong, each with its own words", () => {
+    const run = (exit: number, text: string) => ({ exit, text, cmd: [], ms: 0, waited: 0, log: '' })
+    const ours = "fixture 1512.03385v1: this run's bundle and its rows (/b, /r/1512.03385v1-zh.json: chain x, 10 units asked, 10 rows)\n"
+    const l1 = "fixture 2609.26457v1: lane L1's bundle and today's dump (no run given)\n"
+    expect(harnessLabJudge(run(0, `${ours}121 of 121 checks passed\n`))).toEqual({ pass: true, numbers: { passed: 121, checks: 121, run: ['1512.03385v1'], l1: [] } })
+    // (the gate gives the harness this run's rows: a paper on another run's data in their place fails it, named; it passed with a
+    // note before, the coordinator's ruling withdrawn on 2026-11-14)
+    expect(harnessLabJudge(run(0, `${ours}${l1}121 of 121 checks passed\n`))).toMatchObject({ pass: false, numbers: { l1: ['2609.26457v1'] }, note: expect.stringMatching(/lane L1's bundle .*not from this run's rows: 2609\.26457v1/) })
+    // (one paper missing from the rows: the harness refuses before any check, naming the paper and the file it expected)
+    const missing = 'FAIL fixtures: no rows of this run for 2609.26457v1: expected /r/2609.26457v1-zh.json\n'
+    expect(harnessLabJudge(run(1, `${ours}${missing}`))).toMatchObject({ pass: false, note: 'no rows of this run for 2609.26457v1: expected /r/2609.26457v1-zh.json' })
+    const refused = 'FAIL fixtures: 2609.26457v1: rows do not belong to these bundles: 25 of 321 units without a row (rows /r, bundles /b)\n'
+    expect(harnessLabJudge(run(1, refused))).toMatchObject({ pass: false, note: expect.stringMatching(/^2609\.26457v1: rows do not belong to these bundles: 25 of 321 units without a row/) })
   })
 })
 
