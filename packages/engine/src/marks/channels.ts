@@ -33,9 +33,24 @@ const CELL_CLASS: readonly ('c' | 'l' | 'r' | undefined)[] = ['c', 'l', 'r']
  * cell's class the same way (marks.mjs LAYOUT_TEX)
  */
 export function readAlign(log: string): Map<number, 'j' | 'l' | 'c' | 'r'> {
+  const text = log.replace(/^(AXT-ALIGN .{69})\n/gm, '$1')
+  const out = paragraphAligns(text)
+  // (a cell's class, where its own paragraph tells nothing)
+  const classed = new Set<number>()
+  for (const m of text.matchAll(/^AXT-CELL (\d{1,9}) ([0-5]) *$/gm)) {
+    const id = Number(m[1])
+    if (classed.has(id)) continue
+    classed.add(id)
+    const code = CELL_CLASS[Number(m[2])]
+    if (code && !out.has(id)) out.set(id, code)
+  }
+  return new Map([...out].sort((a, b) => a[0] - b[0]))
+}
+/** each unit's paragraph's alignment as its end mark states it (readAlign's first reading, the log's wrap joined): the first
+ *  paragraph's, none where TeX set it last in an \hbox */
+function paragraphAligns(text: string): Map<number, 'j' | 'l' | 'c' | 'r'> {
   const last = new Map<number, 'j' | 'l' | 'c' | 'r' | null>()
   const told = new Map<number, 'j' | 'l' | 'c' | 'r'>()
-  const text = log.replace(/^(AXT-ALIGN .{69})\n/gm, '$1')
   for (const m of text.matchAll(
     /^AXT-ALIGN [ht]?(\d{1,9}) ([phv]) ([0-4]) (-?[\d.]+)pt ([0-4]) (-?[\d.]+)pt ([0-4]) (-?[\d.]+)pt$/gm,
   )) {
@@ -51,14 +66,27 @@ export function readAlign(log: string): Map<number, 'j' | 'l' | 'c' | 'r'> {
     const t = told.get(id)
     if (c !== null && t !== undefined) out.set(id, t)
   }
-  // (a cell's class, where its own paragraph tells nothing)
-  const classed = new Set<number>()
+  return out
+}
+/**
+ * Each table cell whose text TeX set in its column template's own box, by the class LaTeX built that template from
+ * (AXT-CELL <i> <class>, the cell's first: c, l, r): TeX's \hfil on the side or sides the slack goes, so that the entries of one
+ * column stand on its left edge (l), its right edge (r) or its middle (c), the column as wide as its widest entry (the column's
+ * box, Room.column: locate/columns.ts). None for a cell whose text is a paragraph of its own (a p, m or b column, X, a \parbox in
+ * the cell: its AXT-ALIGN a paragraph's, which readAlign reads first), whose box is that paragraph's \hsize and no glyph's; none
+ * for a cell no template of LaTeX's set (a plain \halign states no class)
+ */
+export function readCellBoxes(log: string): Map<number, 'c' | 'l' | 'r'> {
+  const text = log.replace(/^(AXT-ALIGN .{69})\n/gm, '$1')
+  const paragraph = paragraphAligns(text)
+  const seen = new Set<number>()
+  const out = new Map<number, 'c' | 'l' | 'r'>()
   for (const m of text.matchAll(/^AXT-CELL (\d{1,9}) ([0-5]) *$/gm)) {
     const id = Number(m[1])
-    if (classed.has(id)) continue
-    classed.add(id)
+    if (seen.has(id)) continue
+    seen.add(id)
     const code = CELL_CLASS[Number(m[2])]
-    if (code && !out.has(id)) out.set(id, code)
+    if (code && !paragraph.has(id)) out.set(id, code)
   }
   return new Map([...out].sort((a, b) => a[0] - b[0]))
 }

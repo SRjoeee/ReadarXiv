@@ -591,10 +591,12 @@ const SPECS: readonly RuleSpec[] = [
     owns: ['T5', 'E27'],
     ports: ['RUN:1796-1814 fitFurther', 'RUN:1738-1753 widenOverPaper', 'RUN:1699-1729 paperTo (its room: Room.side)'],
     how: 'ported',
+    ruling: "2026-11-13 a table cell's room is its column's box",
     reads: ['fit.further', 'fit.floorMin'],
     file: 'fit/further.ts',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "a single-line table cell whose column's box the part states (Room.column) is laid in that box at every size, its 'widen' step none (lay/adapt.ts columnRoomOf: `wide` null), so that its 'shrink' sets it below the floor in the same box: the largest size not over the original's that fits its column (the owner's decision of 2026-11-13, docs/PDF-READER.md §18.13). Today's widened a cell clipped at its floor in its own ink's width half way to the glyph beside it, so that a cell missing its room by much was drawn larger than one missing it by little, and past its column. A cell whose column's box the part does not state is widened as today: the replay's samples state none, and are unchanged",
       replay:
         'chained from F2 on every laid round of the sampled units and of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (584 ran; the widened blocks, Room.side, from the slot)',
       cases: 584,
@@ -983,7 +985,9 @@ const SPECS: readonly RuleSpec[] = [
     // block bottom, and the paragraph's \baselineskip and \parskip (Room.runs, Room.sep, the marked compile's AXT-BODY and
     // AXT-LINES); the adapter reads the room so (lay/adapt.ts), never today's pixel map and its share of a pitch (borrowGap). And
     // the ink that stays beside its lines, no member's, which today never read (Room.stays: a rule or a glyph no unit owns, a QED
-    // box), on the block of the line it stood beside)
+    // box), on the block of the line it stood beside. And a table cell's column's box, which today never read (Room.column,
+    // locate/columns.ts: what TeX set in its column, every entry's, where the entries line up as the column's class sets them;
+    // the owner's decision, docs/PDF-READER.md §18.13), the room a single-line cell is laid in)
     ports: ['RUN:1557-1573 columnOf', 'RUN:1677-1687 freeFor', 'RUN:1699-1729 paperTo'],
     how: 'moved',
     reads: [],
