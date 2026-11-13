@@ -1217,7 +1217,7 @@ function piecesInto(ft: FigureText, read: Read, label: boolean): void {
 }
 
 /**
- * A path's line as the container step's text carries it (the coordinator's ruling of 2026-11-14 on A, PDF-READER §18.36): a
+ * A path's line as the container step's text carries it (PDF-READER §18.36): a
  * glyph the line reading set on the line that no run holds and that spells no word (no letter or digit in it: a pictograph, an
  * icon face's glyph, a mark set alone in another face) is the line's element `symbol`, never its text: its ink the original's,
  * set where the reply sets the element, as a formula's glyph is carried; sent as text it came back as a character no served face

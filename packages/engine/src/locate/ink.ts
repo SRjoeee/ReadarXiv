@@ -736,16 +736,13 @@ function figureTextOf(
       ...(classes.length ? { classes } : {}),
       ...(classes.length
         ? {
-            keptEls: classes.map(([id]): [string, 'pitch' | 'formula' | 'decoration' | 'symbol'] => [
-              id,
-              (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind === 'code'
-                ? 'pitch'
-                : (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind === 'math'
-                  ? 'formula'
-                  : (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind === 'symbol'
-                    ? 'symbol'
-                    : 'decoration',
-            ]),
+            keptEls: classes.map(([id]): [string, 'pitch' | 'formula' | 'decoration' | 'symbol'] => {
+              const kind = (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind
+              return [
+                id,
+                kind === 'code' ? 'pitch' : kind === 'math' ? 'formula' : kind === 'symbol' ? 'symbol' : 'decoration',
+              ]
+            }),
           }
         : {}),
       figure: { set, ...(t.para ? { para: t.para.by } : {}), ...room },
