@@ -662,7 +662,7 @@ function linesOf(
           els: [],
           label,
           para: { justified: false, by: 'container', align },
-          claimed: rs.flatMap((r) => r.read.gs.filter((g) => r.l.free.has(g))),
+          claimed: rs.flatMap((r) => r.read.gs.filter((g) => r.l.free.has(g) && !inkless(glyphs[g]!))),
           copies: [],
           textBoxes: [],
           why: null,
@@ -1216,13 +1216,17 @@ function piecesInto(ft: FigureText, read: Read, label: boolean): void {
   }
 }
 
+/** a glyph whose ink the page does not state: its box of no height (PDF.js states a colour glyph's so) */
+const inkless = (g: G) => !(g.top > g.bottom)
+
 /**
- * A path's line as the container step's text carries it (PDF-READER §18.36): a
- * glyph the line reading set on the line that no run holds and that spells no word (no letter or digit in it: a pictograph, an
- * icon face's glyph, a mark set alone in another face) is the line's element `symbol`, never its text: its ink the original's,
- * set where the reply sets the element, as a formula's glyph is carried; sent as text it came back as a character no served face
- * draws (2608.06701v1 p10's warning sign: the lay threw, the text stood as the original). Signs abutting one another are one
- * element; a word space between them, two. A sign is no decorated word: §18.61's hold is not read from it
+ * A path's line as the container step's text carries it (PDF-READER §18.36): a glyph the line reading set on the line that no
+ * run holds and that spells no word (no letter or digit in it: a pictograph, an icon face's glyph, a mark set alone in another
+ * face) is the line's element `symbol`, never its text: its ink the original's, set where the reply sets the element, as a
+ * formula's glyph is carried; sent as text it came back as a character no served face draws. Signs abutting one another are
+ * one element; a word space between them, two. A sign is no decorated word: §18.61's hold is not read from it. A sign whose ink
+ * the page does not state (`inkless`: 2608.06701v1 p10's colour warning sign, its box on its baseline) cannot be an element,
+ * which is ink carried: it stays page ink where it stands, out of the text and of its glyphs, as no run's glyph is
  */
 function signsApart(read: Read, free: ReadonlySet<number>, glyphs: readonly G[]): Read {
   const pieces: Read['pieces'] = []
@@ -1235,6 +1239,8 @@ function signsApart(read: Read, free: ReadonlySet<number>, glyphs: readonly G[])
     for (const g of st.gs) {
       const x = glyphs[g]!
       const sign = free.has(g) && !/[\p{L}\p{N}]/u.test(x.u)
+      // (one whose ink the page does not state, its box of no height: no element can carry it; page ink where it stands)
+      if (sign && inkless(x)) continue
       const prev = cur?.gs.at(-1)
       const apart = prev !== undefined && x.x0 - glyphs[prev]!.x1 >= SPACE_GAP * Math.min(x.size, glyphs[prev]!.size)
       if (cur && (cur.r === 'S') === sign && !(sign && apart)) cur.gs.push(g)
@@ -2001,3 +2007,4 @@ function roomIn(
   }
   return { over: Number.isFinite(over) ? over : 0, under: Number.isFinite(under) ? under : 0 }
 }
+

@@ -4820,9 +4820,11 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
   step makes as an element `symbol` (`signsApart`), its ink the original's, set where the reply sets the element, as a formula's
   glyph is; signs abutting one another are one element. Sent as text, 2608.06701v1 p10's warning sign came back as a
   character no served face draws, the lay threw (`Unserved`) and the text stood as the original. A sign is no decorated word:
-  §18.61's hold is not read from it. A ground the relation reading reads under the sign alone goes with its element (its box
-  the element's); one no run's room meets is never read, and stays where it stood (the plan box's item 4: its stop's chip, a
-  tone under no run's glyph). The runs it holds on one
+  §18.61's hold is not read from it. A sign whose ink the page does not state (its box of no height: PDF.js states p10's colour
+  sign so) cannot be an element, which is ink carried: it stays page ink where it stands, out of the text and of its glyphs,
+  as at the base (the coordinator's ruling of 2026-11-14). A ground the relation reading reads under the sign alone goes with
+  its element (its box the element's); one no run's room meets is never read, and stays where it stood (the plan box's item 4:
+  its stop's chip, a tone under no run's glyph). The runs it holds on one
   baseline are one line, however far apart their words stand. No legend's entries are joined: two rows or more each beside ink of
   its own inside the path (a sample, a marker; a neighbouring node's edge outside it is none). Rows **centred** (their centres one
   and their left edges not: rows of one length show no alignment, centred or flush) are a node's label: one text, one under the
