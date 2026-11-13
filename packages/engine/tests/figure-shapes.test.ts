@@ -379,7 +379,11 @@ describe('figure-text: a glyph no run holds inside a closed path is the line rea
     // (the rows' units, their glyphs but the spaces; the stop no unit's)
     let at = 0
     const units = ROWS.map((text, k) => {
-      const gs = [...text].flatMap((u) => (u === ' ' ? (at++, []) : [at++]))
+      const gs: number[] = []
+      for (const u of text) {
+        if (u !== ' ') gs.push(at)
+        at++
+      }
       return { k, gs }
     })
     const pg = framed(glyphs)
