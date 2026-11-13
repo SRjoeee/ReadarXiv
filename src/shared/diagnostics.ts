@@ -61,16 +61,6 @@ export function batchLine(r: { scope?: string; segments: number; cached: number;
   return `batch ${scopeTag(r.scope)} segments=${r.segments} cached=${r.cached} calls=${r.calls} done=${r.done} outcome=${r.failed === undefined ? 'ok' : `failed:${r.failed}`}`
 }
 
-/** `split <session> segments=<n> into=<a>+<b>` — the page halved a batch that failed because of one of its segments */
-export function splitLine(scope: string | undefined, segments: number, [a, b]: readonly [number, number]): string {
-  return `split ${scopeTag(scope)} segments=${segments} into=${a}+${b}`
-}
-
-/** `chain <session> tried=<n> served-by=<engine>|- outcome=ok|failed:<kind>` — a call that had to go past its first engine, as it ended */
-export function chainLine(r: { scope?: string; tried: number; servedBy?: string; failed?: string }): string {
-  return `chain ${scopeTag(r.scope)} tried=${r.tried} served-by=${r.servedBy ?? '-'} outcome=${r.failed === undefined ? 'ok' : `failed:${r.failed}`}`
-}
-
 /** `session <session> tab=<id>|- <event>` — a decision of the session router (background/sessions.ts) */
 export function sessionLine(scope: string | undefined, tabId: number | undefined, event: string): string {
   return `session ${scopeTag(scope)} tab=${tabId ?? '-'} ${event}`
@@ -81,8 +71,6 @@ const KIND = '[a-z-]+'
 const SESSION = '(?:\\S{1,8}|-)'
 export const RECORD_SHAPES: readonly RegExp[] = [
   new RegExp(`^batch ${SESSION} segments=\\d+ cached=\\d+ calls=\\d+ done=\\d+ outcome=(?:ok|failed:${KIND})$`),
-  new RegExp(`^split ${SESSION} segments=\\d+ into=\\d+\\+\\d+$`),
-  new RegExp(`^chain ${SESSION} tried=\\d+ served-by=[\\w.:-]+ outcome=(?:ok|failed:${KIND})$`),
   new RegExp(`^session ${SESSION} tab=(?:\\d+|-) (?:grace armed|grace re-armed round=\\d+|probe (?:same|other|unknown)|kept|dropped \\((?:ended|tab closed|left|unconfirmed|superseded)\\) cancelled=\\d+|rebound \\(pack\\))$`),
   /^sessions rebound all \(service deleted\) cancelled=\d+ moved=\d+$/,
 ]
