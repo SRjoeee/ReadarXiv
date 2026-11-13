@@ -30,30 +30,96 @@ const sample = join(REPO, 'tests/fixtures/pdf/sample-1/sample-1.pdf')
 const papers = { '2600.00001v1': sample }
 if (process.env.AXT_PAPER) papers.lab = join(process.env.AXT_PAPER, 'arxiv.pdf')
 const objects = new Map(Object.entries(papers).map(([id, f]) => [`/api/v2/o/arxiv/${id.replace('.', '_')}.pdf`, f]))
-// the fixtures (packages/reader/e2e/fixtures: ours; AXT_LAB_FIXTURES=<id>,… : corpus papers' bundles and the baseline's dumps,
-// read in place from lab-data, the bundles from AXT_L1_BUNDLES (a corpus run's, as the release check gives its own prepare's),
-// else lane L1's): each one's A, its bundle's objects under our server's paths, its dumps and rows
+// the fixtures (packages/reader/e2e/fixtures: ours; AXT_LAB_FIXTURES=<id>,… : corpus papers read in place from lab-data, each
+// laid with a bundle and the rows that belong to it): with AXT_L1_BUNDLES and AXT_LAB_ROWS, a corpus run's bundles and that
+// run's rows of them (the release check's prepare and its reader gate's rows step: `<id>-zh.json`, the chain's results over the
+// bundle's units, no translator asked); a paper the rows do not hold, and every paper without the two, lane L1's bundle and the
+// baseline's dump of today's reader over it (the dump was made over that bundle: its units are the bundle's). Bundles are never
+// given without their rows: AXT_L1_BUNDLES alone is refused, and a run's rows that leave a unit of its bundle without a row,
+// or name units it does not hold, stop the harness before any check (rows of another run). Each one's A, its bundle's objects
+// under our server's paths, its dumps and rows
 const FIX = join(HERE, 'fixtures')
 const LAB = '/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11'
-const LAB_BUNDLES = process.env.AXT_L1_BUNDLES ?? join(LAB, 'lanes/L1-out4/bundles')
+const L1_BUNDLES = join(LAB, 'lanes/L1-out4/bundles')
+const RUN_BUNDLES = process.env.AXT_L1_BUNDLES ?? null
+const RUN_ROWS = process.env.AXT_LAB_ROWS ?? null
+if (RUN_BUNDLES && !RUN_ROWS) {
+  console.log(
+    `FAIL fixtures: AXT_L1_BUNDLES (${RUN_BUNDLES}) without AXT_LAB_ROWS: bundles without their rows (the same run's rows step)`,
+  )
+  process.exit(1)
+}
+if (RUN_ROWS && !RUN_BUNDLES) {
+  console.log(
+    `FAIL fixtures: AXT_LAB_ROWS (${RUN_ROWS}) without AXT_L1_BUNDLES: rows without the bundles they were made over`,
+  )
+  process.exit(1)
+}
 const fixtures = {}
 for (const name of readdirSync(FIX)) {
   const d = join(FIX, name)
   if (!existsSync(join(d, 'arxiv.pdf'))) continue
   fixtures[name] = { pdf: join(d, 'arxiv.pdf'), bundle: join(d, 'bundle'), files: d, dumps: {}, rows: {} }
 }
+/** a corpus paper's rows of a run: the run's results (`<id>-zh.json`: { pair, lang, identity, results }), each a translate
+ *  package's Result by unit id, in the order the run asked them, the parts' reading order page by page (the order its rows
+ *  come in while it runs, which the deltas give: in the head's Units' order the units born on A come last, and 2307.16209v1's
+ *  page 1, five of them, waited for the last delta); and whether they belong to the bundle: every unit the run asks a
+ *  translator for (a member of a part that states no reason against it, of a unit the paper does not keep: the rows tool's and
+ *  the product's set) has a row, and no row names a unit the bundle does not hold */
+function runRowsOf(bundle, file) {
+  const head = JSON.parse(readFileSync(join(bundle, 'head.json'), 'utf8'))
+  const units = head.units.flatMap((u) => JSON.parse(readFileSync(join(bundle, `${u}.units`), 'utf8')).units)
+  const byId = new Map(units.map((u) => [u.id, u]))
+  const asked = new Set()
+  for (const d of head.parts)
+    if (d)
+      for (const flow of JSON.parse(readFileSync(join(bundle, `${d}.part`), 'utf8')).flows)
+        for (const m of flow)
+          if (typeof m.text === 'string' && !m.why && byId.has(m.text) && !byId.get(m.text).kept) asked.add(m.text)
+  const { identity, results } = JSON.parse(readFileSync(file, 'utf8'))
+  const got = new Map(results.map((r) => [r.id, r]))
+  const missing = [...asked].filter((id) => !got.has(id)).length
+  const extra = [...got.keys()].filter((id) => !byId.has(id)).length
+  return { identity, asked: asked.size, missing, extra, byId, rows: { format: 1, rows: [...got.values()] } }
+}
+const notBelonging = []
 for (const id of (process.env.AXT_LAB_FIXTURES ?? '').split(',').filter(Boolean)) {
   const papersJson = JSON.parse(readFileSync(join(LAB, 'baseline/corpora/papers.json'), 'utf8'))
   const p = papersJson.papers.find((x) => x.id === id)
   if (!p) throw new Error(`no corpus paper ${id}`)
+  const runFile = RUN_ROWS ? join(RUN_ROWS, `${id}-zh.json`) : null
+  const run = runFile && existsSync(runFile) ? runRowsOf(join(RUN_BUNDLES, id), runFile) : null
   fixtures[id] = {
     pdf: join(p.dir, 'arxiv.pdf'),
-    bundle: join(LAB_BUNDLES, id),
+    bundle: run ? join(RUN_BUNDLES, id) : join(L1_BUNDLES, id),
     files: join(LAB, 'baseline/reader'),
     dumps: { zh: `${id}-zh.reader.json` },
     rows: { zh: null },
+    // (the rows served: the run's (their object), else the dump's (rowsOfDump))
+    runRows: run ? { zh: run.rows } : null,
     face: 'cjk',
   }
+  if (run && (run.missing || run.extra))
+    notBelonging.push(
+      `${id}: rows do not belong to these bundles: ${run.missing} of ${run.asked} units without a row${run.extra ? `, ${run.extra} rows of units they do not hold` : ''} (rows ${runFile}, bundles ${RUN_BUNDLES})`,
+    )
+  // (the checks that paint today's dump over the parts (convert.ts pagesOf) join its units to the bundle's by id: on a run's
+  // bundle, the units the run cut otherwise are not painted; said, so that their reach is read)
+  const dumpIds = run
+    ? new Set(
+        JSON.parse(readFileSync(join(LAB, 'baseline/reader', `${id}-zh.reader.json`), 'utf8')).units.map((u) => u.id),
+      )
+    : null
+  console.log(
+    run
+      ? `fixture ${id}: this run's bundle and its rows (${RUN_BUNDLES}, ${runFile}: chain ${run.identity}, ${run.asked} units asked, ${run.rows.rows.length} rows); today's dump joins ${[...dumpIds].filter((u) => run.byId.has(u)).length} of its ${dumpIds.size} units`
+      : `fixture ${id}: lane L1's bundle and today's dump (${RUN_ROWS ? `not in this run's rows, ${RUN_ROWS}` : 'no run given'})`,
+  )
+}
+if (notBelonging.length) {
+  console.log(`FAIL fixtures: ${notBelonging.join('; ')}`)
+  process.exit(1)
 }
 const indexOf = {}
 /** the stand-in of our server's v2 routes: each paper's document; a scenario a check sets (`modes[seg]`): 'not-opened' (a 404
@@ -148,30 +214,29 @@ for (const [name, f] of Object.entries(fixtures)) {
   const targets = {}
   const sources = Object.keys(f.dumps).length ? Object.keys(f.dumps).map((t) => [t, null]) : [['de', 'de.rows.json']]
   for (const [t, rf] of sources) {
-    const bytes = rf
-      ? readFileSync(join(f.files, rf))
-      : Buffer.from(JSON.stringify(rowsOfDump(JSON.parse(readFileSync(join(f.files, f.dumps[t]), 'utf8')))))
+    const bytes = rf ? readFileSync(join(f.files, rf)) : Buffer.from(JSON.stringify(rowsObjectOf(f, t)))
     const sha = createHash('sha256').update(bytes).digest('hex')
     rowsObjects.set(`/api/v2/o/r/${seg}/${t}/fx/${sha}`, bytes)
     const n = JSON.parse(bytes.toString('utf8')).rows.length
     // (a corpus paper: its rows as our server's run writes them, in the units' reading order, every unit but those the paper
-    // keeps (a unit the dump has no row of read as its own text), cut into DELTAS objects: `modes[seg]` 'deltas' gives them one
-    // at a time, a translation under way)
+    // keeps, cut into DELTAS objects: `modes[seg]` 'deltas' gives them one at a time, a translation under way. A run's rows
+    // in the order the run made them (runRowsOf); over the dump's, a unit the dump has no row of read as its own text)
     if (!rf) {
       const dumpRows = new Map(JSON.parse(bytes.toString('utf8')).rows.map((r) => [r.id, r]))
       const plain = (ps) => ps.map((x) => (x.t === 'text' ? x.s : x.content ? plain(x.content) : '')).join('')
-      const all = []
-      for (const u of head.units)
-        for (const x of JSON.parse(readFileSync(join(f.bundle, `${u}.units`), 'utf8')).units)
-          if (!x.kept && !all.some((r) => r.id === x.id))
-            all.push(
-              dumpRows.get(x.id) ?? {
-                id: x.id,
-                ok: true,
-                content: [{ t: 'text', s: plain(x.content) || '·' }],
-                by: 'fx',
-              },
-            )
+      const all = f.runRows ? [...dumpRows.values()] : []
+      if (!f.runRows)
+        for (const u of head.units)
+          for (const x of JSON.parse(readFileSync(join(f.bundle, `${u}.units`), 'utf8')).units)
+            if (!x.kept && !all.some((r) => r.id === x.id))
+              all.push(
+                dumpRows.get(x.id) ?? {
+                  id: x.id,
+                  ok: true,
+                  content: [{ t: 'text', s: plain(x.content) || '·' }],
+                  by: 'fx',
+                },
+              )
       const list = []
       for (let k = 0; k < DELTAS; k++) {
         const b = Buffer.from(
@@ -228,6 +293,10 @@ for (const [name, f] of Object.entries(fixtures)) {
     targets,
   }
 }
+/** a corpus paper's rows for target `t`: its run's, else its dump's */
+function rowsObjectOf(f, t) {
+  return f.runRows?.[t] ?? rowsOfDump(JSON.parse(readFileSync(join(f.files, f.dumps[t]), 'utf8')))
+}
 /** a corpus dump's rows: a row a unit, its text the dump's (what is painted is the dump) */
 function rowsOfDump(dump) {
   return {
@@ -250,21 +319,11 @@ const fixtureRoute = {
       res.writeHead(200, { 'content-type': 'application/json' })
       return res.end(JSON.stringify(indexOf[name]))
     }
-    // (a corpus paper's rows: those of its dump's units, a row each, whatever their text: the dump is what is painted)
+    // (a corpus paper's rows: its run's, else those of its dump's units, a row each, whatever their text: the dump is what is
+    // painted)
     if (/\.rows\.json$/.test(file) && f.rows[file.split('.')[0]] === null) {
-      const dump = JSON.parse(readFileSync(join(f.files, f.dumps[file.split('.')[0]]), 'utf8'))
       res.writeHead(200, { 'content-type': 'application/json' })
-      return res.end(
-        JSON.stringify({
-          format: 1,
-          rows: dump.units.map((u) => ({
-            id: u.id,
-            ok: true,
-            content: [{ t: 'text', s: u.lines.map((l) => l.text).join(' ') }],
-            by: 'baseline',
-          })),
-        }),
-      )
+      return res.end(JSON.stringify(rowsObjectOf(f, file.split('.')[0])))
     }
     // (the full-width punctuation's check's rows, punct.mjs: written for it, given the fixture's own units' ids)
     const punct = /^([a-zA-Z-]+)\.rows\.json$/.exec(file ?? '')?.[1]
@@ -296,6 +355,23 @@ const movedDoc = (d) => ({
 const movedObject = (seg, digest) => {
   const file = readdirSync(bundleOf[seg]).find((x) => x.startsWith(`${digest}.`))
   return file ? readFileSync(join(bundleOf[seg], file)) : (twinObjects.get(`/api/v2/o/p/${seg}/fx/${digest}`) ?? null)
+}
+/** the target's rows less those of the units only page `page` holds (`late-page`), an object of its own, by its ref */
+const rowsLess = (seg, t, page) => {
+  const pagesOf = new Map()
+  for (const d of partsOfHead[seg]) {
+    const part = JSON.parse(readFileSync(join(bundleOf[seg], `${d}.part`), 'utf8'))
+    for (const m of part.flows.flat())
+      if (typeof m.text === 'string') pagesOf.set(m.text, (pagesOf.get(m.text) ?? new Set()).add(part.page))
+  }
+  const was = docs[seg].targets[t].rows[0]
+  const all = JSON.parse(rowsObjects.get(`/api/v2/o/${was.path}`).toString('utf8'))
+  const alone = (id) => pagesOf.get(id)?.size === 1 && pagesOf.get(id).has(page)
+  const bytes = Buffer.from(JSON.stringify({ ...all, rows: all.rows.filter((r) => !alone(r.id)) }))
+  const sha256 = createHash('sha256').update(bytes).digest('hex')
+  const path = was.path.replace(was.sha256, sha256)
+  rowsObjects.set(`/api/v2/o/${path}`, bytes)
+  return { path, sha256, bytes: bytes.length }
 }
 /** a paper of a stale layer once opened (worker v2 machine.ts): prepared again, the old layer served meanwhile, the target's
  *  work made by the open and not started (none of the wanted units told yet) */
@@ -400,6 +476,19 @@ const v2Route = {
               total: ds.total,
             },
           },
+        })
+      }
+      // (the rows of the units page `page` alone holds held back for `after` ms from the first follow, the run going on
+      // meanwhile, then the run done, its rows whole: that page waits for them while the page after it is laid and drawn; the
+      // weight check's race, page 2's overlay in place before page 1's)
+      if (m?.kind === 'late-page') {
+        m.start ??= performance.now()
+        if (performance.now() - m.start >= m.after) return json(200, { ...d, rev: 3 })
+        const [t, x] = Object.entries(d.targets)[0]
+        return json(200, {
+          ...d,
+          rev: 2,
+          targets: { [t]: { ...x, state: 'running', rows: [rowsLess(d.pv, t, m.page)] } },
         })
       }
       // (a layer of another build than the one our server runs and no run of the target (staging, 2026-11-08: PIPELINE 77 to 78,
@@ -2188,33 +2277,69 @@ async function inkIn(page, clip) {
     return ink
   }, buf.toString('base64'))
 }
+/** the fewest lines the weight check measures on a page: under it, the page does not speak for the overlay's ink */
+const INK_LINES_LEAST = 3
+/** the targets set in the CJK faces: their runs of the target's script are Han, kana or Hangul, any other target's Latin */
+const CJK_TARGET = /^(zh|ja|ko)(-|$)/
 /** the ink of laid page 1's overlay lines as drawn, each against the same runs drawn by a canvas's fillText (as PDF.js draws a
  *  page's text) in their computed faces, sizes and fills at their places: a line's own ink, what the page shows with it alone
- *  of the overlay's text less what it shows with none. `lines`: the regular expressions of the lines measured (the first line
- *  each matches), else the six longest lines of eight characters or more drawn upright in no small capitals */
-async function linesInk(page, lines = null) {
-  await page.evaluate(async () => {
-    await document.fonts.ready
-    await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)))
-  })
-  const chosen = await page.evaluate((res) => {
-    const texts = [...document.querySelector('.axt-over > svg').querySelectorAll('text')]
-    const plain = (t) =>
-      !t.hasAttribute('transform') &&
-      [...t.querySelectorAll('tspan')].every((s) => getComputedStyle(s).fontVariantCaps === 'normal')
-    const chars = (t) => [...t.textContent].filter((c) => /\S/u.test(c)).length
-    if (res) return res.map((r) => texts.findIndex((t) => new RegExp(r, 'u').test(t.textContent))).filter((k) => k >= 0)
-    return texts
-      .map((t, k) => [k, chars(t)])
-      .filter(([k, n]) => n >= 8 && plain(texts[k]))
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([k]) => k)
-  }, lines)
+ *  of the overlay's text less what it shows with none (`under`, the page's own ink in the line's box). Page 1's own overlay
+ *  (its slot's: the stack numbers its slots), once it is in place, and that one element through every step: the first overlay
+ *  in the document is whichever page was drawn first, and a page 2 that asks fewer face slices than page 1 is drawn first
+ *  (2609.26457v1: the check chose from page 2's running head and measured page 1's title by its index; lane harness-weight,
+ *  2026-11-13). `lines`: the regular expressions of the lines measured (the first line each matches); else the six longest
+ *  lines of eight characters or more, drawn upright in no small capitals, that carry a run of the target's script naming no
+ *  fill of its own (none, or the layer's CJK ink): the runs the ink rule governs, where a run the PDF colours is drawn in the
+ *  PDF's colour and says nothing of the layer's. `offered`: every upright line of eight characters or more, its runs' own
+ *  fills and whether it qualifies; `held`: the element measured is still page 1's overlay at the end */
+async function linesInk(page, target, lines = null) {
+  await waitFor(page, () => !!document.querySelector('[data-page-number="1"] .axt-over > svg'), null, 30_000)
+  const { chosen, offered } = await page.evaluate(
+    async ([res, cjkTarget]) => {
+      await document.fonts.ready
+      await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)))
+      const svg = document.querySelector('[data-page-number="1"] .axt-over > svg')
+      window.__inkSvg = svg
+      const texts = [...svg.querySelectorAll('text')]
+      const plain = (t) =>
+        !t.hasAttribute('transform') &&
+        [...t.querySelectorAll('tspan')].every((s) => getComputedStyle(s).fontVariantCaps === 'normal')
+      const chars = (t) => [...t.textContent].filter((c) => /\S/u.test(c)).length
+      const cjk = (s) => /[\p{sc=Han}\p{sc=Hira}\p{sc=Kana}\p{sc=Hang}]/u.test(s)
+      const latin = (s) => /[\p{sc=Latn}\p{Nd}]/u.test(s) && !cjk(s)
+      const inked = (s) =>
+        (s.getAttribute('fill') === null || s.getAttribute('fill') === '#141414') &&
+        (cjkTarget ? cjk(s.textContent) : latin(s.textContent))
+      const offered = texts
+        .map((t, k) => ({ k, n: chars(t), t }))
+        .filter(({ n, t }) => n >= 8 && plain(t))
+        .map(({ k, n, t }) => ({
+          k,
+          n,
+          text: t.textContent.trim().slice(0, 24),
+          fills: [...new Set([...t.querySelectorAll('tspan')].map((s) => s.getAttribute('fill')))],
+          inked: [...t.querySelectorAll('tspan')].some(inked),
+        }))
+      if (res)
+        return {
+          chosen: res.map((r) => texts.findIndex((t) => new RegExp(r, 'u').test(t.textContent))).filter((k) => k >= 0),
+          offered,
+        }
+      return {
+        chosen: offered
+          .filter((o) => o.inked)
+          .sort((a, b) => b.n - a.n)
+          .slice(0, 6)
+          .map((o) => o.k),
+        offered,
+      }
+    },
+    [lines, CJK_TARGET.test(target)],
+  )
   const out = []
   for (const k of chosen) {
     const clip = await page.evaluate(async (k) => {
-      const t = document.querySelector('.axt-over > svg').querySelectorAll('text')[k]
+      const t = window.__inkSvg.querySelectorAll('text')[k]
       t.scrollIntoView({ block: 'center' })
       await new Promise((ok) => setTimeout(ok, 300))
       const r = t.getBoundingClientRect()
@@ -2228,7 +2353,7 @@ async function linesInk(page, lines = null) {
     // (the overlay's lines shown: none (-1), line k alone, or all again (null))
     const show = (only) =>
       page.evaluate((only) => {
-        const texts = document.querySelector('.axt-over > svg').querySelectorAll('text')
+        const texts = window.__inkSvg.querySelectorAll('text')
         texts.forEach((t, i) => {
           t.style.visibility = only === null ? '' : i === only ? 'visible' : 'hidden'
         })
@@ -2240,7 +2365,7 @@ async function linesInk(page, lines = null) {
     await show(null)
     const canvas = await page.evaluate(
       ([k, clip]) => {
-        const svg = document.querySelector('.axt-over > svg')
+        const svg = window.__inkSvg
         const t = svg.querySelectorAll('text')[k]
         const box = svg.getBoundingClientRect(),
           u = box.width / svg.viewBox.baseVal.width,
@@ -2291,14 +2416,18 @@ async function linesInk(page, lines = null) {
       runs: canvas.runs,
       svg: Math.round(svg - none),
       canvas: Math.round(canvas.ink),
+      under: Math.round(none),
     })
   }
   const state = await page.evaluate(() => ({
     decided: document.querySelector('.axt-reader').getAttribute('data-axt-layer-text'),
-    rendering: getComputedStyle(document.querySelector('.axt-over > svg')).textRendering,
+    rendering: getComputedStyle(window.__inkSvg).textRendering,
+    held:
+      window.__inkSvg.isConnected &&
+      window.__inkSvg === document.querySelector('[data-page-number="1"] .axt-over > svg'),
   }))
   const sum = (f) => out.reduce((a, l) => a + l[f], 0)
-  return { ...state, ratio: +(sum('svg') / Math.max(1, sum('canvas'))).toFixed(3), lines: out }
+  return { ...state, ratio: +(sum('svg') / Math.max(1, sum('canvas'))).toFixed(3), lines: out, offered }
 }
 await check(
   "compose: the overlay's text drawn at the weight a canvas draws it (PDF.js's page's own), in the layer's ink, the PDF's black, a CJK run today's #141414: geometricPrecision, or auto where the reader's fixed probe in a served face lays out alike under both, decided once a reader (docs/PDF-READER.md §11.8; the maintainer's report of 2026-11-08: lighter than today's)",
@@ -2312,10 +2441,10 @@ await check(
         viewport: { width: 1600, height: 1000 },
       })
       const lines = process.env.AXT_INK_LINES && corpus.includes(name) ? process.env.AXT_INK_LINES.split('|') : null
-      const got = await linesInk(page, lines)
+      const got = await linesInk(page, target, lines)
       if (process.env.AXT_SHOTS) {
         const clip = await page.evaluate(() => {
-          const svg = document.querySelector('.axt-over > svg')
+          const svg = window.__inkSvg
           svg.scrollIntoView({ block: 'start' })
           const r = svg.getBoundingClientRect()
           return {
@@ -2334,7 +2463,16 @@ await check(
     if (process.env.AXT_INK_OUT)
       (await import('node:fs')).writeFileSync(process.env.AXT_INK_OUT, `${JSON.stringify(out, null, 1)}\n`)
     for (const [name, got] of Object.entries(out)) {
-      assert(got.lines.length > 0, `${name}: no line measured`)
+      // (page 1's overlay, the one element measured at every step, still in place at the end: a page laid again while it was
+      // measured is no measurement of what is shown)
+      assert(got.held, `${name}: page 1's overlay was replaced while it was measured`)
+      // (enough lines in the layer's ink: a page that offers fewer is said, what it offered with it; a line in the PDF's own
+      // colour never stands in for them)
+      const least = process.env.AXT_INK_LINES ? 1 : INK_LINES_LEAST
+      assert(
+        got.lines.length >= least,
+        `${name}: page 1 offers ${got.lines.length} line(s) of 8 characters or more carrying a run of its target's script in no fill of its own, under ${least}; its upright lines of 8 or more: ${JSON.stringify(got.offered.map((o) => [o.text, o.fills, o.inked]))}`,
+      )
       // (the rendering the root says is the one the overlay draws in: auto under the attribute, geometricPrecision without)
       assert(
         (got.decided === 'auto') === (got.rendering === 'auto') && /^(auto|geometricprecision)$/.test(got.rendering),
@@ -2357,12 +2495,66 @@ await check(
         `${name}: no run of its target's script measured`,
       )
     }
+    // (each line measured: its text's start, its ink, the canvas's, and the page's own ink in its box with no overlay text)
     return Object.fromEntries(
       Object.entries(out).map(([n, g]) => [
         n,
-        { decided: g.decided, rendering: g.rendering, ratio: g.ratio, lines: g.lines.length },
+        {
+          decided: g.decided,
+          rendering: g.rendering,
+          ratio: g.ratio,
+          lines: g.lines.map((l) => [l.text.slice(0, 16), l.svg, l.canvas, l.under]),
+        },
       ]),
     )
+  },
+)
+await check(
+  "compose: the weight check measures page 1's own overlay, the same element at every step, when page 2's is drawn first (s1-columns, de: the rows of the units page 1 alone holds come 8 s after the first follow; lane harness-weight, 2026-11-13: on 2609.26457v1 page 2 was drawn first, and the check chose page 2's running head and measured page 1's title in its place)",
+  async () => {
+    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    const seg = indexOf['s1-columns'].seg
+    modes[seg] = { kind: 'late-page', page: 1, after: 8000 }
+    try {
+      const { page, context, errors } = await typesetLaid('s1-columns', 'de', {
+        dpr: 2,
+        viewport: { width: 1600, height: 1000 },
+      })
+      const slots = () =>
+        page.evaluate(() =>
+          [...document.querySelectorAll('.axt-over > svg')].map((s) =>
+            s.closest('[data-page-number]')?.getAttribute('data-page-number'),
+          ),
+        )
+      const before = await slots()
+      // (where each line the measure shows alone stands: its page's slot)
+      await page.evaluate(() => {
+        window.__shownAlone = []
+        new MutationObserver((records) => {
+          for (const { target: t } of records)
+            if (t.localName === 'text' && t.style.visibility === 'visible')
+              window.__shownAlone.push(t.closest('[data-page-number]')?.getAttribute('data-page-number') ?? null)
+        }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['style'] })
+      })
+      const got = await linesInk(page, 'de')
+      const shown = [...new Set(await page.evaluate(() => window.__shownAlone))]
+      const after = await slots()
+      await context.close()
+      assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+      // (the seeding holds: page 2's overlay in place, page 1's not, when the measure began)
+      assert(
+        before.includes('2') && !before.includes('1'),
+        `the overlays in place when the measure began: pages ${before}`,
+      )
+      assert(
+        shown.length === 1 && shown[0] === '1',
+        `lines shown alone on pages ${JSON.stringify(shown)} (then ${after})`,
+      )
+      assert(got.held && got.lines.length >= INK_LINES_LEAST, `${got.lines.length} lines measured, held ${got.held}`)
+      return { before, after, shown, lines: got.lines.length, ratio: got.ratio }
+    } finally {
+      delete modes[seg]
+    }
   },
 )
 await check(

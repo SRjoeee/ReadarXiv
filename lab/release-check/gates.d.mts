@@ -36,6 +36,9 @@ export interface Retired { id: string; retired: string; by: string[]; why: strin
 export declare const RETIRED: Retired[]
 export declare function censusOf(text: string): Numbers
 export declare function checksOf(text: string): { passed?: number; checks?: number }
+/** harness-lab's verdict: its checks, the papers laid from this run's bundles and rows (`run`) and from lane L1's (`l1`), and
+ *  the harness's refusal of bundles and rows that do not belong together as its note */
+export declare function harnessLabJudge(step: StepRun): Judged
 export declare function vitestOf(text: string): { tests?: number; failed?: number; skipped?: number; files?: number }
 export declare function diffOf(text: string): Partial<Record<'files' | 'of' | 'units' | 'shownBefore' | 'shown' | 'lost' | 'accepted' | 'gained' | 'changed', number>>
 /** a typesetter runner's numbers; `added`: the added pairs' (lab/typeset/added.mjs), read after its heading */
