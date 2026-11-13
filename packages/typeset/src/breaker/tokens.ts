@@ -69,11 +69,11 @@ export type Token = {
   at?: number
   end?: number
   space?: true
-  /** a space no line breaks at: a tie's, the source's `~` (TeX's \penalty10000 and its interword glue): break.mjs's group runs
+  /** a space no line breaks at: a tie's, the source's `~` (TeX's \penalty10000 and its interword glue): break.ts's group runs
    *  on through it; the space is drawn and stretched with the line's other spaces */
   tie?: true
   /** set right after the token before it with nothing between, two elements the source sets side by side (consecutive pieces of
-   *  its unit) and the row too: one word, glued, and the gap before it inside the word (break.mjs inWord: no slack, no squeeze) */
+   *  its unit) and the row too: one word, glued, and the gap before it inside the word (break.ts inWord: no slack, no squeeze) */
   tight?: true
   keep?: true
   crop?: Record<string, unknown>
@@ -480,7 +480,7 @@ export function tokens(i: TokensInput): Tokens {
   const minWord = P.hyphenation.minWord
   const cjkRe = cjkClassRe(cjkQuotes)
   const kinsoku = kinsokuOf(P.noStart, P.noEnd)
-  /** a character no line opens with: UAX 14's (no-start.mjs) or the target's rules' (P.noStart): break.mjs `barred`'s */
+  /** a character no line opens with: UAX 14's (no-start.mjs) or the target's rules' (P.noStart): break.ts `barred`'s */
   const barredChar = (ch: string) => noStart(ch) || kinsoku.starts(ch)
   const lastIsSpace = () => tokens.length > 0 && !!tokens.at(-1)!.space
   /** the space tokens a chunk of white space made that holds more than ordinary collapsible white space (space, tab, line

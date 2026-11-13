@@ -42,7 +42,7 @@
 // turned): its size is not its glyphs' (OriginLab's Type 3 faces, glyphs of 2048 units an em under a font matrix of 10/2048,
 // shown at a size of about 1, stand 7 of it tall), so that a translation drawn at its size would be a tenth of the original,
 // and its row's band is one no part's reader takes (layer-proto/figure-rows.mjs checkFigures). A font that gives no Unicode a
-// reader can trust leaves its unit the original's too, which the wrap tells from the font's own dict (remove.mjs unicodeOf).
+// reader can trust leaves its unit the original's too, which the wrap tells from the font's own dict (remove.ts unicodeOf).
 //
 // Each unit's place, in its own frame (its first glyph's origin, along its direction, up across it): its box from its first
 // glyph's start to its last glyph's end, its band from its descent to its ascent, at least DRAW_BAND (the line a translation is

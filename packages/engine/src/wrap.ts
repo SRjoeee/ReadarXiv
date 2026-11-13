@@ -26,11 +26,11 @@
 // The proof (§2.5, (a)–(d)). Of each page before it is written (a failure refuses the page, never the paper): its new stream
 // lexed again, every BDC of ours balanced by its EMC at its depth and text state, its operators, with ours taken out and the
 // split shows joined, our page's, and the deflated bytes written inflated back to it. Of the paper: the section exact over our
-// bytes (delta-wire.mjs deltaSection: every entry at its object, /Prev our startxref) and the wrapped document read again by the
-// object layer (xref.mjs), its catalog, pages and resources ours but for /OCProperties, /Contents and /Properties, each page's
+// bytes (delta-wire.ts deltaSection: every entry at its object, /Prev our startxref) and the wrapped document read again by the
+// object layer (xref.ts), its catalog, pages and resources ours but for /OCProperties, /Contents and /Properties, each page's
 // own /Properties kept and ours beside them, every group listed and ON.
 //
-// An original module (no port statement). It imports the remover's lexer and page walk (remove.mjs), the section writer
+// An original module (no port statement). It imports the remover's lexer and page walk (remove.ts), the section writer
 // and its reader; @cantoo/pdf-lib (MIT), deflate and inflate are given. Moved into the engine package with wrapOf and planOf
 // alone (the rebuild's stage 1a): wrapFinal, which owns our final pass's ink before it wraps it, stays today's
 // (src/pdf-reader/engine/layout/wrap-final.mjs) and calls these through the package's entry.
@@ -172,7 +172,7 @@ export const GROUPS_PAGE: number = 512,
   GROUPS_DOC: number = 8000
 /** what each read of one page may read and hold (the wrap's, the proof's of the new stream, the proof's of the unwrapped page:
  *  each under these bounds of its own, in turn): its content streams' decoded bytes, and its operators by their heap
- *  (remove.mjs COST, every operator counted, not the walk's alone: about 160 bytes an operator, so 48 MiB is about 300,000).
+ *  (remove.ts COST, every operator counted, not the walk's alone: about 160 bytes an operator, so 48 MiB is about 300,000).
  *  Past either the page is not wrapped (its units the original's), never the paper and never the process: a plot of two
  *  million path operators (30 MB decoded) holds 320 MB of them. The remover's own walk keeps its HELD_MAX and BYTES_MAX */
 export const WRAP_DECODED_PAGE: number = 32 * 2 ** 20,
@@ -333,7 +333,7 @@ function codeGroups(row: (string | null | undefined)[] | undefined, count: numbe
 }
 
 /**
- * Wrap our final pass. `finalBytes` its bytes; `plans` page (1-based) -> { facts (remove.mjs alignOf's of PDF.js's list of the
+ * Wrap our final pass. `finalBytes` its bytes; `plans` page (1-based) -> { facts (remove.ts alignOf's of PDF.js's list of the
  * page), shows, paths } (planOf's), a page with none left unwrapped; `PL` @cantoo/pdf-lib's exports; `deflate` (bytes -> bytes, deterministic) and
  * `inflate` (bytes, limit -> bytes) as the remover takes them. Returns { bytes (finalBytes and the section), xref, sha256,
  * pages: Map p -> { ok, why?, groups, sequences, split, merged } (a page not ok or merged makes each unit on it `page` or, with a
@@ -748,7 +748,7 @@ function figureGroupsOf(plan: WrapPlan): Set<string> {
  * `figures` false leaves every figure's group out (its ink the page's). A figure's run inside a form is wrapped in the form's own
  * stream, written again (`forms`), where that form is an object of its own with resources of its own, painted once on the page
  * and rewritten by no page before (`rewritten`), and holds no unit's ink beside the figures'; where it is not, or where the run's
- * font gives no Unicode a reader can trust (remove.mjs unicodeOf), the figure's group is left out, its unit the original's
+ * font gives no Unicode a reader can trust (remove.ts unicodeOf), the figure's group is left out, its unit the original's
  * (`figureWhy`: group -> 'shared' | 'unicode' | 'bounds')
  */
 function wrapPage(
@@ -1132,7 +1132,7 @@ function flatOf(
 }
 
 /**
- * (d) The wrapped document read again by the object layer as PDF.js reads it (xref.mjs), against our pass: the catalog ours
+ * (d) The wrapped document read again by the object layer as PDF.js reads it (xref.ts), against our pass: the catalog ours
  * but its /OCProperties, which lists every group of ours and holds each in its default /ON; each page our pass's object, its
  * dict ours but /Contents and /Resources, its resources ours but /Properties, which names each of the page's groups by its
  * resource name and an OCG of its name; every page not wrapped ours whole. `why`, or null

@@ -171,7 +171,7 @@ export function replacedWhy(ranges: unknown, last: number): string | null {
   return null
 }
 
-/** the delta's startxref: the number before its final `%%EOF` (its last 1024 bytes, as tail.mjs startxrefOf reads one) */
+/** the delta's startxref: the number before its final `%%EOF` (its last 1024 bytes, as tail.ts startxrefOf reads one) */
 function lastStartxref(delta: Uint8Array): number | null {
   const text = latin1(delta.subarray(Math.max(0, delta.length - 1024)))
   const m = /startxref\n(\d{1,15})\n%%EOF\n$/.exec(text)
@@ -179,7 +179,7 @@ function lastStartxref(delta: Uint8Array): number | null {
 }
 
 /**
- * The delta's own section, read from its bytes alone as section.mjs writes it: `delta` the bytes, `orig` { bytes, xref } arXiv's
+ * The delta's own section, read from its bytes alone as section.ts writes it: `delta` the bytes, `orig` { bytes, xref } arXiv's
  * PDF's length and startxref. { kind, startxref (composed), prev, size, rows: [[number, generation, offset (composed)], …] },
  * where it is one section of either kind, its /Prev the original's startxref, its startxref where the section begins, and
  * EVERY entry of it pointing exactly at its `n g obj` inside the delta (PDF.js forgives an offset moved onto whitespace, so its

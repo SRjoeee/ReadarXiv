@@ -1137,7 +1137,7 @@ function extentsOf(pages, glyphs) {
   return [...out].map(([p, [x0, y0, x1, y1, s]]) => [p, [x0 - s, y0 - s, x1 + s, y1 + s]])
 }
 
-/** the ink units the wrap could not hide alone, as it reads a source unit (wrap.mjs `unhidden`): one with a glyph on a page it did
+/** the ink units the wrap could not hide alone, as it reads a source unit (wrap.ts `unhidden`): one with a glyph on a page it did
  *  not wrap, or a placeholder on a page whose groups it merged (its placeholder's ink then folded into its text's). `pages` the
  *  wrap's (wrapOf's `pages`: page -> { ok, merged }). The page pass lays none of them (pipeline/ink-pass.mjs inkOfHost `off`) */
 export function inkOff(ink, pages) {

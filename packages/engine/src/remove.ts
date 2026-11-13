@@ -12,7 +12,7 @@
 // untrusted, and the hard bound on what reading them may cost is the process it runs in, not this module. Its budgets (WALK_MAX,
 // HELD_MAX, BYTES_MAX, FORM_DEPTH) refuse a page early and softly, the rest of the paper going on; PDF.js and the object layer may
 // still exceed any of them: run it in the maker child, under a hard memory limit and a wall clock, one paper at a time. A failed
-// allocation under that limit refuses no page: it is the paper's, thrown as it came (memory.mjs).
+// allocation under that limit refuses no page: it is the paper's, thrown as it came (memory.ts).
 import { isMemoryError } from './memory.ts'
 import { latin1 } from './tail.ts'
 import type { OpsReader } from './opstream.ts'
@@ -78,7 +78,7 @@ export interface PdfDocument {
   readonly context: PdfContext
   getPages(): PdfPage[]
 }
-/** the layer's parser of one object's syntax: its public reading (xref.mjs reaches three protected members of it, by a cast
+/** the layer's parser of one object's syntax: its public reading (xref.ts reaches three protected members of it, by a cast
  *  that names each) */
 export interface PdfObjectParser {
   parseObject(): PdfObject
@@ -909,7 +909,7 @@ export async function openRemover(
       try {
         out = readAtMost(decodePDFRawStream(st), limit)
       } catch (e) {
-        // (a failed allocation is no stream the object layer refuses: the paper's, memory.mjs)
+        // (a failed allocation is no stream the object layer refuses: the paper's, memory.ts)
         if (e instanceof DecodeLimit || isMemoryError(e)) throw e
         // a stream the object layer's inflater refuses (a damaged zlib header, a stream cut short) that PDF.js reads:
         // inflated tolerantly, as PDF.js does, where the filter is Flate alone

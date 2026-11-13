@@ -6,7 +6,7 @@
 // nothing reads, and on an image-heavy paper it is nearly all of B (2610.37818v1: 31.43 of 32.23 MB in 412 streams).
 //
 // `holesOf(bytes, { PL })` gives the byte range of the data of every indirect stream whose dictionary says `/Subtype /Image`
-// and is no stencil mask, found by the cross-reference sections and each stream's resolved /Length (xref.mjs openObjects:
+// and is no stencil mask, found by the cross-reference sections and each stream's resolved /Length (xref.ts openObjects:
 // every object read where its entry says), never by a scan. A stencil mask (`/IM` or `/ImageMask` true, PDF.js reading `/IM`
 // first, either indirect) is decoded into the operator list itself (a Type 3 glyph's paths, a one-pixel mask's operator, the
 // mask's bits): it stays, as does any image whose mask flag is not plainly absent or false. A soft mask is an image of its own
@@ -39,10 +39,10 @@ export interface Holes {
 }
 
 /** the most objects, and the most bytes its object and cross-reference streams decode to, holesOf reads of a document: the
- *  wrap's own bounds (wrap.mjs graphWhy). Past either, B is stored whole */
+ *  wrap's own bounds (wrap.ts graphWhy). Past either, B is stored whole */
 export const SPARSE_OBJECTS_MAX = DELTA_OBJECTS_MAX
 /** the most bytes a document's object and cross-reference streams decode to that holesOf reads: the delta's bound
- *  (DELTA_DECODED_MAX, 48 MiB, PDF-READER §19.8), the number of the remover's bound on a page's decoded bytes (remove.mjs
+ *  (DELTA_DECODED_MAX, 48 MiB, PDF-READER §19.8), the number of the remover's bound on a page's decoded bytes (remove.ts
  *  BYTES_MAX); for a document's streams, unmeasured */
 export const SPARSE_DECODED_MAX = 48 * 2 ** 20
 /** the first eight bytes of a packed B */

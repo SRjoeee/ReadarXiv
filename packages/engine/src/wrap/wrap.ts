@@ -1,5 +1,5 @@
 // wrap(bytesA, located, pagesA): arXiv's own runs wrapped in optional content, as an incremental update over arXiv's exact
-// bytes (design §4.1 "the add-on, exactly"; spike S1c's wrapA.mjs). Today's wrapOf and planOf as they are (wrap.mjs), each page
+// bytes (design §4.1 "the add-on, exactly"; spike S1c's wrapA.mjs). Today's wrapOf and planOf as they are (wrap.ts), each page
 // planned from the groups locate carried onto A: `<ord>.<page>.t` a member's text, `.e` its travelling elements, `.l` its
 // label (design §4.5). wrapOf refuses what it cannot prove (an encrypted file, a page past its bounds, a form partly owned, a
 // split it cannot make, …): a page it refuses keeps every unit on it the original's. Its own proofs run inside it (each page's

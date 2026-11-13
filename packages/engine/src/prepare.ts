@@ -28,7 +28,7 @@ export interface PrepareDeps {
   PL: PdfLib
   deflate: (b: Uint8Array) => Uint8Array
   /** bytes inflated, no more than `limit` + 1 of them (the remover's and the wrap's); a failed allocation thrown as it came
-   *  (memory.mjs isMemoryError), never read again another way: the back half lets it through as the paper's */
+   *  (memory.ts isMemoryError), never read again another way: the back half lets it through as the paper's */
   inflate: (b: Uint8Array, limit: number) => Uint8Array
   paper: { id: string; version: number }
   /** the prepare's identity: the digest of the engine build, the source, A and the TeX tree */

@@ -3,7 +3,7 @@
 // whole: a page's list ended where its parse failed, a font read as none (an ErrorFont), a pattern, a shading or a colour space
 // left out. No call of its API fails for any of these, and `stopAtErrors` does not change that for a page's list: its API settles
 // the list with what it read (lane mem-errors, 2026-11-10). Each such warning names its site and prints its reason as text
-// (`${reason}`). A warning whose reason is a failed allocation (memory.mjs isMemoryText) is the paper's: the read that heard it
+// (`${reason}`). A warning whose reason is a failed allocation (memory.ts isMemoryText) is the paper's: the read that heard it
 // throws one (memoryFailure). Every other recovery is counted by its site, with its first reason (`recovered`, which the bundle's
 // head states): at normal memory none fires on the corpus (the census of 2026-11-10: the 88 papers and 2609.19644v1, arXiv's PDF
 // and B), so one seen in the wild is told.

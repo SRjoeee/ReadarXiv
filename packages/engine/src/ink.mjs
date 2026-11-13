@@ -442,7 +442,7 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
   }
   // (indices: the showing operation's place and the glyph's within it; the painted path's place; inside an annotation, -1)
   // (a soft mask's group, an ExtGState's /SMask PDF.js lists as a group: no content stream the remover walks paints it, so
-  // that its shows and paths are counted as an annotation's are not: remove.mjs alignOf)
+  // that its shows and paths are counted as an annotation's are not: remove.ts alignOf)
   let showAt = -1, pathAt = -1, inAnnotation = 0, curShow = -1, glyphAt = -1, inMask = 0
   const maskGroups = []
   const fonts = new Map()

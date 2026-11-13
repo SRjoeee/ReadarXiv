@@ -123,7 +123,7 @@ export async function readPdf<X = never>(
   let info: Record<string, unknown> | null = null
   try {
     const pdf = await task.promise
-    // (the document's metadata where PDF.js reads it, else none; a failed allocation is the paper's: memory.mjs)
+    // (the document's metadata where PDF.js reads it, else none; a failed allocation is the paper's: memory.ts)
     info = ((await pdf.getMetadata?.().catch(orNone(null))) ?? null)?.info ?? null
     heard()
     for (let p = 1; p <= pdf.numPages; p++) {
@@ -196,7 +196,7 @@ async function levelBack(pdfjs: PdfJs, level: number): Promise<void> {
 }
 
 /** a rejection's stand-in, `none`, for what a reading may lack (a page's links, the document's metadata); a failed allocation
- *  (memory.mjs isMemoryError) thrown as it came, the paper's and never the reading's */
+ *  (memory.ts isMemoryError) thrown as it came, the paper's and never the reading's */
 const orNone =
   <T>(none: T) =>
   (e: unknown): T => {

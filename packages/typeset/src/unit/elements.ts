@@ -42,7 +42,7 @@ export type Res = {
   breaks?: readonly (readonly [number, number])[]
   /** a mark's crop (lay/read.ts readingsOf's `mark`): glued to what precedes it, as TeX sets a mark, no glue between */
   mark?: true
-  /** a tie's space (ElementReading.tie): no line breaks at it (breaker/tokens.ts, break.mjs) */
+  /** a tie's space (ElementReading.tie): no line breaks at it (breaker/tokens.ts, break.ts) */
   tie?: true
   proof?: true
   empty?: true
