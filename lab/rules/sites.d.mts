@@ -28,6 +28,7 @@ export interface Rule {
   unwrapped?: number
   /** a list's reads the recorder cannot see (an index, a copy the platform makes), each `<form> <file>:<line>` */
   unseen?: string[]
+  holder?: { name: string; lines: number }
   wholeReads?: number
 }
 export interface Bound { rule: string; at?: 'left' | 'right' | number; shape: string; value?: number; key?: string }

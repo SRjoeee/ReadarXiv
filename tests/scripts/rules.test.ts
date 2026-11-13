@@ -409,7 +409,9 @@ export const fits = (op, nums) => nums.length === ARITY[op]
 const KERNS = { '\\\\enspace': 0.5, '\\\\thinspace': 0.25, '\\\\,': 0.2 }
 export const kern = src => (Object.hasOwn(KERNS, src) ? KERNS[src] : null)
 `
-  const CITED = `/** a placeholder whose macro may look at what follows it: \\\\protect\\\\eqref, as 2608.23586 writes it */
+  const CITED = `// a module of placeholders
+
+/** a placeholder whose macro may look at what follows it: \\\\protect\\\\eqref, as 2608.23586 writes it */
 const LOOKS_AHEAD = p => {
   const n = p.length
   return n > 0 && /\\\\(?:xspace|protect|noexpand|expandafter)$/.test(p)
@@ -561,6 +563,8 @@ console.log(JSON.stringify(out))
   it('defect 4: a citation is read from the comment on the declaration that holds the rule', () => {
     const key = must(Object.keys(map.rules).find(k => k.startsWith('packages/engine/src/cited::') && map.rules[k]?.kind === 'list'), 'the pattern of cited.mjs')
     expect(ledger.rules[key]?.citation).toMatchObject({ flag: 'paper', papers: ['2608.23586'] })
+    // (the report names the declaration the comment was read from, and its length)
+    expect(ledger.rules[key]?.holder).toEqual({ name: 'LOOKS_AHEAD', lines: 4 })
   })
 })
 

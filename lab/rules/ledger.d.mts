@@ -43,6 +43,7 @@ export interface Row {
   reads?: number
   listReads?: Record<string, number>
   unseen?: string[]
+  holder?: { name: string; lines: number }
   judged?: string[]
   entriesNotJudged?: { entry: string; why: string }[]
   neverTested?: boolean

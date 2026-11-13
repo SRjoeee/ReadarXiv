@@ -93,6 +93,46 @@ const declaredIn = scope => {
 /** a comment as one line of text: JSDoc's stars and the line breaks out */
 const commentText = c => (c ?? '').replace(/^\s*\*+\s?/gm, '').replace(/\s+/g, ' ').trim()
 
+/** the comment directly before a node, as the census reads a statement's (census-lib.mjs `adjacent`, DEFINITIONS.comments):
+ *  nothing but white space and no blank line between, cut where its kind changes (a block comment is the node's alone, else
+ *  the run of line comments), a block that opens the file the file's */
+const adjacentOf = (text, node) => {
+  const comments = node?.leadingComments ?? []
+  const opensLine = c => /^\s*$/.test(text.slice(text.lastIndexOf('\n', c.start - 1) + 1, c.start))
+  const tight = (c, end) => /^[ \t]*\n?[ \t]*$/.test(text.slice(c.end, end))
+  const last = comments.at(-1)
+  if (!last || !tight(last, node.start) || !opensLine(last)) return ''
+  const block = [last]
+  if (last.type !== 'CommentBlock')
+    for (let i = comments.length - 2; i >= 0; i--) {
+      const c = comments[i]
+      if (c.type === 'CommentBlock' || !tight(c, block[0].start) || !opensLine(c)) break
+      block.unshift(c)
+    }
+  if (/^\s*$/.test(text.slice(0, block[0].start))) return ''
+  return block.map(c => c.value).join('\n')
+}
+const HOLDERS = new Set(['VariableDeclarator', 'FunctionDeclaration', 'ClassMethod', 'ClassPrivateMethod', 'ClassProperty', 'ClassPrivateProperty', 'ObjectMethod', 'ObjectProperty'])
+/** the comment on the declaration that holds a rule (its nearest enclosing declaration: a variable's, a function's, a class
+ *  member's, an object's property), where that is not the statement the rule stands in (whose comment the census reads):
+ *  a pattern inside a predicate declared `const LOOKS_AHEAD = p => { … return … /…/.test(…) }` is held by LOOKS_AHEAD.
+ *  `ps`: the rule's node's parents, outermost first */
+const holderCommentOf = (text, ps) => {
+  const own = ps.findLastIndex(p => /Statement$|Declaration$/.test(p.type))
+  for (let i = ps.length - 1; i >= 0; i--) {
+    if (!HOLDERS.has(ps[i].type)) continue
+    let at = ps[i].type === 'VariableDeclarator' ? i - 1 : i
+    if (/^Export(?:Named|Default)Declaration$/.test(ps[at - 1]?.type ?? '')) at -= 1
+    if (at <= own && own <= i) return null
+    const comment = adjacentOf(text, ps[at])
+    // (the holder named, with its lines: the report shows which declaration's comment a citation was read from)
+    const n = ps[i]
+    const name = n.id?.name ?? n.key?.name ?? n.key?.value ?? '(anonymous)'
+    return comment ? { comment, name, lines: (n.loc?.end.line ?? 0) - (n.loc?.start.line ?? 0) + 1 } : null
+  }
+  return null
+}
+
 /** the sites of a tree: `scan` a census scan read with `nodes` for these files (census-lib scanTree), `graph` its import
  *  graph (graphOf), `alive` the ids AFTER keeps (or null: unknown). Returns `{ rules, sites, files, keyOfItem }`: rules
  *  keyed as `keyed` says, sites numbered across the tree, each file's edits, and (not for JSON) each census item's key by
@@ -144,7 +184,9 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS, keysOnl
         const ps = parentsOf.get(t.nodes.site) ?? []
         const op = t.context === 'comparison' ? t.nodes.site.operator : t.context.slice(5)
         const key = keyed(fk, fnPathOf(ps), `${op}${t.raw}`)
-        rules[key] = { key, ...base, fn: fnPathOf(ps) }
+        // (its citation read from its statement's comment and the comment on the declaration that holds it)
+        const held = holderCommentOf(f.text, ps)
+        rules[key] = { key, ...base, comment: commentText(`${t.nodes.comment ?? ''}\n${held?.comment ?? ''}`), ...(held ? { holder: { name: held.name, lines: held.lines } } : {}), fn: fnPathOf(ps) }
         literalRules.set(t.nodes.literal, rules[key])
         keyOfItem.set(t, key)
       }
@@ -153,9 +195,10 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS, keysOnl
       if (!l.nodes) continue
       const ps = parentsOf.get(l.nodes.literal) ?? []
       const fnPath = fnPathOf(ps)
+      const held = holderCommentOf(f.text, ps)
       // (a list by the name of the declaration it stands in, else by its first two entries)
       const key = keyed(fk, fnPath, l.name ?? `${l.form}[${l.nodes.entries.slice(0, 2).join(',')}]`)
-      rules[key] = { key, kind: 'list', file: path, line: l.line, form: l.form, name: l.name ?? null, size: l.size, entries: l.nodes.entries, class: l.class, comment: commentText(l.nodes.comment), area: f.area, after: alive ? alive.has(id(path)) : null, fn: fnPath, sites: [] }
+      rules[key] = { key, kind: 'list', file: path, line: l.line, form: l.form, name: l.name ?? null, size: l.size, entries: l.nodes.entries, class: l.class, comment: commentText(`${l.nodes.comment ?? ''}\n${held?.comment ?? ''}`), ...(held ? { holder: { name: held.name, lines: held.lines } } : {}), area: f.area, after: alive ? alive.has(id(path)) : null, fn: fnPath, sites: [] }
       keyOfItem.set(l, key)
       listRules.push({ path, rule: rules[key], node: l.nodes.literal, parent: l.nodes.parent })
     }

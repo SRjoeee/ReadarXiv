@@ -198,6 +198,7 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
       after: rule.after,
       comment: rule.comment ?? '',
       citation: cite,
+      ...(rule.holder ? { holder: rule.holder } : {}),
       sites,
       folds: [],
     }
