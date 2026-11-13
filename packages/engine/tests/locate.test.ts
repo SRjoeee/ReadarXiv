@@ -3,11 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
 import { bundle, stateOf } from '../src/bundle/bundle.ts'
 import type { Doc, DocTurned } from '../src/doc.ts'
-import { pageGlyphsOf } from '../src/glyph.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
 import { eachBetweenPaired, locate } from './helpers/locate.ts'
 import type { AddOn } from '../src/wrap/wrap.ts'
-import { docOf, type PageSpec } from './helpers/doc.ts'
+import { docOf, type PageSpec, pageGlyphsOf } from './helpers/doc.ts'
 
 const text = (s: string) => ({ t: 'text' as const, s })
 const r2 = (v: number) => Math.round(v * 100) / 100

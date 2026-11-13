@@ -19,18 +19,13 @@ export declare const AUX_WORDS: readonly string[]
 export declare const PENALTY_WORDS: readonly string[]
 /** what LaTeX and booktabs set between a table's rows */
 export declare const ROW_RULES: readonly string[]
-/** the kernel's macros that expand to one of their arguments alone: [how many they take, which they give] */
-export declare const ARGUMENT_SELECTORS: Readonly<Record<string, readonly [number, number]>>
 /** the argument a definition expands to alone, { of, arg }, or null */
 export declare function selectsArgument(params: number, body: string | null | undefined): { of: number; arg: number } | null
 /** TeX's and LaTeX's spaces in text: control symbols, control words, and the commands whose argument is a length */
 export declare const SPACE_SYMBOLS: readonly string[]
 export declare const SPACE_WORDS: readonly string[]
-export declare const SPACE_LENGTHS: readonly string[]
 /** the spaces of negative width among SPACE_SYMBOLS */
 export declare const NEGATIVE_SPACES: readonly string[]
-/** a control symbol that is a space in math alone (amsmath's \>) */
-export declare const MATH_SPACE_SYMBOLS: readonly string[]
 /** a source's leading space as a pattern source (`negative`: the negative spaces too; `math`: the math alone's too) */
 export declare function spaceLead(options?: { negative?: boolean; math?: boolean }): string
 /** a source that is one space whole, as a pattern source (`math`: the math alone's too) */

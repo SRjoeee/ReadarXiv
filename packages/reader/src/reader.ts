@@ -207,8 +207,6 @@ const BAND_VARS = ['--axt-hl-color', '--axt-hl-mix'] as const
 /** how long a new reading place stands before its units are asked first (a scroll's pages passed over ask nothing) */
 const NEAR_MS = 150
 
-export type { Words }
-
 export function openReader(
   root: HTMLElement,
   o: {

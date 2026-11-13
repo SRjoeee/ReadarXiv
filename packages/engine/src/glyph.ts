@@ -75,23 +75,6 @@ export class PageGlyph implements DocGlyph {
   }
 }
 
-/** a page's glyphs from glyphs of any kind, their coordinates in one array of the page's (readPdf's; a test's) */
-export function pageGlyphsOf(list: readonly DocGlyph[]): PageGlyph[] {
-  const c = new Float64Array(8 * list.length)
-  return list.map((g, j) => {
-    const o = 8 * j
-    c[o] = g.x0
-    c[o + 1] = g.x1
-    c[o + 2] = g.y
-    c[o + 3] = g.top
-    c[o + 4] = g.bottom
-    c[o + 5] = g.size
-    c[o + 6] = g.ix0
-    c[o + 7] = g.ix1
-    return new PageGlyph(c, o, g)
-  })
-}
-
 /** a glyph with fields other than its coordinates changed, of its own kind: a page glyph keeps its page's array (a spread would
  *  copy its own fields alone), a plain glyph is its spread */
 export function glyphWith<G extends DocGlyph>(

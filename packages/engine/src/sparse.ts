@@ -40,11 +40,11 @@ export interface Holes {
 
 /** the most objects, and the most bytes its object and cross-reference streams decode to, holesOf reads of a document: the
  *  wrap's own bounds (wrap.ts graphWhy). Past either, B is stored whole */
-export const SPARSE_OBJECTS_MAX = DELTA_OBJECTS_MAX
+const SPARSE_OBJECTS_MAX = DELTA_OBJECTS_MAX
 /** the most bytes a document's object and cross-reference streams decode to that holesOf reads: the delta's bound
  *  (DELTA_DECODED_MAX, 48 MiB, PDF-READER §19.8), the number of the remover's bound on a page's decoded bytes (remove.ts
  *  BYTES_MAX); for a document's streams, unmeasured */
-export const SPARSE_DECODED_MAX = 48 * 2 ** 20
+const SPARSE_DECODED_MAX = 48 * 2 ** 20
 /** the first eight bytes of a packed B */
 export const PACKED_MAGIC = 'sparse/1'
 const MAGIC = new TextEncoder().encode(PACKED_MAGIC)

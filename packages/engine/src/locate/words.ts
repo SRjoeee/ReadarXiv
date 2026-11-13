@@ -31,7 +31,7 @@ export const bySentence = (kind: string, figure = false): boolean => !figure && 
 const OBJ = '￼'
 /** a unit's plain projection, as the translate package counts a row's sentences in it (accept.ts projectionOf: text pieces
  *  joined, each element one character, a group's edges none; a nested unit travels as an element, the hosts' units) */
-export function projectionOf(content: readonly Piece[]): string {
+function projectionOf(content: readonly Piece[]): string {
   let out = ''
   for (const p of content) {
     if (p.t === 'text') out += p.s

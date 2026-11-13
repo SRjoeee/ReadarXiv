@@ -67,7 +67,7 @@ const BOUNDED = new Set([OWNED_HOW.indexOf('closed'), OWNED_HOW.indexOf('open, t
 /** the glyphs and boxes the ownership of a paper may visit (real ranges never overlap: they cost its ink once) */
 export const OWN_WORK = 20_000_000
 /** the unit ids a record lists the spell check's refusals of, and of its leaks, at most: a count of ids; unmeasured */
-export const SPELL_LIST_MAX = 64
+const SPELL_LIST_MAX = 64
 
 const START = /^([th]?)(\d+)s$/
 /** the point the marked compile sets before a caption's label, \\fnum@<type>, where TeX sets it (layout/marks.mjs) */

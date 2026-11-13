@@ -13,7 +13,7 @@ import { LLM_LIMITS, llmTranslator } from './llm'
 import { langOf, microsoftServes } from './targets'
 import type { ProviderKind } from './types'
 
-export { langOf, microsoftServes } from './targets'
+export { langOf } from './targets'
 import { WIRE_FORMATS } from './wire-formats'
 
 /** a configuration code by its BCP-47 tag (the LLM prompt names the language by the configuration's code) */

@@ -175,7 +175,7 @@ const FOLIO = /^[-\u2013\u2014]?(?:\d{1,4}|[ivxlcdm]{1,8})[-\u2013\u2014]?$/
 /** where a page's folio begins among its glyphs (its glyph count where it has none, `regions` its regionsOf): the run of
  *  glyphs that ends its stream, on one baseline and outside the bodies, that spells a page number alone and stands below every
  *  other glyph of the page by FOLIO_GAP of its size or more */
-export function folioOf(page, regions) {
+function folioOf(page, regions) {
   const G = page.glyphs, n = G.n
   if (!n) return 0
   let k = n - 1
