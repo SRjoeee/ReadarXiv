@@ -41,7 +41,8 @@ import { carriedOf, tokenBand, tokenBox } from '../emit/sentences.ts'
 import { CJK, cjkClassRe } from '../breaker/script.ts'
 import { measured, paperOf, readMember, rowPieces, tstyleOf } from './read.ts'
 import { namedRows } from './named.ts'
-import { waitOf } from './wait.ts'
+import { drawsName, ownRowOf, waitOf } from './wait.ts'
+import { type ParasStated, paraPieces, type V0Piece } from '../unit/breaks.ts'
 
 /** what a caller may ask of a lay besides its Page. A head's names are no option: the target's are the rules' (Rules.heads),
  *  the paper's own its name units' rows (Part.paper.names, ownNamesOf), so that every caller lays one page alike */
@@ -125,11 +126,12 @@ function bandRulesOf(m: Placed): (page: number) => number[] | undefined {
 const holdsTable = (why: Unlaid, spanning: boolean) => why !== 'unwrapped' || spanning
 
 /** a member's row content, or why it has none to be set from: a unit the paper keeps as it is (Unit.kept: its names, an
- *  algorithm's body) has none whatever row is given of it (one stored before the unit was kept), never translated */
+ *  algorithm's body) has none whatever row is given of it (one stored before the unit was kept), never translated: `kept`,
+ *  told apart from a row that did not come by the rows' end (`none`) */
 function contentOf(m: Placed, rows: Rows): OutPiece[] | Unlaid {
   if (m.why) return m.why
   if (typeof m.text !== 'string') return m.kind === 'name' ? 'name' : 'kind'
-  if (rows.kept?.(m.text)) return 'none'
+  if (rows.kept?.(m.text)) return 'kept'
   const row = rows.get(m.text)
   if (!row) return 'none'
   if (!row.ok) return row.why.kind
@@ -158,7 +160,7 @@ function decideTables(
     const m = byOrd.get(o)
     if (!m || m.why || leave.has(m.kind) || typeof m.text !== 'string') return null
     const c = contentOf(m, rows)
-    if (c === 'none') return 'same'
+    if (c === 'none' || c === 'kept') return 'same'
     if (typeof c === 'string') return 'changed'
     return typeof m.plain === 'string' && unchanged(m.plain, textOfContent(c)) ? 'same' : 'changed'
   }
@@ -342,7 +344,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   const rowLines = rowLinesOf(part.flows, { left: true })
   const lineskip = (part.paper.lineskip as [number, number] | undefined) ?? null
   // (a theorem-like head's word where the target's packages name none: the paper's own name unit's translation, PDF-READER
-  // §19.14, today's ownNames)
+  // §19.14, today's ownNames; read when a member that can draw it asks, its page waiting for its paper's names, wait.ts)
   const ownNames = ownNamesOf(part.paper.names, rows)
   // (each table's groups, and those kept whole as names: decided before any cell is read, so that none of them is set)
   const tables = decideTables(part, rows, leave)
@@ -362,7 +364,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   // first, so that a face not loaded is waited for and never measured, PR #620's re-review)
   const read = new Map<
     number,
-    { rd: ReturnType<typeof readMember>; pieces: ReturnType<typeof rowPieces>; tokens: Tokens }
+    { rd: ReturnType<typeof readMember>; pieces: readonly V0Piece[]; tokens: Tokens; paras?: ParasStated }
   >()
   // (each laid member's label on a line of its own: its relabel's row, labelRowOf)
   const labelRows = new Map<number, Laid['lines'][number]>()
@@ -420,7 +422,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       const content = contentOf(m, rows)
       if (typeof content === 'string') {
         state.set(m.ord, content)
-        if (!m.why && (typeof m.text !== 'string' || content === 'none')) unmeant.add(m.ord)
+        if (!m.why && (typeof m.text !== 'string' || content === 'none' || content === 'kept')) unmeant.add(m.ord)
         continue
       }
       // (a cell of a group kept whole as names: the original's, and its group with it, holdsTable below)
@@ -439,7 +441,10 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       }
       const relabels = !!mm.label && !((mm.fixed ?? 0) & LABEL_KEPT)
       let rd: ReturnType<typeof readMember>
-      const pieces = rowPieces(mm, content)
+      // (its paragraph points cut into its row where a sentence start pairs with them, Placed.paras: unit/breaks.ts paraPieces;
+      // a named unit's sentences in its own projection, named.ts)
+      const row = typeof m.text === 'string' ? rows.get(m.text) : undefined
+      const { pieces, paras } = paraPieces(mm, rowPieces(mm, content), row?.ok ? row.sentences : undefined)
       try {
         rd = readMember({
           m: mm,
@@ -448,7 +453,12 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
           to: rules.target,
           P: R as never,
           paper,
-          labels: { words: rules.labels, captions: rules.captions, heads: rules.heads, names: ownNames },
+          labels: {
+            words: rules.labels,
+            captions: rules.captions,
+            heads: rules.heads,
+            names: drawsName(m) ? ownNames : null,
+          },
           refs: rules.refs,
           relabels,
           lead: led?.lead ?? null,
@@ -496,7 +506,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
         }
         if (row.line) labelRows.set(m.ord, row.line)
       }
-      read.set(m.ord, { rd, pieces, tokens })
+      read.set(m.ord, { rd, pieces, tokens, ...(paras ? { paras } : {}) })
     }
   // (the figure texts, S.figures over the part: a face not loaded waited for as any)
   let fig = figuresOf(part, figs, rows, { paper, R, metrics })
@@ -814,8 +824,11 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
     const off = offOn(page)
     const kept = keptIn.get(m.ord) ?? new Set<string>()
     const pieces = read.get(m.ord)?.pieces
-    // (its row's sentences, where its translator cut them: the panes light by sentence where both find every start, lit.ts)
-    const row = typeof m.text === 'string' ? rows.get(m.text) : undefined
+    // (its row's sentences, where its translator cut them: the panes light by sentence where both find every start, lit.ts. Of a
+    // member set from its row alone: one the prepare, the toggles or the paper leave the original's whatever the rows reads none,
+    // as its page waits for none, ownRowOf)
+    const own = ownRowOf(m, rows, leave)
+    const row = own === null ? undefined : rows.get(own)
     const sentences = row?.ok ? row.sentences : undefined
     if (st === 'laid' && layout && pieces)
       owners.set(m.ord, {
@@ -836,6 +849,9 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       off,
       ...(x?.fit ? { fit: x.fit } : {}),
       ...(x?.evened ? { evened: x.evened } : {}),
+      ...(x?.tie ? { tie: x.tie } : {}),
+      // (what became of the paragraph points its part states, where it is laid: unit/breaks.ts paraPieces)
+      ...(st === 'laid' && read.get(m.ord)?.paras ? { paras: read.get(m.ord)!.paras! } : {}),
       lines,
       lit:
         st === 'laid'

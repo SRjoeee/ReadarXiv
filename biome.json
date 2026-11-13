@@ -26,6 +26,10 @@
 			"formatter": { "enabled": false }
 		},
 		{
+			"includes": ["packages/engine/tests/front/**"],
+			"formatter": { "enabled": false }
+		},
+		{
 			"includes": ["packages/ui/src/locales/**"],
 			"formatter": { "enabled": false }
 		},

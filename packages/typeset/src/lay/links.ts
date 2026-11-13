@@ -11,9 +11,10 @@
 //   characters under it; the annotations of one target over it one link); one over the member's text, over the translation of
 //   its link group (\href, \url, \hyperlink, \hyperref: placePair) of its target, as matchUnit's url and name tiers pair
 //   them (the target each group's source names, SpanAt.to: the annotations of a target with the groups that name it), then,
-//   for what no target decides, as its order tier does, by kind first (a footnote's mark's with the member's marks, another
-//   destination's with its references and \hyperref groups, each piece that holds none of its kind: a link round a reference's
-//   number that takes in the comma after it is the text's by the part, the element owning half of its glyphs), then over the
+//   for what no target decides, as its order tier does, by kind first (a footnote's mark's with the member's marks, a
+//   citation's with its citations, another destination's with its references and \hyperref groups, each piece that holds none
+//   of its kind: a link round a reference's or a citation's number that takes in the comma or the bracket after it is the
+//   text's by the part, the element owning half of its glyphs), then over the
 //   groups that name none (a part made before SpanAt.to) (the k-th annotation the k-th piece where they are as many, else the
 //   k-th run of one target's annotations; one piece takes them all where they are of one target; over the member, else by the
 //   groups drawn on the page and its own annotations), else, where the member has no link group drawn, over its whole drawing
@@ -85,14 +86,20 @@ const kindOf = (to: Link['to']): 'cite' | 'note' | 'internal' | 'url' => {
   if (typeof d === 'string' && /^Hfootnote\./.test(d)) return 'note'
   return 'internal'
 }
+/** an element's command that sets a citation, by the command the part states (El.cmd): natbib's and biblatex's citation
+ *  commands are named so, \nocite sets nothing (emit/links.ts CITE_SRC, today's links.mjs, by the source) */
+const CITE_CMD = /^(?![Nn]ocite)[A-Za-z]*[Cc]ite[A-Za-z]*\*?$/
 /** the kind an element's link is of by its source (links.mjs linkKindOf, by the command and the nested mark the part states): a
- *  footnote's mark, a reference; null for any other (a citation's goes by its key, which the part does not state) */
-const elKindOf = (e: { cmd?: string; nested?: 1 }): 'note' | 'internal' | null =>
+ *  footnote's mark, a reference, a citation (hyperref names its destination cite.<key>; the part states no key, so a citation is
+ *  told by its command and paired by the order tier, as a reference is); null for any other */
+const elKindOf = (e: { cmd?: string; nested?: 1 }): 'note' | 'internal' | 'cite' | null =>
   e.nested || /^(?:footnote|footnotemark)\*?$/.test(e.cmd ?? '')
     ? 'note'
     : REF_CMD.test(e.cmd ?? '')
       ? 'internal'
-      : null
+      : CITE_CMD.test(e.cmd ?? '')
+        ? 'cite'
+        : null
 const boxOf = (b: readonly number[]) =>
   [Math.min(b[0]!, b[2]!), Math.min(b[1]!, b[3]!), Math.max(b[0]!, b[2]!), Math.max(b[1]!, b[3]!)] as const
 const holds = (a: readonly number[], b: readonly number[]) => {
@@ -294,15 +301,16 @@ export function linksOf(
     // (today's order tier, by kind: the annotations of the member's text no group's target decides, a footnote's mark's with the
     // member's marks, any other destination's with its references and its \hyperref groups, each piece that holds none of its
     // kind, over the member, in their orders (links.mjs:420): hyperref's link round a reference's number takes in the comma after
-    // it by the link's margin, and the part gives it to the text, the element owning one of its two glyphs, 2608.25210v2-zh.
-    // Paired as the order rule below pairs (each, each run of one target, or all to one piece), else left to it)
+    // it by the link's margin, and the part gives it to the text, the element owning one of its two glyphs, 2608.25210v2-zh;
+    // a citation's with its citations alike, the closing bracket taken in after a number of one digit, 2610.37818v1-zh p8's
+    // "[24, 4]". Paired as the order rule below pairs (each, each run of one target, or all to one piece), else left to it)
     const byOrder = new Map<number, number>()
     const taken = new Set<number>()
     // (the tier that gave an element each of its annotations: its geometry, the part's owner, else this order; one paired by
     // order alone is never laid over the whole piece where its characters are not found, placeText)
     const tierOf = new Map<number, string>()
     const tier = (i: number) => tierOf.get(i) ?? 'geometry'
-    for (const kind of ['note', 'internal'] as const) {
+    for (const kind of ['note', 'internal', 'cite'] as const) {
       const as = text.filter((i) => kindOf(list[i]!.to) === kind && !named.has(key(list[i]!.to)))
       if (!as.length) continue
       const pieces = [

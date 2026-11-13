@@ -325,7 +325,7 @@ const SPECS: readonly RuleSpec[] = [
     file: 'breaker/tokens.ts',
     how: 'ported',
     ruling:
-      "2026-11-10 no space beside a full-width mark's blank side (xeCJK's rule; the owner's staging case 2611.03953v2-zh); 2026-11-12 a full-width mark's blank half is the measure of the face that draws it (lane cjk-punct, the owner's staging case 2611.03953v2 p13 in zh-TW and ja); 2026-11-12 no ordinary space before a full-width mark no line opens with, whatever stands before it (the coordinator's ruling on lane stray-stop, the owner's staging case 1706.03762v7-zh p4)",
+      "2026-11-10 no space beside a full-width mark's blank side (xeCJK's rule; the owner's staging case 2611.03953v2-zh); 2026-11-12 a full-width mark's blank half is the measure of the face that draws it (lane cjk-punct, the owner's staging case 2611.03953v2 p13 in zh-TW and ja); 2026-11-12 no ordinary space before a full-width mark no line opens with, whatever stands before it (the coordinator's ruling on lane stray-stop, the owner's staging case 1706.03762v7-zh p4); 2026-11-13 two elements the source and the row set side by side are one word: glued, no slack between them, two crops TeX set on one line at TeX's distance between their starts (the coordinator's ruling on F8, the owner's staging case 2111.09276v1 p1)",
     reads: ['breaking.*', 'fit.autospace', 'fit.compressMax', 'words'],
     state: {
       is: 'changed',
@@ -440,7 +440,7 @@ const SPECS: readonly RuleSpec[] = [
     file: 'breaker/place.mjs',
     state: {
       is: 'changed',
-      why: "a line not set as Latin text spreads its slack, and its squeeze, over the gaps between its items but those inside a word (break.mjs gapsOf: an item that continues its word, `brk` or `cont`): TeX sets no glue inside a word, and its url package none at a URL's break points; today's spread it over every gap, so a URL whose line ends are joins (lane url-join), cut at its break points, was letter-spaced to the measure (lane literal-fixes, 2608.25210v2 p17: 1.9-2.7 pt after each `/`). Nor before a hung label's text and inside the label (tabOf: TeX's hang is a box), so the text's first line starts on the edge its other lines stand on",
+      why: "a line not set as Latin text spreads its slack, and its squeeze, over the gaps between its items but those inside a word (break.mjs gapsOf: an item that continues its word, `brk` or `cont`, or an element set right after the one before it with nothing between in the source or the row, `tight`, tokens.ts sideBySide): TeX sets no glue inside a word, and its url package none at a URL's break points; today's spread it over every gap, so a URL whose line ends are joins (lane url-join), cut at its break points, was letter-spaced to the measure (lane literal-fixes, 2608.25210v2 p17: 1.9-2.7 pt after each `/`). Nor before a hung label's text and inside the label (tabOf: TeX's hang is a box), so the text's first line starts on the edge its other lines stand on",
       replay:
         "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164; the lines' ends of 7 rounds whose tokens hold a word's break point read to a millionth of a point, tests/replay/tap.ts wordGlued: the rule moves a line's slack between its gaps, never its end) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589 before the rule); tests/unit/placement.test.ts",
       cases: 164,

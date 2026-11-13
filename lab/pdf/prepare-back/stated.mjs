@@ -140,6 +140,13 @@ export const CAUSE = Object.freeze({
   // TeX's marked compile states, its text-mode glyphs read as text: locate's `displays`): the display's ink, kept with it — the
   // coordinator's ruling of 2026-11-09; 2608.08481v1 t118-t121, (7)'s and (8)'s parts)
   displayPart: "kept on arXiv's page as part of a display",
+  // ((t), lane lost-11, the coordinator's ruling of 2026-11-13: what the reader sees on today's lines, each side read as arXiv
+  // prints it: today's unit whose every line one or more drawn units of the candidate's meet, consecutive in the dump's order,
+  // every unit meeting them drawn, its reading a contiguous part of theirs joined in that order (printedHeld); arXiv's own text
+  // the reference where today's reading dropped a hyphen arXiv prints at one of its line ends. 2608.06007v1 t244-t248, today's
+  // notes of several entries now v2's references with their labels and numbers; 2608.08481v1 t125, its raised mark now a label;
+  // 2307.16209v1 t737, its formulas' braces now in their elements)
+  printed: 'held whole by the drawn units on its lines, read as arXiv prints them',
 })
 /** how the parity joins (lab/typeset/parity/join.mjs) a member of the candidate's to the unit of today's a statement names it the
  *  holder of, by the statement's cause: 'whole', the holder holds today's unit whole, its member is today's unit (heldJoin one
@@ -160,6 +167,8 @@ export const HOLDER_JOIN = Object.freeze({
   decoration: 'element',
   formula: 'element',
   item: 'whole',
+  // ((t) where one unit holds today's whole; several name no holder)
+  printed: 'whole',
 })
 /** `out` (statedOf's statements) where every one naming a holder has its cause declared in HOLDER_JOIN; else an error naming the
  *  cause, so that a run never writes a statement the parity's join would not read */
@@ -624,6 +633,76 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     }
     return /\p{L}/u.test(t.replaceAll(FORMULA_MARK, '')) && v.includes(t)
   }
+  // ((t): a unit read as arXiv prints it: its label and every element with ink by arXiv's glyphs in its boxes (a formula too: on
+  // both sides its ink, wherever either side's element begins and ends), its text pieces as written through TeX's ligatures,
+  // white space aside; null where a page is not read)
+  const printedRead = (n) => {
+    const segs = new Map((n.elements ?? []).map((e) => [e.k, e.segs ?? []]))
+    let s = n.label?.length ? printedIn(n.label) : ''
+    if (s === null) return null
+    for (const p of n.pieces ?? []) {
+      if (p.kind === 'text') s += ligatured(p.s)
+      else if (p.kind === 'ph' && segs.get(p.k)?.length) {
+        const q = printedIn(segs.get(p.k))
+        if (q === null) return null
+        s += q
+      }
+    }
+    return s.replace(/\s+/g, '')
+  }
+  // ((t): how many of today's lines end, on arXiv's page, with a hyphen: the most of the candidate's hyphens today's reading may
+  // lack, each one TeX set at one of those line ends and today's took for its break)
+  const HYPHEN = /^[-‐]$/u
+  const hyphenEnds = (u) =>
+    u.lines.filter((l) => {
+      const ink = (glyphs(l.page) ?? [])
+        .filter((g) => !g.blank && g.x0 >= l.x0 - ON && g.x1 <= l.x1 + ON && g.y >= Math.min(l.top, l.bottom) - ON && g.y <= Math.max(l.top, l.bottom) + ON)
+        .sort((a, b) => a.x0 - b.x0)
+      return ink.length > 0 && HYPHEN.test(ink.at(-1).u)
+    }).length
+  // ((t): `t` a contiguous part of `h`, but for at most `n` of h's hyphens t lacks)
+  const holdsPrinted = (h, t, n) => {
+    if (h.includes(t)) return true
+    if (!n) return false
+    for (let j0 = h.indexOf(t[0]); j0 >= 0; j0 = h.indexOf(t[0], j0 + 1)) {
+      let i = 0,
+        j = j0,
+        skipped = 0
+      while (i < t.length && j < h.length) {
+        if (t[i] === h[j]) {
+          i++
+          j++
+        } else if (HYPHEN.test(h[j]) && skipped < n) {
+          skipped++
+          j++
+        } else break
+      }
+      if (i === t.length) return true
+    }
+    return false
+  }
+  // ((t): the candidate's units meeting today's lines by their boxes, every line met, each drawn, consecutive in the dump's order,
+  // today's reading a contiguous part of theirs joined in that order (letters case apart only where today's glyphs are in a face
+  // of small capitals, as (l')); those units, else null)
+  const printedHeld = (u) => {
+    if (!u.lines?.length || !u.lines.every((l) => glyphs(l.page))) return null
+    const at = units.filter((n) => !n.replaced && u.lines.some((l) => boxesOf(n).some((k) => across(k, l)))).sort((a, b) => a.ord - b.ord)
+    if (!at.length || !at.every((n) => n.state === 'drawn')) return null
+    if (!u.lines.every((l) => at.some((n) => boxesOf(n).some((k) => across(k, l))))) return null
+    const lo = at[0].ord,
+      hi = at.at(-1).ord
+    if (units.some((n) => !n.replaced && n.ord > lo && n.ord < hi && !at.includes(n))) return null
+    let t = printedRead(u)
+    const parts = at.map(printedRead)
+    if (!t || parts.some((p) => p === null)) return null
+    let h = parts.join('')
+    if (inSmallCaps(u)) {
+      t = t.toLowerCase()
+      h = h.toLowerCase()
+    }
+    return /\p{L}/u.test(t) && holdsPrinted(h, t, hyphenEnds(u)) ? at : null
+  }
+  const printedSaid = (at) => ({ by: at[0], cause: CAUSE.printed, ...(at.length === 1 ? { holder: at[0] } : {}) })
   const isBlock = (n) => !n.replaced && unitClass(n.kind) === 'names'
   // ((c'): a unit of the author block's, of any kind, standing for today's line after the name before's trail)
   const trailBlock = (u) => {
@@ -935,6 +1014,8 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     // (none of these: the author block's units holding its line between them (f'); consecutive units holding its text (j))
     const block = !c && !kept && !names && !part && !trailed && !held && !apart ? heldByBlockUnits(u) : null
     const split = !c && !kept && !names && !part && !trailed && !held && !apart && !block ? splitOf(u) : null
+    // (none of these: the drawn units on its lines read as arXiv prints them (t))
+    const printed = !c && !kept && !names && !part && !trailed && !held && !apart && !block && !split ? printedHeld(u) : null
     // (a stand-in of its kind that reads otherwise, holding today's whole text: held whole (f))
     const how = c ? howOf(u, c) : null
     const standIn = how === CAUSE.another && standInHolds(u, c)
@@ -943,6 +1024,8 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     // (one that holds no whole: (j) from it onward, its text the parts' in order; else (g) over the parts)
     const parts = how === CAUSE.another && !standIn && !itemC ? partsFrom(u, c) : null
     const fromIt = parts ? (parts.map(glyphTextOf).join('').includes(glyphTextOf(u)) && !!glyphTextOf(u) ? CAUSE.split : arxivParts(u, parts) ? CAUSE.arxivParts : null) : null
+    // (none of these, a stand-in that reads otherwise: the drawn units on today's lines read as arXiv prints them (t))
+    const printedC = how === CAUSE.another && !standIn && !itemC && !fromIt ? printedHeld(u) : null
     // (a names unit's stand-in of its ledger class, its characters today's in another order: its kind moved, the candidate's
     // unit holding today's whole, named as the holder so that the parity joins the two (heldJoin), as while (f) stated them: the
     // coordinator's ruling of 2026-11-10, round 8 B2b, 2610.30034v1 t309-t311)
@@ -954,7 +1037,9 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
           ? { by: c, cause: CAUSE.item, holder: c }
           : fromIt
           ? { by: c, cause: fromIt }
-          : { by: c, cause: how, ...(moved ? { holder: c } : {}) }
+          : printedC
+            ? printedSaid(printedC)
+            : { by: c, cause: how, ...(moved ? { holder: c } : {}) }
       : itemN
         ? { by: itemN, cause: CAUSE.item, holder: itemN }
         : kept
@@ -971,7 +1056,9 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
                 ? { by: block.holder ?? [...units].find((n) => !n.replaced && boxesOf(n).some((k) => across(k, u.lines[0]))), cause: CAUSE.heldBlock, ...(block.holder ? { holder: block.holder } : {}) }
                 : split
                   ? { by: split[0], cause: CAUSE.split }
-                  : null
+                  : printed
+                    ? printedSaid(printed)
+                    : null
     if (kept) out.push({ u, why: "kept on arXiv's page as the original's, no text of it sent", cause: 'keptAt' })
     else if (!said && part) out.push({ u, why: CAUSE.displayPart, cause: 'displayPart' })
     else if (said) {

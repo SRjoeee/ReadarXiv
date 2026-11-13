@@ -6,8 +6,31 @@
   "license": "GPL-3.0-only",
   "description": "source, marks, ink, align, locate, wrap, bundle and prepare: a paper in, its bundle out",
   "sideEffects": false,
+  "//": "The ./today/… exports are the transition paths of the front half moved from src/pdf-reader/engine, one a moved module: only the old paths there and the lab import them (tests/pdf-reader/engine-contract.test.ts holds it). The cut-over deletes them with the old paths.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./today/source/latex-front.mjs": "./src/source/latex-front.mjs",
+    "./today/source/paper-meta.mjs": "./src/source/paper-meta.mjs",
+    "./today/source/tex-kernel.mjs": "./src/source/tex-kernel.mjs",
+    "./today/source/tex-names.mjs": "./src/source/tex-names.mjs",
+    "./today/source/text-symbols.mjs": "./src/source/text-symbols.mjs",
+    "./today/source/text-piece.mjs": "./src/source/text-piece.mjs",
+    "./today/marks/names.mjs": "./src/marks/names.mjs",
+    "./today/marks/marks.mjs": "./src/marks/marks.mjs",
+    "./today/own/stream.mjs": "./src/own/stream.mjs",
+    "./today/own/own.mjs": "./src/own/own.mjs",
+    "./today/instrument/mt.mjs": "./src/instrument/mt.mjs",
+    "./today/compile/tex.mjs": "./src/compile/tex.mjs",
+    "./today/compile/tex-errors.mjs": "./src/compile/tex-errors.mjs",
+    "./today/compile/base.mjs": "./src/compile/base.mjs",
+    "./today/compile/pdf-lite.mjs": "./src/compile/pdf-lite.mjs",
+    "./today/compile/guard.mjs": "./src/compile/guard.mjs",
+    "./today/compile/live.mjs": "./src/compile/live.mjs",
+    "./today/compile/paper.mjs": "./src/compile/paper.mjs",
+    "./today/instrument/format.mjs": "./src/instrument/format.mjs",
+    "./today/instrument/units.mjs": "./src/instrument/units.mjs",
+    "./today/instrument/layer1.mjs": "./src/instrument/layer1.mjs",
+    "./today/instrument/instrument.mjs": "./src/instrument/instrument.mjs"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

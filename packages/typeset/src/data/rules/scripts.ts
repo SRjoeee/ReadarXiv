@@ -4,8 +4,6 @@
 
 import type { LanguageRules, ScriptRules } from './types.ts'
 
-export const VERSION = 10
-
 /** each script's fields: what a target written in it reads where its language sets nothing of its own */
 export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
   Hans: {

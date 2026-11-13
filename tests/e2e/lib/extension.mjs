@@ -6,17 +6,17 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { chromiumOptions } from './chromium.mjs'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 const { chromium } = createRequire(REPO)('playwright')
 export const BUILD = join(REPO, '.output/chrome-mv3')
 /**
- * The features Playwright turns off (its chromiumSwitches.ts, 1.63), save one: storage partitioning, which a reader's
- * Chrome has on. A later --disable-features replaces Playwright's list. Left off, the TeX page framed by the reader over
- * arXiv's PDF page shared the cache of the one framed by an extension page, which in Chrome it does not (measured in
- * Chrome 145, 153 and 154: the warm-up's report)
+ * The launch: chromium.mjs's options, storage partitioning left on (`partitioned`), which a reader's Chrome has on and
+ * Playwright turns off. Left off, the TeX page framed by the reader over arXiv's PDF page shared the cache of the one framed by
+ * an extension page, which in Chrome it does not (measured in Chrome 145, 153 and 154: the warm-up's report)
  */
-const PLAYWRIGHT_OFF = ['AvoidUnnecessaryBeforeUnloadCheckSync', 'DestroyProfileOnBrowserClose', 'DialMediaRouteProvider', 'GlobalMediaControls', 'HttpsUpgrades', 'LensOverlay', 'MediaRouter', 'PaintHolding', 'BlockOriginHeaderModificationOnRedirect', 'Translate', 'AutoDeElevate', 'OptimizationHints']
+const PARTITIONED = { partitioned: true }
 
 /**
  * { context, worker, id, readerUrl(query) }: `profile` names the temporary profile's directory, `extension` another
@@ -29,11 +29,14 @@ const PLAYWRIGHT_OFF = ['AvoidUnnecessaryBeforeUnloadCheckSync', 'DestroyProfile
  * release build's does not (above). `AXT_CHROME` in the environment runs another Chrome binary instead of Playwright's
  * (the extension's floor, Chrome 131).
  *
+ * `backForwardCache`: the browser's back-forward cache on, as a reader's Chrome has it (Playwright launches Chromium with
+ * `--disable-back-forward-cache`, so that a page left is never restored from it).
+ *
  * Both temporary directories go when the context closes: a copy of the build and a profile a run, never removed, once
  * filled the disk (25 GiB). `context.close()` removes them once the browser has exited; a context that closes on its
  * own (the browser crashing, a headed window shut) removes them from its `close` event
  */
-export async function launchWithReader({ profile = 'reader', extension = BUILD, demos = false, topLevel = true, headless = true, viewport = { width: 1600, height: 1000 }, deviceScaleFactor, args = [], languages = null } = {}) {
+export async function launchWithReader({ profile = 'reader', extension = BUILD, demos = false, topLevel = true, headless = true, viewport = { width: 1600, height: 1000 }, deviceScaleFactor, args = [], languages = null, backForwardCache = false } = {}) {
   if (!existsSync(join(extension, 'pdf-reader.html'))) throw new Error(`no reader in ${extension}: \`pnpm build\` at the repository root`)
   const temporary = []
   const removeTemporary = () => {
@@ -66,7 +69,7 @@ export async function launchWithReader({ profile = 'reader', extension = BUILD, 
   let context
   try {
     // (AXT_CHROME: another Chrome, the floor's for one, as the other suites take it)
-    context = await chromium.launchPersistentContext(profileDir, { ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }), headless, viewport, ...(deviceScaleFactor ? { deviceScaleFactor } : {}), args: [`--disable-features=${PLAYWRIGHT_OFF.join(',')}`, `--disable-extensions-except=${extension}`, `--load-extension=${extension}`, ...args] })
+    context = await chromium.launchPersistentContext(profileDir, chromiumOptions({ ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }), ...(backForwardCache ? { ignoreDefaultArgs: ['--disable-back-forward-cache'] } : {}), headless, viewport, ...(deviceScaleFactor ? { deviceScaleFactor } : {}), args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, ...args] }, PARTITIONED))
   } catch (e) {
     removeTemporary()
     throw e

@@ -6,6 +6,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { CACHE as SWEEP_CACHE } from '../../packages/typeset/tests/replay/today.ts'
+import { ADDED, ADDED_HEADING } from '../typeset/added.mjs'
 import { PAIRS as PARITY_PAIRS } from '../typeset/parity/pairs.mjs'
 import { SLICES, TABLES } from '../typeset/served-metrics.mjs'
 import { perfOf } from './perf.mjs'
@@ -277,6 +278,10 @@ export function diffOf(text) {
 
 /** the typeset runners' invariant line: "invariants over the laid members[ (page by page)]: {json}" */
 export function typesetOf(text) {
+  // (a runner's log that walked the added pairs apart, lab/typeset/added.mjs: the set's numbers are read before its heading,
+  // the added pairs' after it, as `added`)
+  const cut = text.indexOf(ADDED_HEADING)
+  if (cut >= 0) return { ...typesetOf(text.slice(0, cut)), added: typesetOf(text.slice(cut + ADDED_HEADING.length)) }
   const out = {}
   const inv = /invariants over the laid members(?: \(page by page\))?: (\{[^}]*\})/.exec(text)
   if (inv) Object.assign(out, JSON.parse(inv[1]))
@@ -291,6 +296,11 @@ export function typesetOf(text) {
   // head pass's known cause, and by another, which fails the run)
   const across = /^I6 across the pages' lays \(cross-lay\.ts\): \d+ units begun on a pass page, (\d+) laid by two pages' lays or more; \d+ laid otherwise: (\d+) by the head pass .*, (\d+) by another cause$/m.exec(text)
   if (across) Object.assign(out, { I6twice: num(across[1]), I6head: num(across[2]), I6other: num(across[3]) })
+  // (the paragraph points, the runner with --entry (paras-gate.ts): those stated on the pages walked, those whose row carries
+  // their anchor, of those opened (their first word starts a line of the member) and on TeX's line, and those run on, which fail
+  // the run)
+  const paras = /^the paragraph points \(paras-gate\.ts\): (\d+) stated .*?; (\d+) with an anchor in their row .*?: (\d+) opened .*?, (\d+) of them on TeX's line, (\d+) NOT/m.exec(text)
+  if (paras) Object.assign(out, { parasStated: num(paras[1]), parasAnchored: num(paras[2]), parasOpened: num(paras[3]), parasOnTexLine: num(paras[4]), parasOff: num(paras[5]) })
   const lay = /a page's lay \(layPagePrepared[^)]*\), ms: p50 ([\d.]+), p90 ([\d.]+), p99 ([\d.]+), max ([\d.]+) over (\d+) pages/.exec(text)
   if (lay) Object.assign(out, { layP50: num(lay[1]), layP90: num(lay[2]), layP99: num(lay[3]), layMax: num(lay[4]), layPages: num(lay[5]) })
   const first = /^\{"pairs":.*\}$/m.exec(text)
@@ -299,6 +309,32 @@ export function typesetOf(text) {
     Object.assign(out, { pairs: c.pairs, pages: c.pages, msPerPage: c.msPerPage })
   }
   return out
+}
+
+/** whether the release check's sentence-cover fails on a paragraph point its row anchors and the page runs on (paras-gate.ts):
+ *  from the round in which the engine half states every point's first word (Placed.paras: design-display 2a, the coordinator's
+ *  ruling of 2026-11-13), whose lane turns this on. Until then a point stated at a group the reply dropped has no first word to
+ *  fall back to, and its count is reported, not held */
+export const PARAS_HELD = false
+
+/** sentence-cover's verdict over its run (`steps`, the reader gate's): I10 and I6 counted where the run ended whole (exit 0, or
+ *  1 for a unit laid otherwise by another cause than the head pass's or a paragraph point run on), the paragraph points held
+ *  where `parasHeld`. The added pairs walked apart (`added`, lab/typeset/added.mjs) are held as the set's in each of these: their
+ *  I10, their I6 and their paragraph points */
+export function sentenceCoverJudge(steps, parasHeld = PARAS_HELD) {
+  const t = typesetOf(steps[0]?.text ?? '')
+  // (the added pairs walked apart, `t.added`: their I10 and I6 held as the set's, their numbers beside)
+  const a = t.added
+  const whole = steps[0]?.exit === 0 || (steps[0]?.exit === 1 && (t.I6other > 0 || a?.I6other > 0 || t.parasOff > 0 || a?.parasOff > 0) && t.I10pieces > 0)
+  const counted = whole && t.I10 != null
+  const across = whole && t.I6other != null
+  const findings = { ...(counted ? { I10: { held: t.I10 === 0, count: t.I10 } } : {}), ...(across ? { I6: { held: t.I6other === 0, count: t.I6other } } : {}) }
+  const parasOf = (x) => (x.parasOff != null ? { parasAnchored: x.parasAnchored, parasOpened: x.parasOpened, parasOnTexLine: x.parasOnTexLine, parasOff: x.parasOff } : {})
+  return {
+    pass: counted && t.I10 === 0 && across && t.I6other === 0 && (!a || (a.I10 === 0 && a.I6other === 0)) && (!parasHeld || (t.parasOff === 0 && (!a || a.parasOff === 0))),
+    numbers: { ...(t.I10 != null ? { I10: t.I10 } : {}), pieces: t.I10pieces ?? 0, pairs: t.pairs, ...(t.I6other != null ? { I6twice: t.I6twice, I6head: t.I6head, I6other: t.I6other } : {}), ...parasOf(t), ...(a ? { added: { pairs: a.pairs, I10: a.I10, pieces: a.I10pieces ?? 0, I6other: a.I6other, ...parasOf(a) } } : {}) },
+    ...(Object.keys(findings).length ? { findings } : {}),
+  }
 }
 
 /** a corpus runner's log.tsv (lab/pdf/prepare-back/corpus.sh): one line a paper, `id <tab> exit <tab> summary`. The table
@@ -600,23 +636,14 @@ export const GATES = [
       { cmd: ['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', `--out=${join(ctx.work, 'sentence-cover')}`], slot: 'test', env: { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }, fresh: join(ctx.work, 'sentence-cover') },
     ],
     // (counted over the pieces the entry drew: a run that laid nothing, or did not end whole, has no count and fails; a run whose
-    // exit is a unit laid otherwise by two pages' lays alone (I6 across the lays, another cause than the head pass's) ended whole)
-    judge: (ctx, steps) => {
-      const t = typesetOf(steps[0]?.text ?? '')
-      const whole = steps[0]?.exit === 0 || (steps[0]?.exit === 1 && t.I6other > 0 && t.I10pieces > 0)
-      const counted = whole && t.I10 != null
-      const across = whole && t.I6other != null
-      const findings = { ...(counted ? { I10: { held: t.I10 === 0, count: t.I10 } } : {}), ...(across ? { I6: { held: t.I6other === 0, count: t.I6other } } : {}) }
-      return {
-        pass: counted && t.I10 === 0 && across && t.I6other === 0,
-        numbers: { ...(t.I10 != null ? { I10: t.I10 } : {}), pieces: t.I10pieces ?? 0, pairs: t.pairs, ...(t.I6other != null ? { I6twice: t.I6twice, I6head: t.I6head, I6other: t.I6other } : {}) },
-        ...(Object.keys(findings).length ? { findings } : {}),
-      }
-    },
+    // exit is a unit laid otherwise by two pages' lays alone (I6 across the lays, another cause than the head pass's) ended whole,
+    // and one whose exit is a paragraph point run on (paras-gate.ts, design-display 2a's gate): its count is reported, and
+    // fails the gate where PARAS_HELD says so; the added pairs walked apart held as the set's: sentenceCoverJudge)
+    judge: (ctx, steps) => sentenceCoverJudge(steps),
   },
   {
     id: 'display',
-    title: "display ≥ today: no page worse than today's, a difference only where nearer the original (lab/typeset/parity/: today's output and v2's drawn beside arXiv's page on 22 papers with the same rows, every difference judged against the original)",
+    title: "display ≥ today: no page worse than today's, a difference only where nearer the original (lab/typeset/parity/: today's output and v2's drawn beside arXiv's page on 22 papers with the same rows, every difference judged against the original; the added pairs, lab/typeset/added.mjs, judged apart)",
     tier: 'full',
     stage: 'reader',
     holds: ['I3', 'I10'],
@@ -632,28 +659,36 @@ export const GATES = [
       exists("the reader's served faces' tables (AXT_FACE_TABLES)", join(TABLES, 'index.json')),
       exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
       exists("today's engine at 065c1d973 (AXT_TODAY)", join(process.env.AXT_TODAY ?? join(ctx.root, '..', 'refactor-read'), 'src/pdf-reader/engine/view/engine.css')),
+      exists("the added pairs' today's side (lab/typeset/added.mjs)", lab(ctx, 'baseline/added/pairs.txt')),
     ],
+    // (the 22 pairs, then the added pairs in steps of their own, their today's side read through added.mjs's root of links (made
+    // as the step runs), their sheet beside, so that the 22's numbers stay comparable with the rounds before)
     steps: ctx => {
       const work = join(ctx.work, 'display')
+      const added = join(ctx.work, 'display-added')
+      const withAdded = cmd => ['node', 'lab/typeset/added.mjs', '--', ...cmd]
       const env = { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }
       return [
         { cmd: ['node', 'lab/typeset/parity/v2.mjs', `--out=${join(work, 'v2')}`, ...PARITY_PAIRS], slot: 'test', env, fresh: work },
         { cmd: ['node', 'lab/typeset/parity/render.mjs', `--work=${work}`, `--out=${join(work, 'sheet')}`, ...PARITY_PAIRS], slot: 'e2e', env },
         { cmd: ['node', 'lab/typeset/parity/measure.mjs', `--work=${work}`, `--out=${join(work, 'sheet')}`, ...PARITY_PAIRS], env },
+        { cmd: withAdded(['node', 'lab/typeset/parity/v2.mjs', `--out=${join(added, 'v2')}`, ...ADDED]), slot: 'test', env, fresh: added },
+        { cmd: withAdded(['node', 'lab/typeset/parity/render.mjs', `--work=${added}`, `--out=${join(added, 'sheet')}`, ...ADDED]), slot: 'e2e', env },
+        { cmd: withAdded(['node', 'lab/typeset/parity/measure.mjs', `--work=${added}`, `--out=${join(added, 'sheet')}`, ...ADDED]), env },
       ]
     },
     judge: (ctx, steps) => {
-      const text = steps.at(-1)?.text ?? ''
-      const m = /parity: (\d+) pages of (\d+) pairs; (\d+) worse than today/.exec(text)
-      const numbers = m ? { pages: num(m[1]), pairs: num(m[2]), worse: num(m[3]) } : {}
-      // (what keeps the run from being judged whole: an asked pair or page not drawn, a page that failed; any fails the gate)
-      const inc = /^incomplete: (\d+)/m.exec(text)
-      if (inc) numbers.incomplete = num(inc[1])
-      for (const f of text.matchAll(/^ {2}([a-z-]+) +(\d+) pages worse \((\d+) differences\), (\d+) nearer/gm)) numbers[f[1]] = `${f[2]} pages worse, ${f[4]} nearer`
+      const numbers = parityOf(steps[2]?.text ?? '')
       // (I10 over the pairs' Pages as the reader lays them: v2.mjs's count)
       const I10 = typesetOf(steps[0]?.text ?? '').I10
       if (I10 != null) numbers.I10 = I10
-      return { pass: steps.length === 3 && steps.every(s => s.exit === 0), numbers, ...(I10 != null ? { findings: { I10: { held: I10 === 0, count: I10 } } } : {}), note: `the sheet: ${join(ctx.work, 'display', 'sheet', 'index.html')}` }
+      // (the added pairs' verdict and I10, apart)
+      const added = parityOf(steps[5]?.text ?? '')
+      const addedI10 = typesetOf(steps[3]?.text ?? '').I10
+      if (addedI10 != null) added.I10 = addedI10
+      numbers.added = added
+      const findings = { ...(I10 != null || addedI10 != null ? { I10: { held: (I10 ?? 0) === 0 && (addedI10 ?? 0) === 0, count: (I10 ?? 0) + (addedI10 ?? 0) } } : {}) }
+      return { pass: steps.length === 6 && steps.every(s => s.exit === 0), numbers, ...(Object.keys(findings).length ? { findings } : {}), note: `the sheets: ${join(ctx.work, 'display', 'sheet', 'index.html')}, ${join(ctx.work, 'display-added', 'sheet', 'index.html')}` }
     },
   },
   {
@@ -845,12 +880,23 @@ function corpusJudge(ctx, out, proofs) {
   }
 }
 
+/** a parity verdict's numbers (lab/typeset/parity/measure.mjs's log): its pages, pairs and pages worse; what kept it from being
+ *  judged whole (an asked pair or page not drawn, a page that failed: any fails the gate); each measure's pages worse */
+function parityOf(text) {
+  const m = /parity: (\d+) pages of (\d+) pairs; (\d+) worse than today/.exec(text)
+  const numbers = m ? { pages: num(m[1]), pairs: num(m[2]), worse: num(m[3]) } : {}
+  const inc = /^incomplete: (\d+)/m.exec(text)
+  if (inc) numbers.incomplete = num(inc[1])
+  for (const f of text.matchAll(/^ {2}([a-z-]+) +(\d+) pages worse \((\d+) differences\), (\d+) nearer/gm)) numbers[f[1]] = `${f[2]} pages worse, ${f[4]} nearer`
+  return numbers
+}
+
 function typesetJudge(steps) {
   const t = typesetOf(steps[0].text)
   const d = steps[1] ? diffOf(steps[1].text) : {}
   return {
     pass: steps.every(s => s.exit === 0),
-    numbers: { ...d, I3: t.I3, I4: t.I4, I5: t.I5, msPerPage: t.msPerPage, layP50: t.layP50, layP90: t.layP90, layP99: t.layP99, layPages: t.layPages },
+    numbers: { ...d, I3: t.I3, I4: t.I4, I5: t.I5, msPerPage: t.msPerPage, layP50: t.layP50, layP90: t.layP90, layP99: t.layP99, layPages: t.layPages, ...(t.added ? { added: { pairs: t.added.pairs, I3: t.added.I3, I4: t.added.I4, I5: t.added.I5 } } : {}) },
     findings: Object.fromEntries(['I3', 'I4', 'I5'].filter(k => t[k] != null).map(k => [k, { held: t[k] === 0, count: t[k] }])),
   }
 }

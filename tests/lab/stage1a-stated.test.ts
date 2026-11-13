@@ -12,6 +12,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { CAUSE, HOLDER_JOIN, holdersDeclared, keptWhyOf, statedOf } from '../../lab/pdf/prepare-back/stated.mjs'
+// @ts-expect-error — a plain node module of the lab
+import { flatOf, keyedByPiece, pieceKOf } from '../../lab/pdf/prepare-back/pieces.mjs'
 import { RAW_ADDRESSES, readingOf, scriptsKeptAsElements, scriptsKeptInAnotherOrder } from '../../packages/typeset/tests/replay/l1.ts'
 import { ADDRESS_GROUP, EMAIL_ADDRESS } from '../../src/pdf-reader/engine/source/latex-front.mjs'
 
@@ -1186,5 +1188,108 @@ describe.skipIf(!existsSync(ACCEPTANCE))("F3's script in the differential's acce
     const accepted = (cause: string) =>
       (JSON.parse(readFileSync(ACCEPTANCE, 'utf8')) as { accepted: { match: string }[] }).accepted.some((e) => new RegExp(e.match).test(cause))
     expect(accepted(CAUSE.script)).toBe(true)
+  })
+})
+
+describe("(t) held whole by the drawn units on its lines, read as arXiv prints them (lane lost-11, the coordinator's ruling of 2026-11-13)", () => {
+  // (each side its label and inked elements by arXiv's glyphs in their boxes, its text as written; arXiv's own text the reference
+  // where today's reading dropped a hyphen arXiv prints at one of its line ends)
+  const ink = (s: string, x: number, y: number) => [...s].map((u, i) => glyph(u, x + 5 * i, x + 5 * i + 5, y, 10))
+  const why = (c: string) => `made on arXiv's page as ${c.repeat(12)}: ${CAUSE.printed}`
+  type Box = Line & { kind?: string }
+  const drawn = (u: ReturnType<typeof unit>, els: { k: number; kind: string; segs: Line[] }[] = [], label: Box[] = []) => ({
+    ...u,
+    state: 'drawn',
+    elements: els,
+    ...(label.length ? { label } : {}),
+  })
+  it("states an ink line whose raised mark is now its stand-in's label and its address an element, the stand-in its holder (2608.08481v1 t125)", () => {
+    const today = on(unit(id('a'), 125, 'inkorphan', [ph('$*$'), text(' Electronic address: a@b.org')]), box(100, 300, 500, 508, 498))
+    today.elements = [{ k: 0, kind: 'math', segs: [box(100, 105, 504, 510, 503)] }]
+    const v2 = drawn(
+      on(unit(id('b'), 115, 'inkorphan', [text('Electronic address: '), ph('\\url{a@b.org}')]), box(110, 300, 500, 508, 498)),
+      [{ k: 1, kind: 'url', segs: [box(200, 235, 500, 507, 499)] }],
+      [{ kind: 'number', ...box(100, 105, 504, 510, 503) }],
+    )
+    const glyphs = () => [...ink('*', 100, 504), ...ink('a@b.org', 200, 500)]
+    const out = statedOf([today], [v2], { glyphs })
+    expect(said(out)).toEqual([[125, why('b')]])
+    expect(out[0].holder).toBe(id('b'))
+    // (no page read: nothing is read as arXiv prints it)
+    expect(said(statedOf([today], [v2]))).toEqual([[125, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`]])
+  })
+  it("states today's note of two entries now two consecutive references, their labels and numbers as arXiv prints them, no holder (2608.06007v1 t244)", () => {
+    const today = on(unit(id('a'), 244, 'inknotes', [text('[37] Ann Lee, Cachegen. ACM, 2024. [38] Bo Li, Pie. 2023.')]), box(80, 300, 600, 608, 598), box(80, 300, 588, 596, 586))
+    const ref = (c: string, ord: number, s: string, y: number) =>
+      drawn(on(unit(id(c), ord, 'reference', [text(s), ph('2024.')]), box(100, 275, y, y + 8, y - 2)), [{ k: 1, kind: 'number', segs: [box(250, 275, y, y + 7, y - 1)] }], [{ kind: 'number', ...box(80, 100, y, y + 7, y - 1) }])
+    const v2 = [ref('b', 264, 'Ann Lee, Cachegen. ACM, ', 600), ref('c', 265, 'Bo Li, Pie. ', 588)]
+    const glyphs = () => [...ink('[37]', 80, 600), ...ink('2024.', 250, 600), ...ink('[38]', 80, 588), ...ink('2023.', 250, 588)]
+    const out = statedOf([today], v2, { glyphs })
+    expect(said(out)).toEqual([[244, why('b')]])
+    expect(out[0].holder).toBeUndefined()
+    // (another unit between them in the dump's order, or one of them not drawn: none)
+    const between = on(unit(id('d'), 265, 'para', [text('x')]), box(72, 300, 300, 308, 298))
+    expect(statedOf([today], [v2[0], between, { ...v2[1], ord: 266 }], { glyphs })).toEqual([])
+    expect(statedOf([today], [v2[0], { ...v2[1], state: 'laid' }], { glyphs })).toEqual([])
+  })
+  it("reads a hyphen arXiv prints at the end of one of today's lines as arXiv's where today's reading dropped it, and nowhere else (2608.06007v1 t245)", () => {
+    const lines = [box(80, 300, 600, 608, 598), box(80, 300, 588, 596, 586)]
+    const today = (s: string) => on(unit(id('a'), 245, 'inknotes', [text(s)]), ...lines)
+    const at = (cut: number) => {
+      const url = 'docs.org/api-guide/x'
+      const v2 = drawn(
+        on(unit(id('b'), 267, 'reference', [text('see '), ph(`\\url{${url}}`), text(' now')]), box(100, 300, 600, 608, 598), box(80, 135, 588, 596, 586)),
+        [{ k: 1, kind: 'url', segs: [box(125, 125 + 5 * cut, 600, 607, 599), box(80, 80 + 5 * (url.length - cut), 588, 595, 587)] }],
+        [{ kind: 'number', ...box(80, 100, 600, 607, 599) }],
+      )
+      const glyphs = () => [...ink('[40]', 80, 600), ...ink('see', 105, 600), ...ink(url.slice(0, cut), 125, 600), ...ink(url.slice(cut), 80, 588), ...ink('now', 120, 588)]
+      return { v2, glyphs }
+    }
+    // (TeX broke the address after its hyphen: the line ends with it)
+    const end = at('docs.org/api-'.length)
+    expect(said(statedOf([today('[40] see docs.org/apiguide/x now')], [end.v2], { glyphs: end.glyphs }))).toEqual([[245, why('b')]])
+    // (a hyphen today's lacks that no line of today's ends with; a letter today's lacks)
+    const mid = at('docs.org/api'.length)
+    expect(said(statedOf([today('[40] see docs.org/apiguide/x now')], [mid.v2], { glyphs: mid.glyphs }))).toEqual([])
+    expect(said(statedOf([today('[40] see docs.org/apguide/x now')], [end.v2], { glyphs: end.glyphs }))).toEqual([])
+  })
+  it("states nothing where today's letters differ from arXiv's print but for a face of small capitals (2610.19159v1 t1990)", () => {
+    const today = on(unit(id('a'), 1990, 'inkorphan', [text('Lenient self-verification')]), box(175, 300, 711, 718, 709))
+    const v2 = drawn(
+      on(unit(id('b'), 1264, 'para', [text('Step 3357 Tool Output'), ph('\\mark{Lenient Self-verification}')]), box(80, 300, 711, 718, 709)),
+      [{ k: 1, kind: 'macro', segs: [box(175, 300, 711, 717, 710)] }],
+    )
+    const glyphs = () => ink('(LenientSelf-verification)', 170, 711)
+    expect(statedOf([today], [v2], { glyphs })).toEqual([])
+  })
+})
+
+describe('the dump keys an element by its piece (pieces.mjs, which run.mjs and restate.mjs read; lane lost-11)', () => {
+  // (2608.06007v1's reference 264: the instrument's ids are the front end's piece indices, a group dropped before "2024.")
+  const content = [
+    { t: 'text', s: 'Ann Lee, et' },
+    { t: 'el', id: '1', kind: 'space', src: '~' },
+    { t: 'text', s: 'al. In ' },
+    { t: 'span', id: '3', open: '{', close: '}', content: [{ t: 'text', s: 'ACM' }] },
+    { t: 'text', s: ', ' },
+    { t: 'el', id: '8', kind: 'number', src: '2024.' },
+    { t: 'unit', id: '9', unit: 'f'.repeat(64), pre: '\\footnote{', post: '}' },
+  ]
+  it('numbers the pieces by place and keys each element and nested unit by its piece, a trail by none', () => {
+    const { pieces, kOf } = flatOf(content)
+    expect(pieces.map((p: { k: number; kind: string }) => [p.k, p.kind])).toEqual([
+      [0, 'text'], [1, 'ph'], [2, 'text'], [3, 'open'], [4, 'text'], [5, 'close'], [6, 'text'], [7, 'ph'], [8, 'nested'],
+    ])
+    expect([pieceKOf(kOf, '1'), pieceKOf(kOf, 8), pieceKOf(kOf, '9'), pieceKOf(kOf, '~'), pieceKOf(kOf, null)]).toEqual([1, 7, 8, null, null])
+  })
+  it("keys a dump's own elements written by content id by their pieces, its statements and units its bundle lacks left as they are", () => {
+    const own = { id: id('a'), ord: 0, kind: 'reference', elements: [{ k: 8, kind: 'number', segs: [] }, { k: 1, kind: 'space', segs: [] }, { k: null, kind: 'other', segs: [] }] }
+    const r = keyedByPiece(
+      [own, { id: id('b'), ord: 1, replaced: true, elements: [{ k: 8 }] }, { id: id('c'), ord: 2, elements: [{ k: 3 }] }],
+      (u: string) => (u === id('a') ? content : undefined),
+    )
+    expect(r.units[0].elements.map((e: { k: number | null }) => e.k)).toEqual([7, 1, null])
+    expect([r.units[1].elements[0].k, r.units[2].elements[0].k]).toEqual([8, 3])
+    expect(r.counts).toEqual({ units: 2, elements: 3, moved: 1, unbundled: 1 })
   })
 })

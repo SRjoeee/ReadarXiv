@@ -125,8 +125,10 @@ export const ENDPOINTS = [
   { kind: 'google', re: /translate-pa\.googleapis\.com|translate\.googleapis\.com/ },
   { kind: 'deepl', re: /api(?:-free)?\.deepl\.com/ },
 ]
-/** a citation of a definition, in a declaration's comment: TeX's, LaTeX's, the PDF's, Unicode's, a font's, a standard's */
-export const CITES_DEFINITION = /\b(?:TeX(?:book)?|LaTeX|latex\.ltx|plain\.tex|PDF(?:'s| spec| reference)|ISO[ -]32000|Unicode|UAX ?#?\d+|UTS ?#?\d+|CLDR|OpenType|TrueType|PostScript|Type ?1|the font's|font's own|JIS ?X ?4051|W3C|clreq|jlreq|klreq|CSS'?s?|ECMA|RFC ?\d+|IEEE ?754|PDF\.js's|Chromium's)\b/
+/** a citation of a definition, in a declaration's comment: TeX's, LaTeX's, a file of a TeX distribution named by its
+ *  extension (cite.sty, article.cls, latex.ltx: a package's name alone is no citation), the PDF's, Unicode's, a font's, a
+ *  standard's; plain.tex by name (`.tex` is every paper's extension) */
+export const CITES_DEFINITION = /\b(?:TeX(?:book)?|LaTeX|[\w@-]+\.(?:sty|cls|clo|def|ltx|bst|bbx|cbx|lbx|fd|cfg|dtx)|plain\.tex|PDF(?:'s| spec| reference)|ISO[ -]32000|Unicode|UAX ?#?\d+|UTS ?#?\d+|CLDR|OpenType|TrueType|PostScript|Type ?1|the font's|font's own|JIS ?X ?4051|W3C|clreq|jlreq|klreq|CSS'?s?|ECMA|RFC ?\d+|IEEE ?754|PDF\.js's|Chromium's)\b/
 /** a citation of evidence: a paper, the corpus, a measurement */
 export const CITES_EVIDENCE = /\b\d{4}\.\d{4,5}(?:v\d+)?\b|\bcorpus\b|\bmeasured\b|\btuned\b|\bempiric|\bon the \d+ papers\b|\bseen on\b/i
 /** the exact factors between units and the bounds of a representation: a literal of one of these values whose name or comment
@@ -211,9 +213,11 @@ const textOf = (text, n) => text.slice(n.start, n.end)
 
 /**
  * One file's facts: its lines by kind, what it imports and exports, and what the rule-debt, type and duplication counts read
- * of it. `tokens`: also each function's token digest (the duplication count's).
+ * of it. `tokens`: also each function's token digest (the duplication count's). `nodes`: also, not enumerable (census.json
+ * never holds them), the file's syntax tree (`ast`) and each threshold's and list's own nodes (`nodes`: the literal, its
+ * declaration or the comparison or call it stands in), for the rule ledger's instrument (lab/rules/sites.mjs).
  */
-export function factsOf(path, text, { tokens = true } = {}) {
+export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
   const kind = kindOf(path)
   const head = text.split('\n').slice(0, 12).join('\n')
   const f = { path, kind, bytes: Buffer.byteLength(text), generated: GENERATED.test(head), ported: PORTED.test(text.split('\n').slice(0, 30).join('\n')), copied: COPIED.test(head), parsed: true }
@@ -244,6 +248,9 @@ export function factsOf(path, text, { tokens = true } = {}) {
   }
   const kinds = lineKinds(text, ast.comments.map(c => [c.start, c.end]))
   f.lines = countLines(kinds)
+  // (an item's nodes, kept out of every enumeration)
+  const keep = (item, n) => (nodes ? Object.defineProperty(item, 'nodes', { value: n }) : item)
+  if (nodes) Object.defineProperty(f, 'ast', { value: ast })
   const commentsOnLine = new Map()
   for (const c of ast.comments) for (let l = lineAt[c.start]; l <= lineAt[c.end - 1]; l++) commentsOnLine.set(l, [...(commentsOnLine.get(l) ?? []), c.value])
   f.history = historyIn(text, ast.comments)
@@ -255,18 +262,23 @@ export function factsOf(path, text, { tokens = true } = {}) {
       .map(c => c.value)
       .join('\n')
   const sameLine = node => (commentsOnLine.get(lineAt[node.start]) ?? []).join('\n')
-  // (the comment right before a statement, its line comments joined, nothing but white space and no blank line between it and
-  // the statement; not the file's opening comment, which is the file's: `leading` holds every comment before a statement)
+  // (the comment right before a statement (census.mjs DEFINITIONS `comments`): nothing but white space and no blank line between
+  // it and the statement, cut where its kind changes: a block comment there is the statement's alone, else the run of line
+  // comments with no blank line inside; a block that opens the file is the file's: `leading` holds every comment before)
   const adjacent = node => {
-    const block = []
-    let end = node?.start ?? 0
-    for (const c of [...(node?.leadingComments ?? [])].reverse()) {
-      const between = text.slice(c.end, end)
-      if (!/^[ \t]*\n?[ \t]*$/.test(between) || !/^\s*$/.test(text.slice(text.lastIndexOf('\n', c.start - 1) + 1, c.start))) break
-      block.unshift(c)
-      end = c.start
-    }
-    if (!block.length || /^\s*$/.test(text.slice(0, block[0].start))) return ''
+    const comments = node?.leadingComments ?? []
+    const opensLine = c => /^\s*$/.test(text.slice(text.lastIndexOf('\n', c.start - 1) + 1, c.start))
+    const tight = (c, end) => /^[ \t]*\n?[ \t]*$/.test(text.slice(c.end, end))
+    const last = comments.at(-1)
+    if (!last || !tight(last, node.start) || !opensLine(last)) return ''
+    const block = [last]
+    if (last.type !== 'CommentBlock')
+      for (let i = comments.length - 2; i >= 0; i--) {
+        const c = comments[i]
+        if (c.type === 'CommentBlock' || !tight(c, block[0].start) || !opensLine(c)) break
+        block.unshift(c)
+      }
+    if (/^\s*$/.test(text.slice(0, block[0].start))) return ''
     return block.map(c => c.value).join('\n')
   }
 
@@ -335,7 +347,8 @@ export function factsOf(path, text, { tokens = true } = {}) {
     for (const v of d.declarations) {
       const name = v.id?.type === 'Identifier' ? v.id.name : null
       if (!name || !v.init) continue
-      const comment = `${leading(s)}\n${sameLine(v)}`
+      // (a rule's comment: the block directly before its declaration, and its own line's; DEFINITIONS.comments)
+      const comment = `${adjacent(s)}\n${sameLine(v)}`
       const lit = stringOf(v.init) ?? (v.init.type === 'NumericLiteral' ? v.init.value : v.init.type === 'TSAsExpression' ? (stringOf(v.init.expression) ?? (v.init.expression.type === 'NumericLiteral' ? v.init.expression.value : null)) : null)
       if (lit != null && UPPER.test(name)) f.constants.push({ name, value: lit, line: lineAt[v.start] })
       if (lit != null && UPPER.test(name) && !NOT_VERSION.test(name) && (VERSION_NAME.test(name) || VERSION_FILE.test(path) || RAISED.test(leading(s).replace(/\n\s*\*?\s*/g, ' ')))) {
@@ -349,7 +362,7 @@ export function factsOf(path, text, { tokens = true } = {}) {
       if (UPPER.test(name)) {
         const value = numberOf(v.init)
         if (value != null) {
-          f.thresholds.push(thresholdOf({ value, raw: textOf(text, v.init), name, comment, line: lineAt[v.start], context: 'constant' }))
+          f.thresholds.push(keep(thresholdOf({ value, raw: textOf(text, v.init), name, comment, line: lineAt[v.start], context: 'constant' }), { literal: v.init, declarator: v, comment }))
           constNodes.add(v.init)
         }
         const obj = v.init.type === 'CallExpression' && v.init.callee?.property?.name === 'freeze' ? v.init.arguments[0] : v.init.type === 'TSAsExpression' ? v.init.expression : v.init
@@ -359,8 +372,8 @@ export function factsOf(path, text, { tokens = true } = {}) {
           const values = props.map(p => numberOf(p.value))
           const enumeration = props.length >= 3 && values.every(Number.isInteger) && new Set(values).size === values.length
           for (const p of props) {
-            const t = thresholdOf({ value: numberOf(p.value), raw: textOf(text, p.value), name: `${name}.${nameOf(p.key) ?? '?'}`, comment: `${comment}\n${leading(p)}\n${sameLine(p)}`, line: lineAt[p.start], context: 'table' })
-            f.thresholds.push(enumeration ? { ...t, class: 'code' } : t)
+            const t = thresholdOf({ value: numberOf(p.value), raw: textOf(text, p.value), name: `${name}.${nameOf(p.key) ?? '?'}`, comment: `${comment}\n${adjacent(p)}\n${sameLine(p)}`, line: lineAt[p.start], context: 'table' })
+            f.thresholds.push(keep(enumeration ? { ...t, class: 'code' } : t, { literal: p.value, declarator: v, property: p, comment: `${comment}\n${adjacent(p)}\n${sameLine(p)}` }))
             constNodes.add(p.value)
           }
         }
@@ -383,19 +396,22 @@ export function factsOf(path, text, { tokens = true } = {}) {
       f.functions.push(fn)
       fnStack.push(fn)
     }
-    const stmt = stmtStack.at(-1)
-    const near = n => `${leading(stmt)}\n${sameLine(n)}`
+    // (a statement's comment; an exported declaration's is its export statement's, where the parser hangs it)
+    const inner = stmtStack.at(-1)
+    const outer = stmtStack.at(-2)
+    const stmt = (outer?.type === 'ExportNamedDeclaration' || outer?.type === 'ExportDefaultDeclaration') && outer.declaration === inner ? outer : inner
+    const near = n => `${adjacent(stmt)}\n${sameLine(n)}`
     switch (node.type) {
       case 'BinaryExpression':
         if (RELATIONAL.has(node.operator))
           for (const side of [node.left, node.right])
-            if (isNumberLiteral(side) && !constNodes.has(side)) f.thresholds.push(thresholdOf({ value: numberOf(side), raw: textOf(text, side), name: null, comment: near(node), line: lineAt[side.start], context: 'comparison', other: textOf(text, side === node.left ? node.right : node.left).slice(0, 60) }))
+            if (isNumberLiteral(side) && !constNodes.has(side)) f.thresholds.push(keep(thresholdOf({ value: numberOf(side), raw: textOf(text, side), name: null, comment: near(node), line: lineAt[side.start], context: 'comparison', other: textOf(text, side === node.left ? node.right : node.left).slice(0, 60) }), { literal: side, site: node, comment: near(node) }))
         break
       case 'CallExpression': {
         const c = node.callee
         if (c?.type === 'Identifier') f.calls.add(c.name)
         if (c?.type === 'MemberExpression' && c.object?.name === 'Math' && ['min', 'max'].includes(c.property?.name))
-          for (const a of node.arguments) if (isNumberLiteral(a) && !constNodes.has(a)) f.thresholds.push(thresholdOf({ value: numberOf(a), raw: textOf(text, a), name: null, comment: near(node), line: lineAt[a.start], context: `Math.${c.property.name}` }))
+          for (const a of node.arguments) if (isNumberLiteral(a) && !constNodes.has(a)) f.thresholds.push(keep(thresholdOf({ value: numberOf(a), raw: textOf(text, a), name: null, comment: near(node), line: lineAt[a.start], context: `Math.${c.property.name}` }), { literal: a, site: node, comment: near(node) }))
         if (c?.type === 'Import' || c?.name === 'require') addImport(stringOf(node.arguments[0]), ['*'], false, node)
         if (c?.type === 'MemberExpression' && ((c.object?.name === 'Translator' && c.property?.name === 'create') || c.property?.name === 'createTranslator')) f.endpoints.push({ kind: 'chrome', line: lineAt[node.start] })
         break
@@ -439,13 +455,13 @@ export function factsOf(path, text, { tokens = true } = {}) {
           // (our own vocabulary: declared `as const`, its type the literal's, or a schema's enum: not a name list)
           const vocabulary = ((parent?.type === 'TSAsExpression' || parent?.type === 'TSTypeAssertion') && isConst(parent.typeAnnotation)) || (parent?.type === 'CallExpression' && parent.arguments[0] === node && parent.callee?.type === 'MemberExpression' && nameOf(parent.callee.property) === 'enum')
           if (vocabulary) f.vocabularies.push({ ...l, class: 'vocabulary' })
-          else f.lists.push(l)
+          else f.lists.push(keep(l, { literal: node, parent, entries: strings, comment: near(node) }))
         }
         break
       }
       case 'RegExpLiteral': {
         const words = alternativesOf(node.pattern)
-        if (words.length >= 3) f.lists.push(listOf({ entries: words, line: lineAt[node.start], name: nameOf(stmtDeclName(stmt)), comment: near(node), form: 'regex' }))
+        if (words.length >= 3) f.lists.push(keep(listOf({ entries: words, line: lineAt[node.start], name: nameOf(stmtDeclName(stmt)), comment: near(node), form: 'regex' }), { literal: node, parent, entries: words, comment: near(node) }))
         if (ARXIV_ID.test(node.pattern.replace(/\\\./g, '.'))) f.papers.push({ id: ARXIV_ID.exec(node.pattern.replace(/\\\./g, '.'))[0], line: lineAt[node.start] })
         break
       }
@@ -546,7 +562,7 @@ const sentencesOf = value =>
     .filter(Boolean)
 const isConst = n => n?.type === 'TSTypeReference' && n.typeName?.type === 'Identifier' && n.typeName.name === 'const'
 const idsOf = p => (!p ? [] : p.type === 'Identifier' ? [p.name] : p.type === 'ObjectPattern' ? p.properties.flatMap(x => idsOf(x.value ?? x.argument)) : p.type === 'ArrayPattern' ? p.elements.flatMap(idsOf) : p.type === 'AssignmentPattern' ? idsOf(p.left) : p.type === 'RestElement' ? idsOf(p.argument) : [])
-const stmtDeclName = s => (s?.type === 'VariableDeclaration' ? s.declarations[0]?.id : s?.type === 'ExportNamedDeclaration' && s.declaration?.type === 'VariableDeclaration' ? s.declaration.declarations[0]?.id : s?.id ?? null)
+const stmtDeclName = s => (s?.type === 'VariableDeclaration' ? s.declarations[0]?.id : (s?.type === 'ExportNamedDeclaration' || s?.type === 'ExportDefaultDeclaration') && s.declaration ? stmtDeclName(s.declaration) : (s?.id ?? null))
 const countLines = kinds => ({ code: kinds.filter(k => k === 'code').length, comment: kinds.filter(k => k === 'comment').length, blank: kinds.filter(k => k === 'blank').length })
 const withoutRanges = (text, ranges) => {
   const a = text.split('')
@@ -614,7 +630,8 @@ export function thresholdOf(t) {
 
 /** a list of names (census.mjs DEFINITIONS `lists`): `defined` where its comment cites a definition, `listed` otherwise */
 function listOf(l) {
-  return { line: l.line, name: l.name ?? null, size: l.entries.length, form: l.form, sample: l.entries.slice(0, 4), class: CITES_DEFINITION.test(l.comment ?? '') ? 'defined' : 'listed' }
+  const cites = CITES_DEFINITION.exec(l.comment ?? '')?.[0] ?? null
+  return { line: l.line, name: l.name ?? null, size: l.entries.length, form: l.form, sample: l.entries.slice(0, 4), class: cites ? 'defined' : 'listed', cites }
 }
 
 // ---------------------------------------------------------------- resolution
@@ -888,7 +905,7 @@ export function typeCheckedOf(scan, graph) {
 // ---------------------------------------------------------------- scanning a tree
 
 /** a repository's tree read whole: every file's place and facts */
-export function scanTree(repo, root, profile, { tokens = true } = {}) {
+export function scanTree(repo, root, profile, { tokens = true, nodes = null } = {}) {
   const files = new Map()
   for (const path of listFiles(root, profile.exclude ?? [])) {
     const kind = kindOf(path)
@@ -898,7 +915,11 @@ export function scanTree(repo, root, profile, { tokens = true } = {}) {
       continue
     }
     const text = readFileSync(join(root, path), 'utf8')
-    files.set(path, { ...factsOf(path, text, { tokens }), ...placeOf(path, profile) })
+    // (`nodes`: a test of a path, the files whose syntax trees and items' nodes are kept; the spread copies what is enumerable)
+    const f = factsOf(path, text, { tokens, nodes: Boolean(nodes?.(path)) })
+    const kept = { ...f, ...placeOf(path, profile) }
+    if (f.ast) Object.defineProperties(kept, { ast: { value: f.ast }, text: { value: text } })
+    files.set(path, kept)
   }
   return { repo, root, profile, files }
 }

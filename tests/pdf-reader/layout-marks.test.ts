@@ -6,7 +6,7 @@ import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
 import { patch, startOf } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, colourPieceOf, DISPLAY, encodeLayoutMarks, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_SCHEMA, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, AHEAD_PROBE_MAX, FOLLOWERS, GLYPHS_PIECE, INK_ANY, INK_BUDGET, inkSamples, inkSection, leadSamples, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks, refKeysOf, refsTex } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, colourPieceOf, DISPLAY, encodeLayoutMarks, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_SCHEMA, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, AHEAD_PROBE_MAX, FOLLOWERS, GLYPHS_PIECE, INK_ANY, INK_BUDGET, inkSamples, inkSection, leadSamples, markProbeTex, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks, refKeysOf, refsTex } from '@/pdf-reader/engine/layout/marks.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
 import { GLYPHS_PAGE } from '@readarxiv/engine'
 import { markWords, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
@@ -458,12 +458,12 @@ describe('the paper\'s own switch: TeX asked what a mark does before what follow
     expect(tex).not.toMatch(/\\write|\\immediate|AXT-/)
     expect(FOLLOWERS).toEqual(['.', ',', ';', ':', '!', '?', 'word', 'call'])
   })
-  it('readProbe: the rows of every section, tagged, with their schema; readMarkProbe takes its own and no other', () => {
-    expect(probeRow('punct', 3, '\\axt@qo')).toBe(`\\typeout{LAYOUT-PROBE ${PROBE_SCHEMA} punct 3 \\axt@qo}`)
+  it('readProbe: the rows of every section, tagged; a line of another marker is no row; readMarkProbe takes its own and no other', () => {
+    expect(probeRow('punct', 3, '\\axt@qo')).toBe('\\typeout{LAYOUT-PROBE 1 punct 3 \\axt@qo}')
     const log = 'LAYOUT-PROBE 1 punct 0 00000000\nLAYOUT-PROBE 1 role 4 display\nother line\nLAYOUT-PROBE 2 punct 1 22222222\nLAYOUT-PROBE 1 punct 1 22222200\nLAYOUT-PROBE 1 punct 2 2200000\nLAYOUT-PROBE 1 punct 7 22222222\nLAYOUT-PROBE 1 punct 0\n'
-    expect(readProbe(log).map(r => [r.schema, r.tag, r.fields.join(' ')])).toEqual([[1, 'punct', '0 00000000'], [1, 'role', '4 display'], [2, 'punct', '1 22222222'], [1, 'punct', '1 22222200'], [1, 'punct', '2 2200000'], [1, 'punct', '7 22222222'], [1, 'punct', '0']])
+    expect(readProbe(log).map(r => [r.tag, r.fields.join(' ')])).toEqual([['punct', '0 00000000'], ['role', '4 display'], ['punct', '1 22222200'], ['punct', '2 2200000'], ['punct', '7 22222222'], ['punct', '0']])
     const samples = [{ command: '\\cite' }, { command: '\\autocite' }, { command: '\\footnote' }]
-    // another schema's row, a section of another tag, a code cut short, a sample the probe has not: no answer
+    // a line of another marker, a section of another tag, a code cut short, a sample the probe has not: no answer
     expect(readMarkProbe(log, samples)).toEqual({ '\\cite': '00000000', '\\autocite': '22222200' })
     // an error TeX logged in a box answers nothing: in the box as the paper sets it, no answer (x); with the opening
     // mark, no mark (2); with both marks alone, no closing mark (1, REVTeX's citeautoscript); one before any row is no

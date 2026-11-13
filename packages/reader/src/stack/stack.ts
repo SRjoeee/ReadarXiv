@@ -135,6 +135,12 @@ export interface ViewContent {
   over: ((at: SlotAt) => Promise<HTMLElement | null> | HTMLElement | null) | null
   /** what is laid over drawn again at a new scale, RECOPY_MS after a zoom (the crops), in the slot's turn of the scheduler */
   again?: ((over: HTMLElement, at: SlotAt) => Promise<void>) | null
+  /** what is laid over let go while the drawing is kept off the view, a small copy kept of it (the crops' page-sized bitmap: a
+   *  far page holds one bitmap, its page view's): the device pixels the copy holds */
+  away?: ((over: HTMLElement) => number) | null
+  /** what `away` let go put back from its copy, in the caller's task, as it was: false where no copy fits (the scale moved while
+   *  it was far), to be drawn anew (`again`) before the drawing is shown */
+  back?: ((over: HTMLElement, at: SlotAt) => boolean) | null
   /** what is laid over let go with its drawing (its text layer out of PDF.js's registry) */
   free?: ((over: HTMLElement) => void) | null
 }
@@ -799,7 +805,7 @@ export function createStack(o: StackOptions): Stack {
       if (!s.near && s.shown === d) {
         const px = d.over ? pixelsOf(d) : 0
         if (px && px <= keepPixels) {
-          keep(s, px)
+          keep(s, px + awayOf(d))
           trim(s.n)
         } else {
           release(d, s)
@@ -844,17 +850,57 @@ export function createStack(o: StackOptions): Stack {
       name(s)
       return
     }
-    keep(s, px)
+    keep(s, px + awayOf(d))
     trim(s.n)
   }
-  /** slot s's drawing kept off the view (`px` its device pixels), marked so that the sheet holds it out of the layout tree; 0:
-   *  kept no more, back in it */
+  /** slot s's drawing kept off the view (`px` its device pixels: its page view's and the copy its overlay keeps), marked so that
+   *  the sheet holds it out of the layout tree; 0: kept no more, back in it once it is whole (`putBack`) */
   function keep(s: Slot, px: number) {
     s.kept = px
     if (px) {
       s.keptAt = ++keepTick
       s.div.setAttribute(KEPT, '')
-    } else s.div.removeAttribute(KEPT)
+    } else if (putBack(s)) s.div.removeAttribute(KEPT)
+  }
+  /** drawing d's overlay let go to its copy as d is kept off the view (its crops' page-sized bitmap: design-performance-2026-11-13
+   *  Q7, a far page holds one bitmap): the device pixels the copy holds */
+  function awayOf(d: Drawing): number {
+    const c = d.content
+    return d.over && isView(c) && c.away ? c.away(d.over) : 0
+  }
+  /** the drawings whose overlay is being drawn anew before they go back into the layout tree (no copy fitted) */
+  const redrawing = new WeakSet<Drawing>()
+  /**
+   * Slot s's kept drawing made whole to go back into the layout tree in this task: what its overlay let go put back from its
+   * copy, so that the page comes back as it left (the compositor only ever sees the page-sized crops canvas). Where no copy fits
+   * (the scale moved while it was far) its overlay is drawn anew first and the drawing goes back once it is (false meanwhile):
+   * a page is never shown without its crops. True where nothing waits
+   */
+  function putBack(s: Slot): boolean {
+    const d = s.shown
+    const c = d?.content
+    if (!d?.view || !d.over || !c || !isView(c) || !c.back) return true
+    const at: SlotAt = { n: s.n, view: d.view, viewport: d.view.viewport, signal: d.ac.signal }
+    if (c.back(d.over, at)) return true
+    if (redrawing.has(d)) return false
+    if (!c.again) return true
+    redrawing.add(d)
+    counts.agains++
+    void c
+      .again(d.over, at)
+      .catch(() => {})
+      .finally(() => {
+        redrawing.delete(d)
+        if (s.shown !== d || disposed) return
+        if (!s.kept) s.div.removeAttribute(KEPT)
+        else if (s.div.hasAttribute(KEPT)) {
+          // (kept still, or again: the crops drawn anew let go to a copy as well, and back from it as the jump's frame
+          // callback or the near observer finds the page)
+          awayOf(d)
+          areaSoon()
+        }
+      })
+    return false
   }
   /** the laid drawings kept past the budget let go, the farthest from the page in the middle of the view first (else from the
    *  page just kept), the one kept longest first between two as far */
@@ -867,11 +913,13 @@ export function createStack(o: StackOptions): Stack {
   }
   /** slot s's kept drawing taken out of the keep: let go (`drop`), or shown again (it came near) */
   function unkeep(s: Slot, drop: boolean) {
-    keep(s, 0)
     if (!drop) {
+      keep(s, 0)
       counts.restored++
       return
     }
+    s.kept = 0
+    s.div.removeAttribute(KEPT)
     release(s.shown, s)
     s.shown = null
     counts.keptDropped++
@@ -910,7 +958,7 @@ export function createStack(o: StackOptions): Stack {
       for (const s of slots) {
         if (!s.kept || !s.div.hasAttribute(KEPT)) continue
         const r = s.div.getBoundingClientRect()
-        if (r.bottom > view.top && r.top < view.bottom) s.div.removeAttribute(KEPT)
+        if (r.bottom > view.top && r.top < view.bottom && putBack(s)) s.div.removeAttribute(KEPT)
       }
       for (const s of slots) {
         const d = s.shown

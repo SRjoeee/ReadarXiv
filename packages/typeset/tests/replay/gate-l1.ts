@@ -7,6 +7,7 @@
 // measures, their alignment and indent, the size, the leading, the edges): the rule whose stated facts changed it.
 import type { OutPiece, Part, Row, Unit } from '@readarxiv/format'
 import { layPage, nameOf } from '../../src/lay/entry.ts'
+import { waitOf } from '../../src/lay/wait.ts'
 import { ownNamesOf } from '../../src/unit/rename.ts'
 import type { LinkFate } from '../../src/lay/links.ts'
 import { keptBefore, ledBy } from '../../src/lay/lead.ts'
@@ -36,6 +37,7 @@ import { inkEndOf } from '../../src/shared/share.ts'
 import type { Metrics, RuleParams, Rows } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
 import { type Cover, coverDone, coverOf, newCover } from './cover.ts'
+import { newParasGate, type ParasGate, parasGate } from './paras-gate.ts'
 import { walkCase } from './fit-input.ts'
 import type { GateUnit } from './gate.ts'
 import { keptJoin, keptRow, type L1Placed, l1Paper, type TodayPrepared, todayPrepared, todayUnitOf } from './l1.ts'
@@ -102,6 +104,11 @@ export type GateL1 = {
     cover: Cover
     /** I6 across the pages' lays (cross-lay.ts): each unit begun on a pass page as every page's lay that runs that pass lays it */
     crossLay?: CrossLay
+    /** the paragraph points (paras-gate.ts): each the part states whose row carries its anchor laid opening on TeX's line */
+    paras: ParasGate
+    /** the reads gate (o.leave), by reading option: the pages laid under it, the row ids their lays read, those the page's wait
+     *  set does not hold and on how many pages, examples */
+    reads?: Map<string, { pages: number; reads: number; outside: number; outsidePages: number; ex: string[] }>
   }
 }
 
@@ -544,6 +551,14 @@ export function gateL1Pair(
      *  package may not import): one refused is no row, the unit left the original's, as the chain makes no row of a reading
      *  that says nothing */
     accept?: (unit: Unit, content: readonly OutPiece[]) => boolean
+    /** the reads gate (what a page reads is what it waits for, docs/PDF-READER.md §19.15): with `entry`, each page laid again by
+     *  layPage under each of these reading options (a name, and the unit kinds its toggles leave the original's: Rules.leave,
+     *  the reader's compose/classes.ts leftKinds; the reader's default and every option on), over the entry's rows, each row id
+     *  its lay reads recorded; an id its page's wait set does not hold (waitOf over no row in, the rows going on: every row the
+     *  page would wait for) is counted (GateL1's entry.reads), no exemption: 0 to pass */
+    leave?: ReadonlyMap<string, readonly string[]>
+    /** where given, each page's lay under each option told: the ids it read and its wait set (a lab tool's record) */
+    reads?: (option: string, page: number, read: ReadonlySet<string>, waits: ReadonlySet<string>) => void
   } = {},
 ): GateL1 {
   const measure = o.metricsOf ? fitMeasure(o.metricsOf(pair)) : null
@@ -578,6 +593,8 @@ export function gateL1Pair(
             figures: new Map(),
             lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 },
             cover: newCover(),
+            paras: newParasGate(),
+            ...(o.leave ? { reads: new Map() } : {}),
           },
         }
       : {}),
@@ -1045,8 +1062,13 @@ export function gateL1Pair(
   }
   // (the entry's lays of each unit begun on a pass page, by the page whose lay laid it: I6 across the lays, cross-lay.ts)
   const laysOf = new Map<number, Map<number, UnitLay>>()
+  // (the rule ledger's recorder, where a lab run installed it (lab/rules/register.mjs): the pair, the page of each case)
+  type Recorder = { context(next: { paper?: string; page?: number | null }): void }
+  const ledgerRecorder = (globalThis as { __axtRules?: Recorder }).__axtRules
+  ledgerRecorder?.context({ paper: pair, page: null })
   for (const [pg, part] of [...bundle.parts].sort((a, b) => a[0] - b[0])) {
     out.pages++
+    ledgerRecorder?.context({ page: pg })
     // (its flows, cut where a member is not set: the one after it starts where TeX set it, as after a member left)
     const flows: FlowMember[][] = []
     for (const flow of part.flows) {
@@ -1118,6 +1140,38 @@ export function gateL1Pair(
         laysOf.set(x.ord, by.set(pg, x))
       }
       coverOf(out.entry.cover, page, part as Part, metrics, pair)
+      parasGate(out.entry.paras, pair, pg, page, part as Part, entryRows, bundle.units)
+      // (the reads gate: the page laid under each reading option, every row id its lay reads against what the page would wait
+      // for while rows come; the entry's rows as they are, every row in)
+      for (const [option, left] of o.leave ?? []) {
+        const leave = new Set(left)
+        const waits = new Set(waitOf(part as Part, { get: () => undefined, done: false, kept: entryRows.kept }, leave))
+        const read = new Set<string>()
+        const recorded: Rows = {
+          get: (id) => {
+            read.add(id)
+            return entryRows!.get(id)
+          },
+          done: entryRows.done,
+          kept: entryRows.kept,
+        }
+        layPage(
+          part as Part,
+          recorded,
+          { ...rulesFor(L.target as never, { leave: [...left] }), set: R, hyph: patternsSeen ?? {} },
+          metrics,
+        )
+        o.reads?.(option, pg, read, waits)
+        const outside = [...read].filter((id) => !waits.has(id))
+        const r = out.entry.reads!.get(option) ?? { pages: 0, reads: 0, outside: 0, outsidePages: 0, ex: [] }
+        out.entry.reads!.set(option, r)
+        r.pages++
+        r.reads += read.size
+        r.outside += outside.length
+        if (outside.length) r.outsidePages++
+        if (outside.length && r.ex.length < 3)
+          r.ex.push(`p${pg}: ${outside.length} (${outside.map((x) => x.slice(0, 8)).join(', ')})`)
+      }
       // (the links' fates, the dropped with an example each; the laid members' boxes on both panes)
       ;((part as Part).links ?? []).forEach((l, i) => {
         // (an annotation of a member's other page, which the part holds with its page: counted apart)
@@ -1260,6 +1314,7 @@ export function gateL1Pair(
       prev.sizes.push(...sizes)
     }
   }
+  ledgerRecorder?.context({ page: null })
   if (out.entry) coverDone(out.entry.cover, pair)
   if (out.entry && laysOf.size) out.entry.crossLay = crossLayOf(laysOf)
   for (const u of L.units) {

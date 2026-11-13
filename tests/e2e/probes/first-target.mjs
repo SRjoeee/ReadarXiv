@@ -5,6 +5,7 @@
 import { rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import { chromiumOptions } from '../lib/chromium.mjs'
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
@@ -14,11 +15,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 for (const list of LISTS) {
   rmSync(PROFILE, { recursive: true, force: true })
-  const context = await chromium.launchPersistentContext(PROFILE, {
+  const context = await chromium.launchPersistentContext(PROFILE, chromiumOptions({
     ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
     headless: !process.env.AXT_HEADED,
     args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, `--accept-lang=${list}`],
-  })
+  }))
   let [worker] = context.serviceWorkers()
   if (!worker) worker = await context.waitForEvent('serviceworker')
   // Waited for, not slept through: the write follows the install event by however long the worker takes to start

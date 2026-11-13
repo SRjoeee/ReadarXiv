@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { PAST_FOOT } from '../../src/fit/walk.ts'
 import { rowLinesOf } from '../../src/lay/adapt.ts'
 import { layPage } from '../../src/lay/entry.ts'
+import { waitOf } from '../../src/lay/wait.ts'
 import { rowPieces, srcOfEl } from '../../src/lay/read.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { Item, Metrics, Rows } from '../../src/types.ts'
@@ -67,7 +68,149 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     // of the unit stored before it was kept, or today's door row the parity hands in, drew it erased and set as one line)
     const kept: Rows = { ...rowsOf([row([{ t: 'text', s: 'ein Satz' }])], true), kept: (k) => k === id }
     const p = layPage(part(member()), kept, rules, metrics())
-    expect(p.members[0]).toMatchObject({ state: 'none', off: 0, lines: [] })
+    // (stated `kept`, never `none`: `none` is a row that did not come by the rows' end, the test before)
+    expect(p.members[0]).toMatchObject({ state: 'kept', off: 0, lines: [] })
+    // (while rows still come, the same: its row never comes, so nothing waits for it)
+    const going = layPage(part(member()), { ...rowsOf([]), kept: (k) => k === id }, rules, metrics())
+    expect([going.wait.rows, going.members[0]!.state]).toEqual([[], 'kept'])
+  })
+  it('states a kept figure text kept, as a kept member of any other kind', () => {
+    const fig = member({
+      kind: 'figure',
+      plain: 'Time',
+      align: 'l',
+      lines: [[1, 0, 100, 120, 200, 208, 198, 100, 120, 0, 10]],
+      room: { below: 20, side: [60, 400] },
+    })
+    const p = layPage(
+      part(fig),
+      { ...rowsOf([row([{ t: 'text', s: 'Zeit' }])], true), kept: (k) => k === id },
+      rules,
+      metrics(),
+    )
+    expect(p.members[0]!.state).toBe('kept')
+  })
+  it('reads no row of a member it never draws a row for: what a page reads is what it waits for (PDF-READER §19.15)', () => {
+    // (four members, each with a row given: one the prepare leaves the original's (`why`), a figure text likewise, one of a kind
+    // the toggles leave, one the paper keeps; and one laid. The page waits for the laid one's row alone, and reads no other)
+    const [w, f, l, k, t] = ['1', '2', '3', '4', '5'].map((c) => c.repeat(64))
+    const fig = (ord: number, text: string): Placed =>
+      member({
+        ord,
+        text,
+        kind: 'figure',
+        plain: 'Time',
+        align: 'l',
+        why: 'unwrapped',
+        lines: [[1, 0, 100, 120, 600, 608, 598, 100, 120, 0, 10]],
+        room: { below: 20, side: [60, 400] },
+      })
+    const members = [
+      member({ ord: 0, text: w!, why: 'unwrapped' }),
+      fig(1, f!),
+      member({ ord: 2, text: l!, kind: 'reference', lines: [[1, 0, 72, 300, 500, 507, 498, 72, 300, 0, 10]] }),
+      member({ ord: 3, text: k!, lines: [[1, 0, 72, 300, 400, 407, 398, 72, 300, 0, 10]] }),
+      member({ ord: 4, text: t!, lines: [[1, 0, 72, 300, 300, 307, 298, 72, 300, 0, 10]] }),
+    ]
+    const pt: Part = { ...part(members[0]!), flows: members.map((m) => [m]) }
+    const said = (id: string): Row => ({
+      id,
+      ok: true,
+      by: 'test',
+      content: [{ t: 'text', s: 'Ein Satz. Noch einer.' }],
+      sentences: { src: [0, 10], tr: [0, 10] },
+    })
+    const all = new Map([w, f, l, k, t].map((x) => [x!, said(x!)]))
+    const reads = new Set<string>()
+    const rows = (done: boolean): Rows => ({
+      get: (x) => {
+        reads.add(x)
+        return all.get(x)
+      },
+      done,
+      kept: (x) => x === k,
+    })
+    const leave = { ...rules, leave: ['reference'] }
+    const waits = waitOf(pt, { get: () => undefined, done: false, kept: (x) => x === k }, new Set(leave.leave))
+    expect(waits).toEqual([t])
+    for (const done of [false, true]) {
+      reads.clear()
+      const p = layPage(pt, rows(done), leave, metrics())
+      expect(p.members.map((m) => m.state)).toEqual(['unwrapped', 'unwrapped', 'left', 'kept', 'laid'])
+      expect([...reads].filter((x) => !waits.includes(x))).toEqual([])
+    }
+  })
+  it("waits for the paper's own names where a member can draw one, and no page reads a name it does not wait for (§19.14)", () => {
+    // (a paper naming its own "Hypothesis" (Part.paper.names): a heading whose head name is it, a paragraph with a cleveref
+    // reference, and a plain paragraph. A page holding either of the first two waits for every name of its paper and reads
+    // only what its members ask; a page of the plain one alone waits for none and reads none)
+    const [h, r, q, n1, n2] = ['6', '7', '8', '9', 'a'].map((c) => c.repeat(64))
+    const head = member({
+      ord: 0,
+      text: h!,
+      kind: 'heading',
+      label: {
+        ink: [1, 72, 698, 120, 707, 700],
+        name: ['Hypothesis', [1, 72, 698, 120, 707, 700]],
+        style: { role: 'serif', size: 10 },
+      } as Placed['label'],
+    })
+    const ref = member({
+      ord: 1,
+      text: r!,
+      lines: [[1, 0, 72, 300, 600, 607, 598, 72, 300, 0, 10]],
+      els: [['1', { kind: 'num', ink: [[1, 150, 598, 200, 607, 600]], cmd: 'cref', text: 'Hypothesis 2' }]],
+    })
+    const plain = member({ ord: 2, text: q!, lines: [[1, 0, 72, 300, 500, 507, 498, 72, 300, 0, 10]] })
+    const names: [string, string][] = [
+      ['Hypothesis', n1!],
+      ['Conjecture', n2!],
+    ]
+    const pageOf = (ms: Placed[]): Part => ({
+      ...part(ms[0]!),
+      paper: { ...part(ms[0]!).paper, names },
+      flows: ms.map((m) => [m]),
+    })
+    const said = (id: string, s: string): Row => ({ id, ok: true, by: 'test', content: [{ t: 'text', s }] })
+    const all = new Map([
+      [h!, said(h!, 'Eine Hypothese')],
+      [r!, said(r!, 'Siehe ')],
+      [q!, said(q!, 'Ein Satz.')],
+      [n1!, said(n1!, 'Hypothese')],
+      [n2!, said(n2!, 'Vermutung')],
+    ])
+    const reads = new Set<string>()
+    const rows = (done: boolean): Rows => ({
+      get: (x) => {
+        reads.add(x)
+        return all.get(x)
+      },
+      done,
+    })
+    const none: Rows = { get: () => undefined, done: false }
+    for (const [ms, waited] of [
+      [
+        [head, plain],
+        [h, n1, n2, q],
+      ],
+      [
+        [ref, plain],
+        [r, n1, n2, q],
+      ],
+      [[plain], [q]],
+    ] as [Placed[], string[]][]) {
+      const pt = pageOf(ms)
+      expect(waitOf(pt, none)).toEqual(waited)
+      for (const done of [false, true]) {
+        reads.clear()
+        layPage(pt, rows(done), rules, metrics())
+        expect([...reads].filter((x) => !waited.includes(x))).toEqual([])
+      }
+    }
+    // (the plain page alone reads no name)
+    reads.clear()
+    layPage(pageOf([plain]), rows(true), rules, metrics())
+    expect([...reads]).toEqual([q])
   })
   it('waits for a face not loaded, as for a row', () => {
     const p = layPage(

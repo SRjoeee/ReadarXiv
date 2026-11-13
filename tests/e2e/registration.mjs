@@ -17,12 +17,13 @@
 // was measured here; a copy is now always rendered from the composed document, and what it hides is glyph-exact by its groups:
 // the pixel gates of lab/pdf/spikes/ocg-gate.mjs and lab/pdf/spikes/ocg-reader.mjs.)
 //
-// Usage: pnpm build && pnpm e2e:registration     (first time: npx playwright install chromium)
+// Usage: AXT_READER=today pnpm build && pnpm e2e:registration     (first time: npx playwright install chromium); a default
+// build (v2) runs registration-v2.mjs
 // Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build; AXT_DPR=1.1,1.8 runs those ratios alone;
 // AXT_BASE=delta cuts the sample as a layer held as a delta over arXiv's PDF.
 // AXT_MEASURE=1 checks nothing and measures the copy instead, at the fit and at 100 %: each laid copy's render (ms, the median
 // of five) and the long tasks of the browser's own recopy after the zoom, a line a page (PDF-READER.md §11.8).
-import { readFileSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { FACES } from '../../src/pdf-reader/engine/rules/font-roles.mjs'
 import { copyWithGrants } from './ext-copy.mjs'
@@ -35,6 +36,10 @@ import { seedService } from './options-page.mjs'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const BUILD = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
+// a build of the rebuilt reader (AXT_READER=v2: the reader package's PDF.js files at its root) runs the rebuilt reader's
+// registration, which ends the run; a build of today's reader (AXT_READER=today) runs today's below, which the released
+// extension still reads with: the cut-over that removes today's reader removes this body with it, and this choice
+if (existsSync(`${BUILD}/pdfjs`)) await import('./registration-v2.mjs')
 const EXT = `${HERE}.ext-registration`
 /** the window: a laptop's (the owner's fit, 87 %, at a pixel ratio of 2) */
 const WINDOW = { width: 1512, height: 848 }

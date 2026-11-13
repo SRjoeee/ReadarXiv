@@ -41,8 +41,6 @@ const head = what => `// ${what}.
 files.set('scripts.ts', `${head("The rule set's scripts: each script's fields, which a language's own fields replace, and the hyphenation minimums")}
 import type { LanguageRules, ScriptRules } from './types.ts'
 
-export const VERSION = ${SET.version}
-
 /** each script's fields: what a target written in it reads where its language sets nothing of its own */
 export const SCRIPTS: Readonly<Record<string, ScriptRules>> = ${lit(SET.scripts)}
 
@@ -60,7 +58,7 @@ files.set('index.ts', `${head('The rule set: its languages by tag')}
 ${langs.map(t => `import { ${varOf(t)} } from './${fileOf(t)}'`).join('\n')}
 import type { LanguageRules } from './types.ts'
 
-export { HYPHENATION, SCRIPTS, VERSION } from './scripts.ts'
+export { HYPHENATION, SCRIPTS } from './scripts.ts'
 export type { LanguageRules, ScriptRules } from './types.ts'
 
 /** each language's own fields, by its tag */

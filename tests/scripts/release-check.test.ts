@@ -8,7 +8,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, INVARIANTS, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
+import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, INVARIANTS, PARAS_HELD, sentenceCoverJudge, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
+import { ADDED_HEADING } from '../../lab/typeset/added.mjs'
 import { cutoverOf, gatesOf, invariantLine, markdownOf, privateResultOf, targetLines, verdictOf } from '../../lab/release-check/verdict.mjs'
 
 const dirs: string[] = []
@@ -303,13 +304,43 @@ describe('the equivalence gates, in either shape of their tools', () => {
     // counted, I6 counted against)
     expect(cover.judge!(ctx, [run(1, said(4767634, 0, 1))])).toMatchObject({ pass: false, findings: { I10: { held: true, count: 0 }, I6: { held: false, count: 1 } } })
     expect(cover.judge!(ctx, [run(0, said(4767634, 5))])).toMatchObject({ pass: false, findings: { I10: { held: false, count: 5 } } })
+    // (a paragraph point the row anchors and the page runs on (paras-gate.ts): the run exits 1 and ends whole, I10 and I6 still
+    // counted, the points' counts reported; held, it fails the gate, from the round the engine half lands in: PARAS_HELD)
+    const points = `${said(4767634, 0)}\nthe paragraph points (paras-gate.ts): 8 stated (8 group); 6 with an anchor in their row (6 sentence; 2 no row); of those, their member laid: 4 opened (their first word starts a line of the member), 3 of them on TeX's line, 2 NOT (run on); not laid: none`
+    expect(PARAS_HELD).toBe(false)
+    expect(cover.judge!(ctx, [run(1, points)])).toMatchObject({ pass: true, numbers: { I10: 0, I6other: 0, parasAnchored: 6, parasOpened: 4, parasOnTexLine: 3, parasOff: 2 }, findings: { I10: { held: true, count: 0 } } })
+    expect(sentenceCoverJudge([run(1, points)], true).pass).toBe(false)
+    expect(sentenceCoverJudge([run(0, points.replace('2 NOT', '0 NOT'))], true).pass).toBe(true)
     // (nothing laid: no finding, no pass; a run that did not end whole: its count is not read)
     const none = cover.judge!(ctx, [run(1, said(0, 0))])
     expect(none.pass).toBe(false)
     expect(none.findings).toBeUndefined()
     expect(cover.judge!(ctx, [run(1, said(100, 0))]).findings).toBeUndefined()
+    // (the added pairs walked apart after the set, lab/typeset/added.mjs: the set's numbers read before the heading, theirs after
+    // it as `added`; a fault of theirs fails the gate, the set's count unmoved)
+    const apart = (faults: number) => `${said(4767634, 0)}\n${ADDED_HEADING} a-zh, b-zh\n${said(5000, faults).replace('"pairs":123', '"pairs":2')}`
+    expect(cover.judge!(ctx, [run(0, apart(0))])).toMatchObject({ pass: true, numbers: { I10: 0, pieces: 4767634, pairs: 123, added: { pairs: 2, I10: 0, pieces: 5000, I6other: 0 } } })
+    expect(cover.judge!(ctx, [run(0, apart(3))])).toMatchObject({ pass: false, numbers: { I10: 0, added: { I10: 3 } } })
+    expect(typesetOf(apart(3))).toMatchObject({ pairs: 123, I10: 0, added: { pairs: 2, I10: 3 } })
     // (the display gate reads the parity's lay of its pairs the same way)
     expect(gate('display').judge!(ctx, [run(0, 'I10, the sentence cover (cover.ts): 599484 pieces; 2 faults: x'), run(0), run(0, 'parity: 9 pages of 1 pairs; 0 worse than today; missing none')]).findings).toEqual({ I10: { held: false, count: 2 } })
+  })
+  it("holds the added pairs' paragraph points as the set's, the two lanes' changes to the judge joined", () => {
+    const said = (pieces: number, faults: number, other = 0) =>
+      `{"pairs":123,"laid":1,"pages":2}\nI10, the sentence cover (cover.ts): 9 member-pages lit, ${pieces} pieces; ${faults} faults\nI6 across the pages' lays (cross-lay.ts): 90 units begun on a pass page, 9 laid by two pages' lays or more; ${2 + other} laid otherwise: 2 by the head pass (known: headOf reads the paragraph over the unit as one lay filled it and the other did not), ${other} by another cause`
+    const points = (off: number) =>
+      `the paragraph points (paras-gate.ts): 5 stated (5 group); 5 with an anchor in their row (5 sentence; 0 no row); of those, their member laid: 5 opened (their first word starts a line of the member), ${5 - off} of them on TeX's line, ${off} NOT (run on); not laid: none`
+    // (the set clean; the added pairs walked apart after the heading, their points `off` run on, their I6 `other`)
+    const added = (off: number, other = 0) => `${said(4767634, 0)}\n${points(0)}\n${ADDED_HEADING} a-zh, b-zh\n${said(5000, 0, other).replace('"pairs":123', '"pairs":2')}\n${points(off)}`
+    // (1) the added pairs' points run on, not held: the run exits 1 and is whole, it passes, the numbers carry their points
+    expect(PARAS_HELD).toBe(false)
+    expect(sentenceCoverJudge([run(1, added(5))])).toMatchObject({ pass: true, numbers: { I10: 0, I6other: 0, parasOff: 0, added: { pairs: 2, I10: 0, I6other: 0, parasAnchored: 5, parasOpened: 5, parasOnTexLine: 0, parasOff: 5 } } })
+    // (2) the same, held: it fails; with none of theirs run on it passes
+    expect(sentenceCoverJudge([run(1, added(5))], true).pass).toBe(false)
+    expect(sentenceCoverJudge([run(0, added(0))], true).pass).toBe(true)
+    // (3) the set clean and the added pairs with a unit laid otherwise by another cause than the head pass's: it fails, the
+    // added pairs held as the set's inside the one function
+    expect(sentenceCoverJudge([run(1, added(0, 1))])).toMatchObject({ pass: false, numbers: { I6other: 0, added: { I6other: 1 } } })
   })
   it("reads the display gate's verdict as measure.mjs states it: its pages, the pages worse than today's and each measure's, passing on its exit", () => {
     const text = [
@@ -320,7 +351,13 @@ describe('the equivalence gates, in either shape of their tools', () => {
     const ctx = ctxAt('/repo', '/work')
     const judged = gate('display').judge!(ctx, [run(0), run(0), run(1, text)])
     expect(judged).toMatchObject({ pass: false, numbers: { pages: 365, pairs: 22, worse: 2, weight: '0 pages worse, 4 nearer', cross: '2 pages worse, 1 nearer' } })
-    expect(gate('display').judge!(ctx, [run(0), run(0), run(0, 'parity: 9 pages of 1 pairs; 0 worse than today; missing none')]).pass).toBe(true)
+    const passed = (added: string) => [run(0), run(0), run(0, 'parity: 9 pages of 1 pairs; 0 worse than today; missing none'), run(0), run(0), run(added === 'worse' ? 1 : 0, `parity: 27 pages of 2 pairs; ${added === 'worse' ? 1 : 0} worse than today; missing none`)]
+    expect(gate('display').judge!(ctx, passed('none')).pass).toBe(true)
+    // (the added pairs judged in steps of their own, their numbers apart from the set's; a page of theirs worse fails the gate)
+    expect(gate('display').judge!(ctx, passed('none')).numbers).toMatchObject({ pages: 9, pairs: 1, worse: 0, added: { pages: 27, pairs: 2, worse: 0 } })
+    expect(gate('display').judge!(ctx, passed('worse'))).toMatchObject({ pass: false, numbers: { worse: 0, added: { worse: 1 } } })
+    // (the set's three steps alone are not the gate's whole run)
+    expect(gate('display').judge!(ctx, passed('none').slice(0, 3)).pass).toBe(false)
     // (a run not judged whole fails by measure.mjs's exit; its count is reported)
     const whole = gate('display').judge!(ctx, [run(0), run(0), run(1, 'parity: 8 pages of 1 pairs; 0 worse than today; missing none\nincomplete: 1 (a-zh p3: not drawn)')])
     expect(whole).toMatchObject({ pass: false, numbers: { pages: 8, worse: 0, incomplete: 1 } })

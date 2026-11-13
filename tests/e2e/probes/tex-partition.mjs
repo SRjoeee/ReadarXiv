@@ -1,6 +1,6 @@
 // Probe for the TeX page's warm-up (DESIGN §16): which of the TeX page's storage a frame of it shares, framed where the
-// extension frames it. Asked of the real browser, storage partitioning on (Playwright turns it off by default: its
-// --disable-features list is replaced here), with a probe extension and a probe page on this machine under the real
+// extension frames it. Asked of the real browser, storage partitioning on (Playwright turns it off by default: the launch is
+// chromium.mjs's, `partitioned`), with a probe extension and a probe page on this machine under the real
 // names — tex.readarxiv.org and arxiv.org mapped to a local HTTPS server whose certificate the browser trusts by key:
 //   offscreen   the page framed by an offscreen document (where the warm-up runs)
 //   reader      framed by an extension page open as a tab (the reader standalone)
@@ -23,6 +23,7 @@ import { createServer } from 'node:https'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
+import { chromiumOptions } from '../lib/chromium.mjs'
 
 const exe = process.env.AXT_CHROME ?? null
 const branded = !!exe && !/for Testing|Chromium/i.test(exe)
@@ -90,13 +91,13 @@ writeFileSync(join(ext, 'frame.js'), `const ctx = new URLSearchParams(location.s
 const profile = join(work, 'profile')
 mkdirSync(join(profile, 'Default'), { recursive: true })
 writeFileSync(join(profile, 'Default', 'Preferences'), JSON.stringify({ extensions: { ui: { developer_mode: true } } }))
-const context = await chromium.launchPersistentContext(profile, {
+const context = await chromium.launchPersistentContext(profile, chromiumOptions({
   ...(exe ? { executablePath: exe } : { channel: 'chromium' }),
   headless: true,
   ...(branded ? { ignoreDefaultArgs: ['--disable-extensions'] } : {}),
-  args: ['--disable-features=Translate', `--ignore-certificate-errors-spki-list=${spki}`, `--host-resolver-rules=MAP tex.readarxiv.org 127.0.0.1:${port}, MAP arxiv.org 127.0.0.1:${port}, MAP other.example 127.0.0.1:${port}`,
+  args: [`--ignore-certificate-errors-spki-list=${spki}`, `--host-resolver-rules=MAP tex.readarxiv.org 127.0.0.1:${port}, MAP arxiv.org 127.0.0.1:${port}, MAP other.example 127.0.0.1:${port}`,
     ...(branded ? ['--enable-unsafe-extension-debugging'] : [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`])],
-})
+}, { partitioned: true }))
 let id
 if (branded) id = (await (await context.browser().newBrowserCDPSession()).send('Extensions.loadUnpacked', { path: ext })).id
 else id = new URL((context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))).url()).host

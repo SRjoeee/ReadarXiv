@@ -23,7 +23,7 @@ describe('language names in the interface', () => {
     expect(languageLabel('cmn')).toBe('简体中文')
   })
 
-  it('what goes to the model is the English menu\'s own name, CLDR\'s common one (UI.md §6, rule 3): changing it means bumping PROMPT_VERSION', () => {
+  it('what goes to the model is the English menu\'s own name, CLDR\'s common one (UI.md §6, rule 3): changing it moves the prompt\'s digest (PROMPT_DIGEST)', () => {
     expect(englishName('cmn')).toBe('Simplified Chinese')
     expect(englishName('arb')).toBe('Arabic')
     // The English menu's names are the prompt's own (UI.md §6, rule 3), not another copy: identical character for character

@@ -364,6 +364,19 @@ describe('closureOf', () => {
     })
     expect([...closureOf(['src/a.mjs'], { root: t.root })].sort()).toEqual(['src/a.mjs', 'src/b.mjs', 'src/c.ts'])
   })
+  it('follows a transition path to the moved module and on from it, and no other package', () => {
+    const t = tree({
+      'src/pdf-reader/engine/source/old.mjs': "export { x } from '@readarxiv/engine/today/source/old.mjs'\nimport '@readarxiv/engine'\n",
+      'packages/engine/src/source/old.mjs': "import { y } from '../memory.mjs'\nexport const x = y\n",
+      'packages/engine/src/memory.mjs': 'export const y = 1\n',
+      'packages/engine/src/index.ts': 'export const z = 1\n',
+    })
+    expect([...closureOf(['src/pdf-reader/engine/source/old.mjs'], { root: t.root })].sort()).toEqual([
+      'packages/engine/src/memory.mjs',
+      'packages/engine/src/source/old.mjs',
+      'src/pdf-reader/engine/source/old.mjs',
+    ])
+  })
 })
 
 // ---- the repository's own tree

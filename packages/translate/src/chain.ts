@@ -65,20 +65,21 @@ export const SUPPORTS_MS = 2_000
 export const GATE_MS = 1_000
 /** the store key's grammar; it rises only if the grammar changes */
 export const KEY_VERSION = 't1'
-/** the chain's own outcome rules (fall-through per unit, one re-ask where a translator asks it, the runs floor of stretches
- *  of two letters or more, every stretch given or none, `-whole` (d76d6b200: a stretch no translator gives leaves the unit the
- *  original's, never its English between translated stretches), a span that is no edge keeping its head in a copy of itself:
- *  runs.ts; an element set after the unit's text given to no translator, put back after the translation: tailOf; a group a
- *  reply did not bring back placed around its own text where the translation states it, as often as the source holds that
- *  text in groups of its style alone, its end mark matched by its class, `groups/2`: groups.ts; a word tied to a reference
- *  that abbreviates the item's name sent to every translator as that name: names.ts; a phrase group a markers-wire translator's
- *  reply did not bring back placed where it states the group's reference translation, asked of it in the unit's batch:
- *  groups.ts placeReferences; a request a translator refuses handed on whole, halved only where its endpoint said it is too
- *  large, `pass-whole`, #636: a 400 read as every unit's refusal kept the next translator's answers as rows; a group that is
- *  not `must` with an edge inside a word offered to no translator, its words whole and plain, `words`: words.ts): a change to
- *  them is a change of every row */
-export const CHAIN_RULES =
-  'chain/1|fall-through|reask|runs>=2-whole|runs-heads|after|groups/2|names|references|pass-whole|words'
+/** The behaviour digest of the chain's own outcome rules: the SHA-256 of the chain's outcomes over the case table of
+ *  tests/chain-cases.ts, held by tests/chain-digest.test.ts and written by `pnpm digests --write`. The rules, each with a
+ *  case there that it alone decides: fall-through per unit; one re-ask where a translator asks it; the runs floor of stretches
+ *  of two letters or more, every stretch given or none (a stretch no translator gives leaves the unit the original's, never its
+ *  English between translated stretches), a span that is no edge keeping its head in a copy of itself: runs.ts; an element
+ *  set after the unit's text given to no translator, put back after the translation: tailOf; a group a reply did not bring
+ *  back placed around its own text where the translation states it, as often as the source holds that text in groups of its
+ *  style alone, its end mark matched by its class: groups.ts; a word tied to a reference that abbreviates the item's name sent
+ *  to every translator as that name: names.ts; a phrase group a markers-wire translator's reply did not bring back placed
+ *  where it states the group's reference translation, asked of it in the unit's batch: groups.ts placeReferences; a request a
+ *  translator refuses handed on whole, halved only where its endpoint said it is too large (#636: a 400 read as every unit's
+ *  refusal kept the next translator's answers as rows); a group that is not `must` with an edge inside a word offered to no
+ *  translator, its words whole and plain: words.ts. A change to them that changes an outcome moves it, and every row with it
+ *  (identityOf); a change that changes none leaves it */
+export const CHAIN_DIGEST = '543eba3d1576a1eb00d3aa3e96386a19cca39aba0fcf274ad45c68911be26fa6'
 
 // ---------------------------------------------------------------- the platform's timers and controllers, by structure
 
@@ -188,10 +189,10 @@ export function rowContextOf(
 }
 
 /** What a row is keyed by besides unit id and target (DECISION: translators' identities and their behaviour digests plus
- *  the acceptance rule's digest, and the chain's own rules): it moves only when an outcome could */
+ *  the acceptance rule's digest, and the chain's own rules' digest): it moves only when an outcome could */
 export async function identityOf(translators: readonly Translator[]): Promise<string> {
   const parts = translators.map((t) => [t.identity, t.digest, t.limits.reask])
-  return sha256Hex(JSON.stringify([CHAIN_RULES, ACCEPT_DIGEST, parts])).slice(0, 32)
+  return sha256Hex(JSON.stringify([CHAIN_DIGEST, ACCEPT_DIGEST, parts])).slice(0, 32)
 }
 
 // ---------------------------------------------------------------- the lanes: one per translator identity
@@ -260,8 +261,49 @@ const UNCONFIGURED: Partial<Record<Fault['code'], UnconfiguredCode>> = {
 /** the failures that are the endpoint's health, which the breaker counts (chain.ts ENGINE_FAILURES) */
 const HEALTH = new Set<Fault['code']>(['network', 'timeout', 'overload'])
 /** a request its translator refused whole for no reason of its size or the language (`pass`): the same at any size, so it is
- *  this translator's, counted by the breaker as a failure of its endpoint is (a 400 to every request stops being asked) */
-const refusedWhole = (f: Fault): boolean => f.remedy === 'pass' && f.code !== 'too-large' && f.code !== 'unsupported'
+ *  this translator's, counted by the breaker as a failure of its endpoint is (a 400 to every request stops being asked). A
+ *  request answered whole in no shape of its translator's (`malformed`, whatever its remedy: a 200 that is a captcha's HTML
+ *  page where the endpoint's JSON belongs, asked once more) is refused the same way, at any size: counted alike */
+const refusedWhole = (f: Fault): boolean =>
+  f.code === 'malformed' || (f.remedy === 'pass' && f.code !== 'too-large' && f.code !== 'unsupported')
+
+/**
+ * A call's stages, one a translator of its chain: how many of the call's `n` units have no outcome yet from each, and the units
+ * that fall from it held until none is left, so that they leave for the next translator together and its lane cuts them by its
+ * own limits (design-performance-2026-11-13 Q6: the lab's fill sent 290 of Microsoft's 318 requests with one unit each, as the
+ * Google reply that refused it was read). No timer: a unit is held for its call's own earlier replies alone. A unit leaves a
+ * stage once (`passed`), or every stage still before it when it has its result (`done`); an aborted call lets every held
+ * unit go
+ */
+export function stagesOf(
+  n: number,
+  stages: number,
+  signal: Signal,
+): { passed(i: number, k: number): void; done(i: number): void; ready(k: number): Promise<void> } {
+  const left = Array.from({ length: stages }, () => n)
+  /** the stage each unit is at (it has left every stage before it) */
+  const at = new Array<number>(n).fill(0)
+  const held: (() => void)[][] = Array.from({ length: stages }, () => [])
+  const leave = (s: number) => {
+    left[s] = (left[s] as number) - 1
+    if (left[s] === 0) for (const go of (held[s] as (() => void)[]).splice(0)) go()
+  }
+  signal.addEventListener('abort', () => {
+    for (const h of held) for (const go of h.splice(0)) go()
+  })
+  return {
+    passed(i, k) {
+      for (; (at[i] as number) <= k && (at[i] as number) < stages; at[i] = (at[i] as number) + 1) leave(at[i] as number)
+    },
+    done(i) {
+      for (; (at[i] as number) < stages; at[i] = (at[i] as number) + 1) leave(at[i] as number)
+    },
+    ready: (k) =>
+      left[k] === 0 || signal.aborted
+        ? Promise.resolve()
+        : new Promise<void>((go) => (held[k] as (() => void)[]).push(go)),
+  }
+}
 
 export function chainOf(ports: Ports = {}): Chain {
   const clock = ports.clock ?? realClock()
@@ -719,6 +761,7 @@ export function chainOf(ports: Ports = {}): Chain {
           skipped.push({ by: t.identity, code })
         }
       }
+      const stages = stagesOf(units.length, served.length, signal)
       const work = units.map((u, i) =>
         settle(u, i, {
           target,
@@ -735,6 +778,9 @@ export function chainOf(ports: Ports = {}): Chain {
           ask: askOf,
           owned,
           runs: true,
+          passed: stages.passed,
+          done: stages.done,
+          ready: stages.ready,
         }),
       )
       const all = Promise.all(work).then(() => {
@@ -779,6 +825,12 @@ export function chainOf(ports: Ports = {}): Chain {
     /** what an answer no unit waits for is written by, owned by the call so that it settles before the call's last write */
     owned: <T>(p: Promise<T>) => Promise<T>
     runs: boolean
+    /** unit `i` has its outcome from translator `k` and falls from it (stagesOf) */
+    passed: (i: number, k: number) => void
+    /** unit `i` has its result */
+    done: (i: number) => void
+    /** settled once every unit of the call has its outcome from translator `k`, or the call is aborted */
+    ready: (k: number) => Promise<void>
   }
 
   /** one unit through the chain: exactly one emit. Every translator is sent it with each word tied to a reference that
@@ -797,6 +849,7 @@ export function chainOf(ports: Ports = {}): Chain {
       r = { id: u.id, ok: false, why: { kind: 'unavailable' } }
     }
     c.emit(i, r)
+    c.done(i)
   }
 
   async function outcomeOf(u: UnitIn, i: number, c: Call): Promise<Result> {
@@ -846,6 +899,8 @@ export function chainOf(ports: Ports = {}): Chain {
     let off: UnconfiguredCode | null = null
     for (let k = 0; k < c.served.length; k++) {
       if (c.signal.aborted) return aborted(u)
+      // (it has its outcome from the translator before: it falls from it)
+      if (k > 0) c.passed(i, k - 1)
       const t = c.served[k] as Translator
       const last = k === c.served.length - 1
       const wk = wires[k]
@@ -924,6 +979,12 @@ export function chainOf(ports: Ports = {}): Chain {
             by: t.identity,
             ...(r.sentences ? { sentences: r.sentences } : {}),
           }
+      }
+      // (a unit that falls is asked of this translator with the call's others that fall: once every unit of the call has
+      // its outcome from the translator before, so that its lane cuts them by its own limits alone; no timer)
+      if (k > 0) {
+        await c.ready(k - 1)
+        if (c.signal.aborted) return aborted(u)
       }
       const lane = laneOf(t)
       if (!last && shut(lane)) {

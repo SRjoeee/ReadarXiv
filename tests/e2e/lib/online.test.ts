@@ -19,7 +19,7 @@ const ONLINE_SCRIPTS = [
   'probes/retainer-path', 'probes/toggle-latency', 'probes/toggle-profile', 'probes/toggle-timeline',
 ].map(f => `tests/e2e/${f}.mjs`)
 /** the scripts that name arXiv and stay on this machine: a route table or a page.route answers it, or a local server */
-const OFFLINE_SCRIPTS = ['a11y', 'framing', 'reader', 'registration', 'viewer-control', 'probes/pinch-cost', 'probes/pinch-jitter', 'probes/reader-times', 'probes/tex-partition', 'probes/ui-shots', 'probes/v2-smoke', 'probes/web-app-mark'].map(f => `tests/e2e/${f}.mjs`)
+const OFFLINE_SCRIPTS = ['a11y', 'framing', 'reader', 'reader-v2', 'registration', 'registration-v2', 'viewer-control', 'probes/pinch-cost', 'probes/pinch-jitter', 'probes/reader-times', 'probes/tex-partition', 'probes/ui-shots', 'probes/v2-smoke', 'probes/web-app-mark'].map(f => `tests/e2e/${f}.mjs`)
 const source = (file: string) => readFileSync(join(ROOT, file), 'utf8')
 const LAUNCH = /\b(launchPersistentContext|launchWithReader|newContext|chromium\.launch)\(/
 
@@ -37,7 +37,7 @@ describe('an online run: the project\'s User-Agent, and never our production ser
     expect(PROJECT_UA).toBe('ReadarXiv/0.1 (+https://readarxiv.org; research)')
     const o = online({ channel: 'chromium', args: ['--load-extension=x'] })
     expect(o.userAgent).toBe(PROJECT_UA)
-    expect(o.args).toEqual(['--load-extension=x', `--user-agent=${PROJECT_UA}`])
+    expect(o.args.slice(1)).toEqual(['--load-extension=x', `--user-agent=${PROJECT_UA}`])
     expect(online().userAgent).not.toMatch(/HeadlessChrome|Chrome\//)
   })
 

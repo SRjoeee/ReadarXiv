@@ -1,5 +1,5 @@
-// Today's reader behind the one chrome (the build's default, AXT_READER 'today': stage 5a; it goes when lane L3's typesetter
-// passes its gate and the reader package lays the pages, stage 5's deletion list): its session (session/host.ts on the
+// Today's reader behind the one chrome (AXT_READER 'today', the reader the released extension reads with; the build's default is
+// 'v2' since 2026-11-13: stage 5a; it goes with the cut-over, stage 5's deletion list): its session (session/host.ts on the
 // engine's view, its run on our server's v1 layer) opened in the chrome's panes, its events told to the chrome's controller
 // with the extension's configuration as the one preference model, and the chrome's patches written as configuration changes.
 import type { Session as ChromeSession, SessionHost as ChromeHost, ReaderController } from '@readarxiv/reader'

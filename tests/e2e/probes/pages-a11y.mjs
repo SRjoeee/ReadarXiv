@@ -9,6 +9,7 @@ import { rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import AxeBuilder from '@axe-core/playwright'
 import { chromium } from 'playwright'
+import { chromiumOptions } from '../lib/chromium.mjs'
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../../.output/chrome-mv3-dev', import.meta.url))
@@ -16,12 +17,12 @@ const PROFILE = `${E2E}.profile-pages-a11y`
 rmSync(PROFILE, { recursive: true, force: true })
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, chromiumOptions({
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: true,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: 1300, height: 1100 },
-})
+}))
 const [worker] = context.serviceWorkers().length ? context.serviceWorkers() : [await context.waitForEvent('serviceworker')]
 const extensionId = new URL(worker.url()).host
 const page = await context.newPage()

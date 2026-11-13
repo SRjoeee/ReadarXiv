@@ -67,9 +67,10 @@ export function pitchOf(rows) {
 }
 
 /** a `line-count` difference of a unit v2 sets in exactly one line fewer than today's on the page, both at most the original's
- *  count, v2 at the original's size; with each side's rows and the paragraph's leading, or null */
+ *  count, v2 at the original's size; with each side's rows and the paragraph's leading, or null. A count read over the pages a
+ *  unit spans (verdict.mjs linesPass, `pages`) is no count on the page: every ruling on a line count is stated on the page */
 function lineFewer(d, x) {
-  if (d.flag !== 'line-count' || !d.unit) return null
+  if (d.flag !== 'line-count' || !d.unit || d.pages) return null
   const t = d.today?.value,
     v = d.v2?.value,
     o = d.original
@@ -122,6 +123,45 @@ export function cutBeforeBoundary(lines, slots) {
   return null
 }
 
+/** a side's size exactly one fit step under the original's (to the hundredth) */
+const oneStepOf = (v) => !!v?.osize && Math.abs(v.size - (1 - SIZE_STEP) * v.osize) <= 0.01 + 1e-9
+/**
+ * TRS's size, a member's or a size tie's (the measure's `tie <key>, <key>`): each member on the page one step under the original,
+ * whole, and its step one an evening of the page's fill took, as the lay states it: its own `evened` names the size step, or it
+ * states a `tie` (PDF-READER §18.64: laid at its tie's one size) whose member `by`, the one whose own need set it, states an
+ * evening by the size step at one step under its original. The member whose statement covers it (its own part's ord, or `by`),
+ * or null where any member's is not covered
+ */
+function tieStep(d, x) {
+  const keys = d.unit.startsWith('tie ') ? d.unit.slice(4).split(', ') : [d.unit.split(' ')[0]]
+  let at = null
+  for (const key of keys) {
+    const u = x.p.units?.find((w) => w.key === key)
+    if (!u?.sides?.v2 || u.part === null || u.part === undefined || !x.whole(key) || !oneStepOf(u.sides.v2)) return null
+    const m = x.laid(u.part)
+    const by = m?.evened?.by?.includes('size') ? u.part : m?.tie?.by
+    if (by === undefined || by === null) return null
+    if (by !== u.part) {
+      // (the member that set it: its statement on this page, read as its own would be; where it begins on another page, its
+      // own page's statement, its drawn size its fit's against the part's)
+      const o = x.p.units?.find((w) => w.part === by)
+      const om = x.laid(by) ?? Object.values(x.v2.pages ?? {}).flatMap((pg) => pg.members ?? []).find((q) => q.ord === by)
+      const ov = o?.sides?.v2 ?? (om?.fit && { size: om.fit.size, osize: x.member(by)?.style?.size })
+      if (!om?.evened?.by?.includes('size') || !oneStepOf(ov) || (o && !x.whole(o.key))) return null
+    }
+    at ??= by
+  }
+  return at
+}
+
+/** whether v2 draws member `ord` as the original on the page: not laid, no group of it turned off, no line of v2's text drawn of
+ *  it, so its ink stays where TeX set it at its size (T1, T4, T5) */
+function drawnAsOriginal(ord, x) {
+  const m = x.laid(ord)
+  const drawn = (x.rec.v2?.units ?? []).some((u) => u.id === ord && u.lines.some((l) => l.n > 0))
+  return !!m && m.state !== 'laid' && !(m.off ?? 0) && !(m.lines?.length ?? 0) && !drawn
+}
+
 /**
  * The rulings, in the order a difference is tried against them (the first whose condition holds covers it). `holds(d, x)`: d a
  * difference worse by its measure, x the page's context (rulingsPass). An entry with no `holds` is a class he accepted that no
@@ -137,18 +177,18 @@ export const RULINGS = [
     words: '看起来调整过之后挺舒服。只是你说的有 13 页会出现反效果，因为我不太了解会是什么样子，所以你来帮我判断一下，我们到底应该怎么做。\n计算量多 4.8% 可以接受，段落字号小一级也不是问题，只要用户感受不到就行。',
     example: '1810.04805v2-zh p3, 2602.23285v2-ja p15 (the pages of his look)',
     condition:
-      "what the lay states, never an inference from the geometry: v2's Page member states the unit evened (`evened`: `by` the knobs the page's fill took, in the order taken, of `track`, `room`, `size`, `foot`; `lines` its line count on the page at its fitted layout, before them; the fill keeps an evening only where every frame of the unit then stands in the page's band). size: evened by `size`, at exactly one fit step under the original's size (to the hundredth), the unit whole. line-count: evened, its count against today's other by no more than the knobs changed it, the same way (v2's count before them is today's or nearer it), at the original's size or, evened by `size`, one step under it, the unit whole. A unit one step small, or a line count other, that the lay did not even is judged as before",
+      "what the lay states, never an inference from the geometry: v2's Page member states the unit evened (`evened`: `by` the knobs the page's fill took, in the order taken, of `track`, `room`, `size`, `foot`; `lines` its line count on the page at its fitted layout, before them; the fill keeps an evening only where every frame of the unit then stands in the page's band). size: evened by `size`, at exactly one fit step under the original's size (to the hundredth), the unit whole; a member of a size tie (the measure's `tie` difference, or one member's) where every member on the page is one step under the original, whole, and states the step itself or a `tie` (laid at its tie's one size, PDF-READER §18.64) whose member `by`, the one whose own need set it, states that evening by `size` one step under its original. line-count: evened, its count against today's other by no more than the knobs changed it, the same way (v2's count before them is today's or nearer it), at the original's size or, evened by `size`, one step under it, the unit whole. A unit one step small, or a line count other, that the lay did not even is judged as before",
     holds(d, x) {
       if (!d.unit) return false
+      if (d.flag === 'size') return tieStep(d, x) !== null
       const u = x.unit(d)
       const v = u?.sides?.v2
       if (!v || u.part === null || u.part === undefined || !x.whole(u.key)) return false
       const ev = x.laid(u.part)?.evened
       if (!ev?.by?.length) return false
       const knobs = ev.by
-      const oneStep = !!v.osize && Math.abs(v.size - (1 - SIZE_STEP) * v.osize) <= 0.01 + 1e-9
-      if (d.flag === 'size') return knobs.includes('size') && oneStep
-      if (d.flag !== 'line-count') return false
+      const oneStep = oneStepOf(v)
+      if (d.flag !== 'line-count' || d.pages) return false
       const t = d.today?.value,
         n = d.v2?.value
       if (![t, n, ev.lines].every(Number.isFinite) || n === t) return false
@@ -156,8 +196,10 @@ export const RULINGS = [
       return sized && Math.sign(n - t) === Math.sign(n - ev.lines) && Math.abs(n - t) <= Math.abs(n - ev.lines)
     },
     says(d, x) {
-      const ev = x.laid(x.unit(d).part).evened
-      return `evened by ${ev.by.join(' + ')}; ${ev.lines} lines on this page before`
+      const by = d.flag === 'size' ? tieStep(d, x) : null
+      const ev = x.laid(by ?? x.unit(d).part).evened
+      const tied = by !== null && (d.unit.startsWith('tie ') || by !== x.unit(d).part)
+      return `${tied ? `its size tie at the step of its member ${by}, ` : ''}evened by ${ev.by.join(' + ')}; ${ev.lines} lines on this page before`
     },
   },
   {
@@ -231,6 +273,28 @@ export const RULINGS = [
     },
   },
   {
+    id: 'L1R',
+    title: "a paragraph a line shorter than today's, the page's fill spreading it into the room TeX left under it",
+    verdict: ACCEPTED,
+    date: DATE,
+    seen: "not judged on a card of its own: two looks he accepted composed, as the coordinator states the condition (design-display-2026-11-13, X4): L1 (a paragraph a line shorter than today's, in the height today takes) and TRS (a tight paragraph the page's fill evened by TeX's room, his verdict 17:25)",
+    words: null,
+    example:
+      "2610.21312v1-zh p2 t17: 9 lines at the original's 9.96 pt against today's 10 at 10.16 (its fit's 9 before the evening), spread from 1.37 to 1.49 into TeX's room under it, its last line 9.09 pt under today's",
+    condition:
+      "line-count: v2 sets the unit in exactly one line fewer than today on the page (both at most the original's count), at the original's size (within the size floor), as L1 reads it; its count the fit's (v2's Page member states it evened, `evened.lines` its count before the knobs, the count it draws), evened by TeX's room alone (`evened.by` the room and nothing else: no knob moved its count); its lines inside TeX's room (the block measure: none past TeX's text block bottom beyond a stated borrow, or nearer the next ink than TeX's paragraph separation, on any of its pages); the unit whole (WHOLE). Where its last row stands against today's is not asked: the room's bound is TeX's",
+    holds(d, x) {
+      const f = lineFewer(d, x)
+      if (!f || !x.whole(f.u.key) || x.pastV2.has(f.u.key)) return false
+      const ev = x.laid(f.u.part)?.evened
+      return ev?.by?.length === 1 && ev.by[0] === 'room' && ev.lines === d.v2.value
+    },
+    says(d, x) {
+      const f = lineFewer(d, x)
+      return `its last row ${r2(f.tEnd - f.vEnd)} pt under today's, in TeX's room`
+    },
+  },
+  {
     id: 'L3',
     title: "a proof one line longer than today's, in the room under it",
     verdict: ACCEPTED,
@@ -242,7 +306,7 @@ export const RULINGS = [
     condition:
       "line-count, a theorem (a proof): v2 sets it in exactly one line more than today, today on the original's count, v2 at the original's size (the size floor), v2's lines inside the room the borrow keeps (the block measure: none of the unit's past TeX's text block bottom beyond the depth the lay states it borrowed within the fit's bound, or nearer the next ink than TeX's paragraph separation, on any of its pages), the unit whole (WHOLE). Today's size is not asked (the coordinator's ruling of 2026-11-12: 2610.40645 p30, today 0.55 % under the original, is the look of p12). Reported beside, what today does there instead: its size against the original's, a line of its past TeX's measure, where its last line ends against TeX's end box",
     holds(d, x) {
-      if (d.flag !== 'line-count' || !d.unit) return false
+      if (d.flag !== 'line-count' || !d.unit || d.pages) return false
       const t = d.today?.value,
         v = d.v2?.value
       if (![t, v, d.original].every(Number.isFinite) || v - t !== 1 || t !== d.original) return false
@@ -534,9 +598,7 @@ export const RULINGS = [
       if (d.flag !== 'shown' || !d.unit || d.today?.value !== 'translated') return false
       const ord = x.unit(d)?.part
       if (ord === null || ord === undefined || !(x.v2.pseudocode ?? []).includes(ord)) return false
-      const m = x.laid(ord)
-      const drawn = (x.rec.v2?.units ?? []).some((u) => u.id === ord && u.lines.some((l) => l.n > 0))
-      return !!m && m.state !== 'laid' && !(m.off ?? 0) && !(m.lines?.length ?? 0) && !drawn
+      return drawnAsOriginal(ord, x)
     },
     says: () => "the prepare states it a line of an algorithm's pseudocode (the dump's keptBy), drawn as the original",
   },
@@ -561,16 +623,35 @@ export const RULINGS = [
       if (![t, v].every(Number.isFinite)) return false
       const apart = (f.pitch ?? 0) + (f.identifier ?? 0) + (f.unmeasured ?? 0)
       if (t - v > apart + f.decorated) return false
-      return ords.every((o) => {
-        const m = x.laid(o)
-        const drawn = (x.rec.v2?.units ?? []).some((u) => u.id === o && u.lines.some((l) => l.n > 0))
-        return !!m && m.state !== 'laid' && !(m.off ?? 0) && !(m.lines?.length ?? 0) && !drawn
-      })
+      return ords.every((o) => drawnAsOriginal(o, x))
     },
     says(d, x) {
       const f = x.p.measures.figures
       return `today ${d.today.value}, v2 ${d.v2.value}: ${f.decorated} of today's texts stand in the ${f.decoratedOrds.length} held for a decorated word, drawn as the original${f.pitch || f.identifier ? `; ${(f.pitch ?? 0) + (f.identifier ?? 0)} kept by a mark` : ''}${f.unmeasured ? `; ${f.unmeasured} no row serves` : ''}`
     },
+  },
+  {
+    id: 'T5',
+    title: 'a cell or a figure label held whole as the original for a decorated word in it, where today translates it',
+    verdict: '同意你的建议',
+    date: DATE,
+    seen: "verification/readiness.zh.html, item-15 (W11, the three questions after the figure and table text research), part (a): until a ground can follow its word, hold the whole label or cell as the original (the recommendation he agreed to); his verdict, verification/owner-comments-readiness-2026-11-12.json item-15; the rule as built: lane decorated-whole, PDF-READER §18.61, the prepare's `keptBy: 'decorated'`; T4 reads the same hold through the page's count of figure texts, T5 through the unit the dump states held; the condition the coordinator's, 2026-11-13 (lane pairs-91)",
+    words: null,
+    example:
+      "2111.09276v1-zh p4, a table's body: twelve cells each holding a word on a highlighted ground, held whole as the original by v2 (the dump: kept as the original whole, a decorated word inside it), translated by today; two of its columns drawn mixed by them, where today translates them whole",
+    condition:
+      "shown: today translates the unit and v2 draws it as the original (not laid, no group of it turned off, no line of v2's text drawn of it), its member one the prepare states held whole for a decorated word (the dump of the run v2 is laid from, a unit's `keptBy: 'decorated'`, which v2.mjs reads into the v2 file's `decorated`); groups: a table's grid group today draws whole translated and v2 mixed, every cell of it v2 draws as the original (the difference's `asOriginal`, fidelity.mjs) one so held and so drawn, the others translated. A unit v2 leaves the original's with no such statement still counts, and so does a group today keeps whole",
+    holds(d, x) {
+      const held = (key) => {
+        const ord = x.unit({ unit: key })?.part
+        return ord !== null && ord !== undefined && (x.v2.decorated ?? []).includes(ord) && drawnAsOriginal(ord, x)
+      }
+      if (d.flag === 'shown') return !!d.unit && d.today?.value === 'translated' && held(d.unit.split(' ')[0])
+      if (d.flag !== 'groups' || d.today?.value !== 'target' || d.v2?.value !== 'mixed') return false
+      const kept = d.asOriginal?.v2 ?? []
+      return kept.length > 0 && kept.every(held)
+    },
+    says: (d) => (d.flag === 'groups' ? `its cells ${d.asOriginal.v2.join(', ')} held whole for a decorated word (the dump's keptBy), drawn as the original` : 'the prepare states it held whole for a decorated word (the dump\'s keptBy), drawn as the original'),
   },
   {
     id: 'WB',

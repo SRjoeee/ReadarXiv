@@ -8,7 +8,7 @@ import type { DocGlyph } from '../src/doc.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
 import { fakedCaps, unitSize } from '../src/locate/facts.ts'
 import { cutLines, lineSize } from '../src/locate/lines.ts'
-import { locate } from '../src/locate/locate.ts'
+import { locate } from './helpers/locate.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
 
 /** a glyph; a space the font's, whose outline is empty: no extent across or up from its origin (ink.mjs's reading) */

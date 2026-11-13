@@ -309,6 +309,12 @@ the extension's reader passes none (its narrow window keeps §5's rule).
   「空间占用有点太大……两者都更紧凑简洁」).
 - Each row: the **translated title**, one line, truncating, in the language it is in (`lang`); the original title in its tooltip; the page number at the end
   (11 px, tabular, ink-2 — §4.1). A fold's tooltip says 展开 or 收起, to its right; the fold is named by the section (UI.md S-R-02a).
+  Both titles are text, never TeX: each element of the heading (a paper's macro, a formula, a reference, a citation) is its
+  copy text as its part states it (`El.text`, the glyphs TeX set, else `El.copy`, the source's plain text: a formula as linear
+  text, "τ_V"), a forced break a space, and an element no part has stated, or one that states neither, nothing, as today's
+  reader drops every element (`packages/reader` session/contents.ts `copyTextOf`). The rebuilt reader showed the element's
+  source there, "\sys" and the translated words for "Overview of BLIP" (2608.25210v2; 177 contents entries of 38 papers at
+  B15).
 - The section being read is marked (the fill, 600) and its branch expanded; the mark follows the reading as it scrolls.
   A row jumps both sides to the heading.
 - The headings and their levels come from the paper's source as the engine reads it: the source parser
@@ -914,7 +920,36 @@ With the reader closed, a PDF page gets the abstract page's entry view: the two 
   arXiv's PDFs or not: `#readarxiv` opens it either way.
 - **数据** gains a line for the PDF translations kept on this machine, `{n} 篇 · {size}`, and 清除 through the existing
   `Confirm` (two presses; it disarms after 4 s), beside the HTML translations' line (the maintainer: 「其他暂时这样」 on
-  the proposal). The settings page is on the extension's origin and calls the store's `usage()` and `clear()` directly.
+  the proposal). The settings page is on the extension's origin and calls the store's `usage()` and `clear()` directly: the
+  store of the reader the build runs (`AXT_READER`), never the other's.
+- **The papers this machine keeps** (the rebuilt reader, `packages/reader` behind the extension's host): the owner's rule of
+  2026-10-08, offline nothing new is drawn and a paper kept still opens. The store is the reader's network seen through this
+  machine (`host/stored-fetch.ts` over `cache/paper-store.ts`, at the Host's one seam, its `fetch`): what never changes at its
+  address (an object of a layer or a range of one, our copy of arXiv's PDF where it was read, a face's file) is read there
+  first and kept as it is read; what may change (the faces' tables, a language's patterns) and the paper's document (the
+  open's answer, the follow's documents) are asked of our server first, the last document with a layer kept for each paper
+  version, and answered from the store where our server is out of reach (a fetch that rejects and is no abort of the reader's,
+  or a 5xx). arXiv's own bytes are never kept, as the old reader's store kept none. Each answer is checked against the digest
+  of its bytes as kept, every time it is read (and a whole object against the digest its address names before it is kept);
+  past 200 MB the paper versions opened least recently go first, with all they hold, the faces' files last; every failure of
+  the store is a miss. What a reader sees, our server out of reach (the existing words only):
+  - **a paper kept**: the Reading state: the original, and the translation laid from the store and from the passages the
+    background keeps (the rows, DESIGN §9), no capsule; a passage never translated before is asked of the service, which may
+    itself be out of reach: the passages that failed, with their retry and close (S-R-15), once the run has ended;
+  - **none kept**: the original, the translated displays as they are, and the capsule of Not to be had now (§8, §8.1): our
+    server answering with a failure (a 5xx), the bilingual version not to be had now, with its retry (S-R-24); no answer at
+    all (the browser offline, a connection reset), the network's sentence with no retry, the session asking again by itself
+    (`tests/e2e/reader-v2-layer.mjs`, the states section, both with nothing kept).
+  The database is the old reader's (`axt-layer`) at version 5. **The version step** deletes the old reader's three tables
+  (objects by digest, catalogs, who held what), which no address of the rebuilt reader reaches, on the first open by this
+  build. **The way back**, measured (`tests/cache/paper-store.test.ts`, Dexie 4.4): a build of version 4 meets the database
+  of version 5 and works, Dexie opening it at 5.1 with the old tables made again beside the new; its papers kept from then
+  on are its own, and this build, back again, works on its own rows. Nothing breaks either way; what a return leaves is the
+  old tables beside the new (at most the old store's 200 MB), until a later version step names them null again: the
+  rollback recipe is that step in the release that comes forward after a rollback (`axt-layer` version 6, `objects`,
+  `papers`, `refs` null). The background's `axt-translation-cache` at version 3 (cache/translate-store.ts, the per-text
+  table dropped) goes back the same way, measured (`tests/cache/translate-store.test.ts`): a build of version 2 works at
+  3.1 with its `entries` made again, this build again on its own rows; its recipe the same, `entries` null in version 4.
 
 ### 9.4 The shared `Menu`, made accessible
 
@@ -1113,7 +1148,28 @@ set -- cannot scroll"); at no width it draws no page. The translation's pane in 
 A page shown from the back-forward cache: the reader meets a persisted `pagehide` and `pageshow` itself, as it meets the
 document's visibility and the browser's online state: away, our server is neither followed nor asked and no timer runs; back,
 the document is followed anew, the panes as they were (today's web `session/job.ts putAway`). A `pagehide` that is not
-persisted is the host's to close the reader on.
+persisted closes the reader, and only that one: the package's one glue of a reader and the chrome's session
+(`chrome/open.ts` `openSession`, both hosts; the coordinator's ruling of 2026-11-13: a page the browser may restore is never
+closed for good). The glue tells the reader's state as the chrome's events (`eventsOf`), runs the chrome's commands, and
+takes from a host only what differs: its telling of some events (the website's arXiv HTML link, the extension's crash as a
+failure), what it watches, whether the chrome may hold the original, what goes at the page's end.
+
+A settled paper is asked nothing until something says it moved: once the document says nothing runs, the follow waits for the
+reader's wake instead of asking again a minute later (design-performance-2026-11-13 Q9; the page shown again, the network back
+and the back-forward cache start a new follow by themselves). The wake is an object of the layer answered gone (a 404: our
+server replaced the layer and deleted the old one's objects): its head, or a part, which is read as its page comes near, long
+after the head (#640 review). Either lets the layer go (`object.refused`) and wakes the follow, once a catalog: the document is
+asked again and the layer our server serves now read and laid, no reload; on the extension, whose rows are made here, no follow
+lives once its layer is final, and the layer let go is what asks again. A document that still names the catalog gone asks
+nothing more. The add-on is not among them yet: read by ranges, a range answered 404 once bytes of it came is the network's
+(`bytes/source.ts`), and the layer is refused `broken`, which a retry asks again.
+
+The extension's reader never comes back from the back-forward cache: it is shown only in a frame over arXiv's PDF page
+(`entrypoints/pdf.content.ts`), and Chrome does not cache a page that embeds an extension's frame. Its reasons, read through
+the DevTools protocol (`Page.backForwardCacheNotUsed`; the page's own `notRestoredReasons` says only `masked` for the frame,
+another origin's), measured on Chrome for Testing 153 in 2026-11 by `tests/e2e/reader-v2.mjs`: `SupportPending:EmbedderExtensionFrame`,
+`SupportPending:ContainsPlugins`, `Circumstantial:BrowsingInstanceNotSwapped`. The page comes back loaded again, its reader
+opened anew. The check keeps the restored branch: a Chrome that caches such a page sends it to the reader's own resume.
 
 Where its host gives no engine, the reader lays with lane L3's typesetter (`packages/reader/src/compose/typeset.ts`):
 `layPage` under the rule set's rules for the target the rows are of, the reader's "What to translate" as the rules' `leave`
@@ -1358,6 +1414,21 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   it is held, out again at its end where still far. A kept page's words are not found by the
   browser's find while it is far, as today's are not (the coordinator's word, 2026-11-12: equal to production is the bar).
   Held by the harness's check "a far laid page kept out of the layout tree, back pixel for pixel, the scroll height unmoved".
+  **A kept page holds one bitmap** (design-performance-2026-11-13 Q7): its page view's. Its crops canvas, page-sized so that the
+  compositor draws it as it draws the page view, holds a few formulas' pixels on most pages; kept, it let every laid page hold a
+  second page of pixels (2610.20808v1 and 2610.40645v1 after a scroll: 27 and 35 of them, 62.6 and 74.3 MiB; the GPU process
+  595-605 and 658 MiB against 420-433 with them let go, lane crops-probe, 2026-11-13). As the page is kept, the smallest box of
+  whole device pixels that holds where its crops are drawn (`packages/reader` paint.ts `cropsBox`) is copied one to one into a
+  canvas of its own that is never in the document and is read by the CPU (`willReadFrequently`), and the crops canvas's bitmap
+  is let go (`cropsAway`); as the page comes back, in the task that puts it back into the layout tree (the jump's own frame or
+  the near observer's), the canvas is made page-sized again and the copy drawn at its place, one to one (`cropsBack`): the page
+  comes back as it left, the same canvas and the same pixels, alpha included, no crop render made. A canvas cut to the box and
+  shown so (lane reader-perf's C) is not taken: Chromium composites a layer of another size differently, 14 of the harness's 37
+  shots unlike though the canvas's own pixels were identical (lane crops-probe). Where no copy fits (the scale moved while the
+  page was far) the crops are drawn anew (`cropsAgain`) and the page goes back into the layout tree once they are in: never
+  shown without them, nor with the old scale's. The budget counts what a kept page holds: its page view and its copy.
+  Held by the same check (the crops canvas 0 × 0 while far, the budget, the canvas in the jump's frame equal to what it held,
+  no crop drawn again; after a zoom while far, the crops at the new grid as the page goes back) and paint.test.ts.
 - **The faces, in one wave** (`layer-proto/warm.mjs`). v0 checks and loads the faces of a unit as it lays it, one unit after
   another (E2), so a page whose units brought new characters waited a round trip a unit: 2602.23285v2 in Chinese asked 38
   font files in 12 waves before its first page, 4.3 to 9.2 s of a cold visit (production, 2026-10-24). The side asks the
@@ -2683,6 +2754,19 @@ within noise.
   typesetting and the streams' reads make them). The package's sweep, one look a frame: 0.105 ms a look at its median, 0.040
   after. While a pinch is shown its pages stand where its transform draws them, which no place kept holds: the page is read as
   shown for those frames, as before.
+- **The right's page told reads no layout either** (design-performance-2026-11-13 Q8): the page number the chrome shows for
+  the right pane (`panes.ts` tellRightPage) is the page at its shown top, told in every scroll and each time the stack puts a
+  page in place (its `shown`). It read the pane's width (`shown()`), its scrollTop and each page's offsetTop / offsetHeight,
+  and a page put in place leaves the layout dirty: over a scroll of 2610.20808v1 (zh) 56 layouts were forced there, 344 ms
+  (a trace with the scripts' stacks: readarxiv-lab-data `lanes/reader-q7`). Keeping the width alone moved them to the next
+  read (`shownAt`'s scrollTop: 56, 337 ms). Now it reads the width kept (read as the panes are made and where the reader
+  changes a pane's display, kept by a ResizeObserver of each pane), the scroll position the pane's scroll events keep, and the
+  page from the pointer's kept places (each page's end as the layout read gave it): 0 such forced layouts over the same
+  scroll. Where the pane moved before its scroll event came (the reader's own placing after an open or a relayout, or a scale,
+  a display or a resize that read the places again) it reads fresh until that event: told from kept values there, the page
+  differed on 2 of 248 tells over the lab paper's display change and narrow view (the kept position the old scale's, the
+  places the new one's); with the fresh reads, the page told equals the layout's on every tell, 58 on sample-1 and 252 on
+  2610.20808v1, over a scroll, jumps, zooms, display changes, the narrow view and resizes.
 - **What it does not settle**: a display the part states no ink of (LOST) leaves a gap with nothing in it, filled as today's;
   a display set on a text line beside a word (TeX's display after a word on its baseline) is on that line's row, lit with it;
   a sentence whose only text is a display lights nothing but the display; and a sentence that runs on past a display with no
@@ -5702,7 +5786,15 @@ fit's borrow; the fill's foot step is not an option.
 lines }` (`types.ts` Laid, `lay/page.ts`, from the fill's `FillLaid.evened`): the knobs the fill took, in the order taken (a knob
 that gave nothing is not named: a paragraph its fit set at the tracking's bound already takes the size step alone), and its
 line count on that page at its fitted layout, before them; one the foot lifted carries `fit.over` too, how deep its lines went
-under TeX's bottom (§18.37's statement, the depth and not the line its state allows). Nothing of the lay reads either; the
+under TeX's bottom (§18.37's statement, the depth and not the line its state allows). A knob is named only where the state its
+final lines are laid at still carries it as the evening took it (`fill-page.ts` carried, 2026-11-13, round B16): the pass lays an
+evened paragraph again after the evening, and two of its steps put a knob back. The head pass lays a paragraph under a widow line
+lower with no room borrowed (`headOf`, `borrow: 0`), so that one evened by TeX's room stated a room its lines no longer stood in
+(2610.20967v1-zh page 4, unit 85, the head pass's own page: `track` and `room` stated, `track` alone carried); the page's one size
+grown replaces the size step's scale. The tracking stays named: the fill's own tracking of a CJK paragraph still short of its
+frame adds its steps to the knob's, so the knob still moves the final lines. One with no knob carried states no evening. Over
+the 90 pairs on the door's rows (default toggles), that unit is the one statement the rule moves; nothing drawn moves. Nothing
+of the lay reads either; the
 display gate's rulings TRS and Fm do (`lab/typeset/parity/rulings.mjs`), so that a paragraph one step small, a line short or
 a line past the bottom is accepted only where the lay says it evened it so.
 
@@ -6033,6 +6125,13 @@ Each mark is a cause of the candidate's own unit (`lab/pdf/prepare-back/stated.m
 `pseudocode`, `nameCell`, `block`; keptWhyOf), which the acceptance list does not accept by this: its entries are the
 coordinator's. The order of `keptBy` is the rules': a unit two marks state is kept by the first.
 
+**The page states it `kept`** (2026-11-13, round B16). A Page member whose unit the paper keeps (`Rows.kept`, the bundle's
+`Unit.kept`) is stated `kept` (`types.ts` Unlaid; `lay/entry.ts` contentOf, `lay/figures.ts` for a figure text), and `none`
+means one thing again: a row that had not come when the rows ended. Nothing the page draws moves: both are the original's, both
+hold no table group (a kept cell counts as one that came back as it went, as before) and neither is waited for; the reader
+reads `state === 'laid'` alone. The lab's display gate read both as "left the original's", a kept unit and a missing row
+alike (lab-data `refactor-2026-11/LATER.md`, 2026-11-12).
+
 Left out, each with its reason: the reader's toggles (a kind they leave is the page's 'left', no keep of the prepare; the dump
 states a unit of today's that such a member holds as `names`, "a line of the author block, kept by the names toggle"); a babel
 name (its own group, in no dump); an element kept as ink inside a translated unit (`El.keep`: a display row, a held line; no
@@ -6085,6 +6184,15 @@ alone were traced (lane google-lay) to the gate, not the reader, but for one (§
   "laid against laid" 328 and 34 (door 337 and 47). The rest is the table's names rule (`decideTables`, which the runner has
   not): a body column whose cells came back as they went kept whole as the original's, more often with Google's replies ("cells
   against laid", 107 against the door's 19).
+- **The reads gate** (2026-11-13, round B16, design-display row F6). The runner lays each page again under the reader's default
+  reading options and with every option on (`gateL1Pair`'s `leave`: the kinds their toggles leave, the reader's
+  `compose/classes.ts` leftKinds), its rows recording every id the lay reads (`reads`), and counts each id its page's wait set
+  (waitOf over no row in, the rows going on) does not hold: no exemption, 0 to pass (`gate-l1.mjs` exits 1 otherwise). It is the
+  law of §19.15 ("what a page reads is what it waits for") as a gate: a lay that reads a row its page does not wait for draws
+  what that row's coming later changes, and the composer lays such a page again once (§8.1). Over the 90 pairs before this
+  round: 469 reads on 110 pages of members the prepare, the toggles or the paper leave as the original (their sentences read for
+  the highlight, a figure text's row read before its reason), and the paper's own names, 29,522 on 1,890 pages; now none
+  (§19.14's names, wait.ts `ownRowOf`).
 
 ### 18.64 A size tie caps a member from the passes up to its own first page (the coordinator's ruling, 2026-11-12)
 
@@ -6136,6 +6244,23 @@ begin on two pages or more (28 members: 2608.16117v1 57/59 and 115/119, 2610.104
 12-16, 2610.21827v1 47-59, 2610.22197v1 72/74): what the entry draws of each, page by page, is the same before and after on
 the door's rows and on Google's; given the runner's members' rows alone, ord 12 on page 2 at 10.91 pt, its page-1 size, where it
 was 10.64. No PIPELINE, TRANSLATE or CHAIN_RULES: the lay is the reader's, and no stored byte moves.
+
+**What the page states of it** (2026-11-13, round B16, the coordinator's ruling). A member laid at its tie's cap states `tie:
+{ scale, by }` (`types.ts` Laid, `lay/page.ts` tieStated): the cap, a scale of its own size, and the member whose own need set
+it, in the round that set it (`tieCaps`' TieOrigin, followed back through a cap that member was itself laid at). That member
+states the tie too, by itself; where its own page's fill set it there (the evening's size step, §18.57) and its final lines
+stand that step under its own size, its `evened` names the size step among the knobs its final lines carry, with its line
+count on the page at its fitted layout of the final round. The statement is of the final lay, never a merged history: a knob of
+an earlier round's is named only where the final lines carry it. 2608.25210v2-zh page 11, traced over the rounds: in the first,
+unit 200 (today's t212) was evened by its tracking and a size step, 0.975, and unit 199 (t211), one paragraph of TeX's with
+it, capped there; in the second, 200 laid again at its own size took its tracking alone; in the third it was capped in turn
+through 199, whose cap is 200's own step, and the final page stated `{ track }` on 200 and nothing on 199, so that the display
+gate read the tie one step small with no reason. Both at 0.975 is no fault of the drawing: one paragraph has one size, and the
+step is the only size both fit at (200 at its own size needs it while 199 stands at its own). Now 199 states `tie { 0.975, by
+200 }` and 200 `tie { 0.975, by 200 }`, `evened { track, size }`. The display gate's TRS reads a tie's members' statements
+(the measure's `tie t211, t212`, which it could not read before): a member stating `tie` is covered where the member that set
+it is (`lab/typeset/parity/rulings.mjs`). Nothing drawn moves. `packages/typeset/tests/unit/tie-cap.test.ts`,
+`tight-paragraph.test.ts`.
 
 ### 18.66 A paragraph TeX opened inside a unit is read by the same facts on both sides of its end (2026-11-13)
 
@@ -6203,6 +6328,142 @@ it. Not this round's: staging drew the same at round B10's engine; the lay follo
 - **The end's gate**, `lab/pdf/spikes/para-end-cases.mjs`: a paragraph after a hyperref'd footnote, after a plain `\href`,
   after a citation and after a full stop, with microtype, each end stated before the next paragraph's first glyph and no glyph
   moved by the points (four ends missing before). The facts pass reads two ends at one glyph position as one.
+
+### 18.67 Two elements the source sets side by side are one word, at TeX's distance (the coordinator's ruling, 2026-11-13)
+
+The owner's report on staging (round B12, 2111.09276v1 p1, a caption): `the tokens that have been edited are
+\hlyellow{high}\hlblue{lighted}`, one word in two highlights, was drawn with white between the two colours. The row set the two
+elements with nothing between them and the breaker made no space token; the gap was the typesetter's: each crop advanced by its
+padded box (`unit/crops.ts` cropOfBox, 0.4 pt each side) where TeX set the second's ink 0.25 pt over the first's, and the CJK
+line's justification put its slack between the two (`break.mjs` inWord read only `brk` and `cont`): 0.97 pt of white. On Google's
+wire a reply also set a space there (3,122 of 3,290 such pairs over the lab's 90 pairs), which the reading now takes back (DESIGN
+§6.2's glue rule, one rule for every pair of pieces): spacing and places are restored from the source on reading, and the row
+carries the adjacency.
+
+The rule (`breaker/tokens.ts` sideBySide): two elements consecutive in the source (their pieces' index `k`, one after the other,
+nothing between) and in the row (no token between them), each drawn (a crop or a text; never a forced break's newline or a kept
+region's blockTo, control tokens), are one word as TeX set it, whatever their kinds: the later one's first token is glued and
+`tight`, inside the word for `inWord` (no slack of a justified line and no squeeze between them), and two crops TeX set on one
+line (one page, one baseline) keep TeX's distance between their starts: a kern after the first, that distance less its box, which
+a line's end drops. A tie between them is TeX's own space (the tie's rule holds them across it); a forced break, its line end.
+
+Measured over the 90 pairs (r21's bundles, the reader gate's runner, base = the round's typesetter, Google's rows read with the
+glue rule): with the door rows 6 of 23,006 units move, with Google's 5 of 22,939, each holding such a pair (2501.14787v1 ord
+404, a typewriter symbol and its superscript; 2610.21098v1 ord 13, a minus sign and a macro's number, its paragraph one character
+re-broken on three lines; 2610.21376v1 ords 40, 46, 85, 131, a formula and a revision macro of the paper's own after it, a
+typewriter word and a formula): the
+crops' places by at most 2.5 pt, one line's end by 0.8 pt; I3 (3), I4 (0), I5 (2) and I6 (11, the head pass's) as before on both, a closing mark's blank half past
+its slot 3,537 -> 3,536 on the door's rows (2610.21098v1's re-broken lines, the one unit whose lines moved there), 3,121 on Google's. The owner's caption: the two highlights
+16.26 pt apart, TeX's distance, where they stood 17.48. The display gate's lay (its 22 pairs, the door's rows, default and every switch on): one page
+of 344 moves, 2608.25210v2-zh p9, a formula and the element right after it on one line, the line's other items 0.01 pt at most. A first build glued the control token after such an element (2608.06701v1
+p1: a page's fill threw, I6 caught it) and was corrected before it was committed: both sides must draw.
+
+### 18.68 The lab's differential reads a unit as arXiv prints it; the dump keys an element by its piece (2026-11-13)
+
+The migration's differential (the lab's `baseline/tools/diff.mjs`) counts units by their id, the hash of a unit's kind and
+pieces: a unit the rebuilt engine reads otherwise is another id, and today's counts as lost unless stage 1a's statement
+(`lab/pdf/prepare-back/stated.mjs`) finds what stands for it. Eleven lines stayed lost round after round; traced one by one
+(the lab's lane lost-11), eight are drawn by the rebuilt engine on every line, and three are real, kept as the original where
+today's erased ink it never drew again (a class's "Funding:", a table note's mark): those are the facts round's.
+
+- The dump's element keys. Stage 1a's dump (`lab/pdf/prepare-back/run.mjs`) numbered a unit's pieces by place and wrote each
+  element's `k` as the instrument's content id, which numbers a piece by the front end's own index and skips the groups it
+  drops or joins (`pipeline/instrument.mjs` piecesOf): after any such piece the two differ, and a statement reading an element
+  by its piece's k read another piece, or none. Round B15's r22: 8,225 of 73,121 elements keyed otherwise than by their piece,
+  7,261 of them naming no piece of their unit. `lab/pdf/prepare-back/pieces.mjs` flattens a unit's content once and keys each
+  element and nested unit by its piece (the name before's trail, of no piece, stays null); run.mjs writes the dump so, and
+  `restate.mjs --keys-from-bundles` keys a run made before from its bundles' units. On r22 and on B14's r21k no statement moved
+  by it alone, nor any other count of the differential; no bundle byte moves.
+- (t) "held whole by the drawn units on its lines, read as arXiv prints them": today's unit whose every line one or more drawn
+  units of the candidate's meet, consecutive in the dump's order, every unit on its lines drawn, today's reading a contiguous
+  part of theirs joined in that order; each side read as arXiv prints it (its label and every element with ink by arXiv's
+  glyphs in its boxes, a formula too; its text as written through TeX's ligatures; white space aside; letters case apart only
+  where today's glyphs are all in a face of small capitals). A hyphen arXiv prints at the end of one of today's lines that
+  today's reading dropped as TeX's break is arXiv's (the coordinator's ruling of 2026-11-13: arXiv's own text is the reference).
+  One unit holding it is its holder, which the display gate joins by; several name none. On r22 and r21k it states 28 units:
+  seven of the eleven (2608.06007v1's five bibliography notes, now its references under the References toggle;
+  2608.08481v1 t125; 2307.16209v1 t737) and 21 of 2610.21377v1 that the acceptance list held one by one as absent. With its
+  entry the differential reads 4 lost on both runs: 2610.19159v1 t1990 (a macro's prose argument, the display design's N10) and
+  the three real ones.
+
+### 18.69 A paragraph TeX opened in plain text opens where the row's sentence start pairs with its first word (2026-11-13)
+
+§18.66 states a paragraph TeX opened inside a unit where a group or an element stands at its start. Two cases remain (the
+display design of 2026-11-13, 2a): a paragraph that opens in plain text (`A. \smallbreak\noindent B.`, a class's separator, a
+plain new paragraph the source writes no blank line before), and a point stated at a group the translator's reply dropped (with
+Microsoft's rows the bold markers of 2111.09276v1's run-in titles come back at the unit's end, and the reading places a lost group
+only where its text stands once in the source: "COIN", three times there, runs on). The fact for both is the paragraph's first
+word: its offset in the unit's source projection (what `Row.sentences.src` counts in) and the line TeX opened it on, the part's
+`paras`. A paragraph point is a fact of the source, and a group or an element is one carrier of it that a reply can drop: the
+part states the first word of EVERY point, whatever stronger anchor it also has, and the lay reads the strongest carrier the row
+kept (the coordinator's ruling of 2026-11-13, in place of the design's "stated once, by the strongest fact"). The engine's half
+states it, in a later round; until then no part holds it and nothing drawn moves.
+
+- **The lay** (`unit/breaks.ts` `paraPieces`, `pairing`). A point on a line no stronger fact the row holds opens (a group's open
+  or an element between the row's texts, a forced break: `statedBreaks`; one opening a line) is paired with the row's
+  sentence whose start on A is that word: the row's cuts each holding a word of A (`lay/lit.ts` `worded`), the first of
+  `Placed.words` at or after the start (`firstWordAt`, the highlight's own start rule) being the point's word on the point's
+  line. Its place in the translation is the highlight's too (`startsInProjection`: the start's first letter, digit or element,
+  back over the opening marks set against it). A piece of the typesetter's own (`par`, never in a Row, never on a wire) stands
+  there, before the groups opened right there, a text piece cut in two; it stands for no character, so the row's projection,
+  its sentences and the highlight's places do not move. `statedBreaks` reads it as a group's open with `opens` its line, under
+  the same guards; one it does not open is taken out. The blocks, the tokens' `blockTo` and the breaker run unchanged; the white
+  space at the cut is dropped as at any block's edge. A named variant pairs after `lay/named.ts` has given its sentences back in
+  the unit's own projection.
+- **No pair, no guess.** Where the row carries no sentences (they did not reconstruct; Chrome's translator) or no start of it is
+  the point's word (an end inside a sentence: a float TeX set in the middle of one), no block opens and the text flows on through
+  the member's lines, as before: no nearest start and no proportional place is taken, which would set half a sentence on a line
+  of its own.
+- **Stated** (`Laid.paras`, where the part states a point and the member is laid): `[opened, noStart, noSentences]`: the points
+  opened on their line (by their own pair, or by a stronger fact the row holds there), those that flowed on for want of a start
+  the lay can open at their word, those for want of the row's sentences.
+- **The gate** (the reader gate, `lab/typeset/gate-l1.mjs --entry`, `packages/typeset/tests/replay/paras-gate.ts`): each point a
+  part states (a group's open, an element, a first word) whose row carries its anchor (the group or the element between the
+  row's texts, else the sentence start paired with its first word) is laid with its first word starting a line of the member: a
+  laid line of the member on the page of TeX's line begins with the paragraph's first thing. The defect a reader sees is a
+  paragraph that starts on the last line of the one before; one that starts a line of its member has none, whether that line
+  stands on TeX's baseline or not (the coordinator's ruling of 2026-11-13: the baseline is the spacing design's). A point run on
+  fails the run; those on TeX's baseline are counted beside, never failed; a point with no anchor flows on and is counted by why.
+  In the lab the first word of a point stated at a group or an element is read from the unit's source, so the gate holds today's
+  group points to the fallback the part will state. Of several facts that state one line, the point is the first in the source
+  (2609.36054v2's author block states each line at its name's group and at its affiliation's after it). The release check's
+  `sentence-cover` reads the counts and fails on a point run on once `PARAS_HELD` (`lab/release-check/gates.mjs`) is on: the
+  engine half's lane turns it on in the round it lands in; until then a point a reply's dropped group leaves has no first word
+  to fall back to.
+- **Measured** (the base c331582c6 against this lay, round B15's parts, no part stating a first word): the reader's own lay
+  (`lab/typeset/parity/v2.mjs`) over the 90 pairs and the two added ones (2111.09276v1-zh, 2611.03953v2-zh), on the door rows
+  and on the lab's Google store, default and every switch on: 368 of 368 files identical. The reader gate at this lay: every
+  number it read before as at the base (90 pairs, door: entry 24,056 alike / 244, I3 3, I4 0, I5 2, I10 0 over 3,145,577
+  pieces, I6 0 other; Google: 23,544 / 827, I3 3, I10 0 over 3,569,346, I6 0 other). The points: 27 stated over the 90 (all at
+  a group), 3 not on TeX's line on both stores, each beginning a line of its own at the member's own pitch (2608.25210v2 p1 ord
+  8, 2610.21924v1 p2 ord 17, 2610.30151v1 p1 ord 0: CJK leading, a title's); on the door rows 24 belong to members with no
+  door row. 2111.09276v1-zh: Google's rows 8 of 8 open; the door rows (Microsoft's replies in today's reading) 6 not, 5 of them
+  run on (COIN, Youcook2, Howto-GEN, "Token Replacement", "Step Aggregation Model", "IER": run-in titles whose groups the reply
+  dropped). A copy of its parts stating COIN's and Youcook2's first words (the lab's simulation) opens those two on TeX's lines
+  (179.84, 585.36) on the door rows; one stating every such point's first word, and its words in every part that holds the
+  member, opens all six (the gate 0) and moves no other unit across the pages' lays (I6 0 other).
+
+### 18.70 A stop the source ties to a word or a number ends no sentence on the tags wire (the coordinator's ruling, 2026-11-13)
+
+A tie after a stop is TeX's own statement that the space there is a word space and not a sentence's end: `~` is
+`\penalty10000\ `, and no end-of-sentence space is ever set at it. So where the source ties a word or a number to a stop, the tags
+wire (Google's, Chrome's built-in translator's, the LLM services') marks no sentence end there: no boundary marker, no cut of the
+row's sentences (`wire/tags.ts` planTags `tied`). A word or a number is text that begins with a letter or a digit, or an element
+the sentence cutter reads as one (a number, a reference, a formula, a paper's macro); a tie and then a mark, which annotates the
+sentence before it (a note's mark, a footnote's call, a citation), keeps the end, the mark glued to the sentence that ended
+(2111.09276v1's `search.~\footnote{…}`). No word list and no language's case decide it: the tie is the source's.
+
+Why: on round B15's wire the boundary marker stands right after a sentence's stop, before the elements the source glues after it
+(DESIGN §6.2), and the cutter ended sentences at abbreviations' dots a tie follows. After "vol." Google then completed the
+"sentence" with a volume, an issue and pages the paper does not print ("…Systems, vol.~36, pp.~…" read as "vol. 10, no. 1, pp.
+1-10" in Chinese) in 42 bibliography units of 7 papers over the lab's Google store at round RB1, 39 of their rows read; on round
+B14's wire (the marker after the elements) none. Every such marker over the store's 92 pairs (lane glued-mark, 2026-11-13): 533,
+532 in bibliographies (after a one-letter initial 366, "M.~Casals"; "vol." 99, "no." 51, "p." 6 before a number; a lower-case
+initial 3, "J. a.~P. Cavalcante"; journal abbreviations 7, "Amer.~Math.~Soc.", "Math.~Ann.", "Ch.~Pommerenke") and 1 in prose
+("…an ingredient in Definition.~\ref{…}.", a stop the author typed inside the sentence): every one read, none a sentence's end.
+The wires of 479 bibliography units and 1 prose unit change; they are asked again. Reading a `number` element as a digit
+instead was measured and withdrawn: the cutter's own merge of a short capitalised word before a number (`Exer. 5`) then joins
+262 author blocks to their year ("…Llion Jones. 2018. Character-level…"), true ends lost.
 
 ## 19. The engine's contract
 
@@ -6549,6 +6810,19 @@ own), each part carrying its pages' cell rules (`rules`).
     address's placeholder or a letter past ASCII (a letter of the name to XeTeX and LuaTeX) follows it. A paper that makes the
     space active anywhere, its class's files among its own (`\obeyspaces`, a `\catcode` of the space set to 13), keeps every
     indent, which TeX reads there; none of the 231 does.
+  - *A formula ends where TeX ends it, past what a comment in it holds* (F37, 2026-11-13; a reviewer's finding on round B15's
+    pull request). An unescaped `%` ends its line for TeX, a brace or a closing delimiter after it with it (`\%` is the
+    character, `\\%` a line break and then a comment). The scan for an inline formula's end (`latex-front.mjs` `mathEnd`)
+    counted a commented brace, so `Take $x % { note⏎+y$ and $z$ here.` sent `x` and `+y` as text and made ` and ` a formula;
+    a display's `$$` and `\]` were found by searching, a commented one taken for the end. Every scan for where a formula,
+    a display or an environment ends now passes over a comment as the file's group reader does (`matchGroup`: a backslash and
+    the character after it a pair, then `%` to its line's end), or asks `inComment` of a match it found by searching:
+    `mathEnd` for `$…$`, `\(…\)`, `$$…$$` and `\[…\]`; the end of the paper's own begin and end commands for a display
+    (`\beq … \eeq`); `endOfEnv` and the TikZ node reader, whose own test read `\\%` as an escaped percent. Over para-start's 89
+    papers nothing moves: the front end's units and project byte for byte as before, and stage 1a's bundles (2,722 objects)
+    and dumps (89) identical, every compile its cached one. Their 47 formulas that hold a comment are all displays, whose
+    commented braces and dollars no scan counted before either (`packages/engine/tests/front/math-comment.test.ts` holds the
+    cases).
   - *What the guard's retries bought* (staging, PIPELINE 46 to 48, 82 prepares of 60 papers): it compiled more than the
     marked original on three, 160 s of the box's CPU, and saved none, for on none did it find a unit to blame, and its last
     remedy, the name marks off, changed nothing where it ran: 2610.37818v1 above (the name marks off, the unmarked original, refused: 114 s);
@@ -8837,6 +9111,21 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   ink 0.09 em over a curve 0.127 em under). The figure gate's O and R stay 0: `under` 2 on the pack (1512.03385v1) and 1 on
   the 25-paper set's bases (2610.21085v1's "jury,"); its zh model, held to the em box, leaves 1512.03385v1's "110-layer"
   (its curve 0.115 em under) the original's at its whole size, where the layer reads the ink of its ideographs.
+- **The stroke under the text is an edge, as a container's** (the coordinator's ruling of 2026-11-13 on the readiness list's
+  D02, the owner's mechanism of 2026-11-10 for a container's edge, `Room.over`): the typesetter (`packages/typeset`
+  `shared/figure-fit.ts` fitFigureSet) shrinks a set until each translation's ink under its baseline (its depth as above, the
+  served face's, a CJK run's held to its em box) clears the stroke's top (`Room.under`), to the set's floor at the least, and
+  the set's other labels step with it (one size a set); one that would need less than the floor stays the original's
+  (`crowded`), as before. Before, a translation that reached the stroke at the size its set gave it stayed the original's
+  whatever a smaller size would have cleared. A stroke through the letters, at or above the baseline, is no `Room.under` (the
+  figure reading states one only wholly below the baseline): that case waits for the figure reading to state it. Measured at
+  round B15's head over the 46 figure texts whose stroke stands nearer than a CJK em box's depth (19 pairs, the reader gate's
+  lay): with Google's rows 9 drawn that were the original's, each set at the factor its stroke asks (0.684 to 0.968), 7 of
+  their sets' labels stepping with them, 20 still the original's (19 asking a factor under the floor, the subscript "out" of
+  2610.22065v1's W_out at its baseline); with the door's rows 3 drawn, 2 labels stepping; every drawn one's ink above its
+  stroke; no other figure text and no other unit moved. Drawn by the reader package itself over the same Google rows, in the
+  browser's faces, one more is drawn: 2610.35877v1 p15's "; distance", whose stroke asks 0.576 by the gate's measure of its
+  semicolon, with its set's "Moved mass".
 - **Its set and its room** (the owner's rule of 2026-10-29, after 2010.11929v2's legends in Chinese: "All" drawn smaller
   than the other entries, "Patch size" starting further right than its column, "Head 3" smaller than "Head 1", each label
   fitted to its own box and anchored by what it read alone; `figure-text.mjs` `setsOf`, `roomsOf`): the labels of one group are set at one size, the original's by default; each keeps the original's alignment
@@ -9368,6 +9657,22 @@ layer wherever such a name is drawn (the owner's other ground truth of 2026-10-2
   2610.21312v1's "Setting", 2610.21884v1's "Notation", 2610.35877v1's "Result"), 3 figure units and 6 ink units that had taken
   them go (the ink units after them numbered one on), their 9 label rows stay in the layout (#541's rule had dropped them under
   those units), and no source unit's text group moves; 216 of 216 local sources keep every unit's hash.
+- **Waited for where drawn** (2026-11-13, round B16, the coordinator's ruling on design-display row F6). The reader's typesetter
+  read every name's row on every page of a paper with names (`ownNamesOf`, 29,522 reads on 1,890 pages of the 90 pairs) and
+  waited for none, so a page committed before a name's row came drew the original's head or reference and was laid again once
+  it came. Now a name's row is read only when a member's head or reference asks it (`unit/rename.ts` ownNamesOf: a lookup that
+  reads a row when asked), and one predicate (`lay/wait.ts` drawsName) says which members can: a theorem's or a heading's head
+  name (Label.name), or an element whose source a cross-referencing package generates or a citation's note (U.rename's
+  sources). Such a member waits, beside its own row, for every name of its paper; no other member is given them. What it costs a
+  reader: the server asks for the names first (the website's windows: the name units lead the first window whether or not the
+  layer's catalog is known), and over the 90 pairs' 83 papers every name stands in that first window (47 papers name their own,
+  610 names, at most 330 characters against the first window's 2,500); the reader orders them first too
+  (`session/rows.ts` ranked). A refused row ends the wait, as any row does. Where a page's own rows come from before and a name's
+  does not (asked again), the page waits for the first window, which holds the names and the page in view. A name's row that
+  comes after a page's own now lays that page once, where it laid it twice, the head first drawn as printed
+  (`packages/reader/tests/composer.test.ts`); the reads gate counts no name read outside a page's wait set (§18.63). Nothing a
+  page draws moves: over the 90 pairs, on the door's rows and Google's, the lay draws every page as before but the highlight
+  boxes of members a toggle leaves (no longer read by sentence from rows the reader answers refused: what the reader draws).
 - **Limits.** The translator sees a name alone, with no sentence around it: a word of two senses may come back in the other
   ("Note", "Line"). A name only a macro of the paper's prints (`\newcommand{\thmname}{Satz}`) is not read.
 

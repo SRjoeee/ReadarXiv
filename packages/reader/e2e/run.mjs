@@ -68,6 +68,9 @@ const deltasOf = {}
 const twins = {},
   rebuilt = {},
   twinObjects = new Map()
+/** each paper's bundle and its head's parts, for its layer made again in a directory of its own (`moved`) */
+const bundleOf = {},
+  partsOfHead = {}
 for (const [name, f] of Object.entries(fixtures)) {
   const head = JSON.parse(readFileSync(join(f.bundle, 'head.json'), 'utf8'))
   const seg = `${head.paper.id.replace('.', '_')}v${head.paper.version}`
@@ -90,6 +93,8 @@ for (const [name, f] of Object.entries(fixtures)) {
       return { path: `p/${seg}/fx/${sha256}`, sha256, bytes: b.length }
     }
     const h = JSON.parse(readFileSync(join(f.bundle, `${headDigest}.head`), 'utf8'))
+    bundleOf[seg] = f.bundle
+    partsOfHead[seg] = h.parts.filter(Boolean)
     const members = {}
     const parts = h.parts.map((d) => {
       if (!d) return d
@@ -250,6 +255,22 @@ const fixtureRoute = {
     return res.end(readFileSync(at))
   },
 }
+/** a paper's layer made again in a directory of its own (`moved`): the stale scenario's new build (`rebuilt`: its head, its own
+ *  parts, the add-on and the units as they were), every object under `fx2`, the document naming it there */
+const movedDoc = (d) => ({
+  ...d,
+  rev: 3,
+  layer: {
+    ...d.layer,
+    catalog: { ...rebuilt[d.pv].catalog, path: rebuilt[d.pv].catalog.path.replace('/fx/', '/fx2/') },
+    units: d.layer.units.map((u) => ({ ...u, path: u.path.replace('/fx/', '/fx2/') })),
+  },
+})
+/** an object of the layer made again, by its digest: the bundle's file, or one of the new build's */
+const movedObject = (seg, digest) => {
+  const file = readdirSync(bundleOf[seg]).find((x) => x.startsWith(`${digest}.`))
+  return file ? readFileSync(join(bundleOf[seg], file)) : (twinObjects.get(`/api/v2/o/p/${seg}/fx/${digest}`) ?? null)
+}
 /** a paper of a stale layer once opened (worker v2 machine.ts): prepared again, the old layer served meanwhile, the target's
  *  work made by the open and not started (none of the wanted units told yet) */
 const staleOpened = (d, target) => ({
@@ -268,6 +289,26 @@ const v2Route = {
     }
     // (an original our server cannot give now: the original lost)
     if (url.pathname.startsWith('/api/v2/o/broken/')) return json(503, { error: 'unavailable' })
+    // (a layer made again in a directory of its own, `moved`, as the first part of the old one is asked: that part and every
+    // object of the old directory after it gone, as our server answers an object deleted (404, its word `gone`); the new
+    // directory's objects served)
+    const mv = /^\/api\/v2\/o\/p\/([^/]+)\/(fx2?)\/([0-9a-f]{64})$/.exec(url.pathname)
+    if (mv && modes[mv[1]]?.kind === 'moved') {
+      const m = modes[mv[1]]
+      if (mv[2] === 'fx') {
+        if (!m.switched && partsOfHead[mv[1]].includes(mv[3])) {
+          m.switched = true
+          m.from = v2log.length
+        }
+        if (!m.switched) return false
+        m.gone = (m.gone ?? 0) + 1
+        return json(404, { error: 'gone' })
+      }
+      const bytes = movedObject(mv[1], mv[3])
+      if (!bytes) return json(404, { error: 'gone' })
+      answerBytes(req, res, bytes)
+      return true
+    }
     if (url.pathname.startsWith('/api/v2/papers/')) {
       const seg = url.pathname.slice('/api/v2/papers/'.length)
       v2log.push({ what: 'follow', seg, query: url.search, at: performance.now() })
@@ -389,12 +430,14 @@ const v2Route = {
         })
       }
       // (a newer catalog once the check says so: the same layer under the twin head. Our server makes one by a prepare again,
-      // the layer before it served meanwhile, and the follow keeps its pace of a run while that prepare runs: a document in
-      // which nothing runs is followed again a minute on, client.ts IDLE_MS)
+      // the layer before it served meanwhile, and the follow keeps its pace of a run while that prepare runs; a document in
+      // which nothing runs is followed again on the reader's wake alone, reader.ts: an object answered gone)
       if (m?.kind === 'recatalog')
         return m.switched
           ? json(200, { ...d, rev: 3, layer: { ...d.layer, catalog: twins[d.pv] } })
           : json(200, { ...d, rev: 2, prepare: { ...d.prepare, state: 'running', stage: 'compiling' } })
+      // (a layer made again in a directory of its own once a part of the old one is asked: nothing runs before or after)
+      if (m?.kind === 'moved') return json(200, m.switched ? movedDoc(d) : { ...d, rev: 2 })
       return json(200, { ...d, rev: 2 })
     }
     if (url.pathname === '/api/v2/open' && req.method === 'POST') {
@@ -876,7 +919,9 @@ for (const name of Object.keys(fixtures)) {
 // its drawing held out of the layout tree while it is kept (`data-axt-kept`), so that no relayout of the document walks it (a
 // face added to the document re-lays every text node laid out: verification/reader-perf.md §1), its slot keeping its box; and
 // put back as it was as the page comes near: no new drawing, the same pixels on the page's grid, the pane's scroll height never
-// moved. A pane a third of a page high: page 1 is far (past one pane's height) once the pane is at its end.
+// moved. Kept, it holds one bitmap, its page view's: its crops canvas let go and a copy of its crops' box kept off the
+// document, drawn back in the task it returns (§11.8 "A kept page holds one bitmap"). A pane a third of a page high: page 1 is
+// far (past one pane's height) once the pane is at its end.
 await check(
   'stack: a far laid page kept out of the layout tree, back pixel for pixel, the scroll height unmoved (s1-columns)',
   async () => {
@@ -893,6 +938,8 @@ await check(
         const pane = document.querySelector('.axt-pane.right')
         const holder = s?.querySelector(':scope > .axt-slot-view')
         const p = window.__h.panes.probe()
+        const crops = s?.querySelector('.axt-over > canvas.axt-crops')
+        const view = s?.querySelector('.canvasWrapper > canvas')
         return {
           kept: !!s?.hasAttribute('data-axt-kept'),
           boxes: holder ? holder.getClientRects().length : -1,
@@ -900,7 +947,23 @@ await check(
           made: p['right.made'],
           restored: p['right.restored'],
           keptN: p['right.kept'],
+          agains: p['right.agains'],
+          keptPx: p['right.keptPixels'],
+          // (its crops canvas's bitmap, and the box of its crops a copy holds while the page is away)
+          crops: crops ? [crops.width, crops.height] : null,
+          away: crops?.dataset.axtAway?.split(',').map(Number) ?? null,
+          viewPx: view ? view.width * view.height : 0,
         }
+      }, slot)
+    /** page 1's crops canvas: its size and its pixels' digest, every channel (FNV-1a over getImageData) */
+    const cropsOf = () =>
+      page.evaluate((sel) => {
+        const c = document.querySelector(`${sel} .axt-over > canvas.axt-crops`)
+        if (!c?.width || !c.height) return null
+        const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+        let h = 2166136261
+        for (let i = 0; i < d.length; i++) h = Math.imul(h ^ d[i], 16777619)
+        return [c.width, c.height, h >>> 0]
       }, slot)
     const toTop = () => page.evaluate(() => (document.querySelector('.axt-pane.right').scrollTop = 0))
     // (no pointer moved in this check: nothing lit on either pane)
@@ -908,6 +971,7 @@ await check(
     await page.waitForTimeout(300)
     const before = await page.locator(`${slot} > .axt-slot-view`).screenshot({ animations: 'disabled' })
     const s0 = await state()
+    const crops0 = await cropsOf()
     await page.evaluate(() => {
       const p = document.querySelector('.axt-pane.right')
       p.scrollTop = p.scrollHeight
@@ -917,19 +981,32 @@ await check(
     const s1 = await state()
     // (the jump back: in the frame that draws it, page 1's drawing already in the layout tree. A callback asked from the jump's
     // scroll event runs in that frame before its layout and paint, after the stack's own, asked from the same event earlier)
-    const inJumpFrame = await page.evaluate(
+    // (and its crops canvas in that frame: the page-sized canvas again, its pixels the ones it held before it went far)
+    const jump = await page.evaluate(
       (sel) =>
         new Promise((done) => {
           const p = document.querySelector('.axt-pane.right')
           p.addEventListener(
             'scroll',
-            () => requestAnimationFrame(() => done(document.querySelector(sel).hasAttribute('data-axt-kept'))),
+            () =>
+              requestAnimationFrame(() => {
+                const c = document.querySelector(`${sel} .axt-over > canvas.axt-crops`)
+                let crops = null
+                if (c?.width && c.height) {
+                  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+                  let h = 2166136261
+                  for (let i = 0; i < d.length; i++) h = Math.imul(h ^ d[i], 16777619)
+                  crops = [c.width, c.height, h >>> 0]
+                }
+                done({ kept: document.querySelector(sel).hasAttribute('data-axt-kept'), crops })
+              }),
             { once: true },
           )
           p.scrollTop = 0
         }),
       slot,
     )
+    const inJumpFrame = jump.kept
     await waitFor(page, () => window.__h.panes.right.near(1))
     await page.waitForTimeout(300)
     const s2 = await state()
@@ -941,6 +1018,19 @@ await check(
       p.scrollTop = p.scrollHeight
     })
     await waitFor(page, () => !window.__h.panes.right.near(1))
+    const s3 = await state()
+    // (the moment it goes back into the layout tree, whenever that is (the zoom may bring it near): its crops canvas then,
+    // before any frame is drawn of it)
+    await page.evaluate((sel) => {
+      const s = document.querySelector(sel)
+      window.__backAt = null
+      new MutationObserver((_, o) => {
+        if (s.hasAttribute('data-axt-kept')) return
+        const c = s.querySelector('.axt-over > canvas.axt-crops')
+        window.__backAt = c ? [c.width, c.height] : null
+        o.disconnect()
+      }).observe(s, { attributes: true, attributeFilter: ['data-axt-kept'] })
+    }, slot)
     await page.evaluate(() => window.__h.panes.zoomBy(1.25))
     await page.waitForTimeout(800)
     const zoomed = await page.evaluate(() => window.__h.panes.scale)
@@ -954,6 +1044,8 @@ await check(
       zoomed,
     )
     await page.waitForTimeout(300)
+    const s4 = await state()
+    const backAt = await page.evaluate(() => window.__backAt)
     const z = await page.evaluate((sel) => {
       const s = document.querySelector(sel)
       const r = (e) => {
@@ -981,6 +1073,25 @@ await check(
       `page 1 back: ${JSON.stringify({ far: s1, back: s2 })}`,
     )
     assert(inJumpFrame === false, 'page 1 still out of the layout tree in the frame that draws the jump back to it')
+    // (Q7: a far kept page holds one bitmap, its page view's, and a copy of its crops' box; the budget counts both)
+    assert(
+      crops0 && s1.crops?.[0] * s1.crops?.[1] === 0 && s1.away?.length === 4,
+      `page 1 far and kept: its crops canvas ${JSON.stringify(s1.crops)} (near ${JSON.stringify(crops0)}), its copy ${JSON.stringify(s1.away)}`,
+    )
+    assert(
+      s1.keptN === 1 && s1.keptPx === s1.viewPx + s1.away[2] * s1.away[3],
+      `page 1 kept: the budget counts ${s1.keptPx} px for its page view's ${s1.viewPx} and its copy's ${JSON.stringify(s1.away)}`,
+    )
+    // (back in the jump's own frame with the crops it held, pixel for pixel with alpha, from the copy: no crop render)
+    assert(
+      JSON.stringify(jump.crops) === JSON.stringify(crops0) && s2.agains === s1.agains,
+      `page 1 back: its crops canvas in the jump's frame ${JSON.stringify(jump.crops)}, before it went far ${JSON.stringify(crops0)}; crops drawn again ${s1.agains} -> ${s2.agains}`,
+    )
+    // (a zoom while it was far: no copy fits; its crops drawn again at the new scale before it goes back into the layout tree)
+    assert(
+      backAt?.[0] > 0 && s3.away?.length === 4 && backAt[0] !== crops0[0] && s4.agains > s3.agains,
+      `page 1 back after a zoom while far: its crops canvas as it went back into the layout tree ${JSON.stringify(backAt)} (the grid before ${crops0?.slice(0, 2)}); crops drawn again ${s3.agains} -> ${s4.agains}`,
+    )
     assert(before.equals(after), 'page 1 back is not the same pixels as before it went far')
     const near = (a, b) => a && b && a.every((v, i) => Math.abs(v - b[i]) <= 1)
     assert(
@@ -992,7 +1103,8 @@ await check(
       made: s2.made,
       restored: s2.restored,
       bytes: after.length,
-      zoomed: { scale: zoomed, ...z },
+      copy: s1.away,
+      zoomed: { scale: zoomed, ...z, back: backAt, agains: [s3.agains, s4.agains] },
     }
   },
 )
@@ -1032,12 +1144,16 @@ await check(
     const ext = p1.anchors.find((l) => l.href === 'https://example.invalid/reader'),
       inner = p1.anchors.find((l) => l.href?.startsWith('#'))
     if (ext) await page.mouse.click(ext.rect.x + ext.rect.width / 2, ext.rect.y + ext.rect.height / 2)
+    const before = await page.evaluate(() => document.querySelector('.axt-pane.right').scrollTop)
     if (inner) await page.mouse.click(inner.rect.x + inner.rect.width / 2, inner.rect.y + inner.rect.height / 2)
-    // (a document this short ends before page 2 can stand at the top: the jump brings it into view)
+    // (a document this short ends before page 2 can stand at the top: the jump brings it into view. The jump is the pane's move
+    // from where it stood: page 2 in view and the pane scrolled were both so before the click, and the reads of page 2 that
+    // followed a late jump read it before the move, 642 px and 78 px from where it was then, 2026-11-13)
     const jumped = inner
       ? await waitFor(
           page,
-          () => window.__h.panes.right.inView(2) && document.querySelector('.axt-pane.right').scrollTop > 0,
+          (y) => window.__h.panes.right.inView(2) && document.querySelector('.axt-pane.right').scrollTop !== y,
+          before,
         ).then(
           () => true,
           () => false,
@@ -1568,14 +1684,12 @@ await check('reader: a paper being prepared, opened and followed to its layer (w
   modes[seg] = { kind: 'not-opened', prepareMs: 600 }
   const { page, context, errors } = await newPage()
   await page.evaluate(() => window.__h.reader('s2-splits', { host: 'web' }))
-  const seen = new Set()
-  const t0 = Date.now()
-  while (Date.now() - t0 < 20_000) {
-    const s = await page.evaluate(() => window.__h.readers[0].reader.state().layer.s)
-    seen.add(s)
-    if (s === 'ready') break
-    await page.waitForTimeout(50)
-  }
+  // (the layer's states as the reader told them, every one from its first: a poll's samples missed the preparing of a loaded
+  // machine, its first one already past it, 2026-11-13)
+  await waitFor(page, () => window.__h.readers[0].reader.state().layer.s === 'ready', null, 20_000).catch(
+    () => undefined,
+  )
+  const seen = new Set(await page.evaluate(() => window.__h.readers[0].layers))
   await readerLaid(page)
   await context.close()
   delete modes[seg]
@@ -1609,6 +1723,9 @@ await check(
         await page.waitForTimeout(50)
       }
       const asked = await page.evaluate(() => window.__h.readers[0].asked.map((a) => a.url))
+      // (the layer's states as the reader told them, every one from its first: the loop's polls began, on a loaded machine, with
+      // the old layer already in, 2026-11-13)
+      const told = await page.evaluate(() => window.__h.readers[0].layers)
       // (what the composer laid the new catalog's pages from: the parts it was given, as the engine's lay is handed them)
       const lays = await page.evaluate(() => {
         const marks = window.__h.marks
@@ -1622,7 +1739,7 @@ await check(
       assert(opens.length === 1 && opens[0].ask.target === 'de', `opens ${JSON.stringify(opens)}`)
       assert(mine[0]?.what === 'follow', `the follow first: ${JSON.stringify(mine.slice(0, 2))}`)
       // (the old layer kept while the paper is prepared again: ready from its first document on, never let go)
-      assert(seen.join() === 'none,ready', `layer states ${seen}`)
+      assert(told.join() === 'none,ready', `layer states ${told}`)
       // (the new catalog's pages laid from its own parts, never from the parts of the head before: staging, 1706.03762v7)
       const fresh = [rebuilt[seg].catalog.sha256, ...rebuilt[seg].parts]
       const unread = fresh.filter((d) => !asked.some((u) => u.endsWith(d)))
@@ -1631,7 +1748,7 @@ await check(
         lays.length && lays.every(([n, k]) => k === rebuilt[seg].members[n]),
         `the new catalog's pages laid from the parts before: ${JSON.stringify({ lays, members: rebuilt[seg].members })}`,
       )
-      return { layer: seen, follows: mine.length - opens.length, parts: rebuilt[seg].parts.length }
+      return { layer: told, follows: mine.length - opens.length, parts: rebuilt[seg].parts.length }
     } finally {
       delete modes[seg]
     }
@@ -1673,6 +1790,8 @@ await check(
           )
         await page.waitForTimeout(50)
       }
+      // (the layer's states as the reader told them, every one from its first, as in the check above)
+      const told = await page.evaluate(() => window.__h.readers[0].layers)
       await context.close()
       assert(!errors.length, errors.join('; '))
       const mine = v2log.slice(from).filter((x) => x.what === 'open' || x.seg === seg)
@@ -1684,8 +1803,8 @@ await check(
         `a target named: ${JSON.stringify(mine)}`,
       )
       // (the old layer kept while the paper is prepared again: ready from its first document on, never let go)
-      assert(seen.join() === 'none,ready', `layer states ${seen}`)
-      return { layer: seen, follows: mine.length - opens.length, parts: rebuilt[seg].parts.length }
+      assert(told.join() === 'none,ready', `layer states ${told}`)
+      return { layer: told, follows: mine.length - opens.length, parts: rebuilt[seg].parts.length }
     } finally {
       delete modes[seg]
     }
@@ -3513,6 +3632,94 @@ await check(
     }
   },
 )
+// A settled paper is asked nothing more until the reader's wake (design-performance-2026-11-13 Q9: a settled tab asked once a
+// minute, 60 asks an hour): its head answered gone (the paper's objects replaced) asks the document once; an hour of the page's
+// clock after that, nothing
+await check(
+  'reader: a settled paper asked nothing more but on the wake: the head answered gone asks the document once, then an hour of nothing',
+  async () => {
+    const name = 's2-splits'
+    const seg = indexOf[name].seg
+    const head = `/api/v2/o/${docs[seg].layer.catalog.path}`
+    const { page, context, errors } = await newPage()
+    // (the page's clock faked from here, flowing as the real one until the check moves it)
+    await page.clock.install()
+    let gone = 0
+    await context.route(`**${head}`, async (route) => {
+      if (gone++ === 0) return route.fulfill({ status: 404, body: '' })
+      return route.fallback()
+    })
+    const from = v2log.length
+    const follows = () => v2log.slice(from).filter((x) => x.what === 'follow' && x.seg === seg).length
+    await page.evaluate((n) => window.__h.reader(n, { host: 'web' }), name)
+    // (the first document, the head answered gone, and the one ask that follows it)
+    const t0 = Date.now()
+    while (follows() < 2 && Date.now() - t0 < 10_000) await page.waitForTimeout(100)
+    await page.waitForTimeout(2000)
+    const afterGone = follows()
+    // (an hour of the page's clock, the paper settled)
+    await page.clock.fastForward('01:00:00')
+    await page.waitForTimeout(2000)
+    const afterHour = follows()
+    await context.close()
+    assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+    assert(
+      gone >= 1 && afterGone === 2,
+      `follows: ${afterGone} by the head answered gone (asked ${gone} times), 2 wanted`,
+    )
+    assert(afterHour === afterGone, `follows in an hour of a settled paper: ${afterHour - afterGone}`)
+    return { follows: afterHour, headAsked: gone }
+  },
+)
+// A part answered gone after the head was read (#640 review): the layer made again in a directory of its own once the composed
+// document is open, as our server replaces a layer and later deletes the old one's objects. A part is read as its page comes
+// near, long after the head: the reader that read the old head learns of the new layer only by asking the document again.
+// Both hosts: the website's follow settled, waiting for a wake; the extension's none at all (rows made here, the layer final)
+for (const host of ['web', 'ext'])
+  await check(
+    `reader: a part of the layer answered gone once its head was read asks the document once, and the layer our server serves now is laid without a reload (${host}'s host)`,
+    async () => {
+      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      const name = 's1-columns'
+      const seg = indexOf[name].seg
+      modes[seg] = { kind: 'moved', switched: false }
+      try {
+        const { page, context, errors } = await newPage()
+        await page.evaluate(([n, h]) => window.__h.reader(n, { host: h, typeset: true, target: 'de' }), [name, host])
+        // (the composed document open over the old layer, then its first part asked: the layer made again, the part gone)
+        for (const t0 = Date.now(); !modes[seg].switched && Date.now() - t0 < 30_000; ) await page.waitForTimeout(50)
+        assert(modes[seg].switched, 'no part of the first layer asked in 30 s')
+        let s = null
+        for (const t0 = Date.now(); Date.now() - t0 < 20_000; ) {
+          s = await page.evaluate(() => {
+            const x = window.__h.readers[0]
+            return {
+              layer: x.reader.state().layer.s,
+              laid: x.reader.probe().laidPages,
+              moved: x.asked.filter((a) => a.url.includes('/fx2/')).length,
+            }
+          })
+          if (s.laid > 0 && s.moved > 0) break
+          await page.waitForTimeout(100)
+        }
+        // (settled after it: no more asks of the document)
+        await page.waitForTimeout(1500)
+        // (counted from the moment the layer was made again, the stand-in's)
+        const follows = v2log.slice(modes[seg].from).filter((x) => x.what === 'follow' && x.seg === seg).length
+        const gone = modes[seg].gone
+        await context.close()
+        assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+        assert(
+          s.laid > 0 && s.moved > 0,
+          `the layer our server serves now not laid in 20 s: ${JSON.stringify({ ...s, follows, gone })}`,
+        )
+        assert(follows === 1, `follows after the part answered gone: ${follows}, 1 wanted`)
+        return { ...s, follows, gone }
+      } finally {
+        delete modes[seg]
+      }
+    },
+  )
 await check(
   "reader: each composed document keeps its own layout: a newer catalog's pages laid by its layout, the older one's late layout dropped",
   async () => {

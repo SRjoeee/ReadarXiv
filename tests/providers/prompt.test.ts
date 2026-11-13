@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { PROMPT_VERSION, PROTOCOL_BLOCK, buildPrompts, formatGlossary } from '@/providers/prompt'
-import { DEFAULT_PROMPTS_CONFIG } from '@/providers/prompt-library'
+import { englishName } from '@/config/languages'
+import {
+  BUILD_PROMPTS_DIGEST, PROMPT_DATA, PROMPT_DIGEST, PROMPT_TEXT_DIGEST, PROTOCOL_BLOCK, buildPrompts, buildPromptsWith, formatGlossary,
+  type PromptData, promptDigestOf, promptTextDigestOf,
+} from '@/providers/prompt'
+import { BUILT_IN_PROMPTS, DEFAULT_PROMPTS_CONFIG } from '@/providers/prompt-library'
 import type { TranslateRequest } from '@/providers/types'
+import { CASES, RULES, buildPromptsDigestOf } from './prompt-cases'
 
 const request: TranslateRequest = {
   segments: [{ id: 'S1.p1.1', text: 'Let <x id="1"/> be a graph.' }, { id: 'S1.p2.1', text: 'Then <t id="1">bold</t>.' }],
@@ -29,8 +34,44 @@ describe('prompt', () => {
     expect(buildPrompts(request, withTarget).prompt.startsWith('Target language:')).toBe(false)
   })
 
-  it('carries a version: raised to 3 when the target language became its English name', () => {
-    expect(PROMPT_VERSION).toBe('5')
+  it('holds its rules\' behaviour digest: BUILD_PROMPTS_DIGEST is the hash of buildPrompts\' outputs over its case table', () => {
+    const got = buildPromptsDigestOf()
+    expect(got, `buildPrompts' outcomes changed: BUILD_PROMPTS_DIGEST is now ${got}; \`pnpm digests --write\` writes it`).toBe(BUILD_PROMPTS_DIGEST)
+  })
+
+  it('has a case for each of buildPrompts\' rules, and every case names one of them', () => {
+    expect([...new Set(CASES.map(c => c.rule))].sort()).toEqual([...RULES].sort())
+  })
+
+  it('is named by the data\'s digest, taken at load, and the rules\' digest together; buildPrompts is the rules over the product\'s data', () => {
+    expect(PROMPT_TEXT_DIGEST).toBe(promptTextDigestOf())
+    expect(PROMPT_DIGEST).toBe(promptDigestOf(PROMPT_TEXT_DIGEST, BUILD_PROMPTS_DIGEST))
+    expect(PROMPT_DIGEST).toMatch(/^[0-9a-f]{64}$/)
+    expect(buildPrompts(request)).toEqual(buildPromptsWith(PROMPT_DATA, request))
+  })
+
+  it('the data\'s digest moves with each of its parts: the protocol block, a built-in\'s text, any target\'s name; not with a built-in\'s display name, which is never sent', () => {
+    const moved = (data: Partial<PromptData>) => promptTextDigestOf({ ...PROMPT_DATA, ...data })
+    expect(moved({ protocol: `${PROTOCOL_BLOCK}\n5. Be brief.` })).not.toBe(PROMPT_TEXT_DIGEST)
+    const precise = BUILT_IN_PROMPTS['precision-rewrite']!
+    expect(moved({ builtIns: { ...BUILT_IN_PROMPTS, 'precision-rewrite': { ...precise, prompt: `${precise.prompt}\nBe brief.` } } })).not.toBe(PROMPT_TEXT_DIGEST)
+    expect(moved({ names: { ...PROMPT_DATA.names, jpn: `${englishName('jpn')} (Japan)` } })).not.toBe(PROMPT_TEXT_DIGEST)
+    expect(moved({ builtIns: { ...BUILT_IN_PROMPTS, 'precision-rewrite': { ...precise, name: 'Renamed' } } })).toBe(PROMPT_TEXT_DIGEST)
+    // (the names are the language table's English names, the ones englishName gives)
+    expect(Object.entries(PROMPT_DATA.names).every(([code, name]) => englishName(code) === name)).toBe(true)
+  })
+
+  it('the last two raises of PROMPT_VERSION, replayed, each move the identity: 5, a target\'s English name (the data); 4, the glossary added to a prompt that lacks it (a rule)', () => {
+    const five = promptTextDigestOf({ ...PROMPT_DATA, names: { ...PROMPT_DATA.names, cmn: 'Simplified Mandarin Chinese' } })
+    expect(promptDigestOf(five, BUILD_PROMPTS_DIGEST)).not.toBe(PROMPT_DIGEST)
+    // (buildPrompts before raise 4: no glossary added to a prompt that names none)
+    const beforeFour: typeof buildPromptsWith = (data, r, p) => {
+      const b = buildPromptsWith(data, r, p)
+      return { ...b, prompt: b.prompt.replace(/^Glossary:\n(?:[^\n]*\n)*?\n/, '') }
+    }
+    const four = buildPromptsDigestOf(beforeFour)
+    expect(four).not.toBe(BUILD_PROMPTS_DIGEST)
+    expect(promptDigestOf(PROMPT_TEXT_DIGEST, four)).not.toBe(PROMPT_DIGEST)
   })
 
   it('system prompt = the prompt library\'s template + the protocol block; the protocol block spells out placeholders and the output shape', () => {

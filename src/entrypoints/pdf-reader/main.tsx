@@ -20,9 +20,9 @@ import { answeredBy, firstReadTime } from '@/ui/first-read'
 export const TOP_LEVEL_READER_KEY = 'axt_top_level_reader'
 
 declare const __AXT_READER__: 'today' | 'v2' | undefined
-/** which reader the page runs: today's session under the package's chrome (the default), or the reader package whole
+/** which reader the page runs: the reader package whole (the default), or today's session under the package's chrome
  *  (wxt.config.ts AXT_READER) */
-const READER = typeof __AXT_READER__ === 'string' ? __AXT_READER__ : 'today'
+const READER = typeof __AXT_READER__ === 'string' ? __AXT_READER__ : 'v2'
 
 // The settings once, before the first paint, for the language and for the chrome (ui/first-read.ts): the page gives the
 // read 1,500 ms and paints the defaults, said to be unreadable, if it has not answered (S-R-21). The session, a heavy

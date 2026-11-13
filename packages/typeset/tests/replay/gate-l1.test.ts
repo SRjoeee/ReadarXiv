@@ -7,6 +7,7 @@ import { tableMetrics } from '../../src/metrics/table.ts'
 import { gatePair } from './gate.ts'
 import { entryByToday, gateL1Pair, invariantsOf } from './gate-l1.ts'
 import type { PageMember } from '../../src/lay/page.ts'
+import type { Metrics } from '../../src/types.ts'
 import { hasL1 } from './l1.ts'
 import { hasDerived, hasTap, readGz, TAP } from './tap.ts'
 import { hasCache } from './today.ts'
@@ -34,6 +35,36 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache || !hasL1)('the gat
     expect(g.inv.I5).toEqual([])
     expect(g.inv.I3.length).toBeLessThanOrEqual(today.inv.I3.length)
     expect(g.selfDiffer).toEqual([])
+  })
+  it('lays each page under the reader’s default options and every option on, reading no row its page does not wait for', {
+    timeout: 120_000,
+  }, () => {
+    // (the reads gate, docs/PDF-READER.md §19.15: the kinds the reader's default toggles leave, its names' and references', and
+    // none; every row id each lay reads held against its page's wait set, no exemption)
+    const leave = new Map([
+      ['default', ['affiliation', 'author', 'inknames', 'inkreferences', 'reference', 'refnames']],
+      ['every option on', []],
+    ])
+    const seen = new Map<string, number>()
+    // (what is read does not hang on a width: every text measured half its size a character, so that no measure is missing)
+    const metrics: Metrics = {
+      ready: () => true,
+      advance: (_f, size, t) => (size * [...t].length) / 2,
+      ink: () => [0.7, 0.2, 0],
+    }
+    const g = gateL1Pair('1706.03762v7-de.pack', {
+      reading: 'part',
+      metricsOf: () => metrics,
+      entry: true,
+      leave,
+      reads: (option, _pg, read) => seen.set(option, (seen.get(option) ?? 0) + read.size),
+    })
+    for (const option of leave.keys()) {
+      const r = g.entry!.reads!.get(option)!
+      expect([r.pages, r.outside, r.outsidePages]).toEqual([g.pages, 0, 0])
+      expect(r.reads).toBe(seen.get(option))
+      expect(r.reads).toBeGreaterThan(0)
+    }
   })
 })
 
