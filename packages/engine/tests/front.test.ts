@@ -359,6 +359,38 @@ describe('the prepare: the tree before any compile, refusals as reasons, and the
   test('the reading tells what is held from what is let go: held on purpose, both are reached', async () => {
     expect(await reachedAtBack(new Set(['files', 'made']))).toEqual(['files', 'made'])
   }, 60_000)
+  test('the instrument made anew is handed out in a run given none; a run given stored ones hands out none, even where it did not take them and TeX ran again', async () => {
+    /** the instrument's objects a prepare hands the host, and its notes; the back half then refuses the spies' empty instrument */
+    const run = async (original: Uint8Array, stored: StoredInstrument | null) => {
+      const handed = new Map<string, Uint8Array>()
+      const notes: [string, unknown][] = []
+      await prepare(
+        () => ({ files: files({ 'main.tex': PAPER }), original, stored }),
+        host({
+          instrument: async (name, bytes) => {
+            handed.set(name, bytes)
+          },
+          note: (n, d) => notes.push([n, d]),
+        }),
+      ).catch(() => null)
+      return { handed, notes }
+    }
+    const A = await pdfOf(1, null)
+    const fresh = await run(A, null)
+    expect([...fresh.handed.keys()]).toEqual(['b.pdf', 'log', 'plan', 'definitions'])
+    const made = Object.fromEntries(fresh.handed) as StoredInstrument
+    // (the stored objects taken: no TeX, nothing handed out)
+    const reused = await run(A, made)
+    expect(reused.handed.size).toBe(0)
+    expect(reused.notes.filter(([n]) => n === 'front')).toEqual([])
+    // (not taken: made for another page count, or a plan that cannot be read; TeX runs again, and nothing is handed out)
+    const other = await run(await pdfOf(2, null), made)
+    expect(other.notes).toContainEqual(['front', { stored: 'made with another original: compiled anew' }])
+    expect(other.handed.size).toBe(0)
+    const unreadable = await run(A, { ...made, plan: enc.encode('{"front":"today","v":1}') })
+    expect(unreadable.notes).toContainEqual(['front', { stored: 'unreadable: compiled anew' }])
+    expect(unreadable.handed.size).toBe(0)
+  }, 60_000)
   test("the back half is given the front half's own reading of an element's class (instrument.mjs classesOf), the host never names it", async () => {
     // (a page of three Helvetica lines, B and A alike: its first two lines one paragraph's, its third another's)
     const doc = await PL.PDFDocument.create()

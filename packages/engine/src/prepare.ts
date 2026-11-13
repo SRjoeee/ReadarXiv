@@ -341,7 +341,9 @@ async function frontOf(
   if (!r.ok) return r
   if (!sentUnits) throw new Error('the front half sent no units')
   lap('front')
-  // (the instrument's four objects where TeX ran; not where the stored ones were taken)
+  // (the instrument's four objects where TeX ran, in a run that was given none. A host that gives a prepare stored ones keeps
+  // what it stored under their key and takes no other in that run, even where the front half did not take them (a plan it
+  // cannot read, another original's facts) and TeX ran again: handed out there, they would end the run as the host's fault)
   if (r.made && !input.stored) for (const name of INSTRUMENT_OBJECTS) await host.instrument(name, r.made[name])
   return { instrument: r.instrument, original: input.original }
 }
