@@ -294,7 +294,7 @@ export function reportJson(report, meta = {}) {
 
 /**
  * The comment, as markdown: its verdict first, a table for each target that moved (the others folded), the pages that
- * moved with their lab links, and what the run could not say. `o`: { headSha, baseSha, pack, enginePipeline, targets (the
+ * moved with their lab links, and what the run could not say. `o`: { headSha, baseSha, targets (the
  * targets the engine offers), changedTargets (those whose rules the change touches), label }.
  */
 export function commentOf(report, o) {
@@ -304,7 +304,6 @@ export function commentOf(report, o) {
   const L = [MARK, `## Rules gate: ${verdict}`, '']
   L.push(`Model tier of the layer gate on ${report.targets.reduce((a, t) => a + t.outputs.length, 0)} outputs of ${report.targets.length} targets, ${short(o.headSha)} against the merge base ${short(o.baseSha)}${o.label ? ` (${o.label})` : ''}, both runs on one runner.`, '')
   if (report.problems.length) L.push('**This run cannot pass:**', ...report.problems.map(p => `- ${p}`), '')
-  if (o.pack && o.enginePipeline && String(o.pack.pipeline) !== String(o.enginePipeline)) L.push(`The pack was made under PIPELINE ${o.pack.pipeline} and the engine is at PIPELINE ${o.enginePipeline}: remake the pack.`, '')
   if (o.changedTargets) L.push(o.changedTargets.length ? `Rules changed for: ${o.changedTargets.join(', ')}.` : 'The rule set changes no target.', '')
   if (o.targets) {
     const have = new Set(report.targets.map(t => t.target)), none = o.targets.filter(t => !have.has(t))
@@ -618,11 +617,8 @@ async function compareCommand(argv) {
     const rulesOf = (set, t) => { const { version: _, ...rules } = E.resolveRules(set, t); return JSON.stringify(rules) }
     if (sets[0] && sets[1]) meta.changedTargets = E.TARGETS.filter(t => rulesOf(sets[0], t) !== rulesOf(sets[1], t))
   }
-  // (the engine keeps its versions in pipeline/; an engine from before the move, as --head-engine may name, keeps them at its root)
-  const versionsFile = ['pipeline/versions.mjs', 'versions.mjs'].map(f => join(engineDir, f)).find(f => existsSync(f))
-  const pipeline = versionsFile ? /export const PIPELINE_VERSION = '([^']+)'/.exec(readFileSync(versionsFile, 'utf8'))?.[1] ?? null : null
   meta.pack = pack
-  const text = commentOf(report, { headSha, baseSha, pack, enginePipeline: pipeline, targets: E.TARGETS, changedTargets: meta.changedTargets, rulings, label: typeof arg('label') === 'string' ? arg('label') : undefined })
+  const text = commentOf(report, { headSha, baseSha, targets: E.TARGETS, changedTargets: meta.changedTargets, rulings, label: typeof arg('label') === 'string' ? arg('label') : undefined })
   const json = `${JSON.stringify(reportJson(report, meta), null, 1)}\n`
   mkdirSync(out, { recursive: true })
   // (what a parser said of a ruling file is the pull request author's text: a file of the runner, which the job does not show or upload)

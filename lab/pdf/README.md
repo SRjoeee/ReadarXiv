@@ -474,7 +474,7 @@ wrapped page with its own erase and put back, and without cell rules, which it r
 longer makes.
 
 Remaking it, on the machine that holds the data (after the fixtures are made again, a PIPELINE moves, the layout file moves,
-or the faces change; `rules-gate.mjs compare` warns when the engine's PIPELINE is not the pack's). A pull request that moves the
+or the faces change; the manifest's `pipeline` is the pack's own record, which the gate compares with no engine's). A pull request that moves the
 layout file makes the fixtures again with its engine (the layer gate's `--layouts=made`), re-makes the pack and uploads the new
 objects, before its CI can pass: the gate restores the committed `gate-pack.json`, and an object that is not in the bucket is a
 404 there.

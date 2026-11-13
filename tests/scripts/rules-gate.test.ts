@@ -270,19 +270,23 @@ describe('compare as the job runs it', () => {
   const enginePipeline = /export const PIPELINE_VERSION = '([^']+)'/.exec(readFileSync(join(root, 'src/pdf-reader/engine/pipeline/versions.mjs'), 'utf8'))![1]!
   const manifest = (pipeline: string, names: string[]) => ({ schema: 1, pipeline, files: names.map(n => ({ path: `refs/${n}/ref.json` })) })
 
-  it('holds both runs to the pack\'s outputs, and warns of a pack made under another PIPELINE than the engine\'s (it finds the engine\'s version where the engine keeps it)', () => {
+  it('holds both runs to the pack\'s outputs; the pack\'s PIPELINE is its own record, in the numbers, and the comment compares no engine\'s with it', () => {
+    // (the manifest's `pipeline` is the version of the engine that first made the pack, carried by every remake since; its
+    // translations are stamped otherwise and the engine moves every round: a sentence comparing them was printed on every pull
+    // request and true of none, PR #642)
     const file = write('run.json', run(base()))
     const names = Object.keys(base())
     const ok = compareRun(`--base=${file}`, `--head=${file}`, `--out=${join(dir, 'ok')}`, `--pack=${write('pack-ok.json', manifest('9', names))}`)
     expect(ok.status, ok.stderr).toBe(0)
-    expect(readFileSync(join(dir, 'ok', 'rules-gate.md'), 'utf8')).toContain(`The pack was made under PIPELINE 9 and the engine is at PIPELINE ${enginePipeline}: remake the pack.`)
+    expect(enginePipeline).not.toBe('9')
+    expect(readFileSync(join(dir, 'ok', 'rules-gate.md'), 'utf8')).not.toContain('PIPELINE')
+    expect(JSON.parse(readFileSync(join(dir, 'ok', 'rules-gate.json'), 'utf8')).pack).toMatchObject({ pipeline: '9' })
     // a pack with one more output than the runs hold: both runs lack it
     const more = compareRun(`--base=${file}`, `--head=${file}`, `--out=${join(dir, 'more')}`, `--pack=${write('pack-more.json', manifest(enginePipeline, [...names, '2001.00001v1-zh']))}`)
     expect(more.status).toBe(1)
     const comment = readFileSync(join(dir, 'more', 'rules-gate.md'), 'utf8')
     expect(comment).toContain("- the base run lacks 1 output of the pack's: 2001.00001v1-zh")
     expect(comment).toContain("- the head run lacks 1 output of the pack's: 2001.00001v1-zh")
-    expect(comment).not.toContain('remake the pack')
   })
   it('stops at a --pack that names no file, instead of going without one', () => {
     const file = write('run.json', run(base()))
@@ -576,10 +580,6 @@ describe('the comment', () => {
     expect(quoted).not.toContain('\n')
     // a file name that is no name is no ruling
     expect(() => parseRuling({ date: 'x', by: 'b', quote: 'q', measures: ['m'], targets: ['ja'], why: 'w' }, 'a|b`c.json')).toThrow(/file name/)
-  })
-  it('warns when the pack was made under another PIPELINE than the engine\'s', () => {
-    const text = commentOf(judge(run(base()), run(base())), { headSha: SHA_HEAD, baseSha: SHA_BASE, pack: { digest: 'f'.repeat(64), pipeline: '10' }, enginePipeline: '11' })
-    expect(text).toMatch(/PIPELINE 10.*PIPELINE 11/)
   })
 })
 
