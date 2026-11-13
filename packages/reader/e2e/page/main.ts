@@ -852,6 +852,8 @@ const h = {
     asked: { url: string; at: number }[]
     /** every layer state the reader told, from its first (a check reads the whole run of them, not what a poll happened to see) */
     layers: string[]
+    /** each call of the extension's host's translate (rows made here): the units' ids it was handed, in order, and its context */
+    translated: { ids: string[]; context: { title?: string; abstract?: string } | null }[]
   }[],
   /** the held first layout let go (a reader opened with `holdFirstLay`) */
   releaseLay: null as (() => void) | null,
@@ -905,6 +907,7 @@ const h = {
       .then((x) => (fx = x))
     const target = o.target ?? 'de'
     const ext = o.host === 'ext'
+    const translated: (typeof h.readers)[number]['translated'] = []
     // (each layout the engine makes is a generation: its making marked `lay-asked`, each page it lays marked `lay`)
     let generations = 0
     const host = {
@@ -921,7 +924,12 @@ const h = {
       },
       ...(ext
         ? {
-            translate: async function* (units: readonly { id: string }[], t: string, x: { signal: AbortSignal }) {
+            translate: async function* (
+              units: readonly { id: string }[],
+              t: string,
+              x: { signal: AbortSignal; context?: { title?: string; abstract?: string } },
+            ) {
+              translated.push({ ids: units.map((u) => u.id), context: x.context ?? null })
               await fxReady
               const all = (
                 (await (
@@ -956,7 +964,7 @@ const h = {
       const s = reader.state().layer.s
       if (layers.at(-1) !== s) layers.push(s)
     })
-    h.readers.push({ reader, root, asked, layers })
+    h.readers.push({ reader, root, asked, layers, translated })
     return { returnedAt, askedBeforeReturn: asked.map((a) => a.url) }
     function fixtureEngine(): Engine {
       return {

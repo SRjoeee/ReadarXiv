@@ -4,7 +4,10 @@ export interface Fixture {
   paper: string
   version: number
   pages: number
+  /** the Units objects its head names */
   units: string[]
+  /** the source's Units object, which the document names ahead of the head's (prepare.units, layer.units) */
+  source: string
   catalog: string
   pdf: Uint8Array
   objects: Map<string, Uint8Array>

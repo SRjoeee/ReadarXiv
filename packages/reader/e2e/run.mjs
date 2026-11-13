@@ -11,6 +11,8 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
+import { kindShown } from '../src/compose/classes.ts'
+import { createContents, plainOf } from '../src/session/contents.ts'
 import { judgePunct, measurePunct, PUNCT_TARGETS, punctRows } from './punct.mjs'
 import { answerBytes, startServer } from './server.mjs'
 
@@ -125,6 +127,21 @@ for (const [name, f] of Object.entries(fixtures)) {
     const file = files.find((x) => x.startsWith(`${digest}.`))
     return { path: `p/${seg}/fx/${digest}`, sha256: digest, bytes: statSync(join(f.bundle, file)).size }
   }
+  // (the source's units, as a prepare hands them out before its marked compile (the engine's prepare.ts `units`), named by our
+  // server's document ahead of the objects the head names, in `prepare.units` and `layer.units` alike: every Units object the
+  // prepare told. The same units under the same ids in an object of other bytes, since the bundle's units hold what the source
+  // does not state (the units located and born on A, the names' variants); here, the head's units less their last that is no
+  // heading. A reader that took the document's list for the layer's listed every heading of the contents twice and counted every
+  // unit twice: staging, round RB1, 2026-11-13, 2608.25210v2's 25 headings as 50 entries)
+  const sourceRef = (() => {
+    const all = head.units.flatMap((u) => JSON.parse(readFileSync(join(f.bundle, `${u}.units`), 'utf8')).units)
+    const last = all.findLastIndex((u) => u.kind !== 'heading')
+    const b = Buffer.from(JSON.stringify({ format: 1, units: all.filter((_, i) => i !== last) }))
+    const sha256 = createHash('sha256').update(b).digest('hex')
+    twinObjects.set(`/api/v2/o/p/${seg}/fx/${sha256}`, b)
+    return { path: `p/${seg}/fx/${sha256}`, sha256, bytes: b.length }
+  })()
+  indexOf[name].source = sourceRef.sha256
   const targets = {}
   const sources = Object.keys(f.dumps).length ? Object.keys(f.dumps).map((t) => [t, null]) : [['de', 'de.rows.json']]
   for (const [t, rf] of sources) {
@@ -195,10 +212,16 @@ for (const [name, f] of Object.entries(fixtures)) {
       at: 0,
       build: 'fx',
       stage: null,
-      units: head.units.map(refOf),
+      units: [sourceRef, ...head.units.map(refOf)],
       html: null,
     },
-    layer: { catalog: refOf(headDigest), units: head.units.map(refOf), format: 1, build: 'fx', stale: false },
+    layer: {
+      catalog: refOf(headDigest),
+      units: [sourceRef, ...head.units.map(refOf)],
+      format: 1,
+      build: 'fx',
+      stale: false,
+    },
     targets,
   }
 }
@@ -1719,6 +1742,127 @@ await check(
       `state ${JSON.stringify([st.original, st.layer, st.rows])}`,
     )
     return { moments: Object.fromEntries(Object.entries(p).filter(([k]) => k.startsWith('at.'))), rows: st.rows }
+  },
+)
+/** a fixture's layer as its head names it: its units, the contents' entries the reader's own rule makes of them, and how many
+ *  the view counts (those not kept, of a kind the toggles show by default) */
+function headLayerOf(name) {
+  const f = fixtures[name]
+  const head = JSON.parse(readFileSync(join(f.bundle, 'head.json'), 'utf8'))
+  const units = head.units.flatMap((u) => JSON.parse(readFileSync(join(f.bundle, `${u}.units`), 'utf8')).units)
+  return {
+    units,
+    entries: createContents(units, head).entries(),
+    counted: units.filter((u) => !u.kept && kindShown(u.kind)).length,
+  }
+}
+await check(
+  "contents: every heading one entry over our server's document, which names the source's units ahead of the head's: just opened, after a part is read, after the panel is closed and opened; the view's count the head's units'; the source's object never asked (staging RB1, 2026-11-13: 2608.25210v2's 25 headings listed as 50 entries)",
+  async () => {
+    const want = headLayerOf('s1-columns')
+    const { page, context, errors } = await newPage({ path: 'chrome.html' })
+    const asked = []
+    page.on('request', (r) => asked.push(new URL(r.url()).pathname))
+    await page.evaluate((n) => window.__c.open(n, {}), 's1-columns')
+    await waitFor(
+      page,
+      () => (window.__c.reader?.probe().laidPages ?? 0) > 0 && window.__c.reader.state().view.outline.length > 0,
+      null,
+      25_000,
+    )
+    /** the panel's rows (their titles, whether shown), the reader's entries (their originals) and the view's count */
+    const seen = () =>
+      page.evaluate(() => {
+        const s = window.__c.reader.state()
+        const panel = document.getElementById('axt-contents')
+        return {
+          open: !!panel && !panel.inert,
+          rows: [...(panel?.querySelectorAll('.toc-list > li') ?? [])].map(
+            (li) => li.querySelector('.t')?.textContent ?? '',
+          ),
+          shown: [...(panel?.querySelectorAll('.toc-list > li') ?? [])].filter((li) => !li.hidden).length,
+          entries: s.view.outline.map((e) => e.original),
+          total: s.rows.total ?? null,
+        }
+      })
+    const toggle = page.locator('button[aria-controls="axt-contents"]')
+    await toggle.click()
+    await page.waitForTimeout(200)
+    const opened = await seen()
+    // (a part read: the last entry gone to, its page's part read and its members placed, as a page brought near places them)
+    const last = await page.evaluate(() => window.__c.reader.state().view.outline.at(-1)?.id ?? null)
+    await page.evaluate((id) => window.__c.reader.do({ do: 'heading', id }), last)
+    await waitFor(
+      page,
+      (id) => !!window.__c.reader.state().view.outline.find((e) => e.id === id)?.page,
+      last,
+      10_000,
+    ).catch(() => undefined)
+    await page.waitForTimeout(200)
+    const placed = await seen()
+    await toggle.click()
+    await page.waitForTimeout(200)
+    const closed = await seen()
+    await toggle.click()
+    await page.waitForTimeout(200)
+    const again = await seen()
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    const n = want.entries.length
+    const once = (x) =>
+      x.entries.length === n &&
+      x.rows.length === n &&
+      JSON.stringify(x.entries) === JSON.stringify(want.entries.map((e) => e.original))
+    for (const [moment, x] of [
+      ['just opened', opened],
+      ['after a part is read', placed],
+      ['after the panel is closed and opened', again],
+    ])
+      assert(x.open && once(x), `${moment}: ${n} headings wanted, ${JSON.stringify(x)}`)
+    assert(!closed.open && once(closed), `closed: ${JSON.stringify(closed)}`)
+    assert(opened.total === want.counted, `the view counts ${opened.total} units, the head names ${want.counted}`)
+    const source = indexOf['s1-columns'].source
+    assert(
+      !asked.some((p) => p.endsWith(source)),
+      `the source's object asked: ${asked.filter((p) => p.includes('/fx/'))}`,
+    )
+    return { entries: n, shown: again.shown, counted: opened.total }
+  },
+)
+await check(
+  "rows made here: the units the head names handed to the translator, each once, and the context's abstract once; the source's units our server's document names ahead of them never read (staging RB1, 2026-11-13)",
+  async () => {
+    const want = headLayerOf('s1-columns')
+    const { page, context, errors } = await newPage()
+    await page.evaluate(() => window.__h.reader('s1-columns', { host: 'ext' }))
+    await readerLaid(page)
+    await waitFor(page, () => window.__h.readers[0].reader.state().rows.s === 'complete', null, 20_000)
+    const x = await page.evaluate(() => ({
+      translated: window.__h.readers[0].translated,
+      asked: window.__h.readers[0].asked.map((a) => a.url),
+      total: window.__h.readers[0].reader.state().rows.total,
+    }))
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    const ids = want.units.filter((u) => !u.kept).map((u) => u.id)
+    const first = x.translated[0]
+    assert(
+      first && first.ids.length === new Set(first.ids).size && [...first.ids].sort().join() === [...ids].sort().join(),
+      `the first call: ${first?.ids.length} units (${new Set(first?.ids).size} ids), the head's ${ids.length}`,
+    )
+    const abstract = plainOf(want.units.find((u) => u.kind === 'abstract').content)
+    const lead = abstract.slice(0, 32)
+    assert(
+      (first.context?.abstract ?? '').split(lead).length === 2,
+      `the context's abstract holds its first words ${(first.context?.abstract ?? '').split(lead).length - 1} times`,
+    )
+    assert(x.total === want.counted, `the view counts ${x.total} units, the head names ${want.counted}`)
+    const source = indexOf['s1-columns'].source
+    assert(
+      !x.asked.some((u) => u.endsWith(source)),
+      `the source's object asked: ${x.asked.filter((u) => u.includes('/fx/'))}`,
+    )
+    return { asked: first.ids.length, calls: x.translated.length, counted: x.total }
   },
 )
 await check('reader: a paper being prepared, opened and followed to its layer (website host)', async () => {

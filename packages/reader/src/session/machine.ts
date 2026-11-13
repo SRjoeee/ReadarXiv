@@ -38,6 +38,19 @@ export interface PaperRef {
 }
 /** an immutable object on our server (format's Ref) */
 export type { Ref }
+/** an object of a layer by its address and digest: a Ref, or one its head names by digest alone (its length unstated) */
+export type ObjectAt = Pick<Ref, 'path' | 'sha256'>
+/** the directory an object of a layer lies in, by its catalog: objects the catalog names by digest are at `<dir>/<sha256>` */
+export const dirOf = (catalog: Pick<Ref, 'path'>): string => catalog.path.slice(0, catalog.path.lastIndexOf('/'))
+/**
+ * The layer's units: the Units objects its head names, in its order, each in its catalog's directory as its parts are. The
+ * head's outline and its parts' members are of these units, and of no other: the document's `layer.units` is our server's word
+ * for what its translation is given, which on the website lists the source's units, told before the marked compile, ahead of
+ * the bundle's (the same units under the same ids, in another object: the contents listed every heading twice and the view
+ * counted every unit twice, staging RB1, 2026-11-13)
+ */
+export const layerUnitsOf = (catalog: Pick<Ref, 'path'>, head: Pick<Head, 'units'>): ObjectAt[] =>
+  head.units.map((sha256) => ({ path: `${dirOf(catalog)}/${sha256}`, sha256 }))
 
 /** the policy's constants, the same in both hosts (design-b §4) */
 export const GATE_MS = 1500
@@ -283,7 +296,8 @@ export type Spec =
   | { slot: 'open'; target: string | null }
   | { slot: 'code' }
   | { slot: 'composed'; head: Head }
-  | { slot: 'rows'; target: string; from: 'server' | 'here'; units: Ref[] }
+  /** `units`: what the rows are made of (unitsOf): the layer's units, read by rows made here; our server's word for its run's */
+  | { slot: 'rows'; target: string; from: 'server' | 'here'; units: ObjectAt[] }
   | { slot: 'html' }
   | { slot: 'timer'; at: number }
 
@@ -1028,10 +1042,14 @@ export function settle(s0: State): State {
   return s
 }
 
-/** the units the rows are made of: the layer's, or the prepare's from `preparing` on; rows made here only once a head that draws
- *  is read (nothing goes to the visitor's service for a paper whose pages the layer will not draw) */
-function unitsOf(s: State): Ref[] {
-  if (s.layer.s === 'ready') return s.here && !s.layer.head?.addOn ? [] : s.layer.units
+/** the units the rows are made of: our server's, the layer's as its document names them, or the prepare's from `preparing` on;
+ *  rows made here, the layer's units its head names (layerUnitsOf), once a head that draws is read (nothing goes to the
+ *  visitor's service for a paper whose pages the layer will not draw) */
+function unitsOf(s: State): ObjectAt[] {
+  if (s.layer.s === 'ready') {
+    if (!s.here) return s.layer.units
+    return s.layer.head?.addOn ? layerUnitsOf(s.layer.catalog, s.layer.head) : []
+  }
   if (s.layer.s === 'preparing' && !s.here) return s.layer.units
   return []
 }
@@ -1077,10 +1095,10 @@ export function resources(s: State): Map<Ticket, Spec> {
 }
 
 /** the objects wanted now, content-addressed, in priority order: the catalog (the head) while it is not read, then the layer's
- *  units (the contents' headings, and the rows made here) */
-export function wanted(s: State): Ref[] {
+ *  units its head names (layerUnitsOf: the contents' headings, the view's count, the kept units, the rows made here) */
+export function wanted(s: State): ObjectAt[] {
   if (s.layer.s !== 'ready' || !s.layer.code) return []
-  return s.layer.head ? s.layer.units : [s.layer.catalog]
+  return s.layer.head ? layerUnitsOf(s.layer.catalog, s.layer.head) : [s.layer.catalog]
 }
 
 /** the tickets an input carries (none: content-addressed or the reader's own) */

@@ -22,16 +22,19 @@ import type { Lay } from './compose/page.ts'
 import { CATALOGUE_WORDS, type Words } from './compose/words.ts'
 import { createPanes, type Display, type Panes, type Side, type Zoom } from './panes/panes.ts'
 import { type Kit, loadKit, type PdfBuild } from './pdfjs/kit.ts'
-import { dirOf, follow, objectStore, open, Refused, segOf } from './session/client.ts'
+import { follow, objectStore, open, Refused, segOf } from './session/client.ts'
 import { type Contents, createContents, type OutlineEntry, type Rect } from './session/contents.ts'
 import {
   againOf,
   type Doc,
+  dirOf,
   displayOf,
   type Effect,
   init,
   type LayerWhy,
+  layerUnitsOf,
   lookSaid,
+  type ObjectAt,
   type OriginalWhy,
   type PaperRef,
   type Prefs,
@@ -406,17 +409,22 @@ export function openReader(
     const l = rt.state.layer
     return l.s === 'ready' && l.head ? partsOf(l.catalog, l.head)(n) : Promise.resolve(null)
   }
-  /** the layer's units, in their objects' order, read once a head (the contents' headings, the rows made here, the view's count) */
+  /** the layer's units, read once a head: the objects its head names, in its order (machine.ts layerUnitsOf), each by its digest
+   *  within the Units bound, as the parts are read. The one place the contents' headings, the view's count, the kept units, the
+   *  rows made here and their context read units from: never the document's list, which on the website names the source's units
+   *  too (the contents listed every heading twice) */
   let unitsHeld: { key: string; units: Promise<Unit[]> } | null = null
   /** the units last read: the view's count reads them (stateOf), the layer shown's once read, the layer's before it meanwhile */
   let unitsRead: readonly Unit[] | null = null
-  const unitsKey = (refs: readonly Ref[]) => refs.map((r) => r.sha256).join()
-  const unitsOf = (refs: readonly Ref[]): Promise<Unit[]> => {
-    const key = unitsKey(refs)
+  const unitsOf = (list: readonly ObjectAt[]): Promise<Unit[]> => {
+    const key = list.map((r) => r.sha256).join()
     if (unitsHeld?.key !== key) {
-      const p = Promise.all(refs.map(async (u) => (read('units', await objectOf(u), u.sha256) as Units).units)).then(
-        (l) => l.flat(),
-      )
+      const p = Promise.all(
+        list.map(
+          async (u) =>
+            (read('units', await objects.ofDigest(u.path, u.sha256, BOUNDS.units.bytes), u.sha256) as Units).units,
+        ),
+      ).then((l) => l.flat())
       unitsHeld = { key, units: p }
       // (the kept units known: a page that waited for theirs alone is laid now)
       p.then(
@@ -478,12 +486,13 @@ export function openReader(
       tellSoon()
     })
   }
-  /** the contents of a head made once its units are in, the original's own outline matched for the headings it does not place */
-  function contentsFor(h: Head, refs: readonly Ref[]) {
-    const key = `${h.units.join()}|${refs.map((r) => r.sha256).join()}`
+  /** the contents of a head made once its units are in (those it names, `units`), the original's own outline matched for the
+   *  headings it does not place */
+  function contentsFor(h: Head, units: readonly ObjectAt[]) {
+    const key = units.map((u) => u.path).join()
     if (contentsOf === key) return
     contentsOf = key
-    void unitsOf(refs).then(
+    void unitsOf(units).then(
       (units) => {
         if (closed || contentsOf !== key) return
         const c = createContents(units, h)
@@ -871,8 +880,9 @@ export function openReader(
         try {
           if (spec.from === 'here' && host.translate) {
             const translate = host.translate.bind(host)
-            // the layer's units (those the paper keeps as they are aside), translated here: the page in view's first, then ahead
-            // before behind; a new reading place's asked again first (nearSoon), the paper's title and abstract the context
+            // the layer's units, those its head names (machine.ts unitsOf: each once), those the paper keeps as they are aside,
+            // translated here: the page in view's first, then ahead before behind; a new reading place's asked again first
+            // (nearSoon), the paper's title and abstract the context
             const all = await unitsOf(spec.units)
             if (signal.aborted) return
             const units = all.filter((u) => !u.kept)
@@ -1039,12 +1049,13 @@ export function openReader(
   }
   const onState = (s: State) => {
     warmSoon(s)
-    // (the layer's units, once its head is read: the contents' headings, and the rows made here read them from the same objects)
-    if (s.layer.s === 'ready' && s.layer.head && wanted(s).length) contentsFor(s.layer.head, s.layer.units)
+    // (the layer's units, once its head is read, those it names: the contents' headings, the view's count, and the rows made here
+    // read them from the same objects)
+    if (s.layer.s === 'ready' && s.layer.head && wanted(s).length) contentsFor(s.layer.head, wanted(s))
     for (const r of wanted(s)) {
       if (s.layer.s !== 'ready' || r.sha256 !== s.layer.catalog.sha256 || fetching.has(r.sha256)) continue
       fetching.add(r.sha256)
-      objectOf(r).then(
+      objectOf(s.layer.catalog).then(
         (b) => {
           head = read('head', b, r.sha256) as Head
           if (original?.doc) void original.source.prove(head.original.chunks)

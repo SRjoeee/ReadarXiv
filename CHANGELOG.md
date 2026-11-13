@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, the contents list each heading of the paper once, and the count of passages translated is the paper's own. Every heading had been listed twice, the second list below the first, and every passage counted twice.
 - Changed: in the PDF reader, a note the paper writes for its authors, such as a "Corresponding author" or "Equal contribution" footnote on an author's name, or the footnote of affiliations a conference style prints at the foot of the first page, follows "Authors and affiliations" as the author block does: as printed by default, translated with the option on. Such a note had always been translated, and could show one translation with the option off and another with it on. A note on the title or on the paper itself is translated as before.
 - Fixed: with Google translating, a reference's volume, issue and pages are the ones the paper prints. After an abbreviation such as "vol." or an author's initial, Google had been told a sentence ended there, and could write a volume, an issue and pages of its own.
 - Fixed: with Google translating, a footnote mark the paper sets right after a sentence's full stop stays at the end of that sentence. Google could carry it into the next sentence, where it stood beside another mark.
