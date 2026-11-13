@@ -72,16 +72,17 @@ export {
   treeOf,
 } from './front.ts'
 // (the stored plan's codec, a module of its own: what a host keys the stored instrument by names it without the front half's
-// readers of what is stored)
+// readers of what is stored. Its reader is storedPlanOf here: `planOf` is the wrap's, wrap.types.ts's, which an explicit
+// export of the same name would shadow)
 export {
   type Kept,
   keeps,
   type OriginalFacts,
   opened,
-  type Plan,
   type PrepareWhy,
-  planOf,
-  type ReadPlan,
+  planOf as storedPlanOf,
+  type Plan as StoredPlan,
+  type ReadPlan as ReadStoredPlan,
   type StoredInstrument,
   unkeep,
   withBbl,
