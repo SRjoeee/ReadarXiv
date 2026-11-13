@@ -3535,6 +3535,21 @@ its glyphs' advances and its elements' ink on its baseline, a centred cell's cen
 "p=5 n=20 …", whose italic p's ink starts 0.63 pt before its advances); it steps down there to the fit's floor and, only where
 it is clipped there, runs on half way to the glyph beside it, a quarter of its size off a wall (today's `paperTo`).
 
+**Measured** (lane cell-col, over round RB2b's 89 papers and 2611.03953v2, against the round's head): the bundles differ by
+`Room.column` on 7,869 cell members alone (3,744 state none), every other object, the prepare dumps, the ownership and the
+differential byte for byte. On the owner's two tables the box is the trace's reading of TeX's column (Table 7's Method column
+208.15–274.66, Table 11's 212.41–238.29); "MOPD (TA init)" goes from 0.8 to 0.9 of the size, "base", "teacher" and "span" to the
+original's. The reader gate's entry over the 92 pairs on Google's rows: 1,771 laid cells under the original's size before, 1,326
+after (747 of them in their box, the translation wider than the column); 513 single-line cells reach the original's size; 180 are
+drawn smaller, every one where today's reader had run it on past its column (97 of them at the original's size); 21 whose
+translation is wider than its column even at 0.6 of the size are left the original's by themselves (§18.72), 17 of them
+2610.22214v1's "TLE" and "tn" in a column 12 pt wide; columns holding two sizes or more 383 of 780 → 273 of 777; I3, I4 and I5
+as before. 4,887 laid cells are in their column's box; on the old path 2,047 single-line cells (881 in a column of a cell of no
+class, 710 in a column holding a word not read whole, 271 of one entry, 138 the walk placed otherwise than TeX, 34 of two
+classes, 13 of no grid place), 278 spanning, 291 of several lines. The display gate reads 21 pages of its 22 pairs and 5 of the
+added two newly worse in both modes, every difference a cell laid inside its column's box (`frame`, past the gate's own room of
+before) or at another size than today's (`size`), smaller only where today's line stood past the box.
+
 **Not this rule's**: TeX's own statement of the box. The template that ends in `\axt@te{<class>}` could set a point first and
 last in it, outside every `\unskip` of LaTeX's and colortbl's guard, so that TeX states each cell box's edges and the content box
 is that less `\tabcolsep` a side: no reading of A then, and a `p` column's box and a widened column's stated too. They would be
