@@ -64,6 +64,9 @@ export interface InstrumentUnit {
   /** a table's cell or a figure's text that holds no ordinary word, kept as written (R1, PDF-READER §18.72: language.ts): the lab's
    *  dump tells it by it; the bundle does not carry it (`kept` alone) */
   words?: true
+  /** a table's cell or a figure's text whose words are the paper's own names, kept as written (R2, PDF-READER §18.72:
+   *  language.ts paperNamesOf): the lab's dump tells it by it; the bundle does not carry it (`kept` alone) */
+  names?: true
   /** a figure text the figure reading keeps whole as crowded (a formula it would tear, a translation with no room beside other
    *  ink: figure-lines.ts, today/figure-text.mjs) and for no reason of its own besides (`double`, `script`): the lab's dump tells
    *  it by it; the bundle does not carry it (`unwrapped`, as a wrap failure is) */

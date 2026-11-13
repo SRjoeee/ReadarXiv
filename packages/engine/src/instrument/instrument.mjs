@@ -31,7 +31,7 @@ import { phClass, texToText } from './layer1.mjs'
 import { textPieceOf } from '../source/text-piece.mjs'
 import { symbolText } from '../source/text-symbols.mjs'
 import { displayStop, isInkless } from './mt.mjs'
-import { keptAsWritten } from './language.ts'
+import { keptAsWritten, paperNamesOf, RUNNING } from './language.ts'
 
 const UTF8 = new TextDecoder('utf-8')
 /** a unit's start point and end point (MARK_DEF's `<i>s`/`<i>e`, a heading's `h<i>…`, a cell's `t<i>…`), by unit index */
@@ -1251,16 +1251,20 @@ export function nameGroupOf(g) {
  * is drawn in the target's word); `kept`, a unit the paper keeps as it is, never translated: the body of an algorithm float
  * (`pseudocode`: kept as the original as code is, the owner's ruling of 2026-11-08; its caption is the float's, translated), and a
  * table's cell or a figure's text that holds no ordinary word (`words`, R1 of PDF-READER §18.72: language.ts keptAsWritten over
- * its content, its elements by kind; the owner's direction of 2026-11-13: decide what is content from the source's facts); `why`,
- * each kept unit's reason, the rule that keeps it ('pseudocode' first), which the lab's dump states (`keptBy`) and the bundle
- * does not carry. Whether a text that holds words is a name is the paper's own (R2) or the translator's
+ * its content, its elements by kind; the owner's direction of 2026-11-13: decide what is content from the source's facts), or whose
+ * words are the paper's own names (`names`, R2: a title-case word its running text writes capitalised mid-sentence and never in
+ * lower case, language.ts paperNamesOf); `why`, each kept unit's reason, the rule that keeps it ('pseudocode' first, then 'words',
+ * 'names'), which the lab's dump states (`keptBy`) and the bundle does not carry
  */
 export function unitFactsOf(paper) {
   const float = new Map(paper.floatTypes ?? [])
   const why = new Map((paper.pseudocode ?? []).map(i => [i, 'pseudocode']))
+  const contents = paper.units.map(u => (JUDGED.has(u.kind) || RUNNING.has(u.kind) ? piecesOf(u.pieces, { kindOf: elementKindOf }) : null))
+  // (the paper's own names, R2: read off its running text)
+  const names = paperNamesOf(paper.units.flatMap((u, i) => (RUNNING.has(u.kind) ? [{ kind: u.kind, content: contents[i] }] : [])))
   paper.units.forEach((u, i) => {
     if (why.has(i) || !JUDGED.has(u.kind)) return
-    const k = keptAsWritten(piecesOf(u.pieces, { kindOf: elementKindOf }))
+    const k = keptAsWritten(contents[i], names)
     if (k) why.set(i, k)
   })
   return { float, kept: new Set(why.keys()), why }

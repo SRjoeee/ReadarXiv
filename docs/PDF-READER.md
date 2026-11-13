@@ -6580,6 +6580,22 @@ figure's texts); how a table's cells go together is its structure's, the typeset
     U R, SSIM B, P(match), c-lasso, IQR (s), P95 (s), COMPASS (s), Time(s), 15 LLMs, N = 2--4).
   - A table's cell, a TikZ picture's text and a figure's text read off its ink are judged; other kinds are not (their count is
     the lane's, for a decision of its own).
+- **R2: a word the paper's own running text writes as a name is a name of that paper; a text made only of such names and R1's
+  tokens is kept as written** (language.ts paperNamesOf, onlyNames; the lab's dump `keptBy: 'names'`). From the source, no list:
+  - RUNNING TEXT: the units of kind `para`, `abstract`, `theorem`, `caption` and `footnote` (the paper's sentences); not a
+    heading or the title (title case), a table's cell or a figure's text (the texts judged), the bibliography (titles and names),
+    the author block;
+  - a WORD of it is a run of letters (`\p{L}+`: "Gemini-2.5" holds "Gemini"); TITLE CASE is a capital, then lower-case letters
+    ("MiniMax" and "GPT" are none: R1 reads them);
+  - MID-SENTENCE: not its sentence's first word, the sentences being the shared cutter's (`@readarxiv/text` sentenceCuts over the
+    unit's plain projection, each element one U+FFFC read as the translators' wires read it: a citation where it stands, a
+    note's mark the sentence before it's, a formula a word, a reference a number); a sentence's first word is the first run of
+    letters at or after its start, so "Results are …" opening a sentence is no evidence and an abbreviation ("Fig. 2, Tukey …")
+    ends no sentence;
+  - NEVER IN LOWER CASE: no run of letters of the running text, wherever it stands, is the word in lower case ("Test" where the
+    paper also writes "test set" is a word);
+  - a name of the paper: a title-case word written mid-sentence at least once and never in lower case. A text's word tokens (R1's,
+    cut at their joiners) all such names: kept ("Claude", "Mistral" in a header, "Tukey" in a body cell, "Claude GPT-4o").
 - **No column is kept for what its cells say.** The typesetter kept a body column whole as the original's where at least 0.4 of
   its cells came back from the translator as they went or were kept before asking (`NAMES_SHARE`, measured once on 29 fixtures
   and six papers): a tuned share that stood in for a fact about each cell, and kept a label under names English ("Avg.

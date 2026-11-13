@@ -1,14 +1,17 @@
 // Whether a short text is language to translate (docs/PDF-READER.md §18.72, the owner's direction of 2026-11-13: decide which
 // cells are content and which are not, by what the source states and the table's structure; a translator's error is not ours
-// to correct). A text that holds no ordinary word is not language: it is kept as written (R1). It is a fact of a text, so it is
-// decided where Unit.kept is decided
+// to correct). A text that holds no ordinary word is not language: it is kept as written (R1). A word the paper's own running
+// text writes as a name is a name of that paper (R2). Both are facts of a text, so they are decided where Unit.kept is decided
 // (instrument.mjs unitFactsOf for the source's cells and figure texts, locate/ink.ts for a figure's texts read off its ink); the
 // table's own structure (a header cell alone, a body column's cells between the same two rules) is the typesetter's
 // (packages/typeset lay/entry.ts decideTables). No word list and no tuned number: the definitions below are the rule.
 import type { Piece } from '@readarxiv/format'
+import { sentenceCuts } from '@readarxiv/text'
 
 /** what text set in a code face stands as among a text's characters (a code element, a \texttt group): no word holds it */
 const CODE = '\ue000'
+/** an element in a projection the sentence cutter reads (@readarxiv/text) */
+const OBJECT = '\ufffc'
 const IS_LETTER = /\p{L}/u
 const IS_DIGIT = /\p{Nd}/u
 /** a token's edges: what is neither a letter, a digit nor code ("(ours)", "Avg.", "+schema", "[CLS]") */
@@ -79,7 +82,90 @@ export const tokensOf = (content: readonly Piece[]): string[] =>
 export const holdsNoWord = (content: readonly Piece[]): boolean =>
   tokensOf(content).every((t) => tokenKind(t) !== 'word')
 
-/** why a short text is kept as written: 'words' (R1: it holds no ordinary word), or null (language: sent) */
-export function keptAsWritten(content: readonly Piece[]): 'words' | null {
-  return holdsNoWord(content) ? 'words' : null
+/** the kinds whose units are the paper's running text: sentences of its own prose (a paragraph, the abstract, a theorem's body, a
+ *  caption, a footnote); not a heading or the title (title case), a table's cell or a figure's text (the texts judged), the
+ *  bibliography (titles and names), the author block */
+export const RUNNING = new Set(['para', 'abstract', 'theorem', 'caption', 'footnote'])
+
+/** what an element reads as to the sentence cutter (@readarxiv/text sentenceCuts): packages/translate's standInOf (wire/text.ts),
+ *  the same table: a note's mark the sentence before it's, a citation where it stands, a reference a number, a formula a word,
+ *  a break or a space a space; any other element a word */
+function standInOf(kind: string): string | undefined {
+  if (kind === 'cite') return 'citation'
+  if (kind === 'note-mark' || kind === 'footnote') return 'annotation'
+  if (kind === 'ref' || kind === 'eqref') return '1'
+  if (kind === 'math') return 'x'
+  if (kind === 'break' || kind === 'space') return ' '
+  return undefined
+}
+
+/** a unit's plain projection (its text, each element and nested unit one U+FFFC) and each U+FFFC's element kind */
+function projectionOf(content: readonly Piece[], kinds: Map<number, string>, out = { s: '' }): string {
+  for (const p of content) {
+    if (p.t === 'text') out.s += p.s
+    else if (p.t === 'span') projectionOf(p.content, kinds, out)
+    else {
+      kinds.set(out.s.length, p.t === 'el' ? p.kind : 'unit')
+      out.s += OBJECT
+    }
+  }
+  return out.s
+}
+
+const TITLE_CASE = /^\p{Lu}\p{Ll}+$/u
+const LOWER_CASE = /^\p{Ll}+$/u
+const WORD = /\p{L}+/gu
+
+/**
+ * R2: the paper's own names: each title-case word (a capital, then lower-case letters) its running text (RUNNING) writes
+ * capitalised mid-sentence at least once and never in lower case. Mid-sentence: not the first word of its sentence, the
+ * sentences being the shared cutter's (@readarxiv/text sentenceCuts over each unit's plain projection, its elements read as
+ * the translators' wires read them); a sentence's first word is the first run of letters at or after its start. Never in lower
+ * case: no run of letters of the running text, wherever it stands, is the word in lower case. A word is a run of letters
+ * (\p{L}+): "Gemini-2.5" holds "Gemini"; "MiniMax" and "GPT" are no title-case word (R1 reads them)
+ */
+export function paperNamesOf(units: readonly { kind: string; content: readonly Piece[] }[]): Set<string> {
+  const capital = new Set<string>()
+  const lower = new Set<string>()
+  for (const u of units) {
+    if (!RUNNING.has(u.kind)) continue
+    const kinds = new Map<number, string>()
+    const projection = projectionOf(u.content, kinds)
+    if (!projection) continue
+    const starts = [0, ...sentenceCuts(projection, (at) => standInOf(kinds.get(at) ?? 'other'))]
+    // (each sentence's first word: the first run of letters at or after its start)
+    const first = new Set<number>()
+    for (const s of starts) {
+      const m = /\p{L}/u.exec(projection.slice(s))
+      if (m) first.add(s + m.index)
+    }
+    for (const m of projection.matchAll(WORD)) {
+      const w = m[0]
+      if (LOWER_CASE.test(w)) lower.add(w)
+      else if (TITLE_CASE.test(w) && !first.has(m.index)) capital.add(w)
+    }
+  }
+  return new Set([...capital].filter((w) => !lower.has(w.toLowerCase())))
+}
+
+/** R2: a text made only of the paper's own names and R1's tokens: every word in it, cut at its joiners, of the paper's names */
+export function onlyNames(content: readonly Piece[], names: ReadonlySet<string>): boolean {
+  const words = tokensOf(content).filter((t) => tokenKind(t) === 'word')
+  return (
+    words.length > 0 &&
+    words.every((t) =>
+      t
+        .replace(EDGES, '')
+        .split(JOINERS)
+        .filter((x) => x.length)
+        .every((x) => names.has(x)),
+    )
+  )
+}
+
+/** why a short text is kept as written: 'words' (R1: it holds no ordinary word), 'names' (R2: its words are the paper's own
+ *  names), or null (language: sent) */
+export function keptAsWritten(content: readonly Piece[], names: ReadonlySet<string>): 'words' | 'names' | null {
+  if (holdsNoWord(content)) return 'words'
+  return onlyNames(content, names) ? 'names' : null
 }
