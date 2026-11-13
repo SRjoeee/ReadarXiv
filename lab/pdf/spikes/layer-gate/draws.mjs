@@ -28,7 +28,7 @@ float32Outlines?.(pdfjs, worker)
 globalThis.pdfjsWorker = worker
 const { getDocument, OPS } = pdfjs
 const { drawDataOf } = await import(E('pipeline/draw-data.mjs'))
-const { BOXES_PAGE, GLYPHS_PAGE, pageInk } = await import(existsSync(E('layout/ink.mjs')) ? E('layout/ink.mjs') : E('../../../packages/engine/src/ink.mjs'))
+const { BOXES_PAGE, GLYPHS_PAGE, pageInk } = await import(existsSync(E('layout/ink.mjs')) ? E('layout/ink.mjs') : E('../../../packages/engine/src/ink.ts'))
 const NM = dirname(require.resolve('pdfjs-dist/package.json'))
 const task = getDocument({ data: new Uint8Array(readFileSync(pdf)), maxImageSize: LINK_TEXT_PIXELS ?? NO_IMAGE_PIXELS, verbosity: 0, cMapUrl: `${NM}/cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}/standard_fonts/`, useSystemFonts: false, fontExtraProperties: true })
 const doc = await task.promise

@@ -4,7 +4,8 @@
 // whose /Prev is the original's startxref and whose offsets are the composed document's. Its head (layer-proto/format.mjs:
 // `base.kind` 'delta') names the pages it replaces as page ranges and counts what it reused and wrote. Imports the tail's
 // largest object number and its latin-1 reading alone: the head's reader (a browser's), the page pass and the box read it alike.
-import { latin1, OBJECT_MAX } from './tail.ts'
+import { latin1 } from './bounded-reads.ts'
+import { OBJECT_MAX } from './tail.ts'
 
 /** a head's base of ours is a delta over arXiv's PDF or a whole PDF of ours (`full`: no `kind` on the wire) */
 export const BASE_KINDS = Object.freeze(['delta', 'full'] as const)

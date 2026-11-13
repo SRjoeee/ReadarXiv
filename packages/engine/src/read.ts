@@ -19,7 +19,7 @@
 // and let go: no page's whole list is held (2610.40394v1 page 23, 510,506 operations, was 93 MiB held as one list, lane op-stream).
 import type { Doc, DocGlyph, DocMarks, DocPage, DocTurned } from './doc.ts'
 import { PageGlyph } from './glyph.ts'
-import { BOXES_PAGE, GLYPHS_PAGE, inkReader, type PageInk } from './ink.types.ts'
+import { BOXES_PAGE, GLYPHS_PAGE, inkReader, type PageInk } from './ink.ts'
 import { type OpsPage, type OpsReader, readOps } from './opstream.ts'
 import { isMemoryError } from './memory.ts'
 import { memoryFailure, WARNINGS, watchWarnings } from './warnings.ts'

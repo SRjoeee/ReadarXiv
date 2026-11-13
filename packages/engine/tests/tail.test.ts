@@ -1,10 +1,10 @@
-// latin1 (src/tail): the engine's one reading of bytes as latin-1, which the cross-reference reader, the delta's wire and the
-// remover take from the tail. Each held a copy before: String.fromCharCode.apply over each slice of 8192 bytes, three of them
+// latin1 (src/bounded-reads.ts, where it moved from the tail): the engine's one reading of bytes as latin-1, which the
+// cross-reference reader, the delta's wire, the remover and the tail take. Each held a copy before: String.fromCharCode.apply over each slice of 8192 bytes, three of them
 // ending a slice at Math.min(length, i + 8192) (tail's, xref's, delta-wire's) and one at i + 8192 (remove's). The shared
 // reading calls String.fromCharCode by Reflect.apply over each slice (the same operation by the specification, which
 // TypeScript lets take a typed array where it does not let apply). Both old copies are kept here as the reference it equals.
 import { describe, expect, test } from 'vitest'
-import { latin1 } from '../src/tail.ts'
+import { latin1 } from '../src/bounded-reads.ts'
 
 // (each copy as it was, the cast its only addition: TypeScript types apply's arguments as an array, where apply takes any
 // array-like, a typed array among them)

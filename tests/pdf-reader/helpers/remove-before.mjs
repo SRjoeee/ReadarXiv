@@ -1,6 +1,6 @@
 // The remover (packages/engine/src/remove.mjs) as it was at d42fb8bca, before its lexer and its page walk stated their bounds and
-// told an operand by its kind before reading it: kept here alone, verbatim but its two imports (the engine's entry for what it
-// imported by path) and three lint notes, as the reference the change is held to, value for value and error for error
+// told an operand by its kind before reading it: kept here alone, verbatim but its two imports (by the engine's entry and the
+// shared reads' module for what it imported by path) and three lint notes, as the reference the change is held to, value for value and error for error
 // (tests/pdf-reader/remove-bounds.test.ts). Imported by no module of the engine.
 //
 // Our pages' content streams read as the wrap reads them (layout/wrap.mjs; docs/route/ocg-erasure.md §2): the streams lexed (lex),
@@ -19,7 +19,7 @@
 // still exceed any of them: run it in the maker child, under a hard memory limit and a wall clock, one paper at a time. A failed
 // allocation under that limit refuses no page: it is the paper's, thrown as it came (memory.mjs).
 import { isMemoryError } from '@readarxiv/engine'
-import { latin1 } from '@readarxiv/engine'
+import { latin1 } from '../../../packages/engine/src/bounded-reads.ts'
 
 const WS = new Uint8Array(256)
 for (const c of [0, 9, 10, 12, 13, 32]) WS[c] = 1

@@ -11,7 +11,8 @@
 // the tail's startxref and its latin-1 reading alone.
 import type { DeltaWhy } from './delta-wire.ts'
 import type { PdfDecodeStream, PdfDict, PdfLib, PdfObject, PdfObjectParser, PdfRawStream, PdfRef } from './remove.ts'
-import { latin1, startxrefOf } from './tail.ts'
+import { latin1 } from './bounded-reads.ts'
+import { startxrefOf } from './tail.ts'
 
 /** an entry of a cross-reference section: free (0), an object at its offset (1), an object in an object stream (2) */
 export type XrefEntry = { t: 0 } | { t: 1; off: number; g: number } | { t: 2; stm: number; i: number; g: 0 }
