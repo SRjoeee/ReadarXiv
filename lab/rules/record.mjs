@@ -11,12 +11,18 @@
 //       the census's AFTER headline items (its tuned thresholds and name lists) matched one by one to the map's rules (by
 //       file, line, form and value or name): what one holds and the other lacks; the rules with no site and why; with a
 //       recording, the rules that ran, by area (areas.mjs)
-//   node lab/rules/record.mjs ledger --sites=<sites.json> --recording=<recording.json> [--out=lab/rules/ledger.json]
-//       the ledger (ledger.mjs): every rule's row, its sites' states, its verdict
-//   node lab/rules/record.mjs report --ledger=<ledger.json> [--census=<census.json>] [--out=<dir>] [--deferred=a,b]
-//                                    [--profile="<what the inputs were>"]
-//       the report by area and by file (report.mjs) into <dir>/report.md and report-by-file.md
-//   node lab/rules/record.mjs remap --from=<old sites.json or ledger.json> --to=<new sites.json> [--out=<remap.json>]
+//   node lab/rules/record.mjs ledger --sites=<sites.json> --recording=<recording.json> [--full=<full record>]
+//                                    [--out=lab/rules/ledger.json]
+//       the ledger (ledger.mjs) in its two forms: the full record (every rule's row, its sites' states, its verdict, the
+//       tests by name; default lab/rules/out/ledger-full.json, kept outside the repository) and the tracked ledger naming
+//       it by its sha256
+//   node lab/rules/record.mjs trace --full=<full record> [--ledger=lab/rules/ledger.json] [--key=<rule key>]
+//       the tracked ledger read through the full record it names: every row's verdict against the full record's (exit 1
+//       where one differs or the digest is not the one named); with a key, that row's tests and nearest cases by name
+//   node lab/rules/record.mjs report --ledger=<full record, or the tracked ledger with --full=<its full record>>
+//                                    [--census=<census.json>] [--out=<dir>] [--deferred=a,b] [--profile="<what the inputs were>"]
+//       the report by area and by file (report.mjs) into <dir>/report.md and report-by-file.md, read from the full record
+//   node lab/rules/record.mjs remap --from=<old sites.json or ledger.json, either form> --to=<new sites.json> [--out=<remap.json>]
 //       old keys matched to new where code moved between functions or files: by signature, value and ordinal; every key
 //       it cannot follow printed. A recording is never re-keyed by it: a moved tree is recorded again
 //
@@ -24,6 +30,7 @@
 // [--import tsx] <runner> …; the tests: AXT_RULES_SITES=… AXT_RULES_OUT=… pnpm exec vitest run --config
 // lab/rules/vitest.config.mts. Exit 0 done, 2 usage.
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -32,7 +39,7 @@ import { graphOf, scanTree } from '../release-check/census-lib.mjs'
 import { ENGINE_PROFILE } from '../release-check/census-profile.mjs'
 import { cutoverOf } from '../release-check/census.mjs'
 import { AREAS, areaOf } from './areas.mjs'
-import { ledgerOf } from './ledger.mjs'
+import { digestOf, ledgerOf, resolveTracked, TRACKED_FORMAT, trackedOf, trackedText } from './ledger.mjs'
 import { mergeRecords } from './merge.mjs'
 import { reportOf } from './report.mjs'
 import { RULE_AREAS, siteMapOf, sitesOf } from './sites.mjs'
@@ -120,14 +127,16 @@ export function agreementOf(census, map, recording = null) {
  *  neither side kept, in turn: the same file name (a module moved whole to another folder), function, signature and
  *  ordinal (`file`); the same function, signature and ordinal in another file (`function`); the same signature
  *  and ordinal (`ordinal`); for a comparison, the same signature and the same text of its other operand (`operand`). Each
- *  stage pairs a key only where what it reads is one key on each side: what is left is printed, never guessed */
+ *  stage pairs a key only where what it reads is one key on each side: what is left is printed, never guessed. Entries
+ *  and operands are compared by their digests: the tracked ledger holds those alone */
 export function remapOf(from, to) {
   const partsOf = k => {
     const [file, fn, ...rest] = k.split('::')
     const sig = rest.join('::')
     return { stem: file.split('/').pop(), fn, sig: sig.replace(/#\d+$/, ''), ord: /#(\d+)$/.exec(sig)?.[1] ?? '0' }
   }
-  const idOf = r => JSON.stringify([r.kind, r.kind === 'list' ? r.entries : r.value])
+  const idOf = r => JSON.stringify([r.kind, r.kind === 'list' ? (r.entriesDigest ?? digestOf(r.entries)) : r.value])
+  const operandOf = r => r.otherDigest ?? (r.other ? digestOf(r.other) : null)
   let kept = 0
   const oldLeft = new Set()
   const newLeft = new Set(Object.keys(to.rules))
@@ -141,7 +150,7 @@ export function remapOf(from, to) {
     ['file', (k, r) => [partsOf(k).stem, partsOf(k).fn, partsOf(k).sig, partsOf(k).ord, idOf(r)].join('\u0000')],
     ['function', (k, r) => [partsOf(k).fn, partsOf(k).sig, partsOf(k).ord, idOf(r)].join('\u0000')],
     ['ordinal', (k, r) => [partsOf(k).sig, partsOf(k).ord, idOf(r)].join('\u0000')],
-    ['operand', (k, r) => (r.other ? [partsOf(k).sig, idOf(r), r.other].join('\u0000') : null)],
+    ['operand', (k, r) => (operandOf(r) ? [partsOf(k).sig, idOf(r), operandOf(r)].join('\u0000') : null)],
   ]
   const moved = {}
   const how = {}
@@ -226,15 +235,52 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
       process.exit(2)
     }
     const ledger = ledgerOf(map, recording)
-    const out = opt('out') ?? join(ROOT, 'lab/rules/ledger.json')
-    writeFileSync(out, `${JSON.stringify(ledger, null, 1)}\n`)
+    // (the full record first: the tracked ledger names its bytes)
+    const fullFile = resolve(opt('full') ?? join(ROOT, 'lab/rules/out/ledger-full.json'))
+    const fullText = `${JSON.stringify(ledger, null, 1)}\n`
+    mkdirSync(dirname(fullFile), { recursive: true })
+    writeFileSync(fullFile, fullText)
+    const digest = createHash('sha256').update(fullText).digest('hex')
+    const out = resolve(opt('out') ?? join(ROOT, 'lab/rules/ledger.json'))
+    const text = trackedText(trackedOf(ledger, { digest, map }))
+    writeFileSync(out, text)
     const by = {}
     for (const r of Object.values(ledger.rules)) by[r.verdict] = (by[r.verdict] ?? 0) + 1
-    console.log(`rules: the ledger of ${Object.keys(ledger.rules).length} rules into ${out}: ${JSON.stringify(by)}`)
+    console.log(`rules: the ledger of ${Object.keys(ledger.rules).length} rules: ${JSON.stringify(by)}`)
+    console.log(`rules: the full record ${fullFile} (${Buffer.byteLength(fullText)} bytes, sha256 ${digest}); the tracked ledger ${out} (${Buffer.byteLength(text)} bytes)`)
     process.exit(0)
   }
+  // (the full record of a tracked ledger, checked against the digest it names; a full record is its own)
+  const fullOf = (ledgerText, fullFile) => {
+    const ledger = JSON.parse(ledgerText)
+    if (ledger.format !== TRACKED_FORMAT) return { full: ledger, rows: null }
+    if (!fullFile) {
+      console.error('rules: this is the tracked ledger: name its full record with --full=<file>')
+      process.exit(2)
+    }
+    const fullText = readFileSync(fullFile, 'utf8')
+    try {
+      return { full: JSON.parse(fullText), rows: resolveTracked(ledger, fullText).rules }
+    } catch (e) {
+      console.error(`rules: ${e.message}`)
+      process.exit(1)
+    }
+  }
+  if (cmd === 'trace') {
+    const { full, rows } = fullOf(readFileSync(opt('ledger') ?? join(ROOT, 'lab/rules/ledger.json'), 'utf8'), opt('full'))
+    if (!rows) {
+      console.error('usage: record.mjs trace --full=<full record> [--ledger=<tracked ledger>] [--key=<rule key>]')
+      process.exit(2)
+    }
+    const apart = Object.keys({ ...full.rules, ...rows }).filter(k => full.rules[k]?.verdict !== rows[k]?.verdict)
+    console.log(`rules: ${Object.keys(rows).length} tracked rows read through the full record (${Object.keys(full.rules).length} rows): ${apart.length} verdicts apart`)
+    for (const k of apart) console.log(`rules: apart: ${k}: tracked ${rows[k]?.verdict ?? '(none)'}, full ${full.rules[k]?.verdict ?? '(none)'}`)
+    const key = opt('key')
+    if (key) console.log(JSON.stringify({ key, ...rows[key] }, null, 1))
+    process.exit(apart.length ? 1 : 0)
+  }
   if (cmd === 'report') {
-    const ledger = JSON.parse(readFileSync(opt('ledger') ?? join(ROOT, 'lab/rules/ledger.json'), 'utf8'))
+    const ledger = fullOf(readFileSync(opt('ledger') ?? join(ROOT, 'lab/rules/ledger.json'), 'utf8'), opt('full')).full
     const census = opt('census') ? JSON.parse(readFileSync(opt('census'), 'utf8')) : null
     const out = resolve(opt('out') ?? join(ROOT, 'lab/rules/out'))
     const r = reportOf(ledger, { budgets: census?.trees.AFTER.debt.thresholds.list ?? null, profile: opt('profile'), deferred: opt('deferred')?.split(',') ?? [] })

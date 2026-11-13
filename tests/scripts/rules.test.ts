@@ -6,15 +6,16 @@
 // what the census counts; the instrumented runner prints what the plain one prints; the record holds each outcome, the
 // nearest cases and each entry's hits.
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { factsOf } from '../../lab/release-check/census-lib.mjs'
 import { areaOf } from '../../lab/rules/areas.mjs'
-import { ledgerOf } from '../../lab/rules/ledger.mjs'
+import { type Ledger, ledgerOf, marginOf, resolveTracked, TRACKED_FORMAT, type Tracked } from '../../lab/rules/ledger.mjs'
 import { mergeRecords } from '../../lab/rules/merge.mjs'
-import { agreementOf, countsOf, siteMapOfCheckout } from '../../lab/rules/record.mjs'
+import { agreementOf, countsOf, remapOf, siteMapOfCheckout } from '../../lab/rules/record.mjs'
 import { recorderOf } from '../../lab/rules/recorder.mjs'
 import { reportOf } from '../../lab/rules/report.mjs'
 import { applyEdits, instrument } from '../../lab/rules/transform.mjs'
@@ -269,6 +270,90 @@ describe('a recording', () => {
     expect(code?.code).toContain('__axtRules.gt(')
     expect(plugin.transform('x', join(dir, 'run.mjs'))).toBeNull()
     expect(readFileSync(join(dir, 'packages/engine/src/rules.ts'), 'utf8')).toBe(RULES)
+  })
+})
+
+describe('the ledger in two forms', () => {
+  // (the corpus takes short's one side alone; a test of our own, named in Japanese, takes the other: the test is the
+  // rule's reason, by its file and ordinal in the tracked form, by its name only in the full record)
+  const TEST_FILE = 'tests/scripts/marks.test.ts'
+  const TITLE = '句点「。」で切る'
+  const NAME = `${TEST_FILE} > ${TITLE}`
+  const RECORD = join(ROOT, 'lab/rules/record.mjs')
+  const node = (args: string[]) => execFileSync(process.execPath, args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  const status = (args: string[]) => {
+    try {
+      node(args)
+      return 0
+    } catch (e) {
+      return (e as { status: number }).status
+    }
+  }
+  let fullText = ''
+  let trackedFile = ''
+  let fullFile = ''
+  beforeAll(() => {
+    write('run-one.mjs', "import { short, clamp, isHead } from './packages/engine/src/rules.ts'\nconsole.log(short('ab'), clamp(12), isHead('section'))\n")
+    const corpus = join(dir, 'records-forms')
+    execFileSync(process.execPath, ['--import', join(ROOT, 'lab/rules/register.mjs'), 'run-one.mjs'], { cwd: dir, encoding: 'utf8', env: { ...process.env, AXT_RULES_SITES: join(dir, 'sites.json'), AXT_RULES_OUT: corpus, AXT_RULES_ROOT: dir, AXT_RULES_PAPER: '2401.00001v1', AXT_RULES_INPUT: 'corpus' } })
+    const tests = join(dir, 'records-forms-tests')
+    const r = recorderOf(map, { out: tests, input: 'tests' })
+    r.context({ file: TEST_FILE, test: NAME })
+    r.lt(must(sitesOfRule('::short::<4#1')[0], 'short').id, 9, 4)
+    r.st(must(sitesOfRule('::HEADS#1')[0], 'HEADS').id, new Set(['section', 'subsection', 'paragraph'])).has('figure')
+    r.flush('marks', { labRead: false })
+    writeFileSync(join(dir, 'recording-forms.json'), JSON.stringify(mergeRecords(map, [corpus, tests])))
+    fullFile = join(dir, 'out/ledger-full.json')
+    trackedFile = join(dir, 'ledger.json')
+    node([RECORD, 'ledger', `--sites=${join(dir, 'sites.json')}`, `--recording=${join(dir, 'recording-forms.json')}`, `--full=${fullFile}`, `--out=${trackedFile}`])
+    fullText = readFileSync(fullFile, 'utf8')
+  })
+  it('writes the full record and the tracked ledger naming it by its digest, every verdict the same', () => {
+    const full = JSON.parse(fullText) as Ledger
+    const tracked = JSON.parse(readFileSync(trackedFile, 'utf8')) as Tracked
+    expect(tracked.format).toBe(TRACKED_FORMAT)
+    expect(tracked.recorded.full).toBe(createHash('sha256').update(fullText).digest('hex'))
+    expect(Object.keys(tracked.rules)).toEqual(Object.keys(full.rules))
+    for (const [k, r] of Object.entries(full.rules)) expect(tracked.rules[k]?.verdict, k).toBe(r.verdict)
+    const short = must(tracked.rules['packages/engine/src/rules::short::<4#1'], 'short')
+    expect(short).toMatchObject({ verdict: 'test', kind: 'threshold', value: 4, runs: { corpus: [1, 1, 0], tests: [1, 0, 1] }, tests: { false: { [TEST_FILE]: [0] } } })
+    expect(short.margin).toMatchObject({ units: 'rule', false: { eff: 9, test: [TEST_FILE, 0] }, true: { eff: 2, paper: '2401.00001v1' } })
+    // (the list's hits by entry, in the list's order, where they remove its entries; the entries by their digest alone)
+    expect(full.rules['packages/engine/src/rules::(top)::HEADS#1']).toMatchObject({ verdict: 'test', removeEntries: ['subsection', 'paragraph'] })
+    expect(tracked.rules['packages/engine/src/rules::(top)::HEADS#1']).toMatchObject({ verdict: 'test', kind: 'list', size: 3, hits: [1, 0, 0], tests: { false: { [TEST_FILE]: [0] } } })
+    expect(readFileSync(trackedFile, 'utf8')).not.toContain('subsection')
+  })
+  it("holds no byte of a test's name, and no text that is not ASCII", () => {
+    const text = readFileSync(trackedFile, 'utf8')
+    expect(fullText).toContain(NAME)
+    expect(Buffer.from(text, 'utf8').every(b => b < 0x80)).toBe(true)
+    // (not escaped either: the name is not there at all)
+    expect(text).not.toContain('\\u')
+    expect(text).not.toContain(`${TEST_FILE} > `)
+  })
+  it('reads back through the full record: each test and nearest case by name, the verdicts the full ledger holds', () => {
+    const full = JSON.parse(fullText) as Ledger
+    const tracked = JSON.parse(readFileSync(trackedFile, 'utf8')) as Tracked
+    const back = resolveTracked(tracked, fullText)
+    for (const [k, r] of Object.entries(full.rules)) {
+      const b = must(back.rules[k], k)
+      expect(b.verdict).toBe(r.verdict)
+      for (const side of ['false', 'true'] as const) expect(new Set(b.tests[side] ?? []), `${k} ${side}`).toEqual(new Set(r.sites.flatMap(s => s.tests?.[side] ?? [])))
+      const m = marginOf(r)
+      const plain = (c: Record<string, unknown> | null | undefined) => (c ? Object.fromEntries(Object.entries(c).filter(([, v]) => v != null)) : null)
+      expect(b.margin ? { units: b.margin.units, false: plain(b.margin.false), true: plain(b.margin.true) } : null, k).toEqual(m ? { units: m.units, false: plain(m.false), true: plain(m.true) } : null)
+    }
+    expect(back.rules['packages/engine/src/rules::short::<4#1']?.tests.false).toEqual([NAME])
+    expect(back.rules['packages/engine/src/rules::short::<4#1']?.margin?.false?.test).toBe(NAME)
+    // (the commands: trace reads every row back; a full record that is not the one named is refused; the report reads it)
+    expect(status([RECORD, 'trace', `--ledger=${trackedFile}`, `--full=${fullFile}`])).toBe(0)
+    write('out/other-full.json', `${fullText} `)
+    expect(status([RECORD, 'trace', `--ledger=${trackedFile}`, `--full=${join(dir, 'out/other-full.json')}`])).toBe(1)
+    expect(status([RECORD, 'report', `--ledger=${trackedFile}`, `--out=${join(dir, 'out/report')}`])).toBe(2)
+    expect(status([RECORD, 'report', `--ledger=${trackedFile}`, `--full=${fullFile}`, `--out=${join(dir, 'out/report')}`])).toBe(0)
+    expect(readFileSync(join(dir, 'out/report/report-by-file.md'), 'utf8')).toContain('(packages/engine/src/rules::short::<4#1): **test**')
+    // (remap follows the tracked rows as it follows the map's)
+    expect(remapOf(tracked, map)).toMatchObject({ kept: Object.keys(map.rules).length, unmatched: { old: [], new: [] } })
   })
 })
 
