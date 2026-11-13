@@ -29,10 +29,14 @@ again in the translation.
 The directions point one way, and `scripts/check-boundary.mjs` holds them (its table `PACKAGES`; it runs in `pnpm lint`): a
 package imports another only through its entry, `@readarxiv/<name>`, never a deep or a relative path into it; no package
 imports the extension's `src/`, its aliases, `wxt` or a virtual module; a directory under `packages/` that `PACKAGES` does not
-list fails; and no package holds a hand-written declaration file, so the JavaScript modules a package still holds (the
-engine's `ink.mjs`, `wrap.mjs`, the moved front half; the typesetter's `breaker/*.mjs`; the reader's `stack/sync.mjs`) are typed
-by a `*.types.ts` facade beside them, or, for the front half, by one facade at the engine's entry,
-`packages/engine/src/front.types.ts`. Each package is type-checked under its own `tsconfig.json` (`tsc -b packages`) and
+list fails; and no package holds a hand-written declaration file, so the JavaScript modules a package still holds, all of
+them the engine's, are typed by a `*.types.ts` facade that re-exports with its type each value read of them: `ink.mjs` by
+`packages/engine/src/ink.types.ts` beside it; today's ink makers copied into `packages/engine/src/locate/today/` (`deps.mjs`,
+`figure-text.mjs`, `ink-units.mjs`, `ledger.mjs`, and the `accents.mjs` and `content-classes.mjs` they import) by
+`packages/engine/src/locate/today/today.types.ts`, but for the two values of `accents.mjs` that
+`packages/engine/src/locate/facts.ts` reads and types itself; and the moved front half, the 27 modules of `source/`, `marks/`,
+`own/`, `compile/` and `instrument/`, by one facade at the engine's entry, `packages/engine/src/front.types.ts`. Each package
+is type-checked under its own `tsconfig.json` (`tsc -b packages`) and
 tested under its own `vitest.config.ts`; `packages/README.md` states the rest.
 
 The extension is the root package, over the packages and never under them:
@@ -194,15 +198,15 @@ a gate is named by its id there. The rows after them are this repository's own.
 |---|---|---|
 | I1: all groups on, the composed page paints what A paints, glyph, box and pixel | `prepare` (PDF.js's proofs over the corpus, `lab/pdf/prepare-back/prove.mjs` (a)); `pixels` (poppler); `canvas` (Chromium); `harness` (the reader's fixtures) | in the reader, held on the harness's fixtures alone; `canvas` has passed only with a stand-in (`--normalize`) |
 | I2: a group off hides exactly its ink, and no pixel outside it changes | `prepare` (proof (c′)); `pixels` (Cairo) | no gate turns a group off in the reader |
-| I3: a laid unit's ink stays inside its regions and room and overlaps no other ink | `harness`; `typeset-today`, `typeset-parts`; `display` | |
-| I4: every element of a laid unit appears exactly once | `harness`; `typeset-today`, `typeset-parts` | |
-| I5: no line wider than its frame beyond the stated tolerance; no unit under the size floor | `typeset-today`, `typeset-parts` | no gate counts the size floor |
+| I3: a laid unit's ink stays inside its regions and room and overlaps no other ink | `harness`; `typeset-today`, `reader-parts`; `display` | |
+| I4: every element of a laid unit appears exactly once | `harness`; `typeset-today`, `reader-parts` | |
+| I5: no line wider than its frame beyond the stated tolerance; no unit under the size floor | `typeset-today`, `reader-parts` | no gate counts the size floor |
 | I6: the same inputs give the same bytes (the prepare) and the same display list (the lay) | `prepare-same` (the corpus twice, `lab/pdf/prepare-back/same.mjs`); `sentence-cover` (a unit laid alike by every page's lay that holds it); `packages/typeset/tests/replay/purity.test.ts`; the private repository's box tier (the corpus through the box) | a page laid twice is compared on one pair alone, with the lab's data |
 | I7: a unit's boxes on the left and on the right are the same boxes | no gate | |
 | I8: the text layer of a laid page reads the translation in reading order | `harness`; `harness-lab` (five corpus papers); the website's reader checks (private) | not over the corpus |
 | I9: the box refuses each escape of the security suite and has no network | the private repository's box tier | run under emulation alone |
 | I10: on both panes every drawn piece of a lit unit is in exactly one of its sentences, the same sentences on both | `sentence-cover`; `display` | not over our server's own rows |
-| D: no unit drawn or laid at the frozen baseline (the released reader's output, recorded in the lab) is lost, but for the acceptance list | `prepare-diff`; `typeset-today`, `typeset-parts`; the private repository's sweep against its staging server | |
+| D: no unit drawn or laid at the frozen baseline (the released reader's output, recorded in the lab) is lost, but for the acceptance list | `prepare-diff`; `typeset-today`; the private repository's sweep against its staging server | |
 | Display: no page drawn worse than today's reader draws it, a difference only where nearer A | `display` (`lab/typeset/parity/`: both drawn beside A's page with the same rows) | |
 | A package imports only the packages `PACKAGES` allows, by entry; nothing of the extension | `scripts/check-boundary.mjs` (`pnpm lint`) | |
 | The core is platform-free; today's engine imports only what `ENGINE_ALLOW` and `ENGINE_PACKAGES` name | `scripts/check-boundary.mjs` | |
@@ -218,7 +222,7 @@ a gate is named by its id there. The rows after them are this repository's own.
 | The prepare's entry re-exports each module's own values; the front half's files are let go before the back half; a run given a stored instrument hands out none | `packages/engine/tests/entry.test.ts`, `packages/engine/tests/front.test.ts` | |
 | Each behaviour digest is the hash of its case table's outcomes | `packages/translate/tests/digests.test.ts`, `packages/translate/tests/chain-digest.test.ts`, `tests/providers/prompt.test.ts`; `pnpm digests` | |
 | A translator is sent no field of identity (`src`, `keys`, `open`, `close`, `depth`, `of`) | `packages/translate/tests/bundle.test.ts` | |
-| Every site that decides a reading option reads `toggleKind` | the toggle-kind test in `tests/pdf-reader/` | |
+| Every site that decides a reading option reads `toggleKind` | `tests/pdf-reader/toggle-kind.test.ts` | |
 | The layer's units are those its head names, each read once | `packages/reader/tests/session.test.ts`; the harness (`packages/reader/e2e/run.mjs`) | |
 | The HTML page's DOM: a translation only as its block's next sibling, the original gaining `data-axt-*` alone, restore giving back the DOM node by node (DESIGN §7.1) | `tests/renderer/restore.test.ts` and the renderer's tests on every fixture; `pnpm e2e` | |
 | No `:has()` in an injected style sheet | `tests/styles/no-has.test.ts` | |
@@ -232,7 +236,7 @@ a gate is named by its id there. The rows after them are this repository's own.
 | what the marked compile is asked and what TeX states back: the marks, the probe, the frames, skips and alignments of the log | `packages/engine/src/marks/` (`marks.mjs` writes and reads the probe; `channels.ts` reads TeX's statements), the compile's driver `packages/engine/src/compile/` | the compile side: a host that keys the stored instrument by the code of `compiled.ts`, `plan.ts` and what they reach compiles every paper once more |
 | what the instrument says of B: an element's class, a piece TeX set no ink for | `packages/engine/src/instrument/instrument.mjs`, its typed seam `packages/engine/src/instrument.ts` | after TeX: a stored instrument stays good, nothing compiles again; the bundle's objects move |
 | which glyph of A a unit owns, whether it is located, what a member states | `packages/engine/src/align/`, `packages/engine/src/locate/` (the phases' order in `locate.ts`; ownership written only by `ownership.ts`; the facts read off A in `facts.ts` and `facts-pass.ts`); written into the part by `packages/engine/src/bundle/bundle.ts` | the parts move. Proof: the lab's corpus run object for object against the last (`lab/pdf/prepare-back/same.mjs`), the differential (`prepare-diff`) |
-| which ink a reader can hide | the groups, `groupsOf` in `packages/engine/src/locate/ownership.ts`; the add-on, `packages/engine/src/wrap/wrap.ts` over `packages/engine/src/wrap.mjs` | the add-on moves. Proof: `lab/pdf/prepare-back/prove.mjs`, `pixels` |
+| which ink a reader can hide | the groups, `groupsOf` in `packages/engine/src/locate/ownership.ts`; the add-on, `packages/engine/src/wrap/wrap.ts` over `packages/engine/src/wrap.ts` | the add-on moves. Proof: `lab/pdf/prepare-back/prove.mjs`, `pixels` |
 | a field of a bundle object | `packages/format/src/schema.ts` | an optional field is free: a reader strips what it does not know. One an old reader would misread raises `FORMAT`, and a reader names the formats it reads in its open (`FORMATS`) |
 | a word of the paper's document | `packages/format/src/doc.ts` | a closed word (what a reader does) needs a new `v`; an open word (what it is told) is free |
 | a rule of the lay: breaking, the fit, the page fill, a figure's text, a table's group | `packages/typeset/src/` (`breaker/`, `fit/`, `shared/`, `unit/`, `lay/`), entered by `packages/typeset/src/lay/entry.ts` | nothing stored moves and no number rises: a page is laid when it is read. Proof: the typesetter's tests, `display`, `sentence-cover` |
