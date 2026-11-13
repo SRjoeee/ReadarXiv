@@ -1154,6 +1154,16 @@ closed for good). The glue tells the reader's state as the chrome's events (`eve
 takes from a host only what differs: its telling of some events (the website's arXiv HTML link, the extension's crash as a
 failure), what it watches, whether the chrome may hold the original, what goes at the page's end.
 
+A settled paper is asked nothing until something says it moved: once the document says nothing runs, the follow waits for the
+reader's wake instead of asking again a minute later (design-performance-2026-11-13 Q9; the page shown again, the network back
+and the back-forward cache start a new follow by themselves). The wake is an object of the layer answered gone (a 404: our
+server replaced the layer and deleted the old one's objects): its head, or a part, which is read as its page comes near, long
+after the head (#640 review). Either lets the layer go (`object.refused`) and wakes the follow, once a catalog: the document is
+asked again and the layer our server serves now read and laid, no reload; on the extension, whose rows are made here, no follow
+lives once its layer is final, and the layer let go is what asks again. A document that still names the catalog gone asks
+nothing more. The add-on is not among them yet: read by ranges, a range answered 404 once bytes of it came is the network's
+(`bytes/source.ts`), and the layer is refused `broken`, which a retry asks again.
+
 The extension's reader never comes back from the back-forward cache: it is shown only in a frame over arXiv's PDF page
 (`entrypoints/pdf.content.ts`), and Chrome does not cache a page that embeds an extension's frame. Its reasons, read through
 the DevTools protocol (`Page.backForwardCacheNotUsed`; the page's own `notRestoredReasons` says only `masked` for the frame,

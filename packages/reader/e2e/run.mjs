@@ -68,6 +68,9 @@ const deltasOf = {}
 const twins = {},
   rebuilt = {},
   twinObjects = new Map()
+/** each paper's bundle and its head's parts, for its layer made again in a directory of its own (`moved`) */
+const bundleOf = {},
+  partsOfHead = {}
 for (const [name, f] of Object.entries(fixtures)) {
   const head = JSON.parse(readFileSync(join(f.bundle, 'head.json'), 'utf8'))
   const seg = `${head.paper.id.replace('.', '_')}v${head.paper.version}`
@@ -90,6 +93,8 @@ for (const [name, f] of Object.entries(fixtures)) {
       return { path: `p/${seg}/fx/${sha256}`, sha256, bytes: b.length }
     }
     const h = JSON.parse(readFileSync(join(f.bundle, `${headDigest}.head`), 'utf8'))
+    bundleOf[seg] = f.bundle
+    partsOfHead[seg] = h.parts.filter(Boolean)
     const members = {}
     const parts = h.parts.map((d) => {
       if (!d) return d
@@ -250,6 +255,22 @@ const fixtureRoute = {
     return res.end(readFileSync(at))
   },
 }
+/** a paper's layer made again in a directory of its own (`moved`): the stale scenario's new build (`rebuilt`: its head, its own
+ *  parts, the add-on and the units as they were), every object under `fx2`, the document naming it there */
+const movedDoc = (d) => ({
+  ...d,
+  rev: 3,
+  layer: {
+    ...d.layer,
+    catalog: { ...rebuilt[d.pv].catalog, path: rebuilt[d.pv].catalog.path.replace('/fx/', '/fx2/') },
+    units: d.layer.units.map((u) => ({ ...u, path: u.path.replace('/fx/', '/fx2/') })),
+  },
+})
+/** an object of the layer made again, by its digest: the bundle's file, or one of the new build's */
+const movedObject = (seg, digest) => {
+  const file = readdirSync(bundleOf[seg]).find((x) => x.startsWith(`${digest}.`))
+  return file ? readFileSync(join(bundleOf[seg], file)) : (twinObjects.get(`/api/v2/o/p/${seg}/fx/${digest}`) ?? null)
+}
 /** a paper of a stale layer once opened (worker v2 machine.ts): prepared again, the old layer served meanwhile, the target's
  *  work made by the open and not started (none of the wanted units told yet) */
 const staleOpened = (d, target) => ({
@@ -268,6 +289,26 @@ const v2Route = {
     }
     // (an original our server cannot give now: the original lost)
     if (url.pathname.startsWith('/api/v2/o/broken/')) return json(503, { error: 'unavailable' })
+    // (a layer made again in a directory of its own, `moved`, as the first part of the old one is asked: that part and every
+    // object of the old directory after it gone, as our server answers an object deleted (404, its word `gone`); the new
+    // directory's objects served)
+    const mv = /^\/api\/v2\/o\/p\/([^/]+)\/(fx2?)\/([0-9a-f]{64})$/.exec(url.pathname)
+    if (mv && modes[mv[1]]?.kind === 'moved') {
+      const m = modes[mv[1]]
+      if (mv[2] === 'fx') {
+        if (!m.switched && partsOfHead[mv[1]].includes(mv[3])) {
+          m.switched = true
+          m.from = v2log.length
+        }
+        if (!m.switched) return false
+        m.gone = (m.gone ?? 0) + 1
+        return json(404, { error: 'gone' })
+      }
+      const bytes = movedObject(mv[1], mv[3])
+      if (!bytes) return json(404, { error: 'gone' })
+      answerBytes(req, res, bytes)
+      return true
+    }
     if (url.pathname.startsWith('/api/v2/papers/')) {
       const seg = url.pathname.slice('/api/v2/papers/'.length)
       v2log.push({ what: 'follow', seg, query: url.search, at: performance.now() })
@@ -395,6 +436,8 @@ const v2Route = {
         return m.switched
           ? json(200, { ...d, rev: 3, layer: { ...d.layer, catalog: twins[d.pv] } })
           : json(200, { ...d, rev: 2, prepare: { ...d.prepare, state: 'running', stage: 'compiling' } })
+      // (a layer made again in a directory of its own once a part of the old one is asked: nothing runs before or after)
+      if (m?.kind === 'moved') return json(200, m.switched ? movedDoc(d) : { ...d, rev: 2 })
       return json(200, { ...d, rev: 2 })
     }
     if (url.pathname === '/api/v2/open' && req.method === 'POST') {
@@ -3628,6 +3671,55 @@ await check(
     return { follows: afterHour, headAsked: gone }
   },
 )
+// A part answered gone after the head was read (#640 review): the layer made again in a directory of its own once the composed
+// document is open, as our server replaces a layer and later deletes the old one's objects. A part is read as its page comes
+// near, long after the head: the reader that read the old head learns of the new layer only by asking the document again.
+// Both hosts: the website's follow settled, waiting for a wake; the extension's none at all (rows made here, the layer final)
+for (const host of ['web', 'ext'])
+  await check(
+    `reader: a part of the layer answered gone once its head was read asks the document once, and the layer our server serves now is laid without a reload (${host}'s host)`,
+    async () => {
+      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      const name = 's1-columns'
+      const seg = indexOf[name].seg
+      modes[seg] = { kind: 'moved', switched: false }
+      try {
+        const { page, context, errors } = await newPage()
+        await page.evaluate(([n, h]) => window.__h.reader(n, { host: h, typeset: true, target: 'de' }), [name, host])
+        // (the composed document open over the old layer, then its first part asked: the layer made again, the part gone)
+        for (const t0 = Date.now(); !modes[seg].switched && Date.now() - t0 < 30_000; ) await page.waitForTimeout(50)
+        assert(modes[seg].switched, 'no part of the first layer asked in 30 s')
+        let s = null
+        for (const t0 = Date.now(); Date.now() - t0 < 20_000; ) {
+          s = await page.evaluate(() => {
+            const x = window.__h.readers[0]
+            return {
+              layer: x.reader.state().layer.s,
+              laid: x.reader.probe().laidPages,
+              moved: x.asked.filter((a) => a.url.includes('/fx2/')).length,
+            }
+          })
+          if (s.laid > 0 && s.moved > 0) break
+          await page.waitForTimeout(100)
+        }
+        // (settled after it: no more asks of the document)
+        await page.waitForTimeout(1500)
+        // (counted from the moment the layer was made again, the stand-in's)
+        const follows = v2log.slice(modes[seg].from).filter((x) => x.what === 'follow' && x.seg === seg).length
+        const gone = modes[seg].gone
+        await context.close()
+        assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+        assert(
+          s.laid > 0 && s.moved > 0,
+          `the layer our server serves now not laid in 20 s: ${JSON.stringify({ ...s, follows, gone })}`,
+        )
+        assert(follows === 1, `follows after the part answered gone: ${follows}, 1 wanted`)
+        return { ...s, follows, gone }
+      } finally {
+        delete modes[seg]
+      }
+    },
+  )
 await check(
   "reader: each composed document keeps its own layout: a newer catalog's pages laid by its layout, the older one's late layout dropped",
   async () => {
