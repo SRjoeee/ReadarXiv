@@ -3,8 +3,8 @@
 // correct). A text that holds no ordinary word is not language: it is kept as written (R1). A word the paper's own running
 // text writes as a name is a name of that paper (R2). Both are facts of a text, so they are decided where Unit.kept is decided
 // (instrument.mjs unitFactsOf for the source's cells and figure texts, locate/ink.ts for a figure's texts read off its ink); the
-// table's own structure (a header cell alone, a body column's cells between the same two rules) is the typesetter's
-// (packages/typeset lay/entry.ts decideTables). No word list and no tuned number: the definitions below are the rule.
+// table's own structure too (R4, namesOfBlocks below, over the front end's tableBlocks: a body column's cells between the same
+// two rules; a header cell in no block), read by unitFactsOf; the typesetter decides none. No word list; BLOCK_SHARE a majority.
 import type { Piece } from '@readarxiv/format'
 import { sentenceCuts } from '@readarxiv/text'
 
