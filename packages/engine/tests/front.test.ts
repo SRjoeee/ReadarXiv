@@ -11,11 +11,11 @@ import * as PL from '@cantoo/pdf-lib'
 import { BOUNDS, read, type Unit, unitId } from '@readarxiv/format'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, test, vi } from 'vitest'
+import type { PreparePdfJs } from '../src/compiled.ts'
 import {
   type FrontHalf,
   type FrontInput,
   originalFactsOf,
-  type PreparePdfJs,
   prepareFront,
   sourceUnitsOf,
   treeOf,

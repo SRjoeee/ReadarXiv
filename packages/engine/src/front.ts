@@ -3,14 +3,15 @@
 // any compile of the marks, the marked compile with its final pass (B), and the instrument stated over B
 // (instrument/instrument.mjs instrumentOf); or, given the instrument's four stored objects of a compile of the same original,
 // the instrument made again from them with no TeX. With what it is given: arXiv's PDF's facts (originalFactsOf) and the TeX
-// tree (treeOf). The stored plan's codec (what a prepare stores beside B and how it is read back, the paper as opened) is
-// plan.ts's, a module of its own: a host that keys the stored instrument by the code its compile side runs names it there,
-// never prepareFront, whose readers of what is stored (instrumentOf, the units first) stay out of the key. The orchestration
-// of the two halves is prepare.ts's.
+// tree (treeOf). What decides the four objects a prepare stores is compiled.ts's compiledOf (the paper opened, a stored
+// instrument taken or not, the bibliography, the marked compile with every argument it is given) and plan.ts's (the plan
+// written and read back): a host that keys the stored instrument by the code its compile side runs names them there, never
+// prepareFront, whose readers of what is stored (instrumentOf, the units, which compiledOf is handed as a function) stay out
+// of the key. The orchestration of the two halves is prepare.ts's.
 import { BOUNDS, type PrepareStage as FormatStage, type Unit, unitId, write } from '@readarxiv/format'
+import { compiledOf, type PreparePdfJs } from './compiled.ts'
 import {
   analyze,
-  bibliographyKept,
   bundleUnitsOf,
   type Compiled,
   type CompileRequest,
@@ -19,29 +20,13 @@ import {
   elementKindOf,
   inMemory,
   instrumentOf,
-  madeBibliography,
-  markedOfPaper,
   type Paper,
-  type PdfLike,
   texLiveOfPdf,
-  textOfPdf,
   unitFactsOf,
 } from './front.types.ts'
 import type { Instrument } from './instrument.ts'
 import { bySentence } from './locate/words.ts'
-import { isMemoryError } from './memory.types.ts'
-import {
-  FROM_UTF8,
-  type OriginalFacts,
-  opened,
-  type PrepareWhy,
-  planOf,
-  type StoredInstrument,
-  storedInstrumentOf,
-  unkeep,
-  withBbl,
-} from './plan.ts'
-import type { PdfDocument, PdfJs } from './read.ts'
+import type { OriginalFacts, PrepareWhy, StoredInstrument } from './plan.ts'
 
 /** a paper refused, with the reason and a line of detail */
 export interface Refusal {
@@ -50,12 +35,6 @@ export interface Refusal {
 }
 /** the stages a prepare tells, in their order (`@readarxiv/format`'s PREPARE_STAGES past the source's fetch) */
 export type PrepareStage = Exclude<FormatStage, 'fetching'>
-
-/** PDF.js as a prepare reads every document with it: A and B as the back half reads them (read.ts), and what the front half
- *  asks of A and of a compile's PDF (their facts, their pages' text) */
-export interface PreparePdfJs extends PdfJs {
-  getDocument(src: Record<string, unknown>): { promise: Promise<PdfDocument & PdfLike>; destroy(): Promise<void> }
-}
 
 /** what the front half is given */
 export interface FrontInput {
@@ -181,96 +160,25 @@ export function sourceUnitsOf(paper: Paper): Unit[] {
   return out
 }
 
-/** each page's text of a compile's PDF (the layout guard's check), or null where PDF.js cannot read it */
-async function pagesTextOf(
-  pdf: Uint8Array,
-  pdfjs: PreparePdfJs,
-  options: Record<string, unknown>,
-): Promise<string[] | null> {
-  const task = pdfjs.getDocument({ ...options, data: pdf.slice() })
-  try {
-    return await textOfPdf(await task.promise)
-  } catch (e) {
-    if (isMemoryError(e)) throw e
-    return null
-  } finally {
-    await task.destroy().catch(() => {})
-  }
-}
-
 /** The front half: the paper opened, its bibliography made where TeX must make it (or the .bbl the plan kept), the source's
  *  units handed out, the marked compile and its final pass (B) with arXiv's day and page count, and the instrument stated over
  *  B, with its four objects where TeX made them. A stored instrument is taken only for the original it was made with: the
  *  facts of A the marked compile read (its page count, its day, its banner) the same, else the paper is compiled anew */
 export async function prepareFront(input: FrontInput): Promise<FrontResult> {
-  let paper = opened(input.files)
-  const read = input.stored ? planOf(input.stored) : null
-  const f = input.original
-  const plan =
-    read && read.facts.pages === f.pages && read.facts.day === f.day && read.facts.banner === f.banner ? read : null
-  if (input.stored && !plan)
-    input.note('front', { stored: read ? 'made with another original: compiled anew' : 'unreadable: compiled anew' })
-  let bbl: { path: string; bytes: Uint8Array } | null = null
-  if (plan) {
-    if (plan.bbl) {
-      bbl = plan.bbl
-      paper = withBbl(paper, bbl)
-    }
-  } else if (bibliographyKept(paper) === null) {
-    input.stage('compiling')
-    const r = await madeBibliography(paper, { compile: input.compile, engines: input.engines })
-    if ('paper' in r) {
-      paper = r.paper
-      bbl = r.made
-    }
-    input.note('bibliography', 'paper' in r ? { entries: r.paper.units.length, ms: r.ms } : { kept: r.kept, ms: r.ms })
-  }
-  await input.units(unitsObjects(sourceUnitsOf(paper)))
-
-  let finalPdf: Uint8Array
-  let log: string
-  let options: Record<string, unknown>
-  let made: StoredInstrument | null = null
-  if (plan && input.stored) {
-    finalPdf = input.stored['b.pdf']
-    log = FROM_UTF8.decode(input.stored.log)
-    options = {
-      texts: unkeep(plan.texts),
-      inkless: unkeep(plan.inkless),
-      ...(plan.lineskip ? { lineskip: unkeep(plan.lineskip) } : {}),
-      ...(plan.decorated ? { decorated: unkeep(plan.decorated) } : {}),
-    }
-  } else {
-    input.stage('compiling')
-    const day = f.day
-    const m = await markedOfPaper(paper, {
-      compile: input.compile,
-      compileBudgetMs: null,
-      engines: input.engines,
-      pages: async () => f.pages,
-      ...(day ? { sourceDate: day } : {}),
-      textOf: (pdf) => pagesTextOf(pdf, input.pdfjs, input.documentOptions),
-    })
-    if ('refused' in m)
-      return {
-        ok: false,
-        why: 'cannot-typeset',
-        detail: `the marked compile: ${m.refused}${m.why ? `: ${m.why}` : ''}`.slice(0, 500),
-      }
-    const base = m.base
-    if (!base || !('pdf' in base) || !(base.pdf instanceof Uint8Array))
-      return {
-        ok: false,
-        why: 'cannot-typeset',
-        detail: `the final pass: ${base && 'refused' in base ? `refused: ${base.why ?? ''}` : 'none'}`.slice(0, 500),
-      }
-    finalPdf = base.pdf
-    log = m.log ?? ''
-    options = m.options ?? {}
-    // (a plan whose options do not read back as they are is not kept: a later prepare compiles again)
-    made = storedInstrumentOf({ finalPdf, log, options, bbl, facts: f })
-    if (!made) input.note('front', { plan: "not kept: the probe's answers do not read back as they are" })
-  }
+  const c = await compiledOf({
+    files: input.files,
+    original: input.original,
+    stored: input.stored,
+    compile: input.compile,
+    engines: input.engines,
+    pdfjs: input.pdfjs,
+    documentOptions: input.documentOptions,
+    stage: (s) => input.stage(s),
+    note: (n, d) => input.note(n, d),
+    units: (paper) => input.units(unitsObjects(sourceUnitsOf(paper))),
+  })
+  if (!c.ok) return c
+  const { paper, finalPdf, log, options, made } = c
   input.stage('units')
   const r = await instrumentOf({
     paper,

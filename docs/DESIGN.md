@@ -1063,8 +1063,10 @@ only how it meets the rest of the extension.
   go before the back half begins (`packages/engine/tests/front.test.ts`). The stored plan's codec (what a prepare stores
   beside B and how it is read back, the paper as opened) is `plan.ts`'s, a module of its own: a host that keys the stored
   instrument by the code its compile side runs names it there, never `prepareFront`, whose readers of what is stored
-  (`instrumentOf`, the units first) stay out of the key. The two halves' orchestration is `prepare.ts`'s, so a change of it
-  keys nothing anew.
+  (`instrumentOf`, the units first) stay out of the key. What decides the stored objects is `compiled.ts`'s `compiledOf`:
+  the paper opened, a stored instrument taken or not, the bibliography, the marked compile with every argument it is given,
+  and what is stored of it (`plan.ts` `storedInstrumentOf`); `prepareFront` hands it the units as a function and states the
+  instrument after it. The two halves' orchestration is `prepare.ts`'s, so a change of it keys nothing anew.
   **One front half, today's** (2026-11-09). A rebuilt front half (a typed source reader under TeX's definitions, a marks
   writer and a drafts-only compile plan, in `packages/engine/src/{source,marks,compile}/`) was run beside today's over
   the 87 corpus papers and deleted (its last state is the tag `f2-final-2026-11-09`): it stated none of the element

@@ -64,13 +64,14 @@ export {
   type FrontInput,
   type FrontResult,
   originalFactsOf,
-  type PreparePdfJs,
   type PrepareStage,
   prepareFront,
   type Refusal,
   type TreeDecision,
   treeOf,
 } from './front.ts'
+// (the stored half of the front half, a module of its own: what decides the instrument's stored objects, which a host keys them by)
+export { type CompiledInput, type CompiledResult, compiledOf, type PreparePdfJs } from './compiled.ts'
 // (the stored plan's codec, a module of its own: what a host keys the stored instrument by names it without the front half's
 // readers of what is stored. Its reader is storedPlanOf here: `planOf` is the wrap's, wrap.types.ts's, which an explicit
 // export of the same name would shadow)

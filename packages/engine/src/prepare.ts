@@ -10,15 +10,8 @@ import type { Head } from '@readarxiv/format'
 import { align, type Mapping } from './align/align.ts'
 import { type BundleObject, bundle } from './bundle/bundle.ts'
 import type { Doc } from './doc.ts'
-import {
-  type FrontHalf,
-  originalFactsOf,
-  type PreparePdfJs,
-  type PrepareStage,
-  prepareFront,
-  type Refusal,
-  treeOf,
-} from './front.ts'
+import type { PreparePdfJs } from './compiled.ts'
+import { type FrontHalf, originalFactsOf, type PrepareStage, prepareFront, type Refusal, treeOf } from './front.ts'
 import { type Compiled, type CompileRequest, classesOf } from './front.types.ts'
 import type { Instrument } from './instrument.ts'
 import { type Located, type LocateOptions, locate } from './locate/locate.ts'

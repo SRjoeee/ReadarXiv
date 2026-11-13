@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
 import * as deltaWire from '../src/delta-wire.types.ts'
+import * as compiled from '../src/compiled.ts'
 import * as entry from '../src/index.ts'
 import * as ink from '../src/ink.types.ts'
 import * as memory from '../src/memory.types.ts'
@@ -40,9 +41,10 @@ describe("the package's entry", () => {
     )
     expect(shadowed).toEqual([])
   })
-  test("the wrap's planOf is the entry's; the stored plan's reader is storedPlanOf, its writer storedInstrumentOf", () => {
+  test("the wrap's planOf is the entry's; the stored plan's reader is storedPlanOf, its writer storedInstrumentOf, the stored half compiledOf", () => {
     expect(entry.planOf).toBe(wrap.planOf)
     expect(entry.storedPlanOf).toBe(plan.planOf)
     expect(entry.storedInstrumentOf).toBe(plan.storedInstrumentOf)
+    expect(entry.compiledOf).toBe(compiled.compiledOf)
   })
 })
