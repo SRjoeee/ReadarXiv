@@ -83,6 +83,20 @@ export function classifyFont(name: string, fallbackFamily?: string): FontStyle {
   return { fam, bold, italic, caps, design, known, name: n }
 }
 
+// Each design's fonts by the PostScript name a PDF's font states (`ps`, its subset tag dropped). The names mirror several
+// sources, group by group:
+// - TeX Live 2025's fonts, a Type 1 file's FontName (as its map files, pdftex.map, name the file) or an OpenType file's name
+//   table (ID 6): the math of AMSFonts (MSAM, MSBM), Euler (EU…), wasy, lasy, rsfs, stmaryrd, bbold, bbm, doublestroke
+//   (DSROM, DSSS), MnSymbol, Latin Modern, TeX Gyre, STIX and STIX Two, XITS, Asana, newtx, newpx, txfonts, pxfonts,
+//   mathpazo (PazoMath, zplmi), fourier and mathdesign (Md…); URW's base 35 as TeX Live carries them, 1999's (NimbusRomNo9L,
+//   NimbusSanL, NimbusMonL, URWPalladioL, StandardSymL), 2017's (NimbusRoman, NimbusSans, NimbusMono, P052,
+//   StandardSymbolsPS) and nimbus15's (ztm-, zhv-, zco-); TeX Gyre Termes, Heros, Cursor and Pagella; Tempora; GNU FreeMono
+//   and FreeSans; Bera Sans Mono and DejaVu Sans Mono; Inconsolata; CMU; Linux Libertine, Biolinum and Libertinus; Domitian;
+//   XCharter and Bitstream's Charter (CharterBT); EB Garamond and URW Garamond; Utopia and Erewhon; Charis SIL.
+// - PDF's standard 14 fonts (ISO 32000-1 9.6.2.2): Times, Helvetica, Courier, Symbol, ZapfDingbats.
+// - Faces outside TeX Live, each by name: Arial, Liberation Sans, Liberation Mono, Cambria Math, Symbol MT, Dingbats,
+//   Bitstream Vera Sans Mono, Bitstream Charter, Palatino, Palladio, Book Antiqua, Adobe Garamond (AGaramond), Garamond.
+// Which of these names TeX Live 2025's map files hold is not checked against the compile image's tree here.
 const DESIGNS: readonly { design: string; cls: string; ps: RegExp; nfss?: RegExp; bold?: RegExp }[] = [
   // math: drawn as the layer's math face, set as the paper's math in TeX
   {
