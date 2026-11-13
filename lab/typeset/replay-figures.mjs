@@ -3,8 +3,9 @@
 // widths and rules as today's run had them (packages/typeset/tests/replay/figures.ts), each outcome projected as the dump
 // projects it and compared whole (unit, page, drawn, why, line: x0, baseline, turn, text). `--marks=today` sets a translation
 // by its advance, as today's did (figures.ts); else by its ink, as v2 does. Prints the counts and the classes of difference by
-// the first differing field, up to five cases a class, and the texts today left crowded over a stroke that the set's shrink
-// now draws (`cleared`) and their sets' others (`stepped`), each listed, which are no difference (figures.ts); writes nothing. Run from the worktree's root (heavy: through
+// the first differing field, up to five cases a class, and the texts today left crowded over a stroke that S.figures now draws
+// (`cleared`) and those drawn at their own width's factor where today's drew their set at its least, starting elsewhere for it
+// (`untied`), each listed, which are no difference (figures.ts); writes nothing. Run from the worktree's root (heavy: through
 // heavy-slot.sh test):
 //   node lab/typeset/replay-figures.mjs
 import { readdirSync } from 'node:fs'
@@ -19,7 +20,7 @@ const named = args.filter(a => !a.startsWith('--'))
 const pairs = named.length
   ? named
   : readdirSync(READER).filter(f => f.endsWith('.reader.json')).map(f => f.replace(/\.reader\.json$/, '')).sort()
-const count = { pairs: 0, figures: 0, equal: 0, differ: 0, extra: 0, cleared: 0, stepped: 0, threw: 0 }
+const count = { pairs: 0, figures: 0, equal: 0, differ: 0, extra: 0, cleared: 0, untied: 0, threw: 0 }
 const ruled = []
 const classes = new Map()
 const t0 = performance.now()
@@ -32,9 +33,9 @@ for (const pair of pairs) {
   count.differ += r.differ.length
   count.extra += r.extra.length
   count.cleared += r.cleared.length
-  count.stepped += r.stepped.length
+  count.untied += r.untied.length
   for (const x of r.cleared) ruled.push(`${pair} ${x} cleared`)
-  for (const x of r.stepped) ruled.push(`${pair} ${x} stepped`)
+  for (const x of r.untied) ruled.push(`${pair} ${x} untied`)
   for (const d of [...r.differ, ...r.extra]) {
     const cls = d.replace(/^ord \d+ p\d+/, '').replace(/^\d+\|\d+/, '').replace(/\[\d+\]/g, '[]').replace(/:.*/, '')
     const list = classes.get(cls) ?? classes.set(cls, []).get(cls)

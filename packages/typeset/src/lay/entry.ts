@@ -6,7 +6,7 @@
 // character no served face holds leaves it `served`), its setting (adapt.ts: U.blocks, U.decor, U.params, its flow's shared
 // rows), every flow laid and each pass page filled (layPagePrepared: L8-L11, a flow that throws its own; a table's cells each
 // laid by its own row and held or settled by group where one cannot be drawn, S.table.groups: the header, each column, the cells
-// spanning the same columns; a size tie's members at one size), and the members as drawn (D.display). The reader's leave
+// spanning the same columns; a flow's size tie's members at one size), and the members as drawn (D.display). The reader's leave
 // (Rules.leave: the unit kinds it shows untranslated) leaves a member of such a kind the original's (`left`), nothing of it
 // off and no row of it waited for. A babel name is set on its own (S.names over the part, nameOf), or, bound by the part to the
 // member after it in its flow, as that member's lead (lay/lead.ts). Each member's boxes on both panes (Laid.lit, lay/lit.ts: by
@@ -35,7 +35,7 @@ import { figuresOf } from './figures.ts'
 import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
 import { type LinkFate, type LinkOwner, linksOf } from './links.ts'
 import { inFrame, inkOfLine, litLaid, litOfA, pageBoxOf, runBoxOfA, widened } from './lit.ts'
-import { type CellTie, layPagePrepared, SAME, type UnitLay } from './page.ts'
+import { type CellTie, layPagePrepared, type UnitLay } from './page.ts'
 import { type TableGroup, tableGroups } from '../shared/table-groups.ts'
 import { carriedOf, tokenBand, tokenBox } from '../emit/sentences.ts'
 import { CJK, cjkClassRe } from '../breaker/script.ts'
@@ -477,30 +477,10 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       }
       read.set(m.ord, { rd, pieces, tokens, ...(paras ? { paras } : {}) })
     }
-  // (the figure texts, S.figures over the part: a face not loaded waited for as any)
-  let fig = figuresOf(part, figs, rows, { paper, R, metrics })
+  // (the figure texts, S.figures over the part, each at the size its own width needs: a face not loaded waited for as any)
+  const fig = figuresOf(part, figs, rows, { paper, R, metrics })
   faces.push(...fig.wait)
   for (const [ord, w] of fig.why) state.set(ord, w)
-  // (the factor of every figure's set whose figure texts the paragraph path lays in this call, S.figures' over the figure texts
-  // of the set's own page: the part of a later page holds that page's flows where it is a pass page (design-a §1.3 (b)), and
-  // every page's lay that holds the set caps them at it alike (I6). Read off this page's figure texts alone, a later page's lay
-  // found no factor and laid them at their own size: 2610.19159v1-ja p57's set at 0.66 by page 57's lay, at 1.0 by page 58's.
-  // Its faces waited for as any: the factor is measured. A set whose figure texts stood on two pages would take the least of
-  // its pages', whichever page lays it)
-  const plain = new Set(figs.map((m) => m.ord))
-  const setPages = new Set<number>()
-  for (const t of part.ties ?? [])
-    if (t.rule === 'size' && !t.ords.every((o) => plain.has(o)))
-      for (const m of figs) {
-        const p = m.lines[0]?.[0]
-        if (p !== undefined && p !== page && t.ords.includes(m.ord)) setPages.add(p)
-      }
-  const setScales = new Map(fig.scales)
-  for (const p of setPages) {
-    const there = figuresOf(part, figs, rows, { paper, R, metrics, page: p })
-    faces.push(...there.wait)
-    for (const [first, k] of there.scales) setScales.set(first, Math.min(k, setScales.get(first) ?? k))
-  }
   // (one state per call: a face not loaded leaves the whole page waiting, as a row not in does)
   if (faces.length) return waitAll(faces)
   // (each read member's setting, its flow taken from its end: a run-in head's follower is open only where the follower is set,
@@ -614,58 +594,19 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
     }
     if (cur.length) flows.push(cur)
   }
-  // (a figure's set, one size a group (the owner's rule of 2026-10-29): its figure texts the paragraph path lays (an element, lines
-  // joined, a label) capped at the factor S.figures set its labels at, the set's floor S.figures' (floorMin, which a set shrinks
-  // to as one); then its labels set again at the least scale one of those was laid at, where it is smaller)
+  // (a flow's size tie, one paragraph of TeX's at one scale. A figure's set, which the part states as a size tie too (the
+  // figure reading's sets), is read for no size: each of its texts at what its own width needs, a label S.figures sets and one
+  // the paragraph path lays (an element, lines joined, a label) alike, the owner's ruling of 2026-11-13 on a figure's sets
+  // (docs/PDF-READER.md §19.12, §18.54). A size tie holding a figure text is a figure's set: no figure text joins a flow)
   const figureOrds = new Set(members.filter((m) => m.kind === 'figure').map((m) => m.ord))
   const ties = [
     ...cellTies,
     ...(part.ties ?? []).flatMap((t) =>
-      t.rule !== 'size'
-        ? []
-        : [
-            {
-              rule: 'size' as const,
-              ords: t.ords,
-              ...(t.ords.some((o) => figureOrds.has(o))
-                ? { floor: R.floorMin, ...(setScales.has(t.ords[0]!) ? { least: setScales.get(t.ords[0]!)! } : {}) }
-                : {}),
-            },
-          ],
+      t.rule === 'size' && !t.ords.some((o) => figureOrds.has(o)) ? [{ rule: 'size' as const, ords: t.ords }] : [],
     ),
   ]
-  // (a figure's paragraph members laid at its labels' factor at the most from the page's first lay, the factor being known before
-  // it: the page laid once where none of them needs less, not laid and laid again at the cap by layPagePrepared)
-  const capOf = new Map<number, number>()
-  for (const t of ties)
-    if (t.rule === 'size' && t.least !== undefined && t.least < 1)
-      for (const o of t.ords) capOf.set(o, Math.max(t.least, t.floor ?? 0))
-  const laid = layPagePrepared(
-    page,
-    capOf.size
-      ? flows.map((f) =>
-          f.map((m) => {
-            const c = capOf.get(m.ord)
-            return c === undefined ? m : { ...m, P: { ...m.P, capScale: Math.min(m.P.capScale ?? 1, c) } }
-          }),
-        )
-      : flows,
-    ties,
-    R,
-  )
+  const laid = layPagePrepared(page, flows, ties, R)
   o.lays?.push(...laid.passed)
-  const fitOf = new Map(laid.fits)
-  const caps = new Map<number, number>()
-  for (const [first, k] of fig.scales) {
-    const tie = part.ties?.find((t) => t.rule === 'size' && t.ords[0] === first)
-    const least = Math.min(...(tie?.rule === 'size' ? tie.ords : []).flatMap((o) => fitOf.get(o) ?? []))
-    if (least < k - SAME) caps.set(first, least)
-  }
-  if (caps.size) {
-    for (const ord of fig.why.keys()) state.delete(ord)
-    fig = figuresOf(part, figs, rows, { paper, R, metrics, caps })
-    for (const [ord, w] of fig.why) state.set(ord, w)
-  }
   const byOrd = new Map(laid.members.map((x) => [x.ord, x]))
   // (each label drawn in another member's layout, by its owner: the pages its crop is cut from)
   const carriedLabels = new Map<number, Set<number>>()

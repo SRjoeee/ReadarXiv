@@ -2,7 +2,7 @@
 // group of, a face no slice serves, a face not loaded yet), the fit's anchors and floor, and the font's class.
 import { describe, expect, it } from 'vitest'
 import type { Face } from '../../src/breaker/tokens.ts'
-import { fitFigureSet, sameAsSource } from '../../src/shared/figure-fit.ts'
+import { fitFigure, sameAsSource } from '../../src/shared/figure-fit.ts'
 import { type FigureRow, figures, fontClassOf } from '../../src/shared/figures.ts'
 import type { Metrics } from '../../src/types.ts'
 
@@ -39,7 +39,6 @@ const row = (id: number, o: Partial<FigureRow> = {}): FigureRow => ({
   descent: -0.2,
   fill: -1,
   font: 'ABCDEF+NimbusSanL-Bold',
-  set: `f${id}`,
   before: 0,
   after: 0,
   ...o,
@@ -84,15 +83,15 @@ describe('S.figures', () => {
     expect(wait.wait).toEqual([['400 100px "axt-x"', 'Zeit']])
     expect(figures({ ...one, metrics: metricsOf(() => 'never') }).figures[0]!.why).toBe('served')
   })
-  it('draws a set at one size from its anchor, in its fill', () => {
+  it('draws each from its anchor at what its own width needs, in its fill', () => {
     const got = figures({
       ...base,
-      figures: [row(1, { fill: 0xff0000, set: 'f1' }), row(2, { anchor: 'end', set: 'f1', x: 300 })],
+      figures: [row(1, { fill: 0xff0000 }), row(2, { anchor: 'end', x: 300 })],
       unit: (id) => tr(id === 1 ? 'Zeit' : 'Zeitpunkt') as never,
       metrics: metricsOf(),
     })
-    // ("Zeitpunkt" 4.5 a size, 45 at 10 over 20: the set at 20/45 of its size, under the floor 0.6 for it alone: left unfit,
-    // and "Zeit" (20 at 10) at its own size)
+    // ("Zeitpunkt" 4.5 a size, 45 at 10 over 20: 20/45 of its size, under the floor 0.6: left unfit; "Zeit" (20 at 10) at its
+    // own size)
     expect(got.figures.map((f) => [f.drawn, f.why, f.size, f.fill])).toEqual([
       [true, null, 10, 0xff0000],
       [false, 'unfit', undefined, undefined],
@@ -154,28 +153,19 @@ describe('S.figures sets a translation on its anchor by its ink, as the breaker 
 
 describe('S.figures’ fit', () => {
   const f = { length: 20, size: 10, anchor: 'centre' as const, before: 4, after: 2 }
-  it('shrinks the set by the least factor any needs, a centred one over the narrower room either side', () => {
-    const got = fitFigureSet(
-      [
-        { f, width1: 2.4 },
-        { f: { ...f, anchor: 'end' as const }, width1: 2.2 },
-      ],
-      0.6,
-    )
-    expect(got[0]).toEqual({ size: 10, offset: -2, width: 24 })
-    expect(got[1]).toEqual({ size: 10, offset: -2, width: 22 })
+  it('fits each by its own line, a centred one over the narrower room either side, a right-aligned one into the room before it', () => {
+    expect(fitFigure({ f, width1: 2.4 }, 0.6)).toEqual({ size: 10, offset: -2, width: 24 })
+    expect(fitFigure({ f: { ...f, anchor: 'end' as const }, width1: 2.2 }, 0.6)).toEqual({
+      size: 10,
+      offset: -2,
+      width: 22,
+    })
   })
-  it('leaves one whose width needs a factor under the floor the original’s, and fits the rest without it', () => {
-    // (one 40 wide in a line of 20, no room: 0.5, under the floor 0.6; the other 24 wide in its centred line of 24: its size)
-    const got = fitFigureSet(
-      [
-        { f: { ...f, anchor: 'start' as const, after: 0 }, width1: 4 },
-        { f, width1: 2.4 },
-      ],
-      0.6,
-    )
-    expect(got[0]).toBeNull()
-    expect(got[1]).toEqual({ size: 10, offset: -2, width: 24 })
+  it('steps one wider than its line by what its width needs, and leaves one that needs a factor under the floor the original’s', () => {
+    // (one 30 wide in its centred line of 24: 0.8, drawn at 8 and centred; one 40 wide in a line of 20, no room: 0.5, under
+    // the floor 0.6)
+    expect(fitFigure({ f, width1: 3 }, 0.6)).toEqual({ size: 8, offset: -2, width: 24 })
+    expect(fitFigure({ f: { ...f, anchor: 'start' as const, after: 0 }, width1: 4 }, 0.6)).toBeNull()
   })
   it('reads a translation that says its source again as the same, and a font’s class by its name', () => {
     expect(sameAsSource('Time (s)', 'time s')).toBe(true)
