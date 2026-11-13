@@ -11,6 +11,7 @@ import { HUNK, hunkName } from '../align/align.ts'
 import { bornOf } from './born.ts'
 import { sourceText } from './facts.ts'
 import { inkOf } from './ink.ts'
+import { SET_AGAIN } from './members.ts'
 import type { Claims } from './ownership.ts'
 import { empty } from './place.ts'
 import { AUTHOR_KINDS, assign, eachBetweenPaired, field, type LocateOptions, piecesOf, type Work } from './work.ts'
@@ -46,6 +47,8 @@ export function unitsMadeOnA(w: Work, claims: Claims, o: LocateOptions): void {
       classesOf: o.classesOf,
       // (the source unit a glyph of A is: its member's claim, else its partner's owner on B)
       ownerOf: claims.unit,
+      // (the units whose only place is a paragraph that sets a unit again: phase 1's, placed nowhere of their own)
+      released: new Set(members.filter((mem) => mem.cause === SET_AGAIN).map((mem) => mem.unit)),
       artefact: figureArtefact,
       fixed: artefacts ? fixedFaces : null,
     })

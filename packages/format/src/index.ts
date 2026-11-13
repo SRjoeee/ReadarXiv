@@ -52,6 +52,7 @@ export {
   Split,
   Style,
   Tie,
+  toggleKind,
   Unit,
   Units,
   Why,

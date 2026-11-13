@@ -1,5 +1,7 @@
 // What a reader translates on a laid page (the reading options' "What to translate", docs/PDF-READER.md §15): five toggles over
-// the content classes, a unit's class a pure function of its kind, so that the server and every reader tell it alike. A toggle
+// the content classes, a unit's class a pure function of its toggleKind (format's: the block its source ties it to, Unit.of and
+// Placed.of, else its kind: a note the source writes in an author command's argument is the author block's, the owner's ruling
+// of 2026-11-13), so that the server and every reader tell it alike; every caller reads a unit's or a member's through it. A toggle
 // shows or hides what was made, in place: nothing is fetched or translated again. Carried from today's table
 // (src/pdf-reader/engine/rules/content-classes.mjs UNIT_CLASS, TOGGLE_DEFAULTS at baf2083e0): `always` and `never` are no toggle.
 import type { ClassName } from '../prefs.ts'
@@ -31,7 +33,7 @@ export const CLASS_DEFAULTS: Readonly<Record<ClassName, boolean>> = {
   names: false,
 }
 
-/** whether a unit of `kind` is shown translated under the toggles `classes` (over the defaults; none: the defaults) */
+/** whether a unit of toggleKind `kind` is shown translated under the toggles `classes` (over the defaults; none: the defaults) */
 export function kindShown(kind: string, classes?: Readonly<Partial<Record<ClassName, boolean>>> | null): boolean {
   const toggle = Object.hasOwn(TOGGLE_OF, kind) ? TOGGLE_OF[kind] : undefined
   if (!toggle) return true

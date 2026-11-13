@@ -696,7 +696,7 @@ describe('a bad unit is dropped and counted, the rest standing (BUNDLE 3\'s drop
     expect(await refusal(readUnitsChunk(otherPaper.bytes, { ref: otherPaper.ref, before: c0 }))).toMatchObject({ path: 'paper' })
     const otherVersion = forged('units', { ...b, paper: { id: PAPER.id, version: 2 } })
     expect(await refusal(readUnitsChunk(otherVersion.bytes, { ref: otherVersion.ref, before: c0 }))).toMatchObject({ path: 'paper' })
-    const otherPipeline = forged('units', { ...b, pipeline: '99' })
+    const otherPipeline = forged('units', { ...b, pipeline: '98' })
     expect(await refusal(readUnitsChunk(otherPipeline.bytes, { ref: otherPipeline.ref, before: c0 }))).toMatchObject({ path: 'pipeline' })
     for (const ids of [[1, 0], [1, 1.5], [1], [1, 2, 3], 'x']) {
       const bad = forged('units', { ...b, ids })
@@ -1081,7 +1081,7 @@ describe('the index', () => {
 
   it('binds the paper and the pipeline, and the chain: chunks not read one after the other', async () => {
     const t = await twoChunks()
-    expect(() => indexOf(t.rh, [{ ...t.read[0]!, pipeline: '99' }, t.read[1]!])).toThrow(expect.objectContaining({ message: expect.stringMatching(/pipeline/) }))
+    expect(() => indexOf(t.rh, [{ ...t.read[0]!, pipeline: '98' }, t.read[1]!])).toThrow(expect.objectContaining({ message: expect.stringMatching(/pipeline/) }))
     expect(() => indexOf(t.rh, [{ ...t.read[0]!, paper: { id: PAPER.id, version: 9 } }, t.read[1]!])).toThrow(expect.objectContaining({ message: expect.stringMatching(/paper/) }))
     // a second chunk read with no chunk before it (its `stands` a fresh record): not the chain
     const f = { bytes: t.chunks[1]!.bytes, ref: t.chunks[1]!.ref }

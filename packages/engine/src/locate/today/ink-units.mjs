@@ -1,11 +1,12 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, nothing else but nine changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
+// marked COPY, nothing else but ten changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
 // head's number of its phrase no folio, phrased; a unit's label's glyphs stated, `glyphs.label`; each kept run's glyphs by its
 // placeholder stated, `glyphs.runs`; an e-mail address or an identifier a kept run of its own, addressed, and a group of local parts before their
 // domain one over its words and lines, groupedAddresses; a formula's TeX specials written as TeX sets
 // them, never stripped, MATH_SPECIAL; a script a kept run whatever its face, written as TeX writes one, a label a first line's
 // leading raised scripts, no run over a line's break at a script, scriptsOf; a line of no text word the next of its paragraph's unit;
-// a paragraph TeX ended between two lines parts them; a display TeX set one kept block, its number with it, keptUnitsOf): run
+// a paragraph TeX ended between two lines parts them; a display TeX set one kept block, its number with it, keptUnitsOf; rule 8 by
+// the source's ties, no share): run
 // by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file stays the production prepare's until the cut-over.
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
@@ -52,9 +53,12 @@
 //      segments its glyphs' boxes, a head's line centred where TeX centred it on the page;
 //   7. what it owns: its text glyphs `u<id>`, its placeholders' `u<id>.p` (own.mjs's groups), claimed in the wrap
 //      (claimInk), every one a glyph no unit owned;
-//   8. a block of notes or orphans whose letters are mostly an author unit's words (NAMES_SHARE) is its names (`inknames`): of
-//      the names toggle, as the author block is, not always translated (REVTeX's names its marks do not own); so is one that
-//      echoes a unit of the author block (rule 5: an affiliation REVTeX prints from its own lists, its source unit laid nowhere);
+//   8. a block of notes or orphans that holds whole the letters of an author or affiliation unit with no place of its own on A is
+//      its names (`inknames`): of the names toggle, as the author block is, not always translated (REVTeX's names its marks do
+//      not own); so is one that echoes a unit of the author block (rule 5: an affiliation REVTeX prints from its own lists, its
+//      source unit laid nowhere); and one that holds whole an author command's argument a macro stores (`stored`: ICML's footnote
+//      of its places) is the names' wherever it stands (CHANGED: today's read a block as the names where 60 % of its letters
+//      were an author unit's words, NAMES_SHARE);
 //   9. its style: the weight, slant and fill most of its text glyphs hold is the unit's, which the reader measures on them; a
 //      run of words in another is a group of the commands that set it (`\textbf{`, `\textmd{`, `\textit{`, `\textup{`,
 //      `\textcolor[HTML]{…}{`), as a source unit's are, so that its translation keeps each run's (a theorem's bold head before
@@ -78,8 +82,6 @@ import { ADDRESS_GROUP, classifyFont, classOf, EMAIL_ADDRESS, identifiersIn, lin
 
 /** the ledger's classes made units, and each one's kind (rules/content-classes.mjs UNIT_CLASS gives the class back) */
 export const INK_KIND = Object.freeze({ heads: 'inkheads', contents: 'inkcontents', notes: 'inknotes', orphan: 'inkorphan', names: 'inknames', references: 'inkreferences' })
-/** a block of the names an author unit holds: this share of its letters, at least, in words of an author unit's (rule 8) */
-export const NAMES_SHARE = 0.6
 /** a block's next line: within this many of its size below the one before */
 export const BLOCK_DY = 1.75
 /** a paragraph's next line, where TeX's paragraphs are marked (`paras`): within this many of its size below the one before */
@@ -469,7 +471,7 @@ const ECHO_ORDER = { heading: 0, caption: 1 }
  * characters; locate states a member's label from the glyphs it is told, as a source unit's, 2610.22065v1 p1's "2" erased with
  * the translated affiliation and drawn by nobody)
  */
-export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
+export function inkUnitsOf(pages, ledger, { units = null, from = null, unplaced = null, stored = null } = {}) {
   const fams = new Map(), faces = new Map()
   const base = Number.isInteger(from) && from >= (units?.length ?? 0) ? from : units?.length ?? 0
   // the source units an ink unit may echo, by their letters
@@ -569,20 +571,32 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
   const out = []
   // (the ink units an ink unit may echo, by their letters: each one echoing none, rule 5)
   const inkEchoOf = new Map()
-  // (the author units' words: a block whose letters are an author unit's names is that unit's, of the names toggle, rule 8)
-  const authorWords = new Set()
-  if (units) for (const u of units) if (u?.kind === 'author') for (const w of utf8(u.pieces.filter(p => p.t === 'text').map(p => p.s ?? '').join(' ')).split(/[^\p{L}]+/u)) { const s = spellOf(w); if (s.length >= 2) authorWords.add(s) }
-  const namesOf = lines => {
-    if (!authorWords.size) return false
-    let all = 0, named = 0
-    for (const l of lines) for (const w of l.words) if (w.fam === 'text') for (const part of w.text.split(/[^\p{L}]+/u)) { const s = spellOf(part); if (!s) continue; all += s.length; if (authorWords.has(s)) named += s.length }
-    return all > 0 && named >= NAMES_SHARE * all
+  // (CHANGED, rule 8 by the source, no share (the coordinator's ruling of 2026-11-13, lane f2-author): a block of notes or orphans
+  // that holds whole the letters of an author or affiliation unit with no place of its own on A (`unplaced`, locate's: one that
+  // owns no glyph of A, or whose only place is a paragraph that sets a unit again) is its names, of the names toggle: what TeX
+  // set of the block's own text where no unit's marks stand (REVTeX's names, acmart's names a paper's own \@mkauthors types out);
+  // and one that holds whole the letters of an author command's argument a macro stores (`stored`: the front end's held,
+  // ICML's \icmlaffiliation that \printAffiliationsAndNotice sets in its footnote) is the names' wherever it stands, `stored`.
+  // "Holds whole": the unit's letters (spellOf of its text pieces) are a run of the block's text words' letters that starts at
+  // a word's start and ends at a word's end, a class's separator between names ("and", a comma) no part of them. Today's read a
+  // block as the names where 60 % of its letters were in an author unit's words, NAMES_SHARE)
+  const holdsWhole = (lines, spells) => {
+    if (!spells?.length) return false
+    let all = ''
+    const starts = new Set(), ends = new Set()
+    for (const l of lines) for (const w of l.words) if (w.fam === 'text') { const s = spellOf(w.text); if (!s) continue; starts.add(all.length); all += s; ends.add(all.length) }
+    for (const sp of spells) for (let k = all.indexOf(sp); k >= 0; k = all.indexOf(sp, k + 1)) if (starts.has(k) && ends.has(k + sp.length)) return true
+    return false
   }
+  const spells = list => (list ?? []).map(u => spellOf(utf8(u.pieces.filter(p => p.t === 'text').map(p => p.s ?? '').join('')))).filter(Boolean)
+  const unplacedSpells = spells(unplaced), storedSpells = spells(stored)
   for (const lines of groups) {
     // (an entry of no text word, a URL alone: nothing to translate, the original's)
     if (lines[0].cls === 'references' && !lines.some(l => l.words.some(textual))) continue
     const id = base + out.length
-    let cls = (lines[0].cls === 'orphan' || lines[0].cls === 'notes') && namesOf(lines) ? 'names' : lines[0].cls
+    const noted = lines[0].cls === 'orphan' || lines[0].cls === 'notes'
+    const held = noted && holdsWhole(lines, storedSpells)
+    let cls = held || (noted && holdsWhole(lines, unplacedSpells)) ? 'names' : lines[0].cls
     // pieces: text words joined, a run of math or typewriter words a placeholder (rule 4), a run of words in another weight, slant
     // or colour than the unit's a group that sets it (rule 9)
     const pieces = [], phs = [], labelled = []
@@ -674,7 +688,7 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     if (e !== undefined && (cls === 'orphan' || cls === 'notes') && unitClass(units[e]) === 'names') cls = 'names'
     const textGlyphs = lines.flatMap(l => l.words.filter(w => w.fam === 'text').flatMap(w => w.gs.map(g => [l.page, g])))
     if (echo === null && spell.length >= 4 && !inkEchoOf.has(key)) inkEchoOf.set(key, out.length)
-    out.push({ id, kind: INK_KIND[cls], cls, echo, pieces: own, glyphs: { text: textGlyphs, ph: kept.flatMap(p => p.gs), runs: kept.map(p => [p.k, p.gs]), ...(labelled.length ? { label: labelled } : {}) }, rows: rowsOf(id, INK_KIND[cls], cls, lines, kept, own.length, pages) })
+    out.push({ id, kind: INK_KIND[cls], cls, echo, ...(held ? { stored: true } : {}), pieces: own, glyphs: { text: textGlyphs, ph: kept.flatMap(p => p.gs), runs: kept.map(p => [p.k, p.gs]), ...(labelled.length ? { label: labelled } : {}) }, rows: rowsOf(id, INK_KIND[cls], cls, lines, kept, own.length, pages) })
   }
   return out
 }

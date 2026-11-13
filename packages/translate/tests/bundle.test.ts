@@ -28,6 +28,7 @@ const FULL: FormatUnit = {
   depth: 2,
   sentences: true,
   kept: true,
+  of: 'author',
   content: [
     { t: 'text', s: 'We fix ' },
     { t: 'el', id: 'm', kind: 'math', src: '$\\theta$', keys: ['eq:theta'] },

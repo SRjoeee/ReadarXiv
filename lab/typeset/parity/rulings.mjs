@@ -675,6 +675,26 @@ export const RULINGS = [
       return `today ends its line before a boundary between runs on p${c.page} at ${c.baseline} in the breaker's hyphen ("…${c.text.slice(-24)}")`
     },
   },
+  {
+    id: 'AN',
+    title: "a note of the author block follows the block's option (the owner, 2026-11-13)",
+    verdict: "the owner's ruling",
+    date: '2026-11-13',
+    seen: "the owner's ruling of 2026-11-13 (STATE 01:03; design-display-2026-11-13.md 2b and its amendment in section 7): text the paper's code ties to the author block follows the names option both ways, a region of its own is body text; his look at staging the same day, 2611.03953v2-zh p1's correspondence footnote drawn in two translations across the switch; the rule as built: lane f2-author, PDF-READER §18.71",
+    words: null,
+    example:
+      "1706.03762v7-zh p1: its three \\thanks of \\author{…} (\"Equal contribution…\", \"Work performed while at Google Brain.\", \"…Google Research.\") drawn as the original with the names off, where today translates them; 2611.03953v2-zh p1: ICML's footnote of its stored places",
+    condition:
+      "shown: v2 leaves the unit the original's because the reader's options leave it (its Page member `left`), and the part states the member a note its source ties to the author block: `of: 'author'` (a note written in an author command's argument, or one the paper's bindings attach to an author: Placed.of), or an ink unit of the names (`inknames`) the lay leaves so (the text a class sets of an author command's stored argument, ICML's footnote). With the names option on the note is translated and nothing is covered; any other unit v2 leaves the original's counts as before",
+    holds(d, x) {
+      if (d.flag !== 'shown' || !d.unit) return false
+      const u = x.unit(d)
+      if (u?.part === null || u?.part === undefined) return false
+      const f = x.member(u.part)
+      return x.laid(u.part)?.state === 'left' && (f?.of === 'author' || f?.kind === 'inknames')
+    },
+    says: (d, x) => `the part states it ${x.member(x.unit(d).part)?.of === 'author' ? "a note of the author block (Placed.of)" : 'an ink unit of the names'}; the names option off`,
+  },
 ]
 /** the measures that read a unit's content lost or changed against the original: a unit none of them finds v2 farther on (worse,
  *  or covered) on any of its pages is whole (the rulings L2 and S4) */

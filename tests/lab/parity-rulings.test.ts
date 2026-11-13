@@ -457,6 +457,34 @@ describe("T1: a line of an algorithm's pseudocode kept as the original (his ruli
   })
 })
 
+describe("AN: a note of the author block follows the block's option (the owner, 2026-11-13)", () => {
+  // (1706.03762v7-zh p1: today translates the \thanks of \author{…}, v2 leaves it the original's with the names off; the part
+  // states the member `of: 'author'`, v2.mjs's facts carry it)
+  const page = (o: { fact?: object; member?: object } = {}) => {
+    const { page: p } = judged(
+      {
+        diffs: [worse('shown', 't2 footnote', null, 'translated', 'none', [null, null])],
+        units: [{ key: 't2', kind: 'footnote', part: 2, align: 'j', sides: { today: side(1, 8, 8, 1) } }],
+      },
+      {
+        v2: { facts: { [N]: { members: [{ ord: 2, kind: 'footnote', ...(o.fact ?? { of: 'author' }) }], ties: [] } }, pages: { [N]: { members: [{ ord: 2, state: 'left', off: 0, lines: [], ...(o.member ?? {}) }] } } },
+        rec: rec(),
+      },
+    )
+    const d = (p.diffs as Diff[])[0]!
+    return [d.worse, d.covered ?? null]
+  }
+  it('left by the options, the part stating it a note of the block or an ink unit of the names: covered by AN', () => {
+    expect(page()).toEqual([false, 'AN'])
+    expect(page({ fact: { kind: 'inknames' } })).toEqual([false, 'AN'])
+  })
+  it('no such statement, or v2 not leaving it (laid, or the original for another reason): worse', () => {
+    expect(page({ fact: {} })).toEqual([true, null])
+    expect(page({ member: { state: 'none' } })).toEqual([true, null])
+    expect(page({ member: { state: 'laid', lines: [[100, 72, 300, []]] } })).toEqual([true, null])
+  })
+})
+
 describe('T4: figure texts held whole as the original for a decorated word, counted fewer than today (his answer to W11 (a))', () => {
   // (2608.06701v1-zh p1: today draws 45 figure texts translated, v2 24; v2's prepare holds 15 figure members whole for a decorated
   // word in their label (the dump's `keptBy: 'decorated'`), in which 21 of today's drawn texts stand)
@@ -708,9 +736,10 @@ describe('the rulings file', () => {
       expect(r.title.length).toBeGreaterThan(10)
       // (his verdicts: accepted, taken, option 1 (T2), agreed with the recommendation (T4); T1 his ruling of 2026-11-08 as the
       // record states it, relayed in English)
-      // (WB the coordinator's ruling of 2026-11-13 on the owner's report of the day before, the law it rests on built in B.break)
-      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : r.id === 'T1' ? r.verdict === 'pseudocode kept' : r.id === 'WB' ? r.verdict === "the coordinator's ruling" : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528', '\u540c\u610f\u4f60\u7684\u5efa\u8bae'].includes(r.verdict)).toBe(true)
-      expect(r.date).toBe(r.id === 'T1' ? '2026-11-08' : r.id === 'WB' ? '2026-11-13' : '2026-11-12')
+      // (WB the coordinator's ruling of 2026-11-13 on the owner's report of the day before, the law it rests on built in B.break;
+      // AN the owner's ruling of 2026-11-13 on the author block's notes, built in lane f2-author)
+      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : r.id === 'T1' ? r.verdict === 'pseudocode kept' : r.id === 'WB' ? r.verdict === "the coordinator's ruling" : r.id === 'AN' ? r.verdict === "the owner's ruling" : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528', '\u540c\u610f\u4f60\u7684\u5efa\u8bae'].includes(r.verdict)).toBe(true)
+      expect(r.date).toBe(r.id === 'T1' ? '2026-11-08' : r.id === 'WB' || r.id === 'AN' ? '2026-11-13' : '2026-11-12')
       expect(r.example.length).toBeGreaterThan(20)
       expect(r.condition === null ? r.unstated : r.condition).toBeTruthy()
       expect(r.condition === null).toBe(r.holds === null)

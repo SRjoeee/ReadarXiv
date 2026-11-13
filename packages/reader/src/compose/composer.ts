@@ -35,7 +35,7 @@
 // - **The pages ahead**: once the rows have ended, the AHEAD_PAGES pages past the near ones the way the reader moves, laid and
 //   drawn into drawings kept off the view at background priority while the view's own pages hold nothing, so that the reader
 //   reaching one finds it put back at once.
-import type { Part, Placed, Row } from '@readarxiv/format'
+import { type Part, type Placed, type Row, toggleKind } from '@readarxiv/format'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import type { ClassName } from '../prefs.ts'
 import type { Kit } from '../pdfjs/kit.ts'
@@ -211,8 +211,8 @@ export function createComposer(o: ComposerOptions): Composer {
   const pages = new Map<number, Page>()
   const commits = new Map<number, Commit>()
   const members = new Map<number, Placed>()
-  /** each unit's kind, by its id (the toggles read it) */
-  const kindOf = new Map<string, string>()
+  /** each unit's toggleKind (format's: the block its source ties it to, else its kind), by its id: what the toggles read */
+  const toggleOf = new Map<string, string>()
   const recs = new Map<number, PageRec>()
   const rec = (n: number): PageRec => {
     let P = recs.get(n)
@@ -257,7 +257,7 @@ export function createComposer(o: ComposerOptions): Composer {
   // reads as no translation (it stays the original's), whatever was translated
   const rowsView: Rows = {
     get(id) {
-      const k = kindOf.get(id)
+      const k = toggleOf.get(id)
       if (k !== undefined && !kindShown(k, classes)) return { id, ok: false, why: { kind: 'refused' } } as Row
       return rows?.get(id)
     },
@@ -417,7 +417,7 @@ export function createComposer(o: ComposerOptions): Composer {
             for (const m of f)
               if (!members.has(m.ord)) {
                 members.set(m.ord, m)
-                if (typeof m.text === 'string') kindOf.set(m.text, m.kind)
+                if (typeof m.text === 'string') toggleOf.set(m.text, toggleKind(m))
               }
         return part
       })
@@ -713,7 +713,7 @@ export function createComposer(o: ComposerOptions): Composer {
     if (stack.showing(n)?.startsWith('laid:')) return marks.unmark(n)
     const boxes: MarkBox[] = []
     for (const m of members.values()) {
-      if (m.why === 'unlocated' || m.why === 'page' || !kindShown(m.kind, classes)) continue
+      if (m.why === 'unlocated' || m.why === 'page' || !kindShown(toggleKind(m), classes)) continue
       if (typeof m.text === 'string' && rowsView.kept?.(m.text)) continue
       if (rows.done && (typeof m.text !== 'string' || !rowsView.get(m.text)?.ok)) continue
       let x0 = Number.POSITIVE_INFINITY,
@@ -974,7 +974,7 @@ export function createComposer(o: ComposerOptions): Composer {
       if (layer?.part !== next?.part) {
         parts.clear()
         members.clear()
-        kindOf.clear()
+        toggleOf.clear()
       }
       layer = next
       unrows?.()

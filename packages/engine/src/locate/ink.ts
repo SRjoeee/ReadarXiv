@@ -95,6 +95,9 @@ export interface InkInput {
   /** the source unit a glyph of A (global) is, -1 none: where it is given, the author block under the title is read
    *  (author-block.ts) */
   ownerOf?: ((a: number) => number) | undefined
+  /** the source units whose only place on A is a paragraph that sets a unit again (members.ts SET_AGAIN): no place of their own,
+   *  as one that owns no glyph of A has none (the ink units' rule 8, inkUnitsOf `unplaced`) */
+  released?: ReadonlySet<number> | undefined
   /** the faces the document sets at one pitch (facts.ts fixedFacesOf), where Rule 1 keeps such text: a figure's run goes into
    *  or out of none of them (figure-text.mjs figureUnitsOf `fixed`, PDF-READER §18.22) */
   fixed?: ReadonlySet<string> | null | undefined
@@ -204,6 +207,22 @@ export function inkOf(o: InkInput): {
   const units: TodayUnit[] = ins.units.map((u) =>
     u.kind === 'name' ? null : { kind: u.kind, pieces: flatOf(u.content) },
   )
+  // (the author block's own text where TeX set it apart from its units' marks, the ink units' rule 8 by the source: the author
+  // and affiliation units with no place of their own on A, none of A's glyphs theirs or their only place a paragraph that sets
+  // a unit again; and the author commands' arguments a macro stores, whose ink is the ink units', `stored`)
+  const placed = new Set<number>()
+  if (o.ownerOf)
+    inkA.pages.forEach((pg, i) => {
+      for (let j = 0; j < pg.glyphs.length; j++) placed.add(o.ownerOf!((m.offA[i] as number) + j))
+    })
+  const unplaced = ins.units.flatMap((u, i) =>
+    (u.kind === 'author' || u.kind === 'affiliation') &&
+    u.name === undefined &&
+    (!placed.has(i) || !!o.released?.has(i))
+      ? [units[i]!]
+      : [],
+  )
+  const stored = ins.units.flatMap((u, i) => (u.stored ? [units[i]!] : []))
   // ---- the author block under the title (author-block.ts), read twice: before the figure texts, so that a framed title box's
   // block is no figure's text (TeX drew it in the picture its title is in); and once the ink units are cut, from its first name
   // (an ink unit rule 8 made of the names) on
@@ -298,7 +317,7 @@ export function inkOf(o: InkInput): {
     return out
   })
   const ledger = ledgerOf(pages, { glyphs: ledgerOwn }, { units, floats: ins.units.map((u) => u.float ?? null) })
-  const ink = inkUnitsOf(pages, ledger, { units, from: base })
+  const ink = inkUnitsOf(pages, ledger, { units, from: base, unplaced, stored })
   const namedAt = new Set<string>()
   for (const u of ink)
     if (u.kind === 'inknames') for (const [p, g] of [...u.glyphs.text, ...u.glyphs.ph]) namedAt.add(`${p - 1}|${g}`)
@@ -763,8 +782,10 @@ const BLOCK_TAKES = new Set(['inknotes', 'inkorphan', 'inknames'])
  * The ink units of the author block under the title its names, and none elsewhere (the owner's ruling of 2026-11-09: the names
  * toggle governs the block under the title, whole, and nothing else). Inside it, an ink unit all of whose glyphs are the
  * block's ink is of the names (`inknames`), a note's or an orphan's of today's ledger as much as one rule 8 named; outside it, one
- * rule 8 named for an author unit's words or an echo of one (acmart's reference format, a running line printed from the same data)
- * is its ledger line's class again, the text it is
+ * rule 8 named for the letters of an author unit with no place of its own, or an echo of one (acmart's reference format, a
+ * running line printed from the same data), is its ledger line's class again, the text it is; but one that holds an author
+ * command's stored argument whole (`stored`: ICML's footnote of the places \icmlaffiliation stores) stays the names' where it
+ * stands, the text the source ties to the block (the owner's ruling of 2026-11-13)
  */
 function nameBlock(
   ink: TodayInkUnit[],
@@ -775,7 +796,9 @@ function nameBlock(
   for (const l of ledger.lines as { page: number; cls: string; gs: number[] }[])
     for (const g of l.gs) lineCls.set(`${l.page}|${g}`, l.cls)
   for (const u of ink) {
-    if (!BLOCK_TAKES.has(u.kind)) continue
+    // (an ink unit of the text an author command's stored argument holds is the block's wherever TeX sets it: ICML's footnote of
+    // its places, at the column's foot, rule 8's `stored`)
+    if (!BLOCK_TAKES.has(u.kind) || u.stored) continue
     const gs = [...u.glyphs.text, ...u.glyphs.ph]
     const inside = gs.length > 0 && gs.every(([p, g]) => inBlock(p, g))
     let cls = u.cls

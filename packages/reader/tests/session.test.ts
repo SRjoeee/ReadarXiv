@@ -22,6 +22,7 @@ import {
   type Ticket,
   translationShown,
   WAIT_MAX_MS,
+  wanted,
 } from '../src/session/machine.ts'
 import { createRuntime, type Handlers } from '../src/session/runtime.ts'
 import { layerOf, paperDoc, prepareOf, runOf } from './helpers/doc.ts'
@@ -30,7 +31,9 @@ const PREFS: Prefs = { ...DEFAULTS, display: 'bilingual', target: 'zh-Hans', syn
 const ref = (c: string): Ref => ({ path: `p/2600_00001v1/x/${c.repeat(64)}`, sha256: c.repeat(64), bytes: 10 })
 const CATALOG = ref('a'),
   UNITS = [ref('b')]
-/** a head over original `o`, its add-on `addOn` (null: the add-on was refused, nothing can be drawn) */
+/** objects as a head names them, each at its digest in its catalog's directory (machine.ts layerUnitsOf) */
+const named = (refs: Ref[]) => refs.map(({ path, sha256 }) => ({ path, sha256 }))
+/** a head over original `o`, its add-on `addOn` (null: the add-on was refused, nothing can be drawn), naming the layer's units */
 const headOf = (o = 'o', addOn: boolean = true) =>
   ({
     format: 1,
@@ -38,7 +41,7 @@ const headOf = (o = 'o', addOn: boolean = true) =>
     made: 'x',
     original: { bytes: 9, sha256: o.repeat(64), chunk: 65536, chunks: '' },
     addOn: addOn ? { digest: 'd'.repeat(64), bytes: 10 } : null,
-    units: [],
+    units: UNITS.map((u) => u.sha256),
     parts: [],
   }) as unknown as Head
 const HEAD = headOf()
@@ -402,7 +405,7 @@ describe('the session: the open, wherever the document lacks what the visit need
     expect(m.has('link')).toBe(true)
     m.feed({ i: 'code.loaded', t: m.live('code') }, { i: 'head', digest: CATALOG.sha256, head: HEAD })
     expect(m.has('composed')).toBe(true)
-    expect([...resources(m.s).values()]).toContainEqual({ slot: 'rows', target: ZH, from: 'here', units: UNITS })
+    expect([...resources(m.s).values()]).toContainEqual({ slot: 'rows', target: ZH, from: 'here', units: named(UNITS) })
     m.feed({ i: 'open.answered', t: m.live('open'), doc: stale(2, { prepare: prep('running', { attempt: 2 }) }) })
     expect(opens(m)).toEqual([])
     expect(m.has('link')).toBe(true)
@@ -431,8 +434,8 @@ describe('the session: the open, wherever the document lacks what the visit need
     // (the open's answer carries the new build's layer: a prepare another visit asked ended meanwhile)
     m.feed({ i: 'open.answered', t: m.live('open'), doc: rebuilt(2) })
     expect(m.has('rows')).toBe(false)
-    m.feed({ i: 'head', digest: CATALOG2.sha256, head: HEAD })
-    expect([...resources(m.s).values()]).toContainEqual({ slot: 'rows', target: ZH, from: 'here', units: NEW })
+    m.feed({ i: 'head', digest: CATALOG2.sha256, head: { ...HEAD, units: NEW.map((u) => u.sha256) } })
+    expect([...resources(m.s).values()]).toContainEqual({ slot: 'rows', target: ZH, from: 'here', units: named(NEW) })
     const same = hereNow()
     same.feed({ i: 'paper', t: same.live('link'), doc: stale(1) })
     same.feed({ i: 'code.loaded', t: same.live('code') }, { i: 'head', digest: CATALOG.sha256, head: HEAD })
@@ -1005,6 +1008,52 @@ describe('the session: the rows', () => {
     expect([...resources(r.s).values()]).toContainEqual(expect.objectContaining({ slot: 'rows', from: 'here' }))
     r.feed({ i: 'cmd.set', prefs: { target: 'ja' } })
     expect(r.has('link') || r.has('open')).toBe(false)
+  })
+})
+
+describe("the session: the layer's units, those its head names (staging RB1, 2026-11-13: the contents listed every heading twice, the view counted every unit twice)", () => {
+  /** our server's document as the website writes it: every Units object the prepare told, in `prepare.units` and `layer.units`
+   *  alike, the source's (told before the marked compile: the same units under the same ids, in other bytes) ahead of those the
+   *  head names; and its run's units its own word */
+  const SOURCE = ref('s')
+  const TOLD = [SOURCE, ...UNITS]
+  const told = (rev: number) =>
+    doc(rev, {
+      prepare: prepareOf({ state: 'done', why: null, retryAt: null, stage: null, units: TOLD }),
+      layer: layerOf({ catalog: CATALOG, units: TOLD, format: 1, stale: false }),
+      targets: { [ZH]: run('done', { units: TOLD }) },
+    })
+  /** a visit over that document, the original open, the layer's code in; its head read where `head` is given */
+  const visit = (o: { here?: boolean; head?: Head; doc?: Doc } = {}) => {
+    const m = machine({ here: !!o.here })
+    const d = o.doc ?? told(1)
+    m.feed(
+      { i: 'original.opened', t: m.live('original'), pages: 4, bytes: 9 },
+      { i: 'panes.drawn' },
+      { i: 'paper', t: m.live('link'), doc: d },
+    )
+    m.feed({ i: 'code.loaded', t: m.live('code') })
+    if (o.head) m.feed({ i: 'head', digest: d.layer?.catalog.sha256 ?? '', head: o.head })
+    return m
+  }
+  it("the objects wanted: the catalog until its head is read, then the units it names, each at its digest in the catalog's directory, as its parts are; never the source's the document names ahead of them", () => {
+    expect(wanted(visit().s)).toEqual([CATALOG])
+    const m = visit({ head: HEAD })
+    expect(wanted(m.s)).toEqual(named(UNITS))
+    expect(wanted(m.s).some((u) => u.sha256 === SOURCE.sha256)).toBe(false)
+    // (a head in a directory of its own: its units read there, whatever paths the document gives them)
+    const moved = { ...CATALOG, path: `p/2600_00001v1/y/${CATALOG.sha256}` }
+    const n = visit({ head: HEAD, doc: { ...told(1), layer: layerOf({ catalog: moved, units: TOLD }) } })
+    expect(wanted(n.s)).toEqual([{ path: `p/2600_00001v1/y/${UNITS[0]?.sha256}`, sha256: UNITS[0]?.sha256 }])
+  })
+  it('rows made here are made of the units the head names, each object once: none before a head that draws', () => {
+    expect(visit({ here: true }).has('rows')).toBe(false)
+    const m = visit({ here: true, head: HEAD })
+    expect([...resources(m.s).values()]).toContainEqual({ slot: 'rows', target: ZH, from: 'here', units: named(UNITS) })
+  })
+  it("our server's rows keep its word for what its run was given (the document's list): its needs and its runs compare to it", () => {
+    const m = visit({ head: HEAD })
+    expect([...resources(m.s).values()]).toContainEqual({ slot: 'rows', target: ZH, from: 'server', units: TOLD })
   })
 })
 
