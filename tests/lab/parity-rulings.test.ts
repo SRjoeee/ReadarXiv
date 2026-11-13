@@ -818,6 +818,85 @@ describe('WB: no word is cut by a boundary between runs (the coordinator\'s ruli
   })
 })
 
+describe("CB: a table cell laid in its column's box at the largest size it holds (the owner's decision, 2026-11-13)", () => {
+  // (2611.03953v2-zh p13 t206, "MOPD (TA init)" in its Method column 208.15-274.66: v2 at 0.9 of 8.97, its translation ending in a
+  // full-width closing parenthesis whose blank half hangs past the column, its ink inside; today at 0.8 in its own width. And
+  // 1512.03385v1-zh p12 t309, "val" centred in its column 455.33-471.02: v2 at 0.9, today at 1.0 run on past the column)
+  type O = { column?: number[] | null; side?: number[]; held?: boolean; state?: string; v2?: Line; today?: Line; box?: number[]; ord?: number }
+  const ctx = (o: O) => {
+    const ord = o.ord ?? 206
+    const box = o.box ?? [208.15, 274.66]
+    return {
+      v2: {
+        today: { [ord]: { today: ord } },
+        facts: {
+          [N]: {
+            members: [
+              {
+                ord,
+                kind: 'cell',
+                align: 'l',
+                style: { size: 8.97 },
+                lines: [o.held ? [N, 0, box[0], box[0] + 50, 333.93, 341, 332, 48, 563, 1, 8.97] : fact(box[0], box[0] + 50, 333.93, 8.97)],
+                ...(o.column === null ? {} : { column: o.column ?? box }),
+                side: o.side ?? [box[0] - 150, box[1] + 20],
+              },
+            ],
+            ties: [],
+          },
+        },
+        pages: { [N]: { members: [{ ord, state: o.state ?? 'laid', off: 1, lines: [[333.93, box[0], box[1], []]] }] } },
+      },
+      rec: rec(
+        { units: [{ id: ord, lines: [o.today ?? drawn(333.93, 208.15, 267.4, 7.18, 'MOPD\uff08TA \u521d\u59cb\u5316\uff09')] }] },
+        { units: [{ id: ord, lines: [o.v2 ?? drawn(333.93, 208.15, 278.85, 8.07, 'MOPD\uff08TA \u521d\u59cb\u5316\uff09')] }] },
+      ),
+    }
+  }
+  const unit = (ord = 206) => ({ key: `t${ord}`, kind: 'cell', part: ord, align: 'l', sides: { today: side(1, 7.18, 8.97, 1), v2: side(1, 8.07, 8.97, 1) } })
+  const one = (d: Diff, o: O = {}) => {
+    const { page: p } = judged({ diffs: [d], units: [unit(o.ord)] }, ctx(o))
+    const x = p.diffs[0]!
+    return [x.worse, x.covered ?? null]
+  }
+  const frame = () => worse('frame', 't206 cell', 0, 0.08, 7.23, [0.08, 7.23])
+  const larger = () => worse('size', 't206 cell', 8.97, 7.18, 8.07, [0.2, 0.1])
+  // (1512.03385v1-zh p12's shape: v2 smaller than today, today's line run past the column)
+  const val = (today: Line) =>
+    one(worse('size', 't309 cell', 8.97, 8.97, 8.07, [0, 0.1]), {
+      ord: 309,
+      box: [455.33, 471.02],
+      v2: drawn(726, 455.35, 471.24, 8.07, '\u74e6\u5c14'),
+      today,
+    })
+  it("a cell in its column's box, its ink inside it (a closing mark's blank half hanging past): its frame covered by CB", () => {
+    expect(one(frame())).toEqual([false, 'CB'])
+  })
+  it("a cell in its box at a size larger than today's, or smaller only where today's line ran past the box: covered", () => {
+    expect(one(larger())).toEqual([false, 'CB'])
+    expect(val(drawn(726, 457.81, 476.19, 8.97, '\u74e6\u5c14'))).toEqual([false, 'CB'])
+  })
+  it("not a cell whose ink passes its column's box: worse", () => {
+    // (the same line ending in a letter: its ink 4.19 pt past the column, beyond the position floor)
+    const past = drawn(333.93, 208.15, 278.85, 8.07, 'MOPD TA \u521d\u59cb\u5316x')
+    expect(one(frame(), { v2: past })).toEqual([true, null])
+    expect(one(larger(), { v2: past })).toEqual([true, null])
+  })
+  it("not a cell smaller than today where today's line stood inside the box (under the size its column allows): worse", () => {
+    expect(val(drawn(726, 456.5, 470.5, 8.97, '\u74e6\u5c14'))).toEqual([true, null])
+  })
+  it('not a cell whose column the part does not state, nor one laid on the old path (ink of its own line inside the box, a held line), nor one not laid: worse', () => {
+    expect(one(frame(), { column: null })).toEqual([true, null])
+    expect(one(frame(), { side: [55.44, 270] })).toEqual([true, null])
+    expect(one(frame(), { held: true })).toEqual([true, null])
+    expect(one(frame(), { state: 'unfit' })).toEqual([true, null])
+  })
+  it('not another measure of a cell in its box: judged as before', () => {
+    expect(one(worse('over', 't206 cell', 0, 0, 40, [0, 40]))).toEqual([true, null])
+    expect(one(worse('line-count', 't206 cell', 1, 1, 2, [0, 1]))).toEqual([true, null])
+  })
+})
+
 describe('the rulings file', () => {
   it('states each ruling with its class, condition, verdict, date and example; one with no condition says why', () => {
     for (const r of RULINGS) {
@@ -828,8 +907,9 @@ describe('the rulings file', () => {
       // (WB the coordinator's ruling of 2026-11-13 on the owner's report of the day before, the law it rests on built in B.break;
       // AN the owner's ruling of 2026-11-13 on the author block's notes, built in lane f2-author; CT his choice of 2026-11-13 on a
       // table's cells, built in lane cells-like-body; CU the coordinator's ruling (c) of 2026-11-13 under it, the same lane)
-      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : r.id === 'T1' ? r.verdict === 'pseudocode kept' : r.id === 'WB' || r.id === 'CU' ? r.verdict === "the coordinator's ruling" : r.id === 'AN' || r.id === 'CT' ? r.verdict === "the owner's ruling" : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528', '\u540c\u610f\u4f60\u7684\u5efa\u8bae'].includes(r.verdict)).toBe(true)
-      expect(r.date).toBe(r.id === 'T1' ? '2026-11-08' : r.id === 'WB' || r.id === 'AN' || r.id === 'CT' || r.id === 'CU' ? '2026-11-13' : '2026-11-12')
+      // (CB the owner's decision of 2026-11-13, his choice of the column's box, built in lane cell-col)
+      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : r.id === 'T1' ? r.verdict === 'pseudocode kept' : r.id === 'WB' || r.id === 'CU' ? r.verdict === "the coordinator's ruling" : r.id === 'AN' || r.id === 'CT' ? r.verdict === "the owner's ruling" : r.id === 'CB' ? r.verdict === "the owner's decision" : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528', '\u540c\u610f\u4f60\u7684\u5efa\u8bae'].includes(r.verdict)).toBe(true)
+      expect(r.date).toBe(r.id === 'T1' ? '2026-11-08' : r.id === 'WB' || r.id === 'AN' || r.id === 'CT' || r.id === 'CU' || r.id === 'CB' ? '2026-11-13' : '2026-11-12')
       expect(r.example.length).toBeGreaterThan(20)
       expect(r.condition === null ? r.unstated : r.condition).toBeTruthy()
       expect(r.condition === null).toBe(r.holds === null)
