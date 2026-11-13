@@ -8,8 +8,8 @@
 // would hold another object than PDF.js shows. Refused, never guessed: an encrypted document, a hybrid one (/XRefStm), an entry
 // that does not point at its object, a section that does not parse, a stream whose /Length does not end at `endstream`, a
 // predictor other than PNG's, more objects or decoded bytes than the bounds. An original module (no port statement); imports
-// the tail's startxref alone.
-import { startxrefOf } from './tail.mjs'
+// the tail's startxref and its latin-1 reading alone.
+import { latin1, startxrefOf } from './tail.mjs'
 
 /** the refusal of a document this reader will not read: `code` the delta's why (delta.mjs DELTA_WHYS) */
 export class XrefRefusal extends Error {
@@ -18,7 +18,6 @@ export class XrefRefusal extends Error {
 /** the sections followed along /Prev at most, and an object stream's or a cross-reference stream's decoded bytes at most */
 const SECTIONS_MAX = 4096
 const DEPTH_MAX = 64
-const latin1 = u8 => { let s = ''; for (let k = 0; k < u8.length; k += 8192) s += String.fromCharCode.apply(null, u8.subarray(k, Math.min(u8.length, k + 8192))); return s }
 const WS = new Uint8Array(256)
 for (const c of [0, 9, 10, 12, 13, 32]) WS[c] = 1
 const CHUNK = 1 << 16

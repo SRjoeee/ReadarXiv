@@ -7,3 +7,5 @@ import * as tail_js from './tail.mjs'
 export const OBJECT_MAX = tail_js.OBJECT_MAX as number
 /** the `startxref` of a PDF (the last 1024 bytes); null where there is none */
 export const startxrefOf = tail_js.startxrefOf as (pdf: Uint8Array) => number | null
+/** bytes as a string, one character a byte (ISO 8859-1) */
+export const latin1 = tail_js.latin1 as (b: Uint8Array) => string

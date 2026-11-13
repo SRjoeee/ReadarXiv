@@ -3,8 +3,8 @@
 // the delta (D) and the remover's tails; the delta is ONE incremental-update section of the original's kind (layout/section.mjs)
 // whose /Prev is the original's startxref and whose offsets are the composed document's. Its head (layer-proto/format.mjs:
 // `base.kind` 'delta') names the pages it replaces as page ranges and counts what it reused and wrote. Imports the tail's
-// largest object number alone: the head's reader (a browser's), the page pass and the box read it alike.
-import { OBJECT_MAX } from './tail.mjs'
+// largest object number and its latin-1 reading alone: the head's reader (a browser's), the page pass and the box read it alike.
+import { latin1, OBJECT_MAX } from './tail.mjs'
 
 /** a head's base of ours is a delta over arXiv's PDF or a whole PDF of ours (`full`: no `kind` on the wire) */
 export const BASE_KINDS = Object.freeze(['delta', 'full'])
@@ -108,7 +108,6 @@ export function replacedWhy(ranges, last) {
   return null
 }
 
-const latin1 = u8 => { let s = ''; for (let k = 0; k < u8.length; k += 8192) s += String.fromCharCode.apply(null, u8.subarray(k, Math.min(u8.length, k + 8192))); return s }
 /** the delta's startxref: the number before its final `%%EOF` (its last 1024 bytes, as tail.mjs startxrefOf reads one) */
 function lastStartxref(delta) {
   const text = latin1(delta.subarray(Math.max(0, delta.length - 1024)))

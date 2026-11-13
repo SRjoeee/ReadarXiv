@@ -14,6 +14,7 @@
 // still exceed any of them: run it in the maker child, under a hard memory limit and a wall clock, one paper at a time. A failed
 // allocation under that limit refuses no page: it is the paper's, thrown as it came (memory.mjs).
 import { isMemoryError } from './memory.ts'
+import { latin1 } from './tail.mjs'
 
 const WS = new Uint8Array(256)
 for (const c of [0, 9, 10, 12, 13, 32]) WS[c] = 1
@@ -62,8 +63,6 @@ const DIGIT = new Int8Array(256).fill(-1)
 for (let c = 0; c < 10; c++) DIGIT[48 + c] = c
 for (let c = 0; c < 6; c++) { DIGIT[65 + c] = 10 + c; DIGIT[97 + c] = 10 + c }
 const td = new TextDecoder('latin1')
-/** bytes as the characters of their codes (ISO 8859-1, which TextDecoder's 'latin1', windows-1252, is not) */
-const latin1 = u8 => { let out = ''; for (let k = 0; k < u8.length; k += 8192) out += String.fromCharCode.apply(null, u8.subarray(k, k + 8192)); return out }
 
 /**
  * The heap a lexed token, and an event the walk records, is held in, in bytes, by its kind: each at least what 1 million
