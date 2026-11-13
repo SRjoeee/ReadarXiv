@@ -52,7 +52,7 @@ describe("the parity's lay with the spaces beside a full-width mark's blank side
 })
 
 describe("the parity's lay with no CJK line squeezed (the owner's ruling L2 of 2026-11-12, rulings.mjs)", () => {
-  const BREAK = resolve(__dirname, '../../packages/typeset/src/breaker/break.mjs')
+  const BREAK = resolve(__dirname, '../../packages/typeset/src/breaker/break.ts')
   const source = readFileSync(BREAK, 'utf8')
   const RULE = '  const squeezes = !!P.cjk && !P.keepAll && !(st.track > (st.fitTrack ?? P.trackStart ?? 0) + 1e-9)\n'
   it("turns the breaker's squeeze off while the lab's global asks it, and touches nothing else in the file", async () => {
@@ -61,7 +61,7 @@ describe("the parity's lay with no CJK line squeezed (the owner's ruling L2 of 2
     expect(after).toContain('  const squeezes = !globalThis.__parityNoSqueeze && !!P.cjk && !P.keepAll && !(st.track > (st.fitTrack ?? P.trackStart ?? 0) + 1e-9)\n')
     expect(after.replace('!globalThis.__parityNoSqueeze && ', '')).toBe(source)
   })
-  it('throws where break.mjs no longer holds the line once', async () => {
+  it('throws where break.ts no longer holds the line once', async () => {
     await expect(hooked(source.replace(RULE, ''), `file://${BREAK}`)).rejects.toThrow(/no longer holds/)
   })
 })

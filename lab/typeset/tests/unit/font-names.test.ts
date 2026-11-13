@@ -4,7 +4,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { classifyFont, familyOfFonts } from '../../../../packages/typeset/src/breaker/font-names.types.ts'
+import { classifyFont, familyOfFonts } from '../../../../packages/typeset/src/breaker/font-names.ts'
 import { L1_BUNDLES, hasL1 } from '../../../../packages/typeset/tests/replay/l1.ts'
 import { hasToday, todayFile } from '../../../../packages/typeset/tests/replay/tap.ts'
 

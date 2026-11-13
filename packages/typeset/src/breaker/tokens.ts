@@ -96,6 +96,16 @@ export type Token = {
    *  line, `pad` the distance TeX set from its rectangle's right edge to its line's right edge (the slot's, PDF units), a break
    *  before it, kept off the line's text by `gap` (the original line's own distance to its ink) and half an em at most */
   endMark?: { pad: number; gap: number }
+  /** a frame break (B.cuts withPageBreaks: its page, the unit's block its frame begins with, a cut of the frames' share only) */
+  pageBreak?: number
+  frame?: number
+  share?: true
+  /** a unit's own label carried to its first line's start (lay/adapt.ts, the row's label crop) */
+  ownLabel?: true
+  /** a part of a URL cut at its break points: the token cut (B.break urlCut) */
+  of?: Token
+  /** a word's head cut at a hyphenation point, its hyphen set (B.break) */
+  hyphenated?: true
 }
 /** a resolution as the tokens read it (U.elements' with the later rules' fields) */
 export type TRes = {

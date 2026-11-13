@@ -9,7 +9,7 @@
 // the caller hands them in (`Reading`), and what it hands is today's (the gate's runner: the tap's), so that a difference the
 // runner finds is a fact of the setting's. A member the stage does not set says why (`stop`), never silently.
 import type { Placed } from '@readarxiv/format'
-import { classifyFont } from '../breaker/font-names.types.ts'
+import { classifyFont } from '../breaker/font-names.ts'
 import { type NumberCrop, numberCrop } from '../fit/numbered.ts'
 import type { FitBlock, FitParams, Stay, Tokens } from '../fit/types.ts'
 import type { Row, RowLine, RunRow } from '../shared/row-start.ts'

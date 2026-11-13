@@ -22,7 +22,7 @@
 // small capitals, a colour piece's run.
 import type { El, OutPiece, Placed, Piece, SpanAt } from '@readarxiv/format'
 import { type CjkFaces, faceOf, ownSmallCaps, type Roles, rolesFor } from '../breaker/faces.ts'
-import { classifyFont, familyOfFonts } from '../breaker/font-names.types.ts'
+import { classifyFont, familyOfFonts } from '../breaker/font-names.ts'
 import { measure } from '../breaker/measure.ts'
 import { noStart } from '../breaker/script.ts'
 import { baseOf, type TokenRules, type TStyle, tokens as tokensOf } from '../breaker/tokens.ts'
