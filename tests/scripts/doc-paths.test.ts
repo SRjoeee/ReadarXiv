@@ -16,8 +16,8 @@ const ROOT = resolve(__dirname, '../..')
 const git = (...args: string[]) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 28 })
 const tracked = git('ls-files', '-z').split('\0').filter(Boolean)
 
-/** the documents under test: the project's rules, the documents of docs/ (not those in its folders), the two READMEs of the lab and the parked tree */
-const DOCUMENTS = ['CLAUDE.md', ...tracked.filter(file => /^docs\/[^/]+\.md$/.test(file)), 'lab/pdf/README.md', 'parked/README.md']
+/** the documents under test: the project's rules, the map of the repository, the documents of docs/ (not those in its folders), the two READMEs of the lab and the parked tree */
+const DOCUMENTS = ['CLAUDE.md', 'ARCHITECTURE.md', ...tracked.filter(file => /^docs\/[^/]+\.md$/.test(file)), 'lab/pdf/README.md', 'parked/README.md']
 
 /** the directories of the tree a document may name a path in (reference/, .output/ and the like are ignored directories, not the tree) */
 const ROOTS = new Set(tracked.filter(file => file.includes('/')).map(file => file.split('/')[0]!))
@@ -70,7 +70,7 @@ describe('the paths in the documents', () => {
   })
 
   it('has each of the documents', () => {
-    expect(DOCUMENTS).toEqual(expect.arrayContaining(['CLAUDE.md', 'docs/DESIGN.md', 'docs/PDF-READER.md', 'lab/pdf/README.md', 'parked/README.md']))
+    expect(DOCUMENTS).toEqual(expect.arrayContaining(['CLAUDE.md', 'ARCHITECTURE.md', 'docs/DESIGN.md', 'docs/PDF-READER.md', 'lab/pdf/README.md', 'parked/README.md']))
     for (const doc of DOCUMENTS) expect([doc, FILES.has(doc)]).toEqual([doc, true])
   })
 

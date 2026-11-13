@@ -4,6 +4,7 @@ Read arXiv is a bilingual arXiv reader. This repository holds the Chrome extensi
 
 ## Where the truth lives
 
+- `ARCHITECTURE.md` — the map, read before changing anything: the packages and which may import which, the four shapes of a paper's data, the life of a paper from the prepare to a drawn page on both hosts, every invariant with the gate that holds it, where a change belongs and what moving a version or a digest costs, and where the build differs from the approved design.
 - `docs/DESIGN.md` — the current design: what the extension does, how it is built, why each non-obvious choice was made, with the measurements beside the decisions. Cite it by section (`DESIGN §7.2`). A decision that changes goes into its section in the same pull request as the code.
 - `docs/UI.md` — the interface contract: every control and string of the popup and the settings page, by id (`S-P-80`), with the reasons behind them.
 - `docs/PDF-READER.md` — the PDF reader's interface design: every control, state and motion with the reason behind it, the maintainer's words where a decision rests on them, and the measurements; §17 is the highlight. The reader's engine is held by the gates of `lab/pdf/README.md`; the experiment it grew in (its running record and plans) is read from the tag: `git show exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md`, `git show exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/<file>`.
