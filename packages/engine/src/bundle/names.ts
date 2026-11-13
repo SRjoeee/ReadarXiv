@@ -21,7 +21,7 @@
 //   its content with each occurrence's text an element of kind `person` (its `src` the name as the unit writes it), its other
 //   pieces and their ids as they are, written right after it, so that a translator is asked for it with the unit and its row is
 //   its own (its own id and wire: nothing is keyed by the toggle). An original module (no port statement).
-import { type Named, type Person, type Piece, type Split, type Unit, unitId } from '@readarxiv/format'
+import { type Named, type Person, type Piece, type Split, toggleKind, type Unit, unitId } from '@readarxiv/format'
 import type { PieceClass } from '../instrument.ts'
 
 /** the kind of a unit's form with the block's names it holds as elements, and the kind of each such element */
@@ -93,6 +93,8 @@ export interface BlockMember {
   ord: number
   unit: string
   kind: string
+  /** its unit's Unit.of (format's toggleKind reads it) */
+  of?: string
 }
 export interface NamesOut {
   /** each unit's variant, by the unit's id */
@@ -145,7 +147,7 @@ export function namesOf(
       if (k < 0) continue
       anchor.set(n, out.persons.length)
       nameAt.push(n)
-      out.persons.push([u.id, m.kind, k])
+      out.persons.push([u.id, toggleKind(m), k])
       out.splits.set(u.id, splitOf(u.id, st(u)))
       break
     }

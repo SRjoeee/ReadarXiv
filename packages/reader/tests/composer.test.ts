@@ -3,7 +3,7 @@
 // at a time (the hold), what stays the original's, the stall clock, failures asked again, another target and the toggles in
 // place, the translating marks, the pages ahead, the faces' wave; and the faces' own rules (four at a time, asked once, a lasting
 // answer never asked again); the served faces' tables that cannot be had under it (no lay, no table asked again and again).
-import type { OutPiece, Part, Placed, Row } from '@readarxiv/format'
+import { type OutPiece, type Part, type Placed, type Row, toggleKind } from '@readarxiv/format'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AHEAD_SETTLE_MS,
@@ -20,7 +20,7 @@ import { createServed, type Served } from '../src/compose/served.ts'
 import { PROBE_TEXT } from '../src/compose/text-rendering.ts'
 import type { Clock } from '../src/stack/clock.ts'
 import { layPage, rulesFor } from '@readarxiv/typeset'
-import { leftKinds } from '../src/compose/classes.ts'
+import { kindShown, leftKinds } from '../src/compose/classes.ts'
 import type { PageContent, Stack, StackEvents } from '../src/stack/stack.ts'
 
 // ---------------------------------------------------------------- the stand-ins
@@ -1656,4 +1656,64 @@ describe('the toggles turned and turned back: the drawing a function of the part
     }
     return r
   }
+
+  // (a note of the author block follows the block's option, both ways (the owner's ruling of 2026-11-13): a \thanks written in
+  // \author{…} (`of: 'author'`, its kind a footnote's) and ICML's footnote of the places its class stores (kind `inknames`), each
+  // naming the block's person, so with a variant (§19.15). Names off: the member is left, its original drawn, neither its row
+  // nor its variant's read; on: the variant drawn, the block's name in it, never the note's own row; off, on, off, on: two
+  // drawings, the original and the variant. 2611.03953v2-zh p1 drew the note's own row off and its variant on: two translations
+  // of one sentence across the switch)
+  const NOTES: [string, Placed][] = [
+    ['a \\thanks inside \\author', { ...at(3, 'footnote', E, 120), of: 'author' } as unknown as Placed],
+    ['ICML’s footnote of the stored places', at(3, 'inknames', E, 120)],
+  ]
+  it.each(NOTES)(
+    '%s: off the original and no row read, on the variant, never the note’s own row',
+    async (_name, note) => {
+      const p = { ...part, flows: [[at(1, 'author', B, 740)], [at(2, 'para', P, 600)], [note]] } as unknown as Part
+      let classes: Record<(typeof OPTIONS)[number], boolean> = { ...DEFAULTS }
+      const read = new Set<string>()
+      const lay = ((q: Part, rows: Rows) => {
+        lay.calls++
+        const seen: Rows = {
+          get: (id: string) => (read.add(id), rows.get(id)),
+          done: rows.done,
+          ...(rows.kept ? { kept: rows.kept } : {}),
+        }
+        return layPage(q, seen as never, rulesFor('de', { leave: leftKinds(classes) }), metrics) as unknown as Page
+      }) as unknown as ReturnType<typeof standInLay>
+      lay.calls = 0
+      const w = world({ pages: new Map([[1, p]]), classes, lay })
+      w.stack.setNear([1])
+      const rows = statedOnce('de')
+      open(w, rows)
+      rows.state([ROWS[P]!, ROWS[B]!, ROWS[E]!, ROWS[V]!])
+      await settle()
+      w.stack.put(1)
+      await settle()
+      const noteOf = () => drawn(w)?.find(([ord]) => ord === 3)
+      const off = noteOf()
+      expect(off?.[1]).toBe('left')
+      expect(read.has(E) || read.has(V)).toBe(false)
+      const turn = async (on: boolean) => {
+        classes = { ...classes, names: on }
+        w.composer.setClasses(classes)
+        await settle()
+        w.clock.advance(HOLD_MS)
+        await settle()
+        w.stack.put(1)
+        await settle()
+        return noteOf()
+      }
+      const on = await turn(true)
+      expect(on?.[1]).toBe('laid')
+      expect(String(on?.[2]).trim()).toBe('Korrespondenz: Wenyong Zhou.')
+      const drawings = new Set([JSON.stringify(off), JSON.stringify(on)])
+      for (const state of [false, true, false, true]) drawings.add(JSON.stringify(await turn(state)))
+      expect(drawings.size).toBe(2)
+      // (and the count of what the view shows translated follows it: the note counted with the names on, not off)
+      expect(kindShown(toggleKind(note), DEFAULTS)).toBe(false)
+      expect(kindShown(toggleKind(note), { ...DEFAULTS, names: true })).toBe(true)
+    },
+  )
 })

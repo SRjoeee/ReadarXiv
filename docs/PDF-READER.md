@@ -873,7 +873,7 @@ whose value is the layer's `classes` option as it is (§19.10, §19.13).
 | `tables` | true | Text in tables | the table cells |
 | `heads` | true | Headers and footers | the running heads and feet |
 | `references` | false | References | the bibliography, each entry whole, the names inside it included |
-| `names` | false | Authors and affiliations | the whole author block under the title: its names, affiliations, institutions, addresses and e-mail line (the owner, 2026-10-30; from 2026-10-28 to then the names alone, "Author names", the rest always translated). The key and its default are as they were: no migration, and by default the whole block is the original's |
+| `names` | false | Authors and affiliations | the whole author block under the title: its names, affiliations, institutions, addresses and e-mail line (the owner, 2026-10-30; from 2026-10-28 to then the names alone, "Author names", the rest always translated), and the notes its source ties to it wherever they stand: a `\thanks` written in `\author{…}`, acmart's `\authornote`, ICML's footnote of the places its class stores (the owner, 2026-11-13; §18.71). The key and its default are as they were: no migration, and by default the whole block is the original's |
 
 - **A toggle shows or hides; it never translates.** Every class is translated once whatever the toggles say (the run sends
   every unit `toTranslate` names, the hidden classes' among them), and a change is the layer side's `setClasses`: the door
@@ -6465,6 +6465,43 @@ The wires of 479 bibliography units and 1 prose unit change; they are asked agai
 instead was measured and withdrawn: the cutter's own merge of a short capitalised word before a number (`Exer. 5`) then joins
 262 author blocks to their year ("…Llion Jones. 2018. Character-level…"), true ends lost.
 
+### 18.71 A note the source ties to the author block follows the names option (the owner's ruling, 2026-11-13)
+
+The owner's ruling: text the paper's code ties to the author block follows the names option both ways (off: the original; on:
+translated); text in a region of its own is body text. What ties a note to the block is the source's, read as LaTeXML's bindings
+read it, never a word list or a share:
+
+- **A note written inside an author command's argument** is the block's: a `\thanks` or a `\footnote` anywhere in the argument of
+  a command the role table names `author` (`FRONT_ROLES`: `\author`, `\affil`, `\icmlauthor` …), the innermost such argument
+  deciding (`latex-front.mjs` `tieNotes`, the walk's `within`). A note of `\title`'s argument is the title's: body. LaTeXML reads
+  the first so (a `\thanks` in a creator's text annotates the creator, `Base_Utility.pool.ltxml` 331-332).
+- **A note written on its own** is the block's where the paper's bindings attach it to an author: the generator keeps, per
+  binding, where a note command's text goes (`scripts/latexml-args.mjs` `NOTE_POOLS`, `NOTE_PACKAGES`): `creator`, the author
+  before it (REVTeX's `\thanks` after `\author{…}`, acmart's `\authornote`); `label:<prefix>`, the authors whose text requests the
+  label (`REQUEST_*`: elsarticle's `\cortext[key]{…}` and `\corref{key}` in an `\author`, read once the whole source is); or the
+  document's (the kernel's `\thanks`, amsart's), body. A label no author's text requests is an orphan LaTeXML drops: body.
+- **An author command's argument a macro stores** keeps its role's kinds (`frontBlock`): ICML's `\icmlaffiliation`, which its
+  class stores with `\gdef` for the footnote `\printAffiliationsAndNotice` sets, is the block's places, held and unmarked as
+  before (a mark there could be set twice or never: 2608.16117 lost a page), no longer a paragraph's.
+- **The ink TeX sets of the block's own text** (locate, `today/ink-units.mjs` rule 8): a block of notes or orphans that holds
+  whole the letters of an author or affiliation unit with no place of its own on A (it owns no glyph of A, or its only place is
+  a paragraph that sets a unit again: 2610.22065v1's names its own `\@mkauthors` types out) is the names', and opens the block's
+  stretch; outside the stretch it is turned back, the text it is (`nameBlock`: acmart's reference format, amsart's addresses at
+  the paper's end, a running head, which is never a note's or an orphan's line). One that holds whole a stored argument's text
+  (ICML's footnote of its places) is the names' wherever it stands. "Holds whole": the unit's letters a run of the line's words'
+  letters from a word's start to a word's end, a class's separator ("and", a comma) no part of it. Today's named a block where 60 %
+  of its letters were an author unit's words (`NAMES_SHARE`), which is gone.
+
+A note so tied carries `of: 'author'` on its unit and on each of its members (format's `Unit.of`, `Placed.of`: optional, not in
+the id; a reader of before reads none and translates the note, as before), and every reading of a class reads a unit's or a
+member's kind through format's `toggleKind` (`of`, else its kind): the reader's classes, its composer and its count, the
+typesetter's `leave`, and so every gate that lays a page (a test holds every such site to it). ICML's footnote is `inknames`, a
+kind of the names already. Its variant (§19.15) stays: with the names on, the note is drawn from its variant, the block's names in
+it (one person, one translation); with them off it is left the original's and neither its row nor its variant's is read. So off,
+on, off, on draws two drawings, the original and the variant, never the note's own row beside the variant (the coordinator's
+ruling of 2026-11-13: the owner saw 2611.03953v2-zh p1's footnote drawn from its own row off and from its variant on, two
+translations of one sentence across the switch).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
@@ -9539,7 +9576,10 @@ lines) follows it, the original's with it off, translated with it on (the author
   figure text (a kept block: an address alone). 2604.14228v3's correspondence line is one ink unit of the names, its three figure
   texts gone. A date line TeX sets under the names (REVTeX's "(Dated: …)", `\today`) is the block's, by the owner's
   positional rule (the coordinator's call of 2026-11-10). A title block with no author command and no name rule 8 reads
-  (2610.30854v1's `\MakeJointTitle`) has none.
+  (2610.30854v1's `\MakeJointTitle`) has none. Since 2026-11-13 rule 8 is the source's tie, no share: an ink line that holds whole
+  an author or affiliation unit with no place of its own (§18.71); and a note the source ties to the block (written in an author
+  command's argument, attached to an author by the paper's bindings, or ICML's footnote of its stored places) follows the
+  names toggle wherever it stands (`of: 'author'`, §18.71).
 - **Names are translated for every target** (`layer-proto/rows.mjs` `toTranslate`, TRANSLATE_VERSION 6): the author block's units
   are sent whatever the language, as every unit is but a table's kept names; they are laid as any unit, and stay the original's
   where the wrap cannot hide their ink (`unhidden`).
@@ -9682,7 +9722,9 @@ The owner's ruling of 2026-11-10: one person, one translation per paper. With th
 that the paper prints elsewhere is drawn with the block's translation of that name. "Elsewhere" covers an ACM reference format,
 a correspondence line, an acknowledgement, an author's biography and a self-citation. With the toggle off, that other text is
 ordinary text, translated and drawn as before: the same unit, the same wire and the same row, with nothing keyed by the toggle.
-The toggle still governs the block under the title alone (§19.13, the ruling of 2026-11-09).
+The toggle still governs the block under the title alone (§19.13, the ruling of 2026-11-09), and since 2026-11-13 the notes the
+source ties to it (§18.71): such a note keeps its variant, drawn with the names on; with them off it is left the original's and
+neither its row nor its variant's is read.
 
 - **Why.** A name is translated again wherever it stands. Today's stored rows (the sweep cache, Microsoft) compare a name
   translated alone with the same name in other units: outside references 12 differ, 5 agree and 4 stay English; in references

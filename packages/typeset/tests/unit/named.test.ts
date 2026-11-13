@@ -253,4 +253,26 @@ describe('layPage over such a unit', () => {
     expect(text([])).toContain('Wenyong Zhou')
     expect(text(['affiliation', 'author', 'inknames'])).toContain('W. Zhou')
   })
+  // (a note the source ties to the author block follows the names option (the owner's ruling of 2026-11-13): a \thanks of
+  // \author{…} (`of: 'author'`, a footnote's kind) and ICML's footnote of its stored places (`inknames`). Off: left, the
+  // original's, neither its row nor its variant's read; on: the variant, the block's name in it; never its own row beside it)
+  it.each([
+    ['of the block by its source', { ...m, of: 'author' }],
+    ['of the names by its kind', { ...m, kind: 'inknames' }],
+  ] as [string, Placed][])(
+    'lays a note %s left with the names off, reading no row of it, and its variant with them on',
+    (_n, note) => {
+      const p: Part = { ...part, flows: [[note]] }
+      const read = new Set<string>()
+      const seen: Rows = { get: (k) => (read.add(k), rows.get(k)), done: rows.done }
+      const lay = (leave: string[]) => layPage(p, seen, rulesFor('de', { leave }), metrics).members[0]!
+      const off = lay(['affiliation', 'author', 'inknames'])
+      expect(off.state).toBe('left')
+      expect([read.has(E), read.has(V)]).toEqual([false, false])
+      const on = lay([])
+      expect(on.state).toBe('laid')
+      expect(on.lines.flatMap((l) => l[3].map((i) => i.s)).join('')).toContain('Wenyong Zhou')
+      expect(on.lines.flatMap((l) => l[3].map((i) => i.s)).join('')).not.toContain('W. Zhou')
+    },
+  )
 })

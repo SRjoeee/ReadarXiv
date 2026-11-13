@@ -43,7 +43,8 @@ export interface Metrics {
 export type Choices = {
   captions?: { figure: 'target' | 'original'; table: 'target' | 'original' }
   /** the unit kinds the reader shows untranslated (design-a's `Kind[]`: a toggle's kinds, e.g. the references' `reference`,
-   *  `refnames`, `inkreferences`); layPage leaves a member of one the original's (`left`) */
+   *  `refnames`, `inkreferences`); layPage leaves a member the original's (`left`) whose toggleKind (format's: the block its
+   *  source ties it to, Placed.of, else its kind) is one */
   leave?: string[]
   /** how far a unit's last line may stand under TeX's text block bottom, in points, where that keeps it from a step down its
    *  fit's sizes (docs/PDF-READER.md §18.37): none, the rule's (fit/walk.ts PAST_FOOT); 0, never (the owner's switch) */
