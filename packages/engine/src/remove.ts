@@ -13,8 +13,8 @@
 // HELD_MAX, BYTES_MAX, FORM_DEPTH) refuse a page early and softly, the rest of the paper going on; PDF.js and the object layer may
 // still exceed any of them: run it in the maker child, under a hard memory limit and a wall clock, one paper at a time. A failed
 // allocation under that limit refuses no page: it is the paper's, thrown as it came (memory.mjs).
+import { at, latin1 } from './bounded-reads.ts'
 import { isMemoryError } from './memory.ts'
-import { latin1 } from './tail.ts'
 import type { OpsReader } from './opstream.ts'
 
 /** a PDF object as the object layer (@cantoo/pdf-lib) holds one, as the engine reads it: a dictionary's or an array's entry
@@ -692,10 +692,6 @@ const PAINT = new Set(['S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n'])
  *  number, a boolean, null, a string, an array, or no operand (what `?.v` read of each) */
 export const vOf = (x: Operand | undefined) =>
   typeof x === 'object' && x !== null && !Array.isArray(x) && x.t !== 'str' ? x.v : undefined
-/** `x?.[k]`, the value told by its kind before the read: undefined for null or none, else the property of the value or of its
- *  wrapper, read with the value as its receiver, as a read of it is (an argument of PDF.js's operator list, alignReader) */
-export const at = (x: unknown, k: PropertyKey): unknown =>
-  x === null || x === undefined ? undefined : Reflect.get(Object(x), k, x)
 /** a form nested deeper than this is not walked: the page is refused */
 const FORM_DEPTH = 12
 /** a glyph name that names a code, not a character (a generator's own numbering): its Unicode is not read from it */

@@ -74,10 +74,13 @@ describe('the gate runs when what it loads changes', () => {
   })
   it('loads in the page no module the page cannot import: none of the repository\'s TypeScript (src/core), which only --door transpiles', () => {
     // (3310dfa7 on #456: run.mjs imported translate/groups.mjs, whose mt.mjs imports src/core's .ts: every output of the head run
-    // failed to load the engine, "did not run")
+    // failed to load the engine, "did not run". The workspace packages' TypeScript is served stripped, lab/pdf/packages-route.mjs:
+    // the ink walk's readers, packages/engine/src/ink-args.ts, load in the page as its other modules do)
     const E = (f: string) => join(ROOT, 'src/pdf-reader/engine', f)
     const page = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', '../../../packages/engine/src/ink.mjs', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layer-proto/hyph.mjs'].map(E))
-    expect(page.filter(f => f.endsWith('.ts'))).toEqual([])
+    expect(page.filter(f => f.endsWith('.ts') && !f.startsWith('packages/'))).toEqual([])
+    // (and the check holds something: the page's closure reaches the packages' TypeScript)
+    expect(page.filter(f => f.startsWith('packages/') && f.endsWith('.ts')).length).toBeGreaterThan(0)
   })
   it('covers the gate, its scorer and measures, the rules gate, the pack and its manifest, and itself', () => {
     const gate = ['lab/pdf/spikes/layer-gate.mjs', ...readdirSync(join(ROOT, 'lab/pdf/spikes/layer-gate')).map(f => `lab/pdf/spikes/layer-gate/${f}`), 'lab/pdf/spikes/rules-gate.mjs', 'lab/pdf/spikes/gate-pack.mjs', 'scripts/r2-read.mjs', 'lab/pdf/gate-pack.json', '.github/workflows/rules-gate.yml']

@@ -16,7 +16,10 @@
 // nothing, and nothing here throws on a malformed list. Each bound is an abuse guard, twenty times or more above the
 // corpus's heaviest page (the census of 2026-10-16: the 2,793 pages of the 124 papers of data/corpus, read by the pinned
 // PDF.js on the lite worker), and every one of those pages is read under them exactly as under none: no real page meets one.
-// Imports nothing: the maker runs it in a Worker or in Node alike.
+// Imports only its readers of PDF.js's values (ink-args.ts) and the engine's shared reads (bounded-reads.ts, a leaf): the maker
+// runs it in a Worker or in Node alike.
+import { at } from './bounded-reads.ts'
+import { argsOf, fontIdOf, fontView, fourOf, gstateOf, lengthOf, listOf, minMaxOf, pathOf, procOf, shownOf, sixOf } from './ink-args.ts'
 
 /** the operations read on a page at most; past it the page is capped (its reader gives it no ink). The corpus's busiest
  *  page holds 146,115 (2608.12606 page 5: 17,903 paths, each with its save, transform, colour, width and restore; the next
@@ -109,9 +112,7 @@ const IDENTITY = Object.freeze([1, 0, 0, 1, 0, 0])
 const mul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]]
 /** six numbers from an argument (an array or a typed array), else BROKEN */
 function matrixOf(v) {
-  if (!v || typeof v !== 'object' || !(v.length >= 6)) return BROKEN
-  const m = [v[0], v[1], v[2], v[3], v[4], v[5]]
-  return m.every(x => typeof x === 'number') ? m : BROKEN
+  return sixOf(v) ?? BROKEN
 }
 const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 const finite = (...xs) => xs.every(Number.isFinite)
@@ -133,15 +134,16 @@ const fresh = () => ({
 const squareOf = m => (Math.abs(m[1]) < 1e-9 && Math.abs(m[2]) < 1e-9) || (Math.abs(m[0]) < 1e-9 && Math.abs(m[3]) < 1e-9)
 /** whether a path PDF.js gives (constructPath's data: 0 moveTo, 1 lineTo, 2 and 3 curves, 4 closePath) is one rectangle on the
  *  page's axes under matrix `m`: one subpath of four corners, its edges level and upright in turn (0.01 of a unit across) */
-function rectPathOf(m, data) {
-  if (!data || typeof data.length !== 'number') return false
+function rectPathOf(m, path) {
+  const data = pathOf(path)
+  if (!data) return false
   const pts = []
   for (let i = 0, moves = 0; i < data.length;) {
-    const o = data[i++]
+    const o = data.at(i++)
     if (o === 4) continue
     if (o !== 0 && o !== 1) return false
     if (o === 0 && ++moves > 1) return false
-    const x = data[i], y = data[i + 1]
+    const x = data.at(i), y = data.at(i + 1)
     i += 2
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false
     const X = m[0] * x + m[2] * y + m[4], Y = m[1] * x + m[3] * y + m[5], p = pts.at(-1)
@@ -170,10 +172,10 @@ const fillOf = a => (typeof a?.[0] === 'string' && /^#[0-9a-f]{6}$/i.test(a[0]) 
  * font, the browser's default): the font's declared ascent and descent then
  */
 export function outlineBox(commonObjs, font, fontChar) {
-  if (!font || typeof font.loadedName !== 'string' || typeof fontChar !== 'string' || typeof commonObjs?.has !== 'function') return null
-  const id = `${font.loadedName}_path_${fontChar}`
+  if (!font || typeof at(font, 'loadedName') !== 'string' || typeof fontChar !== 'string' || typeof commonObjs?.has !== 'function') return null
+  const id = `${at(font, 'loadedName')}_path_${fontChar}`
   let path = null
-  try { if (commonObjs.has(id)) path = commonObjs.get(id)?.path } catch { return null }
+  try { if (commonObjs.has(id)) path = at(commonObjs.get(id), 'path') } catch { return null }
   // DrawOPS: moveTo 0 and lineTo 1 a point, curveTo 2 three, quadraticCurveTo 3 two, closePath 4 none
   return pointsBox(path)
 }
@@ -198,11 +200,15 @@ export function type3Box(OPS, font, id) {
   if (font?.isType3Font !== true || id === undefined || id === null) return null
   let m = type3Boxes.get(font)
   if (!m) type3Boxes.set(font, (m = new Map()))
-  if (!m.has(id)) m.set(id, procBox(OPS, font, id))
-  return m.get(id)
+  let box = m.get(id)
+  if (box === undefined) {
+    box = procBox(OPS, font, id)
+    m.set(id, box)
+  }
+  return box
 }
 function procBox(OPS, font, id) {
-  const procs = font.charProcOperatorList, proc = procs instanceof Map ? procs.get(id) : procs?.[id]
+  const proc = procOf(font, id)
   const fns = proc?.fnArray, args = proc?.argsArray
   if (!fns || typeof fns.length !== 'number' || fns.length > TYPE3_OPS) return null
   const fm = matrixOf(font.fontMatrix)
@@ -225,20 +231,20 @@ function procBox(OPS, font, id) {
     return true
   }
   for (let j = 0; j < fns.length; j++) {
-    const fn = fns[j], a = args?.[j] ?? []
+    const fn = fns[j], a = argsOf(args?.[j])
     if (QUIET.has(fn)) continue
     if (fn === OPS.save) { if (stack.length >= STACK_MAX) return null; stack.push([ctm, lw]) }
     else if (fn === OPS.restore) { const t = stack.pop(); if (t) [ctm, lw] = t }
     else if (fn === OPS.transform) { ctm = mul(ctm, matrixOf(a)); if (ctm.some(v => !Number.isFinite(v))) return null }
     else if (fn === OPS.setLineWidth) lw = num(a[0])
-    else if (fn === OPS.setGState) { for (const e of Array.isArray(a[0]) ? a[0] : []) if (Array.isArray(e) && e[0] === 'LW') lw = num(e[1]) }
+    else if (fn === OPS.setGState) { for (const e of gstateOf(a[0])) if (Array.isArray(e) && e[0] === 'LW') lw = num(e[1]) }
     else if (fn === OPS.constructPath) {
-      const op = a[0], mm = a[2]
+      const op = a[0], mm = minMaxOf(a[2])
       // (a bitmap glyph's image mask, which PDF.js compiles into a path of its ink's outline in the image's unit square
       // (rawFillPath; its minMax is the bitmap's size in pixels, no box of the path's): the path's own points)
-      if (op === OPS.rawFillPath) { const b = pointsBox(a[1]?.[0]); if (!b || (b.length === 4 && !add(ctm, b[0], b[1], b[2], b[3]))) return null; continue }
+      if (op === OPS.rawFillPath) { const b = pointsBox(at(a[1], 0)); if (!b || (b.length === 4 && !add(ctm, b[0], b[1], b[2], b[3]))) return null; continue }
       if (!PAINTS.has(op)) continue
-      if (!(mm && mm.length >= 4 && finite(mm[0], mm[1], mm[2], mm[3]) && mm[2] >= mm[0] && mm[3] >= mm[1])) return null
+      if (!(mm && mm[2] >= mm[0] && mm[3] >= mm[1])) return null
       const e = STROKES.has(op) ? lw / 2 : 0
       if (!add(ctm, mm[0] - e, mm[1] - e, mm[2] + e, mm[3] + e)) return null
     } else if (IMAGES.has(fn)) { if (!add(ctm, 0, 0, 1, 1)) return null }
@@ -259,14 +265,15 @@ function quietOps(OPS) {
 
 /** the box of a path's points (PDF.js's DrawOPS, as outlineBox reads them): [x0, y0, x1, y1], [] for none, null where it is no
  *  such path */
-function pointsBox(path) {
-  if (!path || typeof path.length !== 'number') return null
+function pointsBox(v) {
+  const path = pathOf(v)
+  if (!path) return null
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
   for (let i = 0; i < path.length;) {
-    const op = path[i++], k = op === 0 || op === 1 ? 2 : op === 2 ? 6 : op === 3 ? 4 : op === 4 ? 0 : -1
+    const op = path.at(i++), k = op === 0 || op === 1 ? 2 : op === 2 ? 6 : op === 3 ? 4 : op === 4 ? 0 : -1
     if (k < 0 || i + k > path.length) return null
     for (let q = 0; q < k; q += 2) {
-      const x = path[i + q], y = path[i + q + 1]
+      const x = path.at(i + q), y = path.at(i + q + 1)
       if (!Number.isFinite(x) || !Number.isFinite(y)) return null
       if (x < x0) x0 = x
       if (x > x1) x1 = x
@@ -306,7 +313,7 @@ export function readOutlines(table) {
   for (const [font, row] of Object.entries(table ?? {})) {
     if (!Array.isArray(row)) continue
     for (let i = 0; i + 4 < row.length; i += 5) {
-      const [x0, y0, x1, y1] = [row[i + 1], row[i + 2], row[i + 3], row[i + 4]].map(v => v / 1000)
+      const x0 = Number(row[i + 1]) / 1000, y0 = Number(row[i + 2]) / 1000, x1 = Number(row[i + 3]) / 1000, y1 = Number(row[i + 4]) / 1000
       out.set(`${font}|${row[i]}`, x0 > x1 ? [] : [x0, y0, x1, y1])
     }
   }
@@ -447,12 +454,14 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
   const maskGroups = []
   const fonts = new Map()
   const fontOf = id => {
-    if (!fonts.has(id)) {
+    let font = fonts.get(id)
+    if (font === undefined) {
       let f = null
       try { f = commonObjs.get(id) } catch {}
-      fonts.set(id, f && typeof f === 'object' ? f : null)
+      font = f && typeof f === 'object' ? fontView(f) : null
+      fonts.set(id, font)
     }
-    return fonts.get(id)
+    return font
   }
   const {
     save: SAVE, restore: RESTORE, transform: TRANSFORM, setLineWidth: LINE_WIDTH, setGState: GSTATE,
@@ -529,8 +538,9 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
   const paintOf = (font, id) => {
     let m = type3Paint.get(font)
     if (!m) type3Paint.set(font, (m = new Map()))
-    if (!m.has(id)) {
-      const procs = font.charProcOperatorList, proc = procs instanceof Map ? procs.get(id) : procs?.[id]
+    let had = m.get(id)
+    if (!had) {
+      const proc = procOf(font, id)
       const fns = proc?.fnArray ?? [], args = proc?.argsArray ?? []
       const out = { d0: fns[0] === D0, fill: false, stroke: false, lit: false }
       // (a procedure past the bound type3Box reads is not scanned, a step a read operation: taken as painting, never unseen)
@@ -543,17 +553,18 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
         if (strokes) { if (st.CA === null) out.stroke = true; else if (st.CA > 0) out.lit = true }
       }
       for (let i = 0; i < fns.length; i++) {
-        const fn = fns[i], a = args[i] ?? []
+        const fn = fns[i], a = argsOf(args[i])
         if (fn === SAVE) { if (saved.length >= STACK_MAX) { out.lit = true; break } saved.push({ ...st }) }
         else if (fn === RESTORE) st = saved.pop() ?? st
-        else if (fn === GSTATE) { for (const e of Array.isArray(a[0]) ? a[0] : []) if (Array.isArray(e)) { if (e[0] === 'ca') st.ca = alphaOf(e[1]); else if (e[0] === 'CA') st.CA = alphaOf(e[1]) } }
+        else if (fn === GSTATE) { for (const e of gstateOf(a[0])) if (Array.isArray(e)) { if (e[0] === 'ca') st.ca = alphaOf(e[1]); else if (e[0] === 'CA') st.CA = alphaOf(e[1]) } }
         else if (QUIET.has(fn) || STATE.has(fn)) continue
         else if (fn === PATH) { const op = a[0]; if (op !== OPS.endPath) paint(!STROKE_ONLY.has(op), STROKES.has(op)) }
         else paint(true, false)
       }
       m.set(id, out)
+      had = out
     }
-    return m.get(id)
+    return had
   }
   /** a glyph's: the fill's where its rendering mode fills (0, 2), and where it strokes (1, 2) the stroke's or the fill's, the
    *  larger (PDF strokes text at the stroke's alpha, PDF.js's paintChar at the fill's: unseen only where neither shows it). A Type 3 glyph's as
@@ -622,7 +633,7 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
     let m = ownColours.get(font)
     if (!m) ownColours.set(font, (m = new Map()))
     if (!m.has(id)) {
-      const procs = font.charProcOperatorList, proc = procs instanceof Map ? procs.get(id) : procs?.[id]
+      const proc = procOf(font, id)
       const fns = proc?.fnArray ?? []
       m.set(id, fns.length > 0 && fns[0] !== D1 && [...fns].some(fn => fn === FILL_RGB || fn === FILL_N || fn === FILL_NONE))
     }
@@ -762,8 +773,9 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
     if (x1 > b[2]) b[2] = x1
     if (y1 > b[3]) b[3] = y1
   }
-  const shapeOf = (box, op, data) => {
-    if (!data || typeof data.length !== 'number' || shapeNumbers + data.length * 2 > SHAPE_NUMBERS_PAGE) return
+  const shapeOf = (box, op, path) => {
+    const data = pathOf(path)
+    if (!data || shapeNumbers + data.length * 2 > SHAPE_NUMBERS_PAGE) return
     // (a fill and a stroke each as far as it shows: one painted at an alpha of 0 none of the shape's, `fillStroke` under ca 0 a
     // stroke alone)
     const m = s.ctm, fill = FILLS.has(op) && fillAlpha() > 0, stroke = STROKES.has(op) && strokeAlpha() > 0, segs = []
@@ -771,13 +783,13 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
     const X = (px, py) => m[0] * px + m[2] * py + m[4], Y = (px, py) => m[1] * px + m[3] * py + m[5]
     const close = () => { if (fill && open && (x !== sx || y !== sy)) segs.push(x, y, sx, sy) }
     for (let i = 0; i < data.length;) {
-      const o = data[i++]
-      if (o === 0) { close(); x = sx = X(data[i], data[i + 1]); y = sy = Y(data[i], data[i + 1]); open = true; i += 2 }
-      else if (o === 1) { const nx = X(data[i], data[i + 1]), ny = Y(data[i], data[i + 1]); segs.push(x, y, nx, ny); x = nx; y = ny; i += 2 }
+      const o = data.at(i++)
+      if (o === 0) { close(); x = sx = X(data.at(i), data.at(i + 1)); y = sy = Y(data.at(i), data.at(i + 1)); open = true; i += 2 }
+      else if (o === 1) { const nx = X(data.at(i), data.at(i + 1)), ny = Y(data.at(i), data.at(i + 1)); segs.push(x, y, nx, ny); x = nx; y = ny; i += 2 }
       else if (o === 2 || o === 3) {
         // (a cubic's control points and end, a quadratic's one control point and end)
         const n = o === 2 ? 6 : 4, c = []
-        for (let q = 0; q < n; q += 2) c.push(X(data[i + q], data[i + q + 1]), Y(data[i + q], data[i + q + 1]))
+        for (let q = 0; q < n; q += 2) c.push(X(data.at(i + q), data.at(i + q + 1)), Y(data.at(i + q), data.at(i + q + 1)))
         i += n
         let px = x, py = y
         for (let k = 1; k <= CURVE_STEPS; k++) {
@@ -805,15 +817,15 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
     if (s.tr & 4) s.rclip = false
     // (in a state not known, its font, size and mode are not either: nothing shown is placed, and the page is capped)
     if (!known()) return
-    const f = s.font
-    if (!f || !Array.isArray(arr)) return
+    const f = s.font, shown = shownOf(arr)
+    if (!f || !shown) return
     const size = s.size, hs = s.hs * s.dir, vertical = !!f.vertical
     const own = matrixOf(f.fontMatrix), fm = own === BROKEN ? FONT_MATRIX : own
     const M = mul(s.ctm, s.tm)
     if (f.isType3Font) {
       // the canvas neither paints nor advances a Type 3 font's invisible text or one of size 0
       if (s.tr === 3 || size === 0) return
-      for (const g of arr) {
+      for (const g of shown) {
         step(1)
         if (stop) return
         if (typeof g === 'number') { s.x += (((vertical ? 1 : -1) * g * size) / 1000) * hs; continue }
@@ -832,7 +844,7 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
     if (f.isInvalidPDFjsFont) {
       // drawn as one string from the line's place: each glyph by the widths before it, no spacing (as the canvas)
       let w = 0
-      for (const g of arr) {
+      for (const g of shown) {
         step(1)
         if (stop) return
         if (!g || typeof g !== 'object') continue
@@ -845,7 +857,7 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
       return
     }
     let x = 0
-    for (const g of arr) {
+    for (const g of shown) {
       step(1)
       if (stop) return
       if (typeof g === 'number') { x += ((vertical ? 1 : -1) * g * size) / 1000; continue }
@@ -854,7 +866,7 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
       const spacing = (g.isSpace ? s.ws : 0) + s.cs
       if (vertical) {
         const vm = g.vmetric || f.defaultVMetrics
-        x += (vm ? -num(vm[0]) : num(g.width)) * adv - spacing * s.dir
+        x += (vm ? -num(at(vm, 0)) : num(g.width)) * adv - spacing * s.dir
         continue
       }
       // the glyph's own advance; the spacing after it moves the next one
@@ -871,7 +883,7 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
     listed += fnArray.length
     for (let j = 0; j < fnArray.length && walked < OPS_CAP && !stop; j++, walked++) {
       step(1)
-      const fn = fnArray[j], a = argsArray[j] ?? []
+      const fn = fnArray[j], a = argsOf(argsArray[j])
       switch (fn) {
         case SAVE: push(); break
         case RESTORE: pop(); break
@@ -882,12 +894,12 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
         // (`tile`: a tiling pattern's fill, PDF.js's ["TilingPattern", …], whose cells paint what is not read; a shading's is smooth)
         case FILL_NONE: case FILL_N: s.fill = NO_FILL; s.tile = fn === FILL_N && a?.[0] === 'TilingPattern'; break
         case GSTATE:
-          for (const e of Array.isArray(a[0]) ? a[0] : []) {
+          for (const e of gstateOf(a[0])) {
             step(1)
             if (stop) break
             if (!Array.isArray(e)) continue
             if (e[0] === 'LW') s.lw = num(e[1])
-            else if (e[0] === 'Font' && Array.isArray(e[1])) setFont(e[1][0], e[1][1])
+            else if (e[0] === 'Font') { const font = listOf(e[1]); if (font) setFont(fontIdOf(font[0]), font[1]) }
             else if (e[0] === 'ca') s.ca = alphaOf(e[1])
             else if (e[0] === 'CA') s.CA = alphaOf(e[1])
             // (PDF.js gives a blend mode as the canvas's operation, Normal and Compatible 'source-over', and a soft mask as whether one
@@ -897,7 +909,7 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
           }
           break
         case BEGIN_TEXT: s.tm = IDENTITY; s.x = s.y = s.lx = s.ly = 0; break
-        case FONT: setFont(a[0], a[1]); break
+        case FONT: setFont(fontIdOf(a[0]), a[1]); break
         case TEXT_MATRIX: s.tm = matrixOf(a[0] && typeof a[0] === 'object' ? a[0] : a); s.x = s.y = s.lx = s.ly = 0; break
         case MOVE: moveText(a[0], a[1]); break
         case LEADING_MOVE: s.leading = num(a[1]); moveText(a[0], a[1]); break
@@ -917,14 +929,14 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
           s.form++
           s.formId = ++formSeq
           if (a[0]) s.ctm = mul(s.ctm, matrixOf(a[0]))
-          const bb = a[1]
-          if (bb && bb.length >= 4) { clipTo(s.ctm, num(bb[0]), num(bb[1]), num(bb[2]), num(bb[3])); if (!squareOf(s.ctm)) s.rclip = false }
+          const bb = fourOf(a[1])
+          if (bb) { clipTo(s.ctm, num(bb[0]), num(bb[1]), num(bb[2]), num(bb[3])); if (!squareOf(s.ctm)) s.rclip = false }
           break
         }
         case FORM_END: pop(); break
         // (a transparency group is painted with the alpha constant in force, and its content begins at alpha 1: PDF 11.6.6)
         case GROUP: {
-          const m = !!a?.[0]?.smask
+          const m = !!at(a[0], 'smask')
           maskGroups.push(m)
           if (m) inMask++
           push()
@@ -932,9 +944,9 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
           // (its blend mode and soft mask are the group's as a whole, its content's own Normal and none at its start, as its alpha)
           s.gblend = s.gblend || s.bm || s.sm; s.bm = s.sm = false
           // (the figures' reading: what the group paints is bounded by its box, its matrix applied, as PDF.js's beginGroup bounds it)
-          const bb = a?.[0]?.bbox
-          if (turned && bb && bb.length >= 4) {
-            const gm = a[0].matrix ? mul(s.ctm, matrixOf(a[0].matrix)) : s.ctm
+          const bb = fourOf(at(a[0], 'bbox'))
+          if (turned && bb) {
+            const gm = at(a[0], 'matrix') ? mul(s.ctm, matrixOf(at(a[0], 'matrix'))) : s.ctm
             const b = boxOf(gm, num(bb[0]), num(bb[1]), num(bb[2]), num(bb[3]), s.gclip) ?? [0, 0, -1, -1]
             s.gclip = b
             if (!squareOf(gm)) s.rclip = false
@@ -946,9 +958,9 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
           // [id, rect, transform, matrix, …]: an annotation's appearance in its own space, clipped to its rectangle
           inAnnotation++
           push()
-          const rect = a[1]
+          const rect = fourOf(a[1])
           s = fresh()
-          if (rect && rect.length >= 4) clipTo(IDENTITY, num(rect[0]), num(rect[1]), num(rect[2]), num(rect[3]))
+          if (rect) clipTo(IDENTITY, num(rect[0]), num(rect[1]), num(rect[2]), num(rect[3]))
           s.ctm = mul(matrixOf(a[2]), matrixOf(a[3]))
           break
         }
@@ -957,9 +969,9 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
         // (glyphsOnly: the glyphs and the state they are placed by alone; paths, shadings and images place no glyph)
         case PATH: {
           if (glyphsOnly) { s.pendingClip = false; break }
-          const op = a[0], mm = a[2]
+          const op = a[0], mm = minMaxOf(a[2])
           if (!inAnnotation && !inMask) pathAt++
-          const ok = mm && mm.length >= 4 && finite(mm[0], mm[1], mm[2], mm[3]) && mm[2] >= mm[0] && mm[3] >= mm[1]
+          const ok = mm && mm[2] >= mm[0] && mm[3] >= mm[1]
           if (ok && PAINTS.has(op)) {
             const e = STROKES.has(op) ? s.lw / 2 : 0
             const had = boxes.length
@@ -967,13 +979,13 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
             // (a figure's path, its segments kept: whether it crosses a figure's label is its lines', not its box's)
             // (`shapesAll`: every path's, where the page's figures are not told by its own forms and pictures: arXiv's page, whose
             // pictures' points are B's and whose included figures its producer may have flattened)
-            if (turned && withShapes && boxes.length > had && (shapesAll || s.form > 0 || picture > 0) && !inAnnotation && !inMask) shapeOf(had / 4, op, a[1]?.[0])
+            if (turned && withShapes && boxes.length > had && (shapesAll || s.form > 0 || picture > 0) && !inAnnotation && !inMask) shapeOf(had / 4, op, at(a[1], 0))
           }
           // a clip takes effect after the path is painted (the canvas's pendingClip)
           if (s.pendingClip) {
             if (ok) clipTo(s.ctm, mm[0], mm[1], mm[2], mm[3]); else s.clip = [0, 0, -1, -1]
             // (the clip is kept as its box: a triangle's, a circle's or a turned rectangle's box is more than it shows)
-            if (ok && !rectPathOf(s.ctm, a[1]?.[0])) s.rclip = false
+            if (ok && !rectPathOf(s.ctm, at(a[1], 0))) s.rclip = false
             s.pendingClip = false
           }
           break
@@ -989,31 +1001,31 @@ export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: 
           // [id, scaleX, scaleY, positions]; a mask's [mask, scaleX, skewX, skewY, scaleY, positions]
           const mask = fn === MASK_REPEAT
           const [sa, sb, sc, sd] = mask ? [a[1], a[2], a[3], a[4]] : [a[1], 0, 0, a[2]]
-          const at = a[mask ? 5 : 3]
-          if (!at || !(at.length >= 0)) break
-          for (let i = 0; i + 1 < at.length && !stop; i += 2) addBox(mul(s.ctm, matrixOf([sa, sb, sc, sd, at[i], at[i + 1]])), 0, 0, 1, 1, -3, fillAlpha())
+          const places = a[mask ? 5 : 3]
+          if (!places || !(lengthOf(places) >= 0)) break
+          for (let i = 0; i + 1 < lengthOf(places) && !stop; i += 2) addBox(mul(s.ctm, matrixOf([sa, sb, sc, sd, at(places, i), at(places, i + 1)])), 0, 0, 1, 1, -3, fillAlpha())
           break
         }
         case MASK_GROUP: case INLINE_GROUP: {
           if (glyphsOnly) break
           const group = fn === MASK_GROUP ? a[0] : a[1]
-          for (const img of Array.isArray(group) ? group : []) { if (stop) break; addBox(mul(s.ctm, matrixOf(img?.transform)), 0, 0, 1, 1, -3, fillAlpha()) }
+          for (const img of listOf(group) ?? []) { if (stop) break; addBox(mul(s.ctm, matrixOf(at(img, 'transform'))), 0, 0, 1, 1, -3, fillAlpha()) }
           break
         }
         case INTENT: {
-          const name = typeof a[0] === 'string' ? a[0] : a[0] && typeof a[0] === 'object' ? a[0].name : null
-          const m = typeof name === 'string' ? POINT.exec(name) : null
+          const name = typeof a[0] === 'string' ? a[0] : a[0] && typeof a[0] === 'object' ? at(a[0], 'name') : null
+          const point = typeof name === 'string' ? POINT.exec(name)?.[1] : undefined
           // (a picture's points apart, `pictures`, a paragraph's, `paras`, and a paragraph's end, `paraEnds`: no mark of any unit's,
           // never among the points the marks and the ownership read)
-          if (m && (m[1] === PICTURE_START || m[1] === PICTURE_END)) { pictures.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 }); picture = m[1] === PICTURE_START ? picture + 1 : Math.max(0, picture - 1); if (m[1] === PICTURE_START) pictureIds.push(++pictureSeq); else pictureIds.pop() }
+          if (point && (point === PICTURE_START || point === PICTURE_END)) { pictures.push({ name: point, glyph: glyphs.length, box: boxes.length / 4 }); picture = point === PICTURE_START ? picture + 1 : Math.max(0, picture - 1); if (point === PICTURE_START) pictureIds.push(++pictureSeq); else pictureIds.pop() }
           // (a region's points apart too, `regions`: a line's kind, never a mark's; a column body's bracket (bs, be) is read by them as
           // well, where a code paragraph TeX broke over a page or a column ends and goes on)
-          else if (m && REGION_POINT.test(m[1])) regionPoints.push({ name: m[1], glyph: glyphs.length })
-          else if (m && FRONT_POINT.test(m[1])) fronts.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
-          else if (m && PARA_END.test(m[1])) paraEnds.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4, point: points.length, para: paras.length })
-          else if (m) {
-            (PARA_POINT.test(m[1]) ? paras : points).push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
-            if (BODY_BRACKET.test(m[1])) regionPoints.push({ name: m[1], glyph: glyphs.length })
+          else if (point && REGION_POINT.test(point)) regionPoints.push({ name: point, glyph: glyphs.length })
+          else if (point && FRONT_POINT.test(point)) fronts.push({ name: point, glyph: glyphs.length, box: boxes.length / 4 })
+          else if (point && PARA_END.test(point)) paraEnds.push({ name: point, glyph: glyphs.length, box: boxes.length / 4, point: points.length, para: paras.length })
+          else if (point) {
+            (PARA_POINT.test(point) ? paras : points).push({ name: point, glyph: glyphs.length, box: boxes.length / 4 })
+            if (BODY_BRACKET.test(point)) regionPoints.push({ name: point, glyph: glyphs.length })
           }
           break
         }

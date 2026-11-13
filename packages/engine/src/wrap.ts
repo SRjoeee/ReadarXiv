@@ -34,9 +34,10 @@
 // and its reader; @cantoo/pdf-lib (MIT), deflate and inflate are given. Moved into the engine package with wrapOf and planOf
 // alone (the rebuild's stage 1a): wrapFinal, which owns our final pass's ink before it wraps it, stays today's
 // (src/pdf-reader/engine/layout/wrap-final.mjs) and calls these through the package's entry.
+import { at } from './bounded-reads.ts'
 import { isMemoryError } from './memory.ts'
 import { DELTA_OBJECTS_MAX, deltaSection, UNHIDDEN_MAX } from './delta-wire.ts'
-import { alignOf, at, DecodeLimit, lex, LexLimit, openRemover, vOf } from './remove.ts'
+import { alignOf, DecodeLimit, lex, LexLimit, openRemover, vOf } from './remove.ts'
 import { appendSection } from './section.ts'
 import { startxrefOf } from './tail.ts'
 import { openObjects } from './xref.ts'
