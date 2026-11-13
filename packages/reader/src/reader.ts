@@ -251,6 +251,18 @@ export function openReader(
       else w.due = true
     }
   }
+  /**
+   * An object of the layer of catalog `digest` answered gone, its head or a part read as its page comes near: the paper's
+   * objects replaced (PDF-READER §11.5). The layer let go (machine.ts `object.refused`: no live follow is needed for the
+   * document to be asked again, the extension's being none once its layer is final) and the follow that waits woken, once a
+   * catalog: a document that still names the same catalog makes no loop of asks
+   */
+  const layerGone = (digest: string) => {
+    rt.input({ i: 'object.refused', digest, why: 'gone' })
+    if (woken.has(digest)) return
+    woken.add(digest)
+    wakeFollows()
+  }
   /** when each first moment came, ms from the open (the probe's: the harness's order checks and timings) */
   const t0 = performance.now()
   const moments: Record<string, number> = {}
@@ -377,7 +389,11 @@ export function openReader(
         part: async (n) => {
           const d = h.parts[n - 1]
           if (!d) return null
-          const part = read('part', await byDigest(`${dirOf(c)}/${d}`, d), d) as Part
+          const bytes = await byDigest(`${dirOf(c)}/${d}`, d).catch((e: unknown) => {
+            if (e instanceof Refused && e.why === 'gone') layerGone(c.sha256)
+            throw e
+          })
+          const part = read('part', bytes, d) as Part
           // (the contents' headings placed by the part's members: the contents of this head's alone)
           if (head === h && contents?.place(part.flows.flat())) outlineSoon()
           return part
@@ -1036,12 +1052,9 @@ export function openReader(
         },
         (e) => {
           const why = e instanceof Refused ? (e.why as 'gone' | 'bad' | 'network') : 'network'
-          rt.input({ i: 'object.refused', digest: r.sha256, why })
           // (the paper's objects replaced: the document asked again, once a catalog)
-          if (why === 'gone' && !woken.has(r.sha256)) {
-            woken.add(r.sha256)
-            wakeFollows()
-          }
+          if (why === 'gone') layerGone(r.sha256)
+          else rt.input({ i: 'object.refused', digest: r.sha256, why })
         },
       )
     }
