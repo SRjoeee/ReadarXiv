@@ -67,9 +67,10 @@ export function pitchOf(rows) {
 }
 
 /** a `line-count` difference of a unit v2 sets in exactly one line fewer than today's on the page, both at most the original's
- *  count, v2 at the original's size; with each side's rows and the paragraph's leading, or null */
+ *  count, v2 at the original's size; with each side's rows and the paragraph's leading, or null. A count read over the pages a
+ *  unit spans (verdict.mjs linesPass, `pages`) is no count on the page: every ruling on a line count is stated on the page */
 function lineFewer(d, x) {
-  if (d.flag !== 'line-count' || !d.unit) return null
+  if (d.flag !== 'line-count' || !d.unit || d.pages) return null
   const t = d.today?.value,
     v = d.v2?.value,
     o = d.original
@@ -153,6 +154,14 @@ function tieStep(d, x) {
   return at
 }
 
+/** whether v2 draws member `ord` as the original on the page: not laid, no group of it turned off, no line of v2's text drawn of
+ *  it, so its ink stays where TeX set it at its size (T1, T4, T5) */
+function drawnAsOriginal(ord, x) {
+  const m = x.laid(ord)
+  const drawn = (x.rec.v2?.units ?? []).some((u) => u.id === ord && u.lines.some((l) => l.n > 0))
+  return !!m && m.state !== 'laid' && !(m.off ?? 0) && !(m.lines?.length ?? 0) && !drawn
+}
+
 /**
  * The rulings, in the order a difference is tried against them (the first whose condition holds covers it). `holds(d, x)`: d a
  * difference worse by its measure, x the page's context (rulingsPass). An entry with no `holds` is a class he accepted that no
@@ -179,7 +188,7 @@ export const RULINGS = [
       if (!ev?.by?.length) return false
       const knobs = ev.by
       const oneStep = oneStepOf(v)
-      if (d.flag !== 'line-count') return false
+      if (d.flag !== 'line-count' || d.pages) return false
       const t = d.today?.value,
         n = d.v2?.value
       if (![t, n, ev.lines].every(Number.isFinite) || n === t) return false
@@ -297,7 +306,7 @@ export const RULINGS = [
     condition:
       "line-count, a theorem (a proof): v2 sets it in exactly one line more than today, today on the original's count, v2 at the original's size (the size floor), v2's lines inside the room the borrow keeps (the block measure: none of the unit's past TeX's text block bottom beyond the depth the lay states it borrowed within the fit's bound, or nearer the next ink than TeX's paragraph separation, on any of its pages), the unit whole (WHOLE). Today's size is not asked (the coordinator's ruling of 2026-11-12: 2610.40645 p30, today 0.55 % under the original, is the look of p12). Reported beside, what today does there instead: its size against the original's, a line of its past TeX's measure, where its last line ends against TeX's end box",
     holds(d, x) {
-      if (d.flag !== 'line-count' || !d.unit) return false
+      if (d.flag !== 'line-count' || !d.unit || d.pages) return false
       const t = d.today?.value,
         v = d.v2?.value
       if (![t, v, d.original].every(Number.isFinite) || v - t !== 1 || t !== d.original) return false
@@ -589,9 +598,7 @@ export const RULINGS = [
       if (d.flag !== 'shown' || !d.unit || d.today?.value !== 'translated') return false
       const ord = x.unit(d)?.part
       if (ord === null || ord === undefined || !(x.v2.pseudocode ?? []).includes(ord)) return false
-      const m = x.laid(ord)
-      const drawn = (x.rec.v2?.units ?? []).some((u) => u.id === ord && u.lines.some((l) => l.n > 0))
-      return !!m && m.state !== 'laid' && !(m.off ?? 0) && !(m.lines?.length ?? 0) && !drawn
+      return drawnAsOriginal(ord, x)
     },
     says: () => "the prepare states it a line of an algorithm's pseudocode (the dump's keptBy), drawn as the original",
   },
@@ -616,16 +623,35 @@ export const RULINGS = [
       if (![t, v].every(Number.isFinite)) return false
       const apart = (f.pitch ?? 0) + (f.identifier ?? 0) + (f.unmeasured ?? 0)
       if (t - v > apart + f.decorated) return false
-      return ords.every((o) => {
-        const m = x.laid(o)
-        const drawn = (x.rec.v2?.units ?? []).some((u) => u.id === o && u.lines.some((l) => l.n > 0))
-        return !!m && m.state !== 'laid' && !(m.off ?? 0) && !(m.lines?.length ?? 0) && !drawn
-      })
+      return ords.every((o) => drawnAsOriginal(o, x))
     },
     says(d, x) {
       const f = x.p.measures.figures
       return `today ${d.today.value}, v2 ${d.v2.value}: ${f.decorated} of today's texts stand in the ${f.decoratedOrds.length} held for a decorated word, drawn as the original${f.pitch || f.identifier ? `; ${(f.pitch ?? 0) + (f.identifier ?? 0)} kept by a mark` : ''}${f.unmeasured ? `; ${f.unmeasured} no row serves` : ''}`
     },
+  },
+  {
+    id: 'T5',
+    title: 'a cell or a figure label held whole as the original for a decorated word in it, where today translates it',
+    verdict: '同意你的建议',
+    date: DATE,
+    seen: "verification/readiness.zh.html, item-15 (W11, the three questions after the figure and table text research), part (a): until a ground can follow its word, hold the whole label or cell as the original (the recommendation he agreed to); his verdict, verification/owner-comments-readiness-2026-11-12.json item-15; the rule as built: lane decorated-whole, PDF-READER §18.61, the prepare's `keptBy: 'decorated'`; T4 reads the same hold through the page's count of figure texts, T5 through the unit the dump states held; the condition the coordinator's, 2026-11-13 (lane pairs-91)",
+    words: null,
+    example:
+      "2111.09276v1-zh p4, a table's body: twelve cells each holding a word on a highlighted ground, held whole as the original by v2 (the dump: kept as the original whole, a decorated word inside it), translated by today; two of its columns drawn mixed by them, where today translates them whole",
+    condition:
+      "shown: today translates the unit and v2 draws it as the original (not laid, no group of it turned off, no line of v2's text drawn of it), its member one the prepare states held whole for a decorated word (the dump of the run v2 is laid from, a unit's `keptBy: 'decorated'`, which v2.mjs reads into the v2 file's `decorated`); groups: a table's grid group today draws whole translated and v2 mixed, every cell of it v2 draws as the original (the difference's `asOriginal`, fidelity.mjs) one so held and so drawn, the others translated. A unit v2 leaves the original's with no such statement still counts, and so does a group today keeps whole",
+    holds(d, x) {
+      const held = (key) => {
+        const ord = x.unit({ unit: key })?.part
+        return ord !== null && ord !== undefined && (x.v2.decorated ?? []).includes(ord) && drawnAsOriginal(ord, x)
+      }
+      if (d.flag === 'shown') return !!d.unit && d.today?.value === 'translated' && held(d.unit.split(' ')[0])
+      if (d.flag !== 'groups' || d.today?.value !== 'target' || d.v2?.value !== 'mixed') return false
+      const kept = d.asOriginal?.v2 ?? []
+      return kept.length > 0 && kept.every(held)
+    },
+    says: (d) => (d.flag === 'groups' ? `its cells ${d.asOriginal.v2.join(', ')} held whole for a decorated word (the dump's keptBy), drawn as the original` : 'the prepare states it held whole for a decorated word (the dump\'s keptBy), drawn as the original'),
   },
   {
     id: 'WB',

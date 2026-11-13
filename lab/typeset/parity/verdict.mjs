@@ -4,7 +4,7 @@
 // differences past a noise floor judged (v2 nearer passes, farther fails the page), and each side's faults against the
 // absolute bounds. `coverageOf` holds the run to what it asked: every asked pair drawn by this run from the pages v2.mjs laid
 // for it, every page of each drawn and measured. `verdictOf`: the gate passes only on complete coverage with no page worse.
-import { bare, judgeJoined, joinedOf, measureFidelity, mutualBest as bestPairs, originalOf, SIZE_STEP } from './fidelity.mjs'
+import { bare, judgeJoined, joinedOf, mathDrawn, measureFidelity, mutualBest as bestPairs, originalOf, SIZE_STEP } from './fidelity.mjs'
 import { measureBlind, raisedOver } from './blind.mjs'
 import { unitClass } from '../../../packages/engine/src/locate/today/content-classes.mjs'
 import { litColumn, paintedEntries } from './paint.mjs'
@@ -263,7 +263,7 @@ export const SAYS = {
   links: "the links a reader can follow on the page (the anchors each side drew, counted per target per drawn line: one target's on one line or on lines one under the other one link) against the original's link annotations (one target's one right after the other one link: TeX's annotation a line of a link it broke): how many are missing",
   borders: "the links drawn with a border (the anchors each side drew with one) against the original's link annotations PDF.js draws a border round: how many are missing",
   highlight: "the units today highlights: the lines each side's sentence boxes leave uncovered (its drawn lines, its original's), v2's against today's; elsewhere v2's boxes that miss its drawn lines or its original's (none is no fault; covering boxes where today draws none are better)",
-  'line-count': "a unit's line count on the page against the original's",
+  'line-count': "a unit's line count on the page against the original's; a unit on two pages or more, over them (linesPass)",
   over: "a side's text drawn over ink that stays (the copy's, a crop's, the original's it keeps): device pixels of its text over other ink (the original: none)",
   frame: "a laid line past its column or the original's text block (a cell: past its own room, the owner's ruling 3), points (the original: none)",
   block: "lines borrowed past TeX's room: under its text block bottom, or the next ink nearer than its paragraph separation (the owner's ruling 1)",
@@ -440,7 +440,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   }
   // (the run-ins the part states (`led`, follower ord -> its leader's): a follower it joins to the member before it in its flow
   // (Placed.join: the two share that one's last line, TeX's separation between them), and the member a bound name leads
-  // (lay/lead.ts); each judged where its first line on this page is the leader's last. Two units set on one line otherwise
+  // (lay/lead.ts); each judged where its first line on this page is the leader's last, each read in the part's order (a
+  // paragraph that runs on into the next column stands higher there than on the line it shares: 2611.03953v2 p3, p9). Two units set on one line otherwise
   // (an author's address in a column of its own beside another's, a table's cells, a figure's texts) are no run-in: each
   // stands where TeX set it, judged by anchor and align)
   const APART = new Set(['cell', 'figure', 'inkfigures'])
@@ -451,12 +452,13 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const hk = keyOfPart(lead),
       h = orig.get(hk)
     if (!h?.lines.length || APART.has(h.kind)) continue
-    const hl = [...h.lines].sort((a, b) => a.y - b.y)[0]
-    const fl = [...f.lines].sort((a, b) => b.y - a.y)[0]
+    if (!h.last) continue
+    const hl = h.lines.at(-1)
+    const fl = f.lines[0]
     if (Math.abs(fl.y - hl.y) > 0.5) continue
     runIns.push({ hk, h, hl, fk, f, fl, sz: fl.size || f.size || 10, sep: fl.x0 - hl.x1 })
   }
-  const followers = new Set(runIns.map((r) => r.fk))
+  const runInOf = new Map(runIns.map((r) => [r.fk, r]))
   // (the lines of TeX's several members share whole, set centred or flush right, as the lay reads them (`rows`: the typesetter's
   // rowLinesOf over the part's flows, measure.mjs; the coordinator's ruling of 2026-11-09): TeX placed the whole line, so a
   // member's place follows from the run, and each is judged by the line (its run's middle, or end, below), never by its own
@@ -540,6 +542,12 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       // (a turned line, a figure's rotated text, is measured by its box alone: no baseline, start or gap to read)
       const ls = all.filter((l) => !l.rot)
       const s = { lines: all.length + (cropRows[side].get(key) ?? 0), size: median(all.map((l) => l.size)), chars: sum(all, 'n'), bold: sum(all, 'bold'), italic: sum(all, 'italic') }
+      // (a tie's member is read at the least of its drawn lines' sizes, its scripts aside (raisedOver): the size of its run the
+      // tie caps, below)
+      if (tieOf.has(key)) {
+        const own = ls.filter((l) => l.n > 0 && !raisedOver(l, ls))
+        if (own.length) s.least = Math.min(...own.map((l) => l.size))
+      }
       // (a label the side draws anew is no character of the text's share: the original's share is read over the unit's lines,
       // which begin after the label's ink (originalOf), so a relabelled head's bold label is no bold text; a label kept as the
       // original's ink is a crop's stand-in, never counted)
@@ -551,6 +559,12 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
           s.italic -= d.italic
         }
       }
+      // (nor are the characters A sets in a math face, which the original's share leaves out: the share is the letters' own,
+      // fidelity.mjs mathDrawn)
+      const m = mathDrawn(all, aOrig.get(key)?.math)
+      s.chars -= m.n
+      s.bold -= m.bold
+      s.italic -= m.italic
       if (o?.lines.length && ls.length) {
         const ol = [...o.lines].sort((a, b) => b.y - a.y)
         const dl = [...ls].sort((a, b) => b.y - a.y)
@@ -609,13 +623,18 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
         } else if (o.align === 'l' || o.align === 'j') {
           // (a follower's first line starts after its head, whose translation is another width: the gap measures it; every
           // other line starts where one of the original's lines (but an indented first) starts: its column's margin, a margin
-          // beside a float, the margin after a display)
+          // beside a float, the margin after a display. A follower's first line is the one it shares with its head (runIns):
+          // the original's first in the part's order, the drawn one on a row of the head's drawn lines (else its highest), so a
+          // paragraph that runs on into the next column is judged on its own lines there, 2611.03953v2 p3, p9)
+          const r = runInOf.get(key)
+          const joined = r ? (ls.filter((l) => (M.get(r.hk) ?? []).some((x) => !x.rot && Math.abs(x.y - l.y) <= 0.5)).sort((a, b) => b.y - a.y)[0] ?? dl[0]) : null
+          const own = r ? o.lines.filter((l) => l !== r.fl) : []
           const first =
-            o.first && !followers.has(key)
+            o.first && !r
               ? Math.min(startOff(dl[0], ol[0].x0), ol[0].label !== undefined ? startOff(dl[0], ol[0].label) : Number.POSITIVE_INFINITY)
               : 0
-          const starts = (ol.length > 1 && o.first ? ol.slice(1) : ol).map((l) => l.x0)
-          const rest = dl.slice(o.first ? 1 : 0).map((l) => Math.min(...starts.map((x) => startOff(l, x))))
+          const starts = (r ? (own.length ? own : ol) : ol.length > 1 && o.first ? ol.slice(1) : ol).map((l) => l.x0)
+          const rest = (r ? ls.filter((l) => l !== joined) : dl.slice(o.first ? 1 : 0)).map((l) => Math.min(...starts.map((x) => startOff(l, x))))
           off = Math.max(first, ...rest)
           how = `${o.align === 'l' ? 'left' : 'justified'}: a line's start`
         }
@@ -652,6 +671,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       if (os) {
         t.share = t.size / os
         v.share = v.size / os
+        if (t.least !== undefined) t.leastShare = t.least / os
+        if (v.least !== undefined) v.leastShare = v.least / os
         if (!tieOf.has(key)) judgeText(key, true)('size', name, 'size off the original\'s (share of it)', r2(os), { value: r2(t.size), d: Math.abs(1 - t.share), chars: t.chars }, { value: r2(v.size), d: Math.abs(1 - v.share), chars: v.chars }, NEAR.size)
       }
       if (t.olines !== undefined && v.olines !== undefined)
@@ -678,9 +699,18 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
 
   // ------------------------------------------------ size of a tie: one paragraph, its smallest member's share of the original's
   // size on each side (today's members laid one by one, its smallest over the same members): a tie member under today's
-  // smallest is worse, the tie's members at today's smallest equal
+  // smallest is worse, the tie's members at today's smallest equal. Each member at the least of its runs: the tie caps a unit's
+  // fit, and a unit its displays split is laid a run at a time, each run at that scale or more naturally (PDF-READER §18.7, a
+  // unit split by its displays), so its lines' median may be a later run's, larger (2611.03953v2 p12: a paragraph tied to its
+  // run-in head at 0.95, three lines before its display and four after it at 1.0 on both sides, read at 1.0)
   for (const keys of ties) {
-    const side = (k) => keys.map((key) => units.find((u) => u.key === key)?.sides[k]?.share).filter(Number.isFinite)
+    const side = (k) =>
+      keys
+        .map((key) => {
+          const s = units.find((u) => u.key === key)?.sides[k]
+          return s?.leastShare ?? s?.share
+        })
+        .filter(Number.isFinite)
     const t = side('today'),
       v = side('v2')
     if (t.length !== keys.length || v.length !== keys.length) continue
@@ -757,7 +787,10 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       // (a head v2 lays with no line of its own stands in its follower's first line, a bound name set as its lead: the two are
       // one drawn line there, no separation between units to read)
       if (side === 'v2' && !flat(hk)?.length && stateOf.get(h.part) === 'laid') continue
-      const fd = flat(fk)?.length ? [...flat(fk)].sort((a, b) => b.y - a.y)[0] : { y: fl.y, x0: fl.x0 }
+      // (its first drawn line the one it shares with its head's: on a row of one of the head's drawn lines, the highest such; a
+      // side that draws the head on no row of its follower's, the follower's highest)
+      const shared = (flat(fk) ?? []).filter((l) => flat(hk)?.some((x) => Math.abs(x.y - l.y) <= 0.5))
+      const fd = flat(fk)?.length ? [...(shared.length ? shared : flat(fk))].sort((a, b) => b.y - a.y)[0] : { y: fl.y, x0: fl.x0 }
       const hd = flat(hk)?.length ? flat(hk).find((l) => Math.abs(l.y - fd.y) <= 0.5) : Math.abs(hl.y - fd.y) <= 0.5 ? hl : null
       if (!hd || (!flat(fk)?.length && !flat(hk)?.length)) continue
       g[side] = fd.x0 - hd.x1
@@ -1620,6 +1653,78 @@ export function stylePass(pages, recount) {
         worse: dv > dt,
       })
     }
+    p.diffs = keep
+    recount(p)
+  }
+}
+/**
+ * The paper's pass of the line count: a unit whose text the two readers break over a page apart is judged once over the pages it
+ * spans. Such a unit is one v2 sets in more lines than today on one page and in fewer on another (each side's lines on a page,
+ * none where it draws none of the unit: `units[].sides`, `lines`): its text moved over the break, which a page at a time reads as
+ * differences that cancel. Each side's lines are summed over those pages, the original's over the pages either side reads its
+ * count on (`olines`), the unit's line-count differences on each page replaced by that one, on the first page one stands on, its
+ * pages named (`pages`); none where the two stand as far from the original over them (the measure's floor, half a line). Where a
+ * page's difference was judged fresh (judgeFresh: the line count follows from the fresh text's length) the unit's is too:
+ * listed, never worse. 2111.09276v1 t87, 33 lines on A, 25 on p5 and 8 on p6: TeX's paragraph points keep v2's text on the page
+ * TeX set it, so v2 sets 19 and 7 where today sets 21 and 6, read a page at a time two lines farther on p5 and one nearer on p6,
+ * over both 26 against today's 27. The owner's rulings on a line count are stated on the page: none reads a count over pages
+ * (rulings.mjs). A unit on one page, or one v2 sets in fewer lines than today on some of its pages and in more on none (or the
+ * reverse), stays as measured on each page: its difference stands on the page it arises on, where the rulings read it
+ */
+export function linesPass(pages, recount) {
+  const ps = pages.filter((p) => !p.error)
+  const at = new Map()
+  for (const p of ps)
+    for (const u of p.units ?? []) {
+      const t = u.sides?.today,
+        v = u.sides?.v2
+      const o = t?.olines ?? v?.olines
+      if (!Number.isFinite(o)) continue
+      if (!at.has(u.key)) at.set(u.key, [])
+      at.get(u.key).push({ page: p.page, t: t?.lines ?? 0, v: v?.lines ?? 0, o })
+    }
+  const keyOf = (d) => (d.flag === 'line-count' && d.unit ? String(d.unit).split(' ')[0] : null)
+  const across = new Map([...at].filter(([, xs]) => xs.some((x) => x.v > x.t) && xs.some((x) => x.v < x.t)))
+  if (!across.size) return
+  const fresh = new Set()
+  for (const p of ps) for (const d of p.diffs ?? []) if (across.has(keyOf(d)) && d.nearer === 'fresh') fresh.add(keyOf(d))
+  const done = new Set()
+  for (const p of [...ps].sort((a, b) => a.page - b.page)) {
+    const keep = []
+    let moved = false
+    for (const d of p.diffs ?? []) {
+      const key = keyOf(d)
+      const xs = across.get(key)
+      if (!xs) {
+        keep.push(d)
+        continue
+      }
+      moved = true
+      if (done.has(key)) continue
+      done.add(key)
+      const sum = (k) => xs.reduce((n, x) => n + x[k], 0)
+      const o = sum('o'),
+        t = sum('t'),
+        v = sum('v')
+      const dt = Math.abs(t - o),
+        dv = Math.abs(v - o)
+      if (Math.abs(dv - dt) <= 0.5) continue
+      const on = xs.map((x) => x.page).sort((a, b) => a - b)
+      const what = `lines off the original's count, over the pages it spans (${on.map((x) => `p${x}`).join(', ')})`
+      const { chars: _c, ...rest } = d
+      keep.push({
+        ...rest,
+        what,
+        ...(d.base ? { base: what } : {}),
+        original: o,
+        today: { value: t, off: dt },
+        v2: { value: v, off: dv },
+        nearer: fresh.has(key) ? 'fresh' : dv < dt ? 'v2' : 'today',
+        worse: !fresh.has(key) && dv > dt,
+        pages: on,
+      })
+    }
+    if (!moved) continue
     p.diffs = keep
     recount(p)
   }

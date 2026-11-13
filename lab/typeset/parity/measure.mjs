@@ -24,7 +24,7 @@ import { keptFacts, originalFacts, scriptsPass } from './blind.mjs'
 import { frameOf, labelsPass } from './fidelity.mjs'
 import { bundleCheck, bundleOf, pdfOf, whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
-import { coverageOf, FLAGS, freshOf, freshResolve, judgedChanged, linksPass, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, stylePass, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
+import { coverageOf, FLAGS, freshOf, freshResolve, judgedChanged, linesPass, linksPass, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, stylePass, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
 import { cutBeforeBoundary, rulingsOf, rulingsPass } from './rulings.mjs'
 
 /** why a unit is laid with a fresh row (fresh.mjs freshNeeds' causes), as the sheet says it (lane parity-fresh) */
@@ -237,6 +237,12 @@ for (const [pair, raw] of drawn) {
     mine.filter((p) => !p.error),
     recount,
   )
+  // (a unit's line count read over the pages it spans: where the two readers break the page apart, its text moves over the break,
+  // verdict.mjs linesPass)
+  linesPass(
+    mine.filter((p) => !p.error),
+    recount,
+  )
   // (the paper's labels in one form, the owner's ruling 4: judged over the paper's pages)
   labelsPass(
     mine.filter((p) => !p.error),
@@ -278,6 +284,7 @@ for (const [pair, raw] of drawn) {
     sharePass(drawnAgain, recount)
     linksPass(drawnAgain, recount)
     stylePass(drawnAgain, recount)
+    linesPass(drawnAgain, recount)
     labelsPass(drawnAgain, recount)
     scriptsPass(drawnAgain, recount)
     // (the owner's rulings of 2026-11-12 read on the re-lay's drawing, rulings.mjs: a difference judged there carries the ruling that

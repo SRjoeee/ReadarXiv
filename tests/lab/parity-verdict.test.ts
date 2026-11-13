@@ -589,6 +589,42 @@ describe("a size tie (one paragraph's text is even) judged as one paragraph", ()
   })
 })
 
+describe('a size tie whose paragraph a display splits: each member read at the least of its runs, the one the tie caps', () => {
+  // (2611.03953v2 p12: a run-in head, member 57, and its paragraph, member 59, which a display splits: three lines before it,
+  // four after. v2 ties the two at 0.95 of the original's size; the paragraph's run after the display comes out at its own size
+  // (a unit split by its displays is laid a run at a time, each run at the tie's scale or more naturally: PDF-READER §18.7).
+  // Today draws the head at 1.02 and the paragraph as v2 does, 0.95 then 1.0. Read at its lines' median, the paragraph stood at
+  // 1.0 on both sides, so the tie's smallest was v2's head alone)
+  const before = [500, 488, 476],
+    after = [440, 428, 416, 404]
+  const v2 = v2Of({
+    members: [57, 59].map((ord) => ({ ord, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } })),
+    facts: [
+      { ord: 57, kind: 'heading', align: 'l', style: { size: 10 }, lines: [factLine(72, 120, 500)] },
+      { ord: 59, kind: 'para', align: 'j', style: { size: 10 }, lines: [factLine(130, 300, 500), ...[...before.slice(1), ...after].map((y) => factLine(72, 300, y))] },
+    ],
+    today: { 57: { today: 57 }, 59: { today: 59 } },
+    ties: [[57, 59]],
+  })
+  const at = (size: number, x0: number, y: number) => ({ ...drawnLine(x0, 300, y, 'x'.repeat(12), size) })
+  const para = (first: number, rest: number) => [at(first, 130, 500), ...before.slice(1).map((y) => at(first, 72, y)), ...after.map((y) => at(rest, 72, y))]
+  const page = (head: { today: number; v2: number }, v2First = 9.5) =>
+    measure(
+      v2,
+      rec({
+        today: { units: [{ id: 57, lines: [{ ...drawnLine(72, 120, 500, 'x'.repeat(4), head.today) }] }, { id: 59, lines: para(9.5, 10) }], lit: [57, 59] },
+        v2: { units: [{ id: 57, lines: [{ ...drawnLine(72, 120, 500, 'x'.repeat(4), head.v2) }] }, { id: 59, lines: para(v2First, 10) }], lit: [57, 59] },
+      }),
+    )
+  const sizes = (p: { diffs: { flag: string; unit: string | null; worse: boolean }[] }) => p.diffs.filter((d) => d.flag === 'size')
+  it("v2's tie at 0.95, today's paragraph's first run at 0.95 under its head at 1.02: the smallest equal, no difference", () => {
+    expect(sizes(page({ today: 10.2, v2: 9.5 }))).toEqual([])
+  })
+  it("a tie under today's least run is worse, as one paragraph", () => {
+    expect(sizes(page({ today: 10.2, v2: 9 }, 9))).toMatchObject([{ unit: 'tie t57, t59', worse: true }])
+  })
+})
+
 describe('gap: a follower the part states as run in after its leader, nothing else set on one line', () => {
   const gaps = (p: { diffs: { flag: string }[] }) => p.diffs.filter((d) => d.flag === 'gap')
   const laid = (ords: number[]) => ords.map((ord) => ({ ord, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }))

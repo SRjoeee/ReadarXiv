@@ -4,7 +4,7 @@
 // geometry of one of his cases.
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { measurePage, pastRoomPass, recount, sharePass, stylePass } from '../../lab/typeset/parity/verdict.mjs'
+import { linesPass, measurePage, pastRoomPass, recount, sharePass, stylePass } from '../../lab/typeset/parity/verdict.mjs'
 // @ts-expect-error — a plain node module of the lab
 import { frameOf, labelsPass, originalOf } from '../../lab/typeset/parity/fidelity.mjs'
 // @ts-expect-error — a plain node module of the lab
@@ -39,13 +39,13 @@ const v2Of = (
   ...(o.fills ? { fills: o.fills } : {}),
   ...(o.spaced ? { spaced: { [N]: o.spaced } } : {}),
 })
-type Extra = { prep?: { ord: number }[]; pair?: string; frame?: object; groups?: object[]; keptByGroup?: Set<number>; folios?: Set<number>; ruled?: Set<number>; cellRooms?: Map<number, object>; floor?: number; pastFoot?: number }
+type Extra = { prep?: { ord: number }[]; pair?: string; frame?: object; groups?: object[]; keptByGroup?: Set<number>; folios?: Set<number>; ruled?: Set<number>; cellRooms?: Map<number, object>; floor?: number; pastFoot?: number; led?: Map<number, number> }
 const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, x: Extra = {}) =>
   measurePage(x.pair ?? 'p-zh', v2, r, {
     prepByOrd: new Map((x.prep ?? []).map((u) => [u.ord, u])),
     todayOf: new Map(Object.entries(v2.today).map(([k, t]) => [Number(k), t.today])),
     turned: new Set(),
-    led: new Map(),
+    led: x.led ?? new Map(),
     top: new Set(),
     frame: x.frame ?? null,
     groups: x.groups ?? [],
@@ -414,6 +414,35 @@ describe('elements: drawn otherwise than the original sets them', () => {
   })
 })
 
+describe("a run-in paragraph read from the join the part states: its first line the head's last, whatever column it ends in", () => {
+  // (2611.03953v2 p3: a run-in heading (37) ends its line at 181.45 and its paragraph (38) starts on it at 191.41, runs down the
+  // first column and on into the second, whose first line stands higher on the page (714.98) than the shared one (144.3); the
+  // part's join (Placed.join, `led` 38 -> 37) states the two share the heading's last line)
+  const head = { ord: 37, kind: 'heading', align: 'l', style: { size: 10 }, lines: [factLine(55.44, 181.45, 144.3)] }
+  const ys = [144.3, 132.34, 120.39, 108.43]
+  const col2 = [714.98, 702.98]
+  const para = { ord: 38, kind: 'para', align: 'j', style: { size: 10 }, lines: [factLine(191.41, 289.44, 144.3), ...ys.slice(1).map((y) => factLine(55.44, 289.44, y)), ...col2.map((y) => factLine(307.44, 541.44, y))] }
+  /** a side's drawing: its head translated, ending at `end`, the paragraph's first line starting `sep` after it */
+  const side = (end: number, sep: number) => [
+    { id: 37, lines: [drawnLine(55.44, end, 144.3, '\u5f15\u8a00')] },
+    { id: 38, lines: [drawnLine(end + sep, 289.44, 144.3, '\u6587'.repeat(8)), ...ys.slice(1).map((y) => drawnLine(55.44, 289.44, y, '\u6587'.repeat(20))), ...col2.map((y) => drawnLine(307.44, 541.44, y, '\u6587'.repeat(20)))] },
+  ]
+  const page = (sep: { today: number; v2: number }, led = new Map([[38, 37]])) =>
+    measure(
+      v2Of({ members: [laid(37), laid(38)], facts: [head, para], today: { 37: { today: 37 }, 38: { today: 38 } } }),
+      rec({ today: { units: side(120, sep.today) }, v2: { units: side(110, sep.v2) } }),
+      { led },
+    )
+  it("its first line is the follower's, judged by the gap after its head, not as a line's start off the original's", () => {
+    const p = page({ today: 9.96, v2: 9.96 })
+    expect(of('align')(p)).toEqual([])
+    expect(p.units.find((u: { key: string }) => u.key === 't38').sides.v2.gap).toEqual({ original: 9.96, drawn: 9.96 })
+  })
+  it('a gap v2 draws wider than the original by more than the floor is read there', () => {
+    expect(of('gap')(page({ today: 9.96, v2: 30 }))).toMatchObject([{ unit: 't38 para after t37 heading', worse: true }])
+  })
+})
+
 describe("groups: a table's grid group translated or kept whole as today decides (the owner's ruling 3; 1706.03762 p9)", () => {
   // (Table 3's header: train 118, PPL 119, BLEU 120, params 121; today leaves the header whole, v2 translates 118 and 121 and
   // keeps the names 119 and 120)
@@ -424,6 +453,10 @@ describe("groups: a table's grid group translated or kept whole as today decides
   it("v2's header part translated, part the original's, where today's is whole: worse", () => {
     const r = rec({ v2: { units: [{ id: 118, lines: [drawnLine(370, 380, 653, '\u5217\u8f66', 9.96)] }, { id: 121, lines: [drawnLine(480, 490, 653, '\u53c2\u6570', 9.96)] }] } })
     expect(of('groups')(measure(v2, r, { prep, groups }))).toMatchObject([{ unit: 'group 3:h', worse: true, v2: { value: 'mixed' }, today: { value: 'original' } }])
+  })
+  it('states its cells and those each side draws as the original, which the ruling T5 reads (rulings.mjs)', () => {
+    const r = rec({ v2: { units: [{ id: 118, lines: [drawnLine(370, 380, 653, '\u5217\u8f66', 9.96)] }, { id: 121, lines: [drawnLine(480, 490, 653, '\u53c2\u6570', 9.96)] }] } })
+    expect(of('groups')(measure(v2, r, { prep, groups }))).toMatchObject([{ cells: ['t118', 't119', 't120', 't121'], asOriginal: { today: ['t118', 't119', 't120', 't121'], v2: ['t119', 't120'] } }])
   })
   it("a group today's decision kept whole, handed to v2 as rows already decided and drawn the same: not exercised, never worse", () => {
     // (the stored rows hold no translation for a group today kept, so v2's own decision cannot be exercised on it: recorded
@@ -550,6 +583,50 @@ describe("weight of a figure's texts: their darkness over each drawing's own reg
   })
 })
 
+describe("a cell's weight and style: the bold share is the letters' own, a symbol A sets in math not counted with them (2111.09276v1 p8)", () => {
+  // (a header cell `\textbf{Rank}$\downarrow$`: A sets the letters bold and the arrow in a math face, which the original's share
+  // leaves out (originalOf); today draws the translation and the arrow all bold, v2 the translation bold and the arrow regular, as
+  // TeX set it. Two such cells, so that the class holds ink enough; `k` arrows each)
+  const facts = [60, 61].map((ord, i) => ({ ord, kind: 'cell', align: 'c', style: { size: 9 }, lines: [factLine(100 + 80 * i, 150 + 80 * i, 400, 9)] }))
+  const v2 = v2Of({ members: [60, 61].map((o) => ({ ord: o, state: 'laid', lines: [] })), facts, today: { 60: { today: 60 }, 61: { today: 61 } } })
+  const runsOf = (k: number) =>
+    [0, 1].flatMap((i) => [
+      [100 + 80 * i, 398, 140 + 80 * i, 406, 400, 9, 0, 'Rank', 0],
+      [141 + 80 * i, 398, 150 + 80 * i, 406, 400, 9, 1, '\u2193'.repeat(k), 0],
+    ])
+  /** a drawn cell: two letters and its arrows, the arrows bold or not */
+  const cell = (i: number, arrowBold: boolean, k: number) => [
+    { ...drawnLine(100 + 80 * i, 150 + 80 * i, 400, `\u533b\u7597${'\u2193'.repeat(k)}`, 9), bold: arrowBold ? 2 + k : 2, st: `11${(arrowBold ? '1' : '0').repeat(k)}` },
+  ]
+  const dark = { mean: 0.6, pixels: 900 }
+  const page = (todayArrow: boolean, v2Arrow: boolean, { k = 1, fonts = ['ABCDEF+NimbusRomNo9L-Medi', 'ABCDEF+CMSY10'] } = {}) =>
+    measure(
+      v2,
+      rec({
+        today: { units: [60, 61].map((id, i) => ({ id, lines: cell(i, todayArrow, k) })) },
+        v2: { units: [60, 61].map((id, i) => ({ id, lines: cell(i, v2Arrow, k) })) },
+        original: { runs: runsOf(k), fonts },
+        px: fid({ dark: { today: { 't:60': dark, 't:61': dark }, v2: { 'p:60': dark, 'p:61': dark } }, orig: { 'p:60': dark, 'p:61': dark } }),
+      }),
+    )
+  const read = (flag: string, unit?: string) => (p: { diffs: { flag: string; unit: string; worse: boolean; nearer: string }[] }) =>
+    p.diffs.filter((d) => d.flag === flag && (unit === undefined || d.unit === unit)).map((d) => [d.unit, d.worse, d.nearer])
+  it("the arrow A sets in math, drawn regular by v2 and bold by today, moves neither side's weight: no difference", () => {
+    expect(read('weight', 'cells')(page(true, false))).toEqual([])
+  })
+  it("nor either side's style, three arrows a cell", () => {
+    expect(read('style')(page(true, false, { k: 3 }))).toEqual([])
+  })
+  it('an arrow A sets in the bold text face is counted with the letters: v2 drawing it regular is worse, as before', () => {
+    const bold = { fonts: ['ABCDEF+NimbusRomNo9L-Medi', 'ABCDEF+NimbusRomNo9L-Medi'] }
+    expect(read('weight', 'cells')(page(true, false, bold))).toEqual([['cells', true, 'today']])
+    expect(read('style')(page(true, false, { ...bold, k: 3 }))).toEqual([
+      ['t60 cell', true, 'today'],
+      ['t61 cell', true, 'today'],
+    ])
+  })
+})
+
 describe("ink: the PDF's own black (the owner's ruling 7)", () => {
   const f = one(5, 'para', [factLine(72, 540, 600)])
   const at = (fill: string) => [{ ...drawnLine(72, 540, 600, 'x'.repeat(30)), fill }]
@@ -604,6 +681,63 @@ describe("style: a unit's share read over the pages it spans (the paper's pass)"
     ]
     stylePass(pages, recount)
     expect(pages[0]!.diffs).toMatchObject([{ flag: 'style', worse: true, nearer: 'today', v2: { value: 0.3 } }])
+  })
+})
+
+describe("line-count: a unit's lines read over the pages it spans (the paper's pass)", () => {
+  // (2111.09276v1 p5 and p6 t87: a paragraph of 33 lines on A, 25 on p5 and 8 on p6. TeX's paragraph points keep v2's text on
+  // the page TeX set it, so v2 sets 19 on p5 and 7 on p6, today 21 and 6: read a page at a time, v2 two lines farther on p5 and one
+  // nearer on p6; over both, today 27, v2 26)
+  type D = { flag: string; unit: string; what?: string; worse: boolean; nearer: string; original: unknown; today: { value: unknown; off: unknown }; v2: { value: unknown; off: unknown }; pages?: number[] }
+  type Page = { page: number; worse: number; diffs: D[]; units: object[] }
+  const recount = (p: Page) => {
+    p.worse = p.diffs.filter((d) => d.worse).length
+  }
+  const count = (unit: string, o: number, t: number, v: number, nearer?: string): D => {
+    const n = nearer ?? (Math.abs(v - o) < Math.abs(t - o) ? 'v2' : 'today')
+    return { flag: 'line-count', unit, worse: n === 'today', nearer: n, original: o, today: { value: t, off: Math.abs(t - o) }, v2: { value: v, off: Math.abs(v - o) } }
+  }
+  const unit = (key: string, o: number, t: number | null, v: number | null) => ({ key, kind: 'para', sides: { ...(t === null ? {} : { today: { lines: t, olines: o } }), ...(v === null ? {} : { v2: { lines: v, olines: o } }) } })
+  const pagesOf = (a: [number, number, number], b: [number, number, number], d = (x: [number, number, number]) => count('t87 para', ...x)) => [
+    { page: 5, worse: 0, diffs: [d(a)], units: [unit('t87', ...a)] },
+    { page: 6, worse: 0, diffs: [d(b)], units: [unit('t87', ...b)] },
+  ]
+  it('one difference over both pages, on the first: v2 one line farther from the original than today, worse, its pages named', () => {
+    const pages: Page[] = pagesOf([25, 21, 19], [8, 6, 7])
+    for (const p of pages) recount(p)
+    linesPass(pages, recount)
+    expect(pages[0]!.diffs).toMatchObject([{ flag: 'line-count', unit: 't87 para', original: 33, today: { value: 27, off: 6 }, v2: { value: 26, off: 7 }, worse: true, nearer: 'today', pages: [5, 6] }])
+    expect(pages[0]!.diffs[0]!.what).toContain('over the pages it spans (p5, p6)')
+    expect(pages[1]!.diffs).toEqual([])
+    expect(pages.map((p) => p.worse)).toEqual([1, 0])
+  })
+  it('none where the two stand as far over both pages, whatever each page reads', () => {
+    const pages: Page[] = pagesOf([25, 22, 21], [8, 5, 6])
+    linesPass(pages, recount)
+    expect(pages.map((p) => p.diffs)).toEqual([[], []])
+  })
+  it('a page one side draws none of the unit on counts it there as none; a unit on one page stays as measured', () => {
+    // (v2 sets all 33 on p5 where today needs p6 too: over both, today 27 and v2 30)
+    const pages: Page[] = [
+      { page: 5, worse: 0, diffs: [count('t87 para', 25, 21, 30)], units: [unit('t87', 25, 21, 30), unit('t90', 4, 4, 3)] },
+      { page: 6, worse: 0, diffs: [], units: [unit('t87', 8, 6, null)] },
+    ]
+    pages[0]!.diffs.push(count('t90 para', 4, 4, 3))
+    linesPass(pages, recount)
+    expect(pages[0]!.diffs).toMatchObject([{ unit: 't87 para', original: 33, today: { value: 27 }, v2: { value: 30 }, nearer: 'v2', worse: false }, { unit: 't90 para', worse: true, original: 4 }])
+  })
+  it('a unit v2 sets in fewer lines than today on one page and in as many on the other stays as measured on each page', () => {
+    // (its line fewer stands on the page it arises on, where the owner's rulings on a line count read it: 2611.03953v2 t21)
+    const pages: Page[] = pagesOf([4, 3, 2], [24, 18, 18])
+    pages[1]!.diffs = []
+    linesPass(pages, recount)
+    expect(pages[0]!.diffs).toMatchObject([{ unit: 't87 para', original: 4, today: { value: 3 }, v2: { value: 2 }, worse: true }])
+    expect(pages[0]!.diffs[0]!.pages).toBeUndefined()
+  })
+  it('a page judged fresh keeps the unit fresh over its pages: listed, never worse', () => {
+    const pages: Page[] = pagesOf([25, 21, 19], [8, 6, 7], (x) => count('t87 para', ...x, 'fresh'))
+    linesPass(pages, recount)
+    expect(pages[0]!.diffs).toMatchObject([{ unit: 't87 para', nearer: 'fresh', worse: false, pages: [5, 6] }])
   })
 })
 
