@@ -32,7 +32,6 @@ import {
   type Effect,
   init,
   type LayerWhy,
-  layerUnitsOf,
   lookSaid,
   type ObjectAt,
   type OriginalWhy,
