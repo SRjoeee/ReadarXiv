@@ -1,7 +1,7 @@
 // B.place (design-b §1.5, G1): each line's items placed (justified within the caps, ragged, centred, flush), and a fit's
 // breaking made a layout (laidOut). Today's code (layer2.mjs L2:3976-4038, L2:4136-4157), moved by
 // lab/typeset/move-fit.mjs; typed by place.types.ts.
-import { gapsOf, hangOf, inWord, latinishOf, lineExtent, squeezable, tabOf } from './break.mjs'
+import { gapsOf, hangOf, inWord, latinishOf, lineExtent, squeezable, tabOf } from './break.ts'
 import { inFlow, slotsAt } from './slots.ts'
 import { toLastLines } from '../fit/last-lines.ts'
 

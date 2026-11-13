@@ -7,7 +7,7 @@
 // centred or flush right (RowLine), is laid as one run: its members run on as on any shared row, the run then placed as TeX
 // placed the line (layLine). A member is prepared from its part (L5-L7: the unit's rules, the tokens) by the adapter; the
 // composition reads nothing else.
-import { hangOf, noLineStart } from '../breaker/break.types.ts'
+import { hangOf, noLineStart } from '../breaker/break.ts'
 import type { FitBlock } from '../fit/types.ts'
 import type { FillLaid } from '../shared/fill-page.ts'
 import { relay } from '../shared/relay.ts'

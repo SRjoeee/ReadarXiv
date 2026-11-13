@@ -2,7 +2,7 @@
 // @ts-ignore: JavaScript moved as it is, typed by this file alone (a package holds no declaration file)
 import * as m from './place.mjs'
 import type { FitBlock, FitParams, FitState, Layout } from '../fit/types.ts'
-import type { Broken } from './break.types.ts'
+import type { Broken } from './break.ts'
 
 /** a fit's breaking at its state made a layout: its lines placed, what it set and lost counted (L2:4139 laidOut) */
 export const laidOut: (

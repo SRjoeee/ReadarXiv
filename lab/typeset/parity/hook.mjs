@@ -16,11 +16,11 @@
 // reads (the coordinator's ruling of 2026-11-10, xeCJK's rule). That rule alone: the next line of the filter, no ordinary space
 // before a full-width mark no line opens with (markBarredStart, the coordinator's ruling of 2026-11-12, against xeCJK's, which
 // keeps that space), is a ruling of its own that the 2026-11-10 one does not cover, and stays in that lay. And in
-// packages/typeset/src/breaker/break.mjs a CJK line no longer squeezes to take the group it misses (`squeezes`: its marks' blank
+// packages/typeset/src/breaker/break.ts a CJK line no longer squeezes to take the group it misses (`squeezes`: its marks' blank
 // halves and SQUEEZE em a gap, light compression before stretching) while `globalThis.__parityNoSqueeze` is set, which v2.mjs sets
 // alone, around another lay of the pair whose pages it does not keep: each member's line count without that punctuation rule, the
 // counterfactual the owner's ruling L2 reads (rulings.mjs, 2026-11-12). Nothing else of any module is touched; a gate-l1.ts that no
-// longer holds the call once, a fill-pass.ts or slots.ts its anchor, or a tokens.ts or break.mjs its line once, throws.
+// longer holds the call once, a fill-pass.ts or slots.ts its anchor, or a tokens.ts or break.ts its line once, throws.
 const CALL = /const page = layPage\(\n[\s\S]*?\n {6}\)\n(?= {6}out\.entry\.ms\.push)/g
 const FILL = '  const { units, ...told } = fillUnitsOf(\n'
 const OPTION_I = '  if ((b.B.at(-1) as number) - low > 1e-9) floor = Math.min(floor, low + (L - 1) * p0)\n'
@@ -46,9 +46,9 @@ export async function load(url, context, nextLoad) {
     once(source, OPTION_I, 'slots.ts')
     return { ...r, source: source.replace(OPTION_I, `  if (!globalThis.__parityNoOptionI) ${OPTION_I.trimStart()}`) }
   }
-  if (url.endsWith('/packages/typeset/src/breaker/break.mjs')) {
+  if (url.endsWith('/packages/typeset/src/breaker/break.ts')) {
     const source = String(r.source)
-    if (source.split(SQUEEZES).length !== 2) throw new Error('parity hook: break.mjs no longer holds its squeeze line once')
+    if (source.split(SQUEEZES).length !== 2) throw new Error('parity hook: break.ts no longer holds its squeeze line once')
     return { ...r, source: source.replace(SQUEEZES, `  const squeezes = !globalThis.__parityNoSqueeze && ${SQUEEZES.slice('  const squeezes = '.length)}`) }
   }
   if (url.endsWith('/packages/typeset/src/breaker/tokens.ts')) {

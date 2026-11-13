@@ -4,7 +4,7 @@
 // held by the walk's, the chain's and the fill's replays on the corpus. The `borrow` knob is today's: a block's lines laid on into
 // the room under its last line, before its leading and its size (the owner's ruling of 2026-11-08, borrowing bounded by TeX's
 // facts: so that a page's body keeps one size); the room is TeX's (lay/adapt.ts), stated on each block (`free`).
-import { breakLines } from '../breaker/break.types.ts'
+import { breakLines } from '../breaker/break.ts'
 import { laidOut } from '../breaker/place.types.ts'
 import { roomOf, slotsAt } from '../breaker/slots.ts'
 import type { Token } from '../breaker/tokens.ts'
