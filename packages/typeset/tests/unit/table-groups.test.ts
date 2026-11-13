@@ -181,3 +181,82 @@ describe('a cell that cannot be drawn stays the original’s alone; its group is
     expect(states(plain, rowsOf(translated)).every((s) => s === 'laid')).toBe(true)
   })
 })
+
+// R4 (docs/PDF-READER.md §18.72): a body column's cells between the same two rules (Room.band, the rules the part states over and
+// under each cell) are one group; where more than half of its text cells are kept as written (Unit.kept: R1, a text with no
+// ordinary word; R2, the paper's own names), its other text cells are kept too; exactly half is not more than half, and each
+// cell is laid by itself. A header cell is judged alone (R3): no header is voted.
+describe('R4: a body column’s cells between the same two rules are one group', () => {
+  /** a cell standing between two rules: `band` [under, over] */
+  const banded = (ord: number, at: [number, number, number, 0 | 1], plain: string, band: [number, number]) =>
+    cell(ord, at, plain, { room: { below: 0, next: 300, side: [52 + 100 * at[1], 152 + 100 * at[1]], band } })
+  it('Table 2’s stub (2611.03953v2 p7): the dataset names kept, "Avg. Recovery" under its own rule laid by its row', () => {
+    const t = tableOf([
+      cell(0, [0, 0, 1, 1], 'Domain'),
+      cell(1, [0, 1, 1, 1], 'Final'),
+      ...['MedQA', 'CaseHOLD', 'FinQA', 'IFBench'].map((s, k) => banded(2 + k, [1 + k, 0, 1, 0], s, [277, 322])),
+      banded(6, [5, 0, 1, 0], 'Avg. Recovery', [263, 277]),
+    ])
+    const rows = rowsOf({ 0: 'Domäne', 1: 'Endwert', 6: 'Mittlere Erholung' }, [2, 3, 4, 5])
+    expect(states(t, rows)).toEqual(['laid', 'laid', 'kept', 'kept', 'kept', 'kept', 'laid'])
+  })
+  it('the same column with no rule between them is one group: four of five kept, the fifth kept with them', () => {
+    const t = tableOf([
+      cell(0, [0, 0, 1, 1], 'Domain'),
+      ...['MedQA', 'CaseHOLD', 'FinQA', 'IFBench', 'Avg. Recovery'].map((s, k) =>
+        banded(1 + k, [1 + k, 0, 1, 0], s, [263, 322]),
+      ),
+    ])
+    const rows = rowsOf({ 0: 'Domäne', 5: 'Mittlere Erholung' }, [1, 2, 3, 4])
+    expect(states(t, rows)).toEqual(['laid', 'kept', 'kept', 'kept', 'kept', 'kept'])
+  })
+  it('"Gemini" kept in its block of model names (2608.06701v1 p5: three of four kept as identifiers)', () => {
+    const t = tableOf([
+      cell(0, [0, 0, 1, 1], 'Executor'),
+      ...['DeepSeek', 'Gemini', '(2.5-flash)', 'MiniMax'].map((s, k) => banded(1 + k, [1 + k, 0, 1, 0], s, [600, 700])),
+    ])
+    const rows = rowsOf({ 0: 'Ausführer', 2: 'Zwillinge' }, [1, 3, 4])
+    expect(states(t, rows)).toEqual(['laid', 'kept', 'kept', 'kept', 'kept'])
+  })
+  it('a block at exactly one half is no names block: "Vanilla" laid by its row beside "SAGE" (the reply is not ours)', () => {
+    const t = tableOf([
+      cell(0, [0, 0, 1, 1], 'Method'),
+      ...['Vanilla', 'SAGE', 'Vanilla', 'SAGE'].map((s, k) => banded(1 + k, [1 + k, 0, 1, 0], s, [600, 700])),
+    ])
+    const rows = rowsOf({ 0: 'Methode', 1: 'Vanille', 3: 'Vanille' }, [2, 4])
+    expect(states(t, rows)).toEqual(['laid', 'laid', 'kept', 'laid', 'kept'])
+  })
+  it('"Method", a first row over a rule in a table whose header the source reader does not find (2602.23285v2-ja p19): laid', () => {
+    const t = tableOf([
+      banded(0, [0, 0, 1, 0], 'Method', [460, 470]),
+      banded(1, [1, 0, 1, 0], 'latent-ODE', [400, 459]),
+      banded(2, [2, 0, 1, 0], 'latent-ODE', [400, 459]),
+    ])
+    const rows = rowsOf({ 0: 'Methode' }, [1, 2])
+    expect(states(t, rows)).toEqual(['laid', 'kept', 'kept'])
+  })
+  it('a header cell is judged alone: a header row of three kept names lays its word by its row', () => {
+    const t = tableOf([
+      cell(0, [0, 0, 1, 1], 'Model'),
+      cell(1, [0, 1, 1, 1], 'Claude'),
+      cell(2, [0, 2, 1, 1], 'Mistral'),
+      cell(3, [0, 3, 1, 1], 'GPT'),
+    ])
+    const rows = rowsOf({ 0: 'Modell' }, [1, 2, 3])
+    expect(states(t, rows)).toEqual(['laid', 'kept', 'kept', 'kept'])
+  })
+  it('a cell the part leaves the original’s (a why) is no text cell of the count: two of three kept is more than half', () => {
+    const t = tableOf([
+      cell(0, [0, 0, 1, 1], 'Model'),
+      banded(1, [1, 0, 1, 0], 'DeepSeek', [600, 700]),
+      banded(2, [2, 0, 1, 0], 'MiniMax', [600, 700]),
+      cell(3, [3, 0, 1, 0], 'Gemini Pro', {
+        why: 'unwrapped',
+        room: { below: 0, next: 300, side: [52, 152], band: [600, 700] },
+      }),
+      banded(4, [4, 0, 1, 0], 'Claude', [600, 700]),
+    ])
+    const rows = rowsOf({ 0: 'Modell', 4: 'Claude' }, [1, 2])
+    expect(states(t, rows)).toEqual(['laid', 'kept', 'kept', 'unwrapped', 'kept'])
+  })
+})
