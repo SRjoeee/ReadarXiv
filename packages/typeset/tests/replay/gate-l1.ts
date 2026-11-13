@@ -34,7 +34,7 @@ import { type FitMeasure, fitMeasure } from '../../src/breaker/measure.ts'
 import type { Face } from '../../src/breaker/tokens.ts'
 import type { LaidLine, Layout } from '../../src/fit/types.ts'
 import { inkEndOf } from '../../src/shared/share.ts'
-import type { Metrics, RuleParams, Rows } from '../../src/types.ts'
+import type { Metrics, Page, RuleParams, Rows } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
 import { type Cover, coverDone, coverOf, newCover } from './cover.ts'
 import { newParasGate, type ParasGate, parasGate } from './paras-gate.ts'
@@ -559,6 +559,10 @@ export function gateL1Pair(
     leave?: ReadonlyMap<string, readonly string[]>
     /** where given, each page's lay under each option told: the ids it read and its wait set (a lab tool's record) */
     reads?: (option: string, page: number, read: ReadonlySet<string>, waits: ReadonlySet<string>) => void
+    /** where given, with `entry`, each page the entry lays told (layPage's Page): what the reader paints of it, the lab's I11
+     *  (lab/typeset/painted.mjs: every lit box painted whole, on both panes), which reads the reader's painter, a package this
+     *  one does not import */
+    laid?: (page: number, laid: Page) => void
   } = {},
 ): GateL1 {
   const measure = o.metricsOf ? fitMeasure(o.metricsOf(pair)) : null
@@ -1135,6 +1139,7 @@ export function gateL1Pair(
         { linkFates, lays },
       )
       out.entry.ms.push(performance.now() - t1)
+      o.laid?.(pg, page)
       for (const x of lays) {
         const by = laysOf.get(x.ord) ?? new Map<number, UnitLay>()
         laysOf.set(x.ord, by.set(pg, x))

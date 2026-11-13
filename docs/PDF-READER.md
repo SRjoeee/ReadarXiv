@@ -2730,7 +2730,10 @@ within noise.
   and 30, sentences 63 and 410, members lit whole 21 and 57), every one with two boxes on one band, none holding another
   block's middle that it did not; every other shape's paint is byte for byte as before. The parity's paint model
   (`lab/typeset/parity/paint.mjs`) reads the same rows, held equal to the painter's drawn outlines
-  (`tests/lab/parity-paint-binds.test.ts`).
+  (`tests/lab/parity-paint-binds.test.ts`). The sentence cover (I10) judges Laid.lit, never the paint, and passed the display's
+  second row on neither pane: the reader gate's entry now holds **I11, every lit box painted whole on both panes**
+  (`lab/typeset/painted.mjs`: each shape painted by the painter's own rows and outlines in its CSS px at scale one, each box less
+  the drawing's 0.01 px a side held inside them exactly; 0 the only passing value, in the gate's summary line).
 - **A figure text lights its own lines' band alone** (Laid.lit `band`, every member the part states of kind `figure`, laid or
   not, level or turned; the typesetter's `lay/entry.ts`, the reader's `compose/highlight.ts`): no pad beside and no half
   leading over and under, on both panes and where the pointer is hit alike. The half leading is the lower quartile of the
