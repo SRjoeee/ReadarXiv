@@ -2,17 +2,27 @@
 import * as PL from '@cantoo/pdf-lib'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { lex, openRemover } from '@readarxiv/engine'
+import { alignOf, alignReader, lex, openRemover } from '@readarxiv/engine'
 import { lexedDiff, outcomeOf, streamsOf, WALK_KEEP } from './helpers/lex-compare'
-import { lex as lexBefore, openRemover as openRemoverBefore } from './helpers/remove-before.mjs'
+import { DOCUMENT_OPTIONS } from './helpers/ocg-pdfs'
+import {
+  alignOf as alignOfBefore,
+  alignReader as alignReaderBefore,
+  lex as lexBefore,
+  openRemover as openRemoverBefore,
+} from './helpers/remove-before.mjs'
 
 // The remover's lexer and page walk state their bounds and tell an operand by its kind before they read a property of it
 // (packages/engine/src/remove.mjs: an escape at a string's last byte, an octal escape's digits past the end, an inline image's
 // `ID` two bytes from the end; a name read of Tf's, gs's and Do's operand, a show's elements, a width no number, a /Contents that
 // is no stream), where they read past an end or a property of a number and relied on undefined. Held here to the remover before
 // that change (helpers/remove-before.mjs, d42fb8bca verbatim), value for value and error for error: on hand cases at each edge,
-// on seeded random streams, and on every stream and every page of the repository's PDFs.
+// on seeded random streams, and on every stream and every page of the repository's PDFs. And the alignment facts' reader
+// (alignReader), which reads PDF.js's operator list and reads each argument through `at` (`x?.[k]` told by its kind before the
+// read): held to the one before on every page of the repository's PDFs through PDF.js's own lists, and on seeded synthetic lists
+// of every shape an argument may take, whole and in pieces.
 
 const enc = (s: string) => new Uint8Array(Buffer.from(s, 'latin1'))
 /** a seeded generator (mulberry32): the same streams on every run */
@@ -197,4 +207,80 @@ describe('the page walk reads every page as it did before it told an operand by 
     expect(pdfs.length).toBeGreaterThan(3)
     for (const f of pdfs) expect(await walkDifference(new Uint8Array(readFileSync(join(dir, f)))), f).toBeNull()
   }, 60_000)
+})
+
+describe('the alignment facts\' reader reads every list as it did before it told an argument by its kind', () => {
+  type List = { fnArray: number[]; argsArray: unknown[] }
+  type Reader = { read(fnArray: ArrayLike<number>, argsArray: ArrayLike<unknown>): void; end(): unknown }
+  const O = OPS as unknown as Record<string, number>
+  const outcome = (f: () => unknown) => { try { return { facts: f() } } catch (e) { return thrown(e) } }
+  /** where the reader and the one before first part on `list` (null: nowhere): read whole (alignOf), and in pieces of `sizes` */
+  function alignDifference(list: List, sizes: readonly number[] = [1, 3, 1000]): string | null {
+    const d = lexedDiff(outcome(() => alignOf(O, list)), outcome(() => alignOfBefore(O, list)))
+    if (d) return `whole${d}`
+    const pieces = (r: Reader, size: number) => { for (let i = 0; i < list.fnArray.length; i += size) r.read(list.fnArray.slice(i, i + size), list.argsArray.slice(i, i + size)); return r.end() }
+    for (const size of sizes) {
+      const e = lexedDiff(outcome(() => pieces(alignReader(O), size)), outcome(() => pieces(alignReaderBefore(O), size)))
+      if (e) return `pieces of ${size}${e}`
+    }
+    return null
+  }
+  it('on 3,000 seeded lists: groups whose first argument is no array, glyph lists with holes, repeats with short arrays', () => {
+    const next = rng(19159)
+    const pick = <T>(a: readonly T[]) => a[Math.floor(next() * a.length)] as T
+    const anyValue = () => pick<unknown>([undefined, null, 0, 7, 'abc', '', true, false, {}, { length: 3 }, { length: '6' }, [], [1, 2, 3], [1, 2, 3, 4, 5], new Float32Array(4), new Uint8Array(3), new DataView(new ArrayBuffer(4))])
+    const glyph = (): unknown => {
+      if (next() < 0.15) return pick<unknown>([5, -3.5, null, undefined, 'x', true, [], [1]])
+      const g: Rec = { unicode: 'a' }
+      if (next() < 0.7) g.originalCharCode = pick<unknown>([0, 65, 255, 65535, 2 ** 32 - 1, 2 ** 32, -1, 1.5, Number.NaN, '65', null, undefined, 2 ** 53])
+      return g
+    }
+    const glyphs = () => {
+      const a: unknown[] = []
+      for (let k = Math.floor(next() * 6); k > 0; k--) if (next() < 0.2) a.length++; else a.push(glyph())
+      if (next() < 0.1) a.length += 2
+      return a
+    }
+    const numbers = () => Array.from({ length: Math.floor(next() * 7) }, () => next())
+    const FNS = ['beginAnnotation', 'endAnnotation', 'beginGroup', 'endGroup', 'showText', 'showSpacedText', 'constructPath', 'paintImageXObject', 'paintInlineImageXObject', 'paintImageMaskXObject', 'paintSolidColorImageMask', 'paintImageXObjectRepeat', 'paintImageMaskXObjectRepeat', 'paintImageMaskXObjectGroup', 'paintInlineImageXObjectGroup', 'save', 'restore', 'transform'].map(n => O[n]!)
+    const argsOf = (fn: number): unknown => {
+      // (an entry that is no array of arguments, as no list of PDF.js's holds)
+      if (next() < 0.08) return pick<unknown>([null, undefined, 'abc', 5, {}])
+      if (fn === O.beginGroup) return [next() < 0.6 ? { smask: pick<unknown>([null, undefined, false, 0, true, {}, 'x', 1]), bbox: [0, 0, 1, 1] } : next() < 0.5 ? { bbox: [] } : anyValue()]
+      if (fn === O.showText || fn === O.showSpacedText) return [next() < 0.85 ? glyphs() : anyValue()]
+      if (fn === O.paintImageXObjectRepeat || fn === O.paintImageMaskXObjectRepeat) {
+        const a: unknown[] = fn === O.paintImageXObjectRepeat ? ['img', 1, 1] : [{}, 1, 0, 0, 1]
+        a.push(next() < 0.7 ? numbers() : anyValue())
+        return next() < 0.25 ? a.slice(0, Math.floor(next() * a.length)) : a
+      }
+      if (fn === O.paintImageMaskXObjectGroup) return [next() < 0.7 ? Array.from({ length: Math.floor(next() * 4) }, () => ({})) : anyValue()]
+      if (fn === O.paintInlineImageXObjectGroup) return [{}, next() < 0.7 ? Array.from({ length: Math.floor(next() * 4) }, () => ({})) : anyValue()]
+      return next() < 0.5 ? [] : [anyValue()]
+    }
+    let threw = 0
+    for (let n = 0; n < 3000; n++) {
+      const fnArray: number[] = [], argsArray: unknown[] = []
+      for (let k = 1 + Math.floor(next() * 25); k > 0; k--) { const fn = next() < 0.95 ? pick(FNS) : Math.floor(next() * 100); fnArray.push(fn); argsArray.push(argsOf(fn)) }
+      const list = { fnArray, argsArray }
+      expect(alignDifference(list), JSON.stringify(list)).toBeNull()
+      if ('threw' in outcome(() => alignOfBefore(O, list))) threw++
+    }
+    // (both refuse a shown argument that is no array alike: the generator meets it)
+    expect(threw).toBeGreaterThan(0)
+  })
+  it('on every page of the repository\'s PDFs, through PDF.js\'s own operator lists', async () => {
+    const files = [...readdirSync(join(process.cwd(), 'tests/fixtures/pdf'), { recursive: true }).map(f => join('tests/fixtures/pdf', String(f))), ...['s1-columns', 's2-splits', 's3-turned'].map(s => `packages/reader/e2e/fixtures/${s}/arxiv.pdf`)].filter(f => f.endsWith('.pdf'))
+    let pages = 0
+    for (const f of files) {
+      const task = getDocument({ ...DOCUMENT_OPTIONS, data: new Uint8Array(readFileSync(join(process.cwd(), f))) })
+      const doc = await task.promise
+      for (let p = 1; p <= doc.numPages; p++) {
+        const list = (await (await doc.getPage(p)).getOperatorList()) as unknown as List
+        expect(alignDifference({ fnArray: [...list.fnArray], argsArray: [...list.argsArray] }), `${f} page ${p}`).toBeNull()
+        pages++
+      }
+      await task.destroy()
+    }
+    expect(pages).toBeGreaterThan(20)
+  }, 120_000)
 })

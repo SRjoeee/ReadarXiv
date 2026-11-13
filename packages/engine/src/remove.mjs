@@ -245,6 +245,9 @@ const PAINT = new Set(['S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n'])
 /** an operand's `v`, told by its kind before it is read: a name's text, a dictionary's items, a keyword's word; undefined for a
  *  number, a boolean, null, a string, an array, or no operand (what `?.v` read of each) */
 const vOf = x => (typeof x === 'object' && x !== null && !Array.isArray(x) && x.t !== 'str' ? x.v : undefined)
+/** `x?.[k]`, the value told by its kind before the read: undefined for null or none, else the property of the value or of its
+ *  wrapper, read with the value as its receiver, as a read of it is (an argument of PDF.js's operator list, alignReader) */
+const at = (x, k) => (x === null || x === undefined ? undefined : Reflect.get(Object(x), k, x))
 /** a form nested deeper than this is not walked: the page is refused */
 const FORM_DEPTH = 12
 /** a glyph name that names a code, not a character (a generator's own numbering): its Unicode is not read from it */
@@ -645,24 +648,28 @@ export function alignReader(OPS) {
       const fn = fnArray[j]
       if (fn === OPS.beginAnnotation) inAnnot++
       else if (fn === OPS.endAnnotation) inAnnot = Math.max(0, inAnnot - 1)
-      else if (fn === OPS.beginGroup) { const m = !!argsArray[j]?.[0]?.smask; groups.push(m); if (m) inMask++ }
+      else if (fn === OPS.beginGroup) { const m = !!at(at(argsArray[j], 0), 'smask'); groups.push(m); if (m) inMask++ }
       else if (fn === OPS.endGroup) { if (groups.pop()) inMask-- }
       else if (inAnnot || inMask) continue
       else if (fn === OPS.showText || fn === OPS.showSpacedText) {
-        const gl = (argsArray[j]?.[0] ?? []).filter(g => g && typeof g === 'object')
+        // (the glyphs and numbers shown: an array, as PDF.js gives them; a typed array holds no glyph; any other value is refused
+        // with the error reading it gave, `filter` being no function of it)
+        const shown = at(argsArray[j], 0) ?? []
+        if (!Array.isArray(shown) && !(ArrayBuffer.isView(shown) && !(shown instanceof DataView))) throw new TypeError('((intermediate value) ?? []).filter is not a function')
+        const gl = Array.isArray(shown) ? shown.filter(g => g !== null && typeof g === 'object') : []
         const row = new Array(gl.length)
         for (let k = 0; k < gl.length; k++) {
-          const c = gl[k].originalCharCode
+          const c = at(gl[k], 'originalCharCode')
           // (a code is a whole number below 2^32, as the walk splits a string; anything else is compared and never equal)
-          row[k] = c === undefined ? null : Number.isInteger(c) && c >= 0 && c < CODE_LIMIT ? c : -1
+          row[k] = c === undefined ? null : typeof c === 'number' && Number.isInteger(c) && c >= 0 && c < CODE_LIMIT ? c : -1
         }
         codes.push(row)
       } else if (fn === OPS.constructPath) paths++
       else if (ONE.has(fn)) images++
-      else if (fn === OPS.paintImageXObjectRepeat) images += Math.floor((argsArray[j]?.[3]?.length ?? 0) / 2)
-      else if (fn === OPS.paintImageMaskXObjectRepeat) images += Math.floor((argsArray[j]?.[5]?.length ?? 0) / 2)
-      else if (fn === OPS.paintImageMaskXObjectGroup) images += Array.isArray(argsArray[j]?.[0]) ? argsArray[j][0].length : 0
-      else if (fn === OPS.paintInlineImageXObjectGroup) images += Array.isArray(argsArray[j]?.[1]) ? argsArray[j][1].length : 0
+      else if (fn === OPS.paintImageXObjectRepeat) images += Math.floor(Number(at(at(argsArray[j], 3), 'length') ?? 0) / 2)
+      else if (fn === OPS.paintImageMaskXObjectRepeat) images += Math.floor(Number(at(at(argsArray[j], 5), 'length') ?? 0) / 2)
+      else if (fn === OPS.paintImageMaskXObjectGroup) { const group = at(argsArray[j], 0); images += Array.isArray(group) ? group.length : 0 }
+      else if (fn === OPS.paintInlineImageXObjectGroup) { const group = at(argsArray[j], 1); images += Array.isArray(group) ? group.length : 0 }
     }
   }
   return { read, end: () => ({ codes, paths, images }) }

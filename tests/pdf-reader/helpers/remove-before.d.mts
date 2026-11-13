@@ -10,3 +10,12 @@ export declare function openRemover(
   bytes: Uint8Array,
   o: { PL: unknown; inflate?: ((bytes: Uint8Array, limit: number) => Uint8Array) | null },
 ): Promise<{ numPages: number; walkPage(pageIndex: number): unknown; decode(st: unknown, limit?: number): Uint8Array; ctx: { lookup(v: unknown): unknown } }>
+/** a page's alignment facts from PDF.js's operator list, and the same as a reader of the list in pieces */
+export declare function alignOf(
+  OPS: Record<string, number>,
+  opList: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> },
+): { codes: (number | null)[][]; paths: number; images: number }
+export declare function alignReader(OPS: Record<string, number>): {
+  read(fnArray: ArrayLike<number>, argsArray: ArrayLike<unknown>): void
+  end(): { codes: (number | null)[][]; paths: number; images: number }
+}
