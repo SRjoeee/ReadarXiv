@@ -26,14 +26,14 @@ import type { ReadCatalog, Ref } from '../engine/layer.mjs'
 import type { TellRef } from '../engine/view.mjs'
 
 /** the API's root, kept for every released extension */
-export const API_ROOT = '/api/v1/'
+const API_ROOT = '/api/v1/'
 /** why there is no layer to answer: none made yet (ask the prepare), the paper's source or PDF not to be had, a prepare that
  *  cannot succeed, or a CTAG the server makes no layer of */
-export const LAYER_WHYS = ['not-prepared', 'no-source', 'no-pdf', 'cannot-prepare', 'unknown-versions'] as const
+const LAYER_WHYS = ['not-prepared', 'no-source', 'no-pdf', 'cannot-prepare', 'unknown-versions'] as const
 export type LayerWhy = (typeof LAYER_WHYS)[number]
 /** a 202's, and a 404's or 429's, bytes at most: the objects made so far, as many as a catalog names; a few hundred bytes */
-export const PREPARING_CAP = CATALOG_CAP
-export const SMALL_CAP = 4096
+const PREPARING_CAP = CATALOG_CAP
+const SMALL_CAP = 4096
 /** how far an object's answer may pass its ref's bytes before it is refused unread (an encoded answer's own length) */
 export const OBJECT_MARGIN = 1024
 /** how long after a 5xx or a network failure an answer is asked once more */
@@ -43,15 +43,15 @@ export const RETRY_MS = 1000
  *  the reader in its look for good. Thirty seconds bring the largest object at 64 kbit/s */
 export const REQUEST_MS = 30_000
 /** our copy of the original read whole (no tag to read it by ranges): its own bound, a 46 MB copy at 80 KB/s */
-export const ORIGINAL_MS = 600_000
+const ORIGINAL_MS = 600_000
 /** a delta object (at most DELTA_MAX_BYTES, 24 MiB): 24 MiB at 400 KB/s */
 export const DELTA_MS = 60_000
 /** the header of the catalog's and the objects' answers that names the original the layer is bound to: our copy's entity-tag */
-export const BASE_ETAG_HEADER = 'x-axt-base-etag'
+const BASE_ETAG_HEADER = 'x-axt-base-etag'
 /** a strong entity-tag (RFC 9110 §8.8.3), as R2 tags an object: the only kind a range is held to */
 export const STRONG_ETAG = /^"[\x21\x23-\x7e]{1,200}"$/
 /** the original an answer names its layer bound to (BASE_ETAG_HEADER), a strong entity-tag; null for none, or another kind */
-export const boundOf = (r: Response): string | null => { const t = r.headers.get(BASE_ETAG_HEADER); return t !== null && STRONG_ETAG.test(t) ? t : null }
+const boundOf = (r: Response): string | null => { const t = r.headers.get(BASE_ETAG_HEADER); return t !== null && STRONG_ETAG.test(t) ? t : null }
 
 export interface Paper { id: string; version: number }
 /** the prepare under way: its place in the queue, its stage, how far it has come (0 to 1), when to ask again, and the objects
@@ -81,7 +81,7 @@ export function paperSegment(p: Paper): string {
   return `${p.id.replace('/', '_')}v${p.version}`
 }
 export const layerPath = (api: string, p: Paper) => `${api}${API_ROOT}layer/${paperSegment(p)}/${CTAG5}`
-export const objectPath = (api: string, p: Paper, sha256: string) => `${layerPath(api, p)}/o/${sha256}`
+const objectPath = (api: string, p: Paper, sha256: string) => `${layerPath(api, p)}/o/${sha256}`
 /** our base as a delta over arXiv's PDF, by its digest: the object route with the delta's own suffix, as the web serves it (its
  *  src/shared/layer-api.ts deltaPath; the engine's deltaKey names it so). The bare digest of a delta is a 404 there */
 export const deltaPath = (api: string, p: Paper, sha256: string) => `${objectPath(api, p, sha256)}.delta`

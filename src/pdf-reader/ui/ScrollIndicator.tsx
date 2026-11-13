@@ -13,7 +13,7 @@ const scrollerOf = (track: HTMLElement | null) => track?.parentElement?.querySel
 const DRAG_ENDS = ['pointerup', 'pointercancel', 'lostpointercapture'] as const
 
 /** the thumb: the pane's visible share of the track, 32 px at least */
-export const thumbSize = (track: number, client: number, scroll: number) => Math.min(track, Math.max(32, Math.round((track * client) / Math.max(scroll, 1))))
+const thumbSize = (track: number, client: number, scroll: number) => Math.min(track, Math.max(32, Math.round((track * client) / Math.max(scroll, 1))))
 
 export const ScrollIndicator = forwardRef<HTMLDivElement, { controller: ReaderController; side: Side }>(function ScrollIndicator({ controller, side }, ref) {
   const track = useRef<HTMLDivElement>(null)
