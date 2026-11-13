@@ -5,7 +5,6 @@ import { COLOR_MAX, OPACITY_MAX, OPACITY_MIN, sanitizeColor, sanitizeCustomCss }
 import type { Config } from './schema'
 
 export const UNDERLINES = ['none', 'solid', 'dotted', 'dashed', 'wavy'] as const
-export type Underline = (typeof UNDERLINES)[number]
 export const HL_OPACITY_MIN = 0.05
 export const HL_OPACITY_MAX = 0.6
 
@@ -118,4 +117,3 @@ export function resetBuiltIns(a: Appearance, list: 'styles' | 'highlights'): App
  * the UI layer, and the configuration layer knows no locale pack (Codex on #161). The name is still held to the schema's cap (NAME_MAX) here: over it the whole configuration cannot be stored, and the reader only sees “not saved” (Codex on #157)
  */
 export const duplicateStyle = (p: StyleProfile, name: string): StyleProfile => ({ ...p, id: newProfileId('style'), name: name.slice(0, NAME_MAX) })
-export const duplicateHighlight = (p: HighlightProfile, name: string): HighlightProfile => ({ ...p, id: newProfileId('hl'), name: name.slice(0, NAME_MAX) })
