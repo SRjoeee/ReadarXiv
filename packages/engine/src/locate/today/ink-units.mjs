@@ -775,7 +775,9 @@ export function keptUnitsOf(pages, ledger, owner, { from }) {
   return blocks.map((b, j) => {
     const id = from + j, kind = INK_KIND[b.cls] ?? (b.body ? INK_KIND.orphan : INK_KIND.heads)
     const rows = rowsOf(id, kind, b.cls, b.lines, [], 0, pages)
-    return { id, kind, cls: b.cls, echo: null, kept: true, ...(addressesAlone(pages, b.lines) ? { address: true } : {}), pieces: [], glyphs: { text: b.lines.flatMap(l => l.gs.map(g => [l.page, g])), ph: [] }, rows: { ...rows, erase: [] } }
+    // (CHANGED: a block of a display TeX set says so, `display`, so that its lines on A are its rows by the display rule, as a
+    // unit's display's are: locate/geometry.ts, rows.ts. PDF-READER §17.9)
+    return { id, kind, cls: b.cls, echo: null, kept: true, ...(addressesAlone(pages, b.lines) ? { address: true } : {}), ...(b.display ? { display: true } : {}), pieces: [], glyphs: { text: b.lines.flatMap(l => l.gs.map(g => [l.page, g])), ph: [] }, rows: { ...rows, erase: [] } }
   })
 }
 

@@ -5991,6 +5991,24 @@ softmax(" alone on both panes, and the rest with the paragraph before on arXiv's
   faces) and the add-ons of 13, whose groups are named by the index of each unit made on A (`axt<unit>.<page>.t`: the figure
   texts made after the merged blocks, numbered on from them); TRANSLATE stays (a kept block is never sent); the units objects
   of every paper as they were (a kept block's unit is its kind's, of no content).
+- **Its lines are its rows by the display rule** (2026-11-13, lane display-highlight; the owner's report of 2111.09276v1 p5's
+  display (4), §17.9). A kept block's lines on A were cut by the text line rule (`locate/geometry.ts`, `lines.ts`), which keeps a
+  glyph off a line's band within one and a half sizes of it as a script: display (4)'s number "(", its ink 13.7 pt over the
+  second row's baseline, stayed on that row's line and its "4)" made a line of its own, the number cut in two; a fraction's
+  numerator, a radical, an operator's limits made lines of their own too. A unit's display has its rows by the display rule
+  (`locate/rows.ts`: its ink's bands joined where they overlap top to bottom, two bands joined where their glyphs interleave in
+  TeX's stream, a row's number with the row whose band its ink reaches), and so a unit's row reaches its number, the blank
+  between them lit (over the parity's 24 pairs, 448 numbers TeX set on a row, every one in its row's box). A kept block of a
+  display now says so (`today/ink-units.mjs` keptUnitsOf's `display`, the unit's `display`, which the bundle does not carry) and
+  its lines are its rows by the same rule (`geometry.ts`): a reader cannot tell a kept display from a unit's, and it looks as one.
+  Over the 89 papers and 2611.03953v2 (stage 1a against round RB2a's r23e and r23e-two): 34 kept displays' members on 16 papers
+  move their lines (55 member-pages; their count, extents, baselines, sizes, flags, and their lead, room and alignment read off
+  them), 30 of the 74 the highlight's census finds (13 of its 19 of several rows; 23 of the 25 it found lit wrongly before the
+  painter's fix), the other 44 a line a row by either rule; and 18 other members (32 member-pages, 11 pages of 3 papers) move
+  their lines' column alone (15 paragraphs, a theorem, a footnote, a running head: the page's column reading,
+  `locate.ts` columnsAndMeasures, which the display's narrow lines had made two-column). No unit, id, ord, flow or other field of
+  a part moves; the ownership is the same and the located files but their run measures; 2611.03953v2 identical. PIPELINE moves
+  (the parts of 16 papers); TRANSLATE does not (a kept block is never sent).
 - **Not done.** A display the source ends with `$$` (no region, §18.19) keeps the listing's rule; a number TeX sets before its
   display (`\leqno`: none in the 88); a display inside a float, which no kept block takes.
 

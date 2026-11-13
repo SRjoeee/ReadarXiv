@@ -32,6 +32,8 @@ export interface TodayInkUnit {
   kept?: true
   /** a kept block of e-mail addresses and their separators alone (keptUnitsOf's, addressesAlone) */
   address?: true
+  /** a kept block of a display TeX set (keptUnitsOf's: its region `display`), its lines the display rule's rows (geometry.ts) */
+  display?: true
   /** of the names: it holds whole the text of an author command's argument a macro stores (inkUnitsOf's rule 8, `stored`), the
    *  block's wherever it stands */
   stored?: true

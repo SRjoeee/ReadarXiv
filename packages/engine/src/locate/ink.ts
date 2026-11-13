@@ -446,6 +446,8 @@ export function inkOf(o: InkInput): {
         fixed: true,
         // (why it is kept, for the lab's dump: a block of e-mail addresses alone, else a block of rule 10's)
         ...(u.address ? { address: true as const } : { block: true as const }),
+        // (a block of a display TeX set: its lines on A its rows by the display rule, geometry.ts)
+        ...(u.display ? { display: true as const } : {}),
       },
       text: [],
       ph: [],
