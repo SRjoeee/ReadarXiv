@@ -4,6 +4,65 @@
 // compiled-copy session read, went with the rules audit of 2026-11-04: exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md,
 // sixteenth addendum, holds it.)
 
+/** a pane as the follower moves it: its scroller, its page stack (what a transform moves), its pages drawn where they now
+ *  show, and its renderer told it shows `shift()` px below its scrollTop (null to stop) */
+export interface FollowPane {
+  container: HTMLElement
+  stack: HTMLElement
+  redraw(): void
+  lend(shift: (() => number) | null): void
+}
+export interface Follower<P extends FollowPane = FollowPane> {
+  input(side: P, type: string): void
+  hover(side: P): void
+  scrolled(side: P): boolean
+  ended(side: P): void
+  touches(fingers: number): void
+  level(from: P, y: number, there: number): number
+  zoomed(): void
+  zooming(side: P | null): void
+  take(side: P): void
+  put(container: HTMLElement, top: number): void
+  bake(): void
+  invalidate(): void
+  reset(): void
+  shift(pane: P): number
+  /** `top(p)`: a pane's scrollTop as its scroll events gave it, read in its place (none: read off the pane) */
+  shownAt(pane: P, top?: (p: P) => number): number
+  levelError(side: P): number | null
+  driver(): P | null
+  motion(): 'scroll' | 'glide' | 'spring' | null
+  compositing(): boolean
+  stop(): void
+}
+/** a ScrollTimeline's constructor (the compositor's timeline on a scroller's block axis) */
+type Compositor = new (o: { source: Element; axis: string }) => AnimationTimeline
+export interface FollowerOptions<P extends FollowPane> {
+  panes: { left: P; right: P }
+  active(): boolean
+  target(from: P): number | null
+  clock: {
+    now(): number
+    frame(cb: () => void): number
+    cancel(id: number): void
+    later(cb: () => void, ms: number): number
+    clear(id: number): void
+  }
+  timer: boolean
+  compositor: Compositor | null
+  reduced(): boolean
+  laidOut(el: Element): Promise<void>
+  window: EventTarget
+  signal: AbortSignal
+}
+/** the follower's motion on the compositor: none; a transform bound to the driver's scroll (`from`); a glide at rest */
+type Glass<P> =
+  | { anim: null; kind: null; side: null; from: null; shift: null }
+  | { anim: Animation; kind: 'scroll'; side: P; from: P; shift: (at?: number) => number }
+  | { anim: Animation; kind: 'glide'; side: P; from: null; shift: () => number }
+/** a motion under way (unbind's) */
+type Moving<P> = Exclude<Glass<P>, { anim: null }>
+
 // ---------------------------------------------------------------- the identity follower
 // The reader drives one pane — the one last touched by a wheel, a touch, a key or a press — and the other follows it as one
 // sheet: while the reader scrolls, by the reader's own steps; once the scroll has ended (a trackpad's glide included) and
@@ -23,7 +82,10 @@
 // way is baked on input; a click's level calls off the rest and the timer's end; the pair levelled once a zoom settles.
 
 /** a critically damped spring's way from 0 to 1 over its time, k from 0 to 1: no overshoot, no bounce */
-const springAt = k => { const y = t => 1 - (1 + 6.6 * t) * Math.exp(-6.6 * t); return y(Math.min(1, Math.max(0, k))) / y(1) }
+const springAt = (k: number): number => {
+  const y = (t: number) => 1 - (1 + 6.6 * t) * Math.exp(-6.6 * t)
+  return y(Math.min(1, Math.max(0, k))) / y(1)
+}
 /** the same curve as a CSS easing, for the glide the compositor runs */
 const SPRING = `linear(${Array.from({ length: 41 }, (_, i) => +springAt(i / 40).toFixed(4)).join(', ')})`
 /** how long after the scroll's end the pair is levelled (ms) */
@@ -41,30 +103,49 @@ const SCROLL_END_MS = { native: 400, timer: 150 }
  * `o.laidOut(el)`: the next moment `el` is laid out; `o.window`/`o.signal`: where an input's end is heard, and the
  * signal that ends every listener. The view hands it every input and scroll of the panes
  */
-export function createFollower(o) {
+export function createFollower<P extends FollowPane>(o: FollowerOptions<P>): Follower<P> {
   const { left, right } = o.panes
-  const other = p => (p === left ? right : left)
+  const other = (p: P) => (p === left ? right : left)
   const clock = o.clock
   const endMs = o.timer ? SCROLL_END_MS.timer : SCROLL_END_MS.native
-  let driver = null, step = 0, touching = false, zoomRest = 0, zoomGen = 0, stopped = false
+  let driver: P | null = null,
+    step = 0,
+    touching = false,
+    zoomRest = 0,
+    zoomGen = 0,
+    stopped = false
   /** a zoom under way (zooming, until zoomed): nothing is bound, so that no transform of the follower's meets the zoom's */
   let zoomHeld = false
   /** `pos`: the follower's position, fractional (scrollTop rounds to device pixels, and steps of one size must not drift
    *  by it); `lastD`: the driver's position last seen, null to read afresh; `rest`: the wait after the scroll's end;
    *  `spring`: the glide by script under way; `moving`: the driver scrolling, from its first step to its scroll's end;
    *  `levelled`: when a click last levelled the pair; `fallback`: the scroll's end where no scrollend comes */
-  const follow = { pos: null, lastD: null, rest: 0, spring: 0, moving: false, levelled: 0, fallback: 0 }
+  const follow: {
+    pos: number | null
+    lastD: number | null
+    rest: number
+    spring: number
+    moving: boolean
+    levelled: number
+    fallback: number
+  } = { pos: null, lastD: null, rest: 0, spring: 0, moving: false, levelled: 0, fallback: 0 }
   /** the follower's motion on the compositor: `anim` the transform, `kind` 'scroll' (bound to `from`, the driver) or
    *  'glide', `side` the follower, `shift()` how far the transform shows it below its scrollTop */
-  const glass = { anim: null, kind: null, side: null, from: null, shift: null }
+  const glass = { anim: null, kind: null, side: null, from: null, shift: null } as Glass<P>
   /** a pane's scroll position set by the view itself: its scroll event is not the reader's */
-  const placed = new WeakMap()
+  const placed = new WeakMap<HTMLElement, number>()
   const onCompositor = () => !!o.compositor && o.active()
-  const glideMs = d => (o.reduced() ? 0 : Math.min(450, 250 + 0.25 * Math.abs(d)))
-  const clearRest = () => { clock.clear(follow.rest); follow.rest = 0 }
-  const clearFallback = () => { clock.clear(follow.fallback); follow.fallback = 0 }
+  const glideMs = (d: number) => (o.reduced() ? 0 : Math.min(450, 250 + 0.25 * Math.abs(d)))
+  const clearRest = () => {
+    clock.clear(follow.rest)
+    follow.rest = 0
+  }
+  const clearFallback = () => {
+    clock.clear(follow.fallback)
+    follow.fallback = 0
+  }
 
-  function put(container, top) {
+  function put(container: HTMLElement, top: number) {
     container.scrollTop = top
     placed.set(container, container.scrollTop)
   }
@@ -74,14 +155,25 @@ export function createFollower(o) {
     follow.lastD = driver.container.scrollTop
     follow.pos = other(driver).container.scrollTop
   }
-  function stopSpring() { if (follow.spring) clock.cancel(follow.spring); follow.spring = 0 }
+  function stopSpring() {
+    if (follow.spring) clock.cancel(follow.spring)
+    follow.spring = 0
+  }
   /** a critically damped spring to a position by script: 250–450 ms as the distance asks; one step with reduced motion */
-  function springTo(tc, target) {
+  function springTo(tc: HTMLElement, target: number) {
     stopSpring()
-    const x0 = tc.scrollTop, d = target - x0, T = glideMs(d), t0 = clock.now()
+    const x0 = tc.scrollTop,
+      d = target - x0,
+      T = glideMs(d),
+      t0 = clock.now()
     const tick = () => {
       const k = T ? (clock.now() - t0) / T : 1
-      if (k >= 1) { put(tc, target); follow.spring = 0; rebase(); return }
+      if (k >= 1) {
+        put(tc, target)
+        follow.spring = 0
+        rebase()
+        return
+      }
       put(tc, x0 + d * springAt(k))
       follow.spring = clock.frame(tick)
     }
@@ -89,7 +181,7 @@ export function createFollower(o) {
   }
   /** the motion under way taken off (its animation, and the container lent to PDF.js), and what it was */
   function unbind() {
-    const g = { ...glass }
+    const g = { ...glass } as Moving<P>
     g.anim.cancel()
     g.side.lend(null)
     Object.assign(glass, { anim: null, kind: null, side: null, from: null, shift: null })
@@ -98,61 +190,119 @@ export function createFollower(o) {
   /** the motion under way ended where it stands: the transform's shift into the follower's scrollTop, the transform gone */
   function bake() {
     if (!glass.anim) return
-    const c = glass.side.container, pos = c.scrollTop + glass.shift(), g = unbind()
+    const c = glass.side.container,
+      pos = c.scrollTop + glass.shift(),
+      g = unbind()
     put(c, pos)
     if (g.kind === 'scroll') follow.lastD = g.from.container.scrollTop
     follow.pos = pos
     g.side.redraw()
   }
   /** the motion under way given up, the follower left at its scrollTop */
-  function drop() { if (glass.anim) unbind().side.redraw() }
+  function drop() {
+    if (glass.anim) unbind().side.redraw()
+  }
   /** the follower bound to the driver's scroll: for every position of the driver, the follower's — where it stands, plus
    *  the driver's steps since the positions it goes on from, within the follower's ends — as keyframes of a ScrollTimeline
    *  on the driver, linear between */
   function arm() {
     if (!onCompositor() || !driver || glass.anim || zoomHeld) return
-    const d = driver, f = other(d), dc = d.container, tc = f.container
-    const Dmax = dc.scrollHeight - dc.clientHeight, Fmax = tc.scrollHeight - tc.clientHeight, F0 = tc.scrollTop
+    const d = driver,
+      f = other(d),
+      dc = d.container,
+      tc = f.container
+    const Dmax = dc.scrollHeight - dc.clientHeight,
+      Fmax = tc.scrollHeight - tc.clientHeight,
+      F0 = tc.scrollTop
     if (Dmax < 1 || !dc.clientHeight || !tc.clientHeight) return
     if (follow.lastD == null || follow.pos == null) rebase()
-    const Db = follow.lastD, Fb = follow.pos, clamp = v => Math.min(Fmax, Math.max(0, v))
+    const Db = follow.lastD as number,
+      Fb = follow.pos as number,
+      clamp = (v: number) => Math.min(Fmax, Math.max(0, v))
     // the same steps: straight, but for where the follower meets one of its ends
-    let pts = [0, Db - Fb, Db + Fmax - Fb, Dmax].filter(D => D >= 0 && D <= Dmax).sort((a, b) => a - b).map(D => [D, clamp(Fb + D - Db)])
-    pts = pts.filter((p, i) => i === 0 || p[0] > pts[i - 1][0])
-    if (pts[0][0] > 0) pts.unshift([0, pts[0][1]])
-    if (pts.at(-1)[0] < Dmax) pts.push([Dmax, pts.at(-1)[1]])
+    let pts: [D: number, F: number][] = [0, Db - Fb, Db + Fmax - Fb, Dmax]
+      .filter((D) => D >= 0 && D <= Dmax)
+      .sort((a, b) => a - b)
+      .map((D) => [D, clamp(Fb + D - Db)])
+    pts = pts.filter((p, i) => i === 0 || p[0] > pts[i - 1]![0])
+    if ((pts[0] as [number, number])[0] > 0) pts.unshift([0, (pts[0] as [number, number])[1]])
+    if ((pts.at(-1) as [number, number])[0] < Dmax) pts.push([Dmax, (pts.at(-1) as [number, number])[1]])
     const shift = (at = dc.scrollTop) => {
       const D = Math.min(Dmax, Math.max(0, at))
-      let lo = 0, hi = pts.length - 1
-      while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (pts[mid][0] <= D) lo = mid; else hi = mid }
-      const [a, b] = [pts[lo], pts[hi]], t = b[0] === a[0] ? 0 : (D - a[0]) / (b[0] - a[0])
+      let lo = 0,
+        hi = pts.length - 1
+      while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1
+        if (pts[mid]![0] <= D) lo = mid
+        else hi = mid
+      }
+      const [a, b] = [pts[lo]!, pts[hi]!],
+        t = b[0] === a[0] ? 0 : (D - a[0]) / (b[0] - a[0])
       return a[1] + Math.min(1, Math.max(0, t)) * (b[1] - a[1]) - F0
     }
-    const anim = f.stack.animate(pts.map(([D, F]) => ({ offset: D / Dmax, transform: `translateY(${F0 - F}px)` })), { timeline: new o.compositor({ source: dc, axis: 'block' }), fill: 'both' })
+    const anim = f.stack.animate(
+      pts.map(([D, F]) => ({ offset: D / Dmax, transform: `translateY(${F0 - F}px)` })),
+      { timeline: new (o.compositor as Compositor)({ source: dc, axis: 'block' }), fill: 'both' },
+    )
     Object.assign(glass, { anim, kind: 'scroll', side: f, from: d, shift })
     f.lend(shift)
   }
   /** the glide at rest on the compositor: the follower's stack moved to `target` on the spring's curve, then baked, and
    *  bound to the driver again */
-  function glideOn(pane, target) {
-    const tc = pane.container, d = target - tc.scrollTop, T = glideMs(d)
-    if (!T) { put(tc, target); rebase(); arm(); return }
-    const anim = pane.stack.animate([{ transform: 'translateY(0px)' }, { transform: `translateY(${-d}px)` }], { duration: T, easing: SPRING, fill: 'both' })
-    Object.assign(glass, { anim, kind: 'glide', side: pane, from: null, shift: () => d * springAt((anim.currentTime ?? 0) / T) })
+  function glideOn(pane: P, target: number) {
+    const tc = pane.container,
+      d = target - tc.scrollTop,
+      T = glideMs(d)
+    if (!T) {
+      put(tc, target)
+      rebase()
+      arm()
+      return
+    }
+    const anim = pane.stack.animate([{ transform: 'translateY(0px)' }, { transform: `translateY(${-d}px)` }], {
+      duration: T,
+      easing: SPRING,
+      fill: 'both',
+    })
+    Object.assign(glass, {
+      anim,
+      kind: 'glide',
+      side: pane,
+      from: null,
+      shift: () => d * springAt(((anim.currentTime as number | null) ?? 0) / T),
+    })
     pane.lend(glass.shift)
-    const tick = () => { if (glass.anim !== anim) return; pane.redraw(); clock.frame(tick) }
+    const tick = () => {
+      if (glass.anim !== anim) return
+      pane.redraw()
+      clock.frame(tick)
+    }
     clock.frame(tick)
-    anim.onfinish = () => { if (glass.anim !== anim) return; bake(); rebase(); arm() }
+    anim.onfinish = () => {
+      if (glass.anim !== anim) return
+      bake()
+      rebase()
+      arm()
+    }
   }
   /** a pane's position as the screen shows it: its scrollTop, and the transform's shift while it follows on the compositor;
    *  `top(p)`, where given, a pane's scrollTop as its scroll events gave it, the driver's too (the pointer's frame reads no
    *  layout, PDF-READER §17.4: scrollTop read there laid the page out again in every frame of a scroll) */
-  const shownAt = (pane, top = p => p.container.scrollTop) =>
-    top(pane) + (glass.side === pane ? (glass.kind === 'scroll' ? glass.shift(top(glass.from)) : glass.shift()) : 0)
+  const shownAt = (pane: P, top = (p: P) => p.container.scrollTop) =>
+    top(pane) +
+    (glass.side === pane
+      ? glass.kind === 'scroll'
+        ? glass.shift(top(glass.from))
+        : (glass.shift as () => number)()
+      : 0)
   /** where `to` stands level with `from` at rest: either end of `from`'s document takes it to the same end; else
    *  `o.target`; null where that is not known */
-  function levelTarget(from) {
-    const to = other(from), dc = from.container, tc = to.container, D = dc.scrollTop, most = tc.scrollHeight - tc.clientHeight
+  function levelTarget(from: P) {
+    const to = other(from),
+      dc = from.container,
+      tc = to.container,
+      D = dc.scrollTop,
+      most = tc.scrollHeight - tc.clientHeight
     if (D <= 1) return 0
     if (D >= dc.scrollHeight - dc.clientHeight - 1) return most
     const t = o.target(from)
@@ -160,61 +310,96 @@ export function createFollower(o) {
   }
   /** the scroll ended on the driver: the other pane glides so that the point at the top of the driver's view stands at
    *  the same height on both */
-  function alignTop(side) {
+  function alignTop(side: P) {
     if (!o.active() || side !== driver) return
     bake()
-    const to = other(side), tc = to.container, target = levelTarget(side)
-    if (target == null || Math.abs(target - tc.scrollTop) < 1) { rebase(); arm(); return }
+    const to = other(side),
+      tc = to.container,
+      target = levelTarget(side)
+    if (target == null || Math.abs(target - tc.scrollTop) < 1) {
+      rebase()
+      arm()
+      return
+    }
     if (onCompositor()) glideOn(to, target)
     else springTo(tc, target)
   }
   /** one frame of the follower by script while the driver scrolls: moved by the driver's step; a glide under way stops,
    *  and the follower goes on from where it stands. On the compositor the transform moves it, and PDF.js is asked to draw
    *  the pages it now shows */
-  function followFrame(side) {
+  function followFrame(side: P) {
     if (onCompositor()) {
       // a rest's glide still under way as the driver moves again ends where it stands, and the follower is bound to the
       // driver from there: left to finish, it held the follower off the driver for its whole length
-      if (glass.kind === 'glide') { bake(); rebase() }
+      if (glass.kind === 'glide') {
+        bake()
+        rebase()
+      }
       if (!glass.anim) arm()
       other(side).redraw()
       return
     }
-    const tc = other(side).container, D = side.container.scrollTop
-    if (follow.spring) { stopSpring(); follow.pos = tc.scrollTop }
-    if (follow.lastD == null || follow.pos == null) { follow.lastD = D; follow.pos = tc.scrollTop; return }
+    const tc = other(side).container,
+      D = side.container.scrollTop
+    if (follow.spring) {
+      stopSpring()
+      follow.pos = tc.scrollTop
+    }
+    if (follow.lastD == null || follow.pos == null) {
+      follow.lastD = D
+      follow.pos = tc.scrollTop
+      return
+    }
     const by = D - follow.lastD
     follow.lastD = D
     follow.pos = Math.min(tc.scrollHeight - tc.clientHeight, Math.max(0, follow.pos + by))
     put(tc, follow.pos)
   }
   /** a pane becomes the driver: what moves ends where it stands, and the other goes on from where it stands */
-  function take(side) {
+  function take(side: P) {
     if (driver === side) return
-    bake(); driver = side; stopSpring(); clearRest(); rebase()
+    bake()
+    driver = side
+    stopSpring()
+    clearRest()
+    rebase()
   }
   /** the scroll's end on a pane: the pair levelled REST_MS on. Not an end with no step of the reader's since the last, or
    *  since a click levelled the pair; never while a finger is down */
-  function scrollEnded(side) {
+  function scrollEnded(side: P) {
     if (side !== driver || touching || !follow.moving) return
     clearFallback()
     follow.moving = false
     clearRest()
-    follow.rest = clock.later(() => { follow.rest = 0; alignTop(side) }, REST_MS)
+    follow.rest = clock.later(() => {
+      follow.rest = 0
+      alignTop(side)
+    }, REST_MS)
   }
   /** a rest an input called off, armed again once the input ends without a scroll: at once for a wheel or a key, at the
    *  release of a finger or a button. `until`: the events that end the input, heard on the window in its capture phase */
-  function restAfter(side, until) {
+  function restAfter(side: P, until: readonly string[] | null) {
     const t0 = clock.now()
     const again = () => {
       if (stopped || driver !== side || follow.moving || follow.rest || follow.levelled > t0) return
-      follow.rest = clock.later(() => { follow.rest = 0; alignTop(side) }, REST_MS)
+      follow.rest = clock.later(() => {
+        follow.rest = 0
+        alignTop(side)
+      }, REST_MS)
     }
     if (!until) return again()
     const ended = new AbortController()
     // ended with the view, and gone with the input: a press made during each rest would otherwise leave one for the view's life
     o.signal.addEventListener('abort', () => ended.abort(), { once: true, signal: ended.signal })
-    for (const type of until) o.window.addEventListener(type, () => { ended.abort(); clock.later(again, 0) }, { capture: true, once: true, passive: true, signal: ended.signal })
+    for (const type of until)
+      o.window.addEventListener(
+        type,
+        () => {
+          ended.abort()
+          clock.later(again, 0)
+        },
+        { capture: true, once: true, passive: true, signal: ended.signal },
+      )
   }
 
   return {
@@ -227,55 +412,93 @@ export function createFollower(o) {
       const calledOff = follow.rest !== 0
       clearRest()
       if (glass.kind === 'glide') bake()
-      if (follow.spring) { stopSpring(); rebase() }
+      if (follow.spring) {
+        stopSpring()
+        rebase()
+      }
       arm()
-      if (calledOff) restAfter(side, type === 'touchstart' ? ['touchend', 'touchcancel'] : type === 'pointerdown' ? ['pointerup', 'pointercancel'] : null)
+      if (calledOff)
+        restAfter(
+          side,
+          type === 'touchstart'
+            ? ['touchend', 'touchcancel']
+            : type === 'pointerdown'
+              ? ['pointerup', 'pointercancel']
+              : null,
+        )
     },
     /** the pointer over a pane: on the compositor the follower is bound ahead, but not while a scroll, its rest or its
      *  glide is under way on the other pane, which the pointer passing over would cut off */
     hover(side) {
-      if (onCompositor() && driver !== side && !follow.moving && !follow.rest && glass.kind !== 'glide') { take(side); arm() }
+      if (onCompositor() && driver !== side && !follow.moving && !follow.rest && glass.kind !== 'glide') {
+        take(side)
+        arm()
+      }
     },
     /** a pane's scroll event: false where it is a put of the view's own */
     scrolled(side) {
       const mine = placed.get(side.container)
-      if (mine != null) { placed.delete(side.container); if (Math.abs(mine - side.container.scrollTop) < 1) return false }
+      if (mine != null) {
+        placed.delete(side.container)
+        if (Math.abs(mine - side.container.scrollTop) < 1) return false
+      }
       // the follower scrolled by something else (a link, PDF.js, the find bar): it stands where that put it, and goes on
       // from there; on the compositor its transform is given up, and it is bound again
       if (driver && side !== driver) {
-        if (glass.side === side) { drop(); rebase(); arm() } else rebase()
+        if (glass.side === side) {
+          drop()
+          rebase()
+          arm()
+        } else rebase()
         return true
       }
       if (!o.active() || side !== driver) return true
       // the rest's wait begun again with the event, since the scroll's end comes in the same frame as its last step; and
       // the scroll's end should no scrollend come
-      clearRest(); follow.moving = true
-      clearFallback(); follow.fallback = clock.later(() => scrollEnded(side), endMs)
-      if (!step) step = clock.frame(() => { step = 0; followFrame(side) })
+      clearRest()
+      follow.moving = true
+      clearFallback()
+      follow.fallback = clock.later(() => scrollEnded(side), endMs)
+      if (!step)
+        step = clock.frame(() => {
+          step = 0
+          followFrame(side)
+        })
       return true
     },
     /** a pane's scrollend */
-    ended(side) { scrollEnded(side) },
+    ended(side) {
+      scrollEnded(side)
+    },
     /** the fingers on the surface (a touch event's): the wait starts again as the last of them lifts */
     touches(fingers) {
       touching = fingers > 0
       const side = driver
-      if (!touching && side && follow.moving) { clearFallback(); follow.fallback = clock.later(() => scrollEnded(side), endMs) }
+      if (!touching && side && follow.moving) {
+        clearFallback()
+        follow.fallback = clock.later(() => scrollEnded(side), endMs)
+      }
     },
     /** `to` (the other pane of `from`) scrolled so that its position `there` shows at height `y` of `from`'s view, `from`
      *  taking up what `to` cannot scroll at either end: a click's level. A rest still to come is called off, as is the
      *  scroll's end its last step armed, and a motion under way ends first. The reading line's share of the view, after */
     level(from, y, there) {
-      const to = other(from), fc = from.container, tc = to.container
+      const to = other(from),
+        fc = from.container,
+        tc = to.container
       const dy = tc.getBoundingClientRect().top - fc.getBoundingClientRect().top
-      clearRest(); follow.levelled = clock.now()
-      clearFallback(); follow.moving = false
-      bake(); stopSpring()
+      clearRest()
+      follow.levelled = clock.now()
+      clearFallback()
+      follow.moving = false
+      bake()
+      stopSpring()
       const want = there + dy - y
       put(tc, want)
       const short = tc.scrollTop - want
       if (Math.abs(short) > 0.5) put(fc, fc.scrollTop + short)
-      rebase(); arm()
+      rebase()
+      arm()
       return (there - tc.scrollTop + dy) / Math.max(1, fc.clientHeight)
     },
     /** the pair levelled once a zoom settles: its last step, REST_MS more, both stacks laid out at the new scale, then by
@@ -306,23 +529,50 @@ export function createFollower(o) {
       zoomHeld = true
       // (a zoom before this one, still to be levelled, is levelled by this one's end instead)
       zoomGen++
-      clock.clear(zoomRest); zoomRest = 0
-      bake(); stopSpring(); clearRest(); clearFallback()
+      clock.clear(zoomRest)
+      zoomRest = 0
+      bake()
+      stopSpring()
+      clearRest()
+      clearFallback()
       follow.moving = false
       follow.lastD = null
     },
-    take(side) { take(side); arm() },
+    take(side) {
+      take(side)
+      arm()
+    },
     put,
     bake,
     /** a layout changed: what moves ends where it stands, and the driver's position is read afresh */
-    invalidate() { bake(); follow.lastD = null },
+    invalidate() {
+      bake()
+      follow.lastD = null
+    },
     /** the sync turned on or off, or made available: nothing under way, the follower bound again where it runs */
-    reset() { bake(); stopSpring(); clearRest(); clearFallback(); follow.moving = false; rebase(); arm() },
+    reset() {
+      bake()
+      stopSpring()
+      clearRest()
+      clearFallback()
+      follow.moving = false
+      rebase()
+      arm()
+    },
     /** how far a pane's pages show below its scrollTop now (the compositor's shift), for the pointer */
-    shift(pane) { return glass.side === pane ? (glass.kind === 'scroll' ? glass.shift(glass.from.container.scrollTop) : glass.shift()) : 0 },
+    shift(pane) {
+      return glass.side === pane
+        ? glass.kind === 'scroll'
+          ? glass.shift(glass.from.container.scrollTop)
+          : (glass.shift as () => number)()
+        : 0
+    },
     shownAt,
     /** how far the other pane stands from level with `side` (px; positive: above it), or null */
-    levelError(side) { const t = levelTarget(side); return t == null ? null : t - shownAt(other(side)) },
+    levelError(side) {
+      const t = levelTarget(side)
+      return t == null ? null : t - shownAt(other(side))
+    },
     driver: () => driver,
     motion: () => glass.kind ?? (follow.spring ? 'spring' : null),
     compositing: () => onCompositor(),
@@ -330,7 +580,12 @@ export function createFollower(o) {
     stop() {
       stopped = true
       if (glass.anim) unbind()
-      stopSpring(); clearRest(); clearFallback(); clock.clear(zoomRest); clock.cancel(step); step = 0
+      stopSpring()
+      clearRest()
+      clearFallback()
+      clock.clear(zoomRest)
+      clock.cancel(step)
+      step = 0
       driver = null
     },
   }

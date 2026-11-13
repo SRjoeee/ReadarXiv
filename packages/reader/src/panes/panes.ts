@@ -20,7 +20,7 @@ import {
   type Stack,
   type ViewContent,
 } from '../stack/stack.ts'
-import { createFollower, type Follower, type FollowPane } from '../stack/sync.types.ts'
+import { createFollower, type Follower, type FollowPane } from '../stack/sync.ts'
 import { type AheadHold, aheadHeld, eagerPages, letAheadGo, quietRoot } from './left.ts'
 
 /** how far a page is turned on screen (its /Rotate, as its viewport shows it): 0, 90, 180 or 270 */
