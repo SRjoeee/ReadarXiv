@@ -73,7 +73,7 @@ const LEAVE = new Map([
   ['every option on', leftKinds({ figures: true, tables: true, heads: true, references: true, names: true })],
 ])
 const reads = new Map([...LEAVE.keys()].map((k) => [k, { pages: 0, reads: 0, outside: 0, outsidePages: 0, ex: [] }]))
-const entry = { crossLay: { units: 0, twice: 0, head: [], other: [] }, alike: 0, differ: 0, ex: [], ms: [], names: new Map(), links: new Map(), linkEx: new Map(), figures: new Map(), lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 }, cover: { members: 0, pieces: 0, faults: new Map(), ex: new Map(), byPair: new Map() } }
+const entry = { paras: { stated: new Map(), anchor: new Map(), opened: 0, onTexLine: 0, off: [], offBy: new Map(), notLaid: new Map(), openedEx: [], noneEx: [] }, crossLay: { units: 0, twice: 0, head: [], other: [] }, alike: 0, differ: 0, ex: [], ms: [], names: new Map(), links: new Map(), linkEx: new Map(), figures: new Map(), lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 }, cover: { members: 0, pieces: 0, faults: new Map(), ex: new Map(), byPair: new Map() } }
 /** Whether the entry is given a door row. The rows are today's stored replies in today's reading; one that says nothing (the
  *  chain's rule, accept.ts: no letter or digit where the unit has a letter, 'empty') is no translation of its unit under any
  *  reading, and the chain makes no row of it whatever its translator: the entry is given none and leaves the unit the
@@ -104,6 +104,16 @@ const addCover = (pair, c) => {
     n += v
   }
   if (n) C.byPair.set(pair, [...c.faults].map(([k, v]) => `${k} ${v}`).join(', '))
+}
+/** the paragraph points (paras-gate.ts) over the pairs */
+const addParas = (x) => {
+  const P = entry.paras
+  for (const k of ['stated', 'anchor', 'notLaid', 'offBy']) for (const [a, n] of x[k]) P[k].set(a, (P[k].get(a) ?? 0) + n)
+  P.opened += x.opened
+  P.onTexLine += x.onTexLine
+  P.off.push(...x.off)
+  P.openedEx.push(...x.openedEx.slice(0, Math.max(0, 6 - P.openedEx.length)))
+  P.noneEx.push(...x.noneEx.slice(0, Math.max(0, 12 - P.noneEx.length)))
 }
 /** I6 across the pages' lays (cross-lay.ts) over the pairs: each unit laid otherwise, by its cause */
 const addCrossLay = (pair, x) => {
@@ -151,7 +161,7 @@ for (const pair of pairs) {
   count.adapted += g.setting.size
   count.pages += g.pages
   pageMs.push(...g.ms)
-  if (g.entry) { entry.alike += g.entry.alike; entry.differ += g.entry.differ; entry.ms.push(...g.entry.ms); for (const x of g.entry.ex) if (entry.ex.length < 8) entry.ex.push(`${pair} ${x}`); for (const [k, n] of g.entry.names) entry.names.set(k, (entry.names.get(k) ?? 0) + n); for (const [k, n] of g.entry.links) entry.links.set(k, (entry.links.get(k) ?? 0) + n); for (const [k, n] of g.entry.figures) entry.figures.set(k, (entry.figures.get(k) ?? 0) + n); for (const [k, xs] of g.entry.linkEx) entry.linkEx.set(k, [...(entry.linkEx.get(k) ?? []), ...xs].slice(0, 4)); for (const k of Object.keys(entry.lit)) entry.lit[k] += g.entry.lit[k]; addCover(pair, g.entry.cover); addCrossLay(pair, g.entry.crossLay); for (const [k, r] of g.entry.reads ?? []) { const t = reads.get(k); t.pages += r.pages; t.reads += r.reads; t.outside += r.outside; t.outsidePages += r.outsidePages; for (const x of r.ex) if (t.ex.length < 6) t.ex.push(`${pair} ${x}`) } }
+  if (g.entry) { entry.alike += g.entry.alike; entry.differ += g.entry.differ; entry.ms.push(...g.entry.ms); for (const x of g.entry.ex) if (entry.ex.length < 8) entry.ex.push(`${pair} ${x}`); for (const [k, n] of g.entry.names) entry.names.set(k, (entry.names.get(k) ?? 0) + n); for (const [k, n] of g.entry.links) entry.links.set(k, (entry.links.get(k) ?? 0) + n); for (const [k, n] of g.entry.figures) entry.figures.set(k, (entry.figures.get(k) ?? 0) + n); for (const [k, xs] of g.entry.linkEx) entry.linkEx.set(k, [...(entry.linkEx.get(k) ?? []), ...xs].slice(0, 4)); for (const k of Object.keys(entry.lit)) entry.lit[k] += g.entry.lit[k]; addCover(pair, g.entry.cover); addCrossLay(pair, g.entry.crossLay); addParas(g.entry.paras); for (const [k, r] of g.entry.reads ?? []) { const t = reads.get(k); t.pages += r.pages; t.reads += r.reads; t.outside += r.outside; t.outsidePages += r.outsidePages; for (const x of r.ex) if (t.ex.length < 6) t.ex.push(`${pair} ${x}`) } }
   adaptMs += g.adaptMs
   readMs += g.readMs ?? 0
   inv.laid += g.inv.laid
@@ -279,6 +289,19 @@ if (ENTRY) {
   console.log(`I10, the sentence cover (cover.ts): ${C.members} member-pages lit, ${C.pieces} pieces; ${faults} faults${faults ? ':' : ''}`)
   for (const [k, n] of [...C.faults].sort((a, b) => b[1] - a[1])) console.log(`  ${n} ${k}: ${(C.ex.get(k) ?? []).join(' | ')}`)
   for (const [pair, line] of C.byPair) console.log(`  ${pair}: ${line}`)
+  // (the paragraph points, paras-gate.ts: each the part states (a group's open, an element, its first word) whose row carries
+  // its anchor (the group or the element between its texts, else a sentence start paired with its first word) laid with its
+  // first word starting a line of the member; one run on fails the run. Those on TeX's baseline counted beside; those with no
+  // anchor flow on, counted by why)
+  {
+    const P = entry.paras, n = m => [...m.values()].reduce((a, b) => a + b, 0)
+    const anchored = n(P.anchor) - [...P.anchor].filter(([k]) => k.startsWith('none') || k === 'no row').reduce((a, [, v]) => a + v, 0)
+    console.log(`the paragraph points (paras-gate.ts): ${n(P.stated)} stated (${top(P.stated)}); ${anchored} with an anchor in their row (${top(P.anchor)}); of those, their member laid: ${P.opened} opened (their first word starts a line of the member), ${P.onTexLine} of them on TeX's line, ${P.off.length} NOT (run on); not laid: ${top(P.notLaid) || 'none'}`)
+    for (const x of P.off) console.log(`  not opened: ${x}`)
+    for (const x of P.openedEx) console.log(`  opened, e.g.: ${x}`)
+    for (const x of P.noneEx) console.log(`  no anchor, e.g.: ${x}`)
+    if (P.off.length) process.exitCode = 1
+  }
   // (I6 across the pages' lays, cross-lay.ts: a unit laid otherwise by two pages' lays fails the run, but where the head pass's
   // known cause tells it (headOf reading the paragraph over it filled by one lay, at its fit by the other: LATER.md), counted
   // and listed apart)

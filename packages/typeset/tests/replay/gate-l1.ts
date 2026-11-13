@@ -37,6 +37,7 @@ import { inkEndOf } from '../../src/shared/share.ts'
 import type { Metrics, RuleParams, Rows } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
 import { type Cover, coverDone, coverOf, newCover } from './cover.ts'
+import { newParasGate, type ParasGate, parasGate } from './paras-gate.ts'
 import { walkCase } from './fit-input.ts'
 import type { GateUnit } from './gate.ts'
 import { keptJoin, keptRow, type L1Placed, l1Paper, type TodayPrepared, todayPrepared, todayUnitOf } from './l1.ts'
@@ -103,6 +104,8 @@ export type GateL1 = {
     cover: Cover
     /** I6 across the pages' lays (cross-lay.ts): each unit begun on a pass page as every page's lay that runs that pass lays it */
     crossLay?: CrossLay
+    /** the paragraph points (paras-gate.ts): each the part states whose row carries its anchor laid opening on TeX's line */
+    paras: ParasGate
     /** the reads gate (o.leave), by reading option: the pages laid under it, the row ids their lays read, those the page's wait
      *  set does not hold and on how many pages, examples */
     reads?: Map<string, { pages: number; reads: number; outside: number; outsidePages: number; ex: string[] }>
@@ -590,6 +593,7 @@ export function gateL1Pair(
             figures: new Map(),
             lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 },
             cover: newCover(),
+            paras: newParasGate(),
             ...(o.leave ? { reads: new Map() } : {}),
           },
         }
@@ -1136,6 +1140,7 @@ export function gateL1Pair(
         laysOf.set(x.ord, by.set(pg, x))
       }
       coverOf(out.entry.cover, page, part as Part, metrics, pair)
+      parasGate(out.entry.paras, pair, pg, page, part as Part, entryRows, bundle.units)
       // (the reads gate: the page laid under each reading option, every row id its lay reads against what the page would wait
       // for while rows come; the entry's rows as they are, every row in)
       for (const [option, left] of o.leave ?? []) {

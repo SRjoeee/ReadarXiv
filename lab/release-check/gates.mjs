@@ -296,6 +296,11 @@ export function typesetOf(text) {
   // head pass's known cause, and by another, which fails the run)
   const across = /^I6 across the pages' lays \(cross-lay\.ts\): \d+ units begun on a pass page, (\d+) laid by two pages' lays or more; \d+ laid otherwise: (\d+) by the head pass .*, (\d+) by another cause$/m.exec(text)
   if (across) Object.assign(out, { I6twice: num(across[1]), I6head: num(across[2]), I6other: num(across[3]) })
+  // (the paragraph points, the runner with --entry (paras-gate.ts): those stated on the pages walked, those whose row carries
+  // their anchor, of those opened (their first word starts a line of the member) and on TeX's line, and those run on, which fail
+  // the run)
+  const paras = /^the paragraph points \(paras-gate\.ts\): (\d+) stated .*?; (\d+) with an anchor in their row .*?: (\d+) opened .*?, (\d+) of them on TeX's line, (\d+) NOT/m.exec(text)
+  if (paras) Object.assign(out, { parasStated: num(paras[1]), parasAnchored: num(paras[2]), parasOpened: num(paras[3]), parasOnTexLine: num(paras[4]), parasOff: num(paras[5]) })
   const lay = /a page's lay \(layPagePrepared[^)]*\), ms: p50 ([\d.]+), p90 ([\d.]+), p99 ([\d.]+), max ([\d.]+) over (\d+) pages/.exec(text)
   if (lay) Object.assign(out, { layP50: num(lay[1]), layP90: num(lay[2]), layP99: num(lay[3]), layMax: num(lay[4]), layPages: num(lay[5]) })
   const first = /^\{"pairs":.*\}$/m.exec(text)
@@ -304,6 +309,32 @@ export function typesetOf(text) {
     Object.assign(out, { pairs: c.pairs, pages: c.pages, msPerPage: c.msPerPage })
   }
   return out
+}
+
+/** whether the release check's sentence-cover fails on a paragraph point its row anchors and the page runs on (paras-gate.ts):
+ *  from the round in which the engine half states every point's first word (Placed.paras: design-display 2a, the coordinator's
+ *  ruling of 2026-11-13), whose lane turns this on. Until then a point stated at a group the reply dropped has no first word to
+ *  fall back to, and its count is reported, not held */
+export const PARAS_HELD = false
+
+/** sentence-cover's verdict over its run (`steps`, the reader gate's): I10 and I6 counted where the run ended whole (exit 0, or
+ *  1 for a unit laid otherwise by another cause than the head pass's or a paragraph point run on), the paragraph points held
+ *  where `parasHeld`. The added pairs walked apart (`added`, lab/typeset/added.mjs) are held as the set's in each of these: their
+ *  I10, their I6 and their paragraph points */
+export function sentenceCoverJudge(steps, parasHeld = PARAS_HELD) {
+  const t = typesetOf(steps[0]?.text ?? '')
+  // (the added pairs walked apart, `t.added`: their I10 and I6 held as the set's, their numbers beside)
+  const a = t.added
+  const whole = steps[0]?.exit === 0 || (steps[0]?.exit === 1 && (t.I6other > 0 || a?.I6other > 0 || t.parasOff > 0 || a?.parasOff > 0) && t.I10pieces > 0)
+  const counted = whole && t.I10 != null
+  const across = whole && t.I6other != null
+  const findings = { ...(counted ? { I10: { held: t.I10 === 0, count: t.I10 } } : {}), ...(across ? { I6: { held: t.I6other === 0, count: t.I6other } } : {}) }
+  const parasOf = (x) => (x.parasOff != null ? { parasAnchored: x.parasAnchored, parasOpened: x.parasOpened, parasOnTexLine: x.parasOnTexLine, parasOff: x.parasOff } : {})
+  return {
+    pass: counted && t.I10 === 0 && across && t.I6other === 0 && (!a || (a.I10 === 0 && a.I6other === 0)) && (!parasHeld || (t.parasOff === 0 && (!a || a.parasOff === 0))),
+    numbers: { ...(t.I10 != null ? { I10: t.I10 } : {}), pieces: t.I10pieces ?? 0, pairs: t.pairs, ...(t.I6other != null ? { I6twice: t.I6twice, I6head: t.I6head, I6other: t.I6other } : {}), ...parasOf(t), ...(a ? { added: { pairs: a.pairs, I10: a.I10, pieces: a.I10pieces ?? 0, I6other: a.I6other, ...parasOf(a) } } : {}) },
+    ...(Object.keys(findings).length ? { findings } : {}),
+  }
 }
 
 /** a corpus runner's log.tsv (lab/pdf/prepare-back/corpus.sh): one line a paper, `id <tab> exit <tab> summary`. The table
@@ -605,21 +636,10 @@ export const GATES = [
       { cmd: ['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', `--out=${join(ctx.work, 'sentence-cover')}`], slot: 'test', env: { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }, fresh: join(ctx.work, 'sentence-cover') },
     ],
     // (counted over the pieces the entry drew: a run that laid nothing, or did not end whole, has no count and fails; a run whose
-    // exit is a unit laid otherwise by two pages' lays alone (I6 across the lays, another cause than the head pass's) ended whole)
-    judge: (ctx, steps) => {
-      const t = typesetOf(steps[0]?.text ?? '')
-      // (the added pairs walked apart, `t.added`: their I10 and I6 held as the set's, their numbers beside)
-      const a = t.added
-      const whole = steps[0]?.exit === 0 || (steps[0]?.exit === 1 && (t.I6other > 0 || a?.I6other > 0) && t.I10pieces > 0)
-      const counted = whole && t.I10 != null
-      const across = whole && t.I6other != null
-      const findings = { ...(counted ? { I10: { held: t.I10 === 0, count: t.I10 } } : {}), ...(across ? { I6: { held: t.I6other === 0, count: t.I6other } } : {}) }
-      return {
-        pass: counted && t.I10 === 0 && across && t.I6other === 0 && (!a || (a.I10 === 0 && a.I6other === 0)),
-        numbers: { ...(t.I10 != null ? { I10: t.I10 } : {}), pieces: t.I10pieces ?? 0, pairs: t.pairs, ...(t.I6other != null ? { I6twice: t.I6twice, I6head: t.I6head, I6other: t.I6other } : {}), ...(a ? { added: { pairs: a.pairs, I10: a.I10, pieces: a.I10pieces ?? 0, I6other: a.I6other } } : {}) },
-        ...(Object.keys(findings).length ? { findings } : {}),
-      }
-    },
+    // exit is a unit laid otherwise by two pages' lays alone (I6 across the lays, another cause than the head pass's) ended whole,
+    // and one whose exit is a paragraph point run on (paras-gate.ts, design-display 2a's gate): its count is reported, and
+    // fails the gate where PARAS_HELD says so; the added pairs walked apart held as the set's: sentenceCoverJudge)
+    judge: (ctx, steps) => sentenceCoverJudge(steps),
   },
   {
     id: 'display',

@@ -170,23 +170,27 @@ type At = [line: number, x: number]
 const LATE = 2
 const after = (a: At, b: At) => a[0] > b[0] || (a[0] === b[0] && a[1] > b[1])
 
+/** the index in the part's words (Placed.words, in order) of the first at or after offset `o` of the source projection: a
+ *  sentence's first word, where its start is found on A (startsOnA) and where a paragraph point pairs with it (unit/breaks.ts
+ *  paraPieces) */
+export function firstWordAt(words: readonly (readonly [number, number, number])[], o: number): number {
+  let lo = 0,
+    hi = words.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (words[mid]![0] < o) lo = mid + 1
+    else hi = mid
+  }
+  return lo
+}
+
 /**
  * Where each sentence after the first begins on A (today's anchors.mjs sentenceStarts): row start `o` at the first of the
  * part's words (Placed.words) at or after it that the part places, among its sentence's first three (LATE) and before the
  * next start's; each after the one before and after the unit's own first word. Null where one is not found
  */
 export function startsOnA(words: readonly (readonly [number, number, number])[], src: readonly number[]): At[] | null {
-  const firstAt = (o: number) => {
-    let lo = 0,
-      hi = words.length
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1
-      if (words[mid]![0] < o) lo = mid + 1
-      else hi = mid
-    }
-    return lo
-  }
-  const at = src.map(firstAt)
+  const at = src.map((o) => firstWordAt(words, o))
   const head = words.find((w) => w[1] >= 0)
   if (!head || !src.length) return null
   let prev: At = [head[1], head[2]]
@@ -298,15 +302,14 @@ function placesOf(
   const offset: number[] = []
   // (each stretch of the projection: its first offset, its plain offsets by character)
   const runs: { from: number; to: number[] }[] = []
-  let text = ''
+  const { text, from } = projectionOf(pieces)
   for (const [k, p] of pieces.entries()) {
     if (p.t !== 'text') {
       tracker.gap()
       piece[k] = tracker.space()
       if (p.t === 'ph' || p.t === 'nested') {
-        offset[k] = text.length
-        runs.push({ from: text.length, to: [piece[k]!] })
-        text += OBJ
+        offset[k] = from[k]!
+        runs.push({ from: from[k]!, to: [piece[k]!] })
       }
       continue
     }
@@ -316,8 +319,7 @@ function placesOf(
     const at = tracker.text(sh)
     const i = sh.search(/\S/)
     piece[k] = i >= 0 ? at[i]! : tracker.next()
-    runs.push({ from: text.length, to: back.map((c) => at[c] ?? tracker.next()) })
-    text += p.s
+    runs.push({ from: from[k]!, to: back.map((c) => at[c] ?? tracker.next()) })
   }
   return {
     piece,
@@ -333,6 +335,19 @@ function placesOf(
   }
 }
 const OBJ = '\ufffc'
+/** a row's pieces as the translation's projection (Row.sentences.tr counts in it): its text pieces as the row writes them, each
+ *  element and nested unit one character, a group's edges and a piece of the typesetter's own none; `from` the offset each
+ *  piece begins at */
+export function projectionOf(pieces: readonly V0Piece[]): { text: string; from: number[] } {
+  let text = ''
+  const from: number[] = []
+  for (const [k, p] of pieces.entries()) {
+    from[k] = text.length
+    if (p.t === 'text') text += p.s
+    else if (p.t === 'ph' || p.t === 'nested') text += OBJ
+  }
+  return { text, from }
+}
 /** each character of a text piece's string by the index of the character of its shown form it becomes (breaker/text.ts
  *  shown: a translation's TeX escapes undone, each one character); null where they do not read back so */
 function shownIndex(p: TextPiece, sh: string): number[] | null {
@@ -405,20 +420,32 @@ function tokensOn(
  * of 2026-11-10). Null where one has none
  */
 function startsInPlain(places: NonNullable<ReturnType<typeof placesOf>>, tr: readonly number[]): number[] | null {
+  const starts = startsInProjection(places.text, tr)
+  if (!starts) return null
   const out: number[] = []
-  let floor = 0
-  for (let j = 0; j < tr.length; j++) {
-    const end = j + 1 < tr.length ? tr[j + 1]! : places.text.length
-    let o = tr[j]!
-    while (o < end && places.text[o] !== OBJ && !/[\p{L}\p{N}]/u.test(places.text[o]!)) o++
-    if (o >= end) return null
-    // (from the opening brackets and quotes set against its first word, Unicode's Ps and Pi: "(Vier" begins its sentence at
-    // its bracket, as a word is placed on A, engine words.ts; a token is in the sentence its start falls in)
-    while (o > floor && /[\p{Ps}\p{Pi}]/u.test(places.text[o - 1]!)) o--
-    floor = o + 1
+  for (const o of starts) {
     const p = places.at(o)
     if (p < 0 || (out.length && p <= out.at(-1)!)) return null
     out.push(p)
+  }
+  return out
+}
+/** startsInPlain's rule in the translation's projection (`text`, projectionOf's): each start in the row (Row.sentences.tr) at
+ *  the first letter, digit or element at or after it, before the next start, and the opening marks set against it; where a
+ *  paragraph point paired with a start opens its block (unit/breaks.ts paraPieces). Null where one has none */
+export function startsInProjection(text: string, tr: readonly number[]): number[] | null {
+  const out: number[] = []
+  let floor = 0
+  for (let j = 0; j < tr.length; j++) {
+    const end = j + 1 < tr.length ? tr[j + 1]! : text.length
+    let o = tr[j]!
+    while (o < end && text[o] !== OBJ && !/[\p{L}\p{N}]/u.test(text[o]!)) o++
+    if (o >= end) return null
+    // (from the opening brackets and quotes set against its first word, Unicode's Ps and Pi: "(Vier" begins its sentence at
+    // its bracket, as a word is placed on A, engine words.ts; a token is in the sentence its start falls in)
+    while (o > floor && /[\p{Ps}\p{Pi}]/u.test(text[o - 1]!)) o--
+    floor = o + 1
+    out.push(o)
   }
   return out
 }
@@ -624,9 +651,9 @@ function withBreaks(
  * on that today pairs by sentence were all such, or a translation's sentence with no token drawn (bySentence's `unlaid`: an
  * element moved past the translation's last stop), joined the same way (the feature list's F1). Joined, the other sentences stay
  * the translator's pairs, and the one joined lights with its neighbour on both panes (lanes/hl-display: a cut stands on both
- * panes or on neither)
+ * panes or on neither). A paragraph point pairs with these cuts (unit/breaks.ts paraPieces)
  */
-function worded(
+export function worded(
   words: readonly (readonly [number, number, number])[],
   src: readonly number[],
   tr: readonly number[],

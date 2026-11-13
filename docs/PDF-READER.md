@@ -6376,6 +6376,63 @@ today's erased ink it never drew again (a class's "Funding:", a table note's mar
   entry the differential reads 4 lost on both runs: 2610.19159v1 t1990 (a macro's prose argument, the display design's N10) and
   the three real ones.
 
+### 18.69 A paragraph TeX opened in plain text opens where the row's sentence start pairs with its first word (2026-11-13)
+
+§18.66 states a paragraph TeX opened inside a unit where a group or an element stands at its start. Two cases remain (the
+display design of 2026-11-13, 2a): a paragraph that opens in plain text (`A. \smallbreak\noindent B.`, a class's separator, a
+plain new paragraph the source writes no blank line before), and a point stated at a group the translator's reply dropped (with
+Microsoft's rows the bold markers of 2111.09276v1's run-in titles come back at the unit's end, and the reading places a lost group
+only where its text stands once in the source: "COIN", three times there, runs on). The fact for both is the paragraph's first
+word: its offset in the unit's source projection (what `Row.sentences.src` counts in) and the line TeX opened it on, the part's
+`paras`. A paragraph point is a fact of the source, and a group or an element is one carrier of it that a reply can drop: the
+part states the first word of EVERY point, whatever stronger anchor it also has, and the lay reads the strongest carrier the row
+kept (the coordinator's ruling of 2026-11-13, in place of the design's "stated once, by the strongest fact"). The engine's half
+states it, in a later round; until then no part holds it and nothing drawn moves.
+
+- **The lay** (`unit/breaks.ts` `paraPieces`, `pairing`). A point on a line no stronger fact the row holds opens (a group's open
+  or an element between the row's texts, a forced break: `statedBreaks`; one opening a line) is paired with the row's
+  sentence whose start on A is that word: the row's cuts each holding a word of A (`lay/lit.ts` `worded`), the first of
+  `Placed.words` at or after the start (`firstWordAt`, the highlight's own start rule) being the point's word on the point's
+  line. Its place in the translation is the highlight's too (`startsInProjection`: the start's first letter, digit or element,
+  back over the opening marks set against it). A piece of the typesetter's own (`par`, never in a Row, never on a wire) stands
+  there, before the groups opened right there, a text piece cut in two; it stands for no character, so the row's projection,
+  its sentences and the highlight's places do not move. `statedBreaks` reads it as a group's open with `opens` its line, under
+  the same guards; one it does not open is taken out. The blocks, the tokens' `blockTo` and the breaker run unchanged; the white
+  space at the cut is dropped as at any block's edge. A named variant pairs after `lay/named.ts` has given its sentences back in
+  the unit's own projection.
+- **No pair, no guess.** Where the row carries no sentences (they did not reconstruct; Chrome's translator) or no start of it is
+  the point's word (an end inside a sentence: a float TeX set in the middle of one), no block opens and the text flows on through
+  the member's lines, as before: no nearest start and no proportional place is taken, which would set half a sentence on a line
+  of its own.
+- **Stated** (`Laid.paras`, where the part states a point and the member is laid): `[opened, noStart, noSentences]`: the points
+  opened on their line (by their own pair, or by a stronger fact the row holds there), those that flowed on for want of a start
+  the lay can open at their word, those for want of the row's sentences.
+- **The gate** (the reader gate, `lab/typeset/gate-l1.mjs --entry`, `packages/typeset/tests/replay/paras-gate.ts`): each point a
+  part states (a group's open, an element, a first word) whose row carries its anchor (the group or the element between the
+  row's texts, else the sentence start paired with its first word) is laid with its first word starting a line of the member: a
+  laid line of the member on the page of TeX's line begins with the paragraph's first thing. The defect a reader sees is a
+  paragraph that starts on the last line of the one before; one that starts a line of its member has none, whether that line
+  stands on TeX's baseline or not (the coordinator's ruling of 2026-11-13: the baseline is the spacing design's). A point run on
+  fails the run; those on TeX's baseline are counted beside, never failed; a point with no anchor flows on and is counted by why.
+  In the lab the first word of a point stated at a group or an element is read from the unit's source, so the gate holds today's
+  group points to the fallback the part will state. Of several facts that state one line, the point is the first in the source
+  (2609.36054v2's author block states each line at its name's group and at its affiliation's after it). The release check's
+  `sentence-cover` reads the counts and fails on a point run on once `PARAS_HELD` (`lab/release-check/gates.mjs`) is on: the
+  engine half's lane turns it on in the round it lands in; until then a point a reply's dropped group leaves has no first word
+  to fall back to.
+- **Measured** (the base c331582c6 against this lay, round B15's parts, no part stating a first word): the reader's own lay
+  (`lab/typeset/parity/v2.mjs`) over the 90 pairs and the two added ones (2111.09276v1-zh, 2611.03953v2-zh), on the door rows
+  and on the lab's Google store, default and every switch on: 368 of 368 files identical. The reader gate at this lay: every
+  number it read before as at the base (90 pairs, door: entry 24,056 alike / 244, I3 3, I4 0, I5 2, I10 0 over 3,145,577
+  pieces, I6 0 other; Google: 23,544 / 827, I3 3, I10 0 over 3,569,346, I6 0 other). The points: 27 stated over the 90 (all at
+  a group), 3 not on TeX's line on both stores, each beginning a line of its own at the member's own pitch (2608.25210v2 p1 ord
+  8, 2610.21924v1 p2 ord 17, 2610.30151v1 p1 ord 0: CJK leading, a title's); on the door rows 24 belong to members with no
+  door row. 2111.09276v1-zh: Google's rows 8 of 8 open; the door rows (Microsoft's replies in today's reading) 6 not, 5 of them
+  run on (COIN, Youcook2, Howto-GEN, "Token Replacement", "Step Aggregation Model", "IER": run-in titles whose groups the reply
+  dropped). A copy of its parts stating COIN's and Youcook2's first words (the lab's simulation) opens those two on TeX's lines
+  (179.84, 585.36) on the door rows; one stating every such point's first word, and its words in every part that holds the
+  member, opens all six (the gate 0) and moves no other unit across the pages' lays (I6 0 other).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
