@@ -72,7 +72,7 @@ export function onPagesOf(pair: string, ords: ReadonlySet<number>): { pages: Set
 }
 /** whether a round's tokens hold an item that continues its word (B.tokens' pushText: `brk`, a piece after a break point inside a
  *  word, a URL's after its `/`; `cont`, a run of one case of a word), where lane literal-fixes' rule (no glue inside a word:
- *  breaker/break.mjs gapsOf, read by placeItems and the breaker's squeeze) spreads a line's slack or squeeze over fewer gaps
+ *  breaker/break.ts gapsOf, read by placeItems and the breaker's squeeze) spreads a line's slack or squeeze over fewer gaps
  *  than today's did */
 export const inWordOf = (tokens: readonly unknown[]): boolean =>
   tokens.some((t) => !!(t as { brk?: unknown }).brk || !!(t as { cont?: unknown }).cont)

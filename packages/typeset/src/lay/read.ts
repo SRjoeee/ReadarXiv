@@ -12,7 +12,7 @@
 //   maps over them and the lines the elements keep; U.marks' facts (origAfter, heldAfter) from El.after;
 // - U.label over the label's parts (Label.name, num, punct) as its glyphs;
 // - the unit's base style, its size and its colour from Style (today's originalStyle and measuredOf over its characters), the
-//   faces' design from the font's name (today's classifyFont, breaker/font-names.mjs), the paper's designs and English family
+//   faces' design from the font's name (today's classifyFont, breaker/font-names.ts), the paper's designs and English family
 //   from Part.paper.faces (today's page-1 tally and familyOfFonts);
 // - U.rename over the resolutions drawn as the page's text: a generated reference's or a citation's note's names in the
 //   target's (the rules' reference names, babel's, the paper's own name units'), where the reader draws labels anew;

@@ -668,7 +668,7 @@ export function adapt(i: AdaptInput): Adapted {
   // last token, set at the end of the line the text ends on, as far from that line's right edge as TeX set it from its own
   // (`pad`, its rectangle's right edge to the slot's on the line TeX set it on), on that line where the text ends the keep-off
   // distance before it (`gap`, TeX's own distance and half an em at most: B.slots' rule for ink that stays), else on a line of its
-  // own (breaker/break.mjs). Left where TeX set it, a translation a line longer stood it beside a line mid-paragraph (2610.40645v1-ja
+  // own (breaker/break.ts). Left where TeX set it, a translation a line longer stood it beside a line mid-paragraph (2610.40645v1-ja
   // p12 t80), one a line shorter alone under the text. The prepare's claim after the unit's end point, no piece's, is drawn as its
   // own crop; the author's own mark (`\qed` written in the text, an element of the unit's) is set so where the translation ends
   // with it, and drawn where the translation sets it otherwise)
