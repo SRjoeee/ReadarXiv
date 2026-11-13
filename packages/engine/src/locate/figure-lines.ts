@@ -77,8 +77,9 @@ export interface FigureText {
   /** held with its label (§18.61): its `why` `decoration` for a word a decoration holds in another line of its label, or in
    *  another text of its printed line, none of its own */
   withLabel?: true
-  /** a closed shape round all of it: its room's edges over and under its baseline (PDF units up and down from it) */
-  container: { over: number; under: number } | null
+  /** a closed shape round all of it: its room's edges over and under its baseline (PDF units up and down from it); for a text
+   *  the container step makes of a path's rows, `side`, the path's inside across (its edges at every row, page x: acrossIn) */
+  container: { over: number; under: number; side?: [number, number] } | null
   /** the depth under its baseline of the stroke under its text (roomOf's `under`) */
   under: number | null
 }
@@ -681,12 +682,19 @@ function linesOf(
         const mine = idx.filter((i) => lines[i]!.ks.every((k) => ft.ks.includes(k)))
         const others = [...lines.filter((_, i) => !mine.includes(i)), ...rs.map((r) => r.l)]
         if (!ft.why && rs.some((r) => torn(ft, r.l, glyphs, loose, others))) ft.why = 'crowded'
-        if (!ft.container)
+        // (its room the path's inside: over and under its baseline, and across, at its rows (§18.36))
+        if (!ft.container) {
           ft.container = roomIn(
             h.shape,
             ft.order.flatMap((o) => (o.t === 'text' ? o.glyphs : [])),
             glyphs,
           )
+          const side = acrossIn(
+            h.shape,
+            rs.map((r) => r.l),
+          )
+          if (side) ft.container.side = side
+        }
         out.push(ft)
         for (const i of mine) taken.add(i)
       }
@@ -1984,7 +1992,7 @@ function roomIn(
   shape: { segs: ArrayLike<number>; hw: number; stroke: boolean },
   gs: readonly number[],
   glyphs: readonly G[],
-) {
+): { over: number; under: number; side?: [number, number] } {
   const x0 = Math.min(...gs.map((g) => glyphs[g]!.x0)),
     x1 = Math.max(...gs.map((g) => glyphs[g]!.x1))
   const ys = gs.map((g) => glyphs[g]!.y).sort((a, b) => a - b)
@@ -2008,3 +2016,33 @@ function roomIn(
   return { over: Number.isFinite(over) ? over : 0, under: Number.isFinite(under) ? under : 0 }
 }
 
+/**
+ * A path's inside across a text of its rows (§18.36: a joined text's room is the path's inside): at each row, the path's
+ * segments crossing it a third of the row's size over its baseline (where the wrap rule reads the measure), the nearest at or
+ * before the row's start and at or past its end; across all of them the narrowest, its stroke's half width in. None where a
+ * row meets no edge either side
+ */
+function acrossIn(
+  shape: { segs: ArrayLike<number>; hw: number; stroke: boolean },
+  rows: readonly Line[],
+): [number, number] | null {
+  const S = shape.segs
+  const w = shape.stroke ? shape.hw : 0
+  let left = Number.NEGATIVE_INFINITY,
+    right = Number.POSITIVE_INFINITY
+  for (const l of rows) {
+    const y = l.y + 0.35 * l.size
+    const xs: number[] = []
+    for (let i = 0; i + 3 < S.length; i += 4) {
+      const ay = S[i + 1]!,
+        by = S[i + 3]!
+      if (ay > y !== by > y) xs.push(S[i]! + ((y - ay) * (S[i + 2]! - S[i]!)) / (by - ay))
+    }
+    const r = Math.min(...xs.filter((x) => x >= l.x1 - 0.5)),
+      lft = Math.max(...xs.filter((x) => x <= l.x0 + 0.5))
+    if (!Number.isFinite(r) || !Number.isFinite(lft)) return null
+    left = Math.max(left, lft)
+    right = Math.min(right, r)
+  }
+  return rows.length && left + w < right - w ? [left + w, right - w] : null
+}

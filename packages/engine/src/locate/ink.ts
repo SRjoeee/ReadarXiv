@@ -715,9 +715,16 @@ function figureTextOf(
   const x1 = Math.max(...all.map((g) => G[g]!.x1))
   const x0 = G[all[0]!]!.x0
   // (a paragraph, F3: laid in its lines as a body paragraph is, its room the facts pass's (its lines' sides, below it): none of
-  // a line's free line along its run; a line alone, as before)
+  // a line's free line along its run; a line alone, as before. One the container step made of a path's rows has the path's
+  // inside across as its room beside its lines (§18.36), stated as a line's free line is, from its rows' extent: the facts pass
+  // takes it as Room.side, never the column's)
+  const across = t.para && t.container?.side
+  const left = Math.min(...all.map((g) => G[g]!.x0))
   const room = t.para
-    ? { ...roomOfText(t) }
+    ? {
+        ...roomOfText(t),
+        ...(across ? { x: left, length: x1 - left, before: left - across[0], after: across[1] - x1 } : {}),
+      }
     : {
         x: x0,
         ...(Number.isFinite(f0.y) ? { y: f0.y } : {}),
