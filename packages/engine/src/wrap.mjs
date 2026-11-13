@@ -39,7 +39,7 @@ import { DELTA_OBJECTS_MAX, deltaSection, UNHIDDEN_MAX } from './delta-wire.ts'
 import { alignOf, DecodeLimit, lex, LexLimit, openRemover } from './remove.mjs'
 import { appendSection } from './section.ts'
 import { startxrefOf } from './tail.ts'
-import { openObjects } from './xref.mjs'
+import { openObjects } from './xref.ts'
 
 /** the groups and the marked-content sequences of ours a page may hold, and the groups a document may (E1, E3) */
 export const GROUPS_PAGE = 512, SEQUENCES_PAGE = 2000, GROUPS_DOC = 8000

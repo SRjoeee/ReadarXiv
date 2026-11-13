@@ -28,7 +28,7 @@
 import { DELTA_OBJECTS_MAX } from './delta-wire.ts'
 import { isMemoryError } from './memory.ts'
 import type { PdfLib } from './remove.types.ts'
-import { openObjects, XrefRefusal } from './xref.types.ts'
+import { openObjects, XrefRefusal } from './xref.ts'
 
 /** the byte range of one image's data in B: [start, length] */
 export type Hole = readonly [start: number, length: number]

@@ -10,7 +10,7 @@ export * from './remove.types.ts'
 export * from './section.ts'
 export * from './tail.ts'
 export * from './wrap.types.ts'
-export * from './xref.types.ts'
+export * from './xref.ts'
 
 // ---- the back half of the prepare
 // (the unit's id, which the front half's adapter computes for the seam: format's)

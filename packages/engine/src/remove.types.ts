@@ -33,9 +33,109 @@ export const COST = remove_js.COST as Readonly<
 /** what a page's walk may hold: its streams' operators and its events by COST, each stream lexed once, and their decoded bytes */
 export const HELD_MAX = remove_js.HELD_MAX as number
 export const BYTES_MAX = remove_js.BYTES_MAX as number
-/** the PDF object layer's exports the remover reads (@cantoo/pdf-lib) */
-// biome-ignore lint/suspicious/noExplicitAny: today's declaration of the object layer's exports, as callers read it
-export type PdfLib = Record<string, any>
+/** a PDF object as the object layer (@cantoo/pdf-lib) holds one, as the engine reads it: a dictionary's or an array's entry
+ *  read through `get`, where it has one */
+export interface PdfObject {
+  toString(): string
+  get?(key: PdfName | number): PdfObject | undefined
+}
+/** a name (`/Name`): its text with the slash (`asString`), its characters decoded (`decodeText`, where the layer has it) */
+export interface PdfName extends PdfObject {
+  asString(): string
+  decodeText?(): string
+}
+export interface PdfNumber extends PdfObject {
+  asNumber(): number
+}
+/** an indirect reference (`n g R`) */
+export interface PdfRef extends PdfObject {
+  readonly objectNumber: number
+  readonly generationNumber: number
+}
+export interface PdfArray extends PdfObject {
+  size(): number
+  get(index: number): PdfObject
+  asArray(): PdfObject[]
+}
+export interface PdfDict extends PdfObject {
+  get(key: PdfName): PdfObject | undefined
+  entries(): [PdfName, PdfObject][]
+}
+/** a stream as the layer holds one: its dictionary and its contents decoded (`getContents`) */
+export interface PdfStream extends PdfObject {
+  readonly dict: PdfDict
+  getContents(): Uint8Array
+}
+/** a stream as it stands in the file: its dictionary and its bytes, not decoded */
+export interface PdfRawStream extends PdfObject {
+  readonly dict: PdfDict
+  readonly contents: Uint8Array
+}
+/** a page's dictionary in the layer's page tree: its own entries, its resources inherited or its own */
+export interface PdfPageLeaf extends PdfDict {
+  Resources(): PdfDict | undefined
+}
+export interface PdfPage {
+  readonly node: PdfPageLeaf
+  readonly ref: PdfRef
+}
+/** a document's objects as the layer holds them: its trailer's entries, any object by reference, its largest object number */
+export interface PdfContext {
+  readonly trailerInfo: { Root?: PdfObject; Encrypt?: PdfObject; Info?: PdfObject; ID?: PdfObject }
+  readonly largestObjectNumber: number
+  lookup(ref: PdfObject | undefined): PdfObject | undefined
+  /** every indirect object, by its ref (a test's reading of the whole document: tests/pdf-reader/helpers/lex-compare.ts) */
+  enumerateIndirectObjects(): [PdfRef, PdfObject][]
+}
+export interface PdfDocument {
+  readonly context: PdfContext
+  getPages(): PdfPage[]
+}
+/** the layer's parser of one object's syntax: its public reading (xref.mjs reaches three protected members of it, by a cast
+ *  that names each) */
+export interface PdfObjectParser {
+  parseObject(): PdfObject
+}
+/** a stream's filters run by the layer (PDF.js's DecodeStream, ported): its bytes a chunk at a time, read again from the start */
+export interface PdfDecodeStream {
+  getBytes(length?: number): Uint8Array | Uint8ClampedArray
+  reset(): void
+  /** its bytes decoded whole (a test's reading: tests/pdf-reader/helpers/lex-compare.ts) */
+  decode(): Uint8Array
+}
+/** a class of the layer as the engine meets it: its instances told by `instanceof`, narrowed by its prototype (the layer's
+ *  constructors are private, so no construct signature describes them; a function is what `instanceof` takes on its right) */
+// biome-ignore lint/complexity/noBannedTypes: a class of the layer is a Function, and instanceof takes nothing narrower
+export interface PdfClass<T> extends Function {
+  readonly prototype: T
+}
+/** the PDF object layer's exports the engine reads (@cantoo/pdf-lib, given by the host), and its tests: its public surface,
+ *  so that the module itself is one */
+export interface PdfLib {
+  PDFName: PdfClass<PdfName> & { of(name: string): PdfName }
+  PDFNumber: PdfClass<PdfNumber>
+  PDFRef: PdfClass<PdfRef> & { of(objectNumber: number, generationNumber?: number): PdfRef }
+  PDFArray: PdfClass<PdfArray>
+  PDFDict: PdfClass<PdfDict>
+  PDFStream: PdfClass<PdfStream>
+  PDFRawStream: PdfClass<PdfRawStream> & { of(dict: PdfDict, contents: Uint8Array): PdfRawStream }
+  PDFBool: { readonly False: PdfObject }
+  PDFContext: { create(): PdfContext }
+  PDFObjectParser: { forBytes(bytes: Uint8Array, context: PdfContext): PdfObjectParser }
+  PDFDocument: {
+    load(
+      bytes: Uint8Array,
+      options: {
+        ignoreEncryption?: boolean
+        updateMetadata?: boolean
+        throwOnInvalidObject?: boolean
+        parseSpeed?: number
+      },
+    ): Promise<PdfDocument>
+  }
+  ParseSpeeds: { readonly Fastest: number }
+  decodePDFRawStream(stream: PdfRawStream): PdfDecodeStream
+}
 /** the operators a page's walk may visit, its forms' as often as they are painted; past it the page is refused */
 export const WALK_MAX = remove_js.WALK_MAX as number
 /** PDF.js's operator list of a page, as the remover reads it */

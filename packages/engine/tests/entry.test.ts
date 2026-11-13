@@ -14,7 +14,7 @@ import * as remove from '../src/remove.types.ts'
 import * as section from '../src/section.ts'
 import * as tail from '../src/tail.ts'
 import * as wrap from '../src/wrap.types.ts'
-import * as xref from '../src/xref.types.ts'
+import * as xref from '../src/xref.ts'
 
 /** the modules the entry re-exports whole, by the path its `export *` names (a package names its imports literally) */
 const WHOLE: Record<string, Record<string, unknown>> = {
@@ -25,7 +25,7 @@ const WHOLE: Record<string, Record<string, unknown>> = {
   './section.ts': section,
   './tail.ts': tail,
   './wrap.types.ts': wrap,
-  './xref.types.ts': xref,
+  './xref.ts': xref,
 }
 
 describe("the package's entry", () => {
