@@ -285,6 +285,39 @@ describe('the prepare: the tree before any compile, refusals as reasons, and the
   const never: FrontHalf = async () => {
     throw new Error('the front half ran')
   }
+  test("the compile the front half is given is the host's, passed through: each request as it was, each answer as it came, the files handed once before the first", async () => {
+    const A = await pdfOf(1, null)
+    const seen: unknown[] = []
+    const asks = [
+      { main: 'main.tex', engine: 'pdflatex', rerun: false, bibtex: null, overrides: new Map() },
+      { main: 'main.tex', engine: 'pdflatex', rerun: true, bibtex: true, overrides: new Map() },
+    ]
+    const answers = asks.map((_, i) => ({ ok: i === 1, log: `answer ${i}` }))
+    const front: FrontHalf = async (input) => {
+      for (const q of asks) seen.push(['answer', await input.compile(q)])
+      return { ok: false, why: 'cannot-typeset', detail: 'measured' }
+    }
+    const end = await prepare(
+      () => ({ files: files({ 'main.tex': PAPER }), original: A, stored: null }),
+      host({
+        handFiles: async () => {
+          seen.push('files')
+        },
+        compile: async (q) => {
+          seen.push(['ask', q])
+          return answers[asks.indexOf(q)] ?? { ok: false }
+        },
+      }),
+      front,
+    )
+    expect(end).toEqual({ ok: false, why: 'cannot-typeset', detail: 'measured' })
+    expect(seen).toHaveLength(5)
+    expect(seen[0]).toBe('files')
+    for (const [i, q] of asks.entries()) {
+      expect((seen[1 + 2 * i] as unknown[])[1]).toBe(q)
+      expect((seen[2 + 2 * i] as unknown[])[1]).toBe(answers[i])
+    }
+  })
   test("a paper of another tree is answered with it before the front half runs; the source's own refusal and an unreadable A are reasons", async () => {
     const A = await pdfOf(1, null)
     const notes: [string, unknown][] = []
