@@ -22,7 +22,7 @@
 // comment and the numbers are searched for every string of the fixtures' translations before they are written, and withheld
 // (exit 2) where one is found. A ruling's words are the maintainer's, and are the only free text in the comment.
 import { execFileSync, spawn } from 'node:child_process'
-import { appendFileSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { appendFileSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -466,6 +466,10 @@ export function parseEngines(json) {
 }
 
 const git = (...args) => execFileSync('git', args, { cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 26 })
+/** an engine's worktree given modules of its own, from the store this tree's install filled (rules-gate.yml's merge base alike): a
+ *  workspace's links are relative (node_modules/@readarxiv/engine -> ../../packages/engine), so a node_modules borrowed from this
+ *  tree would load this tree's packages into the engine's run */
+export const installEngine = dir => { execFileSync('pnpm', ['-C', dir, 'install', '--frozen-lockfile', '--prefer-offline'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 26 }) }
 
 /** the rule set's file, which a ruling is bound to by the version it held where the ruling came in */
 const RULES_FILE = 'src/pdf-reader/engine/rules/layout-rules.json'
@@ -509,8 +513,8 @@ function leakCount(text, rulings, strings) {
   return leaksIn(text, strings) + free.reduce((n, t) => n + fragmentsIn(t, haystack), 0)
 }
 
-/** `deps`: the gate's run, git and the two uses of the network, so that a test runs the whole command on fakes */
-export async function engines(argv, { run = runGate, git: gitFn = git, fetchImpl = fetch } = {}) {
+/** `deps`: the gate's run, git, the engine's install and the uses of the network, so that a test runs the whole command on fakes */
+export async function engines(argv, { run = runGate, git: gitFn = git, fetchImpl = fetch, install = installEngine } = {}) {
   const arg = n => option(argv, n)
   const list = parseEngines(JSON.parse(readFileSync(resolve(arg('list')), 'utf8')))
   if (!list.length) { console.log('no live engine is named in live-engines.json: nothing to check'); return 0 }
@@ -539,7 +543,8 @@ export async function engines(argv, { run = runGate, git: gitFn = git, fetchImpl
     const dir = join(work, e.name.replace(/[^A-Za-z0-9._-]+/g, '-'))
     gitFn('worktree', 'add', '--detach', dir, sha)
     try {
-      symlinkSync(join(REPO, 'node_modules'), join(dir, 'node_modules'))
+      // (the engine on modules of its own, or not at all: a run on this tree's would measure this tree's packages under its name)
+      try { install(dir) } catch (err) { throw new Error(`its own install failed, and borrowed modules would run this tree's packages: ${String(err?.message ?? err).split('\n')[0].slice(0, 160)}`) }
       // the set published for this engine: what a reader of its schema takes now; none yet, the engine's own built-in
       let published = join(dir, ENGINE, 'rules/layout-rules.json'), from = 'the built-in set (none is published)'
       if (arg('published')) {

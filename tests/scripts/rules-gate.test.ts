@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -330,7 +330,7 @@ describe('the live-engines check honours the rulings, as the pull request gate d
   }
 
   /** the command on a regressed head (ja: a unit left English) against its base, with a tree */
-  async function check(tree: Record<string, string>, { regress = true, record = '', versions = {} as Record<string, number>, asAdded = {} as Record<string, string> } = {}) {
+  async function check(tree: Record<string, string>, { regress = true, record = '', versions = {} as Record<string, number>, asAdded = {} as Record<string, string>, install = (_dir: string) => {} } = {}) {
     const dir = mkdtempSync(join(tmpdir(), 'rules-gate-engines-'))
     const write = (name: string, content: unknown) => { mkdirSync(join(dir, name, '..'), { recursive: true }); writeFileSync(join(dir, name), typeof content === 'string' ? content : JSON.stringify(content)); return join(dir, name) }
     const names = Object.keys(base())
@@ -341,12 +341,28 @@ describe('the live-engines check honours the rulings, as the pull request gate d
     const t = { ...tree }
     if (record) t[RECORD] = record
     const fake = fakeGit(t, versions, asAdded)
-    const runFake = async (o: { rules: string }) => (o.rules === headRules ? headRun : baseRun)
+    // (each step in order: an engine's install, its two runs, each with what its worktree holds then)
+    const steps: string[] = []
+    const runFake = async (o: { rules: string; engine: string }) => {
+      steps.push(`run ${existsSync(join(o.engine, 'node_modules')) ? lstatSync(join(o.engine, 'node_modules')).isSymbolicLink() ? 'on a link' : 'on its own modules' : 'on no modules'}`)
+      return o.rules === headRules ? headRun : baseRun
+    }
+    const installFake = (at: string) => { steps.push('install'); install(at); mkdirSync(join(at, 'node_modules'), { recursive: true }) }
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const code = await engines(argv, { run: runFake as never, git: fake.git as never, fetchImpl: (async () => { throw new Error('no network') }) as never })
+    const code = await engines(argv, { run: runFake as never, git: fake.git as never, fetchImpl: (async () => { throw new Error('no network') }) as never, install: installFake })
     const verdict = join(dir, 'out', 'v0.4.1.md')
-    return { code, said: log.mock.calls.map(c => String(c[0])).join('\n'), verdict: existsSync(verdict) ? readFileSync(verdict, 'utf8') : null, files: fake }
+    return { code, said: log.mock.calls.map(c => String(c[0])).join('\n'), verdict: existsSync(verdict) ? readFileSync(verdict, 'utf8') : null, files: fake, steps }
   }
+  it('runs each engine on modules of its own, installed in its worktree before either run, never on a link to this tree\'s (PR #642)', async () => {
+    const r = await check({ [`${RULINGS}README.md`]: '# Rulings' })
+    expect(r.steps).toEqual(['install', 'run on its own modules', 'run on its own modules'])
+  })
+  it('names an engine whose own install fails and runs nothing on it: borrowed modules would measure this tree\'s packages', async () => {
+    const r = await check({ [`${RULINGS}README.md`]: '# Rulings' }, { install: () => { throw new Error('Command failed: pnpm install\nmore') } })
+    expect(r.code).toBe(1)
+    expect(r.steps).toEqual(['install'])
+    expect(r.said).toContain("FAIL on engine v0.4.1 (v0.4.1): the gate did not run: its own install failed, and borrowed modules would run this tree's packages: Command failed: pnpm install")
+  })
   const fileOf = (over: Record<string, unknown> = {}) => ({ [`${RULINGS}ja-unit.json`]: JSON.stringify(accepted(over)) })
 
   it('fails on an engine\'s regression that no ruling accepts, naming the target and the measure', async () => {
