@@ -1253,6 +1253,7 @@ await check(
     assert(ord !== undefined, 'no note of the names on page 1')
     const [off, on, off2, on2] = drawings
     assert(off?.state === 'left' && off2?.state === 'left', `off: ${JSON.stringify([off, off2])}`)
+    assert(JSON.stringify(on2) === JSON.stringify(on), `on again: ${JSON.stringify(on2)}`)
     // (the variant's row with the block's translation of the name, "Zur nnA eeL", set for its element; the note's own row reads
     // "nnA .eeL", the stop inside the reversed word)
     assert(

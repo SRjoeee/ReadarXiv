@@ -264,7 +264,13 @@ describe('layPage over such a unit', () => {
     (_n, note) => {
       const p: Part = { ...part, flows: [[note]] }
       const read = new Set<string>()
-      const seen: Rows = { get: (k) => (read.add(k), rows.get(k)), done: rows.done }
+      const seen: Rows = {
+        get: (k) => {
+          read.add(k)
+          return rows.get(k)
+        },
+        done: rows.done,
+      }
       const lay = (leave: string[]) => layPage(p, seen, rulesFor('de', { leave }), metrics).members[0]!
       const off = lay(['affiliation', 'author', 'inknames'])
       expect(off.state).toBe('left')

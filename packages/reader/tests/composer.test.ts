@@ -1676,7 +1676,10 @@ describe('the toggles turned and turned back: the drawing a function of the part
       const lay = ((q: Part, rows: Rows) => {
         lay.calls++
         const seen: Rows = {
-          get: (id: string) => (read.add(id), rows.get(id)),
+          get: (id: string) => {
+            read.add(id)
+            return rows.get(id)
+          },
           done: rows.done,
           ...(rows.kept ? { kept: rows.kept } : {}),
         }
