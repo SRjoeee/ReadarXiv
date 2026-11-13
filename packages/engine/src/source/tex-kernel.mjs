@@ -79,7 +79,7 @@ export const ROW_RULES = Object.freeze(['hline', 'cline', 'toprule', 'midrule', 
 /** the kernel's macros that expand to one of their arguments and nothing else, by name: how many they take, and which they give
  *  (latex.ltx: \@firstofone and \@iden take one, \@firstoftwo and \@secondoftwo two). A .bbl defines its field commands by them
  *  (apsrev4-2's `\providecommand \bibinfo [0]{\@secondoftwo}`) */
-export const ARGUMENT_SELECTORS = Object.freeze({ '@firstofone': [1, 1], '@iden': [1, 1], '@firstoftwo': [2, 1], '@secondoftwo': [2, 2] })
+const ARGUMENT_SELECTORS = Object.freeze({ '@firstofone': [1, 1], '@iden': [1, 1], '@firstoftwo': [2, 1], '@secondoftwo': [2, 2] })
 /** the argument a definition expands to alone (`params`, the arguments it declares; `body`, its replacement text, its comments
  *  out as TeX takes them, each with its line's end), as { of, arg }: how many arguments a call takes and which one, from 1, it
  *  sets — `#2` of `[2]`, \@secondoftwo of `[0]`; null for a body that sets anything else (a style, a word, a box, a space) or
@@ -109,11 +109,11 @@ export const SPACE_SYMBOLS = Object.freeze(['~', '\\ ', '\\,', '\\:', '\\;', '\\
 /** control words with no argument that are spaces: LaTeX's \enspace, \quad, \qquad, \thinspace and \nobreakspace */
 export const SPACE_WORDS = Object.freeze(['enspace', 'quad', 'qquad', 'thinspace', 'nobreakspace'])
 /** control words whose argument is the space's length: LaTeX's \hspace{…}, starred or not */
-export const SPACE_LENGTHS = Object.freeze(['hspace'])
+const SPACE_LENGTHS = Object.freeze(['hspace'])
 /** the spaces of negative width among SPACE_SYMBOLS: what takes room away is no gap a space of the wire's or the layer's fills */
 export const NEGATIVE_SPACES = Object.freeze(['\\!'])
 /** a control symbol that is a space in math alone: amsmath's `\>` (\medspace); in text it is the tabbing environment's tab */
-export const MATH_SPACE_SYMBOLS = Object.freeze(['\\>'])
+const MATH_SPACE_SYMBOLS = Object.freeze(['\\>'])
 
 /** the symbols as alternatives of a pattern: a control space is a backslash and any white space; a symbol's backslash is no
  *  forced break's second (`\\` and a line's end is a break, read from a source's end as from its start) */
