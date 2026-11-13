@@ -79,6 +79,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { chromiumOptions } from '../../../tests/e2e/lib/chromium.mjs'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 const root = new URL('..', import.meta.url).pathname
@@ -108,7 +109,7 @@ async function launch(build, label) {
   const copy = mkdtempSync(join(tmpdir(), `hl-gate-${label}-`)), profile = mkdtempSync(join(tmpdir(), `hl-gate-profile-${label}-`))
   cpSync(build, copy, { recursive: true })
   cpSync(PAPERS, join(copy, 'pdf-reader/papers'), { recursive: true })
-  const context = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, viewport: { width: 1600, height: 1000 }, args: [`--disable-extensions-except=${copy}`, `--load-extension=${copy}`] })
+  const context = await chromium.launchPersistentContext(profile, chromiumOptions({ channel: 'chromium', headless: true, viewport: { width: 1600, height: 1000 }, args: [`--disable-extensions-except=${copy}`, `--load-extension=${copy}`] }))
   const close = context.close.bind(context)
   context.close = async () => { try { await close() } finally { for (const d of [copy, profile]) rmSync(d, { recursive: true, force: true, maxRetries: 3 }) } }
   const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))

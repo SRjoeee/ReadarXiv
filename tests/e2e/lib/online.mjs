@@ -6,6 +6,7 @@
 // tests/e2e/lib/online.test.ts holds the list of them and checks both.
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { chromiumOptions } from './chromium.mjs'
 
 /** the opt-in: an online script runs only where this is set to 1 */
 export const ONLINE = 'AXT_E2E_ONLINE'
@@ -42,7 +43,8 @@ export function goOnline(name, { env = process.env, exit = code => process.exit(
 
 /** a browser context's launch options for an online run: the project's User-Agent on its pages (`userAgent`) and, through
  *  Chromium's own switch, on everything else the browser sends (its workers, the extension's service worker and its
- *  fetches); and each extension it loads (`--load-extension=`) one whose reader talks to staging, never production */
+ *  fetches); and each extension it loads (`--load-extension=`) one whose reader talks to staging, never production. Made
+ *  through chromium.mjs's options, as every persistent context of the checks is: the features they turn off, one list */
 export function online(options = {}) {
   const args = options.args ?? []
   for (const a of args) {
@@ -52,5 +54,5 @@ export function online(options = {}) {
       if (server) refuseProduction(server)
     }
   }
-  return { ...options, userAgent: PROJECT_UA, args: [...args, `--user-agent=${PROJECT_UA}`] }
+  return chromiumOptions({ ...options, userAgent: PROJECT_UA, args: [...args, `--user-agent=${PROJECT_UA}`] })
 }

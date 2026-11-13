@@ -13,6 +13,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { edges, menuRows, offCentre, shootEach } from './align.mjs'
+import { chromiumOptions } from '../lib/chromium.mjs'
 
 const EXT = fileURLToPath(new URL('../../../.output/chrome-mv3-dev', import.meta.url))
 const OUT = fileURLToPath(new URL('../../../lab/pdf/out/popup/', import.meta.url))
@@ -24,10 +25,10 @@ mkdirSync(OUT, { recursive: true })
 const profile = mkdtempSync(join(tmpdir(), 'popup-align-'))
 // the profile goes when the process ends, a failure's throw included (a profile a run once filled the disk)
 process.on('exit', () => rmSync(profile, { recursive: true, force: true }))
-const context = await chromium.launchPersistentContext(profile, {
+const context = await chromium.launchPersistentContext(profile, chromiumOptions({
   channel: 'chromium', headless: true, deviceScaleFactor: 2, reducedMotion: 'reduce', viewport: { width: 1200, height: 900 },
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
-})
+}))
 const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))
 const id = new URL(worker.url()).host
 const page = await context.newPage()

@@ -34,6 +34,7 @@ import { bySentence } from '../../../src/pdf-reader/engine/view/highlight.mjs'
 import { cutsOf, rehydrateTags, sentencesOf, serializeTags } from '../../../src/pdf-reader/engine/translate/mt.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { chooseBuiltIn, openOptions } from '../../../tests/e2e/options-page.mjs'
+import { chromiumOptions } from '../../../tests/e2e/lib/chromium.mjs'
 
 const REPO = new URL('../../../', import.meta.url).pathname, root = new URL('..', import.meta.url).pathname
 const { chromium } = createRequire(REPO)('playwright')
@@ -65,7 +66,7 @@ for (const [k, list] of Object.entries(sets)) {
 // the extension, its background asked as the reader's engine asks it (engine.mjs: a status that binds a scope, then
 // translate calls in the chain's batches)
 const launch = async () => {
-  const context = await chromium.launchPersistentContext(PROFILE, { channel: 'chromium', headless: true, args: [`--disable-extensions-except=${BUILD}`, `--load-extension=${BUILD}`] })
+  const context = await chromium.launchPersistentContext(PROFILE, chromiumOptions({ channel: 'chromium', headless: true, args: [`--disable-extensions-except=${BUILD}`, `--load-extension=${BUILD}`] }))
   const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))
   return { context, extId: new URL(worker.url()).host }
 }

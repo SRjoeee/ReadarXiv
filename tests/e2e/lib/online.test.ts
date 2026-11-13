@@ -37,7 +37,7 @@ describe('an online run: the project\'s User-Agent, and never our production ser
     expect(PROJECT_UA).toBe('ReadarXiv/0.1 (+https://readarxiv.org; research)')
     const o = online({ channel: 'chromium', args: ['--load-extension=x'] })
     expect(o.userAgent).toBe(PROJECT_UA)
-    expect(o.args).toEqual(['--load-extension=x', `--user-agent=${PROJECT_UA}`])
+    expect(o.args.slice(1)).toEqual(['--load-extension=x', `--user-agent=${PROJECT_UA}`])
     expect(online().userAgent).not.toMatch(/HeadlessChrome|Chrome\//)
   })
 
