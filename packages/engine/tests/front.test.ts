@@ -14,17 +14,16 @@ import { describe, expect, test, vi } from 'vitest'
 import {
   type FrontHalf,
   type FrontInput,
-  type OriginalFacts,
   originalFactsOf,
   type PreparePdfJs,
   prepareFront,
   sourceUnitsOf,
-  type StoredInstrument,
   treeOf,
   unitsObjects,
 } from '../src/front.ts'
 import { classesOf, instrumentOf, markedOfPaper, openPaper } from '../src/front.types.ts'
 import { type Instrument, ownersOf, ROLE } from '../src/instrument.ts'
+import type { OriginalFacts, StoredInstrument } from '../src/plan.ts'
 import { type PrepareHost, prepare } from '../src/prepare.ts'
 import { readPdf } from '../src/read.ts'
 

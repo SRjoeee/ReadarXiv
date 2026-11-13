@@ -12,22 +12,18 @@ import { type BundleObject, bundle } from './bundle/bundle.ts'
 import type { Doc } from './doc.ts'
 import {
   type FrontHalf,
-  FrontRefusal,
-  INSTRUMENT_OBJECTS,
-  type OriginalFacts,
   originalFactsOf,
   type PreparePdfJs,
   type PrepareStage,
   prepareFront,
   type Refusal,
-  type StoredInstrument,
-  short,
   treeOf,
 } from './front.ts'
 import { type Compiled, type CompileRequest, classesOf } from './front.types.ts'
 import type { Instrument } from './instrument.ts'
 import { type Located, type LocateOptions, locate } from './locate/locate.ts'
 import { isMemoryError } from './memory.types.ts'
+import { FrontRefusal, INSTRUMENT_OBJECTS, type OriginalFacts, type StoredInstrument, short } from './plan.ts'
 import { type PdfJs, type ReadPage, type Recovered, readPdf } from './read.ts'
 import { type AlignFacts, alignReader, type PdfLib } from './remove.types.ts'
 import { type AddOn, type WrapPageA, wrap, wrapPageOf } from './wrap/wrap.ts'
