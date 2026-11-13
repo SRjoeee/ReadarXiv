@@ -6492,7 +6492,8 @@ read it, never a word list or a share:
 - **A note written on its own** is the block's where the paper's bindings attach it to an author: the generator keeps, per
   binding, where a note command's text goes (`scripts/latexml-args.mjs` `NOTE_POOLS`, `NOTE_PACKAGES`): `creator`, the author
   before it (REVTeX's `\thanks` after `\author{…}`, acmart's `\authornote`); `label:<prefix>`, the authors whose text requests the
-  label (`REQUEST_*`: elsarticle's `\cortext[key]{…}` and `\corref{key}` in an `\author`, read once the whole source is); or the
+  label (`REQUEST_*`: elsarticle's `\cortext[key]{…}` and `\corref{key}` in an `\author`, read once the whole source is, and as
+  TeX reads the argument: a request in a comment, in a branch TeX skips or in one the source cannot tell asks for nothing); or the
   document's (the kernel's `\thanks`, amsart's), body. A label no author's text requests is an orphan LaTeXML drops: body.
 - **An author command's argument a macro stores** keeps its role's kinds (`frontBlock`): ICML's `\icmlaffiliation`, which its
   class stores with `\gdef` for the footnote `\printAffiliationsAndNotice` sets, is the block's places, held and unmarked as
@@ -6504,7 +6505,11 @@ read it, never a word list or a share:
   the paper's end, a running head, which is never a note's or an orphan's line). One that holds whole a stored argument's text
   (ICML's footnote of its places) is the names' wherever it stands. "Holds whole": the unit's letters a run of the line's words'
   letters from a word's start to a word's end, a class's separator ("and", a comma) no part of it. Today's named a block where 60 %
-  of its letters were an author unit's words (`NAMES_SHARE`), which is gone.
+  of its letters were an author unit's words (`NAMES_SHARE`), which is gone. What this tie cannot tell: ink no unit owns that
+  repeats a stored argument's text whole without TeX having set it from that argument (a note of the paper's own, made no unit,
+  that quotes an affiliation word for word) is read as the block's too, since only a mark inside the stored argument would tell
+  the two apart, and that structural tie was designed and not taken (a stored text may be set twice or never). A paper that shows
+  such a note becomes a fixture of the rule before the rule changes; the corpus ties exactly ICML's two footnotes.
 
 A note so tied carries `of: 'author'` on its unit and on each of its members (format's `Unit.of`, `Placed.of`: optional, not in
 the id; a reader of before reads none and translates the note, as before), and every reading of a class reads a unit's or a
