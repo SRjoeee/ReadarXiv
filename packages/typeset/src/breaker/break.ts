@@ -7,7 +7,6 @@ import { breakPoints } from './hyph.ts'
 import { keptPair, kinsokuOf, noStart } from './script.ts'
 import { inFlow, texRoomOf } from './slots.ts'
 import type { FitBlock, FitParams, FitState, LaidItem, LaidLine } from '../fit/types.ts'
-import type { CutToken } from './cuts.ts'
 import type { Mins } from './hyph.ts'
 import type { FitMeasure } from './measure.ts'
 import type { Slot } from './slots.ts'
@@ -32,9 +31,8 @@ export type Crop = {
 }
 /** a URL's crop, its break points stated (urlCut's) */
 type UrlCrop = Crop & { breaks: [x: number, at: number][] }
-/** a token as the breaker reads it: the cuts' (CutToken: a page break), its crop's fields (Crop), a unit's own label carried to
- *  its first line (`ownLabel`), the whole URL a part cut at its break points is of (`of`) */
-export type BreakToken = Omit<CutToken, 'crop'> & { crop?: Crop; ownLabel?: true; of?: BreakToken }
+/** a token as the breaker reads it: its crop's fields (Crop), which Token states as a record */
+export type BreakToken = Omit<Token, 'crop'> & { crop?: Crop }
 /** a laid item as the breaker makes it: its token as the breaker reads it; its text set at a hung label's end (`tabbed`); a
  *  space that shrinks no more (`rigid`: a hung label's, TeX's hang is a box) */
 type BreakItem = Omit<LaidItem, 't'> & { t: BreakToken; tabbed?: true; rigid?: true }
@@ -203,7 +201,7 @@ const latinishOf = (items: readonly ItemOf[], P: FitParams): boolean => {
   const kt = tabOf(items)
   return (
     items.some((it, k) => it.t.space && k > kt) &&
-    ((P.keepAll as boolean | undefined) || items.filter((it) => it.t.cls === 'cjk').length < items.length / 2)
+    (P.keepAll || items.filter((it) => it.t.cls === 'cjk').length < items.length / 2)
   )
 }
 /** the marks of a line whose blank half a squeeze may take (placeItems): its marks with one as their face draws them (the
@@ -275,6 +273,7 @@ function breakLines(
   // (a word wider than its line cut by its characters, each a grapheme, what a reader sees as one character: a letter and the
   // marks over it, a flag's two regional indicators; never before a mark no line opens with, nor inside a pair UAX 14 keeps)
   const cutBarred = (chars: readonly string[], k: number) => barredChar(chars[k]!) || keptPair(chars[k - 1], chars[k])
+  // (the line in hand: null until the first open(); every read is inside a closure that runs after it, `settle` reading it with `?.`)
   let line = null as unknown as Line
   // (`past`: how many of the unit's kept regions the text has passed before the line's first item, the walk's own count
   // (`consumed`, below): where the page's word table writes a region's kept lines, words.mjs, in the text's order whatever
@@ -342,7 +341,7 @@ function breakLines(
     while (k >= 0 && !lines[k]!.items.length) k--
     const prev = lines[k]
     if (!prev || !inFlow(prev, line) || !(prev.baseline > line.baseline)) return
-    const [skip, limit] = P.lineskip as readonly [skip: number, limit: number]
+    const [skip, limit] = P.lineskip
     const e0 = extentOf(prev),
       e1 = extentOf(line)
     if (prev.baseline - e0.d - (line.baseline + e1.a) >= limit) return
@@ -421,7 +420,7 @@ function breakLines(
   const held: Held[] = [],
     immediate = new Set<number>()
   let runFrom = 0
-  const base = (P.blockBase as number | undefined) ?? 0
+  const base = P.blockBase ?? 0
   /** whether slot or line `sl` is in break `h`'s frame or past it */
   const reaches = (sl: Slot, h: Pick<Held, 'pg' | 'fr'>) =>
     h.fr !== null && h.fr !== undefined ? sl.block + base >= h.fr : sl.page >= h.pg
@@ -563,7 +562,7 @@ function breakLines(
           shift = -half
         }
       }
-      const asp = t.asp && (line.items.length || items.length) ? (P.autospace as number) * f : 0
+      const asp = t.asp && (line.items.length || items.length) ? P.autospace * f : 0
       // (`kern`: the explicit glue after it, an advance of its own beside its width, which trim drops at a line's end: no part of
       // what it draws, a crop's image, a word's box)
       const kern = kernOf(t, f)
@@ -612,12 +611,7 @@ function breakLines(
   }
   /** whether a group fits the line in hand: its spaces and the line's shrunk to spaceMin, a closing mark at its end hung */
   const fits = (g: Group, cap: number) =>
-    line.x -
-      (line.spaces - g.rig) * (1 - (P.spaceMin as number)) -
-      g.sp * (1 - (P.spaceMin as number)) +
-      g.w -
-      g.hang <=
-    cap + 0.01
+    line.x - (line.spaces - g.rig) * (1 - P.spaceMin) - g.sp * (1 - P.spaceMin) + g.w - g.hang <= cap + 0.01
   // (a group set at a hung label's end makes the label's spaces on the line a box's, TeX's hang: they shrink no more, `rig`)
   // (and its hang's edge every later line of the hung block starts at, `hung` (B.slots): TeX's \hangindent, the label box's width)
   const take = (g: Group) => {
@@ -677,7 +671,7 @@ function breakLines(
     if (!squeezes || line.centred || !line.items.length) return false
     const all = line.items.concat(g.items)
     if (latinishOf(all, P)) return false
-    const need = line.x - (line.spaces - g.rig + g.sp) * (1 - (P.spaceMin as number)) + g.w - g.hang - cap
+    const need = line.x - (line.spaces - g.rig + g.sp) * (1 - P.spaceMin) + g.w - g.hang - cap
     const gaps = gapsOf(all)
     const stretch = stretchOf(cap)
     return (
@@ -705,7 +699,7 @@ function breakLines(
     const next = slots[li + 1]
     if (!next || tokW(t, f, st, scale) > next.x1 - next.x0 + 0.01) return false
     const stretch = stretchOf(cap)
-    return !(stretch > STRETCH_MIN * f && stretch <= (P.cjkJust as number) * f)
+    return !(stretch > STRETCH_MIN * f && stretch <= P.cjkJust * f)
   }
   if (slots.length) open()
   // (the walk ends where the text does; a page break held on its last lines whose page got none of it is laid then, strand,
@@ -819,7 +813,7 @@ function breakLines(
         const w = tokW(t, f, st, scale)
         const room = line.x1 - line.x0 - (t.endMark as EndMark).pad - w - Math.min(half, (t.endMark as EndMark).gap)
         const hang = hangOf(line.items.at(-1), st.compress) * f
-        if (!line.items.length || line.x - line.spaces * (1 - (P.spaceMin as number)) - hang <= room + 0.01) {
+        if (!line.items.length || line.x - line.spaces * (1 - P.spaceMin) - hang <= room + 0.01) {
           line.items.push({ t, w, shift: 0, asp: 0 })
           i++
           continue
@@ -865,7 +859,7 @@ function breakLines(
         i = j
         continue
       }
-      const shrink = line.spaces * (1 - (P.spaceMin as number))
+      const shrink = line.spaces * (1 - P.spaceMin)
       let g = groupOf(i, j)
       if (j > own && !line.items.length && !fits(g, cap)) {
         j = own

@@ -9,14 +9,11 @@ import type { Token } from './tokens.ts'
 /** a cut: the page and frame a line begins, at a token (pageCutsOf); `share`, a cut of the frames' share only, which a lay keeps
  *  only at a state that holds the share */
 export type Cut = { page: number; frame: number; at: number; share?: true }
-/** a token as the cuts read and make it: a page-break token (withPageBreaks': `pageBreak` its page, `frame` the unit's block the
- *  frame begins with, `share` a cut of the frames' share) is one */
-export type CutToken = Token & { pageBreak?: number; frame?: number; share?: true }
 /** a frame of the unit: its consecutive blocks of one run on one page whose columns meet (pageCutsOf) */
 type Frame = { after: number; page: number; x0: number; x1: number; first: number; lines: number }
 
 /** a token that sets nothing of the text: a kept region's break, a forced break, a page break, a space */
-const textless = (t: CutToken): boolean =>
+const textless = (t: Token): boolean =>
   t.blockTo !== undefined || t.newline !== undefined || t.pageBreak !== undefined || !!t.space
 /**
  * Where the fit's lay of a unit (`lines`, breakLines' at the fit's state, each with its first token `from` and its block)
@@ -40,7 +37,7 @@ const textless = (t: CutToken): boolean =>
 export function pageCutsOf(
   lines: readonly LaidLine[],
   blocks: readonly FitBlock[],
-  tokens: readonly CutToken[],
+  tokens: readonly Token[],
   P: FitParams,
 ): Cut[] {
   const frames: Frame[] = []
@@ -54,7 +51,7 @@ export function pageCutsOf(
     } else frames.push({ after, page: b.page, x0: b.x0, x1: b.x1, first: bi, lines: originalLines(b) })
   })
   const kinsoku = kinsokuOf(P.noStart ?? '', P.noEnd ?? '')
-  const opens = (t: CutToken) =>
+  const opens = (t: Token) =>
     !textless(t) && !t.glue && !(typeof t.s === 'string' && t.s !== '' && (noStart(t.s) || kinsoku.starts(t.s)))
   const out: Cut[] = []
   for (const after of new Set(frames.map((f) => f.after))) {
@@ -118,7 +115,7 @@ export function pageCutsOf(
 /** the tokens with a page-break token (`{ pageBreak: page }`, breakLines') before each cut's token (pageCutsOf's) */
 export function withPageBreaks(tokens: Tokens, cuts: readonly Cut[]): Tokens {
   if (!cuts.length) return tokens
-  const out: CutToken[] = []
+  const out: Token[] = []
   let c = 0
   tokens.forEach((t, i) => {
     while (c < cuts.length && cuts[c]!.at === i) {

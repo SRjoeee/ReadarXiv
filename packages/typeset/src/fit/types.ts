@@ -73,13 +73,26 @@ export type FitParams = {
   step: number
   trackStart?: number
   capScale?: number
-  lineskip?: readonly number[] | null
+  /** TeX's \lineskip and \lineskiplimit (Part.paper.lineskip, lay/adapt.ts), a pair */
+  lineskip?: readonly [skip: number, limit: number] | null
   halfLead?: { head: boolean; foot: boolean; below: number } | null
   lastLines?: boolean
   noStart?: string
   noEnd?: string
   hyphen?: boolean | number
   hyphenation?: Record<string, unknown>
+  /** the target's spacing (ScriptRules, resolveRules' params): a space's least and most share of its width as a line shrinks
+   *  and stretches it, a CJK gap's most stretch (em), the space set between CJK and Latin text (em), and whether the script
+   *  breaks between words only (keepAll) */
+  spaceMin: number
+  spaceMax: number
+  cjkJust: number
+  autospace: number
+  keepAll: boolean
+  /** a run laid alone (fit/runs.ts runParams): its first block's place in the unit */
+  blockBase?: number
+  /** the state's compression, which laidOut (B.place) sets on the call's parameters before placeItems reads it */
+  _compress?: number
   /** the measures of the call (fitMeasure over Metrics) */
   measure: FitMeasure
   /** each language's hyphenation patterns (hyphenationOf), the run's */

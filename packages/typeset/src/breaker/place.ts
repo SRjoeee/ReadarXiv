@@ -55,7 +55,7 @@ function placeItems(lines: LaidLine[], f: number, P: FitParams): void {
         slack += 0.5 * f
       }
       if (slack < 0) {
-        const by = Math.max(slack, -spW * (1 - (P.spaceMin as number)))
+        const by = Math.max(slack, -spW * (1 - P.spaceMin))
         if (spaces.length) perSpace = by / spaces.length
         const gaps = gapsOf(line.items)
         if (gaps > 0) perGap = (slack - (spaces.length ? by : 0)) / gaps
@@ -67,11 +67,11 @@ function placeItems(lines: LaidLine[], f: number, P: FitParams): void {
     else if (line.mode === 'just' && slack > 0) {
       if (latinish) {
         const per = slack / spaces.length
-        if (per <= (P.spaceMax as number) * (spW / spaces.length)) perSpace = per
+        if (per <= P.spaceMax * (spW / spaces.length)) perSpace = per
         else line.mode = 'ragged'
       } else {
         const gaps = gapsOf(line.items)
-        if (gaps > 0 && slack / gaps <= (P.cjkJust as number) * f) perGap = slack / gaps
+        if (gaps > 0 && slack / gaps <= P.cjkJust * f) perGap = slack / gaps
         else if (gaps > 0) line.mode = 'ragged'
       }
     }

@@ -187,9 +187,9 @@ export function keepsPages(
 ): boolean {
   const breaks: [number, number][] = []
   tokens?.forEach((t, i) => {
-    const b = (t as { pageBreak?: number }).pageBreak
+    const b = t.pageBreak
     // (a cut of the frames' share, read only by a lay that holds the share: pageCutsOf `share`)
-    if (b !== undefined && (share || !(t as { share?: boolean }).share)) breaks.push([i, b])
+    if (b !== undefined && (share || !t.share)) breaks.push([i, b])
   })
   const sent = (from: number) => breaks.reduce((pg, [i, b]) => (i < from ? Math.max(pg, b) : pg), -Infinity)
   let j = 0

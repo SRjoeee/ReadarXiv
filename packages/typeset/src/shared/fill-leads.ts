@@ -6,13 +6,13 @@
 import { footFloorOf } from '../breaker/slots.ts'
 import { layoutAt } from '../fit/at.ts'
 import { keepsPages } from '../fit/runs.ts'
-import type { CutToken } from '../breaker/cuts.ts'
+import type { Token } from '../breaker/tokens.ts'
 import type { FitBlock, FitParams, FitState, Layout } from '../fit/types.ts'
 
 /** a unit (or a run of one) as its fill leadings are read: its tokens, blocks, size, parameters and layout; its fill leadings
  *  set on it */
 export type FillUnit = {
-  tokens: readonly CutToken[]
+  tokens: readonly Token[]
   blocks: readonly FitBlock[]
   s: number
   P: FitParams
@@ -292,7 +292,7 @@ function frameShareOf(p: FillUnit, bx: FitState, lo: number, hi: number, laid: L
     L = (k: number) => (k === 0 ? lo : Math.min(hi, r3(lo + k * 0.01)))
   // (the cuts the tokens hold (pageCutsOf, the frames' share): before the first block of each frame but the first, the text
   // before it set in the frames before it)
-  const base = (p.P.blockBase as number | undefined) ?? 0,
+  const base = p.P.blockBase ?? 0,
     cuts: [number, number][] = []
   p.tokens.forEach((t, i) => {
     if (t.pageBreak !== undefined && t.frame !== undefined && t.frame !== null) cuts.push([i, t.frame])

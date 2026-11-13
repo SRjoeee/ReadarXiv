@@ -179,7 +179,7 @@ function slotsAt(blocks: readonly FitBlock[], st: FitState, P: FitParams, s: num
   for (let bi = blocks.length - 2; bi >= 0; bi--) if (blocks[bi]!.through) feet[bi] = feet[bi + 1]!
   // (a run's blocks are laid alone, layoutRuns: the unit's first line is the first block's of the unit, P.blockBase the run's
   // first block's place in it)
-  const base = (P.blockBase as number | undefined) ?? 0
+  const base = P.blockBase ?? 0
   for (const [bi, b] of blocks.entries()) {
     const p0 = b.pitch0 ?? 1.2 * s
     // (a block of a frame before the unit's last filled at a leading of its own, `leads` (S.fill.leads: each frame of a paragraph
