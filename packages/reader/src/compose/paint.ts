@@ -16,7 +16,7 @@
 import type { PageViewport, PDFPageProxy } from 'pdfjs-dist'
 import type { OptionalContentConfig } from '../stack/stack.ts'
 import type { Faces } from './faces.ts'
-import type { Ink, Item, Laid, Page } from './page.ts'
+import type { Ink, Item, Page } from './page.ts'
 
 const SVG = 'http://www.w3.org/2000/svg'
 const n2 = (v: number) => Math.round(v * 100) / 100
@@ -500,6 +500,3 @@ export function cropsFree(over: HTMLElement) {
     h.copy.height = 0
   }
 }
-
-/** the laid members of a page (state 'laid'), the ones the overlay draws */
-export const laidOf = (page: Page): Laid[] => page.members.filter((m) => m.state === 'laid')
