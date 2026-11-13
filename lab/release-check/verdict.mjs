@@ -132,6 +132,10 @@ export function markdownOf(report) {
     const res = g.status === 'private' ? `the private repository's: ${g.command ? `\`${g.command}\`` : 'its command in the private gates file'}; not run here` : `${g.status}${g.reason ? `: ${g.reason}` : ''}`
     L.push(`| \`${g.id}\` ${cell(g.title)} | ${g.stage} | ${g.holds.join(', ')} | ${cell(res)}${g.note ? ` — ${cell(g.note)}` : ''} | ${g.ms != null ? `${Math.round(g.ms / 1000)} s` : ''} | ${cell(numbersOf(g.numbers))} |`)
   }
+  if (report.retired?.length) {
+    L.push('', '## Gates retired', '', '| Gate | Retired | In its place | Why |', '|---|---|---|---|')
+    for (const r of report.retired) L.push(`| \`${r.id}\` | ${r.retired} | ${r.by.map(b => `\`${b}\``).join(', ')} | ${cell(r.why)} |`)
+  }
   L.push('', '## Invariants (design §4.9)', '', '| | Status | Held by | Why |', '|---|---|---|---|')
   for (const i of report.invariants) L.push(`| **${i.id}** ${cell(i.says)} | ${i.status} | ${i.gates.join(', ')} | ${cell(i.why.join('; '))} |`)
   L.push('', '## Design §7: the numbers against the targets', '', '| Measure | Baseline | Target | This run | |', '|---|---|---|---|---|')

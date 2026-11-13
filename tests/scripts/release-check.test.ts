@@ -8,8 +8,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, INVARIANTS, PARAS_HELD, sentenceCoverJudge, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
-import { ADDED_HEADING } from '../../lab/typeset/added.mjs'
+import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, INVARIANTS, PARAS_HELD, productionRowsOf, RETIRED, readerPartsJudge, readerPartsRecord, rowsOf, sentenceCoverJudge, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
+import { papersOf } from '../../lab/release-check/papers.mjs'
+import { ADDED, ADDED_HEADING } from '../../lab/typeset/added.mjs'
+import { isProduction, type Row, rowsAgainst } from '../../lab/typeset/parity/production-rows.mjs'
 import { cutoverOf, gatesOf, invariantLine, markdownOf, privateResultOf, targetLines, verdictOf } from '../../lab/release-check/verdict.mjs'
 
 const dirs: string[] = []
@@ -180,17 +182,19 @@ describe("the prepare's corpus, as the round's stage 1a runs it", () => {
     expect(cachesOf('# the round chain\n/a/compiles\n\n/b/cache # the second\n')).toBe('/a/compiles:/b/cache')
   })
 
-  it('runs the 88 papers on the caches RELEASE_CHECK_CACHES names, a run and its twin with the same flags, the baseline\'s dumps read', () => {
+  it("runs the 88 papers and the added pairs' on the caches RELEASE_CHECK_CACHES names, a run and its twin with the same flags, the baseline's dumps read", () => {
     const refactor = mkdtempSync(join(tmpdir(), 'release-check-lab-'))
     dirs.push(refactor)
     writeFileSync(join(refactor, 'flags.txt'), '--caches=/round/r21/compiles:/round/r20/compiles\n--prove\n')
     const ctx: Ctx = { root: '/repo', labData: refactor, refactor, work: '/work', online: false, minFree: 0 }
     process.env.RELEASE_CHECK_CACHES = join(refactor, 'flags.txt')
     try {
-      const [prepare, same] = corpus(['prepare', 'prepare-same']).map(g => g.steps!(ctx)[0]!.cmd)
-      expect(prepare).toEqual(['bash', 'lab/pdf/prepare-back/corpus.sh', join(refactor, 'lanes/L1-papers88.tsv'), '/work/prepare', '/round/r21/compiles:/round/r20/compiles', '2', '--prove', `--baseline=${join(refactor, 'baseline/prepare')}`])
+      // (each corpus gate first writes the run's list: the set's papers, then the added pairs' papers, lab/typeset/added.mjs)
+      for (const g of corpus(['prepare', 'prepare-same', 'pixels'])) expect(g.steps!(ctx)[0]?.cmd).toEqual(['node', 'lab/release-check/papers.mjs', '/work/papers.tsv', join(refactor, 'lanes/L1-papers88.tsv'), join(refactor, 'baseline/added/papers.tsv')])
+      const [prepare, same] = corpus(['prepare', 'prepare-same']).map(g => g.steps!(ctx)[1]!.cmd)
+      expect(prepare).toEqual(['bash', 'lab/pdf/prepare-back/corpus.sh', '/work/papers.tsv', '/work/prepare', '/round/r21/compiles:/round/r20/compiles', '2', '--prove', `--baseline=${join(refactor, 'baseline/prepare')}`])
       expect(same?.slice(4)).toEqual(prepare?.slice(4))
-      for (const g of corpus(['prepare', 'prepare-same', 'pixels'])) expect(g.needs!(ctx).map(n => n.path)).toContain(join(refactor, 'flags.txt'))
+      for (const g of corpus(['prepare', 'prepare-same', 'pixels'])) expect(g.needs!(ctx).map(n => n.path)).toEqual(expect.arrayContaining([join(refactor, 'flags.txt'), join(refactor, 'baseline/added/papers.tsv')]))
       // (the baseline's dumps where the run reads them, the round's flags; the pixel proofs' run takes its own)
       expect(corpus(['prepare', 'prepare-same', 'pixels']).map(g => g.needs!(ctx).some(n => n.path === join(refactor, 'baseline/prepare')))).toEqual([true, true, false])
     } finally {
@@ -198,6 +202,23 @@ describe("the prepare's corpus, as the round's stage 1a runs it", () => {
     }
     // (without it, the lab's list for these papers)
     expect(corpus(['prepare'])[0]!.needs!(ctx).map(n => n.path)).toContain(join(refactor, 'lanes/L1-caches88.txt'))
+  })
+
+  it('writes the lists as one, each paper once in the order first named, and refuses a paper named with two directories', () => {
+    expect(papersOf(['a\t/x/a\nb\t/x/b\n', 'c\t/y/c\n\nb\t/x/b\n'])).toBe('a\t/x/a\nb\t/x/b\nc\t/y/c\n')
+    expect(() => papersOf(['a\t/x/a\n', 'a\t/y/a\n'])).toThrow(/a is named with two directories/)
+  })
+
+  it("reads the twin's comparison by its name, a run cut short no pass", () => {
+    const d = mkdtempSync(join(tmpdir(), 'release-check-'))
+    dirs.push(d)
+    mkdirSync(join(d, 'prepare-2'))
+    writeFileSync(join(d, 'prepare-2', 'log.tsv'), `p\t0\t${JSON.stringify({ id: 'p', proofs: { a: 0, c: 0 } })}`)
+    const ctx: Ctx = { root: '/repo', labData: d, refactor: d, work: d, online: false, minFree: 0 }
+    const same = corpus(['prepare-same'])[0]!
+    const step = (as: string | undefined, exit: number, text = ''): StepRun => ({ cmd: ['x'], ...(as ? { as } : {}), exit, ms: 0, log: '', text })
+    expect(same.judge!(ctx, [step(undefined, 0), step(undefined, 0), step('same', 0, '{"objects":20,"same":20}')])).toEqual({ pass: true, numbers: { papers: 1, same: '{"objects":20,"same":20}' } })
+    expect(same.judge!(ctx, [step(undefined, 0), step(undefined, 0)]).pass).toBe(false)
   })
 
   it('counts the units drawn only on the papers the baseline holds, beside its own count', () => {
@@ -213,17 +234,26 @@ describe("the prepare's corpus, as the round's stage 1a runs it", () => {
   })
 })
 
-describe("the typesetter's replays", () => {
-  it("replays the figures under today's mark rule, which PDF-READER §19.12 reads the port's figures by, every other replay as it is", () => {
-    const ctx: Ctx = { root: '/repo', labData: null, refactor: '/lab', work: '/work', online: false, minFree: 12 }
-    expect(GATES.find(g => g.id === 'typeset-replays')!.steps!(ctx).map(s => s.cmd.slice(1))).toEqual([
-      ['lab/typeset/replay-fit.mjs'],
-      ['lab/typeset/replay-fill.mjs'],
-      ['lab/typeset/replay-emit.mjs'],
-      ['lab/typeset/replay-names.mjs'],
-      ['lab/typeset/replay-figures.mjs', '--marks=today'],
-      ['lab/typeset/replay-display.mjs'],
-    ])
+describe('the gates retired', () => {
+  it('names each with its date, its reason and the gates that hold its question now, none of them still run', () => {
+    expect(RETIRED.map(r => r.id)).toEqual(['typeset-parts', 'typeset-replays'])
+    const ids = GATES.map(g => g.id)
+    for (const r of RETIRED) {
+      expect(ids).not.toContain(r.id)
+      expect(r.retired).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+      expect(r.why.length).toBeGreaterThan(80)
+      for (const by of r.by) expect(ids).toContain(by)
+    }
+    // (typeset-parts' runner laid only today's ids: reader-parts lays as the entry does; the replays' wider comparison with
+    // today's lay is the display gate over every pair)
+    expect(RETIRED.find(r => r.id === 'typeset-parts')?.by).toEqual(['reader-parts'])
+    expect(RETIRED.find(r => r.id === 'typeset-replays')?.by).toEqual(['display-wide'])
+  })
+
+  it('lists them in the report', () => {
+    const md = markdownOf({ tier: 'full', verdict: 'GO', why: [], commit: 'abc', dirty: false, started: 's', ended: 'e', machine: 'm', labData: null, work: '/w', gates: [], retired: RETIRED, invariants: [], targets: [] })
+    expect(md).toContain('## Gates retired')
+    expect(md).toContain('| `typeset-parts` | 2026-11-13 | `reader-parts` |')
   })
 })
 
@@ -294,9 +324,6 @@ describe('the equivalence gates, in either shape of their tools', () => {
     const ctx = ctxAt('/repo', '/work')
     expect(cover.holds).toEqual(['I10', 'I6'])
     expect(cover.steps!(ctx)[0]?.cmd).toEqual(['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', '--out=/work/sentence-cover'])
-    // (typeset-parts, today's reading, lays no entry: it holds no I10 and asks for none)
-    expect(gate('typeset-parts').holds).not.toContain('I10')
-    expect(gate('typeset-parts').steps!(ctx)[0]?.cmd).not.toContain('--entry')
     const said = (pieces: number, faults: number, other = 0) =>
       `{"pairs":123,"laid":1,"pages":2}\nI10, the sentence cover (cover.ts): 9 member-pages lit, ${pieces} pieces; ${faults} faults\nI6 across the pages' lays (cross-lay.ts): 90 units begun on a pass page, 9 laid by two pages' lays or more; ${2 + other} laid otherwise: 2 by the head pass (known: headOf reads the paragraph over the unit as one lay filled it and the other did not), ${other} by another cause`
     expect(cover.judge!(ctx, [run(0, said(4767634, 0))])).toMatchObject({ pass: true, numbers: { I10: 0, pieces: 4767634, I6head: 2, I6other: 0 }, findings: { I10: { held: true, count: 0 }, I6: { held: true, count: 0 } } })
@@ -322,8 +349,57 @@ describe('the equivalence gates, in either shape of their tools', () => {
     expect(cover.judge!(ctx, [run(0, apart(0))])).toMatchObject({ pass: true, numbers: { I10: 0, pieces: 4767634, pairs: 123, added: { pairs: 2, I10: 0, pieces: 5000, I6other: 0 } } })
     expect(cover.judge!(ctx, [run(0, apart(3))])).toMatchObject({ pass: false, numbers: { I10: 0, added: { I10: 3 } } })
     expect(typesetOf(apart(3))).toMatchObject({ pairs: 123, I10: 0, added: { pairs: 2, I10: 3 } })
-    // (the display gate reads the parity's lay of its pairs the same way)
-    expect(gate('display').judge!(ctx, [run(0, 'I10, the sentence cover (cover.ts): 599484 pieces; 2 faults: x'), run(0), run(0, 'parity: 9 pages of 1 pairs; 0 worse than today; missing none')]).findings).toEqual({ I10: { held: false, count: 2 } })
+    // (a row id read outside a page's wait set: the runner exits 1 for it, as for a paragraph point run on; read whole, it fails
+    // the gate, never hidden by the points' exit beside it)
+    const reads = (outside: number) => `the reads gate, default (author): 9 pages laid, 90 row ids read; ${outside} read outside the page's wait set, on ${outside} pages\nthe reads gate, every option on (none left): 9 pages laid, 99 row ids read; 0 read outside the page's wait set, on 0 pages`
+    expect(typesetOf(reads(3))).toMatchObject({ readsPages: 9, readsOutside: 3 })
+    expect(cover.judge!(ctx, [run(1, `${points}\n${reads(0)}`)])).toMatchObject({ pass: true, numbers: { readsOutside: 0, parasOff: 2 } })
+    expect(cover.judge!(ctx, [run(1, `${points}\n${reads(3)}`)])).toMatchObject({ pass: false, numbers: { readsOutside: 3, parasOff: 2 }, findings: { I10: { held: true, count: 0 } } })
+    expect(cover.judge!(ctx, [run(1, `${apart(0)}\n${reads(2)}`)])).toMatchObject({ pass: false, numbers: { added: { readsOutside: 2 } } })
+  })
+
+  it("lays the stored rows' pairs over each rows store as the round's reader gate does, I3, I4 and I5 counted, the runner's own verdicts held", () => {
+    const refactor = mkdtempSync(join(tmpdir(), 'release-check-lab-'))
+    dirs.push(refactor)
+    mkdirSync(join(refactor, 'lanes/cjk-punct/blast'), { recursive: true })
+    writeFileSync(join(refactor, 'lanes/cjk-punct/blast/pairs.txt'), 'a-zh b-ja\nc-de\n')
+    const ctx: Ctx = { root: '/repo', labData: refactor, refactor, work: '/work', online: false, minFree: 0 }
+    const rp = gate('reader-parts')
+    expect([rp.tier, rp.holds, rp.after]).toEqual(['full', ['I3', 'I4', 'I5'], ['prepare']])
+    const steps = rp.steps!(ctx)
+    const pairs = ['a-zh', 'b-ja', 'c-de', ...ADDED]
+    expect(steps.map(x => x.as)).toEqual(['door', 'rows', 'google'])
+    expect(steps[0]).toMatchObject({ cmd: ['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', '--out=/work/reader-parts/door', ...pairs], slot: 'run', env: { AXT_L1_BUNDLES: '/work/prepare/bundles', AXT_GATE_ENTRY: '1' }, all: true })
+    expect(steps[1]?.cmd).toEqual(['node', '--experimental-strip-types', join(refactor, 'lanes/converge-7/tools-b15/google-rows.mts'), '/repo', '/work/reader-parts/google-rows', join(refactor, 'google-rows/ef6989debed1'), ...pairs])
+    expect(steps[2]).toMatchObject({ cmd: ['node', '--import', join(refactor, 'lanes/converge-7/tools-b15/rows-register.mjs'), 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', '--out=/work/reader-parts/google', ...pairs], env: { AXT_B14_ROWS: '/work/reader-parts/google-rows' } })
+    // (the judge: both stores read whole, their counts as findings, the rows made with none unavailable)
+    const said = (I3: number, I5: number) =>
+      [
+        `invariants over the laid members (page by page): {"laid":23966,"lines":60866,"I3":${I3},"I4":0,"I5":${I5}}; I3: x; I4: ; I5: y`,
+        "the entry (layPage over each part and its rows): 24056 of the runner's members laid alike, 244 not: x | y; a page, ms: p50 4.1, p90 9.9, p99 21.5, max 80 over 2568 pages",
+        'I10, the sentence cover (cover.ts): 47028 member-pages lit, 3145597 pieces; 0 faults',
+        "I6 across the pages' lays (cross-lay.ts): 26254 units begun on a pass page, 9770 laid by two pages' lays or more; 11 laid otherwise: 11 by the head pass (known: headOf reads the paragraph over the unit as one lay filled it and the other did not), 0 by another cause",
+        "the reads gate, default (author): 2568 pages laid, 45463 row ids read; 0 read outside the page's wait set, on 0 pages",
+      ].join('\n')
+    const named = (as: string, exit: number, text: string): StepRun => ({ cmd: ['x'], as, exit, ms: 0, log: '', text })
+    const total = 'total over 92 pairs: units 32833, google 32247, microsoft 569, ok self 17'
+    expect(rowsOf(total)).toEqual({ pairs: 92, units: 32833, google: 32247, microsoft: 569, okSelf: 17 })
+    const ok = readerPartsJudge([named('door', 0, said(3, 2)), named('rows', 0, total), named('google', 0, said(3, 2))])
+    expect(ok).toMatchObject({ pass: true, numbers: { door: { alike: 24056, not: 244, I3: 3, I4: 0, I5: 2, I10: 0 }, google: { I3: 3 }, rows: { units: 32833 }, layP50: 4.1, layP90: 9.9, layP99: 21.5, layPages: 2568 }, findings: { I3: { held: false, count: '3 (door), 3 (google)' }, I4: { held: true, count: 0 }, I5: { held: false } } })
+    // (a seeded fault: no reply stored for units the chain asks, so the rows are not the round's; a run that did not end whole)
+    expect(readerPartsJudge([named('door', 0, said(0, 0)), named('rows', 0, `${total}, refused unavailable 4`), named('google', 0, said(0, 0))])).toMatchObject({ pass: false, note: expect.stringMatching(/no reply to 4 units/) })
+    expect(readerPartsJudge([named('door', 0, said(0, 0)), named('rows', 0, total), named('google', 1, 'the entry laid nothing: I10 not counted')]).pass).toBe(false)
+    expect(readerPartsJudge([named('door', 0, said(0, 0)), named('rows', 2, '')]).pass).toBe(false)
+    // (held to the last integrated round's counts: a count above them fails the gate (a seeded overlap: 3 -> 13), one below is said)
+    const record = { commit: 'abc', counts: { door: { I3: 3, I4: 0, I5: 2 }, google: { I3: 3, I4: 0, I5: 2 } } }
+    const stores = (I3: number, I5: number) => [named('door', 0, said(I3, I5)), named('rows', 0, total), named('google', 0, said(3, 2))]
+    expect(readerPartsJudge(stores(3, 2), false, record)).toMatchObject({ pass: true })
+    expect(readerPartsJudge(stores(13, 2), false, record)).toMatchObject({ pass: false, note: 'above the last round\'s (abc): I3 3 -> 13 (door)' })
+    expect(readerPartsJudge(stores(1, 2), false, record)).toMatchObject({ pass: true, note: 'below the last round\'s (abc), the record to lower: I3 3 -> 1 (door)' })
+    // (the committed record names every part the gate counts)
+    expect(Object.keys(readerPartsRecord(join(import.meta.dirname, '../..')).counts)).toEqual(['door', 'door, added', 'google', 'google, added'])
+    // (the page's layout, design §7, is the entry's on the door's rows)
+    expect(TARGETS.find(t => t.id === 'layout')?.from).toBe('reader-parts')
   })
   it("holds the added pairs' paragraph points as the set's, the two lanes' changes to the judge joined", () => {
     const said = (pieces: number, faults: number, other = 0) =>
@@ -342,41 +418,155 @@ describe('the equivalence gates, in either shape of their tools', () => {
     // added pairs held as the set's inside the one function
     expect(sentenceCoverJudge([run(1, added(0, 1))])).toMatchObject({ pass: false, numbers: { I6other: 0, added: { I6other: 1 } } })
   })
-  it("reads the display gate's verdict as measure.mjs states it: its pages, the pages worse than today's and each measure's, passing on its exit", () => {
-    const text = [
-      'parity: 365 pages of 22 pairs; 2 worse than today; missing 2303.11366v4-zh',
-      '  weight         0 pages worse (0 differences), 4 nearer; faults: v2 0 pages, today 0',
-      '  cross          2 pages worse (5 differences), 1 nearer; faults: v2 3 pages, today 1',
-    ].join('\n')
+  it("reads the display gate's verdict as measure.mjs states it: its pages, the pages worse than today's and each measure's, in both modes, today's rows production's", () => {
     const ctx = ctxAt('/repo', '/work')
-    const judged = gate('display').judge!(ctx, [run(0), run(0), run(1, text)])
-    expect(judged).toMatchObject({ pass: false, numbers: { pages: 365, pairs: 22, worse: 2, weight: '0 pages worse, 4 nearer', cross: '2 pages worse, 1 nearer' } })
-    const passed = (added: string) => [run(0), run(0), run(0, 'parity: 9 pages of 1 pairs; 0 worse than today; missing none'), run(0), run(0), run(added === 'worse' ? 1 : 0, `parity: 27 pages of 2 pairs; ${added === 'worse' ? 1 : 0} worse than today; missing none`)]
-    expect(gate('display').judge!(ctx, passed('none')).pass).toBe(true)
-    // (the added pairs judged in steps of their own, their numbers apart from the set's; a page of theirs worse fails the gate)
-    expect(gate('display').judge!(ctx, passed('none')).numbers).toMatchObject({ pages: 9, pairs: 1, worse: 0, added: { pages: 27, pairs: 2, worse: 0 } })
-    expect(gate('display').judge!(ctx, passed('worse'))).toMatchObject({ pass: false, numbers: { worse: 0, added: { worse: 1 } } })
-    // (the set's three steps alone are not the gate's whole run)
-    expect(gate('display').judge!(ctx, passed('none').slice(0, 3)).pass).toBe(false)
-    // (a run not judged whole fails by measure.mjs's exit; its count is reported)
-    const whole = gate('display').judge!(ctx, [run(0), run(0), run(1, 'parity: 8 pages of 1 pairs; 0 worse than today; missing none\nincomplete: 1 (a-zh p3: not drawn)')])
-    expect(whole).toMatchObject({ pass: false, numbers: { pages: 8, worse: 0, incomplete: 1 } })
-    // (a step that did not run is no pass)
-    expect(gate('display').judge!(ctx, [run(0), run(2)]).pass).toBe(false)
+    const display = gate('display')
+    // (today's rows checked production's, then the 22 and the added pairs, under the default options and with every switch on;
+    // each verdict's step runs whatever it found, so that the added pairs are judged though the set's pages are worse)
+    const planned = display.steps!(ctx)
+    expect(planned.map(x => x.as)).toEqual(['rows', 'rows-added', 'v2', 'render', 'measure', 'v2-added', 'render-added', 'measure-added', 'v2-on', 'render-on', 'measure-on', 'v2-added-on', 'render-added-on', 'measure-added-on'])
+    expect(planned.filter(x => x.all).map(x => x.as)).toEqual(['rows', 'rows-added', 'measure', 'measure-added', 'measure-on', 'measure-added-on'])
+    const set = planned.find(x => x.as === 'v2')!.cmd.slice(3)
+    expect(set).toHaveLength(22)
+    expect(planned[0]?.cmd).toEqual(['node', 'lab/typeset/parity/production-rows.mjs', ...set])
+    expect(planned[1]?.cmd).toEqual(['node', 'lab/typeset/added.mjs', '--', 'node', 'lab/typeset/parity/production-rows.mjs', ...ADDED])
+    expect(planned.find(x => x.as === 'v2-on')?.cmd).toEqual(['node', 'lab/typeset/parity/v2.mjs', '--out=/work/display-on/v2', '--toggles=on', ...set])
+    expect(planned.find(x => x.as === 'render-on')?.cmd).toContain('--toggles=on')
+    const step = (as: string, exit = 0, text = ''): StepRun => ({ cmd: ['x'], as, exit, ms: 0, log: '', text })
+    const rowsOk = (n: number) => `production's rows: ${n} of ${n} pairs; 900 of 900 stored rows given back by production's own path`
+    const parity = (pages: number, pairs: number, worse: number) => `parity: ${pages} pages of ${pairs} pairs; ${worse} worse than today; missing none`
+    const run = ({ worse = 0, addedWorse = 0, onWorse = 0, rows = rowsOk(2) } = {}) => [
+      step('rows', 0, rowsOk(22)),
+      step('rows-added', rows === rowsOk(2) ? 0 : 1, rows),
+      step('v2', 0, 'I10, the sentence cover (cover.ts): 599484 pieces; 0 faults'),
+      step('render'),
+      step('measure', worse ? 1 : 0, parity(344, 22, worse)),
+      step('v2-added'),
+      step('render-added'),
+      step('measure-added', addedWorse ? 1 : 0, parity(27, 2, addedWorse)),
+      step('v2-on', 0, 'I10, the sentence cover (cover.ts): 653653 pieces; 2 faults: x'),
+      step('render-on'),
+      step('measure-on', onWorse ? 1 : 0, parity(344, 22, onWorse)),
+      step('v2-added-on'),
+      step('render-added-on'),
+      step('measure-added-on', 0, parity(27, 2, 0)),
+    ]
+    expect(display.judge!(ctx, run())).toMatchObject({ pass: true, numbers: { pages: 344, worse: 0, added: { pages: 27, worse: 0 }, on: { pages: 344, worse: 0, I10: 2, added: { pages: 27 } }, today: { rows: { pairs: 22, of: 22 }, 'rows-added': { pairs: 2 } } }, findings: { I10: { held: false, count: 2 } } })
+    expect(display.judge!(ctx, run({ worse: 2 }))).toMatchObject({ pass: false, numbers: { worse: 2, added: { worse: 0 } } })
+    expect(display.judge!(ctx, run({ addedWorse: 1 }))).toMatchObject({ pass: false, numbers: { worse: 0, added: { worse: 1 } } })
+    expect(display.judge!(ctx, run({ onWorse: 5 }))).toMatchObject({ pass: false, numbers: { worse: 0, on: { worse: 5 } } })
+    // (a seeded fault: today's rows of an added pair made without production's own row path; the parity is still measured beside)
+    const replica = "2111.09276v1-zh: NOT production's: 470 stored rows, 463 given back; moved whole -> kept 7 (92, 122); differ 0; missing 0; extra 0; held 0\nproduction's rows: 0 of 1 pairs; 463 of 470 stored rows given back by production's own path"
+    expect(productionRowsOf(replica)).toEqual({ pairs: 0, of: 1, rows: 463, stored: 470, not: ['2111.09276v1-zh: 470 stored rows, 463 given back; moved whole -> kept 7 (92, 122); differ 0; missing 0; extra 0; held 0'] })
+    expect(display.judge!(ctx, run({ rows: replica }))).toMatchObject({ pass: false, numbers: { pages: 344, worse: 0 }, note: expect.stringMatching(/^today's side is not production's: 2111\.09276v1-zh/) })
+    // (a step that did not run, a run cut short: no pass)
+    expect(display.judge!(ctx, run().slice(0, 8)).pass).toBe(false)
+    const whole = run()
+    whole[4] = step('measure', 1, `${parity(343, 22, 0)}\nincomplete: 1 (a-zh p3: not drawn)`)
+    expect(display.judge!(ctx, whole)).toMatchObject({ pass: false, numbers: { pages: 343, worse: 0, incomplete: 1 } })
+  })
+
+  it('asks the display question of every pair of the stored rows at the release tier, a cut-over blocker', () => {
+    const refactor = mkdtempSync(join(tmpdir(), 'release-check-lab-'))
+    dirs.push(refactor)
+    mkdirSync(join(refactor, 'lanes/cjk-punct/blast'), { recursive: true })
+    writeFileSync(join(refactor, 'lanes/cjk-punct/blast/pairs.txt'), 'a-zh b-ja\n')
+    const ctx: Ctx = { root: '/repo', labData: refactor, refactor, work: '/work', online: false, minFree: 0 }
+    const wide = gate('display-wide')
+    expect([wide.tier, wide.cutover, wide.holds]).toEqual(['release', true, ['I3', 'I10']])
+    const planned = wide.steps!(ctx)
+    expect(planned.map(x => [x.as, x.cmd.slice(1).join(' ')])).toEqual([
+      ['rows', 'lab/typeset/parity/production-rows.mjs a-zh b-ja'],
+      ['v2', 'lab/typeset/parity/v2.mjs --out=/work/display-wide/v2 a-zh b-ja'],
+      ['render', 'lab/typeset/parity/render.mjs --work=/work/display-wide --out=/work/display-wide/sheet a-zh b-ja'],
+      ['measure', 'lab/typeset/parity/measure.mjs --work=/work/display-wide --out=/work/display-wide/sheet a-zh b-ja'],
+    ])
+    const step = (as: string, exit = 0, text = ''): StepRun => ({ cmd: ['x'], as, exit, ms: 0, log: '', text })
+    expect(wide.judge!(ctx, [step('rows', 0, "production's rows: 2 of 2 pairs; 9 of 9 stored rows"), step('v2'), step('render'), step('measure', 1, 'parity: 2300 pages of 90 pairs; 7 worse than today; missing none')])).toMatchObject({ pass: false, numbers: { pages: 2300, pairs: 90, worse: 7 } })
+    expect(wide.judge!(ctx, [step('rows', 0, "production's rows: 2 of 2 pairs; 9 of 9 stored rows"), step('v2'), step('render'), step('measure', 0, 'parity: 2300 pages of 90 pairs; 0 worse than today; missing none')]).pass).toBe(true)
   })
 
   it('keeps the cut-over NO-GO until every cut-over blocker passed in the run, a blocker the run left out named', () => {
     const blocker = gate('display')
     expect(blocker.cutover).toBe(true)
     const other = gate('typecheck')
-    expect(cutoverOf(GATES, [other], { typecheck: { status: 'pass' } })).toMatchObject({ verdict: 'NO-GO', why: ['display: not in this run (tier full)', 'perf-release: not in this run (tier release)'] })
+    expect(cutoverOf(GATES, [other], { typecheck: { status: 'pass' } })).toMatchObject({ verdict: 'NO-GO', why: ['display: not in this run (tier full)', 'display-wide: not in this run (tier release)', 'perf-release: not in this run (tier release)'] })
     expect(cutoverOf(GATES, [other, blocker], { typecheck: { status: 'pass' }, display: { status: 'fail' } }).verdict).toBe('NO-GO')
-    // (performance ≥ today is a blocker too, the release tier's: GO only with both passed)
+    // (performance ≥ today and the display question over every pair are blockers too, the release tier's: GO only with all passed)
     const perf = gate('perf-release')
-    expect(perf.cutover).toBe(true)
-    expect(cutoverOf(GATES, [other, blocker], { typecheck: { status: 'fail' }, display: { status: 'pass' } })).toMatchObject({ verdict: 'NO-GO', why: ['perf-release: not in this run (tier release)'] })
-    expect(cutoverOf(GATES, [other, blocker, perf], { typecheck: { status: 'fail' }, display: { status: 'pass' }, 'perf-release': { status: 'pass' } })).toMatchObject({ verdict: 'GO', why: [] })
+    const wide = gate('display-wide')
+    expect([perf.cutover, wide.cutover]).toEqual([true, true])
+    expect(cutoverOf(GATES, [other, blocker], { typecheck: { status: 'fail' }, display: { status: 'pass' } })).toMatchObject({ verdict: 'NO-GO', why: ['display-wide: not in this run (tier release)', 'perf-release: not in this run (tier release)'] })
+    expect(cutoverOf(GATES, [other, blocker, wide, perf], { typecheck: { status: 'fail' }, display: { status: 'pass' }, 'display-wide': { status: 'pass' }, 'perf-release': { status: 'pass' } })).toMatchObject({ verdict: 'GO', why: [] })
     expect(markdownOf({ tier: 'full', verdict: 'NO-GO', why: [], cutover: { verdict: 'NO-GO', why: ['display: fail'], blockers: ['display'] }, invariants: [], gates: [], targets: [] })).toContain('**Cut-over: NO-GO.**')
+  })
+})
+
+describe("today's rows, the way back and the head's own builds", () => {
+  const gate = (id: string) => GATES.find(g => g.id === id)!
+  const ctx: Ctx = { root: '/repo', labData: '/lab', refactor: '/lab/refactor-2026-11', work: '/work', online: false, minFree: 12 }
+  const run = (exit: number, text = '', as?: string): StepRun => ({ cmd: ['x'], ...(as ? { as } : {}), exit, ms: 0, log: '', text })
+
+  it("holds a pair's stored rows production's where production's own row path gives every one back, a kept row by its state", () => {
+    const whole = (id: number, t: string): Row => [id, [t], 'whole', 'microsoft']
+    const kept = (id: number, by: string | null, was: string): Row => [id, [], 'kept', by, null, was]
+    // (production's: its kept rows read back with no translation, so their translator and state are not compared)
+    const ok = rowsAgainst([whole(1, 'a'), kept(2, 'microsoft', 'whole')], [whole(1, 'a'), kept(2, null, 'none')])
+    expect([ok.same, isProduction(ok)]).toEqual([2, true])
+    // (a replica's: each unit's own row, no table decision; production's path keeps a column of names)
+    const replica = rowsAgainst([whole(1, 'a'), whole(2, 'Oracle')], [whole(1, 'a'), kept(2, 'microsoft', 'whole')])
+    expect(replica).toMatchObject({ same: 1, moved: [{ id: 2, from: 'whole', to: 'kept' }] })
+    expect(isProduction(replica)).toBe(false)
+    // (a row it would not make, one it makes that is not stored, one it holds back, one it writes otherwise)
+    expect(rowsAgainst([whole(1, 'a'), whole(3, 'c')], [whole(1, 'b'), whole(4, 'd')], [3])).toMatchObject({ same: 0, differ: [1], held: [3], extra: [4] })
+    expect(rowsAgainst([whole(5, 'e')], [])).toMatchObject({ missing: [5] })
+  })
+
+  it("builds today's reader apart and runs today's own checks on it, never the rebuilt reader's in their place", () => {
+    expect(gate('build-today').steps!(ctx)[0]).toMatchObject({ cmd: ['bash', 'lab/release-check/today-build.sh', '/repo', '/work/today-reader'], slot: 'test' })
+    for (const script of ['e2e:reader', 'e2e:registration']) {
+      const g = gate(`${script}-today`)
+      expect([g.tier, g.after]).toEqual(['full', ['build-today']])
+      expect(g.steps!(ctx)[0]).toMatchObject({ cmd: ['pnpm', script], slot: 'e2e', env: { AXT_EXT_DIR: '/work/today-reader/.output/chrome-mv3' } })
+    }
+    const work = mkdtempSync(join(tmpdir(), 'release-check-today-'))
+    dirs.push(work)
+    const today = gate('e2e:reader-today')
+    const at = { ...ctx, work }
+    mkdirSync(join(work, 'today-reader/.output/chrome-mv3'), { recursive: true })
+    expect(today.judge!(at, [run(0, '159/159 passed (30 controls), 5 note(s)')])).toEqual({ pass: true, numbers: { passed: 159, checks: 159 } })
+    // (a seeded fault: the build the gate reads is the rebuilt reader's, whose 81 checks would pass in today's place)
+    mkdirSync(join(work, 'today-reader/.output/chrome-mv3/pdfjs'))
+    expect(today.judge!(at, [run(0, '81/81 passed')])).toMatchObject({ pass: false, note: expect.stringMatching(/carries the rebuilt reader/) })
+    // (the fast tier's two scripts run the rebuilt reader's checks on the default build, and say so)
+    expect(gate('e2e:reader').title).toMatch(/rebuilt reader/)
+    expect(gate('e2e:registration').title).toMatch(/rebuilt reader/)
+  })
+
+  it('builds the reader the performance gates measure from this commit, in the website tree PERF_WEB names, and never measures without it', () => {
+    const prior = process.env.PERF_WEB
+    process.env.PERF_WEB = '/web'
+    try {
+      for (const id of ['perf-batch', 'perf-release']) {
+        const steps = gate(id).steps!(ctx)
+        const build = `/work/${id}-build`
+        expect(steps[0]).toMatchObject({ cmd: ['bash', '/lab/refactor-2026-11/perf/tools/build-new.sh', 'HEAD', 'HEAD'], env: { PERF_BUILD: build, PERF_WEB_REPO: '/web', PERF_ENGINE_REPO: '/repo' }, fresh: build, as: 'build' })
+        expect(steps.at(-1)?.env?.PERF_BUILD).toBe(build)
+      }
+    } finally {
+      if (prior === undefined) delete process.env.PERF_WEB
+      else process.env.PERF_WEB = prior
+    }
+    delete process.env.PERF_WEB
+    expect(gate('perf-batch').needs!(ctx).find(n => /PERF_WEB/.test(n.what))?.path).toBe('')
+    // (a build that failed is no measurement: the gate fails and says so)
+    expect(gate('perf-batch').judge!(ctx, [run(1, 'ERR_PNPM_OUTDATED_LOCKFILE', 'build')])).toMatchObject({ pass: false, note: expect.stringMatching(/could not be built/) })
+  })
+
+  it("opens the harness's corpus papers from this run's bundles", () => {
+    const h = gate('harness-lab')
+    expect(h.after).toEqual(['prepare'])
+    expect(h.steps!(ctx)[0]?.env).toMatchObject({ AXT_L1_BUNDLES: '/work/prepare/bundles', AXT_LAB_FIXTURES: '1512.03385v1,1706.03762v7,2609.26457v1,2307.16209v1,2610.20030v1' })
   })
 })
 
@@ -397,9 +587,9 @@ describe('the report', () => {
     expect(lines.find(t => t.id === 'units')).toMatchObject({ status: 'met' })
     expect(lines.find(t => t.id === 'commit')).toMatchObject({ status: 'missed' })
     expect(lines.find(t => t.id === 'reuse')).toMatchObject({ status: 'not measured', why: expect.stringMatching(/no gate/) })
-    expect(lines.find(t => t.id === 'layout')).toMatchObject({ status: 'not measured', why: 'typeset-parts not in this tier' })
+    expect(lines.find(t => t.id === 'layout')).toMatchObject({ status: 'not measured', why: 'reader-parts not in this tier' })
     // (the runner prints p50, p90 and p99: a p95 under 30 ms is told only where the p99 is under it, missed where the p90 is over)
-    const lay = (p50: number, p90: number, p99: number) => targetLines({ 'typeset-parts': { status: 'fail', numbers: { layP50: p50, layP90: p90, layP99: p99, layPages: 9 } } }).find(t => t.id === 'layout')?.status
+    const lay = (p50: number, p90: number, p99: number) => targetLines({ 'reader-parts': { status: 'fail', numbers: { layP50: p50, layP90: p90, layP99: p99, layPages: 9 } } }).find(t => t.id === 'layout')?.status
     expect([lay(7.6, 20.7, 33.5), lay(7.6, 20.7, 29), lay(7.6, 31, 40), lay(11, 20, 25)]).toEqual(['reported', 'met', 'missed', 'missed'])
   })
 

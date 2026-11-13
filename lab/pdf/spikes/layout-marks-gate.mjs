@@ -1,4 +1,6 @@
 // lab/pdf/spikes/layout-marks-gate.mjs
+// Retired as a gate on 2026-11-13, its record not made again (lab/pdf/README.md, "The layout marks and the unit marks", says
+// why); runnable as a measurement until the cut-over deletes it with today's engine.
 // The layout marks' quality on the corpus (Plan 8b, Task 2; spec §5). The layout marks have a compile of their own (the
 // layout compile, v1), which feeds only the layout file; the readings and the final come from a compile with none. A
 // line the marks move costs that paper's layout lines alone: their marks are where the layout compile set them, not
