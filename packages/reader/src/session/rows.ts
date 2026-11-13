@@ -3,7 +3,7 @@
 // behind, a unit behind the reading place counted twice as far; the paper's title and abstract as an LLM's context; a retry
 // asking for the units with no row alone (those translated are held). Pure: the reader gives it the units, the rows held and the
 // reading place.
-import type { Row, Unit } from '@readarxiv/format'
+import { type Row, toggleKind, type Unit } from '@readarxiv/format'
 import { kindShown } from '../compose/classes.ts'
 import { committed, type Page } from '../compose/page.ts'
 import type { Prefs } from '../prefs.ts'
@@ -162,7 +162,7 @@ export interface ViewRows {
 export function viewOf(o: {
   /** the units of the layer shown, once read; while a new layer's are not, the units last read (the layer before it, whose
    *  pages the panes show until the new one lays: its count holds, never 0 of 0 for a moment); null before any, or no layer */
-  units: readonly { id: string; kind: string; kept?: boolean }[] | null
+  units: readonly { id: string; kind: string; of?: string; kept?: boolean }[] | null
   classes: Prefs['classes'] | null
   held: ReadonlyMap<string, Row>
   /** a layer is shown (the session's ready) */
@@ -182,7 +182,7 @@ export function viewOf(o: {
     lost = 0,
     total = 0
   for (const u of o.units) {
-    if (u.kept || !kindShown(u.kind, o.classes)) continue
+    if (u.kept || !kindShown(toggleKind(u), o.classes)) continue
     total++
     const r = o.held.get(u.id)
     if (r?.ok) got++

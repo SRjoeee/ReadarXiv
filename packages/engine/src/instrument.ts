@@ -82,6 +82,13 @@ export interface InstrumentUnit {
   /** the paper's title, a unit of its front matter (the front end's) */
   title?: true
   front?: true
+  /** the author block a note is tied to by its source (latex-front.mjs tieNotes: written inside an author command's argument,
+   *  or on its own where the paper's bindings attach it to an author): its toggle the block's (format's Unit.of) */
+  of?: 'author'
+  /** an author command's argument a macro of the paper's or its class's stores to set elsewhere (the front end's `held`: ICML's
+   *  \icmlaffiliation, set in the footnote \printAffiliationsAndNotice sets): no mark of its own, its ink an ink unit's
+   *  (today/ink-units.mjs's stored rule); the bundle does not carry it */
+  stored?: true
   /** TeX's alignment of it where TeX stated it (its end mark's \leftskip, \rightskip, \parfillskip); a cell's, its own
    *  paragraph's, else the class LaTeX built its column's template from (marks/channels.ts readAlign) */
   align?: 'j' | 'l' | 'c' | 'r'

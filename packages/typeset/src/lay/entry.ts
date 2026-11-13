@@ -19,7 +19,7 @@
 // theorem-like head is drawn in the target's word (U.label's headLabelInTarget): the rules' (Rules.heads), else the paper's own
 // name unit's row (ownNamesOf over Part.paper.names), as today's headOf; a reference cleveref or \autoref generates, and a
 // citation's note, with its names in the target's (U.rename: Rules.refs, babel's names, the paper's own), as today's renameRefs.
-import { type Box, type Ink, LINE_FLAG, type OutPiece, type Part, type Placed } from '@readarxiv/format'
+import { type Box, type Ink, LINE_FLAG, type OutPiece, type Part, type Placed, toggleKind } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
 import { fitMeasure, fontString } from '../breaker/measure.ts'
@@ -158,7 +158,7 @@ function decideTables(
   const byOrd = new Map(part.flows.flat().map((m) => [m.ord, m]))
   const answer = (o: number): CellAnswer => {
     const m = byOrd.get(o)
-    if (!m || m.why || leave.has(m.kind) || typeof m.text !== 'string') return null
+    if (!m || m.why || leave.has(toggleKind(m)) || typeof m.text !== 'string') return null
     const c = contentOf(m, rows)
     if (c === 'none' || c === 'kept') return 'same'
     if (typeof c === 'string') return 'changed'
@@ -383,7 +383,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   for (const flow of part.flows)
     for (let k = 0; k < flow.length; k++) {
       const m = flow[k]!
-      if (leave.has(m.kind)) {
+      if (leave.has(toggleKind(m))) {
         state.set(m.ord, 'left')
         unmeant.add(m.ord)
         // (a name left the original's before the member the part binds it to: that member set after it, pinned by it, as after

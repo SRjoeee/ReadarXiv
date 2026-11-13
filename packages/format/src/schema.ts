@@ -121,7 +121,7 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
 )
 
 /** a unit, each distinct one once: `depth` a heading's level, `sentences` it is cut into sentences, `kept` the paper keeps it
- *  as it is (never translated) */
+ *  as it is (never translated), `of` the block its source ties it to where that is not its kind's (toggleKind) */
 export const Unit = z.object({
   id: Id,
   kind: Kind,
@@ -129,7 +129,18 @@ export const Unit = z.object({
   depth: int.optional(),
   sentences: z.literal(true).optional(),
   kept: z.literal(true).optional(),
+  // the kind of the block the paper's source ties it to, whose reading option it follows: `author`, a note the source writes
+  // inside an author command's argument or attaches to an author (a \thanks in \author{…}, acmart's \authornote), which the
+  // names option shows translated or leaves the original's with the block (the owner's ruling of 2026-11-13). An open string,
+  // so that a reader of before reads a new value as none; not in the id, which stays its kind's and pieces'
+  of: Kind.optional(),
 })
+/**
+ * The kind a unit's or a member's reading option is decided by: the block its source ties it to (`of`), else its own kind. The
+ * one reading of it: the reader's classes, its composer and its counts, the typesetter's `leave` and every gate that lays a page
+ * call this, so that a note of the author block is left or shown with the block wherever a kind decides it
+ */
+export const toggleKind = (x: { readonly kind: string; readonly of?: string | undefined }): string => x.of ?? x.kind
 export const Units = z.object({ format, units: z.array(Unit) })
 
 // ---------------------------------------------------------------- what laying a page reads
@@ -317,6 +328,8 @@ export const Word = z.object({
 export const Placed = z.object({
   ord: int.min(0),
   kind: Kind,
+  // its unit's Unit.of: what the lay's reading options read with its kind (toggleKind)
+  of: Kind.optional(),
   text: z.union([Id, Word]),
   why: PrepWhy.optional(),
   join: z.union([z.tuple([num]), z.tuple([num, flag])]).optional(),

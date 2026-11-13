@@ -135,6 +135,9 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
   // (the paper's title and its front matter: no section heading's rules for them, X.lastLines)
   if (unit?.title) p.title = 1
   if (unit?.front) p.front = 1
+  // (the block its source ties its row's unit to, which its reading option follows with its kind: format's toggleKind)
+  const of = (unit?.echo !== undefined ? units[unit.echo] : unit)?.of
+  if (of) p.of = of
   if (mem.elements.length) {
     // (each element's class, copy text, a symbol's drawing and a footnote's mark as the instrument reads its source: the part
     // states them so that no rule of the typesetter reads a source)
@@ -233,6 +236,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
       kind: u.kind,
       content: u.content,
       ...(u.depth !== undefined ? { depth: u.depth } : {}),
+      ...(u.of ? { of: u.of } : {}),
       // (running text a translator cuts into sentences, the reader lighting each with its translation: words.ts bySentence)
       ...(!u.kept && bySentence(u.kind, !!u.figure) ? { sentences: true as const } : {}),
       ...(u.kept ? { kept: true as const } : {}),
@@ -254,7 +258,9 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     (u, p) => classes.get(u)?.get(p),
     // (the members a part holds: one with no line on any page is drawn nowhere)
     placed.flatMap((x) =>
-      typeof x.text === 'string' && x.lines.length ? [{ ord: x.ord, unit: x.text, kind: x.kind }] : [],
+      typeof x.text === 'string' && x.lines.length
+        ? [{ ord: x.ord, unit: x.text, kind: x.kind, ...(x.of ? { of: x.of } : {}) }]
+        : [],
     ),
   )
   const written = units.flatMap((u) => {

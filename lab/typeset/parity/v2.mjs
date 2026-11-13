@@ -405,6 +405,8 @@ for (const pair of pairs) {
         list.push({
           ord: m.ord,
           kind: m.kind,
+          // (the block its source ties it to, Placed.of: the ruling AN reads it)
+          ...(m.of ? { of: m.of } : {}),
           text: typeof m.text === 'string' ? m.text : null,
           align: m.align,
           style: m.style,

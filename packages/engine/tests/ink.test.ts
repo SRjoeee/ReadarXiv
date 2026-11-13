@@ -1704,6 +1704,145 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(made.some((m) => m.kind === 'inknames')).toBe(false)
   })
 
+  it('opens the block at a line no unit owns that holds whole an author unit placed nowhere: its names, "and" none of them (rule 8 by the source)', () => {
+    // (REVTeX's and cas-sc's names their marks do not own, 2610.21084v1's "… Solomon and Deepanshu Verma": the line holds each
+    // author unit's letters whole, the class's "and" between them; the stretch opens there, and the places after it are the
+    // block's. Today's named it by a 60 % share of an author unit's words)
+    const lines = [
+      'A Title',
+      'Ann Lee and Bo Writer with the Department of Physics',
+      'Some Institute',
+      'Abstract text here',
+      'Body text here',
+    ]
+    const { B, A } = pair({
+      lines,
+      points: [
+        ['bs1', 0],
+        ['be1', lines.join('').length],
+      ],
+    })
+    const title = { ...unitOf('heading', 'A Title'), title: true as const, front: true as const }
+    const units = [
+      title,
+      unitOf('author', 'Ann Lee'),
+      unitOf('author', 'Bo Writer'),
+      unitOf('affiliation', 'Some Institute'),
+      unitOf('abstract', 'Abstract text here'),
+      unitOf('para', 'Body text here'),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, -1, 3, 4, 5]]), A, align(B, A), { pages: rawOf(A) })
+    const made = L.members.filter((m) => m.unit >= units.length)
+    const textOf = (m: (typeof made)[number]) =>
+      L.units[m.unit]!.content.map((p) => (p.t === 'text' ? p.s : '')).join('')
+    expect(made.map((m) => [textOf(m), m.kind])).toEqual([
+      ['Ann Lee and Bo Writer with the Department of Physics', 'inknames'],
+    ])
+    expect(L.members[3]!.kind).toBe('affiliation')
+  })
+
+  it('names no line by a share of an author’s words: one that holds an author unit placed elsewhere is the text it is', () => {
+    // (a correspondence line under the block, its name the block's unit set where it stands: an orphan, as the ACM reference
+    // format is; and a line that is most of an unplaced unit's words but not all of them: no tie)
+    // (each note between two bodies of the column, as TeX ships a column's notes before what follows: no running foot)
+    const n = [
+      'A Title',
+      'Ann Lee',
+      'Abstract text here',
+      'Body text here',
+      'Write to Ann Lee',
+      'More body here',
+      'Bo Q Writer',
+      'Last body here',
+    ]
+    const lines = n.map((t, i) => (i === 4 || i === 6 ? { text: t, x: 72, y: 700 - 12 * i - 12, size: 9 } : t))
+    const at = (k: number) => n.slice(0, k).join('').length
+    const { B, A } = pair({
+      lines,
+      points: [
+        ['bs1', 0],
+        ['be1', at(4)],
+        ['bs2', at(5)],
+        ['be2', at(6)],
+        ['bs3', at(7)],
+        ['be3', at(8)],
+      ],
+    })
+    const title = { ...unitOf('heading', 'A Title'), title: true as const, front: true as const }
+    const units = [
+      title,
+      unitOf('author', 'Ann Lee'),
+      unitOf('abstract', 'Abstract text here'),
+      unitOf('para', 'Body text here'),
+      unitOf('para', 'More body here'),
+      unitOf('para', 'Last body here'),
+      unitOf('author', 'Bo Writer'),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 2, 3, -1, 4, -1, 5]]), A, align(B, A), { pages: rawOf(A) })
+    const made = L.members.filter((m) => m.unit >= units.length)
+    const textOf = (m: (typeof made)[number]) =>
+      L.units[m.unit]!.content.map((p) => (p.t === 'text' ? p.s : '')).join('')
+    expect(made.map((m) => [textOf(m), m.kind])).toEqual([
+      ['Write to Ann Lee', 'inknotes'],
+      ['Bo Q Writer', 'inknotes'],
+    ])
+    // (and a line before the names that is mostly an author's words, the author's unit set where it stands: no names line, so it
+    // opens no block; today's 60 % named it, and the block opened there took it in)
+    const head = ['A Title', 'Ann Lee etc', 'Ann Lee', 'Abstract text here', 'Body text here']
+    const H = pair({
+      lines: head,
+      points: [
+        ['bs1', 0],
+        ['be1', head.join('').length],
+      ],
+    })
+    const hu = [
+      title,
+      unitOf('author', 'Ann Lee'),
+      unitOf('abstract', 'Abstract text here'),
+      unitOf('para', 'Body text here'),
+    ]
+    const HL = locate(instrumentOf(H.B, hu, [[0, -1, 1, 2, 3]]), H.A, align(H.B, H.A), { pages: rawOf(H.A) })
+    expect(HL.members.filter((m) => m.unit >= hu.length).map((m) => m.kind)).toEqual(['inkorphan'])
+  })
+
+  it('makes a note that holds whole an author command’s stored argument the names’, wherever it stands (ICML’s places)', () => {
+    // (icml2026.sty stores each \icmlaffiliation's place with \gdef and sets them once, in the footnote
+    // \printAffiliationsAndNotice sets at the column's foot: no unit's marks there, the stored unit placed nowhere. The note is
+    // the block's text, of the names toggle, though it stands outside the block under the title: nameBlock leaves it so)
+    const foot = 'Some Institute of Testing. Correspondence to: Ann Lee.'
+    const n = ['A Title', 'Ann Lee', 'Abstract text here', 'Body text here', foot, 'More body here']
+    const lines = n.map((t, i) => (i === 4 ? { text: t, x: 72, y: 600, size: 9 } : t))
+    const at = (k: number) => n.slice(0, k).join('').length
+    const { B, A } = pair({
+      lines,
+      points: [
+        ['bs1', 0],
+        ['be1', at(4)],
+        ['bs2', at(5)],
+        ['be2', at(6)],
+      ],
+    })
+    const title = { ...unitOf('heading', 'A Title'), title: true as const, front: true as const }
+    const place = { ...unitOf('affiliation', 'Some Institute of Testing'), front: true as const, stored: true as const }
+    const units = [
+      title,
+      unitOf('author', 'Ann Lee'),
+      unitOf('abstract', 'Abstract text here'),
+      unitOf('para', 'Body text here'),
+      unitOf('para', 'More body here'),
+      place,
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 2, 3, -1, 4]]), A, align(B, A), { pages: rawOf(A) })
+    const made = L.members.filter((m) => m.unit >= units.length)
+    expect(made.map((m) => m.kind)).toEqual(['inknames'])
+    // (the same note where the place is no stored argument, the unit an ordinary one placed nowhere: rule 8 names it, and outside
+    // the block under the title it is turned back, the note it is)
+    const plain = units.map((u) => (u === place ? unitOf('affiliation', 'Some Institute of Testing') : u))
+    const P = locate(instrumentOf(B, plain, [[0, 1, 2, 3, -1, 4]]), A, align(B, A), { pages: rawOf(A) })
+    expect(P.members.filter((m) => m.unit >= plain.length).map((m) => m.kind)).toEqual(['inknotes'])
+  })
+
   it('reads a glyph as an included figure’s where its partner on B is one, A’s form flattened', () => {
     const B = docOf([{ lines: ['a paragraph', { text: 'Loss', y: 640, form: true }] }])
     const A = docOf([{ lines: ['a paragraph', { text: 'Loss', y: 640 }] }])

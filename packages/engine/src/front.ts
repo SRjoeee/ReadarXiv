@@ -148,6 +148,8 @@ export function sourceUnitsOf(paper: Paper): Unit[] {
       ...(u.depth !== undefined && Number.isInteger(u.depth) ? { depth: u.depth } : {}),
       ...(!kept && bySentence(u.kind) ? { sentences: true as const } : {}),
       ...(kept ? { kept: true as const } : {}),
+      // (the block its source ties a note to, as the bundle's unit states it: latex-front.mjs tieNotes)
+      ...(u.of ? { of: u.of } : {}),
     })
   })
   // (the paper's names, after its source's units: each a unit of one text piece)

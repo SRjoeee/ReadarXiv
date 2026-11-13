@@ -8,7 +8,7 @@
 
 // ---------------------------------------------------------------- files and bytes
 import { isMemoryError } from '../memory.mjs'
-import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, loads, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from './arg-roles.mjs'
+import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, labelRequestsOf, loads, noteAttachOf, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from './arg-roles.mjs'
 import { symbolText, TEXT_SYMBOLS } from './text-symbols.mjs'
 import { DECLARATION_WORDS, selectsArgument } from './tex-kernel.mjs'
 /** unpacked files (a Map of relative path → bytes) as a project's file system */
@@ -85,6 +85,59 @@ const roleOf = name => (FRONT_NAMES.has(name) ? 'names' : 'places')
 const AUTHOR_KINDS = new Set(['author', 'affiliation'])
 /** whether a unit is of an author block (AUTHOR_KINDS): what the TeX path sets and keeps as one block, names and places alike */
 export const inAuthorBlock = u => AUTHOR_KINDS.has(u?.kind)
+/**
+ * The author block a note is tied to by the source (the owner's ruling of 2026-11-13: text the paper's code ties to the author
+ * block follows the names option both ways; a region of its own is body text): a note's unit gets `of: 'author'` where (1) it
+ * is written inside the argument of a command the role table names `author` (FRONT_ROLES, LaTeXML's bindings: \\author, \\affil,
+ * \\icmlauthor …), at any depth, the innermost such command's argument being the walk's `within` (a \\thanks inside \\title's is
+ * the title's: body); or (2) it is written on its own and the paper's bindings attach it to an author (arg-roles.mjs
+ * noteAttachOf: REVTeX's \\thanks after \\author{…}, acmart's \\authornote; elsarticle's \\cortext[key]{…} where an author
+ * command's argument requests its label, \\corref{key}: resolved once the whole source is read, tieLabels). A note of the
+ * document (the kernel's \\thanks, amsart's), or one LaTeXML attaches to nothing (a label no author requests), is body
+ */
+function tieNotes(made, name, key, b, outer) {
+  if (!made.length) return
+  if (outer === 'author') { for (const u of made) u.of = 'author'; return }
+  if (outer !== undefined) return
+  const attach = noteAttachOf(name, paper?.bindings ?? null)
+  if (attach === 'creator') {
+    // (the author before it: an author command's unit made earlier in the source, LaTeXML's default attachment)
+    const first = b.units.indexOf(made[0])
+    if (b.units.slice(0, first < 0 ? b.units.length : first).some(u => u.kind === 'author' && !u.held)) for (const u of made) u.of = 'author'
+  } else if (attach) for (const u of made) u.ofLabel = `${attach.slice(6)}:${key ?? ''}`
+}
+/** an author command's argument (frontBlock's, of names): the labels it requests (labelRequestsOf: \\corref{a,b} asks for
+ *  `cor:a` and `cor:b`), outside comments, into `requested` */
+function requestsIn(s, from, to, requested) {
+  const reqs = labelRequestsOf(paper?.bindings ?? null)
+  if (!reqs.size) return
+  for (const m of s.slice(from, to).matchAll(/\\([A-Za-z]+)\s*\{([^{}]*)\}/g)) {
+    const prefix = reqs.get(m[1])
+    if (!prefix || inComment(s, from + m.index)) continue
+    for (const k of m[2].split(',')) requested.add(`${prefix}:${k.trim()}`)
+  }
+}
+/** the letters of a text as two labels of a name are compared (LaTeXML's CleanLabel: a creator's `fuzzy` label its name) */
+const labelLetters = t => t.normalize('NFKD').replace(/[^\p{L}\p{N}]/gu, '').toLowerCase()
+/** the notes attached by a label (tieNotes' `ofLabel`), once the whole source is read: the author block's where an author
+ *  command's argument requests the label (`fuzzy`: where an author's name is the note's key), else body */
+function tieLabels(units, requested) {
+  const names = new Set(units.filter(u => u.kind === 'author').map(u => labelLetters(latin1Text(u))))
+  for (const u of units) {
+    if (u.ofLabel === undefined) continue
+    const [prefix, ...rest] = u.ofLabel.split(':'), key = rest.join(':')
+    if (prefix === 'fuzzy' ? names.has(labelLetters(key)) : requested.has(u.ofLabel)) u.of = 'author'
+    delete u.ofLabel
+  }
+}
+/** a unit's text pieces as the source's characters (its UTF-8 bytes read latin1 back as UTF-8) */
+const latin1Text = u => { const t = u.pieces.filter(p => p.t === 'text').map(p => p.s).join(''); try { return new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t)) } catch (e) { if (isMemoryError(e)) throw e; return t } }
+/** `f` run with the walk inside the argument of a front matter command of role `role` (the role table's: tieNotes' `within`) */
+function inFront(b, role, f) {
+  const saved = b.within
+  b.within = role
+  try { return f() } finally { b.within = saved }
+}
 /** the kind of the units an environment makes, `kind` (a table's cells, an abstract, a theorem), but inside an author block:
  *  there every unit is the block's own, its names or its places as frontBlock cuts them, whatever environment TeX sets it in
  *  (2610.35877v1's `\author{\begin{tabular}{cc} Ayush Mittal & Dhruv Gupta\\ …\end{tabular}}`: its names were table
@@ -1996,6 +2049,9 @@ function frontEnds(s, from, to, ifs = new Set(), rowEnds = null) {
  * placeholders)
  */
 function frontBlock(s, from, to, b, ctx, role = 'names', call = null) {
+  // (an author command's argument, whoever calls it: a note in it is the block's, tieNotes; the labels a creator's text requests)
+  if (b.within !== 'author') return inFront(b, 'author', () => frontBlock(s, from, to, b, ctx, role, call))
+  if (role === 'names' && ctx.requested) requestsIn(s, from, to, ctx.requested)
   const callAt = call ? calledAfter(s, call, ctx) : undefined
   if (/(^|[,{\s])[A-Za-z]+\s*=\s*\{/.test(s.slice(from, to))) { if (role === 'places') frontValues(s, from, to, b, ctx); else frontNotes(s, from, to, b, ctx); return }
   // the notes, wherever they are in the argument (as frontNotes finds them), and the rows' and blocks' ends at its top level
@@ -2213,10 +2269,19 @@ function frontCommand(s, at, end, name, to, b, ctx, { front = false } = {}) {
   const arg = call.known ? call.args.find(a => a.param === n - 1 && s[a.start] === '{') : reqs[n - 1] ?? reqs.at(-1)
   if (!arg) return -1
   b.flush()
-  const from = arg.start + 1, upTo = arg.end - 1, saved = b.kind, before = b.units.length
-  if (role === 'author') frontBlock(s, from, upTo, b, ctx, roleOf(name), at === null ? null : { at, end: call.end })
-  else if (role === 'note' || role === 'prose') { b.kind = role === 'note' ? 'footnote' : 'para'; walk(s, from, upTo, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.front = true }
-  else { b.kind = role === 'abstract' ? 'abstract' : 'heading'; b.title = role === 'title'; walk(s, from, upTo, b, ctx); b.flush(); b.title = false; b.kind = saved }
+  const from = arg.start + 1, upTo = arg.end - 1, saved = b.kind, before = b.units.length, outer = b.within
+  inFront(b, role, () => {
+    if (role === 'author') frontBlock(s, from, upTo, b, ctx, roleOf(name), at === null ? null : { at, end: call.end })
+    else if (role === 'note' || role === 'prose') { b.kind = role === 'note' ? 'footnote' : 'para'; walk(s, from, upTo, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.front = true }
+    else { b.kind = role === 'abstract' ? 'abstract' : 'heading'; b.title = role === 'title'; walk(s, from, upTo, b, ctx); b.flush(); b.title = false; b.kind = saved }
+  })
+  // (a note command's: the author block's where its argument stands in an author's, or its binding attaches it to one, by its
+  // label its optional argument (elsarticle's \\cortext[key]{…}) or, a name's label (`fuzzy`), its text: tieNotes)
+  if (role === 'note') {
+    const opt = call.args.find(a => a.kind === 'opt' && s[a.start] === '[')
+    const key = noteAttachOf(name, paper?.bindings ?? null) === 'label:fuzzy' ? s.slice(from, upTo) : opt ? s.slice(opt.start + 1, opt.end - 1).trim() : null
+    tieNotes(b.units.slice(before).filter(u => u.kind === 'footnote'), name, key, b, outer)
+  }
   if (front) for (const u of b.units.slice(before)) u.front = true
   return call.end
 }
@@ -2510,6 +2575,12 @@ function walk(s, from, to, b, ctx) {
         // a \\thanks is the title's or an author's note wherever it is written (revtex takes it after \\author{…}): no
         // mark, as frontNote gives the author block's
         if (name === 'thanks') for (const u of b.units.slice(before)) u.front = true
+        // (the author block's where the source ties it there: inside an author command's argument, or a \\thanks on its own the
+        // paper's bindings attach to an author, its key elsarticle's optional label; a \\footnote on its own is the body's: tieNotes)
+        if (name !== 'footnotetext') {
+          const opt = name === 'thanks' ? args.find(a => a.kind === 'opt') : undefined
+          tieNotes(b.units.slice(before), name, opt ? s.slice(opt.start + 1, opt.end - 1).trim() : null, b, name === 'thanks' || b.within === 'author' ? b.within : 'body')
+        }
         b.cur = parent
         if (parent && made === 1) { const inner = b.units[b.units.length - 1]; inner.nested = true; parent.pieces.push({ t: 'nested', pre: s.slice(i, inner.start), unit: inner, post: s.slice(inner.end, e) }); parent.end = e }
         else if (parent && made === 0) { parent.pieces.push({ t: 'ph', src: s.slice(i, e) }); parent.end = e }
@@ -2524,7 +2595,7 @@ function walk(s, from, to, b, ctx) {
       else if (name === 'tablecaption') b.captype = 'table'
       else if ((name === 'subcaption' || name === 'subcaptionbox') && typeof b.inFloat === 'string') b.captype = `sub${b.inFloat}`
       // an abstract given as an argument (sn-jnl's \\abstract{…}) is the paper's abstract, as its environment is
-      b.kind = CAPTIONS.has(name) ? 'caption' : name === 'abstract' ? 'abstract' : 'heading'; b.title = name === 'title'; b.depth = DEPTH[name]; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.depth = undefined; b.kind = saved; b.captype = savedType
+      b.kind = CAPTIONS.has(name) ? 'caption' : name === 'abstract' ? 'abstract' : 'heading'; b.title = name === 'title'; b.depth = DEPTH[name]; inFront(b, name === 'title' ? 'title' : b.within, () => walk(s, req.start + 1, req.end - 1, b, ctx)); b.flush(); b.title = false; b.depth = undefined; b.kind = saved; b.captype = savedType
       i = e; continue
     }
     // \multicolumn{n}{spec}{text}, \multirow[v]{n}{width}[shift]{text}, \makecell[pos]{text}: only the content is prose,
@@ -2555,7 +2626,7 @@ function walk(s, from, to, b, ctx) {
       const { args, end: e } = frontArgs(s, end, name, ctx, to)
       endText(); b.flush()
       const first = args.find(a => a.kind === 'req')
-      for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(name), a === first ? { at: i, end: e } : null); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) }
+      inFront(b, 'author', () => { for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(name), a === first ? { at: i, end: e } : null); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) } })
       i = e; continue
     }
     if ((FRONT_PROSE.has(name) || (FRONT_BOXES.has(name) && !ctx.boxesUnread)) && AUTHOR_KINDS.has(b.kind)) {
@@ -2613,7 +2684,12 @@ function walk(s, from, to, b, ctx) {
       const arg = call.reqs[macro.prose - 1 - (macro.opt ? 1 : 0)]
       if (arg?.group && macro.stores) {
         endText(); b.flush()
-        const before = b.units.length, saved = b.kind; b.kind = 'para'; walk(s, arg.start + 1, arg.end - 1, b, ctx); b.flush(); b.kind = saved
+        const before = b.units.length, saved = b.kind
+        // (a command the role table names an author command keeps its role's kinds, its text an author block's names or places
+        // (frontBlock): ICML's \\icmlaffiliation, which icml2026.sty stores with \\gdef for the footnote \\printAffiliationsAndNotice
+        // sets. Read as prose, its places were paragraphs of the body's)
+        if (FRONT_ROLES[name]?.[0] === 'author') frontBlock(s, arg.start + 1, arg.end - 1, b, ctx, roleOf(name))
+        else { b.kind = 'para'; walk(s, arg.start + 1, arg.end - 1, b, ctx); b.flush(); b.kind = saved }
         // (`held`: its text is the macro's to use, as text or not: elsarticle's \\biboptions{semicolon} holds natbib's options)
         for (const u of b.units.slice(before)) { u.front = true; u.held = true }
         i = call.end; goOn(macro, call, i); continue
@@ -3332,10 +3408,10 @@ function frontMatter(s, from, to, b, ctx) {
     if (c.name === 'title') {
       if (c !== title) continue
       const { args, end } = argsOfForm(s, c.end, unitForm('title', ctx)), req = args.find(a => a.kind === 'req')
-      if (req) { b.kind = 'heading'; b.title = true; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.kind = undefined; past = end }
+      if (req) { b.kind = 'heading'; b.title = true; inFront(b, 'title', () => walk(s, req.start + 1, req.end - 1, b, ctx)); b.flush(); b.title = false; b.kind = undefined; past = end }
       continue
     }
-    if (FRONT_MATTER.has(c.name)) { const { args, end } = frontArgs(s, c.end, c.name, ctx, to); for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(c.name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) } past = end; continue }
+    if (FRONT_MATTER.has(c.name)) { const { args, end } = frontArgs(s, c.end, c.name, ctx, to); inFront(b, 'author', () => { for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(c.name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) } }); past = end; continue }
     if (ctx.ownAuthors?.has(c.name)) { const e = ownAuthorCall(s, null, c.end, c.name, to, b, ctx); if (e > 0) past = e; continue }
     // a \thanks of its own (revtex's, after \author{…}): a front note, as in the body
     if (c.name === 'thanks') { const { args, end } = argsOfForm(s, c.end, unitForm('thanks', ctx)); if (args.some(a => a.kind === 'req')) { b.flush(); frontNote(s, c.at, end, b, ctx); past = end } continue }
@@ -3585,6 +3661,8 @@ function readProject(fsys, main, tables, sourceText, own) {
   const ctx = { frontRowEnds: frontRowEndsOf(ownTexts), rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), activeSpaces: activeSpacesIn([...sources.map(sourceText), ...ownTexts]), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), quotes: csquotesOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
   // (the author block's commands of a class the paper ships that the role table does not know: ownAuthorsOf)
   ctx.ownAuthors = ownAuthorsOf(own, ctx.macros)
+  // (the labels the authors' texts request, which a note attached by its label waits for: tieLabels)
+  ctx.requested = new Set()
   const scan = { lineEnvs, ifs, ifValues }, percents = { lineEnvs, ifs, defined: paper.own, skipEnvs }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
@@ -3635,6 +3713,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   }
   visit(mainFile.rel)
   storedBodies(calls, { ctx, files, units, own })
+  tieLabels(units, ctx.requested)
   restorePercents(units)
   const texOrder = entriesLast(units)
   // a source declared in a Latin-1 family encoding: its bytes read as latin1 are already the right characters
@@ -4184,7 +4263,7 @@ const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]r
  *  mode (inMath) */
 export const markUnits = (units, translated = null) => {
   const id = new Map(units.map((u, i) => [u, i]))
-  return u => (inAuthorBlock(u) ? (translated?.has(u) && fitsWide(u) ? AUTHOR_WIDE : null) : u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.front || (u.stored && !u.once) || inMath(u) ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` })
+  return u => (inAuthorBlock(u) && !u.held ? (translated?.has(u) && fitsWide(u) ? AUTHOR_WIDE : null) : u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.front || (u.stored && !u.once) || inMath(u) ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` })
 }
 /**
  * Whether a unit holds a subscript or a superscript of its own (a piece `_` or `^`, outside every formula the walker
@@ -4221,7 +4300,8 @@ const LETTER_GROUP = inner => {
  * compares: two rows of one block are two (article sets each row of its \\author where it stands: 1706.03762v7's "Google Brain"
  * three times), two equal commands one. Not one a macro
  * of the paper's or its class's only stores (`held`: elsarticle's \\biboptions{semicolon}, read as prose, is natbib's options,
- * and a mark there one natbib does not know: 2608.16117 lost a page). The \\date too: a class sets its front matter where it
+ * and a mark there one natbib does not know: 2608.16117 lost a page), an author block's own among them (ICML's stored
+ * \\icmlaffiliation: its ink is read as an ink unit's, ink-units.mjs's stored rule). The \\date too: a class sets its front matter where it
  * likes (amsart: the date in a note of the first page, the addresses at the paper's end), and an unmarked unit is searched
  * between its marked neighbours, so the addresses' marks alone took 2610.21037's date out of its search
  */
@@ -4230,7 +4310,7 @@ const LETTER_GROUP = inner => {
 const asTokens = t => t.replace(/(?<!\\)%[^\n]*(?:\n[ \t]*)?/g, '').replace(/[ \t]*\n[ \t]*\n\s*/g, '\u2029').replace(/[ \t\n]+/g, ' ').trim()
 export function frontMarks(units) {
   const id = new Map(units.map((u, i) => [u, i]))
-  const front = units.filter(u => (inAuthorBlock(u) || (u.front && u.kind !== 'heading' && !u.held)) && (!u.stored || (u.once && inAuthorBlock(u))) && !inMath(u))
+  const front = units.filter(u => ((inAuthorBlock(u) || (u.front && u.kind !== 'heading')) && !u.held) && (!u.stored || (u.once && inAuthorBlock(u))) && !inMath(u))
   // (what a class compares is a command's whole argument: an author block's unit by its block's text, which two commands share
   // where they are equal — revtex's two equal \\affiliation{…}, set once —, never two rows of one block, which the class sets
   // each where it stands: 1706.03762v7's three "Google Brain" rows of one \\author; a note by its own text)

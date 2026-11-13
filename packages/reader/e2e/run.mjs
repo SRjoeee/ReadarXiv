@@ -1223,6 +1223,48 @@ await check(
   },
 )
 await check(
+  "compose: a note the source ties to the author block follows the names option through the reader's own typesetter: off as printed, on its variant with the block's name, never its own row; off and on again the same two drawings (s4-author, ICML's footnote shape; the owner's ruling of 2026-11-13, PDF-READER §18.71)",
+  async () => {
+    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    const OFF = { figures: true, tables: true, heads: true, references: false, names: false }
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), indexOf['s4-author'].original)
+    await page.evaluate((c) => window.__h.layer('s4-author', { typeset: true, classes: c }), OFF)
+    await laidShown(page, 1)
+    // (the footnote: the ink unit locate cut of the places its class stores, of the names, with a variant naming the author)
+    const ord = await page.evaluate(
+      () =>
+        window.__h.parts
+          .get(1)
+          .flows.flat()
+          .find((m) => m.kind === 'inknames')?.ord,
+    )
+    const note = () => page.evaluate((o) => window.__h.drawnOf(1).find((m) => m.ord === o), ord)
+    const drawings = [await note()]
+    for (const names of [true, false, true]) {
+      const from = await page.evaluate(() => window.__h.marks.length)
+      await page.evaluate((c) => window.__h.setClasses(c), { ...OFF, names })
+      await waitFor(page, (n) => window.__h.marks.slice(n).some((m) => m.what === 'laid' && m.page === 1), from, 10_000)
+      await page.waitForTimeout(300)
+      drawings.push(await note())
+    }
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(ord !== undefined, 'no note of the names on page 1')
+    const [off, on, off2, on2] = drawings
+    assert(off?.state === 'left' && off2?.state === 'left', `off: ${JSON.stringify([off, off2])}`)
+    assert(JSON.stringify(on2) === JSON.stringify(on), `on again: ${JSON.stringify(on2)}`)
+    // (the variant's row with the block's translation of the name, "Zur nnA eeL", set for its element; the note's own row reads
+    // "nnA .eeL", the stop inside the reversed word)
+    assert(
+      on?.state === 'laid' && /:ot Zur nnA eeL\./.test(on.text) && !/\.eeL/.test(on.text),
+      `on: ${JSON.stringify(on)}`,
+    )
+    assert(new Set(drawings.map((d) => JSON.stringify(d))).size === 2, `the drawings: ${JSON.stringify(drawings)}`)
+    return { ord, off: off.state, on: on.text }
+  },
+)
+await check(
   'compose: a crop the typesetter cut over two lines (a URL broken) read by the text layer and its copy once, whole, in order (s1-columns)',
   async () => {
     // (the formula "f(x)=x+1" is one item of PDF.js's text, as a URL may be; its crop cut after "f(x)=", the item's middle under

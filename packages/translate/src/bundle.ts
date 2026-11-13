@@ -14,13 +14,14 @@ export const NESTED_KIND = 'note-mark'
 /**
  * A bundle's unit as a translator is given it: every field format states that the contract declares, which is what the wires
  * read (a wire reads a piece through the contract's type), and none that only names the unit or a piece: an element's TeX
- * source `src` and its `keys`, a group's `open` and `close`, a heading's `depth`; and `kept`, which no translator is given (the
- * caller leaves a kept unit out: it is never translated). A field format adds that the contract declares reaches the wire
+ * source `src` and its `keys`, a group's `open` and `close`, a heading's `depth`, the block a unit's source ties it to, `of`
+ * (what the reader's options read of it); and `kept`, which no translator is given (the caller leaves a kept unit out: it is
+ * never translated). A field format adds that the contract declares reaches the wire
  * with no change here; one it does not declare is a field of identity, to be left here too (tests/bundle.test.ts holds both:
  * the fixture states every field of format's schema, and no wire reads a field left)
  */
 export function unitInOf(unit: BundleUnit): UnitIn {
-  const { depth: _depth, kept: _kept, content, ...rest } = unit
+  const { depth: _depth, kept: _kept, of: _of, content, ...rest } = unit
   return { ...rest, content: content.map(pieceOf) }
 }
 

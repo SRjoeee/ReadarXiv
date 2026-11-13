@@ -59,12 +59,16 @@ interface Ctx {
   splits: ReadonlyMap<string, Split>
 }
 
+/** whether the toggles show a person of the block: its kind there (Person's, which the bundle states as its anchor member's
+ *  toggleKind, bundle/names.ts) not one `leave` holds. The one reading of a person's kind for the toggles */
+const personShown = (person: Person, leave: ReadonlySet<string>): boolean => !leave.has(person[1])
+
 /** the block's translation of person `p`: its text, null where it has none, undefined where its row is still to come */
 function personOf(c: Ctx, p: number): string | null | undefined {
   const person = c.persons[p]
   if (!person) return null
-  const [unit, kind, k] = person
-  if (c.leave.has(kind)) return null
+  const [unit, , k] = person
+  if (!personShown(person, c.leave)) return null
   const row = c.rows.get(unit)
   if (!row) return c.rows.done ? null : undefined
   const split = c.splits.get(unit)
@@ -226,7 +230,7 @@ export function namedRows(part: Pick<Part, 'paper'>, rows: Rows, leave: Readonly
  *  changes (2611.03953v2-zh p1: the correspondence footnote's variant late, the names off, the footnote
  *  the original's until a toggle laid the page again with its own row) */
 function shownOf(n: Named, persons: readonly Person[], leave: ReadonlySet<string>): Person[] {
-  return n[2].map((x) => persons[x[1]]).filter((p): p is Person => !!p && !leave.has(p[1]))
+  return n[2].map((x) => persons[x[1]]).filter((p): p is Person => !!p && personShown(p, leave))
 }
 
 /** the rows besides its own a unit the part states names a person of the block waits for while rows may come: its variant's

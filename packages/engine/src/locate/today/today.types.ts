@@ -32,6 +32,9 @@ export interface TodayInkUnit {
   kept?: true
   /** a kept block of e-mail addresses and their separators alone (keptUnitsOf's, addressesAlone) */
   address?: true
+  /** of the names: it holds whole the text of an author command's argument a macro stores (inkUnitsOf's rule 8, `stored`), the
+   *  block's wherever it stands */
+  stored?: true
   pieces: TodayPiece[]
   /** its text's glyphs, its placeholders' (`ph`), each kept run's by its placeholder's index among the pieces (`runs`,
    *  inkUnitsOf's; none for a kept block), and, of its text's, its label's where it has one (`label`: inkUnitsOf's,
@@ -166,7 +169,9 @@ export const inkLeft = ledger.inkLeft as (
 export const inkUnitsOf = inkUnits.inkUnitsOf as (
   pages: readonly TodayPage[],
   ledger: TodayLedger,
-  o: { units: readonly TodayUnit[]; from: number },
+  /** `unplaced`, the author and affiliation units with no place of their own on A, and `stored`, the author commands' arguments a
+   *  macro stores: rule 8's source ties */
+  o: { units: readonly TodayUnit[]; from: number; unplaced?: readonly TodayUnit[]; stored?: readonly TodayUnit[] },
 ) => TodayInkUnit[]
 /** a line's scripts (ink-units.mjs scriptsOf, rule 4): of its glyphs `order`, those TeX set smaller than the line's text and off its
  *  baseline, each raised (1) or lowered (-1) */
