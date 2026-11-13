@@ -410,7 +410,8 @@ const fresh = (): InkState => ({
 const squareOf = (m: Matrix): boolean =>
   (Math.abs(m[1]) < 1e-9 && Math.abs(m[2]) < 1e-9) || (Math.abs(m[0]) < 1e-9 && Math.abs(m[3]) < 1e-9)
 /** whether a path PDF.js gives (constructPath's data: 0 moveTo, 1 lineTo, 2 and 3 curves, 4 closePath) is one rectangle on the
- *  page's axes under matrix `m`: one subpath of four corners, its edges level and upright in turn (0.01 of a unit across) */
+ *  page's axes under matrix `m`: one subpath of four corners (a fifth point dropped), its edges level and upright in turn (0.01
+ *  of a unit across) */
 function rectPathOf(m: Matrix, path: unknown): boolean {
   const data = pathOf(path)
   if (!data) return false
@@ -429,8 +430,7 @@ function rectPathOf(m: Matrix, path: unknown): boolean {
       p = pts.at(-1)
     if (!p || Math.abs(p[0] - X) > 0.01 || Math.abs(p[1] - Y) > 0.01) pts.push([X, Y])
   }
-  if (pts.length === 5 && Math.abs(pts[0]![0] - pts[4]![0]) <= 0.01 && Math.abs(pts[0]![1] - pts[4]![1]) <= 0.01)
-    pts.pop()
+  if (pts.length === 5) pts.pop()
   if (pts.length !== 4) return false
   const level = (i: number) => Math.abs(pts[i]![1] - pts[(i + 1) % 4]![1]) <= 0.01,
     upright = (i: number) => Math.abs(pts[i]![0] - pts[(i + 1) % 4]![0]) <= 0.01
