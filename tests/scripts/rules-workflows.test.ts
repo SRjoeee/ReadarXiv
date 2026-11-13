@@ -66,7 +66,7 @@ describe('the gate runs when what it loads changes', () => {
     // the page (layer-gate/proto.mjs) imports these from /engine/; layer-gate.mjs imports the others in Node
     // (and the wrap's, layer-gate/wrap.mjs: the base page wrapped by optional content and its cell rules, beside the source
     // units' reading, which is the pipeline's and not the drawing's)
-    const loaded = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', '../../../packages/engine/src/ink.mjs', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layout/wrap-final.mjs', '../../../packages/engine/src/wrap.ts', 'layout/cell-rules.mjs', '../../../packages/engine/src/remove.ts', 'layer-proto/hyph.mjs', 'layer-proto/rows.mjs'].map(E))
+    const loaded = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', '../../../packages/engine/src/ink.ts', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layout/wrap-final.mjs', '../../../packages/engine/src/wrap.ts', 'layout/cell-rules.mjs', '../../../packages/engine/src/remove.ts', 'layer-proto/hyph.mjs', 'layer-proto/rows.mjs'].map(E))
     // (and the rows' reading, rows.mjs, whose units openProto takes: their table groups, translate/groups.mjs, and a cell's
     // span, layer-proto/cells.mjs — Devin on #456)
     expect(loaded.length).toBeGreaterThan(20)
@@ -77,7 +77,7 @@ describe('the gate runs when what it loads changes', () => {
     // failed to load the engine, "did not run". The workspace packages' TypeScript is served stripped, lab/pdf/packages-route.mjs:
     // the ink walk's readers, packages/engine/src/ink-args.ts, load in the page as its other modules do)
     const E = (f: string) => join(ROOT, 'src/pdf-reader/engine', f)
-    const page = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', '../../../packages/engine/src/ink.mjs', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layer-proto/hyph.mjs'].map(E))
+    const page = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', '../../../packages/engine/src/ink.ts', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layer-proto/hyph.mjs'].map(E))
     expect(page.filter(f => f.endsWith('.ts') && !f.startsWith('packages/'))).toEqual([])
     // (and the check holds something: the page's closure reaches the packages' TypeScript)
     expect(page.filter(f => f.startsWith('packages/') && f.endsWith('.ts')).length).toBeGreaterThan(0)

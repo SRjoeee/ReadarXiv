@@ -3,7 +3,7 @@ export const ENGINE_PURPOSE =
   'source, marks, ink, align, locate, wrap, bundle and prepare: a paper in, its bundle out' as const
 
 // ---- today's modules, moved as they are (JavaScript, typed by their *.types.ts)
-export * from './ink.types.ts'
+export * from './ink.ts'
 export * from './delta-wire.ts'
 export * from './memory.ts'
 export * from './remove.ts'
