@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { scanTree } from '../../lab/release-check/census-lib.mjs'
 import { ENGINE_PROFILE } from '../../lab/release-check/census-profile.mjs'
 import { census } from '../../lab/release-check/census.mjs'
-import { citationsOf, type Ledger, ledgerOf, recordedOf } from '../../lab/rules/ledger.mjs'
+import { citationsOf, type Ledger, ledgerOf, recordedOf, trackedOf, trackedText } from '../../lab/rules/ledger.mjs'
 import type { Recording, SiteSums } from '../../lab/rules/merge.mjs'
 import { remapOf } from '../../lab/rules/record.mjs'
 import { reportOf } from '../../lab/rules/report.mjs'
@@ -149,6 +149,36 @@ describe('the report', () => {
     expect(r.byArea).toContain('budget packages/engine/src/locate/rules.ts:99 `WAIT_MS` = 500 (time), unmeasured')
     expect(r.byArea).toMatch(/`ITERATED` .*: iterate 4/)
     expect(r.byFile).toContain(`## ${FILE} (area a)`)
+  })
+})
+
+describe('the tracked form', () => {
+  const near = (d: number, paper: string | null, test: string | null = null) => ({ d, eff: 0.5 + d, x: 0.5 + d, b: 1, k: 1, paper, page: paper ? 2 : null, test })
+  const { map, recording } = made({
+    ...SPECS,
+    // (two comparisons of one constant: the margin is the nearest case each side over both)
+    NEAREST: { sites: [{ kind: 'cmp', per: { corpus: n(2, 2, { near: [near(0.2, '2401.00001v1'), near(0.1, '2401.00001v1')] }) } }, { kind: 'cmp', per: { corpus: n(1, 1, { near: [near(0.05, '2401.00001v1'), null] }), tests: n(1, 0, { near: [null, near(0.01, null, 'b.test.ts > close')], tests: [null, { kept: ['b.test.ts > close'], more: 0 }] }) } }] },
+  })
+  const l = ledgerOf(map, recording)
+  const t = trackedOf(l, { digest: 'f00d' })
+  it('keeps each verdict, the counts per input, the margin over the sites, the hits that remove entries, the tests by file and ordinal', () => {
+    for (const [k, r] of Object.entries(l.rules)) expect(t.rules[k]?.verdict, k).toBe(r.verdict)
+    expect(t.recorded).toMatchObject({ commit: 'c0ffee', full: 'f00d', inputs: { corpus: { records: 1, papers: 1 } } })
+    const m = t.rules[`packages/engine/src/locate/rules::(top)::NEAREST`]?.margin
+    expect([m?.units, m?.false?.d, m?.true?.d, m?.true?.test]).toEqual(['rule', 0.05, 0.01, ['b.test.ts', 0]])
+    expect(t.rules[`packages/engine/src/locate/rules::(top)::DECIDES`]?.runs).toEqual({ corpus: [9, 7, 2] })
+    expect(t.rules[`packages/engine/src/locate/rules::(top)::FOLDED_READ`]).toMatchObject({ runs: { corpus: [2, 2, 0] }, reads: { corpus: 1 }, folds: 1 })
+    expect(t.rules[`packages/engine/src/locate/rules::(top)::LIST`]).toMatchObject({ kind: 'list', size: 3, hits: [3, 0, 0] })
+    // (a list whose entries are exempt or not judged: its hits decide nothing, and are left in the full record)
+    expect(t.rules[`packages/engine/src/locate/rules::(top)::DEFINED`]?.hits).toBeUndefined()
+    expect(t.rules[`packages/engine/src/locate/rules::(top)::BY_TEST`]?.tests).toEqual({ false: { 'a.test.ts': [0] } })
+    expect(t.rules[`packages/engine/src/locate/rules::(top)::PAPER`]?.cites).toEqual({ flag: 'paper', papers: ['2401.00001v1'] })
+    const text = trackedText(t)
+    expect(text).not.toContain('the other side')
+    expect(text).not.toContain('the column gap')
+    expect(JSON.parse(text)).toEqual(t)
+    // (one rule a line)
+    expect(text.split('\n').filter(x => x.startsWith('  "packages/')).length).toBe(Object.keys(t.rules).length)
   })
 })
 

@@ -3,9 +3,10 @@
 // rules that stay, the list entries to remove); every flagged citation with its whole comment, for the coordinator to
 // confirm or strike before a removal lane acts on the area; BY NAME, the rules the ledger marks as deciding nothing (file,
 // line, the constant or list, what was recorded): the list an area whose removals are scheduled shows; the magnitudes with
-// no stated source beside the census's unmeasured budgets; the lists whose entries are not judged. Pure. Not shipped.
+// no stated source beside the census's unmeasured budgets; the lists whose entries are not judged. Read from the full
+// record (ledger.mjs ledgerOf): the names it prints are not in the tracked ledger. Pure. Not shipped.
 import { AREAS, areaOf } from './areas.mjs'
-import { readsOf, recordedOf, VERDICTS } from './ledger.mjs'
+import { marginOf, readsOf, recordedOf, VERDICTS } from './ledger.mjs'
 
 const AREA_IDS = [...AREAS.map(a => a.id), 'other']
 const saysOf = id => AREAS.find(a => a.id === id)?.says ?? 'in no area'
@@ -125,7 +126,7 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
   for (const [file, rs] of Object.entries(byFile).sort((a, b) => a[0].localeCompare(b[0]))) {
     F.push(`## ${file} (area ${areaOf(file)})`, '')
     for (const r of rs.sort((a, b) => a.line - b.line)) {
-      const margin = r.sites.find(s => s.margin)?.margin
+      const margin = marginOf(r)
       const m = margin ? `; nearest: ${margin.false ? `false at ${round(margin.false.eff)}` : '—'} / ${margin.true ? `true at ${round(margin.true.eff)}` : '—'}${margin.units === 'slack' ? ' (slack)' : ''}` : ''
       F.push(`- line ${r.line} \`${cell(nameOf(r))}\` (${r.key}): **${r.verdict}**${r.folds.length && r.verdict !== 'remove' ? `, ${r.folds.length} site(s) to fold` : ''}${r.removeEntries?.length ? `, ${r.removeEntries.length} entries to remove` : ''}; ${recordedOf(r)}${m}`)
     }

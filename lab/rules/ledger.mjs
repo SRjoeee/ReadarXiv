@@ -35,6 +35,13 @@
 //    which modules each process loaded (transform.mjs); the row names the module's importers.
 // Any input other than the tests of our own counts as the corpus: a third paper set (a fresh sweep's papers) is recorded
 // with AXT_RULES_INPUT=<its name>, a list and a cache directory, no code changed.
+//
+// Two forms (the coordinator's ruling, 2026-11-13): the FULL record (`ledgerOf`: every site, the comments, the tests by
+// name, the inputs' papers), kept outside the repository; and the TRACKED ledger (`trackedOf`, lab/rules/ledger.json):
+// per rule what the census and a reader need to see its reason, nothing quoted (no comment, no entry, no test's name: a
+// name is test input, and some are not English), naming the full record by its digest so that each row can be traced to it
+// (`resolveTracked`).
+import { createHash } from 'node:crypto'
 import { CITES_DEFINITION } from '../release-check/census-lib.mjs'
 import { areaOf } from './areas.mjs'
 
@@ -231,6 +238,145 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
     holdoutAdds: papersCited.filter(p => !held.has(base(p))),
     rules: rows,
   }
+}
+
+export const TRACKED_FORMAT = 'readarxiv/rule-ledger-tracked 1'
+/** a short digest of a value (its JSON): what remap compares where the tracked ledger holds no text */
+export const digestOf = x => createHash('sha256').update(JSON.stringify(x)).digest('hex').slice(0, 16)
+/** a test's file: a test is named `<its file> > <its name>` (vitest-setup.mjs) */
+const testFileOf = name => name.split(' > ')[0]
+
+/** the tests the full record names (every site's tests, every nearest case's), per test file, each once, sorted by name:
+ *  a test's ordinal is its place in its file's list, which only the full record can turn back into a name */
+export function testsOf(full) {
+  const by = new Map()
+  const add = t => {
+    if (!t) return
+    const f = testFileOf(t)
+    if (!by.has(f)) by.set(f, new Set())
+    by.get(f).add(t)
+  }
+  for (const r of Object.values(full.rules))
+    for (const s of r.sites) {
+      for (const t of s.tests?.false ?? []) add(t)
+      for (const t of s.tests?.true ?? []) add(t)
+      add(s.margin?.false?.test)
+      add(s.margin?.true?.test)
+    }
+  return Object.fromEntries([...by.keys()].sort().map(f => [f, [...by.get(f)].sort()]))
+}
+
+/** a row's margin: the nearest case on each side over its sites, in the rule's own units where any site has them (else in
+ *  the comparisons' slack) */
+export function marginOf(row) {
+  const ms = row.sites.map(s => s.margin).filter(Boolean)
+  if (!ms.length) return null
+  const units = ms.some(m => m.units === 'rule') ? 'rule' : 'slack'
+  const pick = side =>
+    ms
+      .filter(m => m.units === units)
+      .map(m => m[side])
+      .filter(Boolean)
+      .sort((a, b) => a.d - b.d)[0] ?? null
+  return { units, false: pick('false'), true: pick('true') }
+}
+
+/** the tracked ledger of a full record (`digest`: the full record's file's sha256; `map`: the site map, for the other
+ *  operand remap compares): per rule its line, kind, value (or the list's size and its entries' digest), verdict,
+ *  citation flag and papers, runs and each outcome's count per input, plain reads, the margin and its two nearest cases
+ *  (by paper, page, the run's ordinal, or a test by file and ordinal; numbers only), its list's hits by entry (in the
+ *  list's order) where they are what removes its entries, the tests that take each outcome by file and ordinal, the
+ *  sites to fold (their count) and, not exercised, its module's importers */
+export function trackedOf(full, { digest, map = null }) {
+  const index = testsOf(full)
+  const ordinal = new Map(Object.values(index).flatMap(names => names.map((t, i) => [t, i])))
+  const ref = t => [testFileOf(t), ordinal.get(t)]
+  const caseOf = c => (c ? { d: c.d, eff: c.eff, x: c.x, b: c.b, k: c.k, ...(c.paper ? { paper: c.paper } : {}), ...(c.page != null ? { page: c.page } : {}), ...(c.test ? { test: ref(c.test) } : {}) } : null)
+  const rules = {}
+  for (const [key, r] of Object.entries(full.rules)) {
+    const runs = {}
+    const reads = {}
+    for (const s of r.sites)
+      for (const [k, o] of Object.entries(s.outcomes)) {
+        if (s.kind === 'val') {
+          if (o.n) reads[k] = (reads[k] ?? 0) + o.n
+          continue
+        }
+        const x = (runs[k] ??= [0, 0, 0])
+        x[0] += o.n
+        x[1] += o.t
+        x[2] += o.f
+      }
+    const tests = {}
+    for (const side of ['false', 'true']) {
+      const names = new Set(r.sites.flatMap(s => s.tests?.[side] ?? []))
+      if (!names.size) continue
+      const byFile = {}
+      for (const t of names) (byFile[testFileOf(t)] ??= []).push(ordinal.get(t))
+      tests[side] = Object.fromEntries(
+        Object.keys(byFile)
+          .sort()
+          .map(f => [f, byFile[f].sort((a, b) => a - b)]),
+      )
+    }
+    const m = marginOf(r)
+    const other = map?.rules?.[key]?.other
+    rules[key] = {
+      line: r.line,
+      kind: r.kind,
+      ...(r.kind === 'list' ? { size: r.entries.length, entriesDigest: digestOf(r.entries) } : { value: r.value }),
+      ...(other ? { otherDigest: digestOf(other) } : {}),
+      verdict: r.verdict,
+      ...(r.citation.flag ? { cites: { flag: r.citation.flag, ...(r.citation.papers.length ? { papers: r.citation.papers } : {}) } } : {}),
+      ...(Object.keys(runs).length ? { runs } : {}),
+      ...(Object.keys(reads).length ? { reads } : {}),
+      ...(m ? { margin: { units: m.units, false: caseOf(m.false), true: caseOf(m.true) } } : {}),
+      ...(r.removeEntries ? { hits: r.entries.map(e => r.hits?.[e] ?? 0) } : {}),
+      ...(Object.keys(tests).length ? { tests } : {}),
+      ...(r.folds.length ? { folds: r.folds.length } : {}),
+      ...(r.module ? { module: r.module } : {}),
+    }
+  }
+  return {
+    format: TRACKED_FORMAT,
+    about:
+      "The rule ledger, tracked form (design-reduction 3c, 8.9): per census rule of the rule areas its verdict and what it rests on, nothing quoted: no comment, no list entry, no test's name. A test is named by its file and its ordinal there: its place among that file's tests the full record names, sorted by name; `margin` holds the nearest case each side over the rule's sites (numbers, the paper and page, k the run's ordinal at its site); `hits` count a list's entries in the list's order where they remove entries. The full record (every site, the comments, the tests by name, the inputs' papers) is kept outside the repository: `recorded.full` is its file's sha256; `node lab/rules/record.mjs trace --full=<it>` reads a row through it. Generated by `node lab/rules/record.mjs ledger`, never edited by hand.",
+    recorded: {
+      commit: full.recorded.commit,
+      sites: full.recorded.sites,
+      full: digest,
+      inputs: Object.fromEntries(Object.entries(full.recorded.inputs ?? {}).map(([k, v]) => [k, { records: v.records, papers: v.papers?.length ?? 0 }])),
+    },
+    holdoutAdds: full.holdoutAdds,
+    rules,
+  }
+}
+
+/** the tracked ledger's text: one rule a line, every character outside ASCII written as its escape (a key is the code's
+ *  own signature) */
+export function trackedText(tracked) {
+  const { rules, ...head } = tracked
+  const top = JSON.stringify(head, null, 1).replace(/\n}$/, '')
+  const lines = Object.entries(rules).map(([k, r]) => `  ${JSON.stringify(k)}: ${JSON.stringify(r)}`)
+  return `${top},\n "rules": {\n${lines.join(',\n')}\n }\n}\n`.replace(/[\u0080-￿]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
+}
+
+/** the tracked ledger read through the full record it names (the full record's file's text, checked against its digest):
+ *  per rule its verdict, the tests that take each outcome by name, and the margin's cases with their tests by name */
+export function resolveTracked(tracked, fullText) {
+  const digest = createHash('sha256').update(fullText).digest('hex')
+  if (digest !== tracked.recorded.full) throw new Error(`the full record's digest is ${digest}, the tracked ledger names ${tracked.recorded.full}`)
+  const index = testsOf(JSON.parse(fullText))
+  const nameOf = ([f, i]) => index[f]?.[i] ?? null
+  const caseOf = c => (c ? { ...c, ...(c.test ? { test: nameOf(c.test) } : {}) } : null)
+  const rules = {}
+  for (const [key, r] of Object.entries(tracked.rules))
+    rules[key] = {
+      verdict: r.verdict,
+      tests: Object.fromEntries(Object.entries(r.tests ?? {}).map(([side, byFile]) => [side, Object.entries(byFile).flatMap(([f, os]) => os.map(i => nameOf([f, i])))])),
+      margin: r.margin ? { units: r.margin.units, false: caseOf(r.margin.false), true: caseOf(r.margin.true) } : null,
+    }
+  return { rules }
 }
 
 /** what was recorded of a row, in words: per input its decisions (each outcome's count) and its plain reads */

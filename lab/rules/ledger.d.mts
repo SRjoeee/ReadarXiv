@@ -47,7 +47,36 @@ export interface Row {
   module?: { loaded: boolean | null; importers: string[] | null }
 }
 export interface Ledger { format: string; about: string; recorded: { commit: string | null; sites: string; inputs: Recording['inputs'] }; holdoutAdds: string[]; rules: Record<string, Row> }
+/** a test by its file and its ordinal there */
+export type TestRef = [string, number]
+export interface Case { d: number; eff: number; x: number; b: number; k: number; paper?: string; page?: number; test?: TestRef }
+export interface TrackedRow {
+  line: number
+  kind: 'threshold' | 'list'
+  value?: number
+  size?: number
+  entriesDigest?: string
+  otherDigest?: string
+  verdict: string
+  cites?: { flag: string; papers?: string[] }
+  runs?: Record<string, [number, number, number]>
+  reads?: Record<string, number>
+  margin?: { units: 'rule' | 'slack'; false: Case | null; true: Case | null }
+  hits?: number[]
+  tests?: { false?: Record<string, number[]>; true?: Record<string, number[]> }
+  folds?: number
+  module?: { loaded: boolean | null; importers: string[] | null }
+}
+export interface Tracked { format: string; about: string; recorded: { commit: string | null; sites: string; full: string; inputs: Record<string, { records: number; papers: number }> }; holdoutAdds: string[]; rules: Record<string, TrackedRow> }
+export interface Resolved { rules: Record<string, { verdict: string; tests: { false?: (string | null)[]; true?: (string | null)[] }; margin: { units: string; false: (Omit<Case, 'test'> & { test?: string | null }) | null; true: (Omit<Case, 'test'> & { test?: string | null }) | null } | null }> }
 export declare const LEDGER_FORMAT: string
+export declare const TRACKED_FORMAT: string
+export declare function digestOf(x: unknown): string
+export declare function testsOf(full: Ledger): Record<string, string[]>
+export declare function marginOf(row: Row): { units: 'rule' | 'slack'; false: Record<string, unknown> | null; true: Record<string, unknown> | null } | null
+export declare function trackedOf(full: Ledger, options: { digest: string; map?: SiteMap | null }): Tracked
+export declare function trackedText(tracked: Tracked): string
+export declare function resolveTracked(tracked: Tracked, fullText: string): Resolved
 export declare const OWN_INPUT: string
 export declare const VERDICTS: Record<string, { reason: boolean | null; says: string }>
 export declare function citationsOf(comment: string | null | undefined): Citation
