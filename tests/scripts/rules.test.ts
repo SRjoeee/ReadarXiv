@@ -411,13 +411,28 @@ const LOOKS_AHEAD = p => {
 }
 export const looks = p => LOOKS_AHEAD(p)
 `
+  // (lists read past their objects, and two the recorder sees: one copied into a Set, one tested by \`every\`)
+  const PAST = `// lists read past their objects
+const KINDS = ['para', 'cell', 'note']
+export const kindAt = i => KINDS[i]
+const WORDS = /(?:one|two|three)/
+const WORDS_G = new RegExp(WORDS.source, 'g')
+export const words = s => s.match(WORDS_G)?.length ?? 0
+const NAMES = ['alpha', 'beta', 'gamma']
+const NAME_SET = new Set(NAMES)
+export const named = s => NAME_SET.has(s)
+const ALL = ['red', 'green', 'blue']
+export const allIn = s => ALL.every(c => s.includes(c))
+`
   const RUN = `import { FORMS } from './packages/engine/src/forms.mjs'
 import { fits } from './packages/engine/src/table.mjs'
 import { looks } from './packages/engine/src/cited.mjs'
+import { kindAt, words, named, allIn } from './packages/engine/src/past.mjs'
 const out = {}
 for (const [k, f] of Object.entries(FORMS)) out[k] = [f('nothing here'), f('an alpha and a gamma')]
 out.fits = [fits('rg', [1, 2, 3]), fits('cmyk', [1, 2])]
 out.looks = [looks('a \\\\protect'), looks('plain')]
+out.past = [kindAt(1), words('one two'), named('beta'), named('zeta'), allIn('red green'), allIn('red green blue')]
 console.log(JSON.stringify(out))
 `
   beforeAll(() => {
@@ -427,6 +442,7 @@ console.log(JSON.stringify(out))
     put('packages/engine/src/forms.mjs', FORMS)
     put('packages/engine/src/table.mjs', TABLE)
     put('packages/engine/src/cited.mjs', CITED)
+    put('packages/engine/src/past.mjs', PAST)
     put('run-blind.mjs', RUN)
     map = siteMapOfCheckout(tree)
     writeFileSync(join(tree, 'sites.json'), JSON.stringify(map))
@@ -466,6 +482,20 @@ console.log(JSON.stringify(out))
   ])('defect 1: %s records a text with no match as one false, a text with matches as one true', (name, hits) => {
     const r = siteRecord(`::(top)::${name}#1`)
     expect(r && { n: r.n, t: r.t, f: r.f, hits: r.hits }).toEqual({ n: 2, t: 1, f: 1, hits })
+  })
+
+  it('reads a list read past its object (an index, a pattern made of its source) as not judged, never removed', () => {
+    expect(ledger.rules[keyOf('past::(top)::KINDS#1')]).toMatchObject({ verdict: 'not judged', unseen: ['index packages/engine/src/past.mjs:3'] })
+    expect(ledger.rules[keyOf('past::(top)::WORDS#1')]).toMatchObject({ verdict: 'not judged', listReads: { source: 1 } })
+  })
+  it("reads a list copied into a Set by the Set's tests, and an `every` by the entry it stopped at", () => {
+    expect(siteRecord('past::(top)::NAMES#1')).toMatchObject({ n: 2, t: 1, f: 1, hits: { beta: 1 } })
+    expect(siteRecord('past::(top)::NAMES#1')?.reads).toBeNull()
+    expect(ledger.rules[keyOf('past::(top)::NAMES#1')]).toMatchObject({ verdict: 'decides', removeEntries: ['alpha', 'gamma'] })
+    // (allIn('red green') stops at blue; allIn('red green blue') holds for all three, decided by none: red and green alone
+    // taken away, both calls answer as they did)
+    expect(siteRecord('past::(top)::ALL#1')).toMatchObject({ n: 2, t: 1, f: 1, hits: { blue: 1 } })
+    expect(ledger.rules[keyOf('past::(top)::ALL#1')]).toMatchObject({ removeEntries: ['red', 'green'] })
   })
 
   // defect 3: a table read by a computed key (`ARITY[op]`) had no site, and every entry read "read nowhere": removed

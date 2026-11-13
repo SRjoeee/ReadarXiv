@@ -19,6 +19,7 @@ export interface Recorder {
   ls<T>(id: number, arr: T): T
   st<T>(id: number, set: T): T
   re<T>(id: number, rx: T): T
+  hush(...sources: unknown[]): void
   ns<T>(set: T, ...sources: unknown[]): T
   loaded(path: string): void
   context(next: { paper?: string | null; test?: string | null; file?: string | null; page?: number | null }): void

@@ -115,7 +115,7 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
   for (const id of AREA_IDS) {
     const n = rows.filter(r => r.area === id && r.verdict === 'not judged')
     if (!n.length) continue
-    L.push(`### Area ${id}: ${n.length}`, '', ...n.map(r => `- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}): ${Object.entries(readsOf(r.sites)).map(([k, v]) => `${k} ${v}`).join(', ')}`), '')
+    L.push(`### Area ${id}: ${n.length}`, '', ...n.map(r => `- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}): ${Object.entries(readsOf(r.sites)).map(([k, v]) => `${k} ${v}`).join(', ')}${r.unseen?.length ? `${Object.keys(readsOf(r.sites)).length ? '; ' : ''}read where the recorder cannot see: ${r.unseen.join(', ')}` : ''}`), '')
   }
 
   // by file: every row

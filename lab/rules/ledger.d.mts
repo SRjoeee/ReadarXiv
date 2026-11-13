@@ -42,6 +42,7 @@ export interface Row {
   hits?: Record<string, number>
   reads?: number
   listReads?: Record<string, number>
+  unseen?: string[]
   handedWhole?: number
   foldedToValue?: boolean
   module?: { loaded: boolean | null; importers: string[] | null }

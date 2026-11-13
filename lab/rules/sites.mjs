@@ -418,8 +418,101 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS, keysOnl
       const sources = a.type === 'ArrayExpression' ? a.elements.filter(e => e?.type === 'SpreadElement').map(e => e.argument) : [a]
       const plain = sources.filter(s => s.type === 'Identifier' || (s.type === 'MemberExpression' && !s.computed && s.object.type === 'Identifier'))
       if (!plain.length) return
-      edits.get(path).push({ at: n.start, end: n.end, pre: '__axtRules.ns(', post: `, ${plain.map(s => text.slice(s.start, s.end)).join(', ')})` })
+      // (the making iterates each list it is made of once: hushed, so that a list copied into a Set reads as the Set's
+      // membership tests, not as iterated)
+      const named = plain.map(s => text.slice(s.start, s.end)).join(', ')
+      edits.get(path).push({ at: n.start, end: n.end, pre: `__axtRules.ns((__axtRules.hush(${named}), `, post: `), ${named})` })
     })
+  }
+
+  // (5) the lists' reads the recorder cannot see. The recorder sees a list through its object: every method of an array, a
+  // Set or a pattern, its iteration, a string's methods that consume a pattern, wherever the object is handed. What reads the
+  // entries without the object's methods is not seen: an entry read by its index (`L[i]`), the platform copying the entries
+  // (`JSON.stringify(L)`, `structuredClone(L)`, `Object.values(L)` and Object's and Reflect's other readers but freeze,
+  // `X.concat(L)`, a method borrowed onto it (`Array.prototype.includes.call(L, x)`, `.apply(L, …)`), a pattern made of it
+  // (`new RegExp(L)`). Each such read of a list's binding (its module's, and through every import of it) or of the literal
+  // itself is noted on the rule (`unseen`): its entries cannot be judged by their hits (ledger.mjs: not judged)
+  const unseenOf = (ref, ps) => {
+    let child = ref
+    let i = ps.length - 1
+    while (i >= 0 && (ps[i].type === 'ParenthesizedExpression' || TS_EXPRESSION.has(ps[i].type))) child = ps[i--]
+    const p = ps[i]
+    if (!p) return null
+    if ((p.type === 'MemberExpression' || p.type === 'OptionalMemberExpression') && p.object === child && p.computed && p.property.type !== 'StringLiteral') return 'index'
+    if (!/^(?:Call|OptionalCall|New)Expression$/.test(p.type) || !p.arguments.includes(child)) return null
+    const c = p.callee
+    if (c.type === 'Identifier' && (c.name === 'RegExp' || c.name === 'structuredClone')) return c.name
+    if (c.type !== 'MemberExpression' || c.computed) return null
+    const m = c.property.name
+    const o = c.object.type === 'Identifier' ? c.object.name : null
+    if (o === 'JSON' || o === 'Reflect' || (o === 'Object' && m !== 'freeze' && m !== 'isFrozen')) return `${o}.${m}`
+    if (m === 'concat' || ((m === 'call' || m === 'apply') && p.arguments[0] === child)) return m
+    return null
+  }
+  // (a list's binding: `const NAME = <literal>`, through `new Set(…)`, `Object.freeze(…)`, a cast or parentheses)
+  const bindingOf = (node, ps) => {
+    let holder = node
+    let i = ps.length - 1
+    const through = () => {
+      while (i >= 0 && (ps[i].type === 'ParenthesizedExpression' || TS_EXPRESSION.has(ps[i].type))) holder = ps[i--]
+    }
+    through()
+    if (ps[i]?.type === 'NewExpression' && ps[i].callee?.name === 'Set' && ps[i].arguments[0] === holder) holder = ps[i--]
+    through()
+    if (ps[i]?.type === 'CallExpression' && ps[i].callee?.type === 'MemberExpression' && ps[i].callee.object?.name === 'Object' && ps[i].callee.property?.name === 'freeze' && ps[i].arguments[0] === holder) holder = ps[i--]
+    through()
+    const d = ps[i]
+    if (d?.type !== 'VariableDeclarator' || d.init !== holder || d.id.type !== 'Identifier') return { holder, at: i }
+    const scope = ps.slice(0, i).findLast(p => FUNCTION.has(p.type)) ?? null
+    return { holder, at: i, name: d.id.name, decl: d, scope }
+  }
+  const readsOfName = (root, name, decl, note) => {
+    const shadowed = new Map()
+    walk(root, (n, ps) => {
+      if (n.type !== 'Identifier' || n.name !== name || n === decl?.id) return
+      const par = ps.at(-1)
+      if ((par?.type === 'MemberExpression' || par?.type === 'OptionalMemberExpression') && par.property === n && !par.computed) return
+      if (/^(?:ObjectProperty|ClassProperty|ObjectMethod|ClassMethod)$/.test(par?.type ?? '') && par.key === n && !par.computed && !par.shorthand) return
+      if (/Specifier$/.test(par?.type ?? '') || (par?.type === 'VariableDeclarator' && par.id === n)) return
+      const inner = ps.filter(p => FUNCTION.has(p.type) && p !== root)
+      if (
+        inner.some(p => {
+          if (!shadowed.has(p)) shadowed.set(p, declaredIn(p))
+          return shadowed.get(p).has(name)
+        })
+      )
+        return
+      note(n, ps)
+    })
+  }
+  for (const { path, rule, node } of listRules) {
+    const f = fileOf(path)
+    const ps = parentsOf.get(node) ?? []
+    const found = []
+    const note = file => (n, nps) => {
+      const form = unseenOf(n, nps)
+      if (form) found.push(`${form} ${file}:${lineOf(n)}`)
+    }
+    const b = bindingOf(node, ps)
+    if (!b.name) {
+      const form = unseenOf(b.holder, ps.slice(0, b.at + 1))
+      if (form) found.push(`${form} ${path}:${lineOf(b.holder)}`)
+    } else {
+      readsOfName(b.scope ?? f.ast.program, b.name, b.decl, note(path))
+      // (a module's own binding, read where it is imported: by name, or as a namespace's member)
+      if (!b.scope)
+        for (const [p2, f2] of files) {
+          if (p2 === path) continue
+          const { named, spaces } = importsOf(p2, f2)
+          for (const [local, d] of named) if (d.path === path && d.name === b.name) readsOfName(f2.ast.program, local, null, note(p2))
+          for (const [ns, to] of spaces)
+            if (to === path)
+              walk(f2.ast.program, (n, nps) => {
+                if (n.type === 'MemberExpression' && !n.computed && n.object.type === 'Identifier' && n.object.name === ns && n.property.name === b.name) note(p2)(n, nps)
+              })
+        }
+    }
+    if (found.length) rule.unseen = [...new Set(found)].sort()
   }
 
   const out = { rules, sites, files: {} }

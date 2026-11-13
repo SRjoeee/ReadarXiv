@@ -155,7 +155,9 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
     const reads = sum(vals.map(s => ({ n: sum(Object.values(s.outcomes), 'n') })), 'n')
     const cite = citationsOf(rule.comment)
     const exempt = cite.flag && cite.flag !== 'tuned'
-    const listReads = sum(deciding.map(s => ({ n: Object.values(s.reads ?? {}).reduce((x, y) => x + y, 0) })), 'n')
+    // (a list's reads: those the recorder saw (iterated, joined, mapped, its pattern's source read) and those it cannot see,
+    // which the site map names (sites.mjs `unseen`: an entry read by its index, a copy the platform makes))
+    const listReads = sum(deciding.map(s => ({ n: Object.values(s.reads ?? {}).reduce((x, y) => x + y, 0) })), 'n') + (rule.unseen?.length ?? 0)
     const row = {
       key,
       file: rule.file,
@@ -196,7 +198,8 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
         if (rule.class === 'defined' || exempt) row.entriesExempt = true
         else row.removeEntries = rule.entries.filter(e => !hits[e])
       }
-      if (row.verdict === 'not judged') row.listReads = readsOf(deciding)
+      if (row.verdict === 'not judged') row.listReads = { ...readsOf(deciding), ...(rule.unseen?.length ? { unseen: rule.unseen.length } : {}) }
+      if (rule.unseen?.length) row.unseen = rule.unseen
     } else if (!sites.length) {
       // (a table entry handed whole is read where it is handed; one read nowhere is never read)
       row.verdict = rule.wholeReads ? (exempt && cite.flag !== 'paper' ? 'value' : 'magnitude') : exempt ? cited() : 'remove'
