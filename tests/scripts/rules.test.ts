@@ -357,6 +357,131 @@ describe('the ledger in two forms', () => {
   })
 })
 
+describe("the recorder's blind sides (lane r5b-front's probes, 2026-11-13)", () => {
+  // (a tree of its own: a pattern read each way a pattern is consumed, one pattern a way; a table read by a computed key; a
+  // pattern inside a predicate whose declaration's comment cites a paper; a runner that hands each a text with no match, then
+  // a text with two)
+  let tree = ''
+  let map: ReturnType<typeof siteMapOfCheckout>
+  let rec: ReturnType<typeof mergeRecords>
+  let ledger: Ledger
+  const put = (path: string, text: string) => {
+    mkdirSync(dirname(join(tree, path)), { recursive: true })
+    writeFileSync(join(tree, path), text)
+  }
+  const ALT = '/(?:alpha|beta|gamma)/'
+  const FORMS = `// each way a pattern is consumed, a pattern a way
+const BY_TEST = ${ALT}
+const BY_EXEC = ${ALT}
+const BY_MATCH = ${ALT}
+const BY_MATCH_G = ${ALT}g
+const BY_REPLACE = ${ALT}
+const BY_REPLACE_G = ${ALT}g
+const BY_REPLACE_ALL = ${ALT}g
+const BY_MATCH_ALL = ${ALT}g
+const BY_SPREAD = ${ALT}g
+const BY_SEARCH = ${ALT}
+const BY_SPLIT = ${ALT}
+export const FORMS = {
+  test: s => BY_TEST.test(s),
+  exec: s => BY_EXEC.exec(s)?.[0] ?? null,
+  match: s => s.match(BY_MATCH)?.[0] ?? null,
+  matchG: s => (s.match(BY_MATCH_G) ?? []).join(','),
+  replace: s => s.replace(BY_REPLACE, '_'),
+  replaceG: s => s.replace(BY_REPLACE_G, '_'),
+  replaceAll: s => s.replaceAll(BY_REPLACE_ALL, '_'),
+  matchAll: s => {
+    const at = []
+    for (const m of s.matchAll(BY_MATCH_ALL)) at.push(m.index)
+    return at.join(',')
+  },
+  spread: s => [...s.matchAll(BY_SPREAD)].length,
+  search: s => s.search(BY_SEARCH),
+  split: s => s.split(BY_SPLIT).join('|'),
+}
+`
+  const TABLE = `// the operands each colour operator takes
+const ARITY = { rg: 3, k: 4, rgb: 3, cmyk: 4 }
+export const fits = (op, nums) => nums.length === ARITY[op]
+`
+  const CITED = `/** a placeholder whose macro may look at what follows it: \\\\protect\\\\eqref, as 2608.23586 writes it */
+const LOOKS_AHEAD = p => {
+  const n = p.length
+  return n > 0 && /\\\\(?:xspace|protect|noexpand|expandafter)$/.test(p)
+}
+export const looks = p => LOOKS_AHEAD(p)
+`
+  const RUN = `import { FORMS } from './packages/engine/src/forms.mjs'
+import { fits } from './packages/engine/src/table.mjs'
+import { looks } from './packages/engine/src/cited.mjs'
+const out = {}
+for (const [k, f] of Object.entries(FORMS)) out[k] = [f('nothing here'), f('an alpha and a gamma')]
+out.fits = [fits('rg', [1, 2, 3]), fits('cmyk', [1, 2])]
+out.looks = [looks('a \\\\protect'), looks('plain')]
+console.log(JSON.stringify(out))
+`
+  beforeAll(() => {
+    tree = mkdtempSync(join(tmpdir(), 'axt-rules-blind-'))
+    put('package.json', JSON.stringify({ name: 'blind', type: 'module' }))
+    put('packages/engine/package.json', JSON.stringify({ name: '@x/engine', type: 'module', exports: { '.': './src/forms.mjs' } }))
+    put('packages/engine/src/forms.mjs', FORMS)
+    put('packages/engine/src/table.mjs', TABLE)
+    put('packages/engine/src/cited.mjs', CITED)
+    put('run-blind.mjs', RUN)
+    map = siteMapOfCheckout(tree)
+    writeFileSync(join(tree, 'sites.json'), JSON.stringify(map))
+    const out = join(tree, 'records')
+    const env = { ...process.env, AXT_RULES_SITES: join(tree, 'sites.json'), AXT_RULES_OUT: out, AXT_RULES_ROOT: tree, AXT_RULES_PAPER: '2401.00009v1', AXT_RULES_INPUT: 'corpus' }
+    const plain = execFileSync(process.execPath, ['run-blind.mjs'], { cwd: tree, encoding: 'utf8' })
+    const recorded = execFileSync(process.execPath, ['--import', join(ROOT, 'lab/rules/register.mjs'), 'run-blind.mjs'], { cwd: tree, encoding: 'utf8', env })
+    if (recorded !== plain) throw new Error(`the instrument changed the output:\n${plain}\n${recorded}`)
+    rec = mergeRecords(map, [out])
+    ledger = ledgerOf(map, rec)
+  })
+  afterAll(() => rmSync(tree, { recursive: true, force: true }))
+  const keyOf = (suffix: string) => must(Object.keys(map.rules).find(k => k.endsWith(suffix)), `rule ${suffix} among ${Object.keys(map.rules).join(' ')}`)
+  const siteRecord = (suffix: string) => {
+    const id = must(map.rules[keyOf(suffix)]?.sites.find(s => map.sites[s]?.kind !== 'val'), `a site of ${suffix}`)
+    return rec.sites.corpus?.[String(id)] ?? null
+  }
+
+  // defect 1: a pattern read by matchAll recorded each match and never a text with no match; `[...text.matchAll(re)]` over a
+  // text with no match recorded nothing. Every way a pattern is consumed records one outcome a text it is handed: false where
+  // the text holds no match, true where it holds one, and a hit for each match it reads (a pattern without `g` reads the
+  // first match alone)
+  const ONE = { alpha: 1 }
+  const BOTH = { alpha: 1, gamma: 1 }
+  it.each([
+    ['BY_TEST', ONE],
+    ['BY_EXEC', ONE],
+    ['BY_MATCH', ONE],
+    ['BY_MATCH_G', BOTH],
+    ['BY_REPLACE', ONE],
+    ['BY_REPLACE_G', BOTH],
+    ['BY_REPLACE_ALL', BOTH],
+    ['BY_MATCH_ALL', BOTH],
+    ['BY_SPREAD', BOTH],
+    ['BY_SEARCH', ONE],
+    ['BY_SPLIT', BOTH],
+  ])('defect 1: %s records a text with no match as one false, a text with matches as one true', (name, hits) => {
+    const r = siteRecord(`::(top)::${name}#1`)
+    expect(r && { n: r.n, t: r.t, f: r.f, hits: r.hits }).toEqual({ n: 2, t: 1, f: 1, hits })
+  })
+
+  // defect 3: a table read by a computed key (`ARITY[op]`) had no site, and every entry read "read nowhere": removed
+  it('defect 3: a table read by a computed key records the entry it read; an entry no run read is never hit', () => {
+    const verdict = (entry: string) => ledger.rules[keyOf(`::(top)::ARITY.${entry}`)]?.verdict
+    expect(['rg', 'cmyk', 'k', 'rgb'].map(verdict)).toEqual(['decides', 'decides', 'remove', 'remove'])
+  })
+
+  // defect 4: a pattern's citation was read off the statement it stands in (here a `return`, which has no comment), not off
+  // the declaration that holds it, whose comment cites a paper
+  it('defect 4: a citation is read from the comment on the declaration that holds the rule', () => {
+    const key = must(Object.keys(map.rules).find(k => k.startsWith('packages/engine/src/cited::') && map.rules[k]?.kind === 'list'), 'the pattern of cited.mjs')
+    expect(ledger.rules[key]?.citation).toMatchObject({ flag: 'paper', papers: ['2608.23586'] })
+  })
+})
+
 describe('a module no input exercises', () => {
   // (a tree of its own: `used.ts` the runner imports and calls once, one way; `spare.ts` only `reader.ts` imports, which
   // no input loads)

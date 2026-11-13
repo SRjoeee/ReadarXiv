@@ -123,6 +123,21 @@ describe('the classifier', () => {
     expect(rowOf(l, 'DEFINED')).toMatchObject({ verdict: 'decides', entriesExempt: true })
     expect(rowOf(l, 'DEFINED').removeEntries).toBeUndefined()
   })
+  // defect 2 (lane r5b-front, 2026-11-13): a list was judged by its outcomes like a comparison, so a list that always
+  // matched read "one outcome" and was marked `remove`; folded to true it would match everything. Section 3c judges a list
+  // by its entries' hits: hit on the corpus, it stays and its unhit entries go; hit only by a test of our own, the test is
+  // its reason; no hit anywhere, it goes with its rule
+  it('defect 2: judges a list by its entries\' hits, never by its outcomes alone', () => {
+    const lists = made({
+      ALWAYS: { kind: 'list', entries: ['a', 'b', 'c'], sites: [{ kind: 're', per: { corpus: n(4, 0, { hits: { a: 3, b: 1 } }) } }] },
+      ONCE: { kind: 'list', entries: ['a', 'b', 'c'], sites: [{ kind: 're', per: { tests: n(1, 0, { hits: { b: 1 } }) } }] },
+      NEVER_HIT: { kind: 'list', entries: ['a', 'b', 'c'], sites: [{ kind: 'set', per: { corpus: n(0, 4) } }] },
+    })
+    const ll = ledgerOf(lists.map, lists.recording)
+    expect(rowOf(ll, 'ALWAYS')).toMatchObject({ verdict: 'decides', removeEntries: ['c'] })
+    expect(rowOf(ll, 'ONCE')).toMatchObject({ verdict: 'test', removeEntries: ['a', 'c'] })
+    expect(rowOf(ll, 'NEVER_HIT').verdict).toBe('remove')
+  })
   it('says what was recorded, in words', () => {
     expect(recordedOf(rowOf(l, 'FOLDED_READ'))).toBe('corpus: 2 runs, 2 true, 0 false, read 1')
     expect(recordedOf(rowOf(l, 'NEVER'))).toBe('never ran on any input')
