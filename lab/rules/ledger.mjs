@@ -59,6 +59,7 @@ export const VERDICTS = {
   magnitude: { reason: null, says: 'a magnitude with no stated source: reported beside the unmeasured budgets, not counted as a decision' },
   'not judged': { reason: null, says: "a list used otherwise than by membership: entries not judged (R6's)" },
   'cited paper silent': { reason: false, says: 'its cited paper was recorded in the holdout and it decided nothing there: a removal candidate' },
+  budget: { reason: null, says: 'a bound on a quantity the code grows itself (a counter, a depth passed on increased, a length it adds to, a clock) whose passing only stops the work: kept, never removed; its unit and source are R5e\'s (listed beside the unmeasured budgets)' },
   'not exercised': { reason: false, says: 'its module ran no site on any input (no input imports or calls it): the recording cannot judge it; the report names what would exercise it' },
   remove: { reason: false, says: 'decides nothing on any input, and cites nothing that exempts it: removed' },
 }
@@ -281,6 +282,14 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
           const n = keySites.reduce((x, s, k) => x + (per[s.id]?.hits?.[own[k]] ?? 0), 0)
           if (n) row.keyReads[input] = n
         }
+      }
+      // (a budget: every deciding site of it a bound on a quantity the code grows itself, whose passing only stops the work
+      // (sites.mjs budgetOf); one that never bound is still a bound: `budget`, never folded, never removed)
+      const budgets = deciding.map(s => map.sites[s.id].bounds.find(b => b.rule === key)?.budget)
+      if (deciding.length && !keySites.length && budgets.every(Boolean)) {
+        row.budget = [...new Map(budgets.map(b => [`${b.quantity}\u0000${b.stops}`, b])).values()]
+        if (row.verdict === 'remove' || row.verdict === 'magnitude' || row.verdict === 'value') row.verdict = 'budget'
+        row.folds = []
       }
     }
     // (a cited paper silent in the holdout is a removal candidate: its sites fold like any other's)

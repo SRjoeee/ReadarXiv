@@ -37,7 +37,7 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
   if (profile) L.push(`> **A PROFILE, NOT THE YIELD.** ${profile}`, '')
   L.push(`Recorded at ${ledger.recorded.commit ?? 'an unknown commit'} over the site map ${ledger.recorded.sites}; inputs: ${inputs || 'none'}. Rows: the census's rules of the rule areas the cut-over keeps (${rows.length}; ${cut} more in modules the cut-over deletes, not reported). A margin never decides a removal: removal follows from one outcome or never run alone (lab/rules/ledger.mjs).`, '')
   L.push('## The yield', '', 'Per area: the rules, then each verdict\'s count; to remove: the rules that go whole; sites to fold: the comparisons of rules that stay that saw one outcome or never ran; entries: list entries with no hit.', '')
-  const V = ['decides', 'test', 'definition', 'cited paper', 'measurement', 'value', 'magnitude', 'not judged', 'not exercised', 'cited paper silent', 'remove']
+  const V = ['decides', 'test', 'definition', 'cited paper', 'measurement', 'value', 'magnitude', 'budget', 'not judged', 'not exercised', 'cited paper silent', 'remove']
   L.push(`| Area | Rules (thresholds, lists) | ${V.join(' | ')} | Sites to fold | Entries to remove |`, `|---|---|${V.map(() => '---').join('|')}|---|---|`)
   for (const id of AREA_IDS) {
     const c = counts[id]
@@ -82,6 +82,13 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
       }
     for (const r of entries) L.push(`- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}): ${r.removeEntries.length} of ${(r.judged ?? r.entries).length} entries with no hit: ${r.removeEntries.join(', ')}${r.entriesNotJudged?.length ? `; not judged: ${r.entriesNotJudged.map(x => `${x.entry} (${x.why})`).join(', ')}` : ''}`)
     L.push('')
+  }
+  // the budgets: each with its bound and what passing it stops (sites.mjs budgetOf); kept, their units and sources R5e's
+  L.push('## Budgets (a bound on a quantity the code grows itself whose passing only stops the work: kept, never removed)', '', "Each: the rule's bound, the quantity it bounds, what passing it stops (a loop ends, an exit, nothing more added); its verdict where the recording shows it binding (decides, test), else budget. Its unit and source: R5e's.", '')
+  for (const id of AREA_IDS) {
+    const b = rows.filter(r => r.area === id && r.budget?.length)
+    if (!b.length) continue
+    L.push(`### Area ${id}: ${b.length}`, '', ...b.map(r => `- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}) = ${r.value}: ${r.budget.map(x => `\`${cell(x.quantity)}\`, ${x.stops}`).join('; ')}; ${r.verdict}; inputs: ${exercisedBy(r)}`), '')
   }
   // the magnitudes, beside the unmeasured budgets
   const unmeasured = {}

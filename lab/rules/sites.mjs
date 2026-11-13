@@ -154,6 +154,86 @@ const heldBy = (held, value) => {
   return { holder: { name: held.name, lines: held.lines, read }, adds: read ? held.comment : '' }
 }
 
+// ---- budgets (the coordinator's ruling of 2026-11-14). A BUDGET SITE is a comparison of a quantity the code grows itself
+// against the rule's bound, where passing the bound only STOPS the work:
+// - the quantity: a variable, or its `.length` / `.size` / `.byteLength`, that the scope declaring it grows (`++`, `+=`, an
+//   assignment whose value holds it plus a number, `.push`, `.add`, `.set`, `.unshift`, a call handed it plus a number (a
+//   depth passed on increased), an assignment inside the loop the comparison guards); or an expression holding a clock's
+//   reading (`performance.now()`, `Date.now()`);
+// - the stop: the comparison (alone, or a conjunct) is the test of a loop that runs while the quantity is under the bound;
+//   or (alone, or a disjunct) the test of an `if` with no `else`, the quantity past the bound, whose branch ends in return,
+//   throw, break or continue; or the test, the quantity under the bound, of an `if` with no `else` whose branch adds to that
+//   same quantity. A clamp, a floor, a flush, or a branch that computes something else is none.
+const LOOPS = new Set(['WhileStatement', 'DoWhileStatement', 'ForStatement'])
+const EXITS = new Set(['ReturnStatement', 'ThrowStatement', 'BreakStatement', 'ContinueStatement'])
+const APPENDS = ['push', 'add', 'set', 'unshift']
+const bare = n => {
+  while (n && (n.type === 'ParenthesizedExpression' || TS_EXPRESSION.has(n.type))) n = n.expression
+  return n
+}
+const quantityOf = q => {
+  q = bare(q)
+  if (q?.type === 'Identifier') return q.name
+  if (q?.type === 'MemberExpression' && !q.computed && ['length', 'size', 'byteLength'].includes(q.property.name) && bare(q.object)?.type === 'Identifier') return bare(q.object).name
+  return null
+}
+const holds = (root, test) => {
+  let yes = false
+  walk(root, n => {
+    if (!yes && test(n)) yes = true
+  })
+  return yes
+}
+const isClock = n => n.type === 'CallExpression' && n.callee?.type === 'MemberExpression' && ((n.callee.object?.name === 'performance' && n.callee.property?.name === 'now') || (n.callee.object?.name === 'Date' && n.callee.property?.name === 'now'))
+const plusOf = (e, name) => holds(e, n => n.type === 'BinaryExpression' && n.operator === '+' && bare(n.left)?.name === name && n.right.type === 'NumericLiteral')
+const appendsTo = (root, name) => holds(root, n => n.type === 'CallExpression' && n.callee?.type === 'MemberExpression' && APPENDS.includes(n.callee.property?.name) && bare(n.callee.object)?.name === name)
+/** whether `scope` grows `name` itself (`loop`: an assignment inside it counts) */
+const grows = (scope, name, loop) => {
+  let yes = false
+  walk(scope, (n, ps) => {
+    if (yes) return false
+    if (n.type === 'UpdateExpression' && bare(n.argument)?.name === name) yes = true
+    else if (n.type === 'AssignmentExpression' && bare(n.left)?.name === name && (n.operator !== '=' || plusOf(n.right, name) || (loop && ps.includes(loop)))) yes = true
+    else if ((n.type === 'CallExpression' || n.type === 'NewExpression') && n.arguments.some(a => a.type === 'BinaryExpression' && a.operator === '+' && bare(a.left)?.name === name && a.right.type === 'NumericLiteral')) yes = true
+  })
+  return yes || appendsTo(scope, name)
+}
+/** the scope that declares `name`, from the comparison outward: a function whose parameters or body declare it, else the module */
+const declaringScope = (ps, name, program) => {
+  for (let i = ps.length - 1; i >= 0; i--) {
+    const p = ps[i]
+    if (!FUNCTION.has(p.type)) continue
+    if (p.params.some(x => bare(x.type === 'AssignmentPattern' ? x.left : x)?.name === name) || holds(p.body, n => n.type === 'VariableDeclarator' && n.id.type === 'Identifier' && n.id.name === name)) return p
+  }
+  return program
+}
+/** a comparison `node` (its parents `ps`, the rule's operand at `at`) as a budget site: `{ quantity, stops }`, or null */
+const budgetOf = (f, node, ps, at) => {
+  if (node.type !== 'BinaryExpression' || !REL[node.operator]) return null
+  const q = at === 'left' ? node.right : node.left
+  const under = (node.operator === '<' || node.operator === '<=') === (at !== 'left')
+  let child = node
+  let i = ps.length - 1
+  const ops = new Set()
+  while (i >= 0 && (ps[i].type === 'LogicalExpression' || ps[i].type === 'ParenthesizedExpression')) {
+    if (ps[i].type === 'LogicalExpression') ops.add(ps[i].operator)
+    child = ps[i--]
+  }
+  const p = ps[i]
+  const name = quantityOf(q)
+  const clock = !name && holds(q, isClock)
+  if (!name && !clock) return null
+  const scope = name ? declaringScope(ps, name, f.ast.program) : null
+  const quantity = f.text.slice(q.start, q.end)
+  if (p && LOOPS.has(p.type) && p.test === child && !ops.has('||') && under && (clock || grows(scope, name, p))) return { quantity, stops: 'a loop' }
+  if (p?.type !== 'IfStatement' || p.test !== child || p.alternate) return null
+  const body = p.consequent
+  const exits = body?.type === 'BlockStatement' ? EXITS.has(body.body.at(-1)?.type) : EXITS.has(body?.type)
+  if (!under && !ops.has('&&') && exits && (clock || grows(scope, name, null))) return { quantity, stops: 'an exit' }
+  if (under && !ops.has('||') && name && appendsTo(body, name)) return { quantity, stops: 'adding to it' }
+  return null
+}
+
 /** the sites of a tree: `scan` a census scan read with `nodes` for these files (census-lib scanTree), `graph` its import
  *  graph (graphOf), `alive` the ids AFTER keeps (or null: unknown). Returns `{ rules, sites, files, keyOfItem }`: rules
  *  keyed as `keyed` says, sites numbered across the tree, each file's edits, and (not for JSON) each census item's key by
@@ -338,7 +418,8 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS, keysOnl
         continue
       }
       const at = t.context === 'comparison' ? (t.nodes.site.left === t.nodes.literal ? 'left' : 'right') : t.nodes.site.arguments.indexOf(t.nodes.literal)
-      bind(site, rule, { at, shape: 'direct', value: t.value })
+      const budget = site.kind === 'cmp' ? budgetOf(f, t.nodes.site, ps, at) : null
+      bind(site, rule, { at, shape: 'direct', value: t.value, ...(budget ? { budget } : {}) })
     }
 
   // (2) the constants' references, in their module and in every module that imports them
@@ -484,7 +565,8 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS, keysOnl
         rule.unsited = 'a form the instrument does not wrap (a spread argument, an optional call)'
         return false
       }
-      bind(site, rule, { at: use.at, shape: use.shape, value: rule.value })
+      const budget = use.kind === 'cmp' ? budgetOf(f, use.node, use.ps, use.at) : null
+      bind(site, rule, { at: use.at, shape: use.shape, value: rule.value, ...(budget ? { budget } : {}) })
       return false
     })
   }

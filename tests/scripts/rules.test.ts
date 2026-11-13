@@ -459,11 +459,54 @@ export const plain = s => NOT.test(s)
 const MANY = /(?:one|two|three)+/g
 export const many = s => (s.match(MANY) ?? []).join(',')
 `
+  // (bounds on work: three budgets (an exit past a counter, a loop's cap its loop ends without, a cap on a list it appends
+  // to) and three that are none (a clamp, an input's own length, a flush))
+  const WORK = `// bounds on work
+const SLOT_WORK = 5000
+export const search = xs => {
+  let work = 0
+  for (const x of xs) {
+    work += x
+    if (work > SLOT_WORK) return false
+  }
+  return true
+}
+export const passes = s => {
+  for (let pass = 0; pass < 4; pass++) {
+    const t = s.replace('aa', 'a')
+    if (t === s) break
+    s = t
+  }
+  return s
+}
+const SAMPLES = 3
+export const sample = xs => {
+  const out = []
+  for (const x of xs) if (out.length < SAMPLES) out.push(x)
+  return out
+}
+export const clamp = w => Math.min(w, 40)
+export const short = s => s.length < 3
+const FLUSH_EVERY = 5
+export const buffer = xs => {
+  const w = []
+  let n = 0
+  for (const x of xs) {
+    w.push(x)
+    if (w.length >= FLUSH_EVERY) {
+      n++
+      w.splice(0)
+    }
+  }
+  return n
+}
+`
   const RUN = `import { FORMS } from './packages/engine/src/forms.mjs'
 import { fits, kern } from './packages/engine/src/table.mjs'
 import { looks, marks } from './packages/engine/src/cited.mjs'
 import { kindAt, words, named, allIn } from './packages/engine/src/past.mjs'
 import { known, part, plain, many } from './packages/engine/src/entries.mjs'
+import { search, passes, sample, clamp, short, buffer } from './packages/engine/src/work.mjs'
 const out = {}
 for (const [k, f] of Object.entries(FORMS)) out[k] = [f('nothing here'), f('an alpha and a gamma')]
 out.fits = [fits('rg', [1, 2, 3]), fits('cmyk', [1, 2]), kern('\\\\enspace'), kern('\\\\quad')]
@@ -471,6 +514,7 @@ out.looks = [looks('a \\\\protect'), looks('plain')]
 out.marks = marks(0.001)
 out.past = [kindAt(1), words('one two'), named('beta'), named('zeta'), allIn('red green'), allIn('red green blue')]
 out.entries = [known('WinAnsiEncoding'), known('StandardEncoding'), known('Other'), part('section 2'), plain('quux'), plain('foo'), many('onetwo x')]
+out.work = [search([1, 2, 3]), passes('aaa'), sample([1, 2]), clamp(10), short('abcd'), buffer([1, 2])]
 console.log(JSON.stringify(out))
 `
   beforeAll(() => {
@@ -482,6 +526,7 @@ console.log(JSON.stringify(out))
     put('packages/engine/src/cited.mjs', CITED)
     put('packages/engine/src/past.mjs', PAST)
     put('packages/engine/src/entries.mjs', ENTRIES)
+    put('packages/engine/src/work.mjs', WORK)
     // (a package's test support: no product rule)
     put('packages/engine/src/testing/fakes.mjs', '// a scripted fetch\nexport const ok = status => status >= 200 && status < 300\n')
     put('run-blind.mjs', RUN)
@@ -566,6 +611,25 @@ console.log(JSON.stringify(out))
     expect([f.shadow, f.marks]).toEqual([String.raw`(?:()alpha|()beta|()gamma)(\w)\4`, [[0, 1], [1, 2], [2, 3]]])
     expect(new RegExp(f.shadow ?? '', 'iy').exec('BETAxx')?.slice(1, 5)).toEqual([undefined, '', undefined, 'x'])
     expect(entriesOf(String.raw`(?:alpha|beta|gamma)\2`).why).toMatch(/back reference/)
+  })
+
+  // (the coordinator's ruling of 2026-11-14: a budget is a comparison of a quantity the code grows itself where passing the
+  // bound only stops the work; class budget, never remove)
+  it('classes a bound on what the code grows itself, whose passing only stops, as a budget: never removed', () => {
+    const row = (suffix: string) => must(ledger.rules[keyOf(`work::${suffix}`)], suffix)
+    expect([row('(top)::SLOT_WORK'), row('passes::<4#1'), row('(top)::SAMPLES')].map(r => [r.verdict, r.budget])).toEqual([
+      ['budget', [{ quantity: 'work', stops: 'an exit' }]],
+      ['budget', [{ quantity: 'pass', stops: 'a loop' }]],
+      ['budget', [{ quantity: 'out.length', stops: 'adding to it' }]],
+    ])
+    // (a clamp, a property of the input, a flush: none is a budget)
+    expect([row('clamp::min40#1'), row('short::<3#1'), row('(top)::FLUSH_EVERY')].map(r => [r.verdict, r.budget ?? null])).toEqual([
+      ['remove', null],
+      ['remove', null],
+      ['remove', null],
+    ])
+    // (the report lists each with its bound and what it stops)
+    expect(reportOf(ledger).byArea).toContain('`SLOT_WORK` (packages/engine/src/work::(top)::SLOT_WORK) = 5000: `work`, an exit; budget; inputs: papers')
   })
 
   // defect 3: a table read by a computed key (`ARITY[op]`) had no site, and every entry read "read nowhere": removed

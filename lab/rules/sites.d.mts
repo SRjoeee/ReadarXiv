@@ -31,7 +31,7 @@ export interface Rule {
   holder?: { name: string; lines: number; read: 'states its value' | 'names the definition' | null }
   wholeReads?: number
 }
-export interface Bound { rule: string; at?: 'left' | 'right' | number; shape: string; value?: number; key?: string }
+export interface Bound { rule: string; at?: 'left' | 'right' | number; shape: string; value?: number; key?: string; budget?: { quantity: string; stops: 'a loop' | 'an exit' | 'adding to it' } }
 export interface Site {
   id: number
   kind: 'cmp' | 'eq' | 'mm' | 'val' | 'list' | 'set' | 're' | 'key'

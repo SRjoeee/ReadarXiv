@@ -49,6 +49,7 @@ export interface Row {
   neverTested?: boolean
   handedWhole?: number
   foldedToValue?: boolean
+  budget?: { quantity: string; stops: string }[]
   keyReads?: Record<string, number>
   module?: { loaded: boolean | null; importers: string[] | null }
 }
