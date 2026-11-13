@@ -1,6 +1,13 @@
 // The second half of the rebuilt reader's browser checks (reader-v2.mjs): the reader on the layer the stand-in serves, as the
 // extension's host gives it what it needs. Called by reader-v2.mjs with its context, its stand-in and its reporting.
 import AxeBuilder from '@axe-core/playwright'
+import { createContents } from '../../packages/reader/src/session/contents.ts'
+
+/** the contents' entries of a fixture's layer: those of the units its head names (the reader package's own rule) */
+const headingsOf = f => {
+  const json = d => JSON.parse(new TextDecoder().decode(f.objects.get(d)))
+  return createContents(f.units.flatMap(u => json(u).units), json(f.catalog)).entries().length
+}
 
 /** the right pane (the chrome's): its laid pages' text layers hold the translation's spans and the page's own words */
 const RIGHT = 'section.pane[data-side="right"]'
@@ -8,7 +15,7 @@ const RIGHT = 'section.pane[data-side="right"]'
 const LEFT = 'section.pane[data-side="left"]'
 
 export async function layerChecks(t) {
-  const { context, api, PAPER, PV, LINK, echo, readerState, sessionState, probe, openReader, paperOpened, laid, setConfig, clearPaperStore, section, check, control, note, sleep, SHOTS } = t
+  const { context, api, fixture, PAPER, PV, LINK, echo, readerState, sessionState, probe, openReader, paperOpened, laid, setConfig, clearPaperStore, section, check, control, note, sleep, SHOTS } = t
   const rightText = page => page.evaluate(sel => document.querySelector(sel)?.textContent ?? '', RIGHT)
   /** a laid page's translation on the right (its text layer is built after the page is put in place) */
   const echoed = (page, timeout = 15_000) => page.waitForFunction(sel => (document.querySelector(sel)?.textContent ?? '').includes('[echo]'), RIGHT, { timeout }).then(() => true, () => false)
@@ -36,9 +43,12 @@ export async function layerChecks(t) {
     control('a page the layer has not laid shows no translation (before the prepare ended)', { ok: during.laid > 0, detail: `${during.laid} laid then` })
     const mine = since(), opensSeen = mine.filter(r => r.path === '/api/v2/open'), objects = mine.filter(r => r.path.startsWith('/api/v2/o/')).map(r => r.path)
     check('our server asked as the reader asks it: opens naming no target (rows made here), the paper followed until its layer, each object once (the store keeps it)', opensSeen.length >= 1 && opensSeen.every(r => r.body?.includes('"target":null')) && mine.some(r => r.path.startsWith('/api/v2/papers/')) && new Set(objects).size === objects.length, `${opensSeen.length} open(s) ${opensSeen[0]?.body}; ${mine.filter(r => r.path.startsWith('/api/v2/papers/')).length} follow(s); ${objects.length} object asks, ${new Set(objects).size} distinct`)
-    // the contents: the paper's headings, titled by the translation
+    // the contents: the paper's headings, titled by the translation, each once, from the units the head names (our server's
+    // document names the source's units ahead of them: staging RB1, every heading listed twice), the source's object never asked
     const outline = (await readerState(page)).outline ?? []
-    check('the contents: the paper\'s headings, titled by the rows', outline.length >= 3 && outline.some(e => /\[echo\]/.test(e.title ?? '')), JSON.stringify(outline.slice(0, 3)))
+    const headings = headingsOf(fixture)
+    const sourceAsked = since().some(r => r.path.endsWith(fixture.source))
+    check('the contents: the paper\'s headings, each once, titled by the rows; the source\'s units the document names ahead of the head\'s never read', outline.length === headings && outline.some(e => /\[echo\]/.test(e.title ?? '')) && !sourceAsked, `${outline.length} entries, ${headings} headings; the source's object asked: ${sourceAsked}; ${JSON.stringify(outline.slice(0, 3))}`)
     // a link out of the paper on a laid page opens in a new tab through the host, the reader staying
     const anchor = page.locator(`${RIGHT} a[href="${LINK}"]`)
     const found = await anchor.first().waitFor({ timeout: 10_000 }).then(() => true, () => false)

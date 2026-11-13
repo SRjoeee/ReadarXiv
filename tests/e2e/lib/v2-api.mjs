@@ -71,7 +71,17 @@ export function loadFixture(name = 's1-columns') {
     if (m[2] === 'head') catalog = m[1]
   }
   if (!catalog) throw new Error(`no head in ${bundle}`)
-  return { name, paper: head.paper.id, version: head.paper.version, pages: head.paper.pages, units: head.units, catalog, pdf: new Uint8Array(readFileSync(join(dir, 'arxiv.pdf'))), objects, rows: (t = 'de') => JSON.parse(readFileSync(join(dir, `${t}.rows.json`), 'utf8')) }
+  // (the source's units, as a prepare hands them out before its marked compile (packages/engine prepare.ts `units`), which our
+  // server's document names ahead of the objects the head names, in `prepare.units` and `layer.units` alike: the same units under
+  // the same ids in an object of other bytes, the bundle's holding what the source does not state; here, the head's units less
+  // their last that is no heading. The layer's units are those its head names: a reader that read the document's list showed
+  // every heading of the contents twice, staging RB1, 2026-11-13)
+  const all = head.units.flatMap(u => JSON.parse(new TextDecoder().decode(objects.get(u))).units)
+  const last = all.findLastIndex(u => u.kind !== 'heading')
+  const sourceBytes = text(JSON.stringify({ format: 1, units: all.filter((_, i) => i !== last) }))
+  const source = sha256Hex(sourceBytes)
+  objects.set(source, sourceBytes)
+  return { name, paper: head.paper.id, version: head.paper.version, pages: head.paper.pages, units: head.units, source, catalog, pdf: new Uint8Array(readFileSync(join(dir, 'arxiv.pdf'))), objects, rows: (t = 'de') => JSON.parse(readFileSync(join(dir, `${t}.rows.json`), 'utf8')) }
 }
 
 /** a Range header on `size` bytes: [first, last], null for none asked, 'unsatisfiable' for one that holds no byte */
@@ -98,6 +108,8 @@ export function v2Api({ fixtures = [loadFixture()], base = 'https://readarxiv.co
     for (const [sha, bytes] of f.objects) objects.set(`p/${pv}/${prepOf(f)}/${sha}`, bytes)
   }
   const refOf = (f, sha) => ({ path: `p/${segOf(f.paper, f.version)}/${prepOf(f)}/${sha}`, sha256: sha, bytes: f.objects.get(sha).length })
+  /** every Units object the prepare told, as our server's document names them: the source's, then those the head names */
+  const told = f => [refOf(f, f.source), ...f.units.map(u => refOf(f, u))]
   /** each paper version's state: opened (when), prepared (from when), its document's rev */
   const state = new Map()
   let options = { prepared: new Set(fixtures.map(f => f.paper)), fault: null, prepareMs, failed: {}, refuse: null }
@@ -120,8 +132,8 @@ export function v2Api({ fixtures = [loadFixture()], base = 'https://readarxiv.co
       rev,
       paper: f.paper,
       version,
-      prepare: { attempt: state === 'none' ? 0 : 1, state, why: null, retryAt: null, at: s.openedAt, build: state === 'none' ? null : 'e2e', stage: state === 'running' ? 'compiling' : null, units: done ? f.units.map(u => refOf(f, u)) : [], html: null },
-      layer: done ? { catalog: refOf(f, f.catalog), units: f.units.map(u => refOf(f, u)), format: 1, build: 'e2e', stale: false } : null,
+      prepare: { attempt: state === 'none' ? 0 : 1, state, why: null, retryAt: null, at: s.openedAt, build: state === 'none' ? null : 'e2e', stage: state === 'running' ? 'compiling' : null, units: done ? told(f) : [], html: null },
+      layer: done ? { catalog: refOf(f, f.catalog), units: told(f), format: 1, build: 'e2e', stale: false } : null,
       targets: Object.fromEntries(Object.entries(s.targets).map(([t, view]) => [t, { attempt: 0, state: 'none', why: null, retryAt: null, at: s.openedAt, translator: CHAIN, units: null, rows: [], done: 0, total: 0, view }])),
     }
   }
