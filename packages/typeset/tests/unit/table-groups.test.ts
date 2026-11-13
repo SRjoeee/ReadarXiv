@@ -181,3 +181,46 @@ describe('a cell that cannot be drawn stays the original’s alone; its group is
     expect(states(plain, rowsOf(translated)).every((s) => s === 'laid')).toBe(true)
   })
 })
+
+describe('a group on two pages is withheld whole, whatever its cells’ states (its pages read off every cell of it)', () => {
+  // (a column of two cells, a table TeX broke over a page: its first cell on page 1, its second on page 2; each page's part holds
+  // both, the bundle's closure over its ties, and lays the one on the page)
+  const onPage = (c: Placed, page: number): Placed => ({
+    ...c,
+    lines: c.lines.map((l) => [page, ...l.slice(1)] as typeof l),
+  })
+  const top = cell(0, [1, 0, 1, 0], 'fast')
+  const foot = onPage(cell(1, [2, 0, 1, 0], 'slow'), 2)
+  const column = tableOf([top, foot])
+  const both = { 0: 'schnell', 1: 'langsam' }
+  const refusedOf = (ord: number): Rows => {
+    const base = rowsOf(both)
+    return { ...base, get: (id) => (id === idOf(ord + 1) ? { id, ok: false, why: { kind: 'refused' } } : base.get(id)) }
+  }
+  /** each cell's state as the lay of its own page draws it */
+  const drawn = (rows: Rows) => [
+    laidOf({ ...column, page: 1 }, rows)[0]!.state,
+    laidOf({ ...column, page: 2 }, rows)[1]!.state,
+  ]
+  it('both cells set: the group withheld whole on either page', () => {
+    expect(drawn(rowsOf(both))).toEqual(['cells', 'cells'])
+  })
+  it('the cell on page 2 not set before its lay (its row failed): the cell on page 1 withheld with it', () => {
+    expect(drawn(refusedOf(1))).toEqual(['cells', 'refused'])
+  })
+  it('the cell on page 1 not set before its lay (its row failed): the cell on page 2 withheld with it', () => {
+    expect(drawn(refusedOf(0))).toEqual(['refused', 'cells'])
+  })
+  it('the cell on page 2 not set for a reason of the part’s (the wrap cannot hide it): the cell on page 1 withheld with it', () => {
+    const t = tableOf([top, { ...foot, why: 'unwrapped' }])
+    const rows = rowsOf(both)
+    expect([laidOf({ ...t, page: 1 }, rows)[0]!.state, laidOf({ ...t, page: 2 }, rows)[1]!.state]).toEqual([
+      'cells',
+      'unwrapped',
+    ])
+  })
+  it('a cell never to be translated holds nothing: the group’s cells on one page are laid', () => {
+    // (no row with every row in: a cell no translator was sent; it is the original's in a group drawn, wherever it stands)
+    expect(drawn({ ...rowsOf({ 0: 'schnell' }), done: true })).toEqual(['laid', 'none'])
+  })
+})
