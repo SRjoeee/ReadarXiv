@@ -21,7 +21,7 @@ export interface OpenAICompatConfig {
  * reader never gave (PRIVACY.md: the key goes to the service it belongs to; #88 E3). A refused redirect is a TypeError, which
  * the provider takes for a `network` failure, handed to the chain like any other. Read at the call, so a test's stub is the one used
  */
-export const noRedirects: typeof fetch = (input, init) => globalThis.fetch(input, { ...init, redirect: 'error' })
+const noRedirects: typeof fetch = (input, init) => globalThis.fetch(input, { ...init, redirect: 'error' })
 
 export function createModel(config: OpenAICompatConfig, fetchImpl: typeof fetch = noRedirects): LanguageModel {
   // supportsStructuredOutputs: the zod schema goes to the endpoint as response_format: json_schema (DeepSeek / Gemini /

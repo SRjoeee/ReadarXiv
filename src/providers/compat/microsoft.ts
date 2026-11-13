@@ -87,7 +87,7 @@ function wireTarget(target: string): string {
  * Can this target language be translated. After the rewrite every tag lands on a real entry of the public table, so
  * the test is one “is it in the table” — no inference by primary language (the first version did that and judged `zlm → ms-Arab` supported, which measured 400).
  */
-export function supportsTarget(target: string): boolean {
+function supportsTarget(target: string): boolean {
   if (SCRIPT_UNAVAILABLE.has(target)) return false
   return SUPPORTED.has(wireTarget(target))
 }

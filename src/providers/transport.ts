@@ -159,7 +159,7 @@ function messageOf(why: Why): string {
 
 /** What a failure is to a page: one of the kinds its words are keyed on (locale packs, `ui/strings.ts`), as format's one reading
  *  of a `Why` says it (kindOfWhy, the PDF reader's too), with the log's words and a refused key's HTTP status */
-export function errorOf(why: Why, status?: number): ErrorInfo {
+function errorOf(why: Why, status?: number): ErrorInfo {
   const kind = kindOfWhy(why)
   return { kind, message: messageOf(why), ...(kind === 'auth' && status !== undefined ? { status } : {}) }
 }
