@@ -15,6 +15,7 @@ import { factsOf } from '../../lab/release-check/census-lib.mjs'
 import { areaOf } from '../../lab/rules/areas.mjs'
 import { type Ledger, ledgerOf, marginOf, resolveTracked, TRACKED_FORMAT, type Tracked } from '../../lab/rules/ledger.mjs'
 import { mergeRecords } from '../../lab/rules/merge.mjs'
+import { entriesOf } from '../../lab/rules/pattern.mjs'
 import { agreementOf, countsOf, remapOf, siteMapOfCheckout } from '../../lab/rules/record.mjs'
 import { recorderOf } from '../../lab/rules/recorder.mjs'
 import { reportOf } from '../../lab/rules/report.mjs'
@@ -318,9 +319,10 @@ describe('the ledger in two forms', () => {
     const short = must(tracked.rules['packages/engine/src/rules::short::<4#1'], 'short')
     expect(short).toMatchObject({ verdict: 'test', kind: 'threshold', value: 4, runs: { corpus: [1, 1, 0], tests: [1, 0, 1] }, tests: { false: { [TEST_FILE]: [0] } } })
     expect(short.margin).toMatchObject({ units: 'rule', false: { eff: 9, test: [TEST_FILE, 0] }, true: { eff: 2, paper: '2401.00001v1' } })
-    // (the list's hits by entry, in the list's order, where they remove its entries; the entries by their digest alone)
-    expect(full.rules['packages/engine/src/rules::(top)::HEADS#1']).toMatchObject({ verdict: 'test', removeEntries: ['subsection', 'paragraph'] })
-    expect(tracked.rules['packages/engine/src/rules::(top)::HEADS#1']).toMatchObject({ verdict: 'test', kind: 'list', size: 3, hits: [1, 0, 0], tests: { false: { [TEST_FILE]: [0] } } })
+    // (the list's hits by entry, in the list's order, where they remove its entries; the entries by their digest alone; the
+    // corpus hit \`section\`: the list decides there, whatever side the test took)
+    expect(full.rules['packages/engine/src/rules::(top)::HEADS#1']).toMatchObject({ verdict: 'decides', removeEntries: ['subsection', 'paragraph'] })
+    expect(tracked.rules['packages/engine/src/rules::(top)::HEADS#1']).toMatchObject({ verdict: 'decides', kind: 'list', size: 3, hits: [1, 0, 0], tests: { false: { [TEST_FILE]: [0] } } })
     expect(readFileSync(trackedFile, 'utf8')).not.toContain('subsection')
   })
   it("holds no byte of a test's name, and no text that is not ASCII", () => {
@@ -424,15 +426,28 @@ export const named = s => NAME_SET.has(s)
 const ALL = ['red', 'green', 'blue']
 export const allIn = s => ALL.every(c => s.includes(c))
 `
+  // (a pattern's entries by its structure, and the path a match took)
+  const ENTRIES = `// entries read by the path a match took
+const ENC = /^(?:WinAnsi|MacRoman|MacExpert|Standard)Encoding$/
+export const known = n => ENC.test(n)
+const PART = /\\b(?:sec|section|part|chapter)\\w*/
+export const part = s => PART.exec(s)?.[0] ?? null
+const NOT = /^(?!foo|bar|baz|qux)\\w+$/
+export const plain = s => NOT.test(s)
+const MANY = /(?:one|two|three)+/g
+export const many = s => (s.match(MANY) ?? []).join(',')
+`
   const RUN = `import { FORMS } from './packages/engine/src/forms.mjs'
 import { fits } from './packages/engine/src/table.mjs'
 import { looks } from './packages/engine/src/cited.mjs'
 import { kindAt, words, named, allIn } from './packages/engine/src/past.mjs'
+import { known, part, plain, many } from './packages/engine/src/entries.mjs'
 const out = {}
 for (const [k, f] of Object.entries(FORMS)) out[k] = [f('nothing here'), f('an alpha and a gamma')]
 out.fits = [fits('rg', [1, 2, 3]), fits('cmyk', [1, 2])]
 out.looks = [looks('a \\\\protect'), looks('plain')]
 out.past = [kindAt(1), words('one two'), named('beta'), named('zeta'), allIn('red green'), allIn('red green blue')]
+out.entries = [known('WinAnsiEncoding'), known('StandardEncoding'), known('Other'), part('section 2'), plain('quux'), plain('foo'), many('onetwo x')]
 console.log(JSON.stringify(out))
 `
   beforeAll(() => {
@@ -443,6 +458,7 @@ console.log(JSON.stringify(out))
     put('packages/engine/src/table.mjs', TABLE)
     put('packages/engine/src/cited.mjs', CITED)
     put('packages/engine/src/past.mjs', PAST)
+    put('packages/engine/src/entries.mjs', ENTRIES)
     put('run-blind.mjs', RUN)
     map = siteMapOfCheckout(tree)
     writeFileSync(join(tree, 'sites.json'), JSON.stringify(map))
@@ -496,6 +512,31 @@ console.log(JSON.stringify(out))
     // taken away, both calls answer as they did)
     expect(siteRecord('past::(top)::ALL#1')).toMatchObject({ n: 2, t: 1, f: 1, hits: { blue: 1 } })
     expect(ledger.rules[keyOf('past::(top)::ALL#1')]).toMatchObject({ removeEntries: ['red', 'green'] })
+  })
+
+  it("judges a pattern's entries by its alternatives' words, each hit where a match's path went through it", () => {
+    // (the census cuts the pattern at every \`|\` and reads three of ENC's four alternatives; its fourth, Standard, is hit)
+    expect(siteRecord('entries::(top)::ENC#1')).toMatchObject({ n: 3, t: 2, f: 1, hits: { WinAnsi: 1, Standard: 1 } })
+    expect(ledger.rules[keyOf('entries::(top)::ENC#1')]).toMatchObject({ verdict: 'decides', judged: ['WinAnsi', 'MacRoman', 'MacExpert', 'Standard'], removeEntries: ['MacRoman', 'MacExpert'] })
+    // ("section" is matched by \`sec\`, the first alternative, and \`\\w*\`: the text holds \`section\`, the path went through
+    // \`sec\`; taken away, the three others leave the match as it was)
+    expect(siteRecord('entries::(top)::PART#1')?.hits).toEqual({ sec: 1 })
+    expect(ledger.rules[keyOf('entries::(top)::PART#1')]).toMatchObject({ removeEntries: ['section', 'part', 'chapter'] })
+    // (a negative lookahead's alternatives decide by failing, never on a match's path: not judged; a match through none of
+    // the entries is the list's hit still)
+    expect(siteRecord('entries::(top)::NOT#1')).toMatchObject({ t: 1, f: 1, hits: { '(no entry)': 1 } })
+    expect(ledger.rules[keyOf('entries::(top)::NOT#1')]).toMatchObject({ verdict: 'decides', removeEntries: [], entriesNotJudged: ['foo', 'bar', 'baz', 'qux'].map(entry => ({ entry, why: 'in a negative lookaround' })) })
+    // (a repeated group shows its last repetition alone: its entries hit where the match's text holds them)
+    expect(siteRecord('entries::(top)::MANY#1')?.hits).toEqual({ one: 1, two: 1 })
+    expect(ledger.rules[keyOf('entries::(top)::MANY#1')]).toMatchObject({ removeEntries: ['three'] })
+  })
+  it("makes a pattern's shadow with its back references moved to their groups' new numbers", () => {
+    const e = entriesOf(String.raw`(\w)(?:alpha|beta|gamma)\1`, '')
+    expect(e.shadow).toBe(String.raw`(\w)(?:()alpha|()beta|()gamma)\1`)
+    const f = entriesOf(String.raw`(?:alpha|beta|gamma)(\w)\1`, 'i')
+    expect([f.shadow, f.marks]).toEqual([String.raw`(?:()alpha|()beta|()gamma)(\w)\4`, [[0, 1], [1, 2], [2, 3]]])
+    expect(new RegExp(f.shadow ?? '', 'iy').exec('BETAxx')?.slice(1, 5)).toEqual([undefined, '', undefined, 'x'])
+    expect(entriesOf(String.raw`(?:alpha|beta|gamma)\2`).why).toMatch(/back reference/)
   })
 
   // defect 3: a table read by a computed key (`ARITY[op]`) had no site, and every entry read "read nowhere": removed

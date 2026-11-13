@@ -80,7 +80,7 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
         const s = r.sites.find(x => x.id === sid)
         L.push(`- ${s.file}:${s.line} ${s.fn || '(top)'} ${s.kind}${s.op ? ` ${s.op}` : ''} of \`${cell(nameOf(r))}\` (${r.key}): ${s.state === 'never' ? 'never ran' : `one outcome, ${s.outcome}`}`)
       }
-    for (const r of entries) L.push(`- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}): ${r.removeEntries.length} of ${r.entries.length} entries with no hit: ${r.removeEntries.join(', ')}`)
+    for (const r of entries) L.push(`- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}): ${r.removeEntries.length} of ${(r.judged ?? r.entries).length} entries with no hit: ${r.removeEntries.join(', ')}${r.entriesNotJudged?.length ? `; not judged: ${r.entriesNotJudged.map(x => `${x.entry} (${x.why})`).join(', ')}` : ''}`)
     L.push('')
   }
   // the magnitudes, beside the unmeasured budgets

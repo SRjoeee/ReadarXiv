@@ -43,6 +43,8 @@ export interface Site {
   call?: string
   args?: number
   entries?: string[]
+  /** a pattern's entries by its structure and its shadow (pattern.mjs) */
+  alts?: { words: { w: string; look?: 'pos' | 'neg'; rep?: boolean }[]; shadow: string | null; marks: [number, number][]; why?: string }
   flags?: string
 }
 export interface Edit { at?: number; end?: number; pre?: string; post?: string; replace?: [number, number]; text?: string; listNode?: boolean }

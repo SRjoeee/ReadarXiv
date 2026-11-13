@@ -13,6 +13,7 @@
 // list keeps the list's sites. Not shipped.
 import { createHash } from 'node:crypto'
 import { scanTree, graphOf } from '../release-check/census-lib.mjs'
+import { entriesOf } from './pattern.mjs'
 
 export const SITES_FORMAT = 'readarxiv/rule-sites 1'
 /** the areas whose rules the ledger holds: the census's debt areas (the prepare, today's and the packages', and the
@@ -395,7 +396,10 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS, keysOnl
   // (3) the lists: each literal wrapped where it is made; a Set made of one, the Set
   for (const { path, rule, node, parent } of listRules) {
     if (node.type === 'RegExpLiteral') {
-      const site = { kind: 're', line: lineOf(node), fn: fnPathOf(parentsOf.get(node) ?? []), rules: [], bounds: [], entries: rule.entries, flags: node.flags }
+      // (its entries read from its structure, and its shadow: pattern.mjs)
+      const e = entriesOf(node.pattern, node.flags)
+      const alts = { words: e.words.map(w => ({ w: w.word, ...(w.look ? { look: w.look } : {}), ...(w.repeated ? { rep: true } : {}) })), shadow: e.shadow, marks: e.marks, ...(e.why ? { why: e.why } : {}) }
+      const site = { kind: 're', line: lineOf(node), fn: fnPathOf(parentsOf.get(node) ?? []), rules: [], bounds: [], entries: rule.entries, flags: node.flags, alts }
       add(path, site)
       bind(site, rule, { shape: 'list' })
       edits.get(path).push({ at: node.start, end: node.end, pre: `__axtRules.re(${site.id}, `, post: ')' })

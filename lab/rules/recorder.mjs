@@ -245,18 +245,50 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
   const rxExec = RP.exec
   const sourceOf = Object.getOwnPropertyDescriptor(RP, 'source').get
   const flagsOf = Object.getOwnPropertyDescriptor(RP, 'flags').get
-  const entryOf = (id, text) => {
-    // (the alternative a match stands for: the longest of the list's entries its text holds)
+  // (a match's hits: the entries whose alternatives its path went through (pattern.mjs): the shadow run at the match's place
+  // on its text takes the same path, and an entry's capture is defined where its alternative was on it; an entry in a
+  // repeated group, or every entry of a pattern with no shadow, a hit where the match's text holds its word. A match through
+  // no entry is a hit of '(no entry)'; a shadow that did not take the match's path, '(unread)', its entries read by their
+  // words)
+  const shadows = new Map()
+  const shadowOf = id => {
+    if (shadows.has(id)) return shadows.get(id)
     const s = S[id]
-    const t = s.flags?.includes('i') ? text.toLowerCase() : text
-    let best = null
-    for (const e of s.entries) {
-      const w = s.flags?.includes('i') ? e.toLowerCase() : e
-      if (t.includes(w) && (!best || w.length > best.length)) best = e
-    }
-    return best
+    const fold = s.flags?.includes('i') ? x => x.toLowerCase() : x => x
+    const words = (s.alts?.words ?? (s.entries ?? []).map(w => ({ w }))).map(x => ({ ...x, f: fold(x.w) }))
+    const rx = s.alts?.shadow != null ? new RegExp(s.alts.shadow, `${s.flags.replace(/[gy]/g, '')}y`) : null
+    const out = { fold, words, rx, marks: s.alts?.marks ?? [], plain: rx ? words.filter(x => x.rep && !x.look) : words.filter(x => x.look !== 'neg') }
+    shadows.set(id, out)
+    return out
   }
-  const attribute = (id, m) => hit(id, entryOf(id, m[0]) ?? '(no entry)')
+  const attribute = (id, m) => {
+    const sh = shadowOf(id)
+    const text = sh.fold(m[0])
+    let any = false
+    const byWord = xs => {
+      for (const x of xs)
+        if (text.includes(x.f)) {
+          hit(id, x.w)
+          any = true
+        }
+    }
+    if (sh.rx && sh.words.some(x => !x.rep && (x.look === 'pos' || (!x.look && text.includes(x.f))))) {
+      sh.rx.lastIndex = m.index
+      const sm = rxExec.call(sh.rx, m.input)
+      if (sm && sm.index === m.index && sm[0] === m[0]) {
+        for (const [k, g] of sh.marks)
+          if (sm[g] !== undefined) {
+            hit(id, sh.words[k].w)
+            any = true
+          }
+      } else {
+        hit(id, '(unread)')
+        byWord(sh.words.filter(x => !x.look && !x.rep))
+      }
+    }
+    byWord(sh.plain)
+    if (!any) hit(id, '(no entry)')
+  }
   const consumed = (id, matches) => {
     outcome(id, matches.length > 0)
     for (const m of matches) attribute(id, m)

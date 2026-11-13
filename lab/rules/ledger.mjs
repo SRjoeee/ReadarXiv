@@ -50,8 +50,8 @@ export const LEDGER_FORMAT = 'readarxiv/rule-ledger 1'
 export const OWN_INPUT = 'tests'
 /** the verdicts a row may hold, and whether each gives the rule a reason (the census's `rulesUnexplained`, P10) */
 export const VERDICTS = {
-  decides: { reason: true, says: 'decides on the corpus: its counts, margin and nearest cases are its reason' },
-  test: { reason: true, says: 'one outcome on the corpus; a test of our own takes the other side: the test is its reason' },
+  decides: { reason: true, says: "decides on the corpus: its counts, margin and nearest cases are its reason (a list: its entries' hits there)" },
+  test: { reason: true, says: 'one outcome on the corpus (a list: no entry hit there); a test of our own takes the other side (hits it): the test is its reason' },
   definition: { reason: true, says: 'cites a definition: kept as the definition\'s (silent on the inputs where it never decided)' },
   'cited paper': { reason: true, says: 'cites a paper: the paper joins the holdout and the row is judged again' },
   measurement: { reason: true, says: 'cites a measurement, not reproduced: kept and listed' },
@@ -87,6 +87,32 @@ export function readsOf(sites) {
   const out = {}
   for (const s of sites) for (const [k, v] of Object.entries(s.reads ?? {})) out[k] = (out[k] ?? 0) + v
   return out
+}
+
+/** a list's entries as its hits judge them: an array's or a Set's its strings; a pattern's the words of its alternatives
+ *  (pattern.mjs), each once, but those in a negative lookaround (never on a match's path) and those in a lookaround a group
+ *  repeats, and any the census reads that is no alternative's word (`notJudged`, each with why) */
+export function entriesJudged(rule, sites) {
+  const alts = sites.find(s => s?.kind === 're' && s.alts)?.alts
+  if (!alts) return { judged: rule.entries ?? [], notJudged: [] }
+  const judged = []
+  const notJudged = []
+  const seen = new Set()
+  const why = new Map()
+  for (const x of alts.words) {
+    const no = x.look === 'neg' ? 'in a negative lookaround' : x.look === 'pos' && x.rep ? 'in a lookaround a group repeats' : null
+    if (no) {
+      if (!why.has(x.w)) why.set(x.w, no)
+      continue
+    }
+    if (!seen.has(x.w)) {
+      seen.add(x.w)
+      judged.push(x.w)
+    }
+  }
+  for (const [w, no] of why) if (!seen.has(w)) notJudged.push({ entry: w, why: no })
+  for (const e of rule.entries ?? []) if (!seen.has(e) && !why.has(e)) notJudged.push({ entry: e, why: "the census's entry, no alternative's word" })
+  return { judged, notJudged }
 }
 
 /** the ledger of a site map and a recording; `holdout`: the papers a cited paper is judged on (by default every paper the
@@ -181,22 +207,42 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
       if (cite.flag === 'paper') return cite.papers.every(p => held.has(base(p)) && reached(p)) ? 'cited paper silent' : 'cited paper'
       return cite.flag === 'definition' ? 'definition' : 'measurement'
     }
-    const foldable = s => s.state === 'one' || s.state === 'never'
+    // (a comparison's site folds where it saw one outcome or never ran; a list's (its literal's, where every membership test
+    // of it is recorded) where no entry of it was hit and it was read no other way: a list site's one outcome may be its
+    // entries' every hit, never a fold to true)
+    const foldable = rule.kind === 'list' ? s => !Object.keys(s.hits ?? {}).length && !Object.keys(s.reads ?? {}).length : s => s.state === 'one' || s.state === 'never'
     if (rule.kind === 'list') {
+      // A LIST IS JUDGED BY ITS ENTRIES' HITS (3c): a hit is a membership test that found an entry (has, includes, indexOf,
+      // a predicate held for it, an `every` stopped at it) or a match whose path went through it (pattern.mjs); a match
+      // through none of its entries is a hit of the list still ('(no entry)'). Hit on the corpus (any input but the tests of
+      // our own): it decides, and its entries no input hit go; hit by a test of our own alone: the test is its reason;
+      // tested and never hit, or never tested: it goes with its rule (every test of it said "not in it"). A list read
+      // otherwise too (iterated, joined, mapped, its pattern's source read, an entry read by its index) uses its entries
+      // whole: not judged
       const hits = {}
       for (const s of deciding) for (const [k, v] of Object.entries(s.hits ?? {})) hits[k] = (hits[k] ?? 0) + v
+      const hitIn = which =>
+        deciding.some(s =>
+          Object.entries(recording.sites)
+            .filter(([input]) => (which === OWN_INPUT) === (input === OWN_INPUT))
+            .some(([, per]) => Object.keys(per[s.id]?.hits ?? {}).length),
+        )
       const membership = sum(deciding.map(s => ({ n: sum(Object.values(s.outcomes), 'n') })), 'n')
       row.hits = hits
-      if (!membership && !listReads) row.verdict = exempt ? cited() : 'remove'
-      else if (!membership) row.verdict = 'not judged'
-      else if (deciding.some(s => s.state === 'decides')) row.verdict = listReads ? 'not judged' : 'decides'
-      else if (deciding.some(s => s.state === 'test')) row.verdict = listReads ? 'not judged' : 'test'
-      else row.verdict = exempt ? cited() : listReads ? 'not judged' : 'remove'
-      if (!exempt) row.folds = deciding.filter(foldable).map(s => s.id)
-      // (the entries: judged where the list is used by membership alone and cites no definition)
+      if (listReads) row.verdict = 'not judged'
+      else if (hitIn('corpus')) row.verdict = 'decides'
+      else if (hitIn(OWN_INPUT)) row.verdict = 'test'
+      else row.verdict = exempt ? cited() : 'remove'
+      if (!membership && !listReads && row.verdict === 'remove') row.neverTested = true
+      if (!exempt && row.verdict !== 'not judged') row.folds = deciding.filter(foldable).map(s => s.id)
+      // (the entries: judged where the list is used by membership alone and cites no definition; a pattern's are its
+      // alternatives' words, but those its matches cannot show (pattern.mjs))
+      const { judged, notJudged } = entriesJudged(rule, deciding.map(s => map.sites[s.id]))
+      if (judged.join('\u0000') !== rule.entries.join('\u0000')) row.judged = judged
+      if (notJudged.length) row.entriesNotJudged = notJudged
       if (row.verdict === 'decides' || row.verdict === 'test') {
         if (rule.class === 'defined' || exempt) row.entriesExempt = true
-        else row.removeEntries = rule.entries.filter(e => !hits[e])
+        else row.removeEntries = judged.filter(e => !hits[e])
       }
       if (row.verdict === 'not judged') row.listReads = { ...readsOf(deciding), ...(rule.unseen?.length ? { unseen: rule.unseen.length } : {}) }
       if (rule.unseen?.length) row.unseen = rule.unseen
@@ -334,7 +380,7 @@ export function trackedOf(full, { digest, map = null }) {
       ...(Object.keys(runs).length ? { runs } : {}),
       ...(Object.keys(reads).length ? { reads } : {}),
       ...(m ? { margin: { units: m.units, false: caseOf(m.false), true: caseOf(m.true) } } : {}),
-      ...(r.removeEntries ? { hits: r.entries.map(e => r.hits?.[e] ?? 0) } : {}),
+      ...(r.removeEntries ? { hits: (r.judged ?? r.entries).map(e => r.hits?.[e] ?? 0), ...(r.judged ? { judged: r.judged.length } : {}) } : {}),
       ...(Object.keys(tests).length ? { tests } : {}),
       ...(r.folds.length ? { folds: r.folds.length } : {}),
       ...(r.module ? { module: r.module } : {}),
