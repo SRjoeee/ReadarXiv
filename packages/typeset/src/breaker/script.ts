@@ -23,7 +23,7 @@ const CJK_BLOCKS: [number, number][] = [
 const rangesOf = (rs: [number, number][]) =>
   rs.map(([a, b]) => (a === b ? `\\u{${a.toString(16)}}` : `\\u{${a.toString(16)}}-\\u{${b.toString(16)}}`)).join('')
 export const CJK = new RegExp(`[${rangesOf(CJK_BLOCKS)}]`, 'u')
-export const cjkClassWith = (extra: number[]) =>
+const cjkClassWith = (extra: number[]) =>
   new RegExp(`[${rangesOf([...CJK_BLOCKS, ...extra.map((c): [number, number] => [c, c])])}]`, 'u')
 /** the characters a script that sets no spaces between its words sets none beside: Han, kana, Bopomofo and the CJK blocks'
  *  marks, but Hangul's, Latin's and a common number */
@@ -37,9 +37,9 @@ const CJK_QUOTES = [0x201c, 0x201d, 0x2018, 0x2019, 0x2014, 0x2026, 0xb7]
 const CJK_CLASS = [CJK, cjkClassWith(CJK_QUOTES)] as const
 /** `quotes` (the rules' cjkQuotes): whether the curly quotes, dashes, ellipsis and middle dot are CJK's too (L2:2104) */
 export const cjkClassRe = (quotes: boolean) => CJK_CLASS[quotes ? 1 : 0]
-export const PUNCT_CLOSE =
+const PUNCT_CLOSE =
   /^[\u3001\u3002\uFF0C\uFF0E\uFF1A\uFF1B\uFF01\uFF1F\uFF09\u300D\u300F\u3011\u3015\u3009\u300B\u3019\u3017”’]$/
-export const PUNCT_OPEN = /^[\uFF08\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016“‘]$/
+const PUNCT_OPEN = /^[\uFF08\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016“‘]$/
 /** a full-width mark's side by what it does in the text (L2:2096-2104): `close` for the marks that close or end something (the
  *  white a space after it would double is its), `open` for those that open something (the white before it); null for any other
  *  character. Where its face draws its ink is no part of it: that is markOf's. The space rule's alone (tokens.ts markBlankEdge) */

@@ -178,7 +178,7 @@ export type TokensInput = {
 /** the tokens, with the unit's base style (today's `tokens.base`) and U.marks' decisions taken while they were made */
 export type Tokens = { tokens: Token[]; base: TStyle; marks: MarksTrace }
 
-export const hexOf = (rgb: number) => `#${rgb.toString(16).padStart(6, '0')}`
+const hexOf = (rgb: number) => `#${rgb.toString(16).padStart(6, '0')}`
 /** a fill not told (layout/fills.mjs UNKNOWN) */
 const UNKNOWN = -1
 /** a link group's open: \href's, \hyperref's and \hyperlink's (L2:2245), and \url's, which the prepare reads as a link group
