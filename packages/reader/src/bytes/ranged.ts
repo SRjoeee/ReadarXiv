@@ -13,7 +13,7 @@ import { CHUNK } from './store.ts'
 
 /** the chunks at a document's end asked beside its first: its trailer and cross-reference (2602.23285v2: its last 2 chunks
  *  were 3.11 to 3.65 s of a cold visit, one after the other, once its worker had started; W ranges.ts:35-37) */
-export const TAIL_CHUNKS = 2
+const TAIL_CHUNKS = 2
 
 /** what of PDF.js a ranged open needs */
 export interface RangedLib {

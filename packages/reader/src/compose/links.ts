@@ -24,7 +24,7 @@ export const urlAllowed = (url: string): boolean => {
   }
 }
 /** the characters of a link's name at most (links.mjs NAME_MAX: more is no link a page has); unmeasured */
-export const NAME_MAX = 2000
+const NAME_MAX = 2000
 /** the widest link border drawn, px whatever the zoom (links.mjs BORDER_MAX); unmeasured */
 const BORDER_MAX = 20
 const pct = (v: number) => `${Math.round(v * 1e4) / 1e4}%`
@@ -40,7 +40,7 @@ export interface LinkHooks {
 }
 
 /** a destination as the page carries it: a name, or an explicit one written as JSON */
-export function destOf(dest: string): string | unknown[] {
+function destOf(dest: string): string | unknown[] {
   if (dest.startsWith('[')) {
     try {
       const d = JSON.parse(dest)

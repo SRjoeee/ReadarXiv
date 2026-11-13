@@ -24,12 +24,12 @@ export const RETRY_MS = 1_000
  *  prepare, the target's run): our server's own reconnection time for such a stream, whose last frame that document is
  *  (`retry: 60000`, server design-a "Followers"; worker v2 paper.ts `#tell`). Staging, 2026-11-07: a done paper asked again
  *  at once each time its one-frame stream ended, 18 to 50 times a second */
-export const IDLE_MS = 60_000
+const IDLE_MS = 60_000
 
 /** a paper version's segment (L5's Seg: `.` and `/` as `_`, its version) */
 export const segOf = (p: PaperRef, version: number): string => `${p.id.replace(/[./]/g, '_')}v${version}`
 /** a paper's segment for the follow: with its version where known, else the id alone (the server resolves the latest) */
-export const followSegOf = (p: PaperRef): string => (p.version ? segOf(p, p.version) : p.id.replace(/[./]/g, '_'))
+const followSegOf = (p: PaperRef): string => (p.version ? segOf(p, p.version) : p.id.replace(/[./]/g, '_'))
 
 /** why the server's answer is not what was asked: `not-opened` (a follow of a paper the server has not opened), `not-found`
  *  (no such paper), `update` (a deployment that reads no format of this reader's), `busy` / `rate` (a 429: at capacity, the
@@ -188,7 +188,7 @@ export function object(a: Ask, ref: Ref): Promise<Uint8Array> {
   })
 }
 /** an object a catalog names by its digest alone (a part: its length is not in the head): read within `cap`, held to its digest */
-export function objectOfDigest(a: Ask, path: string, sha256: string, cap: number): Promise<Uint8Array> {
+function objectOfDigest(a: Ask, path: string, sha256: string, cap: number): Promise<Uint8Array> {
   return request(a, `/api/v2/o/${path}`, {}, async (r) => {
     if (r.status === 404) throw new Refused('gone')
     if (!r.ok) throw new Refused('bad')

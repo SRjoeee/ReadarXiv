@@ -49,7 +49,7 @@ const EPS = 0.5
  *  line's neighbours are merged (PDF-READER §11.11); a ruling, unmeasured */
 export const TEXT_ITEMS_MAX = 2000
 /** the paper's language, on the text layer (docs/PDF-READER.md §13) */
-export const SOURCE_LANG = 'en'
+const SOURCE_LANG = 'en'
 /** how far past a crop's source the middle of a text item of its may stand, PDF units (an item's box is its font's, not its
  *  ink's) */
 const PAD = 0.6

@@ -54,7 +54,7 @@ export function plainOf(pieces: readonly Piece[]): string {
  * element (R engine/translate/mt.mjs plainTranslated): never its TeX source, which the contents showed as "\sys" and the translated
  * words for "Overview of BLIP" (2608.25210v2; 177 entries of 38 papers at B15)
  */
-export function copyTextOf(kind: string | undefined, el: El | undefined): string {
+function copyTextOf(kind: string | undefined, el: El | undefined): string {
   if (kind === 'break' || el?.brk) return ' '
   return el?.text !== undefined ? el.text : (el?.copy ?? '')
 }
