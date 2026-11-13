@@ -1,8 +1,10 @@
-// A table's cells decided by group (the owner's ruling of 2026-11-08: judged the way the production site judges, today's
-// decideGroups and settleGroup on TeX's grid): the part states each cell's grid place (Placed.cell) and its own text (Placed.plain); the entry
-// groups a table's cells as today's groupOf (the header's cells, each column's, the cells spanning the same columns), keeps a
-// body column whole where at least NAMES_SHARE of its cells came back from the translator as they went or were kept before
-// asking (names: models, datasets), translates the header as a group, and holds and settles each group alone.
+// A table's cells (the owner, 2026-11-13: a table's cell is text like any other; the translator decides a name). Each cell is
+// judged alone, by its own row, as a paragraph is: its translation laid, or the original's where it has no row, a row that
+// failed, or a reason of the part's. A reply equal to its source is a translation like any other. A cell that cannot be drawn
+// in its translation (unfit, a row that failed, the wrap cannot hide it) stays the original's by itself, as a paragraph does
+// (the coordinator's ruling (c) of 2026-11-13); what still binds a cell to the others of its group (the header's cells, a
+// column's, the cells spanning the same columns: TeX's grid, Placed.cell) is geometry alone: a cell that spans holds its group
+// where it cannot be drawn (its box is the others' too), and a group on two pages is withheld whole (page-wait.test.ts).
 import type { OutPiece, Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
@@ -43,86 +45,111 @@ const tableOf = (cells: Placed[]): Part => ({
 })
 const text = (s: string): OutPiece[] => [{ t: 'text', s }]
 /** each cell's row: its translation's text by ord (a missing ord, no row: `kept` names those the paper keeps) */
-const rowsOf = (by: Record<number, string | null>, kept: number[] = []): Rows => {
+const rowsOf = (by: Record<number, string | null>, kept: number[] = [], who = 'test'): Rows => {
   const m = new Map<string, Row>()
   for (const [o, s] of Object.entries(by))
-    if (s !== null) m.set(idOf(Number(o) + 1), { id: idOf(Number(o) + 1), ok: true, by: 'test', content: text(s) })
+    if (s !== null) m.set(idOf(Number(o) + 1), { id: idOf(Number(o) + 1), ok: true, by: who, content: text(s) })
   const k = new Set(kept.map((o) => idOf(o + 1)))
   return { get: (id) => m.get(id), done: false, kept: (id) => k.has(id) }
 }
-const states = (p: Part, rows: Rows) => layPage(p, rows, rules, metrics()).members.map((m) => m.state)
+const laidOf = (p: Part, rows: Rows) => layPage(p, rows, rules, metrics()).members
+const states = (p: Part, rows: Rows) => laidOf(p, rows).map((m) => m.state)
+/** a laid member's text, its lines' items joined */
+const textOfLaid = (m: ReturnType<typeof laidOf>[number]) =>
+  m.lines
+    .flatMap((l) => l[3])
+    .map((i) => ('s' in i ? i.s : ''))
+    .join('')
+    .trim()
 
-// (a header of two cells; a column of models, two of five of which come back as they went; a column of descriptions, one
-// of five)
-const header = [cell(0, [0, 0, 1, 1], 'Model'), cell(1, [0, 1, 1, 1], 'Training')]
-const models = ['ByteNet', 'GNMT', 'ConvS2S', 'Transformer base', 'Transformer big'].map((s, k) =>
-  cell(2 + k, [1 + k, 0, 1, 0], s),
-)
-const notes = ['fast', 'slow', 'large', 'small', 'BLEU'].map((s, k) => cell(7 + k, [1 + k, 1, 1, 0], s))
-const table = tableOf([...header, ...models, ...notes])
+// (a header of two cells; a column of datasets and one label under them, the paper's Table 2 of 2611.03953v2 in its shape; a
+// column of scores' descriptions)
+const header = [cell(0, [0, 0, 1, 1], 'Dataset'), cell(1, [0, 1, 1, 1], 'Note')]
+const names = ['MedQA', 'CaseHOLD', 'FinQA', 'IFBench', 'Avg. Recovery'].map((s, k) => cell(2 + k, [1 + k, 0, 1, 0], s))
+const notes = ['fast', 'slow', 'large', 'small', 'mean'].map((s, k) => cell(7 + k, [1 + k, 1, 1, 0], s))
+const table = tableOf([...header, ...names, ...notes])
 const translated: Record<number, string> = {
-  0: 'Modell',
-  1: 'Training',
-  2: 'ByteNet',
-  3: 'GNMT',
-  4: 'KonvS2S',
-  5: 'Transformator Basis',
-  6: 'Transformator groß',
+  0: 'Datensatz',
+  1: 'Hinweis',
+  2: 'MedQA',
+  3: 'CaseHOLD',
+  4: 'FinQA',
+  5: 'IFBench',
+  6: 'Mittlere Erholung',
   7: 'schnell',
   8: 'langsam',
   9: 'groß',
   10: 'klein',
-  11: 'BLEU',
+  11: 'Mittel',
 }
 
-describe('a table decided by group (S.table.groups: today’s decideGroups over TeX’s grid)', () => {
-  it('keeps a column whole where two of its five cells came back as they went; translates one with one in five', () => {
-    // (1706.03762v7's Model column, today kept whole in Chinese: "ByteNet", "Deep-Att + PosUnk" in English beside "GNMT + RL
-    // Ensemble" translated, the brief's failure; v2 laid each cell alone)
-    expect(states(table, rowsOf(translated))).toEqual([
-      // (the header: translated as a group, a cell of it back as it went among them)
-      'laid',
-      'laid',
-      // (the models: 2 of 5 as they went, at NAMES_SHARE 0.4: the column of names kept whole)
-      'cells',
-      'cells',
-      'cells',
-      'cells',
-      'cells',
-      // (the descriptions: 1 of 5, translated whole)
-      'laid',
-      'laid',
-      'laid',
-      'laid',
-      'laid',
-    ])
+describe('a table’s cell is text like any other: each laid by its own row', () => {
+  it('a column of names with one label: the names laid as the translator wrote them, the label in its translation', () => {
+    // (the column rule kept the whole column the original's where 0.4 of its cells came back as they went: "Avg. Recovery"
+    // stayed English beside the names; no column is read for what its cells are now)
+    const members = laidOf(table, rowsOf(translated))
+    expect(members.map((m) => m.state)).toEqual(Array(12).fill('laid'))
+    expect(textOfLaid(members[6]!)).toBe('Mittlere Erholung')
   })
-  it('counts a cell the paper keeps as it is (never asked) as one that came back as it went', () => {
-    // (the paper's own name rule kept "ByteNet" and "GNMT" before asking: no row, never to come; the others translated)
-    const rows = rowsOf({ ...translated, 2: null, 3: null, 4: 'KonvS2S', 5: 'Basis', 6: 'groß' }, [2, 3])
-    expect(states(table, rows).slice(2, 7)).toEqual(['kept', 'kept', 'cells', 'cells', 'cells'])
+  it('a reply equal to its source is an ordinary row: laid, its column’s other cells laid by theirs', () => {
+    const all = rowsOf({ ...translated, 6: 'Avg. Recovery', 7: 'fast', 8: 'slow', 9: 'large', 10: 'small', 11: 'mean' })
+    const members = laidOf(table, all)
+    expect(members.map((m) => m.state)).toEqual(Array(12).fill('laid'))
+    expect(members.slice(2, 7).map(textOfLaid)).toEqual(['MedQA', 'CaseHOLD', 'FinQA', 'IFBench', 'Avg. Recovery'])
   })
-  it('never keeps the header as names: a header of names stays translated where it was', () => {
-    const rows = rowsOf({ ...translated, 0: 'Model', 1: 'Training' })
-    expect(states(table, rows).slice(0, 2)).toEqual(['laid', 'laid'])
+  it('a header row with a name in it: each of its cells laid by its own row, the name as the translator wrote it', () => {
+    const t = tableOf([cell(0, [0, 0, 1, 1], 'Model'), cell(1, [0, 1, 1, 1], 'EM'), ...names.slice(0, 2)])
+    const members = laidOf(t, rowsOf({ 0: 'Modell', 1: 'EM', 2: 'MedQA', 3: 'CaseHOLD' }))
+    expect(members.map((m) => m.state)).toEqual(['laid', 'laid', 'laid', 'laid'])
+    expect(members.slice(0, 2).map(textOfLaid)).toEqual(['Modell', 'EM'])
   })
-  it('withholds the group of a cell that cannot be set, and that group alone: the other groups are laid', () => {
-    // (1706.03762v7-zh p9: today's header group left English, "(dev)" clipped past its floor, the body's base/big and row E
-    // translated; v2 withheld the whole table)
+  it('a unit the chain answered itself (no letter: `self`, never sent) is laid as its row says, as any row', () => {
+    // (chain.ts outcomeOf: a unit with no letter is answered by the chain with its own content; the front end makes no unit of a
+    // text of fewer than two letters, so such a row reaches an ink unit only: held here, nothing done about it, the coordinator's
+    // word of 2026-11-13)
+    const t = tableOf([cell(0, [0, 0, 1, 1], 'Model'), cell(1, [1, 0, 1, 0], '0.2')])
+    const rows: Rows = {
+      get: (id) =>
+        id === idOf(1)
+          ? { id, ok: true, by: 'test', content: text('Modell') }
+          : id === idOf(2)
+            ? { id, ok: true, by: 'self', content: text('0.2') }
+            : undefined,
+      done: false,
+      kept: () => false,
+    }
+    expect(states(t, rows)).toEqual(['laid', 'laid'])
+  })
+  it('a cell the paper keeps (Unit.kept: a fact of its source) is the original’s alone: its column’s others are laid', () => {
+    const rows = rowsOf({ ...translated, 2: null, 3: null }, [2, 3])
+    expect(states(table, rows).slice(2, 7)).toEqual(['kept', 'kept', 'laid', 'laid', 'laid'])
+  })
+  it('a cell with no row is the original’s alone: it holds nothing (never sent, or a reply not come by the rows’ end)', () => {
+    const rows = { ...rowsOf({ ...translated, 4: null }), done: true }
+    expect(states(table, rows).slice(2, 7)).toEqual(['laid', 'laid', 'none', 'laid', 'laid'])
+  })
+})
+
+describe('a cell that cannot be drawn stays the original’s alone; its group is held where the geometry needs it', () => {
+  it('a cell whose reply does not fit it is the original’s alone, as a paragraph’s would be: its header’s other cells laid', () => {
+    // (the coordinator's ruling (c) of 2026-11-13: 1810.04805v2-zh p6, QNLI's reply, a library's name, unfit in its cell, held
+    // Table 1's header English whole, System and Average with it, which today translates)
     const rows = rowsOf({ ...translated, 1: 'Ein sehr langes Wort über die ganze Tabelle hinweg gesetzt' })
-    const s = states(table, rows)
-    expect(s[0]).toBe('cells')
-    expect(s[1]).not.toBe('laid')
-    expect(s.slice(7)).toEqual(['laid', 'laid', 'laid', 'laid', 'laid'])
+    expect(states(table, rows)).toEqual(['laid', 'unfit', ...Array(10).fill('laid')])
   })
-  it('decides the cells spanning the same columns as one group of their own, never with a column’s', () => {
-    // (1706.03762v7 p9's row (E), "positional embedding instead of sinusoids" over four columns: group c1+4; a \multicolumn
-    // cell is no column's)
-    const span = cell(12, [6, 1, 2, 0], 'positional embedding instead of sinusoids')
-    const t = tableOf([...header, ...models, ...notes.slice(0, 3), span])
-    const rows = rowsOf({ ...translated, 7: 'fast', 8: 'slow', 12: 'Positionseinbettung' })
-    // (the descriptions now 2 of 3 as they went: kept; the spanning cell its own group, translated)
-    expect(states(t, rows).slice(7)).toEqual(['cells', 'cells', 'cells', 'laid'])
+  it('a cell whose row failed (a Row not ok) is the original’s alone: its column’s other cells laid', () => {
+    const base = rowsOf(translated)
+    const rows: Rows = {
+      ...base,
+      get: (id) => (id === idOf(10) ? { id, ok: false, why: { kind: 'refused' } } : base.get(id)),
+    }
+    expect(states(table, rows).slice(7)).toEqual(['laid', 'laid', 'refused', 'laid', 'laid'])
+  })
+  it('a spanning cell whose reply does not fit it still holds its group: its box is the others’ too', () => {
+    // (a header cell set over two rows, \multirow: the tie states it spanning)
+    const t: Part = { ...table, ties: [{ ...table.ties![0]!, spanning: [1] } as NonNullable<Part['ties']>[number]] }
+    const rows = rowsOf({ ...translated, 1: 'Ein sehr langes Wort über die ganze Tabelle hinweg gesetzt' })
+    expect(states(t, rows)).toEqual(['cells', 'unfit', ...Array(10).fill('laid')])
   })
   it('holds a group whose cell spanning columns the wrap cannot hide, as one stated spanning (its box the others’ too)', () => {
     const span = cell(7, [1, 0, 2, 0], 'all', { why: 'unwrapped' })
@@ -131,8 +158,26 @@ describe('a table decided by group (S.table.groups: today’s decideGroups over 
     const rows = rowsOf({ ...translated, 7: 'alle', 8: 'keine' })
     expect(states(t, rows)).toEqual(['laid', 'laid', 'unwrapped', 'cells'])
   })
+  it('a cell the wrap cannot hide, its box its own, is the original’s alone; its group laid (the ruling of 2026-10-24)', () => {
+    const lone = cell(12, [6, 1, 1, 0], 'left', { why: 'unwrapped' })
+    const t = tableOf([...header, ...notes, lone])
+    const rows = rowsOf({ ...translated, 12: 'links' })
+    expect(states(t, rows)).toEqual(['laid', 'laid', 'laid', 'laid', 'laid', 'laid', 'laid', 'unwrapped'])
+  })
+  it('decides the cells spanning the same columns as one group of their own, never with a column’s', () => {
+    // (1706.03762v7 p9's row (E), "positional embedding instead of sinusoids" over four columns: group c1+4; a \multicolumn
+    // cell is no column's: its failure holds its own group alone)
+    const span = cell(12, [6, 1, 2, 0], 'positional embedding instead of sinusoids')
+    const t = tableOf([...header, ...names, ...notes.slice(0, 3), span])
+    const base = rowsOf({ ...translated, 12: 'Positionseinbettung' })
+    const rows: Rows = {
+      ...base,
+      get: (id) => (id === idOf(13) ? { id, ok: false, why: { kind: 'refused' } } : base.get(id)),
+    }
+    expect(states(t, rows).slice(7)).toEqual(['laid', 'laid', 'laid', 'refused'])
+  })
   it('keeps a table whose cells state no grid place as one group, as before', () => {
-    const plain = tableOf([...header, ...models, ...notes].map(({ cell: _, ...c }) => c as Placed))
+    const plain = tableOf([...header, ...names, ...notes].map(({ cell: _, ...c }) => c as Placed))
     expect(states(plain, rowsOf(translated)).every((s) => s === 'laid')).toBe(true)
   })
 })

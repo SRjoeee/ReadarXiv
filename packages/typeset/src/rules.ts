@@ -618,17 +618,18 @@ const SPECS: readonly RuleSpec[] = [
     home: 'shared',
     step: 'L2',
     owns: ['3.4:decide'],
-    ports: ['groups.mjs:37-93 groupOf, decideGroups, NAMES_SHARE, unchanged', 'rows.mjs:265-292 layerRows'],
+    ports: ['groups.mjs:37-43 groupOf', 'rows.mjs:265-292 layerRows'],
     how: 'ported',
-    ruling: "2026-11-08 a table's cells translated or kept by group, the way the production site judges them",
-    reads: ['NAMES_SHARE'],
+    ruling:
+      "2026-11-08 a table's cells drawn by group, the way the production site draws them; 2026-11-13 a table's cell is text like any other, the translator decides a name; 2026-11-13 (c) a cell that cannot be drawn is the original's by itself, its group held only where the geometry needs it",
+    reads: [],
     file: 'shared/table-groups.ts',
     state: {
       is: 'changed',
-      why: "decided in the entry over each member's own row and TeX's grid places (Placed.cell), not over the rows the door gives a unit id; a member the prepare leaves the original's (its why) tells nothing, where today counted its row",
+      why: "the groups over TeX's grid places (Placed.cell), for the hold and the settle alone: each cell laid by its own row, no group decided by what its cells say (today's decideGroups keeps a column whole as names where NAMES_SHARE of its cells came back as they went; not ported, the owner's word of 2026-11-13); and a cell not set before its lay holds its group only where it spans (lay/entry.ts holdsTable), where today's held it for any reason but the wrap's (the coordinator's ruling (c) of 2026-11-13)",
       replay:
         'tests/unit/table-groups.test.ts over hand-made parts (the corpus rows the parity reads are decided already)',
-      cases: 7,
+      cases: 13,
     },
   },
   {
@@ -852,9 +853,17 @@ const SPECS: readonly RuleSpec[] = [
     owns: ['T8', '1F:withheld', '3.4:settle'],
     ports: ['RUN:2401-2409 withhold', 'RUN:2411-2425 settleGroup'],
     how: 'ported',
+    ruling:
+      "2026-11-13 (c) a cell that cannot be drawn is the original's by itself, its group held only where the geometry needs it",
     reads: [],
     file: 'shared/table-settle.ts',
-    state: { is: 'ported', replay: 'every call of the corpus: ledgers/*.ledger.json.gz settles', cases: 1479 },
+    state: {
+      is: 'changed',
+      why: "the verdict today's (tableSettle: on two pages, a cell unfit, or painted), what it withholds not: a cell its lay could not draw whole is the original's by itself, the group's other cells laid, as a paragraph's would be; the group withheld whole only where that cell spans or the group lies on two pages (lay/page.ts settleTies; the coordinator's ruling (c) of 2026-11-13, under the owner's a table's cell is text like any other). Today's withheld the group whole for any cell unfit: with cells judged like body text, one unfit reply took back the whole of its header or column (the display gate at 2026-11-13: 26 groups, 144 cells on 19 pages)",
+      replay:
+        'the verdict on every call of the corpus (ledgers/*.ledger.json.gz settles, tests/replay/table-settle.test.ts); what it withholds, tests/unit/page-wait.test.ts and table-groups.test.ts',
+      cases: 1479,
+    },
   },
   // ---------------------------------------------------------------- what the reader paints, hides, selects and links
   {

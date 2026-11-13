@@ -171,7 +171,11 @@ for (const [pair, raw] of drawn) {
   // (the ruling WB: where today's drawing of a unit ends a line before a boundary between runs inside a word, read from today's two
   // dumps, its reader dump's lines and its tap ledger's slots, rulings.mjs cutBeforeBoundary; by the unit's key, today's ord)
   const readerFile = join(LAB, 'refactor-2026-11', 'baseline', 'reader', `${pair}.reader.json`)
-  const todayLines = new Map((existsSync(readerFile) ? JSON.parse(readFileSync(readerFile, 'utf8')).units : []).map((u) => [u.ord, u.lines]))
+  const todayDump = existsSync(readerFile) ? JSON.parse(readFileSync(readerFile, 'utf8')) : null
+  const todayLines = new Map((todayDump?.units ?? []).map((u) => [u.ord, u.lines]))
+  // (the ruling CT: why today's reader leaves a unit the original's, its dump's notLaid or left `why`, by its key)
+  const todayWhys = new Map([...(todayDump?.notLaid ?? []), ...(todayDump?.left ?? [])].map((u) => [`t${u.ord}`, u.why ?? null]))
+  const todayWhy = (key) => todayWhys.get(String(key)) ?? null
   const cuts = new Map()
   const todayCut = (key) => {
     if (!cuts.has(key)) {
@@ -293,7 +297,7 @@ for (const [pair, raw] of drawn) {
       const rec = raw.pages.find((r) => r.page === pg)
       return rec && v2.relay.pages[pg] && rec.relay && !rec.relay.error ? { ...rec, v2: { ...rec.v2, ...rec.relay } } : rec
     }
-    rulingsPass(drawnAgain, { recOf: relayRec, v2: relayV2, laid: relayV2.pages, unsqueezed: v2.relay.unsqueezed ?? null, todayCut }, recount)
+    rulingsPass(drawnAgain, { recOf: relayRec, v2: relayV2, laid: relayV2.pages, unsqueezed: v2.relay.unsqueezed ?? null, todayCut, todayWhy }, recount)
     for (const p of mine) freshResolve(p, again.find((q) => q?.page === p.page) ?? null, { incomparable, unsentenced })
     relayTimes.push({ pair, lay: v2.relay.ms ?? null, drawing: raw.relayMs ?? null, pages: Object.keys(v2.relay.pages).length })
   }
@@ -360,7 +364,7 @@ for (const [pair, raw] of drawn) {
   // covered, listed apart; the pair's lay with no CJK line squeezed, `unsqueezed`, for the ruling L2)
   rulingsPass(
     mine.filter((p) => !p.error),
-    { recOf: (pg) => raw.pages.find((r) => r.page === pg), v2, laid: v2.pages, unsqueezed: v2.unsqueezed ?? null, todayCut },
+    { recOf: (pg) => raw.pages.find((r) => r.page === pg), v2, laid: v2.pages, unsqueezed: v2.unsqueezed ?? null, todayCut, todayWhy },
     recount,
   )
   pages.push(...mine)

@@ -388,22 +388,25 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
   })
   const cellRows = (second: OutPiece[] | null = [{ t: 'text', s: 'zwei' }]) =>
     rowsOf([row([{ t: 'text', s: 'eins' }]), ...(second ? [{ ...row(second), id: idC }] : [])], true)
-  it("leaves a table's every cell the original's where one of them cannot be set before its lay (PR #620 review: one English cell, its peers laid)", () => {
-    // (today's contract, RUN:1223 and settleGroup RUN:2411: a translated cell that cannot be drawn — unproven, its row refused
-    // or never come, unfit — keeps every cell of its group the original's; the laid ones are withheld, 'cells', and turn
-    // nothing off)
+  it("leaves a table's cell that cannot be set before its lay the original's alone, its peers laid; one that spans holds its table", () => {
+    // (the coordinator's ruling (c) of 2026-11-13, under the owner's of the same day (a table's cell is text like any other): a
+    // cell that cannot be drawn in its translation — unproven, its row refused or never come, unfit — stays the original's by
+    // itself, as a paragraph does, where today's contract (RUN:1223, settleGroup RUN:2411, the PR #620 review's ground) kept
+    // every cell of its group the original's; its group is held only where the geometry needs it: a cell that spans)
     const unproven = twoCells({ els: [['0', { kind: 'umacro', unknown: 1, cmd: 'sys', bare: 1, ink: [] }]] })
     const r2 = cellRows([
       { t: 'el', id: '0' },
       { t: 'text', s: ' zwei' },
     ])
-    expect(layPage(unproven, r2, rules, metrics()).members.map((m) => [m.state, m.off, m.lines.length])).toEqual([
-      ['cells', 0, 0],
-      ['unproven', 0, 0],
+    expect(layPage(unproven, r2, rules, metrics()).members.map((m) => [m.state, m.lines.length > 0])).toEqual([
+      ['laid', true],
+      ['unproven', false],
     ])
     // (a translation that failed: the cell was to be translated with the rest)
     const failed = rowsOf([row([{ t: 'text', s: 'eins' }]), { id: idC, ok: false, why: { kind: 'refused' } }], true)
-    expect(layPage(twoCells(), failed, rules, metrics()).members.map((m) => m.state)).toEqual(['cells', 'refused'])
+    expect(layPage(twoCells(), failed, rules, metrics()).members.map((m) => m.state)).toEqual(['laid', 'refused'])
+    const failedSpanning: Part = { ...twoCells(), ties: [{ rule: 'cells', cells: [[0, 1]], spanning: [1] }] }
+    expect(layPage(failedSpanning, failed, rules, metrics()).members.map((m) => m.state)).toEqual(['cells', 'refused'])
     // (no row with every row in: a cell no translator was sent (a cell of digits), the original's in a table laid)
     expect(layPage(twoCells(), cellRows(null), rules, metrics()).members.map((m) => m.state)).toEqual(['laid', 'none'])
     // (both set: the table laid whole)
