@@ -138,7 +138,9 @@ const holderCommentOf = (text, ps) => {
  *  keyed as `keyed` says, sites numbered across the tree, each file's edits, and (not for JSON) each census item's key by
  *  the item. `keysOnly`: the rules and their keys alone (the census's reading of the ledger) */
 export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS, keysOnly = false } = {}) {
-  const inScope = (p, f) => f.role === 'product' && f.kind === 'code' && !f.generated && areas.includes(f.area) && f.ast
+  // (a package's test support, `packages/<name>/src/testing/` (translate's: fake translators, a scripted fetch), exported
+  // only as the package's `./testing` entry and imported by tests and the lab, never by a product module: no product rule)
+  const inScope = (p, f) => f.role === 'product' && f.kind === 'code' && !f.generated && areas.includes(f.area) && f.ast && !/^packages\/[^/]+\/src\/testing\//.test(p)
   const files = [...scan.files].filter(([p, f]) => inScope(p, f)).sort((a, b) => a[0].localeCompare(b[0]))
   const rules = {}
   const sites = []

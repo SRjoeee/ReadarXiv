@@ -454,6 +454,18 @@ export function resolveTracked(tracked, fullText) {
 }
 
 /** what was recorded of a row, in words: per input its decisions (each outcome's count) and its plain reads */
+/** which inputs reached a row (ran a site of it, read it, read its key): `papers` (the corpus, the holdout, a third set,
+ *  the tests that read the lab's data), `tests` (the tests of our own), both, or none. A rule the papers never reach has
+ *  "one outcome" only for what the tests took (the translate package's: no paper input calls the chain) */
+export function exercisedBy(row) {
+  const inputs = new Set()
+  for (const s of row.sites) for (const [k, o] of Object.entries(s.outcomes)) if (o.n) inputs.add(k)
+  for (const [k, n] of Object.entries(row.keyReads ?? {})) if (n) inputs.add(k)
+  const tests = inputs.has(OWN_INPUT)
+  const papers = [...inputs].some(k => k !== OWN_INPUT)
+  return papers && tests ? 'papers and tests' : papers ? 'papers' : tests ? 'tests' : 'none'
+}
+
 export function recordedOf(row) {
   const per = {}
   for (const s of row.sites)

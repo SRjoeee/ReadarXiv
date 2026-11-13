@@ -91,4 +91,5 @@ export declare function citationsOf(comment: string | null | undefined): Citatio
 export declare function readsOf(sites: { reads?: Record<string, number> }[]): Record<string, number>
 export declare function ledgerOf(map: SiteMap, recording: Recording, options?: { holdout?: string[] | null }): Ledger
 export declare function recordedOf(row: Row): string
+export declare function exercisedBy(row: Row): string
 export declare function entriesJudged(rule: { entries?: string[] }, sites: (import('./sites.mjs').Site | undefined)[]): { judged: string[]; notJudged: { entry: string; why: string }[] }
