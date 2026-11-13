@@ -615,15 +615,18 @@ function cellPrintsText(src, b, ctx) {
   for (const m of x.matchAll(/\\([A-Za-z@]+)/g)) if (ctx.bodies?.has(m[1]) && macroSetsText(m[1], b, ctx)) return true
   return false
 }
+/** the paper's macros a body's text is looked for through, nested (macroSetsText): a budget of the walk's, as displayLetters
+ *  expands the paper's macros three deep */
+const NESTED_MACROS_MAX = 3
 /** whether the paper's macro `name`'s body sets text: two letters together where the walk reads it (probeBranch's `words`), or a
- *  call of another of the paper's macros that does (three deep), by the paper, once */
+ *  call of another of the paper's macros that does (NESTED_MACROS_MAX deep), by the paper, once */
 function macroSetsText(name, b, ctx, depth = 0) {
   const memo = ctx.textMacros ?? (ctx.textMacros = new Map())
   if (memo.has(name)) return memo.get(name)
   memo.set(name, false)
   const body = ctx.bodies.get(name) ?? ''
   const r = probeBranch(body, 0, body.length, b, ctx)
-  const sets = r.words || (depth < 3 && [...body.matchAll(/\\([A-Za-z@]+)/g)].some(m => m[1] !== name && ctx.bodies.has(m[1]) && macroSetsText(m[1], b, ctx, depth + 1)))
+  const sets = r.words || (depth < NESTED_MACROS_MAX && [...body.matchAll(/\\([A-Za-z@]+)/g)].some(m => m[1] !== name && ctx.bodies.has(m[1]) && macroSetsText(m[1], b, ctx, depth + 1)))
   memo.set(name, sets)
   return sets
 }
