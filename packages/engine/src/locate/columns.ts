@@ -49,12 +49,29 @@ export interface FreeWord {
 }
 
 /**
- * How far two entries' edges (or middles) may stand apart and still be one column's, PDF units: what a part's hundredth, a
- * glyph's advance against its TFM width and a formula's italic correction TeX counts in an entry's box and no advance shows leave
- * of TeX's equal positions (the lane cell-room's reading of 767 columns of the corpus with two single-line unit cells: 723 within
- * it, the rest 0.5 to 43.7 pt apart, cells of another column the source walk placed there: lanes/cell-col.md for the spread)
+ * How far two entries' edges (or middles) may stand apart and still be one column's: 0.5, in PDF units (points). Its source: TeX
+ * sets every entry of an l, c or r column on the column's one edge or middle exactly (the template's \hfil), and the part states
+ * positions on its hundredth; what stands between is what TeX counts in an entry's box and no glyph's advance shows (a formula's
+ * italic correction, an advance against its TFM width) and an element's ink past its advance, which an entry's extent takes in.
+ * Measured over the columns of two unit cells or more of one class on the round's 90 bundles (lane cell-col): 572 of 608 equal to
+ * the hundredth, 12 apart by 0.1 to 0.5 (an element's ink against an advance, a centred cell of several lines), 2 by 0.5 to 0.75,
+ * 22 by over 2 (cells the source walk placed in another column than TeX's). Its reason: docs/PDF-READER.md §18.13, a column
+ * whose entries do not line up is no column of TeX's
  */
 const ALIGNED = 0.5
+/**
+ * The fewest entries a column's box is read from: 2, a count of entries. Its source: what lining up is: one entry stands on its
+ * column's edge with nothing to show that the edge is TeX's, and its box would be its own extent, which no reading holds to TeX's
+ * column (docs/PDF-READER.md §18.13: a column of one entry states none)
+ */
+const ENTRIES = 2
+/**
+ * The fewest pages a table's columns are compared over before its pages are pooled: 2, a count of pages. Its source: TeX sets a
+ * longtable's columns at one width on every page it runs over (longtable.sty, its widths kept in the .aux), so where the pages'
+ * frames stand alike a column stands at its class's edge or middle alike on each; one page has nothing to compare
+ * (docs/PDF-READER.md §18.13)
+ */
+const PAGES = 2
 
 type Box = [number, number]
 type Entry = [x0: number, x1: number, cls: ColumnClass]
@@ -70,7 +87,7 @@ const hullOf = (es: readonly (readonly [number, number, ...unknown[]])[]): Box =
 ]
 /** a column's box from its entries: their hull, where there are two at least and each stands where its class sets it there */
 function boxOf(es: readonly Entry[]): Box | null {
-  if (es.length < 2) return null
+  if (es.length < ENTRIES) return null
   const box = hullOf(es)
   return es.every((e) => setIn(e[2], e, box)) ? box : null
 }
@@ -137,7 +154,7 @@ export function columnBoxes(cells: readonly ColumnCell[], words: readonly FreeWo
     const cols = new Set(pages.flatMap((p) => [...perPage.get(p)!.keys()]))
     for (const k of cols) {
       const on = pages.filter((p) => perPage.get(p)!.has(k))
-      if (on.length < 2) continue
+      if (on.length < PAGES) continue
       common++
       const ks = new Set(on.map((p) => classOf.get(p)!.get(k) ?? null))
       const K = ks.size === 1 ? [...ks][0]! : null
