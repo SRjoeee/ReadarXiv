@@ -90,6 +90,23 @@ describe('a note written on its own is the block’s where the paper’s binding
       ['Corresponding author.', 'author'],
     ])
   })
+  it('a request in a branch TeX skips is no request: \\iffalse, a paper’s own \\newif set false; \\iftrue’s branch is (review of #641)', () => {
+    const cortext = '\\cortext[x]{Contact the editorial office.}'
+    expect(notes(units(doc('elsarticle', `\\title{A Paper}\n\\author{Ann Lee\\iffalse\\corref{x}\\fi}\n${cortext}`)))).toEqual([
+      ['Contact the editorial office.', '-'],
+    ])
+    expect(notes(units(doc('elsarticle', `\\title{A Paper}\n\\author{Ann Lee\\iftrue\\corref{x}\\fi}\n${cortext}`)))).toEqual([
+      ['Contact the editorial office.', 'author'],
+    ])
+    const own = (value: string) =>
+      notes(units(doc('elsarticle', `\\newif\\ifcorr\n\\corr${value}\n\\title{A Paper}\n\\author{Ann Lee\\ifcorr\\corref{x}\\fi}\n${cortext}`)))
+    expect(own('false')).toEqual([['Contact the editorial office.', '-']])
+    expect(own('true')).toEqual([['Contact the editorial office.', 'author']])
+    // (and one the source cannot tell, \ifdefined: TeX may or may not ask; no author surely does, so body)
+    expect(notes(units(doc('elsarticle', `\\title{A Paper}\n\\author{Ann Lee\\ifdefined\\journalmode\\corref{x}\\fi}\n${cortext}`)))).toEqual([
+      ['Contact the editorial office.', '-'],
+    ])
+  })
 })
 
 describe('an author command’s argument a macro stores keeps its role’s kind', () => {
