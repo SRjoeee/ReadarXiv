@@ -618,17 +618,18 @@ const SPECS: readonly RuleSpec[] = [
     home: 'shared',
     step: 'L2',
     owns: ['3.4:decide'],
-    ports: ['groups.mjs:37-93 groupOf, decideGroups, NAMES_SHARE, unchanged', 'rows.mjs:265-292 layerRows'],
+    ports: ['groups.mjs:37-43 groupOf', 'rows.mjs:265-292 layerRows'],
     how: 'ported',
-    ruling: "2026-11-08 a table's cells translated or kept by group, the way the production site judges them",
-    reads: ['NAMES_SHARE'],
+    ruling:
+      "2026-11-08 a table's cells drawn by group, the way the production site draws them; 2026-11-13 a table's cell is text like any other, the translator decides a name",
+    reads: [],
     file: 'shared/table-groups.ts',
     state: {
       is: 'changed',
-      why: "decided in the entry over each member's own row and TeX's grid places (Placed.cell), not over the rows the door gives a unit id; a member the prepare leaves the original's (its why) tells nothing, where today counted its row",
+      why: "the groups over TeX's grid places (Placed.cell), for the hold and the settle alone: each cell laid by its own row, no group decided by what its cells say (today's decideGroups keeps a column whole as names where NAMES_SHARE of its cells came back as they went; not ported, the owner's word of 2026-11-13)",
       replay:
         'tests/unit/table-groups.test.ts over hand-made parts (the corpus rows the parity reads are decided already)',
-      cases: 7,
+      cases: 11,
     },
   },
   {

@@ -2248,7 +2248,7 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     units already (a paragraph or a footnote under the table): they stop the caption's walk and light by sentence.
   - **A figure's picture** lights nothing, nor its panels: the two panes stand side by side already. No outline is drawn.
   - **A table** lights cell by cell, and a gap between two cells or a rule nothing. A cell the front end made a unit lights
-    alone; so does one it did not — a cell of numbers, of a formula, of one letter (a unit has two letters at least): the
+    alone; so does one it did not — a cell of numbers, of a formula, of one letter (a unit has two letters at least, §18.72): the
     table's words no unit holds, one cell while they stand on one line within 0.6 of their height of each other, and
     within 0.4 where those words leave a column free between them on every row of the table (`floats.mjs` `cellsOf`: a
     word space is a third of the height, two columns' `\tabcolsep` more than one; columns set tight, a decimal point or a ±
@@ -2800,7 +2800,7 @@ A rule that does two of these is split, or classed by the more expensive.
 
 The edge cases, decided:
 
-- **`NAMES_SHARE` (a table's groups)** is a translation rule. The workflow decides groups, and the rows a reader gets hold the decision (`state: 'kept'`), not the cells' translations. Making it a layout rule would mean rows that carry every kept cell's translation, for a threshold measured once.
+- **`NAMES_SHARE` (a table's groups)** is a translation rule of today's reader (the rebuilt reader decides no group by what its cells say, §18.72). The workflow decides groups, and the rows a reader gets hold the decision (`state: 'kept'`), not the cells' translations. Making it a layout rule would mean rows that carry every kept cell's translation, for a threshold measured once.
 - **`authorsTranslated`** decides which units a target sends, so it is a translation rule and lives in `translate/kept.mjs`, apart from the TeX path's strategies (`scripts.mjs`, taken out of the engine with the compiled translation on 2026-11-04).
 - **Float labels and babel's names** (the names a language gives a figure, a table and each generated heading: Abstract, References, Contents, …, and whether to use them) are layout: one language's choice at draw time. Where each name stands is extraction: the layout marks wrap the name macros' text and the layout file locates each occurrence (D1a). The layer draws the target's word wherever TeX identified the heading: by its macro, by a style's literal through the definition it sits in, and after the paper's own `\selectlanguage`; the captions (which float labels are the target's: the reader's `CAPTIONS`, `layer-proto/reader.mjs`; a compile of the translation once read them, `captionsOf`, taken out with it on 2026-11-04) decide float labels alone (the ruling on D1a). A name TeX sets right before a unit on its first line (IEEEtran's run-in "Abstract—") is that unit's lead, flowed with its translation whatever its width, the original's joint and glue after it. A name's word is drawn in runs by script as a unit's words are: its CJK characters in the target's CJK face, every other (a Latin word, a digit, a space) in the Latin one (`layer2.mjs` `nameScriptRuns`): the CJK faces served hold no ASCII, so that one face for a word of two scripts was refused by the face check and the name left the original's (the figure labels' finding, #490). **The parked final's requirement:** if the TeX page program returns, it must name the same headings: rewrite a literal the marks wrap to its macro (`\abstractname`), and apply the target's captions again after the paper's own language switch. **Hyphenation** (which patterns a target uses, and their minimums) is layout; the pattern files are assets the host serves, and the algorithms are code.
 - **The font roles** (which CJK family and weights a script takes) are layout. The face catalog (files, licences, size corrections, coverage) and the Latin design table are facts about files and stay code. **A CJK script is drawn at Regular, and Bold for bold, beside every English family** (the maintainer's ruling of 2026-10-29, on crops of four papers, `research/babeldoc-typography-2026-10-29/weight/`): Light, and SemiBold for bold, beside Computer Modern and Garamond read lighter than the page they sit in and than BabelDOC's Source Han Serif Regular, by 9 % of the original's stroke on 2608.16117v1's six blocks (0.86 of it against Regular's 0.95, at the canvas's weight); the rule (`cjkFaces.light`) and the eight Light and SemiBold faces went (`RULES_SCHEMA` 6, §18.2; engines of schema 5 keep the last set published for it, §18.3). **A CJK italic run is the body's own face slanted** (the owner's ruling of 2026-10-19, Q17's row 3), in zh, zh-Hant, ja and ko alike: the same face, size correction and weight as the upright, sheared 13° about its baseline as it is drawn (an SVG skew, `layer-proto/fonts.mjs` `CJK_SLANT_DEG`, the one number; 10° was the other the owner saw). A bold italic run is the bold face sheared, no longer the bold upright. No file is fetched for it and no face is made: the run is measured in the upright's own font string, so its advance and every character's place are the upright's. **A CJK run's family list ends with the Latin face of its weight**, upright (`fonts.mjs` `roleFaceOf`, #47.14): the copy space the drawing appends to a run (`layer2.mjs` `lineRuns`, for copy and find) is Basic Latin, which every CJK slice leaves to the Latin faces (the web's font slices), so with the CJK face alone the device drew it and the canvas measured it in the device's own face (the web's `layer-fonts` e2e, rows 3 and 4, marked known); the CJK faces stay first, so every CJK character is theirs, and the CJK class holds no other character the Latin faces serve. The rule set's `cjkFaces.kai`, which no engine read after this ruling, went with the light designs at schema 6 (§18.2): the engines readers held before it, which draw emphasis in it, read schema 5 and keep their schema-5 set (§18.3), so no set of schema 6 names it.
@@ -6026,15 +6026,12 @@ was that it may stay the original's where the highlight forces it.
   `holdsLetter` (`figure-lines.ts`, Unicode's letter), which already tells a figure's decorated word (`cite`) from a decorated
   number (`ref`) and now reads a cell's decorated text too. A figure text whose decorated word is all its text but its marks
   (2608.06701v1's "`CallbackBase.host_label(result)`" between backticks) is held like the others: no special case.
-- **A cell is held, not kept.** The table-group rule (`lay/entry.ts` decideTables: a body column whose cells mostly came back from
-  the translator as they went is a column of names, kept whole; a kept cell counts as one that came back as it went) judges what
-  kind of content a column holds from the translator's replies. A cell held for its decoration is ordinary translatable text held
-  for a reason of drawing: no evidence about its column. Stated `unwrapped`, it tells the decision nothing, and its column is
-  decided by its other cells' replies. Stated `kept` (as Rule 1 keeps a cell, §18.22) the decorated cells alone would have passed
-  NAMES_SHARE in every column that holds them and kept 17 more cells whole (2111.09276v1 Table 1's columns 0 and 2, 3 each;
-  2610.40576v1's tables 9, 10 and 12, 4, 3 and 4); the owner's ruling names the label or the cell, and his ruling on header rows
-  goes the same way (a kept cell does not hold its row, "as now"). A held cell is still sent to the translator and its reply still
-  comes back (the bundle marks it no `kept`), as a held figure text's is; accepted for the same reason.
+- **A cell is held, not kept.** A cell held for its decoration is ordinary translatable text held for a reason of drawing: stated
+  `unwrapped`, alone, it holds nothing of its group (a cell the wrap cannot hide, its box its own, is the original's alone,
+  `lay/entry.ts` holdsTable). When this rule was made the table-group rule then in force (a body column whose cells mostly came back
+  from the translator as they went kept whole as a column of names, deleted on 2026-11-13, §18.72) read a `kept` cell as a name:
+  stated `kept`, the decorated cells alone would have kept 17 more cells whole. A held cell is still sent to the translator and its
+  reply still comes back (the bundle marks it no `kept`), as a held figure text's is; accepted for the same reason.
 - **Not this section's.** Captions and body text: their decorated tokens stay elements in the translated line (§18.51: Figure 1's
   caption of 2111.09276v1 translated with its two highlights as crops). A table's header row's other cells (the owner's "as now").
   A style group whose edge is inside a word (§18.47). A colour alone withholds no word today (a figure's run is one fill, a
@@ -6111,9 +6108,8 @@ keep now carries its reason from the line that decides it, as the family before 
 (`InstrumentUnit`) that the lab's dump reads and the bundle does not carry, so no bundle byte moves.
 
 - `pseudocode`: a unit of an algorithm float's body (the front end's `pseudocode`, read by `pipeline/instrument.mjs`
-  `unitFactsOf`, which now states each kept unit's reason beside the set: 'pseudocode' first, then 'name'). The dump's
-  `keptBy: 'pseudocode'`.
-- `nameCell`: a cell or a figure text of names or markup tokens alone (`translate/mt.mjs` nameCells). `keptBy: 'name'`.
+  `unitFactsOf`, which now states each kept unit's reason beside the set). The dump's `keptBy: 'pseudocode'`.
+- (`nameCell`, a cell or a figure text of names or markup tokens alone, `keptBy: 'name'`: gone with the rule, §18.72.)
 - `crowded`: a figure text the figure reading keeps whole as crowded (a translation with no room beside other ink, a formula it
   would tear) and for no reason of its own besides (`double`, `script` stay first). `keptBy: 'crowded'`.
 - `block`: a kept block of rule 10 (`locate/today/ink-units.mjs` keptUnitsOf: a listing, a page number, a URL alone, a
@@ -6122,7 +6118,7 @@ keep now carries its reason from the line that decides it, as the family before 
   (`locate/ink.ts`); no unit of the corpus moved by it.
 
 Each mark is a cause of the candidate's own unit (`lab/pdf/prepare-back/stated.mjs` CAUSE: `address`, `crowded`,
-`pseudocode`, `nameCell`, `block`; keptWhyOf), which the acceptance list does not accept by this: its entries are the
+`pseudocode`, `block`; keptWhyOf), which the acceptance list does not accept by this: its entries are the
 coordinator's. The order of `keptBy` is the rules': a unit two marks state is kept by the first.
 
 **The page states it `kept`** (2026-11-13, round B16). A Page member whose unit the paper keeps (`Rows.kept`, the bundle's
@@ -6181,9 +6177,9 @@ alone were traced (lane google-lay) to the gate, not the reader, but for one (§
 - **Like for like.** With every unit's Google row, the entry lays members the runner, bounded by today's laid members, never
   lays, and a page's fill meets them: over the 90 pairs the entry's lines differ from the runner's for 1,164 members (door 544);
   given the rows of the runner's members alone (the lane's hook, `AXT_LIKE`), 625 before these fixes and 281 after (door 244),
-  "laid against laid" 328 and 34 (door 337 and 47). The rest is the table's names rule (`decideTables`, which the runner has
+  "laid against laid" 328 and 34 (door 337 and 47). The rest was the table's names rule (`decideTables`, which the runner has
   not): a body column whose cells came back as they went kept whole as the original's, more often with Google's replies ("cells
-  against laid", 107 against the door's 19).
+  against laid", 107 against the door's 19); deleted on 2026-11-13 (§18.72).
 - **The reads gate** (2026-11-13, round B16, design-display row F6). The runner lays each page again under the reader's default
   reading options and with every option on (`gateL1Pair`'s `leave`: the kinds their toggles leave, the reader's
   `compose/classes.ts` leftKinds), its rows recording every id the lay reads (`reads`), and counts each id its page's wait set
@@ -6515,6 +6511,43 @@ notes in 20 papers are now the original's on their first page: 28 `\thanks` insi
 `of`, and the stored places and ICML's footnotes their kinds); no LAYOUT (no mark moves), no TRANSLATE (no wire moves); FORMAT
 stays 1. The display gate's ruling AN (`lab/typeset/parity/rulings.mjs`) covers the `shown` readings these notes make with the
 names off.
+
+### 18.72 A table's cell is text like any other; the translator decides a name (the owner's ruling, 2026-11-13)
+
+The owner's words on a card of 2611.03953v2 p7 (a column of dataset names, MedQA, CaseHOLD …, under them the row "Avg.
+Recovery", kept English with them): judge naturally what a thing is and whether to translate it, by a rule general and long-lived,
+no dead rule and no opening made for one translator's weakness; an LLM with the paper as its context will translate better. Shown
+the three ways and their price on real replies, he chose the third: 「c。好，按你建议的来。」. So the rebuilt engine decides only
+what is not language, what the source states: the translator decides the rest, and a reply equal to its source is a lawful
+translation. What an LLM should leave as written belongs in the translation instruction, one place for every provider, never in
+the layout's rules.
+
+- **No unit is kept for what its words look like.** The front half kept a table's cell and a TikZ picture's text when its words
+  looked like names (`mt.mjs` nameCells: at most three words each with a digit, all capitals or an inner capital, or a capitalised
+  word the paper's prose writes so mid-sentence and never in lower case; or markup tokens). It no longer reads that rule
+  (`compile/live.mjs` openPaper states no `kept`; `instrument.mjs` unitFactsOf keeps an algorithm's body alone, §18.22's pitch
+  and the identifiers' placeholders stay where they were): a header row is a row of texts like the others, translated whole, the
+  names in it as the translator writes them.
+- **No column is kept for what its cells say.** The typesetter kept a body column whole as the original's where at least 0.4 of
+  its cells came back from the translator as they went or were kept before asking (`NAMES_SHARE`, measured once on 29 fixtures
+  and six papers): a tuned share that stood in for a fact about each cell, and kept a label under names English ("Avg.
+  Recovery", "IER (Ours)", "+schema"). Deleted with its answer (`shared/table-groups.ts` NAMES_SHARE, namesGroup, CellAnswer,
+  unchanged; `lay/entry.ts` decideTables' names): each cell is laid by its own row, a reply equal to its source as any other row
+  (drawn; the acceptance rule refuses no echo, `translate/accept.ts`).
+- **What stays the original's, each a fact of the source or of the drawing.** A cell of fewer than two letters is no unit: the front
+  end makes none of a text with under two letters on its text pieces (`latex-front.mjs` flush; a formula alone is a placeholder,
+  no letter of text), so its ink stays; a unit with no letter that reaches the chain (an ink unit) is answered by the chain with
+  its own content and never sent (`chain.ts`, `by: 'self'`), and a figure text whose row is its source keeps its ink
+  (`shared/figures.ts` sameAsSource). Code set in one pitch (§18.22), an identifier or an address (§18.25, every unit's), a
+  formula, a citation and a reference (elements), an algorithm's body (the owner's ruling of 2026-11-08), a cell holding a
+  decorated word (§18.61, until a ground can follow its words). And a table's group is still drawn whole or not at all where a
+  cell of it cannot be drawn (a row failed, unfit, clipped, on two pages: `holdsTable`, `settleTies`; the owner's ruling of
+  2026-11-08 and the cell the wrap cannot hide, of 2026-10-24): a failure of drawing, never a judgement of what a cell says.
+- **Today's reader keeps its rule until the cut-over.** The rebuilt engine shares openPaper and the bundle's units with it; the name
+  rule moved back to today's `translate/mt.mjs` (isName, isCode, proseOf, nameCells), and today's path states it on its own:
+  `pipeline/live.mjs` openPaper (`withNames`), `layer-proto/units.mjs` bundleUnitsOf (its KEPT flag from the paper's `kept`),
+  `layout/paper.mjs` madeBibliography's paper opened again. Its bundles are byte for byte what they were (the engine's golden
+  tests). Today's `translate/groups.mjs` (decideGroups, NAMES_SHARE) is the website's and stays with it.
 
 ## 19. The engine's contract
 

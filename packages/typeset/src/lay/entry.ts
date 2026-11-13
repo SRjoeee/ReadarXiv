@@ -4,9 +4,9 @@
 // (waitOf: rows not in while more may come, before any work), each member's reading and tokens (read.ts readMember over the row's
 // pieces made from the member's stated facts, rowPieces: no Units object), its faces (B.cover: a face not loaded is waited for, a
 // character no served face holds leaves it `served`), its setting (adapt.ts: U.blocks, U.decor, U.params, its flow's shared
-// rows), every flow laid and each pass page filled (layPagePrepared: L8-L11, a flow that throws its own; a table's cells
-// decided, laid and settled by group, S.table.groups: the header, each column, the cells spanning the same columns, a column
-// of names kept whole; a size tie's members at one size), and the members as drawn (D.display). The reader's leave
+// rows), every flow laid and each pass page filled (layPagePrepared: L8-L11, a flow that throws its own; a table's cells each
+// laid by its own row and held or settled by group where one cannot be drawn, S.table.groups: the header, each column, the cells
+// spanning the same columns; a size tie's members at one size), and the members as drawn (D.display). The reader's leave
 // (Rules.leave: the unit kinds it shows untranslated) leaves a member of such a kind the original's (`left`), nothing of it
 // off and no row of it waited for. A babel name is set on its own (S.names over the part, nameOf), or, bound by the part to the
 // member after it in its flow, as that member's lead (lay/lead.ts). Each member's boxes on both panes (Laid.lit, lay/lit.ts: by
@@ -36,7 +36,7 @@ import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
 import { type LinkFate, type LinkOwner, linksOf } from './links.ts'
 import { inFrame, inkOfLine, litLaid, litOfA, pageBoxOf, runBoxOfA, widened } from './lit.ts'
 import { layPagePrepared, SAME, type UnitLay } from './page.ts'
-import { type CellAnswer, namesGroup, type TableGroup, tableGroups, unchanged } from '../shared/table-groups.ts'
+import { type TableGroup, tableGroups } from '../shared/table-groups.ts'
 import { carriedOf, tokenBand, tokenBox } from '../emit/sentences.ts'
 import { CJK, cjkClassRe } from '../breaker/script.ts'
 import { measured, paperOf, readMember, rowPieces, tstyleOf } from './read.ts'
@@ -117,7 +117,7 @@ function bandRulesOf(m: Placed): (page: number) => number[] | undefined {
  * Whether a member of a table's group, not set for `why`, holds its group the original's (today's contract, RUN:1223 and
  * settleGroup RUN:2411: a translated cell that cannot be drawn keeps every cell of its group the original's): a cell to be
  * translated that cannot be set does — unlocated, its row failed (a Row not ok: refused, unavailable, …), unproven, a face it
- * lacks, unfit, an error, its group kept as names ('cells') — and one the wrap cannot hide is the original's alone, the rest
+ * lacks, unfit, an error, its group held by another ('cells') — and one the wrap cannot hide is the original's alone, the rest
  * of its group laid (the coordinator's ruling of 2026-10-24), unless it spans columns or rows (its box is the others' too). One never to be translated holds
  * nothing (today's "one not expected never has a row, and is the original's in a group drawn"): no text of its own, a kind the
  * reader leaves, or no row with every row in (`none`: a unit no translator was sent, a cell of digits; a translation that
@@ -125,8 +125,8 @@ function bandRulesOf(m: Placed): (page: number) => number[] | undefined {
  */
 const holdsTable = (why: Unlaid, spanning: boolean) => why !== 'unwrapped' || spanning
 
-/** a member's row content, or why it has none to be set from: a unit the paper keeps as it is (Unit.kept: its names, an
- *  algorithm's body) has none whatever row is given of it (one stored before the unit was kept), never translated: `kept`,
+/** a member's row content, or why it has none to be set from: a unit the paper keeps as it is (Unit.kept: an algorithm's body,
+ *  code set in one pitch) has none whatever row is given of it (one stored before the unit was kept), never translated: `kept`,
  *  told apart from a row that did not come by the rows' end (`none`) */
 function contentOf(m: Placed, rows: Rows): OutPiece[] | Unlaid {
   if (m.why) return m.why
@@ -138,48 +138,22 @@ function contentOf(m: Placed, rows: Rows): OutPiece[] | Unlaid {
   return row.content
 }
 
-/** a row's text as its pieces write it, an element a space (what "came back as it went" reads: groups.mjs plainTranslated) */
-const textOfContent = (ps: readonly OutPiece[]): string =>
-  ps.map((p) => (p.t === 'text' ? p.s : p.t === 'span' ? textOfContent(p.content) : ' ')).join('')
-
 /**
  * S.table.groups over the part: each table's cells by group (the tie's cells by their stated grid places, Placed.cell; a table
- * that states none one group), and the ords of the groups kept whole as names (a body column at least NAMES_SHARE of whose
- * cells came back from the translator as they went, its own text Placed.plain against its row's): today's decideGroups after
- * translation. A member's answer: no row with every row in (kept before asking, or never sent) came back as it went; a row
- * failed came back changed (holdsTable keeps its group whole anyway); a member left the original's whatever its row (the
- * prepare's why, a kind the reader leaves, no text of its own) tells nothing
+ * that states none one group), for the hold and the settle (holdsTable, settleTies). No group is decided by what its cells say:
+ * a table's cell is text like any other, laid by its own row (the owner, 2026-11-13: the translator decides a name; today's
+ * column rule, groups.mjs decideGroups' `names`, is not ported)
  */
-function decideTables(
-  part: Part,
-  rows: Rows,
-  leave: ReadonlySet<string>,
-): { groups: Map<NonNullable<Part['ties']>[number], TableGroup[] | null>; names: Set<number> } {
+function tableGroupsOf(part: Part): Map<NonNullable<Part['ties']>[number], TableGroup[] | null> {
   const byOrd = new Map(part.flows.flat().map((m) => [m.ord, m]))
-  const answer = (o: number): CellAnswer => {
-    const m = byOrd.get(o)
-    if (!m || m.why || leave.has(toggleKind(m)) || typeof m.text !== 'string') return null
-    const c = contentOf(m, rows)
-    if (c === 'none' || c === 'kept') return 'same'
-    if (typeof c === 'string') return 'changed'
-    return typeof m.plain === 'string' && unchanged(m.plain, textOfContent(c)) ? 'same' : 'changed'
-  }
   const groups = new Map<NonNullable<Part['ties']>[number], TableGroup[] | null>()
-  const names = new Set<number>()
-  for (const t of part.ties ?? []) {
-    if (t.rule !== 'cells') continue
-    const gs = tableGroups(t.cells, (o) => byOrd.get(o)?.cell)
-    groups.set(t, gs)
-    for (const g of gs ?? [])
-      if (
-        namesGroup(
-          g.head,
-          g.cells.map((c) => c.map(answer)),
-        )
+  for (const t of part.ties ?? [])
+    if (t.rule === 'cells')
+      groups.set(
+        t,
+        tableGroups(t.cells, (o) => byOrd.get(o)?.cell),
       )
-        for (const c of g.cells) for (const o of c) names.add(o)
-  }
-  return { groups, names }
+  return groups
 }
 
 /**
@@ -346,8 +320,8 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   // (a theorem-like head's word where the target's packages name none: the paper's own name unit's translation, PDF-READER
   // §19.14, today's ownNames; read when a member that can draw it asks, its page waiting for its paper's names, wait.ts)
   const ownNames = ownNamesOf(part.paper.names, rows)
-  // (each table's groups, and those kept whole as names: decided before any cell is read, so that none of them is set)
-  const tables = decideTables(part, rows, leave)
+  // (each table's groups, for the hold and the settle below)
+  const tableGroupsOfPart = tableGroupsOf(part)
   const state = new Map<number, Unlaid>()
   // (the members never to be translated: no text of their own, or of a kind the reader leaves; they hold no tie)
   const unmeant = new Set<number>()
@@ -423,11 +397,6 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       if (typeof content === 'string') {
         state.set(m.ord, content)
         if (!m.why && (typeof m.text !== 'string' || content === 'none' || content === 'kept')) unmeant.add(m.ord)
-        continue
-      }
-      // (a cell of a group kept whole as names: the original's, and its group with it, holdsTable below)
-      if (tables.names.has(m.ord)) {
-        state.set(m.ord, 'cells')
         continue
       }
       // (led by a name: its lead drawn anew with it, or the name kept the original's before it)
@@ -605,7 +574,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
     if (t.rule !== 'cells') continue
     // (a cell whose box is the others' too: one the tie states spanning, or one its grid place spans columns)
     const spanning = new Set([...(t.spanning ?? []), ...t.cells.flat().filter((o) => (cellOf.get(o)?.[2] ?? 1) > 1)])
-    for (const g of tables.groups.get(t) ?? [{ cells: t.cells }]) {
+    for (const g of tableGroupsOfPart.get(t) ?? [{ cells: t.cells }]) {
       const cells = g.cells.flat()
       const holds = cells.some((o) => {
         const why = state.get(o)
