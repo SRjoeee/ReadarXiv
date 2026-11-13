@@ -3,10 +3,10 @@
 // engine 065c1d973 from today's rules/font-roles.mjs FACES and rules/font-letters.mjs HOLDS and SMCP.
 //
 // HOLDS and SMCP mirror the face files: an alphabet is held where the file's cmap table (its best Unicode subtable) maps every
-// letter of it, the letters as today's rules/font-roles.mjs LETTER_SETS states them (`Latn` A-Z a-z, `Cyrl` U+0410-U+044F, a
-// language's its script's and its own, breaker/faces.ts LETTERS' keys); a face sets small capitals where its file's GSUB
-// table has the `smcp` feature. Made at 065c1d973 by today's tests/pdf-reader/font-letters.test.ts from the coverage table
-// that scripts/font-roles.py reads out of the files. The files, the catalogue's (Source Han Serif's OTFs from Adobe's
+// letter of it, the letters as src/pdf-reader/engine/rules/font-roles.mjs LETTER_SETS states them (`Latn` A-Z a-z, `Cyrl`
+// U+0410-U+044F, a language's its script's and its own, breaker/faces.ts LETTERS' keys); a face sets small capitals where its
+// file's GSUB table has the `smcp` feature. Made at 065c1d973 by tests/pdf-reader/font-letters.test.ts from the coverage
+// table that scripts/font-roles.py reads out of the files. The files, the catalogue's (Source Han Serif's OTFs from Adobe's
 // release 2.003R, Nimbus's from URW's base35 release 20200910, every other TeX Live 2025's, the compile image
 // texlive/texlive@sha256:7056390e…), each group's in the order regular, bold, italic, bold italic, those it has (Source Han
 // Serif's and Harano Aji's: regular, medium, bold):
