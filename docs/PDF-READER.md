@@ -6502,6 +6502,20 @@ on, off, on draws two drawings, the original and the variant, never the note's o
 ruling of 2026-11-13: the owner saw 2611.03953v2-zh p1's footnote drawn from its own row off and from its variant on, two
 translations of one sentence across the switch).
 
+Measured over round RB1's 89 papers and 2611.03953v2 (stage 1a against its own run, lane f2-author): every unit and member as
+before but `of` on 32 units (36 notes, equal texts one unit) in 20 papers, 29 of them drawn on a first page; the two ICML papers'
+stored places (2 and 5) of kind `affiliation`, no longer `para`, and their footnotes `inknames`, no longer `inknotes` (the
+footnotes' ids move with their kind; their rows are made again from the stored replies, the wire unchanged, nothing asked; their
+variants keep their ids); rule 8's tie leaves every ink unit's final kind and the block's stretch as the share left them,
+2610.22065v1's two names lines among them (its eight `\author` units' only place a paragraph that sets them again); the lines the
+share named and the tie does not all stood outside the stretch, turned back either way; the glyphs' ownership as before. By default 31
+notes in 20 papers are now the original's on their first page: 28 `\thanks` inside `\author` (17 papers), acmart's `\authornote`
+(2402.10294v1) and the two ICML footnotes. `\title`'s six notes, the five `\thanks` amsart and acmart attach to the document and
+2608.16117v1's `\cortext`, whose label only a commented-out `\author` requests, stay translated. PIPELINE moves (the units gain
+`of`, and the stored places and ICML's footnotes their kinds); no LAYOUT (no mark moves), no TRANSLATE (no wire moves); FORMAT
+stays 1. The display gate's ruling AN (`lab/typeset/parity/rulings.mjs`) covers the `shown` readings these notes make with the
+names off.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
