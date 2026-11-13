@@ -5,8 +5,16 @@ import { isMemoryError } from '@readarxiv/engine'
 import { whyText } from './guard.mjs'
 import { finalCheck } from './base.mjs'
 import { readMarked } from './marks.mjs'
-import { markedOfPaper } from '@readarxiv/engine/today/compile/paper.mjs'
-export { bibliographyKept, madeBibliography, markedOfPaper, handoverOf } from '@readarxiv/engine/today/compile/paper.mjs'
+import { madeBibliography as bibliographyMade, markedOfPaper } from '@readarxiv/engine/today/compile/paper.mjs'
+import { withNames } from '../pipeline/live.mjs'
+export { bibliographyKept, markedOfPaper, handoverOf } from '@readarxiv/engine/today/compile/paper.mjs'
+
+/** the engine package's madeBibliography (compile/paper.mjs), the paper it opens again with the made .bbl today's as openPaper
+ *  makes it (pipeline/live.mjs withNames: today's name rule's `kept`) */
+export const madeBibliography = async (paper, o) => {
+  const r = await bibliographyMade(paper, o)
+  return r.paper ? { ...r, paper: withNames(r.paper) } : r
+}
 
 /**
  * A paper's layout marks (paper.d.mts): markedOfPaper's marked original, then read once (stage 3), with each stage's time, or

@@ -1116,7 +1116,8 @@ only how it meets the rest of the extension.
   the paper's units, indexed once) is held back from every engine before the call and keeps its text, where the HTML
   page (§15.1) sends every box and keeps names only from an engine that read each box alone: a known difference,
   deferred to the debt issue. The cells and figure units a compile leaves as they are keep the pipeline's own test
-  (`mt.mjs` `nameCells`) until a pipeline version moves. On the markers wire (§6.2, the free engines'), a reply is
+  (`mt.mjs` `nameCells`) in today's reader until the cut-over; the rebuilt reader keeps no unit by its words (a table's cell
+  is text like any other, the translator decides a name: PDF-READER §18.72). On the markers wire (§6.2, the free engines'), a reply is
   read back by the HTML page's reader (`protector/tokens.ts` `markerReader`, §6.4; `mt.mjs` `rehydrate`): a marker's
   `#` the engine set twice, `@e##` or `@e# #`, is the marker's, where Microsoft's Chinese for 2610.02069 had set the
   second as text ("El Ni ñ#", "Figure 10#"). Here alone, the wire's text holding no `#` of its own (TeX's `\#` being a

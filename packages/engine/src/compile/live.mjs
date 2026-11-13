@@ -8,7 +8,6 @@ import { analyze } from '../source/paper-meta.mjs'
 import { paperNames, theoremNames } from '../source/paper-names.mjs'
 import { CALL_TEX, classNamesTex, DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, probeSamples, refKeysOf, refsTex, regionsTex } from '../marks/marks.mjs'
 import { documentBounds, DVI_MARK_DEF, dviEngine, FONT_PROBE, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, texFilesOf, texText } from '../source/latex-front.mjs'
-import { nameCells } from '../instrument/mt.mjs'
 import { completeLog, END_TEX, LINES_TEX } from './tex.mjs'
 import { unbalancedUnits } from './guard.mjs'
 
@@ -87,7 +86,9 @@ export const notFound = log => new Set([...unwrapped(lastTexLog(log)).matchAll(/
  *  float (`inFloat`, their indices, latex-front.mjs loadProject's), each caption's float type (`floatTypes`, [index, type]), the
  *  units of an algorithm float's body (`pseudocode`, their indices) and the order TeX sets them in where it is not theirs
  *  (`texOrder`, their indices in that order, or null: an author block's later units and the bibliography's entries are numbered
- *  after the rest, latex-front.mjs entriesLast) */
+ *  after the rest, latex-front.mjs entriesLast). No unit is kept for what its words look like: a table's cell is text like any
+ *  other and the translator decides a name (the owner, 2026-11-13); the old reader's name rule is its own (src/pdf-reader/engine/
+ *  pipeline/live.mjs openPaper) */
 export function openPaper(files) {
   const fsys = inMemory(files)
   const meta = analyze(fsys)
@@ -98,7 +99,7 @@ export function openPaper(files) {
   const texts = texFilesOf(fsys, meta.main), names = paperNames(texts)
   // (the printed names of its theorem-like environments among them, the label forms of its heads: the wrap's `names`,
   // layout/own.mjs)
-  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, floatTypes: project.floatTypes ?? [], pseudocode: project.pseudocode ?? [], texOrder: project.texOrder ?? null, kept: nameCells(project.units), names, theoremNames: theoremNames(texts) }
+  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, floatTypes: project.floatTypes ?? [], pseudocode: project.pseudocode ?? [], texOrder: project.texOrder ?? null, names, theoremNames: theoremNames(texts) }
 }
 
 /**

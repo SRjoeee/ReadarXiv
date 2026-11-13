@@ -41,11 +41,13 @@ export type BundleUnit = [
   edges: { lead?: string; trail?: string; inner?: string } | null,
   pieces: BundlePiece[],
 ]
-export const bundleUnitsOf = units_js.bundleUnitsOf as (paper: {
-  units: readonly SourceUnit[]
-  kept: ReadonlySet<SourceUnit>
-  names?: readonly string[]
-}) => BundleUnit[]
+export const bundleUnitsOf = units_js.bundleUnitsOf as (
+  paper: {
+    units: readonly SourceUnit[]
+    names?: readonly string[]
+  },
+  kept?: ReadonlySet<SourceUnit> | null,
+) => BundleUnit[]
 export interface PdfLike {
   numPages: number
   getPage(p: number): Promise<{
@@ -261,7 +263,7 @@ export const elementKindOf = instrument_js.elementKindOf as (piece: { t: string;
 export const unitFactsOf = instrument_js.unitFactsOf as (paper: Paper) => {
   float: Map<number, string>
   kept: Set<number>
-  why: Map<number, 'pseudocode' | 'name'>
+  why: Map<number, 'pseudocode'>
 }
 export const instrumentOf = instrument_js.instrumentOf as (
   o: Record<string, unknown>,
@@ -275,7 +277,6 @@ export interface Paper {
   floatTypes?: [number, string][]
   pseudocode?: number[]
   texOrder?: number[] | null
-  kept: Set<SourceUnit>
   names: string[]
   theoremNames?: string[]
 }
