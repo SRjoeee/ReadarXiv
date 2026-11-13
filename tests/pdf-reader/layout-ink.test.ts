@@ -681,6 +681,18 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
     // (the clip given back at its restore: a fill after it covers again)
     expect(opaque(...at([1, 0, 0, 1, 0, 0], [OPS.save, []], ...clipTo([10, 10, 60, 10, 10, 50], [10, 10, 60, 50]), [OPS.restore, []], rect(10, 10, 60, 50)))).toBe(true)
   })
+  describe('a clip of five points is a rectangle only where its fifth point is its first (RB3\'s review)', () => {
+    const rect = (x0: number, y0: number, x1: number, y1: number): Op => [OPS.constructPath, [OPS.fill, [Float32Array.from([0, x0, y0, 1, x1, y0, 1, x1, y1, 1, x0, y1, 4])], Float32Array.from([x0, y0, x1, y1])]]
+    const clipTo = (pts: number[], box: number[]): Op[] => [[OPS.clip, []], [OPS.constructPath, [OPS.endPath, [Float32Array.from([0, pts[0]!, pts[1]!, ...pts.slice(2).flatMap((v, i) => (i % 2 ? [v] : [1, v])), 4])], Float32Array.from(box)]]]
+    const opaque = (...ops: Op[]) => figureInk(ops).shapes!.get(figureInk(ops).boxes.length / 4 - 1)!.opaque ?? false
+    const at = (...inner: Op[]): Op[] => [[OPS.paintFormXObjectBegin, [Float32Array.from([1, 0, 0, 1, 0, 0]), Float32Array.from([0, 0, 100, 100])]], ...inner, [OPS.paintFormXObjectEnd, []]]
+    it('four corners in turn and a fifth point inside their box are a pentagon: kept as its box, a fill under it covers nothing, as under a triangle\'s clip', () => {
+      expect(opaque(...at([OPS.save, []], ...clipTo([10, 10, 60, 10, 60, 50, 10, 50, 35, 30], [10, 10, 60, 50]), rect(10, 10, 60, 50), [OPS.restore, []]))).toBe(false)
+    })
+    it('four corners in turn and a fifth point that is the first again, a line closing the path by hand: the rectangle, a fill under it covers', () => {
+      expect(opaque(...at([OPS.save, []], ...clipTo([10, 10, 60, 10, 60, 50, 10, 50, 10, 10], [10, 10, 60, 50]), rect(10, 10, 60, 50), [OPS.restore, []]))).toBe(true)
+    })
+  })
   it('a label over a gridline that a white fill clipped to a triangle leaves in view is crowded; the same fill clipped to its rectangle covers it (#602\'s review)', () => {
     // (the gridline at x 30 through the word's band; the white fill [10, 30, 60, 55] painted after it, clipped to a triangle whose
     // edge from (60, 30) to (10, 55) passes x 30 at y 45, inside the band: above it the gridline shows; then the word "label")
