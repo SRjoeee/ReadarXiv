@@ -10,15 +10,7 @@
 // predictor other than PNG's, more objects or decoded bytes than the bounds. An original module (no port statement); imports
 // the tail's startxref and its latin-1 reading alone.
 import type { DeltaWhy } from './delta-wire.ts'
-import type {
-  PdfDecodeStream,
-  PdfDict,
-  PdfLib,
-  PdfObject,
-  PdfObjectParser,
-  PdfRawStream,
-  PdfRef,
-} from './remove.ts'
+import type { PdfDecodeStream, PdfDict, PdfLib, PdfObject, PdfObjectParser, PdfRawStream, PdfRef } from './remove.ts'
 import { latin1, startxrefOf } from './tail.ts'
 
 /** an entry of a cross-reference section: free (0), an object at its offset (1), an object in an object stream (2) */
