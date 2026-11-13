@@ -6596,12 +6596,23 @@ figure's texts); how a table's cells go together is its structure's, the typeset
     paper also writes "test set" is a word);
   - a name of the paper: a title-case word written mid-sentence at least once and never in lower case. A text's word tokens (R1's,
     cut at their joiners) all such names: kept ("Claude", "Mistral" in a header, "Tukey" in a body cell, "Claude GPT-4o").
-- **No column is kept for what its cells say.** The typesetter kept a body column whole as the original's where at least 0.4 of
-  its cells came back from the translator as they went or were kept before asking (`NAMES_SHARE`, measured once on 29 fixtures
-  and six papers): a tuned share that stood in for a fact about each cell, and kept a label under names English ("Avg.
-  Recovery", "IER (Ours)", "+schema"). Deleted with its answer (`shared/table-groups.ts` NAMES_SHARE, namesGroup, CellAnswer,
-  unchanged; `lay/entry.ts` decideTables' names): each cell is laid by its own row, a reply equal to its source as any other row
-  (drawn; the acceptance rule refuses no echo, `translate/accept.ts`).
+- **R3: a header cell is judged by R1 and R2 alone, by itself.** "Avg. Recovery" in Table 1's header is translated beside
+  "MedQA", which is kept; no header row is voted.
+- **R4: a body column's cells between the same two rules are one group; where more than half of its text cells are kept by R1
+  or R2, its other text cells are kept too.** The typesetter's, per member, at lay time (`lay/entry.ts` decideTables,
+  `shared/table-groups.ts` keptByBlocks): a block is the cells of one body column (a cell's first column and the columns it
+  spans, Placed.cell) standing between the same two rules (Room.band and bandOpen, the rules the part states over and under each
+  cell); its text cells are its members with a text of their own and no reason of the part's (Placed.why); a cell kept by a
+  fact of the source (one pitch) counts as kept. Exactly half is not more than half: each cell of such a block is laid by
+  itself. "More than half" (moreThanHalf) is the rule's one stated threshold: a majority is the least that makes a block one
+  kind of thing, names or words, and no number is tuned to the corpus (over its body columns the kept share stands at 0 or 1
+  in 72 % of them, 34 of 654 at exactly one half, lane table-judge). Why the block and not the column: the column's majority,
+  measured over the corpus before the build, decided its 188 cells like a coin (71 names kept, 72 labels kept with them, at
+  every threshold from 0.4 to 0.7) and kept the owner's own "Avg. Recovery" under the dataset names of 2611.03953v2's Table 2,
+  which its paper sets under a rule of its own; between two rules, 61 names to 21 labels. A cell its block keeps waits for its
+  row as before (its unit is not kept: a unit is one text wherever it stands) and is laid as a kept unit's is. Today's column
+  rule (`NAMES_SHARE`: a body column at least 0.4 of whose cells came back from the translator as they went, kept whole) is
+  not ported: no translator's reply decides what a cell is.
 - **What stays the original's, each a fact of the source or of the drawing.** A cell of fewer than two letters is no unit: the front
   end makes none of a text with under two letters on its text pieces (`latex-front.mjs` flush; a formula alone is a placeholder,
   no letter of text), so its ink stays; a unit with no letter that reaches the chain (an ink unit) is answered by the chain with

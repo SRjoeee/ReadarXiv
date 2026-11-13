@@ -36,7 +36,7 @@ import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
 import { type LinkFate, type LinkOwner, linksOf } from './links.ts'
 import { inFrame, inkOfLine, litLaid, litOfA, pageBoxOf, runBoxOfA, widened } from './lit.ts'
 import { type CellTie, layPagePrepared, SAME, type UnitLay } from './page.ts'
-import { type TableGroup, tableGroups } from '../shared/table-groups.ts'
+import { keptByBlocks, type TableGroup, tableGroups } from '../shared/table-groups.ts'
 import { carriedOf, tokenBand, tokenBox } from '../emit/sentences.ts'
 import { CJK, cjkClassRe } from '../breaker/script.ts'
 import { measured, paperOf, readMember, rowPieces, tstyleOf } from './read.ts'
@@ -125,12 +125,13 @@ function bandRulesOf(m: Placed): (page: number) => number[] | undefined {
 const holdsTable = (spanning: boolean) => spanning
 
 /** a member's row content, or why it has none to be set from: a unit the paper keeps as it is (Unit.kept: an algorithm's body,
- *  code set in one pitch) has none whatever row is given of it (one stored before the unit was kept), never translated: `kept`,
- *  told apart from a row that did not come by the rows' end (`none`) */
-function contentOf(m: Placed, rows: Rows): OutPiece[] | Unlaid {
+ *  code set in one pitch, a text that holds no ordinary word or only the paper's own names) has none whatever row is given of it
+ *  (one stored before the unit was kept), never translated: `kept`, told apart from a row that did not come by the rows' end
+ *  (`none`); so has a table's cell its block keeps (`voted`, decideTables: R4) */
+function contentOf(m: Placed, rows: Rows, voted: ReadonlySet<number>): OutPiece[] | Unlaid {
   if (m.why) return m.why
   if (typeof m.text !== 'string') return m.kind === 'name' ? 'name' : 'kind'
-  if (rows.kept?.(m.text)) return 'kept'
+  if (rows.kept?.(m.text) || voted.has(m.ord)) return 'kept'
   const row = rows.get(m.text)
   if (!row) return 'none'
   if (!row.ok) return row.why.kind
@@ -143,6 +144,27 @@ function contentOf(m: Placed, rows: Rows): OutPiece[] | Unlaid {
  * a table's cell is text like any other, laid by its own row (the owner, 2026-11-13: the translator decides a name; today's
  * column rule, groups.mjs decideGroups' `names`, is not ported)
  */
+/**
+ * S.table.groups' decision over the part (R4, PDF-READER §18.72): the members of each table's body kept as written because the
+ * cells of their column between the same two rules are more than half kept (Unit.kept: R1 and R2, the engine's, a fact of each
+ * text; shared/table-groups.ts keptByBlocks). Per member, at lay time: a unit is one text, kept or not wherever it stands, and
+ * its block decides what a member of it is; a header cell is judged by itself (R3). Such a member is laid as a kept unit's is
+ * (its ink the original's, no group held for it); its unit is not kept, so a page still waits for its row (waitOf), unused
+ */
+function decideTables(part: Part, rows: Rows): Set<number> {
+  const byOrd = new Map(part.flows.flat().map((m) => [m.ord, m]))
+  const out = new Set<number>()
+  const kept = (m: Placed) => typeof m.text === 'string' && !!rows.kept?.(m.text)
+  for (const t of part.ties ?? [])
+    if (t.rule === 'cells')
+      for (const o of keptByBlocks(
+        t.cells.flatMap((c) => c.flatMap((x) => byOrd.get(x) ?? [])),
+        kept,
+      ))
+        out.add(o)
+  return out
+}
+
 function tableGroupsOf(part: Part): Map<NonNullable<Part['ties']>[number], TableGroup[] | null> {
   const byOrd = new Map(part.flows.flat().map((m) => [m.ord, m]))
   const groups = new Map<NonNullable<Part['ties']>[number], TableGroup[] | null>()
@@ -321,6 +343,8 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   const ownNames = ownNamesOf(part.paper.names, rows)
   // (each table's groups, for the hold and the settle below)
   const tableGroupsOfPart = tableGroupsOf(part)
+  // (the table body's members their block keeps as written: R4)
+  const voted = decideTables(part, rows)
   const state = new Map<number, Unlaid>()
   // (the members never to be translated: no text of their own, or of a kind the reader leaves; they hold no tie)
   const unmeant = new Set<number>()
@@ -392,7 +416,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
         if (next && !('lead' in n)) leadFor.set(next.ord, { name: m, word: null })
         continue
       }
-      const content = contentOf(m, rows)
+      const content = contentOf(m, rows, voted)
       if (typeof content === 'string') {
         state.set(m.ord, content)
         if (!m.why && (typeof m.text !== 'string' || content === 'none' || content === 'kept')) unmeant.add(m.ord)

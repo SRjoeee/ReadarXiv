@@ -621,15 +621,15 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['groups.mjs:37-43 groupOf', 'rows.mjs:265-292 layerRows'],
     how: 'ported',
     ruling:
-      "2026-11-08 a table's cells drawn by group, the way the production site draws them; 2026-11-13 a table's cell is text like any other, the translator decides a name; 2026-11-13 (c) a cell that cannot be drawn is the original's by itself, its group held only where the geometry needs it",
+      "2026-11-08 a table's cells drawn by group, the way the production site draws them; 2026-11-13 (c) a cell that cannot be drawn is the original's by itself, its group held only where the geometry needs it; 2026-11-13 the owner's direction (21:44, approved): what of a table is language is decided from the source's facts and the table's structure, a header cell by itself, a body column's cells between the same two rules one group kept together where more than half of them are kept",
     reads: [],
     file: 'shared/table-groups.ts',
     state: {
       is: 'changed',
-      why: "the groups over TeX's grid places (Placed.cell), for the hold and the settle alone: each cell laid by its own row, no group decided by what its cells say (today's decideGroups keeps a column whole as names where NAMES_SHARE of its cells came back as they went; not ported, the owner's word of 2026-11-13); and a cell not set before its lay holds its group only where it spans (lay/entry.ts holdsTable), where today's held it for any reason but the wrap's (the coordinator's ruling (c) of 2026-11-13)",
+      why: "the groups over TeX's grid places (Placed.cell), for the hold and the settle; and the names block (R4, lay/entry.ts decideTables, shared/table-groups.ts keptByBlocks): the cells of one body column between the same two rules (Room.band) kept together where more than half of them are Unit.kept (the engine's R1 and R2), where today's decideGroups kept a whole column where NAMES_SHARE (0.4) of its cells came back from the translator as they went or were kept; a header cell judged by itself; and a cell not set before its lay holds its group only where it spans (lay/entry.ts holdsTable), where today's held it for any reason but the wrap's (the coordinator's ruling (c) of 2026-11-13)",
       replay:
         'tests/unit/table-groups.test.ts over hand-made parts (the corpus rows the parity reads are decided already)',
-      cases: 13,
+      cases: 20,
     },
   },
   {
