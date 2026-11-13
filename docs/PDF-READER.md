@@ -6578,6 +6578,18 @@ entry's lines nearer the runner's (the runner never had the column rule: 244 -> 
 No TRANSLATE (no wire moves), no LAYOUT (no mark moves), FORMAT stays 1. The display gate's ruling CT
 (`lab/typeset/parity/rulings.mjs`) covers the differences of a cell today keeps by these two rules and the rebuilt reader lays.
 
+Measured with the cell that cannot be drawn left the original's by itself (lane cells-like-body, the build b1b649645): the display
+gate over its 22 pairs, by default, worse 6 -> 2 against the head before it, the 2 F2's own (2610.21313v1 p1, p4): 1810.04805v2
+p6 and p8 and 2608.04322v1 p7 and p10 no longer worse, their 25 cells drawn as today draws them; with every switch on, 9 -> 5, the
+5 F2's. One page newly worse by the `groups` measure, 2602.23285v2-ja p19 in both modes (Table 7's column "Method / latent-ODE /
+latent-ODE": today withholds it whole for latent-ODE's unfit reply, the rebuilt reader lays Method and leaves the two latent-ODE
+cells the original's), the rule itself: covered by its own ruling, CU (a cell that cannot be drawn stays the original by itself;
+today kept the whole group for it), which covers that group alone over both modes and both sets. The two added pairs: 4 -> 1
+uncovered in both modes (2111.09276v1 p5's line count, as at F2). Unmeasured 0, incomplete 0, I10 0 faults. The reader gate on
+both stores: every invariant as before; the entry and the runner (which keeps today's settle: every cell of its ties stated
+spanning) not alike 224 -> 294 on the door's rows and 809 -> 961 on Google's, the cells the entry now lays alone; the runner's
+dumps 0 units moved. No version: the lay alone moves, no unit, part or bundle.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
