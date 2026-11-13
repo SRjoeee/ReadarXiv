@@ -213,11 +213,9 @@ const hex = (b: Uint8Array) => {
   for (let i = 0; i < b.length; i++) s += HEX[b[i]!]
   return `${s}>`
 }
-/** fmt of an operand, as fmt read one: a number's text; else '0' where its magnitude as a number is below 5e-7 (null, false, '0'),
- *  and otherwise the TypeError reading its toFixed gave */
+/** fmt of an operand: a number's text; any other operand, the TypeError reading its toFixed gave */
 const fmtOf = (v: Operand | undefined): string => {
   if (typeof v === 'number') return fmt(v)
-  if (Math.abs(Number(v)) < 5e-7) return '0'
   throw new TypeError(
     v === undefined ? "Cannot read properties of undefined (reading 'toFixed')" : 'x.toFixed is not a function',
   )
