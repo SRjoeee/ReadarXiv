@@ -6604,9 +6604,10 @@ figure's texts); how a table's cells go together is its structure's, the typeset
   spans, Placed.cell) standing between the same two rules (Room.band and bandOpen, the rules the part states over and under each
   cell); its text cells are its members with a text of their own and no reason of the part's (Placed.why); a cell kept by a
   fact of the source (one pitch) counts as kept. Exactly half is not more than half: each cell of such a block is laid by
-  itself. "More than half" (moreThanHalf) is the rule's one stated threshold: a majority is the least that makes a block one
-  kind of thing, names or words, and no number is tuned to the corpus (over its body columns the kept share stands at 0 or 1
-  in 72 % of them, 34 of 654 at exactly one half, lane table-judge). Why the block and not the column: the column's majority,
+  itself. "More than half" (`BLOCK_SHARE`, one half, exceeded) is the rule's one threshold: a majority is the least that makes
+  a block one kind of thing, names or words; over the corpus's body columns the kept share stands at 0 or 1 in 72 % of them, and
+  keeping its 70 blocks at exactly one half too would keep 69 of the 92 pairs' cells read as words for 1 read as a name (lane
+  table-judge). Why the block and not the column: the column's majority,
   measured over the corpus before the build, decided its 188 cells like a coin (71 names kept, 72 labels kept with them, at
   every threshold from 0.4 to 0.7) and kept the owner's own "Avg. Recovery" under the dataset names of 2611.03953v2's Table 2,
   which its paper sets under a rule of its own; between two rules, 61 names to 21 labels. A cell its block keeps waits for its

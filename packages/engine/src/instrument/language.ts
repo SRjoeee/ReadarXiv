@@ -1,6 +1,6 @@
-// Whether a short text is language to translate (docs/PDF-READER.md §18.72, the owner's direction of 2026-11-13: decide which
-// cells are content and which are not, by what the source states and the table's structure; a translator's error is not ours
-// to correct). A text that holds no ordinary word is not language: it is kept as written (R1). A word the paper's own running
+// Whether a short text is language to translate (docs/PDF-READER.md §18.72, the owner's direction: decide which cells are
+// content and which are not, by what the source states and the table's structure; a translator's error is not ours to
+// correct). A text that holds no ordinary word is not language: it is kept as written (R1). A word the paper's own running
 // text writes as a name is a name of that paper (R2). Both are facts of a text, so they are decided where Unit.kept is decided
 // (instrument.mjs unitFactsOf for the source's cells and figure texts, locate/ink.ts for a figure's texts read off its ink); the
 // table's own structure (a header cell alone, a body column's cells between the same two rules) is the typesetter's
@@ -61,7 +61,7 @@ export function tokenKind(token: string): 'symbol' | 'number' | 'identifier' | '
 /** a text's characters as R1 reads them: its text pieces in order, text set in a code face (a span whose style is `mono`, an
  *  element of kind `code`) one CODE character each, every other element (a formula, a citation, a reference, a paper's macro, a
  *  space, a rule) a space: an element is a fact of the source, never a word */
-export function wordTextOf(content: readonly Piece[], mono = false): string {
+function wordTextOf(content: readonly Piece[], mono = false): string {
   let out = ''
   for (const p of content) {
     if (p.t === 'text') out += mono ? p.s.replace(/\S+/g, CODE) : p.s
@@ -73,7 +73,7 @@ export function wordTextOf(content: readonly Piece[], mono = false): string {
 }
 
 /** the tokens of a text (wordTextOf, cut at white space) */
-export const tokensOf = (content: readonly Piece[]): string[] =>
+const tokensOf = (content: readonly Piece[]): string[] =>
   wordTextOf(content)
     .split(/\s+/u)
     .filter((x) => x.length)
@@ -82,9 +82,10 @@ export const tokensOf = (content: readonly Piece[]): string[] =>
 export const holdsNoWord = (content: readonly Piece[]): boolean =>
   tokensOf(content).every((t) => tokenKind(t) !== 'word')
 
-/** the kinds whose units are the paper's running text: sentences of its own prose (a paragraph, the abstract, a theorem's body, a
- *  caption, a footnote); not a heading or the title (title case), a table's cell or a figure's text (the texts judged), the
- *  bibliography (titles and names), the author block */
+/** the kinds whose units are the paper's running text: what LaTeX sets in paragraph mode as sentences of the paper's own prose (a
+ *  paragraph, the abstract environment, a \newtheorem environment's body, a \caption, a \footnote); not a \section's heading or
+ *  the \title (set in title case), a tabular's cell or a figure's text (the texts judged), the bibliography (titles and names),
+ *  the author block */
 export const RUNNING = new Set(['para', 'abstract', 'theorem', 'caption', 'footnote'])
 
 /** what an element reads as to the sentence cutter (@readarxiv/text sentenceCuts): packages/translate's standInOf (wire/text.ts),
