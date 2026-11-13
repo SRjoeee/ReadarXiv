@@ -1,5 +1,6 @@
 // A server of immutable objects answering ranges as R2 does (206, Content-Range, a strong ETag), with faults on demand: the
 // byte layer's tests' network.
+import { expect } from 'vitest'
 import type { Fetch } from '../../src/bytes/source.ts'
 
 export interface ServedObject {
@@ -78,6 +79,20 @@ export function bytesOf(n: number, seed = 1): Uint8Array {
   return b
 }
 
+/** `read` is `served` byte for byte: the same length, then no offset at which they differ, the first one named where there is
+ *  one. (A deep equality walks a typed array element by element: 75 ms a 64 KiB chunk, 3.4 s for 2.5 MB alone on a quiet
+ *  machine, where this takes 1 to 4 ms; 2026-11-13) */
+export function expectBytes(read: Uint8Array | null | undefined, served: Uint8Array): void {
+  expect(read?.length, 'the length read').toBe(served.length)
+  const r = read as Uint8Array
+  let at = 0
+  while (at < served.length && r[at] === served[at]) at++
+  expect(
+    at < served.length ? { offset: at, read: r[at], served: served[at] } : null,
+    'the first byte read that is not the one served',
+  ).toBeNull()
+}
+
 /** a manual clock for the sources' timers */
 export function manualTimers() {
   let now = 0
@@ -107,6 +122,12 @@ export function manualTimers() {
     },
     get pending() {
       return due.size
+    },
+    /** when the earliest timer is due (ms on this clock), or null where none is */
+    get next() {
+      let at: number | null = null
+      for (const e of due.values()) if (at === null || e.at < at) at = e.at
+      return at
     },
     /** the time on this clock (ms from its start) */
     get now() {
