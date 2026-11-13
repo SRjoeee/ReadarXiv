@@ -409,11 +409,11 @@ try {
     const leftAgain = await leave(page)
     await sleep(1500)
     check('the reader is off the page again before the popup\'s entry is pressed', leftAgain && !(await readerOnPage()), `way back taken ${leftAgain}, reader over the page ${await readerOnPage()}`)
-    // (the popup as the toolbar opens it, over this page: the PDF page the active tab of its window, which the popup asks for once
-    // at its start, and the popup a tab beside it that does not take its place. Opened as the active tab and the PDF page brought
-    // to the front after it, the popup's one ask raced the bringing: on a loaded machine it asked first, found its own tab and
-    // offered no entry (2026-11-13). The PDF page made active and the popup's tab made beside it by the extension's own tabs API,
-    // each done when it resolves)
+    // (the popup as the toolbar opens it, over this page: the PDF page the active tab of its window, which the popup asks for at
+    // its start and every half second after while no page answers, three seconds in all (popup/state.ts), and the popup a tab
+    // beside it that does not take its place. Opened as the active tab and the PDF page brought to the front after it, its asks
+    // raced the bringing: a bring later than its three seconds left it on its own tab with no entry (2026-11-13). The PDF page made
+    // active and the popup's tab made beside it by the extension's own tabs API, each done when it resolves)
     const popupTab = context.waitForEvent('page')
     await worker.evaluate(async ({ paper, popup }) => {
       const [tab] = await chrome.tabs.query({ url: paper })
