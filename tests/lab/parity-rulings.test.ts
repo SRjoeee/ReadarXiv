@@ -524,6 +524,56 @@ describe("CT: a table's cell is text like any other; the translator decides a na
   })
 })
 
+describe('CU: a cell that cannot be drawn stays the original by itself; today kept the whole group for it (the coordinator, 2026-11-13)', () => {
+  // (2602.23285v2-ja p19, Table 7's column: Method (t170) and two cells of latent-ODE (t173, t174) whose reply does not fit them;
+  // today's settle withheld the column whole, v2 lays Method and leaves the two the original's, each `unfit`)
+  type O = { why?: Record<string, string>; member?: (ord: number) => object; today?: string[]; v2?: string[]; units?: number[] }
+  const ords = [170, 173, 174]
+  const ctx = (o: O) => ({
+    v2: {
+      today: Object.fromEntries(ords.map((ord) => [ord, { today: ord }])),
+      facts: { [N]: { members: ords.map((ord) => ({ ord, kind: 'cell' })), ties: [] } },
+      pages: {
+        [N]: {
+          members: ords.map((ord) => ({
+            ord,
+            ...(ord === 170 ? { state: 'laid', off: 1, lines: [[460, 330, 358, []]] } : { state: 'unfit', off: 0, lines: [] }),
+            ...(o.member?.(ord) ?? {}),
+          })),
+        },
+      },
+    },
+    rec: rec(),
+    todayWhy: (key: string) => (o.why ?? { t170: 'group: a cell unfit', t173: 'group: a cell unfit', t174: 'group: a cell unfit' })[key] ?? null,
+  })
+  const unitsOf = (os: number[]) => os.map((o) => ({ key: `t${o}`, kind: 'cell', part: o, align: 'l', sides: { today: side(1, 9, 9, 1) } }))
+  const column = (o: O = {}) => {
+    const d = { ...worse('groups', 'group 7:c1', 'whole', 'original', 'mixed'), cells: ['t170', 't173', 't174'], asOriginal: { today: o.today ?? ['t170', 't173', 't174'], v2: o.v2 ?? ['t173', 't174'] } } as Diff
+    const { page: p } = judged({ diffs: [d], units: unitsOf(o.units ?? ords) }, ctx(o))
+    const x = (p.diffs as (Diff & { coveredSays?: string })[])[0]!
+    return [x.worse, x.covered ?? null, x.coveredSays ?? null]
+  }
+  it("a group today withheld for a cell it could not draw, v2 leaving that cell the original's and laying the others: covered by CU", () => {
+    expect(column()).toEqual([false, 'CU', "its cells t173, t174 the original's by themselves (unfit), t170 laid; today withheld the group for them"])
+    expect(column({ why: { t170: 'group: a cell not drawn', t173: 'unfit', t174: 'group: a cell not drawn' } })[1]).toBe('CU')
+    // (a cell neither side draws has no unit on the page: v2's ord read from its join to today's)
+    expect(column({ units: [170] })[1]).toBe('CU')
+  })
+  it("not a cell v2 leaves the original's that today draws translated: worse", () => {
+    expect(column({ today: ['t173', 't174'], v2: ['t170', 't173', 't174'] })).toEqual([true, null, null])
+    expect(column({ today: ['t173', 't174'] })).toEqual([true, null, null])
+  })
+  it('not a group today held for another reason (on two pages; a spanning cell, for which v2 holds the group too): worse', () => {
+    expect(column({ why: { t170: 'group: on two pages', t173: 'group: on two pages', t174: 'group: on two pages' } })).toEqual([true, null, null])
+    expect(column({ member: (ord) => (ord === 170 ? { state: 'cells', off: 0, lines: [] } : {}) })).toEqual([true, null, null])
+    expect(column({ member: (ord) => (ord === 173 ? { state: 'cells' } : {}) })).toEqual([true, null, null])
+  })
+  it('not a cell v2 lays past the block or leaves for no failure of its own (no row): worse', () => {
+    expect(column({ member: (ord) => (ord === 170 ? { fit: { size: 9, lead: 1.2, over: 3.5 } } : {}) })).toEqual([true, null, null])
+    expect(column({ member: (ord) => (ord === 174 ? { state: 'none' } : {}) })).toEqual([true, null, null])
+  })
+})
+
 describe('T4: figure texts held whole as the original for a decorated word, counted fewer than today (his answer to W11 (a))', () => {
   // (2608.06701v1-zh p1: today draws 45 figure texts translated, v2 24; v2's prepare holds 15 figure members whole for a decorated
   // word in their label (the dump's `keptBy: 'decorated'`), in which 21 of today's drawn texts stand)
@@ -777,9 +827,9 @@ describe('the rulings file', () => {
       // record states it, relayed in English)
       // (WB the coordinator's ruling of 2026-11-13 on the owner's report of the day before, the law it rests on built in B.break;
       // AN the owner's ruling of 2026-11-13 on the author block's notes, built in lane f2-author; CT his choice of 2026-11-13 on a
-      // table's cells, built in lane cells-like-body)
-      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : r.id === 'T1' ? r.verdict === 'pseudocode kept' : r.id === 'WB' ? r.verdict === "the coordinator's ruling" : r.id === 'AN' || r.id === 'CT' ? r.verdict === "the owner's ruling" : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528', '\u540c\u610f\u4f60\u7684\u5efa\u8bae'].includes(r.verdict)).toBe(true)
-      expect(r.date).toBe(r.id === 'T1' ? '2026-11-08' : r.id === 'WB' || r.id === 'AN' || r.id === 'CT' ? '2026-11-13' : '2026-11-12')
+      // table's cells, built in lane cells-like-body; CU the coordinator's ruling (c) of 2026-11-13 under it, the same lane)
+      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : r.id === 'T1' ? r.verdict === 'pseudocode kept' : r.id === 'WB' || r.id === 'CU' ? r.verdict === "the coordinator's ruling" : r.id === 'AN' || r.id === 'CT' ? r.verdict === "the owner's ruling" : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528', '\u540c\u610f\u4f60\u7684\u5efa\u8bae'].includes(r.verdict)).toBe(true)
+      expect(r.date).toBe(r.id === 'T1' ? '2026-11-08' : r.id === 'WB' || r.id === 'AN' || r.id === 'CT' || r.id === 'CU' ? '2026-11-13' : '2026-11-12')
       expect(r.example.length).toBeGreaterThan(20)
       expect(r.condition === null ? r.unstated : r.condition).toBeTruthy()
       expect(r.condition === null).toBe(r.holds === null)

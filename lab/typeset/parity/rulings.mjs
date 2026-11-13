@@ -732,7 +732,63 @@ export const RULINGS = [
       return `${d.flag === 'groups' ? `its cells ${keys.join(', ')}` : 'the cell'} kept by ${by.join(' and ')}, laid by v2 from its own row`
     },
   },
+  {
+    id: 'CU',
+    title: 'a cell that cannot be drawn stays the original by itself (PDF-READER §18.72); today kept the whole group for it',
+    verdict: "the coordinator's ruling",
+    date: '2026-11-13',
+    seen: "the coordinator's ruling (c) of 2026-11-13 under the owner's choice of the same day (a table's cell is text like any other): a cell whose reply cannot be drawn in its cell stays the original by itself, as a body paragraph does, its group held only where the geometry needs it (a spanning cell, a group on two pages); his ruling the same day on 2602.23285v2-ja p19, covered by a ruling of its own; the rule as built: lane cells-like-body, lay/entry.ts holdsTable and lay/page.ts settleTies, PDF-READER §18.72",
+    words: null,
+    example:
+      '2602.23285v2-ja p19, Table 7\'s column "Method / latent-ODE / latent-ODE": today withholds the column whole, the reply for latent-ODE not fitting its cell; v2 lays Method in its translation and leaves the two latent-ODE cells the original\'s',
+    condition:
+      "groups: a table's grid group today's settle withheld for a cell it could not draw (today's reader dump: each cell v2 lays `group: a cell unfit` or `group: a cell not drawn`, the group the original's whole in today's), drawn mixed by v2 because v2 leaves that cell (or those cells) the original's by itself: each cell v2 leaves the original's one today leaves so too, its v2 member stating a failure of its own (unfit, refused, unavailable, unwrapped, unproven, unlocated, a face, an error), not its group's (`cells`) nor no row (`none`); and v2 lays each of the group's other cells (its Page member `laid`, a `cell`, no line past TeX's text block bottom). Not covered: a group where v2 leaves the original's a cell today draws translated; a group today held for another reason (on two pages; a spanning cell, for which v2 holds the group too); a cell v2 lays past the bottom. Every other measure of those cells is judged as before (I3, I5 and the overflow measures stay hard)",
+    holds(d, x) {
+      if (d.flag !== 'groups') return false
+      const today = new Set(d.asOriginal?.today ?? []),
+        v2 = new Set(d.asOriginal?.v2 ?? [])
+      const cells = d.cells ?? []
+      const memberOf = (key) => {
+        const ord = cellOrd(key, x)
+        return ord === null ? null : { kind: x.member(ord)?.kind, m: x.laid(ord) }
+      }
+      const left = cells.filter((k) => v2.has(k)),
+        laid = cells.filter((k) => !v2.has(k))
+      if (!left.length || !laid.length || !cells.every((k) => today.has(k))) return false
+      return (
+        left.every((k) => {
+          const u = memberOf(k)
+          return u?.kind === 'cell' && CELL_OWN.has(u.m?.state)
+        }) &&
+        laid.every((k) => {
+          const u = memberOf(k)
+          return CELL_HELD.has(x.todayWhy(k)) && u?.kind === 'cell' && u.m?.state === 'laid' && !((u.m?.fit?.over ?? 0) > 0)
+        })
+      )
+    },
+    says(d, x) {
+      const v2 = new Set(d.asOriginal?.v2 ?? [])
+      const left = (d.cells ?? []).filter((k) => v2.has(k)),
+        laid = (d.cells ?? []).filter((k) => !v2.has(k))
+      const states = [...new Set(left.map((k) => x.laid(cellOrd(k, x))?.state))]
+      return `its cells ${left.join(', ')} the original's by themselves (${states.join(', ')}), ${laid.join(', ')} laid; today withheld the group for them`
+    },
+  },
 ]
+/** CU: today's reasons for a cell its settle withheld with its group for a cell it could not draw (today's reader dump), and the
+ *  states of a v2 member left the original's by a failure of its own drawing or row, not its group's nor for no row */
+const CELL_HELD = new Set(['group: a cell unfit', 'group: a cell not drawn'])
+const CELL_OWN = new Set(['unfit', 'refused', 'unavailable', 'unwrapped', 'unproven', 'unlocated', 'face', 'error'])
+/** CU: v2's ord of today's unit `key`: the page's unit of it, else v2's join (the v2 file's `today`, ord -> today's ord), a cell
+ *  that neither side draws having no unit on the page */
+function cellOrd(key, x) {
+  if (!/^t\d+$/.test(key ?? '')) return null
+  const u = x.unit({ unit: key })
+  if (u?.part !== null && u?.part !== undefined) return u.part
+  const t = Number(key.slice(1))
+  const hit = Object.entries(x.v2?.today ?? {}).find(([, j]) => j?.today === t)
+  return hit ? Number(hit[0]) : null
+}
 /** the measures that read a unit's content lost or changed against the original: a unit none of them finds v2 farther on (worse,
  *  or covered) on any of its pages is whole (the rulings L2 and S4) */
 export const WHOLE = ['shown', 'elements', 'scripts', 'labels']
