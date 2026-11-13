@@ -123,6 +123,21 @@ const h = {
   pages: new Map<number, Page>(),
   rows: null as (RowsSource & { give(ids?: string[]): void; end?(): void; rowsCount: number }) | null,
   external: [] as string[],
+  /** the reading options the reader's own typesetter lays under (`typeset`), as the reader's preferences give them: setClasses */
+  classes: null as Record<'figures' | 'tables' | 'heads' | 'references' | 'names', boolean> | null,
+  /** the reading options turned, as the reader turns them: the typesetter's rules and the composer's toggles together */
+  setClasses(c: Record<'figures' | 'tables' | 'heads' | 'references' | 'names', boolean>) {
+    h.classes = c
+    h.composer?.setClasses(c)
+  },
+  /** each member page `n` draws as committed: its ord, state and drawn text */
+  drawnOf(n: number) {
+    return (h.composer?.laid(n)?.members ?? []).map((m) => ({
+      ord: m.ord,
+      state: m.state,
+      text: m.lines.map((l) => l[3].map((i) => i.s).join('')).join('|'),
+    }))
+  },
   t0: 0,
   marks: [] as { what: string; at: number; [k: string]: unknown }[],
   /** the panes over the original at `url` (a path of our server's, else arXiv's absolute URL). `borrow`: the right's pages as
@@ -293,7 +308,7 @@ const h = {
       kit,
       faces: served ? served.faces : h.faces,
       lay: served
-        ? await typesetLay({ served, target: () => target, classes: () => o.classes ?? null })
+        ? await typesetLay({ served, target: () => target, classes: () => h.classes ?? o.classes ?? null })
         : fixtureLay(pages, parts),
       unlaid: o.unlaid ?? 'original',
       lang: () => target,
@@ -313,6 +328,7 @@ const h = {
       warn: (w, e) => console.warn(w, e),
     })
     h.composer = composer
+    h.classes = o.classes ?? null
     composer.on('laid', (e) => h.marks.push({ what: 'laid', at: performance.now() - h.t0, page: e.n, on: !!e.page }))
     panes.right.on('shown', (e) => {
       // (the commit's style and layout: the swap's own task, its layout forced here, in the same task)

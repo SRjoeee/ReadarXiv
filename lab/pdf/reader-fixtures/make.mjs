@@ -99,6 +99,23 @@ const PAPERS = {
       ] },
     ],
   },
+  // an author block whose note its source ties to it (the owner's ruling of 2026-11-13, docs/PDF-READER.md §18.71): ICML's shape,
+  // a place an author command's argument stores (a unit of the block, held, set nowhere of its own), set by the class in a
+  // footnote at the column's foot that names the author too, no unit's: locate makes it an ink unit of the names, and its
+  // variant (§19.15) carries the block's name
+  's4-author': {
+    id: '2600.00005', version: 1,
+    pages: [
+      { size: [612, 792], blocks: [
+        { u: 'title', kind: 'heading', title: true, font: 'HB', size: 16, x: 72, y: 720, w: 468, text: 'Notes of an Author Block' },
+        { u: 'a1', kind: 'author', front: true, size: 11, x: 72, y: 696, w: 468, text: 'Ann Lee' },
+        { u: 'place', kind: 'affiliation', stored: true, text: 'Some Institute of Testing' },
+        { u: 'abstract', kind: 'abstract', size: 10, x: 92, y: 670, w: 428, lead: 12, text: words(40, 3) },
+        { u: 'p1', kind: 'para', size: 10, x: 72, y: 580, w: 468, lead: 12, text: words(60, 9) },
+        { ink: true, size: 8, x: 72, y: 90, w: 468, lead: 9.6, text: 'Some Institute of Testing. Correspondence to: Ann Lee.' },
+      ] },
+    ],
+  },
 }
 
 /** PDF.js as the maker reads a paper whose pages are turned: each page in its own space, its /Rotate not seen. Lane L1's
@@ -149,8 +166,8 @@ async function write(paper) {
   // (`flat`: the next piece's id, its place in the unit as the front end counts it: a text piece, an element, a group's open and
   // its close one place each, a group's content between; `spans` and `classes` what the instrument states of its groups and
   // elements, by piece id)
-  const unitOf = (name, kind) => {
-    if (!units.has(name)) units.set(name, { name, kind, pieces: [], labels: '', flat: 0, spans: [], classes: [] })
+  const unitOf = (name, kind, flags = {}) => {
+    if (!units.has(name)) units.set(name, { name, kind, pieces: [], labels: '', flat: 0, spans: [], classes: [], ...flags })
     return units.get(name)
   }
   const streams = paper.pages.map(() => [])
@@ -164,8 +181,11 @@ async function write(paper) {
         annots.push([p, b.figure, { url: b.href }])
         continue
       }
+      // (a stored argument: a unit of the source, its text set nowhere of its own)
+      if (b.stored) { addText(unitOf(b.u, b.kind, { front: true, held: true }), b.text); continue }
       const font = b.font ?? 'H', size = b.size
-      const unit = unitOf(b.u, b.kind)
+      // (ink no unit owns: text the class sets of what it stored, which locate makes a unit of)
+      const unit = b.ink ? null : unitOf(b.u, b.kind, { ...(b.title ? { title: true, front: true } : {}), ...(b.front ? { front: true } : {}) })
       const runIn = b.runIn ? unitOf(b.runIn.u, 'heading') : null
       // the tokens: a label, a run-in head, the words, an element among them
       const toks = []
@@ -202,7 +222,7 @@ async function write(paper) {
         for (const t of l) {
           const x = b.x + t.dx
           const piece = t.el ? addEl(t.unit, t.el) : null
-          if (t.role === 'text') addText(t.unit, t.s, t.link)
+          if (t.role === 'text' && t.unit) addText(t.unit, t.s, t.link)
           if (t.role === 'label') t.unit.labels += t.s
           const sameRun = run && run.font === t.font && run.unit === t.unit && run.role === t.role && t.role === 'text'
           // (the run-in head and its text: two units in one show, the TJ's kern between them)
@@ -276,7 +296,7 @@ async function instrumentOf(bytes, written, reading = pdfjs) {
   const index = new Map(written.units.map((u, i) => [u, i]))
   const units = written.units.map(u => {
     const content = u.pieces.length ? u.pieces : [{ t: 'text', s: u.labels }]
-    return { id: unitId(u.kind, content), kind: u.kind, content, ...(u.spans.length ? { spans: u.spans } : {}), ...(u.classes.length ? { classes: u.classes } : {}) }
+    return { id: unitId(u.kind, content), kind: u.kind, content, ...(u.spans.length ? { spans: u.spans } : {}), ...(u.classes.length ? { classes: u.classes } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(u.held ? { stored: true } : {}) }
   })
   const glyphs = r.doc.pages.map((pg, p) => {
     const O = { unit: new Int32Array(pg.glyphs.length).fill(-1), role: new Uint8Array(pg.glyphs.length), piece: new Int32Array(pg.glyphs.length).fill(-1) }
@@ -292,6 +312,7 @@ async function instrumentOf(bytes, written, reading = pdfjs) {
       for (const s of segs) {
         for (let q = 0; q < s.n; q++, at++) {
           const j = js[at]
+          if (s.unit === null) continue
           O.unit[j] = index.get(s.unit)
           O.role[j] = s.role === 'element' ? ROLE.element : s.role === 'label' ? ROLE.label : ROLE.text
           if (s.piece !== null) O.piece[j] = s.piece
@@ -383,6 +404,11 @@ async function make(name, paper) {
   if (!head) throw new Error(`${name}: no head (${JSON.stringify(tally?.wrap)})`)
   // the rows: every unit's translation; the dump: each laid member of each part
   const rows = ins.units.map((u, k) => ({ id: u.id, ok: true, content: translationOf(u, k), by: 'reader-fixtures' }))
+  // (and the units the prepare made beyond the instrument's: an ink unit locate cut, a unit's variant naming the block's person)
+  const seen = new Set(rows.map(r => r.id))
+  for (const d of head.units)
+    for (const u of JSON.parse(readFileSync(join(dir, 'bundle', `${d}.units`), 'utf8')).units)
+      if (!seen.has(u.id) && !u.kept) { seen.add(u.id); rows.push({ id: u.id, ok: true, content: translationOf(u, rows.length), by: 'reader-fixtures' }) }
   writeFileSync(join(dir, 'de.rows.json'), `${JSON.stringify({ format: 1, rows })}\n`)
   const rowOf = new Map(rows.map(r => [r.id, r]))
   const font = await (await PL.PDFDocument.create()).embedFont(PL.StandardFonts.Helvetica)
