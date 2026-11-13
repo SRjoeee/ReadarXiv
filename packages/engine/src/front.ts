@@ -32,14 +32,12 @@ import { bySentence } from './locate/words.ts'
 import { isMemoryError } from './memory.types.ts'
 import {
   FROM_UTF8,
-  keeps,
   type OriginalFacts,
   opened,
-  type Plan,
   type PrepareWhy,
   planOf,
   type StoredInstrument,
-  toBase64,
+  storedInstrumentOf,
   unkeep,
   withBbl,
 } from './plan.ts'
@@ -183,8 +181,6 @@ export function sourceUnitsOf(paper: Paper): Unit[] {
   return out
 }
 
-const UTF8 = new TextEncoder()
-
 /** each page's text of a compile's PDF (the layout guard's check), or null where PDF.js cannot read it */
 async function pagesTextOf(
   pdf: Uint8Array,
@@ -271,29 +267,9 @@ export async function prepareFront(input: FrontInput): Promise<FrontResult> {
     finalPdf = base.pdf
     log = m.log ?? ''
     options = m.options ?? {}
-    const texts = keeps(options.texts)
-    const inkless = keeps(options.inkless)
-    const lineskip = keeps(options.lineskip)
-    const decorated = keeps(options.decorated)
     // (a plan whose options do not read back as they are is not kept: a later prepare compiles again)
-    if (texts !== undefined && inkless !== undefined && lineskip !== undefined && decorated !== undefined) {
-      const p: Plan = {
-        front: 'today',
-        v: 1,
-        texts,
-        inkless,
-        ...(lineskip ? { lineskip } : {}),
-        ...(decorated ? { decorated } : {}),
-        bbl: bbl ? { path: bbl.path, bytes: toBase64(bbl.bytes) } : null,
-        facts: { pages: f.pages, day: f.day, banner: f.banner },
-      }
-      made = {
-        'b.pdf': finalPdf,
-        log: UTF8.encode(log),
-        plan: UTF8.encode(JSON.stringify(p)),
-        definitions: UTF8.encode('{"front":"today","definitions":null}'),
-      }
-    } else input.note('front', { plan: "not kept: the probe's answers do not read back as they are" })
+    made = storedInstrumentOf({ finalPdf, log, options, bbl, facts: f })
+    if (!made) input.note('front', { plan: "not kept: the probe's answers do not read back as they are" })
   }
   input.stage('units')
   const r = await instrumentOf({

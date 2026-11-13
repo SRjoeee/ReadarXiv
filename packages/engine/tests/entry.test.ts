@@ -40,8 +40,9 @@ describe("the package's entry", () => {
     )
     expect(shadowed).toEqual([])
   })
-  test("the wrap's planOf is the entry's; the stored plan's reader is storedPlanOf", () => {
+  test("the wrap's planOf is the entry's; the stored plan's reader is storedPlanOf, its writer storedInstrumentOf", () => {
     expect(entry.planOf).toBe(wrap.planOf)
     expect(entry.storedPlanOf).toBe(plan.planOf)
+    expect(entry.storedInstrumentOf).toBe(plan.storedInstrumentOf)
   })
 })

@@ -84,6 +84,7 @@ export {
   type Plan as StoredPlan,
   type ReadPlan as ReadStoredPlan,
   type StoredInstrument,
+  storedInstrumentOf,
   unkeep,
   withBbl,
 } from './plan.ts'

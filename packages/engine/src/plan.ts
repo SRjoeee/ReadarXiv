@@ -39,6 +39,7 @@ export class FrontRefusal extends Error {
 export const short = (e: unknown): string =>
   String((typeof e === 'object' && e !== null && 'message' in e ? e.message : undefined) ?? e).slice(0, 300)
 
+const UTF8 = new TextEncoder()
 const FROM_UTF8 = new TextDecoder()
 
 /** bytes as base64, padded (what the plan stores a .bbl as) */
@@ -120,6 +121,47 @@ interface Plan {
   bbl: { path: string; bytes: string } | null
   facts: OriginalFacts
 }
+/** the instrument's four objects as a prepare stores them, of what the marked compile gave (B, its log, the options instrumentOf
+ *  reads), the job's .bbl the paper was opened with and the facts of the original it was compiled for: B as it is, the log and
+ *  the plan as UTF-8 (the plan's JSON in this order of its keys), the definitions; null where the options do not read back as
+ *  they are, so that no plan is stored that would not make the same instrument */
+const storedInstrumentOf = ({
+  finalPdf,
+  log,
+  options,
+  bbl,
+  facts: f,
+}: {
+  finalPdf: Uint8Array
+  log: string
+  options: Record<string, unknown>
+  bbl: { path: string; bytes: Uint8Array } | null
+  facts: OriginalFacts
+}): StoredInstrument | null => {
+  const texts = keeps(options.texts)
+  const inkless = keeps(options.inkless)
+  const lineskip = keeps(options.lineskip)
+  const decorated = keeps(options.decorated)
+  if (texts !== undefined && inkless !== undefined && lineskip !== undefined && decorated !== undefined) {
+    const p: Plan = {
+      front: 'today',
+      v: 1,
+      texts,
+      inkless,
+      ...(lineskip ? { lineskip } : {}),
+      ...(decorated ? { decorated } : {}),
+      bbl: bbl ? { path: bbl.path, bytes: toBase64(bbl.bytes) } : null,
+      facts: { pages: f.pages, day: f.day, banner: f.banner },
+    }
+    return {
+      'b.pdf': finalPdf,
+      log: UTF8.encode(log),
+      plan: UTF8.encode(JSON.stringify(p)),
+      definitions: UTF8.encode('{"front":"today","definitions":null}'),
+    }
+  }
+  return null
+}
 /** a plan as it is read: its .bbl's bytes decoded */
 type ReadPlan = Omit<Plan, 'bbl'> & { bbl: { path: string; bytes: Uint8Array } | null }
 /** the plan of the stored objects, where they hold one */
@@ -193,4 +235,4 @@ function withBbl(paper: Paper, bbl: { path: string; bytes: Uint8Array }): Paper 
   return again
 }
 
-export { FROM_UTF8, type Kept, keeps, opened, type Plan, planOf, type ReadPlan, toBase64, unkeep, withBbl }
+export { FROM_UTF8, type Kept, keeps, opened, type Plan, planOf, type ReadPlan, storedInstrumentOf, unkeep, withBbl }
