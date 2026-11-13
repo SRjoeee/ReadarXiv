@@ -2344,8 +2344,10 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
 
 - **Runs and rows** (`highlight.mjs`): a unit's tokens on a page, in its lines, by column → its runs, one page and one
   column each, cut where another unit's line stands between two of its rows (a float set inside a paragraph) and, on a
-  page of two columns, where a full-width line does (revtex's widetext); rows are lines merged where they overlap, so a
-  display's numerator, denominator, limits, scripts and number are one row. What stands between two of a unit's words
+  page of two columns, where a full-width line does (revtex's widetext); its rows are its lines' union, never part of one:
+  lines that overlap up and down are one row there, so that a display's numerator, denominator, limits, scripts and number
+  are every one lit (today's merges them into one row, their extent across; the rebuilt reader cuts the union into bands at
+  every line's head and foot, §17.9). What stands between two of a unit's words
   and is no unit's is its own (an inline formula's pieces), in running text only and never across another unit's line;
   the words before its first one on its line (a theorem's head, a list's label) too, but a cell's: the words before a
   cell on its row are cells of their own (2026-10-30; before, a cell took its row's cells of numbers before it, unseen
@@ -2705,6 +2707,38 @@ within noise.
   measure counts a bridge too (a room the outline paints between two rows room for a line apart, across a block's row in the
   column, which holds none of its ink): over round 8 part A's drawing (5c83a7faf), with the rows' own width the cut was worse
   than today's on 34 units of 31 pages, default and every toggle on alike (2610.17024v1 p9 t129 among them), and is on none.
+- **A shape paints the union of its boxes, never part of one** (the owner's report of 2026-11-13 on staging, 2111.09276v1 p5:
+  display (4), two rows and its number set at the right between them, lit on both panes as a band over its first row and a
+  strip from under that row's end to the number, its second row on neither: 「我发现这里的对照高亮有瑕疵」). The display is no
+  unit's ink (its paragraph opens with it, set before the paragraph's start: §17.1's display at its unit's edge), so it is a kept
+  block lit whole (§18.58), its lines on A cut by the text line rule (`packages/engine` locate/geometry.ts, lines.ts): the
+  number's "(", its ink 13.7 pt over the second row's baseline, under that rule's one and a half sizes, stayed on the row's line
+  as a script, its "4)" a line of its own. The painter met every two of a shape's rows next to each other from the top where
+  their pads overlapped, as if one stood over the other: the second row's line and "4)", their tops alike, were met at the
+  middle of the band they share, the row's foot raised over all of its ink; the hit test read the same rows, so the pointer on
+  the second row or on the number found nothing. Now a shape's rows are `compose/highlight.ts` `paintRows`': two rows one over
+  the other meet at the middle of their pads' overlap and one outline joins them where they meet across, the room between them
+  painted, unless another block stands between (as before); boxes on one band (their own extents overlapping up and down) are
+  never met: the union is cut into bands at every box's head and foot, each band's boxes one row where they meet across (a row
+  and the number beside it, two lines whose fonts' boxes overlap) and a row each where they stand apart (a sentence's runs either
+  side of another sentence's element, a line of the next column), each row joined to the outline whose last row stands on the
+  band right above it and meets it across. A shape of no two boxes on one band paints as before, row for row. So the pointer
+  on any row of a display or on its number lights the whole display on both panes, and on a sentence of its paragraph that
+  sentence alone (above). A unit's display states its number inside its row's box (the display rule, `rows.ts`): its row's band
+  reaches the number, the blank between lit, as today's lights a display whole as one rectangle (over the parity's 24 pairs, 448
+  numbers set on a row, every one so on both readers); the painter now lights every box it is given, whatever the lines' cut.
+  Measured over the 92 pairs' laid pages (the reader gate's entry, Google's rows, every shape lit alone by the reader's own code,
+  b06a95ba6 against this change): of 4,439 displays (judged by arXiv's text items inside them, painted and hit on both panes),
+  the 4,365 of units painted whole before and after, and 25 of the 74 no unit owns (12 papers; 10 of their 19 of several rows)
+  lit wrongly, now none; over every shape, boxes not painted whole 387 on the left (in the shapes of 30 kept blocks, 52
+  sentences, 20 members lit whole) and 862 on the right (30, 377, 55), now 0; 611 shapes paint otherwise (on the left and the right: kept blocks 30
+  and 30, sentences 63 and 410, members lit whole 21 and 57), every one with two boxes on one band, none holding another
+  block's middle that it did not; every other shape's paint is byte for byte as before. The parity's paint model
+  (`lab/typeset/parity/paint.mjs`) reads the same rows, held equal to the painter's drawn outlines
+  (`tests/lab/parity-paint-binds.test.ts`). The sentence cover (I10) judges Laid.lit, never the paint, and passed the display's
+  second row on neither pane: the reader gate's entry now holds **I11, every lit box painted whole on both panes**
+  (`lab/typeset/painted.mjs`: each shape painted by the painter's own rows and outlines in its CSS px at scale one, each box less
+  the drawing's 0.01 px a side held inside them exactly; 0 the only passing value, in the gate's summary line).
 - **A figure text lights its own lines' band alone** (Laid.lit `band`, every member the part states of kind `figure`, laid or
   not, level or turned; the typesetter's `lay/entry.ts`, the reader's `compose/highlight.ts`): no pad beside and no half
   leading over and under, on both panes and where the pointer is hit alike. The half leading is the lower quartile of the
