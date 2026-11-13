@@ -147,7 +147,7 @@ export { type FitMeasure, fitMeasure, fontString, measure } from './breaker/meas
 export { type Cover, cover, runsOfTokens } from './breaker/cover.ts'
 export { type RelayFollower, type RelayLead, relay } from './shared/relay.ts'
 export { breakPoints, hyphenationOf, type Mins, type Patterns } from './breaker/hyph.ts'
-export { footFloorOf, inFlow, PREDISPLAY, SHORT_SKIP, type Slot, slotsAt, texRoomOf } from './breaker/slots.types.ts'
+export { footFloorOf, inFlow, PREDISPLAY, SHORT_SKIP, type Slot, slotsAt, texRoomOf } from './breaker/slots.ts'
 export { type Broken, breakLines, lineExtent } from './breaker/break.types.ts'
 export { type Cut, pageCutsOf, textless, withPageBreaks } from './breaker/cuts.ts'
 export { laidOut } from './breaker/place.types.ts'

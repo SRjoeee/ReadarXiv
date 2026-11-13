@@ -7,7 +7,7 @@
 // translation on both sides). And two more, for the verdict's leadRuling (the owner's ruling of 2026-11-10): in
 // packages/typeset/src/shared/fill-pass.ts one call is put before a page's fill, `globalThis.__parityFill?.(page, the units
 // begun on it, those running on to it, the rules)`, which v2.mjs reads to record each pass's target; and in
-// packages/typeset/src/breaker/slots.mjs option (i)'s line (floorOver: the gap under a borrowing paragraph measured from the
+// packages/typeset/src/breaker/slots.ts option (i)'s line (floorOver: the gap under a borrowing paragraph measured from the
 // borrow's limit) is skipped while `globalThis.__parityNoOptionI` is set, which v2.mjs sets alone, around a first lay of the
 // pair whose pages it does not keep: each page's target before (i). And in packages/typeset/src/breaker/tokens.ts the line that
 // sets no space beside a full-width mark's blank side (markBlankEdge: after a closing mark, before an opening one; B.tokens, lane
@@ -20,10 +20,10 @@
 // halves and SQUEEZE em a gap, light compression before stretching) while `globalThis.__parityNoSqueeze` is set, which v2.mjs sets
 // alone, around another lay of the pair whose pages it does not keep: each member's line count without that punctuation rule, the
 // counterfactual the owner's ruling L2 reads (rulings.mjs, 2026-11-12). Nothing else of any module is touched; a gate-l1.ts that no
-// longer holds the call once, a fill-pass.ts or slots.mjs its anchor, or a tokens.ts or break.mjs its line once, throws.
+// longer holds the call once, a fill-pass.ts or slots.ts its anchor, or a tokens.ts or break.mjs its line once, throws.
 const CALL = /const page = layPage\(\n[\s\S]*?\n {6}\)\n(?= {6}out\.entry\.ms\.push)/g
 const FILL = '  const { units, ...told } = fillUnitsOf(\n'
-const OPTION_I = '  if (b.B.at(-1) - low > 1e-9) floor = Math.min(floor, low + (L - 1) * p0)\n'
+const OPTION_I = '  if ((b.B.at(-1) as number) - low > 1e-9) floor = Math.min(floor, low + (L - 1) * p0)\n'
 
 const BLANK_SIDES = '    if (markBlankEdge(before, true, cjkFace) || markBlankEdge(after, false, cjkFace)) return false\n'
 const SQUEEZES = '  const squeezes = !!P.cjk && !P.keepAll && !(st.track > (st.fitTrack ?? P.trackStart ?? 0) + 1e-9)\n'
@@ -41,9 +41,9 @@ export async function load(url, context, nextLoad) {
       source: source.replace(FILL, `  ;(globalThis as any).__parityFill?.(pg, begun, ok.filter((p) => p.pages[0] !== pg), P)\n${FILL}`),
     }
   }
-  if (url.endsWith('/packages/typeset/src/breaker/slots.mjs')) {
+  if (url.endsWith('/packages/typeset/src/breaker/slots.ts')) {
     const source = String(r.source)
-    once(source, OPTION_I, 'slots.mjs')
+    once(source, OPTION_I, 'slots.ts')
     return { ...r, source: source.replace(OPTION_I, `  if (!globalThis.__parityNoOptionI) ${OPTION_I.trimStart()}`) }
   }
   if (url.endsWith('/packages/typeset/src/breaker/break.mjs')) {

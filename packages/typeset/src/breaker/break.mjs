@@ -5,7 +5,7 @@
 import { textless } from './cuts.ts'
 import { breakPoints } from './hyph.ts'
 import { keptPair, kinsokuOf, noStart } from './script.ts'
-import { inFlow, texRoomOf } from './slots.mjs'
+import { inFlow, texRoomOf } from './slots.ts'
 
 const GRAPHEMES = new Intl.Segmenter('en', { granularity: 'grapheme' })
 /** a text's graphemes, each a string: what a reader sees as one character */

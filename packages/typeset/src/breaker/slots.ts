@@ -1,19 +1,45 @@
 // B.slots (design-b §1.5): the slots (lines) a unit's blocks hold at a state of the fit, and the floor a paragraph's last line
 // keeps over the next line of its column. Today's code (layer2.mjs L2:3118-3281, flowMeasureAt L2:597-610, inFlow L2:3061),
-// moved by lab/typeset/move-fit.mjs; typed by slots.types.ts.
+// moved by lab/typeset/move-fit.mjs.
 import { measureOf, measureOn } from '../unit/blocks.ts'
+import type { FitBlock, FitParams, FitState } from '../fit/types.ts'
+
+/** a slot: a line a block holds at a state, before the breaker fills it (slotsAt): its block, page, extent and baseline, the
+ *  original's line it stands on (`target`), its pitch, the kept regions before it (`after`), its foot and its flow; a label's
+ *  hang (`hangGap`, `hung`) and TeX's flush alignment where its block has them */
+export type Slot = {
+  block: number
+  page: number
+  x0: number
+  x1: number
+  baseline: number
+  target: number | null
+  centred: boolean
+  pitch: number
+  after: number
+  foot: number
+  flow: number
+  hangGap?: number
+  hung?: true
+  flush?: 'left' | 'right'
+}
+/** a block's stop on a shared row (U.decor's `stop`) */
+type Stop = NonNullable<FitBlock['stop']>
 
 /** whether two laid lines or slots are one flow of TeX's lines (blocks2: blocks of one unit that follow each other in the
  *  layout file with only the unit's own lines between, in one frame, and no kept region the text passes; every other block
  *  a flow of its own) */
-const inFlow = (a, b) => a.flow === b.flow
+const inFlow = (a: { flow?: number }, b: { flow?: number }): boolean => a.flow === b.flow
 /** a block's foot at a state: the lowest baseline a line of it is laid at, its last less what it borrows (its room TeX's facts
  *  leave, Block.free: the owner's ruling of 2026-11-08) */
-const lowOf = (b, st, s) => b.B.at(-1) - Math.min(roomOf(b, st), st.borrow * (b.pitch0 ?? 1.2 * s))
+const lowOf = (b: FitBlock, st: FitState, s: number): number =>
+  (b.B.at(-1) as number) - Math.min(roomOf(b, st), st.borrow * (b.pitch0 ?? 1.2 * s))
 /** the room under a block's last baseline at a state: Block.free; at a state that borrows past TeX's text block bottom
  *  (FitState.over, docs/PDF-READER.md §18.37), the bottom's depth that much deeper, the next ink's bound as it is */
-function roomOf(b, st) {
-  return st.over && b.toFoot !== undefined ? Math.max(0, Math.min(b.toFoot + st.over, b.toInk)) : b.free ?? 0
+function roomOf(b: FitBlock, st: FitState): number {
+  return st.over && b.toFoot !== undefined
+    ? Math.max(0, Math.min(b.toFoot + st.over, b.toInk as number))
+    : (b.free ?? 0)
 }
 /**
  * The gap under a paragraph never tighter than its lines (the half-leading round, 2026-10-17, its second form): the lowest
@@ -34,27 +60,28 @@ function roomOf(b, st) {
  * closer (the alphabets: nothing moves), a last line it shares with ink that stays (`foot` false: a unit begins on it), a
  * last frame of one line (no room to give), no line under it
  */
-function footFloorAt(blocks, st, P, s) {
+function footFloorAt(blocks: readonly FitBlock[], st: FitState, P: FitParams, s: number): number | null {
   const e = P.halfLead
   if (!e?.foot || !blocks.length) return null
-  return floorOver(blocks.at(-1), e.below, st.lead, st, s)
+  return floorOver(blocks.at(-1)!, e.below, st.lead, st, s)
 }
 /** the floor of block `b`'s last line at leading L, the original's next line of its column `below` under its last baseline: the
  *  gap under a paragraph at its own leading (footFloorAt), or null */
-function floorOver(b, below, L, st, s) {
+function floorOver(b: FitBlock, below: number, L: number, st: FitState, s: number): number | null {
   if (!(L > 1 + 1e-9) || !Number.isFinite(below)) return null
   const low = lowOf(b, st, s)
-  if (!(b.B[0] - low > 0.05)) return null
+  if (!((b.B[0] as number) - low > 0.05)) return null
   // (and the original's own skip at that boundary, its room past its pitch, capped at a pitch as the gate's measure caps
   // it, measure.mjs paraGapsOf: a NeurIPS \parskip of 5.5 pt under 11 is kept over the leading, where without it a gap of a
   // pitch and a skip equalled a leading of 1.5 and the paragraphs ran together)
-  const p0 = b.pitch0 ?? 1.2 * s, skip = Math.min(Math.max(0, below - p0), p0)
-  let floor = b.B.at(-1) - below + L * p0 + skip
+  const p0 = b.pitch0 ?? 1.2 * s,
+    skip = Math.min(Math.max(0, below - p0), p0)
+  let floor = (b.B.at(-1) as number) - below + L * p0 + skip
   // (a state that borrows room under it, TeX's (Room.runs, Room.sep): the gap measured from the borrow's limit, its foot,
   // which stands TeX's separation over the next ink; at its own leading that much higher, the original's skip past the
   // separation (a list's \itemsep, flush bottom's stretch) the borrow's. Lab option (i) of 2026-11-09, shown to the owner alone and with (iii):
   // 1810.04805v2's references that need every line of theirs stood at the original's pitch among entries spread to 1.38)
-  if (b.B.at(-1) - low > 1e-9) floor = Math.min(floor, low + (L - 1) * p0)
+  if ((b.B.at(-1) as number) - low > 1e-9) floor = Math.min(floor, low + (L - 1) * p0)
   return floor > low + 1e-9 ? floor : null
 }
 /**
@@ -65,13 +92,15 @@ function floorOver(b, below, L, st, s) {
  * run-in text, then its prompt in a frame; a first paragraph filled to its block's foot stood a pitch of the original over the
  * second, its own lines half again as far apart. Null where nothing is asked
  */
-function paraFloorAt(blocks, bi, st, s) {
-  const b = blocks[bi], n = blocks[bi + 1]
+function paraFloorAt(blocks: readonly FitBlock[], bi: number, st: FitState, s: number): number | null {
+  const b = blocks[bi]!,
+    n = blocks[bi + 1]
   if (!n?.opens || n.page !== b.page || !(Math.min(b.x1, n.x1) > Math.max(b.x0, n.x0))) return null
-  return floorOver(b, b.B.at(-1) - n.B[0], st.leads?.[bi] ?? st.lead, st, s)
+  return floorOver(b, (b.B.at(-1) as number) - (n.B[0] as number), st.leads?.[bi] ?? st.lead, st, s)
 }
 /** footFloorAt for the fill leadings' guesses of a closer leading (run.mjs guessCloser): the floor a state asks, or null */
-export const footFloorOf = (blocks, st, P, s) => footFloorAt(blocks, st, P, s)
+export const footFloorOf = (blocks: readonly FitBlock[], st: FitState, P: FitParams, s: number): number | null =>
+  footFloorAt(blocks, st, P, s)
 /** of a line's size: a display whose top stands under its baseline nearer than this is in reach of its descent (TeX's
  *  \abovedisplayshortskip, nothing but stretch, sets one that near; its \abovedisplayskip does not) */
 export const SHORT_SKIP = 0.3
@@ -90,14 +119,21 @@ const ON_LINE = 0.05
  * of #496), nor the other half of a line its rectangles cut in two. -Infinity where the unit's blocks hold no line of the
  * original under the crop, or none past it on that side
  */
-export function texRoomOf(blocks, r, below) {
+export function texRoomOf(
+  blocks: readonly FitBlock[] | null,
+  r: { crop: readonly [x0: number, y0: number, x1: number, y1: number]; page: number; baseline: number },
+  below: boolean,
+): number {
   const cx = (r.crop[0] + r.crop[2]) / 2
   for (const b of blocks ?? []) {
     if (b.page !== r.page) continue
-    const j = b.B.findIndex((y, i) => Math.abs(y - r.baseline) <= ON_LINE && b.rects[i][1] <= cx && cx <= b.rects[i][3])
+    const j = b.B.findIndex(
+      (y, i) => Math.abs(y - r.baseline) <= ON_LINE && b.rects[i]![1] <= cx && cx <= b.rects[i]![3],
+    )
     if (j < 0) continue
-    const G = b.G ?? b.B, k = below ? j + 1 : j - 1
-    return k >= 0 && k < G.length ? Math.abs(G[j] - G[k]) : -Infinity
+    const G = b.G ?? b.B,
+      k = below ? j + 1 : j - 1
+    return k >= 0 && k < G.length ? Math.abs(G[j]! - G[k]!) : -Infinity
   }
   return -Infinity
 }
@@ -110,23 +146,25 @@ export function texRoomOf(blocks, r, below) {
  * wider rows under it: the review of #595). 2608.16117v1 p19's u59, its first block the shared row's remainder alone beside
  * Figure 9, flows on at the paragraph's full measure, the unit before's rows'
  */
-function flowMeasureAt(b, y) {
-  const { y: row, lead } = b.flowX
-  const j = lead.B.findIndex(v => Math.abs(v - row) < 0.05)
-  const a = measureOf(lead, row, j), c = measureOf(b, row, 0), shared = [Math.min(a[0], c[0]), Math.max(a[1], c[1])]
-  return measureOn((lead.G ?? lead.B).slice(0, j + 1), i => (i < j ? measureOf(lead, y, i) : shared), y)
+function flowMeasureAt(b: FitBlock, y: number): [number, number] {
+  const { y: row, lead } = b.flowX as { y: number; lead: FitBlock }
+  const j = lead.B.findIndex((v) => Math.abs(v - row) < 0.05)
+  const a = measureOf(lead, row, j),
+    c = measureOf(b, row, 0),
+    shared: [number, number] = [Math.min(a[0], c[0]), Math.max(a[1], c[1])]
+  return measureOn((lead.G ?? lead.B).slice(0, j + 1), (i) => (i < j ? measureOf(lead, y, i) : shared), y)
 }
 /** the slots (lines) a unit's blocks hold at a state: each { block, page, x0, x1, baseline, target, centred }. The pitch is
  *  the original's times the leading, whatever the size (D6's F6a, 2026-10-08: a Latin line shrunk with its size sat on none
  *  of the original's baselines and its unit ended a fraction of a line short, the blank added to the gap below it; every
  *  script's lines now stay on the original's baselines while the size shrinks, as CJK's did) */
-function slotsAt(blocks, st, P, s) {
-  const out = []
+function slotsAt(blocks: readonly FitBlock[], st: FitState, P: FitParams, s: number): Slot[] {
+  const out: Slot[] = []
   // (each block's foot, the lowest a line of it is laid at: its last baseline less what it borrows; a line TeX's rule moves
   // down may go on past it into the next block of its flow where blocks2 found nothing kept between them, `through`, to
   // the foot of the last block it so runs into, `foot`; the page fill's states (`box`) the unit's last frame's no lower than
   // a leading over the next line of its column, footFloorAt)
-  const lows = blocks.map(b => lowOf(b, st, s))
+  const lows = blocks.map((b) => lowOf(b, st, s))
   const floor = st.box ? footFloorAt(blocks, st, P, s) : null
   if (floor !== null) lows[lows.length - 1] = floor
   // (and under each paragraph TeX states inside the unit, at its own leading: paraFloorAt)
@@ -136,10 +174,10 @@ function slotsAt(blocks, st, P, s) {
       if (f !== null) lows[bi] = f
     }
   const feet = lows.slice()
-  for (let bi = blocks.length - 2; bi >= 0; bi--) if (blocks[bi].through) feet[bi] = feet[bi + 1]
+  for (let bi = blocks.length - 2; bi >= 0; bi--) if (blocks[bi]!.through) feet[bi] = feet[bi + 1]!
   // (a run's blocks are laid alone, layoutRuns: the unit's first line is the first block's of the unit, P.blockBase the run's
   // first block's place in it)
-  const base = P.blockBase ?? 0
+  const base = (P.blockBase as number | undefined) ?? 0
   for (const [bi, b] of blocks.entries()) {
     const p0 = b.pitch0 ?? 1.2 * s
     // (a block of a frame before the unit's last filled at a leading of its own, `leads` (S.fill.leads: each frame of a paragraph
@@ -147,11 +185,11 @@ function slotsAt(blocks, st, P, s) {
     const lead = st.leads?.[bi] ?? st.lead
     const pitch = p0 * lead
     const onGrid = Math.abs(lead - 1) < 1e-6
-    const low = lows[bi]
+    const low = lows[bi]!
     const firstBlock = bi + base === 0
     // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own; and its gaps TeX's
     // \lineskip rule opened closed to the pitch, blocks2's `E`)
-    const G = onGrid && b.E ? b.E : b.G ?? b.B
+    const G = onGrid && b.E ? b.E : (b.G ?? b.B)
     for (let k = 0; k < 400; k++) {
       // (the first line on a shared row stands on the baseline the line before it there was laid at, `startY`, where that is
       // not TeX's (run.mjs layout2, shareOf's `at`): the row's line, its measure the row's, whatever the block's foot)
@@ -160,12 +198,21 @@ function slotsAt(blocks, st, P, s) {
       // `above`): the unit's lines flow on from it at its own pitch, as one paragraph read on; one that leaves no room there
       // has its first line a pitch under it)
       const flows = firstBlock && b.onLead && k > 0
-      let y = shared ? b.startY : flows ? b.startY - k * pitch : onGrid ? (k < G.length ? G[k] : G.at(-1) - (k - G.length + 1) * pitch) : b.B[0] - k * pitch
+      let y = shared
+        ? (b.startY as number)
+        : flows
+          ? (b.startY as number) - k * pitch
+          : onGrid
+            ? k < G.length
+              ? G[k]!
+              : (G.at(-1) as number) - (k - G.length + 1) * pitch
+            : (b.B[0] as number) - k * pitch
       // (the page fill's states, `head`: the unit's first block lower by the room the gap over it lacks, where the paragraph over
       // it cannot end higher (S.fill.page headOf: its last line alone on its frame's first line, TeX's widow), its foot its own)
       if (st.head && firstBlock && !shared && b.startY === undefined) y -= st.head
       // never two lines closer than 0.7 of the pitch (a baseline the text layer could not tell)
-      if (out.length && out.at(-1).block === bi && y > out.at(-1).baseline - 0.7 * pitch) y = out.at(-1).baseline - pitch
+      if (out.length && out.at(-1)!.block === bi && y > out.at(-1)!.baseline - 0.7 * pitch)
+        y = out.at(-1)!.baseline - pitch
       if (y < low - 0.05 && !shared) break
       const target = k === 0 || (onGrid && !flows && k < b.B.length) ? k : null
       // (each slot the measure of the line it is laid at, where the paragraph's changed: measuresOf; the block's grid, its
@@ -173,14 +220,22 @@ function slotsAt(blocks, st, P, s) {
       // (a line flowed on from the unit before over the rows its translation left, the shared row included, `flowX` (run.mjs
       // layout2): the measure TeX set at its height, the two units' rows' around the row (flowMeasureAt); under it, the unit's
       // own rows')
-      const [mx0, mx1] = flows && b.flowX && y >= b.flowX.y - 0.05 ? flowMeasureAt(b, y) : measureOf(b, y, (onGrid || shared) && !flows && k < G.length ? k : -1)
+      const [mx0, mx1] =
+        flows && b.flowX && y >= b.flowX.y - 0.05
+          ? flowMeasureAt(b, y)
+          : measureOf(b, y, (onGrid || shared) && !flows && k < G.length ? k : -1)
       // (the first line's start: the block's indent, or where a shared line leaves it, `start`, run.mjs layout2)
       // (and a block a forced break's region opens, `opens` (blocksOf2): its first line TeX's paragraph's, at its indent)
-      let x0 = firstBlock && k === 0 && b.start !== undefined ? b.start : (firstBlock || b.opens) && k === 0 && !b.centred ? b.x0 + b.indent : mx0
+      let x0 =
+        firstBlock && k === 0 && b.start !== undefined
+          ? b.start
+          : (firstBlock || b.opens) && k === 0 && !b.centred
+            ? b.x0 + b.indent
+            : mx0
       // (a label TeX hung beside the block's text (`hang`, lay/adapt.ts): the first line starts at the label, `hangGap` the space
       // TeX set after it at the state's scale, which breakLines hangs the text at the drawn label's end by; the block's later
       // lines starting at its text's edge, `hung`, take the edge it sets)
-      let hangGap, hung
+      let hangGap: number | undefined, hung: true | undefined
       if (firstBlock && k === 0 && b.start === undefined && b.hang !== undefined && !b.centred && b.hang < x0) {
         hangGap = (b.hangGap ?? 0) * st.scale
         x0 = b.hang
@@ -191,7 +246,9 @@ function slotsAt(blocks, st, P, s) {
       // unit 76: German's last line ran on over the matrix TeX set 1.1 pt under its short line)
       const em = s * st.scale
       let x1 = mx1
-      for (const d of b.shortSkips ?? []) if (d.top < y && d.top > y - SHORT_SKIP * em && Math.min(x1, d.x1) > Math.max(x0, d.x0)) x1 = Math.min(x1, d.x0 - PREDISPLAY * em)
+      for (const d of b.shortSkips ?? [])
+        if (d.top < y && d.top > y - SHORT_SKIP * em && Math.min(x1, d.x1) > Math.max(x0, d.x0))
+          x1 = Math.min(x1, d.x0 - PREDISPLAY * em)
       // (ink that stays beside the original's lines, no member's (`stays`, Room.stays: a mark TeX set after a space, a frame's
       // rule; amsthm's QED box in a part made before a unit's end mark was stated, El.end, lay/adapt.ts, which follows the
       // translation's end since): a line whose reach meets it, from its descent's (SHORT_SKIP, as a
@@ -208,7 +265,19 @@ function slotsAt(blocks, st, P, s) {
       }
       // a sliver beside a formula (narrower than 1.5 em) holds no text: its words were the formula's
       if (x1 - x0 < 1.5 * s * st.scale) continue
-      const slot = { block: bi, page: b.page, x0, x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, foot: feet[bi], flow: b.flow ?? bi }
+      const slot: Slot = {
+        block: bi,
+        page: b.page,
+        x0,
+        x1,
+        baseline: y,
+        target,
+        centred: b.centred,
+        pitch,
+        after: b.after ?? 0,
+        foot: feet[bi]!,
+        flow: b.flow ?? bi,
+      }
       if (hangGap !== undefined) slot.hangGap = hangGap
       if (hung) slot.hung = true
       // (a unit TeX set flush left or flush right, run.mjs: placeItems sets its lines by it)
@@ -221,8 +290,8 @@ function slotsAt(blocks, st, P, s) {
     // one is no line of it; and where the row is the block's foot, with no slot on it, the slot nearest it may stand over its
     // baseline by more than half a pitch, within an em, its text over what stays there)
     if (b.stop) {
-      const d = sl => Math.abs(sl.baseline - b.stop.y)
-      const near = out.filter(sl => sl.block === bi && d(sl) < b.stop.band).sort((p, q) => d(p) - d(q))
+      const d = (sl: Slot) => Math.abs(sl.baseline - (b.stop as Stop).y)
+      const near = out.filter((sl) => sl.block === bi && d(sl) < (b.stop as Stop).band).sort((p, q) => d(p) - d(q))
       for (const sl of near) {
         sl.x1 = Math.min(sl.x1, b.stop.x1)
         if (sl.x1 - sl.x0 >= 1.5 * s * st.scale) break

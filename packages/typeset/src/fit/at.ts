@@ -3,7 +3,7 @@
 // walk's, the chain's and the fill's replays on the corpus.
 import { breakLines } from '../breaker/break.types.ts'
 import { laidOut } from '../breaker/place.types.ts'
-import { slotsAt } from '../breaker/slots.types.ts'
+import { slotsAt } from '../breaker/slots.ts'
 import type { Token } from '../breaker/tokens.ts'
 import type { FitBlock, FitParams, FitState, Layout } from './types.ts'
 

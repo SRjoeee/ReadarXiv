@@ -3,7 +3,7 @@
 // (run.mjs RUN:494-595: fillLeadsOf, closerLead, guessCloser), moved by lab/typeset/move-fit.mjs; typed by
 // fill-leads.types.ts. The layout found, which the page's fill reuses (today's fillLaid, a module WeakMap), is a field of
 // the unit, `fillLaid` (design-b §1.5: FillLeads.laid).
-import { footFloorOf } from '../breaker/slots.mjs'
+import { footFloorOf } from '../breaker/slots.ts'
 import { layoutAt } from '../fit/at.ts'
 import { keepsPages } from '../fit/runs.ts'
 

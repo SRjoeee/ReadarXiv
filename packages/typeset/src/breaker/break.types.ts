@@ -4,7 +4,7 @@
 import * as m from './break.mjs'
 import type { FitBlock, FitParams, FitState, LaidItem, LaidLine } from '../fit/types.ts'
 import type { FitMeasure } from './measure.ts'
-import type { Slot } from './slots.types.ts'
+import type { Slot } from './slots.ts'
 import type { Token } from './tokens.ts'
 
 /** a breaking at a state: its lines, the tokens it laid from (its own copy where it cut one), how many it set of all */

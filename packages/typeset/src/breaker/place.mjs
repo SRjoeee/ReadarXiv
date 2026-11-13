@@ -2,7 +2,7 @@
 // breaking made a layout (laidOut). Today's code (layer2.mjs L2:3976-4038, L2:4136-4157), moved by
 // lab/typeset/move-fit.mjs; typed by place.types.ts.
 import { gapsOf, hangOf, inWord, latinishOf, lineExtent, squeezable, tabOf } from './break.mjs'
-import { inFlow, slotsAt } from './slots.mjs'
+import { inFlow, slotsAt } from './slots.ts'
 import { toLastLines } from '../fit/last-lines.ts'
 
 /** each line's items placed: justified where the slack is within the caps (CJK per gap, but none inside a word: gapsOf,
