@@ -2,7 +2,8 @@
 // to the information sign, its words drop the time, its retry is offered): the website's page's useClock, the chrome's own
 import { useEffect, useState } from 'react'
 
-/** the longest a timer waits (its delay is a 32-bit count of ms): a time further off is waited for in steps */
+/** the longest a timer waits, ms: the platform's limit, a timer's delay being a signed 32-bit count of ms (`setTimeout`
+ *  takes a WebIDL `long`); a time further off is waited for in steps */
 const LONGEST_MS = 2 ** 31 - 1
 
 /** now, and again once `at` has passed: the time is read as the component renders, and a timer renders it again at `at`, never
