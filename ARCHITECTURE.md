@@ -30,8 +30,8 @@ The directions point one way, and `scripts/check-boundary.mjs` holds them (its t
 package imports another only through its entry, `@readarxiv/<name>`, never a deep or a relative path into it; no package
 imports the extension's `src/`, its aliases, `wxt` or a virtual module; a directory under `packages/` that `PACKAGES` does not
 list fails; and no package holds a hand-written declaration file, so the JavaScript modules a package still holds, all of
-them the engine's, are typed by a `*.types.ts` facade that re-exports with its type each value read of them: `ink.mjs` by
-`packages/engine/src/ink.types.ts` beside it; today's ink makers copied into `packages/engine/src/locate/today/` (`deps.mjs`,
+them the engine's, are typed by a `*.types.ts` facade that re-exports with its type each value read of them: today's ink
+makers copied into `packages/engine/src/locate/today/` (`deps.mjs`,
 `figure-text.mjs`, `ink-units.mjs`, `ledger.mjs`, and the `accents.mjs` and `content-classes.mjs` they import) by
 `packages/engine/src/locate/today/today.types.ts`, but for the two values of `accents.mjs` that
 `packages/engine/src/locate/facts.ts` reads and types itself; and the moved front half, the 27 modules of `source/`, `marks/`,
@@ -198,14 +198,14 @@ a gate is named by its id there. The rows after them are this repository's own.
 |---|---|---|
 | I1: all groups on, the composed page paints what A paints, glyph, box and pixel | `prepare` (PDF.js's proofs over the corpus, `lab/pdf/prepare-back/prove.mjs` (a)); `pixels` (poppler); `canvas` (Chromium); `harness` (the reader's fixtures) | in the reader, held on the harness's fixtures alone; `canvas` has passed only with a stand-in (`--normalize`) |
 | I2: a group off hides exactly its ink, and no pixel outside it changes | `prepare` (proof (c′)); `pixels` (Cairo) | no gate turns a group off in the reader |
-| I3: a laid unit's ink stays inside its regions and room and overlaps no other ink | `harness`; `typeset-today`, `reader-parts`; `display` | |
+| I3: a laid unit's ink stays inside its regions and room and overlaps no other ink | `harness`; `typeset-today`, `reader-parts`; `display`, `display-wide` | |
 | I4: every element of a laid unit appears exactly once | `harness`; `typeset-today`, `reader-parts` | |
 | I5: no line wider than its frame beyond the stated tolerance; no unit under the size floor | `typeset-today`, `reader-parts` | no gate counts the size floor |
 | I6: the same inputs give the same bytes (the prepare) and the same display list (the lay) | `prepare-same` (the corpus twice, `lab/pdf/prepare-back/same.mjs`); `sentence-cover` (a unit laid alike by every page's lay that holds it); `packages/typeset/tests/replay/purity.test.ts`; the private repository's box tier (the corpus through the box) | a page laid twice is compared on one pair alone, with the lab's data |
 | I7: a unit's boxes on the left and on the right are the same boxes | no gate | |
 | I8: the text layer of a laid page reads the translation in reading order | `harness`; `harness-lab` (five corpus papers); the website's reader checks (private) | not over the corpus |
 | I9: the box refuses each escape of the security suite and has no network | the private repository's box tier | run under emulation alone |
-| I10: on both panes every drawn piece of a lit unit is in exactly one of its sentences, the same sentences on both | `sentence-cover`; `display` | not over our server's own rows |
+| I10: on both panes every drawn piece of a lit unit is in exactly one of its sentences, the same sentences on both | `sentence-cover`; `display`, `display-wide` | not over our server's own rows |
 | D: no unit drawn or laid at the frozen baseline (the released reader's output, recorded in the lab) is lost, but for the acceptance list | `prepare-diff`; `typeset-today`; the private repository's sweep against its staging server | |
 | Display: no page drawn worse than today's reader draws it, a difference only where nearer A | `display` (`lab/typeset/parity/`: both drawn beside A's page with the same rows) | |
 | A package imports only the packages `PACKAGES` allows, by entry; nothing of the extension | `scripts/check-boundary.mjs` (`pnpm lint`) | |
