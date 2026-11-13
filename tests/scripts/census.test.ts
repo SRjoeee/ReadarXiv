@@ -198,7 +198,7 @@ describe('rule debt', () => {
     const entry = "{ id: 'S.a', owns: ['T1', 'T2', 'T3'], ports: ['RUN:1-2 a', 'L2:3-4 b', 'x.mjs:5 c'], reads: ['p.q', 'p.r', 'p.s'] }"
     for (const decl of ['const SPECS: readonly RuleSpec[] = ', 'const SPECS: RuleSpec[] = ', 'export const SPECS: ReadonlyArray<RuleSpec> = ']) {
       const f = factsOf('src/engine/rules.ts', `type RuleSpec = { id: string }\n${decl}[\n  ${entry},\n  ${entry.replace("'S.a'", "'S.b'")},\n]\n`)
-      expect(f.lists?.map(l => l.entries ?? l.sample), decl).toEqual([['T1', 'T2', 'T3'], ['p.q', 'p.r', 'p.s'], ['T1', 'T2', 'T3'], ['p.q', 'p.r', 'p.s']])
+      expect(f.lists?.map(l => l.sample), decl).toEqual([['T1', 'T2', 'T3'], ['p.q', 'p.r', 'p.s'], ['T1', 'T2', 'T3'], ['p.q', 'p.r', 'p.s']])
     }
     for (const decl of ['const SPECS = ', 'const SPECS: readonly Other[] = ']) {
       const f = factsOf('src/engine/rules.ts', `${decl}[\n  ${entry},\n]\n`)
