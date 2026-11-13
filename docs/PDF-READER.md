@@ -321,6 +321,16 @@ the extension's reader passes none (its narrow window keeps §5's rule).
   (`latex-front`) knows which sectioning command each heading unit comes from (`section`, `subsection`,
   `subsubsection`, …) and keeps it on the unit as its level (§10.4); a copy stored before that has no levels and its
   outline is flat. A heading's page is the translation's.
+- **Each heading is one entry.** The headings are those of the layer's units as its head names them (`head.units`, each
+  object read by its digest from the catalog's directory, as the parts are: `packages/reader` session/machine.ts
+  `layerUnitsOf`), the units the head's outline and its parts' members are of. Our server's document names more in
+  `layer.units`: every Units object the prepare told, the source's units (handed out before the marked compile, so that a
+  translation can start) ahead of the bundle's, the same units under the same ids in another object. The document's list
+  stays our server's word for what its run was given (`needsOf`); nothing the reader shows is read from it. The rebuilt
+  reader read it as the layer's and listed every heading twice, from its first deploy (2026-11-07) to round RB1: on staging,
+  2026-11-13, 2608.25210v2's 25 headings were 50 entries, the view counted 600 units where the head's count 336 (§6.6), and
+  the source's object was fetched with the head's. The view's count, the units the paper keeps, the rows made here and their context
+  (the paper's abstract) read the same units, each once.
 
 ### 6.4 The page pills
 
@@ -454,10 +464,13 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
   wait goes on: on staging 2026-11-12, 2010.11929v2 (a stale layer, no translation under the chain) counted 356 of 435,
   left the moment attempt 1 was done while the prepare still ran, and came back 6.8 s later at the new layer's attempt 2.
   Its count is one statement over that set: those
-  units with a translation held, of those units. It never passes its total, and never falls while the layer shown and
+  units with a translation held, of those units. Those units are the layer's as its head names them, each once (§6.3), read
+  once its head is read: never the document's `layer.units`, which names the source's units too (2608.25210v2 counted 600
+  where the head's units count 336, staging 2026-11-13). It never passes its total, and never falls while the layer shown and
   the toggles stay, since rows held are only added to. Its total changes only with the layer shown or the toggles, and
   then it is a new statement; while a new layer's units are not read yet, the count is the layer's before it (the pages on
-  screen), never 0 of 0 for a moment. Some cases are told by their end alone, so the line and the capsule say nothing of them:
+  screen), never 0 of 0 for a moment. On a first open the count is 0 of 0 until the head's units are read, then their
+  total, once. Some cases are told by their end alone, so the line and the capsule say nothing of them:
   rows read of a run done with nothing more to come (a stored translation); a run that restates rows the view holds; a run on
   units of a layer not shown yet that leaves every unit shown held. Before this rule, on staging 2026-11-11,
   2610.21924v1 opened after a deploy said "translating" three times over a paper already on screen. Its count went from

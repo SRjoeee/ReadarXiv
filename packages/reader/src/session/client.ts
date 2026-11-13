@@ -220,9 +220,6 @@ export function objectStore(a: Ask) {
   }
 }
 
-/** the directory an object of a layer lies in, by its catalog: objects the catalog names by digest are at `<dir>/<sha256>` */
-export const dirOf = (catalog: Ref): string => catalog.path.slice(0, catalog.path.lastIndexOf('/'))
-
 /** a document as the server writes it (format's PaperDoc, unknown fields stripped), or null where it is none */
 export function docOf(x: unknown): Doc | null {
   const d = PaperDoc.safeParse(x)

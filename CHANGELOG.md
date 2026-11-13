@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, the contents list each heading of the paper once, and the count of passages translated is the paper's own. Every heading had been listed twice, the second list below the first, and every passage counted twice.
 - Fixed: with Google translating, a reference's volume, issue and pages are the ones the paper prints. After an abbreviation such as "vol." or an author's initial, Google had been told a sentence ended there, and could write a volume, an issue and pages of its own.
 - Fixed: with Google translating, a footnote mark the paper sets right after a sentence's full stop stays at the end of that sentence. Google could carry it into the next sentence, where it stood beside another mark.
 - Fixed: in the PDF reader, a formula whose source holds a comment, where an author left an old term, a brace or an equation's end commented out, is kept whole as printed, and the words after it are translated as the sentence they are. The formula's letters had been sent as words and the text up to the next formula taken for a formula, or an equation ended at its commented-out end and its last lines read as prose.
