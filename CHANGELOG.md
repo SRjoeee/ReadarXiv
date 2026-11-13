@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: with Google translating, a footnote mark the paper sets right after a sentence's full stop stays at the end of that sentence. Google could carry it into the next sentence, where it stood beside another mark.
 - Fixed: in the PDF reader, a formula whose source holds a comment, where an author left an old term, a brace or an equation's end commented out, is kept whole as printed, and the words after it are translated as the sentence they are. The formula's letters had been sent as words and the text up to the next formula taken for a formula, or an equation ended at its commented-out end and its last lines read as prose.
 - Fixed: in the PDF reader, a figure's label with a line just under it, such as an axis, a gridline or a bar's edge, is translated where a slightly smaller size keeps the translation clear of the line; its neighbours in the same legend or row step down with it to one size. It had stayed in English.
 - Fixed: in the PDF reader, a citation number whose link on the original also takes in the bracket after it, such as the "4" of "[24, 4]", keeps its link in the translation. It had been dropped.

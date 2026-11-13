@@ -262,15 +262,89 @@ describe('google: on the wire a sentence ends at its stop', () => {
       tr: [12],
     })
   })
-  it('a reply that moved the element past a word reads as a moved element reads: where the reply set it, the boundary at the marker', () => {
-    const r = readTagged(GLUED_STOP, `每个标记都关注其左侧。<x id="3"/>我们${w(1)}报告两种规模。<x id="4"/>${w(2)}`)
+})
+
+// (an element the source glues after a sentence's stop is that sentence's: on the wire it stands after the boundary marker, the
+// first thing of the next sentence's segment, where Google may carry it into that sentence's words (2111.09276v1 p5: "…search.
+// [9] Then we apply an image encoder[10]", its zh reply setting mark 9 beside mark 10; 7 of 665 such elements over the
+// lab's Google store, every other kept first). The reading sets it back right after that marker, the sentence's end in the
+// reply; one the reply set anywhere in its own sentence stays. Lane glued-mark, 2026-11-13, DESIGN §6.2)
+describe('google: an element glued after a stop goes back to its sentence when the reply carried it into the next', () => {
+  const w = (n: number) => `<span id="${n}" translate="no">x${n}</span>`
+  const show = (c: OutPiece[] | undefined) => c?.map((p) => (p.t === 'text' ? p.s : `#${p.id}`)).join('')
+  it('moved past a word of the next sentence: right after the marker, the white space the reply set after it gone with it', () => {
+    const r = readTagged(GLUED_STOP, `每个标记都关注其左侧。<x id="3"/>我们${w(1)} 报告两种规模。<x id="4"/>${w(2)}`)
     expect(r?.content).toEqual([
-      { t: 'text', s: '每个标记都关注其左侧。我们' },
+      { t: 'text', s: '每个标记都关注其左侧。' },
       { t: 'el', id: 'f' },
-      { t: 'text', s: '报告两种规模。' },
+      { t: 'text', s: '我们报告两种规模。' },
       { t: 'el', id: 'g' },
     ])
-    expect(r?.sentences).toEqual({ src: [34], tr: [11] })
+    // (the boundary after the element, as from a reply that kept it there)
+    expect(r?.sentences).toEqual({ src: [34], tr: [12] })
+  })
+  it('a tie and a mark glued after the stop: the mark the reply moved goes back after the tie it kept; the next mark stays', () => {
+    const u = unit(
+      'tm',
+      [
+        t('We search the web.'),
+        el('s', 'space'),
+        el('a', 'note-mark'),
+        t(' Then we apply an encoder'),
+        el('b', 'note-mark'),
+        t(' to each image.'),
+      ],
+      true,
+    )
+    expect(google({ fetch: scriptedFetch(googleEcho).fetch }).write(u, 'zh-Hans')).toBe(
+      `We search the web.<x id="4"/>${w(1)}${w(2)} Then we apply an encoder${w(3)} to each image.`,
+    )
+    const r = readTagged(u, `我们搜索网络。<x id="4"/> ${w(1)}我们对每幅图像应用编码器${w(2)} ${w(3)}。`)
+    expect(show(r?.content)).toBe('我们搜索网络。#s#a我们对每幅图像应用编码器#b。')
+    expect(r?.sentences).toEqual({ src: [21], tr: [9] })
+  })
+  it('two moved, in the reply’s other order: back in the source’s order', () => {
+    const u = unit('two', [t('It ends.'), el('a', 'note-mark'), el('b', 'note-mark'), t(' Then more words.')], true)
+    expect(show(readTagged(u, `它结束了。<x id="3"/>然后${w(2)}更多${w(1)}词。`)?.content)).toBe(
+      '它结束了。#a#b然后更多词。',
+    )
+  })
+  it('carried past a later marker, into a sentence after the next: back after its own marker', () => {
+    const u = unit('far', [t('One ends.'), el('a', 'note-mark'), t(' Two ends. Three ends.')], true)
+    expect(google({ fetch: scriptedFetch(googleEcho).fetch }).write(u, 'zh-Hans')).toBe(
+      `One ends.<x id="2"/>${w(1)} Two ends. <x id="3"/>Three ends.`,
+    )
+    const r = readTagged(u, `一结束。<x id="2"/>二结束。<x id="3"/>三${w(1)}结束。`)
+    expect(show(r?.content)).toBe('一结束。#a二结束。三结束。')
+  })
+  it('set in its own sentence, before or after its stop (a target that writes a note’s mark before the stop): where the reply set it', () => {
+    expect(
+      show(
+        readTagged(GLUED_STOP, `每个标记都关注其左侧${w(1)}。<x id="3"/>我们报告两种规模。<x id="4"/>${w(2)}`)?.content,
+      ),
+    ).toBe('每个标记都关注其左侧#f。我们报告两种规模。#g')
+    expect(
+      show(
+        readTagged(GLUED_STOP, `每个标记都关注${w(1)}其左侧。<x id="3"/>我们报告两种规模。<x id="4"/>${w(2)}`)?.content,
+      ),
+    ).toBe('每个标记都关注#f其左侧。我们报告两种规模。#g')
+  })
+  it('no sentence known where the markers did not come back once each and in order: where the reply set it', () => {
+    expect(show(readTagged(GLUED_STOP, `每个标记都关注其左侧。我们${w(1)}报告两种规模。${w(2)}`)?.content)).toBe(
+      '每个标记都关注其左侧。我们#f报告两种规模。#g',
+    )
+  })
+  it('an element after the stop and white space is no glued one: where the reply set it', () => {
+    const u = unit('sp', [t('It ends. '), el('a', 'note-mark'), t(' Then more words.')], true)
+    expect(show(readTagged(u, `它结束了。<x id="2"/>然后${w(1)}更多词。`)?.content)).toBe('它结束了。然后#a更多词。')
+  })
+  it('the void spelling (Chrome’s, an LLM’s) reads the same', () => {
+    expect(
+      show(
+        readTagged(GLUED_STOP, '每个标记都关注其左侧。<x id="3"/>我们<x id="1"/> 报告两种规模。<x id="4"/><x id="2"/>')
+          ?.content,
+      ),
+    ).toBe('每个标记都关注其左侧。#f我们报告两种规模。#g')
   })
 })
 

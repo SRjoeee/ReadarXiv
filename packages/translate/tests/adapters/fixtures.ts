@@ -540,6 +540,12 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     why: 'the stops back where the boundary markers stand right after them; the sentence starts after the marks (tags.ts leads)',
   },
   {
+    unit: 23,
+    raw: '每个标记都关注其左侧。<x id="3"/>我们<span id="1" translate="no">x1</span> 报告两种规模。<x id="4"/><span id="2" translate="no">x2</span>',
+    taken: true,
+    why: 'a mark glued after a stop that the reply carried into the next sentence: back right after the stop’s marker (tags.ts leadsBack)',
+  },
+  {
     unit: 24,
     raw: '标记 <span id="1" translate="no">x1</span> <span id="2" translate="no">x2</span> 和图 <span id="3" translate="no">x3</span> <span id="4" translate="no">x4</span> 这里。',
     taken: true,
