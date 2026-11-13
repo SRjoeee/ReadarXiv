@@ -21,9 +21,9 @@ export const hasDerived = (name: string) => existsSync(join(DERIVED, `${name}.js
 
 export const readGz = (file: string): unknown => JSON.parse(gunzipSync(readFileSync(file)).toString('utf8'))
 
-/** today's rule params (resolveRules') less the fields an owner's ruling removed from the port's rule set (lab/typeset/
- *  rules-data.mjs RULED_OUT: `borrowGap`, the clearance a borrowed line kept over the next ink, which TeX's paragraph separation
- *  replaces, 2026-11-08) */
+/** today's rule params (resolveRules') less the fields an owner's ruling removed from the port's rule set, which the
+ *  package's data/rules never held: `borrowGap`, the clearance a borrowed line kept over the next ink, which TeX's paragraph
+ *  separation replaces, 2026-11-08 */
 export function ruledParams<T>(params: T): T {
   const o = { ...(params as Record<string, unknown>) }
   delete o.borrowGap

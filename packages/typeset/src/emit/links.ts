@@ -2,8 +2,8 @@
 // Ported from engine 065c1d973 links.mjs: matchUnit L369-446 (an annotation matched to the member's pieces, tier by tier:
 // geometry, a citation's key or a destination's name, a url, the order of a kind, the whole text), placeUnit L485-497 with
 // placeText, placeCrop, placePair, keptOf, rangeRecord, spanOf, tooDeep, normed (a matched annotation's record over what is
-// drawn of its piece: the drawn characters of a rendering, a crop's own map, a pair's tokens), and the targets' kinds
-// (kindOfAnnot, urlOf, linkKindOf, singleTarget). Lane L1 states each annotation's owner (Part.links' `owner`, today's
+// drawn of its piece: the drawn characters of a rendering, a crop's own map, a pair's tokens), and the annotations' kinds and
+// urls (kindOfAnnot, urlOf). Lane L1 states each annotation's owner (Part.links' `owner`, today's
 // ownedIn run once by the prepare): a member's candidates are the annotations it owns, matched among its pieces as today.
 // A link no member's drawing takes stays at A's boxes (design-a §1.2: Page.links), the reader's.
 import type { LaidLine } from '../fit/types.ts'
@@ -73,60 +73,6 @@ export function urlOf(arg: unknown): string | null {
   } catch {
     return null
   }
-}
-const CITE_SRC = /^\\(?![Nn]ocite)[A-Za-z]*[Cc]ite[A-Za-z]*\*?\s*(?:\[[^\]]*\]\s*)*\{([^{}]*)\}/
-const REF_SRC =
-  /^\\(?:ref|eqref|autoref|Autoref|cref|Cref|crefrange|Crefrange|cpageref|Cpageref|pageref|nameref|Nameref|vref|Vref|labelcref|subref|hyperref|hyperlink)\*?(?![A-Za-z])/
-const NOTE_SRC = /^\\(?:footnote|footnotemark)(?![A-Za-z])/
-const URL_SRC = /^\\url\*?\s*\{((?:[^{}]|\{[^{}]*\})*)\}/
-const HREF_SRC = /^\\href\*?\s*\{((?:[^{}]|\{[^{}]*\})*)\}/
-export type LinkKind =
-  | { kind: 'cite'; keys: string[] }
-  | { kind: 'url'; url: string }
-  | { kind: 'internal'; name?: string }
-  | { kind: 'note' }
-/** the link a piece may carry, by its source (links.mjs linkKindOf): a citation's keys, a url, a destination, a mark; null */
-export function linkKindOf(piece: { t?: string; src?: unknown } | null | undefined): LinkKind | null {
-  if (piece?.t === 'nested') return { kind: 'note' }
-  const src = typeof piece?.src === 'string' ? piece.src : ''
-  if (piece?.t === 'open') {
-    const h = HREF_SRC.exec(src)
-    if (h) {
-      const url = urlOf(h[1])
-      return url ? { kind: 'url', url } : null
-    }
-    const n = /^\\hyperlink\s*\{([^{}]+)\}/.exec(src)
-    if (n) return { kind: 'internal', name: n[1]!.trim() }
-    return /^\\(?:hyperref|hyperlink)(?![A-Za-z])/.test(src) ? { kind: 'internal' } : null
-  }
-  if (piece?.t !== 'ph') return null
-  const c = CITE_SRC.exec(src)
-  if (c)
-    return {
-      kind: 'cite',
-      keys: c[1]!
-        .split(',')
-        .map((k) => k.trim())
-        .filter(Boolean),
-    }
-  const u = URL_SRC.exec(src) ?? HREF_SRC.exec(src)
-  if (u) {
-    const url = urlOf(u[1])
-    return url ? { kind: 'url', url } : null
-  }
-  if (NOTE_SRC.test(src)) return { kind: 'note' }
-  if (REF_SRC.test(src)) return { kind: 'internal' }
-  return null
-}
-/** whether a piece names one link target alone (links.mjs singleTarget) */
-export function singleTarget(piece: { src?: string } | null | undefined, kind: LinkKind | null): boolean {
-  if (!kind) return false
-  if (kind.kind === 'cite') return kind.keys.length === 1
-  if (kind.kind === 'internal') {
-    const arg = /\{([^{}]*)\}/.exec(piece?.src ?? '')
-    return !!arg && !arg[1]!.includes(',')
-  }
-  return true
 }
 const sameTarget = (a: Annot, b: Annot) =>
   a.url !== undefined ? a.url === b.url : b.url === undefined && JSON.stringify(a.dest) === JSON.stringify(b.dest)
