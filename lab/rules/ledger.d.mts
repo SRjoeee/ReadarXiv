@@ -93,4 +93,5 @@ export declare function readsOf(sites: { reads?: Record<string, number> }[]): Re
 export declare function ledgerOf(map: SiteMap, recording: Recording, options?: { holdout?: string[] | null }): Ledger
 export declare function recordedOf(row: Row): string
 export declare function exercisedBy(row: Row): string
+export declare const THIRD_INPUT: string
 export declare function entriesJudged(rule: { entries?: string[] }, sites: (import('./sites.mjs').Site | undefined)[]): { judged: string[]; notJudged: { entry: string; why: string }[] }

@@ -126,7 +126,7 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
   }
 
   // by file: every row
-  const F = ['# The rule ledger, by file', '', 'Each row says which inputs reached it: papers (the corpus, the holdout, a third set, the tests that read the lab\'s data), tests (the tests of our own), both, or none. A rule the papers never reach has one outcome only for what the tests took.', '']
+  const F = ['# The rule ledger, by file', '', 'Each row says which inputs reached it: papers (the corpus, the holdout, the tests that read the lab\'s data), tests (the tests of our own), the third set (fresh papers in neither), or none. A rule the papers never reach has one outcome only for what the tests took.', '']
   if (profile) F.push(`> **A PROFILE, NOT THE YIELD.** ${profile}`, '')
   const byFile = {}
   for (const r of rows) (byFile[r.file] ??= []).push(r)

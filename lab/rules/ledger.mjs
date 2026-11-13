@@ -470,10 +470,15 @@ export function exercisedBy(row) {
   const inputs = new Set()
   for (const s of row.sites) for (const [k, o] of Object.entries(s.outcomes)) if (o.n) inputs.add(k)
   for (const [k, n] of Object.entries(row.keyReads ?? {})) if (n) inputs.add(k)
-  const tests = inputs.has(OWN_INPUT)
-  const papers = [...inputs].some(k => k !== OWN_INPUT)
-  return papers && tests ? 'papers and tests' : papers ? 'papers' : tests ? 'tests' : 'none'
+  const names = []
+  if ([...inputs].some(k => k !== OWN_INPUT && k !== THIRD_INPUT)) names.push('papers')
+  if (inputs.has(OWN_INPUT)) names.push('tests')
+  if (inputs.has(THIRD_INPUT)) names.push('the third set')
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : (names[0] ?? 'none')
 }
+/** the input a third paper set is recorded as (AXT_RULES_INPUT): fresh papers in neither the corpus nor the holdout, the
+ *  corpus again for every verdict, named apart where a row says which inputs reached it */
+export const THIRD_INPUT = 'third'
 
 export function recordedOf(row) {
   const per = {}

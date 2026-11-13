@@ -142,6 +142,10 @@ describe('the classifier', () => {
     expect([rowOf(l, 'DECIDES'), rowOf(l, 'BY_TEST'), rowOf(l, 'NEVER')].map(exercisedBy)).toEqual(['papers', 'papers and tests', 'none'])
     const t = made({ ONLY: { sites: [{ kind: 'cmp', per: { tests: n(0, 3) } }] } })
     expect(exercisedBy(rowOf(ledgerOf(t.map, t.recording), 'ONLY'))).toBe('tests')
+    // (a third paper set, recorded as its own input, is named apart; for the verdict it is the corpus again)
+    const u = made({ FRESH: { sites: [{ kind: 'cmp', per: { corpus: n(4, 0), third: n(0, 1), tests: n(1, 0) } }] } })
+    const fresh = rowOf(ledgerOf(u.map, u.recording), 'FRESH')
+    expect([exercisedBy(fresh), fresh.verdict]).toEqual(['papers, tests and the third set', 'decides'])
   })
   it('says what was recorded, in words', () => {
     expect(recordedOf(rowOf(l, 'FOLDED_READ'))).toBe('corpus: 2 runs, 2 true, 0 false, read 1')
