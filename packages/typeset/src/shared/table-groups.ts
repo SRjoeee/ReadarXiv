@@ -2,8 +2,8 @@
 // cells a reader compares with one another, held together where the geometry needs it. Ported from engine 065c1d973
 // translate/groups.mjs (groupOf), over TeX's grid as the part states it (Placed.cell) in place of today's rows: the groups are the
 // entry's, before anything is set. A cell that cannot be drawn is the original's by itself, as a paragraph is (the coordinator's
-// ruling (c) of 2026-11-13); its group is held where that cell spans (its box the others' too: lay/entry.ts holdsTable before the
-// lay, lay/page.ts settleTies after it) and withheld whole where it lies on two pages (settleTies).
+// ruling (c)); its group is held where that cell spans (its box the others' too: lay/entry.ts holdsTable before the lay,
+// lay/page.ts settleTies after it). A group on two pages is laid like any other, each cell by itself (PDF-READER §18.72).
 //
 // The groups follow the table's own structure, TeX's tabular: the header's cells are one group, and below it each column's
 // cells another, a cell spanning several columns (\multicolumn) one with the cells spanning the same columns, a cell spanning

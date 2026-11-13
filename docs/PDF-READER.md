@@ -6624,9 +6624,12 @@ figure's texts); how a table's cells go together is its structure's, the typeset
   2026-11-13, under the owner's). A cell whose reply does not fit it, whose row failed, whose wrap cannot hide it, or whose flow
   threw is the original's alone, the other cells of its header or column laid; its group is held only where the geometry needs
   it: a cell that spans columns or rows (`\multicolumn`, `\multirow`: its box is the others' too, so its ink would stand under
-  their translations), and a group on two pages (its first page would be painted before its last is laid). `lay/entry.ts`
-  holdsTable (before the lay: a spanning cell alone holds), `lay/page.ts` settleTies (after it: `tableSettle`'s verdict is
-  today's, what it withholds is the cell, or the group where that cell spans or the group lies on two pages). The reasons, in
+  their translations). A group on two pages is laid like any other, each cell by itself (the coordinator's ruling of
+  2026-11-13): today's withheld it whole because its first page was painted before its last was laid; here a page's part holds
+  every member of a tie it touches (the bundle's part), so every page lays the group whole and decides it alike, and nothing
+  of one page waits on another's. Over the tap, today's 15 groups so withheld are every one painted (each cell laid by its last
+  round). `lay/entry.ts` holdsTable (before the lay: a spanning cell alone holds), `lay/page.ts` settleTies (after it:
+  `tableSettle`'s verdict is today's but its pages, what it withholds is the cell, or the group where that cell spans). The reasons, in
   order: (1) with cells judged like body text, a group drawn whole or not at all would let one unfit reply take back up to a
   whole table — at the head before this rule, 26 groups, 144 cells on 19 pages of the display gate's 24 pairs (holds-v2, lane
   cells-like-body), 22 of the groups only since the name rule went (QNLI -> 昆士兰国家图书馆 holding BERT's Table 1 header

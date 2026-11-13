@@ -586,9 +586,9 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
     }
   // (each table group alone: a cell not set before its lay is the original's by itself, but one that spans (holdsTable), which
   // leaves every cell of its group the original's, the set ones 'cells'; the others are decided by their lays, over the cells
-  // set, settleTies withholding a cell its lay refused alone, its group where that cell spans or the group lies on two pages (a
-  // cell left out of the flows and its tie handed whole, settleTies skips the group). A table whose cells state no grid place
-  // is one group)
+  // set, settleTies withholding a cell its lay refused alone, its group where that cell spans (a group on two pages laid like any
+  // other; a cell left out of the flows and its tie handed whole, settleTies skips the group). A table whose cells state no grid
+  // place is one group)
   const inPart = new Set(members.map((m) => m.ord))
   const cellOf = new Map(members.map((m) => [m.ord, m.cell]))
   const held = new Set<number>()

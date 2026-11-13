@@ -854,14 +854,14 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['RUN:2401-2409 withhold', 'RUN:2411-2425 settleGroup'],
     how: 'ported',
     ruling:
-      "2026-11-13 (c) a cell that cannot be drawn is the original's by itself, its group held only where the geometry needs it",
+      "2026-11-13 (c) a cell that cannot be drawn is the original's by itself, its group held only where the geometry needs it; 2026-11-13 a group on two pages is laid like any other, each cell by itself",
     reads: [],
     file: 'shared/table-settle.ts',
     state: {
       is: 'changed',
-      why: "the verdict today's (tableSettle: on two pages, a cell unfit, or painted), what it withholds not: a cell its lay could not draw whole is the original's by itself, the group's other cells laid, as a paragraph's would be; the group withheld whole only where that cell spans or the group lies on two pages (lay/page.ts settleTies; the coordinator's ruling (c) of 2026-11-13, under the owner's a table's cell is text like any other). Today's withheld the group whole for any cell unfit: with cells judged like body text, one unfit reply took back the whole of its header or column (the display gate at 2026-11-13: 26 groups, 144 cells on 19 pages)",
+      why: "the verdict today's but its pages (tableSettle: a cell unfit, or painted), what it withholds not: a cell its lay could not draw whole is the original's by itself, the group's other cells laid, as a paragraph's would be; the group withheld whole only where that cell spans (lay/page.ts settleTies; the coordinator's ruling (c), under the owner's a table's cell is text like any other). Today's withheld the group whole for any cell unfit: with cells judged like body text, one unfit reply took back the whole of its header or column (the display gate at 2026-11-13: 26 groups, 144 cells on 19 pages). Today's withheld a group whose cells lie on two pages whole, its first page painted before its last was laid; each page's part holds every member of a tie it touches, so every page lays the group whole, and the group is laid like any other (the coordinator's ruling of 2026-11-13, PDF-READER §18.72: the tap's 15 such groups, every one painted)",
       replay:
-        'the verdict on every call of the corpus (ledgers/*.ledger.json.gz settles, tests/replay/table-settle.test.ts); what it withholds, tests/unit/page-wait.test.ts and table-groups.test.ts',
+        'the verdict on every call of the corpus (ledgers/*.ledger.json.gz settles, tests/replay/table-settle.test.ts: as today but its 15 groups on two pages, counted apart); what it withholds, tests/unit/page-wait.test.ts and table-groups.test.ts',
       cases: 1479,
     },
   },

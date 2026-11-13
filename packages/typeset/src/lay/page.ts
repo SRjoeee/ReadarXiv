@@ -1,8 +1,7 @@
 // layPage's composition over prepared flows (design-b §1.6 L8-L11, E1): every flow of the part laid (L8, layFlow), each laid
 // member's fill leadings with it (L9); then each pass page the page reads, ascending (its own and the first page of every
 // member with a line on it: design-a §1.3), filled over the members with a line there in stream order (L10, S.fill.page's
-// pass); the table groups settled (L11, S.table.settle: a cell unfit withheld alone, its group whole where it spans; a group on
-// two pages withheld whole); the
+// pass); the table groups settled (L11, S.table.settle: a cell unfit withheld alone, its group whole where it spans); the
 // page's members as drawn (E1, D.display). Pure: the flows are laid anew on each call, nothing is kept between calls.
 import { type DisplayLine, displayLines } from '../emit/display.ts'
 import type { PageRules } from '../shared/fill-page.ts'
@@ -315,25 +314,23 @@ function layPageTied(
 
 type Lay = { m: FlowMember; unit?: PassUnit; state: 'laid' | Unlaid; slots: LedgerSlot[]; error?: string }
 /** L11, S.table.settle: each table group's verdict over its members (RUN:2401-2425, tableSettle). A cell its own lay could not
- *  draw whole (its flow threw: 'error'; refused; clipped, then 'unfit') is the original's by itself, the group's other cells laid,
- *  as a paragraph's would be (the coordinator's ruling (c) of 2026-11-13); the group is withheld whole, every cell with it,
- *  where the geometry needs it: such a cell spans (its box the others' too), or the group lies on two pages (its first page
- *  would be painted before its last is laid). A group the call holds no member of is not this page's. Its members' states set
- *  in `lays` */
+ *  draw whole (its flow threw: 'error'; refused; clipped, then 'unfit') is the original's by itself, the group's other cells
+ *  laid, as a paragraph's would be (the coordinator's ruling (c)); the group is withheld whole, every cell with it, where the
+ *  geometry needs it alone: such a cell spans (its box the others' too). A group on two pages is laid like any other, each cell
+ *  by itself (PDF-READER §18.72: the part holds every member of a tie it touches, so every page lays the group whole). A group
+ *  the call holds no member of is not this page's. Its members' states set in `lays` */
 export function settleTies(ties: readonly CellTie[], lays: ReadonlyMap<number, Lay>): PreparedPage['tables'] {
   const tables: PreparedPage['tables'] = []
   for (const t of ties) {
     const cells = t.cells.map((o) => lays.get(o)).filter((x) => x !== undefined)
     // (a group whose members the caller did not hand in, but for those its flows' lays hold: not decided here)
     if (cells.length < t.cells.length) continue
-    const why = tableSettle(
-      cells.map((x) => ({ pages: x.m.pages, refused: x.state !== 'laid', clipped: !!x.unit?.layout.clipped })),
-    )
+    const why = tableSettle(cells.map((x) => ({ refused: x.state !== 'laid', clipped: !!x.unit?.layout.clipped })))
     tables.push({ cells: [...t.cells], why })
     if (!why) continue
     const unfit = (x: Lay) => x.state !== 'laid' || !!x.unit?.layout.clipped
     const spans = new Set(t.spanning ?? [])
-    const whole = why === 'on two pages' || cells.some((x) => unfit(x) && spans.has(x.m.ord))
+    const whole = cells.some((x) => unfit(x) && spans.has(x.m.ord))
     for (const x of cells) {
       if (!whole && !unfit(x)) continue
       if (x.state === 'laid') x.state = whole ? 'cells' : 'unfit'

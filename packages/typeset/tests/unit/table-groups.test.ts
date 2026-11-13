@@ -4,7 +4,7 @@
 // in its translation (unfit, a row that failed, the wrap cannot hide it) stays the original's by itself, as a paragraph does
 // (the coordinator's ruling (c) of 2026-11-13); what still binds a cell to the others of its group (the header's cells, a
 // column's, the cells spanning the same columns: TeX's grid, Placed.cell) is geometry alone: a cell that spans holds its group
-// where it cannot be drawn (its box is the others' too), and a group on two pages is withheld whole (page-wait.test.ts).
+// where it cannot be drawn (its box is the others' too); a group on two pages is laid like any other (page-wait.test.ts).
 import type { OutPiece, Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
