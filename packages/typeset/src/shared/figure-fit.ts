@@ -2,8 +2,10 @@
 // of a figure) drawn at one size, the original's where each translation fits; a translation on its original's baseline, from
 // its anchor's edge, into the free line beside its box (its room, `before` and `after`); where one does not fit, its whole set
 // shrinks by one factor, the least its translations need, to `floor` of the size at the most (a label needing less is left
-// the original's, `unfit`); a translation that reaches the stroke under its original's text at the size its set gives it is
-// left the original's (`crowded`), and the rest of its set fitted again without it. A translation is fitted and anchored by its
+// the original's, `unfit`); a stroke under its original's text (Room.under, wholly below the baseline) is an edge as a
+// container's is (Room.over): the set shrinks until the translation's own ink clears it, to `floor` at the most, and one that
+// would need less is left the original's (`crowded`), the rest of its set fitted without it (the coordinator's ruling of
+// 2026-11-13 on D02, the owner's mechanism of 2026-11-10 for a container's edge). A translation is fitted and anchored by its
 // ink, as every line the breaker sets: a full-width mark's blank half at its edge (`blank1`, B.break leadOf and hangOf) is no
 // part of the line it needs, and stands past its anchor's edge (today's set it by its advance: a centred label ending with a
 // closing mark a quarter em off its original's middle, a right-aligned one half an em short of its end). Ported from engine
@@ -37,8 +39,9 @@ export const CJK_FOOT = 0.12
 
 /**
  * Where the translations of one set are drawn (figure-fit.mjs fitFigureSet): item by item its fit, null where it does not fit
- * at `floor` of its size (or has no width, size or box), false where at the size it is given it reaches the stroke under its
- * text. One factor for every item drawn: the least any of them needs, at least `floor`, those that reach their stroke aside.
+ * at `floor` of its size (or has no width, size or box), false where its ink clears the stroke under its text only under
+ * `floor` of its size. One factor for every item drawn: the least any of them needs (its line, its container's edge, the
+ * stroke under it), at least `floor`, those left the original's aside.
  * An item's `width1` is its advance at size 1, `blank1` the blank halves at its edges, before its ink and after it (none
  * where not given): its ink, its advance less them, is what it needs of its line and what its anchor places. `cap`: the most
  * of their sizes the set is drawn at, where a figure text of its size tie that another path lays (the paragraph path: an
@@ -68,22 +71,18 @@ export function fitFigureSet(
         : 1
     return Math.min(along, over)
   })
-  const met = items.map(() => false)
-  let k = 1
-  for (let more = true; more; ) {
-    const drawn = need.filter((n, i) => n >= floor - 1e-9 && !met[i])
-    k = drawn.length ? Math.min(...drawn) : 1
-    if (cap < k) k = Math.max(floor, cap)
-    more = false
-    items.forEach(({ f, depth1 }, i) => {
-      // (today's `Number.isFinite(f.under)`: a row of no stroke under its text holds null)
-      if (met[i] || !(need[i]! >= floor - 1e-9) || !Number.isFinite(f.under) || !Number.isFinite(depth1)) return
-      if (depth1 * f.size * k >= (f.under as number)) {
-        met[i] = true
-        more = true
-      }
-    })
-  }
+  // (above the stroke under its text: its ink under its baseline at the size drawn no deeper than the stroke's top, as its ink
+  // over it stays under a container's edge; a row of no stroke under its text holds null, today's `Number.isFinite(f.under)`;
+  // a translation of no ink under its baseline clears a stroke under it, and touches one at it)
+  const clear = items.map(({ f, depth1 }) => {
+    if (typeof f.under !== 'number' || !Number.isFinite(f.under) || !Number.isFinite(depth1) || !(f.size > 0))
+      return Number.POSITIVE_INFINITY
+    return depth1 > 0 ? f.under / (depth1 * f.size) : f.under > 0 ? Number.POSITIVE_INFINITY : 0
+  })
+  const met = items.map((_, i) => need[i]! >= floor - 1e-9 && !(clear[i]! >= floor - 1e-9))
+  const drawn = need.flatMap((n, i) => (n >= floor - 1e-9 && !met[i] ? [Math.min(n, clear[i]!)] : []))
+  let k = drawn.length ? Math.min(...drawn) : 1
+  if (cap < k) k = Math.max(floor, cap)
   return items.map(({ f, width1, blank1 }, i) => {
     if (!(need[i]! >= floor - 1e-9)) return null
     if (met[i]) return false
