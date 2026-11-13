@@ -26,7 +26,7 @@ const CONTINUES = /^\s*[a-z0-9([]/
 
 const OBJ = '￼'
 /** what an element reads as when the caller says nothing: a word */
-export const STAND_IN = 'Xx'
+const STAND_IN = 'Xx'
 /** what a citation reads as where it opens a sentence: a word that begins one, bracketed as a citation is written, so that a
  *  stop that ends no sentence before it still continues there (`et al. [3] classify`: TERMINAL_ABBR, CONTINUES) */
 const OPENING_CITATION = '[Xx]'
