@@ -19,7 +19,7 @@ import { ColourPick } from '../ui/ColourPick'
 import { segmentWidth } from '../ui/lists'
 
 /** The strength's steps (§6.4): as it is, a step lighter (the built-in muted style's 0.7), lighter still */
-export const STRENGTHS = [1, 0.7, 0.5] as const
+const STRENGTHS = [1, 0.7, 0.5] as const
 
 export function StyleEditor({ value, onChange, onDone, full, onDuplicate, onDelete }: {
   value: StyleProfile

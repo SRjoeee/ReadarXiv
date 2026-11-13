@@ -23,7 +23,7 @@ export interface OcrServiceDeps {
 }
 
 /** The store read's waiting cap: the store is an optimisation, and IndexedDB may hang rather than reject (#45) */
-export const CACHE_READ_BUDGET_MS = 2_000
+const CACHE_READ_BUDGET_MS = 2_000
 
 /** a read of the store, all misses past its budget or on its failure */
 async function readWithBudget(store: KeyValues, keys: string[], ms: number, warn?: (line: string) => void): Promise<(string | null)[]> {
