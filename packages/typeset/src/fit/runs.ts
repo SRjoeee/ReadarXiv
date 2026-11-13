@@ -2,7 +2,7 @@
 // laid as its own text block, joined as one layout; and whether a layout keeps the pages its fit set its lines on. Ported
 // from engine 065c1d973 layer2.mjs L2:4163-4257, L2:4379-4400 (moved first as JavaScript by lab/typeset/move-fit.mjs, now
 // TypeScript), held by the chain's and the fill's replays on the corpus.
-import { textless } from '../breaker/cuts.types.ts'
+import { textless } from '../breaker/cuts.ts'
 import type { Token } from '../breaker/tokens.ts'
 import type { FitBlock, FitParams, FitState, LaidLine, Layout } from './types.ts'
 import { layoutUnit2 } from './walk.ts'

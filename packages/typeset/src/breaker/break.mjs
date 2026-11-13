@@ -2,7 +2,7 @@
 // lines, a word cut or hyphenated where it must be, a CJK line squeezed to take its group. Today's code (layer2.mjs
 // L2:3283-3893, graphemesOf L2:316-317, headOfCut L2:2431-2436), moved by lab/typeset/move-fit.mjs; typed by
 // break.types.ts. Its measures are the call's (`P.measure`, `m`), its patterns `P.patterns`.
-import { textless } from './cuts.mjs'
+import { textless } from './cuts.ts'
 import { breakPoints } from './hyph.ts'
 import { keptPair, kinsokuOf, noStart } from './script.ts'
 import { inFlow, texRoomOf } from './slots.mjs'

@@ -455,7 +455,7 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     ruling: "2026-10-30 frames fill as TeX does; 2026-11-10 the frames' share within the page's band",
     reads: [],
-    file: 'breaker/cuts.mjs',
+    file: 'breaker/cuts.ts',
     state: {
       is: 'changed',
       why: "a cut also stands where the fit sets the line its frame's share begins with in that frame or later, marked `share`: today's set none there, the frame before not full at the fit's state. A marked cut is read by a lay at a state that holds the share alone (breakLines, keepsPages), the page fill's where every frame before the last holds it at or above its page's band floor (S.fill.leads frameShareOf, S.fill.page; the owner's of 2026-11-10): 2610.22065v1-zh p5 t94, 8 lines and 2, TeX's, where the fit left 7 and 3. Every other lay, the fit's own among them, reads the tokens as today's",
