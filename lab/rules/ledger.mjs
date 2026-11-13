@@ -50,8 +50,8 @@ export const LEDGER_FORMAT = 'readarxiv/rule-ledger 1'
 export const OWN_INPUT = 'tests'
 /** the verdicts a row may hold, and whether each gives the rule a reason (the census's `rulesUnexplained`, P10) */
 export const VERDICTS = {
-  decides: { reason: true, says: 'decides on the corpus: its counts, margin and nearest cases are its reason' },
-  test: { reason: true, says: 'one outcome on the corpus; a test of our own takes the other side: the test is its reason' },
+  decides: { reason: true, says: "decides on the corpus: its counts, margin and nearest cases are its reason (a list: its entries' hits there)" },
+  test: { reason: true, says: 'one outcome on the corpus (a list: no entry hit there); a test of our own takes the other side (hits it): the test is its reason' },
   definition: { reason: true, says: 'cites a definition: kept as the definition\'s (silent on the inputs where it never decided)' },
   'cited paper': { reason: true, says: 'cites a paper: the paper joins the holdout and the row is judged again' },
   measurement: { reason: true, says: 'cites a measurement, not reproduced: kept and listed' },
@@ -59,6 +59,7 @@ export const VERDICTS = {
   magnitude: { reason: null, says: 'a magnitude with no stated source: reported beside the unmeasured budgets, not counted as a decision' },
   'not judged': { reason: null, says: "a list used otherwise than by membership: entries not judged (R6's)" },
   'cited paper silent': { reason: false, says: 'its cited paper was recorded in the holdout and it decided nothing there: a removal candidate' },
+  budget: { reason: null, says: 'a bound on a quantity the code grows itself (a counter, a depth passed on increased, a length it adds to, a clock) whose passing only stops the work: kept, never removed; its unit and source are R5e\'s (listed beside the unmeasured budgets)' },
   'not exercised': { reason: false, says: 'its module ran no site on any input (no input imports or calls it): the recording cannot judge it; the report names what would exercise it' },
   remove: { reason: false, says: 'decides nothing on any input, and cites nothing that exempts it: removed' },
 }
@@ -87,6 +88,32 @@ export function readsOf(sites) {
   const out = {}
   for (const s of sites) for (const [k, v] of Object.entries(s.reads ?? {})) out[k] = (out[k] ?? 0) + v
   return out
+}
+
+/** a list's entries as its hits judge them: an array's or a Set's its strings; a pattern's the words of its alternatives
+ *  (pattern.mjs), each once, but those in a negative lookaround (never on a match's path) and those in a lookaround a group
+ *  repeats, and any the census reads that is no alternative's word (`notJudged`, each with why) */
+export function entriesJudged(rule, sites) {
+  const alts = sites.find(s => s?.kind === 're' && s.alts)?.alts
+  if (!alts) return { judged: rule.entries ?? [], notJudged: [] }
+  const judged = []
+  const notJudged = []
+  const seen = new Set()
+  const why = new Map()
+  for (const x of alts.words) {
+    const no = x.look === 'neg' ? 'in a negative lookaround' : x.look === 'pos' && x.rep ? 'in a lookaround a group repeats' : null
+    if (no) {
+      if (!why.has(x.w)) why.set(x.w, no)
+      continue
+    }
+    if (!seen.has(x.w)) {
+      seen.add(x.w)
+      judged.push(x.w)
+    }
+  }
+  for (const [w, no] of why) if (!seen.has(w)) notJudged.push({ entry: w, why: no })
+  for (const e of rule.entries ?? []) if (!seen.has(e) && !why.has(e)) notJudged.push({ entry: e, why: "the census's entry, no alternative's word" })
+  return { judged, notJudged }
 }
 
 /** the ledger of a site map and a recording; `holdout`: the papers a cited paper is judged on (by default every paper the
@@ -150,12 +177,16 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
   const rows = {}
   for (const [key, rule] of Object.entries(map.rules)) {
     const sites = rule.sites.map(siteOf)
-    const deciding = sites.filter(s => s.kind !== 'val')
+    // (a `key` site, a table read by a key known at run time, is every entry's: judged by the entry's own key's hits)
+    const keySites = sites.filter(s => s.kind === 'key')
+    const deciding = sites.filter(s => s.kind !== 'val' && s.kind !== 'key')
     const vals = sites.filter(s => s.kind === 'val')
     const reads = sum(vals.map(s => ({ n: sum(Object.values(s.outcomes), 'n') })), 'n')
     const cite = citationsOf(rule.comment)
     const exempt = cite.flag && cite.flag !== 'tuned'
-    const listReads = sum(deciding.map(s => ({ n: Object.values(s.reads ?? {}).reduce((x, y) => x + y, 0) })), 'n')
+    // (a list's reads: those the recorder saw (iterated, joined, mapped, its pattern's source read) and those it cannot see,
+    // which the site map names (sites.mjs `unseen`: an entry read by its index, a copy the platform makes))
+    const listReads = sum(deciding.map(s => ({ n: Object.values(s.reads ?? {}).reduce((x, y) => x + y, 0) })), 'n') + (rule.unseen?.length ?? 0)
     const row = {
       key,
       file: rule.file,
@@ -168,6 +199,7 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
       after: rule.after,
       comment: rule.comment ?? '',
       citation: cite,
+      ...(rule.holder ? { holder: rule.holder } : {}),
       sites,
       folds: [],
     }
@@ -179,38 +211,86 @@ export function ledgerOf(map, recording, { holdout = null } = {}) {
       if (cite.flag === 'paper') return cite.papers.every(p => held.has(base(p)) && reached(p)) ? 'cited paper silent' : 'cited paper'
       return cite.flag === 'definition' ? 'definition' : 'measurement'
     }
-    const foldable = s => s.state === 'one' || s.state === 'never'
+    // (a comparison's site folds where it saw one outcome or never ran; a list's (its literal's, where every membership test
+    // of it is recorded) where no entry of it was hit and it was read no other way: a list site's one outcome may be its
+    // entries' every hit, never a fold to true)
+    const foldable = rule.kind === 'list' ? s => !Object.keys(s.hits ?? {}).length && !Object.keys(s.reads ?? {}).length : s => s.state === 'one' || s.state === 'never'
     if (rule.kind === 'list') {
+      // A LIST IS JUDGED BY ITS ENTRIES' HITS (3c): a hit is a membership test that found an entry (has, includes, indexOf,
+      // a predicate held for it, an `every` stopped at it) or a match whose path went through it (pattern.mjs); a match
+      // through none of its entries is a hit of the list still ('(no entry)'). Hit on the corpus (any input but the tests of
+      // our own): it decides, and its entries no input hit go; hit by a test of our own alone: the test is its reason;
+      // tested and never hit, or never tested: it goes with its rule (every test of it said "not in it"). A list read
+      // otherwise too (iterated, joined, mapped, its pattern's source read, an entry read by its index) uses its entries
+      // whole: not judged
       const hits = {}
       for (const s of deciding) for (const [k, v] of Object.entries(s.hits ?? {})) hits[k] = (hits[k] ?? 0) + v
+      const hitIn = which =>
+        deciding.some(s =>
+          Object.entries(recording.sites)
+            .filter(([input]) => (which === OWN_INPUT) === (input === OWN_INPUT))
+            .some(([, per]) => Object.keys(per[s.id]?.hits ?? {}).length),
+        )
       const membership = sum(deciding.map(s => ({ n: sum(Object.values(s.outcomes), 'n') })), 'n')
       row.hits = hits
-      if (!membership && !listReads) row.verdict = exempt ? cited() : 'remove'
-      else if (!membership) row.verdict = 'not judged'
-      else if (deciding.some(s => s.state === 'decides')) row.verdict = listReads ? 'not judged' : 'decides'
-      else if (deciding.some(s => s.state === 'test')) row.verdict = listReads ? 'not judged' : 'test'
-      else row.verdict = exempt ? cited() : listReads ? 'not judged' : 'remove'
-      if (!exempt) row.folds = deciding.filter(foldable).map(s => s.id)
-      // (the entries: judged where the list is used by membership alone and cites no definition)
+      if (listReads) row.verdict = 'not judged'
+      else if (hitIn('corpus')) row.verdict = 'decides'
+      else if (hitIn(OWN_INPUT)) row.verdict = 'test'
+      else row.verdict = exempt ? cited() : 'remove'
+      if (!membership && !listReads && row.verdict === 'remove') row.neverTested = true
+      if (!exempt && row.verdict !== 'not judged') row.folds = deciding.filter(foldable).map(s => s.id)
+      // (the entries: judged where the list is used by membership alone and cites no definition; a pattern's are its
+      // alternatives' words, but those its matches cannot show (pattern.mjs))
+      const { judged, notJudged } = entriesJudged(rule, deciding.map(s => map.sites[s.id]))
+      if (judged.join('\u0000') !== rule.entries.join('\u0000')) row.judged = judged
+      if (notJudged.length) row.entriesNotJudged = notJudged
       if (row.verdict === 'decides' || row.verdict === 'test') {
         if (rule.class === 'defined' || exempt) row.entriesExempt = true
-        else row.removeEntries = rule.entries.filter(e => !hits[e])
+        else row.removeEntries = judged.filter(e => !hits[e])
       }
-      if (row.verdict === 'not judged') row.listReads = readsOf(deciding)
+      if (row.verdict === 'not judged') row.listReads = { ...readsOf(deciding), ...(rule.unseen?.length ? { unseen: rule.unseen.length } : {}) }
+      if (rule.unseen?.length) row.unseen = rule.unseen
     } else if (!sites.length) {
       // (a table entry handed whole is read where it is handed; one read nowhere is never read)
       row.verdict = rule.wholeReads ? (exempt && cite.flag !== 'paper' ? 'value' : 'magnitude') : exempt ? cited() : 'remove'
       if (rule.wholeReads) row.handedWhole = rule.wholeReads
-    } else if (!deciding.length) {
+    } else if (!deciding.length && !keySites.length) {
       row.reads = reads
       row.verdict = !reads ? (exempt ? cited() : 'remove') : cite.flag === 'definition' || cite.flag === 'measurement' ? 'value' : 'magnitude'
     } else {
-      if (deciding.some(s => s.state === 'decides')) row.verdict = 'decides'
-      else if (deciding.some(s => s.state === 'test')) row.verdict = 'test'
+      // (a table's entry read by a key known at run time: the reads of its own key are its hits, judged as a list's entry's
+      // are: read on the corpus, it decides; by a test of our own alone, the test is its reason)
+      const own = keySites.map(s => map.sites[s.id].bounds.find(b => b.rule === key)?.key)
+      const keyHit = which =>
+        keySites.some((s, k) =>
+          Object.entries(recording.sites)
+            .filter(([input]) => (which === OWN_INPUT) === (input === OWN_INPUT))
+            .some(([, per]) => per[s.id]?.hits?.[own[k]]),
+        )
+      const handed = reads || rule.wholeReads
+      if (deciding.some(s => s.state === 'decides') || keyHit('corpus')) row.verdict = 'decides'
+      else if (deciding.some(s => s.state === 'test') || keyHit(OWN_INPUT)) row.verdict = 'test'
       else if (exempt) row.verdict = cited()
-      else row.verdict = reads ? (cite.flag === 'definition' || cite.flag === 'measurement' ? 'value' : 'magnitude') : 'remove'
+      else row.verdict = handed ? (cite.flag === 'definition' || cite.flag === 'measurement' ? 'value' : 'magnitude') : 'remove'
       if (!exempt) row.folds = deciding.filter(foldable).map(s => s.id)
       if (reads) row.reads = reads
+      if (rule.wholeReads) row.handedWhole = rule.wholeReads
+      if (keySites.length) {
+        // (its own key's reads, per input)
+        row.keyReads = {}
+        for (const [input, per] of Object.entries(recording.sites)) {
+          const n = keySites.reduce((x, s, k) => x + (per[s.id]?.hits?.[own[k]] ?? 0), 0)
+          if (n) row.keyReads[input] = n
+        }
+      }
+      // (a budget: every deciding site of it a bound on a quantity the code grows itself, whose passing only stops the work
+      // (sites.mjs budgetOf); one that never bound is still a bound: `budget`, never folded, never removed)
+      const budgets = deciding.map(s => map.sites[s.id].bounds.find(b => b.rule === key)?.budget)
+      if (deciding.length && !keySites.length && budgets.every(Boolean)) {
+        row.budget = [...new Map(budgets.map(b => [`${b.quantity}\u0000${b.stops}`, b])).values()]
+        if (row.verdict === 'remove' || row.verdict === 'magnitude' || row.verdict === 'value') row.verdict = 'budget'
+        row.folds = []
+      }
     }
     // (a cited paper silent in the holdout is a removal candidate: its sites fold like any other's)
     if (row.verdict === 'cited paper silent') row.folds = deciding.filter(foldable).map(s => s.id)
@@ -302,6 +382,8 @@ export function trackedOf(full, { digest, map = null }) {
           if (o.n) reads[k] = (reads[k] ?? 0) + o.n
           continue
         }
+        // (a key site is the table's: the entry's own key's reads are `keyReads`)
+        if (s.kind === 'key') continue
         const x = (runs[k] ??= [0, 0, 0])
         x[0] += o.n
         x[1] += o.t
@@ -330,8 +412,9 @@ export function trackedOf(full, { digest, map = null }) {
       ...(r.citation.flag ? { cites: { flag: r.citation.flag, ...(r.citation.papers.length ? { papers: r.citation.papers } : {}) } } : {}),
       ...(Object.keys(runs).length ? { runs } : {}),
       ...(Object.keys(reads).length ? { reads } : {}),
+      ...(r.keyReads && Object.keys(r.keyReads).length ? { keyReads: r.keyReads } : {}),
       ...(m ? { margin: { units: m.units, false: caseOf(m.false), true: caseOf(m.true) } } : {}),
-      ...(r.removeEntries ? { hits: r.entries.map(e => r.hits?.[e] ?? 0) } : {}),
+      ...(r.removeEntries ? { hits: (r.judged ?? r.entries).map(e => r.hits?.[e] ?? 0), ...(r.judged ? { judged: r.judged.length } : {}) } : {}),
       ...(Object.keys(tests).length ? { tests } : {}),
       ...(r.folds.length ? { folds: r.folds.length } : {}),
       ...(r.module ? { module: r.module } : {}),
@@ -340,7 +423,7 @@ export function trackedOf(full, { digest, map = null }) {
   return {
     format: TRACKED_FORMAT,
     about:
-      "The rule ledger, tracked form (design-reduction 3c, 8.9): per census rule of the rule areas its verdict and what it rests on, nothing quoted: no comment, no list entry, no test's name. A test is named by its file and its ordinal there: its place among that file's tests the full record names, sorted by name; `margin` holds the nearest case each side over the rule's sites (numbers, the paper and page, k the run's ordinal at its site); `hits` count a list's entries in the list's order where they remove entries. The full record (every site, the comments, the tests by name, the inputs' papers) is kept outside the repository: `recorded.full` is its file's sha256; `node lab/rules/record.mjs trace --full=<it>` reads a row through it. Generated by `node lab/rules/record.mjs ledger`, never edited by hand.",
+      "The rule ledger, tracked form (design-reduction 3c, 8.9): per census rule of the rule areas its verdict and what it rests on, nothing quoted: no comment, no list entry, no test's name. A test is named by its file and its ordinal there: its place among that file's tests the full record names, sorted by name; `margin` holds the nearest case each side over the rule's sites (numbers, the paper and page, k the run's ordinal at its site); `hits` count a list's entries where they remove entries, in the order of its entries as its hits judge them (a pattern's word alternatives, lab/rules/pattern.mjs: `judged` their number where they are not the census's); `keyReads` count, per input, the reads of a table's entry by its key. The full record (every site, the comments, the tests by name, the inputs' papers) is kept outside the repository: `recorded.full` is its file's sha256; `node lab/rules/record.mjs trace --full=<it>` reads a row through it. Generated by `node lab/rules/record.mjs ledger`, never edited by hand.",
     recorded: {
       commit: full.recorded.commit,
       sites: full.recorded.sites,
@@ -380,20 +463,40 @@ export function resolveTracked(tracked, fullText) {
 }
 
 /** what was recorded of a row, in words: per input its decisions (each outcome's count) and its plain reads */
+/** which inputs reached a row (ran a site of it, read it, read its key): `papers` (the corpus, the holdout, a third set,
+ *  the tests that read the lab's data), `tests` (the tests of our own), both, or none. A rule the papers never reach has
+ *  "one outcome" only for what the tests took (the translate package's: no paper input calls the chain) */
+export function exercisedBy(row) {
+  const inputs = new Set()
+  for (const s of row.sites) for (const [k, o] of Object.entries(s.outcomes)) if (o.n) inputs.add(k)
+  for (const [k, n] of Object.entries(row.keyReads ?? {})) if (n) inputs.add(k)
+  const names = []
+  if ([...inputs].some(k => k !== OWN_INPUT && k !== THIRD_INPUT)) names.push('papers')
+  if (inputs.has(OWN_INPUT)) names.push('tests')
+  if (inputs.has(THIRD_INPUT)) names.push('the third set')
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : (names[0] ?? 'none')
+}
+/** the input a third paper set is recorded as (AXT_RULES_INPUT): fresh papers in neither the corpus nor the holdout, the
+ *  corpus again for every verdict, named apart where a row says which inputs reached it */
+export const THIRD_INPUT = 'third'
+
 export function recordedOf(row) {
   const per = {}
   for (const s of row.sites)
     for (const [k, o] of Object.entries(s.outcomes)) {
-      const p = (per[k] ??= { n: 0, t: 0, f: 0, reads: 0 })
+      const p = (per[k] ??= { n: 0, t: 0, f: 0, reads: 0, keys: 0 })
       if (s.kind === 'val') p.reads += o.n
-      else {
+      else if (s.kind !== 'key') {
         p.n += o.n
         p.t += o.t
         p.f += o.f
       }
     }
+  // (a table's entry read by a key known at run time: its own key's reads)
+  for (const [k, n] of Object.entries(row.keyReads ?? {})) (per[k] ??= { n: 0, t: 0, f: 0, reads: 0, keys: 0 }).keys += n
   const runs = Object.entries(per)
-    .map(([k, o]) => `${k}: ${[o.n ? `${o.n} run${o.n === 1 ? '' : 's'}, ${o.t} true, ${o.f} false` : '', o.reads ? `read ${o.reads}` : ''].filter(Boolean).join(', ')}`)
+    .filter(([, o]) => o.n || o.reads || o.keys)
+    .map(([k, o]) => `${k}: ${[o.n ? `${o.n} run${o.n === 1 ? '' : 's'}, ${o.t} true, ${o.f} false` : '', o.reads ? `read ${o.reads}` : '', o.keys ? `read by its key ${o.keys}` : ''].filter(Boolean).join(', ')}`)
     .join('; ')
   return runs || 'never ran on any input'
 }

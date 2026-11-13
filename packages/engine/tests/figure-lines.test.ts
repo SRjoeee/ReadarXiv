@@ -2,9 +2,9 @@
 // and the relation reading of a crowded text's ink (the owner's reformulation of 2026-11-10 of the no-touch rule).
 import { describe, expect, it } from 'vitest'
 import type { DocGlyph } from '../src/doc.ts'
-import { pageGlyphsOf } from '../src/glyph.ts'
 import { copyRunsOf, figureLinesOf, setApart } from '../src/locate/figure-lines.ts'
 import type { TodayFigures, TodayMet, TodayPage, TodayShape } from '../src/locate/today/today.types.ts'
+import { pageGlyphsOf } from './helpers/doc.ts'
 
 type Glyph = {
   u: string

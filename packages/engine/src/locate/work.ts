@@ -5,7 +5,7 @@ import type { El, Ink, Label, Line, LinkBorder, Piece, Room, Style } from '@read
 import type { Mapping } from '../align/align.ts'
 import { setPagesOf } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
-import type { PageInk } from '../ink.types.ts'
+import type { PageInk } from '../ink.ts'
 import type { Instrument, InstrumentUnit, TexFrame } from '../instrument.ts'
 import { fixedFacesOf } from './facts.ts'
 import type { DisplayLine, InkInput, InkStats } from './ink.ts'

@@ -6,7 +6,7 @@
 // no stated source beside the census's unmeasured budgets; the lists whose entries are not judged. Read from the full
 // record (ledger.mjs ledgerOf): the names it prints are not in the tracked ledger. Pure. Not shipped.
 import { AREAS, areaOf } from './areas.mjs'
-import { marginOf, readsOf, recordedOf, VERDICTS } from './ledger.mjs'
+import { exercisedBy, marginOf, readsOf, recordedOf, VERDICTS } from './ledger.mjs'
 
 const AREA_IDS = [...AREAS.map(a => a.id), 'other']
 const saysOf = id => AREAS.find(a => a.id === id)?.says ?? 'in no area'
@@ -37,7 +37,7 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
   if (profile) L.push(`> **A PROFILE, NOT THE YIELD.** ${profile}`, '')
   L.push(`Recorded at ${ledger.recorded.commit ?? 'an unknown commit'} over the site map ${ledger.recorded.sites}; inputs: ${inputs || 'none'}. Rows: the census's rules of the rule areas the cut-over keeps (${rows.length}; ${cut} more in modules the cut-over deletes, not reported). A margin never decides a removal: removal follows from one outcome or never run alone (lab/rules/ledger.mjs).`, '')
   L.push('## The yield', '', 'Per area: the rules, then each verdict\'s count; to remove: the rules that go whole; sites to fold: the comparisons of rules that stay that saw one outcome or never ran; entries: list entries with no hit.', '')
-  const V = ['decides', 'test', 'definition', 'cited paper', 'measurement', 'value', 'magnitude', 'not judged', 'not exercised', 'cited paper silent', 'remove']
+  const V = ['decides', 'test', 'definition', 'cited paper', 'measurement', 'value', 'magnitude', 'budget', 'not judged', 'not exercised', 'cited paper silent', 'remove']
   L.push(`| Area | Rules (thresholds, lists) | ${V.join(' | ')} | Sites to fold | Entries to remove |`, `|---|---|${V.map(() => '---').join('|')}|---|---|`)
   for (const id of AREA_IDS) {
     const c = counts[id]
@@ -54,7 +54,7 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
     const flagged = rows.filter(r => r.area === id && r.citation.flag && byFlag(r) === first).sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)
     if (!flagged.length) continue
     L.push(`### Area ${id}: ${flagged.length} ${first ? 'whose verdict the flag makes' : 'whose verdict the recording makes'}`, '')
-    for (const r of flagged) L.push(`- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}): flag **${r.citation.flag}**${r.citation.papers.length ? ` (${r.citation.papers.join(', ')})` : r.citation.definition ? ` (${r.citation.definition})` : r.citation.section ? ` (${r.citation.section})` : ''}; verdict ${r.verdict}${r.citation.flag === 'tuned' ? ' (no exemption)' : ''}; recorded: ${recordedOf(r)}.`, `  Comment: ${r.comment || '(none)'}`)
+    for (const r of flagged) L.push(`- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}): flag **${r.citation.flag}**${r.citation.papers.length ? ` (${r.citation.papers.join(', ')})` : r.citation.definition ? ` (${r.citation.definition})` : r.citation.section ? ` (${r.citation.section})` : ''}; verdict ${r.verdict}${r.citation.flag === 'tuned' ? ' (no exemption)' : ''}; recorded: ${recordedOf(r)}.`, `  Comment: ${r.comment || '(none)'}${r.holder?.read ? ` (with the comment on ${r.holder.name}, the declaration that holds it, ${r.holder.lines} line${r.holder.lines === 1 ? '' : 's'}, which ${r.holder.read})` : ''}`)
     L.push('')
   }
 
@@ -66,7 +66,7 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
     const gone = rows.filter(r => r.area === id && (r.verdict === 'remove' || r.verdict === 'cited paper silent')).sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)
     if (!gone.length) continue
     L.push(`## Area ${id}${deferred.includes(id) ? ', removal scheduled' : ''}: the rules that decide nothing, by name (${gone.length})`, '', `${saysOf(id)}.`, '')
-    for (const r of gone) L.push(`- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key})${r.verdict === 'cited paper silent' ? ` [cited paper silent: confirm; before it is folded, the removal lane says which rule now takes the case its comment describes on ${r.citation.papers.join(', ')}, from that paper's record: a case merely not reached is not a case handled]` : ''}: ${recordedOf(r)}`)
+    for (const r of gone) L.push(`- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}) (inputs: ${exercisedBy(r)})${r.verdict === 'cited paper silent' ? ` [cited paper silent: confirm; before it is folded, the removal lane says which rule now takes the case its comment describes on ${r.citation.papers.join(', ')}, from that paper's record: a case merely not reached is not a case handled]` : ''}: ${recordedOf(r)}`)
     L.push('')
   }
   // the sites to fold in rules that stay, and the entries to remove
@@ -80,8 +80,15 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
         const s = r.sites.find(x => x.id === sid)
         L.push(`- ${s.file}:${s.line} ${s.fn || '(top)'} ${s.kind}${s.op ? ` ${s.op}` : ''} of \`${cell(nameOf(r))}\` (${r.key}): ${s.state === 'never' ? 'never ran' : `one outcome, ${s.outcome}`}`)
       }
-    for (const r of entries) L.push(`- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}): ${r.removeEntries.length} of ${r.entries.length} entries with no hit: ${r.removeEntries.join(', ')}`)
+    for (const r of entries) L.push(`- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}): ${r.removeEntries.length} of ${(r.judged ?? r.entries).length} entries with no hit: ${r.removeEntries.join(', ')}${r.entriesNotJudged?.length ? `; not judged: ${r.entriesNotJudged.map(x => `${x.entry} (${x.why})`).join(', ')}` : ''}`)
     L.push('')
+  }
+  // the budgets: each with its bound and what passing it stops (sites.mjs budgetOf); kept, their units and sources R5e's
+  L.push('## Budgets (a bound on a quantity the code grows itself whose passing only stops the work: kept, never removed)', '', "Each: the rule's bound, the quantity it bounds, what passing it stops (a loop ends, an exit, nothing more added); its verdict where the recording shows it binding (decides, test), else budget. Its unit and source: R5e's.", '')
+  for (const id of AREA_IDS) {
+    const b = rows.filter(r => r.area === id && r.budget?.length)
+    if (!b.length) continue
+    L.push(`### Area ${id}: ${b.length}`, '', ...b.map(r => `- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}) = ${r.value}: ${r.budget.map(x => `\`${cell(x.quantity)}\`, ${x.stops}`).join('; ')}; ${r.verdict}; inputs: ${exercisedBy(r)}`), '')
   }
   // the magnitudes, beside the unmeasured budgets
   const unmeasured = {}
@@ -115,11 +122,11 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
   for (const id of AREA_IDS) {
     const n = rows.filter(r => r.area === id && r.verdict === 'not judged')
     if (!n.length) continue
-    L.push(`### Area ${id}: ${n.length}`, '', ...n.map(r => `- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}): ${Object.entries(readsOf(r.sites)).map(([k, v]) => `${k} ${v}`).join(', ')}`), '')
+    L.push(`### Area ${id}: ${n.length}`, '', ...n.map(r => `- ${r.file}:${r.line} \`${cell(nameOf(r))}\` (${r.key}): ${Object.entries(readsOf(r.sites)).map(([k, v]) => `${k} ${v}`).join(', ')}${r.unseen?.length ? `${Object.keys(readsOf(r.sites)).length ? '; ' : ''}read where the recorder cannot see: ${r.unseen.join(', ')}` : ''}`), '')
   }
 
   // by file: every row
-  const F = ['# The rule ledger, by file', '']
+  const F = ['# The rule ledger, by file', '', 'Each row says which inputs reached it: papers (the corpus, the holdout, the tests that read the lab\'s data), tests (the tests of our own), the third set (fresh papers in neither), or none. A rule the papers never reach has one outcome only for what the tests took.', '']
   if (profile) F.push(`> **A PROFILE, NOT THE YIELD.** ${profile}`, '')
   const byFile = {}
   for (const r of rows) (byFile[r.file] ??= []).push(r)
@@ -128,7 +135,7 @@ export function reportOf(ledger, { budgets = null, profile = null, deferred = []
     for (const r of rs.sort((a, b) => a.line - b.line)) {
       const margin = marginOf(r)
       const m = margin ? `; nearest: ${margin.false ? `false at ${round(margin.false.eff)}` : '—'} / ${margin.true ? `true at ${round(margin.true.eff)}` : '—'}${margin.units === 'slack' ? ' (slack)' : ''}` : ''
-      F.push(`- line ${r.line} \`${cell(nameOf(r))}\` (${r.key}): **${r.verdict}**${r.folds.length && r.verdict !== 'remove' ? `, ${r.folds.length} site(s) to fold` : ''}${r.removeEntries?.length ? `, ${r.removeEntries.length} entries to remove` : ''}; ${recordedOf(r)}${m}`)
+      F.push(`- line ${r.line} \`${cell(nameOf(r))}\` (${r.key}): **${r.verdict}** (inputs: ${exercisedBy(r)})${r.folds.length && r.verdict !== 'remove' ? `, ${r.folds.length} site(s) to fold` : ''}${r.removeEntries?.length ? `, ${r.removeEntries.length} entries to remove` : ''}; ${recordedOf(r)}${m}`)
     }
     F.push('')
   }

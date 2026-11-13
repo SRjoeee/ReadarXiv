@@ -3,8 +3,9 @@
 // glyph's own fields alone (lane mem-back: the coordinates were 16-byte heap numbers each, 8 a glyph, in two Docs of a paper).
 import { describe, expect, it } from 'vitest'
 import type { DocGlyph } from '../src/doc.ts'
-import { glyphWith, pageGlyphsOf } from '../src/glyph.ts'
+import { glyphWith } from '../src/glyph.ts'
 import { textOf } from '../src/locate/facts.ts'
+import { pageGlyphsOf } from './helpers/doc.ts'
 
 const plain = (u: string, x = 72, y = 700, o: Partial<DocGlyph> = {}): DocGlyph => {
   const size = o.size ?? 10

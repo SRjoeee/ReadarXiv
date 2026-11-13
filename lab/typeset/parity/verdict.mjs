@@ -908,6 +908,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // `decorated`, PDF-READER's hold of a decorated word, lane decorated-whole): the owner's ruling T4 reads the figure texts today
   // translated in them, rulings.mjs; counted apart from the texts no row serves)
   const decorated = new Set(v2.decorated ?? [])
+  // (the members v2's prepare keeps as written, R1, R2 and R4 of PDF-READER §18.72, v2.mjs's `words`, `paperNames` and `namesBlock`: the ruling CT
+  // reads the figure texts among them, rulings.mjs)
+  const asWritten = new Set([...(v2.words ?? []), ...(v2.paperNames ?? []), ...(v2.namesBlock ?? [])])
   // (a mark the gate holds a ruling for alone: every kept unit of the dump states its reason since lane keep-reasons, and a reason
   // with no ruling is no set-aside)
   const keptToday = new Map((v2.keptToday ?? []).filter(([, mark]) => Object.hasOwn(RULING_OF, mark)))
@@ -981,10 +984,12 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // unit is joined to one of v2's figure members `pitch` names, figuresMatched's join by the original's box. Fewer than today's
   // by no more than those is the ruling's, PITCH_RULING; a group the join does not pair stays counted)
   // (and those it keeps for an identifier they hold, `identifier`, the coordinator's ruling of 2026-11-10: IDENTIFIER_RULING)
-  const figKept = [...figuresMatched(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n).keys()].filter(
-    (o) => pitch.has(o) || identifier.has(o) || formula.has(o) || double.has(o) || script.has(o),
-  )
-  const figPitch = figKept.filter((o) => pitch.has(o)).length
+  // Counted as today's TEXTS, not v2's members (lane table-judge, 2610.20967v1-zh p2: v2 keeps "tmin t tmax" whole as one member
+  // where today drew "min" and "max" as two texts; the members' count fell one short of the texts today drew): each of today's
+  // drawn groups joined to such a member, or whose middle stands in its lines on the page (below, keptTexts)
+  const keptApart = (o) => pitch.has(o) || identifier.has(o) || formula.has(o) || double.has(o) || script.has(o)
+  const joinedTo = figuresMatched(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n)
+  const figKept = [...joinedTo.keys()].filter(keptApart)
   // (a figure member v2 draws that holds two or more of today's figure texts: one translation for what today drew in pieces, each
   // of them drawn. Held by their text, its text theirs in order (v2.mjs `joined`, join.mjs joinedJoin's exact text: F0's line, a
   // figure paragraph, a word joined across a size change, 2608.06701v1 p1's "…th" | "e…"), or by their place: a text of today's
@@ -1020,26 +1025,42 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     [...figOrds].filter((o) => !pitch.has(o) && !identifier.has(o) && !formula.has(o) && !double.has(o) && !script.has(o) && !decorated.has(o) && unmeasured(o)),
   )
   // (today's drawn groups whose middle stands in spans, however today cut its texts)
-  const groupsIn = (spans) =>
-    (rec.today.figures ?? []).filter((g) => {
-      const b = spanOf(g.lines.filter((l) => l.n > 0).map(band))
-      if (!b) return false
-      const x = (b.x0 + b.x1) / 2,
-        y = (b.y0 + b.y1) / 2
-      return spans.some((s) => x >= s.x0 - 0.5 && x <= s.x1 + 0.5 && y >= s.y0 - 0.5 && y <= s.y1 + 0.5)
-    }).length
+  const groupIdsIn = (spans) =>
+    (rec.today.figures ?? [])
+      .filter((g) => {
+        const b = spanOf(g.lines.filter((l) => l.n > 0).map(band))
+        if (!b) return false
+        const x = (b.x0 + b.x1) / 2,
+          y = (b.y0 + b.y1) / 2
+        return spans.some((s) => x >= s.x0 - 0.5 && x <= s.x1 + 0.5 && y >= s.y0 - 0.5 && y <= s.y1 + 0.5)
+      })
+      .map((g) => g.id)
+  const groupsIn = (spans) => groupIdsIn(spans).length
+  // (today's texts kept by a mark of v2's prepare: joined to such a member, or standing in its lines, each text once)
+  const onPage = (o) => (facts.get(o)?.lines ?? []).some((l) => l[0] === n)
+  const keptTexts = (has) => {
+    const ids = new Set(groupIdsIn(spansOf([...figOrds].filter((o) => has(o) && onPage(o)))))
+    for (const [o, g] of joinedTo) if (has(o)) ids.add(g)
+    return ids.size
+  }
+  const figKeptTexts = keptTexts(keptApart)
+  const figPitch = keptTexts((o) => pitch.has(o))
+  const figKeptOrds = [...new Set([...figKept, ...[...figOrds].filter((o) => keptApart(o) && onPage(o) && groupsIn(spansOf([o])) > 0)])]
   const figUnmeasured = groupsIn(unmeasuredSpans)
   // (and in a figure member held for a decorated word: the owner's ruling T4 reads them, rulings.mjs)
   const figDecoratedOrds = [...figOrds].filter((o) => decorated.has(o) && (facts.get(o)?.lines ?? []).some((l) => l[0] === n))
   const figDecorated = groupsIn(spansOf(figDecoratedOrds))
+  // (and in a figure member kept as written, R1 and R2: the ruling CT reads them)
+  const figWrittenOrds = [...figOrds].filter((o) => asWritten.has(o) && !decorated.has(o) && (facts.get(o)?.lines ?? []).some((l) => l[0] === n))
+  const figWritten = groupsIn(spansOf(figWrittenOrds))
   if (figVJ < figT) {
-    const ruled = figVJ >= figT - figKept.length
-    const unm = !ruled && figVJ >= figT - figKept.length - figUnmeasured
+    const ruled = figVJ >= figT - figKeptTexts
+    const unm = !ruled && figVJ >= figT - figKeptTexts - figUnmeasured
     diff('figures', null, 'figure texts drawn translated', null, { value: figT, off: null }, { value: figVJ, off: null }, !ruled && !unm, ruled ? 'ruling' : unm ? 'unmeasured' : 'today')
     if (ruled)
       out.diffs.at(-1).ruling = [
         ...new Set(
-          figKept.map((o) =>
+          figKeptOrds.map((o) =>
             pitch.has(o)
               ? PITCH_RULING
               : identifier.has(o)
@@ -1345,7 +1366,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     laid: { today: T.size, v2: V.size, gained },
     echoed,
     within,
-    figures: { today: figT, v2: figV, v2Laid: figLaid, ...(figPitch ? { pitch: figPitch } : {}), ...(figKept.length > figPitch ? { identifier: figKept.length - figPitch } : {}), ...(figJoined ? { joined: figJoined } : {}), ...(figUnmeasured ? { unmeasured: figUnmeasured } : {}), ...(figDecoratedOrds.length ? { decorated: figDecorated, decoratedOrds: figDecoratedOrds } : {}) },
+    figures: { today: figT, v2: figV, v2Laid: figLaid, ...(figPitch ? { pitch: figPitch } : {}), ...(figKeptTexts > figPitch ? { identifier: figKeptTexts - figPitch } : {}), ...(figJoined ? { joined: figJoined } : {}), ...(figUnmeasured ? { unmeasured: figUnmeasured } : {}), ...(figDecoratedOrds.length ? { decorated: figDecorated, decoratedOrds: figDecoratedOrds } : {}), ...(figWrittenOrds.length ? { asWritten: figWritten, asWrittenOrds: figWrittenOrds } : {}) },
   }
   for (const f of FLAGS) {
     const a = faults.today[f] ?? [],
@@ -1871,7 +1892,7 @@ export function recount(out) {
  * extends it apart (withCrops, raised), its edge never a mark's. Every box a full em of its face, a mark the breaker compressed
  * too: compression moves the next character, not the mark's box (breaker/break.mjs). A line of marks alone is its boxes
  */
-function inkedLine(l) {
+export function inkedLine(l) {
   if (l.rot || l.x0 === null) return { ...l, ix0: l.x0, ix1: l.x1 }
   const chars = [...l.text].filter((c) => !/\s/u.test(c) && c !== OBJ)
   const ix0 = l.x0 + (OPENING.test(chars[0] ?? '') ? 0.5 * l.size : 0),
@@ -2023,9 +2044,9 @@ function figuresMatched(groups, prep, facts, n) {
     .filter((m) => figure(m.kind))
     .map((m) => ({ id: m.ord, box: spanOf(m.lines.filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))) }))
     .filter((x) => x.box)
-  const drawnByToday = new Set(mutualBest(g, t).values())
+  const groupOf = new Map([...mutualBest(g, t)].map(([gid, tid]) => [tid, gid]))
   const out = new Map()
-  for (const [today, ord] of mutualBest(t.filter((x) => drawnByToday.has(x.id)), v)) out.set(ord, today)
+  for (const [today, ord] of mutualBest(t.filter((x) => groupOf.has(x.id)), v)) out.set(ord, groupOf.get(today))
   return out
 }
 

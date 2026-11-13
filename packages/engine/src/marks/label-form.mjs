@@ -11,7 +11,7 @@ const LABEL_NUMBER = '[([]?(?:\\d{1,4}|[a-z]|[ivxlcdm]{1,6})(?:[.\\-–](?:\\d{1
 // before a digit alone, so that two letters are no number, "Figure AB"; alone, a letter and a number are a model's or a
 // product's name, "A100", no label)
 const formOf = name => new RegExp(`^(?:(?:${name}(?:(?:[a-z](?=\\d))?${LABEL_NUMBER})?|${LABEL_NUMBER})[)\\].:–—|]{0,2}|[•◦▪▫‣⁃∙·∗*–—\\-+○●■□►▸▹➢✓✔])$`, 'u')
-export const LABEL_FORM = formOf(LABEL_NAME)
+const LABEL_FORM = formOf(LABEL_NAME)
 export const labelText = s => s.normalize('NFKC').toLowerCase().replace(/\s/gu, '')
 /**
  * The label's form with the paper's own theorem names beside LABEL_NAME (`names`: source/paper-names.mjs theoremNames, the

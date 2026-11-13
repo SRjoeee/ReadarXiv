@@ -31,8 +31,10 @@ import { CHUNK, type ChunkStore } from './store.ts'
 export const STALL_MS = 10_000
 /** how many times a range is asked, at most, where the network fails it, but by an owner that keeps reading */
 export const RANGE_TRIES = 2
-/** the pause before a read the network failed at once is asked again, doubled at each failure, to RETRY_MAX_MS */
+/** the pause before a read the network failed at once is asked again, ms, doubled at each failure, to RETRY_MAX_MS;
+ *  unmeasured */
 export const RETRY_MS = 1_000
+/** the longest that pause, ms; unmeasured */
 export const RETRY_MAX_MS = 30_000
 
 /** why a source is refused: no such object at its address (`missing`: a 404 or a 410 before any byte of it was read, the
@@ -149,7 +151,7 @@ export const chunkUrl = (url: string, begin: number, end: number): string =>
   `${url}${url.includes('?') ? '&' : '?'}r=${begin}-${end - 1}`
 
 /** a chunk's digest as the head writes it: the first 16 bytes of its SHA-256, base64url (22 characters) */
-export async function chunkDigest(bytes: Uint8Array): Promise<string> {
+async function chunkDigest(bytes: Uint8Array): Promise<string> {
   const subtle = (globalThis as { crypto?: Crypto }).crypto?.subtle
   if (subtle) {
     const d = new Uint8Array(await subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>))

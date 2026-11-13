@@ -13,8 +13,9 @@ import { dirname, join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { factsOf } from '../../lab/release-check/census-lib.mjs'
 import { areaOf } from '../../lab/rules/areas.mjs'
-import { type Ledger, ledgerOf, marginOf, resolveTracked, TRACKED_FORMAT, type Tracked } from '../../lab/rules/ledger.mjs'
+import { type Ledger, ledgerOf, marginOf, recordedOf, resolveTracked, TRACKED_FORMAT, type Tracked, trackedOf } from '../../lab/rules/ledger.mjs'
 import { mergeRecords } from '../../lab/rules/merge.mjs'
+import { entriesOf } from '../../lab/rules/pattern.mjs'
 import { agreementOf, countsOf, remapOf, siteMapOfCheckout } from '../../lab/rules/record.mjs'
 import { recorderOf } from '../../lab/rules/recorder.mjs'
 import { reportOf } from '../../lab/rules/report.mjs'
@@ -318,9 +319,10 @@ describe('the ledger in two forms', () => {
     const short = must(tracked.rules['packages/engine/src/rules::short::<4#1'], 'short')
     expect(short).toMatchObject({ verdict: 'test', kind: 'threshold', value: 4, runs: { corpus: [1, 1, 0], tests: [1, 0, 1] }, tests: { false: { [TEST_FILE]: [0] } } })
     expect(short.margin).toMatchObject({ units: 'rule', false: { eff: 9, test: [TEST_FILE, 0] }, true: { eff: 2, paper: '2401.00001v1' } })
-    // (the list's hits by entry, in the list's order, where they remove its entries; the entries by their digest alone)
-    expect(full.rules['packages/engine/src/rules::(top)::HEADS#1']).toMatchObject({ verdict: 'test', removeEntries: ['subsection', 'paragraph'] })
-    expect(tracked.rules['packages/engine/src/rules::(top)::HEADS#1']).toMatchObject({ verdict: 'test', kind: 'list', size: 3, hits: [1, 0, 0], tests: { false: { [TEST_FILE]: [0] } } })
+    // (the list's hits by entry, in the list's order, where they remove its entries; the entries by their digest alone; the
+    // corpus hit \`section\`: the list decides there, whatever side the test took)
+    expect(full.rules['packages/engine/src/rules::(top)::HEADS#1']).toMatchObject({ verdict: 'decides', removeEntries: ['subsection', 'paragraph'] })
+    expect(tracked.rules['packages/engine/src/rules::(top)::HEADS#1']).toMatchObject({ verdict: 'decides', kind: 'list', size: 3, hits: [1, 0, 0], tests: { false: { [TEST_FILE]: [0] } } })
     expect(readFileSync(trackedFile, 'utf8')).not.toContain('subsection')
   })
   it("holds no byte of a test's name, and no text that is not ASCII", () => {
@@ -354,6 +356,313 @@ describe('the ledger in two forms', () => {
     expect(readFileSync(join(dir, 'out/report/report-by-file.md'), 'utf8')).toContain('(packages/engine/src/rules::short::<4#1): **test**')
     // (remap follows the tracked rows as it follows the map's)
     expect(remapOf(tracked, map)).toMatchObject({ kept: Object.keys(map.rules).length, unmatched: { old: [], new: [] } })
+  })
+})
+
+describe("the recorder's blind sides (lane r5b-front's probes, 2026-11-13)", () => {
+  // (a tree of its own: a pattern read each way a pattern is consumed, one pattern a way; a table read by a computed key; a
+  // pattern inside a predicate whose declaration's comment cites a paper; a runner that hands each a text with no match, then
+  // a text with two)
+  let tree = ''
+  let map: ReturnType<typeof siteMapOfCheckout>
+  let rec: ReturnType<typeof mergeRecords>
+  let ledger: Ledger
+  const put = (path: string, text: string) => {
+    mkdirSync(dirname(join(tree, path)), { recursive: true })
+    writeFileSync(join(tree, path), text)
+  }
+  const ALT = '/(?:alpha|beta|gamma)/'
+  const FORMS = `// each way a pattern is consumed, a pattern a way
+const BY_TEST = ${ALT}
+const BY_EXEC = ${ALT}
+const BY_MATCH = ${ALT}
+const BY_MATCH_G = ${ALT}g
+const BY_REPLACE = ${ALT}
+const BY_REPLACE_G = ${ALT}g
+const BY_REPLACE_ALL = ${ALT}g
+const BY_MATCH_ALL = ${ALT}g
+const BY_SPREAD = ${ALT}g
+const BY_SEARCH = ${ALT}
+const BY_SPLIT = ${ALT}
+export const FORMS = {
+  test: s => BY_TEST.test(s),
+  exec: s => BY_EXEC.exec(s)?.[0] ?? null,
+  match: s => s.match(BY_MATCH)?.[0] ?? null,
+  matchG: s => (s.match(BY_MATCH_G) ?? []).join(','),
+  replace: s => s.replace(BY_REPLACE, '_'),
+  replaceG: s => s.replace(BY_REPLACE_G, '_'),
+  replaceAll: s => s.replaceAll(BY_REPLACE_ALL, '_'),
+  matchAll: s => {
+    const at = []
+    for (const m of s.matchAll(BY_MATCH_ALL)) at.push(m.index)
+    return at.join(',')
+  },
+  spread: s => [...s.matchAll(BY_SPREAD)].length,
+  search: s => s.search(BY_SEARCH),
+  split: s => s.split(BY_SPLIT).join('|'),
+}
+`
+  const TABLE = `// the operands each colour operator takes
+const ARITY = { rg: 3, k: 4, rgb: 3, cmyk: 4 }
+export const fits = (op, nums) => nums.length === ARITY[op]
+// the kerns, in em
+const KERNS = { '\\\\enspace': 0.5, '\\\\thinspace': 0.25, '\\\\,': 0.2 }
+export const kern = src => (Object.hasOwn(KERNS, src) ? KERNS[src] : null)
+`
+  const CITED = `// a module of placeholders
+
+/** a placeholder whose macro may look at what follows it: \\\\protect\\\\eqref, as 2608.23586 writes it */
+const LOOKS_AHEAD = p => {
+  const n = p.length
+  return n > 0 && /\\\\(?:xspace|protect|noexpand|expandafter)$/.test(p)
+}
+export const looks = p => LOOKS_AHEAD(p)
+
+/** whether a mark is glued to its word, as TeX sets it */
+const glued = gap => {
+  const g = gap * 2
+  return g > 0.03
+}
+/** a PDF date's minute: at most 59 */
+const minuteOk = m => {
+  const n = Number(m)
+  return n <= 59
+}
+/** a PDF date's second (PDF 32000-1 §7.9.4) */
+const secondOk = s => {
+  const n = Number(s)
+  return n <= 61
+}
+export const marks = x => [glued(x), minuteOk(x), secondOk(x)]
+`
+  // (lists read past their objects, and two the recorder sees: one copied into a Set, one tested by \`every\`)
+  const PAST = `// lists read past their objects
+const KINDS = ['para', 'cell', 'note']
+export const kindAt = i => KINDS[i]
+const WORDS = /(?:one|two|three)/
+const WORDS_G = new RegExp(WORDS.source, 'g')
+export const words = s => s.match(WORDS_G)?.length ?? 0
+const NAMES = ['alpha', 'beta', 'gamma']
+const NAME_SET = new Set(NAMES)
+export const named = s => NAME_SET.has(s)
+const ALL = ['red', 'green', 'blue']
+export const allIn = s => ALL.every(c => s.includes(c))
+`
+  // (a pattern's entries by its structure, and the path a match took)
+  const ENTRIES = `// entries read by the path a match took
+const ENC = /^(?:WinAnsi|MacRoman|MacExpert|Standard)Encoding$/
+export const known = n => ENC.test(n)
+const PART = /\\b(?:sec|section|part|chapter)\\w*/
+export const part = s => PART.exec(s)?.[0] ?? null
+const NOT = /^(?!foo|bar|baz|qux)\\w+$/
+export const plain = s => NOT.test(s)
+const MANY = /(?:one|two|three)+/g
+export const many = s => (s.match(MANY) ?? []).join(',')
+`
+  // (bounds on work: three budgets (an exit past a counter, a loop's cap its loop ends without, a cap on a list it appends
+  // to) and three that are none (a clamp, an input's own length, a flush))
+  const WORK = `// bounds on work
+const SLOT_WORK = 5000
+export const search = xs => {
+  let work = 0
+  for (const x of xs) {
+    work += x
+    if (work > SLOT_WORK) return false
+  }
+  return true
+}
+export const passes = s => {
+  for (let pass = 0; pass < 4; pass++) {
+    const t = s.replace('aa', 'a')
+    if (t === s) break
+    s = t
+  }
+  return s
+}
+const SAMPLES = 3
+export const sample = xs => {
+  const out = []
+  for (const x of xs) if (out.length < SAMPLES) out.push(x)
+  return out
+}
+export const clamp = w => Math.min(w, 40)
+export const short = s => s.length < 3
+const FLUSH_EVERY = 5
+export const buffer = xs => {
+  const w = []
+  let n = 0
+  for (const x of xs) {
+    w.push(x)
+    if (w.length >= FLUSH_EVERY) {
+      n++
+      w.splice(0)
+    }
+  }
+  return n
+}
+`
+  const RUN = `import { FORMS } from './packages/engine/src/forms.mjs'
+import { fits, kern } from './packages/engine/src/table.mjs'
+import { looks, marks } from './packages/engine/src/cited.mjs'
+import { kindAt, words, named, allIn } from './packages/engine/src/past.mjs'
+import { known, part, plain, many } from './packages/engine/src/entries.mjs'
+import { search, passes, sample, clamp, short, buffer } from './packages/engine/src/work.mjs'
+const out = {}
+for (const [k, f] of Object.entries(FORMS)) out[k] = [f('nothing here'), f('an alpha and a gamma')]
+out.fits = [fits('rg', [1, 2, 3]), fits('cmyk', [1, 2]), kern('\\\\enspace'), kern('\\\\quad')]
+out.looks = [looks('a \\\\protect'), looks('plain')]
+out.marks = marks(0.001)
+out.past = [kindAt(1), words('one two'), named('beta'), named('zeta'), allIn('red green'), allIn('red green blue')]
+out.entries = [known('WinAnsiEncoding'), known('StandardEncoding'), known('Other'), part('section 2'), plain('quux'), plain('foo'), many('onetwo x')]
+out.work = [search([1, 2, 3]), passes('aaa'), sample([1, 2]), clamp(10), short('abcd'), buffer([1, 2])]
+console.log(JSON.stringify(out))
+`
+  beforeAll(() => {
+    tree = mkdtempSync(join(tmpdir(), 'axt-rules-blind-'))
+    put('package.json', JSON.stringify({ name: 'blind', type: 'module' }))
+    put('packages/engine/package.json', JSON.stringify({ name: '@x/engine', type: 'module', exports: { '.': './src/forms.mjs' } }))
+    put('packages/engine/src/forms.mjs', FORMS)
+    put('packages/engine/src/table.mjs', TABLE)
+    put('packages/engine/src/cited.mjs', CITED)
+    put('packages/engine/src/past.mjs', PAST)
+    put('packages/engine/src/entries.mjs', ENTRIES)
+    put('packages/engine/src/work.mjs', WORK)
+    // (a package's test support: no product rule)
+    put('packages/engine/src/testing/fakes.mjs', '// a scripted fetch\nexport const ok = status => status >= 200 && status < 300\n')
+    put('run-blind.mjs', RUN)
+    map = siteMapOfCheckout(tree)
+    writeFileSync(join(tree, 'sites.json'), JSON.stringify(map))
+    const out = join(tree, 'records')
+    const env = { ...process.env, AXT_RULES_SITES: join(tree, 'sites.json'), AXT_RULES_OUT: out, AXT_RULES_ROOT: tree, AXT_RULES_PAPER: '2401.00009v1', AXT_RULES_INPUT: 'corpus' }
+    const plain = execFileSync(process.execPath, ['run-blind.mjs'], { cwd: tree, encoding: 'utf8' })
+    const recorded = execFileSync(process.execPath, ['--import', join(ROOT, 'lab/rules/register.mjs'), 'run-blind.mjs'], { cwd: tree, encoding: 'utf8', env })
+    if (recorded !== plain) throw new Error(`the instrument changed the output:\n${plain}\n${recorded}`)
+    rec = mergeRecords(map, [out])
+    ledger = ledgerOf(map, rec)
+  })
+  afterAll(() => rmSync(tree, { recursive: true, force: true }))
+  const keyOf = (suffix: string) => must(Object.keys(map.rules).find(k => k.endsWith(suffix)), `rule ${suffix} among ${Object.keys(map.rules).join(' ')}`)
+  const siteRecord = (suffix: string) => {
+    const id = must(map.rules[keyOf(suffix)]?.sites.find(s => map.sites[s]?.kind !== 'val'), `a site of ${suffix}`)
+    return rec.sites.corpus?.[String(id)] ?? null
+  }
+
+  // defect 1: a pattern read by matchAll recorded each match and never a text with no match; `[...text.matchAll(re)]` over a
+  // text with no match recorded nothing. Every way a pattern is consumed records one outcome a text it is handed: false where
+  // the text holds no match, true where it holds one, and a hit for each match it reads (a pattern without `g` reads the
+  // first match alone)
+  const ONE = { alpha: 1 }
+  const BOTH = { alpha: 1, gamma: 1 }
+  it.each([
+    ['BY_TEST', ONE],
+    ['BY_EXEC', ONE],
+    ['BY_MATCH', ONE],
+    ['BY_MATCH_G', BOTH],
+    ['BY_REPLACE', ONE],
+    ['BY_REPLACE_G', BOTH],
+    ['BY_REPLACE_ALL', BOTH],
+    ['BY_MATCH_ALL', BOTH],
+    ['BY_SPREAD', BOTH],
+    ['BY_SEARCH', ONE],
+    ['BY_SPLIT', BOTH],
+  ])('defect 1: %s records a text with no match as one false, a text with matches as one true', (name, hits) => {
+    const r = siteRecord(`::(top)::${name}#1`)
+    expect(r && { n: r.n, t: r.t, f: r.f, hits: r.hits }).toEqual({ n: 2, t: 1, f: 1, hits })
+  })
+
+  it("leaves a package's test support out of the rules", () => {
+    expect(Object.keys(map.rules).filter(k => k.includes('/src/testing/'))).toEqual([])
+    expect(map.files['packages/engine/src/testing/fakes.mjs']).toBeUndefined()
+  })
+  it('reads a list read past its object (an index, a pattern made of its source) as not judged, never removed', () => {
+    expect(ledger.rules[keyOf('past::(top)::KINDS#1')]).toMatchObject({ verdict: 'not judged', unseen: ['index packages/engine/src/past.mjs:3'] })
+    expect(ledger.rules[keyOf('past::(top)::WORDS#1')]).toMatchObject({ verdict: 'not judged', listReads: { source: 1 } })
+  })
+  it("reads a list copied into a Set by the Set's tests, and an `every` by the entry it stopped at", () => {
+    expect(siteRecord('past::(top)::NAMES#1')).toMatchObject({ n: 2, t: 1, f: 1, hits: { beta: 1 } })
+    expect(siteRecord('past::(top)::NAMES#1')?.reads).toBeNull()
+    expect(ledger.rules[keyOf('past::(top)::NAMES#1')]).toMatchObject({ verdict: 'decides', removeEntries: ['alpha', 'gamma'] })
+    // (allIn('red green') stops at blue; allIn('red green blue') holds for all three, decided by none: red and green alone
+    // taken away, both calls answer as they did)
+    expect(siteRecord('past::(top)::ALL#1')).toMatchObject({ n: 2, t: 1, f: 1, hits: { blue: 1 } })
+    expect(ledger.rules[keyOf('past::(top)::ALL#1')]).toMatchObject({ removeEntries: ['red', 'green'] })
+  })
+
+  it("judges a pattern's entries by its alternatives' words, each hit where a match's path went through it", () => {
+    // (the census cuts the pattern at every \`|\` and reads three of ENC's four alternatives; its fourth, Standard, is hit)
+    expect(siteRecord('entries::(top)::ENC#1')).toMatchObject({ n: 3, t: 2, f: 1, hits: { WinAnsi: 1, Standard: 1 } })
+    expect(ledger.rules[keyOf('entries::(top)::ENC#1')]).toMatchObject({ verdict: 'decides', judged: ['WinAnsi', 'MacRoman', 'MacExpert', 'Standard'], removeEntries: ['MacRoman', 'MacExpert'] })
+    // ("section" is matched by \`sec\`, the first alternative, and \`\\w*\`: the text holds \`section\`, the path went through
+    // \`sec\`; taken away, the three others leave the match as it was)
+    expect(siteRecord('entries::(top)::PART#1')?.hits).toEqual({ sec: 1 })
+    expect(ledger.rules[keyOf('entries::(top)::PART#1')]).toMatchObject({ removeEntries: ['section', 'part', 'chapter'] })
+    // (a negative lookahead's alternatives decide by failing, never on a match's path: not judged; a match through none of
+    // the entries is the list's hit still)
+    expect(siteRecord('entries::(top)::NOT#1')).toMatchObject({ t: 1, f: 1, hits: { '(no entry)': 1 } })
+    expect(ledger.rules[keyOf('entries::(top)::NOT#1')]).toMatchObject({ verdict: 'decides', removeEntries: [], entriesNotJudged: ['foo', 'bar', 'baz', 'qux'].map(entry => ({ entry, why: 'in a negative lookaround' })) })
+    // (a repeated group shows its last repetition alone: its entries hit where the match's text holds them)
+    expect(siteRecord('entries::(top)::MANY#1')?.hits).toEqual({ one: 1, two: 1 })
+    expect(ledger.rules[keyOf('entries::(top)::MANY#1')]).toMatchObject({ removeEntries: ['three'] })
+  })
+  it("makes a pattern's shadow with its back references moved to their groups' new numbers", () => {
+    const e = entriesOf(String.raw`(\w)(?:alpha|beta|gamma)\1`, '')
+    expect(e.shadow).toBe(String.raw`(\w)(?:()alpha|()beta|()gamma)\1`)
+    const f = entriesOf(String.raw`(?:alpha|beta|gamma)(\w)\1`, 'i')
+    expect([f.shadow, f.marks]).toEqual([String.raw`(?:()alpha|()beta|()gamma)(\w)\4`, [[0, 1], [1, 2], [2, 3]]])
+    expect(new RegExp(f.shadow ?? '', 'iy').exec('BETAxx')?.slice(1, 5)).toEqual([undefined, '', undefined, 'x'])
+    expect(entriesOf(String.raw`(?:alpha|beta|gamma)\2`).why).toMatch(/back reference/)
+  })
+
+  // (the coordinator's ruling of 2026-11-14: a budget is a comparison of a quantity the code grows itself where passing the
+  // bound only stops the work; class budget, never remove)
+  it('classes a bound on what the code grows itself, whose passing only stops, as a budget: never removed', () => {
+    const row = (suffix: string) => must(ledger.rules[keyOf(`work::${suffix}`)], suffix)
+    expect([row('(top)::SLOT_WORK'), row('passes::<4#1'), row('(top)::SAMPLES')].map(r => [r.verdict, r.budget])).toEqual([
+      ['budget', [{ quantity: 'work', stops: 'an exit' }]],
+      ['budget', [{ quantity: 'pass', stops: 'a loop' }]],
+      ['budget', [{ quantity: 'out.length', stops: 'adding to it' }]],
+    ])
+    // (a clamp, a property of the input, a flush: none is a budget)
+    expect([row('clamp::min40#1'), row('short::<3#1'), row('(top)::FLUSH_EVERY')].map(r => [r.verdict, r.budget ?? null])).toEqual([
+      ['remove', null],
+      ['remove', null],
+      ['remove', null],
+    ])
+    // (the report lists each with its bound and what it stops)
+    expect(reportOf(ledger).byArea).toContain('`SLOT_WORK` (packages/engine/src/work::(top)::SLOT_WORK) = 5000: `work`, an exit; budget; inputs: papers')
+  })
+
+  // defect 3: a table read by a computed key (`ARITY[op]`) had no site, and every entry read "read nowhere": removed
+  it('defect 3: a table read by a computed key records the entry it read; an entry no run read is never hit', () => {
+    const verdict = (entry: string) => ledger.rules[keyOf(`::(top)::ARITY.${entry}`)]?.verdict
+    expect(['rg', 'cmyk', 'k', 'rgb'].map(verdict)).toEqual(['decides', 'decides', 'remove', 'remove'])
+  })
+
+  it("reads a table's keys tested by Object.hasOwn as the entries' hits, per input, in the tracked form as well", () => {
+    // (kern('\enspace') tests the key and reads it: two reads of its key; kern('\quad') finds no entry)
+    expect(ledger.rules[keyOf('table::(top)::KERNS.\\enspace')]).toMatchObject({ verdict: 'decides', keyReads: { corpus: 2 } })
+    expect(ledger.rules[keyOf('table::(top)::KERNS.\\thinspace')]?.verdict).toBe('remove')
+    expect(recordedOf(must(ledger.rules[keyOf('table::(top)::KERNS.\\enspace')], 'the row'))).toBe('corpus: read by its key 2')
+    expect(trackedOf(ledger, { digest: 'f00d' }).rules[keyOf('table::(top)::KERNS.\\enspace')]).toMatchObject({ verdict: 'decides', keyReads: { corpus: 2 } })
+  })
+
+  // defect 4: a pattern's citation was read off the statement it stands in (here a `return`, which has no comment), not off
+  // the declaration that holds it, whose comment cites a paper
+  it('defect 4: a citation is read from the comment on the declaration that holds the rule', () => {
+    const key = must(Object.keys(map.rules).find(k => k.startsWith('packages/engine/src/cited::') && map.rules[k]?.kind === 'list'), 'the pattern of cited.mjs')
+    expect(ledger.rules[key]?.citation).toMatchObject({ flag: 'paper', papers: ['2608.23586'] })
+    // (the report names the declaration the comment was read from, and its length)
+    // (its comment names entries of the pattern, \protect and \xspace: it states the rule's value)
+    expect(ledger.rules[key]?.holder).toEqual({ name: 'LOOKS_AHEAD', lines: 4, read: 'states its value' })
+  })
+  // (the coordinator's ruling of 2026-11-14: a holder's comment exempts a rule only where it states the rule's value or names
+  // the definition the value comes from; a header that merely mentions TeX exempts nothing)
+  it("reads a holder's comment only where it states the rule's value or names the definition it comes from", () => {
+    const row = (fn: string) => must(Object.values(ledger.rules).find(r => r.file.endsWith('cited.mjs') && r.kind === 'threshold' && r.key.includes(`::${fn}::`)), fn)
+    expect([row('glued').citation.flag, row('glued').holder]).toEqual([null, { name: 'glued', lines: 4, read: null }])
+    expect(row('glued').verdict).toBe('remove')
+    expect([row('minuteOk').citation.flag, row('minuteOk').holder?.read]).toEqual([null, 'states its value'])
+    expect([row('secondOk').citation.flag, row('secondOk').holder?.read]).toEqual(['definition', 'names the definition'])
   })
 })
 

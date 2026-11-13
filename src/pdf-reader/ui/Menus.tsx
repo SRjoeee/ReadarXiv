@@ -1,13 +1,10 @@
 // Kept at this path for the website's reader (readarxiv-web, @vendor/pdf-reader/ui/Menus) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
-// The toolbar's menus (the reader's design, §6.1, §6.7): zoom, the target language, the translation service, the
-// download. Each is a toolbar control and its anchored popover; choosing closes it
-import { ChevronDown, Download } from 'lucide'
-import { browser } from 'wxt/browser'
+// The toolbar's menus the website takes (the reader's design, §6.1, §6.7): zoom and the target language. Each is a toolbar
+// control and its anchored popover; choosing closes it
+import { ChevronDown } from 'lucide'
 import { type LangCode, toBcp47 } from '@/config/languages'
 import { DEFAULT_CONFIG } from '@/config/schema'
-import { isBuiltInService } from '@/config/services'
-import { MANAGE_SERVICES, serviceItems } from '@/ui/service-items'
-import { R, S, serviceName } from '@/ui/strings'
+import { R, S } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import { Icon } from '@/ui/controls/Icon'
 import { languageItems, ownName } from './languages'
@@ -16,11 +13,9 @@ import { MenuList } from '@/ui/controls/MenuList'
 import { useSettingsLock } from './settings-lock'
 import { ToolbarButton } from './ToolbarButton'
 import { useReader } from './use-reader'
-import { useRejected } from '@/ui/use-rejected'
 
 const FITS = [['page-width', () => R.zoom.width], ['page-fit', () => R.zoom.page], ['page-actual', () => R.zoom.actual]] as const
 const SCALES = [0.5, 0.75, 1, 1.25, 1.5, 2]
-const openOptions = (section: string) => void browser.tabs.create({ url: (browser.runtime.getURL as (p: string) => string)(`/options.html#${section}`) })
 /** the popover shut, as a pick does */
 const shut = (id: string) => document.getElementById(id)?.hidePopover()
 
@@ -63,57 +58,6 @@ export function LanguageMenu({ controller, name }: { controller: ReaderControlle
             onPick={code => { controller.patchSettings(c => ({ ...c, targetLanguage: code as LangCode })); shut(pop.popover.id) }} />
         </Popover>
       )}
-    </>
-  )
-}
-
-export function ServiceMenu({ controller }: { controller: ReaderController }) {
-  const state = useReader(controller, s => ({ settings: s.settings, pack: s.pack }))
-  // a refused key says so in the list, as in the popup (the redesign's design, §5.2; the controller's ruling 22)
-  const rejected = useRejected()
-  const lock = useSettingsLock(controller)
-  const pop = usePopover('listbox')
-  // before the settings land the defaults stand in the button's place, greyed, so that the bar does not reflow (S-R-21)
-  const config = state.settings ?? DEFAULT_CONFIG
-  const items = lock.locked ? [] : serviceItems(config, state.pack, rejected).map(i => ({ id: i.id, name: i.name, hint: i.hint, checked: i.selected, disabled: i.disabled && !i.action }))
-  return (
-    <>
-      <ToolbarButton label={S.rows.service} value={serviceName(config.provider, config.services)} anchor={pop.anchor} disabled={lock.locked} why={lock.why} {...(lock.locked ? {} : pop.trigger)} className="menu-btn">
-        <Icon node={ChevronDown} size={12} className="text-ink-3" />
-      </ToolbarButton>
-      {!lock.locked && (
-        <Popover {...pop.popover} role="listbox" label={S.rows.service}>
-          <MenuList key={pop.generation} kind="listbox" label={S.rows.service} items={items} onClose={() => shut(pop.popover.id)}
-            onPick={id => {
-              shut(pop.popover.id)
-              // managing the services, or a pack to download: the settings page's (the reader downloads no pack itself)
-              const item = serviceItems(config, state.pack, rejected).find(i => i.id === id)
-              if (id === MANAGE_SERVICES || item?.action) return openOptions('translate/services')
-              // a service another tab deleted meanwhile is not written: the chain would take an unknown id for Microsoft
-              // while the bar showed the raw id (the popup's rule)
-              controller.patchSettings(c => (isBuiltInService(id) || c.services.some(s => s.id === id) ? { ...c, provider: id } : c))
-            }} />
-        </Popover>
-      )}
-    </>
-  )
-}
-
-/** `wide`: the bar's, which leaves it in a narrow window for the reading options' own (reader.css data-wide) */
-export function DownloadMenu({ controller, wide = false }: { controller: ReaderController; wide?: boolean }) {
-  // the original only once its document is open: loading, or after a fetch that failed, there are no bytes to give
-  // the translation once there is one to give (the layer exported, Task 20); until then the original alone
-  const state = useReader(controller, s => ({ translation: s.download === 'translation', original: s.sides.left.pages > 0 }))
-  const pop = usePopover('menu')
-  const items = [{ id: 'translation', name: R.download.translation, disabled: !state.translation }, { id: 'original', name: R.download.original, disabled: !state.original }]
-  return (
-    <>
-      <ToolbarButton label={R.download.name} anchor={pop.anchor} {...pop.trigger} data-wide={wide || undefined}>
-        <Icon node={Download} />
-      </ToolbarButton>
-      <Popover {...pop.popover} role="menu" label={R.download.name} className="!min-w-[160px]">
-        <MenuList key={pop.generation} kind="items" label={R.download.name} items={items} onClose={() => shut(pop.popover.id)} onPick={which => { shut(pop.popover.id); void controller.download(which as 'translation' | 'original') }} />
-      </Popover>
     </>
   )
 }

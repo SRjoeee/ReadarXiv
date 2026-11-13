@@ -1,15 +1,13 @@
 // D.links on hand-made members, each held to today's links.mjs (engine 065c1d973) on the same case: matchUnit's tiers (geometry
 // by a rendering's characters and by TeX's segments, a citation's key, a destination's name, a url, the order of a kind, the
-// whole text, the ambiguous), placeUnit's pairs and whole texts, and the targets' kinds.
+// whole text, the ambiguous), placeUnit's pairs and whole texts, and the annotations' kinds and urls.
 import { describe, expect, it } from 'vitest'
 import {
   type Annot,
   type Cand,
   kindOfAnnot,
-  linkKindOf,
   matchUnit,
   placeUnit,
-  singleTarget,
   type Target,
   urlOf,
 } from '../../../../packages/typeset/src/emit/links.ts'
@@ -66,28 +64,7 @@ describe.skipIf(!today)('D.links', () => {
       })
       expect(flat(mine)).toEqual(flat(theirs))
     })
-  it('reads the targets’ kinds and urls as today', () => {
-    const pieces = [
-      { t: 'ph', src: '\\cite{a, b}' },
-      { t: 'ph', src: '\\citep[p.~3]{c}' },
-      { t: 'ph', src: '\\url{https://x.org/a\\_b}' },
-      { t: 'ph', src: '\\href{mailto:a@b.c}{mail}' },
-      { t: 'ph', src: '\\footnote{x}' },
-      { t: 'ph', src: '\\cref{fig:a,fig:b}' },
-      { t: 'ph', src: '\\ref{sec:a}' },
-      { t: 'ph', src: '$x$' },
-      { t: 'nested' },
-      { t: 'open', src: '\\href{https://y.org}{' },
-      { t: 'open', src: '\\hyperlink{sec:b}{' },
-      { t: 'open', src: '\\hyperref[sec:c]{' },
-      { t: 'open', src: '\\textbf{' },
-      null,
-    ]
-    for (const p of pieces) {
-      const k = linkKindOf(p)
-      expect(k).toEqual(call('linkKindOf', p))
-      expect(singleTarget(p as never, k)).toBe(call('singleTarget', p, k))
-    }
+  it('reads the annotations’ kinds and urls as today', () => {
     for (const a of [{ url: 'https://a' }, { dest: 'cite.x' }, { dest: 'Hfootnote.2' }, { dest: ['p', 1] }])
       expect(kindOfAnnot(a)).toBe(call('kindOfAnnot', a))
     for (const u of ['https://a.org/x\\%20', 'not a url', 7]) expect(urlOf(u)).toBe(call('urlOf', u))

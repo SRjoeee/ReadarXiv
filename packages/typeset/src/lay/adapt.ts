@@ -9,7 +9,7 @@
 // the caller hands them in (`Reading`), and what it hands is today's (the gate's runner: the tap's), so that a difference the
 // runner finds is a fact of the setting's. A member the stage does not set says why (`stop`), never silently.
 import type { Placed } from '@readarxiv/format'
-import { classifyFont } from '../breaker/font-names.types.ts'
+import { classifyFont } from '../breaker/font-names.ts'
 import { type NumberCrop, numberCrop } from '../fit/numbered.ts'
 import type { FitBlock, FitParams, Stay, Tokens } from '../fit/types.ts'
 import type { Row, RowLine, RunRow } from '../shared/row-start.ts'
@@ -98,9 +98,10 @@ export const rectOf = (l: Line, m: Placed): Rect => {
   return [l[0], r2(x0), r2(l[4] - BELOW * sizeOf(l, m)), r2(x1), r2(l[4] + ABOVE * sizeOf(l, m))]
 }
 /**
- * A table cell's own room on a line (the owner's ruling of 2026-11-08: each cell in its own room, sized as today): what TeX set
- * on it, its glyphs' advances (the line's x0 and x1) and its elements' ink on its baseline, which an italic letter's overhang
- * takes past its advance (2610.17024v1 p14's cells "p=5 n=20 …": the p's ink at 149.79, its line's advances from 150.42).
+ * A table cell's own room on a line, where its column's box is not its room (columnRoomOf: the part states none, or it is laid
+ * otherwise; today's reader's room for every cell): what TeX set on it, its glyphs' advances (the line's x0 and x1) and its
+ * elements' ink on its baseline, which an italic letter's overhang takes past its advance (2610.17024v1 p14's cells "p=5 n=20
+ * …": the p's ink at 149.79, its line's advances from 150.42).
  * Today's rectangle held it (texRects: the layout file's glyph boxes); a room of the advances alone was that much narrower, and
  * a translation opening with that p was set a step under the original's size where today's kept it. A centred cell's stays
  * centred where TeX centred its line, its advances' middle (TeX's column class, Placed.align), as wide as its own ink needs
@@ -121,6 +122,22 @@ function cellExtent(l: Line, m: Placed): [number, number] {
   const mid = (l[2] + l[3]) / 2,
     half = Math.max(mid - x0, x1 - mid)
   return [mid - half, mid + half]
+}
+/**
+ * A single-line table cell's column's box (Room.column; the owner's decision, docs/PDF-READER.md §18.13): the room
+ * it is laid in, in its column's alignment (its class: Placed.align), at the largest size not over the original's that fits
+ * it, the same room at every size (no step down in its own ink's width first, no room opening only where it is clipped at its
+ * floor: X.further's 'widen'). Undefined where the part states none (a part made before, a column whose box is not
+ * established), for a cell of several lines or a held one, and where ink not its own stands inside the box on its line (its
+ * Room.side short of an edge of the box: a mark TeX set in its entry past a space): each laid in its own room as before
+ */
+function columnRoomOf(m: Placed): readonly [number, number] | undefined {
+  const c = m.room.column
+  const l = m.lines[0]
+  if (m.kind !== 'cell' || !c || !l || m.lines.length !== 1 || l[9] & KEPT) return undefined
+  const side = m.room.side
+  if (side && (side[0] > c[0] + 0.01 || side[1] < c[1] - 0.01)) return undefined
+  return c
 }
 /** the label as U.decor reads it: its parts' ink as its characters, the first and the last reaching its ink's own ends (today's
  *  decor read every glyph of the label: a bracket before its name, "(a)", no part names, is its ink's all the same) */
@@ -310,6 +327,12 @@ export function adapt(i: AdaptInput): Adapted {
     return { stop: 'breaks (U.breaks not adapted)' }
   const lines = m.lines
   const rects = lines.map((l) => rectOf(l, m))
+  // (a single-line cell whose column's box the part states: that box its room)
+  const column = columnRoomOf(m)
+  if (column) {
+    const r = rects[0]!
+    rects[0] = [r[0], r2(column[0]), r[2], r2(column[1]), r[4]]
+  }
   // (each line's frame: its run of lines on one page and column)
   const frames: number[] = []
   lines.forEach((l, j) => {
@@ -524,7 +547,8 @@ export function adapt(i: AdaptInput): Adapted {
   // width at its floor (X.further's 'widen': today's widenOverPaper, a cell never widened before, RUN:2116), its room today's
   // paperTo's (RUN:1699): half way to the glyph beside it, another cell's text or a number's (two cells sharing paper take
   // half each), a quarter of its size off a wall (Room.wall: its column's rule, a neighbour's fill), to its column's edge
-  // where nothing stands before it; null where none grows)
+  // where nothing stands before it; null where none grows. None for a cell laid in its column's box (columnRoomOf): its room
+  // is that box at every size, and X.further shrinks it there)
   const cellSideOf = (b: FitBlock): Side | undefined => {
     const r0 = b.rects[0] as Rect
     const j = (lineInfo.get(rectKey(r0)) ?? lineInfo.get(rectKeyNoX0(r0)))?.j
@@ -541,7 +565,7 @@ export function adapt(i: AdaptInput): Adapted {
     }
   }
   let wide: FitBlock[] | null = null
-  if (kind === 'cell') {
+  if (kind === 'cell' && !column) {
     const grown = blocks.map((b) => {
       const w = { ...b }
       widen(w, cellSideOf(w))
@@ -668,7 +692,7 @@ export function adapt(i: AdaptInput): Adapted {
   // last token, set at the end of the line the text ends on, as far from that line's right edge as TeX set it from its own
   // (`pad`, its rectangle's right edge to the slot's on the line TeX set it on), on that line where the text ends the keep-off
   // distance before it (`gap`, TeX's own distance and half an em at most: B.slots' rule for ink that stays), else on a line of its
-  // own (breaker/break.mjs). Left where TeX set it, a translation a line longer stood it beside a line mid-paragraph (2610.40645v1-ja
+  // own (breaker/break.ts). Left where TeX set it, a translation a line longer stood it beside a line mid-paragraph (2610.40645v1-ja
   // p12 t80), one a line shorter alone under the text. The prepare's claim after the unit's end point, no piece's, is drawn as its
   // own crop; the author's own mark (`\qed` written in the text, an element of the unit's) is set so where the translation ends
   // with it, and drawn where the translation sets it otherwise)

@@ -67,7 +67,8 @@ async function made(key, { engine, out, base, bytes, layoutFile, source }) {
     return { key, file: head.wrapped ? pdfFile : base, head, headFile }
   }
   mkdirSync(dir, { recursive: true })
-  const E = f => import(existsSync(join(engine, 'src/pdf-reader/engine', f)) ? join(engine, 'src/pdf-reader/engine', f) : join(engine, 'packages/engine/src', f.split('/').pop()))
+  // (a module moved into the engine package and made TypeScript there found by its stem: packages/engine/src/ink.ts)
+  const E = f => { const p = existsSync(join(engine, 'src/pdf-reader/engine', f)) ? join(engine, 'src/pdf-reader/engine', f) : join(engine, 'packages/engine/src', f.split('/').pop()); return import(existsSync(p) ? p : p.replace(/\.mjs$/, '.ts')) }
   const [{ wrapFinal }, { openPaper }, { unpackSource }, { indexLayout, parseLayout }, { pageInk }, { bundleUnitsOf }] = await Promise.all([existsSync(join(engine, 'src/pdf-reader/engine/layout/wrap-final.mjs')) ? 'layout/wrap-final.mjs' : 'layout/wrap.mjs', 'pipeline/live.mjs', 'source/tar.mjs', 'layout/file.mjs', 'layout/ink.mjs', 'layer-proto/bundle.mjs'].map(E))
   // (the cell rules by the engine's own module; an engine from before REMOVAL 8 has none and reads its rules from its add-on, which
   // this instrument no longer makes: the gate's own module then, whose rules such an engine does not read)

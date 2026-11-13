@@ -34,7 +34,7 @@ mkdirSync(join(OUT, NAME), { recursive: true })
 // ---- the wrap, as the maker child makes it, kept by the base's digest
 const FX = join(PACK, 'fixtures', NAME)
 const baseBytes = new Uint8Array(readFileSync(join(FX, 'base.pdf')))
-const digest = createHash('sha256').update(baseBytes).update(readFileSync(join(REPO, 'src/pdf-reader/engine/layout/wrap-final.mjs'))).update(readFileSync(join(REPO, 'packages/engine/src/wrap.mjs'))).update(readFileSync(join(REPO, 'packages/engine/src/own/own.mjs'))).update(existsSync(join(FX, 'base.json')) ? readFileSync(join(FX, 'base.json')) : 'no record').digest('hex').slice(0, 16)
+const digest = createHash('sha256').update(baseBytes).update(readFileSync(join(REPO, 'src/pdf-reader/engine/layout/wrap-final.mjs'))).update(readFileSync(join(REPO, 'packages/engine/src/wrap.ts'))).update(readFileSync(join(REPO, 'packages/engine/src/own/own.mjs'))).update(existsSync(join(FX, 'base.json')) ? readFileSync(join(FX, 'base.json')) : 'no record').digest('hex').slice(0, 16)
 const wrappedPath = join(OUT, NAME, `wrapped-${digest}.pdf`), headPath = join(OUT, NAME, `wrapped-${digest}.json`), glyphsPath = join(OUT, NAME, `wrapped-${digest}-ink2.json`)
 if (!existsSync(wrappedPath) || !existsSync(glyphsPath)) {
   const { wrapFinal } = await import(join(REPO, 'src/pdf-reader/engine/layout/wrap-final.mjs'))
@@ -53,7 +53,7 @@ if (!existsSync(wrappedPath) || !existsSync(glyphsPath)) {
   writeFileSync(headPath, JSON.stringify({ stats: r.stats, unhidden: r.unhidden, labelKept: r.labelKept, own: r.own, ms: Math.round(performance.now() - t0) }))
   // (each page's glyphs as ownership read them, with their group, in device px at the page's k (2.5), y down: what a hidden pixel
   // outside the layout file's rectangles belongs to)
-  const { pageInk } = await import(join(REPO, 'packages/engine/src/ink.mjs'))
+  const { pageInk } = await import(join(REPO, 'packages/engine/src/ink.ts'))
   const task = getDocument({ data: baseBytes.slice(), verbosity: 0, fontExtraProperties: true, standardFontDataUrl: join(REPO, 'node_modules/pdfjs-dist/standard_fonts/'), cMapUrl: join(REPO, 'node_modules/pdfjs-dist/cmaps/'), cMapPacked: true })
   const doc = await task.promise, glyphs = []
   for (let p = 1; p <= doc.numPages; p++) {

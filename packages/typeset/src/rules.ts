@@ -399,7 +399,7 @@ const SPECS: readonly RuleSpec[] = [
     ruling:
       "2026-11-08 the gap under a paragraph its own leading's alone; 2026-11-10 a borrowing paragraph's gap from the borrow's limit",
     reads: ['fit.borrow', 'tex.predisplay', 'k.SHORT_SKIP 0.3', 'Room.stays'],
-    file: 'breaker/slots.mjs',
+    file: 'breaker/slots.ts',
     state: {
       is: 'changed',
       why: "a slot whose reach (SHORT_SKIP under its baseline to an em over it) meets ink that stays beside the unit's lines, no member's (Room.stays: amsthm's QED box after a proof's last words, 2610.40645v1-ja p12 t80 and p31 t260), keeps half an em off it, borrowed or not; today's slots ran across the block's hull and a ragged last line missed such ink by its shortness alone. And the owner's ruling of 2026-11-08 on the gap, chosen on a preview of two rules: footFloorAt holds the gap under a paragraph to its own leading alone, where today's held it to the larger of its own and the next paragraph's (the page fill's `next`), which pulled a paragraph whose translation nearly fills its block under the leading its own block allows (1810.04805v2 p8 t156 1.08 among 1.38-1.5, its own 1.14; 229 of 3,900 units of the 22 parity pairs, 228 looser by a median 0.02). The same floor under each paragraph TeX states inside a unit (paraFloorAt: a block whose next opens a paragraph in its column), at that paragraph's own leading (the owner's comment #9 on 2608.25210v2 p3: each paragraph of a unit filled at its own, S.fill.leads); today's held the unit's last alone. And a state that borrows TeX's room under a paragraph (floorOver, the owner's of 2026-11-10, option (i)) has the gap measured from the borrow's limit, its last line down to (L - 1) pitches over it, where today's held it from TeX's last line: a reference that needs every line of its own stood at the original's pitch among entries spread to 1.38 (1810.04805v2's references; their blocks' laid share 0.854 to 0.877); its fill leadings move (tests/replay/round.ts `L9 (i)`). The walk's states carry no `next` and no `box`: its replay is unchanged. And a block whose label TeX hung beside its text (`hang`, lay/adapt.ts) has its first slot start at the label with the space TeX set after it (`hangGap`, at the state's scale), and its later slots at the text's edge marked `hung`, which breakLines moves to the hang's edge it sets",
@@ -420,7 +420,7 @@ const SPECS: readonly RuleSpec[] = [
     ],
     how: 'ported',
     reads: ['fit.cjkJust', 'fit.spaceMax', 'fit.spaceMin', 'breaking.*', 'lineskip'],
-    file: 'breaker/break.mjs',
+    file: 'breaker/break.ts',
     state: {
       is: 'changed',
       why: "a CJK line's squeeze, and the stretch that tells whether it squeezes, count no gap inside a word (gapsOf: an item that continues its word, `brk` or `cont`): TeX sets no glue inside a word, and its url package breaks a URL at a penalty with no glue (\\Urlmuskip 0mu); today's counted every gap between a line's items (lane literal-fixes, 2608.25210v2 p17's URL). And on a line whose slot states a hung label's space (B.slots' `hangGap`), the first text after the label starts at the drawn label's end and that space (`tabbed`), the hang's edge every later `hung` slot of the block takes (`edge`): TeX's hang is the label's box. And a squeeze takes the blank half of every mark its face measures one in (the tokens' `punct`), where today's took it of a list of characters (SQUEEZE_MARKS) that left out the colon, the semicolon and the marks of exclamation and question whatever the face (docs/PDF-READER.md §18.48). And the line before a run's boundary (a kept region the next slot lies after) is a last line on the walk's run past too, as TeX's partial paragraph before a display (line_break with \\parfillskip): no hyphenation at its end, set ragged; today's run past ended it as any full line, a Latin word hyphenated across the display (2610.21106v1-zh p3, docs/PDF-READER.md §18.7; the replay restates today's line so, tests/replay/tap.ts lastBeforeRegion: over the corpus 32,396 of 32,589 rounds as today, the five more the rule's, four lines' mode and 2608.16117v1-de unit 28's state, 0.875 to 0.85)",
@@ -437,10 +437,10 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['L2:3980-4037 placeItems', 'L2:4139-4160 laidOut'],
     how: 'ported',
     reads: [],
-    file: 'breaker/place.mjs',
+    file: 'breaker/place.ts',
     state: {
       is: 'changed',
-      why: "a line not set as Latin text spreads its slack, and its squeeze, over the gaps between its items but those inside a word (break.mjs gapsOf: an item that continues its word, `brk` or `cont`, or an element set right after the one before it with nothing between in the source or the row, `tight`, tokens.ts sideBySide): TeX sets no glue inside a word, and its url package none at a URL's break points; today's spread it over every gap, so a URL whose line ends are joins (lane url-join), cut at its break points, was letter-spaced to the measure (lane literal-fixes, 2608.25210v2 p17: 1.9-2.7 pt after each `/`). Nor before a hung label's text and inside the label (tabOf: TeX's hang is a box), so the text's first line starts on the edge its other lines stand on",
+      why: "a line not set as Latin text spreads its slack, and its squeeze, over the gaps between its items but those inside a word (break.ts gapsOf: an item that continues its word, `brk` or `cont`, or an element set right after the one before it with nothing between in the source or the row, `tight`, tokens.ts sideBySide): TeX sets no glue inside a word, and its url package none at a URL's break points; today's spread it over every gap, so a URL whose line ends are joins (lane url-join), cut at its break points, was letter-spaced to the measure (lane literal-fixes, 2608.25210v2 p17: 1.9-2.7 pt after each `/`). Nor before a hung label's text and inside the label (tabOf: TeX's hang is a box), so the text's first line starts on the edge its other lines stand on",
       replay:
         "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164; the lines' ends of 7 rounds whose tokens hold a word's break point read to a millionth of a point, tests/replay/tap.ts wordGlued: the rule moves a line's slack between its gaps, never its end) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589 before the rule); tests/unit/placement.test.ts",
       cases: 164,
@@ -455,7 +455,7 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     ruling: "2026-10-30 frames fill as TeX does; 2026-11-10 the frames' share within the page's band",
     reads: [],
-    file: 'breaker/cuts.mjs',
+    file: 'breaker/cuts.ts',
     state: {
       is: 'changed',
       why: "a cut also stands where the fit sets the line its frame's share begins with in that frame or later, marked `share`: today's set none there, the frame before not full at the fit's state. A marked cut is read by a lay at a state that holds the share alone (breakLines, keepsPages), the page fill's where every frame before the last holds it at or above its page's band floor (S.fill.leads frameShareOf, S.fill.page; the owner's of 2026-11-10): 2610.22065v1-zh p5 t94, 8 lines and 2, TeX's, where the fit left 7 and 3. Every other lay, the fit's own among them, reads the tokens as today's",
@@ -591,10 +591,12 @@ const SPECS: readonly RuleSpec[] = [
     owns: ['T5', 'E27'],
     ports: ['RUN:1796-1814 fitFurther', 'RUN:1738-1753 widenOverPaper', 'RUN:1699-1729 paperTo (its room: Room.side)'],
     how: 'ported',
+    ruling: "2026-11-13 a table cell's room is its column's box",
     reads: ['fit.further', 'fit.floorMin'],
     file: 'fit/further.ts',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "a single-line table cell whose column's box the part states (Room.column) is laid in that box at every size, its 'widen' step none (lay/adapt.ts columnRoomOf: `wide` null), so that its 'shrink' sets it below the floor in the same box: the largest size not over the original's that fits its column (the owner's decision of 2026-11-13, docs/PDF-READER.md §18.13). Today's widened a cell clipped at its floor in its own ink's width half way to the glyph beside it, so that a cell missing its room by much was drawn larger than one missing it by little, and past its column. A cell whose column's box the part does not state is widened as today: the replay's samples state none, and are unchanged",
       replay:
         'chained from F2 on every laid round of the sampled units and of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (584 ran; the widened blocks, Room.side, from the slot)',
       cases: 584,
@@ -618,17 +620,18 @@ const SPECS: readonly RuleSpec[] = [
     home: 'shared',
     step: 'L2',
     owns: ['3.4:decide'],
-    ports: ['groups.mjs:37-93 groupOf, decideGroups, NAMES_SHARE, unchanged', 'rows.mjs:265-292 layerRows'],
+    ports: ['groups.mjs:37-43 groupOf', 'rows.mjs:265-292 layerRows'],
     how: 'ported',
-    ruling: "2026-11-08 a table's cells translated or kept by group, the way the production site judges them",
-    reads: ['NAMES_SHARE'],
+    ruling:
+      "2026-11-08 a table's cells drawn by group, the way the production site draws them; 2026-11-13 (c) a cell that cannot be drawn is the original's by itself, its group held only where the geometry needs it; 2026-11-13 the owner's direction (21:44, approved): what of a table is language is decided from the source's facts and the table's structure, the engine's Unit.kept (R1, R2, R4), no table rule in the typesetter",
+    reads: [],
     file: 'shared/table-groups.ts',
     state: {
       is: 'changed',
-      why: "decided in the entry over each member's own row and TeX's grid places (Placed.cell), not over the rows the door gives a unit id; a member the prepare leaves the original's (its why) tells nothing, where today counted its row",
+      why: "the groups over TeX's grid places (Placed.cell), for the hold and the settle, and no decision of what a cell is: today's decideGroups kept a whole column where NAMES_SHARE (0.4) of its cells came back from the translator as they went or were kept; here which cells are language is the engine's Unit.kept (R1, R2 and the paper's names blocks, R4: PDF-READER §18.72), laid as any kept unit is; and a cell not set before its lay holds its group only where it spans (lay/entry.ts holdsTable), where today's held it for any reason but the wrap's (the coordinator's ruling (c) of 2026-11-13)",
       replay:
         'tests/unit/table-groups.test.ts over hand-made parts (the corpus rows the parity reads are decided already)',
-      cases: 7,
+      cases: 19,
     },
   },
   {
@@ -806,7 +809,7 @@ const SPECS: readonly RuleSpec[] = [
     ],
     how: 'ported',
     reads: ['fill.lead', 'fill.leadRel', 'fit.leadFloor'],
-    file: 'shared/fill-leads.mjs',
+    file: 'shared/fill-leads.ts',
     state: {
       is: 'changed',
       why: "the owner on staging, 2026-11-08 (each paragraph fills the original's block, as its neighbours): a unit over a page or column break has each frame's own fill leading beside its own (frameLeadsOf), where today's held every frame to the one its fullest frame allowed (1810.04805v2 p6: four lines at the original's pitch in a frame of five); and each paragraph TeX states inside a unit (a block that opens one: SpanAt.opens, El.opens) a frame of its own, its leading its own (the owner's comment #9 on 2608.25210v2 p3: a prompt box's text held to the original's pitch by its unit's run-in line, which needed both its lines, beside a box whose run-in line took one and whose text spread; the ruling of 2026-11-08, (a)); the frames filled where the gap under the unit takes its fill leading closer than its fit's too (1810.04805v2 p6/p7 t119: five lines on p6 at the original's pitch and one of two characters alone on p7, its fit's four and two). And the frames' share (frameShareOf, the owner's of 2026-11-10): each frame filled while it holds TeX's share of the unit's lines, lowered towards the original's pitch only where it must, with the leading each frame before the last holds it at, which the page fill keeps where every one is at or above its page's band floor; recorded where it lays something the frames' own leadings do not. The unit's fill leading, top and line count, its L9 slot, as today's, but a round that borrows room (B.slots' option (i), tests/replay/round.ts `L9 (i)`)",
@@ -852,9 +855,17 @@ const SPECS: readonly RuleSpec[] = [
     owns: ['T8', '1F:withheld', '3.4:settle'],
     ports: ['RUN:2401-2409 withhold', 'RUN:2411-2425 settleGroup'],
     how: 'ported',
+    ruling:
+      "2026-11-13 (c) a cell that cannot be drawn is the original's by itself, its group held only where the geometry needs it; 2026-11-13 a group on two pages is laid like any other, each cell by itself",
     reads: [],
     file: 'shared/table-settle.ts',
-    state: { is: 'ported', replay: 'every call of the corpus: ledgers/*.ledger.json.gz settles', cases: 1479 },
+    state: {
+      is: 'changed',
+      why: "the verdict today's but its pages (tableSettle: a cell unfit, or painted), what it withholds not: a cell its lay could not draw whole is the original's by itself, the group's other cells laid, as a paragraph's would be; the group withheld whole only where that cell spans (lay/page.ts settleTies; the coordinator's ruling (c), under the owner's a table's cell is text like any other). Today's withheld the group whole for any cell unfit: with cells judged like body text, one unfit reply took back the whole of its header or column (the display gate at 2026-11-13: 26 groups, 144 cells on 19 pages). Today's withheld a group whose cells lie on two pages whole, its first page painted before its last was laid; each page's part holds every member of a tie it touches, so every page lays the group whole, and the group is laid like any other (the coordinator's ruling of 2026-11-13, PDF-READER §18.72: the tap's 15 such groups, every one painted)",
+      replay:
+        'the verdict on every call of the corpus (ledgers/*.ledger.json.gz settles, tests/replay/table-settle.test.ts: as today but its 15 groups on two pages, counted apart); what it withholds, tests/unit/page-wait.test.ts and table-groups.test.ts',
+      cases: 1479,
+    },
   },
   // ---------------------------------------------------------------- what the reader paints, hides, selects and links
   {
@@ -974,7 +985,9 @@ const SPECS: readonly RuleSpec[] = [
     // block bottom, and the paragraph's \baselineskip and \parskip (Room.runs, Room.sep, the marked compile's AXT-BODY and
     // AXT-LINES); the adapter reads the room so (lay/adapt.ts), never today's pixel map and its share of a pitch (borrowGap). And
     // the ink that stays beside its lines, no member's, which today never read (Room.stays: a rule or a glyph no unit owns, a QED
-    // box), on the block of the line it stood beside)
+    // box), on the block of the line it stood beside. And a table cell's column's box, which today never read (Room.column,
+    // locate/columns.ts: what TeX set in its column, every entry's, where the entries line up as the column's class sets them;
+    // the owner's decision, docs/PDF-READER.md §18.13), the room a single-line cell is laid in)
     ports: ['RUN:1557-1573 columnOf', 'RUN:1677-1687 freeFor', 'RUN:1699-1729 paperTo'],
     how: 'moved',
     reads: [],

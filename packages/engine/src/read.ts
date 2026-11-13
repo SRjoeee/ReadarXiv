@@ -19,9 +19,9 @@
 // and let go: no page's whole list is held (2610.40394v1 page 23, 510,506 operations, was 93 MiB held as one list, lane op-stream).
 import type { Doc, DocGlyph, DocMarks, DocPage, DocTurned } from './doc.ts'
 import { PageGlyph } from './glyph.ts'
-import { BOXES_PAGE, GLYPHS_PAGE, inkReader, type PageInk } from './ink.types.ts'
+import { BOXES_PAGE, GLYPHS_PAGE, inkReader, type PageInk } from './ink.ts'
 import { type OpsPage, type OpsReader, readOps } from './opstream.ts'
-import { isMemoryError } from './memory.types.ts'
+import { isMemoryError } from './memory.ts'
 import { memoryFailure, WARNINGS, watchWarnings } from './warnings.ts'
 
 /** what the back half needs of PDF.js: its getDocument and its operator codes */
@@ -123,7 +123,7 @@ export async function readPdf<X = never>(
   let info: Record<string, unknown> | null = null
   try {
     const pdf = await task.promise
-    // (the document's metadata where PDF.js reads it, else none; a failed allocation is the paper's: memory.mjs)
+    // (the document's metadata where PDF.js reads it, else none; a failed allocation is the paper's: memory.ts)
     info = ((await pdf.getMetadata?.().catch(orNone(null))) ?? null)?.info ?? null
     heard()
     for (let p = 1; p <= pdf.numPages; p++) {
@@ -196,7 +196,7 @@ async function levelBack(pdfjs: PdfJs, level: number): Promise<void> {
 }
 
 /** a rejection's stand-in, `none`, for what a reading may lack (a page's links, the document's metadata); a failed allocation
- *  (memory.mjs isMemoryError) thrown as it came, the paper's and never the reading's */
+ *  (memory.ts isMemoryError) thrown as it came, the paper's and never the reading's */
 const orNone =
   <T>(none: T) =>
   (e: unknown): T => {

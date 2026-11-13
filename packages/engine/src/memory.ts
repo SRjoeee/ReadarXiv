@@ -1,0 +1,52 @@
+// Memory-class errors (the prepare pipeline's bundle 4 contract, C8.4 and amendment M7): the failures that mean a paper does
+// not fit in this process, as V8 and Node name them. Every catch of the engine's that would turn an error into a verdict (a
+// refused page, a dropped part) lets one of these through unchanged, so that the service sees a memory failure as one and not
+// as a defect of the paper. The predicate is the web's own (container/src/run/memory.ts isMemoryError), reproduced word for
+// word, so that the child and the service agree on what a memory failure is. Imports nothing: the readers and the writers of
+// the layer's format take it. isMemoryText is the same definition for a reason that reaches text only (PDF.js's warnings: a
+// failure its worker recovers from, read by readPdf's watch, warnings.ts), V8's words in one place for both.
+
+/** V8's words for a backing store it could not allocate */
+export const ALLOCATION_FAILED = 'Array buffer allocation failed'
+/** V8's failed allocation as text: its RangeError's toString(), the form in which a failure's reason reaches text (PDF.js's
+ *  wrapping of a worker's error keeps it as `details`; its warnings print `${reason}`) */
+const ALLOCATION_FAILED_TEXT = `RangeError: ${ALLOCATION_FAILED}`
+/** Node's words for one it could not allocate itself, with its code ERR_MEMORY_ALLOCATION_FAILED: from Node 24 on,
+ *  Buffer.allocUnsafe and what is made of it (Buffer.allocUnsafeSlow, Buffer.concat, zlib's output) throw a RangeError of these
+ *  words where Node 22 threw V8's ALLOCATION_FAILED (measured under RLIMIT_DATA on 22.23, 24.22 and 26.13) */
+const NODE_ALLOCATION_FAILED = 'Failed to allocate memory'
+
+/**
+ * Whether `e` is a failed allocation: V8's RangeError of its exact words, Node's own ERR_MEMORY_ALLOCATION_FAILED (an Error on
+ * Node 22, a RangeError of NODE_ALLOCATION_FAILED from Node 24 on, which its code tells, not its words), or PDF.js's wrapping of
+ * either from its worker (pdf.mjs wrapReason: an UnknownErrorException of its message and its `toString()`). A length no array
+ * may have (`Invalid typed array length`, `Invalid array buffer length`, `Invalid string length`), Node's ERR_STRING_TOO_LONG and
+ * ERR_BUFFER_TOO_LARGE (a bounded inflate's refusal), a stack overflow, or the words in any other error are none
+ */
+export function isMemoryError(e: unknown): boolean {
+  if (typeof e !== 'object' || e === null) return false
+  if ((e as ErrorFields).code === 'ERR_MEMORY_ALLOCATION_FAILED') return true
+  if (e instanceof RangeError) return e.message === ALLOCATION_FAILED
+  if ((e as ErrorFields).name !== 'UnknownErrorException') return false
+  // (the wrapping keeps an error's words and its toString(), not its code: V8's is a RangeError, Node's own an Error on Node 22
+  // and a RangeError from Node 24 on)
+  if ((e as ErrorFields).message === ALLOCATION_FAILED) return isMemoryText((e as ErrorFields).details)
+  return (
+    (e as ErrorFields).message === NODE_ALLOCATION_FAILED &&
+    ((e as ErrorFields).details === `RangeError: ${NODE_ALLOCATION_FAILED}` ||
+      (e as ErrorFields).details === `Error: ${NODE_ALLOCATION_FAILED}`)
+  )
+}
+/** the fields isMemoryError reads of any object: each what the object holds, or undefined (an object's property read is
+ *  unknown, which TypeScript's `object` does not let be read) */
+type ErrorFields = { code?: unknown; name?: unknown; message?: unknown; details?: unknown }
+
+/**
+ * Whether `reason`, a failure's reason as text, is a failed allocation: exactly V8's (its RangeError's toString(), the words
+ * isMemoryError takes in PDF.js's wrapping of one). Node's own failure is told by its code, which no text carries, so none of
+ * its words is one here; nor V8's words in any other error's text (`FormatError: Array buffer allocation failed`), nor any text
+ * around them
+ */
+export function isMemoryText(reason: unknown): boolean {
+  return reason === ALLOCATION_FAILED_TEXT
+}

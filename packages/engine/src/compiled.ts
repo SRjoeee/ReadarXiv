@@ -15,7 +15,7 @@ import {
   type PdfLike,
   textOfPdf,
 } from './front.types.ts'
-import { isMemoryError } from './memory.types.ts'
+import { isMemoryError } from './memory.ts'
 import {
   FROM_UTF8,
   type OriginalFacts,

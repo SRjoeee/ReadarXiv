@@ -136,7 +136,7 @@ const toldKind = (kind: ProviderErrorKind): ProviderErrorKind => (kind === 'abor
 const kindOf = (e: unknown): ProviderErrorKind => toldKind((e as { kind?: ProviderErrorKind })?.kind ?? 'unknown')
 
 /** the paper's title and abstract for an LLM's prompt, as the HTML page sends them (src/core/extractor/context.ts's cut) */
-export function contextOf(index: Parameters<typeof unitOf>[0]): { paperTitle?: string; abstract?: string } {
+function contextOf(index: Parameters<typeof unitOf>[0]): { paperTitle?: string; abstract?: string } {
   let title: string | undefined
   const abstract: string[] = []
   for (let id = 0; id < index.units.length; id++) {

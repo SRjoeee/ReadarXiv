@@ -1,6 +1,6 @@
 // Two elements the row sets with nothing between them, which the source sets side by side (consecutive pieces), each drawn as
 // its crop: they keep TeX's own distance between their starts, not two padded crop boxes, and the line's justification puts no
-// slack between them (the pair is one word to break.mjs's inWord). The case: a caption's word TeX set in two highlights,
+// slack between them (the pair is one word to break.ts's inWord). The case: a caption's word TeX set in two highlights,
 // `\hlyellow{high}\hlblue{lighted}`, whose inks overlap by 0.25 pt; drawn with each crop's 0.4 pt margins and a CJK line's
 // slack between them, 0.97 pt of white stood between the two colours. Parts made by hand, words of our own: a justified line
 // of CJK at 10 pt on a 228 pt measure (72-300), two element crops on the line below, set by TeX one right after the other.

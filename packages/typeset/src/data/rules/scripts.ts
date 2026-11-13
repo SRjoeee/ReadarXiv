@@ -1,6 +1,6 @@
-// The rule set's scripts: each script's fields, which a language's own fields replace, and the hyphenation minimums.
-// Today's rules/layout-rules.json (schema 10, version 10, engine 065c1d973), written by lab/typeset/rules-data.mjs; not
-// edited by hand.
+// The rule set's scripts: each script's fields, which a language's own fields replace, and the hyphenation minimums (what
+// each field mirrors: types.ts). The source, edited here; taken at engine 065c1d973 from today's rules/layout-rules.json
+// (schema 10, version 10).
 
 import type { LanguageRules, ScriptRules } from './types.ts'
 

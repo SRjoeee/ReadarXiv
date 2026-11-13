@@ -62,6 +62,62 @@ const WEBSITE_IMPORTS: readonly { path: string; names: readonly string[] }[] = [
   { path: 'ui/strings', names: ['languageName', 'profileName', 'R', 'S', 'setLocale'] },
 ]
 
+/**
+ * Every path of the workspace packages the website reaches by a relative path into its submodule (`vendor/readarxiv/<path>`),
+ * outside the alias and outside src/ (readarxiv-web e0ae76dd, gathered 2026-11-13 from its code, its scripts and its tests):
+ * - the modules its browser checks, scripts and tests import (plain `node`, whose own type stripping reads a `.ts` module,
+ *   esbuild, or its test runner), each with every value it takes, named as a bundler finds it (with or without an extension);
+ * - the files and folders it reads, bundles or credits by their path (names: none), a folder written with its `/`.
+ * A path only named in a check that it is absent somewhere is not held. A path leaves this list only when the website stops
+ * reaching it, in a pull request that names the website's commit that stopped; one a change here must move is moved here and
+ * at the website's next pin together (round RB2b: the engine's tail.mjs and ink.mjs made TypeScript, their three importers'
+ * specifiers the pin's).
+ */
+const WEBSITE_PACKAGE_PATHS: readonly { path: string; names: readonly string[] }[] = [
+  // (the modules imported, and the values taken)
+  { path: 'packages/engine/src/ink.ts', names: ['pageInk'] },
+  { path: 'packages/engine/src/tail.ts', names: ['startxrefOf'] },
+  { path: 'packages/format/src/index.ts', names: ['toggleKind'] },
+  { path: 'packages/reader/e2e/page/convert', names: ['fixtureLay', 'pagesOf'] },
+  { path: 'packages/reader/src/bytes/source.ts', names: ['chunkUrl', 'rangeSource'] },
+  { path: 'packages/reader/src/bytes/store.ts', names: ['CHUNK', 'chunkStore'] },
+  { path: 'packages/reader/src/chrome/links', names: ['linkable'] },
+  { path: 'packages/reader/src/chrome/status', names: ['capsuleOf'] },
+  { path: 'packages/reader/src/compose/classes.ts', names: ['kindShown'] },
+  { path: 'packages/reader/src/compose/typeset.ts', names: ['pastFootOf'] },
+  { path: 'packages/reader/src/session/client.ts', names: ['follow', 'objectStore', 'open', 'Refused'] },
+  { path: 'packages/reader/src/session/contents.ts', names: ['createContents'] },
+  { path: 'packages/reader/src/session/machine.ts', names: ['FORMATS', 'needsOf'] },
+  { path: 'packages/reader/src/session/paper.ts', names: ['abstractTitleOf', 'htmlVersionOf'] },
+  // (the files and folders read, bundled or credited by their path)
+  { path: 'packages/engine/src/bundle/bundle.ts', names: [] },
+  { path: 'packages/engine/src/compile/live.mjs', names: [] },
+  { path: 'packages/engine/src/compile/paper.mjs', names: [] },
+  { path: 'packages/engine/src/compiled.ts', names: [] },
+  { path: 'packages/engine/src/front.ts', names: [] },
+  { path: 'packages/engine/src/instrument/instrument.mjs', names: [] },
+  { path: 'packages/engine/src/locate/locate.ts', names: [] },
+  { path: 'packages/engine/src/locate/words.ts', names: [] },
+  { path: 'packages/engine/src/marks/marks.mjs', names: [] },
+  { path: 'packages/engine/src/plan.ts', names: [] },
+  { path: 'packages/engine/src/prepare.ts', names: [] },
+  { path: 'packages/engine/src/source/latexml-args.mjs', names: [] },
+  { path: 'packages/engine/src/source/tex-names.json', names: [] },
+  { path: 'packages/engine/src/wrap/wrap.ts', names: [] },
+  { path: 'packages/reader/e2e/fixtures/', names: [] },
+  { path: 'packages/reader/src/chrome/', names: [] },
+  { path: 'packages/reader/src/chrome/Capsule.tsx', names: [] },
+  { path: 'packages/reader/src/chrome/capsule-motion.ts', names: [] },
+  { path: 'packages/reader/src/chrome/capsule-words.ts', names: [] },
+  { path: 'packages/typeset/src/data/rules/heads.ts', names: [] },
+  { path: 'packages/typeset/src/data/rules/refs.ts', names: [] },
+  { path: 'packages/ui/src/controls.css', names: [] },
+  { path: 'packages/ui/src/controls/display-glyphs.ts', names: [] },
+  { path: 'packages/ui/src/controls/Icon.tsx', names: [] },
+  { path: 'packages/ui/src/controls/MenuList.tsx', names: [] },
+  { path: 'packages/ui/src/tokens.css', names: [] },
+]
+
 const SRC = resolve(__dirname, '../../src')
 /** What a bundler finds for `<path>`, in the order it tries: the module's own file, then a directory's index */
 const CANDIDATES = ['.ts', '.tsx', '.mjs', '.d.mts', '/index.ts', '/index.tsx', '/index.mjs', '/index.d.mts']
@@ -105,5 +161,31 @@ describe("the website's @vendor/ imports: every module resolves at its path unde
     const listed = WEBSITE_IMPORTS.filter(entry => entry.names.length > 0)
     expect([...imported.keys()].sort()).toEqual(listed.map(entry => entry.path).sort())
     for (const { path, names } of listed) expect(imported.get(path), path).toEqual([...names].sort())
+  })
+})
+
+const ROOT = resolve(__dirname, '../..')
+/** What a path of WEBSITE_PACKAGE_PATHS names in the tree: a folder (written with its `/`), or the file a bundler finds */
+const packagePathOf = (path: string): string | undefined =>
+  path.endsWith('/')
+    ? existsSync(`${ROOT}/${path}`) && statSync(`${ROOT}/${path}`).isDirectory() ? `${ROOT}/${path}` : undefined
+    : ['', '.ts', '.tsx', '.mjs'].map(ext => `${ROOT}/${path}${ext}`).find(isFile)
+
+describe("the website's relative paths into the workspace packages: every one is at its path, and each module loads and exports every value the website takes from it", () => {
+  it('the list names each path once and each name once', () => {
+    expect(new Set(WEBSITE_PACKAGE_PATHS.map(entry => entry.path)).size).toBe(WEBSITE_PACKAGE_PATHS.length)
+    for (const { path, names } of WEBSITE_PACKAGE_PATHS) expect(new Set(names).size, path).toBe(names.length)
+  })
+
+  it.each(WEBSITE_PACKAGE_PATHS)('$path is there', ({ path }) => {
+    expect(packagePathOf(path), path).toBeDefined()
+  })
+
+  it.each(WEBSITE_PACKAGE_PATHS.filter(entry => entry.names.length > 0))('$path loads and exports $names', async ({ path, names }) => {
+    const file = packagePathOf(path)
+    expect(file, path).toBeDefined()
+    if (!file) return
+    const module: Record<string, unknown> = await import(/* @vite-ignore */ file)
+    expect(names.filter(name => !(name in module)), `${path} no longer exports`).toEqual([])
   })
 })

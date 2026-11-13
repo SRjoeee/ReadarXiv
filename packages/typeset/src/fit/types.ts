@@ -43,10 +43,13 @@ export type FitState = {
   scale: number
   knob: string
   fitTrack?: number
-  box?: number
+  /** a state of the page fill's, whose last frame's slots stop at the gap's floor (B.slots footFloorAt): read as a flag; its
+   *  writers set `1` (S.fill.page) and `true` (S.fill.leads) */
+  box?: number | boolean
   /** by block, the leading of a frame before the unit's last (a page's, a column's), where the page fill set it looser than
-   *  `lead`, which is the last frame's (S.fill.leads): each frame of a paragraph filled over its own block */
-  leads?: number[]
+   *  `lead`, which is the last frame's (S.fill.leads): each frame of a paragraph filled over its own block; none (a hole) for
+   *  a block of the last frame, which takes `lead` */
+  leads?: (number | undefined)[]
   /** how much lower the unit's first block stands than TeX set it, the room the gap over it lacks where the paragraph over it
    *  cannot end higher (S.fill.page headOf), in the page fill's states alone */
   head?: number
@@ -70,13 +73,26 @@ export type FitParams = {
   step: number
   trackStart?: number
   capScale?: number
-  lineskip?: readonly number[] | null
+  /** TeX's \lineskip and \lineskiplimit (Part.paper.lineskip, lay/adapt.ts), a pair */
+  lineskip?: readonly [skip: number, limit: number] | null
   halfLead?: { head: boolean; foot: boolean; below: number } | null
   lastLines?: boolean
   noStart?: string
   noEnd?: string
   hyphen?: boolean | number
   hyphenation?: Record<string, unknown>
+  /** the target's spacing (ScriptRules, resolveRules' params): a space's least and most share of its width as a line shrinks
+   *  and stretches it, a CJK gap's most stretch (em), the space set between CJK and Latin text (em), and whether the script
+   *  breaks between words only (keepAll) */
+  spaceMin: number
+  spaceMax: number
+  cjkJust: number
+  autospace: number
+  keepAll: boolean
+  /** a run laid alone (fit/runs.ts runParams): its first block's place in the unit */
+  blockBase?: number
+  /** the state's compression, which laidOut (B.place) sets on the call's parameters before placeItems reads it */
+  _compress?: number
   /** the measures of the call (fitMeasure over Metrics) */
   measure: FitMeasure
   /** each language's hyphenation patterns (hyphenationOf), the run's */

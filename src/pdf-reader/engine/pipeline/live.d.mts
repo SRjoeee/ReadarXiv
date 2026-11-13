@@ -7,6 +7,8 @@ import type { analyze } from '../source/paper-meta.mjs'
  *  indices in `units` in the order TeX sets them, where it is not theirs, else null (loadProject's) */
 export interface Paper { fsys: ReturnType<typeof inMemory>; meta: ReturnType<typeof analyze>; project: { main: string; units: SourceUnit[]; inFloat: number[]; /** the bibliographies \\bibliography reads, by the names it gives (latex-front.mjs) */ bibliography?: string[] }; units: SourceUnit[]; inFloat: number[]; /** each caption's float type, [index, type] (LaTeX's \\@captype: its float environment, \\captionof's) */ floatTypes?: [number, string][]; /** the units of an algorithm float's body, rising */ pseudocode?: number[]; texOrder?: number[] | null; kept: Set<SourceUnit>; /** the structural names its TeX prints that no package names in every target (source/paper-names.mjs): units of kind `name` in its bundle, after its source's */ names: string[]; /** the printed names of its theorem-like environments among them: the label forms of its heads, the wrap's `names` (layout/own.mjs) */ theoremNames?: string[] }
 export declare function openPaper(files: Map<string, Uint8Array>): Paper
+/** a paper of the engine package's openPaper as today's reader keeps it: `kept`, today's name rule's (translate/mt.mjs nameCells) */
+export declare function withNames<P extends { units: SourceUnit[] }>(paper: P): P & { kept: Set<SourceUnit> }
 /** what the units are (versions.mjs's) */
 export { PIPELINE_VERSION } from './versions.mjs'
 /** the definitions a paper's .bbl makes for itself before its first entry, which the mark probe sets first: its \\providecommand and

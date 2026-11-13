@@ -59,25 +59,55 @@ describe('a flow whose lay throws', () => {
   })
 })
 
-describe('a table group, one verdict for its members (settleTies, L11)', () => {
-  const lay = (ord: number, state: 'laid' | 'error') =>
+describe('a table group settled (settleTies, L11): a cell that cannot be drawn alone, the group where the geometry needs it', () => {
+  const lay = (ord: number, state: 'laid' | 'error', pages = [1]) =>
     ({
-      m: { ord, pages: [1] } as unknown as FlowMember,
+      m: { ord, pages } as unknown as FlowMember,
       state,
       slots: [],
       ...(state === 'laid' ? { unit: { layout: { clipped: false } } } : { error: 'Error: x' }),
     }) as never
-  it('leaves every cell the original’s where one cell’s flow threw, the failed cell keeping its reason', () => {
+  const stateOf = (lays: Map<number, never>, o: number) =>
+    (lays.get(o) as unknown as { state: string; unit?: unknown }).state
+  it('leaves the cell whose flow threw the original’s alone, keeping its reason; the group’s other cells laid', () => {
     const lays = new Map([
       [4, lay(4, 'error')],
       [5, lay(5, 'laid')],
     ])
     const tables = settleTies([{ rule: 'cells', cells: [4, 5] }], lays)
     expect(tables).toHaveLength(1)
-    expect(tables[0]!.why).not.toBeNull()
-    expect((lays.get(5) as unknown as { state: string }).state).toBe('cells')
+    expect(tables[0]!.why).toBe('a cell unfit')
+    expect(stateOf(lays, 5)).toBe('laid')
+    expect((lays.get(5) as unknown as { unit?: unknown }).unit).toBeDefined()
+    expect(stateOf(lays, 4)).toBe('error')
+  })
+  it('withholds the group whole where the cell that cannot be drawn spans (its box the others’ too)', () => {
+    const lays = new Map([
+      [4, lay(4, 'error')],
+      [5, lay(5, 'laid')],
+    ])
+    settleTies([{ rule: 'cells', cells: [4, 5], spanning: [4] }], lays)
+    expect(stateOf(lays, 5)).toBe('cells')
     expect((lays.get(5) as unknown as { unit?: unknown }).unit).toBeUndefined()
-    expect((lays.get(4) as unknown as { state: string }).state).toBe('error')
+    expect(stateOf(lays, 4)).toBe('error')
+  })
+  it('lays a group on two pages like any other: every cell laid, the group painted (PDF-READER §18.72)', () => {
+    const lays = new Map([
+      [4, lay(4, 'laid', [1])],
+      [5, lay(5, 'laid', [2])],
+    ])
+    expect(settleTies([{ rule: 'cells', cells: [4, 5] }], lays)[0]!.why).toBeNull()
+    expect([stateOf(lays, 4), stateOf(lays, 5)]).toEqual(['laid', 'laid'])
+  })
+  it('leaves a cell of a group on two pages that cannot be drawn the original’s alone, its other cells laid', () => {
+    const lays = new Map([
+      [4, lay(4, 'laid', [1])],
+      [5, lay(5, 'error', [2])],
+      [6, lay(6, 'laid', [2])],
+    ])
+    expect(settleTies([{ rule: 'cells', cells: [4, 5, 6] }], lays)[0]!.why).toBe('a cell unfit')
+    expect([stateOf(lays, 4), stateOf(lays, 5), stateOf(lays, 6)]).toEqual(['laid', 'error', 'laid'])
+    expect((lays.get(4) as unknown as { unit?: unknown }).unit).toBeDefined()
   })
   it('lays a group whose every cell is laid on one page', () => {
     const lays = new Map([

@@ -46,7 +46,8 @@ export const FORM_SHARE = 0.5
 /** a float's bracket (layout/marks.mjs POINTS_TEX `fs<n>`, `fe<n>`) and the point that says its type has no counter (`fn<n>`) */
 const FLOAT_BRACKET = /^f([se])(\d+)$/
 const FLOAT_UNCOUNTED = /^fn\d+$/
-/** the orphan lines a ledger lists, at most (all are counted) */
+/** the orphan lines a ledger lists, at most (all are counted): a count of lines, the ledger's bound (PDF-READER §18.45);
+ *  unmeasured */
 export const ORPHAN_LINES_MAX = 200
 /** ADDED: a float's caption type that is an algorithm's (latex-front.mjs FLOAT_ENVS `algorithm`, every float the walk reads an
  *  algorithm's by, algorithm.sty's and algorithm2e's alike: its body's lines are the original's, PSEUDOCODE), and a table's
@@ -57,7 +58,7 @@ const ALGORITHM_FLOAT = 'algorithm', TABLE_FLOAT = 'table'
  *  `nocells` its float a table's that holds no cell (a table the front end read as none: a tabular inside a command whose
  *  argument it does not walk); `other` the rest (a figure's text no reading took, a sub-caption of a package not read) */
 export const FLOAT_WHY = Object.freeze(['code', 'cells', 'nocells', 'other'])
-/** an orphan line's text as listed, at most */
+/** an orphan line's text as listed, at most, UTF-16 code units; unmeasured */
 const TEXT_MAX = 160
 
 /** the babel names whose text opens a zone, and the zone it opens: a list, the bibliography, an index; a unit's start ends it, but a

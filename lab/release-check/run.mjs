@@ -26,7 +26,7 @@ import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, statfsS
 import { arch, availableParallelism, homedir, platform, totalmem } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { GATES, INVARIANTS, TIERS } from './gates.mjs'
+import { GATES, INVARIANTS, RETIRED, TIERS } from './gates.mjs'
 import { cutoverOf, gatesOf, invariantLine, markdownOf, privateResultOf, targetLines, verdictOf } from './verdict.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
@@ -57,7 +57,8 @@ const privates = existsSync(privateFile) ? JSON.parse(readFileSync(privateFile, 
 const only = opt('only')?.split(',').filter(Boolean) ?? null
 const tierGates = gatesOf(GATES, tier)
 if (only) for (const id of only) if (!tierGates.some(g => g.id === id)) {
-  console.error(`release-check: no gate ${id} in tier ${tier}`)
+  const r = RETIRED.find(x => x.id === id)
+  console.error(r ? `release-check: ${id} was retired on ${r.retired} (${r.by.join(', ')} in its place): ${r.why}` : `release-check: no gate ${id} in tier ${tier}`)
   process.exit(2)
 }
 
@@ -103,7 +104,7 @@ function runStep(step, log) {
         const text = Buffer.concat(chunks).toString('utf8')
         // (the time it waited for the heavy slot, which another lane held, is not the gate's)
         const waited = Number(/heavy-slot: \w+ slot \S+ taken after (\d+)s/.exec(text)?.[1] ?? 0) * 1000
-        done({ cmd: step.cmd, exit, ms: Math.max(0, Math.round(performance.now() - t0) - waited), waited, log, text })
+        done({ cmd: step.cmd, ...(step.as ? { as: step.as } : {}), exit, ms: Math.max(0, Math.round(performance.now() - t0) - waited), waited, log, text })
       })
     child.on('error', e => {
       chunks.push(Buffer.from(String(e)))
@@ -183,6 +184,7 @@ const report = {
   work: ctx.work,
   online: ctx.online,
   gates: tierGates.map(g => results[g.id]),
+  retired: RETIRED,
   invariants,
   targets: targetLines(results),
 }

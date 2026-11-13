@@ -14,7 +14,7 @@
 // drawn in the target's word, never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
-import { boxedAlignOf, framesOf, readAlign, readBoxAlign, readRefNames, readSkips } from '../marks/channels.ts'
+import { boxedAlignOf, framesOf, readAlign, readBoxAlign, readCellBoxes, readRefNames, readSkips } from '../marks/channels.ts'
 import { groupFacts } from '../marks/faces.ts'
 import { holdsLetter } from '../locate/figure-lines.ts'
 import { linkTargetOf } from '../locate/ink.ts'
@@ -31,6 +31,7 @@ import { phClass, texToText } from './layer1.mjs'
 import { textPieceOf } from '../source/text-piece.mjs'
 import { symbolText } from '../source/text-symbols.mjs'
 import { displayStop, isInkless } from './mt.mjs'
+import { keptAsWritten, namesOfBlocks, paperNamesOf, RUNNING } from './language.ts'
 
 const UTF8 = new TextDecoder('utf-8')
 /** a unit's start point and end point (MARK_DEF's `<i>s`/`<i>e`, a heading's `h<i>…`, a cell's `t<i>…`), by unit index */
@@ -1247,17 +1248,34 @@ export function nameGroupOf(g) {
 /**
  * What the instrument states of each of the paper's units from the front end's facts beside them (live.mjs openPaper), by
  * index: `float`, a caption's float type (LaTeX's \\@captype there, `floatTypes`: the part's Label.float, by which its label
- * is drawn in the target's word); `kept`, a unit the paper keeps as it is, never translated: its names (nameCells) and the body
- * of an algorithm float (`pseudocode`: kept as the original as code is, the owner's ruling of 2026-11-08; its caption is the
- * float's, translated); `why`, each kept unit's reason, the rule that keeps it ('pseudocode' first, then 'name': a cell or a
- * figure text of names or markup tokens alone, nameCells), which the lab's dump states (`keptBy`) and the bundle does not carry
+ * is drawn in the target's word); `kept`, a unit the paper keeps as it is, never translated: the body of an algorithm float
+ * (`pseudocode`: kept as the original as code is, the owner's ruling of 2026-11-08; its caption is the float's, translated), and a
+ * table's cell or a figure's text that holds no ordinary word (`words`, R1 of PDF-READER §18.72: language.ts keptAsWritten over
+ * its content, its elements by kind; the owner's direction of 2026-11-13: decide what is content from the source's facts), or whose
+ * words are the paper's own names (`paperNames`, R2: a title-case word its running text writes capitalised mid-sentence and never in
+ * lower case, language.ts paperNamesOf); `why`, each kept unit's reason, the rule that keeps it ('pseudocode' first, then 'words',
+ * 'paperNames'), which the lab's dump states (`keptBy`) and the bundle does not carry
  */
 export function unitFactsOf(paper) {
   const float = new Map(paper.floatTypes ?? [])
   const why = new Map((paper.pseudocode ?? []).map(i => [i, 'pseudocode']))
-  paper.units.forEach((u, i) => { if (paper.kept?.has(u) && !why.has(i)) why.set(i, 'name') })
+  const contents = paper.units.map(u => (JUDGED.has(u.kind) || RUNNING.has(u.kind) ? piecesOf(u.pieces, { kindOf: elementKindOf }) : null))
+  // (the paper's own names, R2: read off its running text)
+  const names = paperNamesOf(paper.units.flatMap((u, i) => (RUNNING.has(u.kind) ? [{ kind: u.kind, content: contents[i] }] : [])))
+  paper.units.forEach((u, i) => {
+    if (why.has(i) || !JUDGED.has(u.kind)) return
+    const k = keptAsWritten(contents[i], names)
+    if (k) why.set(i, k)
+  })
+  // (R4: the texts the paper's names blocks keep, over R1's and R2's, each kept in every cell of the paper's tables that prints it)
+  const keyOf = i => JSON.stringify(contents[i])
+  const blockNames = namesOfBlocks(paper.tableBlocks ?? [], i => why.has(i), keyOf)
+  if (blockNames.size) paper.units.forEach((u, i) => { if (u.kind === 'cell' && !why.has(i) && blockNames.has(keyOf(i))) why.set(i, 'namesBlock') })
   return { float, kept: new Set(why.keys()), why }
 }
+/** the kinds whose texts are judged as language or not (R1, PDF-READER §18.72): a table's cell, a TikZ picture's text (a figure's
+ *  texts read off its ink are judged where they are made, locate/ink.ts) */
+const JUDGED = new Set(['cell', 'figure'])
 
 /**
  * The cells held whole as the original for a decorated word they hold (PDF-READER §18.61, the owner's ruling of 2026-11-12: until
@@ -1308,6 +1326,9 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   // (a unit TeX set only in a box inside a paragraph, ICML's \icmlauthor names in their \mbox: its line's alignment where the
   // skips in force at its end mark and the paragraph TeX ends after it state the same, its two statements of the line)
   const boxed = boxedAlignOf(readBoxAlign(lastTexLog(log)), pages)
+  // (a cell's class where TeX set its text in its column template's own box, no paragraph of its own: what its column's box is
+  // read by, locate/columns.ts)
+  const cellBoxes = readCellBoxes(lastTexLog(log))
   // (each colour piece's fill as TeX set its run, by unit and piece index: marks.mjs readColours over the marked compile's log)
   const colours = new Map()
   for (const [i, k, rgb] of readColours(log)) (colours.get(i) ?? colours.set(i, new Map()).get(i)).set(k, rgb)
@@ -1332,7 +1353,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     const unhidden = own.units.get(i)?.unhidden
     const classes = classesOf(u.pieces, colours.get(i) ?? null, shown), spans = spansOf(u.pieces, colours.get(i) ?? null), passed = passedOf(u.pieces)
     classesBy[i] = new Map(classes)
-    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(passed.length ? { passed } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(u.of ? { of: u.of } : {}), ...(u.held && (u.kind === 'author' || u.kind === 'affiliation') ? { stored: true } : {}), ...(facts.kept.has(i) ? { kept: true, ...(facts.why.get(i) === 'pseudocode' ? { pseudocode: true } : { nameCell: true }) } : {}), ...(held.has(i) ? { fixed: true, decorated: 'token' } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : boxed.has(i) ? { align: boxed.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
+    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(passed.length ? { passed } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(u.of ? { of: u.of } : {}), ...(u.held && (u.kind === 'author' || u.kind === 'affiliation') ? { stored: true } : {}), ...(facts.kept.has(i) ? { kept: true, [facts.why.get(i)]: true } : {}), ...(held.has(i) ? { fixed: true, decorated: 'token' } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}), ...(cellBoxes.has(i) ? { boxed: cellBoxes.get(i) } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : boxed.has(i) ? { align: boxed.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
   })
   for (let i = units.length; i < inkBase; i++) {
     const content = contentOf(bundle[i][5].map(p => ({ t: 'text', s: p[1] })))

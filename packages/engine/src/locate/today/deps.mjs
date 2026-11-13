@@ -5,7 +5,7 @@
 // piece (today's classOf, which the front half's adapter ran) instead of a source. And regionsOf reads a page's body brackets
 // paired by number, nesting where a page's columns are balanced, as today's stream.mjs now reads them (CHANGED with it).
 export { classifyFont, familyKeysOf, sameFamily } from '../facts.ts'
-export { displayTextMask, PICTURE_END, PICTURE_START, regionMask } from '../../ink.mjs'
+export { displayTextMask, PICTURE_END, PICTURE_START, regionMask } from '../../ink.ts'
 
 // ---- layout/stream.mjs:141-149 (spellOf)
 const BASE_LETTERS = { ß: 'ss', ı: 'i', ȷ: 'j', ø: 'o', æ: 'ae', œ: 'oe', ł: 'l', đ: 'd', ð: 'd', ħ: 'h', þ: 'th', ŋ: 'n', ς: 'σ' }

@@ -1,12 +1,12 @@
 // wrap(bytesA, located, pagesA): arXiv's own runs wrapped in optional content, as an incremental update over arXiv's exact
-// bytes (design §4.1 "the add-on, exactly"; spike S1c's wrapA.mjs). Today's wrapOf and planOf as they are (wrap.mjs), each page
+// bytes (design §4.1 "the add-on, exactly"; spike S1c's wrapA.mjs). Today's wrapOf and planOf as they are (wrap.ts), each page
 // planned from the groups locate carried onto A: `<ord>.<page>.t` a member's text, `.e` its travelling elements, `.l` its
 // label (design §4.5). wrapOf refuses what it cannot prove (an encrypted file, a page past its bounds, a form partly owned, a
 // split it cannot make, …): a page it refuses keeps every unit on it the original's. Its own proofs run inside it (each page's
 // new stream lexed again and its operators, ours taken out, A's; the section read back over A's bytes; the document's object
 // graph A's but for the catalog's optional content, the pages' contents and properties). The add-on is the section alone.
-import type { AlignFacts, PdfLib } from '../remove.types.ts'
-import { planOf, type Wrap, type WrapPage, type WrapPlan, wrapOf } from '../wrap.types.ts'
+import type { AlignFacts, PdfLib } from '../remove.ts'
+import { planOf, type Wrap, type WrapPage, type WrapPlan, wrapOf } from '../wrap.ts'
 import type { Located } from '../locate/locate.ts'
 import type { ReadPage } from '../read.ts'
 

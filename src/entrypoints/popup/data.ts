@@ -14,7 +14,7 @@ import { closePopup, EMBEDDED } from './embedded'
 import { type PopupActions, type PopupHost, createPopupState } from './state'
 import type { PopupInput } from './view-model'
 
-export type { OptionsLink, PopupActions } from './state'
+export type { PopupActions } from './state'
 
 /**
  * P0's two checks of a paper (the redesign's design, §5.4): the PDF page's own HEADs (core/pdf/entry.ts), sent from the

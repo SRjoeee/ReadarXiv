@@ -813,15 +813,16 @@ describe("(s) a figure text or a cell held whole for a decorated word it holds (
 describe('every kept unit states the rule that keeps it (lane gate-finds, the coordinator\'s ruling of 2026-11-12)', () => {
   // (the candidate's own unit's cause by the mark the prepare writes on it, the lab's alone: a block of e-mail addresses alone, a
   // figure text kept as crowded, a line of an algorithm float's body (the owner's ruling of 2026-11-08: pseudocode kept as the
-  // original), a cell or a figure text of names or markup tokens alone, any other block of text no unit owns)
+  // original), any other block of text no unit owns; no unit is kept for its words, the owner's word of 2026-11-13: a mark the
+  // prepare no longer writes, 'name', states no cause)
   it('states the cause of each mark, one cause a mark, and none for a unit no rule keeps', () => {
     const by = (keptBy: string) => keptWhyOf({ id: id('a'), keptBy, state: 'laid' })
-    expect(['address', 'crowded', 'pseudocode', 'name', 'block'].map(by)).toEqual([
+    expect(['address', 'crowded', 'pseudocode', 'block', 'name'].map(by)).toEqual([
       CAUSE.address,
       CAUSE.crowded,
       CAUSE.pseudocode,
-      CAUSE.nameCell,
       CAUSE.block,
+      null,
     ])
     expect(new Set(Object.values(CAUSE)).size).toBe(Object.keys(CAUSE).length)
     expect(keptWhyOf({ id: id('a'), kept: true, state: 'drawn' })).toBe(null)

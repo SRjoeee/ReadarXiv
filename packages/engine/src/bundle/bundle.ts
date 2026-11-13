@@ -87,7 +87,7 @@ export function stateOf(mem: Member, addOn: BundleInput['addOn']): MemberState {
 /** an element with what its source says of it (the instrument's PieceClass): its class as its kind, and the rest where set;
  *  `asInk`, a symbol whose ink locate found not that symbol as its reading draws it (Member.asInk): a formula's, `other`, drawn
  *  as its ink, no symbol's drawing (2610.10069v1 p20's `$\vs^*$`, read as "*" on the baseline, its bold s lost) */
-export function classed(el: El, c: PieceClass | undefined, asInk = false): El {
+function classed(el: El, c: PieceClass | undefined, asInk = false): El {
   if (!c) return el
   const out: El = { ...el, kind: asInk && c.cls === 'symbol' ? 'other' : c.cls }
   if (c.unknown) out.unknown = 1

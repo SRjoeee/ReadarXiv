@@ -1267,6 +1267,24 @@ describe("a unit the prepare keeps by a rule's mark is the original's; one no ro
     expect(of('figures')(figs({ identifier: [50], pitch: [51] }))).toEqual([[false, 'ruling']])
     expect(of('figures')(figs({ identifier: [50] }))).toEqual([[true, 'today']])
   })
+  it("counts the texts of today's that stand in a member kept by a mark, not the members: one member, two of today's pieces", () => {
+    // (2610.20967v1-zh p2: v2 keeps "tmin t tmax" whole for its scripts (F3), where today drew "min" and "max" as two texts, and
+    // keeps the formula "Lflow + λ · LREPA" whose subscript today drew as the text "flow": three of today's texts, two members)
+    const wide = { ord: 50, kind: 'figure', align: 'l', style: { size: 8 }, lines: [factLine(100, 240, 300, 8)] }
+    const one = (marks: object, members = [{ ord: 50, state: 'none', lines: [] }]) =>
+      measure(
+        { ...v2Of({ members, facts: [wide] }), ...marks },
+        rec({
+          today: { figures: [{ id: 'f0', lines: [drawnLine(100, 140, 300, 'wxyz', 8)] }, { id: 'f1', lines: [drawnLine(200, 240, 300, 'wxyz', 8)] }] },
+          v2: { units: [] },
+        }),
+        [prepFig(90, 100), prepFig(91, 200)],
+      )
+    expect(of('figures')(one({ script: [50] } as never))).toEqual([[false, 'ruling']])
+    expect(one({ script: [50] } as never).measures.figures).toMatchObject({ today: 2, v2: 0, identifier: 2 })
+    // (a member no mark keeps: both of today's texts missing)
+    expect(of('figures')(one({}))).toEqual([[true, 'today']])
+  })
   it("a run-in's gap where its head is unmeasured is unmeasured too, never worse", () => {
     const facts = [
       { ord: 10, kind: 'heading', align: 'l', style: { size: 10 }, lines: [factLine(72, 150, 700)] },

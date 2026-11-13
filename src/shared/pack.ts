@@ -14,7 +14,7 @@ type TranslatorGlobal = {
 }
 const translatorApi = () => (globalThis as { Translator?: TranslatorGlobal }).Translator
 
-export async function packState(target: string): Promise<PackState> {
+async function packState(target: string): Promise<PackState> {
   const api = translatorApi()
   if (!api) return 'unsupported'
   try {

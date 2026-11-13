@@ -9,7 +9,7 @@
 // paintFigures RUN:1441-1496 without its paint (the hidden box, the SVG, the text layer: the reader's and D.*'s), layer2.mjs
 // figureRuns, figureRunsWidth L2:4824-4836 and fonts.mjs classifyFont's family, weight and slant (fonts.mjs:42-52). A face not
 // loaded yet is waited for (B.cover: `waiting`, its faces in `wait`), where today's run awaited it.
-import { hangOf, leadOf } from '../breaker/break.types.ts'
+import { hangOf, leadOf } from '../breaker/break.ts'
 import { cover } from '../breaker/cover.ts'
 import { type FitMeasure, fitMeasure } from '../breaker/measure.ts'
 import { cjkClassRe, markOf } from '../breaker/script.ts'

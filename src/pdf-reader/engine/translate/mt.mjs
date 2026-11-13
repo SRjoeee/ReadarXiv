@@ -10,7 +10,59 @@ import { balancedRuns, delimiterResidue, RUN_SEPARATOR } from '../../../core/pro
 import { ABBR, sentenceCuts } from '../../../core/sentences/index.ts'
 import { spaceLead, spaceSource } from '../rules/tex-kernel.mjs'
 import { utf8, DISPLAY, breaks, isInkless, displayStop, shown, plain, plainTranslated } from '@readarxiv/engine/today/instrument/mt.mjs'
-export { utf8, DISPLAY, isInkless, displayStop, isName, isCode, proseOf, nameCells, shown, plainTranslated } from '@readarxiv/engine/today/instrument/mt.mjs'
+export { utf8, DISPLAY, isInkless, displayStop, shown, plainTranslated } from '@readarxiv/engine/today/instrument/mt.mjs'
+
+// ---------------------------------------------------------------- names
+// The old reader's cell and figure rule (nameCells), moved back here from the engine package (packages/engine/src/instrument/
+// mt.mjs) when the rebuilt engine stopped keeping a unit by it (the owner, 2026-11-13: a table's cell is text like any other; the
+// translator decides a name): today's openPaper (pipeline/live.mjs) and figure units (pipeline/page-pass.mjs) read it until the
+// cut-over deletes this path. Kept apart from src/core/names.ts until a pipeline version moves
+/**
+ * Whether a short text (a table cell, a figure label) is only a name — a dataset, a model, a method — which, sent
+ * alone and with no context, comes back as words (HellaSwag → 地狱之战, Magicoder → 魔法师), while the prose keeps
+ * names as they are. At most three words, each of them a name: one with a digit or an inner capital (GSM8K,
+ * DirectHarm4), all capitals (MATH, ASR), or a capitalised word the prose treats as a proper noun and never as a
+ * common one — capitalised in the middle of a sentence (… and Aegis [16]) or as the start of a longer name (Beaver for
+ * BeaverTails), and never in lower case. A capitalised word the prose writes in lower case too is a word, set in title
+ * case in a heading or a term (Average, Score, Safety Dataset); one the prose never treats as a name is a word as well
+ * (Compute). Of the two mistakes, translating a name (Aegis → 宙斯盾) misleads, leaving a word untranslated does not:
+ * a doubtful case stays a name only on both kinds of evidence. `prose` is the running text.
+ */
+export function isName(text, prose) {
+  const words = text.replace(/\s+/g, ' ').trim().split(' ')
+  if (words.length > 3) return false
+  const quote = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  // (after a lower-case letter, a clause's punctuation or `&`, a conjunction no sentence begins after: 2610.37818v1's "Tanks &
+  // Temples", whose `\\&` is a character of the text since 2026-11-11, and which as a placeholder stood in no text of the prose)
+  const proper = w => new RegExp(`[a-z,;:)\\]&] ${quote(w)}(?![a-z])`).test(prose) || new RegExp(`(^|[^A-Za-z])${quote(w)}[A-Z]`).test(prose)
+  const common = w => new RegExp(`(^|[^A-Za-z])${quote(w.toLowerCase())}($|[^A-Za-z])`).test(prose)
+  const nameWord = w => { const bare = w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, ''); return !bare || /[0-9]/.test(bare) || /^[A-Z][^a-z]*$/.test(bare) || /^[A-Za-z][a-z]*[A-Z]/.test(bare) || (/^[A-Z][a-z]+$/.test(bare) && proper(bare) && !common(bare)) }
+  return words.every(nameWord)
+}
+// ---------------------------------------------------------------- code
+/** a markup token: a word in angle brackets, as a model's special tokens are written (<pad>, </s>, <|endoftext|>) */
+const MARKUP_TOKEN = /^<\/?[^\s<>]+\/?>$/u
+/**
+ * Whether a short text is code, which keeps its source as a name does: every word a markup token (1706.03762v7's "<pad>", which
+ * Microsoft gave back as a Chinese word for a cushion in angle brackets), or, given `code` (codeTextsOf: a figure's label against the paper's own), a text the paper sets as
+ * code (2610.38366v1's ordering cue `after`, 2608.08350v2's `tanh`). A table's cell is held to the markup tokens alone: a cell's
+ * words that the paper sets as code elsewhere are words there (2608.28697v1's "easy", "middle", "hard")
+ */
+export function isCode(text, code = null) {
+  const t = String(text ?? '').replace(/\s+/g, ' ').trim()
+  if (!t) return false
+  return t.split(' ').every(w => MARKUP_TOKEN.test(w)) || !!code?.has(t)
+}
+const shortUnit = u => u.kind === 'cell' || u.kind === 'figure'
+const textOfUnit = u => u.pieces.filter(p => p.t === 'text').map(p => p.s).join(' ')
+/** the running text isName reads a short text against: every unit's text but a table cell's and a figure's, and a
+ *  bibliography's entries none of it (their titles are in title case, their names all proper nouns) */
+export const proseOf = units => units.filter(u => u && !shortUnit(u) && u.kind !== 'reference' && u.kind !== 'refnames').map(textOfUnit).join('\n')
+/** the table cells and figure texts that are only names (isName) or markup tokens (isCode): they keep their source */
+export function nameCells(units) {
+  const prose = proseOf(units)
+  return new Set(units.filter(u => shortUnit(u) && (isName(textOfUnit(u), prose) || isCode(textOfUnit(u)))))
+}
 
 // This file is the translation's: the wire a unit goes out as, and the reading back of a reply. A change here that alters
 // what is sent for a unit or what its reply is read as raises TRANSLATE_VERSION, the identity of the translation rules

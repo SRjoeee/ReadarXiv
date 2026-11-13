@@ -15,10 +15,10 @@ import { type FrontHalf, originalFactsOf, type PrepareStage, prepareFront, type 
 import { type Compiled, type CompileRequest, classesOf } from './front.types.ts'
 import type { Instrument } from './instrument.ts'
 import { type Located, type LocateOptions, locate } from './locate/locate.ts'
-import { isMemoryError } from './memory.types.ts'
+import { isMemoryError } from './memory.ts'
 import { FrontRefusal, INSTRUMENT_OBJECTS, type OriginalFacts, type StoredInstrument, short } from './plan.ts'
 import { type PdfJs, type ReadPage, type Recovered, readPdf } from './read.ts'
-import { type AlignFacts, alignReader, type PdfLib } from './remove.types.ts'
+import { type AlignFacts, alignReader, type PdfLib } from './remove.ts'
 import { type AddOn, type WrapPageA, wrap, wrapPageOf } from './wrap/wrap.ts'
 
 export interface PrepareDeps {
@@ -28,7 +28,7 @@ export interface PrepareDeps {
   PL: PdfLib
   deflate: (b: Uint8Array) => Uint8Array
   /** bytes inflated, no more than `limit` + 1 of them (the remover's and the wrap's); a failed allocation thrown as it came
-   *  (memory.mjs isMemoryError), never read again another way: the back half lets it through as the paper's */
+   *  (memory.ts isMemoryError), never read again another way: the back half lets it through as the paper's */
   inflate: (b: Uint8Array, limit: number) => Uint8Array
   paper: { id: string; version: number }
   /** the prepare's identity: the digest of the engine build, the source, A and the TeX tree */

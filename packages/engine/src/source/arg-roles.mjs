@@ -17,10 +17,9 @@
 // A register (\tabcolsep) is '=': TeX's assignment may follow it, `\tabcolsep=2pt`; a token register (llncs'
 // \titlerunning) `?s{x`, its value a group. A command LaTeXML reads in code past its prototype (\cmidrule[]'s
 // (trim){a-b}, acronym's \ac*{key}) is not known: its arguments are no reader's text
-import { BINDINGS, COMMANDS, ENVIRONMENTS, FRONT, LATEXML_COMMIT, NOTE_PACKAGES, NOTE_POOLS, PACKAGE_COMMANDS, PACKAGE_ENVIRONMENTS, REQUEST_PACKAGES, REQUEST_POOLS, REQUIRES } from './latexml-args.mjs'
+import { BINDINGS, COMMANDS, ENVIRONMENTS, FRONT, NOTE_PACKAGES, NOTE_POOLS, PACKAGE_COMMANDS, PACKAGE_ENVIRONMENTS, REQUEST_PACKAGES, REQUEST_POOLS, REQUIRES } from './latexml-args.mjs'
 import { BREAK_HINTS, inkFree } from './tex-kernel.mjs'
 
-export { LATEXML_COMMIT }
 /** the roles' names, by their letter */
 export const ROLES = Object.freeze({ t: 'text', c: 'content', a: 'arg', d: 'dimension', k: 'keys', n: 'name', v: 'verbatim', r: 'register', x: 'code', m: 'math', s: 'literal' })
 /** roles whose argument a page may show as letters: what a source fallback draws (textArgsOf) — a name is no such one,
@@ -340,7 +339,7 @@ const skipSpaces = (s, i) => {
   return i
 }
 /** the end of a group opening at s[i], past its matching close; -1 where it does not close */
-export function groupEnd(s, i, open = '{', close = '}') {
+function groupEnd(s, i, open = '{', close = '}') {
   let depth = 0
   for (let j = i; j < s.length; j++) {
     const c = s[j]

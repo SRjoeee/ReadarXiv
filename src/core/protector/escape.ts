@@ -38,7 +38,7 @@ export function escapeText(s: string, format: WireFormat = 'tags'): string {
 // nbsp written as an escape sequence: a literal U+00A0 gets quietly normalised to an ordinary space by text tools (met while editing this file)
 const NAMED: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0' }
 
-/** Decode entities. One rule for both formats — the `@@` of markers is restored in tokenize / unescapeText already and is not touched here */
+/** Decode entities. One rule for both formats — the `@@` of markers is restored in tokenize already and is not touched here */
 /**
  * The entities `decodeText` resolves, as a source string so the offsets scan can build an anchored
  * copy of it (`src/core/protector/offsets.ts`). One definition, because a scan that recognised a
@@ -55,16 +55,4 @@ export function decodeText(s: string): string {
     }
     return NAMED[body.toLowerCase()] ?? match
   })
-}
-
-/**
- * The unescape **for plain-text round trips only**: titles (§10) and OCR lines go “escapeText → translate → here”
- * with no tokeniser in between, so `@@` has to be restored at this step. Not for the placeholder path — that wire's
- * `@@` was restored in `tokenize` already, and doing it again would eat a literal `@@` down to `@` (Codex on #107
- * pointed out the asymmetry). `replace` matches left to right without overlap, like the tokeniser, so `@@@@` → `@@`
- * and `@@@@@` → `@@@`, consistent on both sides
- */
-export function unescapeText(s: string, format: WireFormat = 'tags'): string {
-  // Entities first, then `@@`: an engine that encoded `@@` as `&#64;&#64;` would be missed the other way round
-  return format === 'markers' ? decodeText(s).replace(/@@/g, '@') : decodeText(s)
 }

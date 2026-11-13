@@ -111,7 +111,8 @@ const LEADER = /^[.·•…]+$/u
 /** a number set apart from the word beside it, the page's own ink: more than this share of its size between them (a section
  *  number's \quad, an entry's number box, a folio's \hfil); a word space is a quarter to a third, after a full stop under a half */
 const APART = 0.5
-/** a line's erase rectangles at most, merged where they meet (layout/make.mjs MERGE, ERASE_MAX) */
+/** a line's erase rectangles at most, merged where they meet (layout/make.mjs MERGE, ERASE_MAX): a count of rectangles;
+ *  unmeasured */
 const MERGE = 0.5, ERASE_MAX = 16
 /** a placeholder's segments at most, an inline one's (layout/file.mjs SEGS_INLINE) */
 const SEGS_INLINE = 4
@@ -459,7 +460,7 @@ function echoKey(u) {
 const ECHO_ORDER = { heading: 0, caption: 1 }
 
 /**
- * The ink units of a document. `pages` as the wrap reads them (layout/wrap.mjs: each glyph { u, x0, x1, ix0, ix1, y, size, top,
+ * The ink units of a document. `pages` as the wrap reads them (wrap.ts: each glyph { u, x0, x1, ix0, ix1, y, size, top,
  * bottom, font, blank? }, its points, its view); `ledger` ledgerOf's over them (its `lines`); `units` the paper's source units,
  * their ids their indices, or null (no echo). Ids from `from` on: the bundle's units before them, the source units' and the
  * paper's structural names' (layer-proto/units.mjs bundleUnitsOf), units.length where it is not given. Returns [{ id, kind, cls, echo, pieces, glyphs: { text:
@@ -1136,7 +1137,7 @@ function extentsOf(pages, glyphs) {
   return [...out].map(([p, [x0, y0, x1, y1, s]]) => [p, [x0 - s, y0 - s, x1 + s, y1 + s]])
 }
 
-/** the ink units the wrap could not hide alone, as it reads a source unit (wrap.mjs `unhidden`): one with a glyph on a page it did
+/** the ink units the wrap could not hide alone, as it reads a source unit (wrap.ts `unhidden`): one with a glyph on a page it did
  *  not wrap, or a placeholder on a page whose groups it merged (its placeholder's ink then folded into its text's). `pages` the
  *  wrap's (wrapOf's `pages`: page -> { ok, merged }). The page pass lays none of them (pipeline/ink-pass.mjs inkOfHost `off`) */
 export function inkOff(ink, pages) {

@@ -3,14 +3,14 @@ export const ENGINE_PURPOSE =
   'source, marks, ink, align, locate, wrap, bundle and prepare: a paper in, its bundle out' as const
 
 // ---- today's modules, moved as they are (JavaScript, typed by their *.types.ts)
-export * from './ink.types.ts'
-export * from './delta-wire.types.ts'
-export * from './memory.types.ts'
-export * from './remove.types.ts'
-export * from './section.types.ts'
-export * from './tail.types.ts'
-export * from './wrap.types.ts'
-export * from './xref.types.ts'
+export * from './ink.ts'
+export * from './delta-wire.ts'
+export * from './memory.ts'
+export * from './remove.ts'
+export * from './section.ts'
+export * from './tail.ts'
+export * from './wrap.ts'
+export * from './xref.ts'
 
 // ---- the back half of the prepare
 // (the unit's id, which the front half's adapter computes for the seam: format's)

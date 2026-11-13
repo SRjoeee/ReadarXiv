@@ -59,6 +59,7 @@ const BODY = 0.15
  */
 const PART_MAIN = 0.85
 const MAINS_SHARE = 0.25
+/** a line's size at most, PDF units: the layout file's bound on a line's size (layout/file.mjs SIZE_MAX); unmeasured */
 const SIZE_MAX = 200
 export function lineSize(gs: readonly DocGlyph[]): number {
   if (!gs.length) return 0

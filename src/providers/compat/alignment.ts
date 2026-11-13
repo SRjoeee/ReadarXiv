@@ -23,17 +23,6 @@ export interface SentenceAlignment {
   target: number[]
 }
 
-/** Cumulative boundaries of a length list: `[0, l0, l0+l1, …, total]`. */
-export function boundariesOf(lengths: readonly number[]): number[] {
-  const out = [0]
-  let at = 0
-  for (const len of lengths) {
-    at += len
-    out.push(at)
-  }
-  return out
-}
-
 /**
  * Accepts the alignment only if it reconstructs both texts exactly, otherwise returns undefined.
  *
@@ -220,22 +209,4 @@ export function verifyAlignment(
   // Snapping after the checks, not before: it only ever moves a boundary inside the text it was
   // already verified against, so the partition it returns is exact by construction.
   return snapAlignment(alignment, sourceText, targetText)
-}
-
-/** One sentence as a pair of wire intervals, ready to be turned into ranges. */
-export interface SentencePair {
-  index: number
-  source: { from: number; to: number }
-  target: { from: number; to: number }
-}
-
-/** Expands an alignment into per-sentence intervals. Assumes it already passed `verifyAlignment`. */
-export function sentencePairs(alignment: SentenceAlignment): SentencePair[] {
-  const src = boundariesOf(alignment.source)
-  const tgt = boundariesOf(alignment.target)
-  return alignment.source.map((_, i) => ({
-    index: i,
-    source: { from: src[i]!, to: src[i + 1]! },
-    target: { from: tgt[i]!, to: tgt[i + 1]! },
-  }))
 }

@@ -51,7 +51,7 @@ export declare function textsOf(record: unknown, min?: number): Set<string>
 export declare function leaksIn(text: string, strings: Iterable<string>): number
 export declare function fragmentsIn(text: string, haystack: string, o?: { size?: number; stride?: number }): number
 
-export interface CommentOptions { headSha?: string; baseSha?: string; pack?: { digest: string; pipeline: string } | null; enginePipeline?: string | null; targets?: readonly string[]; changedTargets?: string[]; rulings?: Ruling[]; label?: string }
+export interface CommentOptions { headSha?: string; baseSha?: string; targets?: readonly string[]; changedTargets?: string[]; rulings?: Ruling[]; label?: string }
 export declare function commentOf(report: Verdict, o: CommentOptions): string
 export declare function reportJson(report: Verdict, meta?: { base?: { commit?: string | null; rules?: { version: number; sha256: string } }; head?: { commit?: string | null; rules?: { version: number; sha256: string } }; pack?: { digest: string; pipeline: string } | null; changedTargets?: string[] }): Record<string, unknown>
 
@@ -59,7 +59,8 @@ export declare function gateArgs(o: { engine: string; rules: string; pack: strin
 export declare function publicLine(line: string): string | null
 export declare function codeSpan(text: string, max?: number): string
 export declare function runGate(o: { engine: string; rules: string; pack: string; packJson: string; out?: string; log?: string; workers?: number }): Promise<string>
-export declare function engines(argv: string[], deps?: { run?: typeof runGate; git?: (...args: string[]) => string; fetchImpl?: (url: string, init: { headers: Record<string, string> }) => Promise<{ ok: boolean; status: number; arrayBuffer(): Promise<ArrayBuffer> }> }): Promise<number>
+export declare function installEngine(dir: string): void
+export declare function engines(argv: string[], deps?: { run?: typeof runGate; git?: (...args: string[]) => string; fetchImpl?: (url: string, init: { headers: Record<string, string> }) => Promise<{ ok: boolean; status: number; arrayBuffer(): Promise<ArrayBuffer> }>; install?: (dir: string) => void }): Promise<number>
 
 export declare function schemaOf(source: string): number | null
 export declare function parseEngines(json: unknown): { name: string; ref: string }[]

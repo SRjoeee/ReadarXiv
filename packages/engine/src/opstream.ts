@@ -4,7 +4,7 @@
 // WHY. PDF.js's getOperatorList answers a page's list as one object, every operation of the page in it at once. A page of paths
 // holds hundreds of thousands (2610.40394v1 page 23: 510,506 operations): its list was 93 MiB held, the heap at 372-381 MiB inside
 // that one call, for arXiv's PDF and for our compile alike, and that call decided the paper's memory limit in the box. Every reader
-// of the list (ink.mjs inkReader, remove.mjs alignReader, read.ts's glyph tags) reads it front to back in one pass, so none needs
+// of the list (ink.mjs inkReader, remove.ts alignReader, read.ts's glyph tags) reads it front to back in one pass, so none needs
 // it whole.
 //
 // WHAT. PDF.js's worker already sends a list in pieces (its OperatorList.CHUNK_SIZE, 1,000 operations), and the page's proxy

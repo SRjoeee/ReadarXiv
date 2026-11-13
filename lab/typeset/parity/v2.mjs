@@ -415,6 +415,9 @@ for (const pair of pairs) {
           // measure reads)
           ...(!(m.read ?? []).includes('lead') ? { pitch: m.lead } : {}),
           ...(m.label ? { label: m.label } : {}),
+          // (a table cell's column's box and the ink beside its line, where the part states the box: Room.column, Room.side; the
+          // ruling CB reads them, as the typesetter's columnRoomOf does)
+          ...(m.kind === 'cell' && m.room?.column ? { column: m.room.column, ...(m.room.side ? { side: m.room.side } : {}) } : {}),
           // (TeX's room under each run of its lines and its paragraph separation, where the part states them: the block measure's)
           ...(m.room?.runs || m.room?.sep !== undefined
             ? { room: { ...(m.room.runs ? { runs: m.room.runs } : {}), ...(m.room.sep !== undefined ? { sep: m.room.sep } : {}) } }
@@ -462,6 +465,11 @@ for (const pair of pairs) {
   // (a line of an algorithm's pseudocode, kept as the original (the owner's ruling 5 of 2026-11-08; stated by the prepare since lane
   // keep-reasons): the ruling T1 reads it, rulings.mjs. None where the run's dump predates that statement)
   const pseudocode = candidateKept(paperOf(pair), 'pseudocode')
+  // (a table's cell or a figure text kept as written, R1 and R2 (PDF-READER §18.72; stated by the prepare's `keptBy`): the ruling CT
+  // reads them, rulings.mjs)
+  const keptWords = candidateKept(paperOf(pair), 'words')
+  const keptNames = candidateKept(paperOf(pair), 'paperNames')
+  const keptBlocks = candidateKept(paperOf(pair), 'namesBlock')
   const keptToday = candidateKeptToday(paperOf(pair))
   // (the ink of the elements its prepare keeps as the original's, by member: F0's run of one pitch, a stretch a decoration holds;
   // the verdict reads the original's style without it, the coordinator's ruling 1 on F0)
@@ -498,6 +506,9 @@ for (const pair of pairs) {
     ...(script.length ? { script } : {}),
     ...(decorated.length ? { decorated } : {}),
     ...(pseudocode.length ? { pseudocode } : {}),
+    ...(keptWords.length ? { words: keptWords } : {}),
+    ...(keptNames.length ? { paperNames: keptNames } : {}),
+    ...(keptBlocks.length ? { namesBlock: keptBlocks } : {}),
     ...(keptToday.length ? { keptToday } : {}),
     ...(keptEls.length ? { keptEls } : {}),
     ...(noRow.size ? { noRow: [...noRow].sort((a, b) => a - b) } : {}),

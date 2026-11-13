@@ -3,15 +3,14 @@
 import { type Piece, read, unitId } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
-import { pageGlyphsOf } from '../src/glyph.ts'
 import { bundle } from '../src/bundle/bundle.ts'
 import type { Doc, DocTurned } from '../src/doc.ts'
-import type { PageInk } from '../src/ink.types.ts'
+import type { PageInk } from '../src/ink.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
 import { carry, spansOf } from '../src/locate/ink.ts'
 import { locate } from './helpers/locate.ts'
 import type { AddOn } from '../src/wrap/wrap.ts'
-import { docOf, type PageSpec } from './helpers/doc.ts'
+import { docOf, type PageSpec, pageGlyphsOf } from './helpers/doc.ts'
 
 const text = (s: string) => ({ t: 'text' as const, s })
 const unitOf = (kind: string, s: string): InstrumentUnit => {
