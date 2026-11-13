@@ -6541,22 +6541,45 @@ notes in 20 papers are now the original's on their first page: 28 `\thanks` insi
 stays 1. The display gate's ruling AN (`lab/typeset/parity/rulings.mjs`) covers the `shown` readings these notes make with the
 names off.
 
-### 18.72 A table's cell is text like any other; the translator decides a name (the owner's ruling, 2026-11-13)
+### 18.72 What of a table's cells and a figure's texts is language: translated; the rest kept as written (the owner's direction, 2026-11-13)
 
 The owner's words on a card of 2611.03953v2 p7 (a column of dataset names, MedQA, CaseHOLD …, under them the row "Avg.
 Recovery", kept English with them): judge naturally what a thing is and whether to translate it, by a rule general and long-lived,
-no dead rule and no opening made for one translator's weakness; an LLM with the paper as its context will translate better. Shown
-the three ways and their price on real replies, he chose the third: 「c。好，按你建议的来。」. So the rebuilt engine decides only
-what is not language, what the source states: the translator decides the rest, and a reply equal to its source is a lawful
-translation. What an LLM should leave as written belongs in the translation instruction, one place for every provider, never in
-the layout's rules.
+no dead rule and no opening made for one translator's weakness. He chose first to let the translator decide every cell
+(「c。好，按你建议的来。」, built as (C)); seeing it drawn with Microsoft's replies, he wrote (2026-11-13, 21:44):
+「我们本质上做的，就是不要再去修微软或者谷歌翻译器所导致翻译不准的 bug。我们更多应该确定，怎么去判断这一行、这一列或者这一格是该翻译还是不该翻译。而且这些内容应该是有一定关联性或组别的，最好能智能一些，能让我们知道它到底是内容还是标题。」
+(what we do is not to fix the translators' errors, but to decide whether a row, a column or a cell is to be translated, by its
+relations and its group: whether it is content or a title), and of the model-names table (2608.06701v1 p5) that production's
+drawing read more naturally. The rule below was put to him and approved: 「我觉得你说对，这个方向是对的。就这样去干」. A translator's
+reply to what is sent is the translator's: a cell sent is laid as its reply says, a reply equal to its source a lawful one.
+What of a text is language is a fact of the text, decided where Unit.kept is decided (the engine, for a table's cells and a
+figure's texts); how a table's cells go together is its structure's, the typesetter's.
 
-- **No unit is kept for what its words look like.** The front half kept a table's cell and a TikZ picture's text when its words
-  looked like names (`mt.mjs` nameCells: at most three words each with a digit, all capitals or an inner capital, or a capitalised
-  word the paper's prose writes so mid-sentence and never in lower case; or markup tokens). It no longer reads that rule
-  (`compile/live.mjs` openPaper states no `kept`; `instrument.mjs` unitFactsOf keeps an algorithm's body alone, §18.22's pitch
-  and the identifiers' placeholders stay where they were): a header row is a row of texts like the others, translated whole, the
-  names in it as the translator writes them.
+- **R1: a text that holds no ordinary word is not language, and is kept as written.** Read from the facts the source states
+  first, then the text itself (`packages/engine/src/instrument/language.ts`, keptAsWritten; the instrument's unitFactsOf for the
+  source's cells and TikZ texts, `locate/ink.ts` for a figure's texts read off its ink; the lab's dump `keptBy: 'words'`):
+  - the text is its text pieces in order; text set in a code face (an element of kind `code`, a span of style `mono`) is one
+    stand-in character no word holds; every other element (a formula, a citation, a reference, a paper's macro, a space, a rule)
+    a space: an element is the source's fact, never a word. A text glued to code is one token with it (`\texttt{run}-all`);
+  - its tokens are its runs of non-white characters, each with its edges off (what is neither a letter, a digit nor code:
+    "(ours)" is "ours", "Avg." is "Avg");
+  - a token is a SYMBOL where no letter or digit is left, or one letter alone ("B", "N+"); a NUMBER where it holds a digit
+    (79.86, Qwen3-4B, GPT-4o, ViT-B/16, 18-layer, test1); an IDENTIFIER where it holds code, an underscore or a dot between two
+    letters (torch.nn, Aes.Qual, s.e.), or where, cut at its joiners (a hyphen, an en dash, a slash, a plus, a bracket), a part of
+    it is one letter, two letters or more all capitals, or holds a capital after a letter and is not title case (Howto-GEN,
+    Lean-GAP, MNLI-(m/mm), T(s), w/o), or, with no joiner, it is all capitals of two letters or more (AULC, BLEU) or holds a
+    capital after a letter (MedQA, CaseHOLD, DeepSeek, iPhone, CNNs); else a WORD: lower case or title case letters of any
+    script, alone or joined to words (Avg., Recovery, Gemini, Self-Attention, Precision/Recall, Unsafe/labeled);
+  - the text is kept where no token is a word. No word list and no tuned number: the classes are the definition.
+  - The coordinator's words ("an identifier being a token with a digit, an inner capital, all capitals of two letters or more,
+    or a joiner inside it (hyphen with a digit or capital, underscore, slash, dot between letters)") read as written differ from
+    this reading on 49 of the 92 pairs' cells (lane table-judge): as written, any slash and a hyphen beside a capital make an
+    identifier, keeping 35 cells of words (Self-Attention, Self-Distil, Default/Stem, Workload/Task, Unsafe/labeled (%) and its
+    BF16 and NF4 forms, Seconds/case, bits/atom, Book/section/exercise IDs, Prefix-Fwd, Lo-Phy, and the names Deep-Att + PosUnk,
+    Smoothie-Global, Smoothie-Local, Clark--West); and one letter alone is a word, sending 14 cells this reading keeps (R U,
+    U R, SSIM B, P(match), c-lasso, IQR (s), P95 (s), COMPASS (s), Time(s), 15 LLMs, N = 2--4).
+  - A table's cell, a TikZ picture's text and a figure's text read off its ink are judged; other kinds are not (their count is
+    the lane's, for a decision of its own).
 - **No column is kept for what its cells say.** The typesetter kept a body column whole as the original's where at least 0.4 of
   its cells came back from the translator as they went or were kept before asking (`NAMES_SHARE`, measured once on 29 fixtures
   and six papers): a tuned share that stood in for a fact about each cell, and kept a label under names English ("Avg.
@@ -6590,17 +6613,6 @@ the layout's rules.
   `pipeline/live.mjs` openPaper (`withNames`), `layer-proto/units.mjs` bundleUnitsOf (its KEPT flag from the paper's `kept`),
   `layout/paper.mjs` madeBibliography's paper opened again. Its bundles are byte for byte what they were (the engine's golden
   tests). Today's `translate/groups.mjs` (decideGroups, NAMES_SHARE) is the website's and stays with it.
-
-Measured over round RB1's 89 papers and 2611.03953v2 (stage 1a against F2's run, lane cells-like-body): the units' `kept` gone
-from 1,482 distinct units (1,087 cells and 395 TikZ texts: the dumps' 2,211 cell entries in 59 papers and 541 TikZ entries), no
-id, no member, no ownership moved; and one paper further by the two facts of the source that skipped a kept unit and now read it
-as every unit (2610.40576v1: one cell's `\ctk{}` groups `code` elements, two cells holding a highlight held whole, §18.22,
-§18.61). The rows asked anew: 1,125 cell units over the lab's 92 pairs (33,958 units, Google's store 0 unavailable after 42 keyless
-requests, Microsoft's after 66). The reader gate over the 92 on both stores: every invariant as before (I3, I4, I5, I10, I6), the
-entry's lines nearer the runner's (the runner never had the column rule: 244 -> 224 members not alike on the door's rows,
-827 -> 809 on Google's), 0 rows read outside a page's wait set. PIPELINE moves (the units' `kept`); the integration's to make.
-No TRANSLATE (no wire moves), no LAYOUT (no mark moves), FORMAT stays 1. The display gate's ruling CT
-(`lab/typeset/parity/rulings.mjs`) covers the differences of a cell today keeps by these two rules and the rebuilt reader lays.
 
 Measured with the cell that cannot be drawn left the original's by itself (lane cells-like-body, the build b1b649645): the display
 gate over its 22 pairs, by default, worse 6 -> 2 against the head before it, the 2 F2's own (2610.21313v1 p1, p4): 1810.04805v2

@@ -15,6 +15,7 @@ import type { Doc, DocGlyph, DocPoint } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
 import { displayTextMask, type PageInk, regionMask } from '../ink.ts'
 import type { Instrument, InstrumentUnit, PieceClass, SpanClass } from '../instrument.ts'
+import { keptAsWritten } from '../instrument/language.ts'
 import { runIns } from '../marks/run-ins.ts'
 import { type AuthorBlock, authorBlockOf } from './author-block.ts'
 import { copyRunsOf, type FigureText, figureLinesOf, type LinesWork, textOf as lineTextOf } from './figure-lines.ts'
@@ -546,7 +547,10 @@ export function inkOf(o: InkInput): {
               ? { why: 'figure: code', fixed: true as const, pitch: true as const }
               : identifiersIn((f.text ?? '').normalize('NFKC')).length
                 ? { why: 'figure: identifier', fixed: true as const }
-                : {}),
+                : // (a text that holds no ordinary word is kept as written, as a table's cell is: R1, PDF-READER §18.72)
+                  keptAsWritten(content)
+                  ? { kept: true as const, words: true as const }
+                  : {}),
       },
       text,
       ph: [],
@@ -762,7 +766,10 @@ function figureTextOf(
             ...(t.why === 'script' ? { script: true as const } : {}),
             ...(t.why === 'decoration' ? { decorated: t.withLabel ? ('label' as const) : ('token' as const) } : {}),
           }
-        : {}),
+        : // (a text that holds no ordinary word is kept as written, as a table's cell is: R1, PDF-READER §18.72)
+          keptAsWritten(content)
+          ? { kept: true as const, words: true as const }
+          : {}),
     },
     text: [...textGs, ...t.copies].map(glob).sort((a, b) => a - b),
     ...(t.label.length ? { label: t.label.map(glob).sort((a, b) => a - b) } : {}),

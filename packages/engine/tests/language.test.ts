@@ -12,7 +12,7 @@ describe('R1: a token is a symbol, a number, an identifier or a word', () => {
     for (const t of ['--', '±', '(', 'B', 'N+', 'x', '✓']) expect([t, tokenKind(t)]).toEqual([t, 'symbol'])
   })
   it('numbers: a digit anywhere (a version, a size, a count joined to a word)', () => {
-    for (const t of ['79.86', '4,099', 'Qwen3-4B', 'GPT-4o', '18-layer', 'test1', 'top-1', '9.5B'])
+    for (const t of ['79.86', '4,099', 'Qwen3-4B', 'GPT-4o', 'ViT-B/16', '18-layer', 'test1', 'top-1', '9.5B'])
       expect([t, tokenKind(t)]).toEqual([t, 'number'])
   })
   it('identifiers: all capitals, a capital after a letter, an underscore, a dot between letters, a joined part that is one', () => {
@@ -31,8 +31,8 @@ describe('R1: a token is a symbol, a number, an identifier or a word', () => {
       's.e.',
       'Howto-GEN',
       'Lean-GAP',
-      'ViT-B/16',
       'MNLI-(m/mm)',
+      'w/o',
       'T(s)',
       'Non-IID',
       'EN-FR',
@@ -46,7 +46,6 @@ describe('R1: a token is a symbol, a number, an identifier or a word', () => {
       '(ours)',
       '+schema',
       'Self-Attention',
-      'w/o',
       'Precision/Recall',
       'Unsafe/labeled',
       'Gemini',

@@ -263,7 +263,7 @@ export const elementKindOf = instrument_js.elementKindOf as (piece: { t: string;
 export const unitFactsOf = instrument_js.unitFactsOf as (paper: Paper) => {
   float: Map<number, string>
   kept: Set<number>
-  why: Map<number, 'pseudocode'>
+  why: Map<number, 'pseudocode' | 'words'>
 }
 export const instrumentOf = instrument_js.instrumentOf as (
   o: Record<string, unknown>,

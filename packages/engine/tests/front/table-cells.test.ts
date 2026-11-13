@@ -87,10 +87,10 @@ describe('R1: a text that holds no ordinary word is not language, and is kept as
   it('the source’s facts are no words: text in a code face, a formula, a citation beside an identifier', () => {
     expect(
       judged(
-        table(['Method & Score', '\\midrule\n{\\ttfamily resnet} & 1.0', 'BERT~\\cite{devlin} & 2.0', '$\\alpha$-net $k$ & 3.0', 'base $\\alpha$ & 4.0']),
+        table(['Method & Score', '\\midrule\n\\texttt{run}-all & 1.0', 'BERT~\\cite{devlin} & 2.0', '$\\alpha$-net $k$ & 3.0', 'base $\\alpha$ & 4.0']),
       ).slice(2),
     ).toEqual([
-      ['resnet', 'words'],
+      ['-all', 'words'],
       ['BERT', 'words'],
       ['-net', null],
       ['base', null],

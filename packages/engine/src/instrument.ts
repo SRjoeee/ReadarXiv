@@ -61,6 +61,9 @@ export interface InstrumentUnit {
   /** a line of an algorithm float's body, kept as the original as code is (the front end's `pseudocode`, pipeline/instrument.mjs
    *  unitFactsOf; the owner's ruling of 2026-11-08): the lab's dump tells it by it; the bundle does not carry it (`kept` alone) */
   pseudocode?: true
+  /** a table's cell or a figure's text that holds no ordinary word, kept as written (R1, PDF-READER §18.72: language.ts): the lab's
+   *  dump tells it by it; the bundle does not carry it (`kept` alone) */
+  words?: true
   /** a figure text the figure reading keeps whole as crowded (a formula it would tear, a translation with no room beside other
    *  ink: figure-lines.ts, today/figure-text.mjs) and for no reason of its own besides (`double`, `script`): the lab's dump tells
    *  it by it; the bundle does not carry it (`unwrapped`, as a wrap failure is) */
