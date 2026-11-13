@@ -14,7 +14,7 @@
 // drawn in the target's word, never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
-import { boxedAlignOf, framesOf, readAlign, readBoxAlign, readRefNames, readSkips } from '../marks/channels.ts'
+import { boxedAlignOf, framesOf, readAlign, readBoxAlign, readCellBoxes, readRefNames, readSkips } from '../marks/channels.ts'
 import { groupFacts } from '../marks/faces.ts'
 import { holdsLetter } from '../locate/figure-lines.ts'
 import { linkTargetOf } from '../locate/ink.ts'
@@ -1308,6 +1308,9 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   // (a unit TeX set only in a box inside a paragraph, ICML's \icmlauthor names in their \mbox: its line's alignment where the
   // skips in force at its end mark and the paragraph TeX ends after it state the same, its two statements of the line)
   const boxed = boxedAlignOf(readBoxAlign(lastTexLog(log)), pages)
+  // (a cell's class where TeX set its text in its column template's own box, no paragraph of its own: what its column's box is
+  // read by, locate/columns.ts)
+  const cellBoxes = readCellBoxes(lastTexLog(log))
   // (each colour piece's fill as TeX set its run, by unit and piece index: marks.mjs readColours over the marked compile's log)
   const colours = new Map()
   for (const [i, k, rgb] of readColours(log)) (colours.get(i) ?? colours.set(i, new Map()).get(i)).set(k, rgb)
@@ -1332,7 +1335,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     const unhidden = own.units.get(i)?.unhidden
     const classes = classesOf(u.pieces, colours.get(i) ?? null, shown), spans = spansOf(u.pieces, colours.get(i) ?? null), passed = passedOf(u.pieces)
     classesBy[i] = new Map(classes)
-    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(passed.length ? { passed } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(u.of ? { of: u.of } : {}), ...(u.held && (u.kind === 'author' || u.kind === 'affiliation') ? { stored: true } : {}), ...(facts.kept.has(i) ? { kept: true, pseudocode: true } : {}), ...(held.has(i) ? { fixed: true, decorated: 'token' } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : boxed.has(i) ? { align: boxed.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
+    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(passed.length ? { passed } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(u.of ? { of: u.of } : {}), ...(u.held && (u.kind === 'author' || u.kind === 'affiliation') ? { stored: true } : {}), ...(facts.kept.has(i) ? { kept: true, pseudocode: true } : {}), ...(held.has(i) ? { fixed: true, decorated: 'token' } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}), ...(cellBoxes.has(i) ? { boxed: cellBoxes.get(i) } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : boxed.has(i) ? { align: boxed.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
   })
   for (let i = units.length; i < inkBase; i++) {
     const content = contentOf(bundle[i][5].map(p => ({ t: 'text', s: p[1] })))

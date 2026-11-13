@@ -23,7 +23,13 @@ const idOf = (n: number) => n.toString(16).padStart(64, '0')
 const cell = (
   ord: number,
   [x0, x1]: [number, number],
-  o: { align?: Placed['align']; side?: [number, number]; column?: [number, number]; y?: number; grid?: Placed['cell'] } = {},
+  o: {
+    align?: Placed['align']
+    side?: [number, number]
+    column?: [number, number]
+    y?: number
+    grid?: Placed['cell']
+  } = {},
 ): Placed => ({
   ord,
   kind: 'cell',
@@ -168,6 +174,8 @@ describe('a table cell laid in its column’s box (Room.column; the owner’s de
     // (its own 30 pt: 0.85; clipped at the floor in 50, widened to 162.5: 0.875; "Pre" stepped until its room is 1.5 em: 0.8;
     // "Final" widened: 1.0; "Step 100" in its own 27: 0.9; the centred one widened to 105-155: 0.9; the right one to 112.5: 0.95;
     // the spanning one widened to 125-215: 0.9)
-    expect([0, 1, 2, 3, 4, 5, 6, 7].map(size)).toEqual([8.5, 8.75, 8, 10, 9, 9, 9.5, 9].map((x) => expect.closeTo(x, 5)))
+    expect([0, 1, 2, 3, 4, 5, 6, 7].map(size)).toEqual(
+      [8.5, 8.75, 8, 10, 9, 9, 9.5, 9].map((x) => expect.closeTo(x, 5)),
+    )
   })
 })

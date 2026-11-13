@@ -9,8 +9,8 @@ import type { Claims } from './ownership.ts'
 import { AUTHOR_KINDS, assign, BRACKET, CALL, lettersIn, type Member, UNIT_MARK, type Work } from './work.ts'
 
 /** a word ends where two glyphs stand this share of their size apart, and a trail with it (the ink units' word rule, today's
- *  wordsOf: ink-units.mjs WORD_GAP) */
-const WORD_GAP = 0.12
+ *  wordsOf: ink-units.mjs WORD_GAP); a table's entry no unit is read by its words (facts-pass.ts readColumns) */
+export const WORD_GAP = 0.12
 
 export function claimTrails(w: Work, claims: Claims): void {
   const { B, NB, m, inkA, ins, pageA, pageB, unitB, gA } = w.ix

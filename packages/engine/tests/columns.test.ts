@@ -48,7 +48,10 @@ describe('readCellBoxes: the class TeX set each cell’s text by in its column t
 
 describe('columnBoxes: a column’s box from its entries, where they line up as its class sets them', () => {
   it('takes an l column’s box from its widest entry, every cell of it the same box (Table 11’s base, teacher, span)', () => {
-    const b = columnBoxes([at(1, 1, 'l', 212.41, 228.34), at(2, 1, 'l', 212.41, 238.29), at(3, 1, 'l', 212.41, 228.84)], [])
+    const b = columnBoxes(
+      [at(1, 1, 'l', 212.41, 228.34), at(2, 1, 'l', 212.41, 238.29), at(3, 1, 'l', 212.41, 228.84)],
+      [],
+    )
     expect([...b]).toEqual([
       [1, [212.41, 238.29]],
       [2, [212.41, 238.29]],
@@ -84,10 +87,7 @@ describe('columnBoxes: a column’s box from its entries, where they line up as 
     expect(columnBoxes([at(1, 0, 'l', 100, 130), at(2, 0, undefined, 100, 150)], []).size).toBe(0)
   })
   it('centres a \\multicolumn{1}{c} cell of an l column in the column’s box, and joins no word to a column of two classes', () => {
-    const b = columnBoxes(
-      [at(1, 0, 'c', 110, 140), at(2, 0, 'l', 100, 150), at(3, 0, 'l', 100, 120)],
-      [word(100, 160)],
-    )
+    const b = columnBoxes([at(1, 0, 'c', 110, 140), at(2, 0, 'l', 100, 150), at(3, 0, 'l', 100, 120)], [word(100, 160)])
     expect(b.get(1)).toEqual([100, 150])
     expect(b.get(3)).toEqual([100, 150])
   })
@@ -159,7 +159,13 @@ describe('locate states each cell’s column box as Room.column', () => {
     }
     const units = [cell('Model', 0, 0, 'l'), cell('Val', 0, 1, 'r'), cell('Ours', 1, 0, 'l'), cell('Base', 2, 0, 'l')]
     // (each glyph's unit, the numbers' none)
-    const owner = [...Array(5).fill(0), ...Array(3).fill(1), ...Array(4).fill(2), ...Array(4).fill(-1), ...Array(4).fill(3)]
+    const owner = [
+      ...Array(5).fill(0),
+      ...Array(3).fill(1),
+      ...Array(4).fill(2),
+      ...Array(4).fill(-1),
+      ...Array(4).fill(3),
+    ]
     const ins: Instrument = {
       ink: B,
       units,

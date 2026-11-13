@@ -31,7 +31,9 @@ import {
   TRAIL,
   tailOf,
 } from './facts.ts'
+import { type ColumnCell, columnBoxes, type FreeWord } from './columns.ts'
 import { isInk, r2 } from './lines.ts'
+import { WORD_GAP } from './trails.ts'
 import { spellOf } from './today/today.types.ts'
 
 /** a line that ends short of its column's right edge by this share of its size ends at a forced break (today's SHORT TEX:87),
@@ -297,6 +299,89 @@ export function factsOf(input: FactsInput): void {
   for (const mem of fx.members) {
     if (!mem.located || !mem.lines.length) continue
     memberFacts(fx, mem)
+  }
+  readColumns(fx)
+}
+
+/**
+ * Each table cell's column's box (Room.column; the owner's decision of 2026-11-13, docs/PDF-READER.md §18.13), once every
+ * member's facts are read (its band): locate/columns.ts over each table's located cells, each its first column and span, its
+ * class (InstrumentUnit.cell.boxed) and what TeX set of it on its page (its lines' advances and its elements' ink on their
+ * baselines, as the typesetter's own room of a cell reads it), and the words of ink no member owns on the table's band on each
+ * page (the cells' bands, Room.band, else their lines' bodies, within their lines' measure): one baseline each, as TeX sets one
+ * box's glyphs, cut where a glyph a member owns stands or a word's gap (WORD_GAP, the ink units' word rule) opens
+ */
+function readColumns(fx: FactsIndex): void {
+  const { members, units, owned, gA, bandOn } = fx
+  const tables = new Map<number, Member[]>()
+  for (const mem of members) {
+    const c = mem.unit >= 0 ? units[mem.unit]?.cell : undefined
+    if (!c || !mem.located || !mem.lines.length) continue
+    const l = tables.get(c.table)
+    if (l) l.push(mem)
+    else tables.set(c.table, [mem])
+  }
+  for (const mems of tables.values()) {
+    const cells: ColumnCell[] = []
+    // (the table's band and measure on each page: [lo, hi, m0, m1])
+    const band = new Map<number, [number, number, number, number]>()
+    for (const mem of mems) {
+      const c = units[mem.unit]!.cell!
+      const page = mem.lines[0]![0]
+      let x0 = Number.POSITIVE_INFINITY,
+        x1 = Number.NEGATIVE_INFINITY
+      for (const l of mem.lines) {
+        if (l[0] !== page) continue
+        x0 = Math.min(x0, l[2])
+        x1 = Math.max(x1, l[3])
+        const size = l[10] ?? mem.style.size
+        for (const [, e] of mem.elements)
+          for (const k of e.ink)
+            if (k[0] === l[0] && Math.abs(k[5] - l[4]) < 0.4 * size && k[1] < l[3] && k[3] > l[2]) {
+              x0 = Math.min(x0, k[1])
+              x1 = Math.max(x1, k[3])
+            }
+        const b = band.get(page) ?? [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, l[7], l[8]]
+        band.set(page, [
+          Math.min(b[0], mem.room.band?.[0] ?? l[6]),
+          Math.max(b[1], mem.room.band?.[1] ?? l[5]),
+          Math.min(b[2], l[7]),
+          Math.max(b[3], l[8]),
+        ])
+      }
+      cells.push({ ord: mem.ord, page, col: c.col, span: c.span ?? 1, cls: c.boxed, x0, x1 })
+    }
+    const words: FreeWord[] = []
+    for (const [page, [lo, hi, m0, m1]] of band) {
+      // (the page's ink on the band, by baseline to the hundredth and then across; a word of free ink at a time)
+      const ink = bandOn(page, lo, hi)
+        .filter((g) => g.x1 > m0 && g.x0 < m1 && !gA(g.a).unseen)
+        .sort((a, b) => r2(a.y) - r2(b.y) || a.x0 - b.x0)
+      let cur: (FreeWord & { y: number; size: number }) | null = null
+      for (const g of ink) {
+        const size = gA(g.a).size
+        const free = owned.member(g.a) < 0
+        if (
+          cur &&
+          free &&
+          r2(g.y) === cur.y &&
+          g.x0 - cur.x1 <= WORD_GAP * Math.max(size, cur.size) &&
+          g.x0 >= cur.x0
+        ) {
+          cur.x1 = Math.max(cur.x1, g.x1)
+          cur.size = size
+          continue
+        }
+        if (cur) words.push({ page, x0: cur.x0, x1: cur.x1 })
+        cur = free ? { page, x0: g.x0, x1: g.x1, y: r2(g.y), size } : null
+      }
+      if (cur) words.push({ page, x0: cur.x0, x1: cur.x1 })
+    }
+    const boxes = columnBoxes(cells, words)
+    for (const mem of mems) {
+      const b = boxes.get(mem.ord)
+      if (b) mem.room.column = [r2(b[0]), r2(b[1])]
+    }
   }
 }
 
