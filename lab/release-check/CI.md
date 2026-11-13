@@ -54,7 +54,8 @@ is the maintainer's machine's alone; where it is absent the gates run directly. 
 browser, and since stage 1a (29df59fff, b94bca203: `pageInk`, `wrapOf` and `planOf` moved into `packages/engine`) today's
 layer imports `@readarxiv/engine` by its bare name, which a page without a bundler cannot resolve ("Failed to resolve module
 specifier"): the page never reports ready and the script times out. Every other gate of the tier passes. The fix is the
-script's (a bundle of what its page loads), and the `reader` job is turned on after it.
+script's (a bundle of what its page loads), and the `reader` job is turned on after it. Fixed since `38c9062b8` (the page's import
+map resolves the packages the engine imports by name, `lab/pdf/packages-route.mjs`).
 
 **Rules gate** (exists: `.github/workflows/rules-gate.yml`, path-filtered on today's engine): unchanged until today's
 engine is deleted at the cut-over.
