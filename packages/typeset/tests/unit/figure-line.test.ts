@@ -1,8 +1,9 @@
 // A figure text that holds an element (F0, PDF-READER §18.26: "Project Page:" and its address, a title and its path) states no
 // own text (Placed.plain) and is laid by the paragraph path: its translation on its line, its element drawn as a crop of its ink
 // right after it, its element group off, no hole where the original's longer label stood (2611.03178v1 p1). A figure text a
-// closed shape holds whole (the owner's reformulation of 2026-11-10: its container) is laid inside it: S.figures keeps its
-// translation's ink under the shape's edge over its baseline (Room.over), its set shrunk to it, else the original's.
+// closed shape holds whole keeps the original's size where its translation is no wider than the original: the shape's edge over
+// its baseline (Room.over) is no test of S.figures (the owner's rule of 2026-11-13, F41, which retired his reformulation of
+// 2026-11-10 for a figure text's height: drawn at the original's size it stands in the band the original's line stands in).
 import type { Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
@@ -105,9 +106,9 @@ describe('a figure text with an element, its runs in their own fills (F0, 2610.1
   })
 })
 
-describe('a figure text laid inside the closed shape that holds it (the owner’s reformulation of 2026-11-10)', () => {
-  // ("Module" at 10 over 100-136 on baseline 400, a box round it whose top edge stands 6 over the baseline: a CJK translation's
-  // ink, 7 over at its size, must shrink to 6/7 of it)
+describe('a figure text inside the closed shape that holds it keeps its size where it is no wider (F41)', () => {
+  // ("Module" at 10 over 100-136 on baseline 400, a box round it whose top edge stands 6 over the baseline, or 1: a CJK
+  // translation's ink stands 7 over at its size; its translation, two ideographs 20 wide in a box of 36, is no wider)
   const boxed = (over?: number): Placed => ({
     ord: 0,
     kind: 'figure',
@@ -124,12 +125,10 @@ describe('a figure text laid inside the closed shape that holds it (the owner’
     const m = layPage(part([p]), rows([row]), rulesFor('zh'), metrics).members[0]!
     return m.state === 'laid' ? (m.lines[0]![3][0] as { size: number }).size : m.state
   }
-  it('lays it at its size where the shape leaves room, shrunk to the shape’s edge where it does not', () => {
+  it('lays it at its size whatever the shape’s edge over its baseline', () => {
     expect(sizeOf(boxed())).toBe(10)
-    expect(sizeOf(boxed(6))).toBeCloseTo((10 * 6) / 7, 6)
-  })
-  it('leaves it the original’s where the shape’s edge would shrink it past the floor', () => {
-    expect(sizeOf(boxed(1))).toBe('unfit')
+    expect(sizeOf(boxed(6))).toBe(10)
+    expect(sizeOf(boxed(1))).toBe(10)
   })
 })
 

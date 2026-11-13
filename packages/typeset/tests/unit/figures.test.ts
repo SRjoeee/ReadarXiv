@@ -42,7 +42,6 @@ const row = (id: number, o: Partial<FigureRow> = {}): FigureRow => ({
   set: `f${id}`,
   before: 0,
   after: 0,
-  under: null,
   ...o,
 })
 const base = {
@@ -99,27 +98,6 @@ describe('S.figures', () => {
       [false, 'unfit', undefined, undefined],
     ])
   })
-  it('draws a set over a stroke under a text where its translation’s ink clears it at a size at the floor or over', () => {
-    // (the translation's ink 0.2 of its size under its baseline, `metricsOf`: a stroke 1.6 under it at 10 clears at 0.8, the set
-    // with it; one 1.1 under would need 0.55, under the floor 0.6: the original's, crowded)
-    const drawn = figures({
-      ...base,
-      figures: [row(1, { under: 1.6, set: 's1' }), row(2, { set: 's1', y: 180 })],
-      unit: () => tr('Zeit') as never,
-      metrics: metricsOf(),
-    })
-    expect(drawn.figures.map((f) => [f.drawn, f.why, f.size])).toEqual([
-      [true, null, 8],
-      [true, null, 8],
-    ])
-    const kept = figures({
-      ...base,
-      figures: [row(1, { under: 1.1 })],
-      unit: () => tr('Zeit') as never,
-      metrics: metricsOf(),
-    })
-    expect(kept.figures.map((f) => [f.drawn, f.why])).toEqual([[false, 'crowded']])
-  })
 })
 
 describe('S.figures sets a translation on its anchor by its ink, as the breaker sets every line (B.break leadOf, hangOf)', () => {
@@ -175,43 +153,29 @@ describe('S.figures sets a translation on its anchor by its ink, as the breaker 
 })
 
 describe('S.figures’ fit', () => {
-  const f = { length: 20, size: 10, anchor: 'centre' as const, before: 4, after: 2, under: null }
+  const f = { length: 20, size: 10, anchor: 'centre' as const, before: 4, after: 2 }
   it('shrinks the set by the least factor any needs, a centred one over the narrower room either side', () => {
     const got = fitFigureSet(
       [
-        { f, width1: 2.4, depth1: 0.2 },
-        { f: { ...f, anchor: 'end' as const }, width1: 2.2, depth1: 0.2 },
+        { f, width1: 2.4 },
+        { f: { ...f, anchor: 'end' as const }, width1: 2.2 },
       ],
       0.6,
     )
     expect(got[0]).toEqual({ size: 10, offset: -2, width: 24 })
     expect(got[1]).toEqual({ size: 10, offset: -2, width: 22 })
   })
-  it('shrinks the set until a translation’s ink clears the stroke under its text, as under a container’s edge', () => {
-    // (a stroke 1.6 under the baseline, the translation's ink 0.2 of its size under it: at 10 it reaches 2.0, at 8 it stands
-    // on the stroke's top: the set drawn at 0.8, its mate with it, one size a set; 2610.21547v1 p8's "checkpoint" at 0.882)
+  it('leaves one whose width needs a factor under the floor the original’s, and fits the rest without it', () => {
+    // (one 40 wide in a line of 20, no room: 0.5, under the floor 0.6; the other 24 wide in its centred line of 24: its size)
     const got = fitFigureSet(
       [
-        { f: { ...f, under: 1.6 }, width1: 2, depth1: 0.2 },
-        { f, width1: 2, depth1: 0.2 },
+        { f: { ...f, anchor: 'start' as const, after: 0 }, width1: 4 },
+        { f, width1: 2.4 },
       ],
       0.6,
     )
-    expect(got[0]).toEqual({ size: 8, offset: 2, width: 16 })
-    expect(got[1]).toEqual({ size: 8, offset: 2, width: 16 })
-    // (its ink at the size drawn no deeper than the stroke's top)
-    expect(0.2 * (got[0] as { size: number }).size).toBeLessThanOrEqual(1.6)
-  })
-  it('leaves one no shrink above the floor clears of the stroke under its text crowded, and fits the rest without it', () => {
-    const got = fitFigureSet(
-      [
-        { f: { ...f, under: 1.1 }, width1: 2, depth1: 0.2 },
-        { f, width1: 4, depth1: 0.1 },
-      ],
-      0.6,
-    )
-    expect(got[0]).toBe(false)
-    expect(got[1]).toEqual({ size: 6, offset: -2, width: 24 })
+    expect(got[0]).toBeNull()
+    expect(got[1]).toEqual({ size: 10, offset: -2, width: 24 })
   })
   it('reads a translation that says its source again as the same, and a font’s class by its name', () => {
     expect(sameAsSource('Time (s)', 'time s')).toBe(true)

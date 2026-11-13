@@ -8,9 +8,9 @@
 // held (no dump says `unhidden`). Today's S.figures set a translation by its advance, as a line whose marks' ems hold no blank
 // half: replayed with `marks: 'today'`, its faces state no measure of their marks (Face.ids none: script.ts markOf finds no
 // blank half, which S.figures' blanksOf alone reads of them), the rest the target's own; else by its ink, as v2 sets every
-// line. One rule departs from today's on purpose (the coordinator's ruling of 2026-11-13 on D02): a text today left `crowded`
-// over a stroke under it that its set's shrink now clears (shared/figure-fit.ts: drawn under its size, its row stating the
-// stroke) is `cleared`, and each other text of its set that moves only where its line starts, its size stepping with the set's,
+// line. One rule departs from today's on purpose (the owner's rule of 2026-11-13, F41: width is the fit's only test, no stroke
+// under a text measured): a text today left `crowded` over a stroke under it (its row stating the stroke) that S.figures draws
+// now is `cleared`, and each other text of its set that moves only where its line starts, its size stepping with the set's,
 // `stepped`: neither is a difference.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -121,12 +121,13 @@ export function replayFigures(
       rules: R,
       metrics,
     })
-    // (the texts today left crowded over a stroke under them that the set's shrink draws now, and their sets)
+    // (the texts today left crowded over a stroke under them that S.figures draws now, and their sets)
     const rowOf = new Map(rows.map((r) => [r.id, r]))
     const clears = (f: Figure) => {
       const r = rowOf.get(f.id),
-        w = want.get(`${f.id}|${f.page}`)
-      return !!r && !!w && !w.drawn && w.why === 'crowded' && f.drawn && Number.isFinite(r.under) && f.size! < r.size
+        w = want.get(`${f.id}|${f.page}`),
+        under = tf.under(f.id, f.page)
+      return !!r && !!w && !w.drawn && w.why === 'crowded' && f.drawn && under !== null && Number.isFinite(under)
     }
     const clearedSets = new Set(got.figures.filter(clears).map((f) => rowOf.get(f.id)!.set ?? rowOf.get(f.id)!.group))
     for (const f of got.figures) {
