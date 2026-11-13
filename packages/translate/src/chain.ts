@@ -65,20 +65,21 @@ export const SUPPORTS_MS = 2_000
 export const GATE_MS = 1_000
 /** the store key's grammar; it rises only if the grammar changes */
 export const KEY_VERSION = 't1'
-/** the chain's own outcome rules (fall-through per unit, one re-ask where a translator asks it, the runs floor of stretches
- *  of two letters or more, every stretch given or none, `-whole` (d76d6b200: a stretch no translator gives leaves the unit the
- *  original's, never its English between translated stretches), a span that is no edge keeping its head in a copy of itself:
- *  runs.ts; an element set after the unit's text given to no translator, put back after the translation: tailOf; a group a
- *  reply did not bring back placed around its own text where the translation states it, as often as the source holds that
- *  text in groups of its style alone, its end mark matched by its class, `groups/2`: groups.ts; a word tied to a reference
- *  that abbreviates the item's name sent to every translator as that name: names.ts; a phrase group a markers-wire translator's
- *  reply did not bring back placed where it states the group's reference translation, asked of it in the unit's batch:
- *  groups.ts placeReferences; a request a translator refuses handed on whole, halved only where its endpoint said it is too
- *  large, `pass-whole`, #636: a 400 read as every unit's refusal kept the next translator's answers as rows; a group that is
- *  not `must` with an edge inside a word offered to no translator, its words whole and plain, `words`: words.ts): a change to
- *  them is a change of every row */
-export const CHAIN_RULES =
-  'chain/1|fall-through|reask|runs>=2-whole|runs-heads|after|groups/2|names|references|pass-whole|words'
+/** The behaviour digest of the chain's own outcome rules: the SHA-256 of the chain's outcomes over the case table of
+ *  tests/chain-cases.ts, held by tests/chain-digest.test.ts and written by `pnpm digests --write`. The rules, each with a
+ *  case there that it alone decides: fall-through per unit; one re-ask where a translator asks it; the runs floor of stretches
+ *  of two letters or more, every stretch given or none (a stretch no translator gives leaves the unit the original's, never its
+ *  English between translated stretches), a span that is no edge keeping its head in a copy of itself: runs.ts; an element
+ *  set after the unit's text given to no translator, put back after the translation: tailOf; a group a reply did not bring
+ *  back placed around its own text where the translation states it, as often as the source holds that text in groups of its
+ *  style alone, its end mark matched by its class: groups.ts; a word tied to a reference that abbreviates the item's name sent
+ *  to every translator as that name: names.ts; a phrase group a markers-wire translator's reply did not bring back placed
+ *  where it states the group's reference translation, asked of it in the unit's batch: groups.ts placeReferences; a request a
+ *  translator refuses handed on whole, halved only where its endpoint said it is too large (#636: a 400 read as every unit's
+ *  refusal kept the next translator's answers as rows); a group that is not `must` with an edge inside a word offered to no
+ *  translator, its words whole and plain: words.ts. A change to them that changes an outcome moves it, and every row with it
+ *  (identityOf); a change that changes none leaves it */
+export const CHAIN_DIGEST = '543eba3d1576a1eb00d3aa3e96386a19cca39aba0fcf274ad45c68911be26fa6'
 
 // ---------------------------------------------------------------- the platform's timers and controllers, by structure
 
@@ -188,10 +189,10 @@ export function rowContextOf(
 }
 
 /** What a row is keyed by besides unit id and target (DECISION: translators' identities and their behaviour digests plus
- *  the acceptance rule's digest, and the chain's own rules): it moves only when an outcome could */
+ *  the acceptance rule's digest, and the chain's own rules' digest): it moves only when an outcome could */
 export async function identityOf(translators: readonly Translator[]): Promise<string> {
   const parts = translators.map((t) => [t.identity, t.digest, t.limits.reask])
-  return sha256Hex(JSON.stringify([CHAIN_RULES, ACCEPT_DIGEST, parts])).slice(0, 32)
+  return sha256Hex(JSON.stringify([CHAIN_DIGEST, ACCEPT_DIGEST, parts])).slice(0, 32)
 }
 
 // ---------------------------------------------------------------- the lanes: one per translator identity

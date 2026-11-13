@@ -14,11 +14,10 @@ import {
   HEAD_STOP,
   LABEL_AFTER_BREAK,
   GLUED_PAST,
-  OWN_GLUED,
   SOURCE_LINES,
   GLUED_STOP,
-  SIDE_BY_SIDE,
   STYLED_OBJECT,
+  TAGS_UNITS,
   UNITS,
 } from './fixtures.ts'
 
@@ -31,17 +30,7 @@ export const googleEcho = (_url: string, init: FetchInit) => {
 translatorSuite('google', {
   make: (fetch) => google({ fetch }),
   target: 'zh-Hans',
-  units: [
-    ...UNITS,
-    HEAD_STOP,
-    DISPLAY_ENDS,
-    SOURCE_LINES,
-    GLUED_PAST,
-    OWN_GLUED,
-    STYLED_OBJECT,
-    GLUED_STOP,
-    SIDE_BY_SIDE,
-  ],
+  units: TAGS_UNITS,
   echo: googleEcho,
   replies: GOOGLE_REPLIES,
   faults: [

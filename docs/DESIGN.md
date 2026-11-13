@@ -662,7 +662,7 @@ Not built, on purpose: direct `anthropic` / `gemini` providers (OpenRouter proxi
 ### 8.2 LLM call conventions
 
 - AI SDK 7's `generateText` + `Output.object({ schema })` with `{ segments: { id, text }[] }`; the SDK's own `maxRetries: 0`, retries left to the ported policy (§8.3).
-- **The prompt has two layers**: `prompt-library.ts` (the template variables `{{targetLanguage}}` `{{input}}` `{{paperTitle}}` `{{abstract}}` `{{sectionTitle}}` `{{glossary}}`, the built-ins `default` / `precision-rewrite`, the reader's own patterns, selection by `promptId`, a built-in winning over one's own with its id and the default standing in for an id that names nothing; a prompt's identity in the translator's is a built-in's id, whose wording `PROMPT_VERSION` stands for, or one's own two parts whole) says *how to translate*; the **protocol block** of `prompt.ts` (JSON segments, placeholder rules, output shape) is appended after any system prompt, says *how to send and receive*, and a custom prompt cannot change it. A custom prompt missing `{{input}}`, `{{targetLanguage}}` or `{{glossary}}` gets it appended, or a template created afresh would silently ignore the glossary. `PROMPT_VERSION` (`5`) enters the cache key and is bumped whenever what is sent changes meaning.
+- **The prompt has two layers**: `prompt-library.ts` (the template variables `{{targetLanguage}}` `{{input}}` `{{paperTitle}}` `{{abstract}}` `{{sectionTitle}}` `{{glossary}}`, the built-ins `default` / `precision-rewrite`, the reader's own patterns, selection by `promptId`, a built-in winning over one's own with its id and the default standing in for an id that names nothing; a prompt's identity in the translator's is a built-in's id, whose wording the prompt's digest holds, or one's own two parts whole) says *how to translate*; the **protocol block** of `prompt.ts` (JSON segments, placeholder rules, output shape) is appended after any system prompt, says *how to send and receive*, and a custom prompt cannot change it. A custom prompt missing `{{input}}`, `{{targetLanguage}}` or `{{glossary}}` gets it appended, or a template created afresh would silently ignore the glossary. **The prompt's identity** (`PROMPT_DIGEST`, `prompt.ts`) is derived in two parts, each where it is exact, and enters the LLM translator's identity, and so the cache key, where `PROMPT_VERSION` stood (`5` last, 2026-11-07): (a) the data's bytes, hashed at load (`PROMPT_TEXT_DIGEST`: the protocol block, each built-in's two texts by its id, the language table's English names), and (b) `buildPrompts`' rules, a behaviour digest held by a test (`BUILD_PROMPTS_DIGEST`: its outputs over the case table of `tests/providers/prompt-cases.ts`, run on data of the table's own so that it reads the rules alone, with a case that only each of its twenty rules decides; `pnpm digests` recomputes it beside the translate package's, and its diff announces that the LLM's answers are asked again). The slot is the hash of the two. Both parts are needed because the last two raises were neither the protocol nor the built-ins: 4 was a rule (the glossary added to a prompt of one's own that lacked it), 5 data (the targets' English names); a probe set hashed at load would hold only the rules its probes happen to reach, and announce nothing.
 - **The protocol block shows two placeholder examples**, an unverified trade-off: Read Frog gives none, on the argument that an example gives "emit a marker" a baseline probability; validation stops any id that does not exist, so the worst case is one wasted request. Settling it needs an A/B on a real machine with an LLM key — `pnpm e2e:placeholders` can run it.
 - **Metadata goes in the user message**, delimited as `<document_metadata>` and declared untrusted: a paper's title and abstract are author-written, and a paper about prompt injection may carry instruction-like text that a system prompt would take as peer instructions. The protocol block declares segments and metadata alike as data.
 - **`{{targetLanguage}}` is the language's English name**, not its code ("Simplified Chinese"), from `config/languages.ts`: the English menu's name, CLDR's common one under UI.md §6's naming policy (`PROMPT_VERSION` 5, 2026-11-07; before, ISO 639-3's reference names, "Simplified Mandarin Chinese", from Read Frog's table). The 180 targets are Read Frog's 179 and Standard Malay (`zsm`, added 2026-10-29: Read Frog's only Malay is Jawi, `zlm`, tagged `ms-Arab`, and `ms` is the Latin one's).
@@ -746,8 +746,10 @@ decision: clearing it costs a re-translation and nothing else.
   translator is sent changes its key by itself (the wire's bytes are in it); how a reply is read changes nothing stored. A
   translator's identity is its endpoint, model and prompt, never its key (hard rule 5): Microsoft's, Google's and the
   built-in engine's are the package's; one of the reader's services is `llm:` + 16 hex of its endpoint (origin and path),
-  model, `PROMPT_VERSION` with the prompt's key, and the thinking switch where the endpoint is sent one
-  (`src/providers/llm.ts`), so a prompt whose meaning changes raises `PROMPT_VERSION` and its answers and rows are new.
+  model, the prompt's digest (`PROMPT_DIGEST`, §8.2) with the prompt's key, and the thinking switch where the endpoint is
+  sent one (`src/providers/llm.ts`), so a change to what the model is sent is another identity by itself and its answers
+  and rows are new: an answer stored under the identity before is never read again, as after a raised version
+  (`tests/providers/llm.test.ts`).
 - **The rows** (`rows`): a unit's accepted result, `r1 | identityOf(the chain's translators) | target | sha256 of the
   unit (its kind, content, whether it lights by sentence) | the context's digest where a translator reads it`, its glossary
   the entries the unit's wires use (`rowContextOf`, the package's: the unit as the chain sends it)
@@ -757,7 +759,12 @@ decision: clearing it costs a re-translation and nothing else.
   language pack, which may answer next time (the chain's per-unit notes tell which). So a block Microsoft mangles and
   Google answers is not asked of Microsoft again on the next open, the case the chain's answer store alone cannot avoid
   (it keeps no refusal). A row's key moves with the chain: another engine, another order, a translator's behaviour digest,
-  the acceptance rule's.
+  the acceptance rule's, the chain's own rules' (`CHAIN_DIGEST`: the hash of the chain's outcomes over its case table,
+  `packages/translate/tests/chain-cases.ts`, each rule with a case it alone decides; a test holds the literal). No number is
+  raised by hand for any of them: a digest literal is what its case table gives. `pnpm digests` recomputes every behaviour
+  digest (`scripts/digests.ts` over `packages/translate/tests/digests.ts` and `tests/providers/prompt-cases.ts`, the LLM
+  prompt's rules, §8.2) and `pnpm digests --write` writes the literals
+  that moved; that diff is the announcement that rows are asked again.
 - **The recogniser's readings** (`ocr`, §15.2): by `ocrCacheKey` (`src/cache/ocr-key.ts`), apart from translation's.
 - **Bounds, per table**: 30 days from the write, 20,000 entries and 50 MiB, the least recently read going first past either
   cap (counted incrementally from a `bytes` index; the reading time written back apart, not awaited); a value of at most
@@ -1205,8 +1212,8 @@ only how it meets the rest of the extension.
   in a copy of it and its stop after its words (`packages/translate/src/words.ts` wholeWordsOf, called once in `chain.ts`
   settle and rowContextOf): every wire, the runs floor, the acceptance rule and the put-back below read the unit so. The word
   travels whole and plain, and the translation carries no style from the group. A `must` group (a link, a run-in label,
-  every pair of the HTML page) stays as its host states it. `CHAIN_RULES` `words`. Over the 88 corpus papers 47 of 15,408
-  groups (17 units, 13 papers): the tags wire moves in those 17 units, the markers wire in none.
+  every pair of the HTML page) stays as its host states it. A case of the chain's digest (`CHAIN_DIGEST`, §9). Over the 88
+  corpus papers 47 of 15,408 groups (17 units, 13 papers): the tags wire moves in those 17 units, the markers wire in none.
 - **A group a reply did not bring back is placed where the translation states it** (lane style-spans, 2026-11-10). A
   group's style (its weight, slant or colour: its command's, `SpanAt.colour` from TeX's log, `SpanAt.style` read off its
   glyphs) is drawn only where the reply holds the group. The tags wire carries every group (Google keeps tags); the markers
@@ -1219,14 +1226,14 @@ only how it meets the rest of the extension.
   equal (NFKC: a full-width parenthesis, U+FF08, is "("), white space aside, once in the translation as whole words (UAX #29's word
   boundaries, `Intl.Segmenter`) in the place the reply holds around the group (its nearest group the reply brought back, else
   the unit), and once in the source's same place, the group's alone (`packages/translate/src/groups.ts` placeGroups;
-  `CHAIN_RULES` `groups`, so every row is read again from the stored replies, nothing asked again). A label, an identifier, a
-  name a translator writes as it is gets its style back on every engine; a group whose words were translated has no
+  a case of the chain's digest, `CHAIN_DIGEST`, so every row is read again from the stored replies, nothing asked again). A
+  label, an identifier, a name a translator writes as it is gets its style back on every engine; a group whose words were translated has no
   counterpart stated and stays plain (only a translator that keeps markup brings it back), as does one holding an element or
   another group, or one whose text the source also holds outside the groups of its style or the translation another number
   of times. "Once" is the rule's n = 1 (lane span-putback, 2026-11-11, PDF-READER §18.42): a text the source holds in the place
   only as groups of one style, n of them, and the translation n times there, places each (2602.23285v2's "RQ2" set bold twice
   in a paragraph); an end mark the group's text ends in is matched by its class, Unicode's Terminal_Punctuation ("RQ1." is the
-  reply's "RQ1" and an ideographic full stop); `CHAIN_RULES` `groups/2`. No wire changes, no byte is sent; reading costs
+  reply's "RQ1" and an ideographic full stop); two cases of the chain's digest. No wire changes, no byte is sent; reading costs
   11 µs a unit (34 µs a unit holding a group that is not `must`). Over the 88 corpus papers' stored replies read as the
   markers wire would bring them, 665 groups in 75 papers get their style back (575 a face, 90 a colour), and 2,637 that draw
   none of their own (a bibliography's fields, bare groups) go back around their words.
@@ -1250,7 +1257,7 @@ only how it meets the rest of the extension.
   and when it ends its signal cancels what is still asked and what it started settles before its last store write, so that
   no request outlives the call and an answer that came in time is stored (Codex's review of round B11: a reference in a
   request of its own outlived the call, out of the host's abort, its answer never stored).
-  `CHAIN_RULES` `references`: every row is read again from its stored reply and no stored reply is asked again; the
+  A case of the chain's digest: every row is read again from its stored reply and no stored reply is asked again; the
   references are new requests. Over the 88 corpus papers' Chinese, of the 1,406 phrase groups of their running text (bold
   252, italic 722, colour 280, small capitals 24, a paper's style 128), 196 hold an element and are not asked; of the 1,142
   asked (68 more are a span around the whole unit beside elements that set nothing, or hold another group), 20 are placed by

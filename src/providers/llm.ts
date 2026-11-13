@@ -13,7 +13,7 @@ import { TAG_RE } from '@/core/protector/tokens'
 import { redact } from '@/shared/diagnostics'
 import { createGlossaryMatcher, type GlossaryMatcher } from './glossary'
 import { createModel } from './model'
-import { buildPrompts, PROMPT_VERSION } from './prompt'
+import { buildPrompts, PROMPT_DIGEST } from './prompt'
 import { promptKey, type PromptsConfig } from './prompt-library'
 import { thinkingBodyFields } from './thinking'
 import type { TranslateContext } from './types'
@@ -130,7 +130,8 @@ export function llmTranslator(service: Service, o: LlmOptions): Translator {
   // the thinking switch changes the request only where an endpoint has an adapter (thinking.ts): elsewhere on and off are
   // one request and one identity
   const adapted = JSON.stringify(thinkingBodyFields(service.baseURL, 'enabled')) !== JSON.stringify(thinkingBodyFields(service.baseURL, 'disabled'))
-  const identity = `llm:${sha256Hex(JSON.stringify([endpointIdentity(service.baseURL), service.model, PROMPT_VERSION, promptKey(o.prompts), adapted ? service.thinking : null])).slice(0, 16)}`
+  // (the prompt as the model is sent it: the prompt's digest, taken at load, and the prompt in use; prompt.ts PROMPT_DIGEST)
+  const identity = `llm:${sha256Hex(JSON.stringify([endpointIdentity(service.baseURL), service.model, PROMPT_DIGEST, promptKey(o.prompts), adapted ? service.thinking : null])).slice(0, 16)}`
   const limits: Limits = { ...LLM_LIMITS, ...(isLoopback(service.baseURL) ? { inFlight: LOOPBACK_IN_FLIGHT } : {}) }
   // a table's matcher compiled once for every wire of a call (one table object a call)
   const matchers = new WeakMap<Glossary, GlossaryMatcher>()

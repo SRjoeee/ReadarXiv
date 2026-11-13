@@ -20,6 +20,7 @@
     "fixtures:stats": "node scripts/fetch-fixtures.mjs && tsx scripts/fixtures-stats.ts",
     "icons": "node scripts/icons.mjs",
     "tokens": "tsx scripts/tokens.ts",
+    "digests": "tsx scripts/digests.ts",
     "check:output": "node scripts/check-output.mjs",
     "e2e": "node tests/e2e/extension.mjs",
     "e2e:layout": "node tests/e2e/layout.mjs",

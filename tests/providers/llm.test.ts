@@ -3,11 +3,13 @@
 // as its remedy; the key goes to the service alone (#88 E3, E4)
 import { APICallError } from 'ai'
 import { MockLanguageModelV4 } from 'ai/test'
-import { chainOf, Fault, type FetchInit, type FetchReply, type Result, type Store, type Translator, type UnitIn } from '@readarxiv/translate'
-import { fakeClock } from '@readarxiv/translate/testing'
+import { chainOf, Fault, type FetchInit, type FetchReply, identityOf, keyOf, type Result, sha256Hex, type Store, type Translator, type UnitIn } from '@readarxiv/translate'
+import { fakeClock, memoryStore } from '@readarxiv/translate/testing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG, type Config } from '@/config/schema'
 import { endpointIdentity, LLM_LIMITS, llmTranslator, withoutKey } from '@/providers/llm'
+import { PROMPT_DIGEST } from '@/providers/prompt'
+import { promptKey } from '@/providers/prompt-library'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport } from '@/providers/transport'
 import type { Service } from '@/config/services'
@@ -44,7 +46,7 @@ const apiError = (statusCode: number, message = 'refused', headers?: Record<stri
   new APICallError({ message, url: 'u', requestBodyValues: {}, statusCode, responseBody: '', isRetryable: false, ...(headers ? { responseHeaders: headers } : {}) })
 
 describe('the LLM translator', () => {
-  it("its identity is the endpoint, the model, the prompt's version and key, and the thinking switch where it is sent; never the key", () => {
+  it("its identity is the endpoint, the model, the prompt's digest and key, and the thinking switch where it is sent; never the key", () => {
     const a = llmTranslator(SVC, { codeOf })
     expect(a.identity).toMatch(/^llm:[0-9a-f]{16}$/)
     expect(llmTranslator({ ...SVC, apiKey: 'other-key-000000' }, { codeOf }).identity).toBe(a.identity)
@@ -59,6 +61,34 @@ describe('the LLM translator', () => {
     expect(endpointIdentity('https://h/v1/?q=1#x')).toBe('https://h/v1')
     // the query stays out: it may carry a credential under any name (#607's review, declined at endpointIdentity)
     expect(llmTranslator({ ...SVC, baseURL: `${SVC.baseURL}?code=made-up-0123` }, { codeOf }).identity).toBe(a.identity)
+  })
+  it("an answer stored under the identity the prompt's version made (PROMPT_VERSION '5', where its digest stands now) is never reached: the model is asked, the old entry neither read nor changed", async () => {
+    // (the identity as llm.ts writes it, the prompt's part given: its digest now, the version before)
+    const identityWith = (prompt: string) => `llm:${sha256Hex(JSON.stringify([endpointIdentity(SVC.baseURL), SVC.model, prompt, promptKey(), SVC.thinking])).slice(0, 16)}`
+    let calls = 0
+    const model = modelReturning(() => {
+      calls++
+      return { segments: [{ id: '0', text: 'Frisch <x id="1"/> neu.' }] }
+    })
+    const t = llmTranslator(SVC, { codeOf, model })
+    expect(t.identity).toBe(identityWith(PROMPT_DIGEST))
+    const before: Translator = { ...t, identity: identityWith('5') }
+    expect(before.identity).not.toBe(t.identity)
+    const u = unit('u', ' be.')
+    const old = keyOf(before, 'zh', before.write(u, 'zh'))
+    const stale = 'Alt <x id="1"/> veraltet.'
+    const store = memoryStore()
+    store.entries.set(old, stale)
+    const rs: Result[] = []
+    for await (const r of chainOf({ store }).translate([u], 'zh', { translators: [t] })) rs.push(r)
+    expect(calls).toBe(1)
+    expect(rs[0]).toMatchObject({ ok: true, by: t.identity })
+    expect(JSON.stringify(rs[0])).toContain('Frisch')
+    expect(JSON.stringify(rs[0])).not.toContain('veraltet')
+    expect(store.reads.flat()).not.toContain(old)
+    expect(store.entries.get(old)).toBe(stale)
+    // (a page's row is keyed by the chain's identity over the translator's: another key as well)
+    expect(await identityOf([t])).not.toBe(await identityOf([before]))
   })
   it("today's request size and its re-ask; a local endpoint fewer in flight", () => {
     expect(llmTranslator(SVC, { codeOf }).limits).toEqual(LLM_LIMITS)

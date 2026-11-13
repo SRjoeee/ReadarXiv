@@ -35,14 +35,12 @@ export declare function aheadSamples(units: readonly SourceUnit[]): AheadSample[
 export declare function aheadSection(samples: readonly AheadSample[]): string
 /** the asked classes' commands the probe asks about at most, and the complete macros apart */
 export declare const COMPLETE_PROBE_MAX: number
-/** the probe's schema: a new section adds rows of a tag of its own */
-export declare const PROBE_SCHEMA: number
-/** the TeX that writes one row `LAYOUT-PROBE <schema> <tag> <fields…>` */
+/** the TeX that writes one row `LAYOUT-PROBE 1 <tag> <fields…>` (the marker a fixed string) */
 export declare const probeRow: (tag: string, ...fields: (string | number)[]) => string
 /** the probe document's body: its sections' TeX */
 export declare const probeTex: (sections: readonly string[]) => string
 /** every row of a probe's log */
-export declare function readProbe(log: string): { schema: number; tag: string; fields: string[] }[]
+export declare function readProbe(log: string): { tag: string; fields: string[] }[]
 /** the punctuation section (`punct`) */
 export declare function punctuationSection(samples: readonly { src: string; call: boolean; glued?: string }[], from?: number): string
 /** the layout marks' probe document, after \\begin{document} of the font probe: the punctuation section, then the ink

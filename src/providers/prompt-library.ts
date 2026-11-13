@@ -27,8 +27,8 @@ export interface PromptTemplate {
 }
 
 /**
- * The built-in prompts by id, in the order the lists show them. Their wording enters what the model is sent: a change
- * of meaning bumps PROMPT_VERSION (prompt.ts)
+ * The built-in prompts by id, in the order the lists show them. Their wording enters what the model is sent, and the
+ * prompt's digest (prompt.ts PROMPT_DIGEST) with it: any change to it is another translator identity
  */
 export const BUILT_IN_PROMPTS: Readonly<Record<string, PromptTemplate>> = Object.freeze({
   default: {
@@ -121,10 +121,15 @@ export function promptExists(config: PromptsConfig, id: string): boolean {
 
 /**
  * The prompt in use: a built-in by its id first (one's own with a built-in's id does not replace it), else the
- * reader's own with that id, else the default
+ * reader's own with that id, else the default. `builtIns` the product's own unless given (prompt.ts's case table gives
+ * its own, so that the rule is read apart from the built-ins' wording)
  */
-export function selectPrompt(config: PromptsConfig = DEFAULT_PROMPTS_CONFIG): PromptTemplate {
-  return builtIn(config.promptId) ?? config.patterns.find(p => p.id === config.promptId) ?? BUILT_IN_PROMPTS[DEFAULT_PROMPT_ID]!
+export function selectPrompt(
+  config: PromptsConfig = DEFAULT_PROMPTS_CONFIG,
+  builtIns: Readonly<Record<string, PromptTemplate>> = BUILT_IN_PROMPTS,
+): PromptTemplate {
+  const builtInOf = (id: string) => (Object.hasOwn(builtIns, id) ? builtIns[id] : undefined)
+  return builtInOf(config.promptId) ?? config.patterns.find(p => p.id === config.promptId) ?? builtIns[DEFAULT_PROMPT_ID]!
 }
 
 const VARIABLE = new RegExp(`\\{\\{(${PROMPT_TOKENS.join('|')})\\}\\}`, 'g')
@@ -135,8 +140,9 @@ export function renderTemplate(text: string, values: Record<PromptToken, string>
 }
 
 /**
- * What the prompt in use is, for the translator's identity (llm.ts hashes it): a built-in's id, whose wording
- * PROMPT_VERSION stands for; one's own as its two parts, each whole, so that any change to either is another identity
+ * What the prompt in use is, for the translator's identity (llm.ts hashes it): a built-in's id, whose wording the prompt's
+ * digest holds (prompt.ts PROMPT_DIGEST); one's own as its two parts, each whole, so that any change to either is another
+ * identity
  */
 export function promptKey(config: PromptsConfig = DEFAULT_PROMPTS_CONFIG): string {
   const prompt = selectPrompt(config)

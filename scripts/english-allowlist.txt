@@ -148,7 +148,8 @@ CHANGELOG.md 1  # 2026-11-02: +1, the reader-facing line for #554 quotes the dou
 tests/entry/abstract.test.ts 1  # 2026-11-04: the abstract page's link in Korean, the expectation
 tests/pdf-reader/layer-links-moved.test.ts 1  # 2026-11-04: the gate counts kana and hangul now: a Japanese heading, the expectation
 tests/e2e/probes/ui-shots.mjs 1  # 2026-11-04: the interface languages' own names heading the index's sections (product data, UI.md §6)
-packages/translate/tests/accept.test.ts 34  # 2026-11-07: Chinese readings of a unit, the inputs and expectations of the acceptance rule (packages/translate)
+packages/translate/tests/accept-cases.ts 17  # 2026-11-13: moved from accept.test.ts with the golden cases ACCEPT_DIGEST is taken over, so that `pnpm digests` reads them with no test runner (lane r7-identities); 2026-11-07: Chinese readings of a unit, the inputs of the acceptance rule (packages/translate)
+packages/translate/tests/accept.test.ts 17  # 2026-11-13: -17, the golden cases moved to accept-cases.ts (lane r7-identities); 2026-11-07: Chinese readings of a unit, the inputs and expectations of the acceptance rule (packages/translate)
 packages/translate/tests/host-statements.test.ts 6  # 2026-11-07: Chinese replies in Microsoft's shapes the HTML page met live (a marker without its #, jammed, inside a word, away from its #), the inputs of the strict reading
 packages/translate/tests/sha256.test.ts 1  # 2026-11-07: a multilingual text, the input of a digest checked against Node's
 packages/translate/src/groups.ts 1  # 2026-11-10: a full-width parenthesis quoted as the example of Unicode's compatibility folding a group's text is read under (lane style-spans)
@@ -186,5 +187,6 @@ packages/typeset/tests/unit/figure-line.test.ts 13  # 2026-11-11: +2, a joined b
 packages/typeset/tests/unit/named.test.ts 19  # 2026-11-10: Chinese replies of a block's names line and of a unit naming its author elsewhere, and the rows resolved from them, the inputs and expectations of one person's one translation (lane name-terms)
 packages/translate/src/words.ts 1  # 2026-11-12: Google's translation of a bold initial's fragments on staging quoted as the rule's evidence (2111.09276v1: the pronoun and two sounds; lane word-spans)
 packages/translate/tests/words.test.ts 29  # 2026-11-12: Chinese replies of the tags and markers wires to units whose groups cut a word or hold whole words, a Chinese source sentence with a group of a whole word, a glossary entry's translation, the inputs and expectations of the unit as the chain sends it and reads it back (lane word-spans)
+packages/translate/tests/chain-cases.ts 1  # 2026-11-13: an ideographic full stop in a German reply, the input of the chain's case for a group's end mark matched by its class (CHAIN_DIGEST's table, lane r7-identities)
 packages/translate/tests/chain-owned.test.ts 5  # 2026-11-12: Chinese replies of a scripted markers-wire translator (a unit's, its phrase group's reference, a second unit's), the inputs and expectations of a call that owns every request it starts (the review of round B11)
 packages/translate/tests/names-wire.test.ts 14  # 2026-11-10: Chinese replies of the tags wire to a block's names line and to a variant's person element, and the pieces read back from them (lane name-terms)
