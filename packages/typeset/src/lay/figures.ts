@@ -2,9 +2,9 @@
 // translation where it says something its source does not, in the faces of its style, each at the size its own width needs, on
 // its original's baseline from its anchor's edge into the free line beside its box, by its ink as the breaker sets every line (a
 // full-width mark's blank half at its edge past the anchor's edge, as its face draws it, and its target's compressMax), the original's
-// where its width does not fit (width the fit's only test: no fact over or under its text is read, the owner's rule of
-// 2026-11-13, figure-fit.ts; nor its set's size tie, which the part states and no size reads: each text at its own size,
-// docs/PDF-READER.md §19.12). Its facts are the part's, as the prepare states them from today's figure reading
+// where its width does not fit (width the fit's only test, figure-fit.ts: no fact over or under its text is read; nor its set's
+// size tie, which the part states and no size reads: each text at its own size, docs/PDF-READER.md §19.12, the owner's
+// rules of 2026-11-13). Its facts are the part's, as the prepare states them from today's figure reading
 // (layout/figure-text.mjs): its line (its box along its run and its baseline), its anchor (Placed.align: l start, c centre, r
 // end), its room before and after its box (Room.side), its style (size, fill, family, weight, slant) and its groups' (a run of its glyphs in another face: SpanAt.style, its translation inside the group drawn in
 // it), its own text (Placed.plain). One turned (Placed.dir) is set along its run as a level one along
