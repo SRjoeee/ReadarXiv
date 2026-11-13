@@ -219,6 +219,10 @@ const clearLayerStore = async () => {
   await p.close()
   return got
 }
+/** what arXiv's PDF page's content script decided, once it has: its floating button, or the reader laid over the page — the one or
+ *  the other (pdf.content.ts); the button is drawn once arXiv has answered its two HEADs, which a loaded machine answers later than
+ *  a fixed wait after the load allowed (2026-11-13: no button 3 s after the load). 15 s at most */
+const decided = page => page.waitForFunction(() => !!document.querySelector('.axt-floating, iframe[data-axt-pdf-reader]'), null, { timeout: 15_000, polling: 100 }).catch(() => undefined)
 /** the paper's pages counted on the left, and the extension's settings read: the reader has opened the paper */
 const paperOpened = (page, timeout = 30_000) => page.waitForFunction(() => { const s = window.__reader?.controller?.getState(); return !!s?.settings && s.sides.left.pages > 0 }, null, { timeout }).then(() => true, () => false)
 /** a change of the extension's settings written where the extension keeps them (the worker's storage) */
@@ -352,7 +356,14 @@ try {
     }
     const sources = { html: ENTRY.html.source, pdf: ENTRY.pdf.source }
     const panelEntries = frame => frame.evaluate(({ html, pdf }) => [...document.querySelectorAll('button')].filter(b => new RegExp(`${html}|${pdf}`).test(b.textContent ?? '')).map(b => ({ text: b.textContent?.trim(), disabled: b.getAttribute('aria-disabled') === 'true' })), sources)
+    /** an entry pressed: the press makes its panel or its popup go (the reader laid over the page, the popup closed), which may
+     *  come before the press's own answer does: a frame detached, a page closed, is the press done; the checks after it read
+     *  whether the reader came */
     const pressEntry = (frame, which) => frame.evaluate(({ which, sources }) => [...document.querySelectorAll('button')].find(b => new RegExp(sources[which]).test(b.textContent ?? ''))?.click(), { which, sources })
+      .catch(e => { if (!/detached|closed/i.test(e.message)) throw e })
+    /** a panel's or a popup's entries once it has drawn them (it draws them whole, once the PDF page has answered it), 15 s at
+     *  most; polled by time, not by frame: the popup's tab is not the active one, and a frame is not promised to it */
+    const entriesDrawn = frame => frame.waitForFunction(({ html, pdf }) => [...document.querySelectorAll('button')].some(b => new RegExp(`${html}|${pdf}`).test(b.textContent ?? '')), sources, { timeout: 15_000, polling: 100 }).catch(() => undefined)
 
     const page = track(await context.newPage())
     await page.goto(`https://arxiv.org/pdf/${PAPER}`)
@@ -364,7 +375,7 @@ try {
     await setConfig({ pdfReader: { enabled: false } })
     const off = track(await context.newPage())
     await off.goto(`https://arxiv.org/pdf/${PAPER}`)
-    await sleep(2500)
+    await decided(off)
     const offButton = await off.evaluate(() => document.querySelectorAll('.axt-floating').length)
     control('the reader off in the settings, the PDF page does not open it (the browser\'s viewer and the floating button instead)', { ...(await readerOver(off, 2000)), detail: `${offButton} floating button` })
     await off.close()
@@ -373,7 +384,8 @@ try {
     const over = await page.evaluate(() => ({ framed: !!document.querySelector('iframe[data-axt-pdf-reader]'), buttons: document.querySelectorAll('.axt-floating').length }))
     control('with the reader still over the page, it has not been left: the reader is there and the button is not', { ok: !over.framed && over.buttons === 1, detail: JSON.stringify(over) })
     const left = await leave(page)
-    await sleep(2500)
+    // (the button the way back draws, once it has: pdf.content.ts installs it at the reader's close)
+    await page.waitForFunction(() => !!document.querySelector('.axt-floating'), null, { timeout: 15_000, polling: 100 }).catch(() => undefined)
     const buttons = await page.evaluate(() => document.querySelectorAll('.axt-floating').length)
     check('the reader\'s way back takes it off the page, and the floating button is there', left && buttons === 1, `reader gone ${left}, ${buttons} floating button`)
     control('the reader is not over the page once it has been left (what the next two checks start from)', await readerOver(page, 1500))
@@ -381,8 +393,10 @@ try {
     // the button's panel, and its PDF entry
     const target = await page.evaluate(() => { const r = document.querySelector('.axt-floating')?.shadowRoot?.querySelector('.axt-fb-main')?.getBoundingClientRect(); return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null })
     await page.mouse.click(target.x, target.y)
-    await sleep(2500)
-    const panel = page.frames().find(f => f.url().includes('/popup.html'))
+    // (the panel's frame once it is there, then its entries once it has drawn them)
+    let panel = null
+    for (const end = Date.now() + 15_000; !panel && Date.now() < end; await sleep(100)) panel = page.frames().find(f => f.url().includes('/popup.html')) ?? null
+    if (panel) await entriesDrawn(panel)
     const entries = panel ? await panelEntries(panel) : []
     const [html, pdf] = [entries.find(e => /HTML/.test(e.text)), entries.find(e => /PDF/.test(e.text))]
     check('the button\'s panel offers both entries: the PDF one for the sample, the HTML one greyed (it has no HTML page)', !!pdf && !pdf.disabled && !!html && html.disabled, JSON.stringify(entries))
@@ -400,12 +414,22 @@ try {
     const leftAgain = await leave(page)
     await sleep(1500)
     check('the reader is off the page again before the popup\'s entry is pressed', leftAgain && !(await readerOnPage()), `way back taken ${leftAgain}, reader over the page ${await readerOnPage()}`)
-    const popup = track(await context.newPage())
-    await popup.goto(`chrome-extension://${id}/popup.html`)
-    await page.bringToFront()
-    await sleep(2500)
+    // (the popup as the toolbar opens it, over this page: the PDF page the active tab of its window, which the popup asks for at
+    // its start and every half second after while no page answers, three seconds in all (popup/state.ts), and the popup a tab
+    // beside it that does not take its place. Opened as the active tab and the PDF page brought to the front after it, its asks
+    // raced the bringing: a bring later than its three seconds left it on its own tab with no entry (2026-11-13). The PDF page made
+    // active and the popup's tab made beside it by the extension's own tabs API, each done when it resolves)
+    const popupTab = context.waitForEvent('page')
+    await worker.evaluate(async ({ paper, popup }) => {
+      const [tab] = await chrome.tabs.query({ url: paper })
+      await chrome.tabs.update(tab.id, { active: true })
+      await chrome.tabs.create({ url: popup, active: false, windowId: tab.windowId })
+    }, { paper: `https://arxiv.org/pdf/${PAPER}*`, popup: `chrome-extension://${id}/popup.html` })
+    const popup = track(await popupTab)
+    await entriesDrawn(popup)
     const popupEntries = await panelEntries(popup)
-    check('the popup on the PDF page offers the same two entries', popupEntries.length === 2 && popupEntries.some(e => /PDF/.test(e.text) && !e.disabled), JSON.stringify(popupEntries))
+    const popupShows = popupEntries.length ? '' : `; the popup shows “${(await popup.evaluate(() => document.body.innerText).catch(() => '')).replace(/\s+/g, ' ').slice(0, 160)}”`
+    check('the popup on the PDF page offers the same two entries', popupEntries.length === 2 && popupEntries.some(e => /PDF/.test(e.text) && !e.disabled), `${JSON.stringify(popupEntries)}${popupShows}`)
     await pressEntry(popup, 'pdf')
     const viaPopup = await readerOver(page)
     const tabs = context.pages().filter(p => /arxiv\.org\/pdf\//.test(p.url())).length
@@ -1317,7 +1341,7 @@ try {
     await page.evaluate(() => window.__reader.controller.download('original'))
     const vt = await viewerTab
     await vt?.waitForLoadState('load').catch(() => undefined)
-    await sleep(3000)
+    if (vt) await decided(vt)
     const viewer = vt ? await vt.evaluate(() => ({ url: location.href, reader: !!document.querySelector('iframe[data-axt-pdf-reader]'), buttons: document.querySelectorAll('.axt-floating').length, noOpener: window.opener === null })).catch(e => ({ error: String(e.message).slice(0, 80) })) : null
     check('the original\'s download opens arXiv\'s PDF in a tab of its own at #axt-viewer, no reader laid over it (the setting on), the floating button there, no opener', !!viewer && /^https:\/\/arxiv\.org\/pdf\/[^#]+#axt-viewer$/.test(viewer.url ?? '') && viewer.reader === false && viewer.buttons === 1 && viewer.noOpener === true, JSON.stringify(viewer))
     await vt?.close()

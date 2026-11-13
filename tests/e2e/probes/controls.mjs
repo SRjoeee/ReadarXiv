@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { edges, menuRows, offCentre, shootEach } from './align.mjs'
+import { chromiumOptions } from '../lib/chromium.mjs'
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = fileURLToPath(new URL('../../../.output/chrome-mv3-dev', import.meta.url))
@@ -356,14 +357,14 @@ async function menus(page, lang) {
 // ---- each task of Part 3 adds its control's checks above this line, and its function to CHECKS ----
 const CHECKS = [base, buttons, forms, segmented, menus]
 
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, chromiumOptions({
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: true,
   // tall enough for the whole sheet and its menus: a popover past the window's foot is cut short in its shot
   viewport: { width: 1280, height: 1800 },
   deviceScaleFactor: 2,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
-})
+}))
 const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))
 const id = new URL(worker.url()).host
 

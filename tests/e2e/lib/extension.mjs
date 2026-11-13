@@ -6,17 +6,17 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { chromiumOptions } from './chromium.mjs'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 const { chromium } = createRequire(REPO)('playwright')
 export const BUILD = join(REPO, '.output/chrome-mv3')
 /**
- * The features Playwright turns off (its chromiumSwitches.ts, 1.63), save one: storage partitioning, which a reader's
- * Chrome has on. A later --disable-features replaces Playwright's list. Left off, the TeX page framed by the reader over
- * arXiv's PDF page shared the cache of the one framed by an extension page, which in Chrome it does not (measured in
- * Chrome 145, 153 and 154: the warm-up's report)
+ * The launch: chromium.mjs's options, storage partitioning left on (`partitioned`), which a reader's Chrome has on and
+ * Playwright turns off. Left off, the TeX page framed by the reader over arXiv's PDF page shared the cache of the one framed by
+ * an extension page, which in Chrome it does not (measured in Chrome 145, 153 and 154: the warm-up's report)
  */
-const PLAYWRIGHT_OFF = ['AvoidUnnecessaryBeforeUnloadCheckSync', 'DestroyProfileOnBrowserClose', 'DialMediaRouteProvider', 'GlobalMediaControls', 'HttpsUpgrades', 'LensOverlay', 'MediaRouter', 'PaintHolding', 'BlockOriginHeaderModificationOnRedirect', 'Translate', 'AutoDeElevate', 'OptimizationHints']
+const PARTITIONED = { partitioned: true }
 
 /**
  * { context, worker, id, readerUrl(query) }: `profile` names the temporary profile's directory, `extension` another
@@ -69,7 +69,7 @@ export async function launchWithReader({ profile = 'reader', extension = BUILD, 
   let context
   try {
     // (AXT_CHROME: another Chrome, the floor's for one, as the other suites take it)
-    context = await chromium.launchPersistentContext(profileDir, { ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }), ...(backForwardCache ? { ignoreDefaultArgs: ['--disable-back-forward-cache'] } : {}), headless, viewport, ...(deviceScaleFactor ? { deviceScaleFactor } : {}), args: [`--disable-features=${PLAYWRIGHT_OFF.join(',')}`, `--disable-extensions-except=${extension}`, `--load-extension=${extension}`, ...args] })
+    context = await chromium.launchPersistentContext(profileDir, chromiumOptions({ ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }), ...(backForwardCache ? { ignoreDefaultArgs: ['--disable-back-forward-cache'] } : {}), headless, viewport, ...(deviceScaleFactor ? { deviceScaleFactor } : {}), args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, ...args] }, PARTITIONED))
   } catch (e) {
     removeTemporary()
     throw e

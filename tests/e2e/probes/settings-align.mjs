@@ -22,6 +22,7 @@ import { chromium } from 'playwright'
 import { copyWithGrants } from '../ext-copy.mjs'
 import { chooseUiLanguage } from '../options-page.mjs'
 import { menuRows } from './align.mjs'
+import { chromiumOptions } from '../lib/chromium.mjs'
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const SRC = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
@@ -66,13 +67,13 @@ const BASE = `http://127.0.0.1:${server.address().port}/v1`
 rmSync(PROFILE, { recursive: true, force: true })
 mkdirSync(OUT, { recursive: true })
 copyWithGrants(SRC, EXT, { hostPermissions: ['http://127.0.0.1/*'] })
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, chromiumOptions({
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: !process.env.AXT_HEADED,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: 1300, height: 1100 },
   deviceScaleFactor: 2,
-})
+}))
 let [worker] = context.serviceWorkers()
 if (!worker) worker = await context.waitForEvent('serviceworker')
 const extId = worker.url().split('/')[2]

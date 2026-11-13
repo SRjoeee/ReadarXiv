@@ -32,6 +32,7 @@ import { copyWithGrants } from './ext-copy.mjs'
 import { startEchoEndpoint } from './lib/echo-endpoint.mjs'
 import { serveOffline } from './lib/offline-arxiv.mjs'
 import { addService, openOptions, setSwitch } from './options-page.mjs'
+import { chromiumOptions } from './lib/chromium.mjs'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const SRC = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
@@ -268,7 +269,7 @@ const PAPER_URL = `${site.origin}/html/${PAPER}`
 console.log(`${PAPER_URL} and the echo endpoint at ${endpoint.baseURL}: nothing leaves this machine`)
 
 // ── The baseline: the same paper, no extension ────────────────────────────────
-const baseContext = await chromium.launchPersistentContext(BASE_PROFILE, LAUNCH)
+const baseContext = await chromium.launchPersistentContext(BASE_PROFILE, chromiumOptions(LAUNCH))
 await keepOffline(baseContext, refused)
 const basePage = await baseContext.newPage()
 await basePage.goto(PAPER_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 })
@@ -291,10 +292,10 @@ check('arXiv\'s own style sheets, vendored, style the page', sheets.length >= 4 
 // ── The treatment: with the extension, one audit per mode ────────────────────────────────
 // A copy of the build that also matches 127.0.0.1 and may talk to the echo endpoint: the real build is for arxiv.org and asks for an endpoint's host at run time (ext-copy.mjs)
 copyWithGrants(SRC, EXT, { hostPermissions: ['http://127.0.0.1/*'], contentMatches: { 'https://arxiv.org/html/*': ['http://127.0.0.1/html/*'] } })
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, chromiumOptions({
   ...LAUNCH,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
-})
+}))
 await keepOffline(context, refused)
 context.setDefaultNavigationTimeout(90_000)
 let [worker] = context.serviceWorkers()
