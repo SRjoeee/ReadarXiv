@@ -4849,7 +4849,11 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
   accent). One join reads wrong: 2610.20507v1 p8's "giant + AGB / (∼ 12% of τMS, not followed)" and the region's own label
   "black hole" 12.8 pt under it, centred on one axis, are one text. Held to TeX's interline rule as a paragraph's lines are
   (`oneLead`), the step would undo it and ten joins that read right (2406.06525v1's centred caption paragraphs, rows a tool set
-  4.21 to 4.85 pt apart; 2610.31506v1's two node labels): not taken. No joined text stands as the original for a glyph: Google
+  4.21 to 4.85 pt apart; 2610.31506v1's two node labels): not taken. Held to the order the content stream sets a text's rows
+  in (one text object, one node, set line after line: rows one text only where each comes after the row above it in the
+  stream), it would undo that join and one that reads right (2610.19274v1 p17's white "CTJA / module", its lower row shown
+  first): not taken either; of the 186 texts the step makes over the 89, two stand out of the stream's order, those two. No
+  joined text stands as the original for a glyph: Google
   sets a sign at its text's end (item 4's stop after the translation's last character, with no full stop of its own); p10's
   colour sign, inkless, stays page ink where it stands and its text is sent with its own full stop. A ground under a glyph no
   run holds is read by no relation: item 4's chip stays where it stood, empty of its stop (a known residue). **Its room is the
@@ -4860,7 +4864,8 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
   path ran past the path's edge (2610.20507v1 p8: one line from 155.7 to 297.5 in a region ending at 296.21). And its lines are
   read top to bottom, as its rows were joined (geometry.ts): its first line, from which it is laid, its top row's, whatever
   order its runs stand in the stream (the same label's lowest row stands first in the stream, and its translation was laid on
-  it). **A joined text is laid as a paragraph of the body is laid** (the owner's
+  it). Measured over the 89: the room across of 178 figure members on 22 papers moves, every joined text's, to its path's
+  inside; one member's lines are read in another order (that label's). **A joined text is laid as a paragraph of the body is laid** (the owner's
   ruling of 2026-11-11: a figure's text keeps the body's rules, none of its own and no optical correction): its first line on its
   first row's baseline, its leading the ladder's and the page fill's, as a body paragraph's of the same lines and height (a
   translation of fewer lines takes a looser leading and fills its rows' extent), no line under its last row's baseline. A CJK
