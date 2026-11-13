@@ -136,6 +136,33 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
   }
   const A = Array.prototype
   const protos = new Map()
+  // (a list copied into a Set (sites.mjs `ns`): the copy's iteration of it is the Set's making, not a read; `hush` names the
+  // objects whose next iteration is that copy's)
+  const hushed = new WeakMap()
+  const iterated = (ids, obj) => {
+    const n = hushed.get(obj) ?? 0
+    if (n > 1) hushed.set(obj, n - 1)
+    else if (n === 1) hushed.delete(obj)
+    else for (const id of ids) read(id, 'iterate')
+  }
+  /** every method of a prototype the swapped one does not take itself: a read of the list, by the method's name (what is
+   *  not a membership test uses the entries whole: a list read so is not judged by its entries' hits) */
+  const readsAll = (P, base, ids, own) => {
+    for (const name of Object.getOwnPropertyNames(base)) {
+      if (name === 'constructor' || own.has(name)) continue
+      const d = Object.getOwnPropertyDescriptor(base, name)
+      if (typeof d?.value !== 'function') continue
+      const fn = d.value
+      Object.defineProperty(P, name, {
+        value: function (...a) {
+          for (const id of ids) read(id, name)
+          return fn.apply(this, a)
+        },
+        writable: true,
+        configurable: true,
+      })
+    }
+  }
   const listProto = id => {
     const P = Object.create(A)
     Object.defineProperty(P, MARK, { value: [id] })
@@ -153,8 +180,9 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
       member(id, x, i !== -1)
       return i
     })
-    // (a test by a predicate: each entry it holds true is a hit; the call's outcome is whether any was)
-    for (const name of ['some', 'find', 'findIndex', 'findLast', 'findLastIndex', 'filter', 'every'])
+    // (a test by a predicate: the entries it held true for are hits (`some` and the finds stop at the first); the call's
+    // outcome is whether any was)
+    for (const name of ['some', 'find', 'findIndex', 'findLast', 'findLastIndex', 'filter'])
       define(name, function (fn, thisArg) {
         let any = false
         const res = A[name].call(this, (v, i, a) => {
@@ -168,15 +196,22 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
         outcome(id, any)
         return res
       })
-    for (const name of ['forEach', 'map', 'join', 'reduce', 'slice', 'concat', 'flatMap'])
-      define(name, function (...a) {
-        read(id, name)
-        return A[name].apply(this, a)
+    // (`every` is a conjunction: the entry it stops at, its predicate false there, is the one that decided the call; a call
+    // that held for every entry was decided by none of them, any one taken away)
+    define('every', function (fn, thisArg) {
+      const res = A.every.call(this, (v, i, a) => {
+        const ok = fn.call(thisArg, v, i, a)
+        if (!ok) hit(id, v)
+        return ok
       })
+      outcome(id, res)
+      return res
+    })
     define(Symbol.iterator, function () {
-      read(id, 'iterate')
+      iterated([id], this)
       return A[Symbol.iterator].call(this)
     })
+    readsAll(P, A, [id], new Set(['includes', 'indexOf', 'lastIndexOf', 'some', 'find', 'findIndex', 'findLast', 'findLastIndex', 'filter', 'every']))
     return P
   }
   const SP = Set.prototype
@@ -191,53 +226,129 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
       for (const id of ids) member(id, x, found && S[id].entries.includes(x))
       return found
     })
-    for (const name of ['forEach', 'values', 'keys', 'entries'])
-      define(name, function (...a) {
-        for (const id of ids) read(id, name)
-        return SP[name].apply(this, a)
-      })
     define(Symbol.iterator, function () {
-      for (const id of ids) read(id, 'iterate')
+      iterated(ids, this)
       return SP[Symbol.iterator].call(this)
     })
+    readsAll(P, SP, ids, new Set(['has']))
     return P
   }
+
+  // ---- patterns. One outcome a consumption: each call that hands the pattern a text (exec, test, a string's match,
+  // matchAll, replace, replaceAll, search, split) records false where it found no match in it, true where it found one, and
+  // a hit for each match it read. Test, match, replace and search run their own exec calls: those are the consumption's,
+  // read when it ends (`frames`); matchAll and split match with a copy their species makes, so their matches are read off
+  // the iterator, or found again by a plain copy; an exec the code calls itself is a consumption of its own (a loop's last
+  // call, which finds none, one false). The pattern's source read (`.source`, its text) is a read: what is made of it no
+  // site sees
   const RP = RegExp.prototype
-  const entryOf = (id, text) => {
-    // (the alternative a match stands for: the longest of the list's entries its text holds)
+  const rxExec = RP.exec
+  const sourceOf = Object.getOwnPropertyDescriptor(RP, 'source').get
+  const flagsOf = Object.getOwnPropertyDescriptor(RP, 'flags').get
+  // (a match's hits: the entries whose alternatives its path went through (pattern.mjs): the shadow run at the match's place
+  // on its text takes the same path, and an entry's capture is defined where its alternative was on it; an entry in a
+  // repeated group, or every entry of a pattern with no shadow, a hit where the match's text holds its word. A match through
+  // no entry is a hit of '(no entry)'; a shadow that did not take the match's path, '(unread)', its entries read by their
+  // words)
+  const shadows = new Map()
+  const shadowOf = id => {
+    if (shadows.has(id)) return shadows.get(id)
     const s = S[id]
-    const t = s.flags?.includes('i') ? text.toLowerCase() : text
-    let best = null
-    for (const e of s.entries) {
-      const w = s.flags?.includes('i') ? e.toLowerCase() : e
-      if (t.includes(w) && (!best || w.length > best.length)) best = e
-    }
-    return best
+    const fold = s.flags?.includes('i') ? x => x.toLowerCase() : x => x
+    const words = (s.alts?.words ?? (s.entries ?? []).map(w => ({ w }))).map(x => ({ ...x, f: fold(x.w) }))
+    const rx = s.alts?.shadow != null ? new RegExp(s.alts.shadow, `${s.flags.replace(/[gy]/g, '')}y`) : null
+    const out = { fold, words, rx, marks: s.alts?.marks ?? [], plain: rx ? words.filter(x => x.rep && !x.look) : words.filter(x => x.look !== 'neg') }
+    shadows.set(id, out)
+    return out
   }
-  const matched = (id, m) => {
-    outcome(id, m !== null)
-    if (m) hit(id, entryOf(id, m[0]) ?? '(no entry)')
-    return m
+  const attribute = (id, m) => {
+    const sh = shadowOf(id)
+    const text = sh.fold(m[0])
+    let any = false
+    const byWord = xs => {
+      for (const x of xs)
+        if (text.includes(x.f)) {
+          hit(id, x.w)
+          any = true
+        }
+    }
+    if (sh.rx && sh.words.some(x => !x.rep && (x.look === 'pos' || (!x.look && text.includes(x.f))))) {
+      sh.rx.lastIndex = m.index
+      const sm = rxExec.call(sh.rx, m.input)
+      if (sm && sm.index === m.index && sm[0] === m[0]) {
+        for (const [k, g] of sh.marks)
+          if (sm[g] !== undefined) {
+            hit(id, sh.words[k].w)
+            any = true
+          }
+      } else {
+        hit(id, '(unread)')
+        byWord(sh.words.filter(x => !x.look && !x.rep))
+      }
+    }
+    byWord(sh.plain)
+    if (!any) hit(id, '(no entry)')
+  }
+  const consumed = (id, matches) => {
+    outcome(id, matches.length > 0)
+    for (const m of matches) attribute(id, m)
+  }
+  const frames = []
+  const within = (id, rx, run) => {
+    const frame = { rx, matches: [] }
+    frames.push(frame)
+    try {
+      return run()
+    } finally {
+      frames.splice(frames.lastIndexOf(frame), 1)
+      consumed(id, frame.matches)
+    }
   }
   const reProto = id => {
     const P = Object.create(RP)
     Object.defineProperty(P, MARK, { value: [id] })
-    Object.defineProperty(P, 'exec', {
-      value: function (s) {
-        return matched(id, RP.exec.call(this, s))
-      },
-      writable: true,
-      configurable: true,
+    const define = (name, fn) => Object.defineProperty(P, name, { value: fn, writable: true, configurable: true })
+    define('exec', function (s) {
+      const m = rxExec.call(this, s)
+      const top = frames.at(-1)
+      if (top?.rx === this) {
+        if (m) top.matches.push(m)
+      } else consumed(id, m ? [m] : [])
+      return m
     })
-    // (matchAll matches with a copy its species makes, which is RegExp's: its matches are read off the iterator)
-    Object.defineProperty(P, Symbol.matchAll, {
-      value: function* (s) {
+    define('test', function (s) {
+      return within(id, this, () => RP.test.call(this, s))
+    })
+    for (const k of [Symbol.match, Symbol.replace, Symbol.search])
+      define(k, function (...a) {
+        return within(id, this, () => RP[k].apply(this, a))
+      })
+    define(Symbol.matchAll, function* (s) {
+      let any = false
+      try {
         for (const m of RP[Symbol.matchAll].call(this, s)) {
-          matched(id, m)
+          if (!any) {
+            any = true
+            outcome(id, true)
+          }
+          attribute(id, m)
           yield m
         }
+      } finally {
+        if (!any) outcome(id, false)
+      }
+    })
+    define(Symbol.split, function (s, limit) {
+      const out = RP[Symbol.split].call(this, s, limit)
+      const copy = new RegExp(sourceOf.call(this), `${flagsOf.call(this).replace(/[gy]/g, '')}g`)
+      consumed(id, [...String(s).matchAll(copy)])
+      return out
+    })
+    Object.defineProperty(P, 'source', {
+      get() {
+        read(id, 'source')
+        return sourceOf.call(this)
       },
-      writable: true,
       configurable: true,
     })
     return P
@@ -270,8 +381,29 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
     ls: (id, arr) => (Array.isArray(arr) ? Object.setPrototypeOf(arr, protoFor(`l${id}`, () => listProto(id))) : arr),
     st: (id, set) => (set instanceof Set ? Object.setPrototypeOf(set, protoFor(`s${id}`, () => setProto([id]))) : set),
     re: (id, rx) => (rx instanceof RegExp ? Object.setPrototypeOf(rx, protoFor(`r${id}`, () => reProto(id))) : rx),
+    /** a table read by a key known at run time (`T[x]`): the entry read, the key's hit */
+    tk: (id, table, key) => {
+      const found = table != null && Object.hasOwn(table, key)
+      outcome(id, found)
+      if (found) hit(id, key)
+      return table[key]
+    },
+    /** a table's keys tested (`Object.hasOwn(T, x)`): found, the key's hit */
+    th: (id, table, key) => {
+      const found = Object.hasOwn(table, key)
+      outcome(id, found)
+      if (found) hit(id, key)
+      return found
+    },
+    /** before a Set is made of other things (sites.mjs's `new Set(x)` edit): each list among them is iterated once by the
+     *  making, which is no read of it */
+    hush: (...sources) => {
+      for (const s of sources) if (marksOf(s)) hushed.set(s, (hushed.get(s) ?? 0) + 1)
+    },
     /** a Set made of other things: the lists among them (marked by their prototypes) give it their sites */
     ns: (set, ...sources) => {
+      // (a source the making did not iterate after all: its hush taken back)
+      for (const s of sources) if (hushed.has(s)) hushed.delete(s)
       const ids = [...new Set(sources.flatMap(s => marksOf(s) ?? []))].filter(id => S[id].kind !== 're').sort((a, b) => a - b)
       return ids.length ? Object.setPrototypeOf(set, protoFor(`s${ids.join(',')}`, () => setProto(ids))) : set
     },

@@ -42,8 +42,15 @@ export interface Row {
   hits?: Record<string, number>
   reads?: number
   listReads?: Record<string, number>
+  unseen?: string[]
+  holder?: { name: string; lines: number; read: 'states its value' | 'names the definition' | null }
+  judged?: string[]
+  entriesNotJudged?: { entry: string; why: string }[]
+  neverTested?: boolean
   handedWhole?: number
   foldedToValue?: boolean
+  budget?: { quantity: string; stops: string }[]
+  keyReads?: Record<string, number>
   module?: { loaded: boolean | null; importers: string[] | null }
 }
 export interface Ledger { format: string; about: string; recorded: { commit: string | null; sites: string; inputs: Recording['inputs'] }; holdoutAdds: string[]; rules: Record<string, Row> }
@@ -61,8 +68,10 @@ export interface TrackedRow {
   cites?: { flag: string; papers?: string[] }
   runs?: Record<string, [number, number, number]>
   reads?: Record<string, number>
+  keyReads?: Record<string, number>
   margin?: { units: 'rule' | 'slack'; false: Case | null; true: Case | null }
   hits?: number[]
+  judged?: number
   tests?: { false?: Record<string, number[]>; true?: Record<string, number[]> }
   folds?: number
   module?: { loaded: boolean | null; importers: string[] | null }
@@ -83,3 +92,6 @@ export declare function citationsOf(comment: string | null | undefined): Citatio
 export declare function readsOf(sites: { reads?: Record<string, number> }[]): Record<string, number>
 export declare function ledgerOf(map: SiteMap, recording: Recording, options?: { holdout?: string[] | null }): Ledger
 export declare function recordedOf(row: Row): string
+export declare function exercisedBy(row: Row): string
+export declare const THIRD_INPUT: string
+export declare function entriesJudged(rule: { entries?: string[] }, sites: (import('./sites.mjs').Site | undefined)[]): { judged: string[]; notJudged: { entry: string; why: string }[] }
