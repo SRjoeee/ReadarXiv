@@ -62,6 +62,17 @@ const WEBSITE_IMPORTS: readonly { path: string; names: readonly string[] }[] = [
   { path: 'ui/strings', names: ['languageName', 'profileName', 'R', 'S', 'setLocale'] },
 ]
 
+/**
+ * Modules of the workspace packages the website reaches by a relative path into its submodule (`vendor/readarxiv/<path>`),
+ * outside the alias and outside src/: its browser checks and its fixture scripts, which plain `node` runs (Node's own type
+ * stripping reads a `.ts` module) or esbuild bundles. The path with its extension, as such a specifier names it, and every
+ * value taken from it (readarxiv-web e0ae76dd, gathered 2026-11-13). Held here: each path a change of this repository moved
+ * under them (the engine's tail.mjs made TypeScript, round RB2b), until the website imports it through a package's entry.
+ */
+const WEBSITE_PACKAGE_PATHS: readonly { path: string; names: readonly string[] }[] = [
+  { path: 'packages/engine/src/tail.ts', names: ['startxrefOf'] },
+]
+
 const SRC = resolve(__dirname, '../../src')
 /** What a bundler finds for `<path>`, in the order it tries: the module's own file, then a directory's index */
 const CANDIDATES = ['.ts', '.tsx', '.mjs', '.d.mts', '/index.ts', '/index.tsx', '/index.mjs', '/index.d.mts']
@@ -105,5 +116,19 @@ describe("the website's @vendor/ imports: every module resolves at its path unde
     const listed = WEBSITE_IMPORTS.filter(entry => entry.names.length > 0)
     expect([...imported.keys()].sort()).toEqual(listed.map(entry => entry.path).sort())
     for (const { path, names } of listed) expect(imported.get(path), path).toEqual([...names].sort())
+  })
+})
+
+describe("the website's relative paths into the workspace packages: every module is at its path, loads, and exports every value the website takes from it", () => {
+  it('the list names each path once and each name once', () => {
+    expect(new Set(WEBSITE_PACKAGE_PATHS.map(entry => entry.path)).size).toBe(WEBSITE_PACKAGE_PATHS.length)
+    for (const { path, names } of WEBSITE_PACKAGE_PATHS) expect(new Set(names).size, path).toBe(names.length)
+  })
+
+  it.each(WEBSITE_PACKAGE_PATHS)('$path is a file, loads and exports $names', async ({ path, names }) => {
+    const file = resolve(__dirname, '../..', path)
+    expect(isFile(file), path).toBe(true)
+    const module: Record<string, unknown> = await import(/* @vite-ignore */ file)
+    expect(names.filter(name => !(name in module)), `${path} no longer exports`).toEqual([])
   })
 })
