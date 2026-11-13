@@ -60,7 +60,7 @@ export type PreparedPage = {
 }
 
 /** two scales of a tie alike: within the fit's thousandths (its caps are floored to them: U.params, a cell's cap) */
-export const SAME = 0.0005
+const SAME = 0.0005
 /** the pages a member has lines on (its pages) begin with its first */
 const firstPage = (m: FlowMember) => m.pages[0] ?? 0
 /** how far under TeX's text block bottom a layout's lines stand where the state that laid them let them past it (FitState.over:
@@ -165,6 +165,7 @@ export function tieCaps(
   const wasOf = new Map(origin?.of ?? [])
   for (const t of sizes) {
     const on = t.ords.filter((o) => fitOf.has(o))
+    // (a member is capped only by a mate the call lays: a tie with one member laid caps nothing)
     if (on.length < 2) continue
     for (const o of on) {
       const from = firstOf.get(o) ?? 0

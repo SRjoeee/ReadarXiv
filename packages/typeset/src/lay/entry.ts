@@ -626,7 +626,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
     }
     if (cur.length) flows.push(cur)
   }
-  // (a flow's size tie, one paragraph of TeX's at one scale. A figure's set, which the part states as a size tie too (today's
+  // (a flow's size tie, one paragraph of TeX's at one scale. A figure's set, which the part states as a size tie too (the
   // figure reading's sets), is read for no size: each of its texts at what its own width needs, a label S.figures sets and one
   // the paragraph path lays (an element, lines joined, a label) alike, the owner's ruling of 2026-11-13 on a figure's sets
   // (docs/PDF-READER.md §19.12, §18.54). A size tie holding a figure text is a figure's set: no figure text joins a flow)

@@ -10,7 +10,7 @@
 // blank half at its edge (`blank1`, B.break leadOf and hangOf) is no part of the line it needs, and stands past its anchor's
 // edge (today's set it by its advance: a centred label ending with a closing mark a quarter em off its original's middle, a
 // right-aligned one half an em short of its end). Ported from engine 065c1d973 layer-proto/figure-fit.mjs (lineOf, fitFigure,
-// sameAsSource; today's fitted a set by one factor, fitFigureSet).
+// sameAsSource).
 
 /** a figure unit as the fit reads it: its box's length along its run, its size, its anchor, its room before and after its box */
 export type FitFigure = {

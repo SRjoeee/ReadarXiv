@@ -5,7 +5,7 @@
 // else left the original's, why told: `no row`, `kept`, `untranslated`, `same` as its source, `unhidden` where the document
 // holds no group of it, a face's refusal (`served`), `unfit` (its width needs more than the floor). Width is the fit's only test
 // (figure-fit.ts, the owner's rule of 2026-11-13): a translation's height is not measured, nor what another text of its figure
-// needs (the owner's ruling of 2026-11-13 on a figure's sets: each at its own size). Ported from engine 065c1d973 run.mjs
+// needs (each at its own size, docs/PDF-READER.md §19.12). Ported from engine 065c1d973 run.mjs
 // paintFigures RUN:1441-1496 without its paint (the hidden box, the SVG, the text layer: the reader's and D.*'s), layer2.mjs
 // figureRuns, figureRunsWidth L2:4824-4836 and fonts.mjs classifyFont's family, weight and slant (fonts.mjs:42-52). A face not
 // loaded yet is waited for (B.cover: `waiting`, its faces in `wait`), where today's run awaited it.
