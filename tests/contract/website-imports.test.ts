@@ -70,11 +70,12 @@ const WEBSITE_IMPORTS: readonly { path: string; names: readonly string[] }[] = [
  * - the files and folders it reads, bundles or credits by their path (names: none), a folder written with its `/`.
  * A path only named in a check that it is absent somewhere is not held. A path leaves this list only when the website stops
  * reaching it, in a pull request that names the website's commit that stopped; one a change here must move is moved here and
- * at the website's next pin together (round RB2b: the engine's tail.mjs made TypeScript, its two importers' specifiers the pin's).
+ * at the website's next pin together (round RB2b: the engine's tail.mjs and ink.mjs made TypeScript, their three importers'
+ * specifiers the pin's).
  */
 const WEBSITE_PACKAGE_PATHS: readonly { path: string; names: readonly string[] }[] = [
   // (the modules imported, and the values taken)
-  { path: 'packages/engine/src/ink.mjs', names: ['pageInk'] },
+  { path: 'packages/engine/src/ink.ts', names: ['pageInk'] },
   { path: 'packages/engine/src/tail.ts', names: ['startxrefOf'] },
   { path: 'packages/format/src/index.ts', names: ['toggleKind'] },
   { path: 'packages/reader/e2e/page/convert', names: ['fixtureLay', 'pagesOf'] },
