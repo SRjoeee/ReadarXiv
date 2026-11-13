@@ -10,7 +10,7 @@ import { firstDifference, hasTap, ledger, TAP } from './tap.ts'
 type Settle = { group: string; ids: number[]; why: string | null }
 
 describe.skipIf(!hasTap)('S.table.settle: replayed on every call of the corpus', () => {
-  it('paints or withholds every group as today did, but a group on two pages, painted where its cells are', { timeout: 120_000 }, () => {
+  it('paints or withholds every group as today did, one on two pages by its cells', { timeout: 120_000 }, () => {
     const differ: string[] = []
     const count: Record<string, number> = { groups: 0 }
     for (const f of readdirSync(join(TAP, 'ledgers'))) {
