@@ -78,6 +78,7 @@
 // Pure arithmetic; an original module (no port statement).
 import { unitClass } from '../content-classes.ts'
 import { accentTexts } from '../accents.ts'
+import { latin1 } from '../../bounded-reads.ts'
 import { classifyFont } from '../facts.ts'
 import { ADDRESS_GROUP, EMAIL_ADDRESS, identifiersIn, lineRulesOf, OWN_WORK, RULE_EM, spellOf, utf8 } from './deps.mjs'
 
@@ -147,13 +148,11 @@ const PH_GAP = 0.3
 const r2 = v => Math.round(v * 100) / 100
 const PAIR = /\p{L}{2}/u
 
-/** a text as the front end holds a source's: its UTF-8 bytes in a Latin-1 view (latex-front.mjs latin1, read back by mt.mjs utf8) */
+/** a text as the front end holds a source's: its UTF-8 bytes in a Latin-1 view (latex-front.mjs latin1, read back by mt.mjs utf8), the
+ *  bytes read by the engine's one latin1 (bounded-reads.ts) */
 const ENCODER = new TextEncoder()
 function sourceView(s) {
-  const b = ENCODER.encode(s)
-  let out = ''
-  for (let i = 0; i < b.length; i += 0x8000) out += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000))
-  return out
+  return latin1(ENCODER.encode(s))
 }
 
 /** the font family of a face, read once a face */
