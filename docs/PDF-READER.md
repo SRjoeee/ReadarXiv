@@ -7013,6 +7013,19 @@ cell is laid in the cell's room in its column, so that no cell is drawn smaller 
 - **The names rules read the whole text**: R1 and R2 (`instrument/language.ts`) read a forced break as a space, so a cell is kept
   only where no token of any of its lines is a word; R4 reads it as one text cell of one unit, its key its content (the break an
   element of it, as a cell's `\hline` is).
+- **The lay: a line of a grid cell is laid in the cell's room in its column, whichever line it is** (the coordinator's statement,
+  `packages/typeset/src/lay/adapt.ts` `columnRoomOf`): where the part states the cell's `Room.column`, every line's room is it,
+  not only a single line's; the cell has one size, the largest not over the original's at which every line fits (the fit's states
+  in the same room, no widening); its lines stand as TeX set them in the cell's box: the box, as wide as its widest laid line, in
+  the room by the cell's class (`Placed.align`), each line in the box by its own (`Placed.inner`, read off arXiv's page; absent,
+  the cell's class: `breaker/place.ts` boxLines). It replaces, for these cells, each line in its own width widened half way to
+  its neighbour where clipped at the floor. A reply that sets the break at its start or end takes none (U.breaks), and the breaker
+  fills the cell's lines, each in the room. A paragraph cell (a p, m, b or X column, a `\parbox`: no column box), a cell with a held
+  line or lines on two pages, and one whose side stops short of the box are laid in their own rooms as before. Over the 89
+  papers' chain no member of several lines stated a column before this (290 cells of several lines, none with `Room.column`), so
+  the rule reaches the merged cells alone. `Placed.inner` is an optional field: the schema's rule (`packages/format/src/schema.ts`:
+  "a new optional field does not raise FORMAT; FORMAT rises only when an old reader would misread") keeps FORMAT 1, a typesetter
+  of before laying the lines in their own rooms as it did.
 
 ## 19. The engine's contract
 

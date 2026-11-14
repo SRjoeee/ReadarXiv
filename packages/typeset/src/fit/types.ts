@@ -29,6 +29,10 @@ export type FitBlock = DecorBlock & {
    *  borrow past the bottom reads apart (§18.37, B.slots roomOf) */
   toFoot?: number
   toInk?: number
+  /** a table cell of several lines laid in its column's room (lay/adapt.ts, docs/PDF-READER.md §18.74): its lines stand as TeX set
+   *  them in the cell's box, the box as wide as its widest laid line, set in the room by the cell's class (`cls`), each line in
+   *  the box by its own (`inner`: Placed.inner, else the cell's class): B.place's boxLines */
+  box?: { cls: 'l' | 'c' | 'r'; inner: 'l' | 'c' | 'r' }
 }
 /** ink beside a unit's line that no translation replaces: its box, whether it stood after the line's end (else before its
  *  start), and how far off it TeX set that line (`gap`: from the line's end to it, or from it to the line's start) */

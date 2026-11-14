@@ -96,6 +96,33 @@ function placeItems(lines: LaidLine[], f: number, P: FitParams): void {
     }
   }
 }
+/** a table cell's lines as TeX set them in its box (FitBlock.box, lay/adapt.ts; docs/PDF-READER.md §18.74): the box as wide as
+ *  its widest laid line, set in the cell's room (each line's slot) by the cell's class, each line in the box by its own; a line's
+ *  items moved together, their spacing as placed */
+function boxLines(lines: LaidLine[], blocks: readonly FitBlock[]): void {
+  const byBlock = new Map<number, LaidLine[]>()
+  for (const l of lines)
+    if (blocks[l.block]?.box && l.items.length) (byBlock.get(l.block) ?? byBlock.set(l.block, []).get(l.block)!).push(l)
+  for (const [k, ls] of byBlock) {
+    const { cls, inner } = blocks[k]!.box!
+    const span = (l: LaidLine) => {
+      const a = l.items[0]!,
+        z = l.items.at(-1)!
+      return [a.x as number, (z.x as number) + z.w] as const
+    }
+    const W = Math.max(...ls.map((l) => span(l)[1] - span(l)[0]))
+    for (const l of ls) {
+      const room = l.x1 - l.x0
+      const box0 = l.x0 + (cls === 'c' ? (room - W) / 2 : cls === 'r' ? room - W : 0)
+      const [a, z] = span(l)
+      const at = box0 + (inner === 'c' ? (W - (z - a)) / 2 : inner === 'r' ? W - (z - a) : 0)
+      const dx = at - a
+      if (Math.abs(dx) < 1e-9) continue
+      for (const it of l.items) it.x = (it.x as number) + dx
+      l.used = (l.used ?? 0) + dx
+    }
+  }
+}
 /** a fit's breaking at its state made a layout: its lines placed, and what it set and lost counted; the lines TeX's rule
  *  opened (`opened`), and with no values for it (P.lineskip none) the lines that come nearer the one before them in their
  *  block than nothing, its foot over their top, and stay so (`unopened`: what the rule would have opened) */
@@ -111,6 +138,7 @@ function laidOut(
   if (P.lastLines && !clipped)
     toLastLines(r.lines, blocks, P.halfLead?.below, f, () => slotsAt(blocks, { ...st, lead: 1, box: undefined }, P, s))
   placeItems(r.lines, f, P)
+  boxLines(r.lines, blocks)
   const count = (t: Token) => (t.s ? [...t.s].length : t.crop ? 1 : 0)
   const allChars = r.tokens.reduce((a, t) => a + count(t), 0)
   const drawn = r.lines.reduce((a, l) => a + l.items.reduce((b, it) => b + count(it.t), 0), 0)

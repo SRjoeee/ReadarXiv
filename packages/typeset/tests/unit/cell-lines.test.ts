@@ -49,7 +49,7 @@ const cell = (
 const rowsOf = (by: Record<number, [string, string]>): Rows => {
   const m = new Map<string, Row>()
   for (const [o, [a, b]] of Object.entries(by)) {
-    const content: Row['content'] = [
+    const content: Extract<Row, { ok: true }>['content'] = [
       ...(a ? [{ t: 'text' as const, s: a }] : []),
       { t: 'el' as const, id: '1' },
       ...(b ? [{ t: 'text' as const, s: b }] : []),
