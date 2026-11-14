@@ -6960,6 +6960,38 @@ v2's members: nothing newly worse against RB2b's sheets, page by page, in either
 pairs 1 as RB2b's. PIPELINE moves (the units' `kept`): the integration's. No TRANSLATE, no LAYOUT (the lift is the lay's alone;
 R4 a unit's `kept`, no mark moves).
 
+### 18.73 A paper's macro that begins an environment: its arguments as TeX reads them, its content a block (the coordinator's ruling, 2026-11-15)
+
+Found on the test site (2026-11-14): 1512.03385v1 p12, Table 13's header ("LOC method", "LOC network", "LOC error on GT CLS",
+"classification network", "top-5 LOC error on predicted CLS") stayed English beside a translated "testing". Each is the call of
+the paper's `\tabincell{c}{LOC \\ method}`, whose body is `\begin{tabular}{@{}#1@{}}#2\end{tabular}`. The source reader read the
+body's `\begin` as a command of one argument, `{tabular}`, and the preamble after it as a free group of text, so both parameters
+were prose, the macro had no prose argument (`paperMacros`: one alone), and each call was one placeholder: the cell held no letter
+and was no unit (`flush`), its ink A's. Two statements, both in `source/latex-front.ts`:
+
+- **An environment begun in a macro's body reads its own arguments as it declares them** (`paramUse`: `environmentParams` and
+  `readArgs`, as the walk reads a table's own arguments): a parameter in one is prose only where its role is text or content. A
+  tabular's preamble and a minipage's position and width are none, so `\tabincell`'s prose argument is its text. An environment the
+  role table does not know is read as before.
+- **An argument the body sets inside an environment of its own, not math, is a block of its own** (`proseInEnvironment`, in the
+  walk's prose-argument branch beside `holdsBlock`): TeX sets that environment's content apart from the text around the call (a
+  minipage's paragraph, a tabular's cells, a tcolorbox, a centred list), as the walk reads the same environment written in place,
+  where every environment but math ends the text before it. Walked as a pair inside the paragraph instead (the first statement
+  alone), 2610.37818v1's five `\fdpanel{width}{image}{label}` calls, each a minipage on one line of a figure, made one paragraph of
+  five boxes' labels.
+- A macro with two text parameters outside any environment stays one placeholder, as before (`paperMacros`, "a macro with two such
+  arguments has no `prose`"); and a `\\` inside a cell still ends the cell's unit: a header set on two lines is two line units, as
+  every cell of several lines is today (the coordinator's ruling: the whole cell is the owner's decision, with the column room of a
+  cell of several lines; lane hdr-lines' phase 1b measured both).
+
+Measured (lane hdr-lines, the source reader alone over the 89 papers, the holdout and the third set; the front half's Units
+objects of every other paper byte for byte the base's): the corpus 4 papers, 25 units in for 10 (1512.03385v1's header, its five
+cells now ten line units; 2610.37818v1's panel labels "Corridor_Out (re-registered)" and "(a) Dark rim band", each a unit of its
+own; 2608.25210v2's prompt boxes, a tcolorbox, 9 paragraphs for 6; 2111.09276v1's four rotated cells, a one-column tabular round
+`\rotatebox`, the same words without the call's pair); the holdout none; the third set 1 paper (2608.14934v1's conflicts and data
+statements, a centred list: 2 paragraphs without the call's pair). PIPELINE moves (the units): the integration's; the compile side's
+key moves (the marks are written by unit).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
