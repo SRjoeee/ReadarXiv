@@ -6,11 +6,12 @@
 // field of its setting that differs from today's (round.ts prepare over the same round: the blocks' pages, baselines and
 // measures, their alignment and indent, the size, the leading, the edges): the rule whose stated facts changed it.
 // The runner never mixes two numberings: what it hands the lay names members by today's ords alone (the ledger's and the
-// dumps'), never by a part's. Each member is renamed by its unit of today's, and a member no unit of today's joins has no ord of
-// today's: a tie leaves it out, and a follower, a row or a RowLine member it is names no member (todayMember, todayTies). A part
-// ord kept among today's names whichever unit of today's holds that number, and so another unit wherever an insertion moved the
-// part's ords (lane hdr-lines, 2026-11-15: 2608.25210v2-zh's e021ea1f6aed capped by a heading's size tie through the part ord
-// of the heading's paragraph, which joins no unit, once S1's three inserted units moved the paper's ords by 3).
+// dumps'), never by a part's. Each member is renamed by its unit of today's, and a member no unit of today's joins has no ord
+// of today's: a tie leaves it out, and a follower, a row or a RowLine member it is names no member (todayMember, todayTies),
+// and pieceCrops reads each member's crops' piece indices from its own unit of today's (cropLays). A part ord kept among
+// today's names whichever unit of today's holds that number, and so another unit wherever an insertion moved the part's ords
+// (lane hdr-lines, 2026-11-15: 2608.25210v2-zh's e021ea1f6aed capped by a heading's size tie through the part ord of the
+// heading's paragraph, which joins no unit, once S1's three inserted units moved the paper's ords by 3).
 import type { OutPiece, Part, Row, Unit } from '@readarxiv/format'
 import { layPage, nameOf } from '../../src/lay/entry.ts'
 import { waitOf } from '../../src/lay/wait.ts'
@@ -393,10 +394,10 @@ export function todayTies(
   })
 }
 
-/** the adapted members (by part ord) as the runner hands them to pieceCrops, which reads each one's crops' piece indices back
- *  from the ledger's unit of its key */
+/** the adapted members (by part ord) as the runner hands them to pieceCrops, by their unit's ord of today's (todayMember's):
+ *  pieceCrops reads each one's crops' piece indices back from the ledger's unit of its key */
 export function cropLays(adapted: ReadonlyMap<number, FlowMember>): Parameters<typeof pieceCrops>[1] {
-  return new Map([...adapted].map(([o, m]) => [o, { tokens: m.tokens } as never]))
+  return new Map([...adapted.values()].map((m) => [m.ord, { tokens: m.tokens } as never]))
 }
 
 /** the first field of a member's setting that differs from today's prepared one, or 'equal' */
