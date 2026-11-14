@@ -93,7 +93,8 @@ const WEBSITE_PACKAGE_PATHS: readonly { path: string; names: readonly string[] }
   { path: 'packages/engine/src/bundle/bundle.ts', names: [] },
   // (live.ts read by its path in the website's tests at e0ae76dd, named `.mjs` there until its next pin)
   { path: 'packages/engine/src/compile/live.ts', names: [] },
-  { path: 'packages/engine/src/compile/paper.mjs', names: [] },
+  // (paper.ts read by its path in the website's tests at e0ae76dd, named `.mjs` there until its next pin)
+  { path: 'packages/engine/src/compile/paper.ts', names: [] },
   { path: 'packages/engine/src/compiled.ts', names: [] },
   { path: 'packages/engine/src/front.ts', names: [] },
   // (instrument.ts read by its path in the website's tests at e0ae76dd, named `.mjs` there until its next pin)

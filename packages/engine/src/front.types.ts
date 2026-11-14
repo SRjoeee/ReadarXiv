@@ -5,10 +5,7 @@
 // is format's pieces (a unit's id is made of them), its kindOf given a piece and its idOfNested a nested piece's unit;
 // classesOf takes the pieces locate hands it (an index signature of the declaration's refused them). Exit: the typing of
 // the moved modules replaces this file.
-import type { Piece } from '@readarxiv/format'
 import type { PdfLike } from './compile/base.ts'
-import type { Instrument, PieceClass } from './instrument.ts'
-import type { NameKey } from './marks/names.ts'
 import type { CellPlace, SourceUnit } from './source/latex-front.ts'
 import type { Compiled, CompileRequest, Paper } from './compile/live.ts'
 import * as instrument_js from './instrument/instrument.ts'
@@ -19,8 +16,7 @@ import * as pdfLite_js from './compile/pdf-lite.ts'
 import * as units_js from './instrument/units.ts'
 import * as latexFront_js from './source/latex-front.ts'
 import * as paperMeta_js from './source/paper-meta.ts'
-// @ts-ignore: JavaScript moved as it is, typed by this file alone
-import * as paper_js from './compile/paper.mjs'
+import * as paper_js from './compile/paper.ts'
 export type { BundlePiece, BundleUnit } from './instrument/units.ts'
 export const bundleUnitsOf = units_js.bundleUnitsOf
 export type { PdfLike }
@@ -34,154 +30,9 @@ export const texLiveOfPdf = guard_js.texLiveOfPdf
 export const compilerOfPdf = guard_js.compilerOfPdf
 export const texRan = guard_js.texRan
 export const limitOf = guard_js.limitOf
-export type MarkClass = 'math' | 'display' | 'cite' | 'ref' | 'eqref' | 'code' | 'url' | 'footnote' | 'macro' | 'number'
-export type Switches = Record<string, string>
-export type Complete = Record<string, number>
-export interface LayoutMarks {
-  schema: 15
-  engine: string
-  marking: {
-    classes: MarkClass[]
-    switches: Switches | null
-    inkless: string[] | null
-    texts: string[] | null
-    names: Partial<Record<NameKey, 0 | 1>> | null
-    lineskip: [number, number] | null
-    complete: Complete | null
-    apart: string[] | null
-  }
-  pages: number
-  views: number[]
-  columns: number[]
-  marks: [name: string, page: number, x: number, y: number][]
-  dropped: string[]
-  lines: [id: number, n: number][]
-  align: [id: number, code: AlignCode][]
-  colours: [id: number, k: number, rgb: number][]
-  words: string[]
-  tokens: number[]
-  chars: string[]
-  owned: (string | number)[][]
-  links: LinkRow[]
-}
-export type AlignCode = 'c' | 'l' | 'r' | 'j'
-export type LinkRow = [
-  dest: string,
-  page: number,
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-  a: number,
-  b: number,
-  n: number,
-  text: string,
-]
-declare function layoutMarksOf(
-  marked: unknown,
-  log: string,
-  o: {
-    engine: string
-    classes?: readonly MarkClass[]
-    switches?: Switches | null
-    inkless?: readonly string[] | null
-    texts?: readonly (readonly [string, string])[] | readonly string[] | null
-    decorated?: readonly (readonly [string, string])[] | null
-    names?: Partial<Record<NameKey, 0 | 1>> | null
-    lineskip?: readonly [number, number] | null
-    complete?: Complete | null
-    apart?: readonly string[] | null
-    units?: readonly SourceUnit[] | null
-    OPS?: Record<string, number> | null
-  },
-): Promise<LayoutMarks>
-export type MarkedOptions = Parameters<typeof layoutMarksOf>[2] & { paper?: boolean }
-export type { NameKey }
-export interface ConvergeRecord {
-  drafts: number
-  marked: number
-  settled: boolean
-  fallback?: 'no-files' | 'draft-failed' | 'aux-jobs' | 'bib-missing' | 'files-bound'
-}
-export const markedOfPaper = paper_js.markedOfPaper as (
-  paper: Paper,
-  o: MarkedCompileOptions,
-) => Promise<
-  | {
-      pdf: Uint8Array
-      log: string
-      options: Omit<MarkedOptions, 'units' | 'OPS'>
-      ms: { probe: number; compile: number; guard?: number; final?: number }
-      cm?: ConvergeRecord
-      guard?: GuardRecord
-      base?: FinalPass
-    }
-  | {
-      refused: MarkedRefusal
-      why?: string
-      limit?: RefusalLimit
-      own?: OwnVerdict
-      ms: Record<string, number>
-      cm?: ConvergeRecord
-      guard?: GuardRecord
-    }
->
-export interface MarkedCompileOptions {
-  compile(req: CompileRequest): Promise<Compiled>
-  converge?: boolean
-  compileBudgetMs?: number | null
-  filesBound?: { count: number; bytes: number } | null
-  OPS?: Record<string, number>
-  pages?: number | (() => number | null | Promise<number | null>) | null
-  engines?: readonly string[] | null
-  tried?: readonly string[] | null
-  final?: boolean
-  sourceDate?: number | (() => number | null | Promise<number | null>) | null
-  textOf?: ((pdf: Uint8Array) => Promise<string[] | null>) | null
-  compilerOf?: (() => Promise<string | null>) | null
-}
-export type RefusalLimit = string
-export type FinalPass = { pdf: Uint8Array; log: string } | { refused: 'final'; why: string; limit?: RefusalLimit }
-export interface OwnVerdict {
-  ran: boolean
-  short: boolean
-  limit: string | null
-  tree: string | null
-}
-export interface GuardRecord {
-  extra: number
-  unmarked: number[]
-  names: boolean
-  failed: ('preamble' | 'braces' | 'ran' | 'pages' | 'aux' | 'text' | 'errors')[]
-  judged?: string
-}
-export type MarkedRefusal = 'probe' | 'compile' | 'texlive' | 'engine' | 'marks'
-export const madeBibliography = paper_js.madeBibliography as (
-  paper: Paper,
-  o: {
-    compile(req: CompileRequest): Promise<Compiled>
-    compilerOf?: (() => Promise<string | null>) | null
-    engines?: readonly string[] | null
-  },
-) => Promise<
-  { paper: Paper; made: { path: string; bytes: Uint8Array }; ms: number } | { kept: BibliographyKept; ms: number }
->
-export type BibliographyKept =
-  | 'shipped'
-  | 'none'
-  | 'biblatex'
-  | 'bib-missing'
-  | 'engine'
-  | 'compile'
-  | 'no-files'
-  | 'aux-jobs'
-  | 'biber'
-  | 'no-bbl'
-  | 'moved'
-  | 'entries'
-export const bibliographyKept = paper_js.bibliographyKept as (
-  paper: Paper,
-) => Extract<BibliographyKept, 'shipped' | 'none' | 'biblatex' | 'bib-missing'> | null
+export const markedOfPaper = paper_js.markedOfPaper
+export const madeBibliography = paper_js.madeBibliography
+export const bibliographyKept = paper_js.bibliographyKept
 export const LITE_PDFJS = pdfLite_js.LITE_PDFJS
 export const NO_IMAGE_PIXELS = pdfLite_js.NO_IMAGE_PIXELS
 export const LINK_TEXT_PIXELS = pdfLite_js.LINK_TEXT_PIXELS

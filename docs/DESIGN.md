@@ -1041,7 +1041,7 @@ only how it meets the rest of the extension.
 - **The prepare's two halves** (`@readarxiv/engine`; our server runs them, the extension neither). The front half is
   today's front end, moved into the package as it was (`packages/engine/src/{source,marks,own,compile,instrument}/`): it
   reads a paper's source into units (`source/latex-front.mjs`), writes the marks that bracket each unit for TeX and
-  compiles the marked source, an instrument no reader sees (`compile/paper.mjs`, `marks/marks.ts`); its adapter
+  compiles the marked source, an instrument no reader sees (`compile/paper.ts`, `marks/marks.ts`); its adapter
   (`instrument/instrument.ts`) states what it gives, the instrument: the owner of each glyph of that compile
   (`own/own.ts`) and what the source says of each element and group. The back half, `prepareBack(instrument, arXiv's
   PDF)`, reads arXiv's PDF once, carries that ownership onto arXiv's glyphs by aligning the two glyph sequences (`align`,

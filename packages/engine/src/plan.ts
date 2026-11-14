@@ -217,7 +217,7 @@ function opened(files: Map<string, Uint8Array>): Paper {
     throw new FrontRefusal('cannot-typeset', `the front end could not read the paper: ${short(e).slice(0, 200)}`)
   }
 }
-/** the paper opened again with the job's .bbl (compile/paper.mjs madeBibliography's own reopening, its compiler kept) */
+/** the paper opened again with the job's .bbl (compile/paper.ts madeBibliography's own reopening, its compiler kept) */
 function withBbl(paper: Paper, bbl: { path: string; bytes: Uint8Array }): Paper {
   const files = new Map<string, Uint8Array>()
   for (const p of paper.fsys.list()) {
