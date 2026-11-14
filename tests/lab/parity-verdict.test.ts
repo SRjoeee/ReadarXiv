@@ -1515,6 +1515,17 @@ describe('the measures read the joined set: a unit of today cut into members of 
     const shown = (p.diffs as D[]).filter((x) => x.flag === 'shown')
     expect(shown.map((x) => [x.worse, x.v2?.value])).toEqual([[true, 'part 12: none']])
   })
+  it("a member a ruling keeps is no line the group lays: the leading read over the lines v2 lays, as a kept element's are", () => {
+    // (the lead on two lines at 10 pt, 12 apart; the box under it at 8 pt, 16 apart (a tcolorbox's spacing); today drew it all
+    // at 16 apart; v2 draws the lead at its own 12 and keeps the box: read over the box's lines too, v2's lead read tight)
+    const lead2 = { ...lead, lines: [factLine(72, 300, 512), factLine(72, 300, 500)] }
+    const box2 = { ...box, lines: [factLine(80, 280, 486, 8), factLine(80, 280, 470, 8), factLine(80, 280, 454, 8)] }
+    const v2 = v2Of({ members: [{ ord: 11, state: 'laid', lines: [] }, { ord: 12, state: 'none', lines: [] }], facts: [lead2, box2], pitch: [12] })
+    const today = { units: [{ id: 7, lines: [drawnLine(72, 300, 512, 'abcdefghij'), drawnLine(80, 280, 496, 'abcdefgh', 8), drawnLine(80, 280, 480, 'abcdefgh', 8), drawnLine(80, 280, 464, 'abcdefgh', 8)] }] }
+    const v2Lead2 = { units: [{ id: 11, lines: [drawnLine(72, 300, 512, 'abcdefghij'), drawnLine(72, 300, 500, 'abcdefghij')] }] }
+    const p = measurePage('p-zh', v2, rec({ today, v2: v2Lead2 }), ctx(v2, [{ today: [7], members: [11, 12] }]))
+    expect((p.diffs as D[]).filter((x) => x.worse).map((x) => x.flag)).toEqual([])
+  })
   it("units of today that one member holds are measured as one: today's two lines against the member's", () => {
     const cell = { ord: 21, kind: 'cell', align: 'c', style: { size: 10 }, lines: [factLine(100, 160, 500), factLine(100, 160, 488)] }
     const v2 = v2Of({ members: [{ ord: 21, state: 'laid', lines: [] }], facts: [cell] })
