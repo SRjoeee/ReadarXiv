@@ -7379,19 +7379,18 @@ export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\newsavebox
  *  read then alone every revtex and aastex paper's last page was one column (the review of 2026-10-01). And as
  *  \\end{document} begins, before the grid closes: a last page with no unit mark on it — the references alone — was
  *  read one column too (2608.20847's page 9, aastex 2608.12606's page 20; the re-review of 2026-10-02) */
-export const MARK_DEF =
-  [
-    '\\makeatletter\\ifdefined\\XeTeXrevision\\def\\axt@dest#1{\\special{pdf:dest (axt-#1) [@thispage /XYZ @xpos @ypos null]}}',
-    '\\ifdefined\\AddToHook\\AddToHook{shipout/firstpage}{\\special{dvipdfmx:config C 0x0010}}\\fi',
-    '\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} xyz\\relax}',
-    '\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} xyz\\relax\\fi}',
-    '\\else\\def\\axt@dest#1{}\\fi\\fi\\fi',
-    '\\def\\axt@colsnow{\\ifdefined\\pagegrid@col\\ifnum\\pagegrid@col>\\@ne 2\\else 1\\fi\\else\\ifnum\\ifdefined\\col@number\\col@number\\else\\@ne\\fi>\\@ne 2\\else\\if@twocolumn 2\\else 1\\fi\\fi\\fi}\\gdef\\axt@colmax{1}',
-    '\\def\\axt@colseen{\\ifnum\\axt@colsnow>\\axt@colmax\\relax\\xdef\\axt@colmax{\\axt@colsnow}\\fi}',
-    '\\protected\\def\\axtmark#1{\\axt@colseen\\axt@dest{#1}}',
-    '\\ifdefined\\AddToHook\\AddToHook{shipout/background}{\\axt@colseen\\put(0,0){\\axt@dest{c\\axt@colmax-\\the\\ReadonlyShipoutCounter}}\\gdef\\axt@colmax{1}}\\AddToHook{enddocument}{\\axt@colseen}\\fi\\makeatother',
-    ...END_MARK,
-  ].join('\n') + '\n'
+export const MARK_DEF = `${[
+  '\\makeatletter\\ifdefined\\XeTeXrevision\\def\\axt@dest#1{\\special{pdf:dest (axt-#1) [@thispage /XYZ @xpos @ypos null]}}',
+  '\\ifdefined\\AddToHook\\AddToHook{shipout/firstpage}{\\special{dvipdfmx:config C 0x0010}}\\fi',
+  '\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} xyz\\relax}',
+  '\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} xyz\\relax\\fi}',
+  '\\else\\def\\axt@dest#1{}\\fi\\fi\\fi',
+  '\\def\\axt@colsnow{\\ifdefined\\pagegrid@col\\ifnum\\pagegrid@col>\\@ne 2\\else 1\\fi\\else\\ifnum\\ifdefined\\col@number\\col@number\\else\\@ne\\fi>\\@ne 2\\else\\if@twocolumn 2\\else 1\\fi\\fi\\fi}\\gdef\\axt@colmax{1}',
+  '\\def\\axt@colseen{\\ifnum\\axt@colsnow>\\axt@colmax\\relax\\xdef\\axt@colmax{\\axt@colsnow}\\fi}',
+  '\\protected\\def\\axtmark#1{\\axt@colseen\\axt@dest{#1}}',
+  '\\ifdefined\\AddToHook\\AddToHook{shipout/background}{\\axt@colseen\\put(0,0){\\axt@dest{c\\axt@colmax-\\the\\ReadonlyShipoutCounter}}\\gdef\\axt@colmax{1}}\\AddToHook{enddocument}{\\axt@colseen}\\fi\\makeatother',
+  ...END_MARK,
+].join('\n')}\n`
 /** whether a compiler is arXiv's `latex` (its 00README's, or the one guessed for a package of EPS figures alone: paper-meta.mjs):
  *  pdfTeX in DVI mode, \\pdfoutput 0, whose DVI arXiv makes a PDF by dvips and ps2pdf, and a host by dvipdfmx
  *  (live.d.mts CompileRequest), which reads the marks' specials (DVI_MARK_DEF) */
@@ -7633,29 +7632,27 @@ export function latinFontsFor(probe: FontProbe | null | undefined): string {
   if (face(probe.rm)) out.push(`\\setmainfont{${face(probe.rm)}}${GYRE_FACES}`)
   if (face(probe.sf)) out.push(`\\setsansfont{${face(probe.sf)}}${GYRE_FACES}`)
   if (face(probe.tt)) out.push(`\\setmonofont{${face(probe.tt)}}${GYRE_FACES}`)
-  return out.length ? out.join('\n') + '\n' : ''
+  return out.length ? `${out.join('\n')}\n` : ''
 }
 
 /** pdfTeX-only primitives that arXiv sources use outside any \\ifpdf, made harmless under XeTeX. Goes first in the main file */
-export const XETEX_SHIM =
-  [
-    '\\ifdefined\\pdfoutput\\else\\newcount\\pdfoutput\\fi',
-    '\\ifdefined\\pdfminorversion\\else\\newcount\\pdfminorversion\\fi',
-    '\\ifdefined\\pdfcompresslevel\\else\\newcount\\pdfcompresslevel\\fi',
-    '\\ifdefined\\pdfobjcompresslevel\\else\\newcount\\pdfobjcompresslevel\\fi',
-    '\\ifdefined\\pdfsuppresswarningpagegroup\\else\\newcount\\pdfsuppresswarningpagegroup\\fi',
-    '\\ifdefined\\pdfinfo\\else\\long\\def\\pdfinfo#1{}\\fi',
-    '\\ifdefined\\pdfglyphtounicode\\else\\def\\pdfglyphtounicode#1#2{}\\fi',
-    '\\ifdefined\\pdfgentounicode\\else\\newcount\\pdfgentounicode\\fi',
-  ].join('\n') + '\n'
+export const XETEX_SHIM = `${[
+  '\\ifdefined\\pdfoutput\\else\\newcount\\pdfoutput\\fi',
+  '\\ifdefined\\pdfminorversion\\else\\newcount\\pdfminorversion\\fi',
+  '\\ifdefined\\pdfcompresslevel\\else\\newcount\\pdfcompresslevel\\fi',
+  '\\ifdefined\\pdfobjcompresslevel\\else\\newcount\\pdfobjcompresslevel\\fi',
+  '\\ifdefined\\pdfsuppresswarningpagegroup\\else\\newcount\\pdfsuppresswarningpagegroup\\fi',
+  '\\ifdefined\\pdfinfo\\else\\long\\def\\pdfinfo#1{}\\fi',
+  '\\ifdefined\\pdfglyphtounicode\\else\\def\\pdfglyphtounicode#1#2{}\\fi',
+  '\\ifdefined\\pdfgentounicode\\else\\newcount\\pdfgentounicode\\fi',
+].join('\n')}\n`
 
 // ---------------------------------------------------------------- engine adaptation: rules for known incompatibilities
 /** R1, before \documentclass under XeTeX: what pdfTeX papers use that XeLaTeX lacks, and the engine guard of some templates */
-export const XETEX_SHIM_R1 =
-  [
-    '\\providecommand\\DeclareUnicodeCharacter[2]{}', // inputenc's, not loaded under XeLaTeX
-    '\\RequirePackage{iftex}\\let\\RequirePDFTeX\\relax', // a template's "pdfTeX only" guard (AAAI 2027)
-  ].join('\n') + '\n'
+export const XETEX_SHIM_R1 = `${[
+  '\\providecommand\\DeclareUnicodeCharacter[2]{}', // inputenc's, not loaded under XeLaTeX
+  '\\RequirePackage{iftex}\\let\\RequirePDFTeX\\relax', // a template's "pdfTeX only" guard (AAAI 2027)
+].join('\n')}\n`
 /** R2, under XeTeX: a pdftex driver option names the wrong backend for hyperref, graphicx, color */
 export function stripPdftexOption(text: string): string {
   return text.replace(
@@ -7667,10 +7664,9 @@ export function stripPdftexOption(text: string): string {
   )
 }
 /** R3, before \begin{document}, any engine: a template's "package X is forbidden" errors become warnings */
-export const FORBIDDEN_TO_WARNING =
-  [
-    '\\makeatletter',
-    '\\let\\axt@PackageError\\PackageError',
-    '\\long\\def\\PackageError#1#2#3{\\in@{forbid}{#2}\\ifin@\\PackageWarning{#1}{#2}\\else\\in@{must not use}{#2}\\ifin@\\PackageWarning{#1}{#2}\\else\\axt@PackageError{#1}{#2}{#3}\\fi\\fi}',
-    '\\makeatother',
-  ].join('\n') + '\n'
+export const FORBIDDEN_TO_WARNING = `${[
+  '\\makeatletter',
+  '\\let\\axt@PackageError\\PackageError',
+  '\\long\\def\\PackageError#1#2#3{\\in@{forbid}{#2}\\ifin@\\PackageWarning{#1}{#2}\\else\\in@{must not use}{#2}\\ifin@\\PackageWarning{#1}{#2}\\else\\axt@PackageError{#1}{#2}{#3}\\fi\\fi}',
+  '\\makeatother',
+].join('\n')}\n`
