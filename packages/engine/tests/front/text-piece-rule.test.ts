@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { textPieceOf } from '@/pdf-reader/engine/rules/text-piece.mjs'
+import { textPieceOf } from '../../src/source/text-piece.ts'
 
 // rules/text-piece.mjs: which piece is plain text, whose characters the page holds as they were written. The layer reads it for
 // a formula's class (layer2.mjs formulaOf: a text piece is no formula) and the maker for what a row's segments must spell
