@@ -2174,6 +2174,8 @@ function resolveKeeps(macros: Map<string, Macro>) {
     }
     keeps.set(name, k)
   }
+  // (each pass follows a kept argument one call further down, and one that keeps nothing new ends the reading: at most four
+  // passes, a count of passes; unmeasured)
   for (let pass = 0; pass < 4; pass++) {
     let changed = false
     for (const [name, m] of macros) {
@@ -2612,6 +2614,7 @@ function setsWords(macro: Macro) {
             )
             .replace(/\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\$[^$]*\$/g, ' ')
         : ''
+    // (the innermost groups out, a level a pass: at most 20 levels, a count of passes; unmeasured)
     for (let n = 0; n < 20 && /\{[^{}]*\}/.test(t); n++) t = t.replace(/\{[^{}]*\}/g, ' ')
     // (an optional argument's brackets, a box's [c][14.5pt], and a dimension after a command, \\rowcolor{gray!8}[0pt], are no words)
     t = t
@@ -2678,6 +2681,7 @@ export function displayLetters(src: string, macros: ReadonlyMap<string, string> 
     const t = s.replace(/\\([A-Za-z@]+)/g, (m: string, name: string) =>
       macros.has(name) ? ` ${macros.get(name)} ` : m,
     )
+    // (a pass whose text would pass 20,000 UTF-16 code units is not taken: the text the pass before left; unmeasured)
     if (t === s || t.length > 20000) break
     s = t
   }
@@ -4160,7 +4164,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
   // unit's leading and line probe, which go before its first piece, cannot come between them. Only a command whose
   // arguments the walk knows: a heading's or a caption's, another of the paper's macros, one of the role table's; one it
   // does not know (\\xspace, \\fi) leaves what follows the call as it was read before. `thens`, how many in a row: a
-  // macro that ends in itself goes no further than a few
+  // macro that ends in itself goes no further than four (a count of calls in a row; unmeasured)
   let then: { name: string; end: number } | null = null,
     thens = 0
   const goOn = (macro: Macro, call: { end: number }, at: number) => {
