@@ -81,12 +81,12 @@ type Item =
     }
   | { t: 'open'; id: string; at: number; letters: boolean; depth: number }
   | { t: 'close'; id: string; at: number }
-export type Slot = { t: 'void'; out: OutPiece[] } | { t: 'open'; id: string } | { t: 'close'; id: string }
-export interface Beside {
+type Slot = { t: 'void'; out: OutPiece[] } | { t: 'open'; id: string } | { t: 'close'; id: string }
+interface Beside {
   before: OutPiece[]
   after: OutPiece[]
 }
-export interface Off {
+interface Off {
   front: OutPiece[]
   back: OutPiece[]
   heads: ReadonlyMap<string, OutPiece[]>

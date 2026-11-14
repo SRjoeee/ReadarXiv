@@ -30,8 +30,8 @@ import {
   standInOf,
 } from './text.ts'
 
-export type TagSlot = { t: 'void'; out: OutPiece[]; own: boolean } | { t: 'pair'; id: string }
-export interface TagsPlan {
+type TagSlot = { t: 'void'; out: OutPiece[]; own: boolean } | { t: 'pair'; id: string }
+interface TagsPlan {
   /** what is sent: the wire with its boundary markers */
   wire: string
   slots: TagSlot[]
@@ -83,7 +83,7 @@ const SPAN_CLOSE = /<\/span\s*>/y
  * words read in their sentences (顺序, "m 个"); 3 of 122 units refused by the token contract (Google moved an element and
  * left its token as text: the next translator's)
  */
-export type TagSpelling = 'void' | 'html'
+type TagSpelling = 'void' | 'html'
 /** the token an element written as a word holds: its slot's number after an `x` */
 export const tokenOf = (n: number): string => `x${n}`
 const elementTag = (as: TagSpelling, n: number): string =>
