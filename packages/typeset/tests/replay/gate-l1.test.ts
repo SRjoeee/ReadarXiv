@@ -5,8 +5,9 @@ import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
 import { tableMetrics } from '../../src/metrics/table.ts'
 import { gatePair } from './gate.ts'
-import { entryByToday, gateL1Pair, invariantsOf } from './gate-l1.ts'
-import type { PageMember } from '../../src/lay/page.ts'
+import { cropLays, entryByToday, gateL1Pair, invariantsOf, todayMember, todayTies } from './gate-l1.ts'
+import { type PageMember, tieCaps } from '../../src/lay/page.ts'
+import type { FlowMember } from '../../src/lay/flow.ts'
 import type { Metrics } from '../../src/types.ts'
 import { hasL1 } from './l1.ts'
 import { hasDerived, hasTap, readGz, TAP } from './tap.ts'
@@ -81,6 +82,71 @@ describe("the entry's members compared with the runner's, by today's unit (round
     const by = entryByToday([m(121), m(122), m(125)], unitOf)
     expect([...by.keys()]).toEqual([125, 126])
     expect(by.get(125)).toEqual({ ord: 121, state: 'laid' })
+  })
+})
+
+describe("the runner never mixes two numberings: a member no unit of today's joins has no ord of today's (lane hdr-lines)", () => {
+  // (a part of our own, as 2608.25210v2-zh p9 stood on step 1's bundle of 2026-11-15: the part ties the run-in heading (part ord
+  // 183, today's 192) with its paragraph (part ord 184), which joins no unit of today's; part ord 175 is today's 184. The runner
+  // kept the paragraph's 184 among today's ords, there the ord of another unit laid on the page, and the tie capped that unit at
+  // the heading's 0.975: 8.97 pt to 8.74, because S1's three units inserted earlier in the paper moved every ord after them)
+  const unitOf = new Map([
+    [175, { ord: 184 }],
+    [183, { ord: 192 }],
+  ])
+  const handed = new Set([184, 192])
+  /** an ord is counted from 0 (format's Placed.ord): one under it names no member */
+  const noOrd = (o: number | undefined) => o !== undefined && o < 0
+  it("leaves out of a size tie a member no unit of today's joins: the tie never reaches the unit that holds its part ord today", () => {
+    const ties = todayTies([{ rule: 'size', ords: [183, 184] }], unitOf, handed)
+    expect(ties).toEqual([{ rule: 'size', ords: [192] }])
+    // (laid: the heading at 0.975, the other unit at its own size; the tie caps nothing of that unit)
+    const sizes = ties.filter((t): t is { rule: 'size'; ords: number[] } => t.rule === 'size')
+    const at = new Map([
+      [184, 1],
+      [192, 0.975],
+    ])
+    const cap = new Map<number, number>()
+    tieCaps(sizes, at, at, new Map([...at.keys()].map((o) => [o, 9])), () => 0.6, cap)
+    expect(cap.has(184)).toBe(false)
+  })
+  it("leaves out of a table's cells a member no unit of today's joins", () => {
+    expect(todayTies([{ rule: 'cells', cells: [[183], [184]] }], unitOf, handed)).toEqual([
+      { rule: 'cells', cells: [192], spanning: [192] },
+    ])
+  })
+  it("names by no ord of today's the follower, the row and a RowLine member that join none, and the rest by theirs", () => {
+    const line = (ords: number[]) => ({ ords, align: 'c', rows: [], left: 0, right: 100 })
+    const of = (follower: number, row: number, ords: number[]) =>
+      todayMember(
+        {
+          ord: 183,
+          follower: { id: follower, open: false, row: { page: 9, baseline: 500 }, first: { page: 9, x1: 300 } },
+          rowStart: { row: { id: row, page: 9, baseline: 480, x0: 50, x1: 200, size: 9 }, carried: false },
+          line: line(ords),
+        } as unknown as FlowMember,
+        192,
+        unitOf,
+      )
+    const joined = of(175, 175, [183, 175])
+    expect([joined.ord, joined.follower?.id, joined.rowStart?.row.id, joined.line?.ords]).toEqual([
+      192,
+      184,
+      184,
+      [192, 184],
+    ])
+    const none = of(184, 184, [183, 184])
+    expect(none.ord).toBe(192)
+    expect(noOrd(none.follower?.id)).toBe(true)
+    expect(noOrd(none.rowStart?.row.id)).toBe(true)
+    expect(none.line?.ords[0]).toBe(192)
+    expect(noOrd(none.line?.ords[1])).toBe(true)
+  })
+  it("hands pieceCrops each member by its unit's ord of today's, the ledger's unit whose crops' piece indices it reads", () => {
+    // (keyed by its part ord, a member's crops took the piece indices of the ledger's unit of that number: on a bundle whose every
+    // ord is 3 more, 4,664 of the Google store's dumped units read other elements' indices, their lay alike)
+    const m = { ord: 184, tokens: [{ crop: { crop: [0, 0, 1, 1] } }] } as unknown as FlowMember
+    expect([...cropLays(new Map([[175, m]])).keys()]).toEqual([184])
   })
 })
 
