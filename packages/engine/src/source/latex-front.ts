@@ -305,7 +305,7 @@ export const latin1Bytes = (s: string): Uint8Array => {
 }
 const utf8Bytes = (s: string) => new TextEncoder().encode(s)
 const bytesOf = (s: string, enc: string) => (enc === 'utf8' ? utf8Bytes(s) : latin1Bytes(s))
-const UTF8 = new TextDecoder('utf-8', { fatal: true }),
+const UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }),
   UTF8_LAX = new TextDecoder()
 /** whether a source's text (its bytes read latin1) is UTF-8: a file that is never decodes as UTF-8 (a failed allocation of its
  *  bytes is the paper's, never a file in another encoding) */
@@ -478,7 +478,7 @@ const latin1Text = (u: SourceUnit<WalkFile>) => {
     .map((p) => p.s)
     .join('')
   try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t))
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(latin1Bytes(t))
   } catch (e) {
     if (isMemoryError(e)) throw e
     return t
@@ -6661,7 +6661,7 @@ function readProject(
     .find((x) => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
   const isUtf8 = (t: string) => {
     try {
-      new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t))
+      new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(latin1Bytes(t))
       return true
     } catch (e) {
       if (isMemoryError(e)) throw e

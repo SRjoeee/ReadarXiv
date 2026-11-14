@@ -271,7 +271,9 @@ export function createServed(o: {
    *  `cap`, not JSON, of another shape) at once, else once it fails again */
   const tableOf = async <T>(what: string, url: string, cap: number, shape: (v: unknown) => T): Promise<T | null> => {
     try {
-      return shape(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(await fileOf(url, cap))))
+      return shape(
+        JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(await fileOf(url, cap))),
+      )
     } catch (e) {
       if (!gone) o.warn?.(what, e)
       return null
