@@ -7,6 +7,7 @@
 // are Uint8Arrays.
 
 // ---------------------------------------------------------------- files and bytes
+import { latin1 } from '../bounded-reads.ts'
 import { isMemoryError } from '../memory.ts'
 import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, labelRequestsOf, loads, noteAttachOf, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from './arg-roles.ts'
 import { symbolText, TEXT_SYMBOLS } from './text-symbols.ts'
@@ -20,8 +21,9 @@ export const normalizePath = p => { const out = []; for (const seg of p.split('/
 /** the name TeX gives what it writes for a main file, its .aux and .bbl: the file's own name without its extension, in
  *  the package's root, where TeX runs whatever directory the main file is in (arXiv's compile, the TeX page's) */
 export const jobName = main => main.slice(main.lastIndexOf('/') + 1).replace(/\.[^.]*$/, '')
-/** bytes as a string of the same code units (latin1, byte for byte): the scanner's view of a source */
-export const latin1 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return s }
+/** bytes as a string of the same code units (latin1, byte for byte): the scanner's view of a source, the engine's one
+ *  (bounded-reads.ts) */
+export { latin1 }
 /**
  * A source file's bytes as TeX reads its lines: latin1, each line's end an LF. web2c's input_line (texmfmp.c) ends a line
  * at a CR or an LF and takes the LF of a CRLF with its CR, so a CR, an LF or a CRLF is one line's end, and a blank line
