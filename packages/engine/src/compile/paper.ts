@@ -76,7 +76,7 @@ import type { Compiled, CompileRequest, Paper, Spans } from './live.ts'
 // ---------------------------------------------------------------- the types of the marked compile
 /** the host's limit a compile met, as a refusal names it (the web's `limit`, the TeX page's timeout, the budget's) */
 export type RefusalLimit = string
-/** CM's record (convergeThenMark): its draft and marked passes, whether it settled, why it fell back to today's compile */
+/** CM's record (convergeThenMark): its draft and marked passes, whether it settled, why it fell back to the one-pass request */
 export interface ConvergeRecord {
   drafts: number
   marked: number
