@@ -1,5 +1,6 @@
 // The ink units' maker (packages/engine/src/locate/today/ink-units.mjs) as it was at 0a3585fd0, before sourceView read its bytes
-// through the engine's one latin1 (bounded-reads.ts): kept here alone, verbatim but its four imports (by path from here), as the
+// through the engine's one latin1 (bounded-reads.ts): kept here alone, verbatim but its imports (by path from here; the names deps.mjs
+// held of typed homes from those homes since 2026-11-14), as the
 // reference the change is held to (tests/pdf-reader/ink-units-bounds.test.ts), and three lint notes. Imported by no module of the engine.
 //
 // COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
@@ -83,7 +84,10 @@
 import { unitClass } from '../../../packages/engine/src/locate/content-classes.ts'
 import { accentTexts } from '../../../packages/engine/src/locate/accents.ts'
 import { classifyFont } from '../../../packages/engine/src/locate/facts.ts'
-import { ADDRESS_GROUP, EMAIL_ADDRESS, identifiersIn, lineRulesOf, OWN_WORK, RULE_EM, spellOf, utf8 } from '../../../packages/engine/src/locate/today/deps.mjs'
+import { utf8 } from '../../../packages/engine/src/instrument/mt.ts'
+import { spellOf } from '../../../packages/engine/src/own/stream.ts'
+import { ADDRESS_GROUP, EMAIL_ADDRESS, identifiersIn } from '../../../packages/engine/src/source/latex-front.ts'
+import { lineRulesOf, OWN_WORK, RULE_EM } from '../../../packages/engine/src/locate/today/deps.mjs'
 
 /** a unit's flags as the layout file states them, which the bundle's rows carry: its title, its front matter, and its alignment as
  *  TeX set it, one of CENTRED, FLUSH_LEFT, FLUSH_RIGHT and JUSTIFIED at most (alignOf, below). The values are the layout file's

@@ -76,7 +76,7 @@ function pageOf(lines: { parts: Part[]; y: number; size?: number }[]) {
         x += w
       }
   })
-  return { glyphs, turned: [], boxes: [], paths: [], boxAt: glyphs.map(() => 0), view: [0, 0, 612, 792], points: [], paras: [], paraEnds: [], regions: [], pictures: [], shapes: new Map(), figures: new Map(), unseen: new Set(), cut: new Map() }
+  return { glyphs, turned: [], boxes: [], paths: [], boxAt: glyphs.map(() => 0), view: [0, 0, 612, 792] as const, points: [], paras: [], paraEnds: [], regions: [], pictures: [], shapes: new Map(), figures: new Map(), unseen: new Set(), cut: new Map() }
 }
 const MATH = 'ABCDEF+CMMI10', MONO = 'ABCDEF+CMTT10'
 

@@ -28,7 +28,7 @@ import {
   turnedStyleGlyph,
   unitSize,
 } from './facts.ts'
-import { identifiersIn } from './today/today.types.ts'
+import { identifiersIn } from '../source/latex-front.ts'
 import { figureGroup, figureUnitsOf, SPACE_GAP } from './figure-text.ts'
 import {
   statedClassOf as classOf,

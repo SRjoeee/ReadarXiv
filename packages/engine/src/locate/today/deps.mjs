@@ -1,13 +1,7 @@
-// What today's ink makers (locate/ledger.ts, figure-text.ts, ink-units.ts: copies of src/pdf-reader/engine/layout's at abe884b5e,
-// run by locate over arXiv's page) take of the front half where its home is still JavaScript: each copied as it is from the file
-// and line named (abe884b5e), so that the makers read exactly what today's read, held equal to today's by
-// tests/pdf-reader/locate-ink-today.test.ts; and, re-exported, what a typed home holds (no copy is kept of a home that is typed),
-// until the makers import it from there. A copy leaves when its home is typed, and this file with the last of them.
-
-// ---- own/stream.ts spellOf, columnsAt, regionsOf, their home's own (typed by lane t4-leaves): no copy is kept of a home that is
-// typed. The copy's spellOf wrote its pattern's four characters `ˆˇ˘-˝` as themselves and the home writes
-// \u02c6\u02c7\u02d8-\u02dd: the same code points (U+02C6, U+02C7, U+02D8-U+02DD), one pattern; the rest same code
-export { columnsAt, regionsOf, spellOf } from '../../own/stream.ts'
+// What today's ink makers (locate/ink-units.ts: a copy of src/pdf-reader/engine/layout's at abe884b5e, run by locate over arXiv's
+// page) take of own/own, whose home is still JavaScript: copied as it is from the file and line named (abe884b5e), so that the
+// maker reads exactly what today's reads. Every other name the makers take of the front half they import from its typed home;
+// this file goes when own/own is typed.
 
 // ---- layout/own.mjs:64, 73, 773-835 (OWN_WORK, RULE_EM, lineRulesOf)
 export const OWN_WORK = 20_000_000
@@ -64,14 +58,3 @@ export function lineRulesOf(pages, glyphs, boxes, max = Infinity) {
   }
   return { rules, work, over: false }
 }
-
-// ---- source/latex-front.ts EMAIL_ADDRESS and ADDRESS_GROUP, their home's own (an e-mail address as a text writes it,
-// keepAddresses'; several at one domain written once, keepGroups'): no copy is kept of a home that is typed
-export { ADDRESS_GROUP, EMAIL_ADDRESS } from '../../source/latex-front.ts'
-
-// ---- source/latex-front.ts identifiersIn, its home's own (each identifier of a text; keepIdentifiers'): no copy is kept of a
-// home that is changed or typed
-export { identifiersIn } from '../../source/latex-front.ts'
-
-// ---- instrument/mt.ts utf8, its home's own (no copy is kept of a home that is typed)
-export { utf8 } from '../../instrument/mt.ts'

@@ -25,9 +25,9 @@
 // folio; stage 2 brackets them by points of their own (the note's §7).
 // Pure arithmetic over the pages; an original module (no port statement).
 import { CLASS_CODE, CLASS_IDS, type ClassId, unitClass } from './content-classes.ts'
-import { displayTextMask, type InkRegion, regionMask } from '../ink.ts'
+import { displayTextMask, type InkPoint, type InkRegion, regionMask } from '../ink.ts'
+import { columnsAt, regionsOf, type View } from '../own/stream.ts'
 import { classifyFont } from './facts.ts'
-import { columnsAt, regionsOf, type TodayPoint } from './today/today.types.ts'
 
 /** a glyph as the ledger reads one (pageInk's with `indices`): its Unicode, advance, baseline, size, font, ink's top and bottom;
  *  whether it is shown inside a form XObject and whether its Unicode is blank */
@@ -51,8 +51,10 @@ export interface LedgerPage {
   boxes?: readonly number[]
   regions?: readonly InkRegion[]
   paras?: readonly TodayPoint[]
-  view?: readonly number[]
+  view?: View
 }
+/** a point of the marked compile as the makers read one (pageInk's): its name, and the glyphs and boxes the page showed before it */
+export type TodayPoint = InkPoint
 /** a page as today's makers read one (layout/wrap-final.mjs's pages: pageInk's result, its view, and the marks' points), as its
  *  callers hold it; each maker reads it by its own page type (LedgerPage, FigurePage, the ink units'), all of whose fields are
  *  optional */

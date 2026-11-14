@@ -81,19 +81,11 @@ import { unitClass } from './content-classes.ts'
 import { accentTexts } from './accents.ts'
 import { latin1 } from '../bounded-reads.ts'
 import { classifyFont } from './facts.ts'
-import type { LedgerLine, OwnerName, TodayLedger, TodayPiece, TodayUnit } from './ledger.ts'
-import {
-  ADDRESS_GROUP,
-  EMAIL_ADDRESS,
-  identifiersIn,
-  lineRulesOf,
-  OWN_WORK,
-  RULE_EM,
-  type RulesPage,
-  spellOf,
-  type TodayPoint,
-  utf8,
-} from './today/today.types.ts'
+import { utf8 } from '../instrument/mt.ts'
+import { spellOf } from '../own/stream.ts'
+import { ADDRESS_GROUP, EMAIL_ADDRESS, identifiersIn } from '../source/latex-front.ts'
+import type { LedgerLine, OwnerName, TodayLedger, TodayPiece, TodayPoint, TodayUnit } from './ledger.ts'
+import { lineRulesOf, OWN_WORK, RULE_EM, type RulesPage } from './today/today.types.ts'
 
 /** a glyph as the ink units read one (the wrap's: pageInk's with `indices`): its Unicode, advance, ink across, baseline, size, ink's
  *  top and bottom, font, whether its Unicode is blank, its fill, whether it is shown inside a form XObject */

@@ -21,7 +21,7 @@ function pageOf(lines: Line[], points: [string, number][]) {
       x += 0.5 * size
     }
   }
-  return { glyphs, boxes: [], points: points.map(([name, glyph]) => ({ name, glyph, box: 0 })), regions: [], paras: [], view: [0, 0, 612, 792] }
+  return { glyphs, boxes: [], points: points.map(([name, glyph]) => ({ name, glyph, box: 0 })), regions: [], paras: [], view: [0, 0, 612, 792] as const }
 }
 
 describe("the ledger's depth rule: the last `figures` rule, as RULES.findLast read it", () => {

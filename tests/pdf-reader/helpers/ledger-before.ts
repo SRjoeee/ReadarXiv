@@ -1,6 +1,7 @@
 // The ledger (packages/engine/src/locate/ledger.ts) as it was at 18e55a09b, before its depth rule was found by an ES2022 reading
 // (the last `figures` rule of RULES, by filter and at, where it read RULES.findLast): kept here alone, verbatim but its four
-// imports (by path from here), as the reference the change is held to (tests/pdf-reader/ledger-bounds.test.ts). Imported by no
+// imports (by path from here; own/stream's names from their typed home since 2026-11-14), as the reference the change is held to
+// (tests/pdf-reader/ledger-bounds.test.ts). Imported by no
 // module of the engine.
 //
 // COPIED as it is from src/pdf-reader/engine/layout/ledger.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
@@ -32,7 +33,8 @@
 import { CLASS_CODE, CLASS_IDS, type ClassId, unitClass } from '../../../packages/engine/src/locate/content-classes.ts'
 import { displayTextMask, type InkRegion, regionMask } from '../../../packages/engine/src/ink.ts'
 import { classifyFont } from '../../../packages/engine/src/locate/facts.ts'
-import { columnsAt, regionsOf, type TodayPoint } from '../../../packages/engine/src/locate/today/today.types.ts'
+import { columnsAt, regionsOf, type View } from '../../../packages/engine/src/own/stream.ts'
+import type { TodayPoint } from '../../../packages/engine/src/locate/ledger.ts'
 
 /** a glyph as the ledger reads one (pageInk's with `indices`): its Unicode, advance, baseline, size, font, ink's top and bottom;
  *  whether it is shown inside a form XObject and whether its Unicode is blank */
@@ -56,7 +58,7 @@ export interface LedgerPage {
   boxes?: readonly number[]
   regions?: readonly InkRegion[]
   paras?: readonly TodayPoint[]
-  view?: readonly number[]
+  view?: View
 }
 /** a page as today's makers read one (layout/wrap-final.mjs's pages: pageInk's result, its view, and the marks' points), as its
  *  callers hold it; each maker reads it by its own page type (LedgerPage, FigurePage, the ink units'), all of whose fields are

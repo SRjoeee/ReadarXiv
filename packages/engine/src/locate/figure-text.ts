@@ -74,8 +74,7 @@
 // Pure arithmetic over the pages; an original module (no port statement).
 import { displayTextMask, type InkRegion, PICTURE_END, PICTURE_START, regionMask } from '../ink.ts'
 import { classifyFont, familyKeysOf, sameFamily } from './facts.ts'
-import type { OwnerName } from './ledger.ts'
-import type { TodayPoint } from './today/today.types.ts'
+import type { OwnerName, TodayPoint } from './ledger.ts'
 
 /** a level glyph as the figure reading takes one (pageInk's with `indices` and `turned`): its Unicode, advance, baseline, ink's
  *  top and bottom, size, font, its ink across (`ix0`, `ix1`), its show and place there (`n`, `k`), its fill, whether its Unicode
