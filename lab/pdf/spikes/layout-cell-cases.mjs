@@ -12,15 +12,29 @@
 // LaTeX's sets: tabularray's tblr (its cells set as paragraphs: their own) and a plain \halign (nothing), neither of which
 // may state a class, nor pass a cell's to a later table. With --base=<file> (the head of MARK_DEF and LAYOUT_TEX before the
 // change, one file), each document is compiled with it too and the two PDFs are held equal byte for byte but for LuaTeX's
-// trailer /ID: the readings put nothing in the PDF.
+// trailer /ID: the readings put nothing in the PDF; and where the head sets cells' end points (below), the two pages' glyphs and
+// rules equal (each glyph's character, advance, baseline and size and each box's edges to 0.001 pt; LuaTeX's to 0.011, the shift its
+// PDF writer gives a glyph after a literal, POINTS_TEX's accepted bound) and every point of the base's at its place in the stream,
+// the head's cell end points the only ones added.
+// The cell's end (the statement that an element's ink ends where TeX ends what it stands in, for a cell its cell's end: LAYOUT_TEX's
+// \axt@te sets `t<i>x` at the end of the cell's template, where it writes AXT-CELL): every cell of a LaTeX template holds its
+// point after its end mark, nothing between the two but the pieces TeX set after the cell's last text (a piece whose opening mark
+// stands alone, as layoutMarking writes one whose source ends in a control word or whose class may read ahead), never a glyph of
+// a later cell nor a rule TeX painted after the cell (the column's rules, a row's rules, a later row's ground); its destination at or
+// past the cell's last ink across. A cell no template of LaTeX's sets (tabularray's tblr, a plain \halign) holds none. The cases
+// `end…` are one preamble kind each: a plain tabular with column and row rules, tabular*, tabularx's X, longtable over a page break,
+// siunitx's S, array in math, \multicolumn under booktabs' \cmidrule, \multirow, colortbl's \rowcolor and \cellcolor, booktabs'
+// rules, a cell ending in a control word, before `\\[2pt]`, before a comment, beside an empty cell, a nested tabular.
 // Exit 1 on a reading that is not TeX's, a TeX error, or a PDF that differs.
 //   pnpm exec tsx lab/pdf/spikes/layout-cell-cases.mjs [--years=2023,2025] [--engines=pdflatex,…] [--only=<case>,…]
-//     [--base=<head.tex>] [--out=<dir>]
+//     [--base=<head.tex>] [--out=<dir>] [--ends]   (--ends: each cell's end point as read, for the table)
 // Docker with the years' pinned images (lab/pdf/compile-images.json); no network.
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { pageInk } from '@readarxiv/engine'
+import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { readAlign } from '../../../packages/engine/src/marks/channels.ts'
 import { DVI_MARK_DEF, MARK_DEF } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
 import { DVI_LAYOUT_TEX, LAYOUT_TEX } from '../../../src/pdf-reader/engine/layout/marks.mjs'
@@ -38,6 +52,11 @@ const C = (i, text = `cell ${i}`) => `\\leavevmode\\axtmark{t${i}s}${text}\\axte
 const U = (i, text = `unit ${i}`) => `\\leavevmode\\axtmark{${i}s}${text}\\axtend{${i}e}`
 const doc = (pre, body, cls = 'article') => `\\documentclass${cls === 'article' ? '' : '[aps,pra,twocolumn]'}{${cls}}\n${pre}\n\\begin{document}\n${body}\n\\end{document}\n`
 const LONG = 'a text longer than any cell'
+/** a cell whose last piece stands after its end mark with its opening mark alone, as layoutMarking writes a cell's trailing piece
+ *  whose source ends in a control word or whose class may read ahead (`\checkmark`, a paper's macro, `\textsuperscript{…}`) */
+const T = (i, text, piece, k = 3) => `\\leavevmode\\axtmark{t${i}s}${text}\\axtend{t${i}e} \\axtpma{p${i}.${k}a}${piece} `
+/** the end cases' own macros: a paper's macros of one letter each */
+const OWN = '\\newcommand{\\ok}{v}\\newcommand{\\B}{B}'
 
 /** each case: its document, each cell's alignment as TeX set it (a letter where TeX's reading must state it, '-' where nothing
  *  may be stated), and the cells no template of LaTeX's set, for which no class may be written (AXT-CELL) */
@@ -148,6 +167,173 @@ const CASES = {
     // (a later table of LaTeX's whose cells hold no unit: none of them states a cell of the tables before)
     `\\begin{tabular}{rl} x & y \\\\ ${LONG} & ${LONG} \\\\ \\end{tabular}`,
   ].join('\n')), { 81: 'l', 82: 'c', 83: 'r', 91: 'l', 92: 'c', 93: '-', 94: '-' }, [81, 82, 83, 93, 94]],
+  // (the cell's end, one preamble kind a case: each cell's alignment as TeX set it, and what its end point holds after its end
+  // mark, END_AFTER)
+  endTabular: [doc(OWN, [
+    '\\begin{tabular}{l|c|r}', '\\hline',
+    `${T(201, 'flat, 4.5', '\\ok')} & ${C(202)} & ${T(203, 'Mod', '\\textsuperscript{x}')} \\\\`, '\\hline',
+    `${C(204)} & ${T(205, 'A vs', '\\B')} & 1.0 \\\\`, '\\hline',
+    '\\end{tabular}',
+  ].join('\n')), { 201: 'l', 202: 'c', 203: 'r', 204: 'l', 205: 'c' }],
+  endTabularStar: [doc(OWN, [
+    '\\begin{tabular*}{\\linewidth}{@{\\extracolsep{\\fill}}lcr@{}}',
+    `${T(211, 'one', '\\ok')} & ${C(212)} & ${T(213, 'three', '\\B')} \\\\`,
+    '\\end{tabular*}',
+  ].join('\n')), { 211: 'l', 212: 'c', 213: 'r' }],
+  endTabularx: [doc(`\\usepackage{tabularx}${OWN}`, [
+    '\\begin{tabularx}{\\linewidth}{lX}',
+    `${T(221, 'name', '\\ok')} & ${T(222, 'a paragraph of words in a column of the rest of the line', '\\B')} \\\\`,
+    '\\end{tabularx}',
+  ].join('\n')), { 221: 'l', 222: 'j' }],
+  // (seventy rows: the table breaks over a page, each cell's point on its own page)
+  endLongtable: [doc(`\\usepackage{longtable}${OWN}`, [
+    '\\begin{longtable}{lr}',
+    ...Array.from({ length: 70 }, (_, r) => `${T(300 + r, `row ${r}`, '\\ok')} & ${r} \\\\`),
+    '\\end{longtable}',
+  ].join('\n')), Object.fromEntries(Array.from({ length: 70 }, (_, r) => [300 + r, 'l']))],
+  endSiunitx: [doc(`\\usepackage{siunitx}${OWN}`, [
+    '\\begin{tabular}{lS[table-format=1.2]}',
+    `${T(241, 'Acc', '\\ok')} & {${T(242, 'head', '\\B')}} \\\\`,
+    'x & 0.73 \\\\',
+    '\\end{tabular}',
+  ].join('\n')), { 241: 'l', 242: 'c' }],
+  // (an array in math: its cells in math mode, a formula's; the class its template's all the same)
+  endArray: [doc(OWN, [
+    '$\\begin{array}{cc}',
+    `${T(251, 'ab', '\\ok')} & ${C(252, 'cd')} \\\\`,
+    'e & f',
+    '\\end{array}$',
+  ].join('\n')), {}],
+  endMulticolumn: [doc(`\\usepackage{booktabs}${OWN}`, [
+    '\\begin{tabular}{lcc}', '\\toprule',
+    `${C(261)} & \\multicolumn{2}{c}{${T(262, 'A vs', '\\B')}} \\\\`,
+    '\\cmidrule(lr){1-1}\\cmidrule(lr){2-3}',
+    'x & y & z \\\\', '\\bottomrule',
+    '\\end{tabular}',
+  ].join('\n')), { 261: 'l', 262: 'c' }],
+  endMultirow: [doc(`\\usepackage{multirow}${OWN}`, [
+    '\\begin{tabular}{lc}',
+    `\\multirow{2}{*}{${T(271, 'two rows', '\\ok')}} & ${C(272)} \\\\`,
+    ' & y \\\\',
+    '\\end{tabular}',
+  ].join('\n')), { 272: 'c' }],
+  endColortbl: [doc(`\\usepackage[table]{xcolor}${OWN}`, [
+    '\\begin{tabular}{lc}',
+    `\\rowcolor{gray!20} ${T(281, 'shaded', '\\ok')} & ${C(282)} \\\\`,
+    `\\cellcolor{red!20}${T(283, 'red', '\\B')} & z \\\\`,
+    '\\rowcolor{blue!10} x & y \\\\',
+    '\\end{tabular}',
+  ].join('\n')), { 281: 'l', 282: 'c', 283: 'l' }],
+  endBooktabs: [doc(`\\usepackage{booktabs}${OWN}`, [
+    '\\begin{tabular}{lr}', '\\toprule',
+    `${C(291)} & ${C(292)} \\\\`, '\\midrule',
+    `${T(293, 'last', '\\ok')} & ${T(294, 'row', '\\B')} \\\\`, '\\bottomrule',
+    '\\end{tabular}',
+  ].join('\n')), { 291: 'l', 292: 'r', 293: 'l', 294: 'r' }],
+  endControlWord: [doc(`\\usepackage{amssymb}${OWN}`, [
+    '\\begin{tabular}{ll}',
+    `${T(401, 'flat', '\\checkmark')} & ${T(402, 'ok', '\\ok')} \\\\`,
+    '\\end{tabular}',
+  ].join('\n')), { 401: 'l', 402: 'l' }],
+  endBreakSkip: [doc(OWN, [
+    '\\begin{tabular}{lc}',
+    `${T(411, 'gap', '\\ok')} & ${T(412, 'after', '\\B')} \\\\[2pt]`,
+    `${C(413)} & x \\\\`,
+    '\\end{tabular}',
+  ].join('\n')), { 411: 'l', 412: 'c', 413: 'l' }],
+  endComment: [doc(OWN, [
+    '\\begin{tabular}{lc}',
+    `${T(421, 'noted', '\\ok')}% a comment after the piece`,
+    `& ${C(422)} \\\\`,
+    '\\end{tabular}',
+  ].join('\n')), { 421: 'l', 422: 'c' }],
+  endEmpty: [doc(OWN, [
+    '\\begin{tabular}{lcr}',
+    `${T(431, 'before', '\\ok')} & & ${C(432)} \\\\`,
+    `x & & ${LONG} \\\\`,
+    '\\end{tabular}',
+  ].join('\n')), { 431: 'l', 432: 'r' }],
+  endNested: [doc(OWN, [
+    '\\begin{tabular}{ll}',
+    `${T(441, 'outer', '\\B')} & \\begin{tabular}{c}${T(442, 'in', '\\ok')}\\\\ ${C(443)}\\end{tabular} \\\\`,
+    `${C(444, `x \\begin{tabular}{c}${T(445, 'deep', '\\ok')}\\end{tabular}`)} & y \\\\`,
+    '\\end{tabular}',
+  ].join('\n')), { 441: 'l', 442: 'c', 443: 'c', 444: 'l', 445: 'c' }],
+}
+/** what each cell's end point holds after its end mark, where it is not nothing: the characters of its trailing piece (by case,
+ *  by cell); every other cell of a LaTeX template holds nothing there */
+const END_AFTER = {
+  endTabular: { 201: 'v', 203: 'x', 205: 'B' },
+  endTabularStar: { 211: 'v', 213: 'B' },
+  endTabularx: { 221: 'v', 222: 'B' },
+  endLongtable: Object.fromEntries(Array.from({ length: 70 }, (_, r) => [300 + r, 'v'])),
+  endSiunitx: { 241: 'v', 242: 'B' },
+  endArray: { 251: 'v' },
+  endMulticolumn: { 262: 'B' },
+  endMultirow: { 271: 'v' },
+  endColortbl: { 281: 'v', 283: 'B' },
+  endBooktabs: { 293: 'v', 294: 'B' },
+  endControlWord: { 401: '✓', 402: 'v' },
+  endBreakSkip: { 411: 'v', 412: 'B' },
+  endComment: { 421: 'v' },
+  endEmpty: { 431: 'v' },
+  endNested: { 441: 'B', 442: 'v', 445: 'v' },
+}
+/** a compile's pages as pageInk reads them (each glyph, each box, each point in stream order) and its axt- destinations' places */
+async function inkOf(file) {
+  if (!existsSync(file)) return null
+  const task = getDocument({ data: new Uint8Array(readFileSync(file)), verbosity: 0 }), pdf = await task.promise, pages = [], dests = new Map()
+  for (let n = 1; n <= pdf.numPages; n++) { const pg = await pdf.getPage(n); pages.push(pageInk(OPS, await pg.getOperatorList(), pg.commonObjs, { rotate: pg.rotate })) }
+  const all = await pdf.getDestinations()
+  for (const [full, d] of all instanceof Map ? all : Object.entries(all ?? {})) if (full.startsWith('axt-')) dests.set(full.slice(4), [(await pdf.getPageIndex(d[0])) + 1, d[2], d[3]])
+  await task.destroy()
+  return { pages, dests }
+}
+/** the base's and the head's pages: equal glyphs and boxes (`tol` pt), every base point at its place in the head's stream, the
+ *  head's other points cells' end points alone; null where so, else why not */
+function sameInk(a, b, tol) {
+  if (a.pages.length !== b.pages.length) return `${a.pages.length} pages, ${b.pages.length}`
+  let worst = 0
+  for (let p = 0; p < a.pages.length; p++) {
+    const A = a.pages[p], B = b.pages[p]
+    if (A.glyphs.length !== B.glyphs.length || A.boxes.length !== B.boxes.length) return `page ${p + 1}: ${A.glyphs.length}/${B.glyphs.length} glyphs, ${A.boxes.length / 4}/${B.boxes.length / 4} boxes`
+    for (let g = 0; g < A.glyphs.length; g++) {
+      const x = A.glyphs[g], y = B.glyphs[g]
+      if (x.u !== y.u) return `page ${p + 1} glyph ${g}: ${JSON.stringify(x.u)} / ${JSON.stringify(y.u)}`
+      worst = Math.max(worst, Math.abs(x.x0 - y.x0), Math.abs(x.x1 - y.x1), Math.abs(x.y - y.y), Math.abs(x.size - y.size))
+    }
+    for (let i = 0; i < A.boxes.length; i++) worst = Math.max(worst, Math.abs(A.boxes[i] - B.boxes[i]))
+    const added = B.points.filter(q => !A.points.some(o => o.name === q.name && o.glyph === q.glyph && o.box === q.box))
+    const lost = A.points.filter(o => !B.points.some(q => o.name === q.name && o.glyph === q.glyph && o.box === q.box))
+    if (lost.length) return `page ${p + 1}: ${lost.length} point(s) of the base moved or gone (${lost[0].name})`
+    if (added.some(q => !/^t\d+x$/.test(q.name))) return `page ${p + 1}: a point added that is no cell's end (${added.find(q => !/^t\d+x$/.test(q.name)).name})`
+  }
+  return worst > tol ? `a glyph or a box moved ${worst.toFixed(4)} pt` : null
+}
+/** each cell's end point against its cell (`ink` the head's): where every cell `cells` names holds its point on its end mark's page,
+ *  after its end mark, the glyphs between the two its trailing piece's characters (`after`, '' none), no box between, its destination
+ *  at or past the last ink of the cell across; and none for `none`. The faults, and each cell's reading for the table */
+function cellEnds(ink, cells, after, none) {
+  const faults = [], read = []
+  const at = name => { for (let p = 0; p < ink.pages.length; p++) { const q = ink.pages[p].points.findIndex(o => o.name === name); if (q >= 0) return { p, q, pt: ink.pages[p].points[q] } } return null }
+  for (const i of cells) {
+    const s = at(`t${i}s`), e = at(`t${i}e`), x = at(`t${i}x`)
+    if (none.includes(i)) { if (x) faults.push(`${i}: a point at a cell no LaTeX template sets`); read.push(`${i} none`); continue }
+    if (!e || !s) { faults.push(`${i}: its own marks not found`); continue }
+    if (!x) { faults.push(`${i}: no end point`); continue }
+    if (x.p !== e.p || x.q < e.q) { faults.push(`${i}: its end point before its end mark or on another page`); continue }
+    const P = ink.pages[x.p]
+    const between = P.glyphs.slice(e.pt.glyph, x.pt.glyph).map(g => g.u).join('').replace(/\s/g, '')
+    const boxes = x.pt.box - e.pt.box
+    if (between !== (after[i] ?? '')) faults.push(`${i}: after its end mark ${JSON.stringify(between)} (TeX's ${JSON.stringify(after[i] ?? '')})`)
+    if (boxes) faults.push(`${i}: ${boxes} box(es) between its end mark and its end point`)
+    const own = P.glyphs.slice(s.pt.glyph, x.pt.glyph).filter(g => /\S/.test(g.u))
+    const last = own.length ? Math.max(...own.map(g => g.x1)) : null
+    const d = ink.dests.get(`t${i}x`)
+    if (d && last !== null && d[1] < last - 0.01) faults.push(`${i}: its destination at ${d[1].toFixed(2)}, before its cell's ink ends (${last.toFixed(2)})`)
+    read.push(`${i} p${x.p + 1} ${JSON.stringify(between)}${d && last !== null ? ` +${(d[1] - last).toFixed(2)}` : ''}`)
+  }
+  return { faults, read }
 }
 
 // (--only=<case>,…: those cases alone)
@@ -174,7 +360,7 @@ for (const year of YEARS) {
   writeFileSync(join(dir, 'run.sh'), `${ENGINES.map(e => `for d in *-${e}-*/; do (cd "$d" && ${pass(e)}; ${pass(e)}); done`).join('\n')}\ntrue\n`)
   execFileSync('docker', ['run', '--rm', '--network', 'none', '-e', 'SOURCE_DATE_EPOCH=1700000000', '-e', 'FORCE_SOURCE_DATE=1', '-v', `${dir}:/work`, '-w', '/work', image, 'sh', 'run.sh'], { stdio: 'ignore', timeout: 1_800_000 })
   for (const e of ENGINES)
-    for (const [name, [, want, classless = []]] of Object.entries(CASES)) {
+    for (const [name, [src, want, classless = []]] of Object.entries(CASES)) {
       const at = join(dir, `new-${e}-${name}`)
       if (!existsSync(join(at, 'main.log'))) { console.log(`FAIL ${year} ${e} ${name}: no log`); bad++; continue }
       const text = readFileSync(join(at, 'main.log'), 'latin1')
@@ -182,16 +368,28 @@ for (const year of YEARS) {
       const wrong = Object.entries(want).filter(([i, c]) => (c === '-' ? got[i] !== undefined : got[i] !== c)).map(([i, c]) => `${i}: ${got[i] ?? 'none'} (TeX ${c})`)
       for (const i of classless) if (new RegExp(`^AXT-CELL ${i} `, 'm').test(text)) wrong.push(`${i}: a class written`)
       const errors = (text.match(/^! .*$/gm) ?? []).slice(0, 3)
+      // (each cell's end point, every cell the document marks: `t<i>s` in its source)
+      const ink = await inkOf(join(at, 'main.pdf'))
+      const cells = [...src.matchAll(/\\axtmark\{t(\d+)s\}/g)].map(m => Number(m[1]))
+      const ends = ink ? cellEnds(ink, cells, END_AFTER[name] ?? {}, classless) : { faults: ['no PDF'], read: [] }
       let same = ''
       if (BASE) {
         const a = join(dir, `base-${e}-${name}`, 'main.pdf'), b = join(at, 'main.pdf')
         // (LuaTeX's trailer /ID is made of the output's path, which the two directories differ by: masked)
         const bytes = f => readFileSync(f, 'latin1').replace(/\/ID \[ ?<[0-9A-Fa-f]+> ?<[0-9A-Fa-f]+> ?\]/g, '/ID []')
-        same = !existsSync(a) || !existsSync(b) ? 'no PDF' : bytes(a) === bytes(b) ? 'PDF the same' : 'PDF DIFFERS'
-        if (same !== 'PDF the same') bad++
+        if (!existsSync(a) || !existsSync(b)) same = 'no PDF'
+        else if (bytes(a) === bytes(b)) same = 'PDF the same'
+        else {
+          // (where the head sets a cell's end point: the same glyphs and rules, every base point in its place)
+          const why = sameInk(await inkOf(a), ink, e === 'lualatex' ? 0.011 : 0.001)
+          same = why === null ? 'ink the same, end points added' : `INK DIFFERS: ${why}`
+        }
+        if (same !== 'PDF the same' && same !== 'ink the same, end points added') bad++
       }
-      if (wrong.length || errors.length) bad++
-      console.log(`${wrong.length || errors.length || (BASE && same !== 'PDF the same') ? 'FAIL' : 'ok  '} ${year} ${e} ${name}${wrong.length ? `: ${wrong.join('; ')}` : ''}${errors.length ? `; TeX: ${errors.join(' | ')}` : ''}${same ? `; ${same}` : ''}`)
+      if (wrong.length || errors.length || ends.faults.length) bad++
+      const ok = !wrong.length && !errors.length && !ends.faults.length && (!BASE || same === 'PDF the same' || same === 'ink the same, end points added')
+      console.log(`${ok ? 'ok  ' : 'FAIL'} ${year} ${e} ${name}${wrong.length ? `: ${wrong.join('; ')}` : ''}${errors.length ? `; TeX: ${errors.join(' | ')}` : ''}${same ? `; ${same}` : ''}${ends.faults.length ? `; ENDS: ${ends.faults.slice(0, 6).join('; ')}${ends.faults.length > 6 ? ` (+${ends.faults.length - 6})` : ''}` : ''}`)
+      if (process.argv.includes('--ends')) console.log(`      ends: ${ends.read.join(', ')}`)
     }
 }
 console.log(`the documents and their logs: ${OUT}`)
