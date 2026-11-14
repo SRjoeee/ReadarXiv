@@ -458,7 +458,8 @@ function linesOf(
     const lines: Line[] = []
     for (const [k, gs0] of runOf) {
       const u = fig.units[k]!
-      if (Math.abs((u.ux ?? 1) - 1) > 1e-6 || Math.abs(u.uy ?? 0) > 1e-6) continue
+      // (a turned run is no level line: its direction across tells it, as in figureLinesOf's scripts above)
+      if (Math.abs(u.uy ?? 0) > 1e-6) continue
       const gs = gs0.filter((g) => real(glyphs[g])).sort((a, b) => glyphs[a]!.x0 - glyphs[b]!.x0)
       if (!gs.length) continue
       lines.push(lineOf([k], gs, new Set(), glyphs, figOf(glyphs[gs[0]!]!)))
