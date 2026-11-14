@@ -32,9 +32,9 @@ imports the extension's `src/`, its aliases, `wxt` or a virtual module; a direct
 list fails; and no package holds a hand-written declaration file, so the JavaScript modules a package still holds, all of
 them the engine's, are typed by a `*.types.ts` facade that re-exports with its type each value read of them: today's ink
 makers copied into `packages/engine/src/locate/today/` (`deps.mjs`,
-`figure-text.mjs`, `ink-units.mjs`, `ledger.mjs`, and the `accents.mjs` and `content-classes.mjs` they import) by
-`packages/engine/src/locate/today/today.types.ts`, but for the two values of `accents.mjs` that
-`packages/engine/src/locate/facts.ts` reads and types itself; and the moved front half, the 27 modules of `source/`, `marks/`,
+`figure-text.mjs`, `ink-units.mjs`, `ledger.mjs`) by `packages/engine/src/locate/today/today.types.ts` (the `accents.ts` and
+`content-classes.ts` they import are TypeScript in `packages/engine/src/locate/`, whose `facts.ts` re-exports two values of
+`accents.ts` under its own types); and the moved front half, the 27 modules of `source/`, `marks/`,
 `own/`, `compile/` and `instrument/`, by one facade at the engine's entry, `packages/engine/src/front.types.ts`. Each package
 is type-checked under its own `tsconfig.json` (`tsc -b packages`) and
 tested under its own `vitest.config.ts`; `packages/README.md` states the rest.
