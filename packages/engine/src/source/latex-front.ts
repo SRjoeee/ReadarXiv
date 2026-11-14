@@ -2692,7 +2692,8 @@ function tableArgsEnd(s: string, afterBegin: number, bodyEnd: number, env: strin
     tr = tp && readArgs(s, afterBegin, tp, bodyEnd)
   return tr?.complete
     ? tr.end
-    : argsOfForm(s, afterBegin, env.startsWith('tabularx') || env === 'tabular*' || env === 'tabulary' ? '{[{' : '[{').end
+    : argsOfForm(s, afterBegin, env.startsWith('tabularx') || env === 'tabular*' || env === 'tabulary' ? '{[{' : '[{')
+        .end
 }
 /** whether a macro's body sets its prose parameter inside an environment of its own, not math (a minipage's paragraph, a
  *  tabular's cells, a tcolorbox, a centred list): TeX sets that environment's content apart from the text around the call, as
@@ -4570,7 +4571,9 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       // its rows the same); one of several columns a table of its own, below
       if (TABLE_ENVS.test(env) && ctx.tables && b.cellMode && inGridCell(b, s, i)) {
         const argsEnd = tableArgsEnd(s, afterBegin, bodyEnd, env, ctx),
-          rows = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter).filter((c) => /\S/.test(s.slice(c.start, c.end)))
+          rows = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter).filter((c) =>
+            /\S/.test(s.slice(c.start, c.end)),
+          )
         if (rows.every((c) => c.col === 0 && c.span === 1) && rows.some((c) => c.row > 0)) {
           endText()
           const id = b.open(s.slice(i, argsEnd), i)
