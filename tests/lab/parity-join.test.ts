@@ -518,4 +518,25 @@ describe("a unit of today cut into several members of v2, and several of today's
   it('never one already joined one to one, nor units whose words no member holds whole', () => {
     expect(piecesJoin(v2Part, units, new Map([[55, 55], [70, 70], [80, 80]]))).toEqual([])
   })
+  // (2611.03953v2-zh p8 after S2: today's t118, a paragraph the one-to-one join leaves (v2 holds `\method{}` as an element, so
+  // their ids differ), v2's member 118 its words whole; the next member the one-to-one join left on the page, 137, a merged cell
+  // `\makecell{Time to\\target}` whose rows are today's t137 and t138. The paragraph's few hundred words and the cell's four
+  // were within a tenth of today's paragraph's: the paragraph was joined to members 118 and 137, and the cell to nothing)
+  const many = Array.from({ length: 60 }, (_, k) => `word${k}`).join(' ')
+  const box = (s1: string, s2: string) => [{ t: 'span', open: '\\makecell{', close: '}', content: [{ t: 'text', s: s1 }, { t: 'el', id: 'b', src: '\\\\' }, { t: 'text', s: s2 }] }]
+  const cellPart = bundle({ 8: [member(118, 'para', H), member(137, 'cell', Q), member(138, 'cell', R)] }, [
+    { id: H, kind: 'para', content: text(many) },
+    { id: Q, kind: 'cell', content: box('Time to', 'target') as never },
+    { id: R, kind: 'cell', content: box('Recovery', 'at budget') as never },
+  ])
+  const cellUnits = [today(118, 8, many), today(137, 8, 'Time to'), today(138, 8, 'target'), today(139, 8, 'Recovery'), today(140, 8, 'at budget')]
+  it("never extends a run past a member that alone holds the unit's words: one member is no group of pieces", () => {
+    expect(piecesJoin(cellPart, cellUnits, new Map()).filter((g: { today: number[] }) => g.today.includes(118))).toEqual([])
+  })
+  it("joins a merged cell to its rows though its box's macro is no word of theirs (today's rows hold no group round them)", () => {
+    expect(piecesJoin(cellPart, cellUnits, new Map())).toEqual([
+      { today: [137, 138], members: [137] },
+      { today: [139, 140], members: [138] },
+    ])
+  })
 })
