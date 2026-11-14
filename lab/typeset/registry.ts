@@ -592,12 +592,12 @@ const SPECS: readonly RuleSpec[] = [
     owns: ['T5', 'E27'],
     ports: ['RUN:1796-1814 fitFurther', 'RUN:1738-1753 widenOverPaper', 'RUN:1699-1729 paperTo (its room: Room.side)'],
     how: 'ported',
-    ruling: "2026-11-13 a table cell's room is its column's box",
+    ruling: "2026-11-13 a table cell's room is its column's box; 2026-11-14 and its share of the blank beside it",
     reads: ['fit.further', 'fit.floorMin'],
     file: 'fit/further.ts',
     state: {
       is: 'changed',
-      why: "a single-line table cell whose column's box the part states (Room.column) is laid in that box at every size, its 'widen' step none (lay/adapt.ts columnRoomOf: `wide` null), so that its 'shrink' sets it below the floor in the same box: the largest size not over the original's that fits its column (the owner's decision of 2026-11-13, docs/PDF-READER.md §18.13). Today's widened a cell clipped at its floor in its own ink's width half way to the glyph beside it, so that a cell missing its room by much was drawn larger than one missing it by little, and past its column. A cell whose column's box the part does not state is widened as today: the replay's samples state none, and are unchanged",
+      why: "a single-line table cell whose room in its column the part states (Room.column: its column's box widened by the column's share of the blank beside it, never past its own side) is laid in that room at every size, its 'widen' step none (lay/adapt.ts columnRoomOf: `wide` null), so that its 'shrink' sets it below the floor in the same room: the largest size not over the original's that fits its room in its column (the owner's decisions of 2026-11-13 and 2026-11-14, docs/PDF-READER.md §18.13). Today's widened a cell clipped at its floor in its own ink's width half way to the glyph beside it, so that a cell missing its room by much was drawn larger than one missing it by little, and past its column. A cell whose room the part does not state is widened as today: the replay's samples state none, and are unchanged",
       replay:
         'chained from F2 on every laid round of the sampled units and of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (584 ran; the widened blocks, Room.side, from the slot)',
       cases: 584,
