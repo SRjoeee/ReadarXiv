@@ -22,7 +22,7 @@
     "./today/instrument/mt.mjs": "./src/instrument/mt.mjs",
     "./today/compile/tex.mjs": "./src/compile/tex.mjs",
     "./today/compile/tex-errors.mjs": "./src/compile/tex-errors.mjs",
-    "./today/compile/base.mjs": "./src/compile/base.mjs",
+    "./today/compile/base.ts": "./src/compile/base.ts",
     "./today/compile/pdf-lite.ts": "./src/compile/pdf-lite.ts",
     "./today/compile/guard.mjs": "./src/compile/guard.mjs",
     "./today/compile/live.mjs": "./src/compile/live.mjs",

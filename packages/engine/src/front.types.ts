@@ -6,12 +6,12 @@
 // classesOf takes the pieces locate hands it (an index signature of the declaration's refused them). Exit: the typing of
 // the moved modules replaces this file.
 import type { Piece } from '@readarxiv/format'
+import type { PdfLike } from './compile/base.ts'
 import type { Instrument, PieceClass } from './instrument.ts'
 import type { NameKey } from './marks/names.ts'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
 import * as instrument_js from './instrument/instrument.mjs'
-// @ts-ignore: JavaScript moved as it is, typed by this file alone
-import * as base_js from './compile/base.mjs'
+import * as base_js from './compile/base.ts'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
 import * as guard_js from './compile/guard.mjs'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
@@ -26,27 +26,13 @@ import * as paperMeta_js from './source/paper-meta.mjs'
 import * as paper_js from './compile/paper.mjs'
 export type { BundlePiece, BundleUnit } from './instrument/units.ts'
 export const bundleUnitsOf = units_js.bundleUnitsOf
-export interface PdfLike {
-  numPages: number
-  getPage(p: number): Promise<{
-    view?: number[]
-    rotate?: number
-    userUnit?: number
-    getTextContent(): Promise<{ items?: { str?: string }[] }>
-  }>
-  getDestinations(): Promise<Record<string, unknown[] | null> | Map<string, unknown[] | null>>
-  getPageIndex(ref: unknown): Promise<number>
-  getMetadata?(): Promise<{
-    info?: { CreationDate?: string; Custom?: Map<string, unknown> } | null
-    metadata?: { getRaw?(): unknown } | null
-  } | null>
-}
-export const DRIVER_OUTPUT_MARK = base_js.DRIVER_OUTPUT_MARK as 'axt-runner: dvipdfmx output'
-export const DRIVER_OUTPUT_TRUNCATED = base_js.DRIVER_OUTPUT_TRUNCATED as 'axt-runner: dvipdfmx output truncated'
-export const driverOutputGiven = base_js.driverOutputGiven as (log: string | null | undefined) => boolean
-export const driverOutputTruncated = base_js.driverOutputTruncated as (log: string | null | undefined) => boolean
-export const textOfPdf = base_js.textOfPdf as (doc: PdfLike) => Promise<string[]>
-export const creationEpochOf = base_js.creationEpochOf as (doc: PdfLike) => Promise<number | null>
+export type { PdfLike }
+export const DRIVER_OUTPUT_MARK = base_js.DRIVER_OUTPUT_MARK
+export const DRIVER_OUTPUT_TRUNCATED = base_js.DRIVER_OUTPUT_TRUNCATED
+export const driverOutputGiven = base_js.driverOutputGiven
+export const driverOutputTruncated = base_js.driverOutputTruncated
+export const textOfPdf = base_js.textOfPdf
+export const creationEpochOf = base_js.creationEpochOf
 export const texLiveOfPdf = guard_js.texLiveOfPdf as (doc: PdfLike) => Promise<string | null>
 export const compilerOfPdf = guard_js.compilerOfPdf as (
   doc: PdfLike,

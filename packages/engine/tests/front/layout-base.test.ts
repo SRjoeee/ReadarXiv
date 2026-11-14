@@ -1,8 +1,8 @@
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { boxesCheck, creationEpochOf, driverLostInk, finalCheck, hasMarkText, markTextBeyond, markTextOf, marksOfPdf, pageTextOf, pdfDateEpoch, textOfPdf, xmpDateEpoch, xmpDatesOf } from '@/pdf-reader/engine/layout/base.mjs'
-import { ALLOCATION_FAILED } from '@readarxiv/engine'
+import { boxesCheck, creationEpochOf, driverLostInk, finalCheck, hasMarkText, markTextBeyond, markTextOf, marksOfPdf, pageTextOf, pdfDateEpoch, textOfPdf, xmpDateEpoch, xmpDatesOf } from '../../src/compile/base.ts'
+import { ALLOCATION_FAILED } from '../../src/index.ts'
 
 // Our compile as the base page (layout/base.mjs; design note §3.1, §3.3): the final pass against the draft it was made of, our
 // pages against arXiv's, no mark of ours printed as text, and arXiv's /CreationDate as the compiles' day.
