@@ -2024,6 +2024,20 @@ function paramUse(
       i = Math.min(afterEnd, to)
       continue
     }
+    // any other environment reads its own arguments as it declares them (environmentParams, as the walk reads a table's), a
+    // parameter there text only where the argument's role is: a tabular's preamble and a minipage's width are none. Read as
+    // free groups after `\\begin{name}`, 1512.03385v1's \\tabincell{c}{…} = \\begin{tabular}{@{}#1@{}}#2\\end{tabular} had two
+    // prose parameters, so no prose argument, and each call was one placeholder: its Table 13 header no unit, in English
+    if (env) {
+      const ep = environmentParams(env[1]!.trim(), paper?.bindings ?? null)
+      const r = ep && readArgs(s, end + env[0].length, ep, to)
+      if (r?.complete) {
+        for (const a of r.args)
+          paramUse(s, a.start + 1, a.end - 1, textual && (a.role === 't' || a.role === 'c'), use, storing)
+        i = r.end
+        continue
+      }
+    }
     const { args, end: e, known } = commandArgs(s, end, name)
     const reqs = args.filter((a) => a.kind === 'req')
     // typeset as prose: the text of a font command or a box, of a caption or a footnote (2608.06007's
@@ -2665,6 +2679,26 @@ function macroArgs(s: string, i: number, macro: { params: number; opt: boolean }
 const BLOCK =
   /\n[ \t]*\n|\\(?:par|item|part|chapter|(?:sub)*section|(?:sub)?paragraph|caption)(?![A-Za-z@])|\\begin\s*\{([^}]+)\}/g
 const holdsBlock = (text: string) => [...text.matchAll(BLOCK)].some((m) => !m[1] || !MATH_ENVS.test(m[1].trim()))
+/** whether a macro's body sets its prose parameter inside an environment of its own, not math (a minipage's paragraph, a
+ *  tabular's cells, a tcolorbox, a centred list): TeX sets that environment's content apart from the text around the call, as
+ *  the walk reads the same environment written in place (every environment but math ends the text before it), so the call's
+ *  argument is a block of its own. The environment's own arguments are not its content (environmentParams, as paramUse reads
+ *  them). Walked as a pair inside the paragraph, 2610.37818v1's five \\fdpanel{width}{image}{label} calls, each a minipage,
+ *  made one paragraph of five boxes' labels */
+function proseInEnvironment(macro: Macro): boolean {
+  if (macro.prose === undefined) return false
+  const def = uncommented(macro.def),
+    param = new RegExp(`#${macro.prose}(?!\\d)`)
+  for (const m of def.matchAll(/\\begin\s*\{([^}]+)\}/g)) {
+    const env = m[1]!.trim()
+    if (MATH_ENVS.test(env)) continue
+    const at = m.index + m[0].length,
+      ep = environmentParams(env, paper?.bindings ?? null),
+      r = ep && readArgs(def, at, ep)
+    if (param.test(def.slice(r?.complete ? r.end : at, endOfEnv(def, at, env)[0]))) return true
+  }
+  return false
+}
 
 // ---------------------------------------------------------------- units
 /** the kinds set in the running text, which a display standing alone after them belongs to */
@@ -5063,9 +5097,10 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         continue
       }
       if (arg?.group) {
-        // an argument that holds paragraphs, a figure or a proof (\\techreport{…}, \\revised{…} around whole passages)
-        // is walked as an environment's body is; one within a paragraph is part of it, the call around it a pair
-        if (holdsBlock(s.slice(arg.start + 1, arg.end - 1))) {
+        // an argument that holds paragraphs, a figure or a proof (\\techreport{…}, \\revised{…} around whole passages), or
+        // that the macro's body sets inside an environment of its own (proseInEnvironment: a minipage's, a tabular's
+        // content), is walked as an environment's body is; one within a paragraph is part of it, the call around it a pair
+        if (holdsBlock(s.slice(arg.start + 1, arg.end - 1)) || proseInEnvironment(macro)) {
           endText()
           b.flush()
           walk(s, arg.start + 1, arg.end - 1, b, ctx)
