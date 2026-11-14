@@ -2688,7 +2688,10 @@ export function followsOf(
  * marking marked. TeX ships it right before the start mark: stream.mjs ownedOf reads its ink between the point before that mark
  * and the mark (headInk), where it was LOST, OUTSIDE its unit's lines, and its light no block's (2501.14787v1 p24u193)
  */
-export function headsOf(units: readonly Unit[], names: ReadonlySet<string>): (start: string) => Head | null {
+export function headsOf(
+  units: readonly { pieces?: readonly Piece[] | undefined }[],
+  names: ReadonlySet<string>,
+): (start: string) => Head | null {
   const textOf = (p: TextPiece): string => (!p.tr && p.src !== undefined ? p.src : p.s) ?? ''
   return (start: string): Head | null => {
     const m = /^(\d+)s$/.exec(start),
