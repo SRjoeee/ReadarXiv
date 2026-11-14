@@ -872,7 +872,7 @@ const UNIT_FORMS = { subcaptionbox: '[{[[', captionof: '{[{', tablecaption: '{' 
  *  body: LaTeX's form is what it reads */
 function unitForm(name, ctx) {
   const macro = ctx.macros.get(name)
-  if (macro?.params > 0) return (macro.opt ? '[' : '') + '{'.repeat(macro.params - (macro.opt ? 1 : 0))
+  if (macro && macro.params > 0) return (macro.opt ? '[' : '') + '{'.repeat(macro.params - (macro.opt ? 1 : 0))
   return UNIT_FORMS[name] ?? '[{'
 }
 /** a citation command: natbib's, biblatex's, apacite's (\cite, \citep, \citet, \parencite, \textcite, \citeA, \citeNP,
@@ -1359,7 +1359,7 @@ function tailOf(body) {
   if (!name || NO_ARGS.has(name)) return null
   // one an operand of the command before it, which TeX does not run: \\string\\section, \\let\\saved\\section,
   // \\let\\saved=\\section, \\def\\section…
-  const before = t[at[n - 1]] === '=' ? n - 2 : n - 1
+  const before = t[at[n - 1] ?? -1] === '=' ? n - 2 : n - 1
   return OPERAND_OF.has(word(n - 1)) || SECOND_OPERAND_OF.has(word(before - 1)) ? null : name
 }
 /**
@@ -1734,7 +1734,7 @@ export function identifiersIn(s) {
   const out = []
   const answered = (t, at, step) => {
     // (whether the bracket at `at` of `t` has its pair inside t, walking `step` from it: depth by its own pair alone)
-    const c = t[at], open = step > 0 ? c : Object.keys(PAIRS).find(k => PAIRS[k] === c), close = PAIRS[open]
+    const c = t[at], open = step > 0 ? c : Object.keys(PAIRS).find(k => PAIRS[k] === c), close = open === undefined ? undefined : PAIRS[open]
     if (!close) return false
     let depth = 0
     for (let i = at; i >= 0 && i < t.length; i += step) {
@@ -1824,7 +1824,7 @@ function tikzText(s, from, to, b, ctx) {
         k = ws(k)
         if (s[k] === '[') { const e = matchGroup(s, k, '[', ']'); if (e < 0) break; k = e; continue }
         if (s[k] === '(') { const e = matchGroup(s, k, '(', ')'); if (e < 0 || e > to) break; k = e; continue }
-        if (s.startsWith('at', k) && /[\s(]/.test(s[k + 2])) { k += 2; continue }
+        if (s.startsWith('at', k) && /[\s(]/.test(s[k + 2] ?? '')) { k += 2; continue }
         break
       }
     } else if (m[0].startsWith('\\addlegendentry')) { k = ws(k); if (s[k] === '[') { const e = matchGroup(s, k, '[', ']'); if (e > 0) k = ws(e) } }
@@ -2003,7 +2003,7 @@ const isConditional = (name, ifs) => TEX_IFS.has(name) || ifs.has(name) || /^if@
  */
 function newifValues(texts, ifs) {
   const set = new Map()
-  if (!ifs.size) return set
+  if (!ifs.size) return new Map()
   // only a file that sets one is read (a package's files mostly do not)
   const sets = new RegExp(String.raw`\\(?:${[...ifs].map(n => n.slice(2).replace(/@/g, '\\@')).join('|')})(?:true|false)(?![A-Za-z@])`)
   for (const t of texts.filter(x => sets.test(x))) for (const c of texCommands(t, { ifs })) {
@@ -2880,7 +2880,7 @@ function walk(s, from, to, b, ctx) {
       }
     }
     // (\\texorpdfstring's first argument whether or not the paper's packages tell the role table of it: a class may define it)
-    const pdfString = PDF_STRING.has(name) && args?.args.length >= 2 && s[args.args[0].start] === '{' && s[args.args[1].start] === '{'
+    const pdfString = PDF_STRING.has(name) && !!args && args.args.length >= 2 && s[args.args[0].start] === '{' && s[args.args[1].start] === '{'
     // (a line box in PIPELINE 29's walk: one placeholder, as that walk read it, LINE_BOXES)
     const walked = pdfString ? args.args.slice(0, 1) : branch ?? (args?.known && !(LINE_BOXES.has(name) && ctx.boxesUnread) ? args.args.filter(a => (a.role === 't' || a.role === 'c') && (s[a.start] === '{' || a.shape === '[')) : [])
     // (its call ends with its second argument: where the table does not know it, every adjacent group was read as one of its)

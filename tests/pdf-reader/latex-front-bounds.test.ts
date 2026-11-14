@@ -3,7 +3,8 @@
 // them (helpers/latex-front-before.mjs, 074329318 verbatim but its imports), value for value and error for error: its latin1 the
 // engine's one (bounded-reads.ts: slices of 8192 bytes, not 32768, read by Reflect.apply), and six reads of a value that may be
 // none made explicit — unitForm's paper macro of none (`macro && macro.params > 0`), tailOf's token before a body's only one
-// (`at[n - 1] ?? -1`), identifiersIn's closing bracket of no pair (`PAIRS[open ?? '']`), tikzText's character past the text
+// (`at[n - 1] ?? -1`), identifiersIn's closing bracket of no pair (`open === undefined ?
+// undefined : PAIRS[open]`, lane t2-locate's prepared change), tikzText's character past the text
 // (`s[k + 2] ?? ''`), the walk's \texorpdfstring of no arguments read (`!!args && …`), newifValues of a paper with no \newif
 // (`new Map()`, the empty Map it returned). Each read gave what the old one gave on every input: an index or a key of none read
 // none, a comparison with none false. Held on byte strings of every length round both slices, on seeded strings of brackets,
@@ -79,7 +80,7 @@ describe('identifiersIn and identifierSource', () => {
   it('gives each identifier as before, a closing bracket of no pair among them', () => {
     for (const s of HAND) expect(now.identifiersIn(s), s).toEqual(BEFORE.identifiersIn(s))
     const r = seeded(11)
-    const alphabet = ['a', 'b', 'Z', '0', '9', '_', '_', '(', ')', '[', ']', '{', '}', '「', '」', '（', '）', '⟨', '⟩', '【', '】', '"', "'", '`', '«', '»', '“', '”', '‘', '’', '.', ',', ';', ':', '!', '?', ' ', '\n', '\u0000', '\\', '@', '$', '-']
+    const alphabet = ['a', 'b', 'Z', '0', '9', '_', '_', '(', ')', '[', ']', '{', '}', '「', '」', '（', '）', '⟨', '⟩', '【', '】', '〈', '〉', '［', '］', '｛', '｝', '⦅', '⦆', '‹', '›', '"', "'", '`', '«', '»', '“', '”', '‘', '’', '.', ',', ';', ':', '!', '?', ' ', '\n', '\u0000', '\\', '@', '$', '-']
     for (let n = 0; n < 4000; n++) {
       let s = ''
       for (let k = r.int(30); k > 0; k--) s += r.pick(alphabet)
@@ -111,6 +112,8 @@ const PREAMBLE = [
   '\\title{A Title\\thanks{Supported by words}}',
   '\\author{First Author \\and Second Author}',
   '\\newcommand{\\caption}[1]{#1}',
+  '\\renewcommand{\\footnote}{(a note)}',
+  '\\ifdefined\\foo\\title{A conditional title}\\fi',
 ]
 const BODY = [
   'Plain words of a sentence, then more words. ',
@@ -197,6 +200,7 @@ describe('loadProject and what reads its units', () => {
     same(project({ 'main.tex': doc(PREAMBLE[0]!, '\\section{Own of none} words here.') }), 'heading of no parameter')
     same(project({ 'main.tex': doc(PREAMBLE[1]!, '\\section{One}{Two} words here.') }), 'heading of two')
     same(project({ 'main.tex': doc(PREAMBLE[2]!, '\\subsection[o]{t} words here.') }), 'heading of an optional one')
+    same(project({ 'main.tex': doc('\\renewcommand{\\footnote}{(a note)}', 'Words\\footnote{A note of words} after.') }), 'note of no parameter')
     // (macros whose body ends in a command: alone, after a \let and an `=`, after \string)
     same(project({ 'main.tex': doc(PREAMBLE.slice(3, 9).join('\n'), BODY.slice(8, 15).join(' ')) }), 'macro tails')
     // (a picture cut off at `node at`, the text's last characters, in a file of its own)
@@ -209,6 +213,7 @@ describe('loadProject and what reads its units', () => {
     same(project({ 'main.tex': doc('', BODY[24]! + BODY[25]!) }), 'identifiers')
     // (no \newif at all, one set false, one set both ways)
     same(project({ 'main.tex': doc('', '\\ifdraft Draft words\\else Final words\\fi') }), 'no newif')
+    same(project({ 'main.tex': doc('\\ifdefined\\foo\\title{A conditional title}\\fi', 'Words of the body.') }), 'no newif, a conditional of TeX\'s in the preamble')
     same(project({ 'main.tex': doc('\\newif\\ifdraft\\draftfalse', '\\ifdraft Draft words\\else Final words\\fi') }), 'newif false')
     same(project({ 'main.tex': doc('\\newif\\ifdraft\\draftfalse\\drafttrue', '\\ifdraft Draft words\\else Final words\\fi') }), 'newif both')
     // (a Latin-1 file, its inputenc declared; CR line ends)

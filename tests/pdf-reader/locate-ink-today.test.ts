@@ -541,8 +541,6 @@ describe('today’s ink makers in the engine package', () => {
     expect(one(T as unknown as Impl).map(said)).toEqual([
       ['Ask ', '<\\url{llm_equal_human}>', ' first, then `', '<\\url{CallbackBase.host_label(result)}>', '`, ', '<\\url{conv5_x}>', ' and _x and camelCase, e.g. this.'],
     ])
-    // (one pattern for both readers: the front end's)
-    expect(T.identifiersIn.toString()).toBe(identifiersIn.toString())
     // (the whole token, its edges' sentence punctuation aside, a bracket the token answers its own: lane literal-fixes, the
     // coordinator's of 2026-11-10)
     const ids = (s: string) => identifiersIn(s).map(([a, b]) => s.slice(a, b))

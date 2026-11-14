@@ -111,57 +111,9 @@ export const EMAIL_ADDRESS = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/
 // it, keepGroups'), held equal to it by tests/pdf-reader/locate-ink-today.test.ts
 export const ADDRESS_GROUP = /(?<![\w.+-])(?:\{[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\}|\([\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\)|\[[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\])@[\w-]+(?:\.[\w-]+)+/
 
-// ---- source/latex-front.mjs identifiersIn (each identifier of a text: a token with no white space holding two letters or digits
-// joined by underscores, whole, its leading and trailing sentence punctuation aside; keepIdentifiers'), with SNAKE and PAIRS, held
-// equal to it by tests/pdf-reader/locate-ink-today.test.ts
-const SNAKE = /[^\W_]_+[^\W_]/
-/** an opening and a closing bracket of a pair a token may hold (`host_label(result)`, `[sentence_1]`, `{root_question}`) */
-const PAIRS = { '(': ')', '[': ']', '{': '}' }
-/** Each identifier of a text (a reading of a unit's pieces, or an ink word's characters), its [start, end) code units: a token, a
- *  run of characters with no white space (nor U+0000, which stands for what no character of a text is: a command, a group's
- *  edge), that holds an identifier's mark (SNAKE), the whole token: `CallbackBase.host_label(result)`, `test_parser.py`,
- *  `--view_range`, `response_equal_human_example`. Its leading and trailing sentence punctuation is none of it: from its end a
- *  stop, a comma, a semicolon, a colon, an exclamation or a question mark and a quote (`'` `"` `` ` `` and every closing one,
- *  Pf), from its start a quote (every opening one, Pi); and a bracket at either edge that no bracket of its pair inside the token
- *  answers (`(see conv5_x)` the `)` of a parenthesis the sentence opened; `[sentence_1]` and `host_label(result)` keep theirs),
- *  another opening or closing bracket at its edge too (Ps, Pe). Its syntax alone: no word list, no camelCase, nothing dotted
- *  without an underscore ("e.g." is prose). The source's (keepIdentifiers), an ink unit's word's (packages/engine's copy of
- *  ink-units.mjs, addressed) and a figure text's (locate's ink.ts): the copy held equal to this by
- *  tests/pdf-reader/locate-ink-today.test.ts */
-export function identifiersIn(s) {
-  const out = []
-  const answered = (t, at, step) => {
-    // (whether the bracket at `at` of `t` has its pair inside t, walking `step` from it: depth by its own pair alone)
-    const c = t[at], open = step > 0 ? c : Object.keys(PAIRS).find(k => PAIRS[k] === c), close = PAIRS[open]
-    if (!close) return false
-    let depth = 0
-    for (let i = at; i >= 0 && i < t.length; i += step) {
-      if (t[i] === (step > 0 ? open : close)) depth++
-      else if (t[i] === (step > 0 ? close : open) && --depth === 0) return true
-    }
-    return false
-  }
-  // (the tokens: runs of characters that are no white space and no U+0000)
-  const tokens = []
-  for (let i = 0; i < s.length; ) {
-    while (i < s.length && (s[i] === '\u0000' || /\s/u.test(s[i]))) i++
-    const at = i
-    while (i < s.length && s[i] !== '\u0000' && !/\s/u.test(s[i])) i++
-    if (i > at) tokens.push([at, i])
-  }
-  for (const [a0, b0] of tokens) {
-    if (!SNAKE.test(s.slice(a0, b0))) continue
-    let a = a0, b = b0
-    for (;;) {
-      const t = s.slice(a, b), last = t.at(-1), first = t[0]
-      if (/[.,;:!?'"`\p{Pf}]/u.test(last) || (/\p{Pe}/u.test(last) && !answered(t, t.length - 1, -1))) b--
-      else if (/['"`\p{Pi}]/u.test(first) || (/\p{Ps}/u.test(first) && !answered(t, 0, 1))) a++
-      else break
-    }
-    if (SNAKE.test(s.slice(a, b))) out.push([a, b])
-  }
-  return out
-}
+// ---- source/latex-front.mjs identifiersIn, its home's own (each identifier of a text; keepIdentifiers'): the copy is not kept
+// once its home is changed or typed (the coordinator's ruling of 2026-11-14)
+export { identifiersIn } from '../../source/latex-front.mjs'
 
 // ---- layout/file.mjs:255 (UNIT_FLAG)
 export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4, FLUSH_LEFT: 8, FLUSH_RIGHT: 16, JUSTIFIED: 32 })
