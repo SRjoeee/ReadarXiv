@@ -5927,10 +5927,10 @@ export const CSQUOTES_DEFAULT: QuoteVariant = 'american'
  * `style=american`, `english` or `USenglish`, no `autostyle` but `autostyle=false`, no \\setquotestyle, and babel's or
  * polyglossia's main language, where one is named, one of CSQUOTES_NAMES; `{ known: false }` where the style is another the
  * source alone cannot tell (the compile's glyphs would be the fact: not read here); null where csquotes is not loaded. The
- * variant: babel's main language's (its last option), which csquotes' default option autostyle=tryonce takes at the end of
- * the preamble; csquotes' default (CSQUOTES_DEFAULT) where `style=` or `autostyle=false` keeps it, where no language is named,
- * and under polyglossia, whose main language csquotes reads as \\mainbabelname: by its name alone (the reader reads no
- * `variant=`) the pinned TeX Live set the default's marks
+ * variant: babel's main language's (its `main=`, else its last language option), which csquotes' default option
+ * autostyle=tryonce takes at the end of the preamble; csquotes' default (CSQUOTES_DEFAULT) where `style=` or `autostyle=false`
+ * keeps it, where no language is named, and under polyglossia, whose main language csquotes reads as \\mainbabelname: by its
+ * name alone (the reader reads no `variant=`) the pinned TeX Live set the default's marks
  */
 function csquotesOf(texts: readonly string[]): Ctx['quotes'] {
   const t = texts.map(uncommented).join('\n')
@@ -5943,12 +5943,18 @@ function csquotesOf(texts: readonly string[]): Ctx['quotes'] {
   const style = opts.find((o) => /^style\s*=/.test(o))?.replace(/^style\s*=\s*/, '')
   const variantOf = (l: string | undefined) =>
     l !== undefined && Object.hasOwn(CSQUOTES_NAMES, l) ? CSQUOTES_NAMES[l] : undefined
-  const babel = [...t.matchAll(/\\usepackage\s*\[([^\]]*)\]\s*\{babel\}/g)].flatMap((b) =>
+  // babel's main language: the one its `main=` option names, wherever it stands among the options, else its last language
+  // option. babel.sty (v26.3) stores each key=value option as \bbl@opt@<key> (lines 401, 405-410), appends \bbl@opt@main to the
+  // languages it loads (4238-4240) and takes it out of the list before it (4260-4273): the main language is loaded last. Its
+  // other key=value options (provide=, shorthands=, …) are not read
+  const babelOptions = [...t.matchAll(/\\usepackage\s*\[([^\]]*)\]\s*\{babel\}/g)].flatMap((b) =>
     b[1]!
       .split(',')
       .map((x) => x.trim())
-      .filter((x) => x && !x.includes('=')),
+      .filter(Boolean),
   )
+  const babelMain = babelOptions.map((x) => /^main\s*=\s*(.+)$/.exec(x)?.[1]).find((x) => x !== undefined)
+  const babelLanguage = babelMain ?? babelOptions.filter((x) => !x.includes('=')).at(-1)
   const main = /\\setmainlanguage\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/.exec(t)?.[1]?.trim()
   // (the styles a `style=` names that the reader reads: csquotes.def's aliases of the American variant, american, english and
   // USenglish; another, of either variant, is a style it does not tell)
@@ -5956,11 +5962,11 @@ function csquotesOf(texts: readonly string[]): Ctx['quotes'] {
     !opts.some((o) => /^autostyle\b/.test(o) && !/=\s*false$/.test(o)) &&
     !/\\setquotestyle\b/.test(t) &&
     (!style || /^(?:american|english|USenglish)$/.test(style)) &&
-    (!babel.length || variantOf(babel.at(-1)) !== undefined) &&
+    (babelLanguage === undefined || variantOf(babelLanguage) !== undefined) &&
     (!main || variantOf(main) !== undefined)
   if (!known) return { known }
   const adapts = !style && !opts.some((o) => /^autostyle\b/.test(o))
-  return { known, levels: CSQUOTES_ENGLISH[(adapts && !main && variantOf(babel.at(-1))) || CSQUOTES_DEFAULT] }
+  return { known, levels: CSQUOTES_ENGLISH[(adapts && !main && variantOf(babelLanguage)) || CSQUOTES_DEFAULT] }
 }
 /** csquotes' marks for an \\enquote at the walk's quotation level (`ctx.quoteLevel`, 0 outside one; `\\enquote*` one level in,
  *  `end` past its name and star), alternating by level; null where the paper does not load csquotes or its marks are unknown */
