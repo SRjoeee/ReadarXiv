@@ -3578,8 +3578,8 @@ not line up, 4 a spanning cell widened), 106 gain one and 5 spanning cells their
 columns with ink beside them drawn and looked at, each TeX's column. Of the 67 single-line cells under the original's size among
 them, 28 reach it, 37 are larger, 2 do not move; p7 Table 1's "MOPD (TA init)" goes from 0.8 to 1.0 (its box 73.17-157.25, the
 widest entry "MOPD (SFT warm-up)", its share 1.99 to the fill of the next column's cells: room 73.17-159.25). One cell is
-smaller, as the column rule makes it where the old path had run a cell past its column: 1512.03385v1 p6's "top-5 err." from 1.0
-to 0.875, its room 37.38 pt (7.97 to "top-1 err." on the left, 4.09 to the table's edge on the right, a `c` cell the smaller on
+smaller, as the column rule makes it where the old path had run a cell past its column: 1512.03385v1 p6's header of its top five
+error from 1.0 to 0.875, its room 37.38 pt (7.97 to the next column's box on the left, 4.09 to the table's edge on the right, a `c` cell the smaller on
 both sides) where its own room had been widened half way to the glyphs beside its line, 45.15 pt; no cell goes unfit or under
 the floor.
 
@@ -3633,6 +3633,14 @@ middle); a cell spanning columns, the union of its boxes by its first column's l
   original's size), p13 Table 7's "MOPD (TA init)" 0.9 to 0.95 (66.51 to 70.00; 84.12 at the original's size), p16 Table 12's
   "Scale" 0.725 to 0.875 (19.42 to 23.41), 2610.17024v1 p18's "Total" 0.675 to 0.9 (18.12 to 24.10); p16's "Final" stood at the
   original's size already. 322 single-line cells under the original's size have no stated column.
+- **Measured as built** (lane cell-share, the head against round RB3's): the chain's stage 1a over the 89 papers and 2611.03953v2
+  changes `Room.column` on cell members alone (4,986 cells' boxes widened, 245 boxes gained by the inside words' reading below,
+  143 the same, none lost), every other object, the prepare dumps, the ownership and the differential byte for byte. The reader
+  gate on both stores: I3, I4 and I5 the same faults, I10 and I11 none; 832 (the door's rows) and 799 (Google's) of about 22,300
+  units drawn otherwise, every one a cell. The display gate in both modes: no page newly worse; ruling CB covers 24 pages and 59
+  differences of the 22 pairs (21 and 49 before) and 7 and 33 of the added two. The locate pass, back to back with RB3's code at
+  one machine state: 78.7 and 78.2 s against 79.4 and 77.8 s over the 89, inside the spread of two runs of one code (2.1%);
+  `readColumns` about 1 to 2 ms more on the papers with the most table cells (528 cells: 8.1 to 9.4 ms).
 
 **Laid in its own room as before**: a cell whose column the part does not state (above, and every part made before the field), a
 cell of several lines, a held line, and a cell whose own line holds ink not its own inside its room (its `Room.side` short of an
