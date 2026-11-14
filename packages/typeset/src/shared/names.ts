@@ -59,9 +59,9 @@ export type PageChar = {
 }
 
 /** a capital set at this share of a name's largest letter or less is a faked small capital (L2:808) */
-export const SMALL_CAPS_SHARE = 0.9
+const SMALL_CAPS_SHARE = 0.9
 /** the share of the size small capitals the layer draws itself are set at (L2:812) */
-export const SMALL_CAPS_RATIO = 0.8
+const SMALL_CAPS_RATIO = 0.8
 const cased = (ch: string) => ch.toLowerCase() !== ch.toUpperCase()
 
 // ---------------------------------------------------------------- the readings of the page around a name

@@ -74,7 +74,7 @@ export const GENERATED_COMMANDS: readonly string[] = Object.freeze([
   'Autoref',
 ])
 /** a placeholder whose text a package generates (L2:1277 GENERATED_REF) */
-export const GENERATED_REF = new RegExp(`^\\\\(?:${GENERATED_COMMANDS.join('|')})\\*?\\s*\\{`)
+const GENERATED_REF = new RegExp(`^\\\\(?:${GENERATED_COMMANDS.join('|')})\\*?\\s*\\{`)
 /** a citation's note, its last optional argument (L2:1279 CITE_NOTE) */
 const CITE_NOTE = /^\\(?:cite[a-z]*|parencite|textcite|autocite)\*?((?:\s*\[[^\]]*\])+)\s*\{/
 /** the targets whose names do not inflect (tex-names.mjs:17) */

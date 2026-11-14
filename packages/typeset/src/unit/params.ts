@@ -22,7 +22,7 @@ import type { Block } from './blocks.ts'
 /** a CJK target's small capitals at this share of the original's size (L2:792 CJK_CAPS_SIZE, the ruling of 2026-10-24) */
 export const CJK_CAPS_SIZE = 1
 /** a solid-set original's pitch, × its size (L2:3065 SOLID) */
-export const SOLID = 1.25
+const SOLID = 1.25
 /** the units of the page's head and foot (today's ink units of the heads and the notes): one of a single line, a running head,
  *  a page number, keeps the original's size (the owner's ruling of 2026-11-08): its fit's floor is its size */
 const HEAD_FOOT = new Set(['inkheads', 'inknotes'])

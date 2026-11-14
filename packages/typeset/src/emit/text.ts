@@ -14,7 +14,7 @@ import type { LaidLine, Layout } from '../fit/types.ts'
 
 /** the most items a page's layer holds, a count of text items (textlayer.mjs TEXT_ITEMS_MAX): past it a line's neighbours
  *  are merged (PDF-READER §11.11); a ruling, unmeasured */
-export const TEXT_ITEMS_MAX = 2000
+const TEXT_ITEMS_MAX = 2000
 /** a compact item's fields, a count of numbers an item: x, baseline, width, size, ascent, flags (textlayer.mjs F, the layout
  *  its itemsOf writes Compact.num in): the stride of the layout, no bound of work */
 const F = 6
