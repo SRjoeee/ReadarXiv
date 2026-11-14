@@ -1,5 +1,5 @@
 // COPIED from src/pdf-reader/engine/rules/content-classes.mjs (abe884b5e) for today's ink makers beside it, which locate runs over arXiv's page,
-// without the reader's toggles and their defaults, which nothing of the packages reads (the reader's are packages/format's).
+// without the readings of the reader's toggles, which nothing of the packages calls (the reader's are packages/format's).
 // The content classes (docs/route/orphan-text.md): every text glyph of our final pass belongs to exactly one, and each class
 // has one translation path and one reader toggle. One table, read by the maker child's ledger (layout/ledger.mjs), by the
 // sweep and by the readers' settings: a class is translated once on the server, into the shared cache, and a toggle only shows
@@ -8,8 +8,11 @@
 // (UNIT_CLASS), which the bundle's units carry, so the server and every reader tell it alike.
 // An original module (no port statement). Imports nothing.
 
+/** the reader's toggles, in the order the settings list them: `always` and `never` are no toggle */
+export const TOGGLES = Object.freeze(['always', 'heads', 'tables', 'figures', 'references', 'names', 'never'] as const)
+
 /**
- * Each class: `toggle`, the reader's toggle it is shown by (`always` and `never` are no toggle); `state`, what exists today — `built` (translated and drawn: the source's units, and the ink
+ * Each class: `toggle` (TOGGLES); `state`, what exists today — `built` (translated and drawn: the source's units, and the ink
  * units layout/ink-units.mjs and layout/figure-text.mjs make of the glyphs no source unit owns, stages 2, 3 and 5 of
  * docs/route/orphan-text.md), `planned` (accounted for by the ledger, no path yet), `never` (kept as the original's ink by
  * design), which the lab's ledger reads (lab/pdf/spikes/ledger.mjs builtShare: the letters of the built classes); `glyphs`, whether the ledger can give a glyph this
@@ -165,3 +168,14 @@ export function unitClass(u: string | unknown[] | { readonly kind?: unknown } | 
   // (`!`: an own entry, Object.hasOwn's)
   return Object.hasOwn(UNIT_CLASS, kind) ? UNIT_CLASS[kind]! : 'body'
 }
+
+/** each toggle's default, where a reader has set none (the owner's, 2026-10-25): heads, tables and figures on; names (the
+ *  whole author block since 2026-10-30) and references off. A direct open of the run given none (layer-proto/run.mjs openProto: the lab's gates, the tests') takes them
+ *  too, and the lab's fixture maker sends no unit they hide (the gates hold no translation of it) */
+export const TOGGLE_DEFAULTS = Object.freeze({
+  heads: true,
+  tables: true,
+  figures: true,
+  references: false,
+  names: false,
+})
