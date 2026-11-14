@@ -543,6 +543,9 @@ describe('locate states how the lines of a cell of several lines stand in its bo
               ]
             : []),
           { t: 'text' as const, s: t },
+          ...(k === lines.length - 1 && after.has(lines.length)
+            ? [{ t: 'el' as const, id: 'z', kind: 'other' as const, src: '\\\\', brk: true as const }]
+            : []),
         ])
     const units: InstrumentUnit[] = [
       {
@@ -623,6 +626,19 @@ describe('locate states how the lines of a cell of several lines stand in its bo
         [2],
       ),
     ).toEqual({ lines: 4, inner: undefined })
+  })
+  it('reads a box whose last row is empty, its break after its last line (`Wasserstein \\\\ QGAN \\\\`): its rows the lines', () => {
+    expect(
+      innerOf(
+        'c',
+        [
+          ['Errorx', 100],
+          ['ontestset', 91],
+        ],
+        false,
+        [1, 2],
+      ),
+    ).toEqual({ lines: 2, inner: 'c' })
   })
   it('states none for a cell of a paragraph column (p, m, b: no class of a column box), its lines one apart by \\newline', () => {
     // (2608.27043v1's "Best: 98.91% AUC \newline Worst: 96.71% AUC", a p column's cell on two lines)
