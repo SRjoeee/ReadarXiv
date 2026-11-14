@@ -984,7 +984,9 @@ export function readInkApart(log: string | null | undefined, samples: readonly s
 }
 
 // ---- babel's names: what each one's own text is, TeX asked
-/** each name's macro, by key (file.mjs NAME_KEYS): babel's [captions], which a class defines as well */
+/** each name's macro, by key (file.mjs NAME_KEYS): babel's [captions], which a class defines as well; the key's macro as
+ *  babel.sty's \bbl@ini@captions@aux names it, the key then `name`, held by the release check's babel-names
+ *  (lab/marks/babel-names.mjs) */
 export const NAME_MACROS: Readonly<Record<NameKey, string>> = Object.freeze({
   abstract: 'abstractname',
   ref: 'refname',

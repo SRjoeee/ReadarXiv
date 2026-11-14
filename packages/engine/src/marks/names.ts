@@ -3,8 +3,10 @@
 // target's words (rules/layout-rules.json `labels`). One list, read by the server's modules and the readers': imports
 // nothing.
 
-/** the keys, babel's own (its ini files' [captions]). `chapter` and `part` are not among them: their CJK names are
- *  templates around the number TeX sets after the name */
+/** the keys, babel's own (its ini files' [captions]): each a key of its English locale's [captions]
+ *  (tex/generic/babel/locale/en/babel-en.ini) in every pinned compile image's TeX Live, as the release check's babel-names
+ *  holds them (lab/marks/babel-names.mjs). `chapter` and `part` are not among them: their CJK names are templates around
+ *  the number TeX sets after the name */
 export const NAME_KEYS = Object.freeze([
   'abstract',
   'ref',
@@ -22,7 +24,8 @@ export const NAME_KEYS = Object.freeze([
 ] as const)
 /** a babel name's key */
 export type NameKey = (typeof NAME_KEYS)[number]
-/** each name's English value, babel's en [captions] (the layout rules' pinned locale files): what a style that writes a
+/** each name's English value, babel's en [captions] (the layout rules' pinned locale files; babel-en.ini's, held by the
+ *  release check's babel-names): what a style that writes a
  *  name literally writes (marks.mjs literalNames), and a head the layer never draws as a theorem's (layer2.mjs
  *  headLabelInTarget: a babel name is the names' own, nameInTarget) */
 export const NAME_ENGLISH: Readonly<Record<NameKey, string>> = Object.freeze({

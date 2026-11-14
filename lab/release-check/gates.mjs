@@ -11,6 +11,9 @@ import { PAIRS as PARITY_PAIRS } from '../typeset/parity/pairs.mjs'
 import { SLICES, TABLES } from '../typeset/served-metrics.mjs'
 import { perfOf } from './perf.mjs'
 
+/** the compile images each TeX Live year's papers are compiled in, by year (lab/pdf/compile-images.json) */
+const COMPILE_PINS = JSON.parse(readFileSync(new URL('../pdf/compile-images.json', import.meta.url), 'utf8'))
+
 /** the tiers, each holding the gates of the ones before it (lab/release-check/CI.md says where each runs) */
 export const TIERS = ['fast', 'full', 'release']
 
@@ -945,6 +948,25 @@ export const GATES = [
   },
   todayE2e('e2e:reader', "today's reader (AXT_READER=today, the way back) on the stand-in of the v1 layer API: tests/e2e/reader.mjs's own checks"),
   todayE2e('e2e:registration', "today's reader (AXT_READER=today): a laid page's copy, SVG and links registered at every zoom"),
+  // ---------------------------------------------------------------- the definitions the engine's lists mirror, in the TeX trees
+  // (a list of a package's names whose header names the file it copies, held to that file as each pinned compile image holds it:
+  // design 3c's second kind of list. The files are copied out of the local images, never pulled: `--pull never`)
+  {
+    id: 'babel-names',
+    title: "the babel names the layout marks wrap (packages/engine/src/marks/names.ts NAME_KEYS and NAME_ENGLISH, marks.ts NAME_MACROS) against babel's own files in each pinned compile image's TeX Live (lab/pdf/compile-images.json): every key a key of babel-en.ini's [captions], its value the English one there, its macro the one babel.sty's \\bbl@ini@captions@aux names (lab/marks/babel-names.mjs)",
+    tier: 'release',
+    stage: 'pipeline',
+    holds: [],
+    needs: () => [exists('docker', which('docker'))],
+    steps: ctx => [
+      ...Object.entries(COMPILE_PINS.images).map(([year, pin]) => ({
+        cmd: ['docker', 'run', '--rm', '--pull', 'never', '--network', 'none', '-v', `${join(ctx.work, 'babel-names', year)}:/out`, pin.texlive, 'sh', '-c', 'cp "$(kpsewhich babel-en.ini)" "$(kpsewhich babel.sty)" /out/'],
+        slot: 'docker',
+        fresh: join(ctx.work, 'babel-names', year),
+      })),
+      { cmd: ['node', '--import', 'tsx', 'lab/marks/babel-names.mjs', ...Object.keys(COMPILE_PINS.images).map(year => join(ctx.work, 'babel-names', year))] },
+    ],
+  },
   // ---------------------------------------------------------------- the private repository's (named, never run here)
   { id: 'private-platform', title: "the private repository's platform tier: the Worker, the paper's object and the Workflows under workerd, the routes' contract suite, the persisted contracts", tier: 'full', stage: 'platform', holds: [], private: true },
   { id: 'private-box', title: "the private repository's box tier: the security suite on native amd64", tier: 'release', stage: 'box', holds: ['I9'], private: true },
