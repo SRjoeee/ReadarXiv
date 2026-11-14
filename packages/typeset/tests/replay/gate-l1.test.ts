@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
 import { tableMetrics } from '../../src/metrics/table.ts'
 import { gatePair } from './gate.ts'
-import { entryByToday, gateL1Pair, invariantsOf, todayMember, todayTies } from './gate-l1.ts'
+import { cropLays, entryByToday, gateL1Pair, invariantsOf, todayMember, todayTies } from './gate-l1.ts'
 import { type PageMember, tieCaps } from '../../src/lay/page.ts'
 import type { FlowMember } from '../../src/lay/flow.ts'
 import type { Metrics } from '../../src/types.ts'
@@ -141,6 +141,12 @@ describe("the runner never mixes two numberings: a member no unit of today's joi
     expect(noOrd(none.rowStart?.row.id)).toBe(true)
     expect(none.line?.ords[0]).toBe(192)
     expect(noOrd(none.line?.ords[1])).toBe(true)
+  })
+  it("hands pieceCrops each member by its unit's ord of today's, the ledger's unit whose crops' piece indices it reads", () => {
+    // (keyed by its part ord, a member's crops took the piece indices of the ledger's unit of that number: on a bundle whose every
+    // ord is 3 more, 4,664 of the Google store's dumped units read other elements' indices, their lay alike)
+    const m = { ord: 184, tokens: [{ crop: { crop: [0, 0, 1, 1] } }] } as unknown as FlowMember
+    expect([...cropLays(new Map([[175, m]])).keys()]).toEqual([184])
   })
 })
 
