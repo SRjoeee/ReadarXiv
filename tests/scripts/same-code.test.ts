@@ -104,6 +104,16 @@ describe('a typing change', () => {
     expect(summaryOf(rows)).toEqual({ judged: 3, same: 3, changed: 0, others: 1, notCode: 1 })
   })
 
+  it('reads a transition path of the engine package (`@readarxiv/engine/today/<path>`) as the module it names, renamed', () => {
+    const renames = new Map([['packages/engine/src/source/k.mjs', 'packages/engine/src/source/k.ts']])
+    const at = (text: string) => ({ path: 'src/pdf-reader/engine/rules/k.mjs', text })
+    const old = at("export { a } from '@readarxiv/engine/today/source/k.mjs'\n")
+    expect(verdictOf(old, at("export { a } from '@readarxiv/engine/today/source/k.ts'\n"), renames).verdict).toBe('same code')
+    // (another module, or the old path where the module was renamed, is other code)
+    expect(verdictOf(old, at("export { a } from '@readarxiv/engine/today/source/j.ts'\n"), renames).verdict).toBe('code changed')
+    expect(verdictOf(old, at("export { a } from '@readarxiv/engine/today/source/k.mjs'\n"), renames).verdict).toBe('code changed')
+  })
+
   it('reads a facade only where it re-exports one module\'s values under their own names, none a `let`', () => {
     const module = (path: string) => (path.endsWith('tail.mjs') ? JS : path.endsWith('live.mjs') ? 'export let n = 1\nexport const bump = () => n++\n' : null)
     expect(facadeOf(FACADE, 'src/tail.types.ts', module)).toBe('src/tail.mjs')
