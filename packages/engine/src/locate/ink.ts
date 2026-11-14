@@ -1238,7 +1238,10 @@ function firstEl(content: readonly Piece[]): string | null {
   }
   return null
 }
-/** a group's style, read off its command (pipeline/instrument.mjs:43-52, ported) */
+/** a group's style, read off its command: the instrument's table (instrument/instrument.ts SPAN_STYLES, the same seven),
+ *  held to it command by command by packages/engine/tests/sides.test.ts; each entry a command of LaTeX's kernel or of a
+ *  package's (hyperref's \href, \url, \hyperlink and \hyperref; ulem's \uline; color's \textcolor, \color and \colorbox;
+ *  listings' \lstinline), a mirror of their definitions, never a list of the cases a paper gave */
 const SPAN_STYLES: [RegExp, string][] = [
   [/^\\(?:textbf|bfseries|bf|mathbf|boldsymbol)\b/, 'bold'],
   [/^\\(?:textit|itshape|it|emph|em|textsl|slshape|sl)\b/, 'italic'],

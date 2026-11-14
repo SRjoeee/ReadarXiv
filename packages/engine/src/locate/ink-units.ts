@@ -1688,7 +1688,8 @@ function rowsOf(
   let share = -1,
     seen = 0
   fs.forEach((f, q) => {
-    if (q > 0) share = Math.max(share, 0, Math.min(1000, Math.round((1000 * seen) / total)))
+    // (a share of a thousand at most: the words before this frame are some of the unit's)
+    if (q > 0) share = Math.max(share, 0, Math.round((1000 * seen) / total))
     for (let j = f.first; j < f.first + f.n; j++) seen += lines[j]!.words.length
     const P = pages[f.page - 1]!,
       view = P.view!,

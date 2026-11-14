@@ -302,7 +302,7 @@ function lastEntriesOf(pages: readonly LedgerPage[], units: readonly TodayUnit[]
 }
 
 /** the line rules, in order: the first whose test holds gives the line its class */
-export const RULES: readonly LineRule[] = Object.freeze(
+const RULES: readonly LineRule[] = Object.freeze(
   (
     [
       // (a line TeX set in the body of an environment the source sets as code, by its points (pageInk's `regions`, marks.mjs

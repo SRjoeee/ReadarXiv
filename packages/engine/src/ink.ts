@@ -202,8 +202,8 @@ export type PackedGlyphs = {
   fill: Int32Array
   most: number
 }
-/** a column packGlyphs may keep */
-export type GlyphColumn = 'x0' | 'x1' | 'y' | 'top' | 'bottom' | 'ix0' | 'ix1' | 'size' | 'font' | 'u' | 'fill'
+/** a column packGlyphs may keep (GLYPH_COLUMNS') */
+export type GlyphColumn = (typeof GLYPH_COLUMNS)[number]
 type PackOptions = { order?: readonly number[] | null; fontIds?: ((font: string) => number) | null }
 /** the columns packGlyphs makes, each written by its name (any of them, or none) */
 type PackSink = { [column: string]: unknown; n: number; most: number } & Partial<Omit<PackedGlyphs, 'n' | 'most'>>
@@ -591,8 +591,10 @@ function procBox(OPS: Record<string, number>, font: PdfFont, id: unknown): Box4 
   return x0 <= x1 ? [x0, y0, x1, y1] : []
 }
 /** the operations a char procedure may hold that paint nothing and change no extent type3Box reads: the line's style, a
- *  colour, a clip (which only cuts ink), the glyph's width, the text state with nothing shown, a mark; by name, once a table */
-const QUIET_NAMES = [
+ *  colour, a clip (which only cuts ink), the glyph's width, the text state with nothing shown, a mark; by name, once a table.
+ *  Each a name of PDF.js's operator table (pdfjs-dist's OPS, src/shared/util.js), held so by
+ *  packages/engine/tests/mirrors.test.ts: a name it lacks would be dropped from the table unseen */
+export const QUIET_NAMES = [
   'dependency',
   'setLineCap',
   'setLineJoin',
@@ -2107,8 +2109,8 @@ export const unreadOf = (
   ink: { rotated?: boolean; capped?: boolean; timedOut?: boolean } | null | undefined,
 ): Unread | null => (ink?.rotated ? 'rotated' : ink?.capped ? 'capped' : ink?.timedOut ? 'timedOut' : null)
 
-/** every column packGlyphs may keep */
-export const GLYPH_COLUMNS = Object.freeze<GlyphColumn[]>([
+/** every column packGlyphs may keep: a vocabulary of the package's own, each a field of a Glyph */
+export const GLYPH_COLUMNS = Object.freeze([
   'x0',
   'x1',
   'y',
@@ -2120,7 +2122,7 @@ export const GLYPH_COLUMNS = Object.freeze<GlyphColumn[]>([
   'font',
   'u',
   'fill',
-])
+] as const satisfies readonly (keyof Glyph)[])
 /**
  * A page's glyphs (pageInk's, a Glyph each) packed as columns, the form a reading keeps them in past its page: { n, most,
  * and each of `columns` (GLYPH_COLUMNS, all where none are given) }, the i-th of each column the glyph `order[i]`
