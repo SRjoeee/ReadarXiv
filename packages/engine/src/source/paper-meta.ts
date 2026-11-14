@@ -15,7 +15,7 @@ type Readme = {
 }
 /** what arXiv would compile: the package's files counted, its README read (`readme`), the main file (`main`, guessed or not;
  *  null where none is found, with `verdict` 'no-main'), the sources arXiv compiles (`toplevels`), the compiler (guessed or not;
- *  `compilerFrom` 'pdf' where compile/paper.mjs reads it off arXiv's PDF afterwards, never analyze), the TeX Live year, and the
+ *  `compilerFrom` 'pdf' where compile/paper.ts reads it off arXiv's PDF afterwards, never analyze), the TeX Live year, and the
  *  features a failure might hang on */
 export type PaperMeta = {
   files: number

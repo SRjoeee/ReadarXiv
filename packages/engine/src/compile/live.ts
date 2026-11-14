@@ -6,10 +6,92 @@
 // over our base page, and the web's rows hold it.
 import { analyze } from '../source/paper-meta.ts'
 import { paperNames, theoremNames } from '../source/paper-names.ts'
-import { CALL_TEX, classNamesTex, DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, probeSamples, refKeysOf, refsTex, regionsTex } from '../marks/marks.mjs'
-import { documentBounds, DVI_MARK_DEF, dviEngine, FONT_PROBE, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, texFilesOf, texText } from '../source/latex-front.ts'
+import {
+  CALL_TEX,
+  classNamesTex,
+  DVI_LAYOUT_TEX,
+  inkSamples,
+  LAYOUT_CLASSES,
+  LAYOUT_TEX,
+  layoutMarking,
+  leadSamples,
+  literalNames,
+  markProbeTex,
+  probeSamples,
+  refKeysOf,
+  refsTex,
+  regionsTex,
+} from '../marks/marks.ts'
+import {
+  documentBounds,
+  DVI_MARK_DEF,
+  dviEngine,
+  FONT_PROBE,
+  inMemory,
+  jobName,
+  lastTexLog,
+  latin1,
+  latin1Bytes,
+  loadProject,
+  MARK_DEF,
+  markUnits,
+  patch,
+  texFilesOf,
+  texText,
+} from '../source/latex-front.ts'
 import { completeLog, END_TEX, LINES_TEX } from './tex.ts'
-import { unbalancedUnits } from './guard.mjs'
+import { unbalancedUnits } from './guard.ts'
+import type { CompleteGiven, MarkClass, Switches } from '../marks/marks.ts'
+import type { Fsys, SourceUnit, UnitSpan } from '../source/latex-front.ts'
+import type { UnitLines } from './tex-errors.ts'
+
+/** a compile as the host answers it (the box's, the web runner's, the TeX page's): whether TeX ran, its PDF, the aux and .bbl of
+ *  its last pass, its log, its time, its error, the hosts it asked of the network, its passes, the files it wrote, the host's
+ *  limit it met where the host says one */
+export interface Compiled {
+  ok: boolean
+  pdf?: Uint8Array | null
+  aux?: string | null
+  bbl?: string | null
+  log?: string
+  ms?: number
+  error?: string
+  network?: string[]
+  passes?: number
+  files?: Map<string, Uint8Array>
+  limit?: string
+}
+/** what a compile is asked: the main file, the engine, whether to run TeX again, whether to run BibTeX (null: the host's
+ *  choice), the files to write over the paper's, a draft, the files written back, the date the source is set at */
+export interface CompileRequest {
+  main: string
+  engine: string
+  rerun: boolean
+  bibtex: boolean | null
+  overrides: Map<string, Uint8Array>
+  draft?: boolean
+  files?: boolean
+  sourceDate?: number
+}
+/** the paper opened (openPaper): its files, what arXiv would compile, the project read, its units and the facts beside them,
+ *  its structural names and its theorem names */
+export type Paper = ReturnType<typeof openPaper>
+/** what originalFiles writes into `spans`: the main file's head of ours (`skip`) and each unit's lines and bytes, when asked */
+export type Spans = { skip?: number; lines?: () => UnitLines<SourceUnit>[] }
+/** originalFiles' options */
+export type OriginalOptions = {
+  lines?: boolean
+  spans?: Spans | null
+  layout?: readonly MarkClass[] | null
+  switches?: Switches | null
+  inkless?: readonly string[] | null
+  complete?: CompleteGiven | null
+  apart?: readonly string[] | null
+  unmarked?: ReadonlySet<number> | null
+  names?: boolean
+  pastBegin?: boolean
+  transcode?: boolean
+}
 
 /** Whether a compile's last TeX pass stopped short of the document's end: TeX's fatal errors — an emergency stop (a
  *  file that ended inside an argument, a line asked of no terminal, the job ended with no \\end), its capacity
@@ -17,7 +99,10 @@ import { unbalancedUnits } from './guard.mjs'
  *  before the stop, and xdvipdfmx makes them a PDF (pdfTeX writes none). A compiler that answers with any PDF it made —
  *  the gates' native one, latexmk -f in nonstop mode — gave 2608.16117's Chinese final, three pages of forty, as set
  *  (its comment never ended: latex-front.mjs LINE_ENVS); the TeX page's BusyTeX halts on a TeX error, and gives none */
-export const stoppedShort = log => /^(?:! Emergency stop\.|! TeX capacity exceeded, sorry|\(That makes 100 errors; please try again\.\)|! This can't happen|! I can't go on meeting you like this)/m.test(lastTexLog(log))
+export const stoppedShort = (log: string | null | undefined): boolean =>
+  /^(?:! Emergency stop\.|! TeX capacity exceeded, sorry|\(That makes 100 errors; please try again\.\)|! This can't happen|! I can't go on meeting you like this)/m.test(
+    lastTexLog(log),
+  )
 /**
  * Whether a compile ran through, the one test of a compile's success wherever a PDF or a log of it is taken (the marked
  * original and CM's passes, layout/paper.mjs): TeX ran (`ok`), and its last pass
@@ -28,7 +113,8 @@ export const stoppedShort = log => /^(?:! Emergency stop\.|! TeX capacity exceed
  * marked original taken on its PDF alone gave 2610.20713's layout from the 7 pages of 15 TL2025 set before its hundredth
  * error (2026-10-19). Whether it gave a PDF is the caller's to ask: a draft gives none
  */
-export const ranThrough = c => !!c?.ok && !stoppedShort(c.log) && completeLog(c.log)
+export const ranThrough = (c: Compiled | null | undefined): boolean =>
+  !!c?.ok && !stoppedShort(c.log) && completeLog(c.log)
 /** DRAFT's first line, graphicx's draft option alone: the final pass of the marked original (layout/paper.mjs markedOfPaper
  *  `base`) is its files with this line made NO_DRIVER_GROUP, one line, so that no line of them moves */
 export const DRAFT_OPTION = '\\PassOptionsToPackage{draft}{graphicx}'
@@ -44,43 +130,64 @@ export const DRAFT_OPTION = '\\PassOptionsToPackage{draft}{graphicx}'
  *  is another (XeTeX's xetex.def, the DVI drivers under `latex`), nothing is defined and nothing changes. A name in \csname
  *  needs no \makeatletter, which this line runs before. The marked compile keeps the drivers as they are: its pages are read
  *  for their marks and never shipped, and a group sits in a figure's form, where it moves no mark */
-export const NO_DRIVER_GROUP = ['pdftex.def', 'luatex.def'].map(def => `\\AddToHook{file/${def}/after}{\\ifcsname Gread@transgroupfalse\\endcsname\\expandafter\\let\\csname Gread@transgrouptrue\\expandafter\\endcsname\\csname Gread@transgroupfalse\\endcsname\\fi}`).join('')
+export const NO_DRIVER_GROUP = ['pdftex.def', 'luatex.def']
+  .map(
+    (def) =>
+      `\\AddToHook{file/${def}/after}{\\ifcsname Gread@transgroupfalse\\endcsname\\expandafter\\let\\csname Gread@transgrouptrue\\expandafter\\endcsname\\csname Gread@transgroupfalse\\endcsname\\fi}`,
+  )
+  .join('')
 /** images as frames of their own size (graphicx's draft), each frame's corners marked — g<n>a and g<n>b at its left and
  *  right ends on its baseline, g<n>t at its top right, n counting \includegraphics in the order TeX runs them — so that
  *  the reader lays the left's figure over its frame (session.mjs leftFor). A transformed include (\rotatebox or
  *  \resizebox around it, angle=) turns or scales its frame and not the marks, whose rectangle then has the size of no
  *  figure on the left, and the reader leaves that frame as it is */
-const DRAFT = [
-  DRAFT_OPTION,
-  '\\makeatletter\\AddToHook{package/graphics/after}{\\newcount\\axt@g\\let\\axt@setfile\\Gin@setfile%',
-  '\\def\\Gin@setfile#1#2#3{\\leavevmode\\global\\advance\\axt@g\\@ne\\axtmark{g\\the\\axt@g a}\\axt@setfile{#1}{#2}{#3}%',
-  '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',
-].join('\n') + '\n'
+const DRAFT =
+  [
+    DRAFT_OPTION,
+    '\\makeatletter\\AddToHook{package/graphics/after}{\\newcount\\axt@g\\let\\axt@setfile\\Gin@setfile%',
+    '\\def\\Gin@setfile#1#2#3{\\leavevmode\\global\\advance\\axt@g\\@ne\\axtmark{g\\the\\axt@g a}\\axt@setfile{#1}{#2}{#3}%',
+    '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',
+  ].join('\n') + '\n'
 /** where the main file's \\begin{document} stands as TeX finds it (latex-front.mjs documentBounds: none in a comment, a
  *  definition or a filecontents), -1 where it has none: what goes before the document goes there */
-const beginDocument = text => documentBounds(text).begin
+const beginDocument = (text: string): number => documentBounds(text).begin
 /** an aux's lines of one command, those whose braces close on the line: a line cut short would stop TeX reading the
  *  aux it is given */
-const auxLines = (aux, command) => (aux ?? '').split('\n').filter(l => l.startsWith(`\\${command}{`) && closed(l)).join('\n')
-const closed = line => { let depth = 0; for (const c of line.replace(/\\./g, '')) if (c === '{') depth++; else if (c === '}' && --depth < 0) return false; return depth === 0 }
+const auxLines = (aux: string | null | undefined, command: string): string =>
+  (aux ?? '')
+    .split('\n')
+    .filter((l) => l.startsWith(`\\${command}{`) && closed(l))
+    .join('\n')
+const closed = (line: string): boolean => {
+  let depth = 0
+  for (const c of line.replace(/\\./g, ''))
+    if (c === '{') depth++
+    else if (c === '}' && --depth < 0) return false
+  return depth === 0
+}
 /** the lists a pass writes at its end from an aux's \@writefile{<ext>}{<entry>} lines (LaTeX's \enddocument), by
  *  extension: \tableofcontents's toc, \listoffigures' lof, \listoftables' lot, any list a package keeps so (backref's
  *  brf) — each line's entry, in order */
-const listsOf = aux => {
-  const out = new Map()
-  for (const [, ext, entry] of auxLines(aux, '@writefile').matchAll(/^\\@writefile\{(\w+)\}\{(.*)\}$/gm)) out.set(ext, `${out.get(ext) ?? ''}${entry}\n`)
+const listsOf = (aux: string | null | undefined): Map<string, string> => {
+  const out = new Map<string, string>()
+  for (const [, ext, entry] of auxLines(aux, '@writefile').matchAll(/^\\@writefile\{(\w+)\}\{(.*)\}$/gm))
+    out.set(ext!, `${out.get(ext!) ?? ''}${entry}\n`)
   return out
 }
 /** TeX writes its log in lines of 79 characters at most, a warning about a long key over two: joined again (a line of
  *  79 of its own is joined to the next too, so what is looked for in it is not anchored to a line's start) */
-const unwrapped = log => log.replace(/^(.{79})\n/gm, '$1')
+const unwrapped = (log: string): string => log.replace(/^(.{79})\n/gm, '$1')
 /** whether a pass set a contents list from nothing: one its aux writes (listsOf) whose file the pass did not find
  *  (LaTeX's \@input: "No file <job>.<ext>."), as a pass does that was given no aux of its own (the F2 re-review's N2) —
  *  the list set empty, every unit after it early by its height. `main`, the project's main file (the job's name) */
-export const listsMissing = (r, main) => { const log = unwrapped(lastTexLog(r.log)); return [...listsOf(r.aux).keys()].some(ext => log.includes(`No file ${jobName(main)}.${ext}.`)) }
+export const listsMissing = (r: { log?: string; aux?: string | null }, main: string): boolean => {
+  const log = unwrapped(lastTexLog(r.log))
+  return [...listsOf(r.aux).keys()].some((ext) => log.includes(`No file ${jobName(main)}.${ext}.`))
+}
 /** the files a compile's last pass looked for and did not find, as LaTeX's \@input says it ("No file <name>.": a list,
  *  the bibliography, the index; biblatex's bibliography says so too) */
-export const notFound = log => new Set([...unwrapped(lastTexLog(log)).matchAll(/No file (\S+?)\.(?=\s|$)/g)].map(m => m[1]))
+export const notFound = (log: string | null | undefined): Set<string> =>
+  new Set([...unwrapped(lastTexLog(log)).matchAll(/No file (\S+?)\.(?=\s|$)/g)].map((m) => m[1]!))
 
 /** a paper's files (Map path → bytes) → what the pipeline works on: its units, and beside them which of them are written inside a
  *  float (`inFloat`, their indices, latex-front.mjs loadProject's), each caption's float type (`floatTypes`, [index, type]), the
@@ -90,17 +197,30 @@ export const notFound = log => new Set([...unwrapped(lastTexLog(log)).matchAll(/
  *  after the rest, latex-front.mjs entriesLast). No unit is kept for what its words look like: a table's cell is text like any
  *  other and the translator decides a name (the owner, 2026-11-13); the old reader's name rule is its own (src/pdf-reader/engine/
  *  pipeline/live.mjs openPaper) */
-export function openPaper(files) {
+export function openPaper(files: ReadonlyMap<string, Uint8Array>) {
   const fsys = inMemory(files)
   const meta = analyze(fsys)
   if (!meta.main) throw new Error('no main file')
   const project = loadProject(fsys, meta.main, { tables: true })
   // (the structural names its TeX prints that no package names in every target: units of their own in the bundle, after its
   // source's, sent to the translator once: source/paper-names.mjs, bundleUnitsOf)
-  const texts = texFilesOf(fsys, meta.main), names = paperNames(texts)
+  const texts = texFilesOf(fsys, meta.main),
+    names = paperNames(texts)
   // (the printed names of its theorem-like environments among them, the label forms of its heads: the wrap's `names`,
   // layout/own.mjs)
-  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, floatTypes: project.floatTypes ?? [], pseudocode: project.pseudocode ?? [], tableBlocks: project.tableBlocks ?? [], texOrder: project.texOrder ?? null, names, theoremNames: theoremNames(texts) }
+  return {
+    fsys,
+    meta,
+    project,
+    units: project.units,
+    inFloat: project.inFloat,
+    floatTypes: project.floatTypes ?? [],
+    pseudocode: project.pseudocode ?? [],
+    tableBlocks: project.tableBlocks ?? [],
+    texOrder: project.texOrder ?? null,
+    names,
+    theoremNames: theoremNames(texts),
+  }
 }
 
 /**
@@ -121,20 +241,29 @@ export function openPaper(files) {
  * in it again, `@` a letter as it was there (the reviews of #486). Anything else of the head (a length, a \\renewcommand, which
  * would replace the paper's own, a group, whose definitions are its own) is passed over. '' where the paper has no .bbl, or none
  */
-export function bblProvides(fsys, main) {
+export function bblProvides(fsys: Fsys, main: string): string {
   const path = `${jobName(main)}.bbl`
   if (!fsys.list().includes(path)) return ''
-  const text = uncommentedTex(texText(fsys.read(path))), end = text.search(/\\(?:bibitem|harvarditem)(?![A-Za-z@])/)
-  const head = end < 0 ? text : text.slice(0, end), out = []
+  const text = uncommentedTex(texText(fsys.read(path)!)),
+    end = text.search(/\\(?:bibitem|harvarditem)(?![A-Za-z@])/)
+  const head = end < 0 ? text : text.slice(0, end),
+    out: string[] = []
   /** `re` (sticky) matched at `i`, or null */
-  const at = (re, i) => { re.lastIndex = i; return re.exec(head) }
+  const at = (re: RegExp, i: number): RegExpExecArray | null => {
+    re.lastIndex = i
+    return re.exec(head)
+  }
   /** where `@` is a letter in the head: after a \\makeatletter, before the \\makeatother after it */
-  const letters = i => { const a = head.lastIndexOf('\\makeatletter', i), o = head.lastIndexOf('\\makeatother', i); return a >= 0 && a > o }
-  const put = (i, tex) => out.push(letters(i) ? `\\makeatletter${tex}\\makeatother ` : tex)
+  const letters = (i: number) => {
+    const a = head.lastIndexOf('\\makeatletter', i),
+      o = head.lastIndexOf('\\makeatother', i)
+    return a >= 0 && a > o
+  }
+  const put = (i: number, tex: string) => out.push(letters(i) ? `\\makeatletter${tex}\\makeatother ` : tex)
   /** the end past the balanced group that opens at `i` (white space before it passed over), or -1 where there is none or it
    *  runs off the head */
-  const group = i => {
-    i += at(BLANKS, i)[0].length
+  const group = (i: number) => {
+    i += at(BLANKS, i)![0].length
     if (head[i] !== '{') return -1
     for (let j = i, depth = 0; j < head.length; j++) {
       if (head[j] === '\\') j++
@@ -146,47 +275,67 @@ export function bblProvides(fsys, main) {
   /** the end past the conditional that opens at `i`, at its matching \\fi (the primitive conditionals nested in it counted), or -1:
    *  also where a word that may be a conditional of a package's or a \\newif's (\\ifpdf, \\if@foo) stands in it before its end, whose
    *  \\fi no reading of the head alone tells from the guard's (the review of #492), the block then passed over head by head */
-  const conditional = i => {
-    for (let depth = 0, m; (m = at(IF_FI, i)); i = m.index + m[0].length) {
-      if (m[1] === 'fi') { if (--depth === 0) return m.index + m[0].length } else if (m[1] !== undefined) depth++
+  const conditional = (i: number) => {
+    // biome-ignore lint/suspicious/noAssignInExpressions: each conditional's match taken in the loop's test (the module's own form)
+    for (let depth = 0, m: RegExpExecArray | null; (m = at(IF_FI, i)); i = m.index + m[0].length) {
+      if (m[1] === 'fi') {
+        if (--depth === 0) return m.index + m[0].length
+      } else if (m[1] !== undefined) depth++
       else if (m[2]?.startsWith('if')) return -1
     }
     return -1
   }
-  for (let i = 0, m, e; i < head.length; i = e) {
-    if ((m = at(COMMAND, i)) && (e = group(i + m[0].length)) > 0) put(i, `\\providecommand${m[1]}${head.slice(i + m[0].length - m[2].length, e)}`)
+  for (let i = 0, m: RegExpExecArray | null, e: number; i < head.length; i = e) {
+    // biome-ignore lint/suspicious/noAssignInExpressions: each reading's match and end taken in its test (the module's own form)
+    if ((m = at(COMMAND, i)) && (e = group(i + m[0].length)) > 0)
+      put(i, `\\providecommand${m[1]}${head.slice(i + m[0].length - m[2]!.length, e)}`)
+    // biome-ignore lint/suspicious/noAssignInExpressions: the reading's match and end taken in its test (the module's own form)
     else if (at(CONDITIONAL, i) && (e = conditional(i)) > 0) {
       // (one that defines nothing, or replaces a definition, passed over whole)
       const body = head.slice(i, e)
       if (DEFINES.test(body) && !RENEWS.test(body)) put(i, body)
-    } else if ((m = at(IFUNDEFINED, i)) && (e = [0, 1, 2].reduce(j => (j > 0 ? group(j) : j), i + m[0].length)) > 0) put(i, head.slice(i, e))
-    else if ((m = at(DEF, i)) && (e = group(i + m[0].length)) > 0) put(i, `\\ifx${m[1]}\\undefined${head.slice(i, e)}\\fi `)
+      // biome-ignore lint/suspicious/noAssignInExpressions: the reading's match and end taken in its test (the module's own form)
+    } else if ((m = at(IFUNDEFINED, i)) && (e = [0, 1, 2].reduce((j) => (j > 0 ? group(j) : j), i + m[0].length)) > 0)
+      put(i, head.slice(i, e))
+    // biome-ignore lint/suspicious/noAssignInExpressions: the reading's match and end taken in its test (the module's own form)
+    else if ((m = at(DEF, i)) && (e = group(i + m[0].length)) > 0)
+      put(i, `\\ifx${m[1]}\\undefined${head.slice(i, e)}\\fi `)
+    // biome-ignore lint/suspicious/noAssignInExpressions: the reading's match and end taken in its test (the module's own form)
     else if ((m = at(LET, i))) put(i, `\\ifx${m[1]}\\undefined${head.slice(i, (e = i + m[0].length))}\\fi `)
     // (anything else: a group passed over whole, a control sequence or a character one at a time)
-    else if (head[i] === '{') e = (g => (g > 0 ? g : head.length))(group(i))
+    else if (head[i] === '{') e = ((g) => (g > 0 ? g : head.length))(group(i))
     else e = i + (at(TOKEN, i)?.[0].length ?? 1)
   }
   return out.join('')
 }
 const BLANKS = /\s*/y
+// biome-ignore format: its flags as the module writes them (the formatter would sort them, another literal)
 const TOKEN = /\\(?:[A-Za-z@]+|.)/ys
 /** a \\providecommand or \\newcommand up to its body: [1] its star, [2] its name, arity and default */
-const COMMAND = /\\(?:provide|new)command(\*?)(\s*(?:\{\s*\\(?:[A-Za-z@]+|.)\s*\}|\\(?:[A-Za-z@]+|.))\s*(?:\[\s*\d\s*\]\s*)?(?:\[[^\]]*\]\s*)?)(?=\{)/ys
+// biome-ignore format: its flags as the module writes them (the formatter would sort them, another literal)
+const COMMAND =
+  /\\(?:provide|new)command(\*?)(\s*(?:\{\s*\\(?:[A-Za-z@]+|.)\s*\}|\\(?:[A-Za-z@]+|.))\s*(?:\[\s*\d\s*\]\s*)?(?:\[[^\]]*\]\s*)?)(?=\{)/ys
 /** a conditional on whether a name is defined: natbib's \\expandafter\\ifx\\csname, `\\ifx\\X\\undefined`, amsplain's `\\ifx\\undefined\\X`, e-TeX's */
-const CONDITIONAL = /\\expandafter\s*\\ifx\s*\\csname|\\ifx\s*\\(?:[A-Za-z@]+|.)\s*\\(?:undefined|relax|@undefined)(?![A-Za-z@])|\\ifx\s*\\(?:undefined|@undefined)\s*\\(?:[A-Za-z@]+|.)|\\if(?:defined|csname)(?![A-Za-z@])/y
+const CONDITIONAL =
+  /\\expandafter\s*\\ifx\s*\\csname|\\ifx\s*\\(?:[A-Za-z@]+|.)\s*\\(?:undefined|relax|@undefined)(?![A-Za-z@])|\\ifx\s*\\(?:undefined|@undefined)\s*\\(?:[A-Za-z@]+|.)|\\if(?:defined|csname)(?![A-Za-z@])/y
 /** the next primitive conditional ([1] `if…`) or \\fi ([1] `fi`), or any other control sequence passed over ([2] its word) */
-const IF_FI = /[^\\]*\\(?:(if(?:x|cat|num|dim|odd|vmode|hmode|mmode|inner|void|hbox|vbox|eof|true|false|case|defined|csname|fontchar)?|fi)(?![A-Za-z@])|([A-Za-z@]+)|.)/ys
+// biome-ignore format: its flags as the module writes them (the formatter would sort them, another literal)
+const IF_FI =
+  /[^\\]*\\(?:(if(?:x|cat|num|dim|odd|vmode|hmode|mmode|inner|void|hbox|vbox|eof|true|false|case|defined|csname|fontchar)?|fi)(?![A-Za-z@])|([A-Za-z@]+)|.)/ys
 const DEFINES = /\\(?:providecommand|newcommand|[gex]?def|let)(?![A-Za-z@])/
 const RENEWS = /\\renewcommand(?![A-Za-z@])/
 const IFUNDEFINED = /\\@ifundefined(?![A-Za-z@])/y
 /** a \\def (\\gdef, \\edef, \\xdef) up to its body: [1] its name (not a \\csname's, whose name is no token to test); the parameter text
  *  after it */
-const DEF = /\\[gex]?def(?![A-Za-z@])\s*(\\(?!csname(?![A-Za-z@]))(?:[A-Za-z@]+|.))[^{}\\]*(?:\\(?:[A-Za-z@]+|.)[^{}\\]*)*?(?=\{)/ys
+// biome-ignore format: its flags as the module writes them (the formatter would sort them, another literal)
+const DEF =
+  /\\[gex]?def(?![A-Za-z@])\s*(\\(?!csname(?![A-Za-z@]))(?:[A-Za-z@]+|.))[^{}\\]*(?:\\(?:[A-Za-z@]+|.)[^{}\\]*)*?(?=\{)/ys
 /** a \\let: [1] its name, then an optional `=` and the one token it is let to */
+// biome-ignore format: its flags as the module writes them (the formatter would sort them, another literal)
 const LET = /\\let(?![A-Za-z@])\s*(\\(?!csname(?![A-Za-z@]))(?:[A-Za-z@]+|.))\s*=?\s*(?:\\(?:[A-Za-z@]+|.)|[^\s\\{}])/ys
 /** a TeX source with its comments taken out as TeX reads them: from an unescaped `%` (an even number of backslashes before it) to
  *  its line's end, that line's end and the next line's leading blanks with it (TeX skips the blanks a line begins with) */
-const uncommentedTex = t => t.replace(/(?<!\\)((?:\\\\)*)%[^\n]*(?:\n[ \t]*)?/g, '$1')
+const uncommentedTex = (t: string): string => t.replace(/(?<!\\)((?:\\\\)*)%[^\n]*(?:\n[ \t]*)?/g, '$1')
 /** the preamble alone, closed at once: its log names the document's font families; with `marks`, the layout marks' TeX
  *  (MARK_DEF, LAYOUT_TEX) first and, after \begin{document}, the mark probe
  *  (layout/marks.mjs markProbeTex: what the paper's own citation and footnote commands do with a mark and with what
@@ -195,19 +344,43 @@ const uncommentedTex = t => t.replace(/(?<!\\)((?:\\\\)*)%[^\n]*(?:\n[ \t]*)?/g,
  *  `latex` (latex-front.mjs dviEngine), each
  *  followed by its DVI marks (DVI_MARK_DEF, marks.mjs DVI_LAYOUT_TEX), so that the probe asks TeX about the marks the DVI
  *  compile sets. Without it, the bytes as before */
-export function probeFiles({ fsys, project, meta }, { marks = false, preamble = null } = {}) {
+export function probeFiles(
+  { fsys, project, meta }: Paper,
+  { marks = false, preamble = null }: { marks?: boolean; preamble?: string | null } = {},
+): Map<string, Uint8Array> {
   // (the main file as the front end reads it, its line ends TeX's: read raw, a lone-CR preamble's first comment hid its
   // \begin{document}, and the probe was the whole document and a second one)
-  const text = texText(fsys.read(project.main))
+  const text = texText(fsys.read(project.main)!)
   const at = beginDocument(text)
   const dvi = dviEngine(meta?.compiler)
   // (with the marked preamble, its line probes inert: \axtlines is LINES_TEX's, which the probe does not load, and the preamble
   // only stores the text it marks)
-  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + classNamesTex(texsOf(fsys)) + (preamble === null ? '' : PREAMBLE_LINES) : '', probe = marks ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units))}` : ''
-  return new Map([[project.main, latin1Bytes(`${head}${END_TEX}${marks && preamble !== null ? preamble : text.slice(0, at)}${FONT_PROBE}\\begin{document}${probe}\\end{document}\n`)]])
+  const head = marks
+      ? MARK_DEF +
+        (dvi ? DVI_MARK_DEF : '') +
+        LAYOUT_TEX +
+        (dvi ? DVI_LAYOUT_TEX : '') +
+        classNamesTex(texsOf(fsys)) +
+        (preamble === null ? '' : PREAMBLE_LINES)
+      : '',
+    probe = marks
+      ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units))}`
+      : ''
+  return new Map([
+    [
+      project.main,
+      latin1Bytes(
+        `${head}${END_TEX}${marks && preamble !== null ? preamble : text.slice(0, at)}${FONT_PROBE}\\begin{document}${probe}\\end{document}\n`,
+      ),
+    ],
+  ])
 }
 /** the text of each of the paper's TeX files (a class's own name it calls: marks.mjs classNamesTex) */
-const texsOf = fsys => fsys.list().filter(p => /\.(?:tex|ltx)$/i.test(p)).map(p => latin1(fsys.read(p) ?? new Uint8Array()))
+const texsOf = (fsys: Fsys): string[] =>
+  fsys
+    .list()
+    .filter((p) => /\.(?:tex|ltx)$/i.test(p))
+    .map((p) => latin1(fsys.read(p) ?? new Uint8Array()))
 /** \axtlines in the mark probe over the marked preamble: a protected macro, as LINES_TEX's is, that sets nothing. One line */
 const PREAMBLE_LINES = '\\protected\\def\\axtlines#1{}'
 /**
@@ -220,19 +393,48 @@ const PREAMBLE_LINES = '\\protected\\def\\axtlines#1{}'
  * begins on (`first`: the probe's head before it) and its last (`last`). Null where no unit of the main file stands in its preamble:
  * the probe is the paper's own preamble's, byte for byte as before
  */
-export function markedPreamble(paper, { complete = null } = {}) {
+export function markedPreamble(
+  paper: Paper,
+  { complete = null }: { complete?: CompleteGiven | null } = {},
+): { text: string; first: number; last: number } | null {
   const { project, meta } = paper
   // (no unit of the main file before its \begin{document} as the front end read it: nothing to write)
   const own = project.files?.get(project.main)
-  if (typeof own === 'string') { const end = beginDocument(own); if (!project.units.some(u => u.file === project.main && u.start < end)) return null }
-  const write = unmarked => { const sp = {}; return { files: originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, complete, names: false, ...(unmarked?.size ? { unmarked } : {}), spans: sp }), sp } }
+  if (typeof own === 'string') {
+    const end = beginDocument(own)
+    if (!project.units.some((u) => u.file === project.main && u.start < end)) return null
+  }
+  const write = (unmarked: ReadonlySet<number> | null) => {
+    const sp: Spans = {}
+    return {
+      files: originalFiles(paper, {
+        lines: true,
+        layout: LAYOUT_CLASSES,
+        complete,
+        names: false,
+        ...(unmarked?.size ? { unmarked } : {}),
+        spans: sp,
+      }),
+      sp,
+    }
+  }
   let { files, sp } = write(null)
-  const balance = unbalancedUnits(paper, files, sp.lines(), sp.skip)
+  const balance = unbalancedUnits(paper, files, sp.lines!(), sp.skip!)
   if (balance.units.size) ({ files, sp } = write(balance.units))
-  const text = latin1(files.get(project.main)), body = text.slice(sp.skip), at = beginDocument(body)
-  if (!sp.lines().some(x => x.file === project.main && x.from !== undefined && x.from - sp.skip < at)) return null
-  const preamble = body.slice(0, at), dvi = dviEngine(meta?.compiler)
-  const first = (MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + PREAMBLE_LINES + END_TEX).split('\n').length
+  const text = latin1(files.get(project.main)!),
+    body = text.slice(sp.skip),
+    at = beginDocument(body)
+  if (!sp.lines!().some((x) => x.file === project.main && x.from !== undefined && x.from - sp.skip! < at)) return null
+  const preamble = body.slice(0, at),
+    dvi = dviEngine(meta?.compiler)
+  const first = (
+    MARK_DEF +
+    (dvi ? DVI_MARK_DEF : '') +
+    LAYOUT_TEX +
+    (dvi ? DVI_LAYOUT_TEX : '') +
+    PREAMBLE_LINES +
+    END_TEX
+  ).split('\n').length
   return { text: preamble, first, last: first + preamble.replace(/\n$/, '').split('\n').length - 1 }
 }
 
@@ -262,43 +464,95 @@ export function markedPreamble(paper, { complete = null } = {}) {
  *  inputenc option): 2610.20581's latin1 source, transcoded under its own inputenc, set each é as Ã© and each no-break
  *  space in math as a \\^ error, 74 errors and a page more than arXiv's. On by default without `layout`, as the bytes were
  *  before (CM's unlayered drafts pass it off: layout/paper.mjs convergeThenMark) */
-export function originalFiles({ fsys, project: read, meta }, { lines = false, spans = null, layout = null, switches = null, inkless = null, complete = null, apart = null, unmarked = null, names = true, pastBegin = !!layout, transcode = !layout } = {}) {
+export function originalFiles(
+  { fsys, project: read, meta }: Paper,
+  {
+    lines = false,
+    spans = null,
+    layout = null,
+    switches = null,
+    inkless = null,
+    complete = null,
+    apart = null,
+    unmarked = null,
+    names = true,
+    pastBegin = !!layout,
+    transcode = !layout,
+  }: OriginalOptions = {},
+): Map<string, Uint8Array> {
   // (the paper's own bytes: patch transcodes no file)
-  const project = !transcode && read.transcode?.size ? { ...read, transcode: new Set() } : read
-  const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
-  const raw = spans ? [] : null
-  let out, patched = null, called = false
+  const project = !transcode && read.transcode?.size ? { ...read, transcode: new Set<string>() } : read
+  const base = markUnits(project.units),
+    index = new Map(project.units.map((u, i) => [u, i]))
+  const raw: UnitSpan[] | null = spans ? [] : null
+  let out: Map<string, Uint8Array>,
+    patched: Map<string, Uint8Array> | null = null,
+    called = false
   if (layout) {
-    const marked = layoutMarking(project.units, layout, { lines, switches, inkless, complete, apart }), paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
+    const marked = layoutMarking(project.units, layout, { lines, switches, inkless, complete, apart }),
+      paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
     // (an author's call the source states, \axtcall: its definition in the head, CALL_TEX)
-    called = marked.units.some(u => !!marked.mark(u)?.call)
-    const asSource = unmarked ? new Set([...unmarked].map(i => marked.units[i]).filter(Boolean)) : null
+    called = marked.units.some((u) => !!marked.mark(u)?.call)
+    const asSource = unmarked
+      ? (new Set([...unmarked].map((i) => marked.units[i]).filter(Boolean)) as Set<SourceUnit>)
+      : null
     out = patch({ ...project, units: marked.units }, new Map(), { mark: marked.mark, spans: raw, asSource, pastBegin })
-    for (const x of raw ?? []) { x.unit = paperOf.get(x.unit) ?? x.unit; if (x.outer) x.outer = paperOf.get(x.outer) ?? x.outer }
+    for (const x of raw ?? []) {
+      x.unit = paperOf.get(x.unit) ?? x.unit
+      if (x.outer) x.outer = paperOf.get(x.outer) ?? x.outer
+    }
     // (the files as patch wrote them, the units' bytes in them, before the names' wraps below move what follows a wrap)
     patched = spans ? new Map(out) : null
     // a babel name a style writes literally in the construct its macro names (marks.mjs literalNames), in any of the
     // package's style, class and source files (the main file's preamble), wrapped as the macro's own text is: no line
     // of any file gains or loses a line
-    if (names) for (const path of fsys.list()) {
-      if (!/\.(?:sty|cls|tex|ltx)$/i.test(path)) continue
-      const bytes = out.get(path) ?? fsys.read(path)
-      if (!bytes) continue
-      const text = latin1(bytes), at = path === project.main ? beginDocument(text) : text.length
-      const wrapped = literalNames(text.slice(0, at))
-      if (wrapped !== text.slice(0, at)) out.set(path, latin1Bytes(wrapped + text.slice(at)))
-    }
+    if (names)
+      for (const path of fsys.list()) {
+        if (!/\.(?:sty|cls|tex|ltx)$/i.test(path)) continue
+        const bytes = out.get(path) ?? fsys.read(path)
+        if (!bytes) continue
+        const text = latin1(bytes),
+          at = path === project.main ? beginDocument(text) : text.length
+        const wrapped = literalNames(text.slice(0, at))
+        if (wrapped !== text.slice(0, at)) out.set(path, latin1Bytes(wrapped + text.slice(at)))
+      }
   } else {
-    out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw, pastBegin })
+    out = patch(project, new Map(), {
+      mark: lines
+        ? (u) => {
+            const m = base(u)
+            return m && { ...m, before: `\\axtlines{${index.get(u)}}` }
+          }
+        : base,
+      spans: raw,
+      pastBegin,
+    })
     patched = spans ? new Map(out) : null
   }
   const dvi = dviEngine(meta?.compiler)
   // (with `layout`, each reference's item and its name asked of TeX at the document's end: marks.mjs refsTex, none for a paper with
   // no reference, whose bytes stay as they were)
-  const head = DRAFT + MARK_DEF + (dvi ? DVI_MARK_DEF : '') + (layout ? LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (called ? CALL_TEX : '') + (names ? classNamesTex(texsOf(fsys)) : NAMES_OFF) + regionsTex(project.codeEnvs, project.codeBodies) + refsTex(refKeysOf(project.units)) : '') + END_TEX + (lines ? LINES_TEX : '')
-  out.set(project.main, latin1Bytes(head + latin1(out.get(project.main))))
+  const head =
+    DRAFT +
+    MARK_DEF +
+    (dvi ? DVI_MARK_DEF : '') +
+    (layout
+      ? LAYOUT_TEX +
+        (dvi ? DVI_LAYOUT_TEX : '') +
+        (called ? CALL_TEX : '') +
+        (names ? classNamesTex(texsOf(fsys)) : NAMES_OFF) +
+        regionsTex(project.codeEnvs, project.codeBodies) +
+        refsTex(refKeysOf(project.units))
+      : '') +
+    END_TEX +
+    (lines ? LINES_TEX : '')
+  out.set(project.main, latin1Bytes(head + latin1(out.get(project.main)!)))
   // (`skip`: the main file's head of ours, before the paper's first byte)
-  if (spans) { let found = null; spans.skip = head.length; spans.lines = () => (found ??= unitLines(raw, patched, out, project.main, head.length)) }
+  if (spans) {
+    let found: UnitLines<SourceUnit>[] | null = null
+    spans.skip = head.length
+    spans.lines = () => (found ??= unitLines(raw!, patched!, out, project.main, head.length))
+  }
   return out
 }
 /** the babel names' marks off (originalFiles `names` false): NAMES_TEX's wrapper (\axt@nmall, which begindocument/end and
@@ -312,25 +566,44 @@ const NAMES_OFF = '\\makeatletter\\let\\axt@nmall\\relax\\makeatother'
  * nested unit where it stands in the unit it is written in (`outer`, found before it). The main file is searched past
  * the TeX put before the paper (`skip` bytes); a unit not found again is left out
  */
-function unitLines(raw, patched, out, main, skip) {
-  const byFile = new Map()
-  for (const x of raw) (byFile.get(x.file) ?? byFile.set(x.file, []).get(x.file)).push(x)
-  const found = []
+function unitLines(
+  raw: readonly UnitSpan[],
+  patched: ReadonlyMap<string, Uint8Array>,
+  out: ReadonlyMap<string, Uint8Array>,
+  main: string,
+  skip: number,
+): UnitLines<SourceUnit>[] {
+  const byFile = new Map<string, UnitSpan[]>()
+  for (const x of raw) (byFile.get(x.file) ?? byFile.set(x.file, []).get(x.file)!).push(x)
+  const found: UnitLines<SourceUnit>[] = []
   for (const [file, list] of byFile) {
-    const was = latin1(patched.get(file)), now = latin1(out.get(file) ?? patched.get(file))
-    let cursor = file === main ? skip : 0, line = 1, counted = 0
-    const lineAt = k => { for (; counted < k; counted++) if (now.charCodeAt(counted) === 10) line++; return line }
-    const breaks = (from, to) => { let n = 0; for (let i = from; i < to; i++) if (now.charCodeAt(i) === 10) n++; return n }
-    const outers = new Map()
+    const was = latin1(patched.get(file)!),
+      now = latin1(out.get(file) ?? patched.get(file)!)
+    let cursor = file === main ? skip : 0,
+      line = 1,
+      counted = 0
+    const lineAt = (k: number) => {
+      for (; counted < k; counted++) if (now.charCodeAt(counted) === 10) line++
+      return line
+    }
+    const breaks = (from: number, to: number) => {
+      let n = 0
+      for (let i = from; i < to; i++) if (now.charCodeAt(i) === 10) n++
+      return n
+    }
+    const outers = new Map<SourceUnit, { from: number; was: number; first: number }>()
     for (const x of list) {
       if (x.outer) {
         const o = outers.get(x.outer)
         if (!o) continue
-        const from = o.from + (x.from - o.was), to = from + (x.to - x.from), first = o.first + breaks(o.from, from)
+        const from = o.from + (x.from - o.was),
+          to = from + (x.to - x.from),
+          first = o.first + breaks(o.from, from)
         found.push({ file, unit: x.unit, first, last: first + breaks(from, to - 1), from, to, post: x.post ?? 0 })
         continue
       }
-      const bytes = was.slice(x.from, x.to), k = now.indexOf(bytes, cursor)
+      const bytes = was.slice(x.from, x.to),
+        k = now.indexOf(bytes, cursor)
       if (k < 0 || !bytes) continue
       cursor = k + bytes.length
       const at = { file, unit: x.unit, first: lineAt(k), last: lineAt(cursor - 1), from: k, to: cursor }

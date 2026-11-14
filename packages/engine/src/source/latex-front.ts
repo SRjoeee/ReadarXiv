@@ -6668,11 +6668,11 @@ function readProject(
       return false
     }
   }
-  const transcode = enc ? new Set([...files].filter(([, t]) => !isUtf8(t)).map(([f]) => f)) : new Set()
+  const transcode = enc ? new Set([...files].filter(([, t]) => !isUtf8(t)).map(([f]) => f)) : new Set<string>()
   // the units written inside a float, by their index in `units`, rising: a number survives a copy of the units, a clone and JSON
   const inFloat = units.flatMap((u, i) => (ctx.floats.has(u) ? [i] : []))
   // (each caption's float type, [index, type]; the units of an algorithm float's body, rising)
-  const floatTypes = units.flatMap((u, i) => (CAPTYPES.has(u) ? [[i, CAPTYPES.get(u)]] : []))
+  const floatTypes = units.flatMap((u, i): [number, string][] => (CAPTYPES.has(u) ? [[i, CAPTYPES.get(u)!]] : []))
   const pseudocode = units.flatMap((u, i) => (PSEUDOCODE.has(u) ? [i] : []))
   // (R4's blocks, noteBlocks: each block's text cells, a cell's units by their index, or `name`: a number survives a copy)
   const indexOf = new Map<SourceUnit<WalkFile>, number>(units.map((u, i) => [u, i]))

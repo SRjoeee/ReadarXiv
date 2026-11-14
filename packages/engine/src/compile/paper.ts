@@ -22,45 +22,221 @@
 // The compile and the opening are the caller's (a native TeX Live and PDF.js in Node, the TeX page and a worker in a
 // browser), so that this imports neither PDF.js nor a `node:*` module.
 import { jobName, lastTexLog, latin1, latin1Bytes, normalizePath, texText } from '../source/latex-front.ts'
-import { DRAFT_OPTION, listsMissing, markedPreamble, NO_DRIVER_GROUP, notFound, openPaper, originalFiles, probeFiles, ranThrough, stoppedShort } from './live.mjs'
+import {
+  DRAFT_OPTION,
+  listsMissing,
+  markedPreamble,
+  NO_DRIVER_GROUP,
+  notFound,
+  openPaper,
+  originalFiles,
+  probeFiles,
+  ranThrough,
+  stoppedShort,
+} from './live.ts'
 import { completeLog } from './tex.ts'
 import { bundleUnitsOf } from '../instrument/units.ts'
 import { isMemoryError } from '../memory.ts'
-import { auxUnits, contextUnits, copiesOutOfPlace, cutCopyUnits, engineUnknown, preambleUnits, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
+import {
+  auxUnits,
+  contextUnits,
+  copiesOutOfPlace,
+  cutCopyUnits,
+  engineUnknown,
+  preambleUnits,
+  errorCount,
+  errorUnits,
+  firstError,
+  limitOf,
+  ownErrors,
+  pagesOfLog,
+  texLiveOf,
+  texRan,
+  unbalancedUnits,
+  unmarkedFiles,
+  whyText,
+} from './guard.ts'
 import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, markTextOf } from './base.ts'
-import { completeCalled, LAYOUT_CLASSES, probeSamples, readInkAnswers, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from '../marks/marks.mjs'
+import {
+  completeCalled,
+  LAYOUT_CLASSES,
+  probeSamples,
+  readInkAnswers,
+  readMarkProbe,
+  readNameProbe,
+  readSkipProbe,
+  NAME_MARK_FILE,
+  withoutNameMarks,
+} from '../marks/marks.ts'
+import type { Complete, MarkClass, Switches } from '../marks/marks.ts'
+import type { NameKey } from '../marks/names.ts'
+import type { Fsys } from '../source/latex-front.ts'
+import type { Compiled, CompileRequest, Paper, Spans } from './live.ts'
+
+// ---------------------------------------------------------------- the types of the marked compile
+/** the host's limit a compile met, as a refusal names it (the web's `limit`, the TeX page's timeout, the budget's) */
+export type RefusalLimit = string
+/** CM's record (convergeThenMark): its draft and marked passes, whether it settled, why it fell back to today's compile */
+export interface ConvergeRecord {
+  drafts: number
+  marked: number
+  settled: boolean
+  fallback?: 'no-files' | 'draft-failed' | 'aux-jobs' | 'bib-missing' | 'files-bound'
+}
+/** a check of the layout guard's that failed */
+export type GuardCheck = 'preamble' | 'braces' | 'ran' | 'pages' | 'aux' | 'text' | 'errors'
+/** what the layout guard did (markedOfPaper `guard`): its compiles past the marked original's, the units left unmarked, the
+ *  names marked or not, the checks that failed, its judgement where it made one */
+export interface GuardRecord {
+  extra: number
+  unmarked: number[]
+  names: boolean
+  failed: GuardCheck[]
+  judged?: string
+}
+/** the unmarked original's verdict (ownVerdict): what a host's handover to another TeX Live tree is decided by */
+export interface OwnVerdict {
+  ran: boolean
+  short: boolean
+  limit: string | null
+  tree: string | null
+}
+/** the final pass (finalPass): the base page, or why there is none */
+export type FinalPass = { pdf: Uint8Array; log: string } | { refused: 'final'; why: string; limit?: RefusalLimit }
+/** why a paper has no marked original */
+export type MarkedRefusal = 'probe' | 'compile' | 'texlive' | 'engine' | 'marks'
+/** why madeBibliography made no .bbl */
+export type BibliographyKept =
+  | 'shipped'
+  | 'none'
+  | 'biblatex'
+  | 'bib-missing'
+  | 'engine'
+  | 'compile'
+  | 'no-files'
+  | 'aux-jobs'
+  | 'biber'
+  | 'no-bbl'
+  | 'moved'
+  | 'entries'
+/** the host's compile, what it is asked of a paper's compiler and the compilers it runs */
+type Host = {
+  compile(req: CompileRequest): Promise<Compiled>
+  compilerOf?: (() => Promise<string | null>) | null
+  engines?: readonly string[] | null
+}
+/** markedOfPaper's options */
+export interface MarkedCompileOptions {
+  compile(req: CompileRequest): Promise<Compiled>
+  converge?: boolean
+  compileBudgetMs?: number | null
+  filesBound?: { count: number; bytes: number } | null
+  OPS?: Record<string, number>
+  pages?: number | (() => number | null | Promise<number | null>) | null
+  engines?: readonly string[] | null
+  tried?: readonly string[] | null
+  final?: boolean
+  sourceDate?: number | (() => number | null | Promise<number | null>) | null
+  textOf?: ((pdf: Uint8Array) => Promise<string[] | null>) | null
+  compilerOf?: (() => Promise<string | null>) | null
+}
+/** what the marked original is read with (the reader's readMarked, but the units and the operator codes): its engine, its
+ *  classes, the probe's answers, the paper's complete macros */
+export type MarkedOptions = {
+  engine: string
+  classes: readonly MarkClass[]
+  switches: Switches
+  inkless: string[]
+  texts: [source: string, text: string][]
+  decorated: [source: string, text: string][]
+  names: Partial<Record<NameKey, 0 | 1>>
+  lineskip: [lineskip: number, limit: number] | null
+  complete: Complete | null
+  apart: string[]
+}
+/** the marked original (markedOfPaper), or why there is none; each stage's time, CM's and the guard's records */
+export type Marked =
+  | {
+      pdf: Uint8Array
+      log: string
+      options: MarkedOptions
+      ms: Record<string, number>
+      cm?: ConvergeRecord
+      guard?: GuardRecord
+      base?: FinalPass
+    }
+  | {
+      refused: MarkedRefusal
+      why?: string
+      limit?: RefusalLimit
+      own?: OwnVerdict
+      ms: Record<string, number>
+      cm?: ConvergeRecord
+      guard?: GuardRecord
+    }
+/** a compile's evidence for the guard's checks (markedOfPaper's `evidence`), and an attempt's units and names */
+type Evidence = {
+  c: Compiled | null
+  files: Map<string, Uint8Array> | null
+  spans: Spans
+  ran: boolean
+  pages: number | null
+  short: boolean
+  long: boolean
+  aux: Set<number>
+  text: boolean
+  textUnits: Set<number>
+  errors: number
+  unmarked?: Set<number>
+  named?: boolean
+}
+/** the unmarked original's compile (markedOfPaper's `original`) */
+type Attempt = Evidence & { unmarked: Set<number>; named: boolean }
+type OwnCompile = {
+  c: Compiled | null
+  ran: boolean
+  pages: number | null
+  short: boolean
+  long: boolean
+  errors: number
+  own: Set<string>
+}
 
 /** the layout guard's compiles past the marked original's, at most, the unmarked original's among them */
 const GUARD_EXTRA = 2
 
 /** the compilers of arXiv's routes a host may name for a paper (guard.mjs compilerOfPdf) */
-const COMPILERS = new Set(['latex', 'pdflatex', 'xelatex', 'lualatex'])
+const COMPILERS: ReadonlySet<string | null> = new Set(['latex', 'pdflatex', 'xelatex', 'lualatex'])
 /** a package that names no compiler has one guessed from its files (paper-meta.mjs); arXiv's PDF says how it was made —
  *  compilerOfPdf, the host's `compilerOf` —, and that is the compiler of every compile and of the marks the probe is written
  *  with: the paper's meta is set to it before the first. Any failure of the host's but a failed allocation leaves the guess */
-async function compilerAsked(paper, compilerOf) {
+async function compilerAsked(paper: Paper, compilerOf: Host['compilerOf']): Promise<void> {
   if (!paper.meta?.compilerGuessed || typeof compilerOf !== 'function') return
   try {
     const said = await compilerOf()
     if (COMPILERS.has(said)) Object.assign(paper.meta, { compiler: said, compilerGuessed: false, compilerFrom: 'pdf' })
-  } catch (e) { if (isMemoryError(e)) throw e }
+  } catch (e) {
+    if (isMemoryError(e)) throw e
+  }
 }
 
 /** why madeBibliography would make no .bbl of a paper before any compile (`shipped`, `none`, `biblatex`, `bib-missing`), or null:
  *  it asks its pass. For a host that orders its steps by it (the web's prepare decides the paper's tree before the pass, so that
  *  the .bbl is the tree's that compiles it) */
-export function bibliographyKept(paper) {
+export function bibliographyKept(
+  paper: Paper,
+): Extract<BibliographyKept, 'shipped' | 'none' | 'biblatex' | 'bib-missing'> | null {
   if (paper.meta.bbl) return 'shipped'
   const named = paper.project.bibliography ?? []
   if (!named.length) return 'none'
   if (paper.meta.biblatex) return 'biblatex'
-  if (named.some(n => !paper.fsys.read(normalizePath(n.endsWith('.bib') ? n : `${n}.bib`)))) return 'bib-missing'
+  if (named.some((n) => !paper.fsys.read(normalizePath(n.endsWith('.bib') ? n : `${n}.bib`)))) return 'bib-missing'
   return null
 }
 /** an entry's unit (latex-front.mjs bibliography: one unit an entry) */
 const ENTRY = 'reference'
 /** the \\bibitem a .bbl BibTeX wrote holds: one at the start of each entry's first line, as every style writes it */
-const bibitemsOf = bytes => (texText(bytes).match(/^[ \t]*\\bibitem(?![A-Za-z@])/gm) ?? []).length
+const bibitemsOf = (bytes: Uint8Array): number => (texText(bytes).match(/^[ \t]*\\bibitem(?![A-Za-z@])/gm) ?? []).length
 const BIBITEM_LINE = /^[ \t]*\\bibitem(?![A-Za-z@])/m
 /**
  * The bibliography BibTeX makes of a paper that ships none (PDF-READER §19.13; the owner's ruling of 2026-10-28: a .bbl the
@@ -81,39 +257,87 @@ const BIBITEM_LINE = /^[ \t]*\\bibitem(?![A-Za-z@])/m
  * front end read as a comment and TeX does not, ran over the 18 entries after it, and marked so their citations were undefined). `compilerOf`, as
  * markedOfPaper's: asked before the pass, and the paper opened again keeps what it said. Never throws but a failed allocation
  */
-export async function madeBibliography(paper, { compile, compilerOf = null, engines = null }) {
+export async function madeBibliography(
+  paper: Paper,
+  { compile, compilerOf = null, engines = null }: Host,
+): Promise<
+  { paper: Paper; made: { path: string; bytes: Uint8Array }; ms: number } | { kept: BibliographyKept; ms: number }
+> {
   const t0 = performance.now()
-  const done = r => ({ ...r, ms: Math.round(performance.now() - t0) })
-  const { main } = paper.project, job = jobName(main)
+  const done = <R extends object>(r: R) => ({ ...r, ms: Math.round(performance.now() - t0) })
+  const { main } = paper.project,
+    job = jobName(main)
   const before = bibliographyKept(paper)
   if (before) return done({ kept: before })
   await compilerAsked(paper, compilerOf)
-  const engine = paper.meta.compiler
+  const engine = paper.meta.compiler!
   if (Array.isArray(engines) && !engines.includes(engine)) return done({ kept: 'engine' })
-  let c = null
-  try { c = await compile({ main, engine, rerun: false, bibtex: true, overrides: unmarkedFiles(paper), draft: true, files: true }) } catch (e) { if (isMemoryError(e)) throw e }
+  let c: Compiled | null = null
+  try {
+    c = await compile({
+      main,
+      engine,
+      rerun: false,
+      bibtex: true,
+      overrides: unmarkedFiles(paper),
+      draft: true,
+      files: true,
+    })
+  } catch (e) {
+    if (isMemoryError(e)) throw e
+  }
   if (!ranThrough(c)) return done({ kept: 'compile' })
-  if (!c.files) return done({ kept: 'no-files' })
-  if (otherBibJobs(c.files, main)) return done({ kept: 'aux-jobs' })
-  if (bibMissing(c.files, paper.fsys)) return done({ kept: 'bib-missing' })
-  if (c.files.has(`${job}.bcf`)) return done({ kept: 'biber' })
-  const bytes = c.files.get(`${job}.bbl`)
-  if (!bytes || !/\\begin\s*\{thebibliography\}/.test(texText(bytes)) || !/\\bibitem(?![A-Za-z@])/.test(texText(bytes))) return done({ kept: 'no-bbl' })
+  if (!c!.files) return done({ kept: 'no-files' })
+  if (otherBibJobs(c!.files, main)) return done({ kept: 'aux-jobs' })
+  if (bibMissing(c!.files, paper.fsys)) return done({ kept: 'bib-missing' })
+  if (c!.files.has(`${job}.bcf`)) return done({ kept: 'biber' })
+  const bytes = c!.files.get(`${job}.bbl`)
+  if (!bytes || !/\\begin\s*\{thebibliography\}/.test(texText(bytes)) || !/\\bibitem(?![A-Za-z@])/.test(texText(bytes)))
+    return done({ kept: 'no-bbl' })
   const path = `${job}.bbl`
-  let again
-  try { again = openPaper(new Map([...paper.fsys.list().map(p => [p, paper.fsys.read(p)]), [path, bytes]])) } catch (e) { if (isMemoryError(e)) throw e; return done({ kept: 'moved' }) }
+  let again: Paper
+  try {
+    again = openPaper(
+      new Map([...paper.fsys.list().map((p): [string, Uint8Array] => [p, paper.fsys.read(p)!]), [path, bytes]]),
+    )
+  } catch (e) {
+    if (isMemoryError(e)) throw e
+    return done({ kept: 'moved' })
+  }
   // (the units before the entries and the names after them, the bundle's as they were; the entries every one of kind ENTRY)
-  const was = bundleUnitsOf(paper), now = bundleUnitsOf(again), n = paper.units.length, k = again.units.length - n
-  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
-  if (k <= 0 || !same(now.slice(0, n), was.slice(0, n)) || !same(now.slice(n + k), was.slice(n)) || !again.units.slice(n).every(u => u.kind === ENTRY)) return done({ kept: 'moved' })
-  if (paper.units.some((u, i) => u.file !== again.units[i].file || u.start !== again.units[i].start || u.end !== again.units[i].end)) return done({ kept: 'moved' })
+  const was = bundleUnitsOf(paper),
+    now = bundleUnitsOf(again),
+    n = paper.units.length,
+    k = again.units.length - n
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+  if (
+    k <= 0 ||
+    !same(now.slice(0, n), was.slice(0, n)) ||
+    !same(now.slice(n + k), was.slice(n)) ||
+    !again.units.slice(n).every((u) => u.kind === ENTRY)
+  )
+    return done({ kept: 'moved' })
+  if (
+    paper.units.some(
+      (u, i) => u.file !== again.units[i]!.file || u.start !== again.units[i]!.start || u.end !== again.units[i]!.end,
+    )
+  )
+    return done({ kept: 'moved' })
   // (no entry the front end reads past its end: one that holds another \\bibitem BibTeX wrote, at a line's start, has taken the next
   // entries in, and marked so, their \\bibitem no longer define their citations. An entry of no words — a web address and a year
   // alone, ACM's `\\bibinfo{booktitle}{\\emph{\\url{…}}}` — is no unit, and the others are the bibliography's all the same:
   // 2608.25210v2's four such kept its 64 entries English)
   const text = texText(bytes)
-  if (k > bibitemsOf(bytes) || again.units.slice(n).some(u => u.file === path && BIBITEM_LINE.test(text.slice(u.start, u.end)))) return done({ kept: 'entries' })
-  Object.assign(again.meta, { compiler: paper.meta.compiler, compilerGuessed: paper.meta.compilerGuessed, ...(paper.meta.compilerFrom ? { compilerFrom: paper.meta.compilerFrom } : {}) })
+  if (
+    k > bibitemsOf(bytes) ||
+    again.units.slice(n).some((u) => u.file === path && BIBITEM_LINE.test(text.slice(u.start, u.end)))
+  )
+    return done({ kept: 'entries' })
+  Object.assign(again.meta, {
+    compiler: paper.meta.compiler,
+    compilerGuessed: paper.meta.compilerGuessed,
+    ...(paper.meta.compilerFrom ? { compilerFrom: paper.meta.compilerFrom } : {}),
+  })
   return done({ paper: again, made: { path, bytes } })
 }
 
@@ -176,47 +400,99 @@ export async function madeBibliography(paper, { compile, compilerOf = null, engi
  * which no mark of ours may stand as text (base.mjs markTextOf; 'text' in the guard's record): a mark printed is out of place
  * as one in an auxiliary file is, its units left unmarked and the paper compiled again within GUARD_EXTRA, else 'marks'
  */
-export async function markedOfPaper(paper, { compile, converge = false, compileBudgetMs = null, filesBound = null, pages = null, engines = null, tried = null, final: wantFinal = true, sourceDate = null, textOf = null, compilerOf = null }) {
-  const ms = {}
+export async function markedOfPaper(
+  paper: Paper,
+  {
+    compile,
+    converge = false,
+    compileBudgetMs = null,
+    filesBound = null,
+    pages = null,
+    engines = null,
+    tried = null,
+    final: wantFinal = true,
+    sourceDate = null,
+    textOf = null,
+    compilerOf = null,
+  }: MarkedCompileOptions,
+): Promise<Marked> {
+  const ms: Record<string, number> = {}
   /** a stage, timed; null where it fails or throws, but a failed allocation, which goes on as itself (the run's, never the paper's) */
-  const stage = async (name, run) => {
+  const stage = async <T>(name: string, run: () => Promise<T>): Promise<T | null> => {
     const t0 = performance.now()
-    try { return await run() } catch (e) { if (isMemoryError(e)) throw e; return null } finally { ms[name] = Math.round(performance.now() - t0) }
+    try {
+      return await run()
+    } catch (e) {
+      if (isMemoryError(e)) throw e
+      return null
+    } finally {
+      ms[name] = Math.round(performance.now() - t0)
+    }
   }
   await compilerAsked(paper, compilerOf)
-  const { main } = paper.project, engine = paper.meta.compiler
-  if (Array.isArray(engines) && !engines.includes(engine)) return { refused: 'engine', why: `the paper is compiled by ${engine ?? 'no named engine'}, which the host does not run`, ms }
+  const { main } = paper.project,
+    engine = paper.meta.compiler!
+  if (Array.isArray(engines) && !engines.includes(engine))
+    return {
+      refused: 'engine',
+      why: `the paper is compiled by ${engine ?? 'no named engine'}, which the host does not run`,
+      ms,
+    }
   // (each compile's wall as the host counts it, its `ms`, else as long as it took here — what the host's compile budget is
   // spent by: CM's bets and the guard's compiles —, and the last one's)
   const wall = { spent: 0, last: 0, longest: 0 }
   /** whether the host's budget holds one more compile as long as the longest so far, and a fifth (none given: always) */
-  const budgetLeft = () => compileBudgetMs === null || compileBudgetMs === undefined || compileBudgetMs - wall.spent >= 1.2 * wall.longest
+  const budgetLeft = () =>
+    compileBudgetMs === null || compileBudgetMs === undefined || compileBudgetMs - wall.spent >= 1.2 * wall.longest
   // (the day every compile after the probe is made on, asked once before the marked original's: `sourceDate`; and each answer's
   // request, which the final pass is made of)
-  let date = null
-  const requestOf = new WeakMap()
-  const asked = async req => {
-    const t0 = performance.now(), q = date === null ? req : { ...req, sourceDate: date }, c = await compile(q)
-    wall.last = c?.ms ?? performance.now() - t0; wall.spent += wall.last; wall.longest = Math.max(wall.longest, wall.last)
+  let date: number | null = null
+  const requestOf = new WeakMap<Compiled, CompileRequest>()
+  const asked = async (req: CompileRequest): Promise<Compiled> => {
+    const t0 = performance.now(),
+      q = date === null ? req : { ...req, sourceDate: date },
+      c = await compile(q)
+    wall.last = c?.ms ?? performance.now() - t0
+    wall.spent += wall.last
+    wall.longest = Math.max(wall.longest, wall.last)
     if (c && typeof c === 'object') requestOf.set(c, q)
     return c
   }
   /** the mark text the host's `textOf` reads on a compile's pages (design §3.3.2; base.mjs markTextOf), null where it reads none:
    *  no host's, or a failure of its own (but a failed allocation) */
-  const markText = async pdf => {
+  const markText = async (pdf: Uint8Array | null | undefined) => {
     if (typeof textOf !== 'function' || !pdf?.length) return null
-    try { const pages = await textOf(pdf); return Array.isArray(pages) ? markTextOf(pages) : null } catch (e) { if (isMemoryError(e)) throw e; return null }
+    try {
+      const pages = await textOf(pdf)
+      return Array.isArray(pages) ? markTextOf(pages) : null
+    } catch (e) {
+      if (isMemoryError(e)) throw e
+      return null
+    }
   }
   // (the paper's macros that read nothing past their arguments, from their definitions: the front end's, those its units call)
   const complete = completeCalled(paper.units, paper.project?.complete)
   // (the preamble as the marked original writes it, where a unit of the main file stands in it: live.mjs markedPreamble. A throw
   // of its own leaves the probe the paper's own preamble's, as before)
-  let preamble = null
-  try { preamble = markedPreamble(paper, { complete }) } catch (e) { if (isMemoryError(e)) throw e; preamble = null }
+  let preamble: ReturnType<typeof markedPreamble> = null
+  try {
+    preamble = markedPreamble(paper, { complete })
+  } catch (e) {
+    if (isMemoryError(e)) throw e
+    preamble = null
+  }
   const probe = await stage('probe', async () => {
     // (the font probe's request: one pass, no bibliography)
-    const ask = pre => asked({ main, engine, rerun: false, bibtex: false, overrides: probeFiles(paper, { marks: true, ...(pre ? { preamble: pre.text } : {}) }) })
-    let c = await ask(preamble), blamed = new Set()
+    const ask = (pre: ReturnType<typeof markedPreamble>) =>
+      asked({
+        main,
+        engine,
+        rerun: false,
+        bibtex: false,
+        overrides: probeFiles(paper, { marks: true, ...(pre ? { preamble: pre.text } : {}) }),
+      })
+    let c: Compiled | null = await ask(preamble),
+      blamed = new Set<number>()
     if (preamble) {
       // (TeX's errors at our marks where it read the marked preamble name their units, left unmarked before the marked compile
       // (guard.mjs preambleUnits), TeX stopped there or not; then, or where that probe stopped before its body wrote a row (TeX
@@ -232,37 +508,76 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     // (the texts of the macros and of the units' leads, asked last: live.mjs probeFiles)
     // (the body's and the entries' answers, as every reader takes them: marks.mjs readInkAnswers)
     const { inkless, texts, decorated, apart } = readInkAnswers(log, paper.units)
-    return { switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)), inkless, texts, decorated, names: readNameProbe(log), lineskip: readSkipProbe(log), apart, blamed }
+    return {
+      switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)),
+      inkless,
+      texts,
+      decorated,
+      names: readNameProbe(log),
+      lineskip: readSkipProbe(log),
+      apart,
+      blamed,
+    }
   })
   if (!probe) return { refused: 'probe', ms }
   // (the day the marked original and its final pass are compiled on: the host's, asked once; any failure of the host's but a
   // failed allocation leaves the compiles on the host's clock)
   if (sourceDate !== null && sourceDate !== undefined) {
-    try { const d = typeof sourceDate === 'function' ? await sourceDate() : sourceDate; if (Number.isSafeInteger(d) && d >= 0) date = d } catch (e) { if (isMemoryError(e)) throw e }
+    try {
+      const d = typeof sourceDate === 'function' ? await sourceDate() : sourceDate
+      if (Number.isSafeInteger(d) && d! >= 0) date = d
+    } catch (e) {
+      if (isMemoryError(e)) throw e
+    }
   }
   const { switches, inkless, texts, decorated, names, lineskip, apart, blamed } = probe
   const cm = converge ? { drafts: 0, marked: 0, settled: false } : null
   /** the result, with CM's record where it ran */
-  const result = r => (cm ? { ...r, cm } : r)
-  const job = jobName(main), count = paper.units.length, bibtex = paper.meta.bbl ? false : null
+  const result = (r: Marked): Marked => (cm ? { ...r, cm } : r)
+  const job = jobName(main),
+    count = paper.units.length,
+    bibtex = paper.meta.bbl ? false : null
   /** the marked original's files, the units of `unmarked` as the paper's own and the babel names marked or not */
-  const filesOf = (unmarked, named, spans) => originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless, complete, apart, ...(unmarked.size ? { unmarked } : {}), ...(named ? {} : { names: false }), spans })
+  const filesOf = (unmarked: ReadonlySet<number>, named: boolean, spans: Spans) =>
+    originalFiles(paper, {
+      lines: true,
+      layout: LAYOUT_CLASSES,
+      switches,
+      inkless,
+      complete,
+      apart,
+      ...(unmarked.size ? { unmarked } : {}),
+      ...(named ? {} : { names: false }),
+      spans,
+    })
   // (before the compile: the units the probe's preamble blamed (`preamble`); each unit's writing against its source's braces; our
   // other edits unbalancing a file, no names)
-  const before = () => ({ unmarked: new Set(blamed), failed: blamed.size ? ['preamble'] : [] })
-  const g = { extra: 0, ...before(), names: true }
+  const before = (): { unmarked: Set<number>; failed: GuardCheck[] } => ({
+    unmarked: new Set(blamed),
+    failed: blamed.size ? ['preamble'] : [],
+  })
+  const g: { extra: number; unmarked: Set<number>; failed: GuardCheck[]; names: boolean; judged?: string } = {
+    extra: 0,
+    ...before(),
+    names: true,
+  }
   // (a throw of the check's own skips it: the marked original as before; the files written in the compile's stage then, whose
   // throw is the compile's refusal as before the guard)
-  let spans = {}, files = null
+  let spans: Spans = {},
+    files: Map<string, Uint8Array> | null = null
   try {
-    const sp = {}, f = filesOf(g.unmarked, true, sp)
-    const balance = unbalancedUnits(paper, f, sp.lines(), sp.skip)
+    const sp: Spans = {},
+      f = filesOf(g.unmarked, true, sp)
+    const balance = unbalancedUnits(paper, f, sp.lines!(), sp.skip)
     if (balance.units.size || balance.other) {
       g.failed.push('braces')
       g.unmarked = new Set([...blamed, ...balance.units])
       g.names = !balance.other
       files = filesOf(g.unmarked, g.names, spans)
-    } else { spans = sp; files = f }
+    } else {
+      spans = sp
+      files = f
+    }
   } catch (e) {
     if (isMemoryError(e)) throw e
     Object.assign(g, before())
@@ -272,40 +587,84 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   }
   const marked = await stage('compile', async () => {
     files ??= filesOf(g.unmarked, g.names, spans)
-    if (cm) return convergeThenMark(paper, asked, files, cm, { wall, budget: compileBudgetMs, bound: filesBound, keep: wantFinal })
+    if (cm)
+      return convergeThenMark(paper, asked, files, cm, {
+        wall,
+        budget: compileBudgetMs,
+        bound: filesBound,
+        keep: wantFinal,
+      })
     // (every pass, the bibliography's step as the paper needs it; one that did not run through (ranThrough) is no marked
     // original, whatever PDF it left — 2610.20713's, TL2025's 7 pages of 15 before its hundredth error; with the files it wrote,
     // which the final pass is made over)
     return asked({ main, engine, rerun: true, bibtex, overrides: files, ...(wantFinal ? { files: true } : {}) })
   })
   // (`decorated`, the texts TeX set beside a decoration of their own (readInkDecorated): the instrument's alone, no marks file's)
-  const options = { engine, classes: LAYOUT_CLASSES, switches, inkless, texts, decorated, names, lineskip, complete, apart }
-  const record = () => ({ extra: g.extra, unmarked: [...g.unmarked].sort((a, b) => a - b), names: g.names, failed: g.failed, ...(g.judged ? { judged: g.judged } : {}) })
-  const guarded = r => result(g.failed.length ? { ...r, guard: record() } : r)
-  if (!marked) return guarded({ refused: 'compile', why: cm ? 'a marked pass did not run through, or the compile threw' : 'the compile threw', ms })
+  const options: MarkedOptions = {
+    engine,
+    classes: LAYOUT_CLASSES,
+    switches,
+    inkless,
+    texts,
+    decorated,
+    names,
+    lineskip,
+    complete,
+    apart,
+  }
+  const record = (): GuardRecord => ({
+    extra: g.extra,
+    unmarked: [...g.unmarked].sort((a, b) => a - b),
+    names: g.names,
+    failed: g.failed,
+    ...(g.judged ? { judged: g.judged } : {}),
+  })
+  const guarded = (r: Marked): Marked => result(g.failed.length ? { ...r, guard: record() } : r)
+  if (!marked)
+    return guarded({
+      refused: 'compile',
+      why: cm ? 'a marked pass did not run through, or the compile threw' : 'the compile threw',
+      ms,
+    })
   /** the unmarked original's verdict, once it was compiled (ownVerdict): a refusal names it, as `own` */
-  let verdict = null
-  const owned = r => (verdict ? { ...r, own: verdict } : r)
+  let verdict: OwnVerdict | null = null
+  const owned = (r: Marked): Marked => (verdict ? { ...r, own: verdict } : r)
   // (a throw of the guard's own after the compile: the last remedy that passed the checks stands, else the marked original as
   // before the guard, one that ran through with a PDF — with the base page asked, not one of more pages than arXiv's, as the
   // guard's own rule (`stands`); a remedy that passed never is one —, else the compile's refusal)
-  let standing = null
+  let standing = null as Attempt | null
   /** arXiv's page count, once the checks asked the host for it (null: not given, or not asked yet) */
-  let N = null
+  let N: number | null = null
   /** the compile the marked original is (its evidence: the answer `c` and its files), once one stands: the final pass's */
-  let accepted = null
+  let accepted: { c: Compiled | null; files: Map<string, Uint8Array> | null } | null = null
   const made = await (async () => {
-    try { return await checked() } catch (e) {
+    try {
+      return await checked()
+    } catch (e) {
       if (isMemoryError(e)) throw e
-      g.judged = whyText(`the layout guard failed: ${e?.message ?? e}`)
-      if (standing) { g.unmarked = standing.unmarked; g.names = standing.named; accepted = standing; return guarded({ pdf: standing.c.pdf, log: lastTexLog(standing.c.log), options, ms }) }
-      if (ranThrough(marked) && marked.pdf?.length) {
-        const M = pagesOfLog(marked.log)
-        if (wantFinal && N !== null && M !== null && M > N) return guarded(owned({ refused: 'compile', why: whyText(`the marked original has ${M} pages, arXiv's PDF ${N}; ${g.judged}`), ms }))
-        accepted = { c: marked, files }
-        return guarded({ pdf: marked.pdf, log: lastTexLog(marked.log), options, ms })
+      g.judged = whyText(`the layout guard failed: ${(e as { message?: unknown } | null)?.message ?? e}`)
+      if (standing) {
+        g.unmarked = standing.unmarked
+        g.names = standing.named
+        accepted = standing
+        return guarded({ pdf: standing.c!.pdf!, log: lastTexLog(standing.c!.log), options, ms })
       }
-      return guarded(owned({ refused: 'compile', why: whyText(`the marked original did not run through; ${g.judged}`), ms }))
+      if (ranThrough(marked) && marked!.pdf?.length) {
+        const M = pagesOfLog(marked!.log)
+        if (wantFinal && N !== null && M !== null && M > N)
+          return guarded(
+            owned({
+              refused: 'compile',
+              why: whyText(`the marked original has ${M} pages, arXiv's PDF ${N}; ${g.judged}`),
+              ms,
+            }),
+          )
+        accepted = { c: marked!, files }
+        return guarded({ pdf: marked!.pdf, log: lastTexLog(marked!.log), options, ms })
+      }
+      return guarded(
+        owned({ refused: 'compile', why: whyText(`the marked original did not run through; ${g.judged}`), ms }),
+      )
     }
   })()
   return 'pdf' in made && wantFinal ? { ...made, base: await finalPass(accepted) } : made
@@ -321,36 +680,53 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
    * (graphics-def 8d691483be came after it): our figure forms are then arXiv's, which the delta copies, and drawn as arXiv's
    * are. The marked compile is left as it is, so that its marks and the units read from it are what they were
    */
-  async function finalPass(e) {
+  async function finalPass(
+    e: { c: Compiled | null; files: Map<string, Uint8Array> | null } | null,
+  ): Promise<FinalPass> {
     const t0 = performance.now()
-    const out = r => { ms.final = Math.round(performance.now() - t0); return r }
-    const no = (why, limit = null) => out({ refused: 'final', why: whyText(why), ...(limit ? { limit } : {}) })
+    const out = (r: FinalPass) => {
+      ms.final = Math.round(performance.now() - t0)
+      return r
+    }
+    const no = (why: string, limit: RefusalLimit | null = null) =>
+      out({ refused: 'final', why: whyText(why), ...(limit ? { limit } : {}) })
     const req = e?.c ? requestOf.get(e.c) : null
-    if (!req || !(e.files instanceof Map)) return no('the marked original\'s compile is not known')
-    if (!(e.c.files instanceof Map)) return no('the marked compile returned no files to make the final pass over')
+    if (!req || !(e!.files instanceof Map)) return no("the marked original's compile is not known")
+    if (!(e!.c!.files instanceof Map)) return no('the marked compile returned no files to make the final pass over')
     if (!budgetLeft()) return no('no compile left within the compile budget', 'budget')
-    const bytes = e.files.get(main)
+    const bytes = e!.files.get(main)
     const text = bytes ? latin1(bytes) : ''
-    if (!text.startsWith(`${DRAFT_OPTION}\n`)) return no('the marked original\'s main file does not begin with graphicx\'s draft option')
-    const outputs = outputsOf(job), over = new Map()
-    for (const [p, b] of [...req.overrides, ...e.c.files]) if (e.files.has(p) || !outputs.test(p)) over.set(p, e.files.get(p) ?? b)
+    if (!text.startsWith(`${DRAFT_OPTION}\n`))
+      return no("the marked original's main file does not begin with graphicx's draft option")
+    const outputs = outputsOf(job),
+      over = new Map()
+    for (const [p, b] of [...req.overrides, ...e!.c!.files])
+      if (e!.files.has(p) || !outputs.test(p)) over.set(p, e!.files.get(p) ?? b)
     over.set(main, latin1Bytes(`${NO_DRIVER_GROUP}\n${text.slice(DRAFT_OPTION.length + 1)}`))
-    let c = null
-    try { c = await asked({ main, engine, rerun: false, bibtex: false, overrides: over }) } catch (x) {
+    let c: Compiled | null = null
+    try {
+      c = await asked({ main, engine, rerun: false, bibtex: false, overrides: over })
+    } catch (x) {
       if (isMemoryError(x)) throw x
-      return no(`the final pass threw: ${x?.message ?? x}`)
+      return no(`the final pass threw: ${(x as { message?: unknown } | null)?.message ?? x}`)
     }
     if (ranThrough(c) && c.pdf?.length) {
       // (under `latex` the DVI is drawn by dvipdfmx, and arXiv's by dvips and ps2pdf: a special dvipdfmx could not draw, a
       // PSTricks picture's, is ink our page lacks and arXiv's has. The host gives the driver's terminal after TeX's log, behind
       // its own line (base.mjs DRIVER_OUTPUT_MARK); where it gives none, or cut it, what the driver could not draw is not known:
       // no base page of ours)
-      if (engine === 'latex' && !driverOutputGiven(c.log)) return no(`the host gave no output of the final pass's dvipdfmx: its log lacks the line \`${DRIVER_OUTPUT_MARK}\``)
-      if (engine === 'latex' && driverOutputTruncated(c.log)) return no('the host\'s dvipdfmx output was cut: its special failures cannot be checked')
+      if (engine === 'latex' && !driverOutputGiven(c.log))
+        return no(
+          `the host gave no output of the final pass's dvipdfmx: its log lacks the line \`${DRIVER_OUTPUT_MARK}\``,
+        )
+      if (engine === 'latex' && driverOutputTruncated(c.log))
+        return no("the host's dvipdfmx output was cut: its special failures cannot be checked")
       const lost = engine === 'latex' ? driverLostInk(c.log) : null
       if (lost?.count) {
-        const [page, what] = lost.samples[0]
-        return no(`the final pass's dvipdfmx could not draw ${lost.count} special${lost.count === 1 ? '' : 's'} of the page (${page ? `page ${page}: ` : ''}${what})`)
+        const [page, what] = lost.samples[0]!
+        return no(
+          `the final pass's dvipdfmx could not draw ${lost.count} special${lost.count === 1 ? '' : 's'} of the page (${page ? `page ${page}: ` : ''}${what})`,
+        )
       }
       return out({ pdf: c.pdf, log: lastTexLog(c.log) })
     }
@@ -362,114 +738,233 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   }
 
   /** the checks after the compile, and the remedies */
-  async function checked() {
+  async function checked(): Promise<Marked> {
     // arXiv's page count, asked once where the host gives it (N, the result's too: a throw after it is judged by it)
     if (pages !== null && pages !== undefined) {
       // (any failure of the host's but a failed allocation leaves the page check out: N null)
-      try { const n = typeof pages === 'function' ? await pages() : pages; if (Number.isInteger(n) && n > 0) N = n } catch (e) { if (isMemoryError(e)) throw e }
+      try {
+        const n = typeof pages === 'function' ? await pages() : pages
+        if (Number.isInteger(n) && n! > 0) N = n
+      } catch (e) {
+        if (isMemoryError(e)) throw e
+      }
     }
     const several = (paper.meta.toplevels ?? 1) > 1
     /** what a compile shows of the checks: ran through, its pages against arXiv's (`short` fewer, where a paper of one toplevel
      *  source; `long` more), the units named by marks out of place — in an auxiliary file, or printed as text on its pages
      *  (`text`: the pages whose text the host's `textOf` reads a mark of ours in, base.mjs markTextOf; its units with the aux's) —,
      *  its TeX errors */
-    const evidence = async (c, f, sp) => {
-      const ran = ranThrough(c) && !!c?.pdf?.length, M = c ? pagesOfLog(c.log) : null
+    const evidence = async (c: Compiled | null, f: Map<string, Uint8Array> | null, sp: Spans): Promise<Evidence> => {
+      const ran = ranThrough(c) && !!c?.pdf?.length,
+        M = c ? pagesOfLog(c.log) : null
       const shown = ran ? await markText(c.pdf) : null
-      const short = ran && N !== null && M !== null && M < N && !several, long = ran && N !== null && M !== null && M > N
-      const text = shown ? shown.pages.length > 0 : false, errors = c ? errorCount(c.log) : 0
+      const short = ran && N !== null && M !== null && M < N && !several,
+        long = ran && N !== null && M !== null && M > N
+      const text = shown ? shown.pages.length > 0 : false,
+        errors = c ? errorCount(c.log) : 0
       // (a mark a file it wrote holds, judged by what TeX did with it where the compile shows it: guard.mjs copiesOutOfPlace; its
       // pages' text read, so that no mark printed is known, not assumed: no `textOf`, or one that failed, shows nothing; and a mark of
       // ours a class's verbatim copy of our source cut, whatever else the compile shows: guard.mjs cutCopyUnits)
-      const aux = ran ? new Set([...copiesOutOfPlace(auxUnits(c, count, job), { clean: shown !== null && !short && !long && !text && errors === 0, log: c.log }), ...cutCopyUnits(c, f, count)]) : new Set()
-      return { c, files: f, spans: sp, ran, pages: M, short, long, aux, text, textUnits: new Set(shown ? [...shown.units].filter(u => u < count) : []), errors }
+      const aux = ran
+        ? new Set<number>([
+            ...copiesOutOfPlace(auxUnits(c, count, job), {
+              clean: shown !== null && !short && !long && !text && errors === 0,
+              log: c.log,
+            }),
+            ...cutCopyUnits(c, f, count),
+          ])
+        : new Set<number>()
+      return {
+        c,
+        files: f,
+        spans: sp,
+        ran,
+        pages: M,
+        short,
+        long,
+        aux,
+        text,
+        textUnits: new Set(shown ? [...shown.units].filter((u) => u < count) : []),
+        errors,
+      }
     }
     /** whether it stands: ran through, arXiv's pages, nothing out of place, and no errors (or no more than the paper's own) */
-    const fits = e => e.ran && !e.short && !e.long && e.aux.size === 0 && !e.text
-    const clean = (e, own) => fits(e) && (e.errors === 0 || (own !== null && e.errors <= own.errors))
-    const failedOf = e => [...(e.ran ? [] : ['ran']), ...(e.short || e.long ? ['pages'] : []), ...(e.aux.size ? ['aux'] : []), ...(e.text ? ['text'] : []), ...(e.errors ? ['errors'] : [])]
-    const done = e => { accepted = e; return guarded({ pdf: e.c.pdf, log: lastTexLog(e.c.log), options, ms }) }
+    const fits = (e: Evidence) => e.ran && !e.short && !e.long && e.aux.size === 0 && !e.text
+    const clean = (e: Evidence, own: OwnCompile | null) =>
+      fits(e) && (e.errors === 0 || (own !== null && e.errors <= own.errors))
+    const failedOf = (e: Evidence): GuardCheck[] => [
+      ...(e.ran ? [] : (['ran'] as const)),
+      ...(e.short || e.long ? (['pages'] as const) : []),
+      ...(e.aux.size ? (['aux'] as const) : []),
+      ...(e.text ? (['text'] as const) : []),
+      ...(e.errors ? (['errors'] as const) : []),
+    ]
+    const done = (e: Evidence) => {
+      accepted = e
+      return guarded({ pdf: e.c!.pdf!, log: lastTexLog(e.c!.log), options, ms })
+    }
     // (a why without the log's control characters, within WHY_MAX)
-    const refuse = r => guarded(owned({ ...r, ...(r.why === undefined ? {} : { why: whyText(r.why) }), ms }))
+    const refuse = (r: { refused: MarkedRefusal; why?: string; limit?: RefusalLimit }) =>
+      guarded(owned({ ...r, ...(r.why === undefined ? {} : { why: whyText(r.why) }), ms }))
     const e0 = await evidence(marked, files, spans)
     if (clean(e0, null)) return done(e0)
     g.failed.push(...failedOf(e0))
     const t0 = performance.now()
-    const timed = r => { ms.guard = Math.round(performance.now() - t0); return r }
+    const timed = (r: Marked) => {
+      ms.guard = Math.round(performance.now() - t0)
+      return r
+    }
     // a compile TeX never ran, or one a host's limit stopped, is no mark's fault: no compile mends it
     if (!e0.ran) {
       const limit = limitOf(marked)
-      if (limit) return refuse({ refused: 'compile', why: `the marked original was stopped by the host's ${limit} limit`, limit })
+      if (limit)
+        return refuse({
+          refused: 'compile',
+          why: `the marked original was stopped by the host's ${limit} limit`,
+          limit,
+        })
       // (`engine` where the host names the engine unknown; any other answer TeX never ran in, a host's own failure or its cap on
       // a compile's result, the compile's)
-      if (!texRan(marked.log)) return refuse({ refused: engineUnknown(marked) ? 'engine' : 'compile', why: `the ${engine} compile ran no TeX${firstLine(marked) ? `: ${firstLine(marked)}` : ''}` })
+      if (!texRan(marked!.log))
+        return refuse({
+          refused: engineUnknown(marked) ? 'engine' : 'compile',
+          why: `the ${engine} compile ran no TeX${firstLine(marked) ? `: ${firstLine(marked)}` : ''}`,
+        })
     }
     /** whether the host's budget holds one more compile, within GUARD_EXTRA */
     const afford = () => g.extra < GUARD_EXTRA && budgetLeft()
     /** the unmarked original's compile, once it ran through to arXiv's pages: what an attempt's errors are judged against */
-    let own = null
+    let own: OwnCompile | null = null
     /** the marked original again, `unmarked` left the paper's own and the names marked or not: its evidence */
-    const attempt = async (unmarked, named) => {
+    const attempt = async (unmarked: Set<number>, named: boolean): Promise<Attempt> => {
       g.extra++
-      const sp = {}, f = filesOf(unmarked, named, sp)
-      let c = null
+      const sp: Spans = {},
+        f = filesOf(unmarked, named, sp)
+      let c: Compiled | null = null
       // (a failed allocation is the run's, never the paper's refusal)
-      try { c = await asked({ main, engine, rerun: true, bibtex, overrides: f, ...(wantFinal ? { files: true } : {}) }) } catch (e) { if (isMemoryError(e)) throw e }
+      try {
+        c = await asked({ main, engine, rerun: true, bibtex, overrides: f, ...(wantFinal ? { files: true } : {}) })
+      } catch (e) {
+        if (isMemoryError(e)) throw e
+      }
       const r = { ...(await evidence(c, f, sp)), unmarked, named }
       // (one that passes the checks stands if a later step of the guard throws)
       if (clean(r, own)) standing = r
       return r
     }
     /** the unmarked original (unmarkedFiles), compiled as the marked one is: whether it ran through, its pages, its errors */
-    const original = async () => {
+    const original = async (): Promise<OwnCompile> => {
       g.extra++
-      let c = null
-      try { c = await asked({ main, engine, rerun: true, bibtex, overrides: unmarkedFiles(paper) }) } catch (e) { if (isMemoryError(e)) throw e }
-      const ran = ranThrough(c) && !!c?.pdf?.length, M = c ? pagesOfLog(c.log) : null
-      const u = { c, ran, pages: M, short: ran && N !== null && M !== null && M < N && !several, long: ran && N !== null && M !== null && M > N, errors: c ? errorCount(c.log) : 0, own: c ? ownErrors(c.log) : new Set() }
+      let c: Compiled | null = null
+      try {
+        c = await asked({ main, engine, rerun: true, bibtex, overrides: unmarkedFiles(paper) })
+      } catch (e) {
+        if (isMemoryError(e)) throw e
+      }
+      const ran = ranThrough(c) && !!c?.pdf?.length,
+        M = c ? pagesOfLog(c.log) : null
+      const u = {
+        c,
+        ran,
+        pages: M,
+        short: ran && N !== null && M !== null && M < N && !several,
+        long: ran && N !== null && M !== null && M > N,
+        errors: c ? errorCount(c.log) : 0,
+        own: c ? ownErrors(c.log) : new Set<string>(),
+      }
       if (u.ran && !u.short) own = u
       verdict = ownVerdict(u)
       return u
     }
     /** the attempt taken: its units and names the guard's record */
-    const take = e => { if (e !== e0) { g.unmarked = e.unmarked; g.names = e.named } return timed(done(e)) }
+    const take = (e: Evidence) => {
+      if (e !== e0) {
+        g.unmarked = e.unmarked!
+        g.names = e.named!
+      }
+      return timed(done(e))
+    }
     /** of attempts that ran through to arXiv's page count or more, the one that fails the fewest checks, then has the fewest
      *  errors (the earliest of equals): judged by the page pass and the carry as before. With the base page asked (`final`),
      *  none of more pages than arXiv's (`long`): the page pass refuses a base page of another page count whatever the carry
      *  (BUNDLE 8, design note §3.3.4), so the unmarked original is compiled instead of the final pass, and tells whose fault
      *  it is (2610.20581: a marked original of 34 pages, arXiv's 33, taken, and the final pass spent on it) */
-    const best = list => { let b = null; for (const e of list) if (stands(e) && (!b || rank(e) < rank(b))) b = e; return b }
-    const stands = e => e.ran && !e.short && !(wantFinal && e.long)
-    const rank = e => (e.aux.size || e.text ? 2e9 : 0) + (e.long ? 1e9 : 0) + e.errors
-    const union = (...sets) => { const out = new Set(); for (const s of sets) for (const x of s) out.add(x); return out }
-    const blamedBy = (e, own = null) => (e.c && texRan(e.c.log) ? errorUnits(paper, e.c.log, e.files, e.spans.lines(), own) : new Set())
+    const best = (list: readonly Evidence[]) => {
+      let b: Evidence | null = null
+      for (const e of list) if (stands(e) && (!b || rank(e) < rank(b))) b = e
+      return b
+    }
+    const stands = (e: Evidence) => e.ran && !e.short && !(wantFinal && e.long)
+    const rank = (e: Evidence) => (e.aux.size || e.text ? 2e9 : 0) + (e.long ? 1e9 : 0) + e.errors
+    const union = (...sets: Iterable<number>[]) => {
+      const out = new Set<number>()
+      for (const s of sets) for (const x of s) out.add(x)
+      return out
+    }
+    const blamedBy = (e: Evidence, own: ReadonlySet<string> | null = null) =>
+      e.c && texRan(e.c.log) ? errorUnits(paper, e.c.log, e.files!, e.spans.lines!(), own) : new Set<number>()
     /** the units an attempt's errors blame: those their lines of input stand in (blamedBy), else, where they stand in none, those
      *  TeX's context shows it reading (guard.mjs contextUnits) — before the names off, the remedy of no unit blamed */
-    const weakOf = (e, own = null) => {
-      const lines = [...blamedBy(e, own)].filter(i => !g.unmarked.has(i))
-      return lines.length || !e.c || !texRan(e.c.log) ? lines : [...contextUnits(e.c.log, count, own)].filter(i => !g.unmarked.has(i))
+    const weakOf = (e: Evidence, own: ReadonlySet<string> | null = null): number[] => {
+      const lines = [...blamedBy(e, own)].filter((i) => !g.unmarked.has(i))
+      return lines.length || !e.c || !texRan(e.c.log)
+        ? lines
+        : [...contextUnits(e.c.log, count, own)].filter((i) => !g.unmarked.has(i))
     }
     /** TeX's own failure, as the unmarked original shows it: the category and why, every tree tried named (the host's
      *  `tried`, then the box's); 'texlive' where the paper declares a year none of them is */
-    const texs = u => {
-      if (!u.c) return { refused: 'compile', why: 'the paper\'s own source: the compile threw' }
+    const texs = (u: OwnCompile): { refused: MarkedRefusal; why: string; limit?: RefusalLimit } => {
+      if (!u.c) return { refused: 'compile', why: "the paper's own source: the compile threw" }
       const limit = limitOf(u.c)
-      if (limit) return { refused: 'compile', why: `the paper's own source was stopped by the host's ${limit} limit`, limit }
-      if (!texRan(u.c.log)) return { refused: engineUnknown(u.c) ? 'engine' : 'compile', why: `the ${engine} compile of the paper's own source ran no TeX${firstLine(u.c) ? `: ${firstLine(u.c)}` : ''}` }
-      const what = !u.ran ? 'does not run through' : `has ${u.pages} pages, arXiv's PDF ${N}`, err = firstError(u.c.log), said = err ? `: ${err}` : ''
-      const ours = texLiveOf(u.c.log), declared = paper.meta.tlVersion ?? null, cls = paper.meta.documentclass ? ` (${paper.meta.documentclass})` : ''
-      const trees = treesOf(tried, ours), on = trees.join(' or ')
-      if (declared && ours && !trees.includes(String(declared))) return { refused: 'texlive', why: `the paper${cls} declares TeX Live ${declared}; on TeX Live ${on} its own source ${what}${said}` }
-      if (declared && trees.length > 1) return { refused: 'compile', why: `the paper${cls} declares TeX Live ${declared}; its own source ${what} on TeX Live ${on}${said}` }
+      if (limit)
+        return { refused: 'compile', why: `the paper's own source was stopped by the host's ${limit} limit`, limit }
+      if (!texRan(u.c.log))
+        return {
+          refused: engineUnknown(u.c) ? 'engine' : 'compile',
+          why: `the ${engine} compile of the paper's own source ran no TeX${firstLine(u.c) ? `: ${firstLine(u.c)}` : ''}`,
+        }
+      const what = !u.ran ? 'does not run through' : `has ${u.pages} pages, arXiv's PDF ${N}`,
+        err = firstError(u.c.log),
+        said = err ? `: ${err}` : ''
+      const ours = texLiveOf(u.c.log),
+        declared = paper.meta.tlVersion ?? null,
+        cls = paper.meta.documentclass ? ` (${paper.meta.documentclass})` : ''
+      const trees = treesOf(tried, ours),
+        on = trees.join(' or ')
+      if (declared && ours && !trees.includes(String(declared)))
+        return {
+          refused: 'texlive',
+          why: `the paper${cls} declares TeX Live ${declared}; on TeX Live ${on} its own source ${what}${said}`,
+        }
+      if (declared && trees.length > 1)
+        return {
+          refused: 'compile',
+          why: `the paper${cls} declares TeX Live ${declared}; its own source ${what} on TeX Live ${on}${said}`,
+        }
       return { refused: 'compile', why: `the paper's own source${cls} ${what}${on ? ` on TeX Live ${on}` : ''}${said}` }
     }
-    const whatOf = e => (!e.ran ? 'does not run through' : e.short || e.long ? `has ${e.pages} pages, arXiv's PDF ${N}` : 'is not the paper')
+    const whatOf = (e: Evidence) =>
+      !e.ran
+        ? 'does not run through'
+        : e.short || e.long
+          ? `has ${e.pages} pages, arXiv's PDF ${N}`
+          : 'is not the paper'
     /** the marked original refused as ours ('marks'), or, where nothing told whose fault it is (the unmarked original not
      *  compiled), as the compile's, as before the guard */
-    const why = (e, more) => { const err = e.c ? firstError(e.c.log) : null; return `the marked original ${whatOf(e)}${err ? ` (${err})` : ''}, ${more}` }
-    const ours = (e, more) => ({ refused: 'marks', why: why(e, more) })
+    const why = (e: Evidence, more: string) => {
+      const err = e.c ? firstError(e.c.log) : null
+      return `the marked original ${whatOf(e)}${err ? ` (${err})` : ''}, ${more}`
+    }
+    const ours = (e: Evidence, more: string): { refused: MarkedRefusal; why: string } => ({
+      refused: 'marks',
+      why: why(e, more),
+    })
     // (asked where no compile is left: the budget's, where it is the budget that holds none, rather than the guard's own count)
-    const untold = (e, more) => ({ refused: 'compile', why: why(e, `${more}; the paper's own source was not compiled`), ...(budgetLeft() ? {} : { limit: 'budget' }) })
+    const untold = (e: Evidence, more: string): { refused: MarkedRefusal; why: string; limit?: RefusalLimit } => ({
+      refused: 'compile',
+      why: why(e, `${more}; the paper's own source was not compiled`),
+      ...(budgetLeft() ? {} : { limit: 'budget' }),
+    })
 
     if (!afford()) {
       g.judged = 'no compile left'
@@ -478,22 +973,35 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     // errors alone: the paper's own, or the units they stand in
     if (fits(e0)) {
       const u = await original()
-      if (!u.ran || u.short) { g.judged = 'the paper\'s own source does not make arXiv\'s pages here'; return take(e0) }
-      if (e0.errors <= u.errors) { g.judged = 'its errors are the paper\'s own'; return take(e0) }
-      if (!afford()) { g.judged = 'no compile left'; return take(e0) }
+      if (!u.ran || u.short) {
+        g.judged = "the paper's own source does not make arXiv's pages here"
+        return take(e0)
+      }
+      if (e0.errors <= u.errors) {
+        g.judged = "its errors are the paper's own"
+        return take(e0)
+      }
+      if (!afford()) {
+        g.judged = 'no compile left'
+        return take(e0)
+      }
       const blamed = weakOf(e0, u.own)
       const e1 = await attempt(union(g.unmarked, blamed), blamed.length ? g.names : false)
       if (clean(e1, u)) return take(e1)
-      return take(best([e0, e1]))
+      return take(best([e0, e1])!)
     }
-    const strong = [...union(e0.aux, e0.textUnits)].filter(i => !g.unmarked.has(i)), weak = weakOf(e0)
+    const strong = [...union(e0.aux, e0.textUnits)].filter((i) => !g.unmarked.has(i)),
+      weak = weakOf(e0)
     /** an attempt that fits, its errors judged against the unmarked original's where it has any and a compile is left */
-    const judged = async (e1, also) => {
+    const judged = async (e1: Evidence, also: readonly Evidence[]) => {
       if (e1.errors === 0) return e1
-      if (!afford()) { g.judged = 'no compile left'; return e1 }
+      if (!afford()) {
+        g.judged = 'no compile left'
+        return e1
+      }
       const u = await original()
       if (!u.ran || u.short || e1.errors <= u.errors) return e1
-      return best([e0, e1, ...also])
+      return best([e0, e1, ...also])!
     }
     if (strong.length) {
       // a mark of ours out of place: those units (and those the errors stand in) unmarked, then the names off too
@@ -509,9 +1017,14 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
       }
       if (afford() && g.names) {
         const e2 = await attempt(e1.unmarked, false)
-        if (fits(e2)) { if (e2.errors) g.judged = 'no compile left'; return take(e2) }
+        if (fits(e2)) {
+          if (e2.errors) g.judged = 'no compile left'
+          return take(e2)
+        }
         const kept = best([e0, e1, e2])
-        return kept ? take(kept) : timed(refuse(ours(e0, `nor with units ${[...e1.unmarked].join(', ')} unmarked and the name marks off`)))
+        return kept
+          ? take(kept)
+          : timed(refuse(ours(e0, `nor with units ${[...e1.unmarked].join(', ')} unmarked and the name marks off`)))
       }
       const kept = best([e0, e1])
       return kept ? take(kept) : timed(refuse(ours(e0, `nor with units ${[...e1.unmarked].join(', ')} unmarked`)))
@@ -519,7 +1032,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     // it did not run through, or its pages are not arXiv's: the units its errors stand in and the name marks, both off (none
     // to take off: the unmarked original tells whose fault it is)
     const remedy = weak.length ? `units ${weak.join(', ')} unmarked and the name marks off` : 'the name marks off'
-    let e1 = null
+    let e1: Evidence | null = null
     if (weak.length || g.names) {
       e1 = await attempt(union(g.unmarked, weak), false)
       if (fits(e1)) {
@@ -537,25 +1050,45 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     const u = await original()
     // (the paper's own source of other pages than arXiv's: TeX's, where the base page is asked)
     if (!u.ran || u.short || (wantFinal && u.long)) return timed(refuse(texs(u)))
-    return timed(refuse(ours(e0, `${e1 ? `nor with ${remedy}, ` : ''}where the paper's own source makes ${u.pages ?? 'its'} pages`)))
+    return timed(
+      refuse(
+        ours(e0, `${e1 ? `nor with ${remedy}, ` : ''}where the paper's own source makes ${u.pages ?? 'its'} pages`),
+      ),
+    )
   }
 }
 
 /** the files a compile of job `job` writes that are its own outputs, never the next pass's inputs: its PDF, its DVI or XDV, its
  *  log, SyncTeX's, latexmk's and BibTeX's records */
-const outputsOf = job => new RegExp(`^${job.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.(?:pdf|dvi|xdv|log|blg|synctex(?:\\.gz)?|fls|fdb_latexmk)$`)
+const outputsOf = (job: string): RegExp =>
+  new RegExp(
+    `^${job.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.(?:pdf|dvi|xdv|log|blg|synctex(?:\\.gz)?|fls|fdb_latexmk)$`,
+  )
 /** a compile's first line of what it said, where TeX said nothing: its error, else its log's */
-const firstLine = c => String(c?.error ?? c?.log ?? '').split('\n').find(l => l.trim())?.trim().slice(0, 120) ?? ''
+const firstLine = (c: Compiled | null): string =>
+  String(c?.error ?? c?.log ?? '')
+    .split('\n')
+    .find((l) => l.trim())
+    ?.trim()
+    .slice(0, 120) ?? ''
 
 /** a TeX Live year as a refusal and the handover name it ('2023'), else null */
-const yearOf = y => (y === null || y === undefined ? null : /^\d{4}$/.test(String(y)) ? String(y) : null)
+const yearOf = (y: unknown): string | null =>
+  y === null || y === undefined ? null : /^\d{4}$/.test(String(y)) ? String(y) : null
 /** the TeX Live years a refusal of TeX's names: the host's `tried`, in order, then the box's, each once */
-const treesOf = (tried, ours) => [...new Set([...(Array.isArray(tried) ? tried : []), ours].map(yearOf).filter(y => y !== null))]
+const treesOf = (tried: readonly unknown[] | null | undefined, ours: unknown): string[] => [
+  ...new Set([...(Array.isArray(tried) ? tried : []), ours].map(yearOf).filter((y) => y !== null)),
+]
 /** the unmarked original's verdict (paper.d.mts OwnVerdict), as a host's handover reads it (handoverOf): whether it ran
  *  through (live.mjs ranThrough, with a PDF), whether it did with fewer pages than arXiv's (`pages` given, one toplevel
  *  source), the host's limit it met (limitOf), and the TeX Live year its engine's banner names (null where TeX never ran or
  *  the compile threw) */
-const ownVerdict = u => ({ ran: u.ran, short: u.short, limit: (u.c ? limitOf(u.c) : null) ?? null, tree: u.c && texRan(u.c.log) ? texLiveOf(u.c.log) : null })
+const ownVerdict = (u: OwnCompile): OwnVerdict => ({
+  ran: u.ran,
+  short: u.short,
+  limit: (u.c ? limitOf(u.c) : null) ?? null,
+  tree: u.c && texRan(u.c.log) ? texLiveOf(u.c.log) : null,
+})
 
 /**
  * The host's handover to another TeX Live tree (the TL2023 plan §2.3), over a refusal's `own` (markedOfPaper): the year of
@@ -566,27 +1099,46 @@ const ownVerdict = u => ({ ran: u.ran, short: u.short, limit: (u.c ? limitOf(u.c
  * ran, a compile that threw: the host's own failure, tried again on the same tree). The tree that makes a paper's layout is
  * then a function of the source and the served trees alone (TeX on a frozen tree is deterministic; no limit enters)
  */
-export function handoverOf(own, { declared = null, served = [], last = false } = {}) {
+export function handoverOf(
+  own: OwnVerdict | null | undefined,
+  {
+    declared = null,
+    served = [],
+    last = false,
+  }: { declared?: unknown; served?: readonly unknown[]; last?: boolean } = {},
+): string | null {
   if (!own || last || own.limit || (own.ran && !own.short)) return null
   const here = yearOf(own.tree)
   if (here === null) return null
-  const others = treesOf(served, null).filter(y => y !== here), want = yearOf(declared)
+  const others = treesOf(served, null).filter((y) => y !== here),
+    want = yearOf(declared)
   if (!others.length) return null
-  return want !== null && others.includes(want) ? want : others[0]
+  return want !== null && others.includes(want) ? want : others[0]!
 }
 
 /** CM's bound: the TeX passes it runs at most, its drafts and marked passes together (latexmk's max_repeat) */
 const PASSES = 5
-const sameBytes = (a, b) => a.length === b.length && a.every((x, i) => x === b[i])
+const sameBytes = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i])
 /** whether a file a pass wrote is the copy it was given, a babel name's marks aside in the aux and the lists (marks.mjs
  *  withoutNameMarks): a mark anywhere else is a difference */
-const sameFile = (p, a, b) => !!b && (sameBytes(a, b) || (NAME_MARK_FILE.test(p) && withoutNameMarks(latin1(a)) === withoutNameMarks(latin1(b))))
-const byPath = ([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)
+const sameFile = (p: string, a: Uint8Array, b: Uint8Array | null | undefined) =>
+  !!b && (sameBytes(a, b) || (NAME_MARK_FILE.test(p) && withoutNameMarks(latin1(a)) === withoutNameMarks(latin1(b))))
+const byPath = ([a]: readonly [string, ...unknown[]], [b]: readonly [string, ...unknown[]]) =>
+  a < b ? -1 : a > b ? 1 : 0
 /** what the bibliography step reads: every aux's \citation, \bibdata and \bibstyle lines (BibTeX's), every .bcf whole (biber's) */
-const bibInput = files => [...files].filter(([p]) => /\.(?:aux|bcf)$/.test(p)).sort(byPath).map(([p, b]) => `${p}\n${p.endsWith('.bcf') ? latin1(b) : (latin1(b).match(/^\\(?:citation|bibdata|bibstyle)\{.*$/gm) ?? []).join('\n')}`).join('\n')
+const bibInput = (files: ReadonlyMap<string, Uint8Array>): string =>
+  [...files]
+    .filter(([p]) => /\.(?:aux|bcf)$/.test(p))
+    .sort(byPath)
+    .map(
+      ([p, b]) =>
+        `${p}\n${p.endsWith('.bcf') ? latin1(b) : (latin1(b).match(/^\\(?:citation|bibdata|bibstyle)\{.*$/gm) ?? []).join('\n')}`,
+    )
+    .join('\n')
 /** whether a pass wrote a bibliography job beside the main one's (an aux of another name holding a \bibdata: chapterbib, multibib,
  *  bibunits), which latexmk runs BibTeX on and a one-pass request (the main job's bibliography step alone) never does */
-const otherBibJobs = (files, main) => [...files].some(([p, b]) => /\.aux$/.test(p) && p !== `${jobName(main)}.aux` && /^\\bibdata\{/m.test(latin1(b)))
+const otherBibJobs = (files: ReadonlyMap<string, Uint8Array>, main: string): boolean =>
+  [...files].some(([p, b]) => /\.aux$/.test(p) && p !== `${jobName(main)}.aux` && /^\\bibdata\{/m.test(latin1(b)))
 /** whether a bibliography the pass names has no .bib file in the project nor among the files the pass wrote (a \bibdata name in an
  *  aux, a datasource of a .bcf): the bibliography step's tool would run, but latexmk -norc (bibtex_use 1) skips BibTeX and biber
  *  when any .bib is missing, and BibTeX writes an empty thebibliography none of L's passes has. A .bib the pass writes itself is
@@ -594,13 +1146,21 @@ const otherBibJobs = (files, main) => [...files].some(([p, b]) => /\.aux$/.test(
  *  \bibdata before the paper's own, so every REVTeX paper that ships its .bib and no .bbl read as one that lacks a .bib, its
  *  entries no units and its bibliography text no unit owns (2610.20595v1, 2610.21770v1: their entries cut a column at a time).
  *  Over-broad for a .bib of the TeX tree (IEEEabrv): only today's compile is asked then */
-const bibMissing = (files, fsys) => {
-  const names = []
+const bibMissing = (files: ReadonlyMap<string, Uint8Array>, fsys: Fsys): boolean => {
+  const names: string[] = []
   for (const [p, b] of files) {
-    if (p.endsWith('.aux')) for (const m of latin1(b).matchAll(/^\\bibdata\{([^}]*)\}/gm)) names.push(...m[1].split(','))
-    else if (p.endsWith('.bcf')) for (const m of latin1(b).matchAll(/<bcf:datasource\b[^>]*>([^<]*)</g)) names.push(m[1])
+    if (p.endsWith('.aux'))
+      for (const m of latin1(b).matchAll(/^\\bibdata\{([^}]*)\}/gm)) names.push(...m[1]!.split(','))
+    else if (p.endsWith('.bcf'))
+      for (const m of latin1(b).matchAll(/<bcf:datasource\b[^>]*>([^<]*)</g)) names.push(m[1]!)
   }
-  return names.map(n => n.trim()).filter(Boolean).some(n => { const bib = normalizePath(n.endsWith('.bib') ? n : `${n}.bib`); return !fsys.read(bib) && !files.has(bib) })
+  return names
+    .map((n) => n.trim())
+    .filter(Boolean)
+    .some((n) => {
+      const bib = normalizePath(n.endsWith('.bib') ? n : `${n}.bib`)
+      return !fsys.read(bib) && !files.has(bib)
+    })
 }
 
 /**
@@ -636,45 +1196,85 @@ const bibMissing = (files, fsys) => {
  *     returned, its own aside) are past the host's `filesBound` (a host holds one pass's files to it; `files-bound`); a marked pass that did not run
  *     through, or gave no PDF, is the compile's refusal (null), with no fallback after it
  */
-async function convergeThenMark(paper, compile, marked, cm, { wall, budget, bound, keep = false }) {
-  const { main } = paper.project, engine = paper.meta.compiler, shipped = !!paper.meta.bbl
+async function convergeThenMark(
+  paper: Paper,
+  compile: (req: CompileRequest) => Promise<Compiled>,
+  marked: Map<string, Uint8Array>,
+  cm: ConvergeRecord,
+  {
+    wall,
+    budget,
+    bound,
+    keep = false,
+  }: {
+    wall: { spent: number; longest: number }
+    budget: number | null | undefined
+    bound: { count: number; bytes: number } | null | undefined
+    keep?: boolean
+  },
+): Promise<Compiled | null> {
+  const { main } = paper.project,
+    engine = paper.meta.compiler!,
+    shipped = !!paper.meta.bbl
   // (the paper's own bytes, as the marked passes' are: originalFiles `transcode`, so that the aux the drafts write is the one
   // the marked passes would)
   const unmarked = originalFiles(paper, { lines: true, transcode: false })
-  const carried = new Map()
-  let passes = 0, bibSeen = null
+  const carried = new Map<string, Uint8Array>()
+  let passes = 0,
+    bibSeen: string | null = null
   /** whether the budget leaves room for one more pass as long as the longest compile so far, the probe's included */
   const affordable = () => budget === null || budget === undefined || budget - wall.spent >= 1.2 * wall.longest
   /** the bytes a pass given `own` had at a path: its own file, else the latest carried, else the paper's */
-  const givenAt = (own, p) => own.get(p) ?? carried.get(p) ?? paper.fsys.read(p)
-  const pass = async (own, draft, bibtex) => {
+  const givenAt = (own: ReadonlyMap<string, Uint8Array>, p: string) =>
+    own.get(p) ?? carried.get(p) ?? paper.fsys.read(p)
+  const pass = async (own: ReadonlyMap<string, Uint8Array>, draft: boolean, bibtex: boolean | null) => {
     passes++
     if (draft) cm.drafts++
     else cm.marked++
-    const c = await compile({ main, engine, rerun: false, bibtex, overrides: new Map([...carried, ...own]), draft, files: true })
+    const c = await compile({
+      main,
+      engine,
+      rerun: false,
+      bibtex,
+      overrides: new Map([...carried, ...own]),
+      draft,
+      files: true,
+    })
     return c ?? null
   }
   /** a pass's files carried to the next, and the bibliography step's input where it ran */
-  const take = (c, bibtex) => {
-    for (const [p, b] of c.files) carried.set(p, b)
+  const take = (c: Compiled, bibtex: boolean | null) => {
+    for (const [p, b] of c.files!) carried.set(p, b)
     if (bibtex) bibSeen = bibInput(carried)
   }
   /** whether the files the next pass would be given on top of its own (carried + the pass's returned, at paths other than
    *  `own`'s) are within the host's bound (`bound` { count, bytes }, absent: unlimited): a host holds one pass's files to it,
    *  and a set that grew past it across the passes is a frame outside the protocol */
-  const fits = (c, own) => {
+  const fits = (c: Compiled, own: ReadonlyMap<string, Uint8Array>) => {
     if (!bound) return true
     const held = new Map(carried)
-    for (const [p, b] of c.files) held.set(p, b)
-    let count = 0, bytes = 0
-    for (const [p, b] of held) if (!own.has(p)) { count++; bytes += b.length }
+    for (const [p, b] of c.files!) held.set(p, b)
+    let count = 0,
+      bytes = 0
+    for (const [p, b] of held)
+      if (!own.has(p)) {
+        count++
+        bytes += b.length
+      }
     return count <= bound.count && bytes <= bound.bytes
   }
   const bibtexNext = () => !shipped && bibInput(carried) !== bibSeen
-  const fallback = async why => {
+  const fallback = async (why: NonNullable<ConvergeRecord['fallback']>) => {
     cm.fallback = why
     // (today's request for the marked original, judged as today's: ran through, a PDF)
-    const c = await compile({ main, engine, rerun: true, bibtex: shipped ? false : null, overrides: marked, ...(keep ? { files: true } : {}) })
+    const c = await compile({
+      main,
+      engine,
+      rerun: true,
+      bibtex: shipped ? false : null,
+      overrides: marked,
+      ...(keep ? { files: true } : {}),
+    })
     return ranThrough(c) && c.pdf?.length ? c : null
   }
   const first = await pass(unmarked, true, !shipped)
@@ -683,9 +1283,15 @@ async function convergeThenMark(paper, compile, marked, cm, { wall, budget, boun
   if (!shipped && otherBibJobs(first.files, main)) return fallback('aux-jobs')
   if (!shipped && bibMissing(first.files, paper.fsys)) return fallback('bib-missing')
   // (the aux from the files' bytes: the `aux` field may be a lossy decoding)
-  const auxBytes = first.files.get(`${jobName(main)}.aux`), missed = notFound(first.log)
-  const readNext = (p, b) => { const had = givenAt(unmarked, p); return had ? !sameFile(p, b, had) : missed.has(p) && /\S/.test(latin1(b)) }
-  const more = [...first.files].some(([p, b]) => /\.(?:bbl|ind)$/.test(p) && readNext(p, b)) || listsMissing({ log: first.log, aux: auxBytes ? latin1(auxBytes) : null }, main)
+  const auxBytes = first.files.get(`${jobName(main)}.aux`),
+    missed = notFound(first.log)
+  const readNext = (p: string, b: Uint8Array) => {
+    const had = givenAt(unmarked, p)
+    return had ? !sameFile(p, b, had) : missed.has(p) && /\S/.test(latin1(b))
+  }
+  const more =
+    [...first.files].some(([p, b]) => /\.(?:bbl|ind)$/.test(p) && readNext(p, b)) ||
+    listsMissing({ log: first.log, aux: auxBytes ? latin1(auxBytes) : null }, main)
   const second = more && affordable()
   if (!fits(first, second ? unmarked : marked)) return fallback('files-bound')
   take(first, !shipped)
@@ -697,7 +1303,7 @@ async function convergeThenMark(paper, compile, marked, cm, { wall, budget, boun
     if (!fits(again, marked)) return fallback('files-bound')
     take(again, bibtex)
   }
-  let last = null
+  let last: Compiled | null = null
   while (passes < PASSES && (!last || affordable())) {
     const bibtex = bibtexNext()
     const c = await pass(marked, false, bibtex)
@@ -705,7 +1311,10 @@ async function convergeThenMark(paper, compile, marked, cm, { wall, budget, boun
     if (!c.files) return fallback('no-files')
     last = c
     cm.settled = [...c.files].every(([p, b]) => sameFile(p, b, givenAt(marked, p)))
-    if (cm.settled) { take(c, bibtex); break }
+    if (cm.settled) {
+      take(c, bibtex)
+      break
+    }
     if (passes < PASSES && affordable() && !fits(c, marked)) return fallback('files-bound')
     take(c, bibtex)
   }

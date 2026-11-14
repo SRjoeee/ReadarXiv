@@ -13,7 +13,15 @@
 // into, and sets nothing there. The native cases (lab/pdf/spikes/
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
 // lines they carry and lose, and fails on a loss of no accepted cause.
-import { BACKREF_LIST, calledAt, frontMarks, identifierSource, lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.ts'
+import {
+  BACKREF_LIST,
+  calledAt,
+  frontMarks,
+  identifierSource,
+  lastTexLog,
+  markUnits,
+  NO_ARG_COMMANDS,
+} from '../source/latex-front.ts'
 import { textless } from '../source/arg-roles.ts'
 import { symbolText } from '../source/text-symbols.ts'
 import { INK_FREE_LEAD, prefixWord } from '../source/tex-kernel.ts'
@@ -21,22 +29,111 @@ import { DISPLAY, plainTranslated } from '../instrument/mt.ts'
 import { NAME_ENGLISH, NAME_KEYS } from './names.ts'
 import { fillOfColour } from './colour.ts'
 import { spellOf, WANT } from '../own/stream.ts'
+import type { PhPiece, SourcePiece, SourceUnit, TextPiece, UnitMark } from '../source/latex-front.ts'
+import type { Follow, Head, Split } from '../own/stream.ts'
+import type { NameKey } from './names.ts'
+
+// ---------------------------------------------------------------- the types of what the marking reads and makes
+/** the walk's units (latex-front.ts), of a file or of none (a macro body's expansion), and their pieces */
+type Unit = SourceUnit<string | null>
+type Piece = SourcePiece<string | null>
+/** a piece as the classes read it: its kind, its source (a nested unit's call has none) and a call's source before its note */
+export type PieceLike = { t: string; src?: string | undefined; pre?: string | undefined }
+/** a mark's class (classOf) */
+export type MarkClass = 'math' | 'display' | 'cite' | 'ref' | 'eqref' | 'code' | 'url' | 'footnote' | 'macro' | 'number'
+/** what TeX answered to the mark probe (readMarkProbe): per command, a code a follower (FOLLOWERS); per look-ahead pair
+ *  (aheadKey), one code */
+export type Switches = Record<string, string>
+/** the paper's macros that read nothing past their arguments, by name: their arity (completeCalled) */
+export type Complete = Record<string, number>
+/** those macros as the marking takes them: the marks file's object, a map, or the front end's pairs (completeMacros) */
+export type CompleteGiven = Complete | ReadonlyMap<string, number> | readonly (readonly [name: string, arity: number])[]
+/** a sample of the probe's punctuation section (probeSamples): a command's source TeX can set in a box, whether it is a
+ *  footnote's call, and for a paper's complete macro (`own`) the placeholder its call is glued to */
+export type CommandSample = {
+  command: string
+  src: string
+  call: boolean
+  own?: true
+  glued?: string
+  ahead?: undefined
+}
+/** a look-ahead pair's sample (aheadSamples): a paper's macro, the white space after it and the placeholder it precedes */
+export type AheadSample = {
+  key: string
+  src: string
+  gap: '' | ' '
+  follows: string
+  math: boolean
+  ahead: true
+  own?: undefined
+}
+/** a sample of the mark probe */
+export type ProbeSample = CommandSample | AheadSample
+/** a row of a probe's log (readProbe) */
+export type ProbeRow = { tag: string; fields: string[] }
+/** the ink section's answers (readInkAnswers) */
+export type InkAnswers = {
+  inkless: string[]
+  texts: [source: string, text: string][]
+  decorated: [source: string, text: string][]
+  apart: string[]
+}
+/** layoutMarking's options */
+export type MarkingOptions = {
+  lines?: boolean
+  switches?: Switches | null
+  inkless?: readonly string[] | null
+  complete?: CompleteGiven | null
+  apart?: readonly string[] | null
+}
+/** the units with their layout marks, and each unit's mark for patch (of a unit or its copy) */
+export type Marking = { units: Unit[]; mark: (u: Unit) => UnitMark }
 
 // ---------------------------------------------------------------- the classes
 /** every class, in this order */
-export const MARK_CLASSES = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'code', 'url', 'footnote', 'macro', 'number'])
+export const MARK_CLASSES: readonly MarkClass[] = Object.freeze([
+  'math',
+  'display',
+  'cite',
+  'ref',
+  'eqref',
+  'code',
+  'url',
+  'footnote',
+  'macro',
+  'number',
+])
 /** the classes the run marks when asked: the global default, every class (Task 2's corpus check). The paper's own switch
  *  (layoutMarking's `switches`, what TeX answers to the mark probe) takes marks off a command's placeholders where TeX
  *  says they would change what follows them */
-export const LAYOUT_CLASSES = Object.freeze([...MARK_CLASSES])
+export const LAYOUT_CLASSES: readonly MarkClass[] = Object.freeze([...MARK_CLASSES])
 
 /** control words whose placeholder sets no ink, besides the declarations latex-front reads as taking no argument */
-const INVISIBLE_WORDS = ['label', 'index', 'xspace', 'phantom', 'hphantom', 'vphantom', 'hspace', 'vspace', 'hskip', 'vskip', 'kern', 'color', 'nobreakspace', 'footnotesize', 'normalsize']
+const INVISIBLE_WORDS = [
+  'label',
+  'index',
+  'xspace',
+  'phantom',
+  'hphantom',
+  'vphantom',
+  'hspace',
+  'vspace',
+  'hskip',
+  'vskip',
+  'kern',
+  'color',
+  'nobreakspace',
+  'footnotesize',
+  'normalsize',
+]
 /** a placeholder whose rendering is never ink: matched on its leading control sequence — a tie, a forced break `\\`, one of
  *  TeX's and LaTeX's own that set no ink and read nothing after them (rules/tex-kernel.mjs: a space or kern, an italic
  *  correction, a discretionary hyphen, `\@`, a penalty, `\relax`…; none gets a mark, which would move a line), or a control
  *  word of the lists, followed by no letter */
-export const INVISIBLE = new RegExp(String.raw`^(?:~|\\\\|${INK_FREE_LEAD}|\\(?:${[...NO_ARG_COMMANDS, ...INVISIBLE_WORDS].join('|')})(?![A-Za-z@]))`)
+export const INVISIBLE = new RegExp(
+  String.raw`^(?:~|\\\\|${INK_FREE_LEAD}|\\(?:${[...NO_ARG_COMMANDS, ...INVISIBLE_WORDS].join('|')})(?![A-Za-z@]))`,
+)
 /** a character the scanner keeps as structure, with no ink of its own: an alignment's tab in a table it does not read as
  *  one (aastex's deluxetable between \\startdata and \\enddata), a stray brace, a parameter, a script mark */
 const STRUCTURE = /^[&#^_{}]$/
@@ -61,11 +158,11 @@ const FOOTNOTE_MARK = /^\\footnote(?:mark)?(?![A-Za-z@])/
 
 /** whether a piece is the list backref sets after a bibliography entry (latex-front.mjs BACKREF_LIST): no source of its own, its
  *  marks LAYOUT_TEX's around the list (layoutMarking's `\\axtbrname`), never a sample of the probe's */
-export const backrefPiece = p => p?.t === 'ph' && p.src === BACKREF_LIST
+export const backrefPiece = (p: PieceLike | null | undefined): boolean => p?.t === 'ph' && p.src === BACKREF_LIST
 /** a piece's class, or null where it is not marked (text, a group's open or close, an invisible placeholder) */
 /** \\rule's call: what TeX's ink section measures, not the role table (a strut, \\rule{0pt}{2ex}, none; a bar, ink) */
 export const RULE = /^\s*\\rule\b/
-export function classOf(piece) {
+export function classOf(piece: PieceLike | null | undefined): MarkClass | null {
   if (piece?.t === 'nested') return 'footnote'
   if (piece?.t !== 'ph') return null
   const src = piece.src ?? ''
@@ -102,11 +199,12 @@ const PUNCT = '.,;:!?'
 const MOVED = PUNCT
 /** the classes whose commands the probe asks about: a package may look past their closing brace (a paper's macro has its
  *  opening mark alone (LOOKS_AHEAD), but one that reads nothing past its arguments, which the probe asks about too) */
-const ASKED = new Set(['cite', 'ref', 'eqref', 'url', 'footnote'])
+const ASKED: ReadonlySet<string | null> = new Set(['cite', 'ref', 'eqref', 'url', 'footnote'])
 /** the commands asked about at most, a paper; and of the paper's macros that read nothing past their arguments, apart (a
  *  paper may set its every number by one: 2610.21098 calls 316), each source at most COMPLETE_SRC_MAX long. Counts of
  *  commands: COMPLETE_PROBE_MAX is past that paper's 316, PROBE_MAX is unmeasured */
-export const PROBE_MAX = 16, COMPLETE_PROBE_MAX = 512
+export const PROBE_MAX = 16,
+  COMPLETE_PROBE_MAX = 512
 /** a probed macro's source, and the placeholder's after it, at most, UTF-16 code units (the look-ahead pair's key holds
  *  each within it); unmeasured */
 const COMPLETE_SRC_MAX = 200
@@ -115,23 +213,39 @@ const COMPLETE_SRC_MAX = 200
 export const AHEAD_PROBE_MAX = 128
 /** the classes of a placeholder after a paper's macro the probe asks about (aheadSamples): those the maker cannot find
  *  with no mark of their own (a paper's macro is found by the text TeX sets for it, a display is set in no box of a line) */
-const AHEAD_FOLLOWS = new Set(['math', 'cite', 'ref', 'eqref', 'code', 'url', 'footnote', 'number'])
+const AHEAD_FOLLOWS: ReadonlySet<string | null> = new Set([
+  'math',
+  'cite',
+  'ref',
+  'eqref',
+  'code',
+  'url',
+  'footnote',
+  'number',
+])
 /** the white space between two pieces, as TeX reads it in a line: one space (any run of spaces, tabs and one line's end), or
  *  none; null for anything else (a blank line, a paragraph's end, a character) */
-const gapOf = s => (s === '' ? '' : /^[ \t]*(?:\r?\n)?[ \t]*$/.test(s) ? ' ' : null)
+const gapOf = (s: string): '' | ' ' | null => (s === '' ? '' : /^[ \t]*(?:\r?\n)?[ \t]*$/.test(s) ? ' ' : null)
 /** the key of TeX's answer for a paper's macro and the placeholder it precedes (aheadSamples): the two sources and the white
  *  space between, joined by `#`, which neither holds (`fit`); never a control word, so no command's answer is one */
-export const aheadKey = (src, gap, follows) => `${src}#${gap}#${follows}`
+export const aheadKey = (src: string, gap: string, follows: string): string => `${src}#${gap}#${follows}`
 /** the complete macros as a map, name → arity, from the front end's pairs or the marking's object */
-const completeMap = c => (c instanceof Map ? c : new Map(Array.isArray(c) ? c : Object.entries(c ?? {})))
+const completeMap = (c: CompleteGiven | null | undefined): ReadonlyMap<string, number> =>
+  c instanceof Map ? c : new Map(Array.isArray(c) ? c : Object.entries(c ?? {}))
 /** a piece's leading command: \cite of \cite[p.~3]{a}, \footnote of a call; null for none */
 /** the units in the order the probe's samples are taken: a bibliography's entries (latex-front.mjs bibliography: kinds
  *  `reference` and `refnames`) after every other unit, wherever they stand, so that the body's samples are the ones they were
  *  before entries were units, and an entry's takes what room the caps leave. A macro a .bbl defines (\\providecommand{\\doi}),
  *  unknown to the probe's preamble, is no answer there (an error), never a wrong one */
-const BIB = u => u?.kind === 'reference' || u?.kind === 'refnames'
-const sampleOrder = units => (units.some(BIB) ? [...units.filter(u => !BIB(u)), ...units.filter(BIB)] : units)
-export const commandOf = p => (p?.t === 'nested' ? /^\\[A-Za-z@]+/.exec(p.pre ?? '')?.[0] : p?.t === 'ph' ? /^\\[A-Za-z@]+/.exec(p.src ?? '')?.[0] : null) ?? null
+const BIB = (u: Unit | undefined): boolean => u?.kind === 'reference' || u?.kind === 'refnames'
+const sampleOrder = (units: readonly Unit[]): readonly Unit[] =>
+  units.some(BIB) ? [...units.filter((u) => !BIB(u)), ...units.filter(BIB)] : units
+export const commandOf = (p: PieceLike | null | undefined): string | null =>
+  (p?.t === 'nested'
+    ? /^\\[A-Za-z@]+/.exec(p.pre ?? '')?.[0]
+    : p?.t === 'ph'
+      ? /^\\[A-Za-z@]+/.exec(p.src ?? '')?.[0]
+      : null) ?? null
 /**
  * The mark probe's samples: each command of the asked classes the paper writes, once, by the first piece of it TeX can
  * set in a box (no comment or parameter sign, no \verb): a placeholder's own source (a citation of the keys the paper
@@ -141,27 +255,46 @@ export const commandOf = p => (p?.t === 'nested' ? /^\\[A-Za-z@]+/.exec(p.pre ??
  * under fnpct, a kern after its last letter), and only TeX's answer says a closing mark there moves nothing. The asked
  * classes' first, then the paper's own (`own`), which markProbeTex asks about last
  */
-export function probeSamples(units, complete = null) {
-  const seen = new Map(), own = new Map(), closed = completeMap(complete)
-  const fit = src => !/[%#]|\\(?:verb|lstinline)(?![A-Za-z@])/.test(src) && src.length <= 400
-  for (const u of sampleOrder(units)) for (const [k, p] of u.pieces.entries()) {
-    const cmd = commandOf(p), cls = classOf(p)
-    if (!cmd) continue
-    if (ASKED.has(cls)) {
-      if (seen.has(cmd) || seen.size >= PROBE_MAX) continue
-      const src = p.t === 'nested' ? `${p.pre}A note.${p.post}` : p.src
-      if (fit(src)) seen.set(cmd, { command: cmd, src, call: cls === 'footnote' })
-    } else if (cls === 'macro' && !own.has(cmd) && own.size < COMPLETE_PROBE_MAX && completeCall(p, closed) && fit(p.src) && p.src.length <= COMPLETE_SRC_MAX) {
-      // (the placeholder its call is glued to, where one stands right after it: `\\share{}\\%`, asked as its `call` follower)
-      // (a percent or hash sign only escaped, as a text symbol writes it: `\\%`, an odd number of backslashes before it)
-      const next = u.pieces[k + 1], glued = next?.t === 'ph' && typeof next.src === 'string' && fit(next.src.replace(/(?<!\\)((?:\\\\)*)\\[%#]/g, '$1')) && next.src.length <= COMPLETE_SRC_MAX ? next.src : null
-      own.set(cmd, { command: cmd, src: p.src, call: false, own: true, ...(glued ? { glued } : {}) })
+export function probeSamples(units: readonly Unit[], complete: CompleteGiven | null = null): ProbeSample[] {
+  const seen = new Map<string, CommandSample>(),
+    own = new Map<string, CommandSample>(),
+    closed = completeMap(complete)
+  const fit = (src: string) => !/[%#]|\\(?:verb|lstinline)(?![A-Za-z@])/.test(src) && src.length <= 400
+  for (const u of sampleOrder(units))
+    for (const [k, p] of u.pieces.entries()) {
+      const cmd = commandOf(p),
+        cls = classOf(p)
+      if (!cmd) continue
+      if (ASKED.has(cls)) {
+        if (seen.has(cmd) || seen.size >= PROBE_MAX) continue
+        const src = p.t === 'nested' ? `${p.pre}A note.${p.post}` : p.src!
+        if (fit(src)) seen.set(cmd, { command: cmd, src, call: cls === 'footnote' })
+      } else if (
+        cls === 'macro' &&
+        !own.has(cmd) &&
+        own.size < COMPLETE_PROBE_MAX &&
+        completeCall(p, closed) &&
+        fit(p.src!) &&
+        p.src!.length <= COMPLETE_SRC_MAX
+      ) {
+        // (the placeholder its call is glued to, where one stands right after it: `\\share{}\\%`, asked as its `call` follower)
+        // (a percent or hash sign only escaped, as a text symbol writes it: `\\%`, an odd number of backslashes before it)
+        const next = u.pieces[k + 1],
+          glued =
+            next?.t === 'ph' &&
+            typeof next.src === 'string' &&
+            fit(next.src.replace(/(?<!\\)((?:\\\\)*)\\[%#]/g, '$1')) &&
+            next.src.length <= COMPLETE_SRC_MAX
+              ? next.src
+              : null
+        own.set(cmd, { command: cmd, src: p.src!, call: false, own: true, ...(glued ? { glued } : {}) })
+      }
     }
-  }
   return [...seen.values(), ...own.values(), ...aheadSamples(units)]
 }
 /** a source the probe sets in a box: no comment or parameter sign, no \verb, at most 400 code units (probeSamples' `fit`) */
-const probeFit = src => typeof src === 'string' && !/[%#]|\\(?:verb|lstinline)(?![A-Za-z@])/.test(src) && src.length <= 400
+const probeFit = (src: string | undefined): boolean =>
+  typeof src === 'string' && !/[%#]|\\(?:verb|lstinline)(?![A-Za-z@])/.test(src) && src.length <= 400
 /**
  * The look-ahead pairs' samples (`ahead`): each placeholder of the paper's own macros (classOf 'macro', not a text symbol)
  * followed, right after it or past white space alone, by a placeholder of AHEAD_FOLLOWS, paired with that placeholder, each
@@ -171,16 +304,27 @@ const probeFit = src => typeof src === 'string' && !/[%#]|\\(?:verb|lstinline)(?
  * (2609.20976's \\snr, `\\ac{SNR}\\xspace`, before `$\\geq 50$`). Read from the units alone, whatever the paper's complete macros:
  * the samples are numbered by their own rows (aheadSection), the same for every reader of the probe's log. Asked last
  */
-export function aheadSamples(units) {
-  const out = new Map()
+export function aheadSamples(units: readonly Unit[]): AheadSample[] {
+  const out = new Map<string, AheadSample>()
   for (const u of sampleOrder(units)) {
     const pieces = u.pieces ?? []
     for (let q = 0; q < pieces.length; q++) {
       if (out.size >= AHEAD_PROBE_MAX) return [...out.values()]
-      const pair = pairOf(pieces, q), next = pieces[q]
-      if (!pair || !AHEAD_FOLLOWS.has(classOf(next)) || prefixWord(next.src) || !probeFit(next.src) || !next.src.length || next.src.length > COMPLETE_SRC_MAX) continue
-      const [m, gap] = pair, key = aheadKey(m.src, gap, next.src)
-      if (!out.has(key)) out.set(key, { key, src: m.src, gap, follows: next.src, math: classOf(next) === 'math', ahead: true })
+      const pair = pairOf(pieces, q),
+        next = pieces[q]!
+      if (
+        !pair ||
+        !AHEAD_FOLLOWS.has(classOf(next)) ||
+        prefixWord(next.src) ||
+        !probeFit(next.src) ||
+        !next.src!.length ||
+        next.src!.length > COMPLETE_SRC_MAX
+      )
+        continue
+      const [m, gap] = pair,
+        key = aheadKey(m.src, gap, next.src!)
+      if (!out.has(key))
+        out.set(key, { key, src: m.src, gap, follows: next.src!, math: classOf(next) === 'math', ahead: true })
     }
   }
   return [...out.values()]
@@ -189,12 +333,26 @@ export function aheadSamples(units) {
  *  alone (gapOf), and that white space: [the macro's piece, ' ' or '', its index], or null — none for a text symbol (READS_NOTHING), a
  *  prefix (\protect: it is the next piece's), a macro after a prefix (whose marks stand before the prefix), a source the probe
  *  cannot set in a box, or one the marks file would not hold as a pair's key (AHEAD_KEY: a control sequence first) */
-function pairOf(pieces, q) {
+function pairOf(pieces: readonly Piece[], q: number): [m: PhPiece, gap: '' | ' ', at: number] | null {
   const p = pieces[q]
   if (p?.t !== 'ph') return null
-  const gapped = pieces[q - 1]?.t === 'text', at = gapped ? q - 2 : q - 1, m = pieces[at], gap = gapped ? gapOf(pieces[q - 1].s ?? '') : ''
-  if (gap === null || at < 0 || m?.t !== 'ph' || classOf(m) !== 'macro' || READS_NOTHING(m) || prefixWord(m.src) || !probeFit(m.src) || !/^\\./.test(m.src) || m.src.length > COMPLETE_SRC_MAX) return null
-  if (at > 0 && pieces[at - 1].t === 'ph' && prefixWord(pieces[at - 1].src)) return null
+  const gapped = pieces[q - 1]?.t === 'text',
+    at = gapped ? q - 2 : q - 1,
+    m = pieces[at],
+    gap = gapped ? gapOf(pieces[q - 1]!.s ?? '') : ''
+  if (
+    gap === null ||
+    at < 0 ||
+    m?.t !== 'ph' ||
+    classOf(m) !== 'macro' ||
+    READS_NOTHING(m) ||
+    prefixWord(m.src) ||
+    !probeFit(m.src) ||
+    !/^\\./.test(m.src) ||
+    m.src.length > COMPLETE_SRC_MAX
+  )
+    return null
+  if (at > 0 && pieces[at - 1]!.t === 'ph' && prefixWord(pieces[at - 1]!.src)) return null
   return [m, gap, at]
 }
 // ---- the probe document: sections, each writing tagged rows
@@ -202,15 +360,17 @@ function pairOf(pieces, q) {
  *  macro's expansion) or given here; never a line the run reads as a reading (no `AXT-`). The marker is a fixed string, its
  *  `1` no number anyone raises: the probe's writer and its readers are one build, and a stored log is keyed by the compile
  *  that wrote it. A new section adds rows of a tag of its own, and changes no other's */
-export const probeRow = (tag, ...fields) => `\\typeout{LAYOUT-PROBE 1 ${tag} ${fields.join(' ')}}`
+export const probeRow = (tag: string, ...fields: (string | number)[]): string =>
+  `\\typeout{LAYOUT-PROBE 1 ${tag} ${fields.join(' ')}}`
 /** the probe document's body, after \begin{document} of the font probe's compile (the paper's own preamble): its
  *  sections' TeX, each a self-contained group of tests that writes its own rows, in order */
-export const probeTex = sections => `\\makeatletter${sections.join('\n')}\\makeatother\n`
+export const probeTex = (sections: readonly string[]): string => `\\makeatletter${sections.join('\n')}\\makeatother\n`
 /** every row a probe's log holds: { tag, fields }, in order. A row of a tag the caller does not know is the caller's to
  *  pass over */
-export function readProbe(log) {
-  const out = []
-  for (const m of (log ?? '').matchAll(/^LAYOUT-PROBE 1 ([a-z][a-z0-9-]*)((?: [^ \n]+)*) *$/gm)) out.push({ tag: m[1], fields: m[2].trim().split(' ').filter(Boolean) })
+export function readProbe(log: string | null | undefined): ProbeRow[] {
+  const out: ProbeRow[] = []
+  for (const m of (log ?? '').matchAll(/^LAYOUT-PROBE 1 ([a-z][a-z0-9-]*)((?: [^ \n]+)*) *$/gm))
+    out.push({ tag: m[1]!, fields: m[2]!.trim().split(' ').filter(Boolean) })
   return out
 }
 
@@ -233,18 +393,34 @@ export function readProbe(log) {
  * where each package's lookahead stops (REVTeX's swap takes any token after the citation in a \csname); an empty
  * paragraph after each sample starts TeX's error count again. Writes nothing, ships out nothing
  */
-export function punctuationSection(samples, from = 0) {
-  const box = (i, j, n, body) => `${probeRow('punct-at', i, j, n)}\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn{}\\axt@qreset${PROBE_LEVEL}\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype\\ifinner\\ifhmode/in\\fi\\fi}}\\axt@unwind\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
-  const put = d => `\\xdef\\axt@qo{\\axt@qo${d}}`
+export function punctuationSection(
+  samples: readonly { src: string; call: boolean; glued?: string | undefined }[],
+  from = 0,
+): string {
+  const box = (i: number, j: number, n: string, body: string) =>
+    `${probeRow('punct-at', i, j, n)}\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn{}\\axt@qreset${PROBE_LEVEL}\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype\\ifinner\\ifhmode/in\\fi\\fi}}\\axt@unwind\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
+  const put = (d: number) => `\\xdef\\axt@qo{\\axt@qo${d}}`
   const tests = samples.map(({ src, call, glued }, n) => {
-    const i = from + n, open = `\\axtpma{q${i}a}`, close = `\\axtpm{q${i}b}`
+    const i = from + n,
+      open = `\\axtpma{q${i}a}`,
+      close = `\\axtpm{q${i}b}`
     // (before a punctuation mark the command moves, a ≠ b: the pair as the paper sets it with a word after (m), and with the
     // opening mark before the command and the closing one after the mark it moves (p): equal, both marks go so, 3)
-    const moved = f => (f === ' x' ? put(2) : `${box(i, PUNCT.indexOf(f), 'm', `${src}${f} x`)}${box(i, PUNCT.indexOf(f), 'p', `${open}${src}${f}${close} x`)}\\ifx\\axt@qm\\axt@qp${put(3)}\\else${put(2)}\\fi`)
-    const each = [...PUNCT, ' x'].map((f, j) => `\\begingroup${box(i, j, 'a', `${src}${f}`)}${box(i, j, 'b', `${src}{}${f}`)}${box(i, j, 'c', `${open}${src}${close}${f}`)}${box(i, j, 'd', `${open}${src}${f}`)}\\ifx\\axt@qa\\axt@qb\\endgroup\\ifx\\axt@qa\\axt@qd\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\else${put(2)}\\fi\\else${moved(f)}\\endgroup\\fi`).join('')
-    const again = call ? `\\begingroup${box(i, 7, 'a', `${src}${src}`)}${box(i, 7, 'e', `${src}\\axtpma{q${i}c}${src}`)}\\endgroup\\ifx\\axt@qa\\axt@qe${put(0)}\\else${put(2)}\\fi`
-      : glued ? `\\begingroup${box(i, 7, 'a', `${src}${glued}`)}${box(i, 7, 'b', `${src}{}${glued}`)}${box(i, 7, 'c', `${open}${src}${close}${glued}`)}\\endgroup\\ifx\\axt@qa\\axt@qb\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\else${put(2)}\\fi`
-      : put(0)
+    const moved = (f: string) =>
+      f === ' x'
+        ? put(2)
+        : `${box(i, PUNCT.indexOf(f), 'm', `${src}${f} x`)}${box(i, PUNCT.indexOf(f), 'p', `${open}${src}${f}${close} x`)}\\ifx\\axt@qm\\axt@qp${put(3)}\\else${put(2)}\\fi`
+    const each = [...PUNCT, ' x']
+      .map(
+        (f, j) =>
+          `\\begingroup${box(i, j, 'a', `${src}${f}`)}${box(i, j, 'b', `${src}{}${f}`)}${box(i, j, 'c', `${open}${src}${close}${f}`)}${box(i, j, 'd', `${open}${src}${f}`)}\\ifx\\axt@qa\\axt@qb\\endgroup\\ifx\\axt@qa\\axt@qd\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\else${put(2)}\\fi\\else${moved(f)}\\endgroup\\fi`,
+      )
+      .join('')
+    const again = call
+      ? `\\begingroup${box(i, 7, 'a', `${src}${src}`)}${box(i, 7, 'e', `${src}\\axtpma{q${i}c}${src}`)}\\endgroup\\ifx\\axt@qa\\axt@qe${put(0)}\\else${put(2)}\\fi`
+      : glued
+        ? `\\begingroup${box(i, 7, 'a', `${src}${glued}`)}${box(i, 7, 'b', `${src}{}${glued}`)}${box(i, 7, 'c', `${open}${src}${close}${glued}`)}\\endgroup\\ifx\\axt@qa\\axt@qb\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\else${put(2)}\\fi`
+        : put(0)
     return `${each}${again}${probeRow('punct', i, '\\axt@qo')}\\gdef\\axt@qo{}\\noindent\\par`
   })
   return `${PROBE_UNWIND}\\begingroup\\newbox\\axt@qbox\\gdef\\axt@qo{}${PROBE_RESET}${tests.join('\n')}\\endgroup`
@@ -259,10 +435,12 @@ export function punctuationSection(samples, from = 0) {
  *  a mark that moves nothing). A box TeX still sets a character in \\nullfont in is no answer (TEX_ERROR). In a probe of no such
  *  sample it changes nothing: each box closes its own groups */
 const PROBE_LEVEL = '\\xdef\\axt@level{\\the\\currentgrouplevel}'
-const PROBE_UNWIND = '\\gdef\\axt@unwind{\\global\\let\\axt@unwound\\relax\\ifnum\\currentgrouplevel>\\axt@level\\relax\\ifnum\\currentgrouptype=14 \\global\\let\\axt@unwound\\axt@unwind\\endgroup\\else\\ifnum\\currentgrouptype<6 \\ifnum\\currentgrouptype>0 \\global\\let\\axt@unwound\\axt@unwind\\egroup\\fi\\fi\\fi\\fi\\axt@unwound}'
+const PROBE_UNWIND =
+  '\\gdef\\axt@unwind{\\global\\let\\axt@unwound\\relax\\ifnum\\currentgrouplevel>\\axt@level\\relax\\ifnum\\currentgrouptype=14 \\global\\let\\axt@unwound\\axt@unwind\\endgroup\\else\\ifnum\\currentgrouptype<6 \\ifnum\\currentgrouptype>0 \\global\\let\\axt@unwound\\axt@unwind\\egroup\\fi\\fi\\fi\\fi\\axt@unwound}'
 /** each box of the punctuation and look-ahead sections starts from the same state: the footnote counter as it was, biblatex's
  *  citation trackers reset (punctuationSection) */
-const PROBE_RESET = '\\edef\\axt@qfn{\\ifdefined\\c@footnote\\the\\c@footnote\\else0\\fi}\\def\\axt@qreset{\\ifdefined\\c@footnote\\global\\c@footnote=\\axt@qfn\\relax\\fi\\ifdefined\\citereset\\citereset\\fi}'
+const PROBE_RESET =
+  '\\edef\\axt@qfn{\\ifdefined\\c@footnote\\the\\c@footnote\\else0\\fi}\\def\\axt@qreset{\\ifdefined\\c@footnote\\global\\c@footnote=\\axt@qfn\\relax\\fi\\ifdefined\\citereset\\citereset\\fi}'
 /** a placeholder before which LAYOUT_TEX's opening mark, glued to a letter, sets itself in a box (\\axt@boxy: a formula, \\mbox,
  *  \\textsuperscript), so that TeX hyphenates the word before it no more than before the placeholder itself */
 const BOXY = /^(?:\$|\\\(|\\(?:ensuremath|mbox|textsuperscript)(?![A-Za-z@]))/
@@ -282,18 +460,22 @@ const BOXY = /^(?:\$|\\\(|\\(?:ensuremath|mbox|textsuperscript)(?![A-Za-z@]))/
  * the first, then a, c, d, g), so that an error TeX logs is that box's (readMarkProbe). An empty paragraph after each starts
  * TeX's error count again. Writes nothing, ships out nothing
  */
-export function aheadSection(samples) {
-  const box = (j, n, body) => `${probeRow('ahead-at', j, n)}\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn{}\\axt@qreset${PROBE_LEVEL}\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype\\ifinner\\ifhmode/in\\fi\\fi}}\\axt@unwind\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
-  const put = d => `\\xdef\\axt@qo{${d}}`
+export function aheadSection(samples: readonly AheadSample[]): string {
+  const box = (j: number, n: string, body: string) =>
+    `${probeRow('ahead-at', j, n)}\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn{}\\axt@qreset${PROBE_LEVEL}\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype\\ifinner\\ifhmode/in\\fi\\fi}}\\axt@unwind\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
+  const put = (d: number) => `\\xdef\\axt@qo{${d}}`
   const tests = samples.map(({ src, gap, follows, math }, j) => {
-    const open = `\\axtpma{q${j}a}`, close = `\\axtpm{q${j}b}`, next = `\\${math ? 'axtpmm' : 'axtpma'}{q${j}c}`
+    const open = `\\axtpma{q${j}a}`,
+      close = `\\axtpm{q${j}b}`,
+      next = `\\${math ? 'axtpmm' : 'axtpma'}{q${j}c}`
     const boxes = `${box(j, 'w', `${src}${gap}${follows}`)}${box(j, 'a', `${src}${gap}${follows}`)}${box(j, 'c', `${open}${src}${close}${gap}${next}${follows}`)}${box(j, 'd', `${open}${src}${gap}${next}${follows}`)}\\gdef\\axt@qend{2}${box(j, 'g', `${open}${src}${gap}\\axt@qat${next}${follows}`)}`
     const word = BOXY.test(follows) ? put(1) : put(2)
     return `\\begingroup${boxes}\\endgroup\\ifx\\axt@qa\\axt@qd\\ifcase\\axt@qend\\relax\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\or${word}\\else${put(2)}\\fi\\else${put(2)}\\fi${probeRow('ahead', j, '\\axt@qo')}\\gdef\\axt@qo{}\\noindent\\par`
   })
   // (what the list ends with where the placeholder's opening mark goes, by \\lastnodetype: 0 a character, 7 a ligature, 12 a kern
   // — 1; 8 a discretionary, 9 a whatsit — 2; any other — 0)
-  const at = '\\def\\axt@qat{\\xdef\\axt@qend{\\ifcase\\lastnodetype 1\\or0\\or0\\or0\\or0\\or0\\or0\\or1\\or2\\or2\\or0\\or0\\or1\\else0\\fi}}'
+  const at =
+    '\\def\\axt@qat{\\xdef\\axt@qend{\\ifcase\\lastnodetype 1\\or0\\or0\\or0\\or0\\or0\\or0\\or1\\or2\\or2\\or0\\or0\\or1\\else0\\fi}}'
   return `${PROBE_UNWIND}\\begingroup\\newbox\\axt@qbox\\gdef\\axt@qo{}${PROBE_RESET}${at}${tests.join('\n')}\\endgroup`
 }
 // ---- what a paper's macro sets: TeX asked
@@ -312,21 +494,25 @@ export const INK_BUDGET = 65536
  * argument's value, and a text carried may be a prefix of what it sets, which a split or a lead read from one side would take as
  * its end). A symbol the layout draws as text (TEXT_SYMBOLS) is not asked
  */
-export function inkSamples(units) {
-  const body = [], calls = [], seen = new Set(), leads = new Set()
+export function inkSamples(units: readonly Unit[]): string[] {
+  const body: string[] = [],
+    calls: string[] = [],
+    seen = new Set<string>(),
+    leads = new Set<string>()
   for (const u of sampleOrder(units)) {
     const head = BIB(u) ? headEnd(u.pieces ?? [], 0) : 0
     u.pieces.forEach((p, k) => {
-      if (p.t !== 'ph' || classOf(p) !== 'macro' || backrefPiece(p) || symbolText(p.src) !== null || !boxable(p.src)) return
+      if (p.t !== 'ph' || classOf(p) !== 'macro' || backrefPiece(p) || symbolText(p.src) !== null || !boxable(p.src))
+        return
       if (BIB(u) && k < head) leads.add(p.src)
       if (seen.has(p.src)) return
       seen.add(p.src)
       ;(BIB(u) ? calls : body).push(p.src)
     })
   }
-  const out = []
+  const out: string[] = []
   let room = INK_BUDGET
-  for (const src of [...body, ...calls.filter(c => leads.has(c)), ...calls.filter(c => !leads.has(c))]) {
+  for (const src of [...body, ...calls.filter((c) => leads.has(c)), ...calls.filter((c) => !leads.has(c))]) {
     if (src.length > room) continue
     out.push(src)
     room -= src.length
@@ -337,17 +523,44 @@ export function inkSamples(units) {
  *  texts it showed they and the leads set (readInkTexts), and those it showed set beside a decoration of their own
  *  (readInkDecorated), those whose box it began apart (readInkApart), each the asked source's own. The one reader every caller
  *  takes them by: layout/paper.mjs, the lab's */
-export function readInkAnswers(log, units) {
-  const ink = inkSamples(units), leads = leadSamples(units, ink)
-  return { inkless: readInkProbe(log, ink), texts: readInkTexts(log, [...ink, ...leads]), decorated: readInkDecorated(log, [...ink, ...leads]), apart: readInkApart(log, ink) }
+export function readInkAnswers(log: string | null | undefined, units: readonly Unit[]): InkAnswers {
+  const ink = inkSamples(units),
+    leads = leadSamples(units, ink)
+  return {
+    inkless: readInkProbe(log, ink),
+    texts: readInkTexts(log, [...ink, ...leads]),
+    decorated: readInkDecorated(log, [...ink, ...leads]),
+    apart: readInkApart(log, ink),
+  }
 }
-const balanced = s => { let d = 0; for (let i = 0; i < s.length; i++) { if (s[i] === '\\') { i++; continue } if (s[i] === '{') d++; else if (s[i] === '}' && --d < 0) return false } return d === 0 }
+const balanced = (s: string): boolean => {
+  let d = 0
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\\') {
+      i++
+      continue
+    }
+    if (s[i] === '{') d++
+    else if (s[i] === '}' && --d < 0) return false
+  }
+  return d === 0
+}
 /** whether a source holds a comment or a parameter sign: a `%` or a `#` no backslash escapes (`\\%` and `\\#` set a character;
  *  `\\\\%` is a line's end and a comment) */
-const rawSign = s => { for (let i = 0; i < s.length; i++) { if (s[i] === '\\') { i++; continue } if (s[i] === '%' || s[i] === '#') return true } return false }
+const rawSign = (s: string): boolean => {
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\\') {
+      i++
+      continue
+    }
+    if (s[i] === '%' || s[i] === '#') return true
+  }
+  return false
+}
 /** a source TeX can set in a box of its own: no comment or parameter sign, no \\verb, its braces balanced, no environment, no
  *  paragraph's end (2608.25210v2's `\\delete{… around 5\\% across …}`, which sets no ink, was never asked for its `\\%`) */
-const boxable = src => !!src && !rawSign(src) && !/\\(?:verb|lstinline|begin|end|par)(?![A-Za-z@])/.test(src) && balanced(src)
+const boxable = (src: string | undefined): boolean =>
+  !!src && !rawSign(src) && !/\\(?:verb|lstinline|begin|end|par)(?![A-Za-z@])/.test(src) && balanced(src)
 /**
  * The leads' samples: the placeholders at a unit's head, before its start mark (headEnd), where no mark goes, that inkSamples
  * does not ask about — inline code (classOf 'code': a cell's \\texttt{max\\_tokens}, 2610.21098v1 p13u138) and a paper's macro
@@ -356,17 +569,27 @@ const boxable = src => !!src && !rawSign(src) && !/\\(?:verb|lstinline|begin|end
  * lead's ink beside its unit's start (make.mjs besideMarks) and the erasure a cell's (own.mjs, MR 5b): with no text, the unit is
  * the original's. Asked last (markProbeTex)
  */
-export function leadSamples(units, asked = inkSamples(units)) {
-  const seen = new Set(asked), out = []
+export function leadSamples(units: readonly Unit[], asked: readonly string[] = inkSamples(units)): string[] {
+  const seen = new Set<string | undefined>(asked),
+    out: string[] = []
   let room = INK_BUDGET - asked.reduce((n, src) => n + src.length, 0)
   for (const u of sampleOrder(units)) {
-    const pieces = u.pieces ?? [], head = headEnd(pieces, 0)
+    const pieces = u.pieces ?? [],
+      head = headEnd(pieces, 0)
     for (let k = 0; k < head; k++) {
-      const p = pieces[k], cls = classOf(p)
-      if ((cls !== 'macro' && cls !== 'code') || seen.has(p.src) || symbolText(p.src) !== null || !boxable(p.src) || p.src.length > room) continue
+      const p = pieces[k]!,
+        cls = classOf(p)
+      if (
+        (cls !== 'macro' && cls !== 'code') ||
+        seen.has(p.src) ||
+        symbolText(p.src) !== null ||
+        !boxable(p.src) ||
+        p.src!.length > room
+      )
+        continue
       seen.add(p.src)
-      out.push(p.src)
-      room -= p.src.length
+      out.push(p.src!)
+      room -= p.src!.length
     }
   }
   return out
@@ -376,9 +599,13 @@ export function leadSamples(units, asked = inkSamples(units)) {
  * (\showbox, every node: TeX's own list of what it set), between a row `ink-at <i>` and a row `ink-end <i>` (`i` numbered on
  * from `from`); an empty paragraph after each starts TeX's error count again. Writes nothing, ships out nothing (readInkProbe)
  */
-export function inkSection(samples, from = 0) {
-  const show = '\\begingroup\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@ibox\\endgroup'
-  const tests = samples.map((src, i) => `${probeRow('ink-at', from + i)}\\begingroup\\global\\setbox\\axt@ibox\\box\\voidb@x${PROBE_LEVEL}\\setbox\\axt@ibox\\hbox{${src}}\\axt@unwind${show}\\endgroup${probeRow('ink-end', from + i)}\\noindent\\par`)
+export function inkSection(samples: readonly string[], from = 0): string {
+  const show =
+    '\\begingroup\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@ibox\\endgroup'
+  const tests = samples.map(
+    (src, i) =>
+      `${probeRow('ink-at', from + i)}\\begingroup\\global\\setbox\\axt@ibox\\box\\voidb@x${PROBE_LEVEL}\\setbox\\axt@ibox\\hbox{${src}}\\axt@unwind${show}\\endgroup${probeRow('ink-end', from + i)}\\noindent\\par`,
+  )
   return `${PROBE_UNWIND}\\begingroup\\newbox\\axt@ibox${tests.join('\n')}\\endgroup`
 }
 /** the probe document of the layout marks: its punctuation section, then its ink section, its name section, its skip section,
@@ -391,15 +618,30 @@ export function inkSection(samples, from = 0) {
  *  the ink answers before it stand. A paper with no lead to ask about has the document it had. After them all the look-ahead
  *  section (aheadSamples, numbered by its own rows): each pair's macro runs whatever its body does too, and what an error there
  *  loses is the pairs after it, whose pieces keep no mark as before. A paper with no such pair has the document it had */
-export const markProbeTex = (samples, ink = [], leads = []) => {
-  const listed = samples.filter(s => !s.ahead), ahead = samples.filter(s => s.ahead)
-  const n = listed.findIndex(s => s.own), asked = n < 0 ? listed : listed.slice(0, n)
-  return probeTex([punctuationSection(asked), ...(ink.length ? [inkSection(ink)] : []), nameSection(), skipSection(), ...(n < 0 ? [] : [punctuationSection(listed.slice(n), n)]), ...(leads.length ? [inkSection(leads, ink.length)] : []), ...(ahead.length ? [aheadSection(ahead)] : [])])
+export const markProbeTex = (
+  samples: readonly ProbeSample[],
+  ink: readonly string[] = [],
+  leads: readonly string[] = [],
+): string => {
+  const listed = samples.filter((s) => !s.ahead),
+    ahead = samples.filter((s) => s.ahead) as AheadSample[]
+  const n = listed.findIndex((s) => s.own),
+    asked = n < 0 ? listed : listed.slice(0, n)
+  return probeTex([
+    punctuationSection(asked),
+    ...(ink.length ? [inkSection(ink)] : []),
+    nameSection(),
+    skipSection(),
+    ...(n < 0 ? [] : [punctuationSection(listed.slice(n), n)]),
+    ...(leads.length ? [inkSection(leads, ink.length)] : []),
+    ...(ahead.length ? [aheadSection(ahead)] : []),
+  ])
 }
 /** a node TeX lists that sets no ink: glue, a kern, a penalty, a math switch, a box (its own nodes listed below it), a
  *  mark, a colour stack, a write, a destination, a saved or restored matrix, an adjust's or a discretionary's head
  *  (theirs below), leaders' head (their box or rule below) */
-const NO_INK_NODE = /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\(|mark|pdfcolorstack|write|openout|closeout|pdfdest|pdfsave|pdfrestore|pdfsetmatrix|vadjust|discretionary|leaders|cleaders|xleaders)/
+const NO_INK_NODE =
+  /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\(|mark|pdfcolorstack|write|openout|closeout|pdfdest|pdfsave|pdfrestore|pdfsetmatrix|vadjust|discretionary|leaders|cleaders|xleaders)/
 /** a rule TeX lists: its height, depth and width (`*` running) */
 const RULE_NODE = /^\.+\\rule\(([-\d.*]+)\+([-\d.*]+)\)x([-\d.*]+)$/
 /**
@@ -408,29 +650,60 @@ const RULE_NODE = /^\.+\\rule\(([-\d.*]+)\+([-\d.*]+)\)x([-\d.*]+)$/
  * literal, special, insertion or node it lists otherwise — with no error between its rows but the listing's own `! OK.`.
  * A sample with no listing, an error, a line cut short or a node not known is no answer: what it sets is not known
  */
-export function readInkProbe(log, samples) {
-  const out = []
-  let at = null, nodes = null, bad = false, done = false
+export function readInkProbe(log: string | null | undefined, samples: readonly string[]): string[] {
+  const out: string[] = []
+  let at: number | null = null,
+    nodes: string[] | null = null,
+    bad = false,
+    done = false
   for (const line of (log ?? '').split('\n')) {
     const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
     if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
       const i = Number(r.fields[0])
-      if (r.tag === 'ink-at') { at = i; nodes = null; bad = false; done = false; continue }
+      if (r.tag === 'ink-at') {
+        at = i
+        nodes = null
+        bad = false
+        done = false
+        continue
+      }
       if (at === i && nodes && !bad && samples[i] !== undefined) out.push(samples[i])
       at = null
       continue
     }
     if (at === null || done) continue
     // the listing's own end, `! OK.` (`<file>:<line>: OK.` under -file-line-error)
-    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) { done = nodes !== null; if (!done) bad = true; continue }
-    if (TEX_ERROR.test(line)) { bad = true; continue }
-    if (/^> \\box\d+=/.test(line)) { nodes = []; continue }
+    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) {
+      done = nodes !== null
+      if (!done) bad = true
+      continue
+    }
+    if (TEX_ERROR.test(line)) {
+      bad = true
+      continue
+    }
+    if (/^> \\box\d+=/.test(line)) {
+      nodes = []
+      continue
+    }
     if (nodes === null) continue
-    if (/^\\hbox\(/.test(line) && !nodes.length) { nodes.push(line); continue }
-    if (NO_INK_NODE.test(line)) { nodes.push(line); continue }
+    if (/^\\hbox\(/.test(line) && !nodes.length) {
+      nodes.push(line)
+      continue
+    }
+    if (NO_INK_NODE.test(line)) {
+      nodes.push(line)
+      continue
+    }
     const rule = RULE_NODE.exec(line)
-    if (rule && rule[3] !== '*' && Number(rule[3]) <= 0) { nodes.push(line); continue }
-    if (rule && rule[1] !== '*' && rule[2] !== '*' && Number(rule[1]) + Number(rule[2]) <= 0) { nodes.push(line); continue }
+    if (rule && rule[3] !== '*' && Number(rule[3]) <= 0) {
+      nodes.push(line)
+      continue
+    }
+    if (rule && rule[1] !== '*' && rule[2] !== '*' && Number(rule[1]) + Number(rule[2]) <= 0) {
+      nodes.push(line)
+      continue
+    }
     if (line === '') continue
     bad = true
   }
@@ -451,7 +724,7 @@ const CHAR_NODE = /^\.+\\([A-Za-z0-9]+)\/\S+ (\S|\^\^[0-9a-f]{2}|\^\^.)(?: \(lig
  *  CoworkOS`) */
 const WORD_NODE = /^\.+\\TU\/\S+ (\S{2,})$/
 /** the text encodings, whose letters and digits are ASCII's */
-const TEXT_ENCODING = new Set(['OT1', 'T1', 'LY1', 'TU'])
+const TEXT_ENCODING: ReadonlySet<string | undefined> = new Set(['OT1', 'T1', 'LY1', 'TU'])
 /** the punctuation each text encoding sets as ASCII's character and TeX prints as it: every one's, and T1's and TU's more
  *  (OT1 sets ¡ ¿ ” “ ˙ – — at < > " \\ _ { |, and its italic £ at $; LY1 is taken at the first alone). Not `?`: the probe has
  *  no aux, and a macro's \\ref sets "??" there (2610.21098v1's \\figref{…}), never in the paper */
@@ -477,7 +750,10 @@ const TEXT_PASS = /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\()/
  * outside a formula, an error): what it sets is not known as text. The layout finds such a placeholder, set at a unit's head
  * where no mark goes, by its text (make.mjs besideMarks), and the erasure a cell's (own.mjs, MR 5b), each glyph by leadStep
  */
-export function readInkTexts(log, samples) {
+export function readInkTexts(
+  log: string | null | undefined,
+  samples: readonly string[],
+): [source: string, text: string][] {
   return inkTextsOf(log, samples, false)
 }
 /** a box TeX lists of no width, at a depth of the sample's box (its dots): what it holds moves no character of the line */
@@ -497,34 +773,79 @@ const ZERO_BOX = /^(\.+)\\[hv]box\([-\d.]+\+[-\d.]+\)x-?0(?:\.0+)?(?:,|$)/
  * leave the rule behind; the reading that takes this text takes the boxes its glyphs were painted with too (instrument.mjs
  * unmarkedInkOf)
  */
-export function readInkDecorated(log, samples) {
+export function readInkDecorated(
+  log: string | null | undefined,
+  samples: readonly string[],
+): [source: string, text: string][] {
   return inkTextsOf(log, samples, true)
 }
 /** readInkTexts' reading, and with `decorated` readInkDecorated's: the decoration TeX painted with the characters passed over, and
  *  only a sample that has one given */
-function inkTextsOf(log, samples, decorated) {
-  const out = []
-  let at = null, text = null, bad = false, done = false, math = 0
+function inkTextsOf(
+  log: string | null | undefined,
+  samples: readonly string[],
+  decorated: boolean,
+): [source: string, text: string][] {
+  const out: [source: string, text: string][] = []
+  let at: number | null = null,
+    text: string | null = null,
+    bad = false,
+    done = false,
+    math = 0
   // (`under`: the depth of the box of no width being read, -1 for none; `drawn`: a rule painted in one; `prev` the line before;
   // `disc` the depth of the discretionary whose break lists are being passed over, -1 for none)
-  let under = -1, drawn = false, prev = '', disc = -1
+  let under = -1,
+    drawn = false,
+    prev = '',
+    disc = -1
   for (const line of (log ?? '').split('\n')) {
     const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
     if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
       const i = Number(r.fields[0])
-      if (r.tag === 'ink-at') { at = i; text = null; bad = false; done = false; math = 0; under = -1; drawn = false; prev = ''; disc = -1; continue }
-      if (at === i && done && !bad && text && text.length <= INK_TEXT_MAX && text.replaceAll(INK_ANY, '') !== '' && (!decorated || drawn) && samples[i] !== undefined) out.push([samples[i], text])
+      if (r.tag === 'ink-at') {
+        at = i
+        text = null
+        bad = false
+        done = false
+        math = 0
+        under = -1
+        drawn = false
+        prev = ''
+        disc = -1
+        continue
+      }
+      if (
+        at === i &&
+        done &&
+        !bad &&
+        text &&
+        text.length <= INK_TEXT_MAX &&
+        text.replaceAll(INK_ANY, '') !== '' &&
+        (!decorated || drawn) &&
+        samples[i] !== undefined
+      )
+        out.push([samples[i], text])
       at = null
       continue
     }
     if (at === null || done) continue
-    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) { done = text !== null && math === 0; if (!done) bad = true; continue }
-    if (TEX_ERROR.test(line)) { bad = true; continue }
-    if (/^> \\box\d+=/.test(line)) { text = ''; continue }
+    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) {
+      done = text !== null && math === 0
+      if (!done) bad = true
+      continue
+    }
+    if (TEX_ERROR.test(line)) {
+      bad = true
+      continue
+    }
+    if (/^> \\box\d+=/.test(line)) {
+      text = ''
+      continue
+    }
     if (text === null) continue
     if (/^\\hbox\(/.test(line) && !text) continue
     if (decorated) {
-      const depth = /^\.*/.exec(line)[0].length
+      const depth = /^\.*/.exec(line)![0].length
       // (TeX breaks a log line at max_print_line, PRINT_LINE: a node's line that long goes on on the next line, which holds no
       // dots, or an empty one where it ended there; a colour stack's literal of four numbers a colour does, 2610.40576v1's)
       const wrapped = prev.length >= PRINT_LINE && depth === 0
@@ -536,24 +857,43 @@ function inkTextsOf(log, samples, decorated) {
       disc = -1
       if (under >= 0 && depth > under) {
         const rule = RULE_NODE.exec(line)
-        if (rule) { if ((rule[3] === '*' || Number(rule[3]) > 0) && (rule[1] === '*' || rule[2] === '*' || Number(rule[1]) + Number(rule[2]) > 0)) drawn = true }
-        else if (CHAR_NODE.test(line) || WORD_NODE.test(line) || !NO_INK_NODE.test(line)) bad = true
+        if (rule) {
+          if (
+            (rule[3] === '*' || Number(rule[3]) > 0) &&
+            (rule[1] === '*' || rule[2] === '*' || Number(rule[1]) + Number(rule[2]) > 0)
+          )
+            drawn = true
+        } else if (CHAR_NODE.test(line) || WORD_NODE.test(line) || !NO_INK_NODE.test(line)) bad = true
         continue
       }
       under = -1
       // (a box of no width, and leaders, whose rule or box below is painted the length of the glue they stand for: soul's ground
       // under a space between two words of one highlight. A colour stack sets no ink)
-      if (math === 0 && (ZERO_BOX.test(line) || /^\.+\\[cx]?leaders /.test(line))) { under = depth; continue }
-      if (math === 0 && /^\.+\\discretionary(?: replacing \d+)?$/.test(line)) { disc = depth; continue }
+      if (math === 0 && (ZERO_BOX.test(line) || /^\.+\\[cx]?leaders /.test(line))) {
+        under = depth
+        continue
+      }
+      if (math === 0 && /^\.+\\discretionary(?: replacing \d+)?$/.test(line)) {
+        disc = depth
+        continue
+      }
       if (/^\.+\\pdfcolorstack /.test(line)) continue
     }
     if (/^\.+\\mathon(?![A-Za-z])/.test(line)) math++
-    else if (/^\.+\\mathoff(?![A-Za-z])/.test(line) && --math < 0) { bad = true; continue }
+    else if (/^\.+\\mathoff(?![A-Za-z])/.test(line) && --math < 0) {
+      bad = true
+      continue
+    }
     const c = CHAR_NODE.exec(line)
     if (c) {
-      const [, enc, ch, lig] = c, punct = enc === 'T1' || enc === 'TU' ? PUNCT_WIDE : PUNCT_ALL
-      if (TEXT_ENCODING.has(enc) && (lig ? /^[A-Za-z0-9]+$/.test(lig) : /^[A-Za-z0-9]$/.test(ch) || (ch.length === 1 && punct.includes(ch)))) text += lig ?? ch
-      else if (math > 0 && !lig && enc === 'OML' && /^[A-Za-z0-9]$/.test(ch)) text += ch
+      const [, enc, ch, lig] = c,
+        punct = enc === 'T1' || enc === 'TU' ? PUNCT_WIDE : PUNCT_ALL
+      if (
+        TEXT_ENCODING.has(enc) &&
+        (lig ? /^[A-Za-z0-9]+$/.test(lig) : /^[A-Za-z0-9]$/.test(ch!) || (ch!.length === 1 && punct.includes(ch!)))
+      )
+        text += lig ?? ch
+      else if (math > 0 && !lig && enc === 'OML' && /^[A-Za-z0-9]$/.test(ch!)) text += ch
       else if (math > 0) text += INK_ANY
       else bad = true
       continue
@@ -561,7 +901,7 @@ function inkTextsOf(log, samples, decorated) {
     // (XeTeX's word, outside a formula: its characters, each one a character node's would be)
     const w = math === 0 ? WORD_NODE.exec(line) : null
     if (w) {
-      if ([...w[1]].every(ch => /^[A-Za-z0-9]$/.test(ch) || PUNCT_WIDE.includes(ch))) text += w[1]
+      if ([...w[1]!].every((ch) => /^[A-Za-z0-9]$/.test(ch) || PUNCT_WIDE.includes(ch))) text += w[1]
       else bad = true
       continue
     }
@@ -577,11 +917,12 @@ function inkTextsOf(log, samples, decorated) {
  * past it); every other character is spelled by the glyphs' own, a blank glyph passed over between them. Returns the end
  * past the glyph, or -1 where it is not the lead's
  */
-export function leadStep(want, end, t) {
+export function leadStep(want: string, end: number, t: string): number {
   if (end <= 0) return -1
   if (want[end - 1] === INK_ANY) return t ? end - 1 : -1
   if (!t) return end
-  const k = end - t.length, part = k >= 0 ? want.slice(k, end) : null
+  const k = end - t.length,
+    part = k >= 0 ? want.slice(k, end) : null
   return part === t && !part.includes(INK_ANY) ? k : -1
 }
 
@@ -589,7 +930,8 @@ export function leadStep(want, end, t) {
  *  takes a mark's whatsit: glue, a kern, a penalty, a whatsit (a colour stack, a write, a special, a literal, a destination, a
  *  saved matrix), a mark. Not a box, a rule or a formula's start: TeX hyphenates no word that one of those follows, and does
  *  hyphenate one a mark's whatsit follows (`characterization\\mbox{$\\star$}` would break as charac-terization) */
-const APART_NODE = /^\.\\(?:glue|kern|penalty|pdfcolorstack|write|openout|closeout|special|pdfliteral|pdfdest|pdfsave|pdfrestore|pdfsetmatrix|mark)/
+const APART_NODE =
+  /^\.\\(?:glue|kern|penalty|pdfcolorstack|write|openout|closeout|special|pdfliteral|pdfdest|pdfsave|pdfrestore|pdfsetmatrix|mark)/
 /**
  * The samples whose box TeX began with a node apart from the word before it, from the probe's log (inkSection): each sample whose
  * box TeX listed in full with no error between its rows, its first node one of APART_NODE (`\\,pp`'s kern, a colour's stack).
@@ -597,22 +939,44 @@ const APART_NODE = /^\.\\(?:glue|kern|penalty|pdfcolorstack|write|openout|closeo
  * their hyphenation ends at it as at a mark (layoutMarking `apart`). A sample whose box begins with a character, a box, a rule or
  * a formula, or is not listed, is not one
  */
-export function readInkApart(log, samples) {
-  const out = []
-  let at = null, first = null, listed = false, bad = false, done = false
+export function readInkApart(log: string | null | undefined, samples: readonly string[]): string[] {
+  const out: string[] = []
+  let at: number | null = null,
+    first: string | null = null,
+    listed = false,
+    bad = false,
+    done = false
   for (const line of (log ?? '').split('\n')) {
     const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
     if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
       const i = Number(r.fields[0])
-      if (r.tag === 'ink-at') { at = i; first = null; listed = false; bad = false; done = false; continue }
-      if (at === i && done && !bad && first !== null && APART_NODE.test(first) && samples[i] !== undefined) out.push(samples[i])
+      if (r.tag === 'ink-at') {
+        at = i
+        first = null
+        listed = false
+        bad = false
+        done = false
+        continue
+      }
+      if (at === i && done && !bad && first !== null && APART_NODE.test(first) && samples[i] !== undefined)
+        out.push(samples[i])
       at = null
       continue
     }
     if (at === null || done) continue
-    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) { done = listed; if (!done) bad = true; continue }
-    if (TEX_ERROR.test(line)) { bad = true; continue }
-    if (/^> \\box\d+=/.test(line)) { listed = true; continue }
+    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) {
+      done = listed
+      if (!done) bad = true
+      continue
+    }
+    if (TEX_ERROR.test(line)) {
+      bad = true
+      continue
+    }
+    if (/^> \\box\d+=/.test(line)) {
+      listed = true
+      continue
+    }
     if (listed && first === null && /^\.(?!\.)/.test(line)) first = line
   }
   return out
@@ -620,7 +984,21 @@ export function readInkApart(log, samples) {
 
 // ---- babel's names: what each one's own text is, TeX asked
 /** each name's macro, by key (file.mjs NAME_KEYS): babel's [captions], which a class defines as well */
-export const NAME_MACROS = Object.freeze({ abstract: 'abstractname', ref: 'refname', bib: 'bibname', contents: 'contentsname', listfigure: 'listfigurename', listtable: 'listtablename', appendix: 'appendixname', index: 'indexname', proof: 'proofname', preface: 'prefacename', glossary: 'glossaryname', figure: 'figurename', table: 'tablename' })
+export const NAME_MACROS: Readonly<Record<NameKey, string>> = Object.freeze({
+  abstract: 'abstractname',
+  ref: 'refname',
+  bib: 'bibname',
+  contents: 'contentsname',
+  listfigure: 'listfigurename',
+  listtable: 'listtablename',
+  appendix: 'appendixname',
+  index: 'indexname',
+  proof: 'proofname',
+  preface: 'prefacename',
+  glossary: 'glossaryname',
+  figure: 'figurename',
+  table: 'tablename',
+})
 /**
  * The name section of the probe (`name`): for each name the wrapper wrapped as the document began (NAMES_TEX keeps the
  * macro as it was, \axt@nmt@<key>), a row `name <key> <0 or 1>`: 1 where its own text, as a \protected@edef expands it,
@@ -628,14 +1006,24 @@ export const NAME_MACROS = Object.freeze({ abstract: 'abstractname', ref: 'refna
  * takes a name's glyphs set in capitals as a case change only where its own text is not (NAME_FLAG.CAPITALS). Writes
  * nothing, ships out nothing (readNameProbe)
  */
-export function nameSection() {
-  return NAME_KEYS.map(k => `\\ifcsname axt@nmt@${k}\\endcsname\\begingroup\\protected@edef\\axt@qa{\\csname axt@nmt@${k}\\endcsname}\\uppercase\\expandafter{\\expandafter\\def\\expandafter\\axt@qb\\expandafter{\\axt@qa}}\\ifx\\axt@qa\\axt@qb${probeRow('name', k, 0)}\\else${probeRow('name', k, 1)}\\fi\\endgroup\\fi`).join('')
+export function nameSection(): string {
+  return NAME_KEYS.map(
+    (k) =>
+      `\\ifcsname axt@nmt@${k}\\endcsname\\begingroup\\protected@edef\\axt@qa{\\csname axt@nmt@${k}\\endcsname}\\uppercase\\expandafter{\\expandafter\\def\\expandafter\\axt@qb\\expandafter{\\axt@qa}}\\ifx\\axt@qa\\axt@qb${probeRow('name', k, 0)}\\else${probeRow('name', k, 1)}\\fi\\endgroup\\fi`,
+  ).join('')
 }
 /** each name's answer from the probe's log (nameSection): { key: 1 its own text holds a lowercase letter, 0 not }, the
  *  keys TeX answered for; a row of another shape or key is passed over */
-export function readNameProbe(log) {
-  const out = {}
-  for (const r of readProbe(log)) if (r.tag === 'name' && r.fields.length === 2 && NAME_KEYS.includes(r.fields[0]) && /^[01]$/.test(r.fields[1])) out[r.fields[0]] = Number(r.fields[1])
+export function readNameProbe(log: string | null | undefined): Partial<Record<NameKey, 0 | 1>> {
+  const out: Partial<Record<NameKey, 0 | 1>> = {}
+  for (const r of readProbe(log))
+    if (
+      r.tag === 'name' &&
+      r.fields.length === 2 &&
+      (NAME_KEYS as readonly string[]).includes(r.fields[0]!) &&
+      /^[01]$/.test(r.fields[1]!)
+    )
+      out[r.fields[0] as NameKey] = Number(r.fields[1]) as 0 | 1
   return out
 }
 
@@ -657,44 +1045,74 @@ const BP_PER_PT = 72 / 72.27
 export const skipSection = () => probeRow('lineskip', '\\the\\dimexpr\\lineskip\\relax', '\\space\\the\\lineskiplimit')
 /** the paper's \lineskip and \lineskiplimit from the probe's log (skipSection), in PDF units: [lineskip, limit], or null
  *  where no row of that shape is there, one is twice, or a value is past TeX's \maxdimen (under 16384pt) */
-export function readSkipProbe(log) {
-  const rows = readProbe(log).filter(r => r.tag === 'lineskip')
-  if (rows.length !== 1 || rows[0].fields.length !== 2) return null
-  const pt = rows[0].fields.map(f => Number(TEX_PT.exec(f)?.[1] ?? NaN))
-  return pt.every(x => Number.isFinite(x) && Math.abs(x) <= 16384) ? pt.map(x => x * BP_PER_PT) : null
+export function readSkipProbe(log: string | null | undefined): [lineskip: number, limit: number] | null {
+  const rows = readProbe(log).filter((r) => r.tag === 'lineskip')
+  if (rows.length !== 1 || rows[0]!.fields.length !== 2) return null
+  const pt = rows[0]!.fields.map((f) => Number(TEX_PT.exec(f)?.[1] ?? NaN))
+  return pt.every((x) => Number.isFinite(x) && Math.abs(x) <= 16384)
+    ? (pt.map((x) => x * BP_PER_PT) as [lineskip: number, limit: number])
+    : null
 }
 
 /** the constructs a style may write a babel name literally in, by the environment or command defined, and the keys of
  *  the names it would be made of */
-const LITERAL_IN = Object.freeze({ abstract: ['abstract'], endabstract: ['abstract'], thebibliography: ['ref', 'bib'], tableofcontents: ['contents'], listoffigures: ['listfigure'], listoftables: ['listtable'], theindex: ['index'], proof: ['proof'] })
+const LITERAL_IN: Readonly<Record<string, readonly NameKey[]>> = Object.freeze({
+  abstract: ['abstract'],
+  endabstract: ['abstract'],
+  thebibliography: ['ref', 'bib'],
+  tableofcontents: ['contents'],
+  listoffigures: ['listfigure'],
+  listoftables: ['listtable'],
+  theindex: ['index'],
+  proof: ['proof'],
+})
 const CONSTRUCT = Object.keys(LITERAL_IN).join('|')
 /** a construct's definition, its head: an environment's (LaTeX's, xparse's), a command's (LaTeX's, xparse's), a \def's */
-const DEFINITION = new RegExp(String.raw`\\(?:(?:re)?newenvironment\*?\s*\{(${CONSTRUCT})\}|(?:New|Renew|Declare|Provide)DocumentEnvironment\s*\{(${CONSTRUCT})\}|(?:(?:renew|new|provide)command|DeclareRobustCommand)\*?\s*\{?\s*\\(${CONSTRUCT})(?![A-Za-z@])\s*\}?|(?:New|Renew|Declare|Provide)DocumentCommand\s*\{?\s*\\(${CONSTRUCT})(?![A-Za-z@])\s*\}?|[gex]?def\s*\\(${CONSTRUCT})(?![A-Za-z@]))`, 'g')
+const DEFINITION = new RegExp(
+  String.raw`\\(?:(?:re)?newenvironment\*?\s*\{(${CONSTRUCT})\}|(?:New|Renew|Declare|Provide)DocumentEnvironment\s*\{(${CONSTRUCT})\}|(?:(?:renew|new|provide)command|DeclareRobustCommand)\*?\s*\{?\s*\\(${CONSTRUCT})(?![A-Za-z@])\s*\}?|(?:New|Renew|Declare|Provide)DocumentCommand\s*\{?\s*\\(${CONSTRUCT})(?![A-Za-z@])\s*\}?|[gex]?def\s*\\(${CONSTRUCT})(?![A-Za-z@]))`,
+  'g',
+)
 /** the commands whose arguments a literal there is no text set on the page in: a label, a reference, a message, a
  *  destination's name, a counter, an environment's name, a test; and \csname to its \endcsname */
-const NOT_TEXT = /\\(?:label|ref|pageref|eqref|nameref|autoref|cite[A-Za-z]*|nocite|typeout|message|wlog|write|hypertarget|hyperdef|hyperlink|pdfbookmark|@namedef|@nameuse|@ifundefined|@ifpackageloaded|@ifclassloaded|ifthenelse|setcounter|addtocounter|newcounter|usecounter|refstepcounter|stepcounter|begin|end|(?:Package|Class|Generic)(?:Warning|WarningNoLine|Info|Error))(?![A-Za-z@])|\\csname(?![A-Za-z@])/g
+const NOT_TEXT =
+  /\\(?:label|ref|pageref|eqref|nameref|autoref|cite[A-Za-z]*|nocite|typeout|message|wlog|write|hypertarget|hyperdef|hyperlink|pdfbookmark|@namedef|@nameuse|@ifundefined|@ifpackageloaded|@ifclassloaded|ifthenelse|setcounter|addtocounter|newcounter|usecounter|refstepcounter|stepcounter|begin|end|(?:Package|Class|Generic)(?:Warning|WarningNoLine|Info|Error))(?![A-Za-z@])|\\csname(?![A-Za-z@])/g
 /** past white space and comments from i */
-const skipBlank = (t, i) => { for (;;) { while (i < t.length && /\s/.test(t[i])) i++; if (t[i] !== '%') return i; while (i < t.length && t[i] !== '\n') i++ } }
+const skipBlank = (t: string, i: number): number => {
+  for (;;) {
+    while (i < t.length && /\s/.test(t[i]!)) i++
+    if (t[i] !== '%') return i
+    while (i < t.length && t[i] !== '\n') i++
+  }
+}
 /** the end (one past its closing brace) of the brace group opening at i, escapes and comments skipped; -1 if unclosed */
-function groupEnd(t, i) {
+function groupEnd(t: string, i: number): number {
   if (t[i] !== '{') return -1
   let d = 0
   for (let j = i; j < t.length; j++) {
     const c = t[j]
-    if (c === '\\') { j++; continue }
-    if (c === '%') { while (j < t.length && t[j] !== '\n') j++; continue }
+    if (c === '\\') {
+      j++
+      continue
+    }
+    if (c === '%') {
+      while (j < t.length && t[j] !== '\n') j++
+      continue
+    }
     if (c === '{') d++
     else if (c === '}' && --d === 0) return j + 1
   }
   return -1
 }
 /** past an optional argument's brackets at i (at the brace depth they open), or i itself */
-function optionalEnd(t, i) {
+function optionalEnd(t: string, i: number): number {
   if (t[i] !== '[') return i
   let d = 0
   for (let j = i; j < t.length; j++) {
     const c = t[j]
-    if (c === '\\') { j++; continue }
+    if (c === '\\') {
+      j++
+      continue
+    }
     if (c === '{') d++
     else if (c === '}') d--
     else if (c === ']' && d === 0) return j + 1
@@ -710,21 +1128,27 @@ function optionalEnd(t, i) {
  * but in a command's arguments that are no text set on the page (NOT_TEXT). The identity is the definition's, never the page's; what TeX prints is unchanged, so the carry is.
  * Returns the text, the same where it holds none
  */
-export function literalNames(text) {
-  const edits = []
+export function literalNames(text: string): string {
+  const edits: [start: number, end: number, key: NameKey][] = []
   for (const m of text.matchAll(DEFINITION)) {
-    const name = m[1] ?? m[2] ?? m[3] ?? m[4] ?? m[5], keys = LITERAL_IN[name]
+    const name = m[1] ?? m[2] ?? m[3] ?? m[4] ?? m[5],
+      keys = LITERAL_IN[name!]
     // its bodies: an environment's two (xparse's after its argument specification), a command's one (after its
     // optional arguments, or xparse's specification), a \def's one (after its parameter text)
-    let i = m.index + m[0].length, bodies = []
-    const xparse = /Document(?:Environment|Command)/.test(m[0]), env = m[1] !== undefined || m[2] !== undefined
+    let i = m.index + m[0].length,
+      bodies: [start: number, end: number][] = []
+    const xparse = /Document(?:Environment|Command)/.test(m[0]),
+      env = m[1] !== undefined || m[2] !== undefined
     if (m[5] !== undefined) {
       // (a parameter text holds no brace: #1, a delimiter)
-      for (const end = Math.min(text.length, i + 200); i < end && text[i] !== '{';) i++
+      for (const end = Math.min(text.length, i + 200); i < end && text[i] !== '{'; ) i++
     } else {
       i = skipBlank(text, i)
-      if (xparse) { const e = groupEnd(text, i); if (e < 0) continue; i = skipBlank(text, e) }
-      else for (let n = 0; n < 2; n++) i = skipBlank(text, optionalEnd(text, i))
+      if (xparse) {
+        const e = groupEnd(text, i)
+        if (e < 0) continue
+        i = skipBlank(text, e)
+      } else for (let n = 0; n < 2; n++) i = skipBlank(text, optionalEnd(text, i))
     }
     for (let n = 0; n < (env ? 2 : 1); n++) {
       i = skipBlank(text, i)
@@ -736,10 +1160,14 @@ export function literalNames(text) {
     for (const [a, b] of bodies) {
       const body = text.slice(a, b)
       // the spans of the body no literal is wrapped in
-      const off = []
+      const off: [start: number, end: number][] = []
       for (const x of body.matchAll(NOT_TEXT)) {
         let j = x.index + x[0].length
-        if (x[0] === '\\csname') { const e = body.indexOf('\\endcsname', j); off.push([x.index, e < 0 ? body.length : e]); continue }
+        if (x[0] === '\\csname') {
+          const e = body.indexOf('\\endcsname', j)
+          off.push([x.index, e < 0 ? body.length : e])
+          continue
+        }
         for (let n = 0; n < 2; n++) {
           j = skipBlank(body, optionalEnd(body, skipBlank(body, j)))
           const e = groupEnd(body, j)
@@ -748,7 +1176,7 @@ export function literalNames(text) {
           j = e
         }
       }
-      for (const key of keys) {
+      for (const key of keys!) {
         const words = NAME_ENGLISH[key].split(' ').join(String.raw`\s+`)
         for (const l of body.matchAll(new RegExp(String.raw`(?<![\\A-Za-z@])${words}(?![A-Za-z@])`, 'g'))) {
           if (off.some(([s, e]) => l.index >= s && l.index < e)) continue
@@ -759,7 +1187,8 @@ export function literalNames(text) {
   }
   if (!edits.length) return text
   edits.sort((x, y) => y[0] - x[0])
-  let out = text, last = Infinity
+  let out = text,
+    last = Infinity
   for (const [s, e, key] of edits) {
     if (e > last) continue
     out = `${out.slice(0, s)}\\axtnma{${key}}${out.slice(s, e)}\\axtnmb{${key}}${out.slice(e)}`
@@ -782,33 +1211,58 @@ const TEX_ERROR = /^(?:! |[^\s:]+:\d+: |Missing character: There is no .* in fon
  * one code: an error in the box let go or as the paper sets it no answer (`x`), in the one with the two openings or the one
  * asking what the list ends with 2, in the one with every mark at most 1
  */
-export function readMarkProbe(log, samples) {
-  const out = {}, errored = new Map(), listed = samples.filter(s => !s.ahead), ahead = samples.filter(s => s.ahead)
-  let at = null
+export function readMarkProbe(log: string | null | undefined, samples: readonly ProbeSample[]): Switches {
+  const out: Switches = {},
+    errored = new Map<string, Set<string>>(),
+    listed = samples.filter((s) => !s.ahead),
+    ahead = samples.filter((s) => s.ahead) as AheadSample[]
+  let at: [box: string, n: string] | null = null
   for (const line of (log ?? '').split('\n')) {
-    if (TEX_ERROR.test(line)) { if (at) (errored.get(at[0]) ?? errored.set(at[0], new Set()).get(at[0])).add(at[1]); continue }
+    if (TEX_ERROR.test(line)) {
+      if (at) (errored.get(at[0]) ?? errored.set(at[0], new Set()).get(at[0])!).add(at[1])
+      continue
+    }
     const [r] = readProbe(line)
     if (!r) continue
-    if (r.tag === 'punct-at' && r.fields.length === 3) { at = [`${r.fields[0]}:${r.fields[1]}`, r.fields[2]]; continue }
-    if (r.tag === 'ahead-at' && r.fields.length === 2) { at = [`ahead:${r.fields[0]}`, r.fields[1]]; continue }
+    if (r.tag === 'punct-at' && r.fields.length === 3) {
+      at = [`${r.fields[0]}:${r.fields[1]}`, r.fields[2]!]
+      continue
+    }
+    if (r.tag === 'ahead-at' && r.fields.length === 2) {
+      at = [`ahead:${r.fields[0]}`, r.fields[1]!]
+      continue
+    }
     at = null
     if (r.tag === 'ahead' && r.fields.length === 2) {
-      const s = ahead[Number(r.fields[0])], code = r.fields[1]
-      if (!s || !/^\d+$/.test(r.fields[0]) || !/^[012]$/.test(code)) continue
+      const s = ahead[Number(r.fields[0])],
+        code = r.fields[1]!
+      if (!s || !/^\d+$/.test(r.fields[0]!) || !/^[012]$/.test(code)) continue
       const bad = errored.get(`ahead:${r.fields[0]}`)
-      out[s.key] = !bad ? code : bad.has('w') || bad.has('a') ? 'x' : bad.has('d') || bad.has('g') ? '2' : code === '2' ? '2' : '1'
+      out[s.key] = !bad
+        ? code
+        : bad.has('w') || bad.has('a')
+          ? 'x'
+          : bad.has('d') || bad.has('g')
+            ? '2'
+            : code === '2'
+              ? '2'
+              : '1'
       continue
     }
     if (r.tag !== 'punct' || r.fields.length !== 2) continue
-    const i = r.fields[0], s = listed[Number(i)], codes = r.fields[1]
+    const i = r.fields[0],
+      s = listed[Number(i)],
+      codes = r.fields[1]!
     if (!s || !/^[0123]+$/.test(codes) || codes.length !== FOLLOWERS.length) continue
-    out[s.command] = [...codes].map((c, j) => {
-      const bad = errored.get(`${i}:${j}`)
-      if (!bad) return c
-      if (bad.has('a') || bad.has('b')) return 'x'
-      if (bad.has('d') || bad.has('e') || c === '3') return '2'
-      return c === '2' ? '2' : '1'
-    }).join('')
+    out[s.command] = [...codes]
+      .map((c, j) => {
+        const bad = errored.get(`${i}:${j}`)
+        if (!bad) return c
+        if (bad.has('a') || bad.has('b')) return 'x'
+        if (bad.has('d') || bad.has('e') || c === '3') return '2'
+        return c === '2' ? '2' : '1'
+      })
+      .join('')
   }
   return out
 }
@@ -1170,7 +1624,7 @@ export const NAMES_TEX = [
   '\\cs_new_protected:Npn\\axt@nmw#1#2{\\cs_if_eq:NcF#1{axt@nmd@#2}{\\bool_lazy_all:nT{{\\token_if_macro_p:N#1}{!\\token_if_protected_macro_p:N#1}{!\\token_if_protected_long_macro_p:N#1}{\\str_if_eq_p:ee{\\cs_parameter_spec:N#1}{}}{!\\tl_if_blank_p:o{#1}}}{\\cs_set_eq:cN{axt@nmt@#2}#1\\cs_set:Npx#1{\\exp_not:N\\relax\\exp_not:N\\axtnma{#2}\\exp_not:o{#1}\\exp_not:N\\axtnmb{#2}}\\cs_set_eq:cN{axt@nmd@#2}#1}}}',
   '\\cs_new_protected:Npn\\axt@nmwrap#1#2{\\cs_if_exist:cT{#2}{\\exp_args:Nc\\axt@nmw{#2}{#1}}}',
   '\\ExplSyntaxOff',
-  `\\def\\axt@nmall{\\ifaxt@nmon${NAME_KEYS.map(k => `\\axt@nmwrap{${k}}{${NAME_MACROS[k]}}`).join('')}\\fi}`,
+  `\\def\\axt@nmall{\\ifaxt@nmon${NAME_KEYS.map((k) => `\\axt@nmwrap{${k}}{${NAME_MACROS[k]}}`).join('')}\\fi}`,
   '\\AddToHook{begindocument/end}{\\global\\axt@nmontrue\\axt@nmall}\\AddToHook{package/babel/after}{\\AddBabelHook{axtnames}{afterextras}{\\axt@nmall}}',
   '\\AddToHook{package/gettitlestring/after}{\\ifdefined\\GetTitleStringDisableCommands\\GetTitleStringDisableCommands{\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble}\\fi}',
   '\\fi',
@@ -1181,14 +1635,16 @@ export const NAMES_TEX = [
  *  babel's own macro is (NAMES_TEX's \axt@nmwrap, the same key: the target's word, the probe's case answer), where the paper's
  *  files call the construct, so that no other paper's bytes move, and only where babel's own macro is not defined (one key, one
  *  macro wrapped: \axt@nmd@<key>). 2610.21504v1 p4's "Proof:" was read as its paragraph's number label, English on both panes */
-export const CLASS_NAMES = Object.freeze([{ key: 'proof', macro: 'IEEEproofname', own: 'proofname', call: /\\begin\s*\{IEEEproof\}/ }])
+export const CLASS_NAMES = Object.freeze([
+  { key: 'proof', macro: 'IEEEproofname', own: 'proofname', call: /\\begin\s*\{IEEEproof\}/ },
+])
 /** the TeX that wraps each class name (CLASS_NAMES) of a paper whose files (`texts`, their text) call its construct outside
  *  a comment, on the head's own line after NAMES_TEX; '' for a paper that calls none */
-export function classNamesTex(texts) {
-  const bare = texts.map(t => t.replace(/(?<!\\)%.*$/gm, ''))
-  const used = CLASS_NAMES.filter(n => bare.some(t => n.call.test(t)))
+export function classNamesTex(texts: readonly string[]): string {
+  const bare = texts.map((t) => t.replace(/(?<!\\)%.*$/gm, ''))
+  const used = CLASS_NAMES.filter((n) => bare.some((t) => n.call.test(t)))
   if (!used.length) return ''
-  const wraps = used.map(n => `\\ifdefined\\${n.own}\\else\\axt@nmwrap{${n.key}}{${n.macro}}\\fi`).join('')
+  const wraps = used.map((n) => `\\ifdefined\\${n.own}\\else\\axt@nmwrap{${n.key}}{${n.macro}}\\fi`).join('')
   return `\\makeatletter\\ifdefined\\axt@nmall\\ifdefined\\axt@nmwrap\\g@addto@macro\\axt@nmall{\\ifaxt@nmon${wraps}\\fi}\\fi\\fi\\makeatother`
 }
 
@@ -1205,7 +1661,7 @@ const NAME_MARKS = /(?:\\protect\s*)?\\axtnm[ab]\s*\{[^{}]*\}/g
 /** the files a babel name's marks are written to: the aux and the lists (.toc .lof .lot and the common .loa .lol .lop) */
 export const NAME_MARK_FILE = /\.(?:aux|toc|lof|lot|loa|lol|lop)$/
 /** a file's text with its babel name marks, each with its own argument, taken out */
-export const withoutNameMarks = text => text.replace(NAME_MARKS, '')
+export const withoutNameMarks = (text: string): string => text.replace(NAME_MARKS, '')
 
 /** \axt@unmark<tl>: the regex that takes a mark and its argument out of a token list, behind a memory and a prefilter.
  *  The regex costs ~4 ms a run over a list that holds a mark (~50 µs a token) and ~3 ms over one that holds none, and the
@@ -1230,7 +1686,7 @@ const UNMARK_TEX = [
   '\\ifdefined\\ExplSyntaxOn\\ExplSyntaxOn',
   `\\regex_const:Nn\\c__axt_marks_regex{\\c{${UNMARK_CS.join('|')}}\\cB.\\c[^BE].*\\cE.}`,
   '\\bool_new:N\\g__axt_unmark_bool\\tl_new:N\\g__axt_unmark_in_tl\\tl_new:N\\g__axt_unmark_out_tl',
-  `\\cs_new_protected:Npn\\axt@unmark#1{\\tl_if_eq:NNTF#1\\g__axt_unmark_in_tl{\\tl_set_eq:NN#1\\g__axt_unmark_out_tl}{\\group_begin:\\int_set:Nn\\tex_escapechar:D{92}\\bool_gset_false:N\\g__axt_unmark_bool${UNMARK_CS.map(n => `\\str_if_in:NnT#1{\\${n}}{\\bool_gset_true:N\\g__axt_unmark_bool}`).join('')}\\group_end:\\bool_if:NT\\g__axt_unmark_bool{\\tl_gset_eq:NN\\g__axt_unmark_in_tl#1\\regex_replace_all:NnN\\c__axt_marks_regex{}#1\\tl_gset_eq:NN\\g__axt_unmark_out_tl#1}}}`,
+  `\\cs_new_protected:Npn\\axt@unmark#1{\\tl_if_eq:NNTF#1\\g__axt_unmark_in_tl{\\tl_set_eq:NN#1\\g__axt_unmark_out_tl}{\\group_begin:\\int_set:Nn\\tex_escapechar:D{92}\\bool_gset_false:N\\g__axt_unmark_bool${UNMARK_CS.map((n) => `\\str_if_in:NnT#1{\\${n}}{\\bool_gset_true:N\\g__axt_unmark_bool}`).join('')}\\group_end:\\bool_if:NT\\g__axt_unmark_bool{\\tl_gset_eq:NN\\g__axt_unmark_in_tl#1\\regex_replace_all:NnN\\c__axt_marks_regex{}#1\\tl_gset_eq:NN\\g__axt_unmark_out_tl#1}}}`,
   '\\ExplSyntaxOff\\fi',
 ].join('')
 
@@ -1276,7 +1732,12 @@ const BACKREF_TEX = [
  * paper's own with \obeylines in an mdframed box): each glyph where it was, every code line between its two points and nothing
  * else
  */
-export function regionsTex(codeEnvs, bodies = codeEnvs) {
+export function regionsTex(codeEnvs: readonly string[] | null | undefined): string
+export function regionsTex(codeEnvs: readonly string[] | null | undefined, bodies: readonly string[]): string
+export function regionsTex(
+  codeEnvs: readonly string[] | null | undefined,
+  bodies: readonly string[] | null | undefined = codeEnvs,
+): string {
   if (!codeEnvs?.length) return ''
   return [
     '\\makeatletter\\newif\\ifaxt@code\\newif\\ifaxt@cdin\\gdef\\axt@cdn{0}',
@@ -1285,7 +1746,7 @@ export function regionsTex(codeEnvs, bodies = codeEnvs) {
     '\\def\\axt@fvwrap{\\ifdefined\\FancyVerbFormatLine\\let\\axt@fvfl\\FancyVerbFormatLine\\def\\FancyVerbFormatLine##1{\\axt@cdopen\\axt@fvfl{##1}\\axt@cdclose}\\fi}',
     '\\def\\axt@lstwrap{\\ifdefined\\lst@AddToHook\\lst@AddToHook{Init}{\\axt@codetrue}\\fi\\ifdefined\\lst@MakeCaption\\let\\axt@lstmc\\lst@MakeCaption\\def\\lst@MakeCaption##1{\\edef\\axt@cdwas{\\ifaxt@code1\\else0\\fi}\\axt@codefalse\\axt@lstmc{##1}\\ifnum\\axt@cdwas=1 \\axt@codetrue\\fi}\\fi}',
     '\\ifdefined\\AddToHook\\AddToHook{para/begin}{\\axt@cdclose\\ifaxt@code\\axt@cdopen\\fi}\\AddToHook{para/end}{\\axt@cdclose}\\AddToHook{begindocument/end}{\\axt@fvwrap\\axt@lstwrap}',
-    ...bodies.map(n => `\\AddToHook{env/${n}/begin}{\\axt@codetrue}`),
+    ...bodies!.map((n) => `\\AddToHook{env/${n}/begin}{\\axt@codetrue}`),
     '\\fi\\makeatother',
   ].join('')
 }
@@ -1375,7 +1836,7 @@ const ONE_KEY = /^\\[A-Za-z]+\*?\s*\{([^{},]*)\}\s*$/
 const TEX_KEY = /^(?!.*\^\^)[^\\{}%#]{1,200}$/
 /** the label a reference element names (classOf's `ref` and `eqref`, one label, no page's), as the marked compile writes it
  *  (white space as TeX reads it, one space); null for any other piece */
-export function refKeyOf(piece) {
+export function refKeyOf(piece: Piece | null | undefined): string | null {
   if (piece?.t !== 'ph') return null
   const cls = classOf(piece)
   if ((cls !== 'ref' && cls !== 'eqref') || PAGE_REF.test(piece.src)) return null
@@ -1384,9 +1845,13 @@ export function refKeyOf(piece) {
 }
 /** each label the paper's reference elements name (refKeyOf), once, in the order its units name them: the list the marked
  *  compile asks TeX about (refsTex), each key by its place in it */
-export function refKeysOf(units) {
-  const out = new Set()
-  for (const u of units) for (const p of u.pieces ?? []) { const k = refKeyOf(p); if (k !== null) out.add(k) }
+export function refKeysOf(units: readonly { pieces?: readonly Piece[] | undefined }[]): string[] {
+  const out = new Set<string>()
+  for (const u of units)
+    for (const p of u.pieces ?? []) {
+      const k = refKeyOf(p)
+      if (k !== null) out.add(k)
+    }
   return [...out]
 }
 /**
@@ -1406,7 +1871,7 @@ export function refKeysOf(units) {
  * label TeX has no definition of, or one with neither form (no hyperref, no cleveref), is passed over. One line, its own
  * \makeatletter; '' for a paper with no reference, whose bytes stay as they were
  */
-export function refsTex(keys) {
+export function refsTex(keys: readonly string[]): string {
   if (!keys.length) return ''
   return [
     '\\makeatletter',
@@ -1427,7 +1892,8 @@ export function refsTex(keys) {
 /** POINTS_TEX's point under `latex` (latex-front.mjs dviEngine), where pdfTeX writes no PDF itself and its \\pdfliteral sets
  *  nothing: xdvipdfmx's, as POINTS_TEX sets it under XeTeX, a `pdf:code` special, the same rendering intent in the content
  *  stream; pdfTeX's where it writes the PDF. DVI_LAYOUT_TEX's last part */
-export const DVI_POINTS_TEX = '\\let\\axt@pdfpoint\\axt@point\\def\\axt@point#1{\\ifnum\\pdfoutput>0 \\axt@pdfpoint{#1}\\else\\special{pdf:code /axt-#1 ri}\\fi}'
+export const DVI_POINTS_TEX =
+  '\\let\\axt@pdfpoint\\axt@point\\def\\axt@point#1{\\ifnum\\pdfoutput>0 \\axt@pdfpoint{#1}\\else\\special{pdf:code /axt-#1 ri}\\fi}'
 /**
  * LAYOUT_TEX under `latex` (latex-front.mjs dviEngine: arXiv's DVI compiler, the DVI made a PDF by dvipdfmx): where pdfTeX
  * writes no PDF itself, its destination and its points are xdvipdfmx's, as LAYOUT_TEX sets them under XeTeX — MARK_DEF's
@@ -1452,7 +1918,8 @@ export const DVI_POINTS_TEX = '\\let\\axt@pdfpoint\\axt@point\\def\\axt@point#1{
  * source states a call (live.mjs originalFiles): every other paper's bytes as before. After LAYOUT_TEX, whose \axt@set it uses.
  * One line
  */
-export const CALL_TEX = '\\makeatletter\\def\\axtcall{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@call\\else\\noexpand\\axtcall\\fi}\\def\\axt@call#1{\\ifhmode\\ifnum\\lastnodetype=-1 \\else\\axt@set{#1c}\\fi\\fi}\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtcall\\@gobble}\\fi}\\makeatother'
+export const CALL_TEX =
+  '\\makeatletter\\def\\axtcall{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@call\\else\\noexpand\\axtcall\\fi}\\def\\axt@call#1{\\ifhmode\\ifnum\\lastnodetype=-1 \\else\\axt@set{#1c}\\fi\\fi}\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtcall\\@gobble}\\fi}\\makeatother'
 export const DVI_LAYOUT_TEX = `\\makeatletter\\let\\axt@pdfdo\\axt@destonly\\def\\axt@destonly#1{\\ifnum\\pdfoutput>0 \\axt@pdfdo{#1}\\else\\axt@dvidest{#1}\\fi}${DVI_POINTS_TEX}\\makeatother`
 
 /** a colour piece's name in the log, `c<unit>.<k>` */
@@ -1466,21 +1933,28 @@ const PRINT_LINE = 79
  * whose string is of no form known (a dvips named colour): its colour is not known. A line TeX wrapped at its 79 characters is
  * joined back
  */
-export function readColours(log) {
-  const lines = lastTexLog(typeof log === 'string' ? log : '').split('\n'), seen = new Map(), twice = new Set()
+export function readColours(log: string | null | undefined): [unit: number, k: number, rgb: number][] {
+  const lines = lastTexLog(typeof log === 'string' ? log : '').split('\n'),
+    seen = new Map<string, number | null>(),
+    twice = new Set<string>()
   for (let i = 0; i < lines.length; i++) {
-    let line = lines[i]
+    let line = lines[i]!
     if (!line.startsWith('AXT-COLOUR ')) continue
-    while (line.length % PRINT_LINE === 0 && i + 1 < lines.length && lines[i + 1] !== '') line += lines[++i]
+    while (line.length % PRINT_LINE === 0 && i + 1 < lines.length && lines[i + 1] !== '') line += lines[++i]!
     const m = COLOUR_LINE.exec(line)
     if (!m) continue
-    const key = `${m[1]}.${m[2]}`, rgb = fillOfColour(m[3].trim())
+    const key = `${m[1]}.${m[2]}`,
+      rgb = fillOfColour(m[3]!.trim())
     // (a piece set in two colours, or once in a form not known, has none, whatever comes after)
     if (seen.has(key) && seen.get(key) !== rgb) twice.add(key)
     seen.set(key, rgb)
   }
-  const out = []
-  for (const [key, rgb] of seen) if (rgb !== null && !twice.has(key)) { const [i, k] = key.split('.').map(Number); out.push([i, k, rgb]) }
+  const out: [unit: number, k: number, rgb: number][] = []
+  for (const [key, rgb] of seen)
+    if (rgb !== null && !twice.has(key)) {
+      const [i, k] = key.split('.').map(Number)
+      out.push([i!, k!, rgb])
+    }
   return out.sort((a, b) => a[0] - b[0] || a[1] - b[1])
 }
 
@@ -1494,8 +1968,10 @@ export const MARK_NAME = /^(?:\d+[se]|c[12]-\d+|[th]\d+[se]|[pn]\d+\.\d+[ab]|g\d
 /** a colour piece: a \textcolor's open (`\textcolor{blue!60!black}{`, `\textcolor[rgb]{0,0,1}{`) or a \color switch
  *  (`\color{red}`, `\color[HTML]{245B60}`): its run's text is set in the colour, which the marked original writes at it
  *  (LAYOUT_TEX's AXT-COLOUR, readColours) */
-const COLOUR_OPEN = /^\\textcolor\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}\s*\{$/, COLOUR_SWITCH = /^\\color\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}$/
-export const colourPieceOf = p => (p?.t === 'open' && COLOUR_OPEN.test(p.src ?? '')) || (p?.t === 'ph' && COLOUR_SWITCH.test(p.src ?? ''))
+const COLOUR_OPEN = /^\\textcolor\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}\s*\{$/,
+  COLOUR_SWITCH = /^\\color\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}$/
+export const colourPieceOf = (p: PieceLike | null | undefined): boolean =>
+  (p?.t === 'open' && COLOUR_OPEN.test(p.src ?? '')) || (p?.t === 'ph' && COLOUR_SWITCH.test(p.src ?? ''))
 
 /** patch's own test of the pieces that are always set on the line, where a unit's start mark goes before one that opens
  *  the unit (latex-front.mjs INLINE: kept equal, which layout-marks.test.ts holds against patch itself) */
@@ -1507,26 +1983,45 @@ const WORD_END = /[\p{L}\p{N}]$/u
  * many arguments as it takes, each a brace group or one token (TeX skips the spaces before each), and nothing after them
  * but white space, or an empty group for a macro of none (`\method{}`, as the front end keeps it)
  */
-export function completeCall(p, complete) {
+export function completeCall(
+  p: PieceLike | null | undefined,
+  complete: ReadonlyMap<string, number> | null | undefined,
+): boolean {
   if (!complete?.size || p?.t !== 'ph' || typeof p.src !== 'string') return false
   const m = /^\\([A-Za-z@]+)/.exec(p.src)
-  const arity = m && complete.get(m[1])
+  const arity = m && complete.get(m[1]!)
   if (arity === undefined || arity === null) return false
   const s = p.src
-  let k = m[0].length
-  const spaces = () => { while (k < s.length && /\s/.test(s[k])) k++ }
+  let k = m![0].length
+  const spaces = () => {
+    while (k < s.length && /\s/.test(s[k]!)) k++
+  }
   for (let n = 0; n < arity; n++) {
     spaces()
     if (k >= s.length || s[k] === '}') return false
     if (s[k] === '{') {
-      let depth = 0, j = k
-      for (; j < s.length; j++) { if (s[j] === '\\') { j++; continue } if (s[j] === '{') depth++; else if (s[j] === '}' && --depth === 0) break }
+      let depth = 0,
+        j = k
+      for (; j < s.length; j++) {
+        if (s[j] === '\\') {
+          j++
+          continue
+        }
+        if (s[j] === '{') depth++
+        else if (s[j] === '}' && --depth === 0) break
+      }
       if (j >= s.length) return false
       k = j + 1
-    } else if (s[k] === '\\') { const c = /^\\(?:[A-Za-z@]+|.)/s.exec(s.slice(k)); k += c ? c[0].length : 1 } else k++
+    } else if (s[k] === '\\') {
+      const c = /^\\(?:[A-Za-z@]+|.)/s.exec(s.slice(k))
+      k += c ? c[0].length : 1
+    } else k++
   }
   spaces()
-  if (arity === 0 && s.startsWith('{}', k)) { k += 2; spaces() }
+  if (arity === 0 && s.startsWith('{}', k)) {
+    k += 2
+    spaces()
+  }
   return k === s.length
 }
 /** a source that ends an environment: \end skips the spaces after it where the environment says so (a display's,
@@ -1540,15 +2035,22 @@ const ENDS_IN_CS = /\\(?:[A-Za-z@]+\*?|[^A-Za-z@)])$/
  *  punctuation after it), \xspace itself, and a prefix that applies to the next token (\protect\eqref: a mark between
  *  them takes the \protect, and is written to the list of figures as itself, 2608.23586). It gets no closing mark, and
  *  the piece right after it no mark at all, which its macro would see in that piece's place */
-const LOOKS_AHEAD = p => {
+const LOOKS_AHEAD = (p: PieceLike | null | undefined): boolean => {
   const cls = classOf(p)
-  return cls === 'macro' || cls === 'footnote' || (p?.t === 'ph' && /\\(?:xspace\*?|protect|noexpand|expandafter|string|unexpanded|detokenize|global|long|outer|protected|immediate)$/.test(p.src ?? ''))
+  return (
+    cls === 'macro' ||
+    cls === 'footnote' ||
+    (p?.t === 'ph' &&
+      /\\(?:xspace\*?|protect|noexpand|expandafter|string|unexpanded|detokenize|global|long|outer|protected|immediate)$/.test(
+        p.src ?? '',
+      ))
+  )
 }
 /** a placeholder that reads nothing after it, whatever else it is: a LaTeX text symbol (text-symbols.mjs: `\S`, `\%`, `\_`, each
  *  one character by the kernel's own definition, no argument and no look ahead), where LOOKS_AHEAD's class of a macro
  *  takes it for a paper's macro. The piece right after it keeps its marks ("\S\ref{sec:a}"); its ink is read as any macro's
  *  is, by the probe and its own rows. The ink-free ones (rules/tex-kernel.mjs) never come here: INVISIBLE has no class for them */
-const READS_NOTHING = p => p?.t === 'ph' && symbolText(p.src) !== null
+const READS_NOTHING = (p: PieceLike | null | undefined): boolean => p?.t === 'ph' && symbolText(p.src) !== null
 
 /** a group's opening by a command that reads that argument verbatim, as characters, whatever definition the front end
  *  read for it: url.sty's \url and \path, hyperref's \url and \nolinkurl, breakurl's \burl, hyperref's \href's first
@@ -1564,9 +2066,9 @@ const VERBATIM_ARG = /\\(?:url|nolinkurl|path|burl|href\s*(?:\[[^\]]*\])?)\s*\{$
  * row's start it would begin the cell before \cline's \noalign or \multicolumn's \omit, which TeX refuses. A unit that
  * opens with a footnote's call gets no start mark (patch); its pieces after the call are in the paragraph the call began
  */
-export function headEnd(pieces, from = 0) {
+export function headEnd(pieces: readonly Piece[], from = 0): number {
   for (let k = from; k < pieces.length; k++) {
-    const p = pieces[k]
+    const p = pieces[k]!
     if (p.t === 'text') {
       const s = !p.tr && p.src !== undefined ? p.src : p.s
       const w = /^[ \t\r\n]*(?=[^ \t\r\n])/.exec(s)
@@ -1576,7 +2078,10 @@ export function headEnd(pieces, from = 0) {
     }
     if (p.t === 'open') continue
     // (an inline formula, and an identifier, text TeX sets as written (identifierPiece): the head's first word)
-    if (p.t === 'ph') { if (INLINE.test(p.src) || identifierPiece(p.src)) return k; continue }
+    if (p.t === 'ph') {
+      if (INLINE.test(p.src) || identifierPiece(p.src)) return k
+      continue
+    }
     return k + 1
   }
   return pieces.length
@@ -1586,11 +2091,15 @@ const BREAK = /^\\(?:\\|(?:cr|crcr|tabularnewline)(?![A-Za-z@]))/
 /** the pieces passed over, by index: at the unit's head (headEnd), and the same way after each forced break and each
  *  alignment tab, where a table's row or cell may begin in a table the scanner read as prose (aastex's deluxetable:
  *  \enddata after the last row's \\; tabularray's \SetCell, which must open its cell) */
-function passedOver(pieces) {
-  const out = new Set()
-  const skip = from => { for (let k = from, end = headEnd(pieces, from); k < end; k++) out.add(k) }
+function passedOver(pieces: readonly Piece[]): Set<number> {
+  const out = new Set<number>()
+  const skip = (from: number) => {
+    for (let k = from, end = headEnd(pieces, from); k < end; k++) out.add(k)
+  }
   skip(0)
-  pieces.forEach((p, k) => { if (p.t === 'ph' && (BREAK.test(p.src ?? '') || p.src === '&')) skip(k + 1) })
+  pieces.forEach((p, k) => {
+    if (p.t === 'ph' && (BREAK.test(p.src ?? '') || p.src === '&')) skip(k + 1)
+  })
   return out
 }
 
@@ -1617,10 +2126,20 @@ function passedOver(pieces) {
  * - none inside a group whose opening command reads that argument verbatim, as characters (VERBATIM_ARG), at any depth:
  *   a mark there would be printed as its own name
  */
-export function layoutMarking(units, classes, { lines = false, switches = null, inkless = null, complete = null, apart = null } = {}) {
+/** (each copy is its unit's, every field kept but its pieces: the units' own type, of their files) */
+export function layoutMarking<U extends Unit>(
+  units: readonly U[],
+  classes: readonly MarkClass[],
+  o?: MarkingOptions,
+): { units: U[]; mark: (u: U) => UnitMark }
+export function layoutMarking(
+  units: readonly Unit[],
+  classes: readonly MarkClass[],
+  { lines = false, switches = null, inkless = null, complete = null, apart = null }: MarkingOptions = {},
+): Marking {
   const on = new Set(classes)
   /** a paper's macro TeX said sets no ink (readInkProbe): no mark, as an invisible placeholder has none */
-  const none = new Set(inkless ?? [])
+  const none: ReadonlySet<string | undefined> = new Set(inkless ?? [])
   /** the paper's macros that read nothing past their arguments (completeMacros): a call of one with all of them, which TeX
    *  answered for (the mark probe asks about them: probeSamples), looks at nothing after it as far as its own reading goes;
    *  what its body sets may (a citation, a footnote, a kern after its last letter), so its closing mark is TeX's answer, and the
@@ -1630,45 +2149,66 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
   /** the call the probe asked about for each complete macro (probeSamples, over the same units): a call of it with other
    *  arguments may end in another glyph, which TeX kerns otherwise with what follows (`\\fmt{x}{V}.` under mathptmx, the
    *  probe's `\\fmt{x}{x}.`), so its answer is that call's, and a call of no arguments's at all */
-  const asked = switches && closed.size ? probeSamples(units, closed).filter(s => s.own) : []
-  const probed = new Map(asked.map(s => [s.command, s.src]))
+  const asked = switches && closed.size ? (probeSamples(units, closed).filter((s) => s.own) as CommandSample[]) : []
+  const probed = new Map<string | null, string>(asked.map((s) => [s.command, s.src]))
   /** the placeholder each complete macro's probed call is glued to (probeSamples' `glued`), TeX's answer for it the `call`
    *  follower's: a call glued to a placeholder of that source has its closing mark where TeX answered that a mark between the
    *  two moves nothing (2610.21098's `\\HarnessLimitShare{}\\%`: a kern between the number's last digit and the next
    *  glyph, which a mark would take, is the font's to say) */
-  const glued = new Map(asked.filter(s => s.glued).map(s => [s.command, s.glued]))
-  const answered = p => completeCall(p, closed) && !!switches?.[commandOf(p)] && (closed.get(commandOf(p).slice(1)) === 0 || probed.get(commandOf(p)) === p.src)
-  const looks = p => LOOKS_AHEAD(p) && !answered(p)
-  const gluedTo = (p, next) => next?.t === 'ph' && answered(p) && glued.get(commandOf(p)) === next.src
+  const glued = new Map<string | null, string | undefined>(
+    asked.filter((s) => s.glued).map((s) => [s.command, s.glued]),
+  )
+  const answered = (p: PieceLike | null | undefined): boolean =>
+    completeCall(p, closed) &&
+    !!switches?.[commandOf(p)!] &&
+    (closed.get(commandOf(p)!.slice(1)) === 0 || probed.get(commandOf(p)) === p!.src)
+  const looks = (p: PieceLike | null | undefined): boolean => LOOKS_AHEAD(p) && !answered(p)
+  const gluedTo = (p: PieceLike | null | undefined, next: Piece | undefined): boolean =>
+    next?.t === 'ph' && answered(p) && glued.get(commandOf(p)) === next.src
   // (white space after a call that ends in a control word is none: TeX skips it, and the next piece stands against the call's
   // last letter, where its mark's whatsit would let TeX hyphenate the word a citation's box keeps whole: `\\tf \\cite{a}`)
-  const opensAfter = (after, spaced) => spaced && !ENDS_IN_CS.test(after.src ?? '') && answered(after) && switches[commandOf(after)][6] === '0'
+  const opensAfter = (after: PieceLike, spaced: boolean): boolean =>
+    spaced && !ENDS_IN_CS.test(after.src ?? '') && answered(after) && switches![commandOf(after)!]![6] === '0'
   /** the paper's macros whose box TeX began with a node apart from a word (readInkApart): glued to one, none of its letters */
-  const parted = new Set(apart ?? [])
+  const parted: ReadonlySet<string | undefined> = new Set(apart ?? [])
   /** what TeX answered for a piece's command before what follows it: a code of readMarkProbe's ('x' no answer: no mark
    *  as '2'); with `switches` and no answer for an asked class's command, '2' too — no mark where TeX did not say one
    *  is safe (the re-review's m4); with no `switches` at all (the probe not run), undefined: the marks as before */
-  const answer = (p, next) => {
+  const answer = (p: Piece, next: Piece | undefined): string | undefined => {
     if (!switches) return undefined
-    const codes = switches[commandOf(p)]
+    const codes = switches[commandOf(p) ?? '']
     if (!codes) return ASKED.has(classOf(p)) ? '2' : undefined
-    const code = classOf(next) === 'footnote' && classOf(p) === 'footnote' ? (codes[7] === '0' ? codes[6] : codes[7] === 'x' ? 'x' : '1') : gluedTo(p, next) ? codes[7] : codes[next?.t === 'text' && next.s[0] && PUNCT.includes(next.s[0]) ? PUNCT.indexOf(next.s[0]) : 6]
+    const code =
+      classOf(next) === 'footnote' && classOf(p) === 'footnote'
+        ? codes[7] === '0'
+          ? codes[6]
+          : codes[7] === 'x'
+            ? 'x'
+            : '1'
+        : gluedTo(p, next)
+          ? codes[7]
+          : codes[next?.t === 'text' && next.s[0] && PUNCT.includes(next.s[0]) ? PUNCT.indexOf(next.s[0]) : 6]
     return code === 'x' ? '2' : code
   }
   /** whether a piece after one that may look ahead may have its marks: TeX answered so for a footnote's call */
-  const free = (after, p) => classOf(after) === 'footnote' && !!switches?.[commandOf(after)] && (classOf(p) === 'footnote' ? switches[commandOf(after)][7] === '0' : switches[commandOf(after)][6] === '0')
+  const free = (after: PieceLike | null, p: Piece): boolean =>
+    classOf(after) === 'footnote' &&
+    !!switches?.[commandOf(after)!] &&
+    (classOf(p) === 'footnote' ? switches![commandOf(after)!]![7] === '0' : switches![commandOf(after)!]![6] === '0')
   /** TeX's answer for the placeholder at `q` of a unit's pieces and the paper's macro right before it, past white space alone
    *  or none (pairOf, aheadSamples; readMarkProbe: `0` every mark moves nothing, `1` the macro's opening mark alone and the
    *  placeholder's, `2` or `x` none on the placeholder), with that macro's piece; null where the pair was not asked about */
-  const aheadSaid = (pieces, q) => {
-    const pair = switches ? pairOf(pieces, q) : null, code = pair ? switches[aheadKey(pair[0].src, pair[1], pieces[q].src)] : undefined
-    return code === undefined ? null : { m: pair[0], at: pair[2], code }
+  const aheadSaid = (pieces: readonly Piece[], q: number): { m: PhPiece; at: number; code: string } | null => {
+    const pair = switches ? pairOf(pieces, q) : null,
+      code = pair ? switches![aheadKey(pair[0].src, pair[1], (pieces[q] as PhPiece).src)] : undefined
+    return code === undefined ? null : { m: pair![0], at: pair![2], code }
   }
   /** the paper's macros that got their opening mark, by piece: a placeholder after one is marked only so, as TeX was asked */
-  const opened = new Set()
-  const base = markUnits(units), front = frontMarks(units)
+  const opened = new Set<PieceLike | null | undefined>()
+  const base = markUnits(units),
+    front = frontMarks(units)
   const index = new Map(units.map((u, i) => [u, i]))
-  const own = u => {
+  const own = (u: Unit): UnitMark => {
     const i = index.get(u)
     if (u.kind === 'cell') return { start: `\\leavevmode\\axtmark{t${i}s}`, end: `\\axtend{t${i}e}` }
     // (a front heading too, a class's command whose text it hands elsewhere as well — ICML's \\icmltitle, set in a box the class
@@ -1680,11 +2220,14 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
     // (the front matter's units: their unit marks, no line probe, which would act on the class's own paragraph)
     // (and an author's call the source states before it, latex-front.mjs CALLED_AT: its point `<i>c`, CALL_TEX)
     const f = front(u)
-    if (f) { const at = calledAt(u); return at === undefined ? f : { ...f, call: `\\axtcall{${i}}`, callAt: at } }
+    if (f) {
+      const at = calledAt(u)
+      return at === undefined ? f : { ...f, call: `\\axtcall{${i}}`, callAt: at }
+    }
     const m = base(u)
     return m && lines ? { ...m, before: `\\axtlines{${i}}` } : m
   }
-  const copies = units.map(u => ({ ...u }))
+  const copies = units.map((u) => ({ ...u }))
   const copyOf = new Map(units.map((u, i) => [u, copies[i]]))
   units.forEach((u, i) => {
     const passed = own(u) ? passedOver(u.pieces) : null
@@ -1693,27 +2236,35 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
     // \protect before it, it is stored as it is and set where the note is: 2610.20484's \texttt and 2610.11256's \href in a
     // \thanks were LOST, their marks gone)
     const lead = front(u) ? '\\protect' : ''
-    let last = null, gap = false, beforePrefix = null, gapBefore = false
+    let last: Piece | null = null,
+      gap = false,
+      beforePrefix: Piece | null = null,
+      gapBefore = false
     /** the pieces whose closing mark goes after the punctuation mark their command moves (TeX's 3), by index: that mark */
-    const movedAt = new Map()
+    const movedAt = new Map<number, PhPiece>()
     /** the groups open at a piece, innermost last: whether each is, or is inside, an argument read verbatim */
-    const verbatim = []
+    const verbatim: boolean[] = []
     /** the paper's macros this unit sets with no mark of their own, by index (none TeX said sets no ink): those passed over that
      *  nothing before them reads (at its head they get a head point) and those glued to the word before them (right after its last
      *  text they get the point after their group; below) */
-    const bare = new Set()
-    const out = u.pieces.map((p, k) => {
+    const bare = new Set<number>()
+    const out = u.pieces.map((p, k): Piece[] => {
       const piece = p.t === 'nested' ? { ...p, unit: copyOf.get(p.unit) ?? p.unit } : p
       // (backref's list after an entry, no byte of the source: the name of its marks, which LAYOUT_TEX's hook sets around the list
       // where TeX sets it, after the entry's end mark; none in a unit of no mark, nor with the paper's macros unmarked)
       if (backrefPiece(p)) return own(u) && on.has('macro') ? [{ t: 'ph', src: `\\axtbrname{p${i}.${k}}` }] : []
       // (`spaced`: white space alone between the piece before and this one; after a prefix (PREFIX_WORDS: \protect), the piece
       // before the prefix's, the pair one command whose marks stand before the prefix)
-      const prefixed = k > 0 && prefixWord(u.pieces[k - 1].t === 'ph' ? u.pieces[k - 1].src : null)
-      const after = prefixed ? beforePrefix : last, spaced = prefixed ? gapBefore : gap
+      const prefixed = k > 0 && prefixWord(u.pieces[k - 1]!.t === 'ph' ? u.pieces[k - 1]!.src : null)
+      const after = prefixed ? beforePrefix : last,
+        spaced = prefixed ? gapBefore : gap
       if (p.t !== 'text' || /[^ \t\r\n]/.test(p.s)) {
-        if (p.t === 'ph' && prefixWord(p.src)) { beforePrefix = last; gapBefore = gap }
-        last = p; gap = false
+        if (p.t === 'ph' && prefixWord(p.src)) {
+          beforePrefix = last
+          gapBefore = gap
+        }
+        last = p
+        gap = false
       } else gap = true
       if (p.t === 'open') verbatim.push(verbatim.at(-1) === true || VERBATIM_ARG.test(p.src ?? ''))
       else if (p.t === 'close') verbatim.pop()
@@ -1725,12 +2276,15 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // call's too, which its own answer leaves none there; its closing mark is its own answer's. Not in a front unit, whose marks
       // are robust and the probe's box sets none so)
       const pairSaid = lead ? null : aheadSaid(u.pieces, k)
-      const ahead = !!pairSaid && pairSaid.m === after && opened.has(after) && (pairSaid.code === '0' || pairSaid.code === '1')
+      const ahead =
+        !!pairSaid && pairSaid.m === after && opened.has(after) && (pairSaid.code === '0' || pairSaid.code === '1')
       // (`reads`: the piece before this one may read what follows it, so that nothing of ours may stand between them)
-      const reads = LOOKS_AHEAD(after) && !READS_NOTHING(after) && !free(after, p) && !opensAfter(after, spaced) && !ahead
+      const reads =
+        LOOKS_AHEAD(after) && !READS_NOTHING(after) && !free(after, p) && !opensAfter(after!, spaced) && !ahead
       const cls = passed && !passed.has(k) && !reads ? classOf(p) : null
       if (!cls || !on.has(cls) || (cls === 'macro' && none.has(p.src))) {
-        if (!cls && passed?.has(k) && !reads && on.has('macro') && classOf(p) === 'macro' && !none.has(p.src)) bare.add(k)
+        if (!cls && passed?.has(k) && !reads && on.has('macro') && classOf(p) === 'macro' && !none.has(p.src))
+          bare.add(k)
         return [piece]
       }
       // a paper's macro may set letters: glued to the word before, it is part of it (an accent, \\ss), and a mark would
@@ -1742,8 +2296,18 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // word ends where it ended (an author's `Zhou\\textsuperscript{1}`, 2610.21924v1 u1: its affiliations had no mark, the
       // author line English). Not past a prefix, which \\axt@boxy would see in the command's place
       // (the piece before a prefix's, past it: the pair is one command, glued to the word before it as the command alone would be)
-      const before = u.pieces[prefixed ? k - 2 : k - 1], next = u.pieces[k + 1]
-      if (cls === 'macro' && before?.t === 'text' && WORD_END.test(before.s) && !parted.has(p.src) && !(BOXY.test(p.src) && !prefixed)) { bare.add(k); return [piece] }
+      const before = u.pieces[prefixed ? k - 2 : k - 1],
+        next = u.pieces[k + 1]
+      if (
+        cls === 'macro' &&
+        before?.t === 'text' &&
+        WORD_END.test(before.s) &&
+        !parted.has(p.src) &&
+        !(BOXY.test(p.src!) && !prefixed)
+      ) {
+        bare.add(k)
+        return [piece]
+      }
       // (a complete call keeps its opening mark whatever TeX answered for what follows, as any macro of the paper's has it: the
       // answer is the closing mark's and the next piece's alone. A call that ends in a control word is answered '2' before a word,
       // TeX's tokenizer skipping the space after it where `{}` keeps it, which says nothing of a mark before the call)
@@ -1754,7 +2318,18 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // after it, past its first character (`movedAt`); a paper's macro keeps its opening mark alone, as for 2; a text piece whose
       // source is not its text there (an accent's letter joined to it), none)
       const raw = cls === 'macro' && !answered(p) ? undefined : answer(p, next)
-      const said = (raw === '2' || raw === '3') && cls === 'macro' ? '1' : raw === '3' && !(next?.t === 'text' && PUNCT.includes(next.s[0]) && (next.src === undefined || next.src[0] === next.s[0])) ? '2' : raw
+      const said =
+        (raw === '2' || raw === '3') && cls === 'macro'
+          ? '1'
+          : raw === '3' &&
+              !(
+                next?.t === 'text' &&
+                next.s[0] !== undefined &&
+                PUNCT.includes(next.s[0]) &&
+                (next.src === undefined || next.src[0] === next.s[0])
+              )
+            ? '2'
+            : raw
       if (said === '2') return [piece]
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
       // (an inline formula's opening mark is set on the empty list too: \axtpmm, LAYOUT_TEX. `opens`: the mark that opens the
@@ -1762,15 +2337,31 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // (an identifier's \axthpk: it begins with a character, so in vertical mode, where a box's paragraph opens with it, the mark
       // begins the paragraph before that character as TeX would and sets its point there, where \axtpma waits for the next mark
       // (its closing one: 2608.25210v2 p3's \mypython box, the element empty); in horizontal mode \axtpma's)
-      const open = { t: 'ph', src: `${lead}\\${cls === 'math' ? 'axtpmm' : identifierPiece(p.src) ? 'axthpk' : 'axtpma'}{${name}a}`, opens: true }
-      if (said === '3') { movedAt.set(k, { t: 'ph', src: `${lead}\\axtpm{${name}b}` }); return [open, piece] }
+      const open: PhPiece = {
+        t: 'ph',
+        src: `${lead}\\${cls === 'math' ? 'axtpmm' : identifierPiece(p.src) ? 'axthpk' : 'axtpma'}{${name}a}`,
+        opens: true,
+      }
+      if (said === '3') {
+        movedAt.set(k, { t: 'ph', src: `${lead}\\axtpm{${name}b}` })
+        return [open, piece]
+      }
       if (cls === 'macro') opened.add(p)
       // a complete call's closing mark, where TeX answered for what follows (`said`), only before white space or punctuation, or at
       // the unit's end: before a letter or a digit it would stand inside a word (`\\tf{}s`: TeX would break Transform-ers no
       // more), before another piece against that piece's first character
-      const closes = !answered(p) || next === undefined || (next.t === 'text' && /^[ \t\r\n.,;:!?]/.test(next.s)) || gluedTo(p, next)
+      const closes =
+        !answered(p) || next === undefined || (next.t === 'text' && /^[ \t\r\n.,;:!?]/.test(next.s)) || gluedTo(p, next)
       // (an identifier that ends in a text symbol, `\}`, keeps its closing mark: TeX skips no space after a control symbol)
-      if (said === '1' || !closes || (looks(p) && !(cls === 'footnote' && said === '0')) || (ENDS_IN_CS.test(p.src) && !identifierPiece(p.src)) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
+      if (
+        said === '1' ||
+        !closes ||
+        (looks(p) && !(cls === 'footnote' && said === '0')) ||
+        (ENDS_IN_CS.test(p.src ?? '') && !identifierPiece(p.src)) ||
+        /\s$/.test(p.src ?? '') ||
+        ENDS_ENV.test(p.src ?? '')
+      )
+        return [open, piece]
       return [open, piece, { t: 'ph', src: `${lead}\\axtpm{${name}b}` }]
     })
     // (a placeholder the marking passes over after a forced break (passedOver) has its opening point before the break, before the
@@ -1782,30 +2373,46 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
     // stand. 2608.25210v2 u143's algorithm lines, PDF-READER §18.34)
     if (own(u)) {
       const head = headEnd(u.pieces, 0)
-      const blank = r => r.t === 'text' && !/[^ \t\r\n]/.test(r.s)
+      const blank = (r: Piece): boolean => r.t === 'text' && !/[^ \t\r\n]/.test(r.s)
       for (let k = 0; k < u.pieces.length; k++) {
-        const p = u.pieces[k]
-        if (p.t !== 'ph' || !BREAK.test(p.src ?? '') || out[k].length !== 1 || out[k][0] !== u.pieces[k]) continue
+        const p = u.pieces[k]!
+        if (p.t !== 'ph' || !BREAK.test(p.src ?? '') || out[k]!.length !== 1 || out[k]![0] !== u.pieces[k]) continue
         let j = k + 1
-        while (j < u.pieces.length && blank(u.pieces[j])) j++
+        while (j < u.pieces.length && blank(u.pieces[j]!)) j++
         const q = u.pieces[j]
-        if (q?.t !== 'ph' || BREAK.test(q.src ?? '') || q.src === '&' || !passed?.has(j) || out[j].length !== 1 || out[j][0] !== u.pieces[j]) continue
+        if (
+          q?.t !== 'ph' ||
+          BREAK.test(q.src ?? '') ||
+          q.src === '&' ||
+          !passed?.has(j) ||
+          out[j]!.length !== 1 ||
+          out[j]![0] !== u.pieces[j]
+        )
+          continue
         const cls = classOf(q)
         if (!cls || !on.has(cls) || (cls === 'macro' && none.has(q.src))) continue
         let f = k
         for (let b = k - 1; b >= 0; b--) {
-          const r = u.pieces[b]
+          const r = u.pieces[b]!
           if (blank(r)) continue
-          if (r.t === 'ph' && BREAK.test(r.src ?? '') && out[b].length === 1) { f = b; continue }
+          if (r.t === 'ph' && BREAK.test(r.src ?? '') && out[b]!.length === 1) {
+            f = b
+            continue
+          }
           break
         }
         if (f < head) continue
-        out[f] = [{ t: 'ph', src: `${lead}\\axtpma{${cls === 'footnote' ? 'n' : 'p'}${i}.${j}a}` }, ...out[f]]
+        out[f] = [{ t: 'ph', src: `${lead}\\axtpma{${cls === 'footnote' ? 'n' : 'p'}${i}.${j}a}` }, ...out[f]!]
       }
     }
     // (a closing mark after the punctuation mark its piece's command moves: the text after the piece cut after that mark)
     for (const [k, close] of movedAt) {
-      const t = u.pieces[k + 1], cut = (a, b) => ({ ...t, s: t.s.slice(a, b), ...(t.src !== undefined ? { src: t.src.slice(a, b) } : {}) })
+      const t = u.pieces[k + 1] as TextPiece,
+        cut = (a: number, b?: number) => ({
+          ...t,
+          s: t.s.slice(a, b),
+          ...(t.src !== undefined ? { src: t.src.slice(a, b) } : {}),
+        })
       out[k + 1] = [cut(0, 1), close, ...(t.s.length > 1 ? [cut(1)] : [])]
     }
     // (a paper's macro that looks ahead, with its opening mark alone, whose next piece past white space alone or none got its
@@ -1813,15 +2420,34 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
     // white space, which may be a line's end before a blank one, or in an environment's \end, whose skip of the spaces after it
     // the probe's box cannot show)
     for (let q = 1; q < out.length && !lead; q++) {
-      const said = aheadSaid(u.pieces, q), k = said?.at ?? -1, m = said?.m
-      if (said?.code !== '0' || out[q].length < 2 || out[q][1] !== u.pieces[q] || out[k].length !== 2 || out[k][1] !== m || !opened.has(m) || !looks(m) || /\s$/.test(m.src) || ENDS_ENV.test(m.src)) continue
-      out[k] = [...out[k], { t: 'ph', src: `\\axtpm{p${i}.${k}b}` }]
+      const said = aheadSaid(u.pieces, q),
+        k = said?.at ?? -1,
+        m = said?.m
+      if (
+        said?.code !== '0' ||
+        out[q]!.length < 2 ||
+        out[q]![1] !== u.pieces[q] ||
+        out[k]!.length !== 2 ||
+        out[k]![1] !== m ||
+        !opened.has(m) ||
+        !looks(m) ||
+        /\s$/.test(m!.src) ||
+        ENDS_ENV.test(m!.src)
+      )
+        continue
+      out[k] = [...out[k]!, { t: 'ph', src: `\\axtpm{p${i}.${k}b}` }]
     }
     // (a prefixed piece's opening mark before its prefix)
     for (let k = 1; k < out.length; k++) {
-      if (!prefixWord(u.pieces[k - 1].t === 'ph' ? u.pieces[k - 1].src : null) || out[k - 1].length !== 1 || out[k].length < 2 || out[k][0] === u.pieces[k]) continue
-      out[k - 1] = [out[k][0], ...out[k - 1]]
-      out[k] = out[k].slice(1)
+      if (
+        !prefixWord(u.pieces[k - 1]!.t === 'ph' ? u.pieces[k - 1]!.src : null) ||
+        out[k - 1]!.length !== 1 ||
+        out[k]!.length < 2 ||
+        out[k]![0] === u.pieces[k]
+      )
+        continue
+      out[k - 1] = [out[k]![0]!, ...out[k - 1]!]
+      out[k] = out[k]!.slice(1)
     }
     // (a paper's macro with no mark of its own at the unit's head, before its start mark, where TeX sets its ink: \\axthpk, its
     // opening point, the start mark its closing one; one after the unit's last text, after its end mark (glued to the word
@@ -1830,49 +2456,80 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
     // text, so no end mark. Neither in a cell nor in a unit that holds an alignment's tab: a mark at the head would stand before the
     // \\omit or \\noalign TeX looks for at an entry's or a row's start (\\multicolumn's: "Misplaced \\omit"), and a group's end
     // there is an entry's, after which the point would open the next one)
-    if (own(u) && bare.size && u.kind !== 'cell' && !u.pieces.some(p => p.t === 'ph' && p.src === '&')) {
+    if (own(u) && bare.size && u.kind !== 'cell' && !u.pieces.some((p) => p.t === 'ph' && p.src === '&')) {
       const head = headEnd(u.pieces, 0)
-      const lastText = u.pieces.findLastIndex(p => p.t === 'text' && /[^ \t\r\n]/.test(p.s))
+      const lastText = u.pieces.findLastIndex((p) => p.t === 'text' && /[^ \t\r\n]/.test(p.s))
       for (const k of bare) {
-        if (out[k].length !== 1 || (k > 0 && prefixWord(u.pieces[k - 1].t === 'ph' ? u.pieces[k - 1].src : null))) continue
-        if (k < head) out[k] = [{ t: 'ph', src: `${lead}\\axthpk{p${i}.${k}a}` }, ...out[k]]
+        if (out[k]!.length !== 1 || (k > 0 && prefixWord(u.pieces[k - 1]!.t === 'ph' ? u.pieces[k - 1]!.src : null)))
+          continue
+        if (k < head) out[k] = [{ t: 'ph', src: `${lead}\\axthpk{p${i}.${k}a}` }, ...out[k]!]
         // (right after the last text alone: the end mark stands between the two, nothing of the paper's — `\\urldef\\tempurl`,
         // whose first defines the next token, 2608.25210v2's .bbl)
-        else if (!lead && k === lastText + 1) out[k] = [{ t: 'ph', src: `\\axttg{p${i}.${k}g}` }, ...out[k]]
+        else if (!lead && k === lastText + 1) out[k] = [{ t: 'ph', src: `\\axttg{p${i}.${k}g}` }, ...out[k]!]
       }
     }
-    copies[i].pieces = out.flat()
+    copies[i]!.pieces = out.flat()
   })
-  const at = new Map([...index, ...copies.map((c, i) => [c, i])])
-  return { units: copies, mark: u => (at.has(u) ? own(units[at.get(u)]) : null) }
+  const at = new Map([...index, ...copies.map((c, i): [Unit, number] => [c, i])])
+  return { units: copies, mark: (u) => (at.has(u) ? own(units[at.get(u)!]!) : null) }
 }
 /** the paper's macros a marking takes for reading nothing past their arguments, at most: a count of macros; unmeasured */
 export const COMPLETE_MAX = 4096
 /** of the paper's complete macros (latex-front.mjs completeMacros, [name, arity]), those its units call as placeholders,
  *  as the marking records them: an object by name, at most COMPLETE_MAX, the first by name; null for none given */
-export function completeCalled(units, complete) {
+export function completeCalled(
+  units: readonly { pieces: readonly PieceLike[] }[],
+  complete: readonly (readonly [name: string, arity: number])[] | null | undefined,
+): Complete | null {
   if (!Array.isArray(complete)) return null
-  const called = new Set()
-  for (const u of units) for (const p of u.pieces) { const c = p.t === 'ph' && /^\\([A-Za-z@]+)/.exec(p.src ?? ''); if (c) called.add(c[1]) }
-  const out = {}
+  const called = new Set<string>()
+  for (const u of units)
+    for (const p of u.pieces) {
+      const c = p.t === 'ph' && /^\\([A-Za-z@]+)/.exec(p.src ?? '')
+      if (c) called.add(c[1]!)
+    }
+  const out: Complete = {}
   let n = 0
   // (a name the file's check takes: a control word's of at most 63 letters, an arity of one digit)
-  for (const [name, arity] of complete) if (called.has(name) && n < COMPLETE_MAX && /^[A-Za-z@]{1,63}$/.test(name) && Number.isInteger(arity) && arity >= 0 && arity <= 9) { out[name] = arity; n++ }
+  for (const [name, arity] of complete)
+    if (
+      called.has(name) &&
+      n < COMPLETE_MAX &&
+      /^[A-Za-z@]{1,63}$/.test(name) &&
+      Number.isInteger(arity) &&
+      arity >= 0 &&
+      arity <= 9
+    ) {
+      out[name] = arity
+      n++
+    }
   return out
 }
 
 /** the names a log reports set twice: pdfTeX's and LuaTeX's warnings, dvipdfmx's, in every pass a log holds (a line TeX
  *  cut at 79 characters joined to the next) */
-export const duplicatesIn = log => {
-  const text = (log ?? '').replace(/^(.{79})\n/gm, '$1'), out = new Set()
-  for (const m of text.matchAll(/destination with the same identifier \(name\{axt-([^}\s]+)\}\)|duplicate destination with the name 'axt-([^'\s]+)'|Object @axt-(\S+?) already defined/g)) out.add(m[1] ?? m[2] ?? m[3])
-  return [...out].filter(n => MARK_NAME.test(n))
+export const duplicatesIn = (log: string | null | undefined): string[] => {
+  const text = (log ?? '').replace(/^(.{79})\n/gm, '$1'),
+    out = new Set<string>()
+  for (const m of text.matchAll(
+    /destination with the same identifier \(name\{axt-([^}\s]+)\}\)|duplicate destination with the name 'axt-([^'\s]+)'|Object @axt-(\S+?) already defined/g,
+  ))
+    out.add((m[1] ?? m[2] ?? m[3])!)
+  return [...out].filter((n) => MARK_NAME.test(n))
 }
 
 /** the source pieces of a unit that TeX ligatures and LaTeX's quotes set as other characters, as the glyphs have them */
-export const asSet = s => s.replace(/---/g, '\u2014').replace(/--/g, '\u2013').replace(/``/g, '\u201c').replace(/''/g, '\u201d').replace(/`/g, '\u2018').replace(/'/g, '\u2019').replace(/[~\s]/g, '')
+export const asSet = (s: string): string =>
+  s
+    .replace(/---/g, '\u2014')
+    .replace(/--/g, '\u2013')
+    .replace(/``/g, '\u201c')
+    .replace(/''/g, '\u201d')
+    .replace(/`/g, '\u2018')
+    .replace(/'/g, '\u2019')
+    .replace(/[~\s]/g, '')
 /** a unit's end marks, any of which may be the next mark after its last piece */
-const endsOf = i => [`${i}e`, `t${i}e`, `h${i}e`]
+const endsOf = (i: number): string[] => [`${i}e`, `t${i}e`, `h${i}e`]
 /**
  * What the marking says of each piece with an opening mark, for its own ink (layout/stream.mjs Follow): by its opening
  * mark's name, whether it has a closing mark (`names`: the destinations set and those dropped), the first WANT
@@ -1897,31 +2554,62 @@ const endsOf = i => [`${i}e`, `t${i}e`, `h${i}e`]
  * `\code{…} \papertext{…}below.`, a macro of no ink between the code and its text. The erasure's `through` and `split` read past
  * the pieces after it as before
  */
-export function followsOf(units, names, texts = null, inkless = null) {
-  const shown = texts instanceof Map ? texts : Array.isArray(texts) ? new Map(Array.from({ length: Math.floor(texts.length / 2) }, (_, j) => [texts[2 * j], texts[2 * j + 1]])) : null
-  const nameOf = (i, k) => { const c = classOf(units[i]?.pieces[k]); return c ? `${c === 'footnote' ? 'n' : 'p'}${i}.${k}` : null }
-  const noInk = new Set(inkless ?? [])
+export function followsOf(
+  units: readonly Unit[],
+  names: ReadonlySet<string>,
+  texts: readonly string[] | ReadonlyMap<string, string> | null = null,
+  inkless: Iterable<string> | null = null,
+): (name: string) => Follow | null {
+  const shown: ReadonlyMap<string | undefined, string> | null =
+    texts instanceof Map
+      ? texts
+      : Array.isArray(texts)
+        ? new Map(
+            Array.from({ length: Math.floor(texts.length / 2) }, (_, j): [string, string] => [
+              texts[2 * j],
+              texts[2 * j + 1],
+            ]),
+          )
+        : null
+  const nameOf = (i: number, k: number): string | null => {
+    const c = classOf(units[i]?.pieces[k])
+    return c ? `${c === 'footnote' ? 'n' : 'p'}${i}.${k}` : null
+  }
+  const noInk: ReadonlySet<string | undefined> = new Set(inkless ?? [])
   /** what piece q of unit i sets past a piece's ink, as text, `after` the text after it so far: a text piece's text, an unmarked
    *  text symbol's character where nothing but white space comes before it and the text's comparison reads it as written (asSet:
    *  not `\\textasciitilde`'s `~`, which it takes for a tie); '' for nothing (no class, or a paper's macro TeX said sets no ink);
    *  null for a visible piece */
-  const shownAt = (i, q, after) => {
-    const p = units[i].pieces[q], c = classOf(p)
+  const shownAt = (i: number, q: number, after: string): string | null => {
+    const p = units[i]!.pieces[q]!,
+      c = classOf(p)
     if (!c) return p.t === 'text' ? plainTranslated([p]) : ''
     if (c !== 'macro') return null
     if (noInk.has(p.src)) return ''
     const sym = symbolText(p.src)
     return sym !== null && asSet(sym) === sym && !names.has(`p${i}.${q}a`) && !/\S/.test(after) ? sym : null
   }
-  return name => {
+  return (name: string): Follow | null => {
     const m = /^([pn])(\d+)\.(\d+)a$/.exec(name)
-    const i = m ? Number(m[2]) : -1, k = m ? Number(m[3]) : -1, u = units[i]
+    const i = m ? Number(m[2]) : -1,
+      k = m ? Number(m[3]) : -1,
+      u = units[i]
     if (!u || nameOf(i, k) !== name.slice(0, -1)) return null
-    const display = classOf(u.pieces[k]) === 'display', group = []
-    let after = '', q = k + 1
+    const display = classOf(u.pieces[k]) === 'display',
+      group: string[] = []
+    let after = '',
+      q = k + 1
     for (;;) {
-      for (let t; q < u.pieces.length && (t = shownAt(i, q, after)) !== null; q++) after += t
-      if (!display || q >= u.pieces.length || classOf(u.pieces[q]) !== 'display' || /\S/.test(after) || names.has(`${nameOf(i, q)}a`)) break
+      // biome-ignore lint/suspicious/noAssignInExpressions: each piece's text read once, as the loop's test (the module's own form)
+      for (let t: string | null; q < u.pieces.length && (t = shownAt(i, q, after)) !== null; q++) after += t
+      if (
+        !display ||
+        q >= u.pieces.length ||
+        classOf(u.pieces[q]) !== 'display' ||
+        /\S/.test(after) ||
+        names.has(`${nameOf(i, q)}a`)
+      )
+        break
       group.push(`${nameOf(i, q)}a`)
       q++
     }
@@ -1930,14 +2618,21 @@ export function followsOf(units, names, texts = null, inkless = null) {
     const blocked = !!next && !names.has(`${next}a`)
     // (`through`, the erasure's: past the unmarked visible pieces right after it, nothing but white space between, the next
     // marked piece's opening; null where text or the unit's end comes first)
-    let through = null, others = 0
+    let through: string | null = null,
+      others = 0
     if (blocked && !/\S/.test(after)) {
       for (let r = q + 1; r < u.pieces.length; r++) {
-        const p = u.pieces[r]
-        if (p.t === 'text') { if (/\S/.test(plainTranslated([p]))) break; continue }
+        const p = u.pieces[r]!
+        if (p.t === 'text') {
+          if (/\S/.test(plainTranslated([p]))) break
+          continue
+        }
         const c = classOf(p)
         if (!c) continue
-        if (names.has(`${nameOf(i, r)}a`)) { through = `${nameOf(i, r)}a`; break }
+        if (names.has(`${nameOf(i, r)}a`)) {
+          through = `${nameOf(i, r)}a`
+          break
+        }
         others++
       }
     }
@@ -1945,16 +2640,27 @@ export function followsOf(units, names, texts = null, inkless = null) {
     // (AHEAD_FOLLOWS, or a paper's macro that is no text symbol: a .bbl's `\\DOIprefix\\doi{…}`), the next marked piece right after
     // that piece (`through`), or text after it, then a piece of its unit's ends (`want`, `rest`, `ends`, as an opening's): its ink
     // ends where that text begins)
-    const F = blocked && !/\S/.test(after) ? u.pieces[q] : null, fcls = classOf(F)
-    const parted = !!F && classOf(u.pieces[k]) === 'macro' && (AHEAD_FOLLOWS.has(fcls) || (fcls === 'macro' && symbolText(F.src) === null))
-    let trail = null
+    const F = blocked && !/\S/.test(after) ? u.pieces[q] : null,
+      fcls = classOf(F)
+    const parted =
+      !!F &&
+      classOf(u.pieces[k]) === 'macro' &&
+      (AHEAD_FOLLOWS.has(fcls) || (fcls === 'macro' && symbolText(F.src) === null))
+    let trail: { want: string; rest: string; ends: string[] } | null = null
     if (parted && !through) {
-      let rest = '', r = q + 1
-      for (; r < u.pieces.length && !classOf(u.pieces[r]); r++) if (u.pieces[r].t === 'text') rest += plainTranslated([u.pieces[r]])
+      let rest = '',
+        r = q + 1
+      for (; r < u.pieces.length && !classOf(u.pieces[r]); r++)
+        if (u.pieces[r]!.t === 'text') rest += plainTranslated([u.pieces[r]!])
       const fnext = r < u.pieces.length ? nameOf(i, r) : null
-      if (/\S/.test(rest)) trail = { want: asSet(rest).normalize('NFKC').toLowerCase().replace(/\s/g, '').slice(0, WANT), rest: spellOf(rest), ends: [...(fnext ? [`${fnext}a`] : []), ...endsOf(i)] }
+      if (/\S/.test(rest))
+        trail = {
+          want: asSet(rest).normalize('NFKC').toLowerCase().replace(/\s/g, '').slice(0, WANT),
+          rest: spellOf(rest),
+          ends: [...(fnext ? [`${fnext}a`] : []), ...endsOf(i)],
+        }
     }
-    const text = shown && parted && ((through && !others) || trail) ? shown.get(u.pieces[k].src) : undefined
+    const text = shown && parted && ((through && !others) || trail) ? shown.get(u.pieces[k]!.src) : undefined
     const said = typeof text === 'string' && /[\p{L}\p{N}]/u.test(text) ? text : ''
     // (`rest`, the erasure's: the whole text after it up to its next visible piece, as the spell check reads one — its letters and
     // digits —, so that the text after it is told where it runs exactly to its unit's next mark, not where its first WANT
@@ -1963,8 +2669,20 @@ export function followsOf(units, names, texts = null, inkless = null) {
     // set before its own ink — cite.sty's superscripts, natmove, fnpct: `\\cite{a}.` set ".¹" — and where TeX answered so, the
     // piece's closing mark stands after it (layoutMarking's 3): the piece's ink is what its two marks hold but that mark first,
     // where none stands after them (stream.mjs ownedOf: a piece of 0 has the mark after its closing point, its own ink as it is)
-    const moved = ASKED.has(classOf(u.pieces[k])) && MOVED.includes(after[0]) ? after[0] : null
-    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group, ...(said ? { split: { name: `${next}a`, text: said, ...(trail ?? {}) } } : {}), ...(moved ? { moved } : {}) }
+    const moved =
+      ASKED.has(classOf(u.pieces[k])) && after[0] !== undefined && MOVED.includes(after[0]) ? after[0] : null
+    return {
+      closing: names.has(`${name.slice(0, -1)}b`),
+      want,
+      rest: spellOf(after),
+      display,
+      ends: [...(next ? [`${next}a`] : []), ...endsOf(i)],
+      blocked,
+      through,
+      group,
+      ...(said ? { split: { name: `${next}a`, text: said, ...(trail ?? {}) } as Split } : {}),
+      ...(moved ? { moved } : {}),
+    }
   }
 }
 
@@ -1976,26 +2694,38 @@ export function followsOf(units, names, texts = null, inkless = null) {
  * marking marked. TeX ships it right before the start mark: stream.mjs ownedOf reads its ink between the point before that mark
  * and the mark (headInk), where it was LOST, OUTSIDE its unit's lines, and its light no block's (2501.14787v1 p24u193)
  */
-export function headsOf(units, names) {
-  const textOf = p => (!p.tr && p.src !== undefined ? p.src : p.s) ?? ''
-  return start => {
-    const m = /^(\d+)s$/.exec(start), i = m ? Number(m[1]) : -1, pieces = units[i]?.pieces
+export function headsOf(
+  units: readonly { pieces?: readonly Piece[] | undefined }[],
+  names: ReadonlySet<string>,
+): (start: string) => Head | null {
+  const textOf = (p: TextPiece): string => (!p.tr && p.src !== undefined ? p.src : p.s) ?? ''
+  return (start: string): Head | null => {
+    const m = /^(\d+)s$/.exec(start),
+      i = m ? Number(m[1]) : -1,
+      pieces = units[i]?.pieces
     if (!Array.isArray(pieces)) return null
     const head = headEnd(pieces, 0)
     let k = 0
-    for (; k < head; k++) { const p = pieces[k]; if (p.t === 'text' ? /\S/.test(textOf(p)) : classOf(p)) break }
-    if (k >= head || classOf(pieces[k]) !== 'display' || names.has(`p${i}.${k}a`) || names.has(`p${i}.${k}b`)) return null
-    const group = []
+    for (; k < head; k++) {
+      const p = pieces[k]!
+      if (p.t === 'text' ? /\S/.test(textOf(p)) : classOf(p)) break
+    }
+    if (k >= head || classOf(pieces[k]) !== 'display' || names.has(`p${i}.${k}a`) || names.has(`p${i}.${k}b`))
+      return null
+    const group: string[] = []
     for (let q = k + 1; q < head; q++) {
-      const p = pieces[q]
-      if (p.t === 'text') { if (/\S/.test(textOf(p))) break; continue }
+      const p = pieces[q]!
+      if (p.t === 'text') {
+        if (/\S/.test(textOf(p))) break
+        continue
+      }
       const c = classOf(p)
       if (!c) continue
       if (c !== 'display' || names.has(`p${i}.${q}a`)) break
       group.push(`p${i}.${q}a`)
     }
     // (`whole`: one display of no row break, `\\`, which TeX never breaks over a page; a group may break between its displays)
-    const whole = group.length === 0 && !/\\\\/.test(pieces[k].src ?? '')
+    const whole = group.length === 0 && !/\\\\/.test(pieces[k]!.src ?? '')
     return { name: `p${i}.${k}a`, group, whole }
   }
 }

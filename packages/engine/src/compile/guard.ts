@@ -15,11 +15,38 @@ import { isMemoryError } from '../memory.ts'
 import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.ts'
 import { texErrors, unitsAtErrors } from './tex-errors.ts'
 import { END_TEX } from './tex.ts'
-import { duplicatesIn } from '../marks/marks.mjs'
+import { duplicatesIn } from '../marks/marks.ts'
+import type { Fsys, SourceUnit } from '../source/latex-front.ts'
+import type { TexError, UnitLines } from './tex-errors.ts'
+import type { PdfLike } from './base.ts'
 
-const isLetter = c => (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 64
+/** the paper as the guard reads it (live.mjs openPaper's): its units, its project's file texts and main file, its files */
+export type GuardPaper = {
+  units: readonly SourceUnit[]
+  project: { main: string; files: ReadonlyMap<string, string> }
+  fsys: Fsys
+}
+/** a compile as the guard reads it (the host's answer): the files it wrote, its main aux, its error, its log, the limit it met */
+export type GuardCompile =
+  | {
+      files?: ReadonlyMap<string, Uint8Array> | null
+      aux?: string | null
+      error?: string
+      log?: string
+      limit?: string
+    }
+  | null
+  | undefined
+/** a unit's lines in the files a compile was given (live.mjs originalFiles' `spans.lines()`), and with its bytes there */
+type Lines = UnitLines<SourceUnit>
+type Spanned = Lines & { from: number; to: number }
+/** a list's or a group's frame as marksOutOfPlace reads the file: the control word before it, its argument's place */
+type Frame = { cs: string | null; arg: number }
+
+const isLetter = (c: number): boolean => (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 64
 /** the environments TeX reads verbatim, whose braces are no group: their text is the paper's either way, skipped alike */
-const VERBATIM = /^\\begin\s*\{((?:verbatim|Verbatim|BVerbatim|LVerbatim|SaveVerbatim|VerbatimOut|lstlisting|minted|comment|filecontents|verbatimwrite|boxedverbatim|tcblisting)\*?)\}/
+const VERBATIM =
+  /^\\begin\s*\{((?:verbatim|Verbatim|BVerbatim|LVerbatim|SaveVerbatim|VerbatimOut|lstlisting|minted|comment|filecontents|verbatimwrite|boxedverbatim|tcblisting)\*?)\}/
 
 /**
  * A text's brace balance outside comments and verbatim: its `{` less its `}`, a control symbol's (`\{`, `\}`, `\\`) taken
@@ -27,7 +54,7 @@ const VERBATIM = /^\\begin\s*\{((?:verbatim|Verbatim|BVerbatim|LVerbatim|SaveVer
  * category codes are not followed (a paper that makes `{` a letter): the same text gives the same count, and the guard
  * compares a text with itself as the marks left it
  */
-export function braceBalance(text) {
+export function braceBalance(text: string): number {
   let d = 0
   const n = text.length
   for (let i = 0; i < n; i++) {
@@ -42,7 +69,8 @@ export function braceBalance(text) {
           if (text[k] === '*') k++
           const delim = text[k]
           if (delim && !/[\s{[A-Za-z]/.test(delim)) {
-            const end = text.indexOf(delim, k + 1), eol = text.indexOf('\n', k + 1)
+            const end = text.indexOf(delim, k + 1),
+              eol = text.indexOf('\n', k + 1)
             i = end < 0 || (eol >= 0 && eol < end) ? (eol < 0 ? n : eol) : end
             continue
           }
@@ -50,7 +78,7 @@ export function braceBalance(text) {
           const m = VERBATIM.exec(text.slice(i, i + 80))
           if (m) {
             const end = text.indexOf(`\\end{${m[1]}}`, i + m[0].length)
-            i = end < 0 ? n : end + m[1].length + 6
+            i = end < 0 ? n : end + m[1]!.length + 6
             continue
           }
         }
@@ -80,37 +108,54 @@ export function braceBalance(text) {
  * balanced by construction): `other`, whether a file's balance moved by more than its units explain (`skip`, the main
  * file's head of ours, left out). Gives { units: Set of unit indices, other }
  */
-export function unbalancedUnits(paper, files, lines, skip = 0) {
+export function unbalancedUnits(
+  paper: GuardPaper,
+  files: ReadonlyMap<string, Uint8Array>,
+  lines: readonly Lines[],
+  skip = 0,
+): { units: Set<number>; other: boolean } {
   const { project } = paper
   const index = new Map(paper.units.map((u, i) => [u, i]))
-  const sourceOf = u => (project.files.get(u.file) ?? '').slice(u.start, u.end)
-  const texts = new Map()
-  const textOf = path => { if (!texts.has(path)) { const b = files.get(path); texts.set(path, b ? latin1(b) : null) } return texts.get(path) }
-  const delta = x => { const t = textOf(x.file); return t === null ? 0 : braceBalance(t.slice(x.from, x.to)) - braceBalance(sourceOf(x.unit)) }
-  const out = new Set(), byFile = new Map()
+  const sourceOf = (u: SourceUnit) => (project.files.get(u.file) ?? '').slice(u.start, u.end)
+  const texts = new Map<string, string | null>()
+  const textOf = (path: string) => {
+    if (!texts.has(path)) {
+      const b = files.get(path)
+      texts.set(path, b ? latin1(b) : null)
+    }
+    return texts.get(path) as string | null
+  }
+  const delta = (x: Spanned) => {
+    const t = textOf(x.file)
+    return t === null ? 0 : braceBalance(t.slice(x.from, x.to)) - braceBalance(sourceOf(x.unit))
+  }
+  const out = new Set<number | undefined>(),
+    byFile = new Map<string, number>()
   // (a nested unit's span carries what closes it in its outer unit, `post`; a top-level one's does not)
-  const tops = lines.filter(x => x.from !== undefined && x.post === undefined), nested = lines.filter(x => x.from !== undefined && x.post !== undefined)
-  const d = new Map(lines.filter(x => x.from !== undefined).map(x => [x, delta(x)]))
+  const tops = lines.filter((x): x is Spanned => x.from !== undefined && x.post === undefined),
+    nested = lines.filter((x): x is Spanned => x.from !== undefined && x.post !== undefined)
+  const d = new Map(lines.filter((x): x is Spanned => x.from !== undefined).map((x) => [x, delta(x)]))
   for (const x of nested) if (d.get(x) !== 0) out.add(index.get(x.unit))
   for (const t of tops) {
     // (its nested units' own: those inside no other of its nested units)
-    const mine = nested.filter(x => x.file === t.file && x.from >= t.from && x.to <= t.to)
-    const direct = mine.filter(x => !mine.some(y => y !== x && y.from <= x.from && x.to <= y.to))
-    const own = d.get(t) - direct.reduce((s, x) => s + d.get(x), 0)
+    const mine = nested.filter((x) => x.file === t.file && x.from >= t.from && x.to <= t.to)
+    const direct = mine.filter((x) => !mine.some((y) => y !== x && y.from <= x.from && x.to <= y.to))
+    const own = d.get(t)! - direct.reduce((s, x) => s + d.get(x)!, 0)
     if (own !== 0) out.add(index.get(t.unit))
-    byFile.set(t.file, (byFile.get(t.file) ?? 0) + d.get(t))
+    byFile.set(t.file, (byFile.get(t.file) ?? 0) + d.get(t)!)
   }
   let other = false
   for (const [path, bytes] of files) {
     const own = paper.fsys.read(path)
     if (!own || !/\.(?:tex|ltx|sty|cls)$/i.test(path)) continue
-    const written = latin1(bytes), from = path === project.main ? skip : 0
+    const written = latin1(bytes),
+      from = path === project.main ? skip : 0
     // (the paper's own as the front end read it, its line ends TeX's: the file is written so, and braceBalance's comment
     // ends at an LF — read raw, a lone-CR file's first % took the rest of it, and its braces were others')
     if (braceBalance(written.slice(from)) - braceBalance(texText(own)) !== (byFile.get(path) ?? 0)) other = true
   }
   out.delete(undefined)
-  return { units: out, other }
+  return { units: out as Set<number>, other }
 }
 
 /** our marks that a file can hold: MARK_DEF's unit marks and LAYOUT_TEX's piece, heading and colour marks, each with its
@@ -120,7 +165,12 @@ const MARK_CS = new Set(['axtmark', 'axtend', 'axtlines', 'axtpma', 'axtpmm', 'a
  *  as text (the lists with every mark off, \@starttoc's \axt@off): the second argument of \contentsline (the kernel's, every
  *  class's list entry: \contentsline{type}{text}{page}{anchor}), and the third group of \newlabel's second (nameref's
  *  title: \newlabel{key}{{number}{page}{title}{anchor}{}}) */
-const inText = stack => stack.some((f, i) => (f.cs === 'contentsline' && f.arg === 2) || (f.cs === 'newlabel' && f.arg === 2 && stack[i + 1]?.cs === null && stack[i + 1]?.arg === 3))
+const inText = (stack: readonly Frame[]): boolean =>
+  stack.some(
+    (f, i) =>
+      (f.cs === 'contentsline' && f.arg === 2) ||
+      (f.cs === 'newlabel' && f.arg === 2 && stack[i + 1]?.cs === null && stack[i + 1]?.arg === 3),
+  )
 /**
  * The marks of ours a file TeX wrote holds where no text is set: every mark (MARK_CS) but one inside a list entry's text or
  * a label's title (inText), by its argument as written (`216s`, `p69.1a`, `14`). The file is read as TeX's tokens are
@@ -129,9 +179,10 @@ const inText = stack => stack.some((f, i) => (f.cs === 'contentsline' && f.arg =
  * the toc inside etoc's \csname, `\etoc@depthtag {main\axtend {2e}}`, and every reading of the contents raised "Missing
  * \endcsname inserted"; a caption's marks in the lists and in nameref's title stand in text
  */
-export function marksOutOfPlace(text) {
-  const out = [], stack = []
-  let pending = null
+export function marksOutOfPlace(text: string): string[] {
+  const out: string[] = [],
+    stack: Frame[] = []
+  let pending: Frame | null = null
   const n = text.length
   for (let i = 0; i < n; i++) {
     const c = text.charCodeAt(i)
@@ -161,9 +212,21 @@ export function marksOutOfPlace(text) {
       pending = null
       continue
     }
-    if (c === 37) { const eol = text.indexOf('\n', i); i = eol < 0 ? n : eol; continue }
-    if (c === 123) { stack.push({ cs: pending?.cs ?? null, arg: pending?.arg ?? 1 }); pending = null; continue }
-    if (c === 125) { const f = stack.pop(); pending = f ? { cs: f.cs, arg: f.arg + 1 } : null; continue }
+    if (c === 37) {
+      const eol = text.indexOf('\n', i)
+      i = eol < 0 ? n : eol
+      continue
+    }
+    if (c === 123) {
+      stack.push({ cs: pending?.cs ?? null, arg: pending?.arg ?? 1 })
+      pending = null
+      continue
+    }
+    if (c === 125) {
+      const f = stack.pop()
+      pending = f ? { cs: f.cs, arg: f.arg + 1 } : null
+      continue
+    }
     if (c === 32 || c === 10 || c === 13 || c === 9) continue
     pending = null
   }
@@ -171,7 +234,10 @@ export function marksOutOfPlace(text) {
 }
 /** a mark's unit, by the index its argument begins with: a unit's own (`216s`, `2e`, `14`), a cell's (`t…`), a heading's
  *  (`h…`), a placeholder's or a footnote call's (`p…`, `n…`), a colour piece's (`c…`); none for a frame's (`g…`) */
-const unitOfMark = arg => { const m = /^(?:[pnht]?(\d+)|c(\d+)\.)/.exec(arg); return m ? Number(m[1] ?? m[2]) : null }
+const unitOfMark = (arg: string): number | null => {
+  const m = /^(?:[pnht]?(\d+)|c(\d+)\.)/.exec(arg)
+  return m ? Number(m[1] ?? m[2]) : null
+}
 /** a mark of ours with its argument as TeX's log shows a line of input (MARK_CS) */
 const MARK_IN_LINE = new RegExp(String.raw`\\(?:${[...MARK_CS].join('|')})\s*\{([^{}\s]*)\}`, 'g')
 /**
@@ -182,35 +248,48 @@ const MARK_IN_LINE = new RegExp(String.raw`\\(?:${[...MARK_CS].join('|')})\s*\{(
  * set on the author's line — are not the error's: what the place cannot tell is left to the marked compile's guard (a mark's
  * own argument is no group)
  */
-const marksAtError = (before, after) => {
-  const text = `${before}\n${after}`, at = before.length, marks = [...text.matchAll(MARK_IN_LINE)], flat = text.split('')
-  for (const m of marks) { flat[m.index + m[0].indexOf('{')] = ' '; flat[m.index + m[0].length - 1] = ' ' }
+const marksAtError = (before: string, after: string): RegExpExecArray[] => {
+  const text = `${before}\n${after}`,
+    at = before.length,
+    marks = [...text.matchAll(MARK_IN_LINE)],
+    flat = text.split('')
+  for (const m of marks) {
+    flat[m.index + m[0].indexOf('{')] = ' '
+    flat[m.index + m[0].length - 1] = ' '
+  }
   /** the brace that opens the group around `i`, before it, or -1 */
-  const opener = i => {
-    for (let d = 0; --i >= 0;) {
+  const opener = (i: number) => {
+    for (let d = 0; --i >= 0; ) {
       if (flat[i] === '}') d++
-      else if (flat[i] === '{') { if (d === 0) return i; d-- }
+      else if (flat[i] === '{') {
+        if (d === 0) return i
+        d--
+      }
     }
     return -1
   }
   /** the brace that closes the group around `i`, after it, or -1 */
-  const closer = i => {
+  const closer = (i: number) => {
     for (let d = 0; i < flat.length; i++) {
       if (flat[i] === '{') d++
-      else if (flat[i] === '}') { if (d === 0) return i; d-- }
+      else if (flat[i] === '}') {
+        if (d === 0) return i
+        d--
+      }
     }
     return -1
   }
   let last = at - 1
-  while (last >= 0 && /\s/.test(flat[last])) last--
-  let from, to
+  while (last >= 0 && /\s/.test(flat[last]!)) last--
+  let from: number, to: number
   if (last >= 0 && flat[last] === '}') [from, to] = [Math.max(0, opener(last)), last]
   else {
-    const o = opener(at), c = closer(at)
+    const o = opener(at),
+      c = closer(at)
     if (o < 0 && c < 0) return []
     ;[from, to] = [Math.max(0, o), c < 0 ? flat.length : c]
   }
-  return marks.filter(m => m.index > from && m.index < to)
+  return marks.filter((m) => m.index > from && m.index < to)
 }
 /**
  * The units the mark probe's errors stand at where TeX read the marked preamble (live.mjs markedPreamble, probeFiles `preamble`):
@@ -220,11 +299,18 @@ const marksAtError = (before, after) => {
  * our marks: 2610.37668v1's myarxiv `\author` takes a name's initials, the first token of each word, through a `\csname`, and our
  * start mark is that token ("Missing \endcsname inserted", the page count one more than arXiv's)
  */
-export function preambleUnits(log, count, { first, last }) {
-  const out = new Set()
+export function preambleUnits(
+  log: string | null | undefined,
+  count: number,
+  { first, last }: { first: number; last: number },
+): Set<number> {
+  const out = new Set<number>()
   for (const e of texErrors(log ?? '')) {
     if (e.line < first || e.line > last) continue
-    for (const m of marksAtError(e.before, e.after)) { const u = unitOfMark(m[1]); if (u !== null && u < count) out.add(u) }
+    for (const m of marksAtError(e.before, e.after)) {
+      const u = unitOfMark(m[1]!)
+      if (u !== null && u < count) out.add(u)
+    }
   }
   return out
 }
@@ -236,12 +322,15 @@ const AUX_FILE = /\.(?:aux|toc|lof|lot|loa|lol|lop|loe|thm|out|brf|nav|snm|vrb|i
  * (`files`, where the host gives them), else in its main aux (`aux`, which every host returns: LaTeX writes each list's
  * entries through it, \@writefile), ids below `count`
  */
-export function auxUnits(c, count, job) {
-  const out = new Set()
-  const files = c?.files ? [...c.files] : c?.aux ? [[`${job}.aux`, latin1Bytes(c.aux)]] : []
+export function auxUnits(c: GuardCompile, count: number, job: string): Set<number> {
+  const out = new Set<number>()
+  const files: [string, Uint8Array][] = c?.files ? [...c.files] : c?.aux ? [[`${job}.aux`, latin1Bytes(c.aux)]] : []
   for (const [path, bytes] of files) {
     if (!AUX_FILE.test(path) || !bytes?.length) continue
-    for (const arg of marksOutOfPlace(latin1(bytes))) { const u = unitOfMark(arg); if (u !== null && u < count) out.add(u) }
+    for (const arg of marksOutOfPlace(latin1(bytes))) {
+      const u = unitOfMark(arg)
+      if (u !== null && u < count) out.add(u)
+    }
   }
   return out
 }
@@ -266,15 +355,21 @@ const OURS_ON_LINE = new RegExp(String.raw`(?:\\leavevmode)?\\(?:${[...MARK_CS].
  * of whole lines (comment.sty's, acmart's acks) loses none, and its marks stand; one that begins inside the paper's own text loses
  * the paper's on arXiv's page too. In the 88: cas-common's abstract alone; acmart's acks copied whole (2608.25210v2, 2610.22065v1)
  */
-export function cutCopyUnits(c, files, count) {
-  const out = new Set()
+export function cutCopyUnits(
+  c: GuardCompile,
+  files: ReadonlyMap<string, Uint8Array> | null | undefined,
+  count: number,
+): Set<number> {
+  const out = new Set<number>()
   if (!c?.files || !files) return out
   /** our lines that hold each mark, by its text */
-  let lines = null
-  const linesWith = mark => {
+  let lines: Map<string, string[]> | null = null
+  const linesWith = (mark: string): string[] => {
     if (!lines) {
       lines = new Map()
-      for (const [, bytes] of files) for (const line of latin1(bytes ?? new Uint8Array(0)).split(/\r?\n/)) for (const m of line.matchAll(SOURCE_MARK)) lines.set(m[0], [...(lines.get(m[0]) ?? []), line])
+      for (const [, bytes] of files)
+        for (const line of latin1(bytes ?? new Uint8Array(0)).split(/\r?\n/))
+          for (const m of line.matchAll(SOURCE_MARK)) lines.set(m[0], [...(lines.get(m[0]) ?? []), line])
     }
     return lines.get(mark) ?? []
   }
@@ -292,7 +387,7 @@ export function cutCopyUnits(c, files, count) {
         const k = at - head.length
         for (const o of ours.matchAll(OURS_ON_LINE)) {
           if (!(o.index < k && k < o.index + o[0].length)) continue
-          const u = unitOfMark(o[1])
+          const u = unitOfMark(o[1]!)
           if (u !== null && u < count) out.add(u)
         }
       }
@@ -302,11 +397,12 @@ export function cutCopyUnits(c, files, count) {
 }
 
 /** a log as TeX wrote it, its lines of 79 characters joined again (live.mjs unwrapped) */
-const unwrapped = log => log.replace(/^(.{79})\n/gm, '$1')
+const unwrapped = (log: string): string => log.replace(/^(.{79})\n/gm, '$1')
 /** whether a compile's last pass wrote its PDF itself (pdfTeX's or LuaTeX's "Output written on <job>.pdf"): its log then names
  *  every destination of ours TeX set twice, its own warning at the second (marks.mjs duplicatesIn). XeTeX's xdvipdfmx and the DVI
  *  driver latexmk runs tell theirs to no log the host returns */
-export const tellsTwice = log => /^Output written on .*\.pdf \(\d+ pages?\b/m.test(unwrapped(lastTexLog(log ?? '')))
+export const tellsTwice = (log: string | null | undefined): boolean =>
+  /^Output written on .*\.pdf \(\d+ pages?\b/m.test(unwrapped(lastTexLog(log ?? '')))
 /**
  * The units a compile's marks out of place in a file it wrote name (auxUnits), judged by what TeX did with each: out of place,
  * unless the compile is otherwise the paper's (`clean`: it ran through to arXiv's pages, its pages' text read and no mark printed
@@ -324,17 +420,30 @@ export const tellsTwice = log => /^Output written on .*\.pdf \(\d+ pages?\b/m.te
  * tags); a compile whose driver wrote the PDF cannot tell, and stays so too. A list entry's text and nameref's title are never
  * out of place (marksOutOfPlace)
  */
-export const copiesOutOfPlace = (units, { clean, log }) => {
+export const copiesOutOfPlace = (
+  units: Set<number>,
+  { clean, log }: { clean: boolean; log: string | null | undefined },
+): Set<number> => {
   if (!(clean && tellsTwice(log))) return units
-  const twice = new Set(duplicatesIn(log).flatMap(n => { const m = /^(\d+)[se]$/.exec(n); return m ? [Number(m[1])] : [] }))
-  return new Set([...units].filter(u => twice.has(u)))
+  const twice = new Set(
+    duplicatesIn(log).flatMap((n) => {
+      const m = /^(\d+)[se]$/.exec(n)
+      return m ? [Number(m[1])] : []
+    }),
+  )
+  return new Set([...units].filter((u) => twice.has(u)))
 }
 /** the TeX errors of a compile's last pass: its `! ` lines */
-export const errorCount = log => (lastTexLog(log ?? '').match(/^! /gm) ?? []).length
+export const errorCount = (log: string | null | undefined): number =>
+  (lastTexLog(log ?? '').match(/^! /gm) ?? []).length
 /** the pages TeX says the last pass wrote ("Output written on main.pdf (36 pages, …)", the .xdv's under XeTeX), else null */
-export const pagesOfLog = log => { const all = [...unwrapped(lastTexLog(log ?? '')).matchAll(/Output written on .*?\((\d+) pages?\b/g)]; return all.length ? Number(all.at(-1)[1]) : null }
+export const pagesOfLog = (log: string | null | undefined): number | null => {
+  const all = [...unwrapped(lastTexLog(log ?? '')).matchAll(/Output written on .*?\((\d+) pages?\b/g)]
+  return all.length ? Number(all.at(-1)![1]) : null
+}
 /** the TeX Live year of a compile, from its engine's banner ("This is pdfTeX, … (TeX Live 2025) …"), else null */
-export const texLiveOf = log => /\(TeX Live (\d{4})\)/.exec(log ?? '')?.[1] ?? null
+export const texLiveOf = (log: string | null | undefined): string | null =>
+  /\(TeX Live (\d{4})\)/.exec(log ?? '')?.[1] ?? null
 /**
  * The TeX Live year of the build arXiv's PDF says it was made on, from the `PTEX.Fullbanner` of its Info dictionary
  * ("This is pdfTeX, … (TeX Live 2023) kpathsea …"), else null. The dictionary is the one PDF.js resolves from the trailer's
@@ -343,10 +452,15 @@ export const texLiveOf = log => /\(TeX Live (\d{4})\)/.exec(log ?? '')?.[1] ?? n
  * document's. No other signal counts (never the Producer, never a version number). A document that cannot say is null; only
  * a memory-class error is thrown (base.mjs creationEpochOf).
  */
-export const texLiveOfPdf = async doc => {
-  let banner = null
-  try { banner = (await doc.getMetadata())?.info?.Custom?.get?.('PTEX.Fullbanner') ?? null } catch (e) { if (isMemoryError(e)) throw e; banner = null }
-  return typeof banner === 'string' ? /TeX Live (\d{4})/.exec(banner)?.[1] ?? null : null
+export const texLiveOfPdf = async (doc: PdfLike): Promise<string | null> => {
+  let banner: unknown = null
+  try {
+    banner = (await doc.getMetadata())?.info?.Custom?.get?.('PTEX.Fullbanner') ?? null
+  } catch (e) {
+    if (isMemoryError(e)) throw e
+    banner = null
+  }
+  return typeof banner === 'string' ? (/TeX Live (\d{4})/.exec(banner)?.[1] ?? null) : null
 }
 /**
  * The compiler arXiv's PDF says made it, from the Creator and Producer of its Info dictionary (the one PDF.js resolves): `latex`
@@ -355,11 +469,17 @@ export const texLiveOfPdf = async doc => {
  * It is the ground truth of a package that names no compiler (paper-meta.mjs guesses one from the files: a source with no
  * figure was taken for pdflatex though arXiv built it with latex and dvips, 1007.0072v1). Only a memory-class error is thrown
  */
-export const compilerOfPdf = async doc => {
-  let info = null
-  try { info = (await doc.getMetadata())?.info ?? null } catch (e) { if (isMemoryError(e)) throw e; info = null }
-  const text = key => (typeof info?.[key] === 'string' ? info[key] : '')
-  const creator = text('Creator'), producer = text('Producer')
+export const compilerOfPdf = async (doc: PdfLike): Promise<'latex' | 'pdflatex' | 'xelatex' | 'lualatex' | null> => {
+  let info: Record<string, unknown> | null = null
+  try {
+    info = (await doc.getMetadata())?.info ?? null
+  } catch (e) {
+    if (isMemoryError(e)) throw e
+    info = null
+  }
+  const text = (key: string) => (typeof info?.[key] === 'string' ? (info[key] as string) : '')
+  const creator = text('Creator'),
+    producer = text('Producer')
   if (/\bdvips/i.test(creator)) return 'latex'
   if (/^xdvipdfmx\b|\bXeTeX\b/.test(producer)) return 'xelatex'
   if (/^LuaTeX\b|^LuaHBTeX\b/.test(producer)) return 'lualatex'
@@ -367,32 +487,36 @@ export const compilerOfPdf = async doc => {
   return null
 }
 /** whether TeX ran at all: its banner in the log (a host that refused the compiler, a jail that ran nothing, has none) */
-export const texRan = log => /^This is \S*TeX\b/m.test(log ?? '')
+export const texRan = (log: string | null | undefined): boolean => /^This is \S*TeX\b/m.test(log ?? '')
 /** whether the host says it does not run the compiler asked (the web runner's "unknown engine"): the one answer TeX never ran
  *  in that is the engine's, not the compile's (a host's own failure, its cap on a compile's result) */
-export const engineUnknown = c => /\bunknown engine\b/i.test(`${c?.error ?? ''}\n${c?.log ?? ''}`)
+export const engineUnknown = (c: GuardCompile): boolean =>
+  /\bunknown engine\b/i.test(`${c?.error ?? ''}\n${c?.log ?? ''}`)
 /** a why as a refusal holds it (layer-proto/format.mjs whyText): no control character, within WHY_MAX */
 export { whyText }
 /** the host's limit a compile met, where it says one (the web's `limit`, the TeX page's timeout), else null */
-export const limitOf = c => c?.limit ?? (/\b(?:timeout|time limit)\b/i.test(c?.error ?? '') ? 'time' : null)
+export const limitOf = (c: GuardCompile): string | null =>
+  c?.limit ?? (/\b(?:timeout|time limit)\b/i.test(c?.error ?? '') ? 'time' : null)
 /** the first TeX error of a compile's last pass, with the line it names, for a refusal's why */
-export function firstError(log) {
+export function firstError(log: string | null | undefined): string | null {
   const lines = lastTexLog(log ?? '').split('\n')
-  const k = lines.findIndex(l => l.startsWith('! '))
+  const k = lines.findIndex((l) => l.startsWith('! '))
   if (k < 0) return null
-  const at = lines.slice(k + 1, k + 12).find(l => /^l\.\d+/.test(l))
+  const at = lines.slice(k + 1, k + 12).find((l) => /^l\.\d+/.test(l))
   return `${lines[k]}${at ? ` (${at.trim().slice(0, 60)})` : ''}`.slice(0, 160)
 }
 
 /** the marks of ours a log's context may show, taken out before an error is compared with the unmarked original's: each
  *  mark with its argument, and the \leavevmode a unit's start mark comes with */
-const OUR_MARKS = /\\leavevmode\s*(?=\\axtmark\b)|\\(?:axtmark|axtend|axtlines|axtpma|axtpmm|axtpm|axthmark|axtcolour)\s*\{[^{}]*\}/g
+const OUR_MARKS =
+  /\\leavevmode\s*(?=\\axtmark\b)|\\(?:axtmark|axtend|axtlines|axtpma|axtpmm|axtpm|axthmark|axtcolour)\s*\{[^{}]*\}/g
 const CONTEXT = 12
-const skeleton = s => s.replace(OUR_MARKS, '').replace(/[^\x21-\x7e]/g, '')
+const skeleton = (s: string): string => s.replace(OUR_MARKS, '').replace(/[^\x21-\x7e]/g, '')
 /** an error's identity whatever marks stand around it: its message and the text right before and after its place */
-const errorKey = e => `${e.message}|${skeleton(e.before).slice(-CONTEXT)}|${skeleton(e.after).slice(0, CONTEXT)}`
+const errorKey = (e: TexError): string =>
+  `${e.message}|${skeleton(e.before).slice(-CONTEXT)}|${skeleton(e.after).slice(0, CONTEXT)}`
 /** the errors of the unmarked original, by identity (errorKey), the paper's own */
-export const ownErrors = log => new Set(texErrors(log ?? '').map(errorKey))
+export const ownErrors = (log: string | null | undefined): Set<string> => new Set(texErrors(log ?? '').map(errorKey))
 
 /**
  * The units the marked compile's errors stand in (tex-errors.mjs unitsAtErrors),
@@ -402,20 +526,30 @@ export const ownErrors = log => new Set(texErrors(log ?? '').map(errorKey))
  * line of input of its own), in whichever file has a unit there. `files` the bytes the compile was given, `lines` its
  * units' spans (live.mjs originalFiles' `spans.lines()`). Gives unit indices
  */
-export function errorUnits(paper, log, files, lines, own = null) {
+export function errorUnits(
+  paper: { units: readonly SourceUnit[] },
+  log: string | null | undefined,
+  files: ReadonlyMap<string, Uint8Array>,
+  lines: readonly Lines[],
+  own: ReadonlySet<string> | null = null,
+): Set<number> {
   const index = new Map(paper.units.map((u, i) => [u, i]))
-  const errors = texErrors(log ?? '').filter(e => e.char === undefined && !own?.has(errorKey(e)))
-  const out = new Set(unitsAtErrors(errors, files, lines).map(u => index.get(u)))
+  const errors = texErrors(log ?? '').filter((e) => e.char === undefined && !own?.has(errorKey(e)))
+  const out = new Set<number | undefined>(unitsAtErrors(errors, files, lines).map((u) => index.get(u)))
   for (const m of lastTexLog(log ?? '').matchAll(/^! Incomplete \\if\w*; all text was ignored after line (\d+)\./gm)) {
     const at = Number(m[1])
-    const here = lines.filter(x => x.first <= at && at <= x.last)
-    for (const file of new Set(here.map(x => x.file))) {
-      const mine = here.filter(x => x.file === file)
-      for (const x of mine) if (!mine.some(y => y !== x && y.from !== undefined && x.from !== undefined && x.from <= y.from && y.to <= x.to)) out.add(index.get(x.unit))
+    const here = lines.filter((x) => x.first <= at && at <= x.last)
+    for (const file of new Set(here.map((x) => x.file))) {
+      const mine = here.filter((x) => x.file === file)
+      for (const x of mine)
+        if (
+          !mine.some((y) => y !== x && y.from !== undefined && x.from !== undefined && x.from <= y.from && y.to <= x.to)
+        )
+          out.add(index.get(x.unit))
     }
   }
   out.delete(undefined)
-  return out
+  return out as Set<number>
 }
 
 /** a name mark of ours as TeX's log shows it (layout/marks.mjs NAMES_TEX: \\axtnma{key}, \\axtnmb{key} and their inner forms) */
@@ -430,22 +564,32 @@ const MARK_IN_CONTEXT = new RegExp(String.raw`\\(?:${[...MARK_CS].join('|')})\s*
  * the next, indented to it, the rest (`after`). An error TeX raised in an output routine or a \\write is none, as texErrors
  * takes none
  */
-function errorContexts(log) {
-  const lines = lastTexLog(log ?? '').split('\n'), byLine = texErrors(log ?? ''), out = []
+function errorContexts(log: string | null | undefined): (TexError & { levels: { before: string; after: string }[] })[] {
+  const lines = lastTexLog(log ?? '').split('\n'),
+    byLine = texErrors(log ?? ''),
+    out: (TexError & { levels: { before: string; after: string }[] })[] = []
   let n = 0
   for (let k = 0; k < lines.length && n < byLine.length; k++) {
-    if (!lines[k].startsWith('! ')) continue
-    const levels = []
-    let input = false, elsewhere = false
-    for (let j = k + 1; j < Math.min(lines.length, k + 40) && !lines[j].startsWith('! '); j++) {
-      if (/^l\.\d+/.test(lines[j])) { input = true; break }
-      if (/^<(?:output|write)>/.test(lines[j])) elsewhere = true
+    if (!lines[k]!.startsWith('! ')) continue
+    const levels: { before: string; after: string }[] = []
+    let input = false,
+      elsewhere = false
+    for (let j = k + 1; j < Math.min(lines.length, k + 40) && !lines[j]!.startsWith('! '); j++) {
+      if (/^l\.\d+/.test(lines[j]!)) {
+        input = true
+        break
+      }
+      if (/^<(?:output|write)>/.test(lines[j]!)) elsewhere = true
       // (a level: its line, and the next, white space to where the first ends, then the rest)
-      const next = lines[j + 1] ?? '', pad = /^ +/.exec(next)?.[0].length ?? 0
-      if (lines[j] && !/^\s/.test(lines[j]) && pad > 0 && pad >= lines[j].length - 1) { levels.push({ before: lines[j], after: next.trim() }); j++ }
+      const next = lines[j + 1] ?? '',
+        pad = /^ +/.exec(next)?.[0].length ?? 0
+      if (lines[j] && !/^\s/.test(lines[j]!) && pad > 0 && pad >= lines[j]!.length - 1) {
+        levels.push({ before: lines[j]!, after: next.trim() })
+        j++
+      }
     }
     if (!input || elsewhere) continue
-    out.push({ ...byLine[n++], levels })
+    out.push({ ...byLine[n++]!, levels })
   }
   return out
 }
@@ -458,14 +602,23 @@ function errorContexts(log) {
  * brace. An error whose context shows a name mark of ours is the names' (the guard's names off), and the line of input itself
  * is errorUnits' to read: neither names a unit here. Gives unit indices
  */
-export function contextUnits(log, count, own = null) {
-  const out = new Set()
+export function contextUnits(
+  log: string | null | undefined,
+  count: number,
+  own: ReadonlySet<string> | null = null,
+): Set<number> {
+  const out = new Set<number>()
   for (const e of errorContexts(log)) {
-    if (e.char !== undefined || own?.has(errorKey(e)) || e.levels.some(l => NAME_MARK.test(l.before) || NAME_MARK.test(l.after))) continue
+    if (
+      e.char !== undefined ||
+      own?.has(errorKey(e)) ||
+      e.levels.some((l) => NAME_MARK.test(l.before) || NAME_MARK.test(l.after))
+    )
+      continue
     for (const l of e.levels) {
       const m = [...l.before.matchAll(MARK_IN_CONTEXT)].at(-1) ?? [...l.after.matchAll(MARK_IN_CONTEXT)][0]
       if (!m) continue
-      const u = unitOfMark(m[1])
+      const u = unitOfMark(m[1]!)
       if (u !== null && u < count) out.add(u)
       break
     }
@@ -476,4 +629,10 @@ export function contextUnits(log, count, own = null) {
 /** the unmarked original: the paper's own files, its main one with graphicx's draft (the marked original's frames, which
  *  set no other place) and END_TEX (AXT-END, by which a compile ran through: live.mjs ranThrough) on one line before its
  *  first, nothing else of ours */
-export const unmarkedFiles = paper => new Map([[paper.project.main, latin1Bytes(`\\PassOptionsToPackage{draft}{graphicx}${END_TEX}${latin1(paper.fsys.read(paper.project.main))}`)]])
+export const unmarkedFiles = (paper: GuardPaper): Map<string, Uint8Array> =>
+  new Map([
+    [
+      paper.project.main,
+      latin1Bytes(`\\PassOptionsToPackage{draft}{graphicx}${END_TEX}${latin1(paper.fsys.read(paper.project.main)!)}`),
+    ],
+  ])

@@ -1,5 +1,5 @@
 // The part of this module that stays in the old engine: what the moved front half never calls. The rest moved into the engine
-// package (packages/engine/src/marks/marks.mjs); this path imports it back and re-exports its names through its transition path. The cut-over
+// package (packages/engine/src/marks/marks.ts); this path imports it back and re-exports its names through its transition path. The cut-over
 // deletes this file.
 import { lastTexLog } from '../source/latex-front.mjs'
 import { tokenAtMark, tokenizeDocument } from '../pipeline/anchors.mjs'
@@ -12,8 +12,8 @@ import { isMemoryError } from '@readarxiv/engine'
 import { NAME_ENGLISH, NAME_KEYS } from './names.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
 import { OWNED, OWNED_HOW, ownedPages, STREAM_COLUMNS } from './stream.mjs'
-import { MARK_CLASSES, LAYOUT_CLASSES, classOf, FOLLOWERS, PUNCT, ASKED, PROBE_MAX, COMPLETE_PROBE_MAX, COMPLETE_SRC_MAX, AHEAD_PROBE_MAX, commandOf, INK_BUDGET, INK_TEXT_MAX, INK_ANY, PUNCT_WIDE, BP_PER_PT, readColours, MARK_NAME, COMPLETE_MAX, duplicatesIn, followsOf, headsOf } from '@readarxiv/engine/today/marks/marks.mjs'
-export { MARK_CLASSES, LAYOUT_CLASSES, INVISIBLE, backrefPiece, RULE, classOf, FOLLOWERS, PROBE_MAX, COMPLETE_PROBE_MAX, AHEAD_PROBE_MAX, aheadKey, commandOf, probeSamples, aheadSamples, probeRow, probeTex, readProbe, punctuationSection, aheadSection, INK_BUDGET, inkSamples, readInkAnswers, leadSamples, inkSection, markProbeTex, readInkProbe, INK_TEXT_MAX, INK_ANY, readInkTexts, readInkDecorated, leadStep, readInkApart, NAME_MACROS, nameSection, readNameProbe, skipSection, readSkipProbe, literalNames, readMarkProbe, POINTS_TEX, NAMES_TEX, CLASS_NAMES, classNamesTex, UNMARK_CS, NAME_MARK_FILE, withoutNameMarks, regionsTex, LAYOUT_TEX, refKeyOf, refKeysOf, refsTex, DVI_POINTS_TEX, CALL_TEX, DVI_LAYOUT_TEX, readColours, MARK_NAME, colourPieceOf, completeCall, headEnd, layoutMarking, COMPLETE_MAX, completeCalled, duplicatesIn, asSet, followsOf, headsOf } from '@readarxiv/engine/today/marks/marks.mjs'
+import { MARK_CLASSES, LAYOUT_CLASSES, classOf, FOLLOWERS, PUNCT, ASKED, PROBE_MAX, COMPLETE_PROBE_MAX, COMPLETE_SRC_MAX, AHEAD_PROBE_MAX, commandOf, INK_BUDGET, INK_TEXT_MAX, INK_ANY, PUNCT_WIDE, BP_PER_PT, readColours, MARK_NAME, COMPLETE_MAX, duplicatesIn, followsOf, headsOf } from '@readarxiv/engine/today/marks/marks.ts'
+export { MARK_CLASSES, LAYOUT_CLASSES, INVISIBLE, backrefPiece, RULE, classOf, FOLLOWERS, PROBE_MAX, COMPLETE_PROBE_MAX, AHEAD_PROBE_MAX, aheadKey, commandOf, probeSamples, aheadSamples, probeRow, probeTex, readProbe, punctuationSection, aheadSection, INK_BUDGET, inkSamples, readInkAnswers, leadSamples, inkSection, markProbeTex, readInkProbe, INK_TEXT_MAX, INK_ANY, readInkTexts, readInkDecorated, leadStep, readInkApart, NAME_MACROS, nameSection, readNameProbe, skipSection, readSkipProbe, literalNames, readMarkProbe, POINTS_TEX, NAMES_TEX, CLASS_NAMES, classNamesTex, UNMARK_CS, NAME_MARK_FILE, withoutNameMarks, regionsTex, LAYOUT_TEX, refKeyOf, refKeysOf, refsTex, DVI_POINTS_TEX, CALL_TEX, DVI_LAYOUT_TEX, readColours, MARK_NAME, colourPieceOf, completeCall, headEnd, layoutMarking, COMPLETE_MAX, completeCalled, duplicatesIn, asSet, followsOf, headsOf } from '@readarxiv/engine/today/marks/marks.ts'
 
 /** a displayed formula's source: the wire's (mt.mjs), whose own stop it writes after the display's marker */
 export { DISPLAY }

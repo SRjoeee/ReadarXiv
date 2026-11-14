@@ -16,21 +16,21 @@
     "./today/source/text-symbols.ts": "./src/source/text-symbols.ts",
     "./today/source/text-piece.ts": "./src/source/text-piece.ts",
     "./today/marks/names.ts": "./src/marks/names.ts",
-    "./today/marks/marks.mjs": "./src/marks/marks.mjs",
+    "./today/marks/marks.ts": "./src/marks/marks.ts",
     "./today/own/stream.ts": "./src/own/stream.ts",
-    "./today/own/own.mjs": "./src/own/own.mjs",
+    "./today/own/own.ts": "./src/own/own.ts",
     "./today/instrument/mt.ts": "./src/instrument/mt.ts",
     "./today/compile/tex.ts": "./src/compile/tex.ts",
     "./today/compile/tex-errors.ts": "./src/compile/tex-errors.ts",
     "./today/compile/base.ts": "./src/compile/base.ts",
     "./today/compile/pdf-lite.ts": "./src/compile/pdf-lite.ts",
-    "./today/compile/guard.mjs": "./src/compile/guard.mjs",
-    "./today/compile/live.mjs": "./src/compile/live.mjs",
-    "./today/compile/paper.mjs": "./src/compile/paper.mjs",
+    "./today/compile/guard.ts": "./src/compile/guard.ts",
+    "./today/compile/live.ts": "./src/compile/live.ts",
+    "./today/compile/paper.ts": "./src/compile/paper.ts",
     "./today/instrument/format.ts": "./src/instrument/format.ts",
     "./today/instrument/units.ts": "./src/instrument/units.ts",
     "./today/instrument/layer1.ts": "./src/instrument/layer1.ts",
-    "./today/instrument/instrument.mjs": "./src/instrument/instrument.mjs"
+    "./today/instrument/instrument.ts": "./src/instrument/instrument.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
