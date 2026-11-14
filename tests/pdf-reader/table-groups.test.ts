@@ -60,7 +60,7 @@ describe('tableGrid: a table body as its cells lay it out', () => {
 describe('loadProject: each cell unit carries its place in its table', () => {
   const tex = doc('\\begin{tabular}{ll}\n\\toprule\nModel & Training cost \\\\\n\\midrule\nAlphaNet & fast training \\\\\nBetaNet & slow \\begin{tabular}{c}long\\\\training\\end{tabular} \\\\\n\\bottomrule\n\\end{tabular}\n\n\\begin{tabular}{l}\nOne cell of another table \\\\\n\\end{tabular}')
   // (a one-column tabular of several rows nested in a cell sets lines of that cell's text, one unit with its forced break, and is
-  // no table of its own: the next table is the paper's second, PDF-READER §18.74; it was three units and the third table)
+  // no table of its own: the next table is the paper's second, PDF-READER §18.75; it was three units and the third table)
   it('its table, row, column and span, and whether its row is the header\'s; a nested one-column table\'s lines are the outer cell\'s text', () => {
     expect(cells(tex)).toEqual([
       { text: 'Model', table: 1, row: 0, col: 0, span: 1, head: true },
