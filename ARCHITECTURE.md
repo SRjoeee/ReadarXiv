@@ -79,9 +79,10 @@ source reader states, and by `packages/engine/src/locate/ink.ts` for the texts r
 piece) and carries it onto A by aligning the two documents' glyph sequences (`packages/engine/src/align/align.ts`). A unit is
 **located** where every glyph it owns on B has a partner on A: no partial credit, no threshold; one that is not stays the
 original's, with its cause. Each located unit is placed on A as one or more **members** (`Member`; format's `Placed`): its
-lines, elements, label, style and room read from A's own glyphs, and TeX's statements where B's log has them (a table cell's
-room is its column's box where the column's entries establish it, `Room.column`: `packages/engine/src/locate/columns.ts`, read
-in `packages/engine/src/locate/facts-pass.ts`). `locate` runs
+lines, elements, label, style and room read from A's own glyphs, and TeX's statements where B's log has them (a single-line
+table cell's room in its column, `Room.column`, is its column's box, where the column's entries establish it, widened by the
+column's share of the blank beside it, never past the cell's own side: `packages/engine/src/locate/columns.ts`, read in
+`packages/engine/src/locate/facts-pass.ts`, §18.13). `locate` runs
 its phases in one order (`packages/engine/src/locate/locate.ts`), and one module, `packages/engine/src/locate/ownership.ts`, is
 the only writer of who owns each glyph of A and of the lists each member states its ink in. Locate also makes the units no
 source unit is, of A's glyphs no source unit owns (a running head, text inside a figure: `packages/engine/src/locate/ink.ts`;
@@ -247,7 +248,7 @@ a gate is named by its id there. The rows after them are this repository's own.
 | which ink a reader can hide | the groups, `groupsOf` in `packages/engine/src/locate/ownership.ts`; the add-on, `packages/engine/src/wrap/wrap.ts` over `packages/engine/src/wrap.ts` | the add-on moves. Proof: `lab/pdf/prepare-back/prove.mjs`, `pixels` |
 | a field of a bundle object | `packages/format/src/schema.ts` | an optional field is free: a reader strips what it does not know. One an old reader would misread raises `FORMAT`, and a reader names the formats it reads in its open (`FORMATS`) |
 | a word of the paper's document | `packages/format/src/doc.ts` | a closed word (what a reader does) needs a new `v`; an open word (what it is told) is free |
-| a rule of the lay: breaking, the fit, the page fill, a figure's text, a table's group, a cell in its column's box | `packages/typeset/src/` (`breaker/`, `fit/`, `shared/`, `unit/`, `lay/`; a cell's room `packages/typeset/src/lay/adapt.ts`), entered by `packages/typeset/src/lay/entry.ts` | nothing stored moves and no number rises: a page is laid when it is read. Proof: the typesetter's tests, `display`, `sentence-cover` |
+| a rule of the lay: breaking, the fit, the page fill, a figure's text, a table's group, a cell in its room in its column | `packages/typeset/src/` (`breaker/`, `fit/`, `shared/`, `unit/`, `lay/`; a cell's room `packages/typeset/src/lay/adapt.ts`), entered by `packages/typeset/src/lay/entry.ts` | nothing stored moves and no number rises: a page is laid when it is read. Proof: the typesetter's tests, `display`, `sentence-cover` |
 | a language's data: labels, hyphenation, punctuation, faces, the names of headings and references | `packages/typeset/src/data/`, the source, edited by hand: `rules/` (a file a language over its script's; what each field mirrors, babel's captions and minimums, hyph-utf8's patterns, TeX Live's names, in `rules/types.ts`), `faces.ts` (the face catalogue; each face's coverage and small capitals as its file's cmap and GSUB state them), `marks.ts` (the CJK marks' ink, measured in the face files by `lab/typeset/marks-data.py`). Today's reader keeps its own copies under `src/pdf-reader/engine/rules/` until the cut-over | nothing stored moves: a page is laid when it is read, so a value edited moves the lay's dumps (the reader gate, `display`); `packages/typeset/tests/unit/data.test.ts` holds every export's shape, and `tests/typeset/tex-names.test.ts` the head and reference names equal to the engine's `packages/engine/src/source/tex-names.json`, which they mirror |
 | what a reading option shows | `packages/reader/src/compose/classes.ts`, by format's `toggleKind` | nothing stored |
 | how a translation is drawn | `packages/reader/src/compose/paint.ts` | nothing stored |
