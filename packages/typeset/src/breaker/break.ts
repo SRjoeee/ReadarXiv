@@ -15,12 +15,12 @@ import type { Face, Token } from './tokens.ts'
 /** a breaking at a state: its lines, the tokens it laid from (its own copy where it cut one), how many it set of all */
 export type Broken = { lines: LaidLine[]; tokens: Token[]; rest: number; total: number; spilled?: boolean }
 /** a mark that may stand at a line's edge: a laid item's token's mark class, and whether the mark has lost its blank half */
-export type EdgeMark = { t: Pick<Token, 'punct'>; cut?: boolean } | null | undefined
+type EdgeMark = { t: Pick<Token, 'punct'>; cut?: boolean } | null | undefined
 /** a crop as the breaker reads it (Token.crop, a record there): its rectangle at the original's scale, its page and TeX
  *  baseline, the segment's box it was cut from (`gap.box`), its copy text, its url package's break points (`breaks`: the x
  *  between two of its glyphs and the copy text's UTF-16 code units before it) and the edges a cut left (`cut`: 1 its left, 2
  *  its right) */
-export type Crop = {
+type Crop = {
   crop: [x0: number, y0: number, x1: number, y1: number]
   page: number
   baseline: number
@@ -32,7 +32,7 @@ export type Crop = {
 /** a URL's crop, its break points stated (urlCut's) */
 type UrlCrop = Crop & { breaks: [x: number, at: number][] }
 /** a token as the breaker reads it: its crop's fields (Crop), which Token states as a record */
-export type BreakToken = Omit<Token, 'crop'> & { crop?: Crop }
+type BreakToken = Omit<Token, 'crop'> & { crop?: Crop }
 /** a laid item as the breaker makes it: its token as the breaker reads it; its text set at a hung label's end (`tabbed`); a
  *  space that shrinks no more (`rigid`: a hung label's, TeX's hang is a box) */
 type BreakItem = Omit<LaidItem, 't'> & { t: BreakToken; tabbed?: true; rigid?: true }

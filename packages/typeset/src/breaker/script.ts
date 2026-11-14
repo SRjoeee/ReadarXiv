@@ -122,7 +122,7 @@ const lastOf = (s: string) => {
     hi = n > 1 ? s.charCodeAt(n - 2) : 0
   return c >= 0xdc00 && c <= 0xdfff && hi >= 0xd800 && hi <= 0xdbff ? s.codePointAt(n - 2)! : c
 }
-export type Kinsoku = { starts(s: string): boolean; ends(s: string): boolean }
+type Kinsoku = { starts(s: string): boolean; ends(s: string): boolean }
 /** the rule set's line-break marks (layer1.mjs kinsokuOf): whether a token begins with a mark no line starts with, or ends with
  *  one no line ends with. Today's caches it by its lists; made again each call here, the typesetter holding no module state */
 export function kinsokuOf(noStartList: string, noEndList: string): Kinsoku {

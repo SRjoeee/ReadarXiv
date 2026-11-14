@@ -8,7 +8,7 @@ import type { Token } from './tokens.ts'
 
 /** a cut: the page and frame a line begins, at a token (pageCutsOf); `share`, a cut of the frames' share only, which a lay keeps
  *  only at a state that holds the share */
-export type Cut = { page: number; frame: number; at: number; share?: true }
+type Cut = { page: number; frame: number; at: number; share?: true }
 /** a frame of the unit: its consecutive blocks of one run on one page whose columns meet (pageCutsOf) */
 type Frame = { after: number; page: number; x0: number; x1: number; first: number; lines: number }
 

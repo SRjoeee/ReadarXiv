@@ -257,7 +257,7 @@ function normed(chars: readonly string[], keep: RegExp) {
 
 /** a laid line with its runs (D.display's lineRuns): a run's items [index on the line, offset in its text], its text */
 type Run = TextRun
-export type RunLine = { line: LaidLine; runs: readonly LineRun[] }
+type RunLine = { line: LaidLine; runs: readonly LineRun[] }
 type Edge = (line: LaidLine, run: Run, at: number) => number
 type Band = (t: unknown, line: LaidLine) => { top: number; bottom: number }
 type D = { ch: string; li: number; run: Run; at: number; end: number; n: number }
@@ -269,7 +269,7 @@ type Tok = {
   ph?: unknown
   st?: { link?: unknown }
 }
-export type LinkRecord = {
+type LinkRecord = {
   boxes: number[]
   url?: string
   dest?: unknown

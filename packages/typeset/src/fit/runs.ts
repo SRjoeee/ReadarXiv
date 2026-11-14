@@ -9,7 +9,7 @@ import { layoutUnit2 } from './walk.ts'
 
 /** a run of a unit between its kept regions: its first block, its blocks and its tokens (and each token's place in the
  *  unit's, `idx`); once laid, its parameters and layout */
-export type Run = {
+type Run = {
   after?: number
   bi0: number
   blocks: FitBlock[]

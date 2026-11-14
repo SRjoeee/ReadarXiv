@@ -28,7 +28,7 @@ export function tokenBand(t: BandToken, L: { f: number }, by: number) {
 }
 
 /** the page's table of tokens, one column a field (words.mjs newWords): float32 boxes, a token's word and its place */
-export type Words = {
+type Words = {
   n: number
   l: number[]
   r: number[]
@@ -90,7 +90,7 @@ export type KeptLine = {
   k?: number
   block?: number
 }
-export type KeptInput = {
+type KeptInput = {
   /** the member's rectangles ([page, x0, bottom, x1, top]) */
   rects: readonly Rect[]
   /** the rectangles it keeps as the original's, by key (U.elements' keep) */

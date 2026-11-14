@@ -134,7 +134,7 @@ export type TRes = {
   heldMarks?: string[]
   [more: string]: unknown
 }
-export type Reading = {
+type Reading = {
   get(k: number): TRes | undefined
   measured?: { st?: TStyle | null; fill?: number | null; pieces?: ReadonlyMap<number, number> | null } | null
   capsRatio?: number
@@ -176,7 +176,7 @@ export type TokensInput = {
   tagWords: boolean
 }
 /** the tokens, with the unit's base style (today's `tokens.base`) and U.marks' decisions taken while they were made */
-export type Tokens = { tokens: Token[]; base: TStyle; marks: MarksTrace }
+type Tokens = { tokens: Token[]; base: TStyle; marks: MarksTrace }
 
 export const hexOf = (rgb: number) => `#${rgb.toString(16).padStart(6, '0')}`
 /** a fill not told (layout/fills.mjs UNKNOWN) */
