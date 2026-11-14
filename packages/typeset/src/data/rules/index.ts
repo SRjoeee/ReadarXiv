@@ -23,7 +23,6 @@ import { ZH_TW } from './zh-tw.ts'
 import type { LanguageRules } from './types.ts'
 
 export { HYPHENATION, SCRIPTS } from './scripts.ts'
-export type { LanguageRules, ScriptRules } from './types.ts'
 
 /** each language's own fields, by its tag */
 export const LANGUAGES: Readonly<Record<string, LanguageRules>> = {

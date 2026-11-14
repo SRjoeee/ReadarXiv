@@ -28,7 +28,7 @@ type Building = { after: number; tokens: Token[]; idx: number[]; bi0?: number; b
  * unit is one run, where a run with text has no slots of its own or a block no run's text (the walk's own rules then place
  * it), or where the blocks are not in the order of their regions
  */
-export function runsOf(tokens: readonly Token[], blocks: readonly FitBlock[]): Run[] | null {
+function runsOf(tokens: readonly Token[], blocks: readonly FitBlock[]): Run[] | null {
   if (blocks.length < 2) return null
   // (a run opens at a display alone: a forced break that opens another frame (tokensOf2's `brk`) breaks the line, and its
   // frames stay the run's, as the unit's own walk sets them. Each token kept with its place in the unit's (`idx`))

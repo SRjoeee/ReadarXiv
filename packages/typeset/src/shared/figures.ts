@@ -114,7 +114,7 @@ export function fontClassOf(name: string): { fam: 'serif' | 'sans' | 'mono' | 'm
 
 /** a figure's translation in its runs by script, each in its face (L2:4825 figureRuns); and by style, where its characters
  *  (`at`, by code point) hold their own (a group's run on A), each run in its style's face */
-export function figureRuns(
+function figureRuns(
   text: string,
   faceOf: (cls: 'cjk' | 'latin', st?: TStyle) => Face,
   quotes: boolean,

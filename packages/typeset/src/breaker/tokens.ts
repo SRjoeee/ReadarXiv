@@ -427,7 +427,7 @@ export function caseRuns(
   return out.map(({ src, k, at: a, n }) => ({ s: k === 1 ? src : upper(src), k, at: a, n }))
 }
 /** a rendering's runs with the names a package generated in it in the target's (L2:1309 renameRuns) */
-export function renameRuns<R extends { text: string }>(
+function renameRuns<R extends { text: string }>(
   runs: readonly R[],
   rename: readonly [number, number, string][],
 ): R[] | null {
@@ -447,7 +447,7 @@ export function renameRuns<R extends { text: string }>(
   return out
 }
 /** a crop resolution as its readers take it, one a part (L2:1875 cropPartsOf) */
-export function cropPartsOf(r: TRes): Record<string, unknown>[] {
+function cropPartsOf(r: TRes): Record<string, unknown>[] {
   if (!r.parts) return [r]
   return r.parts.map((q, i) => ({
     ...r,

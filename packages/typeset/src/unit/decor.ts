@@ -109,7 +109,7 @@ export function widen(b: DecorBlock, side: Side | undefined): void {
 }
 
 /** each block's displays TeX set with its short skip under one of its own lines (L2:3048 shortSkipsTo) */
-export function shortSkipsTo(
+function shortSkipsTo(
   blocks: DecorBlock[],
   skips: readonly ShortSkip[],
   lineInfo: ReadonlyMap<string, { j?: number }> | null,

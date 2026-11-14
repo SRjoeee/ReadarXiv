@@ -122,7 +122,7 @@ const unspaced = (s: string) =>
 const has = (table: Readonly<Record<string, string>>, w: string) => Object.hasOwn(table, w) && !!table[w]
 
 /** a generated reference's name in the target, or null (tex-names.mjs:74 refName) */
-export function refName(
+function refName(
   english: string,
   n: RefNames,
   labels: Readonly<Record<string, string>> | null,
@@ -152,7 +152,7 @@ function conjunctionOf(t: NonNullable<RefNames['target']>, c: string, own: OwnNa
 
 /** a generated reference's text in the target's names: its replacements in order; null where a part of it is no number,
  *  name or conjunction the target has a word for; empty where it holds no name (tex-names.mjs:103 refInTarget) */
-export function refInTarget(
+function refInTarget(
   text: string,
   n: RefNames,
   labels: Readonly<Record<string, string>> | null,

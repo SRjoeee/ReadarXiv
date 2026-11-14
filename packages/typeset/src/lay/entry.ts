@@ -249,7 +249,7 @@ export function nameOf(
  *  row of its own on the label's baseline, at its size, in its runs by script (a name's: nameScriptRuns), set as TeX set that
  *  line against its measure (Label.align): centred on the label's middle, from its start, or to its end. Nothing else of its
  *  member moves: no line of the member's leads with it */
-export function labelRowOf(
+function labelRowOf(
   lb: NonNullable<Placed['label']>,
   row: { text: string; st: Parameters<typeof faceOf>[1] },
   faceFor: (st: Parameters<typeof faceOf>[1], cls: 'cjk' | 'latin') => ReturnType<typeof faceOf>,
