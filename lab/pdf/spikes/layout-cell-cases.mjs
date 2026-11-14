@@ -405,8 +405,10 @@ function sameAsBare(bare, marked, e) {
 }
 /** each cell's end point against its cell (`ink` the head's): where every cell `cells` names holds its point on its end mark's page,
  *  after its end mark, the glyphs between the two its trailing piece's characters (`after`, '' none), no box between, its destination
- *  at or past the last ink of the cell across; and none for `none`. The faults, and each cell's reading for the table */
-function cellEnds(ink, cells, after, none) {
+ *  at or past the last ink of the cell across, within `tol` (0.01 pt; under dvipdfmx 0.02: its writer places a glyph of a run a
+ *  point splits anew, absolutely, sameInk's bound: a \\makecell[r] in an r column under XeLaTeX, its last glyph 0.0114 pt past the
+ *  point TeX set at its end, pdfLaTeX's and LuaLaTeX's within 0.0001); and none for `none`. The faults, and each cell's reading */
+function cellEnds(ink, cells, after, none, tol = 0.01) {
   const faults = [], read = []
   const at = name => { for (let p = 0; p < ink.pages.length; p++) { const q = ink.pages[p].points.findIndex(o => o.name === name); if (q >= 0) return { p, q, pt: ink.pages[p].points[q] } } return null }
   for (const i of cells) {
@@ -424,7 +426,7 @@ function cellEnds(ink, cells, after, none) {
     const own = P.glyphs.slice(s.pt.glyph, x.pt.glyph).filter(g => /\S/.test(g.u))
     const last = own.length ? Math.max(...own.map(g => g.x1)) : null
     const d = ink.dests.get(`t${i}x`)
-    if (d && last !== null && d[1] < last - 0.01) faults.push(`${i}: its destination at ${d[1].toFixed(2)}, before its cell's ink ends (${last.toFixed(2)})`)
+    if (d && last !== null && d[1] < last - tol) faults.push(`${i}: its destination at ${d[1].toFixed(2)}, before its cell's ink ends (${last.toFixed(2)})`)
     read.push(`${i} p${x.p + 1} ${JSON.stringify(between)}${d && last !== null ? ` +${(d[1] - last).toFixed(2)}` : ''}`)
   }
   return { faults, read }
@@ -470,7 +472,7 @@ for (const year of YEARS) {
       // (each cell's end point, every cell the document marks: `t<i>s` in its source)
       const ink = await inkOf(join(at, 'main.pdf'))
       const cells = [...src.matchAll(/\\axtmark\{t(\d+)s\}/g)].map(m => Number(m[1]))
-      const ends = ink ? cellEnds(ink, cells, END_AFTER[name] ?? {}, [...classless, ...(NO_END[name] ?? [])]) : { faults: ['no PDF'], read: [] }
+      const ends = ink ? cellEnds(ink, cells, END_AFTER[name] ?? {}, [...classless, ...(NO_END[name] ?? [])], e === 'xelatex' || e === 'latex' ? 0.02 : 0.01) : { faults: ['no PDF'], read: [] }
       let same = ''
       if (BASE) {
         const a = join(dir, `base-${e}-${name}`, 'main.pdf'), b = join(at, 'main.pdf')
