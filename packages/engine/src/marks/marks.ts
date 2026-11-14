@@ -195,8 +195,9 @@ export const FOLLOWERS = Object.freeze(['.', ',', ';', ':', '!', '?', 'word', 'c
 const PUNCT = '.,;:!?'
 /** the punctuation marks a package may set before a citation's or a call's own ink, moved from after it (cite.sty's
  *  \\CiteMoveChars, natmove's, fnpct's): those the probe asks about (TeX answers 3 for those it moves, layoutMarking), a piece's
- *  closing mark after one of them holding it first (followsOf `moved`) */
-const MOVED = PUNCT
+ *  closing mark after one of them holding it first (followsOf `moved`); a set of its characters, which the first character of a
+ *  text of none is not */
+const MOVED: ReadonlySet<string | undefined> = new Set(PUNCT)
 /** the classes whose commands the probe asks about: a package may look past their closing brace (a paper's macro has its
  *  opening mark alone (LOOKS_AHEAD), but one that reads nothing past its arguments, which the probe asks about too) */
 const ASKED: ReadonlySet<string | null> = new Set(['cite', 'ref', 'eqref', 'url', 'footnote'])
@@ -2669,8 +2670,7 @@ export function followsOf(
     // set before its own ink — cite.sty's superscripts, natmove, fnpct: `\\cite{a}.` set ".¹" — and where TeX answered so, the
     // piece's closing mark stands after it (layoutMarking's 3): the piece's ink is what its two marks hold but that mark first,
     // where none stands after them (stream.mjs ownedOf: a piece of 0 has the mark after its closing point, its own ink as it is)
-    const moved =
-      ASKED.has(classOf(u.pieces[k])) && after[0] !== undefined && MOVED.includes(after[0]) ? after[0] : null
+    const moved = ASKED.has(classOf(u.pieces[k])) && MOVED.has(after[0]) ? after[0] : null
     return {
       closing: names.has(`${name.slice(0, -1)}b`),
       want,
