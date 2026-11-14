@@ -358,6 +358,33 @@ export function entryByToday<M extends { ord: number }>(
   return out
 }
 
+/** an adapted member as the runner hands it to the lay: named by its unit's ord of today's (`ord`), and the follower and the
+ *  row its fields name by theirs (`unitOf`: part ord -> today's unit) */
+export function todayMember(mem: FlowMember, ord: number, unitOf: ReadonlyMap<number, { ord: number }>): FlowMember {
+  const todayOrd = (o: number) => unitOf.get(o)?.ord ?? o
+  mem.ord = ord
+  if (mem.follower) mem.follower = { ...mem.follower, id: todayOrd(mem.follower.id) }
+  if (mem.rowStart) mem.rowStart = { ...mem.rowStart, row: { ...mem.rowStart.row, id: todayOrd(mem.rowStart.row.id) } }
+  return mem
+}
+
+/** a page's ties as the runner hands them to the lay, in today's ords (`unitOf`: part ord -> today's unit): a table's cells
+ *  those of them `handed` (the members laid on the page), each stated spanning */
+export function todayTies(
+  ties: readonly { rule: string; cells?: readonly (readonly number[])[]; ords?: readonly number[] }[],
+  unitOf: ReadonlyMap<number, { ord: number }>,
+  handed: ReadonlySet<number>,
+): ({ rule: 'size'; ords: number[] } | { rule: 'cells'; cells: number[]; spanning: number[] })[] {
+  return ties.map((t) => {
+    if (t.rule !== 'cells') return { rule: 'size' as const, ords: (t.ords ?? []).map((o) => unitOf.get(o)?.ord ?? o) }
+    const cells = (t.cells ?? [])
+      .flat()
+      .map((o) => unitOf.get(o)?.ord ?? o)
+      .filter((o) => handed.has(o))
+    return { rule: 'cells' as const, cells, spanning: cells }
+  })
+}
+
 /** the first field of a member's setting that differs from today's prepared one, or 'equal' */
 export function settingDiff(mine: FlowMember, today: FlowMember, tokens = true): string {
   if (mine.blocks.length !== today.blocks.length) return 'U.blocks: block count'
@@ -966,12 +993,7 @@ export function gateL1Pair(
     // (the CJK body face's size correction, B.faces': today's trackStart, as U.params read it, where the reading is today's)
     if (o.reading !== 'part') got.member.P.trackStart = up?.trackStart as number
     // (named by today's ords, which the ledger and the dumps hold: L1's ord of a unit can differ)
-    const todayOrd = (o: number) => unitOf.get(o)?.ord ?? o
-    const mem = got.member
-    mem.ord = u.ord
-    if (mem.follower) mem.follower = { ...mem.follower, id: todayOrd(mem.follower.id) }
-    if (mem.rowStart)
-      mem.rowStart = { ...mem.rowStart, row: { ...mem.rowStart.row, id: todayOrd(mem.rowStart.row.id) } }
+    const mem = todayMember(got.member, u.ord, unitOf)
     adapted.set(ord, mem)
     const td = prepare(c)
     let setting = settingDiff(mem, td, o.reading !== 'part')
@@ -1104,14 +1126,7 @@ export function gateL1Pair(
     // Today's settleGroup withholds the group whole for any cell it cannot draw: the runner states every cell of it spanning,
     // which settleTies so withholds, where the entry holds a group for a spanning cell alone, ruling (c) of 2026-11-13)
     const handed = new Set(flows.flat().map((m) => m.ord))
-    const ties = ((part.ties ?? []) as { rule: string; cells?: number[][]; ords?: number[] }[]).map((t) => {
-      if (t.rule !== 'cells') return { rule: 'size' as const, ords: (t.ords ?? []).map((o) => unitOf.get(o)?.ord ?? o) }
-      const cells = (t.cells ?? [])
-        .flat()
-        .map((o) => unitOf.get(o)?.ord ?? o)
-        .filter((o) => handed.has(o))
-      return { rule: 'cells' as const, cells, spanning: cells }
-    })
+    const ties = todayTies((part.ties ?? []) as { rule: string; cells?: number[][]; ords?: number[] }[], unitOf, handed)
     // (a flow whose lay throws is left the original's alone by the composition, design-a §1.4: its members 'error', the reason
     // with them)
     let got: ReturnType<typeof layPagePrepared> | null = null
