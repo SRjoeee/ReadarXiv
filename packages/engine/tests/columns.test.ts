@@ -6,12 +6,12 @@ import { unitId } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
-import { type ColumnCell, columnBoxes, type FreeWord } from '../src/locate/columns.ts'
+import { type BandInk, type ColumnCell, columnBoxes, type FreeWord } from '../src/locate/columns.ts'
 import { readCellBoxes } from '../src/marks/channels.ts'
 import { docOf } from './helpers/doc.ts'
 import { locate } from './helpers/locate.ts'
 
-const at = (ord: number, col: number, cls: ColumnCell['cls'], x0: number, x1: number, o: Partial<ColumnCell> = {}) => ({
+const at = (ord: number, col: number, cls: ColumnCell['cls'], x0: number, x1: number, o: Partial<ColumnCell> = {}): ColumnCell => ({
   ord,
   page: 1,
   col,
@@ -151,8 +151,94 @@ describe('columnBoxes: a column’s box from its entries, where they line up as 
   })
 })
 
-describe('locate states each cell’s column box as Room.column', () => {
-  it('reads an l column of cells and an r column of a header over numbers no unit is', () => {
+describe('columnBoxes with the band’s ink: each cell’s room in its column, its box widened by the column’s share of the blank', () => {
+  // (the share is half the blank between the box's edge and what stands next on the table's band on that side: TeX makes the
+  // blank between two columns of each one's own \tabcolsep. Three columns, l, c and r, two entries each, 20 pt apart; the
+  // table's rules end 6 pt past its outer columns)
+  const three = (): ColumnCell[] => [
+    at(1, 0, 'l', 100, 130),
+    at(2, 0, 'l', 100, 120),
+    at(3, 1, 'c', 150, 170),
+    at(11, 1, 'c', 155, 165),
+    at(4, 2, 'r', 190, 220),
+    at(12, 2, 'r', 200, 220),
+  ]
+  const band = (o: Partial<BandInk> = {}): BandInk[] => [{ page: 1, ink: [], walls: [], edge: [94, 226], ...o }]
+  /** a room to the part's hundredth, as the facts pass states it */
+  const near = (b: readonly number[] | undefined) => b?.map((x) => Math.round(x * 100) / 100)
+  it('grows an l cell to the right, an r cell to the left, a c cell both ways, each by half the blank to its neighbour', () => {
+    const r = columnBoxes(three(), [], band())
+    expect(near(r.get(1))).toEqual([100, 140])
+    expect(near(r.get(2))).toEqual([100, 140])
+    expect(near(r.get(3))).toEqual([140, 180])
+    expect(near(r.get(4))).toEqual([180, 220])
+    // (no band's ink handed: the boxes themselves, as before)
+    expect(columnBoxes(three(), []).get(3)).toEqual([150, 170])
+  })
+  it('gives a c cell the smaller of its two shares on both sides, its middle the box’s', () => {
+    const cells = three().map((c) => (c.ord === 4 ? { ...c, x0: 178 } : c))
+    expect(near(columnBoxes(cells, [], band()).get(3))).toEqual([146, 174])
+  })
+  it('stops at a vertical rule and at a neighbour’s fill, painted edges alike: half the blank to the edge', () => {
+    // (a rule between the first two columns)
+    const r = columnBoxes(three(), [], band({ walls: [[139.8, 140.2]] }))
+    expect(near(r.get(1))).toEqual([100, 134.9])
+    expect(near(r.get(3))).toEqual([145.1, 174.9])
+    // (the third column's cells filled, colortbl's ground over its cell box: an edge beside the second, the third's own ground)
+    const f = columnBoxes(three(), [], band({ walls: [[184, 226]] }))
+    expect(near(f.get(3))).toEqual([143, 177])
+    expect(near(f.get(4))).toEqual([180, 220])
+    // (a ground across every column, a row's colour, is no edge beside any)
+    expect(near(columnBoxes(three(), [], band({ walls: [[94, 226]] })).get(3))).toEqual([140, 180])
+  })
+  it('takes the table’s own edge where nothing stands on a side, where its rules end; no share where the page shows none', () => {
+    const cells = [at(1, 0, 'r', 100, 130), at(2, 0, 'r', 110, 130), at(3, 1, 'l', 150, 170), at(4, 1, 'l', 150, 160)]
+    const r = columnBoxes(cells, [], band())
+    expect(near(r.get(1))).toEqual([97, 130])
+    expect(near(r.get(3))).toEqual([150, 198])
+    const none = columnBoxes(cells, [], band({ edge: undefined }))
+    expect(near(none.get(1))).toEqual([100, 130])
+    expect(near(none.get(3))).toEqual([150, 170])
+  })
+  it('stops at a word of free ink and at a glyph of a member that is no cell of the table, on any row of the band', () => {
+    // (a number no unit is between the first two columns; a footnote's mark a paragraph owns, on the band)
+    expect(near(columnBoxes(three(), [word(134, 138)], band()).get(1))).toEqual([100, 132])
+    expect(near(columnBoxes(three(), [], band({ ink: [[136, 140]] })).get(1))).toEqual([100, 133])
+    // (a glyph straddling the box's edge leaves no blank on that side: a c cell beside it grows neither way)
+    expect(near(columnBoxes(three(), [], band({ ink: [[168, 172]] })).get(3))).toEqual([150, 170])
+  })
+  it('stops at the unit cells of a column with no box, and reads nothing past the table’s edge', () => {
+    // (the third column one cell, no box: its cell stands next to the second)
+    const one = three().filter((c) => c.ord !== 12 && c.ord !== 4)
+    expect(near(columnBoxes([...one, at(4, 2, 'l', 178, 200)], [], band()).get(3))).toEqual([146, 174])
+    // (a word of another table set beside this one, past this one's rules' end)
+    const two = three().filter((c) => c.col < 2)
+    expect(near(columnBoxes(two, [word(300, 320)], band({ edge: [94, 176] })).get(3))).toEqual([147, 173])
+  })
+  it('widens a spanning cell’s union by its first column’s left share and its last one’s right; it stands next to none', () => {
+    const cells = [...three(), at(5, 0, 'c', 115, 155, { span: 2 }), at(6, 1, 'c', 165, 205, { span: 2 })]
+    const r = columnBoxes(cells, [], band())
+    expect(near(r.get(5))).toEqual([97, 173])
+    expect(near(r.get(6))).toEqual([147, 223])
+    // (the second spanning cell's ink crosses the blank between the second and third columns: the c cell keeps its shares)
+    expect(near(r.get(3))).toEqual([140, 180])
+  })
+  it('never passes the cell’s own side: the widening cut at its Room.side, the box itself where the side stops short of it', () => {
+    // (the first cell's line stops at TeX's measure at 136, a \cmidrule's end beside the third's at 175; the fourth's side short
+    // of its box on the left, a mark TeX set in its entry: the box stands there, and the typesetter lays it in its own room)
+    const sides: Record<number, readonly [number, number]> = { 1: [90, 136], 3: [120, 175], 4: [195, 230] }
+    const cells = three().map((c) => (sides[c.ord] ? { ...c, side: sides[c.ord] } : c))
+    const r = columnBoxes(cells, [], band())
+    expect(near(r.get(1))).toEqual([100, 136])
+    expect(near(r.get(2))).toEqual([100, 140])
+    // (a c cell's cut alike on both sides: its middle stays the box's)
+    expect(near(r.get(3))).toEqual([145, 175])
+    expect(near(r.get(4))).toEqual([190, 220])
+  })
+})
+
+describe('locate states each cell’s room in its column as Room.column', () => {
+  it('reads an l column of cells and an r column of a header over numbers no unit is, each widened by its share', () => {
     // (a header row, Model and Val; two rows under it, each a cell of the first column and a number of the second: glyphs 6 pt
     // wide, the numbers' ink owned by no unit)
     const B = docOf([
@@ -196,11 +282,13 @@ describe('locate states each cell’s column box as Room.column', () => {
       made: { compiler: 'pdflatex', tree: '2025', front: 'test' },
     }
     const ms = locate(ins, B, align(B, B)).members
+    // (the l column grows right and the r column left, each by half the 18 pt between their boxes; no rule shows the table's
+    // edge, so neither has a share on its outer side)
     expect(ms.slice(0, 4).map((m) => m.room.column)).toEqual([
-      [100, 130],
-      [148, 184],
-      [100, 130],
-      [100, 130],
+      [100, 139],
+      [139, 184],
+      [100, 139],
+      [100, 139],
     ])
   })
 })
