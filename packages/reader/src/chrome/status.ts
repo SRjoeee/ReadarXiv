@@ -112,7 +112,7 @@ export function stageOf(state: ReaderState): Stage | null {
 }
 /** some of the translation is there to be read: a page laid, or the layer's pages known and rows of them in (the website's
  *  "drawn": the layer's first rows taken this visit) */
-export const translationThere = (state: ReaderState): boolean =>
+const translationThere = (state: ReaderState): boolean =>
   state.layer.laid > 0 || (state.layer.total > 0 && state.translated.got > 0)
 /** neither side has anything to show: the original could not be read, nothing of the translation is there, and none is to be
  *  had now (its layer refused, for now or for the paper): the website's `originalLost && layer === 'unavailable'` (its
@@ -314,7 +314,7 @@ export function lineOf(state: ReaderState, held = false, prepared = false): Line
 const GOES_ON: ReadonlySet<Cause> = new Set<Cause>([...GOES_ON_WHY].map(causeFor).filter((c): c is Cause => c !== null))
 /** a wait the session goes on from by itself (GOES_ON): a wait, as the first-time wait is, never a refusal; the display the reader
  *  chose is kept through it (the coordinator, 2026-11-12) */
-export const goesOnNow = (state: ReaderState): boolean => {
+const goesOnNow = (state: ReaderState): boolean => {
   const cause = causeOf(state)
   return cause !== null && GOES_ON.has(cause)
 }
