@@ -44,6 +44,11 @@ describe('a cell of several lines has its start mark before the box that holds i
       new RegExp(`\\\\textbf\\{${S}\\\\makecell\\[l\\]\\{Bold`),
     )
   })
+  it('before the first of two boxes that hold its lines, each one, where no group holds them all (the outer entry)', () => {
+    expect(marked('\\makecell{Left \\\\ top} \\makecell{right \\\\ bottom} & testing & x')).toMatch(
+      new RegExp(`${S}\\\\makecell\\{Left`),
+    )
+  })
   it('after a \\cellcolor at the head, before the box', () => {
     expect(marked('\\cellcolor{red}\\makecell{X \\\\ Y} & testing & x')).toMatch(new RegExp(`\\\\cellcolor\\{red\\}${S}\\\\makecell\\{X`))
   })
