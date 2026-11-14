@@ -41,17 +41,17 @@ const sourceViewNow = (s: string) => latin1(ENCODER.encode(s))
 
 describe("sourceView: a source's UTF-8 bytes read latin-1 through the engine's one latin1", () => {
   it('reads every width, a lone surrogate, and each slice edge of both readers as the one before', () => {
-    const cases = ['', 'a', 'abc', '\u0000', 'é', '数', '😀', '\ud800', 'x\udc00y', '$\\{x\\}$', '\\url{https://example.org/a_b}']
+    const cases = ['', 'a', 'abc', '\u0000', 'é', '€', '😀', '\ud800', 'x\udc00y', '$\\{x\\}$', '\\url{https://example.org/a_b}']
     // (8192 bytes, 8192 + 1, a 3- and a 4-byte character across the edge, 0x8000 bytes, past it)
     for (const n of [4095, 4096, 4097, 16383, 16384, 16385]) cases.push('é'.repeat(n))
-    for (const n of [2730, 2731, 10922, 10923]) cases.push('数'.repeat(n), `a${'数'.repeat(n)}`, `ab${'数'.repeat(n)}`)
+    for (const n of [2730, 2731, 10922, 10923]) cases.push('€'.repeat(n), `a${'€'.repeat(n)}`, `ab${'€'.repeat(n)}`)
     for (const n of [2047, 2048, 2049, 8191, 8192, 8193]) cases.push('😀'.repeat(n), `a${'😀'.repeat(n)}`)
     for (const s of cases) expect(sourceViewNow(s), JSON.stringify(s.slice(0, 20))).toBe(sourceViewBefore(s))
   })
 
   it('reads 300 seeded texts of up to 40,000 code units as the one before', () => {
     const next = rng(20261114)
-    const alphabet = ['a', 'Z', '0', ' ', '\\', '$', '{', '}', '_', 'é', 'ß', 'α', '数', 'ー', '😀', '𝑥', '\ud800', '\udfff', '\u0000', '\u00ff']
+    const alphabet = ['a', 'Z', '0', ' ', '\\', '$', '{', '}', '_', 'é', 'ß', 'α', '€', 'ॐ', '😀', '𝑥', '\ud800', '\udfff', '\u0000', '\u00ff']
     for (let n = 0; n < 300; n++) {
       const len = Math.floor(next() * 40_000)
       let s = ''
@@ -98,7 +98,7 @@ describe('the maker: the same units, claims and kept blocks before the change an
       pageOf([
         { parts: [{ s: 'Let ' }, { s: 'x', font: MATH }, { s: ' be a value of the set' }], y: 700 },
         { parts: [{ s: 'Mail ' }, { s: 'a.b@example.org', font: MONO }, { s: ' or see llm_equal_human here' }], y: 650 },
-        { parts: [{ s: 'Física de los ' }, { s: '数学', font: 'ABCDEF+SimSun' }, { s: ' and ' }, { s: '𝑥$\\{}', font: MATH }, { s: ' done' }], y: 600 },
+        { parts: [{ s: 'Física de los ' }, { s: 'ॐ€', font: 'ABCDEF+NotoSans' }, { s: ' and ' }, { s: '𝑥$\\{}', font: MATH }, { s: ' done' }], y: 600 },
         { parts: [{ s: 'Visit ' }, { s: 'https://example.org/a_b', font: MONO }, { s: ' for the rest of it' }], y: 550 },
       ]),
     ]
@@ -112,7 +112,7 @@ describe('the maker: the same units, claims and kept blocks before the change an
         // (four words of text and more: no formula's line, the page's own text; an address in the text's face, \urlstyle{same})
         { parts: [{ s: 'Let the value of ' }, { s: 'α'.repeat(5000), font: MATH }, { s: ' be long enough here' }], y: 700 },
         { parts: [{ s: 'Then the value of ' }, { s: 'β'.repeat(17000), font: MATH }, { s: ' is longer than that' }], y: 600 },
-        { parts: [{ s: `See the page https://example.org/${'数'.repeat(3000)} for the rest of it` }], y: 500 },
+        { parts: [{ s: `See the page https://example.org/${'€'.repeat(3000)} for the rest of it` }], y: 500 },
       ]),
     ]
     const now = make(pages, false)
