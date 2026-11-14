@@ -290,7 +290,173 @@ describe('columnBoxes with the band’s ink: each cell’s room in its column, i
     expect(near(r.get(3))).toEqual([145, 175])
     expect(near(r.get(4))).toEqual([190, 220])
   })
+  // (a table set over two pages whose columns stand alike, its entries pooled: the first page holds the three columns' cells, the
+  // second the first column's cells and one of the second column's, or one of the second's and the third column's, and spanning
+  // cells over two columns, one of which has no unit cell on that page: that column's box is the first page's)
+  const pages = (o: { last: boolean }): ColumnCell[] => [
+    ...three(),
+    ...(o.last
+      ? [at(21, 0, 'l', 100, 125, { page: 2 }), at(22, 0, 'l', 100, 115, { page: 2 })]
+      : [at(24, 2, 'r', 190, 220, { page: 2 }), at(25, 2, 'r', 205, 220, { page: 2 })]),
+    at(23, 1, 'c', 152, 168, { page: 2 }),
+  ]
+  const both = (): BandInk[] => [...band(), ...band().map((b) => ({ ...b, page: 2 }))]
+  it('gives a spanning cell its room where its page holds no unit cell of its last column: no share there, the box stands', () => {
+    // (Codex's shape, pull request #644: the union [150, 220] of the second and third columns, a c cell set on its middle on the
+    // second page, which holds no unit cell of the third; the box is the cell's, so its room is too)
+    const cells = [...pages({ last: true }), at(31, 1, 'c', 165, 205, { page: 2, span: 2 })]
+    expect(columnBoxes(cells, []).get(31)).toEqual([150, 220])
+    expect(near(columnBoxes(cells, [], both()).get(31))).toEqual([150, 220])
+  })
+  it('gives a spanning cell its room where its page holds no unit cell of its first column: no share there, the box stands', () => {
+    const cells = [...pages({ last: false }), at(32, 0, 'c', 115, 155, { page: 2, span: 2 })]
+    expect(columnBoxes(cells, []).get(32)).toEqual([100, 170])
+    expect(near(columnBoxes(cells, [], both()).get(32))).toEqual([100, 170])
+  })
+  it('widens such a cell on the side its page states a share for, as its class grows: l right, r left, c by the smaller (0)', () => {
+    // (the last column's share unstated on the second page, the second column's left share there half its 20 pt to the first's
+    // box: an r cell grows left by it, an l cell grows right and so not at all, a c cell by the smaller, none)
+    const last = [
+      ...pages({ last: true }),
+      at(31, 1, 'c', 165, 205, { page: 2, span: 2 }),
+      at(33, 1, 'l', 150, 200, { page: 2, span: 2 }),
+      at(34, 1, 'r', 170, 220, { page: 2, span: 2 }),
+    ]
+    const r = columnBoxes(last, [], both())
+    expect([31, 33, 34].map((o) => near(r.get(o)))).toEqual([
+      [150, 220],
+      [150, 220],
+      [140, 220],
+    ])
+    // (the first column's share unstated, the third's right share half its 6 pt to the table's edge: an l cell grows right by it)
+    const first = [
+      ...pages({ last: false }),
+      at(32, 0, 'c', 115, 155, { page: 2, span: 2 }),
+      at(35, 0, 'l', 100, 150, { page: 2, span: 2 }),
+      at(36, 0, 'r', 120, 170, { page: 2, span: 2 }),
+    ]
+    const f = columnBoxes(first, [], both())
+    expect([32, 35, 36].map((o) => near(f.get(o)))).toEqual([
+      [100, 170],
+      [100, 173],
+      [100, 170],
+    ])
+  })
+  it('gives every cell that has a box a room, and that room holds its box (generated tables, seeds 1 to 2000)', () => {
+    // (one to three pages, tied or shifted as a two-sided document's; two to five columns of each class, zero to three unit cells
+    // of each on each page, some of another class, of none or set off their edge; spanning cells, some wider than the union;
+    // free words in a column or anywhere; the band's glyphs, walls and edge, or none; sides, some short of the box)
+    const failed: number[] = []
+    let reached = 0
+    for (let seed = 1; seed <= 2000; seed++) {
+      const { cells, words, bands } = tableOf(seed)
+      const boxes = columnBoxes(cells, words)
+      const rooms = columnBoxes(cells, words, bands)
+      const hundredth = (v: number) => Math.round(v * 100) / 100
+      if (
+        cells.some(
+          (c) =>
+            c.span > 1 &&
+            boxes.has(c.ord) &&
+            [c.col, c.col + c.span - 1].some(
+              (k) => !cells.some((s) => s.page === c.page && s.span === 1 && s.col === k),
+            ),
+        )
+      )
+        reached++
+      for (const [ord, b] of boxes) {
+        const room = rooms.get(ord)
+        if (!room || room[0] > hundredth(b[0]) + 1e-9 || room[1] < hundredth(b[1]) - 1e-9) {
+          failed.push(seed)
+          break
+        }
+      }
+    }
+    // (the generator reaches the shape above: a spanning cell with a box on a page that holds no unit cell of an end column)
+    expect(reached).toBeGreaterThan(0)
+    expect(failed.slice(0, 10)).toEqual([])
+  })
 })
+
+/** a seeded generator (mulberry32): the same numbers for a seed on every run */
+function rng(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+/** a table of the seed's: its cells on each of its pages, the free words on its band and what else stands there */
+function tableOf(seed: number): { cells: ColumnCell[]; words: FreeWord[]; bands: BandInk[] } {
+  const r = rng(seed)
+  const int = (a: number, b: number) => a + Math.floor(r() * (b - a + 1))
+  const pick = <T>(xs: readonly T[]): T => xs[Math.floor(r() * xs.length)]!
+  const CLASSES = ['l', 'c', 'r'] as const
+  const set = (cls: 'l' | 'c' | 'r', x0: number, x1: number, w: number): [number, number] =>
+    cls === 'l' ? [x0, x0 + w] : cls === 'r' ? [x1 - w, x1] : [(x0 + x1 - w) / 2, (x0 + x1 + w) / 2]
+  const cols: { x0: number; x1: number; cls: 'l' | 'c' | 'r' }[] = []
+  let x = 100
+  for (let k = int(2, 5); k > 0; k--) {
+    const w = int(15, 50)
+    cols.push({ x0: x, x1: x + w, cls: pick(CLASSES) })
+    x += w + int(8, 24)
+  }
+  const end = cols.at(-1)!.x1
+  const nPages = int(1, 3)
+  const cells: ColumnCell[] = []
+  const words: FreeWord[] = []
+  const bands: BandInk[] = []
+  let ord = 0
+  const sideOf = (a: number, b: number) => (r() < 0.3 ? { side: [a - int(-2, 15), b + int(-2, 15)] as const } : {})
+  for (let page = 1; page <= nPages; page++) {
+    const s = page > 1 && r() < 0.25 ? int(-20, 20) : 0
+    cols.forEach((c, col) => {
+      for (let i = int(0, 3); i > 0; i--) {
+        const cls = r() < 0.05 ? undefined : r() < 0.1 ? pick(CLASSES) : c.cls
+        const w = r() < 0.5 ? c.x1 - c.x0 : int(5, c.x1 - c.x0)
+        const off = r() < 0.1 ? int(-3, 3) : 0
+        const [a, b] = set(cls ?? c.cls, c.x0 + s + off, c.x1 + s + off, w)
+        cells.push({ ord: ord++, page, col, span: 1, cls, x0: a, x1: b, ...sideOf(a, b) })
+      }
+    })
+    for (let i = int(0, 2); i > 0; i--) {
+      const col = int(0, cols.length - 2)
+      const span = int(2, cols.length - col)
+      const u0 = cols[col]!.x0 + s
+      const u1 = cols[col + span - 1]!.x1 + s
+      const cls = r() < 0.1 ? undefined : pick(CLASSES)
+      const w = r() < 0.15 ? u1 - u0 + int(1, 10) : int(10, u1 - u0)
+      const [a, b] = set(cls ?? 'c', u0, u1, w)
+      cells.push({ ord: ord++, page, col, span, cls, x0: a, x1: b, ...sideOf(a, b) })
+    }
+    for (let i = int(0, 3); i > 0; i--) {
+      const c = pick(cols)
+      const y = int(0, 3) * 10
+      if (r() < 0.6) {
+        const [a, b] = set(c.cls, c.x0 + s, c.x1 + s, int(3, c.x1 - c.x0))
+        words.push({ page, x0: a, x1: b, y })
+      } else {
+        const a = int(90, end + 10) + s
+        words.push({ page, x0: a, x1: a + int(2, 20), y })
+      }
+    }
+    const some = (p: number, w: number) =>
+      Array.from({ length: r() < p ? int(1, 2) : 0 }, () => {
+        const a = int(90, end + 10) + s
+        return [a, a + int(1, w)] as const
+      })
+    bands.push({
+      page,
+      ink: some(0.3, 6),
+      walls: some(0.2, 40),
+      ...(r() < 0.7 ? { edge: [94 + s, end + 6 + s] as const } : {}),
+    })
+  }
+  return { cells, words, bands }
+}
 
 describe('locate states each cell’s room in its column as Room.column', () => {
   it('reads an l column of cells and an r column of a header over numbers no unit is, each widened by its share', () => {
