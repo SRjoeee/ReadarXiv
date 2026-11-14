@@ -4,7 +4,10 @@
 // owners and units in, the same units out.
 import { describe, expect, it } from 'vitest'
 import * as P from '../../packages/engine/src/locate/ink.ts'
-import * as T from '../../packages/engine/src/locate/today/today.types.ts'
+import * as TF from '../../packages/engine/src/locate/today/figure-text.types.ts'
+import * as TI from '../../packages/engine/src/locate/today/ink-units.types.ts'
+import * as TL from '../../packages/engine/src/locate/today/ledger.types.ts'
+import * as TD from '../../packages/engine/src/locate/today/today.types.ts'
 import { figureUnitsOf } from '../../src/pdf-reader/engine/layout/figure-text.mjs'
 import { claimInk, inkUnitsOf, keptUnitsOf } from '../../src/pdf-reader/engine/layout/ink-units.mjs'
 import { ledgerOf } from '../../src/pdf-reader/engine/layout/ledger.mjs'
@@ -14,6 +17,8 @@ import { classesOf, contentOf, spansOf, unicodeOf } from '../../src/pdf-reader/e
 import { DISPLAY } from '../../src/pdf-reader/engine/translate/mt.mjs'
 import { ADDRESS_GROUP, EMAIL_ADDRESS, identifiersIn } from '../../src/pdf-reader/engine/source/latex-front.mjs'
 
+/** the package's copies, as the facades that type them give them (deps.mjs's JavaScript names, and each maker's) */
+const T = { ...TD, ...TF, ...TI, ...TL }
 type G = Record<string, unknown>
 /** a page in today's shape: lines of glyphs set left to right (a glyph half its size wide), the marks' points by glyph */
 function pageOf(lines: { s: string; x?: number; y: number; size?: number; font?: string; form?: boolean; fid?: number; space?: number }[], marks: { points?: [string, number][]; paras?: [string, number][]; paraEnds?: [string, number, number, number][]; regions?: { kind: string; from: number; to: number }[]; pictures?: [string, number][] } = {}) {

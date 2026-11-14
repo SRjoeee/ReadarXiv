@@ -28,24 +28,24 @@ import {
   turnedStyleGlyph,
   unitSize,
 } from './facts.ts'
+import { identifiersIn } from './today/today.types.ts'
+import { figureGroup, figureUnitsOf, SPACE_GAP } from './today/figure-text.types.ts'
 import {
   statedClassOf as classOf,
   claimInk,
-  figureGroup,
-  figureUnitsOf,
-  identifiersIn,
   inkUnitsOf,
   keptUnitsOf,
+  type TodayInkUnit,
+  UNIT_FLAG,
+} from './today/ink-units.types.ts'
+import {
   type FloatLine,
   inkLeft,
   ledgerOf,
-  type TodayInkUnit,
   type TodayPage,
   type TodayPiece,
-  SPACE_GAP,
   type TodayUnit,
-  UNIT_FLAG,
-} from './today/today.types.ts'
+} from './today/ledger.types.ts'
 
 /** the owner the figure reading's input gives arXiv's ink (PDF-READER §18.27): on a page of A our compile sets, a glyph it never
  *  printed — arXiv's margin stamp, which its newer pages show inside a form of arXiv's — is no text the paper's TeX set, and so

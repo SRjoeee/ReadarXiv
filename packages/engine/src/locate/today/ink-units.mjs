@@ -80,7 +80,7 @@ import { unitClass } from '../content-classes.ts'
 import { accentTexts } from '../accents.ts'
 import { latin1 } from '../../bounded-reads.ts'
 import { classifyFont } from '../facts.ts'
-import { ADDRESS_GROUP, EMAIL_ADDRESS, identifiersIn, lineRulesOf, OWN_WORK, RULE_EM, spellOf, utf8 } from './deps.mjs'
+import { ADDRESS_GROUP, EMAIL_ADDRESS, identifiersIn, lineRulesOf, OWN_WORK, RULE_EM, spellOf, utf8 } from './today.types.ts'
 
 /** a unit's flags as the layout file states them, which the bundle's rows carry: its title, its front matter, and its alignment as
  *  TeX set it, one of CENTRED, FLUSH_LEFT, FLUSH_RIGHT and JUSTIFIED at most (alignOf, below). The values are the layout file's

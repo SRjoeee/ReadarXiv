@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { latin1 } from '../../packages/engine/src/bounded-reads.ts'
-import { claimInk, inkUnitsOf, keptUnitsOf, ledgerOf } from '../../packages/engine/src/locate/today/today.types.ts'
+import { claimInk, inkUnitsOf, keptUnitsOf } from '../../packages/engine/src/locate/today/ink-units.types.ts'
+import { ledgerOf } from '../../packages/engine/src/locate/today/ledger.types.ts'
 import {
   claimInk as claimInkBefore,
   inkUnitsOf as inkUnitsOfBefore,

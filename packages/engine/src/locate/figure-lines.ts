@@ -16,11 +16,11 @@ import {
   SPACE_GAP,
   type TodayFigures,
   type TodayMet,
-  type TodayPage,
   type TodayShape,
   interiorOf,
-  scriptsOf,
-} from './today/today.types.ts'
+} from './today/figure-text.types.ts'
+import { scriptsOf } from './today/ink-units.types.ts'
+import type { TodayPage } from './today/ledger.types.ts'
 import type { DocGlyph } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
 import { accentOver, COMBINING, classifyFont, lineEnd, TRACKING_SPACE_FACTOR } from './facts.ts'

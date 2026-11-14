@@ -27,7 +27,7 @@
 import { CLASS_CODE, CLASS_IDS, unitClass } from '../content-classes.ts'
 import { displayTextMask, regionMask } from '../../ink.ts'
 import { classifyFont } from '../facts.ts'
-import { columnsAt, regionsOf } from './deps.mjs'
+import { columnsAt, regionsOf } from './today.types.ts'
 
 /** two glyphs on one line: their baselines within this share of the larger size (a superscript, a subscript) */
 export const LINE_DY = 0.6
