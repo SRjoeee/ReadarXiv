@@ -7,6 +7,7 @@
 // the moved modules replaces this file.
 import type { Piece } from '@readarxiv/format'
 import type { Instrument, PieceClass } from './instrument.ts'
+import type { NameKey } from './marks/names.ts'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
 import * as instrument_js from './instrument/instrument.mjs'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
@@ -137,22 +138,7 @@ declare function layoutMarksOf(
   },
 ): Promise<LayoutMarks>
 export type MarkedOptions = Parameters<typeof layoutMarksOf>[2] & { paper?: boolean }
-declare const NAME_KEYS: readonly [
-  'abstract',
-  'ref',
-  'bib',
-  'contents',
-  'listfigure',
-  'listtable',
-  'appendix',
-  'index',
-  'proof',
-  'preface',
-  'glossary',
-  'figure',
-  'table',
-]
-export type NameKey = (typeof NAME_KEYS)[number]
+export type { NameKey }
 export interface ConvergeRecord {
   drafts: number
   marked: number

@@ -18,7 +18,7 @@ import { textless } from '../source/arg-roles.mjs'
 import { symbolText } from '../source/text-symbols.mjs'
 import { INK_FREE_LEAD, prefixWord } from '../source/tex-kernel.mjs'
 import { DISPLAY, plainTranslated } from '../instrument/mt.mjs'
-import { NAME_ENGLISH, NAME_KEYS } from './names.mjs'
+import { NAME_ENGLISH, NAME_KEYS } from './names.ts'
 import { fillOfColour } from './colour.ts'
 import { spellOf, WANT } from '../own/stream.mjs'
 
