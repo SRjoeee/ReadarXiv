@@ -52,7 +52,7 @@ import { utf8 } from '../instrument/mt.mjs'
 import { symbolText } from '../source/text-symbols.mjs'
 import { UNHIDDEN } from '../delta-wire.ts'
 import { classOf, headsOf, INK_ANY, leadStep } from '../marks/marks.mjs'
-import { columnsAt, OWNED, OWNED_HOW, ownedOf, READ_ALONE, regionsOf, spellOf } from './stream.mjs'
+import { columnsAt, OWNED, OWNED_HOW, ownedOf, READ_ALONE, regionsOf, spellOf } from './stream.ts'
 import { isLabelForm, labelFormOf, labelText } from '../marks/label-form.ts'
 import { counterAfter, counterBefore } from '../marks/names.ts'
 

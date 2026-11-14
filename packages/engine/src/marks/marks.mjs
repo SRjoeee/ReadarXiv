@@ -20,7 +20,7 @@ import { INK_FREE_LEAD, prefixWord } from '../source/tex-kernel.mjs'
 import { DISPLAY, plainTranslated } from '../instrument/mt.mjs'
 import { NAME_ENGLISH, NAME_KEYS } from './names.ts'
 import { fillOfColour } from './colour.ts'
-import { spellOf, WANT } from '../own/stream.mjs'
+import { spellOf, WANT } from '../own/stream.ts'
 
 // ---------------------------------------------------------------- the classes
 /** every class, in this order */
