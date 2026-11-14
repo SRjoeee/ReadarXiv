@@ -325,3 +325,120 @@ export function todayJoin(pages, bundle, units, prepared = null, stated = []) {
   for (const page of Object.values(pages)) for (const m of page.members) if (join.has(m.ord)) out[m.ord] = { today: join.get(m.ord) }
   return out
 }
+
+/** a text's words, by its pieces' source: each run of letters and digits (NFKC, case folded) of its text and of its elements'
+ *  and groups' source (a placeholder's `\\code{…}`, a group's `\\textcolor{blue}{`): one front end holds as an element what
+ *  the other holds as text (v2's `[sentence\\_1]` an element, today's its letters), and each piece is a separator, as are its
+ *  spaces and its punctuation */
+const wordsOf = (texts) =>
+  texts
+    .join(' ')
+    .normalize('NFKC')
+    .toLowerCase()
+    .match(/[\p{L}\p{N}]+/gu) ?? []
+/** a v2 unit's pieces' source: its text, each element's source, each group's open and close round its content (`groups`
+ *  false: its groups' contents alone, as a cell's rows read that today cut a unit a row, the box round them in none of them) */
+const v2Texts = (content, groups = true) =>
+  (content ?? []).flatMap((p) =>
+    p.t === 'text' ? [p.s] : p.t === 'span' ? (groups ? [` ${p.open ?? ''}`, ...v2Texts(p.content), `${p.close ?? ''} `] : [' ', ...v2Texts(p.content, false), ' ']) : [` ${p.src ?? ''} `],
+  )
+/** the longest common subsequence of two word lists, its length */
+const lcs = (a, b) => {
+  let prev = new Array(b.length + 1).fill(0)
+  for (let i = 1; i <= a.length; i++) {
+    const cur = new Array(b.length + 1).fill(0)
+    for (let j = 1; j <= b.length; j++) cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1])
+    prev = cur
+  }
+  return prev[b.length]
+}
+/** whether two word lists say the same words in the same order: equal, or in common for nine tenths of each (a placeholder one
+ *  front end reads as text, the other as an element: today's `\_`, v2's "_") */
+const sameWords = (a, b) =>
+  a.length > 0 &&
+  b.length > 0 &&
+  (a.join(' ') === b.join(' ') ||
+    (Math.min(a.length, b.length) >= 0.9 * Math.max(a.length, b.length) && lcs(a, b) >= 0.9 * Math.max(a.length, b.length)))
+
+/**
+ * The parity's join by pieces (lane hdr-lines, S1 and S2, the coordinator's of 2026-11-15): today's reader and v2's cut some
+ * texts into other units, so that one unit of today's is several members of v2's part (S1: a lead sentence and the prompt box
+ * set in it, which v2's prepare sets apart and keeps for its one pitch) and several units of today's one member (S2: a table cell
+ * set on two lines, today a unit a line). No id joins them, nor one member to one unit: their pieces do. A unit of today joins the
+ * run of members, two or more, consecutive in the part's order, whose words together are its words in order (sameWords; a
+ * member's read with its groups' opens and closes and without); a member, the run of today's units, two or more, consecutive in
+ * today's order, whose words together are its own; a run whose first alone says them, none. Over what the
+ * one-to-one join (`todayOf`: part ord -> today's ord, todayJoin) left, on a page both stand on (a unit of today's by its lines'
+ * pages, a member by the parts that hold it), each unit and member in one group at most. `bundle` the paper's L1 bundle,
+ * `prepared` today's prepare dump's units ({ ord, lines, pieces }). Returns the groups, `{ today: [ords], members: [ords] }`,
+ * in today's order
+ */
+export function piecesJoin(bundle, prepared, todayOf) {
+  const joinedToday = new Set(todayOf.values())
+  // (each member once, its pages the parts that hold it, its words its unit's)
+  const members = new Map()
+  for (const [pg, part] of bundle.parts)
+    for (const flow of part.flows)
+      for (const m of flow) {
+        if (todayOf.has(m.ord) || typeof m.text !== 'string') continue
+        const content = bundle.units.get(m.text)?.content
+        const x = members.get(m.ord) ?? { ord: m.ord, pages: new Set(), words: wordsOf(v2Texts(content)), bare: wordsOf(v2Texts(content, false)) }
+        x.pages.add(pg)
+        members.set(m.ord, x)
+      }
+  const free = [...members.values()].filter((m) => m.words.length).sort((a, b) => a.ord - b.ord)
+  const left = [...prepared]
+    .filter((u) => !joinedToday.has(u.ord))
+    .map((u) => {
+      const words = wordsOf((u.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : ` ${p.src ?? ''} `)))
+      return { ord: u.ord, pages: new Set((u.lines ?? []).map((l) => l.page)), words, bare: words }
+    })
+    .filter((u) => u.words.length)
+    .sort((a, b) => a.ord - b.ord)
+  const meets = (a, b) => [...a.pages].some((p) => b.pages.has(p))
+  const used = { today: new Set(), members: new Set() }
+  const groups = []
+  // (each side's words read twice, a v2 member's with its groups' opens and closes and without them (`bare`: a merged cell's
+  // box, `\makecell{`, stands round its rows, and today's unit a row holds none of it), today's alike both times: two say the
+  // same where either reading does)
+  const same = (a, b) => sameWords(a.words, b.words) || sameWords(a.bare, b.bare)
+  /** the run from `start` of `list`, consecutive in its order, each on a page `one` stands on, two or more, whose words are its;
+   *  none where its first alone says them (one member or unit is no group of pieces, whatever the one-to-one join left of it:
+   *  a run that goes on past it adds only words a tenth may hide, 2611.03953v2-zh p8's paragraph and the merged cell after it) */
+  const runOf = (one, list, start, taken) => {
+    const run = []
+    const got = { words: [], bare: [] }
+    for (let k = start; k < list.length; k++) {
+      const x = list[k]
+      if (taken.has(x.ord) || !meets(one, x) || Math.min(got.words.length, got.bare.length) >= one.words.length * 1.1) break
+      run.push(x)
+      got.words = [...got.words, ...x.words]
+      got.bare = [...got.bare, ...x.bare]
+      if (same(got, one)) return run.length >= 2 ? run : null
+    }
+    return null
+  }
+  for (const t of left) {
+    if (used.today.has(t.ord)) continue
+    for (let k = 0; k < free.length; k++) {
+      const run = runOf(t, free, k, used.members)
+      if (!run) continue
+      for (const m of run) used.members.add(m.ord)
+      used.today.add(t.ord)
+      groups.push({ today: [t.ord], members: run.map((m) => m.ord) })
+      break
+    }
+  }
+  for (const m of free) {
+    if (used.members.has(m.ord)) continue
+    for (let k = 0; k < left.length; k++) {
+      const run = runOf(m, left, k, used.today)
+      if (!run) continue
+      for (const t of run) used.today.add(t.ord)
+      used.members.add(m.ord)
+      groups.push({ today: run.map((t) => t.ord), members: [m.ord] })
+      break
+    }
+  }
+  return groups.sort((a, b) => a.today[0] - b.today[0])
+}

@@ -513,3 +513,193 @@ describe('locate states each cell’s room in its column as Room.column', () => 
     ])
   })
 })
+
+// (a table cell of several lines, one unit since §18.75: how its lines stand in the cell's box, read off A as their left edges,
+// middles or right edges together within ALIGNED, Placed.inner; all three together, the cell's class; none, no reading)
+describe('locate states how the lines of a cell of several lines stand in its box (Placed.inner, §18.75)', () => {
+  /** a cell of two lines owned by one unit, its column's class `boxed`: each line's text and start (glyphs 6 pt wide); its lines
+   *  the rows of a box it holds, a forced break between each two (a merged cell), or with `paragraph` a paragraph's (none) */
+  const innerOf = (
+    boxed: 'l' | 'c' | 'r' | undefined,
+    lines: [string, number][],
+    paragraph = false,
+    breaks?: number[],
+  ) => {
+    const B = docOf([{ lines: lines.map(([text, x], k) => ({ text, x, y: 712 - 12 * k })) }])
+    // (`breaks`: the lines a forced break follows, where they are not every one: a paragraph's \\newline among its wrapped lines)
+    const after = new Set(breaks ?? lines.slice(1).map((_, k) => k + 1))
+    const content = paragraph
+      ? [{ t: 'text' as const, s: lines.map(([t]) => t).join(' ') }]
+      : lines.flatMap(([t], k) => [
+          ...(after.has(k)
+            ? [
+                {
+                  t: 'el' as const,
+                  id: String(k),
+                  kind: 'other' as const,
+                  src: k % 2 ? '\\\\' : '\\newline',
+                  brk: true as const,
+                },
+              ]
+            : []),
+          { t: 'text' as const, s: t },
+          ...(k === lines.length - 1 && after.has(lines.length)
+            ? [{ t: 'el' as const, id: 'z', kind: 'other' as const, src: '\\\\', brk: true as const }]
+            : []),
+        ])
+    const units: InstrumentUnit[] = [
+      {
+        id: unitId('cell', content),
+        kind: 'cell',
+        content,
+        cell: { table: 0, row: 0, col: 0, ...(boxed ? { boxed } : {}) },
+      },
+    ]
+    const ins: Instrument = {
+      ink: B,
+      units,
+      glyphs: B.pages.map((pg) => {
+        const O = ownersOf(pg.glyphs.length)
+        pg.glyphs.forEach((_, j) => {
+          O.unit[j] = 0
+          O.role[j] = ROLE.text
+        })
+        return O
+      }),
+      boxes: B.pages.map((pg) => ownersOf(pg.kinds.length)),
+      tex: {},
+      made: { compiler: 'pdflatex', tree: '2025', front: 'test' },
+    }
+    const m = locate(ins, B, align(B, B)).members[0]!
+    return { lines: m.lines.length, inner: (m as { inner?: string }).inner }
+  }
+  it('reads lines centred in the box, flush left and flush right, whatever the column’s class', () => {
+    // ("Errorx" 36 pt, "ontestset" 54 pt)
+    expect(
+      innerOf('l', [
+        ['Errorx', 109],
+        ['ontestset', 100],
+      ]),
+    ).toEqual({ lines: 2, inner: 'c' })
+    expect(
+      innerOf('c', [
+        ['Errorx', 100],
+        ['ontestset', 100],
+      ]),
+    ).toEqual({ lines: 2, inner: 'l' })
+    expect(
+      innerOf('l', [
+        ['Errorx', 118],
+        ['ontestset', 100],
+      ]),
+    ).toEqual({ lines: 2, inner: 'r' })
+  })
+  it('takes the cell’s class where lines of one width line up all three ways', () => {
+    expect(
+      innerOf('r', [
+        ['Errorx', 100],
+        ['testxx', 100],
+      ]),
+    ).toEqual({ lines: 2, inner: 'r' })
+  })
+  it('states none where the lines line up no way (a reading the page does not give), and none for a cell of one line', () => {
+    expect(
+      innerOf('l', [
+        ['Errorx', 103],
+        ['ontestset', 100],
+      ]),
+    ).toEqual({ lines: 2, inner: undefined })
+    expect(innerOf('l', [['Errorx', 103]])).toEqual({ lines: 1, inner: undefined })
+  })
+  it('states none for a paragraph cell whose forced break is one among lines TeX wrapped (a p column’s \\newline): no rows', () => {
+    // (four lines, a \newline after the second: 2608.27043v1's "Best: … \newline Worst: …", each part wrapped on two lines)
+    expect(
+      innerOf(
+        'l',
+        [
+          ['Bestxx', 100],
+          ['scorex', 100],
+          ['Worstx', 100],
+          ['scorey', 100],
+        ],
+        false,
+        [2],
+      ),
+    ).toEqual({ lines: 4, inner: undefined })
+  })
+  it('reads a box whose last row is empty, its break after its last line (`Wasserstein \\\\ QGAN \\\\`): its rows the lines', () => {
+    expect(
+      innerOf(
+        'c',
+        [
+          ['Errorx', 100],
+          ['ontestset', 91],
+        ],
+        false,
+        [1, 2],
+      ),
+    ).toEqual({ lines: 2, inner: 'c' })
+  })
+  it('states none for a cell of a paragraph column (p, m, b: no class of a column box), its lines one apart by \\newline', () => {
+    // (2608.27043v1's "Best: 98.91% AUC \newline Worst: 96.71% AUC", a p column's cell on two lines)
+    expect(
+      innerOf(undefined, [
+        ['Bestxx', 100],
+        ['Worstxyz', 100],
+      ]),
+    ).toEqual({ lines: 2, inner: undefined })
+  })
+  it('states none for a cell whose lines are a paragraph of its own (a p column, no forced break): no box of rows', () => {
+    expect(
+      innerOf(
+        'l',
+        [
+          ['Errorx', 100],
+          ['ontestset', 100],
+        ],
+        true,
+      ),
+    ).toEqual({ lines: 2, inner: undefined })
+  })
+})
+
+describe('a cell of several lines is one entry of its column’s box, its hull (§18.75, d)', () => {
+  it('takes the hull of a centred box’s two lines as an l column’s entry, beside a cell of one line', () => {
+    // (cell 0: "Errorx" 109-145 over "ontestset" 100-154, a centred box in an l column; cell 1: "Basexx" 100-136; both l)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Errorx', x: 109, y: 712 },
+          { text: 'ontestset', x: 100, y: 700 },
+          { text: 'Basexx', x: 100, y: 688 },
+        ],
+      },
+    ])
+    const cell = (s: string, row: number): InstrumentUnit => {
+      const content = [{ t: 'text' as const, s }]
+      return { id: unitId('cell', content), kind: 'cell', content, cell: { table: 0, row, col: 0, boxed: 'l' } }
+    }
+    const owner = [...Array(15).fill(0), ...Array(6).fill(1)]
+    const ins: Instrument = {
+      ink: B,
+      units: [cell('Errorx ontestset', 0), cell('Basexx', 1)],
+      glyphs: B.pages.map((pg) => {
+        const O = ownersOf(pg.glyphs.length)
+        pg.glyphs.forEach((_, j) => {
+          O.unit[j] = owner[j] ?? -1
+          O.role[j] = ROLE.text
+        })
+        return O
+      }),
+      boxes: B.pages.map((pg) => ownersOf(pg.kinds.length)),
+      tex: {},
+      made: { compiler: 'pdflatex', tree: '2025', front: 'test' },
+    }
+    const ms = locate(ins, B, align(B, B)).members
+    // (the box the widest entry's, the two-line cell's hull 100-154; no rule shows the table's edge: no share)
+    expect(ms.slice(0, 2).map((m) => [m.lines.length, m.room.column])).toEqual([
+      [2, [100, 154]],
+      [1, [100, 154]],
+    ])
+  })
+})

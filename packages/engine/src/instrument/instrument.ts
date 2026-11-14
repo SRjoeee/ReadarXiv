@@ -1293,7 +1293,10 @@ export function boundedEmpty(
     }
     // (the start point's piece as patch finds it, over the source's text as patch writes it)
     const start = S
-      ? startOf(P.map((q) => (q.t === 'text' && !q.tr && q.src !== undefined ? { ...q, s: q.src } : q)))[0]
+      ? startOf(
+          P.map((q) => (q.t === 'text' && !q.tr && q.src !== undefined ? { ...q, s: q.src } : q)),
+          unit?.kind === 'cell',
+        )[0]
       : -1
     const last = P.findLastIndex(real)
     const seen = new Map<string, boolean>()
@@ -1894,7 +1897,10 @@ export function outsidePieces(
     if (!S || !P.length || twice.has(u)) return
     const f = first.get(u)
     if (f && (f[0] < S[0] || (f[0] === S[0] && f[1] < S[1]))) return
-    const start = startOf(P.map((q) => (q.t === 'text' && !q.tr && q.src !== undefined ? { ...q, s: q.src } : q)))[0]
+    const start = startOf(
+      P.map((q) => (q.t === 'text' && !q.tr && q.src !== undefined ? { ...q, s: q.src } : q)),
+      unit?.kind === 'cell',
+    )[0]
     for (let k = 0; k < start; k++) if (P[k]!.t === 'ph') out.push({ unit: u, piece: String(k) })
   })
   return out

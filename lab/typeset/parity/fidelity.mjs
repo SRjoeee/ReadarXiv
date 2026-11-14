@@ -785,10 +785,13 @@ export function measureFidelity(c) {
   // set in a face of one pitch (lane b5-fixes; round 8 B8, 2608.25210 p3 t55: its description at 8.97 pt over a box at 7.97,
   // the box's size read as the unit's and its lines as the unit's room). A line is the element's where its baseline is one of
   // the element's ink boxes' on this page and the two overlap across)
+  // (and those of a member of a group of the join by pieces a ruling keeps, its prompt box set apart since S1: verdict.mjs's
+  // `keptLines`, the same lines read so)
   const laidLinesOf = (o) => {
     const kept = (facts.get(o.part)?.els ?? []).filter((e) => e[6]).flatMap((e) => e[2])
-    if (!kept.length) return o.lines
-    return o.lines.filter((l) => !kept.some((b) => Math.abs(l.y - b[4]) <= 1 && Math.min(l.x1, b[2]) - Math.max(l.x0, b[0]) > 0.5 * (b[2] - b[0])))
+    const ls = o.keptLines?.length ? o.lines.filter((l) => !o.keptLines.includes(l)) : o.lines
+    if (!kept.length) return ls
+    return ls.filter((l) => !kept.some((b) => Math.abs(l.y - b[4]) <= 1 && Math.min(l.x1, b[2]) - Math.max(l.x0, b[0]) > 0.5 * (b[2] - b[0])))
   }
   const tight = { today: new Map(), v2: new Map() }
   const leadOf = new Map()

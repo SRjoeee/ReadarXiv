@@ -1482,3 +1482,56 @@ describe("F0's figure texts under the general rules: an element kept as the orig
     expect(of('style')(figStyled())).toEqual([[true, 'today']])
   })
 })
+
+describe('the measures read the joined set: a unit of today cut into members of v2, and units of today one member (hdr-lines, S1/S2)', () => {
+  // (2608.25210v2-zh p3 after S1: today's t55 is a lead sentence with its prompt box; v2 sets them apart, the lead a member
+  // translated and the box a member its prepare keeps for its one pitch (§18.22). A table cell set on two lines after S2: today's
+  // two line units, v2's one member. The join by their pieces (join.mjs piecesJoin) hands measurePage the groups)
+  type D = { flag: string; worse: boolean; nearer: string; unit: string; ruling?: string; v2?: { value: unknown } }
+  const ctx = (v2: ReturnType<typeof v2Of>, pieceGroups: { today: number[]; members: number[] }[], prep: { ord: number }[] = []) => ({
+    prepByOrd: new Map(prep.map((u) => [u.ord, u])),
+    todayOf: new Map(Object.entries(v2.today).map(([k, t]) => [Number(k), t.today])),
+    turned: new Set(),
+    led: new Map(),
+    top: new Set(),
+    pieceGroups,
+  })
+  const lead = { ord: 11, kind: 'para', align: 'j', style: { size: 10 }, lines: [factLine(72, 300, 500)] }
+  const box = { ord: 12, kind: 'para', align: 'l', style: { size: 8 }, lines: [factLine(80, 280, 480, 8), factLine(80, 280, 470, 8)] }
+  const split = (pitch: number[]) =>
+    v2Of({ members: [{ ord: 11, state: 'laid', lines: [] }, { ord: 12, state: 'none', lines: [] }], facts: [lead, box], pitch })
+  const today7 = { units: [{ id: 7, lines: [drawnLine(72, 300, 500, 'abcdefghij'), drawnLine(80, 280, 480, 'abcdefgh', 8), drawnLine(80, 280, 470, 'abcdefgh', 8)] }] }
+  const v2Lead = { units: [{ id: 11, lines: [drawnLine(72, 300, 500, 'abcdefghij')] }] }
+  it('a unit of today shown where each part of it is translated in a member or kept by a rule a ruling covers: not worse', () => {
+    const p = measurePage('p-zh', split([12]), rec({ today: today7, v2: v2Lead }), ctx(split([12]), [{ today: [7], members: [11, 12] }]))
+    const d = (p.diffs as D[]).filter((x) => x.worse)
+    expect(d.map((x) => x.flag)).toEqual([])
+    const shown = (p.diffs as D[]).filter((x) => x.flag === 'shown')
+    expect(shown.map((x) => [x.worse, x.nearer])).toEqual([[false, 'ruling']])
+    expect(shown[0]?.ruling).toMatch(/one pitch/)
+  })
+  it('one part of it neither translated nor kept by a ruling: a translation missing, that member named', () => {
+    const p = measurePage('p-zh', split([]), rec({ today: today7, v2: v2Lead }), ctx(split([]), [{ today: [7], members: [11, 12] }]))
+    const shown = (p.diffs as D[]).filter((x) => x.flag === 'shown')
+    expect(shown.map((x) => [x.worse, x.v2?.value])).toEqual([[true, 'part 12: none']])
+  })
+  it("a member a ruling keeps is no line the group lays: the leading read over the lines v2 lays, as a kept element's are", () => {
+    // (the lead on two lines at 10 pt, 12 apart; the box under it at 8 pt, 16 apart (a tcolorbox's spacing); today drew it all
+    // at 16 apart; v2 draws the lead at its own 12 and keeps the box: read over the box's lines too, v2's lead read tight)
+    const lead2 = { ...lead, lines: [factLine(72, 300, 512), factLine(72, 300, 500)] }
+    const box2 = { ...box, lines: [factLine(80, 280, 486, 8), factLine(80, 280, 470, 8), factLine(80, 280, 454, 8)] }
+    const v2 = v2Of({ members: [{ ord: 11, state: 'laid', lines: [] }, { ord: 12, state: 'none', lines: [] }], facts: [lead2, box2], pitch: [12] })
+    const today = { units: [{ id: 7, lines: [drawnLine(72, 300, 512, 'abcdefghij'), drawnLine(80, 280, 496, 'abcdefgh', 8), drawnLine(80, 280, 480, 'abcdefgh', 8), drawnLine(80, 280, 464, 'abcdefgh', 8)] }] }
+    const v2Lead2 = { units: [{ id: 11, lines: [drawnLine(72, 300, 512, 'abcdefghij'), drawnLine(72, 300, 500, 'abcdefghij')] }] }
+    const p = measurePage('p-zh', v2, rec({ today, v2: v2Lead2 }), ctx(v2, [{ today: [7], members: [11, 12] }]))
+    expect((p.diffs as D[]).filter((x) => x.worse).map((x) => x.flag)).toEqual([])
+  })
+  it("units of today that one member holds are measured as one: today's two lines against the member's", () => {
+    const cell = { ord: 21, kind: 'cell', align: 'c', style: { size: 10 }, lines: [factLine(100, 160, 500), factLine(100, 160, 488)] }
+    const v2 = v2Of({ members: [{ ord: 21, state: 'laid', lines: [] }], facts: [cell] })
+    const today = { units: [{ id: 30, lines: [drawnLine(100, 160, 500, 'abcdef')] }, { id: 31, lines: [drawnLine(100, 160, 488, 'abcdef')] }] }
+    const v2Cell = { units: [{ id: 21, lines: [drawnLine(100, 160, 500, 'abcdef', 8), drawnLine(100, 160, 488, 'abcdef', 8)] }] }
+    const p = measurePage('p-zh', v2, rec({ today, v2: v2Cell }), ctx(v2, [{ today: [30, 31], members: [21] }]))
+    expect((p.diffs as D[]).filter((x) => x.worse).map((x) => [x.flag, x.unit])).toEqual([['size', 't30 cell']])
+  })
+})

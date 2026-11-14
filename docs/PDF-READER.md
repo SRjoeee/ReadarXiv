@@ -7056,6 +7056,78 @@ these tables back), I10 and I11 one member-page fewer (that figure text); the di
 2610.21176v1 p13's cell 101 in its column with the table's bottom rule, and 2610.20716v1 p19's header with its two `\cmidrule`s,
 where it had laid the first over its row's first cells and both without their rules.
 
+### 18.75 A table cell set on several lines is one text (the owner's decision of 2026-11-15)
+
+The owner, shown lane hdr-lines' table of 48 cells set on two lines (each line translated alone today, and as one text by
+Google: 11 better, 9 the same, 2 worse; 2 drawn smaller in the lines' own widths): multi-line cells are translated WHOLE; where a
+reply loses the break the cell falls back to today's line-by-line translation (the chain's runs floor); and each line of such a
+cell is laid in the cell's room in its column, so that no cell is drawn smaller than today for having become one unit.
+
+- **The source reader: a cell's unit is the grid's cell** (`source/latex-front.ts`). The walk ended a cell's unit at every `\\`
+  in a table (and every row-end macro), where the table's grid (`tableGrid`) ends a cell only at a `\\` outside its groups and
+  nested environments: TeX's `\\` is `\@tabularcr`, the end of a row of the innermost alignment it stands in. The grid is read
+  before the body's walk and the walk ends a unit only where the grid ends the cell (`inGridCell`); a `\\` inside a grid cell, in
+  a box the cell holds (`\makecell`, `\shortstack`, a `\parbox`, a paper macro's argument), is a forced break of the cell's text,
+  the placeholder it is in a paragraph. A tabular of one column and several rows nested in a cell sets lines of that cell's text:
+  its `\begin`/`\end` a pair round them, each row's end a forced break, its rules placeholders; one of one row is its own cell as
+  before (its pieces, id and rows unchanged: 2503.06072v3's 27 one-row nested tabulars); one of several columns a table of its
+  own (a table set in a cell). In a table's cell, §18.73's block yields to the cell: the call of a macro whose body sets its
+  argument in an environment is the pair round its argument (`<\tabincell{c}{>LOC [\\] method<}>`). An author block's tabular is
+  cut at its rows as before (its names and places are two kinds).
+- **The names rules read the whole text**: R1 and R2 (`instrument/language.ts`) read a forced break as a space, so a cell is kept
+  only where no token of any of its lines is a word; R4 reads it as one text cell of one unit, its key its content (the break an
+  element of it, as a cell's `\hline` is).
+- **The marking: the start mark before the box** (`source/latex-front.ts` startOf, for a cell). The cell's lines are the rows
+  of a box it holds, and a start mark inside the box defined the cell's index in the box's first entry (LAYOUT_TEX's `\axt@cs`,
+  carried to the innermost alignment entry): that template wrote the box's class (`AXT-CELL`) and set §18.74's end point after
+  the box's first line, and a `\shortstack`'s own `\halign`, no template of LaTeX's, wrote neither. So where every forced break
+  of a cell stands inside a group of it, its start mark goes before the open piece of the innermost group that holds them all
+  (`\makecell{`, `\shortstack{`, a nested tabular's `\begin`, a paper macro's pair, a `\parbox`), a `\multicolumn` passed
+  through (its `\omit` opens the entry: no mark before it), where the head's start stands inside that group (a cell whose first
+  word stands before the box keeps its mark there); where no group holds them all (two boxes side by side), before the outermost
+  group the start stands in. The outer template then writes one `AXT-CELL`, the outer column's class, and sets one end point
+  after the whole box; the inner templates write nothing for it. The end mark stays after the last word, inside the box; a
+  forced break gets no mark (the marking reads `\\` as invisible), nor does a rule that opens an inner row (`A\\ \hline B`: a
+  rule's placeholder sets no letter, and a mark after a row's end is passed over). The instrument reads the start piece by the
+  same rule (boundedEmpty, outsidePieces). Proven at TeX (`lab/pdf/spikes/layout-cell-cases.mjs`, its merged cases: ten boxes, each
+  in an l, a c and an r column, and six under `\multirow`, `\multicolumn` and after a `\cellcolor`; both pinned years, pdfLaTeX,
+  XeLaTeX, LuaLaTeX and latex with dvipdfmx): every merged cell writes one `AXT-CELL`, its outer column's class (a `\parbox`'s its
+  paragraph's, j), and sets one end point after the box, nothing between its end mark and it; each page's glyphs and rules those
+  of the same document without our marks (pdfLaTeX's to 0.001 pt, LuaLaTeX's within 0.011, under dvipdfmx a run a point splits
+  placed anew by the writer within 0.01); 240 of 240 compiles with every earlier case. Red with the start mark inside the box:
+  16 of 16 compiles wrong (the box's class, the end point before the end mark, a `\shortstack` with neither). Under XeLaTeX a
+  `\makecell[r]` in an r column has its last glyph 0.0114 pt past the end point TeX set at it (pdfLaTeX's and LuaLaTeX's within
+  0.0001): the gate holds an end point to its cell's last ink within 0.02 pt under dvipdfmx, its writer's placement.
+- **The lay: a line of a grid cell is laid in the cell's room in its column, whichever line it is** (the coordinator's statement,
+  `packages/typeset/src/lay/adapt.ts` `columnRoomOf`): where the part states the cell's `Room.column`, every line's room is it,
+  not only a single line's; the cell has one size, the largest not over the original's at which every line fits (the fit's states
+  in the same room, no widening); its lines stand as TeX set them in the cell's box: the box, as wide as its widest laid line, in
+  the room by the cell's class (`Placed.align`), each line in the box by its own (`Placed.inner`, read off arXiv's page; absent,
+  the cell's class: `breaker/place.ts` boxLines, one box over all its lines whichever block each is in, each line's extent its
+  ink's as placeItems centres a single line, a closing mark that ends it standing in the margin by its blank half: by its advance
+  a line that ends with a CJK closing parenthesis stood a quarter of its size off TeX's middle, 2608.06701v1 p6, 2608.25210v2 p13). Its forced break ends
+  its line where the reply keeps it between words: U.breaks' maps, keyed by each line's own rectangle as the reading read it, are
+  carried onto the room's (a lead read off the page knows no pitch, so the line after the break opens a region of its own,
+  `breakAt`; with the rectangles the room's and the maps not carried, 18 of the 34 cells of two or three lines the entry laid over
+  the table's papers ran their lines together, 2608.06701v1's "Trigger \\ Rate (%)" drawn with the first character of its
+  second line's translation on its first line). It replaces, for these
+  cells, each line in its own width widened half way to its neighbour where clipped at the floor. A reply that sets the break at its start or end takes none (U.breaks), and the breaker
+  fills the cell's lines, each in the room. A paragraph cell (a p, m, b or X column, a `\parbox`: no column box), a cell with a held
+  line or lines on two pages, and one whose side stops short of the box are laid in their own rooms as before.
+  `Placed.inner` is read by the facts pass (`locate/columns.ts` innerOf, in `facts-pass.ts` readColumns), for a cell whose lines
+  are the rows of a box it holds, a line each: it holds a forced break and its rows (each stretch of its text between two forced
+  breaks, an empty one none: a break that ends the box's last row adds no row) are as many as its lines, in a column of class l, c
+  or r (a paragraph cell's lines, a p column's, state none, nor a `\newline` among lines TeX wrapped): TeX sets each line in
+  the box by the box's own template, which states nothing of the lines, so they are read off arXiv's page as a column is: their
+  left edges together within `ALIGNED` (half a point), `l`; their middles, `c`; their right edges, `r`; all three (lines of one
+  width), the cell's class; none, no reading (the lines laid by the cell's class), counted and listed at the build. A cell of
+  several lines is one entry of its column's box, the hull of its lines (readColumns read a member of several lines so already),
+  its class the outer column's. Over the 89
+  papers' chain no member of several lines stated a column before this (290 cells of several lines, none with `Room.column`), so
+  the rule reaches the merged cells alone. `Placed.inner` is an optional field: the schema's rule (`packages/format/src/schema.ts`:
+  "a new optional field does not raise FORMAT; FORMAT rises only when an old reader would misread") keeps FORMAT 1, a typesetter
+  of before laying the lines in their own rooms as it did.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

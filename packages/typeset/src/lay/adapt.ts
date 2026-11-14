@@ -123,19 +123,23 @@ function cellExtent(l: Line, m: Placed): [number, number] {
   return [mid - half, mid + half]
 }
 /**
- * A single-line table cell's room in its column (Room.column: its column's box widened by the column's share of the blank
- * beside it, never past its own side; the owner's decisions, docs/PDF-READER.md §18.13): the room
- * it is laid in, in its column's alignment (its class: Placed.align), at the largest size not over the original's that fits
- * it, the same room at every size (no step down in its own ink's width first, no room opening only where it is clipped at its
- * floor: X.further's 'widen'). Undefined where the part states none (a part made before, a column whose box is not
- * established), for a cell of several lines or a held one, and where ink not its own stands inside the room on its line (its
- * Room.side short of an edge of it: a mark TeX set in its entry past a space; the engine never states a room past a side that
- * reaches the box, so this is a side short of the box): each laid in its own room as before
+ * A table cell's room in its column (Room.column: its column's box widened by the column's share of the blank beside it, never
+ * past its own side; the owner's decisions, docs/PDF-READER.md §18.13, and for a cell of several lines §18.75): the room each of
+ * its lines is laid in, in its column's alignment (its class: Placed.align; a cell of several lines its box so, its lines in the
+ * box by Placed.inner: FitBlock.box), at the largest size not over the original's that fits every line, the same room at every
+ * size (no step down in its own ink's width first, no room opening only where it is clipped at its floor: X.further's 'widen').
+ * Undefined where the part states none (a part made before, a column whose box is not established, a paragraph cell's), for a
+ * cell with a held line or lines on two pages, and where ink not its own stands inside the room on its line (its Room.side short
+ * of an edge of it: a mark TeX set in its entry past a space; the engine never states a room past a side that reaches the box,
+ * so this is a side short of the box): each laid in its own room as before
  */
 function columnRoomOf(m: Placed): readonly [number, number] | undefined {
   const c = m.room.column
   const l = m.lines[0]
-  if (m.kind !== 'cell' || !c || !l || m.lines.length !== 1 || l[9] & KEPT) return undefined
+  // (a cell of several lines too, every line its: the lines of a box TeX set in the cell, one unit (§18.75), each laid in the
+  // cell's room in its column whichever line it is, so that no cell is drawn smaller for having become one unit; a paragraph
+  // cell states no column. Its lines on one page; none held)
+  if (m.kind !== 'cell' || !c || !l || m.lines.some((x) => x[0] !== l[0] || x[9] & KEPT)) return undefined
   const side = m.room.side
   if (side && (side[0] > c[0] + 0.01 || side[1] < c[1] - 0.01)) return undefined
   return c
@@ -320,19 +324,31 @@ export function adapt(i: AdaptInput): Adapted {
   const { m, R } = i
   if (m.why) return { stop: m.why }
   if (!m.lines.length) return { stop: 'no lines' }
-  const br = i.reading.breaks
+  const read = i.reading.breaks
   if (
-    !br &&
+    !read &&
     (m.els?.some(([, e]) => e.ends || e.opens !== undefined) || m.spans?.some(([, x]) => x.opens !== undefined))
   )
     return { stop: 'breaks (U.breaks not adapted)' }
   const lines = m.lines
   const rects = lines.map((l) => rectOf(l, m))
-  // (a single-line cell whose room in its column the part states: that its room)
+  // (a cell whose room in its column the part states: that every line's room; U.breaks' maps, keyed by each line's own
+  // rectangle as the reading read it, carried onto the room's, so that a forced break whose next line opens a region of its own
+  // (a lead read off the page: no pitch, U.breaks breakAt) still ends its line there, §18.75)
   const column = columnRoomOf(m)
-  if (column) {
-    const r = rects[0]!
-    rects[0] = [r[0], r2(column[0]), r[2], r2(column[1]), r[4]]
+  const moved = new Map<string, string>()
+  if (column)
+    for (const [j, r] of rects.entries()) {
+      rects[j] = [r[0], r2(column[0]), r[2], r2(column[1]), r[4]]
+      moved.set(rectKey(r), rectKey(rects[j]!))
+    }
+  const carried = <V>(map: Map<string, V> | null): Map<string, V> | null =>
+    map && moved.size ? new Map([...map].map(([k, v]) => [moved.get(k) ?? k, v])) : map
+  const br = read && {
+    regionOf: carried(read.regionOf)!,
+    breakAt: carried(read.breakAt)!,
+    joinAt: carried(read.joinAt)!,
+    paraAt: read.paraAt && moved.size ? new Set([...read.paraAt].map((k) => moved.get(k) ?? k)) : read.paraAt,
   }
   // (each line's frame: its run of lines on one page and column)
   const frames: number[] = []
@@ -427,6 +443,12 @@ export function adapt(i: AdaptInput): Adapted {
   if (hang !== undefined && blocks[0] && blocks[0].page === rects[0]![0] && !blocks[0].centred) {
     blocks[0].hang = hang
     blocks[0].hangGap = hangGap
+  }
+  // (a cell of several lines in its room: its box set there by its class, its lines in the box by their own, as TeX set them:
+  // B.place's boxLines, §18.75)
+  if (column && lines.length > 1) {
+    const cls = m.align === 'r' ? 'r' : m.align === 'c' ? 'c' : 'l'
+    for (const b of blocks) b.box = { cls, inner: m.inner ?? cls }
   }
   // (the room each block may borrow under it (today's freeFor RUN:1677, which RUN:2193 gives every block but a cell's), from TeX's
   // facts alone (the owner's ruling of 2026-11-08): a block that ends a run of its text lines the part states the room under

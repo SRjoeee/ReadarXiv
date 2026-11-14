@@ -84,6 +84,24 @@ export interface FreeWord {
  */
 const ALIGNED = 0.5
 /**
+ * How the lines of a table cell of several lines stand in the cell's box (Placed.inner, docs/PDF-READER.md §18.75): TeX sets the
+ * box (a \\makecell's, a \\shortstack's, a nested one-column tabular's) by the cell's class in its column and each line in the box
+ * by the box's own template, which states nothing of the lines; read off A as for a column: their left edges together within
+ * ALIGNED, 'l'; their middles, 'c'; their right edges, 'r'; all three (lines of one width), the cell's class (`cls`); none (the
+ * lines line up no way), none: no reading, the lines then laid by the cell's class
+ */
+export function innerOf(
+  lines: readonly (readonly [number, number])[],
+  cls: ColumnClass | undefined,
+): ColumnClass | undefined {
+  const spread = (f: (l: readonly [number, number]) => number) => Math.max(...lines.map(f)) - Math.min(...lines.map(f))
+  const by: ColumnClass[] = []
+  if (spread((l) => l[0]) <= ALIGNED) by.push('l')
+  if (spread((l) => (l[0] + l[1]) / 2) <= ALIGNED) by.push('c')
+  if (spread((l) => l[1]) <= ALIGNED) by.push('r')
+  return by.length === 1 ? by[0] : by.length > 1 ? cls : undefined
+}
+/**
  * The fewest entries a column's box is read from: 2, a count of entries. Its source: what lining up is: one entry stands on its
  * column's edge with nothing to show that the edge is TeX's, and its box would be its own extent, which no reading holds to TeX's
  * column (docs/PDF-READER.md §18.13: a column of one entry states none)

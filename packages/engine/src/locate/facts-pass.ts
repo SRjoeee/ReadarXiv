@@ -31,7 +31,7 @@ import {
   TRAIL,
   tailOf,
 } from './facts.ts'
-import { type ColumnCell, columnBoxes, type FreeWord } from './columns.ts'
+import { type ColumnCell, columnBoxes, type FreeWord, innerOf } from './columns.ts'
 import { isInk, r2 } from './lines.ts'
 import { WORD_GAP } from './trails.ts'
 import { spellOf } from '../own/stream.ts'
@@ -337,17 +337,22 @@ function readColumns(fx: FactsIndex): void {
       const page = mem.lines[0]![0]
       let x0 = Number.POSITIVE_INFINITY,
         x1 = Number.NEGATIVE_INFINITY
+      // (each line's extent too: how the lines of a cell of several lines stand in its box, Placed.inner)
+      const extents: [number, number][] = []
       for (const l of mem.lines) {
         if (l[0] !== page) continue
-        x0 = Math.min(x0, l[2])
-        x1 = Math.max(x1, l[3])
+        let a = l[2],
+          z = l[3]
         const size = l[10] ?? mem.style.size
         for (const [, e] of mem.elements)
           for (const k of e.ink)
             if (k[0] === l[0] && Math.abs(k[5] - l[4]) < 0.4 * size && k[1] < l[3] && k[3] > l[2]) {
-              x0 = Math.min(x0, k[1])
-              x1 = Math.max(x1, k[3])
+              a = Math.min(a, k[1])
+              z = Math.max(z, k[3])
             }
+        extents.push([a, z])
+        x0 = Math.min(x0, a)
+        x1 = Math.max(x1, z)
         const b = band.get(page) ?? [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, l[7], l[8]]
         band.set(page, [
           Math.min(b[0], mem.room.band?.[0] ?? l[6]),
@@ -357,6 +362,19 @@ function readColumns(fx: FactsIndex): void {
         ])
       }
       cells.push({ ord: mem.ord, page, col: c.col, span: c.span ?? 1, cls: c.boxed, x0, x1, side: mem.room.side })
+      // (a cell of several lines on one page, the lines of a box TeX set in it, its rows: a line each, every two apart by a forced
+      // break (rowsOf: an empty row none), in a column of class l, c or r (a paragraph cell's lines, a p column's, hold none,
+      // or a \\newline among lines TeX wrapped, or are a paragraph's in no column box): how they stand in the box, §18.75)
+      if (
+        c.boxed !== undefined &&
+        extents.length > 1 &&
+        extents.length === mem.lines.length &&
+        holdsBreak(units[mem.unit]!.content) &&
+        rowsOf(units[mem.unit]!.content) === extents.length
+      ) {
+        const inner = innerOf(extents, c.boxed)
+        if (inner) mem.inner = inner
+      }
     }
     const words: FreeWord[] = []
     const bands: { page: number; ink: [number, number][]; walls: [number, number][]; edge?: [number, number] }[] = []
@@ -809,6 +827,34 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
       }
     }
   }
+}
+
+/** a unit's rows as a box holds them: the stretches of its content between its forced breaks (elements whose source is one,
+ *  FORCED_BREAK, in its groups or not) that hold something, text or another element: a break that closes an empty row (at the
+ *  content's end, or two in a row) makes none */
+function rowsOf(content: readonly Piece[]): number {
+  let rows = 0,
+    open = false
+  const walk = (ps: readonly Piece[]) => {
+    for (const p of ps) {
+      if (p.t === 'span') walk(p.content)
+      else if (p.t === 'el' && FORCED_BREAK.test((p as { src?: string }).src?.trim() ?? '')) open = false
+      else if (p.t === 'el' || (p.t === 'text' && /\S/.test(p.s))) {
+        if (!open) rows++
+        open = true
+      }
+    }
+  }
+  walk(content)
+  return rows
+}
+/** whether a unit's content holds a forced break, in its groups or not */
+function holdsBreak(content: readonly Piece[]): boolean {
+  return content.some((p) =>
+    p.t === 'el'
+      ? FORCED_BREAK.test((p as { src?: string }).src?.trim() ?? '')
+      : p.t === 'span' && holdsBreak(p.content),
+  )
 }
 
 /** its label's parts and style */
